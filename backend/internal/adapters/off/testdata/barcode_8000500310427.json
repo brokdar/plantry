@@ -1,0 +1,23 @@
+{
+  "code": "8000500310427",
+  "status": 1,
+  "status_verbose": "product found",
+  "product": {
+    "product_name": "Biscuits croquants au coeur onctueux de Nutella\u00ae",
+    "product_name_de": "Knusprige Kekse mit einem cremigen Herz aus Nutella\u00ae",
+    "product_name_en": "nutella biscuits",
+    "brands": "nutella",
+    "serving_size": "",
+    "serving_quantity": 0,
+    "product_quantity": 0,
+    "product_quantity_unit": "",
+    "nutriments": {
+      "energy-kcal_100g": 515,
+      "proteins_100g": 7.9,
+      "fat_100g": 24.8,
+      "carbohydrates_100g": 64,
+      "sodium_100g": 0.2236
+    },
+    "image_front_small_url": "https://images.openfoodfacts.org/images/products/800/050/031/0427/front_fr.510.200.jpg"
+  }
+}

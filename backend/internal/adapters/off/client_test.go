@@ -37,10 +37,10 @@ func TestLookupBarcode_Found(t *testing.T) {
 	require.Len(t, candidates, 1)
 
 	c := candidates[0]
-	assert.Equal(t, "Nutella Hazelnut Spread", c.Name)
+	assert.Equal(t, "Nutella", c.Name)
 	assert.Equal(t, "Ferrero", c.Brand)
 	assert.Equal(t, "3017620422003", c.Barcode)
-	assert.Equal(t, "https://images.openfoodfacts.org/images/products/301/762/042/2003/front_en.6.200.jpg", c.ImageURL)
+	assert.Equal(t, "https://images.openfoodfacts.org/images/products/301/762/042/2003/front_en.820.200.jpg", c.ImageURL)
 
 	require.NotNil(t, c.Kcal100g)
 	assert.InDelta(t, 539.0, *c.Kcal100g, 0.01)
@@ -50,10 +50,9 @@ func TestLookupBarcode_Found(t *testing.T) {
 	assert.InDelta(t, 30.9, *c.Fat100g, 0.01)
 	require.NotNil(t, c.Carbs100g)
 	assert.InDelta(t, 57.5, *c.Carbs100g, 0.01)
-	require.NotNil(t, c.Fiber100g)
-	assert.InDelta(t, 3.4, *c.Fiber100g, 0.01)
+	assert.Nil(t, c.Fiber100g)
 	require.NotNil(t, c.Sodium100g)
-	assert.InDelta(t, 0.041, *c.Sodium100g, 0.001)
+	assert.InDelta(t, 0.0428, *c.Sodium100g, 0.0001)
 }
 
 func TestLookupBarcode_NotFound(t *testing.T) {
@@ -107,7 +106,7 @@ func TestLookupBarcode_PartialNutriments(t *testing.T) {
 	require.Len(t, candidates, 1)
 
 	c := candidates[0]
-	assert.Equal(t, "Highland Spring Water", c.Name)
+	assert.Equal(t, "Twix Ice cream", c.Name)
 
 	// These are present in the fixture (even if zero-valued).
 	require.NotNil(t, c.Kcal100g)
@@ -123,13 +122,20 @@ func TestLookupBarcode_PartialNutriments(t *testing.T) {
 }
 
 func TestLookupBarcode_NameLocalization(t *testing.T) {
-	_, client := newTestServer(t, fixtureHandler(t, "barcode_3017620422003.json"))
+	// barcode_8000500310427 has distinct base/en/de names so both branches are meaningful.
+	_, client := newTestServer(t, fixtureHandler(t, "barcode_8000500310427.json"))
 
-	// German localization should pick product_name_de.
-	candidates, err := client.LookupBarcode(context.Background(), "3017620422003", "de")
+	// English: should pick product_name_en, not the French base name.
+	enCandidates, err := client.LookupBarcode(context.Background(), "8000500310427", "en")
 	require.NoError(t, err)
-	require.Len(t, candidates, 1)
-	assert.Equal(t, "Nutella Nuss-Nougat-Creme", candidates[0].Name)
+	require.Len(t, enCandidates, 1)
+	assert.Equal(t, "nutella biscuits", enCandidates[0].Name)
+
+	// German: should pick product_name_de.
+	deCandidates, err := client.LookupBarcode(context.Background(), "8000500310427", "de")
+	require.NoError(t, err)
+	require.Len(t, deCandidates, 1)
+	assert.Equal(t, "Knusprige Kekse mit einem cremigen Herz aus Nutella\u00ae", deCandidates[0].Name)
 }
 
 func TestSearchByName_ContextCancelled(t *testing.T) {

@@ -4,13 +4,13 @@
   "totalPages": 1,
   "foods": [
     {
-      "fdcId": 171077,
-      "description": "Chicken, breast, meat only, cooked, roasted",
+      "fdcId": 171477,
+      "description": "Chicken, broilers or fryers, breast, meat only, cooked, roasted",
       "dataType": "SR Legacy",
       "foodCategory": "Poultry Products",
       "foodNutrients": [
         { "nutrientId": 1008, "nutrientName": "Energy", "unitName": "KCAL", "value": 165.0 },
-        { "nutrientId": 1003, "nutrientName": "Protein", "unitName": "G", "value": 31.02 },
+        { "nutrientId": 1003, "nutrientName": "Protein", "unitName": "G", "value": 31.0 },
         { "nutrientId": 1004, "nutrientName": "Total lipid (fat)", "unitName": "G", "value": 3.57 },
         { "nutrientId": 1005, "nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": 0.0 },
         { "nutrientId": 1079, "nutrientName": "Fiber, total dietary", "unitName": "G", "value": 0.0 },
@@ -18,30 +18,30 @@
       ]
     },
     {
-      "fdcId": 171078,
-      "description": "Chicken, thigh, meat only, cooked, roasted",
+      "fdcId": 172388,
+      "description": "Chicken, broilers or fryers, thigh, meat only, cooked, roasted",
       "dataType": "SR Legacy",
       "foodCategory": "Poultry Products",
       "foodNutrients": [
-        { "nutrientId": 1008, "nutrientName": "Energy", "unitName": "KCAL", "value": 209.0 },
-        { "nutrientId": 1003, "nutrientName": "Protein", "unitName": "G", "value": 25.94 },
-        { "nutrientId": 1004, "nutrientName": "Total lipid (fat)", "unitName": "G", "value": 10.88 },
+        { "nutrientId": 1008, "nutrientName": "Energy", "unitName": "KCAL", "value": 179.0 },
+        { "nutrientId": 1003, "nutrientName": "Protein", "unitName": "G", "value": 24.8 },
+        { "nutrientId": 1004, "nutrientName": "Total lipid (fat)", "unitName": "G", "value": 8.15 },
         { "nutrientId": 1005, "nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": 0.0 },
         { "nutrientId": 1079, "nutrientName": "Fiber, total dietary", "unitName": "G", "value": 0.0 },
-        { "nutrientId": 1093, "nutrientName": "Sodium, Na", "unitName": "MG", "value": 700.0 }
+        { "nutrientId": 1093, "nutrientName": "Sodium, Na", "unitName": "MG", "value": 106.0 }
       ]
     },
     {
-      "fdcId": 171079,
-      "description": "Chicken, wing, meat only, cooked, roasted",
+      "fdcId": 172392,
+      "description": "Chicken, broilers or fryers, wing, meat only, cooked, roasted",
       "dataType": "Foundation",
       "foodCategory": "Poultry Products",
       "foodNutrients": [
         { "nutrientId": 1008, "nutrientName": "Energy", "unitName": "KCAL", "value": 203.0 },
-        { "nutrientId": 1003, "nutrientName": "Protein", "unitName": "G", "value": 30.46 },
+        { "nutrientId": 1003, "nutrientName": "Protein", "unitName": "G", "value": 30.5 },
         { "nutrientId": 1004, "nutrientName": "Total lipid (fat)", "unitName": "G", "value": 8.13 },
         { "nutrientId": 1005, "nutrientName": "Carbohydrate, by difference", "unitName": "G", "value": 0.0 },
-        { "nutrientId": 1093, "nutrientName": "Sodium, Na", "unitName": "MG", "value": 82.0 }
+        { "nutrientId": 1093, "nutrientName": "Sodium, Na", "unitName": "MG", "value": 92.0 }
       ]
     }
   ]

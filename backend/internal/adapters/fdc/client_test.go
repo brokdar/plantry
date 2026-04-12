@@ -34,14 +34,14 @@ func TestSearchByName_MultipleResults(t *testing.T) {
 
 	// First result: chicken breast
 	r := results[0]
-	assert.Equal(t, "Chicken, breast, meat only, cooked, roasted", r.Name)
-	assert.Equal(t, 171077, r.FdcID)
+	assert.Equal(t, "Chicken, broilers or fryers, breast, meat only, cooked, roasted", r.Name)
+	assert.Equal(t, 171477, r.FdcID)
 	assert.Equal(t, "SR Legacy", r.DataType)
 	assert.Equal(t, "Poultry Products", r.Category)
 	require.NotNil(t, r.Kcal100g)
 	assert.InDelta(t, 165.0, *r.Kcal100g, 0.01)
 	require.NotNil(t, r.Protein100g)
-	assert.InDelta(t, 31.02, *r.Protein100g, 0.01)
+	assert.InDelta(t, 31.0, *r.Protein100g, 0.01)
 	require.NotNil(t, r.Fat100g)
 	assert.InDelta(t, 3.57, *r.Fat100g, 0.01)
 	require.NotNil(t, r.Carbs100g)
@@ -72,13 +72,13 @@ func TestSearchByName_SodiumConversion(t *testing.T) {
 	require.NotNil(t, results[0].Sodium100g)
 	assert.InDelta(t, 0.074, *results[0].Sodium100g, 0.0001)
 
-	// Second result: sodium 700 mg → 0.7 g
+	// Second result: sodium 106 mg → 0.106 g
 	require.NotNil(t, results[1].Sodium100g)
-	assert.InDelta(t, 0.7, *results[1].Sodium100g, 0.0001)
+	assert.InDelta(t, 0.106, *results[1].Sodium100g, 0.0001)
 
-	// Third result: sodium 82 mg → 0.082 g
+	// Third result: sodium 92 mg → 0.092 g
 	require.NotNil(t, results[2].Sodium100g)
-	assert.InDelta(t, 0.082, *results[2].Sodium100g, 0.0001)
+	assert.InDelta(t, 0.092, *results[2].Sodium100g, 0.0001)
 }
 
 func TestSearchByName_PartialNutrients(t *testing.T) {

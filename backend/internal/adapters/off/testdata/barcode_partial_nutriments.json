@@ -3,18 +3,18 @@
   "status": 1,
   "status_verbose": "product found",
   "product": {
-    "product_name": "Highland Spring Water",
-    "product_name_de": "",
-    "product_name_en": "Highland Spring Water",
-    "brands": "Highland Spring",
-    "serving_size": "250 ml",
-    "serving_quantity": 250,
-    "product_quantity": 1500,
-    "product_quantity_unit": "ml",
+    "product_name": "Twix Ice Cream",
+    "product_name_de": "Twix Ice Cream",
+    "product_name_en": "Twix Ice cream",
+    "brands": "Twix",
+    "serving_size": "43.1 g",
+    "serving_quantity": 43.1,
+    "product_quantity": 0,
+    "product_quantity_unit": "",
     "nutriments": {
       "energy-kcal_100g": 0,
       "proteins_100g": 0
     },
-    "image_front_small_url": "https://images.openfoodfacts.org/images/products/water.200.jpg"
+    "image_front_small_url": "https://images.openfoodfacts.org/images/products/500/015/948/4695/front_fr.85.200.jpg"
   }
 }

@@ -4,8 +4,8 @@
   "status_verbose": "product found",
   "product": {
     "product_name": "Nutella",
-    "product_name_de": "Nutella Nuss-Nougat-Creme",
-    "product_name_en": "Nutella Hazelnut Spread",
+    "product_name_de": "Nutella",
+    "product_name_en": "Nutella",
     "brands": "Ferrero",
     "serving_size": "15 g",
     "serving_quantity": 15,
@@ -16,9 +16,8 @@
       "proteins_100g": 6.3,
       "fat_100g": 30.9,
       "carbohydrates_100g": 57.5,
-      "fiber_100g": 3.4,
-      "sodium_100g": 0.041
+      "sodium_100g": 0.0428
     },
-    "image_front_small_url": "https://images.openfoodfacts.org/images/products/301/762/042/2003/front_en.6.200.jpg"
+    "image_front_small_url": "https://images.openfoodfacts.org/images/products/301/762/042/2003/front_en.820.200.jpg"
   }
 }
