@@ -231,6 +231,48 @@ func TestUpdateIngredient_400_EmptyName(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
 }
 
+func TestUpdateIngredient_400_InvalidID(t *testing.T) {
+	r := setupRouter(t)
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPut, "/api/ingredients/abc", bytes.NewBufferString(`{"name":"X"}`)))
+	assert.Equal(t, http.StatusBadRequest, resp.Code)
+}
+
+func TestUpdateIngredient_409_DuplicateName(t *testing.T) {
+	r := setupRouter(t)
+	for _, name := range []string{"Alpha", "Beta"} {
+		resp := httptest.NewRecorder()
+		r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/ingredients", bytes.NewBufferString(`{"name":"`+name+`"}`)))
+		require.Equal(t, http.StatusCreated, resp.Code)
+	}
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPut, "/api/ingredients/2", bytes.NewBufferString(`{"name":"Alpha"}`)))
+	assert.Equal(t, http.StatusConflict, resp.Code)
+}
+
+func TestUpdateIngredient_200_RoundTrip(t *testing.T) {
+	r := setupRouter(t)
+	// create
+	createResp := httptest.NewRecorder()
+	r.ServeHTTP(createResp, httptest.NewRequest(http.MethodPost, "/api/ingredients", bytes.NewBufferString(`{"name":"Rice"}`)))
+	require.Equal(t, http.StatusCreated, createResp.Code)
+
+	// update
+	updateResp := httptest.NewRecorder()
+	r.ServeHTTP(updateResp, httptest.NewRequest(http.MethodPut, "/api/ingredients/1", bytes.NewBufferString(`{"name":"Brown Rice","kcal_100g":112}`)))
+	require.Equal(t, http.StatusOK, updateResp.Code)
+
+	// verify via GET
+	getResp := httptest.NewRecorder()
+	r.ServeHTTP(getResp, httptest.NewRequest(http.MethodGet, "/api/ingredients/1", nil))
+	assert.Equal(t, http.StatusOK, getResp.Code)
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&got))
+	assert.Equal(t, "Brown Rice", got["name"])
+	assert.Equal(t, float64(112), got["kcal_100g"])
+}
+
 func TestDeleteIngredient_400_InvalidID(t *testing.T) {
 	r := setupRouter(t)
 	resp := httptest.NewRecorder()
@@ -264,4 +306,25 @@ func TestListIngredients_FTSSpecialChars(t *testing.T) {
 	resp := httptest.NewRecorder()
 	r.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/ingredients?search=chicken+AND+tofu", nil))
 	assert.Equal(t, http.StatusOK, resp.Code)
+}
+
+func TestListIngredients_SortDesc(t *testing.T) {
+	r := setupRouter(t)
+	for _, name := range []string{"Apple", "Banana", "Cherry"} {
+		resp := httptest.NewRecorder()
+		r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/ingredients", bytes.NewBufferString(`{"name":"`+name+`"}`)))
+		require.Equal(t, http.StatusCreated, resp.Code)
+	}
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/ingredients?sort=name&order=desc", nil))
+	assert.Equal(t, http.StatusOK, resp.Code)
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	items := got["items"].([]any)
+	require.Len(t, items, 3)
+	first := items[0].(map[string]any)
+	last := items[2].(map[string]any)
+	assert.Equal(t, "Cherry", first["name"])
+	assert.Equal(t, "Apple", last["name"])
 }

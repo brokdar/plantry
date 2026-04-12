@@ -203,12 +203,17 @@ func TestList_RespectsSearch(t *testing.T) {
 }
 
 func TestList_DefaultLimit(t *testing.T) {
-	svc := ingredient.NewService(newFakeRepo())
-	// create no items — just verify the query gets a sensible default limit
-	result, err := svc.List(context.Background(), ingredient.ListQuery{})
+	repo := newFakeRepo()
+	svc := ingredient.NewService(repo)
+	ctx := context.Background()
+
+	for i := 0; i < 60; i++ {
+		require.NoError(t, svc.Create(ctx, &ingredient.Ingredient{Name: fmt.Sprintf("Item%d", i)}))
+	}
+
+	result, err := svc.List(ctx, ingredient.ListQuery{})
 	require.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Empty(t, result.Items)
+	assert.Len(t, result.Items, 50, "default limit should cap results at 50")
 }
 
 func TestUpdate_EmptyName(t *testing.T) {
@@ -276,10 +281,18 @@ func TestList_NegativeLimit(t *testing.T) {
 }
 
 func TestList_MaxLimitCap(t *testing.T) {
-	svc := ingredient.NewService(newFakeRepo())
-	result, err := svc.List(context.Background(), ingredient.ListQuery{Limit: 500})
+	repo := newFakeRepo()
+	svc := ingredient.NewService(repo)
+	ctx := context.Background()
+
+	for i := 0; i < 250; i++ {
+		require.NoError(t, svc.Create(ctx, &ingredient.Ingredient{Name: fmt.Sprintf("Cap%d", i)}))
+	}
+
+	result, err := svc.List(ctx, ingredient.ListQuery{Limit: 500})
 	require.NoError(t, err)
-	assert.NotNil(t, result)
+	assert.Equal(t, 250, result.Total)
+	assert.Len(t, result.Items, 200, "limit 500 should be clamped to max 200")
 }
 
 func TestUpsertPortion_Valid(t *testing.T) {

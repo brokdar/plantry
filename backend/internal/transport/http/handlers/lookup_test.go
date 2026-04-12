@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
@@ -158,4 +160,55 @@ func TestResolve_EmptyName(t *testing.T) {
 	r.ServeHTTP(resp, req)
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
+}
+
+func setupLookupRouterWithImageStore(t *testing.T, imgStore *imagestore.Store) http.Handler {
+	t.Helper()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewIngredientRepo(db)
+	svc := ingredient.NewService(repo)
+	resolver := ingredient.NewResolver(repo, nil, nil)
+	lh := handlers.NewLookupHandler(resolver, imgStore, svc)
+
+	r := chi.NewRouter()
+	r.Route("/api/ingredients", func(r chi.Router) {
+		r.Get("/", handlers.NewIngredientHandler(svc).List)
+		r.Post("/", handlers.NewIngredientHandler(svc).Create)
+		r.Get("/lookup", lh.Lookup)
+		r.Post("/resolve", lh.Resolve)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Get("/", handlers.NewIngredientHandler(svc).Get)
+		})
+	})
+	return r
+}
+
+func TestResolve_ImageDownloadFailure(t *testing.T) {
+	// HTTP server that always returns 500.
+	failSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+	}))
+	defer failSrv.Close()
+
+	imgStore, err := imagestore.New(t.TempDir(), &http.Client{})
+	require.NoError(t, err)
+
+	router := setupLookupRouterWithImageStore(t, imgStore)
+
+	body := fmt.Sprintf(
+		`{"name":"Fail Image Ingredient","source":"off","kcal_100g":100,"protein_100g":10,"fat_100g":5,"carbs_100g":20,"fiber_100g":2,"sodium_100g":0.1,"image_url":"%s/fail.jpg"}`,
+		failSrv.URL,
+	)
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/ingredients/resolve", bytes.NewBufferString(body))
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusCreated, resp.Code)
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Equal(t, "Fail Image Ingredient", got["name"])
+	assert.NotZero(t, got["id"])
+	// image_path should be absent (omitempty) because download failed.
+	assert.Nil(t, got["image_path"], "image_path should be nil when image download fails")
 }

@@ -69,10 +69,6 @@ type resolveRequest struct {
 	Carbs100g   float64 `json:"carbs_100g"`
 	Fiber100g   float64 `json:"fiber_100g"`
 	Sodium100g  float64 `json:"sodium_100g"`
-	Portions    []struct {
-		Unit  string  `json:"unit"`
-		Grams float64 `json:"grams"`
-	} `json:"portions"`
 }
 
 // Resolve handles POST /api/ingredients/resolve.
