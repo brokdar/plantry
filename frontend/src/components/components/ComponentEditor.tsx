@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTranslation } from "react-i18next"
@@ -32,7 +32,7 @@ import {
   useCreateComponent,
   useUpdateComponent,
 } from "@/lib/queries/components"
-import { useIngredients } from "@/lib/queries/ingredients"
+import { useIngredients, useIngredient } from "@/lib/queries/ingredients"
 import { usePortions } from "@/lib/queries/portions"
 import type { Component } from "@/lib/api/components"
 import { ApiError } from "@/lib/api/client"
@@ -56,8 +56,8 @@ export function ComponentEditor({
           name: component.name,
           role: component.role as ComponentFormValues["role"],
           reference_portions: component.reference_portions,
-          prep_minutes: component.prep_minutes,
-          cook_minutes: component.cook_minutes,
+          prep_minutes: component.prep_minutes ?? 0,
+          cook_minutes: component.cook_minutes ?? 0,
           notes: component.notes,
           ingredients: component.ingredients.map((ci) => ({
             ingredient_id: ci.ingredient_id,
@@ -446,6 +446,32 @@ function IngredientRow({
   const unit = form.watch(`ingredients.${index}.unit`)
 
   const { data: portions } = usePortions(ingredientId)
+  // Fetch full ingredient to populate per-100g macros in edit mode, where
+  // the component API returns only the join-table fields (no macros).
+  const { data: ingredientDetail } = useIngredient(ingredientId)
+  useEffect(() => {
+    if (!ingredientDetail) return
+    // Only backfill when macros were not already set (e.g. via selectIngredient).
+    if ((form.getValues(`ingredients.${index}.kcal_100g`) ?? 0) > 0) return
+    form.setValue(`ingredients.${index}.kcal_100g`, ingredientDetail.kcal_100g)
+    form.setValue(
+      `ingredients.${index}.protein_100g`,
+      ingredientDetail.protein_100g
+    )
+    form.setValue(`ingredients.${index}.fat_100g`, ingredientDetail.fat_100g)
+    form.setValue(
+      `ingredients.${index}.carbs_100g`,
+      ingredientDetail.carbs_100g
+    )
+    form.setValue(
+      `ingredients.${index}.fiber_100g`,
+      ingredientDetail.fiber_100g
+    )
+    form.setValue(
+      `ingredients.${index}.sodium_100g`,
+      ingredientDetail.sodium_100g
+    )
+  }, [ingredientDetail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function selectIngredient(ing: {
     id: number

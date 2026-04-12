@@ -23,8 +23,8 @@ export interface Component {
   role: string
   variant_group_id: number | null
   reference_portions: number
-  prep_minutes: number
-  cook_minutes: number
+  prep_minutes: number | null
+  cook_minutes: number | null
   image_path: string | null
   notes: string | null
   last_cooked_at: string | null
