@@ -48,7 +48,8 @@
     "unit": "Unit",
     "grams": "Grams",
     "add": "Add portion",
-    "unit_placeholder": "e.g. cup, tbsp, slice"
+    "unit_placeholder": "e.g. cup, tbsp, slice",
+    "delete_unit": "Delete {{unit}}"
   },
   "image": {
     "upload": "Upload image",
@@ -64,6 +65,9 @@
       "duplicate_name": "An ingredient with this name already exists.",
       "in_use": "This ingredient is used in a component and cannot be deleted.",
       "lookup_failed": "Could not search external databases"
+    },
+    "image": {
+      "upload_failed": "Image operation failed. Please try again."
     }
   },
   "common": {

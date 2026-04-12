@@ -118,7 +118,8 @@ export function IngredientEditor({
 }: IngredientEditorProps) {
   const { t } = useTranslation()
   const isEdit = !!ingredient
-  const [selectedCandidate, setSelectedCandidate] = useState(false)
+  const [selectedCandidate, setSelectedCandidate] =
+    useState<LookupCandidate | null>(null)
 
   const form = useForm<IngredientFormValues>({
     resolver: zodResolver(ingredientSchema) as Resolver<IngredientFormValues>,
@@ -174,11 +175,11 @@ export function IngredientEditor({
   function handleCandidateSelect(candidate: LookupCandidate) {
     const values = candidateToFormValues(candidate)
     form.reset(values)
-    setSelectedCandidate(true)
+    setSelectedCandidate(candidate)
   }
 
   function handleBackToSearch() {
-    setSelectedCandidate(false)
+    setSelectedCandidate(null)
     form.reset({
       name: "",
       source: "manual",

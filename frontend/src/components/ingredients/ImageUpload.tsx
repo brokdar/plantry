@@ -1,8 +1,7 @@
-import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Upload, Trash2, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { uploadImage, deleteImage } from "@/lib/api/images"
+import { useUploadImage, useDeleteImage } from "@/lib/queries/images"
 
 interface ImageUploadProps {
   ingredientId: number
@@ -16,32 +15,32 @@ export function ImageUpload({
   onImageChange,
 }: ImageUploadProps) {
   const { t } = useTranslation()
-  const [isUploading, setIsUploading] = useState(false)
+  const uploadMutation = useUploadImage()
+  const deleteMutation = useDeleteImage()
+  const isUploading = uploadMutation.isPending || deleteMutation.isPending
 
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
 
-    setIsUploading(true)
-    try {
-      const result = await uploadImage(ingredientId, file)
-      onImageChange(result.image_path)
-    } finally {
-      setIsUploading(false)
-    }
+    uploadMutation.mutate(
+      { ingredientId, file },
+      {
+        onSuccess: (result) => onImageChange(result.image_path),
+      }
+    )
 
     // Reset the input so the same file can be re-selected
     e.target.value = ""
   }
 
-  async function handleDelete() {
-    setIsUploading(true)
-    try {
-      await deleteImage(ingredientId)
-      onImageChange(null)
-    } finally {
-      setIsUploading(false)
-    }
+  function handleDelete() {
+    deleteMutation.mutate(
+      { ingredientId },
+      {
+        onSuccess: () => onImageChange(null),
+      }
+    )
   }
 
   return (
@@ -92,6 +91,12 @@ export function ImageUpload({
           </Button>
         )}
       </div>
+
+      {(uploadMutation.isError || deleteMutation.isError) && (
+        <p className="text-sm text-destructive">
+          {t("error.image.upload_failed")}
+        </p>
+      )}
     </div>
   )
 }

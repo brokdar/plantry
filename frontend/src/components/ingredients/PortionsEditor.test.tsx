@@ -68,16 +68,47 @@ describe("PortionsEditor", () => {
 
     await screen.findByText("cup")
 
-    const deleteButtons = screen.getAllByRole("button")
-    // The delete button is the icon button in the portion row
-    const deleteButton = deleteButtons.find(
-      (btn) => btn.querySelector("svg") && !btn.textContent?.includes("Add")
-    )
-    expect(deleteButton).toBeDefined()
-    await user.click(deleteButton!)
+    const deleteButton = screen.getByRole("button", { name: /delete cup/i })
+    await user.click(deleteButton)
 
     await waitFor(() => {
       expect(deletePortion).toHaveBeenCalledWith(1, "cup")
     })
+  })
+
+  test("does not submit with empty unit", async () => {
+    const user = userEvent.setup()
+    vi.mocked(listPortions).mockResolvedValue([])
+
+    renderWithRouter(<PortionsEditor ingredientId={1} />)
+    await screen.findByText("Portions")
+
+    // Only fill grams, leave unit empty
+    const gramsInput = screen.getByRole("spinbutton")
+    await user.type(gramsInput, "30")
+
+    const addButton = screen.getByRole("button", { name: /add portion/i })
+    // Button should be disabled when unit is empty
+    expect(addButton).toBeDisabled()
+  })
+
+  test("does not submit with zero grams", async () => {
+    const user = userEvent.setup()
+    vi.mocked(listPortions).mockResolvedValue([])
+    vi.mocked(upsertPortion).mockResolvedValue(undefined)
+
+    renderWithRouter(<PortionsEditor ingredientId={1} />)
+    await screen.findByText("Portions")
+
+    const unitInput = screen.getByPlaceholderText(/cup, tbsp, slice/i)
+    await user.type(unitInput, "slice")
+
+    const gramsInput = screen.getByRole("spinbutton")
+    await user.type(gramsInput, "0")
+
+    const addButton = screen.getByRole("button", { name: /add portion/i })
+    await user.click(addButton)
+
+    expect(upsertPortion).not.toHaveBeenCalled()
   })
 })

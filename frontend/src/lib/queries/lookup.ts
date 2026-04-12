@@ -11,5 +11,6 @@ export function useLookup(params: LookupParams) {
     queryKey: lookupKeys.search(params),
     queryFn: () => lookupIngredients(params),
     enabled: !!(params.barcode || params.query),
+    staleTime: 60_000,
   })
 }

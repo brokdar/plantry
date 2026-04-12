@@ -39,9 +39,8 @@ describe("ImageUpload", () => {
       />
     )
 
-    // alt="" gives presentation role, so query by selector
     await screen.findByText("Remove image")
-    const img = document.querySelector("img")
+    const img = screen.getByAltText("")
     expect(img).toBeTruthy()
     expect(img).toHaveAttribute("src", "/images/chicken.jpg")
 
@@ -96,5 +95,52 @@ describe("ImageUpload", () => {
 
     expect(deleteImage).toHaveBeenCalledWith(1)
     expect(onImageChange).toHaveBeenCalledWith(null)
+  })
+
+  test("shows error message on upload failure", async () => {
+    const user = userEvent.setup()
+    vi.mocked(uploadImage).mockRejectedValue(new Error("Upload failed"))
+
+    renderWithRouter(
+      <ImageUpload
+        ingredientId={1}
+        currentImagePath={null}
+        onImageChange={vi.fn()}
+      />
+    )
+
+    await screen.findByText("Upload image")
+
+    const file = new File(["content"], "test.jpg", { type: "image/jpeg" })
+    const input = document.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement
+    expect(input).toBeTruthy()
+
+    await user.upload(input, file)
+
+    expect(
+      await screen.findByText(/image operation failed/i)
+    ).toBeInTheDocument()
+  })
+
+  test("shows error message on delete failure", async () => {
+    const user = userEvent.setup()
+    vi.mocked(deleteImage).mockRejectedValue(new Error("Delete failed"))
+
+    renderWithRouter(
+      <ImageUpload
+        ingredientId={1}
+        currentImagePath="chicken.jpg"
+        onImageChange={vi.fn()}
+      />
+    )
+
+    const removeButton = await screen.findByText("Remove image")
+    await user.click(removeButton)
+
+    expect(
+      await screen.findByText(/image operation failed/i)
+    ).toBeInTheDocument()
   })
 })

@@ -2,7 +2,7 @@ import { describe, expect, test, vi, beforeEach } from "vitest"
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
-import { mockChickenBreast } from "@/test/fixtures"
+import { mockChickenBreast, mockLookupResponse } from "@/test/fixtures"
 
 vi.mock("@/lib/api/ingredients", () => ({
   listIngredients: vi.fn(),
@@ -28,6 +28,7 @@ vi.mock("@/lib/api/images", () => ({
 }))
 
 import { createIngredient, updateIngredient } from "@/lib/api/ingredients"
+import { lookupIngredients } from "@/lib/api/lookup"
 import { ApiError } from "@/lib/api/client"
 import { IngredientEditor } from "./IngredientEditor"
 
@@ -170,6 +171,59 @@ describe("IngredientEditor", () => {
     await waitFor(() => {
       expect(onSuccess).toHaveBeenCalled()
     })
+  })
+
+  test("populates form from lookup candidate", async () => {
+    const user = userEvent.setup()
+    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
+
+    renderWithRouter(<IngredientEditor />)
+
+    const input = await screen.findByPlaceholderText(
+      /search by name or barcode/i
+    )
+    await user.type(input, "chicken")
+
+    const candidate = await screen.findByText("Chicken Breast, Raw")
+    await user.click(candidate)
+
+    expect(await screen.findByLabelText("Name")).toHaveValue(
+      "Chicken Breast, Raw"
+    )
+    expect(screen.getByLabelText("Calories (kcal)")).toHaveValue(120)
+    expect(screen.getByLabelText("Protein (g)")).toHaveValue(22.5)
+    expect(screen.getByLabelText("Fat (g)")).toHaveValue(2.6)
+  })
+
+  test("back to search resets form", async () => {
+    const user = userEvent.setup()
+    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
+
+    renderWithRouter(<IngredientEditor />)
+
+    const input = await screen.findByPlaceholderText(
+      /search by name or barcode/i
+    )
+    await user.type(input, "chicken")
+
+    const candidate = await screen.findByText("Chicken Breast, Raw")
+    await user.click(candidate)
+
+    expect(await screen.findByLabelText("Name")).toHaveValue(
+      "Chicken Breast, Raw"
+    )
+
+    const backButton = screen.getByRole("button", {
+      name: /back to search/i,
+    })
+    await user.click(backButton)
+
+    // Tabs should be back (search tab visible again)
+    expect(
+      await screen.findByRole("tab", { name: /search/i })
+    ).toBeInTheDocument()
+    // Form should no longer be visible
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument()
   })
 
   test("shows server error message", async () => {

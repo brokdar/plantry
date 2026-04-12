@@ -90,7 +90,7 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
           <div className="space-y-2">
             {results.map((candidate, index) => (
               <button
-                key={`${candidate.source}-${candidate.name}-${index}`}
+                key={`${candidate.source}-${candidate.fdc_id ?? candidate.barcode ?? candidate.name}`}
                 type="button"
                 className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent ${
                   index === recommendedIndex

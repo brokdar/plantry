@@ -2,7 +2,7 @@ import { describe, expect, test, vi, beforeEach } from "vitest"
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
-import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
+import { mockLookupCandidate, mockLookupResponse } from "@/test/fixtures"
 import { LookupPanel } from "./LookupPanel"
 
 vi.mock("@/lib/api/lookup", () => ({
@@ -10,27 +10,6 @@ vi.mock("@/lib/api/lookup", () => ({
 }))
 
 import { lookupIngredients } from "@/lib/api/lookup"
-
-const mockCandidate: LookupCandidate = {
-  name: "Chicken Breast, Raw",
-  source: "fdc",
-  barcode: null,
-  fdc_id: 171077,
-  image_url: null,
-  existing_id: null,
-  kcal_100g: 120,
-  protein_100g: 22.5,
-  fat_100g: 2.6,
-  carbs_100g: 0,
-  fiber_100g: 0,
-  sodium_100g: 0.074,
-  portions: [],
-}
-
-const mockResponse: LookupResponse = {
-  results: [mockCandidate],
-  recommended_index: 0,
-}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -49,7 +28,7 @@ describe("LookupPanel", () => {
   test("shows candidates after typing a query", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    vi.mocked(lookupIngredients).mockResolvedValue(mockResponse)
+    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
 
     renderWithRouter(<LookupPanel onSelect={onSelect} />)
 
@@ -66,7 +45,7 @@ describe("LookupPanel", () => {
   test("click candidate calls onSelect", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    vi.mocked(lookupIngredients).mockResolvedValue(mockResponse)
+    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
 
     renderWithRouter(<LookupPanel onSelect={onSelect} />)
 
@@ -78,7 +57,7 @@ describe("LookupPanel", () => {
     const candidateButton = await screen.findByText("Chicken Breast, Raw")
     await user.click(candidateButton)
 
-    expect(onSelect).toHaveBeenCalledWith(mockCandidate)
+    expect(onSelect).toHaveBeenCalledWith(mockLookupCandidate)
   })
 
   test("shows no results message for empty results", async () => {

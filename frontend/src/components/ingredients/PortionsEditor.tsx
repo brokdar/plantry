@@ -62,6 +62,7 @@ export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
                 size="icon-sm"
                 onClick={() => handleDelete(p.unit)}
                 disabled={deleteMutation.isPending}
+                aria-label={t("portion.delete_unit", { unit: p.unit })}
               >
                 <Trash2 className="size-4" />
               </Button>

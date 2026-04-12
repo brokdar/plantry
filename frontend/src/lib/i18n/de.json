@@ -48,7 +48,8 @@
     "unit": "Einheit",
     "grams": "Gramm",
     "add": "Portion hinzufügen",
-    "unit_placeholder": "z.B. Tasse, EL, Scheibe"
+    "unit_placeholder": "z.B. Tasse, EL, Scheibe",
+    "delete_unit": "{{unit}} entfernen"
   },
   "image": {
     "upload": "Bild hochladen",
@@ -64,6 +65,9 @@
       "duplicate_name": "Eine Zutat mit diesem Namen existiert bereits.",
       "in_use": "Diese Zutat wird in einer Komponente verwendet und kann nicht gelöscht werden.",
       "lookup_failed": "Externe Datenbanken konnten nicht durchsucht werden"
+    },
+    "image": {
+      "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut."
     }
   },
   "common": {
