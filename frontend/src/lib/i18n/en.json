@@ -27,6 +27,34 @@
     "no_results": "No ingredients found.",
     "empty_state": "No ingredients yet. Create your first one!"
   },
+  "lookup": {
+    "title": "Find ingredient",
+    "search_placeholder": "Search by name or barcode...",
+    "scan_barcode": "Scan barcode",
+    "enter_barcode": "Enter barcode",
+    "no_results": "No matches found",
+    "searching": "Searching...",
+    "source_off": "Open Food Facts",
+    "source_fdc": "USDA",
+    "create_manually": "Create manually",
+    "back_to_search": "Back to search",
+    "select_match": "Select a match",
+    "recommended": "Recommended",
+    "tab_search": "Search",
+    "tab_manual": "Manual"
+  },
+  "portion": {
+    "title": "Portions",
+    "unit": "Unit",
+    "grams": "Grams",
+    "add": "Add portion",
+    "unit_placeholder": "e.g. cup, tbsp, slice"
+  },
+  "image": {
+    "upload": "Upload image",
+    "remove": "Remove image",
+    "uploading": "Uploading..."
+  },
   "error": {
     "not_found": "Resource not found.",
     "invalid_id": "Invalid ID.",
@@ -34,7 +62,8 @@
     "server": "Something went wrong.",
     "ingredient": {
       "duplicate_name": "An ingredient with this name already exists.",
-      "in_use": "This ingredient is used in a component and cannot be deleted."
+      "in_use": "This ingredient is used in a component and cannot be deleted.",
+      "lookup_failed": "Could not search external databases"
     }
   },
   "common": {
