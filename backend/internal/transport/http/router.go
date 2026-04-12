@@ -30,9 +30,14 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 		api.Route("/ingredients", func(r chi.Router) {
 			r.Get("/", h.Ingredients.List)
 			r.Post("/", h.Ingredients.Create)
-			r.Get("/{id}", h.Ingredients.Get)
-			r.Put("/{id}", h.Ingredients.Update)
-			r.Delete("/{id}", h.Ingredients.Delete)
+			r.Route("/{id}", func(r chi.Router) {
+				r.Get("/", h.Ingredients.Get)
+				r.Put("/", h.Ingredients.Update)
+				r.Delete("/", h.Ingredients.Delete)
+				r.Get("/portions", h.Ingredients.ListPortions)
+				r.Post("/portions", h.Ingredients.UpsertPortion)
+				r.Delete("/portions/{unit}", h.Ingredients.DeletePortion)
+			})
 		})
 	})
 

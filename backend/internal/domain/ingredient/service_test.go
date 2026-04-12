@@ -16,14 +16,23 @@ import (
 
 // --- fake in-memory repo ---
 
+type portionKey struct {
+	ingredientID int64
+	unit         string
+}
+
 type fakeRepo struct {
-	mu    sync.Mutex
-	items map[int64]*ingredient.Ingredient
-	seq   int64
+	mu       sync.Mutex
+	items    map[int64]*ingredient.Ingredient
+	portions map[portionKey]*ingredient.Portion
+	seq      int64
 }
 
 func newFakeRepo() *fakeRepo {
-	return &fakeRepo{items: make(map[int64]*ingredient.Ingredient)}
+	return &fakeRepo{
+		items:    make(map[int64]*ingredient.Ingredient),
+		portions: make(map[portionKey]*ingredient.Portion),
+	}
 }
 
 func (r *fakeRepo) Create(_ context.Context, i *ingredient.Ingredient) error {
@@ -98,6 +107,38 @@ func (r *fakeRepo) List(_ context.Context, q ingredient.ListQuery) (*ingredient.
 		end = total
 	}
 	return &ingredient.ListResult{Items: filtered[start:end], Total: total}, nil
+}
+
+func (r *fakeRepo) ListPortions(_ context.Context, ingredientID int64) ([]ingredient.Portion, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var result []ingredient.Portion
+	for k, p := range r.portions {
+		if k.ingredientID == ingredientID {
+			result = append(result, *p)
+		}
+	}
+	return result, nil
+}
+
+func (r *fakeRepo) UpsertPortion(_ context.Context, p *ingredient.Portion) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := portionKey{ingredientID: p.IngredientID, unit: p.Unit}
+	clone := *p
+	r.portions[key] = &clone
+	return nil
+}
+
+func (r *fakeRepo) DeletePortion(_ context.Context, ingredientID int64, unit string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	key := portionKey{ingredientID: ingredientID, unit: unit}
+	if _, ok := r.portions[key]; !ok {
+		return fmt.Errorf("%w: portion %d/%s", domain.ErrNotFound, ingredientID, unit)
+	}
+	delete(r.portions, key)
+	return nil
 }
 
 // --- tests ---
@@ -239,4 +280,86 @@ func TestList_MaxLimitCap(t *testing.T) {
 	result, err := svc.List(context.Background(), ingredient.ListQuery{Limit: 500})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
+}
+
+func TestUpsertPortion_Valid(t *testing.T) {
+	repo := newFakeRepo()
+	svc := ingredient.NewService(repo)
+	require.NoError(t, svc.Create(context.Background(), &ingredient.Ingredient{Name: "Rice"}))
+
+	err := svc.UpsertPortion(context.Background(), &ingredient.Portion{
+		IngredientID: 1, Unit: "cup", Grams: 185,
+	})
+	assert.NoError(t, err)
+}
+
+func TestUpsertPortion_EmptyUnit(t *testing.T) {
+	repo := newFakeRepo()
+	svc := ingredient.NewService(repo)
+	require.NoError(t, svc.Create(context.Background(), &ingredient.Ingredient{Name: "Rice"}))
+
+	err := svc.UpsertPortion(context.Background(), &ingredient.Portion{
+		IngredientID: 1, Unit: "", Grams: 185,
+	})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+}
+
+func TestUpsertPortion_ZeroGrams(t *testing.T) {
+	repo := newFakeRepo()
+	svc := ingredient.NewService(repo)
+	require.NoError(t, svc.Create(context.Background(), &ingredient.Ingredient{Name: "Rice"}))
+
+	err := svc.UpsertPortion(context.Background(), &ingredient.Portion{
+		IngredientID: 1, Unit: "cup", Grams: 0,
+	})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+}
+
+func TestUpsertPortion_NegativeGrams(t *testing.T) {
+	repo := newFakeRepo()
+	svc := ingredient.NewService(repo)
+	require.NoError(t, svc.Create(context.Background(), &ingredient.Ingredient{Name: "Rice"}))
+
+	err := svc.UpsertPortion(context.Background(), &ingredient.Portion{
+		IngredientID: 1, Unit: "cup", Grams: -10,
+	})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+}
+
+func TestUpsertPortion_IngredientNotFound(t *testing.T) {
+	svc := ingredient.NewService(newFakeRepo())
+	err := svc.UpsertPortion(context.Background(), &ingredient.Portion{
+		IngredientID: 999, Unit: "cup", Grams: 185,
+	})
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+func TestListPortions_IngredientNotFound(t *testing.T) {
+	svc := ingredient.NewService(newFakeRepo())
+	_, err := svc.ListPortions(context.Background(), 999)
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+func TestDeletePortion_NotFound(t *testing.T) {
+	svc := ingredient.NewService(newFakeRepo())
+	err := svc.DeletePortion(context.Background(), 999, "cup")
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+func TestUpsertPortion_OverwritesExisting(t *testing.T) {
+	repo := newFakeRepo()
+	svc := ingredient.NewService(repo)
+	require.NoError(t, svc.Create(context.Background(), &ingredient.Ingredient{Name: "Rice"}))
+
+	require.NoError(t, svc.UpsertPortion(context.Background(), &ingredient.Portion{
+		IngredientID: 1, Unit: "cup", Grams: 185,
+	}))
+	require.NoError(t, svc.UpsertPortion(context.Background(), &ingredient.Portion{
+		IngredientID: 1, Unit: "cup", Grams: 200,
+	}))
+
+	portions, err := svc.ListPortions(context.Background(), 1)
+	require.NoError(t, err)
+	require.Len(t, portions, 1)
+	assert.Equal(t, 200.0, portions[0].Grams)
 }

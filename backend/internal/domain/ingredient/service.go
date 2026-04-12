@@ -75,6 +75,33 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
 }
 
+// ListPortions returns all portions for the given ingredient.
+func (s *Service) ListPortions(ctx context.Context, ingredientID int64) ([]Portion, error) {
+	if _, err := s.repo.Get(ctx, ingredientID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListPortions(ctx, ingredientID)
+}
+
+// UpsertPortion validates and creates or updates a portion for an ingredient.
+func (s *Service) UpsertPortion(ctx context.Context, p *Portion) error {
+	if p.Unit == "" {
+		return fmt.Errorf("%w: unit required", domain.ErrInvalidInput)
+	}
+	if p.Grams <= 0 {
+		return fmt.Errorf("%w: grams must be positive", domain.ErrInvalidInput)
+	}
+	if _, err := s.repo.Get(ctx, p.IngredientID); err != nil {
+		return err
+	}
+	return s.repo.UpsertPortion(ctx, p)
+}
+
+// DeletePortion removes a portion by ingredient ID and unit.
+func (s *Service) DeletePortion(ctx context.Context, ingredientID int64, unit string) error {
+	return s.repo.DeletePortion(ctx, ingredientID, unit)
+}
+
 // List returns a page of ingredients matching the query.
 func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
 	if q.Limit <= 0 {

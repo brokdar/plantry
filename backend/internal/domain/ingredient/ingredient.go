@@ -44,3 +44,10 @@ type ListResult struct {
 	Items []Ingredient
 	Total int
 }
+
+// Portion represents a serving size unit for an ingredient.
+type Portion struct {
+	IngredientID int64
+	Unit         string
+	Grams        float64
+}
