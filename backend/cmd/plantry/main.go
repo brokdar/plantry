@@ -21,6 +21,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/off"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/config"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
@@ -82,10 +83,14 @@ func run() error {
 		}
 	}
 
+	componentRepo := sqlite.NewComponentRepo(conn)
+	componentSvc := component.NewService(componentRepo, ingredientRepo)
+
 	h := transport.Handlers{
 		Ingredients: handlers.NewIngredientHandler(ingredientSvc),
 		Lookup:      handlers.NewLookupHandler(resolver, imgStore, ingredientSvc),
 		Images:      handlers.NewImageHandler(ingredientSvc, imgStore),
+		Components:  handlers.NewComponentHandler(componentSvc, ingredientRepo),
 	}
 	handler := transport.NewRouter(logger, static, h)
 

@@ -1,0 +1,249 @@
+import { test, expect, request as apiRequest } from "@playwright/test"
+
+const API = "http://localhost:8080"
+
+function uid() {
+  return crypto.randomUUID().slice(0, 8)
+}
+
+async function seedIngredient(data: {
+  name: string
+  kcal_100g?: number
+  protein_100g?: number
+  fat_100g?: number
+  carbs_100g?: number
+}) {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  const res = await ctx.post("/api/ingredients", { data })
+  const body = await res.json()
+  expect(
+    res.ok(),
+    `Seed ingredient "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
+  ).toBeTruthy()
+  await ctx.dispose()
+  return body as { id: number; name: string }
+}
+
+async function seedComponent(data: {
+  name: string
+  role: string
+  reference_portions?: number
+  ingredients?: {
+    ingredient_id: number
+    amount: number
+    unit: string
+    grams: number
+    sort_order: number
+  }[]
+  instructions?: { step_number: number; text: string }[]
+  tags?: string[]
+}) {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  const res = await ctx.post("/api/components", {
+    data: {
+      reference_portions: 1,
+      ...data,
+    },
+  })
+  const body = await res.json()
+  expect(
+    res.ok(),
+    `Seed component "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
+  ).toBeTruthy()
+  await ctx.dispose()
+  return body as { id: number; name: string }
+}
+
+async function cleanupComponent(id: number) {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  await ctx.delete(`/api/components/${id}`)
+  await ctx.dispose()
+}
+
+async function cleanupIngredient(id: number) {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  await ctx.delete(`/api/ingredients/${id}`)
+  await ctx.dispose()
+}
+
+test.describe("Component Library", () => {
+  test("create a component via the form", async ({ page }) => {
+    const tag = uid()
+    const ing = await seedIngredient({
+      name: `E2E Chicken ${tag}`,
+      kcal_100g: 165,
+      protein_100g: 31,
+    })
+    let createdId: number | undefined
+
+    try {
+      await page.goto("/components/new")
+      await page.getByLabel(/^name/i).fill(`Curry ${tag}`)
+      await page.getByLabel(/servings/i).fill("2")
+
+      const responsePromise = page.waitForResponse(
+        (res) =>
+          res.url().includes("/api/components") &&
+          res.request().method() === "POST"
+      )
+      await page.getByRole("button", { name: /save/i }).click()
+      const response = await responsePromise
+      expect(response.status()).toBe(201)
+
+      const body = (await response.json()) as { id: number }
+      createdId = body.id
+
+      await expect(
+        page.getByRole("cell", { name: `Curry ${tag}` })
+      ).toBeVisible()
+    } finally {
+      if (createdId) await cleanupComponent(createdId)
+      await cleanupIngredient(ing.id)
+    }
+  })
+
+  test("search filters components by name", async ({ page }) => {
+    const tag = uid()
+    const c1 = await seedComponent({
+      name: `Chicken Curry ${tag}`,
+      role: "main",
+    })
+    const c2 = await seedComponent({
+      name: `Tofu Bowl ${tag}`,
+      role: "standalone",
+    })
+    const c3 = await seedComponent({
+      name: `Pasta Sauce ${tag}`,
+      role: "sauce",
+    })
+
+    try {
+      await page.goto("/components")
+
+      await expect(page.getByRole("cell", { name: c1.name })).toBeVisible()
+      await expect(page.getByRole("cell", { name: c2.name })).toBeVisible()
+      await expect(page.getByRole("cell", { name: c3.name })).toBeVisible()
+
+      await page.getByPlaceholder(/search/i).fill("chicken")
+      await page.waitForResponse(
+        (res) =>
+          res.url().includes("/api/components") &&
+          res.url().includes("search=chicken")
+      )
+
+      await expect(page.getByRole("cell", { name: c1.name })).toBeVisible()
+      await expect(page.getByRole("cell", { name: c2.name })).toHaveCount(0)
+      await expect(page.getByRole("cell", { name: c3.name })).toHaveCount(0)
+    } finally {
+      await cleanupComponent(c1.id)
+      await cleanupComponent(c2.id)
+      await cleanupComponent(c3.id)
+    }
+  })
+
+  test("edit a component", async ({ page }) => {
+    const tag = uid()
+    const comp = await seedComponent({ name: `Edit Test ${tag}`, role: "main" })
+
+    try {
+      await page.goto(`/components/${comp.id}`)
+      await expect(page.getByText(`Edit Test ${tag}`)).toBeVisible()
+
+      await page.getByRole("link", { name: /edit/i }).click()
+      await expect(page.getByLabel(/^name/i)).toHaveValue(`Edit Test ${tag}`)
+
+      await page.getByLabel(/^name/i).fill(`Updated ${tag}`)
+
+      const responsePromise = page.waitForResponse(
+        (res) =>
+          res.url().includes(`/api/components/${comp.id}`) &&
+          res.request().method() === "PUT"
+      )
+      await page.getByRole("button", { name: /save/i }).click()
+      const response = await responsePromise
+      expect(response.status()).toBe(200)
+
+      await expect(page.getByText(`Updated ${tag}`)).toBeVisible()
+    } finally {
+      await cleanupComponent(comp.id)
+    }
+  })
+
+  test("delete a component", async ({ page }) => {
+    const tag = uid()
+    const keep = await seedComponent({ name: `Keep ${tag}`, role: "main" })
+    const toDelete = await seedComponent({
+      name: `Delete ${tag}`,
+      role: "side_veg",
+    })
+
+    try {
+      await page.goto("/components")
+      await expect(
+        page.getByRole("cell", { name: toDelete.name })
+      ).toBeVisible()
+
+      const row = page.getByRole("row").filter({ hasText: toDelete.name })
+      await row.getByRole("button", { name: /delete/i }).click()
+
+      const responsePromise = page.waitForResponse(
+        (res) =>
+          res.url().includes(`/api/components/${toDelete.id}`) &&
+          res.request().method() === "DELETE"
+      )
+      await page.getByRole("button", { name: /^delete$/i }).click()
+      await responsePromise
+
+      await expect(page.getByRole("cell", { name: toDelete.name })).toHaveCount(
+        0
+      )
+      await expect(page.getByRole("cell", { name: keep.name })).toBeVisible()
+    } finally {
+      await cleanupComponent(keep.id)
+    }
+  })
+
+  test("nutrition endpoint returns correct values", async ({ page }) => {
+    const tag = uid()
+    const ing = await seedIngredient({
+      name: `Nut Chicken ${tag}`,
+      kcal_100g: 200,
+      protein_100g: 20,
+      fat_100g: 10,
+      carbs_100g: 0,
+    })
+
+    const comp = await seedComponent({
+      name: `Nut Comp ${tag}`,
+      role: "main",
+      reference_portions: 2,
+      ingredients: [
+        {
+          ingredient_id: ing.id,
+          amount: 400,
+          unit: "g",
+          grams: 400,
+          sort_order: 0,
+        },
+      ],
+    })
+
+    try {
+      // Verify via API: 400g at 200kcal/100g = 800kcal total, /2 portions = 400
+      const ctx = await apiRequest.newContext({ baseURL: API })
+      const res = await ctx.get(`/api/components/${comp.id}/nutrition`)
+      expect(res.ok()).toBeTruthy()
+      const nut = (await res.json()) as { kcal: number; protein: number }
+      expect(nut.kcal).toBe(400)
+      expect(nut.protein).toBe(40)
+      await ctx.dispose()
+
+      // View detail page — nutrition should render
+      await page.goto(`/components/${comp.id}`)
+      await expect(page.getByText("400.0")).toBeVisible()
+    } finally {
+      await cleanupComponent(comp.id)
+      await cleanupIngredient(ing.id)
+    }
+  })
+})

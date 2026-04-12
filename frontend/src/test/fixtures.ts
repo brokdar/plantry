@@ -34,7 +34,59 @@ export const mockBrownRice = {
   updated_at: "2024-01-02T00:00:00Z",
 }
 
+import type { Component } from "@/lib/api/components"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
+
+export const mockChickenCurry: Component = {
+  id: 1,
+  name: "Chicken Curry",
+  role: "main",
+  variant_group_id: null,
+  reference_portions: 2,
+  prep_minutes: 10,
+  cook_minutes: 30,
+  image_path: null,
+  notes: null,
+  last_cooked_at: null,
+  cook_count: 0,
+  ingredients: [
+    {
+      id: 1,
+      component_id: 1,
+      ingredient_id: 1,
+      amount: 300,
+      unit: "g",
+      grams: 300,
+      sort_order: 0,
+    },
+  ],
+  instructions: [
+    { id: 1, component_id: 1, step_number: 1, text: "Cook chicken" },
+    { id: 2, component_id: 1, step_number: 2, text: "Add curry paste" },
+  ],
+  tags: ["spicy", "thai"],
+  created_at: "2024-01-01T00:00:00Z",
+  updated_at: "2024-01-01T00:00:00Z",
+}
+
+export const mockTofuBowl: Component = {
+  id: 2,
+  name: "Tofu Bowl",
+  role: "standalone",
+  variant_group_id: null,
+  reference_portions: 1,
+  prep_minutes: 5,
+  cook_minutes: 15,
+  image_path: null,
+  notes: null,
+  last_cooked_at: null,
+  cook_count: 0,
+  ingredients: [],
+  instructions: [],
+  tags: ["vegan"],
+  created_at: "2024-01-02T00:00:00Z",
+  updated_at: "2024-01-02T00:00:00Z",
+}
 
 export const mockLookupCandidate: LookupCandidate = {
   name: "Chicken Breast, Raw",

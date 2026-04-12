@@ -23,6 +23,12 @@ function RootComponent() {
           >
             {t("nav.ingredients")}
           </Link>
+          <Link
+            to="/components"
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground [&.active]:text-foreground"
+          >
+            {t("nav.components")}
+          </Link>
         </nav>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">

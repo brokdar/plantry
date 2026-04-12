@@ -190,6 +190,43 @@ func (r *IngredientRepo) List(ctx context.Context, q ingredient.ListQuery) (*ing
 	return &ingredient.ListResult{Items: items, Total: total}, nil
 }
 
+// LookupForNutrition fetches multiple ingredients by ID for nutrition calculation.
+func (r *IngredientRepo) LookupForNutrition(ctx context.Context, ids []int64) (map[int64]*ingredient.Ingredient, error) {
+	if len(ids) == 0 {
+		return make(map[int64]*ingredient.Ingredient), nil
+	}
+	builder := sq.Select("*").From("ingredients").Where(sq.Eq{"id": ids})
+	query, args, err := builder.PlaceholderFormat(sq.Question).ToSql()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	result := make(map[int64]*ingredient.Ingredient, len(ids))
+	for rows.Next() {
+		var row sqlcgen.Ingredient
+		if err := rows.Scan(
+			&row.ID, &row.Name, &row.Source, &row.Barcode, &row.OffID,
+			&row.FdcID, &row.ImagePath, &row.Kcal100g, &row.Protein100g,
+			&row.Fat100g, &row.Carbs100g, &row.Fiber100g, &row.Sodium100g,
+			&row.CreatedAt, &row.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		var i ingredient.Ingredient
+		mapToDomain(&row, &i)
+		result[i.ID] = &i
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // sanitizeFTS5 wraps each word in double-quotes so FTS5 treats reserved words
 // (AND, OR, NOT, NEAR) and special characters (*, ^, ") as literals.
 func sanitizeFTS5(input string) string {
