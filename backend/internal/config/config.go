@@ -9,9 +9,10 @@ import (
 )
 
 type Config struct {
-	Port     int
-	DBPath   string
-	LogLevel slog.Level
+	Port      int
+	DBPath    string
+	LogLevel  slog.Level
+	ImagePath string
 }
 
 func Load() (Config, error) {
@@ -31,6 +32,11 @@ func Load() (Config, error) {
 
 	if v := os.Getenv("PLANTRY_DB_PATH"); v != "" {
 		cfg.DBPath = v
+	}
+
+	cfg.ImagePath = "/data/images"
+	if v := os.Getenv("PLANTRY_IMAGE_PATH"); v != "" {
+		cfg.ImagePath = v
 	}
 
 	if v := os.Getenv("PLANTRY_LOG_LEVEL"); v != "" {
