@@ -122,7 +122,12 @@ func TestLookup_NoResults(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/ingredients/lookup?barcode=000", nil)
 	r.ServeHTTP(resp, req)
 
-	assert.Equal(t, http.StatusNotFound, resp.Code)
+	assert.Equal(t, http.StatusOK, resp.Code)
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	results := got["results"].([]any)
+	assert.Len(t, results, 0)
+	assert.Equal(t, float64(-1), got["recommended_index"])
 }
 
 func TestResolve_CreatesIngredient(t *testing.T) {

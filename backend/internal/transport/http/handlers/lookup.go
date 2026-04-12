@@ -47,7 +47,10 @@ func (h *LookupHandler) Lookup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(results) == 0 {
-		writeError(w, http.StatusNotFound, "error.ingredient.lookup.not_found")
+		writeJSON(w, http.StatusOK, lookupResponse{
+			Results:          []ingredient.Candidate{},
+			RecommendedIndex: -1,
+		})
 		return
 	}
 

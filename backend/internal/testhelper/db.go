@@ -2,6 +2,7 @@ package testhelper
 
 import (
 	"database/sql"
+	"path/filepath"
 	"testing"
 
 	"github.com/pressly/goose/v3"
@@ -16,7 +17,8 @@ import (
 func NewTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
-	conn, err := sql.Open("sqlite", "file::memory:?cache=shared&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
+	path := filepath.Join(t.TempDir(), "test.db")
+	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	require.NoError(t, err)
 	conn.SetMaxOpenConns(1)
 

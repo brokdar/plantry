@@ -62,7 +62,8 @@ func (s *Store) SaveFromURL(ctx context.Context, url, category string, id int64)
 // SaveUpload processes an uploaded image from reader, resizes, and saves as JPEG.
 // Returns the relative path.
 func (s *Store) SaveUpload(_ context.Context, r io.Reader, category string, id int64) (string, error) {
-	return s.processAndSave(r, category, id)
+	limited := io.LimitReader(r, maxBodyBytes)
+	return s.processAndSave(limited, category, id)
 }
 
 // Delete removes the image file for the given category and id.

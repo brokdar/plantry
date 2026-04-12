@@ -180,6 +180,16 @@ func TestDeterministicFilename(t *testing.T) {
 	assert.Equal(t, 120, cfg.Height)
 }
 
+func TestSaveUpload_OversizedRejected(t *testing.T) {
+	store, err := imagestore.New(t.TempDir(), nil)
+	require.NoError(t, err)
+
+	// 11 MB of zeros — exceeds the 10 MB upload limit; decode must fail.
+	big := bytes.NewReader(make([]byte, 11<<20))
+	_, err = store.SaveUpload(context.Background(), big, "ingredients", 99)
+	assert.Error(t, err)
+}
+
 func TestSaveFromURL_InvalidImage(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("this is not an image"))
