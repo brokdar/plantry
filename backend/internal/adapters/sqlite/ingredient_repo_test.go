@@ -209,6 +209,21 @@ func TestListOffsetBeyondTotal(t *testing.T) {
 	assert.Equal(t, 3, result.Total)
 }
 
+func TestListFTSPrefixMatch(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewIngredientRepo(db)
+	ctx := context.Background()
+
+	require.NoError(t, repo.Create(ctx, &ingredient.Ingredient{Name: "Chicken Breast", Source: "manual"}))
+	require.NoError(t, repo.Create(ctx, &ingredient.Ingredient{Name: "Tofu", Source: "manual"}))
+
+	result, err := repo.List(ctx, ingredient.ListQuery{Search: "chick", Limit: 50, SortBy: "name"})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Total)
+	require.Len(t, result.Items, 1)
+	assert.Equal(t, "Chicken Breast", result.Items[0].Name)
+}
+
 func TestNullableFieldsRoundtrip(t *testing.T) {
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewIngredientRepo(db)

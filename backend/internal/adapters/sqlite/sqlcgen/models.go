@@ -26,6 +26,12 @@ type Ingredient struct {
 	UpdatedAt   string
 }
 
+type IngredientPortion struct {
+	IngredientID int64
+	Unit         string
+	Grams        float64
+}
+
 type IngredientsFt struct {
 	Name string
 }

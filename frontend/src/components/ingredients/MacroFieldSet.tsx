@@ -44,6 +44,7 @@ export function MacroFieldSet({ control, disabled }: MacroFieldSetProps) {
                   min="0"
                   disabled={disabled}
                   {...fieldProps}
+                  value={fieldProps.value ?? ""}
                 />
               </FormControl>
               <FormMessage />

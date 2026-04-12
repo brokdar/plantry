@@ -27,6 +27,35 @@
     "no_results": "Keine Zutaten gefunden.",
     "empty_state": "Noch keine Zutaten. Erstelle deine erste!"
   },
+  "lookup": {
+    "title": "Zutat finden",
+    "search_placeholder": "Nach Name oder Barcode suchen...",
+    "scan_barcode": "Barcode scannen",
+    "enter_barcode": "Barcode eingeben",
+    "no_results": "Keine Treffer gefunden",
+    "searching": "Suche...",
+    "source_off": "Open Food Facts",
+    "source_fdc": "USDA",
+    "create_manually": "Manuell erstellen",
+    "back_to_search": "Zurück zur Suche",
+    "select_match": "Treffer auswählen",
+    "recommended": "Empfohlen",
+    "tab_search": "Suche",
+    "tab_manual": "Manuell"
+  },
+  "portion": {
+    "title": "Portionen",
+    "unit": "Einheit",
+    "grams": "Gramm",
+    "add": "Portion hinzufügen",
+    "unit_placeholder": "z.B. Tasse, EL, Scheibe",
+    "delete_unit": "{{unit}} entfernen"
+  },
+  "image": {
+    "upload": "Bild hochladen",
+    "remove": "Bild entfernen",
+    "uploading": "Wird hochgeladen..."
+  },
   "error": {
     "not_found": "Ressource nicht gefunden.",
     "invalid_id": "Ungültige ID.",
@@ -34,7 +63,11 @@
     "server": "Etwas ist schiefgelaufen.",
     "ingredient": {
       "duplicate_name": "Eine Zutat mit diesem Namen existiert bereits.",
-      "in_use": "Diese Zutat wird in einer Komponente verwendet und kann nicht gelöscht werden."
+      "in_use": "Diese Zutat wird in einer Komponente verwendet und kann nicht gelöscht werden.",
+      "lookup_failed": "Externe Datenbanken konnten nicht durchsucht werden"
+    },
+    "image": {
+      "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut."
     }
   },
   "common": {

@@ -9,4 +9,7 @@ type Repository interface {
 	Update(ctx context.Context, i *Ingredient) error
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context, q ListQuery) (*ListResult, error)
+	ListPortions(ctx context.Context, ingredientID int64) ([]Portion, error)
+	UpsertPortion(ctx context.Context, p *Portion) error
+	DeletePortion(ctx context.Context, ingredientID int64, unit string) error
 }

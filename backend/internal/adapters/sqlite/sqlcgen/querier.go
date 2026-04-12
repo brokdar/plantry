@@ -12,11 +12,14 @@ import (
 type Querier interface {
 	CreateIngredient(ctx context.Context, arg CreateIngredientParams) (Ingredient, error)
 	DeleteIngredient(ctx context.Context, id int64) (sql.Result, error)
+	DeletePortion(ctx context.Context, arg DeletePortionParams) (sql.Result, error)
 	GetIngredient(ctx context.Context, id int64) (Ingredient, error)
+	ListPortions(ctx context.Context, ingredientID int64) ([]IngredientPortion, error)
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)
 	UpdateIngredient(ctx context.Context, arg UpdateIngredientParams) (Ingredient, error)
+	UpsertPortion(ctx context.Context, arg UpsertPortionParams) error
 }
 
 var _ Querier = (*Queries)(nil)

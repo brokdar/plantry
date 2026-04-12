@@ -9,16 +9,19 @@ import (
 )
 
 type Config struct {
-	Port     int
-	DBPath   string
-	LogLevel slog.Level
+	Port      int
+	DBPath    string
+	LogLevel  slog.Level
+	ImagePath string
+	FDCAPIKey string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		Port:     8080,
-		DBPath:   "/data/plantry.db",
-		LogLevel: slog.LevelInfo,
+		Port:      8080,
+		DBPath:    "/data/plantry.db",
+		LogLevel:  slog.LevelInfo,
+		ImagePath: "/data/images",
 	}
 
 	if v := os.Getenv("PLANTRY_PORT"); v != "" {
@@ -46,6 +49,14 @@ func Load() (Config, error) {
 		default:
 			return Config{}, fmt.Errorf("PLANTRY_LOG_LEVEL invalid: %q", v)
 		}
+	}
+
+	if v := os.Getenv("PLANTRY_IMAGE_PATH"); v != "" {
+		cfg.ImagePath = v
+	}
+
+	if v := os.Getenv("PLANTRY_FDC_API_KEY"); v != "" {
+		cfg.FDCAPIKey = v
 	}
 
 	return cfg, nil

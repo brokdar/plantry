@@ -16,6 +16,9 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/jaltszeimer/plantry/backend/db"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/fdc"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/off"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/config"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
@@ -57,8 +60,32 @@ func run() error {
 
 	ingredientRepo := sqlite.NewIngredientRepo(conn)
 	ingredientSvc := ingredient.NewService(ingredientRepo)
+
+	// External food providers.
+	offClient := off.New()
+	offProvider := off.NewProvider(offClient)
+
+	var fdcProvider ingredient.FoodProvider
+	if cfg.FDCAPIKey != "" {
+		fdcClient := fdc.New(cfg.FDCAPIKey)
+		fdcProvider = fdc.NewProvider(fdcClient)
+	}
+
+	resolver := ingredient.NewResolver(ingredientRepo, offProvider, fdcProvider)
+
+	// Image store (optional).
+	var imgStore *imagestore.Store
+	if cfg.ImagePath != "" {
+		imgStore, err = imagestore.New(cfg.ImagePath, nil)
+		if err != nil {
+			return fmt.Errorf("image store: %w", err)
+		}
+	}
+
 	h := transport.Handlers{
 		Ingredients: handlers.NewIngredientHandler(ingredientSvc),
+		Lookup:      handlers.NewLookupHandler(resolver, imgStore, ingredientSvc),
+		Images:      handlers.NewImageHandler(ingredientSvc, imgStore),
 	}
 	handler := transport.NewRouter(logger, static, h)
 

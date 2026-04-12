@@ -17,6 +17,8 @@ func toHTTP(err error) (int, string) {
 		return http.StatusConflict, "error.ingredient.in_use"
 	case errors.Is(err, domain.ErrInvalidInput):
 		return http.StatusBadRequest, "error.invalid_body"
+	case errors.Is(err, domain.ErrLookupFailed):
+		return http.StatusBadGateway, "error.ingredient.lookup_failed"
 	default:
 		return http.StatusInternalServerError, "error.server"
 	}

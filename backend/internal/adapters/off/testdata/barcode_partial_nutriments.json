@@ -1,0 +1,20 @@
+{
+  "code": "5000159484695",
+  "status": 1,
+  "status_verbose": "product found",
+  "product": {
+    "product_name": "Twix Ice Cream",
+    "product_name_de": "Twix Ice Cream",
+    "product_name_en": "Twix Ice cream",
+    "brands": "Twix",
+    "serving_size": "43.1 g",
+    "serving_quantity": 43.1,
+    "product_quantity": 0,
+    "product_quantity_unit": "",
+    "nutriments": {
+      "energy-kcal_100g": 0,
+      "proteins_100g": 0
+    },
+    "image_front_small_url": "https://images.openfoodfacts.org/images/products/500/015/948/4695/front_fr.85.200.jpg"
+  }
+}

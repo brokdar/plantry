@@ -26,6 +26,9 @@ export interface IngredientListResponse {
 export interface IngredientInput {
   name: string
   source?: string
+  barcode?: string | null
+  off_id?: string | null
+  fdc_id?: string | null
   kcal_100g?: number
   protein_100g?: number
   fat_100g?: number

@@ -33,3 +33,4 @@ go.work.sum
 
 # Vitest run artifacts (updated on every test run, not useful in VCS)
 frontend/test-results/
+.claude/worktrees/

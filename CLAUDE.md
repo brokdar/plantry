@@ -41,6 +41,7 @@ docker compose up --build             # build + run (port 8080)
 
 Load these before writing or modifying the relevant code:
 
+- **`frontend-design`** - creating/modifying frontend pages/components
 - **`vitest`** — frontend unit tests
 - **`playwright-best-practices`** — e2e tests
 - **`vercel-react-best-practices`** — React components
