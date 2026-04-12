@@ -1,0 +1,2 @@
+# Placeholder so //go:embed compiles before the frontend build lands here.
+# Docker Stage B copies the Vite `dist/` contents into this directory.

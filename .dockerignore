@@ -1,0 +1,25 @@
+.git
+.github
+.claude
+.agents
+docs
+skills-lock.json
+README.md
+LICENSE
+
+# Node / frontend build artifacts
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+frontend/.vite
+
+# Go caches & local DBs
+backend/bin
+backend/tmp
+backend/**/*.db
+backend/**/*.db-*
+backend/internal/webui/files/*
+!backend/internal/webui/files/.keep
+
+**/.DS_Store

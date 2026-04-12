@@ -1,0 +1,9 @@
+{
+  "nav": {
+    "brand": "Plantry"
+  },
+  "home": {
+    "title": "Welcome to Plantry",
+    "subtitle": "Your self-hosted meal planner."
+  }
+}
