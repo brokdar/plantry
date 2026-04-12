@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+# TanStack Router generated file — has its own formatting
+src/routeTree.gen.ts
+.pnpm-store/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock

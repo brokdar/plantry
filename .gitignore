@@ -30,3 +30,6 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Vitest run artifacts (updated on every test run, not useful in VCS)
+frontend/test-results/

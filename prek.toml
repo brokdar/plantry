@@ -1,0 +1,95 @@
+minimum_prek_version = "0.3.8"
+
+# ── Builtin (Rust-native, instant, zero deps) ─────────────────────────────────
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "no-commit-to-branch", args = ["-b", "main"] },
+  { id = "detect-private-key" },
+  { id = "check-added-large-files", args = ["--maxkb=500"] },
+  { id = "check-merge-conflict" },
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-yaml" },
+  { id = "check-toml" },
+  # tsconfig files use JSONC (comments) — exclude them
+  { id = "check-json", exclude = "tsconfig" },
+]
+
+# ── Local system hooks ────────────────────────────────────────────────────────
+[[repos]]
+repo = "local"
+hooks = [
+  # gofumpt: prek installs via go install (language = "golang"), auto-fixes
+  {
+    id                      = "gofumpt",
+    name                    = "gofumpt",
+    language                = "golang",
+    entry                   = "gofumpt",
+    args                    = ["-w"],
+    files                   = "^backend/.*\\.go$",
+    pass_filenames          = true,
+    additional_dependencies = ["mvdan.cc/gofumpt@latest"],
+  },
+
+  # golangci-lint: run from backend/ to pick up the module root
+  # Install: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+  {
+    id             = "golangci-lint",
+    name           = "golangci-lint",
+    language       = "system",
+    entry          = "bash -c 'cd backend && golangci-lint run --config .golangci.yml --new-from-rev HEAD'",
+    files          = "^backend/.*\\.go$",
+    pass_filenames = false,
+  },
+
+  # go mod tidy: runs tidy then fails if go.mod/go.sum changed
+  {
+    id             = "go-mod-tidy",
+    name           = "go mod tidy (drift check)",
+    language       = "system",
+    entry          = "bash -c 'cd backend && go mod tidy && git diff --exit-code go.mod go.sum'",
+    files          = "^backend/",
+    pass_filenames = false,
+  },
+
+  # go test — mandatory
+  {
+    id             = "go-test",
+    name           = "go test",
+    language       = "system",
+    entry          = "bash -c 'cd backend && go test ./...'",
+    files          = "^backend/.*\\.go$",
+    pass_filenames = false,
+  },
+
+  # Prettier: auto-fixes TS/TSX/CSS; git blocks commit if files were reformatted
+  {
+    id             = "prettier",
+    name           = "Prettier",
+    language       = "system",
+    entry          = "bash -c 'cd frontend && bunx prettier --write .'",
+    files          = "^frontend/src/.*\\.(ts|tsx|css)$",
+    pass_filenames = false,
+  },
+
+  # ESLint: check-only (real lint errors surface here)
+  {
+    id             = "eslint",
+    name           = "ESLint",
+    language       = "system",
+    entry          = "bash -c 'cd frontend && bun run lint'",
+    files          = "^frontend/src/.*\\.(ts|tsx)$",
+    pass_filenames = false,
+  },
+
+  # Vitest unit tests — mandatory
+  {
+    id             = "vitest",
+    name           = "vitest",
+    language       = "system",
+    entry          = "bash -c 'cd frontend && bun run test'",
+    files          = "^frontend/src/.*\\.(ts|tsx)$",
+    pass_filenames = false,
+  },
+]
