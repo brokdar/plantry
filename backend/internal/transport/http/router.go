@@ -39,6 +39,10 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Put("/", h.Components.Update)
 					r.Delete("/", h.Components.Delete)
 					r.Get("/nutrition", h.Components.Nutrition)
+					if h.Components.HasImageStore() {
+						r.Post("/image", h.Components.Upload)
+						r.Delete("/image", h.Components.DeleteImage)
+					}
 				})
 			})
 		}

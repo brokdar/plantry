@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
@@ -24,8 +26,8 @@ func setupComponentRouter(t *testing.T) (http.Handler, *sqlite.IngredientRepo) {
 	db := testhelper.NewTestDB(t)
 	iRepo := sqlite.NewIngredientRepo(db)
 	cRepo := sqlite.NewComponentRepo(db)
-	cSvc := component.NewService(cRepo, iRepo)
-	h := handlers.NewComponentHandler(cSvc, iRepo)
+	cSvc := component.NewService(cRepo, iRepo, iRepo)
+	h := handlers.NewComponentHandler(cSvc, nil)
 
 	r := chi.NewRouter()
 	r.Route("/api/components", func(r chi.Router) {
@@ -277,4 +279,97 @@ func TestNutrition_404(t *testing.T) {
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/components/999/nutrition", nil))
 	assert.Equal(t, http.StatusNotFound, resp.Code)
+}
+
+func setupComponentRouterWithImages(t *testing.T) (http.Handler, *sqlite.IngredientRepo) {
+	t.Helper()
+	db := testhelper.NewTestDB(t)
+	iRepo := sqlite.NewIngredientRepo(db)
+	cRepo := sqlite.NewComponentRepo(db)
+	cSvc := component.NewService(cRepo, iRepo, iRepo)
+
+	store, err := imagestore.New(t.TempDir(), nil)
+	require.NoError(t, err)
+
+	h := handlers.NewComponentHandler(cSvc, store)
+	r := chi.NewRouter()
+	r.Route("/api/components", func(r chi.Router) {
+		r.Post("/", h.Create)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Get("/", h.Get)
+			r.Post("/image", h.Upload)
+			r.Delete("/image", h.DeleteImage)
+		})
+	})
+	return r, iRepo
+}
+
+func TestComponentImageUpload(t *testing.T) {
+	router, _ := setupComponentRouterWithImages(t)
+
+	// Create a component first.
+	createBody := `{"name":"Image Test","role":"main","reference_portions":1}`
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, httptest.NewRequest(http.MethodPost, "/api/components", bytes.NewBufferString(createBody)))
+	require.Equal(t, http.StatusCreated, createResp.Code)
+
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&created))
+
+	// Build multipart request.
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile("image", "test.jpg")
+	require.NoError(t, err)
+	_, _ = part.Write(testImagePNG(t))
+	require.NoError(t, w.Close())
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/components/%.0f/image", created["id"]), &buf)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Contains(t, got["image_path"], "components/")
+}
+
+func TestComponentImageDelete(t *testing.T) {
+	router, _ := setupComponentRouterWithImages(t)
+
+	// Create and upload.
+	createBody := `{"name":"Delete Image Test","role":"main","reference_portions":1}`
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, httptest.NewRequest(http.MethodPost, "/api/components", bytes.NewBufferString(createBody)))
+	require.Equal(t, http.StatusCreated, createResp.Code)
+
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&created))
+	url := fmt.Sprintf("/api/components/%.0f/image", created["id"])
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile("image", "test.jpg")
+	require.NoError(t, err)
+	_, _ = part.Write(testImagePNG(t))
+	require.NoError(t, w.Close())
+
+	uploadResp := httptest.NewRecorder()
+	uploadReq := httptest.NewRequest(http.MethodPost, url, &buf)
+	uploadReq.Header.Set("Content-Type", w.FormDataContentType())
+	router.ServeHTTP(uploadResp, uploadReq)
+	require.Equal(t, http.StatusOK, uploadResp.Code)
+
+	// Delete the image.
+	deleteResp := httptest.NewRecorder()
+	router.ServeHTTP(deleteResp, httptest.NewRequest(http.MethodDelete, url, nil))
+	assert.Equal(t, http.StatusNoContent, deleteResp.Code)
+
+	// Verify image_path is nil.
+	getResp := httptest.NewRecorder()
+	router.ServeHTTP(getResp, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/components/%.0f", created["id"]), nil))
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&got))
+	assert.Nil(t, got["image_path"])
 }

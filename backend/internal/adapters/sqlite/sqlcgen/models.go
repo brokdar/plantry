@@ -14,8 +14,8 @@ type Component struct {
 	Role              string
 	VariantGroupID    sql.NullInt64
 	ReferencePortions float64
-	PrepMinutes       int64
-	CookMinutes       int64
+	PrepMinutes       sql.NullInt64
+	CookMinutes       sql.NullInt64
 	ImagePath         sql.NullString
 	Notes             sql.NullString
 	LastCookedAt      sql.NullString

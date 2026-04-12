@@ -11,15 +11,15 @@ interface TestCase {
   expected_per_portion: Macros
 }
 
-const tolerance = 0.01
+const numDigits = 2 // matches Go side's 0.01 tolerance
 
 function assertMacrosClose(got: Macros, want: Macros) {
-  expect(got.kcal).toBeCloseTo(want.kcal, tolerance)
-  expect(got.protein).toBeCloseTo(want.protein, tolerance)
-  expect(got.fat).toBeCloseTo(want.fat, tolerance)
-  expect(got.carbs).toBeCloseTo(want.carbs, tolerance)
-  expect(got.fiber).toBeCloseTo(want.fiber, tolerance)
-  expect(got.sodium).toBeCloseTo(want.sodium, tolerance)
+  expect(got.kcal).toBeCloseTo(want.kcal, numDigits)
+  expect(got.protein).toBeCloseTo(want.protein, numDigits)
+  expect(got.fat).toBeCloseTo(want.fat, numDigits)
+  expect(got.carbs).toBeCloseTo(want.carbs, numDigits)
+  expect(got.fiber).toBeCloseTo(want.fiber, numDigits)
+  expect(got.sodium).toBeCloseTo(want.sodium, numDigits)
 }
 
 describe("fromIngredients", () => {

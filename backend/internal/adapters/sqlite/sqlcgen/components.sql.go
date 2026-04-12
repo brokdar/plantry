@@ -21,8 +21,8 @@ type CreateComponentParams struct {
 	Role              string
 	VariantGroupID    sql.NullInt64
 	ReferencePortions float64
-	PrepMinutes       int64
-	CookMinutes       int64
+	PrepMinutes       sql.NullInt64
+	CookMinutes       sql.NullInt64
 	ImagePath         sql.NullString
 	Notes             sql.NullString
 }
@@ -287,8 +287,8 @@ type UpdateComponentParams struct {
 	Role              string
 	VariantGroupID    sql.NullInt64
 	ReferencePortions float64
-	PrepMinutes       int64
-	CookMinutes       int64
+	PrepMinutes       sql.NullInt64
+	CookMinutes       sql.NullInt64
 	ImagePath         sql.NullString
 	Notes             sql.NullString
 	ID                int64

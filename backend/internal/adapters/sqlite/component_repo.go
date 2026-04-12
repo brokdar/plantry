@@ -44,18 +44,15 @@ func (r *ComponentRepo) Create(ctx context.Context, c *component.Component) erro
 	qtx := sqlcgen.New(tx)
 	row, err := qtx.CreateComponent(ctx, sqlcgen.CreateComponentParams{
 		Name:              c.Name,
-		Role:              c.Role,
+		Role:              string(c.Role),
 		VariantGroupID:    toNullInt64(c.VariantGroupID),
 		ReferencePortions: c.ReferencePortions,
-		PrepMinutes:       int64(c.PrepMinutes),
-		CookMinutes:       int64(c.CookMinutes),
+		PrepMinutes:       toNullInt64FromIntPtr(c.PrepMinutes),
+		CookMinutes:       toNullInt64FromIntPtr(c.CookMinutes),
 		ImagePath:         toNullString(c.ImagePath),
 		Notes:             toNullString(c.Notes),
 	})
 	if err != nil {
-		if isUniqueViolation(err, "components.name") {
-			return fmt.Errorf("%w: %s", domain.ErrDuplicateName, c.Name)
-		}
 		return err
 	}
 	mapComponentToDomain(&row, c)
@@ -95,20 +92,17 @@ func (r *ComponentRepo) Update(ctx context.Context, c *component.Component) erro
 	row, err := qtx.UpdateComponent(ctx, sqlcgen.UpdateComponentParams{
 		ID:                c.ID,
 		Name:              c.Name,
-		Role:              c.Role,
+		Role:              string(c.Role),
 		VariantGroupID:    toNullInt64(c.VariantGroupID),
 		ReferencePortions: c.ReferencePortions,
-		PrepMinutes:       int64(c.PrepMinutes),
-		CookMinutes:       int64(c.CookMinutes),
+		PrepMinutes:       toNullInt64FromIntPtr(c.PrepMinutes),
+		CookMinutes:       toNullInt64FromIntPtr(c.CookMinutes),
 		ImagePath:         toNullString(c.ImagePath),
 		Notes:             toNullString(c.Notes),
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: id %d", domain.ErrNotFound, c.ID)
-		}
-		if isUniqueViolation(err, "components.name") {
-			return fmt.Errorf("%w: %s", domain.ErrDuplicateName, c.Name)
 		}
 		return err
 	}
@@ -305,11 +299,11 @@ func (r *ComponentRepo) loadChildren(ctx context.Context, q *sqlcgen.Queries, c 
 func mapComponentToDomain(row *sqlcgen.Component, c *component.Component) {
 	c.ID = row.ID
 	c.Name = row.Name
-	c.Role = row.Role
+	c.Role = component.Role(row.Role)
 	c.VariantGroupID = fromNullInt64(row.VariantGroupID)
 	c.ReferencePortions = row.ReferencePortions
-	c.PrepMinutes = int(row.PrepMinutes)
-	c.CookMinutes = int(row.CookMinutes)
+	c.PrepMinutes = fromNullInt64ToIntPtr(row.PrepMinutes)
+	c.CookMinutes = fromNullInt64ToIntPtr(row.CookMinutes)
 	c.ImagePath = fromNullString(row.ImagePath)
 	c.Notes = fromNullString(row.Notes)
 	c.CookCount = int(row.CookCount)
@@ -319,6 +313,21 @@ func mapComponentToDomain(row *sqlcgen.Component, c *component.Component) {
 		t, _ := time.Parse(timeLayout, row.LastCookedAt.String)
 		c.LastCookedAt = &t
 	}
+}
+
+func toNullInt64FromIntPtr(v *int) sql.NullInt64 {
+	if v == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(*v), Valid: true}
+}
+
+func fromNullInt64ToIntPtr(n sql.NullInt64) *int {
+	if !n.Valid {
+		return nil
+	}
+	v := int(n.Int64)
+	return &v
 }
 
 func toNullInt64(v *int64) sql.NullInt64 {

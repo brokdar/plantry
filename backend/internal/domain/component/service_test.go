@@ -30,11 +30,6 @@ func newFakeRepo() *fakeRepo {
 func (r *fakeRepo) Create(_ context.Context, c *component.Component) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for _, existing := range r.items {
-		if existing.Name == c.Name {
-			return fmt.Errorf("%w: %s", domain.ErrDuplicateName, c.Name)
-		}
-	}
 	r.seq++
 	c.ID = r.seq
 	clone := *c
@@ -62,11 +57,6 @@ func (r *fakeRepo) Update(_ context.Context, c *component.Component) error {
 	if _, ok := r.items[c.ID]; !ok {
 		return fmt.Errorf("%w: id %d", domain.ErrNotFound, c.ID)
 	}
-	for _, existing := range r.items {
-		if existing.Name == c.Name && existing.ID != c.ID {
-			return fmt.Errorf("%w: %s", domain.ErrDuplicateName, c.Name)
-		}
-	}
 	clone := *c
 	clone.Ingredients = append([]component.ComponentIngredient(nil), c.Ingredients...)
 	clone.Instructions = append([]component.Instruction(nil), c.Instructions...)
@@ -93,7 +83,7 @@ func (r *fakeRepo) List(_ context.Context, q component.ListQuery) (*component.Li
 		if q.Search != "" && !strings.Contains(strings.ToLower(c.Name), strings.ToLower(q.Search)) {
 			continue
 		}
-		if q.Role != "" && c.Role != q.Role {
+		if q.Role != "" && string(c.Role) != q.Role {
 			continue
 		}
 		filtered = append(filtered, *c)
@@ -124,12 +114,33 @@ func (f *fakePortionLookup) ListPortions(_ context.Context, ingredientID int64) 
 	return f.portions[ingredientID], nil
 }
 
+// --- fake nutrition lookup ---
+
+type fakeNutritionLookup struct {
+	ingredients map[int64]*ingredient.Ingredient
+}
+
+func newFakeNutritionLookup() *fakeNutritionLookup {
+	return &fakeNutritionLookup{ingredients: make(map[int64]*ingredient.Ingredient)}
+}
+
+func (f *fakeNutritionLookup) LookupForNutrition(_ context.Context, ids []int64) (map[int64]*ingredient.Ingredient, error) {
+	result := make(map[int64]*ingredient.Ingredient, len(ids))
+	for _, id := range ids {
+		if ing, ok := f.ingredients[id]; ok {
+			result[id] = ing
+		}
+	}
+	return result, nil
+}
+
 // --- helpers ---
 
-func newService() (*component.Service, *fakeRepo, *fakePortionLookup) {
+func newService() (*component.Service, *fakeRepo, *fakePortionLookup, *fakeNutritionLookup) {
 	repo := newFakeRepo()
 	pl := newFakePortionLookup()
-	return component.NewService(repo, pl), repo, pl
+	nl := newFakeNutritionLookup()
+	return component.NewService(repo, pl, nl), repo, pl, nl
 }
 
 func validComponent() *component.Component {
@@ -150,14 +161,14 @@ func validComponent() *component.Component {
 // --- tests ---
 
 func TestCreate_AssignsID(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	require.NoError(t, svc.Create(context.Background(), c))
 	assert.NotZero(t, c.ID)
 }
 
 func TestCreate_DefaultReferencePortions(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.ReferencePortions = 0 // should default to 1
 	require.NoError(t, svc.Create(context.Background(), c))
@@ -165,7 +176,7 @@ func TestCreate_DefaultReferencePortions(t *testing.T) {
 }
 
 func TestCreate_EmptyName(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.Name = ""
 	err := svc.Create(context.Background(), c)
@@ -173,7 +184,7 @@ func TestCreate_EmptyName(t *testing.T) {
 }
 
 func TestCreate_InvalidRole(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.Role = "appetizer"
 	err := svc.Create(context.Background(), c)
@@ -181,7 +192,7 @@ func TestCreate_InvalidRole(t *testing.T) {
 }
 
 func TestCreate_EmptyRole(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.Role = ""
 	err := svc.Create(context.Background(), c)
@@ -189,7 +200,7 @@ func TestCreate_EmptyRole(t *testing.T) {
 }
 
 func TestCreate_NegativeReferencePortions(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.ReferencePortions = -1
 	err := svc.Create(context.Background(), c)
@@ -197,7 +208,7 @@ func TestCreate_NegativeReferencePortions(t *testing.T) {
 }
 
 func TestCreate_ResolvesPortionUnit(t *testing.T) {
-	svc, _, pl := newService()
+	svc, _, pl, _ := newService()
 	pl.portions[10] = []ingredient.Portion{{IngredientID: 10, Unit: "cup", Grams: 185}}
 
 	c := validComponent()
@@ -209,7 +220,7 @@ func TestCreate_ResolvesPortionUnit(t *testing.T) {
 }
 
 func TestCreate_GramsUnitSkipsLookup(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.Ingredients = []component.ComponentIngredient{
 		{IngredientID: 1, Amount: 250, Unit: "g"},
@@ -219,7 +230,7 @@ func TestCreate_GramsUnitSkipsLookup(t *testing.T) {
 }
 
 func TestCreate_MlUnitSkipsLookup(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.Ingredients = []component.ComponentIngredient{
 		{IngredientID: 1, Amount: 100, Unit: "ml"},
@@ -229,7 +240,7 @@ func TestCreate_MlUnitSkipsLookup(t *testing.T) {
 }
 
 func TestCreate_UnknownPortionUnit(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.Ingredients = []component.ComponentIngredient{
 		{IngredientID: 1, Amount: 2, Unit: "bushel"},
@@ -238,15 +249,8 @@ func TestCreate_UnknownPortionUnit(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrInvalidInput)
 }
 
-func TestCreate_DuplicateName(t *testing.T) {
-	svc, _, _ := newService()
-	require.NoError(t, svc.Create(context.Background(), validComponent()))
-	err := svc.Create(context.Background(), validComponent())
-	assert.ErrorIs(t, err, domain.ErrDuplicateName)
-}
-
 func TestCreate_IngredientZeroAmount(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.Ingredients = []component.ComponentIngredient{
 		{IngredientID: 1, Amount: 0, Unit: "g"},
@@ -256,7 +260,7 @@ func TestCreate_IngredientZeroAmount(t *testing.T) {
 }
 
 func TestCreate_InstructionEmptyText(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.Instructions = []component.Instruction{{StepNumber: 1, Text: ""}}
 	err := svc.Create(context.Background(), c)
@@ -264,7 +268,7 @@ func TestCreate_InstructionEmptyText(t *testing.T) {
 }
 
 func TestUpdate_ReplacesChildren(t *testing.T) {
-	svc, repo, _ := newService()
+	svc, repo, _, _ := newService()
 	c := validComponent()
 	require.NoError(t, svc.Create(context.Background(), c))
 
@@ -287,7 +291,7 @@ func TestUpdate_ReplacesChildren(t *testing.T) {
 }
 
 func TestUpdate_NotFound(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := validComponent()
 	c.ID = 999
 	err := svc.Update(context.Background(), c)
@@ -295,19 +299,19 @@ func TestUpdate_NotFound(t *testing.T) {
 }
 
 func TestDelete_NotFound(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	err := svc.Delete(context.Background(), 999)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 }
 
 func TestGet_NotFound(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	_, err := svc.Get(context.Background(), 999)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 }
 
 func TestList_DefaultLimit(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	ctx := context.Background()
 	for i := 0; i < 60; i++ {
 		c := &component.Component{
@@ -325,14 +329,14 @@ func TestList_DefaultLimit(t *testing.T) {
 }
 
 func TestList_MaxLimitCap(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	result, err := svc.List(context.Background(), component.ListQuery{Limit: 500})
 	require.NoError(t, err)
 	assert.NotNil(t, result)
 }
 
 func TestList_RoleFilter(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	ctx := context.Background()
 	require.NoError(t, svc.Create(ctx, &component.Component{
 		Name: "Main dish", Role: component.RoleMain, ReferencePortions: 1,
@@ -341,14 +345,14 @@ func TestList_RoleFilter(t *testing.T) {
 		Name: "Side dish", Role: component.RoleSideVeg, ReferencePortions: 1,
 	}))
 
-	result, err := svc.List(ctx, component.ListQuery{Role: component.RoleMain})
+	result, err := svc.List(ctx, component.ListQuery{Role: string(component.RoleMain)})
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Total)
 	assert.Equal(t, "Main dish", result.Items[0].Name)
 }
 
 func TestCreate_NoIngredientsAllowed(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	c := &component.Component{
 		Name:              "Simple sauce",
 		Role:              component.RoleSauce,
@@ -361,14 +365,47 @@ func TestCreate_NoIngredientsAllowed(t *testing.T) {
 }
 
 func TestCreate_AllValidRoles(t *testing.T) {
-	svc, _, _ := newService()
+	svc, _, _, _ := newService()
 	roles := []string{"main", "side_starch", "side_veg", "side_protein", "sauce", "drink", "dessert", "standalone"}
 	for _, role := range roles {
 		c := &component.Component{
 			Name:              fmt.Sprintf("Test %s", role),
-			Role:              role,
+			Role:              component.Role(role),
 			ReferencePortions: 1,
 		}
 		require.NoError(t, svc.Create(context.Background(), c), "role %s should be valid", role)
 	}
+}
+
+func TestNutrition_PerPortion(t *testing.T) {
+	svc, _, _, nl := newService()
+	ctx := context.Background()
+
+	// Seed ingredient nutrition data.
+	nl.ingredients[1] = &ingredient.Ingredient{
+		ID: 1, Kcal100g: 165, Protein100g: 31, Fat100g: 3.6,
+	}
+
+	c := &component.Component{
+		Name:              "Chicken dish",
+		Role:              component.RoleMain,
+		ReferencePortions: 2,
+		Ingredients: []component.ComponentIngredient{
+			{IngredientID: 1, Amount: 200, Unit: "g", Grams: 200},
+		},
+	}
+	require.NoError(t, svc.Create(ctx, c))
+
+	macros, err := svc.Nutrition(ctx, c.ID)
+	require.NoError(t, err)
+	// 200g chicken: 330 kcal total / 2 portions = 165
+	assert.InDelta(t, 165.0, macros.Kcal, 0.01)
+	// 200g: 62g protein total / 2 portions = 31
+	assert.InDelta(t, 31.0, macros.Protein, 0.01)
+}
+
+func TestNutrition_NotFound(t *testing.T) {
+	svc, _, _, _ := newService()
+	_, err := svc.Nutrition(context.Background(), 999)
+	assert.ErrorIs(t, err, domain.ErrNotFound)
 }

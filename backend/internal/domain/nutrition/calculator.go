@@ -54,3 +54,6 @@ func PerPortion(c ComponentInput) Macros {
 		Sodium:  total.Sodium / c.ReferencePortions,
 	}
 }
+
+// PlateTotal computes total nutrition for a full plate of components.
+// Deferred to Phase 5 (planner).

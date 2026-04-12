@@ -84,13 +84,13 @@ func run() error {
 	}
 
 	componentRepo := sqlite.NewComponentRepo(conn)
-	componentSvc := component.NewService(componentRepo, ingredientRepo)
+	componentSvc := component.NewService(componentRepo, ingredientRepo, ingredientRepo)
 
 	h := transport.Handlers{
 		Ingredients: handlers.NewIngredientHandler(ingredientSvc),
 		Lookup:      handlers.NewLookupHandler(resolver, imgStore, ingredientSvc),
 		Images:      handlers.NewImageHandler(ingredientSvc, imgStore),
-		Components:  handlers.NewComponentHandler(componentSvc, ingredientRepo),
+		Components:  handlers.NewComponentHandler(componentSvc, imgStore),
 	}
 	handler := transport.NewRouter(logger, static, h)
 

@@ -3,7 +3,7 @@ package component
 import "time"
 
 // Role categorises a component for meal planning.
-type Role = string
+type Role string
 
 const (
 	RoleMain        Role = "main"
@@ -37,8 +37,8 @@ type Component struct {
 	Role              Role
 	VariantGroupID    *int64
 	ReferencePortions float64
-	PrepMinutes       int
-	CookMinutes       int
+	PrepMinutes       *int
+	CookMinutes       *int
 	ImagePath         *string
 	Notes             *string
 	LastCookedAt      *time.Time

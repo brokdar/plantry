@@ -8,20 +8,24 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 )
 
 // ComponentHandler holds the HTTP handlers for the component resource.
 type ComponentHandler struct {
-	svc            *component.Service
-	ingredientRepo *sqlite.IngredientRepo
+	svc   *component.Service
+	store *imagestore.Store
 }
 
 // NewComponentHandler creates a new ComponentHandler.
-func NewComponentHandler(svc *component.Service, ingredientRepo *sqlite.IngredientRepo) *ComponentHandler {
-	return &ComponentHandler{svc: svc, ingredientRepo: ingredientRepo}
+func NewComponentHandler(svc *component.Service, store *imagestore.Store) *ComponentHandler {
+	return &ComponentHandler{svc: svc, store: store}
+}
+
+// HasImageStore reports whether image upload/delete is available.
+func (h *ComponentHandler) HasImageStore() bool {
+	return h.store != nil
 }
 
 // --- request / response DTOs ---
@@ -43,8 +47,8 @@ type componentRequest struct {
 	Name              string                       `json:"name"`
 	Role              string                       `json:"role"`
 	ReferencePortions float64                      `json:"reference_portions"`
-	PrepMinutes       int                          `json:"prep_minutes"`
-	CookMinutes       int                          `json:"cook_minutes"`
+	PrepMinutes       *int                         `json:"prep_minutes"`
+	CookMinutes       *int                         `json:"cook_minutes"`
 	Notes             *string                      `json:"notes"`
 	Ingredients       []componentIngredientRequest `json:"ingredients"`
 	Instructions      []instructionRequest         `json:"instructions"`
@@ -74,8 +78,8 @@ type componentResponse struct {
 	Role              string                        `json:"role"`
 	VariantGroupID    *int64                        `json:"variant_group_id,omitempty"`
 	ReferencePortions float64                       `json:"reference_portions"`
-	PrepMinutes       int                           `json:"prep_minutes"`
-	CookMinutes       int                           `json:"cook_minutes"`
+	PrepMinutes       *int                          `json:"prep_minutes"`
+	CookMinutes       *int                          `json:"cook_minutes"`
 	ImagePath         *string                       `json:"image_path,omitempty"`
 	Notes             *string                       `json:"notes,omitempty"`
 	LastCookedAt      *string                       `json:"last_cooked_at,omitempty"`
@@ -126,7 +130,7 @@ func toComponentResponse(c *component.Component) componentResponse {
 	resp := componentResponse{
 		ID:                c.ID,
 		Name:              c.Name,
-		Role:              c.Role,
+		Role:              string(c.Role),
 		VariantGroupID:    c.VariantGroupID,
 		ReferencePortions: c.ReferencePortions,
 		PrepMinutes:       c.PrepMinutes,
@@ -269,48 +273,12 @@ func (h *ComponentHandler) Nutrition(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, err := h.svc.Get(r.Context(), id)
+	macros, err := h.svc.Nutrition(r.Context(), id)
 	if err != nil {
 		status, key := componentError(err)
 		writeError(w, status, key)
 		return
 	}
-
-	// Collect ingredient IDs.
-	ids := make([]int64, len(c.Ingredients))
-	for i, ci := range c.Ingredients {
-		ids[i] = ci.IngredientID
-	}
-
-	ingMap, err := h.ingredientRepo.LookupForNutrition(r.Context(), ids)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "error.server")
-		return
-	}
-
-	inputs := make([]nutrition.IngredientInput, 0, len(c.Ingredients))
-	for _, ci := range c.Ingredients {
-		ing, ok := ingMap[ci.IngredientID]
-		if !ok {
-			continue
-		}
-		inputs = append(inputs, nutrition.IngredientInput{
-			Per100g: nutrition.Macros{
-				Kcal:    ing.Kcal100g,
-				Protein: ing.Protein100g,
-				Fat:     ing.Fat100g,
-				Carbs:   ing.Carbs100g,
-				Fiber:   ing.Fiber100g,
-				Sodium:  ing.Sodium100g,
-			},
-			Grams: ci.Grams,
-		})
-	}
-
-	macros := nutrition.PerPortion(nutrition.ComponentInput{
-		Ingredients:       inputs,
-		ReferencePortions: c.ReferencePortions,
-	})
 
 	writeJSON(w, http.StatusOK, nutritionResponse{
 		Kcal:    macros.Kcal,
@@ -320,6 +288,79 @@ func (h *ComponentHandler) Nutrition(w http.ResponseWriter, r *http.Request) {
 		Fiber:   macros.Fiber,
 		Sodium:  macros.Sodium,
 	})
+}
+
+// Upload handles POST /api/components/{id}/image.
+func (h *ComponentHandler) Upload(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+
+	c, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+
+	if err := r.ParseMultipartForm(maxImageSize); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	imgPath, err := h.store.SaveUpload(r.Context(), file, "components", id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "error.server")
+		return
+	}
+
+	c.ImagePath = &imgPath
+	if err := h.svc.Update(r.Context(), c); err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"image_path": imgPath})
+}
+
+// DeleteImage handles DELETE /api/components/{id}/image.
+func (h *ComponentHandler) DeleteImage(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+
+	c, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+
+	if err := h.store.Delete("components", id); err != nil {
+		writeError(w, http.StatusInternalServerError, "error.server")
+		return
+	}
+
+	c.ImagePath = nil
+	if err := h.svc.Update(r.Context(), c); err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func requestToComponent(req *componentRequest) *component.Component {
@@ -349,7 +390,7 @@ func requestToComponent(req *componentRequest) *component.Component {
 
 	return &component.Component{
 		Name:              req.Name,
-		Role:              req.Role,
+		Role:              component.Role(req.Role),
 		ReferencePortions: req.ReferencePortions,
 		PrepMinutes:       req.PrepMinutes,
 		CookMinutes:       req.CookMinutes,

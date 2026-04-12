@@ -14,6 +14,8 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
+func intPtr(v int) *int { return &v }
+
 func seedIngredient(t *testing.T, repo *sqlite.IngredientRepo, name string) *ingredient.Ingredient {
 	t.Helper()
 	i := &ingredient.Ingredient{Name: name, Source: "manual", Kcal100g: 100, Protein100g: 10}
@@ -33,8 +35,8 @@ func TestComponentRepo_CreateAndGet(t *testing.T) {
 		Name:              "Chicken Curry",
 		Role:              component.RoleMain,
 		ReferencePortions: 2,
-		PrepMinutes:       10,
-		CookMinutes:       30,
+		PrepMinutes:       intPtr(10),
+		CookMinutes:       intPtr(30),
 		Ingredients: []component.ComponentIngredient{
 			{IngredientID: ing.ID, Amount: 300, Unit: "g", Grams: 300, SortOrder: 0},
 		},
@@ -55,8 +57,10 @@ func TestComponentRepo_CreateAndGet(t *testing.T) {
 	assert.Equal(t, "Chicken Curry", got.Name)
 	assert.Equal(t, component.RoleMain, got.Role)
 	assert.Equal(t, 2.0, got.ReferencePortions)
-	assert.Equal(t, 10, got.PrepMinutes)
-	assert.Equal(t, 30, got.CookMinutes)
+	require.NotNil(t, got.PrepMinutes)
+	assert.Equal(t, 10, *got.PrepMinutes)
+	require.NotNil(t, got.CookMinutes)
+	assert.Equal(t, 30, *got.CookMinutes)
 
 	require.Len(t, got.Ingredients, 1)
 	assert.Equal(t, ing.ID, got.Ingredients[0].IngredientID)
@@ -125,19 +129,6 @@ func TestComponentRepo_GetNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 }
 
-func TestComponentRepo_DuplicateName(t *testing.T) {
-	db := testhelper.NewTestDB(t)
-	repo := sqlite.NewComponentRepo(db)
-	ctx := context.Background()
-
-	c1 := &component.Component{Name: "Pasta", Role: component.RoleMain, ReferencePortions: 1}
-	require.NoError(t, repo.Create(ctx, c1))
-
-	c2 := &component.Component{Name: "Pasta", Role: component.RoleSideStarch, ReferencePortions: 1}
-	err := repo.Create(ctx, c2)
-	assert.ErrorIs(t, err, domain.ErrDuplicateName)
-}
-
 func TestComponentRepo_FTSSearch(t *testing.T) {
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewComponentRepo(db)
@@ -160,7 +151,7 @@ func TestComponentRepo_ListRoleFilter(t *testing.T) {
 	require.NoError(t, repo.Create(ctx, &component.Component{Name: "Main 1", Role: component.RoleMain, ReferencePortions: 1}))
 	require.NoError(t, repo.Create(ctx, &component.Component{Name: "Side 1", Role: component.RoleSideVeg, ReferencePortions: 1}))
 
-	result, err := repo.List(ctx, component.ListQuery{Role: component.RoleMain, Limit: 50})
+	result, err := repo.List(ctx, component.ListQuery{Role: string(component.RoleMain), Limit: 50})
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Total)
 	assert.Equal(t, "Main 1", result.Items[0].Name)
@@ -254,6 +245,40 @@ func TestComponentRepo_DeleteCascadesChildren(t *testing.T) {
 
 	_, err := repo.Get(ctx, c.ID)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+func TestComponentRepo_FTSSearchSanitization(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewComponentRepo(db)
+	ctx := context.Background()
+
+	// Seed one component so searches execute against a non-empty table.
+	require.NoError(t, repo.Create(ctx, &component.Component{
+		Name: "Chicken Curry", Role: component.RoleMain, ReferencePortions: 1,
+	}))
+
+	// Each search must not cause an FTS5 syntax error.
+	tests := []struct {
+		name   string
+		search string
+	}{
+		{"reserved AND", "AND"},
+		{"reserved OR", "OR"},
+		{"reserved NOT", "NOT"},
+		{"reserved NEAR", "NEAR"},
+		{"wildcard star", "ch*ken"},
+		{"caret prefix", "^chicken"},
+		{"embedded quote", `ch"ken`},
+		{"unicode", "poulet rôti"},
+		{"mixed operators", "chicken AND NOT OR"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := repo.List(ctx, component.ListQuery{Search: tt.search, Limit: 50})
+			assert.NoError(t, err, "search %q should not cause FTS5 error", tt.search)
+		})
+	}
 }
 
 func TestIngredientRepo_LookupForNutrition(t *testing.T) {

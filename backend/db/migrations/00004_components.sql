@@ -7,12 +7,12 @@ CREATE TABLE variant_groups (
 
 CREATE TABLE components (
     id                 INTEGER PRIMARY KEY,
-    name               TEXT NOT NULL UNIQUE,
+    name               TEXT NOT NULL,
     role               TEXT NOT NULL CHECK (role IN ('main','side_starch','side_veg','side_protein','sauce','drink','dessert','standalone')),
     variant_group_id   INTEGER REFERENCES variant_groups(id) ON DELETE SET NULL,
     reference_portions REAL NOT NULL DEFAULT 1 CHECK (reference_portions > 0),
-    prep_minutes       INTEGER NOT NULL DEFAULT 0,
-    cook_minutes       INTEGER NOT NULL DEFAULT 0,
+    prep_minutes       INTEGER,
+    cook_minutes       INTEGER,
     image_path         TEXT,
     notes              TEXT,
     last_cooked_at     TEXT,

@@ -6,6 +6,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 )
 
 // PortionLookup resolves custom portion units to grams.
@@ -13,15 +14,21 @@ type PortionLookup interface {
 	ListPortions(ctx context.Context, ingredientID int64) ([]ingredient.Portion, error)
 }
 
+// NutritionLookup fetches ingredient nutrition data by ID.
+type NutritionLookup interface {
+	LookupForNutrition(ctx context.Context, ids []int64) (map[int64]*ingredient.Ingredient, error)
+}
+
 // Service holds business logic for components.
 type Service struct {
-	repo     Repository
-	portions PortionLookup
+	repo            Repository
+	portions        PortionLookup
+	nutritionLookup NutritionLookup
 }
 
 // NewService creates a component service.
-func NewService(repo Repository, portions PortionLookup) *Service {
-	return &Service{repo: repo, portions: portions}
+func NewService(repo Repository, portions PortionLookup, nl NutritionLookup) *Service {
+	return &Service{repo: repo, portions: portions, nutritionLookup: nl}
 }
 
 func (s *Service) validate(c *Component) error {
@@ -129,4 +136,47 @@ func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
 		q.SortBy = "name"
 	}
 	return s.repo.List(ctx, q)
+}
+
+// Nutrition returns per-portion macros for a component.
+func (s *Service) Nutrition(ctx context.Context, id int64) (*nutrition.Macros, error) {
+	c, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]int64, len(c.Ingredients))
+	for i, ci := range c.Ingredients {
+		ids[i] = ci.IngredientID
+	}
+
+	ingMap, err := s.nutritionLookup.LookupForNutrition(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("lookup nutrition: %w", err)
+	}
+
+	inputs := make([]nutrition.IngredientInput, 0, len(c.Ingredients))
+	for _, ci := range c.Ingredients {
+		ing, ok := ingMap[ci.IngredientID]
+		if !ok {
+			continue
+		}
+		inputs = append(inputs, nutrition.IngredientInput{
+			Per100g: nutrition.Macros{
+				Kcal:    ing.Kcal100g,
+				Protein: ing.Protein100g,
+				Fat:     ing.Fat100g,
+				Carbs:   ing.Carbs100g,
+				Fiber:   ing.Fiber100g,
+				Sodium:  ing.Sodium100g,
+			},
+			Grams: ci.Grams,
+		})
+	}
+
+	macros := nutrition.PerPortion(nutrition.ComponentInput{
+		Ingredients:       inputs,
+		ReferencePortions: c.ReferencePortions,
+	})
+	return &macros, nil
 }
