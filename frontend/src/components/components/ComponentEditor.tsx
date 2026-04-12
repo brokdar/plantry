@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useForm, useFieldArray, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTranslation } from "react-i18next"
 import { Plus, Trash2, X } from "lucide-react"
@@ -50,7 +50,7 @@ export function ComponentEditor({
   const isEdit = !!component
 
   const form = useForm<ComponentFormValues>({
-    resolver: zodResolver(componentSchema),
+    resolver: zodResolver(componentSchema) as Resolver<ComponentFormValues>,
     defaultValues: component
       ? {
           name: component.name,

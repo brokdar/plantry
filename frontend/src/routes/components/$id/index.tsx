@@ -76,11 +76,12 @@ function ComponentDetailPage() {
         <span>
           {t("component.reference_portions")}: {component.reference_portions}
         </span>
-        {(component.prep_minutes > 0 || component.cook_minutes > 0) && (
+        {((component.prep_minutes ?? 0) > 0 ||
+          (component.cook_minutes ?? 0) > 0) && (
           <span>
             {t("component.time", {
-              prep: component.prep_minutes,
-              cook: component.cook_minutes,
+              prep: component.prep_minutes ?? 0,
+              cook: component.cook_minutes ?? 0,
             })}
           </span>
         )}
