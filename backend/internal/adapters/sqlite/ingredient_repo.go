@@ -138,7 +138,8 @@ func (r *IngredientRepo) List(ctx context.Context, q ingredient.ListQuery) (*ing
 
 	if q.Search != "" {
 		ftsClause := "id IN (SELECT rowid FROM ingredients_fts WHERE ingredients_fts MATCH ?)"
-		searchTerm := sanitizeFTS5(q.Search) + "*"
+		tokens := strings.Fields(sanitizeFTS5(q.Search))
+		searchTerm := strings.Join(tokens, "* ") + "*"
 		builder = builder.Where(ftsClause, searchTerm)
 		countBuilder = countBuilder.Where(ftsClause, searchTerm)
 	}
@@ -162,6 +163,7 @@ func (r *IngredientRepo) List(ctx context.Context, q ingredient.ListQuery) (*ing
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 
 	items := make([]ingredient.Ingredient, 0)
 	for rows.Next() {
