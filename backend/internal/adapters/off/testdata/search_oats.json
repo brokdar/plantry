@@ -1,0 +1,64 @@
+{
+  "count": 3,
+  "page": 1,
+  "page_size": 10,
+  "products": [
+    {
+      "product_name": "Rolled Oats",
+      "product_name_de": "Haferflocken",
+      "product_name_en": "Rolled Oats",
+      "brands": "Bob's Red Mill",
+      "serving_size": "40 g",
+      "serving_quantity": 40,
+      "product_quantity": 907,
+      "product_quantity_unit": "g",
+      "nutriments": {
+        "energy-kcal_100g": 379,
+        "proteins_100g": 13.2,
+        "fat_100g": 6.5,
+        "carbohydrates_100g": 67.7,
+        "fiber_100g": 10.1,
+        "sodium_100g": 0.002
+      },
+      "image_front_small_url": "https://images.openfoodfacts.org/images/products/rolled-oats.200.jpg"
+    },
+    {
+      "product_name": "Instant Oatmeal",
+      "product_name_de": "",
+      "product_name_en": "Instant Oatmeal",
+      "brands": "Quaker",
+      "serving_size": "28 g",
+      "serving_quantity": 28,
+      "product_quantity": 336,
+      "product_quantity_unit": "g",
+      "nutriments": {
+        "energy-kcal_100g": 367,
+        "proteins_100g": 12.1,
+        "fat_100g": 6.2,
+        "carbohydrates_100g": 68.5,
+        "fiber_100g": 9.4,
+        "sodium_100g": 0.006
+      },
+      "image_front_small_url": "https://images.openfoodfacts.org/images/products/instant-oatmeal.200.jpg"
+    },
+    {
+      "product_name": "Steel Cut Oats",
+      "product_name_de": "Stahlgeschnittene Haferflocken",
+      "product_name_en": "Steel Cut Oats",
+      "brands": "Bob's Red Mill",
+      "serving_size": "40 g",
+      "serving_quantity": 40,
+      "product_quantity": 680,
+      "product_quantity_unit": "g",
+      "nutriments": {
+        "energy-kcal_100g": 375,
+        "proteins_100g": 13.0,
+        "fat_100g": 6.0,
+        "carbohydrates_100g": 66.0,
+        "fiber_100g": 10.0,
+        "sodium_100g": 0.001
+      },
+      "image_front_small_url": "https://images.openfoodfacts.org/images/products/steel-cut-oats.200.jpg"
+    }
+  ]
+}
