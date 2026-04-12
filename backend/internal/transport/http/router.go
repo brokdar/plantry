@@ -11,7 +11,12 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
-func NewRouter(logger *slog.Logger, staticHandler http.Handler) http.Handler {
+// Handlers groups all per-aggregate HTTP handlers for route registration.
+type Handlers struct {
+	Ingredients *handlers.IngredientHandler
+}
+
+func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -21,6 +26,14 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler) http.Handler {
 
 	r.Route("/api", func(api chi.Router) {
 		api.Get("/health", handlers.Health)
+
+		api.Route("/ingredients", func(r chi.Router) {
+			r.Get("/", h.Ingredients.List)
+			r.Post("/", h.Ingredients.Create)
+			r.Get("/{id}", h.Ingredients.Get)
+			r.Put("/{id}", h.Ingredients.Update)
+			r.Delete("/{id}", h.Ingredients.Delete)
+		})
 	})
 
 	if staticHandler != nil {

@@ -1,38 +1,20 @@
-# CLAUDE.md
+# Plantry
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## What Plantry Is
-
-Plantry is a **self-hosted weekly meal planner** for home cooks. The core insight driving all product and technical decisions: a real meal is a **plate** (composition of N components — main + sides + sauce), not a single recipe. This "plates, not recipes" model is the reason the data model looks the way it does.
-
-Key constraints baked into every decision:
-
-- **Single binary, no CGO** — must cross-compile to ARMv7/ARM64 (Raspberry Pi). No CGO, no native extensions.
-- **Local-first** — one SQLite file, no cloud, no multi-tenancy. AI features degrade gracefully when no key is configured.
-- **AI is a tool, not a dependency** — app must be fully usable with AI disabled.
-
-## Stack
-
-**Backend:** Go 1.25, chi v5, SQLite (`modernc.org/sqlite` — pure Go), goose migrations, sqlc for query generation, `log/slog`.
-
-**Frontend:** React 19, TypeScript, Vite 7, TanStack Router (file-based, auto code-split), TanStack Query, Tailwind v4 (OKLch tokens), shadcn/ui, Bun as package manager.
-
-**Deployment:** Multi-stage Docker build — Bun builds SPA → Go embeds static output → single ~30 MB Alpine image. Volume `/data` holds `plantry.db` + `images/`.
+Self-hosted weekly meal planner. Single Go binary embeds SPA, serves from one SQLite file. Must cross-compile to ARM (no CGO).
 
 ## Commands
 
-### Backend (Go)
+### Backend
 
 ```bash
 cd backend
 go build ./...                        # compile
 go test ./...                         # all tests
-go test ./internal/domain/...         # domain-only tests (pure, no DB)
 go test -run TestName ./path/...      # single test
 go vet ./...                          # vet
-golangci-lint run                     # lint (requires golangci-lint installed)
-sqlc generate                         # regenerate sqlcgen from queries + migrations
+golangci-lint run                     # lint
+sqlc generate                         # regenerate from queries + migrations
+go test -race ./...                   # race detector — run before feature complete
 ```
 
 ### Frontend
@@ -40,95 +22,120 @@ sqlc generate                         # regenerate sqlcgen from queries + migrat
 ```bash
 cd frontend
 bun install                           # install deps
-bun run dev                           # dev server (port 5173, proxies /api to :8080)
+bun run dev                           # dev server (port 5173, proxies /api → :8080)
 bun run build                         # production build → dist/
 bun run typecheck                     # tsc --noEmit
 bun run lint                          # eslint
-bun run test                          # vitest run (unit tests)
-bun run test:watch                    # vitest interactive
-bun run e2e                           # playwright tests (requires running backend)
-bun run format                        # prettier (with tailwind plugin)
+bun run test                          # vitest (unit)
+bun run e2e                           # playwright (needs running backend)
 bun run check                         # lint + typecheck + unit tests
 ```
 
 ### Docker
 
 ```bash
-docker compose up --build             # build and run (port 8080)
-docker compose up                     # run existing image
+docker compose up --build             # build + run (port 8080)
 ```
+
+## Required Skills
+
+Load these before writing or modifying the relevant code:
+
+- **`vitest`** — frontend unit tests
+- **`playwright-best-practices`** — e2e tests
+- **`vercel-react-best-practices`** — React components
+- **`vercel-composition-patterns`** — component API design / refactoring prop interfaces
+- **`golang-testing`** — Go tests
+- **`golang-patterns`** — Go code
 
 ## Architecture
 
-### Backend — Hexagonal-Lite (target: `transport → domain ← adapters`)
+### Backend — Hexagonal-Lite (`transport → domain ← adapters`)
 
 ```
 backend/internal/
-├── adapters/
-│   └── sqlite/      # sqlc-generated queries (queries/ + sqlcgen/) + goose migrations
+├── adapters/sqlite/   # sqlc queries (queries/ + sqlcgen/) + goose migrations
+├── domain/            # aggregates, services, repo interfaces
 ├── transport/http/
-│   ├── router.go    # all chi route registrations
-│   └── handlers/    # thin HTTP translation, one file per aggregate
-├── webui/           # embeds frontend dist/ for single-binary serving
-├── config/          # env var loading + validation
-└── testhelper/      # NewTestDB, HTTP fixtures, time freezer
+│   ├── router.go      # chi route registrations
+│   └── handlers/      # thin HTTP translation, one file per aggregate
+├── webui/             # embeds frontend dist/
+├── config/            # env var loading
+└── testhelper/        # NewTestDB, HTTP fixtures
 ```
 
-**Pattern:** aggregates are plain exported structs (no private fields). `*.Service` types hold all business logic and take repos as constructor args.
+Aggregates are plain exported structs. `*.Service` holds business logic, takes repo interfaces as constructor args.
 
 ### Frontend — TanStack Router (file-based)
 
 ```
 frontend/src/
-├── routes/          # file-based route tree (auto-generated routeTree.gen.ts)
-├── components/
-│   └── ui/          # shadcn primitives
+├── routes/            # file-based (auto-generates routeTree.gen.ts — never edit)
+├── components/ui/     # shadcn primitives
 ├── lib/
-│   ├── i18n/        # i18next setup (react-i18next)
-│   └── utils.ts     # cn() and other helpers
-├── assets/          # static assets
-└── test/            # vitest setup
+│   ├── api/           # fetch wrappers per resource
+│   ├── queries/       # TanStack Query hooks + key factories
+│   ├── schemas/       # zod validation schemas
+│   └── i18n/          # i18next (react-i18next)
+└── test/              # render.tsx (renderWithRouter), fixtures.ts (mock data)
 ```
 
-Routes auto-discover from `src/routes/`. Do not edit `routeTree.gen.ts` manually — it's regenerated by the Vite plugin on every dev server start.
+Forms: `react-hook-form` + `zod`. Design tokens: `frontend/src/index.css` (OKLch).
 
-Forms use `react-hook-form` + `zod` for validation.
+## Coding Rules
 
-### Data Model Key Points (planned)
+- **`errors.Is()`, never `==`** for sentinel errors. Wrapped errors break `==` silently.
+- **Domain validation in the service, not the DB.** DB constraints are a safety net only.
+- **Sanitize FTS5 input.** Pass user search strings through `sanitizeFTS5()` before MATCH.
+- **Use sqlc-generated functions, not raw SQL.** Change query annotations and regenerate if needed.
+- **`testhelper.NewTestDB()` must mirror production config** (pragmas, `SetMaxOpenConns(1)`, etc).
 
-- **Component** (formerly "recipe") is the atomic dish. Has a `role` (main / side_starch / side_veg / side_protein / sauce / drink / dessert / standalone).
-- **Plate** = 1..N `plate_components` on a `(week_id, day, slot_id)` grid cell.
-- **Variant groups** link sibling components (chicken curry ↔ tofu curry ↔ chickpea curry).
-- `user_profile` is a singleton row (`id = 1`). `preferences` column is JSON — AI-managed, schema evolves.
-- Timestamps are `TEXT` in ISO-8601 UTC throughout.
-- Schema lives in goose migrations; `sqlc` generates query code from `backend/internal/adapters/sqlite/queries/`. After schema or query changes, run `sqlc generate`.
+## Testing
 
-## Environment Variables
+### Strategy
 
-```
-PLANTRY_PORT=8080
-PLANTRY_DB_PATH=/data/plantry.db
-PLANTRY_LOG_LEVEL=info
-PLANTRY_FDC_API_KEY=          # optional — USDA nutrition lookup
-PLANTRY_AI_PROVIDER=          # openai | anthropic | (empty = AI disabled)
-PLANTRY_AI_MODEL=
-PLANTRY_AI_API_KEY=
-PLANTRY_AUTH_PASSWORD=        # optional single-password gate for household use
-```
+- **Unit tests:** pure, no DB, no HTTP.
+- **Adapter tests:** real SQLite via `testhelper.NewTestDB()`. Never mock the database.
+- **e2e:** Playwright, requires both backend and frontend running.
 
-## Testing Strategy
+### Coverage Requirements
 
-- **Unit tests:** pure, no DB, no HTTP. Fast, first line of defence.
-- **Adapter tests:** hit a real SQLite DB via `testhelper.NewTestDB()`. Never mock the database.
-- **e2e tests:** Playwright, require both backend and frontend running.
+Every feature must cover happy path **and** edge cases across all layers before it's complete:
 
-## Design Tokens (canonical)
+- Validation: empty/missing required fields, invalid enums, out-of-range numbers, boundary values
+- Conflicts: duplicate names, update/delete non-existent, in-use references
+- Input sanitization: FTS operators, SQL-sensitive chars, unicode
+- Nullable roundtrips: create with value → update to null → verify null
+- HTTP edge cases: malformed JSON, non-numeric IDs, invalid query params
 
-OKLch botanical theme. Authoritative token source: `frontend/src/index.css`
+### Frontend Vitest
 
-```
---primary:    oklch(0.55 0.08 145)   /* sage green */
---accent:     oklch(0.88 0.06 75)    /* warm amber */
---background: oklch(0.98 0.01 85)    /* warm off-white */
---foreground: oklch(0.22 0.02 145)   /* deep moss */
-```
+- Mock at `@/lib/api/*` module level — TanStack Query works normally with mocked fetch fns.
+- Use shared `renderWithRouter` from `@/test/render` — wraps in `QueryClientProvider` (retry: false) + `RouterProvider` (createMemoryHistory).
+- Use shared fixtures from `@/test/fixtures` — don't duplicate mock data per test file.
+- Use `screen.findBy*` (async) — `RouterProvider` renders async.
+
+### Playwright E2E
+
+- Self-contained: seed via direct backend API (`http://localhost:8080`), cleanup in `finally`. Always bypass Vite proxy for seeding.
+- Unique data: append `crypto.randomUUID().slice(0,8)` to names.
+- After form submit: `waitForResponse` on the specific API call. Never `waitForURL`, never `waitForTimeout`.
+- For elements absent from DOM (server-filtered): use `toHaveCount(0)`, never `not.toBeVisible()` (causes timeouts).
+- Stable = `--repeat-each=10 --workers=4` with zero failures.
+
+## Gotchas
+
+### SQLite
+
+- Pragmas are per-connection. `sql.DB` pools — use `SetMaxOpenConns(1)` so all queries share WAL + busy_timeout.
+- Timestamps: `TEXT` via `datetime('now')`, Go layout `"2006-01-02 15:04:05"`, serialize as RFC3339 in API.
+
+### React / ESLint
+
+- **No ref access during render** (`react-hooks/refs`). The "compare prev ref value" pattern fails lint. Reset derived state in event handlers instead.
+- **No setState in effects** (`react-hooks/set-state-in-effect`). Move state resets to event handlers.
+- **Prefer `useDeferredValue`** over `useState`+`useEffect` debounce.
+
+### shadcn
+
+- `FormControl` uses `Slot.Root` (radix-ui) instead of `<span>` so id/aria forward to the child input. `useFormField` reads id from `FormItemContext`.

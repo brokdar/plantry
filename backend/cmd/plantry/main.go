@@ -16,8 +16,11 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/jaltszeimer/plantry/backend/db"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/config"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
+	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 	"github.com/jaltszeimer/plantry/backend/internal/webui"
 )
 
@@ -52,7 +55,12 @@ func run() error {
 		return fmt.Errorf("static: %w", err)
 	}
 
-	handler := transport.NewRouter(logger, static)
+	ingredientRepo := sqlite.NewIngredientRepo(conn)
+	ingredientSvc := ingredient.NewService(ingredientRepo)
+	h := transport.Handlers{
+		Ingredients: handlers.NewIngredientHandler(ingredientSvc),
+	}
+	handler := transport.NewRouter(logger, static, h)
 
 	srv := &nethttp.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
@@ -83,11 +91,14 @@ func run() error {
 }
 
 func openDB(path string) (*sql.DB, error) {
-	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"
+	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
+	// Limit to 1 connection so all queries share the same busy_timeout and
+	// WAL pragmas set in the DSN (pragmas are per-connection in SQLite).
+	conn.SetMaxOpenConns(1)
 	if err := conn.Ping(); err != nil {
 		_ = conn.Close()
 		return nil, err

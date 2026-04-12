@@ -3,3 +3,29 @@
 //   sqlc v1.30.0
 
 package sqlcgen
+
+import (
+	"database/sql"
+)
+
+type Ingredient struct {
+	ID          int64
+	Name        string
+	Source      string
+	Barcode     sql.NullString
+	OffID       sql.NullString
+	FdcID       sql.NullString
+	ImagePath   sql.NullString
+	Kcal100g    float64
+	Protein100g float64
+	Fat100g     float64
+	Carbs100g   float64
+	Fiber100g   float64
+	Sodium100g  float64
+	CreatedAt   string
+	UpdatedAt   string
+}
+
+type IngredientsFt struct {
+	Name string
+}

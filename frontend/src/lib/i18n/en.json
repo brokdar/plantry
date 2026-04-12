@@ -1,9 +1,53 @@
 {
   "nav": {
-    "brand": "Plantry"
+    "brand": "Plantry",
+    "ingredients": "Ingredients"
   },
   "home": {
     "title": "Welcome to Plantry",
     "subtitle": "Your self-hosted meal planner."
+  },
+  "ingredient": {
+    "title": "Ingredients",
+    "create": "New Ingredient",
+    "edit": "Edit Ingredient",
+    "name": "Name",
+    "name_placeholder": "e.g. Chicken breast",
+    "kcal": "Calories (kcal)",
+    "protein": "Protein (g)",
+    "fat": "Fat (g)",
+    "carbs": "Carbs (g)",
+    "fiber": "Fiber (g)",
+    "sodium": "Sodium (mg)",
+    "per_100g": "per 100 g",
+    "macros": "Nutrition per 100 g",
+    "search_placeholder": "Search ingredients...",
+    "delete_confirm_title": "Delete ingredient?",
+    "delete_confirm_body": "This action cannot be undone.",
+    "no_results": "No ingredients found.",
+    "empty_state": "No ingredients yet. Create your first one!"
+  },
+  "error": {
+    "not_found": "Resource not found.",
+    "invalid_id": "Invalid ID.",
+    "invalid_body": "Invalid request data.",
+    "server": "Something went wrong.",
+    "ingredient": {
+      "duplicate_name": "An ingredient with this name already exists.",
+      "in_use": "This ingredient is used in a component and cannot be deleted."
+    }
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "edit": "Edit",
+    "back": "Back",
+    "loading": "Loading...",
+    "showing": "Showing {{from}}\u2013{{to}} of {{total}}",
+    "previous": "Previous",
+    "next": "Next",
+    "actions": "Actions"
   }
 }
