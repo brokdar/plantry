@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form"
+import { useForm, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTranslation } from "react-i18next"
 import { Link } from "@tanstack/react-router"
@@ -37,7 +37,7 @@ export function IngredientEditor({
   const isEdit = !!ingredient
 
   const form = useForm<IngredientFormValues>({
-    resolver: zodResolver(ingredientSchema),
+    resolver: zodResolver(ingredientSchema) as Resolver<IngredientFormValues>,
     defaultValues: ingredient
       ? {
           name: ingredient.name,
