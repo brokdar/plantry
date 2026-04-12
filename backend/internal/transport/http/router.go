@@ -14,6 +14,8 @@ import (
 // Handlers groups all per-aggregate HTTP handlers for route registration.
 type Handlers struct {
 	Ingredients *handlers.IngredientHandler
+	Lookup      *handlers.LookupHandler
+	Images      *handlers.ImageHandler
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -30,6 +32,12 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 		api.Route("/ingredients", func(r chi.Router) {
 			r.Get("/", h.Ingredients.List)
 			r.Post("/", h.Ingredients.Create)
+
+			if h.Lookup != nil {
+				r.Get("/lookup", h.Lookup.Lookup)
+				r.Post("/resolve", h.Lookup.Resolve)
+			}
+
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", h.Ingredients.Get)
 				r.Put("/", h.Ingredients.Update)
@@ -37,9 +45,18 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/portions", h.Ingredients.ListPortions)
 				r.Post("/portions", h.Ingredients.UpsertPortion)
 				r.Delete("/portions/{unit}", h.Ingredients.DeletePortion)
+				if h.Images != nil {
+					r.Post("/image", h.Images.Upload)
+					r.Delete("/image", h.Images.DeleteImage)
+				}
 			})
 		})
 	})
+
+	// Serve stored images as static files.
+	if h.Images != nil && h.Images.Store() != nil {
+		r.Handle("/images/*", http.StripPrefix("/images/", http.FileServer(http.Dir(h.Images.Store().BasePath()))))
+	}
 
 	if staticHandler != nil {
 		r.Handle("/*", staticHandler)
