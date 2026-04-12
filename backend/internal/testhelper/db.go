@@ -18,6 +18,7 @@ func NewTestDB(t *testing.T) *sql.DB {
 
 	conn, err := sql.Open("sqlite", "file::memory:?cache=shared&_pragma=foreign_keys(1)")
 	require.NoError(t, err)
+	conn.SetMaxOpenConns(1)
 
 	t.Cleanup(func() { _ = conn.Close() })
 

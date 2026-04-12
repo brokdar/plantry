@@ -1,9 +1,53 @@
 {
   "nav": {
-    "brand": "Plantry"
+    "brand": "Plantry",
+    "ingredients": "Zutaten"
   },
   "home": {
     "title": "Willkommen bei Plantry",
     "subtitle": "Dein selbstgehosteter Essensplaner."
+  },
+  "ingredient": {
+    "title": "Zutaten",
+    "create": "Neue Zutat",
+    "edit": "Zutat bearbeiten",
+    "name": "Name",
+    "name_placeholder": "z. B. Hähnchenbrust",
+    "kcal": "Kalorien (kcal)",
+    "protein": "Eiweiß (g)",
+    "fat": "Fett (g)",
+    "carbs": "Kohlenhydrate (g)",
+    "fiber": "Ballaststoffe (g)",
+    "sodium": "Natrium (mg)",
+    "per_100g": "pro 100 g",
+    "macros": "Nährwerte pro 100 g",
+    "search_placeholder": "Zutaten suchen...",
+    "delete_confirm_title": "Zutat löschen?",
+    "delete_confirm_body": "Diese Aktion kann nicht rückgängig gemacht werden.",
+    "no_results": "Keine Zutaten gefunden.",
+    "empty_state": "Noch keine Zutaten. Erstelle deine erste!"
+  },
+  "error": {
+    "not_found": "Ressource nicht gefunden.",
+    "invalid_id": "Ungültige ID.",
+    "invalid_body": "Ungültige Anfragedaten.",
+    "server": "Etwas ist schiefgelaufen.",
+    "ingredient": {
+      "duplicate_name": "Eine Zutat mit diesem Namen existiert bereits.",
+      "in_use": "Diese Zutat wird in einer Komponente verwendet und kann nicht gelöscht werden."
+    }
+  },
+  "common": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "confirm": "Bestätigen",
+    "edit": "Bearbeiten",
+    "back": "Zurück",
+    "loading": "Laden...",
+    "showing": "{{from}}\u2013{{to}} von {{total}}",
+    "previous": "Zurück",
+    "next": "Weiter",
+    "actions": "Aktionen"
   }
 }

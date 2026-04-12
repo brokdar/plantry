@@ -6,12 +6,17 @@ package sqlcgen
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
+	CreateIngredient(ctx context.Context, arg CreateIngredientParams) (Ingredient, error)
+	DeleteIngredient(ctx context.Context, id int64) (sql.Result, error)
+	GetIngredient(ctx context.Context, id int64) (Ingredient, error)
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)
+	UpdateIngredient(ctx context.Context, arg UpdateIngredientParams) (Ingredient, error)
 }
 
 var _ Querier = (*Queries)(nil)
