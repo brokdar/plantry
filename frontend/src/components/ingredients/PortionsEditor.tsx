@@ -22,8 +22,7 @@ export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
   const [newUnit, setNewUnit] = useState("")
   const [newGrams, setNewGrams] = useState("")
 
-  function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
+  function handleAdd() {
     const unit = newUnit.trim()
     const grams = Number(newGrams)
     if (!unit || !grams || grams <= 0) return
@@ -71,7 +70,7 @@ export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
         </div>
       )}
 
-      <form onSubmit={handleAdd} className="flex items-end gap-2">
+      <div className="flex items-end gap-2">
         <div className="flex-1">
           <label className="mb-1 block text-xs text-muted-foreground">
             {t("portion.unit")}
@@ -80,6 +79,12 @@ export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
             value={newUnit}
             onChange={(e) => setNewUnit(e.target.value)}
             placeholder={t("portion.unit_placeholder")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                handleAdd()
+              }
+            }}
           />
         </div>
         <div className="w-24">
@@ -92,17 +97,24 @@ export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
             min="0"
             value={newGrams}
             onChange={(e) => setNewGrams(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                handleAdd()
+              }
+            }}
           />
         </div>
         <Button
-          type="submit"
+          type="button"
           size="sm"
+          onClick={handleAdd}
           disabled={!newUnit.trim() || !newGrams || upsertMutation.isPending}
         >
           <Plus className="mr-1 size-4" />
           {t("portion.add")}
         </Button>
-      </form>
+      </div>
     </div>
   )
 }

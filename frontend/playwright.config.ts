@@ -18,7 +18,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "cd ../backend && PLANTRY_DB_PATH=/tmp/plantry-e2e.db PLANTRY_LOG_LEVEL=error go run ./cmd/plantry",
+        "cd ../backend && PLANTRY_DB_PATH=/tmp/plantry-e2e.db PLANTRY_IMAGE_PATH=/tmp/plantry-e2e-images PLANTRY_LOG_LEVEL=error go run ./cmd/plantry",
       url: "http://localhost:8080/api/health",
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,

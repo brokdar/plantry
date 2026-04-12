@@ -47,6 +47,7 @@ test.describe("Ingredient Catalogue", () => {
 
     try {
       await page.goto("/ingredients/new")
+      await page.getByRole("tab", { name: /manual/i }).click()
       await page.getByLabel(/^name/i).fill(name)
       await page.getByLabel(/calories/i).fill("165")
       await page.getByLabel(/protein/i).fill("31")
@@ -185,6 +186,7 @@ test.describe("Ingredient Catalogue", () => {
     page,
   }) => {
     await page.goto("/ingredients/new")
+    await page.getByRole("tab", { name: /manual/i }).click()
 
     // Fill a macro field but leave name empty
     await page.getByLabel(/calories/i).fill("100")
@@ -211,6 +213,7 @@ test.describe("Ingredient Catalogue", () => {
 
     try {
       await page.goto("/ingredients/new")
+      await page.getByRole("tab", { name: /manual/i }).click()
       await page.getByLabel(/^name/i).fill(name)
       await page.getByLabel(/calories/i).fill("200")
 

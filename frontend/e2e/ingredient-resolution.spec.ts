@@ -200,7 +200,9 @@ test.describe("Ingredient Resolution", () => {
 
       // Fill in a new portion
       await page.getByPlaceholder(/e\.g\. cup/i).fill("cup")
-      await page.getByRole("spinbutton").fill("240")
+      // Target the grams input by absence of name attribute (PortionsEditor uses
+      // controlled state, so no name; macro fields get name via react-hook-form spread)
+      await page.locator('input[type="number"]:not([name])').fill("240")
 
       // Add the portion
       const addPromise = page.waitForResponse(
