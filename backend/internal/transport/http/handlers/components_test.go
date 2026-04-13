@@ -38,6 +38,8 @@ func setupComponentRouter(t *testing.T) (http.Handler, *sqlite.IngredientRepo) {
 			r.Put("/", h.Update)
 			r.Delete("/", h.Delete)
 			r.Get("/nutrition", h.Nutrition)
+			r.Post("/variant", h.CreateVariant)
+			r.Get("/variants", h.ListVariants)
 		})
 	})
 	return r, iRepo
@@ -333,6 +335,103 @@ func TestComponentImageUpload(t *testing.T) {
 	var got map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
 	assert.Contains(t, got["image_path"], "components/")
+}
+
+func TestCreateVariant_201(t *testing.T) {
+	router, _ := setupComponentRouter(t)
+	createBody := `{"name":"Chicken Curry","role":"main","reference_portions":2}`
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, httptest.NewRequest(http.MethodPost, "/api/components", bytes.NewBufferString(createBody)))
+	require.Equal(t, http.StatusCreated, createResp.Code)
+
+	var parent map[string]any
+	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&parent))
+
+	variantResp := httptest.NewRecorder()
+	router.ServeHTTP(variantResp, httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/components/%.0f/variant", parent["id"]), nil))
+	assert.Equal(t, http.StatusCreated, variantResp.Code)
+
+	var variant map[string]any
+	require.NoError(t, json.NewDecoder(variantResp.Body).Decode(&variant))
+	assert.NotZero(t, variant["id"])
+	assert.NotEqual(t, parent["id"], variant["id"])
+	assert.Equal(t, "main", variant["role"])
+	assert.Contains(t, variant["name"], "(variant)")
+	assert.NotNil(t, variant["variant_group_id"])
+}
+
+func TestCreateVariant_404(t *testing.T) {
+	router, _ := setupComponentRouter(t)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/components/999/variant", nil))
+	assert.Equal(t, http.StatusNotFound, resp.Code)
+}
+
+func TestListVariants_200(t *testing.T) {
+	router, _ := setupComponentRouter(t)
+	createBody := `{"name":"Chicken Curry","role":"main","reference_portions":2}`
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, httptest.NewRequest(http.MethodPost, "/api/components", bytes.NewBufferString(createBody)))
+	require.Equal(t, http.StatusCreated, createResp.Code)
+
+	var parent map[string]any
+	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&parent))
+
+	// Create a variant.
+	variantResp := httptest.NewRecorder()
+	router.ServeHTTP(variantResp, httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/components/%.0f/variant", parent["id"]), nil))
+	require.Equal(t, http.StatusCreated, variantResp.Code)
+
+	// List variants from parent.
+	listResp := httptest.NewRecorder()
+	router.ServeHTTP(listResp, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/components/%.0f/variants", parent["id"]), nil))
+	assert.Equal(t, http.StatusOK, listResp.Code)
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(listResp.Body).Decode(&got))
+	items, _ := got["items"].([]any)
+	assert.Len(t, items, 1)
+}
+
+func TestListVariants_200_Empty(t *testing.T) {
+	router, _ := setupComponentRouter(t)
+	createBody := `{"name":"Solo Component","role":"main","reference_portions":1}`
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, httptest.NewRequest(http.MethodPost, "/api/components", bytes.NewBufferString(createBody)))
+	require.Equal(t, http.StatusCreated, createResp.Code)
+
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&created))
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/components/%.0f/variants", created["id"]), nil))
+	assert.Equal(t, http.StatusOK, resp.Code)
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	items, _ := got["items"].([]any)
+	assert.Empty(t, items)
+}
+
+func TestListVariants_404(t *testing.T) {
+	router, _ := setupComponentRouter(t)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/components/999/variants", nil))
+	assert.Equal(t, http.StatusNotFound, resp.Code)
+}
+
+func TestCreateVariant_400_InvalidID(t *testing.T) {
+	router, _ := setupComponentRouter(t)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/components/abc/variant", nil))
+	assert.Equal(t, http.StatusBadRequest, resp.Code)
+}
+
+func TestListVariants_400_InvalidID(t *testing.T) {
+	router, _ := setupComponentRouter(t)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/components/abc/variants", nil))
+	assert.Equal(t, http.StatusBadRequest, resp.Code)
 }
 
 func TestComponentImageDelete(t *testing.T) {

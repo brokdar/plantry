@@ -130,3 +130,15 @@ export function deleteComponent(id: number): Promise<void> {
 export function getComponentNutrition(id: number): Promise<ComponentNutrition> {
   return apiFetch(`/components/${id}/nutrition`)
 }
+
+export interface VariantListResponse {
+  items: Component[]
+}
+
+export function createVariant(id: number): Promise<Component> {
+  return apiFetch(`/components/${id}/variant`, { method: "POST" })
+}
+
+export function listVariants(id: number): Promise<VariantListResponse> {
+  return apiFetch(`/components/${id}/variants`)
+}

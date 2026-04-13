@@ -290,6 +290,51 @@ func (h *ComponentHandler) Nutrition(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type variantListResponse struct {
+	Items []componentResponse `json:"items"`
+}
+
+// CreateVariant handles POST /api/components/{id}/variant.
+func (h *ComponentHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+
+	variant, err := h.svc.CreateVariant(r.Context(), id)
+	if err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, toComponentResponse(variant))
+}
+
+// ListVariants handles GET /api/components/{id}/variants.
+func (h *ComponentHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+
+	siblings, err := h.svc.ListVariants(r.Context(), id)
+	if err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+
+	items := make([]componentResponse, len(siblings))
+	for i := range siblings {
+		items[i] = toComponentResponse(&siblings[i])
+	}
+
+	writeJSON(w, http.StatusOK, variantListResponse{Items: items})
+}
+
 // Upload handles POST /api/components/{id}/image.
 func (h *ComponentHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

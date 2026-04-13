@@ -15,6 +15,7 @@ type Querier interface {
 	CreateComponentInstruction(ctx context.Context, arg CreateComponentInstructionParams) error
 	CreateComponentTag(ctx context.Context, arg CreateComponentTagParams) error
 	CreateIngredient(ctx context.Context, arg CreateIngredientParams) (Ingredient, error)
+	CreateVariantGroup(ctx context.Context, name string) (VariantGroup, error)
 	DeleteComponent(ctx context.Context, id int64) (sql.Result, error)
 	DeleteComponentIngredients(ctx context.Context, componentID int64) error
 	DeleteComponentInstructions(ctx context.Context, componentID int64) error
@@ -27,6 +28,7 @@ type Querier interface {
 	ListComponentInstructions(ctx context.Context, componentID int64) ([]ComponentInstruction, error)
 	ListComponentTags(ctx context.Context, componentID int64) ([]ComponentTag, error)
 	ListPortions(ctx context.Context, ingredientID int64) ([]IngredientPortion, error)
+	ListSiblingComponents(ctx context.Context, arg ListSiblingComponentsParams) ([]Component, error)
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)

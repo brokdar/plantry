@@ -70,7 +70,9 @@
     "instruction_placeholder": "Describe this step...",
     "select_ingredient": "Select ingredient",
     "all_roles": "All roles",
-    "time": "{{prep}} + {{cook}} min"
+    "time": "{{prep}} + {{cook}} min",
+    "create_variant": "Create variant",
+    "other_variants": "Other variants"
   },
   "lookup": {
     "title": "Find ingredient",

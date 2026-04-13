@@ -14,6 +14,7 @@ export const componentKeys = {
   detail: (id: number) => [...componentKeys.details(), id] as const,
   nutrition: (id: number) =>
     [...componentKeys.detail(id), "nutrition"] as const,
+  variants: (id: number) => [...componentKeys.detail(id), "variants"] as const,
 }
 
 export { lookupKeys } from "./lookup"

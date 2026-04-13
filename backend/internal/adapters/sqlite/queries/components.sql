@@ -51,3 +51,9 @@ DELETE FROM component_tags WHERE component_id = ?;
 
 -- name: ListComponentTags :many
 SELECT component_id, tag FROM component_tags WHERE component_id = ? ORDER BY tag;
+
+-- name: CreateVariantGroup :one
+INSERT INTO variant_groups (name) VALUES (?) RETURNING *;
+
+-- name: ListSiblingComponents :many
+SELECT * FROM components WHERE variant_group_id = ? AND id != ? ORDER BY name;

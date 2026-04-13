@@ -218,6 +218,29 @@ func (r *ComponentRepo) List(ctx context.Context, q component.ListQuery) (*compo
 	return &component.ListResult{Items: items, Total: total}, nil
 }
 
+func (r *ComponentRepo) CreateVariantGroup(ctx context.Context, name string) (int64, error) {
+	group, err := r.q.CreateVariantGroup(ctx, name)
+	if err != nil {
+		return 0, err
+	}
+	return group.ID, nil
+}
+
+func (r *ComponentRepo) Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]component.Component, error) {
+	rows, err := r.q.ListSiblingComponents(ctx, sqlcgen.ListSiblingComponentsParams{
+		VariantGroupID: sql.NullInt64{Int64: variantGroupID, Valid: true},
+		ID:             excludeID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]component.Component, len(rows))
+	for i := range rows {
+		mapComponentToDomain(&rows[i], &items[i])
+	}
+	return items, nil
+}
+
 // --- internal helpers ---
 
 func (r *ComponentRepo) insertChildren(ctx context.Context, qtx *sqlcgen.Queries, c *component.Component) error {

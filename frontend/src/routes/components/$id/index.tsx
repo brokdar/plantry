@@ -1,10 +1,15 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { useComponent, useComponentNutrition } from "@/lib/queries/components"
+import {
+  useComponent,
+  useComponentNutrition,
+  useVariants,
+  useCreateVariant,
+} from "@/lib/queries/components"
 
 export const Route = createFileRoute("/components/$id/")({
   component: ComponentDetailPage,
@@ -14,9 +19,12 @@ function ComponentDetailPage() {
   const { t } = useTranslation()
   const { id } = Route.useParams()
   const numericId = Number(id)
+  const navigate = useNavigate()
 
   const { data: component, isLoading } = useComponent(numericId)
   const { data: nutrition } = useComponentNutrition(numericId)
+  const { data: variantsData } = useVariants(numericId)
+  const createVariant = useCreateVariant()
 
   if (Number.isNaN(numericId)) {
     return (
@@ -65,11 +73,32 @@ function ComponentDetailPage() {
             {t(`component.role_${component.role}`)}
           </Badge>
         </div>
-        <Button asChild>
-          <Link to="/components/$id/edit" params={{ id: String(component.id) }}>
-            {t("common.edit")}
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            disabled={createVariant.isPending}
+            onClick={() => {
+              createVariant.mutate(component.id, {
+                onSuccess: (variant) => {
+                  void navigate({
+                    to: "/components/$id/edit",
+                    params: { id: String(variant.id) },
+                  })
+                },
+              })
+            }}
+          >
+            {t("component.create_variant")}
+          </Button>
+          <Button asChild>
+            <Link
+              to="/components/$id/edit"
+              params={{ id: String(component.id) }}
+            >
+              {t("common.edit")}
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-4 text-sm text-muted-foreground">
@@ -144,6 +173,32 @@ function ComponentDetailPage() {
                   <p className="text-xs text-muted-foreground">{f.label}</p>
                   <p className="text-sm font-medium">{f.value.toFixed(1)}</p>
                 </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {variantsData && variantsData.items.length > 0 && (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">
+              {t("component.other_variants")}
+            </h3>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {variantsData.items.map((variant) => (
+                <Link
+                  key={variant.id}
+                  to="/components/$id"
+                  params={{ id: String(variant.id) }}
+                  className="flex items-center gap-3 rounded-md border border-border p-3 transition-colors hover:bg-muted/50"
+                >
+                  <span className="text-sm font-medium">{variant.name}</span>
+                  <Badge variant="secondary" className="ml-auto">
+                    {t(`component.role_${variant.role}`)}
+                  </Badge>
+                </Link>
               ))}
             </div>
           </div>

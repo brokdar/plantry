@@ -113,6 +113,17 @@ func (q *Queries) CreateComponentTag(ctx context.Context, arg CreateComponentTag
 	return err
 }
 
+const createVariantGroup = `-- name: CreateVariantGroup :one
+INSERT INTO variant_groups (name) VALUES (?) RETURNING id, name, created_at
+`
+
+func (q *Queries) CreateVariantGroup(ctx context.Context, name string) (VariantGroup, error) {
+	row := q.db.QueryRowContext(ctx, createVariantGroup, name)
+	var i VariantGroup
+	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	return i, err
+}
+
 const deleteComponent = `-- name: DeleteComponent :execresult
 DELETE FROM components WHERE id = ?
 `
@@ -254,6 +265,52 @@ func (q *Queries) ListComponentTags(ctx context.Context, componentID int64) ([]C
 	for rows.Next() {
 		var i ComponentTag
 		if err := rows.Scan(&i.ComponentID, &i.Tag); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSiblingComponents = `-- name: ListSiblingComponents :many
+SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at FROM components WHERE variant_group_id = ? AND id != ? ORDER BY name
+`
+
+type ListSiblingComponentsParams struct {
+	VariantGroupID sql.NullInt64
+	ID             int64
+}
+
+func (q *Queries) ListSiblingComponents(ctx context.Context, arg ListSiblingComponentsParams) ([]Component, error) {
+	rows, err := q.db.QueryContext(ctx, listSiblingComponents, arg.VariantGroupID, arg.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Component{}
+	for rows.Next() {
+		var i Component
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Role,
+			&i.VariantGroupID,
+			&i.ReferencePortions,
+			&i.PrepMinutes,
+			&i.CookMinutes,
+			&i.ImagePath,
+			&i.Notes,
+			&i.LastCookedAt,
+			&i.CookCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
