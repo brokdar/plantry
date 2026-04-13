@@ -281,6 +281,116 @@ func TestComponentRepo_FTSSearchSanitization(t *testing.T) {
 	}
 }
 
+func TestComponentRepo_CreateVariantGroup(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewComponentRepo(db)
+	ctx := context.Background()
+
+	groupID, err := repo.CreateVariantGroup(ctx, "Curry family")
+	require.NoError(t, err)
+	assert.NotZero(t, groupID)
+
+	// A second group gets a different ID.
+	groupID2, err := repo.CreateVariantGroup(ctx, "Bowl family")
+	require.NoError(t, err)
+	assert.NotEqual(t, groupID, groupID2)
+}
+
+func TestComponentRepo_Siblings(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	iRepo := sqlite.NewIngredientRepo(db)
+	repo := sqlite.NewComponentRepo(db)
+	ctx := context.Background()
+
+	ing := seedIngredient(t, iRepo, "Chicken")
+
+	groupID, err := repo.CreateVariantGroup(ctx, "Curry family")
+	require.NoError(t, err)
+
+	parent := &component.Component{
+		Name:              "Chicken Curry",
+		Role:              component.RoleMain,
+		ReferencePortions: 2,
+		VariantGroupID:    &groupID,
+		Ingredients: []component.ComponentIngredient{
+			{IngredientID: ing.ID, Amount: 300, Unit: "g", Grams: 300, SortOrder: 0},
+		},
+		Instructions: []component.Instruction{
+			{StepNumber: 1, Text: "Cook chicken"},
+		},
+		Tags: []string{"spicy"},
+	}
+	require.NoError(t, repo.Create(ctx, parent))
+
+	variant := &component.Component{
+		Name:              "Tofu Curry",
+		Role:              component.RoleMain,
+		ReferencePortions: 2,
+		VariantGroupID:    &groupID,
+	}
+	require.NoError(t, repo.Create(ctx, variant))
+
+	// Siblings of the variant should return the parent (excluding the variant).
+	siblings, err := repo.Siblings(ctx, groupID, variant.ID)
+	require.NoError(t, err)
+	require.Len(t, siblings, 1)
+	assert.Equal(t, parent.ID, siblings[0].ID)
+	assert.Equal(t, "Chicken Curry", siblings[0].Name)
+
+	// Children must be loaded (not empty).
+	require.Len(t, siblings[0].Ingredients, 1)
+	assert.Equal(t, ing.ID, siblings[0].Ingredients[0].IngredientID)
+	require.Len(t, siblings[0].Instructions, 1)
+	assert.Equal(t, "Cook chicken", siblings[0].Instructions[0].Text)
+	assert.Equal(t, []string{"spicy"}, siblings[0].Tags)
+}
+
+func TestComponentRepo_SiblingsEmpty(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewComponentRepo(db)
+	ctx := context.Background()
+
+	groupID, err := repo.CreateVariantGroup(ctx, "Solo group")
+	require.NoError(t, err)
+
+	solo := &component.Component{
+		Name:              "Solo Component",
+		Role:              component.RoleMain,
+		ReferencePortions: 1,
+		VariantGroupID:    &groupID,
+	}
+	require.NoError(t, repo.Create(ctx, solo))
+
+	// Only member in group — siblings should be empty.
+	siblings, err := repo.Siblings(ctx, groupID, solo.ID)
+	require.NoError(t, err)
+	assert.Empty(t, siblings)
+}
+
+func TestComponentRepo_SiblingsExcludesCorrectID(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewComponentRepo(db)
+	ctx := context.Background()
+
+	groupID, err := repo.CreateVariantGroup(ctx, "Triple group")
+	require.NoError(t, err)
+
+	a := &component.Component{Name: "A", Role: component.RoleMain, ReferencePortions: 1, VariantGroupID: &groupID}
+	b := &component.Component{Name: "B", Role: component.RoleMain, ReferencePortions: 1, VariantGroupID: &groupID}
+	c := &component.Component{Name: "C", Role: component.RoleMain, ReferencePortions: 1, VariantGroupID: &groupID}
+	require.NoError(t, repo.Create(ctx, a))
+	require.NoError(t, repo.Create(ctx, b))
+	require.NoError(t, repo.Create(ctx, c))
+
+	siblings, err := repo.Siblings(ctx, groupID, b.ID)
+	require.NoError(t, err)
+	require.Len(t, siblings, 2)
+
+	names := []string{siblings[0].Name, siblings[1].Name}
+	assert.Contains(t, names, "A")
+	assert.Contains(t, names, "C")
+}
+
 func TestIngredientRepo_LookupForNutrition(t *testing.T) {
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewIngredientRepo(db)
