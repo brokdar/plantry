@@ -237,6 +237,9 @@ func (r *ComponentRepo) Siblings(ctx context.Context, variantGroupID int64, excl
 	items := make([]component.Component, len(rows))
 	for i := range rows {
 		mapComponentToDomain(&rows[i], &items[i])
+		if err := r.loadChildren(ctx, r.q, &items[i]); err != nil {
+			return nil, err
+		}
 	}
 	return items, nil
 }
