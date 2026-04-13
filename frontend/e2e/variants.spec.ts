@@ -59,7 +59,7 @@ test.describe("Variant Components", () => {
       // Navigate to parent detail page.
       await page.goto(`/components/${parent.id}`)
       await expect(
-        page.getByText(`Chicken Curry ${tag}`, { exact: false })
+        page.getByRole("heading", { name: `Chicken Curry ${tag}` })
       ).toBeVisible()
 
       // "Other variants" section should show the variant.
@@ -76,11 +76,13 @@ test.describe("Variant Components", () => {
       await variantDetailPromise
 
       // Variant detail page shows the variant name.
-      await expect(page.getByText(variant.name)).toBeVisible()
+      await expect(
+        page.getByRole("heading", { name: variant.name })
+      ).toBeVisible()
 
       // Variant's "Other variants" section shows the parent.
       await expect(
-        page.getByText(`Chicken Curry ${tag}`, { exact: false })
+        page.getByRole("link", { name: new RegExp(`Chicken Curry ${tag}`) })
       ).toBeVisible()
     } finally {
       await cleanupComponent(variant.id)
