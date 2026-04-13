@@ -6,6 +6,8 @@ import {
   updateComponent,
   deleteComponent,
   getComponentNutrition,
+  createVariant,
+  listVariants,
   type ComponentListParams,
   type ComponentInput,
 } from "@/lib/api/components"
@@ -61,6 +63,29 @@ export function useDeleteComponent() {
   return useMutation({
     mutationFn: (id: number) => deleteComponent(id),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: componentKeys.lists() })
+    },
+  })
+}
+
+export function useVariants(id: number) {
+  return useQuery({
+    queryKey: componentKeys.variants(id),
+    queryFn: () => listVariants(id),
+    enabled: id > 0,
+  })
+}
+
+export function useCreateVariant() {
+  return useMutation({
+    mutationFn: (id: number) => createVariant(id),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({
+        queryKey: componentKeys.variants(id),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: componentKeys.detail(id),
+      })
       void queryClient.invalidateQueries({ queryKey: componentKeys.lists() })
     },
   })

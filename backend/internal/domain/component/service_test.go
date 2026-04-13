@@ -18,13 +18,18 @@ import (
 // --- fake repository ---
 
 type fakeRepo struct {
-	mu    sync.Mutex
-	items map[int64]*component.Component
-	seq   int64
+	mu       sync.Mutex
+	items    map[int64]*component.Component
+	seq      int64
+	groupSeq int64
+	groups   map[int64]string // groupID -> name
 }
 
 func newFakeRepo() *fakeRepo {
-	return &fakeRepo{items: make(map[int64]*component.Component)}
+	return &fakeRepo{
+		items:  make(map[int64]*component.Component),
+		groups: make(map[int64]string),
+	}
 }
 
 func (r *fakeRepo) Create(_ context.Context, c *component.Component) error {
@@ -73,6 +78,26 @@ func (r *fakeRepo) Delete(_ context.Context, id int64) error {
 	}
 	delete(r.items, id)
 	return nil
+}
+
+func (r *fakeRepo) CreateVariantGroup(_ context.Context, name string) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.groupSeq++
+	r.groups[r.groupSeq] = name
+	return r.groupSeq, nil
+}
+
+func (r *fakeRepo) Siblings(_ context.Context, variantGroupID int64, excludeID int64) ([]component.Component, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var result []component.Component
+	for _, c := range r.items {
+		if c.VariantGroupID != nil && *c.VariantGroupID == variantGroupID && c.ID != excludeID {
+			result = append(result, *c)
+		}
+	}
+	return result, nil
 }
 
 func (r *fakeRepo) List(_ context.Context, q component.ListQuery) (*component.ListResult, error) {
@@ -407,5 +432,138 @@ func TestNutrition_PerPortion(t *testing.T) {
 func TestNutrition_NotFound(t *testing.T) {
 	svc, _, _, _ := newService()
 	_, err := svc.Nutrition(context.Background(), 999)
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+// --- variant tests ---
+
+func TestCreateVariant_FirstVariant_CreatesGroup(t *testing.T) {
+	svc, repo, _, _ := newService()
+	ctx := context.Background()
+
+	parent := validComponent()
+	require.NoError(t, svc.Create(ctx, parent))
+	assert.Nil(t, parent.VariantGroupID)
+
+	variant, err := svc.CreateVariant(ctx, parent.ID)
+	require.NoError(t, err)
+	assert.NotZero(t, variant.ID)
+	assert.NotEqual(t, parent.ID, variant.ID)
+
+	// Parent should now have a variant_group_id.
+	updatedParent, err := repo.Get(ctx, parent.ID)
+	require.NoError(t, err)
+	require.NotNil(t, updatedParent.VariantGroupID)
+
+	// Variant should share the same group.
+	require.NotNil(t, variant.VariantGroupID)
+	assert.Equal(t, *updatedParent.VariantGroupID, *variant.VariantGroupID)
+
+	// Variant inherits role and reference_portions.
+	assert.Equal(t, parent.Role, variant.Role)
+	assert.Equal(t, parent.ReferencePortions, variant.ReferencePortions)
+
+	// Variant name includes "(variant)".
+	assert.Contains(t, variant.Name, "(variant)")
+}
+
+func TestCreateVariant_SubsequentVariant_JoinsGroup(t *testing.T) {
+	svc, repo, _, _ := newService()
+	ctx := context.Background()
+
+	parent := validComponent()
+	require.NoError(t, svc.Create(ctx, parent))
+
+	v1, err := svc.CreateVariant(ctx, parent.ID)
+	require.NoError(t, err)
+
+	v2, err := svc.CreateVariant(ctx, parent.ID)
+	require.NoError(t, err)
+
+	// All three should share the same group.
+	updatedParent, _ := repo.Get(ctx, parent.ID)
+	require.NotNil(t, updatedParent.VariantGroupID)
+	require.NotNil(t, v1.VariantGroupID)
+	require.NotNil(t, v2.VariantGroupID)
+	assert.Equal(t, *updatedParent.VariantGroupID, *v1.VariantGroupID)
+	assert.Equal(t, *updatedParent.VariantGroupID, *v2.VariantGroupID)
+
+	// No new group created for v2 — group count should be 1.
+	assert.Len(t, repo.groups, 1)
+}
+
+func TestCreateVariant_NotFound(t *testing.T) {
+	svc, _, _, _ := newService()
+	_, err := svc.CreateVariant(context.Background(), 999)
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+func TestCreateVariant_FromVariant_JoinsSameGroup(t *testing.T) {
+	svc, repo, _, _ := newService()
+	ctx := context.Background()
+
+	parent := validComponent()
+	require.NoError(t, svc.Create(ctx, parent))
+
+	v1, err := svc.CreateVariant(ctx, parent.ID)
+	require.NoError(t, err)
+
+	// Create a variant from v1 (not from parent).
+	v2, err := svc.CreateVariant(ctx, v1.ID)
+	require.NoError(t, err)
+
+	// All three should share the same group.
+	updatedParent, _ := repo.Get(ctx, parent.ID)
+	require.NotNil(t, v2.VariantGroupID)
+	assert.Equal(t, *updatedParent.VariantGroupID, *v2.VariantGroupID)
+
+	// No new group created.
+	assert.Len(t, repo.groups, 1)
+}
+
+func TestListVariants_ReturnsSiblings(t *testing.T) {
+	svc, _, _, _ := newService()
+	ctx := context.Background()
+
+	parent := validComponent()
+	require.NoError(t, svc.Create(ctx, parent))
+
+	v1, err := svc.CreateVariant(ctx, parent.ID)
+	require.NoError(t, err)
+
+	v2, err := svc.CreateVariant(ctx, parent.ID)
+	require.NoError(t, err)
+
+	// From parent's perspective: siblings are v1 and v2.
+	siblings, err := svc.ListVariants(ctx, parent.ID)
+	require.NoError(t, err)
+	assert.Len(t, siblings, 2)
+
+	// From v1's perspective: siblings are parent and v2.
+	siblings, err = svc.ListVariants(ctx, v1.ID)
+	require.NoError(t, err)
+	assert.Len(t, siblings, 2)
+
+	// From v2's perspective: siblings are parent and v1.
+	siblings, err = svc.ListVariants(ctx, v2.ID)
+	require.NoError(t, err)
+	assert.Len(t, siblings, 2)
+}
+
+func TestListVariants_NoGroup_ReturnsEmpty(t *testing.T) {
+	svc, _, _, _ := newService()
+	ctx := context.Background()
+
+	c := validComponent()
+	require.NoError(t, svc.Create(ctx, c))
+
+	siblings, err := svc.ListVariants(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Empty(t, siblings)
+}
+
+func TestListVariants_NotFound(t *testing.T) {
+	svc, _, _, _ := newService()
+	_, err := svc.ListVariants(context.Background(), 999)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 }

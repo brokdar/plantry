@@ -88,6 +88,31 @@ export const mockTofuBowl: Component = {
   updated_at: "2024-01-02T00:00:00Z",
 }
 
+export const mockChickenCurryWithVariantGroup: Component = {
+  ...mockChickenCurry,
+  id: 10,
+  variant_group_id: 1,
+}
+
+export const mockTofuCurryVariant: Component = {
+  id: 11,
+  name: "Tofu Curry",
+  role: "main",
+  variant_group_id: 1,
+  reference_portions: 2,
+  prep_minutes: 10,
+  cook_minutes: 25,
+  image_path: null,
+  notes: null,
+  last_cooked_at: null,
+  cook_count: 0,
+  ingredients: [],
+  instructions: [],
+  tags: ["vegan"],
+  created_at: "2024-01-03T00:00:00Z",
+  updated_at: "2024-01-03T00:00:00Z",
+}
+
 export const mockLookupCandidate: LookupCandidate = {
   name: "Chicken Breast, Raw",
   source: "fdc",

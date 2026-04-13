@@ -138,6 +138,49 @@ func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
 	return s.repo.List(ctx, q)
 }
 
+// CreateVariant creates a new skeleton component in the same variant group as the parent.
+// If the parent has no variant group, one is created and assigned to the parent first.
+func (s *Service) CreateVariant(ctx context.Context, parentID int64) (*Component, error) {
+	parent, err := s.repo.Get(ctx, parentID)
+	if err != nil {
+		return nil, err
+	}
+
+	if parent.VariantGroupID == nil {
+		groupID, err := s.repo.CreateVariantGroup(ctx, parent.Name)
+		if err != nil {
+			return nil, fmt.Errorf("create variant group: %w", err)
+		}
+		parent.VariantGroupID = &groupID
+		if err := s.repo.Update(ctx, parent); err != nil {
+			return nil, fmt.Errorf("assign parent to group: %w", err)
+		}
+	}
+
+	variant := &Component{
+		Name:              parent.Name + " (variant)",
+		Role:              parent.Role,
+		VariantGroupID:    parent.VariantGroupID,
+		ReferencePortions: parent.ReferencePortions,
+	}
+	if err := s.repo.Create(ctx, variant); err != nil {
+		return nil, fmt.Errorf("create variant: %w", err)
+	}
+	return variant, nil
+}
+
+// ListVariants returns sibling components in the same variant group, excluding the given component.
+func (s *Service) ListVariants(ctx context.Context, componentID int64) ([]Component, error) {
+	c, err := s.repo.Get(ctx, componentID)
+	if err != nil {
+		return nil, err
+	}
+	if c.VariantGroupID == nil {
+		return []Component{}, nil
+	}
+	return s.repo.Siblings(ctx, *c.VariantGroupID, componentID)
+}
+
 // Nutrition returns per-portion macros for a component.
 func (s *Service) Nutrition(ctx context.Context, id int64) (*nutrition.Macros, error) {
 	c, err := s.repo.Get(ctx, id)

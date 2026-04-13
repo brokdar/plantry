@@ -70,7 +70,9 @@
     "instruction_placeholder": "Beschreibe diesen Schritt...",
     "select_ingredient": "Zutat auswählen",
     "all_roles": "Alle Rollen",
-    "time": "{{prep}} + {{cook}} Min."
+    "time": "{{prep}} + {{cook}} Min.",
+    "create_variant": "Variante erstellen",
+    "other_variants": "Andere Varianten"
   },
   "lookup": {
     "title": "Zutat finden",
