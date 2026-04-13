@@ -97,6 +97,7 @@ test.describe("Variant Components", () => {
       role: "standalone",
     })
 
+    let variantId: number | undefined
     try {
       await page.goto(`/components/${parent.id}`)
       await expect(page.getByText(`Tofu Bowl ${tag}`)).toBeVisible()
@@ -112,13 +113,12 @@ test.describe("Variant Components", () => {
       expect(response.status()).toBe(201)
 
       const variant = (await response.json()) as { id: number; name: string }
+      variantId = variant.id
 
       // Should navigate to the variant's edit page.
       await expect(page.getByLabel(/^name/i)).toBeVisible()
-
-      // Cleanup the variant too.
-      await cleanupComponent(variant.id)
     } finally {
+      if (variantId) await cleanupComponent(variantId)
       await cleanupComponent(parent.id)
     }
   })
