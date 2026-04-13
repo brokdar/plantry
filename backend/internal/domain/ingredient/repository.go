@@ -12,4 +12,5 @@ type Repository interface {
 	ListPortions(ctx context.Context, ingredientID int64) ([]Portion, error)
 	UpsertPortion(ctx context.Context, p *Portion) error
 	DeletePortion(ctx context.Context, ingredientID int64, unit string) error
+	LookupForNutrition(ctx context.Context, ids []int64) (map[int64]*Ingredient, error)
 }

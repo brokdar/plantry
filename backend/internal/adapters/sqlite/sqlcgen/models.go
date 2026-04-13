@@ -8,6 +8,48 @@ import (
 	"database/sql"
 )
 
+type Component struct {
+	ID                int64
+	Name              string
+	Role              string
+	VariantGroupID    sql.NullInt64
+	ReferencePortions float64
+	PrepMinutes       sql.NullInt64
+	CookMinutes       sql.NullInt64
+	ImagePath         sql.NullString
+	Notes             sql.NullString
+	LastCookedAt      sql.NullString
+	CookCount         int64
+	CreatedAt         string
+	UpdatedAt         string
+}
+
+type ComponentIngredient struct {
+	ID           int64
+	ComponentID  int64
+	IngredientID int64
+	Amount       float64
+	Unit         string
+	Grams        float64
+	SortOrder    int64
+}
+
+type ComponentInstruction struct {
+	ID          int64
+	ComponentID int64
+	StepNumber  int64
+	Text        string
+}
+
+type ComponentTag struct {
+	ComponentID int64
+	Tag         string
+}
+
+type ComponentsFt struct {
+	Name string
+}
+
 type Ingredient struct {
 	ID          int64
 	Name        string
@@ -34,4 +76,10 @@ type IngredientPortion struct {
 
 type IngredientsFt struct {
 	Name string
+}
+
+type VariantGroup struct {
+	ID        int64
+	Name      string
+	CreatedAt string
 }

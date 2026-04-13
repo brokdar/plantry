@@ -1,7 +1,8 @@
 {
   "nav": {
     "brand": "Plantry",
-    "ingredients": "Zutaten"
+    "ingredients": "Zutaten",
+    "components": "Komponenten"
   },
   "home": {
     "title": "Willkommen bei Plantry",
@@ -26,6 +27,50 @@
     "delete_confirm_body": "Diese Aktion kann nicht rückgängig gemacht werden.",
     "no_results": "Keine Zutaten gefunden.",
     "empty_state": "Noch keine Zutaten. Erstelle deine erste!"
+  },
+  "component": {
+    "title": "Komponenten",
+    "create": "Neue Komponente",
+    "edit": "Komponente bearbeiten",
+    "view": "Komponentendetails",
+    "name": "Name",
+    "name_placeholder": "z. B. Hähnchen-Curry",
+    "role": "Rolle",
+    "role_placeholder": "Rolle wählen",
+    "role_main": "Hauptgericht",
+    "role_side_starch": "Beilage (Stärke)",
+    "role_side_veg": "Beilage (Gemüse)",
+    "role_side_protein": "Beilage (Protein)",
+    "role_sauce": "Soße",
+    "role_drink": "Getränk",
+    "role_dessert": "Dessert",
+    "role_standalone": "Eigenständig",
+    "reference_portions": "Portionen",
+    "prep_minutes": "Vorbereitung (Min.)",
+    "cook_minutes": "Kochen (Min.)",
+    "notes": "Notizen",
+    "notes_placeholder": "Optionale Notizen...",
+    "ingredients": "Zutaten",
+    "instructions": "Zubereitung",
+    "tags": "Tags",
+    "add_ingredient": "Zutat hinzufügen",
+    "add_instruction": "Schritt hinzufügen",
+    "add_tag": "Tag hinzufügen",
+    "tag_placeholder": "z. B. scharf, schnell",
+    "nutrition": "Nährwerte pro Portion",
+    "search_placeholder": "Komponenten suchen...",
+    "no_results": "Keine Komponenten gefunden.",
+    "empty_state": "Noch keine Komponenten. Erstelle deine erste!",
+    "delete_confirm_title": "Komponente löschen?",
+    "delete_confirm_body": "Diese Aktion kann nicht rückgängig gemacht werden.",
+    "amount": "Menge",
+    "unit": "Einheit",
+    "grams": "Gramm",
+    "step": "Schritt {{number}}",
+    "instruction_placeholder": "Beschreibe diesen Schritt...",
+    "select_ingredient": "Zutat auswählen",
+    "all_roles": "Alle Rollen",
+    "time": "{{prep}} + {{cook}} Min."
   },
   "lookup": {
     "title": "Zutat finden",
@@ -65,6 +110,11 @@
       "duplicate_name": "Eine Zutat mit diesem Namen existiert bereits.",
       "in_use": "Diese Zutat wird in einer Komponente verwendet und kann nicht gelöscht werden.",
       "lookup_failed": "Externe Datenbanken konnten nicht durchsucht werden"
+    },
+    "component": {
+      "duplicate_name": "Eine Komponente mit diesem Namen existiert bereits.",
+      "in_use": "Diese Komponente wird in einem Teller verwendet und kann nicht gelöscht werden.",
+      "invalid_role": "Ungültige Rolle."
     },
     "image": {
       "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut."

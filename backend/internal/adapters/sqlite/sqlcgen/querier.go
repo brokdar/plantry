@@ -10,14 +10,27 @@ import (
 )
 
 type Querier interface {
+	CreateComponent(ctx context.Context, arg CreateComponentParams) (Component, error)
+	CreateComponentIngredient(ctx context.Context, arg CreateComponentIngredientParams) error
+	CreateComponentInstruction(ctx context.Context, arg CreateComponentInstructionParams) error
+	CreateComponentTag(ctx context.Context, arg CreateComponentTagParams) error
 	CreateIngredient(ctx context.Context, arg CreateIngredientParams) (Ingredient, error)
+	DeleteComponent(ctx context.Context, id int64) (sql.Result, error)
+	DeleteComponentIngredients(ctx context.Context, componentID int64) error
+	DeleteComponentInstructions(ctx context.Context, componentID int64) error
+	DeleteComponentTags(ctx context.Context, componentID int64) error
 	DeleteIngredient(ctx context.Context, id int64) (sql.Result, error)
 	DeletePortion(ctx context.Context, arg DeletePortionParams) (sql.Result, error)
+	GetComponent(ctx context.Context, id int64) (Component, error)
 	GetIngredient(ctx context.Context, id int64) (Ingredient, error)
+	ListComponentIngredients(ctx context.Context, componentID int64) ([]ComponentIngredient, error)
+	ListComponentInstructions(ctx context.Context, componentID int64) ([]ComponentInstruction, error)
+	ListComponentTags(ctx context.Context, componentID int64) ([]ComponentTag, error)
 	ListPortions(ctx context.Context, ingredientID int64) ([]IngredientPortion, error)
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)
+	UpdateComponent(ctx context.Context, arg UpdateComponentParams) (Component, error)
 	UpdateIngredient(ctx context.Context, arg UpdateIngredientParams) (Ingredient, error)
 	UpsertPortion(ctx context.Context, arg UpsertPortionParams) error
 }

@@ -16,6 +16,7 @@ type Handlers struct {
 	Ingredients *handlers.IngredientHandler
 	Lookup      *handlers.LookupHandler
 	Images      *handlers.ImageHandler
+	Components  *handlers.ComponentHandler
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -28,6 +29,23 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 	r.Route("/api", func(api chi.Router) {
 		api.Get("/health", handlers.Health)
+
+		if h.Components != nil {
+			api.Route("/components", func(r chi.Router) {
+				r.Get("/", h.Components.List)
+				r.Post("/", h.Components.Create)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.Components.Get)
+					r.Put("/", h.Components.Update)
+					r.Delete("/", h.Components.Delete)
+					r.Get("/nutrition", h.Components.Nutrition)
+					if h.Components.HasImageStore() {
+						r.Post("/image", h.Components.Upload)
+						r.Delete("/image", h.Components.DeleteImage)
+					}
+				})
+			})
+		}
 
 		api.Route("/ingredients", func(r chi.Router) {
 			r.Get("/", h.Ingredients.List)

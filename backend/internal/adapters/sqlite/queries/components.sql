@@ -1,0 +1,53 @@
+-- name: CreateComponent :one
+INSERT INTO components (name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: GetComponent :one
+SELECT * FROM components WHERE id = ?;
+
+-- name: UpdateComponent :one
+UPDATE components SET
+    name = ?,
+    role = ?,
+    variant_group_id = ?,
+    reference_portions = ?,
+    prep_minutes = ?,
+    cook_minutes = ?,
+    image_path = ?,
+    notes = ?,
+    updated_at = datetime('now')
+WHERE id = ?
+RETURNING *;
+
+-- name: DeleteComponent :execresult
+DELETE FROM components WHERE id = ?;
+
+-- name: CreateComponentIngredient :exec
+INSERT INTO component_ingredients (component_id, ingredient_id, amount, unit, grams, sort_order)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: DeleteComponentIngredients :exec
+DELETE FROM component_ingredients WHERE component_id = ?;
+
+-- name: ListComponentIngredients :many
+SELECT * FROM component_ingredients WHERE component_id = ? ORDER BY sort_order;
+
+-- name: CreateComponentInstruction :exec
+INSERT INTO component_instructions (component_id, step_number, text)
+VALUES (?, ?, ?);
+
+-- name: DeleteComponentInstructions :exec
+DELETE FROM component_instructions WHERE component_id = ?;
+
+-- name: ListComponentInstructions :many
+SELECT * FROM component_instructions WHERE component_id = ? ORDER BY step_number;
+
+-- name: CreateComponentTag :exec
+INSERT INTO component_tags (component_id, tag) VALUES (?, ?);
+
+-- name: DeleteComponentTags :exec
+DELETE FROM component_tags WHERE component_id = ?;
+
+-- name: ListComponentTags :many
+SELECT component_id, tag FROM component_tags WHERE component_id = ? ORDER BY tag;

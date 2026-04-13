@@ -141,6 +141,19 @@ func (r *fakeRepo) DeletePortion(_ context.Context, ingredientID int64, unit str
 	return nil
 }
 
+func (r *fakeRepo) LookupForNutrition(_ context.Context, ids []int64) (map[int64]*ingredient.Ingredient, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	result := make(map[int64]*ingredient.Ingredient, len(ids))
+	for _, id := range ids {
+		if i, ok := r.items[id]; ok {
+			clone := *i
+			result[id] = &clone
+		}
+	}
+	return result, nil
+}
+
 // --- tests ---
 
 func TestCreate_AssignsID(t *testing.T) {

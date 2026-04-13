@@ -7,19 +7,23 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 )
 
-func toHTTP(err error) (int, string) {
+func toHTTPWithResource(err error, resource string) (int, string) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		return http.StatusNotFound, "error.not_found"
 	case errors.Is(err, domain.ErrDuplicateName):
-		return http.StatusConflict, "error.ingredient.duplicate_name"
+		return http.StatusConflict, "error." + resource + ".duplicate_name"
 	case errors.Is(err, domain.ErrInUse):
-		return http.StatusConflict, "error.ingredient.in_use"
+		return http.StatusConflict, "error." + resource + ".in_use"
 	case errors.Is(err, domain.ErrInvalidInput):
 		return http.StatusBadRequest, "error.invalid_body"
 	case errors.Is(err, domain.ErrLookupFailed):
-		return http.StatusBadGateway, "error.ingredient.lookup_failed"
+		return http.StatusBadGateway, "error." + resource + ".lookup_failed"
 	default:
 		return http.StatusInternalServerError, "error.server"
 	}
+}
+
+func toHTTP(err error) (int, string) {
+	return toHTTPWithResource(err, "ingredient")
 }
