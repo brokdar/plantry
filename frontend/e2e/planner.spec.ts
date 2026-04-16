@@ -1,71 +1,12 @@
-import { request as apiRequest, expect, test } from "@playwright/test"
+import { expect, test } from "@playwright/test"
 
-const API = "http://localhost:8080"
-
-function uid() {
-  return crypto.randomUUID().slice(0, 8)
-}
-
-async function seedSlot(name_key: string, icon: string, sort_order: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/settings/slots", {
-    data: { name_key, icon, sort_order, active: true },
-  })
-  const body = (await res.json()) as { id: number; name_key: string }
-  expect(
-    res.ok(),
-    `seed slot ${name_key}: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body
-}
-
-async function seedComponent(name: string, role: string) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/components", {
-    data: { name, role, reference_portions: 1 },
-  })
-  const body = (await res.json()) as { id: number; name: string }
-  expect(
-    res.ok(),
-    `seed component ${name}: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body
-}
-
-async function deletePlatesUsingSlot(slotId: number) {
-  // Best-effort cleanup: walk every week and delete plates that reference the slot.
-  // SQLite ON DELETE RESTRICT prevents deleting the slot row otherwise.
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const wRes = await ctx.get("/api/weeks?limit=100")
-  const weeks = ((await wRes.json()) as { items: { id: number }[] }).items
-  for (const w of weeks) {
-    const det = await ctx.get(`/api/weeks/${w.id}`)
-    const detail = (await det.json()) as {
-      plates: { id: number; slot_id: number }[]
-    }
-    for (const p of detail.plates) {
-      if (p.slot_id === slotId) {
-        await ctx.delete(`/api/plates/${p.id}`)
-      }
-    }
-  }
-  await ctx.dispose()
-}
-
-async function cleanupSlot(id: number) {
-  await deletePlatesUsingSlot(id)
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/settings/slots/${id}`)
-  await ctx.dispose()
-}
-
-async function cleanupComponent(id: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/components/${id}`)
-  await ctx.dispose()
-}
+import {
+  cleanupComponent,
+  cleanupSlot,
+  seedComponent,
+  seedSlot,
+  uid,
+} from "./helpers"
 
 test.describe("Weekly planner", () => {
   test("plan a meal, swap a component, remove one, copy week", async ({
@@ -73,9 +14,18 @@ test.describe("Weekly planner", () => {
   }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.dinner_${tag}`, "Moon", 999)
-    const main = await seedComponent(`Chicken curry ${tag}`, "main")
-    const side = await seedComponent(`Basmati ${tag}`, "side_starch")
-    const replacement = await seedComponent(`Naan ${tag}`, "side_starch")
+    const main = await seedComponent({
+      name: `Chicken curry ${tag}`,
+      role: "main",
+    })
+    const side = await seedComponent({
+      name: `Basmati ${tag}`,
+      role: "side_starch",
+    })
+    const replacement = await seedComponent({
+      name: `Naan ${tag}`,
+      role: "side_starch",
+    })
 
     try {
       await page.goto("/")

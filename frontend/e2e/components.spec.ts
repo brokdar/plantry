@@ -1,70 +1,13 @@
 import { test, expect, request as apiRequest } from "@playwright/test"
 
-const API = "http://localhost:8080"
-
-function uid() {
-  return crypto.randomUUID().slice(0, 8)
-}
-
-async function seedIngredient(data: {
-  name: string
-  kcal_100g?: number
-  protein_100g?: number
-  fat_100g?: number
-  carbs_100g?: number
-}) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/ingredients", { data })
-  const body = await res.json()
-  expect(
-    res.ok(),
-    `Seed ingredient "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body as { id: number; name: string }
-}
-
-async function seedComponent(data: {
-  name: string
-  role: string
-  reference_portions?: number
-  ingredients?: {
-    ingredient_id: number
-    amount: number
-    unit: string
-    grams: number
-    sort_order: number
-  }[]
-  instructions?: { step_number: number; text: string }[]
-  tags?: string[]
-}) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/components", {
-    data: {
-      reference_portions: 1,
-      ...data,
-    },
-  })
-  const body = await res.json()
-  expect(
-    res.ok(),
-    `Seed component "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body as { id: number; name: string }
-}
-
-async function cleanupComponent(id: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/components/${id}`)
-  await ctx.dispose()
-}
-
-async function cleanupIngredient(id: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/ingredients/${id}`)
-  await ctx.dispose()
-}
+import {
+  API,
+  cleanupComponent,
+  cleanupIngredient,
+  seedComponent,
+  seedIngredient,
+  uid,
+} from "./helpers"
 
 test.describe("Component Library", () => {
   test("create a component via the form", async ({ page }) => {

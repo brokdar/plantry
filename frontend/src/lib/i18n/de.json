@@ -169,6 +169,26 @@
     "empty": "Noch keine Mahlzeiten geplant.",
     "week_total": "Wochengesamt"
   },
+  "profile": {
+    "title": "Profil & Ziele",
+    "description": "Lege deine Ernährungsziele und Vorlieben fest.",
+    "goal_preset": "Ziel-Vorlage",
+    "preset_cut": "Abnehmen",
+    "preset_maintain": "Halten",
+    "preset_bulk": "Aufbauen",
+    "kcal_target": "Tägliches Kalorienziel (kcal)",
+    "protein_pct": "Eiweiß %",
+    "fat_pct": "Fett %",
+    "carbs_pct": "Kohlenhydrate %",
+    "macro_sum": "Summe: {{sum}}%",
+    "dietary_restrictions": "Ernährungseinschränkungen",
+    "restriction_placeholder": "z. B. vegetarisch, glutenfrei",
+    "system_prompt": "Benutzerdefinierte KI-Anweisungen",
+    "system_prompt_placeholder": "Beschreibe deine Vorlieben für die KI...",
+    "locale": "Sprache",
+    "save": "Profil speichern",
+    "save_success": "Profil gespeichert"
+  },
   "error": {
     "not_found": "Ressource nicht gefunden.",
     "invalid_id": "Ungültige ID.",
@@ -192,6 +212,9 @@
     },
     "image": {
       "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut."
+    },
+    "profile": {
+      "invalid_macros": "Die Makroprozentsätze dürfen zusammen höchstens 100 ergeben, und das Kalorienziel muss positiv sein."
     }
   },
   "common": {

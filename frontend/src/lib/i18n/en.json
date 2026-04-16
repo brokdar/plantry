@@ -157,6 +157,26 @@
     "remove": "Remove image",
     "uploading": "Uploading..."
   },
+  "profile": {
+    "title": "Profile & Targets",
+    "description": "Set your nutrition goals and preferences.",
+    "goal_preset": "Goal preset",
+    "preset_cut": "Cut",
+    "preset_maintain": "Maintain",
+    "preset_bulk": "Bulk",
+    "kcal_target": "Daily calorie target (kcal)",
+    "protein_pct": "Protein %",
+    "fat_pct": "Fat %",
+    "carbs_pct": "Carbs %",
+    "macro_sum": "Sum: {{sum}}%",
+    "dietary_restrictions": "Dietary restrictions",
+    "restriction_placeholder": "e.g. vegetarian, gluten-free",
+    "system_prompt": "Custom AI instructions",
+    "system_prompt_placeholder": "Describe your preferences for the AI...",
+    "locale": "Language",
+    "save": "Save profile",
+    "save_success": "Profile saved"
+  },
   "error": {
     "not_found": "Resource not found.",
     "invalid_id": "Invalid ID.",
@@ -180,6 +200,9 @@
     },
     "image": {
       "upload_failed": "Image operation failed. Please try again."
+    },
+    "profile": {
+      "invalid_macros": "Macro percentages must sum to 100 or less, and calorie target must be positive."
     }
   },
   "shopping": {

@@ -20,6 +20,7 @@ type Handlers struct {
 	Slots       *handlers.SlotHandler
 	Weeks       *handlers.WeekHandler
 	Plates      *handlers.PlateHandler
+	Profile     *handlers.ProfileHandler
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -82,6 +83,13 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Post("/components", h.Plates.AddComponent)
 				r.Put("/components/{pcId}", h.Plates.UpdateComponent)
 				r.Delete("/components/{pcId}", h.Plates.DeleteComponent)
+			})
+		}
+
+		if h.Profile != nil {
+			api.Route("/profile", func(r chi.Router) {
+				r.Get("/", h.Profile.Get)
+				r.Put("/", h.Profile.Update)
 			})
 		}
 

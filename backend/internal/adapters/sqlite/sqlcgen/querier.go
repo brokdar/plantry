@@ -36,6 +36,7 @@ type Querier interface {
 	GetIngredient(ctx context.Context, id int64) (Ingredient, error)
 	GetPlate(ctx context.Context, id int64) (Plate, error)
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
+	GetProfile(ctx context.Context) (UserProfile, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	GetWeek(ctx context.Context, id int64) (Week, error)
 	GetWeekByYearAndNumber(ctx context.Context, arg GetWeekByYearAndNumberParams) (Week, error)
@@ -59,6 +60,7 @@ type Querier interface {
 	UpdatePlateComponent(ctx context.Context, arg UpdatePlateComponentParams) (PlateComponent, error)
 	UpdateTimeSlot(ctx context.Context, arg UpdateTimeSlotParams) (TimeSlot, error)
 	UpsertPortion(ctx context.Context, arg UpsertPortionParams) error
+	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)
 }
 
 var _ Querier = (*Queries)(nil)

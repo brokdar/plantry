@@ -77,7 +77,9 @@ test.describe("Time slots settings", () => {
     await page.goto("/settings")
     await page.getByLabel(/^icon$/i).fill("Coffee")
     await page.getByRole("button", { name: /save/i }).click()
-    // Form should not POST; we just confirm no slot was created with our marker.
+    // UI should show the validation error inline.
+    await expect(page.getByText("name_key required")).toBeVisible()
+    // Form should not POST; confirm no slot was created.
     const slots = await listSlots()
     expect(slots.find((s) => s.name_key === "")).toBeUndefined()
   })

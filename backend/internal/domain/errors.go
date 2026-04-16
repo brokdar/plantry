@@ -10,4 +10,5 @@ var (
 	ErrLookupFailed  = errors.New("lookup failed")
 	ErrInvalidDay    = errors.New("invalid day")
 	ErrSlotUnknown   = errors.New("slot unknown")
+	ErrInvalidMacros = errors.New("invalid macros")
 )

@@ -95,6 +95,7 @@ export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
             type="number"
             step="0.1"
             min="0"
+            data-testid="portion-grams"
             value={newGrams}
             onChange={(e) => setNewGrams(e.target.value)}
             onKeyDown={(e) => {

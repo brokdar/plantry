@@ -40,6 +40,10 @@ export const plateKeys = {
   detail: (id: number) => [...plateKeys.all, id] as const,
 }
 
+export const profileKeys = {
+  detail: ["profile"] as const,
+}
+
 export { lookupKeys } from "./lookup"
 export { portionKeys } from "./portions"
 export { imageKeys } from "./images"

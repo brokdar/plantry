@@ -1,25 +1,27 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, request as apiRequest } from "@playwright/test"
 
 const API_BASE = "http://localhost:8080"
 
 async function createIngredientAPI(name: string): Promise<number> {
-  const res = await fetch(`${API_BASE}/api/ingredients`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const ctx = await apiRequest.newContext({ baseURL: API_BASE })
+  const res = await ctx.post("/api/ingredients", {
+    data: {
       name,
       kcal_100g: 100,
       protein_100g: 10,
       fat_100g: 5,
       carbs_100g: 15,
-    }),
+    },
   })
-  const data = await res.json()
-  return data.id
+  const body = await res.json()
+  await ctx.dispose()
+  return body.id
 }
 
 async function deleteIngredientAPI(id: number): Promise<void> {
-  await fetch(`${API_BASE}/api/ingredients/${id}`, { method: "DELETE" })
+  const ctx = await apiRequest.newContext({ baseURL: API_BASE })
+  await ctx.delete(`/api/ingredients/${id}`)
+  await ctx.dispose()
 }
 
 test.describe("Ingredient Resolution", () => {
@@ -200,9 +202,7 @@ test.describe("Ingredient Resolution", () => {
 
       // Fill in a new portion
       await page.getByPlaceholder(/e\.g\. cup/i).fill("cup")
-      // Target the grams input by absence of name attribute (PortionsEditor uses
-      // controlled state, so no name; macro fields get name via react-hook-form spread)
-      await page.locator('input[type="number"]:not([name])').fill("240")
+      await page.getByTestId("portion-grams").fill("240")
 
       // Add the portion
       const addPromise = page.waitForResponse(

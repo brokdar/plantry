@@ -1,46 +1,11 @@
-import { test, expect, request as apiRequest } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 
-const API = "http://localhost:8080"
-
-function uid() {
-  return crypto.randomUUID().slice(0, 8)
-}
-
-async function seedComponent(data: {
-  name: string
-  role: string
-  reference_portions?: number
-}) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/components", {
-    data: { reference_portions: 1, ...data },
-  })
-  const body = await res.json()
-  expect(
-    res.ok(),
-    `Seed component "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body as { id: number; name: string }
-}
-
-async function createVariantViaAPI(parentId: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post(`/api/components/${parentId}/variant`)
-  const body = await res.json()
-  expect(
-    res.ok(),
-    `Create variant failed: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body as { id: number; name: string }
-}
-
-async function cleanupComponent(id: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/components/${id}`)
-  await ctx.dispose()
-}
+import {
+  cleanupComponent,
+  createVariantViaAPI,
+  seedComponent,
+  uid,
+} from "./helpers"
 
 test.describe("Variant Components", () => {
   test("create variant, navigate between siblings via Other variants", async ({

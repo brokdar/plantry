@@ -103,6 +103,19 @@ type TimeSlot struct {
 	Active    int64
 }
 
+type UserProfile struct {
+	ID                  int64
+	KcalTarget          sql.NullFloat64
+	ProteinPct          sql.NullFloat64
+	FatPct              sql.NullFloat64
+	CarbsPct            sql.NullFloat64
+	DietaryRestrictions string
+	Preferences         string
+	SystemPrompt        sql.NullString
+	Locale              string
+	UpdatedAt           string
+}
+
 type VariantGroup struct {
 	ID        int64
 	Name      string

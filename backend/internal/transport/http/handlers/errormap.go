@@ -23,6 +23,8 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 		return http.StatusBadRequest, "error.invalid_body"
 	case errors.Is(err, domain.ErrLookupFailed):
 		return http.StatusBadGateway, "error." + resource + ".lookup_failed"
+	case errors.Is(err, domain.ErrInvalidMacros):
+		return http.StatusBadRequest, "error.profile.invalid_macros"
 	default:
 		return http.StatusInternalServerError, "error.server"
 	}
