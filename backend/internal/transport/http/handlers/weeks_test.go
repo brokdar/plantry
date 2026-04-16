@@ -45,8 +45,9 @@ func setupPlannerRouter(t *testing.T) *plannerRouterFixture {
 	plateSvc := plate.NewService(plateRepo, slotRepo, compRepo)
 	plannerSvc := planner.NewService(weekRepo, plateRepo, tx)
 	slotSvc := slot.NewService(slotRepo)
+	componentSvc := component.NewService(compRepo, ingRepo, ingRepo)
 
-	wh := handlers.NewWeekHandler(plannerSvc, plateSvc)
+	wh := handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingRepo)
 	ph := handlers.NewPlateHandler(plateSvc)
 	sh := handlers.NewSlotHandler(slotSvc)
 
@@ -62,6 +63,8 @@ func setupPlannerRouter(t *testing.T) *plannerRouterFixture {
 		r.Get("/{id}", wh.Get)
 		r.Post("/{id}/copy", wh.Copy)
 		r.Post("/{id}/plates", wh.CreatePlate)
+		r.Get("/{id}/shopping-list", wh.ShoppingList)
+		r.Get("/{id}/nutrition", wh.Nutrition)
 	})
 	r.Route("/api/plates/{id}", func(r chi.Router) {
 		r.Get("/", ph.Get)
@@ -219,6 +222,101 @@ func TestWeeks_CopyWeek(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&target))
 	plates := target["plates"].([]any)
 	assert.Len(t, plates, 1, "copy preserves plate count")
+}
+
+func TestWeeks_ShoppingList_NotFound(t *testing.T) {
+	f := setupPlannerRouter(t)
+	resp := httptest.NewRecorder()
+	f.router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/weeks/9999/shopping-list", nil))
+	assert.Equal(t, http.StatusNotFound, resp.Code)
+}
+
+func TestWeeks_Nutrition_NotFound(t *testing.T) {
+	f := setupPlannerRouter(t)
+	resp := httptest.NewRecorder()
+	f.router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/weeks/9999/nutrition", nil))
+	assert.Equal(t, http.StatusNotFound, resp.Code)
+}
+
+func TestWeeks_ShoppingList_EmptyWeek(t *testing.T) {
+	f := setupPlannerRouter(t)
+	week := getCurrentWeek(t, f.router)
+	weekID := int64(week["id"].(float64))
+
+	resp := httptest.NewRecorder()
+	f.router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/weeks/%d/shopping-list", weekID), nil))
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	items := got["items"].([]any)
+	assert.Empty(t, items)
+}
+
+func TestWeeks_ShoppingList_WithPlate(t *testing.T) {
+	f := setupPlannerRouter(t)
+	week := getCurrentWeek(t, f.router)
+	weekID := int64(week["id"].(float64))
+
+	// Create a plate with the fixture component (Curry, 1 ref portion, 100g Chicken@100kcal/100g).
+	body := fmt.Sprintf(`{"day":1,"slot_id":%d,"components":[{"component_id":%d,"portions":1}]}`, f.slotID, f.compID)
+	resp := httptest.NewRecorder()
+	f.router.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/weeks/%d/plates", weekID), bytes.NewBufferString(body)))
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+
+	resp = httptest.NewRecorder()
+	f.router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/weeks/%d/shopping-list", weekID), nil))
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	items := got["items"].([]any)
+	require.Len(t, items, 1)
+	item := items[0].(map[string]any)
+	assert.Equal(t, "Chicken", item["name"])
+	assert.InDelta(t, 100.0, item["total_grams"], 0.01)
+}
+
+func TestWeeks_Nutrition_EmptyWeek(t *testing.T) {
+	f := setupPlannerRouter(t)
+	week := getCurrentWeek(t, f.router)
+	weekID := int64(week["id"].(float64))
+
+	resp := httptest.NewRecorder()
+	f.router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/weeks/%d/nutrition", weekID), nil))
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	days := got["days"].([]any)
+	assert.Empty(t, days)
+	weekMacros := got["week"].(map[string]any)
+	assert.InDelta(t, 0.0, weekMacros["kcal"], 0.01)
+}
+
+func TestWeeks_Nutrition_WithPlate(t *testing.T) {
+	f := setupPlannerRouter(t)
+	week := getCurrentWeek(t, f.router)
+	weekID := int64(week["id"].(float64))
+
+	// Component: Curry, 1 ref portion, 100g Chicken @ 100 kcal/100g → 100 kcal/portion.
+	body := fmt.Sprintf(`{"day":1,"slot_id":%d,"components":[{"component_id":%d,"portions":1}]}`, f.slotID, f.compID)
+	resp := httptest.NewRecorder()
+	f.router.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/weeks/%d/plates", weekID), bytes.NewBufferString(body)))
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+
+	resp = httptest.NewRecorder()
+	f.router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/weeks/%d/nutrition", weekID), nil))
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	days := got["days"].([]any)
+	require.Len(t, days, 1)
+	day := days[0].(map[string]any)
+	assert.InDelta(t, 1.0, day["day"], 0)
+	macros := day["macros"].(map[string]any)
+	assert.InDelta(t, 100.0, macros["kcal"], 0.01)
+	weekMacros := got["week"].(map[string]any)
+	assert.InDelta(t, 100.0, weekMacros["kcal"], 0.01)
 }
 
 func getCurrentWeek(t *testing.T, r http.Handler) map[string]any {

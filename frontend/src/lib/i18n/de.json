@@ -157,6 +157,18 @@
     "remove": "Bild entfernen",
     "uploading": "Wird hochgeladen..."
   },
+  "shopping": {
+    "title": "Einkaufsliste",
+    "description": "Zutaten für diese Woche",
+    "button": "Einkaufen",
+    "empty": "Keine Zutaten – füge zuerst Mahlzeiten zum Planer hinzu."
+  },
+  "nutrition": {
+    "title": "Wochennährwerte",
+    "button": "Nährwerte",
+    "empty": "Noch keine Mahlzeiten geplant.",
+    "week_total": "Wochengesamt"
+  },
   "error": {
     "not_found": "Ressource nicht gefunden.",
     "invalid_id": "Ungültige ID.",

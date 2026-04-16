@@ -182,6 +182,18 @@
       "upload_failed": "Image operation failed. Please try again."
     }
   },
+  "shopping": {
+    "title": "Shopping List",
+    "description": "Ingredients for this week",
+    "button": "Shopping",
+    "empty": "No ingredients — add meals to the planner first."
+  },
+  "nutrition": {
+    "title": "Week Nutrition",
+    "button": "Nutrition",
+    "empty": "No meals planned yet.",
+    "week_total": "Week total"
+  },
   "common": {
     "save": "Save",
     "cancel": "Cancel",

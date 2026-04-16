@@ -58,3 +58,40 @@ export function createPlate(
     body: JSON.stringify(input),
   })
 }
+
+export interface ShoppingItem {
+  ingredient_id: number
+  name: string
+  total_grams: number
+}
+
+export interface ShoppingListResponse {
+  items: ShoppingItem[]
+}
+
+export interface MacrosResponse {
+  kcal: number
+  protein: number
+  fat: number
+  carbs: number
+  fiber: number
+  sodium: number
+}
+
+export interface NutritionDayResponse {
+  day: number
+  macros: MacrosResponse
+}
+
+export interface WeekNutritionResponse {
+  days: NutritionDayResponse[]
+  week: MacrosResponse
+}
+
+export function getShoppingList(id: number): Promise<ShoppingListResponse> {
+  return apiFetch(`/weeks/${id}/shopping-list`)
+}
+
+export function getWeekNutrition(id: number): Promise<WeekNutritionResponse> {
+  return apiFetch(`/weeks/${id}/nutrition`)
+}

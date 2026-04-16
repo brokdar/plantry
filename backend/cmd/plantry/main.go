@@ -105,7 +105,7 @@ func run() error {
 		Images:      handlers.NewImageHandler(ingredientSvc, imgStore),
 		Components:  handlers.NewComponentHandler(componentSvc, imgStore),
 		Slots:       handlers.NewSlotHandler(slotSvc),
-		Weeks:       handlers.NewWeekHandler(plannerSvc, plateSvc),
+		Weeks:       handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingredientRepo),
 		Plates:      handlers.NewPlateHandler(plateSvc),
 	}
 	handler := transport.NewRouter(logger, static, h)

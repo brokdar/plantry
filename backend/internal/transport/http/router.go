@@ -69,6 +69,8 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/{id}", h.Weeks.Get)
 				r.Post("/{id}/copy", h.Weeks.Copy)
 				r.Post("/{id}/plates", h.Weeks.CreatePlate)
+				r.Get("/{id}/shopping-list", h.Weeks.ShoppingList)
+				r.Get("/{id}/nutrition", h.Weeks.Nutrition)
 			})
 		}
 

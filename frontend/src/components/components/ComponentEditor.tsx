@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react"
-import { useForm, useFieldArray, type Resolver } from "react-hook-form"
+import {
+  useForm,
+  useFieldArray,
+  useWatch,
+  type Resolver,
+} from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTranslation } from "react-i18next"
 import { Plus, Trash2, X } from "lucide-react"
@@ -101,8 +106,14 @@ export function ComponentEditor({
   const createMutation = useCreateComponent()
   const updateMutation = useUpdateComponent()
 
-  const watchedIngredients = form.watch("ingredients")
-  const watchedPortions = form.watch("reference_portions")
+  const watchedIngredients = useWatch({
+    control: form.control,
+    name: "ingredients",
+  })
+  const watchedPortions = useWatch({
+    control: form.control,
+    name: "reference_portions",
+  })
 
   async function onSubmit(values: ComponentFormValues) {
     const input = {

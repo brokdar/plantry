@@ -31,6 +31,8 @@ export const weekKeys = {
   byId: (id: number) => [...weekKeys.all, id] as const,
   list: (limit: number, offset: number) =>
     [...weekKeys.all, "list", { limit, offset }] as const,
+  shoppingList: (id: number) => [...weekKeys.all, id, "shopping-list"] as const,
+  nutrition: (id: number) => [...weekKeys.all, id, "nutrition"] as const,
 }
 
 export const plateKeys = {

@@ -4,6 +4,8 @@ import {
   getCurrentWeek,
   getWeek,
   getWeekByDate,
+  getShoppingList,
+  getWeekNutrition,
   copyWeek,
   createPlate,
   type CopyWeekInput,
@@ -43,6 +45,22 @@ export function useCopyWeek() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: weekKeys.all })
     },
+  })
+}
+
+export function useShoppingList(weekId: number) {
+  return useQuery({
+    queryKey: weekKeys.shoppingList(weekId),
+    queryFn: () => getShoppingList(weekId),
+    enabled: weekId > 0,
+  })
+}
+
+export function useWeekNutrition(weekId: number) {
+  return useQuery({
+    queryKey: weekKeys.nutrition(weekId),
+    queryFn: () => getWeekNutrition(weekId),
+    enabled: weekId > 0,
   })
 }
 

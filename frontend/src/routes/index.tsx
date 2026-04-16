@@ -5,15 +5,23 @@ import {
   setISOWeek,
   setISOWeekYear,
 } from "date-fns"
-import { Settings } from "lucide-react"
+import { BarChart2, Settings, ShoppingCart } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
 
+import { NutritionWeekSummary } from "@/components/planner/NutritionWeekSummary"
 import { PlannerGrid } from "@/components/planner/PlannerGrid"
+import { ShoppingPanel } from "@/components/planner/ShoppingPanel"
 import { WeekNavigator } from "@/components/planner/WeekNavigator"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { ApiError } from "@/lib/api/client"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { useCopyWeek, useWeekByDate } from "@/lib/queries/weeks"
@@ -37,6 +45,8 @@ function shiftWeek(year: number, week: number, delta: number) {
 function PlannerPage() {
   const { t } = useTranslation()
   const [{ year, week }, setYearWeek] = useState(nowYearWeek)
+  const [shoppingOpen, setShoppingOpen] = useState(false)
+  const [nutritionOpen, setNutritionOpen] = useState(false)
 
   const slotsQuery = useTimeSlots(true)
   const weekQuery = useWeekByDate(year, week)
@@ -90,19 +100,55 @@ function PlannerPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">
           {t("planner.title")}
         </h1>
-        <WeekNavigator
-          year={week_.year}
-          weekNumber={week_.week_number}
-          onPrev={() => setYearWeek(shiftWeek(year, week, -1))}
-          onNext={() => setYearWeek(shiftWeek(year, week, 1))}
-          onCopy={handleCopy}
-        />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShoppingOpen(true)}
+          >
+            <ShoppingCart className="mr-1.5 h-4 w-4" />
+            {t("shopping.button")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setNutritionOpen(true)}
+          >
+            <BarChart2 className="mr-1.5 h-4 w-4" />
+            {t("nutrition.button")}
+          </Button>
+          <WeekNavigator
+            year={week_.year}
+            weekNumber={week_.week_number}
+            onPrev={() => setYearWeek(shiftWeek(year, week, -1))}
+            onNext={() => setYearWeek(shiftWeek(year, week, 1))}
+            onCopy={handleCopy}
+          />
+        </div>
       </div>
       <PlannerGrid week={week_} slots={slots} />
+
+      <ShoppingPanel
+        weekId={week_.id}
+        open={shoppingOpen}
+        onOpenChange={setShoppingOpen}
+      />
+
+      <Sheet open={nutritionOpen} onOpenChange={setNutritionOpen}>
+        <SheetContent side="right" className="flex w-full flex-col sm:max-w-sm">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <BarChart2 className="h-4 w-4" />
+              {t("nutrition.title")}
+            </SheetTitle>
+          </SheetHeader>
+          <NutritionWeekSummary weekId={week_.id} />
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
