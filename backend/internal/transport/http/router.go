@@ -17,6 +17,9 @@ type Handlers struct {
 	Lookup      *handlers.LookupHandler
 	Images      *handlers.ImageHandler
 	Components  *handlers.ComponentHandler
+	Slots       *handlers.SlotHandler
+	Weeks       *handlers.WeekHandler
+	Plates      *handlers.PlateHandler
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -46,6 +49,37 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 						r.Delete("/image", h.Components.DeleteImage)
 					}
 				})
+			})
+		}
+
+		if h.Slots != nil {
+			api.Route("/settings/slots", func(r chi.Router) {
+				r.Get("/", h.Slots.List)
+				r.Post("/", h.Slots.Create)
+				r.Put("/{id}", h.Slots.Update)
+				r.Delete("/{id}", h.Slots.Delete)
+			})
+		}
+
+		if h.Weeks != nil {
+			api.Route("/weeks", func(r chi.Router) {
+				r.Get("/", h.Weeks.List)
+				r.Get("/current", h.Weeks.Current)
+				r.Get("/by-date", h.Weeks.ByDate)
+				r.Get("/{id}", h.Weeks.Get)
+				r.Post("/{id}/copy", h.Weeks.Copy)
+				r.Post("/{id}/plates", h.Weeks.CreatePlate)
+			})
+		}
+
+		if h.Plates != nil {
+			api.Route("/plates/{id}", func(r chi.Router) {
+				r.Get("/", h.Plates.Get)
+				r.Put("/", h.Plates.Update)
+				r.Delete("/", h.Plates.Delete)
+				r.Post("/components", h.Plates.AddComponent)
+				r.Put("/components/{pcId}", h.Plates.UpdateComponent)
+				r.Delete("/components/{pcId}", h.Plates.DeleteComponent)
 			})
 		}
 

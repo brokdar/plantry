@@ -18,8 +18,15 @@ test("home page loads with Plantry brand and no console errors", async ({
   await expect(
     page.getByRole("link", { name: /plantry/i }).first()
   ).toBeVisible()
+  // The home route renders the planner; before slots are configured the user
+  // sees the empty-state heading. After they're configured, the planner
+  // heading appears. Either signals a successful render.
   await expect(
-    page.getByRole("heading", { name: /welcome to plantry/i })
+    page
+      .getByRole("heading", {
+        name: /(weekly planner|set up your time slots first)/i,
+      })
+      .first()
   ).toBeVisible()
 
   expect(consoleErrors, `console errors: ${consoleErrors.join("\n")}`).toEqual(

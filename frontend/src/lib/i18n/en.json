@@ -1,12 +1,66 @@
 {
   "nav": {
     "brand": "Plantry",
+    "planner": "Planner",
     "ingredients": "Ingredients",
-    "components": "Components"
+    "components": "Components",
+    "settings": "Settings"
   },
   "home": {
     "title": "Welcome to Plantry",
     "subtitle": "Your self-hosted meal planner."
+  },
+  "planner": {
+    "title": "Weekly Planner",
+    "week_label": "Week {{week}}, {{year}}",
+    "prev_week": "Previous week",
+    "next_week": "Next week",
+    "this_week": "This week",
+    "copy_week": "Copy week to next",
+    "copy_success": "Week copied",
+    "empty_state_no_slots_title": "Set up your time slots first",
+    "empty_state_no_slots_body": "Define when you eat — breakfast, lunch, dinner, snacks — so you can plan meals into them.",
+    "empty_state_no_slots_cta": "Configure time slots",
+    "day_mon": "Mon",
+    "day_tue": "Tue",
+    "day_wed": "Wed",
+    "day_thu": "Thu",
+    "day_fri": "Fri",
+    "day_sat": "Sat",
+    "day_sun": "Sun"
+  },
+  "plate": {
+    "add_component": "Add component",
+    "swap_component": "Swap",
+    "remove_component": "Remove",
+    "edit_plate": "Edit plate",
+    "delete_plate": "Delete plate",
+    "delete_confirm_title": "Delete this plate?",
+    "delete_confirm_body": "All components on this plate will be removed.",
+    "note": "Note",
+    "note_placeholder": "Optional note about this meal...",
+    "empty_cell": "Add a meal",
+    "portions": "Portions",
+    "pick_component": "Pick a component",
+    "filter_by_role": "Filter by role"
+  },
+  "slot": {
+    "title": "Time slots",
+    "description": "Define the meal times you plan around.",
+    "add_slot": "Add time slot",
+    "name_key_label": "Translation key",
+    "name_key_placeholder": "slot.breakfast",
+    "icon_label": "Icon",
+    "icon_placeholder": "Coffee",
+    "sort_order_label": "Order",
+    "active_label": "Active",
+    "no_slots": "You haven't created any time slots yet.",
+    "delete_confirm_title": "Delete this time slot?",
+    "delete_confirm_body": "Plates referencing this slot must be removed first.",
+    "breakfast": "Breakfast",
+    "lunch": "Lunch",
+    "dinner": "Dinner",
+    "snack": "Snack"
   },
   "ingredient": {
     "title": "Ingredients",
@@ -117,6 +171,12 @@
       "duplicate_name": "A component with this name already exists.",
       "in_use": "This component is used in a plate and cannot be deleted.",
       "invalid_role": "Invalid role."
+    },
+    "plate": {
+      "slot_unknown": "That time slot doesn't exist."
+    },
+    "slot": {
+      "in_use": "This time slot is used by plates and cannot be deleted."
     },
     "image": {
       "upload_failed": "Image operation failed. Please try again."

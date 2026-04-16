@@ -1,12 +1,66 @@
 {
   "nav": {
     "brand": "Plantry",
+    "planner": "Planer",
     "ingredients": "Zutaten",
-    "components": "Komponenten"
+    "components": "Komponenten",
+    "settings": "Einstellungen"
   },
   "home": {
     "title": "Willkommen bei Plantry",
     "subtitle": "Dein selbstgehosteter Essensplaner."
+  },
+  "planner": {
+    "title": "Wochenplaner",
+    "week_label": "Woche {{week}}, {{year}}",
+    "prev_week": "Vorherige Woche",
+    "next_week": "Nächste Woche",
+    "this_week": "Diese Woche",
+    "copy_week": "Woche in nächste kopieren",
+    "copy_success": "Woche kopiert",
+    "empty_state_no_slots_title": "Lege zuerst deine Mahlzeitzeiten fest",
+    "empty_state_no_slots_body": "Definiere Frühstück, Mittag-, Abendessen, Snacks — damit du Mahlzeiten dort einplanen kannst.",
+    "empty_state_no_slots_cta": "Mahlzeitzeiten einrichten",
+    "day_mon": "Mo",
+    "day_tue": "Di",
+    "day_wed": "Mi",
+    "day_thu": "Do",
+    "day_fri": "Fr",
+    "day_sat": "Sa",
+    "day_sun": "So"
+  },
+  "plate": {
+    "add_component": "Komponente hinzufügen",
+    "swap_component": "Tauschen",
+    "remove_component": "Entfernen",
+    "edit_plate": "Teller bearbeiten",
+    "delete_plate": "Teller löschen",
+    "delete_confirm_title": "Teller löschen?",
+    "delete_confirm_body": "Alle Komponenten dieses Tellers werden entfernt.",
+    "note": "Notiz",
+    "note_placeholder": "Optionale Notiz zu dieser Mahlzeit...",
+    "empty_cell": "Mahlzeit hinzufügen",
+    "portions": "Portionen",
+    "pick_component": "Komponente wählen",
+    "filter_by_role": "Nach Rolle filtern"
+  },
+  "slot": {
+    "title": "Mahlzeitzeiten",
+    "description": "Definiere die Mahlzeitzeiten, um die du planst.",
+    "add_slot": "Mahlzeitzeit hinzufügen",
+    "name_key_label": "Übersetzungsschlüssel",
+    "name_key_placeholder": "slot.breakfast",
+    "icon_label": "Symbol",
+    "icon_placeholder": "Coffee",
+    "sort_order_label": "Reihenfolge",
+    "active_label": "Aktiv",
+    "no_slots": "Du hast noch keine Mahlzeitzeiten erstellt.",
+    "delete_confirm_title": "Diese Mahlzeitzeit löschen?",
+    "delete_confirm_body": "Teller, die diese Zeit verwenden, müssen zuerst entfernt werden.",
+    "breakfast": "Frühstück",
+    "lunch": "Mittagessen",
+    "dinner": "Abendessen",
+    "snack": "Snack"
   },
   "ingredient": {
     "title": "Zutaten",
@@ -117,6 +171,12 @@
       "duplicate_name": "Eine Komponente mit diesem Namen existiert bereits.",
       "in_use": "Diese Komponente wird in einem Teller verwendet und kann nicht gelöscht werden.",
       "invalid_role": "Ungültige Rolle."
+    },
+    "plate": {
+      "slot_unknown": "Diese Mahlzeitzeit existiert nicht."
+    },
+    "slot": {
+      "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."
     },
     "image": {
       "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut."

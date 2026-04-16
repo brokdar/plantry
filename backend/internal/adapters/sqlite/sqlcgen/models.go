@@ -78,8 +78,40 @@ type IngredientsFt struct {
 	Name string
 }
 
+type Plate struct {
+	ID        int64
+	WeekID    int64
+	Day       int64
+	SlotID    int64
+	Note      sql.NullString
+	CreatedAt string
+}
+
+type PlateComponent struct {
+	ID          int64
+	PlateID     int64
+	ComponentID int64
+	Portions    float64
+	SortOrder   int64
+}
+
+type TimeSlot struct {
+	ID        int64
+	NameKey   string
+	Icon      string
+	SortOrder int64
+	Active    int64
+}
+
 type VariantGroup struct {
 	ID        int64
 	Name      string
 	CreatedAt string
+}
+
+type Week struct {
+	ID         int64
+	Year       int64
+	WeekNumber int64
+	CreatedAt  string
 }

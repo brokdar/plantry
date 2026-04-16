@@ -23,6 +23,9 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/config"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 	"github.com/jaltszeimer/plantry/backend/internal/webui"
@@ -86,11 +89,24 @@ func run() error {
 	componentRepo := sqlite.NewComponentRepo(conn)
 	componentSvc := component.NewService(componentRepo, ingredientRepo, ingredientRepo)
 
+	slotRepo := sqlite.NewSlotRepo(conn)
+	slotSvc := slot.NewService(slotRepo)
+
+	plateRepo := sqlite.NewPlateRepo(conn)
+	plateSvc := plate.NewService(plateRepo, slotRepo, componentRepo)
+
+	weekRepo := sqlite.NewWeekRepo(conn)
+	txRunner := sqlite.NewTxRunner(conn)
+	plannerSvc := planner.NewService(weekRepo, plateRepo, txRunner)
+
 	h := transport.Handlers{
 		Ingredients: handlers.NewIngredientHandler(ingredientSvc),
 		Lookup:      handlers.NewLookupHandler(resolver, imgStore, ingredientSvc),
 		Images:      handlers.NewImageHandler(ingredientSvc, imgStore),
 		Components:  handlers.NewComponentHandler(componentSvc, imgStore),
+		Slots:       handlers.NewSlotHandler(slotSvc),
+		Weeks:       handlers.NewWeekHandler(plannerSvc, plateSvc),
+		Plates:      handlers.NewPlateHandler(plateSvc),
 	}
 	handler := transport.NewRouter(logger, static, h)
 

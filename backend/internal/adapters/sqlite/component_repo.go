@@ -226,6 +226,19 @@ func (r *ComponentRepo) CreateVariantGroup(ctx context.Context, name string) (in
 	return group.ID, nil
 }
 
+// Exists reports whether a component with the given ID exists.
+// Implements plate.ComponentChecker.
+func (r *ComponentRepo) Exists(ctx context.Context, id int64) (bool, error) {
+	_, err := r.q.GetComponent(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *ComponentRepo) Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]component.Component, error) {
 	rows, err := r.q.ListSiblingComponents(ctx, sqlcgen.ListSiblingComponentsParams{
 		VariantGroupID: sql.NullInt64{Int64: variantGroupID, Valid: true},

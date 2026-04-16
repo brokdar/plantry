@@ -15,6 +15,10 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 		return http.StatusConflict, "error." + resource + ".duplicate_name"
 	case errors.Is(err, domain.ErrInUse):
 		return http.StatusConflict, "error." + resource + ".in_use"
+	case errors.Is(err, domain.ErrSlotUnknown):
+		return http.StatusUnprocessableEntity, "error.plate.slot_unknown"
+	case errors.Is(err, domain.ErrInvalidDay):
+		return http.StatusBadRequest, "error.invalid_body"
 	case errors.Is(err, domain.ErrInvalidInput):
 		return http.StatusBadRequest, "error.invalid_body"
 	case errors.Is(err, domain.ErrLookupFailed):

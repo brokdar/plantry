@@ -17,6 +17,27 @@ export const componentKeys = {
   variants: (id: number) => [...componentKeys.detail(id), "variants"] as const,
 }
 
+export const slotKeys = {
+  all: ["slots"] as const,
+  lists: () => [...slotKeys.all, "list"] as const,
+  list: (activeOnly: boolean) => [...slotKeys.lists(), { activeOnly }] as const,
+}
+
+export const weekKeys = {
+  all: ["weeks"] as const,
+  current: () => [...weekKeys.all, "current"] as const,
+  byDate: (year: number, week: number) =>
+    [...weekKeys.all, "by-date", { year, week }] as const,
+  byId: (id: number) => [...weekKeys.all, id] as const,
+  list: (limit: number, offset: number) =>
+    [...weekKeys.all, "list", { limit, offset }] as const,
+}
+
+export const plateKeys = {
+  all: ["plates"] as const,
+  detail: (id: number) => [...plateKeys.all, id] as const,
+}
+
 export { lookupKeys } from "./lookup"
 export { portionKeys } from "./portions"
 export { imageKeys } from "./images"
