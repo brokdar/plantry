@@ -292,6 +292,51 @@ func TestSettings_ReportsCurrentConfig(t *testing.T) {
 	assert.False(t, body.Enabled)
 }
 
+// newDebugRouter mirrors the route-registration gating used by the real
+// transport.Router so the test exercises the actual conditional wiring.
+func newDebugRouter(h *handlers.AIHandler, devMode bool) http.Handler {
+	r := chi.NewRouter()
+	r.Route("/api/ai", func(r chi.Router) {
+		if devMode {
+			r.Get("/debug/system-prompt", h.DebugSystemPrompt)
+		}
+	})
+	return r
+}
+
+func TestDebugSystemPrompt_EnabledInDevMode(t *testing.T) {
+	client := &scriptedLLM{}
+	_, h := setupAIRouter(t, client, true)
+	r := newDebugRouter(h, true)
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/ai/debug/system-prompt", nil))
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+
+	var body map[string]string
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	assert.NotEmpty(t, body["system_prompt"])
+}
+
+func TestDebugSystemPrompt_404WhenDevModeOff(t *testing.T) {
+	client := &scriptedLLM{}
+	_, h := setupAIRouter(t, client, true)
+	r := newDebugRouter(h, false)
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/ai/debug/system-prompt", nil))
+	assert.Equal(t, http.StatusNotFound, resp.Code, "route must not exist when DevMode=false")
+}
+
+func TestDebugSystemPrompt_503WhenProviderMissing(t *testing.T) {
+	_, h := setupAIRouter(t, nil, false)
+	r := newDebugRouter(h, true)
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/ai/debug/system-prompt", nil))
+	assert.Equal(t, http.StatusServiceUnavailable, resp.Code)
+}
+
 func TestChat_StreamsErrorEventOnUpstreamFailure(t *testing.T) {
 	client := &scriptedLLM{fail: errors.New("upstream down")}
 	router, _ := setupAIRouter(t, client, true)

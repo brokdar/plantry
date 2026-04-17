@@ -111,6 +111,13 @@ type PlateComponent struct {
 	SortOrder   int64
 }
 
+type PlateFeedback struct {
+	PlateID int64
+	Status  string
+	Note    sql.NullString
+	RatedAt string
+}
+
 type Template struct {
 	ID        int64
 	Name      string

@@ -19,6 +19,7 @@ import { type ChatMode, useChatUI } from "@/lib/stores/chat-ui"
 
 import { ChatComposer } from "./ChatComposer"
 import { ChatMessage, messageToText } from "./ChatMessage"
+import { ConversationHistory } from "./ConversationHistory"
 import { ToolCallBlock } from "./ToolCallBlock"
 
 interface ChatPanelProps {
@@ -77,18 +78,21 @@ export function ChatPanel({ weekId, open, onOpenChange }: ChatPanelProps) {
               ? t("chat.description", { model: settings.model })
               : t("chat.disabled")}
           </SheetDescription>
-          {settings?.enabled && activeConversationId !== null && (
-            <div className="pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleNewConversation}
-                data-testid="chat-new-conversation"
-              >
-                <Plus className="mr-1.5 h-4 w-4" />
-                {t("chat.new_conversation")}
-              </Button>
+          {settings?.enabled && (
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <ConversationHistory weekId={weekId} />
+              {activeConversationId !== null && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNewConversation}
+                  data-testid="chat-new-conversation"
+                >
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  {t("chat.new_conversation")}
+                </Button>
+              )}
             </div>
           )}
         </SheetHeader>

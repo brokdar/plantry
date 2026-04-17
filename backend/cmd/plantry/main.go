@@ -26,6 +26,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/config"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
@@ -113,6 +114,9 @@ func run() error {
 	templateRepo := sqlite.NewTemplateRepo(conn)
 	templateSvc := template.NewService(templateRepo, componentRepo, plateRepo, txRunner)
 
+	feedbackRepo := sqlite.NewFeedbackRepo(conn)
+	feedbackSvc := feedback.NewService(txRunner, plateRepo, componentRepo)
+
 	// AI wiring (optional — disabled if PLANTRY_AI_PROVIDER is empty).
 	var aiHandler *handlers.AIHandler
 	if cfg.AIProvider != "" {
@@ -154,12 +158,14 @@ func run() error {
 		Images:        handlers.NewImageHandler(ingredientSvc, imgStore),
 		Components:    handlers.NewComponentHandler(componentSvc, imgStore),
 		Slots:         handlers.NewSlotHandler(slotSvc),
-		Weeks:         handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingredientRepo),
+		Weeks:         handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingredientRepo, feedbackRepo),
 		Plates:        handlers.NewPlateHandler(plateSvc),
 		Profile:       handlers.NewProfileHandler(profileSvc),
 		Templates:     handlers.NewTemplateHandler(templateSvc),
 		AI:            aiHandler,
 		AIRateLimiter: aiRateLimiter,
+		Feedback:      handlers.NewFeedbackHandler(feedbackSvc),
+		DevMode:       cfg.DevMode,
 	}
 	handler := transport.NewRouter(logger, static, h)
 

@@ -57,3 +57,10 @@ INSERT INTO variant_groups (name) VALUES (?) RETURNING *;
 
 -- name: ListSiblingComponents :many
 SELECT * FROM components WHERE variant_group_id = ? AND id != ? ORDER BY name;
+
+-- name: MarkComponentCooked :exec
+UPDATE components
+SET last_cooked_at = ?,
+    cook_count     = cook_count + 1,
+    updated_at     = datetime('now')
+WHERE id = ?;

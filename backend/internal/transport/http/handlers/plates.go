@@ -66,7 +66,7 @@ func (h *PlateHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusOK, toPlateResponse(p))
+	writeJSON(w, http.StatusOK, toPlateResponse(p, nil))
 }
 
 // Update handles PUT /api/plates/{id}.
@@ -101,7 +101,7 @@ func (h *PlateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusOK, toPlateResponse(existing))
+	writeJSON(w, http.StatusOK, toPlateResponse(existing, nil))
 }
 
 // Delete handles DELETE /api/plates/{id}.

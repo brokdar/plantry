@@ -1,4 +1,5 @@
 import { apiFetch } from "./client"
+import type { PlateFeedback } from "./feedback"
 
 export interface PlateComponent {
   id: number
@@ -15,6 +16,7 @@ export interface Plate {
   slot_id: number
   note: string | null
   components: PlateComponent[]
+  feedback?: PlateFeedback | null
   created_at: string
 }
 

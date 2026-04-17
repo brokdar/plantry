@@ -584,7 +584,7 @@ func toolRecordPreference(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "record_preference",
-		Description: "Persist a single preference key/value into the user's profile (e.g. 'likes_spicy'=true, 'dislikes'=['mushrooms']). Overwrites existing key.",
+		Description: "Persist a single preference key/value into the user's profile (e.g. 'likes_spicy'=true, 'prefers_quick_meals'=true). Overwrites existing key. DO NOT use the keys 'likes' or 'dislikes' — those arrays are managed automatically by plate-feedback ratings; writing them here clobbers the accumulated tag history.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {

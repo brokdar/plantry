@@ -47,7 +47,8 @@ func setupPlannerRouter(t *testing.T) *plannerRouterFixture {
 	slotSvc := slot.NewService(slotRepo)
 	componentSvc := component.NewService(compRepo, ingRepo, ingRepo)
 
-	wh := handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingRepo)
+	fbRepo := sqlite.NewFeedbackRepo(db)
+	wh := handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingRepo, fbRepo)
 	ph := handlers.NewPlateHandler(plateSvc)
 	sh := handlers.NewSlotHandler(slotSvc)
 

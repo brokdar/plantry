@@ -38,6 +38,7 @@ type Querier interface {
 	DeleteIngredient(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlate(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateComponent(ctx context.Context, id int64) (sql.Result, error)
+	DeletePlateFeedback(ctx context.Context, plateID int64) (sql.Result, error)
 	DeletePortion(ctx context.Context, arg DeletePortionParams) (sql.Result, error)
 	DeleteTemplate(ctx context.Context, id int64) (sql.Result, error)
 	DeleteTemplateComponentsByTemplate(ctx context.Context, templateID int64) (sql.Result, error)
@@ -47,6 +48,7 @@ type Querier interface {
 	GetIngredient(ctx context.Context, id int64) (Ingredient, error)
 	GetPlate(ctx context.Context, id int64) (Plate, error)
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
+	GetPlateFeedback(ctx context.Context, plateID int64) (PlateFeedback, error)
 	GetProfile(ctx context.Context) (UserProfile, error)
 	GetTemplate(ctx context.Context, id int64) (Template, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
@@ -61,6 +63,7 @@ type Querier interface {
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]PlateComponent, error)
 	ListPlateComponentsByWeek(ctx context.Context, weekID int64) ([]PlateComponent, error)
+	ListPlateFeedbackByWeek(ctx context.Context, weekID int64) ([]PlateFeedback, error)
 	ListPlatesByWeek(ctx context.Context, weekID int64) ([]Plate, error)
 	ListPortions(ctx context.Context, ingredientID int64) ([]IngredientPortion, error)
 	ListSiblingComponents(ctx context.Context, arg ListSiblingComponentsParams) ([]Component, error)
@@ -68,6 +71,7 @@ type Querier interface {
 	ListTemplates(ctx context.Context) ([]Template, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	ListWeeks(ctx context.Context, arg ListWeeksParams) ([]Week, error)
+	MarkComponentCooked(ctx context.Context, arg MarkComponentCookedParams) error
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)
@@ -79,6 +83,7 @@ type Querier interface {
 	UpdatePlateComponent(ctx context.Context, arg UpdatePlateComponentParams) (PlateComponent, error)
 	UpdateTemplateName(ctx context.Context, arg UpdateTemplateNameParams) (Template, error)
 	UpdateTimeSlot(ctx context.Context, arg UpdateTimeSlotParams) (TimeSlot, error)
+	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
 	UpsertPortion(ctx context.Context, arg UpsertPortionParams) error
 	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)
 }

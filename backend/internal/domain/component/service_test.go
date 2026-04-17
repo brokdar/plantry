@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,6 +87,19 @@ func (r *fakeRepo) CreateVariantGroup(_ context.Context, name string) (int64, er
 	r.groupSeq++
 	r.groups[r.groupSeq] = name
 	return r.groupSeq, nil
+}
+
+func (r *fakeRepo) MarkCooked(_ context.Context, id int64, at time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.items[id]
+	if !ok {
+		return fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
+	}
+	c.CookCount++
+	t := at
+	c.LastCookedAt = &t
+	return nil
 }
 
 func (r *fakeRepo) Siblings(_ context.Context, variantGroupID int64, excludeID int64) ([]component.Component, error) {

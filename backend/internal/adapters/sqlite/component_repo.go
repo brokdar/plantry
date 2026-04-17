@@ -34,6 +34,14 @@ func NewComponentRepo(db *sql.DB) *ComponentRepo {
 	return &ComponentRepo{db: db, q: sqlcgen.New(db)}
 }
 
+// newComponentRepoTx returns a ComponentRepo bound to a transaction. Used by
+// TxRunner when a multi-aggregate write must atomically include component
+// mutations (e.g. marking components cooked from a feedback event).
+// db is left nil so Create/Update know they are already inside an outer tx.
+func newComponentRepoTx(tx *sql.Tx) *ComponentRepo {
+	return &ComponentRepo{db: nil, q: sqlcgen.New(tx)}
+}
+
 func (r *ComponentRepo) Create(ctx context.Context, c *component.Component) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -237,6 +245,13 @@ func (r *ComponentRepo) Exists(ctx context.Context, id int64) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func (r *ComponentRepo) MarkCooked(ctx context.Context, id int64, at time.Time) error {
+	return r.q.MarkComponentCooked(ctx, sqlcgen.MarkComponentCookedParams{
+		LastCookedAt: sql.NullString{String: at.UTC().Format(timeLayout), Valid: true},
+		ID:           id,
+	})
 }
 
 func (r *ComponentRepo) Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]component.Component, error) {

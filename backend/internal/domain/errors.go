@@ -15,4 +15,7 @@ var (
 	// AI / agent errors.
 	ErrAIProviderMissing   = errors.New("ai provider not configured")
 	ErrAIStreamInterrupted = errors.New("ai stream interrupted")
+
+	// Plate feedback errors.
+	ErrInvalidFeedbackStatus = errors.New("invalid feedback status")
 )

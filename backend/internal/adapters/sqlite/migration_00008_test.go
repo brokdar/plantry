@@ -29,8 +29,8 @@ func TestMigration00008_UpDownUp(t *testing.T) {
 	_, err = conn.Exec(`INSERT INTO ai_conversations (title) VALUES ('roundtrip')`)
 	require.NoError(t, err)
 
-	// Step down past 00008 — removes AI tables.
-	require.NoError(t, goose.Down(conn, "migrations"))
+	// Step down past 00008 — removes AI tables (and any migrations on top of it).
+	require.NoError(t, goose.DownTo(conn, "migrations", 7))
 
 	// ai_conversations must no longer exist.
 	var exists int

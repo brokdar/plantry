@@ -182,6 +182,26 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, conv *
 	return base, nil
 }
 
+// DebugSystemPrompt composes and returns the system prompt that would be sent
+// to the LLM for a chat turn given the supplied weekID. It is a thin wrapper
+// over the same logic used by Chat itself, so end-to-end tests can assert on
+// what the agent actually sees. Never call this from the Chat path — it
+// reloads the profile and week and is meant strictly for debug surfaces.
+func (s *Service) DebugSystemPrompt(ctx context.Context, weekID *int64) (string, error) {
+	p, err := s.profile.Get(ctx)
+	if err != nil {
+		return "", err
+	}
+	var week *planner.Week
+	if weekID != nil {
+		w, err := s.planner.Get(ctx, *weekID)
+		if err == nil {
+			week = w
+		}
+	}
+	return ComposePrompt(p, week), nil
+}
+
 func modeHint(mode string) string {
 	switch mode {
 	case "fill_empty":

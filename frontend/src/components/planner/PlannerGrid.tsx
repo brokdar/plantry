@@ -199,6 +199,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
                 >
                   <PlateCell
                     plate={plate}
+                    weekId={week.id}
                     componentsById={componentsById}
                     onAdd={() =>
                       setAddTarget({

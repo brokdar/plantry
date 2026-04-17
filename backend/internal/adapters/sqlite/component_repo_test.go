@@ -3,6 +3,7 @@ package sqlite_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -389,6 +390,43 @@ func TestComponentRepo_SiblingsExcludesCorrectID(t *testing.T) {
 	names := []string{siblings[0].Name, siblings[1].Name}
 	assert.Contains(t, names, "A")
 	assert.Contains(t, names, "C")
+}
+
+func TestComponentRepo_MarkCooked(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	iRepo := sqlite.NewIngredientRepo(db)
+	repo := sqlite.NewComponentRepo(db)
+	ctx := context.Background()
+
+	ing := seedIngredient(t, iRepo, "Rice")
+	c := &component.Component{
+		Name:              "Rice bowl",
+		Role:              component.RoleMain,
+		ReferencePortions: 1,
+		Ingredients: []component.ComponentIngredient{
+			{IngredientID: ing.ID, Amount: 100, Unit: "g", Grams: 100, SortOrder: 0},
+		},
+	}
+	require.NoError(t, repo.Create(ctx, c))
+
+	before, err := repo.Get(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, before.CookCount)
+	assert.Nil(t, before.LastCookedAt)
+
+	at := time.Now().UTC().Truncate(time.Second)
+	require.NoError(t, repo.MarkCooked(ctx, c.ID, at))
+
+	after, err := repo.Get(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, after.CookCount)
+	require.NotNil(t, after.LastCookedAt)
+	assert.WithinDuration(t, at, *after.LastCookedAt, time.Second)
+
+	require.NoError(t, repo.MarkCooked(ctx, c.ID, at.Add(time.Hour)))
+	after2, err := repo.Get(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, after2.CookCount)
 }
 
 func TestIngredientRepo_LookupForNutrition(t *testing.T) {

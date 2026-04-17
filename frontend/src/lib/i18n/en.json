@@ -43,7 +43,18 @@
     "empty_cell": "Add a meal",
     "portions": "Portions",
     "pick_component": "Pick a component",
-    "filter_by_role": "Filter by role"
+    "filter_by_role": "Filter by role",
+    "feedback": {
+      "label": "How did it go?",
+      "cooked": "Cooked",
+      "skipped": "Skipped",
+      "loved": "Loved",
+      "disliked": "Disliked",
+      "add_note": "Add note",
+      "note_placeholder": "Notes about this meal…",
+      "clear": "Clear feedback",
+      "save_note": "Save note"
+    }
   },
   "slot": {
     "title": "Time slots",
@@ -217,7 +228,8 @@
       "invalid_role": "Invalid role."
     },
     "plate": {
-      "slot_unknown": "That time slot doesn't exist."
+      "slot_unknown": "That time slot doesn't exist.",
+      "feedback_invalid_status": "Feedback status must be cooked, skipped, loved, or disliked."
     },
     "slot": {
       "in_use": "This time slot is used by plates and cannot be deleted."
@@ -291,6 +303,13 @@
         "ok": "done",
         "error": "failed"
       }
+    },
+    "history": {
+      "title": "Past conversations",
+      "open": "Open history",
+      "empty": "No conversations yet.",
+      "delete": "Delete conversation",
+      "select": "Open conversation"
     }
   }
 }

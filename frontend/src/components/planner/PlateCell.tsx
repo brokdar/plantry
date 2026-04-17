@@ -12,9 +12,11 @@ import type { Component } from "@/lib/api/components"
 import type { Plate } from "@/lib/api/plates"
 
 import { PlateComponentChip } from "./PlateComponentChip"
+import { PlateFeedbackBar } from "./PlateFeedbackBar"
 
 interface PlateCellProps {
   plate: Plate | undefined
+  weekId: number
   componentsById: Map<number, Component>
   onAdd: () => void
   onSwap: (pcId: number, currentRole?: string) => void
@@ -25,6 +27,7 @@ interface PlateCellProps {
 
 export function PlateCell({
   plate,
+  weekId,
   componentsById,
   onAdd,
   onSwap,
@@ -104,6 +107,7 @@ export function PlateCell({
           )
         })}
       </div>
+      <PlateFeedbackBar plate={plate} weekId={weekId} />
     </div>
   )
 }

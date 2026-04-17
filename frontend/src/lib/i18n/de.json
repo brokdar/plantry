@@ -43,7 +43,18 @@
     "empty_cell": "Mahlzeit hinzufügen",
     "portions": "Portionen",
     "pick_component": "Komponente wählen",
-    "filter_by_role": "Nach Rolle filtern"
+    "filter_by_role": "Nach Rolle filtern",
+    "feedback": {
+      "label": "Wie lief es?",
+      "cooked": "Gekocht",
+      "skipped": "Ausgelassen",
+      "loved": "Geliebt",
+      "disliked": "Nicht gemocht",
+      "add_note": "Notiz hinzufügen",
+      "note_placeholder": "Notizen zu dieser Mahlzeit…",
+      "clear": "Bewertung entfernen",
+      "save_note": "Notiz speichern"
+    }
   },
   "slot": {
     "title": "Mahlzeitzeiten",
@@ -229,7 +240,8 @@
       "invalid_role": "Ungültige Rolle."
     },
     "plate": {
-      "slot_unknown": "Diese Mahlzeitzeit existiert nicht."
+      "slot_unknown": "Diese Mahlzeitzeit existiert nicht.",
+      "feedback_invalid_status": "Bewertung muss gekocht, ausgelassen, geliebt oder nicht gemocht sein."
     },
     "slot": {
       "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."
@@ -291,6 +303,13 @@
         "ok": "erledigt",
         "error": "fehlgeschlagen"
       }
+    },
+    "history": {
+      "title": "Frühere Unterhaltungen",
+      "open": "Verlauf öffnen",
+      "empty": "Noch keine Unterhaltungen.",
+      "delete": "Unterhaltung löschen",
+      "select": "Unterhaltung öffnen"
     }
   }
 }

@@ -19,6 +19,7 @@ type Config struct {
 	AIAPIKey          string
 	AIRateLimitPerMin int
 	AIFakeScript      string
+	DevMode           bool // exposes dev-only debug endpoints; PLANTRY_DEV_MODE
 }
 
 func Load() (Config, error) {
@@ -88,6 +89,17 @@ func Load() (Config, error) {
 	}
 	if v := os.Getenv("PLANTRY_AI_FAKE_SCRIPT"); v != "" {
 		cfg.AIFakeScript = v
+	}
+
+	if v := os.Getenv("PLANTRY_DEV_MODE"); v != "" {
+		switch strings.ToLower(v) {
+		case "1", "true", "yes", "on":
+			cfg.DevMode = true
+		case "0", "false", "no", "off":
+			cfg.DevMode = false
+		default:
+			return Config{}, fmt.Errorf("PLANTRY_DEV_MODE invalid: %q", v)
+		}
 	}
 
 	// Validate AI config: if a provider is set, model must also be set. API

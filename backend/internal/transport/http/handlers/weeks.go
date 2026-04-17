@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
@@ -24,11 +25,13 @@ type WeekHandler struct {
 	plates     *plate.Service
 	components *component.Service
 	ingRepo    ingredient.Repository
+	feedback   feedback.Repository
 }
 
-// NewWeekHandler creates a WeekHandler.
-func NewWeekHandler(p *planner.Service, plates *plate.Service, components *component.Service, ingRepo ingredient.Repository) *WeekHandler {
-	return &WeekHandler{planner: p, plates: plates, components: components, ingRepo: ingRepo}
+// NewWeekHandler creates a WeekHandler. The feedback repository is optional;
+// pass nil to serve responses without embedded per-plate feedback.
+func NewWeekHandler(p *planner.Service, plates *plate.Service, components *component.Service, ingRepo ingredient.Repository, fb feedback.Repository) *WeekHandler {
+	return &WeekHandler{planner: p, plates: plates, components: components, ingRepo: ingRepo, feedback: fb}
 }
 
 type plateComponentResponse struct {
@@ -46,6 +49,7 @@ type plateResponse struct {
 	SlotID     int64                    `json:"slot_id"`
 	Note       *string                  `json:"note,omitempty"`
 	Components []plateComponentResponse `json:"components"`
+	Feedback   *feedbackResponse        `json:"feedback,omitempty"`
 	CreatedAt  string                   `json:"created_at"`
 }
 
@@ -69,27 +73,52 @@ func toPlateComponentResponse(pc *plate.PlateComponent) plateComponentResponse {
 	}
 }
 
-func toPlateResponse(p *plate.Plate) plateResponse {
+func toPlateResponse(p *plate.Plate, fb *feedback.PlateFeedback) plateResponse {
 	comps := make([]plateComponentResponse, len(p.Components))
 	for i := range p.Components {
 		comps[i] = toPlateComponentResponse(&p.Components[i])
 	}
-	return plateResponse{
+	resp := plateResponse{
 		ID: p.ID, WeekID: p.WeekID, Day: p.Day, SlotID: p.SlotID,
 		Note: p.Note, Components: comps,
 		CreatedAt: p.CreatedAt.Format(time.RFC3339),
 	}
+	if fb != nil {
+		r := toFeedbackResponse(fb)
+		resp.Feedback = &r
+	}
+	return resp
 }
 
-func toWeekResponse(w *planner.Week) weekResponse {
+func toWeekResponse(w *planner.Week, feedbackByPlate map[int64]*feedback.PlateFeedback) weekResponse {
 	plates := make([]plateResponse, len(w.Plates))
 	for i := range w.Plates {
-		plates[i] = toPlateResponse(&w.Plates[i])
+		plates[i] = toPlateResponse(&w.Plates[i], feedbackByPlate[w.Plates[i].ID])
 	}
 	return weekResponse{
 		ID: w.ID, Year: w.Year, WeekNumber: w.WeekNumber,
 		Plates: plates, CreatedAt: w.CreatedAt.Format(time.RFC3339),
 	}
+}
+
+// loadFeedbackByWeek returns a plate_id → feedback map for the week. If no
+// feedback repository is configured it returns an empty map so the caller
+// doesn't have to branch.
+func (h *WeekHandler) loadFeedbackByWeek(ctx context.Context, weekID int64) map[int64]*feedback.PlateFeedback {
+	out := map[int64]*feedback.PlateFeedback{}
+	if h.feedback == nil {
+		return out
+	}
+	rows, err := h.feedback.ListByWeek(ctx, weekID)
+	if err != nil {
+		// Feedback is non-critical metadata — failures shouldn't 500 the week.
+		return out
+	}
+	for i := range rows {
+		row := rows[i]
+		out[row.PlateID] = &row
+	}
+	return out
 }
 
 func weekError(err error) (int, string) {
@@ -104,7 +133,7 @@ func (h *WeekHandler) Current(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusOK, toWeekResponse(week))
+	writeJSON(w, http.StatusOK, toWeekResponse(week, h.loadFeedbackByWeek(r.Context(), week.ID)))
 }
 
 // ByDate handles GET /api/weeks/by-date?year=&week=.
@@ -125,7 +154,7 @@ func (h *WeekHandler) ByDate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusOK, toWeekResponse(week))
+	writeJSON(w, http.StatusOK, toWeekResponse(week, h.loadFeedbackByWeek(r.Context(), week.ID)))
 }
 
 // Get handles GET /api/weeks/{id}.
@@ -141,7 +170,7 @@ func (h *WeekHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusOK, toWeekResponse(week))
+	writeJSON(w, http.StatusOK, toWeekResponse(week, h.loadFeedbackByWeek(r.Context(), week.ID)))
 }
 
 // List handles GET /api/weeks.
@@ -166,7 +195,7 @@ func (h *WeekHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]weekResponse, len(rows))
 	for i := range rows {
-		items[i] = toWeekResponse(&rows[i])
+		items[i] = toWeekResponse(&rows[i], h.loadFeedbackByWeek(r.Context(), rows[i].ID))
 	}
 	writeJSON(w, http.StatusOK, weekListResponse{Items: items, Total: total})
 }
@@ -194,7 +223,7 @@ func (h *WeekHandler) Copy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusOK, toWeekResponse(target))
+	writeJSON(w, http.StatusOK, toWeekResponse(target, h.loadFeedbackByWeek(r.Context(), target.ID)))
 }
 
 type createPlateRequest struct {
@@ -234,7 +263,7 @@ func (h *WeekHandler) CreatePlate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusCreated, toPlateResponse(p))
+	writeJSON(w, http.StatusCreated, toPlateResponse(p, nil))
 }
 
 // --- Shopping list and nutrition ---

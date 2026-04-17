@@ -324,6 +324,24 @@ func (q *Queries) ListSiblingComponents(ctx context.Context, arg ListSiblingComp
 	return items, nil
 }
 
+const markComponentCooked = `-- name: MarkComponentCooked :exec
+UPDATE components
+SET last_cooked_at = ?,
+    cook_count     = cook_count + 1,
+    updated_at     = datetime('now')
+WHERE id = ?
+`
+
+type MarkComponentCookedParams struct {
+	LastCookedAt sql.NullString
+	ID           int64
+}
+
+func (q *Queries) MarkComponentCooked(ctx context.Context, arg MarkComponentCookedParams) error {
+	_, err := q.db.ExecContext(ctx, markComponentCooked, arg.LastCookedAt, arg.ID)
+	return err
+}
+
 const updateComponent = `-- name: UpdateComponent :one
 UPDATE components SET
     name = ?,

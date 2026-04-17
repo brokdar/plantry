@@ -21,6 +21,11 @@ func NewProfileRepo(db *sql.DB) *ProfileRepo {
 	return &ProfileRepo{db: db, q: sqlcgen.New(db)}
 }
 
+// newProfileRepoTx binds a ProfileRepo to an open transaction.
+func newProfileRepoTx(tx *sql.Tx) *ProfileRepo {
+	return &ProfileRepo{db: nil, q: sqlcgen.New(tx)}
+}
+
 func (r *ProfileRepo) Get(ctx context.Context) (*profile.Profile, error) {
 	row, err := r.q.GetProfile(ctx)
 	if err != nil {

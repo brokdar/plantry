@@ -43,3 +43,33 @@ func TestLoadInvalidPort(t *testing.T) {
 	_, err := config.Load()
 	assert.Error(t, err)
 }
+
+func TestLoadDevMode(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"", false},
+		{"1", true},
+		{"true", true},
+		{"TRUE", true},
+		{"on", true},
+		{"0", false},
+		{"false", false},
+		{"off", false},
+	}
+	for _, c := range cases {
+		t.Run(c.in, func(t *testing.T) {
+			t.Setenv("PLANTRY_DEV_MODE", c.in)
+			cfg, err := config.Load()
+			require.NoError(t, err)
+			assert.Equal(t, c.want, cfg.DevMode)
+		})
+	}
+}
+
+func TestLoadDevModeInvalid(t *testing.T) {
+	t.Setenv("PLANTRY_DEV_MODE", "bogus")
+	_, err := config.Load()
+	assert.Error(t, err)
+}

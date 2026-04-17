@@ -29,6 +29,8 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 		return http.StatusServiceUnavailable, "error.ai.provider_missing"
 	case errors.Is(err, domain.ErrAIStreamInterrupted):
 		return http.StatusBadGateway, "error.ai.stream_interrupted"
+	case errors.Is(err, domain.ErrInvalidFeedbackStatus):
+		return http.StatusUnprocessableEntity, "error.plate.feedback_invalid_status"
 	default:
 		return http.StatusInternalServerError, "error.server"
 	}

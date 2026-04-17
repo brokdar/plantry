@@ -700,7 +700,8 @@ POST   /api/plates/{id}/components                  body: {component_id, portion
 PUT    /api/plates/{id}/components/{pcId}           body: {portions?, component_id?} (swap or rescale)
 DELETE /api/plates/{id}/components/{pcId}           remove component from plate
 
-POST   /api/plates/{id}/feedback                    body: {status, note?}
+PUT    /api/plates/{id}/feedback                    body: {status, note?} — upsert (one feedback row per plate)
+DELETE /api/plates/{id}/feedback                    remove feedback row
 ```
 
 #### Shopping and nutrition

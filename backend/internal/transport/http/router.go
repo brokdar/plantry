@@ -25,6 +25,8 @@ type Handlers struct {
 	Templates     *handlers.TemplateHandler
 	AI            *handlers.AIHandler
 	AIRateLimiter *plantrymw.RateLimiter
+	Feedback      *handlers.FeedbackHandler
+	DevMode       bool // gates dev-only debug endpoints
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -87,6 +89,10 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Post("/components", h.Plates.AddComponent)
 				r.Put("/components/{pcId}", h.Plates.UpdateComponent)
 				r.Delete("/components/{pcId}", h.Plates.DeleteComponent)
+				if h.Feedback != nil {
+					r.Put("/feedback", h.Feedback.Put)
+					r.Delete("/feedback", h.Feedback.Delete)
+				}
 			})
 		}
 
@@ -123,6 +129,9 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/", h.AI.GetConversation)
 					r.Delete("/", h.AI.DeleteConversation)
 				})
+				if h.DevMode {
+					r.Get("/debug/system-prompt", h.AI.DebugSystemPrompt)
+				}
 			})
 			api.Get("/settings/ai", h.AI.Settings)
 		}
