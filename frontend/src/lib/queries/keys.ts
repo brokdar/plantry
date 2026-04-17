@@ -44,6 +44,14 @@ export const profileKeys = {
   detail: ["profile"] as const,
 }
 
+export const templateKeys = {
+  all: ["templates"] as const,
+  lists: () => [...templateKeys.all, "list"] as const,
+  list: () => [...templateKeys.lists()] as const,
+  details: () => [...templateKeys.all, "detail"] as const,
+  detail: (id: number) => [...templateKeys.details(), id] as const,
+}
+
 export { lookupKeys } from "./lookup"
 export { portionKeys } from "./portions"
 export { imageKeys } from "./images"

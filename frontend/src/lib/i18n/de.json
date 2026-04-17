@@ -4,6 +4,7 @@
     "planner": "Planer",
     "ingredients": "Zutaten",
     "components": "Komponenten",
+    "templates": "Vorlagen",
     "settings": "Einstellungen"
   },
   "home": {
@@ -189,6 +190,29 @@
     "save": "Profil speichern",
     "save_success": "Profil gespeichert"
   },
+  "template": {
+    "eyebrow": "Gespeicherte Zusammenstellungen",
+    "title": "Vorlagen",
+    "subtitle": "Presse einen Lieblings-Teller zur Vorlage — und lege ihn jederzeit wieder auf.",
+    "new": "Neue Vorlage",
+    "new_body": "Erstelle jetzt eine leere Vorlage und fülle sie später im Planer, oder speichere einen bestehenden Teller direkt als Vorlage.",
+    "create": "Vorlage erstellen",
+    "save_as": "Als Vorlage speichern",
+    "save_as_body": "Merke dir diesen Teller, um die gleiche Kombination später mit einem Klick wiederzuverwenden.",
+    "apply_from": "Vorlage anwenden",
+    "rename": "Vorlage umbenennen",
+    "name": "Vorlagenname",
+    "name_placeholder": "z. B. Curry-Abend",
+    "name_help": "Kurz halten — so erscheint sie in der Auswahl.",
+    "name_required": "Bitte einen Namen eingeben.",
+    "components_count_one": "{{count}} Komponente",
+    "components_count_other": "{{count}} Komponenten",
+    "no_components": "Leere Vorlage",
+    "delete_confirm_title": "Diese Vorlage löschen?",
+    "delete_confirm_body": "Du kannst jederzeit eine neue aus einem bestehenden Teller speichern.",
+    "empty_title": "Noch keine Vorlagen",
+    "empty_body": "Speichere einen Teller aus dem Planer als Vorlage, um die Kombination an einem anderen Tag wiederzuverwenden."
+  },
   "error": {
     "not_found": "Ressource nicht gefunden.",
     "invalid_id": "Ungültige ID.",
@@ -215,6 +239,9 @@
     },
     "profile": {
       "invalid_macros": "Die Makroprozentsätze dürfen zusammen höchstens 100 ergeben, und das Kalorienziel muss positiv sein."
+    },
+    "template": {
+      "in_use": "Diese Vorlage verweist noch auf eine fehlende Komponente."
     }
   },
   "common": {

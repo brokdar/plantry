@@ -4,6 +4,7 @@
     "planner": "Planner",
     "ingredients": "Ingredients",
     "components": "Components",
+    "templates": "Templates",
     "settings": "Settings"
   },
   "home": {
@@ -177,6 +178,29 @@
     "save": "Save profile",
     "save_success": "Profile saved"
   },
+  "template": {
+    "eyebrow": "Saved compositions",
+    "title": "Templates",
+    "subtitle": "Press a plate you love into a template, then lay it down any day you like.",
+    "new": "New template",
+    "new_body": "Create an empty template now and compose it later from the planner, or save an existing plate directly as a template.",
+    "create": "Create template",
+    "save_as": "Save as template",
+    "save_as_body": "Bookmark this plate so you can lay down the same components again in one click.",
+    "apply_from": "Apply a template",
+    "rename": "Rename template",
+    "name": "Template name",
+    "name_placeholder": "e.g. Curry night",
+    "name_help": "Keep it short — this is how it'll read in the picker.",
+    "name_required": "Give the template a name.",
+    "components_count_one": "{{count}} component",
+    "components_count_other": "{{count}} components",
+    "no_components": "Empty template",
+    "delete_confirm_title": "Delete this template?",
+    "delete_confirm_body": "You can save another one anytime from an existing plate.",
+    "empty_title": "No templates yet",
+    "empty_body": "Save a plate from the planner as a template to reuse its combo another day."
+  },
   "error": {
     "not_found": "Resource not found.",
     "invalid_id": "Invalid ID.",
@@ -203,6 +227,9 @@
     },
     "profile": {
       "invalid_macros": "Macro percentages must sum to 100 or less, and calorie target must be positive."
+    },
+    "template": {
+      "in_use": "This template still references a missing component."
     }
   },
   "shopping": {

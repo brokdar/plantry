@@ -141,7 +141,7 @@ Every feature must cover happy path **and** edge cases across all layers before 
 
 - `FormControl` uses `Slot.Root` (radix-ui) instead of `<span>` so id/aria forward to the child input. `useFormField` reads id from `FormItemContext`.
 
-## Guidelines
+## Mandatory Guidelines
 
 ### 1. Think Before Coding
 

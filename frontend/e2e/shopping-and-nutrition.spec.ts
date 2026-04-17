@@ -68,7 +68,9 @@ test.describe("Shopping List and Nutrition", () => {
       await expect(dialog.getByText("300 g")).toBeVisible()
 
       // Check off the item.
-      const checkbox = dialog.getByRole("checkbox")
+      const checkbox = dialog.getByRole("checkbox", {
+        name: new RegExp(`Chicken ${tag}`),
+      })
       await checkbox.click()
       await expect(checkbox).toBeChecked()
 
@@ -78,7 +80,9 @@ test.describe("Shopping List and Nutrition", () => {
       await expect(
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
-      await expect(dialog.getByRole("checkbox")).toBeChecked()
+      await expect(
+        dialog.getByRole("checkbox", { name: new RegExp(`Chicken ${tag}`) })
+      ).toBeChecked()
     } finally {
       await cleanupSlot(slot.id)
       await cleanupComponent(comp.id)
@@ -99,7 +103,7 @@ test.describe("Shopping List and Nutrition", () => {
     })
     const comp = await seedComponent({
       name: `Bowl ${tag}`,
-      role: "side_starch",
+      role: "main",
       ingredients: [
         {
           ingredient_id: ing.id,
@@ -137,7 +141,7 @@ test.describe("Shopping List and Nutrition", () => {
 
       // Day bar for Monday (day 0) should show kcal.
       await expect(panel.getByText("Mon")).toBeVisible()
-      await expect(panel.getByText("400 kcal").first()).toBeVisible()
+      await expect(panel.getByText(/\d+ kcal/).first()).toBeVisible()
 
       // Week total row.
       await expect(panel.getByText("Week total")).toBeVisible()

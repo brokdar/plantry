@@ -393,35 +393,6 @@ Never skip steps. Never write "implementation first, tests later." If a test is 
 
 ---
 
-## Phase 13 — Production Polish
-
-**Goal:** ship-ready.
-
-**Slice:**
-
-- PWA via `vite-plugin-pwa` (auto-generated manifest + service worker, cache shell + static assets, auto-update strategy)
-- German translation file (parity with en.json; translation quality is a stretch, structural parity is the bar)
-- Print stylesheet for the planner grid (weekly meal card) and shopping list
-- Endpoint `GET /api/weeks/{id}/calendar.ics` (iCal export) with each plate as an event at its slot's default time
-- Optional single-password auth middleware gated by `PLANTRY_AUTH_PASSWORD`, login page at `/login`
-- Rate limit middleware on `/api/ai/chat` (token bucket, 10/min per IP, env-configurable)
-- Image optimization: resize uploads to max 1200 px on the long edge, convert to JPEG with quality 85
-- Final Docker image size audit (target < 35 MB)
-- Full Playwright smoke pass on the whole app
-- Backup/restore instructions in README
-
-**Tests:**
-
-1. Auth middleware: unauth 401, valid password 200, cookie flow works
-2. iCal handler: valid ICS output parseable by a known parser library (test-only dep)
-3. Rate limiter: burst + sustained test
-4. Image resizer: input > 1200 px becomes ≤ 1200 px, aspect ratio preserved
-5. e2e: `polish.spec.ts` — PWA manifest served, iCal endpoint returns valid content-type, login flow when password set
-
-**Acceptance:** a fresh deployment on a Raspberry Pi runs, serves the PWA, supports login, exports iCal, prints the weekly view, and survives a sustained 100-request burst to the chat endpoint.
-
----
-
 ## Phase summary table
 
 | Phase | Feature shipped                                 | Key risks                                    |
@@ -439,7 +410,6 @@ Never skip steps. Never write "implementation first, tests later." If a test is 
 | 10    | Feedback + learned preferences                  | Heuristic quality (acceptably naive)         |
 | 11    | URL import                                      | Scraping resilience, LLM fallback cost       |
 | 12    | Archive + rotation insights                     | Low                                          |
-| 13    | PWA, i18n, print, iCal, auth, rate limit        | Auth UX, PWA cache invalidation              |
 
 Each phase is self-contained and shippable. Stopping after any phase leaves a coherent product — slightly less capable, but not broken.
 
@@ -462,7 +432,7 @@ Each phase is self-contained and shippable. Stopping after any phase leaves a co
 
 ---
 
-## What ships at the end of Phase 13
+## What ships at the end of Phase 12
 
 A self-hosted meal planning web application that:
 
@@ -475,5 +445,3 @@ A self-hosted meal planning web application that:
 - Archives past weeks and surfaces rotation insights.
 - Supports English and German, prints a weekly card, exports iCal, and optionally gates behind a household password.
 - Has a vertical test suite (domain unit → adapter → handler → e2e) with no untested features.
-
-That is Plantry v1.

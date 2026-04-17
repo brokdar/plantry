@@ -40,7 +40,7 @@ test.describe("Time slots settings", () => {
           r.url().includes("/api/settings/slots") &&
           r.request().method() === "POST"
       )
-      await page.getByRole("button", { name: /save/i }).click()
+      await page.getByRole("button", { name: "Save", exact: true }).click()
       const response = await createResp
       expect(response.status()).toBe(201)
       const created = (await response.json()) as { id: number }
@@ -64,9 +64,7 @@ test.describe("Time slots settings", () => {
         .click()
       await deleteResp
 
-      await expect(
-        page.locator(`[data-testid="slot-row-${createdId}"]`)
-      ).toHaveCount(0)
+      await expect(page.getByText(nameKey)).toHaveCount(0)
       createdId = undefined
     } finally {
       if (createdId) await cleanupSlot(createdId)
@@ -76,7 +74,7 @@ test.describe("Time slots settings", () => {
   test("validation surfaces when name_key is empty", async ({ page }) => {
     await page.goto("/settings")
     await page.getByLabel(/^icon$/i).fill("Coffee")
-    await page.getByRole("button", { name: /save/i }).click()
+    await page.getByRole("button", { name: "Save", exact: true }).click()
     // UI should show the validation error inline.
     await expect(page.getByText("name_key required")).toBeVisible()
     // Form should not POST; confirm no slot was created.

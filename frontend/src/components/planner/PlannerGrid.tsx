@@ -2,9 +2,11 @@ import * as Lucide from "lucide-react"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
 import { ApiError } from "@/lib/api/client"
 import type { Component } from "@/lib/api/components"
 import type { TimeSlot } from "@/lib/api/slots"
+import type { Template } from "@/lib/api/templates"
 import type { Week } from "@/lib/api/weeks"
 import { useComponents } from "@/lib/queries/components"
 import {
@@ -14,6 +16,7 @@ import {
   useSwapPlateComponent,
 } from "@/lib/queries/plates"
 import { findPlateAt } from "@/lib/queries/plate-patches"
+import { useApplyTemplate } from "@/lib/queries/templates"
 import { useCreatePlate } from "@/lib/queries/weeks"
 
 import { AddComponentSheet } from "./AddComponentSheet"
@@ -66,12 +69,14 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
 
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null)
+  const [savePlateId, setSavePlateId] = useState<number | null>(null)
 
   const createPlateMut = useCreatePlate(week.id)
   const addCompMut = useAddPlateComponent(week.id)
   const swapMut = useSwapPlateComponent(week.id)
   const removeMut = useRemovePlateComponent(week.id)
   const deletePlateMut = useDeletePlate(week.id)
+  const applyTemplateMut = useApplyTemplate(week.id)
 
   async function handlePick(component: Component) {
     if (!addTarget) return
@@ -90,6 +95,30 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
           input: { component_id: component.id, portions: 1 },
         })
       }
+    } catch (err) {
+      window.alert(
+        err instanceof ApiError ? t(err.messageKey) : t("error.server")
+      )
+    }
+  }
+
+  async function handleApplyTemplate(template: Template) {
+    if (!addTarget) return
+    const target = addTarget
+    setAddTarget(null)
+    try {
+      let plateId = target.plateId
+      if (plateId === null) {
+        const created = await createPlateMut.mutateAsync({
+          day: target.day,
+          slot_id: target.slotId,
+        })
+        plateId = created.id
+      }
+      await applyTemplateMut.mutateAsync({
+        id: template.id,
+        input: { plate_id: plateId },
+      })
     } catch (err) {
       window.alert(
         err instanceof ApiError ? t(err.messageKey) : t("error.server")
@@ -191,6 +220,9 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
                       plate && handleRemove(plate.id, pcId)
                     }
                     onDeletePlate={() => plate && handleDeletePlate(plate.id)}
+                    onSaveAsTemplate={
+                      plate ? () => setSavePlateId(plate.id) : undefined
+                    }
                   />
                 </div>
               )
@@ -204,12 +236,18 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
         onOpenChange={(o) => !o && setAddTarget(null)}
         defaultRole={addTarget?.defaultRole}
         onPick={handlePick}
+        onPickTemplate={handleApplyTemplate}
       />
       <AddComponentSheet
         open={swapTarget !== null}
         onOpenChange={(o) => !o && setSwapTarget(null)}
         defaultRole={swapTarget?.defaultRole}
         onPick={handleSwapPick}
+      />
+      <SaveAsTemplateDialog
+        open={savePlateId !== null}
+        onOpenChange={(o) => !o && setSavePlateId(null)}
+        plateId={savePlateId}
       />
     </div>
   )

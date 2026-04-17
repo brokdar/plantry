@@ -21,6 +21,7 @@ type Handlers struct {
 	Weeks       *handlers.WeekHandler
 	Plates      *handlers.PlateHandler
 	Profile     *handlers.ProfileHandler
+	Templates   *handlers.TemplateHandler
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -90,6 +91,19 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			api.Route("/profile", func(r chi.Router) {
 				r.Get("/", h.Profile.Get)
 				r.Put("/", h.Profile.Update)
+			})
+		}
+
+		if h.Templates != nil {
+			api.Route("/templates", func(r chi.Router) {
+				r.Get("/", h.Templates.List)
+				r.Post("/", h.Templates.Create)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.Templates.Get)
+					r.Put("/", h.Templates.Update)
+					r.Delete("/", h.Templates.Delete)
+					r.Post("/apply", h.Templates.Apply)
+				})
 			})
 		}
 

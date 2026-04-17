@@ -1,4 +1,4 @@
-import { MoreVertical, Plus, Trash2 } from "lucide-react"
+import { BookmarkPlus, MoreVertical, Plus, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
@@ -20,6 +20,7 @@ interface PlateCellProps {
   onSwap: (pcId: number, currentRole?: string) => void
   onRemoveComponent: (pcId: number) => void
   onDeletePlate: () => void
+  onSaveAsTemplate?: () => void
 }
 
 export function PlateCell({
@@ -29,6 +30,7 @@ export function PlateCell({
   onSwap,
   onRemoveComponent,
   onDeletePlate,
+  onSaveAsTemplate,
 }: PlateCellProps) {
   const { t } = useTranslation()
 
@@ -49,7 +51,7 @@ export function PlateCell({
   }
 
   return (
-    <div className="flex min-h-20 flex-col gap-2 rounded-md border border-border bg-card p-2">
+    <div className="flex min-h-20 min-w-0 flex-col gap-2 overflow-hidden rounded-md border border-border bg-card p-2">
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
@@ -72,6 +74,12 @@ export function PlateCell({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {onSaveAsTemplate && (
+              <DropdownMenuItem onClick={onSaveAsTemplate}>
+                <BookmarkPlus className="h-3 w-3" />
+                {t("template.save_as")}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onClick={onDeletePlate}
               className="text-destructive"

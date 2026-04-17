@@ -106,6 +106,12 @@ export async function cleanupSlot(id: number) {
   await ctx.dispose()
 }
 
+export async function cleanupTemplate(id: number) {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  await ctx.delete(`/api/templates/${id}`)
+  await ctx.dispose()
+}
+
 export async function createVariantViaAPI(parentId: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
   const res = await ctx.post(`/api/components/${parentId}/variant`)

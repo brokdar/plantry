@@ -27,6 +27,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/template"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 	"github.com/jaltszeimer/plantry/backend/internal/webui"
@@ -103,6 +104,9 @@ func run() error {
 	profileRepo := sqlite.NewProfileRepo(conn)
 	profileSvc := profile.NewService(profileRepo)
 
+	templateRepo := sqlite.NewTemplateRepo(conn)
+	templateSvc := template.NewService(templateRepo, componentRepo, plateRepo, txRunner)
+
 	h := transport.Handlers{
 		Ingredients: handlers.NewIngredientHandler(ingredientSvc),
 		Lookup:      handlers.NewLookupHandler(resolver, imgStore, ingredientSvc),
@@ -112,6 +116,7 @@ func run() error {
 		Weeks:       handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingredientRepo),
 		Plates:      handlers.NewPlateHandler(plateSvc),
 		Profile:     handlers.NewProfileHandler(profileSvc),
+		Templates:   handlers.NewTemplateHandler(templateSvc),
 	}
 	handler := transport.NewRouter(logger, static, h)
 

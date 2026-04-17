@@ -95,6 +95,20 @@ type PlateComponent struct {
 	SortOrder   int64
 }
 
+type Template struct {
+	ID        int64
+	Name      string
+	CreatedAt string
+}
+
+type TemplateComponent struct {
+	ID          int64
+	TemplateID  int64
+	ComponentID int64
+	Portions    float64
+	SortOrder   int64
+}
+
 type TimeSlot struct {
 	ID        int64
 	NameKey   string

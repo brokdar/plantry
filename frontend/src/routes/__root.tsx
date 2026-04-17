@@ -29,6 +29,9 @@ function RootComponent() {
           <Link to="/components" className={linkClass}>
             {t("nav.components")}
           </Link>
+          <Link to="/templates" className={linkClass}>
+            {t("nav.templates")}
+          </Link>
           <Link to="/settings" className={linkClass}>
             {t("nav.settings")}
           </Link>
