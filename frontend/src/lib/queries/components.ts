@@ -8,8 +8,10 @@ import {
   getComponentNutrition,
   createVariant,
   listVariants,
+  getInsights,
   type ComponentListParams,
   type ComponentInput,
+  type InsightsParams,
 } from "@/lib/api/components"
 import { queryClient } from "@/lib/query-client"
 import { componentKeys } from "./keys"
@@ -73,6 +75,13 @@ export function useVariants(id: number) {
     queryKey: componentKeys.variants(id),
     queryFn: () => listVariants(id),
     enabled: id > 0,
+  })
+}
+
+export function useInsights(params?: InsightsParams) {
+  return useQuery({
+    queryKey: componentKeys.insights(params ?? {}),
+    queryFn: () => getInsights(params),
   })
 }
 

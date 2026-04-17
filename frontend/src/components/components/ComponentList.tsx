@@ -29,7 +29,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useComponents, useDeleteComponent } from "@/lib/queries/components"
+import {
+  useComponents,
+  useDeleteComponent,
+  useInsights,
+} from "@/lib/queries/components"
 import { COMPONENT_ROLES } from "@/lib/schemas/component"
 
 const PAGE_SIZE = 20
@@ -52,6 +56,9 @@ export function ComponentList() {
   })
 
   const deleteMutation = useDeleteComponent()
+  const { data: insights } = useInsights()
+  const forgottenIds = new Set(insights?.forgotten.map((c) => c.id) ?? [])
+  const mostCookedIds = new Set(insights?.most_cooked.map((c) => c.id) ?? [])
 
   function handleDelete() {
     if (deleteId === null) return
@@ -147,7 +154,28 @@ export function ComponentList() {
                     })
                   }
                 >
-                  <TableCell className="font-medium">{item.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <span>{item.name}</span>
+                      {forgottenIds.has(item.id) && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs"
+                          data-testid={`badge-forgotten-${item.id}`}
+                        >
+                          {t("archive.forgotten")}
+                        </Badge>
+                      )}
+                      {mostCookedIds.has(item.id) && (
+                        <Badge
+                          className="text-xs"
+                          data-testid={`badge-most-cooked-${item.id}`}
+                        >
+                          {t("archive.most_cooked")}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <Badge variant="secondary">
                       {t(`component.role_${item.role}`)}

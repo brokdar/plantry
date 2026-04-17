@@ -6,7 +6,17 @@
     "components": "Components",
     "templates": "Templates",
     "import": "Import",
+    "archive": "Archive",
     "settings": "Settings"
+  },
+  "archive": {
+    "title": "Archive",
+    "subtitle": "Browse past weeks.",
+    "empty": "No archived weeks yet.",
+    "week_label": "Week {{week}}, {{year}}",
+    "back": "Back to archive",
+    "forgotten": "Forgotten",
+    "most_cooked": "Most cooked"
   },
   "import": {
     "title": "Import recipe",

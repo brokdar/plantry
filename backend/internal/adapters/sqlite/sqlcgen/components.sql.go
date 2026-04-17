@@ -278,6 +278,99 @@ func (q *Queries) ListComponentTags(ctx context.Context, componentID int64) ([]C
 	return items, nil
 }
 
+const listForgottenComponents = `-- name: ListForgottenComponents :many
+SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at FROM components
+WHERE last_cooked_at IS NULL OR last_cooked_at < ?
+ORDER BY (last_cooked_at IS NOT NULL), last_cooked_at ASC, name ASC
+LIMIT ?
+`
+
+type ListForgottenComponentsParams struct {
+	LastCookedAt sql.NullString
+	Limit        int64
+}
+
+func (q *Queries) ListForgottenComponents(ctx context.Context, arg ListForgottenComponentsParams) ([]Component, error) {
+	rows, err := q.db.QueryContext(ctx, listForgottenComponents, arg.LastCookedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Component{}
+	for rows.Next() {
+		var i Component
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Role,
+			&i.VariantGroupID,
+			&i.ReferencePortions,
+			&i.PrepMinutes,
+			&i.CookMinutes,
+			&i.ImagePath,
+			&i.Notes,
+			&i.LastCookedAt,
+			&i.CookCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMostCookedComponents = `-- name: ListMostCookedComponents :many
+SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at FROM components
+WHERE cook_count > 0
+ORDER BY cook_count DESC, last_cooked_at DESC, name ASC
+LIMIT ?
+`
+
+func (q *Queries) ListMostCookedComponents(ctx context.Context, limit int64) ([]Component, error) {
+	rows, err := q.db.QueryContext(ctx, listMostCookedComponents, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Component{}
+	for rows.Next() {
+		var i Component
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Role,
+			&i.VariantGroupID,
+			&i.ReferencePortions,
+			&i.PrepMinutes,
+			&i.CookMinutes,
+			&i.ImagePath,
+			&i.Notes,
+			&i.LastCookedAt,
+			&i.CookCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSiblingComponents = `-- name: ListSiblingComponents :many
 SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at FROM components WHERE variant_group_id = ? AND id != ? ORDER BY name
 `

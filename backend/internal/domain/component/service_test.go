@@ -24,6 +24,10 @@ type fakeRepo struct {
 	seq      int64
 	groupSeq int64
 	groups   map[int64]string // groupID -> name
+
+	lastInsightsCutoff  time.Time
+	lastForgottenLimit  int
+	lastMostCookedLimit int
 }
 
 func newFakeRepo() *fakeRepo {
@@ -100,6 +104,15 @@ func (r *fakeRepo) MarkCooked(_ context.Context, id int64, at time.Time) error {
 	t := at
 	c.LastCookedAt = &t
 	return nil
+}
+
+func (r *fakeRepo) Insights(_ context.Context, cutoff time.Time, forgottenLimit, mostCookedLimit int) (component.Insights, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.lastInsightsCutoff = cutoff
+	r.lastForgottenLimit = forgottenLimit
+	r.lastMostCookedLimit = mostCookedLimit
+	return component.Insights{}, nil
 }
 
 func (r *fakeRepo) Siblings(_ context.Context, variantGroupID int64, excludeID int64) ([]component.Component, error) {
@@ -580,4 +593,46 @@ func TestListVariants_NotFound(t *testing.T) {
 	svc, _, _, _ := newService()
 	_, err := svc.ListVariants(context.Background(), 999)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+// --- insights tests ---
+
+func TestInsights_AppliesDefaults(t *testing.T) {
+	svc, repo, _, _ := newService()
+	before := time.Now().UTC()
+	_, err := svc.Insights(context.Background(), component.InsightsQuery{})
+	require.NoError(t, err)
+
+	assert.Equal(t, 10, repo.lastForgottenLimit)
+	assert.Equal(t, 5, repo.lastMostCookedLimit)
+	// Default is 4 weeks back from now.
+	expected := before.AddDate(0, 0, -28)
+	assert.WithinDuration(t, expected, repo.lastInsightsCutoff, 2*time.Second)
+}
+
+func TestInsights_ClampsHighLimits(t *testing.T) {
+	svc, repo, _, _ := newService()
+	_, err := svc.Insights(context.Background(), component.InsightsQuery{
+		ForgottenWeeks:  500,
+		ForgottenLimit:  1000,
+		MostCookedLimit: 1000,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, 50, repo.lastForgottenLimit)
+	assert.Equal(t, 50, repo.lastMostCookedLimit)
+	// Clamped to 52 weeks back.
+	expected := time.Now().UTC().AddDate(0, 0, -52*7)
+	assert.WithinDuration(t, expected, repo.lastInsightsCutoff, 2*time.Second)
+}
+
+func TestInsights_CustomForgottenWeeks(t *testing.T) {
+	svc, repo, _, _ := newService()
+	_, err := svc.Insights(context.Background(), component.InsightsQuery{
+		ForgottenWeeks: 8,
+	})
+	require.NoError(t, err)
+
+	expected := time.Now().UTC().AddDate(0, 0, -56)
+	assert.WithinDuration(t, expected, repo.lastInsightsCutoff, 2*time.Second)
 }

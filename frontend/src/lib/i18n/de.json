@@ -6,7 +6,17 @@
     "components": "Komponenten",
     "templates": "Vorlagen",
     "import": "Import",
+    "archive": "Archiv",
     "settings": "Einstellungen"
+  },
+  "archive": {
+    "title": "Archiv",
+    "subtitle": "Vergangene Wochen durchstöbern.",
+    "empty": "Noch keine archivierten Wochen.",
+    "week_label": "Woche {{week}}, {{year}}",
+    "back": "Zurück zum Archiv",
+    "forgotten": "Vergessen",
+    "most_cooked": "Oft gekocht"
   },
   "import": {
     "title": "Rezept importieren",

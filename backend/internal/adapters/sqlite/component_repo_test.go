@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -452,4 +453,72 @@ func TestIngredientRepo_LookupForNutrition_Empty(t *testing.T) {
 	result, err := repo.LookupForNutrition(context.Background(), nil)
 	require.NoError(t, err)
 	assert.Empty(t, result)
+}
+
+func TestComponentRepo_Insights(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewComponentRepo(db)
+	ctx := context.Background()
+
+	// A: never cooked.
+	compA := &component.Component{Name: "A Never Cooked", Role: component.RoleMain, ReferencePortions: 1}
+	require.NoError(t, repo.Create(ctx, compA))
+
+	// B: cooked long ago (6 weeks back), cook_count=1.
+	compB := &component.Component{Name: "B Long Ago", Role: component.RoleMain, ReferencePortions: 1}
+	require.NoError(t, repo.Create(ctx, compB))
+	longAgo := time.Now().UTC().AddDate(0, 0, -42) // 6 weeks
+	_, err := db.ExecContext(ctx,
+		`UPDATE components SET last_cooked_at = ?, cook_count = 1 WHERE id = ?`,
+		longAgo.Format("2006-01-02 15:04:05"), compB.ID)
+	require.NoError(t, err)
+
+	// C: cooked yesterday, cook_count=5.
+	compC := &component.Component{Name: "C Recent Heavy", Role: component.RoleMain, ReferencePortions: 1}
+	require.NoError(t, repo.Create(ctx, compC))
+	yesterday := time.Now().UTC().AddDate(0, 0, -1)
+	_, err = db.ExecContext(ctx,
+		`UPDATE components SET last_cooked_at = ?, cook_count = 5 WHERE id = ?`,
+		yesterday.Format("2006-01-02 15:04:05"), compC.ID)
+	require.NoError(t, err)
+
+	cutoff := time.Now().UTC().AddDate(0, 0, -28) // 4 weeks back
+	out, err := repo.Insights(ctx, cutoff, 10, 5)
+	require.NoError(t, err)
+
+	// Forgotten: A (never) and B (6 weeks old). C is recent — excluded.
+	require.Len(t, out.Forgotten, 2)
+	assert.Equal(t, compA.ID, out.Forgotten[0].ID, "never-cooked should sort first")
+	assert.Equal(t, compB.ID, out.Forgotten[1].ID)
+
+	// Most cooked: C (5) then B (1). A excluded (count=0).
+	require.Len(t, out.MostCooked, 2)
+	assert.Equal(t, compC.ID, out.MostCooked[0].ID)
+	assert.Equal(t, 5, out.MostCooked[0].CookCount)
+	assert.Equal(t, compB.ID, out.MostCooked[1].ID)
+	assert.Equal(t, 1, out.MostCooked[1].CookCount)
+}
+
+func TestComponentRepo_Insights_EmptyDB(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewComponentRepo(db)
+	out, err := repo.Insights(context.Background(), time.Now().UTC(), 10, 5)
+	require.NoError(t, err)
+	assert.Empty(t, out.Forgotten)
+	assert.Empty(t, out.MostCooked)
+}
+
+func TestComponentRepo_Insights_ForgottenLimit(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewComponentRepo(db)
+	ctx := context.Background()
+
+	for i := 0; i < 5; i++ {
+		c := &component.Component{Name: fmt.Sprintf("C%d", i), Role: component.RoleMain, ReferencePortions: 1}
+		require.NoError(t, repo.Create(ctx, c))
+	}
+
+	out, err := repo.Insights(ctx, time.Now().UTC(), 2, 5)
+	require.NoError(t, err)
+	assert.Len(t, out.Forgotten, 2)
 }

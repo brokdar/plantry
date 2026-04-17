@@ -15,6 +15,8 @@ export const componentKeys = {
   nutrition: (id: number) =>
     [...componentKeys.detail(id), "nutrition"] as const,
   variants: (id: number) => [...componentKeys.detail(id), "variants"] as const,
+  insights: (params: object) =>
+    [...componentKeys.all, "insights", params] as const,
 }
 
 export const slotKeys = {

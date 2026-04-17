@@ -85,3 +85,18 @@ type ListResult struct {
 	Items []Component
 	Total int
 }
+
+// InsightsQuery parameterises the rotation-insights lookup. Zero values are
+// replaced with defaults by Service.Insights.
+type InsightsQuery struct {
+	ForgottenWeeks  int
+	ForgottenLimit  int
+	MostCookedLimit int
+}
+
+// Insights bundles the two rotation signals used by the component library
+// badges and archive view.
+type Insights struct {
+	Forgotten  []Component
+	MostCooked []Component
+}

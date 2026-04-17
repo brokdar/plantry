@@ -3,6 +3,7 @@ package component
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
@@ -179,6 +180,32 @@ func (s *Service) ListVariants(ctx context.Context, componentID int64) ([]Compon
 		return []Component{}, nil
 	}
 	return s.repo.Siblings(ctx, *c.VariantGroupID, componentID)
+}
+
+// Insights returns rotation signals: components not cooked recently (or ever)
+// and the most frequently cooked. Zero-valued query fields fall back to
+// defaults (4 weeks, 10 forgotten, 5 most-cooked).
+func (s *Service) Insights(ctx context.Context, q InsightsQuery) (Insights, error) {
+	if q.ForgottenWeeks <= 0 {
+		q.ForgottenWeeks = 4
+	}
+	if q.ForgottenWeeks > 52 {
+		q.ForgottenWeeks = 52
+	}
+	if q.ForgottenLimit <= 0 {
+		q.ForgottenLimit = 10
+	}
+	if q.ForgottenLimit > 50 {
+		q.ForgottenLimit = 50
+	}
+	if q.MostCookedLimit <= 0 {
+		q.MostCookedLimit = 5
+	}
+	if q.MostCookedLimit > 50 {
+		q.MostCookedLimit = 50
+	}
+	cutoff := time.Now().UTC().AddDate(0, 0, -7*q.ForgottenWeeks)
+	return s.repo.Insights(ctx, cutoff, q.ForgottenLimit, q.MostCookedLimit)
 }
 
 // Nutrition returns per-portion macros for a component.

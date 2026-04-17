@@ -2,12 +2,14 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -33,6 +35,7 @@ func setupComponentRouter(t *testing.T) (http.Handler, *sqlite.IngredientRepo) {
 	r.Route("/api/components", func(r chi.Router) {
 		r.Get("/", h.List)
 		r.Post("/", h.Create)
+		r.Get("/insights", h.Insights)
 		r.Route("/{id}", func(r chi.Router) {
 			r.Get("/", h.Get)
 			r.Put("/", h.Update)
@@ -43,6 +46,26 @@ func setupComponentRouter(t *testing.T) (http.Handler, *sqlite.IngredientRepo) {
 		})
 	})
 	return r, iRepo
+}
+
+func setupComponentRouterWithRepo(t *testing.T) (http.Handler, *sqlite.ComponentRepo) {
+	t.Helper()
+	db := testhelper.NewTestDB(t)
+	iRepo := sqlite.NewIngredientRepo(db)
+	cRepo := sqlite.NewComponentRepo(db)
+	cSvc := component.NewService(cRepo, iRepo, iRepo)
+	h := handlers.NewComponentHandler(cSvc, nil)
+
+	r := chi.NewRouter()
+	r.Route("/api/components", func(r chi.Router) {
+		r.Get("/", h.List)
+		r.Post("/", h.Create)
+		r.Get("/insights", h.Insights)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Get("/", h.Get)
+		})
+	})
+	return r, cRepo
 }
 
 func seedTestIngredient(t *testing.T, iRepo *sqlite.IngredientRepo, name string, kcal, protein float64) *ingredient.Ingredient {
@@ -471,4 +494,61 @@ func TestComponentImageDelete(t *testing.T) {
 	var got map[string]any
 	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&got))
 	assert.Nil(t, got["image_path"])
+}
+
+func TestInsights_200(t *testing.T) {
+	router, cRepo := setupComponentRouterWithRepo(t)
+	ctx := context.Background()
+
+	// A: never cooked (Forgotten).
+	a := &component.Component{Name: "Never Cooked", Role: component.RoleMain, ReferencePortions: 1}
+	require.NoError(t, cRepo.Create(ctx, a))
+
+	// B: cooked long ago (Forgotten + Most cooked).
+	b := &component.Component{Name: "Old", Role: component.RoleMain, ReferencePortions: 1}
+	require.NoError(t, cRepo.Create(ctx, b))
+	require.NoError(t, cRepo.MarkCooked(ctx, b.ID, time.Now().UTC().AddDate(0, 0, -42)))
+
+	// C: cooked recently (Most cooked only).
+	c := &component.Component{Name: "Recent", Role: component.RoleMain, ReferencePortions: 1}
+	require.NoError(t, cRepo.Create(ctx, c))
+	require.NoError(t, cRepo.MarkCooked(ctx, c.ID, time.Now().UTC().AddDate(0, 0, -1)))
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/components/insights", nil))
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var got struct {
+		Forgotten  []map[string]any `json:"forgotten"`
+		MostCooked []map[string]any `json:"most_cooked"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+
+	require.GreaterOrEqual(t, len(got.Forgotten), 2)
+	assert.Equal(t, "Never Cooked", got.Forgotten[0]["name"])
+	assert.Nil(t, got.Forgotten[0]["last_cooked_at"])
+
+	require.GreaterOrEqual(t, len(got.MostCooked), 1)
+	assert.Equal(t, "Recent", got.MostCooked[0]["name"])
+	assert.NotNil(t, got.MostCooked[0]["last_cooked_at"])
+}
+
+func TestInsights_RespectsQueryLimits(t *testing.T) {
+	router, cRepo := setupComponentRouterWithRepo(t)
+	ctx := context.Background()
+	for i := 0; i < 5; i++ {
+		require.NoError(t, cRepo.Create(ctx, &component.Component{
+			Name: fmt.Sprintf("Forgotten%d", i), Role: component.RoleMain, ReferencePortions: 1,
+		}))
+	}
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/components/insights?forgotten_limit=2", nil))
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var got struct {
+		Forgotten []map[string]any `json:"forgotten"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Len(t, got.Forgotten, 2)
 }

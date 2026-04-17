@@ -45,6 +45,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			api.Route("/components", func(r chi.Router) {
 				r.Get("/", h.Components.List)
 				r.Post("/", h.Components.Create)
+				r.Get("/insights", h.Components.Insights)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.Components.Get)
 					r.Put("/", h.Components.Update)

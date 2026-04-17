@@ -90,6 +90,10 @@ func (r *fakeComponentRepo) Siblings(_ context.Context, _, _ int64) ([]component
 	return nil, nil
 }
 
+func (r *fakeComponentRepo) Insights(_ context.Context, _ time.Time, _, _ int) (component.Insights, error) {
+	return component.Insights{}, nil
+}
+
 func (r *fakeComponentRepo) MarkCooked(_ context.Context, id int64, at time.Time) error {
 	if r.markFail != nil {
 		return r.markFail

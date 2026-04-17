@@ -15,10 +15,12 @@ import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as IngredientsIndexRouteImport } from './routes/ingredients/index'
 import { Route as ImportIndexRouteImport } from './routes/import/index'
 import { Route as ComponentsIndexRouteImport } from './routes/components/index'
+import { Route as ArchiveIndexRouteImport } from './routes/archive/index'
 import { Route as TemplatesNewRouteImport } from './routes/templates/new'
 import { Route as IngredientsNewRouteImport } from './routes/ingredients/new'
 import { Route as ComponentsNewRouteImport } from './routes/components/new'
 import { Route as ComponentsIdIndexRouteImport } from './routes/components/$id/index'
+import { Route as ArchiveIdIndexRouteImport } from './routes/archive/$id/index'
 import { Route as IngredientsIdEditRouteImport } from './routes/ingredients/$id/edit'
 import { Route as ComponentsIdEditRouteImport } from './routes/components/$id/edit'
 
@@ -52,6 +54,11 @@ const ComponentsIndexRoute = ComponentsIndexRouteImport.update({
   path: '/components/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ArchiveIndexRoute = ArchiveIndexRouteImport.update({
+  id: '/archive/',
+  path: '/archive/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TemplatesNewRoute = TemplatesNewRouteImport.update({
   id: '/templates/new',
   path: '/templates/new',
@@ -72,6 +79,11 @@ const ComponentsIdIndexRoute = ComponentsIdIndexRouteImport.update({
   path: '/components/$id/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ArchiveIdIndexRoute = ArchiveIdIndexRouteImport.update({
+  id: '/archive/$id/',
+  path: '/archive/$id/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IngredientsIdEditRoute = IngredientsIdEditRouteImport.update({
   id: '/ingredients/$id/edit',
   path: '/ingredients/$id/edit',
@@ -88,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/components/new': typeof ComponentsNewRoute
   '/ingredients/new': typeof IngredientsNewRoute
   '/templates/new': typeof TemplatesNewRoute
+  '/archive/': typeof ArchiveIndexRoute
   '/components/': typeof ComponentsIndexRoute
   '/import/': typeof ImportIndexRoute
   '/ingredients/': typeof IngredientsIndexRoute
@@ -95,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/templates/': typeof TemplatesIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
+  '/archive/$id/': typeof ArchiveIdIndexRoute
   '/components/$id/': typeof ComponentsIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -102,6 +116,7 @@ export interface FileRoutesByTo {
   '/components/new': typeof ComponentsNewRoute
   '/ingredients/new': typeof IngredientsNewRoute
   '/templates/new': typeof TemplatesNewRoute
+  '/archive': typeof ArchiveIndexRoute
   '/components': typeof ComponentsIndexRoute
   '/import': typeof ImportIndexRoute
   '/ingredients': typeof IngredientsIndexRoute
@@ -109,6 +124,7 @@ export interface FileRoutesByTo {
   '/templates': typeof TemplatesIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
+  '/archive/$id': typeof ArchiveIdIndexRoute
   '/components/$id': typeof ComponentsIdIndexRoute
 }
 export interface FileRoutesById {
@@ -117,6 +133,7 @@ export interface FileRoutesById {
   '/components/new': typeof ComponentsNewRoute
   '/ingredients/new': typeof IngredientsNewRoute
   '/templates/new': typeof TemplatesNewRoute
+  '/archive/': typeof ArchiveIndexRoute
   '/components/': typeof ComponentsIndexRoute
   '/import/': typeof ImportIndexRoute
   '/ingredients/': typeof IngredientsIndexRoute
@@ -124,6 +141,7 @@ export interface FileRoutesById {
   '/templates/': typeof TemplatesIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
+  '/archive/$id/': typeof ArchiveIdIndexRoute
   '/components/$id/': typeof ComponentsIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -133,6 +151,7 @@ export interface FileRouteTypes {
     | '/components/new'
     | '/ingredients/new'
     | '/templates/new'
+    | '/archive/'
     | '/components/'
     | '/import/'
     | '/ingredients/'
@@ -140,6 +159,7 @@ export interface FileRouteTypes {
     | '/templates/'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
+    | '/archive/$id/'
     | '/components/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -147,6 +167,7 @@ export interface FileRouteTypes {
     | '/components/new'
     | '/ingredients/new'
     | '/templates/new'
+    | '/archive'
     | '/components'
     | '/import'
     | '/ingredients'
@@ -154,6 +175,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
+    | '/archive/$id'
     | '/components/$id'
   id:
     | '__root__'
@@ -161,6 +183,7 @@ export interface FileRouteTypes {
     | '/components/new'
     | '/ingredients/new'
     | '/templates/new'
+    | '/archive/'
     | '/components/'
     | '/import/'
     | '/ingredients/'
@@ -168,6 +191,7 @@ export interface FileRouteTypes {
     | '/templates/'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
+    | '/archive/$id/'
     | '/components/$id/'
   fileRoutesById: FileRoutesById
 }
@@ -176,6 +200,7 @@ export interface RootRouteChildren {
   ComponentsNewRoute: typeof ComponentsNewRoute
   IngredientsNewRoute: typeof IngredientsNewRoute
   TemplatesNewRoute: typeof TemplatesNewRoute
+  ArchiveIndexRoute: typeof ArchiveIndexRoute
   ComponentsIndexRoute: typeof ComponentsIndexRoute
   ImportIndexRoute: typeof ImportIndexRoute
   IngredientsIndexRoute: typeof IngredientsIndexRoute
@@ -183,6 +208,7 @@ export interface RootRouteChildren {
   TemplatesIndexRoute: typeof TemplatesIndexRoute
   ComponentsIdEditRoute: typeof ComponentsIdEditRoute
   IngredientsIdEditRoute: typeof IngredientsIdEditRoute
+  ArchiveIdIndexRoute: typeof ArchiveIdIndexRoute
   ComponentsIdIndexRoute: typeof ComponentsIdIndexRoute
 }
 
@@ -230,6 +256,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ComponentsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/archive/': {
+      id: '/archive/'
+      path: '/archive'
+      fullPath: '/archive/'
+      preLoaderRoute: typeof ArchiveIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/templates/new': {
       id: '/templates/new'
       path: '/templates/new'
@@ -258,6 +291,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ComponentsIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/archive/$id/': {
+      id: '/archive/$id/'
+      path: '/archive/$id'
+      fullPath: '/archive/$id/'
+      preLoaderRoute: typeof ArchiveIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ingredients/$id/edit': {
       id: '/ingredients/$id/edit'
       path: '/ingredients/$id/edit'
@@ -280,6 +320,7 @@ const rootRouteChildren: RootRouteChildren = {
   ComponentsNewRoute: ComponentsNewRoute,
   IngredientsNewRoute: IngredientsNewRoute,
   TemplatesNewRoute: TemplatesNewRoute,
+  ArchiveIndexRoute: ArchiveIndexRoute,
   ComponentsIndexRoute: ComponentsIndexRoute,
   ImportIndexRoute: ImportIndexRoute,
   IngredientsIndexRoute: IngredientsIndexRoute,
@@ -287,6 +328,7 @@ const rootRouteChildren: RootRouteChildren = {
   TemplatesIndexRoute: TemplatesIndexRoute,
   ComponentsIdEditRoute: ComponentsIdEditRoute,
   IngredientsIdEditRoute: IngredientsIdEditRoute,
+  ArchiveIdIndexRoute: ArchiveIdIndexRoute,
   ComponentsIdIndexRoute: ComponentsIdIndexRoute,
 }
 export const routeTree = rootRouteImport

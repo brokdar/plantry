@@ -7,9 +7,12 @@ import { mockChickenCurry, mockTofuBowl } from "@/test/fixtures"
 vi.mock("@/lib/api/components", () => ({
   listComponents: vi.fn(),
   deleteComponent: vi.fn(),
+  getInsights: vi.fn(),
 }))
 
-import { listComponents } from "@/lib/api/components"
+import { listComponents, getInsights } from "@/lib/api/components"
+
+const noInsights = { forgotten: [], most_cooked: [] }
 
 describe("ComponentList", () => {
   it("renders list of components with role badges", async () => {
@@ -17,6 +20,7 @@ describe("ComponentList", () => {
       items: [mockChickenCurry, mockTofuBowl],
       total: 2,
     })
+    vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
 
@@ -28,6 +32,7 @@ describe("ComponentList", () => {
 
   it("renders empty state when no components", async () => {
     vi.mocked(listComponents).mockResolvedValue({ items: [], total: 0 })
+    vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
 
@@ -41,10 +46,49 @@ describe("ComponentList", () => {
       items: [mockChickenCurry],
       total: 1,
     })
+    vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
 
     expect(await screen.findByText("spicy")).toBeInTheDocument()
     expect(screen.getByText("thai")).toBeInTheDocument()
+  })
+
+  it("renders Forgotten and Most cooked badges from insights", async () => {
+    vi.mocked(listComponents).mockResolvedValue({
+      items: [mockChickenCurry, mockTofuBowl],
+      total: 2,
+    })
+    vi.mocked(getInsights).mockResolvedValue({
+      forgotten: [
+        {
+          id: mockChickenCurry.id,
+          name: mockChickenCurry.name,
+          role: mockChickenCurry.role,
+          image_path: null,
+          cook_count: 0,
+          last_cooked_at: null,
+        },
+      ],
+      most_cooked: [
+        {
+          id: mockTofuBowl.id,
+          name: mockTofuBowl.name,
+          role: mockTofuBowl.role,
+          image_path: null,
+          cook_count: 4,
+          last_cooked_at: "2026-04-15T00:00:00Z",
+        },
+      ],
+    })
+
+    renderWithRouter(<ComponentList />)
+
+    expect(
+      await screen.findByTestId(`badge-forgotten-${mockChickenCurry.id}`)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByTestId(`badge-most-cooked-${mockTofuBowl.id}`)
+    ).toBeInTheDocument()
   })
 })

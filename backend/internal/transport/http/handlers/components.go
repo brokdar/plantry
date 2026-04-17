@@ -294,6 +294,75 @@ type variantListResponse struct {
 	Items []componentResponse `json:"items"`
 }
 
+// componentSummary is a slim shape for rotation-insight cards; it omits
+// ingredients, instructions, and tags (the badge UI doesn't render them).
+type componentSummary struct {
+	ID           int64   `json:"id"`
+	Name         string  `json:"name"`
+	Role         string  `json:"role"`
+	ImagePath    *string `json:"image_path,omitempty"`
+	CookCount    int     `json:"cook_count"`
+	LastCookedAt *string `json:"last_cooked_at,omitempty"`
+}
+
+type insightsResponse struct {
+	Forgotten  []componentSummary `json:"forgotten"`
+	MostCooked []componentSummary `json:"most_cooked"`
+}
+
+func toComponentSummary(c *component.Component) componentSummary {
+	s := componentSummary{
+		ID:        c.ID,
+		Name:      c.Name,
+		Role:      string(c.Role),
+		ImagePath: c.ImagePath,
+		CookCount: c.CookCount,
+	}
+	if c.LastCookedAt != nil {
+		str := c.LastCookedAt.Format(time.RFC3339)
+		s.LastCookedAt = &str
+	}
+	return s
+}
+
+// Insights handles GET /api/components/insights.
+func (h *ComponentHandler) Insights(w http.ResponseWriter, r *http.Request) {
+	q := component.InsightsQuery{}
+	if v := r.URL.Query().Get("forgotten_weeks"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			q.ForgottenWeeks = n
+		}
+	}
+	if v := r.URL.Query().Get("forgotten_limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			q.ForgottenLimit = n
+		}
+	}
+	if v := r.URL.Query().Get("most_cooked_limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			q.MostCookedLimit = n
+		}
+	}
+
+	out, err := h.svc.Insights(r.Context(), q)
+	if err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+
+	forgotten := make([]componentSummary, len(out.Forgotten))
+	for i := range out.Forgotten {
+		forgotten[i] = toComponentSummary(&out.Forgotten[i])
+	}
+	mostCooked := make([]componentSummary, len(out.MostCooked))
+	for i := range out.MostCooked {
+		mostCooked[i] = toComponentSummary(&out.MostCooked[i])
+	}
+
+	writeJSON(w, http.StatusOK, insightsResponse{Forgotten: forgotten, MostCooked: mostCooked})
+}
+
 // CreateVariant handles POST /api/components/{id}/variant.
 func (h *ComponentHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

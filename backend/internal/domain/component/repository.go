@@ -15,4 +15,5 @@ type Repository interface {
 	CreateVariantGroup(ctx context.Context, name string) (int64, error)
 	Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]Component, error)
 	MarkCooked(ctx context.Context, id int64, at time.Time) error
+	Insights(ctx context.Context, cutoff time.Time, forgottenLimit, mostCookedLimit int) (Insights, error)
 }

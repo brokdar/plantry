@@ -8,6 +8,7 @@ import {
   getWeekNutrition,
   copyWeek,
   createPlate,
+  listWeeks,
   type CopyWeekInput,
   type CreatePlateInput,
 } from "@/lib/api/weeks"
@@ -27,6 +28,13 @@ export function useWeek(id: number) {
     queryKey: weekKeys.byId(id),
     queryFn: () => getWeek(id),
     enabled: id > 0,
+  })
+}
+
+export function useWeeksList(limit: number, offset: number) {
+  return useQuery({
+    queryKey: weekKeys.list(limit, offset),
+    queryFn: () => listWeeks(limit, offset),
   })
 }
 

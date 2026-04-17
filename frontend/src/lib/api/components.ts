@@ -142,3 +142,38 @@ export function createVariant(id: number): Promise<Component> {
 export function listVariants(id: number): Promise<VariantListResponse> {
   return apiFetch(`/components/${id}/variants`)
 }
+
+export interface ComponentSummary {
+  id: number
+  name: string
+  role: string
+  image_path: string | null
+  cook_count: number
+  last_cooked_at: string | null
+}
+
+export interface InsightsResponse {
+  forgotten: ComponentSummary[]
+  most_cooked: ComponentSummary[]
+}
+
+export interface InsightsParams {
+  forgotten_weeks?: number
+  forgotten_limit?: number
+  most_cooked_limit?: number
+}
+
+export function getInsights(
+  params?: InsightsParams
+): Promise<InsightsResponse> {
+  const query = new URLSearchParams()
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        query.set(key, String(value))
+      }
+    })
+  }
+  const qs = query.toString()
+  return apiFetch(`/components/insights${qs ? `?${qs}` : ""}`)
+}

@@ -254,6 +254,30 @@ func (r *ComponentRepo) MarkCooked(ctx context.Context, id int64, at time.Time) 
 	})
 }
 
+func (r *ComponentRepo) Insights(ctx context.Context, cutoff time.Time, forgottenLimit, mostCookedLimit int) (component.Insights, error) {
+	forgottenRows, err := r.q.ListForgottenComponents(ctx, sqlcgen.ListForgottenComponentsParams{
+		LastCookedAt: sql.NullString{String: cutoff.UTC().Format(timeLayout), Valid: true},
+		Limit:        int64(forgottenLimit),
+	})
+	if err != nil {
+		return component.Insights{}, err
+	}
+	mostCookedRows, err := r.q.ListMostCookedComponents(ctx, int64(mostCookedLimit))
+	if err != nil {
+		return component.Insights{}, err
+	}
+
+	forgotten := make([]component.Component, len(forgottenRows))
+	for i := range forgottenRows {
+		mapComponentToDomain(&forgottenRows[i], &forgotten[i])
+	}
+	mostCooked := make([]component.Component, len(mostCookedRows))
+	for i := range mostCookedRows {
+		mapComponentToDomain(&mostCookedRows[i], &mostCooked[i])
+	}
+	return component.Insights{Forgotten: forgotten, MostCooked: mostCooked}, nil
+}
+
 func (r *ComponentRepo) Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]component.Component, error) {
 	rows, err := r.q.ListSiblingComponents(ctx, sqlcgen.ListSiblingComponentsParams{
 		VariantGroupID: sql.NullInt64{Int64: variantGroupID, Valid: true},
