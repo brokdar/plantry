@@ -26,6 +26,7 @@ type Handlers struct {
 	AI            *handlers.AIHandler
 	AIRateLimiter *plantrymw.RateLimiter
 	Feedback      *handlers.FeedbackHandler
+	Import        *handlers.ImportHandler
 	DevMode       bool // gates dev-only debug endpoints
 }
 
@@ -134,6 +135,14 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				}
 			})
 			api.Get("/settings/ai", h.AI.Settings)
+		}
+
+		if h.Import != nil {
+			api.Route("/import", func(r chi.Router) {
+				r.Post("/extract", h.Import.Extract)
+				r.Post("/resolve", h.Import.Resolve)
+				r.Get("/lookup", h.Import.LookupLine)
+			})
 		}
 
 		api.Route("/ingredients", func(r chi.Router) {

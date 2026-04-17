@@ -60,6 +60,12 @@ export const aiKeys = {
   settings: () => [...aiKeys.all, "settings"] as const,
 }
 
+export const importKeys = {
+  all: ["import"] as const,
+  lineLookup: (query: string) =>
+    [...importKeys.all, "line-lookup", query] as const,
+}
+
 export { lookupKeys } from "./lookup"
 export { portionKeys } from "./portions"
 export { imageKeys } from "./images"

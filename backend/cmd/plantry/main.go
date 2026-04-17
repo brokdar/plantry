@@ -19,7 +19,9 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/anthropic"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fdc"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/httpfetch"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/jsonld"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/off"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/openai"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
@@ -27,6 +29,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
@@ -119,6 +122,7 @@ func run() error {
 
 	// AI wiring (optional — disabled if PLANTRY_AI_PROVIDER is empty).
 	var aiHandler *handlers.AIHandler
+	var llmForImport llm.Client
 	if cfg.AIProvider != "" {
 		aiRepo := sqlite.NewAIRepo(conn)
 		var llmClient llm.Client
@@ -143,10 +147,16 @@ func run() error {
 		}
 		agentSvc := agent.NewService(aiRepo, llmClient, tools, plannerSvc, profileSvc, cfg.AIModel)
 		aiHandler = handlers.NewAIHandler(agentSvc, cfg.AIProvider, cfg.AIModel)
+		llmForImport = llmClient
 		logger.Info("ai.enabled", "provider", cfg.AIProvider, "model", cfg.AIModel)
 	} else {
 		aiHandler = handlers.NewAIHandler(nil, "", "")
 	}
+
+	// Recipe importer (Phase 11).
+	importFetcher := httpfetch.New()
+	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmForImport, cfg.AIModel, resolver)
+	importHandler := handlers.NewImportHandler(importSvc)
 
 	// Rate limiter for /api/ai/chat. Kept in main so its janitor goroutine
 	// can be wired to the server's shutdown signal.
@@ -165,6 +175,7 @@ func run() error {
 		AI:            aiHandler,
 		AIRateLimiter: aiRateLimiter,
 		Feedback:      handlers.NewFeedbackHandler(feedbackSvc),
+		Import:        importHandler,
 		DevMode:       cfg.DevMode,
 	}
 	handler := transport.NewRouter(logger, static, h)

@@ -5,7 +5,51 @@
     "ingredients": "Zutaten",
     "components": "Komponenten",
     "templates": "Vorlagen",
+    "import": "Import",
     "settings": "Einstellungen"
+  },
+  "import": {
+    "title": "Rezept importieren",
+    "subtitle": "Füge die URL eines Rezepts ein — wir machen eine Komponente daraus.",
+    "step1": {
+      "title": "Wo ist das Rezept?",
+      "url_label": "Rezept-URL",
+      "html_label": "Seiten-HTML",
+      "paste_html_toggle": "Stattdessen das Seiten-HTML einfügen",
+      "url_toggle": "Zurück zur URL-Eingabe",
+      "submit": "Rezept extrahieren"
+    },
+    "step2": {
+      "title": "Zutaten prüfen",
+      "ingredient_col": "Zutaten",
+      "amount": "Menge",
+      "unit": "Einheit",
+      "resolved_label": "Verknüpft",
+      "res_existing": "Mit Bibliothek verknüpfen",
+      "res_skip": "Überspringen",
+      "pick_match": "Passende Zutat auswählen",
+      "searching": "Suche…",
+      "no_match": "Keine Zutat in der Bibliothek gefunden.",
+      "not_in_library": "noch nicht in der Bibliothek",
+      "create_new": "Als neue Zutat anlegen",
+      "change": "Ändern",
+      "unparsed_warning": "Nicht geparst — bitte prüfen",
+      "llm_warning": "Mit KI extrahiert — bitte jede Zeile prüfen.",
+      "resolve_first_one": "{{count}} Zutat benötigt noch eine Zuordnung.",
+      "resolve_first_other": "{{count}} Zutaten benötigen noch eine Zuordnung."
+    },
+    "step3": {
+      "title": "Abschließen",
+      "name_label": "Komponentenname",
+      "role_label": "Rolle",
+      "portions_label": "Referenzportionen",
+      "save": "Komponente speichern"
+    },
+    "status": {
+      "extracting": "Extrahiere…",
+      "via_jsonld": "Aus strukturierten Daten",
+      "via_llm": "Mit KI extrahiert"
+    }
   },
   "home": {
     "title": "Willkommen bei Plantry",
@@ -261,6 +305,15 @@
       "tool_not_found": "Die AI hat versucht, ein unbekanntes Tool zu verwenden.",
       "iterations_exceeded": "Die AI hat zu viele Schritte gemacht — bitte formuliere die Anfrage einfacher.",
       "rate_limit_exceeded": "Zu viele AI-Anfragen. Bitte warte eine Minute."
+    },
+    "import": {
+      "fetch_failed": "Die Rezeptseite konnte nicht geladen werden. Füge stattdessen den Quelltext ein.",
+      "body_too_large": "Die Seite ist zu groß zum Importieren.",
+      "not_html": "Die URL liefert keine HTML-Seite.",
+      "no_recipe": "Auf dieser Seite wurde kein Rezept gefunden.",
+      "llm_failed": "Die KI konnte das Rezept nicht extrahieren.",
+      "invalid_url": "Ungültige URL.",
+      "invalid_resolution": "Ungültige Zutatenauswahl."
     }
   },
   "common": {

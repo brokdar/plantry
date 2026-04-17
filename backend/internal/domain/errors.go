@@ -18,4 +18,12 @@ var (
 
 	// Plate feedback errors.
 	ErrInvalidFeedbackStatus = errors.New("invalid feedback status")
+
+	// Import errors.
+	ErrImportFetchFailed       = errors.New("import fetch failed")
+	ErrImportBodyTooLarge      = errors.New("import body too large")
+	ErrImportNotHTML           = errors.New("import not html")
+	ErrImportNoRecipe          = errors.New("import no recipe found")
+	ErrImportLLMFailed         = errors.New("import llm extraction failed")
+	ErrImportInvalidResolution = errors.New("import invalid resolution")
 )

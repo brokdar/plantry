@@ -5,7 +5,51 @@
     "ingredients": "Ingredients",
     "components": "Components",
     "templates": "Templates",
+    "import": "Import",
     "settings": "Settings"
+  },
+  "import": {
+    "title": "Import recipe",
+    "subtitle": "Paste a recipe URL and we'll turn it into a component.",
+    "step1": {
+      "title": "Where is the recipe?",
+      "url_label": "Recipe URL",
+      "html_label": "Page HTML",
+      "paste_html_toggle": "Paste the page HTML instead",
+      "url_toggle": "Back to URL input",
+      "submit": "Extract recipe"
+    },
+    "step2": {
+      "title": "Review ingredients",
+      "ingredient_col": "Ingredients",
+      "amount": "Amount",
+      "unit": "Unit",
+      "resolved_label": "Linked",
+      "res_existing": "Link to library",
+      "res_skip": "Skip",
+      "pick_match": "Pick a match",
+      "searching": "Searching…",
+      "no_match": "No match in library.",
+      "not_in_library": "not in library",
+      "create_new": "Create as new ingredient",
+      "change": "change",
+      "unparsed_warning": "Could not parse — please review",
+      "llm_warning": "Extracted with AI — please review every row.",
+      "resolve_first_one": "{{count}} ingredient still needs a match.",
+      "resolve_first_other": "{{count}} ingredients still need a match."
+    },
+    "step3": {
+      "title": "Finalize",
+      "name_label": "Component name",
+      "role_label": "Role",
+      "portions_label": "Reference portions",
+      "save": "Save component"
+    },
+    "status": {
+      "extracting": "Extracting…",
+      "via_jsonld": "From structured data",
+      "via_llm": "Extracted with AI"
+    }
   },
   "home": {
     "title": "Welcome to Plantry",
@@ -249,6 +293,15 @@
       "tool_not_found": "The AI tried to use an unknown tool.",
       "iterations_exceeded": "The AI ran too many tool steps — try a simpler request.",
       "rate_limit_exceeded": "You're sending too many AI requests. Please wait a minute."
+    },
+    "import": {
+      "fetch_failed": "Could not load the recipe page. Try pasting the page source instead.",
+      "body_too_large": "The page is too large to import.",
+      "not_html": "The URL did not return an HTML page.",
+      "no_recipe": "No recipe was found on this page.",
+      "llm_failed": "AI could not extract the recipe.",
+      "invalid_url": "Invalid URL.",
+      "invalid_resolution": "Invalid ingredient resolution."
     }
   },
   "shopping": {

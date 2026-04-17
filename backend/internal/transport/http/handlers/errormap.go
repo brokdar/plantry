@@ -31,6 +31,18 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 		return http.StatusBadGateway, "error.ai.stream_interrupted"
 	case errors.Is(err, domain.ErrInvalidFeedbackStatus):
 		return http.StatusUnprocessableEntity, "error.plate.feedback_invalid_status"
+	case errors.Is(err, domain.ErrImportBodyTooLarge):
+		return http.StatusRequestEntityTooLarge, "error.import.body_too_large"
+	case errors.Is(err, domain.ErrImportNotHTML):
+		return http.StatusUnsupportedMediaType, "error.import.not_html"
+	case errors.Is(err, domain.ErrImportNoRecipe):
+		return http.StatusUnprocessableEntity, "error.import.no_recipe"
+	case errors.Is(err, domain.ErrImportFetchFailed):
+		return http.StatusBadGateway, "error.import.fetch_failed"
+	case errors.Is(err, domain.ErrImportLLMFailed):
+		return http.StatusBadGateway, "error.import.llm_failed"
+	case errors.Is(err, domain.ErrImportInvalidResolution):
+		return http.StatusUnprocessableEntity, "error.import.invalid_resolution"
 	default:
 		return http.StatusInternalServerError, "error.server"
 	}
