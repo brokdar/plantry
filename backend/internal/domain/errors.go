@@ -11,4 +11,8 @@ var (
 	ErrInvalidDay    = errors.New("invalid day")
 	ErrSlotUnknown   = errors.New("slot unknown")
 	ErrInvalidMacros = errors.New("invalid macros")
+
+	// AI / agent errors.
+	ErrAIProviderMissing   = errors.New("ai provider not configured")
+	ErrAIStreamInterrupted = errors.New("ai stream interrupted")
 )

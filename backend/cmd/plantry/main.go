@@ -16,13 +16,18 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/jaltszeimer/plantry/backend/db"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/anthropic"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fdc"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/off"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/openai"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/config"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -30,6 +35,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/template"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
+	plantrymw "github.com/jaltszeimer/plantry/backend/internal/transport/http/middleware"
 	"github.com/jaltszeimer/plantry/backend/internal/webui"
 )
 
@@ -107,16 +113,53 @@ func run() error {
 	templateRepo := sqlite.NewTemplateRepo(conn)
 	templateSvc := template.NewService(templateRepo, componentRepo, plateRepo, txRunner)
 
+	// AI wiring (optional — disabled if PLANTRY_AI_PROVIDER is empty).
+	var aiHandler *handlers.AIHandler
+	if cfg.AIProvider != "" {
+		aiRepo := sqlite.NewAIRepo(conn)
+		var llmClient llm.Client
+		switch cfg.AIProvider {
+		case "anthropic":
+			llmClient = anthropic.New(cfg.AIAPIKey)
+		case "openai":
+			llmClient = openai.New(cfg.AIAPIKey)
+		case "fake":
+			fc, err := fake.New(cfg.AIFakeScript)
+			if err != nil {
+				return fmt.Errorf("fake llm: %w", err)
+			}
+			llmClient = fc
+		}
+		tools, err := agent.NewToolSet(agent.Services{
+			Components: componentSvc, Planner: plannerSvc, Plates: plateSvc,
+			Profile: profileSvc, Slots: slotSvc, Ingredient: ingredientRepo,
+		})
+		if err != nil {
+			return fmt.Errorf("build tool set: %w", err)
+		}
+		agentSvc := agent.NewService(aiRepo, llmClient, tools, plannerSvc, profileSvc, cfg.AIModel)
+		aiHandler = handlers.NewAIHandler(agentSvc, cfg.AIProvider, cfg.AIModel)
+		logger.Info("ai.enabled", "provider", cfg.AIProvider, "model", cfg.AIModel)
+	} else {
+		aiHandler = handlers.NewAIHandler(nil, "", "")
+	}
+
+	// Rate limiter for /api/ai/chat. Kept in main so its janitor goroutine
+	// can be wired to the server's shutdown signal.
+	aiRateLimiter := plantrymw.NewRateLimiter(cfg.AIRateLimitPerMin)
+
 	h := transport.Handlers{
-		Ingredients: handlers.NewIngredientHandler(ingredientSvc),
-		Lookup:      handlers.NewLookupHandler(resolver, imgStore, ingredientSvc),
-		Images:      handlers.NewImageHandler(ingredientSvc, imgStore),
-		Components:  handlers.NewComponentHandler(componentSvc, imgStore),
-		Slots:       handlers.NewSlotHandler(slotSvc),
-		Weeks:       handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingredientRepo),
-		Plates:      handlers.NewPlateHandler(plateSvc),
-		Profile:     handlers.NewProfileHandler(profileSvc),
-		Templates:   handlers.NewTemplateHandler(templateSvc),
+		Ingredients:   handlers.NewIngredientHandler(ingredientSvc),
+		Lookup:        handlers.NewLookupHandler(resolver, imgStore, ingredientSvc),
+		Images:        handlers.NewImageHandler(ingredientSvc, imgStore),
+		Components:    handlers.NewComponentHandler(componentSvc, imgStore),
+		Slots:         handlers.NewSlotHandler(slotSvc),
+		Weeks:         handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingredientRepo),
+		Plates:        handlers.NewPlateHandler(plateSvc),
+		Profile:       handlers.NewProfileHandler(profileSvc),
+		Templates:     handlers.NewTemplateHandler(templateSvc),
+		AI:            aiHandler,
+		AIRateLimiter: aiRateLimiter,
 	}
 	handler := transport.NewRouter(logger, static, h)
 
@@ -128,6 +171,11 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Evict idle rate-limit buckets every 5 minutes, retain 30 minutes.
+	janitorStop := make(chan struct{})
+	go aiRateLimiter.StartJanitor(janitorStop, 5*time.Minute, 30*time.Minute)
+	defer close(janitorStop)
 
 	errCh := make(chan error, 1)
 	go func() {

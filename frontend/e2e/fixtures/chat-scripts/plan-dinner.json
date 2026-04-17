@@ -1,0 +1,70 @@
+{
+  "turns": [
+    {
+      "events": [
+        {
+          "delay_ms": 50,
+          "type": "message_start",
+          "payload": { "model": "fake-e2e" }
+        },
+        {
+          "delay_ms": 100,
+          "type": "assistant_delta",
+          "payload": { "text": "Let " }
+        },
+        {
+          "delay_ms": 100,
+          "type": "assistant_delta",
+          "payload": { "text": "me check your slots." }
+        },
+        {
+          "delay_ms": 200,
+          "type": "tool_call_start",
+          "payload": { "id": "tu_1", "name": "list_slots" }
+        },
+        {
+          "delay_ms": 200,
+          "type": "tool_call_delta",
+          "payload": { "id": "tu_1", "args_json": "{}" }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          { "type": "text", "text": "Let me check your slots." },
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_1",
+            "tool_name": "list_slots",
+            "tool_input": {}
+          }
+        ]
+      }
+    },
+    {
+      "events": [
+        {
+          "delay_ms": 100,
+          "type": "message_start",
+          "payload": { "model": "fake-e2e" }
+        },
+        {
+          "delay_ms": 200,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Here are your configured time slots. Once you pick one I can plan a plate."
+          }
+        }
+      ],
+      "stop_reason": "end_turn",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Here are your configured time slots. Once you pick one I can plan a plate."
+          }
+        ]
+      }
+    }
+  ]
+}

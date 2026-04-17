@@ -230,6 +230,13 @@
     },
     "template": {
       "in_use": "This template still references a missing component."
+    },
+    "ai": {
+      "provider_missing": "AI provider is not configured on the server.",
+      "stream_interrupted": "The AI stream was interrupted. Please try again.",
+      "tool_not_found": "The AI tried to use an unknown tool.",
+      "iterations_exceeded": "The AI ran too many tool steps — try a simpler request.",
+      "rate_limit_exceeded": "You're sending too many AI requests. Please wait a minute."
     }
   },
   "shopping": {
@@ -256,5 +263,34 @@
     "previous": "Previous",
     "next": "Next",
     "actions": "Actions"
+  },
+  "chat": {
+    "title": "AI Assistant",
+    "button": "Assistant",
+    "description": "Chatting with {{model}}",
+    "disabled": "AI assistant is disabled.",
+    "provider_missing": "No AI provider is configured. Set PLANTRY_AI_PROVIDER and restart.",
+    "composer": {
+      "placeholder": "Ask me to plan a day, swap a meal, or explain a macro…",
+      "aria_label": "Message to the AI",
+      "send": "Send (Ctrl+Enter)",
+      "abort": "Stop",
+      "mode_label": "Mode",
+      "mode": {
+        "default": "Default",
+        "fill_empty": "Fill empty slots only",
+        "replace_all": "Replace the whole week"
+      }
+    },
+    "new_conversation": "New conversation",
+    "tool": {
+      "args": "arguments",
+      "status": {
+        "pending": "queued",
+        "running": "running…",
+        "ok": "done",
+        "error": "failed"
+      }
+    }
   }
 }

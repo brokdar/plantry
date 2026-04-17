@@ -727,21 +727,24 @@ POST   /api/templates/{id}/apply                    body: {plate_id} → fills p
 GET    /api/profile                                 read singleton
 PUT    /api/profile                                 update (targets, restrictions, system_prompt, locale)
 
-GET    /api/settings                                all tech settings
-PUT    /api/settings/{key}                          update one (body: {value})
 GET    /api/settings/slots                          time slots
 POST   /api/settings/slots                          create
 PUT    /api/settings/slots/{id}                     update
 DELETE /api/settings/slots/{id}                     delete (409 if used by plates)
-GET    /api/settings/ai/models                      provider model list (proxy)
+GET    /api/settings/ai                             read current AI config: {enabled, provider, model}
 ```
+
+**Deferred (post-v1):** generic `PUT /api/settings/{key}` and `PUT /api/settings/{provider|model|api_key}` plus `GET /api/settings/ai/models` (provider-list proxy). AI provider/model/API key come exclusively from `PLANTRY_AI_*` env vars at process startup; changing them requires a restart.
 
 #### AI
 
 ```
-POST   /api/ai/chat                                 SSE stream
-                                                    body: {week_id, mode, messages}
-                                                    events: assistant, tool_call, tool_result,
+POST   /api/ai/chat                                 SSE stream (rate-limited, default 10 req/min per IP)
+                                                    body: {conversation_id?, week_id?, mode, message}
+                                                    events: conversation_ready, message_start,
+                                                            assistant_delta, tool_call_start,
+                                                            tool_call_delta, tool_exec_start,
+                                                            tool_exec_end, tool_result,
                                                             plate_changed, done, error
 
 GET    /api/ai/conversations?week_id=               list (metadata only)

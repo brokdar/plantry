@@ -52,6 +52,14 @@ export const templateKeys = {
   detail: (id: number) => [...templateKeys.details(), id] as const,
 }
 
+export const aiKeys = {
+  all: ["ai"] as const,
+  conversations: (weekId?: number) =>
+    [...aiKeys.all, "conversations", { weekId }] as const,
+  conversation: (id: number) => [...aiKeys.all, "conversation", id] as const,
+  settings: () => [...aiKeys.all, "settings"] as const,
+}
+
 export { lookupKeys } from "./lookup"
 export { portionKeys } from "./portions"
 export { imageKeys } from "./images"

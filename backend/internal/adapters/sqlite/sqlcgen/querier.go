@@ -10,6 +10,9 @@ import (
 )
 
 type Querier interface {
+	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
+	CountConversations(ctx context.Context) (int64, error)
+	CountConversationsByWeek(ctx context.Context, weekID sql.NullInt64) (int64, error)
 	CountPlatesUsingComponent(ctx context.Context, componentID int64) (int64, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 	CountTemplatesUsingComponent(ctx context.Context, componentID int64) (int64, error)
@@ -18,6 +21,7 @@ type Querier interface {
 	CreateComponentIngredient(ctx context.Context, arg CreateComponentIngredientParams) error
 	CreateComponentInstruction(ctx context.Context, arg CreateComponentInstructionParams) error
 	CreateComponentTag(ctx context.Context, arg CreateComponentTagParams) error
+	CreateConversation(ctx context.Context, arg CreateConversationParams) (AiConversation, error)
 	CreateIngredient(ctx context.Context, arg CreateIngredientParams) (Ingredient, error)
 	CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate, error)
 	CreatePlateComponent(ctx context.Context, arg CreatePlateComponentParams) (PlateComponent, error)
@@ -30,6 +34,7 @@ type Querier interface {
 	DeleteComponentIngredients(ctx context.Context, componentID int64) error
 	DeleteComponentInstructions(ctx context.Context, componentID int64) error
 	DeleteComponentTags(ctx context.Context, componentID int64) error
+	DeleteConversation(ctx context.Context, id int64) (sql.Result, error)
 	DeleteIngredient(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlate(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateComponent(ctx context.Context, id int64) (sql.Result, error)
@@ -38,6 +43,7 @@ type Querier interface {
 	DeleteTemplateComponentsByTemplate(ctx context.Context, templateID int64) (sql.Result, error)
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
 	GetComponent(ctx context.Context, id int64) (Component, error)
+	GetConversation(ctx context.Context, id int64) (AiConversation, error)
 	GetIngredient(ctx context.Context, id int64) (Ingredient, error)
 	GetPlate(ctx context.Context, id int64) (Plate, error)
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
@@ -50,6 +56,9 @@ type Querier interface {
 	ListComponentIngredients(ctx context.Context, componentID int64) ([]ComponentIngredient, error)
 	ListComponentInstructions(ctx context.Context, componentID int64) ([]ComponentInstruction, error)
 	ListComponentTags(ctx context.Context, componentID int64) ([]ComponentTag, error)
+	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
+	ListConversationsByWeek(ctx context.Context, arg ListConversationsByWeekParams) ([]AiConversation, error)
+	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]PlateComponent, error)
 	ListPlateComponentsByWeek(ctx context.Context, weekID int64) ([]PlateComponent, error)
 	ListPlatesByWeek(ctx context.Context, weekID int64) ([]Plate, error)
@@ -62,7 +71,9 @@ type Querier interface {
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)
+	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	UpdateComponent(ctx context.Context, arg UpdateComponentParams) (Component, error)
+	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (AiConversation, error)
 	UpdateIngredient(ctx context.Context, arg UpdateIngredientParams) (Ingredient, error)
 	UpdatePlate(ctx context.Context, arg UpdatePlateParams) (Plate, error)
 	UpdatePlateComponent(ctx context.Context, arg UpdatePlateComponentParams) (PlateComponent, error)

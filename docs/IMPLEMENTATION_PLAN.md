@@ -298,9 +298,9 @@ Never skip steps. Never write "implementation first, tests later." If a test is 
   - `list_components`, `get_component`
   - `get_week`, `get_week_nutrition`, `get_profile`
   - `create_plate`, `add_component_to_plate`, `swap_component`, `update_plate_component`, `remove_plate_component`, `delete_plate`, `clear_week`
-- Transport: `POST /api/ai/chat` SSE stream emitting `assistant`, `tool_call`, `tool_result`, `plate_changed`, `done`, `error`
-- AI settings endpoints: `PUT /api/settings/{provider|model|api_key}`, `GET /api/settings/ai/models` (proxies provider model list)
-- Migration `00008_ai.sql`: `ai_conversations`, `ai_messages`
+- Transport: `POST /api/ai/chat` SSE stream emitting `conversation_ready`, `message_start`, `assistant_delta`, `tool_call_start`, `tool_call_delta`, `tool_exec_start`, `tool_exec_end`, `tool_result`, `plate_changed`, `done`, `error`
+- AI settings are **env-only for v1**: provider/model/API key are read from `PLANTRY_AI_PROVIDER`, `PLANTRY_AI_MODEL`, `PLANTRY_AI_API_KEY` at startup. `GET /api/settings/ai` returns `{enabled, provider, model}` (no API key) so the UI can show what's active. **Deferred to a later phase:** `PUT /api/settings/{provider|model|api_key}` (runtime reconfiguration) and `GET /api/settings/ai/models` (provider-list proxy). For a self-hosted household app, restarting the container to change provider is acceptable.
+- Migration `00008_ai.sql`: `ai_conversations`, `ai_messages` (with `role IN ('system','user','assistant','tool','error')` so stream failures stay in the transcript).
 - Frontend: `ChatPanel` (slide-over on planner), `ChatMessage`, `ToolCallBlock`, SSE reader in `lib/api/ai.ts`, `useChatStream` hook in `lib/queries/ai.ts` owning the reader lifetime
 - `useChatStream` invalidates `qk.weeks.byId(weekId)`, `qk.weeks.nutrition(weekId)` and `qk.weeks.shoppingList(weekId)` on every `plate_changed` event — TanStack Query refetches automatically
 - Ephemeral chat UI state (draft message, panel open) lives in `lib/stores/chat-ui.ts` Zustand store; conversation history is a TanStack Query
@@ -315,7 +315,14 @@ Never skip steps. Never write "implementation first, tests later." If a test is 
 4. Frontend unit: SSE buffer parser handles split chunks, interleaved events
 5. e2e: `ai-chat.spec.ts` — intercept /api/ai/chat and replay a canned SSE stream, verify UI shows assistant message, tool blocks, and that the planner grid updates to reflect the "created" plate
 
-**Acceptance:** with a mocked backend stream, a user asks the agent to plan Tuesday dinner and sees the plan appear in the grid in real time.
+**Acceptance:** with the in-process `fake` LLM provider (`PLANTRY_AI_PROVIDER=fake` + a fixture script), a user asks the agent to plan Tuesday dinner and sees the assistant text stream in, tool-call cards transition `running → ok`, and the planner grid refreshes on `plate_changed`.
+
+**Out of scope for Phase 9 v1 (deferred):**
+
+- `PUT /api/settings/{provider|model|api_key}` and `GET /api/settings/ai/models`: runtime provider reconfiguration. Workaround: set env vars and restart.
+- Parallel tool execution inside a single agent turn: v1 executes tools sequentially. The tool handlers wrap already-transactional domain services, so parallel is additive later.
+- OpenAI Responses API (`POST /v1/responses`) with `previous_response_id`: v1 uses Chat Completions with stateless history replay for provider-portable code.
+- Per-user/per-conversation token budget: only per-IP rate limit (`PLANTRY_AI_RATE_LIMIT_PER_MIN`, default 10) guards cost.
 
 ---
 

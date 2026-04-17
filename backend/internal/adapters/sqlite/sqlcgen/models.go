@@ -8,6 +8,22 @@ import (
 	"database/sql"
 )
 
+type AiConversation struct {
+	ID        int64
+	WeekID    sql.NullInt64
+	Title     sql.NullString
+	CreatedAt string
+	UpdatedAt string
+}
+
+type AiMessage struct {
+	ID             int64
+	ConversationID int64
+	Role           string
+	Content        string
+	CreatedAt      string
+}
+
 type Component struct {
 	ID                int64
 	Name              string

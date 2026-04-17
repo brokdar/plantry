@@ -9,19 +9,22 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
+	plantrymw "github.com/jaltszeimer/plantry/backend/internal/transport/http/middleware"
 )
 
 // Handlers groups all per-aggregate HTTP handlers for route registration.
 type Handlers struct {
-	Ingredients *handlers.IngredientHandler
-	Lookup      *handlers.LookupHandler
-	Images      *handlers.ImageHandler
-	Components  *handlers.ComponentHandler
-	Slots       *handlers.SlotHandler
-	Weeks       *handlers.WeekHandler
-	Plates      *handlers.PlateHandler
-	Profile     *handlers.ProfileHandler
-	Templates   *handlers.TemplateHandler
+	Ingredients   *handlers.IngredientHandler
+	Lookup        *handlers.LookupHandler
+	Images        *handlers.ImageHandler
+	Components    *handlers.ComponentHandler
+	Slots         *handlers.SlotHandler
+	Weeks         *handlers.WeekHandler
+	Plates        *handlers.PlateHandler
+	Profile       *handlers.ProfileHandler
+	Templates     *handlers.TemplateHandler
+	AI            *handlers.AIHandler
+	AIRateLimiter *plantrymw.RateLimiter
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -105,6 +108,23 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Post("/apply", h.Templates.Apply)
 				})
 			})
+		}
+
+		if h.AI != nil {
+			limiter := h.AIRateLimiter
+			if limiter == nil {
+				limiter = plantrymw.NewRateLimiter(0) // disabled fallback
+			}
+			api.Route("/ai", func(r chi.Router) {
+				r.With(limiter.Middleware("error.ai.rate_limit_exceeded")).
+					Post("/chat", h.AI.Chat)
+				r.Get("/conversations", h.AI.ListConversations)
+				r.Route("/conversations/{id}", func(r chi.Router) {
+					r.Get("/", h.AI.GetConversation)
+					r.Delete("/", h.AI.DeleteConversation)
+				})
+			})
+			api.Get("/settings/ai", h.AI.Settings)
 		}
 
 		api.Route("/ingredients", func(r chi.Router) {

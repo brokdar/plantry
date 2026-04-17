@@ -5,11 +5,12 @@ import {
   setISOWeek,
   setISOWeekYear,
 } from "date-fns"
-import { BarChart2, Settings, ShoppingCart } from "lucide-react"
+import { BarChart2, Settings, ShoppingCart, Sparkles } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
 
+import { ChatPanel } from "@/components/chat/ChatPanel"
 import { NutritionWeekSummary } from "@/components/planner/NutritionWeekSummary"
 import { PlannerGrid } from "@/components/planner/PlannerGrid"
 import { ShoppingPanel } from "@/components/planner/ShoppingPanel"
@@ -23,6 +24,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { ApiError } from "@/lib/api/client"
+import { useAISettings } from "@/lib/queries/ai"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { useCopyWeek, useWeekByDate } from "@/lib/queries/weeks"
 
@@ -47,10 +49,12 @@ function PlannerPage() {
   const [{ year, week }, setYearWeek] = useState(nowYearWeek)
   const [shoppingOpen, setShoppingOpen] = useState(false)
   const [nutritionOpen, setNutritionOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
 
   const slotsQuery = useTimeSlots(true)
   const weekQuery = useWeekByDate(year, week)
   const copyMut = useCopyWeek()
+  const { data: aiSettings } = useAISettings()
 
   const slots = slotsQuery.data?.items ?? []
 
@@ -121,6 +125,17 @@ function PlannerPage() {
             <BarChart2 className="mr-1.5 h-4 w-4" />
             {t("nutrition.button")}
           </Button>
+          {aiSettings?.enabled && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setChatOpen(true)}
+              data-testid="chat-open-button"
+            >
+              <Sparkles className="mr-1.5 h-4 w-4" />
+              {t("chat.button")}
+            </Button>
+          )}
           <WeekNavigator
             year={week_.year}
             weekNumber={week_.week_number}
@@ -149,6 +164,8 @@ function PlannerPage() {
           <NutritionWeekSummary weekId={week_.id} />
         </SheetContent>
       </Sheet>
+
+      <ChatPanel weekId={week_.id} open={chatOpen} onOpenChange={setChatOpen} />
     </div>
   )
 }

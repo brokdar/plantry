@@ -242,6 +242,13 @@
     },
     "template": {
       "in_use": "Diese Vorlage verweist noch auf eine fehlende Komponente."
+    },
+    "ai": {
+      "provider_missing": "Kein AI-Anbieter auf dem Server konfiguriert.",
+      "stream_interrupted": "Der AI-Stream wurde unterbrochen. Bitte versuche es erneut.",
+      "tool_not_found": "Die AI hat versucht, ein unbekanntes Tool zu verwenden.",
+      "iterations_exceeded": "Die AI hat zu viele Schritte gemacht — bitte formuliere die Anfrage einfacher.",
+      "rate_limit_exceeded": "Zu viele AI-Anfragen. Bitte warte eine Minute."
     }
   },
   "common": {
@@ -256,5 +263,34 @@
     "previous": "Zurück",
     "next": "Weiter",
     "actions": "Aktionen"
+  },
+  "chat": {
+    "title": "KI-Assistent",
+    "button": "Assistent",
+    "description": "Unterhaltung mit {{model}}",
+    "disabled": "KI-Assistent ist deaktiviert.",
+    "provider_missing": "Kein KI-Anbieter konfiguriert. Setze PLANTRY_AI_PROVIDER und starte neu.",
+    "composer": {
+      "placeholder": "Bitte plane einen Tag, tausche eine Mahlzeit oder erkläre ein Makro…",
+      "aria_label": "Nachricht an die KI",
+      "send": "Senden (Strg+Enter)",
+      "abort": "Stopp",
+      "mode_label": "Modus",
+      "mode": {
+        "default": "Standard",
+        "fill_empty": "Nur leere Slots füllen",
+        "replace_all": "Ganze Woche ersetzen"
+      }
+    },
+    "new_conversation": "Neue Unterhaltung",
+    "tool": {
+      "args": "Argumente",
+      "status": {
+        "pending": "wartet",
+        "running": "läuft…",
+        "ok": "erledigt",
+        "error": "fehlgeschlagen"
+      }
+    }
   }
 }
