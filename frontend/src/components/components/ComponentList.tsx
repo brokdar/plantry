@@ -1,7 +1,13 @@
 import { useState, useDeferredValue } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
-import { MoreVertical, Plus, UtensilsCrossed } from "lucide-react"
+import {
+  Bookmark,
+  Download,
+  MoreHorizontal,
+  MoreVertical,
+  Plus,
+} from "lucide-react"
 
 import { EditorialCard } from "@/components/editorial/EditorialCard"
 import { EmptyCreateCard } from "@/components/editorial/EmptyCreateCard"
@@ -9,6 +15,10 @@ import {
   FilterChipGroup,
   type FilterChipOption,
 } from "@/components/editorial/FilterChipGroup"
+import {
+  FoodPlaceholder,
+  type FoodPlaceholderCategory,
+} from "@/components/editorial/FoodPlaceholder"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,6 +43,7 @@ import {
   useDeleteComponent,
   useInsights,
 } from "@/lib/queries/components"
+import { imageURL } from "@/lib/image-url"
 import { COMPONENT_ROLES } from "@/lib/schemas/component"
 
 const PAGE_SIZE = 20
@@ -81,13 +92,47 @@ export function ComponentList() {
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 md:px-8 md:py-12">
       <PageHeader
         title={t("component.title")}
+        description={t("component.subtitle")}
         actions={
-          <Button asChild>
-            <Link to="/components/new">
-              <Plus className="mr-1.5 size-4" aria-hidden />
-              {t("component.create")}
-            </Link>
-          </Button>
+          <>
+            <Button
+              asChild
+              className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
+            >
+              <Link to="/components/new">
+                <Plus className="mr-1.5 size-4" aria-hidden />
+                {t("component.create")}
+              </Link>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t("common.actions")}
+                  data-testid="catalog-secondary-actions"
+                >
+                  <MoreHorizontal className="size-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => navigate({ to: "/import" })}
+                  data-testid="catalog-menu-import"
+                >
+                  <Download className="size-4" />
+                  {t("component.import_from_url")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => navigate({ to: "/templates" })}
+                  data-testid="catalog-menu-templates"
+                >
+                  <Bookmark className="size-4" />
+                  {t("component.browse_templates")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
         }
       />
 
@@ -145,17 +190,20 @@ export function ComponentList() {
                     className="absolute inset-0 z-0"
                     aria-label={item.name}
                   />
-                  <EditorialCard.Image
-                    src={item.image_path ?? undefined}
-                    alt={item.name}
-                  >
-                    {!item.image_path && (
-                      <UtensilsCrossed
-                        className="size-10 text-on-surface-variant/30"
-                        aria-hidden
-                      />
-                    )}
-                  </EditorialCard.Image>
+                  {item.image_path ? (
+                    <EditorialCard.Image
+                      src={imageURL(item.image_path, item.updated_at)}
+                      alt={item.name}
+                    />
+                  ) : (
+                    <FoodPlaceholder
+                      category={
+                        item.role as FoodPlaceholderCategory | undefined
+                      }
+                      className="m-2 aspect-[4/3] w-[calc(100%-1rem)]"
+                      aria-label={item.name}
+                    />
+                  )}
                   <EditorialCard.Body>
                     <div className="flex items-start gap-2">
                       <EditorialCard.Title className="flex-1">

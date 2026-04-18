@@ -24,7 +24,7 @@ describe("IngredientList", () => {
     vi.mocked(listIngredients).mockReturnValue(new Promise(() => {}))
     renderWithRouter(<IngredientList />, "/ingredients")
 
-    await screen.findByRole("heading", { name: "Ingredients" })
+    await screen.findByRole("heading", { name: "The Pantry Archive" })
 
     // Table should not be rendered while loading
     expect(screen.queryByRole("table")).not.toBeInTheDocument()
@@ -49,7 +49,7 @@ describe("IngredientList", () => {
 
     await screen.findByText("Chicken breast")
 
-    const searchInput = screen.getByPlaceholderText("Search ingredients...")
+    const searchInput = screen.getByPlaceholderText("Search the archive…")
     await user.type(searchInput, "xyz")
 
     expect(await screen.findByText("No ingredients found.")).toBeInTheDocument()

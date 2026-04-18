@@ -212,6 +212,34 @@ func validComponent() *component.Component {
 
 // --- tests ---
 
+type fakeImageDeleter struct {
+	calls []string
+}
+
+func (f *fakeImageDeleter) Delete(category string, id int64) error {
+	f.calls = append(f.calls, fmt.Sprintf("%s/%d", category, id))
+	return nil
+}
+
+func TestDelete_CleansUpImage(t *testing.T) {
+	svc, _, _, _ := newService()
+	deleter := &fakeImageDeleter{}
+	svc.WithImageStore(deleter)
+
+	c := validComponent()
+	require.NoError(t, svc.Create(context.Background(), c))
+	require.NoError(t, svc.Delete(context.Background(), c.ID))
+
+	assert.Equal(t, []string{fmt.Sprintf("components/%d", c.ID)}, deleter.calls)
+}
+
+func TestDelete_WithoutImageStore_NoPanic(t *testing.T) {
+	svc, _, _, _ := newService()
+	c := validComponent()
+	require.NoError(t, svc.Create(context.Background(), c))
+	require.NoError(t, svc.Delete(context.Background(), c.ID))
+}
+
 func TestCreate_AssignsID(t *testing.T) {
 	svc, _, _, _ := newService()
 	c := validComponent()

@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MacroFieldSet } from "./MacroFieldSet"
 import { LookupPanel } from "./LookupPanel"
-import { ImageUpload } from "./ImageUpload"
+import { ImageField } from "@/components/images/ImageField"
 import { PortionsEditor } from "./PortionsEditor"
 import {
   ingredientSchema,
@@ -205,12 +205,11 @@ export function IngredientEditor({
       <IngredientForm form={form} isPending={isPending} onSubmit={onSubmit}>
         {ingredient && (
           <div className="space-y-6 border-t pt-6">
-            <ImageUpload
-              ingredientId={ingredient.id}
+            <ImageField
+              entityType="ingredients"
+              entityId={ingredient.id}
               currentImagePath={ingredient.image_path}
-              onImageChange={() => {
-                // Image is managed server-side; no form field update needed
-              }}
+              onImageChange={() => {}}
             />
             <PortionsEditor ingredientId={ingredient.id} />
           </div>

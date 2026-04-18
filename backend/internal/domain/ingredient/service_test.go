@@ -372,6 +372,43 @@ func TestDeletePortion_NotFound(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 }
 
+type fakeImageDeleter struct {
+	calls []string
+}
+
+func (f *fakeImageDeleter) Delete(category string, id int64) error {
+	f.calls = append(f.calls, fmt.Sprintf("%s/%d", category, id))
+	return nil
+}
+
+func TestDelete_CleansUpImage(t *testing.T) {
+	repo := newFakeRepo()
+	deleter := &fakeImageDeleter{}
+	svc := ingredient.NewService(repo).WithImageStore(deleter)
+
+	require.NoError(t, svc.Create(context.Background(), &ingredient.Ingredient{Name: "Rice"}))
+	require.NoError(t, svc.Delete(context.Background(), 1))
+
+	assert.Equal(t, []string{"ingredients/1"}, deleter.calls)
+}
+
+func TestDelete_WithoutImageStore_NoPanic(t *testing.T) {
+	repo := newFakeRepo()
+	svc := ingredient.NewService(repo)
+	require.NoError(t, svc.Create(context.Background(), &ingredient.Ingredient{Name: "Rice"}))
+	require.NoError(t, svc.Delete(context.Background(), 1))
+}
+
+func TestDelete_RepoErrorSkipsImageDelete(t *testing.T) {
+	repo := newFakeRepo()
+	deleter := &fakeImageDeleter{}
+	svc := ingredient.NewService(repo).WithImageStore(deleter)
+
+	err := svc.Delete(context.Background(), 9999)
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+	assert.Empty(t, deleter.calls)
+}
+
 func TestUpsertPortion_OverwritesExisting(t *testing.T) {
 	repo := newFakeRepo()
 	svc := ingredient.NewService(repo)

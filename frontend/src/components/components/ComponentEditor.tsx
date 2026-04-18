@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { NutritionPreview } from "./NutritionPreview"
+import { ImageField } from "@/components/images/ImageField"
 import {
   componentSchema,
   COMPONENT_ROLES,
@@ -419,6 +420,18 @@ export function ComponentEditor({
             ingredients={watchedIngredients}
             referencePortions={watchedPortions}
           />
+        )}
+
+        {isEdit && component && (
+          <div className="space-y-3 border-t pt-6">
+            <h3 className="text-sm font-medium">{t("image.section_title")}</h3>
+            <ImageField
+              entityType="components"
+              entityId={component.id}
+              currentImagePath={component.image_path}
+              onImageChange={() => {}}
+            />
+          </div>
         )}
 
         {/* Actions */}

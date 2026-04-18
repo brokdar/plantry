@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 
 import { PageHeader } from "@/components/editorial/PageHeader"
+import { DisplayPreferences } from "@/components/settings/DisplayPreferences"
 import { ProfileEditor } from "@/components/settings/ProfileEditor"
 import { TimeSlotsEditor } from "@/components/settings/TimeSlotsEditor"
 
@@ -13,13 +14,17 @@ function SettingsPage() {
   const { t } = useTranslation()
 
   return (
-    <div className="mx-auto max-w-5xl space-y-10 px-4 py-8 md:px-8 md:py-12">
-      <PageHeader title={t("nav.settings")} />
-      <div className="grid gap-10 lg:grid-cols-12">
-        <section className="space-y-6 lg:col-span-7">
+    <div className="mx-auto max-w-6xl space-y-10 px-4 py-8 md:px-8 md:py-12">
+      <PageHeader
+        title={t("settings_page.title")}
+        description={t("settings_page.subtitle")}
+      />
+      <div className="grid gap-8 lg:grid-cols-12">
+        <section className="lg:col-span-7">
           <TimeSlotsEditor />
         </section>
         <section className="space-y-6 lg:col-span-5">
+          <DisplayPreferences />
           <ProfileEditor />
         </section>
       </div>

@@ -17,6 +17,7 @@ type Handlers struct {
 	Ingredients   *handlers.IngredientHandler
 	Lookup        *handlers.LookupHandler
 	Images        *handlers.ImageHandler
+	ImageProxy    *handlers.ImageProxyHandler
 	Components    *handlers.ComponentHandler
 	Slots         *handlers.SlotHandler
 	Weeks         *handlers.WeekHandler
@@ -136,6 +137,10 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				}
 			})
 			api.Get("/settings/ai", h.AI.Settings)
+		}
+
+		if h.ImageProxy != nil {
+			api.Post("/image/fetch-url", h.ImageProxy.Fetch)
 		}
 
 		if h.Import != nil {

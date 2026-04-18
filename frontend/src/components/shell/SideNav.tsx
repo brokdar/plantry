@@ -1,9 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import {
   BookOpen,
-  Bookmark,
   CalendarDays,
-  Download,
   History,
   Leaf,
   Package,
@@ -28,11 +26,9 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", labelKey: "nav.planner", icon: CalendarDays, exact: true },
-  { to: "/components", labelKey: "nav.components", icon: BookOpen },
-  { to: "/ingredients", labelKey: "nav.ingredients", icon: Package },
-  { to: "/templates", labelKey: "nav.templates", icon: Bookmark },
-  { to: "/import", labelKey: "nav.import", icon: Download },
-  { to: "/archive", labelKey: "nav.archive", icon: History },
+  { to: "/components", labelKey: "nav.recipes", icon: BookOpen },
+  { to: "/ingredients", labelKey: "nav.pantry", icon: Package },
+  { to: "/archive", labelKey: "nav.past_weeks", icon: History },
   { to: "/settings", labelKey: "nav.settings", icon: Settings },
 ]
 

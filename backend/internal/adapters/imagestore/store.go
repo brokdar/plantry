@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	_ "image/gif"
 	"io"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
+	_ "golang.org/x/image/webp"
 )
 
 const (
@@ -83,7 +85,7 @@ func (s *Store) BasePath() string {
 }
 
 func (s *Store) processAndSave(r io.Reader, category string, id int64) (string, error) {
-	img, err := imaging.Decode(r)
+	img, err := imaging.Decode(r, imaging.AutoOrientation(true))
 	if err != nil {
 		return "", fmt.Errorf("decode image: %w", err)
 	}

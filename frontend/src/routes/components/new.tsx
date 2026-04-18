@@ -14,7 +14,11 @@ function NewComponentPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 md:px-8 md:py-12">
-      <PageHeader title={t("component.create")} />
+      <PageHeader
+        eyebrow={t("component.edit_eyebrow")}
+        title={t("component.new_title")}
+        description={t("component.new_subtitle")}
+      />
       <ComponentEditor onSuccess={() => navigate({ to: "/components" })} />
     </div>
   )

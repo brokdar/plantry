@@ -73,11 +73,11 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Botanical Atelier palette — hex matches docs/stitch-design/*/
-code.html verbatim. Surface ladder,
-sage primary,
-charcoal text,
-tertiary cool-blue accent. */ :root {
+/*
+  Botanical Atelier palette — hex matches docs/stitch-design code.html verbatim.
+  Surface ladder, sage primary, charcoal text, tertiary cool-blue accent.
+*/
+:root {
   --surface: #f9f9f8;
   --surface-container-lowest: #ffffff;
   --surface-container-low: #f3f4f3;

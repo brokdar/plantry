@@ -3,19 +3,26 @@
     "brand": "Plantry",
     "atelier_tagline": "Editorial Nourishment",
     "generate_plan": "Generate Plan",
-    "planner": "Planner",
+    "planner": "Weekly Planner",
     "ingredients": "Ingredients",
+    "recipes": "Recipes",
+    "pantry": "Pantry",
     "components": "Components",
     "templates": "Templates",
     "import": "Import",
     "archive": "Archive",
+    "past_weeks": "Past Weeks",
     "settings": "Settings",
     "search_placeholder": "Search the catalog…"
   },
   "archive": {
-    "title": "Archive",
-    "subtitle": "Browse past weeks.",
+    "title": "Historical Collections",
+    "subtitle": "A curated archive of your seasonal journeys. Revisit past nourishments and integrate them into your current week.",
     "empty": "No archived weeks yet.",
+    "end_of_journey": "End of your journey",
+    "end_of_journey_body": "You've reached the beginning of your Botanical Atelier journey.",
+    "load_more": "Load more history",
+    "meals_total": "{{count}} total meals",
     "week_label": "Week {{week}}, {{year}}",
     "back": "Back to archive",
     "forgotten": "Forgotten",
@@ -81,6 +88,7 @@
     "next_week": "Next week",
     "this_week": "This week",
     "copy_week": "Copy week to next",
+    "daily_avg": "Daily Average",
     "copy_success": "Week copied",
     "generate_prompt": "Plan my week based on my goals and time slots.",
     "empty_state_no_slots_title": "Set up your time slots first",
@@ -120,8 +128,20 @@
       "save_note": "Save note"
     }
   },
+  "settings_page": {
+    "title": "Workspace Preferences",
+    "subtitle": "Tailor your digital kitchen sanctuary to match your culinary workflow. These settings adjust how your editorial nourishment plan is curated and presented."
+  },
+  "display_preferences": {
+    "title": "Display Preferences",
+    "theme_label": "Theme",
+    "theme_description": "Choose between the editorial light palette and a dimmed evening mode.",
+    "theme_light": "Light",
+    "theme_dark": "Dark",
+    "theme_system": "System"
+  },
   "slot": {
-    "title": "Time slots",
+    "title": "Meal Slots",
     "description": "Define the meal times you plan around.",
     "add_slot": "Add time slot",
     "name_key_label": "Translation key",
@@ -139,9 +159,15 @@
     "snack": "Snack"
   },
   "ingredient": {
-    "title": "Ingredients",
+    "title": "The Pantry Archive",
+    "subtitle": "A curated database of your botanical essentials, meticulously tracked for artisanal nourishment.",
     "create": "New Ingredient",
     "edit": "Edit Ingredient",
+    "edit_eyebrow": "Editor",
+    "edit_title": "Ingredient Editor",
+    "edit_subtitle": "Refine the essence of your culinary palette.",
+    "new_title": "New Ingredient",
+    "new_subtitle": "Add a new pantry essential to your botanical atelier.",
     "name": "Name",
     "name_placeholder": "e.g. Chicken breast",
     "kcal": "Calories (kcal)",
@@ -152,7 +178,7 @@
     "sodium": "Sodium (mg)",
     "per_100g": "per 100 g",
     "macros": "Nutrition per 100 g",
-    "search_placeholder": "Search ingredients...",
+    "search_placeholder": "Search the archive…",
     "delete_confirm_title": "Delete ingredient?",
     "delete_confirm_body": "This action cannot be undone.",
     "no_results": "No ingredients found.",
@@ -163,10 +189,18 @@
     "source_fdc": "USDA"
   },
   "component": {
-    "title": "Components",
-    "create": "New Component",
-    "edit": "Edit Component",
-    "view": "Component Details",
+    "title": "Recipe Catalog",
+    "subtitle": "Curated nourishment for your digital kitchen sanctuary. Explore seasonal flavors and mindful preparations.",
+    "create": "New Recipe",
+    "edit": "Edit Recipe",
+    "edit_eyebrow": "Editor",
+    "edit_title": "Refining Your Creation",
+    "edit_subtitle": "Adjust the essence of your dish. Precise measurements ensure the editorial quality of your kitchen sanctuary.",
+    "new_title": "New Recipe",
+    "new_subtitle": "Every creation starts with a first draft. Sketch the essentials now — refine later.",
+    "view": "Recipe Details",
+    "import_from_url": "Import from URL",
+    "browse_templates": "Browse Templates",
     "name": "Name",
     "name_placeholder": "e.g. Chicken curry",
     "role": "Role",
@@ -192,10 +226,10 @@
     "add_tag": "Add tag",
     "tag_placeholder": "e.g. spicy, quick",
     "nutrition": "Nutrition per serving",
-    "search_placeholder": "Search components...",
-    "no_results": "No components found.",
-    "empty_state": "No components yet. Create your first one!",
-    "delete_confirm_title": "Delete component?",
+    "search_placeholder": "Search the catalog…",
+    "no_results": "No recipes found.",
+    "empty_state": "No recipes yet. Create your first one!",
+    "delete_confirm_title": "Delete recipe?",
     "delete_confirm_body": "This action cannot be undone.",
     "amount": "Amount",
     "unit": "Unit",
@@ -233,9 +267,19 @@
     "delete_unit": "Delete {{unit}}"
   },
   "image": {
+    "section_title": "Image",
     "upload": "Upload image",
     "remove": "Remove image",
-    "uploading": "Uploading..."
+    "uploading": "Uploading...",
+    "url_placeholder": "Paste an image URL…",
+    "fetch": "Fetch",
+    "paste_hint": "Or paste an image from the clipboard",
+    "crop": {
+      "title": "Crop image",
+      "zoom": "Zoom",
+      "apply": "Apply",
+      "cancel": "Cancel"
+    }
   },
   "profile": {
     "title": "Profile & Targets",
@@ -303,7 +347,10 @@
       "in_use": "This time slot is used by plates and cannot be deleted."
     },
     "image": {
-      "upload_failed": "Image operation failed. Please try again."
+      "upload_failed": "Image operation failed. Please try again.",
+      "url_invalid": "That URL is not a valid image address.",
+      "url_fetch_failed": "Could not fetch image from that URL.",
+      "url_blocked": "That address is not allowed."
     },
     "profile": {
       "invalid_macros": "Macro percentages must sum to 100 or less, and calorie target must be positive."

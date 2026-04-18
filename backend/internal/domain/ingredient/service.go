@@ -21,14 +21,26 @@ func validateNutrition(i *Ingredient) error {
 	return nil
 }
 
+// ImageDeleter removes stored image files. Used for orphan cleanup on Delete.
+type ImageDeleter interface {
+	Delete(category string, id int64) error
+}
+
 // Service holds all business logic for ingredients.
 type Service struct {
-	repo Repository
+	repo   Repository
+	images ImageDeleter // optional; nil-safe
 }
 
 // NewService creates an ingredient service backed by the given repository.
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
+}
+
+// WithImageStore wires an image deleter so Delete cleans up orphaned image files.
+func (s *Service) WithImageStore(img ImageDeleter) *Service {
+	s.images = img
+	return s
 }
 
 // Create validates and persists a new ingredient.
@@ -70,9 +82,15 @@ func (s *Service) Update(ctx context.Context, i *Ingredient) error {
 	return s.repo.Update(ctx, i)
 }
 
-// Delete removes an ingredient by ID.
+// Delete removes an ingredient by ID and best-effort deletes its stored image.
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	return s.repo.Delete(ctx, id)
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	if s.images != nil {
+		_ = s.images.Delete("ingredients", id)
+	}
+	return nil
 }
 
 // ListPortions returns all portions for the given ingredient.

@@ -1,7 +1,7 @@
 import { useState, useDeferredValue } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
-import { Apple, MoreVertical, Plus } from "lucide-react"
+import { MoreVertical, Plus } from "lucide-react"
 
 import { EditorialCard } from "@/components/editorial/EditorialCard"
 import { EmptyCreateCard } from "@/components/editorial/EmptyCreateCard"
@@ -9,6 +9,7 @@ import {
   FilterChipGroup,
   type FilterChipOption,
 } from "@/components/editorial/FilterChipGroup"
+import { FoodPlaceholder } from "@/components/editorial/FoodPlaceholder"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { MacroBar } from "@/components/editorial/MacroBar"
 import { Badge } from "@/components/ui/badge"
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { imageURL } from "@/lib/image-url"
 import { useIngredients, useDeleteIngredient } from "@/lib/queries/ingredients"
 
 const PAGE_SIZE = 20
@@ -86,8 +88,12 @@ export function IngredientList() {
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 md:px-8 md:py-12">
       <PageHeader
         title={t("ingredient.title")}
+        description={t("ingredient.subtitle")}
         actions={
-          <Button asChild>
+          <Button
+            asChild
+            className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
+          >
             <Link to="/ingredients/new">
               <Plus className="mr-1.5 size-4" aria-hidden />
               {t("ingredient.create")}
@@ -151,17 +157,18 @@ export function IngredientList() {
                     className="absolute inset-0 z-0"
                     aria-label={item.name}
                   />
-                  <EditorialCard.Image
-                    src={item.image_path ?? undefined}
-                    alt={item.name}
-                  >
-                    {!item.image_path && (
-                      <Apple
-                        className="size-10 text-on-surface-variant/30"
-                        aria-hidden
-                      />
-                    )}
-                  </EditorialCard.Image>
+                  {item.image_path ? (
+                    <EditorialCard.Image
+                      src={imageURL(item.image_path, item.updated_at)}
+                      alt={item.name}
+                    />
+                  ) : (
+                    <FoodPlaceholder
+                      category="ingredient"
+                      className="m-2 aspect-[4/3] w-[calc(100%-1rem)]"
+                      aria-label={item.name}
+                    />
+                  )}
                   <EditorialCard.Body>
                     <EditorialCard.Title>{item.name}</EditorialCard.Title>
                     <EditorialCard.Meta className="mt-2">

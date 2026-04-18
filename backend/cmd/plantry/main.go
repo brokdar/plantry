@@ -96,10 +96,14 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("image store: %w", err)
 		}
+		ingredientSvc.WithImageStore(imgStore)
 	}
 
 	componentRepo := sqlite.NewComponentRepo(conn)
 	componentSvc := component.NewService(componentRepo, ingredientRepo, ingredientRepo)
+	if imgStore != nil {
+		componentSvc.WithImageStore(imgStore)
+	}
 
 	slotRepo := sqlite.NewSlotRepo(conn)
 	slotSvc := slot.NewService(slotRepo)
@@ -166,6 +170,7 @@ func run() error {
 		Ingredients:   handlers.NewIngredientHandler(ingredientSvc),
 		Lookup:        handlers.NewLookupHandler(resolver, imgStore, ingredientSvc),
 		Images:        handlers.NewImageHandler(ingredientSvc, imgStore),
+		ImageProxy:    handlers.NewImageProxyHandler(),
 		Components:    handlers.NewComponentHandler(componentSvc, imgStore),
 		Slots:         handlers.NewSlotHandler(slotSvc),
 		Weeks:         handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingredientRepo, feedbackRepo),

@@ -50,7 +50,11 @@ function EditIngredientPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 md:px-8 md:py-12">
-      <PageHeader title={t("ingredient.edit")} />
+      <PageHeader
+        eyebrow={t("ingredient.edit_eyebrow")}
+        title={t("ingredient.edit_title")}
+        description={t("ingredient.edit_subtitle")}
+      />
       <IngredientEditor
         ingredient={ingredient}
         onSuccess={() => navigate({ to: "/ingredients" })}

@@ -8,6 +8,7 @@ import type { TimeSlot } from "@/lib/api/slots"
 import type { Week } from "@/lib/api/weeks"
 import { useComponents } from "@/lib/queries/components"
 import { findPlateAt } from "@/lib/queries/plate-patches"
+import { slotLabel } from "@/lib/slot-label"
 
 const DAY_KEYS = [
   "planner.day_mon",
@@ -65,7 +66,7 @@ export function ReadOnlyPlannerGrid({ week, slots }: ReadOnlyPlannerGridProps) {
               data-testid={`archive-slot-row-${slot.id}`}
             >
               <SlotIcon name={slot.icon} />
-              <span>{t(slot.name_key, { defaultValue: slot.name_key })}</span>
+              <span>{slotLabel(t, slot.name_key)}</span>
             </div>
             {DAY_KEYS.map((_, day) => {
               const plate = findPlateAt(week, day, slot.id)

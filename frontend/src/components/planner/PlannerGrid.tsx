@@ -1,3 +1,10 @@
+import {
+  addDays,
+  format,
+  setISOWeek,
+  setISOWeekYear,
+  startOfISOWeek,
+} from "date-fns"
 import * as Lucide from "lucide-react"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -19,6 +26,7 @@ import { useApplyTemplate } from "@/lib/queries/templates"
 import { useCreatePlate } from "@/lib/queries/weeks"
 import { toastError } from "@/lib/toast"
 
+import { slotLabel } from "@/lib/slot-label"
 import { cn } from "@/lib/utils"
 
 import { AddComponentSheet } from "./AddComponentSheet"
@@ -68,6 +76,11 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)
     return map
   }, [componentsQuery.data])
+
+  const weekStart = useMemo(() => {
+    const d = setISOWeekYear(new Date(), week.year)
+    return startOfISOWeek(setISOWeek(d, week.week_number))
+  }, [week.year, week.week_number])
 
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null)
@@ -162,34 +175,40 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
         className="grid min-w-[900px] gap-0"
         style={{ gridTemplateColumns: `120px repeat(7, minmax(0, 1fr))` }}
       >
-        <div className="border-b border-outline-variant/15 px-2 py-3" />
-        {DAY_KEYS.map((dayKey, idx) => (
-          <div
-            key={dayKey}
-            className="border-b border-outline-variant/15 px-2 py-3 text-center"
-            data-testid={`day-header-${idx}`}
-          >
-            <p className="font-heading text-xs font-bold tracking-widest text-on-surface-variant uppercase">
-              {t(dayKey)}
-            </p>
-          </div>
-        ))}
+        <div className="px-2 py-4" />
+        {DAY_KEYS.map((dayKey, idx) => {
+          const date = addDays(weekStart, idx)
+          return (
+            <div
+              key={dayKey}
+              className="px-2 py-4 text-center"
+              data-testid={`day-header-${idx}`}
+            >
+              <p className="text-[10px] font-bold tracking-widest text-on-surface-variant uppercase">
+                {t(dayKey)}
+              </p>
+              <p className="font-heading text-sm font-bold text-on-surface">
+                {format(date, "MMM d")}
+              </p>
+            </div>
+          )
+        })}
 
         {slots.map((slot, rowIdx) => (
           <div
             key={slot.id}
             className={cn(
               "contents",
-              rowIdx % 2 === 1 && "[&>*]:bg-surface-container-high/20"
+              rowIdx % 2 === 1 && "[&>*]:bg-surface-container-low/60"
             )}
           >
             <div
-              className="flex flex-col items-start justify-center gap-1 border-b border-outline-variant/10 px-3 py-4 text-on-surface-variant"
+              className="flex flex-col items-start justify-center gap-1 px-3 py-4 text-on-surface-variant"
               data-testid={`slot-row-${slot.id}`}
             >
               <SlotIcon name={slot.icon} />
               <span className="font-heading text-[10px] font-bold tracking-widest uppercase">
-                {t(slot.name_key, { defaultValue: slot.name_key })}
+                {slotLabel(t, slot.name_key)}
               </span>
             </div>
             {DAY_KEYS.map((_, day) => {
@@ -197,7 +216,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
               return (
                 <div
                   key={`${slot.id}-${day}`}
-                  className="border-b border-outline-variant/10 p-2"
+                  className="p-2"
                   data-testid={`cell-${day}-${slot.id}`}
                 >
                   <PlateCell

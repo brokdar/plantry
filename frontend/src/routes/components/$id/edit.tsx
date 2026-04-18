@@ -46,7 +46,11 @@ function EditComponentPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 md:px-8 md:py-12">
-      <PageHeader title={t("component.edit")} />
+      <PageHeader
+        eyebrow={t("component.edit_eyebrow")}
+        title={t("component.edit_title")}
+        description={t("component.edit_subtitle")}
+      />
       <ComponentEditor
         component={component}
         onSuccess={() =>

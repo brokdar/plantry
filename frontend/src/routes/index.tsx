@@ -5,13 +5,12 @@ import {
   setISOWeek,
   setISOWeekYear,
 } from "date-fns"
-import { BarChart2, Settings, ShoppingCart, Sparkles } from "lucide-react"
+import { BarChart2, Download, Settings, Sparkles } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { ChatPanel } from "@/components/chat/ChatPanel"
-import { PageHeader } from "@/components/editorial/PageHeader"
 import { NutritionWeekSummary } from "@/components/planner/NutritionWeekSummary"
 import { PlannerGrid } from "@/components/planner/PlannerGrid"
 import { ShoppingPanel } from "@/components/planner/ShoppingPanel"
@@ -25,7 +24,11 @@ import {
 } from "@/components/ui/sheet"
 import { useAISettings } from "@/lib/queries/ai"
 import { useTimeSlots } from "@/lib/queries/slots"
-import { useCopyWeek, useWeekByDate } from "@/lib/queries/weeks"
+import {
+  useCopyWeek,
+  useWeekByDate,
+  useWeekNutrition,
+} from "@/lib/queries/weeks"
 import { useChatUI } from "@/lib/stores/chat-ui"
 import { toastError } from "@/lib/toast"
 
@@ -57,6 +60,7 @@ function PlannerPage() {
   const weekQuery = useWeekByDate(year, week)
   const copyMut = useCopyWeek()
   const { data: aiSettings } = useAISettings()
+  const nutritionQuery = useWeekNutrition(weekQuery.data?.id ?? 0)
 
   const slots = slotsQuery.data?.items ?? []
 
@@ -104,55 +108,82 @@ function PlannerPage() {
     }
   }
 
+  const dailyAvgKcal = (() => {
+    const days = nutritionQuery.data?.days
+    if (!days?.length) return null
+    const plannedDays = days.filter((d) => d.macros.kcal > 0)
+    if (!plannedDays.length) return null
+    const avg =
+      plannedDays.reduce((acc, d) => acc + d.macros.kcal, 0) /
+      plannedDays.length
+    return Math.round(avg)
+  })()
+
   return (
     <div className="px-4 py-6 md:px-8 md:py-8">
-      <PageHeader
-        title={t("planner.title")}
-        description={t("planner.week_label", {
-          week: week_.week_number,
-          year: week_.year,
-        })}
-        actions={
-          <>
+      <header
+        className="mb-10 flex flex-col justify-between gap-8 md:flex-row md:items-end"
+        data-testid="page-header"
+      >
+        <div className="max-w-2xl">
+          <h1 className="font-heading text-4xl leading-tight font-extrabold tracking-tight text-on-surface md:text-5xl">
+            {t("planner.title")}
+          </h1>
+          <p className="mt-2 text-sm font-medium text-on-surface-variant">
+            {t("planner.week_label", {
+              week: week_.week_number,
+              year: week_.year,
+            })}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {dailyAvgKcal !== null && (
+            <div className="flex flex-col justify-center rounded-xl bg-surface-container-low px-5 py-3">
+              <span className="text-[9px] font-bold tracking-widest text-on-surface-variant uppercase">
+                {t("planner.daily_avg")}
+              </span>
+              <span className="font-heading text-xl font-bold text-primary">
+                {dailyAvgKcal.toLocaleString()} kcal
+              </span>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setNutritionOpen(true)}
+            aria-label={t("nutrition.button")}
+          >
+            <BarChart2 className="size-4" />
+          </Button>
+          {aiSettings?.enabled && (
             <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShoppingOpen(true)}
+              variant="ghost"
+              size="icon"
+              onClick={() => openChat(true)}
+              aria-label={t("chat.button")}
+              data-testid="chat-open-button"
             >
-              <ShoppingCart className="mr-1.5 size-4" />
-              {t("shopping.button")}
+              <Sparkles className="size-4" />
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setNutritionOpen(true)}
-            >
-              <BarChart2 className="mr-1.5 size-4" />
-              {t("nutrition.button")}
-            </Button>
-            {aiSettings?.enabled && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openChat(true)}
-                data-testid="chat-open-button"
-              >
-                <Sparkles className="mr-1.5 size-4" />
-                {t("chat.button")}
-              </Button>
-            )}
-            <WeekNavigator
-              year={week_.year}
-              weekNumber={week_.week_number}
-              onPrev={() => setYearWeek(shiftWeek(year, week, -1))}
-              onNext={() => setYearWeek(shiftWeek(year, week, 1))}
-              onCopy={handleCopy}
-            />
-          </>
-        }
-      />
+          )}
+          <WeekNavigator
+            year={week_.year}
+            weekNumber={week_.week_number}
+            onPrev={() => setYearWeek(shiftWeek(year, week, -1))}
+            onNext={() => setYearWeek(shiftWeek(year, week, 1))}
+            onCopy={handleCopy}
+          />
+          <Button
+            onClick={() => setShoppingOpen(true)}
+            className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
+          >
+            <Download className="mr-1.5 size-4" />
+            {t("shopping.button")}
+          </Button>
+        </div>
+      </header>
 
-      <div className="editorial-shadow overflow-hidden rounded-2xl bg-surface-container-lowest p-4 md:p-6">
+      <div className="-mx-2 md:-mx-4">
         <PlannerGrid week={week_} slots={slots} />
       </div>
 

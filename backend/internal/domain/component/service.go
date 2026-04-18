@@ -20,16 +20,28 @@ type NutritionLookup interface {
 	LookupForNutrition(ctx context.Context, ids []int64) (map[int64]*ingredient.Ingredient, error)
 }
 
+// ImageDeleter removes stored image files. Used for orphan cleanup on Delete.
+type ImageDeleter interface {
+	Delete(category string, id int64) error
+}
+
 // Service holds business logic for components.
 type Service struct {
 	repo            Repository
 	portions        PortionLookup
 	nutritionLookup NutritionLookup
+	images          ImageDeleter // optional; nil-safe
 }
 
 // NewService creates a component service.
 func NewService(repo Repository, portions PortionLookup, nl NutritionLookup) *Service {
 	return &Service{repo: repo, portions: portions, nutritionLookup: nl}
+}
+
+// WithImageStore wires an image deleter so Delete cleans up orphaned image files.
+func (s *Service) WithImageStore(img ImageDeleter) *Service {
+	s.images = img
+	return s
 }
 
 func (s *Service) validate(c *Component) error {
@@ -120,9 +132,15 @@ func (s *Service) Update(ctx context.Context, c *Component) error {
 	return s.repo.Update(ctx, c)
 }
 
-// Delete removes a component by ID.
+// Delete removes a component by ID and best-effort deletes its stored image.
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	return s.repo.Delete(ctx, id)
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	if s.images != nil {
+		_ = s.images.Delete("components", id)
+	}
+	return nil
 }
 
 // List returns a page of components matching the query.

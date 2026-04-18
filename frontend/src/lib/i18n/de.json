@@ -3,19 +3,26 @@
     "brand": "Plantry",
     "atelier_tagline": "Redaktionelle Ernährung",
     "generate_plan": "Plan generieren",
-    "planner": "Planer",
+    "planner": "Wochenplan",
     "ingredients": "Zutaten",
+    "recipes": "Rezepte",
+    "pantry": "Vorratskammer",
     "components": "Komponenten",
     "templates": "Vorlagen",
     "import": "Import",
     "archive": "Archiv",
+    "past_weeks": "Vergangene Wochen",
     "settings": "Einstellungen",
     "search_placeholder": "Katalog durchsuchen…"
   },
   "archive": {
-    "title": "Archiv",
-    "subtitle": "Vergangene Wochen durchstöbern.",
+    "title": "Historische Sammlungen",
+    "subtitle": "Ein kuratiertes Archiv deiner saisonalen Reisen. Besuche vergangene Mahlzeiten und integriere sie in deine aktuelle Woche.",
     "empty": "Noch keine archivierten Wochen.",
+    "end_of_journey": "Ende deiner Reise",
+    "end_of_journey_body": "Du hast den Anfang deiner Botanical-Atelier-Reise erreicht.",
+    "load_more": "Mehr Historie laden",
+    "meals_total": "{{count}} Mahlzeiten insgesamt",
     "week_label": "Woche {{week}}, {{year}}",
     "back": "Zurück zum Archiv",
     "forgotten": "Vergessen",
@@ -81,6 +88,7 @@
     "next_week": "Nächste Woche",
     "this_week": "Diese Woche",
     "copy_week": "Woche in nächste kopieren",
+    "daily_avg": "Tagesdurchschnitt",
     "copy_success": "Woche kopiert",
     "generate_prompt": "Plane meine Woche basierend auf meinen Zielen und Zeitfenstern.",
     "empty_state_no_slots_title": "Lege zuerst deine Mahlzeitzeiten fest",
@@ -120,8 +128,20 @@
       "save_note": "Notiz speichern"
     }
   },
+  "settings_page": {
+    "title": "Workspace-Einstellungen",
+    "subtitle": "Passe dein digitales Küchen-Sanktuarium an deinen kulinarischen Workflow an. Diese Einstellungen steuern, wie dein redaktioneller Ernährungsplan kuratiert und präsentiert wird."
+  },
+  "display_preferences": {
+    "title": "Darstellung",
+    "theme_label": "Design",
+    "theme_description": "Wechsle zwischen der hellen Redaktions-Palette und einem gedämpften Abendmodus.",
+    "theme_light": "Hell",
+    "theme_dark": "Dunkel",
+    "theme_system": "System"
+  },
   "slot": {
-    "title": "Mahlzeitzeiten",
+    "title": "Mahlzeiten",
     "description": "Definiere die Mahlzeitzeiten, um die du planst.",
     "add_slot": "Mahlzeitzeit hinzufügen",
     "name_key_label": "Übersetzungsschlüssel",
@@ -139,9 +159,15 @@
     "snack": "Snack"
   },
   "ingredient": {
-    "title": "Zutaten",
+    "title": "Das Vorrats-Archiv",
+    "subtitle": "Eine kuratierte Datenbank deiner botanischen Grundzutaten, sorgfältig erfasst für handwerkliche Ernährung.",
     "create": "Neue Zutat",
     "edit": "Zutat bearbeiten",
+    "edit_eyebrow": "Editor",
+    "edit_title": "Zutaten-Editor",
+    "edit_subtitle": "Verfeinere das Wesen deiner kulinarischen Palette.",
+    "new_title": "Neue Zutat",
+    "new_subtitle": "Ergänze dein botanisches Atelier um eine neue Grundzutat.",
     "name": "Name",
     "name_placeholder": "z. B. Hähnchenbrust",
     "kcal": "Kalorien (kcal)",
@@ -152,7 +178,7 @@
     "sodium": "Natrium (mg)",
     "per_100g": "pro 100 g",
     "macros": "Nährwerte pro 100 g",
-    "search_placeholder": "Zutaten suchen...",
+    "search_placeholder": "Archiv durchsuchen…",
     "delete_confirm_title": "Zutat löschen?",
     "delete_confirm_body": "Diese Aktion kann nicht rückgängig gemacht werden.",
     "no_results": "Keine Zutaten gefunden.",
@@ -163,10 +189,18 @@
     "source_fdc": "USDA"
   },
   "component": {
-    "title": "Komponenten",
-    "create": "Neue Komponente",
-    "edit": "Komponente bearbeiten",
-    "view": "Komponentendetails",
+    "title": "Rezept-Katalog",
+    "subtitle": "Kuratierte Nahrung für dein digitales Küchen-Sanktuarium. Entdecke saisonale Aromen und achtsame Zubereitungen.",
+    "create": "Neues Rezept",
+    "edit": "Rezept bearbeiten",
+    "edit_eyebrow": "Editor",
+    "edit_title": "Deine Kreation verfeinern",
+    "edit_subtitle": "Justiere das Wesen deines Gerichts. Präzise Mengen sichern die redaktionelle Qualität deines Küchen-Sanktuariums.",
+    "new_title": "Neues Rezept",
+    "new_subtitle": "Jede Kreation beginnt mit einem ersten Entwurf. Skizziere jetzt die Grundlagen — verfeinere später.",
+    "view": "Rezept-Details",
+    "import_from_url": "Von URL importieren",
+    "browse_templates": "Vorlagen durchsuchen",
     "name": "Name",
     "name_placeholder": "z. B. Hähnchen-Curry",
     "role": "Rolle",
@@ -192,10 +226,10 @@
     "add_tag": "Tag hinzufügen",
     "tag_placeholder": "z. B. scharf, schnell",
     "nutrition": "Nährwerte pro Portion",
-    "search_placeholder": "Komponenten suchen...",
-    "no_results": "Keine Komponenten gefunden.",
-    "empty_state": "Noch keine Komponenten. Erstelle deine erste!",
-    "delete_confirm_title": "Komponente löschen?",
+    "search_placeholder": "Katalog durchsuchen…",
+    "no_results": "Keine Rezepte gefunden.",
+    "empty_state": "Noch keine Rezepte. Erstelle dein erstes!",
+    "delete_confirm_title": "Rezept löschen?",
     "delete_confirm_body": "Diese Aktion kann nicht rückgängig gemacht werden.",
     "amount": "Menge",
     "unit": "Einheit",
@@ -233,9 +267,19 @@
     "delete_unit": "{{unit}} entfernen"
   },
   "image": {
+    "section_title": "Bild",
     "upload": "Bild hochladen",
     "remove": "Bild entfernen",
-    "uploading": "Wird hochgeladen..."
+    "uploading": "Wird hochgeladen...",
+    "url_placeholder": "Bild-URL einfügen…",
+    "fetch": "Laden",
+    "paste_hint": "Oder ein Bild aus der Zwischenablage einfügen",
+    "crop": {
+      "title": "Bild zuschneiden",
+      "zoom": "Zoom",
+      "apply": "Übernehmen",
+      "cancel": "Abbrechen"
+    }
   },
   "shopping": {
     "title": "Einkaufsliste",
@@ -318,7 +362,10 @@
       "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."
     },
     "image": {
-      "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut."
+      "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut.",
+      "url_invalid": "Die URL ist keine gültige Bildadresse.",
+      "url_fetch_failed": "Bild konnte von dieser URL nicht geladen werden.",
+      "url_blocked": "Diese Adresse ist nicht erlaubt."
     },
     "profile": {
       "invalid_macros": "Die Makroprozentsätze dürfen zusammen höchstens 100 ergeben, und das Kalorienziel muss positiv sein."

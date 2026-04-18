@@ -23,6 +23,7 @@ import {
   useTimeSlots,
 } from "@/lib/queries/slots"
 import { slotSchema, type SlotFormValues } from "@/lib/schemas/slot"
+import { slotLabel } from "@/lib/slot-label"
 import { toastError } from "@/lib/toast"
 
 function SlotIcon({ name }: { name: string }) {
@@ -163,9 +164,7 @@ export function TimeSlotsEditor() {
                 >
                   <SlotIcon name={s.icon} />
                   <div className="flex-1">
-                    <p className="font-medium">
-                      {t(s.name_key, { defaultValue: s.name_key })}
-                    </p>
+                    <p className="font-medium">{slotLabel(t, s.name_key)}</p>
                     <p className="text-xs text-muted-foreground">
                       {s.name_key} · {t("slot.sort_order_label")}:{" "}
                       {s.sort_order}

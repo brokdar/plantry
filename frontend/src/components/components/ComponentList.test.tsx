@@ -42,7 +42,7 @@ describe("ComponentList", () => {
     renderWithRouter(<ComponentList />)
 
     expect(
-      await screen.findByText("No components yet. Create your first one!")
+      await screen.findByText("No recipes yet. Create your first one!")
     ).toBeInTheDocument()
   })
 
