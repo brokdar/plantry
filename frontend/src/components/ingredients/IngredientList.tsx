@@ -33,6 +33,7 @@ export function IngredientList() {
   const deferredSearch = useDeferredValue(search)
   const [offset, setOffset] = useState(0)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const { data, isLoading } = useIngredients({
     search: deferredSearch || undefined,
@@ -46,6 +47,10 @@ export function IngredientList() {
     if (deleteId === null) return
     deleteMutation.mutate(deleteId, {
       onSuccess: () => setDeleteId(null),
+      onError: (err: unknown) => {
+        const key = err instanceof Error ? err.message : "error.server"
+        setDeleteError(t(key))
+      },
     })
   }
 
@@ -175,7 +180,13 @@ export function IngredientList() {
         </>
       )}
 
-      <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+      <Dialog
+        open={deleteId !== null}
+        onOpenChange={() => {
+          setDeleteId(null)
+          setDeleteError(null)
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("ingredient.delete_confirm_title")}</DialogTitle>
@@ -183,8 +194,17 @@ export function IngredientList() {
               {t("ingredient.delete_confirm_body")}
             </DialogDescription>
           </DialogHeader>
+          {deleteError && (
+            <p className="px-1 text-sm text-destructive">{deleteError}</p>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteId(null)
+                setDeleteError(null)
+              }}
+            >
               {t("common.cancel")}
             </Button>
             <Button

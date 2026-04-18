@@ -35,3 +35,4 @@ go.work.sum
 frontend/test-results/
 .claude/worktrees/
 .worktrees/
+.DS_Store
