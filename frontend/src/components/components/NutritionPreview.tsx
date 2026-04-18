@@ -53,7 +53,8 @@ export function NutritionPreview({
     { label: t("ingredient.fat"), value: macros.fat },
     { label: t("ingredient.carbs"), value: macros.carbs },
     { label: t("ingredient.fiber"), value: macros.fiber },
-    { label: t("ingredient.sodium"), value: macros.sodium },
+    // Sodium stored in grams; label is "(mg)", so convert at the boundary.
+    { label: t("ingredient.sodium"), value: macros.sodium * 1000 },
   ]
 
   return (

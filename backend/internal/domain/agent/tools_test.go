@@ -348,3 +348,24 @@ func jsonMust(v any) string {
 	}
 	return string(b)
 }
+
+// TestToolSet_SchemasAreOpenAIStrictCompatible ensures every tool's JSON
+// schema can be shipped to OpenAI's strict-mode function-calling, which rejects
+// object schemas without an explicit "properties" field. Caught a real prod
+// incident where get_profile had {"type":"object","additionalProperties":false}
+// and OpenAI rejected the whole request with 400 invalid_request_error.
+func TestToolSet_SchemasAreOpenAIStrictCompatible(t *testing.T) {
+	f := newToolFixture(t)
+	for _, tool := range f.tools.Describe() {
+		var raw map[string]any
+		require.NoError(t, json.Unmarshal(tool.Schema, &raw),
+			"tool %q schema is not valid JSON", tool.Name)
+
+		if raw["type"] != "object" {
+			continue
+		}
+		_, hasProps := raw["properties"]
+		assert.True(t, hasProps,
+			"tool %q has type=object but no properties field; OpenAI strict mode will reject it", tool.Name)
+	}
+}

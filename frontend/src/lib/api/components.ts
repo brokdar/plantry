@@ -4,6 +4,7 @@ export interface ComponentIngredient {
   id: number
   component_id: number
   ingredient_id: number
+  ingredient_name: string
   amount: number
   unit: string
   grams: number

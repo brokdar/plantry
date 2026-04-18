@@ -332,21 +332,39 @@ func (r *ComponentRepo) insertChildren(ctx context.Context, qtx *sqlcgen.Queries
 }
 
 func (r *ComponentRepo) loadChildren(ctx context.Context, q *sqlcgen.Queries, c *component.Component) error {
-	ciRows, err := q.ListComponentIngredients(ctx, c.ID)
+	// Load component ingredients with their ingredient name via JOIN so the
+	// response surfaces a human-readable label without requiring callers to
+	// refetch ingredients separately.
+	const listCIWithName = `
+		SELECT ci.id, ci.component_id, ci.ingredient_id, i.name,
+		       ci.amount, ci.unit, ci.grams, ci.sort_order
+		FROM component_ingredients ci
+		JOIN ingredients i ON i.id = ci.ingredient_id
+		WHERE ci.component_id = ?
+		ORDER BY ci.sort_order`
+	rows, err := r.db.QueryContext(ctx, listCIWithName, c.ID)
 	if err != nil {
 		return err
 	}
-	c.Ingredients = make([]component.ComponentIngredient, len(ciRows))
-	for i, row := range ciRows {
-		c.Ingredients[i] = component.ComponentIngredient{
-			ID:           row.ID,
-			ComponentID:  row.ComponentID,
-			IngredientID: row.IngredientID,
-			Amount:       row.Amount,
-			Unit:         row.Unit,
-			Grams:        row.Grams,
-			SortOrder:    int(row.SortOrder),
+	c.Ingredients = nil
+	for rows.Next() {
+		var ci component.ComponentIngredient
+		var sortOrder int64
+		if err := rows.Scan(
+			&ci.ID, &ci.ComponentID, &ci.IngredientID, &ci.IngredientName,
+			&ci.Amount, &ci.Unit, &ci.Grams, &sortOrder,
+		); err != nil {
+			_ = rows.Close()
+			return err
 		}
+		ci.SortOrder = int(sortOrder)
+		c.Ingredients = append(c.Ingredients, ci)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := rows.Err(); err != nil {
+		return err
 	}
 
 	instRows, err := q.ListComponentInstructions(ctx, c.ID)

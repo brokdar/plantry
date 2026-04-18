@@ -324,7 +324,10 @@
     "title": "Week Nutrition",
     "button": "Nutrition",
     "empty": "No meals planned yet.",
-    "week_total": "Week total"
+    "week_total": "Week total",
+    "no_target_title": "Set a daily target to see progress",
+    "no_target_body": "Add kcal and macro targets in Settings so daily bars can fill in.",
+    "no_target_cta": "Open Settings"
   },
   "common": {
     "save": "Save",

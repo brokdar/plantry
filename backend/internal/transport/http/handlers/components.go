@@ -56,13 +56,14 @@ type componentRequest struct {
 }
 
 type componentIngredientResponse struct {
-	ID           int64   `json:"id"`
-	ComponentID  int64   `json:"component_id"`
-	IngredientID int64   `json:"ingredient_id"`
-	Amount       float64 `json:"amount"`
-	Unit         string  `json:"unit"`
-	Grams        float64 `json:"grams"`
-	SortOrder    int     `json:"sort_order"`
+	ID             int64   `json:"id"`
+	ComponentID    int64   `json:"component_id"`
+	IngredientID   int64   `json:"ingredient_id"`
+	IngredientName string  `json:"ingredient_name"`
+	Amount         float64 `json:"amount"`
+	Unit           string  `json:"unit"`
+	Grams          float64 `json:"grams"`
+	SortOrder      int     `json:"sort_order"`
 }
 
 type instructionResponse struct {
@@ -110,7 +111,8 @@ func toComponentResponse(c *component.Component) componentResponse {
 	for i, ci := range c.Ingredients {
 		ingredients[i] = componentIngredientResponse{
 			ID: ci.ID, ComponentID: ci.ComponentID, IngredientID: ci.IngredientID,
-			Amount: ci.Amount, Unit: ci.Unit, Grams: ci.Grams, SortOrder: ci.SortOrder,
+			IngredientName: ci.IngredientName,
+			Amount:         ci.Amount, Unit: ci.Unit, Grams: ci.Grams, SortOrder: ci.SortOrder,
 		}
 	}
 

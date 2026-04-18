@@ -333,7 +333,7 @@ func toolGetWeekNutrition(svc Services) Tool {
 }
 
 func toolGetProfile(svc Services) Tool {
-	schema := json.RawMessage(`{"type":"object","additionalProperties":false}`)
+	schema := json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)
 	return Tool{
 		Name:        "get_profile",
 		Description: "Read the user's profile: kcal/macro targets, dietary restrictions, free-form preferences, and any custom system prompt.",

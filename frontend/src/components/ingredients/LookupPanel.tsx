@@ -19,9 +19,15 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
   const [scannerOpen, setScannerOpen] = useState(false)
   const deferredSearch = useDeferredValue(search)
 
+  // Treat all-digit input of typical EAN/UPC length as a barcode so users can
+  // type a barcode into the same field. 8 is the shortest valid GTIN (EAN-8).
+  const typedBarcode = /^\d{8,}$/.test(deferredSearch.trim())
+    ? deferredSearch.trim()
+    : ""
+
   const { data, isLoading, isError } = useLookup(
-    barcode
-      ? { barcode }
+    barcode || typedBarcode
+      ? { barcode: barcode || typedBarcode }
       : { query: deferredSearch.length >= 2 ? deferredSearch : undefined }
   )
 
@@ -37,7 +43,11 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
 
   const results = data?.results ?? []
   const recommendedIndex = data?.recommended_index ?? -1
-  const hasQuery = !!(barcode || (deferredSearch && deferredSearch.length >= 2))
+  const hasQuery = !!(
+    barcode ||
+    typedBarcode ||
+    (deferredSearch && deferredSearch.length >= 2)
+  )
 
   return (
     <div className="space-y-4">

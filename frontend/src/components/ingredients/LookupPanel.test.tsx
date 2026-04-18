@@ -96,4 +96,26 @@ describe("LookupPanel", () => {
       ).toBeInTheDocument()
     })
   })
+
+  test("routes all-digit input to the barcode lookup path", async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
+
+    renderWithRouter(<LookupPanel onSelect={onSelect} />)
+
+    const input = await screen.findByPlaceholderText(
+      /search by name or barcode/i
+    )
+    await user.type(input, "3017620422003")
+
+    await waitFor(() => {
+      expect(lookupIngredients).toHaveBeenCalledWith(
+        expect.objectContaining({ barcode: "3017620422003" })
+      )
+    })
+    expect(lookupIngredients).not.toHaveBeenCalledWith(
+      expect.objectContaining({ query: "3017620422003" })
+    )
+  })
 })

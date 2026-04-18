@@ -233,7 +233,10 @@
     "title": "Wochennährwerte",
     "button": "Nährwerte",
     "empty": "Noch keine Mahlzeiten geplant.",
-    "week_total": "Wochengesamt"
+    "week_total": "Wochengesamt",
+    "no_target_title": "Setze ein Tagesziel, um Fortschritt zu sehen",
+    "no_target_body": "Lege Kalorien- und Makroziele in den Einstellungen fest, damit die Tagesbalken gefüllt werden.",
+    "no_target_cta": "Einstellungen öffnen"
   },
   "profile": {
     "title": "Profil & Ziele",

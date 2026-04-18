@@ -51,14 +51,17 @@ type Component struct {
 }
 
 // ComponentIngredient links an ingredient to a component with a quantity.
+// IngredientName is populated when loaded through the repo; it is not persisted
+// back on write.
 type ComponentIngredient struct {
-	ID           int64
-	ComponentID  int64
-	IngredientID int64
-	Amount       float64
-	Unit         string
-	Grams        float64
-	SortOrder    int
+	ID             int64
+	ComponentID    int64
+	IngredientID   int64
+	IngredientName string
+	Amount         float64
+	Unit           string
+	Grams          float64
+	SortOrder      int
 }
 
 // Instruction is a numbered cooking step.

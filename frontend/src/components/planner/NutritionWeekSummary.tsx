@@ -1,5 +1,7 @@
+import { Link } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 
+import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import type { Profile } from "@/lib/api/profile"
 import { useProfile } from "@/lib/queries/profile"
@@ -44,6 +46,17 @@ export function NutritionWeekSummary({ weekId }: NutritionWeekSummaryProps) {
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto py-4">
+      {!targets && (
+        <div className="mx-4 rounded-md border border-dashed border-border bg-muted/30 p-3 text-sm">
+          <p className="font-medium">{t("nutrition.no_target_title")}</p>
+          <p className="mt-1 text-muted-foreground">
+            {t("nutrition.no_target_body")}
+          </p>
+          <Button asChild size="sm" variant="outline" className="mt-2">
+            <Link to="/settings">{t("nutrition.no_target_cta")}</Link>
+          </Button>
+        </div>
+      )}
       {data.days.length === 0 ? (
         <p className="px-4 text-sm text-muted-foreground">
           {t("nutrition.empty")}

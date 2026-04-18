@@ -40,6 +40,7 @@ func (r *Resolver) lookupBarcode(ctx context.Context, barcode string, _ int) ([]
 			return nil, err
 		}
 		if len(results) > 0 {
+			fillMissingKcal(results)
 			r.enrichExistingIDs(ctx, results)
 			return results, nil
 		}
@@ -52,6 +53,7 @@ func (r *Resolver) lookupBarcode(ctx context.Context, barcode string, _ int) ([]
 			return nil, err
 		}
 		if len(results) > 0 {
+			fillMissingKcal(results)
 			r.enrichExistingIDs(ctx, results)
 			return results, nil
 		}
@@ -70,8 +72,40 @@ func (r *Resolver) lookupQuery(ctx context.Context, query string, limit int) ([]
 		return nil, err
 	}
 
+	fillMissingKcal(results)
 	r.enrichExistingIDs(ctx, results)
 	return results, nil
+}
+
+// fillMissingKcal derives kcal_100g from macros using Atwater factors
+// (4·protein + 4·carbs + 9·fat) whenever the upstream provider returned nil.
+// Some FDC entries (notably raw meats) have macros but no kcal; without this
+// the UI silently defaults kcal to 0 and every downstream total is wrong.
+func fillMissingKcal(cs []Candidate) {
+	for i := range cs {
+		c := &cs[i]
+		if c.Kcal100g != nil {
+			continue
+		}
+		if c.Protein100g == nil && c.Fat100g == nil && c.Carbs100g == nil {
+			continue
+		}
+		var p, f, carbs float64
+		if c.Protein100g != nil {
+			p = *c.Protein100g
+		}
+		if c.Fat100g != nil {
+			f = *c.Fat100g
+		}
+		if c.Carbs100g != nil {
+			carbs = *c.Carbs100g
+		}
+		if carbs < 0 {
+			carbs = 0
+		}
+		kcal := 4*p + 4*carbs + 9*f
+		c.Kcal100g = &kcal
+	}
 }
 
 // enrichExistingIDs checks if any candidate matches a local ingredient by name.

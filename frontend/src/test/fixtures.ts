@@ -54,6 +54,7 @@ export const mockChickenCurry: Component = {
       id: 1,
       component_id: 1,
       ingredient_id: 1,
+      ingredient_name: "Chicken breast",
       amount: 300,
       unit: "g",
       grams: 300,

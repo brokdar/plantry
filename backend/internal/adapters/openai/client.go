@@ -86,12 +86,15 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 // ---------------------------------------------------------------------------
 
 type reqBody struct {
-	Model       string        `json:"model"`
-	Messages    []messageBody `json:"messages"`
-	Tools       []toolBody    `json:"tools,omitempty"`
-	Stream      bool          `json:"stream,omitempty"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Temperature *float64      `json:"temperature,omitempty"`
+	Model    string        `json:"model"`
+	Messages []messageBody `json:"messages"`
+	Tools    []toolBody    `json:"tools,omitempty"`
+	Stream   bool          `json:"stream,omitempty"`
+	// OpenAI deprecated `max_tokens` for reasoning models (o1/o3/gpt-5.x).
+	// `max_completion_tokens` is accepted by every current chat-completions
+	// model, including the older gpt-4o family, so we send only the new key.
+	MaxCompletionTokens int      `json:"max_completion_tokens,omitempty"`
+	Temperature         *float64 `json:"temperature,omitempty"`
 }
 
 type messageBody struct {
@@ -129,9 +132,9 @@ func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
 		maxTok = DefaultMaxTokens
 	}
 	body := reqBody{
-		Model:     req.Model,
-		Stream:    stream,
-		MaxTokens: maxTok,
+		Model:               req.Model,
+		Stream:              stream,
+		MaxCompletionTokens: maxTok,
 	}
 	if req.Temperature > 0 {
 		tmp := req.Temperature

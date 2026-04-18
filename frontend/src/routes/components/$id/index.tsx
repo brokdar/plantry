@@ -58,7 +58,8 @@ function ComponentDetailPage() {
         { label: t("ingredient.fat"), value: nutrition.fat },
         { label: t("ingredient.carbs"), value: nutrition.carbs },
         { label: t("ingredient.fiber"), value: nutrition.fiber },
-        { label: t("ingredient.sodium"), value: nutrition.sodium },
+        // Sodium stored in grams; label is "(mg)", so convert at the boundary.
+        { label: t("ingredient.sodium"), value: nutrition.sodium * 1000 },
       ]
     : []
 
@@ -139,7 +140,12 @@ function ComponentDetailPage() {
           <ul className="space-y-1 text-sm">
             {component.ingredients.map((ci) => (
               <li key={ci.id}>
-                {ci.amount} {ci.unit} ({ci.grams}g)
+                {ci.ingredient_name}
+                <span className="text-muted-foreground">
+                  {" — "}
+                  {ci.amount} {ci.unit}
+                  {ci.unit !== "g" && ` (${ci.grams}g)`}
+                </span>
               </li>
             ))}
           </ul>

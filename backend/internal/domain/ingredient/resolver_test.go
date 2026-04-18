@@ -183,3 +183,49 @@ func TestLookup_ProviderError(t *testing.T) {
 	_, err := resolver.Lookup(context.Background(), "123", "", "en", 5)
 	assert.Error(t, err)
 }
+
+// TestLookup_MissingKcalFallback — some FDC rows (e.g. raw chicken breast)
+// return protein/fat/carbs but no kcal. Without an Atwater fallback the UI
+// silently saved a 0-kcal ingredient and every downstream nutrition total was
+// wrong.
+func TestLookup_MissingKcalFallback(t *testing.T) {
+	p := 22.5
+	f := 1.93
+	c := 0.0
+	fdc := &fakeFoodProvider{
+		searchFn: func(_ context.Context, _ string, _ int) ([]ingredient.Candidate, error) {
+			return []ingredient.Candidate{{
+				Name:        "Raw Chicken",
+				Source:      "fdc",
+				Kcal100g:    nil,
+				Protein100g: &p,
+				Fat100g:     &f,
+				Carbs100g:   &c,
+			}}, nil
+		},
+	}
+
+	resolver := ingredient.NewResolver(newFakeRepo(), nil, fdc)
+	results, err := resolver.Lookup(context.Background(), "", "chicken", "en", 5)
+
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.NotNil(t, results[0].Kcal100g, "resolver should fill kcal from macros")
+	assert.InDelta(t, 4*22.5+4*0+9*1.93, *results[0].Kcal100g, 0.001)
+}
+
+// TestLookup_KcalNotOverwrittenWhenPresent — don't clobber a real kcal value.
+func TestLookup_KcalNotOverwrittenWhenPresent(t *testing.T) {
+	k := 539.0
+	fdc := &fakeFoodProvider{
+		searchFn: func(_ context.Context, _ string, _ int) ([]ingredient.Candidate, error) {
+			return []ingredient.Candidate{{Name: "Nutella", Source: "fdc", Kcal100g: &k}}, nil
+		},
+	}
+	resolver := ingredient.NewResolver(newFakeRepo(), nil, fdc)
+	results, err := resolver.Lookup(context.Background(), "", "nutella", "en", 5)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.NotNil(t, results[0].Kcal100g)
+	assert.Equal(t, 539.0, *results[0].Kcal100g)
+}
