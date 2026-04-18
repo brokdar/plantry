@@ -23,6 +23,7 @@ import {
   useTimeSlots,
 } from "@/lib/queries/slots"
 import { slotSchema, type SlotFormValues } from "@/lib/schemas/slot"
+import { toastError } from "@/lib/toast"
 
 function SlotIcon({ name }: { name: string }) {
   const Icon = (
@@ -63,9 +64,7 @@ export function TimeSlotsEditor() {
     try {
       await deleteMut.mutateAsync(s.id)
     } catch (err) {
-      window.alert(
-        err instanceof ApiError ? t(err.messageKey) : t("error.server")
-      )
+      toastError(err, t)
     }
   }
 

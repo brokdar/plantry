@@ -1,13 +1,16 @@
 {
   "nav": {
     "brand": "Plantry",
+    "atelier_tagline": "Editorial Nourishment",
+    "generate_plan": "Generate Plan",
     "planner": "Planner",
     "ingredients": "Ingredients",
     "components": "Components",
     "templates": "Templates",
     "import": "Import",
     "archive": "Archive",
-    "settings": "Settings"
+    "settings": "Settings",
+    "search_placeholder": "Search the catalog…"
   },
   "archive": {
     "title": "Archive",
@@ -16,7 +19,13 @@
     "week_label": "Week {{week}}, {{year}}",
     "back": "Back to archive",
     "forgotten": "Forgotten",
-    "most_cooked": "Most cooked"
+    "most_cooked": "Most cooked",
+    "read_only": "Read only",
+    "review": "Review",
+    "copy_to_current": "Copy to current",
+    "copy_confirm_title": "Copy this week into the current week?",
+    "copy_confirm_body": "Meals will be added to week {{week}}, {{year}}. Existing meals in the current week are not overwritten.",
+    "copy_success": "Week copied to current"
   },
   "import": {
     "title": "Import recipe",
@@ -73,6 +82,7 @@
     "this_week": "This week",
     "copy_week": "Copy week to next",
     "copy_success": "Week copied",
+    "generate_prompt": "Plan my week based on my goals and time slots.",
     "empty_state_no_slots_title": "Set up your time slots first",
     "empty_state_no_slots_body": "Define when you eat — breakfast, lunch, dinner, snacks — so you can plan meals into them.",
     "empty_state_no_slots_cta": "Configure time slots",
@@ -146,7 +156,11 @@
     "delete_confirm_title": "Delete ingredient?",
     "delete_confirm_body": "This action cannot be undone.",
     "no_results": "No ingredients found.",
-    "empty_state": "No ingredients yet. Create your first one!"
+    "empty_state": "No ingredients yet. Create your first one!",
+    "source_label": "Source",
+    "source_manual": "Manual",
+    "source_off": "Open Food Facts",
+    "source_fdc": "USDA"
   },
   "component": {
     "title": "Components",
@@ -340,7 +354,9 @@
     "showing": "Showing {{from}}\u2013{{to}} of {{total}}",
     "previous": "Previous",
     "next": "Next",
-    "actions": "Actions"
+    "actions": "Actions",
+    "skip_to_content": "Skip to main content",
+    "close": "Close"
   },
   "chat": {
     "title": "AI Assistant",

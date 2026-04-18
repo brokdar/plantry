@@ -1,9 +1,48 @@
-import { request as apiRequest, expect } from "@playwright/test"
+import {
+  request as apiRequest,
+  expect,
+  test as baseTest,
+  type Page,
+} from "@playwright/test"
 
 export const API = "http://localhost:8080"
 
+/**
+ * Extended `test` that auto-installs the dialog guard on every page.
+ * Import as: `import { test, expect } from "./helpers"`.
+ */
+export const test = baseTest.extend({
+  page: async ({ page }, runTest) => {
+    failOnDialog(page)
+    await runTest(page)
+  },
+})
+
+export { expect, apiRequest }
+
 export function uid() {
   return crypto.randomUUID().slice(0, 8)
+}
+
+/**
+ * Registers a dialog handler that fails the test on window.alert (we ship
+ * toasts now, so any alert is a regression) while auto-accepting confirm
+ * and auto-dismissing prompt so delete-flows continue to work.
+ */
+export function failOnDialog(page: Page) {
+  page.on("dialog", (dialog) => {
+    if (dialog.type() === "alert") {
+      void dialog.dismiss()
+      throw new Error(
+        `Unexpected window.alert during test: "${dialog.message()}" — migrate this error path to toast.`
+      )
+    }
+    if (dialog.type() === "prompt") {
+      void dialog.dismiss()
+      return
+    }
+    void dialog.accept()
+  })
 }
 
 export async function seedIngredient(data: {
@@ -104,6 +143,23 @@ export async function cleanupSlot(id: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
   await ctx.delete(`/api/settings/slots/${id}`)
   await ctx.dispose()
+}
+
+export async function seedTemplate(data: {
+  name: string
+  components?: { component_id: number; portions: number }[]
+}) {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  const res = await ctx.post("/api/templates", {
+    data: { components: [], ...data },
+  })
+  const body = await res.json()
+  expect(
+    res.ok(),
+    `Seed template "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
+  ).toBeTruthy()
+  await ctx.dispose()
+  return body as { id: number; name: string }
 }
 
 export async function cleanupTemplate(id: number) {

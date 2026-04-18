@@ -1,18 +1,18 @@
 import { useState, useDeferredValue } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
-import { Trash2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Apple, MoreVertical, Plus } from "lucide-react"
+
+import { EditorialCard } from "@/components/editorial/EditorialCard"
+import { EmptyCreateCard } from "@/components/editorial/EmptyCreateCard"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+  FilterChipGroup,
+  type FilterChipOption,
+} from "@/components/editorial/FilterChipGroup"
+import { PageHeader } from "@/components/editorial/PageHeader"
+import { MacroBar } from "@/components/editorial/MacroBar"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -21,9 +21,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useIngredients, useDeleteIngredient } from "@/lib/queries/ingredients"
 
 const PAGE_SIZE = 20
+
+const INGREDIENT_SOURCES = ["manual", "off", "fdc"] as const
+type IngredientSource = (typeof INGREDIENT_SOURCES)[number]
 
 export function IngredientList() {
   const { t } = useTranslation()
@@ -31,6 +42,7 @@ export function IngredientList() {
 
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search)
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null)
   const [offset, setOffset] = useState(0)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -55,104 +67,177 @@ export function IngredientList() {
   }
 
   const total = data?.total ?? 0
-  const items = data?.items ?? []
+  const itemsRaw = data?.items ?? []
+  const items = sourceFilter
+    ? itemsRaw.filter((i) => i.source === sourceFilter)
+    : itemsRaw
   const from = total > 0 ? offset + 1 : 0
   const to = Math.min(offset + PAGE_SIZE, total)
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {t("ingredient.title")}
-        </h1>
-        <Button asChild>
-          <Link to="/ingredients/new">{t("ingredient.create")}</Link>
-        </Button>
-      </div>
+  const sourceOptions: FilterChipOption[] = INGREDIENT_SOURCES.map(
+    (source) => ({
+      value: source,
+      label: t(`ingredient.source_${source}`),
+      testId: `ingredient-filter-source-${source}`,
+    })
+  )
 
-      <Input
-        placeholder={t("ingredient.search_placeholder")}
-        value={search}
-        onChange={(e) => {
-          setSearch(e.target.value)
-          setOffset(0)
-        }}
-        className="max-w-sm"
+  return (
+    <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 md:px-8 md:py-12">
+      <PageHeader
+        title={t("ingredient.title")}
+        actions={
+          <Button asChild>
+            <Link to="/ingredients/new">
+              <Plus className="mr-1.5 size-4" aria-hidden />
+              {t("ingredient.create")}
+            </Link>
+          </Button>
+        }
       />
 
+      <div className="space-y-4">
+        <Input
+          placeholder={t("ingredient.search_placeholder")}
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value)
+            setOffset(0)
+          }}
+          className="max-w-sm rounded-full bg-surface-container-highest"
+          data-testid="inventory-search"
+        />
+        <FilterChipGroup
+          testId="ingredient-filter-source"
+          ariaLabel={t("ingredient.source_label")}
+          options={sourceOptions}
+          value={sourceFilter}
+          onValueChange={setSourceFilter}
+        />
+      </div>
+
       {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-64 w-full rounded-xl" />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <p className="py-12 text-center text-muted-foreground">
-          {deferredSearch
-            ? t("ingredient.no_results")
-            : t("ingredient.empty_state")}
-        </p>
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <EmptyCreateCard
+            to="/ingredients/new"
+            title={t("ingredient.create")}
+            description={
+              deferredSearch || sourceFilter
+                ? t("ingredient.no_results")
+                : t("ingredient.empty_state")
+            }
+            testId="ingredient-create-tile"
+          />
+        </div>
       ) : (
         <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("ingredient.name")}</TableHead>
-                <TableHead className="text-right">
-                  {t("ingredient.kcal")}
-                </TableHead>
-                <TableHead className="text-right">
-                  {t("ingredient.protein")}
-                </TableHead>
-                <TableHead className="text-right">
-                  {t("ingredient.fat")}
-                </TableHead>
-                <TableHead className="text-right">
-                  {t("ingredient.carbs")}
-                </TableHead>
-                <TableHead className="w-[60px]">
-                  <span className="sr-only">{t("common.actions")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => (
-                <TableRow
-                  key={item.id}
-                  className="cursor-pointer"
-                  onClick={() =>
-                    navigate({
-                      to: "/ingredients/$id/edit",
-                      params: { id: String(item.id) },
-                    })
-                  }
-                >
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  <TableCell className="text-right">{item.kcal_100g}</TableCell>
-                  <TableCell className="text-right">
-                    {item.protein_100g}
-                  </TableCell>
-                  <TableCell className="text-right">{item.fat_100g}</TableCell>
-                  <TableCell className="text-right">
-                    {item.carbs_100g}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setDeleteId(item.id)
-                      }}
-                    >
-                      <Trash2 className="size-4" />
-                      <span className="sr-only">{t("common.delete")}</span>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {items.map((item) => (
+              <div
+                key={item.id}
+                className="relative"
+                data-testid={`ingredient-card-${item.id}`}
+              >
+                <EditorialCard interactive>
+                  <Link
+                    to="/ingredients/$id/edit"
+                    params={{ id: String(item.id) }}
+                    className="absolute inset-0 z-0"
+                    aria-label={item.name}
+                  />
+                  <EditorialCard.Image
+                    src={item.image_path ?? undefined}
+                    alt={item.name}
+                  >
+                    {!item.image_path && (
+                      <Apple
+                        className="size-10 text-on-surface-variant/30"
+                        aria-hidden
+                      />
+                    )}
+                  </EditorialCard.Image>
+                  <EditorialCard.Body>
+                    <EditorialCard.Title>{item.name}</EditorialCard.Title>
+                    <EditorialCard.Meta className="mt-2">
+                      <Badge variant="secondary" className="text-[10px]">
+                        {t(
+                          `ingredient.source_${item.source as IngredientSource}`,
+                          {
+                            defaultValue: item.source,
+                          }
+                        )}
+                      </Badge>
+                      <span>{item.kcal_100g} kcal / 100g</span>
+                    </EditorialCard.Meta>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-on-surface-variant">
+                      <MacroRow
+                        label={t("ingredient.protein")}
+                        value={item.protein_100g}
+                        color="primary"
+                      />
+                      <MacroRow
+                        label={t("ingredient.carbs")}
+                        value={item.carbs_100g}
+                        color="tertiary"
+                      />
+                      <MacroRow
+                        label={t("ingredient.fat")}
+                        value={item.fat_100g}
+                        color="secondary"
+                      />
+                    </div>
+                  </EditorialCard.Body>
+                </EditorialCard>
+                <div className="absolute top-3 right-3 z-10">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t("common.actions")}
+                        className="bg-surface-container-lowest/80 backdrop-blur-sm"
+                        data-testid={`ingredient-card-${item.id}-menu`}
+                      >
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() =>
+                          navigate({
+                            to: "/ingredients/$id/edit",
+                            params: { id: String(item.id) },
+                          })
+                        }
+                      >
+                        {t("common.edit")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setDeleteId(item.id)}
+                        className="text-destructive focus:text-destructive"
+                        data-testid={`ingredient-card-${item.id}-delete`}
+                      >
+                        {t("common.delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            ))}
+            {offset + PAGE_SIZE >= total && (
+              <EmptyCreateCard
+                to="/ingredients/new"
+                title={t("ingredient.create")}
+                testId="ingredient-create-tile"
+              />
+            )}
+          </div>
 
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
@@ -164,6 +249,7 @@ export function IngredientList() {
                 size="sm"
                 disabled={offset === 0}
                 onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
+                data-testid="pagination-prev"
               >
                 {t("common.previous")}
               </Button>
@@ -172,6 +258,7 @@ export function IngredientList() {
                 size="sm"
                 disabled={offset + PAGE_SIZE >= total}
                 onClick={() => setOffset((o) => o + PAGE_SIZE)}
+                data-testid="pagination-next"
               >
                 {t("common.next")}
               </Button>
@@ -211,12 +298,37 @@ export function IngredientList() {
               variant="destructive"
               onClick={handleDelete}
               disabled={deleteMutation.isPending}
+              data-testid="confirm-delete"
             >
               {t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function MacroRow({
+  label,
+  value,
+  color,
+}: {
+  label: string
+  value: number
+  color: "primary" | "tertiary" | "secondary"
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-1">
+        <span className="text-[10px] font-medium tracking-wider uppercase">
+          {label}
+        </span>
+        <span className="font-heading text-sm font-bold text-on-surface">
+          {value.toFixed(0)}
+        </span>
+      </div>
+      <MacroBar segments={[{ value, color }]} max={50} thickness="sm" />
     </div>
   )
 }

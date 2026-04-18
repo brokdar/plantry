@@ -26,8 +26,13 @@ describe("ComponentList", () => {
 
     expect(await screen.findByText("Chicken Curry")).toBeInTheDocument()
     expect(screen.getByText("Tofu Bowl")).toBeInTheDocument()
-    expect(screen.getByText("Main")).toBeInTheDocument()
-    expect(screen.getByText("Standalone")).toBeInTheDocument()
+    // Role labels also appear as filter chips — pick the card scope.
+    const mainCard = screen.getByTestId(`component-card-${mockChickenCurry.id}`)
+    const standaloneCard = screen.getByTestId(
+      `component-card-${mockTofuBowl.id}`
+    )
+    expect(mainCard).toHaveTextContent("Main")
+    expect(standaloneCard).toHaveTextContent("Standalone")
   })
 
   it("renders empty state when no components", async () => {

@@ -1,19 +1,17 @@
 import { useState, useDeferredValue } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
-import { Trash2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
+import { MoreVertical, Plus, UtensilsCrossed } from "lucide-react"
+
+import { EditorialCard } from "@/components/editorial/EditorialCard"
+import { EmptyCreateCard } from "@/components/editorial/EmptyCreateCard"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+  FilterChipGroup,
+  type FilterChipOption,
+} from "@/components/editorial/FilterChipGroup"
+import { PageHeader } from "@/components/editorial/PageHeader"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -23,12 +21,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   useComponents,
   useDeleteComponent,
@@ -44,13 +43,13 @@ export function ComponentList() {
 
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search)
-  const [roleFilter, setRoleFilter] = useState("")
+  const [roleFilter, setRoleFilter] = useState<string | null>(null)
   const [offset, setOffset] = useState(0)
   const [deleteId, setDeleteId] = useState<number | null>(null)
 
   const { data, isLoading } = useComponents({
     search: deferredSearch || undefined,
-    role: roleFilter || undefined,
+    role: roleFilter ?? undefined,
     limit: PAGE_SIZE,
     offset,
   })
@@ -72,18 +71,27 @@ export function ComponentList() {
   const from = total > 0 ? offset + 1 : 0
   const to = Math.min(offset + PAGE_SIZE, total)
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {t("component.title")}
-        </h1>
-        <Button asChild>
-          <Link to="/components/new">{t("component.create")}</Link>
-        </Button>
-      </div>
+  const roleOptions: FilterChipOption[] = COMPONENT_ROLES.map((role) => ({
+    value: role,
+    label: t(`component.role_${role}`),
+    testId: `component-filter-role-${role}`,
+  }))
 
-      <div className="flex flex-wrap items-center gap-3">
+  return (
+    <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 md:px-8 md:py-12">
+      <PageHeader
+        title={t("component.title")}
+        actions={
+          <Button asChild>
+            <Link to="/components/new">
+              <Plus className="mr-1.5 size-4" aria-hidden />
+              {t("component.create")}
+            </Link>
+          </Button>
+        }
+      />
+
+      <div className="space-y-4">
         <Input
           placeholder={t("component.search_placeholder")}
           value={search}
@@ -91,72 +99,77 @@ export function ComponentList() {
             setSearch(e.target.value)
             setOffset(0)
           }}
-          className="max-w-sm"
+          className="max-w-sm rounded-full bg-surface-container-highest"
+          data-testid="catalog-search"
         />
-        <Select
+        <FilterChipGroup
+          testId="component-filter-role"
+          ariaLabel={t("component.role")}
+          options={roleOptions}
           value={roleFilter}
           onValueChange={(v) => {
-            setRoleFilter(v === "all" ? "" : v)
+            setRoleFilter(v)
             setOffset(0)
           }}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder={t("component.all_roles")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("component.all_roles")}</SelectItem>
-            {COMPONENT_ROLES.map((role) => (
-              <SelectItem key={role} value={role}>
-                {t(`component.role_${role}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-64 w-full rounded-xl" />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <p className="py-12 text-center text-muted-foreground">
-          {deferredSearch || roleFilter
-            ? t("component.no_results")
-            : t("component.empty_state")}
-        </p>
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <EmptyCreateCard
+            to="/components/new"
+            title={t("component.create")}
+            description={t("component.empty_state")}
+            testId="component-create-tile"
+          />
+        </div>
       ) : (
         <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("component.name")}</TableHead>
-                <TableHead>{t("component.role")}</TableHead>
-                <TableHead className="text-right">
-                  {t("component.reference_portions")}
-                </TableHead>
-                <TableHead>{t("component.tags")}</TableHead>
-                <TableHead className="w-[60px]">
-                  <span className="sr-only">{t("common.actions")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => (
-                <TableRow
-                  key={item.id}
-                  className="cursor-pointer"
-                  onClick={() =>
-                    navigate({
-                      to: "/components/$id",
-                      params: { id: String(item.id) },
-                    })
-                  }
-                >
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <span>{item.name}</span>
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {items.map((item) => (
+              <div
+                key={item.id}
+                className="relative"
+                data-testid={`component-card-${item.id}`}
+              >
+                <EditorialCard interactive>
+                  <Link
+                    to="/components/$id"
+                    params={{ id: String(item.id) }}
+                    className="absolute inset-0 z-0"
+                    aria-label={item.name}
+                  />
+                  <EditorialCard.Image
+                    src={item.image_path ?? undefined}
+                    alt={item.name}
+                  >
+                    {!item.image_path && (
+                      <UtensilsCrossed
+                        className="size-10 text-on-surface-variant/30"
+                        aria-hidden
+                      />
+                    )}
+                  </EditorialCard.Image>
+                  <EditorialCard.Body>
+                    <div className="flex items-start gap-2">
+                      <EditorialCard.Title className="flex-1">
+                        {item.name}
+                      </EditorialCard.Title>
+                    </div>
+                    <EditorialCard.Meta className="mt-2 flex-wrap">
+                      <Badge variant="secondary">
+                        {t(`component.role_${item.role}`)}
+                      </Badge>
+                      <span>
+                        {item.reference_portions}{" "}
+                        {t("component.reference_portions")}
+                      </span>
                       {forgottenIds.has(item.id) && (
                         <Badge
                           variant="outline"
@@ -174,42 +187,66 @@ export function ComponentList() {
                           {t("archive.most_cooked")}
                         </Badge>
                       )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {t(`component.role_${item.role}`)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {item.reference_portions}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {item.tags.map((tag) => (
-                        <Badge key={tag} variant="outline">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setDeleteId(item.id)
-                      }}
-                    >
-                      <Trash2 className="size-4" />
-                      <span className="sr-only">{t("common.delete")}</span>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    </EditorialCard.Meta>
+                    {item.tags.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1">
+                        {item.tags.map((tag) => (
+                          <Badge
+                            key={tag}
+                            variant="outline"
+                            className="text-xs"
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </EditorialCard.Body>
+                </EditorialCard>
+                <div className="absolute top-3 right-3 z-10">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t("common.actions")}
+                        className="bg-surface-container-lowest/80 backdrop-blur-sm"
+                        data-testid={`component-card-${item.id}-menu`}
+                      >
+                        <MoreVertical className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() =>
+                          navigate({
+                            to: "/components/$id/edit",
+                            params: { id: String(item.id) },
+                          })
+                        }
+                      >
+                        {t("common.edit")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setDeleteId(item.id)}
+                        className="text-destructive focus:text-destructive"
+                        data-testid={`component-card-${item.id}-delete`}
+                      >
+                        {t("common.delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            ))}
+            {offset + PAGE_SIZE >= total && (
+              <EmptyCreateCard
+                to="/components/new"
+                title={t("component.create")}
+                testId="component-create-tile"
+              />
+            )}
+          </div>
 
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
@@ -221,6 +258,7 @@ export function ComponentList() {
                 size="sm"
                 disabled={offset === 0}
                 onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
+                data-testid="pagination-prev"
               >
                 {t("common.previous")}
               </Button>
@@ -229,6 +267,7 @@ export function ComponentList() {
                 size="sm"
                 disabled={offset + PAGE_SIZE >= total}
                 onClick={() => setOffset((o) => o + PAGE_SIZE)}
+                data-testid="pagination-next"
               >
                 {t("common.next")}
               </Button>
@@ -253,6 +292,7 @@ export function ComponentList() {
               variant="destructive"
               onClick={handleDelete}
               disabled={deleteMutation.isPending}
+              data-testid="confirm-delete"
             >
               {t("common.delete")}
             </Button>

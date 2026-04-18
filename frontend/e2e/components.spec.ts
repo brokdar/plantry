@@ -1,4 +1,4 @@
-import { test, expect, request as apiRequest } from "@playwright/test"
+import { test, expect, apiRequest } from "./helpers"
 
 import {
   API,
@@ -36,8 +36,15 @@ test.describe("Component Library", () => {
       const body = (await response.json()) as { id: number }
       createdId = body.id
 
+      // List view may be paginated; narrow by the unique tag to locate the card.
+      await page.getByTestId("catalog-search").fill(tag)
+      await page.waitForResponse(
+        (res) =>
+          res.url().includes("/api/components") &&
+          res.url().includes(`search=${tag}`)
+      )
       await expect(
-        page.getByRole("cell", { name: `Curry ${tag}` })
+        page.getByTestId(`component-card-${createdId}`)
       ).toBeVisible()
     } finally {
       if (createdId) await cleanupComponent(createdId)
@@ -63,20 +70,24 @@ test.describe("Component Library", () => {
     try {
       await page.goto("/components")
 
-      await expect(page.getByRole("cell", { name: c1.name })).toBeVisible()
-      await expect(page.getByRole("cell", { name: c2.name })).toBeVisible()
-      await expect(page.getByRole("cell", { name: c3.name })).toBeVisible()
-
-      await page.getByPlaceholder(/search/i).fill("chicken")
+      // Narrow to seeded items only — shared DB accumulates over test runs.
+      await page.getByTestId("catalog-search").fill(tag)
       await page.waitForResponse(
         (res) =>
           res.url().includes("/api/components") &&
-          res.url().includes("search=chicken")
+          res.url().includes(`search=${tag}`)
       )
 
-      await expect(page.getByRole("cell", { name: c1.name })).toBeVisible()
-      await expect(page.getByRole("cell", { name: c2.name })).toHaveCount(0)
-      await expect(page.getByRole("cell", { name: c3.name })).toHaveCount(0)
+      await expect(page.getByTestId(`component-card-${c1.id}`)).toBeVisible()
+      await expect(page.getByTestId(`component-card-${c2.id}`)).toBeVisible()
+      await expect(page.getByTestId(`component-card-${c3.id}`)).toBeVisible()
+
+      await page.getByTestId("catalog-search").fill(`chicken ${tag}`)
+      await page.waitForResponse((res) => res.url().includes("/api/components"))
+
+      await expect(page.getByTestId(`component-card-${c1.id}`)).toBeVisible()
+      await expect(page.getByTestId(`component-card-${c2.id}`)).toHaveCount(0)
+      await expect(page.getByTestId(`component-card-${c3.id}`)).toHaveCount(0)
     } finally {
       await cleanupComponent(c1.id)
       await cleanupComponent(c2.id)
@@ -122,25 +133,34 @@ test.describe("Component Library", () => {
 
     try {
       await page.goto("/components")
+      await page.getByTestId("catalog-search").fill(tag)
+      await page.waitForResponse(
+        (res) =>
+          res.url().includes("/api/components") &&
+          res.url().includes(`search=${tag}`)
+      )
       await expect(
-        page.getByRole("cell", { name: toDelete.name })
+        page.getByTestId(`component-card-${toDelete.id}`)
       ).toBeVisible()
 
-      const row = page.getByRole("row").filter({ hasText: toDelete.name })
-      await row.getByRole("button", { name: /delete/i }).click()
+      await page.getByTestId(`component-card-${toDelete.id}-menu`).click()
+      await page.getByTestId(`component-card-${toDelete.id}-delete`).click()
 
       const responsePromise = page.waitForResponse(
         (res) =>
           res.url().includes(`/api/components/${toDelete.id}`) &&
           res.request().method() === "DELETE"
       )
-      await page.getByRole("button", { name: /^delete$/i }).click()
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Delete", exact: true })
+        .click()
       await responsePromise
 
-      await expect(page.getByRole("cell", { name: toDelete.name })).toHaveCount(
-        0
-      )
-      await expect(page.getByRole("cell", { name: keep.name })).toBeVisible()
+      await expect(
+        page.getByTestId(`component-card-${toDelete.id}`)
+      ).toHaveCount(0)
+      await expect(page.getByTestId(`component-card-${keep.id}`)).toBeVisible()
     } finally {
       await cleanupComponent(keep.id)
     }

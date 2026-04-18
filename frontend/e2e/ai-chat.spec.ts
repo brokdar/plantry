@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test } from "./helpers"
 
 import { API, cleanupSlot, seedSlot, uid } from "./helpers"
 
@@ -32,8 +32,10 @@ test("chat panel streams assistant text and tool-call states", async ({
     await chatResponse
 
     // Tool card appears during streaming. Match running or ok — either
-    // confirms the tool-call streaming pipeline end-to-end.
-    const toolCard = page.getByTestId("chat-tool-call")
+    // confirms the tool-call streaming pipeline end-to-end. Multiple may
+    // render across the streaming transcript and conversation refetch — we
+    // only need at least one to prove the tool-call pipeline is alive.
+    const toolCard = page.getByTestId("chat-tool-call").first()
     await expect(toolCard).toBeVisible({ timeout: 5_000 })
 
     // Final assistant message shows up in transcript (persisted conversation)

@@ -55,7 +55,7 @@ describe("IngredientList", () => {
     expect(await screen.findByText("No ingredients found.")).toBeInTheDocument()
   })
 
-  test("renders ingredient rows in table", async () => {
+  test("renders ingredient cards with name and kcal", async () => {
     vi.mocked(listIngredients).mockResolvedValue({
       items: [mockChickenBreast, mockBrownRice],
       total: 2,
@@ -64,11 +64,11 @@ describe("IngredientList", () => {
 
     expect(await screen.findByText("Chicken breast")).toBeInTheDocument()
     expect(screen.getByText("Brown rice")).toBeInTheDocument()
-    expect(screen.getByText("165")).toBeInTheDocument()
-    expect(screen.getByText("112")).toBeInTheDocument()
+    expect(screen.getByText("165 kcal / 100g")).toBeInTheDocument()
+    expect(screen.getByText("112 kcal / 100g")).toBeInTheDocument()
   })
 
-  test("shows delete confirmation dialog", async () => {
+  test("shows delete confirmation dialog via card menu", async () => {
     const user = userEvent.setup()
     vi.mocked(listIngredients).mockResolvedValue({
       items: [mockChickenBreast],
@@ -78,8 +78,12 @@ describe("IngredientList", () => {
 
     await screen.findByText("Chicken breast")
 
-    const deleteButtons = screen.getAllByRole("button", { name: "Delete" })
-    await user.click(deleteButtons[0])
+    await user.click(
+      screen.getByTestId(`ingredient-card-${mockChickenBreast.id}-menu`)
+    )
+    await user.click(
+      screen.getByTestId(`ingredient-card-${mockChickenBreast.id}-delete`)
+    )
 
     expect(await screen.findByText("Delete ingredient?")).toBeInTheDocument()
   })
@@ -96,16 +100,17 @@ describe("IngredientList", () => {
 
     await screen.findByText("Chicken breast")
 
-    const deleteButtons = screen.getAllByRole("button", { name: "Delete" })
-    await user.click(deleteButtons[0])
+    await user.click(
+      screen.getByTestId(`ingredient-card-${mockChickenBreast.id}-menu`)
+    )
+    await user.click(
+      screen.getByTestId(`ingredient-card-${mockChickenBreast.id}-delete`)
+    )
 
     const dialog = await screen.findByRole("dialog")
-    const confirmButton = within(dialog).getByRole("button", {
-      name: "Delete",
-    })
-    await user.click(confirmButton)
+    await user.click(within(dialog).getByTestId("confirm-delete"))
 
-    expect(deleteIngredient).toHaveBeenCalledWith(1)
+    expect(deleteIngredient).toHaveBeenCalledWith(mockChickenBreast.id)
   })
 
   test("Previous button disabled on first page", async () => {

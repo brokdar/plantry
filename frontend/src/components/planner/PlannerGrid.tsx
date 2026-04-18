@@ -3,7 +3,6 @@ import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
-import { ApiError } from "@/lib/api/client"
 import type { Component } from "@/lib/api/components"
 import type { TimeSlot } from "@/lib/api/slots"
 import type { Template } from "@/lib/api/templates"
@@ -18,6 +17,9 @@ import {
 import { findPlateAt } from "@/lib/queries/plate-patches"
 import { useApplyTemplate } from "@/lib/queries/templates"
 import { useCreatePlate } from "@/lib/queries/weeks"
+import { toastError } from "@/lib/toast"
+
+import { cn } from "@/lib/utils"
 
 import { AddComponentSheet } from "./AddComponentSheet"
 import { PlateCell } from "./PlateCell"
@@ -96,9 +98,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
         })
       }
     } catch (err) {
-      window.alert(
-        err instanceof ApiError ? t(err.messageKey) : t("error.server")
-      )
+      toastError(err, t)
     }
   }
 
@@ -120,9 +120,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
         input: { plate_id: plateId },
       })
     } catch (err) {
-      window.alert(
-        err instanceof ApiError ? t(err.messageKey) : t("error.server")
-      )
+      toastError(err, t)
     }
   }
 
@@ -137,9 +135,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
         input: { component_id: component.id },
       })
     } catch (err) {
-      window.alert(
-        err instanceof ApiError ? t(err.messageKey) : t("error.server")
-      )
+      toastError(err, t)
     }
   }
 
@@ -147,9 +143,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
     try {
       await removeMut.mutateAsync({ plateId, pcId })
     } catch (err) {
-      window.alert(
-        err instanceof ApiError ? t(err.messageKey) : t("error.server")
-      )
+      toastError(err, t)
     }
   }
 
@@ -158,43 +152,52 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
     try {
       await deletePlateMut.mutateAsync(plateId)
     } catch (err) {
-      window.alert(
-        err instanceof ApiError ? t(err.messageKey) : t("error.server")
-      )
+      toastError(err, t)
     }
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="hide-scrollbar overflow-x-auto">
       <div
-        className="grid min-w-[900px] gap-1"
+        className="grid min-w-[900px] gap-0"
         style={{ gridTemplateColumns: `120px repeat(7, minmax(0, 1fr))` }}
       >
-        <div />
+        <div className="border-b border-outline-variant/15 px-2 py-3" />
         {DAY_KEYS.map((dayKey, idx) => (
           <div
             key={dayKey}
-            className="text-center text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+            className="border-b border-outline-variant/15 px-2 py-3 text-center"
             data-testid={`day-header-${idx}`}
           >
-            {t(dayKey)}
+            <p className="font-heading text-xs font-bold tracking-widest text-on-surface-variant uppercase">
+              {t(dayKey)}
+            </p>
           </div>
         ))}
 
-        {slots.map((slot) => (
-          <div key={slot.id} className="contents">
+        {slots.map((slot, rowIdx) => (
+          <div
+            key={slot.id}
+            className={cn(
+              "contents",
+              rowIdx % 2 === 1 && "[&>*]:bg-surface-container-high/20"
+            )}
+          >
             <div
-              className="flex items-center gap-2 px-2 py-3 text-sm font-medium"
+              className="flex flex-col items-start justify-center gap-1 border-b border-outline-variant/10 px-3 py-4 text-on-surface-variant"
               data-testid={`slot-row-${slot.id}`}
             >
               <SlotIcon name={slot.icon} />
-              <span>{t(slot.name_key, { defaultValue: slot.name_key })}</span>
+              <span className="font-heading text-[10px] font-bold tracking-widest uppercase">
+                {t(slot.name_key, { defaultValue: slot.name_key })}
+              </span>
             </div>
             {DAY_KEYS.map((_, day) => {
               const plate = findPlateAt(week, day, slot.id)
               return (
                 <div
                   key={`${slot.id}-${day}`}
+                  className="border-b border-outline-variant/10 p-2"
                   data-testid={`cell-${day}-${slot.id}`}
                 >
                   <PlateCell

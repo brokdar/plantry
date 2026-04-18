@@ -1,13 +1,16 @@
 {
   "nav": {
     "brand": "Plantry",
+    "atelier_tagline": "Redaktionelle Ernährung",
+    "generate_plan": "Plan generieren",
     "planner": "Planer",
     "ingredients": "Zutaten",
     "components": "Komponenten",
     "templates": "Vorlagen",
     "import": "Import",
     "archive": "Archiv",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "search_placeholder": "Katalog durchsuchen…"
   },
   "archive": {
     "title": "Archiv",
@@ -16,7 +19,13 @@
     "week_label": "Woche {{week}}, {{year}}",
     "back": "Zurück zum Archiv",
     "forgotten": "Vergessen",
-    "most_cooked": "Oft gekocht"
+    "most_cooked": "Oft gekocht",
+    "read_only": "Nur lesen",
+    "review": "Ansehen",
+    "copy_to_current": "In aktuelle Woche kopieren",
+    "copy_confirm_title": "Diese Woche in die aktuelle kopieren?",
+    "copy_confirm_body": "Mahlzeiten werden zu Woche {{week}}, {{year}} hinzugefügt. Vorhandene Mahlzeiten werden nicht überschrieben.",
+    "copy_success": "Woche in aktuelle kopiert"
   },
   "import": {
     "title": "Rezept importieren",
@@ -73,6 +82,7 @@
     "this_week": "Diese Woche",
     "copy_week": "Woche in nächste kopieren",
     "copy_success": "Woche kopiert",
+    "generate_prompt": "Plane meine Woche basierend auf meinen Zielen und Zeitfenstern.",
     "empty_state_no_slots_title": "Lege zuerst deine Mahlzeitzeiten fest",
     "empty_state_no_slots_body": "Definiere Frühstück, Mittag-, Abendessen, Snacks — damit du Mahlzeiten dort einplanen kannst.",
     "empty_state_no_slots_cta": "Mahlzeitzeiten einrichten",
@@ -146,7 +156,11 @@
     "delete_confirm_title": "Zutat löschen?",
     "delete_confirm_body": "Diese Aktion kann nicht rückgängig gemacht werden.",
     "no_results": "Keine Zutaten gefunden.",
-    "empty_state": "Noch keine Zutaten. Erstelle deine erste!"
+    "empty_state": "Noch keine Zutaten. Erstelle deine erste!",
+    "source_label": "Quelle",
+    "source_manual": "Manuell",
+    "source_off": "Open Food Facts",
+    "source_fdc": "USDA"
   },
   "component": {
     "title": "Komponenten",
@@ -340,7 +354,9 @@
     "showing": "{{from}}\u2013{{to}} von {{total}}",
     "previous": "Zurück",
     "next": "Weiter",
-    "actions": "Aktionen"
+    "actions": "Aktionen",
+    "skip_to_content": "Zum Hauptinhalt springen",
+    "close": "Schließen"
   },
   "chat": {
     "title": "KI-Assistent",

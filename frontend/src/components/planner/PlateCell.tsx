@@ -39,22 +39,22 @@ export function PlateCell({
 
   if (!plate) {
     return (
-      <div className="flex min-h-20 items-center justify-center rounded-md border border-dashed border-border/50 bg-card/30">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onAdd}
-          aria-label={t("plate.empty_cell")}
-        >
-          <Plus className="h-4 w-4" />
-          <span className="sr-only">{t("plate.empty_cell")}</span>
-        </Button>
-      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        aria-label={t("plate.empty_cell")}
+        className="group flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-outline-variant/30 text-on-surface-variant/40 transition-all hover:border-primary/40 hover:bg-surface-container-low"
+      >
+        <Plus className="size-5 group-hover:text-primary" aria-hidden />
+        <span className="text-[9px] font-bold tracking-wider uppercase">
+          {t("plate.empty_cell")}
+        </span>
+      </button>
     )
   }
 
   return (
-    <div className="flex min-h-20 min-w-0 flex-col gap-2 overflow-hidden rounded-md border border-border bg-card p-2">
+    <div className="editorial-shadow flex min-h-24 min-w-0 flex-col gap-2 overflow-hidden rounded-xl bg-surface-container-lowest p-2.5">
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"

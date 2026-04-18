@@ -1,4 +1,4 @@
-import { test, expect, request as apiRequest } from "@playwright/test"
+import { test, expect, apiRequest } from "./helpers"
 
 const API_BASE = "http://localhost:8080"
 

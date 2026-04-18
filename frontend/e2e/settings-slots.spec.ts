@@ -1,4 +1,4 @@
-import { request as apiRequest, expect, test } from "@playwright/test"
+import { apiRequest, expect, test } from "./helpers"
 
 const API = "http://localhost:8080"
 
@@ -51,8 +51,7 @@ test.describe("Time slots settings", () => {
         page.locator(`[data-testid="slot-row-${createdId}"]`)
       ).toBeVisible()
 
-      // Delete via the row's button — auto-confirm dialog.
-      page.once("dialog", (d) => d.accept())
+      // Delete via the row's button — failOnDialog auto-accepts confirms.
       const deleteResp = page.waitForResponse(
         (r) =>
           r.url().includes(`/api/settings/slots/${createdId}`) &&

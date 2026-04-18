@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test } from "./helpers"
 
 import {
   cleanupComponent,
@@ -76,7 +76,6 @@ test.describe("Templates", () => {
 
       // Delete the plate so the cell is empty again.
       await cell.getByRole("button", { name: /actions/i }).click()
-      page.once("dialog", (d) => d.accept())
       const deletePlateResp = page.waitForResponse(
         (r) =>
           /\/plates\/\d+$/.test(r.url()) && r.request().method() === "DELETE"

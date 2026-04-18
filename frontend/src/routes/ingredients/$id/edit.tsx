@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
-import { Skeleton } from "@/components/ui/skeleton"
+
+import { PageHeader } from "@/components/editorial/PageHeader"
 import { IngredientEditor } from "@/components/ingredients/IngredientEditor"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useIngredient } from "@/lib/queries/ingredients"
 
 export const Route = createFileRoute("/ingredients/$id/edit")({
@@ -18,7 +20,7 @@ function EditIngredientPage() {
 
   if (Number.isNaN(numericId)) {
     return (
-      <p className="py-12 text-center text-muted-foreground">
+      <p className="py-12 text-center text-on-surface-variant">
         {t("error.invalid_id")}
       </p>
     )
@@ -26,35 +28,33 @@ function EditIngredientPage() {
 
   if (isLoading) {
     return (
-      <section className="space-y-6">
-        <Skeleton className="h-8 w-48" />
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 md:px-8 md:py-12">
+        <Skeleton className="h-10 w-48" />
         <Skeleton className="h-10 w-full" />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-10 w-full" />
           ))}
         </div>
-      </section>
+      </div>
     )
   }
 
   if (!ingredient) {
     return (
-      <p className="py-12 text-center text-muted-foreground">
+      <p className="py-12 text-center text-on-surface-variant">
         {t("error.not_found")}
       </p>
     )
   }
 
   return (
-    <section className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">
-        {t("ingredient.edit")}
-      </h1>
+    <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 md:px-8 md:py-12">
+      <PageHeader title={t("ingredient.edit")} />
       <IngredientEditor
         ingredient={ingredient}
         onSuccess={() => navigate({ to: "/ingredients" })}
       />
-    </section>
+    </div>
   )
 }

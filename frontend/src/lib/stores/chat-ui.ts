@@ -20,7 +20,11 @@ interface ChatUIState {
   reset: () => void
 }
 
-export const useChatUI = create<ChatUIState>((set) => ({
+interface ChatUIStateExtended extends ChatUIState {
+  openWith: (prefill: string) => void
+}
+
+export const useChatUI = create<ChatUIStateExtended>((set) => ({
   open: false,
   draftMessage: "",
   activeConversationId: null,
@@ -32,6 +36,7 @@ export const useChatUI = create<ChatUIState>((set) => ({
   setActiveConversation: (id) => set({ activeConversationId: id }),
   setStreaming: (streaming) => set({ streaming }),
   setMode: (mode) => set({ mode }),
+  openWith: (prefill) => set({ open: true, draftMessage: prefill }),
   reset: () =>
     set({
       draftMessage: "",

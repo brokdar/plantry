@@ -1,6 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { expect, test } from "./helpers"
 
-test("home page loads with Plantry brand and no console errors", async ({
+test("home page loads with sidebar brand and no console errors", async ({
   page,
 }) => {
   const consoleErrors: string[] = []
@@ -13,11 +13,13 @@ test("home page loads with Plantry brand and no console errors", async ({
     consoleErrors.push(err.message)
   })
 
+  await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto("/")
 
-  await expect(
-    page.getByRole("link", { name: /plantry/i }).first()
-  ).toBeVisible()
+  // The planner route uses the rail variant — the full sidebar is not rendered,
+  // but the rail is with the brand link icon.
+  await expect(page.getByTestId("sidenav-rail")).toBeVisible()
+
   // The home route renders the planner; before slots are configured the user
   // sees the empty-state heading. After they're configured, the planner
   // heading appears. Either signals a successful render.

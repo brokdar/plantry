@@ -11,25 +11,27 @@ import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { ChatPanel } from "@/components/chat/ChatPanel"
+import { PageHeader } from "@/components/editorial/PageHeader"
 import { NutritionWeekSummary } from "@/components/planner/NutritionWeekSummary"
 import { PlannerGrid } from "@/components/planner/PlannerGrid"
 import { ShoppingPanel } from "@/components/planner/ShoppingPanel"
 import { WeekNavigator } from "@/components/planner/WeekNavigator"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { ApiError } from "@/lib/api/client"
 import { useAISettings } from "@/lib/queries/ai"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { useCopyWeek, useWeekByDate } from "@/lib/queries/weeks"
+import { useChatUI } from "@/lib/stores/chat-ui"
+import { toastError } from "@/lib/toast"
 
 export const Route = createFileRoute("/")({
   component: PlannerPage,
+  staticData: { shellVariant: "rail" as const },
 })
 
 function nowYearWeek() {
@@ -49,7 +51,7 @@ function PlannerPage() {
   const [{ year, week }, setYearWeek] = useState(nowYearWeek)
   const [shoppingOpen, setShoppingOpen] = useState(false)
   const [nutritionOpen, setNutritionOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
+  const openChat = useChatUI((s) => s.setOpen)
 
   const slotsQuery = useTimeSlots(true)
   const weekQuery = useWeekByDate(year, week)
@@ -60,26 +62,28 @@ function PlannerPage() {
 
   if (slotsQuery.isLoading || weekQuery.isLoading) {
     return (
-      <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+      <div className="px-6 py-12 md:px-12">
+        <p className="text-sm text-on-surface-variant">{t("common.loading")}</p>
+      </div>
     )
   }
 
   if (slots.length === 0) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-          <Settings className="h-10 w-10 text-muted-foreground" aria-hidden />
-          <h2 className="text-xl font-semibold">
+      <div className="px-6 py-12 md:px-12">
+        <section className="editorial-shadow mx-auto flex max-w-2xl flex-col items-center gap-4 rounded-2xl bg-surface-container-lowest py-16 text-center">
+          <Settings className="size-10 text-on-surface-variant" aria-hidden />
+          <h2 className="font-heading text-2xl font-bold text-on-surface">
             {t("planner.empty_state_no_slots_title")}
           </h2>
-          <p className="max-w-md text-sm text-muted-foreground">
+          <p className="max-w-md text-sm text-on-surface-variant">
             {t("planner.empty_state_no_slots_body")}
           </p>
           <Button asChild>
             <Link to="/settings">{t("planner.empty_state_no_slots_cta")}</Link>
           </Button>
-        </CardContent>
-      </Card>
+        </section>
+      </div>
     )
   }
 
@@ -96,56 +100,61 @@ function PlannerPage() {
       })
       setYearWeek(next)
     } catch (err) {
-      window.alert(
-        err instanceof ApiError ? t(err.messageKey) : t("error.server")
-      )
+      toastError(err, t)
     }
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {t("planner.title")}
-        </h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShoppingOpen(true)}
-          >
-            <ShoppingCart className="mr-1.5 h-4 w-4" />
-            {t("shopping.button")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setNutritionOpen(true)}
-          >
-            <BarChart2 className="mr-1.5 h-4 w-4" />
-            {t("nutrition.button")}
-          </Button>
-          {aiSettings?.enabled && (
+    <div className="px-4 py-6 md:px-8 md:py-8">
+      <PageHeader
+        title={t("planner.title")}
+        description={t("planner.week_label", {
+          week: week_.week_number,
+          year: week_.year,
+        })}
+        actions={
+          <>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setChatOpen(true)}
-              data-testid="chat-open-button"
+              onClick={() => setShoppingOpen(true)}
             >
-              <Sparkles className="mr-1.5 h-4 w-4" />
-              {t("chat.button")}
+              <ShoppingCart className="mr-1.5 size-4" />
+              {t("shopping.button")}
             </Button>
-          )}
-          <WeekNavigator
-            year={week_.year}
-            weekNumber={week_.week_number}
-            onPrev={() => setYearWeek(shiftWeek(year, week, -1))}
-            onNext={() => setYearWeek(shiftWeek(year, week, 1))}
-            onCopy={handleCopy}
-          />
-        </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setNutritionOpen(true)}
+            >
+              <BarChart2 className="mr-1.5 size-4" />
+              {t("nutrition.button")}
+            </Button>
+            {aiSettings?.enabled && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openChat(true)}
+                data-testid="chat-open-button"
+              >
+                <Sparkles className="mr-1.5 size-4" />
+                {t("chat.button")}
+              </Button>
+            )}
+            <WeekNavigator
+              year={week_.year}
+              weekNumber={week_.week_number}
+              onPrev={() => setYearWeek(shiftWeek(year, week, -1))}
+              onNext={() => setYearWeek(shiftWeek(year, week, 1))}
+              onCopy={handleCopy}
+            />
+          </>
+        }
+      />
+
+      <div className="editorial-shadow overflow-hidden rounded-2xl bg-surface-container-lowest p-4 md:p-6">
+        <PlannerGrid week={week_} slots={slots} />
       </div>
-      <PlannerGrid week={week_} slots={slots} />
 
       <ShoppingPanel
         weekId={week_.id}
@@ -157,7 +166,7 @@ function PlannerPage() {
         <SheetContent side="right" className="flex w-full flex-col sm:max-w-sm">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
-              <BarChart2 className="h-4 w-4" />
+              <BarChart2 className="size-4" />
               {t("nutrition.title")}
             </SheetTitle>
           </SheetHeader>
@@ -165,7 +174,7 @@ function PlannerPage() {
         </SheetContent>
       </Sheet>
 
-      <ChatPanel weekId={week_.id} open={chatOpen} onOpenChange={setChatOpen} />
+      <ChatPanel weekId={week_.id} />
     </div>
   )
 }

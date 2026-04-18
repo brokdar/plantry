@@ -64,13 +64,13 @@ function ComponentDetailPage() {
     : []
 
   return (
-    <section className="space-y-6">
+    <section className="mx-auto max-w-6xl space-y-6 px-4 py-8 md:px-8 md:py-12">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="font-heading text-3xl font-extrabold tracking-tight text-on-surface md:text-4xl">
             {component.name}
           </h1>
-          <Badge variant="secondary" className="mt-1">
+          <Badge variant="secondary" className="mt-2">
             {t(`component.role_${component.role}`)}
           </Badge>
         </div>

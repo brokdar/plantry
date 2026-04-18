@@ -24,13 +24,13 @@ import { ToolCallBlock } from "./ToolCallBlock"
 
 interface ChatPanelProps {
   weekId: number
-  open: boolean
-  onOpenChange: (open: boolean) => void
 }
 
-export function ChatPanel({ weekId, open, onOpenChange }: ChatPanelProps) {
+export function ChatPanel({ weekId }: ChatPanelProps) {
   const { t } = useTranslation()
   const { data: settings } = useAISettings()
+  const open = useChatUI((s) => s.open)
+  const setOpen = useChatUI((s) => s.setOpen)
   const activeConversationId = useChatUI((s) => s.activeConversationId)
   const setActiveConversation = useChatUI((s) => s.setActiveConversation)
   const { data: conversation } = useConversation(activeConversationId)
@@ -66,7 +66,7 @@ export function ChatPanel({ weekId, open, onOpenChange }: ChatPanelProps) {
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent side="right" className="flex w-full flex-col sm:max-w-md">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">

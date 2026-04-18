@@ -139,12 +139,14 @@ function ImportPage() {
   )
 
   return (
-    <section className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">
+    <section className="mx-auto max-w-4xl space-y-8 px-4 py-8 md:px-8 md:py-12">
+      <header className="space-y-2">
+        <h1 className="font-heading text-4xl font-extrabold tracking-tight text-on-surface md:text-5xl">
           {t("import.title")}
         </h1>
-        <p className="text-sm text-muted-foreground">{t("import.subtitle")}</p>
+        <p className="max-w-lg text-on-surface-variant md:text-lg">
+          {t("import.subtitle")}
+        </p>
       </header>
 
       {step === 1 && (
