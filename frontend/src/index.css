@@ -221,6 +221,15 @@
   }
 }
 
+@keyframes shimmer-sweep {
+  from {
+    transform: translateX(-150%) skewX(-12deg);
+  }
+  to {
+    transform: translateX(220%) skewX(-12deg);
+  }
+}
+
 @layer utilities {
   .editorial-shadow {
     box-shadow: var(--shadow-editorial);
@@ -244,5 +253,26 @@
   }
   .font-heading {
     font-family: var(--font-heading);
+  }
+  /* Shimmer sweep overlay for gradient CTA buttons */
+  .btn-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.22) 50%,
+      transparent 100%
+    );
+    transform: translateX(-150%) skewX(-12deg);
+    pointer-events: none;
+  }
+  .btn-shimmer:hover::after {
+    animation: shimmer-sweep 0.55s ease-out forwards;
   }
 }

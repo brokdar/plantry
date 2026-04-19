@@ -21,20 +21,20 @@ const VARIANT_CLASSES: Record<
   }
 > = {
   default: {
-    root: "gradient-primary editorial-shadow flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold text-on-primary transition-transform active:scale-95",
-    icon: "size-4",
+    root: "btn-shimmer group gradient-primary editorial-shadow flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold text-on-primary transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_20px_-4px_rgba(74,101,77,0.50)] active:translate-y-0 active:scale-[0.98] active:shadow-none",
+    icon: "size-4 transition-transform duration-300 group-hover:rotate-12",
     showLabel: true,
     testId: "generate-plan-default",
   },
   rail: {
-    root: "gradient-primary flex size-10 items-center justify-center rounded-full text-on-primary shadow-md transition-opacity active:opacity-80",
-    icon: "size-5",
+    root: "gradient-primary group flex size-10 items-center justify-center rounded-full text-on-primary shadow-md transition-[transform,box-shadow,opacity] duration-150 ease-out hover:scale-110 hover:shadow-[0_4px_14px_-2px_rgba(74,101,77,0.50)] active:scale-95 active:opacity-80",
+    icon: "size-5 transition-transform duration-300 group-hover:rotate-12",
     showLabel: false,
     testId: "generate-plan-rail",
   },
   fab: {
-    root: "gradient-primary editorial-shadow flex size-14 items-center justify-center rounded-full text-on-primary transition-transform active:scale-95",
-    icon: "size-6",
+    root: "btn-shimmer group gradient-primary editorial-shadow flex size-14 items-center justify-center rounded-full text-on-primary transition-[transform,box-shadow] duration-150 ease-out hover:scale-105 hover:shadow-[0_8px_24px_-4px_rgba(74,101,77,0.55)] active:scale-95",
+    icon: "size-6 transition-transform duration-300 group-hover:rotate-12",
     showLabel: false,
     testId: "generate-plan-fab",
   },

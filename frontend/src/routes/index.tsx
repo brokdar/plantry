@@ -26,6 +26,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { clearWeekPlates } from "@/lib/api/weeks"
 import { useAISettings } from "@/lib/queries/ai"
 import { queryClient } from "@/lib/query-client"
@@ -208,24 +214,44 @@ function PlannerPage() {
               </span>
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setNutritionOpen(true)}
-            aria-label={t("nutrition.button")}
-          >
-            <BarChart2 className="size-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setNutritionOpen(true)}
+                  aria-label={t("nutrition.button")}
+                  className="hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
+                >
+                  <BarChart2 className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {t("nutrition.button")}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {aiSettings?.enabled && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => openChat(true)}
-              aria-label={t("chat.button")}
-              data-testid="chat-open-button"
-            >
-              <Sparkles className="size-4" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => openChat(true)}
+                    aria-label={t("chat.button")}
+                    data-testid="chat-open-button"
+                    className="hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
+                  >
+                    <Sparkles className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {t("chat.button")}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       </div>

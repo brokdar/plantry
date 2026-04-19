@@ -65,10 +65,10 @@ function EmptySlot({ onAdd }: SlotCellProps) {
       data-slot-state="empty"
       className={cn(
         CELL_HEIGHT,
-        "group flex w-full flex-col items-center justify-center gap-2 rounded-[14px] border border-dashed border-outline-variant/40 bg-surface-container-low/50 text-on-surface-variant transition-colors hover:border-primary/50 hover:bg-surface-container-low"
+        "group flex w-full flex-col items-center justify-center gap-2 rounded-[14px] border border-dashed border-outline-variant/40 bg-surface-container-low/50 text-on-surface-variant transition-[border-color,background-color,transform,box-shadow] duration-150 ease-out hover:-translate-y-px hover:border-primary/50 hover:bg-surface-container-low hover:shadow-sm"
       )}
     >
-      <span className="grid size-8 place-items-center rounded-full border border-outline-variant bg-surface-container-lowest text-on-surface group-hover:border-primary group-hover:bg-primary group-hover:text-on-primary">
+      <span className="grid size-8 place-items-center rounded-full border border-outline-variant bg-surface-container-lowest text-on-surface transition-[background-color,border-color,color,transform] duration-150 ease-out group-hover:scale-110 group-hover:border-primary group-hover:bg-primary group-hover:text-on-primary">
         <Plus className="h-3.5 w-3.5" aria-hidden />
       </span>
       <span className="font-heading text-[9.5px] font-bold tracking-[0.18em] uppercase">
@@ -198,7 +198,7 @@ function PlannedSlot({
       data-slot-state="planned"
       className={cn(
         CELL_HEIGHT,
-        "group relative flex flex-col overflow-hidden rounded-[14px] border border-outline-variant/50 bg-surface-container-lowest transition-[border-color,box-shadow] hover:border-primary/40 hover:shadow-[0_1px_2px_rgba(25,28,28,0.04),0_4px_12px_-4px_rgba(25,28,28,0.06)]",
+        "group relative flex flex-col overflow-hidden rounded-[14px] border border-outline-variant/50 bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_2px_8px_rgba(25,28,28,0.06),0_4px_16px_-4px_rgba(74,101,77,0.14)]",
         aiFilled &&
           "border-[#c2974a]/40 shadow-[0_0_0_1px_rgba(194,151,74,0.3),0_4px_12px_-4px_rgba(25,28,28,0.06)]"
       )}
