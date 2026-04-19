@@ -277,6 +277,8 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
   // during drag-start switches to "copy". Because dnd-kit doesn't expose the
   // modifier key on drag events, we stash it from the activator event into a
   // ref that onDragEnd reads.
+  const headerScrollRef = useRef<HTMLDivElement>(null)
+  const bodyScrollRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<"move" | "copy">("move")
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -366,105 +368,128 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="hide-scrollbar overflow-x-auto">
-        <div className="editorial-shadow min-w-[960px] rounded-3xl border border-outline-variant/40 bg-surface-container-lowest p-5">
-          <div
-            className="grid gap-2.5"
-            style={{ gridTemplateColumns: "130px repeat(7, minmax(0, 1fr))" }}
-          >
-            <div />
-            {DAY_KEYS.map((dayKey, idx) => {
-              const date = addDays(weekStart, idx)
-              const isToday = isSameDay(date, today)
-              return (
-                <DayHeader
-                  key={dayKey}
-                  idx={idx}
-                  dayKey={dayKey}
-                  date={date}
-                  today={isToday}
-                  macros={dayMacros.get(idx)}
-                />
-              )
-            })}
+      <div>
+        {/* Sticky header row — lives outside overflow-x-auto so page-scroll sticky works */}
+        <div className="sticky top-16 z-20">
+          <div ref={headerScrollRef} className="hide-scrollbar overflow-x-auto">
+            <div
+              className="grid min-w-[960px] gap-2.5 rounded-t-3xl border-t border-r border-l border-outline-variant/40 bg-surface-container-lowest px-5 pt-5"
+              style={{ gridTemplateColumns: "130px repeat(7, minmax(0, 1fr))" }}
+            >
+              <div />
+              {DAY_KEYS.map((dayKey, idx) => {
+                const date = addDays(weekStart, idx)
+                const isToday = isSameDay(date, today)
+                return (
+                  <DayHeader
+                    key={dayKey}
+                    idx={idx}
+                    dayKey={dayKey}
+                    date={date}
+                    today={isToday}
+                    macros={dayMacros.get(idx)}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        </div>
 
-            {slots.map((slot) => (
-              <div key={slot.id} className="contents">
-                <div
-                  className="flex flex-col items-start justify-center gap-1.5 px-3"
-                  data-testid={`slot-row-${slot.id}`}
-                >
-                  <span className="grid size-6 place-items-center rounded-lg bg-surface-container text-on-surface-variant">
-                    <SlotIcon name={slot.icon} />
-                  </span>
-                  <span className="font-heading text-[12.5px] font-bold tracking-[0.04em] text-on-surface uppercase">
-                    {slotLabel(t, slot.name_key)}
-                  </span>
-                </div>
-                {DAY_KEYS.map((_, day) => {
-                  const plate = findPlateAt(week, day, slot.id)
-                  return (
-                    <DndCellWrapper
-                      key={`${slot.id}-${day}`}
-                      day={day}
-                      slotId={slot.id}
-                      plate={plate}
-                    >
-                      <SlotCell
+        {/* Grid body — horizontal scroll synced with header */}
+        <div
+          ref={bodyScrollRef}
+          className="hide-scrollbar overflow-x-auto"
+          onScroll={(e) => {
+            if (headerScrollRef.current)
+              headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft
+          }}
+        >
+          <div className="editorial-shadow min-w-[960px] rounded-b-3xl border-r border-b border-l border-outline-variant/40 bg-surface-container-lowest px-5 pt-2.5 pb-5">
+            <div
+              className="grid gap-2.5"
+              style={{ gridTemplateColumns: "130px repeat(7, minmax(0, 1fr))" }}
+            >
+              {slots.map((slot) => (
+                <div key={slot.id} className="contents">
+                  <div
+                    className="flex flex-col items-center justify-center gap-1.5 px-3"
+                    data-testid={`slot-row-${slot.id}`}
+                  >
+                    <span className="grid size-6 place-items-center rounded-lg bg-surface-container text-on-surface-variant">
+                      <SlotIcon name={slot.icon} />
+                    </span>
+                    <span className="font-heading text-[12.5px] font-bold tracking-[0.04em] text-on-surface uppercase">
+                      {slotLabel(t, slot.name_key)}
+                    </span>
+                  </div>
+                  {DAY_KEYS.map((_, day) => {
+                    const plate = findPlateAt(week, day, slot.id)
+                    return (
+                      <DndCellWrapper
+                        key={`${slot.id}-${day}`}
                         day={day}
                         slotId={slot.id}
                         plate={plate}
-                        componentsById={componentsById}
-                        aiFilled={plate ? aiFilledIds.has(plate.id) : false}
-                        onAdd={() => openPicker(day, slot.id)}
-                        onDeletePlate={() =>
-                          plate && handleDeletePlate(plate.id)
-                        }
-                        onSaveAsTemplate={
-                          plate ? () => setSavePlateId(plate.id) : undefined
-                        }
-                        onToggleFavorite={() => {
-                          const hero = plate?.components
-                            .slice()
-                            .sort((a, b) => a.sort_order - b.sort_order)[0]
-                          const heroComp = hero
-                            ? componentsById.get(hero.component_id)
-                            : undefined
-                          void handleToggleFavorite(
-                            heroComp?.id,
-                            heroComp?.favorite ?? false
-                          )
-                          // Any manual edit on an AI-filled slot clears its badge.
-                          if (plate) clearAiFillOnPlate(plate.id)
-                        }}
-                        onToggleSkip={() => {
-                          void handleToggleSkip(day, slot.id, plate?.id ?? null)
-                          if (plate) clearAiFillOnPlate(plate.id)
-                        }}
-                        onRateLoved={() => {
-                          if (!plate) return
-                          void handleRate(
-                            plate.id,
-                            "loved",
-                            plate.feedback?.status
-                          )
-                          clearAiFillOnPlate(plate.id)
-                        }}
-                        onRateDisliked={() => {
-                          if (!plate) return
-                          void handleRate(
-                            plate.id,
-                            "disliked",
-                            plate.feedback?.status
-                          )
-                          clearAiFillOnPlate(plate.id)
-                        }}
-                      />
-                    </DndCellWrapper>
-                  )
-                })}
-              </div>
-            ))}
+                      >
+                        <SlotCell
+                          day={day}
+                          slotId={slot.id}
+                          plate={plate}
+                          componentsById={componentsById}
+                          aiFilled={plate ? aiFilledIds.has(plate.id) : false}
+                          onAdd={() => openPicker(day, slot.id)}
+                          onDeletePlate={() =>
+                            plate && handleDeletePlate(plate.id)
+                          }
+                          onSaveAsTemplate={
+                            plate ? () => setSavePlateId(plate.id) : undefined
+                          }
+                          onToggleFavorite={() => {
+                            const hero = plate?.components
+                              .slice()
+                              .sort((a, b) => a.sort_order - b.sort_order)[0]
+                            const heroComp = hero
+                              ? componentsById.get(hero.component_id)
+                              : undefined
+                            void handleToggleFavorite(
+                              heroComp?.id,
+                              heroComp?.favorite ?? false
+                            )
+                            if (plate) clearAiFillOnPlate(plate.id)
+                          }}
+                          onToggleSkip={() => {
+                            void handleToggleSkip(
+                              day,
+                              slot.id,
+                              plate?.id ?? null
+                            )
+                            if (plate) clearAiFillOnPlate(plate.id)
+                          }}
+                          onRateLoved={() => {
+                            if (!plate) return
+                            void handleRate(
+                              plate.id,
+                              "loved",
+                              plate.feedback?.status
+                            )
+                            clearAiFillOnPlate(plate.id)
+                          }}
+                          onRateDisliked={() => {
+                            if (!plate) return
+                            void handleRate(
+                              plate.id,
+                              "disliked",
+                              plate.feedback?.status
+                            )
+                            clearAiFillOnPlate(plate.id)
+                          }}
+                        />
+                      </DndCellWrapper>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

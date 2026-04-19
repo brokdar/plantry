@@ -1,9 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#4a654d"/>
-  <!-- stem -->
-  <path d="M16 27 L16 15" stroke="white" stroke-width="2" stroke-linecap="round"/>
-  <!-- left leaf -->
-  <path d="M16 21 C16 21 9 19 8 13 C11 11 16 16 16 21Z" fill="white"/>
-  <!-- right leaf -->
-  <path d="M16 17 C16 17 23 15 24 9 C21 7 16 12 16 17Z" fill="white" opacity="0.8"/>
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4a654d"/>
+      <stop offset="100%" stop-color="#89a58a"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#g)"/>
+  <!-- lucide Leaf: scaled from 24x24 viewBox to fit within 32x32 with 6px padding -->
+  <g transform="translate(6,6) scale(0.833)">
+    <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" fill="white" stroke="white" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>

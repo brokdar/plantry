@@ -455,7 +455,13 @@
     "select_match": "Select a match",
     "recommended": "Recommended",
     "tab_search": "Search",
-    "tab_manual": "Manual"
+    "tab_manual": "Manual",
+    "scanner_hint": "Point camera at a barcode",
+    "scanner_requesting": "Requesting camera access…",
+    "scanner_error_permission": "Camera access denied",
+    "scanner_error_no_camera": "No camera available",
+    "scanner_error_unavailable": "Barcode scanner not supported",
+    "scanner_fallback_title": "Enter barcode manually"
   },
   "portion": {
     "title": "Portions",

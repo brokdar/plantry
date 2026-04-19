@@ -455,7 +455,13 @@
     "select_match": "Treffer auswählen",
     "recommended": "Empfohlen",
     "tab_search": "Suche",
-    "tab_manual": "Manuell"
+    "tab_manual": "Manuell",
+    "scanner_hint": "Kamera auf Barcode richten",
+    "scanner_requesting": "Kamerazugriff wird angefordert…",
+    "scanner_error_permission": "Kamerazugriff verweigert",
+    "scanner_error_no_camera": "Keine Kamera verfügbar",
+    "scanner_error_unavailable": "Barcode-Scanner wird nicht unterstützt",
+    "scanner_fallback_title": "Barcode manuell eingeben"
   },
   "portion": {
     "title": "Portionen",
