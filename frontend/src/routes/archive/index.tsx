@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { useTimeSlots } from "@/lib/queries/slots"
-import { useWeek, useWeeksList } from "@/lib/queries/weeks"
+import { useCurrentWeek, useWeek, useWeeksList } from "@/lib/queries/weeks"
 import type { Week } from "@/lib/api/weeks"
 
 export const Route = createFileRoute("/archive/")({
@@ -25,7 +25,10 @@ function ArchiveListPage() {
   const [offset, setOffset] = useState(0)
 
   const { data, isLoading } = useWeeksList(PAGE_SIZE, offset)
-  const allItems = [...loadedItems, ...(data?.items ?? [])]
+  const { data: currentWeek } = useCurrentWeek()
+  const allItems = [...loadedItems, ...(data?.items ?? [])].filter(
+    (w) => w.id !== currentWeek?.id
+  )
   const effectiveId = selectedId ?? allItems[0]?.id ?? null
   const hasMore =
     (data?.total ?? 0) > loadedItems.length + (data?.items?.length ?? 0)

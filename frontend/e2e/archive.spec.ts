@@ -86,6 +86,26 @@ test.describe("Archive + rotation insights", () => {
     }
   })
 
+  test("current week is not listed in the archive", async ({ page }) => {
+    const ctx = await apiRequest.newContext({ baseURL: API })
+    try {
+      const res = await ctx.get("/api/weeks/current")
+      expect(res.ok()).toBeTruthy()
+      const currentWeek = (await res.json()) as { id: number }
+
+      await page.goto("/archive")
+
+      // Wait for the list to render (or empty state).
+      await page.waitForLoadState("networkidle")
+
+      await expect(
+        page.getByTestId(`archive-week-${currentWeek.id}`)
+      ).toHaveCount(0)
+    } finally {
+      await ctx.dispose()
+    }
+  })
+
   test("component library surfaces Forgotten badge for never-cooked components", async ({
     page,
   }) => {
