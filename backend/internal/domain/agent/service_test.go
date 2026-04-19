@@ -72,7 +72,7 @@ func newServiceFixture(t *testing.T, client llm.Client) *serviceFixture {
 
 	return &serviceFixture{
 		repo:   aiRepo,
-		svc:    agent.NewService(aiRepo, client, tools, plannerSvc, profileSvc, "test-model"),
+		svc:    agent.NewService(aiRepo, llm.StaticResolver(client, "test-model"), tools, plannerSvc, profileSvc),
 		weekID: week.ID,
 	}
 }

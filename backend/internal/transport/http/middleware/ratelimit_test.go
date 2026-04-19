@@ -36,6 +36,31 @@ func TestRateLimiter_DisabledAllowsAll(t *testing.T) {
 	}
 }
 
+func TestRateLimiter_SetLimit_Reconfigures(t *testing.T) {
+	rl := middleware.NewRateLimiter(2)
+	assert.True(t, rl.Allow("ip"))
+	assert.True(t, rl.Allow("ip"))
+	assert.False(t, rl.Allow("ip"), "bucket exhausted")
+
+	// Reconfiguring clears existing buckets and lets traffic through again.
+	rl.SetLimit(5)
+	for i := 0; i < 5; i++ {
+		assert.True(t, rl.Allow("ip"), "request %d should pass after reconfig", i+1)
+	}
+	assert.False(t, rl.Allow("ip"))
+}
+
+func TestRateLimiter_SetLimit_ToZero_Disables(t *testing.T) {
+	rl := middleware.NewRateLimiter(1)
+	assert.True(t, rl.Allow("ip"))
+	assert.False(t, rl.Allow("ip"))
+
+	rl.SetLimit(0)
+	for i := 0; i < 50; i++ {
+		assert.True(t, rl.Allow("ip"))
+	}
+}
+
 func TestRateLimiter_Middleware_Returns429(t *testing.T) {
 	rl := middleware.NewRateLimiter(2)
 	h := rl.Middleware("error.ai.rate_limit_exceeded")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

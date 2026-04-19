@@ -12,12 +12,10 @@ test.describe("AppShell", () => {
     await expect(sidebar.getByTestId("sidenav-brand")).toBeVisible()
 
     for (const label of [
-      /planner/i,
-      /components/i,
-      /ingredients/i,
-      /templates/i,
-      /import/i,
-      /archive/i,
+      /weekly planner/i,
+      /recipes/i,
+      /pantry/i,
+      /past weeks/i,
       /settings/i,
     ]) {
       await expect(sidebar.getByRole("link", { name: label })).toBeVisible()
@@ -26,16 +24,19 @@ test.describe("AppShell", () => {
     await expect(sidebar.getByTestId("generate-plan-default")).toBeVisible()
   })
 
-  test("planner route uses the icon-rail sidebar variant", async ({ page }) => {
+  test("planner route uses the same default sidebar as other routes", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/")
 
-    await expect(page.getByTestId("sidenav-rail")).toBeVisible()
-    await expect(page.getByTestId("sidenav")).toBeHidden()
-    await expect(page.getByTestId("generate-plan-rail")).toBeVisible()
+    await expect(page.getByTestId("sidenav")).toBeVisible()
+    await expect(page.getByTestId("generate-plan-default")).toBeVisible()
   })
 
-  test("theme toggle flips the root class and persists", async ({ page }) => {
+  test("pressing 'd' toggles the root theme class and persists", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto("/settings")
 
@@ -43,20 +44,25 @@ test.describe("AppShell", () => {
       document.documentElement.classList.contains("dark") ? "dark" : "light"
     )
 
-    await page.getByTestId("theme-toggle").click()
+    await page.keyboard.press("d")
 
-    const next = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark") ? "dark" : "light"
-    )
-
-    expect(next).not.toBe(initial)
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.classList.contains("dark") ? "dark" : "light"
+        )
+      )
+      .not.toBe(initial)
 
     // Toggle back to restore state for other tests.
-    await page.getByTestId("theme-toggle").click()
-    const restored = await page.evaluate(() =>
-      document.documentElement.classList.contains("dark") ? "dark" : "light"
-    )
-    expect(restored).toBe(initial)
+    await page.keyboard.press("d")
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.documentElement.classList.contains("dark") ? "dark" : "light"
+        )
+      )
+      .toBe(initial)
   })
 
   test("mobile viewport shows bottom nav and generate FAB", async ({
@@ -69,8 +75,7 @@ test.describe("AppShell", () => {
     await expect(bottomNav).toBeVisible()
     await expect(bottomNav.getByTestId("generate-plan-fab")).toBeVisible()
 
-    // Desktop sidebars must be hidden on mobile (rendered but not visible).
+    // Desktop sidebar must be hidden on mobile (rendered but not visible).
     await expect(page.getByTestId("sidenav")).toBeHidden()
-    await expect(page.getByTestId("sidenav-rail")).toBeHidden()
   })
 })

@@ -29,7 +29,7 @@ test.describe("Time slots settings", () => {
     let createdId: number | undefined
 
     try {
-      await page.goto("/settings")
+      await page.goto("/settings?tab=meal_slots")
 
       await page.getByLabel(/translation key/i).fill(nameKey)
       await page.getByLabel(/^icon$/i).fill("Coffee")
@@ -71,7 +71,7 @@ test.describe("Time slots settings", () => {
   })
 
   test("validation surfaces when name_key is empty", async ({ page }) => {
-    await page.goto("/settings")
+    await page.goto("/settings?tab=meal_slots")
     await page.getByLabel(/^icon$/i).fill("Coffee")
     await page.getByRole("button", { name: "Save", exact: true }).click()
     // UI should show the validation error inline.

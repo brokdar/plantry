@@ -129,8 +129,84 @@
     }
   },
   "settings_page": {
+    "eyebrow": "Einstellungen",
     "title": "Workspace-Einstellungen",
-    "subtitle": "Passe dein digitales Küchen-Sanktuarium an deinen kulinarischen Workflow an. Diese Einstellungen steuern, wie dein redaktioneller Ernährungsplan kuratiert und präsentiert wird."
+    "subtitle": "Passe dein digitales Küchen-Sanktuarium an deinen kulinarischen Workflow an. Diese Einstellungen steuern, wie dein redaktioneller Ernährungsplan kuratiert und präsentiert wird.",
+    "clear_override": "Überschreibung entfernen",
+    "tabs": {
+      "general": "Allgemein",
+      "ai": "KI",
+      "nutrition": "Ernährung",
+      "meal_slots": "Mahlzeiten-Slots",
+      "system": "System"
+    },
+    "source": {
+      "db": "Datenbank",
+      "env": "Umgebungsvariable",
+      "default": "Standard",
+      "tooltip_db": "Dieser Wert ist in der Datenbank gespeichert und hat Vorrang vor der Umgebungsvariable.",
+      "tooltip_env": "Dieser Wert wird über eine Umgebungsvariable gesetzt. Speichere einen Datenbank-Wert, um ihn zur Laufzeit zu ändern.",
+      "tooltip_default": "Kein Wert konfiguriert — der Standardwert ist aktiv.",
+      "env_also_set": "Für diesen Schlüssel ist auch eine Umgebungsvariable gesetzt. Der Datenbank-Wert hat Vorrang."
+    },
+    "ai": {
+      "provider_section_title": "Assistenten-Konfiguration",
+      "provider_label": "Anbieter",
+      "provider_placeholder": "Anbieter auswählen…",
+      "provider_none": "Deaktiviert",
+      "provider_fake": "Fake (Tests)",
+      "api_key_label": "API-Schlüssel",
+      "api_key_description": "Dein API-Schlüssel des Anbieters. Wird verschlüsselt gespeichert, wenn PLANTRY_SECRET_KEY gesetzt ist.",
+      "api_key_stored": "Es ist bereits ein Schlüssel gespeichert ({{preview}}). Gib einen neuen Wert ein, um ihn zu ersetzen.",
+      "api_key_placeholder": "sk-…",
+      "api_key_placeholder_replace": "Gib einen neuen Schlüssel ein, um den gespeicherten zu ersetzen",
+      "api_key_saved": "API-Schlüssel gespeichert.",
+      "test_connection": "Verbindung testen",
+      "validated": "Verbindung bestätigt.",
+      "model_label": "Modell",
+      "model_placeholder": "Modell auswählen…",
+      "model_saved": "Modell gespeichert.",
+      "click_test_to_load_models": "Führe „Verbindung testen“ aus, um verfügbare Modelle zu laden.",
+      "advanced_title": "Erweitert",
+      "rate_limit_label": "Chat-Ratenlimit",
+      "rate_limit_description": "Maximale /api/ai/chat-Anfragen pro Minute pro IP. 0 deaktiviert das Limit.",
+      "fake_script_label": "Fake-Provider-Skript",
+      "fake_script_description": "Nur für Anbieter „Fake“. Pfad zu einer JSONL-Datei mit vorbereiteten Antworten.",
+      "secret_key_banner_title": "PLANTRY_SECRET_KEY ist nicht gesetzt",
+      "secret_key_banner_body": "Setze die Umgebungsvariable PLANTRY_SECRET_KEY, um API-Schlüssel über die UI zu bearbeiten. Über Umgebungsvariablen bereitgestellte Schlüssel funktionieren auch ohne sie.",
+      "wizard": {
+        "step1_title": "Anbieter wählen",
+        "step1_description": "Wähle, welcher Modellanbieter den Ernährungsassistenten antreiben soll.",
+        "step2_title": "API-Schlüssel hinterlegen",
+        "step2_description": "Validiere den Schlüssel, indem du die verfügbaren Modelle abrufst.",
+        "step3_title": "Modell auswählen",
+        "step3_description": "Wähle das Modell, das der Assistent verwenden soll."
+      }
+    },
+    "fdc": {
+      "title": "USDA FoodData Central",
+      "api_key_label": "FDC API-Schlüssel",
+      "api_key_description": "Aktiviert die Live-Suche in FDC. Leer lassen, um sie zu deaktivieren.",
+      "api_key_stored": "Es ist bereits ein Schlüssel gespeichert ({{preview}}). Gib einen neuen Wert ein, um ihn zu ersetzen.",
+      "api_key_placeholder": "Dein FDC API-Schlüssel",
+      "api_key_placeholder_replace": "Gib einen neuen Schlüssel ein, um den gespeicherten zu ersetzen"
+    },
+    "system": {
+      "readonly_notice": "Infrastruktur-Einstellungen stammen aus Umgebungsvariablen und erfordern einen Neustart zur Änderung.",
+      "fields": {
+        "port": "HTTP-Port",
+        "db_path": "Datenbank-Pfad",
+        "log_level": "Log-Level",
+        "image_path": "Bildspeicher-Pfad",
+        "dev_mode": "Dev-Modus",
+        "version": "Version",
+        "build_commit": "Build-Commit"
+      },
+      "env_tooltip": "Gesetzt via {{envVar}}. Neustart erforderlich.",
+      "restart_required": "Neustart erforderlich",
+      "secret_key_banner_title": "Verschlüsselung deaktiviert",
+      "secret_key_banner_body": "PLANTRY_SECRET_KEY ist nicht gesetzt — API-Schlüssel können erst über die UI gespeichert werden, wenn er konfiguriert ist."
+    }
   },
   "display_preferences": {
     "title": "Darstellung",
@@ -138,7 +214,11 @@
     "theme_description": "Wechsle zwischen der hellen Redaktions-Palette und einem gedämpften Abendmodus.",
     "theme_light": "Hell",
     "theme_dark": "Dunkel",
-    "theme_system": "System"
+    "theme_system": "System",
+    "language_label": "Sprache",
+    "language_description": "Gilt für die gesamte Oberfläche.",
+    "language_english": "English",
+    "language_german": "Deutsch"
   },
   "slot": {
     "title": "Mahlzeiten",
@@ -314,7 +394,11 @@
     "system_prompt_placeholder": "Beschreibe deine Vorlieben für die KI...",
     "locale": "Sprache",
     "save": "Profil speichern",
-    "save_success": "Profil gespeichert"
+    "save_success": "Profil gespeichert",
+    "macros_label": "Makros",
+    "kcal_target_placeholder": "z. B. 2000",
+    "add_restriction": "Hinzufügen",
+    "remove_restriction": "{{tag}} entfernen"
   },
   "template": {
     "eyebrow": "Gespeicherte Zusammenstellungen",
@@ -388,22 +472,33 @@
       "llm_failed": "Die KI konnte das Rezept nicht extrahieren.",
       "invalid_url": "Ungültige URL.",
       "invalid_resolution": "Ungültige Zutatenauswahl."
+    },
+    "settings": {
+      "unknown_key": "Unbekannter Einstellungsschlüssel.",
+      "readonly_key": "Diese Einstellung kann nur über eine Umgebungsvariable geändert werden.",
+      "invalid_value": "Ungültiger Wert für diese Einstellung.",
+      "invalid_api_key": "Der API-Schlüssel wurde abgelehnt. Bitte überprüfe ihn.",
+      "secret_key_missing": "PLANTRY_SECRET_KEY ist nicht gesetzt — verschlüsselte Werte können nicht gespeichert werden.",
+      "unknown_provider": "Unbekannter KI-Anbieter."
     }
   },
   "common": {
     "save": "Speichern",
+    "saved": "Gespeichert.",
     "cancel": "Abbrechen",
     "delete": "Löschen",
     "confirm": "Bestätigen",
     "edit": "Bearbeiten",
     "back": "Zurück",
     "loading": "Laden...",
-    "showing": "{{from}}\u2013{{to}} von {{total}}",
+    "showing": "{{from}}–{{to}} von {{total}}",
     "previous": "Zurück",
     "next": "Weiter",
     "actions": "Aktionen",
     "skip_to_content": "Zum Hauptinhalt springen",
-    "close": "Schließen"
+    "close": "Schließen",
+    "yes": "Ja",
+    "no": "Nein"
   },
   "chat": {
     "title": "KI-Assistent",

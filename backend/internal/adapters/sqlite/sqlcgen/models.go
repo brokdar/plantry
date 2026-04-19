@@ -24,6 +24,13 @@ type AiMessage struct {
 	CreatedAt      string
 }
 
+type AppSetting struct {
+	Key       string
+	Value     string
+	Encrypted int64
+	UpdatedAt string
+}
+
 type Component struct {
 	ID                int64
 	Name              string

@@ -19,7 +19,8 @@ type Config struct {
 	AIAPIKey          string
 	AIRateLimitPerMin int
 	AIFakeScript      string
-	DevMode           bool // exposes dev-only debug endpoints; PLANTRY_DEV_MODE
+	DevMode           bool   // exposes dev-only debug endpoints; PLANTRY_DEV_MODE
+	SecretKey         string // PLANTRY_SECRET_KEY: optional; enables DB encryption for API keys
 }
 
 func Load() (Config, error) {
@@ -89,6 +90,10 @@ func Load() (Config, error) {
 	}
 	if v := os.Getenv("PLANTRY_AI_FAKE_SCRIPT"); v != "" {
 		cfg.AIFakeScript = v
+	}
+
+	if v := os.Getenv("PLANTRY_SECRET_KEY"); v != "" {
+		cfg.SecretKey = v
 	}
 
 	if v := os.Getenv("PLANTRY_DEV_MODE"); v != "" {

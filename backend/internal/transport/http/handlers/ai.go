@@ -17,31 +17,38 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/sse"
 )
 
-// AIHandler exposes /api/ai/* endpoints. When svc is nil, every endpoint
-// returns 503 with error.ai.provider_missing — this lets the router register
-// routes unconditionally while still disabling AI at runtime.
+// AIHandler exposes /api/ai/* endpoints. Enabled state is derived per-request
+// from the llm.Resolver, so endpoints reflect the current effective
+// configuration (database override or env-var) rather than a snapshot taken
+// at startup.
 type AIHandler struct {
 	svc       *agent.Service
-	provider  string
-	model     string
+	resolver  llm.Resolver
 	heartbeat time.Duration
 }
 
-// NewAIHandler constructs an AIHandler. svc may be nil to signal that AI is
-// disabled (no provider configured).
-func NewAIHandler(svc *agent.Service, provider, model string) *AIHandler {
-	return &AIHandler{svc: svc, provider: provider, model: model, heartbeat: 15 * time.Second}
+// NewAIHandler constructs an AIHandler. The resolver must be non-nil; it
+// determines at request time whether a provider is configured.
+func NewAIHandler(svc *agent.Service, resolver llm.Resolver) *AIHandler {
+	return &AIHandler{svc: svc, resolver: resolver, heartbeat: 15 * time.Second}
 }
 
-// Enabled reports whether the AI backend is configured.
-func (h *AIHandler) Enabled() bool { return h.svc != nil }
+// Enabled reports whether the AI backend currently has a provider configured.
+// Called by route guards — an unconfigured deployment returns 503.
+func (h *AIHandler) Enabled(ctx context.Context) bool {
+	if h == nil || h.resolver == nil {
+		return false
+	}
+	_, _, err := h.resolver.Current(ctx)
+	return err == nil
+}
 
 // DebugSystemPrompt handles GET /api/ai/debug/system-prompt?week_id=N.
 // Dev-only — the route must be gated by the router (guarded by DevMode). It
 // returns the composed system prompt the agent would use for the given week,
 // so e2e tests can assert that learned preferences are being injected.
 func (h *AIHandler) DebugSystemPrompt(w http.ResponseWriter, r *http.Request) {
-	if !h.Enabled() {
+	if !h.Enabled(r.Context()) {
 		writeError(w, http.StatusServiceUnavailable, "error.ai.provider_missing")
 		return
 	}
@@ -71,7 +78,7 @@ type chatRequestBody struct {
 
 // Chat handles POST /api/ai/chat (SSE).
 func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
-	if !h.Enabled() {
+	if !h.Enabled(r.Context()) {
 		writeError(w, http.StatusServiceUnavailable, "error.ai.provider_missing")
 		return
 	}
@@ -187,7 +194,7 @@ func toConversationDetail(c *agent.Conversation) conversationResponse {
 
 // ListConversations handles GET /api/ai/conversations.
 func (h *AIHandler) ListConversations(w http.ResponseWriter, r *http.Request) {
-	if !h.Enabled() {
+	if !h.Enabled(r.Context()) {
 		writeError(w, http.StatusServiceUnavailable, "error.ai.provider_missing")
 		return
 	}
@@ -225,7 +232,7 @@ func (h *AIHandler) ListConversations(w http.ResponseWriter, r *http.Request) {
 
 // GetConversation handles GET /api/ai/conversations/{id}.
 func (h *AIHandler) GetConversation(w http.ResponseWriter, r *http.Request) {
-	if !h.Enabled() {
+	if !h.Enabled(r.Context()) {
 		writeError(w, http.StatusServiceUnavailable, "error.ai.provider_missing")
 		return
 	}
@@ -248,7 +255,7 @@ func (h *AIHandler) GetConversation(w http.ResponseWriter, r *http.Request) {
 
 // DeleteConversation handles DELETE /api/ai/conversations/{id}.
 func (h *AIHandler) DeleteConversation(w http.ResponseWriter, r *http.Request) {
-	if !h.Enabled() {
+	if !h.Enabled(r.Context()) {
 		writeError(w, http.StatusServiceUnavailable, "error.ai.provider_missing")
 		return
 	}
@@ -266,22 +273,4 @@ func (h *AIHandler) DeleteConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// ---------------------------------------------------------------------------
-// Settings (read-only in v1)
-// ---------------------------------------------------------------------------
-
-type aiSettingsResponse struct {
-	Enabled  bool   `json:"enabled"`
-	Provider string `json:"provider,omitempty"`
-	Model    string `json:"model,omitempty"`
-}
-
-// Settings handles GET /api/settings/ai — reports which provider + model is
-// currently active. The api_key is never exposed.
-func (h *AIHandler) Settings(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, aiSettingsResponse{
-		Enabled: h.Enabled(), Provider: h.provider, Model: h.model,
-	})
 }

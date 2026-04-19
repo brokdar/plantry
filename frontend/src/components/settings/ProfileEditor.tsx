@@ -15,13 +15,6 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { ApiError } from "@/lib/api/client"
 import { useProfile, useUpdateProfile } from "@/lib/queries/profile"
@@ -159,7 +152,7 @@ export function ProfileEditor() {
                     <Input
                       type="number"
                       min={1}
-                      placeholder="e.g. 2000"
+                      placeholder={t("profile.kcal_target_placeholder")}
                       value={field.value ?? ""}
                       onChange={(e) =>
                         field.onChange(
@@ -176,7 +169,9 @@ export function ProfileEditor() {
             {/* Macro percentages */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Macros</p>
+                <p className="text-sm font-medium">
+                  {t("profile.macros_label")}
+                </p>
                 <span className="text-xs text-muted-foreground">
                   {t("profile.macro_sum", { sum: macroSum })}
                 </span>
@@ -237,7 +232,7 @@ export function ProfileEditor() {
                       type="button"
                       onClick={() => removeRestriction(tag)}
                       className="ml-1 rounded-full hover:text-destructive"
-                      aria-label={`Remove ${tag}`}
+                      aria-label={t("profile.remove_restriction", { tag })}
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -264,7 +259,7 @@ export function ProfileEditor() {
                   size="sm"
                   onClick={addRestriction}
                 >
-                  Add
+                  {t("profile.add_restriction")}
                 </Button>
               </div>
             </div>
@@ -288,29 +283,6 @@ export function ProfileEditor() {
                       }
                     />
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Locale */}
-            <FormField
-              control={form.control}
-              name="locale"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("profile.locale")}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="en">English</SelectItem>
-                      <SelectItem value="de">Deutsch</SelectItem>
-                    </SelectContent>
-                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

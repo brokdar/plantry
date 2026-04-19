@@ -59,6 +59,30 @@ test.describe("Recipe Import", () => {
     let createdId: number | undefined
 
     try {
+      // The backend's /api/import/lookup goes through the FDC provider, which
+      // is inactive in e2e (no API key). Stub it to return the seeded local
+      // ingredients so the auto-link step can select them by existing_id.
+      await page.route("**/api/import/lookup*", async (route) => {
+        const url = new URL(route.request().url())
+        const query = url.searchParams.get("query") ?? ""
+        const match = query.includes("Spaghetti")
+          ? { id: spa.id, name: spa.name }
+          : query.includes("Knoblauch")
+            ? { id: kno.id, name: kno.name }
+            : null
+        const results = match
+          ? [{ name: match.name, source: "fdc", existing_id: match.id }]
+          : []
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            results,
+            recommended_index: match ? 0 : -1,
+          }),
+        })
+      })
+
       await page.goto("/import")
 
       // Step 1 — paste HTML (avoids needing to hit the network).

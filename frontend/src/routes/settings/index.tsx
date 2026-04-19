@@ -1,33 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { useTranslation } from "react-i18next"
+import { z } from "zod"
 
-import { PageHeader } from "@/components/editorial/PageHeader"
-import { DisplayPreferences } from "@/components/settings/DisplayPreferences"
-import { ProfileEditor } from "@/components/settings/ProfileEditor"
-import { TimeSlotsEditor } from "@/components/settings/TimeSlotsEditor"
+import { SettingsShell } from "@/components/settings/SettingsShell"
 
-export const Route = createFileRoute("/settings/")({
-  component: SettingsPage,
+const searchSchema = z.object({
+  tab: z
+    .enum(["general", "ai", "nutrition", "meal_slots", "system"])
+    .optional(),
 })
 
-function SettingsPage() {
-  const { t } = useTranslation()
-
-  return (
-    <div className="mx-auto max-w-6xl space-y-10 px-4 py-8 md:px-8 md:py-12">
-      <PageHeader
-        title={t("settings_page.title")}
-        description={t("settings_page.subtitle")}
-      />
-      <div className="grid gap-8 lg:grid-cols-12">
-        <section className="lg:col-span-7">
-          <TimeSlotsEditor />
-        </section>
-        <section className="space-y-6 lg:col-span-5">
-          <DisplayPreferences />
-          <ProfileEditor />
-        </section>
-      </div>
-    </div>
-  )
-}
+export const Route = createFileRoute("/settings/")({
+  component: SettingsShell,
+  validateSearch: (search) => searchSchema.parse(search),
+})

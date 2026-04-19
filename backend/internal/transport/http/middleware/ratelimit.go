@@ -41,6 +41,26 @@ func NewRateLimiter(perMinute int) *RateLimiter {
 	}
 }
 
+// SetLimit reconfigures the per-minute limit at runtime. Existing buckets
+// are cleared so the new capacity applies immediately; setting perMinute to
+// 0 disables rate limiting.
+func (r *RateLimiter) SetLimit(perMinute int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if perMinute <= 0 {
+		r.capacity = 0
+		r.refill = 0
+		r.buckets = nil
+		return
+	}
+	r.capacity = perMinute
+	r.refill = time.Minute / time.Duration(perMinute)
+	r.buckets = map[string]*bucket{}
+	if r.now == nil {
+		r.now = time.Now
+	}
+}
+
 // Allow reports whether the key gets a token right now. If it does, the bucket
 // is debited by 1.
 func (r *RateLimiter) Allow(key string) bool {

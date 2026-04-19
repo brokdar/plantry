@@ -22,8 +22,18 @@ test.describe("AI chat — history + new conversation", () => {
         (r) =>
           r.url().includes("/api/ai/chat") && r.request().method() === "POST"
       )
+      // The conversation list refetch fires after the stream fully drains;
+      // waiting on it keeps the fake AI client's scripted turn cursor clean
+      // for the next chat test in this project.
+      const convRefetch = page.waitForResponse(
+        (r) =>
+          /\/api\/ai\/conversations(\?|$)/.test(r.url()) &&
+          r.request().method() === "GET" &&
+          r.ok()
+      )
       await page.getByTestId("chat-composer-submit").click()
       await resp
+      await convRefetch
 
       // History button reveals the popover.
       await page.getByRole("button", { name: /open history/i }).click()
@@ -51,8 +61,18 @@ test.describe("AI chat — history + new conversation", () => {
         (r) =>
           r.url().includes("/api/ai/chat") && r.request().method() === "POST"
       )
+      // The conversation list refetch fires after the stream fully drains;
+      // waiting on it keeps the fake AI client's scripted turn cursor clean
+      // so the "New conversation" abort never cancels a mid-flight stream.
+      const convRefetch = page.waitForResponse(
+        (r) =>
+          /\/api\/ai\/conversations(\?|$)/.test(r.url()) &&
+          r.request().method() === "GET" &&
+          r.ok()
+      )
       await page.getByTestId("chat-composer-submit").click()
       await resp
+      await convRefetch
 
       // 'New conversation' button appears once a conversation is active.
       const newBtn = page.getByTestId("chat-new-conversation")

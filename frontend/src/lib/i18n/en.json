@@ -129,8 +129,84 @@
     }
   },
   "settings_page": {
+    "eyebrow": "Settings",
     "title": "Workspace Preferences",
-    "subtitle": "Tailor your digital kitchen sanctuary to match your culinary workflow. These settings adjust how your editorial nourishment plan is curated and presented."
+    "subtitle": "Tailor your digital kitchen sanctuary to match your culinary workflow. These settings adjust how your editorial nourishment plan is curated and presented.",
+    "clear_override": "Clear override",
+    "tabs": {
+      "general": "General",
+      "ai": "AI",
+      "nutrition": "Nutrition",
+      "meal_slots": "Meal Slots",
+      "system": "System"
+    },
+    "source": {
+      "db": "Database",
+      "env": "Env var",
+      "default": "Default",
+      "tooltip_db": "This value is stored in the database and overrides any environment variable.",
+      "tooltip_env": "This value is provided by an environment variable. Save a database override to change it at runtime.",
+      "tooltip_default": "No value is configured — the application default is in effect.",
+      "env_also_set": "An environment variable is also set for this key. The database value takes precedence."
+    },
+    "ai": {
+      "provider_section_title": "Assistant Configuration",
+      "provider_label": "Provider",
+      "provider_placeholder": "Select a provider…",
+      "provider_none": "Disabled",
+      "provider_fake": "Fake (testing)",
+      "api_key_label": "API key",
+      "api_key_description": "Your provider API key. Stored encrypted at rest when PLANTRY_SECRET_KEY is set.",
+      "api_key_stored": "A key is already stored ({{preview}}). Enter a new value to replace it.",
+      "api_key_placeholder": "sk-…",
+      "api_key_placeholder_replace": "Enter a new key to replace the stored one",
+      "api_key_saved": "API key saved.",
+      "test_connection": "Test connection",
+      "validated": "Connection validated.",
+      "model_label": "Model",
+      "model_placeholder": "Select a model…",
+      "model_saved": "Model saved.",
+      "click_test_to_load_models": "Run Test connection to load available models.",
+      "advanced_title": "Advanced",
+      "rate_limit_label": "Chat rate limit",
+      "rate_limit_description": "Maximum /api/ai/chat requests per minute per IP. 0 disables limiting.",
+      "fake_script_label": "Fake provider script",
+      "fake_script_description": "Only used when provider = Fake. Path to a JSONL file of scripted replies.",
+      "secret_key_banner_title": "PLANTRY_SECRET_KEY is not set",
+      "secret_key_banner_body": "Set the PLANTRY_SECRET_KEY environment variable to enable editing API keys in the UI. Keys provided via environment variables continue to work without it.",
+      "wizard": {
+        "step1_title": "Pick a provider",
+        "step1_description": "Choose which model provider should power the meal-planning assistant.",
+        "step2_title": "Supply an API key",
+        "step2_description": "Validate the key by fetching the list of available models.",
+        "step3_title": "Select a model",
+        "step3_description": "Pick the model the assistant should use for chat."
+      }
+    },
+    "fdc": {
+      "title": "USDA FoodData Central",
+      "api_key_label": "FDC API key",
+      "api_key_description": "Enables live FDC ingredient search. Leave empty to disable.",
+      "api_key_stored": "A key is already stored ({{preview}}). Enter a new value to replace it.",
+      "api_key_placeholder": "Your FDC API key",
+      "api_key_placeholder_replace": "Enter a new key to replace the stored one"
+    },
+    "system": {
+      "readonly_notice": "Infrastructure settings are sourced from environment variables and require a restart to change.",
+      "fields": {
+        "port": "HTTP port",
+        "db_path": "Database path",
+        "log_level": "Log level",
+        "image_path": "Image storage path",
+        "dev_mode": "Dev mode",
+        "version": "Version",
+        "build_commit": "Build commit"
+      },
+      "env_tooltip": "Set via {{envVar}}. Restart required to change.",
+      "restart_required": "Restart required",
+      "secret_key_banner_title": "Encryption disabled",
+      "secret_key_banner_body": "PLANTRY_SECRET_KEY is not set — API keys cannot be saved through the UI until it is configured."
+    }
   },
   "display_preferences": {
     "title": "Display Preferences",
@@ -138,7 +214,11 @@
     "theme_description": "Choose between the editorial light palette and a dimmed evening mode.",
     "theme_light": "Light",
     "theme_dark": "Dark",
-    "theme_system": "System"
+    "theme_system": "System",
+    "language_label": "Language",
+    "language_description": "Applies to the entire interface.",
+    "language_english": "English",
+    "language_german": "Deutsch"
   },
   "slot": {
     "title": "Meal Slots",
@@ -299,7 +379,11 @@
     "system_prompt_placeholder": "Describe your preferences for the AI...",
     "locale": "Language",
     "save": "Save profile",
-    "save_success": "Profile saved"
+    "save_success": "Profile saved",
+    "macros_label": "Macros",
+    "kcal_target_placeholder": "e.g. 2000",
+    "add_restriction": "Add",
+    "remove_restriction": "Remove {{tag}}"
   },
   "template": {
     "eyebrow": "Saved compositions",
@@ -373,6 +457,14 @@
       "llm_failed": "AI could not extract the recipe.",
       "invalid_url": "Invalid URL.",
       "invalid_resolution": "Invalid ingredient resolution."
+    },
+    "settings": {
+      "unknown_key": "Unknown settings key.",
+      "readonly_key": "This setting can only be changed via environment variable.",
+      "invalid_value": "Invalid value for this setting.",
+      "invalid_api_key": "The API key was not accepted. Double-check it and try again.",
+      "secret_key_missing": "PLANTRY_SECRET_KEY is not set — cannot save encrypted values.",
+      "unknown_provider": "Unknown AI provider."
     }
   },
   "shopping": {
@@ -392,18 +484,21 @@
   },
   "common": {
     "save": "Save",
+    "saved": "Saved.",
     "cancel": "Cancel",
     "delete": "Delete",
     "confirm": "Confirm",
     "edit": "Edit",
     "back": "Back",
     "loading": "Loading...",
-    "showing": "Showing {{from}}\u2013{{to}} of {{total}}",
+    "showing": "Showing {{from}}–{{to}} of {{total}}",
     "previous": "Previous",
     "next": "Next",
     "actions": "Actions",
     "skip_to_content": "Skip to main content",
-    "close": "Close"
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No"
   },
   "chat": {
     "title": "AI Assistant",

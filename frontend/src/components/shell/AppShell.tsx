@@ -1,7 +1,9 @@
 import { useMatches } from "@tanstack/react-router"
+import { useEffect } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Toaster } from "@/components/ui/sonner"
+import { useProfile } from "@/lib/queries/profile"
 
 import { MobileBottomNav } from "./MobileBottomNav"
 import { SideNav, type SideNavVariant } from "./SideNav"
@@ -14,12 +16,23 @@ type AppShellProps = {
 type ShellStaticData = { shellVariant?: SideNavVariant }
 
 export function AppShell({ children }: AppShellProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const { data: profile } = useProfile()
   const matches = useMatches()
   const lastMatch = matches[matches.length - 1]
   const sidebarVariant: SideNavVariant =
     (lastMatch?.staticData as ShellStaticData | undefined)?.shellVariant ??
     "default"
+
+  // Apply the user's saved locale to i18n once the profile loads. Without
+  // this the LanguageDetector fallback (browser language) wins even when the
+  // user explicitly picked a different language in settings.
+  useEffect(() => {
+    const saved = profile?.locale
+    if (!saved) return
+    const current = i18n.language.split("-")[0]
+    if (saved !== current) void i18n.changeLanguage(saved)
+  }, [profile?.locale, i18n])
 
   return (
     <div className="flex min-h-svh bg-surface text-on-surface">

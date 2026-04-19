@@ -58,8 +58,8 @@ test.describe("Archive + rotation insights", () => {
       await expect(entry).toBeVisible()
       await expect(entry).toContainText("2025")
 
-      // Navigate to the detail view.
-      await entry.click()
+      // Navigate to the detail view via the Review button.
+      await entry.getByTestId(`review-${pastWeek.id}`).click()
       await expect(page).toHaveURL(new RegExp(`/archive/${pastWeek.id}$`))
 
       // Read-only grid renders with the plate's component name.
@@ -106,10 +106,23 @@ test.describe("Archive + rotation insights", () => {
     })
 
     try {
+      // The insights endpoint caps its forgotten list at 10 entries by
+      // default. When repeat runs / parallel workers have created many
+      // never-cooked components, our seeded component can fall outside that
+      // window. Intercept the request and pass forgotten_limit=50 so the
+      // UI renders the badge deterministically.
+      await page.route("**/api/components/insights*", async (route) => {
+        const url = new URL(route.request().url())
+        if (!url.searchParams.has("forgotten_limit")) {
+          url.searchParams.set("forgotten_limit", "50")
+        }
+        await route.continue({ url: url.toString() })
+      })
+
       await page.goto("/components")
 
       // Filter by searching for our unique component.
-      await page.getByPlaceholder("Search components...").fill(`Dish ${tag}`)
+      await page.getByPlaceholder(/search the catalog/i).fill(`Dish ${tag}`)
 
       await expect(page.getByTestId(`badge-forgotten-${comp.id}`)).toBeVisible()
     } finally {

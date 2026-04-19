@@ -14,26 +14,26 @@ import (
 // Service is the facade over conversation persistence + the agent loop. The
 // HTTP handler calls this exclusively.
 type Service struct {
-	repo    Repository
-	client  llm.Client
-	tools   *ToolSet
-	planner *planner.Service
-	profile *profile.Service
-	model   string
+	repo     Repository
+	resolver llm.Resolver
+	tools    *ToolSet
+	planner  *planner.Service
+	profile  *profile.Service
 }
 
-// NewService constructs the agent service.
+// NewService constructs the agent service. The resolver is consulted at the
+// start of each Chat turn so that changes to the provider/model/API key take
+// effect without a restart.
 func NewService(
 	repo Repository,
-	client llm.Client,
+	resolver llm.Resolver,
 	tools *ToolSet,
 	plannerSvc *planner.Service,
 	profileSvc *profile.Service,
-	model string,
 ) *Service {
 	return &Service{
-		repo: repo, client: client, tools: tools,
-		planner: plannerSvc, profile: profileSvc, model: model,
+		repo: repo, resolver: resolver, tools: tools,
+		planner: plannerSvc, profile: profileSvc,
 	}
 }
 
@@ -51,6 +51,11 @@ type ChatRequest struct {
 func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Event) error {
 	if req.UserText == "" {
 		return fmt.Errorf("%w: user_text required", domain.ErrInvalidInput)
+	}
+
+	client, model, err := s.resolver.Current(ctx)
+	if err != nil {
+		return err
 	}
 
 	// Resolve conversation.
@@ -95,11 +100,11 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	return Run(ctx, RunRequest{
 		ConversationID: conv.ID,
 		WeekID:         conv.WeekID,
-		Model:          s.model,
+		Model:          model,
 		SystemPrompt:   prompt,
 		History:        history,
 		Tools:          s.tools.Describe(),
-	}, s.client, s.tools, s.repo, out)
+	}, client, s.tools, s.repo, out)
 }
 
 // ListConversations returns a page of conversations, optionally scoped to a week.

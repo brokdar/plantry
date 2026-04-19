@@ -17,11 +17,13 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/db"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/anthropic"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fdc"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/httpfetch"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/jsonld"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/llmresolver"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/off"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/openai"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
@@ -35,6 +37,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+	settingsdom "github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/template"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
@@ -74,6 +77,28 @@ func run() error {
 		return fmt.Errorf("static: %w", err)
 	}
 
+	// Settings + crypto: editable app settings live in SQLite with env-var
+	// fallback. PLANTRY_SECRET_KEY, when set, enables encryption for API
+	// keys stored in the database.
+	var cipher crypto.Cipher = crypto.NilCipher{}
+	if cfg.SecretKey != "" {
+		c, err := crypto.New(cfg.SecretKey)
+		if err != nil {
+			return fmt.Errorf("crypto: %w", err)
+		}
+		cipher = c
+	}
+	settingsRepo := sqlite.NewAppSettingsRepo(conn)
+	envSnapshot := settingsdom.NewEnvSnapshot(map[string]string{
+		"PLANTRY_AI_PROVIDER":           cfg.AIProvider,
+		"PLANTRY_AI_MODEL":              cfg.AIModel,
+		"PLANTRY_AI_API_KEY":            cfg.AIAPIKey,
+		"PLANTRY_AI_RATE_LIMIT_PER_MIN": strconvOrEmpty(cfg.AIRateLimitPerMin),
+		"PLANTRY_AI_FAKE_SCRIPT":        cfg.AIFakeScript,
+		"PLANTRY_FDC_API_KEY":           cfg.FDCAPIKey,
+	})
+	settingsSvc := settingsdom.NewService(settingsRepo, envSnapshot, cipher)
+
 	ingredientRepo := sqlite.NewIngredientRepo(conn)
 	ingredientSvc := ingredient.NewService(ingredientRepo)
 
@@ -81,11 +106,9 @@ func run() error {
 	offClient := off.New()
 	offProvider := off.NewProvider(offClient)
 
-	var fdcProvider ingredient.FoodProvider
-	if cfg.FDCAPIKey != "" {
-		fdcClient := fdc.New(cfg.FDCAPIKey)
-		fdcProvider = fdc.NewProvider(fdcClient)
-	}
+	// FDC provider is always constructed — it reads the key from settings
+	// per-request and gracefully returns empty results when no key is set.
+	fdcProvider := fdc.NewDynamicProvider(settingsSvc)
 
 	resolver := ingredient.NewResolver(ingredientRepo, offProvider, fdcProvider)
 
@@ -124,47 +147,53 @@ func run() error {
 	feedbackRepo := sqlite.NewFeedbackRepo(conn)
 	feedbackSvc := feedback.NewService(txRunner, plateRepo, componentRepo)
 
-	// AI wiring (optional — disabled if PLANTRY_AI_PROVIDER is empty).
-	var aiHandler *handlers.AIHandler
-	var llmForImport llm.Client
-	if cfg.AIProvider != "" {
-		aiRepo := sqlite.NewAIRepo(conn)
-		var llmClient llm.Client
-		switch cfg.AIProvider {
+	// AI wiring. The llm.Resolver consults settings on every request so
+	// provider / model / API-key changes take effect without a restart.
+	llmFactory := func(provider, apiKey, fakeScript string) (llm.Client, error) {
+		switch provider {
 		case "anthropic":
-			llmClient = anthropic.New(cfg.AIAPIKey)
+			return anthropic.New(apiKey), nil
 		case "openai":
-			llmClient = openai.New(cfg.AIAPIKey)
+			return openai.New(apiKey), nil
 		case "fake":
-			fc, err := fake.New(cfg.AIFakeScript)
-			if err != nil {
-				return fmt.Errorf("fake llm: %w", err)
-			}
-			llmClient = fc
+			return fake.New(fakeScript)
 		}
-		tools, err := agent.NewToolSet(agent.Services{
-			Components: componentSvc, Planner: plannerSvc, Plates: plateSvc,
-			Profile: profileSvc, Slots: slotSvc, Ingredient: ingredientRepo,
-		})
-		if err != nil {
-			return fmt.Errorf("build tool set: %w", err)
-		}
-		agentSvc := agent.NewService(aiRepo, llmClient, tools, plannerSvc, profileSvc, cfg.AIModel)
-		aiHandler = handlers.NewAIHandler(agentSvc, cfg.AIProvider, cfg.AIModel)
-		llmForImport = llmClient
-		logger.Info("ai.enabled", "provider", cfg.AIProvider, "model", cfg.AIModel)
-	} else {
-		aiHandler = handlers.NewAIHandler(nil, "", "")
+		return nil, fmt.Errorf("unknown provider %q", provider)
 	}
+	llmResolver := llmresolver.New(settingsSvc, llmFactory)
+
+	aiRepo := sqlite.NewAIRepo(conn)
+	tools, err := agent.NewToolSet(agent.Services{
+		Components: componentSvc, Planner: plannerSvc, Plates: plateSvc,
+		Profile: profileSvc, Slots: slotSvc, Ingredient: ingredientRepo,
+	})
+	if err != nil {
+		return fmt.Errorf("build tool set: %w", err)
+	}
+	agentSvc := agent.NewService(aiRepo, llmResolver, tools, plannerSvc, profileSvc)
+	aiHandler := handlers.NewAIHandler(agentSvc, llmResolver)
 
 	// Recipe importer (Phase 11).
 	importFetcher := httpfetch.New()
-	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmForImport, cfg.AIModel, resolver)
+	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver)
 	importHandler := handlers.NewImportHandler(importSvc)
 
-	// Rate limiter for /api/ai/chat. Kept in main so its janitor goroutine
-	// can be wired to the server's shutdown signal.
-	aiRateLimiter := plantrymw.NewRateLimiter(cfg.AIRateLimitPerMin)
+	// Rate limiter for /api/ai/chat. Initial limit comes from effective
+	// settings; the SettingsHandler reconfigures it when the user changes
+	// ai.rate_limit_per_min from the UI.
+	initialRate := cfg.AIRateLimitPerMin
+	if effective, err := settingsSvc.EffectiveAI(context.Background()); err == nil && effective.RateLimitPerMin > 0 {
+		initialRate = effective.RateLimitPerMin
+	}
+	aiRateLimiter := plantrymw.NewRateLimiter(initialRate)
+
+	settingsHandler := handlers.NewSettingsHandler(settingsSvc, handlers.SystemInfo{
+		Port:      cfg.Port,
+		DBPath:    cfg.DBPath,
+		LogLevel:  cfg.LogLevel.String(),
+		ImagePath: cfg.ImagePath,
+		DevMode:   cfg.DevMode,
+	}, aiRateLimiter)
 
 	h := transport.Handlers{
 		Ingredients:   handlers.NewIngredientHandler(ingredientSvc),
@@ -181,6 +210,7 @@ func run() error {
 		AIRateLimiter: aiRateLimiter,
 		Feedback:      handlers.NewFeedbackHandler(feedbackSvc),
 		Import:        importHandler,
+		Settings:      settingsHandler,
 		DevMode:       cfg.DevMode,
 	}
 	handler := transport.NewRouter(logger, static, h)
@@ -216,6 +246,16 @@ func run() error {
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	}
+}
+
+// strconvOrEmpty renders a non-negative int as its decimal form, returning
+// "" for zero. Used when building the env snapshot so that an unset env-var
+// (zero rate limit) is distinguishable from a configured one.
+func strconvOrEmpty(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d", n)
 }
 
 func openDB(path string) (*sql.DB, error) {

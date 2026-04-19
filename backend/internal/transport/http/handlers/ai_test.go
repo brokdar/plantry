@@ -93,10 +93,11 @@ func setupAIRouter(t *testing.T, client llm.Client, enabled bool) (http.Handler,
 
 	var h *handlers.AIHandler
 	if enabled {
-		svc := agent.NewService(aiRepo, client, tools, plannerSvc, profileSvc, "test-model")
-		h = handlers.NewAIHandler(svc, "test", "test-model")
+		resolver := llm.StaticResolver(client, "test-model")
+		svc := agent.NewService(aiRepo, resolver, tools, plannerSvc, profileSvc)
+		h = handlers.NewAIHandler(svc, resolver)
 	} else {
-		h = handlers.NewAIHandler(nil, "", "")
+		h = handlers.NewAIHandler(nil, llm.StaticResolver(nil, ""))
 	}
 
 	r := chi.NewRouter()
@@ -106,7 +107,6 @@ func setupAIRouter(t *testing.T, client llm.Client, enabled bool) (http.Handler,
 		r.Get("/conversations/{id}", h.GetConversation)
 		r.Delete("/conversations/{id}", h.DeleteConversation)
 	})
-	r.Get("/api/settings/ai", h.Settings)
 	return r, h
 }
 
@@ -265,32 +265,8 @@ func TestListAndGetAndDeleteConversations(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
-func TestSettings_ReportsCurrentConfig(t *testing.T) {
-	router, _ := setupAIRouter(t, &scriptedLLM{}, true)
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, 200, w.Code)
-	var body struct {
-		Enabled  bool   `json:"enabled"`
-		Provider string `json:"provider"`
-		Model    string `json:"model"`
-	}
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	assert.True(t, body.Enabled)
-	assert.Equal(t, "test", body.Provider)
-	assert.Equal(t, "test-model", body.Model)
-
-	// Disabled form.
-	router2, _ := setupAIRouter(t, nil, false)
-	req = httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
-	w = httptest.NewRecorder()
-	router2.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	assert.False(t, body.Enabled)
-}
+// TestSettings_ReportsCurrentConfig moved to settings_test.go — the /api/settings/ai
+// endpoint is now served by SettingsHandler backed by the settings service.
 
 // newDebugRouter mirrors the route-registration gating used by the real
 // transport.Router so the test exercises the actual conditional wiring.

@@ -77,13 +77,13 @@ func (fakeResolver) Lookup(_ context.Context, _, _, _ string, _ int) ([]ingredie
 // -- tests --
 
 func TestExtract_ValidationFailsWithoutInputs(t *testing.T) {
-	s := importer.NewService(&fakeFetcher{}, &fakeJSONLD{}, nil, "", fakeResolver{})
+	s := importer.NewService(&fakeFetcher{}, &fakeJSONLD{}, nil, fakeResolver{})
 	_, err := s.Extract(context.Background(), importer.ExtractInput{})
 	require.True(t, errors.Is(err, domain.ErrInvalidInput))
 }
 
 func TestExtract_BothInputsIsInvalid(t *testing.T) {
-	s := importer.NewService(&fakeFetcher{}, &fakeJSONLD{}, nil, "", fakeResolver{})
+	s := importer.NewService(&fakeFetcher{}, &fakeJSONLD{}, nil, fakeResolver{})
 	_, err := s.Extract(context.Background(), importer.ExtractInput{URL: "u", HTML: "h"})
 	require.True(t, errors.Is(err, domain.ErrInvalidInput))
 }
@@ -98,7 +98,7 @@ func TestExtract_JSONLD_HappyPath_URLFetched(t *testing.T) {
 		PrepMinutes:        15,
 	}}
 	llmc := &fakeLLM{text: `{}`}
-	s := importer.NewService(f, j, llmc, "fake-model", fakeResolver{})
+	s := importer.NewService(f, j, llm.StaticResolver(llmc, "fake-model"), fakeResolver{})
 
 	d, err := s.Extract(context.Background(), importer.ExtractInput{URL: "https://example.com/x"})
 	require.NoError(t, err)
@@ -119,7 +119,7 @@ func TestExtract_HTMLPath_SkipsFetcher(t *testing.T) {
 		Name: "X", RecipeYieldNumber: 1,
 		RecipeIngredient: []string{"100 g Mehl"},
 	}}
-	s := importer.NewService(f, j, nil, "", fakeResolver{})
+	s := importer.NewService(f, j, nil, fakeResolver{})
 
 	_, err := s.Extract(context.Background(), importer.ExtractInput{HTML: "<html/>"})
 	require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestExtract_HTMLPath_SkipsFetcher(t *testing.T) {
 func TestExtract_NoRecipe_NoLLM_ReturnsNoRecipe(t *testing.T) {
 	f := &fakeFetcher{html: "<html/>"}
 	j := &fakeJSONLD{err: importer.ErrNoRecipe}
-	s := importer.NewService(f, j, nil, "", fakeResolver{})
+	s := importer.NewService(f, j, nil, fakeResolver{})
 
 	_, err := s.Extract(context.Background(), importer.ExtractInput{URL: "u"})
 	require.True(t, errors.Is(err, domain.ErrImportNoRecipe))
@@ -140,7 +140,7 @@ func TestExtract_EmptyIngredients_FallsBackToLLM(t *testing.T) {
 	j := &fakeJSONLD{rec: &importer.RawRecipe{Name: "Empty"}}
 	llmText := `{"name":"Via LLM","servings":2,"instructions":["Tu dies."],"ingredient_lines":["200 g Mehl"],"language":"de"}`
 	llmc := &fakeLLM{text: llmText}
-	s := importer.NewService(f, j, llmc, "fake-model", fakeResolver{})
+	s := importer.NewService(f, j, llm.StaticResolver(llmc, "fake-model"), fakeResolver{})
 
 	d, err := s.Extract(context.Background(), importer.ExtractInput{URL: "u"})
 	require.NoError(t, err)
@@ -155,7 +155,7 @@ func TestExtract_NoRecipe_LLMDisabled_ReturnsAIProviderMissing(t *testing.T) {
 	f := &fakeFetcher{html: "<html/>"}
 	// jsonld found nothing; no LLM wired.
 	j := &fakeJSONLD{rec: &importer.RawRecipe{}}
-	s := importer.NewService(f, j, nil, "", fakeResolver{})
+	s := importer.NewService(f, j, nil, fakeResolver{})
 
 	_, err := s.Extract(context.Background(), importer.ExtractInput{URL: "u"})
 	require.True(t, errors.Is(err, domain.ErrAIProviderMissing))
@@ -165,7 +165,7 @@ func TestExtract_LLMInvalidJSON_Retries_ThenFails(t *testing.T) {
 	f := &fakeFetcher{html: "<html/>"}
 	j := &fakeJSONLD{err: importer.ErrNoRecipe}
 	llmc := &fakeLLM{text: "not json"}
-	s := importer.NewService(f, j, llmc, "fake-model", fakeResolver{})
+	s := importer.NewService(f, j, llm.StaticResolver(llmc, "fake-model"), fakeResolver{})
 
 	_, err := s.Extract(context.Background(), importer.ExtractInput{URL: "u"})
 	require.True(t, errors.Is(err, domain.ErrImportLLMFailed))
@@ -176,7 +176,7 @@ func TestExtract_LLMNotARecipe(t *testing.T) {
 	f := &fakeFetcher{html: "<html/>"}
 	j := &fakeJSONLD{err: importer.ErrNoRecipe}
 	llmc := &fakeLLM{text: `{"not_a_recipe": true}`}
-	s := importer.NewService(f, j, llmc, "fake-model", fakeResolver{})
+	s := importer.NewService(f, j, llm.StaticResolver(llmc, "fake-model"), fakeResolver{})
 
 	_, err := s.Extract(context.Background(), importer.ExtractInput{URL: "u"})
 	require.True(t, errors.Is(err, domain.ErrImportNoRecipe))
@@ -199,7 +199,7 @@ func dumpDraft(t *testing.T, d *importer.Draft) {
 func TestExtract_Chefkoch_LasagnaReal(t *testing.T) {
 	html := loadChefkoch(t, "chefkoch_lasagna_real.html")
 	f := &fakeFetcher{html: html}
-	s := importer.NewService(f, jsonld.Extractor{}, nil, "", fakeResolver{})
+	s := importer.NewService(f, jsonld.Extractor{}, nil, fakeResolver{})
 	d, err := s.Extract(context.Background(), importer.ExtractInput{URL: "https://www.chefkoch.de/rezepte/1112181217260303/Lasagne-Bolognese.html"})
 	require.NoError(t, err)
 
@@ -280,7 +280,7 @@ func TestExtract_Chefkoch_LasagnaReal(t *testing.T) {
 func TestExtract_Chefkoch_BombayReal(t *testing.T) {
 	html := loadChefkoch(t, "chefkoch_bombay_real.html")
 	f := &fakeFetcher{html: html}
-	s := importer.NewService(f, jsonld.Extractor{}, nil, "", fakeResolver{})
+	s := importer.NewService(f, jsonld.Extractor{}, nil, fakeResolver{})
 	d, err := s.Extract(context.Background(), importer.ExtractInput{URL: "https://www.chefkoch.de/rezepte/926401197908362/Bombay-Curry.html"})
 	require.NoError(t, err)
 
@@ -343,7 +343,7 @@ func TestExtract_Chefkoch_BombayReal(t *testing.T) {
 func TestExtract_Chefkoch_HackauflaufReal(t *testing.T) {
 	html := loadChefkoch(t, "chefkoch_hackauflauf_real.html")
 	f := &fakeFetcher{html: html}
-	s := importer.NewService(f, jsonld.Extractor{}, nil, "", fakeResolver{})
+	s := importer.NewService(f, jsonld.Extractor{}, nil, fakeResolver{})
 	d, err := s.Extract(context.Background(), importer.ExtractInput{URL: "https://www.chefkoch.de/rezepte/1560161263457749/Tuerkischer-Hackfleischauflauf-mit-Schafskaese.html"})
 	require.NoError(t, err)
 
@@ -469,7 +469,7 @@ func TestExtract_Chefkoch_Fixtures(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			html := loadChefkoch(t, tc.fixture)
 			f := &fakeFetcher{html: html}
-			s := importer.NewService(f, jsonld.Extractor{}, nil, "", fakeResolver{})
+			s := importer.NewService(f, jsonld.Extractor{}, nil, fakeResolver{})
 			d, err := s.Extract(context.Background(), importer.ExtractInput{URL: "https://chefkoch.de/r/1"})
 			require.NoError(t, err)
 			tc.expect(t, d)

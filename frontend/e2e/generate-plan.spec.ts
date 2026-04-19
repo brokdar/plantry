@@ -8,19 +8,18 @@ import { cleanupSlot, expect, seedSlot, test, uid } from "./helpers"
 // is shared with ai-chat.spec.ts. Chat streaming is covered there.
 
 test.describe("Generate Plan CTA", () => {
-  test("rail variant opens chat with prefilled composer", async ({ page }) => {
-    const slot = await seedSlot(`slot.gen-rail-${uid()}`, "coffee", 10)
+  test("default variant opens chat with prefilled composer from the planner", async ({
+    page,
+  }) => {
+    const slot = await seedSlot(`slot.gen-planner-${uid()}`, "coffee", 10)
 
     try {
-      // Use a wide viewport so the rail (lg:flex) actually renders.
       await page.setViewportSize({ width: 1440, height: 900 })
       await page.goto("/")
 
-      await expect(page.getByTestId("sidenav-rail")).toBeVisible()
+      await expect(page.getByTestId("sidenav")).toBeVisible()
+      await page.getByTestId("generate-plan-default").click()
 
-      await page.getByTestId("generate-plan-rail").click()
-
-      // Chat panel opens.
       const composer = page.getByTestId("chat-composer-input")
       await expect(composer).toBeVisible()
       await expect(composer).toHaveValue(/plan my week/i)
@@ -29,20 +28,18 @@ test.describe("Generate Plan CTA", () => {
     }
   })
 
-  test("default variant opens chat with prefilled composer", async ({
+  test("default variant on another route navigates to planner and opens chat", async ({
     page,
   }) => {
     const slot = await seedSlot(`slot.gen-default-${uid()}`, "coffee", 10)
 
     try {
       await page.setViewportSize({ width: 1440, height: 900 })
-      // Navigate to a route that uses the default (wide) sidebar — archive.
       await page.goto("/archive")
 
       await expect(page.getByTestId("sidenav")).toBeVisible()
       await page.getByTestId("generate-plan-default").click()
 
-      // Navigates to planner and opens chat.
       await expect(page).toHaveURL("/")
       const composer = page.getByTestId("chat-composer-input")
       await expect(composer).toBeVisible()

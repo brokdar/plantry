@@ -36,7 +36,7 @@ test.describe("Profile settings", () => {
   })
 
   test("Cut preset populates fields and saves correctly", async ({ page }) => {
-    await page.goto("/settings")
+    await page.goto("/settings?tab=nutrition")
 
     // Profile card should be visible
     await expect(page.getByText(/profile & targets/i).first()).toBeVisible()
@@ -65,7 +65,7 @@ test.describe("Profile settings", () => {
   })
 
   test("Maintain preset sets correct values", async ({ page }) => {
-    await page.goto("/settings")
+    await page.goto("/settings?tab=nutrition")
     await expect(page.getByText(/profile & targets/i).first()).toBeVisible()
 
     await page.getByRole("button", { name: /^maintain$/i }).click()
@@ -76,7 +76,7 @@ test.describe("Profile settings", () => {
   test("dietary restriction chip editor adds and removes tags", async ({
     page,
   }) => {
-    await page.goto("/settings")
+    await page.goto("/settings?tab=nutrition")
     await expect(page.getByText(/profile & targets/i).first()).toBeVisible()
 
     // Add a restriction
@@ -90,7 +90,7 @@ test.describe("Profile settings", () => {
   })
 
   test("invalid macro sum shows error from server", async ({ page }) => {
-    await page.goto("/settings")
+    await page.goto("/settings?tab=nutrition")
     await expect(page.getByText(/profile & targets/i).first()).toBeVisible()
 
     await page.getByLabel(/protein %/i).fill("60")

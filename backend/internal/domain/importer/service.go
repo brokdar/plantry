@@ -29,16 +29,17 @@ type Resolver interface {
 
 // Service orchestrates recipe import: fetch → JSON-LD → LLM fallback → parse lines.
 type Service struct {
-	fetcher  Fetcher
-	jsonld   JSONLDExtractor
-	llm      llm.Client // may be nil — LLM fallback then returns ErrAIProviderMissing.
-	llmModel string
-	resolver Resolver
+	fetcher     Fetcher
+	jsonld      JSONLDExtractor
+	llmResolver llm.Resolver // may be nil — LLM fallback then returns ErrAIProviderMissing.
+	resolver    Resolver
 }
 
-// NewService builds an import Service. llmClient may be nil.
-func NewService(f Fetcher, j JSONLDExtractor, llmClient llm.Client, llmModel string, r Resolver) *Service {
-	return &Service{fetcher: f, jsonld: j, llm: llmClient, llmModel: llmModel, resolver: r}
+// NewService builds an import Service. llmResolver may be nil; when set, it
+// is consulted per-request so configuration changes take effect without a
+// restart.
+func NewService(f Fetcher, j JSONLDExtractor, llmResolver llm.Resolver, r Resolver) *Service {
+	return &Service{fetcher: f, jsonld: j, llmResolver: llmResolver, resolver: r}
 }
 
 // ExtractInput selects the source for extraction. Exactly one of URL or HTML
@@ -76,7 +77,7 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 	}
 
 	// Fallback: LLM extraction.
-	if s.llm == nil {
+	if s.llmResolver == nil {
 		if errors.Is(err, ErrNoRecipe) {
 			return nil, domain.ErrImportNoRecipe
 		}

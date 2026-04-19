@@ -40,6 +40,7 @@ type Querier interface {
 	DeletePlateComponent(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateFeedback(ctx context.Context, plateID int64) (sql.Result, error)
 	DeletePortion(ctx context.Context, arg DeletePortionParams) (sql.Result, error)
+	DeleteSetting(ctx context.Context, key string) error
 	DeleteTemplate(ctx context.Context, id int64) (sql.Result, error)
 	DeleteTemplateComponentsByTemplate(ctx context.Context, templateID int64) (sql.Result, error)
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
@@ -50,6 +51,7 @@ type Querier interface {
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
 	GetPlateFeedback(ctx context.Context, plateID int64) (PlateFeedback, error)
 	GetProfile(ctx context.Context) (UserProfile, error)
+	GetSetting(ctx context.Context, key string) (AppSetting, error)
 	GetTemplate(ctx context.Context, id int64) (Template, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	GetWeek(ctx context.Context, id int64) (Week, error)
@@ -68,6 +70,7 @@ type Querier interface {
 	ListPlateFeedbackByWeek(ctx context.Context, weekID int64) ([]PlateFeedback, error)
 	ListPlatesByWeek(ctx context.Context, weekID int64) ([]Plate, error)
 	ListPortions(ctx context.Context, ingredientID int64) ([]IngredientPortion, error)
+	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingComponents(ctx context.Context, arg ListSiblingComponentsParams) ([]Component, error)
 	ListTemplateComponentsByTemplate(ctx context.Context, templateID int64) ([]TemplateComponent, error)
 	ListTemplates(ctx context.Context) ([]Template, error)
@@ -88,6 +91,7 @@ type Querier interface {
 	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
 	UpsertPortion(ctx context.Context, arg UpsertPortionParams) error
 	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)
+	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
 }
 
 var _ Querier = (*Queries)(nil)

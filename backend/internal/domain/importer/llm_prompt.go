@@ -20,8 +20,15 @@ const htmlBodyLimit = 60000
 // (nil client), domain.ErrImportLLMFailed (invalid JSON after retry), or
 // domain.ErrImportNoRecipe (LLM replied {"not_a_recipe": true}).
 func (s *Service) llmExtract(ctx context.Context, htmlBody string) (*RawRecipe, error) {
-	if s.llm == nil {
+	if s.llmResolver == nil {
 		return nil, domain.ErrAIProviderMissing
+	}
+	client, model, err := s.llmResolver.Current(ctx)
+	if err != nil {
+		if errors.Is(err, llm.ErrProviderMissing) {
+			return nil, domain.ErrAIProviderMissing
+		}
+		return nil, err
 	}
 
 	stripped := stripHTMLForLLM(htmlBody)
@@ -32,14 +39,14 @@ func (s *Service) llmExtract(ctx context.Context, htmlBody string) (*RawRecipe, 
 	}}
 
 	req := llm.Request{
-		Model:       s.llmModel,
+		Model:       model,
 		System:      llmSystemPrompt,
 		Messages:    []llm.Message{userMsg},
 		Temperature: 0,
 		MaxTokens:   4096,
 	}
 
-	text, err := runLLMOnce(ctx, s.llm, req)
+	text, err := runLLMOnce(ctx, client, req)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +65,7 @@ func (s *Service) llmExtract(ctx context.Context, htmlBody string) (*RawRecipe, 
 		llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: text}}},
 		llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "Your previous response was not valid JSON. Output only the JSON object, nothing else."}}},
 	)
-	text2, err := runLLMOnce(ctx, s.llm, req)
+	text2, err := runLLMOnce(ctx, client, req)
 	if err != nil {
 		return nil, err
 	}

@@ -29,10 +29,10 @@ test.describe("Keyboard shortcuts", () => {
     // submit, which is what we assert.
     const slot = await seedSlot(`slot.kb-${uid()}`, "Moon", 994)
     try {
-      await page.goto("/")
-      // On desktop the default variant renders a sidebar button.
       await page.setViewportSize({ width: 1440, height: 900 })
-      await page.getByTestId("generate-plan-rail").click()
+      await page.goto("/")
+      // All routes render the default sidebar, so the default variant opens chat.
+      await page.getByTestId("generate-plan-default").click()
 
       const composer = page.getByTestId("chat-composer-input")
       await expect(composer).toBeVisible()
@@ -43,9 +43,18 @@ test.describe("Keyboard shortcuts", () => {
         (r) =>
           r.url().includes("/api/ai/chat") && r.request().method() === "POST"
       )
+      // Wait for the conversation list refetch that fires once the SSE
+      // stream fully drains — keeps the fake AI client's turn cursor clean.
+      const convRefetch = page.waitForResponse(
+        (r) =>
+          /\/api\/ai\/conversations(\?|$)/.test(r.url()) &&
+          r.request().method() === "GET" &&
+          r.ok()
+      )
       await composer.press("Control+Enter")
       await resp
       await expect(composer).toHaveValue("")
+      await convRefetch
     } finally {
       await cleanupSlot(slot.id)
     }
