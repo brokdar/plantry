@@ -23,7 +23,7 @@ import { useIngredients, useDeleteIngredient } from "@/lib/queries/ingredients"
 
 import { IngredientCard } from "./IngredientCard"
 
-const PAGE_SIZE = 24
+const PAGE_SIZE = 16
 
 export function IngredientList() {
   const { t } = useTranslation()
@@ -116,16 +116,16 @@ export function IngredientList() {
       )}
 
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[3/4] w-full rounded-2xl" />
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="aspect-[4/3] w-full rounded-2xl" />
           ))}
         </div>
       ) : items.length === 0 ? (
         <EmptyIngredients hasFilters={deferredSearch.length > 0} t={t} />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {items.map((item) => (
               <IngredientCard
                 key={item.id}

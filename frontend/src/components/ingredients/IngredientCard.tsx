@@ -1,9 +1,12 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
-import { MoreVertical, Package } from "lucide-react"
+import { MoreVertical, PencilLine } from "lucide-react"
 
 import { CardImageBadge } from "@/components/editorial/CardImageBadge"
+import { EditorialCard } from "@/components/editorial/EditorialCard"
+import { FoodPlaceholder } from "@/components/editorial/FoodPlaceholder"
 import { MacroBar } from "@/components/editorial/MacroBar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -12,7 +15,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { imageURL } from "@/lib/image-url"
-import { cn } from "@/lib/utils"
 import type { Ingredient } from "@/lib/api/ingredients"
 
 const SOURCE_DOT: Record<string, "primary" | "tertiary" | "muted"> = {
@@ -46,58 +48,63 @@ export function IngredientCard({ ingredient, onDelete }: IngredientCardProps) {
 
   return (
     <div className="group relative" data-testid={`ingredient-card-${id}`}>
-      <article
-        className={cn(
-          "editorial-shadow relative flex flex-col overflow-hidden rounded-2xl bg-surface-container-lowest",
-          "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg",
-          "focus-within:ring-2 focus-within:ring-primary"
-        )}
-      >
+      <EditorialCard interactive>
         <Link
           to="/ingredients/$id/edit"
           params={{ id: String(id) }}
-          className="absolute inset-0 z-10"
+          className="absolute inset-0 z-0"
           aria-label={name}
         />
-        <div className="pointer-events-none relative aspect-[3/4] overflow-hidden bg-surface-container-high">
+        <div className="pointer-events-none relative">
           {image_path ? (
-            <img
+            <EditorialCard.Image
               src={imageURL(image_path, updated_at)}
-              alt=""
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              loading="lazy"
+              alt={name}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <Package
-                className="size-10 text-on-surface-variant/30"
-                aria-hidden
-              />
-            </div>
+            <FoodPlaceholder
+              category="ingredient"
+              className="m-2 aspect-[4/3] w-[calc(100%-1rem)]"
+              aria-label={name}
+            />
           )}
-          <div className="absolute bottom-2 left-2 flex gap-1.5">
+          <EditorialCard.ImageOverlay position="bottom-left">
             <CardImageBadge dot={sourceDot}>{sourceLabel}</CardImageBadge>
-          </div>
+          </EditorialCard.ImageOverlay>
+          <EditorialCard.ImageOverlay
+            position="top-right"
+            className="opacity-100 transition-opacity duration-200 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+          >
+            <span
+              aria-hidden
+              className="hidden size-7 items-center justify-center rounded-full bg-surface-container-lowest/85 backdrop-blur-md md:flex"
+            >
+              <PencilLine className="size-3.5 text-on-surface" />
+            </span>
+          </EditorialCard.ImageOverlay>
         </div>
-        <div className="pointer-events-none flex flex-1 flex-col gap-2 p-3">
-          <p className="line-clamp-2 font-heading text-sm leading-tight font-semibold text-on-surface">
+        <EditorialCard.Body>
+          <EditorialCard.Title className="line-clamp-2">
             {name}
-          </p>
-          <div className="flex flex-wrap gap-1">
-            <MacroPill>{fmt(ingredient.kcal_100g, " kcal")}</MacroPill>
-            <MacroPill>
+          </EditorialCard.Title>
+          <EditorialCard.Meta className="mt-2 flex-wrap gap-x-3 gap-y-1.5">
+            <Badge variant="secondary">
+              {fmt(ingredient.kcal_100g, " kcal")}
+            </Badge>
+            <span>
               {t("ingredient.protein").charAt(0)}{" "}
               {fmt(ingredient.protein_100g, "g")}
-            </MacroPill>
-            <MacroPill>
+            </span>
+            <span>
               {t("ingredient.fat").charAt(0)} {fmt(ingredient.fat_100g, "g")}
-            </MacroPill>
-            <MacroPill>
+            </span>
+            <span>
               {t("ingredient.carbs").charAt(0)}{" "}
               {fmt(ingredient.carbs_100g, "g")}
-            </MacroPill>
-          </div>
+            </span>
+          </EditorialCard.Meta>
           <MacroBar
+            className="mt-3"
             thickness="sm"
             track="surface-container-highest"
             segments={[
@@ -119,9 +126,9 @@ export function IngredientCard({ ingredient, onDelete }: IngredientCardProps) {
             ]}
             max={totalKcal}
           />
-        </div>
-      </article>
-      <div className="absolute top-2 right-2 z-20 opacity-100 transition-opacity duration-200 focus-within:opacity-100 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
+        </EditorialCard.Body>
+      </EditorialCard>
+      <div className="absolute top-3 right-3 z-30 opacity-100 transition-opacity duration-200 focus-within:opacity-100 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -156,13 +163,5 @@ export function IngredientCard({ ingredient, onDelete }: IngredientCardProps) {
         </DropdownMenu>
       </div>
     </div>
-  )
-}
-
-function MacroPill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="rounded-full bg-surface-container px-2 py-0.5 text-[10px] font-medium text-on-surface-variant">
-      {children}
-    </span>
   )
 }
