@@ -79,7 +79,7 @@ EditorialCard.Image = function EditorialCardImage({
   return (
     <div
       className={cn(
-        "relative m-2 aspect-[4/3] overflow-hidden rounded-xl bg-surface-container-high",
+        "pointer-events-none relative m-2 aspect-[4/3] overflow-hidden rounded-xl bg-surface-container-high",
         className
       )}
     >
@@ -106,7 +106,11 @@ EditorialCard.Body = function EditorialCardBody({
   children: React.ReactNode
   className?: string
 }) {
-  return <div className={cn("px-6 pt-2 pb-6", className)}>{children}</div>
+  return (
+    <div className={cn("pointer-events-none px-6 pt-2 pb-6", className)}>
+      {children}
+    </div>
+  )
 }
 
 EditorialCard.Title = function EditorialCardTitle({
@@ -139,6 +143,34 @@ EditorialCard.Meta = function EditorialCardMeta({
     <div
       className={cn(
         "flex items-center gap-4 text-xs font-medium tracking-wider text-on-surface-variant uppercase",
+        className
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+EditorialCard.ImageOverlay = function EditorialCardImageOverlay({
+  position = "bottom-left",
+  className,
+  children,
+}: {
+  position?: "top-left" | "top-right" | "bottom-left" | "bottom-right"
+  className?: string
+  children: React.ReactNode
+}) {
+  const positionClass = {
+    "top-left": "top-3 left-3",
+    "top-right": "top-3 right-3",
+    "bottom-left": "bottom-3 left-3",
+    "bottom-right": "bottom-3 right-3",
+  }[position]
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute z-20 flex gap-1.5",
+        positionClass,
         className
       )}
     >

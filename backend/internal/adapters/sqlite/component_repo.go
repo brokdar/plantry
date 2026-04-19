@@ -223,6 +223,20 @@ func (r *ComponentRepo) List(ctx context.Context, q component.ListQuery) (*compo
 		return nil, err
 	}
 
+	// Load tags per item so list consumers can render tag chips/filters
+	// without an extra round trip per card. N stays bounded by Limit (≤ page
+	// size), which is small enough that a loop beats writing a custom IN query.
+	for i := range items {
+		tagRows, err := r.q.ListComponentTags(ctx, items[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		items[i].Tags = make([]string, len(tagRows))
+		for j, row := range tagRows {
+			items[i].Tags[j] = row.Tag
+		}
+	}
+
 	return &component.ListResult{Items: items, Total: total}, nil
 }
 

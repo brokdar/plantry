@@ -55,8 +55,11 @@ describe("ComponentList", () => {
 
     renderWithRouter(<ComponentList />)
 
-    expect(await screen.findByText("spicy")).toBeInTheDocument()
-    expect(screen.getByText("thai")).toBeInTheDocument()
+    const card = await screen.findByTestId(
+      `component-card-${mockChickenCurry.id}`
+    )
+    expect(card).toHaveTextContent("spicy")
+    expect(card).toHaveTextContent("thai")
   })
 
   it("renders Forgotten and Most cooked badges from insights", async () => {

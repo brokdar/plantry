@@ -53,12 +53,8 @@ function EditComponentPage() {
       />
       <ComponentEditor
         component={component}
-        onSuccess={() =>
-          navigate({
-            to: "/components/$id",
-            params: { id: String(component.id) },
-          })
-        }
+        onSuccess={() => navigate({ to: "/components" })}
+        onDeleted={() => navigate({ to: "/components" })}
       />
     </div>
   )

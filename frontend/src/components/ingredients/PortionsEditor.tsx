@@ -43,9 +43,7 @@ export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
   }
 
   return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-medium">{t("portion.title")}</h3>
-
+    <div className="space-y-3" aria-label={t("portion.title")}>
       {portions.length > 0 && (
         <div className="space-y-2">
           {portions.map((p) => (

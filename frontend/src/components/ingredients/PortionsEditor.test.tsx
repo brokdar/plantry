@@ -38,7 +38,7 @@ describe("PortionsEditor", () => {
 
     renderWithRouter(<PortionsEditor ingredientId={1} />)
 
-    await screen.findByText("Portions")
+    await screen.findByPlaceholderText(/cup, tbsp, slice/i)
 
     const unitInput = screen.getByPlaceholderText(/cup, tbsp, slice/i)
     await user.type(unitInput, "slice")
@@ -81,7 +81,7 @@ describe("PortionsEditor", () => {
     vi.mocked(listPortions).mockResolvedValue([])
 
     renderWithRouter(<PortionsEditor ingredientId={1} />)
-    await screen.findByText("Portions")
+    await screen.findByPlaceholderText(/cup, tbsp, slice/i)
 
     // Only fill grams, leave unit empty
     const gramsInput = screen.getByRole("spinbutton")
@@ -98,7 +98,7 @@ describe("PortionsEditor", () => {
     vi.mocked(upsertPortion).mockResolvedValue(undefined)
 
     renderWithRouter(<PortionsEditor ingredientId={1} />)
-    await screen.findByText("Portions")
+    await screen.findByPlaceholderText(/cup, tbsp, slice/i)
 
     const unitInput = screen.getByPlaceholderText(/cup, tbsp, slice/i)
     await user.type(unitInput, "slice")

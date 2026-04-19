@@ -27,7 +27,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { to: "/", labelKey: "nav.planner", icon: CalendarDays, exact: true },
   { to: "/components", labelKey: "nav.recipes", icon: BookOpen },
-  { to: "/ingredients", labelKey: "nav.pantry", icon: Package },
+  { to: "/ingredients", labelKey: "nav.ingredients", icon: Package },
   { to: "/archive", labelKey: "nav.past_weeks", icon: History },
   { to: "/settings", labelKey: "nav.settings", icon: Settings },
 ]

@@ -14,7 +14,7 @@ test.describe("AppShell", () => {
     for (const label of [
       /weekly planner/i,
       /recipes/i,
-      /pantry/i,
+      /^ingredients$/i,
       /past weeks/i,
       /settings/i,
     ]) {

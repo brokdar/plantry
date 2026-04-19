@@ -37,21 +37,8 @@ beforeEach(() => {
 })
 
 describe("IngredientEditor", () => {
-  test("renders create mode with tabs", async () => {
+  test("renders create mode with empty fields", async () => {
     renderWithRouter(<IngredientEditor />)
-
-    expect(
-      await screen.findByRole("tab", { name: /search/i })
-    ).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: /manual/i })).toBeInTheDocument()
-  })
-
-  test("renders manual tab with empty fields", async () => {
-    const user = userEvent.setup()
-    renderWithRouter(<IngredientEditor />)
-
-    const manualTab = await screen.findByRole("tab", { name: /manual/i })
-    await user.click(manualTab)
 
     const nameInput = await screen.findByLabelText("Name")
     expect(nameInput).toHaveValue("")
@@ -64,43 +51,28 @@ describe("IngredientEditor", () => {
     renderWithRouter(<IngredientEditor ingredient={mockChickenBreast} />)
 
     expect(await screen.findByLabelText("Name")).toHaveValue("Chicken breast")
-    expect(screen.getByLabelText("Calories (kcal)")).toHaveValue(165)
-    expect(screen.getByLabelText("Protein (g)")).toHaveValue(31)
-    expect(screen.getByLabelText("Fat (g)")).toHaveValue(3.6)
+    expect(
+      screen.getByRole("spinbutton", { name: "Calories (kcal)" })
+    ).toHaveValue(165)
+    expect(screen.getByRole("spinbutton", { name: "Protein (g)" })).toHaveValue(
+      31
+    )
+    expect(screen.getByRole("spinbutton", { name: "Fat (g)" })).toHaveValue(3.6)
   })
 
-  test("edit mode does not show tabs", async () => {
-    renderWithRouter(<IngredientEditor ingredient={mockChickenBreast} />)
-
-    await screen.findByLabelText("Name")
-
-    expect(
-      screen.queryByRole("tab", { name: /search/i })
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole("tab", { name: /manual/i })
-    ).not.toBeInTheDocument()
-  })
-
-  test("shows validation error for empty name in manual mode", async () => {
+  test("shows validation error for empty name", async () => {
     const user = userEvent.setup()
     renderWithRouter(<IngredientEditor />)
 
-    const manualTab = await screen.findByRole("tab", { name: /manual/i })
-    await user.click(manualTab)
-
-    const saveButton = await screen.findByRole("button", { name: "Save" })
+    await screen.findByLabelText("Name")
+    const saveButton = screen.getByRole("button", { name: "Save" })
+    // Save is disabled when name empty
+    expect(saveButton).toBeDisabled()
     await user.click(saveButton)
-
-    await waitFor(() => {
-      expect(createIngredient).not.toHaveBeenCalled()
-    })
-    expect(
-      await screen.findByText(/expected string to have >=1 characters/i)
-    ).toBeInTheDocument()
+    expect(createIngredient).not.toHaveBeenCalled()
   })
 
-  test("calls createIngredient on submit in manual mode", async () => {
+  test("calls createIngredient on submit", async () => {
     const user = userEvent.setup()
     const onSuccess = vi.fn()
     vi.mocked(createIngredient).mockResolvedValue({
@@ -110,9 +82,6 @@ describe("IngredientEditor", () => {
     })
 
     renderWithRouter(<IngredientEditor onSuccess={onSuccess} />)
-
-    const manualTab = await screen.findByRole("tab", { name: /manual/i })
-    await user.click(manualTab)
 
     const nameInput = await screen.findByLabelText("Name")
     await user.type(nameInput, "Tofu")
@@ -173,7 +142,7 @@ describe("IngredientEditor", () => {
     })
   })
 
-  test("populates form from lookup candidate", async () => {
+  test("lookup panel populates form from candidate", async () => {
     const user = userEvent.setup()
     vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
 
@@ -190,40 +159,13 @@ describe("IngredientEditor", () => {
     expect(await screen.findByLabelText("Name")).toHaveValue(
       "Chicken Breast, Raw"
     )
-    expect(screen.getByLabelText("Calories (kcal)")).toHaveValue(120)
-    expect(screen.getByLabelText("Protein (g)")).toHaveValue(22.5)
-    expect(screen.getByLabelText("Fat (g)")).toHaveValue(2.6)
-  })
-
-  test("back to search resets form", async () => {
-    const user = userEvent.setup()
-    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
-
-    renderWithRouter(<IngredientEditor />)
-
-    const input = await screen.findByPlaceholderText(
-      /search by name or barcode/i
-    )
-    await user.type(input, "chicken")
-
-    const candidate = await screen.findByText("Chicken Breast, Raw")
-    await user.click(candidate)
-
-    expect(await screen.findByLabelText("Name")).toHaveValue(
-      "Chicken Breast, Raw"
-    )
-
-    const backButton = screen.getByRole("button", {
-      name: /back to search/i,
-    })
-    await user.click(backButton)
-
-    // Tabs should be back (search tab visible again)
     expect(
-      await screen.findByRole("tab", { name: /search/i })
-    ).toBeInTheDocument()
-    // Form should no longer be visible
-    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument()
+      screen.getByRole("spinbutton", { name: "Calories (kcal)" })
+    ).toHaveValue(120)
+    expect(screen.getByRole("spinbutton", { name: "Protein (g)" })).toHaveValue(
+      22.5
+    )
+    expect(screen.getByRole("spinbutton", { name: "Fat (g)" })).toHaveValue(2.6)
   })
 
   test("shows server error message", async () => {
@@ -233,9 +175,6 @@ describe("IngredientEditor", () => {
     )
 
     renderWithRouter(<IngredientEditor />)
-
-    const manualTab = await screen.findByRole("tab", { name: /manual/i })
-    await user.click(manualTab)
 
     const nameInput = await screen.findByLabelText("Name")
     await user.type(nameInput, "Chicken breast")

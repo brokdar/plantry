@@ -87,8 +87,161 @@ test.describe("Recipe Catalog (card grid)", () => {
         r.url().includes(`search=${gibberish}`)
     )
 
-    await page.getByTestId("component-create-tile").click()
+    await page.getByTestId("component-create-tile").getByRole("link").click()
     await expect(page).toHaveURL(/\/components\/new$/)
+  })
+
+  test("layout toggle switches grid ↔ list and persists across reload", async ({
+    page,
+  }) => {
+    const tag = uid()
+    const main = await seedComponent({
+      name: `Toggle Main ${tag}`,
+      role: "main",
+    })
+
+    try {
+      await page.goto("/components")
+
+      // Scope to seeded item so list/grid count is deterministic.
+      const searchResp = page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/components") && r.url().includes(`search=`)
+      )
+      await page.getByTestId("catalog-search").fill(tag)
+      await searchResp
+
+      const gridBtn = page.getByRole("button", { name: "Grid view" })
+      const listBtn = page.getByRole("button", { name: "List view" })
+      const card = page.getByTestId(`component-card-${main.id}`)
+
+      await test.step("grid is the default selection", async () => {
+        await expect(gridBtn).toHaveAttribute("aria-pressed", "true")
+        await expect(listBtn).toHaveAttribute("aria-pressed", "false")
+        await expect(card).toBeVisible()
+      })
+
+      await test.step("clicking list flips selection without losing the card", async () => {
+        await listBtn.click()
+        await expect(listBtn).toHaveAttribute("aria-pressed", "true")
+        await expect(gridBtn).toHaveAttribute("aria-pressed", "false")
+        await expect(card).toBeVisible()
+      })
+
+      await test.step("selection persists across reload", async () => {
+        await page.reload()
+        await expect(
+          page.getByRole("button", { name: "List view" })
+        ).toHaveAttribute("aria-pressed", "true")
+      })
+
+      // Reset to grid so subsequent tests start from default.
+      await page.getByRole("button", { name: "Grid view" }).click()
+    } finally {
+      await cleanupComponent(main.id)
+    }
+  })
+
+  test("tag filter chip appears from items and narrows the grid", async ({
+    page,
+  }) => {
+    const tag = uid()
+    const spicyTag = `spicy-${tag}`
+    const veganTag = `vegan-${tag}`
+    const spicy = await seedComponent({
+      name: `Tagged Spicy ${tag}`,
+      role: "main",
+      tags: [spicyTag],
+    })
+    const vegan = await seedComponent({
+      name: `Tagged Vegan ${tag}`,
+      role: "main",
+      tags: [veganTag],
+    })
+
+    try {
+      await page.goto("/components")
+
+      const searchResp = page.waitForResponse((r) =>
+        r.url().includes(`search=`)
+      )
+      await page.getByTestId("catalog-search").fill(tag)
+      await searchResp
+
+      const spicyCard = page.getByTestId(`component-card-${spicy.id}`)
+      const veganCard = page.getByTestId(`component-card-${vegan.id}`)
+      await expect(spicyCard).toBeVisible()
+      await expect(veganCard).toBeVisible()
+
+      await test.step("clicking the spicy chip filters the grid", async () => {
+        const tagResp = page.waitForResponse(
+          (r) => r.url().includes("/api/components") && r.url().includes("tag=")
+        )
+        await page.getByTestId(`component-filter-tag-${spicyTag}`).click()
+        await tagResp
+        await expect(spicyCard).toBeVisible()
+        await expect(veganCard).toHaveCount(0)
+      })
+
+      await test.step("clicking the active chip again removes the filter", async () => {
+        // Deselecting may hit TanStack Query's cache (the unfiltered query
+        // ran on first paint), so we assert UI state directly rather than
+        // waiting for a network round-trip that may not fire.
+        await page.getByTestId(`component-filter-tag-${spicyTag}`).click()
+        await expect(spicyCard).toBeVisible()
+        await expect(veganCard).toBeVisible()
+      })
+    } finally {
+      await cleanupComponent(spicy.id)
+      await cleanupComponent(vegan.id)
+    }
+  })
+
+  test("clicking a card body navigates to the editor", async ({ page }) => {
+    const tag = uid()
+    const main = await seedComponent({
+      name: `Click Body ${tag}`,
+      role: "main",
+    })
+
+    try {
+      await page.goto("/components")
+      const searchResp = page.waitForResponse((r) =>
+        r.url().includes(`search=`)
+      )
+      await page.getByTestId("catalog-search").fill(tag)
+      await searchResp
+
+      // The card's primary affordance is an absolute <a aria-label={name}>
+      // covering the body; click it the way an accessibility tree would.
+      await page
+        .getByTestId(`component-card-${main.id}`)
+        .getByRole("link", { name: `Click Body ${tag}`, exact: true })
+        .click()
+
+      await expect(page).toHaveURL(new RegExp(`/components/${main.id}/edit$`))
+      await expect(page.getByLabel(/^name/i)).toHaveValue(`Click Body ${tag}`)
+    } finally {
+      await cleanupComponent(main.id)
+    }
+  })
+
+  test("secondary actions menu links to import and templates", async ({
+    page,
+  }) => {
+    await test.step("Import from URL navigates to /import", async () => {
+      await page.goto("/components")
+      await page.getByTestId("catalog-secondary-actions").click()
+      await page.getByRole("menuitem", { name: /import from url/i }).click()
+      await expect(page).toHaveURL(/\/import$/)
+    })
+
+    await test.step("Browse Templates navigates to /templates", async () => {
+      await page.goto("/components")
+      await page.getByTestId("catalog-secondary-actions").click()
+      await page.getByRole("menuitem", { name: /browse templates/i }).click()
+      await expect(page).toHaveURL(/\/templates$/)
+    })
   })
 
   test("card-menu delete confirms, removes card, and shows success", async ({

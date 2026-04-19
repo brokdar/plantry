@@ -47,7 +47,6 @@ test.describe("Ingredient Catalogue", () => {
 
     try {
       await page.goto("/ingredients/new")
-      await page.getByRole("tab", { name: /manual/i }).click()
       await page.getByLabel(/^name/i).fill(name)
       await page.getByLabel(/calories/i).fill("165")
       await page.getByLabel(/protein/i).fill("31")
@@ -71,10 +70,8 @@ test.describe("Ingredient Catalogue", () => {
         page.getByTestId(`ingredient-card-${createdId}`)
       ).toBeVisible()
       await expect(
-        page
-          .getByTestId(`ingredient-card-${createdId}`)
-          .getByText("165 kcal / 100g")
-      ).toBeVisible()
+        page.getByTestId(`ingredient-card-${createdId}`)
+      ).toContainText("165 kcal")
     } finally {
       if (createdId) await cleanupIngredient(createdId)
     }
@@ -157,10 +154,8 @@ test.describe("Ingredient Catalogue", () => {
 
       // Back on list, verify updated value on the card
       await expect(
-        page
-          .getByTestId(`ingredient-card-${ingredient.id}`)
-          .getByText("120 kcal / 100g")
-      ).toBeVisible()
+        page.getByTestId(`ingredient-card-${ingredient.id}`)
+      ).toContainText("120 kcal")
     } finally {
       await cleanupIngredient(ingredient.id)
     }
@@ -219,21 +214,14 @@ test.describe("Ingredient Catalogue", () => {
     page,
   }) => {
     await page.goto("/ingredients/new")
-    await page.getByRole("tab", { name: /manual/i }).click()
 
     // Fill a macro field but leave name empty
     await page.getByLabel(/calories/i).fill("100")
 
-    // Click save — form should NOT submit (client-side validation)
-    await page.getByRole("button", { name: /save/i }).click()
-
-    // Should still be on the new ingredient page (no navigation)
-    await expect(page.getByRole("button", { name: /save/i })).toBeVisible()
-
-    // The name input should have a validation error (browser or zod)
-    // Check that the name field is marked invalid or an error message appears
-    const nameInput = page.getByLabel(/^name/i)
-    await expect(nameInput).toBeVisible()
+    // Save button is disabled until the name field is non-empty — this is
+    // the client-side guard against submitting an empty name.
+    const save = page.getByRole("button", { name: /save/i })
+    await expect(save).toBeDisabled()
 
     // No cleanup needed — nothing was created
   })
@@ -246,7 +234,6 @@ test.describe("Ingredient Catalogue", () => {
 
     try {
       await page.goto("/ingredients/new")
-      await page.getByRole("tab", { name: /manual/i }).click()
       await page.getByLabel(/^name/i).fill(name)
       await page.getByLabel(/calories/i).fill("200")
 

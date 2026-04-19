@@ -1,26 +1,22 @@
-import { useState, useDeferredValue } from "react"
+import { useMemo, useState, useDeferredValue } from "react"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 import {
   Bookmark,
   Download,
+  LayoutGrid,
+  List,
+  Loader2,
   MoreHorizontal,
-  MoreVertical,
   Plus,
+  Utensils,
 } from "lucide-react"
 
-import { EditorialCard } from "@/components/editorial/EditorialCard"
-import { EmptyCreateCard } from "@/components/editorial/EmptyCreateCard"
 import {
   FilterChipGroup,
   type FilterChipOption,
 } from "@/components/editorial/FilterChipGroup"
-import {
-  FoodPlaceholder,
-  type FoodPlaceholderCategory,
-} from "@/components/editorial/FoodPlaceholder"
 import { PageHeader } from "@/components/editorial/PageHeader"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -43,10 +39,18 @@ import {
   useDeleteComponent,
   useInsights,
 } from "@/lib/queries/components"
-import { imageURL } from "@/lib/image-url"
+import { useLocalStorageState } from "@/lib/hooks/useLocalStorageState"
 import { COMPONENT_ROLES } from "@/lib/schemas/component"
+import { cn } from "@/lib/utils"
 
-const PAGE_SIZE = 20
+import { ComponentCard, type ComponentCardLayout } from "./ComponentCard"
+
+const PAGE_SIZE = 16
+
+const LAYOUT_VALUES = ["grid", "list"] as const
+function isLayout(value: string): value is ComponentCardLayout {
+  return (LAYOUT_VALUES as readonly string[]).includes(value)
+}
 
 export function ComponentList() {
   const { t } = useTranslation()
@@ -54,21 +58,36 @@ export function ComponentList() {
 
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search)
+  const [sort, setSort] = useState<string>("name")
   const [roleFilter, setRoleFilter] = useState<string | null>(null)
-  const [offset, setOffset] = useState(0)
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [limit, setLimit] = useState(PAGE_SIZE)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [layout, setLayout] = useLocalStorageState<ComponentCardLayout>(
+    "plantry.componentLayout",
+    "grid",
+    isLayout
+  )
 
-  const { data, isLoading } = useComponents({
+  const { data, isLoading, isFetching } = useComponents({
     search: deferredSearch || undefined,
     role: roleFilter ?? undefined,
-    limit: PAGE_SIZE,
-    offset,
+    tag: tagFilter ?? undefined,
+    sort,
+    limit,
+    offset: 0,
   })
 
   const deleteMutation = useDeleteComponent()
   const { data: insights } = useInsights()
-  const forgottenIds = new Set(insights?.forgotten.map((c) => c.id) ?? [])
-  const mostCookedIds = new Set(insights?.most_cooked.map((c) => c.id) ?? [])
+  const forgottenIds = useMemo(
+    () => new Set(insights?.forgotten.map((c) => c.id) ?? []),
+    [insights]
+  )
+  const mostCookedIds = useMemo(
+    () => new Set(insights?.most_cooked.map((c) => c.id) ?? []),
+    [insights]
+  )
 
   function handleDelete() {
     if (deleteId === null) return
@@ -78,9 +97,16 @@ export function ComponentList() {
   }
 
   const total = data?.total ?? 0
-  const items = data?.items ?? []
-  const from = total > 0 ? offset + 1 : 0
-  const to = Math.min(offset + PAGE_SIZE, total)
+  const items = useMemo(() => data?.items ?? [], [data])
+  const hasMore = items.length < total
+
+  const sortOptions: FilterChipOption[] = useMemo(
+    () => [
+      { value: "name", label: t("component.sort_name") },
+      { value: "created", label: t("component.sort_created") },
+    ],
+    [t]
+  )
 
   const roleOptions: FilterChipOption[] = COMPONENT_ROLES.map((role) => ({
     value: role,
@@ -88,8 +114,20 @@ export function ComponentList() {
     testId: `component-filter-role-${role}`,
   }))
 
+  const availableTags = useMemo(() => {
+    const set = new Set<string>()
+    for (const item of items) for (const tag of item.tags) set.add(tag)
+    return [...set].sort()
+  }, [items])
+
+  const tagOptions: FilterChipOption[] = availableTags.map((tag) => ({
+    value: tag,
+    label: tag,
+    testId: `component-filter-tag-${tag}`,
+  }))
+
   return (
-    <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 md:px-8 md:py-12">
+    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 md:px-8 md:py-12">
       <PageHeader
         title={t("component.title")}
         description={t("component.subtitle")}
@@ -136,17 +174,31 @@ export function ComponentList() {
         }
       />
 
-      <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Input
           placeholder={t("component.search_placeholder")}
           value={search}
           onChange={(e) => {
             setSearch(e.target.value)
-            setOffset(0)
+            setLimit(PAGE_SIZE)
           }}
-          className="max-w-sm rounded-full bg-surface-container-highest"
+          className="flex-1 rounded-full bg-surface-container-highest"
           data-testid="catalog-search"
         />
+        <FilterChipGroup
+          testId="component-sort"
+          ariaLabel={t("component.sort_label")}
+          options={sortOptions}
+          value={sort}
+          onValueChange={(v) => {
+            if (v) setSort(v)
+          }}
+          allowDeselect={false}
+        />
+        <LayoutToggle value={layout} onChange={setLayout} />
+      </div>
+
+      <div className="space-y-3">
         <FilterChipGroup
           testId="component-filter-role"
           ariaLabel={t("component.role")}
@@ -154,173 +206,72 @@ export function ComponentList() {
           value={roleFilter}
           onValueChange={(v) => {
             setRoleFilter(v)
-            setOffset(0)
+            setLimit(PAGE_SIZE)
           }}
         />
+        {tagOptions.length > 0 && (
+          <FilterChipGroup
+            testId="component-filter-tag"
+            ariaLabel={t("component.tags")}
+            options={tagOptions}
+            value={tagFilter}
+            onValueChange={(v) => {
+              setTagFilter(v)
+              setLimit(PAGE_SIZE)
+            }}
+          />
+        )}
       </div>
 
+      {!isLoading && total > 0 && (
+        <p className="text-xs tracking-wider text-on-surface-variant uppercase">
+          {t("component.total_count", { count: total })}
+        </p>
+      )}
+
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-64 w-full rounded-xl" />
-          ))}
-        </div>
+        <ListSkeleton layout={layout} />
       ) : items.length === 0 ? (
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <EmptyCreateCard
-            to="/components/new"
-            title={t("component.create")}
-            description={t("component.empty_state")}
-            testId="component-create-tile"
-          />
-        </div>
+        <EmptyState
+          hasFilters={!!deferredSearch || !!roleFilter || !!tagFilter}
+          t={t}
+        />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className="relative"
-                data-testid={`component-card-${item.id}`}
-              >
-                <EditorialCard interactive>
-                  <Link
-                    to="/components/$id"
-                    params={{ id: String(item.id) }}
-                    className="absolute inset-0 z-0"
-                    aria-label={item.name}
-                  />
-                  {item.image_path ? (
-                    <EditorialCard.Image
-                      src={imageURL(item.image_path, item.updated_at)}
-                      alt={item.name}
-                    />
-                  ) : (
-                    <FoodPlaceholder
-                      category={
-                        item.role as FoodPlaceholderCategory | undefined
-                      }
-                      className="m-2 aspect-[4/3] w-[calc(100%-1rem)]"
-                      aria-label={item.name}
-                    />
-                  )}
-                  <EditorialCard.Body>
-                    <div className="flex items-start gap-2">
-                      <EditorialCard.Title className="flex-1">
-                        {item.name}
-                      </EditorialCard.Title>
-                    </div>
-                    <EditorialCard.Meta className="mt-2 flex-wrap">
-                      <Badge variant="secondary">
-                        {t(`component.role_${item.role}`)}
-                      </Badge>
-                      <span>
-                        {item.reference_portions}{" "}
-                        {t("component.reference_portions")}
-                      </span>
-                      {forgottenIds.has(item.id) && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs"
-                          data-testid={`badge-forgotten-${item.id}`}
-                        >
-                          {t("archive.forgotten")}
-                        </Badge>
-                      )}
-                      {mostCookedIds.has(item.id) && (
-                        <Badge
-                          className="text-xs"
-                          data-testid={`badge-most-cooked-${item.id}`}
-                        >
-                          {t("archive.most_cooked")}
-                        </Badge>
-                      )}
-                    </EditorialCard.Meta>
-                    {item.tags.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-1">
-                        {item.tags.map((tag) => (
-                          <Badge
-                            key={tag}
-                            variant="outline"
-                            className="text-xs"
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </EditorialCard.Body>
-                </EditorialCard>
-                <div className="absolute top-3 right-3 z-10">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t("common.actions")}
-                        className="bg-surface-container-lowest/80 backdrop-blur-sm"
-                        data-testid={`component-card-${item.id}-menu`}
-                      >
-                        <MoreVertical className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() =>
-                          navigate({
-                            to: "/components/$id/edit",
-                            params: { id: String(item.id) },
-                          })
-                        }
-                      >
-                        {t("common.edit")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setDeleteId(item.id)}
-                        className="text-destructive focus:text-destructive"
-                        data-testid={`component-card-${item.id}-delete`}
-                      >
-                        {t("common.delete")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            ))}
-            {offset + PAGE_SIZE >= total && (
-              <EmptyCreateCard
-                to="/components/new"
-                title={t("component.create")}
-                testId="component-create-tile"
-              />
+          <div
+            className={cn(
+              layout === "grid"
+                ? "grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                : "flex flex-col gap-3"
             )}
+          >
+            {items.map((item) => (
+              <ComponentCard
+                key={item.id}
+                component={item}
+                layout={layout}
+                insightFlags={{
+                  forgotten: forgottenIds.has(item.id),
+                  mostCooked: mostCookedIds.has(item.id),
+                }}
+                onDelete={setDeleteId}
+              />
+            ))}
           </div>
 
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {t("common.showing", { from, to, total })}
-            </p>
-            <div className="flex gap-2">
+          {hasMore && (
+            <div className="flex justify-center">
               <Button
                 variant="outline"
-                size="sm"
-                disabled={offset === 0}
-                onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-                data-testid="pagination-prev"
+                onClick={() => setLimit((l) => l + PAGE_SIZE)}
+                disabled={isFetching}
+                data-testid="components-load-more"
               >
-                {t("common.previous")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={offset + PAGE_SIZE >= total}
-                onClick={() => setOffset((o) => o + PAGE_SIZE)}
-                data-testid="pagination-next"
-              >
-                {t("common.next")}
+                {isFetching && <Loader2 className="mr-2 size-4 animate-spin" />}
+                {t("component.load_more")}
               </Button>
             </div>
-          </div>
+          )}
         </>
       )}
 
@@ -347,6 +298,111 @@ export function ComponentList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function LayoutToggle({
+  value,
+  onChange,
+}: {
+  value: ComponentCardLayout
+  onChange: (next: ComponentCardLayout) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <div
+      role="group"
+      aria-label={t("component.layout_label")}
+      className="inline-flex items-center rounded-full bg-surface-container-highest p-0.5"
+    >
+      <button
+        type="button"
+        onClick={() => onChange("grid")}
+        aria-pressed={value === "grid"}
+        aria-label={t("component.layout_grid")}
+        data-testid="component-layout-grid"
+        className={cn(
+          "inline-flex size-8 items-center justify-center rounded-full transition-colors",
+          value === "grid"
+            ? "bg-surface-container-lowest text-on-surface shadow-sm"
+            : "text-on-surface-variant hover:text-on-surface"
+        )}
+      >
+        <LayoutGrid className="size-4" aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("list")}
+        aria-pressed={value === "list"}
+        aria-label={t("component.layout_list")}
+        data-testid="component-layout-list"
+        className={cn(
+          "inline-flex size-8 items-center justify-center rounded-full transition-colors",
+          value === "list"
+            ? "bg-surface-container-lowest text-on-surface shadow-sm"
+            : "text-on-surface-variant hover:text-on-surface"
+        )}
+      >
+        <List className="size-4" aria-hidden />
+      </button>
+    </div>
+  )
+}
+
+function ListSkeleton({ layout }: { layout: ComponentCardLayout }) {
+  if (layout === "list") {
+    return (
+      <div className="flex flex-col gap-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+        ))}
+      </div>
+    )
+  }
+  return (
+    <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <Skeleton key={i} className="aspect-[4/3] w-full rounded-2xl" />
+      ))}
+    </div>
+  )
+}
+
+function EmptyState({
+  hasFilters,
+  t,
+}: {
+  hasFilters: boolean
+  t: (k: string) => string
+}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-outline-variant/40 bg-surface-container-lowest px-6 py-20 text-center"
+      data-testid="component-create-tile"
+    >
+      <div className="flex size-14 items-center justify-center rounded-full bg-surface-container">
+        <Utensils className="size-6 text-on-surface-variant" aria-hidden />
+      </div>
+      <div className="space-y-1">
+        <p className="font-heading text-lg font-bold text-on-surface">
+          {hasFilters ? t("component.no_results") : t("component.empty_title")}
+        </p>
+        <p className="text-sm text-on-surface-variant">
+          {hasFilters
+            ? t("component.no_results_body")
+            : t("component.empty_state")}
+        </p>
+      </div>
+      <Button
+        asChild
+        className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
+      >
+        <Link to="/components/new">
+          <Plus className="mr-1.5 size-4" aria-hidden />
+          {t("component.create")}
+        </Link>
+      </Button>
     </div>
   )
 }

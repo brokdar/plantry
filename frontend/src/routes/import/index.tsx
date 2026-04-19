@@ -123,7 +123,7 @@ function ImportPage() {
         tags: resolved.tags,
       })
       navigate({
-        to: "/components/$id",
+        to: "/components/$id/edit",
         params: { id: String(created.id) },
       })
     } catch (err) {

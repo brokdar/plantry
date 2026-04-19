@@ -58,6 +58,7 @@ function EditIngredientPage() {
       <IngredientEditor
         ingredient={ingredient}
         onSuccess={() => navigate({ to: "/ingredients" })}
+        onDeleted={() => navigate({ to: "/ingredients" })}
       />
     </div>
   )

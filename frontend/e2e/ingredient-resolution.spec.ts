@@ -89,15 +89,13 @@ test.describe("Ingredient Resolution", () => {
     }
   })
 
-  test("switch to manual tab and create ingredient", async ({ page }) => {
+  test("create ingredient manually without lookup", async ({ page }) => {
     const uid = crypto.randomUUID().slice(0, 8)
     const name = `Manual ingredient ${uid}`
 
     let createdId: number | undefined
     try {
       await page.goto("/ingredients/new")
-
-      await page.getByRole("tab", { name: /manual/i }).click()
 
       await page.getByLabel(/name/i).fill(name)
       await page.getByLabel(/calories/i).fill("100")
@@ -240,8 +238,6 @@ test.describe("Ingredient Resolution", () => {
 
     try {
       await page.goto("/ingredients/new")
-
-      await page.getByRole("tab", { name: /manual/i }).click()
 
       await page.getByLabel(/name/i).fill(name)
       await page.getByLabel(/calories/i).fill("200")

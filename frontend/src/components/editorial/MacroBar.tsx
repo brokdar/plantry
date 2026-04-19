@@ -72,7 +72,7 @@ export function MacroBar({
             key={`${segment.label ?? idx}`}
             className={cn("h-full", FILL_COLORS[segment.color ?? "primary"])}
             style={{ width: `${pct}%` }}
-            aria-label={segment.label}
+            aria-hidden
             title={segment.label}
           />
         )

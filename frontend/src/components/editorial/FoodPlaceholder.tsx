@@ -63,7 +63,7 @@ export function FoodPlaceholder({
       role="img"
       aria-label={ariaLabel ?? "food placeholder"}
       className={cn(
-        "flex items-center justify-center overflow-hidden",
+        "pointer-events-none flex items-center justify-center overflow-hidden",
         ROUNDED[rounded],
         className
       )}

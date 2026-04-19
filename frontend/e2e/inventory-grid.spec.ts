@@ -22,7 +22,8 @@ test.describe("Ingredient Inventory (card grid)", () => {
       const card = page.getByTestId(`ingredient-card-${chicken.id}`)
       await expect(card).toBeVisible()
       await expect(card.getByText(chicken.name)).toBeVisible()
-      await expect(card.getByText("165 kcal / 100g")).toBeVisible()
+      await expect(card).toContainText("165 kcal")
+      await expect(card).toContainText("Manual")
     } finally {
       await cleanupIngredient(chicken.id)
     }
@@ -37,7 +38,7 @@ test.describe("Ingredient Inventory (card grid)", () => {
         r.url().includes("/api/ingredients") &&
         r.url().includes(`search=${gibberish}`)
     )
-    await page.getByTestId("ingredient-create-tile").click()
+    await page.getByTestId("ingredient-create-tile").getByRole("link").click()
     await expect(page).toHaveURL(/\/ingredients\/new$/)
   })
 
@@ -87,15 +88,38 @@ test.describe("Ingredient Inventory (card grid)", () => {
     }
   })
 
-  test("source filter chip narrows grid client-side", async ({ page }) => {
+  test("clicking a card body navigates to edit page", async ({ page }) => {
     const tag = uid()
-    // Both seeded via API default to "manual" source — this test checks that
-    // toggling the chip shows/hides all current-page cards when source ≠
-    // "manual" is selected (no backend-sourced non-manual items in scope).
-    const a = await seedIngredient({
-      name: `Source A ${tag}`,
+    const ing = await seedIngredient({
+      name: `Click Edit ${tag}`,
       kcal_100g: 50,
     })
+
+    try {
+      await page.goto("/ingredients")
+      const searchResp = page.waitForResponse((r) =>
+        r.url().includes(`search=`)
+      )
+      await page.getByTestId("inventory-search").fill(tag)
+      await searchResp
+
+      // Click the card-cover anchor by its accessible name (aria-label).
+      await page
+        .getByTestId(`ingredient-card-${ing.id}`)
+        .getByRole("link", { name: `Click Edit ${tag}`, exact: true })
+        .click()
+
+      await expect(page).toHaveURL(new RegExp(`/ingredients/${ing.id}/edit$`))
+      await expect(page.getByLabel(/^name/i)).toHaveValue(`Click Edit ${tag}`)
+    } finally {
+      await cleanupIngredient(ing.id)
+    }
+  })
+
+  test("sort chips update the list order", async ({ page }) => {
+    const tag = uid()
+    const a = await seedIngredient({ name: `Sort A ${tag}`, kcal_100g: 50 })
+    const b = await seedIngredient({ name: `Sort B ${tag}`, kcal_100g: 500 })
 
     try {
       await page.goto("/ingredients")
@@ -106,16 +130,23 @@ test.describe("Ingredient Inventory (card grid)", () => {
           r.url().includes(`search=${tag}`)
       )
       await expect(page.getByTestId(`ingredient-card-${a.id}`)).toBeVisible()
+      await expect(page.getByTestId(`ingredient-card-${b.id}`)).toBeVisible()
 
-      // Select "Open Food Facts" — the manual card should be filtered out.
-      await page.getByTestId("ingredient-filter-source-off").click()
-      await expect(page.getByTestId(`ingredient-card-${a.id}`)).toHaveCount(0)
+      // Switch sort to kcal — fires a new request with sort=kcal.
+      const kcalResp = page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/ingredients") && r.url().includes("sort=kcal")
+      )
+      await page.getByRole("button", { name: /calories/i }).click()
+      await kcalResp
 
-      // Deselect — reappears.
-      await page.getByTestId("ingredient-filter-source-off").click()
-      await expect(page.getByTestId(`ingredient-card-${a.id}`)).toBeVisible()
+      // Name sort chip should no longer be the selected option.
+      await expect(
+        page.getByRole("button", { name: /calories/i })
+      ).toHaveAttribute("aria-pressed", "true")
     } finally {
       await cleanupIngredient(a.id)
+      await cleanupIngredient(b.id)
     }
   })
 })

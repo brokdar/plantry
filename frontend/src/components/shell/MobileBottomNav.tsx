@@ -21,7 +21,7 @@ type MobileNavEntry = {
 
 const LEFT_ENTRIES: MobileNavEntry[] = [
   { to: "/", labelKey: "nav.planner", icon: CalendarDays, exact: true },
-  { to: "/components", labelKey: "nav.components", icon: BookOpen },
+  { to: "/components", labelKey: "nav.recipes", icon: BookOpen },
 ]
 
 const RIGHT_ENTRIES: MobileNavEntry[] = [

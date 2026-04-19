@@ -1,13 +1,36 @@
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import {
   useForm,
   useFieldArray,
   useWatch,
   type Resolver,
+  type UseFormReturn,
 } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTranslation } from "react-i18next"
-import { Plus, Trash2, X } from "lucide-react"
+import { Link, useNavigate } from "@tanstack/react-router"
+import { GitBranch, Loader2, Plus, Trash2, X } from "lucide-react"
+
+import {
+  FoodPlaceholder,
+  type FoodPlaceholderCategory,
+} from "@/components/editorial/FoodPlaceholder"
+import { imageURL } from "@/lib/image-url"
+
+import { NutritionPanel } from "@/components/editorial/NutritionPanel"
+import { SectionCard } from "@/components/editorial/SectionCard"
+import { StickyActionBar } from "@/components/editorial/StickyActionBar"
+import { ImageField } from "@/components/images/ImageField"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Form,
   FormField,
@@ -17,9 +40,6 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -27,8 +47,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { NutritionPreview } from "./NutritionPreview"
-import { ImageField } from "@/components/images/ImageField"
+import { Textarea } from "@/components/ui/textarea"
+
+import { IngredientCombobox } from "./IngredientCombobox"
+
 import {
   componentSchema,
   COMPONENT_ROLES,
@@ -37,20 +59,27 @@ import {
 import {
   useCreateComponent,
   useUpdateComponent,
+  useDeleteComponent,
+  useCreateVariant,
+  useVariants,
 } from "@/lib/queries/components"
-import { useIngredients, useIngredient } from "@/lib/queries/ingredients"
+import { useIngredient } from "@/lib/queries/ingredients"
 import { usePortions } from "@/lib/queries/portions"
+import { fromIngredients, type IngredientInput } from "@/lib/domain/nutrition"
 import type { Component } from "@/lib/api/components"
+import type { Ingredient } from "@/lib/api/ingredients"
 import { ApiError } from "@/lib/api/client"
 
 interface ComponentEditorProps {
   component?: Component
   onSuccess?: () => void
+  onDeleted?: () => void
 }
 
 export function ComponentEditor({
   component,
   onSuccess,
+  onDeleted,
 }: ComponentEditorProps) {
   const { t } = useTranslation()
   const isEdit = !!component
@@ -67,7 +96,7 @@ export function ComponentEditor({
           notes: component.notes,
           ingredients: component.ingredients.map((ci) => ({
             ingredient_id: ci.ingredient_id,
-            ingredient_name: "",
+            ingredient_name: ci.ingredient_name,
             amount: ci.amount,
             unit: ci.unit,
             grams: ci.grams,
@@ -106,6 +135,13 @@ export function ComponentEditor({
 
   const createMutation = useCreateComponent()
   const updateMutation = useUpdateComponent()
+  const deleteMutation = useDeleteComponent()
+  const createVariant = useCreateVariant()
+  const navigate = useNavigate()
+  const { data: variantsData } = useVariants(component?.id ?? 0)
+
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const watchedIngredients = useWatch({
     control: form.control,
@@ -115,6 +151,9 @@ export function ComponentEditor({
     control: form.control,
     name: "reference_portions",
   })
+  const watchedPrep = useWatch({ control: form.control, name: "prep_minutes" })
+  const watchedCook = useWatch({ control: form.control, name: "cook_minutes" })
+  const totalTime = (Number(watchedPrep) || 0) + (Number(watchedCook) || 0)
 
   async function onSubmit(values: ComponentFormValues) {
     const input = {
@@ -139,7 +178,7 @@ export function ComponentEditor({
     }
 
     try {
-      if (isEdit) {
+      if (isEdit && component) {
         await updateMutation.mutateAsync({ id: component.id, data: input })
       } else {
         await createMutation.mutateAsync(input)
@@ -152,7 +191,21 @@ export function ComponentEditor({
     }
   }
 
-  // Tag management
+  function confirmDelete() {
+    if (!component) return
+    setDeleteError(null)
+    deleteMutation.mutate(component.id, {
+      onSuccess: () => {
+        setDeleteOpen(false)
+        onDeleted?.()
+      },
+      onError: (err: unknown) => {
+        const key = err instanceof Error ? err.message : "error.server"
+        setDeleteError(t(key))
+      },
+    })
+  }
+
   const [tagInput, setTagInput] = useState("")
   const watchedTags = form.watch("tags")
 
@@ -171,284 +224,496 @@ export function ComponentEditor({
     )
   }
 
+  const isPending = createMutation.isPending || updateMutation.isPending
+  const perPortionMacros = computePerPortionMacros(
+    watchedIngredients,
+    watchedPortions
+  )
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {form.formState.errors.root && (
           <p className="text-sm text-destructive">
             {form.formState.errors.root.message}
           </p>
         )}
 
-        {/* Basic fields */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("component.name")}</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder={t("component.name_placeholder")}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="role"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("component.role")}</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={t("component.role_placeholder")}
-                      />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {COMPONENT_ROLES.map((role) => (
-                      <SelectItem key={role} value={role}>
-                        {t(`component.role_${role}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+        {isEdit && component && (
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={createVariant.isPending}
+              onClick={() =>
+                createVariant.mutate(component.id, {
+                  onSuccess: (variant) => {
+                    void navigate({
+                      to: "/components/$id/edit",
+                      params: { id: String(variant.id) },
+                    })
+                  },
+                })
+              }
+              data-testid="component-create-variant"
+            >
+              <GitBranch className="mr-1.5 size-4" aria-hidden />
+              {t("component.create_variant")}
+            </Button>
+          </div>
+        )}
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <FormField
-            control={form.control}
-            name="reference_portions"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("component.reference_portions")}</FormLabel>
-                <FormControl>
-                  <Input type="number" step="0.5" min="0.5" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="prep_minutes"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("component.prep_minutes")}</FormLabel>
-                <FormControl>
-                  <Input type="number" min="0" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="cook_minutes"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("component.cook_minutes")}</FormLabel>
-                <FormControl>
-                  <Input type="number" min="0" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <FormField
-          control={form.control}
-          name="notes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("component.notes")}</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder={t("component.notes_placeholder")}
-                  {...field}
-                  value={field.value ?? ""}
-                  onChange={(e) => field.onChange(e.target.value || null)}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* Left column */}
+          <div className="space-y-4 lg:col-span-8">
+            <SectionCard title={t("component.section_identity")}>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>{t("component.name")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder={t("component.name_placeholder")}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        {/* Ingredients */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">
-              {t("component.ingredients")}
-            </h3>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                appendIngredient({
-                  ingredient_id: 0,
-                  ingredient_name: "",
-                  amount: 100,
-                  unit: "g",
-                  grams: 100,
-                  sort_order: ingredientFields.length,
-                })
-              }
-            >
-              <Plus className="mr-1 size-4" />
-              {t("component.add_ingredient")}
-            </Button>
-          </div>
-          {ingredientFields.map((field, index) => (
-            <IngredientRow
-              key={field.id}
-              index={index}
-              form={form}
-              onRemove={() => removeIngredient(index)}
-            />
-          ))}
-        </div>
-
-        {/* Instructions */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">
-              {t("component.instructions")}
-            </h3>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                appendInstruction({
-                  step_number: instructionFields.length + 1,
-                  text: "",
-                })
-              }
-            >
-              <Plus className="mr-1 size-4" />
-              {t("component.add_instruction")}
-            </Button>
-          </div>
-          {instructionFields.map((field, index) => (
-            <div key={field.id} className="flex items-start gap-2">
-              <span className="mt-2 text-sm font-medium text-muted-foreground">
-                {index + 1}.
-              </span>
+                <FormField
+                  control={form.control}
+                  name="reference_portions"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("component.reference_portions")}</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.5" min="0.5" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               <FormField
                 control={form.control}
-                name={`instructions.${index}.text`}
+                name="role"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
+                  <FormItem>
+                    <FormLabel>{t("component.role")}</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={t("component.role_placeholder")}
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {COMPONENT_ROLES.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {t(`component.role_${role}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </SectionCard>
+
+            <SectionCard title={t("component.cooking_time")}>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="prep_minutes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("component.prep_minutes")}</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="cook_minutes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("component.cook_minutes")}</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              {totalTime > 0 && (
+                <p className="text-xs tracking-wider text-on-surface-variant uppercase">
+                  {t("component.cooking_time_total", { minutes: totalTime })}
+                </p>
+              )}
+            </SectionCard>
+
+            <SectionCard title={t("component.tags")}>
+              {watchedTags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {watchedTags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="gap-1">
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="ml-1 rounded-full hover:bg-muted"
+                        aria-label={t("common.delete")}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  placeholder={t("component.tag_placeholder")}
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      addTag()
+                    }
+                  }}
+                  className="max-w-xs"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addTag}
+                >
+                  {t("component.add_tag")}
+                </Button>
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title={t("component.instructions")}
+              actions={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    appendInstruction({
+                      step_number: instructionFields.length + 1,
+                      text: "",
+                    })
+                  }
+                  data-testid="add-instruction"
+                >
+                  <Plus className="mr-1 size-4" />
+                  {t("component.add_instruction")}
+                </Button>
+              }
+            >
+              {instructionFields.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-outline-variant/40 px-6 py-10 text-center text-sm text-on-surface-variant">
+                  {t("component.instructions_empty")}
+                </p>
+              ) : (
+                <ol className="space-y-3">
+                  {instructionFields.map((field, index) => (
+                    <li key={field.id} className="flex items-start gap-3">
+                      <span className="text-on-primary-container mt-2 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-container font-heading text-xs font-bold">
+                        {index + 1}
+                      </span>
+                      <FormField
+                        control={form.control}
+                        name={`instructions.${index}.text`}
+                        render={({ field }) => (
+                          <FormItem className="flex-1">
+                            <FormControl>
+                              <Textarea
+                                placeholder={t(
+                                  "component.instruction_placeholder"
+                                )}
+                                rows={2}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="mt-1.5"
+                        onClick={() => removeInstruction(index)}
+                        aria-label={t("common.delete")}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title={t("component.ingredients")}
+              actions={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    appendIngredient({
+                      ingredient_id: 0,
+                      ingredient_name: "",
+                      amount: 100,
+                      unit: "g",
+                      grams: 100,
+                      sort_order: ingredientFields.length,
+                    })
+                  }
+                  data-testid="add-ingredient"
+                >
+                  <Plus className="mr-1 size-4" />
+                  {t("component.add_ingredient")}
+                </Button>
+              }
+            >
+              {ingredientFields.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-outline-variant/40 px-6 py-10 text-center text-sm text-on-surface-variant">
+                  {t("component.ingredients_empty")}
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {ingredientFields.map((field, index) => (
+                    <IngredientRow
+                      key={field.id}
+                      index={index}
+                      form={form}
+                      onRemove={() => removeIngredient(index)}
+                    />
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard title={t("component.notes")}>
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
                     <FormControl>
-                      <Input
-                        placeholder={t("component.instruction_placeholder")}
+                      <Textarea
+                        placeholder={t("component.notes_placeholder")}
+                        rows={4}
                         {...field}
+                        value={field.value ?? ""}
+                        onChange={(e) => field.onChange(e.target.value || null)}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            </SectionCard>
+          </div>
+
+          {/* Right column */}
+          <div className="space-y-4 lg:sticky lg:top-6 lg:col-span-4 lg:self-start">
+            {isEdit && component && (
+              <SectionCard
+                title={t("image.section_title")}
+                description={t("component.section_image_hint")}
+              >
+                <ImageField
+                  entityType="components"
+                  entityId={component.id}
+                  currentImagePath={component.image_path}
+                  onImageChange={() => {}}
+                />
+              </SectionCard>
+            )}
+
+            {perPortionMacros ? (
+              <NutritionPanel
+                perPortion={perPortionMacros}
+                referencePortions={watchedPortions}
+              />
+            ) : (
+              <SectionCard title={t("component.nutrition")}>
+                <p className="text-sm text-on-surface-variant">
+                  {t("component.nutrition_empty")}
+                </p>
+              </SectionCard>
+            )}
+
+            {isEdit && variantsData && variantsData.items.length > 0 && (
+              <SectionCard
+                title={t("component.other_variants")}
+                testId="component-variants-section"
+              >
+                <div className="-mx-2 flex gap-3 overflow-x-auto px-2 pb-1">
+                  {variantsData.items.map((variant) => (
+                    <Link
+                      key={variant.id}
+                      to="/components/$id/edit"
+                      params={{ id: String(variant.id) }}
+                      className="editorial-shadow group flex w-40 shrink-0 flex-col overflow-hidden rounded-xl bg-surface-container-lowest transition-all duration-200 hover:-translate-y-0.5"
+                      data-testid={`variant-card-${variant.id}`}
+                    >
+                      <div className="aspect-[4/3] overflow-hidden bg-surface-container-high">
+                        {variant.image_path ? (
+                          <img
+                            src={imageURL(
+                              variant.image_path,
+                              variant.updated_at
+                            )}
+                            alt=""
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <FoodPlaceholder
+                            category={
+                              variant.role as
+                                | FoodPlaceholderCategory
+                                | undefined
+                            }
+                            className="h-full w-full"
+                            aria-label={variant.name}
+                          />
+                        )}
+                      </div>
+                      <div className="flex flex-1 flex-col gap-1 px-3 py-3">
+                        <p className="truncate text-sm font-medium text-on-surface">
+                          {variant.name}
+                        </p>
+                        <Badge
+                          variant="secondary"
+                          className="w-fit text-[10px]"
+                        >
+                          {t(`component.role_${variant.role}`)}
+                        </Badge>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </SectionCard>
+            )}
+          </div>
+        </div>
+
+        <StickyActionBar
+          primary={
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="mr-2 size-4 animate-spin" />}
+              {t("common.save")}
+            </Button>
+          }
+          secondary={
+            <Button variant="outline" asChild>
+              <Link to="/components">{t("common.cancel")}</Link>
+            </Button>
+          }
+          destructive={
+            isEdit ? (
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-sm"
-                onClick={() => removeInstruction(index)}
+                onClick={() => setDeleteOpen(true)}
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                data-testid="component-delete"
               >
-                <Trash2 className="size-4" />
+                <Trash2 className="mr-1.5 size-4" />
+                {t("common.delete")}
               </Button>
-            </div>
-          ))}
-        </div>
-
-        {/* Tags */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium">{t("component.tags")}</h3>
-          <div className="flex flex-wrap gap-2">
-            {watchedTags.map((tag) => (
-              <Badge key={tag} variant="secondary" className="gap-1">
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => removeTag(tag)}
-                  className="ml-1 rounded-full hover:bg-muted"
-                >
-                  <X className="size-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <Input
-              placeholder={t("component.tag_placeholder")}
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  addTag()
-                }
-              }}
-              className="max-w-xs"
-            />
-            <Button type="button" variant="outline" size="sm" onClick={addTag}>
-              {t("component.add_tag")}
-            </Button>
-          </div>
-        </div>
-
-        {/* Nutrition Preview */}
-        {watchedIngredients.length > 0 && (
-          <NutritionPreview
-            ingredients={watchedIngredients}
-            referencePortions={watchedPortions}
-          />
-        )}
-
-        {isEdit && component && (
-          <div className="space-y-3 border-t pt-6">
-            <h3 className="text-sm font-medium">{t("image.section_title")}</h3>
-            <ImageField
-              entityType="components"
-              entityId={component.id}
-              currentImagePath={component.image_path}
-              onImageChange={() => {}}
-            />
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex gap-3">
-          <Button
-            type="submit"
-            disabled={createMutation.isPending || updateMutation.isPending}
-          >
-            {t("common.save")}
-          </Button>
-        </div>
+            ) : undefined
+          }
+        />
       </form>
+
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open) setDeleteError(null)
+          setDeleteOpen(open)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("component.delete_confirm_title")}</DialogTitle>
+            <DialogDescription>
+              {t("component.delete_confirm_body")}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p className="px-1 text-sm text-destructive">{deleteError}</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+              data-testid="confirm-delete"
+            >
+              {t("common.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Form>
   )
 }
 
-// --- Ingredient row sub-component ---
+function computePerPortionMacros(
+  ingredients: ComponentFormValues["ingredients"],
+  referencePortions: number
+) {
+  const valid = ingredients.filter((i) => i.grams > 0)
+  if (valid.length === 0) return null
+  const inputs: IngredientInput[] = valid.map((i) => ({
+    per_100g: {
+      kcal: i.kcal_100g ?? 0,
+      protein: i.protein_100g ?? 0,
+      fat: i.fat_100g ?? 0,
+      carbs: i.carbs_100g ?? 0,
+      fiber: i.fiber_100g ?? 0,
+      sodium: i.sodium_100g ?? 0,
+    },
+    grams: i.grams,
+  }))
+  const total = fromIngredients(inputs)
+  const portions = referencePortions > 0 ? referencePortions : 1
+  return {
+    kcal: total.kcal / portions,
+    protein: total.protein / portions,
+    fat: total.fat / portions,
+    carbs: total.carbs / portions,
+    fiber: total.fiber / portions,
+    sodium: total.sodium / portions,
+  }
+}
 
 function IngredientRow({
   index,
@@ -456,26 +721,20 @@ function IngredientRow({
   onRemove,
 }: {
   index: number
-  form: ReturnType<typeof useForm<ComponentFormValues>>
+  form: UseFormReturn<ComponentFormValues>
   onRemove: () => void
 }) {
   const { t } = useTranslation()
-  const [ingredientSearch, setIngredientSearch] = useState("")
-  const { data: ingredientResults } = useIngredients({
-    search: ingredientSearch || undefined,
-    limit: 10,
-  })
 
   const ingredientId = form.watch(`ingredients.${index}.ingredient_id`)
+  const ingredientName = form.watch(`ingredients.${index}.ingredient_name`)
   const unit = form.watch(`ingredients.${index}.unit`)
 
   const { data: portions } = usePortions(ingredientId)
-  // Fetch full ingredient to populate per-100g macros in edit mode, where
-  // the component API returns only the join-table fields (no macros).
   const { data: ingredientDetail } = useIngredient(ingredientId)
+
   useEffect(() => {
     if (!ingredientDetail) return
-    // Only backfill when macros were not already set (e.g. via selectIngredient).
     if ((form.getValues(`ingredients.${index}.kcal_100g`) ?? 0) > 0) return
     form.setValue(`ingredients.${index}.kcal_100g`, ingredientDetail.kcal_100g)
     form.setValue(
@@ -495,18 +754,10 @@ function IngredientRow({
       `ingredients.${index}.sodium_100g`,
       ingredientDetail.sodium_100g
     )
-  }, [ingredientDetail]) // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ingredientDetail])
 
-  function selectIngredient(ing: {
-    id: number
-    name: string
-    kcal_100g: number
-    protein_100g: number
-    fat_100g: number
-    carbs_100g: number
-    fiber_100g: number
-    sodium_100g: number
-  }) {
+  function selectIngredient(ing: Ingredient) {
     form.setValue(`ingredients.${index}.ingredient_id`, ing.id)
     form.setValue(`ingredients.${index}.ingredient_name`, ing.name)
     form.setValue(`ingredients.${index}.kcal_100g`, ing.kcal_100g)
@@ -515,16 +766,6 @@ function IngredientRow({
     form.setValue(`ingredients.${index}.carbs_100g`, ing.carbs_100g)
     form.setValue(`ingredients.${index}.fiber_100g`, ing.fiber_100g)
     form.setValue(`ingredients.${index}.sodium_100g`, ing.sodium_100g)
-    setIngredientSearch("")
-  }
-
-  function handleUnitChange(newUnit: string) {
-    form.setValue(`ingredients.${index}.unit`, newUnit)
-    recalcGrams(form.getValues(`ingredients.${index}.amount`), newUnit)
-  }
-
-  function handleAmountChange(newAmount: number) {
-    recalcGrams(newAmount, unit)
   }
 
   function recalcGrams(amount: number, u: string) {
@@ -538,44 +779,32 @@ function IngredientRow({
     }
   }
 
-  const ingredientName = form.watch(`ingredients.${index}.ingredient_name`)
+  function handleUnitChange(newUnit: string) {
+    form.setValue(`ingredients.${index}.unit`, newUnit)
+    recalcGrams(form.getValues(`ingredients.${index}.amount`), newUnit)
+  }
 
   return (
-    <div className="space-y-2 rounded-md border border-border p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">
-          {ingredientId > 0
-            ? ingredientName || `#${ingredientId}`
-            : t("component.select_ingredient")}
-        </span>
-        <Button type="button" variant="ghost" size="icon-sm" onClick={onRemove}>
+    <div className="space-y-3 rounded-xl border border-outline-variant/30 bg-surface-container/40 p-3">
+      <div className="flex items-start gap-2">
+        <div className="flex-1">
+          <IngredientCombobox
+            value={ingredientId}
+            selectedName={ingredientName}
+            onSelect={selectIngredient}
+            testId={`ingredient-row-${index}-combobox`}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={onRemove}
+          aria-label={t("common.delete")}
+        >
           <Trash2 className="size-4" />
         </Button>
       </div>
-
-      {ingredientId === 0 && (
-        <div className="relative">
-          <Input
-            placeholder={t("ingredient.search_placeholder")}
-            value={ingredientSearch}
-            onChange={(e) => setIngredientSearch(e.target.value)}
-          />
-          {ingredientSearch && ingredientResults?.items.length ? (
-            <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-popover shadow-md">
-              {ingredientResults.items.map((ing) => (
-                <button
-                  key={ing.id}
-                  type="button"
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
-                  onClick={() => selectIngredient(ing)}
-                >
-                  {ing.name}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      )}
 
       {ingredientId > 0 && (
         <div className="grid grid-cols-3 gap-2">
@@ -595,7 +824,7 @@ function IngredientRow({
                     {...field}
                     onChange={(e) => {
                       field.onChange(e)
-                      handleAmountChange(Number(e.target.value))
+                      recalcGrams(Number(e.target.value), unit)
                     }}
                   />
                 </FormControl>
@@ -623,9 +852,11 @@ function IngredientRow({
             <FormLabel className="text-xs">{t("component.grams")}</FormLabel>
             <Input
               type="number"
+              name={`ingredients.${index}.grams`}
               value={form.watch(`ingredients.${index}.grams`).toFixed(1)}
               disabled
-              className="bg-muted"
+              className="bg-surface-container-highest"
+              data-testid={`ingredient-row-${index}-grams`}
             />
           </FormItem>
         </div>

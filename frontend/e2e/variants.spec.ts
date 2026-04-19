@@ -21,34 +21,27 @@ test.describe("Variant Components", () => {
     const variant = await createVariantViaAPI(parent.id)
 
     try {
-      // Navigate to parent detail page.
-      await page.goto(`/components/${parent.id}`)
-      await expect(
-        page.getByRole("heading", { name: `Chicken Curry ${tag}` })
-      ).toBeVisible()
-
-      // "Other variants" section should show the variant.
-      await expect(page.getByText(variant.name)).toBeVisible()
-
-      // Click the variant card to navigate.
-      const variantDetailPromise = page.waitForResponse(
-        (res) =>
-          res.url().includes(`/api/components/${variant.id}`) &&
-          res.request().method() === "GET" &&
-          !res.url().includes("/variants")
+      // Editor is the only detail surface — navigate there.
+      await page.goto(`/components/${parent.id}/edit`)
+      await expect(page.getByLabel(/^name/i)).toHaveValue(
+        `Chicken Curry ${tag}`
       )
-      await page.getByText(variant.name).click()
-      await variantDetailPromise
 
-      // Variant detail page shows the variant name.
-      await expect(
-        page.getByRole("heading", { name: variant.name })
-      ).toBeVisible()
+      // "Other variants" section lists the variant card.
+      const section = page.getByTestId("component-variants-section")
+      await expect(section).toBeVisible()
+      const variantCard = page.getByTestId(`variant-card-${variant.id}`)
+      await expect(variantCard).toBeVisible()
 
-      // Variant's "Other variants" section shows the parent.
-      await expect(
-        page.getByRole("link", { name: new RegExp(`Chicken Curry ${tag}`) })
-      ).toBeVisible()
+      // Click the variant card to navigate to its editor.
+      await variantCard.click()
+      await expect(page).toHaveURL(
+        new RegExp(`/components/${variant.id}/edit$`)
+      )
+      await expect(page.getByLabel(/^name/i)).toHaveValue(variant.name)
+
+      // The variant editor surfaces the parent in its variants section.
+      await expect(page.getByTestId(`variant-card-${parent.id}`)).toBeVisible()
     } finally {
       await cleanupComponent(variant.id)
       await cleanupComponent(parent.id)
@@ -66,16 +59,15 @@ test.describe("Variant Components", () => {
 
     let variantId: number | undefined
     try {
-      await page.goto(`/components/${parent.id}`)
-      await expect(page.getByText(`Tofu Bowl ${tag}`)).toBeVisible()
+      await page.goto(`/components/${parent.id}/edit`)
+      await expect(page.getByLabel(/^name/i)).toHaveValue(`Tofu Bowl ${tag}`)
 
-      // Click "Create variant" button.
       const responsePromise = page.waitForResponse(
         (res) =>
           res.url().includes(`/api/components/${parent.id}/variant`) &&
           res.request().method() === "POST"
       )
-      await page.getByRole("button", { name: /create variant/i }).click()
+      await page.getByTestId("component-create-variant").click()
       const response = await responsePromise
       expect(response.status()).toBe(201)
 
@@ -83,6 +75,7 @@ test.describe("Variant Components", () => {
       variantId = variant.id
 
       // Should navigate to the variant's edit page.
+      await expect(page).toHaveURL(new RegExp(`/components/${variantId}/edit$`))
       await expect(page.getByLabel(/^name/i)).toBeVisible()
     } finally {
       if (variantId) await cleanupComponent(variantId)
@@ -100,13 +93,14 @@ test.describe("Variant Components", () => {
     })
 
     try {
-      await page.goto(`/components/${comp.id}`)
-      await expect(page.getByText(`Solo Component ${tag}`)).toBeVisible()
+      await page.goto(`/components/${comp.id}/edit`)
+      await expect(page.getByLabel(/^name/i)).toHaveValue(
+        `Solo Component ${tag}`
+      )
 
-      // "Other variants" heading should not appear.
-      await expect(
-        page.getByRole("heading", { name: /other variants/i })
-      ).toHaveCount(0)
+      await expect(page.getByTestId("component-variants-section")).toHaveCount(
+        0
+      )
     } finally {
       await cleanupComponent(comp.id)
     }
