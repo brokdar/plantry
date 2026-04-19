@@ -19,12 +19,14 @@ import { currentYearWeek } from "@/lib/weeks-util"
 type CopyToCurrentButtonProps = {
   weekId: number
   size?: "default" | "sm"
+  iconOnly?: boolean
   testId?: string
 }
 
 export function CopyToCurrentButton({
   weekId,
   size = "default",
+  iconOnly = false,
   testId,
 }: CopyToCurrentButtonProps) {
   const { t } = useTranslation()
@@ -59,8 +61,8 @@ export function CopyToCurrentButton({
         }}
         data-testid={testId ?? `copy-to-current-${weekId}`}
       >
-        <Copy className="mr-1.5 size-4" aria-hidden />
-        {t("archive.copy_to_current")}
+        <Copy className={iconOnly ? "size-4" : "mr-1.5 size-4"} aria-hidden />
+        {!iconOnly && t("archive.copy_to_current")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

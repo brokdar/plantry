@@ -1,28 +1,32 @@
-import { useMatches } from "@tanstack/react-router"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Toaster } from "@/components/ui/sonner"
 import { useProfile } from "@/lib/queries/profile"
 
 import { MobileBottomNav } from "./MobileBottomNav"
-import { SideNav, type SideNavVariant } from "./SideNav"
+import { SideNav } from "./SideNav"
 import { TopBar } from "./TopBar"
 
 type AppShellProps = {
   children: React.ReactNode
 }
 
-type ShellStaticData = { shellVariant?: SideNavVariant }
-
 export function AppShell({ children }: AppShellProps) {
   const { t, i18n } = useTranslation()
   const { data: profile } = useProfile()
-  const matches = useMatches()
-  const lastMatch = matches[matches.length - 1]
-  const sidebarVariant: SideNavVariant =
-    (lastMatch?.staticData as ShellStaticData | undefined)?.shellVariant ??
-    "default"
+
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("sidenav-collapsed") === "true"
+  )
+
+  function handleToggle() {
+    setCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem("sidenav-collapsed", String(next))
+      return next
+    })
+  }
 
   // Apply the user's saved locale to i18n once the profile loads. Without
   // this the LanguageDetector fallback (browser language) wins even when the
@@ -42,7 +46,7 @@ export function AppShell({ children }: AppShellProps) {
       >
         {t("common.skip_to_content")}
       </a>
-      <SideNav variant={sidebarVariant} />
+      <SideNav collapsed={collapsed} onToggle={handleToggle} />
       <div className="flex min-w-0 flex-1 flex-col pb-24 md:pb-0">
         <TopBar />
         <main id="main" className="flex-1">

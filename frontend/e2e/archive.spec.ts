@@ -58,9 +58,9 @@ test.describe("Archive + rotation insights", () => {
       await expect(entry).toBeVisible()
       await expect(entry).toContainText("2025")
 
-      // Navigate to the detail view via the Review button.
-      await entry.getByTestId(`review-${pastWeek.id}`).click()
-      await expect(page).toHaveURL(new RegExp(`/archive/${pastWeek.id}$`))
+      // Clicking the row selects it and renders the grid in the right panel.
+      await entry.click()
+      await expect(page).toHaveURL("/archive")
 
       // Read-only grid renders with the plate's component name.
       await expect(page.getByText(`Archived Dish ${tag}`)).toBeVisible()

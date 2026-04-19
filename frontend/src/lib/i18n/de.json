@@ -13,7 +13,9 @@
     "archive": "Archiv",
     "past_weeks": "Vergangene Wochen",
     "settings": "Einstellungen",
-    "search_placeholder": "Katalog durchsuchen…"
+    "search_placeholder": "Katalog durchsuchen…",
+    "collapse_sidebar": "Seitenleiste einklappen",
+    "expand_sidebar": "Seitenleiste ausklappen"
   },
   "archive": {
     "title": "Historische Sammlungen",
@@ -32,7 +34,8 @@
     "copy_to_current": "In aktuelle Woche kopieren",
     "copy_confirm_title": "Diese Woche in die aktuelle kopieren?",
     "copy_confirm_body": "Mahlzeiten werden zu Woche {{week}}, {{year}} hinzugefügt. Vorhandene Mahlzeiten werden nicht überschrieben.",
-    "copy_success": "Woche in aktuelle kopiert"
+    "copy_success": "Woche in aktuelle kopiert",
+    "select_week": "Wähle eine Woche zur Vorschau"
   },
   "import": {
     "title": "Rezept importieren",
