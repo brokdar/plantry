@@ -252,6 +252,8 @@ func errorMessageKey(err error) string {
 func mustMarshal(v any) json.RawMessage {
 	b, err := json.Marshal(v)
 	if err != nil {
+		// Only reachable for un-marshalable types (channels, funcs, cycles) —
+		// none of which appear here. A panic is appropriate; chi.Recoverer catches it.
 		panic(fmt.Sprintf("agent loop: json.Marshal: %v", err))
 	}
 	return b

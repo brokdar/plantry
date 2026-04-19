@@ -219,6 +219,9 @@ func run() error {
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      5 * time.Minute, // generous for AI chat responses
+		IdleTimeout:       120 * time.Second,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

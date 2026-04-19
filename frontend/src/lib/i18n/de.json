@@ -540,6 +540,10 @@
     "empty_body": "Speichere einen Teller aus dem Planer als Vorlage, um die Kombination an einem anderen Tag wiederzuverwenden."
   },
   "error": {
+    "page_not_found": "Seite nicht gefunden.",
+    "page_not_found_body": "Die gesuchte Seite existiert nicht.",
+    "page_error_body": "Ein unerwarteter Fehler ist aufgetreten.",
+    "reload": "Neu laden",
     "not_found": "Ressource nicht gefunden.",
     "invalid_id": "Ungültige ID.",
     "invalid_body": "Ungültige Anfragedaten.",

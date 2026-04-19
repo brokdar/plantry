@@ -27,6 +27,8 @@ RUN apk add --no-cache ca-certificates tzdata && \
 COPY --from=server /out/plantry /usr/local/bin/plantry
 USER plantry
 WORKDIR /data
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget -qO- http://localhost:${PLANTRY_PORT:-8080}/api/health || exit 1
 ENV PLANTRY_PORT=8080 \
     PLANTRY_DB_PATH=/data/plantry.db \
     PLANTRY_LOG_LEVEL=info

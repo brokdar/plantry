@@ -525,6 +525,10 @@
     "empty_body": "Save a plate from the planner as a template to reuse its combo another day."
   },
   "error": {
+    "page_not_found": "Page not found.",
+    "page_not_found_body": "The page you're looking for doesn't exist.",
+    "page_error_body": "An unexpected error occurred.",
+    "reload": "Reload",
     "not_found": "Resource not found.",
     "invalid_id": "Invalid ID.",
     "invalid_body": "Invalid request data.",

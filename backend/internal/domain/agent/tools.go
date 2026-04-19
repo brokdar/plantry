@@ -779,7 +779,8 @@ func weekNutritionTotals(ctx context.Context, svc Services, w *planner.Week) (*n
 func mustJSON(v any) json.RawMessage {
 	b, err := json.Marshal(v)
 	if err != nil {
-		// Encoding plain maps of primitives never errors; this is a true bug if hit.
+		// Only reachable for un-marshalable types (channels, funcs, cycles) —
+		// none of which appear here. A panic is appropriate; chi.Recoverer catches it.
 		panic(fmt.Sprintf("agent tools: json.Marshal: %v", err))
 	}
 	return b

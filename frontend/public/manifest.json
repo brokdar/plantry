@@ -1,0 +1,17 @@
+{
+  "name": "Plantry",
+  "short_name": "Plantry",
+  "description": "Weekly meal planner",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9f9f8",
+  "theme_color": "#4a654d",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
