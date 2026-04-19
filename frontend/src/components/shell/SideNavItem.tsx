@@ -30,9 +30,6 @@ export function SideNavItem({
         )}
       >
         <Icon className="size-5" aria-hidden />
-        <span className="text-[9px] font-bold tracking-tighter uppercase">
-          {label}
-        </span>
       </Link>
     )
   }
