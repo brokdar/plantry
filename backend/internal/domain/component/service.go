@@ -143,6 +143,12 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+// SetFavorite toggles the favorite flag for a component. Favorites surface
+// first in catalog listings and bias the kitchen agent's fill-empty picks.
+func (s *Service) SetFavorite(ctx context.Context, id int64, favorite bool) (*Component, error) {
+	return s.repo.SetFavorite(ctx, id, favorite)
+}
+
 // List returns a page of components matching the query.
 func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
 	if q.Limit <= 0 {

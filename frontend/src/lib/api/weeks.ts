@@ -18,6 +18,7 @@ export interface CreatePlateInput {
   day: number
   slot_id: number
   note?: string | null
+  skipped?: boolean
   components?: { component_id: number; portions: number }[]
 }
 
@@ -94,4 +95,8 @@ export function getShoppingList(id: number): Promise<ShoppingListResponse> {
 
 export function getWeekNutrition(id: number): Promise<WeekNutritionResponse> {
   return apiFetch(`/weeks/${id}/nutrition`)
+}
+
+export function clearWeekPlates(id: number): Promise<void> {
+  return apiFetch(`/weeks/${id}/plates`, { method: "DELETE" })
 }

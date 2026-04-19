@@ -215,6 +215,14 @@ func (r *fakePlateRepo) CountUsingTimeSlot(_ context.Context, _ int64) (int64, e
 	return 0, nil
 }
 
+func (r *fakePlateRepo) SetSkipped(_ context.Context, _ int64, _ bool, _ *string) (*plate.Plate, error) {
+	return nil, nil
+}
+
+func (r *fakePlateRepo) DeleteByWeek(_ context.Context, _ int64) (int64, error) {
+	return 0, nil
+}
+
 // inlineTxRunner runs the closure with the same fake repos (no isolation).
 type inlineTxRunner struct {
 	weeks  planner.WeekRepository

@@ -30,6 +30,7 @@ export interface Component {
   notes: string | null
   last_cooked_at: string | null
   cook_count: number
+  favorite: boolean
   ingredients: ComponentIngredient[]
   instructions: Instruction[]
   tags: string[]
@@ -71,6 +72,7 @@ export interface ComponentListParams {
   search?: string
   role?: string
   tag?: string
+  favorite?: 0 | 1
   limit?: number
   offset?: number
   sort?: string
@@ -125,6 +127,16 @@ export function updateComponent(
 export function deleteComponent(id: number): Promise<void> {
   return apiFetch(`/components/${id}`, {
     method: "DELETE",
+  })
+}
+
+export function setComponentFavorite(
+  id: number,
+  favorite: boolean
+): Promise<Component> {
+  return apiFetch(`/components/${id}/favorite`, {
+    method: "POST",
+    body: JSON.stringify({ favorite }),
   })
 }
 

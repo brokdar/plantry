@@ -87,9 +87,11 @@
     "prev_week": "Vorherige Woche",
     "next_week": "Nächste Woche",
     "this_week": "Diese Woche",
+    "today": "Heute",
     "copy_week": "Woche in nächste kopieren",
     "daily_avg": "Tagesdurchschnitt",
     "copy_success": "Woche kopiert",
+    "fill_empty_cta": "Leere Slots füllen",
     "generate_prompt": "Plane meine Woche basierend auf meinen Zielen und Zeitfenstern.",
     "empty_state_no_slots_title": "Lege zuerst deine Mahlzeitzeiten fest",
     "empty_state_no_slots_body": "Definiere Frühstück, Mittag-, Abendessen, Snacks — damit du Mahlzeiten dort einplanen kannst.",
@@ -100,7 +102,83 @@
     "day_thu": "Do",
     "day_fri": "Fr",
     "day_sat": "Sa",
-    "day_sun": "So"
+    "day_sun": "So",
+    "slot": {
+      "empty": {
+        "label": "Mahlzeit planen"
+      },
+      "overflow": "+{{count}} mehr",
+      "ai_filled": "Vom Küchen-Agenten gefüllt",
+      "action": {
+        "favorite": "Favorit",
+        "love": "Geliebt",
+        "dislike": "Nicht gemocht"
+      },
+      "role": {
+        "main": "Hauptgericht",
+        "side_starch": "Beilage (Stärke)",
+        "side_veg": "Gemüse",
+        "side_protein": "Protein",
+        "sauce": "Soße",
+        "drink": "Getränk",
+        "dessert": "Dessert",
+        "standalone": "Einzeln"
+      }
+    },
+    "revert": {
+      "title_one": "{{count}} Slot vom Küchen-Agenten gefüllt",
+      "title_other": "{{count}} Slots vom Küchen-Agenten gefüllt",
+      "body": "Snapshot gespeichert. Rückgängig verwirft den Plan, Schließen behält ihn.",
+      "revert": "Rückgängig",
+      "dismiss": "Schließen",
+      "reverted": "Rückgängig gemacht",
+      "error": "Konnte nicht rückgängig gemacht werden"
+    },
+    "fill_empty": {
+      "progress": "Fülle leere Slots…",
+      "done": "Leere Slots gefüllt",
+      "error": "Füllen fehlgeschlagen"
+    }
+  },
+  "skip": {
+    "label": "Auslassen",
+    "mark": "Als ausgelassen markieren (auswärts)",
+    "unmark": "Auslassen entfernen",
+    "note": {
+      "placeholder": "Notiz (optional)"
+    }
+  },
+  "picker": {
+    "search": {
+      "placeholder": "Komponenten, Tags, Zutaten suchen…"
+    },
+    "filter": {
+      "favorites": "Favoriten",
+      "recents": "Zuletzt",
+      "mains": "Hauptgerichte",
+      "sides": "Beilagen",
+      "snacks": "Snacks",
+      "sauces": "Soßen",
+      "skip": "Als ausgelassen markieren"
+    },
+    "tag": {
+      "all": "Alle Tags"
+    },
+    "role": {
+      "all": "Beliebige Rolle"
+    },
+    "sort": {
+      "name": "Name",
+      "recent": "Zuletzt gekocht",
+      "kcal": "Kalorien"
+    },
+    "tray": {
+      "title": "Diese Mahlzeit",
+      "empty": "Tippe eine Mahlzeit an. Die erste wird zum Hauptgericht.",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "totals": "Summen"
+    }
   },
   "plate": {
     "add_component": "Komponente hinzufügen",

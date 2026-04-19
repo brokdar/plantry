@@ -4,9 +4,11 @@ import {
   addPlateComponent,
   deletePlate,
   deletePlateComponent,
+  setPlateSkipped,
   updatePlate,
   updatePlateComponent,
   type AddPlateComponentInput,
+  type SetPlateSkippedInput,
   type UpdatePlateComponentInput,
   type UpdatePlateInput,
 } from "@/lib/api/plates"
@@ -151,6 +153,20 @@ export function useUpdatePlateComponentPortions(weekId: number) {
     onMutate: async ({ pcId, portions }) =>
       ctx.snapshot((w) => patchUpdateComponentPortions(w, pcId, portions)),
     onError: (_err, _vars, previous) => previous && ctx.rollback(previous),
+    onSettled: ctx.invalidate,
+  })
+}
+
+export function useSetPlateSkipped(weekId: number) {
+  const ctx = useWeekMutationContext(weekId)
+  return useMutation({
+    mutationFn: ({
+      plateId,
+      input,
+    }: {
+      plateId: number
+      input: SetPlateSkippedInput
+    }) => setPlateSkipped(plateId, input),
     onSettled: ctx.invalidate,
   })
 }

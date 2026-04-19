@@ -87,9 +87,11 @@
     "prev_week": "Previous week",
     "next_week": "Next week",
     "this_week": "This week",
+    "today": "Today",
     "copy_week": "Copy week to next",
     "daily_avg": "Daily Average",
     "copy_success": "Week copied",
+    "fill_empty_cta": "Fill empty slots",
     "generate_prompt": "Plan my week based on my goals and time slots.",
     "empty_state_no_slots_title": "Set up your time slots first",
     "empty_state_no_slots_body": "Define when you eat — breakfast, lunch, dinner, snacks — so you can plan meals into them.",
@@ -100,7 +102,83 @@
     "day_thu": "Thu",
     "day_fri": "Fri",
     "day_sat": "Sat",
-    "day_sun": "Sun"
+    "day_sun": "Sun",
+    "slot": {
+      "empty": {
+        "label": "Plan meal"
+      },
+      "overflow": "+{{count}} more",
+      "ai_filled": "Filled by the kitchen agent",
+      "action": {
+        "favorite": "Favorite",
+        "love": "Loved",
+        "dislike": "Disliked"
+      },
+      "role": {
+        "main": "Main",
+        "side_starch": "Starch",
+        "side_veg": "Vegetable",
+        "side_protein": "Protein",
+        "sauce": "Sauce",
+        "drink": "Drink",
+        "dessert": "Dessert",
+        "standalone": "Standalone"
+      }
+    },
+    "revert": {
+      "title_one": "{{count}} slot filled by the kitchen agent",
+      "title_other": "{{count}} slots filled by the kitchen agent",
+      "body": "Snapshot saved. Revert to discard the plan, or dismiss to keep it.",
+      "revert": "Revert",
+      "dismiss": "Dismiss",
+      "reverted": "Reverted",
+      "error": "Could not revert"
+    },
+    "fill_empty": {
+      "progress": "Filling empty slots…",
+      "done": "Empty slots filled",
+      "error": "Could not fill empty slots"
+    }
+  },
+  "skip": {
+    "label": "Skip",
+    "mark": "Mark as skip (eating out)",
+    "unmark": "Remove skip",
+    "note": {
+      "placeholder": "Add a note (optional)"
+    }
+  },
+  "picker": {
+    "search": {
+      "placeholder": "Search components, tags, ingredients…"
+    },
+    "filter": {
+      "favorites": "Favorites",
+      "recents": "Recent",
+      "mains": "Mains",
+      "sides": "Sides",
+      "snacks": "Snacks",
+      "sauces": "Sauces",
+      "skip": "Mark as skip"
+    },
+    "tag": {
+      "all": "All tags"
+    },
+    "role": {
+      "all": "Any role"
+    },
+    "sort": {
+      "name": "Name",
+      "recent": "Recently cooked",
+      "kcal": "Calories"
+    },
+    "tray": {
+      "title": "This plate",
+      "empty": "Click any meal to add it. The first added becomes the hero.",
+      "save": "Save plate",
+      "cancel": "Cancel",
+      "totals": "Totals"
+    }
   },
   "plate": {
     "add_component": "Add component",

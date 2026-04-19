@@ -55,6 +55,16 @@ UPDATE plates SET
 WHERE id = ?
 RETURNING *;
 
+-- name: SetPlateSkipped :one
+UPDATE plates SET
+    skipped = ?,
+    note    = ?
+WHERE id = ?
+RETURNING *;
+
+-- name: DeletePlatesByWeek :execresult
+DELETE FROM plates WHERE week_id = ?;
+
 -- name: DeletePlate :execresult
 DELETE FROM plates WHERE id = ?;
 

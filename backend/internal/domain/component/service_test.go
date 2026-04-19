@@ -93,6 +93,17 @@ func (r *fakeRepo) CreateVariantGroup(_ context.Context, name string) (int64, er
 	return r.groupSeq, nil
 }
 
+func (r *fakeRepo) SetFavorite(_ context.Context, id int64, favorite bool) (*component.Component, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.items[id]
+	if !ok {
+		return nil, fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
+	}
+	c.Favorite = favorite
+	return c, nil
+}
+
 func (r *fakeRepo) MarkCooked(_ context.Context, id int64, at time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

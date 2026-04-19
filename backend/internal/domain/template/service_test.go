@@ -176,6 +176,14 @@ func (r *fakePlateRepo) ListByWeek(context.Context, int64) ([]plate.Plate, error
 	panic("not used")
 }
 
+func (r *fakePlateRepo) SetSkipped(context.Context, int64, bool, *string) (*plate.Plate, error) {
+	panic("not used")
+}
+
+func (r *fakePlateRepo) DeleteByWeek(context.Context, int64) (int64, error) {
+	panic("not used")
+}
+
 func (r *fakePlateRepo) GetComponent(context.Context, int64) (*plate.PlateComponent, error) {
 	panic("not used")
 }

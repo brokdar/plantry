@@ -85,6 +85,7 @@ type componentResponse struct {
 	Notes             *string                       `json:"notes,omitempty"`
 	LastCookedAt      *string                       `json:"last_cooked_at,omitempty"`
 	CookCount         int                           `json:"cook_count"`
+	Favorite          bool                          `json:"favorite"`
 	Ingredients       []componentIngredientResponse `json:"ingredients"`
 	Instructions      []instructionResponse         `json:"instructions"`
 	Tags              []string                      `json:"tags"`
@@ -140,6 +141,7 @@ func toComponentResponse(c *component.Component) componentResponse {
 		ImagePath:         c.ImagePath,
 		Notes:             c.Notes,
 		CookCount:         c.CookCount,
+		Favorite:          c.Favorite,
 		Ingredients:       ingredients,
 		Instructions:      instructions,
 		Tags:              tags,
@@ -235,11 +237,12 @@ func (h *ComponentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *ComponentHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := component.ListQuery{
-		Search:   r.URL.Query().Get("search"),
-		Role:     r.URL.Query().Get("role"),
-		Tag:      r.URL.Query().Get("tag"),
-		SortBy:   r.URL.Query().Get("sort"),
-		SortDesc: r.URL.Query().Get("order") == "desc",
+		Search:       r.URL.Query().Get("search"),
+		Role:         r.URL.Query().Get("role"),
+		Tag:          r.URL.Query().Get("tag"),
+		FavoriteOnly: r.URL.Query().Get("favorite") == "1",
+		SortBy:       r.URL.Query().Get("sort"),
+		SortDesc:     r.URL.Query().Get("order") == "desc",
 	}
 
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -404,6 +407,31 @@ func (h *ComponentHandler) ListVariants(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, variantListResponse{Items: items})
+}
+
+type favoriteRequest struct {
+	Favorite bool `json:"favorite"`
+}
+
+// SetFavorite handles POST /api/components/{id}/favorite.
+func (h *ComponentHandler) SetFavorite(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	var req favoriteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	c, err := h.svc.SetFavorite(r.Context(), id, req.Favorite)
+	if err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+	writeJSON(w, http.StatusOK, toComponentResponse(c))
 }
 
 // Upload handles POST /api/components/{id}/image.

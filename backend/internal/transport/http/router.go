@@ -55,6 +55,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/nutrition", h.Components.Nutrition)
 					r.Post("/variant", h.Components.CreateVariant)
 					r.Get("/variants", h.Components.ListVariants)
+					r.Post("/favorite", h.Components.SetFavorite)
 					if h.Components.HasImageStore() {
 						r.Post("/image", h.Components.Upload)
 						r.Delete("/image", h.Components.DeleteImage)
@@ -80,6 +81,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/{id}", h.Weeks.Get)
 				r.Post("/{id}/copy", h.Weeks.Copy)
 				r.Post("/{id}/plates", h.Weeks.CreatePlate)
+				r.Delete("/{id}/plates", h.Weeks.ClearPlates)
 				r.Get("/{id}/shopping-list", h.Weeks.ShoppingList)
 				r.Get("/{id}/nutrition", h.Weeks.Nutrition)
 			})
@@ -90,6 +92,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/", h.Plates.Get)
 				r.Put("/", h.Plates.Update)
 				r.Delete("/", h.Plates.Delete)
+				r.Post("/skip", h.Plates.SetSkipped)
 				r.Post("/components", h.Plates.AddComponent)
 				r.Put("/components/{pcId}", h.Plates.UpdateComponent)
 				r.Delete("/components/{pcId}", h.Plates.DeleteComponent)

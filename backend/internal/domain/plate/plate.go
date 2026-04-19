@@ -10,6 +10,7 @@ type Plate struct {
 	Day        int // 0=Mon ... 6=Sun
 	SlotID     int64
 	Note       *string
+	Skipped    bool
 	Components []PlateComponent
 	CreatedAt  time.Time
 }

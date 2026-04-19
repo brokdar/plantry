@@ -9,6 +9,7 @@ import {
   createVariant,
   listVariants,
   getInsights,
+  setComponentFavorite,
   type ComponentListParams,
   type ComponentInput,
   type InsightsParams,
@@ -82,6 +83,19 @@ export function useInsights(params?: InsightsParams) {
   return useQuery({
     queryKey: componentKeys.insights(params ?? {}),
     queryFn: () => getInsights(params),
+  })
+}
+
+export function useSetComponentFavorite() {
+  return useMutation({
+    mutationFn: ({ id, favorite }: { id: number; favorite: boolean }) =>
+      setComponentFavorite(id, favorite),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: componentKeys.lists() })
+      void queryClient.invalidateQueries({
+        queryKey: componentKeys.detail(id),
+      })
+    },
   })
 }
 

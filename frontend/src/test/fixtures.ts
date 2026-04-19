@@ -49,6 +49,7 @@ export const mockChickenCurry: Component = {
   notes: null,
   last_cooked_at: null,
   cook_count: 0,
+  favorite: false,
   ingredients: [
     {
       id: 1,
@@ -82,6 +83,7 @@ export const mockTofuBowl: Component = {
   notes: null,
   last_cooked_at: null,
   cook_count: 0,
+  favorite: false,
   ingredients: [],
   instructions: [],
   tags: ["vegan"],
@@ -107,6 +109,7 @@ export const mockTofuCurryVariant: Component = {
   notes: null,
   last_cooked_at: null,
   cook_count: 0,
+  favorite: false,
   ingredients: [],
   instructions: [],
   tags: ["vegan"],

@@ -94,6 +94,14 @@ func (r *fakeComponentRepo) Insights(_ context.Context, _ time.Time, _, _ int) (
 	return component.Insights{}, nil
 }
 
+func (r *fakeComponentRepo) SetFavorite(_ context.Context, id int64, favorite bool) (*component.Component, error) {
+	if c, ok := r.items[id]; ok {
+		c.Favorite = favorite
+		return c, nil
+	}
+	return nil, nil
+}
+
 func (r *fakeComponentRepo) MarkCooked(_ context.Context, id int64, at time.Time) error {
 	if r.markFail != nil {
 		return r.markFail

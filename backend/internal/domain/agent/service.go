@@ -210,9 +210,9 @@ func (s *Service) DebugSystemPrompt(ctx context.Context, weekID *int64) (string,
 func modeHint(mode string) string {
 	switch mode {
 	case "fill_empty":
-		return "Only create plates in empty (day, slot) cells. Do not modify existing plates unless the user asks."
+		return "Only create plates in empty (day, slot) cells. Do not modify existing plates unless the user asks. Never modify plates where skipped=true — treat them as immutable (the user marked that slot as eating out, canteen, or otherwise off-plan). When candidates are otherwise equivalent, prefer components where favorite=true."
 	case "replace_all":
-		return "You may clear the week and plan it from scratch. Confirm with the user before deleting existing plates."
+		return "You may clear the week and plan it from scratch. Confirm with the user before deleting existing plates. Respect skipped plates — do not overwrite them. When candidates are otherwise equivalent, prefer components where favorite=true."
 	default:
 		return mode
 	}

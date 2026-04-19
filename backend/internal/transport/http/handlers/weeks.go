@@ -48,6 +48,7 @@ type plateResponse struct {
 	Day        int                      `json:"day"`
 	SlotID     int64                    `json:"slot_id"`
 	Note       *string                  `json:"note,omitempty"`
+	Skipped    bool                     `json:"skipped"`
 	Components []plateComponentResponse `json:"components"`
 	Feedback   *feedbackResponse        `json:"feedback,omitempty"`
 	CreatedAt  string                   `json:"created_at"`
@@ -80,7 +81,7 @@ func toPlateResponse(p *plate.Plate, fb *feedback.PlateFeedback) plateResponse {
 	}
 	resp := plateResponse{
 		ID: p.ID, WeekID: p.WeekID, Day: p.Day, SlotID: p.SlotID,
-		Note: p.Note, Components: comps,
+		Note: p.Note, Skipped: p.Skipped, Components: comps,
 		CreatedAt: p.CreatedAt.Format(time.RFC3339),
 	}
 	if fb != nil {
@@ -230,6 +231,7 @@ type createPlateRequest struct {
 	Day        int                          `json:"day"`
 	SlotID     int64                        `json:"slot_id"`
 	Note       *string                      `json:"note"`
+	Skipped    bool                         `json:"skipped"`
 	Components []createPlateComponentInline `json:"components"`
 }
 
@@ -263,7 +265,35 @@ func (h *WeekHandler) CreatePlate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
+	// Skip is expressed via a separate atomic call so the initial Create
+	// doesn't need a new validation path; this also clears any components
+	// the client may have accidentally attached to a skipped plate.
+	if req.Skipped {
+		skipped, err := h.plates.SetSkipped(r.Context(), p.ID, true, req.Note)
+		if err != nil {
+			status, key := toHTTPWithResource(err, "plate")
+			writeError(w, status, key)
+			return
+		}
+		p = skipped
+	}
 	writeJSON(w, http.StatusCreated, toPlateResponse(p, nil))
+}
+
+// ClearPlates handles DELETE /api/weeks/{id}/plates. Removes every plate in a
+// week (used by the Fill-empty revert flow to restore the pre-snapshot state).
+func (h *WeekHandler) ClearPlates(w http.ResponseWriter, r *http.Request) {
+	weekID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	if _, err := h.plates.DeleteByWeek(r.Context(), weekID); err != nil {
+		status, key := toHTTPWithResource(err, "week")
+		writeError(w, status, key)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- Shopping list and nutrition ---

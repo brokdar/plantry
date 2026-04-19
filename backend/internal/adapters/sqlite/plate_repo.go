@@ -237,6 +237,71 @@ func (r *PlateRepo) CountUsingComponent(ctx context.Context, componentID int64) 
 	return r.q.CountPlatesUsingComponent(ctx, componentID)
 }
 
+// SetSkipped toggles the prospective "skip this slot" marker on a plate.
+// When enabling skip, any attached components are cleared atomically.
+func (r *PlateRepo) SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*plate.Plate, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	qtx := sqlcgen.New(tx)
+	s := int64(0)
+	if skipped {
+		s = 1
+		// Empty plates' components before marking skipped.
+		rows, err := qtx.ListPlateComponentsByPlate(ctx, plateID)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			if _, err := qtx.DeletePlateComponent(ctx, row.ID); err != nil {
+				return nil, err
+			}
+		}
+	}
+	row, err := qtx.SetPlateSkipped(ctx, sqlcgen.SetPlateSkippedParams{
+		ID:      plateID,
+		Skipped: s,
+		Note:    toNullString(note),
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: plate %d", domain.ErrNotFound, plateID)
+		}
+		return nil, err
+	}
+
+	var p plate.Plate
+	mapPlateToDomain(&row, &p)
+	if skipped {
+		p.Components = []plate.PlateComponent{}
+	} else {
+		pcRows, err := qtx.ListPlateComponentsByPlate(ctx, plateID)
+		if err != nil {
+			return nil, err
+		}
+		p.Components = make([]plate.PlateComponent, len(pcRows))
+		for i := range pcRows {
+			mapPlateComponentToDomain(&pcRows[i], &p.Components[i])
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// DeleteByWeek clears every plate in a week (used by fill-empty revert).
+func (r *PlateRepo) DeleteByWeek(ctx context.Context, weekID int64) (int64, error) {
+	res, err := r.q.DeletePlatesByWeek(ctx, weekID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 func (r *PlateRepo) CountUsingTimeSlot(ctx context.Context, slotID int64) (int64, error) {
 	return r.q.CountPlatesUsingTimeSlot(ctx, slotID)
 }
@@ -259,6 +324,7 @@ func mapPlateToDomain(row *sqlcgen.Plate, p *plate.Plate) {
 	p.Day = int(row.Day)
 	p.SlotID = row.SlotID
 	p.Note = fromNullString(row.Note)
+	p.Skipped = row.Skipped != 0
 	p.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
 }
 

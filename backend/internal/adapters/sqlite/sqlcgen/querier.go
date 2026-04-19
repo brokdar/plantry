@@ -39,6 +39,7 @@ type Querier interface {
 	DeletePlate(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateComponent(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateFeedback(ctx context.Context, plateID int64) (sql.Result, error)
+	DeletePlatesByWeek(ctx context.Context, weekID int64) (sql.Result, error)
 	DeletePortion(ctx context.Context, arg DeletePortionParams) (sql.Result, error)
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTemplate(ctx context.Context, id int64) (sql.Result, error)
@@ -62,6 +63,7 @@ type Querier interface {
 	ListComponentTags(ctx context.Context, componentID int64) ([]ComponentTag, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
 	ListConversationsByWeek(ctx context.Context, arg ListConversationsByWeekParams) ([]AiConversation, error)
+	ListFavoriteComponents(ctx context.Context) ([]Component, error)
 	ListForgottenComponents(ctx context.Context, arg ListForgottenComponentsParams) ([]Component, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	ListMostCookedComponents(ctx context.Context, limit int64) ([]Component, error)
@@ -80,6 +82,8 @@ type Querier interface {
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)
+	SetComponentFavorite(ctx context.Context, arg SetComponentFavoriteParams) (Component, error)
+	SetPlateSkipped(ctx context.Context, arg SetPlateSkippedParams) (Plate, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	UpdateComponent(ctx context.Context, arg UpdateComponentParams) (Component, error)
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (AiConversation, error)

@@ -46,7 +46,7 @@ func (q *Queries) CountWeeks(ctx context.Context) (int64, error) {
 const createPlate = `-- name: CreatePlate :one
 INSERT INTO plates (week_id, day, slot_id, note)
 VALUES (?, ?, ?, ?)
-RETURNING id, week_id, day, slot_id, note, created_at
+RETURNING id, week_id, day, slot_id, note, created_at, skipped
 `
 
 type CreatePlateParams struct {
@@ -71,6 +71,7 @@ func (q *Queries) CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate
 		&i.SlotID,
 		&i.Note,
 		&i.CreatedAt,
+		&i.Skipped,
 	)
 	return i, err
 }
@@ -174,6 +175,14 @@ func (q *Queries) DeletePlateComponent(ctx context.Context, id int64) (sql.Resul
 	return q.db.ExecContext(ctx, deletePlateComponent, id)
 }
 
+const deletePlatesByWeek = `-- name: DeletePlatesByWeek :execresult
+DELETE FROM plates WHERE week_id = ?
+`
+
+func (q *Queries) DeletePlatesByWeek(ctx context.Context, weekID int64) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deletePlatesByWeek, weekID)
+}
+
 const deleteTimeSlot = `-- name: DeleteTimeSlot :execresult
 DELETE FROM time_slots WHERE id = ?
 `
@@ -183,7 +192,7 @@ func (q *Queries) DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, err
 }
 
 const getPlate = `-- name: GetPlate :one
-SELECT id, week_id, day, slot_id, note, created_at FROM plates WHERE id = ?
+SELECT id, week_id, day, slot_id, note, created_at, skipped FROM plates WHERE id = ?
 `
 
 func (q *Queries) GetPlate(ctx context.Context, id int64) (Plate, error) {
@@ -196,6 +205,7 @@ func (q *Queries) GetPlate(ctx context.Context, id int64) (Plate, error) {
 		&i.SlotID,
 		&i.Note,
 		&i.CreatedAt,
+		&i.Skipped,
 	)
 	return i, err
 }
@@ -375,7 +385,7 @@ func (q *Queries) ListPlateComponentsByWeek(ctx context.Context, weekID int64) (
 }
 
 const listPlatesByWeek = `-- name: ListPlatesByWeek :many
-SELECT id, week_id, day, slot_id, note, created_at FROM plates WHERE week_id = ? ORDER BY day, slot_id, id
+SELECT id, week_id, day, slot_id, note, created_at, skipped FROM plates WHERE week_id = ? ORDER BY day, slot_id, id
 `
 
 func (q *Queries) ListPlatesByWeek(ctx context.Context, weekID int64) ([]Plate, error) {
@@ -394,6 +404,7 @@ func (q *Queries) ListPlatesByWeek(ctx context.Context, weekID int64) ([]Plate, 
 			&i.SlotID,
 			&i.Note,
 			&i.CreatedAt,
+			&i.Skipped,
 		); err != nil {
 			return nil, err
 		}
@@ -478,13 +489,42 @@ func (q *Queries) ListWeeks(ctx context.Context, arg ListWeeksParams) ([]Week, e
 	return items, nil
 }
 
+const setPlateSkipped = `-- name: SetPlateSkipped :one
+UPDATE plates SET
+    skipped = ?,
+    note    = ?
+WHERE id = ?
+RETURNING id, week_id, day, slot_id, note, created_at, skipped
+`
+
+type SetPlateSkippedParams struct {
+	Skipped int64
+	Note    sql.NullString
+	ID      int64
+}
+
+func (q *Queries) SetPlateSkipped(ctx context.Context, arg SetPlateSkippedParams) (Plate, error) {
+	row := q.db.QueryRowContext(ctx, setPlateSkipped, arg.Skipped, arg.Note, arg.ID)
+	var i Plate
+	err := row.Scan(
+		&i.ID,
+		&i.WeekID,
+		&i.Day,
+		&i.SlotID,
+		&i.Note,
+		&i.CreatedAt,
+		&i.Skipped,
+	)
+	return i, err
+}
+
 const updatePlate = `-- name: UpdatePlate :one
 UPDATE plates SET
     day     = ?,
     slot_id = ?,
     note    = ?
 WHERE id = ?
-RETURNING id, week_id, day, slot_id, note, created_at
+RETURNING id, week_id, day, slot_id, note, created_at, skipped
 `
 
 type UpdatePlateParams struct {
@@ -509,6 +549,7 @@ func (q *Queries) UpdatePlate(ctx context.Context, arg UpdatePlateParams) (Plate
 		&i.SlotID,
 		&i.Note,
 		&i.CreatedAt,
+		&i.Skipped,
 	)
 	return i, err
 }

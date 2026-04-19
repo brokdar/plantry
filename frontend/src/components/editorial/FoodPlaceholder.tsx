@@ -28,6 +28,7 @@ type FoodPlaceholderProps = {
   category?: FoodPlaceholderCategory
   className?: string
   rounded?: "lg" | "xl" | "2xl" | "none"
+  size?: "sm" | "md" | "lg"
   "aria-label"?: string
 }
 
@@ -51,10 +52,17 @@ const ROUNDED: Record<NonNullable<FoodPlaceholderProps["rounded"]>, string> = {
   none: "",
 }
 
+const ICON_SIZE: Record<NonNullable<FoodPlaceholderProps["size"]>, string> = {
+  sm: "h-6 w-6",
+  md: "h-12 w-12",
+  lg: "h-16 w-16",
+}
+
 export function FoodPlaceholder({
   category = "default",
   className,
   rounded = "xl",
+  size = "md",
   "aria-label": ariaLabel,
 }: FoodPlaceholderProps) {
   const Icon = ICONS[category] ?? ICONS.default
@@ -74,7 +82,7 @@ export function FoodPlaceholder({
     >
       <Icon
         aria-hidden
-        className="h-12 w-12 text-primary/40"
+        className={cn(ICON_SIZE[size], "text-primary/40")}
         strokeWidth={1.25}
       />
     </div>

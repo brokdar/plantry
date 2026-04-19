@@ -31,6 +31,7 @@ function makeWeek(): Week {
         day: 1,
         slot_id: 1,
         note: null,
+        skipped: false,
         created_at: "",
         components: [
           {

@@ -195,3 +195,17 @@ func (s *Service) UpdateComponentPortions(ctx context.Context, plateComponentID 
 func (s *Service) RemoveComponent(ctx context.Context, plateComponentID int64) error {
 	return s.repo.DeleteComponent(ctx, plateComponentID)
 }
+
+// SetSkipped marks the slot as prospectively skipped (eating out / canteen).
+// Clears attached components atomically when enabling skip; a component-add
+// later implicitly un-skips via AddComponent unhandled — callers must unset
+// skip first.
+func (s *Service) SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*Plate, error) {
+	return s.repo.SetSkipped(ctx, plateID, skipped, note)
+}
+
+// DeleteByWeek clears every plate in a week. Used by the Fill-empty revert flow
+// to restore the pre-snapshot state.
+func (s *Service) DeleteByWeek(ctx context.Context, weekID int64) (int64, error) {
+	return s.repo.DeleteByWeek(ctx, weekID)
+}

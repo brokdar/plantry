@@ -153,6 +153,34 @@ func (r *fakeRepo) CountUsingTimeSlot(_ context.Context, slotID int64) (int64, e
 	return r.usageSlot[slotID], nil
 }
 
+func (r *fakeRepo) SetSkipped(_ context.Context, plateID int64, skipped bool, note *string) (*plate.Plate, error) {
+	p, ok := r.plates[plateID]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	p.Skipped = skipped
+	p.Note = note
+	if skipped {
+		for id, pc := range r.pcs {
+			if pc.PlateID == plateID {
+				delete(r.pcs, id)
+			}
+		}
+	}
+	return p, nil
+}
+
+func (r *fakeRepo) DeleteByWeek(_ context.Context, weekID int64) (int64, error) {
+	n := int64(0)
+	for id, p := range r.plates {
+		if p.WeekID == weekID {
+			delete(r.plates, id)
+			n++
+		}
+	}
+	return n, nil
+}
+
 type fakeSlots struct{ exists map[int64]bool }
 
 func (f *fakeSlots) Exists(_ context.Context, id int64) (bool, error) { return f.exists[id], nil }

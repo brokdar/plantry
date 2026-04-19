@@ -162,7 +162,8 @@ func (r *ComponentRepo) List(ctx context.Context, q component.ListQuery) (*compo
 	}
 	orderClause := col + " " + dir
 
-	builder := sq.Select("*").From("components").OrderBy(orderClause).Limit(uint64(q.Limit)).Offset(uint64(q.Offset))
+	// Favorites surface first, then fall through to user-chosen ordering.
+	builder := sq.Select("*").From("components").OrderBy("favorite DESC", orderClause).Limit(uint64(q.Limit)).Offset(uint64(q.Offset))
 	countBuilder := sq.Select("COUNT(*)").From("components")
 
 	if q.Search != "" {
@@ -180,6 +181,10 @@ func (r *ComponentRepo) List(ctx context.Context, q component.ListQuery) (*compo
 		tagClause := "id IN (SELECT component_id FROM component_tags WHERE tag = ?)"
 		builder = builder.Where(tagClause, q.Tag)
 		countBuilder = countBuilder.Where(tagClause, q.Tag)
+	}
+	if q.FavoriteOnly {
+		builder = builder.Where("favorite = 1")
+		countBuilder = countBuilder.Where("favorite = 1")
 	}
 
 	countSQL, countArgs, err := countBuilder.PlaceholderFormat(sq.Question).ToSql()
@@ -209,6 +214,7 @@ func (r *ComponentRepo) List(ctx context.Context, q component.ListQuery) (*compo
 			&row.ReferencePortions, &row.PrepMinutes, &row.CookMinutes,
 			&row.ImagePath, &row.Notes, &row.LastCookedAt,
 			&row.CookCount, &row.CreatedAt, &row.UpdatedAt,
+			&row.Favorite,
 		); err != nil {
 			return nil, err
 		}
@@ -259,6 +265,29 @@ func (r *ComponentRepo) Exists(ctx context.Context, id int64) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func (r *ComponentRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*component.Component, error) {
+	fav := int64(0)
+	if favorite {
+		fav = 1
+	}
+	row, err := r.q.SetComponentFavorite(ctx, sqlcgen.SetComponentFavoriteParams{
+		ID:       id,
+		Favorite: fav,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
+		}
+		return nil, err
+	}
+	var c component.Component
+	mapComponentToDomain(&row, &c)
+	if err := r.loadChildren(ctx, r.q, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 func (r *ComponentRepo) MarkCooked(ctx context.Context, id int64, at time.Time) error {
@@ -417,6 +446,7 @@ func mapComponentToDomain(row *sqlcgen.Component, c *component.Component) {
 	c.ImagePath = fromNullString(row.ImagePath)
 	c.Notes = fromNullString(row.Notes)
 	c.CookCount = int(row.CookCount)
+	c.Favorite = row.Favorite != 0
 	c.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
 	c.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
 	if row.LastCookedAt.Valid {

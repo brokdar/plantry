@@ -16,4 +16,5 @@ type Repository interface {
 	Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]Component, error)
 	MarkCooked(ctx context.Context, id int64, at time.Time) error
 	Insights(ctx context.Context, cutoff time.Time, forgottenLimit, mostCookedLimit int) (Insights, error)
+	SetFavorite(ctx context.Context, id int64, favorite bool) (*Component, error)
 }

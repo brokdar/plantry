@@ -45,6 +45,7 @@ type Component struct {
 	CookCount         int64
 	CreatedAt         string
 	UpdatedAt         string
+	Favorite          int64
 }
 
 type ComponentIngredient struct {
@@ -108,6 +109,7 @@ type Plate struct {
 	SlotID    int64
 	Note      sql.NullString
 	CreatedAt string
+	Skipped   int64
 }
 
 type PlateComponent struct {

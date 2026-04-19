@@ -43,6 +43,7 @@ type Component struct {
 	Notes             *string
 	LastCookedAt      *time.Time
 	CookCount         int
+	Favorite          bool
 	Ingredients       []ComponentIngredient
 	Instructions      []Instruction
 	Tags              []string
@@ -74,13 +75,14 @@ type Instruction struct {
 
 // ListQuery holds filtering, pagination, and sorting for component listing.
 type ListQuery struct {
-	Search   string
-	Role     string
-	Tag      string
-	Limit    int
-	Offset   int
-	SortBy   string
-	SortDesc bool
+	Search       string
+	Role         string
+	Tag          string
+	FavoriteOnly bool
+	Limit        int
+	Offset       int
+	SortBy       string
+	SortDesc     bool
 }
 
 // ListResult wraps a page of components with the total count.

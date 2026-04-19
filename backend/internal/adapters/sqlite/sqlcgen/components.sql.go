@@ -13,7 +13,7 @@ import (
 const createComponent = `-- name: CreateComponent :one
 INSERT INTO components (name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at
+RETURNING id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at, favorite
 `
 
 type CreateComponentParams struct {
@@ -53,6 +53,7 @@ func (q *Queries) CreateComponent(ctx context.Context, arg CreateComponentParams
 		&i.CookCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Favorite,
 	)
 	return i, err
 }
@@ -160,7 +161,7 @@ func (q *Queries) DeleteComponentTags(ctx context.Context, componentID int64) er
 }
 
 const getComponent = `-- name: GetComponent :one
-SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at FROM components WHERE id = ?
+SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at, favorite FROM components WHERE id = ?
 `
 
 func (q *Queries) GetComponent(ctx context.Context, id int64) (Component, error) {
@@ -180,6 +181,7 @@ func (q *Queries) GetComponent(ctx context.Context, id int64) (Component, error)
 		&i.CookCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Favorite,
 	)
 	return i, err
 }
@@ -278,8 +280,50 @@ func (q *Queries) ListComponentTags(ctx context.Context, componentID int64) ([]C
 	return items, nil
 }
 
+const listFavoriteComponents = `-- name: ListFavoriteComponents :many
+SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at, favorite FROM components WHERE favorite = 1 ORDER BY name
+`
+
+func (q *Queries) ListFavoriteComponents(ctx context.Context) ([]Component, error) {
+	rows, err := q.db.QueryContext(ctx, listFavoriteComponents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Component{}
+	for rows.Next() {
+		var i Component
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Role,
+			&i.VariantGroupID,
+			&i.ReferencePortions,
+			&i.PrepMinutes,
+			&i.CookMinutes,
+			&i.ImagePath,
+			&i.Notes,
+			&i.LastCookedAt,
+			&i.CookCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Favorite,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listForgottenComponents = `-- name: ListForgottenComponents :many
-SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at FROM components
+SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at, favorite FROM components
 WHERE last_cooked_at IS NULL OR last_cooked_at < ?
 ORDER BY (last_cooked_at IS NOT NULL), last_cooked_at ASC, name ASC
 LIMIT ?
@@ -313,6 +357,7 @@ func (q *Queries) ListForgottenComponents(ctx context.Context, arg ListForgotten
 			&i.CookCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Favorite,
 		); err != nil {
 			return nil, err
 		}
@@ -328,7 +373,7 @@ func (q *Queries) ListForgottenComponents(ctx context.Context, arg ListForgotten
 }
 
 const listMostCookedComponents = `-- name: ListMostCookedComponents :many
-SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at FROM components
+SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at, favorite FROM components
 WHERE cook_count > 0
 ORDER BY cook_count DESC, last_cooked_at DESC, name ASC
 LIMIT ?
@@ -357,6 +402,7 @@ func (q *Queries) ListMostCookedComponents(ctx context.Context, limit int64) ([]
 			&i.CookCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Favorite,
 		); err != nil {
 			return nil, err
 		}
@@ -372,7 +418,7 @@ func (q *Queries) ListMostCookedComponents(ctx context.Context, limit int64) ([]
 }
 
 const listSiblingComponents = `-- name: ListSiblingComponents :many
-SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at FROM components WHERE variant_group_id = ? AND id != ? ORDER BY name
+SELECT id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at, favorite FROM components WHERE variant_group_id = ? AND id != ? ORDER BY name
 `
 
 type ListSiblingComponentsParams struct {
@@ -403,6 +449,7 @@ func (q *Queries) ListSiblingComponents(ctx context.Context, arg ListSiblingComp
 			&i.CookCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Favorite,
 		); err != nil {
 			return nil, err
 		}
@@ -435,6 +482,41 @@ func (q *Queries) MarkComponentCooked(ctx context.Context, arg MarkComponentCook
 	return err
 }
 
+const setComponentFavorite = `-- name: SetComponentFavorite :one
+UPDATE components SET
+    favorite   = ?,
+    updated_at = datetime('now')
+WHERE id = ?
+RETURNING id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at, favorite
+`
+
+type SetComponentFavoriteParams struct {
+	Favorite int64
+	ID       int64
+}
+
+func (q *Queries) SetComponentFavorite(ctx context.Context, arg SetComponentFavoriteParams) (Component, error) {
+	row := q.db.QueryRowContext(ctx, setComponentFavorite, arg.Favorite, arg.ID)
+	var i Component
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Role,
+		&i.VariantGroupID,
+		&i.ReferencePortions,
+		&i.PrepMinutes,
+		&i.CookMinutes,
+		&i.ImagePath,
+		&i.Notes,
+		&i.LastCookedAt,
+		&i.CookCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Favorite,
+	)
+	return i, err
+}
+
 const updateComponent = `-- name: UpdateComponent :one
 UPDATE components SET
     name = ?,
@@ -447,7 +529,7 @@ UPDATE components SET
     notes = ?,
     updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at
+RETURNING id, name, role, variant_group_id, reference_portions, prep_minutes, cook_minutes, image_path, notes, last_cooked_at, cook_count, created_at, updated_at, favorite
 `
 
 type UpdateComponentParams struct {
@@ -489,6 +571,7 @@ func (q *Queries) UpdateComponent(ctx context.Context, arg UpdateComponentParams
 		&i.CookCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Favorite,
 	)
 	return i, err
 }

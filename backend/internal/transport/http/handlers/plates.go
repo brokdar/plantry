@@ -181,6 +181,34 @@ func (h *PlateHandler) UpdateComponent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toPlateComponentResponse(pc))
 }
 
+type skipRequest struct {
+	Skipped bool    `json:"skipped"`
+	Note    *string `json:"note"`
+}
+
+// SetSkipped handles POST /api/plates/{id}/skip.
+// Marks a slot as prospectively skipped (eating out / canteen) so the fill-empty
+// kitchen agent leaves it alone. Enabling skip clears attached components.
+func (h *PlateHandler) SetSkipped(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	var req skipRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	p, err := h.svc.SetSkipped(r.Context(), id, req.Skipped, req.Note)
+	if err != nil {
+		status, key := plateError(err)
+		writeError(w, status, key)
+		return
+	}
+	writeJSON(w, http.StatusOK, toPlateResponse(p, nil))
+}
+
 // DeleteComponent handles DELETE /api/plates/{id}/components/{pcId}.
 func (h *PlateHandler) DeleteComponent(w http.ResponseWriter, r *http.Request) {
 	pcID, err := strconv.ParseInt(chi.URLParam(r, "pcId"), 10, 64)

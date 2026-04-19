@@ -20,6 +20,16 @@ UPDATE components SET
 WHERE id = ?
 RETURNING *;
 
+-- name: SetComponentFavorite :one
+UPDATE components SET
+    favorite   = ?,
+    updated_at = datetime('now')
+WHERE id = ?
+RETURNING *;
+
+-- name: ListFavoriteComponents :many
+SELECT * FROM components WHERE favorite = 1 ORDER BY name;
+
 -- name: DeleteComponent :execresult
 DELETE FROM components WHERE id = ?;
 

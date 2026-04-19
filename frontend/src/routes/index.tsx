@@ -6,14 +6,17 @@ import {
   setISOWeekYear,
 } from "date-fns"
 import { BarChart2, Download, Settings, Sparkles } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { ChatPanel } from "@/components/chat/ChatPanel"
 import { PageHeader } from "@/components/editorial/PageHeader"
+import { FillEmptySlotsButton } from "@/components/planner/FillEmptySlotsButton"
+import { MobilePlannerGrid } from "@/components/planner/MobilePlannerGrid"
 import { NutritionWeekSummary } from "@/components/planner/NutritionWeekSummary"
 import { PlannerGrid } from "@/components/planner/PlannerGrid"
+import { RevertBanner } from "@/components/planner/RevertBanner"
 import { ShoppingPanel } from "@/components/planner/ShoppingPanel"
 import { WeekNavigator } from "@/components/planner/WeekNavigator"
 import { Button } from "@/components/ui/button"
@@ -23,7 +26,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { clearWeekPlates } from "@/lib/api/weeks"
 import { useAISettings } from "@/lib/queries/ai"
+import { queryClient } from "@/lib/query-client"
+import { weekKeys } from "@/lib/queries/keys"
 import { useTimeSlots } from "@/lib/queries/slots"
 import {
   useCopyWeek,
@@ -31,6 +37,7 @@ import {
   useWeekNutrition,
 } from "@/lib/queries/weeks"
 import { useChatUI } from "@/lib/stores/chat-ui"
+import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toastError } from "@/lib/toast"
 
 export const Route = createFileRoute("/")({
@@ -61,6 +68,36 @@ function PlannerPage() {
   const copyMut = useCopyWeek()
   const { data: aiSettings } = useAISettings()
   const nutritionQuery = useWeekNutrition(weekQuery.data?.id ?? 0)
+
+  const aiFill = usePlannerUI((s) => s.aiFill)
+  const recordAiFilledPlate = usePlannerUI((s) => s.recordAiFilledPlate)
+  const dismissAiFillBanner = usePlannerUI((s) => s.dismissAiFillBanner)
+  const endAiFillSession = usePlannerUI((s) => s.endAiFillSession)
+
+  // Watch plates created after the fill session started. Plates with
+  // created_at newer than aiFill.startedAt are attributed to the kitchen agent
+  // for the duration of this session. Refresh clears the session entirely.
+  useEffect(() => {
+    if (!aiFill || aiFill.weekId !== weekQuery.data?.id) return
+    const plates = weekQuery.data?.plates ?? []
+    for (const p of plates) {
+      const created = Date.parse(p.created_at)
+      if (!Number.isNaN(created) && created >= aiFill.startedAt) {
+        recordAiFilledPlate(p.id)
+      }
+    }
+  }, [aiFill, weekQuery.data, recordAiFilledPlate])
+
+  async function handleRevert() {
+    if (!weekQuery.data) return
+    try {
+      await clearWeekPlates(weekQuery.data.id)
+      endAiFillSession()
+      await queryClient.invalidateQueries({ queryKey: weekKeys.all })
+    } catch (err) {
+      toastError(err, t)
+    }
+  }
 
   const slots = slotsQuery.data?.items ?? []
 
@@ -128,15 +165,26 @@ function PlannerPage() {
         })}
         title={t("planner.title")}
         actions={
-          <Button
-            onClick={() => setShoppingOpen(true)}
-            className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
-          >
-            <Download className="mr-1.5 size-4" />
-            {t("shopping.button")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {aiSettings?.enabled && <FillEmptySlotsButton weekId={week_.id} />}
+            <Button
+              onClick={() => setShoppingOpen(true)}
+              className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
+            >
+              <Download className="mr-1.5 size-4" />
+              {t("shopping.button")}
+            </Button>
+          </div>
         }
       />
+
+      {aiFill && aiFill.weekId === week_.id && !aiFill.dismissed && (
+        <RevertBanner
+          count={aiFill.aiFilledPlateIds.length}
+          onRevert={handleRevert}
+          onDismiss={dismissAiFillBanner}
+        />
+      )}
 
       <div
         className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-surface-container-low/60 px-4 py-3"
@@ -182,8 +230,11 @@ function PlannerPage() {
         </div>
       </div>
 
-      <div className="-mx-2 md:-mx-4">
+      <div className="-mx-2 hidden md:-mx-4 md:block">
         <PlannerGrid week={week_} slots={slots} />
+      </div>
+      <div className="md:hidden">
+        <MobilePlannerGrid week={week_} slots={slots} />
       </div>
 
       <ShoppingPanel

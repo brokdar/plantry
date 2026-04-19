@@ -18,4 +18,7 @@ type Repository interface {
 
 	CountUsingComponent(ctx context.Context, componentID int64) (int64, error)
 	CountUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
+
+	SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*Plate, error)
+	DeleteByWeek(ctx context.Context, weekID int64) (int64, error)
 }
