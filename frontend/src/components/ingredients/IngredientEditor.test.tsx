@@ -30,6 +30,42 @@ vi.mock("@/lib/api/portions", () => ({
 vi.mock("@/lib/api/images", () => ({
   uploadImage: vi.fn(),
   deleteImage: vi.fn(),
+  fetchImageFromUrl: vi.fn(),
+}))
+
+const toastErrorMock = vi.fn()
+vi.mock("@/lib/toast", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/toast")>()
+  return {
+    ...actual,
+    toastError: (...args: unknown[]) => toastErrorMock(...args),
+  }
+})
+
+type ImageFieldMockProps =
+  | {
+      mode: "staged"
+      onStagedChange: (blob: Blob | null) => void
+    }
+  | { mode: "bound" }
+
+vi.mock("@/components/images/ImageField", () => ({
+  ImageField: (props: ImageFieldMockProps) => {
+    if (props.mode === "staged") {
+      return (
+        <button
+          type="button"
+          data-testid="stage-image"
+          onClick={() =>
+            props.onStagedChange(new Blob(["fake"], { type: "image/jpeg" }))
+          }
+        >
+          Stage
+        </button>
+      )
+    }
+    return <div data-testid="bound-image-field" />
+  },
 }))
 
 import {
@@ -37,6 +73,7 @@ import {
   refetchIngredient,
   updateIngredient,
 } from "@/lib/api/ingredients"
+import { uploadImage } from "@/lib/api/images"
 import { lookupIngredients } from "@/lib/api/lookup"
 import { ApiError } from "@/lib/api/client"
 import { IngredientEditor } from "./IngredientEditor"
@@ -250,5 +287,67 @@ describe("IngredientEditor", () => {
     expect(
       await screen.findByText(/error\.ingredient\.refetch\.no_results/i)
     ).toBeInTheDocument()
+  })
+
+  test("staged image uploads after create using returned id", async () => {
+    const user = userEvent.setup()
+    const onSuccess = vi.fn()
+    vi.mocked(createIngredient).mockResolvedValue({
+      ...mockChickenBreast,
+      id: 42,
+      name: "Tofu",
+    })
+    vi.mocked(uploadImage).mockResolvedValue({ image_path: "p.jpg" })
+
+    renderWithRouter(<IngredientEditor onSuccess={onSuccess} />)
+
+    const nameInput = await screen.findByLabelText("Name")
+    await user.type(nameInput, "Tofu")
+
+    await user.click(screen.getByTestId("stage-image"))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() => {
+      expect(createIngredient).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(uploadImage).toHaveBeenCalledWith(
+        "ingredients",
+        42,
+        expect.any(Blob)
+      )
+    })
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalled()
+    })
+  })
+
+  test("upload failure after create surfaces toast and still calls onSuccess", async () => {
+    const user = userEvent.setup()
+    const onSuccess = vi.fn()
+    vi.mocked(createIngredient).mockResolvedValue({
+      ...mockChickenBreast,
+      id: 99,
+      name: "Lentils",
+    })
+    vi.mocked(uploadImage).mockRejectedValue(new ApiError(500, "error.server"))
+
+    renderWithRouter(<IngredientEditor onSuccess={onSuccess} />)
+
+    const nameInput = await screen.findByLabelText("Name")
+    await user.type(nameInput, "Lentils")
+
+    await user.click(screen.getByTestId("stage-image"))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() => {
+      expect(uploadImage).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalled()
+    })
   })
 })

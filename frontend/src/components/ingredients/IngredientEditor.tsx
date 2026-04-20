@@ -5,14 +5,13 @@ import { useTranslation } from "react-i18next"
 import { Link } from "@tanstack/react-router"
 import { Loader2, RefreshCw, Trash2 } from "lucide-react"
 
-import {
-  MacroDistributionBar,
-  MacroKcalHero,
-  MacroTriad,
-} from "@/components/editorial/macros"
+import { MacroDistributionBar, MacroTriad } from "@/components/editorial/macros"
+import { NutritionPanel } from "@/components/editorial/NutritionPanel"
 import { SectionCard } from "@/components/editorial/SectionCard"
 import { StickyActionBar } from "@/components/editorial/StickyActionBar"
 import { ImageField } from "@/components/images/ImageField"
+import { useFetchImageFromUrl, useUploadImage } from "@/lib/queries/images"
+import { toastError } from "@/lib/toast"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -149,10 +148,13 @@ export function IngredientEditor({
   const updateMutation = useUpdateIngredient()
   const deleteMutation = useDeleteIngredient()
   const refetchMutation = useRefetchIngredient()
+  const uploadMutation = useUploadImage()
+  const fetchImageMutation = useFetchImageFromUrl()
 
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [refetchError, setRefetchError] = useState<string | null>(null)
+  const [stagedImage, setStagedImage] = useState<Blob | null>(null)
 
   const canRefetch =
     !!ingredient &&
@@ -166,13 +168,27 @@ export function IngredientEditor({
   const protein = Number(values.protein_100g) || 0
   const fat = Number(values.fat_100g) || 0
   const carbs = Number(values.carbs_100g) || 0
+  const fiber = Number(values.fiber_100g) || 0
+  const sodium = Number(values.sodium_100g) || 0
 
   async function onSubmit(v: IngredientFormValues) {
     try {
       if (isEdit && ingredient) {
         await updateMutation.mutateAsync({ id: ingredient.id, data: v })
       } else {
-        await createMutation.mutateAsync(v)
+        const created = await createMutation.mutateAsync(v)
+        if (stagedImage) {
+          try {
+            await uploadMutation.mutateAsync({
+              entityType: "ingredients",
+              id: created.id,
+              file: stagedImage,
+            })
+          } catch (err) {
+            toastError(err, t)
+          }
+          setStagedImage(null)
+        }
       }
       onSuccess?.()
     } catch (err) {
@@ -182,8 +198,20 @@ export function IngredientEditor({
     }
   }
 
-  function handleLookupSelect(candidate: LookupCandidate) {
+  async function handleLookupSelect(candidate: LookupCandidate) {
     form.reset(candidateToFormValues(candidate))
+    setStagedImage(null)
+    if (candidate.image_url) {
+      try {
+        const blob = await fetchImageMutation.mutateAsync({
+          url: candidate.image_url,
+        })
+        setStagedImage(blob)
+      } catch {
+        // Image is nice-to-have; silently skip so the rest of the lookup
+        // payload still applies.
+      }
+    }
   }
 
   async function handleRefetch() {
@@ -359,19 +387,26 @@ export function IngredientEditor({
 
           {/* Right column */}
           <div className="space-y-4 lg:sticky lg:top-6 lg:col-span-5 lg:self-start">
-            {isEdit && ingredient && (
-              <SectionCard
-                title={t("image.section_title")}
-                description={t("ingredient.section_image_hint")}
-              >
+            <SectionCard
+              title={t("image.section_title")}
+              description={t("ingredient.section_image_hint")}
+            >
+              {isEdit && ingredient ? (
                 <ImageField
+                  mode="bound"
                   entityType="ingredients"
                   entityId={ingredient.id}
                   currentImagePath={ingredient.image_path}
                   onImageChange={() => {}}
                 />
-              </SectionCard>
-            )}
+              ) : (
+                <ImageField
+                  mode="staged"
+                  stagedBlob={stagedImage}
+                  onStagedChange={setStagedImage}
+                />
+              )}
+            </SectionCard>
 
             {!isEdit && (
               <SectionCard
@@ -382,17 +417,12 @@ export function IngredientEditor({
               </SectionCard>
             )}
 
-            <SectionCard
+            <NutritionPanel
+              variant="static"
               title={t("ingredient.per_100g")}
               testId="ingredient-nutrition-summary"
-            >
-              <MacroKcalHero kcal={kcal} size="md" />
-              <MacroDistributionBar
-                thickness="md"
-                values={{ protein, carbs, fat }}
-              />
-              <MacroTriad size="md" values={{ protein, carbs, fat }} />
-            </SectionCard>
+              macros={{ kcal, protein, fat, carbs, fiber, sodium }}
+            />
           </div>
         </div>
 

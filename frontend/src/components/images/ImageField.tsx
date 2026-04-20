@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
   Clipboard,
@@ -21,7 +21,8 @@ import { toastError } from "@/lib/toast"
 
 import { ImageCropperDialog } from "./ImageCropperDialog"
 
-interface ImageFieldProps {
+type BoundProps = {
+  mode: "bound"
   entityType: ImageEntityType
   entityId: number
   currentImagePath: string | null
@@ -29,26 +30,62 @@ interface ImageFieldProps {
   aspect?: number
 }
 
-export function ImageField({
-  entityType,
-  entityId,
-  currentImagePath,
-  onImageChange,
-  aspect = 4 / 3,
-}: ImageFieldProps) {
+type StagedProps = {
+  mode: "staged"
+  stagedBlob: Blob | null
+  onStagedChange: (blob: Blob | null) => void
+  aspect?: number
+}
+
+export type ImageFieldProps = BoundProps | StagedProps
+
+export function ImageField(props: ImageFieldProps) {
   const { t } = useTranslation()
+  const aspect = props.aspect ?? 4 / 3
+  const isStaged = props.mode === "staged"
+
   const uploadMutation = useUploadImage()
   const deleteMutation = useDeleteImage()
   const fetchUrlMutation = useFetchImageFromUrl()
 
   const [cropSrc, setCropSrc] = useState<string | null>(null)
   const [urlInput, setUrlInput] = useState("")
-  const objectUrlRef = useRef<string | null>(null)
+  // Cache-bust the preview whenever we write a new image for the same path.
+  // Seeded lazily so initial render stays pure; bumped on mutate success.
+  const [imgVersion, setImgVersion] = useState(0)
+  const cropObjectUrlRef = useRef<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+
+  const stagedBlob = isStaged ? (props as StagedProps).stagedBlob : null
+  const stagedPreviewUrl = useMemo(
+    () => (stagedBlob ? URL.createObjectURL(stagedBlob) : null),
+    [stagedBlob]
+  )
+
+  function openCropper(blob: Blob) {
+    if (cropObjectUrlRef.current) URL.revokeObjectURL(cropObjectUrlRef.current)
+    const url = URL.createObjectURL(blob)
+    cropObjectUrlRef.current = url
+    setCropSrc(url)
+  }
+
+  function closeCropper() {
+    setCropSrc(null)
+    if (cropObjectUrlRef.current) {
+      URL.revokeObjectURL(cropObjectUrlRef.current)
+      cropObjectUrlRef.current = null
+    }
+  }
+
+  useEffect(() => {
+    if (!stagedPreviewUrl) return
+    return () => URL.revokeObjectURL(stagedPreviewUrl)
+  }, [stagedPreviewUrl])
 
   useEffect(() => {
     return () => {
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
+      if (cropObjectUrlRef.current)
+        URL.revokeObjectURL(cropObjectUrlRef.current)
     }
   }, [])
 
@@ -72,21 +109,6 @@ export function ImageField({
     return () => document.removeEventListener("paste", onPaste)
   }, [])
 
-  function openCropper(blob: Blob) {
-    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
-    const url = URL.createObjectURL(blob)
-    objectUrlRef.current = url
-    setCropSrc(url)
-  }
-
-  function closeCropper() {
-    setCropSrc(null)
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current)
-      objectUrlRef.current = null
-    }
-  }
-
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ""
@@ -107,26 +129,50 @@ export function ImageField({
 
   async function handleCropped(blob: Blob) {
     closeCropper()
+    if (isStaged) {
+      ;(props as StagedProps).onStagedChange(blob)
+      return
+    }
+    const bound = props as BoundProps
     try {
       const result = await uploadMutation.mutateAsync({
-        entityType,
-        id: entityId,
+        entityType: bound.entityType,
+        id: bound.entityId,
         file: blob,
       })
-      onImageChange(result.image_path)
+      bound.onImageChange(result.image_path)
+      setImgVersion(Date.now())
     } catch (err) {
       toastError(err, t)
     }
   }
 
   async function handleDelete() {
+    if (isStaged) {
+      ;(props as StagedProps).onStagedChange(null)
+      return
+    }
+    const bound = props as BoundProps
     try {
-      await deleteMutation.mutateAsync({ entityType, id: entityId })
-      onImageChange(null)
+      await deleteMutation.mutateAsync({
+        entityType: bound.entityType,
+        id: bound.entityId,
+      })
+      bound.onImageChange(null)
+      setImgVersion(Date.now())
     } catch (err) {
       toastError(err, t)
     }
   }
+
+  const boundPath = !isStaged ? (props as BoundProps).currentImagePath : null
+  const previewUrl = isStaged
+    ? stagedPreviewUrl
+    : boundPath
+      ? imageURL(boundPath, imgVersion || undefined)
+      : null
+
+  const hasImage = previewUrl !== null
 
   const isBusy =
     uploadMutation.isPending ||
@@ -135,13 +181,13 @@ export function ImageField({
 
   return (
     <div ref={rootRef} className="space-y-3" tabIndex={-1}>
-      {currentImagePath && (
+      {hasImage && (
         <div
           className="w-64 overflow-hidden rounded-md bg-surface-container-high"
           style={{ aspectRatio: aspect }}
         >
           <img
-            src={imageURL(currentImagePath, Date.now())}
+            src={previewUrl!}
             alt=""
             className="h-full w-full object-cover"
           />
@@ -173,7 +219,7 @@ export function ImageField({
           </label>
         </Button>
 
-        {currentImagePath && (
+        {hasImage && (
           <Button
             type="button"
             variant="outline"

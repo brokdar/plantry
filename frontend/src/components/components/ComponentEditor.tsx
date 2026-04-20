@@ -21,6 +21,8 @@ import { NutritionPanel } from "@/components/editorial/NutritionPanel"
 import { SectionCard } from "@/components/editorial/SectionCard"
 import { StickyActionBar } from "@/components/editorial/StickyActionBar"
 import { ImageField } from "@/components/images/ImageField"
+import { useUploadImage } from "@/lib/queries/images"
+import { toastError } from "@/lib/toast"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -137,11 +139,13 @@ export function ComponentEditor({
   const updateMutation = useUpdateComponent()
   const deleteMutation = useDeleteComponent()
   const createVariant = useCreateVariant()
+  const uploadMutation = useUploadImage()
   const navigate = useNavigate()
   const { data: variantsData } = useVariants(component?.id ?? 0)
 
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [stagedImage, setStagedImage] = useState<Blob | null>(null)
 
   const watchedIngredients = useWatch({
     control: form.control,
@@ -181,7 +185,19 @@ export function ComponentEditor({
       if (isEdit && component) {
         await updateMutation.mutateAsync({ id: component.id, data: input })
       } else {
-        await createMutation.mutateAsync(input)
+        const created = await createMutation.mutateAsync(input)
+        if (stagedImage) {
+          try {
+            await uploadMutation.mutateAsync({
+              entityType: "components",
+              id: created.id,
+              file: stagedImage,
+            })
+          } catch (err) {
+            toastError(err, t)
+          }
+          setStagedImage(null)
+        }
       }
       onSuccess?.()
     } catch (err) {
@@ -538,23 +554,30 @@ export function ComponentEditor({
 
           {/* Right column */}
           <div className="space-y-4 lg:sticky lg:top-6 lg:col-span-4 lg:self-start">
-            {isEdit && component && (
-              <SectionCard
-                title={t("image.section_title")}
-                description={t("component.section_image_hint")}
-              >
+            <SectionCard
+              title={t("image.section_title")}
+              description={t("component.section_image_hint")}
+            >
+              {isEdit && component ? (
                 <ImageField
+                  mode="bound"
                   entityType="components"
                   entityId={component.id}
                   currentImagePath={component.image_path}
                   onImageChange={() => {}}
                 />
-              </SectionCard>
-            )}
+              ) : (
+                <ImageField
+                  mode="staged"
+                  stagedBlob={stagedImage}
+                  onStagedChange={setStagedImage}
+                />
+              )}
+            </SectionCard>
 
             {perPortionMacros ? (
               <NutritionPanel
-                perPortion={perPortionMacros}
+                macros={perPortionMacros}
                 referencePortions={watchedPortions}
               />
             ) : (

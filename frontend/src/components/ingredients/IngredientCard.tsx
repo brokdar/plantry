@@ -77,7 +77,7 @@ export function IngredientCard({ ingredient, onDelete }: IngredientCardProps) {
           </EditorialCard.ImageOverlay>
         </div>
         <EditorialCard.Body>
-          <EditorialCard.Title className="line-clamp-2">
+          <EditorialCard.Title className="line-clamp-2 min-h-14">
             {name}
           </EditorialCard.Title>
           <div className="mt-2 flex items-baseline justify-between gap-2">

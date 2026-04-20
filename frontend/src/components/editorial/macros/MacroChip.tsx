@@ -79,20 +79,23 @@ export function MacroChip({
   if (isTile) {
     return (
       <div
-        className={cn("flex flex-col", typo.pad, className)}
+        className={cn(
+          "flex flex-col items-center justify-center gap-1",
+          typo.pad,
+          className
+        )}
         data-testid={`macro-chip-${kind}`}
       >
-        <p
+        <MacroDot kind={kind} size={typo.dot} />
+        <span
           className={cn(
-            "flex items-center break-words text-on-surface-variant",
-            typo.gap,
+            "block w-full text-center break-words hyphens-auto text-on-surface-variant",
             typo.label
           )}
         >
-          <MacroDot kind={kind} size={typo.dot} />
-          <span className="min-w-0 break-words">{label}</span>
-        </p>
-        <p className={cn("mt-0.5 text-on-surface tabular-nums", typo.value)}>
+          {label}
+        </span>
+        <p className={cn("text-on-surface tabular-nums", typo.value)}>
           {formatGrams(grams)}
           <span className="ml-1 text-xs font-medium text-on-surface-variant">
             g

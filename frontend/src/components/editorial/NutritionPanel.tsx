@@ -18,69 +18,90 @@ type Macros = {
   sodium: number
 }
 
-type NutritionPanelProps = {
-  perPortion: Macros
+type ToggleableProps = {
+  variant?: "toggleable"
+  macros: Macros
   referencePortions: number
+}
+
+type StaticProps = {
+  variant: "static"
+  macros: Macros
+  hint?: string
+  referencePortions?: never
+}
+
+type NutritionPanelProps = (ToggleableProps | StaticProps) & {
+  title?: string
+  showFiberSodium?: boolean
+  testId?: string
   className?: string
 }
 
-export function NutritionPanel({
-  perPortion,
-  referencePortions,
-  className,
-}: NutritionPanelProps) {
+export function NutritionPanel(props: NutritionPanelProps) {
   const { t } = useTranslation()
+  const {
+    title = t("component.nutrition"),
+    showFiberSodium = true,
+    className,
+    testId = "section-card-nutrition",
+  } = props
+
+  const isToggleable = props.variant !== "static"
   const [view, setView] = useState<"portion" | "total">("portion")
-  const portions = Math.max(referencePortions, 1)
+  const portions = isToggleable ? Math.max(props.referencePortions, 1) : 1
+
   const macros: Macros =
-    view === "portion"
-      ? perPortion
+    !isToggleable || view === "portion"
+      ? props.macros
       : {
-          kcal: perPortion.kcal * portions,
-          protein: perPortion.protein * portions,
-          fat: perPortion.fat * portions,
-          carbs: perPortion.carbs * portions,
-          fiber: perPortion.fiber * portions,
-          sodium: perPortion.sodium * portions,
+          kcal: props.macros.kcal * portions,
+          protein: props.macros.protein * portions,
+          fat: props.macros.fat * portions,
+          carbs: props.macros.carbs * portions,
+          fiber: props.macros.fiber * portions,
+          sodium: props.macros.sodium * portions,
         }
+
+  const heroHint = isToggleable
+    ? view === "portion"
+      ? t("component.nutrition_per_portion_hint")
+      : t("component.nutrition_total_hint", { count: portions })
+    : props.variant === "static"
+      ? props.hint
+      : undefined
 
   return (
     <SectionCard
       className={cn("h-fit", className)}
-      title={t("component.nutrition")}
-      testId="section-card-nutrition"
+      title={title}
+      testId={testId}
       actions={
-        <div
-          role="group"
-          aria-label={t("component.nutrition_view_label")}
-          className="inline-flex items-center rounded-full bg-surface-container-highest p-0.5 text-xs"
-        >
-          <ToggleButton
-            active={view === "portion"}
-            onClick={() => setView("portion")}
-            testId="nutrition-view-portion"
+        isToggleable ? (
+          <div
+            role="group"
+            aria-label={t("component.nutrition_view_label")}
+            className="inline-flex items-center rounded-full bg-surface-container-highest p-0.5 text-xs"
           >
-            {t("component.nutrition_per_portion")}
-          </ToggleButton>
-          <ToggleButton
-            active={view === "total"}
-            onClick={() => setView("total")}
-            testId="nutrition-view-total"
-          >
-            {t("component.nutrition_total")}
-          </ToggleButton>
-        </div>
+            <ToggleButton
+              active={view === "portion"}
+              onClick={() => setView("portion")}
+              testId="nutrition-view-portion"
+            >
+              {t("component.nutrition_per_portion")}
+            </ToggleButton>
+            <ToggleButton
+              active={view === "total"}
+              onClick={() => setView("total")}
+              testId="nutrition-view-total"
+            >
+              {t("component.nutrition_total")}
+            </ToggleButton>
+          </div>
+        ) : undefined
       }
     >
-      <MacroKcalHero
-        kcal={macros.kcal}
-        size="lg"
-        hint={
-          view === "portion"
-            ? t("component.nutrition_per_portion_hint")
-            : t("component.nutrition_total_hint", { count: portions })
-        }
-      />
+      <MacroKcalHero kcal={macros.kcal} size="lg" hint={heroHint} />
 
       <MacroDistributionBar
         thickness="lg"
@@ -100,20 +121,22 @@ export function NutritionPanel({
         }}
       />
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-on-surface-variant">
-        <div className="flex items-center justify-between">
-          <dt>{t("ingredient.fiber")}</dt>
-          <dd className="font-medium text-on-surface">
-            {macros.fiber.toFixed(1)} g
-          </dd>
-        </div>
-        <div className="flex items-center justify-between">
-          <dt>{t("ingredient.sodium")}</dt>
-          <dd className="font-medium text-on-surface">
-            {(macros.sodium * 1000).toFixed(0)} mg
-          </dd>
-        </div>
-      </dl>
+      {showFiberSodium && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-on-surface-variant">
+          <div className="flex items-center justify-between">
+            <dt>{t("ingredient.fiber")}</dt>
+            <dd className="font-medium text-on-surface">
+              {macros.fiber.toFixed(1)} g
+            </dd>
+          </div>
+          <div className="flex items-center justify-between">
+            <dt>{t("ingredient.sodium")}</dt>
+            <dd className="font-medium text-on-surface">
+              {(macros.sodium * 1000).toFixed(0)} mg
+            </dd>
+          </div>
+        </dl>
+      )}
     </SectionCard>
   )
 }
