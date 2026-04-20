@@ -4,13 +4,18 @@ import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
 import { mockChickenBreast, mockLookupResponse } from "@/test/fixtures"
 
-vi.mock("@/lib/api/ingredients", () => ({
-  listIngredients: vi.fn(),
-  getIngredient: vi.fn(),
-  createIngredient: vi.fn(),
-  updateIngredient: vi.fn(),
-  deleteIngredient: vi.fn(),
-}))
+vi.mock("@/lib/api/ingredients", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/ingredients")>()
+  return {
+    ...actual,
+    listIngredients: vi.fn(),
+    getIngredient: vi.fn(),
+    createIngredient: vi.fn(),
+    updateIngredient: vi.fn(),
+    deleteIngredient: vi.fn(),
+    refetchIngredient: vi.fn(),
+  }
+})
 
 vi.mock("@/lib/api/lookup", () => ({
   lookupIngredients: vi.fn(),
@@ -27,7 +32,11 @@ vi.mock("@/lib/api/images", () => ({
   deleteImage: vi.fn(),
 }))
 
-import { createIngredient, updateIngredient } from "@/lib/api/ingredients"
+import {
+  createIngredient,
+  refetchIngredient,
+  updateIngredient,
+} from "@/lib/api/ingredients"
 import { lookupIngredients } from "@/lib/api/lookup"
 import { ApiError } from "@/lib/api/client"
 import { IngredientEditor } from "./IngredientEditor"
@@ -153,8 +162,12 @@ describe("IngredientEditor", () => {
     )
     await user.type(input, "chicken")
 
-    const candidate = await screen.findByText("Chicken Breast, Raw")
-    await user.click(candidate)
+    // Wait for the detail preview to render, then hit Apply.
+    await screen.findByText("Chicken Breast, Raw")
+    const applyButton = await screen.findByRole("button", {
+      name: /use this match/i,
+    })
+    await user.click(applyButton)
 
     expect(await screen.findByLabelText("Name")).toHaveValue(
       "Chicken Breast, Raw"
@@ -184,6 +197,58 @@ describe("IngredientEditor", () => {
 
     expect(
       await screen.findByText("An ingredient with this name already exists.")
+    ).toBeInTheDocument()
+  })
+
+  test("refetch button is hidden when no source IDs are stored", async () => {
+    renderWithRouter(<IngredientEditor ingredient={mockChickenBreast} />)
+    await screen.findByLabelText("Name")
+    expect(screen.queryByTestId("ingredient-refetch")).not.toBeInTheDocument()
+  })
+
+  test("refetch button calls API and updates form values", async () => {
+    const user = userEvent.setup()
+    const withFdc = { ...mockChickenBreast, fdc_id: "171077" }
+    vi.mocked(refetchIngredient).mockResolvedValue({
+      ...withFdc,
+      kcal_100g: 170,
+      protein_100g: 32,
+      sugar_100g: 0.5,
+    })
+
+    renderWithRouter(<IngredientEditor ingredient={withFdc} />)
+
+    const refetchButton = await screen.findByTestId("ingredient-refetch")
+    await user.click(refetchButton)
+
+    await waitFor(() => {
+      expect(refetchIngredient).toHaveBeenCalledWith(withFdc.id, undefined)
+    })
+    await waitFor(() => {
+      expect(
+        screen.getByRole("spinbutton", { name: "Calories (kcal)" })
+      ).toHaveValue(170)
+    })
+    expect(screen.getByRole("spinbutton", { name: "Protein (g)" })).toHaveValue(
+      32
+    )
+  })
+
+  test("refetch button surfaces API errors inline", async () => {
+    const user = userEvent.setup()
+    const withFdc = { ...mockChickenBreast, fdc_id: "171077" }
+    vi.mocked(refetchIngredient).mockRejectedValue(
+      new ApiError(404, "error.ingredient.refetch.no_results")
+    )
+
+    renderWithRouter(<IngredientEditor ingredient={withFdc} />)
+
+    const refetchButton = await screen.findByTestId("ingredient-refetch")
+    await user.click(refetchButton)
+
+    // The i18n key surfaces an error string next to the button.
+    expect(
+      await screen.findByText(/error\.ingredient\.refetch\.no_results/i)
     ).toBeInTheDocument()
   })
 })

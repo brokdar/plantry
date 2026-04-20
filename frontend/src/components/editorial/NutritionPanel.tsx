@@ -1,7 +1,11 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import { MacroBar } from "@/components/editorial/MacroBar"
+import {
+  MacroDistributionBar,
+  MacroKcalHero,
+  MacroTriad,
+} from "@/components/editorial/macros"
 import { SectionCard } from "@/components/editorial/SectionCard"
 import { cn } from "@/lib/utils"
 
@@ -40,11 +44,6 @@ export function NutritionPanel({
           sodium: perPortion.sodium * portions,
         }
 
-  const proteinKcal = macros.protein * 4
-  const carbsKcal = macros.carbs * 4
-  const fatKcal = macros.fat * 9
-  const totalKcal = Math.max(proteinKcal + carbsKcal + fatKcal, 1)
-
   return (
     <SectionCard
       className={cn("h-fit", className)}
@@ -73,52 +72,33 @@ export function NutritionPanel({
         </div>
       }
     >
-      <div className="space-y-1">
-        <p className="font-heading text-5xl font-extrabold text-on-surface">
-          {Math.round(macros.kcal)}
-          <span className="ml-2 text-sm font-medium tracking-widest text-on-surface-variant uppercase">
-            kcal
-          </span>
-        </p>
-        <p className="text-xs tracking-widest text-on-surface-variant uppercase">
-          {view === "portion"
+      <MacroKcalHero
+        kcal={macros.kcal}
+        size="lg"
+        hint={
+          view === "portion"
             ? t("component.nutrition_per_portion_hint")
-            : t("component.nutrition_total_hint", { count: portions })}
-        </p>
-      </div>
-
-      <MacroBar
-        thickness="lg"
-        track="surface-container-highest"
-        segments={[
-          {
-            value: proteinKcal,
-            color: "primary",
-            label: t("ingredient.protein"),
-          },
-          { value: carbsKcal, color: "tertiary", label: t("ingredient.carbs") },
-          { value: fatKcal, color: "secondary", label: t("ingredient.fat") },
-        ]}
-        max={totalKcal}
+            : t("component.nutrition_total_hint", { count: portions })
+        }
       />
 
-      <div className="grid grid-cols-3 gap-2">
-        <MacroStat
-          label={t("ingredient.protein")}
-          value={macros.protein}
-          dot="primary"
-        />
-        <MacroStat
-          label={t("ingredient.carbs")}
-          value={macros.carbs}
-          dot="tertiary"
-        />
-        <MacroStat
-          label={t("ingredient.fat")}
-          value={macros.fat}
-          dot="secondary"
-        />
-      </div>
+      <MacroDistributionBar
+        thickness="lg"
+        values={{
+          protein: macros.protein,
+          carbs: macros.carbs,
+          fat: macros.fat,
+        }}
+      />
+
+      <MacroTriad
+        size="md"
+        values={{
+          protein: macros.protein,
+          carbs: macros.carbs,
+          fat: macros.fat,
+        }}
+      />
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-on-surface-variant">
         <div className="flex items-center justify-between">
@@ -164,36 +144,5 @@ function ToggleButton({
     >
       {children}
     </button>
-  )
-}
-
-function MacroStat({
-  label,
-  value,
-  dot,
-}: {
-  label: string
-  value: number
-  dot: "primary" | "tertiary" | "secondary"
-}) {
-  const dotClass =
-    dot === "primary"
-      ? "bg-primary"
-      : dot === "tertiary"
-        ? "bg-tertiary"
-        : "bg-outline"
-  return (
-    <div className="rounded-xl bg-surface-container px-3 py-2">
-      <p className="flex items-center gap-1.5 text-[10px] tracking-widest text-on-surface-variant uppercase">
-        <span className={cn("inline-block size-1.5 rounded-full", dotClass)} />
-        {label}
-      </p>
-      <p className="mt-0.5 font-heading text-lg font-bold text-on-surface">
-        {value.toFixed(1)}
-        <span className="ml-1 text-xs font-medium text-on-surface-variant">
-          g
-        </span>
-      </p>
-    </div>
   )
 }

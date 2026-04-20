@@ -209,7 +209,7 @@ function ComponentCardList({
       >
         <div
           className={cn(
-            "relative size-20 shrink-0 overflow-hidden rounded-xl bg-surface-container-high"
+            "relative aspect-[4/3] h-20 shrink-0 overflow-hidden rounded-xl bg-surface-container-high"
           )}
         >
           {image_path ? (

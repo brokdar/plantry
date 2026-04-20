@@ -273,6 +273,34 @@ func TestUpdateIngredient_200_RoundTrip(t *testing.T) {
 	assert.Equal(t, float64(112), got["kcal_100g"])
 }
 
+func TestUpdateIngredient_PreservesImagePath(t *testing.T) {
+	// Regression: PUT without image_path must not wipe the stored image, which
+	// is managed by dedicated /image endpoints.
+	r := setupRouter(t)
+	createResp := httptest.NewRecorder()
+	r.ServeHTTP(createResp, httptest.NewRequest(
+		http.MethodPost,
+		"/api/ingredients",
+		bytes.NewBufferString(`{"name":"Oat","image_path":"ingredients/1.jpg"}`),
+	))
+	require.Equal(t, http.StatusCreated, createResp.Code)
+
+	updateResp := httptest.NewRecorder()
+	r.ServeHTTP(updateResp, httptest.NewRequest(
+		http.MethodPut,
+		"/api/ingredients/1",
+		bytes.NewBufferString(`{"name":"Oat","kcal_100g":389}`),
+	))
+	require.Equal(t, http.StatusOK, updateResp.Code)
+
+	getResp := httptest.NewRecorder()
+	r.ServeHTTP(getResp, httptest.NewRequest(http.MethodGet, "/api/ingredients/1", nil))
+	require.Equal(t, http.StatusOK, getResp.Code)
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&got))
+	assert.Equal(t, "ingredients/1.jpg", got["image_path"])
+}
+
 func TestDeleteIngredient_400_InvalidID(t *testing.T) {
 	r := setupRouter(t)
 	resp := httptest.NewRecorder()

@@ -30,6 +30,24 @@ type Candidate struct {
 	Carbs100g   *float64
 	Fiber100g   *float64
 	Sodium100g  *float64 // converted from mg to g
+
+	// Extended nutrients — units match FDC native unless noted.
+	SaturatedFat100g *float64 // g
+	TransFat100g     *float64 // g
+	Cholesterol100g  *float64 // mg
+	Sugar100g        *float64 // g
+	Potassium100g    *float64 // mg
+	Calcium100g      *float64 // mg
+	Iron100g         *float64 // mg
+	Magnesium100g    *float64 // mg
+	Phosphorus100g   *float64 // mg
+	Zinc100g         *float64 // mg
+	VitaminA100g     *float64 // µg RAE
+	VitaminC100g     *float64 // mg
+	VitaminD100g     *float64 // µg
+	VitaminB12100g   *float64 // µg
+	VitaminB6100g    *float64 // mg
+	Folate100g       *float64 // µg DFE
 }
 
 // New creates a Client for the given API key.
@@ -144,15 +162,31 @@ func normaliseFDC(f fdcSearchFood) Candidate {
 	}
 
 	return Candidate{
-		Name:        f.Description,
-		FdcID:       f.FdcID,
-		DataType:    f.DataType,
-		Category:    f.FoodCategory,
-		Kcal100g:    ptr(1008),
-		Protein100g: ptr(1003),
-		Fat100g:     ptr(1004),
-		Carbs100g:   ptr(1005),
-		Fiber100g:   ptr(1079),
-		Sodium100g:  sodiumG,
+		Name:             f.Description,
+		FdcID:            f.FdcID,
+		DataType:         f.DataType,
+		Category:         f.FoodCategory,
+		Kcal100g:         ptr(1008),
+		Protein100g:      ptr(1003),
+		Fat100g:          ptr(1004),
+		Carbs100g:        ptr(1005),
+		Fiber100g:        ptr(1079),
+		Sodium100g:       sodiumG,
+		SaturatedFat100g: ptr(1258),
+		TransFat100g:     ptr(1257),
+		Cholesterol100g:  ptr(1253), // mg
+		Sugar100g:        ptr(2000),
+		Potassium100g:    ptr(1092), // mg
+		Calcium100g:      ptr(1087), // mg
+		Iron100g:         ptr(1089), // mg
+		Magnesium100g:    ptr(1090), // mg
+		Phosphorus100g:   ptr(1091), // mg
+		Zinc100g:         ptr(1095), // mg
+		VitaminA100g:     ptr(1106), // µg RAE
+		VitaminC100g:     ptr(1162), // mg
+		VitaminD100g:     ptr(1114), // µg
+		VitaminB12100g:   ptr(1178), // µg
+		VitaminB6100g:    ptr(1175), // mg
+		Folate100g:       ptr(1190), // µg DFE
 	}
 }

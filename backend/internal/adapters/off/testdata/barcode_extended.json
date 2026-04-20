@@ -1,0 +1,34 @@
+{
+  "code": "1111111111111",
+  "status": 1,
+  "status_verbose": "product found",
+  "product": {
+    "product_name": "Test Extended",
+    "brands": "Test",
+    "image_front_small_url": "",
+    "nutriments": {
+      "energy-kcal_100g": 200,
+      "proteins_100g": 10,
+      "fat_100g": 5,
+      "carbohydrates_100g": 30,
+      "fiber_100g": 3,
+      "sodium_100g": 0.5,
+      "saturated-fat_100g": 1.2,
+      "trans-fat_100g": 0.05,
+      "cholesterol_100g": 20,
+      "sugars_100g": 12,
+      "potassium_100g": 400,
+      "calcium_100g": 150,
+      "iron_100g": 2.1,
+      "magnesium_100g": 60,
+      "phosphorus_100g": 180,
+      "zinc_100g": 1.5,
+      "vitamin-a_100g": 80,
+      "vitamin-c_100g": 20,
+      "vitamin-d_100g": 1.5,
+      "vitamin-b12_100g": 0.8,
+      "vitamin-b6_100g": 0.3,
+      "vitamin-b9_100g": 90
+    }
+  }
+}

@@ -64,6 +64,16 @@
   --color-tertiary-fixed-dim: var(--tertiary-fixed-dim);
   --color-on-tertiary-fixed-variant: var(--on-tertiary-fixed-variant);
 
+  /* Macro tokens — unified protein/carbs/fat/fiber palette across the app */
+  --color-macro-protein: var(--macro-protein);
+  --color-macro-protein-soft: var(--macro-protein-soft);
+  --color-macro-carbs: var(--macro-carbs);
+  --color-macro-carbs-soft: var(--macro-carbs-soft);
+  --color-macro-fat: var(--macro-fat);
+  --color-macro-fat-soft: var(--macro-fat-soft);
+  --color-macro-fiber: var(--macro-fiber);
+  --color-macro-fiber-soft: var(--macro-fiber-soft);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -126,6 +136,18 @@
   --chart-3: oklch(0.66 0.11 55);
   --chart-4: #4a654d;
   --chart-5: #89a58a;
+
+  /* Macro palette — terracotta / wheat / sage / bark.
+     Semantic across every macro surface: IngredientCard, NutritionPanel,
+     NutritionDetail, planner bars, slot dots. Soft variant for chip bg. */
+  --macro-protein: #c87a5a;
+  --macro-protein-soft: #f5e3da;
+  --macro-carbs: #d4b066;
+  --macro-carbs-soft: #f6ecd3;
+  --macro-fat: #6f8a73;
+  --macro-fat-soft: #dbe3dc;
+  --macro-fiber: #a38b6a;
+  --macro-fiber-soft: #ece3d4;
 
   --radius: 0.625rem;
 
@@ -190,6 +212,16 @@
   --chart-3: oklch(0.74 0.13 55);
   --chart-4: #b1ceb1;
   --chart-5: #89a58a;
+
+  /* Macro palette — dark mode: lifted L, same hues, muted soft bg */
+  --macro-protein: #e09276;
+  --macro-protein-soft: #3a2721;
+  --macro-carbs: #e6c684;
+  --macro-carbs-soft: #38301d;
+  --macro-fat: #96b19b;
+  --macro-fat-soft: #24302a;
+  --macro-fiber: #bfa483;
+  --macro-fiber-soft: #322a20;
 
   --sidebar: var(--surface-container-low);
   --sidebar-foreground: var(--on-surface);

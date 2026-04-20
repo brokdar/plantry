@@ -136,11 +136,16 @@ export function ImageField({
   return (
     <div ref={rootRef} className="space-y-3" tabIndex={-1}>
       {currentImagePath && (
-        <img
-          src={imageURL(currentImagePath, Date.now())}
-          alt=""
-          className="h-40 w-40 rounded-md object-cover"
-        />
+        <div
+          className="w-64 overflow-hidden rounded-md bg-surface-container-high"
+          style={{ aspectRatio: aspect }}
+        >
+          <img
+            src={imageURL(currentImagePath, Date.now())}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        </div>
       )}
 
       <div className="flex flex-wrap gap-2">

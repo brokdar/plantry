@@ -43,7 +43,7 @@ export function PickerCard({
       tabIndex={0}
       aria-label={component.name}
     >
-      <div className="relative h-32 overflow-hidden">
+      <div className="relative aspect-[4/3] overflow-hidden">
         {component.image_path ? (
           <img
             src={imageURL(component.image_path)}

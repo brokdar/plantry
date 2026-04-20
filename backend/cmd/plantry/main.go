@@ -110,8 +110,6 @@ func run() error {
 	// per-request and gracefully returns empty results when no key is set.
 	fdcProvider := fdc.NewDynamicProvider(settingsSvc)
 
-	resolver := ingredient.NewResolver(ingredientRepo, offProvider, fdcProvider)
-
 	// Image store (optional).
 	var imgStore *imagestore.Store
 	if cfg.ImagePath != "" {
@@ -161,6 +159,10 @@ func run() error {
 		return nil, fmt.Errorf("unknown provider %q", provider)
 	}
 	llmResolver := llmresolver.New(settingsSvc, llmFactory)
+
+	// Ingredient resolver depends on llmResolver for optional AI translation
+	// and pick-best ranking; nil llmResolver would disable those features.
+	resolver := ingredient.NewResolver(ingredientRepo, offProvider, fdcProvider, llmResolver)
 
 	aiRepo := sqlite.NewAIRepo(conn)
 	tools, err := agent.NewToolSet(agent.Services{

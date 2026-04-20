@@ -151,6 +151,67 @@ func TestSearchByName_ContextCancelled(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
+func TestSearchByName_ExtendedNutrients(t *testing.T) {
+	srv := fixtureServer(t, "search_extended.json")
+	defer srv.Close()
+
+	client := fdc.New("test-key", fdc.WithBaseURL(srv.URL))
+	results, err := client.SearchByName(context.Background(), "test", nil, 10)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	r := results[0]
+
+	require.NotNil(t, r.SaturatedFat100g)
+	assert.InDelta(t, 1.5, *r.SaturatedFat100g, 0.001)
+	require.NotNil(t, r.TransFat100g)
+	assert.InDelta(t, 0.1, *r.TransFat100g, 0.001)
+	require.NotNil(t, r.Cholesterol100g)
+	assert.InDelta(t, 25.0, *r.Cholesterol100g, 0.001)
+	require.NotNil(t, r.Sugar100g)
+	assert.InDelta(t, 8.0, *r.Sugar100g, 0.001)
+	require.NotNil(t, r.Potassium100g)
+	assert.InDelta(t, 300.0, *r.Potassium100g, 0.001)
+	require.NotNil(t, r.Calcium100g)
+	assert.InDelta(t, 120.0, *r.Calcium100g, 0.001)
+	require.NotNil(t, r.Iron100g)
+	assert.InDelta(t, 2.5, *r.Iron100g, 0.001)
+	require.NotNil(t, r.Magnesium100g)
+	assert.InDelta(t, 45.0, *r.Magnesium100g, 0.001)
+	require.NotNil(t, r.Phosphorus100g)
+	assert.InDelta(t, 200.0, *r.Phosphorus100g, 0.001)
+	require.NotNil(t, r.Zinc100g)
+	assert.InDelta(t, 1.8, *r.Zinc100g, 0.001)
+	require.NotNil(t, r.VitaminA100g)
+	assert.InDelta(t, 50.0, *r.VitaminA100g, 0.001)
+	require.NotNil(t, r.VitaminC100g)
+	assert.InDelta(t, 15.0, *r.VitaminC100g, 0.001)
+	require.NotNil(t, r.VitaminD100g)
+	assert.InDelta(t, 1.2, *r.VitaminD100g, 0.001)
+	require.NotNil(t, r.VitaminB12100g)
+	assert.InDelta(t, 0.6, *r.VitaminB12100g, 0.001)
+	require.NotNil(t, r.VitaminB6100g)
+	assert.InDelta(t, 0.4, *r.VitaminB6100g, 0.001)
+	require.NotNil(t, r.Folate100g)
+	assert.InDelta(t, 100.0, *r.Folate100g, 0.001)
+}
+
+func TestSearchByName_ExtendedNutrientsNilWhenMissing(t *testing.T) {
+	srv := fixtureServer(t, "search_chicken.json")
+	defer srv.Close()
+
+	client := fdc.New("test-key", fdc.WithBaseURL(srv.URL))
+	results, err := client.SearchByName(context.Background(), "chicken", nil, 10)
+	require.NoError(t, err)
+
+	// Chicken fixture only has the original 6 nutrients; extended should be nil.
+	r := results[0]
+	assert.Nil(t, r.SaturatedFat100g)
+	assert.Nil(t, r.Sugar100g)
+	assert.Nil(t, r.Potassium100g)
+	assert.Nil(t, r.VitaminC100g)
+	assert.Nil(t, r.Folate100g)
+}
+
 func TestSearchByName_APIKeyInRequest(t *testing.T) {
 	var capturedKey string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

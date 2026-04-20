@@ -1,11 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
+import { z } from "zod/v4"
 
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { IngredientEditor } from "@/components/ingredients/IngredientEditor"
 
+const searchSchema = z.object({
+  debug: z.boolean().optional(),
+})
+
 export const Route = createFileRoute("/ingredients/new")({
   component: NewIngredientPage,
+  validateSearch: (search) => searchSchema.parse(search),
 })
 
 function NewIngredientPage() {

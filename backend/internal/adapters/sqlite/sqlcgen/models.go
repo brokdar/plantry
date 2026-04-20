@@ -75,21 +75,37 @@ type ComponentsFt struct {
 }
 
 type Ingredient struct {
-	ID          int64
-	Name        string
-	Source      string
-	Barcode     sql.NullString
-	OffID       sql.NullString
-	FdcID       sql.NullString
-	ImagePath   sql.NullString
-	Kcal100g    float64
-	Protein100g float64
-	Fat100g     float64
-	Carbs100g   float64
-	Fiber100g   float64
-	Sodium100g  float64
-	CreatedAt   string
-	UpdatedAt   string
+	ID               int64
+	Name             string
+	Source           string
+	Barcode          sql.NullString
+	OffID            sql.NullString
+	FdcID            sql.NullString
+	ImagePath        sql.NullString
+	Kcal100g         float64
+	Protein100g      float64
+	Fat100g          float64
+	Carbs100g        float64
+	Fiber100g        float64
+	Sodium100g       float64
+	CreatedAt        string
+	UpdatedAt        string
+	SaturatedFat100g sql.NullFloat64
+	TransFat100g     sql.NullFloat64
+	Cholesterol100g  sql.NullFloat64
+	Sugar100g        sql.NullFloat64
+	Potassium100g    sql.NullFloat64
+	Calcium100g      sql.NullFloat64
+	Iron100g         sql.NullFloat64
+	Magnesium100g    sql.NullFloat64
+	Phosphorus100g   sql.NullFloat64
+	Zinc100g         sql.NullFloat64
+	VitaminA100g     sql.NullFloat64
+	VitaminC100g     sql.NullFloat64
+	VitaminD100g     sql.NullFloat64
+	VitaminB12100g   sql.NullFloat64
+	VitaminB6100g    sql.NullFloat64
+	Folate100g       sql.NullFloat64
 }
 
 type IngredientPortion struct {

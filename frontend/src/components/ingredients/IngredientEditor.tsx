@@ -3,9 +3,13 @@ import { useForm, useWatch, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTranslation } from "react-i18next"
 import { Link } from "@tanstack/react-router"
-import { Loader2, Trash2 } from "lucide-react"
+import { Loader2, RefreshCw, Trash2 } from "lucide-react"
 
-import { MacroBar } from "@/components/editorial/MacroBar"
+import {
+  MacroDistributionBar,
+  MacroKcalHero,
+  MacroTriad,
+} from "@/components/editorial/macros"
 import { SectionCard } from "@/components/editorial/SectionCard"
 import { StickyActionBar } from "@/components/editorial/StickyActionBar"
 import { ImageField } from "@/components/images/ImageField"
@@ -30,9 +34,17 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
+import {
+  EXTENDED_MACRO_FIELDS,
+  ExtendedNutrientFieldSet,
+  MINERAL_FIELDS,
+  VITAMIN_FIELDS,
+} from "./ExtendedNutrientFieldSet"
 import { LookupPanel } from "./LookupPanel"
 import { MacroFieldSet } from "./MacroFieldSet"
 import { PortionsEditor } from "./PortionsEditor"
+
+import { EXTENDED_NUTRIENT_KEYS } from "@/lib/api/ingredients"
 
 import {
   ingredientSchema,
@@ -42,6 +54,7 @@ import {
   useCreateIngredient,
   useUpdateIngredient,
   useDeleteIngredient,
+  useRefetchIngredient,
 } from "@/lib/queries/ingredients"
 import type { Ingredient } from "@/lib/api/ingredients"
 import type { LookupCandidate } from "@/lib/api/lookup"
@@ -59,7 +72,16 @@ const SOURCE_DOT: Record<string, string> = {
   manual: "bg-on-surface-variant/50",
 }
 
+function emptyExtendedNutrients() {
+  return Object.fromEntries(
+    EXTENDED_NUTRIENT_KEYS.map((k) => [k, null])
+  ) as Record<(typeof EXTENDED_NUTRIENT_KEYS)[number], number | null>
+}
+
 function candidateToFormValues(c: LookupCandidate): IngredientFormValues {
+  const extended = Object.fromEntries(
+    EXTENDED_NUTRIENT_KEYS.map((k) => [k, c[k] ?? null])
+  ) as Record<(typeof EXTENDED_NUTRIENT_KEYS)[number], number | null>
   return {
     name: c.name,
     source: c.source,
@@ -72,6 +94,7 @@ function candidateToFormValues(c: LookupCandidate): IngredientFormValues {
     carbs_100g: c.carbs_100g ?? 0,
     fiber_100g: c.fiber_100g ?? 0,
     sodium_100g: c.sodium_100g ?? 0,
+    ...extended,
   }
 }
 
@@ -88,6 +111,7 @@ function emptyValues(): IngredientFormValues {
     carbs_100g: 0,
     fiber_100g: 0,
     sodium_100g: 0,
+    ...emptyExtendedNutrients(),
   }
 }
 
@@ -114,6 +138,9 @@ export function IngredientEditor({
           carbs_100g: ingredient.carbs_100g,
           fiber_100g: ingredient.fiber_100g,
           sodium_100g: ingredient.sodium_100g,
+          ...(Object.fromEntries(
+            EXTENDED_NUTRIENT_KEYS.map((k) => [k, ingredient[k] ?? null])
+          ) as Record<(typeof EXTENDED_NUTRIENT_KEYS)[number], number | null>),
         }
       : emptyValues(),
   })
@@ -121,9 +148,16 @@ export function IngredientEditor({
   const createMutation = useCreateIngredient()
   const updateMutation = useUpdateIngredient()
   const deleteMutation = useDeleteIngredient()
+  const refetchMutation = useRefetchIngredient()
 
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [refetchError, setRefetchError] = useState<string | null>(null)
+
+  const canRefetch =
+    !!ingredient &&
+    ((ingredient.barcode && ingredient.barcode.length > 0) ||
+      (ingredient.fdc_id && ingredient.fdc_id.length > 0))
 
   const isPending = isEdit ? updateMutation.isPending : createMutation.isPending
 
@@ -132,10 +166,6 @@ export function IngredientEditor({
   const protein = Number(values.protein_100g) || 0
   const fat = Number(values.fat_100g) || 0
   const carbs = Number(values.carbs_100g) || 0
-  const proteinKcal = protein * 4
-  const fatKcal = fat * 9
-  const carbsKcal = carbs * 4
-  const totalKcal = Math.max(proteinKcal + fatKcal + carbsKcal, 1)
 
   async function onSubmit(v: IngredientFormValues) {
     try {
@@ -154,6 +184,41 @@ export function IngredientEditor({
 
   function handleLookupSelect(candidate: LookupCandidate) {
     form.reset(candidateToFormValues(candidate))
+  }
+
+  async function handleRefetch() {
+    if (!ingredient || !canRefetch) return
+    setRefetchError(null)
+    try {
+      const updated = await refetchMutation.mutateAsync({
+        id: ingredient.id,
+        lang: undefined,
+      })
+      // Replace the form values with the freshly-fetched nutrient data so the
+      // user sees the update without navigating away.
+      form.reset({
+        name: updated.name,
+        source: updated.source,
+        barcode: updated.barcode,
+        off_id: updated.off_id,
+        fdc_id: updated.fdc_id,
+        kcal_100g: updated.kcal_100g,
+        protein_100g: updated.protein_100g,
+        fat_100g: updated.fat_100g,
+        carbs_100g: updated.carbs_100g,
+        fiber_100g: updated.fiber_100g,
+        sodium_100g: updated.sodium_100g,
+        ...(Object.fromEntries(
+          EXTENDED_NUTRIENT_KEYS.map((k) => [k, updated[k] ?? null])
+        ) as Record<(typeof EXTENDED_NUTRIENT_KEYS)[number], number | null>),
+      })
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setRefetchError(t(err.messageKey))
+      } else {
+        setRefetchError(t("error.server"))
+      }
+    }
   }
 
   function confirmDelete() {
@@ -198,6 +263,27 @@ export function IngredientEditor({
               />
               {t(`ingredient.source_${source}`, { defaultValue: source })}
             </Badge>
+            {canRefetch && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={handleRefetch}
+                disabled={refetchMutation.isPending || isPending}
+                data-testid="ingredient-refetch"
+              >
+                {refetchMutation.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <RefreshCw className="size-3.5" aria-hidden />
+                )}
+                {t("ingredient.refetch")}
+              </Button>
+            )}
+            {refetchError && (
+              <span className="text-xs text-destructive">{refetchError}</span>
+            )}
           </div>
         )}
 
@@ -229,33 +315,39 @@ export function IngredientEditor({
               description={t("ingredient.section_macros_hint")}
             >
               <MacroFieldSet control={form.control} disabled={isPending} />
-              <MacroBar
+              <MacroDistributionBar
                 thickness="md"
-                track="surface-container-highest"
-                segments={[
-                  {
-                    value: proteinKcal,
-                    color: "primary",
-                    label: t("ingredient.protein"),
-                  },
-                  {
-                    value: carbsKcal,
-                    color: "tertiary",
-                    label: t("ingredient.carbs"),
-                  },
-                  {
-                    value: fatKcal,
-                    color: "secondary",
-                    label: t("ingredient.fat"),
-                  },
-                ]}
-                max={totalKcal}
+                values={{ protein, carbs, fat }}
               />
-              <div className="flex flex-wrap gap-3 text-xs text-on-surface-variant">
-                <LegendDot color="bg-primary" label={t("ingredient.protein")} />
-                <LegendDot color="bg-tertiary" label={t("ingredient.carbs")} />
-                <LegendDot color="bg-outline" label={t("ingredient.fat")} />
-              </div>
+              <MacroTriad
+                size="sm"
+                values={{ protein, carbs, fat }}
+                className="text-xs"
+              />
+            </SectionCard>
+
+            <SectionCard title={t("nutrition.section_extended")}>
+              <ExtendedNutrientFieldSet
+                control={form.control}
+                fields={EXTENDED_MACRO_FIELDS}
+                disabled={isPending}
+              />
+            </SectionCard>
+
+            <SectionCard title={t("nutrition.section_minerals")}>
+              <ExtendedNutrientFieldSet
+                control={form.control}
+                fields={MINERAL_FIELDS}
+                disabled={isPending}
+              />
+            </SectionCard>
+
+            <SectionCard title={t("nutrition.section_vitamins")}>
+              <ExtendedNutrientFieldSet
+                control={form.control}
+                fields={VITAMIN_FIELDS}
+                disabled={isPending}
+              />
             </SectionCard>
 
             {isEdit && ingredient && (
@@ -294,29 +386,12 @@ export function IngredientEditor({
               title={t("ingredient.per_100g")}
               testId="ingredient-nutrition-summary"
             >
-              <p className="font-heading text-4xl font-extrabold text-on-surface">
-                {Math.round(kcal)}
-                <span className="ml-2 text-sm font-medium tracking-widest text-on-surface-variant uppercase">
-                  kcal
-                </span>
-              </p>
-              <dl className="grid grid-cols-3 gap-3">
-                <NutrientStat
-                  label={t("ingredient.protein")}
-                  value={protein}
-                  dot="bg-primary"
-                />
-                <NutrientStat
-                  label={t("ingredient.carbs")}
-                  value={carbs}
-                  dot="bg-tertiary"
-                />
-                <NutrientStat
-                  label={t("ingredient.fat")}
-                  value={fat}
-                  dot="bg-outline"
-                />
-              </dl>
+              <MacroKcalHero kcal={kcal} size="md" />
+              <MacroDistributionBar
+                thickness="md"
+                values={{ protein, carbs, fat }}
+              />
+              <MacroTriad size="md" values={{ protein, carbs, fat }} />
             </SectionCard>
           </div>
         </div>
@@ -386,42 +461,5 @@ export function IngredientEditor({
         </DialogContent>
       </Dialog>
     </Form>
-  )
-}
-
-function NutrientStat({
-  label,
-  value,
-  dot,
-}: {
-  label: string
-  value: number
-  dot: string
-}) {
-  return (
-    <div className="rounded-xl bg-surface-container px-3 py-2">
-      <p className="flex items-center gap-1.5 text-[10px] tracking-widest text-on-surface-variant uppercase">
-        <span className={cn("inline-block size-1.5 rounded-full", dot)} />
-        {label}
-      </p>
-      <p className="mt-0.5 font-heading text-lg font-bold text-on-surface">
-        {value.toFixed(1)}
-        <span className="ml-1 text-xs font-medium text-on-surface-variant">
-          g
-        </span>
-      </p>
-    </div>
-  )
-}
-
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        className={cn("inline-block size-2 rounded-full", color)}
-        aria-hidden
-      />
-      {label}
-    </span>
   )
 }

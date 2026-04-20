@@ -1,5 +1,11 @@
 import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
+
+import {
+  MacroDistributionBar,
+  MacroKcalHero,
+  MacroTriad,
+} from "@/components/editorial/macros"
 import { fromIngredients, type IngredientInput } from "@/lib/domain/nutrition"
 
 interface NutritionPreviewProps {
@@ -47,30 +53,40 @@ export function NutritionPreview({
     }
   }, [ingredients, referencePortions])
 
-  const fields = [
-    { label: t("ingredient.kcal"), value: macros.kcal },
-    { label: t("ingredient.protein"), value: macros.protein },
-    { label: t("ingredient.fat"), value: macros.fat },
-    { label: t("ingredient.carbs"), value: macros.carbs },
-    { label: t("ingredient.fiber"), value: macros.fiber },
-    // Sodium stored in grams; label is "(mg)", so convert at the boundary.
-    { label: t("ingredient.sodium"), value: macros.sodium * 1000 },
-  ]
-
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <h3 className="text-sm font-medium">{t("component.nutrition")}</h3>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {fields.map((f) => (
-          <div
-            key={f.label}
-            className="rounded-md border border-border bg-muted/50 px-3 py-2"
-          >
-            <p className="text-xs text-muted-foreground">{f.label}</p>
-            <p className="text-sm font-medium">{f.value.toFixed(1)}</p>
-          </div>
-        ))}
-      </div>
+      <MacroKcalHero kcal={macros.kcal} size="md" />
+      <MacroDistributionBar
+        thickness="md"
+        values={{
+          protein: macros.protein,
+          carbs: macros.carbs,
+          fat: macros.fat,
+        }}
+      />
+      <MacroTriad
+        size="sm"
+        values={{
+          protein: macros.protein,
+          carbs: macros.carbs,
+          fat: macros.fat,
+        }}
+      />
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-on-surface-variant">
+        <div className="flex items-center justify-between">
+          <dt>{t("macro.fiber")}</dt>
+          <dd className="font-medium text-on-surface">
+            {macros.fiber.toFixed(1)} g
+          </dd>
+        </div>
+        <div className="flex items-center justify-between">
+          <dt>{t("ingredient.sodium")}</dt>
+          <dd className="font-medium text-on-surface">
+            {(macros.sodium * 1000).toFixed(0)} mg
+          </dd>
+        </div>
+      </dl>
     </div>
   )
 }

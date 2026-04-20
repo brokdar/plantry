@@ -5,6 +5,7 @@ import {
   createIngredient,
   updateIngredient,
   deleteIngredient,
+  refetchIngredient,
   type IngredientListParams,
   type IngredientInput,
 } from "@/lib/api/ingredients"
@@ -53,6 +54,19 @@ export function useDeleteIngredient() {
     mutationFn: (id: number) => deleteIngredient(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ingredientKeys.lists() })
+    },
+  })
+}
+
+export function useRefetchIngredient() {
+  return useMutation({
+    mutationFn: ({ id, lang }: { id: number; lang?: string }) =>
+      refetchIngredient(id, lang),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ingredientKeys.lists() })
+      void queryClient.invalidateQueries({
+        queryKey: ingredientKeys.detail(variables.id),
+      })
     },
   })
 }

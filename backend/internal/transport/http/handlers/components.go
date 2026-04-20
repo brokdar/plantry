@@ -208,8 +208,18 @@ func (h *ComponentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// image_path is managed via dedicated /image endpoints; preserve it here so
+	// a regular PUT (which doesn't carry the field) cannot wipe the stored image.
+	existing, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+
 	c := requestToComponent(&req)
 	c.ID = id
+	c.ImagePath = existing.ImagePath
 	if err := h.svc.Update(r.Context(), c); err != nil {
 		status, key := componentError(err)
 		writeError(w, status, key)

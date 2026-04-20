@@ -301,6 +301,11 @@
     "language_english": "English",
     "language_german": "Deutsch"
   },
+  "developer_preferences": {
+    "title": "Developer",
+    "debug_title": "Lookup pipeline trace",
+    "debug_description": "Surfaces a detailed trace panel below the ingredient lookup — AI translation, source timings, pick-best reasoning. Stored locally, not synced to the server."
+  },
   "slot": {
     "title": "Meal Slots",
     "description": "Define the meal times you plan around.",
@@ -362,7 +367,9 @@
     "total_count_other": "{{count}} ingredients",
     "load_more": "Load more",
     "empty_title": "No ingredients yet",
-    "no_results_body": "Try a different search term or clear the filters."
+    "no_results_body": "Try a different search term or clear the filters.",
+    "refetch": "Refresh nutrition",
+    "refetch_failed": "Could not refresh from the upstream source."
   },
   "component": {
     "title": "Recipe Catalog",
@@ -461,7 +468,16 @@
     "scanner_error_permission": "Camera access denied",
     "scanner_error_no_camera": "No camera available",
     "scanner_error_unavailable": "Barcode scanner not supported",
-    "scanner_fallback_title": "Enter barcode manually"
+    "scanner_fallback_title": "Enter barcode manually",
+    "candidates_one": "{{count}} match",
+    "candidates_other": "{{count}} matches",
+    "apply": "Use this match",
+    "existing_warning": "An ingredient with this name already exists in your catalog.",
+    "debug_title": "Pipeline trace",
+    "debug_events": "events",
+    "debug_copy_all": "Copy all",
+    "debug_copy": "Copy",
+    "debug_copied": "Copied"
   },
   "portion": {
     "title": "Portions",
@@ -609,7 +625,40 @@
     "week_total": "Week total",
     "no_target_title": "Set a daily target to see progress",
     "no_target_body": "Add kcal and macro targets in Settings so daily bars can fill in.",
-    "no_target_cta": "Open Settings"
+    "no_target_cta": "Open Settings",
+    "detail_title": "Nutrition for {{name}}",
+    "section_core": "Macros",
+    "section_extended": "Extended macros",
+    "section_minerals": "Minerals",
+    "section_vitamins": "Vitamins",
+    "saturated_fat": "Saturated fat",
+    "trans_fat": "Trans fat",
+    "cholesterol": "Cholesterol",
+    "sugar": "Sugar",
+    "potassium": "Potassium",
+    "calcium": "Calcium",
+    "iron": "Iron",
+    "magnesium": "Magnesium",
+    "phosphorus": "Phosphorus",
+    "zinc": "Zinc",
+    "vitamin_a": "Vitamin A",
+    "vitamin_c": "Vitamin C",
+    "vitamin_d": "Vitamin D",
+    "vitamin_b12": "Vitamin B12",
+    "vitamin_b6": "Vitamin B6",
+    "folate": "Folate"
+  },
+  "macro": {
+    "protein": "Protein",
+    "carbs": "Carbs",
+    "fat": "Fat",
+    "fiber": "Fiber",
+    "protein_abbr": "P",
+    "carbs_abbr": "C",
+    "fat_abbr": "F",
+    "fiber_abbr": "Fi",
+    "kcal": "kcal",
+    "distribution": "Macro split"
   },
   "common": {
     "save": "Save",

@@ -329,6 +329,71 @@ func setupComponentRouterWithImages(t *testing.T) (http.Handler, *sqlite.Ingredi
 	return r, iRepo
 }
 
+func TestUpdateComponent_PreservesImagePath(t *testing.T) {
+	// Regression: PUT without image_path must not wipe the stored image, which
+	// is managed by dedicated /image endpoints.
+	t.Helper()
+	db := testhelper.NewTestDB(t)
+	iRepo := sqlite.NewIngredientRepo(db)
+	cRepo := sqlite.NewComponentRepo(db)
+	cSvc := component.NewService(cRepo, iRepo, iRepo)
+
+	store, err := imagestore.New(t.TempDir(), nil)
+	require.NoError(t, err)
+
+	h := handlers.NewComponentHandler(cSvc, store)
+	router := chi.NewRouter()
+	router.Route("/api/components", func(r chi.Router) {
+		r.Post("/", h.Create)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Get("/", h.Get)
+			r.Put("/", h.Update)
+			r.Post("/image", h.Upload)
+		})
+	})
+
+	createResp := httptest.NewRecorder()
+	router.ServeHTTP(createResp, httptest.NewRequest(
+		http.MethodPost,
+		"/api/components",
+		bytes.NewBufferString(`{"name":"Curry","role":"main","reference_portions":1}`),
+	))
+	require.Equal(t, http.StatusCreated, createResp.Code)
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(createResp.Body).Decode(&created))
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile("image", "test.jpg")
+	require.NoError(t, err)
+	_, _ = part.Write(testImagePNG(t))
+	require.NoError(t, w.Close())
+	uploadResp := httptest.NewRecorder()
+	uploadReq := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/components/%.0f/image", created["id"]), &buf)
+	uploadReq.Header.Set("Content-Type", w.FormDataContentType())
+	router.ServeHTTP(uploadResp, uploadReq)
+	require.Equal(t, http.StatusOK, uploadResp.Code)
+	var uploaded map[string]any
+	require.NoError(t, json.NewDecoder(uploadResp.Body).Decode(&uploaded))
+	imagePath := uploaded["image_path"]
+	require.NotEmpty(t, imagePath)
+
+	updateResp := httptest.NewRecorder()
+	router.ServeHTTP(updateResp, httptest.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("/api/components/%.0f", created["id"]),
+		bytes.NewBufferString(`{"name":"Curry","role":"main","reference_portions":1}`),
+	))
+	require.Equal(t, http.StatusOK, updateResp.Code)
+
+	getResp := httptest.NewRecorder()
+	router.ServeHTTP(getResp, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/components/%.0f", created["id"]), nil))
+	require.Equal(t, http.StatusOK, getResp.Code)
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&got))
+	assert.Equal(t, imagePath, got["image_path"])
+}
+
 func TestComponentImageUpload(t *testing.T) {
 	router, _ := setupComponentRouterWithImages(t)
 

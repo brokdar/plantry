@@ -64,7 +64,7 @@ export function ComposingTray({
               >
                 <div
                   className={cn(
-                    "size-[38px] shrink-0 overflow-hidden rounded-lg",
+                    "aspect-[4/3] h-[38px] shrink-0 overflow-hidden rounded-lg",
                     hero && "outline outline-2 outline-primary"
                   )}
                 >

@@ -138,6 +138,48 @@ func TestLookupBarcode_NameLocalization(t *testing.T) {
 	assert.Equal(t, "Knusprige Kekse mit einem cremigen Herz aus Nutella\u00ae", deCandidates[0].Name)
 }
 
+func TestLookupBarcode_ExtendedNutriments(t *testing.T) {
+	_, client := newTestServer(t, fixtureHandler(t, "barcode_extended.json"))
+
+	candidates, err := client.LookupBarcode(context.Background(), "1111111111111", "en")
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+	c := candidates[0]
+
+	require.NotNil(t, c.SaturatedFat100g)
+	assert.InDelta(t, 1.2, *c.SaturatedFat100g, 0.001)
+	require.NotNil(t, c.TransFat100g)
+	assert.InDelta(t, 0.05, *c.TransFat100g, 0.001)
+	require.NotNil(t, c.Cholesterol100g)
+	assert.InDelta(t, 20.0, *c.Cholesterol100g, 0.001)
+	require.NotNil(t, c.Sugar100g)
+	assert.InDelta(t, 12.0, *c.Sugar100g, 0.001)
+	require.NotNil(t, c.Potassium100g)
+	assert.InDelta(t, 400.0, *c.Potassium100g, 0.001)
+	require.NotNil(t, c.Calcium100g)
+	assert.InDelta(t, 150.0, *c.Calcium100g, 0.001)
+	require.NotNil(t, c.Iron100g)
+	assert.InDelta(t, 2.1, *c.Iron100g, 0.001)
+	require.NotNil(t, c.Magnesium100g)
+	assert.InDelta(t, 60.0, *c.Magnesium100g, 0.001)
+	require.NotNil(t, c.Phosphorus100g)
+	assert.InDelta(t, 180.0, *c.Phosphorus100g, 0.001)
+	require.NotNil(t, c.Zinc100g)
+	assert.InDelta(t, 1.5, *c.Zinc100g, 0.001)
+	require.NotNil(t, c.VitaminA100g)
+	assert.InDelta(t, 80.0, *c.VitaminA100g, 0.001)
+	require.NotNil(t, c.VitaminC100g)
+	assert.InDelta(t, 20.0, *c.VitaminC100g, 0.001)
+	require.NotNil(t, c.VitaminD100g)
+	assert.InDelta(t, 1.5, *c.VitaminD100g, 0.001)
+	require.NotNil(t, c.VitaminB12100g)
+	assert.InDelta(t, 0.8, *c.VitaminB12100g, 0.001)
+	require.NotNil(t, c.VitaminB6100g)
+	assert.InDelta(t, 0.3, *c.VitaminB6100g, 0.001)
+	require.NotNil(t, c.Folate100g)
+	assert.InDelta(t, 90.0, *c.Folate100g, 0.001)
+}
+
 func TestSearchByName_ContextCancelled(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		// This handler would block, but the context is already cancelled.

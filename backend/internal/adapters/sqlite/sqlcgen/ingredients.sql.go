@@ -13,24 +13,49 @@ import (
 const createIngredient = `-- name: CreateIngredient :one
 INSERT INTO ingredients (
     name, source, barcode, off_id, fdc_id, image_path,
-    kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, name, source, barcode, off_id, fdc_id, image_path, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, created_at, updated_at
+    kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g,
+    saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g,
+    potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g,
+    vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g
+) VALUES (
+    ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?
+)
+RETURNING id, name, source, barcode, off_id, fdc_id, image_path, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, created_at, updated_at, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g
 `
 
 type CreateIngredientParams struct {
-	Name        string
-	Source      string
-	Barcode     sql.NullString
-	OffID       sql.NullString
-	FdcID       sql.NullString
-	ImagePath   sql.NullString
-	Kcal100g    float64
-	Protein100g float64
-	Fat100g     float64
-	Carbs100g   float64
-	Fiber100g   float64
-	Sodium100g  float64
+	Name             string
+	Source           string
+	Barcode          sql.NullString
+	OffID            sql.NullString
+	FdcID            sql.NullString
+	ImagePath        sql.NullString
+	Kcal100g         float64
+	Protein100g      float64
+	Fat100g          float64
+	Carbs100g        float64
+	Fiber100g        float64
+	Sodium100g       float64
+	SaturatedFat100g sql.NullFloat64
+	TransFat100g     sql.NullFloat64
+	Cholesterol100g  sql.NullFloat64
+	Sugar100g        sql.NullFloat64
+	Potassium100g    sql.NullFloat64
+	Calcium100g      sql.NullFloat64
+	Iron100g         sql.NullFloat64
+	Magnesium100g    sql.NullFloat64
+	Phosphorus100g   sql.NullFloat64
+	Zinc100g         sql.NullFloat64
+	VitaminA100g     sql.NullFloat64
+	VitaminC100g     sql.NullFloat64
+	VitaminD100g     sql.NullFloat64
+	VitaminB12100g   sql.NullFloat64
+	VitaminB6100g    sql.NullFloat64
+	Folate100g       sql.NullFloat64
 }
 
 func (q *Queries) CreateIngredient(ctx context.Context, arg CreateIngredientParams) (Ingredient, error) {
@@ -47,6 +72,22 @@ func (q *Queries) CreateIngredient(ctx context.Context, arg CreateIngredientPara
 		arg.Carbs100g,
 		arg.Fiber100g,
 		arg.Sodium100g,
+		arg.SaturatedFat100g,
+		arg.TransFat100g,
+		arg.Cholesterol100g,
+		arg.Sugar100g,
+		arg.Potassium100g,
+		arg.Calcium100g,
+		arg.Iron100g,
+		arg.Magnesium100g,
+		arg.Phosphorus100g,
+		arg.Zinc100g,
+		arg.VitaminA100g,
+		arg.VitaminC100g,
+		arg.VitaminD100g,
+		arg.VitaminB12100g,
+		arg.VitaminB6100g,
+		arg.Folate100g,
 	)
 	var i Ingredient
 	err := row.Scan(
@@ -65,6 +106,22 @@ func (q *Queries) CreateIngredient(ctx context.Context, arg CreateIngredientPara
 		&i.Sodium100g,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SaturatedFat100g,
+		&i.TransFat100g,
+		&i.Cholesterol100g,
+		&i.Sugar100g,
+		&i.Potassium100g,
+		&i.Calcium100g,
+		&i.Iron100g,
+		&i.Magnesium100g,
+		&i.Phosphorus100g,
+		&i.Zinc100g,
+		&i.VitaminA100g,
+		&i.VitaminC100g,
+		&i.VitaminD100g,
+		&i.VitaminB12100g,
+		&i.VitaminB6100g,
+		&i.Folate100g,
 	)
 	return i, err
 }
@@ -78,7 +135,7 @@ func (q *Queries) DeleteIngredient(ctx context.Context, id int64) (sql.Result, e
 }
 
 const getIngredient = `-- name: GetIngredient :one
-SELECT id, name, source, barcode, off_id, fdc_id, image_path, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, created_at, updated_at FROM ingredients WHERE id = ?
+SELECT id, name, source, barcode, off_id, fdc_id, image_path, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, created_at, updated_at, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g FROM ingredients WHERE id = ?
 `
 
 func (q *Queries) GetIngredient(ctx context.Context, id int64) (Ingredient, error) {
@@ -100,43 +157,91 @@ func (q *Queries) GetIngredient(ctx context.Context, id int64) (Ingredient, erro
 		&i.Sodium100g,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SaturatedFat100g,
+		&i.TransFat100g,
+		&i.Cholesterol100g,
+		&i.Sugar100g,
+		&i.Potassium100g,
+		&i.Calcium100g,
+		&i.Iron100g,
+		&i.Magnesium100g,
+		&i.Phosphorus100g,
+		&i.Zinc100g,
+		&i.VitaminA100g,
+		&i.VitaminC100g,
+		&i.VitaminD100g,
+		&i.VitaminB12100g,
+		&i.VitaminB6100g,
+		&i.Folate100g,
 	)
 	return i, err
 }
 
 const updateIngredient = `-- name: UpdateIngredient :one
 UPDATE ingredients SET
-    name         = ?,
-    source       = ?,
-    barcode      = ?,
-    off_id       = ?,
-    fdc_id       = ?,
-    image_path   = ?,
-    kcal_100g    = ?,
-    protein_100g = ?,
-    fat_100g     = ?,
-    carbs_100g   = ?,
-    fiber_100g   = ?,
-    sodium_100g  = ?,
-    updated_at   = datetime('now')
+    name               = ?,
+    source             = ?,
+    barcode            = ?,
+    off_id             = ?,
+    fdc_id             = ?,
+    image_path         = ?,
+    kcal_100g          = ?,
+    protein_100g       = ?,
+    fat_100g           = ?,
+    carbs_100g         = ?,
+    fiber_100g         = ?,
+    sodium_100g        = ?,
+    saturated_fat_100g = ?,
+    trans_fat_100g     = ?,
+    cholesterol_100g   = ?,
+    sugar_100g         = ?,
+    potassium_100g     = ?,
+    calcium_100g       = ?,
+    iron_100g          = ?,
+    magnesium_100g     = ?,
+    phosphorus_100g    = ?,
+    zinc_100g          = ?,
+    vitamin_a_100g     = ?,
+    vitamin_c_100g     = ?,
+    vitamin_d_100g     = ?,
+    vitamin_b12_100g   = ?,
+    vitamin_b6_100g    = ?,
+    folate_100g        = ?,
+    updated_at         = datetime('now')
 WHERE id = ?
-RETURNING id, name, source, barcode, off_id, fdc_id, image_path, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, created_at, updated_at
+RETURNING id, name, source, barcode, off_id, fdc_id, image_path, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, created_at, updated_at, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g
 `
 
 type UpdateIngredientParams struct {
-	Name        string
-	Source      string
-	Barcode     sql.NullString
-	OffID       sql.NullString
-	FdcID       sql.NullString
-	ImagePath   sql.NullString
-	Kcal100g    float64
-	Protein100g float64
-	Fat100g     float64
-	Carbs100g   float64
-	Fiber100g   float64
-	Sodium100g  float64
-	ID          int64
+	Name             string
+	Source           string
+	Barcode          sql.NullString
+	OffID            sql.NullString
+	FdcID            sql.NullString
+	ImagePath        sql.NullString
+	Kcal100g         float64
+	Protein100g      float64
+	Fat100g          float64
+	Carbs100g        float64
+	Fiber100g        float64
+	Sodium100g       float64
+	SaturatedFat100g sql.NullFloat64
+	TransFat100g     sql.NullFloat64
+	Cholesterol100g  sql.NullFloat64
+	Sugar100g        sql.NullFloat64
+	Potassium100g    sql.NullFloat64
+	Calcium100g      sql.NullFloat64
+	Iron100g         sql.NullFloat64
+	Magnesium100g    sql.NullFloat64
+	Phosphorus100g   sql.NullFloat64
+	Zinc100g         sql.NullFloat64
+	VitaminA100g     sql.NullFloat64
+	VitaminC100g     sql.NullFloat64
+	VitaminD100g     sql.NullFloat64
+	VitaminB12100g   sql.NullFloat64
+	VitaminB6100g    sql.NullFloat64
+	Folate100g       sql.NullFloat64
+	ID               int64
 }
 
 func (q *Queries) UpdateIngredient(ctx context.Context, arg UpdateIngredientParams) (Ingredient, error) {
@@ -153,6 +258,22 @@ func (q *Queries) UpdateIngredient(ctx context.Context, arg UpdateIngredientPara
 		arg.Carbs100g,
 		arg.Fiber100g,
 		arg.Sodium100g,
+		arg.SaturatedFat100g,
+		arg.TransFat100g,
+		arg.Cholesterol100g,
+		arg.Sugar100g,
+		arg.Potassium100g,
+		arg.Calcium100g,
+		arg.Iron100g,
+		arg.Magnesium100g,
+		arg.Phosphorus100g,
+		arg.Zinc100g,
+		arg.VitaminA100g,
+		arg.VitaminC100g,
+		arg.VitaminD100g,
+		arg.VitaminB12100g,
+		arg.VitaminB6100g,
+		arg.Folate100g,
 		arg.ID,
 	)
 	var i Ingredient
@@ -172,6 +293,22 @@ func (q *Queries) UpdateIngredient(ctx context.Context, arg UpdateIngredientPara
 		&i.Sodium100g,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SaturatedFat100g,
+		&i.TransFat100g,
+		&i.Cholesterol100g,
+		&i.Sugar100g,
+		&i.Potassium100g,
+		&i.Calcium100g,
+		&i.Iron100g,
+		&i.Magnesium100g,
+		&i.Phosphorus100g,
+		&i.Zinc100g,
+		&i.VitaminA100g,
+		&i.VitaminC100g,
+		&i.VitaminD100g,
+		&i.VitaminB12100g,
+		&i.VitaminB6100g,
+		&i.Folate100g,
 	)
 	return i, err
 }

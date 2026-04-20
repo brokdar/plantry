@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 
+import { MacroTriad } from "@/components/editorial/macros"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import type { Profile } from "@/lib/api/profile"
@@ -89,11 +90,15 @@ export function NutritionWeekSummary({ weekId }: NutritionWeekSummaryProps) {
             )}
           </span>
         </div>
-        <div className="flex gap-4 text-xs text-muted-foreground">
-          <span>P {data.week.protein.toFixed(0)}g</span>
-          <span>F {data.week.fat.toFixed(0)}g</span>
-          <span>C {data.week.carbs.toFixed(0)}g</span>
-        </div>
+        <MacroTriad
+          size="xs"
+          abbreviated
+          values={{
+            protein: data.week.protein,
+            carbs: data.week.carbs,
+            fat: data.week.fat,
+          }}
+        />
       </div>
     </div>
   )

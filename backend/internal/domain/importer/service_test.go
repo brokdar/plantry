@@ -70,8 +70,8 @@ func (f *fakeLLM) Stream(ctx context.Context, _ llm.Request, out chan<- llm.Even
 
 type fakeResolver struct{}
 
-func (fakeResolver) Lookup(_ context.Context, _, _, _ string, _ int) ([]ingredient.Candidate, error) {
-	return nil, nil
+func (fakeResolver) Lookup(_ context.Context, _, _, _ string, _ int) ([]ingredient.Candidate, int, error) {
+	return nil, -1, nil
 }
 
 // -- tests --

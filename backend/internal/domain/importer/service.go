@@ -24,7 +24,7 @@ type JSONLDExtractor interface {
 // Resolver resolves an ingredient name against the local catalogue and external sources.
 // Implemented by domain/ingredient.Resolver.
 type Resolver interface {
-	Lookup(ctx context.Context, barcode, query, lang string, limit int) ([]ingredient.Candidate, error)
+	Lookup(ctx context.Context, barcode, query, lang string, limit int) ([]ingredient.Candidate, int, error)
 }
 
 // Service orchestrates recipe import: fetch → JSON-LD → LLM fallback → parse lines.
@@ -95,9 +95,11 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 }
 
 // ResolveLine is a thin wrapper around ingredient.Resolver used from the
-// per-row lookup endpoint in the review step.
+// per-row lookup endpoint in the review step. The recommended-index return
+// value is not exposed to the importer review UI.
 func (s *Service) ResolveLine(ctx context.Context, query, lang string) ([]ingredient.Candidate, error) {
-	return s.resolver.Lookup(ctx, "", query, lang, 5)
+	results, _, err := s.resolver.Lookup(ctx, "", query, lang, 5)
+	return results, err
 }
 
 // FinalizeInput is what the review step submits after the user has resolved

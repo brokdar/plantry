@@ -38,18 +38,34 @@ func NewIngredientRepo(db *sql.DB) *IngredientRepo {
 
 func (r *IngredientRepo) Create(ctx context.Context, i *ingredient.Ingredient) error {
 	row, err := r.q.CreateIngredient(ctx, sqlcgen.CreateIngredientParams{
-		Name:        i.Name,
-		Source:      i.Source,
-		Barcode:     toNullString(i.Barcode),
-		OffID:       toNullString(i.OffID),
-		FdcID:       toNullString(i.FdcID),
-		ImagePath:   toNullString(i.ImagePath),
-		Kcal100g:    i.Kcal100g,
-		Protein100g: i.Protein100g,
-		Fat100g:     i.Fat100g,
-		Carbs100g:   i.Carbs100g,
-		Fiber100g:   i.Fiber100g,
-		Sodium100g:  i.Sodium100g,
+		Name:             i.Name,
+		Source:           i.Source,
+		Barcode:          toNullString(i.Barcode),
+		OffID:            toNullString(i.OffID),
+		FdcID:            toNullString(i.FdcID),
+		ImagePath:        toNullString(i.ImagePath),
+		Kcal100g:         i.Kcal100g,
+		Protein100g:      i.Protein100g,
+		Fat100g:          i.Fat100g,
+		Carbs100g:        i.Carbs100g,
+		Fiber100g:        i.Fiber100g,
+		Sodium100g:       i.Sodium100g,
+		SaturatedFat100g: toNullFloat(i.SaturatedFat100g),
+		TransFat100g:     toNullFloat(i.TransFat100g),
+		Cholesterol100g:  toNullFloat(i.Cholesterol100g),
+		Sugar100g:        toNullFloat(i.Sugar100g),
+		Potassium100g:    toNullFloat(i.Potassium100g),
+		Calcium100g:      toNullFloat(i.Calcium100g),
+		Iron100g:         toNullFloat(i.Iron100g),
+		Magnesium100g:    toNullFloat(i.Magnesium100g),
+		Phosphorus100g:   toNullFloat(i.Phosphorus100g),
+		Zinc100g:         toNullFloat(i.Zinc100g),
+		VitaminA100g:     toNullFloat(i.VitaminA100g),
+		VitaminC100g:     toNullFloat(i.VitaminC100g),
+		VitaminD100g:     toNullFloat(i.VitaminD100g),
+		VitaminB12100g:   toNullFloat(i.VitaminB12100g),
+		VitaminB6100g:    toNullFloat(i.VitaminB6100g),
+		Folate100g:       toNullFloat(i.Folate100g),
 	})
 	if err != nil {
 		if isUniqueViolation(err, "ingredients.name") {
@@ -76,19 +92,35 @@ func (r *IngredientRepo) Get(ctx context.Context, id int64) (*ingredient.Ingredi
 
 func (r *IngredientRepo) Update(ctx context.Context, i *ingredient.Ingredient) error {
 	row, err := r.q.UpdateIngredient(ctx, sqlcgen.UpdateIngredientParams{
-		ID:          i.ID,
-		Name:        i.Name,
-		Source:      i.Source,
-		Barcode:     toNullString(i.Barcode),
-		OffID:       toNullString(i.OffID),
-		FdcID:       toNullString(i.FdcID),
-		ImagePath:   toNullString(i.ImagePath),
-		Kcal100g:    i.Kcal100g,
-		Protein100g: i.Protein100g,
-		Fat100g:     i.Fat100g,
-		Carbs100g:   i.Carbs100g,
-		Fiber100g:   i.Fiber100g,
-		Sodium100g:  i.Sodium100g,
+		ID:               i.ID,
+		Name:             i.Name,
+		Source:           i.Source,
+		Barcode:          toNullString(i.Barcode),
+		OffID:            toNullString(i.OffID),
+		FdcID:            toNullString(i.FdcID),
+		ImagePath:        toNullString(i.ImagePath),
+		Kcal100g:         i.Kcal100g,
+		Protein100g:      i.Protein100g,
+		Fat100g:          i.Fat100g,
+		Carbs100g:        i.Carbs100g,
+		Fiber100g:        i.Fiber100g,
+		Sodium100g:       i.Sodium100g,
+		SaturatedFat100g: toNullFloat(i.SaturatedFat100g),
+		TransFat100g:     toNullFloat(i.TransFat100g),
+		Cholesterol100g:  toNullFloat(i.Cholesterol100g),
+		Sugar100g:        toNullFloat(i.Sugar100g),
+		Potassium100g:    toNullFloat(i.Potassium100g),
+		Calcium100g:      toNullFloat(i.Calcium100g),
+		Iron100g:         toNullFloat(i.Iron100g),
+		Magnesium100g:    toNullFloat(i.Magnesium100g),
+		Phosphorus100g:   toNullFloat(i.Phosphorus100g),
+		Zinc100g:         toNullFloat(i.Zinc100g),
+		VitaminA100g:     toNullFloat(i.VitaminA100g),
+		VitaminC100g:     toNullFloat(i.VitaminC100g),
+		VitaminD100g:     toNullFloat(i.VitaminD100g),
+		VitaminB12100g:   toNullFloat(i.VitaminB12100g),
+		VitaminB6100g:    toNullFloat(i.VitaminB6100g),
+		Folate100g:       toNullFloat(i.Folate100g),
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -173,6 +205,11 @@ func (r *IngredientRepo) List(ctx context.Context, q ingredient.ListQuery) (*ing
 			&row.FdcID, &row.ImagePath, &row.Kcal100g, &row.Protein100g,
 			&row.Fat100g, &row.Carbs100g, &row.Fiber100g, &row.Sodium100g,
 			&row.CreatedAt, &row.UpdatedAt,
+			&row.SaturatedFat100g, &row.TransFat100g, &row.Cholesterol100g, &row.Sugar100g,
+			&row.Potassium100g, &row.Calcium100g, &row.Iron100g, &row.Magnesium100g,
+			&row.Phosphorus100g, &row.Zinc100g,
+			&row.VitaminA100g, &row.VitaminC100g, &row.VitaminD100g,
+			&row.VitaminB12100g, &row.VitaminB6100g, &row.Folate100g,
 		); err != nil {
 			return nil, err
 		}
@@ -214,6 +251,11 @@ func (r *IngredientRepo) LookupForNutrition(ctx context.Context, ids []int64) (m
 			&row.FdcID, &row.ImagePath, &row.Kcal100g, &row.Protein100g,
 			&row.Fat100g, &row.Carbs100g, &row.Fiber100g, &row.Sodium100g,
 			&row.CreatedAt, &row.UpdatedAt,
+			&row.SaturatedFat100g, &row.TransFat100g, &row.Cholesterol100g, &row.Sugar100g,
+			&row.Potassium100g, &row.Calcium100g, &row.Iron100g, &row.Magnesium100g,
+			&row.Phosphorus100g, &row.Zinc100g,
+			&row.VitaminA100g, &row.VitaminC100g, &row.VitaminD100g,
+			&row.VitaminB12100g, &row.VitaminB6100g, &row.Folate100g,
 		); err != nil {
 			return nil, err
 		}
@@ -254,6 +296,22 @@ func mapToDomain(row *sqlcgen.Ingredient, i *ingredient.Ingredient) {
 	i.Carbs100g = row.Carbs100g
 	i.Fiber100g = row.Fiber100g
 	i.Sodium100g = row.Sodium100g
+	i.SaturatedFat100g = fromNullFloat(row.SaturatedFat100g)
+	i.TransFat100g = fromNullFloat(row.TransFat100g)
+	i.Cholesterol100g = fromNullFloat(row.Cholesterol100g)
+	i.Sugar100g = fromNullFloat(row.Sugar100g)
+	i.Potassium100g = fromNullFloat(row.Potassium100g)
+	i.Calcium100g = fromNullFloat(row.Calcium100g)
+	i.Iron100g = fromNullFloat(row.Iron100g)
+	i.Magnesium100g = fromNullFloat(row.Magnesium100g)
+	i.Phosphorus100g = fromNullFloat(row.Phosphorus100g)
+	i.Zinc100g = fromNullFloat(row.Zinc100g)
+	i.VitaminA100g = fromNullFloat(row.VitaminA100g)
+	i.VitaminC100g = fromNullFloat(row.VitaminC100g)
+	i.VitaminD100g = fromNullFloat(row.VitaminD100g)
+	i.VitaminB12100g = fromNullFloat(row.VitaminB12100g)
+	i.VitaminB6100g = fromNullFloat(row.VitaminB6100g)
+	i.Folate100g = fromNullFloat(row.Folate100g)
 	i.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt) //nolint:errcheck // layout is controlled by our migration
 	i.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt) //nolint:errcheck // layout is controlled by our migration
 }
@@ -270,4 +328,19 @@ func fromNullString(ns sql.NullString) *string {
 		return nil
 	}
 	return &ns.String
+}
+
+func toNullFloat(f *float64) sql.NullFloat64 {
+	if f == nil {
+		return sql.NullFloat64{}
+	}
+	return sql.NullFloat64{Float64: *f, Valid: true}
+}
+
+func fromNullFloat(nf sql.NullFloat64) *float64 {
+	if !nf.Valid {
+		return nil
+	}
+	v := nf.Float64
+	return &v
 }

@@ -1,3 +1,6 @@
+import { useTranslation } from "react-i18next"
+
+import { MacroDot } from "@/components/editorial/macros"
 import type { MacrosResponse } from "@/lib/api/weeks"
 
 interface SlotMacroDotsProps {
@@ -5,29 +8,40 @@ interface SlotMacroDotsProps {
 }
 
 export function SlotMacroDots({ macros }: SlotMacroDotsProps) {
+  const { t } = useTranslation()
   if (!macros) return null
   return (
     <div className="flex items-center justify-between gap-2 font-mono text-[10.5px] text-on-surface-variant tabular-nums">
       <span className="font-heading text-[11.5px] font-bold tracking-tight text-on-surface">
-        {Math.round(macros.kcal)} kcal
+        {Math.round(macros.kcal)} {t("macro.kcal")}
       </span>
       <span className="flex items-center gap-1.5">
-        <Dot
-          className="bg-[#c87a5a]"
-          label={`P${Math.round(macros.protein)}`}
+        <Chip
+          kind="protein"
+          value={macros.protein}
+          abbr={t("macro.protein_abbr")}
         />
-        <Dot className="bg-[#d4b066]" label={`C${Math.round(macros.carbs)}`} />
-        <Dot className="bg-[#6f8a73]" label={`F${Math.round(macros.fat)}`} />
+        <Chip kind="carbs" value={macros.carbs} abbr={t("macro.carbs_abbr")} />
+        <Chip kind="fat" value={macros.fat} abbr={t("macro.fat_abbr")} />
       </span>
     </div>
   )
 }
 
-function Dot({ className, label }: { className: string; label: string }) {
+function Chip({
+  kind,
+  value,
+  abbr,
+}: {
+  kind: "protein" | "carbs" | "fat"
+  value: number
+  abbr: string
+}) {
   return (
     <span className="flex items-center gap-1">
-      <span className={`size-1.5 rounded-full ${className}`} aria-hidden />
-      {label}
+      <MacroDot kind={kind} size="xs" />
+      {abbr}
+      {Math.round(value)}
     </span>
   )
 }

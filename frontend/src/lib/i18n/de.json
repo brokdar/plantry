@@ -301,6 +301,11 @@
     "language_english": "English",
     "language_german": "Deutsch"
   },
+  "developer_preferences": {
+    "title": "Entwickler",
+    "debug_title": "Lookup-Pipeline-Trace",
+    "debug_description": "Blendet ein detailliertes Trace-Panel unter der Zutatensuche ein — KI-Übersetzung, Laufzeiten der Quellen, Pick-Best-Begründung. Lokal gespeichert, nicht mit dem Server synchronisiert."
+  },
   "slot": {
     "title": "Mahlzeiten",
     "description": "Definiere die Mahlzeitzeiten, um die du planst.",
@@ -362,7 +367,9 @@
     "total_count_other": "{{count}} Zutaten",
     "load_more": "Mehr laden",
     "empty_title": "Noch keine Zutaten",
-    "no_results_body": "Versuche einen anderen Suchbegriff oder entferne die Filter."
+    "no_results_body": "Versuche einen anderen Suchbegriff oder entferne die Filter.",
+    "refetch": "Nährwerte aktualisieren",
+    "refetch_failed": "Aktualisierung aus der externen Quelle fehlgeschlagen."
   },
   "component": {
     "title": "Rezept-Katalog",
@@ -461,7 +468,16 @@
     "scanner_error_permission": "Kamerazugriff verweigert",
     "scanner_error_no_camera": "Keine Kamera verfügbar",
     "scanner_error_unavailable": "Barcode-Scanner wird nicht unterstützt",
-    "scanner_fallback_title": "Barcode manuell eingeben"
+    "scanner_fallback_title": "Barcode manuell eingeben",
+    "candidates_one": "{{count}} Treffer",
+    "candidates_other": "{{count}} Treffer",
+    "apply": "Diesen Treffer übernehmen",
+    "existing_warning": "Eine Zutat mit diesem Namen existiert bereits in deinem Katalog.",
+    "debug_title": "Pipeline-Trace",
+    "debug_events": "Ereignisse",
+    "debug_copy_all": "Alles kopieren",
+    "debug_copy": "Kopieren",
+    "debug_copied": "Kopiert"
   },
   "portion": {
     "title": "Portionen",
@@ -499,7 +515,40 @@
     "week_total": "Wochengesamt",
     "no_target_title": "Setze ein Tagesziel, um Fortschritt zu sehen",
     "no_target_body": "Lege Kalorien- und Makroziele in den Einstellungen fest, damit die Tagesbalken gefüllt werden.",
-    "no_target_cta": "Einstellungen öffnen"
+    "no_target_cta": "Einstellungen öffnen",
+    "detail_title": "Nährwerte für {{name}}",
+    "section_core": "Makros",
+    "section_extended": "Erweiterte Makros",
+    "section_minerals": "Mineralstoffe",
+    "section_vitamins": "Vitamine",
+    "saturated_fat": "Gesättigte Fettsäuren",
+    "trans_fat": "Transfette",
+    "cholesterol": "Cholesterin",
+    "sugar": "Zucker",
+    "potassium": "Kalium",
+    "calcium": "Calcium",
+    "iron": "Eisen",
+    "magnesium": "Magnesium",
+    "phosphorus": "Phosphor",
+    "zinc": "Zink",
+    "vitamin_a": "Vitamin A",
+    "vitamin_c": "Vitamin C",
+    "vitamin_d": "Vitamin D",
+    "vitamin_b12": "Vitamin B12",
+    "vitamin_b6": "Vitamin B6",
+    "folate": "Folsäure"
+  },
+  "macro": {
+    "protein": "Eiweiß",
+    "carbs": "Kohlenhydrate",
+    "fat": "Fett",
+    "fiber": "Ballaststoffe",
+    "protein_abbr": "E",
+    "carbs_abbr": "K",
+    "fat_abbr": "F",
+    "fiber_abbr": "B",
+    "kcal": "kcal",
+    "distribution": "Makro-Aufteilung"
   },
   "profile": {
     "title": "Profil & Ziele",

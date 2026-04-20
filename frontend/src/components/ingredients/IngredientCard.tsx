@@ -5,8 +5,11 @@ import { MoreVertical, PencilLine } from "lucide-react"
 import { CardImageBadge } from "@/components/editorial/CardImageBadge"
 import { EditorialCard } from "@/components/editorial/EditorialCard"
 import { FoodPlaceholder } from "@/components/editorial/FoodPlaceholder"
-import { MacroBar } from "@/components/editorial/MacroBar"
-import { Badge } from "@/components/ui/badge"
+import {
+  MacroDistributionBar,
+  MacroKcalHero,
+  MacroTriad,
+} from "@/components/editorial/macros"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -28,11 +31,6 @@ type IngredientCardProps = {
   onDelete: (id: number) => void
 }
 
-function fmt(value: number | null | undefined, suffix = ""): string {
-  if (value == null) return "—"
-  return `${Math.round(value * 10) / 10}${suffix}`
-}
-
 export function IngredientCard({ ingredient, onDelete }: IngredientCardProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -40,11 +38,6 @@ export function IngredientCard({ ingredient, onDelete }: IngredientCardProps) {
 
   const sourceDot = SOURCE_DOT[source] ?? "muted"
   const sourceLabel = t(`ingredient.source_${source}`, { defaultValue: source })
-
-  const proteinKcal = (ingredient.protein_100g ?? 0) * 4
-  const carbsKcal = (ingredient.carbs_100g ?? 0) * 4
-  const fatKcal = (ingredient.fat_100g ?? 0) * 9
-  const totalKcal = Math.max(proteinKcal + carbsKcal + fatKcal, 1)
 
   return (
     <div className="group relative" data-testid={`ingredient-card-${id}`}>
@@ -87,44 +80,32 @@ export function IngredientCard({ ingredient, onDelete }: IngredientCardProps) {
           <EditorialCard.Title className="line-clamp-2">
             {name}
           </EditorialCard.Title>
-          <EditorialCard.Meta className="mt-2 flex-wrap gap-x-3 gap-y-1.5">
-            <Badge variant="secondary">
-              {fmt(ingredient.kcal_100g, " kcal")}
-            </Badge>
-            <span>
-              {t("ingredient.protein").charAt(0)}{" "}
-              {fmt(ingredient.protein_100g, "g")}
-            </span>
-            <span>
-              {t("ingredient.fat").charAt(0)} {fmt(ingredient.fat_100g, "g")}
-            </span>
-            <span>
-              {t("ingredient.carbs").charAt(0)}{" "}
-              {fmt(ingredient.carbs_100g, "g")}
-            </span>
-          </EditorialCard.Meta>
-          <MacroBar
+          <div className="mt-2 flex items-baseline justify-between gap-2">
+            <MacroKcalHero
+              kcal={ingredient.kcal_100g}
+              size="sm"
+              hint={t("ingredient.per_100g")}
+            />
+          </div>
+          <MacroDistributionBar
             className="mt-3"
             thickness="sm"
-            track="surface-container-highest"
-            segments={[
-              {
-                value: proteinKcal,
-                color: "primary",
-                label: t("ingredient.protein"),
-              },
-              {
-                value: carbsKcal,
-                color: "tertiary",
-                label: t("ingredient.carbs"),
-              },
-              {
-                value: fatKcal,
-                color: "secondary",
-                label: t("ingredient.fat"),
-              },
-            ]}
-            max={totalKcal}
+            values={{
+              protein: ingredient.protein_100g,
+              carbs: ingredient.carbs_100g,
+              fat: ingredient.fat_100g,
+            }}
+          />
+          <MacroTriad
+            className="mt-3"
+            size="xs"
+            layout="grid"
+            abbreviated
+            values={{
+              protein: ingredient.protein_100g,
+              carbs: ingredient.carbs_100g,
+              fat: ingredient.fat_100g,
+            }}
           />
         </EditorialCard.Body>
       </EditorialCard>
