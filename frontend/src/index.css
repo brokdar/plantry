@@ -151,6 +151,11 @@
 
   --radius: 0.625rem;
 
+  /* Mobile bottom-nav reserve. Used for main-content padding + StickyActionBar
+     offset so the tab bar never overlays form content on <md screens. */
+  --tab-bar-h: 4rem;
+  --tab-bar-inset: calc(var(--tab-bar-h) + env(safe-area-inset-bottom));
+
   --sidebar: var(--surface-container-low);
   --sidebar-foreground: var(--on-surface);
   --sidebar-primary: #4a654d;

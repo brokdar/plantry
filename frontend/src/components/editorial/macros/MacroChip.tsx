@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 
+import { AnimatedNumber } from "@/components/editorial/AnimatedNumber"
 import { cn } from "@/lib/utils"
 import { MacroDot } from "./MacroDot"
 import { formatGrams, type MacroKind } from "./tokens"
@@ -96,7 +97,11 @@ export function MacroChip({
           {label}
         </span>
         <p className={cn("text-on-surface tabular-nums", typo.value)}>
-          {formatGrams(grams)}
+          {grams == null ? (
+            "—"
+          ) : (
+            <AnimatedNumber value={grams} format={(n) => formatGrams(n)} />
+          )}
           <span className="ml-1 text-xs font-medium text-on-surface-variant">
             g
           </span>
@@ -122,7 +127,11 @@ export function MacroChip({
       <MacroDot kind={kind} size={typo.dot} />
       <span className={cn("text-on-surface-variant", typo.label)}>{label}</span>
       <span className={cn("text-on-surface", typo.value)}>
-        {formatGrams(grams)}
+        {grams == null ? (
+          "—"
+        ) : (
+          <AnimatedNumber value={grams} format={(n) => formatGrams(n)} />
+        )}
         <span className="ml-0.5 font-normal text-on-surface-variant">g</span>
       </span>
     </span>

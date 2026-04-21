@@ -20,8 +20,9 @@ export function StickyActionBar({
   return (
     <div
       className={cn(
-        "sticky bottom-20 z-20 -mx-4 mt-4 border-t border-outline-variant/30 bg-surface-container-lowest/95 px-4 py-3 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.18)] backdrop-blur-md md:bottom-0 md:-mx-8 md:px-8",
-        "[padding-bottom:max(0.75rem,env(safe-area-inset-bottom))]",
+        "sticky z-30 -mx-4 mt-4 border-t border-outline-variant/30 bg-surface-container-lowest px-4 py-3 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.22)] md:-mx-8 md:px-8",
+        "bottom-[var(--tab-bar-inset)] md:bottom-0",
+        "[padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] md:[padding-bottom:0.75rem]",
         className
       )}
       data-testid={testId ?? "sticky-action-bar"}

@@ -377,7 +377,13 @@
     "lookup_primary_hint": "Scannen oder suchen — wir füllen die Nährwerte für dich aus. Lass die Nährwerte leer, wenn du nur den Namen brauchst.",
     "staged_portions_hint": "Lege fest, wie diese Zutat gemessen wird (z. B. 1 Scheibe = 25 g). Portionen werden beim Anlegen gespeichert.",
     "nutrition_preview_empty": "Trage Nährwerte ein — hier siehst du die Live-Vorschau.",
-    "breadcrumb_back": "Zurück zu Zutaten"
+    "breadcrumb_back": "Zurück zu Zutaten",
+    "quick_create": {
+      "title": "Zutat schnell anlegen",
+      "description": "Lege hier inline eine neue Zutat an — Nährwerte und Foto kannst du später auf der Zutaten-Seite verfeinern.",
+      "macros_hint": "Optional — bei Unbekanntem auf 0 lassen.",
+      "save": "Anlegen und übernehmen"
+    }
   },
   "component": {
     "title": "Rezept-Katalog",
@@ -389,6 +395,14 @@
     "edit_subtitle": "Justiere das Wesen deines Gerichts. Präzise Mengen sichern die redaktionelle Qualität deines Küchen-Sanktuariums.",
     "new_title": "Neues Rezept",
     "new_subtitle": "Jede Kreation beginnt mit einem ersten Entwurf. Skizziere jetzt die Grundlagen — verfeinere später.",
+    "new_path_chooser": {
+      "aria_label": "Wähle, wie du dieses Rezept anlegst",
+      "import_title": "Von URL importieren",
+      "import_description": "Link einfügen — KI extrahiert Zutaten und Schritte für dich.",
+      "template_title": "Aus Vorlage starten",
+      "template_description": "Fertige Presets durchstöbern und nach deinem Geschmack anpassen.",
+      "or_manual": "oder unten manuell eingeben"
+    },
     "view": "Rezept-Details",
     "import_from_url": "Von URL importieren",
     "browse_templates": "Vorlagen durchsuchen",
@@ -443,9 +457,25 @@
       "exact": "Exakt",
       "approx": "~ Ca.",
       "manual": "Manuell",
-      "required": "Gramm nötig"
+      "required": "Gramm nötig",
+      "tooltip": {
+        "direct": "Exakt — die Einheit ist bereits Gramm oder Milliliter, keine Umrechnung nötig.",
+        "portion": "Exakt — über eine gespeicherte Portion zugeordnet (z. B. 1 Scheibe = 25 g).",
+        "default": "Exakt — aufgelöst über einen hinterlegten Standard für diese Einheit.",
+        "fallback": "Ungefähr — generischer Fallback; eine gespeicherte Portion für diese Einheit erhöht die Genauigkeit.",
+        "manual": "Manuell gesetzt — du hast diese Gramm selbst eingetragen; keine Umrechnung angewendet.",
+        "unresolved": "Gramm nötig — für diese Zähl-Einheit existiert keine Portion. Gramm manuell eintragen oder Portion anlegen."
+      }
     },
     "instructions_empty": "Noch keine Schritte — füge den ersten hinzu, um die Zubereitung festzuhalten.",
+    "image_upload_failed": "Rezept gespeichert, aber das Bild konnte nicht hochgeladen werden. Erneut versuchen?",
+    "image_upload_retry": "Bild erneut hochladen",
+    "image_upload_skip": "Ohne Bild speichern",
+    "portion_hint_proactive": "Diese Zutat nutzt eine Zähl-Einheit ohne gespeicherte Portion — lege eine Portion an, damit Gramm automatisch aufgelöst werden.",
+    "portion_hint_add": "Portion anlegen",
+    "breadcrumb_back": "Zurück zu Rezepten",
+    "notes_toggle_add": "Notizen hinzufügen",
+    "notes_toggle_hide": "Notizen ausblenden",
     "layout_label": "Darstellung",
     "layout_grid": "Kachelansicht",
     "layout_list": "Listenansicht",
@@ -774,6 +804,52 @@
       "empty": "Noch keine Unterhaltungen.",
       "delete": "Unterhaltung löschen",
       "select": "Unterhaltung öffnen"
+    }
+  },
+  "validation": {
+    "required": "Dieses Feld ist erforderlich",
+    "invalid_type": "Ungültiger Wert — erwartet {{expected}}",
+    "invalid_value": "Bitte eine gültige Option wählen",
+    "not_multiple_of": "Muss ein Vielfaches von {{divisor}} sein",
+    "unrecognized_keys": "Unerwartete Felder",
+    "origin": {
+      "string": "Text",
+      "number": "Zahl",
+      "bigint": "Zahl",
+      "array": "Liste",
+      "set": "Menge",
+      "date": "Datum",
+      "file": "Datei"
+    },
+    "too_small": {
+      "default": "Mindestens {{minimum}}",
+      "string": "Mindestens {{minimum}} Zeichen",
+      "number": "Mindestens {{minimum}}",
+      "bigint": "Mindestens {{minimum}}",
+      "array": "Mindestens {{minimum}} Eintrag hinzufügen",
+      "set": "Mindestens {{minimum}} Eintrag hinzufügen",
+      "date": "Muss am oder nach {{minimum}} liegen",
+      "file": "Datei muss mindestens {{minimum}} Bytes groß sein"
+    },
+    "too_big": {
+      "default": "Höchstens {{maximum}}",
+      "string": "Höchstens {{maximum}} Zeichen",
+      "number": "Höchstens {{maximum}}",
+      "bigint": "Höchstens {{maximum}}",
+      "array": "Höchstens {{maximum}} Einträge",
+      "set": "Höchstens {{maximum}} Einträge",
+      "date": "Muss am oder vor {{maximum}} liegen",
+      "file": "Datei darf höchstens {{maximum}} Bytes groß sein"
+    },
+    "invalid_format": {
+      "default": "Ungültig: {{format}}",
+      "email": "Ungültige E-Mail-Adresse",
+      "url": "Ungültige URL",
+      "uuid": "Ungültige UUID",
+      "regex": "Ungültiges Format",
+      "datetime": "Ungültiges Datum/Uhrzeit",
+      "ipv4": "Ungültige IPv4-Adresse",
+      "ipv6": "Ungültige IPv6-Adresse"
     }
   }
 }

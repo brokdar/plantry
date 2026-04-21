@@ -19,6 +19,7 @@ import {
   useUploadImage,
 } from "@/lib/queries/images"
 import { toastError } from "@/lib/toast"
+import { cn } from "@/lib/utils"
 
 import { ImageCropperDialog } from "./ImageCropperDialog"
 
@@ -51,6 +52,7 @@ export function ImageField(props: ImageFieldProps) {
 
   const [cropSrc, setCropSrc] = useState<string | null>(null)
   const [urlInput, setUrlInput] = useState("")
+  const [isDragActive, setIsDragActive] = useState(false)
   // Cache-bust the preview whenever we write a new image for the same path.
   // Seeded lazily so initial render stays pure; bumped on mutate success.
   const [imgVersion, setImgVersion] = useState(0)
@@ -138,6 +140,27 @@ export function ImageField(props: ImageFieldProps) {
     if (file) void startCropFlow(file)
   }
 
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
+    if (!e.dataTransfer?.types?.includes("Files")) return
+    e.preventDefault()
+    setIsDragActive(true)
+  }
+
+  function handleDragLeave(e: React.DragEvent<HTMLDivElement>) {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+    setIsDragActive(false)
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    setIsDragActive(false)
+    const file = Array.from(e.dataTransfer?.files ?? []).find((f) =>
+      f.type.startsWith("image/")
+    )
+    if (!file) return
+    e.preventDefault()
+    void startCropFlow(file)
+  }
+
   async function handleFetchUrl() {
     const url = urlInput.trim()
     if (!url) return
@@ -203,7 +226,18 @@ export function ImageField(props: ImageFieldProps) {
     fetchUrlMutation.isPending
 
   return (
-    <div ref={rootRef} className="space-y-3" tabIndex={-1}>
+    <div
+      ref={rootRef}
+      className={cn(
+        "relative space-y-3 rounded-lg transition-colors",
+        isDragActive &&
+          "bg-primary/5 outline-2 outline-offset-4 outline-primary/60 outline-dashed"
+      )}
+      tabIndex={-1}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {hasImage && (
         <div
           className="w-64 overflow-hidden rounded-md bg-surface-container-high"

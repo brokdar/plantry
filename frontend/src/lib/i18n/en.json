@@ -377,7 +377,13 @@
     "lookup_primary_hint": "Scan or search — we'll fill in the nutrition for you. Skip straight to Save if all you need is the name.",
     "staged_portions_hint": "Define how this ingredient is measured (e.g. 1 slice = 25 g). Portions are saved when you create the ingredient.",
     "nutrition_preview_empty": "Start with macros — your live preview will appear here.",
-    "breadcrumb_back": "Back to ingredients"
+    "breadcrumb_back": "Back to ingredients",
+    "quick_create": {
+      "title": "Quick-create ingredient",
+      "description": "Add a new pantry item inline — you can refine nutrition and add a photo later on the ingredient page.",
+      "macros_hint": "Optional — leave at 0 if unknown.",
+      "save": "Create and use"
+    }
   },
   "component": {
     "title": "Recipe Catalog",
@@ -389,6 +395,14 @@
     "edit_subtitle": "Adjust the essence of your dish. Precise measurements ensure the editorial quality of your kitchen sanctuary.",
     "new_title": "New Recipe",
     "new_subtitle": "Every creation starts with a first draft. Sketch the essentials now — refine later.",
+    "new_path_chooser": {
+      "aria_label": "Choose how to create this recipe",
+      "import_title": "Import from URL",
+      "import_description": "Paste a recipe link — AI extracts the ingredients and steps for you.",
+      "template_title": "Start from a template",
+      "template_description": "Browse ready-made presets and adapt them to your taste.",
+      "or_manual": "or enter manually below"
+    },
     "view": "Recipe Details",
     "import_from_url": "Import from URL",
     "browse_templates": "Browse Templates",
@@ -444,9 +458,25 @@
       "exact": "Exact",
       "approx": "~ Approx",
       "manual": "Manual",
-      "required": "Grams required"
+      "required": "Grams required",
+      "tooltip": {
+        "direct": "Exact — the unit is already grams or milliliters, no conversion needed.",
+        "portion": "Exact — mapped from a saved portion (e.g. 1 slice = 25 g) for this ingredient.",
+        "default": "Exact — resolved via a built-in default for this unit.",
+        "fallback": "Approximate — using a generic fallback; saving a portion for this unit improves accuracy.",
+        "manual": "Manual override — you entered these grams yourself; no conversion applied.",
+        "unresolved": "Grams required — this count unit has no portion mapping. Enter grams manually or add a portion."
+      }
     },
     "instructions_empty": "No steps yet — add the first one to capture the method.",
+    "image_upload_failed": "Recipe saved, but the image didn't upload. Retry?",
+    "image_upload_retry": "Retry upload",
+    "image_upload_skip": "Save without image",
+    "portion_hint_proactive": "This ingredient uses a count unit but has no saved portion — add one so grams resolve automatically.",
+    "portion_hint_add": "Add portion",
+    "breadcrumb_back": "Back to recipes",
+    "notes_toggle_add": "Add notes",
+    "notes_toggle_hide": "Hide notes",
     "layout_label": "Layout",
     "layout_grid": "Grid view",
     "layout_list": "List view",
@@ -775,6 +805,52 @@
       "empty": "No conversations yet.",
       "delete": "Delete conversation",
       "select": "Open conversation"
+    }
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalid_type": "Invalid value — expected {{expected}}",
+    "invalid_value": "Please choose a valid option",
+    "not_multiple_of": "Must be a multiple of {{divisor}}",
+    "unrecognized_keys": "Unexpected fields",
+    "origin": {
+      "string": "text",
+      "number": "number",
+      "bigint": "number",
+      "array": "list",
+      "set": "set",
+      "date": "date",
+      "file": "file"
+    },
+    "too_small": {
+      "default": "Must be at least {{minimum}}",
+      "string": "Must be at least {{minimum}} characters",
+      "number": "Must be at least {{minimum}}",
+      "bigint": "Must be at least {{minimum}}",
+      "array": "Add at least {{minimum}} item",
+      "set": "Add at least {{minimum}} item",
+      "date": "Must be on or after {{minimum}}",
+      "file": "File must be at least {{minimum}} bytes"
+    },
+    "too_big": {
+      "default": "Must be at most {{maximum}}",
+      "string": "Must be at most {{maximum}} characters",
+      "number": "Must be at most {{maximum}}",
+      "bigint": "Must be at most {{maximum}}",
+      "array": "Keep to at most {{maximum}} items",
+      "set": "Keep to at most {{maximum}} items",
+      "date": "Must be on or before {{maximum}}",
+      "file": "File must be at most {{maximum}} bytes"
+    },
+    "invalid_format": {
+      "default": "Invalid {{format}}",
+      "email": "Invalid email address",
+      "url": "Invalid URL",
+      "uuid": "Invalid UUID",
+      "regex": "Invalid format",
+      "datetime": "Invalid date/time",
+      "ipv4": "Invalid IPv4 address",
+      "ipv6": "Invalid IPv6 address"
     }
   }
 }

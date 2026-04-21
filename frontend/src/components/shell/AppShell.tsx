@@ -47,7 +47,7 @@ export function AppShell({ children }: AppShellProps) {
         {t("common.skip_to_content")}
       </a>
       <SideNav collapsed={collapsed} onToggle={handleToggle} />
-      <div className="flex min-w-0 flex-1 flex-col pb-24 md:pb-0">
+      <div className="flex min-w-0 flex-1 flex-col pb-[var(--tab-bar-inset)] md:pb-0">
         <TopBar />
         <main id="main" className="flex-1">
           {children}

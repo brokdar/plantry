@@ -1,7 +1,6 @@
 import { useState, useDeferredValue } from "react"
 import { useTranslation } from "react-i18next"
 import { Check, ChevronsUpDown, Plus, Search } from "lucide-react"
-import { Link } from "@tanstack/react-router"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useIngredients } from "@/lib/queries/ingredients"
 import { cn } from "@/lib/utils"
 import type { Ingredient } from "@/lib/api/ingredients"
+
+import { QuickCreateIngredientDialog } from "./QuickCreateIngredientDialog"
 
 type IngredientComboboxProps = {
   value: number
@@ -33,6 +34,7 @@ export function IngredientCombobox({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
+  const [createOpen, setCreateOpen] = useState(false)
   const deferredSearch = useDeferredValue(search)
 
   const { data, isLoading } = useIngredients({
@@ -141,22 +143,30 @@ export function IngredientCombobox({
         </div>
         <div className="border-t border-outline-variant/20 px-1.5 py-1.5">
           <Button
-            asChild
+            type="button"
             variant="ghost"
             size="sm"
             className="w-full justify-start"
+            onClick={() => {
+              setOpen(false)
+              setCreateOpen(true)
+            }}
+            data-testid={testId ? `${testId}-create` : undefined}
           >
-            <Link
-              to="/ingredients/new"
-              target="_blank"
-              data-testid={testId ? `${testId}-create` : undefined}
-            >
-              <Plus className="mr-1 size-4" />
-              {t("ingredient.create")}
-            </Link>
+            <Plus className="mr-1 size-4" />
+            {t("ingredient.create")}
           </Button>
         </div>
       </PopoverContent>
+      <QuickCreateIngredientDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        initialName={search.trim()}
+        onCreated={(ingredient) => {
+          onSelect(ingredient)
+          setSearch("")
+        }}
+      />
     </Popover>
   )
 }

@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import {
   useForm,
   useFieldArray,
   useWatch,
   type Resolver,
-  type UseFormReturn,
 } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTranslation } from "react-i18next"
@@ -51,8 +50,6 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 
-import { IngredientCombobox } from "./IngredientCombobox"
-import { UnitSelect } from "@/components/ingredients/UnitSelect"
 import { cn } from "@/lib/utils"
 
 import {
@@ -61,24 +58,19 @@ import {
   type ComponentFormValues,
 } from "@/lib/schemas/component"
 import {
+  useComponents,
   useCreateComponent,
   useUpdateComponent,
   useDeleteComponent,
   useCreateVariant,
   useVariants,
 } from "@/lib/queries/components"
-import { useIngredient } from "@/lib/queries/ingredients"
-import { usePortions, useUpsertPortion } from "@/lib/queries/portions"
 import { fromIngredients, type IngredientInput } from "@/lib/domain/nutrition"
-import {
-  isCountUnit,
-  normalizeUnit,
-  resolveGrams,
-  type GramsSource,
-} from "@/lib/domain/units"
+import { isCountUnit, normalizeUnit } from "@/lib/domain/units"
 import type { Component } from "@/lib/api/components"
-import type { Ingredient } from "@/lib/api/ingredients"
 import { ApiError } from "@/lib/api/client"
+
+import { IngredientRow } from "./IngredientRow"
 
 interface ComponentEditorProps {
   component?: Component
@@ -154,6 +146,13 @@ export function ComponentEditor({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [stagedImage, setStagedImage] = useState<Blob | null>(null)
+  const [pendingImage, setPendingImage] = useState<{
+    componentId: number
+    blob: Blob
+  } | null>(null)
+  const [notesOpen, setNotesOpen] = useState(
+    !!(component?.notes && component.notes.length > 0)
+  )
 
   const watchedIngredients = useWatch({
     control: form.control,
@@ -221,10 +220,13 @@ export function ComponentEditor({
               id: created.id,
               file: stagedImage,
             })
+            setStagedImage(null)
           } catch (err) {
+            setPendingImage({ componentId: created.id, blob: stagedImage })
+            setStagedImage(null)
             toastError(err, t)
+            return
           }
-          setStagedImage(null)
         }
       }
       onSuccess?.()
@@ -233,6 +235,26 @@ export function ComponentEditor({
         form.setError("root", { message: t(err.messageKey) })
       }
     }
+  }
+
+  async function retryPendingImage() {
+    if (!pendingImage) return
+    try {
+      await uploadMutation.mutateAsync({
+        entityType: "components",
+        id: pendingImage.componentId,
+        file: pendingImage.blob,
+      })
+      setPendingImage(null)
+      onSuccess?.()
+    } catch (err) {
+      toastError(err, t)
+    }
+  }
+
+  function skipPendingImage() {
+    setPendingImage(null)
+    onSuccess?.()
   }
 
   function confirmDelete() {
@@ -253,8 +275,8 @@ export function ComponentEditor({
   const [tagInput, setTagInput] = useState("")
   const watchedTags = form.watch("tags")
 
-  function addTag() {
-    const tag = tagInput.trim()
+  function addTag(explicit?: string) {
+    const tag = (explicit ?? tagInput).trim()
     if (tag && !watchedTags.includes(tag)) {
       form.setValue("tags", [...watchedTags, tag])
     }
@@ -269,10 +291,41 @@ export function ComponentEditor({
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending
-  const perPortionMacros = computePerPortionMacros(
-    watchedIngredients,
-    watchedPortions
+  const perPortionMacros = useMemo(
+    () => computePerPortionMacros(watchedIngredients, watchedPortions),
+    [watchedIngredients, watchedPortions]
   )
+
+  const handleRemoveIngredient = useCallback(
+    (index: number) => {
+      removeIngredient(index)
+    },
+    [removeIngredient]
+  )
+
+  // Tag autocomplete: derive the distinct set of tags already used across the
+  // catalog. Self-hosted single-user deploy → aggregating client-side from the
+  // existing list query is fine; avoids a dedicated backend endpoint.
+  const { data: catalogData } = useComponents({ limit: 500 })
+  const existingTagList = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of catalogData?.items ?? []) {
+      for (const tag of c.tags ?? []) set.add(tag)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [catalogData?.items])
+  const tagSuggestions = useMemo(() => {
+    const q = tagInput.trim().toLowerCase()
+    if (!q) return []
+    return existingTagList
+      .filter(
+        (tag) =>
+          tag.toLowerCase().includes(q) &&
+          !watchedTags.includes(tag) &&
+          tag.toLowerCase() !== q
+      )
+      .slice(0, 6)
+  }, [tagInput, existingTagList, watchedTags])
 
   return (
     <Form {...form}>
@@ -281,6 +334,40 @@ export function ComponentEditor({
           <p className="text-sm text-destructive">
             {form.formState.errors.root.message}
           </p>
+        )}
+
+        {pendingImage && (
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+            data-testid="pending-image-banner"
+            role="alert"
+          >
+            <p className="flex-1">{t("component.image_upload_failed")}</p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={skipPendingImage}
+                disabled={uploadMutation.isPending}
+              >
+                {t("component.image_upload_skip")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={retryPendingImage}
+                disabled={uploadMutation.isPending}
+                data-testid="pending-image-retry"
+              >
+                {uploadMutation.isPending && (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                )}
+                {t("component.image_upload_retry")}
+              </Button>
+            </div>
+          </div>
         )}
 
         {isEdit && component && (
@@ -427,27 +514,48 @@ export function ComponentEditor({
                   ))}
                 </div>
               )}
-              <div className="flex gap-2">
-                <Input
-                  placeholder={t("component.tag_placeholder")}
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
-                      addTag()
-                    }
-                  }}
-                  className="max-w-xs"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addTag}
-                >
-                  {t("component.add_tag")}
-                </Button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder={t("component.tag_placeholder")}
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        addTag()
+                      }
+                    }}
+                    className="max-w-xs"
+                    data-testid="tag-input"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addTag()}
+                  >
+                    {t("component.add_tag")}
+                  </Button>
+                </div>
+                {tagSuggestions.length > 0 && (
+                  <div
+                    className="flex flex-wrap gap-1.5"
+                    data-testid="tag-suggestions"
+                  >
+                    {tagSuggestions.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => addTag(tag)}
+                        className="rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3 py-1 text-xs text-on-surface-variant transition-colors hover:border-primary/40 hover:bg-primary-fixed/30 hover:text-on-primary-fixed"
+                        data-testid={`tag-suggestion-${tag}`}
+                      >
+                        + {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </SectionCard>
 
@@ -472,9 +580,20 @@ export function ComponentEditor({
               }
             >
               {instructionFields.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-outline-variant/40 px-6 py-10 text-center text-sm text-on-surface-variant">
-                  {t("component.instructions_empty")}
-                </p>
+                <div className="space-y-2">
+                  <p
+                    className={cn(
+                      "rounded-xl border border-dashed px-6 py-10 text-center text-sm",
+                      form.formState.errors.instructions
+                        ? "border-destructive/50 bg-destructive/5 text-destructive"
+                        : "border-outline-variant/40 text-on-surface-variant"
+                    )}
+                  >
+                    {form.formState.errors.instructions?.root?.message ??
+                      form.formState.errors.instructions?.message ??
+                      t("component.instructions_empty")}
+                  </p>
+                </div>
               ) : (
                 <ol className="space-y-3">
                   {instructionFields.map((field, index) => (
@@ -541,9 +660,20 @@ export function ComponentEditor({
               }
             >
               {ingredientFields.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-outline-variant/40 px-6 py-10 text-center text-sm text-on-surface-variant">
-                  {t("component.ingredients_empty")}
-                </p>
+                <div className="space-y-2">
+                  <p
+                    className={cn(
+                      "rounded-xl border border-dashed px-6 py-10 text-center text-sm",
+                      form.formState.errors.ingredients
+                        ? "border-destructive/50 bg-destructive/5 text-destructive"
+                        : "border-outline-variant/40 text-on-surface-variant"
+                    )}
+                  >
+                    {form.formState.errors.ingredients?.root?.message ??
+                      form.formState.errors.ingredients?.message ??
+                      t("component.ingredients_empty")}
+                  </p>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {ingredientFields.map((field, index) => (
@@ -551,33 +681,61 @@ export function ComponentEditor({
                       key={field.id}
                       index={index}
                       form={form}
-                      onRemove={() => removeIngredient(index)}
+                      onRemove={handleRemoveIngredient}
                     />
                   ))}
                 </div>
               )}
             </SectionCard>
 
-            <SectionCard title={t("component.notes")}>
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Textarea
-                        placeholder={t("component.notes_placeholder")}
-                        rows={4}
-                        {...field}
-                        value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value || null)}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </SectionCard>
+            {notesOpen ? (
+              <SectionCard
+                title={t("component.notes")}
+                actions={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setNotesOpen(false)}
+                    data-testid="notes-toggle-hide"
+                  >
+                    {t("component.notes_toggle_hide")}
+                  </Button>
+                }
+              >
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Textarea
+                          placeholder={t("component.notes_placeholder")}
+                          rows={4}
+                          autoFocus
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) =>
+                            field.onChange(e.target.value || null)
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SectionCard>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setNotesOpen(true)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-outline-variant/40 bg-surface-container-lowest/30 px-6 py-4 text-sm text-on-surface-variant transition-colors hover:border-primary/40 hover:text-on-surface"
+                data-testid="notes-toggle-add"
+              >
+                <Plus className="size-4" aria-hidden />
+                {t("component.notes_toggle_add")}
+              </button>
+            )}
           </div>
 
           {/* Right column */}
@@ -764,306 +922,4 @@ function computePerPortionMacros(
     fiber: total.fiber / portions,
     sodium: total.sodium / portions,
   }
-}
-
-function IngredientRow({
-  index,
-  form,
-  onRemove,
-}: {
-  index: number
-  form: UseFormReturn<ComponentFormValues>
-  onRemove: () => void
-}) {
-  const { t } = useTranslation()
-
-  const ingredientId = form.watch(`ingredients.${index}.ingredient_id`)
-  const ingredientName = form.watch(`ingredients.${index}.ingredient_name`)
-  const unit = form.watch(`ingredients.${index}.unit`)
-  const amount = Number(form.watch(`ingredients.${index}.amount`)) || 0
-  const currentGrams = Number(form.watch(`ingredients.${index}.grams`)) || 0
-
-  const { data: portions } = usePortions(ingredientId)
-  const { data: ingredientDetail } = useIngredient(ingredientId)
-  const upsertPortion = useUpsertPortion()
-
-  const [addPortionOpen, setAddPortionOpen] = useState(false)
-  const [addPortionGrams, setAddPortionGrams] = useState("")
-
-  const resolved = resolveGrams(amount, unit, portions ?? [], currentGrams)
-
-  // Whenever amount/unit/portions change and the resolution is auto (not
-  // "manual"), write the computed grams back into the form. We avoid writing
-  // when source is "manual" or "unresolved" so the user can override or keep
-  // typing without losing their value.
-  useEffect(() => {
-    if (!ingredientId) return
-    if (resolved.source === "manual" || resolved.source === "unresolved") return
-    if (Math.abs(resolved.grams - currentGrams) < 0.001) return
-    form.setValue(`ingredients.${index}.grams`, resolved.grams)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolved.grams, resolved.source, ingredientId])
-
-  useEffect(() => {
-    if (!ingredientDetail) return
-    if ((form.getValues(`ingredients.${index}.kcal_100g`) ?? 0) > 0) return
-    form.setValue(`ingredients.${index}.kcal_100g`, ingredientDetail.kcal_100g)
-    form.setValue(
-      `ingredients.${index}.protein_100g`,
-      ingredientDetail.protein_100g
-    )
-    form.setValue(`ingredients.${index}.fat_100g`, ingredientDetail.fat_100g)
-    form.setValue(
-      `ingredients.${index}.carbs_100g`,
-      ingredientDetail.carbs_100g
-    )
-    form.setValue(
-      `ingredients.${index}.fiber_100g`,
-      ingredientDetail.fiber_100g
-    )
-    form.setValue(
-      `ingredients.${index}.sodium_100g`,
-      ingredientDetail.sodium_100g
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ingredientDetail])
-
-  function selectIngredient(ing: Ingredient) {
-    form.setValue(`ingredients.${index}.ingredient_id`, ing.id)
-    form.setValue(`ingredients.${index}.ingredient_name`, ing.name)
-    form.setValue(`ingredients.${index}.kcal_100g`, ing.kcal_100g)
-    form.setValue(`ingredients.${index}.protein_100g`, ing.protein_100g)
-    form.setValue(`ingredients.${index}.fat_100g`, ing.fat_100g)
-    form.setValue(`ingredients.${index}.carbs_100g`, ing.carbs_100g)
-    form.setValue(`ingredients.${index}.fiber_100g`, ing.fiber_100g)
-    form.setValue(`ingredients.${index}.sodium_100g`, ing.sodium_100g)
-  }
-
-  function handleUnitChange(newUnit: string) {
-    const canonical = normalizeUnit(newUnit)
-    form.setValue(`ingredients.${index}.unit`, canonical)
-    // Clear grams so the next resolve pass recomputes from scratch (user's
-    // previous manual override no longer applies to the new unit).
-    form.setValue(`ingredients.${index}.grams`, 0)
-  }
-
-  const needsManualGrams =
-    resolved.source === "unresolved" || resolved.source === "manual"
-  const gramsEditable = needsManualGrams
-  // Only surface the CTA when there is no conversion yet for this unit —
-  // once a portion or universal default kicks in, the CTA is noise.
-  const canAddPortion =
-    ingredientId > 0 &&
-    !!resolved.unit &&
-    isCountUnit(resolved.unit) &&
-    (resolved.source === "unresolved" || resolved.source === "manual")
-
-  async function saveInlinePortion() {
-    const g = Number(addPortionGrams)
-    if (!Number.isFinite(g) || g <= 0) return
-    await upsertPortion.mutateAsync({
-      ingredientId,
-      data: { unit: resolved.unit, grams: g },
-    })
-    // Clear any manual grams override so the new portion takes over.
-    form.setValue(`ingredients.${index}.grams`, 0)
-    setAddPortionOpen(false)
-    setAddPortionGrams("")
-  }
-
-  return (
-    <div
-      className="space-y-3 rounded-xl border border-outline-variant/30 bg-surface-container/40 p-3"
-      data-testid={`ingredient-row-${index}`}
-    >
-      <div className="flex items-start gap-2">
-        <div className="flex-1">
-          <IngredientCombobox
-            value={ingredientId}
-            selectedName={ingredientName}
-            onSelect={selectIngredient}
-            testId={`ingredient-row-${index}-combobox`}
-          />
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={onRemove}
-          aria-label={t("common.delete")}
-        >
-          <Trash2 className="size-4" />
-        </Button>
-      </div>
-
-      {ingredientId > 0 && (
-        <>
-          <div className="grid grid-cols-[minmax(72px,0.7fr)_minmax(0,1.6fr)_minmax(96px,0.9fr)] gap-2">
-            <FormField
-              control={form.control}
-              name={`ingredients.${index}.amount`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs">
-                    {t("component.amount")}
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="any"
-                      min="0.1"
-                      className="tabular-nums"
-                      {...field}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormItem>
-              <FormLabel className="text-xs">{t("component.unit")}</FormLabel>
-              <UnitSelect
-                value={unit}
-                onValueChange={handleUnitChange}
-                portions={portions ?? []}
-                testId={`ingredient-row-${index}-unit`}
-              />
-            </FormItem>
-            <FormField
-              control={form.control}
-              name={`ingredients.${index}.grams`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-xs">
-                    {t("component.grams")}
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="any"
-                      min="0"
-                      {...field}
-                      disabled={!gramsEditable}
-                      className={cn(
-                        "tabular-nums",
-                        !gramsEditable &&
-                          "bg-surface-container-high/40 text-on-surface/80"
-                      )}
-                      data-testid={`ingredient-row-${index}-grams`}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          </div>
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <GramsSourceBadge
-              source={resolved.source}
-              testId={`ingredient-row-${index}-badge`}
-            />
-            {canAddPortion && (
-              <button
-                type="button"
-                className="text-primary underline-offset-2 hover:underline"
-                onClick={() => setAddPortionOpen(true)}
-                data-testid={`ingredient-row-${index}-add-portion`}
-              >
-                {t("component.add_portion_for_unit", {
-                  unit: t(`unit.${resolved.unit}.name`, {
-                    defaultValue: resolved.unit,
-                  }),
-                })}
-              </button>
-            )}
-          </div>
-        </>
-      )}
-
-      <Dialog open={addPortionOpen} onOpenChange={setAddPortionOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t("component.add_portion_title", {
-                unit: t(`unit.${resolved.unit}.name`, {
-                  defaultValue: resolved.unit,
-                }),
-              })}
-            </DialogTitle>
-            <DialogDescription>
-              {t("component.add_portion_body", {
-                unit: t(`unit.${resolved.unit}.name`, {
-                  defaultValue: resolved.unit,
-                }),
-                ingredient: ingredientName,
-              })}
-            </DialogDescription>
-          </DialogHeader>
-          <div>
-            <FormLabel className="text-xs">{t("component.grams")}</FormLabel>
-            <Input
-              type="number"
-              min="0.1"
-              step="any"
-              value={addPortionGrams}
-              onChange={(e) => setAddPortionGrams(e.target.value)}
-              data-testid={`ingredient-row-${index}-add-portion-grams`}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setAddPortionOpen(false)}
-              type="button"
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              type="button"
-              onClick={saveInlinePortion}
-              disabled={upsertPortion.isPending || !addPortionGrams}
-              data-testid={`ingredient-row-${index}-save-portion`}
-            >
-              {t("common.save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
-
-function GramsSourceBadge({
-  source,
-  testId,
-}: {
-  source: GramsSource
-  testId?: string
-}) {
-  const { t } = useTranslation()
-  const variant: Record<GramsSource, "secondary" | "outline" | "destructive"> =
-    {
-      direct: "secondary",
-      portion: "secondary",
-      default: "secondary",
-      fallback: "outline",
-      manual: "outline",
-      unresolved: "destructive",
-    }
-  const labelKey: Record<GramsSource, string> = {
-    direct: "component.grams_source.exact",
-    portion: "component.grams_source.exact",
-    default: "component.grams_source.exact",
-    fallback: "component.grams_source.approx",
-    manual: "component.grams_source.manual",
-    unresolved: "component.grams_source.required",
-  }
-  return (
-    <Badge
-      variant={variant[source]}
-      className="text-[10px] tracking-wide uppercase"
-      data-testid={testId}
-      data-source={source}
-    >
-      {t(labelKey[source])}
-    </Badge>
-  )
 }

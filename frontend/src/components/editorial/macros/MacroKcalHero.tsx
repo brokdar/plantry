@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 
+import { AnimatedNumber } from "@/components/editorial/AnimatedNumber"
 import { cn } from "@/lib/utils"
 
 interface MacroKcalHeroProps {
@@ -40,7 +41,6 @@ export function MacroKcalHero({
 }: MacroKcalHeroProps) {
   const { t } = useTranslation()
   const typo = SIZE[size]
-  const rounded = kcal == null ? "—" : Math.round(kcal).toLocaleString()
 
   return (
     <div
@@ -52,7 +52,14 @@ export function MacroKcalHero({
       data-testid="macro-kcal-hero"
     >
       <p className={cn("text-on-surface tabular-nums", typo.value)}>
-        {rounded}
+        {kcal == null ? (
+          "—"
+        ) : (
+          <AnimatedNumber
+            value={kcal}
+            format={(n) => Math.round(n).toLocaleString()}
+          />
+        )}
         <span
           className={cn(
             "ml-1.5 font-medium tracking-[0.18em] text-on-surface-variant uppercase",
