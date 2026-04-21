@@ -169,11 +169,21 @@ func (r *IngredientRepo) List(ctx context.Context, q ingredient.ListQuery) (*ing
 	countBuilder := sq.Select("COUNT(*)").From("ingredients")
 
 	if q.Search != "" {
-		ftsClause := "id IN (SELECT rowid FROM ingredients_fts WHERE ingredients_fts MATCH ?)"
 		tokens := strings.Fields(sanitizeFTS5(q.Search))
 		searchTerm := strings.Join(tokens, "* ") + "*"
-		builder = builder.Where(ftsClause, searchTerm)
-		countBuilder = countBuilder.Where(ftsClause, searchTerm)
+		where := sq.Or{
+			sq.Expr("id IN (SELECT rowid FROM ingredients_fts WHERE ingredients_fts MATCH ?)", searchTerm),
+		}
+		// LIKE fallback catches substrings inside compound words (e.g. "mais" → "Goldmais").
+		likeConds := sq.And{}
+		for _, t := range strings.Fields(q.Search) {
+			likeConds = append(likeConds, sq.Expr(`name LIKE ? ESCAPE '\'`, "%"+escapeLike(t)+"%"))
+		}
+		if len(likeConds) > 0 {
+			where = append(where, likeConds)
+		}
+		builder = builder.Where(where)
+		countBuilder = countBuilder.Where(where)
 	}
 
 	// Run count query
@@ -267,6 +277,12 @@ func (r *IngredientRepo) LookupForNutrition(ctx context.Context, ids []int64) (m
 		return nil, err
 	}
 	return result, nil
+}
+
+// escapeLike escapes LIKE wildcards so user input is treated literally. Pair with `ESCAPE '\'`.
+func escapeLike(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
 }
 
 // sanitizeFTS5 wraps each word in double-quotes so FTS5 treats reserved words
