@@ -100,6 +100,10 @@ type resolveRequest struct {
 	VitaminB12100g   *float64 `json:"vitamin_b12_100g"`
 	VitaminB6100g    *float64 `json:"vitamin_b6_100g"`
 	Folate100g       *float64 `json:"folate_100g"`
+
+	// ServingQuantityG is grams per serving, when supplied by the upstream
+	// source (OFF). When present, a "serving" portion is seeded on create.
+	ServingQuantityG *float64 `json:"serving_quantity_g"`
 }
 
 // Resolve handles POST /api/ingredients/resolve.
@@ -143,6 +147,23 @@ func (h *LookupHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		status, key := toHTTP(err)
 		writeError(w, status, key)
 		return
+	}
+
+	// Best-effort FDC portion sync so the user gets honey tbsp=21g (etc.)
+	// without a second click. Failures are swallowed — the user can still
+	// trigger the sync manually from the ingredient detail view.
+	if i.FdcID != nil && *i.FdcID != "" {
+		_, _ = h.svc.SyncPortionsFromFDC(r.Context(), i.ID)
+	}
+
+	// OFF-sourced products carry a per-serving gram weight. Seed it as a
+	// "serving" portion so the user can pick "1 serving" as a natural unit.
+	if req.ServingQuantityG != nil && *req.ServingQuantityG > 0 {
+		_ = h.svc.UpsertPortion(r.Context(), &ingredient.Portion{
+			IngredientID: i.ID,
+			Unit:         "serving",
+			Grams:        *req.ServingQuantityG,
+		})
 	}
 
 	// Download image if URL is provided and image store is available.

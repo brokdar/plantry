@@ -53,6 +53,11 @@ type Candidate struct {
 	VitaminB12100g   *float64 // µg
 	VitaminB6100g    *float64 // mg
 	Folate100g       *float64 // µg DFE
+
+	// ServingQuantityG is the OFF-reported grams per serving, if the product
+	// exposes one. Used to seed a "serving" portion so users can pick
+	// "1 serving" as a natural unit for packaged foods.
+	ServingQuantityG *float64
 }
 
 // New creates a Client with the given options.
@@ -148,7 +153,13 @@ func (c *Client) SearchByName(ctx context.Context, query string, lang string, li
 }
 
 func mapProduct(p offProduct, lang string) Candidate {
+	var serving *float64
+	if p.ServingQuantity > 0 {
+		v := p.ServingQuantity
+		serving = &v
+	}
 	return Candidate{
+		ServingQuantityG: serving,
 		Name:             localizedName(p, lang),
 		Brand:            p.Brands,
 		ImageURL:         p.ImageFrontSmallURL,

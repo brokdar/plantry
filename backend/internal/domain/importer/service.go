@@ -8,6 +8,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
 // Fetcher retrieves an HTML document from a URL. Implemented by adapters/httpfetch.
@@ -195,20 +196,28 @@ func (s *Service) Finalize(_ context.Context, in FinalizeInput) (*FinalizedCompo
 			if row.IngredientID == 0 {
 				return nil, fmt.Errorf("%w: missing ingredient_id for %s row", domain.ErrImportInvalidResolution, row.Resolution)
 			}
-			if row.Unit != "g" && row.Unit != "ml" {
-				return nil, fmt.Errorf("%w: unit must be g or ml, got %q", domain.ErrImportInvalidResolution, row.Unit)
-			}
 			if row.Amount <= 0 {
 				return nil, fmt.Errorf("%w: amount must be > 0", domain.ErrImportInvalidResolution)
 			}
 		default:
 			return nil, fmt.Errorf("%w: unknown resolution %q", domain.ErrImportInvalidResolution, row.Resolution)
 		}
+		normalizedUnit := units.Normalize(row.Unit)
+		if normalizedUnit == "" {
+			return nil, fmt.Errorf("%w: unit required", domain.ErrImportInvalidResolution)
+		}
+		// Seed Grams via the universal default when possible so the review UI
+		// can show a reasonable total; the component service re-resolves this
+		// canonically at POST time (honoring ingredient-specific portions).
+		var grams float64
+		if def, ok := units.LookupDefault(normalizedUnit); ok {
+			grams = row.Amount * def.Grams
+		}
 		out.Ingredients = append(out.Ingredients, FinalizedComponentIngredient{
 			IngredientID: row.IngredientID,
 			Amount:       row.Amount,
-			Unit:         row.Unit,
-			Grams:        row.Amount, // unit already canonicalized to g/ml
+			Unit:         normalizedUnit,
+			Grams:        grams,
 			SortOrder:    sort,
 		})
 		sort++

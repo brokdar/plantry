@@ -54,6 +54,9 @@ type Component struct {
 // ComponentIngredient links an ingredient to a component with a quantity.
 // IngredientName is populated when loaded through the repo; it is not persisted
 // back on write.
+//
+// GramsSource explains how Grams was resolved for the current in-memory value.
+// It is set by the resolver at write time and is not persisted.
 type ComponentIngredient struct {
 	ID             int64
 	ComponentID    int64
@@ -62,8 +65,19 @@ type ComponentIngredient struct {
 	Amount         float64
 	Unit           string
 	Grams          float64
+	GramsSource    string
 	SortOrder      int
 }
+
+// Grams-resolution sources surfaced by the service to help clients show
+// confidence badges. These are not persisted to the database.
+const (
+	GramsSourceDirect   = "direct"   // unit is a mass (g/kg/mg/oz/lb), exact
+	GramsSourcePortion  = "portion"  // matched an ingredient-specific portion
+	GramsSourceDefault  = "default"  // universal mass default (e.g., "oz")
+	GramsSourceFallback = "fallback" // universal volume default (water-density)
+	GramsSourceManual   = "manual"   // user-supplied grams; unit could not be auto-resolved
+)
 
 // Instruction is a numbered cooking step.
 type Instruction struct {

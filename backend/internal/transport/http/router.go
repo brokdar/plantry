@@ -183,6 +183,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/portions", h.Ingredients.ListPortions)
 				r.Post("/portions", h.Ingredients.UpsertPortion)
 				r.Delete("/portions/{unit}", h.Ingredients.DeletePortion)
+				r.Post("/sync-portions", h.Ingredients.SyncPortions)
 				if h.Lookup != nil {
 					r.Post("/refetch", h.Lookup.Refetch)
 				}

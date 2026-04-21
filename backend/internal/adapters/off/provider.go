@@ -66,6 +66,7 @@ func toDomainCandidates(candidates []Candidate) []ingredient.Candidate {
 			VitaminB12100g:   c.VitaminB12100g,
 			VitaminB6100g:    c.VitaminB6100g,
 			Folate100g:       c.Folate100g,
+			ServingQuantityG: c.ServingQuantityG,
 		}
 	}
 	return out

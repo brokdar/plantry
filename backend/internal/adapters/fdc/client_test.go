@@ -212,6 +212,58 @@ func TestSearchByName_ExtendedNutrientsNilWhenMissing(t *testing.T) {
 	assert.Nil(t, r.Folate100g)
 }
 
+func TestGetFood_ParsesFoodPortions(t *testing.T) {
+	srv := fixtureServer(t, "food_honey.json")
+	defer srv.Close()
+
+	client := fdc.New("test-key", fdc.WithBaseURL(srv.URL))
+	food, err := client.GetFood(context.Background(), 169640)
+	require.NoError(t, err)
+	require.NotNil(t, food)
+	assert.Equal(t, 169640, food.FdcID)
+	assert.Equal(t, "Honey", food.Description)
+
+	// Zero-gramWeight entries are filtered out.
+	require.Len(t, food.FoodPortions, 3)
+
+	tbsp := food.FoodPortions[0]
+	assert.InDelta(t, 21.0, tbsp.GramWeight, 0.001)
+	assert.Equal(t, "undetermined", tbsp.MeasureUnitName)
+	assert.Equal(t, "tbsp", tbsp.Modifier)
+
+	tsp := food.FoodPortions[1]
+	assert.InDelta(t, 7.0, tsp.GramWeight, 0.001)
+	assert.Equal(t, "tsp", tsp.Modifier)
+
+	cup := food.FoodPortions[2]
+	assert.InDelta(t, 339.0, cup.GramWeight, 0.001)
+	assert.Equal(t, "cup", cup.MeasureUnitName)
+	assert.Empty(t, cup.Modifier)
+}
+
+func TestGetFood_NotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+	client := fdc.New("test-key", fdc.WithBaseURL(srv.URL))
+	food, err := client.GetFood(context.Background(), 999999)
+	require.Error(t, err)
+	assert.Nil(t, food)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestGetFood_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	client := fdc.New("test-key", fdc.WithBaseURL(srv.URL))
+	_, err := client.GetFood(context.Background(), 169640)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
+}
+
 func TestSearchByName_APIKeyInRequest(t *testing.T) {
 	var capturedKey string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

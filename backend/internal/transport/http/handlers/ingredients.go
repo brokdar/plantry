@@ -262,6 +262,44 @@ func (h *IngredientHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// SyncPortions fetches per-unit gram weights from FDC and upserts them into
+// the ingredient_portions table. Only works for ingredients that have an
+// fdc_id set.
+func (h *IngredientHandler) SyncPortions(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+
+	count, err := h.svc.SyncPortionsFromFDC(r.Context(), id)
+	if err != nil {
+		status, key := toHTTP(err)
+		writeError(w, status, key)
+		return
+	}
+
+	portions, err := h.svc.ListPortions(r.Context(), id)
+	if err != nil {
+		status, key := toHTTP(err)
+		writeError(w, status, key)
+		return
+	}
+
+	resp := struct {
+		Added    int               `json:"added"`
+		Portions []portionResponse `json:"portions"`
+	}{Added: count, Portions: make([]portionResponse, len(portions))}
+	for i, p := range portions {
+		resp.Portions[i] = portionResponse{
+			IngredientID: p.IngredientID,
+			Unit:         p.Unit,
+			Grams:        p.Grams,
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (h *IngredientHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := ingredient.ListQuery{
 		Search:   r.URL.Query().Get("search"),

@@ -59,7 +59,7 @@ export function ExtendedNutrientFieldSet({
                   )}
                 >
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <FormLabel className="text-[10px] font-semibold tracking-[0.16em] text-on-surface-variant/80 uppercase">
+                    <FormLabel className="text-xs font-normal text-on-surface-variant">
                       {t(field.labelKey)}
                     </FormLabel>
                     <span className="font-mono text-[10px] text-on-surface-variant/60">

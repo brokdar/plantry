@@ -8,38 +8,127 @@ import {
   useUpsertPortion,
   useDeletePortion,
 } from "@/lib/queries/portions"
+import { normalizeUnit } from "@/lib/domain/units"
 
-interface PortionsEditorProps {
-  ingredientId: number
+import { UnitLabel, UnitSelect } from "./UnitSelect"
+
+export interface StagedPortion {
+  unit: string
+  grams: number
 }
 
-export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
+type PortionsEditorProps =
+  | { mode: "bound"; ingredientId: number }
+  | {
+      mode: "staged"
+      portions: StagedPortion[]
+      onChange: (portions: StagedPortion[]) => void
+    }
+
+export function PortionsEditor(props: PortionsEditorProps) {
+  if (props.mode === "bound") {
+    return <BoundPortionsEditor ingredientId={props.ingredientId} />
+  }
+  return (
+    <StagedPortionsEditor portions={props.portions} onChange={props.onChange} />
+  )
+}
+
+function BoundPortionsEditor({ ingredientId }: { ingredientId: number }) {
   const { t } = useTranslation()
   const { data: portions = [] } = usePortions(ingredientId)
   const upsertMutation = useUpsertPortion()
   const deleteMutation = useDeletePortion()
 
-  const [newUnit, setNewUnit] = useState("")
-  const [newGrams, setNewGrams] = useState("")
-
-  function handleAdd() {
-    const unit = newUnit.trim()
-    const grams = Number(newGrams)
-    if (!unit || !grams || grams <= 0) return
-
-    upsertMutation.mutate(
-      { ingredientId, data: { unit, grams } },
-      {
-        onSuccess: () => {
-          setNewUnit("")
-          setNewGrams("")
-        },
-      }
-    )
+  function handleAdd(unit: string, grams: number) {
+    upsertMutation.mutate({ ingredientId, data: { unit, grams } })
   }
 
   function handleDelete(unit: string) {
     deleteMutation.mutate({ ingredientId, unit })
+  }
+
+  return (
+    <PortionsEditorView
+      t={t}
+      portions={portions}
+      onAdd={handleAdd}
+      onDelete={handleDelete}
+      addPending={upsertMutation.isPending}
+      deletePending={deleteMutation.isPending}
+    />
+  )
+}
+
+function StagedPortionsEditor({
+  portions,
+  onChange,
+}: {
+  portions: StagedPortion[]
+  onChange: (portions: StagedPortion[]) => void
+}) {
+  const { t } = useTranslation()
+
+  function handleAdd(unit: string, grams: number) {
+    const existing = portions.findIndex((p) => normalizeUnit(p.unit) === unit)
+    if (existing >= 0) {
+      const next = [...portions]
+      next[existing] = { unit, grams }
+      onChange(next)
+    } else {
+      onChange([...portions, { unit, grams }])
+    }
+  }
+
+  function handleDelete(unit: string) {
+    onChange(portions.filter((p) => p.unit !== unit))
+  }
+
+  return (
+    <PortionsEditorView
+      t={t}
+      portions={portions.map((p) => ({
+        ingredient_id: 0,
+        unit: p.unit,
+        grams: p.grams,
+      }))}
+      onAdd={handleAdd}
+      onDelete={handleDelete}
+      addPending={false}
+      deletePending={false}
+    />
+  )
+}
+
+interface PortionsEditorViewProps {
+  t: ReturnType<typeof useTranslation>["t"]
+  portions: Array<{ unit: string; grams: number }>
+  onAdd: (unit: string, grams: number) => void
+  onDelete: (unit: string) => void
+  addPending: boolean
+  deletePending: boolean
+}
+
+function PortionsEditorView({
+  t,
+  portions,
+  onAdd,
+  onDelete,
+  addPending,
+  deletePending,
+}: PortionsEditorViewProps) {
+  const [newUnit, setNewUnit] = useState("")
+  const [newGrams, setNewGrams] = useState("")
+
+  const usedUnits = portions.map((p) => normalizeUnit(p.unit))
+
+  function handleAdd() {
+    const unit = normalizeUnit(newUnit)
+    const grams = Number(newGrams)
+    if (!unit || !grams || grams <= 0) return
+    onAdd(unit, grams)
+    setNewUnit("")
+    setNewGrams("")
   }
 
   return (
@@ -49,16 +138,18 @@ export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
           {portions.map((p) => (
             <div
               key={p.unit}
-              className="flex items-center gap-3 rounded border px-3 py-2"
+              className="flex items-center gap-3 rounded-lg border border-outline-variant/40 bg-surface-container/40 px-3 py-2"
             >
-              <span className="flex-1 text-sm font-medium">{p.unit}</span>
-              <span className="text-sm text-muted-foreground">{p.grams}g</span>
+              <UnitLabel unit={p.unit} className="flex-1" />
+              <span className="font-mono text-xs text-on-surface-variant tabular-nums">
+                {p.grams} g
+              </span>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => handleDelete(p.unit)}
-                disabled={deleteMutation.isPending}
+                onClick={() => onDelete(p.unit)}
+                disabled={deletePending}
                 aria-label={t("portion.delete_unit", { unit: p.unit })}
               >
                 <Trash2 className="size-4" />
@@ -73,16 +164,14 @@ export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
           <label className="mb-1 block text-xs text-muted-foreground">
             {t("portion.unit")}
           </label>
-          <Input
+          <UnitSelect
             value={newUnit}
-            onChange={(e) => setNewUnit(e.target.value)}
-            placeholder={t("portion.unit_placeholder")}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault()
-                handleAdd()
-              }
-            }}
+            onValueChange={setNewUnit}
+            excludeKeys={usedUnits}
+            placeholder={t("portion.unit_placeholder_select", {
+              defaultValue: t("unit.placeholder"),
+            })}
+            testId="portion-unit"
           />
         </div>
         <div className="w-24">
@@ -108,7 +197,7 @@ export function PortionsEditor({ ingredientId }: PortionsEditorProps) {
           type="button"
           size="sm"
           onClick={handleAdd}
-          disabled={!newUnit.trim() || !newGrams || upsertMutation.isPending}
+          disabled={!newUnit.trim() || !newGrams || addPending}
         >
           <Plus className="mr-1 size-4" />
           {t("portion.add")}

@@ -25,6 +25,25 @@ func (p *Provider) SearchByName(ctx context.Context, query string, limit int) ([
 	return toDomainCandidates(results), nil
 }
 
+// GetFoodPortions fetches per-unit gram weights for a single FDC food. This
+// is what supplies ingredient-specific density data (e.g., 1 tbsp honey = 21g)
+// to the portions table.
+func (p *Provider) GetFoodPortions(ctx context.Context, fdcID int) ([]ingredient.FoodPortion, error) {
+	food, err := p.client.GetFood(ctx, fdcID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ingredient.FoodPortion, 0, len(food.FoodPortions))
+	for _, fp := range food.FoodPortions {
+		out = append(out, ingredient.FoodPortion{
+			RawUnit:    fp.MeasureUnitName,
+			Modifier:   fp.Modifier,
+			GramWeight: fp.GramWeight,
+		})
+	}
+	return out, nil
+}
+
 func toDomainCandidates(candidates []Candidate) []ingredient.Candidate {
 	out := make([]ingredient.Candidate, len(candidates))
 	for i, c := range candidates {

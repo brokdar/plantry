@@ -52,6 +52,8 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 
 import { IngredientCombobox } from "./IngredientCombobox"
+import { UnitSelect } from "@/components/ingredients/UnitSelect"
+import { cn } from "@/lib/utils"
 
 import {
   componentSchema,
@@ -66,8 +68,14 @@ import {
   useVariants,
 } from "@/lib/queries/components"
 import { useIngredient } from "@/lib/queries/ingredients"
-import { usePortions } from "@/lib/queries/portions"
+import { usePortions, useUpsertPortion } from "@/lib/queries/portions"
 import { fromIngredients, type IngredientInput } from "@/lib/domain/nutrition"
+import {
+  isCountUnit,
+  normalizeUnit,
+  resolveGrams,
+  type GramsSource,
+} from "@/lib/domain/units"
 import type { Component } from "@/lib/api/components"
 import type { Ingredient } from "@/lib/api/ingredients"
 import { ApiError } from "@/lib/api/client"
@@ -160,6 +168,26 @@ export function ComponentEditor({
   const totalTime = (Number(watchedPrep) || 0) + (Number(watchedCook) || 0)
 
   async function onSubmit(values: ComponentFormValues) {
+    // Guard: count units without a portion and no manual grams can't be
+    // resolved to mass → nutrition totals would silently underreport.
+    const unresolved = values.ingredients.find((ci) => {
+      if (!ci.ingredient_id) return false
+      const u = normalizeUnit(ci.unit)
+      if (!u) return true
+      if (isCountUnit(u) && !(ci.grams > 0)) return true
+      return false
+    })
+    if (unresolved) {
+      form.setError("root", {
+        message: t("component.error_unresolved_unit", {
+          unit: t(`unit.${normalizeUnit(unresolved.unit)}.name`, {
+            defaultValue: unresolved.unit,
+          }),
+        }),
+      })
+      return
+    }
+
     const input = {
       name: values.name,
       role: values.role,
@@ -752,9 +780,29 @@ function IngredientRow({
   const ingredientId = form.watch(`ingredients.${index}.ingredient_id`)
   const ingredientName = form.watch(`ingredients.${index}.ingredient_name`)
   const unit = form.watch(`ingredients.${index}.unit`)
+  const amount = Number(form.watch(`ingredients.${index}.amount`)) || 0
+  const currentGrams = Number(form.watch(`ingredients.${index}.grams`)) || 0
 
   const { data: portions } = usePortions(ingredientId)
   const { data: ingredientDetail } = useIngredient(ingredientId)
+  const upsertPortion = useUpsertPortion()
+
+  const [addPortionOpen, setAddPortionOpen] = useState(false)
+  const [addPortionGrams, setAddPortionGrams] = useState("")
+
+  const resolved = resolveGrams(amount, unit, portions ?? [], currentGrams)
+
+  // Whenever amount/unit/portions change and the resolution is auto (not
+  // "manual"), write the computed grams back into the form. We avoid writing
+  // when source is "manual" or "unresolved" so the user can override or keep
+  // typing without losing their value.
+  useEffect(() => {
+    if (!ingredientId) return
+    if (resolved.source === "manual" || resolved.source === "unresolved") return
+    if (Math.abs(resolved.grams - currentGrams) < 0.001) return
+    form.setValue(`ingredients.${index}.grams`, resolved.grams)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolved.grams, resolved.source, ingredientId])
 
   useEffect(() => {
     if (!ingredientDetail) return
@@ -791,24 +839,43 @@ function IngredientRow({
     form.setValue(`ingredients.${index}.sodium_100g`, ing.sodium_100g)
   }
 
-  function recalcGrams(amount: number, u: string) {
-    if (u === "g" || u === "ml") {
-      form.setValue(`ingredients.${index}.grams`, amount)
-    } else if (portions) {
-      const match = portions.find((p) => p.unit === u)
-      if (match) {
-        form.setValue(`ingredients.${index}.grams`, amount * match.grams)
-      }
-    }
+  function handleUnitChange(newUnit: string) {
+    const canonical = normalizeUnit(newUnit)
+    form.setValue(`ingredients.${index}.unit`, canonical)
+    // Clear grams so the next resolve pass recomputes from scratch (user's
+    // previous manual override no longer applies to the new unit).
+    form.setValue(`ingredients.${index}.grams`, 0)
   }
 
-  function handleUnitChange(newUnit: string) {
-    form.setValue(`ingredients.${index}.unit`, newUnit)
-    recalcGrams(form.getValues(`ingredients.${index}.amount`), newUnit)
+  const needsManualGrams =
+    resolved.source === "unresolved" || resolved.source === "manual"
+  const gramsEditable = needsManualGrams
+  // Only surface the CTA when there is no conversion yet for this unit —
+  // once a portion or universal default kicks in, the CTA is noise.
+  const canAddPortion =
+    ingredientId > 0 &&
+    !!resolved.unit &&
+    isCountUnit(resolved.unit) &&
+    (resolved.source === "unresolved" || resolved.source === "manual")
+
+  async function saveInlinePortion() {
+    const g = Number(addPortionGrams)
+    if (!Number.isFinite(g) || g <= 0) return
+    await upsertPortion.mutateAsync({
+      ingredientId,
+      data: { unit: resolved.unit, grams: g },
+    })
+    // Clear any manual grams override so the new portion takes over.
+    form.setValue(`ingredients.${index}.grams`, 0)
+    setAddPortionOpen(false)
+    setAddPortionGrams("")
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-outline-variant/30 bg-surface-container/40 p-3">
+    <div
+      className="space-y-3 rounded-xl border border-outline-variant/30 bg-surface-container/40 p-3"
+      data-testid={`ingredient-row-${index}`}
+    >
       <div className="flex items-start gap-2">
         <div className="flex-1">
           <IngredientCombobox
@@ -830,60 +897,173 @@ function IngredientRow({
       </div>
 
       {ingredientId > 0 && (
-        <div className="grid grid-cols-3 gap-2">
-          <FormField
-            control={form.control}
-            name={`ingredients.${index}.amount`}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-xs">
-                  {t("component.amount")}
-                </FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="any"
-                    min="0.1"
-                    {...field}
-                    onChange={(e) => {
-                      field.onChange(e)
-                      recalcGrams(Number(e.target.value), unit)
-                    }}
-                  />
-                </FormControl>
-              </FormItem>
+        <>
+          <div className="grid grid-cols-[minmax(72px,0.7fr)_minmax(0,1.6fr)_minmax(96px,0.9fr)] gap-2">
+            <FormField
+              control={form.control}
+              name={`ingredients.${index}.amount`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">
+                    {t("component.amount")}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="any"
+                      min="0.1"
+                      className="tabular-nums"
+                      {...field}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormItem>
+              <FormLabel className="text-xs">{t("component.unit")}</FormLabel>
+              <UnitSelect
+                value={unit}
+                onValueChange={handleUnitChange}
+                portions={portions ?? []}
+                testId={`ingredient-row-${index}-unit`}
+              />
+            </FormItem>
+            <FormField
+              control={form.control}
+              name={`ingredients.${index}.grams`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">
+                    {t("component.grams")}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="any"
+                      min="0"
+                      {...field}
+                      disabled={!gramsEditable}
+                      className={cn(
+                        "tabular-nums",
+                        !gramsEditable &&
+                          "bg-surface-container-high/40 text-on-surface/80"
+                      )}
+                      data-testid={`ingredient-row-${index}-grams`}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <GramsSourceBadge
+              source={resolved.source}
+              testId={`ingredient-row-${index}-badge`}
+            />
+            {canAddPortion && (
+              <button
+                type="button"
+                className="text-primary underline-offset-2 hover:underline"
+                onClick={() => setAddPortionOpen(true)}
+                data-testid={`ingredient-row-${index}-add-portion`}
+              >
+                {t("component.add_portion_for_unit", {
+                  unit: t(`unit.${resolved.unit}.name`, {
+                    defaultValue: resolved.unit,
+                  }),
+                })}
+              </button>
             )}
-          />
-          <FormItem>
-            <FormLabel className="text-xs">{t("component.unit")}</FormLabel>
-            <Select value={unit} onValueChange={handleUnitChange}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="g">g</SelectItem>
-                <SelectItem value="ml">ml</SelectItem>
-                {portions?.map((p) => (
-                  <SelectItem key={p.unit} value={p.unit}>
-                    {p.unit}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormItem>
-          <FormItem>
+          </div>
+        </>
+      )}
+
+      <Dialog open={addPortionOpen} onOpenChange={setAddPortionOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t("component.add_portion_title", {
+                unit: t(`unit.${resolved.unit}.name`, {
+                  defaultValue: resolved.unit,
+                }),
+              })}
+            </DialogTitle>
+            <DialogDescription>
+              {t("component.add_portion_body", {
+                unit: t(`unit.${resolved.unit}.name`, {
+                  defaultValue: resolved.unit,
+                }),
+                ingredient: ingredientName,
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <div>
             <FormLabel className="text-xs">{t("component.grams")}</FormLabel>
             <Input
               type="number"
-              name={`ingredients.${index}.grams`}
-              value={form.watch(`ingredients.${index}.grams`).toFixed(1)}
-              disabled
-              className="bg-surface-container-highest"
-              data-testid={`ingredient-row-${index}-grams`}
+              min="0.1"
+              step="any"
+              value={addPortionGrams}
+              onChange={(e) => setAddPortionGrams(e.target.value)}
+              data-testid={`ingredient-row-${index}-add-portion-grams`}
             />
-          </FormItem>
-        </div>
-      )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAddPortionOpen(false)}
+              type="button"
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={saveInlinePortion}
+              disabled={upsertPortion.isPending || !addPortionGrams}
+              data-testid={`ingredient-row-${index}-save-portion`}
+            >
+              {t("common.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  )
+}
+
+function GramsSourceBadge({
+  source,
+  testId,
+}: {
+  source: GramsSource
+  testId?: string
+}) {
+  const { t } = useTranslation()
+  const variant: Record<GramsSource, "secondary" | "outline" | "destructive"> =
+    {
+      direct: "secondary",
+      portion: "secondary",
+      default: "secondary",
+      fallback: "outline",
+      manual: "outline",
+      unresolved: "destructive",
+    }
+  const labelKey: Record<GramsSource, string> = {
+    direct: "component.grams_source.exact",
+    portion: "component.grams_source.exact",
+    default: "component.grams_source.exact",
+    fallback: "component.grams_source.approx",
+    manual: "component.grams_source.manual",
+    unresolved: "component.grams_source.required",
+  }
+  return (
+    <Badge
+      variant={variant[source]}
+      className="text-[10px] tracking-wide uppercase"
+      data-testid={testId}
+      data-source={source}
+    >
+      {t(labelKey[source])}
+    </Badge>
   )
 }

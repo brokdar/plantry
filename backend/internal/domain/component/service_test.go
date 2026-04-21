@@ -358,6 +358,102 @@ func TestCreate_InstructionEmptyText(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrInvalidInput)
 }
 
+func TestCreate_ResolveGrams_PortionExact(t *testing.T) {
+	svc, _, pl, _ := newService()
+	// Honey: 1 tbsp = 21g (FDC-sourced portion).
+	pl.portions[5] = []ingredient.Portion{{IngredientID: 5, Unit: "tbsp", Grams: 21}}
+
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 5, Amount: 2, Unit: "tbsp"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 42.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourcePortion, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_UniversalVolumeFallback(t *testing.T) {
+	svc, _, _, _ := newService()
+	// No portion for this ingredient → water-density tbsp (15g).
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 7, Amount: 2, Unit: "tbsp"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 30.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourceFallback, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_MlWaterDensity(t *testing.T) {
+	svc, _, _, _ := newService()
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 7, Amount: 100, Unit: "ml"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 100.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourceFallback, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_MassDirect(t *testing.T) {
+	svc, _, _, _ := newService()
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 1, Amount: 1.5, Unit: "kg"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 1500.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourceDefault, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_CountUnitRequiresPortion(t *testing.T) {
+	svc, _, _, _ := newService()
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 8, Amount: 2, Unit: "clove"},
+	}
+	err := svc.Create(context.Background(), c)
+	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+	assert.Contains(t, err.Error(), "clove")
+}
+
+func TestCreate_ResolveGrams_CountUnitWithPortion(t *testing.T) {
+	svc, _, pl, _ := newService()
+	pl.portions[8] = []ingredient.Portion{{IngredientID: 8, Unit: "clove", Grams: 4}}
+
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 8, Amount: 2, Unit: "clove"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 8.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourcePortion, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_ManualGramsForCountUnit(t *testing.T) {
+	svc, _, _, _ := newService()
+	// User supplies grams directly for a count unit without portion.
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 8, Amount: 2, Unit: "clove", Grams: 10},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 10.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourceManual, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_AliasedUnit(t *testing.T) {
+	svc, _, _, _ := newService()
+	// "EL" (German) → "tbsp"; unit is normalized on write.
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 7, Amount: 2, Unit: "EL"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, "tbsp", c.Ingredients[0].Unit)
+	assert.Equal(t, 30.0, c.Ingredients[0].Grams)
+}
+
 func TestUpdate_ReplacesChildren(t *testing.T) {
 	svc, repo, _, _ := newService()
 	c := validComponent()

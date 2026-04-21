@@ -103,6 +103,37 @@ describe("LookupPanel", () => {
     })
   })
 
+  test("renders source_name beneath candidate name when it differs", async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    vi.mocked(lookupIngredients).mockResolvedValue({
+      results: [
+        {
+          ...mockLookupCandidate,
+          name: "Paprika",
+          source_name: "Spices, paprika",
+        },
+        {
+          ...mockLookupCandidate,
+          name: "Paprika Pulver",
+          source_name: "Paprika Pulver",
+        },
+      ],
+      recommended_index: 0,
+    })
+
+    renderWithRouter(<LookupPanel onSelect={onSelect} />)
+
+    const input = await screen.findByPlaceholderText(
+      /search by name or barcode/i
+    )
+    await user.type(input, "paprika")
+
+    // The differing source_name must appear so the user can disambiguate.
+    await screen.findAllByText("Spices, paprika")
+    expect(screen.getAllByText("Spices, paprika").length).toBeGreaterThan(0)
+  })
+
   test("routes all-digit input to the barcode lookup path", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()

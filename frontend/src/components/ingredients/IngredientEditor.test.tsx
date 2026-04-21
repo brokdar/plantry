@@ -34,17 +34,23 @@ vi.mock("@/lib/api/images", () => ({
 }))
 
 const toastErrorMock = vi.fn()
+const toastSuccessMock = vi.fn()
 vi.mock("@/lib/toast", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/toast")>()
   return {
     ...actual,
     toastError: (...args: unknown[]) => toastErrorMock(...args),
+    toast: {
+      success: (...args: unknown[]) => toastSuccessMock(...args),
+      error: (...args: unknown[]) => toastErrorMock(...args),
+    },
   }
 })
 
 type ImageFieldMockProps =
   | {
       mode: "staged"
+      stagedBlob: Blob | null
       onStagedChange: (blob: Blob | null) => void
     }
   | { mode: "bound" }
@@ -53,15 +59,20 @@ vi.mock("@/components/images/ImageField", () => ({
   ImageField: (props: ImageFieldMockProps) => {
     if (props.mode === "staged") {
       return (
-        <button
-          type="button"
-          data-testid="stage-image"
-          onClick={() =>
-            props.onStagedChange(new Blob(["fake"], { type: "image/jpeg" }))
-          }
-        >
-          Stage
-        </button>
+        <div>
+          <button
+            type="button"
+            data-testid="stage-image"
+            onClick={() =>
+              props.onStagedChange(new Blob(["fake"], { type: "image/jpeg" }))
+            }
+          >
+            Stage
+          </button>
+          <span data-testid="staged-blob-state">
+            {props.stagedBlob ? "has-blob" : "no-blob"}
+          </span>
+        </div>
       )
     }
     return <div data-testid="bound-image-field" />
@@ -218,6 +229,34 @@ describe("IngredientEditor", () => {
     expect(screen.getByRole("spinbutton", { name: "Fat (g)" })).toHaveValue(2.6)
   })
 
+  test("applying a lookup candidate without image_url preserves staged image", async () => {
+    const user = userEvent.setup()
+    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
+
+    renderWithRouter(<IngredientEditor />)
+
+    await user.click(await screen.findByTestId("stage-image"))
+    expect(screen.getByTestId("staged-blob-state")).toHaveTextContent(
+      "has-blob"
+    )
+
+    const input = screen.getByPlaceholderText(/search by name or barcode/i)
+    await user.type(input, "chicken")
+
+    await screen.findByText("Chicken Breast, Raw")
+    await user.click(
+      await screen.findByRole("button", { name: /use this match/i })
+    )
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Name")).toHaveValue("Chicken Breast, Raw")
+    })
+    // Staged image must still be present — candidate has no image_url.
+    expect(screen.getByTestId("staged-blob-state")).toHaveTextContent(
+      "has-blob"
+    )
+  })
+
   test("shows server error message", async () => {
     const user = userEvent.setup()
     vi.mocked(createIngredient).mockRejectedValue(
@@ -271,22 +310,23 @@ describe("IngredientEditor", () => {
     )
   })
 
-  test("refetch button surfaces API errors inline", async () => {
+  test("refetch button surfaces API errors via toast", async () => {
     const user = userEvent.setup()
     const withFdc = { ...mockChickenBreast, fdc_id: "171077" }
-    vi.mocked(refetchIngredient).mockRejectedValue(
-      new ApiError(404, "error.ingredient.refetch.no_results")
-    )
+    const apiError = new ApiError(404, "error.ingredient.refetch.no_results")
+    vi.mocked(refetchIngredient).mockRejectedValue(apiError)
 
     renderWithRouter(<IngredientEditor ingredient={withFdc} />)
 
     const refetchButton = await screen.findByTestId("ingredient-refetch")
     await user.click(refetchButton)
 
-    // The i18n key surfaces an error string next to the button.
-    expect(
-      await screen.findByText(/error\.ingredient\.refetch\.no_results/i)
-    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        apiError,
+        expect.any(Function)
+      )
+    })
   })
 
   test("staged image uploads after create using returned id", async () => {
@@ -349,5 +389,57 @@ describe("IngredientEditor", () => {
     await waitFor(() => {
       expect(onSuccess).toHaveBeenCalled()
     })
+  })
+
+  test("staged portions are saved after create using returned id", async () => {
+    const user = userEvent.setup()
+    const onSuccess = vi.fn()
+    vi.mocked(createIngredient).mockResolvedValue({
+      ...mockChickenBreast,
+      id: 77,
+      name: "Sourdough",
+    })
+    const { upsertPortion } = await import("@/lib/api/portions")
+    vi.mocked(upsertPortion).mockResolvedValue(undefined)
+
+    renderWithRouter(<IngredientEditor onSuccess={onSuccess} />)
+
+    const nameInput = await screen.findByLabelText("Name")
+    await user.type(nameInput, "Sourdough")
+
+    await user.click(screen.getByTestId("portion-unit"))
+    await user.click(await screen.findByTestId("unit-option-slice"))
+    await user.type(screen.getByTestId("portion-grams"), "45")
+    await user.click(screen.getByRole("button", { name: /add portion/i }))
+
+    // Row appears in the staged list.
+    expect(await screen.findByText("45 g")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() => {
+      expect(createIngredient).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(upsertPortion).toHaveBeenCalledWith(77, {
+        unit: "slice",
+        grams: 45,
+      })
+    })
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalled()
+    })
+  })
+
+  test("shows tooltip explaining save is disabled when name is empty", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(<IngredientEditor />)
+
+    const wrapper = await screen.findByTestId("save-disabled-wrapper")
+    await user.hover(wrapper)
+
+    expect(
+      await screen.findByRole("tooltip", { name: /enter a name to save/i })
+    ).toBeInTheDocument()
   })
 })

@@ -2,7 +2,9 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -152,6 +154,81 @@ func TestDeletePortion_NotFound(t *testing.T) {
 	resp := httptest.NewRecorder()
 	r.ServeHTTP(resp, httptest.NewRequest(http.MethodDelete, "/api/ingredients/1/portions/nonexistent", nil))
 	assert.Equal(t, http.StatusNotFound, resp.Code)
+}
+
+// --- sync-portions tests ---
+
+type stubPortionProvider struct {
+	portions []ingredient.FoodPortion
+	err      error
+}
+
+func (s *stubPortionProvider) GetFoodPortions(_ context.Context, _ int) ([]ingredient.FoodPortion, error) {
+	return s.portions, s.err
+}
+
+func setupSyncRouter(t *testing.T, provider *stubPortionProvider) http.Handler {
+	t.Helper()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewIngredientRepo(db)
+	svc := ingredient.NewService(repo).WithPortionProvider(provider)
+	h := handlers.NewIngredientHandler(svc)
+
+	r := chi.NewRouter()
+	r.Route("/api/ingredients", func(r chi.Router) {
+		r.Post("/", h.Create)
+		r.Route("/{id}", func(r chi.Router) {
+			r.Get("/portions", h.ListPortions)
+			r.Post("/sync-portions", h.SyncPortions)
+		})
+	})
+	return r
+}
+
+func TestSyncPortions_OK(t *testing.T) {
+	provider := &stubPortionProvider{
+		portions: []ingredient.FoodPortion{
+			{RawUnit: "cup", GramWeight: 339},
+			{RawUnit: "undetermined", Modifier: "tbsp", GramWeight: 21},
+		},
+	}
+	r := setupSyncRouter(t, provider)
+	body := `{"name":"Honey","source":"fdc","fdc_id":"169640"}`
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/ingredients", bytes.NewBufferString(body)))
+	require.Equal(t, http.StatusCreated, resp.Code)
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&created))
+	id := created["id"].(float64)
+
+	resp = httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/ingredients/%d/sync-portions", int(id)), nil))
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Equal(t, 2.0, got["added"])
+	portions, _ := got["portions"].([]any)
+	assert.Len(t, portions, 2)
+}
+
+func TestSyncPortions_NoFdcID(t *testing.T) {
+	r := setupSyncRouter(t, &stubPortionProvider{})
+	body := `{"name":"Manual"}`
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/ingredients", bytes.NewBufferString(body)))
+	require.Equal(t, http.StatusCreated, resp.Code)
+
+	resp = httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/ingredients/1/sync-portions", nil))
+	assert.Equal(t, http.StatusBadRequest, resp.Code)
+}
+
+func TestSyncPortions_InvalidID(t *testing.T) {
+	r := setupSyncRouter(t, &stubPortionProvider{})
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/ingredients/abc/sync-portions", nil))
+	assert.Equal(t, http.StatusBadRequest, resp.Code)
 }
 
 func TestDeletePortion_InvalidID(t *testing.T) {

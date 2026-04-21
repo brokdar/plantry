@@ -6,11 +6,13 @@ import {
   updateIngredient,
   deleteIngredient,
   refetchIngredient,
+  syncPortions,
   type IngredientListParams,
   type IngredientInput,
 } from "@/lib/api/ingredients"
 import { queryClient } from "@/lib/query-client"
 import { ingredientKeys } from "./keys"
+import { portionKeys } from "./portions"
 
 export function useIngredients(params?: IngredientListParams) {
   return useQuery({
@@ -54,6 +56,18 @@ export function useDeleteIngredient() {
     mutationFn: (id: number) => deleteIngredient(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ingredientKeys.lists() })
+    },
+  })
+}
+
+export function useSyncPortions() {
+  return useMutation({
+    mutationFn: (id: number) => syncPortions(id),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({ queryKey: portionKeys.list(id) })
+      void queryClient.invalidateQueries({
+        queryKey: ingredientKeys.detail(id),
+      })
     },
   })
 }

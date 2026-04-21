@@ -100,7 +100,6 @@ func run() error {
 	settingsSvc := settingsdom.NewService(settingsRepo, envSnapshot, cipher)
 
 	ingredientRepo := sqlite.NewIngredientRepo(conn)
-	ingredientSvc := ingredient.NewService(ingredientRepo)
 
 	// External food providers.
 	offClient := off.New()
@@ -109,6 +108,8 @@ func run() error {
 	// FDC provider is always constructed — it reads the key from settings
 	// per-request and gracefully returns empty results when no key is set.
 	fdcProvider := fdc.NewDynamicProvider(settingsSvc)
+
+	ingredientSvc := ingredient.NewService(ingredientRepo).WithPortionProvider(fdcProvider)
 
 	// Image store (optional).
 	var imgStore *imagestore.Store

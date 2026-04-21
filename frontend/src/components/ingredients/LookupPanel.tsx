@@ -191,8 +191,14 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
                           className="size-3 shrink-0 opacity-70"
                           aria-hidden
                         />
-                        <span className="min-w-0 flex-1 truncate">
-                          {candidate.name}
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate">{candidate.name}</span>
+                          {candidate.source_name &&
+                            candidate.source_name !== candidate.name && (
+                              <span className="truncate text-[10px] text-on-surface-variant/70">
+                                {candidate.source_name}
+                              </span>
+                            )}
                         </span>
                         {candidate.kcal_100g != null && (
                           <span className="shrink-0 font-mono text-[10px] tabular-nums opacity-60">

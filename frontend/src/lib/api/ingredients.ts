@@ -1,4 +1,5 @@
 import { apiFetch } from "./client"
+import type { Portion } from "./portions"
 
 export interface Ingredient {
   id: number
@@ -138,6 +139,18 @@ export function deleteIngredient(id: number): Promise<void> {
   return apiFetch(`/ingredients/${id}`, {
     method: "DELETE",
   })
+}
+
+export interface SyncPortionsResponse {
+  added: number
+  portions: Portion[]
+}
+
+/** syncPortions pulls per-unit gram weights from FDC for an ingredient that
+ *  has an fdc_id set, storing them in ingredient_portions. Used to backfill
+ *  ingredients that were created before the portion sync feature existed. */
+export function syncPortions(id: number): Promise<SyncPortionsResponse> {
+  return apiFetch(`/ingredients/${id}/sync-portions`, { method: "POST" })
 }
 
 /** refetchIngredient re-queries the upstream source (OFF or FDC) using the

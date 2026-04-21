@@ -409,6 +409,151 @@ func TestDelete_RepoErrorSkipsImageDelete(t *testing.T) {
 	assert.Empty(t, deleter.calls)
 }
 
+// --- portion sync tests ---
+
+type fakePortionProvider struct {
+	portions []ingredient.FoodPortion
+	err      error
+	calls    int
+}
+
+func (f *fakePortionProvider) GetFoodPortions(_ context.Context, _ int) ([]ingredient.FoodPortion, error) {
+	f.calls++
+	return f.portions, f.err
+}
+
+func TestSyncPortionsFromFDC_Happy(t *testing.T) {
+	repo := newFakeRepo()
+	provider := &fakePortionProvider{
+		portions: []ingredient.FoodPortion{
+			{RawUnit: "cup", GramWeight: 339},
+			{RawUnit: "undetermined", Modifier: "tbsp", GramWeight: 21},
+			{RawUnit: "undetermined", Modifier: "tsp", GramWeight: 7},
+		},
+	}
+	svc := ingredient.NewService(repo).WithPortionProvider(provider)
+	fdcID := "169640"
+	i := &ingredient.Ingredient{Name: "Honey", Source: ingredient.SourceFDC, FdcID: &fdcID}
+	require.NoError(t, svc.Create(context.Background(), i))
+
+	count, err := svc.SyncPortionsFromFDC(context.Background(), i.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 3, count)
+
+	portions, err := svc.ListPortions(context.Background(), i.ID)
+	require.NoError(t, err)
+	require.Len(t, portions, 3)
+
+	byUnit := map[string]float64{}
+	for _, p := range portions {
+		byUnit[p.Unit] = p.Grams
+	}
+	assert.Equal(t, 339.0, byUnit["cup"])
+	assert.Equal(t, 21.0, byUnit["tbsp"])
+	assert.Equal(t, 7.0, byUnit["tsp"])
+}
+
+func TestSyncPortionsFromFDC_MedianOfDuplicates(t *testing.T) {
+	repo := newFakeRepo()
+	// Eggs: small 38g, medium 44g, large 50g all fold to "piece"; median 44g.
+	provider := &fakePortionProvider{
+		portions: []ingredient.FoodPortion{
+			{RawUnit: "undetermined", Modifier: "small", GramWeight: 38},
+			{RawUnit: "undetermined", Modifier: "medium", GramWeight: 44},
+			{RawUnit: "undetermined", Modifier: "large", GramWeight: 50},
+		},
+	}
+	svc := ingredient.NewService(repo).WithPortionProvider(provider)
+	fdcID := "100"
+	i := &ingredient.Ingredient{Name: "Egg", Source: ingredient.SourceFDC, FdcID: &fdcID}
+	require.NoError(t, svc.Create(context.Background(), i))
+	count, err := svc.SyncPortionsFromFDC(context.Background(), i.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	portions, err := svc.ListPortions(context.Background(), i.ID)
+	require.NoError(t, err)
+	require.Len(t, portions, 1)
+	assert.Equal(t, "piece", portions[0].Unit)
+	assert.Equal(t, 44.0, portions[0].Grams)
+}
+
+func TestSyncPortionsFromFDC_SimplifiesVerboseFDCLabels(t *testing.T) {
+	repo := newFakeRepo()
+	// Banana-style: "cup, sliced" + "cup, mashed" both map to "cup" (median);
+	// "large (8 inches)" folds to "piece" with its own gram weight.
+	provider := &fakePortionProvider{
+		portions: []ingredient.FoodPortion{
+			{RawUnit: "cup, sliced", GramWeight: 150},
+			{RawUnit: "cup, mashed", GramWeight: 225},
+			{RawUnit: "large (8 inches or longer)", GramWeight: 136},
+			{RawUnit: "NLEA serving", GramWeight: 126},
+		},
+	}
+	svc := ingredient.NewService(repo).WithPortionProvider(provider)
+	fdcID := "173944"
+	i := &ingredient.Ingredient{Name: "Banana", Source: ingredient.SourceFDC, FdcID: &fdcID}
+	require.NoError(t, svc.Create(context.Background(), i))
+	count, err := svc.SyncPortionsFromFDC(context.Background(), i.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 3, count)
+
+	portions, err := svc.ListPortions(context.Background(), i.ID)
+	require.NoError(t, err)
+	byUnit := map[string]float64{}
+	for _, p := range portions {
+		byUnit[p.Unit] = p.Grams
+	}
+	assert.Equal(t, 187.5, byUnit["cup"]) // (150+225)/2
+	assert.Equal(t, 136.0, byUnit["piece"])
+	assert.Equal(t, 126.0, byUnit["serving"])
+}
+
+func TestSyncPortionsFromFDC_NoFdcID(t *testing.T) {
+	repo := newFakeRepo()
+	provider := &fakePortionProvider{}
+	svc := ingredient.NewService(repo).WithPortionProvider(provider)
+	i := &ingredient.Ingredient{Name: "Manual"}
+	require.NoError(t, svc.Create(context.Background(), i))
+	_, err := svc.SyncPortionsFromFDC(context.Background(), i.ID)
+	assert.ErrorIs(t, err, ingredient.ErrNoFdcID)
+	assert.Equal(t, 0, provider.calls, "provider must not be called when no fdc_id")
+}
+
+func TestSyncPortionsFromFDC_NoProvider(t *testing.T) {
+	repo := newFakeRepo()
+	svc := ingredient.NewService(repo)
+	fdcID := "100"
+	i := &ingredient.Ingredient{Name: "Apple", Source: ingredient.SourceFDC, FdcID: &fdcID}
+	require.NoError(t, svc.Create(context.Background(), i))
+	_, err := svc.SyncPortionsFromFDC(context.Background(), i.ID)
+	assert.ErrorIs(t, err, domain.ErrLookupFailed)
+}
+
+func TestSyncPortionsFromFDC_IngredientNotFound(t *testing.T) {
+	svc := ingredient.NewService(newFakeRepo()).WithPortionProvider(&fakePortionProvider{})
+	_, err := svc.SyncPortionsFromFDC(context.Background(), 999)
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+func TestSyncPortionsFromFDC_SkipsZeroGrams(t *testing.T) {
+	repo := newFakeRepo()
+	provider := &fakePortionProvider{
+		portions: []ingredient.FoodPortion{
+			{RawUnit: "cup", GramWeight: 0},   // dropped
+			{RawUnit: "tbsp", GramWeight: -5}, // dropped
+			{RawUnit: "tbsp", GramWeight: 15}, // kept
+		},
+	}
+	svc := ingredient.NewService(repo).WithPortionProvider(provider)
+	fdcID := "100"
+	i := &ingredient.Ingredient{Name: "Something", Source: ingredient.SourceFDC, FdcID: &fdcID}
+	require.NoError(t, svc.Create(context.Background(), i))
+	count, err := svc.SyncPortionsFromFDC(context.Background(), i.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+}
+
 func TestUpsertPortion_OverwritesExisting(t *testing.T) {
 	repo := newFakeRepo()
 	svc := ingredient.NewService(repo)

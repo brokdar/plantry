@@ -13,6 +13,10 @@ type Candidate struct {
 	ImageURL   string `json:"image_url,omitempty"`
 	ExistingID *int64 `json:"existing_id,omitempty"`
 
+	// ServingQuantityG is grams per serving as reported by the upstream source
+	// (currently OFF). Used to seed a "serving" portion on ingredient create.
+	ServingQuantityG *float64 `json:"serving_quantity_g,omitempty"`
+
 	Kcal100g    *float64 `json:"kcal_100g"`
 	Protein100g *float64 `json:"protein_100g"`
 	Fat100g     *float64 `json:"fat_100g"`
@@ -48,4 +52,22 @@ type FoodProvider interface {
 type BarcodeProvider interface {
 	FoodProvider
 	LookupBarcode(ctx context.Context, barcode string) ([]Candidate, error)
+}
+
+// FoodPortion is the provider-neutral shape of a per-unit gram weight.
+// RawUnit is the unit name as the upstream source labelled it (e.g., FDC's
+// "cup", "tablespoon", or "undetermined" with the unit in Modifier). Callers
+// normalize via domain/units.Normalize before persisting.
+type FoodPortion struct {
+	RawUnit    string
+	Modifier   string
+	GramWeight float64
+}
+
+// PortionProvider supplies per-ingredient unit → grams conversions so the
+// catalogue can populate the ingredient_portions table. FDC implements this;
+// OFF exposes only a generic serving and is handled directly in the import
+// path rather than through this interface.
+type PortionProvider interface {
+	GetFoodPortions(ctx context.Context, fdcID int) ([]FoodPortion, error)
 }

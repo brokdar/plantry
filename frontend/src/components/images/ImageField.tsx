@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
+  Camera,
   Clipboard,
   Link as LinkIcon,
   Loader2,
@@ -69,6 +70,28 @@ export function ImageField(props: ImageFieldProps) {
     setCropSrc(url)
   }
 
+  async function startCropFlow(blob: Blob) {
+    const url = URL.createObjectURL(blob)
+    try {
+      const img = new Image()
+      const loaded = await new Promise<boolean>((resolve) => {
+        img.onload = () => resolve(true)
+        img.onerror = () => resolve(false)
+        img.src = url
+      })
+      if (loaded && img.naturalWidth > 0 && img.naturalHeight > 0) {
+        const natural = img.naturalWidth / img.naturalHeight
+        if (Math.abs(natural - aspect) < 0.02) {
+          await handleCropped(blob)
+          return
+        }
+      }
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+    openCropper(blob)
+  }
+
   function closeCropper() {
     setCropSrc(null)
     if (cropObjectUrlRef.current) {
@@ -103,7 +126,7 @@ export function ImageField(props: ImageFieldProps) {
       const file = image.getAsFile()
       if (!file) return
       e.preventDefault()
-      openCropper(file)
+      void startCropFlow(file)
     }
     document.addEventListener("paste", onPaste)
     return () => document.removeEventListener("paste", onPaste)
@@ -112,7 +135,7 @@ export function ImageField(props: ImageFieldProps) {
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ""
-    if (file) openCropper(file)
+    if (file) void startCropFlow(file)
   }
 
   async function handleFetchUrl() {
@@ -121,7 +144,7 @@ export function ImageField(props: ImageFieldProps) {
     try {
       const blob = await fetchUrlMutation.mutateAsync({ url })
       setUrlInput("")
-      openCropper(blob)
+      await startCropFlow(blob)
     } catch (err) {
       toastError(err, t)
     }
@@ -212,6 +235,28 @@ export function ImageField(props: ImageFieldProps) {
             <input
               type="file"
               accept="image/*"
+              className="hidden"
+              onChange={handleFileSelect}
+              disabled={isBusy}
+            />
+          </label>
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={isBusy}
+          className="md:hidden"
+          asChild
+        >
+          <label className="cursor-pointer">
+            <Camera className="mr-2 size-4" />
+            {t("image.take_photo")}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
               className="hidden"
               onChange={handleFileSelect}
               disabled={isBusy}

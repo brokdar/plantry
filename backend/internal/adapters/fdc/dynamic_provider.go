@@ -38,6 +38,20 @@ func (d *DynamicProvider) SearchByName(ctx context.Context, query string, limit 
 	return p.SearchByName(ctx, query, limit)
 }
 
+// GetFoodPortions implements ingredient.PortionProvider. Returns an empty
+// slice when no FDC key is configured so callers can degrade gracefully.
+func (d *DynamicProvider) GetFoodPortions(ctx context.Context, fdcID int) ([]ingredient.FoodPortion, error) {
+	key, err := d.settings.EffectiveFDCKey(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if key == "" {
+		return []ingredient.FoodPortion{}, nil
+	}
+	p := d.providerFor(key)
+	return p.GetFoodPortions(ctx, fdcID)
+}
+
 func (d *DynamicProvider) providerFor(key string) *Provider {
 	hash := key // lightweight comparison key; full cryptographic hashing unnecessary here
 	d.mu.RLock()
