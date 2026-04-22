@@ -24,9 +24,7 @@ test.describe("Mobile planner (day-tab layout)", () => {
 
       // Every active-day slot is reachable — seeded slot appears with its empty
       // placeholder button.
-      await expect(
-        page.locator(`[data-testid="cell-2-${slot.id}"]`).first()
-      ).toBeVisible()
+      await expect(page.getByTestId(`mobile-cell-2-${slot.id}`)).toBeVisible()
     } finally {
       await cleanupSlot(slot.id)
     }

@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Component } from "@/lib/api/components"
+import type { Template } from "@/lib/api/templates"
 import {
   useComponents,
   useSetComponentFavorite,
@@ -17,9 +18,11 @@ import {
 import { useAddPlateComponent, useSetPlateSkipped } from "@/lib/queries/plates"
 import { findPlateAt } from "@/lib/queries/plate-patches"
 import { useTimeSlots } from "@/lib/queries/slots"
+import { useApplyTemplate } from "@/lib/queries/templates"
 import { useCreatePlate, useWeek } from "@/lib/queries/weeks"
 import { slotLabel } from "@/lib/slot-label"
 import { toastError, toast } from "@/lib/toast"
+import { ApplyTemplateSection } from "@/components/templates/ApplyTemplateSection"
 
 import { ComposingTray, type TrayItem } from "./ComposingTray"
 import { PickerCard } from "./PickerCard"
@@ -102,6 +105,7 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
   const addCompMut = useAddPlateComponent(weekId)
   const setSkippedMut = useSetPlateSkipped(weekId)
   const favoriteMut = useSetComponentFavorite()
+  const applyTemplateMut = useApplyTemplate(weekId)
 
   function addToTray(component: Component) {
     setTray((prev) =>
@@ -166,6 +170,26 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
       await setSkippedMut.mutateAsync({
         plateId,
         input: { skipped: true, note: existingPlate?.note ?? null },
+      })
+      onBack()
+    } catch (err) {
+      toastError(err, t)
+    }
+  }
+
+  async function handleApplyTemplate(template: Template) {
+    try {
+      let plateId = existingPlate?.id
+      if (!plateId) {
+        const created = await createPlateMut.mutateAsync({
+          day,
+          slot_id: slotId,
+        })
+        plateId = created.id
+      }
+      await applyTemplateMut.mutateAsync({
+        id: template.id,
+        input: { plate_id: plateId },
       })
       onBack()
     } catch (err) {
@@ -265,6 +289,10 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
             ]}
           />
         </div>
+
+        {!existingPlate && (
+          <ApplyTemplateSection onPick={handleApplyTemplate} />
+        )}
 
         {items.length === 0 ? (
           <div className="grid place-items-center rounded-[14px] border border-dashed border-outline-variant/50 py-20 text-center text-on-surface-variant">

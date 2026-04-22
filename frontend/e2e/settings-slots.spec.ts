@@ -32,7 +32,12 @@ test.describe("Time slots settings", () => {
       await page.goto("/settings?tab=meal_slots")
 
       await page.getByLabel(/translation key/i).fill(nameKey)
-      await page.getByLabel(/^icon$/i).fill("Coffee")
+      // Icon field is a custom Popover combobox — open it, search, then click.
+      await page.getByRole("combobox").click()
+      await page.getByPlaceholder("Search icons…").fill("Coffee")
+      // Multiple lucide icons match "coffee" (Coffee, CoffeeIcon, LucideCoffee);
+      // anchor to an exact title match to pick the primary icon.
+      await page.getByTitle("Coffee", { exact: true }).click()
       await page.getByLabel(/order/i).fill("99")
 
       const createResp = page.waitForResponse(
@@ -72,7 +77,6 @@ test.describe("Time slots settings", () => {
 
   test("validation surfaces when name_key is empty", async ({ page }) => {
     await page.goto("/settings?tab=meal_slots")
-    await page.getByLabel(/^icon$/i).fill("Coffee")
     await page.getByRole("button", { name: "Save", exact: true }).click()
     // UI should show the validation error inline.
     await expect(page.getByText("name_key required")).toBeVisible()

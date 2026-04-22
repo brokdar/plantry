@@ -282,12 +282,12 @@ test.describe("Component Library", () => {
         await expect(trigger).toContainText(`Combo Chicken ${tag}`)
         await expect(search).toHaveCount(0)
         await expect(amountInput).toHaveValue("100")
-        await expect(gramsInput).toHaveValue("100.0")
+        await expect(gramsInput).toHaveValue("100")
       })
 
       await test.step("changing amount recomputes grams for matching unit", async () => {
         await amountInput.fill("250")
-        await expect(gramsInput).toHaveValue("250.0")
+        await expect(gramsInput).toHaveValue("250")
       })
 
       await test.step("save persists the ingredient row to the backend", async () => {

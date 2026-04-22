@@ -32,35 +32,34 @@ test.describe("Templates", () => {
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
       await expect(cell).toBeVisible()
 
-      // Create a plate with the main on Monday.
+      // Create a plate with the main on Monday via the picker.
       const createPlateResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /add a meal/i }).click()
+      await cell.getByRole("button", { name: /plan meal/i }).click()
       await page
         .getByRole("button", { name: new RegExp(`Chicken curry ${tag}`) })
         .click()
+      await page.getByTestId("tray-save").click()
       await createPlateResp
 
-      // Add a side.
+      // Add a side via the Actions dropdown → picker.
       const addCompResp = page.waitForResponse(
         (r) => /\/components$/.test(r.url()) && r.request().method() === "POST"
       )
-      await cell
-        .getByRole("button", { name: /add component/i })
-        .first()
-        .click()
+      await cell.hover()
+      await cell.getByRole("button", { name: /actions/i }).click()
+      await page.getByRole("menuitem", { name: /add component/i }).click()
       await page
         .getByRole("button", { name: new RegExp(`Basmati ${tag}`) })
         .click()
+      await page.getByTestId("tray-save").click()
       await addCompResp
 
       await expect(cell.getByText(`Basmati ${tag}`)).toBeVisible()
 
-      // Wait for the Add sheet overlay to fully detach before clicking Actions.
-      await expect(page.getByRole("dialog")).toHaveCount(0)
-
       // Save as template.
+      await cell.hover()
       await cell.getByRole("button", { name: /actions/i }).click()
       await page.getByRole("menuitem", { name: /save as template/i }).click()
 
@@ -75,6 +74,7 @@ test.describe("Templates", () => {
       templateId = ((await created.json()) as { id: number }).id
 
       // Delete the plate so the cell is empty again.
+      await cell.hover()
       await cell.getByRole("button", { name: /actions/i }).click()
       const deletePlateResp = page.waitForResponse(
         (r) =>
@@ -85,9 +85,8 @@ test.describe("Templates", () => {
 
       await expect(cell.getByText(`Chicken curry ${tag}`)).toHaveCount(0)
 
-      // Reopen the sheet from the empty cell and apply the template.
-      await expect(page.getByRole("dialog")).toHaveCount(0)
-      await cell.getByRole("button", { name: /add a meal/i }).click()
+      // Reopen the picker from the empty cell and apply the template.
+      await cell.getByRole("button", { name: /plan meal/i }).click()
 
       const createEmptyPlateResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"

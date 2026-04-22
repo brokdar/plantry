@@ -24,6 +24,7 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
+    locale: "en-US",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },

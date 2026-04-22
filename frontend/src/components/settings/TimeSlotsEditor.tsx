@@ -60,11 +60,16 @@ const RECOMMENDED_ICONS = [
   "FlameKindling",
 ]
 
+// Lucide exports each icon under three aliases (e.g. Coffee, CoffeeIcon,
+// LucideCoffee). Keep the canonical PascalCase form and drop provider/helper
+// exports that happen to start with a capital letter.
 const ALL_ICON_NAMES: string[] = Object.keys(Lucide as Record<string, unknown>)
   .filter(
     (k) =>
       /^[A-Z]/.test(k) &&
-      typeof (Lucide as Record<string, unknown>)[k] === "function"
+      !/Icon$/.test(k) &&
+      !/^Lucide/.test(k) &&
+      k !== "createLucideIcon"
   )
   .sort()
 

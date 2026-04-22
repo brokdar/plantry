@@ -39,8 +39,8 @@ export const componentSchema = z.object({
   prep_minutes: z.coerce.number().min(0).default(0),
   cook_minutes: z.coerce.number().min(0).default(0),
   notes: z.string().nullable().optional(),
-  ingredients: z.array(componentIngredientSchema).min(1).default([]),
-  instructions: z.array(instructionSchema).min(1).default([]),
+  ingredients: z.array(componentIngredientSchema).default([]),
+  instructions: z.array(instructionSchema).default([]),
   tags: z.array(z.string().min(1)).default([]),
 })
 

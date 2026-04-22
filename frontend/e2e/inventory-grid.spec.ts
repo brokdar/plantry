@@ -22,7 +22,7 @@ test.describe("Ingredient Inventory (card grid)", () => {
       const card = page.getByTestId(`ingredient-card-${chicken.id}`)
       await expect(card).toBeVisible()
       await expect(card.getByText(chicken.name)).toBeVisible()
-      await expect(card).toContainText("165 kcal")
+      await expect(card).toContainText("165kcal")
       await expect(card).toContainText("Manual")
     } finally {
       await cleanupIngredient(chicken.id)

@@ -47,10 +47,11 @@ test.describe("Shopping List and Nutrition", () => {
       const createPlateResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /add a meal/i }).click()
+      await cell.getByRole("button", { name: /plan meal/i }).click()
       await page
         .getByRole("button", { name: new RegExp(`Curry ${tag}`) })
         .click()
+      await page.getByTestId("tray-save").click()
       await createPlateResp
 
       // Open shopping list.
@@ -125,10 +126,11 @@ test.describe("Shopping List and Nutrition", () => {
       const createPlateResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /add a meal/i }).click()
+      await cell.getByRole("button", { name: /plan meal/i }).click()
       await page
         .getByRole("button", { name: new RegExp(`Bowl ${tag}`) })
         .click()
+      await page.getByTestId("tray-save").click()
       await createPlateResp
 
       // Open nutrition panel.

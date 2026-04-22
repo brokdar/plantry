@@ -33,6 +33,7 @@ test.describe("Slot skip + favorite (redesign)", () => {
       await page
         .getByRole("button", { name: new RegExp(`Ramen ${tag}`) })
         .click()
+      await page.getByTestId("tray-save").click()
       await createResp
       await expect(cell.getByText(`Ramen ${tag}`)).toBeVisible()
 
@@ -79,6 +80,7 @@ test.describe("Slot skip + favorite (redesign)", () => {
       )
       await cell.getByRole("button", { name: /plan meal/i }).click()
       await page.getByRole("button", { name: new RegExp(`Pho ${tag}`) }).click()
+      await page.getByTestId("tray-save").click()
       await createResp
       await expect(cell.getByText(`Pho ${tag}`)).toBeVisible()
 

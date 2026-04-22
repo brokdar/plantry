@@ -199,7 +199,10 @@ export function MobilePlannerGrid({ week, slots }: MobilePlannerGridProps) {
         {slots.map((slot) => {
           const plate = findPlateAt(week, activeDay, slot.id)
           return (
-            <li key={slot.id}>
+            <li
+              key={slot.id}
+              data-testid={`mobile-cell-${activeDay}-${slot.id}`}
+            >
               <div className="mb-1.5 flex items-center gap-2 px-1">
                 <SlotIcon name={slot.icon} />
                 <span className="font-heading text-[11px] font-bold tracking-[0.16em] text-on-surface-variant uppercase">

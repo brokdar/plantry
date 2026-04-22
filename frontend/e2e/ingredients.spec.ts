@@ -71,7 +71,7 @@ test.describe("Ingredient Catalogue", () => {
       ).toBeVisible()
       await expect(
         page.getByTestId(`ingredient-card-${createdId}`)
-      ).toContainText("165 kcal")
+      ).toContainText("165kcal")
     } finally {
       if (createdId) await cleanupIngredient(createdId)
     }
@@ -155,7 +155,7 @@ test.describe("Ingredient Catalogue", () => {
       // Back on list, verify updated value on the card
       await expect(
         page.getByTestId(`ingredient-card-${ingredient.id}`)
-      ).toContainText("120 kcal")
+      ).toContainText("120kcal")
     } finally {
       await cleanupIngredient(ingredient.id)
     }

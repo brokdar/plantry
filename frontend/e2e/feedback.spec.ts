@@ -43,27 +43,27 @@ test.describe("Plate feedback + AI memory loop", () => {
       const createPlateResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /add a meal/i }).click()
+      await cell.getByRole("button", { name: /plan meal/i }).click()
       await page
         .getByRole("button", { name: new RegExp(`Curry ${tag}`) })
         .click()
+      await page.getByTestId("tray-save").click()
       await createPlateResp
       await expect(cell.getByText(`Curry ${tag}`)).toBeVisible()
 
-      // Click "Loved" on the feedback bar. Wait for the PUT feedback response.
+      // Click "Loved" on the slot card. Wait for the PUT feedback response.
+      await cell.hover()
+      const lovedBtn = cell.getByTestId("slot-action-love")
       const feedbackResp = page.waitForResponse(
         (r) =>
           /\/api\/plates\/\d+\/feedback$/.test(r.url()) &&
           r.request().method() === "PUT"
       )
-      await cell.getByRole("button", { name: "Loved" }).click()
+      await lovedBtn.click()
       await feedbackResp
 
       // The pressed state flips on.
-      await expect(cell.getByRole("button", { name: "Loved" })).toHaveAttribute(
-        "aria-pressed",
-        "true"
-      )
+      await expect(lovedBtn).toHaveAttribute("aria-pressed", "true")
 
       // Fetch the debug endpoint directly (dev-mode only) and assert the
       // component's tag landed in the profile preferences section of the
@@ -111,33 +111,33 @@ test.describe("Plate feedback + AI memory loop", () => {
       const createPlateResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /add a meal/i }).click()
+      await cell.getByRole("button", { name: /plan meal/i }).click()
       await page
         .getByRole("button", { name: new RegExp(`Bowl ${tag}`) })
         .click()
+      await page.getByTestId("tray-save").click()
       await createPlateResp
+
+      await cell.hover()
+      const lovedBtn = cell.getByTestId("slot-action-love")
 
       const put = page.waitForResponse(
         (r) =>
           /\/api\/plates\/\d+\/feedback$/.test(r.url()) &&
           r.request().method() === "PUT"
       )
-      await cell.getByRole("button", { name: "Cooked" }).click()
+      await lovedBtn.click()
       await put
-      await expect(
-        cell.getByRole("button", { name: "Cooked" })
-      ).toHaveAttribute("aria-pressed", "true")
+      await expect(lovedBtn).toHaveAttribute("aria-pressed", "true")
 
       const del = page.waitForResponse(
         (r) =>
           /\/api\/plates\/\d+\/feedback$/.test(r.url()) &&
           r.request().method() === "DELETE"
       )
-      await cell.getByRole("button", { name: "Cooked" }).click()
+      await lovedBtn.click()
       await del
-      await expect(
-        cell.getByRole("button", { name: "Cooked" })
-      ).not.toHaveAttribute("aria-pressed", "true")
+      await expect(lovedBtn).toHaveAttribute("aria-pressed", "false")
     } finally {
       await cleanupComponent(comp.id)
       await cleanupIngredient(ing.id)

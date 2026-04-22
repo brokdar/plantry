@@ -35,6 +35,7 @@ test.describe("Weekly planner", () => {
       await page
         .getByRole("button", { name: new RegExp(`Chicken curry ${tag}`) })
         .click()
+      await page.getByTestId("tray-save").click()
       await createPlateResp
 
       // Hero title shows the component name.
