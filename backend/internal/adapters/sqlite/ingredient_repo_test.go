@@ -224,6 +224,34 @@ func TestListFTSPrefixMatch(t *testing.T) {
 	assert.Equal(t, "Chicken Breast", result.Items[0].Name)
 }
 
+func TestListSearchSubstring(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewIngredientRepo(db)
+	ctx := context.Background()
+
+	require.NoError(t, repo.Create(ctx, &ingredient.Ingredient{Name: "Goldmais", Source: "manual"}))
+	require.NoError(t, repo.Create(ctx, &ingredient.Ingredient{Name: "Blaubeere", Source: "manual"}))
+	require.NoError(t, repo.Create(ctx, &ingredient.Ingredient{Name: "Tofu", Source: "manual"}))
+
+	// "mais" is inside "Goldmais" — FTS5 word-boundary tokenizer misses this; LIKE fallback catches it.
+	result, err := repo.List(ctx, ingredient.ListQuery{Search: "mais", Limit: 50, SortBy: "name"})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Total)
+	require.Len(t, result.Items, 1)
+	assert.Equal(t, "Goldmais", result.Items[0].Name)
+
+	// Multi-token: both tokens must appear somewhere in name (AND across tokens).
+	require.NoError(t, repo.Create(ctx, &ingredient.Ingredient{Name: "Gelber Goldmais", Source: "manual"}))
+	multi, err := repo.List(ctx, ingredient.ListQuery{Search: "gelb mais", Limit: 50, SortBy: "name"})
+	require.NoError(t, err)
+	assert.Equal(t, 1, multi.Total)
+
+	// LIKE wildcards in user input must be treated literally.
+	safe, err := repo.List(ctx, ingredient.ListQuery{Search: "%_", Limit: 50, SortBy: "name"})
+	require.NoError(t, err)
+	assert.Equal(t, 0, safe.Total)
+}
+
 func TestNullableFieldsRoundtrip(t *testing.T) {
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewIngredientRepo(db)

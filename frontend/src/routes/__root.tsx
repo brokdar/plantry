@@ -1,39 +1,56 @@
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router"
-import { Leaf } from "lucide-react"
 import { useTranslation } from "react-i18next"
+
+import { AppShell } from "@/components/shell/AppShell"
+import { Button } from "@/components/ui/button"
 
 export const Route = createRootRoute({
   component: RootComponent,
+  notFoundComponent: NotFoundPage,
+  errorComponent: ErrorPage,
 })
 
 function RootComponent() {
-  const { t } = useTranslation()
-
   return (
-    <div className="min-h-svh bg-background text-foreground">
-      <header className="border-b border-border">
-        <nav className="mx-auto flex max-w-6xl items-center gap-3 px-6 py-4">
-          <Link to="/" className="flex items-center gap-2">
-            <Leaf className="h-5 w-5 text-primary" aria-hidden="true" />
-            <span className="text-lg font-semibold">{t("nav.brand")}</span>
-          </Link>
-          <Link
-            to="/ingredients"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground [&.active]:text-foreground"
-          >
-            {t("nav.ingredients")}
-          </Link>
-          <Link
-            to="/components"
-            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground [&.active]:text-foreground"
-          >
-            {t("nav.components")}
-          </Link>
-        </nav>
-      </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <Outlet />
-      </main>
+    <AppShell>
+      <Outlet />
+    </AppShell>
+  )
+}
+
+function NotFoundPage() {
+  const { t } = useTranslation()
+  return (
+    <div className="mx-auto flex max-w-lg flex-col items-center gap-4 px-4 py-24 text-center">
+      <p className="font-heading text-7xl font-bold text-primary opacity-20">
+        404
+      </p>
+      <h1 className="font-heading text-2xl font-bold text-on-surface">
+        {t("error.page_not_found")}
+      </h1>
+      <p className="text-sm text-on-surface-variant">
+        {t("error.page_not_found_body")}
+      </p>
+      <Button asChild>
+        <Link to="/">{t("nav.planner")}</Link>
+      </Button>
+    </div>
+  )
+}
+
+function ErrorPage({ error }: { error: Error }) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-4 text-center">
+      <h1 className="font-heading text-2xl font-bold text-on-surface">
+        {t("error.server")}
+      </h1>
+      <p className="text-sm text-on-surface-variant">
+        {error.message || t("error.page_error_body")}
+      </p>
+      <Button onClick={() => window.location.reload()}>
+        {t("error.reload")}
+      </Button>
     </div>
   )
 }

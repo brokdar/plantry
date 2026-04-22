@@ -34,6 +34,14 @@ func NewComponentRepo(db *sql.DB) *ComponentRepo {
 	return &ComponentRepo{db: db, q: sqlcgen.New(db)}
 }
 
+// newComponentRepoTx returns a ComponentRepo bound to a transaction. Used by
+// TxRunner when a multi-aggregate write must atomically include component
+// mutations (e.g. marking components cooked from a feedback event).
+// db is left nil so Create/Update know they are already inside an outer tx.
+func newComponentRepoTx(tx *sql.Tx) *ComponentRepo {
+	return &ComponentRepo{db: nil, q: sqlcgen.New(tx)}
+}
+
 func (r *ComponentRepo) Create(ctx context.Context, c *component.Component) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -154,7 +162,8 @@ func (r *ComponentRepo) List(ctx context.Context, q component.ListQuery) (*compo
 	}
 	orderClause := col + " " + dir
 
-	builder := sq.Select("*").From("components").OrderBy(orderClause).Limit(uint64(q.Limit)).Offset(uint64(q.Offset))
+	// Favorites surface first, then fall through to user-chosen ordering.
+	builder := sq.Select("*").From("components").OrderBy("favorite DESC", orderClause).Limit(uint64(q.Limit)).Offset(uint64(q.Offset))
 	countBuilder := sq.Select("COUNT(*)").From("components")
 
 	if q.Search != "" {
@@ -172,6 +181,10 @@ func (r *ComponentRepo) List(ctx context.Context, q component.ListQuery) (*compo
 		tagClause := "id IN (SELECT component_id FROM component_tags WHERE tag = ?)"
 		builder = builder.Where(tagClause, q.Tag)
 		countBuilder = countBuilder.Where(tagClause, q.Tag)
+	}
+	if q.FavoriteOnly {
+		builder = builder.Where("favorite = 1")
+		countBuilder = countBuilder.Where("favorite = 1")
 	}
 
 	countSQL, countArgs, err := countBuilder.PlaceholderFormat(sq.Question).ToSql()
@@ -201,6 +214,7 @@ func (r *ComponentRepo) List(ctx context.Context, q component.ListQuery) (*compo
 			&row.ReferencePortions, &row.PrepMinutes, &row.CookMinutes,
 			&row.ImagePath, &row.Notes, &row.LastCookedAt,
 			&row.CookCount, &row.CreatedAt, &row.UpdatedAt,
+			&row.Favorite,
 		); err != nil {
 			return nil, err
 		}
@@ -215,6 +229,20 @@ func (r *ComponentRepo) List(ctx context.Context, q component.ListQuery) (*compo
 		return nil, err
 	}
 
+	// Load tags per item so list consumers can render tag chips/filters
+	// without an extra round trip per card. N stays bounded by Limit (≤ page
+	// size), which is small enough that a loop beats writing a custom IN query.
+	for i := range items {
+		tagRows, err := r.q.ListComponentTags(ctx, items[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		items[i].Tags = make([]string, len(tagRows))
+		for j, row := range tagRows {
+			items[i].Tags[j] = row.Tag
+		}
+	}
+
 	return &component.ListResult{Items: items, Total: total}, nil
 }
 
@@ -224,6 +252,73 @@ func (r *ComponentRepo) CreateVariantGroup(ctx context.Context, name string) (in
 		return 0, err
 	}
 	return group.ID, nil
+}
+
+// Exists reports whether a component with the given ID exists.
+// Implements plate.ComponentChecker.
+func (r *ComponentRepo) Exists(ctx context.Context, id int64) (bool, error) {
+	_, err := r.q.GetComponent(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (r *ComponentRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*component.Component, error) {
+	fav := int64(0)
+	if favorite {
+		fav = 1
+	}
+	row, err := r.q.SetComponentFavorite(ctx, sqlcgen.SetComponentFavoriteParams{
+		ID:       id,
+		Favorite: fav,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
+		}
+		return nil, err
+	}
+	var c component.Component
+	mapComponentToDomain(&row, &c)
+	if err := r.loadChildren(ctx, r.q, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (r *ComponentRepo) MarkCooked(ctx context.Context, id int64, at time.Time) error {
+	return r.q.MarkComponentCooked(ctx, sqlcgen.MarkComponentCookedParams{
+		LastCookedAt: sql.NullString{String: at.UTC().Format(timeLayout), Valid: true},
+		ID:           id,
+	})
+}
+
+func (r *ComponentRepo) Insights(ctx context.Context, cutoff time.Time, forgottenLimit, mostCookedLimit int) (component.Insights, error) {
+	forgottenRows, err := r.q.ListForgottenComponents(ctx, sqlcgen.ListForgottenComponentsParams{
+		LastCookedAt: sql.NullString{String: cutoff.UTC().Format(timeLayout), Valid: true},
+		Limit:        int64(forgottenLimit),
+	})
+	if err != nil {
+		return component.Insights{}, err
+	}
+	mostCookedRows, err := r.q.ListMostCookedComponents(ctx, int64(mostCookedLimit))
+	if err != nil {
+		return component.Insights{}, err
+	}
+
+	forgotten := make([]component.Component, len(forgottenRows))
+	for i := range forgottenRows {
+		mapComponentToDomain(&forgottenRows[i], &forgotten[i])
+	}
+	mostCooked := make([]component.Component, len(mostCookedRows))
+	for i := range mostCookedRows {
+		mapComponentToDomain(&mostCookedRows[i], &mostCooked[i])
+	}
+	return component.Insights{Forgotten: forgotten, MostCooked: mostCooked}, nil
 }
 
 func (r *ComponentRepo) Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]component.Component, error) {
@@ -280,21 +375,39 @@ func (r *ComponentRepo) insertChildren(ctx context.Context, qtx *sqlcgen.Queries
 }
 
 func (r *ComponentRepo) loadChildren(ctx context.Context, q *sqlcgen.Queries, c *component.Component) error {
-	ciRows, err := q.ListComponentIngredients(ctx, c.ID)
+	// Load component ingredients with their ingredient name via JOIN so the
+	// response surfaces a human-readable label without requiring callers to
+	// refetch ingredients separately.
+	const listCIWithName = `
+		SELECT ci.id, ci.component_id, ci.ingredient_id, i.name,
+		       ci.amount, ci.unit, ci.grams, ci.sort_order
+		FROM component_ingredients ci
+		JOIN ingredients i ON i.id = ci.ingredient_id
+		WHERE ci.component_id = ?
+		ORDER BY ci.sort_order`
+	rows, err := r.db.QueryContext(ctx, listCIWithName, c.ID)
 	if err != nil {
 		return err
 	}
-	c.Ingredients = make([]component.ComponentIngredient, len(ciRows))
-	for i, row := range ciRows {
-		c.Ingredients[i] = component.ComponentIngredient{
-			ID:           row.ID,
-			ComponentID:  row.ComponentID,
-			IngredientID: row.IngredientID,
-			Amount:       row.Amount,
-			Unit:         row.Unit,
-			Grams:        row.Grams,
-			SortOrder:    int(row.SortOrder),
+	c.Ingredients = nil
+	for rows.Next() {
+		var ci component.ComponentIngredient
+		var sortOrder int64
+		if err := rows.Scan(
+			&ci.ID, &ci.ComponentID, &ci.IngredientID, &ci.IngredientName,
+			&ci.Amount, &ci.Unit, &ci.Grams, &sortOrder,
+		); err != nil {
+			_ = rows.Close()
+			return err
 		}
+		ci.SortOrder = int(sortOrder)
+		c.Ingredients = append(c.Ingredients, ci)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := rows.Err(); err != nil {
+		return err
 	}
 
 	instRows, err := q.ListComponentInstructions(ctx, c.ID)
@@ -333,6 +446,7 @@ func mapComponentToDomain(row *sqlcgen.Component, c *component.Component) {
 	c.ImagePath = fromNullString(row.ImagePath)
 	c.Notes = fromNullString(row.Notes)
 	c.CookCount = int(row.CookCount)
+	c.Favorite = row.Favorite != 0
 	c.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
 	c.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
 	if row.LastCookedAt.Valid {

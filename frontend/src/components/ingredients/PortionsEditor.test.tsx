@@ -1,3 +1,4 @@
+import React from "react"
 import { describe, expect, test, vi, beforeEach } from "vitest"
 import { screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -23,31 +24,35 @@ describe("PortionsEditor", () => {
       { ingredient_id: 1, unit: "tbsp", grams: 15 },
     ])
 
-    renderWithRouter(<PortionsEditor ingredientId={1} />)
+    renderWithRouter(<PortionsEditor mode="bound" ingredientId={1} />)
 
-    expect(await screen.findByText("cup")).toBeInTheDocument()
-    expect(screen.getByText("240g")).toBeInTheDocument()
-    expect(screen.getByText("tbsp")).toBeInTheDocument()
-    expect(screen.getByText("15g")).toBeInTheDocument()
+    // UnitLabel shows canonical key + localized name; assert both rows landed.
+    expect(await screen.findByText("240 g")).toBeInTheDocument()
+    expect(screen.getByText("15 g")).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: /delete cup/i })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: /delete tbsp/i })
+    ).toBeInTheDocument()
   })
 
-  test("adds a new portion", async () => {
+  test("adds a new portion via the unit picker", async () => {
     const user = userEvent.setup()
     vi.mocked(listPortions).mockResolvedValue([])
     vi.mocked(upsertPortion).mockResolvedValue(undefined)
 
-    renderWithRouter(<PortionsEditor ingredientId={1} />)
+    renderWithRouter(<PortionsEditor mode="bound" ingredientId={1} />)
 
-    await screen.findByText("Portions")
+    await screen.findByTestId("portion-unit")
 
-    const unitInput = screen.getByPlaceholderText(/cup, tbsp, slice/i)
-    await user.type(unitInput, "slice")
+    await user.click(screen.getByTestId("portion-unit"))
+    await user.click(await screen.findByTestId("unit-option-slice"))
 
-    const gramsInput = screen.getByRole("spinbutton")
+    const gramsInput = screen.getByTestId("portion-grams")
     await user.type(gramsInput, "30")
 
-    const addButton = screen.getByRole("button", { name: /add portion/i })
-    await user.click(addButton)
+    await user.click(screen.getByRole("button", { name: /add portion/i }))
 
     await waitFor(() => {
       expect(upsertPortion).toHaveBeenCalledWith(1, {
@@ -57,6 +62,23 @@ describe("PortionsEditor", () => {
     })
   })
 
+  test("hides units that already have a portion so duplicates can't be added", async () => {
+    const user = userEvent.setup()
+    vi.mocked(listPortions).mockResolvedValue([
+      { ingredient_id: 1, unit: "tbsp", grams: 15 },
+    ])
+
+    renderWithRouter(<PortionsEditor mode="bound" ingredientId={1} />)
+
+    await screen.findByTestId("portion-unit")
+    await user.click(screen.getByTestId("portion-unit"))
+
+    // tbsp is already in use → not offered in the picker.
+    expect(screen.queryByTestId("unit-option-tbsp")).not.toBeInTheDocument()
+    // Other units remain available.
+    expect(await screen.findByTestId("unit-option-cup")).toBeInTheDocument()
+  })
+
   test("deletes a portion", async () => {
     const user = userEvent.setup()
     vi.mocked(listPortions).mockResolvedValue([
@@ -64,11 +86,11 @@ describe("PortionsEditor", () => {
     ])
     vi.mocked(deletePortion).mockResolvedValue(undefined)
 
-    renderWithRouter(<PortionsEditor ingredientId={1} />)
+    renderWithRouter(<PortionsEditor mode="bound" ingredientId={1} />)
 
-    await screen.findByText("cup")
-
-    const deleteButton = screen.getByRole("button", { name: /delete cup/i })
+    const deleteButton = await screen.findByRole("button", {
+      name: /delete cup/i,
+    })
     await user.click(deleteButton)
 
     await waitFor(() => {
@@ -76,39 +98,54 @@ describe("PortionsEditor", () => {
     })
   })
 
-  test("does not submit with empty unit", async () => {
+  test("add button stays disabled until both fields are filled", async () => {
     const user = userEvent.setup()
     vi.mocked(listPortions).mockResolvedValue([])
 
-    renderWithRouter(<PortionsEditor ingredientId={1} />)
-    await screen.findByText("Portions")
+    renderWithRouter(<PortionsEditor mode="bound" ingredientId={1} />)
 
-    // Only fill grams, leave unit empty
-    const gramsInput = screen.getByRole("spinbutton")
-    await user.type(gramsInput, "30")
+    await screen.findByTestId("portion-unit")
 
     const addButton = screen.getByRole("button", { name: /add portion/i })
-    // Button should be disabled when unit is empty
+    expect(addButton).toBeDisabled()
+
+    await user.type(screen.getByTestId("portion-grams"), "30")
     expect(addButton).toBeDisabled()
   })
 
-  test("does not submit with zero grams", async () => {
+  test("staged mode: add and delete portions via onChange without API calls", async () => {
     const user = userEvent.setup()
-    vi.mocked(listPortions).mockResolvedValue([])
-    vi.mocked(upsertPortion).mockResolvedValue(undefined)
+    const changes: Array<{ unit: string; grams: number }[]> = []
 
-    renderWithRouter(<PortionsEditor ingredientId={1} />)
-    await screen.findByText("Portions")
+    function Harness() {
+      const [portions, setPortions] = React.useState<
+        { unit: string; grams: number }[]
+      >([])
+      return (
+        <PortionsEditor
+          mode="staged"
+          portions={portions}
+          onChange={(next) => {
+            changes.push(next)
+            setPortions(next)
+          }}
+        />
+      )
+    }
 
-    const unitInput = screen.getByPlaceholderText(/cup, tbsp, slice/i)
-    await user.type(unitInput, "slice")
+    renderWithRouter(<Harness />)
 
-    const gramsInput = screen.getByRole("spinbutton")
-    await user.type(gramsInput, "0")
+    await user.click(await screen.findByTestId("portion-unit"))
+    await user.click(await screen.findByTestId("unit-option-slice"))
+    await user.type(screen.getByTestId("portion-grams"), "25")
+    await user.click(screen.getByRole("button", { name: /add portion/i }))
 
-    const addButton = screen.getByRole("button", { name: /add portion/i })
-    await user.click(addButton)
-
+    expect(changes.at(-1)).toEqual([{ unit: "slice", grams: 25 }])
     expect(upsertPortion).not.toHaveBeenCalled()
+    expect(await screen.findByText("25 g")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: /delete slice/i }))
+    expect(changes.at(-1)).toEqual([])
+    expect(deletePortion).not.toHaveBeenCalled()
   })
 })

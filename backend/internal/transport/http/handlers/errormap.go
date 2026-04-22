@@ -15,10 +15,34 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 		return http.StatusConflict, "error." + resource + ".duplicate_name"
 	case errors.Is(err, domain.ErrInUse):
 		return http.StatusConflict, "error." + resource + ".in_use"
+	case errors.Is(err, domain.ErrSlotUnknown):
+		return http.StatusUnprocessableEntity, "error.plate.slot_unknown"
+	case errors.Is(err, domain.ErrInvalidDay):
+		return http.StatusBadRequest, "error.invalid_body"
 	case errors.Is(err, domain.ErrInvalidInput):
 		return http.StatusBadRequest, "error.invalid_body"
 	case errors.Is(err, domain.ErrLookupFailed):
 		return http.StatusBadGateway, "error." + resource + ".lookup_failed"
+	case errors.Is(err, domain.ErrInvalidMacros):
+		return http.StatusBadRequest, "error.profile.invalid_macros"
+	case errors.Is(err, domain.ErrAIProviderMissing):
+		return http.StatusServiceUnavailable, "error.ai.provider_missing"
+	case errors.Is(err, domain.ErrAIStreamInterrupted):
+		return http.StatusBadGateway, "error.ai.stream_interrupted"
+	case errors.Is(err, domain.ErrInvalidFeedbackStatus):
+		return http.StatusUnprocessableEntity, "error.plate.feedback_invalid_status"
+	case errors.Is(err, domain.ErrImportBodyTooLarge):
+		return http.StatusRequestEntityTooLarge, "error.import.body_too_large"
+	case errors.Is(err, domain.ErrImportNotHTML):
+		return http.StatusUnsupportedMediaType, "error.import.not_html"
+	case errors.Is(err, domain.ErrImportNoRecipe):
+		return http.StatusUnprocessableEntity, "error.import.no_recipe"
+	case errors.Is(err, domain.ErrImportFetchFailed):
+		return http.StatusBadGateway, "error.import.fetch_failed"
+	case errors.Is(err, domain.ErrImportLLMFailed):
+		return http.StatusBadGateway, "error.import.llm_failed"
+	case errors.Is(err, domain.ErrImportInvalidResolution):
+		return http.StatusUnprocessableEntity, "error.import.invalid_resolution"
 	default:
 		return http.StatusInternalServerError, "error.server"
 	}

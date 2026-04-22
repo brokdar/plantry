@@ -8,8 +8,11 @@ import {
   getComponentNutrition,
   createVariant,
   listVariants,
+  getInsights,
+  setComponentFavorite,
   type ComponentListParams,
   type ComponentInput,
+  type InsightsParams,
 } from "@/lib/api/components"
 import { queryClient } from "@/lib/query-client"
 import { componentKeys } from "./keys"
@@ -73,6 +76,26 @@ export function useVariants(id: number) {
     queryKey: componentKeys.variants(id),
     queryFn: () => listVariants(id),
     enabled: id > 0,
+  })
+}
+
+export function useInsights(params?: InsightsParams) {
+  return useQuery({
+    queryKey: componentKeys.insights(params ?? {}),
+    queryFn: () => getInsights(params),
+  })
+}
+
+export function useSetComponentFavorite() {
+  return useMutation({
+    mutationFn: ({ id, favorite }: { id: number; favorite: boolean }) =>
+      setComponentFavorite(id, favorite),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: componentKeys.lists() })
+      void queryClient.invalidateQueries({
+        queryKey: componentKeys.detail(id),
+      })
+    },
   })
 }
 

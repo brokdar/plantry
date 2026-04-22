@@ -20,6 +20,16 @@ UPDATE components SET
 WHERE id = ?
 RETURNING *;
 
+-- name: SetComponentFavorite :one
+UPDATE components SET
+    favorite   = ?,
+    updated_at = datetime('now')
+WHERE id = ?
+RETURNING *;
+
+-- name: ListFavoriteComponents :many
+SELECT * FROM components WHERE favorite = 1 ORDER BY name;
+
 -- name: DeleteComponent :execresult
 DELETE FROM components WHERE id = ?;
 
@@ -57,3 +67,22 @@ INSERT INTO variant_groups (name) VALUES (?) RETURNING *;
 
 -- name: ListSiblingComponents :many
 SELECT * FROM components WHERE variant_group_id = ? AND id != ? ORDER BY name;
+
+-- name: MarkComponentCooked :exec
+UPDATE components
+SET last_cooked_at = ?,
+    cook_count     = cook_count + 1,
+    updated_at     = datetime('now')
+WHERE id = ?;
+
+-- name: ListForgottenComponents :many
+SELECT * FROM components
+WHERE last_cooked_at IS NULL OR last_cooked_at < ?
+ORDER BY (last_cooked_at IS NOT NULL), last_cooked_at ASC, name ASC
+LIMIT ?;
+
+-- name: ListMostCookedComponents :many
+SELECT * FROM components
+WHERE cook_count > 0
+ORDER BY cook_count DESC, last_cooked_at DESC, name ASC
+LIMIT ?;

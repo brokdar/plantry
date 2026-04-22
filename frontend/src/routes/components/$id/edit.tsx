@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
-import { Skeleton } from "@/components/ui/skeleton"
+
 import { ComponentEditor } from "@/components/components/ComponentEditor"
+import { PageHeader } from "@/components/editorial/PageHeader"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useComponent } from "@/lib/queries/components"
 
 export const Route = createFileRoute("/components/$id/edit")({
@@ -18,7 +20,7 @@ function EditComponentPage() {
 
   if (Number.isNaN(numericId)) {
     return (
-      <p className="py-12 text-center text-muted-foreground">
+      <p className="py-12 text-center text-on-surface-variant">
         {t("error.invalid_id")}
       </p>
     )
@@ -26,36 +28,34 @@ function EditComponentPage() {
 
   if (isLoading) {
     return (
-      <section className="space-y-6">
-        <Skeleton className="h-8 w-48" />
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 md:px-8 md:py-12">
+        <Skeleton className="h-10 w-48" />
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-10 w-full" />
-      </section>
+      </div>
     )
   }
 
   if (!component) {
     return (
-      <p className="py-12 text-center text-muted-foreground">
+      <p className="py-12 text-center text-on-surface-variant">
         {t("error.not_found")}
       </p>
     )
   }
 
   return (
-    <section className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">
-        {t("component.edit")}
-      </h1>
+    <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 md:px-8 md:py-12">
+      <PageHeader
+        eyebrow={t("component.edit_eyebrow")}
+        title={t("component.edit_title")}
+        description={t("component.edit_subtitle")}
+      />
       <ComponentEditor
         component={component}
-        onSuccess={() =>
-          navigate({
-            to: "/components/$id",
-            params: { id: String(component.id) },
-          })
-        }
+        onSuccess={() => navigate({ to: "/components" })}
+        onDeleted={() => navigate({ to: "/components" })}
       />
-    </section>
+    </div>
   )
 }

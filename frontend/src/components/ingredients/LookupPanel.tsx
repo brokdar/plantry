@@ -1,29 +1,105 @@
 import { useState, useDeferredValue } from "react"
 import { useTranslation } from "react-i18next"
-import { Search, ScanBarcode, Loader2 } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { useRouterState } from "@tanstack/react-router"
+import {
+  Check,
+  Database,
+  Globe,
+  Loader2,
+  ScanBarcode,
+  Search,
+  Sparkles,
+} from "lucide-react"
+
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { useDebugWorkflow } from "@/lib/debugWorkflow"
 import { useLookup } from "@/lib/queries/lookup"
 import type { LookupCandidate } from "@/lib/api/lookup"
+import { cn } from "@/lib/utils"
+
 import { BarcodeScannerModal } from "./BarcodeScannerModal"
+import { LookupDebugPanel } from "./LookupDebugPanel"
+import { NutritionDetail } from "./NutritionDetail"
 
 interface LookupPanelProps {
   onSelect: (candidate: LookupCandidate) => void
 }
 
+/**
+ * LookupPanel is the ingredient-resolution surface that sits inside the
+ * new-ingredient editor. It combines a text query and barcode entry, shows
+ * AI-ranked results in a compact list, previews the nutrition payload of the
+ * selected candidate, and — when `?debug=true` is on the URL — surfaces the
+ * full backend pipeline trace.
+ */
 export function LookupPanel({ onSelect }: LookupPanelProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [search, setSearch] = useState("")
   const [barcode, setBarcode] = useState("")
   const [scannerOpen, setScannerOpen] = useState(false)
+  // User-chosen index; null means "follow the server's recommendation".
+  const [userSelectedIndex, setUserSelectedIndex] = useState<number | null>(
+    null
+  )
+  // Reset the user's pick when a new result set arrives — compared against
+  // the data reference, which changes whenever the query or response does.
+  const [lastDataRef, setLastDataRef] = useState<unknown>(null)
   const deferredSearch = useDeferredValue(search)
 
+  // Debug flag — the settings toggle (localStorage-backed) is the primary
+  // source; `?debug=true` on the URL is a per-session fallback, useful when
+  // sharing reproducer links without touching a user's settings.
+  const [debugPref] = useDebugWorkflow()
+  const debugURL = useRouterState({
+    select: (s) =>
+      (s.location.search as { debug?: boolean } | undefined)?.debug === true,
+  })
+  const debug = debugPref || debugURL
+
+  // Treat all-digit input of typical EAN/UPC length as a barcode so users can
+  // paste or type a barcode into the same field. 8 = shortest valid GTIN.
+  const typedBarcode = /^\d{8,}$/.test(deferredSearch.trim())
+    ? deferredSearch.trim()
+    : ""
+
+  const lang = i18n.language?.slice(0, 2) || "en"
   const { data, isLoading, isError } = useLookup(
-    barcode
-      ? { barcode }
-      : { query: deferredSearch.length >= 2 ? deferredSearch : undefined }
+    barcode || typedBarcode
+      ? { barcode: barcode || typedBarcode, lang, debug }
+      : {
+          query: deferredSearch.length >= 2 ? deferredSearch : undefined,
+          lang,
+          debug,
+        }
   )
+
+  const results = data?.results ?? []
+  const recommendedIndex = data?.recommended_index ?? -1
+  const hasQuery = !!(
+    barcode ||
+    typedBarcode ||
+    (deferredSearch && deferredSearch.length >= 2)
+  )
+  const cameraAvailable =
+    typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia
+
+  // Resetting derived state when inputs change — React's canonical pattern
+  // (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  // Avoids an effect + setState cascade.
+  if (data !== lastDataRef) {
+    setLastDataRef(data)
+    setUserSelectedIndex(null)
+  }
+
+  const effectiveIndex =
+    userSelectedIndex ?? (recommendedIndex >= 0 ? recommendedIndex : 0)
+  const selectedIndex = Math.min(
+    Math.max(0, effectiveIndex),
+    Math.max(0, results.length - 1)
+  )
+  const selected = results.length > 0 ? results[selectedIndex] : null
 
   function handleBarcodeScan(scanned: string) {
     setBarcode(scanned)
@@ -35,15 +111,11 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
     setBarcode("")
   }
 
-  const results = data?.results ?? []
-  const recommendedIndex = data?.recommended_index ?? -1
-  const hasQuery = !!(barcode || (deferredSearch && deferredSearch.length >= 2))
-
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute top-2.5 left-3 size-4 text-muted-foreground" />
+      <div className="space-y-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-on-surface-variant/60" />
           <Input
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
@@ -51,86 +123,137 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
             className="pl-9"
           />
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setScannerOpen(true)}
-        >
-          <ScanBarcode className="mr-2 size-4" />
-          {t("lookup.scan_barcode")}
-        </Button>
+        {cameraAvailable && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setScannerOpen(true)}
+            className="h-8 w-full gap-2 text-xs"
+          >
+            <ScanBarcode className="size-3.5" aria-hidden />
+            {t("lookup.scan_barcode")}
+          </Button>
+        )}
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-muted-foreground">
-            {t("lookup.searching")}
-          </span>
+        <div className="flex items-center justify-center gap-2 py-6 text-xs text-on-surface-variant">
+          <Loader2 className="size-4 animate-spin" aria-hidden />
+          {t("lookup.searching")}
         </div>
       )}
 
       {isError && (
-        <p className="py-4 text-center text-sm text-destructive">
+        <p className="py-4 text-center text-xs text-destructive">
           {t("error.ingredient.lookup_failed")}
         </p>
       )}
 
       {!isLoading && !isError && hasQuery && results.length === 0 && (
-        <p className="py-8 text-center text-sm text-muted-foreground">
+        <p className="py-6 text-center text-xs text-on-surface-variant">
           {t("lookup.no_results")}
         </p>
       )}
 
       {!isLoading && results.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            {t("lookup.select_match")}
-          </p>
-          <div className="space-y-2">
-            {results.map((candidate, index) => (
-              <button
-                key={`${candidate.source}-${candidate.fdc_id ?? candidate.barcode ?? candidate.name}`}
-                type="button"
-                className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent ${
-                  index === recommendedIndex
-                    ? "border-primary bg-primary/5"
-                    : ""
-                }`}
-                onClick={() => onSelect(candidate)}
+        <div className="space-y-3">
+          {results.length > 1 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold tracking-[0.18em] text-on-surface-variant/70 uppercase">
+                {t("lookup.candidates", { count: results.length })}
+              </p>
+              <ul
+                className="max-h-44 space-y-0.5 overflow-y-auto rounded-xl bg-surface-container p-1"
+                role="listbox"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{candidate.name}</span>
-                      {index === recommendedIndex && (
-                        <Badge variant="secondary">
-                          {t("lookup.recommended")}
-                        </Badge>
-                      )}
-                    </div>
-                    {candidate.kcal_100g != null && (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {candidate.kcal_100g} kcal
-                        {candidate.protein_100g != null &&
-                          ` | P: ${candidate.protein_100g}g`}
-                        {candidate.fat_100g != null &&
-                          ` | F: ${candidate.fat_100g}g`}
-                        {candidate.carbs_100g != null &&
-                          ` | C: ${candidate.carbs_100g}g`}
-                      </p>
-                    )}
-                  </div>
-                  <Badge variant="outline">
-                    {candidate.source === "off"
-                      ? t("lookup.source_off")
-                      : t("lookup.source_fdc")}
-                  </Badge>
-                </div>
-              </button>
-            ))}
-          </div>
+                {results.map((candidate, index) => {
+                  const SourceIcon =
+                    candidate.source === "off" ? Globe : Database
+                  const isSelected = index === selectedIndex
+                  const isRecommended = index === recommendedIndex
+                  const key = `${candidate.source}-${candidate.fdc_id ?? candidate.barcode ?? candidate.name}-${index}`
+                  return (
+                    <li key={key}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => setUserSelectedIndex(index)}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
+                          isSelected
+                            ? "bg-primary/10 text-on-surface"
+                            : "text-on-surface-variant hover:bg-surface-container-high"
+                        )}
+                      >
+                        <SourceIcon
+                          className="size-3 shrink-0 opacity-70"
+                          aria-hidden
+                        />
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate">{candidate.name}</span>
+                          {candidate.source_name &&
+                            candidate.source_name !== candidate.name && (
+                              <span className="truncate text-[10px] text-on-surface-variant/70">
+                                {candidate.source_name}
+                              </span>
+                            )}
+                        </span>
+                        {candidate.kcal_100g != null && (
+                          <span className="shrink-0 font-mono text-[10px] tabular-nums opacity-60">
+                            {Math.round(candidate.kcal_100g)} kcal
+                          </span>
+                        )}
+                        {isRecommended && (
+                          <Sparkles
+                            className="size-3 shrink-0 text-primary"
+                            aria-label={t("lookup.recommended")}
+                          />
+                        )}
+                        {isSelected && (
+                          <Check
+                            className="size-3 shrink-0 text-primary"
+                            aria-hidden
+                          />
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+
+          {selected && (
+            <div className="space-y-3">
+              <NutritionDetail
+                candidate={selected}
+                recommended={selectedIndex === recommendedIndex}
+              />
+              <div className="flex items-center justify-between gap-2">
+                <Badge variant="secondary" className="text-[10px] font-medium">
+                  {selected.source === "off"
+                    ? t("lookup.source_off")
+                    : t("lookup.source_fdc")}
+                </Badge>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onSelect(selected)}
+                  className="h-8 gap-1.5 text-xs"
+                >
+                  <Check className="size-3.5" aria-hidden />
+                  {t("lookup.apply")}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
+      )}
+
+      {debug && data?.trace && data.trace.length > 0 && (
+        <LookupDebugPanel trace={data.trace} />
       )}
 
       <BarcodeScannerModal

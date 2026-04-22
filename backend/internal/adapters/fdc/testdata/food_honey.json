@@ -1,0 +1,39 @@
+{
+  "fdcId": 169640,
+  "description": "Honey",
+  "dataType": "SR Legacy",
+  "foodPortions": [
+    {
+      "id": 85389,
+      "amount": 1.0,
+      "gramWeight": 21.0,
+      "modifier": "tbsp",
+      "portionDescription": "1 tbsp",
+      "measureUnit": {"id": 9999, "name": "undetermined", "abbreviation": "undetermined"}
+    },
+    {
+      "id": 85390,
+      "amount": 1.0,
+      "gramWeight": 7.0,
+      "modifier": "tsp",
+      "portionDescription": "1 tsp",
+      "measureUnit": {"id": 9999, "name": "undetermined", "abbreviation": "undetermined"}
+    },
+    {
+      "id": 85391,
+      "amount": 1.0,
+      "gramWeight": 339.0,
+      "modifier": "",
+      "portionDescription": "",
+      "measureUnit": {"id": 1000, "name": "cup", "abbreviation": "cup"}
+    },
+    {
+      "id": 85392,
+      "amount": 1.0,
+      "gramWeight": 0.0,
+      "modifier": "garbage",
+      "portionDescription": "",
+      "measureUnit": {"id": 9999, "name": "undetermined", "abbreviation": "undetermined"}
+    }
+  ]
+}

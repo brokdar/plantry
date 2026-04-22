@@ -10,17 +10,33 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TemplatesIndexRouteImport } from './routes/templates/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as IngredientsIndexRouteImport } from './routes/ingredients/index'
+import { Route as ImportIndexRouteImport } from './routes/import/index'
 import { Route as ComponentsIndexRouteImport } from './routes/components/index'
+import { Route as ArchiveIndexRouteImport } from './routes/archive/index'
+import { Route as TemplatesNewRouteImport } from './routes/templates/new'
 import { Route as IngredientsNewRouteImport } from './routes/ingredients/new'
 import { Route as ComponentsNewRouteImport } from './routes/components/new'
-import { Route as ComponentsIdIndexRouteImport } from './routes/components/$id/index'
+import { Route as ArchiveIdIndexRouteImport } from './routes/archive/$id/index'
 import { Route as IngredientsIdEditRouteImport } from './routes/ingredients/$id/edit'
 import { Route as ComponentsIdEditRouteImport } from './routes/components/$id/edit'
+import { Route as PlannerWeekIdDaySlotIdPickRouteImport } from './routes/planner/$weekId/$day/$slotId/pick'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TemplatesIndexRoute = TemplatesIndexRouteImport.update({
+  id: '/templates/',
+  path: '/templates/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/settings/',
+  path: '/settings/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IngredientsIndexRoute = IngredientsIndexRouteImport.update({
@@ -28,9 +44,24 @@ const IngredientsIndexRoute = IngredientsIndexRouteImport.update({
   path: '/ingredients/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ImportIndexRoute = ImportIndexRouteImport.update({
+  id: '/import/',
+  path: '/import/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ComponentsIndexRoute = ComponentsIndexRouteImport.update({
   id: '/components/',
   path: '/components/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ArchiveIndexRoute = ArchiveIndexRouteImport.update({
+  id: '/archive/',
+  path: '/archive/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TemplatesNewRoute = TemplatesNewRouteImport.update({
+  id: '/templates/new',
+  path: '/templates/new',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IngredientsNewRoute = IngredientsNewRouteImport.update({
@@ -43,9 +74,9 @@ const ComponentsNewRoute = ComponentsNewRouteImport.update({
   path: '/components/new',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ComponentsIdIndexRoute = ComponentsIdIndexRouteImport.update({
-  id: '/components/$id/',
-  path: '/components/$id/',
+const ArchiveIdIndexRoute = ArchiveIdIndexRouteImport.update({
+  id: '/archive/$id/',
+  path: '/archive/$id/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IngredientsIdEditRoute = IngredientsIdEditRouteImport.update({
@@ -58,37 +89,61 @@ const ComponentsIdEditRoute = ComponentsIdEditRouteImport.update({
   path: '/components/$id/edit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlannerWeekIdDaySlotIdPickRoute =
+  PlannerWeekIdDaySlotIdPickRouteImport.update({
+    id: '/planner/$weekId/$day/$slotId/pick',
+    path: '/planner/$weekId/$day/$slotId/pick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/components/new': typeof ComponentsNewRoute
   '/ingredients/new': typeof IngredientsNewRoute
+  '/templates/new': typeof TemplatesNewRoute
+  '/archive/': typeof ArchiveIndexRoute
   '/components/': typeof ComponentsIndexRoute
+  '/import/': typeof ImportIndexRoute
   '/ingredients/': typeof IngredientsIndexRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/templates/': typeof TemplatesIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
-  '/components/$id/': typeof ComponentsIdIndexRoute
+  '/archive/$id/': typeof ArchiveIdIndexRoute
+  '/planner/$weekId/$day/$slotId/pick': typeof PlannerWeekIdDaySlotIdPickRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/components/new': typeof ComponentsNewRoute
   '/ingredients/new': typeof IngredientsNewRoute
+  '/templates/new': typeof TemplatesNewRoute
+  '/archive': typeof ArchiveIndexRoute
   '/components': typeof ComponentsIndexRoute
+  '/import': typeof ImportIndexRoute
   '/ingredients': typeof IngredientsIndexRoute
+  '/settings': typeof SettingsIndexRoute
+  '/templates': typeof TemplatesIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
-  '/components/$id': typeof ComponentsIdIndexRoute
+  '/archive/$id': typeof ArchiveIdIndexRoute
+  '/planner/$weekId/$day/$slotId/pick': typeof PlannerWeekIdDaySlotIdPickRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/components/new': typeof ComponentsNewRoute
   '/ingredients/new': typeof IngredientsNewRoute
+  '/templates/new': typeof TemplatesNewRoute
+  '/archive/': typeof ArchiveIndexRoute
   '/components/': typeof ComponentsIndexRoute
+  '/import/': typeof ImportIndexRoute
   '/ingredients/': typeof IngredientsIndexRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/templates/': typeof TemplatesIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
-  '/components/$id/': typeof ComponentsIdIndexRoute
+  '/archive/$id/': typeof ArchiveIdIndexRoute
+  '/planner/$weekId/$day/$slotId/pick': typeof PlannerWeekIdDaySlotIdPickRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -96,42 +151,66 @@ export interface FileRouteTypes {
     | '/'
     | '/components/new'
     | '/ingredients/new'
+    | '/templates/new'
+    | '/archive/'
     | '/components/'
+    | '/import/'
     | '/ingredients/'
+    | '/settings/'
+    | '/templates/'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
-    | '/components/$id/'
+    | '/archive/$id/'
+    | '/planner/$weekId/$day/$slotId/pick'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/components/new'
     | '/ingredients/new'
+    | '/templates/new'
+    | '/archive'
     | '/components'
+    | '/import'
     | '/ingredients'
+    | '/settings'
+    | '/templates'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
-    | '/components/$id'
+    | '/archive/$id'
+    | '/planner/$weekId/$day/$slotId/pick'
   id:
     | '__root__'
     | '/'
     | '/components/new'
     | '/ingredients/new'
+    | '/templates/new'
+    | '/archive/'
     | '/components/'
+    | '/import/'
     | '/ingredients/'
+    | '/settings/'
+    | '/templates/'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
-    | '/components/$id/'
+    | '/archive/$id/'
+    | '/planner/$weekId/$day/$slotId/pick'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ComponentsNewRoute: typeof ComponentsNewRoute
   IngredientsNewRoute: typeof IngredientsNewRoute
+  TemplatesNewRoute: typeof TemplatesNewRoute
+  ArchiveIndexRoute: typeof ArchiveIndexRoute
   ComponentsIndexRoute: typeof ComponentsIndexRoute
+  ImportIndexRoute: typeof ImportIndexRoute
   IngredientsIndexRoute: typeof IngredientsIndexRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+  TemplatesIndexRoute: typeof TemplatesIndexRoute
   ComponentsIdEditRoute: typeof ComponentsIdEditRoute
   IngredientsIdEditRoute: typeof IngredientsIdEditRoute
-  ComponentsIdIndexRoute: typeof ComponentsIdIndexRoute
+  ArchiveIdIndexRoute: typeof ArchiveIdIndexRoute
+  PlannerWeekIdDaySlotIdPickRoute: typeof PlannerWeekIdDaySlotIdPickRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -143,6 +222,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/templates/': {
+      id: '/templates/'
+      path: '/templates'
+      fullPath: '/templates/'
+      preLoaderRoute: typeof TemplatesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/': {
+      id: '/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ingredients/': {
       id: '/ingredients/'
       path: '/ingredients'
@@ -150,11 +243,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IngredientsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/import/': {
+      id: '/import/'
+      path: '/import'
+      fullPath: '/import/'
+      preLoaderRoute: typeof ImportIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/components/': {
       id: '/components/'
       path: '/components'
       fullPath: '/components/'
       preLoaderRoute: typeof ComponentsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/archive/': {
+      id: '/archive/'
+      path: '/archive'
+      fullPath: '/archive/'
+      preLoaderRoute: typeof ArchiveIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/templates/new': {
+      id: '/templates/new'
+      path: '/templates/new'
+      fullPath: '/templates/new'
+      preLoaderRoute: typeof TemplatesNewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ingredients/new': {
@@ -171,11 +285,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ComponentsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/components/$id/': {
-      id: '/components/$id/'
-      path: '/components/$id'
-      fullPath: '/components/$id/'
-      preLoaderRoute: typeof ComponentsIdIndexRouteImport
+    '/archive/$id/': {
+      id: '/archive/$id/'
+      path: '/archive/$id'
+      fullPath: '/archive/$id/'
+      preLoaderRoute: typeof ArchiveIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ingredients/$id/edit': {
@@ -192,6 +306,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ComponentsIdEditRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/planner/$weekId/$day/$slotId/pick': {
+      id: '/planner/$weekId/$day/$slotId/pick'
+      path: '/planner/$weekId/$day/$slotId/pick'
+      fullPath: '/planner/$weekId/$day/$slotId/pick'
+      preLoaderRoute: typeof PlannerWeekIdDaySlotIdPickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -199,11 +320,17 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ComponentsNewRoute: ComponentsNewRoute,
   IngredientsNewRoute: IngredientsNewRoute,
+  TemplatesNewRoute: TemplatesNewRoute,
+  ArchiveIndexRoute: ArchiveIndexRoute,
   ComponentsIndexRoute: ComponentsIndexRoute,
+  ImportIndexRoute: ImportIndexRoute,
   IngredientsIndexRoute: IngredientsIndexRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+  TemplatesIndexRoute: TemplatesIndexRoute,
   ComponentsIdEditRoute: ComponentsIdEditRoute,
   IngredientsIdEditRoute: IngredientsIdEditRoute,
-  ComponentsIdIndexRoute: ComponentsIdIndexRoute,
+  ArchiveIdIndexRoute: ArchiveIdIndexRoute,
+  PlannerWeekIdDaySlotIdPickRoute: PlannerWeekIdDaySlotIdPickRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

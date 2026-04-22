@@ -1,4 +1,4 @@
-import { test, expect, request as apiRequest } from "@playwright/test"
+import { test, expect, apiRequest } from "./helpers"
 
 // Backend URL — seed/cleanup requests go directly to the backend, bypassing
 // the Vite proxy, to avoid proxy bottlenecks under parallel workers.
@@ -47,7 +47,6 @@ test.describe("Ingredient Catalogue", () => {
 
     try {
       await page.goto("/ingredients/new")
-      await page.getByRole("tab", { name: /manual/i }).click()
       await page.getByLabel(/^name/i).fill(name)
       await page.getByLabel(/calories/i).fill("165")
       await page.getByLabel(/protein/i).fill("31")
@@ -66,9 +65,13 @@ test.describe("Ingredient Catalogue", () => {
       const body = (await response.json()) as { id: number }
       createdId = body.id
 
-      // Should navigate back to list and show the ingredient
-      await expect(page.getByRole("cell", { name })).toBeVisible()
-      await expect(page.getByRole("cell", { name: "165" })).toBeVisible()
+      // Should navigate back to list and show the ingredient card
+      await expect(
+        page.getByTestId(`ingredient-card-${createdId}`)
+      ).toBeVisible()
+      await expect(
+        page.getByTestId(`ingredient-card-${createdId}`)
+      ).toContainText("165kcal")
     } finally {
       if (createdId) await cleanupIngredient(createdId)
     }
@@ -92,22 +95,36 @@ test.describe("Ingredient Catalogue", () => {
     try {
       await page.goto("/ingredients")
 
-      // All three visible
-      await expect(page.getByRole("cell", { name: chicken.name })).toBeVisible()
-      await expect(page.getByRole("cell", { name: tofu.name })).toBeVisible()
-      await expect(page.getByRole("cell", { name: rice.name })).toBeVisible()
-
-      // Search — only chicken matches
-      await page.getByPlaceholder(/search/i).fill("chicken")
+      // Narrow to seeded items only — shared DB accumulates across runs.
+      await page.getByTestId("inventory-search").fill(tag)
       await page.waitForResponse(
         (res) =>
           res.url().includes("/api/ingredients") &&
-          res.url().includes("search=chicken")
+          res.url().includes(`search=${tag}`)
       )
 
-      await expect(page.getByRole("cell", { name: chicken.name })).toBeVisible()
-      await expect(page.getByRole("cell", { name: tofu.name })).toHaveCount(0)
-      await expect(page.getByRole("cell", { name: rice.name })).toHaveCount(0)
+      // All three seeded items visible
+      await expect(
+        page.getByTestId(`ingredient-card-${chicken.id}`)
+      ).toBeVisible()
+      await expect(page.getByTestId(`ingredient-card-${tofu.id}`)).toBeVisible()
+      await expect(page.getByTestId(`ingredient-card-${rice.id}`)).toBeVisible()
+
+      // Search — only chicken matches
+      await page.getByTestId("inventory-search").fill(`chicken ${tag}`)
+      await page.waitForResponse((res) =>
+        res.url().includes("/api/ingredients")
+      )
+
+      await expect(
+        page.getByTestId(`ingredient-card-${chicken.id}`)
+      ).toBeVisible()
+      await expect(page.getByTestId(`ingredient-card-${tofu.id}`)).toHaveCount(
+        0
+      )
+      await expect(page.getByTestId(`ingredient-card-${rice.id}`)).toHaveCount(
+        0
+      )
     } finally {
       await cleanupIngredient(chicken.id)
       await cleanupIngredient(tofu.id)
@@ -135,8 +152,10 @@ test.describe("Ingredient Catalogue", () => {
       const response = await responsePromise
       expect(response.status()).toBe(200)
 
-      // Back on list, verify updated value
-      await expect(page.getByRole("cell", { name: "120" })).toBeVisible()
+      // Back on list, verify updated value on the card
+      await expect(
+        page.getByTestId(`ingredient-card-${ingredient.id}`)
+      ).toContainText("120kcal")
     } finally {
       await cleanupIngredient(ingredient.id)
     }
@@ -155,13 +174,19 @@ test.describe("Ingredient Catalogue", () => {
 
     try {
       await page.goto("/ingredients")
+      await page.getByTestId("inventory-search").fill(tag)
+      await page.waitForResponse(
+        (res) =>
+          res.url().includes("/api/ingredients") &&
+          res.url().includes(`search=${tag}`)
+      )
       await expect(
-        page.getByRole("cell", { name: toDelete.name })
+        page.getByTestId(`ingredient-card-${toDelete.id}`)
       ).toBeVisible()
 
-      // Click delete on the Butter row
-      const row = page.getByRole("row").filter({ hasText: toDelete.name })
-      await row.getByRole("button", { name: /delete/i }).click()
+      // Open the Butter card's menu and choose Delete
+      await page.getByTestId(`ingredient-card-${toDelete.id}-menu`).click()
+      await page.getByTestId(`ingredient-card-${toDelete.id}-delete`).click()
 
       // Confirm deletion
       const responsePromise = page.waitForResponse(
@@ -169,14 +194,17 @@ test.describe("Ingredient Catalogue", () => {
           res.url().includes(`/api/ingredients/${toDelete.id}`) &&
           res.request().method() === "DELETE"
       )
-      await page.getByRole("button", { name: /^delete$/i }).click()
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Delete", exact: true })
+        .click()
       await responsePromise
 
       // Deleted ingredient gone, kept ingredient remains
-      await expect(page.getByRole("cell", { name: toDelete.name })).toHaveCount(
-        0
-      )
-      await expect(page.getByRole("cell", { name: keep.name })).toBeVisible()
+      await expect(
+        page.getByTestId(`ingredient-card-${toDelete.id}`)
+      ).toHaveCount(0)
+      await expect(page.getByTestId(`ingredient-card-${keep.id}`)).toBeVisible()
     } finally {
       await cleanupIngredient(keep.id)
     }
@@ -186,21 +214,14 @@ test.describe("Ingredient Catalogue", () => {
     page,
   }) => {
     await page.goto("/ingredients/new")
-    await page.getByRole("tab", { name: /manual/i }).click()
 
     // Fill a macro field but leave name empty
     await page.getByLabel(/calories/i).fill("100")
 
-    // Click save — form should NOT submit (client-side validation)
-    await page.getByRole("button", { name: /save/i }).click()
-
-    // Should still be on the new ingredient page (no navigation)
-    await expect(page.getByRole("button", { name: /save/i })).toBeVisible()
-
-    // The name input should have a validation error (browser or zod)
-    // Check that the name field is marked invalid or an error message appears
-    const nameInput = page.getByLabel(/^name/i)
-    await expect(nameInput).toBeVisible()
+    // Save button is disabled until the name field is non-empty — this is
+    // the client-side guard against submitting an empty name.
+    const save = page.getByRole("button", { name: /save/i })
+    await expect(save).toBeDisabled()
 
     // No cleanup needed — nothing was created
   })
@@ -213,7 +234,6 @@ test.describe("Ingredient Catalogue", () => {
 
     try {
       await page.goto("/ingredients/new")
-      await page.getByRole("tab", { name: /manual/i }).click()
       await page.getByLabel(/^name/i).fill(name)
       await page.getByLabel(/calories/i).fill("200")
 

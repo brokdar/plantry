@@ -8,6 +8,29 @@ import (
 	"database/sql"
 )
 
+type AiConversation struct {
+	ID        int64
+	WeekID    sql.NullInt64
+	Title     sql.NullString
+	CreatedAt string
+	UpdatedAt string
+}
+
+type AiMessage struct {
+	ID             int64
+	ConversationID int64
+	Role           string
+	Content        string
+	CreatedAt      string
+}
+
+type AppSetting struct {
+	Key       string
+	Value     string
+	Encrypted int64
+	UpdatedAt string
+}
+
 type Component struct {
 	ID                int64
 	Name              string
@@ -22,6 +45,7 @@ type Component struct {
 	CookCount         int64
 	CreatedAt         string
 	UpdatedAt         string
+	Favorite          int64
 }
 
 type ComponentIngredient struct {
@@ -51,21 +75,37 @@ type ComponentsFt struct {
 }
 
 type Ingredient struct {
-	ID          int64
-	Name        string
-	Source      string
-	Barcode     sql.NullString
-	OffID       sql.NullString
-	FdcID       sql.NullString
-	ImagePath   sql.NullString
-	Kcal100g    float64
-	Protein100g float64
-	Fat100g     float64
-	Carbs100g   float64
-	Fiber100g   float64
-	Sodium100g  float64
-	CreatedAt   string
-	UpdatedAt   string
+	ID               int64
+	Name             string
+	Source           string
+	Barcode          sql.NullString
+	OffID            sql.NullString
+	FdcID            sql.NullString
+	ImagePath        sql.NullString
+	Kcal100g         float64
+	Protein100g      float64
+	Fat100g          float64
+	Carbs100g        float64
+	Fiber100g        float64
+	Sodium100g       float64
+	CreatedAt        string
+	UpdatedAt        string
+	SaturatedFat100g sql.NullFloat64
+	TransFat100g     sql.NullFloat64
+	Cholesterol100g  sql.NullFloat64
+	Sugar100g        sql.NullFloat64
+	Potassium100g    sql.NullFloat64
+	Calcium100g      sql.NullFloat64
+	Iron100g         sql.NullFloat64
+	Magnesium100g    sql.NullFloat64
+	Phosphorus100g   sql.NullFloat64
+	Zinc100g         sql.NullFloat64
+	VitaminA100g     sql.NullFloat64
+	VitaminC100g     sql.NullFloat64
+	VitaminD100g     sql.NullFloat64
+	VitaminB12100g   sql.NullFloat64
+	VitaminB6100g    sql.NullFloat64
+	Folate100g       sql.NullFloat64
 }
 
 type IngredientPortion struct {
@@ -78,8 +118,75 @@ type IngredientsFt struct {
 	Name string
 }
 
+type Plate struct {
+	ID        int64
+	WeekID    int64
+	Day       int64
+	SlotID    int64
+	Note      sql.NullString
+	CreatedAt string
+	Skipped   int64
+}
+
+type PlateComponent struct {
+	ID          int64
+	PlateID     int64
+	ComponentID int64
+	Portions    float64
+	SortOrder   int64
+}
+
+type PlateFeedback struct {
+	PlateID int64
+	Status  string
+	Note    sql.NullString
+	RatedAt string
+}
+
+type Template struct {
+	ID        int64
+	Name      string
+	CreatedAt string
+}
+
+type TemplateComponent struct {
+	ID          int64
+	TemplateID  int64
+	ComponentID int64
+	Portions    float64
+	SortOrder   int64
+}
+
+type TimeSlot struct {
+	ID        int64
+	NameKey   string
+	Icon      string
+	SortOrder int64
+	Active    int64
+}
+
+type UserProfile struct {
+	ID                  int64
+	KcalTarget          sql.NullFloat64
+	ProteinPct          sql.NullFloat64
+	FatPct              sql.NullFloat64
+	CarbsPct            sql.NullFloat64
+	DietaryRestrictions string
+	Preferences         string
+	SystemPrompt        sql.NullString
+	Locale              string
+	UpdatedAt           string
+}
+
 type VariantGroup struct {
 	ID        int64
 	Name      string
 	CreatedAt string
+}
+
+type Week struct {
+	ID         int64
+	Year       int64
+	WeekNumber int64
+	CreatedAt  string
 }

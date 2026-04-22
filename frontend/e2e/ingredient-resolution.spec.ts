@@ -1,25 +1,27 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, apiRequest } from "./helpers"
 
 const API_BASE = "http://localhost:8080"
 
 async function createIngredientAPI(name: string): Promise<number> {
-  const res = await fetch(`${API_BASE}/api/ingredients`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const ctx = await apiRequest.newContext({ baseURL: API_BASE })
+  const res = await ctx.post("/api/ingredients", {
+    data: {
       name,
       kcal_100g: 100,
       protein_100g: 10,
       fat_100g: 5,
       carbs_100g: 15,
-    }),
+    },
   })
-  const data = await res.json()
-  return data.id
+  const body = await res.json()
+  await ctx.dispose()
+  return body.id
 }
 
 async function deleteIngredientAPI(id: number): Promise<void> {
-  await fetch(`${API_BASE}/api/ingredients/${id}`, { method: "DELETE" })
+  const ctx = await apiRequest.newContext({ baseURL: API_BASE })
+  await ctx.delete(`/api/ingredients/${id}`)
+  await ctx.dispose()
 }
 
 test.describe("Ingredient Resolution", () => {
@@ -67,7 +69,8 @@ test.describe("Ingredient Resolution", () => {
       await expect(page.getByText(candidateName)).toBeVisible()
       await page.getByText(candidateName).click()
 
-      // Form should be populated with candidate data
+      // "Use this match" populates the form with candidate data.
+      await page.getByRole("button", { name: /use this match/i }).click()
       await expect(page.getByLabel(/name/i)).toHaveValue(candidateName)
 
       // Save and capture response
@@ -87,15 +90,13 @@ test.describe("Ingredient Resolution", () => {
     }
   })
 
-  test("switch to manual tab and create ingredient", async ({ page }) => {
+  test("create ingredient manually without lookup", async ({ page }) => {
     const uid = crypto.randomUUID().slice(0, 8)
     const name = `Manual ingredient ${uid}`
 
     let createdId: number | undefined
     try {
       await page.goto("/ingredients/new")
-
-      await page.getByRole("tab", { name: /manual/i }).click()
 
       await page.getByLabel(/name/i).fill(name)
       await page.getByLabel(/calories/i).fill("100")
@@ -165,7 +166,8 @@ test.describe("Ingredient Resolution", () => {
       await expect(page.getByText(candidateName)).toBeVisible()
       await page.getByText(candidateName).click()
 
-      // Form should be populated
+      // "Use this match" populates the form.
+      await page.getByRole("button", { name: /use this match/i }).click()
       await expect(page.getByLabel(/name/i)).toHaveValue(candidateName)
 
       // Save and capture response
@@ -198,11 +200,10 @@ test.describe("Ingredient Resolution", () => {
         page.getByRole("heading", { name: /portions/i })
       ).toBeVisible()
 
-      // Fill in a new portion
-      await page.getByPlaceholder(/e\.g\. cup/i).fill("cup")
-      // Target the grams input by absence of name attribute (PortionsEditor uses
-      // controlled state, so no name; macro fields get name via react-hook-form spread)
-      await page.locator('input[type="number"]:not([name])').fill("240")
+      // Fill in a new portion — unit field is a Select, grams is a text input.
+      await page.getByTestId("portion-unit").click()
+      await page.getByTestId("unit-option-cup").click()
+      await page.getByTestId("portion-grams").fill("240")
 
       // Add the portion
       const addPromise = page.waitForResponse(
@@ -213,9 +214,11 @@ test.describe("Ingredient Resolution", () => {
       await page.getByRole("button", { name: /add portion/i }).click()
       await addPromise
 
-      // Verify portion appears
-      await expect(page.getByText("cup")).toBeVisible()
-      await expect(page.getByText("240g")).toBeVisible()
+      // Verify portion appears — scope to the delete button's aria-label to
+      // avoid the "cup" text collision with the UnitSelect dropdown options.
+      const deleteBtn = page.getByRole("button", { name: /delete cup/i })
+      await expect(deleteBtn).toBeVisible()
+      await expect(page.getByText("240 g")).toBeVisible()
 
       // Delete the portion
       const deletePromise = page.waitForResponse(
@@ -223,11 +226,13 @@ test.describe("Ingredient Resolution", () => {
           res.url().includes(`/api/ingredients/${ingredientId}/portions`) &&
           res.request().method() === "DELETE"
       )
-      await page.getByRole("button", { name: /delete cup/i }).click()
+      await deleteBtn.click()
       await deletePromise
 
-      // Verify portion is gone (server-filtered, use toHaveCount)
-      await expect(page.getByText("cup")).toHaveCount(0)
+      // Delete button disappears once the portion is gone.
+      await expect(
+        page.getByRole("button", { name: /delete cup/i })
+      ).toHaveCount(0)
     } finally {
       await deleteIngredientAPI(ingredientId)
     }
@@ -240,8 +245,6 @@ test.describe("Ingredient Resolution", () => {
 
     try {
       await page.goto("/ingredients/new")
-
-      await page.getByRole("tab", { name: /manual/i }).click()
 
       await page.getByLabel(/name/i).fill(name)
       await page.getByLabel(/calories/i).fill("200")

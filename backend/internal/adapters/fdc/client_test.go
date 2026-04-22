@@ -151,6 +151,119 @@ func TestSearchByName_ContextCancelled(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 }
 
+func TestSearchByName_ExtendedNutrients(t *testing.T) {
+	srv := fixtureServer(t, "search_extended.json")
+	defer srv.Close()
+
+	client := fdc.New("test-key", fdc.WithBaseURL(srv.URL))
+	results, err := client.SearchByName(context.Background(), "test", nil, 10)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	r := results[0]
+
+	require.NotNil(t, r.SaturatedFat100g)
+	assert.InDelta(t, 1.5, *r.SaturatedFat100g, 0.001)
+	require.NotNil(t, r.TransFat100g)
+	assert.InDelta(t, 0.1, *r.TransFat100g, 0.001)
+	require.NotNil(t, r.Cholesterol100g)
+	assert.InDelta(t, 25.0, *r.Cholesterol100g, 0.001)
+	require.NotNil(t, r.Sugar100g)
+	assert.InDelta(t, 8.0, *r.Sugar100g, 0.001)
+	require.NotNil(t, r.Potassium100g)
+	assert.InDelta(t, 300.0, *r.Potassium100g, 0.001)
+	require.NotNil(t, r.Calcium100g)
+	assert.InDelta(t, 120.0, *r.Calcium100g, 0.001)
+	require.NotNil(t, r.Iron100g)
+	assert.InDelta(t, 2.5, *r.Iron100g, 0.001)
+	require.NotNil(t, r.Magnesium100g)
+	assert.InDelta(t, 45.0, *r.Magnesium100g, 0.001)
+	require.NotNil(t, r.Phosphorus100g)
+	assert.InDelta(t, 200.0, *r.Phosphorus100g, 0.001)
+	require.NotNil(t, r.Zinc100g)
+	assert.InDelta(t, 1.8, *r.Zinc100g, 0.001)
+	require.NotNil(t, r.VitaminA100g)
+	assert.InDelta(t, 50.0, *r.VitaminA100g, 0.001)
+	require.NotNil(t, r.VitaminC100g)
+	assert.InDelta(t, 15.0, *r.VitaminC100g, 0.001)
+	require.NotNil(t, r.VitaminD100g)
+	assert.InDelta(t, 1.2, *r.VitaminD100g, 0.001)
+	require.NotNil(t, r.VitaminB12100g)
+	assert.InDelta(t, 0.6, *r.VitaminB12100g, 0.001)
+	require.NotNil(t, r.VitaminB6100g)
+	assert.InDelta(t, 0.4, *r.VitaminB6100g, 0.001)
+	require.NotNil(t, r.Folate100g)
+	assert.InDelta(t, 100.0, *r.Folate100g, 0.001)
+}
+
+func TestSearchByName_ExtendedNutrientsNilWhenMissing(t *testing.T) {
+	srv := fixtureServer(t, "search_chicken.json")
+	defer srv.Close()
+
+	client := fdc.New("test-key", fdc.WithBaseURL(srv.URL))
+	results, err := client.SearchByName(context.Background(), "chicken", nil, 10)
+	require.NoError(t, err)
+
+	// Chicken fixture only has the original 6 nutrients; extended should be nil.
+	r := results[0]
+	assert.Nil(t, r.SaturatedFat100g)
+	assert.Nil(t, r.Sugar100g)
+	assert.Nil(t, r.Potassium100g)
+	assert.Nil(t, r.VitaminC100g)
+	assert.Nil(t, r.Folate100g)
+}
+
+func TestGetFood_ParsesFoodPortions(t *testing.T) {
+	srv := fixtureServer(t, "food_honey.json")
+	defer srv.Close()
+
+	client := fdc.New("test-key", fdc.WithBaseURL(srv.URL))
+	food, err := client.GetFood(context.Background(), 169640)
+	require.NoError(t, err)
+	require.NotNil(t, food)
+	assert.Equal(t, 169640, food.FdcID)
+	assert.Equal(t, "Honey", food.Description)
+
+	// Zero-gramWeight entries are filtered out.
+	require.Len(t, food.FoodPortions, 3)
+
+	tbsp := food.FoodPortions[0]
+	assert.InDelta(t, 21.0, tbsp.GramWeight, 0.001)
+	assert.Equal(t, "undetermined", tbsp.MeasureUnitName)
+	assert.Equal(t, "tbsp", tbsp.Modifier)
+
+	tsp := food.FoodPortions[1]
+	assert.InDelta(t, 7.0, tsp.GramWeight, 0.001)
+	assert.Equal(t, "tsp", tsp.Modifier)
+
+	cup := food.FoodPortions[2]
+	assert.InDelta(t, 339.0, cup.GramWeight, 0.001)
+	assert.Equal(t, "cup", cup.MeasureUnitName)
+	assert.Empty(t, cup.Modifier)
+}
+
+func TestGetFood_NotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+	client := fdc.New("test-key", fdc.WithBaseURL(srv.URL))
+	food, err := client.GetFood(context.Background(), 999999)
+	require.Error(t, err)
+	assert.Nil(t, food)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestGetFood_ServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	client := fdc.New("test-key", fdc.WithBaseURL(srv.URL))
+	_, err := client.GetFood(context.Background(), 169640)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
+}
+
 func TestSearchByName_APIKeyInRequest(t *testing.T) {
 	var capturedKey string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

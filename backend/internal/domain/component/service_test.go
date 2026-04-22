@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,6 +24,10 @@ type fakeRepo struct {
 	seq      int64
 	groupSeq int64
 	groups   map[int64]string // groupID -> name
+
+	lastInsightsCutoff  time.Time
+	lastForgottenLimit  int
+	lastMostCookedLimit int
 }
 
 func newFakeRepo() *fakeRepo {
@@ -86,6 +91,39 @@ func (r *fakeRepo) CreateVariantGroup(_ context.Context, name string) (int64, er
 	r.groupSeq++
 	r.groups[r.groupSeq] = name
 	return r.groupSeq, nil
+}
+
+func (r *fakeRepo) SetFavorite(_ context.Context, id int64, favorite bool) (*component.Component, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.items[id]
+	if !ok {
+		return nil, fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
+	}
+	c.Favorite = favorite
+	return c, nil
+}
+
+func (r *fakeRepo) MarkCooked(_ context.Context, id int64, at time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.items[id]
+	if !ok {
+		return fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
+	}
+	c.CookCount++
+	t := at
+	c.LastCookedAt = &t
+	return nil
+}
+
+func (r *fakeRepo) Insights(_ context.Context, cutoff time.Time, forgottenLimit, mostCookedLimit int) (component.Insights, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.lastInsightsCutoff = cutoff
+	r.lastForgottenLimit = forgottenLimit
+	r.lastMostCookedLimit = mostCookedLimit
+	return component.Insights{}, nil
 }
 
 func (r *fakeRepo) Siblings(_ context.Context, variantGroupID int64, excludeID int64) ([]component.Component, error) {
@@ -184,6 +222,34 @@ func validComponent() *component.Component {
 }
 
 // --- tests ---
+
+type fakeImageDeleter struct {
+	calls []string
+}
+
+func (f *fakeImageDeleter) Delete(category string, id int64) error {
+	f.calls = append(f.calls, fmt.Sprintf("%s/%d", category, id))
+	return nil
+}
+
+func TestDelete_CleansUpImage(t *testing.T) {
+	svc, _, _, _ := newService()
+	deleter := &fakeImageDeleter{}
+	svc.WithImageStore(deleter)
+
+	c := validComponent()
+	require.NoError(t, svc.Create(context.Background(), c))
+	require.NoError(t, svc.Delete(context.Background(), c.ID))
+
+	assert.Equal(t, []string{fmt.Sprintf("components/%d", c.ID)}, deleter.calls)
+}
+
+func TestDelete_WithoutImageStore_NoPanic(t *testing.T) {
+	svc, _, _, _ := newService()
+	c := validComponent()
+	require.NoError(t, svc.Create(context.Background(), c))
+	require.NoError(t, svc.Delete(context.Background(), c.ID))
+}
 
 func TestCreate_AssignsID(t *testing.T) {
 	svc, _, _, _ := newService()
@@ -290,6 +356,102 @@ func TestCreate_InstructionEmptyText(t *testing.T) {
 	c.Instructions = []component.Instruction{{StepNumber: 1, Text: ""}}
 	err := svc.Create(context.Background(), c)
 	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+}
+
+func TestCreate_ResolveGrams_PortionExact(t *testing.T) {
+	svc, _, pl, _ := newService()
+	// Honey: 1 tbsp = 21g (FDC-sourced portion).
+	pl.portions[5] = []ingredient.Portion{{IngredientID: 5, Unit: "tbsp", Grams: 21}}
+
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 5, Amount: 2, Unit: "tbsp"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 42.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourcePortion, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_UniversalVolumeFallback(t *testing.T) {
+	svc, _, _, _ := newService()
+	// No portion for this ingredient → water-density tbsp (15g).
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 7, Amount: 2, Unit: "tbsp"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 30.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourceFallback, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_MlWaterDensity(t *testing.T) {
+	svc, _, _, _ := newService()
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 7, Amount: 100, Unit: "ml"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 100.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourceFallback, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_MassDirect(t *testing.T) {
+	svc, _, _, _ := newService()
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 1, Amount: 1.5, Unit: "kg"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 1500.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourceDefault, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_CountUnitRequiresPortion(t *testing.T) {
+	svc, _, _, _ := newService()
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 8, Amount: 2, Unit: "clove"},
+	}
+	err := svc.Create(context.Background(), c)
+	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+	assert.Contains(t, err.Error(), "clove")
+}
+
+func TestCreate_ResolveGrams_CountUnitWithPortion(t *testing.T) {
+	svc, _, pl, _ := newService()
+	pl.portions[8] = []ingredient.Portion{{IngredientID: 8, Unit: "clove", Grams: 4}}
+
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 8, Amount: 2, Unit: "clove"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 8.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourcePortion, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_ManualGramsForCountUnit(t *testing.T) {
+	svc, _, _, _ := newService()
+	// User supplies grams directly for a count unit without portion.
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 8, Amount: 2, Unit: "clove", Grams: 10},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, 10.0, c.Ingredients[0].Grams)
+	assert.Equal(t, component.GramsSourceManual, c.Ingredients[0].GramsSource)
+}
+
+func TestCreate_ResolveGrams_AliasedUnit(t *testing.T) {
+	svc, _, _, _ := newService()
+	// "EL" (German) → "tbsp"; unit is normalized on write.
+	c := validComponent()
+	c.Ingredients = []component.ComponentIngredient{
+		{IngredientID: 7, Amount: 2, Unit: "EL"},
+	}
+	require.NoError(t, svc.Create(context.Background(), c))
+	assert.Equal(t, "tbsp", c.Ingredients[0].Unit)
+	assert.Equal(t, 30.0, c.Ingredients[0].Grams)
 }
 
 func TestUpdate_ReplacesChildren(t *testing.T) {
@@ -566,4 +728,46 @@ func TestListVariants_NotFound(t *testing.T) {
 	svc, _, _, _ := newService()
 	_, err := svc.ListVariants(context.Background(), 999)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+// --- insights tests ---
+
+func TestInsights_AppliesDefaults(t *testing.T) {
+	svc, repo, _, _ := newService()
+	before := time.Now().UTC()
+	_, err := svc.Insights(context.Background(), component.InsightsQuery{})
+	require.NoError(t, err)
+
+	assert.Equal(t, 10, repo.lastForgottenLimit)
+	assert.Equal(t, 5, repo.lastMostCookedLimit)
+	// Default is 4 weeks back from now.
+	expected := before.AddDate(0, 0, -28)
+	assert.WithinDuration(t, expected, repo.lastInsightsCutoff, 2*time.Second)
+}
+
+func TestInsights_ClampsHighLimits(t *testing.T) {
+	svc, repo, _, _ := newService()
+	_, err := svc.Insights(context.Background(), component.InsightsQuery{
+		ForgottenWeeks:  500,
+		ForgottenLimit:  1000,
+		MostCookedLimit: 1000,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, 50, repo.lastForgottenLimit)
+	assert.Equal(t, 50, repo.lastMostCookedLimit)
+	// Clamped to 52 weeks back.
+	expected := time.Now().UTC().AddDate(0, 0, -52*7)
+	assert.WithinDuration(t, expected, repo.lastInsightsCutoff, 2*time.Second)
+}
+
+func TestInsights_CustomForgottenWeeks(t *testing.T) {
+	svc, repo, _, _ := newService()
+	_, err := svc.Insights(context.Background(), component.InsightsQuery{
+		ForgottenWeeks: 8,
+	})
+	require.NoError(t, err)
+
+	expected := time.Now().UTC().AddDate(0, 0, -56)
+	assert.WithinDuration(t, expected, repo.lastInsightsCutoff, 2*time.Second)
 }

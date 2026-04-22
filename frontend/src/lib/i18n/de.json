@@ -1,17 +1,339 @@
 {
   "nav": {
     "brand": "Plantry",
+    "atelier_tagline": "Redaktionelle Ernährung",
+    "generate_plan": "Plan generieren",
+    "planner": "Wochenplan",
     "ingredients": "Zutaten",
-    "components": "Komponenten"
+    "recipes": "Rezepte",
+    "pantry": "Vorratskammer",
+    "components": "Komponenten",
+    "templates": "Vorlagen",
+    "import": "Import",
+    "archive": "Archiv",
+    "past_weeks": "Vergangene Wochen",
+    "settings": "Einstellungen",
+    "search_placeholder": "Katalog durchsuchen…",
+    "collapse_sidebar": "Seitenleiste einklappen",
+    "expand_sidebar": "Seitenleiste ausklappen"
+  },
+  "archive": {
+    "title": "Historische Sammlungen",
+    "subtitle": "Ein kuratiertes Archiv deiner saisonalen Reisen. Besuche vergangene Mahlzeiten und integriere sie in deine aktuelle Woche.",
+    "empty": "Noch keine archivierten Wochen.",
+    "end_of_journey": "Ende deiner Reise",
+    "end_of_journey_body": "Du hast den Anfang deiner Botanical-Atelier-Reise erreicht.",
+    "load_more": "Mehr Historie laden",
+    "meals_total": "{{count}} Mahlzeiten insgesamt",
+    "week_label": "Woche {{week}}, {{year}}",
+    "back": "Zurück zum Archiv",
+    "forgotten": "Vergessen",
+    "most_cooked": "Oft gekocht",
+    "read_only": "Nur lesen",
+    "review": "Ansehen",
+    "copy_to_current": "In aktuelle Woche kopieren",
+    "copy_confirm_title": "Diese Woche in die aktuelle kopieren?",
+    "copy_confirm_body": "Mahlzeiten werden zu Woche {{week}}, {{year}} hinzugefügt. Vorhandene Mahlzeiten werden nicht überschrieben.",
+    "copy_success": "Woche in aktuelle kopiert",
+    "select_week": "Wähle eine Woche zur Vorschau"
+  },
+  "import": {
+    "title": "Rezept importieren",
+    "subtitle": "Füge die URL eines Rezepts ein — wir machen eine Komponente daraus.",
+    "step1": {
+      "title": "Wo ist das Rezept?",
+      "url_label": "Rezept-URL",
+      "html_label": "Seiten-HTML",
+      "paste_html_toggle": "Stattdessen das Seiten-HTML einfügen",
+      "url_toggle": "Zurück zur URL-Eingabe",
+      "submit": "Rezept extrahieren"
+    },
+    "step2": {
+      "title": "Zutaten prüfen",
+      "ingredient_col": "Zutaten",
+      "amount": "Menge",
+      "unit": "Einheit",
+      "resolved_label": "Verknüpft",
+      "res_existing": "Mit Bibliothek verknüpfen",
+      "res_skip": "Überspringen",
+      "pick_match": "Passende Zutat auswählen",
+      "searching": "Suche…",
+      "no_match": "Keine Zutat in der Bibliothek gefunden.",
+      "not_in_library": "noch nicht in der Bibliothek",
+      "create_new": "Als neue Zutat anlegen",
+      "change": "Ändern",
+      "unparsed_warning": "Nicht geparst — bitte prüfen",
+      "llm_warning": "Mit KI extrahiert — bitte jede Zeile prüfen.",
+      "resolve_first_one": "{{count}} Zutat benötigt noch eine Zuordnung.",
+      "resolve_first_other": "{{count}} Zutaten benötigen noch eine Zuordnung."
+    },
+    "step3": {
+      "title": "Abschließen",
+      "name_label": "Komponentenname",
+      "role_label": "Rolle",
+      "portions_label": "Referenzportionen",
+      "save": "Komponente speichern"
+    },
+    "status": {
+      "extracting": "Extrahiere…",
+      "via_jsonld": "Aus strukturierten Daten",
+      "via_llm": "Mit KI extrahiert"
+    }
   },
   "home": {
     "title": "Willkommen bei Plantry",
     "subtitle": "Dein selbstgehosteter Essensplaner."
   },
+  "planner": {
+    "title": "Wochenplaner",
+    "week_label": "Woche {{week}}, {{year}}",
+    "prev_week": "Vorherige Woche",
+    "next_week": "Nächste Woche",
+    "this_week": "Diese Woche",
+    "today": "Heute",
+    "copy_week": "Woche in nächste kopieren",
+    "daily_avg": "Tagesdurchschnitt",
+    "copy_success": "Woche kopiert",
+    "fill_empty_cta": "Leere Slots füllen",
+    "generate_prompt": "Plane meine Woche basierend auf meinen Zielen und Zeitfenstern.",
+    "empty_state_no_slots_title": "Lege zuerst deine Mahlzeitzeiten fest",
+    "empty_state_no_slots_body": "Definiere Frühstück, Mittag-, Abendessen, Snacks — damit du Mahlzeiten dort einplanen kannst.",
+    "empty_state_no_slots_cta": "Mahlzeitzeiten einrichten",
+    "day_mon": "Mo",
+    "day_tue": "Di",
+    "day_wed": "Mi",
+    "day_thu": "Do",
+    "day_fri": "Fr",
+    "day_sat": "Sa",
+    "day_sun": "So",
+    "slot": {
+      "empty": {
+        "label": "Mahlzeit planen"
+      },
+      "overflow": "+{{count}} mehr",
+      "ai_filled": "Vom Küchen-Agenten gefüllt",
+      "action": {
+        "favorite": "Favorit",
+        "love": "Geliebt",
+        "dislike": "Nicht gemocht"
+      },
+      "role": {
+        "main": "Hauptgericht",
+        "side_starch": "Beilage (Stärke)",
+        "side_veg": "Gemüse",
+        "side_protein": "Protein",
+        "sauce": "Soße",
+        "drink": "Getränk",
+        "dessert": "Dessert",
+        "standalone": "Einzeln"
+      }
+    },
+    "revert": {
+      "title_one": "{{count}} Slot vom Küchen-Agenten gefüllt",
+      "title_other": "{{count}} Slots vom Küchen-Agenten gefüllt",
+      "body": "Snapshot gespeichert. Rückgängig verwirft den Plan, Schließen behält ihn.",
+      "revert": "Rückgängig",
+      "dismiss": "Schließen",
+      "reverted": "Rückgängig gemacht",
+      "error": "Konnte nicht rückgängig gemacht werden"
+    },
+    "fill_empty": {
+      "progress": "Fülle leere Slots…",
+      "done": "Leere Slots gefüllt",
+      "error": "Füllen fehlgeschlagen"
+    }
+  },
+  "skip": {
+    "label": "Auslassen",
+    "mark": "Als ausgelassen markieren (auswärts)",
+    "unmark": "Auslassen entfernen",
+    "note": {
+      "placeholder": "Notiz (optional)"
+    }
+  },
+  "picker": {
+    "search": {
+      "placeholder": "Komponenten, Tags, Zutaten suchen…"
+    },
+    "filter": {
+      "favorites": "Favoriten",
+      "recents": "Zuletzt",
+      "mains": "Hauptgerichte",
+      "sides": "Beilagen",
+      "snacks": "Snacks",
+      "sauces": "Soßen",
+      "skip": "Als ausgelassen markieren"
+    },
+    "tag": {
+      "all": "Alle Tags"
+    },
+    "role": {
+      "all": "Beliebige Rolle"
+    },
+    "sort": {
+      "name": "Name",
+      "recent": "Zuletzt gekocht",
+      "kcal": "Kalorien"
+    },
+    "tray": {
+      "title": "Diese Mahlzeit",
+      "empty": "Tippe eine Mahlzeit an. Die erste wird zum Hauptgericht.",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "totals": "Summen"
+    }
+  },
+  "plate": {
+    "add_component": "Komponente hinzufügen",
+    "swap_component": "Tauschen",
+    "remove_component": "Entfernen",
+    "edit_plate": "Teller bearbeiten",
+    "delete_plate": "Teller löschen",
+    "delete_confirm_title": "Teller löschen?",
+    "delete_confirm_body": "Alle Komponenten dieses Tellers werden entfernt.",
+    "note": "Notiz",
+    "note_placeholder": "Optionale Notiz zu dieser Mahlzeit...",
+    "empty_cell": "Mahlzeit hinzufügen",
+    "portions": "Portionen",
+    "pick_component": "Komponente wählen",
+    "filter_by_role": "Nach Rolle filtern",
+    "feedback": {
+      "label": "Wie lief es?",
+      "cooked": "Gekocht",
+      "skipped": "Ausgelassen",
+      "loved": "Geliebt",
+      "disliked": "Nicht gemocht",
+      "add_note": "Notiz hinzufügen",
+      "note_placeholder": "Notizen zu dieser Mahlzeit…",
+      "clear": "Bewertung entfernen",
+      "save_note": "Notiz speichern"
+    }
+  },
+  "settings_page": {
+    "eyebrow": "Einstellungen",
+    "title": "Workspace-Einstellungen",
+    "subtitle": "Passe dein digitales Küchen-Sanktuarium an deinen kulinarischen Workflow an. Diese Einstellungen steuern, wie dein redaktioneller Ernährungsplan kuratiert und präsentiert wird.",
+    "clear_override": "Überschreibung entfernen",
+    "tabs": {
+      "general": "Allgemein",
+      "ai": "KI",
+      "nutrition": "Ernährung",
+      "meal_slots": "Mahlzeiten-Slots",
+      "system": "System"
+    },
+    "source": {
+      "db": "Datenbank",
+      "env": "Umgebungsvariable",
+      "default": "Standard",
+      "tooltip_db": "Dieser Wert ist in der Datenbank gespeichert und hat Vorrang vor der Umgebungsvariable.",
+      "tooltip_env": "Dieser Wert wird über eine Umgebungsvariable gesetzt. Speichere einen Datenbank-Wert, um ihn zur Laufzeit zu ändern.",
+      "tooltip_default": "Kein Wert konfiguriert — der Standardwert ist aktiv.",
+      "env_also_set": "Für diesen Schlüssel ist auch eine Umgebungsvariable gesetzt. Der Datenbank-Wert hat Vorrang."
+    },
+    "ai": {
+      "provider_section_title": "Assistenten-Konfiguration",
+      "provider_label": "Anbieter",
+      "provider_placeholder": "Anbieter auswählen…",
+      "provider_none": "Deaktiviert",
+      "provider_fake": "Fake (Tests)",
+      "api_key_label": "API-Schlüssel",
+      "api_key_description": "Dein API-Schlüssel des Anbieters. Wird verschlüsselt gespeichert, wenn PLANTRY_SECRET_KEY gesetzt ist.",
+      "api_key_stored": "Es ist bereits ein Schlüssel gespeichert ({{preview}}). Gib einen neuen Wert ein, um ihn zu ersetzen.",
+      "api_key_placeholder": "sk-…",
+      "api_key_placeholder_replace": "Gib einen neuen Schlüssel ein, um den gespeicherten zu ersetzen",
+      "api_key_saved": "API-Schlüssel gespeichert.",
+      "test_connection": "Verbindung testen",
+      "validated": "Verbindung bestätigt.",
+      "model_label": "Modell",
+      "model_placeholder": "Modell auswählen…",
+      "model_saved": "Modell gespeichert.",
+      "click_test_to_load_models": "Führe „Verbindung testen“ aus, um verfügbare Modelle zu laden.",
+      "advanced_title": "Erweitert",
+      "rate_limit_label": "Chat-Ratenlimit",
+      "rate_limit_description": "Maximale /api/ai/chat-Anfragen pro Minute pro IP. 0 deaktiviert das Limit.",
+      "fake_script_label": "Fake-Provider-Skript",
+      "fake_script_description": "Nur für Anbieter „Fake“. Pfad zu einer JSONL-Datei mit vorbereiteten Antworten.",
+      "secret_key_banner_title": "PLANTRY_SECRET_KEY ist nicht gesetzt",
+      "secret_key_banner_body": "Setze die Umgebungsvariable PLANTRY_SECRET_KEY, um API-Schlüssel über die UI zu bearbeiten. Über Umgebungsvariablen bereitgestellte Schlüssel funktionieren auch ohne sie.",
+      "wizard": {
+        "step1_title": "Anbieter wählen",
+        "step1_description": "Wähle, welcher Modellanbieter den Ernährungsassistenten antreiben soll.",
+        "step2_title": "API-Schlüssel hinterlegen",
+        "step2_description": "Validiere den Schlüssel, indem du die verfügbaren Modelle abrufst.",
+        "step3_title": "Modell auswählen",
+        "step3_description": "Wähle das Modell, das der Assistent verwenden soll."
+      }
+    },
+    "fdc": {
+      "title": "USDA FoodData Central",
+      "api_key_label": "FDC API-Schlüssel",
+      "api_key_description": "Aktiviert die Live-Suche in FDC. Leer lassen, um sie zu deaktivieren.",
+      "api_key_stored": "Es ist bereits ein Schlüssel gespeichert ({{preview}}). Gib einen neuen Wert ein, um ihn zu ersetzen.",
+      "api_key_placeholder": "Dein FDC API-Schlüssel",
+      "api_key_placeholder_replace": "Gib einen neuen Schlüssel ein, um den gespeicherten zu ersetzen"
+    },
+    "system": {
+      "readonly_notice": "Infrastruktur-Einstellungen stammen aus Umgebungsvariablen und erfordern einen Neustart zur Änderung.",
+      "fields": {
+        "port": "HTTP-Port",
+        "db_path": "Datenbank-Pfad",
+        "log_level": "Log-Level",
+        "image_path": "Bildspeicher-Pfad",
+        "dev_mode": "Dev-Modus",
+        "version": "Version",
+        "build_commit": "Build-Commit"
+      },
+      "env_tooltip": "Gesetzt via {{envVar}}. Neustart erforderlich.",
+      "restart_required": "Neustart erforderlich",
+      "secret_key_banner_title": "Verschlüsselung deaktiviert",
+      "secret_key_banner_body": "PLANTRY_SECRET_KEY ist nicht gesetzt — API-Schlüssel können erst über die UI gespeichert werden, wenn er konfiguriert ist."
+    }
+  },
+  "display_preferences": {
+    "title": "Darstellung",
+    "theme_label": "Design",
+    "theme_description": "Wechsle zwischen der hellen Redaktions-Palette und einem gedämpften Abendmodus.",
+    "theme_light": "Hell",
+    "theme_dark": "Dunkel",
+    "theme_system": "System",
+    "language_label": "Sprache",
+    "language_description": "Gilt für die gesamte Oberfläche.",
+    "language_english": "English",
+    "language_german": "Deutsch"
+  },
+  "developer_preferences": {
+    "title": "Entwickler",
+    "debug_title": "Lookup-Pipeline-Trace",
+    "debug_description": "Blendet ein detailliertes Trace-Panel unter der Zutatensuche ein — KI-Übersetzung, Laufzeiten der Quellen, Pick-Best-Begründung. Lokal gespeichert, nicht mit dem Server synchronisiert."
+  },
+  "slot": {
+    "title": "Mahlzeiten",
+    "description": "Definiere die Mahlzeitzeiten, um die du planst.",
+    "add_slot": "Mahlzeitzeit hinzufügen",
+    "name_key_label": "Übersetzungsschlüssel",
+    "name_key_placeholder": "slot.breakfast",
+    "icon_label": "Symbol",
+    "icon_placeholder": "Coffee",
+    "sort_order_label": "Reihenfolge",
+    "active_label": "Aktiv",
+    "no_slots": "Du hast noch keine Mahlzeitzeiten erstellt.",
+    "delete_confirm_title": "Diese Mahlzeitzeit löschen?",
+    "delete_confirm_body": "Teller, die diese Zeit verwenden, müssen zuerst entfernt werden.",
+    "breakfast": "Frühstück",
+    "lunch": "Mittagessen",
+    "dinner": "Abendessen",
+    "snack": "Snack"
+  },
   "ingredient": {
-    "title": "Zutaten",
+    "title": "Das Vorrats-Archiv",
+    "subtitle": "Eine kuratierte Datenbank deiner botanischen Grundzutaten, sorgfältig erfasst für handwerkliche Ernährung.",
     "create": "Neue Zutat",
     "edit": "Zutat bearbeiten",
+    "edit_eyebrow": "Editor",
+    "edit_title": "Zutaten-Editor",
+    "edit_subtitle": "Verfeinere das Wesen deiner kulinarischen Palette.",
+    "new_title": "Neue Zutat",
+    "new_subtitle": "Ergänze dein botanisches Atelier um eine neue Grundzutat.",
     "name": "Name",
     "name_placeholder": "z. B. Hähnchenbrust",
     "kcal": "Kalorien (kcal)",
@@ -22,17 +344,68 @@
     "sodium": "Natrium (mg)",
     "per_100g": "pro 100 g",
     "macros": "Nährwerte pro 100 g",
-    "search_placeholder": "Zutaten suchen...",
+    "search_placeholder": "Archiv durchsuchen…",
     "delete_confirm_title": "Zutat löschen?",
     "delete_confirm_body": "Diese Aktion kann nicht rückgängig gemacht werden.",
     "no_results": "Keine Zutaten gefunden.",
-    "empty_state": "Noch keine Zutaten. Erstelle deine erste!"
+    "empty_state": "Noch keine Zutaten. Erstelle deine erste!",
+    "source_label": "Quelle",
+    "source_manual": "Manuell",
+    "source_off": "Open Food Facts",
+    "source_fdc": "USDA",
+    "section_identity": "Identität",
+    "section_basic": "Basisangaben",
+    "section_macros": "Nährwerte pro 100 g",
+    "section_image_hint": "Füge ein Foto hinzu, damit die Zutat im Katalog auf einen Blick erkennbar ist.",
+    "section_macros_hint": "Werte pro 100 g — Grundlage für die Live-Nährwertberechnung.",
+    "section_lookup_hint": "Durchsuche Open Food Facts und USDA, um Nährwerte automatisch zu übernehmen.",
+    "sort_label": "Sortieren",
+    "sort_name": "Name",
+    "sort_kcal": "Kalorien",
+    "sort_protein": "Protein",
+    "total_count_one": "{{count}} Zutat",
+    "total_count_other": "{{count}} Zutaten",
+    "load_more": "Mehr laden",
+    "empty_title": "Noch keine Zutaten",
+    "no_results_body": "Versuche einen anderen Suchbegriff oder entferne die Filter.",
+    "refetch": "Nährwerte aktualisieren",
+    "refetch_failed": "Aktualisierung aus der externen Quelle fehlgeschlagen.",
+    "sync_portions": "Portionen aus FDC synchronisieren",
+    "sync_portions_done_one": "{{count}} Portion synchronisiert",
+    "sync_portions_done_other": "{{count}} Portionen synchronisiert",
+    "save_disabled_reason": "Gib einen Namen ein, um zu speichern",
+    "lookup_primary_hint": "Scannen oder suchen — wir füllen die Nährwerte für dich aus. Lass die Nährwerte leer, wenn du nur den Namen brauchst.",
+    "staged_portions_hint": "Lege fest, wie diese Zutat gemessen wird (z. B. 1 Scheibe = 25 g). Portionen werden beim Anlegen gespeichert.",
+    "nutrition_preview_empty": "Trage Nährwerte ein — hier siehst du die Live-Vorschau.",
+    "breadcrumb_back": "Zurück zu Zutaten",
+    "quick_create": {
+      "title": "Zutat schnell anlegen",
+      "description": "Lege hier inline eine neue Zutat an — Nährwerte und Foto kannst du später auf der Zutaten-Seite verfeinern.",
+      "macros_hint": "Optional — bei Unbekanntem auf 0 lassen.",
+      "save": "Anlegen und übernehmen"
+    }
   },
   "component": {
-    "title": "Komponenten",
-    "create": "Neue Komponente",
-    "edit": "Komponente bearbeiten",
-    "view": "Komponentendetails",
+    "title": "Rezept-Katalog",
+    "subtitle": "Kuratierte Nahrung für dein digitales Küchen-Sanktuarium. Entdecke saisonale Aromen und achtsame Zubereitungen.",
+    "create": "Neues Rezept",
+    "edit": "Rezept bearbeiten",
+    "edit_eyebrow": "Editor",
+    "edit_title": "Deine Kreation verfeinern",
+    "edit_subtitle": "Justiere das Wesen deines Gerichts. Präzise Mengen sichern die redaktionelle Qualität deines Küchen-Sanktuariums.",
+    "new_title": "Neues Rezept",
+    "new_subtitle": "Jede Kreation beginnt mit einem ersten Entwurf. Skizziere jetzt die Grundlagen — verfeinere später.",
+    "new_path_chooser": {
+      "aria_label": "Wähle, wie du dieses Rezept anlegst",
+      "import_title": "Von URL importieren",
+      "import_description": "Link einfügen — KI extrahiert Zutaten und Schritte für dich.",
+      "template_title": "Aus Vorlage starten",
+      "template_description": "Fertige Presets durchstöbern und nach deinem Geschmack anpassen.",
+      "or_manual": "oder unten manuell eingeben"
+    },
+    "view": "Rezept-Details",
+    "import_from_url": "Von URL importieren",
+    "browse_templates": "Vorlagen durchsuchen",
     "name": "Name",
     "name_placeholder": "z. B. Hähnchen-Curry",
     "role": "Rolle",
@@ -58,10 +431,10 @@
     "add_tag": "Tag hinzufügen",
     "tag_placeholder": "z. B. scharf, schnell",
     "nutrition": "Nährwerte pro Portion",
-    "search_placeholder": "Komponenten suchen...",
-    "no_results": "Keine Komponenten gefunden.",
-    "empty_state": "Noch keine Komponenten. Erstelle deine erste!",
-    "delete_confirm_title": "Komponente löschen?",
+    "search_placeholder": "Katalog durchsuchen…",
+    "no_results": "Keine Rezepte gefunden.",
+    "empty_state": "Noch keine Rezepte. Erstelle dein erstes!",
+    "delete_confirm_title": "Rezept löschen?",
     "delete_confirm_body": "Diese Aktion kann nicht rückgängig gemacht werden.",
     "amount": "Menge",
     "unit": "Einheit",
@@ -72,7 +445,56 @@
     "all_roles": "Alle Rollen",
     "time": "{{prep}} + {{cook}} Min.",
     "create_variant": "Variante erstellen",
-    "other_variants": "Andere Varianten"
+    "other_variants": "Andere Varianten",
+    "section_identity": "Identität",
+    "section_image_hint": "Ein klares Foto lässt Rezepte im Planer und Katalog hervorstechen.",
+    "ingredients_empty": "Noch keine Zutaten — füge die erste hinzu, um die Nährwerte zu erfassen.",
+    "add_portion_for_unit": "+ Portion für \"{{unit}}\" anlegen",
+    "add_portion_title": "Gramm pro {{unit}} festlegen",
+    "add_portion_body": "Gib an, wie viel ein {{unit}} {{ingredient}} in Gramm wiegt. Der Wert wird pro Zutat gespeichert.",
+    "error_unresolved_unit": "Einheit \"{{unit}}\" lässt sich nicht in Gramm umrechnen. Gib Gramm manuell ein oder lege eine Portion an.",
+    "grams_source": {
+      "exact": "Exakt",
+      "approx": "~ Ca.",
+      "manual": "Manuell",
+      "required": "Gramm nötig",
+      "tooltip": {
+        "direct": "Exakt — die Einheit ist bereits Gramm oder Milliliter, keine Umrechnung nötig.",
+        "portion": "Exakt — über eine gespeicherte Portion zugeordnet (z. B. 1 Scheibe = 25 g).",
+        "default": "Exakt — aufgelöst über einen hinterlegten Standard für diese Einheit.",
+        "fallback": "Ungefähr — generischer Fallback; eine gespeicherte Portion für diese Einheit erhöht die Genauigkeit.",
+        "manual": "Manuell gesetzt — du hast diese Gramm selbst eingetragen; keine Umrechnung angewendet.",
+        "unresolved": "Gramm nötig — für diese Zähl-Einheit existiert keine Portion. Gramm manuell eintragen oder Portion anlegen."
+      }
+    },
+    "instructions_empty": "Noch keine Schritte — füge den ersten hinzu, um die Zubereitung festzuhalten.",
+    "image_upload_failed": "Rezept gespeichert, aber das Bild konnte nicht hochgeladen werden. Erneut versuchen?",
+    "image_upload_retry": "Bild erneut hochladen",
+    "image_upload_skip": "Ohne Bild speichern",
+    "portion_hint_proactive": "Diese Zutat nutzt eine Zähl-Einheit ohne gespeicherte Portion — lege eine Portion an, damit Gramm automatisch aufgelöst werden.",
+    "portion_hint_add": "Portion anlegen",
+    "breadcrumb_back": "Zurück zu Rezepten",
+    "notes_toggle_add": "Notizen hinzufügen",
+    "notes_toggle_hide": "Notizen ausblenden",
+    "layout_label": "Darstellung",
+    "layout_grid": "Kachelansicht",
+    "layout_list": "Listenansicht",
+    "nutrition_view_label": "Nährwert-Sicht",
+    "nutrition_per_portion": "Pro Portion",
+    "nutrition_total": "Gesamt",
+    "nutrition_per_portion_hint": "Pro Portion · Makro-Aufteilung nach Kalorien",
+    "nutrition_total_hint": "Gesamtes Rezept · {{count}} Portionen",
+    "nutrition_empty": "Füge Zutaten hinzu, um Live-Nährwerte zu sehen.",
+    "cooking_time": "Zubereitungszeit",
+    "cooking_time_total": "Gesamt · {{minutes}} Min.",
+    "sort_label": "Sortieren",
+    "sort_name": "Name",
+    "sort_created": "Zuletzt hinzugefügt",
+    "total_count_one": "{{count}} Rezept",
+    "total_count_other": "{{count}} Rezepte",
+    "load_more": "Mehr laden",
+    "empty_title": "Noch keine Rezepte",
+    "no_results_body": "Passe die Filter an oder erstelle ein neues Rezept."
   },
   "lookup": {
     "title": "Zutat finden",
@@ -88,7 +510,22 @@
     "select_match": "Treffer auswählen",
     "recommended": "Empfohlen",
     "tab_search": "Suche",
-    "tab_manual": "Manuell"
+    "tab_manual": "Manuell",
+    "scanner_hint": "Kamera auf Barcode richten",
+    "scanner_requesting": "Kamerazugriff wird angefordert…",
+    "scanner_error_permission": "Kamerazugriff verweigert",
+    "scanner_error_no_camera": "Keine Kamera verfügbar",
+    "scanner_error_unavailable": "Barcode-Scanner wird nicht unterstützt",
+    "scanner_fallback_title": "Barcode manuell eingeben",
+    "candidates_one": "{{count}} Treffer",
+    "candidates_other": "{{count}} Treffer",
+    "apply": "Diesen Treffer übernehmen",
+    "existing_warning": "Eine Zutat mit diesem Namen existiert bereits in deinem Katalog.",
+    "debug_title": "Pipeline-Trace",
+    "debug_events": "Ereignisse",
+    "debug_copy_all": "Alles kopieren",
+    "debug_copy": "Kopieren",
+    "debug_copied": "Kopiert"
   },
   "portion": {
     "title": "Portionen",
@@ -98,12 +535,165 @@
     "unit_placeholder": "z.B. Tasse, EL, Scheibe",
     "delete_unit": "{{unit}} entfernen"
   },
+  "unit": {
+    "placeholder": "Einheit wählen",
+    "group": {
+      "portions": "Für diese Zutat",
+      "mass": "Gewicht",
+      "volume": "Volumen",
+      "count": "Pro Stück",
+      "custom": "Eigene"
+    },
+    "exact_grams": "{{grams}} g",
+    "g": { "name": "Gramm" },
+    "kg": { "name": "Kilogramm" },
+    "mg": { "name": "Milligramm" },
+    "oz": { "name": "Unze" },
+    "lb": { "name": "Pfund" },
+    "ml": { "name": "Milliliter" },
+    "l": { "name": "Liter" },
+    "cl": { "name": "Zentiliter" },
+    "dl": { "name": "Deziliter" },
+    "tbsp": { "name": "Esslöffel" },
+    "tsp": { "name": "Teelöffel" },
+    "cup": { "name": "Tasse" },
+    "floz": { "name": "Fl. oz." },
+    "pt": { "name": "Pint" },
+    "qt": { "name": "Quart" },
+    "gal": { "name": "Gallone" },
+    "piece": { "name": "Stück" },
+    "clove": { "name": "Zehe" },
+    "slice": { "name": "Scheibe" },
+    "bunch": { "name": "Bund" },
+    "pinch": { "name": "Prise" },
+    "stick": { "name": "Stange" },
+    "can": { "name": "Dose" },
+    "jar": { "name": "Glas" },
+    "packet": { "name": "Päckchen" },
+    "serving": { "name": "Portion" },
+    "stalk": { "name": "Stiel" },
+    "pod": { "name": "Schote" },
+    "head": { "name": "Kopf" },
+    "leaf": { "name": "Blatt" },
+    "leaves": { "name": "Blätter" },
+    "sprig": { "name": "Zweig" }
+  },
   "image": {
+    "section_title": "Bild",
     "upload": "Bild hochladen",
+    "take_photo": "Foto aufnehmen",
     "remove": "Bild entfernen",
-    "uploading": "Wird hochgeladen..."
+    "uploading": "Wird hochgeladen...",
+    "url_placeholder": "Bild-URL einfügen…",
+    "fetch": "Laden",
+    "paste_hint": "Oder ein Bild aus der Zwischenablage einfügen",
+    "crop": {
+      "title": "Bild zuschneiden",
+      "zoom": "Zoom",
+      "apply": "Übernehmen",
+      "cancel": "Abbrechen"
+    }
+  },
+  "shopping": {
+    "title": "Einkaufsliste",
+    "description": "Zutaten für diese Woche",
+    "button": "Einkaufen",
+    "empty": "Keine Zutaten – füge zuerst Mahlzeiten zum Planer hinzu."
+  },
+  "nutrition": {
+    "title": "Wochennährwerte",
+    "button": "Nährwerte",
+    "empty": "Noch keine Mahlzeiten geplant.",
+    "week_total": "Wochengesamt",
+    "no_target_title": "Setze ein Tagesziel, um Fortschritt zu sehen",
+    "no_target_body": "Lege Kalorien- und Makroziele in den Einstellungen fest, damit die Tagesbalken gefüllt werden.",
+    "no_target_cta": "Einstellungen öffnen",
+    "detail_title": "Nährwerte für {{name}}",
+    "section_core": "Makros",
+    "section_extended": "Erweiterte Makros",
+    "section_minerals": "Mineralstoffe",
+    "section_vitamins": "Vitamine",
+    "saturated_fat": "Gesättigte Fettsäuren",
+    "trans_fat": "Transfette",
+    "cholesterol": "Cholesterin",
+    "sugar": "Zucker",
+    "potassium": "Kalium",
+    "calcium": "Calcium",
+    "iron": "Eisen",
+    "magnesium": "Magnesium",
+    "phosphorus": "Phosphor",
+    "zinc": "Zink",
+    "vitamin_a": "Vitamin A",
+    "vitamin_c": "Vitamin C",
+    "vitamin_d": "Vitamin D",
+    "vitamin_b12": "Vitamin B12",
+    "vitamin_b6": "Vitamin B6",
+    "folate": "Folsäure"
+  },
+  "macro": {
+    "protein": "Eiweiß",
+    "carbs": "Kohlenhydrate",
+    "fat": "Fett",
+    "fiber": "Ballaststoffe",
+    "protein_abbr": "E",
+    "carbs_abbr": "K",
+    "fat_abbr": "F",
+    "fiber_abbr": "B",
+    "kcal": "kcal",
+    "distribution": "Makro-Aufteilung"
+  },
+  "profile": {
+    "title": "Profil & Ziele",
+    "description": "Lege deine Ernährungsziele und Vorlieben fest.",
+    "goal_preset": "Ziel-Vorlage",
+    "preset_cut": "Abnehmen",
+    "preset_maintain": "Halten",
+    "preset_bulk": "Aufbauen",
+    "kcal_target": "Tägliches Kalorienziel (kcal)",
+    "protein_pct": "Eiweiß %",
+    "fat_pct": "Fett %",
+    "carbs_pct": "Kohlenhydrate %",
+    "macro_sum": "Summe: {{sum}}%",
+    "dietary_restrictions": "Ernährungseinschränkungen",
+    "restriction_placeholder": "z. B. vegetarisch, glutenfrei",
+    "system_prompt": "Benutzerdefinierte KI-Anweisungen",
+    "system_prompt_placeholder": "Beschreibe deine Vorlieben für die KI...",
+    "locale": "Sprache",
+    "save": "Profil speichern",
+    "save_success": "Profil gespeichert",
+    "macros_label": "Makros",
+    "kcal_target_placeholder": "z. B. 2000",
+    "add_restriction": "Hinzufügen",
+    "remove_restriction": "{{tag}} entfernen"
+  },
+  "template": {
+    "eyebrow": "Gespeicherte Zusammenstellungen",
+    "title": "Vorlagen",
+    "subtitle": "Presse einen Lieblings-Teller zur Vorlage — und lege ihn jederzeit wieder auf.",
+    "new": "Neue Vorlage",
+    "new_body": "Erstelle jetzt eine leere Vorlage und fülle sie später im Planer, oder speichere einen bestehenden Teller direkt als Vorlage.",
+    "create": "Vorlage erstellen",
+    "save_as": "Als Vorlage speichern",
+    "save_as_body": "Merke dir diesen Teller, um die gleiche Kombination später mit einem Klick wiederzuverwenden.",
+    "apply_from": "Vorlage anwenden",
+    "rename": "Vorlage umbenennen",
+    "name": "Vorlagenname",
+    "name_placeholder": "z. B. Curry-Abend",
+    "name_help": "Kurz halten — so erscheint sie in der Auswahl.",
+    "name_required": "Bitte einen Namen eingeben.",
+    "components_count_one": "{{count}} Komponente",
+    "components_count_other": "{{count}} Komponenten",
+    "no_components": "Leere Vorlage",
+    "delete_confirm_title": "Diese Vorlage löschen?",
+    "delete_confirm_body": "Du kannst jederzeit eine neue aus einem bestehenden Teller speichern.",
+    "empty_title": "Noch keine Vorlagen",
+    "empty_body": "Speichere einen Teller aus dem Planer als Vorlage, um die Kombination an einem anderen Tag wiederzuverwenden."
   },
   "error": {
+    "page_not_found": "Seite nicht gefunden.",
+    "page_not_found_body": "Die gesuchte Seite existiert nicht.",
+    "page_error_body": "Ein unerwarteter Fehler ist aufgetreten.",
+    "reload": "Neu laden",
     "not_found": "Ressource nicht gefunden.",
     "invalid_id": "Ungültige ID.",
     "invalid_body": "Ungültige Anfragedaten.",
@@ -118,21 +708,148 @@
       "in_use": "Diese Komponente wird in einem Teller verwendet und kann nicht gelöscht werden.",
       "invalid_role": "Ungültige Rolle."
     },
+    "plate": {
+      "slot_unknown": "Diese Mahlzeitzeit existiert nicht.",
+      "feedback_invalid_status": "Bewertung muss gekocht, ausgelassen, geliebt oder nicht gemocht sein."
+    },
+    "slot": {
+      "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."
+    },
     "image": {
-      "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut."
+      "upload_failed": "Bildvorgang fehlgeschlagen. Bitte versuche es erneut.",
+      "url_invalid": "Die URL ist keine gültige Bildadresse.",
+      "url_fetch_failed": "Bild konnte von dieser URL nicht geladen werden.",
+      "url_blocked": "Diese Adresse ist nicht erlaubt."
+    },
+    "profile": {
+      "invalid_macros": "Die Makroprozentsätze dürfen zusammen höchstens 100 ergeben, und das Kalorienziel muss positiv sein."
+    },
+    "template": {
+      "in_use": "Diese Vorlage verweist noch auf eine fehlende Komponente."
+    },
+    "ai": {
+      "provider_missing": "Kein AI-Anbieter auf dem Server konfiguriert.",
+      "stream_interrupted": "Der AI-Stream wurde unterbrochen. Bitte versuche es erneut.",
+      "tool_not_found": "Die AI hat versucht, ein unbekanntes Tool zu verwenden.",
+      "iterations_exceeded": "Die AI hat zu viele Schritte gemacht — bitte formuliere die Anfrage einfacher.",
+      "rate_limit_exceeded": "Zu viele AI-Anfragen. Bitte warte eine Minute."
+    },
+    "import": {
+      "fetch_failed": "Die Rezeptseite konnte nicht geladen werden. Füge stattdessen den Quelltext ein.",
+      "body_too_large": "Die Seite ist zu groß zum Importieren.",
+      "not_html": "Die URL liefert keine HTML-Seite.",
+      "no_recipe": "Auf dieser Seite wurde kein Rezept gefunden.",
+      "llm_failed": "Die KI konnte das Rezept nicht extrahieren.",
+      "invalid_url": "Ungültige URL.",
+      "invalid_resolution": "Ungültige Zutatenauswahl."
+    },
+    "settings": {
+      "unknown_key": "Unbekannter Einstellungsschlüssel.",
+      "readonly_key": "Diese Einstellung kann nur über eine Umgebungsvariable geändert werden.",
+      "invalid_value": "Ungültiger Wert für diese Einstellung.",
+      "invalid_api_key": "Der API-Schlüssel wurde abgelehnt. Bitte überprüfe ihn.",
+      "secret_key_missing": "PLANTRY_SECRET_KEY ist nicht gesetzt — verschlüsselte Werte können nicht gespeichert werden.",
+      "unknown_provider": "Unbekannter KI-Anbieter."
     }
   },
   "common": {
     "save": "Speichern",
+    "saved": "Gespeichert.",
     "cancel": "Abbrechen",
     "delete": "Löschen",
     "confirm": "Bestätigen",
     "edit": "Bearbeiten",
     "back": "Zurück",
     "loading": "Laden...",
-    "showing": "{{from}}\u2013{{to}} von {{total}}",
+    "showing": "{{from}}–{{to}} von {{total}}",
     "previous": "Zurück",
     "next": "Weiter",
-    "actions": "Aktionen"
+    "actions": "Aktionen",
+    "skip_to_content": "Zum Hauptinhalt springen",
+    "close": "Schließen",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "chat": {
+    "title": "KI-Assistent",
+    "button": "Assistent",
+    "description": "Unterhaltung mit {{model}}",
+    "disabled": "KI-Assistent ist deaktiviert.",
+    "provider_missing": "Kein KI-Anbieter konfiguriert. Setze PLANTRY_AI_PROVIDER und starte neu.",
+    "composer": {
+      "placeholder": "Bitte plane einen Tag, tausche eine Mahlzeit oder erkläre ein Makro…",
+      "aria_label": "Nachricht an die KI",
+      "send": "Senden (Strg+Enter)",
+      "abort": "Stopp",
+      "mode_label": "Modus",
+      "mode": {
+        "default": "Standard",
+        "fill_empty": "Nur leere Slots füllen",
+        "replace_all": "Ganze Woche ersetzen"
+      }
+    },
+    "new_conversation": "Neue Unterhaltung",
+    "tool": {
+      "args": "Argumente",
+      "status": {
+        "pending": "wartet",
+        "running": "läuft…",
+        "ok": "erledigt",
+        "error": "fehlgeschlagen"
+      }
+    },
+    "history": {
+      "title": "Frühere Unterhaltungen",
+      "open": "Verlauf öffnen",
+      "empty": "Noch keine Unterhaltungen.",
+      "delete": "Unterhaltung löschen",
+      "select": "Unterhaltung öffnen"
+    }
+  },
+  "validation": {
+    "required": "Dieses Feld ist erforderlich",
+    "invalid_type": "Ungültiger Wert — erwartet {{expected}}",
+    "invalid_value": "Bitte eine gültige Option wählen",
+    "not_multiple_of": "Muss ein Vielfaches von {{divisor}} sein",
+    "unrecognized_keys": "Unerwartete Felder",
+    "origin": {
+      "string": "Text",
+      "number": "Zahl",
+      "bigint": "Zahl",
+      "array": "Liste",
+      "set": "Menge",
+      "date": "Datum",
+      "file": "Datei"
+    },
+    "too_small": {
+      "default": "Mindestens {{minimum}}",
+      "string": "Mindestens {{minimum}} Zeichen",
+      "number": "Mindestens {{minimum}}",
+      "bigint": "Mindestens {{minimum}}",
+      "array": "Mindestens {{minimum}} Eintrag hinzufügen",
+      "set": "Mindestens {{minimum}} Eintrag hinzufügen",
+      "date": "Muss am oder nach {{minimum}} liegen",
+      "file": "Datei muss mindestens {{minimum}} Bytes groß sein"
+    },
+    "too_big": {
+      "default": "Höchstens {{maximum}}",
+      "string": "Höchstens {{maximum}} Zeichen",
+      "number": "Höchstens {{maximum}}",
+      "bigint": "Höchstens {{maximum}}",
+      "array": "Höchstens {{maximum}} Einträge",
+      "set": "Höchstens {{maximum}} Einträge",
+      "date": "Muss am oder vor {{maximum}} liegen",
+      "file": "Datei darf höchstens {{maximum}} Bytes groß sein"
+    },
+    "invalid_format": {
+      "default": "Ungültig: {{format}}",
+      "email": "Ungültige E-Mail-Adresse",
+      "url": "Ungültige URL",
+      "uuid": "Ungültige UUID",
+      "regex": "Ungültiges Format",
+      "datetime": "Ungültiges Datum/Uhrzeit",
+      "ipv4": "Ungültige IPv4-Adresse",
+      "ipv6": "Ungültige IPv6-Adresse"
+    }
   }
 }

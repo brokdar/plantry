@@ -2,12 +2,13 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
+@import "@fontsource-variable/manrope";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-heading: var(--font-sans);
   --font-sans: "Inter Variable", sans-serif;
+  --font-heading: "Manrope Variable", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,6 +40,40 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+
+  /* Botanical Atelier — Material-style surface ladder */
+  --color-surface: var(--surface);
+  --color-surface-container-lowest: var(--surface-container-lowest);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  --color-primary-container: var(--primary-container);
+  --color-primary-fixed: var(--primary-fixed);
+  --color-primary-fixed-dim: var(--primary-fixed-dim);
+  --color-on-primary: var(--on-primary);
+  --color-on-primary-fixed: var(--on-primary-fixed);
+  --color-secondary-container: var(--secondary-container);
+  --color-on-secondary-container: var(--on-secondary-container);
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-fixed: var(--tertiary-fixed);
+  --color-tertiary-fixed-dim: var(--tertiary-fixed-dim);
+  --color-on-tertiary-fixed-variant: var(--on-tertiary-fixed-variant);
+
+  /* Macro tokens — unified protein/carbs/fat/fiber palette across the app */
+  --color-macro-protein: var(--macro-protein);
+  --color-macro-protein-soft: var(--macro-protein-soft);
+  --color-macro-carbs: var(--macro-carbs);
+  --color-macro-carbs-soft: var(--macro-carbs-soft);
+  --color-macro-fat: var(--macro-fat);
+  --color-macro-fat-soft: var(--macro-fat-soft);
+  --color-macro-fiber: var(--macro-fiber);
+  --color-macro-fiber-soft: var(--macro-fiber-soft);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -48,76 +83,159 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Botanical OKLch palette — see docs/ARCHITECTURE.md §2. Sage green primary,
-   warm amber accent, warm off-white background, deep moss foreground. */
+/*
+  Botanical Atelier palette — hex matches docs/stitch-design code.html verbatim.
+  Surface ladder, sage primary, charcoal text, tertiary cool-blue accent.
+*/
 :root {
-  --background: oklch(0.98 0.01 85);
-  --foreground: oklch(0.22 0.02 145);
-  --card: oklch(0.995 0.008 85);
-  --card-foreground: oklch(0.22 0.02 145);
-  --popover: oklch(0.995 0.008 85);
-  --popover-foreground: oklch(0.22 0.02 145);
-  --primary: oklch(0.55 0.08 145);
-  --primary-foreground: oklch(0.98 0.01 85);
-  --secondary: oklch(0.92 0.03 145);
-  --secondary-foreground: oklch(0.22 0.02 145);
-  --muted: oklch(0.94 0.02 85);
-  --muted-foreground: oklch(0.45 0.02 145);
-  --accent: oklch(0.88 0.06 75);
-  --accent-foreground: oklch(0.22 0.02 145);
-  --destructive: oklch(0.55 0.18 25);
-  --border: oklch(0.88 0.02 110);
-  --input: oklch(0.9 0.02 110);
-  --ring: oklch(0.55 0.08 145);
-  /* Chart tokens: protein / carbs / fat / fiber / secondary-fiber */
+  --surface: #f9f9f8;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f3f4f3;
+  --surface-container: #edeeed;
+  --surface-container-high: #e7e8e7;
+  --surface-container-highest: #e1e3e2;
+  --on-surface: #191c1c;
+  --on-surface-variant: #424842;
+  --outline: #727972;
+  --outline-variant: #c2c8c0;
+  --primary-container: #89a58a;
+  --primary-fixed: #cceacc;
+  --primary-fixed-dim: #b1ceb1;
+  --on-primary-fixed: #07200e;
+  --secondary-container: #e4e2e2;
+  --on-secondary-container: #646464;
+  --tertiary: #4b6078;
+  --tertiary-fixed: #cfe4ff;
+  --tertiary-fixed-dim: #b2c9e4;
+  --on-tertiary-fixed-variant: #33495f;
+
+  /* shadcn token aliases — realigned to Botanical palette so existing components absorb the restyle */
+  --background: var(--surface);
+  --foreground: var(--on-surface);
+  --card: var(--surface-container-lowest);
+  --card-foreground: var(--on-surface);
+  --popover: var(--surface-container-lowest);
+  --popover-foreground: var(--on-surface);
+  --primary: #4a654d;
+  --primary-foreground: #ffffff;
+  --on-primary: #ffffff;
+  --secondary: var(--surface-container-high);
+  --secondary-foreground: var(--on-surface);
+  --muted: var(--surface-container-low);
+  --muted-foreground: var(--on-surface-variant);
+  --accent: var(--primary-fixed);
+  --accent-foreground: var(--on-primary-fixed);
+  --destructive: #ba1a1a;
+  --border: rgb(194 200 192 / 0.3);
+  --input: var(--surface-container-highest);
+  --ring: #4a654d;
+
+  /* Chart tokens — macros (protein/carbs/fat/fiber) */
   --chart-1: oklch(0.62 0.12 25);
   --chart-2: oklch(0.72 0.1 85);
   --chart-3: oklch(0.66 0.11 55);
-  --chart-4: oklch(0.55 0.08 145);
-  --chart-5: oklch(0.45 0.06 145);
+  --chart-4: #4a654d;
+  --chart-5: #89a58a;
+
+  /* Macro palette — terracotta / wheat / sage / bark.
+     Semantic across every macro surface: IngredientCard, NutritionPanel,
+     NutritionDetail, planner bars, slot dots. Soft variant for chip bg. */
+  --macro-protein: #c87a5a;
+  --macro-protein-soft: #f5e3da;
+  --macro-carbs: #d4b066;
+  --macro-carbs-soft: #f6ecd3;
+  --macro-fat: #6f8a73;
+  --macro-fat-soft: #dbe3dc;
+  --macro-fiber: #a38b6a;
+  --macro-fiber-soft: #ece3d4;
+
   --radius: 0.625rem;
-  --sidebar: oklch(0.96 0.02 85);
-  --sidebar-foreground: oklch(0.22 0.02 145);
-  --sidebar-primary: oklch(0.55 0.08 145);
-  --sidebar-primary-foreground: oklch(0.98 0.01 85);
-  --sidebar-accent: oklch(0.88 0.06 75);
-  --sidebar-accent-foreground: oklch(0.22 0.02 145);
-  --sidebar-border: oklch(0.88 0.02 110);
-  --sidebar-ring: oklch(0.55 0.08 145);
+
+  /* Mobile bottom-nav reserve. Used for main-content padding + StickyActionBar
+     offset so the tab bar never overlays form content on <md screens. */
+  --tab-bar-h: 4rem;
+  --tab-bar-inset: calc(var(--tab-bar-h) + env(safe-area-inset-bottom));
+
+  --sidebar: var(--surface-container-low);
+  --sidebar-foreground: var(--on-surface);
+  --sidebar-primary: #4a654d;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--surface-container-high);
+  --sidebar-accent-foreground: var(--on-surface);
+  --sidebar-border: rgb(194 200 192 / 0.2);
+  --sidebar-ring: #4a654d;
+
+  --shadow-editorial:
+    0 10px 30px -5px rgb(25 28 28 / 0.04),
+    0 20px 40px -10px rgb(74 101 77 / 0.08);
 }
 
 .dark {
-  --background: oklch(0.22 0.02 145);
-  --foreground: oklch(0.95 0.01 85);
-  --card: oklch(0.27 0.02 145);
-  --card-foreground: oklch(0.95 0.01 85);
-  --popover: oklch(0.27 0.02 145);
-  --popover-foreground: oklch(0.95 0.01 85);
-  --primary: oklch(0.7 0.1 145);
-  --primary-foreground: oklch(0.2 0.02 145);
-  --secondary: oklch(0.32 0.03 145);
-  --secondary-foreground: oklch(0.95 0.01 85);
-  --muted: oklch(0.3 0.02 145);
-  --muted-foreground: oklch(0.72 0.02 85);
-  --accent: oklch(0.55 0.1 75);
-  --accent-foreground: oklch(0.95 0.01 85);
-  --destructive: oklch(0.65 0.2 25);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.7 0.1 145);
+  --surface: #101312;
+  --surface-container-lowest: #161917;
+  --surface-container-low: #1c1f1d;
+  --surface-container: #20231f;
+  --surface-container-high: #262a26;
+  --surface-container-highest: #2d312d;
+  --on-surface: #e5e7e4;
+  --on-surface-variant: #b6bbb4;
+  --outline: #8a9089;
+  --outline-variant: #3c413c;
+  --primary-container: #334d36;
+  --primary-fixed: #334d36;
+  --primary-fixed-dim: #223b26;
+  --on-primary-fixed: #cceacc;
+  --secondary-container: #3a3a3a;
+  --on-secondary-container: #c8c6c6;
+  --tertiary: #b2c9e4;
+  --tertiary-fixed: #33495f;
+  --tertiary-fixed-dim: #21374d;
+  --on-tertiary-fixed-variant: #cfe4ff;
+
+  --background: var(--surface);
+  --foreground: var(--on-surface);
+  --card: var(--surface-container-lowest);
+  --card-foreground: var(--on-surface);
+  --popover: var(--surface-container-lowest);
+  --popover-foreground: var(--on-surface);
+  --primary: #b1ceb1;
+  --primary-foreground: #07200e;
+  --on-primary: #07200e;
+  --secondary: var(--surface-container-high);
+  --secondary-foreground: var(--on-surface);
+  --muted: var(--surface-container-low);
+  --muted-foreground: var(--on-surface-variant);
+  --accent: var(--primary-fixed);
+  --accent-foreground: var(--on-primary-fixed);
+  --destructive: #ffb4ab;
+  --border: rgb(255 255 255 / 0.1);
+  --input: var(--surface-container-highest);
+  --ring: #b1ceb1;
+
   --chart-1: oklch(0.7 0.14 25);
   --chart-2: oklch(0.8 0.12 85);
   --chart-3: oklch(0.74 0.13 55);
-  --chart-4: oklch(0.7 0.1 145);
-  --chart-5: oklch(0.6 0.08 145);
-  --sidebar: oklch(0.25 0.02 145);
-  --sidebar-foreground: oklch(0.95 0.01 85);
-  --sidebar-primary: oklch(0.7 0.1 145);
-  --sidebar-primary-foreground: oklch(0.2 0.02 145);
-  --sidebar-accent: oklch(0.55 0.1 75);
-  --sidebar-accent-foreground: oklch(0.95 0.01 85);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.7 0.1 145);
+  --chart-4: #b1ceb1;
+  --chart-5: #89a58a;
+
+  /* Macro palette — dark mode: lifted L, same hues, muted soft bg */
+  --macro-protein: #e09276;
+  --macro-protein-soft: #3a2721;
+  --macro-carbs: #e6c684;
+  --macro-carbs-soft: #38301d;
+  --macro-fat: #96b19b;
+  --macro-fat-soft: #24302a;
+  --macro-fiber: #bfa483;
+  --macro-fiber-soft: #322a20;
+
+  --sidebar: var(--surface-container-low);
+  --sidebar-foreground: var(--on-surface);
+  --sidebar-primary: #b1ceb1;
+  --sidebar-primary-foreground: #07200e;
+  --sidebar-accent: var(--surface-container-high);
+  --sidebar-accent-foreground: var(--on-surface);
+  --sidebar-border: rgb(255 255 255 / 0.1);
+  --sidebar-ring: #b1ceb1;
 }
 
 @layer base {
@@ -129,5 +247,69 @@
   }
   html {
     @apply font-sans;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+  }
+}
+
+@keyframes shimmer-sweep {
+  from {
+    transform: translateX(-150%) skewX(-12deg);
+  }
+  to {
+    transform: translateX(220%) skewX(-12deg);
+  }
+}
+
+@layer utilities {
+  .editorial-shadow {
+    box-shadow: var(--shadow-editorial);
+  }
+  .gradient-primary {
+    background-image: linear-gradient(135deg, #4a654d 0%, #89a58a 100%);
+  }
+  .dark .gradient-primary {
+    background-image: linear-gradient(135deg, #334d36 0%, #b1ceb1 100%);
+  }
+  .glass-header {
+    background-color: color-mix(in oklab, var(--surface) 80%, transparent);
+    backdrop-filter: blur(12px);
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .font-heading {
+    font-family: var(--font-heading);
+  }
+  /* Shimmer sweep overlay for gradient CTA buttons */
+  .btn-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.22) 50%,
+      transparent 100%
+    );
+    transform: translateX(-150%) skewX(-12deg);
+    pointer-events: none;
+  }
+  .btn-shimmer:hover::after {
+    animation: shimmer-sweep 0.55s ease-out forwards;
   }
 }

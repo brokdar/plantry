@@ -28,10 +28,14 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+*.swp
+*.swo
+*.log
 
 # Vitest run artifacts (updated on every test run, not useful in VCS)
 frontend/test-results/
 .claude/worktrees/
 .worktrees/
+.DS_Store

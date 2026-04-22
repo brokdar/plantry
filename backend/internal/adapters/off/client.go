@@ -36,6 +36,28 @@ type Candidate struct {
 	Carbs100g   *float64
 	Fiber100g   *float64
 	Sodium100g  *float64
+
+	SaturatedFat100g *float64
+	TransFat100g     *float64
+	Cholesterol100g  *float64 // mg
+	Sugar100g        *float64
+	Potassium100g    *float64 // mg
+	Calcium100g      *float64 // mg
+	Iron100g         *float64 // mg
+	Magnesium100g    *float64 // mg
+	Phosphorus100g   *float64 // mg
+	Zinc100g         *float64 // mg
+	VitaminA100g     *float64 // µg RAE
+	VitaminC100g     *float64 // mg
+	VitaminD100g     *float64 // µg
+	VitaminB12100g   *float64 // µg
+	VitaminB6100g    *float64 // mg
+	Folate100g       *float64 // µg DFE
+
+	// ServingQuantityG is the OFF-reported grams per serving, if the product
+	// exposes one. Used to seed a "serving" portion so users can pick
+	// "1 serving" as a natural unit for packaged foods.
+	ServingQuantityG *float64
 }
 
 // New creates a Client with the given options.
@@ -131,16 +153,38 @@ func (c *Client) SearchByName(ctx context.Context, query string, lang string, li
 }
 
 func mapProduct(p offProduct, lang string) Candidate {
+	var serving *float64
+	if p.ServingQuantity > 0 {
+		v := p.ServingQuantity
+		serving = &v
+	}
 	return Candidate{
-		Name:        localizedName(p, lang),
-		Brand:       p.Brands,
-		ImageURL:    p.ImageFrontSmallURL,
-		Kcal100g:    p.Nutriments.EnergyKcal100g,
-		Protein100g: p.Nutriments.Proteins100g,
-		Fat100g:     p.Nutriments.Fat100g,
-		Carbs100g:   p.Nutriments.Carbohydrates100g,
-		Fiber100g:   p.Nutriments.Fiber100g,
-		Sodium100g:  p.Nutriments.Sodium100g,
+		ServingQuantityG: serving,
+		Name:             localizedName(p, lang),
+		Brand:            p.Brands,
+		ImageURL:         p.ImageFrontSmallURL,
+		Kcal100g:         p.Nutriments.EnergyKcal100g,
+		Protein100g:      p.Nutriments.Proteins100g,
+		Fat100g:          p.Nutriments.Fat100g,
+		Carbs100g:        p.Nutriments.Carbohydrates100g,
+		Fiber100g:        p.Nutriments.Fiber100g,
+		Sodium100g:       p.Nutriments.Sodium100g,
+		SaturatedFat100g: p.Nutriments.SaturatedFat100g,
+		TransFat100g:     p.Nutriments.TransFat100g,
+		Cholesterol100g:  p.Nutriments.Cholesterol100g,
+		Sugar100g:        p.Nutriments.Sugars100g,
+		Potassium100g:    p.Nutriments.Potassium100g,
+		Calcium100g:      p.Nutriments.Calcium100g,
+		Iron100g:         p.Nutriments.Iron100g,
+		Magnesium100g:    p.Nutriments.Magnesium100g,
+		Phosphorus100g:   p.Nutriments.Phosphorus100g,
+		Zinc100g:         p.Nutriments.Zinc100g,
+		VitaminA100g:     p.Nutriments.VitaminA100g,
+		VitaminC100g:     p.Nutriments.VitaminC100g,
+		VitaminD100g:     p.Nutriments.VitaminD100g,
+		VitaminB12100g:   p.Nutriments.VitaminB12100g,
+		VitaminB6100g:    p.Nutriments.VitaminB6100g,
+		Folate100g:       p.Nutriments.VitaminB9100g,
 	}
 }
 
@@ -194,4 +238,21 @@ type offNutriments struct {
 	Carbohydrates100g *float64 `json:"carbohydrates_100g"`
 	Fiber100g         *float64 `json:"fiber_100g"`
 	Sodium100g        *float64 `json:"sodium_100g"`
+
+	SaturatedFat100g *float64 `json:"saturated-fat_100g"`
+	TransFat100g     *float64 `json:"trans-fat_100g"`
+	Cholesterol100g  *float64 `json:"cholesterol_100g"`
+	Sugars100g       *float64 `json:"sugars_100g"`
+	Potassium100g    *float64 `json:"potassium_100g"`
+	Calcium100g      *float64 `json:"calcium_100g"`
+	Iron100g         *float64 `json:"iron_100g"`
+	Magnesium100g    *float64 `json:"magnesium_100g"`
+	Phosphorus100g   *float64 `json:"phosphorus_100g"`
+	Zinc100g         *float64 `json:"zinc_100g"`
+	VitaminA100g     *float64 `json:"vitamin-a_100g"`
+	VitaminC100g     *float64 `json:"vitamin-c_100g"`
+	VitaminD100g     *float64 `json:"vitamin-d_100g"`
+	VitaminB12100g   *float64 `json:"vitamin-b12_100g"`
+	VitaminB6100g    *float64 `json:"vitamin-b6_100g"`
+	VitaminB9100g    *float64 `json:"vitamin-b9_100g"`
 }

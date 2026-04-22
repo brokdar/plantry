@@ -24,9 +24,7 @@ describe("IngredientList", () => {
     vi.mocked(listIngredients).mockReturnValue(new Promise(() => {}))
     renderWithRouter(<IngredientList />, "/ingredients")
 
-    await screen.findByRole("heading", { name: "Ingredients" })
-
-    // Table should not be rendered while loading
+    await screen.findByRole("heading", { name: "The Pantry Archive" })
     expect(screen.queryByRole("table")).not.toBeInTheDocument()
   })
 
@@ -49,13 +47,17 @@ describe("IngredientList", () => {
 
     await screen.findByText("Chicken breast")
 
-    const searchInput = screen.getByPlaceholderText("Search ingredients...")
+    const searchInput = screen.getByPlaceholderText("Search the archive…")
     await user.type(searchInput, "xyz")
 
-    expect(await screen.findByText("No ingredients found.")).toBeInTheDocument()
+    expect(
+      await screen.findByText(
+        "Try a different search term or clear the filters."
+      )
+    ).toBeInTheDocument()
   })
 
-  test("renders ingredient rows in table", async () => {
+  test("renders ingredient cards with name", async () => {
     vi.mocked(listIngredients).mockResolvedValue({
       items: [mockChickenBreast, mockBrownRice],
       total: 2,
@@ -64,11 +66,13 @@ describe("IngredientList", () => {
 
     expect(await screen.findByText("Chicken breast")).toBeInTheDocument()
     expect(screen.getByText("Brown rice")).toBeInTheDocument()
-    expect(screen.getByText("165")).toBeInTheDocument()
-    expect(screen.getByText("112")).toBeInTheDocument()
+    const chickenCard = screen.getByTestId(
+      `ingredient-card-${mockChickenBreast.id}`
+    )
+    expect(chickenCard).toHaveTextContent("165")
   })
 
-  test("shows delete confirmation dialog", async () => {
+  test("shows delete confirmation dialog via card menu", async () => {
     const user = userEvent.setup()
     vi.mocked(listIngredients).mockResolvedValue({
       items: [mockChickenBreast],
@@ -78,8 +82,12 @@ describe("IngredientList", () => {
 
     await screen.findByText("Chicken breast")
 
-    const deleteButtons = screen.getAllByRole("button", { name: "Delete" })
-    await user.click(deleteButtons[0])
+    await user.click(
+      screen.getByTestId(`ingredient-card-${mockChickenBreast.id}-menu`)
+    )
+    await user.click(
+      screen.getByTestId(`ingredient-card-${mockChickenBreast.id}-delete`)
+    )
 
     expect(await screen.findByText("Delete ingredient?")).toBeInTheDocument()
   })
@@ -96,19 +104,20 @@ describe("IngredientList", () => {
 
     await screen.findByText("Chicken breast")
 
-    const deleteButtons = screen.getAllByRole("button", { name: "Delete" })
-    await user.click(deleteButtons[0])
+    await user.click(
+      screen.getByTestId(`ingredient-card-${mockChickenBreast.id}-menu`)
+    )
+    await user.click(
+      screen.getByTestId(`ingredient-card-${mockChickenBreast.id}-delete`)
+    )
 
     const dialog = await screen.findByRole("dialog")
-    const confirmButton = within(dialog).getByRole("button", {
-      name: "Delete",
-    })
-    await user.click(confirmButton)
+    await user.click(within(dialog).getByTestId("confirm-delete"))
 
-    expect(deleteIngredient).toHaveBeenCalledWith(1)
+    expect(deleteIngredient).toHaveBeenCalledWith(mockChickenBreast.id)
   })
 
-  test("Previous button disabled on first page", async () => {
+  test("Load more button visible when more items available", async () => {
     vi.mocked(listIngredients).mockResolvedValue({
       items: [mockChickenBreast],
       total: 25,
@@ -117,11 +126,12 @@ describe("IngredientList", () => {
 
     await screen.findByText("Chicken breast")
 
-    const prevButton = screen.getByRole("button", { name: "Previous" })
-    expect(prevButton).toBeDisabled()
+    expect(
+      await screen.findByTestId("ingredients-load-more")
+    ).toBeInTheDocument()
   })
 
-  test("clicking Next fetches next page", async () => {
+  test("clicking Load more increases limit", async () => {
     const user = userEvent.setup()
     vi.mocked(listIngredients).mockResolvedValue({
       items: [mockChickenBreast],
@@ -131,13 +141,11 @@ describe("IngredientList", () => {
 
     await screen.findByText("Chicken breast")
 
-    const nextButton = screen.getByRole("button", { name: "Next" })
-    await user.click(nextButton)
+    await user.click(screen.getByTestId("ingredients-load-more"))
 
     await waitFor(() => {
-      expect(listIngredients).toHaveBeenCalledWith(
-        expect.objectContaining({ offset: 20 })
-      )
+      const lastCall = vi.mocked(listIngredients).mock.calls.at(-1)?.[0]
+      expect(lastCall?.limit).toBeGreaterThan(24)
     })
   })
 })

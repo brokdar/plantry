@@ -45,7 +45,7 @@ func setupLookupRouter(t *testing.T, off ingredient.BarcodeProvider, fdc ingredi
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewIngredientRepo(db)
 	svc := ingredient.NewService(repo)
-	resolver := ingredient.NewResolver(repo, off, fdc)
+	resolver := ingredient.NewResolver(repo, off, fdc, nil)
 	lh := handlers.NewLookupHandler(resolver, nil, svc)
 
 	r := chi.NewRouter()
@@ -56,6 +56,8 @@ func setupLookupRouter(t *testing.T, off ingredient.BarcodeProvider, fdc ingredi
 		r.Post("/resolve", lh.Resolve)
 		r.Route("/{id}", func(r chi.Router) {
 			r.Get("/", handlers.NewIngredientHandler(svc).Get)
+			r.Put("/", handlers.NewIngredientHandler(svc).Update)
+			r.Post("/refetch", lh.Refetch)
 		})
 	})
 	return r
@@ -101,6 +103,36 @@ func TestLookup_WithQuery(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
 	results := got["results"].([]any)
 	assert.Len(t, results, 1)
+}
+
+func TestLookup_DebugParamAttachesTrace(t *testing.T) {
+	fdc := &stubFoodProvider{
+		candidates: []ingredient.Candidate{
+			{Name: "Chicken", Source: "fdc", Kcal100g: pf64(120)},
+		},
+	}
+	r := setupLookupRouter(t, nil, fdc)
+
+	// Without ?debug=true — trace must be absent.
+	respPlain := httptest.NewRecorder()
+	reqPlain := httptest.NewRequest(http.MethodGet, "/api/ingredients/lookup?query=chicken", nil)
+	r.ServeHTTP(respPlain, reqPlain)
+	require.Equal(t, http.StatusOK, respPlain.Code)
+	var plain map[string]any
+	require.NoError(t, json.NewDecoder(respPlain.Body).Decode(&plain))
+	_, hasTrace := plain["trace"]
+	assert.False(t, hasTrace, "trace must not leak into the response when debug is off")
+
+	// With ?debug=true — trace must be populated.
+	respDbg := httptest.NewRecorder()
+	reqDbg := httptest.NewRequest(http.MethodGet, "/api/ingredients/lookup?query=chicken&debug=true", nil)
+	r.ServeHTTP(respDbg, reqDbg)
+	require.Equal(t, http.StatusOK, respDbg.Code)
+	var dbg map[string]any
+	require.NoError(t, json.NewDecoder(respDbg.Body).Decode(&dbg))
+	trace, ok := dbg["trace"].([]any)
+	require.True(t, ok, "trace array must be present when debug=true")
+	assert.NotEmpty(t, trace, "trace should have at least the FDC search entry")
 }
 
 func TestLookup_MissingParams(t *testing.T) {
@@ -156,6 +188,66 @@ func TestResolve_InvalidBody(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
 }
 
+func TestRefetch_UpdatesMacrosFromOFF(t *testing.T) {
+	off := &stubBarcodeProvider{
+		candidates: []ingredient.Candidate{{
+			Name:        "Refreshed",
+			Source:      "off",
+			Barcode:     "7770",
+			Kcal100g:    pf64(250),
+			Protein100g: pf64(12),
+			Fat100g:     pf64(8),
+			Carbs100g:   pf64(30),
+			Sugar100g:   pf64(20),
+		}},
+	}
+	r := setupLookupRouter(t, off, nil)
+
+	// Create with stale values + stored barcode.
+	create := `{"name":"Local","source":"off","barcode":"7770","kcal_100g":100,"protein_100g":5,"fat_100g":2,"carbs_100g":10,"fiber_100g":0,"sodium_100g":0}`
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/ingredients", bytes.NewBufferString(create))
+	r.ServeHTTP(resp, req)
+	require.Equal(t, http.StatusCreated, resp.Code)
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&created))
+	id := int64(created["id"].(float64))
+
+	// Refetch.
+	resp = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/ingredients/%d/refetch", id), nil)
+	r.ServeHTTP(resp, req)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	// Core macros overwritten.
+	assert.Equal(t, float64(250), got["kcal_100g"])
+	assert.Equal(t, float64(12), got["protein_100g"])
+	// Extended macro now present.
+	assert.Equal(t, float64(20), got["sugar_100g"])
+	// Name preserved.
+	assert.Equal(t, "Local", got["name"])
+}
+
+func TestRefetch_MissingSourceIDs(t *testing.T) {
+	r := setupLookupRouter(t, nil, nil)
+
+	create := `{"name":"ManualOnly","source":"manual","kcal_100g":100,"protein_100g":5,"fat_100g":2,"carbs_100g":10,"fiber_100g":0,"sodium_100g":0}`
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/ingredients", bytes.NewBufferString(create))
+	r.ServeHTTP(resp, req)
+	require.Equal(t, http.StatusCreated, resp.Code)
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&created))
+	id := int64(created["id"].(float64))
+
+	resp = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/ingredients/%d/refetch", id), nil)
+	r.ServeHTTP(resp, req)
+	assert.Equal(t, http.StatusBadRequest, resp.Code)
+}
+
 func TestResolve_EmptyName(t *testing.T) {
 	r := setupLookupRouter(t, nil, nil)
 
@@ -172,7 +264,7 @@ func setupLookupRouterWithImageStore(t *testing.T, imgStore *imagestore.Store) h
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewIngredientRepo(db)
 	svc := ingredient.NewService(repo)
-	resolver := ingredient.NewResolver(repo, nil, nil)
+	resolver := ingredient.NewResolver(repo, nil, nil, nil)
 	lh := handlers.NewLookupHandler(resolver, imgStore, svc)
 
 	r := chi.NewRouter()

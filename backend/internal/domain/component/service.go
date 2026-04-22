@@ -3,10 +3,12 @@ package component
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
 // PortionLookup resolves custom portion units to grams.
@@ -19,16 +21,28 @@ type NutritionLookup interface {
 	LookupForNutrition(ctx context.Context, ids []int64) (map[int64]*ingredient.Ingredient, error)
 }
 
+// ImageDeleter removes stored image files. Used for orphan cleanup on Delete.
+type ImageDeleter interface {
+	Delete(category string, id int64) error
+}
+
 // Service holds business logic for components.
 type Service struct {
 	repo            Repository
 	portions        PortionLookup
 	nutritionLookup NutritionLookup
+	images          ImageDeleter // optional; nil-safe
 }
 
 // NewService creates a component service.
 func NewService(repo Repository, portions PortionLookup, nl NutritionLookup) *Service {
 	return &Service{repo: repo, portions: portions, nutritionLookup: nl}
+}
+
+// WithImageStore wires an image deleter so Delete cleans up orphaned image files.
+func (s *Service) WithImageStore(img ImageDeleter) *Service {
+	s.images = img
+	return s
 }
 
 func (s *Service) validate(c *Component) error {
@@ -57,31 +71,74 @@ func (s *Service) validate(c *Component) error {
 	return nil
 }
 
-// resolveGrams populates the Grams field for each ingredient.
-// If the unit is "g" or "ml", grams = amount. Otherwise, look up the portion.
-func (s *Service) resolveGrams(ctx context.Context, ingredients []ComponentIngredient) error {
-	for i := range ingredients {
-		ci := &ingredients[i]
-		switch ci.Unit {
-		case "g", "ml":
-			ci.Grams = ci.Amount
-		default:
+// resolveGrams populates the Grams and GramsSource fields for each ingredient
+// using a layered fallback chain:
+//
+//  1. Ingredient-specific portion (FDC/OFF-sourced or user-added) — exact.
+//  2. Universal default (mass direct, volume water-density) — exact for mass,
+//     approximate for volume.
+//  3. User-supplied explicit Grams on a count unit or unknown unit — manual.
+//
+// Errors are returned when a count unit has no portion and no manual grams,
+// or when a unit is entirely unknown. The normalized unit is written back to
+// ci.Unit so downstream storage uses the canonical key.
+func (s *Service) resolveGrams(ctx context.Context, ingredientsList []ComponentIngredient) error {
+	for i := range ingredientsList {
+		ci := &ingredientsList[i]
+		normalized := units.Normalize(ci.Unit)
+		if normalized == "" {
+			return fmt.Errorf("%w: ingredient[%d] unit required", domain.ErrInvalidInput, i)
+		}
+		ci.Unit = normalized
+		manualGrams := ci.Grams
+
+		// 1. Ingredient-specific portion lookup. Skip for bare mass units —
+		//    those are canonical and always resolve via the default table.
+		if normalized != "g" && normalized != "kg" && normalized != "mg" {
 			portions, err := s.portions.ListPortions(ctx, ci.IngredientID)
 			if err != nil {
 				return fmt.Errorf("resolve ingredient %d portions: %w", ci.IngredientID, err)
 			}
-			found := false
 			for _, p := range portions {
-				if p.Unit == ci.Unit {
+				if units.Normalize(p.Unit) == normalized {
 					ci.Grams = ci.Amount * p.Grams
-					found = true
-					break
+					ci.GramsSource = GramsSourcePortion
+					goto next
 				}
 			}
-			if !found {
-				return fmt.Errorf("%w: unknown unit %q for ingredient %d", domain.ErrInvalidInput, ci.Unit, ci.IngredientID)
-			}
 		}
+
+		// 2. Universal default.
+		if def, ok := units.LookupDefault(normalized); ok {
+			ci.Grams = ci.Amount * def.Grams
+			switch {
+			case def.Kind == units.KindMass && normalized == "g":
+				ci.GramsSource = GramsSourceDirect
+			case def.Kind == units.KindMass:
+				ci.GramsSource = GramsSourceDefault
+			default: // KindVolume
+				ci.GramsSource = GramsSourceFallback
+			}
+			goto next
+		}
+
+		// 3. No portion, no default. Accept user-supplied explicit grams as a
+		//    manual fallback (e.g. "2 cloves ≈ 8g" typed by the user). Only
+		//    count units and unknown aliases land here.
+		if manualGrams > 0 {
+			ci.Grams = manualGrams
+			ci.GramsSource = GramsSourceManual
+			continue
+		}
+
+		if units.IsCount(normalized) {
+			return fmt.Errorf("%w: ingredient %d: unit %q requires a portion or manual grams",
+				domain.ErrInvalidInput, ci.IngredientID, normalized)
+		}
+		return fmt.Errorf("%w: unknown unit %q for ingredient %d",
+			domain.ErrInvalidInput, normalized, ci.IngredientID)
+
+	next:
 	}
 	return nil
 }
@@ -119,9 +176,21 @@ func (s *Service) Update(ctx context.Context, c *Component) error {
 	return s.repo.Update(ctx, c)
 }
 
-// Delete removes a component by ID.
+// Delete removes a component by ID and best-effort deletes its stored image.
 func (s *Service) Delete(ctx context.Context, id int64) error {
-	return s.repo.Delete(ctx, id)
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	if s.images != nil {
+		_ = s.images.Delete("components", id)
+	}
+	return nil
+}
+
+// SetFavorite toggles the favorite flag for a component. Favorites surface
+// first in catalog listings and bias the kitchen agent's fill-empty picks.
+func (s *Service) SetFavorite(ctx context.Context, id int64, favorite bool) (*Component, error) {
+	return s.repo.SetFavorite(ctx, id, favorite)
 }
 
 // List returns a page of components matching the query.
@@ -179,6 +248,32 @@ func (s *Service) ListVariants(ctx context.Context, componentID int64) ([]Compon
 		return []Component{}, nil
 	}
 	return s.repo.Siblings(ctx, *c.VariantGroupID, componentID)
+}
+
+// Insights returns rotation signals: components not cooked recently (or ever)
+// and the most frequently cooked. Zero-valued query fields fall back to
+// defaults (4 weeks, 10 forgotten, 5 most-cooked).
+func (s *Service) Insights(ctx context.Context, q InsightsQuery) (Insights, error) {
+	if q.ForgottenWeeks <= 0 {
+		q.ForgottenWeeks = 4
+	}
+	if q.ForgottenWeeks > 52 {
+		q.ForgottenWeeks = 52
+	}
+	if q.ForgottenLimit <= 0 {
+		q.ForgottenLimit = 10
+	}
+	if q.ForgottenLimit > 50 {
+		q.ForgottenLimit = 50
+	}
+	if q.MostCookedLimit <= 0 {
+		q.MostCookedLimit = 5
+	}
+	if q.MostCookedLimit > 50 {
+		q.MostCookedLimit = 50
+	}
+	cutoff := time.Now().UTC().AddDate(0, 0, -7*q.ForgottenWeeks)
+	return s.repo.Insights(ctx, cutoff, q.ForgottenLimit, q.MostCookedLimit)
 }
 
 // Nutrition returns per-portion macros for a component.

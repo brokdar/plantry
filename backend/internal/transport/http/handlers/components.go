@@ -56,13 +56,14 @@ type componentRequest struct {
 }
 
 type componentIngredientResponse struct {
-	ID           int64   `json:"id"`
-	ComponentID  int64   `json:"component_id"`
-	IngredientID int64   `json:"ingredient_id"`
-	Amount       float64 `json:"amount"`
-	Unit         string  `json:"unit"`
-	Grams        float64 `json:"grams"`
-	SortOrder    int     `json:"sort_order"`
+	ID             int64   `json:"id"`
+	ComponentID    int64   `json:"component_id"`
+	IngredientID   int64   `json:"ingredient_id"`
+	IngredientName string  `json:"ingredient_name"`
+	Amount         float64 `json:"amount"`
+	Unit           string  `json:"unit"`
+	Grams          float64 `json:"grams"`
+	SortOrder      int     `json:"sort_order"`
 }
 
 type instructionResponse struct {
@@ -84,6 +85,7 @@ type componentResponse struct {
 	Notes             *string                       `json:"notes,omitempty"`
 	LastCookedAt      *string                       `json:"last_cooked_at,omitempty"`
 	CookCount         int                           `json:"cook_count"`
+	Favorite          bool                          `json:"favorite"`
 	Ingredients       []componentIngredientResponse `json:"ingredients"`
 	Instructions      []instructionResponse         `json:"instructions"`
 	Tags              []string                      `json:"tags"`
@@ -110,7 +112,8 @@ func toComponentResponse(c *component.Component) componentResponse {
 	for i, ci := range c.Ingredients {
 		ingredients[i] = componentIngredientResponse{
 			ID: ci.ID, ComponentID: ci.ComponentID, IngredientID: ci.IngredientID,
-			Amount: ci.Amount, Unit: ci.Unit, Grams: ci.Grams, SortOrder: ci.SortOrder,
+			IngredientName: ci.IngredientName,
+			Amount:         ci.Amount, Unit: ci.Unit, Grams: ci.Grams, SortOrder: ci.SortOrder,
 		}
 	}
 
@@ -138,6 +141,7 @@ func toComponentResponse(c *component.Component) componentResponse {
 		ImagePath:         c.ImagePath,
 		Notes:             c.Notes,
 		CookCount:         c.CookCount,
+		Favorite:          c.Favorite,
 		Ingredients:       ingredients,
 		Instructions:      instructions,
 		Tags:              tags,
@@ -204,8 +208,18 @@ func (h *ComponentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// image_path is managed via dedicated /image endpoints; preserve it here so
+	// a regular PUT (which doesn't carry the field) cannot wipe the stored image.
+	existing, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+
 	c := requestToComponent(&req)
 	c.ID = id
+	c.ImagePath = existing.ImagePath
 	if err := h.svc.Update(r.Context(), c); err != nil {
 		status, key := componentError(err)
 		writeError(w, status, key)
@@ -233,11 +247,12 @@ func (h *ComponentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *ComponentHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := component.ListQuery{
-		Search:   r.URL.Query().Get("search"),
-		Role:     r.URL.Query().Get("role"),
-		Tag:      r.URL.Query().Get("tag"),
-		SortBy:   r.URL.Query().Get("sort"),
-		SortDesc: r.URL.Query().Get("order") == "desc",
+		Search:       r.URL.Query().Get("search"),
+		Role:         r.URL.Query().Get("role"),
+		Tag:          r.URL.Query().Get("tag"),
+		FavoriteOnly: r.URL.Query().Get("favorite") == "1",
+		SortBy:       r.URL.Query().Get("sort"),
+		SortDesc:     r.URL.Query().Get("order") == "desc",
 	}
 
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -294,6 +309,75 @@ type variantListResponse struct {
 	Items []componentResponse `json:"items"`
 }
 
+// componentSummary is a slim shape for rotation-insight cards; it omits
+// ingredients, instructions, and tags (the badge UI doesn't render them).
+type componentSummary struct {
+	ID           int64   `json:"id"`
+	Name         string  `json:"name"`
+	Role         string  `json:"role"`
+	ImagePath    *string `json:"image_path,omitempty"`
+	CookCount    int     `json:"cook_count"`
+	LastCookedAt *string `json:"last_cooked_at,omitempty"`
+}
+
+type insightsResponse struct {
+	Forgotten  []componentSummary `json:"forgotten"`
+	MostCooked []componentSummary `json:"most_cooked"`
+}
+
+func toComponentSummary(c *component.Component) componentSummary {
+	s := componentSummary{
+		ID:        c.ID,
+		Name:      c.Name,
+		Role:      string(c.Role),
+		ImagePath: c.ImagePath,
+		CookCount: c.CookCount,
+	}
+	if c.LastCookedAt != nil {
+		str := c.LastCookedAt.Format(time.RFC3339)
+		s.LastCookedAt = &str
+	}
+	return s
+}
+
+// Insights handles GET /api/components/insights.
+func (h *ComponentHandler) Insights(w http.ResponseWriter, r *http.Request) {
+	q := component.InsightsQuery{}
+	if v := r.URL.Query().Get("forgotten_weeks"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			q.ForgottenWeeks = n
+		}
+	}
+	if v := r.URL.Query().Get("forgotten_limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			q.ForgottenLimit = n
+		}
+	}
+	if v := r.URL.Query().Get("most_cooked_limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			q.MostCookedLimit = n
+		}
+	}
+
+	out, err := h.svc.Insights(r.Context(), q)
+	if err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+
+	forgotten := make([]componentSummary, len(out.Forgotten))
+	for i := range out.Forgotten {
+		forgotten[i] = toComponentSummary(&out.Forgotten[i])
+	}
+	mostCooked := make([]componentSummary, len(out.MostCooked))
+	for i := range out.MostCooked {
+		mostCooked[i] = toComponentSummary(&out.MostCooked[i])
+	}
+
+	writeJSON(w, http.StatusOK, insightsResponse{Forgotten: forgotten, MostCooked: mostCooked})
+}
+
 // CreateVariant handles POST /api/components/{id}/variant.
 func (h *ComponentHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -333,6 +417,31 @@ func (h *ComponentHandler) ListVariants(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, variantListResponse{Items: items})
+}
+
+type favoriteRequest struct {
+	Favorite bool `json:"favorite"`
+}
+
+// SetFavorite handles POST /api/components/{id}/favorite.
+func (h *ComponentHandler) SetFavorite(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	var req favoriteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	c, err := h.svc.SetFavorite(r.Context(), id, req.Favorite)
+	if err != nil {
+		status, key := componentError(err)
+		writeError(w, status, key)
+		return
+	}
+	writeJSON(w, http.StatusOK, toComponentResponse(c))
 }
 
 // Upload handles POST /api/components/{id}/image.

@@ -9,14 +9,27 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
+	plantrymw "github.com/jaltszeimer/plantry/backend/internal/transport/http/middleware"
 )
 
 // Handlers groups all per-aggregate HTTP handlers for route registration.
 type Handlers struct {
-	Ingredients *handlers.IngredientHandler
-	Lookup      *handlers.LookupHandler
-	Images      *handlers.ImageHandler
-	Components  *handlers.ComponentHandler
+	Ingredients   *handlers.IngredientHandler
+	Lookup        *handlers.LookupHandler
+	Images        *handlers.ImageHandler
+	ImageProxy    *handlers.ImageProxyHandler
+	Components    *handlers.ComponentHandler
+	Slots         *handlers.SlotHandler
+	Weeks         *handlers.WeekHandler
+	Plates        *handlers.PlateHandler
+	Profile       *handlers.ProfileHandler
+	Templates     *handlers.TemplateHandler
+	AI            *handlers.AIHandler
+	AIRateLimiter *plantrymw.RateLimiter
+	Feedback      *handlers.FeedbackHandler
+	Import        *handlers.ImportHandler
+	Settings      *handlers.SettingsHandler
+	DevMode       bool // gates dev-only debug endpoints
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -25,15 +38,18 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
+	r.Use(plantrymw.SecurityHeaders())
 	r.Use(requestLogger(logger))
 
 	r.Route("/api", func(api chi.Router) {
+		api.Use(plantrymw.MaxBodySize(1 << 20)) // 1 MB; image upload enforces its own 10 MB limit
 		api.Get("/health", handlers.Health)
 
 		if h.Components != nil {
 			api.Route("/components", func(r chi.Router) {
 				r.Get("/", h.Components.List)
 				r.Post("/", h.Components.Create)
+				r.Get("/insights", h.Components.Insights)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.Components.Get)
 					r.Put("/", h.Components.Update)
@@ -41,11 +57,113 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/nutrition", h.Components.Nutrition)
 					r.Post("/variant", h.Components.CreateVariant)
 					r.Get("/variants", h.Components.ListVariants)
+					r.Post("/favorite", h.Components.SetFavorite)
 					if h.Components.HasImageStore() {
 						r.Post("/image", h.Components.Upload)
 						r.Delete("/image", h.Components.DeleteImage)
 					}
 				})
+			})
+		}
+
+		if h.Slots != nil {
+			api.Route("/settings/slots", func(r chi.Router) {
+				r.Get("/", h.Slots.List)
+				r.Post("/", h.Slots.Create)
+				r.Put("/{id}", h.Slots.Update)
+				r.Delete("/{id}", h.Slots.Delete)
+			})
+		}
+
+		if h.Weeks != nil {
+			api.Route("/weeks", func(r chi.Router) {
+				r.Get("/", h.Weeks.List)
+				r.Get("/current", h.Weeks.Current)
+				r.Get("/by-date", h.Weeks.ByDate)
+				r.Get("/{id}", h.Weeks.Get)
+				r.Post("/{id}/copy", h.Weeks.Copy)
+				r.Post("/{id}/plates", h.Weeks.CreatePlate)
+				r.Delete("/{id}/plates", h.Weeks.ClearPlates)
+				r.Get("/{id}/shopping-list", h.Weeks.ShoppingList)
+				r.Get("/{id}/nutrition", h.Weeks.Nutrition)
+			})
+		}
+
+		if h.Plates != nil {
+			api.Route("/plates/{id}", func(r chi.Router) {
+				r.Get("/", h.Plates.Get)
+				r.Put("/", h.Plates.Update)
+				r.Delete("/", h.Plates.Delete)
+				r.Post("/skip", h.Plates.SetSkipped)
+				r.Post("/components", h.Plates.AddComponent)
+				r.Put("/components/{pcId}", h.Plates.UpdateComponent)
+				r.Delete("/components/{pcId}", h.Plates.DeleteComponent)
+				if h.Feedback != nil {
+					r.Put("/feedback", h.Feedback.Put)
+					r.Delete("/feedback", h.Feedback.Delete)
+				}
+			})
+		}
+
+		if h.Profile != nil {
+			api.Route("/profile", func(r chi.Router) {
+				r.Get("/", h.Profile.Get)
+				r.Put("/", h.Profile.Update)
+			})
+		}
+
+		if h.Templates != nil {
+			api.Route("/templates", func(r chi.Router) {
+				r.Get("/", h.Templates.List)
+				r.Post("/", h.Templates.Create)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.Templates.Get)
+					r.Put("/", h.Templates.Update)
+					r.Delete("/", h.Templates.Delete)
+					r.Post("/apply", h.Templates.Apply)
+				})
+			})
+		}
+
+		if h.AI != nil {
+			limiter := h.AIRateLimiter
+			if limiter == nil {
+				limiter = plantrymw.NewRateLimiter(0) // disabled fallback
+			}
+			api.Route("/ai", func(r chi.Router) {
+				r.With(limiter.Middleware("error.ai.rate_limit_exceeded")).
+					Post("/chat", h.AI.Chat)
+				r.Get("/conversations", h.AI.ListConversations)
+				r.Route("/conversations/{id}", func(r chi.Router) {
+					r.Get("/", h.AI.GetConversation)
+					r.Delete("/", h.AI.DeleteConversation)
+				})
+				if h.DevMode {
+					r.Get("/debug/system-prompt", h.AI.DebugSystemPrompt)
+				}
+			})
+		}
+
+		if h.Settings != nil {
+			api.Route("/settings", func(r chi.Router) {
+				r.Get("/", h.Settings.List)
+				r.Put("/{key}", h.Settings.Set)
+				r.Delete("/{key}", h.Settings.Delete)
+				r.Get("/system", h.Settings.System)
+				r.Get("/ai", h.Settings.AISummary)
+				r.Get("/ai/models", h.Settings.Models)
+			})
+		}
+
+		if h.ImageProxy != nil {
+			api.Post("/image/fetch-url", h.ImageProxy.Fetch)
+		}
+
+		if h.Import != nil {
+			api.Route("/import", func(r chi.Router) {
+				r.Post("/extract", h.Import.Extract)
+				r.Post("/resolve", h.Import.Resolve)
+				r.Get("/lookup", h.Import.LookupLine)
 			})
 		}
 
@@ -65,6 +183,10 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/portions", h.Ingredients.ListPortions)
 				r.Post("/portions", h.Ingredients.UpsertPortion)
 				r.Delete("/portions/{unit}", h.Ingredients.DeletePortion)
+				r.Post("/sync-portions", h.Ingredients.SyncPortions)
+				if h.Lookup != nil {
+					r.Post("/refetch", h.Lookup.Refetch)
+				}
 				if h.Images != nil {
 					r.Post("/image", h.Images.Upload)
 					r.Delete("/image", h.Images.DeleteImage)

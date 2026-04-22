@@ -4,6 +4,7 @@ export interface ComponentIngredient {
   id: number
   component_id: number
   ingredient_id: number
+  ingredient_name: string
   amount: number
   unit: string
   grams: number
@@ -29,6 +30,7 @@ export interface Component {
   notes: string | null
   last_cooked_at: string | null
   cook_count: number
+  favorite: boolean
   ingredients: ComponentIngredient[]
   instructions: Instruction[]
   tags: string[]
@@ -70,6 +72,7 @@ export interface ComponentListParams {
   search?: string
   role?: string
   tag?: string
+  favorite?: 0 | 1
   limit?: number
   offset?: number
   sort?: string
@@ -127,6 +130,16 @@ export function deleteComponent(id: number): Promise<void> {
   })
 }
 
+export function setComponentFavorite(
+  id: number,
+  favorite: boolean
+): Promise<Component> {
+  return apiFetch(`/components/${id}/favorite`, {
+    method: "POST",
+    body: JSON.stringify({ favorite }),
+  })
+}
+
 export function getComponentNutrition(id: number): Promise<ComponentNutrition> {
   return apiFetch(`/components/${id}/nutrition`)
 }
@@ -141,4 +154,39 @@ export function createVariant(id: number): Promise<Component> {
 
 export function listVariants(id: number): Promise<VariantListResponse> {
   return apiFetch(`/components/${id}/variants`)
+}
+
+export interface ComponentSummary {
+  id: number
+  name: string
+  role: string
+  image_path: string | null
+  cook_count: number
+  last_cooked_at: string | null
+}
+
+export interface InsightsResponse {
+  forgotten: ComponentSummary[]
+  most_cooked: ComponentSummary[]
+}
+
+export interface InsightsParams {
+  forgotten_weeks?: number
+  forgotten_limit?: number
+  most_cooked_limit?: number
+}
+
+export function getInsights(
+  params?: InsightsParams
+): Promise<InsightsResponse> {
+  const query = new URLSearchParams()
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        query.set(key, String(value))
+      }
+    })
+  }
+  const qs = query.toString()
+  return apiFetch(`/components/insights${qs ? `?${qs}` : ""}`)
 }
