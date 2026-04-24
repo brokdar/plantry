@@ -10,12 +10,12 @@ import (
 	"database/sql"
 )
 
-const countPlatesUsingComponent = `-- name: CountPlatesUsingComponent :one
-SELECT COUNT(*) FROM plate_components WHERE component_id = ?
+const countPlatesUsingFood = `-- name: CountPlatesUsingFood :one
+SELECT COUNT(*) FROM plate_components WHERE food_id = ?
 `
 
-func (q *Queries) CountPlatesUsingComponent(ctx context.Context, componentID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPlatesUsingComponent, componentID)
+func (q *Queries) CountPlatesUsingFood(ctx context.Context, foodID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPlatesUsingFood, foodID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -77,22 +77,22 @@ func (q *Queries) CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate
 }
 
 const createPlateComponent = `-- name: CreatePlateComponent :one
-INSERT INTO plate_components (plate_id, component_id, portions, sort_order)
+INSERT INTO plate_components (plate_id, food_id, portions, sort_order)
 VALUES (?, ?, ?, ?)
-RETURNING id, plate_id, component_id, portions, sort_order
+RETURNING id, plate_id, food_id, portions, sort_order
 `
 
 type CreatePlateComponentParams struct {
-	PlateID     int64
-	ComponentID int64
-	Portions    float64
-	SortOrder   int64
+	PlateID   int64
+	FoodID    int64
+	Portions  float64
+	SortOrder int64
 }
 
 func (q *Queries) CreatePlateComponent(ctx context.Context, arg CreatePlateComponentParams) (PlateComponent, error) {
 	row := q.db.QueryRowContext(ctx, createPlateComponent,
 		arg.PlateID,
-		arg.ComponentID,
+		arg.FoodID,
 		arg.Portions,
 		arg.SortOrder,
 	)
@@ -100,7 +100,7 @@ func (q *Queries) CreatePlateComponent(ctx context.Context, arg CreatePlateCompo
 	err := row.Scan(
 		&i.ID,
 		&i.PlateID,
-		&i.ComponentID,
+		&i.FoodID,
 		&i.Portions,
 		&i.SortOrder,
 	)
@@ -211,7 +211,7 @@ func (q *Queries) GetPlate(ctx context.Context, id int64) (Plate, error) {
 }
 
 const getPlateComponent = `-- name: GetPlateComponent :one
-SELECT id, plate_id, component_id, portions, sort_order FROM plate_components WHERE id = ?
+SELECT id, plate_id, food_id, portions, sort_order FROM plate_components WHERE id = ?
 `
 
 func (q *Queries) GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error) {
@@ -220,7 +220,7 @@ func (q *Queries) GetPlateComponent(ctx context.Context, id int64) (PlateCompone
 	err := row.Scan(
 		&i.ID,
 		&i.PlateID,
-		&i.ComponentID,
+		&i.FoodID,
 		&i.Portions,
 		&i.SortOrder,
 	)
@@ -315,7 +315,7 @@ func (q *Queries) ListActiveTimeSlots(ctx context.Context) ([]TimeSlot, error) {
 }
 
 const listPlateComponentsByPlate = `-- name: ListPlateComponentsByPlate :many
-SELECT id, plate_id, component_id, portions, sort_order FROM plate_components WHERE plate_id = ? ORDER BY sort_order, id
+SELECT id, plate_id, food_id, portions, sort_order FROM plate_components WHERE plate_id = ? ORDER BY sort_order, id
 `
 
 func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]PlateComponent, error) {
@@ -330,7 +330,7 @@ func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64)
 		if err := rows.Scan(
 			&i.ID,
 			&i.PlateID,
-			&i.ComponentID,
+			&i.FoodID,
 			&i.Portions,
 			&i.SortOrder,
 		); err != nil {
@@ -348,7 +348,7 @@ func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64)
 }
 
 const listPlateComponentsByWeek = `-- name: ListPlateComponentsByWeek :many
-SELECT pc.id, pc.plate_id, pc.component_id, pc.portions, pc.sort_order
+SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.sort_order
 FROM plate_components pc
 JOIN plates p ON p.id = pc.plate_id
 WHERE p.week_id = ?
@@ -367,7 +367,7 @@ func (q *Queries) ListPlateComponentsByWeek(ctx context.Context, weekID int64) (
 		if err := rows.Scan(
 			&i.ID,
 			&i.PlateID,
-			&i.ComponentID,
+			&i.FoodID,
 			&i.Portions,
 			&i.SortOrder,
 		); err != nil {
@@ -556,25 +556,25 @@ func (q *Queries) UpdatePlate(ctx context.Context, arg UpdatePlateParams) (Plate
 
 const updatePlateComponent = `-- name: UpdatePlateComponent :one
 UPDATE plate_components SET
-    component_id = ?,
-    portions     = ?
+    food_id  = ?,
+    portions = ?
 WHERE id = ?
-RETURNING id, plate_id, component_id, portions, sort_order
+RETURNING id, plate_id, food_id, portions, sort_order
 `
 
 type UpdatePlateComponentParams struct {
-	ComponentID int64
-	Portions    float64
-	ID          int64
+	FoodID   int64
+	Portions float64
+	ID       int64
 }
 
 func (q *Queries) UpdatePlateComponent(ctx context.Context, arg UpdatePlateComponentParams) (PlateComponent, error) {
-	row := q.db.QueryRowContext(ctx, updatePlateComponent, arg.ComponentID, arg.Portions, arg.ID)
+	row := q.db.QueryRowContext(ctx, updatePlateComponent, arg.FoodID, arg.Portions, arg.ID)
 	var i PlateComponent
 	err := row.Scan(
 		&i.ID,
 		&i.PlateID,
-		&i.ComponentID,
+		&i.FoodID,
 		&i.Portions,
 		&i.SortOrder,
 	)

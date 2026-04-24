@@ -1,4 +1,4 @@
-package ingredient
+package food
 
 import (
 	"context"
@@ -16,8 +16,7 @@ const (
 )
 
 // TraceEntry is one step in a lookup pipeline trace. Detail is free-form
-// JSON shaped by the step — see AITranslationDetail, AIPickBestDetail,
-// ExternalAPIDetail below.
+// JSON shaped by the step.
 type TraceEntry struct {
 	Step       string     `json:"step"`
 	Level      TraceLevel `json:"level"`
@@ -27,8 +26,7 @@ type TraceEntry struct {
 }
 
 // LookupTrace accumulates TraceEntry items across a single lookup. Nil-safe:
-// every method no-ops on a nil receiver so handlers that do not request debug
-// output pay no cost.
+// every method no-ops on a nil receiver.
 type LookupTrace struct {
 	mu      sync.Mutex
 	entries []TraceEntry
@@ -39,7 +37,7 @@ func NewLookupTrace() *LookupTrace {
 	return &LookupTrace{entries: make([]TraceEntry, 0, 8)}
 }
 
-// Add appends a trace entry. Safe to call on a nil receiver.
+// Add appends a trace entry. Safe on a nil receiver.
 func (t *LookupTrace) Add(entry TraceEntry) {
 	if t == nil {
 		return

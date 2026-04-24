@@ -67,10 +67,10 @@ func (r *PlateRepo) createWith(ctx context.Context, q *sqlcgen.Queries, p *plate
 			pc.SortOrder = i
 		}
 		pcRow, err := q.CreatePlateComponent(ctx, sqlcgen.CreatePlateComponentParams{
-			PlateID:     pc.PlateID,
-			ComponentID: pc.ComponentID,
-			Portions:    pc.Portions,
-			SortOrder:   int64(pc.SortOrder),
+			PlateID:   pc.PlateID,
+			FoodID:    pc.FoodID,
+			Portions:  pc.Portions,
+			SortOrder: int64(pc.SortOrder),
 		})
 		if err != nil {
 			return err
@@ -159,14 +159,14 @@ func (r *PlateRepo) ListByWeek(ctx context.Context, weekID int64) ([]plate.Plate
 
 func (r *PlateRepo) CreateComponent(ctx context.Context, pc *plate.PlateComponent) error {
 	row, err := r.q.CreatePlateComponent(ctx, sqlcgen.CreatePlateComponentParams{
-		PlateID:     pc.PlateID,
-		ComponentID: pc.ComponentID,
-		Portions:    pc.Portions,
-		SortOrder:   int64(pc.SortOrder),
+		PlateID:   pc.PlateID,
+		FoodID:    pc.FoodID,
+		Portions:  pc.Portions,
+		SortOrder: int64(pc.SortOrder),
 	})
 	if err != nil {
 		if isForeignKeyViolation(err) {
-			return fmt.Errorf("%w: invalid plate or component reference", domain.ErrInvalidInput)
+			return fmt.Errorf("%w: invalid plate or food reference", domain.ErrInvalidInput)
 		}
 		return err
 	}
@@ -189,16 +189,16 @@ func (r *PlateRepo) GetComponent(ctx context.Context, id int64) (*plate.PlateCom
 
 func (r *PlateRepo) UpdateComponent(ctx context.Context, pc *plate.PlateComponent) error {
 	row, err := r.q.UpdatePlateComponent(ctx, sqlcgen.UpdatePlateComponentParams{
-		ID:          pc.ID,
-		ComponentID: pc.ComponentID,
-		Portions:    pc.Portions,
+		ID:       pc.ID,
+		FoodID:   pc.FoodID,
+		Portions: pc.Portions,
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: plate_component %d", domain.ErrNotFound, pc.ID)
 		}
 		if isForeignKeyViolation(err) {
-			return fmt.Errorf("%w: invalid component reference", domain.ErrInvalidInput)
+			return fmt.Errorf("%w: invalid food reference", domain.ErrInvalidInput)
 		}
 		return err
 	}
@@ -233,8 +233,8 @@ func (r *PlateRepo) ListComponentsByPlate(ctx context.Context, plateID int64) ([
 	return out, nil
 }
 
-func (r *PlateRepo) CountUsingComponent(ctx context.Context, componentID int64) (int64, error) {
-	return r.q.CountPlatesUsingComponent(ctx, componentID)
+func (r *PlateRepo) CountUsingFood(ctx context.Context, foodID int64) (int64, error) {
+	return r.q.CountPlatesUsingFood(ctx, foodID)
 }
 
 // SetSkipped toggles the prospective "skip this slot" marker on a plate.
@@ -331,7 +331,7 @@ func mapPlateToDomain(row *sqlcgen.Plate, p *plate.Plate) {
 func mapPlateComponentToDomain(row *sqlcgen.PlateComponent, pc *plate.PlateComponent) {
 	pc.ID = row.ID
 	pc.PlateID = row.PlateID
-	pc.ComponentID = row.ComponentID
+	pc.FoodID = row.FoodID
 	pc.Portions = row.Portions
 	pc.SortOrder = int(row.SortOrder)
 }

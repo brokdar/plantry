@@ -10,12 +10,12 @@ import (
 	"database/sql"
 )
 
-const countTemplatesUsingComponent = `-- name: CountTemplatesUsingComponent :one
-SELECT COUNT(*) FROM template_components WHERE component_id = ?
+const countTemplatesUsingFood = `-- name: CountTemplatesUsingFood :one
+SELECT COUNT(*) FROM template_components WHERE food_id = ?
 `
 
-func (q *Queries) CountTemplatesUsingComponent(ctx context.Context, componentID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countTemplatesUsingComponent, componentID)
+func (q *Queries) CountTemplatesUsingFood(ctx context.Context, foodID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTemplatesUsingFood, foodID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -33,22 +33,22 @@ func (q *Queries) CreateTemplate(ctx context.Context, name string) (Template, er
 }
 
 const createTemplateComponent = `-- name: CreateTemplateComponent :one
-INSERT INTO template_components (template_id, component_id, portions, sort_order)
+INSERT INTO template_components (template_id, food_id, portions, sort_order)
 VALUES (?, ?, ?, ?)
-RETURNING id, template_id, component_id, portions, sort_order
+RETURNING id, template_id, food_id, portions, sort_order
 `
 
 type CreateTemplateComponentParams struct {
-	TemplateID  int64
-	ComponentID int64
-	Portions    float64
-	SortOrder   int64
+	TemplateID int64
+	FoodID     int64
+	Portions   float64
+	SortOrder  int64
 }
 
 func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplateComponentParams) (TemplateComponent, error) {
 	row := q.db.QueryRowContext(ctx, createTemplateComponent,
 		arg.TemplateID,
-		arg.ComponentID,
+		arg.FoodID,
 		arg.Portions,
 		arg.SortOrder,
 	)
@@ -56,7 +56,7 @@ func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplat
 	err := row.Scan(
 		&i.ID,
 		&i.TemplateID,
-		&i.ComponentID,
+		&i.FoodID,
 		&i.Portions,
 		&i.SortOrder,
 	)
@@ -91,7 +91,7 @@ func (q *Queries) GetTemplate(ctx context.Context, id int64) (Template, error) {
 }
 
 const listTemplateComponentsByTemplate = `-- name: ListTemplateComponentsByTemplate :many
-SELECT id, template_id, component_id, portions, sort_order FROM template_components WHERE template_id = ? ORDER BY sort_order, id
+SELECT id, template_id, food_id, portions, sort_order FROM template_components WHERE template_id = ? ORDER BY sort_order, id
 `
 
 func (q *Queries) ListTemplateComponentsByTemplate(ctx context.Context, templateID int64) ([]TemplateComponent, error) {
@@ -106,7 +106,7 @@ func (q *Queries) ListTemplateComponentsByTemplate(ctx context.Context, template
 		if err := rows.Scan(
 			&i.ID,
 			&i.TemplateID,
-			&i.ComponentID,
+			&i.FoodID,
 			&i.Portions,
 			&i.SortOrder,
 		); err != nil {

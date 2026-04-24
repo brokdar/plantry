@@ -8,17 +8,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 	plantrymw "github.com/jaltszeimer/plantry/backend/internal/transport/http/middleware"
 )
 
 // Handlers groups all per-aggregate HTTP handlers for route registration.
 type Handlers struct {
-	Ingredients   *handlers.IngredientHandler
+	Foods         *handlers.FoodHandler
 	Lookup        *handlers.LookupHandler
-	Images        *handlers.ImageHandler
 	ImageProxy    *handlers.ImageProxyHandler
-	Components    *handlers.ComponentHandler
+	ImageStore    *imagestore.Store
 	Slots         *handlers.SlotHandler
 	Weeks         *handlers.WeekHandler
 	Plates        *handlers.PlateHandler
@@ -45,22 +45,35 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 		api.Use(plantrymw.MaxBodySize(1 << 20)) // 1 MB; image upload enforces its own 10 MB limit
 		api.Get("/health", handlers.Health)
 
-		if h.Components != nil {
-			api.Route("/components", func(r chi.Router) {
-				r.Get("/", h.Components.List)
-				r.Post("/", h.Components.Create)
-				r.Get("/insights", h.Components.Insights)
+		if h.Foods != nil {
+			api.Route("/foods", func(r chi.Router) {
+				r.Get("/", h.Foods.List)
+				r.Post("/", h.Foods.Create)
+				r.Get("/insights", h.Foods.Insights)
+
+				if h.Lookup != nil {
+					r.Get("/lookup", h.Lookup.Lookup)
+					r.Post("/resolve", h.Lookup.Resolve)
+				}
+
 				r.Route("/{id}", func(r chi.Router) {
-					r.Get("/", h.Components.Get)
-					r.Put("/", h.Components.Update)
-					r.Delete("/", h.Components.Delete)
-					r.Get("/nutrition", h.Components.Nutrition)
-					r.Post("/variant", h.Components.CreateVariant)
-					r.Get("/variants", h.Components.ListVariants)
-					r.Post("/favorite", h.Components.SetFavorite)
-					if h.Components.HasImageStore() {
-						r.Post("/image", h.Components.Upload)
-						r.Delete("/image", h.Components.DeleteImage)
+					r.Get("/", h.Foods.Get)
+					r.Put("/", h.Foods.Update)
+					r.Delete("/", h.Foods.Delete)
+					r.Get("/nutrition", h.Foods.Nutrition)
+					r.Post("/favorite", h.Foods.SetFavorite)
+					r.Post("/variant", h.Foods.CreateVariant)
+					r.Get("/variants", h.Foods.ListVariants)
+					r.Get("/portions", h.Foods.ListPortions)
+					r.Post("/portions", h.Foods.UpsertPortion)
+					r.Delete("/portions/{unit}", h.Foods.DeletePortion)
+					r.Post("/sync-portions", h.Foods.SyncPortions)
+					if h.Lookup != nil {
+						r.Post("/refetch", h.Lookup.Refetch)
+					}
+					if h.Foods.HasImageStore() {
+						r.Post("/image", h.Foods.Upload)
+						r.Delete("/image", h.Foods.DeleteImage)
 					}
 				})
 			})
@@ -128,7 +141,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 		if h.AI != nil {
 			limiter := h.AIRateLimiter
 			if limiter == nil {
-				limiter = plantrymw.NewRateLimiter(0) // disabled fallback
+				limiter = plantrymw.NewRateLimiter(0)
 			}
 			api.Route("/ai", func(r chi.Router) {
 				r.With(limiter.Middleware("error.ai.rate_limit_exceeded")).
@@ -166,38 +179,11 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/lookup", h.Import.LookupLine)
 			})
 		}
-
-		api.Route("/ingredients", func(r chi.Router) {
-			r.Get("/", h.Ingredients.List)
-			r.Post("/", h.Ingredients.Create)
-
-			if h.Lookup != nil {
-				r.Get("/lookup", h.Lookup.Lookup)
-				r.Post("/resolve", h.Lookup.Resolve)
-			}
-
-			r.Route("/{id}", func(r chi.Router) {
-				r.Get("/", h.Ingredients.Get)
-				r.Put("/", h.Ingredients.Update)
-				r.Delete("/", h.Ingredients.Delete)
-				r.Get("/portions", h.Ingredients.ListPortions)
-				r.Post("/portions", h.Ingredients.UpsertPortion)
-				r.Delete("/portions/{unit}", h.Ingredients.DeletePortion)
-				r.Post("/sync-portions", h.Ingredients.SyncPortions)
-				if h.Lookup != nil {
-					r.Post("/refetch", h.Lookup.Refetch)
-				}
-				if h.Images != nil {
-					r.Post("/image", h.Images.Upload)
-					r.Delete("/image", h.Images.DeleteImage)
-				}
-			})
-		})
 	})
 
 	// Serve stored images as static files.
-	if h.Images != nil && h.Images.Store() != nil {
-		r.Handle("/images/*", http.StripPrefix("/images/", http.FileServer(http.Dir(h.Images.Store().BasePath()))))
+	if h.ImageStore != nil {
+		r.Handle("/images/*", http.StripPrefix("/images/", http.FileServer(http.Dir(h.ImageStore.BasePath()))))
 	}
 
 	if staticHandler != nil {

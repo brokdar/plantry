@@ -12,8 +12,7 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
@@ -58,12 +57,12 @@ type ToolSet struct {
 
 // Services aggregates the domain services the default tool set depends on.
 type Services struct {
-	Components *component.Service
-	Planner    *planner.Service
-	Plates     *plate.Service
-	Profile    *profile.Service
-	Slots      *slot.Service
-	Ingredient ingredient.Repository
+	Foods             *food.Service
+	NutritionResolver *food.NutritionResolver
+	Planner           *planner.Service
+	Plates            *plate.Service
+	Profile           *profile.Service
+	Slots             *slot.Service
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -138,15 +137,15 @@ func schemaErrors(r *gojsonschema.Result) string {
 
 func defaultTools(svc Services) []Tool {
 	return []Tool{
-		toolListComponents(svc),
-		toolGetComponent(svc),
+		toolListFoods(svc),
+		toolGetFood(svc),
 		toolListSlots(svc),
 		toolGetWeek(svc),
 		toolGetWeekNutrition(svc),
 		toolGetProfile(svc),
 		toolCreatePlate(svc),
-		toolAddComponentToPlate(svc),
-		toolSwapComponent(svc),
+		toolAddFoodToPlate(svc),
+		toolSwapFood(svc),
 		toolUpdatePlateComponent(svc),
 		toolRemovePlateComponent(svc),
 		toolDeletePlate(svc),
@@ -157,27 +156,29 @@ func defaultTools(svc Services) []Tool {
 
 // --- read tools ---
 
-func toolListComponents(svc Services) Tool {
+func toolListFoods(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
       "properties":{
         "search":{"type":"string"},
+        "kind":{"type":"string","enum":["leaf","composed"]},
         "role":{"type":"string","enum":["main","side_starch","side_veg","side_protein","sauce","drink","dessert","standalone"]},
         "tag":{"type":"string"},
         "limit":{"type":"integer","minimum":1,"maximum":200},
         "offset":{"type":"integer","minimum":0},
-        "sort_by":{"type":"string","enum":["name","created","last_cooked"]},
+        "sort_by":{"type":"string","enum":["name","created_at","last_cooked_at"]},
         "sort_desc":{"type":"boolean"}
       },
       "additionalProperties":false
     }`)
 	return Tool{
-		Name:        "list_components",
-		Description: "List components (dishes) in the library. Filter by role, tag, or search substring. Use this to find a component by name before referencing it by id.",
+		Name:        "list_foods",
+		Description: "List foods in the library. A food is either a LEAF (single edible item with direct nutrition — apple, rice, chicken) or COMPOSED (built from child foods — curry, schnitzel). Filter by kind, role, tag, or search substring. Use this to find a food by name before referencing it by id.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
 				Search   string `json:"search"`
+				Kind     string `json:"kind"`
 				Role     string `json:"role"`
 				Tag      string `json:"tag"`
 				Limit    int    `json:"limit"`
@@ -188,46 +189,51 @@ func toolListComponents(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			res, err := svc.Components.List(ctx, component.ListQuery{
-				Search: in.Search, Role: in.Role, Tag: in.Tag,
-				Limit: in.Limit, Offset: in.Offset,
-				SortBy: in.SortBy, SortDesc: in.SortDesc,
+			res, err := svc.Foods.List(ctx, food.ListQuery{
+				Kind:     food.Kind(in.Kind),
+				Search:   in.Search,
+				Role:     in.Role,
+				Tag:      in.Tag,
+				Limit:    in.Limit,
+				Offset:   in.Offset,
+				SortBy:   in.SortBy,
+				SortDesc: in.SortDesc,
 			})
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
 			items := make([]map[string]any, 0, len(res.Items))
-			for _, c := range res.Items {
-				items = append(items, componentSummary(&c))
+			for i := range res.Items {
+				items = append(items, foodSummary(&res.Items[i]))
 			}
 			return mustJSON(map[string]any{"items": items, "total": res.Total}), ToolEffectNone, nil
 		},
 	}
 }
 
-func toolGetComponent(svc Services) Tool {
+func toolGetFood(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
-      "required":["component_id"],
-      "properties":{"component_id":{"type":"integer","minimum":1}},
+      "required":["food_id"],
+      "properties":{"food_id":{"type":"integer","minimum":1}},
       "additionalProperties":false
     }`)
 	return Tool{
-		Name:        "get_component",
-		Description: "Fetch a component (dish) by id, with ingredients, instructions, role, and tags.",
+		Name:        "get_food",
+		Description: "Fetch a food by id. Composed foods include children (child food + grams), instructions, and tags; leaf foods include direct nutrition and portion overrides.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				ComponentID int64 `json:"component_id"`
+				FoodID int64 `json:"food_id"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			c, err := svc.Components.Get(ctx, in.ComponentID)
+			f, err := svc.Foods.Get(ctx, in.FoodID)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(componentDetail(c)), ToolEffectNone, nil
+			return mustJSON(foodDetail(f)), ToolEffectNone, nil
 		},
 	}
 }
@@ -273,7 +279,7 @@ func toolGetWeek(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "get_week",
-		Description: "Get a week with all its plates (day + slot + component list). If week_id is omitted, returns the current ISO week.",
+		Description: "Get a week with all its plates (day + slot + food list). If week_id is omitted, returns the current ISO week.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -385,31 +391,31 @@ func toolCreatePlate(svc Services) Tool {
 	}
 }
 
-func toolAddComponentToPlate(svc Services) Tool {
+func toolAddFoodToPlate(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
-      "required":["plate_id","component_id"],
+      "required":["plate_id","food_id"],
       "properties":{
         "plate_id":{"type":"integer","minimum":1},
-        "component_id":{"type":"integer","minimum":1},
+        "food_id":{"type":"integer","minimum":1},
         "portions":{"type":"number","exclusiveMinimum":0}
       },
       "additionalProperties":false
     }`)
 	return Tool{
-		Name:        "add_component_to_plate",
-		Description: "Append a component (dish) to a plate with the given portion count (defaults to 1).",
+		Name:        "add_food_to_plate",
+		Description: "Append a food (leaf or composed) to a plate with the given portion count (defaults to 1).",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				PlateID     int64   `json:"plate_id"`
-				ComponentID int64   `json:"component_id"`
-				Portions    float64 `json:"portions"`
+				PlateID  int64   `json:"plate_id"`
+				FoodID   int64   `json:"food_id"`
+				Portions float64 `json:"portions"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			pc, err := svc.Plates.AddComponent(ctx, in.PlateID, in.ComponentID, in.Portions)
+			pc, err := svc.Plates.AddComponent(ctx, in.PlateID, in.FoodID, in.Portions)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -418,31 +424,31 @@ func toolAddComponentToPlate(svc Services) Tool {
 	}
 }
 
-func toolSwapComponent(svc Services) Tool {
+func toolSwapFood(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
-      "required":["plate_component_id","new_component_id"],
+      "required":["plate_component_id","new_food_id"],
       "properties":{
         "plate_component_id":{"type":"integer","minimum":1},
-        "new_component_id":{"type":"integer","minimum":1},
+        "new_food_id":{"type":"integer","minimum":1},
         "portions":{"type":"number","exclusiveMinimum":0}
       },
       "additionalProperties":false
     }`)
 	return Tool{
-		Name:        "swap_component",
-		Description: "Replace the component on an existing plate_component row, preserving sort order. Optionally override portions.",
+		Name:        "swap_food",
+		Description: "Replace the food on an existing plate_component row, preserving sort order. Optionally override portions.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
 				PlateComponentID int64    `json:"plate_component_id"`
-				NewComponentID   int64    `json:"new_component_id"`
+				NewFoodID        int64    `json:"new_food_id"`
 				Portions         *float64 `json:"portions"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			pc, err := svc.Plates.SwapComponent(ctx, in.PlateComponentID, in.NewComponentID, in.Portions)
+			pc, err := svc.Plates.SwapComponent(ctx, in.PlateComponentID, in.NewFoodID, in.Portions)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -463,7 +469,7 @@ func toolUpdatePlateComponent(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "update_plate_component",
-		Description: "Change the portion count on an existing plate_component row without swapping the component.",
+		Description: "Change the portion count on an existing plate_component row without swapping the food.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -491,7 +497,7 @@ func toolRemovePlateComponent(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "remove_plate_component",
-		Description: "Remove a component from a plate without deleting the plate itself.",
+		Description: "Remove a food from a plate without deleting the plate itself.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -625,41 +631,84 @@ func resolveWeek(ctx context.Context, svc Services, weekID int64) (*planner.Week
 	return svc.Planner.Get(ctx, weekID)
 }
 
-func componentSummary(c *component.Component) map[string]any {
+func foodSummary(f *food.Food) map[string]any {
+	role := ""
+	if f.Role != nil {
+		role = string(*f.Role)
+	}
+	ref := float64(0)
+	if f.ReferencePortions != nil {
+		ref = *f.ReferencePortions
+	}
 	return map[string]any{
-		"id":                 c.ID,
-		"name":               c.Name,
-		"role":               string(c.Role),
-		"reference_portions": c.ReferencePortions,
-		"tags":               c.Tags,
+		"id":                 f.ID,
+		"name":               f.Name,
+		"kind":               string(f.Kind),
+		"role":               role,
+		"reference_portions": ref,
+		"tags":               f.Tags,
 	}
 }
 
-func componentDetail(c *component.Component) map[string]any {
-	ings := make([]map[string]any, len(c.Ingredients))
-	for i, ci := range c.Ingredients {
-		ings[i] = map[string]any{
-			"ingredient_id": ci.IngredientID, "amount": ci.Amount,
-			"unit": ci.Unit, "grams": ci.Grams,
+func foodDetail(f *food.Food) map[string]any {
+	children := make([]map[string]any, len(f.Children))
+	for i, ch := range f.Children {
+		children[i] = map[string]any{
+			"child_id":   ch.ChildID,
+			"child_name": ch.ChildName,
+			"child_kind": string(ch.ChildKind),
+			"amount":     ch.Amount,
+			"unit":       ch.Unit,
+			"grams":      ch.Grams,
 		}
 	}
-	instrs := make([]map[string]any, len(c.Instructions))
-	for i, inst := range c.Instructions {
+	instrs := make([]map[string]any, len(f.Instructions))
+	for i, inst := range f.Instructions {
 		instrs[i] = map[string]any{"step_number": inst.StepNumber, "text": inst.Text}
 	}
-	return map[string]any{
-		"id":                 c.ID,
-		"name":               c.Name,
-		"role":               string(c.Role),
-		"variant_group_id":   c.VariantGroupID,
-		"reference_portions": c.ReferencePortions,
-		"prep_minutes":       c.PrepMinutes,
-		"cook_minutes":       c.CookMinutes,
-		"notes":              c.Notes,
-		"tags":               c.Tags,
-		"ingredients":        ings,
-		"instructions":       instrs,
+	out := map[string]any{
+		"id":   f.ID,
+		"name": f.Name,
+		"kind": string(f.Kind),
+		"tags": f.Tags,
 	}
+	if f.Role != nil {
+		out["role"] = string(*f.Role)
+	}
+	if f.ReferencePortions != nil {
+		out["reference_portions"] = *f.ReferencePortions
+	}
+	if f.PrepMinutes != nil {
+		out["prep_minutes"] = *f.PrepMinutes
+	}
+	if f.CookMinutes != nil {
+		out["cook_minutes"] = *f.CookMinutes
+	}
+	if f.Notes != nil {
+		out["notes"] = *f.Notes
+	}
+	if len(children) > 0 {
+		out["children"] = children
+	}
+	if len(instrs) > 0 {
+		out["instructions"] = instrs
+	}
+	if f.Kind == food.KindLeaf {
+		out["kcal_100g"] = derefF(f.Kcal100g)
+		out["protein_100g"] = derefF(f.Protein100g)
+		out["fat_100g"] = derefF(f.Fat100g)
+		out["carbs_100g"] = derefF(f.Carbs100g)
+		out["fiber_100g"] = derefF(f.Fiber100g)
+		out["sodium_100g"] = derefF(f.Sodium100g)
+	}
+	return out
+}
+
+func derefF(p *float64) float64 {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
 
 func weekSummary(w *planner.Week) map[string]any {
@@ -675,8 +724,8 @@ func weekSummary(w *planner.Week) map[string]any {
 
 func plateSummary(p *plate.Plate) map[string]any {
 	comps := make([]map[string]any, len(p.Components))
-	for i, pc := range p.Components {
-		comps[i] = plateComponentMap(&pc)
+	for i := range p.Components {
+		comps[i] = plateComponentMap(&p.Components[i])
 	}
 	return map[string]any{
 		"id": p.ID, "week_id": p.WeekID, "day": p.Day, "slot_id": p.SlotID,
@@ -686,7 +735,7 @@ func plateSummary(p *plate.Plate) map[string]any {
 
 func plateComponentMap(pc *plate.PlateComponent) map[string]any {
 	return map[string]any{
-		"id": pc.ID, "plate_id": pc.PlateID, "component_id": pc.ComponentID,
+		"id": pc.ID, "plate_id": pc.PlateID, "food_id": pc.FoodID,
 		"portions": pc.Portions, "sort_order": pc.SortOrder,
 	}
 }
@@ -711,63 +760,27 @@ func macrosMap(m nutrition.Macros) map[string]any {
 	}
 }
 
-// weekNutritionTotals computes per-day and week-total macros for a week's plates
-// using the same pipeline as the HTTP /api/weeks/{id}/nutrition handler.
+// weekNutritionTotals computes per-day and week-total macros for a week's
+// plates via the recursive food nutrition resolver.
 func weekNutritionTotals(ctx context.Context, svc Services, w *planner.Week) (*nutrition.WeekTotalsResult, error) {
-	compIDs := map[int64]struct{}{}
+	perPortion := map[int64]nutrition.Macros{}
 	for _, p := range w.Plates {
 		for _, pc := range p.Components {
-			compIDs[pc.ComponentID] = struct{}{}
-		}
-	}
-	comps := make(map[int64]*component.Component, len(compIDs))
-	ingIDs := map[int64]struct{}{}
-	for id := range compIDs {
-		c, err := svc.Components.Get(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		comps[id] = c
-		for _, ci := range c.Ingredients {
-			ingIDs[ci.IngredientID] = struct{}{}
-		}
-	}
-	ids := make([]int64, 0, len(ingIDs))
-	for id := range ingIDs {
-		ids = append(ids, id)
-	}
-	ingMap, err := svc.Ingredient.LookupForNutrition(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	perPortion := make(map[int64]nutrition.Macros, len(comps))
-	for id, c := range comps {
-		inputs := make([]nutrition.IngredientInput, 0, len(c.Ingredients))
-		for _, ci := range c.Ingredients {
-			ing, ok := ingMap[ci.IngredientID]
-			if !ok {
+			if _, ok := perPortion[pc.FoodID]; ok {
 				continue
 			}
-			inputs = append(inputs, nutrition.IngredientInput{
-				Per100g: nutrition.Macros{
-					Kcal: ing.Kcal100g, Protein: ing.Protein100g, Fat: ing.Fat100g,
-					Carbs: ing.Carbs100g, Fiber: ing.Fiber100g, Sodium: ing.Sodium100g,
-				},
-				Grams: ci.Grams,
-			})
+			m, err := svc.NutritionResolver.PerPortion(ctx, pc.FoodID)
+			if err != nil {
+				return nil, err
+			}
+			perPortion[pc.FoodID] = m
 		}
-		perPortion[id] = nutrition.PerPortion(nutrition.ComponentInput{
-			Ingredients: inputs, ReferencePortions: c.ReferencePortions,
-		})
 	}
 	dayPlates := make([]nutrition.DayPlate, 0, len(w.Plates))
 	for _, p := range w.Plates {
 		cis := make([]nutrition.PlateComponentInput, 0, len(p.Components))
 		for _, pc := range p.Components {
-			m, ok := perPortion[pc.ComponentID]
-			if !ok {
-				continue
-			}
+			m := perPortion[pc.FoodID]
 			cis = append(cis, nutrition.PlateComponentInput{Macros: m, Portions: pc.Portions})
 		}
 		dayPlates = append(dayPlates, nutrition.DayPlate{Day: p.Day, Plate: nutrition.PlateInput{Components: cis}})
@@ -779,8 +792,6 @@ func weekNutritionTotals(ctx context.Context, svc Services, w *planner.Week) (*n
 func mustJSON(v any) json.RawMessage {
 	b, err := json.Marshal(v)
 	if err != nil {
-		// Only reachable for un-marshalable types (channels, funcs, cycles) —
-		// none of which appear here. A panic is appropriate; chi.Recoverer catches it.
 		panic(fmt.Sprintf("agent tools: json.Marshal: %v", err))
 	}
 	return b

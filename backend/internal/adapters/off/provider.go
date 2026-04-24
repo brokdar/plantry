@@ -3,10 +3,10 @@ package off
 import (
 	"context"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
-// Provider wraps an OFF Client to implement ingredient.BarcodeProvider.
+// Provider wraps an OFF Client to implement food.BarcodeProvider.
 type Provider struct {
 	client *Client
 }
@@ -17,7 +17,7 @@ func NewProvider(client *Client) *Provider {
 }
 
 // LookupBarcode looks up a food product by barcode via OFF.
-func (p *Provider) LookupBarcode(ctx context.Context, barcode string) ([]ingredient.Candidate, error) {
+func (p *Provider) LookupBarcode(ctx context.Context, barcode string) ([]food.Candidate, error) {
 	results, err := p.client.LookupBarcode(ctx, barcode, "en")
 	if err != nil {
 		return nil, err
@@ -26,7 +26,7 @@ func (p *Provider) LookupBarcode(ctx context.Context, barcode string) ([]ingredi
 }
 
 // SearchByName searches for food products by name via OFF.
-func (p *Provider) SearchByName(ctx context.Context, query string, limit int) ([]ingredient.Candidate, error) {
+func (p *Provider) SearchByName(ctx context.Context, query string, limit int) ([]food.Candidate, error) {
 	results, err := p.client.SearchByName(ctx, query, "en", limit)
 	if err != nil {
 		return nil, err
@@ -34,14 +34,14 @@ func (p *Provider) SearchByName(ctx context.Context, query string, limit int) ([
 	return toDomainCandidates(results), nil
 }
 
-func toDomainCandidates(candidates []Candidate) []ingredient.Candidate {
-	out := make([]ingredient.Candidate, len(candidates))
+func toDomainCandidates(candidates []Candidate) []food.Candidate {
+	out := make([]food.Candidate, len(candidates))
 	for i, c := range candidates {
-		out[i] = ingredient.Candidate{
+		out[i] = food.Candidate{
 			Name:             c.Name,
 			SourceName:       c.Name,
 			Brand:            c.Brand,
-			Source:           ingredient.SourceOFF,
+			Source:           food.SourceOFF,
 			Barcode:          c.Barcode,
 			ImageURL:         c.ImageURL,
 			Kcal100g:         c.Kcal100g,

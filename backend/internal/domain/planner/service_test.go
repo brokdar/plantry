@@ -207,7 +207,7 @@ func (r *fakePlateRepo) ListComponentsByPlate(_ context.Context, plateID int64) 
 	return out, nil
 }
 
-func (r *fakePlateRepo) CountUsingComponent(_ context.Context, _ int64) (int64, error) {
+func (r *fakePlateRepo) CountUsingFood(_ context.Context, _ int64) (int64, error) {
 	return 0, nil
 }
 
@@ -292,9 +292,9 @@ func TestCopy_DeepClones(t *testing.T) {
 			Day:    i,
 			SlotID: 1,
 			Components: []plate.PlateComponent{
-				{ComponentID: int64(10 + i), Portions: 1, SortOrder: 0},
-				{ComponentID: int64(20 + i), Portions: 2, SortOrder: 1},
-				{ComponentID: int64(30 + i), Portions: 1, SortOrder: 2},
+				{FoodID: int64(10 + i), Portions: 1, SortOrder: 0},
+				{FoodID: int64(20 + i), Portions: 2, SortOrder: 1},
+				{FoodID: int64(30 + i), Portions: 1, SortOrder: 2},
 			},
 		}
 		require.NoError(t, plates.Create(context.Background(), p))

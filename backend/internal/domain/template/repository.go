@@ -15,7 +15,7 @@ type Repository interface {
 	List(ctx context.Context) ([]Template, error)
 	ReplaceComponents(ctx context.Context, templateID int64, comps []TemplateComponent) error
 	ListComponentsByTemplate(ctx context.Context, templateID int64) ([]TemplateComponent, error)
-	CountUsingComponent(ctx context.Context, componentID int64) (int64, error)
+	CountUsingFood(ctx context.Context, foodID int64) (int64, error)
 }
 
 // TxRunner runs fn inside a single transaction with template + plate repos bound to it.
@@ -23,9 +23,9 @@ type TxRunner interface {
 	RunInTemplateTx(ctx context.Context, fn func(Repository, plate.Repository) error) error
 }
 
-// ComponentChecker reports whether a component exists.
-type ComponentChecker interface {
-	Exists(ctx context.Context, componentID int64) (bool, error)
+// FoodChecker reports whether a food exists.
+type FoodChecker interface {
+	Exists(ctx context.Context, foodID int64) (bool, error)
 }
 
 // PlateComponentSource reads the components of a plate (used when cloning a

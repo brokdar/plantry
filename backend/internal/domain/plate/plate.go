@@ -3,7 +3,8 @@ package plate
 import "time"
 
 // Plate is a meal scheduled at a specific day+slot in a week.
-// It composes one or more components (a main, sides, etc.).
+// It composes one or more foods (a main, sides, etc.). A plate component can
+// reference either a leaf food (e.g., a standalone apple) or a composed food.
 type Plate struct {
 	ID         int64
 	WeekID     int64
@@ -15,13 +16,13 @@ type Plate struct {
 	CreatedAt  time.Time
 }
 
-// PlateComponent is one component on a plate, with portion count and ordering.
+// PlateComponent links a food onto a plate with a portion count + ordering.
 type PlateComponent struct {
-	ID          int64
-	PlateID     int64
-	ComponentID int64
-	Portions    float64
-	SortOrder   int
+	ID        int64
+	PlateID   int64
+	FoodID    int64
+	Portions  float64
+	SortOrder int
 }
 
 // ValidDay reports whether d is a valid day-of-week index (0..6).

@@ -29,15 +29,15 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/config"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	settingsdom "github.com/jaltszeimer/plantry/backend/internal/domain/settings"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/template"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
@@ -99,8 +99,6 @@ func run() error {
 	})
 	settingsSvc := settingsdom.NewService(settingsRepo, envSnapshot, cipher)
 
-	ingredientRepo := sqlite.NewIngredientRepo(conn)
-
 	// External food providers.
 	offClient := off.New()
 	offProvider := off.NewProvider(offClient)
@@ -109,7 +107,10 @@ func run() error {
 	// per-request and gracefully returns empty results when no key is set.
 	fdcProvider := fdc.NewDynamicProvider(settingsSvc)
 
-	ingredientSvc := ingredient.NewService(ingredientRepo).WithPortionProvider(fdcProvider)
+	foodRepo := sqlite.NewFoodRepo(conn)
+	foodSvc := food.NewService(foodRepo).WithPortionProvider(fdcProvider)
+	nutritionResolver := food.NewNutritionResolver(foodRepo)
+	shoppingResolver := shopping.NewResolver(foodRepo)
 
 	// Image store (optional).
 	var imgStore *imagestore.Store
@@ -118,20 +119,14 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("image store: %w", err)
 		}
-		ingredientSvc.WithImageStore(imgStore)
-	}
-
-	componentRepo := sqlite.NewComponentRepo(conn)
-	componentSvc := component.NewService(componentRepo, ingredientRepo, ingredientRepo)
-	if imgStore != nil {
-		componentSvc.WithImageStore(imgStore)
+		foodSvc.WithImageStore(imgStore)
 	}
 
 	slotRepo := sqlite.NewSlotRepo(conn)
 	slotSvc := slot.NewService(slotRepo)
 
 	plateRepo := sqlite.NewPlateRepo(conn)
-	plateSvc := plate.NewService(plateRepo, slotRepo, componentRepo)
+	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo)
 
 	weekRepo := sqlite.NewWeekRepo(conn)
 	txRunner := sqlite.NewTxRunner(conn)
@@ -141,10 +136,10 @@ func run() error {
 	profileSvc := profile.NewService(profileRepo)
 
 	templateRepo := sqlite.NewTemplateRepo(conn)
-	templateSvc := template.NewService(templateRepo, componentRepo, plateRepo, txRunner)
+	templateSvc := template.NewService(templateRepo, foodRepo, plateRepo, txRunner)
 
 	feedbackRepo := sqlite.NewFeedbackRepo(conn)
-	feedbackSvc := feedback.NewService(txRunner, plateRepo, componentRepo)
+	feedbackSvc := feedback.NewService(txRunner, plateRepo, foodRepo)
 
 	// AI wiring. The llm.Resolver consults settings on every request so
 	// provider / model / API-key changes take effect without a restart.
@@ -161,14 +156,18 @@ func run() error {
 	}
 	llmResolver := llmresolver.New(settingsSvc, llmFactory)
 
-	// Ingredient resolver depends on llmResolver for optional AI translation
-	// and pick-best ranking; nil llmResolver would disable those features.
-	resolver := ingredient.NewResolver(ingredientRepo, offProvider, fdcProvider, llmResolver)
+	// Food resolver depends on llmResolver for optional AI translation
+	// and pick-best ranking; nil llmResolver disables those features.
+	resolver := food.NewResolver(foodRepo, offProvider, fdcProvider, llmResolver)
 
 	aiRepo := sqlite.NewAIRepo(conn)
 	tools, err := agent.NewToolSet(agent.Services{
-		Components: componentSvc, Planner: plannerSvc, Plates: plateSvc,
-		Profile: profileSvc, Slots: slotSvc, Ingredient: ingredientRepo,
+		Foods:             foodSvc,
+		NutritionResolver: nutritionResolver,
+		Planner:           plannerSvc,
+		Plates:            plateSvc,
+		Profile:           profileSvc,
+		Slots:             slotSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
@@ -199,13 +198,12 @@ func run() error {
 	}, aiRateLimiter)
 
 	h := transport.Handlers{
-		Ingredients:   handlers.NewIngredientHandler(ingredientSvc),
-		Lookup:        handlers.NewLookupHandler(resolver, imgStore, ingredientSvc),
-		Images:        handlers.NewImageHandler(ingredientSvc, imgStore),
+		Foods:         handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore),
+		Lookup:        handlers.NewLookupHandler(resolver, imgStore, foodSvc),
 		ImageProxy:    handlers.NewImageProxyHandler(),
-		Components:    handlers.NewComponentHandler(componentSvc, imgStore),
+		ImageStore:    imgStore,
 		Slots:         handlers.NewSlotHandler(slotSvc),
-		Weeks:         handlers.NewWeekHandler(plannerSvc, plateSvc, componentSvc, ingredientRepo, feedbackRepo),
+		Weeks:         handlers.NewWeekHandler(plannerSvc, plateSvc, foodSvc, nutritionResolver, shoppingResolver, feedbackRepo),
 		Plates:        handlers.NewPlateHandler(plateSvc),
 		Profile:       handlers.NewProfileHandler(profileSvc),
 		Templates:     handlers.NewTemplateHandler(templateSvc),

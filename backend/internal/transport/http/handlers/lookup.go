@@ -8,28 +8,29 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
-// LookupHandler holds HTTP handlers for ingredient lookup and resolve.
+// LookupHandler hosts external food lookup (OFF/FDC) and the "resolve into a
+// new leaf food" + refetch flows.
 type LookupHandler struct {
-	resolver *ingredient.Resolver
+	resolver *food.Resolver
 	imgStore *imagestore.Store
-	svc      *ingredient.Service
+	svc      *food.Service
 }
 
-// NewLookupHandler creates a new LookupHandler.
-func NewLookupHandler(resolver *ingredient.Resolver, imgStore *imagestore.Store, svc *ingredient.Service) *LookupHandler {
+// NewLookupHandler constructs a LookupHandler.
+func NewLookupHandler(resolver *food.Resolver, imgStore *imagestore.Store, svc *food.Service) *LookupHandler {
 	return &LookupHandler{resolver: resolver, imgStore: imgStore, svc: svc}
 }
 
 type lookupResponse struct {
-	Results          []ingredient.Candidate  `json:"results"`
-	RecommendedIndex int                     `json:"recommended_index"`
-	Trace            []ingredient.TraceEntry `json:"trace,omitempty"`
+	Results          []food.Candidate  `json:"results"`
+	RecommendedIndex int               `json:"recommended_index"`
+	Trace            []food.TraceEntry `json:"trace,omitempty"`
 }
 
-// Lookup handles GET /api/ingredients/lookup.
+// Lookup handles GET /api/foods/lookup.
 func (h *LookupHandler) Lookup(w http.ResponseWriter, r *http.Request) {
 	barcode := r.URL.Query().Get("barcode")
 	query := r.URL.Query().Get("query")
@@ -40,15 +41,15 @@ func (h *LookupHandler) Lookup(w http.ResponseWriter, r *http.Request) {
 	debug := r.URL.Query().Get("debug") == "true"
 
 	if barcode == "" && query == "" {
-		writeError(w, http.StatusBadRequest, "error.ingredient.lookup.missing_param")
+		writeError(w, http.StatusBadRequest, "error.food.lookup.missing_param")
 		return
 	}
 
 	ctx := r.Context()
-	var trace *ingredient.LookupTrace
+	var trace *food.LookupTrace
 	if debug {
-		trace = ingredient.NewLookupTrace()
-		ctx = ingredient.WithTrace(ctx, trace)
+		trace = food.NewLookupTrace()
+		ctx = food.WithTrace(ctx, trace)
 	}
 
 	results, recommended, err := h.resolver.Lookup(ctx, barcode, query, lang, 5)
@@ -58,12 +59,9 @@ func (h *LookupHandler) Lookup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := lookupResponse{
-		Results:          results,
-		RecommendedIndex: recommended,
-	}
+	resp := lookupResponse{Results: results, RecommendedIndex: recommended}
 	if results == nil {
-		resp.Results = []ingredient.Candidate{}
+		resp.Results = []food.Candidate{}
 	}
 	if trace != nil {
 		resp.Trace = trace.Entries()
@@ -72,17 +70,17 @@ func (h *LookupHandler) Lookup(w http.ResponseWriter, r *http.Request) {
 }
 
 type resolveRequest struct {
-	Name        string  `json:"name"`
-	Source      string  `json:"source"`
-	Barcode     *string `json:"barcode"`
-	FdcID       *string `json:"fdc_id"`
-	ImageURL    *string `json:"image_url"`
-	Kcal100g    float64 `json:"kcal_100g"`
-	Protein100g float64 `json:"protein_100g"`
-	Fat100g     float64 `json:"fat_100g"`
-	Carbs100g   float64 `json:"carbs_100g"`
-	Fiber100g   float64 `json:"fiber_100g"`
-	Sodium100g  float64 `json:"sodium_100g"`
+	Name        string   `json:"name"`
+	Source      string   `json:"source"`
+	Barcode     *string  `json:"barcode"`
+	FdcID       *string  `json:"fdc_id"`
+	ImageURL    *string  `json:"image_url"`
+	Kcal100g    *float64 `json:"kcal_100g"`
+	Protein100g *float64 `json:"protein_100g"`
+	Fat100g     *float64 `json:"fat_100g"`
+	Carbs100g   *float64 `json:"carbs_100g"`
+	Fiber100g   *float64 `json:"fiber_100g"`
+	Sodium100g  *float64 `json:"sodium_100g"`
 
 	SaturatedFat100g *float64 `json:"saturated_fat_100g"`
 	TransFat100g     *float64 `json:"trans_fat_100g"`
@@ -101,12 +99,12 @@ type resolveRequest struct {
 	VitaminB6100g    *float64 `json:"vitamin_b6_100g"`
 	Folate100g       *float64 `json:"folate_100g"`
 
-	// ServingQuantityG is grams per serving, when supplied by the upstream
-	// source (OFF). When present, a "serving" portion is seeded on create.
+	// Grams per serving (from OFF) — seeds a "serving" portion.
 	ServingQuantityG *float64 `json:"serving_quantity_g"`
 }
 
-// Resolve handles POST /api/ingredients/resolve.
+// Resolve handles POST /api/foods/resolve — creates a new leaf food from a
+// candidate and best-effort syncs portions + image.
 func (h *LookupHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	var req resolveRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -114,9 +112,14 @@ func (h *LookupHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	i := &ingredient.Ingredient{
+	src := food.Source(req.Source)
+	if src == "" {
+		src = food.SourceManual
+	}
+	f := &food.Food{
 		Name:             req.Name,
-		Source:           req.Source,
+		Kind:             food.KindLeaf,
+		Source:           &src,
 		Barcode:          req.Barcode,
 		FdcID:            req.FdcID,
 		Kcal100g:         req.Kcal100g,
@@ -143,46 +146,47 @@ func (h *LookupHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		Folate100g:       req.Folate100g,
 	}
 
-	if err := h.svc.Create(r.Context(), i); err != nil {
+	if err := h.svc.Create(r.Context(), f); err != nil {
 		status, key := toHTTP(err)
 		writeError(w, status, key)
 		return
 	}
 
-	// Best-effort FDC portion sync so the user gets honey tbsp=21g (etc.)
-	// without a second click. Failures are swallowed — the user can still
-	// trigger the sync manually from the ingredient detail view.
-	if i.FdcID != nil && *i.FdcID != "" {
-		_, _ = h.svc.SyncPortionsFromFDC(r.Context(), i.ID)
+	// Best-effort FDC portion sync so the user gets honey tbsp=21g etc.
+	if f.FdcID != nil && *f.FdcID != "" {
+		_, _ = h.svc.SyncPortionsFromFDC(r.Context(), f.ID)
 	}
 
-	// OFF-sourced products carry a per-serving gram weight. Seed it as a
-	// "serving" portion so the user can pick "1 serving" as a natural unit.
+	// OFF-sourced products carry a per-serving gram weight.
 	if req.ServingQuantityG != nil && *req.ServingQuantityG > 0 {
-		_ = h.svc.UpsertPortion(r.Context(), &ingredient.Portion{
-			IngredientID: i.ID,
-			Unit:         "serving",
-			Grams:        *req.ServingQuantityG,
+		_ = h.svc.UpsertPortion(r.Context(), &food.Portion{
+			FoodID: f.ID,
+			Unit:   "serving",
+			Grams:  *req.ServingQuantityG,
 		})
 	}
 
-	// Download image if URL is provided and image store is available.
+	// Download image if URL provided + image store available.
 	if req.ImageURL != nil && *req.ImageURL != "" && h.imgStore != nil {
-		imgPath, err := h.imgStore.SaveFromURL(r.Context(), *req.ImageURL, "ingredients", i.ID)
+		imgPath, err := h.imgStore.SaveFromURL(r.Context(), *req.ImageURL, "foods", f.ID)
 		if err == nil {
-			i.ImagePath = &imgPath
-			// Best-effort update; ignore errors from image path save.
-			_ = h.svc.Update(r.Context(), i)
+			f.ImagePath = &imgPath
+			_ = h.svc.Update(r.Context(), f)
 		}
 	}
 
-	writeJSON(w, http.StatusCreated, toResponse(i))
+	// Re-load to hydrate portions in response.
+	loaded, err := h.svc.Get(r.Context(), f.ID)
+	if err != nil {
+		status, key := toHTTP(err)
+		writeError(w, status, key)
+		return
+	}
+	writeJSON(w, http.StatusCreated, toFoodResponse(loaded))
 }
 
-// Refetch handles POST /api/ingredients/{id}/refetch. It re-queries the
-// upstream source using the ingredient's stored IDs and overwrites the
-// nutrient fields (all 22) with the fresh values. Name, image, portions, and
-// source IDs are preserved.
+// Refetch handles POST /api/foods/{id}/refetch. Re-queries the upstream
+// source using the food's stored IDs and overwrites the nutrient fields.
 func (h *LookupHandler) Refetch(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -196,10 +200,11 @@ func (h *LookupHandler) Refetch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
+	if existing.Kind != food.KindLeaf {
+		writeError(w, http.StatusBadRequest, "error.food.refetch.not_leaf")
+		return
+	}
 
-	// Choose an upstream query based on what was stored when the ingredient
-	// was first resolved. Barcode always wins when present (OFF or branded
-	// FDC both support it). Fall back to FDC ID as the search term.
 	var barcode, query, lang string
 	lang = r.URL.Query().Get("lang")
 	if lang == "" {
@@ -211,7 +216,7 @@ func (h *LookupHandler) Refetch(w http.ResponseWriter, r *http.Request) {
 	case existing.FdcID != nil && *existing.FdcID != "":
 		query = *existing.FdcID
 	default:
-		writeError(w, http.StatusBadRequest, "error.ingredient.refetch.no_source")
+		writeError(w, http.StatusBadRequest, "error.food.refetch.no_source")
 		return
 	}
 
@@ -222,7 +227,7 @@ func (h *LookupHandler) Refetch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(results) == 0 {
-		writeError(w, http.StatusNotFound, "error.ingredient.refetch.no_results")
+		writeError(w, http.StatusNotFound, "error.food.refetch.no_results")
 		return
 	}
 
@@ -232,45 +237,33 @@ func (h *LookupHandler) Refetch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusOK, toResponse(existing))
+	writeJSON(w, http.StatusOK, toFoodResponse(existing))
 }
 
-// applyCandidateNutrients overwrites nutrient fields on the stored ingredient
-// with values from a freshly-fetched candidate. It never touches Name,
-// ImagePath, or source IDs.
-func applyCandidateNutrients(i *ingredient.Ingredient, c *ingredient.Candidate) {
-	if c.Kcal100g != nil {
-		i.Kcal100g = *c.Kcal100g
-	}
-	if c.Protein100g != nil {
-		i.Protein100g = *c.Protein100g
-	}
-	if c.Fat100g != nil {
-		i.Fat100g = *c.Fat100g
-	}
-	if c.Carbs100g != nil {
-		i.Carbs100g = *c.Carbs100g
-	}
-	if c.Fiber100g != nil {
-		i.Fiber100g = *c.Fiber100g
-	}
-	if c.Sodium100g != nil {
-		i.Sodium100g = *c.Sodium100g
-	}
-	i.SaturatedFat100g = c.SaturatedFat100g
-	i.TransFat100g = c.TransFat100g
-	i.Cholesterol100g = c.Cholesterol100g
-	i.Sugar100g = c.Sugar100g
-	i.Potassium100g = c.Potassium100g
-	i.Calcium100g = c.Calcium100g
-	i.Iron100g = c.Iron100g
-	i.Magnesium100g = c.Magnesium100g
-	i.Phosphorus100g = c.Phosphorus100g
-	i.Zinc100g = c.Zinc100g
-	i.VitaminA100g = c.VitaminA100g
-	i.VitaminC100g = c.VitaminC100g
-	i.VitaminD100g = c.VitaminD100g
-	i.VitaminB12100g = c.VitaminB12100g
-	i.VitaminB6100g = c.VitaminB6100g
-	i.Folate100g = c.Folate100g
+// applyCandidateNutrients overwrites nutrient fields on the stored food with
+// values from a freshly-fetched candidate. Never touches Name, ImagePath, or
+// source IDs.
+func applyCandidateNutrients(f *food.Food, c *food.Candidate) {
+	f.Kcal100g = c.Kcal100g
+	f.Protein100g = c.Protein100g
+	f.Fat100g = c.Fat100g
+	f.Carbs100g = c.Carbs100g
+	f.Fiber100g = c.Fiber100g
+	f.Sodium100g = c.Sodium100g
+	f.SaturatedFat100g = c.SaturatedFat100g
+	f.TransFat100g = c.TransFat100g
+	f.Cholesterol100g = c.Cholesterol100g
+	f.Sugar100g = c.Sugar100g
+	f.Potassium100g = c.Potassium100g
+	f.Calcium100g = c.Calcium100g
+	f.Iron100g = c.Iron100g
+	f.Magnesium100g = c.Magnesium100g
+	f.Phosphorus100g = c.Phosphorus100g
+	f.Zinc100g = c.Zinc100g
+	f.VitaminA100g = c.VitaminA100g
+	f.VitaminC100g = c.VitaminC100g
+	f.VitaminD100g = c.VitaminD100g
+	f.VitaminB12100g = c.VitaminB12100g
+	f.VitaminB6100g = c.VitaminB6100g
+	f.Folate100g = c.Folate100g
 }

@@ -1,4 +1,4 @@
-package ingredient
+package food
 
 import (
 	"context"
@@ -10,7 +10,9 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
 
-// Resolver coordinates lookups across external food providers and the local repository.
+// Resolver coordinates lookups across external food providers (OFF, FDC) and
+// the local catalogue. It only resolves leaf foods — composed foods are user-
+// authored and don't come from external sources.
 type Resolver struct {
 	repo Repository
 	off  BarcodeProvider // may be nil
@@ -19,21 +21,19 @@ type Resolver struct {
 }
 
 // NewResolver creates a Resolver with optional external providers and LLM.
-// A nil llm disables AI features entirely (behavior matches pre-AI lookup).
+// A nil llm disables AI features entirely.
 func NewResolver(repo Repository, off BarcodeProvider, fdc FoodProvider, llmResolver llm.Resolver) *Resolver {
 	return &Resolver{repo: repo, off: off, fdc: fdc, llm: llmResolver}
 }
 
-// Lookup searches for food candidates by barcode or text query.
+// Lookup searches for leaf-food candidates by barcode or text query.
 //
-// For barcode: tries OFF first, then falls back to FDC branded search.
-// For query: searches FDC only (Foundation/SR Legacy). When an LLM is
-// configured and the query is non-English, the query is first translated into
-// an English FDC search term; after results come back, the LLM is asked to
-// pick the best semantic match.
+// Barcode: tries OFF first, then FDC branded search. Query: FDC only. When an
+// LLM is configured and the query is non-English, the query is translated to
+// an English FDC search term; after results come back, the LLM picks the best
+// semantic match.
 //
-// Returns (candidates, recommended_index, error). When results are empty the
-// index is -1; when pick-best is skipped or fails it is 0.
+// Returns (candidates, recommended_index, error). Empty results → index = -1.
 func (r *Resolver) Lookup(ctx context.Context, barcode, query, lang string, limit int) ([]Candidate, int, error) {
 	if barcode != "" {
 		return r.lookupBarcode(ctx, barcode, limit)
@@ -47,27 +47,22 @@ func (r *Resolver) Lookup(ctx context.Context, barcode, query, lang string, limi
 func (r *Resolver) lookupBarcode(ctx context.Context, barcode string, _ int) ([]Candidate, int, error) {
 	trace := TraceFromContext(ctx)
 
-	// Try OFF barcode lookup first.
 	if r.off != nil {
 		start := time.Now()
 		results, err := r.off.LookupBarcode(ctx, barcode)
 		dur := time.Since(start).Milliseconds()
 		if err != nil {
 			trace.Add(TraceEntry{
-				Step:       "off.lookup_barcode",
-				Level:      TraceLevelError,
-				Summary:    "OFF barcode lookup failed",
-				DurationMs: dur,
-				Detail:     ExternalAPIDetail{Source: "off", Barcode: barcode, Error: err.Error()},
+				Step: "off.lookup_barcode", Level: TraceLevelError,
+				Summary: "OFF barcode lookup failed", DurationMs: dur,
+				Detail: ExternalAPIDetail{Source: "off", Barcode: barcode, Error: err.Error()},
 			})
 			return nil, -1, err
 		}
 		trace.Add(TraceEntry{
-			Step:       "off.lookup_barcode",
-			Level:      TraceLevelSuccess,
-			Summary:    resultCountSummary("OFF", len(results)),
-			DurationMs: dur,
-			Detail:     ExternalAPIDetail{Source: "off", Barcode: barcode, ResultCount: len(results)},
+			Step: "off.lookup_barcode", Level: TraceLevelSuccess,
+			Summary: resultCountSummary("OFF", len(results)), DurationMs: dur,
+			Detail: ExternalAPIDetail{Source: "off", Barcode: barcode, ResultCount: len(results)},
 		})
 		if len(results) > 0 {
 			fillMissingKcal(results)
@@ -76,27 +71,22 @@ func (r *Resolver) lookupBarcode(ctx context.Context, barcode string, _ int) ([]
 		}
 	}
 
-	// Fall back to FDC branded search using the barcode as query.
 	if r.fdc != nil {
 		start := time.Now()
 		results, err := r.fdc.SearchByName(ctx, barcode, 5)
 		dur := time.Since(start).Milliseconds()
 		if err != nil {
 			trace.Add(TraceEntry{
-				Step:       "fdc.search_barcode",
-				Level:      TraceLevelError,
-				Summary:    "FDC barcode search failed",
-				DurationMs: dur,
-				Detail:     ExternalAPIDetail{Source: "fdc", Query: barcode, Error: err.Error()},
+				Step: "fdc.search_barcode", Level: TraceLevelError,
+				Summary: "FDC barcode search failed", DurationMs: dur,
+				Detail: ExternalAPIDetail{Source: "fdc", Query: barcode, Error: err.Error()},
 			})
 			return nil, -1, err
 		}
 		trace.Add(TraceEntry{
-			Step:       "fdc.search_barcode",
-			Level:      TraceLevelSuccess,
-			Summary:    resultCountSummary("FDC", len(results)),
-			DurationMs: dur,
-			Detail:     ExternalAPIDetail{Source: "fdc", Query: barcode, ResultCount: len(results)},
+			Step: "fdc.search_barcode", Level: TraceLevelSuccess,
+			Summary: resultCountSummary("FDC", len(results)), DurationMs: dur,
+			Detail: ExternalAPIDetail{Source: "fdc", Query: barcode, ResultCount: len(results)},
 		})
 		if len(results) > 0 {
 			fillMissingKcal(results)
@@ -117,14 +107,12 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 	originalQuery := query
 	searchTerm := query
 
-	// AI translation: only when an LLM is configured and language is non-English.
 	if r.llm != nil && lang != "" && lang != "en" {
 		if client, model, err := r.llm.Current(ctx); err == nil && client != nil {
 			searchTerm = translateQuery(ctx, client, model, originalQuery, trace)
 		} else if err != nil {
 			trace.Add(TraceEntry{
-				Step:    "ai.translate",
-				Level:   TraceLevelInfo,
+				Step: "ai.translate", Level: TraceLevelInfo,
 				Summary: "AI skipped: " + err.Error(),
 				Detail:  AITranslationDetail{InputQuery: originalQuery, Error: err.Error()},
 			})
@@ -136,31 +124,21 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 	dur := time.Since(start).Milliseconds()
 	if err != nil {
 		trace.Add(TraceEntry{
-			Step:       "fdc.search",
-			Level:      TraceLevelError,
-			Summary:    "FDC search failed",
-			DurationMs: dur,
-			Detail:     ExternalAPIDetail{Source: "fdc", Query: searchTerm, Error: err.Error()},
+			Step: "fdc.search", Level: TraceLevelError,
+			Summary: "FDC search failed", DurationMs: dur,
+			Detail: ExternalAPIDetail{Source: "fdc", Query: searchTerm, Error: err.Error()},
 		})
 		return nil, -1, err
 	}
 	trace.Add(TraceEntry{
-		Step:       "fdc.search",
-		Level:      TraceLevelSuccess,
-		Summary:    resultCountSummary("FDC", len(results)),
-		DurationMs: dur,
-		Detail:     ExternalAPIDetail{Source: "fdc", Query: searchTerm, ResultCount: len(results)},
+		Step: "fdc.search", Level: TraceLevelSuccess,
+		Summary: resultCountSummary("FDC", len(results)), DurationMs: dur,
+		Detail: ExternalAPIDetail{Source: "fdc", Query: searchTerm, ResultCount: len(results)},
 	})
 
 	fillMissingKcal(results)
-	// Enrich against local catalogue using the upstream canonical name — local
-	// rows most often have the source-returned name, so matching before the
-	// Name swap keeps the "already exists" hint accurate.
 	r.enrichExistingIDs(ctx, results)
 
-	// For FDC: the canonical description is in Name; swap so the pre-filled
-	// form name is the user's original query and SourceName preserves the
-	// upstream label for the subtitle + future refetch.
 	for i := range results {
 		if results[i].Source == SourceFDC {
 			if results[i].SourceName == "" {
@@ -176,9 +154,6 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 	return results, r.pickRecommended(ctx, originalQuery, results, trace), nil
 }
 
-// pickRecommended returns the index of the best candidate. When an LLM is
-// configured and there is more than one candidate, the LLM picks. Otherwise
-// the first candidate wins.
 func (r *Resolver) pickRecommended(ctx context.Context, originalQuery string, candidates []Candidate, trace *LookupTrace) int {
 	if r.llm == nil || len(candidates) <= 1 {
 		return 0
@@ -187,8 +162,7 @@ func (r *Resolver) pickRecommended(ctx context.Context, originalQuery string, ca
 	if err != nil || client == nil {
 		if err != nil && !errors.Is(err, context.Canceled) {
 			trace.Add(TraceEntry{
-				Step:    "ai.pick_best",
-				Level:   TraceLevelInfo,
+				Step: "ai.pick_best", Level: TraceLevelInfo,
 				Summary: "AI skipped: " + err.Error(),
 			})
 		}
@@ -197,10 +171,8 @@ func (r *Resolver) pickRecommended(ctx context.Context, originalQuery string, ca
 	return pickBest(ctx, client, model, originalQuery, candidates, trace)
 }
 
-// fillMissingKcal derives kcal_100g from macros using Atwater factors
-// (4·protein + 4·carbs + 9·fat) whenever the upstream provider returned nil.
-// Some FDC entries (notably raw meats) have macros but no kcal; without this
-// the UI silently defaults kcal to 0 and every downstream total is wrong.
+// fillMissingKcal derives kcal_100g from macros using Atwater factors whenever
+// the upstream provider returned nil.
 func fillMissingKcal(cs []Candidate) {
 	for i := range cs {
 		c := &cs[i]
@@ -228,10 +200,10 @@ func fillMissingKcal(cs []Candidate) {
 	}
 }
 
-// enrichExistingIDs checks if any candidate matches a local ingredient by name.
+// enrichExistingIDs checks if any candidate matches a local leaf food by name.
 func (r *Resolver) enrichExistingIDs(ctx context.Context, candidates []Candidate) {
 	for i := range candidates {
-		result, err := r.repo.List(ctx, ListQuery{Search: candidates[i].Name, Limit: 1})
+		result, err := r.repo.List(ctx, ListQuery{Kind: KindLeaf, Search: candidates[i].Name, Limit: 1})
 		if err != nil || len(result.Items) == 0 {
 			continue
 		}

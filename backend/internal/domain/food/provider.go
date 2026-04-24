@@ -1,11 +1,13 @@
-package ingredient
+package food
 
 import "context"
 
-// Candidate represents a food item from any source (local, OFF, FDC).
+// Candidate represents an external lookup result (OFF, FDC) that can be
+// promoted into a leaf food. Only leaf foods have provenance and direct
+// per-100g nutrition, so composed foods never come from a Candidate.
 type Candidate struct {
 	Name       string `json:"name"`
-	SourceName string `json:"source_name,omitempty"` // name exactly as returned by the upstream source
+	SourceName string `json:"source_name,omitempty"`
 	Brand      string `json:"brand,omitempty"`
 	Source     Source `json:"source"`
 	Barcode    string `json:"barcode,omitempty"`
@@ -14,7 +16,7 @@ type Candidate struct {
 	ExistingID *int64 `json:"existing_id,omitempty"`
 
 	// ServingQuantityG is grams per serving as reported by the upstream source
-	// (currently OFF). Used to seed a "serving" portion on ingredient create.
+	// (currently OFF). Used to seed a "serving" portion on leaf food create.
 	ServingQuantityG *float64 `json:"serving_quantity_g,omitempty"`
 
 	Kcal100g    *float64 `json:"kcal_100g"`
@@ -24,7 +26,6 @@ type Candidate struct {
 	Fiber100g   *float64 `json:"fiber_100g,omitempty"`
 	Sodium100g  *float64 `json:"sodium_100g,omitempty"`
 
-	// Extended nutrients — nullable; omitted from JSON when no upstream data.
 	SaturatedFat100g *float64 `json:"saturated_fat_100g,omitempty"`
 	TransFat100g     *float64 `json:"trans_fat_100g,omitempty"`
 	Cholesterol100g  *float64 `json:"cholesterol_100g,omitempty"`
@@ -43,31 +44,28 @@ type Candidate struct {
 	Folate100g       *float64 `json:"folate_100g,omitempty"`
 }
 
-// FoodProvider can search foods by name.
+// FoodProvider searches external food databases by name.
 type FoodProvider interface {
 	SearchByName(ctx context.Context, query string, limit int) ([]Candidate, error)
 }
 
-// BarcodeProvider can also look up foods by barcode.
+// BarcodeProvider extends FoodProvider with barcode lookup.
 type BarcodeProvider interface {
 	FoodProvider
 	LookupBarcode(ctx context.Context, barcode string) ([]Candidate, error)
 }
 
-// FoodPortion is the provider-neutral shape of a per-unit gram weight.
-// RawUnit is the unit name as the upstream source labelled it (e.g., FDC's
-// "cup", "tablespoon", or "undetermined" with the unit in Modifier). Callers
-// normalize via domain/units.Normalize before persisting.
-type FoodPortion struct {
+// PortionInfo is the provider-neutral shape of a per-unit gram weight from an
+// external source (e.g., FDC's foodPortions).
+type PortionInfo struct {
 	RawUnit    string
 	Modifier   string
 	GramWeight float64
 }
 
-// PortionProvider supplies per-ingredient unit → grams conversions so the
-// catalogue can populate the ingredient_portions table. FDC implements this;
-// OFF exposes only a generic serving and is handled directly in the import
-// path rather than through this interface.
+// PortionProvider supplies per-food unit → grams conversions used to seed
+// food_portions. FDC implements this; OFF surfaces only a generic serving
+// handled directly on import.
 type PortionProvider interface {
-	GetFoodPortions(ctx context.Context, fdcID int) ([]FoodPortion, error)
+	GetFoodPortions(ctx context.Context, fdcID int) ([]PortionInfo, error)
 }

@@ -31,90 +31,79 @@ type AppSetting struct {
 	UpdatedAt string
 }
 
-type Component struct {
+type Food struct {
 	ID                int64
 	Name              string
-	Role              string
+	Kind              string
+	Role              sql.NullString
+	Source            sql.NullString
+	Barcode           sql.NullString
+	OffID             sql.NullString
+	FdcID             sql.NullString
+	Kcal100g          sql.NullFloat64
+	Protein100g       sql.NullFloat64
+	Fat100g           sql.NullFloat64
+	Carbs100g         sql.NullFloat64
+	Fiber100g         sql.NullFloat64
+	Sodium100g        sql.NullFloat64
+	SaturatedFat100g  sql.NullFloat64
+	TransFat100g      sql.NullFloat64
+	Cholesterol100g   sql.NullFloat64
+	Sugar100g         sql.NullFloat64
+	Potassium100g     sql.NullFloat64
+	Calcium100g       sql.NullFloat64
+	Iron100g          sql.NullFloat64
+	Magnesium100g     sql.NullFloat64
+	Phosphorus100g    sql.NullFloat64
+	Zinc100g          sql.NullFloat64
+	VitaminA100g      sql.NullFloat64
+	VitaminC100g      sql.NullFloat64
+	VitaminD100g      sql.NullFloat64
+	VitaminB12100g    sql.NullFloat64
+	VitaminB6100g     sql.NullFloat64
+	Folate100g        sql.NullFloat64
 	VariantGroupID    sql.NullInt64
-	ReferencePortions float64
+	ReferencePortions sql.NullFloat64
 	PrepMinutes       sql.NullInt64
 	CookMinutes       sql.NullInt64
-	ImagePath         sql.NullString
 	Notes             sql.NullString
+	ImagePath         sql.NullString
+	Favorite          int64
 	LastCookedAt      sql.NullString
 	CookCount         int64
 	CreatedAt         string
 	UpdatedAt         string
-	Favorite          int64
 }
 
-type ComponentIngredient struct {
-	ID           int64
-	ComponentID  int64
-	IngredientID int64
-	Amount       float64
-	Unit         string
-	Grams        float64
-	SortOrder    int64
+type FoodComponent struct {
+	ID        int64
+	ParentID  int64
+	ChildID   int64
+	Amount    float64
+	Unit      string
+	Grams     float64
+	SortOrder int64
 }
 
-type ComponentInstruction struct {
-	ID          int64
-	ComponentID int64
-	StepNumber  int64
-	Text        string
+type FoodInstruction struct {
+	ID         int64
+	FoodID     int64
+	StepNumber int64
+	Text       string
 }
 
-type ComponentTag struct {
-	ComponentID int64
-	Tag         string
+type FoodPortion struct {
+	FoodID int64
+	Unit   string
+	Grams  float64
 }
 
-type ComponentsFt struct {
-	Name string
+type FoodTag struct {
+	FoodID int64
+	Tag    string
 }
 
-type Ingredient struct {
-	ID               int64
-	Name             string
-	Source           string
-	Barcode          sql.NullString
-	OffID            sql.NullString
-	FdcID            sql.NullString
-	ImagePath        sql.NullString
-	Kcal100g         float64
-	Protein100g      float64
-	Fat100g          float64
-	Carbs100g        float64
-	Fiber100g        float64
-	Sodium100g       float64
-	CreatedAt        string
-	UpdatedAt        string
-	SaturatedFat100g sql.NullFloat64
-	TransFat100g     sql.NullFloat64
-	Cholesterol100g  sql.NullFloat64
-	Sugar100g        sql.NullFloat64
-	Potassium100g    sql.NullFloat64
-	Calcium100g      sql.NullFloat64
-	Iron100g         sql.NullFloat64
-	Magnesium100g    sql.NullFloat64
-	Phosphorus100g   sql.NullFloat64
-	Zinc100g         sql.NullFloat64
-	VitaminA100g     sql.NullFloat64
-	VitaminC100g     sql.NullFloat64
-	VitaminD100g     sql.NullFloat64
-	VitaminB12100g   sql.NullFloat64
-	VitaminB6100g    sql.NullFloat64
-	Folate100g       sql.NullFloat64
-}
-
-type IngredientPortion struct {
-	IngredientID int64
-	Unit         string
-	Grams        float64
-}
-
-type IngredientsFt struct {
+type FoodsFt struct {
 	Name string
 }
 
@@ -129,11 +118,11 @@ type Plate struct {
 }
 
 type PlateComponent struct {
-	ID          int64
-	PlateID     int64
-	ComponentID int64
-	Portions    float64
-	SortOrder   int64
+	ID        int64
+	PlateID   int64
+	FoodID    int64
+	Portions  float64
+	SortOrder int64
 }
 
 type PlateFeedback struct {
@@ -150,11 +139,11 @@ type Template struct {
 }
 
 type TemplateComponent struct {
-	ID          int64
-	TemplateID  int64
-	ComponentID int64
-	Portions    float64
-	SortOrder   int64
+	ID         int64
+	TemplateID int64
+	FoodID     int64
+	Portions   float64
+	SortOrder  int64
 }
 
 type TimeSlot struct {

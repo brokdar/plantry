@@ -12,21 +12,21 @@ type SlotChecker interface {
 	Exists(ctx context.Context, slotID int64) (bool, error)
 }
 
-// ComponentChecker reports whether a component exists.
-type ComponentChecker interface {
-	Exists(ctx context.Context, componentID int64) (bool, error)
+// FoodChecker reports whether a food exists.
+type FoodChecker interface {
+	Exists(ctx context.Context, foodID int64) (bool, error)
 }
 
 // Service holds business logic for plates and their components.
 type Service struct {
-	repo       Repository
-	slots      SlotChecker
-	components ComponentChecker
+	repo  Repository
+	slots SlotChecker
+	foods FoodChecker
 }
 
 // NewService creates a plate service.
-func NewService(repo Repository, slots SlotChecker, components ComponentChecker) *Service {
-	return &Service{repo: repo, slots: slots, components: components}
+func NewService(repo Repository, slots SlotChecker, foods FoodChecker) *Service {
+	return &Service{repo: repo, slots: slots, foods: foods}
 }
 
 func (s *Service) validatePlate(ctx context.Context, p *Plate) error {
@@ -47,18 +47,18 @@ func (s *Service) validatePlate(ctx context.Context, p *Plate) error {
 		return fmt.Errorf("%w: slot %d does not exist", domain.ErrSlotUnknown, p.SlotID)
 	}
 	for i, pc := range p.Components {
-		if pc.ComponentID <= 0 {
-			return fmt.Errorf("%w: component[%d] id required", domain.ErrInvalidInput, i)
+		if pc.FoodID <= 0 {
+			return fmt.Errorf("%w: component[%d] food_id required", domain.ErrInvalidInput, i)
 		}
 		if pc.Portions <= 0 {
 			return fmt.Errorf("%w: component[%d] portions must be positive", domain.ErrInvalidInput, i)
 		}
-		exists, err := s.components.Exists(ctx, pc.ComponentID)
+		exists, err := s.foods.Exists(ctx, pc.FoodID)
 		if err != nil {
-			return fmt.Errorf("check component %d: %w", pc.ComponentID, err)
+			return fmt.Errorf("check food %d: %w", pc.FoodID, err)
 		}
 		if !exists {
-			return fmt.Errorf("%w: component %d does not exist", domain.ErrNotFound, pc.ComponentID)
+			return fmt.Errorf("%w: food %d does not exist", domain.ErrNotFound, pc.FoodID)
 		}
 	}
 	return nil
@@ -111,20 +111,20 @@ func (s *Service) ListByWeek(ctx context.Context, weekID int64) ([]Plate, error)
 	return s.repo.ListByWeek(ctx, weekID)
 }
 
-// AddComponent appends a component to a plate at the next sort_order.
-func (s *Service) AddComponent(ctx context.Context, plateID, componentID int64, portions float64) (*PlateComponent, error) {
+// AddComponent appends a food to a plate at the next sort_order.
+func (s *Service) AddComponent(ctx context.Context, plateID, foodID int64, portions float64) (*PlateComponent, error) {
 	if portions <= 0 {
 		portions = 1
 	}
 	if _, err := s.repo.Get(ctx, plateID); err != nil {
 		return nil, err
 	}
-	exists, err := s.components.Exists(ctx, componentID)
+	exists, err := s.foods.Exists(ctx, foodID)
 	if err != nil {
-		return nil, fmt.Errorf("check component: %w", err)
+		return nil, fmt.Errorf("check food: %w", err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("%w: component %d does not exist", domain.ErrNotFound, componentID)
+		return nil, fmt.Errorf("%w: food %d does not exist", domain.ErrNotFound, foodID)
 	}
 	existing, err := s.repo.ListComponentsByPlate(ctx, plateID)
 	if err != nil {
@@ -137,10 +137,10 @@ func (s *Service) AddComponent(ctx context.Context, plateID, componentID int64, 
 		}
 	}
 	pc := &PlateComponent{
-		PlateID:     plateID,
-		ComponentID: componentID,
-		Portions:    portions,
-		SortOrder:   next,
+		PlateID:   plateID,
+		FoodID:    foodID,
+		Portions:  portions,
+		SortOrder: next,
 	}
 	if err := s.repo.CreateComponent(ctx, pc); err != nil {
 		return nil, err
@@ -148,21 +148,21 @@ func (s *Service) AddComponent(ctx context.Context, plateID, componentID int64, 
 	return pc, nil
 }
 
-// SwapComponent replaces the component on an existing plate_component row, preserving sort_order.
+// SwapComponent replaces the food on an existing plate_component row, preserving sort_order.
 // If portionsOverride is nil, the existing portions are kept.
-func (s *Service) SwapComponent(ctx context.Context, plateComponentID, newComponentID int64, portionsOverride *float64) (*PlateComponent, error) {
+func (s *Service) SwapComponent(ctx context.Context, plateComponentID, newFoodID int64, portionsOverride *float64) (*PlateComponent, error) {
 	pc, err := s.repo.GetComponent(ctx, plateComponentID)
 	if err != nil {
 		return nil, err
 	}
-	exists, err := s.components.Exists(ctx, newComponentID)
+	exists, err := s.foods.Exists(ctx, newFoodID)
 	if err != nil {
-		return nil, fmt.Errorf("check component: %w", err)
+		return nil, fmt.Errorf("check food: %w", err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("%w: component %d does not exist", domain.ErrNotFound, newComponentID)
+		return nil, fmt.Errorf("%w: food %d does not exist", domain.ErrNotFound, newFoodID)
 	}
-	pc.ComponentID = newComponentID
+	pc.FoodID = newFoodID
 	if portionsOverride != nil {
 		if *portionsOverride <= 0 {
 			return nil, fmt.Errorf("%w: portions must be positive", domain.ErrInvalidInput)
@@ -197,9 +197,7 @@ func (s *Service) RemoveComponent(ctx context.Context, plateComponentID int64) e
 }
 
 // SetSkipped marks the slot as prospectively skipped (eating out / canteen).
-// Clears attached components atomically when enabling skip; a component-add
-// later implicitly un-skips via AddComponent unhandled — callers must unset
-// skip first.
+// Clears attached components atomically when enabling skip.
 func (s *Service) SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*Plate, error) {
 	return s.repo.SetSkipped(ctx, plateID, skipped, note)
 }

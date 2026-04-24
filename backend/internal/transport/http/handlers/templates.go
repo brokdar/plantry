@@ -21,8 +21,8 @@ func NewTemplateHandler(svc *template.Service) *TemplateHandler {
 }
 
 type templateComponentInlineInput struct {
-	ComponentID int64   `json:"component_id"`
-	Portions    float64 `json:"portions"`
+	FoodID   int64   `json:"food_id"`
+	Portions float64 `json:"portions"`
 }
 
 type createTemplateRequest struct {
@@ -41,11 +41,11 @@ type applyTemplateRequest struct {
 }
 
 type templateComponentResponse struct {
-	ID          int64   `json:"id"`
-	TemplateID  int64   `json:"template_id"`
-	ComponentID int64   `json:"component_id"`
-	Portions    float64 `json:"portions"`
-	SortOrder   int     `json:"sort_order"`
+	ID         int64   `json:"id"`
+	TemplateID int64   `json:"template_id"`
+	FoodID     int64   `json:"food_id"`
+	Portions   float64 `json:"portions"`
+	SortOrder  int     `json:"sort_order"`
 }
 
 type templateResponse struct {
@@ -61,11 +61,11 @@ type templateListResponse struct {
 
 func toTemplateComponentResponse(tc template.TemplateComponent) templateComponentResponse {
 	return templateComponentResponse{
-		ID:          tc.ID,
-		TemplateID:  tc.TemplateID,
-		ComponentID: tc.ComponentID,
-		Portions:    tc.Portions,
-		SortOrder:   tc.SortOrder,
+		ID:         tc.ID,
+		TemplateID: tc.TemplateID,
+		FoodID:     tc.FoodID,
+		Portions:   tc.Portions,
+		SortOrder:  tc.SortOrder,
 	}
 }
 
@@ -117,8 +117,8 @@ func (h *TemplateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		comps = make([]template.TemplateComponent, len(req.Components))
 		for i, c := range req.Components {
 			comps[i] = template.TemplateComponent{
-				ComponentID: c.ComponentID,
-				Portions:    c.Portions,
+				FoodID:   c.FoodID,
+				Portions: c.Portions,
 			}
 		}
 	}
