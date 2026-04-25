@@ -2,17 +2,38 @@ import { test, expect, apiRequest } from "./helpers"
 
 import {
   API,
-  cleanupComponent,
-  cleanupIngredient,
-  seedComponent,
-  seedIngredient,
+  cleanupFood,
+  seedComposedFood,
+  seedLeafFood,
   uid,
 } from "./helpers"
+
+// Composed foods now require at least one child. Seed a throwaway leaf and
+// pass it as the sole child. Returns both ids so callers can clean up.
+async function seedComposedWithStub(
+  data: Parameters<typeof seedComposedFood>[0],
+  tag: string
+) {
+  const stub = await seedLeafFood({ name: `Stub ${tag}-${data.name}` })
+  const composed = await seedComposedFood({
+    ...data,
+    children: data.children ?? [
+      {
+        child_id: stub.id,
+        amount: 100,
+        unit: "g",
+        grams: 100,
+        sort_order: 0,
+      },
+    ],
+  })
+  return { composed, stub }
+}
 
 test.describe("Component Library", () => {
   test("create a component via the form", async ({ page }) => {
     const tag = uid()
-    const ing = await seedIngredient({
+    const ing = await seedLeafFood({
       name: `E2E Chicken ${tag}`,
       kcal_100g: 165,
       protein_100g: 31,
@@ -24,10 +45,20 @@ test.describe("Component Library", () => {
       await page.getByLabel(/^name/i).fill(`Curry ${tag}`)
       await page.getByLabel(/servings/i).fill("2")
 
+      // Composed foods require at least one child — pick the seeded leaf via
+      // the inline combobox.
+      await page.getByRole("button", { name: /add ingredient/i }).click()
+      await page.getByTestId("ingredient-row-0-combobox").click()
+      await page
+        .getByTestId("ingredient-row-0-combobox-search")
+        .fill(`E2E Chicken ${tag}`)
+      await page
+        .getByTestId(`ingredient-row-0-combobox-option-${ing.id}`)
+        .click()
+
       const responsePromise = page.waitForResponse(
         (res) =>
-          res.url().includes("/api/components") &&
-          res.request().method() === "POST"
+          res.url().includes("/api/foods") && res.request().method() === "POST"
       )
       await page.getByRole("button", { name: /save/i }).click()
       const response = await responsePromise
@@ -40,32 +71,32 @@ test.describe("Component Library", () => {
       await page.getByTestId("catalog-search").fill(tag)
       await page.waitForResponse(
         (res) =>
-          res.url().includes("/api/components") &&
+          res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
       await expect(
         page.getByTestId(`component-card-${createdId}`)
       ).toBeVisible()
     } finally {
-      if (createdId) await cleanupComponent(createdId)
-      await cleanupIngredient(ing.id)
+      if (createdId) await cleanupFood(createdId)
+      await cleanupFood(ing.id)
     }
   })
 
   test("search filters components by name", async ({ page }) => {
     const tag = uid()
-    const c1 = await seedComponent({
-      name: `Chicken Curry ${tag}`,
-      role: "main",
-    })
-    const c2 = await seedComponent({
-      name: `Tofu Bowl ${tag}`,
-      role: "standalone",
-    })
-    const c3 = await seedComponent({
-      name: `Pasta Sauce ${tag}`,
-      role: "sauce",
-    })
+    const { composed: c1, stub: s1 } = await seedComposedWithStub(
+      { name: `Chicken Curry ${tag}`, role: "main" },
+      tag
+    )
+    const { composed: c2, stub: s2 } = await seedComposedWithStub(
+      { name: `Tofu Bowl ${tag}`, role: "standalone" },
+      tag
+    )
+    const { composed: c3, stub: s3 } = await seedComposedWithStub(
+      { name: `Pasta Sauce ${tag}`, role: "sauce" },
+      tag
+    )
 
     try {
       await page.goto("/components")
@@ -74,7 +105,7 @@ test.describe("Component Library", () => {
       await page.getByTestId("catalog-search").fill(tag)
       await page.waitForResponse(
         (res) =>
-          res.url().includes("/api/components") &&
+          res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
 
@@ -83,21 +114,32 @@ test.describe("Component Library", () => {
       await expect(page.getByTestId(`component-card-${c3.id}`)).toBeVisible()
 
       await page.getByTestId("catalog-search").fill(`chicken ${tag}`)
-      await page.waitForResponse((res) => res.url().includes("/api/components"))
+      await page.waitForResponse(
+        (res) =>
+          res.url().includes("/api/foods") &&
+          res.url().includes("chicken") &&
+          res.url().includes(tag)
+      )
 
       await expect(page.getByTestId(`component-card-${c1.id}`)).toBeVisible()
       await expect(page.getByTestId(`component-card-${c2.id}`)).toHaveCount(0)
       await expect(page.getByTestId(`component-card-${c3.id}`)).toHaveCount(0)
     } finally {
-      await cleanupComponent(c1.id)
-      await cleanupComponent(c2.id)
-      await cleanupComponent(c3.id)
+      await cleanupFood(c1.id)
+      await cleanupFood(c2.id)
+      await cleanupFood(c3.id)
+      await cleanupFood(s1.id)
+      await cleanupFood(s2.id)
+      await cleanupFood(s3.id)
     }
   })
 
   test("edit a component", async ({ page }) => {
     const tag = uid()
-    const comp = await seedComponent({ name: `Edit Test ${tag}`, role: "main" })
+    const { composed: comp, stub } = await seedComposedWithStub(
+      { name: `Edit Test ${tag}`, role: "main" },
+      tag
+    )
 
     try {
       await page.goto(`/components/${comp.id}/edit`)
@@ -107,7 +149,7 @@ test.describe("Component Library", () => {
 
       const responsePromise = page.waitForResponse(
         (res) =>
-          res.url().includes(`/api/components/${comp.id}`) &&
+          res.url().includes(`/api/foods/${comp.id}`) &&
           res.request().method() === "PUT"
       )
       await page.getByRole("button", { name: /save/i }).click()
@@ -121,24 +163,28 @@ test.describe("Component Library", () => {
         `Updated ${tag}`
       )
     } finally {
-      await cleanupComponent(comp.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(stub.id)
     }
   })
 
   test("delete a component", async ({ page }) => {
     const tag = uid()
-    const keep = await seedComponent({ name: `Keep ${tag}`, role: "main" })
-    const toDelete = await seedComponent({
-      name: `Delete ${tag}`,
-      role: "side_veg",
-    })
+    const { composed: keep, stub: keepStub } = await seedComposedWithStub(
+      { name: `Keep ${tag}`, role: "main" },
+      tag
+    )
+    const { composed: toDelete, stub: delStub } = await seedComposedWithStub(
+      { name: `Delete ${tag}`, role: "side_veg" },
+      tag
+    )
 
     try {
       await page.goto("/components")
       await page.getByTestId("catalog-search").fill(tag)
       await page.waitForResponse(
         (res) =>
-          res.url().includes("/api/components") &&
+          res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
       await expect(
@@ -150,7 +196,7 @@ test.describe("Component Library", () => {
 
       const responsePromise = page.waitForResponse(
         (res) =>
-          res.url().includes(`/api/components/${toDelete.id}`) &&
+          res.url().includes(`/api/foods/${toDelete.id}`) &&
           res.request().method() === "DELETE"
       )
       await page
@@ -164,13 +210,15 @@ test.describe("Component Library", () => {
       ).toHaveCount(0)
       await expect(page.getByTestId(`component-card-${keep.id}`)).toBeVisible()
     } finally {
-      await cleanupComponent(keep.id)
+      await cleanupFood(keep.id)
+      await cleanupFood(keepStub.id)
+      await cleanupFood(delStub.id)
     }
   })
 
   test("nutrition endpoint returns correct values", async ({ page }) => {
     const tag = uid()
-    const ing = await seedIngredient({
+    const ing = await seedLeafFood({
       name: `Nut Chicken ${tag}`,
       kcal_100g: 200,
       protein_100g: 20,
@@ -178,13 +226,13 @@ test.describe("Component Library", () => {
       carbs_100g: 0,
     })
 
-    const comp = await seedComponent({
+    const comp = await seedComposedFood({
       name: `Nut Comp ${tag}`,
       role: "main",
       reference_portions: 2,
-      ingredients: [
+      children: [
         {
-          ingredient_id: ing.id,
+          child_id: ing.id,
           amount: 400,
           unit: "g",
           grams: 400,
@@ -197,7 +245,7 @@ test.describe("Component Library", () => {
       await test.step("API returns per-portion nutrition", async () => {
         // 400g at 200kcal/100g = 800kcal total, /2 portions = 400 per portion.
         const ctx = await apiRequest.newContext({ baseURL: API })
-        const res = await ctx.get(`/api/components/${comp.id}/nutrition`)
+        const res = await ctx.get(`/api/foods/${comp.id}/nutrition`)
         expect(res.ok()).toBeTruthy()
         const nut = (await res.json()) as { kcal: number; protein: number }
         expect(nut.kcal).toBe(400)
@@ -228,8 +276,8 @@ test.describe("Component Library", () => {
         await expect(panel).toContainText("400")
       })
     } finally {
-      await cleanupComponent(comp.id)
-      await cleanupIngredient(ing.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(ing.id)
     }
   })
 
@@ -237,27 +285,39 @@ test.describe("Component Library", () => {
     page,
   }) => {
     const tag = uid()
-    const ing = await seedIngredient({
+    const ing = await seedLeafFood({
       name: `Combo Chicken ${tag}`,
       kcal_100g: 165,
       protein_100g: 31,
     })
-    const comp = await seedComponent({
+    const stub = await seedLeafFood({ name: `Stub ${tag}` })
+    const comp = await seedComposedFood({
       name: `Combo Recipe ${tag}`,
       role: "main",
       reference_portions: 1,
+      children: [
+        {
+          child_id: stub.id,
+          amount: 100,
+          unit: "g",
+          grams: 100,
+          sort_order: 0,
+        },
+      ],
     })
 
     try {
       await page.goto(`/components/${comp.id}/edit`)
 
-      const trigger = page.getByTestId("ingredient-row-0-combobox")
-      const search = page.getByTestId("ingredient-row-0-combobox-search")
+      // The seed populates row 0 with a stub child; the test exercises the
+      // appended row 1.
+      const trigger = page.getByTestId("ingredient-row-1-combobox")
+      const search = page.getByTestId("ingredient-row-1-combobox-search")
       const option = page.getByTestId(
-        `ingredient-row-0-combobox-option-${ing.id}`
+        `ingredient-row-1-combobox-option-${ing.id}`
       )
-      const amountInput = page.locator('input[name="ingredients.0.amount"]')
-      const gramsInput = page.getByTestId("ingredient-row-0-grams")
+      const amountInput = page.locator('input[name="children.1.amount"]')
+      const gramsInput = page.getByTestId("ingredient-row-1-grams")
 
       await test.step("open the combobox from an empty ingredient row", async () => {
         await page.getByRole("button", { name: /add ingredient/i }).click()
@@ -267,7 +327,7 @@ test.describe("Component Library", () => {
 
       await test.step("typeahead surfaces the seeded ingredient with macro hint", async () => {
         const resp = page.waitForResponse(
-          (r) => r.url().includes("/api/ingredients") && r.url().includes(tag)
+          (r) => r.url().includes("/api/foods") && r.url().includes(tag)
         )
         await search.pressSequentially(`Combo Chicken ${tag}`, { delay: 30 })
         await resp
@@ -293,7 +353,7 @@ test.describe("Component Library", () => {
       await test.step("save persists the ingredient row to the backend", async () => {
         const resp = page.waitForResponse(
           (r) =>
-            r.url().includes(`/api/components/${comp.id}`) &&
+            r.url().includes(`/api/foods/${comp.id}`) &&
             r.request().method() === "PUT"
         )
         await page.getByRole("button", { name: /^save$/i }).click()
@@ -307,8 +367,9 @@ test.describe("Component Library", () => {
         await expect(amountInput).toHaveValue("250")
       })
     } finally {
-      await cleanupComponent(comp.id)
-      await cleanupIngredient(ing.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(ing.id)
+      await cleanupFood(stub.id)
     }
   })
 
@@ -316,11 +377,10 @@ test.describe("Component Library", () => {
     page,
   }) => {
     const tag = uid()
-    const comp = await seedComponent({
-      name: `Steps Recipe ${tag}`,
-      role: "main",
-      reference_portions: 1,
-    })
+    const { composed: comp, stub } = await seedComposedWithStub(
+      { name: `Steps Recipe ${tag}`, role: "main", reference_portions: 1 },
+      tag
+    )
 
     try {
       await page.goto(`/components/${comp.id}/edit`)
@@ -332,7 +392,7 @@ test.describe("Component Library", () => {
 
       const resp = page.waitForResponse(
         (r) =>
-          r.url().includes(`/api/components/${comp.id}`) &&
+          r.url().includes(`/api/foods/${comp.id}`) &&
           r.request().method() === "PUT"
       )
       await page.getByRole("button", { name: /^save$/i }).click()
@@ -343,18 +403,18 @@ test.describe("Component Library", () => {
       const persistedStep = page.locator('textarea[name="instructions.0.text"]')
       await expect(persistedStep).toHaveValue("Mix everything together")
     } finally {
-      await cleanupComponent(comp.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(stub.id)
     }
   })
 
   test("editor tag add round-trips to persisted editor", async ({ page }) => {
     const tag = uid()
     const newTag = `quick-${tag}`
-    const comp = await seedComponent({
-      name: `Tag Recipe ${tag}`,
-      role: "main",
-      reference_portions: 1,
-    })
+    const { composed: comp, stub } = await seedComposedWithStub(
+      { name: `Tag Recipe ${tag}`, role: "main", reference_portions: 1 },
+      tag
+    )
 
     try {
       await page.goto(`/components/${comp.id}/edit`)
@@ -367,7 +427,7 @@ test.describe("Component Library", () => {
 
       const resp = page.waitForResponse(
         (r) =>
-          r.url().includes(`/api/components/${comp.id}`) &&
+          r.url().includes(`/api/foods/${comp.id}`) &&
           r.request().method() === "PUT"
       )
       await page.getByRole("button", { name: /^save$/i }).click()
@@ -377,7 +437,8 @@ test.describe("Component Library", () => {
       await page.goto(`/components/${comp.id}/edit`)
       await expect(page.getByText(newTag, { exact: true })).toBeVisible()
     } finally {
-      await cleanupComponent(comp.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(stub.id)
     }
   })
 
@@ -385,11 +446,10 @@ test.describe("Component Library", () => {
     page,
   }) => {
     const tag = uid()
-    const comp = await seedComponent({
-      name: `Cancel Recipe ${tag}`,
-      role: "main",
-      reference_portions: 1,
-    })
+    const { composed: comp, stub } = await seedComposedWithStub(
+      { name: `Cancel Recipe ${tag}`, role: "main", reference_portions: 1 },
+      tag
+    )
 
     try {
       await page.goto(`/components/${comp.id}/edit`)
@@ -407,7 +467,8 @@ test.describe("Component Library", () => {
         `Cancel Recipe ${tag}`
       )
     } finally {
-      await cleanupComponent(comp.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(stub.id)
     }
   })
 })

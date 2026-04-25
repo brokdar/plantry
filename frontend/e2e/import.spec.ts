@@ -1,11 +1,6 @@
 import { test, expect } from "./helpers"
 
-import {
-  cleanupComponent,
-  cleanupIngredient,
-  seedIngredient,
-  uid,
-} from "./helpers"
+import { cleanupFood, seedLeafFood, uid } from "./helpers"
 
 // Chefkoch-shaped HTML pasted directly into the wizard. Avoids any live fetch
 // of chefkoch.de — Playwright cannot intercept the backend's outbound request,
@@ -43,14 +38,14 @@ test.describe("Recipe Import", () => {
     const tag = uid()
     // Seed two ingredients with exact names matching the fixture so that
     // /api/import/lookup returns them with existing_id set.
-    const spa = await seedIngredient({
+    const spa = await seedLeafFood({
       name: `E2E Spaghetti ${tag}`,
       kcal_100g: 350,
       protein_100g: 12,
       fat_100g: 2,
       carbs_100g: 72,
     })
-    const kno = await seedIngredient({
+    const kno = await seedLeafFood({
       name: `E2E Knoblauch ${tag}`,
       kcal_100g: 149,
       protein_100g: 6,
@@ -125,7 +120,7 @@ test.describe("Recipe Import", () => {
 
       const componentPromise = page.waitForResponse(
         (res) =>
-          res.url().match(/\/api\/components$/) !== null &&
+          res.url().match(/\/api\/foods$/) !== null &&
           res.request().method() === "POST"
       )
       await page
@@ -135,17 +130,17 @@ test.describe("Recipe Import", () => {
       expect(componentRes.status()).toBe(201)
       const body = (await componentRes.json()) as {
         id: number
-        ingredients: { unit: string }[]
+        children: { unit: string }[]
       }
       createdId = body.id
-      // All ingredients must be canonicalized to g or ml.
-      for (const ing of body.ingredients) {
-        expect(["g", "ml"]).toContain(ing.unit)
+      // All children must be canonicalized to g or ml.
+      for (const child of body.children) {
+        expect(["g", "ml"]).toContain(child.unit)
       }
     } finally {
-      if (createdId) await cleanupComponent(createdId)
-      await cleanupIngredient(spa.id)
-      await cleanupIngredient(kno.id)
+      if (createdId) await cleanupFood(createdId)
+      await cleanupFood(spa.id)
+      await cleanupFood(kno.id)
     }
   })
 })

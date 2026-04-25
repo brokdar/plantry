@@ -52,7 +52,7 @@ export function MobilePlannerGrid({ week, slots }: MobilePlannerGridProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const componentsQuery = useFoods({ kind: "composed", limit: 200 })
+  const componentsQuery = useFoods({ limit: 200 })
   const componentsById = useMemo(() => {
     const map = new Map<number, Food>()
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)

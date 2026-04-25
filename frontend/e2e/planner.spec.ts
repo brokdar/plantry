@@ -1,9 +1,10 @@
 import { expect, test } from "./helpers"
 
 import {
-  cleanupComponent,
+  cleanupFood,
   cleanupSlot,
-  seedComponent,
+  seedComposedFood,
+  seedLeafFood,
   seedSlot,
   uid,
 } from "./helpers"
@@ -16,9 +17,19 @@ test.describe("Weekly planner", () => {
   test("plan a meal, show it in the slot, navigate weeks", async ({ page }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.dinner_${tag}`, "Moon", 999)
-    const main = await seedComponent({
+    const stub = await seedLeafFood({ name: `Stub ${tag}` })
+    const main = await seedComposedFood({
       name: `Chicken curry ${tag}`,
       role: "main",
+      children: [
+        {
+          child_id: stub.id,
+          amount: 100,
+          unit: "g",
+          grams: 100,
+          sort_order: 0,
+        },
+      ],
     })
 
     try {
@@ -51,7 +62,8 @@ test.describe("Weekly planner", () => {
       await page.getByRole("button", { name: /previous week/i }).click()
       await expect(cell.getByText(`Chicken curry ${tag}`)).toBeVisible()
     } finally {
-      await cleanupComponent(main.id)
+      await cleanupFood(main.id)
+      await cleanupFood(stub.id)
       await cleanupSlot(slot.id)
     }
   })

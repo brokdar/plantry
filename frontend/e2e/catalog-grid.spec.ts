@@ -1,17 +1,46 @@
-import { cleanupComponent, expect, seedComponent, test, uid } from "./helpers"
+import {
+  cleanupFood,
+  expect,
+  seedComposedFood,
+  seedLeafFood,
+  test,
+  uid,
+} from "./helpers"
+
+// Composed foods now require at least one child. Helper that wraps
+// seedComposedFood with a throwaway leaf so tests don't need to set up the
+// child ladder themselves.
+async function seedComposedWithStub(
+  data: Parameters<typeof seedComposedFood>[0],
+  tag: string
+) {
+  const stub = await seedLeafFood({ name: `Stub ${tag}-${data.name}` })
+  const composed = await seedComposedFood({
+    ...data,
+    children: data.children ?? [
+      {
+        child_id: stub.id,
+        amount: 100,
+        unit: "g",
+        grams: 100,
+        sort_order: 0,
+      },
+    ],
+  })
+  return { composed, stub }
+}
 
 test.describe("Recipe Catalog (card grid)", () => {
   test("renders cards with title, role, and portions", async ({ page }) => {
     const tag = uid()
-    const main = await seedComponent({
-      name: `Grid Main ${tag}`,
-      role: "main",
-      reference_portions: 2,
-    })
-    const sauce = await seedComponent({
-      name: `Grid Sauce ${tag}`,
-      role: "sauce",
-    })
+    const { composed: main, stub: mainStub } = await seedComposedWithStub(
+      { name: `Grid Main ${tag}`, role: "main", reference_portions: 2 },
+      tag
+    )
+    const { composed: sauce, stub: sauceStub } = await seedComposedWithStub(
+      { name: `Grid Sauce ${tag}`, role: "sauce" },
+      tag
+    )
 
     try {
       await page.goto("/components")
@@ -21,8 +50,7 @@ test.describe("Recipe Catalog (card grid)", () => {
       await page.getByTestId("catalog-search").fill(tag)
       await page.waitForResponse(
         (r) =>
-          r.url().includes("/api/components") &&
-          r.url().includes(`search=${tag}`)
+          r.url().includes("/api/foods") && r.url().includes(`search=${tag}`)
       )
 
       const mainCard = page.getByTestId(`component-card-${main.id}`)
@@ -32,26 +60,30 @@ test.describe("Recipe Catalog (card grid)", () => {
 
       await expect(mainCard.getByText(main.name)).toBeVisible()
     } finally {
-      await cleanupComponent(main.id)
-      await cleanupComponent(sauce.id)
+      await cleanupFood(main.id)
+      await cleanupFood(sauce.id)
+      await cleanupFood(mainStub.id)
+      await cleanupFood(sauceStub.id)
     }
   })
 
   test("role filter chip single-select narrows grid", async ({ page }) => {
     const tag = uid()
-    const main = await seedComponent({ name: `Chip Main ${tag}`, role: "main" })
-    const sauce = await seedComponent({
-      name: `Chip Sauce ${tag}`,
-      role: "sauce",
-    })
+    const { composed: main, stub: mainStub } = await seedComposedWithStub(
+      { name: `Chip Main ${tag}`, role: "main" },
+      tag
+    )
+    const { composed: sauce, stub: sauceStub } = await seedComposedWithStub(
+      { name: `Chip Sauce ${tag}`, role: "sauce" },
+      tag
+    )
 
     try {
       await page.goto("/components")
       await page.getByTestId("catalog-search").fill(tag)
       await page.waitForResponse(
         (r) =>
-          r.url().includes("/api/components") &&
-          r.url().includes(`search=${tag}`)
+          r.url().includes("/api/foods") && r.url().includes(`search=${tag}`)
       )
       await expect(page.getByTestId(`component-card-${main.id}`)).toBeVisible()
       await expect(page.getByTestId(`component-card-${sauce.id}`)).toBeVisible()
@@ -69,8 +101,10 @@ test.describe("Recipe Catalog (card grid)", () => {
       await expect(page.getByTestId(`component-card-${main.id}`)).toBeVisible()
       await expect(page.getByTestId(`component-card-${sauce.id}`)).toBeVisible()
     } finally {
-      await cleanupComponent(main.id)
-      await cleanupComponent(sauce.id)
+      await cleanupFood(main.id)
+      await cleanupFood(sauce.id)
+      await cleanupFood(mainStub.id)
+      await cleanupFood(sauceStub.id)
     }
   })
 
@@ -83,7 +117,7 @@ test.describe("Recipe Catalog (card grid)", () => {
     await page.getByTestId("catalog-search").fill(gibberish)
     await page.waitForResponse(
       (r) =>
-        r.url().includes("/api/components") &&
+        r.url().includes("/api/foods") &&
         r.url().includes(`search=${gibberish}`)
     )
 
@@ -95,18 +129,17 @@ test.describe("Recipe Catalog (card grid)", () => {
     page,
   }) => {
     const tag = uid()
-    const main = await seedComponent({
-      name: `Toggle Main ${tag}`,
-      role: "main",
-    })
+    const { composed: main, stub } = await seedComposedWithStub(
+      { name: `Toggle Main ${tag}`, role: "main" },
+      tag
+    )
 
     try {
       await page.goto("/components")
 
       // Scope to seeded item so list/grid count is deterministic.
       const searchResp = page.waitForResponse(
-        (r) =>
-          r.url().includes("/api/components") && r.url().includes(`search=`)
+        (r) => r.url().includes("/api/foods") && r.url().includes(`search=`)
       )
       await page.getByTestId("catalog-search").fill(tag)
       await searchResp
@@ -138,7 +171,8 @@ test.describe("Recipe Catalog (card grid)", () => {
       // Reset to grid so subsequent tests start from default.
       await page.getByRole("button", { name: "Grid view" }).click()
     } finally {
-      await cleanupComponent(main.id)
+      await cleanupFood(main.id)
+      await cleanupFood(stub.id)
     }
   })
 
@@ -148,16 +182,14 @@ test.describe("Recipe Catalog (card grid)", () => {
     const tag = uid()
     const spicyTag = `spicy-${tag}`
     const veganTag = `vegan-${tag}`
-    const spicy = await seedComponent({
-      name: `Tagged Spicy ${tag}`,
-      role: "main",
-      tags: [spicyTag],
-    })
-    const vegan = await seedComponent({
-      name: `Tagged Vegan ${tag}`,
-      role: "main",
-      tags: [veganTag],
-    })
+    const { composed: spicy, stub: spicyStub } = await seedComposedWithStub(
+      { name: `Tagged Spicy ${tag}`, role: "main", tags: [spicyTag] },
+      tag
+    )
+    const { composed: vegan, stub: veganStub } = await seedComposedWithStub(
+      { name: `Tagged Vegan ${tag}`, role: "main", tags: [veganTag] },
+      tag
+    )
 
     try {
       await page.goto("/components")
@@ -175,7 +207,7 @@ test.describe("Recipe Catalog (card grid)", () => {
 
       await test.step("clicking the spicy chip filters the grid", async () => {
         const tagResp = page.waitForResponse(
-          (r) => r.url().includes("/api/components") && r.url().includes("tag=")
+          (r) => r.url().includes("/api/foods") && r.url().includes("tag=")
         )
         await page.getByTestId(`component-filter-tag-${spicyTag}`).click()
         await tagResp
@@ -192,17 +224,19 @@ test.describe("Recipe Catalog (card grid)", () => {
         await expect(veganCard).toBeVisible()
       })
     } finally {
-      await cleanupComponent(spicy.id)
-      await cleanupComponent(vegan.id)
+      await cleanupFood(spicy.id)
+      await cleanupFood(vegan.id)
+      await cleanupFood(spicyStub.id)
+      await cleanupFood(veganStub.id)
     }
   })
 
   test("clicking a card body navigates to the editor", async ({ page }) => {
     const tag = uid()
-    const main = await seedComponent({
-      name: `Click Body ${tag}`,
-      role: "main",
-    })
+    const { composed: main, stub } = await seedComposedWithStub(
+      { name: `Click Body ${tag}`, role: "main" },
+      tag
+    )
 
     try {
       await page.goto("/components")
@@ -222,7 +256,8 @@ test.describe("Recipe Catalog (card grid)", () => {
       await expect(page).toHaveURL(new RegExp(`/components/${main.id}/edit$`))
       await expect(page.getByLabel(/^name/i)).toHaveValue(`Click Body ${tag}`)
     } finally {
-      await cleanupComponent(main.id)
+      await cleanupFood(main.id)
+      await cleanupFood(stub.id)
     }
   })
 
@@ -248,22 +283,21 @@ test.describe("Recipe Catalog (card grid)", () => {
     page,
   }) => {
     const tag = uid()
-    const keep = await seedComponent({
-      name: `Grid Keep ${tag}`,
-      role: "main",
-    })
-    const toDelete = await seedComponent({
-      name: `Grid Delete ${tag}`,
-      role: "side_veg",
-    })
+    const { composed: keep, stub: keepStub } = await seedComposedWithStub(
+      { name: `Grid Keep ${tag}`, role: "main" },
+      tag
+    )
+    const { composed: toDelete, stub: delStub } = await seedComposedWithStub(
+      { name: `Grid Delete ${tag}`, role: "side_veg" },
+      tag
+    )
 
     try {
       await page.goto("/components")
       await page.getByTestId("catalog-search").fill(tag)
       await page.waitForResponse(
         (r) =>
-          r.url().includes("/api/components") &&
-          r.url().includes(`search=${tag}`)
+          r.url().includes("/api/foods") && r.url().includes(`search=${tag}`)
       )
       await expect(
         page.getByTestId(`component-card-${toDelete.id}`)
@@ -274,7 +308,7 @@ test.describe("Recipe Catalog (card grid)", () => {
 
       const resp = page.waitForResponse(
         (r) =>
-          r.url().includes(`/api/components/${toDelete.id}`) &&
+          r.url().includes(`/api/foods/${toDelete.id}`) &&
           r.request().method() === "DELETE"
       )
       await page
@@ -288,7 +322,9 @@ test.describe("Recipe Catalog (card grid)", () => {
       ).toHaveCount(0)
       await expect(page.getByTestId(`component-card-${keep.id}`)).toBeVisible()
     } finally {
-      await cleanupComponent(keep.id)
+      await cleanupFood(keep.id)
+      await cleanupFood(keepStub.id)
+      await cleanupFood(delStub.id)
     }
   })
 })

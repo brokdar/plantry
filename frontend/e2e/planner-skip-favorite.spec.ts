@@ -3,9 +3,10 @@ import { expect, test } from "./helpers"
 import {
   API,
   apiRequest,
-  cleanupComponent,
+  cleanupFood,
   cleanupSlot,
-  seedComponent,
+  seedComposedFood,
+  seedLeafFood,
   seedSlot,
   uid,
 } from "./helpers"
@@ -16,9 +17,19 @@ test.describe("Slot skip + favorite (redesign)", () => {
   }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.lunch_${tag}`, "Sun", 998)
-    const main = await seedComponent({
+    const stub = await seedLeafFood({ name: `Stub ${tag}` })
+    const main = await seedComposedFood({
       name: `Ramen ${tag}`,
       role: "main",
+      children: [
+        {
+          child_id: stub.id,
+          amount: 100,
+          unit: "g",
+          grams: 100,
+          sort_order: 0,
+        },
+      ],
     })
 
     try {
@@ -42,7 +53,7 @@ test.describe("Slot skip + favorite (redesign)", () => {
       const favBtn = cell.getByTestId("slot-action-favorite")
       const favResp = page.waitForResponse(
         (r) =>
-          /\/components\/\d+\/favorite$/.test(r.url()) &&
+          /\/foods\/\d+\/favorite$/.test(r.url()) &&
           r.request().method() === "POST"
       )
       await favBtn.click()
@@ -50,12 +61,13 @@ test.describe("Slot skip + favorite (redesign)", () => {
 
       // Verify backend flipped the flag.
       const ctx = await apiRequest.newContext({ baseURL: API })
-      const detail = await ctx.get(`/api/components/${main.id}`)
+      const detail = await ctx.get(`/api/foods/${main.id}`)
       expect(detail.ok()).toBeTruthy()
       const body = await detail.json()
       expect(body.favorite).toBe(true)
     } finally {
-      await cleanupComponent(main.id)
+      await cleanupFood(main.id)
+      await cleanupFood(stub.id)
       await cleanupSlot(slot.id)
     }
   })
@@ -65,9 +77,19 @@ test.describe("Slot skip + favorite (redesign)", () => {
   }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.dinner_${tag}`, "Moon", 997)
-    const main = await seedComponent({
+    const stub = await seedLeafFood({ name: `Stub ${tag}` })
+    const main = await seedComposedFood({
       name: `Pho ${tag}`,
       role: "main",
+      children: [
+        {
+          child_id: stub.id,
+          amount: 100,
+          unit: "g",
+          grams: 100,
+          sort_order: 0,
+        },
+      ],
     })
 
     try {
@@ -100,7 +122,8 @@ test.describe("Slot skip + favorite (redesign)", () => {
       await expect(cell.getByText(/^skip$/i)).toBeVisible()
       await expect(cell.getByText(`Pho ${tag}`)).toHaveCount(0)
     } finally {
-      await cleanupComponent(main.id)
+      await cleanupFood(main.id)
+      await cleanupFood(stub.id)
       await cleanupSlot(slot.id)
     }
   })

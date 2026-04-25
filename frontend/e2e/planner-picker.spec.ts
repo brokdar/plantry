@@ -1,12 +1,36 @@
 import { expect, test } from "./helpers"
 
 import {
-  cleanupComponent,
+  cleanupFood,
   cleanupSlot,
-  seedComponent,
+  seedComposedFood,
+  seedLeafFood,
   seedSlot,
   uid,
 } from "./helpers"
+
+// Composed foods now require at least one child. Helper that wraps
+// seedComposedFood with a throwaway leaf so tests don't need to set up the
+// child ladder themselves.
+async function seedComposedWithStub(
+  data: Parameters<typeof seedComposedFood>[0],
+  tag: string
+) {
+  const stub = await seedLeafFood({ name: `Stub ${tag}-${data.name}` })
+  const composed = await seedComposedFood({
+    ...data,
+    children: data.children ?? [
+      {
+        child_id: stub.id,
+        amount: 100,
+        unit: "g",
+        grams: 100,
+        sort_order: 0,
+      },
+    ],
+  })
+  return { composed, stub }
+}
 
 test.describe("Planner picker route", () => {
   test("empty cell navigates to picker, tray accumulates, Save creates plate", async ({
@@ -14,14 +38,14 @@ test.describe("Planner picker route", () => {
   }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.dinner_${tag}`, "Moon", 996)
-    const main = await seedComponent({
-      name: `Sushi ${tag}`,
-      role: "main",
-    })
-    const side = await seedComponent({
-      name: `Miso ${tag}`,
-      role: "side_veg",
-    })
+    const { composed: main, stub: mainStub } = await seedComposedWithStub(
+      { name: `Sushi ${tag}`, role: "main" },
+      tag
+    )
+    const { composed: side, stub: sideStub } = await seedComposedWithStub(
+      { name: `Miso ${tag}`, role: "side_veg" },
+      tag
+    )
 
     try {
       await page.goto("/")
@@ -55,8 +79,10 @@ test.describe("Planner picker route", () => {
       await expect(page).toHaveURL(/\/$/)
       await expect(cell.getByText(`Sushi ${tag}`)).toBeVisible()
     } finally {
-      await cleanupComponent(side.id)
-      await cleanupComponent(main.id)
+      await cleanupFood(side.id)
+      await cleanupFood(main.id)
+      await cleanupFood(mainStub.id)
+      await cleanupFood(sideStub.id)
       await cleanupSlot(slot.id)
     }
   })
@@ -64,8 +90,14 @@ test.describe("Planner picker route", () => {
   test("favorites prefilter narrows catalog", async ({ page }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.lunch_${tag}`, "Sun", 995)
-    const fav = await seedComponent({ name: `Tacos ${tag}`, role: "main" })
-    const other = await seedComponent({ name: `Lasagna ${tag}`, role: "main" })
+    const { composed: fav, stub: favStub } = await seedComposedWithStub(
+      { name: `Tacos ${tag}`, role: "main" },
+      tag
+    )
+    const { composed: other, stub: otherStub } = await seedComposedWithStub(
+      { name: `Lasagna ${tag}`, role: "main" },
+      tag
+    )
 
     try {
       await page.goto("/")
@@ -76,7 +108,7 @@ test.describe("Planner picker route", () => {
       // Mark Tacos as favorite via its card heart.
       const favResp = page.waitForResponse(
         (r) =>
-          /\/components\/\d+\/favorite$/.test(r.url()) &&
+          /\/foods\/\d+\/favorite$/.test(r.url()) &&
           r.request().method() === "POST"
       )
       await page
@@ -91,8 +123,10 @@ test.describe("Planner picker route", () => {
       await expect(page.getByTestId(`picker-card-${fav.id}`)).toBeVisible()
       await expect(page.getByTestId(`picker-card-${other.id}`)).toHaveCount(0)
     } finally {
-      await cleanupComponent(other.id)
-      await cleanupComponent(fav.id)
+      await cleanupFood(other.id)
+      await cleanupFood(fav.id)
+      await cleanupFood(favStub.id)
+      await cleanupFood(otherStub.id)
       await cleanupSlot(slot.id)
     }
   })

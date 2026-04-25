@@ -47,7 +47,7 @@ function SlotIcon({ name }: { name: string }) {
 
 export function ReadOnlyPlannerGrid({ week, slots }: ReadOnlyPlannerGridProps) {
   const { t } = useTranslation()
-  const componentsQuery = useFoods({ kind: "composed", limit: 200 })
+  const componentsQuery = useFoods({ limit: 200 })
   const componentsById = useMemo(() => {
     const map = new Map<number, Food>()
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)

@@ -51,7 +51,7 @@ func (r *FoodRepo) Create(ctx context.Context, f *food.Food) error {
 	qtx := sqlcgen.New(tx)
 	row, err := qtx.CreateFood(ctx, foodCreateParams(f))
 	if err != nil {
-		if isUniqueViolation(err, "ux_foods_name_leaf") {
+		if isUniqueViolation(err, "foods.name") {
 			return fmt.Errorf("%w: %s", domain.ErrDuplicateName, f.Name)
 		}
 		return err
@@ -100,7 +100,7 @@ func (r *FoodRepo) Update(ctx context.Context, f *food.Food) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: id %d", domain.ErrNotFound, f.ID)
 		}
-		if isUniqueViolation(err, "ux_foods_name_leaf") {
+		if isUniqueViolation(err, "foods.name") {
 			return fmt.Errorf("%w: %s", domain.ErrDuplicateName, f.Name)
 		}
 		return err

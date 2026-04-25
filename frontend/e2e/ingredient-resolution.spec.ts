@@ -4,8 +4,10 @@ const API_BASE = "http://localhost:8080"
 
 async function createIngredientAPI(name: string): Promise<number> {
   const ctx = await apiRequest.newContext({ baseURL: API_BASE })
-  const res = await ctx.post("/api/ingredients", {
+  const res = await ctx.post("/api/foods", {
     data: {
+      kind: "leaf",
+      source: "manual",
       name,
       kcal_100g: 100,
       protein_100g: 10,
@@ -20,7 +22,7 @@ async function createIngredientAPI(name: string): Promise<number> {
 
 async function deleteIngredientAPI(id: number): Promise<void> {
   const ctx = await apiRequest.newContext({ baseURL: API_BASE })
-  await ctx.delete(`/api/ingredients/${id}`)
+  await ctx.delete(`/api/foods/${id}`)
   await ctx.dispose()
 }
 
@@ -29,7 +31,7 @@ test.describe("Ingredient Resolution", () => {
     const uid = crypto.randomUUID().slice(0, 8)
     const candidateName = `Chicken Breast ${uid}`
 
-    await page.route("**/api/ingredients/lookup*", async (route) => {
+    await page.route("**/api/foods/lookup*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -76,8 +78,7 @@ test.describe("Ingredient Resolution", () => {
       // Save and capture response
       const savePromise = page.waitForResponse(
         (res) =>
-          res.url().includes("/api/ingredients") &&
-          res.request().method() === "POST"
+          res.url().includes("/api/foods") && res.request().method() === "POST"
       )
       await page.getByRole("button", { name: /save/i }).click()
       const response = await savePromise
@@ -103,8 +104,7 @@ test.describe("Ingredient Resolution", () => {
 
       const savePromise = page.waitForResponse(
         (res) =>
-          res.url().includes("/api/ingredients") &&
-          res.request().method() === "POST"
+          res.url().includes("/api/foods") && res.request().method() === "POST"
       )
       await page.getByRole("button", { name: /save/i }).click()
       const response = await savePromise
@@ -121,7 +121,7 @@ test.describe("Ingredient Resolution", () => {
     const uid = crypto.randomUUID().slice(0, 8)
     const candidateName = `Barcode Product ${uid}`
 
-    await page.route("**/api/ingredients/lookup*", async (route) => {
+    await page.route("**/api/foods/lookup*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -173,8 +173,7 @@ test.describe("Ingredient Resolution", () => {
       // Save and capture response
       const savePromise = page.waitForResponse(
         (res) =>
-          res.url().includes("/api/ingredients") &&
-          res.request().method() === "POST"
+          res.url().includes("/api/foods") && res.request().method() === "POST"
       )
       await page.getByRole("button", { name: /save/i }).click()
       const response = await savePromise
@@ -208,7 +207,7 @@ test.describe("Ingredient Resolution", () => {
       // Add the portion
       const addPromise = page.waitForResponse(
         (res) =>
-          res.url().includes(`/api/ingredients/${ingredientId}/portions`) &&
+          res.url().includes(`/api/foods/${ingredientId}/portions`) &&
           res.request().method() === "POST"
       )
       await page.getByRole("button", { name: /add portion/i }).click()
@@ -223,7 +222,7 @@ test.describe("Ingredient Resolution", () => {
       // Delete the portion
       const deletePromise = page.waitForResponse(
         (res) =>
-          res.url().includes(`/api/ingredients/${ingredientId}/portions`) &&
+          res.url().includes(`/api/foods/${ingredientId}/portions`) &&
           res.request().method() === "DELETE"
       )
       await deleteBtn.click()
@@ -251,14 +250,17 @@ test.describe("Ingredient Resolution", () => {
 
       const savePromise = page.waitForResponse(
         (res) =>
-          res.url().includes("/api/ingredients") &&
-          res.request().method() === "POST"
+          res.url().includes("/api/foods") && res.request().method() === "POST"
       )
       await page.getByRole("button", { name: /save/i }).click()
       await savePromise
 
-      // Error message about duplicate name should appear
-      await expect(page.getByText(/already exists/i)).toBeVisible()
+      // Error message about duplicate name should appear (the backend
+      // returns error.food.duplicate_name; the form surfaces the translated
+      // message or the key when no translation is registered).
+      await expect(
+        page.getByText(/already exists|food\.duplicate_name/i)
+      ).toBeVisible()
     } finally {
       await deleteIngredientAPI(seededId)
     }

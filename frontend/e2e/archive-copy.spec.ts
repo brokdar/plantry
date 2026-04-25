@@ -1,12 +1,11 @@
 import {
   API,
   apiRequest,
-  cleanupComponent,
-  cleanupIngredient,
+  cleanupFood,
   cleanupSlot,
   expect,
-  seedComponent,
-  seedIngredient,
+  seedComposedFood,
+  seedLeafFood,
   seedSlot,
   test,
   uid,
@@ -15,13 +14,13 @@ import {
 async function seedPastWeekWithPlate(year: number, week: number) {
   const tag = uid()
   const slot = await seedSlot(`slot.copy-${tag}`, "Moon", 991)
-  const ing = await seedIngredient({ name: `Ing ${tag}`, kcal_100g: 100 })
-  const comp = await seedComponent({
+  const ing = await seedLeafFood({ name: `Ing ${tag}`, kcal_100g: 100 })
+  const comp = await seedComposedFood({
     name: `Copy Dish ${tag}`,
     role: "main",
-    ingredients: [
+    children: [
       {
-        ingredient_id: ing.id,
+        child_id: ing.id,
         amount: 100,
         unit: "g",
         grams: 100,
@@ -39,7 +38,7 @@ async function seedPastWeekWithPlate(year: number, week: number) {
     data: {
       day: 0,
       slot_id: slot.id,
-      components: [{ component_id: comp.id, portions: 1 }],
+      components: [{ food_id: comp.id, portions: 1 }],
     },
   })
   expect(plateRes.ok()).toBeTruthy()
@@ -58,8 +57,8 @@ async function seedPastWeekWithPlate(year: number, week: number) {
         }
       }
       await ctx2.dispose()
-      await cleanupComponent(comp.id)
-      await cleanupIngredient(ing.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(ing.id)
       await cleanupSlot(slot.id)
     },
   }
