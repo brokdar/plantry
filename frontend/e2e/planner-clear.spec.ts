@@ -188,8 +188,8 @@ test.describe("Planner — clear shortcuts", () => {
       await cellB.getByTestId("slot-quick-delete").click()
       await expect(cellB.getByText(`PlateB ${tag}`)).toHaveCount(0)
 
-      // Undo only A — B must stay removed
-      await page.getByRole("button", { name: "Undo" }).first().click()
+      // Undo only A — B must stay removed. Sonner prepends new toasts, so PlateA's (first) is last in DOM.
+      await page.getByRole("button", { name: "Undo" }).last().click()
       await expect(cellA.getByText(`PlateA ${tag}`)).toBeVisible()
       await expect(cellB.getByText(`PlateB ${tag}`)).toHaveCount(0)
     } finally {
