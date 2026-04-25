@@ -5,7 +5,7 @@ import { ChevronLeft } from "lucide-react"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { IngredientEditor } from "@/components/ingredients/IngredientEditor"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useIngredient } from "@/lib/queries/ingredients"
+import { useFood } from "@/lib/queries/foods"
 
 export const Route = createFileRoute("/ingredients/$id/edit")({
   component: EditIngredientPage,
@@ -17,7 +17,7 @@ function EditIngredientPage() {
   const navigate = useNavigate()
   const numericId = Number(id)
 
-  const { data: ingredient, isLoading } = useIngredient(numericId)
+  const { data: ingredient, isLoading } = useFood(numericId)
 
   if (Number.isNaN(numericId)) {
     return (

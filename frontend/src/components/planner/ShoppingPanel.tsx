@@ -56,7 +56,7 @@ export function ShoppingPanel({
   // Prune stale purchased IDs whenever the item list changes.
   useEffect(() => {
     if (!data) return
-    const validIds = new Set(data.items.map((i) => i.ingredient_id))
+    const validIds = new Set(data.items.map((i) => i.food_id))
     setPurchased((prev) => {
       const pruned = new Set([...prev].filter((id) => validIds.has(id)))
       savePurchased(weekId, pruned)
@@ -103,21 +103,21 @@ export function ShoppingPanel({
           {items.length > 0 && (
             <ul className="space-y-2">
               {items.map((item) => {
-                const checked = purchased.has(item.ingredient_id)
+                const checked = purchased.has(item.food_id)
                 return (
                   <li
-                    key={item.ingredient_id}
+                    key={item.food_id}
                     className="flex items-center gap-3 rounded-md px-1 py-1.5 hover:bg-muted/50"
                   >
                     <input
                       type="checkbox"
-                      id={`shop-${item.ingredient_id}`}
+                      id={`shop-${item.food_id}`}
                       checked={checked}
-                      onChange={() => toggle(item.ingredient_id)}
+                      onChange={() => toggle(item.food_id)}
                       className="h-4 w-4 rounded border-input accent-primary"
                     />
                     <label
-                      htmlFor={`shop-${item.ingredient_id}`}
+                      htmlFor={`shop-${item.food_id}`}
                       className={cn(
                         "flex flex-1 cursor-pointer items-center justify-between text-sm",
                         checked && "text-muted-foreground line-through"

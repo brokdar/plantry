@@ -5,13 +5,13 @@ import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
 import { PortionsEditor } from "./PortionsEditor"
 
-vi.mock("@/lib/api/portions", () => ({
+vi.mock("@/lib/api/foods", () => ({
   listPortions: vi.fn(),
   upsertPortion: vi.fn(),
   deletePortion: vi.fn(),
 }))
 
-import { listPortions, upsertPortion, deletePortion } from "@/lib/api/portions"
+import { listPortions, upsertPortion, deletePortion } from "@/lib/api/foods"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -19,12 +19,14 @@ beforeEach(() => {
 
 describe("PortionsEditor", () => {
   test("renders existing portions", async () => {
-    vi.mocked(listPortions).mockResolvedValue([
-      { ingredient_id: 1, unit: "cup", grams: 240 },
-      { ingredient_id: 1, unit: "tbsp", grams: 15 },
-    ])
+    vi.mocked(listPortions).mockResolvedValue({
+      items: [
+        { food_id: 1, unit: "cup", grams: 240 },
+        { food_id: 1, unit: "tbsp", grams: 15 },
+      ],
+    })
 
-    renderWithRouter(<PortionsEditor mode="bound" ingredientId={1} />)
+    renderWithRouter(<PortionsEditor mode="bound" foodId={1} />)
 
     // UnitLabel shows canonical key + localized name; assert both rows landed.
     expect(await screen.findByText("240 g")).toBeInTheDocument()
@@ -39,10 +41,14 @@ describe("PortionsEditor", () => {
 
   test("adds a new portion via the unit picker", async () => {
     const user = userEvent.setup()
-    vi.mocked(listPortions).mockResolvedValue([])
-    vi.mocked(upsertPortion).mockResolvedValue(undefined)
+    vi.mocked(listPortions).mockResolvedValue({ items: [] })
+    vi.mocked(upsertPortion).mockResolvedValue({
+      food_id: 1,
+      unit: "slice",
+      grams: 30,
+    })
 
-    renderWithRouter(<PortionsEditor mode="bound" ingredientId={1} />)
+    renderWithRouter(<PortionsEditor mode="bound" foodId={1} />)
 
     await screen.findByTestId("portion-unit")
 
@@ -64,11 +70,11 @@ describe("PortionsEditor", () => {
 
   test("hides units that already have a portion so duplicates can't be added", async () => {
     const user = userEvent.setup()
-    vi.mocked(listPortions).mockResolvedValue([
-      { ingredient_id: 1, unit: "tbsp", grams: 15 },
-    ])
+    vi.mocked(listPortions).mockResolvedValue({
+      items: [{ food_id: 1, unit: "tbsp", grams: 15 }],
+    })
 
-    renderWithRouter(<PortionsEditor mode="bound" ingredientId={1} />)
+    renderWithRouter(<PortionsEditor mode="bound" foodId={1} />)
 
     await screen.findByTestId("portion-unit")
     await user.click(screen.getByTestId("portion-unit"))
@@ -81,12 +87,12 @@ describe("PortionsEditor", () => {
 
   test("deletes a portion", async () => {
     const user = userEvent.setup()
-    vi.mocked(listPortions).mockResolvedValue([
-      { ingredient_id: 1, unit: "cup", grams: 240 },
-    ])
+    vi.mocked(listPortions).mockResolvedValue({
+      items: [{ food_id: 1, unit: "cup", grams: 240 }],
+    })
     vi.mocked(deletePortion).mockResolvedValue(undefined)
 
-    renderWithRouter(<PortionsEditor mode="bound" ingredientId={1} />)
+    renderWithRouter(<PortionsEditor mode="bound" foodId={1} />)
 
     const deleteButton = await screen.findByRole("button", {
       name: /delete cup/i,
@@ -100,9 +106,9 @@ describe("PortionsEditor", () => {
 
   test("add button stays disabled until both fields are filled", async () => {
     const user = userEvent.setup()
-    vi.mocked(listPortions).mockResolvedValue([])
+    vi.mocked(listPortions).mockResolvedValue({ items: [] })
 
-    renderWithRouter(<PortionsEditor mode="bound" ingredientId={1} />)
+    renderWithRouter(<PortionsEditor mode="bound" foodId={1} />)
 
     await screen.findByTestId("portion-unit")
 

@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useIngredients, useDeleteIngredient } from "@/lib/queries/ingredients"
+import { useFoods, useDeleteFood } from "@/lib/queries/foods"
 
 import { IngredientCard } from "./IngredientCard"
 
@@ -35,14 +35,14 @@ export function IngredientList() {
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  const { data, isLoading, isFetching } = useIngredients({
+  const { data, isLoading, isFetching } = useFoods({
     search: deferredSearch || undefined,
     sort,
     limit,
     offset: 0,
   })
 
-  const deleteMutation = useDeleteIngredient()
+  const deleteMutation = useDeleteFood()
 
   function handleDelete() {
     if (deleteId === null) return

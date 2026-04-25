@@ -1,55 +1,32 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 
 import {
-  deleteImage,
+  deleteFoodImage,
   fetchImageFromUrl,
-  uploadImage,
-  type ImageEntityType,
+  uploadFoodImage,
 } from "@/lib/api/images"
 
-import { componentKeys, ingredientKeys } from "./keys"
+import { foodKeys } from "./keys"
 
-function invalidateFor(
-  qc: ReturnType<typeof useQueryClient>,
-  entityType: ImageEntityType,
-  id: number
-) {
-  const keys =
-    entityType === "ingredients"
-      ? [ingredientKeys.detail(id), ingredientKeys.lists()]
-      : [componentKeys.detail(id), componentKeys.lists()]
-  keys.forEach((k) => {
-    void qc.invalidateQueries({ queryKey: k })
-  })
+function invalidateFor(qc: ReturnType<typeof useQueryClient>, id: number) {
+  void qc.invalidateQueries({ queryKey: foodKeys.detail(id) })
+  void qc.invalidateQueries({ queryKey: foodKeys.lists() })
 }
 
 export function useUploadImage() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({
-      entityType,
-      id,
-      file,
-    }: {
-      entityType: ImageEntityType
-      id: number
-      file: Blob
-    }) => uploadImage(entityType, id, file),
-    onSuccess: (_, { entityType, id }) => invalidateFor(qc, entityType, id),
+    mutationFn: ({ id, file }: { id: number; file: Blob }) =>
+      uploadFoodImage(id, file),
+    onSuccess: (_, { id }) => invalidateFor(qc, id),
   })
 }
 
 export function useDeleteImage() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({
-      entityType,
-      id,
-    }: {
-      entityType: ImageEntityType
-      id: number
-    }) => deleteImage(entityType, id),
-    onSuccess: (_, { entityType, id }) => invalidateFor(qc, entityType, id),
+    mutationFn: ({ id }: { id: number }) => deleteFoodImage(id),
+    onSuccess: (_, { id }) => invalidateFor(qc, id),
   })
 }
 

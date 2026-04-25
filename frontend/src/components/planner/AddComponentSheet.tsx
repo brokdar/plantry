@@ -9,14 +9,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import type { Template } from "@/lib/api/templates"
 
 interface AddComponentSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultRole?: string
-  onPick: (c: Component) => void
+  onPick: (c: Food) => void
   onPickTemplate?: (t: Template) => void
 }
 

@@ -5,12 +5,12 @@ import {
   FoodPlaceholder,
   type FoodPlaceholderCategory,
 } from "@/components/editorial/FoodPlaceholder"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import { imageURL } from "@/lib/image-url"
 import { cn } from "@/lib/utils"
 
 interface PickerCardProps {
-  component: Component
+  component: Food
   onPick: () => void
   onToggleFavorite: () => void
 }
@@ -105,9 +105,9 @@ export function PickerCard({
             {t("picker.card.new", { defaultValue: "New — not yet cooked" })}
           </p>
         )}
-        {component.tags.length > 0 && (
+        {(component.tags?.length ?? 0) > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
-            {component.tags.slice(0, 3).map((tag) => (
+            {(component.tags ?? []).slice(0, 3).map((tag) => (
               <span
                 key={tag}
                 className="rounded-full bg-surface-container-low px-2 py-0.5 font-heading text-[10px] font-semibold tracking-wide text-on-surface-variant"

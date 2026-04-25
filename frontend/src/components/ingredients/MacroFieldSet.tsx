@@ -8,9 +8,9 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import type { IngredientFormValues } from "@/lib/schemas/ingredient"
+import type { LeafFoodFormValues } from "@/lib/schemas/food"
 
-interface MacroFieldSetProps<T extends FieldValues = IngredientFormValues> {
+interface MacroFieldSetProps<T extends FieldValues = LeafFoodFormValues> {
   control: Control<T>
   disabled?: boolean
 }
@@ -38,7 +38,7 @@ export function MacroFieldSet({ control, disabled }: MacroFieldSetProps) {
           <FormField
             key={field.name}
             control={control}
-            name={field.name as Path<IngredientFormValues>}
+            name={field.name as Path<LeafFoodFormValues>}
             render={({ field: fieldProps }) => {
               const stored = (fieldProps.value as number | null) ?? null
               const displayValue =

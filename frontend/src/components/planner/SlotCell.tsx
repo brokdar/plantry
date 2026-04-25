@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
 import type { MacrosResponse } from "@/lib/api/weeks"
 import { cn } from "@/lib/utils"
@@ -30,7 +30,7 @@ interface SlotCellProps {
   day: number
   slotId: number
   plate: Plate | undefined
-  componentsById: Map<number, Component>
+  componentsById: Map<number, Food>
   macros?: MacrosResponse
   aiFilled?: boolean
   onAdd: () => void
@@ -182,12 +182,12 @@ function PlannedSlot({
   }
 
   const hero = sorted[0]
-  const heroComp = componentsById.get(hero.component_id)
+  const heroComp = componentsById.get(hero.food_id)
   const sideComps = sorted.slice(1).map((pc) => {
-    const c = componentsById.get(pc.component_id)
-    return c?.name ?? `#${pc.component_id}`
+    const c = componentsById.get(pc.food_id)
+    return c?.name ?? `#${pc.food_id}`
   })
-  const heroName = heroComp?.name ?? `#${hero.component_id}`
+  const heroName = heroComp?.name ?? `#${hero.food_id}`
   const heroRole = heroComp?.role ?? "main"
   const favorite = heroComp?.favorite ?? false
   const loved = plate.feedback?.status === "loved"

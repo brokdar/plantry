@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next"
 import { ComponentEditor } from "@/components/components/ComponentEditor"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useComponent } from "@/lib/queries/components"
+import { useFood } from "@/lib/queries/foods"
 
 export const Route = createFileRoute("/components/$id/edit")({
   component: EditComponentPage,
@@ -16,7 +16,7 @@ function EditComponentPage() {
   const navigate = useNavigate()
   const numericId = Number(id)
 
-  const { data: component, isLoading } = useComponent(numericId)
+  const { data: component, isLoading } = useFood(numericId)
 
   if (Number.isNaN(numericId)) {
     return (

@@ -32,8 +32,8 @@ function createWrapper() {
 
 const mockShoppingList: ShoppingListResponse = {
   items: [
-    { ingredient_id: 1, name: "Chicken", total_grams: 100 },
-    { ingredient_id: 2, name: "Rice", total_grams: 200 },
+    { food_id: 1, name: "Chicken", total_grams: 100 },
+    { food_id: 2, name: "Rice", total_grams: 200 },
   ],
 }
 

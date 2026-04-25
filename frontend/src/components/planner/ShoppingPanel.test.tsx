@@ -78,8 +78,8 @@ describe("ShoppingPanel", () => {
     vi.mocked(useShoppingList).mockReturnValue({
       data: {
         items: [
-          { ingredient_id: 1, name: "Chicken", total_grams: 350 },
-          { ingredient_id: 2, name: "Rice", total_grams: 200.7 },
+          { food_id: 1, name: "Chicken", total_grams: 350 },
+          { food_id: 2, name: "Rice", total_grams: 200.7 },
         ],
       },
       isLoading: false,
@@ -96,7 +96,7 @@ describe("ShoppingPanel", () => {
     const user = userEvent.setup()
     vi.mocked(useShoppingList).mockReturnValue({
       data: {
-        items: [{ ingredient_id: 5, name: "Broccoli", total_grams: 100 }],
+        items: [{ food_id: 5, name: "Broccoli", total_grams: 100 }],
       },
       isLoading: false,
     } as unknown as ReturnType<typeof useShoppingList>)
@@ -116,7 +116,7 @@ describe("ShoppingPanel", () => {
     localStorage.setItem("plantry:purchased:week:1", JSON.stringify([5]))
     vi.mocked(useShoppingList).mockReturnValue({
       data: {
-        items: [{ ingredient_id: 5, name: "Broccoli", total_grams: 100 }],
+        items: [{ food_id: 5, name: "Broccoli", total_grams: 100 }],
       },
       isLoading: false,
     } as unknown as ReturnType<typeof useShoppingList>)

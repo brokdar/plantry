@@ -37,7 +37,7 @@ function makeWeek(): Week {
           {
             id: 200,
             plate_id: 100,
-            component_id: 50,
+            food_id: 50,
             portions: 1,
             sort_order: 0,
           },
@@ -75,7 +75,7 @@ describe("useSwapPlateComponent", () => {
 
     await act(async () => {
       result.current.mutate(
-        { plateId: 100, pcId: 200, input: { component_id: 999 } },
+        { plateId: 100, pcId: 200, input: { food_id: 999 } },
         { onError: () => {} }
       )
     })
@@ -83,7 +83,7 @@ describe("useSwapPlateComponent", () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
 
     const cached = qc.getQueryData<Week>(weekKeys.byId(7))
-    expect(cached?.plates[0].components[0].component_id).toBe(50)
+    expect(cached?.plates[0].components[0].food_id).toBe(50)
   })
 
   it("optimistically applies swap before resolution", async () => {
@@ -109,13 +109,13 @@ describe("useSwapPlateComponent", () => {
       result.current.mutate({
         plateId: 100,
         pcId: 200,
-        input: { component_id: 777 },
+        input: { food_id: 777 },
       })
     })
 
     await waitFor(() => {
       const cached = qc.getQueryData<Week>(weekKeys.byId(7))
-      expect(cached?.plates[0].components[0].component_id).toBe(777)
+      expect(cached?.plates[0].components[0].food_id).toBe(777)
     })
 
     await act(async () => {

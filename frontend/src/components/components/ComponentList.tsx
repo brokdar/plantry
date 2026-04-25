@@ -34,13 +34,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  useComponents,
-  useDeleteComponent,
-  useInsights,
-} from "@/lib/queries/components"
+import { useFoods, useDeleteFood, useInsights } from "@/lib/queries/foods"
 import { useLocalStorageState } from "@/lib/hooks/useLocalStorageState"
-import { COMPONENT_ROLES } from "@/lib/schemas/component"
+import { FOOD_ROLES } from "@/lib/schemas/food"
 import { cn } from "@/lib/utils"
 
 import { ComponentCard, type ComponentCardLayout } from "./ComponentCard"
@@ -69,7 +65,8 @@ export function ComponentList() {
     isLayout
   )
 
-  const { data, isLoading, isFetching } = useComponents({
+  const { data, isLoading, isFetching } = useFoods({
+    kind: "composed",
     search: deferredSearch || undefined,
     role: roleFilter ?? undefined,
     tag: tagFilter ?? undefined,
@@ -78,7 +75,7 @@ export function ComponentList() {
     offset: 0,
   })
 
-  const deleteMutation = useDeleteComponent()
+  const deleteMutation = useDeleteFood()
   const { data: insights } = useInsights()
   const forgottenIds = useMemo(
     () => new Set(insights?.forgotten.map((c) => c.id) ?? []),
@@ -108,7 +105,7 @@ export function ComponentList() {
     [t]
   )
 
-  const roleOptions: FilterChipOption[] = COMPONENT_ROLES.map((role) => ({
+  const roleOptions: FilterChipOption[] = FOOD_ROLES.map((role) => ({
     value: role,
     label: t(`component.role_${role}`),
     testId: `component-filter-role-${role}`,
@@ -116,7 +113,7 @@ export function ComponentList() {
 
   const availableTags = useMemo(() => {
     const set = new Set<string>()
-    for (const item of items) for (const tag of item.tags) set.add(tag)
+    for (const item of items) for (const tag of item.tags ?? []) set.add(tag)
     return [...set].sort()
   }, [items])
 

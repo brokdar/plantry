@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { lookupIngredients, type LookupParams } from "@/lib/api/lookup"
+import { lookupFoods, type LookupParams } from "@/lib/api/lookup"
 
 export const lookupKeys = {
   all: ["lookup"] as const,
@@ -9,7 +9,7 @@ export const lookupKeys = {
 export function useLookup(params: LookupParams) {
   return useQuery({
     queryKey: lookupKeys.search(params),
-    queryFn: () => lookupIngredients(params),
+    queryFn: () => lookupFoods(params),
     enabled: !!(params.barcode || params.query),
     staleTime: 60_000,
   })

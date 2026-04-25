@@ -21,18 +21,18 @@ import {
 import { Input } from "@/components/ui/input"
 import { UnitSelect } from "@/components/ingredients/UnitSelect"
 import { cn } from "@/lib/utils"
-import { useIngredient } from "@/lib/queries/ingredients"
-import { usePortions, useUpsertPortion } from "@/lib/queries/portions"
+import { useFood } from "@/lib/queries/foods"
+import { usePortions, useUpsertPortion } from "@/lib/queries/foods"
 import { isCountUnit, normalizeUnit, resolveGrams } from "@/lib/domain/units"
-import type { Ingredient } from "@/lib/api/ingredients"
-import type { ComponentFormValues } from "@/lib/schemas/component"
+import type { Food } from "@/lib/api/foods"
+import type { ComposedFoodFormValues } from "@/lib/schemas/food"
 
 import { GramsSourceBadge } from "./GramsSourceBadge"
 import { IngredientCombobox } from "./IngredientCombobox"
 
 type IngredientRowProps = {
   index: number
-  form: UseFormReturn<ComponentFormValues>
+  form: UseFormReturn<ComposedFoodFormValues>
   onRemove: (index: number) => void
 }
 
@@ -40,85 +40,89 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
   const { t } = useTranslation()
   const { control } = form
 
-  const ingredientId = useWatch({
+  const foodId = useWatch({
     control,
-    name: `ingredients.${index}.ingredient_id`,
+    name: `children.${index}.child_id`,
   })
   const ingredientName = useWatch({
     control,
-    name: `ingredients.${index}.ingredient_name`,
+    name: `children.${index}.child_name`,
   })
-  const unit = useWatch({ control, name: `ingredients.${index}.unit` })
-  const rawAmount = useWatch({ control, name: `ingredients.${index}.amount` })
-  const rawGrams = useWatch({ control, name: `ingredients.${index}.grams` })
+  const unit = useWatch({ control, name: `children.${index}.unit` })
+  const rawAmount = useWatch({ control, name: `children.${index}.amount` })
+  const rawGrams = useWatch({ control, name: `children.${index}.grams` })
   const amount = Number(rawAmount) || 0
   const currentGrams = Number(rawGrams) || 0
 
-  const { data: portions, isSuccess: portionsLoaded } =
-    usePortions(ingredientId)
-  const { data: ingredientDetail } = useIngredient(ingredientId)
+  const { data: portionsData, isSuccess: portionsLoaded } = usePortions(foodId)
+  const portions = portionsData?.items ?? []
+  const { data: ingredientDetail } = useFood(foodId)
   const upsertPortion = useUpsertPortion()
 
   const [addPortionOpen, setAddPortionOpen] = useState(false)
   const [addPortionGrams, setAddPortionGrams] = useState("")
   const [proactiveHintDismissed, setProactiveHintDismissed] = useState(false)
 
-  const resolved = resolveGrams(amount, unit, portions ?? [], currentGrams)
+  const resolved = resolveGrams(amount, unit, portions, currentGrams)
 
   useEffect(() => {
-    if (!ingredientId) return
+    if (!foodId) return
     if (resolved.source === "manual" || resolved.source === "unresolved") return
     if (Math.abs(resolved.grams - currentGrams) < 0.001) return
-    form.setValue(`ingredients.${index}.grams`, resolved.grams)
+    form.setValue(`children.${index}.grams`, resolved.grams)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolved.grams, resolved.source, ingredientId])
+  }, [resolved.grams, resolved.source, foodId])
 
   useEffect(() => {
     if (!ingredientDetail) return
-    if ((form.getValues(`ingredients.${index}.kcal_100g`) ?? 0) > 0) return
-    form.setValue(`ingredients.${index}.kcal_100g`, ingredientDetail.kcal_100g)
+    if ((form.getValues(`children.${index}.kcal_100g`) ?? 0) > 0) return
     form.setValue(
-      `ingredients.${index}.protein_100g`,
-      ingredientDetail.protein_100g
-    )
-    form.setValue(`ingredients.${index}.fat_100g`, ingredientDetail.fat_100g)
-    form.setValue(
-      `ingredients.${index}.carbs_100g`,
-      ingredientDetail.carbs_100g
+      `children.${index}.kcal_100g`,
+      ingredientDetail.kcal_100g ?? 0
     )
     form.setValue(
-      `ingredients.${index}.fiber_100g`,
-      ingredientDetail.fiber_100g
+      `children.${index}.protein_100g`,
+      ingredientDetail.protein_100g ?? 0
+    )
+    form.setValue(`children.${index}.fat_100g`, ingredientDetail.fat_100g ?? 0)
+    form.setValue(
+      `children.${index}.carbs_100g`,
+      ingredientDetail.carbs_100g ?? 0
     )
     form.setValue(
-      `ingredients.${index}.sodium_100g`,
-      ingredientDetail.sodium_100g
+      `children.${index}.fiber_100g`,
+      ingredientDetail.fiber_100g ?? 0
+    )
+    form.setValue(
+      `children.${index}.sodium_100g`,
+      ingredientDetail.sodium_100g ?? 0
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ingredientDetail])
 
-  function selectIngredient(ing: Ingredient) {
-    form.setValue(`ingredients.${index}.ingredient_id`, ing.id)
-    form.setValue(`ingredients.${index}.ingredient_name`, ing.name)
-    form.setValue(`ingredients.${index}.kcal_100g`, ing.kcal_100g)
-    form.setValue(`ingredients.${index}.protein_100g`, ing.protein_100g)
-    form.setValue(`ingredients.${index}.fat_100g`, ing.fat_100g)
-    form.setValue(`ingredients.${index}.carbs_100g`, ing.carbs_100g)
-    form.setValue(`ingredients.${index}.fiber_100g`, ing.fiber_100g)
-    form.setValue(`ingredients.${index}.sodium_100g`, ing.sodium_100g)
+  function selectIngredient(ing: Food) {
+    form.setValue(`children.${index}.child_id`, ing.id)
+    form.setValue(`children.${index}.child_name`, ing.name)
+    form.setValue(`children.${index}.child_kind`, ing.kind)
+    form.setValue(`children.${index}.kcal_100g`, ing.kcal_100g ?? 0)
+    form.setValue(`children.${index}.protein_100g`, ing.protein_100g ?? 0)
+    form.setValue(`children.${index}.fat_100g`, ing.fat_100g ?? 0)
+    form.setValue(`children.${index}.carbs_100g`, ing.carbs_100g ?? 0)
+    form.setValue(`children.${index}.fiber_100g`, ing.fiber_100g ?? 0)
+    form.setValue(`children.${index}.sodium_100g`, ing.sodium_100g ?? 0)
   }
 
   function handleUnitChange(newUnit: string) {
     const canonical = normalizeUnit(newUnit)
-    form.setValue(`ingredients.${index}.unit`, canonical)
-    form.setValue(`ingredients.${index}.grams`, 0)
+    form.setValue(`children.${index}.unit`, canonical)
+    form.setValue(`children.${index}.grams`, 0)
   }
 
   const needsManualGrams =
     resolved.source === "unresolved" || resolved.source === "manual"
   const gramsEditable = needsManualGrams
   const canAddPortion =
-    ingredientId > 0 &&
+    foodId > 0 &&
     !!resolved.unit &&
     isCountUnit(resolved.unit) &&
     (resolved.source === "unresolved" || resolved.source === "manual")
@@ -128,17 +132,17 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
   // triggers the reactive "Portion hinzufügen" CTA below the row). Skips when
   // the user has dismissed it for this row.
   const showProactivePortionHint =
-    ingredientId > 0 &&
+    foodId > 0 &&
     portionsLoaded &&
-    (portions?.length ?? 0) === 0 &&
+    portions.length === 0 &&
     !canAddPortion &&
     !proactiveHintDismissed
 
   function openProactivePortionDialog() {
     // Pre-populate the inline dialog with the canonical count unit so the
     // existing saveInlinePortion flow applies — no new dialog to build.
-    form.setValue(`ingredients.${index}.unit`, "piece")
-    form.setValue(`ingredients.${index}.grams`, 0)
+    form.setValue(`children.${index}.unit`, "piece")
+    form.setValue(`children.${index}.grams`, 0)
     setAddPortionOpen(true)
     setProactiveHintDismissed(true)
   }
@@ -147,10 +151,10 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
     const g = Number(addPortionGrams)
     if (!Number.isFinite(g) || g <= 0) return
     await upsertPortion.mutateAsync({
-      ingredientId,
+      foodId,
       data: { unit: resolved.unit, grams: g },
     })
-    form.setValue(`ingredients.${index}.grams`, 0)
+    form.setValue(`children.${index}.grams`, 0)
     setAddPortionOpen(false)
     setAddPortionGrams("")
   }
@@ -163,7 +167,7 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
       <div className="flex items-start gap-2">
         <div className="flex-1">
           <IngredientCombobox
-            value={ingredientId}
+            value={foodId}
             selectedName={ingredientName}
             onSelect={selectIngredient}
             testId={`ingredient-row-${index}-combobox`}
@@ -206,12 +210,12 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
         </div>
       )}
 
-      {ingredientId > 0 && (
+      {foodId > 0 && (
         <>
           <div className="grid grid-cols-[minmax(72px,0.7fr)_minmax(0,1.6fr)_minmax(96px,0.9fr)] gap-2">
             <FormField
               control={control}
-              name={`ingredients.${index}.amount`}
+              name={`children.${index}.amount`}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-xs">
@@ -234,13 +238,13 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
               <UnitSelect
                 value={unit}
                 onValueChange={handleUnitChange}
-                portions={portions ?? []}
+                portions={portions}
                 testId={`ingredient-row-${index}-unit`}
               />
             </FormItem>
             <FormField
               control={control}
-              name={`ingredients.${index}.grams`}
+              name={`children.${index}.grams`}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-xs">

@@ -6,12 +6,12 @@ import {
   FoodPlaceholder,
   type FoodPlaceholderCategory,
 } from "@/components/editorial/FoodPlaceholder"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import { imageURL } from "@/lib/image-url"
 import { cn } from "@/lib/utils"
 
 export interface TrayItem {
-  component: Component
+  component: Food
   portions: number
 }
 

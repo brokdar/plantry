@@ -7,7 +7,7 @@ import {
   usePortions,
   useUpsertPortion,
   useDeletePortion,
-} from "@/lib/queries/portions"
+} from "@/lib/queries/foods"
 import { normalizeUnit } from "@/lib/domain/units"
 
 import { UnitLabel, UnitSelect } from "./UnitSelect"
@@ -18,7 +18,7 @@ export interface StagedPortion {
 }
 
 type PortionsEditorProps =
-  | { mode: "bound"; ingredientId: number }
+  | { mode: "bound"; foodId: number }
   | {
       mode: "staged"
       portions: StagedPortion[]
@@ -27,25 +27,26 @@ type PortionsEditorProps =
 
 export function PortionsEditor(props: PortionsEditorProps) {
   if (props.mode === "bound") {
-    return <BoundPortionsEditor ingredientId={props.ingredientId} />
+    return <BoundPortionsEditor foodId={props.foodId} />
   }
   return (
     <StagedPortionsEditor portions={props.portions} onChange={props.onChange} />
   )
 }
 
-function BoundPortionsEditor({ ingredientId }: { ingredientId: number }) {
+function BoundPortionsEditor({ foodId }: { foodId: number }) {
   const { t } = useTranslation()
-  const { data: portions = [] } = usePortions(ingredientId)
+  const { data } = usePortions(foodId)
+  const portions = data?.items ?? []
   const upsertMutation = useUpsertPortion()
   const deleteMutation = useDeletePortion()
 
   function handleAdd(unit: string, grams: number) {
-    upsertMutation.mutate({ ingredientId, data: { unit, grams } })
+    upsertMutation.mutate({ foodId, data: { unit, grams } })
   }
 
   function handleDelete(unit: string) {
-    deleteMutation.mutate({ ingredientId, unit })
+    deleteMutation.mutate({ foodId, unit })
   }
 
   return (
@@ -88,7 +89,7 @@ function StagedPortionsEditor({
     <PortionsEditorView
       t={t}
       portions={portions.map((p) => ({
-        ingredient_id: 0,
+        food_id: 0,
         unit: p.unit,
         grams: p.grams,
       }))}

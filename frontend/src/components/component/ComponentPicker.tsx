@@ -10,12 +10,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { Component } from "@/lib/api/components"
-import { useComponents } from "@/lib/queries/components"
+import type { Food } from "@/lib/api/foods"
+import { useFoods } from "@/lib/queries/foods"
 
 interface ComponentPickerProps {
   defaultRole?: string
-  onPick: (c: Component) => void
+  onPick: (c: Food) => void
 }
 
 const ROLES = [
@@ -34,7 +34,8 @@ export function ComponentPicker({ defaultRole, onPick }: ComponentPickerProps) {
   const [role, setRole] = useState<string>(defaultRole ?? "")
   const [search, setSearch] = useState("")
 
-  const query = useComponents({
+  const query = useFoods({
+    kind: "composed",
     role: role || undefined,
     search: search || undefined,
     limit: 50,

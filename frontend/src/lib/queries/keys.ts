@@ -1,22 +1,13 @@
-export const ingredientKeys = {
-  all: ["ingredients"] as const,
-  lists: () => [...ingredientKeys.all, "list"] as const,
-  list: (params: object) => [...ingredientKeys.lists(), params] as const,
-  details: () => [...ingredientKeys.all, "detail"] as const,
-  detail: (id: number) => [...ingredientKeys.details(), id] as const,
-}
-
-export const componentKeys = {
-  all: ["components"] as const,
-  lists: () => [...componentKeys.all, "list"] as const,
-  list: (params: object) => [...componentKeys.lists(), params] as const,
-  details: () => [...componentKeys.all, "detail"] as const,
-  detail: (id: number) => [...componentKeys.details(), id] as const,
-  nutrition: (id: number) =>
-    [...componentKeys.detail(id), "nutrition"] as const,
-  variants: (id: number) => [...componentKeys.detail(id), "variants"] as const,
-  insights: (params: object) =>
-    [...componentKeys.all, "insights", params] as const,
+export const foodKeys = {
+  all: ["foods"] as const,
+  lists: () => [...foodKeys.all, "list"] as const,
+  list: (params: object) => [...foodKeys.lists(), params] as const,
+  details: () => [...foodKeys.all, "detail"] as const,
+  detail: (id: number) => [...foodKeys.details(), id] as const,
+  nutrition: (id: number) => [...foodKeys.detail(id), "nutrition"] as const,
+  variants: (id: number) => [...foodKeys.detail(id), "variants"] as const,
+  portions: (id: number) => [...foodKeys.detail(id), "portions"] as const,
+  insights: (params: object) => [...foodKeys.all, "insights", params] as const,
 }
 
 export const slotKeys = {
@@ -77,4 +68,3 @@ export const importKeys = {
 }
 
 export { lookupKeys } from "./lookup"
-export { portionKeys } from "./portions"

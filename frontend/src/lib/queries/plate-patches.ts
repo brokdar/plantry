@@ -57,7 +57,7 @@ export function patchAddComponent(
 export function patchSwapComponent(
   week: Week | undefined,
   pcId: number,
-  newComponentId: number,
+  newFoodId: number,
   portionsOverride?: number
 ): Week | undefined {
   if (!week) return week
@@ -69,7 +69,7 @@ export function patchSwapComponent(
         pc.id === pcId
           ? {
               ...pc,
-              component_id: newComponentId,
+              food_id: newFoodId,
               portions: portionsOverride ?? pc.portions,
             }
           : pc

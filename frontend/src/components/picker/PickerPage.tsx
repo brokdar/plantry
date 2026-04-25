@@ -9,12 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import type { Template } from "@/lib/api/templates"
-import {
-  useComponents,
-  useSetComponentFavorite,
-} from "@/lib/queries/components"
+import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useAddPlateComponent, useSetPlateSkipped } from "@/lib/queries/plates"
 import { findPlateAt } from "@/lib/queries/plate-patches"
 import { useTimeSlots } from "@/lib/queries/slots"
@@ -66,7 +63,8 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
 
   const deferredQuery = useDeferredValue(query)
 
-  const componentsQuery = useComponents({
+  const componentsQuery = useFoods({
+    kind: "composed",
     limit: 200,
     search: deferredQuery || undefined,
     favorite: preset === "favorites" ? 1 : undefined,
@@ -79,7 +77,8 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
   const items = useMemo(() => {
     const raw = componentsQuery.data?.items ?? []
     const presetRoles = PRESET_ROLES[preset]
-    if (presetRoles) return raw.filter((c) => presetRoles.includes(c.role))
+    if (presetRoles)
+      return raw.filter((c) => c.role != null && presetRoles.includes(c.role))
     return raw
   }, [componentsQuery.data, preset])
 
@@ -104,10 +103,10 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
   const createPlateMut = useCreatePlate(weekId)
   const addCompMut = useAddPlateComponent(weekId)
   const setSkippedMut = useSetPlateSkipped(weekId)
-  const favoriteMut = useSetComponentFavorite()
+  const favoriteMut = useSetFoodFavorite()
   const applyTemplateMut = useApplyTemplate(weekId)
 
-  function addToTray(component: Component) {
+  function addToTray(component: Food) {
     setTray((prev) =>
       prev.some((t) => t.component.id === component.id)
         ? prev
@@ -134,7 +133,7 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
           day,
           slot_id: slotId,
           components: tray.map((it) => ({
-            component_id: it.component.id,
+            food_id: it.component.id,
             portions: it.portions,
           })),
         })
@@ -144,7 +143,7 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
           await addCompMut.mutateAsync({
             plateId,
             input: {
-              component_id: it.component.id,
+              food_id: it.component.id,
               portions: it.portions,
             },
           })
@@ -197,7 +196,7 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
     }
   }
 
-  async function handleToggleFavorite(component: Component) {
+  async function handleToggleFavorite(component: Food) {
     try {
       await favoriteMut.mutateAsync({
         id: component.id,
@@ -211,7 +210,9 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
   const slotName = slot ? slotLabel(t, slot.name_key) : ""
   const roleOptions = useMemo(() => {
     const set = new Set<string>()
-    for (const c of componentsQuery.data?.items ?? []) set.add(c.role)
+    for (const c of componentsQuery.data?.items ?? []) {
+      if (c.role) set.add(c.role)
+    }
     return Array.from(set).sort()
   }, [componentsQuery.data])
 

@@ -6,10 +6,10 @@ import { mockLookupCandidate, mockLookupResponse } from "@/test/fixtures"
 import { LookupPanel } from "./LookupPanel"
 
 vi.mock("@/lib/api/lookup", () => ({
-  lookupIngredients: vi.fn(),
+  lookupFoods: vi.fn(),
 }))
 
-import { lookupIngredients } from "@/lib/api/lookup"
+import { lookupFoods } from "@/lib/api/lookup"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -28,7 +28,7 @@ describe("LookupPanel", () => {
   test("shows candidate detail and source badge after typing a query", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
+    vi.mocked(lookupFoods).mockResolvedValue(mockLookupResponse)
 
     renderWithRouter(<LookupPanel onSelect={onSelect} />)
 
@@ -49,7 +49,7 @@ describe("LookupPanel", () => {
   test("clicking Apply calls onSelect with the selected candidate", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
+    vi.mocked(lookupFoods).mockResolvedValue(mockLookupResponse)
 
     renderWithRouter(<LookupPanel onSelect={onSelect} />)
 
@@ -69,7 +69,7 @@ describe("LookupPanel", () => {
   test("shows no results message for empty results", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    vi.mocked(lookupIngredients).mockResolvedValue({
+    vi.mocked(lookupFoods).mockResolvedValue({
       results: [],
       recommended_index: -1,
     })
@@ -87,7 +87,7 @@ describe("LookupPanel", () => {
   test("shows error message on failure", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    vi.mocked(lookupIngredients).mockRejectedValue(new Error("Network error"))
+    vi.mocked(lookupFoods).mockRejectedValue(new Error("Network error"))
 
     renderWithRouter(<LookupPanel onSelect={onSelect} />)
 
@@ -106,7 +106,7 @@ describe("LookupPanel", () => {
   test("renders source_name beneath candidate name when it differs", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    vi.mocked(lookupIngredients).mockResolvedValue({
+    vi.mocked(lookupFoods).mockResolvedValue({
       results: [
         {
           ...mockLookupCandidate,
@@ -137,7 +137,7 @@ describe("LookupPanel", () => {
   test("routes all-digit input to the barcode lookup path", async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
+    vi.mocked(lookupFoods).mockResolvedValue(mockLookupResponse)
 
     renderWithRouter(<LookupPanel onSelect={onSelect} />)
 
@@ -147,11 +147,11 @@ describe("LookupPanel", () => {
     await user.type(input, "3017620422003")
 
     await waitFor(() => {
-      expect(lookupIngredients).toHaveBeenCalledWith(
+      expect(lookupFoods).toHaveBeenCalledWith(
         expect.objectContaining({ barcode: "3017620422003" })
       )
     })
-    expect(lookupIngredients).not.toHaveBeenCalledWith(
+    expect(lookupFoods).not.toHaveBeenCalledWith(
       expect.objectContaining({ query: "3017620422003" })
     )
   })

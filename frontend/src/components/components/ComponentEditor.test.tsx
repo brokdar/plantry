@@ -4,16 +4,16 @@ import { renderWithRouter } from "@/test/render"
 import { ComponentEditor } from "./ComponentEditor"
 import { mockChickenCurry } from "@/test/fixtures"
 
-vi.mock("@/lib/api/components", () => ({
+vi.mock("@/lib/api/foods", () => ({
   createComponent: vi.fn(),
   updateComponent: vi.fn(),
 }))
 
-vi.mock("@/lib/api/ingredients", () => ({
+vi.mock("@/lib/api/foods", () => ({
   listIngredients: vi.fn().mockResolvedValue({ items: [], total: 0 }),
 }))
 
-vi.mock("@/lib/api/portions", () => ({
+vi.mock("@/lib/api/foods", () => ({
   listPortions: vi.fn().mockResolvedValue([]),
 }))
 

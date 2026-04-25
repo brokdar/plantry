@@ -3,7 +3,7 @@ import { apiFetch } from "./client"
 export interface TemplateComponent {
   id: number
   template_id: number
-  component_id: number
+  food_id: number
   portions: number
   sort_order: number
 }
@@ -16,7 +16,7 @@ export interface Template {
 }
 
 export interface TemplateComponentInput {
-  component_id: number
+  food_id: number
   portions: number
 }
 

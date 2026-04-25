@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { renderHook, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { useVariants, useCreateVariant } from "@/lib/queries/components"
+import { useVariants, useCreateVariant } from "@/lib/queries/foods"
 import type { ReactNode } from "react"
 
-vi.mock("@/lib/api/components", () => ({
+vi.mock("@/lib/api/foods", () => ({
   listVariants: vi.fn(),
   createVariant: vi.fn(),
   listComponents: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock("@/lib/api/components", () => ({
   updateComponent: vi.fn(),
 }))
 
-import { listVariants, createVariant } from "@/lib/api/components"
+import { listVariants, createVariant } from "@/lib/api/foods"
 import { mockTofuCurryVariant } from "@/test/fixtures"
 
 function createWrapper() {

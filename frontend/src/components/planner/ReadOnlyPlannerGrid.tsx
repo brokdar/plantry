@@ -14,11 +14,11 @@ import {
   type FoodPlaceholderCategory,
 } from "@/components/editorial/FoodPlaceholder"
 import { Badge } from "@/components/ui/badge"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import type { TimeSlot } from "@/lib/api/slots"
 import type { Week } from "@/lib/api/weeks"
 import { imageURL } from "@/lib/image-url"
-import { useComponents } from "@/lib/queries/components"
+import { useFoods } from "@/lib/queries/foods"
 import { findPlateAt } from "@/lib/queries/plate-patches"
 import { slotLabel } from "@/lib/slot-label"
 
@@ -47,9 +47,9 @@ function SlotIcon({ name }: { name: string }) {
 
 export function ReadOnlyPlannerGrid({ week, slots }: ReadOnlyPlannerGridProps) {
   const { t } = useTranslation()
-  const componentsQuery = useComponents({ limit: 200 })
+  const componentsQuery = useFoods({ kind: "composed", limit: 200 })
   const componentsById = useMemo(() => {
-    const map = new Map<number, Component>()
+    const map = new Map<number, Food>()
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)
     return map
   }, [componentsQuery.data])
@@ -123,7 +123,7 @@ export function ReadOnlyPlannerGrid({ week, slots }: ReadOnlyPlannerGridProps) {
 
 interface ReadOnlySlotProps {
   plate: ReturnType<typeof findPlateAt>
-  componentsById: Map<number, Component>
+  componentsById: Map<number, Food>
 }
 
 function ReadOnlySlot({ plate, componentsById }: ReadOnlySlotProps) {
@@ -157,10 +157,10 @@ function ReadOnlySlot({ plate, componentsById }: ReadOnlySlotProps) {
     (a, b) => a.sort_order - b.sort_order
   )
   const hero = sorted[0]
-  const heroComp = hero ? componentsById.get(hero.component_id) : undefined
+  const heroComp = hero ? componentsById.get(hero.food_id) : undefined
   const sides = sorted.slice(1).map((pc) => {
-    const c = componentsById.get(pc.component_id)
-    return c?.name ?? `#${pc.component_id}`
+    const c = componentsById.get(pc.food_id)
+    return c?.name ?? `#${pc.food_id}`
   })
   const heroRole = heroComp?.role ?? "main"
   const roleLabel = t(`planner.slot.role.${heroRole}`, {
@@ -195,7 +195,7 @@ function ReadOnlySlot({ plate, componentsById }: ReadOnlySlotProps) {
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-1 px-2.5 py-2">
         <p className="truncate font-heading text-[13.5px] leading-tight font-bold tracking-tight">
-          {heroComp?.name ?? (hero ? `#${hero.component_id}` : "")}
+          {heroComp?.name ?? (hero ? `#${hero.food_id}` : "")}
         </p>
         {sides.length > 0 && (
           <div className="flex gap-1 overflow-hidden">

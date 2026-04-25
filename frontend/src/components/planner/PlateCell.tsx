@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
 
 import { PlateComponentChip } from "./PlateComponentChip"
@@ -17,7 +17,7 @@ import { PlateFeedbackBar } from "./PlateFeedbackBar"
 interface PlateCellProps {
   plate: Plate | undefined
   weekId: number
-  componentsById: Map<number, Component>
+  componentsById: Map<number, Food>
   onAdd: () => void
   onSwap: (pcId: number, currentRole?: string) => void
   onRemoveComponent: (pcId: number) => void
@@ -95,13 +95,13 @@ export function PlateCell({
       </div>
       <div className="flex flex-col gap-1">
         {plate.components.map((pc) => {
-          const c = componentsById.get(pc.component_id)
+          const c = componentsById.get(pc.food_id)
           return (
             <PlateComponentChip
               key={pc.id}
               pc={pc}
               component={c}
-              onSwap={() => onSwap(pc.id, c?.role)}
+              onSwap={() => onSwap(pc.id, c?.role ?? undefined)}
               onRemove={() => onRemoveComponent(pc.id)}
             />
           )

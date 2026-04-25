@@ -4,19 +4,19 @@ import { renderWithRouter } from "@/test/render"
 import { ComponentList } from "./ComponentList"
 import { mockChickenCurry, mockTofuBowl } from "@/test/fixtures"
 
-vi.mock("@/lib/api/components", () => ({
-  listComponents: vi.fn(),
-  deleteComponent: vi.fn(),
+vi.mock("@/lib/api/foods", () => ({
+  listFoods: vi.fn(),
+  deleteFood: vi.fn(),
   getInsights: vi.fn(),
 }))
 
-import { listComponents, getInsights } from "@/lib/api/components"
+import { listFoods, getInsights } from "@/lib/api/foods"
 
 const noInsights = { forgotten: [], most_cooked: [] }
 
 describe("ComponentList", () => {
   it("renders list of components with role badges", async () => {
-    vi.mocked(listComponents).mockResolvedValue({
+    vi.mocked(listFoods).mockResolvedValue({
       items: [mockChickenCurry, mockTofuBowl],
       total: 2,
     })
@@ -36,7 +36,7 @@ describe("ComponentList", () => {
   })
 
   it("renders empty state when no components", async () => {
-    vi.mocked(listComponents).mockResolvedValue({ items: [], total: 0 })
+    vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
     vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
@@ -47,7 +47,7 @@ describe("ComponentList", () => {
   })
 
   it("shows tags as badges", async () => {
-    vi.mocked(listComponents).mockResolvedValue({
+    vi.mocked(listFoods).mockResolvedValue({
       items: [mockChickenCurry],
       total: 1,
     })
@@ -63,7 +63,7 @@ describe("ComponentList", () => {
   })
 
   it("renders Forgotten and Most cooked badges from insights", async () => {
-    vi.mocked(listComponents).mockResolvedValue({
+    vi.mocked(listFoods).mockResolvedValue({
       items: [mockChickenCurry, mockTofuBowl],
       total: 2,
     })

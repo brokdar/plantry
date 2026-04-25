@@ -3,12 +3,12 @@ import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import type { PlateComponent } from "@/lib/api/plates"
 
 interface PlateComponentChipProps {
   pc: PlateComponent
-  component: Component | undefined
+  component: Food | undefined
   onSwap: () => void
   onRemove: () => void
 }
@@ -27,7 +27,7 @@ export function PlateComponentChip({
       data-testid={`plate-component-${pc.id}`}
     >
       <span className="flex-1 truncate">
-        {component?.name ?? `#${pc.component_id}`}
+        {component?.name ?? `#${pc.food_id}`}
       </span>
       {pc.portions !== 1 && (
         <Badge variant="secondary" className="text-xs">

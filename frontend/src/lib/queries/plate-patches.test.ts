@@ -33,14 +33,14 @@ function week(): Week {
           {
             id: 100,
             plate_id: 10,
-            component_id: 1000,
+            food_id: 1000,
             portions: 1,
             sort_order: 0,
           },
           {
             id: 101,
             plate_id: 10,
-            component_id: 1001,
+            food_id: 1001,
             portions: 2,
             sort_order: 1,
           },
@@ -58,7 +58,7 @@ function week(): Week {
           {
             id: 102,
             plate_id: 11,
-            component_id: 1002,
+            food_id: 1002,
             portions: 1,
             sort_order: 0,
           },
@@ -102,7 +102,7 @@ describe("plate patches", () => {
     const next = patchAddComponent(week(), 10, {
       id: 999,
       plate_id: 10,
-      component_id: 2000,
+      food_id: 2000,
       portions: 1,
       sort_order: 99,
     })
@@ -110,17 +110,17 @@ describe("plate patches", () => {
     expect(p?.components).toHaveLength(3)
   })
 
-  test("patchSwapComponent replaces component_id, default keeps portions", () => {
+  test("patchSwapComponent replaces food_id, default keeps portions", () => {
     const next = patchSwapComponent(week(), 100, 9999)
     const pc = next?.plates[0].components[0]
-    expect(pc?.component_id).toBe(9999)
+    expect(pc?.food_id).toBe(9999)
     expect(pc?.portions).toBe(1)
   })
 
   test("patchSwapComponent applies portionsOverride", () => {
     const next = patchSwapComponent(week(), 101, 9999, 5)
     const pc = next?.plates[0].components[1]
-    expect(pc?.component_id).toBe(9999)
+    expect(pc?.food_id).toBe(9999)
     expect(pc?.portions).toBe(5)
   })
 

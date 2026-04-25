@@ -11,13 +11,10 @@ import { useNavigate } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import type { TimeSlot } from "@/lib/api/slots"
 import type { Week } from "@/lib/api/weeks"
-import {
-  useComponents,
-  useSetComponentFavorite,
-} from "@/lib/queries/components"
+import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { findPlateAt } from "@/lib/queries/plate-patches"
 import { useSetPlateSkipped } from "@/lib/queries/plates"
 import { useWeekNutrition, useCreatePlate } from "@/lib/queries/weeks"
@@ -55,9 +52,9 @@ export function MobilePlannerGrid({ week, slots }: MobilePlannerGridProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const componentsQuery = useComponents({ limit: 200 })
+  const componentsQuery = useFoods({ kind: "composed", limit: 200 })
   const componentsById = useMemo(() => {
-    const map = new Map<number, Component>()
+    const map = new Map<number, Food>()
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)
     return map
   }, [componentsQuery.data])
@@ -85,7 +82,7 @@ export function MobilePlannerGrid({ week, slots }: MobilePlannerGridProps) {
 
   const activeMacros = dayMacros.get(activeDay)
 
-  const setFavoriteMut = useSetComponentFavorite()
+  const setFavoriteMut = useSetFoodFavorite()
   const setSkippedMut = useSetPlateSkipped(week.id)
   const createPlateMut = useCreatePlate(week.id)
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
@@ -221,7 +218,7 @@ export function MobilePlannerGrid({ week, slots }: MobilePlannerGridProps) {
                     .slice()
                     .sort((a, b) => a.sort_order - b.sort_order)[0]
                   const heroComp = hero
-                    ? componentsById.get(hero.component_id)
+                    ? componentsById.get(hero.food_id)
                     : undefined
                   void handleToggleFavorite(
                     heroComp?.id,

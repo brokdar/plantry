@@ -30,14 +30,11 @@ import { addPlateComponent, updatePlate } from "@/lib/api/plates"
 import { createPlate } from "@/lib/api/weeks"
 import { queryClient } from "@/lib/query-client"
 import { weekKeys } from "@/lib/queries/keys"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import type { TimeSlot } from "@/lib/api/slots"
 import type { Template } from "@/lib/api/templates"
 import type { Week } from "@/lib/api/weeks"
-import {
-  useComponents,
-  useSetComponentFavorite,
-} from "@/lib/queries/components"
+import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { findPlateAt } from "@/lib/queries/plate-patches"
 import {
@@ -105,9 +102,9 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
         slotId: String(slotId),
       },
     })
-  const componentsQuery = useComponents({ limit: 200 })
+  const componentsQuery = useFoods({ kind: "composed", limit: 200 })
   const componentsById = useMemo(() => {
-    const map = new Map<number, Component>()
+    const map = new Map<number, Food>()
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)
     return map
   }, [componentsQuery.data])
@@ -139,7 +136,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
   const deletePlateMut = useDeletePlate(week.id)
   const setSkippedMut = useSetPlateSkipped(week.id)
   const applyTemplateMut = useApplyTemplate(week.id)
-  const setFavoriteMut = useSetComponentFavorite()
+  const setFavoriteMut = useSetFoodFavorite()
   const recordFeedbackMut = useRecordFeedback(week.id)
   const clearFeedbackMut = useClearFeedback(week.id)
 
@@ -150,7 +147,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
     return new Set(aiFill.aiFilledPlateIds)
   }, [aiFill, week.id])
 
-  async function handlePick(component: Component) {
+  async function handlePick(component: Food) {
     if (!addTarget) return
     const target = addTarget
     setAddTarget(null)
@@ -159,12 +156,12 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
         await createPlateMut.mutateAsync({
           day: target.day,
           slot_id: target.slotId,
-          components: [{ component_id: component.id, portions: 1 }],
+          components: [{ food_id: component.id, portions: 1 }],
         })
       } else {
         await addCompMut.mutateAsync({
           plateId: target.plateId,
-          input: { component_id: component.id, portions: 1 },
+          input: { food_id: component.id, portions: 1 },
         })
       }
     } catch (err) {
@@ -194,7 +191,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
     }
   }
 
-  async function handleSwapPick(component: Component) {
+  async function handleSwapPick(component: Food) {
     if (!swapTarget) return
     const target = swapTarget
     setSwapTarget(null)
@@ -202,7 +199,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
       await swapMut.mutateAsync({
         plateId: target.plateId,
         pcId: target.pcId,
-        input: { component_id: component.id },
+        input: { food_id: component.id },
       })
     } catch (err) {
       toastError(err, t)
@@ -350,7 +347,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
         })
         for (const pc of src.components) {
           await addPlateComponent(created.id, {
-            component_id: pc.component_id,
+            food_id: pc.food_id,
             portions: pc.portions,
           })
         }
@@ -449,7 +446,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
                               .slice()
                               .sort((a, b) => a.sort_order - b.sort_order)[0]
                             const heroComp = hero
-                              ? componentsById.get(hero.component_id)
+                              ? componentsById.get(hero.food_id)
                               : undefined
                             void handleToggleFavorite(
                               heroComp?.id,
