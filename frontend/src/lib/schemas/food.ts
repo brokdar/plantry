@@ -76,7 +76,7 @@ export const composedInstructionSchema = z.object({
 export const composedFoodSchema = z.object({
   kind: z.literal("composed"),
   name: z.string().min(1),
-  role: z.enum(FOOD_ROLES),
+  role: z.enum(FOOD_ROLES).optional(),
   reference_portions: z.coerce.number().positive().default(1),
   prep_minutes: z.coerce.number().min(0).default(0),
   cook_minutes: z.coerce.number().min(0).default(0),

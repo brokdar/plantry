@@ -188,7 +188,8 @@ function PlannedSlot({
     return c?.name ?? `#${pc.food_id}`
   })
   const heroName = heroComp?.name ?? `#${hero.food_id}`
-  const heroRole = heroComp?.role ?? "main"
+  const heroRole =
+    heroComp?.kind === "composed" ? (heroComp.role ?? null) : null
   const favorite = heroComp?.favorite ?? false
   const loved = plate.feedback?.status === "loved"
   const disliked = plate.feedback?.status === "disliked"
@@ -215,9 +216,11 @@ function PlannedSlot({
       <SlotHero
         imagePath={heroComp?.image_path}
         role={heroRole}
-        roleLabel={t(`planner.slot.role.${heroRole}`, {
-          defaultValue: heroRole,
-        })}
+        roleLabel={
+          heroRole
+            ? t(`planner.slot.role.${heroRole}`, { defaultValue: heroRole })
+            : t("ingredient.kind_label", { defaultValue: "Lebensmittel" })
+        }
       />
       <div className="flex min-h-0 flex-1 flex-col gap-1 px-2.5 py-2">
         <div className="flex items-start justify-between gap-1">

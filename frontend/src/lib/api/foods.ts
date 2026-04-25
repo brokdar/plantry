@@ -59,11 +59,19 @@ export interface FoodInstruction {
   text: string
 }
 
-export interface Food {
+interface FoodBase {
   id: number
-  kind: FoodKind
   name: string
+  image_path: string | null
+  favorite: boolean
+  last_cooked_at?: string | null
+  cook_count: number
+  created_at: string
+  updated_at: string
+}
 
+export interface LeafFood extends FoodBase {
+  kind: "leaf"
   source?: FoodSource | null
   barcode?: string | null
   off_id?: string | null
@@ -91,7 +99,10 @@ export interface Food {
   vitamin_b6_100g?: number | null
   folate_100g?: number | null
   portions?: FoodPortion[]
+}
 
+export interface ComposedFood extends FoodBase {
+  kind: "composed"
   role?: FoodRole | null
   variant_group_id?: number | null
   reference_portions?: number | null
@@ -101,14 +112,9 @@ export interface Food {
   children?: FoodChild[]
   instructions?: FoodInstruction[]
   tags?: string[]
-
-  image_path: string | null
-  favorite: boolean
-  last_cooked_at?: string | null
-  cook_count: number
-  created_at: string
-  updated_at: string
 }
+
+export type Food = LeafFood | ComposedFood
 
 export interface FoodListResponse {
   items: Food[]
@@ -128,11 +134,9 @@ export interface FoodInstructionInput {
   text: string
 }
 
-export interface FoodInput {
+export interface LeafFoodInput {
+  kind: "leaf"
   name: string
-  kind: FoodKind
-
-  // leaf
   source?: string
   barcode?: string | null
   off_id?: string | null
@@ -159,9 +163,12 @@ export interface FoodInput {
   vitamin_b12_100g?: number | null
   vitamin_b6_100g?: number | null
   folate_100g?: number | null
+}
 
-  // composed
-  role?: string
+export interface ComposedFoodInput {
+  kind: "composed"
+  name: string
+  role?: FoodRole
   reference_portions?: number
   prep_minutes?: number | null
   cook_minutes?: number | null
@@ -171,10 +178,12 @@ export interface FoodInput {
   tags?: string[]
 }
 
+export type FoodInput = LeafFoodInput | ComposedFoodInput
+
 export interface FoodListParams {
   kind?: FoodKind
   search?: string
-  role?: string
+  role?: FoodRole
   tag?: string
   favorite?: 0 | 1
   limit?: number
@@ -253,7 +262,7 @@ export function listVariants(id: number): Promise<VariantListResponse> {
 export interface FoodSummary {
   id: number
   name: string
-  role?: string | null
+  role?: FoodRole | null
   image_path?: string | null
   cook_count: number
   last_cooked_at?: string | null

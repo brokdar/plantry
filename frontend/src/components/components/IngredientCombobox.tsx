@@ -12,14 +12,14 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFoods } from "@/lib/queries/foods"
 import { cn } from "@/lib/utils"
-import type { Food } from "@/lib/api/foods"
+import type { LeafFood } from "@/lib/api/foods"
 
 import { QuickCreateIngredientDialog } from "./QuickCreateIngredientDialog"
 
 type IngredientComboboxProps = {
   value: number
   selectedName?: string
-  onSelect: (ingredient: Food) => void
+  onSelect: (ingredient: LeafFood) => void
   disabled?: boolean
   testId?: string
 }
@@ -43,7 +43,7 @@ export function IngredientCombobox({
     limit: 12,
   })
 
-  const items = data?.items ?? []
+  const items = (data?.items ?? []) as LeafFood[]
   const hasSelection = value > 0
 
   return (

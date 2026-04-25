@@ -6,7 +6,7 @@ import { imageURL } from "@/lib/image-url"
 
 interface SlotHeroProps {
   imagePath: string | null | undefined
-  role: string
+  role: string | null
   roleLabel: string
 }
 
@@ -21,7 +21,7 @@ export function SlotHero({ imagePath, role, roleLabel }: SlotHeroProps) {
         />
       ) : (
         <FoodPlaceholder
-          category={role as FoodPlaceholderCategory}
+          category={(role ?? "main") as FoodPlaceholderCategory}
           size="md"
           rounded="none"
           className="h-full w-full"

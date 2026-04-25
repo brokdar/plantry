@@ -67,13 +67,13 @@ import {
 } from "@/lib/queries/foods"
 import { fromIngredients, type IngredientInput } from "@/lib/domain/nutrition"
 import { isCountUnit, normalizeUnit } from "@/lib/domain/units"
-import type { Food } from "@/lib/api/foods"
+import type { ComposedFood } from "@/lib/api/foods"
 import { ApiError } from "@/lib/api/client"
 
 import { IngredientRow } from "./IngredientRow"
 
 interface ComponentEditorProps {
-  component?: Food
+  component?: ComposedFood
   onSuccess?: () => void
   onDeleted?: () => void
 }
@@ -313,7 +313,7 @@ export function ComponentEditor({
   const { data: catalogData } = useFoods({ kind: "composed", limit: 500 })
   const existingTagList = useMemo(() => {
     const set = new Set<string>()
-    for (const c of catalogData?.items ?? []) {
+    for (const c of (catalogData?.items ?? []) as ComposedFood[]) {
       for (const tag of c.tags ?? []) set.add(tag)
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b))
@@ -783,7 +783,7 @@ export function ComponentEditor({
                 testId="component-variants-section"
               >
                 <div className="-mx-2 flex gap-3 overflow-x-auto px-2 pb-1">
-                  {variantsData.items.map((variant) => (
+                  {(variantsData.items as ComposedFood[]).map((variant) => (
                     <Link
                       key={variant.id}
                       to="/components/$id/edit"

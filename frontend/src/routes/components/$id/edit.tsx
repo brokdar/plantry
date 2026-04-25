@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 import { ComponentEditor } from "@/components/components/ComponentEditor"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { ComposedFood } from "@/lib/api/foods"
 import { useFood } from "@/lib/queries/foods"
 
 export const Route = createFileRoute("/components/$id/edit")({
@@ -16,7 +17,7 @@ function EditComponentPage() {
   const navigate = useNavigate()
   const numericId = Number(id)
 
-  const { data: component, isLoading } = useFood(numericId)
+  const { data: food, isLoading } = useFood(numericId)
 
   if (Number.isNaN(numericId)) {
     return (
@@ -36,7 +37,7 @@ function EditComponentPage() {
     )
   }
 
-  if (!component) {
+  if (!food) {
     return (
       <p className="py-12 text-center text-on-surface-variant">
         {t("error.not_found")}
@@ -52,7 +53,7 @@ function EditComponentPage() {
         description={t("component.edit_subtitle")}
       />
       <ComponentEditor
-        component={component}
+        component={food as ComposedFood}
         onSuccess={() => navigate({ to: "/components" })}
         onDeleted={() => navigate({ to: "/components" })}
       />

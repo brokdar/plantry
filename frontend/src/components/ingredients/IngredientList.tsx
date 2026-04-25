@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { LeafFood } from "@/lib/api/foods"
 import { useFoods, useDeleteFood } from "@/lib/queries/foods"
 
 import { IngredientCard } from "./IngredientCard"
@@ -36,6 +37,7 @@ export function IngredientList() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const { data, isLoading, isFetching } = useFoods({
+    kind: "leaf",
     search: deferredSearch || undefined,
     sort,
     limit,
@@ -56,7 +58,7 @@ export function IngredientList() {
   }
 
   const total = data?.total ?? 0
-  const items = data?.items ?? []
+  const items = (data?.items ?? []) as LeafFood[]
   const hasMore = items.length < total
 
   const sortOptions: FilterChipOption[] = useMemo(

@@ -3,14 +3,12 @@
 // in a composed food. The shopping list aggregator and nutrition resolver
 // both treat the leaf as 100 g per portion (the model convention).
 //
-// This exercises the API path the planner UI relies on; the in-app picker
-// currently filters to composed foods for UX reasons, so we POST the plate
-// component over HTTP and assert the planner cell + shopping list +
-// nutrition rollup all reflect it.
+// Two tests: one exercises the API path directly (fast, deterministic),
+// the other exercises the picker UI "Lebensmittel" tab end-to-end.
 
 import {
-  apiRequest,
   API,
+  apiRequest,
   cleanupFood,
   cleanupSlot,
   expect,
@@ -61,6 +59,9 @@ test.describe("Leaf food directly on a plate", () => {
 
       // Planner cell renders the leaf food's name.
       await page.goto("/")
+      await page.waitForResponse(
+        (r) => r.url().includes("/api/weeks") && r.status() === 200
+      )
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
       await expect(cell).toBeVisible()
       await expect(cell.getByText(`Banana ${tag}`)).toBeVisible()
@@ -93,6 +94,71 @@ test.describe("Leaf food directly on a plate", () => {
     } finally {
       if (plateId !== null) {
         await ctx.delete(`/api/plates/${plateId}`)
+      }
+      await ctx.dispose()
+      await cleanupFood(leaf.id)
+      await cleanupSlot(slot.id)
+    }
+  })
+
+  test("picker Lebensmittel tab surfaces leaf food and saves it to the plate", async ({
+    page,
+  }) => {
+    const tag = uid()
+    const slot = await seedSlot(`slot.leaf_${tag}`, "Apple", 993)
+    const leaf = await seedLeafFood({
+      name: `Kiwi ${tag}`,
+      kcal_100g: 61,
+      protein_100g: 1.1,
+    })
+
+    try {
+      await page.goto("/")
+      await page.waitForResponse(
+        (r) => r.url().includes("/api/weeks") && r.status() === 200
+      )
+
+      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
+      await expect(cell).toBeVisible()
+      await cell.getByRole("button", { name: /plan meal/i }).click()
+      await expect(page).toHaveURL(
+        new RegExp(`/planner/\\d+/0/${slot.id}/pick`)
+      )
+
+      // Switch to the Lebensmittel (leaf) tab.
+      await page.getByTestId("picker-tab-leaf").click()
+
+      // Seeded leaf food appears as a picker card.
+      await expect(page.getByTestId(`picker-card-${leaf.id}`)).toBeVisible()
+
+      // Click the card — it lands in the tray.
+      await page.getByTestId(`picker-card-${leaf.id}`).click()
+      await expect(page.getByTestId(`tray-item-${leaf.id}`)).toBeVisible()
+
+      // Save creates the plate and returns to the planner.
+      const createResp = page.waitForResponse(
+        (r) => r.url().includes("/plates") && r.request().method() === "POST"
+      )
+      await page.getByTestId("tray-save").click()
+      await createResp
+
+      await expect(page).toHaveURL(/\/$/)
+      await expect(cell.getByText(`Kiwi ${tag}`)).toBeVisible()
+    } finally {
+      // Best-effort plate cleanup via API before food/slot removal.
+      const ctx = await apiRequest.newContext({ baseURL: API })
+      const weekRes = await ctx.get("/api/weeks/current")
+      if (weekRes.ok()) {
+        const { id: weekId } = (await weekRes.json()) as { id: number }
+        const det = await ctx.get(`/api/weeks/${weekId}`)
+        if (det.ok()) {
+          const detail = (await det.json()) as {
+            plates: { id: number; slot_id: number }[]
+          }
+          for (const p of detail.plates) {
+            if (p.slot_id === slot.id) await ctx.delete(`/api/plates/${p.id}`)
+          }
+        }
       }
       await ctx.dispose()
       await cleanupFood(leaf.id)

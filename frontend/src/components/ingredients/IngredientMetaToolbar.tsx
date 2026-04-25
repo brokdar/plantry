@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { toast, toastError } from "@/lib/toast"
 import { useRefetchFood, useSyncPortions } from "@/lib/queries/foods"
-import type { Food } from "@/lib/api/foods"
+import type { LeafFood } from "@/lib/api/foods"
 import { cn } from "@/lib/utils"
 
 const SOURCE_DOT: Record<string, string> = {
@@ -15,13 +15,13 @@ const SOURCE_DOT: Record<string, string> = {
 }
 
 interface IngredientMetaToolbarProps {
-  ingredient: Food
+  ingredient: LeafFood
   disabled?: boolean
   /**
    * Called with the refetched ingredient so the parent can reset its form to
    * the freshly-sourced nutrient values.
    */
-  onRefetched: (updated: Food) => void
+  onRefetched: (updated: LeafFood) => void
 }
 
 export function IngredientMetaToolbar({
@@ -46,7 +46,7 @@ export function IngredientMetaToolbar({
         id: ingredient.id,
         lang: undefined,
       })
-      onRefetched(updated)
+      onRefetched(updated as LeafFood)
     } catch (err) {
       toastError(err, t)
     }

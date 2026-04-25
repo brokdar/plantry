@@ -17,8 +17,8 @@ export interface TrayItem {
 
 interface ComposingTrayProps {
   items: TrayItem[]
-  onPortionChange: (componentId: number, portions: number) => void
-  onRemove: (componentId: number) => void
+  onPortionChange: (foodId: number, portions: number) => void
+  onRemove: (foodId: number) => void
   onSave: () => void
   onCancel: () => void
   saving?: boolean
@@ -76,7 +76,11 @@ export function ComposingTray({
                     />
                   ) : (
                     <FoodPlaceholder
-                      category={it.component.role as FoodPlaceholderCategory}
+                      category={
+                        ((it.component.kind === "composed"
+                          ? it.component.role
+                          : null) ?? "main") as FoodPlaceholderCategory
+                      }
                       size="sm"
                       rounded="none"
                       className="h-full w-full"
@@ -86,10 +90,14 @@ export function ComposingTray({
                 <div className="min-w-0 flex-1">
                   <p className="font-heading text-[10.5px] font-semibold tracking-[0.08em] text-on-surface-variant uppercase">
                     {hero
-                      ? `${t("picker.tray.hero_prefix", { defaultValue: "Hero" })} · ${t(`planner.slot.role.${it.component.role}`, { defaultValue: it.component.role })}`
-                      : t(`planner.slot.role.${it.component.role}`, {
-                          defaultValue: it.component.role,
-                        })}
+                      ? `${t("picker.tray.hero_prefix", { defaultValue: "Hero" })} · ${it.component.kind === "leaf" ? t("ingredient.kind_label", { defaultValue: "Lebensmittel" }) : t(`planner.slot.role.${it.component.role}`, { defaultValue: it.component.role ?? "" })}`
+                      : it.component.kind === "leaf"
+                        ? t("ingredient.kind_label", {
+                            defaultValue: "Lebensmittel",
+                          })
+                        : t(`planner.slot.role.${it.component.role}`, {
+                            defaultValue: it.component.role ?? "",
+                          })}
                   </p>
                   <p className="truncate font-heading text-[12.5px] font-semibold">
                     {it.component.name}

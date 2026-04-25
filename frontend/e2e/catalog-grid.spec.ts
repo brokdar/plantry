@@ -1,34 +1,4 @@
-import {
-  cleanupFood,
-  expect,
-  seedComposedFood,
-  seedLeafFood,
-  test,
-  uid,
-} from "./helpers"
-
-// Composed foods now require at least one child. Helper that wraps
-// seedComposedFood with a throwaway leaf so tests don't need to set up the
-// child ladder themselves.
-async function seedComposedWithStub(
-  data: Parameters<typeof seedComposedFood>[0],
-  tag: string
-) {
-  const stub = await seedLeafFood({ name: `Stub ${tag}-${data.name}` })
-  const composed = await seedComposedFood({
-    ...data,
-    children: data.children ?? [
-      {
-        child_id: stub.id,
-        amount: 100,
-        unit: "g",
-        grams: 100,
-        sort_order: 0,
-      },
-    ],
-  })
-  return { composed, stub }
-}
+import { cleanupFood, expect, seedComposedWithStub, test, uid } from "./helpers"
 
 test.describe("Recipe Catalog (card grid)", () => {
   test("renders cards with title, role, and portions", async ({ page }) => {

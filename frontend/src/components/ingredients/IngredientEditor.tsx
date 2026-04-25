@@ -47,14 +47,17 @@ import {
 } from "@/lib/api/foods"
 
 import { leafFoodSchema, type LeafFoodFormValues } from "@/lib/schemas/food"
-import { useCreateFood, useUpdateFood } from "@/lib/queries/foods"
-import { useUpsertPortion } from "@/lib/queries/foods"
-import type { Food } from "@/lib/api/foods"
+import {
+  useCreateFood,
+  useUpdateFood,
+  useUpsertPortion,
+} from "@/lib/queries/foods"
+import type { LeafFood } from "@/lib/api/foods"
 import type { LookupCandidate } from "@/lib/api/lookup"
 import { ApiError } from "@/lib/api/client"
 
 interface IngredientEditorProps {
-  ingredient?: Food
+  ingredient?: LeafFood
   onSuccess?: () => void
   onDeleted?: () => void
   onCancel?: () => void
@@ -74,7 +77,7 @@ const MACRO_WATCH_FIELDS = [
  * value object. Single source of truth for form seeding: add a new nutrient
  * key in one place (EXTENDED_NUTRIENT_KEYS) and every seed path picks it up.
  */
-function toFormValues(input?: Food | LookupCandidate): LeafFoodFormValues {
+function toFormValues(input?: LeafFood | LookupCandidate): LeafFoodFormValues {
   const extended = Object.fromEntries(
     EXTENDED_NUTRIENT_KEYS.map((k) => [k, input?.[k] ?? null])
   ) as Record<ExtendedNutrientKey, number | null>

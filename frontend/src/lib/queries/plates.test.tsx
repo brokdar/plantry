@@ -1,7 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { QueryClient } from "@tanstack/react-query"
 import { act, renderHook, waitFor } from "@testing-library/react"
-import type { ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { createHookWrapper } from "@/test/render"
 
 import type { Week } from "@/lib/api/weeks"
 
@@ -47,12 +47,6 @@ function makeWeek(): Week {
   }
 }
 
-function createWrapper(qc: QueryClient) {
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
-  )
-}
-
 describe("useSwapPlateComponent", () => {
   beforeEach(() => vi.clearAllMocks())
 
@@ -70,7 +64,7 @@ describe("useSwapPlateComponent", () => {
     vi.mocked(updatePlateComponent).mockRejectedValueOnce(new Error("boom"))
 
     const { result } = renderHook(() => useSwapPlateComponent(7), {
-      wrapper: createWrapper(qc),
+      wrapper: createHookWrapper(qc),
     })
 
     await act(async () => {
@@ -102,7 +96,7 @@ describe("useSwapPlateComponent", () => {
     )
 
     const { result } = renderHook(() => useSwapPlateComponent(7), {
-      wrapper: createWrapper(qc),
+      wrapper: createHookWrapper(qc),
     })
 
     act(() => {

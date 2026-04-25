@@ -18,12 +18,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { imageURL } from "@/lib/image-url"
 import { cn } from "@/lib/utils"
-import type { Food } from "@/lib/api/foods"
+import type { ComposedFood } from "@/lib/api/foods"
 
 export type ComponentCardLayout = "grid" | "list"
 
 type ComponentCardProps = {
-  component: Food
+  component: ComposedFood
   layout?: ComponentCardLayout
   insightFlags?: { forgotten?: boolean; mostCooked?: boolean }
   onDelete: (id: number) => void

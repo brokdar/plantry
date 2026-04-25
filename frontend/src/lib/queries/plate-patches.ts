@@ -6,10 +6,6 @@
 import type { Plate, PlateComponent } from "@/lib/api/plates"
 import type { Week } from "@/lib/api/weeks"
 
-function findPlate(week: Week, plateId: number): Plate | undefined {
-  return week.plates.find((p) => p.id === plateId)
-}
-
 function mapPlate(week: Week, plateId: number, fn: (p: Plate) => Plate): Week {
   return {
     ...week,
@@ -128,5 +124,3 @@ export function findPlateAt(
 ): Plate | undefined {
   return week.plates.find((p) => p.day === day && p.slot_id === slotId)
 }
-
-export { findPlate }

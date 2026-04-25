@@ -21,10 +21,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { UnitSelect } from "@/components/ingredients/UnitSelect"
 import { cn } from "@/lib/utils"
-import { useFood } from "@/lib/queries/foods"
-import { usePortions, useUpsertPortion } from "@/lib/queries/foods"
+import { useFood, usePortions, useUpsertPortion } from "@/lib/queries/foods"
 import { isCountUnit, normalizeUnit, resolveGrams } from "@/lib/domain/units"
-import type { Food } from "@/lib/api/foods"
+import type { LeafFood } from "@/lib/api/foods"
 import type { ComposedFoodFormValues } from "@/lib/schemas/food"
 
 import { GramsSourceBadge } from "./GramsSourceBadge"
@@ -74,7 +73,7 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
   }, [resolved.grams, resolved.source, foodId])
 
   useEffect(() => {
-    if (!ingredientDetail) return
+    if (!ingredientDetail || ingredientDetail.kind !== "leaf") return
     if ((form.getValues(`children.${index}.kcal_100g`) ?? 0) > 0) return
     form.setValue(
       `children.${index}.kcal_100g`,
@@ -100,7 +99,7 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ingredientDetail])
 
-  function selectIngredient(ing: Food) {
+  function selectIngredient(ing: LeafFood) {
     form.setValue(`children.${index}.child_id`, ing.id)
     form.setValue(`children.${index}.child_name`, ing.name)
     form.setValue(`children.${index}.child_kind`, ing.kind)

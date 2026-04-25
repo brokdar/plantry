@@ -21,7 +21,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import type { Food } from "@/lib/api/foods"
+import type { LeafFood } from "@/lib/api/foods"
 import { useCreateFood } from "@/lib/queries/foods"
 import { ApiError } from "@/lib/api/client"
 
@@ -37,7 +37,7 @@ type QuickCreateIngredientDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   initialName?: string
-  onCreated: (ingredient: Food) => void
+  onCreated: (ingredient: LeafFood) => void
 }
 
 const EMPTY: FormValues = {
@@ -87,7 +87,7 @@ export function QuickCreateIngredientDialog({
         carbs_100g: toNumber(values.carbs_100g),
         fat_100g: toNumber(values.fat_100g),
       })
-      onCreated(ingredient)
+      onCreated(ingredient as LeafFood)
       onOpenChange(false)
     } catch (err) {
       const message =

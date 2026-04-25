@@ -264,6 +264,7 @@ function PlannerPage() {
       </div>
 
       <ShoppingPanel
+        key={week_.id}
         weekId={week_.id}
         open={shoppingOpen}
         onOpenChange={setShoppingOpen}

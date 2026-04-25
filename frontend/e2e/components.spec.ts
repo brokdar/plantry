@@ -4,31 +4,10 @@ import {
   API,
   cleanupFood,
   seedComposedFood,
+  seedComposedWithStub,
   seedLeafFood,
   uid,
 } from "./helpers"
-
-// Composed foods now require at least one child. Seed a throwaway leaf and
-// pass it as the sole child. Returns both ids so callers can clean up.
-async function seedComposedWithStub(
-  data: Parameters<typeof seedComposedFood>[0],
-  tag: string
-) {
-  const stub = await seedLeafFood({ name: `Stub ${tag}-${data.name}` })
-  const composed = await seedComposedFood({
-    ...data,
-    children: data.children ?? [
-      {
-        child_id: stub.id,
-        amount: 100,
-        unit: "g",
-        grams: 100,
-        sort_order: 0,
-      },
-    ],
-  })
-  return { composed, stub }
-}
 
 test.describe("Component Library", () => {
   test("create a component via the form", async ({ page }) => {

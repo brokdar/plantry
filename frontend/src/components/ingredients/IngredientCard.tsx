@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { imageURL } from "@/lib/image-url"
-import type { Food } from "@/lib/api/foods"
+import type { LeafFood } from "@/lib/api/foods"
 
 const SOURCE_DOT: Record<string, "primary" | "tertiary" | "muted"> = {
   fdc: "primary",
@@ -27,7 +27,7 @@ const SOURCE_DOT: Record<string, "primary" | "tertiary" | "muted"> = {
 }
 
 type IngredientCardProps = {
-  ingredient: Food
+  ingredient: LeafFood
   onDelete: (id: number) => void
 }
 

@@ -162,7 +162,8 @@ function ReadOnlySlot({ plate, componentsById }: ReadOnlySlotProps) {
     const c = componentsById.get(pc.food_id)
     return c?.name ?? `#${pc.food_id}`
   })
-  const heroRole = heroComp?.role ?? "main"
+  const heroRole =
+    (heroComp?.kind === "composed" ? heroComp.role : null) ?? "main"
   const roleLabel = t(`planner.slot.role.${heroRole}`, {
     defaultValue: heroRole,
   })

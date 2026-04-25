@@ -1,7 +1,11 @@
-import type { Food } from "@/lib/api/foods"
+import type { ComposedFood, LeafFood } from "@/lib/api/foods"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
+import type {
+  ShoppingListResponse,
+  WeekNutritionResponse,
+} from "@/lib/api/weeks"
 
-export const mockChickenBreast: Food = {
+export const mockChickenBreast: LeafFood = {
   id: 1,
   kind: "leaf",
   name: "Chicken breast",
@@ -22,7 +26,7 @@ export const mockChickenBreast: Food = {
   updated_at: "2024-01-01T00:00:00Z",
 }
 
-export const mockBrownRice: Food = {
+export const mockBrownRice: LeafFood = {
   id: 2,
   kind: "leaf",
   name: "Brown rice",
@@ -43,7 +47,7 @@ export const mockBrownRice: Food = {
   updated_at: "2024-01-02T00:00:00Z",
 }
 
-export const mockChickenCurry: Food = {
+export const mockChickenCurry: ComposedFood = {
   id: 3,
   kind: "composed",
   name: "Chicken Curry",
@@ -79,7 +83,7 @@ export const mockChickenCurry: Food = {
   updated_at: "2024-01-01T00:00:00Z",
 }
 
-export const mockTofuBowl: Food = {
+export const mockTofuBowl: ComposedFood = {
   id: 4,
   kind: "composed",
   name: "Tofu Bowl",
@@ -100,13 +104,13 @@ export const mockTofuBowl: Food = {
   updated_at: "2024-01-02T00:00:00Z",
 }
 
-export const mockChickenCurryWithVariantGroup: Food = {
+export const mockChickenCurryWithVariantGroup: ComposedFood = {
   ...mockChickenCurry,
   id: 10,
   variant_group_id: 1,
 }
 
-export const mockTofuCurryVariant: Food = {
+export const mockTofuCurryVariant: ComposedFood = {
   id: 11,
   kind: "composed",
   name: "Tofu Curry",
@@ -125,6 +129,30 @@ export const mockTofuCurryVariant: Food = {
   tags: ["vegan"],
   created_at: "2024-01-03T00:00:00Z",
   updated_at: "2024-01-03T00:00:00Z",
+}
+
+export const mockShoppingList: ShoppingListResponse = {
+  items: [
+    { food_id: 1, name: "Chicken", total_grams: 100 },
+    { food_id: 2, name: "Rice", total_grams: 200 },
+  ],
+}
+
+export const mockWeekNutrition: WeekNutritionResponse = {
+  days: [
+    {
+      day: 0,
+      macros: {
+        kcal: 500,
+        protein: 40,
+        fat: 15,
+        carbs: 50,
+        fiber: 5,
+        sodium: 1,
+      },
+    },
+  ],
+  week: { kcal: 500, protein: 40, fat: 15, carbs: 50, fiber: 5, sodium: 1 },
 }
 
 export const mockLookupCandidate: LookupCandidate = {

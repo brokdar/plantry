@@ -13,4 +13,4 @@ export const plateComponentSchema = z.object({
   portions: z.number().positive(),
 })
 
-export type PlateComposedFoodFormValues = z.infer<typeof plateComponentSchema>
+export type PlateComponentFormValues = z.infer<typeof plateComponentSchema>

@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -23,8 +24,9 @@ import {
   useImportLineLookup,
   useResolveImport,
 } from "@/lib/queries/import"
-import { createFood } from "@/lib/api/foods"
+import { createFood, type FoodRole } from "@/lib/api/foods"
 import { useCreateFood } from "@/lib/queries/foods"
+import { foodKeys } from "@/lib/queries/keys"
 import { FOOD_ROLES } from "@/lib/schemas/food"
 import { ApiError } from "@/lib/api/client"
 
@@ -35,7 +37,7 @@ export const Route = createFileRoute("/import/")({
 type RowState = {
   resolution: Resolution
   foodId: number | null
-  ingredientName: string | null
+  foodName: string | null
   amount: number
   unit: string
 }
@@ -50,7 +52,7 @@ function ImportPage() {
   const [html, setHtml] = useState("")
   const [showHtml, setShowHtml] = useState(false)
   const [rows, setRows] = useState<RowState[]>([])
-  const [componentName, setComponentName] = useState("")
+  const [recipeName, setRecipeName] = useState("")
   const [role, setRole] = useState<(typeof FOOD_ROLES)[number]>("main")
   const [referencePortions, setReferencePortions] = useState(1)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -68,14 +70,14 @@ function ImportPage() {
       )
       const d = res.draft
       setDraft(d)
-      setComponentName(d.name)
+      setRecipeName(d.name)
       setReferencePortions(d.reference_portions || 1)
       setRows(
         d.ingredients.map((ing) => ({
           resolution:
             ing.confidence === "unparsed" ? "skip" : ("existing" as Resolution),
           foodId: null,
-          ingredientName: null,
+          foodName: null,
           amount: ing.amount,
           unit: ing.unit || "g",
         }))
@@ -92,7 +94,7 @@ function ImportPage() {
     setSubmitError(null)
     try {
       const resolveRes = await resolve.mutateAsync({
-        name: componentName,
+        name: recipeName,
         role,
         reference_portions: referencePortions,
         prep_minutes: draft.prep_minutes,
@@ -114,7 +116,7 @@ function ImportPage() {
       const created = await createComp.mutateAsync({
         kind: "composed",
         name: resolved.name,
-        role: resolved.role,
+        role: resolved.role as FoodRole | undefined,
         reference_portions: resolved.reference_portions,
         prep_minutes: resolved.prep_minutes ?? undefined,
         cook_minutes: resolved.cook_minutes ?? undefined,
@@ -281,8 +283,8 @@ function ImportPage() {
             <Label htmlFor="import-name">{t("import.step3.name_label")}</Label>
             <Input
               id="import-name"
-              value={componentName}
-              onChange={(e) => setComponentName(e.target.value)}
+              value={recipeName}
+              onChange={(e) => setRecipeName(e.target.value)}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -356,6 +358,7 @@ interface RowProps {
 
 function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
   const { t } = useTranslation()
+  const qc = useQueryClient()
   const [creating, setCreating] = useState(false)
 
   const lookup = useImportLineLookup(ing.name, lang)
@@ -368,7 +371,7 @@ function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
     if (!lookup.data) return
     const hit = results.find((r) => r.existing_id)
     if (hit && hit.existing_id) {
-      onChange({ foodId: hit.existing_id, ingredientName: hit.name })
+      onChange({ foodId: hit.existing_id, foodName: hit.name })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lookup.data])
@@ -381,10 +384,11 @@ function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
         name: ing.name,
         source: "manual",
       })
+      void qc.invalidateQueries({ queryKey: foodKeys.lists() })
       onChange({
         resolution: "existing",
         foodId: ingr.id,
-        ingredientName: ingr.name,
+        foodName: ingr.name,
       })
     } finally {
       setCreating(false)
@@ -437,10 +441,10 @@ function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
           {state.foodId ? (
             <div className="flex items-center gap-2 text-sm">
               <Badge>{t("import.step2.resolved_label")}</Badge>
-              <span>{state.ingredientName}</span>
+              <span>{state.foodName}</span>
               <button
                 className="text-xs text-muted-foreground underline underline-offset-2"
-                onClick={() => onChange({ foodId: null, ingredientName: null })}
+                onClick={() => onChange({ foodId: null, foodName: null })}
               >
                 {t("import.step2.change")}
               </button>
@@ -463,7 +467,7 @@ function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
                     r.existing_id
                       ? onChange({
                           foodId: r.existing_id,
-                          ingredientName: r.name,
+                          foodName: r.name,
                         })
                       : undefined
                   }

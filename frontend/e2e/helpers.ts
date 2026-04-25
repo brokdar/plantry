@@ -114,6 +114,25 @@ export async function cleanupFood(id: number) {
   await ctx.dispose()
 }
 
+/**
+ * Seeds a composed food that satisfies the "at least one child" invariant by
+ * creating a throwaway leaf stub automatically. Returns both the composed food
+ * and the stub so callers can clean up both.
+ */
+export async function seedComposedWithStub(
+  data: SeedComposedInput,
+  tag: string
+) {
+  const stub = await seedLeafFood({ name: `Stub ${tag}-${data.name}` })
+  const composed = await seedComposedFood({
+    ...data,
+    children: data.children ?? [
+      { child_id: stub.id, amount: 100, unit: "g", grams: 100, sort_order: 0 },
+    ],
+  })
+  return { composed, stub }
+}
+
 export async function createVariantViaAPI(parentId: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
   const res = await ctx.post(`/api/foods/${parentId}/variant`)

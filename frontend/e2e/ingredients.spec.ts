@@ -1,46 +1,4 @@
-import { test, expect, apiRequest } from "./helpers"
-
-// Backend URL — seed/cleanup requests go directly to the backend, bypassing
-// the Vite proxy, to avoid proxy bottlenecks under parallel workers.
-const API = "http://localhost:8080"
-
-// Unique suffix per test run prevents UNIQUE constraint collisions when tests
-// run in parallel or with --repeat-each.
-function uid() {
-  return crypto.randomUUID().slice(0, 8)
-}
-
-// ---------------------------------------------------------------------------
-// Helper: create a leaf food (the old "ingredient") via direct backend API.
-// ---------------------------------------------------------------------------
-async function seedLeaf(data: {
-  name: string
-  kcal_100g?: number
-  protein_100g?: number
-  fat_100g?: number
-  carbs_100g?: number
-}) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/foods", {
-    data: { kind: "leaf", source: "manual", ...data },
-  })
-  const body = await res.json()
-  expect(
-    res.ok(),
-    `Seed "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body as { id: number; name: string }
-}
-
-// ---------------------------------------------------------------------------
-// Helper: delete leaf food via direct backend API. Best-effort cleanup.
-// ---------------------------------------------------------------------------
-async function cleanupLeaf(id: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/foods/${id}`)
-  await ctx.dispose()
-}
+import { cleanupFood, expect, seedLeafFood, test, uid } from "./helpers"
 
 test.describe("Ingredient Catalogue", () => {
   test("create an ingredient via the form", async ({ page }) => {
@@ -74,21 +32,21 @@ test.describe("Ingredient Catalogue", () => {
         page.getByTestId(`ingredient-card-${createdId}`)
       ).toContainText("165kcal")
     } finally {
-      if (createdId) await cleanupLeaf(createdId)
+      if (createdId) await cleanupFood(createdId)
     }
   })
 
   test("search filters ingredients by name", async ({ page }) => {
     const tag = uid()
-    const chicken = await seedLeaf({
+    const chicken = await seedLeafFood({
       name: `Chicken thigh ${tag}`,
       kcal_100g: 209,
     })
-    const tofu = await seedLeaf({
+    const tofu = await seedLeafFood({
       name: `Tofu ${tag}`,
       kcal_100g: 76,
     })
-    const rice = await seedLeaf({
+    const rice = await seedLeafFood({
       name: `Basmati rice ${tag}`,
       kcal_100g: 130,
     })
@@ -130,15 +88,15 @@ test.describe("Ingredient Catalogue", () => {
         0
       )
     } finally {
-      await cleanupLeaf(chicken.id)
-      await cleanupLeaf(tofu.id)
-      await cleanupLeaf(rice.id)
+      await cleanupFood(chicken.id)
+      await cleanupFood(tofu.id)
+      await cleanupFood(rice.id)
     }
   })
 
   test("edit an ingredient", async ({ page }) => {
     const name = `Brown rice ${uid()}`
-    const ingredient = await seedLeaf({ name, kcal_100g: 112 })
+    const ingredient = await seedLeafFood({ name, kcal_100g: 112 })
 
     try {
       await page.goto(`/ingredients/${ingredient.id}/edit`)
@@ -161,17 +119,17 @@ test.describe("Ingredient Catalogue", () => {
         page.getByTestId(`ingredient-card-${ingredient.id}`)
       ).toContainText("120kcal")
     } finally {
-      await cleanupLeaf(ingredient.id)
+      await cleanupFood(ingredient.id)
     }
   })
 
   test("delete an ingredient", async ({ page }) => {
     const tag = uid()
-    const keep = await seedLeaf({
+    const keep = await seedLeafFood({
       name: `Olive oil ${tag}`,
       kcal_100g: 884,
     })
-    const toDelete = await seedLeaf({
+    const toDelete = await seedLeafFood({
       name: `Butter ${tag}`,
       kcal_100g: 717,
     })
@@ -210,7 +168,7 @@ test.describe("Ingredient Catalogue", () => {
       ).toHaveCount(0)
       await expect(page.getByTestId(`ingredient-card-${keep.id}`)).toBeVisible()
     } finally {
-      await cleanupLeaf(keep.id)
+      await cleanupFood(keep.id)
     }
   })
 
@@ -234,7 +192,7 @@ test.describe("Ingredient Catalogue", () => {
     page,
   }) => {
     const name = `Duplicate test ${uid()}`
-    const existing = await seedLeaf({ name, kcal_100g: 100 })
+    const existing = await seedLeafFood({ name, kcal_100g: 100 })
 
     try {
       await page.goto("/ingredients/new")
@@ -255,7 +213,7 @@ test.describe("Ingredient Catalogue", () => {
         page.getByText(/already exists|food\.duplicate_name/i)
       ).toBeVisible()
     } finally {
-      await cleanupLeaf(existing.id)
+      await cleanupFood(existing.id)
     }
   })
 })

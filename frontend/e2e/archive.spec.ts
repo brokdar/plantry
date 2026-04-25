@@ -94,8 +94,8 @@ test.describe("Archive + rotation insights", () => {
 
       await page.goto("/archive")
 
-      // Wait for the list to render (or empty state).
-      await page.waitForLoadState("networkidle")
+      // Wait for the archive list container to render before asserting absence.
+      await expect(page.getByTestId("archive-list")).toBeVisible()
 
       await expect(
         page.getByTestId(`archive-week-${currentWeek.id}`)

@@ -48,15 +48,12 @@ export function ShoppingPanel({
     loadPurchased(weekId)
   )
 
-  // Re-load purchased state when weekId changes.
-  useEffect(() => {
-    setPurchased(loadPurchased(weekId))
-  }, [weekId])
-
   // Prune stale purchased IDs whenever the item list changes.
+
   useEffect(() => {
     if (!data) return
     const validIds = new Set(data.items.map((i) => i.food_id))
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPurchased((prev) => {
       const pruned = new Set([...prev].filter((id) => validIds.has(id)))
       savePurchased(weekId, pruned)

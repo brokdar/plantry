@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { ComposedFood, FoodRole } from "@/lib/api/foods"
 import { useFoods, useDeleteFood, useInsights } from "@/lib/queries/foods"
 import { useLocalStorageState } from "@/lib/hooks/useLocalStorageState"
 import { FOOD_ROLES } from "@/lib/schemas/food"
@@ -68,7 +69,7 @@ export function ComponentList() {
   const { data, isLoading, isFetching } = useFoods({
     kind: "composed",
     search: deferredSearch || undefined,
-    role: roleFilter ?? undefined,
+    role: (roleFilter ?? undefined) as FoodRole | undefined,
     tag: tagFilter ?? undefined,
     sort,
     limit,
@@ -94,7 +95,7 @@ export function ComponentList() {
   }
 
   const total = data?.total ?? 0
-  const items = useMemo(() => data?.items ?? [], [data])
+  const items = useMemo(() => (data?.items ?? []) as ComposedFood[], [data])
   const hasMore = items.length < total
 
   const sortOptions: FilterChipOption[] = useMemo(
@@ -113,7 +114,9 @@ export function ComponentList() {
 
   const availableTags = useMemo(() => {
     const set = new Set<string>()
-    for (const item of items) for (const tag of item.tags ?? []) set.add(tag)
+    for (const item of items)
+      for (const tag of item.kind === "composed" ? (item.tags ?? []) : [])
+        set.add(tag)
     return [...set].sort()
   }, [items])
 

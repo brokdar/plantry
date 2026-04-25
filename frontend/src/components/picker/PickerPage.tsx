@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { Food } from "@/lib/api/foods"
+import type { ComposedFood, Food, FoodRole } from "@/lib/api/foods"
 import type { Template } from "@/lib/api/templates"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useAddPlateComponent, useSetPlateSkipped } from "@/lib/queries/plates"
@@ -55,6 +55,7 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
   const week = useWeekFromCache(weekId)
   const existingPlate = week ? findPlateAt(week, day, slotId) : undefined
 
+  const [kindTab, setKindTab] = useState<"composed" | "leaf">("composed")
   const [query, setQuery] = useState("")
   const [preset, setPreset] = useState<PickerPreset>("all")
   const [roleFilter, setRoleFilter] = useState<string>("all")
@@ -64,39 +65,51 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
   const deferredQuery = useDeferredValue(query)
 
   const componentsQuery = useFoods({
-    kind: "composed",
+    kind: kindTab,
     limit: 200,
     search: deferredQuery || undefined,
     favorite: preset === "favorites" ? 1 : undefined,
-    role: roleFilter !== "all" ? roleFilter : undefined,
+    role:
+      kindTab === "composed" && roleFilter !== "all"
+        ? (roleFilter as FoodRole)
+        : undefined,
     sort:
-      sort === "recent" ? "last_cooked_at" : sort === "kcal" ? "name" : "name",
-    order: sort === "recent" ? "desc" : "asc",
+      sort === "kcal"
+        ? "kcal"
+        : sort === "recent" && kindTab === "composed"
+          ? "last_cooked_at"
+          : "name",
+    order: sort === "recent" && kindTab === "composed" ? "desc" : "asc",
   })
 
   const items = useMemo(() => {
     const raw = componentsQuery.data?.items ?? []
+    if (kindTab === "leaf") return raw
+    const composed = raw.filter((c): c is ComposedFood => c.kind === "composed")
     const presetRoles = PRESET_ROLES[preset]
     if (presetRoles)
-      return raw.filter((c) => c.role != null && presetRoles.includes(c.role))
-    return raw
-  }, [componentsQuery.data, preset])
+      return composed.filter(
+        (c) => c.role != null && presetRoles.includes(c.role)
+      )
+    return composed
+  }, [componentsQuery.data, preset, kindTab])
 
   const counts = useMemo(() => {
     const raw = componentsQuery.data?.items ?? []
+    const composed = raw.filter((c): c is ComposedFood => c.kind === "composed")
     return {
       all: raw.length,
       favorites: raw.filter((c) => c.favorite).length,
       recents: raw.filter((c) => c.last_cooked_at).length,
-      mains: raw.filter((c) => c.role === "main").length,
-      sides: raw.filter(
+      mains: composed.filter((c) => c.role === "main").length,
+      sides: composed.filter(
         (c) =>
           c.role === "side_starch" ||
           c.role === "side_veg" ||
           c.role === "side_protein"
       ).length,
-      snacks: raw.filter((c) => c.role === "standalone").length,
-      sauces: raw.filter((c) => c.role === "sauce").length,
+      snacks: composed.filter((c) => c.role === "standalone").length,
+      sauces: composed.filter((c) => c.role === "sauce").length,
     }
   }, [componentsQuery.data])
 
@@ -211,7 +224,7 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
   const roleOptions = useMemo(() => {
     const set = new Set<string>()
     for (const c of componentsQuery.data?.items ?? []) {
-      if (c.role) set.add(c.role)
+      if (c.kind === "composed" && c.role) set.add(c.role)
     }
     return Array.from(set).sort()
   }, [componentsQuery.data])
@@ -243,6 +256,37 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
           </div>
         </div>
 
+        {/* Kind tabs */}
+        <div className="mb-4 flex gap-1 rounded-xl bg-surface-container-low p-1">
+          {(
+            [
+              {
+                key: "composed",
+                label: t("picker.tab.recipes", { defaultValue: "Rezepte" }),
+              },
+              {
+                key: "leaf",
+                label: t("picker.tab.foods", { defaultValue: "Lebensmittel" }),
+              },
+            ] as const
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              data-testid={`picker-tab-${key}`}
+              onClick={() => {
+                setKindTab(key)
+                setPreset("all")
+                setRoleFilter("all")
+                if (key === "leaf" && sort === "recent") setSort("name")
+              }}
+              className={`flex-1 rounded-lg py-2 font-heading text-[13px] font-semibold transition-colors ${kindTab === key ? "bg-white text-on-surface shadow-sm" : "text-on-surface-variant hover:text-on-surface"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <label className="mb-4 flex items-center gap-3 rounded-xl bg-surface-container-low px-4 py-3">
           <Search className="h-4 w-4 text-on-surface-variant" aria-hidden />
           <input
@@ -254,44 +298,53 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
           />
         </label>
 
-        <div className="mb-4">
-          <PickerFilters
-            value={preset}
-            onChange={setPreset}
-            counts={counts}
-            onSkipShortcut={handleMarkSkip}
-            canSkip={!existingPlate?.skipped}
-          />
-        </div>
+        {kindTab === "composed" && (
+          <div className="mb-4">
+            <PickerFilters
+              value={preset}
+              onChange={setPreset}
+              counts={counts}
+              onSkipShortcut={handleMarkSkip}
+              canSkip={!existingPlate?.skipped}
+            />
+          </div>
+        )}
 
         <div className="mb-5 grid grid-cols-2 gap-2.5 md:grid-cols-3">
+          {kindTab === "composed" && (
+            <FilterSelect
+              testid="picker-role-filter"
+              value={roleFilter}
+              onChange={setRoleFilter}
+              options={[
+                { value: "all", label: t("picker.role.all") },
+                ...roleOptions.map((r) => ({
+                  value: r,
+                  label: t(`planner.slot.role.${r}`, { defaultValue: r }),
+                })),
+              ]}
+            />
+          )}
           <FilterSelect
-            label={t("picker.role.all")}
-            testid="picker-role-filter"
-            value={roleFilter}
-            onChange={setRoleFilter}
-            options={[
-              { value: "all", label: t("picker.role.all") },
-              ...roleOptions.map((r) => ({
-                value: r,
-                label: t(`planner.slot.role.${r}`, { defaultValue: r }),
-              })),
-            ]}
-          />
-          <FilterSelect
-            label={t("picker.sort.name")}
             testid="picker-sort"
             value={sort}
             onChange={(v) => setSort(v as typeof sort)}
-            options={[
-              { value: "name", label: t("picker.sort.name") },
-              { value: "recent", label: t("picker.sort.recent") },
-              { value: "kcal", label: t("picker.sort.kcal") },
-            ]}
+            options={
+              kindTab === "leaf"
+                ? [
+                    { value: "name", label: t("picker.sort.name") },
+                    { value: "kcal", label: t("picker.sort.kcal") },
+                  ]
+                : [
+                    { value: "name", label: t("picker.sort.name") },
+                    { value: "recent", label: t("picker.sort.recent") },
+                    { value: "kcal", label: t("picker.sort.kcal") },
+                  ]
+            }
           />
         </div>
 
-        {!existingPlate && (
+        {kindTab === "composed" && !existingPlate && (
           <ApplyTemplateSection onPick={handleApplyTemplate} />
         )}
 
@@ -303,9 +356,13 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
                 aria-hidden
               />
               <p className="text-[13px]">
-                {t("picker.empty", {
-                  defaultValue: "No components match this filter.",
-                })}
+                {kindTab === "leaf"
+                  ? t("picker.empty_leaf", {
+                      defaultValue: "No foods match this search.",
+                    })
+                  : t("picker.empty", {
+                      defaultValue: "No components match this filter.",
+                    })}
               </p>
             </div>
           </div>
@@ -336,7 +393,6 @@ export function PickerPage({ weekId, day, slotId, onBack }: PickerPageProps) {
 }
 
 interface FilterSelectProps<T extends string> {
-  label: string
   testid: string
   value: T
   onChange: (v: T) => void

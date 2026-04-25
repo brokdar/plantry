@@ -40,7 +40,6 @@ export const profileKeys = {
 export const templateKeys = {
   all: ["templates"] as const,
   lists: () => [...templateKeys.all, "list"] as const,
-  list: () => [...templateKeys.lists()] as const,
   details: () => [...templateKeys.all, "detail"] as const,
   detail: (id: number) => [...templateKeys.details(), id] as const,
 }
