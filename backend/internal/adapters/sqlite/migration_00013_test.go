@@ -17,8 +17,9 @@ import (
 // integrity.
 func TestMigration00013_UnifiedFood(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "food-migration.db")
-	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)")
+	conn, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	require.NoError(t, err)
+	conn.SetMaxOpenConns(1)
 	defer func() { _ = conn.Close() }()
 
 	goose.SetBaseFS(db.Migrations)
@@ -241,4 +242,36 @@ func TestMigration00013_UnifiedFood(t *testing.T) {
         INSERT INTO foods (name, kind, reference_portions) VALUES ('Chicken Curry', 'composed', 4)
     `)
 	require.NoError(t, err, "composed foods may share names")
+
+	// ── DOWN migration (schema round-trip) ───────────────────────────────
+	require.NoError(t, goose.Down(conn, "migrations"))
+
+	// New food tables must be gone.
+	for _, tbl := range []string{
+		"foods", "food_components", "food_instructions",
+		"food_tags", "food_portions", "foods_fts",
+	} {
+		var n int
+		require.NoError(t, conn.QueryRow(
+			`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, tbl,
+		).Scan(&n))
+		require.Equalf(t, 0, n, "table %s must be gone after DOWN", tbl)
+	}
+	// Old tables must be restored (empty — DOWN is schema-only).
+	for _, tbl := range []string{
+		"ingredients", "components", "component_ingredients",
+		"component_instructions", "component_tags", "ingredient_portions",
+	} {
+		var n int
+		require.NoError(t, conn.QueryRow(
+			`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, tbl,
+		).Scan(&n))
+		require.Equalf(t, 1, n, "table %s must be restored after DOWN", tbl)
+	}
+	// plate_components must reference component_id again.
+	var colName string
+	require.NoError(t, conn.QueryRow(
+		`SELECT name FROM pragma_table_info('plate_components') WHERE name='component_id'`,
+	).Scan(&colName))
+	require.Equal(t, "component_id", colName)
 }

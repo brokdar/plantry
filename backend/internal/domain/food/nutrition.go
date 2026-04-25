@@ -28,11 +28,24 @@ func NewNutritionResolver(repo Repository) *NutritionResolver {
 // food it returns macros for 100 g (the unit the leaf reports its nutrition
 // in).
 func (r *NutritionResolver) PerPortion(ctx context.Context, foodID int64) (nutrition.Macros, error) {
-	f, err := r.repo.Get(ctx, foodID)
+	// LookupByIDs fetches only the food row — no children/instructions/tags — which
+	// is all we need here. Children are loaded separately via ListChildren so that
+	// recursive nodes also avoid full hydration.
+	foods, err := r.repo.LookupByIDs(ctx, []int64{foodID})
 	if err != nil {
 		return nutrition.Macros{}, err
 	}
-	cache := map[int64]nutrition.Macros{} // per-100g macros, per food id
+	f, ok := foods[foodID]
+	if !ok {
+		return nutrition.Macros{}, fmt.Errorf("%w: id %d", domain.ErrNotFound, foodID)
+	}
+	if f.Kind == KindComposed {
+		f.Children, err = r.repo.ListChildren(ctx, foodID)
+		if err != nil {
+			return nutrition.Macros{}, err
+		}
+	}
+	cache := map[int64]nutrition.Macros{} // per-100g macros, memoised per food id
 	total, err := r.totalMacros(ctx, f, cache, 0)
 	if err != nil {
 		return nutrition.Macros{}, err
@@ -79,14 +92,22 @@ func (r *NutritionResolver) per100gFor(ctx context.Context, id int64, cache map[
 	if depth > maxResolveDepth {
 		return nutrition.Macros{}, fmt.Errorf("%w: food tree deeper than %d", domain.ErrInvalidInput, maxResolveDepth)
 	}
-	f, err := r.repo.Get(ctx, id)
+	foods, err := r.repo.LookupByIDs(ctx, []int64{id})
 	if err != nil {
 		return nutrition.Macros{}, err
+	}
+	f, ok := foods[id]
+	if !ok {
+		return nutrition.Macros{}, fmt.Errorf("%w: food %d not found during nutrition resolve", domain.ErrNotFound, id)
 	}
 	if f.Kind == KindLeaf {
 		m := leafPer100g(f)
 		cache[id] = m
 		return m, nil
+	}
+	f.Children, err = r.repo.ListChildren(ctx, id)
+	if err != nil {
+		return nutrition.Macros{}, err
 	}
 	total, err := r.totalMacros(ctx, f, cache, depth)
 	if err != nil {

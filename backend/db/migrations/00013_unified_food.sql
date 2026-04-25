@@ -240,6 +240,46 @@ ALTER TABLE template_components_new RENAME TO template_components;
 CREATE INDEX ix_template_components_template ON template_components(template_id);
 
 -- ──────────────────────────────────────────────────────────────────────
+-- Invariant checks — abort if any rows were silently dropped by the JOINs.
+-- Old tables still exist here so the counts are directly comparable.
+-- RAISE() is trigger-only in SQLite; we use NOT NULL CHECK constraints on
+-- temp tables instead — a failed assertion causes "CHECK constraint failed"
+-- and aborts the transaction.
+-- ──────────────────────────────────────────────────────────────────────
+
+CREATE TEMP TABLE _assert_ingredient_count(ok INTEGER NOT NULL CHECK(ok=1));
+INSERT INTO _assert_ingredient_count VALUES(
+    CASE WHEN (SELECT COUNT(*) FROM ingredients)
+             = (SELECT COUNT(*) FROM foods WHERE kind='leaf') THEN 1 ELSE 0 END);
+DROP TABLE _assert_ingredient_count;
+
+CREATE TEMP TABLE _assert_component_count(ok INTEGER NOT NULL CHECK(ok=1));
+INSERT INTO _assert_component_count VALUES(
+    CASE WHEN (SELECT COUNT(*) FROM components)
+             = (SELECT COUNT(*) FROM foods WHERE kind='composed') THEN 1 ELSE 0 END);
+DROP TABLE _assert_component_count;
+
+CREATE TEMP TABLE _assert_food_components_count(ok INTEGER NOT NULL CHECK(ok=1));
+INSERT INTO _assert_food_components_count VALUES(
+    CASE WHEN (SELECT COUNT(*) FROM component_ingredients)
+             = (SELECT COUNT(*) FROM food_components) THEN 1 ELSE 0 END);
+DROP TABLE _assert_food_components_count;
+
+CREATE TEMP TABLE _assert_grams_sum(ok INTEGER NOT NULL CHECK(ok=1));
+INSERT INTO _assert_grams_sum VALUES(
+    CASE WHEN (SELECT COALESCE(SUM(grams),0) FROM component_ingredients)
+             = (SELECT COALESCE(SUM(grams),0) FROM food_components) THEN 1 ELSE 0 END);
+DROP TABLE _assert_grams_sum;
+
+CREATE TEMP TABLE _assert_composed_parents(ok INTEGER NOT NULL CHECK(ok=1));
+INSERT INTO _assert_composed_parents VALUES(
+    CASE WHEN NOT EXISTS (
+        SELECT 1 FROM food_components fc
+        JOIN foods f ON f.id = fc.parent_id WHERE f.kind != 'composed'
+    ) THEN 1 ELSE 0 END);
+DROP TABLE _assert_composed_parents;
+
+-- ──────────────────────────────────────────────────────────────────────
 -- Drop the old aggregates. variant_groups stays (foods.variant_group_id still references it).
 -- ──────────────────────────────────────────────────────────────────────
 

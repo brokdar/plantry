@@ -24,25 +24,45 @@ var allowedFoodSortColumns = map[string]string{
 	"kcal_100g":      "kcal_100g",
 }
 
+// foodCols enumerates every column of `foods` in CREATE TABLE order.
+// Using an explicit list instead of SELECT * makes the scan resilient to
+// future ALTER TABLE ADD COLUMN migrations.
+var foodCols = []string{
+	"id", "name", "kind", "role",
+	"source", "barcode", "off_id", "fdc_id",
+	"kcal_100g", "protein_100g", "fat_100g", "carbs_100g",
+	"fiber_100g", "sodium_100g",
+	"saturated_fat_100g", "trans_fat_100g", "cholesterol_100g", "sugar_100g",
+	"potassium_100g", "calcium_100g", "iron_100g", "magnesium_100g",
+	"phosphorus_100g", "zinc_100g",
+	"vitamin_a_100g", "vitamin_c_100g", "vitamin_d_100g",
+	"vitamin_b12_100g", "vitamin_b6_100g", "folate_100g",
+	"variant_group_id", "reference_portions", "prep_minutes", "cook_minutes",
+	"notes", "image_path", "favorite", "last_cooked_at", "cook_count",
+	"created_at", "updated_at",
+}
+
 // FoodRepo implements food.Repository backed by SQLite.
 type FoodRepo struct {
-	db *sql.DB
-	q  *sqlcgen.Queries
+	pool *sql.DB      // nil for tx-bound repos; used only for BeginTx
+	dbtx sqlcgen.DBTX // always non-nil; *sql.DB or *sql.Tx
+	q    *sqlcgen.Queries
 }
 
 // NewFoodRepo constructs a FoodRepo.
 func NewFoodRepo(db *sql.DB) *FoodRepo {
-	return &FoodRepo{db: db, q: sqlcgen.New(db)}
+	return &FoodRepo{pool: db, dbtx: db, q: sqlcgen.New(db)}
 }
 
-// newFoodRepoTx returns a FoodRepo bound to a transaction (for multi-aggregate
-// writes). db nil signals "already inside a tx".
+// newFoodRepoTx returns a FoodRepo bound to an existing transaction.
+// pool is nil; Create/Update/Delete (which open their own tx) must not be
+// called on a tx-bound repo.
 func newFoodRepoTx(tx *sql.Tx) *FoodRepo {
-	return &FoodRepo{db: nil, q: sqlcgen.New(tx)}
+	return &FoodRepo{pool: nil, dbtx: tx, q: sqlcgen.New(tx)}
 }
 
 func (r *FoodRepo) Create(ctx context.Context, f *food.Food) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.pool.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -88,7 +108,7 @@ func (r *FoodRepo) Get(ctx context.Context, id int64) (*food.Food, error) {
 }
 
 func (r *FoodRepo) Update(ctx context.Context, f *food.Food) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.pool.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -151,7 +171,7 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 	}
 	orderClause := col + " " + dir
 
-	builder := sq.Select("*").From("foods").
+	builder := sq.Select(foodCols...).From("foods").
 		OrderBy("favorite DESC", orderClause).
 		Limit(uint64(q.Limit)).
 		Offset(uint64(q.Offset))
@@ -196,7 +216,7 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 		return nil, err
 	}
 	var total int
-	if err := r.db.QueryRowContext(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+	if err := r.dbtx.QueryRowContext(ctx, countSQL, countArgs...).Scan(&total); err != nil {
 		return nil, err
 	}
 
@@ -204,7 +224,7 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.db.QueryContext(ctx, listSQL, listArgs...)
+	rows, err := r.dbtx.QueryContext(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +273,7 @@ func (r *FoodRepo) Reachable(ctx context.Context, parentID int64) (map[int64]str
 	for len(queue) > 0 {
 		head := queue[0]
 		queue = queue[1:]
-		rows, err := r.db.QueryContext(ctx,
+		rows, err := r.dbtx.QueryContext(ctx,
 			`SELECT child_id FROM food_components WHERE parent_id = ?`, head)
 		if err != nil {
 			return nil, err
@@ -281,12 +301,12 @@ func (r *FoodRepo) LookupByIDs(ctx context.Context, ids []int64) (map[int64]*foo
 	if len(ids) == 0 {
 		return map[int64]*food.Food{}, nil
 	}
-	builder := sq.Select("*").From("foods").Where(sq.Eq{"id": ids})
+	builder := sq.Select(foodCols...).From("foods").Where(sq.Eq{"id": ids})
 	query, args, err := builder.PlaceholderFormat(sq.Question).ToSql()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.dbtx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -357,11 +377,21 @@ func (r *FoodRepo) UpsertPortion(ctx context.Context, p *food.Portion) error {
 }
 
 func (r *FoodRepo) DeletePortion(ctx context.Context, foodID int64, unit string) error {
-	_, err := r.q.DeleteFoodPortion(ctx, sqlcgen.DeleteFoodPortionParams{
+	res, err := r.q.DeleteFoodPortion(ctx, sqlcgen.DeleteFoodPortionParams{
 		FoodID: foodID,
 		Unit:   unit,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: portion (food_id=%d, unit=%s)", domain.ErrNotFound, foodID, unit)
+	}
+	return nil
 }
 
 // ── Variants ──────────────────────────────────────────────────────────

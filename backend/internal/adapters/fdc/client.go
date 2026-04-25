@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 )
 
 // Client communicates with the USDA FoodData Central API.
@@ -120,7 +122,7 @@ func (c *Client) GetFood(ctx context.Context, fdcID int) (*Food, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("fdc: food %d not found", fdcID)
+		return nil, fmt.Errorf("%w: fdc: food %d not found", domain.ErrNotFound, fdcID)
 	}
 	if resp.StatusCode != http.StatusOK {
 		body := make([]byte, 512)

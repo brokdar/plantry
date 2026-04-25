@@ -42,7 +42,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 	r.Use(requestLogger(logger))
 
 	r.Route("/api", func(api chi.Router) {
-		api.Use(plantrymw.MaxBodySize(1 << 20)) // 1 MB; image upload enforces its own 10 MB limit
+		api.Use(plantrymw.MaxBodySize(10 << 20)) // 10 MB cap; accommodates image uploads
 		api.Get("/health", handlers.Health)
 
 		if h.Foods != nil {

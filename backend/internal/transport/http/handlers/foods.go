@@ -404,8 +404,13 @@ func (h *FoodHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
+	if req.Kind != "" && food.Kind(req.Kind) != existing.Kind {
+		writeError(w, http.StatusUnprocessableEntity, "error.kind_immutable")
+		return
+	}
 	f := requestToFood(&req)
 	f.ID = id
+	f.Kind = existing.Kind // kind is immutable after creation
 	// image_path managed separately
 	f.ImagePath = existing.ImagePath
 	// cook tracking preserved
@@ -413,7 +418,7 @@ func (h *FoodHandler) Update(w http.ResponseWriter, r *http.Request) {
 	f.CookCount = existing.CookCount
 	f.LastCookedAt = existing.LastCookedAt
 	// variant group sticky
-	if req.Kind == string(food.KindComposed) && f.VariantGroupID == nil {
+	if f.Kind == food.KindComposed && f.VariantGroupID == nil {
 		f.VariantGroupID = existing.VariantGroupID
 	}
 	if err := h.svc.Update(r.Context(), f); err != nil {
@@ -445,15 +450,20 @@ func (h *FoodHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FoodHandler) List(w http.ResponseWriter, r *http.Request) {
-	q := food.ListQuery{
-		Kind:         food.Kind(r.URL.Query().Get("kind")),
-		Search:       r.URL.Query().Get("search"),
-		Role:         r.URL.Query().Get("role"),
-		Tag:          r.URL.Query().Get("tag"),
-		FavoriteOnly: r.URL.Query().Get("favorite") == "1",
-		SortBy:       r.URL.Query().Get("sort"),
-		SortDesc:     r.URL.Query().Get("order") == "desc",
+	var q food.ListQuery
+	if k := r.URL.Query().Get("kind"); k != "" {
+		q.Kind = food.Kind(k)
+		if q.Kind != food.KindLeaf && q.Kind != food.KindComposed {
+			writeError(w, http.StatusBadRequest, "error.invalid_kind")
+			return
+		}
 	}
+	q.Search = r.URL.Query().Get("search")
+	q.Role = r.URL.Query().Get("role")
+	q.Tag = r.URL.Query().Get("tag")
+	q.FavoriteOnly = r.URL.Query().Get("favorite") == "1"
+	q.SortBy = r.URL.Query().Get("sort")
+	q.SortDesc = r.URL.Query().Get("order") == "desc"
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			q.Limit = n

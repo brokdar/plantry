@@ -186,7 +186,7 @@ func (s *Service) SyncPortionsFromFDC(ctx context.Context, id int64) (int, error
 	}
 	portions, err := s.portionProvider.GetFoodPortions(ctx, fdcID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, domain.ErrNotFound) {
 			return 0, fmt.Errorf("%w: fdc food %d not found", domain.ErrNotFound, fdcID)
 		}
 		return 0, fmt.Errorf("%w: fdc portions: %v", domain.ErrLookupFailed, err)
@@ -236,6 +236,9 @@ func (s *Service) CreateVariant(ctx context.Context, parentID int64) (*Food, err
 	if parent.ReferencePortions != nil {
 		ref = *parent.ReferencePortions
 	}
+	// Intentionally create with zero children — the variant is a draft that the
+	// user populates. The ≥1 child invariant is enforced only by Update, not
+	// Create, so this is valid per the domain model.
 	variant := &Food{
 		Name:              parent.Name + " (variant)",
 		Kind:              KindComposed,
@@ -360,6 +363,8 @@ func (s *Service) validate(f *Food) error {
 	return nil
 }
 
+// validateLeafNutrition allows all-nil nutrition — OFF/FDC imports often have
+// incomplete data and rejecting them would block valid ingredient creation.
 func validateLeafNutrition(f *Food) error {
 	checks := []*float64{
 		f.Kcal100g, f.Protein100g, f.Fat100g, f.Carbs100g, f.Fiber100g, f.Sodium100g,
@@ -451,7 +456,9 @@ func (s *Service) resolveGrams(ctx context.Context, children []FoodComponent) er
 // can reach the parent (which would create a cycle after the update lands).
 func (s *Service) detectCycles(ctx context.Context, f *Food) error {
 	if f.ID == 0 {
-		return nil // Create — no existing row, nothing can reach back yet.
+		// On Create the food has no DB row yet — no existing food can reference
+		// it, so a cycle is impossible. Self-loops are caught separately above.
+		return nil
 	}
 	for _, ch := range f.Children {
 		if ch.ChildID == f.ID {
