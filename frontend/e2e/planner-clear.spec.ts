@@ -188,10 +188,12 @@ test.describe("Planner — clear shortcuts", () => {
       await cellB.getByTestId("slot-quick-delete").click()
       await expect(cellB.getByText(`PlateB ${tag}`)).toHaveCount(0)
 
-      // Undo only A — B must stay removed. Sonner prepends new toasts, so PlateA's (first) is last in DOM.
-      await page.getByRole("button", { name: "Undo" }).last().click()
-      await expect(cellA.getByText(`PlateA ${tag}`)).toBeVisible()
-      await expect(cellB.getByText(`PlateB ${tag}`)).toHaveCount(0)
+      // Sonner prepends new toasts: [B_toast, A_toast]. B's toast is on top and
+      // actionable; A's is stacked behind and covered. Click the accessible undo
+      // (B's) and verify only B is restored while A stays removed.
+      await page.getByRole("button", { name: "Undo" }).first().click()
+      await expect(cellB.getByText(`PlateB ${tag}`)).toBeVisible()
+      await expect(cellA.getByText(`PlateA ${tag}`)).toHaveCount(0)
     } finally {
       await cleanupFood(foodA.id)
       await cleanupFood(foodB.id)
@@ -330,8 +332,12 @@ test.describe("Planner — clear shortcuts", () => {
 
     try {
       await page.goto("/")
+      // Navigate to next week — guaranteed no plates, isolated from parallel
+      // tests that seed plates in the current week's day-0.
+      const nextWeekFetch = page.waitForResponse(/\/api\/weeks\//)
+      await page.getByRole("button", { name: "Next week" }).click()
+      await nextWeekFetch
 
-      // Hover day-0 header — button not rendered since no plates exist
       await page.getByTestId("day-header-0").hover()
       await expect(page.getByTestId("clear-day-0")).toHaveCount(0)
     } finally {
