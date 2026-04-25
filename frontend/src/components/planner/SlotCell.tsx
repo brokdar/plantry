@@ -4,6 +4,7 @@ import {
   Plus,
   Trash2,
   Utensils,
+  X,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -55,7 +56,7 @@ export function SlotCell(props: SlotCellProps) {
   return <PlannedSlot {...props} plate={plate} />
 }
 
-function EmptySlot({ onAdd }: SlotCellProps) {
+function EmptySlot({ onAdd }: Pick<SlotCellProps, "onAdd">) {
   const { t } = useTranslation()
   return (
     <button
@@ -120,7 +121,20 @@ function SkippedSlot({
           {plate.note}
         </span>
       )}
-      <div className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <Button
+          variant="ghost"
+          size="icon"
+          data-testid="slot-quick-delete"
+          className="h-7 w-7 rounded-full bg-white/90 text-destructive/70 shadow-sm hover:text-destructive"
+          aria-label={t("plate.delete_plate")}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDeletePlate()
+          }}
+        >
+          <X className="h-3 w-3" />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -178,7 +192,7 @@ function PlannedSlot({
     (a, b) => a.sort_order - b.sort_order
   )
   if (sorted.length === 0) {
-    return <EmptySlot {...({ onAdd } as unknown as SlotCellProps)} />
+    return <EmptySlot onAdd={onAdd} />
   }
 
   const hero = sorted[0]
@@ -227,41 +241,56 @@ function PlannedSlot({
           <span className="truncate font-heading text-[13.5px] leading-tight font-bold tracking-tight text-on-surface">
             {heroName}
           </span>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="-mr-1 size-5 shrink-0"
-                aria-label={t("common.actions")}
-              >
-                <MoreVertical className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onAdd}>
-                <Plus className="h-3 w-3" />
-                {t("plate.add_component")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onToggleSkip}>
-                {t("skip.mark")}
-              </DropdownMenuItem>
-              {onSaveAsTemplate && (
-                <DropdownMenuItem onClick={onSaveAsTemplate}>
-                  <BookmarkPlus className="h-3 w-3" />
-                  {t("template.save_as")}
+          <div className="flex shrink-0 items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              data-testid="slot-quick-delete"
+              className="size-5 text-on-surface-variant/50 opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+              aria-label={t("plate.delete_plate")}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDeletePlate()
+              }}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="-mr-1 size-5 shrink-0"
+                  aria-label={t("common.actions")}
+                >
+                  <MoreVertical className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onAdd}>
+                  <Plus className="h-3 w-3" />
+                  {t("plate.add_component")}
                 </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={onDeletePlate}
-                className="text-destructive"
-              >
-                <Trash2 className="h-3 w-3" />
-                {t("plate.delete_plate")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem onClick={onToggleSkip}>
+                  {t("skip.mark")}
+                </DropdownMenuItem>
+                {onSaveAsTemplate && (
+                  <DropdownMenuItem onClick={onSaveAsTemplate}>
+                    <BookmarkPlus className="h-3 w-3" />
+                    {t("template.save_as")}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={onDeletePlate}
+                  className="text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  {t("plate.delete_plate")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
         <SlotChips names={sideComps} max={3} />
         <div className="mt-auto">

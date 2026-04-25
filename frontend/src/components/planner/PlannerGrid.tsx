@@ -26,7 +26,7 @@ import {
   DndCellWrapper,
   type DragPayload,
 } from "@/components/planner/DndCellWrapper"
-import { addPlateComponent, updatePlate } from "@/lib/api/plates"
+import { addPlateComponent, deletePlate, updatePlate } from "@/lib/api/plates"
 import { createPlate } from "@/lib/api/weeks"
 import { queryClient } from "@/lib/query-client"
 import { weekKeys } from "@/lib/queries/keys"
@@ -36,7 +36,7 @@ import type { Template } from "@/lib/api/templates"
 import type { Week } from "@/lib/api/weeks"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
-import { findPlateAt } from "@/lib/queries/plate-patches"
+import { findPlateAt, patchDeletePlate } from "@/lib/queries/plate-patches"
 import {
   useAddPlateComponent,
   useDeletePlate,
@@ -47,7 +47,7 @@ import { useApplyTemplate } from "@/lib/queries/templates"
 import { useWeekNutrition, useCreatePlate } from "@/lib/queries/weeks"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
-import { toastError } from "@/lib/toast"
+import { toast, toastError } from "@/lib/toast"
 
 import { AddComponentSheet } from "./AddComponentSheet"
 import { DayHeader } from "./DayHeader"
@@ -117,14 +117,15 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
   const today = new Date()
 
   const nutritionQuery = useWeekNutrition(week.id)
+  const nutritionData = nutritionQuery.data
   const dayMacros = useMemo(() => {
     const m = new Map<
       number,
-      NonNullable<typeof nutritionQuery.data>["days"][number]["macros"]
+      NonNullable<typeof nutritionData>["days"][number]["macros"]
     >()
-    for (const d of nutritionQuery.data?.days ?? []) m.set(d.day, d.macros)
+    for (const d of nutritionData?.days ?? []) m.set(d.day, d.macros)
     return m
-  }, [nutritionQuery, nutritionQuery.data])
+  }, [nutritionData])
 
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null)
@@ -206,13 +207,97 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
     }
   }
 
-  async function handleDeletePlate(plateId: number) {
-    if (!window.confirm(t("plate.delete_confirm_body"))) return
-    try {
-      await deletePlateMut.mutateAsync(plateId)
-    } catch (err) {
-      toastError(err, t)
-    }
+  function applyToAllCacheSlots(
+    patch: (w: Week | undefined) => Week | undefined
+  ) {
+    queryClient.setQueryData(weekKeys.byId(week.id), patch)
+    queryClient.setQueryData(
+      weekKeys.byDate(week.year, week.week_number),
+      patch
+    )
+    queryClient.setQueryData(weekKeys.current(), (old: Week | undefined) =>
+      old?.id === week.id ? patch(old) : old
+    )
+  }
+
+  function handleDeletePlate(plateId: number) {
+    if (pendingDeletesRef.current.has(plateId)) return
+
+    const plateSnapshot = week.plates.find((p) => p.id === plateId)
+    if (!plateSnapshot) return
+
+    applyToAllCacheSlots((w) => (w ? patchDeletePlate(w, plateId) : w))
+
+    const timeoutId = setTimeout(async () => {
+      pendingDeletesRef.current.delete(plateId)
+      try {
+        await deletePlateMut.mutateAsync(plateId)
+      } catch (err) {
+        toastError(err, t)
+      }
+    }, 5000)
+
+    pendingDeletesRef.current.set(plateId, {
+      timeoutId,
+      snapshot: plateSnapshot,
+    })
+
+    toast(t("plate.deleted"), {
+      action: {
+        label: t("common.undo"),
+        onClick: () => {
+          const pending = pendingDeletesRef.current.get(plateId)
+          if (!pending) return
+          clearTimeout(pending.timeoutId)
+          pendingDeletesRef.current.delete(plateId)
+          // Restore just this plate directly — no invalidate, so other
+          // pending deletes remain removed.
+          applyToAllCacheSlots((w) => {
+            if (!w) return w
+            if (w.plates.some((p) => p.id === plateId)) return w
+            return { ...w, plates: [...w.plates, pending.snapshot] }
+          })
+        },
+      },
+      duration: 5000,
+    })
+  }
+
+  function handleClearDay(day: number) {
+    const dayPlates = week.plates.filter((p) => p.day === day)
+    if (dayPlates.length === 0) return
+
+    applyToAllCacheSlots((w) =>
+      w ? { ...w, plates: w.plates.filter((p) => p.day !== day) } : w
+    )
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await Promise.all(dayPlates.map((p) => deletePlate(p.id)))
+      } catch (err) {
+        toastError(err, t)
+      } finally {
+        void queryClient.invalidateQueries({ queryKey: weekKeys.all })
+      }
+    }, 5000)
+
+    toast(t("planner.day_cleared"), {
+      action: {
+        label: t("common.undo"),
+        onClick: () => {
+          clearTimeout(timeoutId)
+          // Restore day's plates directly — no invalidate.
+          applyToAllCacheSlots((w) => {
+            if (!w) return w
+            const existingIds = new Set(w.plates.map((p) => p.id))
+            const toRestore = dayPlates.filter((p) => !existingIds.has(p.id))
+            if (toRestore.length === 0) return w
+            return { ...w, plates: [...w.plates, ...toRestore] }
+          })
+        },
+      },
+      duration: 5000,
+    })
   }
 
   async function handleToggleSkip(
@@ -277,6 +362,11 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
   const headerScrollRef = useRef<HTMLDivElement>(null)
   const bodyScrollRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<"move" | "copy">("move")
+  type PendingDelete = {
+    timeoutId: ReturnType<typeof setTimeout>
+    snapshot: Week["plates"][number]
+  }
+  const pendingDeletesRef = useRef(new Map<number, PendingDelete>())
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor)
@@ -385,6 +475,8 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
                     date={date}
                     today={isToday}
                     macros={dayMacros.get(idx)}
+                    onClearDay={() => handleClearDay(idx)}
+                    hasPlates={week.plates.some((p) => p.day === idx)}
                   />
                 )
               })}
