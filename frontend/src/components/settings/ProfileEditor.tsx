@@ -106,9 +106,8 @@ export function ProfileEditor() {
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
-      if (err instanceof ApiError) {
-        form.setError("protein_pct", { message: t(err.messageKey) })
-      }
+      const key = err instanceof ApiError ? err.messageKey : "error.server"
+      form.setError("root", { message: t(key) })
     }
   }
 
@@ -176,7 +175,7 @@ export function ProfileEditor() {
                   {t("profile.macro_sum", { sum: macroSum })}
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 items-start gap-3">
                 {(
                   [
                     ["protein_pct", "profile.protein_pct"],
@@ -288,6 +287,11 @@ export function ProfileEditor() {
               )}
             />
 
+            {form.formState.errors.root && (
+              <p className="text-sm text-destructive">
+                {form.formState.errors.root.message}
+              </p>
+            )}
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={updateMut.isPending}>
                 {t("profile.save")}
