@@ -18,12 +18,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { imageURL } from "@/lib/image-url"
 import { cn } from "@/lib/utils"
-import type { Component } from "@/lib/api/components"
+import type { ComposedFood } from "@/lib/api/foods"
 
 export type ComponentCardLayout = "grid" | "list"
 
 type ComponentCardProps = {
-  component: Component
+  component: ComposedFood
   layout?: ComponentCardLayout
   insightFlags?: { forgotten?: boolean; mostCooked?: boolean }
   onDelete: (id: number) => void
@@ -60,7 +60,8 @@ function ComponentCardGrid({
 }: Omit<ComponentCardProps, "layout">) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { id, name, role, image_path, updated_at, tags } = component
+  const { id, name, role, image_path, updated_at } = component
+  const tags = component.tags ?? []
   const totalTime =
     (component.prep_minutes ?? 0) + (component.cook_minutes ?? 0)
 
@@ -195,7 +196,8 @@ function ComponentCardList({
 }: Omit<ComponentCardProps, "layout">) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { id, name, role, image_path, updated_at, tags } = component
+  const { id, name, role, image_path, updated_at } = component
+  const tags = component.tags ?? []
   const totalTime =
     (component.prep_minutes ?? 0) + (component.cook_minutes ?? 0)
 

@@ -4,32 +4,30 @@ import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
 import { mockChickenBreast, mockLookupResponse } from "@/test/fixtures"
 
-vi.mock("@/lib/api/ingredients", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api/ingredients")>()
+vi.mock("@/lib/api/foods", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/foods")>()
   return {
     ...actual,
-    listIngredients: vi.fn(),
-    getIngredient: vi.fn(),
-    createIngredient: vi.fn(),
-    updateIngredient: vi.fn(),
-    deleteIngredient: vi.fn(),
-    refetchIngredient: vi.fn(),
+    listFoods: vi.fn(),
+    getFood: vi.fn(),
+    createFood: vi.fn(),
+    updateFood: vi.fn(),
+    deleteFood: vi.fn(),
+    refetchFood: vi.fn(),
+    listPortions: vi.fn().mockResolvedValue({ items: [] }),
+    upsertPortion: vi.fn(),
+    deletePortion: vi.fn(),
   }
 })
 
 vi.mock("@/lib/api/lookup", () => ({
-  lookupIngredients: vi.fn(),
-}))
-
-vi.mock("@/lib/api/portions", () => ({
-  listPortions: vi.fn().mockResolvedValue([]),
-  upsertPortion: vi.fn(),
-  deletePortion: vi.fn(),
+  lookupFoods: vi.fn(),
+  resolveCandidate: vi.fn(),
 }))
 
 vi.mock("@/lib/api/images", () => ({
-  uploadImage: vi.fn(),
-  deleteImage: vi.fn(),
+  uploadFoodImage: vi.fn(),
+  deleteFoodImage: vi.fn(),
   fetchImageFromUrl: vi.fn(),
 }))
 
@@ -79,13 +77,9 @@ vi.mock("@/components/images/ImageField", () => ({
   },
 }))
 
-import {
-  createIngredient,
-  refetchIngredient,
-  updateIngredient,
-} from "@/lib/api/ingredients"
-import { uploadImage } from "@/lib/api/images"
-import { lookupIngredients } from "@/lib/api/lookup"
+import { createFood, refetchFood, updateFood } from "@/lib/api/foods"
+import { uploadFoodImage } from "@/lib/api/images"
+import { lookupFoods } from "@/lib/api/lookup"
 import { ApiError } from "@/lib/api/client"
 import { IngredientEditor } from "./IngredientEditor"
 
@@ -126,13 +120,13 @@ describe("IngredientEditor", () => {
     // Save is disabled when name empty
     expect(saveButton).toBeDisabled()
     await user.click(saveButton)
-    expect(createIngredient).not.toHaveBeenCalled()
+    expect(createFood).not.toHaveBeenCalled()
   })
 
-  test("calls createIngredient on submit", async () => {
+  test("calls createFood on submit", async () => {
     const user = userEvent.setup()
     const onSuccess = vi.fn()
-    vi.mocked(createIngredient).mockResolvedValue({
+    vi.mocked(createFood).mockResolvedValue({
       ...mockChickenBreast,
       id: 2,
       name: "Tofu",
@@ -151,7 +145,7 @@ describe("IngredientEditor", () => {
     await user.click(saveButton)
 
     await waitFor(() => {
-      expect(createIngredient).toHaveBeenCalledWith(
+      expect(createFood).toHaveBeenCalledWith(
         expect.objectContaining({
           name: "Tofu",
           kcal_100g: 76,
@@ -164,10 +158,10 @@ describe("IngredientEditor", () => {
     })
   })
 
-  test("calls updateIngredient on submit in edit mode", async () => {
+  test("calls updateFood on submit in edit mode", async () => {
     const user = userEvent.setup()
     const onSuccess = vi.fn()
-    vi.mocked(updateIngredient).mockResolvedValue({
+    vi.mocked(updateFood).mockResolvedValue({
       ...mockChickenBreast,
       kcal_100g: 170,
     })
@@ -185,7 +179,7 @@ describe("IngredientEditor", () => {
     await user.click(saveButton)
 
     await waitFor(() => {
-      expect(updateIngredient).toHaveBeenCalledWith(
+      expect(updateFood).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
           name: "Chicken breast",
@@ -201,7 +195,7 @@ describe("IngredientEditor", () => {
 
   test("lookup panel populates form from candidate", async () => {
     const user = userEvent.setup()
-    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
+    vi.mocked(lookupFoods).mockResolvedValue(mockLookupResponse)
 
     renderWithRouter(<IngredientEditor />)
 
@@ -231,7 +225,7 @@ describe("IngredientEditor", () => {
 
   test("applying a lookup candidate without image_url preserves staged image", async () => {
     const user = userEvent.setup()
-    vi.mocked(lookupIngredients).mockResolvedValue(mockLookupResponse)
+    vi.mocked(lookupFoods).mockResolvedValue(mockLookupResponse)
 
     renderWithRouter(<IngredientEditor />)
 
@@ -259,7 +253,7 @@ describe("IngredientEditor", () => {
 
   test("shows server error message", async () => {
     const user = userEvent.setup()
-    vi.mocked(createIngredient).mockRejectedValue(
+    vi.mocked(createFood).mockRejectedValue(
       new ApiError(409, "error.ingredient.duplicate_name")
     )
 
@@ -285,7 +279,7 @@ describe("IngredientEditor", () => {
   test("refetch button calls API and updates form values", async () => {
     const user = userEvent.setup()
     const withFdc = { ...mockChickenBreast, fdc_id: "171077" }
-    vi.mocked(refetchIngredient).mockResolvedValue({
+    vi.mocked(refetchFood).mockResolvedValue({
       ...withFdc,
       kcal_100g: 170,
       protein_100g: 32,
@@ -298,7 +292,7 @@ describe("IngredientEditor", () => {
     await user.click(refetchButton)
 
     await waitFor(() => {
-      expect(refetchIngredient).toHaveBeenCalledWith(withFdc.id, undefined)
+      expect(refetchFood).toHaveBeenCalledWith(withFdc.id, undefined)
     })
     await waitFor(() => {
       expect(
@@ -314,7 +308,7 @@ describe("IngredientEditor", () => {
     const user = userEvent.setup()
     const withFdc = { ...mockChickenBreast, fdc_id: "171077" }
     const apiError = new ApiError(404, "error.ingredient.refetch.no_results")
-    vi.mocked(refetchIngredient).mockRejectedValue(apiError)
+    vi.mocked(refetchFood).mockRejectedValue(apiError)
 
     renderWithRouter(<IngredientEditor ingredient={withFdc} />)
 
@@ -332,12 +326,12 @@ describe("IngredientEditor", () => {
   test("staged image uploads after create using returned id", async () => {
     const user = userEvent.setup()
     const onSuccess = vi.fn()
-    vi.mocked(createIngredient).mockResolvedValue({
+    vi.mocked(createFood).mockResolvedValue({
       ...mockChickenBreast,
       id: 42,
       name: "Tofu",
     })
-    vi.mocked(uploadImage).mockResolvedValue({ image_path: "p.jpg" })
+    vi.mocked(uploadFoodImage).mockResolvedValue({ image_path: "p.jpg" })
 
     renderWithRouter(<IngredientEditor onSuccess={onSuccess} />)
 
@@ -348,14 +342,10 @@ describe("IngredientEditor", () => {
     await user.click(screen.getByRole("button", { name: "Save" }))
 
     await waitFor(() => {
-      expect(createIngredient).toHaveBeenCalled()
+      expect(createFood).toHaveBeenCalled()
     })
     await waitFor(() => {
-      expect(uploadImage).toHaveBeenCalledWith(
-        "ingredients",
-        42,
-        expect.any(Blob)
-      )
+      expect(uploadFoodImage).toHaveBeenCalledWith(42, expect.any(Blob))
     })
     await waitFor(() => {
       expect(onSuccess).toHaveBeenCalled()
@@ -365,12 +355,14 @@ describe("IngredientEditor", () => {
   test("upload failure after create surfaces toast and still calls onSuccess", async () => {
     const user = userEvent.setup()
     const onSuccess = vi.fn()
-    vi.mocked(createIngredient).mockResolvedValue({
+    vi.mocked(createFood).mockResolvedValue({
       ...mockChickenBreast,
       id: 99,
       name: "Lentils",
     })
-    vi.mocked(uploadImage).mockRejectedValue(new ApiError(500, "error.server"))
+    vi.mocked(uploadFoodImage).mockRejectedValue(
+      new ApiError(500, "error.server")
+    )
 
     renderWithRouter(<IngredientEditor onSuccess={onSuccess} />)
 
@@ -381,7 +373,7 @@ describe("IngredientEditor", () => {
     await user.click(screen.getByRole("button", { name: "Save" }))
 
     await waitFor(() => {
-      expect(uploadImage).toHaveBeenCalled()
+      expect(uploadFoodImage).toHaveBeenCalled()
     })
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalled()
@@ -394,13 +386,17 @@ describe("IngredientEditor", () => {
   test("staged portions are saved after create using returned id", async () => {
     const user = userEvent.setup()
     const onSuccess = vi.fn()
-    vi.mocked(createIngredient).mockResolvedValue({
+    vi.mocked(createFood).mockResolvedValue({
       ...mockChickenBreast,
       id: 77,
       name: "Sourdough",
     })
-    const { upsertPortion } = await import("@/lib/api/portions")
-    vi.mocked(upsertPortion).mockResolvedValue(undefined)
+    const { upsertPortion } = await import("@/lib/api/foods")
+    vi.mocked(upsertPortion).mockResolvedValue({
+      food_id: 77,
+      unit: "slice",
+      grams: 45,
+    })
 
     renderWithRouter(<IngredientEditor onSuccess={onSuccess} />)
 
@@ -418,7 +414,7 @@ describe("IngredientEditor", () => {
     await user.click(screen.getByRole("button", { name: "Save" }))
 
     await waitFor(() => {
-      expect(createIngredient).toHaveBeenCalled()
+      expect(createFood).toHaveBeenCalled()
     })
     await waitFor(() => {
       expect(upsertPortion).toHaveBeenCalledWith(77, {

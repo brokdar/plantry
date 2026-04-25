@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useComponents } from "@/lib/queries/components"
+import { useFoods } from "@/lib/queries/foods"
 import {
   useDeleteTemplate,
   useTemplates,
@@ -26,9 +26,13 @@ import { TemplateRenameDialog } from "./TemplateRenameDialog"
 export function TemplateList() {
   const { t } = useTranslation()
   const { data: templates, isLoading } = useTemplates()
-  const { data: componentsData } = useComponents({ limit: 200, offset: 0 })
+  const { data: componentsData } = useFoods({
+    kind: "composed",
+    limit: 200,
+    offset: 0,
+  })
   const componentsById = new Map(
-    componentsData?.items.map((c) => [c.id, c]) ?? []
+    componentsData?.items.map((c) => [c.id, c] as const) ?? []
   )
 
   const [deleteId, setDeleteId] = useState<number | null>(null)
@@ -113,14 +117,14 @@ export function TemplateList() {
                     </span>
                   ) : (
                     tpl.components.slice(0, 4).map((tc) => {
-                      const c = componentsById.get(tc.component_id)
+                      const c = componentsById.get(tc.food_id)
                       return (
                         <Badge
                           key={tc.id}
                           variant="outline"
                           className="text-xs font-normal"
                         >
-                          {c?.name ?? `#${tc.component_id}`}
+                          {c?.name ?? `#${tc.food_id}`}
                         </Badge>
                       )
                     })

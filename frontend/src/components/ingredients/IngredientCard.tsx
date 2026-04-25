@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { imageURL } from "@/lib/image-url"
-import type { Ingredient } from "@/lib/api/ingredients"
+import type { LeafFood } from "@/lib/api/foods"
 
 const SOURCE_DOT: Record<string, "primary" | "tertiary" | "muted"> = {
   fdc: "primary",
@@ -27,7 +27,7 @@ const SOURCE_DOT: Record<string, "primary" | "tertiary" | "muted"> = {
 }
 
 type IngredientCardProps = {
-  ingredient: Ingredient
+  ingredient: LeafFood
   onDelete: (id: number) => void
 }
 
@@ -36,8 +36,11 @@ export function IngredientCard({ ingredient, onDelete }: IngredientCardProps) {
   const navigate = useNavigate()
   const { id, name, source, image_path, updated_at } = ingredient
 
-  const sourceDot = SOURCE_DOT[source] ?? "muted"
-  const sourceLabel = t(`ingredient.source_${source}`, { defaultValue: source })
+  const sourceKey = source ?? "manual"
+  const sourceDot = SOURCE_DOT[sourceKey] ?? "muted"
+  const sourceLabel = t(`ingredient.source_${sourceKey}`, {
+    defaultValue: sourceKey,
+  })
 
   return (
     <div className="group relative" data-testid={`ingredient-card-${id}`}>

@@ -12,21 +12,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { useDeleteIngredient } from "@/lib/queries/ingredients"
+import { useDeleteFood } from "@/lib/queries/foods"
 
 interface DeleteIngredientDialogProps {
-  ingredientId: number
+  foodId: number
   onDeleted?: () => void
 }
 
 export function DeleteIngredientDialog({
-  ingredientId,
+  foodId,
   onDeleted,
 }: DeleteIngredientDialogProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const mutation = useDeleteIngredient()
+  const mutation = useDeleteFood()
 
   function handleOpenChange(next: boolean) {
     if (!next) setError(null)
@@ -35,7 +35,7 @@ export function DeleteIngredientDialog({
 
   function confirm() {
     setError(null)
-    mutation.mutate(ingredientId, {
+    mutation.mutate(foodId, {
       onSuccess: () => {
         setOpen(false)
         onDeleted?.()

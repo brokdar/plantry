@@ -1,10 +1,10 @@
 import { test, expect, apiRequest } from "./helpers"
 
-import { API, cleanupIngredient, seedIngredient, uid } from "./helpers"
+import { API, cleanupFood, seedLeafFood, uid } from "./helpers"
 
 async function seedPortion(ingredientId: number, unit: string, grams: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post(`/api/ingredients/${ingredientId}/portions`, {
+  const res = await ctx.post(`/api/foods/${ingredientId}/portions`, {
     data: { unit, grams },
   })
   expect(
@@ -48,7 +48,7 @@ async function setAmount(
 test.describe("Unit conversion", () => {
   test("honey tbsp uses the ingredient-specific portion", async ({ page }) => {
     const tag = uid()
-    const ing = await seedIngredient({
+    const ing = await seedLeafFood({
       name: `E2E Honey ${tag}`,
       kcal_100g: 304,
       carbs_100g: 82,
@@ -73,13 +73,13 @@ test.describe("Unit conversion", () => {
       const badge = page.getByTestId("ingredient-row-0-badge")
       await expect(badge).toHaveAttribute("data-source", "portion")
     } finally {
-      await cleanupIngredient(ing.id)
+      await cleanupFood(ing.id)
     }
   })
 
   test("tbsp without portion falls back to water-density", async ({ page }) => {
     const tag = uid()
-    const ing = await seedIngredient({ name: `E2E Flour ${tag}` })
+    const ing = await seedLeafFood({ name: `E2E Flour ${tag}` })
 
     try {
       await page.goto("/components/new")
@@ -96,7 +96,7 @@ test.describe("Unit conversion", () => {
       const badge = page.getByTestId("ingredient-row-0-badge")
       await expect(badge).toHaveAttribute("data-source", "fallback")
     } finally {
-      await cleanupIngredient(ing.id)
+      await cleanupFood(ing.id)
     }
   })
 
@@ -104,7 +104,7 @@ test.describe("Unit conversion", () => {
     page,
   }) => {
     const tag = uid()
-    const ing = await seedIngredient({ name: `E2E Garlic ${tag}` })
+    const ing = await seedLeafFood({ name: `E2E Garlic ${tag}` })
 
     try {
       await page.goto("/components/new")
@@ -123,7 +123,7 @@ test.describe("Unit conversion", () => {
 
       const portionResponse = page.waitForResponse(
         (res) =>
-          res.url().includes(`/api/ingredients/${ing.id}/portions`) &&
+          res.url().includes(`/api/foods/${ing.id}/portions`) &&
           res.request().method() === "POST"
       )
       await page.getByTestId("ingredient-row-0-save-portion").click()
@@ -132,7 +132,7 @@ test.describe("Unit conversion", () => {
       await expect(badge).toHaveAttribute("data-source", "portion")
       await expect(page.getByTestId("ingredient-row-0-grams")).toHaveValue("8")
     } finally {
-      await cleanupIngredient(ing.id)
+      await cleanupFood(ing.id)
     }
   })
 })

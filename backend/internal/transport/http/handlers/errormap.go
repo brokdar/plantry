@@ -49,5 +49,5 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 }
 
 func toHTTP(err error) (int, string) {
-	return toHTTPWithResource(err, "ingredient")
+	return toHTTPWithResource(err, "food")
 }

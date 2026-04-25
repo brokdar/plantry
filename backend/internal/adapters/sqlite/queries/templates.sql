@@ -14,7 +14,7 @@ DELETE FROM templates WHERE id = ?;
 SELECT * FROM templates ORDER BY name, id;
 
 -- name: CreateTemplateComponent :one
-INSERT INTO template_components (template_id, component_id, portions, sort_order)
+INSERT INTO template_components (template_id, food_id, portions, sort_order)
 VALUES (?, ?, ?, ?)
 RETURNING *;
 
@@ -24,5 +24,5 @@ DELETE FROM template_components WHERE template_id = ?;
 -- name: ListTemplateComponentsByTemplate :many
 SELECT * FROM template_components WHERE template_id = ? ORDER BY sort_order, id;
 
--- name: CountTemplatesUsingComponent :one
-SELECT COUNT(*) FROM template_components WHERE component_id = ?;
+-- name: CountTemplatesUsingFood :one
+SELECT COUNT(*) FROM template_components WHERE food_id = ?;

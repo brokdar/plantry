@@ -5,7 +5,7 @@ import {
   setISOWeek,
   setISOWeekYear,
 } from "date-fns"
-import { BarChart2, Download, Settings, Sparkles } from "lucide-react"
+import { BarChart2, Download, Settings, Sparkles, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
@@ -32,7 +32,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { clearWeekPlates } from "@/lib/api/weeks"
+import { clearWeekPlates, type Week } from "@/lib/api/weeks"
 import { useAISettings } from "@/lib/queries/ai"
 import { queryClient } from "@/lib/query-client"
 import { weekKeys } from "@/lib/queries/keys"
@@ -44,7 +44,7 @@ import {
 } from "@/lib/queries/weeks"
 import { useChatUI } from "@/lib/stores/chat-ui"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
-import { toastError } from "@/lib/toast"
+import { toast, toastError } from "@/lib/toast"
 
 export const Route = createFileRoute("/")({
   component: PlannerPage,
@@ -103,6 +103,58 @@ function PlannerPage() {
     } catch (err) {
       toastError(err, t)
     }
+  }
+
+  function handleClearWeek() {
+    const target = weekQuery.data
+    if (!target || target.plates.length === 0) return
+
+    const platesSnapshot = target.plates
+
+    const applyToAllCacheSlots = (
+      patch: (w: Week | undefined) => Week | undefined
+    ) => {
+      queryClient.setQueryData(weekKeys.byId(target.id), patch)
+      queryClient.setQueryData(
+        weekKeys.byDate(target.year, target.week_number),
+        patch
+      )
+      queryClient.setQueryData(weekKeys.current(), (old: Week | undefined) =>
+        old?.id === target.id ? patch(old) : old
+      )
+    }
+
+    applyToAllCacheSlots((w) => (w ? { ...w, plates: [] } : w))
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await clearWeekPlates(target.id)
+        void queryClient.invalidateQueries({ queryKey: weekKeys.all })
+      } catch (err) {
+        toastError(err, t)
+        void queryClient.invalidateQueries({ queryKey: weekKeys.all })
+      }
+    }, 5000)
+
+    toast(t("planner.week_cleared"), {
+      action: {
+        label: t("common.undo"),
+        onClick: () => {
+          clearTimeout(timeoutId)
+          // Restore plates directly — no invalidate.
+          applyToAllCacheSlots((w) => {
+            if (!w) return w
+            const existingIds = new Set(w.plates.map((p) => p.id))
+            const toRestore = platesSnapshot.filter(
+              (p) => !existingIds.has(p.id)
+            )
+            if (toRestore.length === 0) return w
+            return { ...w, plates: [...w.plates, ...toRestore] }
+          })
+        },
+      },
+      duration: 5000,
+    })
   }
 
   const slots = slotsQuery.data?.items ?? []
@@ -203,18 +255,35 @@ function PlannerPage() {
           onNext={() => setYearWeek(shiftWeek(year, week, 1))}
           onCopy={handleCopy}
         />
-        <div className="flex flex-wrap items-center gap-3">
-          {dailyAvgKcal !== null && (
-            <div className="flex items-baseline gap-2 rounded-full bg-surface-container-highest px-4 py-1.5">
-              <span className="font-heading text-sm font-bold text-primary">
-                {dailyAvgKcal.toLocaleString()} kcal
-              </span>
-              <span className="text-[9px] font-bold tracking-widest text-on-surface-variant uppercase">
-                {t("planner.daily_avg")}
-              </span>
-            </div>
-          )}
-          <TooltipProvider>
+        <TooltipProvider>
+          <div className="flex flex-wrap items-center gap-3">
+            {dailyAvgKcal !== null && (
+              <div className="flex items-baseline gap-2 rounded-full bg-surface-container-highest px-4 py-1.5">
+                <span className="font-heading text-sm font-bold text-primary">
+                  {dailyAvgKcal.toLocaleString()} kcal
+                </span>
+                <span className="text-[9px] font-bold tracking-widest text-on-surface-variant uppercase">
+                  {t("planner.daily_avg")}
+                </span>
+              </div>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleClearWeek}
+                  aria-label={t("planner.clear_week")}
+                  data-testid="clear-week"
+                  className="hover:bg-destructive/10 hover:text-destructive [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {t("planner.clear_week")}
+              </TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -231,9 +300,7 @@ function PlannerPage() {
                 {t("nutrition.button")}
               </TooltipContent>
             </Tooltip>
-          </TooltipProvider>
-          {aiSettings?.enabled && (
-            <TooltipProvider>
+            {aiSettings?.enabled && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -251,9 +318,9 @@ function PlannerPage() {
                   {t("chat.button")}
                 </TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
+            )}
+          </div>
+        </TooltipProvider>
       </div>
 
       <div className="-mx-2 hidden md:-mx-4 md:block">
@@ -264,6 +331,7 @@ function PlannerPage() {
       </div>
 
       <ShoppingPanel
+        key={week_.id}
         weekId={week_.id}
         open={shoppingOpen}
         onOpenChange={setShoppingOpen}

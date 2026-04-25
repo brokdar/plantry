@@ -10,16 +10,16 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useIngredients } from "@/lib/queries/ingredients"
+import { useFoods } from "@/lib/queries/foods"
 import { cn } from "@/lib/utils"
-import type { Ingredient } from "@/lib/api/ingredients"
+import type { LeafFood } from "@/lib/api/foods"
 
 import { QuickCreateIngredientDialog } from "./QuickCreateIngredientDialog"
 
 type IngredientComboboxProps = {
   value: number
   selectedName?: string
-  onSelect: (ingredient: Ingredient) => void
+  onSelect: (ingredient: LeafFood) => void
   disabled?: boolean
   testId?: string
 }
@@ -37,12 +37,13 @@ export function IngredientCombobox({
   const [createOpen, setCreateOpen] = useState(false)
   const deferredSearch = useDeferredValue(search)
 
-  const { data, isLoading } = useIngredients({
+  const { data, isLoading } = useFoods({
+    kind: "leaf",
     search: deferredSearch || undefined,
     limit: 12,
   })
 
-  const items = data?.items ?? []
+  const items = (data?.items ?? []) as LeafFood[]
   const hasSelection = value > 0
 
   return (
@@ -128,10 +129,10 @@ export function IngredientCombobox({
                           {item.name}
                         </p>
                         <p className="truncate text-[11px] text-on-surface-variant">
-                          {Math.round(item.kcal_100g)} kcal ·{" "}
-                          {item.protein_100g.toFixed(0)}P ·{" "}
-                          {item.carbs_100g.toFixed(0)}C ·{" "}
-                          {item.fat_100g.toFixed(0)}F
+                          {Math.round(item.kcal_100g ?? 0)} kcal ·{" "}
+                          {(item.protein_100g ?? 0).toFixed(0)}P ·{" "}
+                          {(item.carbs_100g ?? 0).toFixed(0)}C ·{" "}
+                          {(item.fat_100g ?? 0).toFixed(0)}F
                         </p>
                       </div>
                     </button>

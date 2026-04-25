@@ -1,5 +1,5 @@
 import { z } from "zod/v4"
-import { COMPONENT_ROLES } from "./component"
+import { FOOD_ROLES } from "./food"
 
 export const importStep1Schema = z
   .object({
@@ -14,7 +14,7 @@ export type ImportStep1Values = z.infer<typeof importStep1Schema>
 
 export const importFinalizeSchema = z.object({
   name: z.string().min(1),
-  role: z.enum(COMPONENT_ROLES),
+  role: z.enum(FOOD_ROLES),
   reference_portions: z.coerce.number().positive(),
   prep_minutes: z.coerce.number().min(0).nullable(),
   cook_minutes: z.coerce.number().min(0).nullable(),

@@ -5,7 +5,8 @@ import { ChevronLeft } from "lucide-react"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { IngredientEditor } from "@/components/ingredients/IngredientEditor"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useIngredient } from "@/lib/queries/ingredients"
+import type { LeafFood } from "@/lib/api/foods"
+import { useFood } from "@/lib/queries/foods"
 
 export const Route = createFileRoute("/ingredients/$id/edit")({
   component: EditIngredientPage,
@@ -17,7 +18,7 @@ function EditIngredientPage() {
   const navigate = useNavigate()
   const numericId = Number(id)
 
-  const { data: ingredient, isLoading } = useIngredient(numericId)
+  const { data: food, isLoading } = useFood(numericId)
 
   if (Number.isNaN(numericId)) {
     return (
@@ -41,7 +42,7 @@ function EditIngredientPage() {
     )
   }
 
-  if (!ingredient) {
+  if (!food) {
     return (
       <p className="py-12 text-center text-on-surface-variant">
         {t("error.not_found")}
@@ -66,7 +67,7 @@ function EditIngredientPage() {
         }
       />
       <IngredientEditor
-        ingredient={ingredient}
+        ingredient={food as LeafFood}
         onSuccess={() => navigate({ to: "/ingredients" })}
         onDeleted={() => navigate({ to: "/ingredients" })}
       />

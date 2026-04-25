@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
@@ -22,10 +22,10 @@ type JSONLDExtractor interface {
 	ExtractRecipe(html string) (*RawRecipe, error)
 }
 
-// Resolver resolves an ingredient name against the local catalogue and external sources.
-// Implemented by domain/ingredient.Resolver.
+// Resolver resolves a raw ingredient line against the local food catalogue
+// and external sources. Implemented by domain/food.Resolver.
 type Resolver interface {
-	Lookup(ctx context.Context, barcode, query, lang string, limit int) ([]ingredient.Candidate, int, error)
+	Lookup(ctx context.Context, barcode, query, lang string, limit int) ([]food.Candidate, int, error)
 }
 
 // Service orchestrates recipe import: fetch → JSON-LD → LLM fallback → parse lines.
@@ -71,13 +71,11 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 		}
 	}
 
-	// First-choice: JSON-LD extraction.
 	rec, err := s.jsonld.ExtractRecipe(htmlBody)
 	if err == nil && len(rec.RecipeIngredient) > 0 {
 		return s.recipeToDraft(rec, sourceURL, "jsonld"), nil
 	}
 
-	// Fallback: LLM extraction.
 	if s.llmResolver == nil {
 		if errors.Is(err, ErrNoRecipe) {
 			return nil, domain.ErrImportNoRecipe
@@ -95,16 +93,16 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 	return s.recipeToDraft(rec, sourceURL, "llm"), nil
 }
 
-// ResolveLine is a thin wrapper around ingredient.Resolver used from the
-// per-row lookup endpoint in the review step. The recommended-index return
-// value is not exposed to the importer review UI.
-func (s *Service) ResolveLine(ctx context.Context, query, lang string) ([]ingredient.Candidate, error) {
+// ResolveLine wraps the food resolver used from the per-row lookup endpoint
+// in the review step. The recommended-index return value is not exposed.
+func (s *Service) ResolveLine(ctx context.Context, query, lang string) ([]food.Candidate, error) {
 	results, _, err := s.resolver.Lookup(ctx, "", query, lang, 5)
 	return results, err
 }
 
 // FinalizeInput is what the review step submits after the user has resolved
-// every ingredient line.
+// every ingredient line. Each row resolves to a child food (leaf) for the new
+// composed food.
 type FinalizeInput struct {
 	Name              string
 	Role              string
@@ -114,7 +112,7 @@ type FinalizeInput struct {
 	Notes             *string
 	Tags              []string
 	Instructions      []FinalizedInstruction
-	Ingredients       []FinalizedIngredient
+	Children          []FinalizedChild
 }
 
 // ResolutionExisting / ResolutionSkip / ResolutionNew classify a per-row decision.
@@ -124,77 +122,83 @@ const (
 	ResolutionNew      = "new"
 )
 
-type FinalizedIngredient struct {
-	Resolution   string
-	IngredientID int64
-	Amount       float64
-	Unit         string
+// FinalizedChild is one resolved ingredient row: pick an existing food,
+// create a new one before POSTing, or skip the row entirely.
+type FinalizedChild struct {
+	Resolution string
+	FoodID     int64
+	Amount     float64
+	Unit       string
 }
 
+// FinalizedInstruction is a reviewed cooking step ready to write.
 type FinalizedInstruction struct {
 	StepNumber int
 	Text       string
 }
 
-// FinalizedComponent mirrors the shape of componentRequest in handlers/components.go
-// so callers can POST it directly to /api/components without reshaping.
-type FinalizedComponent struct {
-	Name              string                         `json:"name"`
-	Role              string                         `json:"role"`
-	ReferencePortions float64                        `json:"reference_portions"`
-	PrepMinutes       *int                           `json:"prep_minutes"`
-	CookMinutes       *int                           `json:"cook_minutes"`
-	Notes             *string                        `json:"notes"`
-	Ingredients       []FinalizedComponentIngredient `json:"ingredients"`
-	Instructions      []FinalizedComponentStep       `json:"instructions"`
-	Tags              []string                       `json:"tags"`
+// FinalizedFood is the JSON payload the importer returns after finalize. It is
+// shaped to be POSTed directly to /api/foods (kind=composed).
+type FinalizedFood struct {
+	Name              string               `json:"name"`
+	Kind              string               `json:"kind"`
+	Role              string               `json:"role"`
+	ReferencePortions float64              `json:"reference_portions"`
+	PrepMinutes       *int                 `json:"prep_minutes"`
+	CookMinutes       *int                 `json:"cook_minutes"`
+	Notes             *string              `json:"notes"`
+	Children          []FinalizedFoodChild `json:"children"`
+	Instructions      []FinalizedFoodStep  `json:"instructions"`
+	Tags              []string             `json:"tags"`
 }
 
-type FinalizedComponentIngredient struct {
-	IngredientID int64   `json:"ingredient_id"`
-	Amount       float64 `json:"amount"`
-	Unit         string  `json:"unit"`
-	Grams        float64 `json:"grams"`
-	SortOrder    int     `json:"sort_order"`
+// FinalizedFoodChild mirrors one food_components row on the target food.
+type FinalizedFoodChild struct {
+	ChildID   int64   `json:"child_id"`
+	Amount    float64 `json:"amount"`
+	Unit      string  `json:"unit"`
+	Grams     float64 `json:"grams"`
+	SortOrder int     `json:"sort_order"`
 }
 
-type FinalizedComponentStep struct {
+// FinalizedFoodStep is one reviewed instruction step.
+type FinalizedFoodStep struct {
 	StepNumber int    `json:"step_number"`
 	Text       string `json:"text"`
 }
 
-// Finalize validates the reviewed draft and returns a payload shaped like
-// componentRequest. No DB writes happen here; persistence is the caller's job
-// via POST /api/components.
-func (s *Service) Finalize(_ context.Context, in FinalizeInput) (*FinalizedComponent, error) {
+// Finalize validates the reviewed draft and returns a payload that POSTs
+// directly to /api/foods. No DB writes happen here.
+func (s *Service) Finalize(_ context.Context, in FinalizeInput) (*FinalizedFood, error) {
 	if in.Name == "" || in.Role == "" || in.ReferencePortions <= 0 {
 		return nil, fmt.Errorf("%w: name, role, reference_portions required", domain.ErrInvalidInput)
 	}
 
-	out := &FinalizedComponent{
+	out := &FinalizedFood{
 		Name:              in.Name,
+		Kind:              string(food.KindComposed),
 		Role:              in.Role,
 		ReferencePortions: in.ReferencePortions,
 		PrepMinutes:       in.PrepMinutes,
 		CookMinutes:       in.CookMinutes,
 		Notes:             in.Notes,
 		Tags:              append([]string{}, in.Tags...),
-		Instructions:      make([]FinalizedComponentStep, 0, len(in.Instructions)),
-		Ingredients:       make([]FinalizedComponentIngredient, 0, len(in.Ingredients)),
+		Instructions:      make([]FinalizedFoodStep, 0, len(in.Instructions)),
+		Children:          make([]FinalizedFoodChild, 0, len(in.Children)),
 	}
 
 	for _, ins := range in.Instructions {
-		out.Instructions = append(out.Instructions, FinalizedComponentStep(ins))
+		out.Instructions = append(out.Instructions, FinalizedFoodStep(ins))
 	}
 
 	sort := 0
-	for _, row := range in.Ingredients {
+	for _, row := range in.Children {
 		switch row.Resolution {
 		case ResolutionSkip:
 			continue
 		case ResolutionExisting, ResolutionNew:
-			if row.IngredientID == 0 {
-				return nil, fmt.Errorf("%w: missing ingredient_id for %s row", domain.ErrImportInvalidResolution, row.Resolution)
+			if row.FoodID == 0 {
+				return nil, fmt.Errorf("%w: missing food_id for %s row", domain.ErrImportInvalidResolution, row.Resolution)
 			}
 			if row.Amount <= 0 {
 				return nil, fmt.Errorf("%w: amount must be > 0", domain.ErrImportInvalidResolution)
@@ -206,25 +210,22 @@ func (s *Service) Finalize(_ context.Context, in FinalizeInput) (*FinalizedCompo
 		if normalizedUnit == "" {
 			return nil, fmt.Errorf("%w: unit required", domain.ErrImportInvalidResolution)
 		}
-		// Seed Grams via the universal default when possible so the review UI
-		// can show a reasonable total; the component service re-resolves this
-		// canonically at POST time (honoring ingredient-specific portions).
 		var grams float64
 		if def, ok := units.LookupDefault(normalizedUnit); ok {
 			grams = row.Amount * def.Grams
 		}
-		out.Ingredients = append(out.Ingredients, FinalizedComponentIngredient{
-			IngredientID: row.IngredientID,
-			Amount:       row.Amount,
-			Unit:         normalizedUnit,
-			Grams:        grams,
-			SortOrder:    sort,
+		out.Children = append(out.Children, FinalizedFoodChild{
+			ChildID:   row.FoodID,
+			Amount:    row.Amount,
+			Unit:      normalizedUnit,
+			Grams:     grams,
+			SortOrder: sort,
 		})
 		sort++
 	}
 
-	if len(out.Ingredients) == 0 {
-		return nil, fmt.Errorf("%w: at least one ingredient required", domain.ErrInvalidInput)
+	if len(out.Children) == 0 {
+		return nil, fmt.Errorf("%w: at least one child food required", domain.ErrInvalidInput)
 	}
 	return out, nil
 }

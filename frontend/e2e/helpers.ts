@@ -45,50 +45,107 @@ export function failOnDialog(page: Page) {
   })
 }
 
-export async function seedIngredient(data: {
+// ── Food seeding ──────────────────────────────────────────────────────
+//
+// The unified Food aggregate replaces the old Ingredient + Component split.
+// `kind: "leaf"` foods carry per-100g nutrition directly (the old
+// "Ingredient"). `kind: "composed"` foods reference child foods (the old
+// "Component"). Plates and templates always reference a Food by id, regardless
+// of kind, so leaf foods can be placed directly on a plate.
+
+export interface SeedLeafInput {
   name: string
   kcal_100g?: number
   protein_100g?: number
   fat_100g?: number
   carbs_100g?: number
-}) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/ingredients", { data })
-  const body = await res.json()
-  expect(
-    res.ok(),
-    `Seed ingredient "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body as { id: number; name: string }
+  fiber_100g?: number
+  sodium_100g?: number
 }
 
-export async function seedComponent(data: {
+export interface SeedComposedChild {
+  child_id: number
+  amount: number
+  unit: string
+  grams: number
+  sort_order: number
+}
+
+export interface SeedComposedInput {
   name: string
   role: string
   reference_portions?: number
-  ingredients?: {
-    ingredient_id: number
-    amount: number
-    unit: string
-    grams: number
-    sort_order: number
-  }[]
+  children?: SeedComposedChild[]
   instructions?: { step_number: number; text: string }[]
   tags?: string[]
-}) {
+}
+
+export async function seedLeafFood(data: SeedLeafInput) {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/components", {
-    data: { reference_portions: 1, ...data },
+  const res = await ctx.post("/api/foods", {
+    data: { kind: "leaf", source: "manual", ...data },
   })
   const body = await res.json()
   expect(
     res.ok(),
-    `Seed component "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
+    `Seed leaf food "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
   ).toBeTruthy()
   await ctx.dispose()
-  return body as { id: number; name: string }
+  return body as { id: number; name: string; kind: "leaf" }
 }
+
+export async function seedComposedFood(data: SeedComposedInput) {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  const res = await ctx.post("/api/foods", {
+    data: { kind: "composed", reference_portions: 1, ...data },
+  })
+  const body = await res.json()
+  expect(
+    res.ok(),
+    `Seed composed food "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
+  ).toBeTruthy()
+  await ctx.dispose()
+  return body as { id: number; name: string; kind: "composed" }
+}
+
+export async function cleanupFood(id: number) {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  await ctx.delete(`/api/foods/${id}`)
+  await ctx.dispose()
+}
+
+/**
+ * Seeds a composed food that satisfies the "at least one child" invariant by
+ * creating a throwaway leaf stub automatically. Returns both the composed food
+ * and the stub so callers can clean up both.
+ */
+export async function seedComposedWithStub(
+  data: SeedComposedInput,
+  tag: string
+) {
+  const stub = await seedLeafFood({ name: `Stub ${tag}-${data.name}` })
+  const composed = await seedComposedFood({
+    ...data,
+    children: data.children ?? [
+      { child_id: stub.id, amount: 100, unit: "g", grams: 100, sort_order: 0 },
+    ],
+  })
+  return { composed, stub }
+}
+
+export async function createVariantViaAPI(parentId: number) {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  const res = await ctx.post(`/api/foods/${parentId}/variant`)
+  const body = await res.json()
+  expect(
+    res.ok(),
+    `Create variant failed: ${res.status()} ${JSON.stringify(body)}`
+  ).toBeTruthy()
+  await ctx.dispose()
+  return body as { id: number; name: string; kind: "composed" }
+}
+
+// ── Slot seeding ──────────────────────────────────────────────────────
 
 export async function seedSlot(
   name_key: string,
@@ -106,18 +163,6 @@ export async function seedSlot(
   ).toBeTruthy()
   await ctx.dispose()
   return body
-}
-
-export async function cleanupComponent(id: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/components/${id}`)
-  await ctx.dispose()
-}
-
-export async function cleanupIngredient(id: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/ingredients/${id}`)
-  await ctx.dispose()
 }
 
 export async function deletePlatesUsingSlot(slotId: number) {
@@ -145,9 +190,11 @@ export async function cleanupSlot(id: number) {
   await ctx.dispose()
 }
 
+// ── Template seeding ──────────────────────────────────────────────────
+
 export async function seedTemplate(data: {
   name: string
-  components?: { component_id: number; portions: number }[]
+  components?: { food_id: number; portions: number }[]
 }) {
   const ctx = await apiRequest.newContext({ baseURL: API })
   const res = await ctx.post("/api/templates", {
@@ -166,16 +213,4 @@ export async function cleanupTemplate(id: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
   await ctx.delete(`/api/templates/${id}`)
   await ctx.dispose()
-}
-
-export async function createVariantViaAPI(parentId: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post(`/api/components/${parentId}/variant`)
-  const body = await res.json()
-  expect(
-    res.ok(),
-    `Create variant failed: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body as { id: number; name: string }
 }

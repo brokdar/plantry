@@ -4,7 +4,7 @@ import type { PlateFeedback } from "./feedback"
 export interface PlateComponent {
   id: number
   plate_id: number
-  component_id: number
+  food_id: number
   portions: number
   sort_order: number
 }
@@ -28,12 +28,12 @@ export interface UpdatePlateInput {
 }
 
 export interface AddPlateComponentInput {
-  component_id: number
+  food_id: number
   portions: number
 }
 
 export interface UpdatePlateComponentInput {
-  component_id?: number
+  food_id?: number
   portions?: number
 }
 

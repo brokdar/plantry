@@ -120,8 +120,8 @@ func (h *PlateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 type addComponentRequest struct {
-	ComponentID int64   `json:"component_id"`
-	Portions    float64 `json:"portions"`
+	FoodID   int64   `json:"food_id"`
+	Portions float64 `json:"portions"`
 }
 
 // AddComponent handles POST /api/plates/{id}/components.
@@ -136,7 +136,7 @@ func (h *PlateHandler) AddComponent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	pc, err := h.svc.AddComponent(r.Context(), plateID, req.ComponentID, req.Portions)
+	pc, err := h.svc.AddComponent(r.Context(), plateID, req.FoodID, req.Portions)
 	if err != nil {
 		status, key := plateError(err)
 		writeError(w, status, key)
@@ -146,12 +146,12 @@ func (h *PlateHandler) AddComponent(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateComponentRequest struct {
-	ComponentID *int64   `json:"component_id"`
-	Portions    *float64 `json:"portions"`
+	FoodID   *int64   `json:"food_id"`
+	Portions *float64 `json:"portions"`
 }
 
 // UpdateComponent handles PUT /api/plates/{id}/components/{pcId}.
-// Supports two modes: swap (component_id provided) or rescale (portions only).
+// Supports two modes: swap (food_id provided) or rescale (portions only).
 func (h *PlateHandler) UpdateComponent(w http.ResponseWriter, r *http.Request) {
 	pcID, err := strconv.ParseInt(chi.URLParam(r, "pcId"), 10, 64)
 	if err != nil {
@@ -165,8 +165,8 @@ func (h *PlateHandler) UpdateComponent(w http.ResponseWriter, r *http.Request) {
 	}
 	var pc *plate.PlateComponent
 	switch {
-	case req.ComponentID != nil:
-		pc, err = h.svc.SwapComponent(r.Context(), pcID, *req.ComponentID, req.Portions)
+	case req.FoodID != nil:
+		pc, err = h.svc.SwapComponent(r.Context(), pcID, *req.FoodID, req.Portions)
 	case req.Portions != nil:
 		pc, err = h.svc.UpdateComponentPortions(r.Context(), pcID, *req.Portions)
 	default:

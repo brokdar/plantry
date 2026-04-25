@@ -9,7 +9,7 @@ export const plateSchema = z.object({
 export type PlateFormValues = z.infer<typeof plateSchema>
 
 export const plateComponentSchema = z.object({
-  component_id: z.number().int().positive(),
+  food_id: z.number().int().positive(),
   portions: z.number().positive(),
 })
 

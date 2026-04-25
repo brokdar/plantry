@@ -19,7 +19,7 @@ export interface CreatePlateInput {
   slot_id: number
   note?: string | null
   skipped?: boolean
-  components?: { component_id: number; portions: number }[]
+  components?: { food_id: number; portions: number }[]
 }
 
 export interface CopyWeekInput {
@@ -61,7 +61,7 @@ export function createPlate(
 }
 
 export interface ShoppingItem {
-  ingredient_id: number
+  food_id: number
   name: string
   total_grams: number
 }

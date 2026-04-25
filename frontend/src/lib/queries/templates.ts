@@ -16,7 +16,7 @@ import { templateKeys, weekKeys } from "./keys"
 
 export function useTemplates() {
   return useQuery({
-    queryKey: templateKeys.list(),
+    queryKey: templateKeys.lists(),
     queryFn: getTemplates,
   })
 }

@@ -72,7 +72,7 @@ DELETE FROM plates WHERE id = ?;
 SELECT * FROM plates WHERE week_id = ? ORDER BY day, slot_id, id;
 
 -- name: CreatePlateComponent :one
-INSERT INTO plate_components (plate_id, component_id, portions, sort_order)
+INSERT INTO plate_components (plate_id, food_id, portions, sort_order)
 VALUES (?, ?, ?, ?)
 RETURNING *;
 
@@ -81,8 +81,8 @@ SELECT * FROM plate_components WHERE id = ?;
 
 -- name: UpdatePlateComponent :one
 UPDATE plate_components SET
-    component_id = ?,
-    portions     = ?
+    food_id  = ?,
+    portions = ?
 WHERE id = ?
 RETURNING *;
 
@@ -102,5 +102,5 @@ ORDER BY p.day, p.slot_id, pc.sort_order, pc.id;
 -- name: CountPlatesUsingTimeSlot :one
 SELECT COUNT(*) FROM plates WHERE slot_id = ?;
 
--- name: CountPlatesUsingComponent :one
-SELECT COUNT(*) FROM plate_components WHERE component_id = ?;
+-- name: CountPlatesUsingFood :one
+SELECT COUNT(*) FROM plate_components WHERE food_id = ?;

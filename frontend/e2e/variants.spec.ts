@@ -1,9 +1,9 @@
 import { test, expect } from "./helpers"
 
 import {
-  cleanupComponent,
+  cleanupFood,
   createVariantViaAPI,
-  seedComponent,
+  seedComposedWithStub,
   uid,
 } from "./helpers"
 
@@ -12,11 +12,10 @@ test.describe("Variant Components", () => {
     page,
   }) => {
     const tag = uid()
-    const parent = await seedComponent({
-      name: `Chicken Curry ${tag}`,
-      role: "main",
-      reference_portions: 2,
-    })
+    const { composed: parent, stub } = await seedComposedWithStub(
+      { name: `Chicken Curry ${tag}`, role: "main", reference_portions: 2 },
+      tag
+    )
 
     const variant = await createVariantViaAPI(parent.id)
 
@@ -43,8 +42,9 @@ test.describe("Variant Components", () => {
       // The variant editor surfaces the parent in its variants section.
       await expect(page.getByTestId(`variant-card-${parent.id}`)).toBeVisible()
     } finally {
-      await cleanupComponent(variant.id)
-      await cleanupComponent(parent.id)
+      await cleanupFood(variant.id)
+      await cleanupFood(parent.id)
+      await cleanupFood(stub.id)
     }
   })
 
@@ -52,10 +52,10 @@ test.describe("Variant Components", () => {
     page,
   }) => {
     const tag = uid()
-    const parent = await seedComponent({
-      name: `Tofu Bowl ${tag}`,
-      role: "standalone",
-    })
+    const { composed: parent, stub } = await seedComposedWithStub(
+      { name: `Tofu Bowl ${tag}`, role: "standalone" },
+      tag
+    )
 
     let variantId: number | undefined
     try {
@@ -64,7 +64,7 @@ test.describe("Variant Components", () => {
 
       const responsePromise = page.waitForResponse(
         (res) =>
-          res.url().includes(`/api/components/${parent.id}/variant`) &&
+          res.url().includes(`/api/foods/${parent.id}/variant`) &&
           res.request().method() === "POST"
       )
       await page.getByTestId("component-create-variant").click()
@@ -78,8 +78,9 @@ test.describe("Variant Components", () => {
       await expect(page).toHaveURL(new RegExp(`/components/${variantId}/edit$`))
       await expect(page.getByLabel(/^name/i)).toBeVisible()
     } finally {
-      if (variantId) await cleanupComponent(variantId)
-      await cleanupComponent(parent.id)
+      if (variantId) await cleanupFood(variantId)
+      await cleanupFood(parent.id)
+      await cleanupFood(stub.id)
     }
   })
 
@@ -87,10 +88,10 @@ test.describe("Variant Components", () => {
     page,
   }) => {
     const tag = uid()
-    const comp = await seedComponent({
-      name: `Solo Component ${tag}`,
-      role: "sauce",
-    })
+    const { composed: comp, stub } = await seedComposedWithStub(
+      { name: `Solo Component ${tag}`, role: "sauce" },
+      tag
+    )
 
     try {
       await page.goto(`/components/${comp.id}/edit`)
@@ -102,7 +103,8 @@ test.describe("Variant Components", () => {
         0
       )
     } finally {
-      await cleanupComponent(comp.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(stub.id)
     }
   })
 })

@@ -10,9 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -21,25 +20,25 @@ import (
 
 // WeekHandler exposes weekly planner read endpoints.
 type WeekHandler struct {
-	planner    *planner.Service
-	plates     *plate.Service
-	components *component.Service
-	ingRepo    ingredient.Repository
-	feedback   feedback.Repository
+	planner  *planner.Service
+	plates   *plate.Service
+	foods    *food.Service
+	resolver *food.NutritionResolver
+	shopping *shopping.Resolver
+	feedback feedback.Repository
 }
 
-// NewWeekHandler creates a WeekHandler. The feedback repository is optional;
-// pass nil to serve responses without embedded per-plate feedback.
-func NewWeekHandler(p *planner.Service, plates *plate.Service, components *component.Service, ingRepo ingredient.Repository, fb feedback.Repository) *WeekHandler {
-	return &WeekHandler{planner: p, plates: plates, components: components, ingRepo: ingRepo, feedback: fb}
+// NewWeekHandler wires dependencies. feedback may be nil.
+func NewWeekHandler(p *planner.Service, plates *plate.Service, foods *food.Service, resolver *food.NutritionResolver, shop *shopping.Resolver, fb feedback.Repository) *WeekHandler {
+	return &WeekHandler{planner: p, plates: plates, foods: foods, resolver: resolver, shopping: shop, feedback: fb}
 }
 
 type plateComponentResponse struct {
-	ID          int64   `json:"id"`
-	PlateID     int64   `json:"plate_id"`
-	ComponentID int64   `json:"component_id"`
-	Portions    float64 `json:"portions"`
-	SortOrder   int     `json:"sort_order"`
+	ID        int64   `json:"id"`
+	PlateID   int64   `json:"plate_id"`
+	FoodID    int64   `json:"food_id"`
+	Portions  float64 `json:"portions"`
+	SortOrder int     `json:"sort_order"`
 }
 
 type plateResponse struct {
@@ -69,7 +68,7 @@ type weekListResponse struct {
 
 func toPlateComponentResponse(pc *plate.PlateComponent) plateComponentResponse {
 	return plateComponentResponse{
-		ID: pc.ID, PlateID: pc.PlateID, ComponentID: pc.ComponentID,
+		ID: pc.ID, PlateID: pc.PlateID, FoodID: pc.FoodID,
 		Portions: pc.Portions, SortOrder: pc.SortOrder,
 	}
 }
@@ -102,9 +101,6 @@ func toWeekResponse(w *planner.Week, feedbackByPlate map[int64]*feedback.PlateFe
 	}
 }
 
-// loadFeedbackByWeek returns a plate_id → feedback map for the week. If no
-// feedback repository is configured it returns an empty map so the caller
-// doesn't have to branch.
 func (h *WeekHandler) loadFeedbackByWeek(ctx context.Context, weekID int64) map[int64]*feedback.PlateFeedback {
 	out := map[int64]*feedback.PlateFeedback{}
 	if h.feedback == nil {
@@ -112,7 +108,6 @@ func (h *WeekHandler) loadFeedbackByWeek(ctx context.Context, weekID int64) map[
 	}
 	rows, err := h.feedback.ListByWeek(ctx, weekID)
 	if err != nil {
-		// Feedback is non-critical metadata — failures shouldn't 500 the week.
 		return out
 	}
 	for i := range rows {
@@ -122,9 +117,7 @@ func (h *WeekHandler) loadFeedbackByWeek(ctx context.Context, weekID int64) map[
 	return out
 }
 
-func weekError(err error) (int, string) {
-	return toHTTPWithResource(err, "week")
-}
+func weekError(err error) (int, string) { return toHTTPWithResource(err, "week") }
 
 // Current handles GET /api/weeks/current.
 func (h *WeekHandler) Current(w http.ResponseWriter, r *http.Request) {
@@ -236,8 +229,8 @@ type createPlateRequest struct {
 }
 
 type createPlateComponentInline struct {
-	ComponentID int64   `json:"component_id"`
-	Portions    float64 `json:"portions"`
+	FoodID   int64   `json:"food_id"`
+	Portions float64 `json:"portions"`
 }
 
 // CreatePlate handles POST /api/weeks/{id}/plates.
@@ -257,7 +250,7 @@ func (h *WeekHandler) CreatePlate(w http.ResponseWriter, r *http.Request) {
 	}
 	for i, c := range req.Components {
 		p.Components = append(p.Components, plate.PlateComponent{
-			ComponentID: c.ComponentID, Portions: c.Portions, SortOrder: i,
+			FoodID: c.FoodID, Portions: c.Portions, SortOrder: i,
 		})
 	}
 	if err := h.plates.Create(r.Context(), p); err != nil {
@@ -265,9 +258,6 @@ func (h *WeekHandler) CreatePlate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	// Skip is expressed via a separate atomic call so the initial Create
-	// doesn't need a new validation path; this also clears any components
-	// the client may have accidentally attached to a skipped plate.
 	if req.Skipped {
 		skipped, err := h.plates.SetSkipped(r.Context(), p.ID, true, req.Note)
 		if err != nil {
@@ -280,8 +270,7 @@ func (h *WeekHandler) CreatePlate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, toPlateResponse(p, nil))
 }
 
-// ClearPlates handles DELETE /api/weeks/{id}/plates. Removes every plate in a
-// week (used by the Fill-empty revert flow to restore the pre-snapshot state).
+// ClearPlates handles DELETE /api/weeks/{id}/plates.
 func (h *WeekHandler) ClearPlates(w http.ResponseWriter, r *http.Request) {
 	weekID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -296,7 +285,7 @@ func (h *WeekHandler) ClearPlates(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// --- Shopping list and nutrition ---
+// ── Shopping list and nutrition ───────────────────────────────────────
 
 type macrosResponse struct {
 	Kcal    float64 `json:"kcal"`
@@ -308,7 +297,7 @@ type macrosResponse struct {
 }
 
 type shoppingListResponse struct {
-	Items []shopping.ShoppingItem `json:"items"`
+	Items []shopping.Item `json:"items"`
 }
 
 type nutritionDayResponse struct {
@@ -328,50 +317,6 @@ func toMacrosResponse(m nutrition.Macros) macrosResponse {
 	}
 }
 
-// loadWeekData collects all component and ingredient data needed by both the
-// shopping-list and nutrition endpoints in a single pass, avoiding duplicate
-// service calls when both are requested in the same request.
-func (h *WeekHandler) loadWeekData(ctx context.Context, plates []plate.Plate) (
-	comps map[int64]*component.Component,
-	ingMap map[int64]*ingredient.Ingredient,
-	err error,
-) {
-	// Collect unique component IDs.
-	compIDSet := make(map[int64]struct{})
-	for _, pl := range plates {
-		for _, pc := range pl.Components {
-			compIDSet[pc.ComponentID] = struct{}{}
-		}
-	}
-
-	comps = make(map[int64]*component.Component, len(compIDSet))
-	ingIDSet := make(map[int64]struct{})
-	for id := range compIDSet {
-		c, err := h.components.Get(ctx, id)
-		if err != nil {
-			return nil, nil, err
-		}
-		comps[id] = c
-		for _, ci := range c.Ingredients {
-			ingIDSet[ci.IngredientID] = struct{}{}
-		}
-	}
-
-	if len(ingIDSet) == 0 {
-		return comps, map[int64]*ingredient.Ingredient{}, nil
-	}
-
-	ids := make([]int64, 0, len(ingIDSet))
-	for id := range ingIDSet {
-		ids = append(ids, id)
-	}
-	ingMap, err = h.ingRepo.LookupForNutrition(ctx, ids)
-	if err != nil {
-		return nil, nil, err
-	}
-	return comps, ingMap, nil
-}
-
 // ShoppingList handles GET /api/weeks/{id}/shopping-list.
 func (h *WeekHandler) ShoppingList(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -385,34 +330,11 @@ func (h *WeekHandler) ShoppingList(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-
-	comps, ingMap, err := h.loadWeekData(r.Context(), week.Plates)
+	items, err := h.shopping.FromPlates(r.Context(), week.Plates)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "error.server")
 		return
 	}
-
-	refs := make(map[int64]shopping.ComponentRef, len(comps))
-	for compID, c := range comps {
-		ings := make([]shopping.ComponentIngredient, 0, len(c.Ingredients))
-		for _, ci := range c.Ingredients {
-			ing, ok := ingMap[ci.IngredientID]
-			if !ok {
-				continue
-			}
-			ings = append(ings, shopping.ComponentIngredient{
-				IngredientID: ci.IngredientID,
-				Name:         ing.Name,
-				Grams:        ci.Grams,
-			})
-		}
-		refs[compID] = shopping.ComponentRef{
-			ReferencePortions: c.ReferencePortions,
-			Ingredients:       ings,
-		}
-	}
-
-	items := shopping.FromPlates(week.Plates, refs)
 	writeJSON(w, http.StatusOK, shoppingListResponse{Items: items})
 }
 
@@ -430,48 +352,28 @@ func (h *WeekHandler) Nutrition(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	comps, ingMap, err := h.loadWeekData(r.Context(), week.Plates)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "error.server")
-		return
-	}
-
-	// Build per-portion macros for each unique component.
-	perPortion := make(map[int64]nutrition.Macros, len(comps))
-	for compID, c := range comps {
-		inputs := make([]nutrition.IngredientInput, 0, len(c.Ingredients))
-		for _, ci := range c.Ingredients {
-			ing, ok := ingMap[ci.IngredientID]
-			if !ok {
+	// Resolve per-portion macros once per unique food_id via the recursive
+	// nutrition resolver, then build day/week totals.
+	perPortion := map[int64]nutrition.Macros{}
+	for _, pl := range week.Plates {
+		for _, pc := range pl.Components {
+			if _, ok := perPortion[pc.FoodID]; ok {
 				continue
 			}
-			inputs = append(inputs, nutrition.IngredientInput{
-				Per100g: nutrition.Macros{
-					Kcal:    ing.Kcal100g,
-					Protein: ing.Protein100g,
-					Fat:     ing.Fat100g,
-					Carbs:   ing.Carbs100g,
-					Fiber:   ing.Fiber100g,
-					Sodium:  ing.Sodium100g,
-				},
-				Grams: ci.Grams,
-			})
+			m, err := h.resolver.PerPortion(r.Context(), pc.FoodID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "error.server")
+				return
+			}
+			perPortion[pc.FoodID] = m
 		}
-		perPortion[compID] = nutrition.PerPortion(nutrition.ComponentInput{
-			Ingredients:       inputs,
-			ReferencePortions: c.ReferencePortions,
-		})
 	}
 
-	// Build DayPlate inputs for the domain aggregator.
 	dayPlates := make([]nutrition.DayPlate, 0, len(week.Plates))
 	for _, pl := range week.Plates {
 		comps := make([]nutrition.PlateComponentInput, 0, len(pl.Components))
 		for _, pc := range pl.Components {
-			m, ok := perPortion[pc.ComponentID]
-			if !ok {
-				continue
-			}
+			m := perPortion[pc.FoodID]
 			comps = append(comps, nutrition.PlateComponentInput{Macros: m, Portions: pc.Portions})
 		}
 		dayPlates = append(dayPlates, nutrition.DayPlate{Day: pl.Day, Plate: nutrition.PlateInput{Components: comps}})

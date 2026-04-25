@@ -1,11 +1,21 @@
-export const mockChickenBreast = {
+import type { ComposedFood, LeafFood } from "@/lib/api/foods"
+import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
+import type {
+  ShoppingListResponse,
+  WeekNutritionResponse,
+} from "@/lib/api/weeks"
+
+export const mockChickenBreast: LeafFood = {
   id: 1,
+  kind: "leaf",
   name: "Chicken breast",
   source: "manual",
   barcode: null,
   off_id: null,
   fdc_id: null,
   image_path: null,
+  favorite: false,
+  cook_count: 0,
   kcal_100g: 165,
   protein_100g: 31,
   fat_100g: 3.6,
@@ -16,14 +26,17 @@ export const mockChickenBreast = {
   updated_at: "2024-01-01T00:00:00Z",
 }
 
-export const mockBrownRice = {
+export const mockBrownRice: LeafFood = {
   id: 2,
+  kind: "leaf",
   name: "Brown rice",
   source: "manual",
   barcode: null,
   off_id: null,
   fdc_id: null,
   image_path: null,
+  favorite: false,
+  cook_count: 0,
   kcal_100g: 112,
   protein_100g: 2.3,
   fat_100g: 0.8,
@@ -34,11 +47,9 @@ export const mockBrownRice = {
   updated_at: "2024-01-02T00:00:00Z",
 }
 
-import type { Component } from "@/lib/api/components"
-import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
-
-export const mockChickenCurry: Component = {
-  id: 1,
+export const mockChickenCurry: ComposedFood = {
+  id: 3,
+  kind: "composed",
   name: "Chicken Curry",
   role: "main",
   variant_group_id: null,
@@ -50,12 +61,13 @@ export const mockChickenCurry: Component = {
   last_cooked_at: null,
   cook_count: 0,
   favorite: false,
-  ingredients: [
+  children: [
     {
       id: 1,
-      component_id: 1,
-      ingredient_id: 1,
-      ingredient_name: "Chicken breast",
+      parent_id: 3,
+      child_id: 1,
+      child_name: "Chicken breast",
+      child_kind: "leaf",
       amount: 300,
       unit: "g",
       grams: 300,
@@ -63,16 +75,17 @@ export const mockChickenCurry: Component = {
     },
   ],
   instructions: [
-    { id: 1, component_id: 1, step_number: 1, text: "Cook chicken" },
-    { id: 2, component_id: 1, step_number: 2, text: "Add curry paste" },
+    { id: 1, food_id: 3, step_number: 1, text: "Cook chicken" },
+    { id: 2, food_id: 3, step_number: 2, text: "Add curry paste" },
   ],
   tags: ["spicy", "thai"],
   created_at: "2024-01-01T00:00:00Z",
   updated_at: "2024-01-01T00:00:00Z",
 }
 
-export const mockTofuBowl: Component = {
-  id: 2,
+export const mockTofuBowl: ComposedFood = {
+  id: 4,
+  kind: "composed",
   name: "Tofu Bowl",
   role: "standalone",
   variant_group_id: null,
@@ -84,21 +97,22 @@ export const mockTofuBowl: Component = {
   last_cooked_at: null,
   cook_count: 0,
   favorite: false,
-  ingredients: [],
+  children: [],
   instructions: [],
   tags: ["vegan"],
   created_at: "2024-01-02T00:00:00Z",
   updated_at: "2024-01-02T00:00:00Z",
 }
 
-export const mockChickenCurryWithVariantGroup: Component = {
+export const mockChickenCurryWithVariantGroup: ComposedFood = {
   ...mockChickenCurry,
   id: 10,
   variant_group_id: 1,
 }
 
-export const mockTofuCurryVariant: Component = {
+export const mockTofuCurryVariant: ComposedFood = {
   id: 11,
+  kind: "composed",
   name: "Tofu Curry",
   role: "main",
   variant_group_id: 1,
@@ -110,11 +124,35 @@ export const mockTofuCurryVariant: Component = {
   last_cooked_at: null,
   cook_count: 0,
   favorite: false,
-  ingredients: [],
+  children: [],
   instructions: [],
   tags: ["vegan"],
   created_at: "2024-01-03T00:00:00Z",
   updated_at: "2024-01-03T00:00:00Z",
+}
+
+export const mockShoppingList: ShoppingListResponse = {
+  items: [
+    { food_id: 1, name: "Chicken", total_grams: 100 },
+    { food_id: 2, name: "Rice", total_grams: 200 },
+  ],
+}
+
+export const mockWeekNutrition: WeekNutritionResponse = {
+  days: [
+    {
+      day: 0,
+      macros: {
+        kcal: 500,
+        protein: 40,
+        fat: 15,
+        carbs: 50,
+        fiber: 5,
+        sodium: 1,
+      },
+    },
+  ],
+  week: { kcal: 500, protein: 40, fat: 15, carbs: 50, fiber: 5, sodium: 1 },
 }
 
 export const mockLookupCandidate: LookupCandidate = {

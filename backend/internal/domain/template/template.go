@@ -12,12 +12,12 @@ type Template struct {
 	CreatedAt  time.Time
 }
 
-// TemplateComponent is one component referenced by a template, with the same
+// TemplateComponent is one food referenced by a template, with the same
 // portions + sort_order shape as plate_components.
 type TemplateComponent struct {
-	ID          int64
-	TemplateID  int64
-	ComponentID int64
-	Portions    float64
-	SortOrder   int
+	ID         int64
+	TemplateID int64
+	FoodID     int64
+	Portions   float64
+	SortOrder  int
 }

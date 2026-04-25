@@ -1,44 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { renderHook, waitFor } from "@testing-library/react"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { useVariants, useCreateVariant } from "@/lib/queries/components"
-import type { ReactNode } from "react"
+import { useVariants, useCreateVariant } from "@/lib/queries/foods"
+import { createHookWrapper } from "@/test/render"
 
-vi.mock("@/lib/api/components", () => ({
+vi.mock("@/lib/api/foods", () => ({
   listVariants: vi.fn(),
   createVariant: vi.fn(),
-  listComponents: vi.fn(),
-  getComponent: vi.fn(),
-  getComponentNutrition: vi.fn(),
-  deleteComponent: vi.fn(),
-  createComponent: vi.fn(),
-  updateComponent: vi.fn(),
 }))
 
-import { listVariants, createVariant } from "@/lib/api/components"
+import { listVariants, createVariant } from "@/lib/api/foods"
 import { mockTofuCurryVariant } from "@/test/fixtures"
-
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  })
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  )
-}
 
 describe("useVariants", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it("fetches variants for a component", async () => {
+  it("fetches variants for a food", async () => {
     vi.mocked(listVariants).mockResolvedValue({
       items: [mockTofuCurryVariant],
     })
 
     const { result } = renderHook(() => useVariants(10), {
-      wrapper: createWrapper(),
+      wrapper: createHookWrapper(),
     })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
@@ -50,7 +34,7 @@ describe("useVariants", () => {
 
   it("does not fetch when id is 0", async () => {
     const { result } = renderHook(() => useVariants(0), {
-      wrapper: createWrapper(),
+      wrapper: createHookWrapper(),
     })
 
     await waitFor(() => expect(result.current.fetchStatus).toBe("idle"))
@@ -68,7 +52,7 @@ describe("useCreateVariant", () => {
     vi.mocked(createVariant).mockResolvedValue(newVariant)
 
     const { result } = renderHook(() => useCreateVariant(), {
-      wrapper: createWrapper(),
+      wrapper: createHookWrapper(),
     })
 
     result.current.mutate(10)

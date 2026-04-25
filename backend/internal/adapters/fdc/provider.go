@@ -3,10 +3,10 @@ package fdc
 import (
 	"context"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain/ingredient"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
-// Provider wraps an FDC Client to implement ingredient.FoodProvider.
+// Provider wraps an FDC Client to implement food.FoodProvider.
 type Provider struct {
 	client *Client
 }
@@ -17,7 +17,7 @@ func NewProvider(client *Client) *Provider {
 }
 
 // SearchByName searches for food items by name via FDC (Foundation + SR Legacy).
-func (p *Provider) SearchByName(ctx context.Context, query string, limit int) ([]ingredient.Candidate, error) {
+func (p *Provider) SearchByName(ctx context.Context, query string, limit int) ([]food.Candidate, error) {
 	results, err := p.client.SearchByName(ctx, query, []string{"Foundation", "SR Legacy"}, limit)
 	if err != nil {
 		return nil, err
@@ -28,14 +28,14 @@ func (p *Provider) SearchByName(ctx context.Context, query string, limit int) ([
 // GetFoodPortions fetches per-unit gram weights for a single FDC food. This
 // is what supplies ingredient-specific density data (e.g., 1 tbsp honey = 21g)
 // to the portions table.
-func (p *Provider) GetFoodPortions(ctx context.Context, fdcID int) ([]ingredient.FoodPortion, error) {
-	food, err := p.client.GetFood(ctx, fdcID)
+func (p *Provider) GetFoodPortions(ctx context.Context, fdcID int) ([]food.PortionInfo, error) {
+	detail, err := p.client.GetFood(ctx, fdcID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ingredient.FoodPortion, 0, len(food.FoodPortions))
-	for _, fp := range food.FoodPortions {
-		out = append(out, ingredient.FoodPortion{
+	out := make([]food.PortionInfo, 0, len(detail.FoodPortions))
+	for _, fp := range detail.FoodPortions {
+		out = append(out, food.PortionInfo{
 			RawUnit:    fp.MeasureUnitName,
 			Modifier:   fp.Modifier,
 			GramWeight: fp.GramWeight,
@@ -44,13 +44,13 @@ func (p *Provider) GetFoodPortions(ctx context.Context, fdcID int) ([]ingredient
 	return out, nil
 }
 
-func toDomainCandidates(candidates []Candidate) []ingredient.Candidate {
-	out := make([]ingredient.Candidate, len(candidates))
+func toDomainCandidates(candidates []Candidate) []food.Candidate {
+	out := make([]food.Candidate, len(candidates))
 	for i, c := range candidates {
-		out[i] = ingredient.Candidate{
+		out[i] = food.Candidate{
 			Name:             c.Name,
 			SourceName:       c.Name,
-			Source:           ingredient.SourceFDC,
+			Source:           food.SourceFDC,
 			FdcID:            c.FdcID,
 			Kcal100g:         c.Kcal100g,
 			Protein100g:      c.Protein100g,

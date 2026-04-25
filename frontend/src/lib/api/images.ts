@@ -1,15 +1,12 @@
 import { ApiError, apiFetch } from "./client"
 
-export type ImageEntityType = "ingredients" | "components"
-
-export async function uploadImage(
-  entityType: ImageEntityType,
+export async function uploadFoodImage(
   id: number,
   file: Blob
 ): Promise<{ image_path: string }> {
   const formData = new FormData()
   formData.append("image", file, "image.jpg")
-  const res = await fetch(`/api/${entityType}/${id}/image`, {
+  const res = await fetch(`/api/foods/${id}/image`, {
     method: "POST",
     body: formData,
   })
@@ -20,11 +17,8 @@ export async function uploadImage(
   return res.json()
 }
 
-export function deleteImage(
-  entityType: ImageEntityType,
-  id: number
-): Promise<void> {
-  return apiFetch(`/${entityType}/${id}/image`, { method: "DELETE" })
+export function deleteFoodImage(id: number): Promise<void> {
+  return apiFetch(`/foods/${id}/image`, { method: "DELETE" })
 }
 
 export async function fetchImageFromUrl(url: string): Promise<Blob> {

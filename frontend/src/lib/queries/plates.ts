@@ -103,7 +103,7 @@ export function useAddPlateComponent(weekId: number) {
         patchAddComponent(w, plateId, {
           id: -Date.now(), // temporary negative id distinguishes optimistic rows
           plate_id: plateId,
-          component_id: input.component_id,
+          food_id: input.food_id,
           portions: input.portions,
           sort_order: 9999,
         })
@@ -127,8 +127,8 @@ export function useSwapPlateComponent(weekId: number) {
     }) => updatePlateComponent(plateId, pcId, input),
     onMutate: async ({ pcId, input }) =>
       ctx.snapshot((w) =>
-        input.component_id !== undefined
-          ? patchSwapComponent(w, pcId, input.component_id, input.portions)
+        input.food_id !== undefined
+          ? patchSwapComponent(w, pcId, input.food_id, input.portions)
           : input.portions !== undefined
             ? patchUpdateComponentPortions(w, pcId, input.portions)
             : w

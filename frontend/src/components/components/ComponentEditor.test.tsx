@@ -4,17 +4,14 @@ import { renderWithRouter } from "@/test/render"
 import { ComponentEditor } from "./ComponentEditor"
 import { mockChickenCurry } from "@/test/fixtures"
 
-vi.mock("@/lib/api/components", () => ({
-  createComponent: vi.fn(),
-  updateComponent: vi.fn(),
-}))
-
-vi.mock("@/lib/api/ingredients", () => ({
-  listIngredients: vi.fn().mockResolvedValue({ items: [], total: 0 }),
-}))
-
-vi.mock("@/lib/api/portions", () => ({
-  listPortions: vi.fn().mockResolvedValue([]),
+vi.mock("@/lib/api/foods", () => ({
+  listFoods: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  createFood: vi.fn(),
+  updateFood: vi.fn(),
+  deleteFood: vi.fn(),
+  listPortions: vi.fn().mockResolvedValue({ items: [] }),
+  listVariants: vi.fn().mockResolvedValue({ items: [] }),
+  createVariant: vi.fn(),
 }))
 
 describe("ComponentEditor", () => {

@@ -122,9 +122,9 @@ func (s *Service) Copy(ctx context.Context, sourceID int64, targetYear, targetWe
 			}
 			for i, pc := range src.Components {
 				cloned.Components = append(cloned.Components, plate.PlateComponent{
-					ComponentID: pc.ComponentID,
-					Portions:    pc.Portions,
-					SortOrder:   i,
+					FoodID:    pc.FoodID,
+					Portions:  pc.Portions,
+					SortOrder: i,
 				})
 			}
 			if err := plates.Create(ctx, &cloned); err != nil {

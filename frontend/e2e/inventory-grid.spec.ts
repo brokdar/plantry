@@ -1,9 +1,9 @@
-import { cleanupIngredient, expect, seedIngredient, test, uid } from "./helpers"
+import { cleanupFood, expect, seedLeafFood, test, uid } from "./helpers"
 
 test.describe("Ingredient Inventory (card grid)", () => {
   test("renders cards with name, kcal, and macros", async ({ page }) => {
     const tag = uid()
-    const chicken = await seedIngredient({
+    const chicken = await seedLeafFood({
       name: `Grid Chicken ${tag}`,
       kcal_100g: 165,
       protein_100g: 31,
@@ -16,8 +16,7 @@ test.describe("Ingredient Inventory (card grid)", () => {
       await page.getByTestId("inventory-search").fill(tag)
       await page.waitForResponse(
         (r) =>
-          r.url().includes("/api/ingredients") &&
-          r.url().includes(`search=${tag}`)
+          r.url().includes("/api/foods") && r.url().includes(`search=${tag}`)
       )
       const card = page.getByTestId(`ingredient-card-${chicken.id}`)
       await expect(card).toBeVisible()
@@ -25,7 +24,7 @@ test.describe("Ingredient Inventory (card grid)", () => {
       await expect(card).toContainText("165kcal")
       await expect(card).toContainText("Manual")
     } finally {
-      await cleanupIngredient(chicken.id)
+      await cleanupFood(chicken.id)
     }
   })
 
@@ -35,7 +34,7 @@ test.describe("Ingredient Inventory (card grid)", () => {
     await page.getByTestId("inventory-search").fill(gibberish)
     await page.waitForResponse(
       (r) =>
-        r.url().includes("/api/ingredients") &&
+        r.url().includes("/api/foods") &&
         r.url().includes(`search=${gibberish}`)
     )
     await page.getByTestId("ingredient-create-tile").getByRole("link").click()
@@ -44,11 +43,11 @@ test.describe("Ingredient Inventory (card grid)", () => {
 
   test("card-menu delete removes the card", async ({ page }) => {
     const tag = uid()
-    const keep = await seedIngredient({
+    const keep = await seedLeafFood({
       name: `Keep Ingredient ${tag}`,
       kcal_100g: 100,
     })
-    const toDelete = await seedIngredient({
+    const toDelete = await seedLeafFood({
       name: `Delete Ingredient ${tag}`,
       kcal_100g: 200,
     })
@@ -58,8 +57,7 @@ test.describe("Ingredient Inventory (card grid)", () => {
       await page.getByTestId("inventory-search").fill(tag)
       await page.waitForResponse(
         (r) =>
-          r.url().includes("/api/ingredients") &&
-          r.url().includes(`search=${tag}`)
+          r.url().includes("/api/foods") && r.url().includes(`search=${tag}`)
       )
       await expect(
         page.getByTestId(`ingredient-card-${toDelete.id}`)
@@ -70,7 +68,7 @@ test.describe("Ingredient Inventory (card grid)", () => {
 
       const resp = page.waitForResponse(
         (r) =>
-          r.url().includes(`/api/ingredients/${toDelete.id}`) &&
+          r.url().includes(`/api/foods/${toDelete.id}`) &&
           r.request().method() === "DELETE"
       )
       await page
@@ -84,13 +82,13 @@ test.describe("Ingredient Inventory (card grid)", () => {
       ).toHaveCount(0)
       await expect(page.getByTestId(`ingredient-card-${keep.id}`)).toBeVisible()
     } finally {
-      await cleanupIngredient(keep.id)
+      await cleanupFood(keep.id)
     }
   })
 
   test("clicking a card body navigates to edit page", async ({ page }) => {
     const tag = uid()
-    const ing = await seedIngredient({
+    const ing = await seedLeafFood({
       name: `Click Edit ${tag}`,
       kcal_100g: 50,
     })
@@ -112,30 +110,28 @@ test.describe("Ingredient Inventory (card grid)", () => {
       await expect(page).toHaveURL(new RegExp(`/ingredients/${ing.id}/edit$`))
       await expect(page.getByLabel(/^name/i)).toHaveValue(`Click Edit ${tag}`)
     } finally {
-      await cleanupIngredient(ing.id)
+      await cleanupFood(ing.id)
     }
   })
 
   test("sort chips update the list order", async ({ page }) => {
     const tag = uid()
-    const a = await seedIngredient({ name: `Sort A ${tag}`, kcal_100g: 50 })
-    const b = await seedIngredient({ name: `Sort B ${tag}`, kcal_100g: 500 })
+    const a = await seedLeafFood({ name: `Sort A ${tag}`, kcal_100g: 50 })
+    const b = await seedLeafFood({ name: `Sort B ${tag}`, kcal_100g: 500 })
 
     try {
       await page.goto("/ingredients")
       await page.getByTestId("inventory-search").fill(tag)
       await page.waitForResponse(
         (r) =>
-          r.url().includes("/api/ingredients") &&
-          r.url().includes(`search=${tag}`)
+          r.url().includes("/api/foods") && r.url().includes(`search=${tag}`)
       )
       await expect(page.getByTestId(`ingredient-card-${a.id}`)).toBeVisible()
       await expect(page.getByTestId(`ingredient-card-${b.id}`)).toBeVisible()
 
       // Switch sort to kcal — fires a new request with sort=kcal.
       const kcalResp = page.waitForResponse(
-        (r) =>
-          r.url().includes("/api/ingredients") && r.url().includes("sort=kcal")
+        (r) => r.url().includes("/api/foods") && r.url().includes("sort=kcal")
       )
       await page.getByRole("button", { name: /calories/i }).click()
       await kcalResp
@@ -145,8 +141,8 @@ test.describe("Ingredient Inventory (card grid)", () => {
         page.getByRole("button", { name: /calories/i })
       ).toHaveAttribute("aria-pressed", "true")
     } finally {
-      await cleanupIngredient(a.id)
-      await cleanupIngredient(b.id)
+      await cleanupFood(a.id)
+      await cleanupFood(b.id)
     }
   })
 })

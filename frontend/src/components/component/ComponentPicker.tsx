@@ -10,12 +10,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { Component } from "@/lib/api/components"
-import { useComponents } from "@/lib/queries/components"
+import type { Food, FoodRole } from "@/lib/api/foods"
+import { useFoods } from "@/lib/queries/foods"
 
 interface ComponentPickerProps {
   defaultRole?: string
-  onPick: (c: Component) => void
+  onPick: (c: Food) => void
 }
 
 const ROLES = [
@@ -34,8 +34,8 @@ export function ComponentPicker({ defaultRole, onPick }: ComponentPickerProps) {
   const [role, setRole] = useState<string>(defaultRole ?? "")
   const [search, setSearch] = useState("")
 
-  const query = useComponents({
-    role: role || undefined,
+  const query = useFoods({
+    role: (role || undefined) as FoodRole | undefined,
     search: search || undefined,
     limit: 50,
   })
@@ -92,7 +92,7 @@ export function ComponentPicker({ defaultRole, onPick }: ComponentPickerProps) {
                 >
                   <span className="font-medium">{c.name}</span>
                   <span className="ml-2 text-xs text-muted-foreground">
-                    {t(`component.role_${c.role}`)}
+                    {c.kind === "composed" && t(`component.role_${c.role}`)}
                   </span>
                 </Button>
               </li>

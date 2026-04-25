@@ -1,11 +1,10 @@
 import { expect, test } from "./helpers"
 
 import {
-  cleanupComponent,
-  cleanupIngredient,
+  cleanupFood,
   cleanupSlot,
-  seedComponent,
-  seedIngredient,
+  seedComposedFood,
+  seedLeafFood,
   seedSlot,
   uid,
 } from "./helpers"
@@ -15,19 +14,19 @@ test.describe("Shopping List and Nutrition", () => {
     const tag = uid()
 
     // Seed: ingredient at 100 kcal/100g, component with 300g of it, 1 ref portion
-    const ing = await seedIngredient({
+    const ing = await seedLeafFood({
       name: `Chicken ${tag}`,
       kcal_100g: 100,
       protein_100g: 20,
       fat_100g: 5,
       carbs_100g: 0,
     })
-    const comp = await seedComponent({
+    const comp = await seedComposedFood({
       name: `Curry ${tag}`,
       role: "main",
-      ingredients: [
+      children: [
         {
-          ingredient_id: ing.id,
+          child_id: ing.id,
           amount: 300,
           unit: "g",
           grams: 300,
@@ -86,8 +85,8 @@ test.describe("Shopping List and Nutrition", () => {
       ).toBeChecked()
     } finally {
       await cleanupSlot(slot.id)
-      await cleanupComponent(comp.id)
-      await cleanupIngredient(ing.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(ing.id)
     }
   })
 
@@ -95,19 +94,19 @@ test.describe("Shopping List and Nutrition", () => {
     const tag = uid()
 
     // 200g of ingredient at 200 kcal/100g → 400 kcal total, 1 ref portion
-    const ing = await seedIngredient({
+    const ing = await seedLeafFood({
       name: `Rice ${tag}`,
       kcal_100g: 200,
       protein_100g: 5,
       fat_100g: 1,
       carbs_100g: 45,
     })
-    const comp = await seedComponent({
+    const comp = await seedComposedFood({
       name: `Bowl ${tag}`,
       role: "main",
-      ingredients: [
+      children: [
         {
-          ingredient_id: ing.id,
+          child_id: ing.id,
           amount: 200,
           unit: "g",
           grams: 200,
@@ -149,8 +148,8 @@ test.describe("Shopping List and Nutrition", () => {
       await expect(panel.getByText("Week total")).toBeVisible()
     } finally {
       await cleanupSlot(slot.id)
-      await cleanupComponent(comp.id)
-      await cleanupIngredient(ing.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(ing.id)
     }
   })
 })

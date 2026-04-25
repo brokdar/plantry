@@ -4,15 +4,15 @@ import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
 import { mockChickenBreast, mockBrownRice } from "@/test/fixtures"
 
-vi.mock("@/lib/api/ingredients", () => ({
-  listIngredients: vi.fn(),
-  getIngredient: vi.fn(),
-  createIngredient: vi.fn(),
-  updateIngredient: vi.fn(),
-  deleteIngredient: vi.fn(),
+vi.mock("@/lib/api/foods", () => ({
+  listFoods: vi.fn(),
+  getFood: vi.fn(),
+  createFood: vi.fn(),
+  updateFood: vi.fn(),
+  deleteFood: vi.fn(),
 }))
 
-import { listIngredients, deleteIngredient } from "@/lib/api/ingredients"
+import { listFoods, deleteFood } from "@/lib/api/foods"
 import { IngredientList } from "./IngredientList"
 
 beforeEach(() => {
@@ -21,7 +21,7 @@ beforeEach(() => {
 
 describe("IngredientList", () => {
   test("renders loading skeleton while fetching", async () => {
-    vi.mocked(listIngredients).mockReturnValue(new Promise(() => {}))
+    vi.mocked(listFoods).mockReturnValue(new Promise(() => {}))
     renderWithRouter(<IngredientList />, "/ingredients")
 
     await screen.findByRole("heading", { name: "The Pantry Archive" })
@@ -29,7 +29,7 @@ describe("IngredientList", () => {
   })
 
   test("renders empty state when no ingredients", async () => {
-    vi.mocked(listIngredients).mockResolvedValue({ items: [], total: 0 })
+    vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
     renderWithRouter(<IngredientList />, "/ingredients")
 
     expect(
@@ -39,7 +39,7 @@ describe("IngredientList", () => {
 
   test("renders empty search results message", async () => {
     const user = userEvent.setup()
-    vi.mocked(listIngredients)
+    vi.mocked(listFoods)
       .mockResolvedValueOnce({ items: [mockChickenBreast], total: 1 })
       .mockResolvedValue({ items: [], total: 0 })
 
@@ -58,7 +58,7 @@ describe("IngredientList", () => {
   })
 
   test("renders ingredient cards with name", async () => {
-    vi.mocked(listIngredients).mockResolvedValue({
+    vi.mocked(listFoods).mockResolvedValue({
       items: [mockChickenBreast, mockBrownRice],
       total: 2,
     })
@@ -74,7 +74,7 @@ describe("IngredientList", () => {
 
   test("shows delete confirmation dialog via card menu", async () => {
     const user = userEvent.setup()
-    vi.mocked(listIngredients).mockResolvedValue({
+    vi.mocked(listFoods).mockResolvedValue({
       items: [mockChickenBreast],
       total: 1,
     })
@@ -92,13 +92,13 @@ describe("IngredientList", () => {
     expect(await screen.findByText("Delete ingredient?")).toBeInTheDocument()
   })
 
-  test("calls deleteIngredient on confirm", async () => {
+  test("calls deleteFood on confirm", async () => {
     const user = userEvent.setup()
-    vi.mocked(listIngredients).mockResolvedValue({
+    vi.mocked(listFoods).mockResolvedValue({
       items: [mockChickenBreast],
       total: 1,
     })
-    vi.mocked(deleteIngredient).mockResolvedValue(undefined)
+    vi.mocked(deleteFood).mockResolvedValue(undefined)
 
     renderWithRouter(<IngredientList />, "/ingredients")
 
@@ -114,11 +114,11 @@ describe("IngredientList", () => {
     const dialog = await screen.findByRole("dialog")
     await user.click(within(dialog).getByTestId("confirm-delete"))
 
-    expect(deleteIngredient).toHaveBeenCalledWith(mockChickenBreast.id)
+    expect(deleteFood).toHaveBeenCalledWith(mockChickenBreast.id)
   })
 
   test("Load more button visible when more items available", async () => {
-    vi.mocked(listIngredients).mockResolvedValue({
+    vi.mocked(listFoods).mockResolvedValue({
       items: [mockChickenBreast],
       total: 25,
     })
@@ -133,7 +133,7 @@ describe("IngredientList", () => {
 
   test("clicking Load more increases limit", async () => {
     const user = userEvent.setup()
-    vi.mocked(listIngredients).mockResolvedValue({
+    vi.mocked(listFoods).mockResolvedValue({
       items: [mockChickenBreast],
       total: 25,
     })
@@ -144,7 +144,7 @@ describe("IngredientList", () => {
     await user.click(screen.getByTestId("ingredients-load-more"))
 
     await waitFor(() => {
-      const lastCall = vi.mocked(listIngredients).mock.calls.at(-1)?.[0]
+      const lastCall = vi.mocked(listFoods).mock.calls.at(-1)?.[0]
       expect(lastCall?.limit).toBeGreaterThan(24)
     })
   })

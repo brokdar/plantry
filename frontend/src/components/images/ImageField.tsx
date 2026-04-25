@@ -11,7 +11,6 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { ImageEntityType } from "@/lib/api/images"
 import { imageURL } from "@/lib/image-url"
 import {
   useDeleteImage,
@@ -25,7 +24,6 @@ import { ImageCropperDialog } from "./ImageCropperDialog"
 
 type BoundProps = {
   mode: "bound"
-  entityType: ImageEntityType
   entityId: number
   currentImagePath: string | null
   onImageChange: (path: string | null) => void
@@ -182,7 +180,6 @@ export function ImageField(props: ImageFieldProps) {
     const bound = props as BoundProps
     try {
       const result = await uploadMutation.mutateAsync({
-        entityType: bound.entityType,
         id: bound.entityId,
         file: blob,
       })
@@ -201,7 +198,6 @@ export function ImageField(props: ImageFieldProps) {
     const bound = props as BoundProps
     try {
       await deleteMutation.mutateAsync({
-        entityType: bound.entityType,
         id: bound.entityId,
       })
       bound.onImageChange(null)

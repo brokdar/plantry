@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { renderHook, waitFor } from "@testing-library/react"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { useShoppingList, useWeekNutrition } from "@/lib/queries/weeks"
-import type { ReactNode } from "react"
+import { createHookWrapper } from "@/test/render"
+import { mockShoppingList, mockWeekNutrition } from "@/test/fixtures"
 
 vi.mock("@/lib/api/weeks", () => ({
   getCurrentWeek: vi.fn(),
@@ -16,43 +16,6 @@ vi.mock("@/lib/api/weeks", () => ({
 }))
 
 import { getShoppingList, getWeekNutrition } from "@/lib/api/weeks"
-import type {
-  ShoppingListResponse,
-  WeekNutritionResponse,
-} from "@/lib/api/weeks"
-
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  })
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  )
-}
-
-const mockShoppingList: ShoppingListResponse = {
-  items: [
-    { ingredient_id: 1, name: "Chicken", total_grams: 100 },
-    { ingredient_id: 2, name: "Rice", total_grams: 200 },
-  ],
-}
-
-const mockNutrition: WeekNutritionResponse = {
-  days: [
-    {
-      day: 0,
-      macros: {
-        kcal: 500,
-        protein: 40,
-        fat: 15,
-        carbs: 50,
-        fiber: 5,
-        sodium: 1,
-      },
-    },
-  ],
-  week: { kcal: 500, protein: 40, fat: 15, carbs: 50, fiber: 5, sodium: 1 },
-}
 
 describe("useShoppingList", () => {
   beforeEach(() => {
@@ -61,7 +24,7 @@ describe("useShoppingList", () => {
 
   it("does not fetch when weekId is 0", async () => {
     const { result } = renderHook(() => useShoppingList(0), {
-      wrapper: createWrapper(),
+      wrapper: createHookWrapper(),
     })
     await waitFor(() => expect(result.current.fetchStatus).toBe("idle"))
     expect(getShoppingList).not.toHaveBeenCalled()
@@ -71,7 +34,7 @@ describe("useShoppingList", () => {
     vi.mocked(getShoppingList).mockResolvedValue(mockShoppingList)
 
     const { result } = renderHook(() => useShoppingList(7), {
-      wrapper: createWrapper(),
+      wrapper: createHookWrapper(),
     })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
@@ -88,17 +51,17 @@ describe("useWeekNutrition", () => {
 
   it("does not fetch when weekId is 0", async () => {
     const { result } = renderHook(() => useWeekNutrition(0), {
-      wrapper: createWrapper(),
+      wrapper: createHookWrapper(),
     })
     await waitFor(() => expect(result.current.fetchStatus).toBe("idle"))
     expect(getWeekNutrition).not.toHaveBeenCalled()
   })
 
   it("fetches week nutrition", async () => {
-    vi.mocked(getWeekNutrition).mockResolvedValue(mockNutrition)
+    vi.mocked(getWeekNutrition).mockResolvedValue(mockWeekNutrition)
 
     const { result } = renderHook(() => useWeekNutrition(7), {
-      wrapper: createWrapper(),
+      wrapper: createHookWrapper(),
     })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))

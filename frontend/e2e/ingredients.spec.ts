@@ -1,44 +1,4 @@
-import { test, expect, apiRequest } from "./helpers"
-
-// Backend URL — seed/cleanup requests go directly to the backend, bypassing
-// the Vite proxy, to avoid proxy bottlenecks under parallel workers.
-const API = "http://localhost:8080"
-
-// Unique suffix per test run prevents UNIQUE constraint collisions when tests
-// run in parallel or with --repeat-each.
-function uid() {
-  return crypto.randomUUID().slice(0, 8)
-}
-
-// ---------------------------------------------------------------------------
-// Helper: create an ingredient via direct backend API.
-// ---------------------------------------------------------------------------
-async function seedIngredient(data: {
-  name: string
-  kcal_100g?: number
-  protein_100g?: number
-  fat_100g?: number
-  carbs_100g?: number
-}) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/ingredients", { data })
-  const body = await res.json()
-  expect(
-    res.ok(),
-    `Seed "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body as { id: number; name: string }
-}
-
-// ---------------------------------------------------------------------------
-// Helper: delete ingredient via direct backend API. Best-effort cleanup.
-// ---------------------------------------------------------------------------
-async function cleanupIngredient(id: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/ingredients/${id}`)
-  await ctx.dispose()
-}
+import { cleanupFood, expect, seedLeafFood, test, uid } from "./helpers"
 
 test.describe("Ingredient Catalogue", () => {
   test("create an ingredient via the form", async ({ page }) => {
@@ -55,8 +15,7 @@ test.describe("Ingredient Catalogue", () => {
 
       const responsePromise = page.waitForResponse(
         (res) =>
-          res.url().includes("/api/ingredients") &&
-          res.request().method() === "POST"
+          res.url().includes("/api/foods") && res.request().method() === "POST"
       )
       await page.getByRole("button", { name: /save/i }).click()
       const response = await responsePromise
@@ -73,21 +32,21 @@ test.describe("Ingredient Catalogue", () => {
         page.getByTestId(`ingredient-card-${createdId}`)
       ).toContainText("165kcal")
     } finally {
-      if (createdId) await cleanupIngredient(createdId)
+      if (createdId) await cleanupFood(createdId)
     }
   })
 
   test("search filters ingredients by name", async ({ page }) => {
     const tag = uid()
-    const chicken = await seedIngredient({
+    const chicken = await seedLeafFood({
       name: `Chicken thigh ${tag}`,
       kcal_100g: 209,
     })
-    const tofu = await seedIngredient({
+    const tofu = await seedLeafFood({
       name: `Tofu ${tag}`,
       kcal_100g: 76,
     })
-    const rice = await seedIngredient({
+    const rice = await seedLeafFood({
       name: `Basmati rice ${tag}`,
       kcal_100g: 130,
     })
@@ -99,7 +58,7 @@ test.describe("Ingredient Catalogue", () => {
       await page.getByTestId("inventory-search").fill(tag)
       await page.waitForResponse(
         (res) =>
-          res.url().includes("/api/ingredients") &&
+          res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
 
@@ -112,8 +71,11 @@ test.describe("Ingredient Catalogue", () => {
 
       // Search — only chicken matches
       await page.getByTestId("inventory-search").fill(`chicken ${tag}`)
-      await page.waitForResponse((res) =>
-        res.url().includes("/api/ingredients")
+      await page.waitForResponse(
+        (res) =>
+          res.url().includes("/api/foods") &&
+          res.url().includes("chicken") &&
+          res.url().includes(tag)
       )
 
       await expect(
@@ -126,15 +88,15 @@ test.describe("Ingredient Catalogue", () => {
         0
       )
     } finally {
-      await cleanupIngredient(chicken.id)
-      await cleanupIngredient(tofu.id)
-      await cleanupIngredient(rice.id)
+      await cleanupFood(chicken.id)
+      await cleanupFood(tofu.id)
+      await cleanupFood(rice.id)
     }
   })
 
   test("edit an ingredient", async ({ page }) => {
     const name = `Brown rice ${uid()}`
-    const ingredient = await seedIngredient({ name, kcal_100g: 112 })
+    const ingredient = await seedLeafFood({ name, kcal_100g: 112 })
 
     try {
       await page.goto(`/ingredients/${ingredient.id}/edit`)
@@ -145,7 +107,7 @@ test.describe("Ingredient Catalogue", () => {
 
       const responsePromise = page.waitForResponse(
         (res) =>
-          res.url().includes(`/api/ingredients/${ingredient.id}`) &&
+          res.url().includes(`/api/foods/${ingredient.id}`) &&
           res.request().method() === "PUT"
       )
       await page.getByRole("button", { name: /save/i }).click()
@@ -157,17 +119,17 @@ test.describe("Ingredient Catalogue", () => {
         page.getByTestId(`ingredient-card-${ingredient.id}`)
       ).toContainText("120kcal")
     } finally {
-      await cleanupIngredient(ingredient.id)
+      await cleanupFood(ingredient.id)
     }
   })
 
   test("delete an ingredient", async ({ page }) => {
     const tag = uid()
-    const keep = await seedIngredient({
+    const keep = await seedLeafFood({
       name: `Olive oil ${tag}`,
       kcal_100g: 884,
     })
-    const toDelete = await seedIngredient({
+    const toDelete = await seedLeafFood({
       name: `Butter ${tag}`,
       kcal_100g: 717,
     })
@@ -177,7 +139,7 @@ test.describe("Ingredient Catalogue", () => {
       await page.getByTestId("inventory-search").fill(tag)
       await page.waitForResponse(
         (res) =>
-          res.url().includes("/api/ingredients") &&
+          res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
       await expect(
@@ -191,7 +153,7 @@ test.describe("Ingredient Catalogue", () => {
       // Confirm deletion
       const responsePromise = page.waitForResponse(
         (res) =>
-          res.url().includes(`/api/ingredients/${toDelete.id}`) &&
+          res.url().includes(`/api/foods/${toDelete.id}`) &&
           res.request().method() === "DELETE"
       )
       await page
@@ -206,7 +168,7 @@ test.describe("Ingredient Catalogue", () => {
       ).toHaveCount(0)
       await expect(page.getByTestId(`ingredient-card-${keep.id}`)).toBeVisible()
     } finally {
-      await cleanupIngredient(keep.id)
+      await cleanupFood(keep.id)
     }
   })
 
@@ -230,7 +192,7 @@ test.describe("Ingredient Catalogue", () => {
     page,
   }) => {
     const name = `Duplicate test ${uid()}`
-    const existing = await seedIngredient({ name, kcal_100g: 100 })
+    const existing = await seedLeafFood({ name, kcal_100g: 100 })
 
     try {
       await page.goto("/ingredients/new")
@@ -239,19 +201,19 @@ test.describe("Ingredient Catalogue", () => {
 
       const responsePromise = page.waitForResponse(
         (res) =>
-          res.url().includes("/api/ingredients") &&
-          res.request().method() === "POST"
+          res.url().includes("/api/foods") && res.request().method() === "POST"
       )
       await page.getByRole("button", { name: /save/i }).click()
       const response = await responsePromise
       expect(response.status()).toBe(409)
 
-      // Error message should be visible on the form
+      // Backend returns 409 with message_key error.food.duplicate_name; the
+      // form surfaces the translated message (or the key if untranslated).
       await expect(
-        page.getByText("An ingredient with this name already exists.")
+        page.getByText(/already exists|food\.duplicate_name/i)
       ).toBeVisible()
     } finally {
-      await cleanupIngredient(existing.id)
+      await cleanupFood(existing.id)
     }
   })
 })

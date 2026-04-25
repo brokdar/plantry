@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -18,14 +19,15 @@ import {
 } from "@/components/ui/select"
 
 import type { Draft, DraftIngredient, Resolution } from "@/lib/api/import"
-import { createIngredient } from "@/lib/api/ingredients"
 import {
   useExtractRecipe,
   useImportLineLookup,
   useResolveImport,
 } from "@/lib/queries/import"
-import { useCreateComponent } from "@/lib/queries/components"
-import { COMPONENT_ROLES } from "@/lib/schemas/component"
+import { createFood, type FoodRole } from "@/lib/api/foods"
+import { useCreateFood } from "@/lib/queries/foods"
+import { foodKeys } from "@/lib/queries/keys"
+import { FOOD_ROLES } from "@/lib/schemas/food"
 import { ApiError } from "@/lib/api/client"
 
 export const Route = createFileRoute("/import/")({
@@ -34,8 +36,8 @@ export const Route = createFileRoute("/import/")({
 
 type RowState = {
   resolution: Resolution
-  ingredientId: number | null
-  ingredientName: string | null
+  foodId: number | null
+  foodName: string | null
   amount: number
   unit: string
 }
@@ -50,14 +52,14 @@ function ImportPage() {
   const [html, setHtml] = useState("")
   const [showHtml, setShowHtml] = useState(false)
   const [rows, setRows] = useState<RowState[]>([])
-  const [componentName, setComponentName] = useState("")
-  const [role, setRole] = useState<(typeof COMPONENT_ROLES)[number]>("main")
+  const [recipeName, setRecipeName] = useState("")
+  const [role, setRole] = useState<(typeof FOOD_ROLES)[number]>("main")
   const [referencePortions, setReferencePortions] = useState(1)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const extract = useExtractRecipe()
   const resolve = useResolveImport()
-  const createComp = useCreateComponent()
+  const createComp = useCreateFood()
 
   async function onSubmitStep1(e: React.FormEvent) {
     e.preventDefault()
@@ -68,14 +70,14 @@ function ImportPage() {
       )
       const d = res.draft
       setDraft(d)
-      setComponentName(d.name)
+      setRecipeName(d.name)
       setReferencePortions(d.reference_portions || 1)
       setRows(
         d.ingredients.map((ing) => ({
           resolution:
             ing.confidence === "unparsed" ? "skip" : ("existing" as Resolution),
-          ingredientId: null,
-          ingredientName: null,
+          foodId: null,
+          foodName: null,
           amount: ing.amount,
           unit: ing.unit || "g",
         }))
@@ -92,7 +94,7 @@ function ImportPage() {
     setSubmitError(null)
     try {
       const resolveRes = await resolve.mutateAsync({
-        name: componentName,
+        name: recipeName,
         role,
         reference_portions: referencePortions,
         prep_minutes: draft.prep_minutes,
@@ -103,22 +105,23 @@ function ImportPage() {
           step_number: i + 1,
           text,
         })),
-        ingredients: rows.map((row) => ({
+        children: rows.map((row) => ({
           resolution: row.resolution,
-          existing_ingredient_id: row.ingredientId ?? undefined,
+          food_id: row.foodId ?? 0,
           amount: row.amount,
           unit: row.unit,
         })),
       })
-      const resolved = resolveRes.component
+      const resolved = resolveRes.food
       const created = await createComp.mutateAsync({
+        kind: "composed",
         name: resolved.name,
-        role: resolved.role,
+        role: resolved.role as FoodRole | undefined,
         reference_portions: resolved.reference_portions,
         prep_minutes: resolved.prep_minutes ?? undefined,
         cook_minutes: resolved.cook_minutes ?? undefined,
         notes: resolved.notes,
-        ingredients: resolved.ingredients,
+        children: resolved.children,
         instructions: resolved.instructions,
         tags: resolved.tags,
       })
@@ -133,8 +136,7 @@ function ImportPage() {
   }
 
   const unresolvedCount = useMemo(
-    () =>
-      rows.filter((r) => r.resolution === "existing" && !r.ingredientId).length,
+    () => rows.filter((r) => r.resolution === "existing" && !r.foodId).length,
     [rows]
   )
 
@@ -281,8 +283,8 @@ function ImportPage() {
             <Label htmlFor="import-name">{t("import.step3.name_label")}</Label>
             <Input
               id="import-name"
-              value={componentName}
-              onChange={(e) => setComponentName(e.target.value)}
+              value={recipeName}
+              onChange={(e) => setRecipeName(e.target.value)}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -292,15 +294,13 @@ function ImportPage() {
               </Label>
               <Select
                 value={role}
-                onValueChange={(v) =>
-                  setRole(v as (typeof COMPONENT_ROLES)[number])
-                }
+                onValueChange={(v) => setRole(v as (typeof FOOD_ROLES)[number])}
               >
                 <SelectTrigger id="import-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMPONENT_ROLES.map((r) => (
+                  {FOOD_ROLES.map((r) => (
                     <SelectItem key={r} value={r}>
                       {t(`component.role_${r}`)}
                     </SelectItem>
@@ -358,6 +358,7 @@ interface RowProps {
 
 function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
   const { t } = useTranslation()
+  const qc = useQueryClient()
   const [creating, setCreating] = useState(false)
 
   const lookup = useImportLineLookup(ing.name, lang)
@@ -366,11 +367,11 @@ function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
   // Auto-select the first returned candidate that has an existing_id.
   useEffect(() => {
     if (state.resolution !== "existing") return
-    if (state.ingredientId) return
+    if (state.foodId) return
     if (!lookup.data) return
     const hit = results.find((r) => r.existing_id)
     if (hit && hit.existing_id) {
-      onChange({ ingredientId: hit.existing_id, ingredientName: hit.name })
+      onChange({ foodId: hit.existing_id, foodName: hit.name })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lookup.data])
@@ -378,11 +379,16 @@ function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
   async function onCreateManual() {
     setCreating(true)
     try {
-      const ingr = await createIngredient({ name: ing.name, source: "manual" })
+      const ingr = await createFood({
+        kind: "leaf",
+        name: ing.name,
+        source: "manual",
+      })
+      void qc.invalidateQueries({ queryKey: foodKeys.lists() })
       onChange({
         resolution: "existing",
-        ingredientId: ingr.id,
-        ingredientName: ingr.name,
+        foodId: ingr.id,
+        foodName: ingr.name,
       })
     } finally {
       setCreating(false)
@@ -414,7 +420,7 @@ function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
           <Select
             value={state.resolution}
             onValueChange={(v) =>
-              onChange({ resolution: v as Resolution, ingredientId: null })
+              onChange({ resolution: v as Resolution, foodId: null })
             }
           >
             <SelectTrigger className="w-40">
@@ -432,15 +438,13 @@ function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
 
       {state.resolution === "existing" && (
         <div className="mt-2 space-y-2">
-          {state.ingredientId ? (
+          {state.foodId ? (
             <div className="flex items-center gap-2 text-sm">
               <Badge>{t("import.step2.resolved_label")}</Badge>
-              <span>{state.ingredientName}</span>
+              <span>{state.foodName}</span>
               <button
                 className="text-xs text-muted-foreground underline underline-offset-2"
-                onClick={() =>
-                  onChange({ ingredientId: null, ingredientName: null })
-                }
+                onClick={() => onChange({ foodId: null, foodName: null })}
               >
                 {t("import.step2.change")}
               </button>
@@ -462,8 +466,8 @@ function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
                   onClick={() =>
                     r.existing_id
                       ? onChange({
-                          ingredientId: r.existing_id,
-                          ingredientName: r.name,
+                          foodId: r.existing_id,
+                          foodName: r.name,
                         })
                       : undefined
                   }

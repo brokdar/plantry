@@ -11,15 +11,15 @@ import (
 
 // Service holds business logic for templates.
 type Service struct {
-	repo       Repository
-	components ComponentChecker
-	plates     PlateComponentSource
-	tx         TxRunner
+	repo   Repository
+	foods  FoodChecker
+	plates PlateComponentSource
+	tx     TxRunner
 }
 
 // NewService creates a Service.
-func NewService(r Repository, c ComponentChecker, p PlateComponentSource, tx TxRunner) *Service {
-	return &Service{repo: r, components: c, plates: p, tx: tx}
+func NewService(r Repository, f FoodChecker, p PlateComponentSource, tx TxRunner) *Service {
+	return &Service{repo: r, foods: f, plates: p, tx: tx}
 }
 
 // Create persists a new template. Exactly one of fromPlateID or components may
@@ -44,32 +44,32 @@ func (s *Service) Create(ctx context.Context, name string, fromPlateID *int64, c
 		t.Components = make([]TemplateComponent, len(src))
 		for i, pc := range src {
 			t.Components[i] = TemplateComponent{
-				ComponentID: pc.ComponentID,
-				Portions:    pc.Portions,
-				SortOrder:   i,
+				FoodID:    pc.FoodID,
+				Portions:  pc.Portions,
+				SortOrder: i,
 			}
 		}
 	} else {
 		t.Components = make([]TemplateComponent, len(components))
 		for i, c := range components {
-			if c.ComponentID <= 0 {
-				return nil, fmt.Errorf("%w: components[%d] component_id required", domain.ErrInvalidInput, i)
+			if c.FoodID <= 0 {
+				return nil, fmt.Errorf("%w: components[%d] food_id required", domain.ErrInvalidInput, i)
 			}
-			exists, err := s.components.Exists(ctx, c.ComponentID)
+			exists, err := s.foods.Exists(ctx, c.FoodID)
 			if err != nil {
-				return nil, fmt.Errorf("check component %d: %w", c.ComponentID, err)
+				return nil, fmt.Errorf("check food %d: %w", c.FoodID, err)
 			}
 			if !exists {
-				return nil, fmt.Errorf("%w: component %d does not exist", domain.ErrNotFound, c.ComponentID)
+				return nil, fmt.Errorf("%w: food %d does not exist", domain.ErrNotFound, c.FoodID)
 			}
 			portions := c.Portions
 			if portions <= 0 {
 				portions = 1
 			}
 			t.Components[i] = TemplateComponent{
-				ComponentID: c.ComponentID,
-				Portions:    portions,
-				SortOrder:   i,
+				FoodID:    c.FoodID,
+				Portions:  portions,
+				SortOrder: i,
 			}
 		}
 	}
@@ -128,10 +128,10 @@ func (s *Service) Apply(ctx context.Context, templateID, plateID int64, merge bo
 			}
 			for i, tc := range t.Components {
 				pc := &plate.PlateComponent{
-					PlateID:     p.ID,
-					ComponentID: tc.ComponentID,
-					Portions:    tc.Portions,
-					SortOrder:   i,
+					PlateID:   p.ID,
+					FoodID:    tc.FoodID,
+					Portions:  tc.Portions,
+					SortOrder: i,
 				}
 				if err := pr.CreateComponent(ctx, pc); err != nil {
 					return fmt.Errorf("add template component: %w", err)
@@ -147,18 +147,15 @@ func (s *Service) Apply(ctx context.Context, templateID, plateID int64, merge bo
 		}
 		for i, tc := range t.Components {
 			pc := &plate.PlateComponent{
-				PlateID:     p.ID,
-				ComponentID: tc.ComponentID,
-				Portions:    tc.Portions,
-				SortOrder:   next + i,
+				PlateID:   p.ID,
+				FoodID:    tc.FoodID,
+				Portions:  tc.Portions,
+				SortOrder: next + i,
 			}
 			if err := pr.CreateComponent(ctx, pc); err != nil {
 				return fmt.Errorf("append template component: %w", err)
 			}
 		}
-		// silence unused-var linter: tr is the tx-bound template repo we
-		// expose for future tx-scoped template reads, kept for symmetry with
-		// planner.Copy.
 		_ = tr
 		return nil
 	})

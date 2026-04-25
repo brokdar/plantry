@@ -5,12 +5,12 @@ import {
   FoodPlaceholder,
   type FoodPlaceholderCategory,
 } from "@/components/editorial/FoodPlaceholder"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import { imageURL } from "@/lib/image-url"
 import { cn } from "@/lib/utils"
 
 interface PickerCardProps {
-  component: Component
+  component: Food
   onPick: () => void
   onToggleFavorite: () => void
 }
@@ -21,11 +21,18 @@ export function PickerCard({
   onToggleFavorite,
 }: PickerCardProps) {
   const { t } = useTranslation()
-  const roleLabel = t(`planner.slot.role.${component.role}`, {
-    defaultValue: component.role,
-  })
-  const prepMins = component.prep_minutes ?? 0
-  const cookMins = component.cook_minutes ?? 0
+
+  const chipLabel =
+    component.kind === "leaf"
+      ? t("ingredient.kind_label", { defaultValue: "Lebensmittel" })
+      : t(`planner.slot.role.${component.role}`, {
+          defaultValue: component.role,
+        })
+
+  const prepMins =
+    component.kind === "composed" ? (component.prep_minutes ?? 0) : 0
+  const cookMins =
+    component.kind === "composed" ? (component.cook_minutes ?? 0) : 0
   const totalMins = prepMins + cookMins
 
   return (
@@ -52,14 +59,17 @@ export function PickerCard({
           />
         ) : (
           <FoodPlaceholder
-            category={component.role as FoodPlaceholderCategory}
+            category={
+              ((component.kind === "composed" ? component.role : null) ??
+                "main") as FoodPlaceholderCategory
+            }
             size="lg"
             rounded="none"
             className="h-full w-full"
           />
         )}
         <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-0.5 font-heading text-[9.5px] font-bold tracking-[0.14em] text-on-surface uppercase">
-          {roleLabel}
+          {chipLabel}
         </span>
         <button
           type="button"
@@ -85,7 +95,22 @@ export function PickerCard({
         <p className="font-heading text-[14px] leading-tight font-bold tracking-tight">
           {component.name}
         </p>
-        {totalMins > 0 || component.cook_count > 0 ? (
+        {component.kind === "leaf" ? (
+          <p className="text-[11.5px] text-on-surface-variant">
+            {component.kcal_100g != null && (
+              <span>{component.kcal_100g} kcal</span>
+            )}
+            {component.kcal_100g != null && component.protein_100g != null && (
+              <span className="mx-1 inline-block size-0.5 rounded-full bg-outline-variant align-middle" />
+            )}
+            {component.protein_100g != null && (
+              <span>
+                {component.protein_100g}g{" "}
+                {t("nutrition.protein", { defaultValue: "protein" })}
+              </span>
+            )}
+          </p>
+        ) : totalMins > 0 || component.cook_count > 0 ? (
           <p className="flex items-center gap-1.5 text-[11.5px] text-on-surface-variant">
             {totalMins > 0 && <span>{totalMins} min</span>}
             {totalMins > 0 && component.cook_count > 0 && (
@@ -105,9 +130,9 @@ export function PickerCard({
             {t("picker.card.new", { defaultValue: "New — not yet cooked" })}
           </p>
         )}
-        {component.tags.length > 0 && (
+        {component.kind === "composed" && (component.tags?.length ?? 0) > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
-            {component.tags.slice(0, 3).map((tag) => (
+            {(component.tags ?? []).slice(0, 3).map((tag) => (
               <span
                 key={tag}
                 className="rounded-full bg-surface-container-low px-2 py-0.5 font-heading text-[10px] font-semibold tracking-wide text-on-surface-variant"

@@ -2,11 +2,10 @@ import { expect, apiRequest, test } from "./helpers"
 
 import {
   API,
-  cleanupComponent,
-  cleanupIngredient,
+  cleanupFood,
   cleanupSlot,
-  seedComponent,
-  seedIngredient,
+  seedComposedFood,
+  seedLeafFood,
   seedSlot,
   uid,
 } from "./helpers"
@@ -17,13 +16,13 @@ test.describe("Archive + rotation insights", () => {
   }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.arc-${tag}`, "Moon", 997)
-    const ing = await seedIngredient({ name: `Ing ${tag}`, kcal_100g: 100 })
-    const comp = await seedComponent({
+    const ing = await seedLeafFood({ name: `Ing ${tag}`, kcal_100g: 100 })
+    const comp = await seedComposedFood({
       name: `Archived Dish ${tag}`,
       role: "main",
-      ingredients: [
+      children: [
         {
-          ingredient_id: ing.id,
+          child_id: ing.id,
           amount: 100,
           unit: "g",
           grams: 100,
@@ -46,7 +45,7 @@ test.describe("Archive + rotation insights", () => {
         data: {
           day: 0,
           slot_id: slot.id,
-          components: [{ component_id: comp.id, portions: 1 }],
+          components: [{ food_id: comp.id, portions: 1 }],
         },
       })
       expect(plateRes.ok()).toBeTruthy()
@@ -80,8 +79,8 @@ test.describe("Archive + rotation insights", () => {
         }
       }
       await ctx.dispose()
-      await cleanupComponent(comp.id)
-      await cleanupIngredient(ing.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(ing.id)
       await cleanupSlot(slot.id)
     }
   })
@@ -95,8 +94,8 @@ test.describe("Archive + rotation insights", () => {
 
       await page.goto("/archive")
 
-      // Wait for the list to render (or empty state).
-      await page.waitForLoadState("networkidle")
+      // Wait for the archive list container to render before asserting absence.
+      await expect(page.getByTestId("archive-list")).toBeVisible()
 
       await expect(
         page.getByTestId(`archive-week-${currentWeek.id}`)
@@ -110,13 +109,13 @@ test.describe("Archive + rotation insights", () => {
     page,
   }) => {
     const tag = uid()
-    const ing = await seedIngredient({ name: `Ing ${tag}`, kcal_100g: 100 })
-    const comp = await seedComponent({
+    const ing = await seedLeafFood({ name: `Ing ${tag}`, kcal_100g: 100 })
+    const comp = await seedComposedFood({
       name: `Forgotten Dish ${tag}`,
       role: "main",
-      ingredients: [
+      children: [
         {
-          ingredient_id: ing.id,
+          child_id: ing.id,
           amount: 100,
           unit: "g",
           grams: 100,
@@ -131,7 +130,7 @@ test.describe("Archive + rotation insights", () => {
       // never-cooked components, our seeded component can fall outside that
       // window. Intercept the request and pass forgotten_limit=50 so the
       // UI renders the badge deterministically.
-      await page.route("**/api/components/insights*", async (route) => {
+      await page.route("**/api/foods/insights*", async (route) => {
         const url = new URL(route.request().url())
         if (!url.searchParams.has("forgotten_limit")) {
           url.searchParams.set("forgotten_limit", "50")
@@ -146,8 +145,8 @@ test.describe("Archive + rotation insights", () => {
 
       await expect(page.getByTestId(`badge-forgotten-${comp.id}`)).toBeVisible()
     } finally {
-      await cleanupComponent(comp.id)
-      await cleanupIngredient(ing.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(ing.id)
     }
   })
 })

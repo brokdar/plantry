@@ -44,23 +44,20 @@ import { PortionsEditor, type StagedPortion } from "./PortionsEditor"
 import {
   EXTENDED_NUTRIENT_KEYS,
   type ExtendedNutrientKey,
-} from "@/lib/api/ingredients"
+} from "@/lib/api/foods"
 
+import { leafFoodSchema, type LeafFoodFormValues } from "@/lib/schemas/food"
 import {
-  ingredientSchema,
-  type IngredientFormValues,
-} from "@/lib/schemas/ingredient"
-import {
-  useCreateIngredient,
-  useUpdateIngredient,
-} from "@/lib/queries/ingredients"
-import { useUpsertPortion } from "@/lib/queries/portions"
-import type { Ingredient } from "@/lib/api/ingredients"
+  useCreateFood,
+  useUpdateFood,
+  useUpsertPortion,
+} from "@/lib/queries/foods"
+import type { LeafFood } from "@/lib/api/foods"
 import type { LookupCandidate } from "@/lib/api/lookup"
 import { ApiError } from "@/lib/api/client"
 
 interface IngredientEditorProps {
-  ingredient?: Ingredient
+  ingredient?: LeafFood
   onSuccess?: () => void
   onDeleted?: () => void
   onCancel?: () => void
@@ -80,15 +77,14 @@ const MACRO_WATCH_FIELDS = [
  * value object. Single source of truth for form seeding: add a new nutrient
  * key in one place (EXTENDED_NUTRIENT_KEYS) and every seed path picks it up.
  */
-function toFormValues(
-  input?: Ingredient | LookupCandidate
-): IngredientFormValues {
+function toFormValues(input?: LeafFood | LookupCandidate): LeafFoodFormValues {
   const extended = Object.fromEntries(
     EXTENDED_NUTRIENT_KEYS.map((k) => [k, input?.[k] ?? null])
   ) as Record<ExtendedNutrientKey, number | null>
 
   if (!input) {
     return {
+      kind: "leaf",
       name: "",
       source: "manual",
       barcode: null,
@@ -107,19 +103,20 @@ function toFormValues(
   const isIngredient = "id" in input
   const barcode = input.barcode ?? null
   const off_id = isIngredient
-    ? input.off_id
+    ? (input.off_id ?? null)
     : input.source === "off"
       ? barcode
       : null
   const fdc_id = isIngredient
-    ? input.fdc_id
+    ? (input.fdc_id ?? null)
     : input.fdc_id != null
       ? String(input.fdc_id)
       : null
 
   return {
+    kind: "leaf",
     name: input.name,
-    source: input.source,
+    source: input.source ?? "manual",
     barcode,
     off_id,
     fdc_id,
@@ -143,13 +140,13 @@ export function IngredientEditor({
   const router = useRouter()
   const isEdit = !!ingredient
 
-  const form = useForm<IngredientFormValues>({
-    resolver: zodResolver(ingredientSchema) as Resolver<IngredientFormValues>,
+  const form = useForm<LeafFoodFormValues>({
+    resolver: zodResolver(leafFoodSchema) as Resolver<LeafFoodFormValues>,
     defaultValues: toFormValues(ingredient),
   })
 
-  const createMutation = useCreateIngredient()
-  const updateMutation = useUpdateIngredient()
+  const createMutation = useCreateFood()
+  const updateMutation = useUpdateFood()
   const uploadMutation = useUploadImage()
   const fetchImageMutation = useFetchImageFromUrl()
   const upsertPortionMutation = useUpsertPortion()
@@ -179,7 +176,7 @@ export function IngredientEditor({
     if (!isEdit) nameInputRef.current?.focus()
   }, [isEdit])
 
-  async function onSubmit(v: IngredientFormValues) {
+  async function onSubmit(v: LeafFoodFormValues) {
     try {
       if (isEdit && ingredient) {
         await updateMutation.mutateAsync({ id: ingredient.id, data: v })
@@ -188,7 +185,6 @@ export function IngredientEditor({
         if (stagedImage) {
           try {
             await uploadMutation.mutateAsync({
-              entityType: "ingredients",
               id: created.id,
               file: stagedImage,
             })
@@ -202,7 +198,7 @@ export function IngredientEditor({
           for (const p of stagedPortions) {
             try {
               await upsertPortionMutation.mutateAsync({
-                ingredientId: created.id,
+                foodId: created.id,
                 data: p,
               })
             } catch {
@@ -374,7 +370,7 @@ export function IngredientEditor({
                 }
               >
                 {isEdit && ingredient ? (
-                  <PortionsEditor mode="bound" ingredientId={ingredient.id} />
+                  <PortionsEditor mode="bound" foodId={ingredient.id} />
                 ) : (
                   <PortionsEditor
                     mode="staged"
@@ -394,7 +390,6 @@ export function IngredientEditor({
                 {isEdit && ingredient ? (
                   <ImageField
                     mode="bound"
-                    entityType="ingredients"
                     entityId={ingredient.id}
                     currentImagePath={ingredient.image_path}
                     onImageChange={() => {}}
@@ -438,7 +433,7 @@ export function IngredientEditor({
             destructive={
               isEdit && ingredient ? (
                 <DeleteIngredientDialog
-                  ingredientId={ingredient.id}
+                  foodId={ingredient.id}
                   onDeleted={onDeleted}
                 />
               ) : undefined

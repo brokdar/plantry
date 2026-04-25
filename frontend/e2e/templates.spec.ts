@@ -1,10 +1,11 @@
 import { expect, test } from "./helpers"
 
 import {
-  cleanupComponent,
+  cleanupFood,
   cleanupSlot,
   cleanupTemplate,
-  seedComponent,
+  seedComposedFood,
+  seedLeafFood,
   seedSlot,
   uid,
 } from "./helpers"
@@ -15,13 +16,23 @@ test.describe("Templates", () => {
   }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.dinner_${tag}`, "Moon", 999)
-    const main = await seedComponent({
+    const stub = await seedLeafFood({ name: `Stub ${tag}` })
+    const child = {
+      child_id: stub.id,
+      amount: 100,
+      unit: "g",
+      grams: 100,
+      sort_order: 0,
+    }
+    const main = await seedComposedFood({
       name: `Chicken curry ${tag}`,
       role: "main",
+      children: [child],
     })
-    const side = await seedComponent({
+    const side = await seedComposedFood({
       name: `Basmati ${tag}`,
       role: "side_starch",
+      children: [child],
     })
 
     let templateId: number | undefined
@@ -45,7 +56,9 @@ test.describe("Templates", () => {
 
       // Add a side via the Actions dropdown → picker.
       const addCompResp = page.waitForResponse(
-        (r) => /\/components$/.test(r.url()) && r.request().method() === "POST"
+        (r) =>
+          /\/plates\/\d+\/components$/.test(r.url()) &&
+          r.request().method() === "POST"
       )
       await cell.hover()
       await cell.getByRole("button", { name: /actions/i }).click()
@@ -105,8 +118,9 @@ test.describe("Templates", () => {
       await expect(cell.getByText(`Basmati ${tag}`)).toBeVisible()
     } finally {
       if (templateId !== undefined) await cleanupTemplate(templateId)
-      await cleanupComponent(main.id)
-      await cleanupComponent(side.id)
+      await cleanupFood(main.id)
+      await cleanupFood(side.id)
+      await cleanupFood(stub.id)
       await cleanupSlot(slot.id)
     }
   })

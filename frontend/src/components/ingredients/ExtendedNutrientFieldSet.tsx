@@ -10,16 +10,16 @@ import {
 } from "@/components/ui/form"
 import { cn } from "@/lib/utils"
 
-import type { IngredientFormValues } from "@/lib/schemas/ingredient"
+import type { LeafFoodFormValues } from "@/lib/schemas/food"
 
 type FieldDef = {
-  name: keyof IngredientFormValues
+  name: keyof LeafFoodFormValues
   labelKey: string
   unit: string
 }
 
 interface ExtendedNutrientFieldSetProps {
-  control: Control<IngredientFormValues>
+  control: Control<LeafFoodFormValues>
   fields: FieldDef[]
   disabled?: boolean
 }
@@ -43,7 +43,7 @@ export function ExtendedNutrientFieldSet({
         <FormField
           key={String(field.name)}
           control={control}
-          name={field.name as Path<IngredientFormValues>}
+          name={field.name as Path<LeafFoodFormValues>}
           render={({ field: fieldProps, fieldState }) => {
             const stored = fieldProps.value as number | null | undefined
             const displayValue = stored == null ? "" : String(stored)

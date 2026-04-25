@@ -56,14 +56,14 @@ func (r *TemplateRepo) createWith(ctx context.Context, q *sqlcgen.Queries, t *te
 			tc.SortOrder = i
 		}
 		tcRow, err := q.CreateTemplateComponent(ctx, sqlcgen.CreateTemplateComponentParams{
-			TemplateID:  tc.TemplateID,
-			ComponentID: tc.ComponentID,
-			Portions:    tc.Portions,
-			SortOrder:   int64(tc.SortOrder),
+			TemplateID: tc.TemplateID,
+			FoodID:     tc.FoodID,
+			Portions:   tc.Portions,
+			SortOrder:  int64(tc.SortOrder),
 		})
 		if err != nil {
 			if isForeignKeyViolation(err) {
-				return fmt.Errorf("%w: invalid component reference", domain.ErrInvalidInput)
+				return fmt.Errorf("%w: invalid food reference", domain.ErrInvalidInput)
 			}
 			return err
 		}
@@ -158,13 +158,13 @@ func (r *TemplateRepo) replaceWith(ctx context.Context, q *sqlcgen.Queries, temp
 	}
 	for i, tc := range comps {
 		if _, err := q.CreateTemplateComponent(ctx, sqlcgen.CreateTemplateComponentParams{
-			TemplateID:  templateID,
-			ComponentID: tc.ComponentID,
-			Portions:    tc.Portions,
-			SortOrder:   int64(i),
+			TemplateID: templateID,
+			FoodID:     tc.FoodID,
+			Portions:   tc.Portions,
+			SortOrder:  int64(i),
 		}); err != nil {
 			if isForeignKeyViolation(err) {
-				return fmt.Errorf("%w: invalid component reference", domain.ErrInvalidInput)
+				return fmt.Errorf("%w: invalid food reference", domain.ErrInvalidInput)
 			}
 			return err
 		}
@@ -184,8 +184,8 @@ func (r *TemplateRepo) ListComponentsByTemplate(ctx context.Context, templateID 
 	return out, nil
 }
 
-func (r *TemplateRepo) CountUsingComponent(ctx context.Context, componentID int64) (int64, error) {
-	return r.q.CountTemplatesUsingComponent(ctx, componentID)
+func (r *TemplateRepo) CountUsingFood(ctx context.Context, foodID int64) (int64, error) {
+	return r.q.CountTemplatesUsingFood(ctx, foodID)
 }
 
 func (r *TemplateRepo) loadTemplateChildren(ctx context.Context, t *template.Template) error {
@@ -209,7 +209,7 @@ func mapTemplateToDomain(row *sqlcgen.Template, t *template.Template) {
 func mapTemplateComponentToDomain(row *sqlcgen.TemplateComponent, tc *template.TemplateComponent) {
 	tc.ID = row.ID
 	tc.TemplateID = row.TemplateID
-	tc.ComponentID = row.ComponentID
+	tc.FoodID = row.FoodID
 	tc.Portions = row.Portions
 	tc.SortOrder = int(row.SortOrder)
 }

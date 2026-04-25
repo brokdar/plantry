@@ -2,11 +2,10 @@ import { expect, apiRequest, test } from "./helpers"
 
 import {
   API,
-  cleanupComponent,
-  cleanupIngredient,
+  cleanupFood,
   cleanupSlot,
-  seedComponent,
-  seedIngredient,
+  seedComposedFood,
+  seedLeafFood,
   seedSlot,
   uid,
 } from "./helpers"
@@ -17,13 +16,13 @@ test.describe("Plate feedback + AI memory loop", () => {
   }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.fb-${tag}`, "Moon", 999)
-    const ing = await seedIngredient({ name: `Chicken ${tag}`, kcal_100g: 100 })
-    const comp = await seedComponent({
+    const ing = await seedLeafFood({ name: `Chicken ${tag}`, kcal_100g: 100 })
+    const comp = await seedComposedFood({
       name: `Curry ${tag}`,
       role: "main",
-      ingredients: [
+      children: [
         {
-          ingredient_id: ing.id,
+          child_id: ing.id,
           amount: 100,
           unit: "g",
           grams: 100,
@@ -80,8 +79,8 @@ test.describe("Plate feedback + AI memory loop", () => {
       expect(body.system_prompt).toContain(`spicy-${tag}`)
       await ctx.dispose()
     } finally {
-      await cleanupComponent(comp.id)
-      await cleanupIngredient(ing.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(ing.id)
       await cleanupSlot(slot.id)
     }
   })
@@ -89,13 +88,13 @@ test.describe("Plate feedback + AI memory loop", () => {
   test("clicking the active status clears feedback", async ({ page }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.fb2-${tag}`, "Moon", 998)
-    const ing = await seedIngredient({ name: `Rice ${tag}`, kcal_100g: 100 })
-    const comp = await seedComponent({
+    const ing = await seedLeafFood({ name: `Rice ${tag}`, kcal_100g: 100 })
+    const comp = await seedComposedFood({
       name: `Bowl ${tag}`,
       role: "main",
-      ingredients: [
+      children: [
         {
-          ingredient_id: ing.id,
+          child_id: ing.id,
           amount: 100,
           unit: "g",
           grams: 100,
@@ -139,8 +138,8 @@ test.describe("Plate feedback + AI memory loop", () => {
       await del
       await expect(lovedBtn).toHaveAttribute("aria-pressed", "false")
     } finally {
-      await cleanupComponent(comp.id)
-      await cleanupIngredient(ing.id)
+      await cleanupFood(comp.id)
+      await cleanupFood(ing.id)
       await cleanupSlot(slot.id)
     }
   })

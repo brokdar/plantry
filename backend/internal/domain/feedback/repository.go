@@ -3,7 +3,7 @@ package feedback
 import (
 	"context"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
@@ -16,9 +16,9 @@ type Repository interface {
 }
 
 // TxRunner runs fn inside a single transaction. The closure receives
-// transactional copies of the feedback, component, and profile repositories so
+// transactional copies of the feedback, food, and profile repositories so
 // recording a feedback event atomically updates feedback rows, cook-count on
-// each component of the plate, and the profile's preferences JSON.
+// each food of the plate, and the profile's preferences JSON.
 type TxRunner interface {
-	RunInFeedbackTx(ctx context.Context, fn func(Repository, component.Repository, profile.Repository) error) error
+	RunInFeedbackTx(ctx context.Context, fn func(Repository, food.Repository, profile.Repository) error) error
 }

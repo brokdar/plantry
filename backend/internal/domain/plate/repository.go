@@ -16,7 +16,7 @@ type Repository interface {
 	DeleteComponent(ctx context.Context, id int64) error
 	ListComponentsByPlate(ctx context.Context, plateID int64) ([]PlateComponent, error)
 
-	CountUsingComponent(ctx context.Context, componentID int64) (int64, error)
+	CountUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CountUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 
 	SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*Plate, error)

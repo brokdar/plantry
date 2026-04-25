@@ -202,7 +202,7 @@ export function TimeSlotsEditor() {
       })
     } catch (err) {
       const key = err instanceof ApiError ? err.messageKey : "error.server"
-      form.setError("name_key", { message: key })
+      form.setError("root", { message: t(key) })
     }
   }
 
@@ -237,6 +237,11 @@ export function TimeSlotsEditor() {
               onSubmit={form.handleSubmit(onSubmit)}
               className="grid gap-4 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-end"
             >
+              {form.formState.errors.root && (
+                <p className="col-span-full text-sm text-destructive">
+                  {form.formState.errors.root.message}
+                </p>
+              )}
               <FormField
                 control={form.control}
                 name="name_key"

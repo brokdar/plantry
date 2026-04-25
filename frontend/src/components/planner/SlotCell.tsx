@@ -4,6 +4,7 @@ import {
   Plus,
   Trash2,
   Utensils,
+  X,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -15,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { Component } from "@/lib/api/components"
+import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
 import type { MacrosResponse } from "@/lib/api/weeks"
 import { cn } from "@/lib/utils"
@@ -30,7 +31,7 @@ interface SlotCellProps {
   day: number
   slotId: number
   plate: Plate | undefined
-  componentsById: Map<number, Component>
+  componentsById: Map<number, Food>
   macros?: MacrosResponse
   aiFilled?: boolean
   onAdd: () => void
@@ -55,7 +56,7 @@ export function SlotCell(props: SlotCellProps) {
   return <PlannedSlot {...props} plate={plate} />
 }
 
-function EmptySlot({ onAdd }: SlotCellProps) {
+function EmptySlot({ onAdd }: Pick<SlotCellProps, "onAdd">) {
   const { t } = useTranslation()
   return (
     <button
@@ -120,7 +121,20 @@ function SkippedSlot({
           {plate.note}
         </span>
       )}
-      <div className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <Button
+          variant="ghost"
+          size="icon"
+          data-testid="slot-quick-delete"
+          className="h-7 w-7 rounded-full bg-white/90 text-destructive/70 shadow-sm hover:text-destructive"
+          aria-label={t("plate.delete_plate")}
+          onClick={(e) => {
+            e.stopPropagation()
+            onDeletePlate()
+          }}
+        >
+          <X className="h-3 w-3" />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -178,17 +192,18 @@ function PlannedSlot({
     (a, b) => a.sort_order - b.sort_order
   )
   if (sorted.length === 0) {
-    return <EmptySlot {...({ onAdd } as unknown as SlotCellProps)} />
+    return <EmptySlot onAdd={onAdd} />
   }
 
   const hero = sorted[0]
-  const heroComp = componentsById.get(hero.component_id)
+  const heroComp = componentsById.get(hero.food_id)
   const sideComps = sorted.slice(1).map((pc) => {
-    const c = componentsById.get(pc.component_id)
-    return c?.name ?? `#${pc.component_id}`
+    const c = componentsById.get(pc.food_id)
+    return c?.name ?? `#${pc.food_id}`
   })
-  const heroName = heroComp?.name ?? `#${hero.component_id}`
-  const heroRole = heroComp?.role ?? "main"
+  const heroName = heroComp?.name ?? `#${hero.food_id}`
+  const heroRole =
+    heroComp?.kind === "composed" ? (heroComp.role ?? null) : null
   const favorite = heroComp?.favorite ?? false
   const loved = plate.feedback?.status === "loved"
   const disliked = plate.feedback?.status === "disliked"
@@ -215,50 +230,67 @@ function PlannedSlot({
       <SlotHero
         imagePath={heroComp?.image_path}
         role={heroRole}
-        roleLabel={t(`planner.slot.role.${heroRole}`, {
-          defaultValue: heroRole,
-        })}
+        roleLabel={
+          heroRole
+            ? t(`planner.slot.role.${heroRole}`, { defaultValue: heroRole })
+            : t("ingredient.kind_label", { defaultValue: "Lebensmittel" })
+        }
       />
       <div className="flex min-h-0 flex-1 flex-col gap-1 px-2.5 py-2">
         <div className="flex items-start justify-between gap-1">
           <span className="truncate font-heading text-[13.5px] leading-tight font-bold tracking-tight text-on-surface">
             {heroName}
           </span>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="-mr-1 size-5 shrink-0"
-                aria-label={t("common.actions")}
-              >
-                <MoreVertical className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onAdd}>
-                <Plus className="h-3 w-3" />
-                {t("plate.add_component")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onToggleSkip}>
-                {t("skip.mark")}
-              </DropdownMenuItem>
-              {onSaveAsTemplate && (
-                <DropdownMenuItem onClick={onSaveAsTemplate}>
-                  <BookmarkPlus className="h-3 w-3" />
-                  {t("template.save_as")}
+          <div className="flex shrink-0 items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              data-testid="slot-quick-delete"
+              className="size-5 text-on-surface-variant/50 opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+              aria-label={t("plate.delete_plate")}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDeletePlate()
+              }}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="-mr-1 size-5 shrink-0"
+                  aria-label={t("common.actions")}
+                >
+                  <MoreVertical className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onAdd}>
+                  <Plus className="h-3 w-3" />
+                  {t("plate.add_component")}
                 </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={onDeletePlate}
-                className="text-destructive"
-              >
-                <Trash2 className="h-3 w-3" />
-                {t("plate.delete_plate")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem onClick={onToggleSkip}>
+                  {t("skip.mark")}
+                </DropdownMenuItem>
+                {onSaveAsTemplate && (
+                  <DropdownMenuItem onClick={onSaveAsTemplate}>
+                    <BookmarkPlus className="h-3 w-3" />
+                    {t("template.save_as")}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={onDeletePlate}
+                  className="text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  {t("plate.delete_plate")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
         <SlotChips names={sideComps} max={3} />
         <div className="mt-auto">

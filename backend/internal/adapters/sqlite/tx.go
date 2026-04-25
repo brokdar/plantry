@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain/component"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -58,11 +58,11 @@ func (t *TxRunner) RunInTemplateTx(ctx context.Context, fn func(template.Reposit
 	return tx.Commit()
 }
 
-// RunInFeedbackTx wraps fn in a single transaction, binding feedback, component,
+// RunInFeedbackTx wraps fn in a single transaction, binding feedback, food,
 // and profile repositories to the same tx. Used by the feedback service so
 // recording a plate rating atomically updates the feedback row, the
-// components' cook_count, and the profile preferences map.
-func (t *TxRunner) RunInFeedbackTx(ctx context.Context, fn func(feedback.Repository, component.Repository, profile.Repository) error) error {
+// foods' cook_count, and the profile preferences map.
+func (t *TxRunner) RunInFeedbackTx(ctx context.Context, fn func(feedback.Repository, food.Repository, profile.Repository) error) error {
 	tx, err := t.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -70,10 +70,10 @@ func (t *TxRunner) RunInFeedbackTx(ctx context.Context, fn func(feedback.Reposit
 	defer func() { _ = tx.Rollback() }()
 
 	feedbackRepo := newFeedbackRepoTx(tx)
-	componentRepo := newComponentRepoTx(tx)
+	foodRepo := newFoodRepoTx(tx)
 	profileRepo := newProfileRepoTx(tx)
 
-	if err := fn(feedbackRepo, componentRepo, profileRepo); err != nil {
+	if err := fn(feedbackRepo, foodRepo, profileRepo); err != nil {
 		return err
 	}
 	return tx.Commit()

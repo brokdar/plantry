@@ -55,9 +55,9 @@ export function lookupImportLine(
 
 export type Resolution = "existing" | "skip" | "new"
 
-export interface ResolveIngredientInput {
+export interface ResolveChildInput {
   resolution: Resolution
-  existing_ingredient_id?: number
+  food_id: number
   amount: number
   unit: string
 }
@@ -76,30 +76,33 @@ export interface ResolveRequest {
   notes: string | null
   tags: string[]
   instructions: ResolveInstructionInput[]
-  ingredients: ResolveIngredientInput[]
+  children: ResolveChildInput[]
 }
 
-export interface ResolvedComponent {
+export interface FinalizedFoodChild {
+  child_id: number
+  amount: number
+  unit: string
+  grams: number
+  sort_order: number
+}
+
+export interface FinalizedFood {
   name: string
+  kind: "composed"
   role: string
   reference_portions: number
   prep_minutes: number | null
   cook_minutes: number | null
   notes: string | null
-  ingredients: {
-    ingredient_id: number
-    amount: number
-    unit: string
-    grams: number
-    sort_order: number
-  }[]
+  children: FinalizedFoodChild[]
   instructions: { step_number: number; text: string }[]
   tags: string[]
 }
 
 export function resolveImport(
   req: ResolveRequest
-): Promise<{ component: ResolvedComponent }> {
+): Promise<{ food: FinalizedFood }> {
   return apiFetch("/import/resolve", {
     method: "POST",
     body: JSON.stringify(req),

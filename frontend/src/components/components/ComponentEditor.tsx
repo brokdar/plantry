@@ -53,27 +53,27 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 import {
-  componentSchema,
-  COMPONENT_ROLES,
-  type ComponentFormValues,
-} from "@/lib/schemas/component"
+  composedFoodSchema,
+  FOOD_ROLES,
+  type ComposedFoodFormValues,
+} from "@/lib/schemas/food"
 import {
-  useComponents,
-  useCreateComponent,
-  useUpdateComponent,
-  useDeleteComponent,
+  useFoods,
+  useCreateFood,
+  useUpdateFood,
+  useDeleteFood,
   useCreateVariant,
   useVariants,
-} from "@/lib/queries/components"
+} from "@/lib/queries/foods"
 import { fromIngredients, type IngredientInput } from "@/lib/domain/nutrition"
 import { isCountUnit, normalizeUnit } from "@/lib/domain/units"
-import type { Component } from "@/lib/api/components"
+import type { ComposedFood } from "@/lib/api/foods"
 import { ApiError } from "@/lib/api/client"
 
 import { IngredientRow } from "./IngredientRow"
 
 interface ComponentEditorProps {
-  component?: Component
+  component?: ComposedFood
   onSuccess?: () => void
   onDeleted?: () => void
 }
@@ -86,38 +86,43 @@ export function ComponentEditor({
   const { t } = useTranslation()
   const isEdit = !!component
 
-  const form = useForm<ComponentFormValues>({
-    resolver: zodResolver(componentSchema) as Resolver<ComponentFormValues>,
+  const form = useForm<ComposedFoodFormValues>({
+    resolver: zodResolver(
+      composedFoodSchema
+    ) as Resolver<ComposedFoodFormValues>,
     defaultValues: component
       ? {
+          kind: "composed" as const,
           name: component.name,
-          role: component.role as ComponentFormValues["role"],
-          reference_portions: component.reference_portions,
+          role: (component.role ?? "main") as ComposedFoodFormValues["role"],
+          reference_portions: component.reference_portions ?? 1,
           prep_minutes: component.prep_minutes ?? 0,
           cook_minutes: component.cook_minutes ?? 0,
           notes: component.notes,
-          ingredients: component.ingredients.map((ci) => ({
-            ingredient_id: ci.ingredient_id,
-            ingredient_name: ci.ingredient_name,
+          children: (component.children ?? []).map((ci) => ({
+            child_id: ci.child_id,
+            child_name: ci.child_name,
+            child_kind: ci.child_kind,
             amount: ci.amount,
             unit: ci.unit,
             grams: ci.grams,
             sort_order: ci.sort_order,
           })),
-          instructions: component.instructions.map((inst) => ({
+          instructions: (component.instructions ?? []).map((inst) => ({
             step_number: inst.step_number,
             text: inst.text,
           })),
-          tags: component.tags,
+          tags: component.tags ?? [],
         }
       : {
+          kind: "composed" as const,
           name: "",
           role: "main" as const,
           reference_portions: 1,
           prep_minutes: 0,
           cook_minutes: 0,
           notes: null,
-          ingredients: [],
+          children: [],
           instructions: [],
           tags: [],
         },
@@ -127,7 +132,7 @@ export function ComponentEditor({
     fields: ingredientFields,
     append: appendIngredient,
     remove: removeIngredient,
-  } = useFieldArray({ control: form.control, name: "ingredients" })
+  } = useFieldArray({ control: form.control, name: "children" })
 
   const {
     fields: instructionFields,
@@ -135,9 +140,9 @@ export function ComponentEditor({
     remove: removeInstruction,
   } = useFieldArray({ control: form.control, name: "instructions" })
 
-  const createMutation = useCreateComponent()
-  const updateMutation = useUpdateComponent()
-  const deleteMutation = useDeleteComponent()
+  const createMutation = useCreateFood()
+  const updateMutation = useUpdateFood()
+  const deleteMutation = useDeleteFood()
   const createVariant = useCreateVariant()
   const uploadMutation = useUploadImage()
   const navigate = useNavigate()
@@ -156,7 +161,7 @@ export function ComponentEditor({
 
   const watchedIngredients = useWatch({
     control: form.control,
-    name: "ingredients",
+    name: "children",
   })
   const watchedPortions = useWatch({
     control: form.control,
@@ -166,11 +171,11 @@ export function ComponentEditor({
   const watchedCook = useWatch({ control: form.control, name: "cook_minutes" })
   const totalTime = (Number(watchedPrep) || 0) + (Number(watchedCook) || 0)
 
-  async function onSubmit(values: ComponentFormValues) {
+  async function onSubmit(values: ComposedFoodFormValues) {
     // Guard: count units without a portion and no manual grams can't be
     // resolved to mass → nutrition totals would silently underreport.
-    const unresolved = values.ingredients.find((ci) => {
-      if (!ci.ingredient_id) return false
+    const unresolved = values.children.find((ci) => {
+      if (!ci.child_id) return false
       const u = normalizeUnit(ci.unit)
       if (!u) return true
       if (isCountUnit(u) && !(ci.grams > 0)) return true
@@ -188,14 +193,15 @@ export function ComponentEditor({
     }
 
     const input = {
+      kind: "composed" as const,
       name: values.name,
       role: values.role,
       reference_portions: values.reference_portions,
       prep_minutes: values.prep_minutes,
       cook_minutes: values.cook_minutes,
       notes: values.notes,
-      ingredients: values.ingredients.map((ci, idx) => ({
-        ingredient_id: ci.ingredient_id,
+      children: values.children.map((ci, idx) => ({
+        child_id: ci.child_id,
         amount: ci.amount,
         unit: ci.unit,
         grams: ci.grams,
@@ -216,7 +222,6 @@ export function ComponentEditor({
         if (stagedImage) {
           try {
             await uploadMutation.mutateAsync({
-              entityType: "components",
               id: created.id,
               file: stagedImage,
             })
@@ -241,7 +246,6 @@ export function ComponentEditor({
     if (!pendingImage) return
     try {
       await uploadMutation.mutateAsync({
-        entityType: "components",
         id: pendingImage.componentId,
         file: pendingImage.blob,
       })
@@ -306,10 +310,10 @@ export function ComponentEditor({
   // Tag autocomplete: derive the distinct set of tags already used across the
   // catalog. Self-hosted single-user deploy → aggregating client-side from the
   // existing list query is fine; avoids a dedicated backend endpoint.
-  const { data: catalogData } = useComponents({ limit: 500 })
+  const { data: catalogData } = useFoods({ kind: "composed", limit: 500 })
   const existingTagList = useMemo(() => {
     const set = new Set<string>()
-    for (const c of catalogData?.items ?? []) {
+    for (const c of (catalogData?.items ?? []) as ComposedFood[]) {
       for (const tag of c.tags ?? []) set.add(tag)
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b))
@@ -447,7 +451,7 @@ export function ComponentEditor({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {COMPONENT_ROLES.map((role) => (
+                        {FOOD_ROLES.map((role) => (
                           <SelectItem key={role} value={role}>
                             {t(`component.role_${role}`)}
                           </SelectItem>
@@ -644,8 +648,8 @@ export function ComponentEditor({
                   size="sm"
                   onClick={() =>
                     appendIngredient({
-                      ingredient_id: 0,
-                      ingredient_name: "",
+                      child_id: 0,
+                      child_name: "",
                       amount: 100,
                       unit: "g",
                       grams: 100,
@@ -664,13 +668,13 @@ export function ComponentEditor({
                   <p
                     className={cn(
                       "rounded-xl border border-dashed px-6 py-10 text-center text-sm",
-                      form.formState.errors.ingredients
+                      form.formState.errors.children
                         ? "border-destructive/50 bg-destructive/5 text-destructive"
                         : "border-outline-variant/40 text-on-surface-variant"
                     )}
                   >
-                    {form.formState.errors.ingredients?.root?.message ??
-                      form.formState.errors.ingredients?.message ??
+                    {form.formState.errors.children?.root?.message ??
+                      form.formState.errors.children?.message ??
                       t("component.ingredients_empty")}
                   </p>
                 </div>
@@ -747,7 +751,6 @@ export function ComponentEditor({
               {isEdit && component ? (
                 <ImageField
                   mode="bound"
-                  entityType="components"
                   entityId={component.id}
                   currentImagePath={component.image_path}
                   onImageChange={() => {}}
@@ -780,7 +783,7 @@ export function ComponentEditor({
                 testId="component-variants-section"
               >
                 <div className="-mx-2 flex gap-3 overflow-x-auto px-2 pb-1">
-                  {variantsData.items.map((variant) => (
+                  {(variantsData.items as ComposedFood[]).map((variant) => (
                     <Link
                       key={variant.id}
                       to="/components/$id/edit"
@@ -896,7 +899,7 @@ export function ComponentEditor({
 }
 
 function computePerPortionMacros(
-  ingredients: ComponentFormValues["ingredients"],
+  ingredients: ComposedFoodFormValues["children"],
   referencePortions: number
 ) {
   const valid = ingredients.filter((i) => i.grams > 0)

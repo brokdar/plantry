@@ -1,4 +1,5 @@
 import { format } from "date-fns"
+import { Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import type { MacrosResponse } from "@/lib/api/weeks"
@@ -10,6 +11,8 @@ interface DayHeaderProps {
   idx: number
   today?: boolean
   macros?: MacrosResponse
+  onClearDay?: () => void
+  hasPlates?: boolean
 }
 
 export function DayHeader({
@@ -18,6 +21,8 @@ export function DayHeader({
   idx,
   today,
   macros,
+  onClearDay,
+  hasPlates,
 }: DayHeaderProps) {
   const { t } = useTranslation()
   // Always render kcal + macro strip on every day header so the row keeps a
@@ -34,7 +39,7 @@ export function DayHeader({
   return (
     <div
       className={cn(
-        "relative flex flex-col items-start gap-2 border-b border-outline-variant/50 px-2.5 py-3 pb-3.5",
+        "group relative flex flex-col items-start gap-2 border-b border-outline-variant/50 px-2.5 py-3 pb-3.5",
         today &&
           "after:absolute after:inset-x-2.5 after:-bottom-px after:h-0.5 after:rounded-sm after:bg-primary"
       )}
@@ -65,12 +70,29 @@ export function DayHeader({
       </span>
       {total > 0 ? (
         <div className="mt-0.5 flex h-1 w-full overflow-hidden rounded-full bg-surface-container">
-          <span className="h-full bg-[#c87a5a]" style={{ width: `${pPct}%` }} />
-          <span className="h-full bg-[#d4b066]" style={{ width: `${cPct}%` }} />
-          <span className="h-full bg-[#6f8a73]" style={{ width: `${fPct}%` }} />
+          <span
+            className="h-full bg-macro-protein"
+            style={{ width: `${pPct}%` }}
+          />
+          <span
+            className="h-full bg-macro-carbs"
+            style={{ width: `${cPct}%` }}
+          />
+          <span className="h-full bg-macro-fat" style={{ width: `${fPct}%` }} />
         </div>
       ) : (
         <div className="mt-0.5 h-1 w-full rounded-full bg-surface-container/60" />
+      )}
+      {onClearDay && hasPlates && (
+        <button
+          type="button"
+          onClick={onClearDay}
+          aria-label={t("planner.clear_day")}
+          data-testid={`clear-day-${idx}`}
+          className="absolute top-2 right-1.5 grid size-5 place-items-center rounded text-on-surface-variant/40 opacity-0 transition-[opacity,color] group-hover:opacity-100 hover:text-destructive"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
       )}
     </div>
   )
