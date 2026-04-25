@@ -62,6 +62,9 @@ func newFoodRepoTx(tx *sql.Tx) *FoodRepo {
 }
 
 func (r *FoodRepo) Create(ctx context.Context, f *food.Food) error {
+	if r.pool == nil {
+		return fmt.Errorf("FoodRepo.Create: must not be called on a tx-bound repo")
+	}
 	tx, err := r.pool.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -108,6 +111,9 @@ func (r *FoodRepo) Get(ctx context.Context, id int64) (*food.Food, error) {
 }
 
 func (r *FoodRepo) Update(ctx context.Context, f *food.Food) error {
+	if r.pool == nil {
+		return fmt.Errorf("FoodRepo.Update: must not be called on a tx-bound repo")
+	}
 	tx, err := r.pool.BeginTx(ctx, nil)
 	if err != nil {
 		return err
