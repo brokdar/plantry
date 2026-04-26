@@ -18,6 +18,11 @@ type Repository interface {
 	CountUsingFood(ctx context.Context, foodID int64) (int64, error)
 }
 
+// PlateCreator creates a new plate and populates its assigned ID.
+type PlateCreator interface {
+	Create(ctx context.Context, p *plate.Plate) error
+}
+
 // TxRunner runs fn inside a single transaction with template + plate repos bound to it.
 type TxRunner interface {
 	RunInTemplateTx(ctx context.Context, fn func(Repository, plate.Repository) error) error

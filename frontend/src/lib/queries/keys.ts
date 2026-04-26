@@ -65,6 +65,11 @@ export const settingsKeys = {
     [...settingsKeys.all, "ai", "models", provider] as const,
 }
 
+export const shoppingKeys = {
+  all: ["shopping"] as const,
+  list: (from: string, to: string) => ["shopping", "list", from, to] as const,
+}
+
 export const importKeys = {
   all: ["import"] as const,
   lineLookup: (query: string) =>

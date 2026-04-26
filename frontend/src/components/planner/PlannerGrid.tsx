@@ -137,7 +137,7 @@ export function PlannerGrid({
   const swapMut = useSwapPlateComponent(0)
   const deletePlateMut = useDeletePlate(0)
   const setSkippedMut = useSetPlateSkipped(0)
-  const applyTemplateMut = useApplyTemplate(0)
+  const applyTemplateMut = useApplyTemplate()
   const setFavoriteMut = useSetFoodFavorite()
   const recordFeedbackMut = useRecordFeedback(0)
   const clearFeedbackMut = useClearFeedback(0)
@@ -178,18 +178,9 @@ export function PlannerGrid({
     const targetDay = days[target.day]
     if (!targetDay) return
     try {
-      let plateId = target.plateId
-      if (plateId === null) {
-        const created = await createPlate(0, {
-          day: target.day,
-          slot_id: target.slotId,
-        })
-        plateId = created.id
-        void queryClient.invalidateQueries({ queryKey: weekKeys.all })
-      }
       await applyTemplateMut.mutateAsync({
-        id: template.id,
-        input: { plate_id: plateId },
+        templateId: template.id,
+        input: { start_date: targetDay.date, slot_id: target.slotId },
       })
     } catch (err) {
       toastError(err, t)

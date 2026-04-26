@@ -33,9 +33,9 @@ func (q *Queries) CreateTemplate(ctx context.Context, name string) (Template, er
 }
 
 const createTemplateComponent = `-- name: CreateTemplateComponent :one
-INSERT INTO template_components (template_id, food_id, portions, sort_order)
-VALUES (?, ?, ?, ?)
-RETURNING id, template_id, food_id, portions, sort_order
+INSERT INTO template_components (template_id, food_id, portions, sort_order, day_offset)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, template_id, food_id, portions, sort_order, day_offset
 `
 
 type CreateTemplateComponentParams struct {
@@ -43,6 +43,7 @@ type CreateTemplateComponentParams struct {
 	FoodID     int64
 	Portions   float64
 	SortOrder  int64
+	DayOffset  int64
 }
 
 func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplateComponentParams) (TemplateComponent, error) {
@@ -51,6 +52,7 @@ func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplat
 		arg.FoodID,
 		arg.Portions,
 		arg.SortOrder,
+		arg.DayOffset,
 	)
 	var i TemplateComponent
 	err := row.Scan(
@@ -59,6 +61,7 @@ func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplat
 		&i.FoodID,
 		&i.Portions,
 		&i.SortOrder,
+		&i.DayOffset,
 	)
 	return i, err
 }
@@ -91,7 +94,7 @@ func (q *Queries) GetTemplate(ctx context.Context, id int64) (Template, error) {
 }
 
 const listTemplateComponentsByTemplate = `-- name: ListTemplateComponentsByTemplate :many
-SELECT id, template_id, food_id, portions, sort_order FROM template_components WHERE template_id = ? ORDER BY sort_order, id
+SELECT id, template_id, food_id, portions, sort_order, day_offset FROM template_components WHERE template_id = ? ORDER BY sort_order, id
 `
 
 func (q *Queries) ListTemplateComponentsByTemplate(ctx context.Context, templateID int64) ([]TemplateComponent, error) {
@@ -109,6 +112,7 @@ func (q *Queries) ListTemplateComponentsByTemplate(ctx context.Context, template
 			&i.FoodID,
 			&i.Portions,
 			&i.SortOrder,
+			&i.DayOffset,
 		); err != nil {
 			return nil, err
 		}

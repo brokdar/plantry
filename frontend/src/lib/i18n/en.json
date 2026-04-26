@@ -665,6 +665,12 @@
   "template": {
     "eyebrow": "Saved compositions",
     "title": "Templates",
+    "applied": "Template applied",
+    "apply": {
+      "start_on": "Start date",
+      "slot": "Meal slot",
+      "submit": "Apply template"
+    },
     "subtitle": "Press a plate you love into a template, then lay it down any day you like.",
     "new": "New template",
     "new_body": "Create an empty template now and compose it later from the planner, or save an existing plate directly as a template.",
@@ -752,7 +758,11 @@
     "title": "Shopping List",
     "description": "Ingredients for this week",
     "button": "Shopping",
-    "empty": "No ingredients — add meals to the planner first."
+    "empty": "No ingredients — add meals to the planner first.",
+    "preset_next7": "Next 7 days",
+    "preset_until_shopping_day": "Until next {{day}}",
+    "preset_this_cycle": "This {{day}} cycle",
+    "range_label": "{{from}} — {{to}}"
   },
   "nutrition": {
     "title": "Week Nutrition",

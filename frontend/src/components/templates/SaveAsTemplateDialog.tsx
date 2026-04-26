@@ -21,22 +21,30 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { useCreateTemplate } from "@/lib/queries/templates"
+import {
+  useCreateTemplate,
+  useCreateTemplateFromRange,
+} from "@/lib/queries/templates"
 import { templateSchema, type TemplateFormValues } from "@/lib/schemas/template"
 
 interface SaveAsTemplateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  plateId: number | null
+  plateId?: number | null
+  range?: { from: string; to: string }
 }
 
 export function SaveAsTemplateDialog({
   open,
   onOpenChange,
   plateId,
+  range,
 }: SaveAsTemplateDialogProps) {
   const { t } = useTranslation()
   const createMutation = useCreateTemplate()
+  const createFromRangeMutation = useCreateTemplateFromRange()
+  const isPending =
+    createMutation.isPending || createFromRangeMutation.isPending
   const form = useForm<TemplateFormValues>({
     resolver: zodResolver(templateSchema),
     defaultValues: { name: "" },
@@ -48,16 +56,28 @@ export function SaveAsTemplateDialog({
   }
 
   function onSubmit(values: TemplateFormValues) {
-    if (plateId === null) return
-    createMutation.mutate(
-      { name: values.name.trim(), from_plate_id: plateId },
-      {
-        onSuccess: () => {
-          form.reset({ name: "" })
-          onOpenChange(false)
-        },
-      }
-    )
+    const name = values.name.trim()
+    if (range) {
+      createFromRangeMutation.mutate(
+        { name, from: range.from, to: range.to },
+        {
+          onSuccess: () => {
+            form.reset({ name: "" })
+            onOpenChange(false)
+          },
+        }
+      )
+    } else if (plateId != null) {
+      createMutation.mutate(
+        { name, from_plate_id: plateId },
+        {
+          onSuccess: () => {
+            form.reset({ name: "" })
+            onOpenChange(false)
+          },
+        }
+      )
+    }
   }
 
   return (
@@ -94,7 +114,7 @@ export function SaveAsTemplateDialog({
               >
                 {t("common.cancel")}
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
+              <Button type="submit" disabled={isPending}>
                 <BookmarkPlus className="size-4" />
                 {t("template.create")}
               </Button>

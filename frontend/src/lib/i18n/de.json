@@ -641,7 +641,11 @@
     "title": "Einkaufsliste",
     "description": "Zutaten für diese Woche",
     "button": "Einkaufen",
-    "empty": "Keine Zutaten – füge zuerst Mahlzeiten zum Planer hinzu."
+    "empty": "Keine Zutaten – füge zuerst Mahlzeiten zum Planer hinzu.",
+    "preset_next7": "Nächste 7 Tage",
+    "preset_until_shopping_day": "Bis nächsten {{day}}",
+    "preset_this_cycle": "Dieser {{day}}-Zyklus",
+    "range_label": "{{from}} — {{to}}"
   },
   "nutrition": {
     "title": "Wochennährwerte",
@@ -712,6 +716,12 @@
   "template": {
     "eyebrow": "Gespeicherte Zusammenstellungen",
     "title": "Vorlagen",
+    "applied": "Vorlage angewendet",
+    "apply": {
+      "start_on": "Startdatum",
+      "slot": "Mahlzeit-Slot",
+      "submit": "Vorlage anwenden"
+    },
     "subtitle": "Presse einen Lieblings-Teller zur Vorlage — und lege ihn jederzeit wieder auf.",
     "new": "Neue Vorlage",
     "new_body": "Erstelle jetzt eine leere Vorlage und fülle sie später im Planer, oder speichere einen bestehenden Teller direkt als Vorlage.",

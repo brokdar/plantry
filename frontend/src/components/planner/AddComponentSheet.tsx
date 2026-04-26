@@ -39,7 +39,7 @@ export function AddComponentSheet({
           <SheetDescription>{t("plate.filter_by_role")}</SheetDescription>
         </SheetHeader>
         <div className="space-y-4 overflow-y-auto px-4 pb-4">
-          {onPickTemplate && <ApplyTemplateSection onPick={onPickTemplate} />}
+          {onPickTemplate && <ApplyTemplateSection />}
           <ComponentPicker defaultRole={defaultRole} onPick={onPick} />
         </div>
       </SheetContent>

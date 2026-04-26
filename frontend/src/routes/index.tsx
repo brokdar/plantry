@@ -1,10 +1,18 @@
 import { getISOWeek, getISOWeekYear } from "date-fns"
-import { BarChart2, Download, Settings, Sparkles, Trash2 } from "lucide-react"
+import {
+  BarChart2,
+  Bookmark,
+  Download,
+  Settings,
+  Sparkles,
+  Trash2,
+} from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { ChatPanel } from "@/components/chat/ChatPanel"
+import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { DateRangeNavigator } from "@/components/planner/DateRangeNavigator"
 import { FillEmptySlotsButton } from "@/components/planner/FillEmptySlotsButton"
@@ -39,7 +47,8 @@ import { plateKeys } from "@/lib/queries/keys"
 import { usePlatesRange } from "@/lib/queries/plates"
 import { useSettings } from "@/lib/queries/settings"
 import { useTimeSlots } from "@/lib/queries/slots"
-import { useWeekByDate, useWeekNutrition } from "@/lib/queries/weeks"
+import { useNutritionRange } from "@/lib/queries/nutrition"
+import { useWeekByDate } from "@/lib/queries/weeks"
 import { useChatUI } from "@/lib/stores/chat-ui"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
@@ -67,6 +76,7 @@ function PlanPage() {
   })
   const [shoppingOpen, setShoppingOpen] = useState(false)
   const [nutritionOpen, setNutritionOpen] = useState(false)
+  const [saveRangeOpen, setSaveRangeOpen] = useState(false)
   const openChat = useChatUI((s) => s.setOpen)
 
   const settingsQuery = useSettings()
@@ -120,7 +130,7 @@ function PlanPage() {
   )
   const syntheticWeekId = syntheticWeekQuery.data?.id ?? 0
 
-  const nutritionQuery = useWeekNutrition(syntheticWeekId)
+  const nutritionQuery = useNutritionRange(from, to)
 
   const aiFill = usePlannerUI((s) => s.aiFill)
   const recordAiFilledPlate = usePlannerUI((s) => s.recordAiFilledPlate)
@@ -298,6 +308,23 @@ function PlanPage() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  onClick={() => setSaveRangeOpen(true)}
+                  aria-label={t("template.save_as")}
+                  data-testid="save-range-template"
+                  className="hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
+                >
+                  <Bookmark className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {t("template.save_as")}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={handleClearWindow}
                   aria-label={t("planner.clear_week")}
                   data-testid="clear-week"
@@ -362,8 +389,8 @@ function PlanPage() {
       </div>
 
       <ShoppingPanel
-        key={syntheticWeekId}
-        weekId={syntheticWeekId}
+        range={{ from, to }}
+        shoppingDay={shoppingDay}
         open={shoppingOpen}
         onOpenChange={setShoppingOpen}
       />
@@ -376,11 +403,17 @@ function PlanPage() {
               {t("nutrition.title")}
             </SheetTitle>
           </SheetHeader>
-          <NutritionWeekSummary weekId={syntheticWeekId} />
+          <NutritionWeekSummary from={from} to={to} />
         </SheetContent>
       </Sheet>
 
       <ChatPanel weekId={syntheticWeekId} />
+
+      <SaveAsTemplateDialog
+        open={saveRangeOpen}
+        onOpenChange={setSaveRangeOpen}
+        range={{ from, to }}
+      />
     </div>
   )
 }

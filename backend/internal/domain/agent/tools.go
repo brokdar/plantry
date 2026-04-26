@@ -19,6 +19,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/template"
 )
 
 // ToolEffect classifies side-effects of a tool invocation. The agent loop uses
@@ -63,6 +64,7 @@ type Services struct {
 	Plates            *plate.Service
 	Profile           *profile.Service
 	Slots             *slot.Service
+	Templates         *template.Service
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -141,10 +143,10 @@ func defaultTools(svc Services) []Tool {
 		toolGetFood(svc),
 		toolListSlots(svc),
 		toolGetPlatesRange(svc),
-		toolGetWeek(svc),
 		toolGetWeekNutrition(svc),
 		toolGetProfile(svc),
 		toolCreatePlate(svc),
+		toolApplyTemplate(svc),
 		toolAddFoodToPlate(svc),
 		toolSwapFood(svc),
 		toolUpdatePlateComponent(svc),
@@ -315,32 +317,6 @@ func toolGetPlatesRange(svc Services) Tool {
 	}
 }
 
-func toolGetWeek(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "properties":{"week_id":{"type":"integer","minimum":1}},
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "get_week",
-		Description: "DEPRECATED — prefer get_plates_range. Get a week with all its plates (day + slot + food list). If week_id is omitted, returns the current ISO week.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				WeekID int64 `json:"week_id"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			week, err := resolveWeek(ctx, svc, in.WeekID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			return mustJSON(weekSummary(week)), ToolEffectNone, nil
-		},
-	}
-}
-
 func toolGetWeekNutrition(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
@@ -403,11 +379,9 @@ func toolGetProfile(svc Services) Tool {
 func toolCreatePlate(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
-      "required":["slot_id"],
+      "required":["date","slot_id"],
       "properties":{
         "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
-        "week_id":{"type":"integer","minimum":1},
-        "day":{"type":"integer","minimum":0,"maximum":6},
         "slot_id":{"type":"integer","minimum":1},
         "note":{"type":"string"}
       },
@@ -415,31 +389,63 @@ func toolCreatePlate(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "create_plate",
-		Description: "Create an empty plate at a given date (YYYY-MM-DD) and slot. Returns the new plate's id. If date is provided, it takes precedence; otherwise falls back to (week_id, day) for legacy callers.",
+		Description: "Create an empty plate at a given date (YYYY-MM-DD) and slot. Returns the new plate's id.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
 				Date   string  `json:"date"`
-				WeekID int64   `json:"week_id"`
-				Day    int     `json:"day"`
 				SlotID int64   `json:"slot_id"`
 				Note   *string `json:"note"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			p := &plate.Plate{WeekID: in.WeekID, Day: in.Day, SlotID: in.SlotID, Note: in.Note}
-			if in.Date != "" {
-				d, err := time.Parse("2006-01-02", in.Date)
-				if err != nil {
-					return nil, ToolEffectNone, fmt.Errorf("%w: date: %v", domain.ErrInvalidInput, err)
-				}
-				p.Date = d
+			d, err := time.Parse("2006-01-02", in.Date)
+			if err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: date: %v", domain.ErrInvalidInput, err)
 			}
+			p := &plate.Plate{Date: d, SlotID: in.SlotID, Note: in.Note}
 			if err := svc.Plates.Create(ctx, p); err != nil {
 				return nil, ToolEffectNone, err
 			}
 			return mustJSON(plateSummary(p)), ToolEffectPlateChanged, nil
+		},
+	}
+}
+
+func toolApplyTemplate(svc Services) Tool {
+	schema := json.RawMessage(`{
+      "type":"object",
+      "required":["template_id","start_date","slot_id"],
+      "properties":{
+        "template_id":{"type":"integer","minimum":1},
+        "start_date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "slot_id":{"type":"integer","minimum":1}
+      },
+      "additionalProperties":false
+    }`)
+	return Tool{
+		Name:        "apply_template",
+		Description: "Apply a meal template starting from a given date. Creates one plate per day_offset entry in the template at start_date + offset, using the given slot.",
+		Schema:      schema,
+		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
+			var in struct {
+				TemplateID int64  `json:"template_id"`
+				StartDate  string `json:"start_date"`
+				SlotID     int64  `json:"slot_id"`
+			}
+			if err := json.Unmarshal(input, &in); err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
+			startDate, err := time.Parse("2006-01-02", in.StartDate)
+			if err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: start_date: %v", domain.ErrInvalidInput, err)
+			}
+			plates, err := svc.Templates.Apply(ctx, in.TemplateID, startDate, in.SlotID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			return mustJSON(map[string]any{"plates_created": len(plates), "effect": "plate_changed"}), ToolEffectPlateChanged, nil
 		},
 	}
 }
@@ -762,17 +768,6 @@ func derefF(p *float64) float64 {
 		return 0
 	}
 	return *p
-}
-
-func weekSummary(w *planner.Week) map[string]any {
-	plates := make([]map[string]any, len(w.Plates))
-	for i, p := range w.Plates {
-		plates[i] = plateSummary(&p)
-	}
-	return map[string]any{
-		"id": w.ID, "year": w.Year, "week_number": w.WeekNumber,
-		"plates": plates,
-	}
 }
 
 func plateSummary(p *plate.Plate) map[string]any {

@@ -21,10 +21,17 @@ type DateRange struct {
 	To   time.Time
 }
 
+// PlanningPrefs holds the user's plan settings that drive the system prompt.
+type PlanningPrefs struct {
+	ShoppingDay string // weekday name e.g. "Saturday"
+	AnchorMode  string // "today" | "next_shopping_day" | "fixed_weekday"
+}
+
 // ComposePrompt builds the system prompt for a chat turn. p may be nil (no
 // profile yet); week may be nil (no week context); dateRange may be nil (no
 // date context — falls back to week-derived range if week is set).
-func ComposePrompt(p *profile.Profile, week *planner.Week, dateRange *DateRange) string {
+// prefs may be nil (omits planning preference lines).
+func ComposePrompt(p *profile.Profile, week *planner.Week, dateRange *DateRange, prefs *PlanningPrefs) string {
 	var b strings.Builder
 
 	b.WriteString(rolePrefix)
@@ -34,12 +41,12 @@ func ComposePrompt(p *profile.Profile, week *planner.Week, dateRange *DateRange)
 
 	switch {
 	case dateRange != nil:
-		writeDateRangeSection(&b, dateRange, week)
+		writeDateRangeSection(&b, dateRange, week, prefs)
 	case week != nil:
 		// Derive a date range from the week for backwards compatibility.
 		from := isoWeekStart(week.Year, week.WeekNumber)
 		dr := &DateRange{From: from, To: from.AddDate(0, 0, 6)}
-		writeDateRangeSection(&b, dr, week)
+		writeDateRangeSection(&b, dr, week, nil)
 	}
 
 	b.WriteString(toolRules)
@@ -128,9 +135,17 @@ func writeProfileSection(b *strings.Builder, p *profile.Profile) {
 	b.WriteString("\n")
 }
 
-func writeDateRangeSection(b *strings.Builder, dr *DateRange, w *planner.Week) {
+func writeDateRangeSection(b *strings.Builder, dr *DateRange, w *planner.Week, prefs *PlanningPrefs) {
 	fmt.Fprintf(b, "Current planning window: %s to %s\n",
 		dr.From.Format("2006-01-02"), dr.To.Format("2006-01-02"))
+	if prefs != nil {
+		if prefs.ShoppingDay != "" {
+			fmt.Fprintf(b, "Shopping day: %s\n", prefs.ShoppingDay)
+		}
+		if prefs.AnchorMode != "" {
+			fmt.Fprintf(b, "Plan anchor: %s\n", prefs.AnchorMode)
+		}
+	}
 	if w == nil || len(w.Plates) == 0 {
 		b.WriteString("This window has no plates yet.\n\n")
 		return

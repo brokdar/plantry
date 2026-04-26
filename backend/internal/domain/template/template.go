@@ -20,4 +20,5 @@ type TemplateComponent struct {
 	FoodID     int64
 	Portions   float64
 	SortOrder  int
+	DayOffset  int
 }

@@ -145,6 +145,7 @@ type TemplateComponent struct {
 	FoodID     int64
 	Portions   float64
 	SortOrder  int64
+	DayOffset  int64
 }
 
 type TimeSlot struct {

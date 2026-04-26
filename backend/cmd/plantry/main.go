@@ -137,7 +137,7 @@ func run() error {
 	profileSvc := profile.NewService(profileRepo)
 
 	templateRepo := sqlite.NewTemplateRepo(conn)
-	templateSvc := template.NewService(templateRepo, foodRepo, plateRepo, txRunner)
+	templateSvc := template.NewService(templateRepo, foodRepo, plateRepo, txRunner, plateSvc)
 
 	feedbackRepo := sqlite.NewFeedbackRepo(conn)
 	feedbackSvc := feedback.NewService(txRunner, plateRepo, foodRepo)
@@ -169,11 +169,12 @@ func run() error {
 		Plates:            plateSvc,
 		Profile:           profileSvc,
 		Slots:             slotSvc,
+		Templates:         templateSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
 	}
-	agentSvc := agent.NewService(aiRepo, llmResolver, tools, plannerSvc, profileSvc)
+	agentSvc := agent.NewService(aiRepo, llmResolver, tools, plannerSvc, profileSvc, settingsSvc)
 	aiHandler := handlers.NewAIHandler(agentSvc, llmResolver)
 
 	// Recipe importer (Phase 11).
@@ -199,21 +200,23 @@ func run() error {
 	}, aiRateLimiter)
 
 	h := transport.Handlers{
-		Foods:         handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore),
-		Lookup:        handlers.NewLookupHandler(resolver, imgStore, foodSvc),
-		ImageProxy:    handlers.NewImageProxyHandler(),
-		ImageStore:    imgStore,
-		Slots:         handlers.NewSlotHandler(slotSvc),
-		Weeks:         handlers.NewWeekHandler(plannerSvc, plateSvc, foodSvc, nutritionResolver, shoppingResolver, feedbackRepo),
-		Plates:        handlers.NewPlateHandler(plateSvc),
-		Profile:       handlers.NewProfileHandler(profileSvc),
-		Templates:     handlers.NewTemplateHandler(templateSvc),
-		AI:            aiHandler,
-		AIRateLimiter: aiRateLimiter,
-		Feedback:      handlers.NewFeedbackHandler(feedbackSvc),
-		Import:        importHandler,
-		Settings:      settingsHandler,
-		DevMode:       cfg.DevMode,
+		Foods:          handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore),
+		Lookup:         handlers.NewLookupHandler(resolver, imgStore, foodSvc),
+		ImageProxy:     handlers.NewImageProxyHandler(),
+		ImageStore:     imgStore,
+		Slots:          handlers.NewSlotHandler(slotSvc),
+		Weeks:          handlers.NewWeekHandler(plannerSvc, plateSvc, foodSvc, nutritionResolver, shoppingResolver, feedbackRepo),
+		Plates:         handlers.NewPlateHandler(plateSvc),
+		Profile:        handlers.NewProfileHandler(profileSvc),
+		Templates:      handlers.NewTemplateHandler(templateSvc, plateSvc),
+		AI:             aiHandler,
+		AIRateLimiter:  aiRateLimiter,
+		Feedback:       handlers.NewFeedbackHandler(feedbackSvc),
+		Import:         importHandler,
+		Settings:       settingsHandler,
+		ShoppingRange:  handlers.NewShoppingRangeHandler(plateSvc, shoppingResolver),
+		NutritionRange: handlers.NewNutritionRangeHandler(plateSvc, nutritionResolver),
+		DevMode:        cfg.DevMode,
 	}
 	handler := transport.NewRouter(logger, static, h)
 

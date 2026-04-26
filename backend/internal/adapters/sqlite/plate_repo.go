@@ -242,8 +242,8 @@ func (r *PlateRepo) ListByWeek(ctx context.Context, weekID int64) ([]plate.Plate
 	return out, nil
 }
 
-// ListByDateRange returns all plates whose date falls within [from, to] inclusive.
-// Results are ordered by date, slot_id, id.
+// ListByDateRange returns all plates whose date falls within [from, to] inclusive,
+// with their components loaded. Results are ordered by date, slot_id, id.
 func (r *PlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]plate.Plate, error) {
 	plateRows, err := r.q.ListPlatesByDateRange(ctx, sqlcgen.ListPlatesByDateRangeParams{
 		FromDate: from.Format(dateLayout),
@@ -258,6 +258,14 @@ func (r *PlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]
 	out := make([]plate.Plate, len(plateRows))
 	for i := range plateRows {
 		mapPlateToDomain(&plateRows[i], &out[i])
+		pcRows, err := r.q.ListPlateComponentsByPlate(ctx, out[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Components = make([]plate.PlateComponent, len(pcRows))
+		for j := range pcRows {
+			mapPlateComponentToDomain(&pcRows[j], &out[i].Components[j])
+		}
 	}
 	return out, nil
 }

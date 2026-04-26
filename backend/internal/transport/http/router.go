@@ -15,21 +15,23 @@ import (
 
 // Handlers groups all per-aggregate HTTP handlers for route registration.
 type Handlers struct {
-	Foods         *handlers.FoodHandler
-	Lookup        *handlers.LookupHandler
-	ImageProxy    *handlers.ImageProxyHandler
-	ImageStore    *imagestore.Store
-	Slots         *handlers.SlotHandler
-	Weeks         *handlers.WeekHandler
-	Plates        *handlers.PlateHandler
-	Profile       *handlers.ProfileHandler
-	Templates     *handlers.TemplateHandler
-	AI            *handlers.AIHandler
-	AIRateLimiter *plantrymw.RateLimiter
-	Feedback      *handlers.FeedbackHandler
-	Import        *handlers.ImportHandler
-	Settings      *handlers.SettingsHandler
-	DevMode       bool // gates dev-only debug endpoints
+	Foods          *handlers.FoodHandler
+	Lookup         *handlers.LookupHandler
+	ImageProxy     *handlers.ImageProxyHandler
+	ImageStore     *imagestore.Store
+	Slots          *handlers.SlotHandler
+	Weeks          *handlers.WeekHandler
+	Plates         *handlers.PlateHandler
+	Profile        *handlers.ProfileHandler
+	Templates      *handlers.TemplateHandler
+	AI             *handlers.AIHandler
+	AIRateLimiter  *plantrymw.RateLimiter
+	Feedback       *handlers.FeedbackHandler
+	Import         *handlers.ImportHandler
+	Settings       *handlers.SettingsHandler
+	ShoppingRange  *handlers.ShoppingRangeHandler
+	NutritionRange *handlers.NutritionRangeHandler
+	DevMode        bool // gates dev-only debug endpoints
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -183,6 +185,14 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Post("/resolve", h.Import.Resolve)
 				r.Get("/lookup", h.Import.LookupLine)
 			})
+		}
+
+		if h.ShoppingRange != nil {
+			api.Get("/shopping-list", h.ShoppingRange.List)
+		}
+
+		if h.NutritionRange != nil {
+			api.Get("/nutrition", h.NutritionRange.List)
 		}
 	})
 

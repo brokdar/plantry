@@ -9,7 +9,13 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 )
+
+// SettingsReader is the subset of settings.Service that the agent needs.
+type SettingsReader interface {
+	Get(ctx context.Context, key string) (settings.Value, error)
+}
 
 // Service is the facade over conversation persistence + the agent loop. The
 // HTTP handler calls this exclusively.
@@ -19,6 +25,7 @@ type Service struct {
 	tools    *ToolSet
 	planner  *planner.Service
 	profile  *profile.Service
+	settings SettingsReader
 }
 
 // NewService constructs the agent service. The resolver is consulted at the
@@ -30,10 +37,11 @@ func NewService(
 	tools *ToolSet,
 	plannerSvc *planner.Service,
 	profileSvc *profile.Service,
+	settingsSvc SettingsReader,
 ) *Service {
 	return &Service{
 		repo: repo, resolver: resolver, tools: tools,
-		planner: plannerSvc, profile: profileSvc,
+		planner: plannerSvc, profile: profileSvc, settings: settingsSvc,
 	}
 }
 
@@ -180,7 +188,16 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, conv *
 			week = w
 		}
 	}
-	base := ComposePrompt(p, week, nil)
+	var prefs *PlanningPrefs
+	if s.settings != nil {
+		shoppingDayVal, _ := s.settings.Get(ctx, settings.KeyPlanShoppingDay)
+		anchorModeVal, _ := s.settings.Get(ctx, settings.KeyPlanAnchor)
+		prefs = &PlanningPrefs{
+			ShoppingDay: shoppingDayVal.Raw,
+			AnchorMode:  anchorModeVal.Raw,
+		}
+	}
+	base := ComposePrompt(p, week, nil, prefs)
 	if req.Mode != "" {
 		base += "\nMode hint: " + modeHint(req.Mode) + "\n"
 	}
@@ -204,7 +221,7 @@ func (s *Service) DebugSystemPrompt(ctx context.Context, weekID *int64) (string,
 			week = w
 		}
 	}
-	return ComposePrompt(p, week, nil), nil
+	return ComposePrompt(p, week, nil, nil), nil
 }
 
 func modeHint(mode string) string {
