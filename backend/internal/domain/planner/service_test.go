@@ -223,6 +223,10 @@ func (r *fakePlateRepo) DeleteByWeek(_ context.Context, _ int64) (int64, error) 
 	return 0, nil
 }
 
+func (r *fakePlateRepo) ListByDateRange(_ context.Context, _, _ time.Time) ([]plate.Plate, error) {
+	return nil, nil
+}
+
 // inlineTxRunner runs the closure with the same fake repos (no isolation).
 type inlineTxRunner struct {
 	weeks  planner.WeekRepository

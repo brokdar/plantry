@@ -180,7 +180,7 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, conv *
 			week = w
 		}
 	}
-	base := ComposePrompt(p, week)
+	base := ComposePrompt(p, week, nil)
 	if req.Mode != "" {
 		base += "\nMode hint: " + modeHint(req.Mode) + "\n"
 	}
@@ -204,7 +204,7 @@ func (s *Service) DebugSystemPrompt(ctx context.Context, weekID *int64) (string,
 			week = w
 		}
 	}
-	return ComposePrompt(p, week), nil
+	return ComposePrompt(p, week, nil), nil
 }
 
 func modeHint(mode string) string {

@@ -3,6 +3,7 @@ package plate
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 )
@@ -30,11 +31,13 @@ func NewService(repo Repository, slots SlotChecker, foods FoodChecker) *Service 
 }
 
 func (s *Service) validatePlate(ctx context.Context, p *Plate) error {
-	if !ValidDay(p.Day) {
-		return fmt.Errorf("%w: day must be between 0 and 6", domain.ErrInvalidDay)
-	}
-	if p.WeekID <= 0 {
-		return fmt.Errorf("%w: week_id required", domain.ErrInvalidInput)
+	if p.Date.IsZero() {
+		if !ValidDay(p.Day) {
+			return fmt.Errorf("%w: day must be between 0 and 6", domain.ErrInvalidDay)
+		}
+		if p.WeekID <= 0 {
+			return fmt.Errorf("%w: date or week_id required", domain.ErrInvalidInput)
+		}
 	}
 	if p.SlotID <= 0 {
 		return fmt.Errorf("%w: slot_id required", domain.ErrSlotUnknown)
@@ -206,4 +209,20 @@ func (s *Service) SetSkipped(ctx context.Context, plateID int64, skipped bool, n
 // to restore the pre-snapshot state.
 func (s *Service) DeleteByWeek(ctx context.Context, weekID int64) (int64, error) {
 	return s.repo.DeleteByWeek(ctx, weekID)
+}
+
+// Range returns all plates in [from, to] inclusive. from must be ≤ to; span must be ≤ 366 days.
+func (s *Service) Range(ctx context.Context, from, to time.Time) ([]Plate, error) {
+	if from.After(to) {
+		return nil, fmt.Errorf("%w: from must not be after to", domain.ErrInvalidInput)
+	}
+	if to.Sub(from) > 366*24*time.Hour {
+		return nil, fmt.Errorf("%w: range exceeds 366 days", domain.ErrInvalidInput)
+	}
+	return s.repo.ListByDateRange(ctx, from, to)
+}
+
+// Day returns all plates for a single date.
+func (s *Service) Day(ctx context.Context, date time.Time) ([]Plate, error) {
+	return s.Range(ctx, date, date)
 }

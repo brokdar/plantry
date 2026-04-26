@@ -140,6 +140,7 @@ func defaultTools(svc Services) []Tool {
 		toolListFoods(svc),
 		toolGetFood(svc),
 		toolListSlots(svc),
+		toolGetPlatesRange(svc),
 		toolGetWeek(svc),
 		toolGetWeekNutrition(svc),
 		toolGetProfile(svc),
@@ -271,6 +272,49 @@ func toolListSlots(svc Services) Tool {
 	}
 }
 
+func toolGetPlatesRange(svc Services) Tool {
+	schema := json.RawMessage(`{
+      "type":"object",
+      "required":["from","to"],
+      "properties":{
+        "from":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "to":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+      },
+      "additionalProperties":false
+    }`)
+	return Tool{
+		Name:        "get_plates_range",
+		Description: "Get all plates for a date range (from and to inclusive, format YYYY-MM-DD). Use this instead of get_week to read plates by calendar date.",
+		Schema:      schema,
+		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
+			var in struct {
+				From string `json:"from"`
+				To   string `json:"to"`
+			}
+			if err := json.Unmarshal(input, &in); err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
+			from, err := time.Parse("2006-01-02", in.From)
+			if err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: from: %v", domain.ErrInvalidInput, err)
+			}
+			to, err := time.Parse("2006-01-02", in.To)
+			if err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: to: %v", domain.ErrInvalidInput, err)
+			}
+			plates, err := svc.Plates.Range(ctx, from, to)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			items := make([]map[string]any, 0, len(plates))
+			for i := range plates {
+				items = append(items, plateSummary(&plates[i]))
+			}
+			return mustJSON(map[string]any{"plates": items}), ToolEffectNone, nil
+		},
+	}
+}
+
 func toolGetWeek(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
@@ -279,7 +323,7 @@ func toolGetWeek(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "get_week",
-		Description: "Get a week with all its plates (day + slot + food list). If week_id is omitted, returns the current ISO week.",
+		Description: "DEPRECATED — prefer get_plates_range. Get a week with all its plates (day + slot + food list). If week_id is omitted, returns the current ISO week.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -359,8 +403,9 @@ func toolGetProfile(svc Services) Tool {
 func toolCreatePlate(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
-      "required":["week_id","day","slot_id"],
+      "required":["slot_id"],
       "properties":{
+        "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
         "week_id":{"type":"integer","minimum":1},
         "day":{"type":"integer","minimum":0,"maximum":6},
         "slot_id":{"type":"integer","minimum":1},
@@ -370,10 +415,11 @@ func toolCreatePlate(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "create_plate",
-		Description: "Create an empty plate at a given day (0=Mon..6=Sun) and slot in a week. Returns the new plate's id.",
+		Description: "Create an empty plate at a given date (YYYY-MM-DD) and slot. Returns the new plate's id. If date is provided, it takes precedence; otherwise falls back to (week_id, day) for legacy callers.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
+				Date   string  `json:"date"`
 				WeekID int64   `json:"week_id"`
 				Day    int     `json:"day"`
 				SlotID int64   `json:"slot_id"`
@@ -383,6 +429,13 @@ func toolCreatePlate(svc Services) Tool {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
 			p := &plate.Plate{WeekID: in.WeekID, Day: in.Day, SlotID: in.SlotID, Note: in.Note}
+			if in.Date != "" {
+				d, err := time.Parse("2006-01-02", in.Date)
+				if err != nil {
+					return nil, ToolEffectNone, fmt.Errorf("%w: date: %v", domain.ErrInvalidInput, err)
+				}
+				p.Date = d
+			}
 			if err := svc.Plates.Create(ctx, p); err != nil {
 				return nil, ToolEffectNone, err
 			}

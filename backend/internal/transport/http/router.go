@@ -103,18 +103,23 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 		}
 
 		if h.Plates != nil {
-			api.Route("/plates/{id}", func(r chi.Router) {
-				r.Get("/", h.Plates.Get)
-				r.Put("/", h.Plates.Update)
-				r.Delete("/", h.Plates.Delete)
-				r.Post("/skip", h.Plates.SetSkipped)
-				r.Post("/components", h.Plates.AddComponent)
-				r.Put("/components/{pcId}", h.Plates.UpdateComponent)
-				r.Delete("/components/{pcId}", h.Plates.DeleteComponent)
-				if h.Feedback != nil {
-					r.Put("/feedback", h.Feedback.Put)
-					r.Delete("/feedback", h.Feedback.Delete)
-				}
+			api.Route("/plates", func(r chi.Router) {
+				r.Get("/", h.Plates.List)
+				r.Post("/", h.Plates.Create)
+				r.Get("/by-date/{date}", h.Plates.Day)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.Plates.Get)
+					r.Put("/", h.Plates.Update)
+					r.Delete("/", h.Plates.Delete)
+					r.Post("/skip", h.Plates.SetSkipped)
+					r.Post("/components", h.Plates.AddComponent)
+					r.Put("/components/{pcId}", h.Plates.UpdateComponent)
+					r.Delete("/components/{pcId}", h.Plates.DeleteComponent)
+					if h.Feedback != nil {
+						r.Put("/feedback", h.Feedback.Put)
+						r.Delete("/feedback", h.Feedback.Delete)
+					}
+				})
 			})
 		}
 

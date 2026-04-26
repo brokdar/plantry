@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -13,19 +14,34 @@ import (
 // prompt. At ~4 chars/token this keeps us well inside a 4 k-token budget.
 const promptCharBudget = 16_000
 
+// DateRange is the active planning window passed to ComposePrompt.
+// Both From and To are inclusive, time-of-day is ignored (date only).
+type DateRange struct {
+	From time.Time
+	To   time.Time
+}
+
 // ComposePrompt builds the system prompt for a chat turn. p may be nil (no
-// profile yet); week may be nil (no week context). The returned string is
-// trimmed to stay inside promptCharBudget.
-func ComposePrompt(p *profile.Profile, week *planner.Week) string {
+// profile yet); week may be nil (no week context); dateRange may be nil (no
+// date context — falls back to week-derived range if week is set).
+func ComposePrompt(p *profile.Profile, week *planner.Week, dateRange *DateRange) string {
 	var b strings.Builder
 
 	b.WriteString(rolePrefix)
 	if p != nil {
 		writeProfileSection(&b, p)
 	}
-	if week != nil {
-		writeWeekSection(&b, week)
+
+	switch {
+	case dateRange != nil:
+		writeDateRangeSection(&b, dateRange, week)
+	case week != nil:
+		// Derive a date range from the week for backwards compatibility.
+		from := isoWeekStart(week.Year, week.WeekNumber)
+		dr := &DateRange{From: from, To: from.AddDate(0, 0, 6)}
+		writeDateRangeSection(&b, dr, week)
 	}
+
 	b.WriteString(toolRules)
 
 	s := b.String()
@@ -35,17 +51,25 @@ func ComposePrompt(p *profile.Profile, week *planner.Week) string {
 	return s
 }
 
-const rolePrefix = `You are Plantry, an assistant for a self-hosted weekly meal planner.
+// isoWeekStart returns the Monday (UTC) of the given ISO year+week.
+func isoWeekStart(year, week int) time.Time {
+	jan4 := time.Date(year, 1, 4, 0, 0, 0, 0, time.UTC)
+	daysFromMonday := int(jan4.Weekday()+6) % 7
+	week1Monday := jan4.AddDate(0, 0, -daysFromMonday)
+	return week1Monday.AddDate(0, 0, (week-1)*7)
+}
 
-You help the user plan meals by composing plates (meals) out of components (dishes) onto a weekly grid. You use tools to read the library, read the week, and mutate plates. You never invent ids — always look them up first with list_components / list_slots / get_week.
+const rolePrefix = `You are Plantry, an assistant for a self-hosted meal planner.
 
-Days are 0=Monday ... 6=Sunday. A plate belongs to exactly one (day, slot) cell in a week. A plate has one or more components with a portion multiplier each.
+You help the user plan meals by composing plates (meals) out of foods onto a date-based grid. You use tools to read the library, read plates by date range, and mutate plates. You never invent ids — always look them up first with list_foods / list_slots / get_plates_range.
+
+Plates live on calendar dates (YYYY-MM-DD). A plate belongs to exactly one (date, slot) cell. A plate has one or more foods with a portion multiplier each. Always reason in calendar dates — never in day indexes.
 
 When the user asks you to plan something, proceed like this:
-1. Read the relevant week with get_week, and slot list with list_slots.
+1. Read the relevant date range with get_plates_range, and slot list with list_slots.
 2. Read the user profile with get_profile once per conversation (targets, dietary restrictions, preferences).
-3. Search the component library with list_components (filter by role) to find candidates.
-4. Call the mutation tools (create_plate, add_component_to_plate, swap_component, update_plate_component, remove_plate_component, delete_plate, clear_week) to apply changes.
+3. Search the food library with list_foods (filter by role) to find candidates.
+4. Call the mutation tools (create_plate, add_food_to_plate, swap_food, update_plate_component, remove_plate_component, delete_plate, clear_week) to apply changes.
 5. Report a short summary of what you changed. Keep your text concise — the UI already shows the plan.
 
 Respect the user's dietary restrictions and preferences. When in doubt, ask once; otherwise act and confirm briefly.
@@ -104,16 +128,18 @@ func writeProfileSection(b *strings.Builder, p *profile.Profile) {
 	b.WriteString("\n")
 }
 
-func writeWeekSection(b *strings.Builder, w *planner.Week) {
-	fmt.Fprintf(b, "Current week: id=%d year=%d week=%d\n", w.ID, w.Year, w.WeekNumber)
-	if len(w.Plates) == 0 {
-		b.WriteString("This week has no plates yet.\n\n")
+func writeDateRangeSection(b *strings.Builder, dr *DateRange, w *planner.Week) {
+	fmt.Fprintf(b, "Current planning window: %s to %s\n",
+		dr.From.Format("2006-01-02"), dr.To.Format("2006-01-02"))
+	if w == nil || len(w.Plates) == 0 {
+		b.WriteString("This window has no plates yet.\n\n")
 		return
 	}
 	b.WriteString("Plates already planned:\n")
 	for _, p := range w.Plates {
-		fmt.Fprintf(b, "- plate_id=%d day=%d slot_id=%d components=%d\n",
-			p.ID, p.Day, p.SlotID, len(p.Components))
+		dateStr := p.Date.Format("2006-01-02")
+		fmt.Fprintf(b, "- plate_id=%d date=%s slot_id=%d components=%d\n",
+			p.ID, dateStr, p.SlotID, len(p.Components))
 	}
 	b.WriteString("\n")
 }

@@ -1,6 +1,9 @@
 package plate
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Repository is the port adapters must implement for plate persistence.
 type Repository interface {
@@ -9,6 +12,7 @@ type Repository interface {
 	Update(ctx context.Context, p *Plate) error
 	Delete(ctx context.Context, id int64) error
 	ListByWeek(ctx context.Context, weekID int64) ([]Plate, error)
+	ListByDateRange(ctx context.Context, from, to time.Time) ([]Plate, error)
 
 	CreateComponent(ctx context.Context, pc *PlateComponent) error
 	GetComponent(ctx context.Context, id int64) (*PlateComponent, error)

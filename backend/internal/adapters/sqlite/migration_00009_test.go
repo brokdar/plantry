@@ -31,7 +31,7 @@ func TestMigration00009_UpDownUp(t *testing.T) {
 	require.NoError(t, err)
 	_, err = conn.Exec(`INSERT INTO time_slots (name_key, icon) VALUES ('slot.dinner', 'utensils')`)
 	require.NoError(t, err)
-	_, err = conn.Exec(`INSERT INTO plates (week_id, day, slot_id) VALUES (1, 0, 1)`)
+	_, err = conn.Exec(`INSERT INTO plates (week_id, day, slot_id, date) VALUES (1, 0, 1, '2025-12-29')`)
 	require.NoError(t, err)
 	_, err = conn.Exec(`INSERT INTO plate_feedback (plate_id, status) VALUES (1, 'loved')`)
 	require.NoError(t, err)

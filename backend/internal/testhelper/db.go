@@ -10,6 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/jaltszeimer/plantry/backend/db"
+	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
 )
 
 // NewTestDB returns a fresh in-memory SQLite database with all migrations

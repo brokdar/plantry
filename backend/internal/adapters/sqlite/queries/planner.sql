@@ -40,8 +40,8 @@ SELECT * FROM time_slots ORDER BY sort_order, id;
 SELECT * FROM time_slots WHERE active = 1 ORDER BY sort_order, id;
 
 -- name: CreatePlate :one
-INSERT INTO plates (week_id, day, slot_id, note)
-VALUES (?, ?, ?, ?)
+INSERT INTO plates (week_id, day, slot_id, note, date)
+VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetPlate :one
@@ -49,9 +49,11 @@ SELECT * FROM plates WHERE id = ?;
 
 -- name: UpdatePlate :one
 UPDATE plates SET
+    week_id = ?,
     day     = ?,
     slot_id = ?,
-    note    = ?
+    note    = ?,
+    date    = ?
 WHERE id = ?
 RETURNING *;
 
@@ -101,6 +103,12 @@ ORDER BY p.day, p.slot_id, pc.sort_order, pc.id;
 
 -- name: CountPlatesUsingTimeSlot :one
 SELECT COUNT(*) FROM plates WHERE slot_id = ?;
+
+-- name: ListPlatesByDateRange :many
+SELECT * FROM plates WHERE date BETWEEN ? AND ? ORDER BY date, slot_id, id;
+
+-- name: ListPlatesByDate :many
+SELECT * FROM plates WHERE date = ? ORDER BY slot_id, id;
 
 -- name: CountPlatesUsingFood :one
 SELECT COUNT(*) FROM plate_components WHERE food_id = ?;

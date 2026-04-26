@@ -16,6 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/jaltszeimer/plantry/backend/db"
+	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/anthropic"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"

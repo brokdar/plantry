@@ -12,6 +12,8 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
+const dateLayout = "2006-01-02"
+
 // PlateRepo implements plate.Repository backed by SQLite.
 type PlateRepo struct {
 	db *sql.DB
@@ -45,12 +47,52 @@ func (r *PlateRepo) Create(ctx context.Context, p *plate.Plate) error {
 	return tx.Commit()
 }
 
+// upsertWeek returns the id of the week row for (year, isoWeek), creating it if absent.
+func (r *PlateRepo) upsertWeek(ctx context.Context, year, isoWeek int) (int64, error) {
+	row, err := r.q.GetWeekByYearAndNumber(ctx, sqlcgen.GetWeekByYearAndNumberParams{
+		Year:       int64(year),
+		WeekNumber: int64(isoWeek),
+	})
+	if err == nil {
+		return row.ID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	created, err := r.q.CreateWeek(ctx, sqlcgen.CreateWeekParams{
+		Year:       int64(year),
+		WeekNumber: int64(isoWeek),
+	})
+	if err != nil {
+		return 0, err
+	}
+	return created.ID, nil
+}
+
+// legacyFromDate derives the legacy week_id and day values from a date.
+// day is 0=Mon … 6=Sun (same encoding as the plates.day column).
+func (r *PlateRepo) legacyFromDate(ctx context.Context, date time.Time) (weekID int64, day int, err error) {
+	year, week := date.ISOWeek()
+	day = (int(date.Weekday()) + 6) % 7
+	weekID, err = r.upsertWeek(ctx, year, week)
+	return
+}
+
 func (r *PlateRepo) createWith(ctx context.Context, q *sqlcgen.Queries, p *plate.Plate) error {
+	// Compute the canonical date from the plate's week_id and day.
+	weekRow, err := q.GetWeek(ctx, p.WeekID)
+	if err != nil {
+		return fmt.Errorf("look up week for plate date: %w", err)
+	}
+	monday := isoWeekStart(int(weekRow.Year), int(weekRow.WeekNumber))
+	dateStr := monday.AddDate(0, 0, p.Day).Format(dateLayout)
+
 	row, err := q.CreatePlate(ctx, sqlcgen.CreatePlateParams{
 		WeekID: p.WeekID,
 		Day:    int64(p.Day),
 		SlotID: p.SlotID,
 		Note:   toNullString(p.Note),
+		Date:   dateStr,
 	})
 	if err != nil {
 		if isForeignKeyViolation(err) {
@@ -97,11 +139,21 @@ func (r *PlateRepo) Get(ctx context.Context, id int64) (*plate.Plate, error) {
 }
 
 func (r *PlateRepo) Update(ctx context.Context, p *plate.Plate) error {
+	// Compute date from the (possibly updated) week_id + day.
+	weekRow, err := r.q.GetWeek(ctx, p.WeekID)
+	if err != nil {
+		return fmt.Errorf("look up week for plate date: %w", err)
+	}
+	monday := isoWeekStart(int(weekRow.Year), int(weekRow.WeekNumber))
+	dateStr := monday.AddDate(0, 0, p.Day).Format(dateLayout)
+
 	row, err := r.q.UpdatePlate(ctx, sqlcgen.UpdatePlateParams{
 		ID:     p.ID,
+		WeekID: p.WeekID,
 		Day:    int64(p.Day),
 		SlotID: p.SlotID,
 		Note:   toNullString(p.Note),
+		Date:   dateStr,
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -153,6 +205,26 @@ func (r *PlateRepo) ListByWeek(ctx context.Context, weekID int64) ([]plate.Plate
 		if out[i].Components == nil {
 			out[i].Components = []plate.PlateComponent{}
 		}
+	}
+	return out, nil
+}
+
+// ListByDateRange returns all plates whose date falls within [from, to] inclusive.
+// Results are ordered by date, slot_id, id.
+func (r *PlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]plate.Plate, error) {
+	plateRows, err := r.q.ListPlatesByDateRange(ctx, sqlcgen.ListPlatesByDateRangeParams{
+		FromDate: from.Format(dateLayout),
+		ToDate:   to.Format(dateLayout),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(plateRows) == 0 {
+		return []plate.Plate{}, nil
+	}
+	out := make([]plate.Plate, len(plateRows))
+	for i := range plateRows {
+		mapPlateToDomain(&plateRows[i], &out[i])
 	}
 	return out, nil
 }
@@ -334,4 +406,13 @@ func mapPlateComponentToDomain(row *sqlcgen.PlateComponent, pc *plate.PlateCompo
 	pc.FoodID = row.FoodID
 	pc.Portions = row.Portions
 	pc.SortOrder = int(row.SortOrder)
+}
+
+// isoWeekStart returns the Monday that begins ISO week `week` of `year`.
+// Algorithm mirrors migrations.IsoWeekStart but avoids a package dependency.
+func isoWeekStart(year, week int) time.Time {
+	jan4 := time.Date(year, 1, 4, 0, 0, 0, 0, time.UTC)
+	daysFromMonday := int(jan4.Weekday()+6) % 7
+	week1Monday := jan4.AddDate(0, 0, -daysFromMonday)
+	return week1Monday.AddDate(0, 0, (week-1)*7)
 }

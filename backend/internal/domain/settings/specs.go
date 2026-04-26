@@ -42,6 +42,34 @@ var registry = []Spec{
 		EnvVar:     "PLANTRY_FDC_API_KEY",
 		AllowEmpty: true,
 	},
+	{
+		Key:     KeyPlanWeekStartsOn,
+		Kind:    KindEnum,
+		Enum:    []string{"monday", "sunday", "saturday"},
+		Default: "monday",
+	},
+	{
+		Key:     KeyPlanAnchor,
+		Kind:    KindEnum,
+		Enum:    []string{"today", "next_shopping_day", "fixed_weekday"},
+		Default: "today",
+	},
+	{
+		Key:      KeyPlanShoppingDay,
+		Kind:     KindInt,
+		Default:  "0",
+		HasRange: true,
+		Min:      0,
+		Max:      6,
+	},
+	{
+		Key:      KeyPlanWindowDays,
+		Kind:     KindInt,
+		Default:  "7",
+		HasRange: true,
+		Min:      5,
+		Max:      14,
+	},
 }
 
 // SpecFor returns the spec for a given key, or (Spec{}, false) if unknown.

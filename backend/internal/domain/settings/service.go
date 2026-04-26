@@ -219,6 +219,9 @@ func validate(spec Spec, raw string) error {
 		if err != nil || n < 0 {
 			return fmt.Errorf("%w: %s must be a non-negative integer", ErrInvalidKind, spec.Key)
 		}
+		if spec.HasRange && (n < spec.Min || n > spec.Max) {
+			return fmt.Errorf("%w: %s must be between %d and %d", ErrInvalidKind, spec.Key, spec.Min, spec.Max)
+		}
 	case KindBool:
 		if raw == "" {
 			return nil
