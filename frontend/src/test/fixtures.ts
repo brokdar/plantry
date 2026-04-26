@@ -1,5 +1,6 @@
 import type { ComposedFood, LeafFood } from "@/lib/api/foods"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
+import type { Plate } from "@/lib/api/plates"
 import type {
   ShoppingListResponse,
   WeekNutritionResponse,
@@ -174,4 +175,48 @@ export const mockLookupCandidate: LookupCandidate = {
 export const mockLookupResponse: LookupResponse = {
   results: [mockLookupCandidate],
   recommended_index: 0,
+}
+
+// Plates spanning two ISO weeks (2026-W16 and 2026-W17)
+// 2026-04-13 = Mon W16, 2026-04-14 = Tue W16, 2026-04-20 = Mon W17
+export const mockPlateW16a: Plate = {
+  id: 101,
+  week_id: 1,
+  day: 0,
+  slot_id: 1,
+  date: "2026-04-13",
+  note: null,
+  skipped: false,
+  components: [
+    { id: 1, plate_id: 101, food_id: 1, portions: 1, sort_order: 0 },
+  ],
+  created_at: "2026-04-13T10:00:00Z",
+}
+
+export const mockPlateW16b: Plate = {
+  id: 102,
+  week_id: 1,
+  day: 1,
+  slot_id: 1,
+  date: "2026-04-14",
+  note: null,
+  skipped: false,
+  components: [
+    { id: 2, plate_id: 102, food_id: 2, portions: 1, sort_order: 0 },
+  ],
+  created_at: "2026-04-14T10:00:00Z",
+}
+
+export const mockPlateW17: Plate = {
+  id: 103,
+  week_id: 2,
+  day: 0,
+  slot_id: 1,
+  date: "2026-04-20",
+  note: null,
+  skipped: false,
+  components: [
+    { id: 3, plate_id: 103, food_id: 3, portions: 1, sort_order: 0 },
+  ],
+  created_at: "2026-04-20T10:00:00Z",
 }

@@ -2,9 +2,9 @@ import { useEffect, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import {
   BookOpen,
+  Calendar,
   CalendarDays,
   ChevronLeft,
-  History,
   Leaf,
   Package,
   Settings,
@@ -27,7 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/", labelKey: "nav.planner", icon: CalendarDays, exact: true },
   { to: "/components", labelKey: "nav.recipes", icon: BookOpen },
   { to: "/ingredients", labelKey: "nav.ingredients", icon: Package },
-  { to: "/archive", labelKey: "nav.past_weeks", icon: History },
+  { to: "/calendar", labelKey: "nav.calendar", icon: Calendar },
   { to: "/settings", labelKey: "nav.settings", icon: Settings },
 ]
 

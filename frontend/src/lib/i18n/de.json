@@ -12,10 +12,29 @@
     "import": "Import",
     "archive": "Archiv",
     "past_weeks": "Vergangene Wochen",
+    "calendar": "Kalender",
     "settings": "Einstellungen",
     "search_placeholder": "Katalog durchsuchen…",
     "collapse_sidebar": "Seitenleiste einklappen",
     "expand_sidebar": "Seitenleiste ausklappen"
+  },
+  "calendar": {
+    "title": "Kalender",
+    "mode_month": "Monat",
+    "mode_week": "Woche",
+    "mode_agenda": "Agenda",
+    "search_placeholder": "Gerichte suchen…",
+    "plan_this_week": "Diese Woche planen",
+    "jump_to_date": "Zu Datum springen",
+    "no_plates_in_range": "Keine Mahlzeiten in diesem Zeitraum.",
+    "load_older": "Ältere 60 Tage laden",
+    "overflow_more": "+{{count}} mehr"
+  },
+  "day": {
+    "title": "{{weekday}}, {{date}}",
+    "prev_day": "Vorheriger Tag",
+    "next_day": "Nächster Tag",
+    "back_to_calendar": "Zurück zum Kalender"
   },
   "archive": {
     "title": "Historische Sammlungen",
@@ -783,6 +802,7 @@
     "delete": "Löschen",
     "confirm": "Bestätigen",
     "edit": "Bearbeiten",
+    "done": "Fertig",
     "back": "Zurück",
     "loading": "Laden...",
     "showing": "{{from}}–{{to}} von {{total}}",

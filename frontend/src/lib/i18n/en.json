@@ -12,10 +12,29 @@
     "import": "Import",
     "archive": "Archive",
     "past_weeks": "Past Weeks",
+    "calendar": "Calendar",
     "settings": "Settings",
     "search_placeholder": "Search the catalog…",
     "collapse_sidebar": "Collapse sidebar",
     "expand_sidebar": "Expand sidebar"
+  },
+  "calendar": {
+    "title": "Calendar",
+    "mode_month": "Month",
+    "mode_week": "Week",
+    "mode_agenda": "Agenda",
+    "search_placeholder": "Search dishes…",
+    "plan_this_week": "Plan this week",
+    "jump_to_date": "Jump to date",
+    "no_plates_in_range": "No meals in this range.",
+    "load_older": "Load older 60 days",
+    "overflow_more": "+{{count}} more"
+  },
+  "day": {
+    "title": "{{weekday}}, {{date}}",
+    "prev_day": "Previous day",
+    "next_day": "Next day",
+    "back_to_calendar": "Back to calendar"
   },
   "archive": {
     "title": "Historical Collections",
@@ -784,6 +803,7 @@
     "delete": "Delete",
     "confirm": "Confirm",
     "edit": "Edit",
+    "done": "Done",
     "back": "Back",
     "loading": "Loading...",
     "showing": "Showing {{from}}–{{to}} of {{total}}",

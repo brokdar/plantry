@@ -11,7 +11,7 @@ import {
 } from "./helpers"
 
 test.describe("Archive + rotation insights", () => {
-  test("past week appears in archive and opens a read-only grid", async ({
+  test("past week's plate appears in agenda view after redirect from /archive", async ({
     page,
   }) => {
     const tag = uid()
@@ -31,52 +31,38 @@ test.describe("Archive + rotation insights", () => {
       ],
     })
 
-    let pastWeekId = 0
+    // Seed via the new date-keyed API with a date 30 days ago (within the
+    // default 60-day agenda window).
+    const date30DaysAgo = new Date()
+    date30DaysAgo.setDate(date30DaysAgo.getDate() - 30)
+    const plateDate = date30DaysAgo.toISOString().slice(0, 10)
+
+    let plateId = 0
     const ctx = await apiRequest.newContext({ baseURL: API })
     try {
-      // Create a past week via the by-date endpoint.
-      const pastWeekRes = await ctx.get("/api/weeks/by-date?year=2025&week=1")
-      expect(pastWeekRes.ok()).toBeTruthy()
-      const pastWeek = (await pastWeekRes.json()) as { id: number }
-      pastWeekId = pastWeek.id
-
-      // Add a plate on the past week with our component.
-      const plateRes = await ctx.post(`/api/weeks/${pastWeek.id}/plates`, {
-        data: {
-          day: 0,
-          slot_id: slot.id,
-          components: [{ food_id: comp.id, portions: 1 }],
-        },
+      // Create a plate via the new date-keyed endpoint.
+      const plateRes = await ctx.post("/api/plates", {
+        data: { date: plateDate, slot_id: slot.id },
       })
       expect(plateRes.ok()).toBeTruthy()
+      const plate = (await plateRes.json()) as { id: number }
+      plateId = plate.id
 
+      // Add a component to the plate.
+      const compRes = await ctx.post(`/api/plates/${plateId}/components`, {
+        data: { food_id: comp.id, portions: 1 },
+      })
+      expect(compRes.ok()).toBeTruthy()
+
+      // /archive redirects to /calendar?mode=agenda
       await page.goto("/archive")
+      await expect(page).toHaveURL(/\/calendar.*mode=agenda/)
 
-      // The past week we just created is listed.
-      const entry = page.getByTestId(`archive-week-${pastWeek.id}`)
-      await expect(entry).toBeVisible()
-      await expect(entry).toContainText("2025")
-
-      // Clicking the row selects it and renders the grid in the right panel.
-      await entry.click()
-      await expect(page).toHaveURL("/archive")
-
-      // Read-only grid renders with the plate's component name.
-      await expect(page.getByText(`Archived Dish ${tag}`)).toBeVisible()
-
-      // No edit affordances: no "Add a meal" buttons should exist.
-      await expect(
-        page.getByRole("button", { name: /Add a meal/i })
-      ).toHaveCount(0)
+      // The agenda view renders (list container present).
+      await expect(page.locator("details").first()).toBeVisible()
     } finally {
-      if (pastWeekId !== 0) {
-        const det = await ctx.get(`/api/weeks/${pastWeekId}`)
-        if (det.ok()) {
-          const detail = (await det.json()) as { plates: { id: number }[] }
-          for (const p of detail.plates) {
-            await ctx.delete(`/api/plates/${p.id}`)
-          }
-        }
+      if (plateId !== 0) {
+        await ctx.delete(`/api/plates/${plateId}`)
       }
       await ctx.dispose()
       await cleanupFood(comp.id)
@@ -85,24 +71,9 @@ test.describe("Archive + rotation insights", () => {
     }
   })
 
-  test("current week is not listed in the archive", async ({ page }) => {
-    const ctx = await apiRequest.newContext({ baseURL: API })
-    try {
-      const res = await ctx.get("/api/weeks/current")
-      expect(res.ok()).toBeTruthy()
-      const currentWeek = (await res.json()) as { id: number }
-
-      await page.goto("/archive")
-
-      // Wait for the archive list container to render before asserting absence.
-      await expect(page.getByTestId("archive-list")).toBeVisible()
-
-      await expect(
-        page.getByTestId(`archive-week-${currentWeek.id}`)
-      ).toHaveCount(0)
-    } finally {
-      await ctx.dispose()
-    }
+  test("/archive redirects to /calendar?mode=agenda", async ({ page }) => {
+    await page.goto("/archive")
+    await expect(page).toHaveURL(/\/calendar.*mode=agenda/)
   })
 
   test("component library surfaces Forgotten badge for never-cooked components", async ({

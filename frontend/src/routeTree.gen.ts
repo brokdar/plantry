@@ -15,10 +15,12 @@ import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as IngredientsIndexRouteImport } from './routes/ingredients/index'
 import { Route as ImportIndexRouteImport } from './routes/import/index'
 import { Route as ComponentsIndexRouteImport } from './routes/components/index'
+import { Route as CalendarIndexRouteImport } from './routes/calendar/index'
 import { Route as ArchiveIndexRouteImport } from './routes/archive/index'
 import { Route as TemplatesNewRouteImport } from './routes/templates/new'
 import { Route as IngredientsNewRouteImport } from './routes/ingredients/new'
 import { Route as ComponentsNewRouteImport } from './routes/components/new'
+import { Route as DayDateIndexRouteImport } from './routes/day/$date/index'
 import { Route as ArchiveIdIndexRouteImport } from './routes/archive/$id/index'
 import { Route as IngredientsIdEditRouteImport } from './routes/ingredients/$id/edit'
 import { Route as ComponentsIdEditRouteImport } from './routes/components/$id/edit'
@@ -54,6 +56,11 @@ const ComponentsIndexRoute = ComponentsIndexRouteImport.update({
   path: '/components/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CalendarIndexRoute = CalendarIndexRouteImport.update({
+  id: '/calendar/',
+  path: '/calendar/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ArchiveIndexRoute = ArchiveIndexRouteImport.update({
   id: '/archive/',
   path: '/archive/',
@@ -72,6 +79,11 @@ const IngredientsNewRoute = IngredientsNewRouteImport.update({
 const ComponentsNewRoute = ComponentsNewRouteImport.update({
   id: '/components/new',
   path: '/components/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DayDateIndexRoute = DayDateIndexRouteImport.update({
+  id: '/day/$date/',
+  path: '/day/$date/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ArchiveIdIndexRoute = ArchiveIdIndexRouteImport.update({
@@ -102,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/ingredients/new': typeof IngredientsNewRoute
   '/templates/new': typeof TemplatesNewRoute
   '/archive/': typeof ArchiveIndexRoute
+  '/calendar/': typeof CalendarIndexRoute
   '/components/': typeof ComponentsIndexRoute
   '/import/': typeof ImportIndexRoute
   '/ingredients/': typeof IngredientsIndexRoute
@@ -110,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
   '/archive/$id/': typeof ArchiveIdIndexRoute
+  '/day/$date/': typeof DayDateIndexRoute
   '/planner/$weekId/$day/$slotId/pick': typeof PlannerWeekIdDaySlotIdPickRoute
 }
 export interface FileRoutesByTo {
@@ -118,6 +132,7 @@ export interface FileRoutesByTo {
   '/ingredients/new': typeof IngredientsNewRoute
   '/templates/new': typeof TemplatesNewRoute
   '/archive': typeof ArchiveIndexRoute
+  '/calendar': typeof CalendarIndexRoute
   '/components': typeof ComponentsIndexRoute
   '/import': typeof ImportIndexRoute
   '/ingredients': typeof IngredientsIndexRoute
@@ -126,6 +141,7 @@ export interface FileRoutesByTo {
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
   '/archive/$id': typeof ArchiveIdIndexRoute
+  '/day/$date': typeof DayDateIndexRoute
   '/planner/$weekId/$day/$slotId/pick': typeof PlannerWeekIdDaySlotIdPickRoute
 }
 export interface FileRoutesById {
@@ -135,6 +151,7 @@ export interface FileRoutesById {
   '/ingredients/new': typeof IngredientsNewRoute
   '/templates/new': typeof TemplatesNewRoute
   '/archive/': typeof ArchiveIndexRoute
+  '/calendar/': typeof CalendarIndexRoute
   '/components/': typeof ComponentsIndexRoute
   '/import/': typeof ImportIndexRoute
   '/ingredients/': typeof IngredientsIndexRoute
@@ -143,6 +160,7 @@ export interface FileRoutesById {
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
   '/archive/$id/': typeof ArchiveIdIndexRoute
+  '/day/$date/': typeof DayDateIndexRoute
   '/planner/$weekId/$day/$slotId/pick': typeof PlannerWeekIdDaySlotIdPickRoute
 }
 export interface FileRouteTypes {
@@ -153,6 +171,7 @@ export interface FileRouteTypes {
     | '/ingredients/new'
     | '/templates/new'
     | '/archive/'
+    | '/calendar/'
     | '/components/'
     | '/import/'
     | '/ingredients/'
@@ -161,6 +180,7 @@ export interface FileRouteTypes {
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
     | '/archive/$id/'
+    | '/day/$date/'
     | '/planner/$weekId/$day/$slotId/pick'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -169,6 +189,7 @@ export interface FileRouteTypes {
     | '/ingredients/new'
     | '/templates/new'
     | '/archive'
+    | '/calendar'
     | '/components'
     | '/import'
     | '/ingredients'
@@ -177,6 +198,7 @@ export interface FileRouteTypes {
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
     | '/archive/$id'
+    | '/day/$date'
     | '/planner/$weekId/$day/$slotId/pick'
   id:
     | '__root__'
@@ -185,6 +207,7 @@ export interface FileRouteTypes {
     | '/ingredients/new'
     | '/templates/new'
     | '/archive/'
+    | '/calendar/'
     | '/components/'
     | '/import/'
     | '/ingredients/'
@@ -193,6 +216,7 @@ export interface FileRouteTypes {
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
     | '/archive/$id/'
+    | '/day/$date/'
     | '/planner/$weekId/$day/$slotId/pick'
   fileRoutesById: FileRoutesById
 }
@@ -202,6 +226,7 @@ export interface RootRouteChildren {
   IngredientsNewRoute: typeof IngredientsNewRoute
   TemplatesNewRoute: typeof TemplatesNewRoute
   ArchiveIndexRoute: typeof ArchiveIndexRoute
+  CalendarIndexRoute: typeof CalendarIndexRoute
   ComponentsIndexRoute: typeof ComponentsIndexRoute
   ImportIndexRoute: typeof ImportIndexRoute
   IngredientsIndexRoute: typeof IngredientsIndexRoute
@@ -210,6 +235,7 @@ export interface RootRouteChildren {
   ComponentsIdEditRoute: typeof ComponentsIdEditRoute
   IngredientsIdEditRoute: typeof IngredientsIdEditRoute
   ArchiveIdIndexRoute: typeof ArchiveIdIndexRoute
+  DayDateIndexRoute: typeof DayDateIndexRoute
   PlannerWeekIdDaySlotIdPickRoute: typeof PlannerWeekIdDaySlotIdPickRoute
 }
 
@@ -257,6 +283,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ComponentsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/calendar/': {
+      id: '/calendar/'
+      path: '/calendar'
+      fullPath: '/calendar/'
+      preLoaderRoute: typeof CalendarIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/archive/': {
       id: '/archive/'
       path: '/archive'
@@ -283,6 +316,13 @@ declare module '@tanstack/react-router' {
       path: '/components/new'
       fullPath: '/components/new'
       preLoaderRoute: typeof ComponentsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/day/$date/': {
+      id: '/day/$date/'
+      path: '/day/$date'
+      fullPath: '/day/$date/'
+      preLoaderRoute: typeof DayDateIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/archive/$id/': {
@@ -322,6 +362,7 @@ const rootRouteChildren: RootRouteChildren = {
   IngredientsNewRoute: IngredientsNewRoute,
   TemplatesNewRoute: TemplatesNewRoute,
   ArchiveIndexRoute: ArchiveIndexRoute,
+  CalendarIndexRoute: CalendarIndexRoute,
   ComponentsIndexRoute: ComponentsIndexRoute,
   ImportIndexRoute: ImportIndexRoute,
   IngredientsIndexRoute: IngredientsIndexRoute,
@@ -330,6 +371,7 @@ const rootRouteChildren: RootRouteChildren = {
   ComponentsIdEditRoute: ComponentsIdEditRoute,
   IngredientsIdEditRoute: IngredientsIdEditRoute,
   ArchiveIdIndexRoute: ArchiveIdIndexRoute,
+  DayDateIndexRoute: DayDateIndexRoute,
   PlannerWeekIdDaySlotIdPickRoute: PlannerWeekIdDaySlotIdPickRoute,
 }
 export const routeTree = rootRouteImport

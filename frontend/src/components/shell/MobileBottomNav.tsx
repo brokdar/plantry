@@ -1,7 +1,7 @@
 import {
   BookOpen,
+  Calendar,
   CalendarDays,
-  History,
   Package,
   Settings,
 } from "lucide-react"
@@ -30,9 +30,9 @@ const RIGHT_ENTRIES: MobileNavEntry[] = [
 ]
 
 const MORE_ENTRY: MobileNavEntry = {
-  to: "/archive",
-  labelKey: "nav.archive",
-  icon: History,
+  to: "/calendar",
+  labelKey: "nav.calendar",
+  icon: Calendar,
 }
 
 export function MobileBottomNav() {

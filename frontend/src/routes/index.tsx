@@ -45,12 +45,26 @@ import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
 
 export const Route = createFileRoute("/")({
+  validateSearch: (search): { date?: string } => ({
+    date: (search.date as string) ?? undefined,
+  }),
   component: PlanPage,
 })
 
 function PlanPage() {
   const { t, i18n } = useTranslation()
-  const [windowOffset, setWindowOffset] = useState(0) // in days, multiple of 7
+  const { date: dateParam } = Route.useSearch()
+  // If ?date= is provided, compute initial offset so the window starts at that date.
+  const [windowOffset, setWindowOffset] = useState(() => {
+    if (!dateParam) return 0
+    const target = new Date(dateParam + "T00:00:00")
+    const today = new Date()
+    const diff = Math.round(
+      (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    )
+    // Round to nearest 7-day boundary (floor toward past)
+    return Math.floor(diff / 7) * 7
+  })
   const [shoppingOpen, setShoppingOpen] = useState(false)
   const [nutritionOpen, setNutritionOpen] = useState(false)
   const openChat = useChatUI((s) => s.setOpen)
