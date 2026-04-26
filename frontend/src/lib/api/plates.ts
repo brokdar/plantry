@@ -14,6 +14,7 @@ export interface Plate {
   week_id: number
   day: number
   slot_id: number
+  date: string
   note: string | null
   skipped: boolean
   components: PlateComponent[]
@@ -25,6 +26,7 @@ export interface UpdatePlateInput {
   day?: number
   slot_id?: number
   note?: string | null
+  date?: string
 }
 
 export interface AddPlateComponentInput {
@@ -35,6 +37,23 @@ export interface AddPlateComponentInput {
 export interface UpdatePlateComponentInput {
   food_id?: number
   portions?: number
+}
+
+export function listPlates(
+  from: string,
+  to: string
+): Promise<{ plates: Plate[] }> {
+  return apiFetch(
+    `/plates?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+  )
+}
+
+export function createPlate(input: {
+  date: string
+  slot_id: number
+  note?: string
+}): Promise<Plate> {
+  return apiFetch("/plates", { method: "POST", body: JSON.stringify(input) })
 }
 
 export function getPlate(id: number): Promise<Plate> {

@@ -1,10 +1,4 @@
-import {
-  addDays,
-  format,
-  setISOWeek,
-  setISOWeekYear,
-  startOfISOWeek,
-} from "date-fns"
+import { format, parseISO } from "date-fns"
 import * as Lucide from "lucide-react"
 import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
@@ -16,11 +10,11 @@ import {
 import { Badge } from "@/components/ui/badge"
 import type { Food } from "@/lib/api/foods"
 import type { TimeSlot } from "@/lib/api/slots"
-import type { Week } from "@/lib/api/weeks"
 import { imageURL } from "@/lib/image-url"
 import { useFoods } from "@/lib/queries/foods"
-import { findPlateAt } from "@/lib/queries/plate-patches"
 import { slotLabel } from "@/lib/slot-label"
+
+import type { PlannerDay } from "./PlannerGrid"
 
 const DAY_KEYS = [
   "planner.day_mon",
@@ -33,7 +27,7 @@ const DAY_KEYS = [
 ] as const
 
 interface ReadOnlyPlannerGridProps {
-  week: Week
+  days: PlannerDay[]
   slots: TimeSlot[]
 }
 
@@ -45,7 +39,7 @@ function SlotIcon({ name }: { name: string }) {
   return <Icon className="h-4 w-4" aria-hidden />
 }
 
-export function ReadOnlyPlannerGrid({ week, slots }: ReadOnlyPlannerGridProps) {
+export function ReadOnlyPlannerGrid({ days, slots }: ReadOnlyPlannerGridProps) {
   const { t } = useTranslation()
   const componentsQuery = useFoods({ limit: 200 })
   const componentsById = useMemo(() => {
@@ -53,11 +47,6 @@ export function ReadOnlyPlannerGrid({ week, slots }: ReadOnlyPlannerGridProps) {
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)
     return map
   }, [componentsQuery.data])
-
-  const weekStart = useMemo(() => {
-    const d = setISOWeekYear(new Date(), week.year)
-    return startOfISOWeek(setISOWeek(d, week.week_number))
-  }, [week.year, week.week_number])
 
   return (
     <div className="hide-scrollbar overflow-x-auto">
@@ -67,11 +56,12 @@ export function ReadOnlyPlannerGrid({ week, slots }: ReadOnlyPlannerGridProps) {
           style={{ gridTemplateColumns: "130px repeat(7, minmax(0, 1fr))" }}
         >
           <div />
-          {DAY_KEYS.map((dayKey, idx) => {
-            const date = addDays(weekStart, idx)
+          {days.map((day, idx) => {
+            const date = parseISO(day.date)
+            const dayKey = DAY_KEYS[day.weekday] ?? DAY_KEYS[idx % 7]
             return (
               <div
-                key={dayKey}
+                key={day.date}
                 className="flex flex-col items-start gap-1 border-b border-outline-variant/50 px-2.5 py-3 pb-3.5"
                 data-testid={`archive-day-header-${idx}`}
               >
@@ -98,12 +88,12 @@ export function ReadOnlyPlannerGrid({ week, slots }: ReadOnlyPlannerGridProps) {
                   {slotLabel(t, slot.name_key)}
                 </span>
               </div>
-              {DAY_KEYS.map((_, day) => {
-                const plate = findPlateAt(week, day, slot.id)
+              {days.map((day, dayIdx) => {
+                const plate = day.plates.find((p) => p.slot_id === slot.id)
                 return (
                   <div
-                    key={`${slot.id}-${day}`}
-                    data-testid={`archive-cell-${day}-${slot.id}`}
+                    key={`${slot.id}-${day.date}`}
+                    data-testid={`archive-cell-${dayIdx}-${slot.id}`}
                     className="h-[178px]"
                   >
                     <ReadOnlySlot
@@ -121,8 +111,10 @@ export function ReadOnlyPlannerGrid({ week, slots }: ReadOnlyPlannerGridProps) {
   )
 }
 
+import type { Plate } from "@/lib/api/plates"
+
 interface ReadOnlySlotProps {
-  plate: ReturnType<typeof findPlateAt>
+  plate: Plate | undefined
   componentsById: Map<number, Food>
 }
 

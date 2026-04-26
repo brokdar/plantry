@@ -148,9 +148,11 @@ func TestPlatesRepo_UpdatePlate_UpdatesLegacy(t *testing.T) {
 	require.NoError(t, repo.Create(ctx, p))
 
 	// Move to: 2026-04-27 (Monday, ISO 2026-W18, day=0).
+	// Zero p.Date so Update takes the legacy path (week_id + day only).
 	w18 := seedWeek(t, db, 2026, 18)
 	p.WeekID = w18
 	p.Day = 0
+	p.Date = time.Time{}
 	require.NoError(t, repo.Update(ctx, p))
 
 	var dateStr string

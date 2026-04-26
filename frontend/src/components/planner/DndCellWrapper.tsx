@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 
 interface DndCellWrapperProps {
   day: number
+  date?: string
   slotId: number
   plate: Plate | undefined
   children: ReactNode
@@ -17,6 +18,7 @@ interface DndCellWrapperProps {
 // purely a dnd-kit adapter so planner layout stays readable.
 export function DndCellWrapper({
   day,
+  date,
   slotId,
   plate,
   children,
@@ -28,7 +30,13 @@ export function DndCellWrapper({
     active,
   } = useDroppable({
     id: droppableId,
-    data: { day, slotId, existingPlateId: plate?.id, skipped: plate?.skipped },
+    data: {
+      day,
+      date,
+      slotId,
+      existingPlateId: plate?.id,
+      skipped: plate?.skipped,
+    },
   })
 
   const draggableId = plate ? `plate:${plate.id}` : null
@@ -40,7 +48,7 @@ export function DndCellWrapper({
     isDragging,
   } = useDraggable({
     id: draggableId ?? `plate:noop-${day}-${slotId}`,
-    data: { plateId: plate?.id, day, slotId },
+    data: { plateId: plate?.id, day, date, slotId },
     disabled: !plate || plate.skipped,
   })
 

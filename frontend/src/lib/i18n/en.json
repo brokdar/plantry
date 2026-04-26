@@ -145,7 +145,15 @@
       "progress": "Filling empty slots…",
       "done": "Empty slots filled",
       "error": "Could not fill empty slots"
-    }
+    },
+    "range_label": "{{from}} – {{to}}",
+    "prev_window": "Previous 7",
+    "next_window": "Next 7",
+    "today_button": "Today",
+    "anchor_today": "From today",
+    "anchor_shopping_day": "From next {{weekday}}",
+    "day_today_pill": "Today",
+    "day_past_label": "Past"
   },
   "skip": {
     "label": "Skip",
@@ -221,6 +229,7 @@
     "clear_override": "Clear override",
     "tabs": {
       "general": "General",
+      "plan": "Planning",
       "ai": "AI",
       "nutrition": "Nutrition",
       "meal_slots": "Meal Slots",
@@ -293,6 +302,16 @@
       "secret_key_banner_title": "Encryption disabled",
       "secret_key_banner_body": "PLANTRY_SECRET_KEY is not set — API keys cannot be saved through the UI until it is configured."
     }
+  },
+  "settings": {
+    "plan_tab": "Planning",
+    "week_starts_on": "Week starts on",
+    "plan_anchor": "Plan view starts",
+    "plan_anchor_today": "Today",
+    "plan_anchor_next_shopping_day": "Next shopping day",
+    "plan_anchor_fixed_weekday": "Fixed weekday",
+    "fixed_weekday_start": "Start weekday",
+    "shopping_day": "Shopping day"
   },
   "display_preferences": {
     "title": "Display Preferences",

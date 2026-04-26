@@ -24,6 +24,7 @@ const basePlate: Plate = {
   week_id: 1,
   day: 0,
   slot_id: 1,
+  date: "2024-01-01",
   note: null,
   skipped: false,
   components: [],

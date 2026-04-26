@@ -1,9 +1,11 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import {
   addPlateComponent,
+  createPlate,
   deletePlate,
   deletePlateComponent,
+  listPlates,
   setPlateSkipped,
   updatePlate,
   updatePlateComponent,
@@ -14,7 +16,7 @@ import {
 } from "@/lib/api/plates"
 import type { Week } from "@/lib/api/weeks"
 
-import { weekKeys } from "./keys"
+import { plateKeys, weekKeys } from "./keys"
 import {
   patchAddComponent,
   patchDeletePlate,
@@ -66,15 +68,47 @@ function useWeekMutationContext(weekId: number) {
   }
 }
 
-export function useUpdatePlate(weekId: number) {
+export function usePlatesRange(from: string, to: string) {
+  return useQuery({
+    queryKey: plateKeys.range(from, to),
+    queryFn: () => listPlates(from, to),
+    enabled: !!from && !!to,
+  })
+}
+
+export function useCreatePlate(rangeFrom: string, rangeTo: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: createPlate,
+    onSettled: () => {
+      void qc.invalidateQueries({
+        queryKey: plateKeys.range(rangeFrom, rangeTo),
+      })
+    },
+  })
+}
+
+export function useUpdatePlate(
+  weekId: number,
+  rangeFrom?: string,
+  rangeTo?: string
+) {
   const ctx = useWeekMutationContext(weekId)
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: UpdatePlateInput }) =>
       updatePlate(id, input),
     onMutate: async ({ id, input }) =>
       ctx.snapshot((w) => patchUpdatePlate(w, id, input)),
     onError: (_err, _vars, previous) => previous && ctx.rollback(previous),
-    onSettled: ctx.invalidate,
+    onSettled: () => {
+      ctx.invalidate()
+      if (rangeFrom && rangeTo) {
+        void qc.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
+      }
+    },
   })
 }
 

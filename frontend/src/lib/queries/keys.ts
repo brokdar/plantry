@@ -31,6 +31,9 @@ export const weekKeys = {
 export const plateKeys = {
   all: ["plates"] as const,
   detail: (id: number) => [...plateKeys.all, id] as const,
+  range: (from: string, to: string) =>
+    [...plateKeys.all, "range", from, to] as const,
+  byDate: (date: string) => [...plateKeys.all, "by-date", date] as const,
 }
 
 export const profileKeys = {

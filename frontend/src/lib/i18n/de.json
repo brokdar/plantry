@@ -145,7 +145,15 @@
       "progress": "Fülle leere Slots…",
       "done": "Leere Slots gefüllt",
       "error": "Füllen fehlgeschlagen"
-    }
+    },
+    "range_label": "{{from}} – {{to}}",
+    "prev_window": "Vorherige 7",
+    "next_window": "Nächste 7",
+    "today_button": "Heute",
+    "anchor_today": "Ab heute",
+    "anchor_shopping_day": "Ab nächstem {{weekday}}",
+    "day_today_pill": "Heute",
+    "day_past_label": "Vergangen"
   },
   "skip": {
     "label": "Auslassen",
@@ -221,6 +229,7 @@
     "clear_override": "Überschreibung entfernen",
     "tabs": {
       "general": "Allgemein",
+      "plan": "Planung",
       "ai": "KI",
       "nutrition": "Ernährung",
       "meal_slots": "Mahlzeiten-Slots",
@@ -293,6 +302,16 @@
       "secret_key_banner_title": "Verschlüsselung deaktiviert",
       "secret_key_banner_body": "PLANTRY_SECRET_KEY ist nicht gesetzt — API-Schlüssel können erst über die UI gespeichert werden, wenn er konfiguriert ist."
     }
+  },
+  "settings": {
+    "plan_tab": "Planung",
+    "week_starts_on": "Woche beginnt am",
+    "plan_anchor": "Planungsansicht beginnt",
+    "plan_anchor_today": "Heute",
+    "plan_anchor_next_shopping_day": "Nächster Einkaufstag",
+    "plan_anchor_fixed_weekday": "Fester Wochentag",
+    "fixed_weekday_start": "Starttag",
+    "shopping_day": "Einkaufstag"
   },
   "display_preferences": {
     "title": "Darstellung",

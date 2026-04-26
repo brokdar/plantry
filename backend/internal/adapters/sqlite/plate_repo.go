@@ -48,8 +48,14 @@ func (r *PlateRepo) Create(ctx context.Context, p *plate.Plate) error {
 }
 
 // upsertWeek returns the id of the week row for (year, isoWeek), creating it if absent.
+// Uses r.q (the non-transactional query set).
 func (r *PlateRepo) upsertWeek(ctx context.Context, year, isoWeek int) (int64, error) {
-	row, err := r.q.GetWeekByYearAndNumber(ctx, sqlcgen.GetWeekByYearAndNumberParams{
+	return r.upsertWeekQ(ctx, r.q, year, isoWeek)
+}
+
+// upsertWeekQ is the transactional variant of upsertWeek.
+func (r *PlateRepo) upsertWeekQ(ctx context.Context, q *sqlcgen.Queries, year, isoWeek int) (int64, error) {
+	row, err := q.GetWeekByYearAndNumber(ctx, sqlcgen.GetWeekByYearAndNumberParams{
 		Year:       int64(year),
 		WeekNumber: int64(isoWeek),
 	})
@@ -59,7 +65,7 @@ func (r *PlateRepo) upsertWeek(ctx context.Context, year, isoWeek int) (int64, e
 	if !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
 	}
-	created, err := r.q.CreateWeek(ctx, sqlcgen.CreateWeekParams{
+	created, err := q.CreateWeek(ctx, sqlcgen.CreateWeekParams{
 		Year:       int64(year),
 		WeekNumber: int64(isoWeek),
 	})
@@ -79,13 +85,26 @@ func (r *PlateRepo) legacyFromDate(ctx context.Context, date time.Time) (weekID 
 }
 
 func (r *PlateRepo) createWith(ctx context.Context, q *sqlcgen.Queries, p *plate.Plate) error {
-	// Compute the canonical date from the plate's week_id and day.
-	weekRow, err := q.GetWeek(ctx, p.WeekID)
-	if err != nil {
-		return fmt.Errorf("look up week for plate date: %w", err)
+	var dateStr string
+	if !p.Date.IsZero() {
+		// Date-keyed path: derive week/day from the date itself.
+		year, week := p.Date.ISOWeek()
+		weekID, err := r.upsertWeekQ(ctx, q, year, week)
+		if err != nil {
+			return fmt.Errorf("upsert week for plate date: %w", err)
+		}
+		p.WeekID = weekID
+		p.Day = (int(p.Date.Weekday()) + 6) % 7
+		dateStr = p.Date.Format(dateLayout)
+	} else {
+		// Legacy path: compute the canonical date from the plate's week_id and day.
+		weekRow, err := q.GetWeek(ctx, p.WeekID)
+		if err != nil {
+			return fmt.Errorf("look up week for plate date: %w", err)
+		}
+		monday := isoWeekStart(int(weekRow.Year), int(weekRow.WeekNumber))
+		dateStr = monday.AddDate(0, 0, p.Day).Format(dateLayout)
 	}
-	monday := isoWeekStart(int(weekRow.Year), int(weekRow.WeekNumber))
-	dateStr := monday.AddDate(0, 0, p.Day).Format(dateLayout)
 
 	row, err := q.CreatePlate(ctx, sqlcgen.CreatePlateParams{
 		WeekID: p.WeekID,
@@ -139,13 +158,27 @@ func (r *PlateRepo) Get(ctx context.Context, id int64) (*plate.Plate, error) {
 }
 
 func (r *PlateRepo) Update(ctx context.Context, p *plate.Plate) error {
-	// Compute date from the (possibly updated) week_id + day.
-	weekRow, err := r.q.GetWeek(ctx, p.WeekID)
-	if err != nil {
-		return fmt.Errorf("look up week for plate date: %w", err)
+	var dateStr string
+	if !p.Date.IsZero() {
+		// When a target date is set (date-keyed move), derive WeekID+Day from it
+		// so the plate is moved to the correct ISO week, even across week boundaries.
+		year, week := p.Date.ISOWeek()
+		weekID, err := r.upsertWeek(ctx, year, week)
+		if err != nil {
+			return fmt.Errorf("upsert week for plate date: %w", err)
+		}
+		p.WeekID = weekID
+		p.Day = (int(p.Date.Weekday()) + 6) % 7
+		dateStr = p.Date.Format(dateLayout)
+	} else {
+		// Legacy path: compute the canonical date from the plate's week_id and day.
+		weekRow, err := r.q.GetWeek(ctx, p.WeekID)
+		if err != nil {
+			return fmt.Errorf("look up week for plate date: %w", err)
+		}
+		monday := isoWeekStart(int(weekRow.Year), int(weekRow.WeekNumber))
+		dateStr = monday.AddDate(0, 0, p.Day).Format(dateLayout)
 	}
-	monday := isoWeekStart(int(weekRow.Year), int(weekRow.WeekNumber))
-	dateStr := monday.AddDate(0, 0, p.Day).Format(dateLayout)
 
 	row, err := r.q.UpdatePlate(ctx, sqlcgen.UpdatePlateParams{
 		ID:     p.ID,
@@ -398,6 +431,7 @@ func mapPlateToDomain(row *sqlcgen.Plate, p *plate.Plate) {
 	p.Note = fromNullString(row.Note)
 	p.Skipped = row.Skipped != 0
 	p.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
+	p.Date, _ = time.Parse(dateLayout, row.Date)
 }
 
 func mapPlateComponentToDomain(row *sqlcgen.PlateComponent, pc *plate.PlateComponent) {
