@@ -31,7 +31,6 @@ export interface PlateComponent {
 
 export interface Plate {
   id: number
-  day: number
   slot_id: number
   date: string
   note: string | null
@@ -42,7 +41,6 @@ export interface Plate {
 }
 
 export interface UpdatePlateInput {
-  day?: number
   slot_id?: number
   note?: string | null
   date?: string

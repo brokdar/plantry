@@ -31,7 +31,7 @@ export function patchDeletePlate(
 export function patchUpdatePlate(
   week: Week | undefined,
   plateId: number,
-  changes: Partial<Pick<Plate, "day" | "slot_id" | "note">>
+  changes: Partial<Pick<Plate, "slot_id" | "note">>
 ): Week | undefined {
   if (!week) return week
   return mapPlate(week, plateId, (p) => ({ ...p, ...changes }))
@@ -114,12 +114,11 @@ export function findPlateForComponent(
   return week.plates.find((p) => p.components.some((pc) => pc.id === pcId))
 }
 
-// findPlateInWeek is exported so component code can locate the plate at a
-// given (day, slot) without re-implementing the predicate.
+// findPlateAt locates the plate at a given (date, slot) in the cached week.
 export function findPlateAt(
   week: Week,
-  day: number,
+  date: string,
   slotId: number
 ): Plate | undefined {
-  return week.plates.find((p) => p.day === day && p.slot_id === slotId)
+  return week.plates.find((p) => p.date === date && p.slot_id === slotId)
 }

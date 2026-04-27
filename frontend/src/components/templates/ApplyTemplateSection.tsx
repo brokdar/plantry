@@ -26,7 +26,15 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
-export function ApplyTemplateSection() {
+interface ApplyTemplateSectionProps {
+  defaultSlotId?: string
+  defaultDate?: string
+}
+
+export function ApplyTemplateSection({
+  defaultSlotId,
+  defaultDate,
+}: ApplyTemplateSectionProps) {
   const { t } = useTranslation()
   const { data: templates, isLoading: tplLoading } = useTemplates()
   const { data: slotsData, isLoading: slotsLoading } = useTimeSlots(true)
@@ -34,8 +42,8 @@ export function ApplyTemplateSection() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(
     null
   )
-  const [startDate, setStartDate] = useState(todayISO)
-  const [slotId, setSlotId] = useState<string>("")
+  const [startDate, setStartDate] = useState(() => defaultDate ?? todayISO())
+  const [slotId, setSlotId] = useState<string>(defaultSlotId ?? "")
 
   const applyMut = useApplyTemplate()
 

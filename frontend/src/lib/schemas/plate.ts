@@ -1,7 +1,6 @@
 import { z } from "zod"
 
 export const plateSchema = z.object({
-  day: z.number().int().min(0).max(6),
   slot_id: z.number().int().positive(),
   note: z.string().nullable().optional(),
 })

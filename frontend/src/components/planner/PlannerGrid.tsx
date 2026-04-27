@@ -25,7 +25,6 @@ import { plateKeys } from "@/lib/queries/keys"
 import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
 import type { TimeSlot } from "@/lib/api/slots"
-import type { Template } from "@/lib/api/templates"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import {
@@ -35,7 +34,6 @@ import {
   useSwapPlateComponent,
   useUpdatePlate,
 } from "@/lib/queries/plates"
-import { useApplyTemplate } from "@/lib/queries/templates"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
@@ -122,7 +120,6 @@ export function PlannerGrid({
   const swapMut = useSwapPlateComponent()
   const deletePlateMut = useDeletePlate()
   const setSkippedMut = useSetPlateSkipped()
-  const applyTemplateMut = useApplyTemplate()
   const setFavoriteMut = useSetFoodFavorite()
   const recordFeedbackMut = useRecordFeedback()
   const clearFeedbackMut = useClearFeedback()
@@ -156,22 +153,6 @@ export function PlannerGrid({
           input: { food_id: component.id, portions: 1 },
         })
       }
-    } catch (err) {
-      toastError(err, t)
-    }
-  }
-
-  async function handleApplyTemplate(template: Template) {
-    if (!addTarget) return
-    const target = addTarget
-    setAddTarget(null)
-    const targetDay = days[target.day]
-    if (!targetDay) return
-    try {
-      await applyTemplateMut.mutateAsync({
-        templateId: template.id,
-        input: { start_date: targetDay.date, slot_id: target.slotId },
-      })
     } catch (err) {
       toastError(err, t)
     }
@@ -568,7 +549,9 @@ export function PlannerGrid({
           onOpenChange={(o) => !o && setAddTarget(null)}
           defaultRole={addTarget?.defaultRole}
           onPick={handlePick}
-          onPickTemplate={handleApplyTemplate}
+          showTemplates
+          defaultSlotId={addTarget ? String(addTarget.slotId) : undefined}
+          defaultDate={addTarget ? days[addTarget.day]?.date : undefined}
         />
         <AddComponentSheet
           open={swapTarget !== null}

@@ -14,7 +14,7 @@
  */
 
 import { ShoppingCart } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -155,18 +155,10 @@ export function ShoppingPanel({
 }: ShoppingPanelProps) {
   const { t, i18n } = useTranslation()
 
-  // Active range — default to the prop range, allow URL override via state.
-  // We keep the active range in component state (not URL params) to avoid
-  // coupling the component to a specific router search schema. The parent
-  // already manages window navigation; here we only need ephemeral override.
+  // Active range — initialized from prop. Parent passes a key based on the
+  // range so this component remounts when the window navigates, resetting all
+  // state without needing a sync effect.
   const [activeRange, setActiveRange] = useState<DateRange>(range)
-
-  // Sync if the parent range changes (e.g. window navigation) and the user
-  // hasn't picked a preset yet (i.e. they're still on the default).
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setActiveRange(range)
-  }, [range.from, range.to]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // One-time migration on first mount.
   useEffect(() => {
@@ -179,30 +171,24 @@ export function ShoppingPanel({
     loadPurchased(activeRange.from, activeRange.to)
   )
 
-  // Reload purchased state whenever the active range changes.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPurchased(loadPurchased(activeRange.from, activeRange.to))
-  }, [activeRange.from, activeRange.to])
-
-  // Prune stale purchased IDs whenever the item list changes.
-  useEffect(() => {
-    if (!data) return
+  // Prune stale IDs (items removed from the shopping list) without setState in
+  // an effect. effectivePurchased drives the UI; purchased is the user's intent.
+  const effectivePurchased = useMemo(() => {
+    if (!data) return purchased
     const validIds = new Set(data.items.map((i) => i.food_id))
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPurchased((prev) => {
-      const pruned = new Set([...prev].filter((id) => validIds.has(id)))
-      savePurchased(activeRange.from, activeRange.to, pruned)
-      return pruned
-    })
-  }, [data, activeRange.from, activeRange.to])
+    return new Set([...purchased].filter((id) => validIds.has(id)))
+  }, [data, purchased])
+
+  // Persist the pruned set whenever it changes.
+  useEffect(() => {
+    savePurchased(activeRange.from, activeRange.to, effectivePurchased)
+  }, [effectivePurchased, activeRange.from, activeRange.to])
 
   function toggle(id: number) {
     setPurchased((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
-      savePurchased(activeRange.from, activeRange.to, next)
       return next
     })
   }
@@ -245,7 +231,10 @@ export function ShoppingPanel({
           <button
             type="button"
             aria-pressed={isActive(presets.next7)}
-            onClick={() => setActiveRange(presets.next7)}
+            onClick={() => {
+              setActiveRange(presets.next7)
+              setPurchased(loadPurchased(presets.next7.from, presets.next7.to))
+            }}
             className={cn(
               "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
               isActive(presets.next7)
@@ -258,7 +247,12 @@ export function ShoppingPanel({
           <button
             type="button"
             aria-pressed={isActive(presets.untilNext)}
-            onClick={() => setActiveRange(presets.untilNext)}
+            onClick={() => {
+              setActiveRange(presets.untilNext)
+              setPurchased(
+                loadPurchased(presets.untilNext.from, presets.untilNext.to)
+              )
+            }}
             className={cn(
               "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
               isActive(presets.untilNext)
@@ -271,7 +265,12 @@ export function ShoppingPanel({
           <button
             type="button"
             aria-pressed={isActive(presets.thisCycle)}
-            onClick={() => setActiveRange(presets.thisCycle)}
+            onClick={() => {
+              setActiveRange(presets.thisCycle)
+              setPurchased(
+                loadPurchased(presets.thisCycle.from, presets.thisCycle.to)
+              )
+            }}
             className={cn(
               "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
               isActive(presets.thisCycle)
@@ -299,7 +298,7 @@ export function ShoppingPanel({
           {items.length > 0 && (
             <ul className="space-y-2">
               {items.map((item) => {
-                const checked = purchased.has(item.food_id)
+                const checked = effectivePurchased.has(item.food_id)
                 return (
                   <li
                     key={item.food_id}

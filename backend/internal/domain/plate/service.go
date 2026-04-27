@@ -83,6 +83,9 @@ func (s *Service) Get(ctx context.Context, id int64) (*Plate, error) {
 
 // Update persists changes to date/slot/note. Child mutations go through their own methods.
 func (s *Service) Update(ctx context.Context, p *Plate) error {
+	if p.Date.IsZero() {
+		return fmt.Errorf("%w: date required", domain.ErrInvalidInput)
+	}
 	if p.SlotID <= 0 {
 		return fmt.Errorf("%w: slot_id required", domain.ErrSlotUnknown)
 	}

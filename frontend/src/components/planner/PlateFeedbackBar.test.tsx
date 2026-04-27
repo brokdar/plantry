@@ -21,7 +21,6 @@ type MutationStub = {
 
 const basePlate: Plate = {
   id: 42,
-  day: 0,
   slot_id: 1,
   date: "2024-01-01",
   note: null,

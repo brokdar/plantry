@@ -378,6 +378,7 @@ function PlanPage() {
       </div>
 
       <ShoppingPanel
+        key={from + "_" + to}
         range={{ from, to }}
         shoppingDay={shoppingDay}
         open={shoppingOpen}

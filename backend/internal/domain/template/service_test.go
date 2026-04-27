@@ -104,24 +104,47 @@ func (m *mockPlateComponentSource) ListComponentsByPlate(ctx context.Context, pl
 	return nil, nil
 }
 
-type mockTxRunner struct{}
-
-func (m *mockTxRunner) RunInTemplateTx(ctx context.Context, fn func(template.Repository, plate.Repository) error) error {
-	return fn(nil, nil)
+type mockTxRunner struct {
+	pr plate.Repository
 }
 
-type mockPlateCreator struct {
+func (m *mockTxRunner) RunInTemplateTx(ctx context.Context, fn func(template.Repository, plate.Repository) error) error {
+	return fn(nil, m.pr)
+}
+
+type mockPlateRepo struct {
 	createFn func(ctx context.Context, p *plate.Plate) error
 	nextID   int64
 }
 
-func (m *mockPlateCreator) Create(ctx context.Context, p *plate.Plate) error {
+func (m *mockPlateRepo) Create(ctx context.Context, p *plate.Plate) error {
 	if m.createFn != nil {
 		return m.createFn(ctx, p)
 	}
 	m.nextID++
 	p.ID = m.nextID
 	return nil
+}
+func (m *mockPlateRepo) Get(_ context.Context, _ int64) (*plate.Plate, error)             { return nil, nil }
+func (m *mockPlateRepo) Update(_ context.Context, _ *plate.Plate) error                   { return nil }
+func (m *mockPlateRepo) Delete(_ context.Context, _ int64) error                          { return nil }
+func (m *mockPlateRepo) CreateComponent(_ context.Context, _ *plate.PlateComponent) error { return nil }
+func (m *mockPlateRepo) GetComponent(_ context.Context, _ int64) (*plate.PlateComponent, error) {
+	return nil, nil
+}
+func (m *mockPlateRepo) UpdateComponent(_ context.Context, _ *plate.PlateComponent) error { return nil }
+func (m *mockPlateRepo) DeleteComponent(_ context.Context, _ int64) error                 { return nil }
+func (m *mockPlateRepo) ListComponentsByPlate(_ context.Context, _ int64) ([]plate.PlateComponent, error) {
+	return nil, nil
+}
+func (m *mockPlateRepo) CountUsingFood(_ context.Context, _ int64) (int64, error)     { return 0, nil }
+func (m *mockPlateRepo) CountUsingTimeSlot(_ context.Context, _ int64) (int64, error) { return 0, nil }
+func (m *mockPlateRepo) SetSkipped(_ context.Context, _ int64, _ bool, _ *string) (*plate.Plate, error) {
+	return nil, nil
+}
+
+func (m *mockPlateRepo) ListByDateRange(_ context.Context, _, _ time.Time) ([]plate.Plate, error) {
+	return nil, nil
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -134,8 +157,8 @@ func mustDate(s string) time.Time {
 	return t
 }
 
-func makeService(repo *mockRepo, pc *mockPlateCreator) *template.Service {
-	return template.NewService(repo, &mockFoodChecker{}, &mockPlateComponentSource{}, &mockTxRunner{}, pc)
+func makeService(repo *mockRepo, pr *mockPlateRepo) *template.Service {
+	return template.NewService(repo, &mockFoodChecker{}, &mockPlateComponentSource{}, &mockTxRunner{pr: pr})
 }
 
 // ── Apply tests ──────────────────────────────────────────────────────────────
@@ -161,8 +184,8 @@ func TestApply_HappyPath(t *testing.T) {
 			return tmpl, nil
 		},
 	}
-	pc := &mockPlateCreator{}
-	svc := makeService(repo, pc)
+	pr := &mockPlateRepo{}
+	svc := makeService(repo, pr)
 
 	plates, err := svc.Apply(context.Background(), 10, start, 1)
 	if err != nil {
@@ -205,8 +228,8 @@ func TestApply_ISOWeekBoundary(t *testing.T) {
 	repo := &mockRepo{
 		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
 	}
-	pc := &mockPlateCreator{}
-	svc := makeService(repo, pc)
+	pr := &mockPlateRepo{}
+	svc := makeService(repo, pr)
 
 	plates, err := svc.Apply(context.Background(), 11, start, 1)
 	if err != nil {
@@ -232,12 +255,12 @@ func TestApply_ConflictPropagated(t *testing.T) {
 		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
 	}
 	conflictErr := fmt.Errorf("%w: plate already exists", domain.ErrDuplicateName)
-	pc := &mockPlateCreator{
+	pr := &mockPlateRepo{
 		createFn: func(_ context.Context, _ *plate.Plate) error {
 			return conflictErr
 		},
 	}
-	svc := makeService(repo, pc)
+	svc := makeService(repo, pr)
 
 	_, err := svc.Apply(context.Background(), 12, mustDate("2026-04-25"), 1)
 	if err == nil {
@@ -250,12 +273,49 @@ func TestApply_ConflictPropagated(t *testing.T) {
 
 func TestApply_MissingSlotID(t *testing.T) {
 	repo := &mockRepo{}
-	pc := &mockPlateCreator{}
-	svc := makeService(repo, pc)
+	svc := makeService(repo, &mockPlateRepo{})
 
 	_, err := svc.Apply(context.Background(), 1, mustDate("2026-04-25"), 0)
 	if !errors.Is(err, domain.ErrInvalidInput) {
 		t.Errorf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestApply_Atomicity_ErrorReturnsNilPlates(t *testing.T) {
+	// Template with 2 components at different offsets → 2 separate plate creates.
+	tmpl := &template.Template{
+		ID:   20,
+		Name: "Multi",
+		Components: []template.TemplateComponent{
+			{FoodID: 1, Portions: 1, DayOffset: 0, SortOrder: 0},
+			{FoodID: 2, Portions: 1, DayOffset: 1, SortOrder: 0},
+		},
+	}
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	calls := 0
+	pr := &mockPlateRepo{
+		createFn: func(_ context.Context, _ *plate.Plate) error {
+			calls++
+			if calls == 2 {
+				return fmt.Errorf("second create failed")
+			}
+			return nil
+		},
+	}
+	svc := makeService(repo, pr)
+
+	got, err := svc.Apply(context.Background(), 20, mustDate("2026-04-25"), 1)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if got != nil {
+		t.Errorf("expected nil plates on error, got %v", got)
+	}
+	if calls != 2 {
+		t.Errorf("expected 2 create calls, got %d", calls)
 	}
 }
 
@@ -278,7 +338,7 @@ func TestSaveAsTemplate_HappyPath(t *testing.T) {
 			return nil
 		},
 	}
-	svc := makeService(repo, &mockPlateCreator{})
+	svc := makeService(repo, &mockPlateRepo{})
 
 	tmpl, err := svc.SaveAsTemplate(context.Background(), "My Pattern", plates, anchor)
 	if err != nil {
@@ -307,7 +367,7 @@ func TestSaveAsTemplate_RejectsPlateBeforeAnchor(t *testing.T) {
 		{Date: mustDate("2026-04-24"), Components: []plate.PlateComponent{{FoodID: 1, Portions: 1}}},
 	}
 	repo := &mockRepo{}
-	svc := makeService(repo, &mockPlateCreator{})
+	svc := makeService(repo, &mockPlateRepo{})
 
 	_, err := svc.SaveAsTemplate(context.Background(), "Bad Pattern", plates, anchor)
 	if !errors.Is(err, domain.ErrInvalidInput) {
@@ -317,7 +377,7 @@ func TestSaveAsTemplate_RejectsPlateBeforeAnchor(t *testing.T) {
 
 func TestSaveAsTemplate_EmptyPlates(t *testing.T) {
 	repo := &mockRepo{}
-	svc := makeService(repo, &mockPlateCreator{})
+	svc := makeService(repo, &mockPlateRepo{})
 
 	_, err := svc.SaveAsTemplate(context.Background(), "Empty", []plate.Plate{}, mustDate("2026-04-25"))
 	if !errors.Is(err, domain.ErrInvalidInput) {

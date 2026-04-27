@@ -153,7 +153,6 @@ export const mockLookupResponse: LookupResponse = {
 // 2026-04-13 = Mon W16, 2026-04-14 = Tue W16, 2026-04-20 = Mon W17
 export const mockPlateW16a: Plate = {
   id: 101,
-  day: 0,
   slot_id: 1,
   date: "2026-04-13",
   note: null,
@@ -166,7 +165,6 @@ export const mockPlateW16a: Plate = {
 
 export const mockPlateW16b: Plate = {
   id: 102,
-  day: 1,
   slot_id: 1,
   date: "2026-04-14",
   note: null,
@@ -179,7 +177,6 @@ export const mockPlateW16b: Plate = {
 
 export const mockPlateW17: Plate = {
   id: 103,
-  day: 0,
   slot_id: 1,
   date: "2026-04-20",
   note: null,

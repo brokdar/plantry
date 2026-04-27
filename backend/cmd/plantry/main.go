@@ -134,7 +134,7 @@ func run() error {
 	profileSvc := profile.NewService(profileRepo)
 
 	templateRepo := sqlite.NewTemplateRepo(conn)
-	templateSvc := template.NewService(templateRepo, foodRepo, plateRepo, txRunner, plateSvc)
+	templateSvc := template.NewService(templateRepo, foodRepo, plateRepo, txRunner)
 
 	feedbackSvc := feedback.NewService(txRunner, plateRepo, foodRepo)
 

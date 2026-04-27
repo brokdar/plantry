@@ -22,7 +22,6 @@ import { usePlatesRange, useUpdatePlate } from "./plates"
 function makePlate(overrides?: Partial<Plate>): Plate {
   return {
     id: 1,
-    day: 0,
     slot_id: 1,
     date: "2026-04-26",
     note: null,

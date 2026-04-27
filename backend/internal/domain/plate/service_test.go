@@ -107,6 +107,15 @@ func TestPlateService_Day_HappyPath(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
+func TestPlateService_Update_ZeroDate(t *testing.T) {
+	svc := newService(&fakeRepo{})
+
+	err := svc.Update(context.Background(), &plate.Plate{SlotID: 1})
+
+	require.Error(t, err)
+	require.True(t, errors.Is(err, domain.ErrInvalidInput))
+}
+
 func TestPlateService_Range_DST(t *testing.T) {
 	t.Setenv("TZ", "America/New_York")
 

@@ -12,16 +12,15 @@ import (
 
 // Service holds business logic for templates.
 type Service struct {
-	repo         Repository
-	foods        FoodChecker
-	plates       PlateComponentSource
-	tx           TxRunner
-	plateCreator PlateCreator
+	repo   Repository
+	foods  FoodChecker
+	plates PlateComponentSource
+	tx     TxRunner
 }
 
 // NewService creates a Service.
-func NewService(r Repository, f FoodChecker, p PlateComponentSource, tx TxRunner, pc PlateCreator) *Service {
-	return &Service{repo: r, foods: f, plates: p, tx: tx, plateCreator: pc}
+func NewService(r Repository, f FoodChecker, p PlateComponentSource, tx TxRunner) *Service {
+	return &Service{repo: r, foods: f, plates: p, tx: tx}
 }
 
 // Create persists a new template. Exactly one of fromPlateID or components may
@@ -196,26 +195,31 @@ func (s *Service) Apply(ctx context.Context, templateID int64, startDate time.Ti
 		groups[idx].comps = append(groups[idx].comps, tc)
 	}
 
-	created := make([]plate.Plate, 0, len(groups))
-	for _, g := range groups {
-		date := startDate.AddDate(0, 0, g.offset)
-		pcs := make([]plate.PlateComponent, len(g.comps))
-		for i, tc := range g.comps {
-			pcs[i] = plate.PlateComponent{
-				FoodID:    tc.FoodID,
-				Portions:  tc.Portions,
-				SortOrder: i,
+	var created []plate.Plate
+	if err := s.tx.RunInTemplateTx(ctx, func(_ Repository, pr plate.Repository) error {
+		for _, g := range groups {
+			date := startDate.AddDate(0, 0, g.offset)
+			pcs := make([]plate.PlateComponent, len(g.comps))
+			for i, tc := range g.comps {
+				pcs[i] = plate.PlateComponent{
+					FoodID:    tc.FoodID,
+					Portions:  tc.Portions,
+					SortOrder: i,
+				}
 			}
+			p := &plate.Plate{
+				Date:       date,
+				SlotID:     slotID,
+				Components: pcs,
+			}
+			if err := pr.Create(ctx, p); err != nil {
+				return fmt.Errorf("create plate at offset %d: %w", g.offset, err)
+			}
+			created = append(created, *p)
 		}
-		p := &plate.Plate{
-			Date:       date,
-			SlotID:     slotID,
-			Components: pcs,
-		}
-		if err := s.plateCreator.Create(ctx, p); err != nil {
-			return nil, fmt.Errorf("create plate at offset %d: %w", g.offset, err)
-		}
-		created = append(created, *p)
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	return created, nil
 }
