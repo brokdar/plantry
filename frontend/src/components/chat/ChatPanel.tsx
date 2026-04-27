@@ -23,10 +23,10 @@ import { ConversationHistory } from "./ConversationHistory"
 import { ToolCallBlock } from "./ToolCallBlock"
 
 interface ChatPanelProps {
-  weekId: number
+  range: { from: string; to: string }
 }
 
-export function ChatPanel({ weekId }: ChatPanelProps) {
+export function ChatPanel({ range }: ChatPanelProps) {
   const { t } = useTranslation()
   const { data: settings } = useAISettings()
   const open = useChatUI((s) => s.open)
@@ -46,7 +46,7 @@ export function ChatPanel({ weekId }: ChatPanelProps) {
     try {
       await chatStream.mutateAsync({
         conversationId: activeConversationId ?? undefined,
-        weekId,
+        range,
         mode: mode || undefined,
         message: text,
       })
@@ -80,7 +80,7 @@ export function ChatPanel({ weekId }: ChatPanelProps) {
           </SheetDescription>
           {settings?.enabled && (
             <div className="flex flex-wrap items-center gap-2 pt-2">
-              <ConversationHistory weekId={weekId} />
+              <ConversationHistory />
               {activeConversationId !== null && (
                 <Button
                   type="button"

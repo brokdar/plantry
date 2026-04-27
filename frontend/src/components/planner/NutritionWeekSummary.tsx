@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import type { Profile } from "@/lib/api/profile"
 import { useProfile } from "@/lib/queries/profile"
-import { useWeekNutrition } from "@/lib/queries/weeks"
+import { useNutritionRange } from "@/lib/queries/nutrition"
 
 import { NutritionDayBar, type NutritionTargets } from "./NutritionDayBar"
 
 interface NutritionWeekSummaryProps {
-  weekId: number
+  from: string
+  to: string
 }
 
 function dailyTargets(profile: Profile): NutritionTargets | undefined {
@@ -25,9 +26,15 @@ function dailyTargets(profile: Profile): NutritionTargets | undefined {
   }
 }
 
-export function NutritionWeekSummary({ weekId }: NutritionWeekSummaryProps) {
+/** Returns Mon=0 … Sun=6 for a YYYY-MM-DD date string. */
+function dateToDayIndex(date: string): number {
+  const d = new Date(date + "T00:00:00")
+  return (d.getDay() + 6) % 7
+}
+
+export function NutritionWeekSummary({ from, to }: NutritionWeekSummaryProps) {
   const { t } = useTranslation()
-  const { data, isLoading } = useWeekNutrition(weekId)
+  const { data, isLoading } = useNutritionRange(from, to)
   const { data: profile } = useProfile()
 
   if (isLoading) {
@@ -42,8 +49,13 @@ export function NutritionWeekSummary({ weekId }: NutritionWeekSummaryProps) {
 
   const targets = profile ? dailyTargets(profile) : undefined
 
+  const totalKcal = data.days.reduce((acc, d) => acc + d.macros.kcal, 0)
+  const totalProtein = data.days.reduce((acc, d) => acc + d.macros.protein, 0)
+  const totalFat = data.days.reduce((acc, d) => acc + d.macros.fat, 0)
+  const totalCarbs = data.days.reduce((acc, d) => acc + d.macros.carbs, 0)
+
   const weekAvgKcal =
-    data.days.length > 0 ? Math.round(data.week.kcal / data.days.length) : 0
+    data.days.length > 0 ? Math.round(totalKcal / data.days.length) : 0
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto py-4">
@@ -65,9 +77,9 @@ export function NutritionWeekSummary({ weekId }: NutritionWeekSummaryProps) {
       ) : (
         <ul className="flex flex-col gap-4 px-4">
           {data.days.map((d) => (
-            <li key={d.day}>
+            <li key={d.date}>
               <NutritionDayBar
-                day={d.day}
+                day={dateToDayIndex(d.date)}
                 macros={d.macros}
                 targets={targets}
               />
@@ -82,7 +94,7 @@ export function NutritionWeekSummary({ weekId }: NutritionWeekSummaryProps) {
         <div className="flex items-center justify-between text-sm font-medium">
           <span>{t("nutrition.week_total")}</span>
           <span>
-            {Math.round(data.week.kcal)} kcal
+            {Math.round(totalKcal)} kcal
             {targets && data.days.length > 0 && (
               <span className="ml-1 text-xs text-muted-foreground">
                 (avg {weekAvgKcal} / {targets.kcal})
@@ -94,9 +106,9 @@ export function NutritionWeekSummary({ weekId }: NutritionWeekSummaryProps) {
           size="xs"
           abbreviated
           values={{
-            protein: data.week.protein,
-            carbs: data.week.carbs,
-            fat: data.week.fat,
+            protein: totalProtein,
+            carbs: totalCarbs,
+            fat: totalFat,
           }}
         />
       </div>

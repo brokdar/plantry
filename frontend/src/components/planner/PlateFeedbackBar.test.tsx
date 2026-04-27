@@ -21,9 +21,8 @@ type MutationStub = {
 
 const basePlate: Plate = {
   id: 42,
-  week_id: 1,
-  day: 0,
   slot_id: 1,
+  date: "2024-01-01",
   note: null,
   skipped: false,
   components: [],
@@ -49,7 +48,7 @@ beforeEach(() => {
 describe("PlateFeedbackBar", () => {
   test("renders all four status buttons", async () => {
     stubMutations()
-    renderWithRouter(<PlateFeedbackBar plate={basePlate} weekId={1} />)
+    renderWithRouter(<PlateFeedbackBar plate={basePlate} />)
 
     for (const label of ["Cooked", "Skipped", "Loved", "Disliked"]) {
       expect(
@@ -60,7 +59,7 @@ describe("PlateFeedbackBar", () => {
 
   test("clicking a status records feedback", async () => {
     const { record } = stubMutations()
-    renderWithRouter(<PlateFeedbackBar plate={basePlate} weekId={1} />)
+    renderWithRouter(<PlateFeedbackBar plate={basePlate} />)
 
     const loved = await screen.findByRole("button", { name: "Loved" })
     await userEvent.click(loved)
@@ -82,7 +81,7 @@ describe("PlateFeedbackBar", () => {
         rated_at: "2024-01-01T00:00:00Z",
       },
     }
-    renderWithRouter(<PlateFeedbackBar plate={plate} weekId={1} />)
+    renderWithRouter(<PlateFeedbackBar plate={plate} />)
 
     const loved = await screen.findByRole("button", { name: "Loved" })
     expect(loved).toHaveAttribute("aria-pressed", "true")
@@ -93,7 +92,7 @@ describe("PlateFeedbackBar", () => {
 
   test("note button is disabled until a status is set", async () => {
     stubMutations()
-    renderWithRouter(<PlateFeedbackBar plate={basePlate} weekId={1} />)
+    renderWithRouter(<PlateFeedbackBar plate={basePlate} />)
     const noteBtn = await screen.findByRole("button", { name: "Add note" })
     expect(noteBtn).toBeDisabled()
   })
@@ -109,7 +108,7 @@ describe("PlateFeedbackBar", () => {
         rated_at: "2024-01-01T00:00:00Z",
       },
     }
-    renderWithRouter(<PlateFeedbackBar plate={plate} weekId={1} />)
+    renderWithRouter(<PlateFeedbackBar plate={plate} />)
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Add note" })

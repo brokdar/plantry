@@ -76,20 +76,3 @@ func (r *FeedbackRepo) Delete(ctx context.Context, plateID int64) error {
 	}
 	return nil
 }
-
-func (r *FeedbackRepo) ListByWeek(ctx context.Context, weekID int64) ([]feedback.PlateFeedback, error) {
-	rows, err := r.q.ListPlateFeedbackByWeek(ctx, weekID)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]feedback.PlateFeedback, len(rows))
-	for i, row := range rows {
-		items[i] = feedback.PlateFeedback{
-			PlateID: row.PlateID,
-			Status:  feedback.Status(row.Status),
-			Note:    fromNullString(row.Note),
-		}
-		items[i].RatedAt, _ = time.Parse(timeLayout, row.RatedAt) //nolint:errcheck
-	}
-	return items, nil
-}

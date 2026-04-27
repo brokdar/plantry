@@ -12,7 +12,6 @@ type Repository interface {
 	Upsert(ctx context.Context, f *PlateFeedback) error
 	Get(ctx context.Context, plateID int64) (*PlateFeedback, error)
 	Delete(ctx context.Context, plateID int64) error
-	ListByWeek(ctx context.Context, weekID int64) ([]PlateFeedback, error)
 }
 
 // TxRunner runs fn inside a single transaction. The closure receives

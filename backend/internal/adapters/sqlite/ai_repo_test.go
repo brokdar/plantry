@@ -129,14 +129,11 @@ func TestAIRepo_List_FiltersByWeek(t *testing.T) {
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewAIRepo(db)
 
-	// Seed a week directly — reusing WeekRepo avoids the coupling but this repo
-	// test has fewer seams, so a raw insert suffices and keeps the test tight.
-	_, err := db.ExecContext(ctx, `INSERT INTO weeks (year, week_number) VALUES (2026, 17)`)
-	require.NoError(t, err)
-	var weekID int64
-	require.NoError(t, db.QueryRowContext(ctx, `SELECT id FROM weeks WHERE year=2026 AND week_number=17`).Scan(&weekID))
+	// weeks table is gone (migration 16); week_id on ai_conversations is now a
+	// plain nullable INTEGER. Use an arbitrary sentinel value.
+	weekID := int64(17)
 
-	_, err = repo.CreateConversation(ctx, &weekID, nil)
+	_, err := repo.CreateConversation(ctx, &weekID, nil)
 	require.NoError(t, err)
 	_, err = repo.CreateConversation(ctx, &weekID, nil)
 	require.NoError(t, err)
@@ -156,28 +153,6 @@ func TestAIRepo_List_FiltersByWeek(t *testing.T) {
 		require.NotNil(t, c.WeekID)
 		assert.Equal(t, weekID, *c.WeekID)
 	}
-}
-
-func TestAIRepo_WeekDelete_SetsConversationWeekNull(t *testing.T) {
-	ctx := context.Background()
-	db := testhelper.NewTestDB(t)
-	repo := sqlite.NewAIRepo(db)
-
-	_, err := db.ExecContext(ctx, `INSERT INTO weeks (year, week_number) VALUES (2026, 17)`)
-	require.NoError(t, err)
-	var weekID int64
-	require.NoError(t, db.QueryRowContext(ctx, `SELECT id FROM weeks WHERE year=2026 AND week_number=17`).Scan(&weekID))
-
-	c, err := repo.CreateConversation(ctx, &weekID, nil)
-	require.NoError(t, err)
-	require.NotNil(t, c.WeekID)
-
-	_, err = db.ExecContext(ctx, `DELETE FROM weeks WHERE id=?`, weekID)
-	require.NoError(t, err)
-
-	got, err := repo.GetConversation(ctx, c.ID)
-	require.NoError(t, err)
-	assert.Nil(t, got.WeekID)
 }
 
 func TestAIRepo_UpdateTitleAndTouch(t *testing.T) {

@@ -31,6 +31,11 @@ export const weekKeys = {
 export const plateKeys = {
   all: ["plates"] as const,
   detail: (id: number) => [...plateKeys.all, id] as const,
+  range: (from: string, to: string) =>
+    [...plateKeys.all, "range", from, to] as const,
+  rangeInfinite: (anchor: string) =>
+    [...plateKeys.all, "range-infinite", anchor] as const,
+  byDate: (date: string) => [...plateKeys.all, "by-date", date] as const,
 }
 
 export const profileKeys = {
@@ -46,8 +51,7 @@ export const templateKeys = {
 
 export const aiKeys = {
   all: ["ai"] as const,
-  conversations: (weekId?: number) =>
-    [...aiKeys.all, "conversations", { weekId }] as const,
+  conversations: () => [...aiKeys.all, "conversations"] as const,
   conversation: (id: number) => [...aiKeys.all, "conversation", id] as const,
   settings: () => [...aiKeys.all, "settings"] as const,
 }
@@ -58,6 +62,11 @@ export const settingsKeys = {
   system: () => [...settingsKeys.all, "system"] as const,
   aiModels: (provider: string) =>
     [...settingsKeys.all, "ai", "models", provider] as const,
+}
+
+export const shoppingKeys = {
+  all: ["shopping"] as const,
+  list: (from: string, to: string) => ["shopping", "list", from, to] as const,
 }
 
 export const importKeys = {

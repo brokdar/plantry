@@ -25,12 +25,15 @@ test.describe("Recipe import — error paths", () => {
     const res = await resp
     expect(res.status()).toBeGreaterThanOrEqual(400)
 
-    // The inline submit error surfaces an i18n message from the import
-    // error family — either "No recipe was found" or "AI could not extract",
-    // depending on whether the backend short-circuits on JSON-LD or tries
-    // the LLM path first.
+    // The inline submit error surfaces an i18n message from the import or AI
+    // family — depending on whether the backend short-circuits on JSON-LD,
+    // tries the LLM path first, or falls back when no AI provider is
+    // configured (DB overrides from earlier ai-serial specs can leave the
+    // provider unset).
     await expect(
-      page.getByText(/No recipe was found|AI could not extract/i)
+      page.getByText(
+        /No recipe was found|AI could not extract|AI provider is not configured/i
+      )
     ).toBeVisible()
   })
 })

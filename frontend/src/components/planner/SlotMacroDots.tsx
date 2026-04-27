@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next"
 
 import { MacroDot } from "@/components/editorial/macros"
-import type { MacrosResponse } from "@/lib/api/weeks"
+import type { MacrosResponse } from "@/lib/api/plates"
 
 interface SlotMacroDotsProps {
   macros?: MacrosResponse

@@ -123,7 +123,7 @@ export async function seedComposedWithStub(
   data: SeedComposedInput,
   tag: string
 ) {
-  const stub = await seedLeafFood({ name: `Stub ${tag}-${data.name}` })
+  const stub = await seedLeafFood({ name: `Stub ${tag}-${uid()}` })
   const composed = await seedComposedFood({
     ...data,
     children: data.children ?? [
@@ -167,17 +167,16 @@ export async function seedSlot(
 
 export async function deletePlatesUsingSlot(slotId: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  const wRes = await ctx.get("/api/weeks?limit=100")
-  const weeks = ((await wRes.json()) as { items: { id: number }[] }).items
-  for (const w of weeks) {
-    const det = await ctx.get(`/api/weeks/${w.id}`)
-    const detail = (await det.json()) as {
-      plates: { id: number; slot_id: number }[]
-    }
-    for (const p of detail.plates) {
-      if (p.slot_id === slotId) {
-        await ctx.delete(`/api/plates/${p.id}`)
-      }
+  const now = new Date()
+  const from = new Date(now.getFullYear() - 1, 0, 1).toISOString().slice(0, 10)
+  const to = new Date(now.getFullYear() + 1, 11, 31).toISOString().slice(0, 10)
+  const platesRes = await ctx.get(`/api/plates?from=${from}&to=${to}`)
+  const body = (await platesRes.json()) as {
+    plates?: { id: number; slot_id: number }[]
+  }
+  for (const p of body.plates ?? []) {
+    if (p.slot_id === slotId) {
+      await ctx.delete(`/api/plates/${p.id}`)
     }
   }
   await ctx.dispose()

@@ -12,7 +12,7 @@ import type { ChatEvent, ChatRequest } from "../domain/chatEvents"
 import { chatStreamStore } from "../stores/chat-stream"
 import { useChatUI } from "../stores/chat-ui"
 
-import { aiKeys, weekKeys } from "./keys"
+import { aiKeys, plateKeys, shoppingKeys } from "./keys"
 
 export function useAISettings() {
   return useQuery({
@@ -22,10 +22,10 @@ export function useAISettings() {
   })
 }
 
-export function useConversations(weekId?: number) {
+export function useConversations() {
   return useQuery({
-    queryKey: aiKeys.conversations(weekId),
-    queryFn: () => listConversations(weekId),
+    queryKey: aiKeys.conversations(),
+    queryFn: () => listConversations(),
     staleTime: 15_000,
   })
 }
@@ -52,12 +52,12 @@ export function useDeleteConversation() {
  * useChatStream owns the POST SSE reader lifetime. Calling .mutateAsync()
  * starts a fresh stream; the in-flight assistant turn is mirrored into the
  * chatStreamStore for low-overhead per-delta rendering. plate_changed
- * events invalidate week-scoped query caches immediately. Turn boundaries
- * and final completion flush to the conversation query cache.
+ * events invalidate the active date-range plate/shopping caches immediately.
+ * Turn boundaries and final completion flush to the conversation query cache.
  */
 export interface ChatStreamParams {
   conversationId?: number
-  weekId?: number
+  range?: { from: string; to: string }
   mode?: "fill_empty" | "replace_all" | ""
   message: string
 }
@@ -81,14 +81,13 @@ export function useChatStream() {
 
       const req: ChatRequest = {
         conversation_id: params.conversationId,
-        week_id: params.weekId,
         mode: params.mode,
         message: params.message,
       }
 
       try {
         for await (const evt of postChatStream(req, ac.signal)) {
-          handleEvent(evt, qc, params.weekId)
+          handleEvent(evt, qc, params.range)
         }
       } finally {
         if (controllerRef.current === ac) controllerRef.current = null
@@ -112,7 +111,7 @@ export function useChatStream() {
 function handleEvent(
   evt: ChatEvent,
   qc: ReturnType<typeof useQueryClient>,
-  weekId?: number
+  range?: { from: string; to: string }
 ) {
   switch (evt.type) {
     case "conversation_ready":
@@ -144,13 +143,15 @@ function handleEvent(
       // Nothing to render beyond status; keep summary compact.
       return
     case "plate_changed": {
-      const targetWeek = evt.data.week_id ?? weekId
-      if (targetWeek) {
-        qc.invalidateQueries({ queryKey: weekKeys.byId(targetWeek) })
-        qc.invalidateQueries({ queryKey: weekKeys.nutrition(targetWeek) })
-        qc.invalidateQueries({ queryKey: weekKeys.shoppingList(targetWeek) })
+      if (range) {
+        qc.invalidateQueries({
+          queryKey: plateKeys.range(range.from, range.to),
+        })
+        qc.invalidateQueries({
+          queryKey: shoppingKeys.list(range.from, range.to),
+        })
       } else {
-        qc.invalidateQueries({ queryKey: weekKeys.all })
+        qc.invalidateQueries({ queryKey: plateKeys.all })
       }
       return
     }

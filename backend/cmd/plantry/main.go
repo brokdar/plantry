@@ -16,6 +16,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/jaltszeimer/plantry/backend/db"
+	_ "github.com/jaltszeimer/plantry/backend/db/migrations"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/anthropic"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
@@ -33,7 +34,6 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	settingsdom "github.com/jaltszeimer/plantry/backend/internal/domain/settings"
@@ -128,9 +128,7 @@ func run() error {
 	plateRepo := sqlite.NewPlateRepo(conn)
 	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo)
 
-	weekRepo := sqlite.NewWeekRepo(conn)
 	txRunner := sqlite.NewTxRunner(conn)
-	plannerSvc := planner.NewService(weekRepo, plateRepo, txRunner)
 
 	profileRepo := sqlite.NewProfileRepo(conn)
 	profileSvc := profile.NewService(profileRepo)
@@ -138,7 +136,6 @@ func run() error {
 	templateRepo := sqlite.NewTemplateRepo(conn)
 	templateSvc := template.NewService(templateRepo, foodRepo, plateRepo, txRunner)
 
-	feedbackRepo := sqlite.NewFeedbackRepo(conn)
 	feedbackSvc := feedback.NewService(txRunner, plateRepo, foodRepo)
 
 	// AI wiring. The llm.Resolver consults settings on every request so
@@ -164,15 +161,15 @@ func run() error {
 	tools, err := agent.NewToolSet(agent.Services{
 		Foods:             foodSvc,
 		NutritionResolver: nutritionResolver,
-		Planner:           plannerSvc,
 		Plates:            plateSvc,
 		Profile:           profileSvc,
 		Slots:             slotSvc,
+		Templates:         templateSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
 	}
-	agentSvc := agent.NewService(aiRepo, llmResolver, tools, plannerSvc, profileSvc)
+	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc)
 	aiHandler := handlers.NewAIHandler(agentSvc, llmResolver)
 
 	// Recipe importer (Phase 11).
@@ -198,21 +195,22 @@ func run() error {
 	}, aiRateLimiter)
 
 	h := transport.Handlers{
-		Foods:         handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore),
-		Lookup:        handlers.NewLookupHandler(resolver, imgStore, foodSvc),
-		ImageProxy:    handlers.NewImageProxyHandler(),
-		ImageStore:    imgStore,
-		Slots:         handlers.NewSlotHandler(slotSvc),
-		Weeks:         handlers.NewWeekHandler(plannerSvc, plateSvc, foodSvc, nutritionResolver, shoppingResolver, feedbackRepo),
-		Plates:        handlers.NewPlateHandler(plateSvc),
-		Profile:       handlers.NewProfileHandler(profileSvc),
-		Templates:     handlers.NewTemplateHandler(templateSvc),
-		AI:            aiHandler,
-		AIRateLimiter: aiRateLimiter,
-		Feedback:      handlers.NewFeedbackHandler(feedbackSvc),
-		Import:        importHandler,
-		Settings:      settingsHandler,
-		DevMode:       cfg.DevMode,
+		Foods:          handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore),
+		Lookup:         handlers.NewLookupHandler(resolver, imgStore, foodSvc),
+		ImageProxy:     handlers.NewImageProxyHandler(),
+		ImageStore:     imgStore,
+		Slots:          handlers.NewSlotHandler(slotSvc),
+		Plates:         handlers.NewPlateHandler(plateSvc),
+		Profile:        handlers.NewProfileHandler(profileSvc),
+		Templates:      handlers.NewTemplateHandler(templateSvc, plateSvc),
+		AI:             aiHandler,
+		AIRateLimiter:  aiRateLimiter,
+		Feedback:       handlers.NewFeedbackHandler(feedbackSvc),
+		Import:         importHandler,
+		Settings:       settingsHandler,
+		ShoppingRange:  handlers.NewShoppingRangeHandler(plateSvc, shoppingResolver),
+		NutritionRange: handlers.NewNutritionRangeHandler(plateSvc, nutritionResolver),
+		DevMode:        cfg.DevMode,
 	}
 	handler := transport.NewRouter(logger, static, h)
 

@@ -10,14 +10,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import type { Food } from "@/lib/api/foods"
-import type { Template } from "@/lib/api/templates"
 
 interface AddComponentSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultRole?: string
   onPick: (c: Food) => void
-  onPickTemplate?: (t: Template) => void
+  showTemplates?: boolean
+  defaultSlotId?: string
+  defaultDate?: string
 }
 
 export function AddComponentSheet({
@@ -25,7 +26,9 @@ export function AddComponentSheet({
   onOpenChange,
   defaultRole,
   onPick,
-  onPickTemplate,
+  showTemplates,
+  defaultSlotId,
+  defaultDate,
 }: AddComponentSheetProps) {
   const { t } = useTranslation()
   return (
@@ -39,7 +42,12 @@ export function AddComponentSheet({
           <SheetDescription>{t("plate.filter_by_role")}</SheetDescription>
         </SheetHeader>
         <div className="space-y-4 overflow-y-auto px-4 pb-4">
-          {onPickTemplate && <ApplyTemplateSection onPick={onPickTemplate} />}
+          {showTemplates && (
+            <ApplyTemplateSection
+              defaultSlotId={defaultSlotId}
+              defaultDate={defaultDate}
+            />
+          )}
           <ComponentPicker defaultRole={defaultRole} onPick={onPick} />
         </div>
       </SheetContent>

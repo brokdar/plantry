@@ -1,8 +1,7 @@
-import { format } from "date-fns"
 import { Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import type { MacrosResponse } from "@/lib/api/weeks"
+import type { MacrosResponse } from "@/lib/api/plates"
 import { cn } from "@/lib/utils"
 
 interface DayHeaderProps {
@@ -24,7 +23,7 @@ export function DayHeader({
   onClearDay,
   hasPlates,
 }: DayHeaderProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   // Always render kcal + macro strip on every day header so the row keeps a
   // uniform vertical rhythm — empty days just read "0 kcal" with a faded bar.
   const kcal = macros ? Math.round(macros.kcal) : 0
@@ -54,7 +53,10 @@ export function DayHeader({
         {t(dayKey)}
       </span>
       <span className="text-[12px] text-on-surface-variant tabular-nums">
-        {format(date, "MMM d")}
+        {new Intl.DateTimeFormat(i18n.language, {
+          month: "short",
+          day: "numeric",
+        }).format(date)}
         {today && <span className="ml-2">· {t("planner.today")}</span>}
       </span>
       <span className="flex items-baseline gap-1" data-testid="day-header-kcal">

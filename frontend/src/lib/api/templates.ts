@@ -31,8 +31,14 @@ export interface UpdateTemplateInput {
 }
 
 export interface ApplyTemplateInput {
-  plate_id: number
-  merge?: boolean
+  start_date: string // YYYY-MM-DD
+  slot_id: number
+}
+
+export interface CreateTemplateFromRangeInput {
+  name: string
+  from: string // YYYY-MM-DD
+  to: string // YYYY-MM-DD
 }
 
 interface TemplateListResponse {
@@ -74,6 +80,15 @@ export function applyTemplate(
   input: ApplyTemplateInput
 ): Promise<void> {
   return apiFetch(`/templates/${id}/apply`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+}
+
+export function createTemplateFromRange(
+  input: CreateTemplateFromRangeInput
+): Promise<Template> {
+  return apiFetch(`/templates`, {
     method: "POST",
     body: JSON.stringify(input),
   })

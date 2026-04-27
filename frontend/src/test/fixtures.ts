@@ -1,9 +1,6 @@
 import type { ComposedFood, LeafFood } from "@/lib/api/foods"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
-import type {
-  ShoppingListResponse,
-  WeekNutritionResponse,
-} from "@/lib/api/weeks"
+import type { Plate } from "@/lib/api/plates"
 
 export const mockChickenBreast: LeafFood = {
   id: 1,
@@ -131,30 +128,6 @@ export const mockTofuCurryVariant: ComposedFood = {
   updated_at: "2024-01-03T00:00:00Z",
 }
 
-export const mockShoppingList: ShoppingListResponse = {
-  items: [
-    { food_id: 1, name: "Chicken", total_grams: 100 },
-    { food_id: 2, name: "Rice", total_grams: 200 },
-  ],
-}
-
-export const mockWeekNutrition: WeekNutritionResponse = {
-  days: [
-    {
-      day: 0,
-      macros: {
-        kcal: 500,
-        protein: 40,
-        fat: 15,
-        carbs: 50,
-        fiber: 5,
-        sodium: 1,
-      },
-    },
-  ],
-  week: { kcal: 500, protein: 40, fat: 15, carbs: 50, fiber: 5, sodium: 1 },
-}
-
 export const mockLookupCandidate: LookupCandidate = {
   name: "Chicken Breast, Raw",
   source: "fdc",
@@ -174,4 +147,42 @@ export const mockLookupCandidate: LookupCandidate = {
 export const mockLookupResponse: LookupResponse = {
   results: [mockLookupCandidate],
   recommended_index: 0,
+}
+
+// Plates spanning two ISO weeks (2026-W16 and 2026-W17)
+// 2026-04-13 = Mon W16, 2026-04-14 = Tue W16, 2026-04-20 = Mon W17
+export const mockPlateW16a: Plate = {
+  id: 101,
+  slot_id: 1,
+  date: "2026-04-13",
+  note: null,
+  skipped: false,
+  components: [
+    { id: 1, plate_id: 101, food_id: 1, portions: 1, sort_order: 0 },
+  ],
+  created_at: "2026-04-13T10:00:00Z",
+}
+
+export const mockPlateW16b: Plate = {
+  id: 102,
+  slot_id: 1,
+  date: "2026-04-14",
+  note: null,
+  skipped: false,
+  components: [
+    { id: 2, plate_id: 102, food_id: 2, portions: 1, sort_order: 0 },
+  ],
+  created_at: "2026-04-14T10:00:00Z",
+}
+
+export const mockPlateW17: Plate = {
+  id: 103,
+  slot_id: 1,
+  date: "2026-04-20",
+  note: null,
+  skipped: false,
+  components: [
+    { id: 3, plate_id: 103, food_id: 3, portions: 1, sort_order: 0 },
+  ],
+  created_at: "2026-04-20T10:00:00Z",
 }

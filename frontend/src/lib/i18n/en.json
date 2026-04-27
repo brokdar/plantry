@@ -10,32 +10,34 @@
     "components": "Components",
     "templates": "Templates",
     "import": "Import",
-    "archive": "Archive",
-    "past_weeks": "Past Weeks",
+    "calendar": "Calendar",
     "settings": "Settings",
     "search_placeholder": "Search the catalog…",
     "collapse_sidebar": "Collapse sidebar",
     "expand_sidebar": "Expand sidebar"
   },
+  "calendar": {
+    "title": "Calendar",
+    "mode_month": "Month",
+    "mode_week": "Week",
+    "mode_agenda": "Agenda",
+    "search_placeholder": "Search dishes…",
+    "plan_this_week": "Plan this week",
+    "jump_to_date": "Jump to date",
+    "no_plates_in_range": "No meals in this range.",
+    "load_older": "Load older 60 days",
+    "overflow_more": "+{{count}} more"
+  },
+  "day": {
+    "title": "{{weekday}}, {{date}}",
+    "prev_day": "Previous day",
+    "next_day": "Next day",
+    "back_to_calendar": "Back to calendar",
+    "empty": "No meals planned"
+  },
   "archive": {
-    "title": "Historical Collections",
-    "subtitle": "A curated archive of your seasonal journeys. Revisit past nourishments and integrate them into your current week.",
-    "empty": "No archived weeks yet.",
-    "end_of_journey": "End of your journey",
-    "end_of_journey_body": "You've reached the beginning of your Botanical Atelier journey.",
-    "load_more": "Load more history",
-    "meals_total": "{{count}} total meals",
-    "week_label": "Week {{week}}, {{year}}",
-    "back": "Back to archive",
     "forgotten": "Forgotten",
-    "most_cooked": "Most cooked",
-    "read_only": "Read only",
-    "review": "Review",
-    "copy_to_current": "Copy to current",
-    "copy_confirm_title": "Copy this week into the current week?",
-    "copy_confirm_body": "Meals will be added to week {{week}}, {{year}}. Existing meals in the current week are not overwritten.",
-    "copy_success": "Week copied to current",
-    "select_week": "Select a week to preview"
+    "most_cooked": "Most cooked"
   },
   "import": {
     "title": "Import recipe",
@@ -86,14 +88,8 @@
   },
   "planner": {
     "title": "Weekly Planner",
-    "week_label": "Week {{week}}, {{year}}",
-    "prev_week": "Previous week",
-    "next_week": "Next week",
-    "this_week": "This week",
     "today": "Today",
-    "copy_week": "Copy week to next",
     "daily_avg": "Daily Average",
-    "copy_success": "Week copied",
     "fill_empty_cta": "Fill empty slots",
     "clear_day": "Clear day",
     "day_cleared": "Day cleared",
@@ -145,7 +141,13 @@
       "progress": "Filling empty slots…",
       "done": "Empty slots filled",
       "error": "Could not fill empty slots"
-    }
+    },
+    "range_label": "{{from}} – {{to}}",
+    "prev_window": "Previous 7",
+    "next_window": "Next 7",
+    "today_button": "Today",
+    "anchor_today": "From today",
+    "anchor_shopping_day": "From next {{weekday}}"
   },
   "skip": {
     "label": "Skip",
@@ -221,6 +223,7 @@
     "clear_override": "Clear override",
     "tabs": {
       "general": "General",
+      "plan": "Planning",
       "ai": "AI",
       "nutrition": "Nutrition",
       "meal_slots": "Meal Slots",
@@ -293,6 +296,16 @@
       "secret_key_banner_title": "Encryption disabled",
       "secret_key_banner_body": "PLANTRY_SECRET_KEY is not set — API keys cannot be saved through the UI until it is configured."
     }
+  },
+  "settings": {
+    "plan_tab": "Planning",
+    "week_starts_on": "Week starts on",
+    "plan_anchor": "Plan view starts",
+    "plan_anchor_today": "Today",
+    "plan_anchor_next_shopping_day": "Next shopping day",
+    "plan_anchor_fixed_weekday": "Fixed weekday",
+    "fixed_weekday_start": "Start weekday",
+    "shopping_day": "Shopping day"
   },
   "display_preferences": {
     "title": "Display Preferences",
@@ -627,6 +640,12 @@
   "template": {
     "eyebrow": "Saved compositions",
     "title": "Templates",
+    "applied": "Template applied",
+    "apply": {
+      "start_on": "Start date",
+      "slot": "Meal slot",
+      "submit": "Apply template"
+    },
     "subtitle": "Press a plate you love into a template, then lay it down any day you like.",
     "new": "New template",
     "new_body": "Create an empty template now and compose it later from the planner, or save an existing plate directly as a template.",
@@ -714,7 +733,11 @@
     "title": "Shopping List",
     "description": "Ingredients for this week",
     "button": "Shopping",
-    "empty": "No ingredients — add meals to the planner first."
+    "empty": "No ingredients — add meals to the planner first.",
+    "preset_next7": "Next 7 days",
+    "preset_until_shopping_day": "Until next {{day}}",
+    "preset_this_cycle": "This {{day}} cycle",
+    "range_label": "{{from}} — {{to}}"
   },
   "nutrition": {
     "title": "Week Nutrition",
@@ -765,6 +788,7 @@
     "delete": "Delete",
     "confirm": "Confirm",
     "edit": "Edit",
+    "done": "Done",
     "back": "Back",
     "loading": "Loading...",
     "showing": "Showing {{from}}–{{to}} of {{total}}",

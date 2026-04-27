@@ -270,6 +270,32 @@ func TestSet_RateLimitChange_ReconfiguresLimiter(t *testing.T) {
 	// package's own tests; here we just ensure the PUT path succeeded.
 }
 
+func TestSettings_WeekStartsOn_RoundTrip(t *testing.T) {
+	r, svc := newSettingsRouter(t)
+	ctx := context.Background()
+
+	// PUT plan.week_starts_on = sunday
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/plan.week_starts_on",
+		strings.NewReader(`{"value":"sunday"}`))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, 204, w.Code)
+
+	// GET plan.week_starts_on — verify stored value
+	v, err := svc.Get(ctx, settings.KeyPlanWeekStartsOn)
+	require.NoError(t, err)
+	assert.Equal(t, "sunday", v.Raw)
+	assert.Equal(t, settings.SourceDB, v.Source)
+
+	// PUT plan.week_starts_on = invalid → 400
+	req = httptest.NewRequest(http.MethodPut, "/api/settings/plan.week_starts_on",
+		strings.NewReader(`{"value":"invalid"}`))
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, 400, w.Code)
+	assert.Contains(t, w.Body.String(), "error.settings.invalid_value")
+}
+
 func TestDelete_UnknownKey(t *testing.T) {
 	r, _ := newSettingsRouter(t)
 	req := httptest.NewRequest(http.MethodDelete, "/api/settings/bogus.key", nil)

@@ -10,32 +10,34 @@
     "components": "Komponenten",
     "templates": "Vorlagen",
     "import": "Import",
-    "archive": "Archiv",
-    "past_weeks": "Vergangene Wochen",
+    "calendar": "Kalender",
     "settings": "Einstellungen",
     "search_placeholder": "Katalog durchsuchen…",
     "collapse_sidebar": "Seitenleiste einklappen",
     "expand_sidebar": "Seitenleiste ausklappen"
   },
+  "calendar": {
+    "title": "Kalender",
+    "mode_month": "Monat",
+    "mode_week": "Woche",
+    "mode_agenda": "Agenda",
+    "search_placeholder": "Gerichte suchen…",
+    "plan_this_week": "Diese Woche planen",
+    "jump_to_date": "Zu Datum springen",
+    "no_plates_in_range": "Keine Mahlzeiten in diesem Zeitraum.",
+    "load_older": "Ältere 60 Tage laden",
+    "overflow_more": "+{{count}} mehr"
+  },
+  "day": {
+    "title": "{{weekday}}, {{date}}",
+    "prev_day": "Vorheriger Tag",
+    "next_day": "Nächster Tag",
+    "back_to_calendar": "Zurück zum Kalender",
+    "empty": "Keine Mahlzeiten geplant"
+  },
   "archive": {
-    "title": "Historische Sammlungen",
-    "subtitle": "Ein kuratiertes Archiv deiner saisonalen Reisen. Besuche vergangene Mahlzeiten und integriere sie in deine aktuelle Woche.",
-    "empty": "Noch keine archivierten Wochen.",
-    "end_of_journey": "Ende deiner Reise",
-    "end_of_journey_body": "Du hast den Anfang deiner Botanical-Atelier-Reise erreicht.",
-    "load_more": "Mehr Historie laden",
-    "meals_total": "{{count}} Mahlzeiten insgesamt",
-    "week_label": "Woche {{week}}, {{year}}",
-    "back": "Zurück zum Archiv",
     "forgotten": "Vergessen",
-    "most_cooked": "Oft gekocht",
-    "read_only": "Nur lesen",
-    "review": "Ansehen",
-    "copy_to_current": "In aktuelle Woche kopieren",
-    "copy_confirm_title": "Diese Woche in die aktuelle kopieren?",
-    "copy_confirm_body": "Mahlzeiten werden zu Woche {{week}}, {{year}} hinzugefügt. Vorhandene Mahlzeiten werden nicht überschrieben.",
-    "copy_success": "Woche in aktuelle kopiert",
-    "select_week": "Wähle eine Woche zur Vorschau"
+    "most_cooked": "Oft gekocht"
   },
   "import": {
     "title": "Rezept importieren",
@@ -86,14 +88,8 @@
   },
   "planner": {
     "title": "Wochenplaner",
-    "week_label": "Woche {{week}}, {{year}}",
-    "prev_week": "Vorherige Woche",
-    "next_week": "Nächste Woche",
-    "this_week": "Diese Woche",
     "today": "Heute",
-    "copy_week": "Woche in nächste kopieren",
     "daily_avg": "Tagesdurchschnitt",
-    "copy_success": "Woche kopiert",
     "fill_empty_cta": "Leere Slots füllen",
     "clear_day": "Tag leeren",
     "day_cleared": "Tag geleert",
@@ -145,7 +141,13 @@
       "progress": "Fülle leere Slots…",
       "done": "Leere Slots gefüllt",
       "error": "Füllen fehlgeschlagen"
-    }
+    },
+    "range_label": "{{from}} – {{to}}",
+    "prev_window": "Vorherige 7",
+    "next_window": "Nächste 7",
+    "today_button": "Heute",
+    "anchor_today": "Ab heute",
+    "anchor_shopping_day": "Ab nächstem {{weekday}}"
   },
   "skip": {
     "label": "Auslassen",
@@ -221,6 +223,7 @@
     "clear_override": "Überschreibung entfernen",
     "tabs": {
       "general": "Allgemein",
+      "plan": "Planung",
       "ai": "KI",
       "nutrition": "Ernährung",
       "meal_slots": "Mahlzeiten-Slots",
@@ -293,6 +296,16 @@
       "secret_key_banner_title": "Verschlüsselung deaktiviert",
       "secret_key_banner_body": "PLANTRY_SECRET_KEY ist nicht gesetzt — API-Schlüssel können erst über die UI gespeichert werden, wenn er konfiguriert ist."
     }
+  },
+  "settings": {
+    "plan_tab": "Planung",
+    "week_starts_on": "Woche beginnt am",
+    "plan_anchor": "Planungsansicht beginnt",
+    "plan_anchor_today": "Heute",
+    "plan_anchor_next_shopping_day": "Nächster Einkaufstag",
+    "plan_anchor_fixed_weekday": "Fester Wochentag",
+    "fixed_weekday_start": "Starttag",
+    "shopping_day": "Einkaufstag"
   },
   "display_preferences": {
     "title": "Darstellung",
@@ -603,7 +616,11 @@
     "title": "Einkaufsliste",
     "description": "Zutaten für diese Woche",
     "button": "Einkaufen",
-    "empty": "Keine Zutaten – füge zuerst Mahlzeiten zum Planer hinzu."
+    "empty": "Keine Zutaten – füge zuerst Mahlzeiten zum Planer hinzu.",
+    "preset_next7": "Nächste 7 Tage",
+    "preset_until_shopping_day": "Bis nächsten {{day}}",
+    "preset_this_cycle": "Dieser {{day}}-Zyklus",
+    "range_label": "{{from}} — {{to}}"
   },
   "nutrition": {
     "title": "Wochennährwerte",
@@ -674,6 +691,12 @@
   "template": {
     "eyebrow": "Gespeicherte Zusammenstellungen",
     "title": "Vorlagen",
+    "applied": "Vorlage angewendet",
+    "apply": {
+      "start_on": "Startdatum",
+      "slot": "Mahlzeit-Slot",
+      "submit": "Vorlage anwenden"
+    },
     "subtitle": "Presse einen Lieblings-Teller zur Vorlage — und lege ihn jederzeit wieder auf.",
     "new": "Neue Vorlage",
     "new_body": "Erstelle jetzt eine leere Vorlage und fülle sie später im Planer, oder speichere einen bestehenden Teller direkt als Vorlage.",
@@ -764,6 +787,7 @@
     "delete": "Löschen",
     "confirm": "Bestätigen",
     "edit": "Bearbeiten",
+    "done": "Fertig",
     "back": "Zurück",
     "loading": "Laden...",
     "showing": "{{from}}–{{to}} von {{total}}",
