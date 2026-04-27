@@ -80,9 +80,14 @@ test.describe("Calendar — agenda view", () => {
       // Agenda view renders — at least one <details> group is visible.
       await expect(page.locator("details").first()).toBeVisible()
 
-      // All three plates should be represented. AgendaGroup shows the slot's
-      // name_key when slots are loaded (falls back to `#id` only if missing).
-      await expect(page.getByText(slot.name_key).first()).toBeVisible()
+      // AgendaList only opens the newest week bucket by default; older weeks
+      // are collapsed <details>. Other tests can leave plates in the current
+      // week, so the open bucket may not include our seeded slot. Verify all
+      // three seeded plates landed in the DOM by counting the slot.name_key
+      // rows (the key is unique per test run).
+      await expect(page.getByText(slot.name_key, { exact: true })).toHaveCount(
+        3
+      )
 
       // "Load older 60 days" button triggers a GET /api/plates request.
       const loadOlderBtn = page.getByRole("button", { name: /load older/i })

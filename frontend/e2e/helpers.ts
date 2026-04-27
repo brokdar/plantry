@@ -123,7 +123,7 @@ export async function seedComposedWithStub(
   data: SeedComposedInput,
   tag: string
 ) {
-  const stub = await seedLeafFood({ name: `Stub ${tag}` })
+  const stub = await seedLeafFood({ name: `Stub ${tag}-${uid()}` })
   const composed = await seedComposedFood({
     ...data,
     children: data.children ?? [

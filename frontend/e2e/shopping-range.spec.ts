@@ -39,6 +39,12 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
+function dateOffset(offsetDays: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + offsetDays)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
 test.describe("Shopping panel — range + presets + purchased state", () => {
   test("opens and renders shopping list for active window", async ({
     page,
@@ -83,13 +89,9 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
     const slot = await seedSlot(`slot.shop_preset_${tag}`, "Sun", 939)
 
     try {
-      await page.goto("/")
-
-      // Navigate to next week so the default range differs from the preset.
-      await page.getByRole("button", { name: /next 7/i }).click()
-      await page.waitForResponse(
-        (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
-      )
+      // Load planner on next week so ShoppingPanel's initial range differs from
+      // the "Next 7 days" preset (today → today+6).
+      await page.goto(`/?date=${dateOffset(8)}`)
 
       await page.getByRole("button", { name: /shopping/i }).click()
       const dialog = page.getByRole("dialog")
@@ -132,13 +134,9 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
       const plate = await seedPlateByDate(today, slot.id, food.id)
       plateId = plate.id
 
-      await page.goto("/")
-
-      // Navigate to next week so the default range differs from "Next 7 days".
-      await page.getByRole("button", { name: /next 7/i }).click()
-      await page.waitForResponse(
-        (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
-      )
+      // Load planner on next week so the shopping-list cache for today's range
+      // is cold. When the chip is clicked it will trigger a fresh API call.
+      await page.goto(`/?date=${dateOffset(8)}`)
 
       await page.getByRole("button", { name: /shopping/i }).click()
       const dialog = page.getByRole("dialog")
@@ -146,9 +144,16 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
 
-      // Select "Next 7 days" — data may be served from cache, so just check chip state
+      // Select "Next 7 days" — register waitForResponse BEFORE clicking so we
+      // don't miss a fast response.
       const chip = dialog.getByRole("button", { name: /next 7 days/i })
+      const shoppingListResp = page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/shopping-list") &&
+          r.request().method() === "GET"
+      )
       await chip.click()
+      await shoppingListResp
       await expect(chip).toHaveAttribute("aria-pressed", "true")
 
       // Check the ingredient
@@ -166,8 +171,7 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
 
-      // Select "Next 7 days" again — data may be cached, chip state is enough
-      await chip.click()
+      // Chip state is restored from the still-mounted ShoppingPanel
       await expect(chip).toHaveAttribute("aria-pressed", "true")
 
       // Item should still be checked
@@ -206,13 +210,9 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
       const plate = await seedPlateByDate(today, slot.id, food.id)
       plateId = plate.id
 
-      await page.goto("/")
-
-      // Navigate to next week so the default range differs from "Next 7 days".
-      await page.getByRole("button", { name: /next 7/i }).click()
-      await page.waitForResponse(
-        (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
-      )
+      // Load planner on next week so the shopping-list cache for today's range
+      // is cold. When the chip is clicked it will trigger a fresh API call.
+      await page.goto(`/?date=${dateOffset(8)}`)
 
       // Open shopping panel
       await page.getByRole("button", { name: /shopping/i }).click()
@@ -221,9 +221,15 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
 
-      // --- Range A: Next 7 days ---
+      // --- Range A: Next 7 days (register waitForResponse BEFORE click) ---
       const chipA = dialog.getByRole("button", { name: /next 7 days/i })
+      const resp1 = page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/shopping-list") &&
+          r.request().method() === "GET"
+      )
       await chipA.click()
+      await resp1
       await expect(chipA).toHaveAttribute("aria-pressed", "true")
 
       // Mark item purchased in Range A

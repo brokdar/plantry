@@ -47,12 +47,15 @@ export default defineConfig({
       command:
         "cd ../backend && PLANTRY_DB_PATH=/tmp/plantry-e2e.db PLANTRY_IMAGE_PATH=/tmp/plantry-e2e-images PLANTRY_LOG_LEVEL=error PLANTRY_DEV_MODE=1 PLANTRY_SECRET_KEY=0123456789abcdef0123456789abcdef PLANTRY_AI_PROVIDER=fake PLANTRY_AI_MODEL=fake-e2e PLANTRY_AI_FAKE_SCRIPT=../frontend/e2e/fixtures/chat-scripts/plan-dinner.json go run ./cmd/plantry",
       url: "http://localhost:8080/api/health",
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 60_000,
     },
     {
       command: "bun run dev",
       url: `http://localhost:${PORT}`,
+      // Vite has no state; safe to reuse a running dev server. The backend
+      // (above) is always spawned fresh so e2e tests never silently bind to
+      // a developer's real DB or a stale process.
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

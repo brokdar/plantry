@@ -106,9 +106,10 @@ test.describe("Templates", () => {
     await page.goto("/templates")
     const grid = page.getByTestId("template-grid")
     const empty = page.getByTestId("template-empty")
-    // Either the grid has items or the empty state shows.
-    const hasGrid = (await grid.count()) > 0
-    if (!hasGrid) {
+    // Either the grid has items or the empty state shows. Wait until one of
+    // them is mounted so the assertion isn't racing the initial query.
+    await expect(grid.or(empty)).toBeVisible()
+    if ((await grid.count()) === 0) {
       await expect(empty).toBeVisible()
     }
   })

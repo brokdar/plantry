@@ -31,12 +31,13 @@ test.describe("Ingredient Inventory (card grid)", () => {
   test("empty-create tile navigates to /ingredients/new", async ({ page }) => {
     await page.goto("/ingredients")
     const gibberish = `zzz-${uid()}`
-    await page.getByTestId("inventory-search").fill(gibberish)
-    await page.waitForResponse(
+    const searchResp = page.waitForResponse(
       (r) =>
         r.url().includes("/api/foods") &&
         r.url().includes(`search=${gibberish}`)
     )
+    await page.getByTestId("inventory-search").fill(gibberish)
+    await searchResp
     await page.getByTestId("ingredient-create-tile").getByRole("link").click()
     await expect(page).toHaveURL(/\/ingredients\/new$/)
   })

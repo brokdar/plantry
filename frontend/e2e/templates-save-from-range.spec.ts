@@ -100,14 +100,9 @@ test.describe("Templates — save from date range", () => {
       // Ensure we're on today's window
       await expect(page.getByTestId("planner-toolbar")).toBeVisible()
 
-      // Find a cell that has a plate and open actions → Save as template
-      const cell0 = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
-      await expect(cell0).toBeVisible()
-
-      // Hover to reveal actions button
-      await cell0.hover()
-      await cell0.getByRole("button", { name: /actions/i }).click()
-      await page.getByRole("menuitem", { name: /save as template/i }).click()
+      // Toolbar "Save as template" saves the entire visible date range,
+      // preserving each plate's day_offset relative to the window start.
+      await page.getByTestId("save-range-template").click()
 
       // Dialog opens — fill in the template name
       const tplName = `RangeTemplate ${tag}`
@@ -115,7 +110,6 @@ test.describe("Templates — save from date range", () => {
         (r) =>
           /\/api\/templates$/.test(r.url()) && r.request().method() === "POST"
       )
-      // The dialog label may be "Template name" or similar — use label text
       const nameInput = page.getByLabel(/template name/i)
       await expect(nameInput).toBeVisible()
       await nameInput.fill(tplName)
@@ -130,12 +124,13 @@ test.describe("Templates — save from date range", () => {
       expect(found).toBeDefined()
       expect(found!.id).toBe(templateId)
 
-      // Verify via GET /api/templates/:id that day_offset values are present
+      // Verify via GET /api/templates/:id that both today + tomorrow produced
+      // components, with day_offsets 0 and 1.
       const detail = await getTemplate(templateId!)
-      expect(detail.components.length).toBeGreaterThanOrEqual(1)
-      // At least one entry with day_offset >= 0
+      expect(detail.components.length).toBeGreaterThanOrEqual(2)
       const offsets = detail.components.map((c) => c.day_offset)
-      expect(offsets.some((o) => o >= 0)).toBe(true)
+      expect(offsets).toContain(0)
+      expect(offsets).toContain(1)
     } finally {
       for (const id of plateIds) {
         await deletePlate(id)
@@ -168,10 +163,7 @@ test.describe("Templates — save from date range", () => {
       await page.goto("/")
       await expect(page.getByTestId("planner-toolbar")).toBeVisible()
 
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
-      await cell.hover()
-      await cell.getByRole("button", { name: /actions/i }).click()
-      await page.getByRole("menuitem", { name: /save as template/i }).click()
+      await page.getByTestId("save-range-template").click()
 
       const tplName = `PageTemplate ${tag}`
       const createTplResp = page.waitForResponse(
