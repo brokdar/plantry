@@ -51,8 +51,7 @@ export const templateKeys = {
 
 export const aiKeys = {
   all: ["ai"] as const,
-  conversations: (weekId?: number) =>
-    [...aiKeys.all, "conversations", { weekId }] as const,
+  conversations: () => [...aiKeys.all, "conversations"] as const,
   conversation: (id: number) => [...aiKeys.all, "conversation", id] as const,
   settings: () => [...aiKeys.all, "settings"] as const,
 }

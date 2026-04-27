@@ -80,10 +80,9 @@ test.describe("Calendar — agenda view", () => {
       // Agenda view renders — at least one <details> group is visible.
       await expect(page.locator("details").first()).toBeVisible()
 
-      // All three plates should be represented; their slot IDs appear in the
-      // agenda rows (AgendaGroup renders `#<slot_id>` for each plate).
-      const slotLabel = `#${slot.id}`
-      await expect(page.getByText(slotLabel).first()).toBeVisible()
+      // All three plates should be represented. AgendaGroup shows the slot's
+      // name_key when slots are loaded (falls back to `#id` only if missing).
+      await expect(page.getByText(slot.name_key).first()).toBeVisible()
 
       // "Load older 60 days" button triggers a GET /api/plates request.
       const loadOlderBtn = page.getByRole("button", { name: /load older/i })

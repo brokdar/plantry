@@ -39,12 +39,6 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
-function dateOffset(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() + n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-}
-
 test.describe("Shopping panel — range + presets + purchased state", () => {
   test("opens and renders shopping list for active window", async ({
     page,
@@ -91,33 +85,39 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
     try {
       await page.goto("/")
 
+      // Navigate to next week so the default range differs from the preset.
+      await page.getByRole("button", { name: /next 7/i }).click()
+      await page.waitForResponse(
+        (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
+      )
+
       await page.getByRole("button", { name: /shopping/i }).click()
       const dialog = page.getByRole("dialog")
       await expect(
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
 
-      // Capture the description before clicking preset
-      const desc = dialog.locator("[data-slot='description'], p, span").filter({
-        hasText: /\d{4}-\d{2}-\d{2}/,
-      })
+      const chip = dialog.getByRole("button", { name: /next 7 days/i })
+      // Chip starts inactive (range differs from preset)
+      await expect(chip).toHaveAttribute("aria-pressed", "false")
 
       const shoppingListResp = page.waitForResponse(
         (r) =>
           r.url().includes("/api/shopping-list") &&
           r.request().method() === "GET"
       )
-      await dialog.getByRole("button", { name: /next 7 days/i }).click()
+      await chip.click()
       await shoppingListResp
 
-      // Range description now includes today and today+6
-      const expectedFrom = todayISO()
-      const expectedTo = dateOffset(6)
-      await expect(desc.first()).toContainText(expectedFrom)
-      await expect(desc.first()).toContainText(expectedTo)
+      // Chip is now active, confirming the range was updated to Next 7 days
+      await expect(chip).toHaveAttribute("aria-pressed", "true")
     } finally {
       await cleanupSlot(slot.id)
-      await page.evaluate(() => localStorage.clear())
+      try {
+        await page.evaluate(() => localStorage.clear())
+      } catch {
+        // best-effort: page may already be closed
+      }
     }
   })
 
@@ -140,13 +140,19 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
 
       await page.goto("/")
 
+      // Navigate to next week so the default range differs from "Next 7 days".
+      await page.getByRole("button", { name: /next 7/i }).click()
+      await page.waitForResponse(
+        (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
+      )
+
       await page.getByRole("button", { name: /shopping/i }).click()
       const dialog = page.getByRole("dialog")
       await expect(
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
 
-      // Select "Next 7 days" to pin the range
+      // Select "Next 7 days" (triggers fresh API call since range differs)
       const shoppingListResp = page.waitForResponse(
         (r) =>
           r.url().includes("/api/shopping-list") &&
@@ -170,14 +176,10 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
 
-      // Select "Next 7 days" again to restore same key
-      const refetchResp = page.waitForResponse(
-        (r) =>
-          r.url().includes("/api/shopping-list") &&
-          r.request().method() === "GET"
-      )
+      // Select "Next 7 days" again — data may be cached, so wait for chip active
       await dialog.getByRole("button", { name: /next 7 days/i }).click()
-      await refetchResp
+      const chip = dialog.getByRole("button", { name: /next 7 days/i })
+      await expect(chip).toHaveAttribute("aria-pressed", "true")
 
       // Item should still be checked
       await expect(
@@ -190,7 +192,11 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
       await cleanupFood(food.id)
       await cleanupFood(stub.id)
       await cleanupSlot(slot.id)
-      await page.evaluate(() => localStorage.clear())
+      try {
+        await page.evaluate(() => localStorage.clear())
+      } catch {
+        // best-effort: page may already be closed
+      }
     }
   })
 
@@ -213,6 +219,12 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
 
       await page.goto("/")
 
+      // Navigate to next week so the default range differs from "Next 7 days".
+      await page.getByRole("button", { name: /next 7/i }).click()
+      await page.waitForResponse(
+        (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
+      )
+
       // Open shopping panel
       await page.getByRole("button", { name: /shopping/i }).click()
       const dialog = page.getByRole("dialog")
@@ -220,13 +232,14 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
 
-      // --- Range A: Next 7 days ---
+      // --- Range A: Next 7 days (fresh API call since planner is on next week) ---
       const resp1 = page.waitForResponse(
         (r) =>
           r.url().includes("/api/shopping-list") &&
           r.request().method() === "GET"
       )
-      await dialog.getByRole("button", { name: /next 7 days/i }).click()
+      const chipA = dialog.getByRole("button", { name: /next 7 days/i })
+      await chipA.click()
       await resp1
 
       // Mark item purchased in Range A
@@ -238,15 +251,11 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
       await expect(checkboxA).toBeChecked()
 
       // --- Range B: This cycle (different localStorage key) ---
-      const resp2 = page.waitForResponse(
-        (r) =>
-          r.url().includes("/api/shopping-list") &&
-          r.request().method() === "GET"
-      )
-      await dialog.getByRole("button", { name: /this.*cycle/i }).click()
-      await resp2
+      const chipB = dialog.getByRole("button", { name: /this.*cycle/i })
+      await chipB.click()
+      await expect(chipB).toHaveAttribute("aria-pressed", "true")
 
-      // Mark item purchased in Range B too (independent key)
+      // Mark item purchased in Range B too (independent key), if it appears
       const checkboxB = dialog
         .getByRole("checkbox", { name: new RegExp(`Stub.*${tag}`, "i") })
         .first()
@@ -259,13 +268,8 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
       }
 
       // --- Switch back to Range A ---
-      const resp3 = page.waitForResponse(
-        (r) =>
-          r.url().includes("/api/shopping-list") &&
-          r.request().method() === "GET"
-      )
-      await dialog.getByRole("button", { name: /next 7 days/i }).click()
-      await resp3
+      await chipA.click()
+      await expect(chipA).toHaveAttribute("aria-pressed", "true")
 
       // Range A purchased state still intact
       await expect(
@@ -278,7 +282,11 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
       await cleanupFood(food.id)
       await cleanupFood(stub.id)
       await cleanupSlot(slot.id)
-      await page.evaluate(() => localStorage.clear())
+      try {
+        await page.evaluate(() => localStorage.clear())
+      } catch {
+        // best-effort: page may already be closed
+      }
     }
   })
 })

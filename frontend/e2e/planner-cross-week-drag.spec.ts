@@ -170,71 +170,11 @@ test.describe("Planner — cross-window plate move (API + grid verification)", (
       const res = await ctx.put(`/api/plates/${plateId}`, {
         data: { date: day3 },
       })
-      await ctx.dispose()
-
       expect(res.status()).toBe(200)
       const body = (await res.json()) as { date: string }
+      await ctx.dispose()
+
       expect(body.date).toBe(day3)
-    } finally {
-      if (plateId) await deletePlate(plateId)
-      await cleanupFood(food.id)
-      await cleanupFood(stub.id)
-      await cleanupSlot(slot.id)
-    }
-  })
-
-  // Aspirational: direct PointerEvent DnD simulation.
-  // dnd-kit uses a 6px activation constraint on PointerSensor which makes
-  // Playwright's mouse.move() unreliable — the drag often never activates.
-  // Enable this once a dnd-kit Playwright helper or accessibility-tree
-  // (keyboard) drag is wired up.
-  test.skip("drag plate from day-0 to day-1 via pointer events", async ({
-    page,
-  }) => {
-    const tag = uid()
-    const slot = await seedSlot(`slot.dnd_${tag}`, "Moon", 947)
-    const { composed: food, stub } = await seedComposedWithStub(
-      { name: `Steak ${tag}`, role: "main" },
-      tag
-    )
-
-    const day0 = dateOffset(0)
-    let plateId: number | undefined
-
-    try {
-      const plate = await seedPlateByDate(day0, slot.id, food.id)
-      plateId = plate.id
-
-      await page.goto("/")
-
-      const src = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
-      const dst = page.locator(`[data-testid="cell-1-${slot.id}"]`).first()
-
-      await expect(src.getByText(`Steak ${tag}`)).toBeVisible()
-
-      const srcBox = await src.boundingBox()
-      const dstBox = await dst.boundingBox()
-      if (!srcBox || !dstBox) throw new Error("bounding box missing")
-
-      await page.mouse.move(
-        srcBox.x + srcBox.width / 2,
-        srcBox.y + srcBox.height / 2
-      )
-      await page.mouse.down()
-      // Move past the 6px activation constraint
-      await page.mouse.move(
-        srcBox.x + srcBox.width / 2 + 10,
-        srcBox.y + srcBox.height / 2
-      )
-      await page.mouse.move(
-        dstBox.x + dstBox.width / 2,
-        dstBox.y + dstBox.height / 2
-      )
-      await page.mouse.up()
-
-      const dst1 = page.locator(`[data-testid="cell-1-${slot.id}"]`).first()
-      await expect(dst1.getByText(`Steak ${tag}`)).toBeVisible()
-      await expect(src.getByText(`Steak ${tag}`)).toHaveCount(0)
     } finally {
       if (plateId) await deletePlate(plateId)
       await cleanupFood(food.id)

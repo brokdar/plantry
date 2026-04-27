@@ -47,13 +47,14 @@ test.describe("Shopping List and Nutrition", () => {
       const sheet1 = page.getByRole("dialog")
       await expect(sheet1).toBeVisible()
       await sheet1.locator("input").first().fill(`Curry ${tag}`)
-      const createPlateResp = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
+      const addComponentResp = page.waitForResponse(
+        (r) =>
+          r.url().includes("/components") && r.request().method() === "POST"
       )
       await sheet1
         .getByRole("button", { name: new RegExp(`Curry ${tag}`) })
         .click()
-      await createPlateResp
+      await addComponentResp
 
       // Open shopping list.
       await page.getByRole("button", { name: /shopping/i }).click()
@@ -66,8 +67,11 @@ test.describe("Shopping List and Nutrition", () => {
       ).toBeVisible()
 
       // Ingredient should appear with 300g.
-      await expect(dialog.getByText(new RegExp(`Chicken ${tag}`))).toBeVisible()
-      await expect(dialog.getByText("300 g")).toBeVisible()
+      const chickenRow = dialog
+        .locator("li")
+        .filter({ hasText: new RegExp(`Chicken ${tag}`) })
+      await expect(chickenRow).toBeVisible()
+      await expect(chickenRow.getByText("300 g")).toBeVisible()
 
       // Check off the item.
       const checkbox = dialog.getByRole("checkbox", {
@@ -128,13 +132,14 @@ test.describe("Shopping List and Nutrition", () => {
       const sheet2 = page.getByRole("dialog")
       await expect(sheet2).toBeVisible()
       await sheet2.locator("input").first().fill(`Bowl ${tag}`)
-      const createPlateResp = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
+      const addComponentResp2 = page.waitForResponse(
+        (r) =>
+          r.url().includes("/components") && r.request().method() === "POST"
       )
       await sheet2
         .getByRole("button", { name: new RegExp(`Bowl ${tag}`) })
         .click()
-      await createPlateResp
+      await addComponentResp2
 
       // Open nutrition panel.
       await page.getByRole("button", { name: /nutrition/i }).click()

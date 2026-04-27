@@ -397,7 +397,7 @@ function PlanPage() {
         </SheetContent>
       </Sheet>
 
-      <ChatPanel weekId={0} />
+      <ChatPanel range={{ from, to }} />
 
       <SaveAsTemplateDialog
         open={saveRangeOpen}

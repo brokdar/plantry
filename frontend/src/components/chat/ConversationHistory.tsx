@@ -12,14 +12,10 @@ import {
 import { useConversations, useDeleteConversation } from "@/lib/queries/ai"
 import { useChatUI } from "@/lib/stores/chat-ui"
 
-interface ConversationHistoryProps {
-  weekId: number
-}
-
-export function ConversationHistory({ weekId }: ConversationHistoryProps) {
+export function ConversationHistory() {
   const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
-  const { data } = useConversations(weekId)
+  const { data } = useConversations()
   const deleteMutation = useDeleteConversation()
   const activeId = useChatUI((s) => s.activeConversationId)
   const setActive = useChatUI((s) => s.setActiveConversation)

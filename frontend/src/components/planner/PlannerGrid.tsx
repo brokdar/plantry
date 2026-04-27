@@ -22,6 +22,7 @@ import {
 import { addPlateComponent, createPlate, deletePlate } from "@/lib/api/plates"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
+import { shoppingKeys } from "@/lib/queries/shopping"
 import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
 import type { TimeSlot } from "@/lib/api/slots"
@@ -147,6 +148,7 @@ export function PlannerGrid({
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
         })
+        void queryClient.invalidateQueries({ queryKey: shoppingKeys.all })
       } else {
         await addCompMut.mutateAsync({
           plateId: target.plateId,
@@ -179,12 +181,22 @@ export function PlannerGrid({
     const plateSnapshot = days[dayIdx]?.plates.find((p) => p.id === plateId)
     if (!plateSnapshot) return
 
+    // Optimistic: remove from cache immediately so the UI updates at once.
+    queryClient.setQueryData<{ plates: Plate[] }>(
+      plateKeys.range(rangeFrom, rangeTo),
+      (old) => ({ plates: (old?.plates ?? []).filter((p) => p.id !== plateId) })
+    )
+
     const timeoutId = setTimeout(async () => {
       pendingDeletesRef.current.delete(plateId)
       try {
         await deletePlateMut.mutateAsync(plateId)
       } catch (err) {
         toastError(err, t)
+        queryClient.setQueryData<{ plates: Plate[] }>(
+          plateKeys.range(rangeFrom, rangeTo),
+          (old) => ({ plates: [...(old?.plates ?? []), plateSnapshot] })
+        )
       }
     }, 5000)
 
@@ -201,9 +213,10 @@ export function PlannerGrid({
           if (!pending) return
           clearTimeout(pending.timeoutId)
           pendingDeletesRef.current.delete(plateId)
-          void queryClient.invalidateQueries({
-            queryKey: plateKeys.range(rangeFrom, rangeTo),
-          })
+          queryClient.setQueryData<{ plates: Plate[] }>(
+            plateKeys.range(rangeFrom, rangeTo),
+            (old) => ({ plates: [...(old?.plates ?? []), pending.snapshot] })
+          )
         },
       },
       duration: 5000,
@@ -214,6 +227,15 @@ export function PlannerGrid({
     const targetDay = days[dayIdx]
     if (!targetDay || targetDay.plates.length === 0) return
     const dayPlates = targetDay.plates
+
+    // Optimistic: remove day's plates from cache immediately.
+    const dayPlateIds = new Set(dayPlates.map((p) => p.id))
+    queryClient.setQueryData<{ plates: Plate[] }>(
+      plateKeys.range(rangeFrom, rangeTo),
+      (old) => ({
+        plates: (old?.plates ?? []).filter((p) => !dayPlateIds.has(p.id)),
+      })
+    )
 
     const timeoutId = setTimeout(async () => {
       try {
@@ -232,9 +254,10 @@ export function PlannerGrid({
         label: t("common.undo"),
         onClick: () => {
           clearTimeout(timeoutId)
-          void queryClient.invalidateQueries({
-            queryKey: plateKeys.range(rangeFrom, rangeTo),
-          })
+          queryClient.setQueryData<{ plates: Plate[] }>(
+            plateKeys.range(rangeFrom, rangeTo),
+            (old) => ({ plates: [...(old?.plates ?? []), ...dayPlates] })
+          )
         },
       },
       duration: 5000,

@@ -35,7 +35,7 @@ beforeEach(() => {
 describe("ConversationHistory", () => {
   test("renders empty state when no conversations exist", async () => {
     stubConversations([])
-    renderWithRouter(<ConversationHistory weekId={1} />)
+    renderWithRouter(<ConversationHistory />)
 
     await userEvent.click(
       await screen.findByRole("button", { name: /Open history/ })
@@ -47,7 +47,7 @@ describe("ConversationHistory", () => {
     stubConversations([
       { id: 7, title: "planning Tuesday", created_at: "2024-01-01T12:00:00Z" },
     ])
-    renderWithRouter(<ConversationHistory weekId={1} />)
+    renderWithRouter(<ConversationHistory />)
 
     await userEvent.click(
       await screen.findByRole("button", { name: /Open history/ })
@@ -62,7 +62,7 @@ describe("ConversationHistory", () => {
     const { mutate } = stubConversations([
       { id: 9, title: "old chat", created_at: "2024-01-01T12:00:00Z" },
     ])
-    renderWithRouter(<ConversationHistory weekId={1} />)
+    renderWithRouter(<ConversationHistory />)
 
     await userEvent.click(
       await screen.findByRole("button", { name: /Open history/ })
@@ -75,7 +75,7 @@ describe("ConversationHistory", () => {
 
   test("falls back to date when no title", async () => {
     stubConversations([{ id: 11, created_at: "2024-03-15T09:30:00Z" }])
-    renderWithRouter(<ConversationHistory weekId={1} />)
+    renderWithRouter(<ConversationHistory />)
 
     await userEvent.click(
       await screen.findByRole("button", { name: /Open history/ })
