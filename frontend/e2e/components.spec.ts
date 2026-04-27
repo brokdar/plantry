@@ -47,12 +47,13 @@ test.describe("Component Library", () => {
       createdId = body.id
 
       // List view may be paginated; narrow by the unique tag to locate the card.
-      await page.getByTestId("catalog-search").fill(tag)
-      await page.waitForResponse(
+      const searchResp = page.waitForResponse(
         (res) =>
           res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
+      await page.getByTestId("catalog-search").fill(tag)
+      await searchResp
       await expect(
         page.getByTestId(`component-card-${createdId}`)
       ).toBeVisible()
@@ -81,24 +82,26 @@ test.describe("Component Library", () => {
       await page.goto("/components")
 
       // Narrow to seeded items only — shared DB accumulates over test runs.
-      await page.getByTestId("catalog-search").fill(tag)
-      await page.waitForResponse(
+      const resp1 = page.waitForResponse(
         (res) =>
           res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
+      await page.getByTestId("catalog-search").fill(tag)
+      await resp1
 
       await expect(page.getByTestId(`component-card-${c1.id}`)).toBeVisible()
       await expect(page.getByTestId(`component-card-${c2.id}`)).toBeVisible()
       await expect(page.getByTestId(`component-card-${c3.id}`)).toBeVisible()
 
-      await page.getByTestId("catalog-search").fill(`chicken ${tag}`)
-      await page.waitForResponse(
+      const resp2 = page.waitForResponse(
         (res) =>
           res.url().includes("/api/foods") &&
           res.url().includes("chicken") &&
           res.url().includes(tag)
       )
+      await page.getByTestId("catalog-search").fill(`chicken ${tag}`)
+      await resp2
 
       await expect(page.getByTestId(`component-card-${c1.id}`)).toBeVisible()
       await expect(page.getByTestId(`component-card-${c2.id}`)).toHaveCount(0)
@@ -136,8 +139,11 @@ test.describe("Component Library", () => {
       expect(response.status()).toBe(200)
 
       // Editor redirects to list on save — the updated card is visible.
+      const editSearchResp = page.waitForResponse((r) =>
+        r.url().includes(`search=${tag}`)
+      )
       await page.getByTestId("catalog-search").fill(tag)
-      await page.waitForResponse((r) => r.url().includes(`search=${tag}`))
+      await editSearchResp
       await expect(page.getByTestId(`component-card-${comp.id}`)).toContainText(
         `Updated ${tag}`
       )
@@ -160,12 +166,13 @@ test.describe("Component Library", () => {
 
     try {
       await page.goto("/components")
-      await page.getByTestId("catalog-search").fill(tag)
-      await page.waitForResponse(
+      const deleteSearchResp = page.waitForResponse(
         (res) =>
           res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
+      await page.getByTestId("catalog-search").fill(tag)
+      await deleteSearchResp
       await expect(
         page.getByTestId(`component-card-${toDelete.id}`)
       ).toBeVisible()
