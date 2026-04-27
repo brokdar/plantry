@@ -33,7 +33,7 @@ jobs:
         run: go test ./...
       - name: Install sqlc
         run: |
-          curl -fsSL -o /tmp/sqlc.tar.gz https://github.com/sqlc-dev/sqlc/releases/download/v1.30.0/sqlc_1.30.0_linux_amd64.tar.gz
+          curl -fsSL -o /tmp/sqlc.tar.gz https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz
           tar -xzf /tmp/sqlc.tar.gz -C /tmp
           sudo mv /tmp/sqlc /usr/local/bin/sqlc
       - name: sqlc generate (no drift)

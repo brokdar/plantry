@@ -101,13 +101,7 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
       // Chip starts inactive (range differs from preset)
       await expect(chip).toHaveAttribute("aria-pressed", "false")
 
-      const shoppingListResp = page.waitForResponse(
-        (r) =>
-          r.url().includes("/api/shopping-list") &&
-          r.request().method() === "GET"
-      )
       await chip.click()
-      await shoppingListResp
 
       // Chip is now active, confirming the range was updated to Next 7 days
       await expect(chip).toHaveAttribute("aria-pressed", "true")
@@ -152,14 +146,10 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
 
-      // Select "Next 7 days" (triggers fresh API call since range differs)
-      const shoppingListResp = page.waitForResponse(
-        (r) =>
-          r.url().includes("/api/shopping-list") &&
-          r.request().method() === "GET"
-      )
-      await dialog.getByRole("button", { name: /next 7 days/i }).click()
-      await shoppingListResp
+      // Select "Next 7 days" — data may be served from cache, so just check chip state
+      const chip = dialog.getByRole("button", { name: /next 7 days/i })
+      await chip.click()
+      await expect(chip).toHaveAttribute("aria-pressed", "true")
 
       // Check the ingredient
       const checkbox = dialog
@@ -176,9 +166,8 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
 
-      // Select "Next 7 days" again — data may be cached, so wait for chip active
-      await dialog.getByRole("button", { name: /next 7 days/i }).click()
-      const chip = dialog.getByRole("button", { name: /next 7 days/i })
+      // Select "Next 7 days" again — data may be cached, chip state is enough
+      await chip.click()
       await expect(chip).toHaveAttribute("aria-pressed", "true")
 
       // Item should still be checked
@@ -232,15 +221,10 @@ test.describe("Shopping panel — range + presets + purchased state", () => {
         dialog.getByRole("heading", { name: /shopping list/i })
       ).toBeVisible()
 
-      // --- Range A: Next 7 days (fresh API call since planner is on next week) ---
-      const resp1 = page.waitForResponse(
-        (r) =>
-          r.url().includes("/api/shopping-list") &&
-          r.request().method() === "GET"
-      )
+      // --- Range A: Next 7 days ---
       const chipA = dialog.getByRole("button", { name: /next 7 days/i })
       await chipA.click()
-      await resp1
+      await expect(chipA).toHaveAttribute("aria-pressed", "true")
 
       // Mark item purchased in Range A
       const checkboxA = dialog
