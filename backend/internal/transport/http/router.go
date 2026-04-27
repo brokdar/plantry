@@ -20,7 +20,6 @@ type Handlers struct {
 	ImageProxy     *handlers.ImageProxyHandler
 	ImageStore     *imagestore.Store
 	Slots          *handlers.SlotHandler
-	Weeks          *handlers.WeekHandler
 	Plates         *handlers.PlateHandler
 	Profile        *handlers.ProfileHandler
 	Templates      *handlers.TemplateHandler
@@ -87,20 +86,6 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Post("/", h.Slots.Create)
 				r.Put("/{id}", h.Slots.Update)
 				r.Delete("/{id}", h.Slots.Delete)
-			})
-		}
-
-		if h.Weeks != nil {
-			api.Route("/weeks", func(r chi.Router) {
-				r.Get("/", h.Weeks.List)
-				r.Get("/current", h.Weeks.Current)
-				r.Get("/by-date", h.Weeks.ByDate)
-				r.Get("/{id}", h.Weeks.Get)
-				r.Post("/{id}/copy", h.Weeks.Copy)
-				r.Post("/{id}/plates", h.Weeks.CreatePlate)
-				r.Delete("/{id}/plates", h.Weeks.ClearPlates)
-				r.Get("/{id}/shopping-list", h.Weeks.ShoppingList)
-				r.Get("/{id}/nutrition", h.Weeks.Nutrition)
 			})
 		}
 

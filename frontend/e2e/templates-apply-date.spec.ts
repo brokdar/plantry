@@ -35,10 +35,6 @@ interface Template {
   components: TemplateComponent[]
 }
 
-interface PlateListResponse {
-  items: { id: number; date: string; slot_id: number }[]
-}
-
 async function seedTemplateWithComponents(
   name: string,
   components: { food_id: number; portions: number; day_offset?: number }[]
@@ -53,12 +49,14 @@ async function seedTemplateWithComponents(
 async function getPlatesForRange(
   from: string,
   to: string
-): Promise<PlateListResponse> {
+): Promise<{ plates: { id: number; date: string; slot_id: number }[] }> {
   const ctx = await apiRequest.newContext({ baseURL: API })
   const res = await ctx.get(`/api/plates?from=${from}&to=${to}`)
   const body = await res.json()
   await ctx.dispose()
-  return body as PlateListResponse
+  return body as {
+    plates: { id: number; date: string; slot_id: number }[]
+  }
 }
 
 async function deletePlate(id: number) {
@@ -86,68 +84,63 @@ test.describe("Templates — apply with start_date", () => {
       ])
       templateId = tpl.id
 
-      // Navigate to /templates
-      await page.goto("/templates")
+      // Open planner and use picker sheet to access ApplyTemplateSection.
+      await page.goto("/")
+      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
+      await expect(cell).toBeVisible()
+      await cell.getByRole("button", { name: /plan meal/i }).click()
 
-      // Find the template card and click it to select
-      const applyBtn = page.getByTestId(`apply-template-${templateId}`)
+      const sheet = page.getByRole("dialog")
+      await expect(sheet).toBeVisible()
+
+      // Click the template card to show the apply form.
+      const applyBtn = sheet.getByTestId(`apply-template-${templateId}`)
       await expect(applyBtn).toBeVisible()
       await applyBtn.click()
 
-      // Fill in the start date
-      const dateInput = page.getByTestId("apply-start-date")
+      // Fill in the start date.
+      const dateInput = sheet.getByTestId("apply-start-date")
       await expect(dateInput).toBeVisible()
       await dateInput.fill(startDate)
 
-      // Pick first slot if not already selected
-      const slotSelect = page.getByTestId("apply-slot-select")
-      await expect(slotSelect).toBeVisible()
-      // The component auto-selects the first slot, but ensure a value is set
-      const currentValue = await slotSelect.inputValue().catch(() => "")
-      if (!currentValue) {
-        // Open and pick the first option
-        await slotSelect.click()
-        await page.getByRole("option").first().click()
-      }
-
-      // Submit
+      // Submit — slot is auto-selected to the first available slot.
       const applyResp = page.waitForResponse(
         (r) =>
           /\/api\/templates\/\d+\/apply$/.test(r.url()) &&
           r.request().method() === "POST"
       )
-      await page.getByTestId("apply-template-submit").click()
+      await sheet.getByTestId("apply-template-submit").click()
       const applied = await applyResp
       expect(applied.ok()).toBe(true)
 
-      // Verify plates were created on startDate via API
+      // Verify plates were created on startDate via API.
       const plates = await getPlatesForRange(startDate, startDate)
-      const createdOnDate = plates.items.filter((p) => p.date === startDate)
+      const createdOnDate = (plates.plates ?? []).filter(
+        (p) => p.date === startDate
+      )
       expect(createdOnDate.length).toBeGreaterThanOrEqual(1)
       createdPlateIds.push(...createdOnDate.map((p) => p.id))
 
-      // Navigate to / and verify toast or plates visible (if in current window)
+      // Navigate to the startDate window and verify via API.
+      await page.keyboard.press("Escape")
       await page.goto("/")
-      // Navigate forward to the startDate window if needed
-      // (startDate is 7 days out so may need one click of Next 7)
       const platesResp = page.waitForResponse(
         (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
       )
-      await page.getByRole("button", { name: /next 7/i }).click()
+      await page.getByRole("button", { name: /Next 7/i }).click()
       await platesResp
 
-      // Verify via API rather than UI since food names use food_id not food name
       const platesAfterNav = await getPlatesForRange(startDate, startDate)
       expect(
-        platesAfterNav.items.filter((p) => p.date === startDate).length
+        (platesAfterNav.plates ?? []).filter((p) => p.date === startDate).length
       ).toBeGreaterThanOrEqual(1)
     } finally {
       for (const id of createdPlateIds) {
         await deletePlate(id)
       }
-      // Also clean up any extra plates that may have been created by apply
+      // Clean up any extra plates that may have been created by apply.
       const remaining = await getPlatesForRange(startDate, startDate)
-      for (const p of remaining.items) {
+      for (const p of remaining.plates ?? []) {
         await deletePlate(p.id)
       }
       if (templateId !== undefined) await cleanupTemplate(templateId)
@@ -174,20 +167,28 @@ test.describe("Templates — apply with start_date", () => {
       ])
       templateId = tpl.id
 
-      await page.goto("/templates")
+      // Open planner and use picker sheet to access ApplyTemplateSection.
+      await page.goto("/")
+      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
+      await expect(cell).toBeVisible()
+      await cell.getByRole("button", { name: /plan meal/i }).click()
 
-      const applyBtn = page.getByTestId(`apply-template-${templateId}`)
+      const sheet = page.getByRole("dialog")
+      await expect(sheet).toBeVisible()
+
+      // Click the template card to show the form.
+      const applyBtn = sheet.getByTestId(`apply-template-${templateId}`)
       await expect(applyBtn).toBeVisible()
       await applyBtn.click()
 
-      // The form should appear with start date pre-filled to today
-      const dateInput = page.getByTestId("apply-start-date")
+      // The form should appear with start date pre-filled to today.
+      const dateInput = sheet.getByTestId("apply-start-date")
       await expect(dateInput).toBeVisible()
       const filledDate = await dateInput.inputValue()
       expect(filledDate).toBe(startDate)
 
-      // Submit button should be enabled when a slot is pre-selected
-      const submitBtn = page.getByTestId("apply-template-submit")
+      // Submit button should be enabled when a slot is pre-selected.
+      const submitBtn = sheet.getByTestId("apply-template-submit")
       await expect(submitBtn).toBeEnabled()
 
       const applyResp = page.waitForResponse(
@@ -201,7 +202,9 @@ test.describe("Templates — apply with start_date", () => {
 
       const plates = await getPlatesForRange(startDate, startDate)
       createdPlateIds.push(
-        ...plates.items.filter((p) => p.date === startDate).map((p) => p.id)
+        ...(plates.plates ?? [])
+          .filter((p) => p.date === startDate)
+          .map((p) => p.id)
       )
       expect(createdPlateIds.length).toBeGreaterThanOrEqual(1)
     } finally {

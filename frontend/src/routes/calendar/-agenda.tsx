@@ -1,7 +1,9 @@
 import type { InfiniteData } from "@tanstack/react-query"
 
 import { AgendaList } from "@/components/calendar/AgendaList"
+import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
+import type { TimeSlot } from "@/lib/api/slots"
 import { flattenPlatesPages } from "@/lib/queries/plates"
 
 interface PlatesPage {
@@ -17,7 +19,8 @@ interface AgendaViewProps {
   fetchNextPage: () => void
   search: string
   weekStartsOn: 0 | 1 | 6
-  showCopyButton?: boolean
+  foodsById: Map<number, Food>
+  slots: TimeSlot[]
 }
 
 export function AgendaView({
@@ -27,7 +30,8 @@ export function AgendaView({
   fetchNextPage,
   search,
   weekStartsOn,
-  showCopyButton,
+  foodsById,
+  slots,
 }: AgendaViewProps) {
   const plates = flattenPlatesPages(data)
 
@@ -39,7 +43,8 @@ export function AgendaView({
       fetchNextPage={fetchNextPage}
       search={search}
       weekStartsOn={weekStartsOn}
-      showCopyButton={showCopyButton}
+      foodsById={foodsById}
+      slots={slots}
     />
   )
 }

@@ -26,12 +26,11 @@ func TestMigration00009_UpDownUp(t *testing.T) {
 
 	require.NoError(t, goose.Up(conn, "migrations"))
 
-	// Seed: need a week + slot + plate to attach feedback to (FK cascade target).
-	_, err = conn.Exec(`INSERT INTO weeks (year, week_number) VALUES (2026, 1)`)
-	require.NoError(t, err)
+	// Seed: need a slot + plate to attach feedback to (FK cascade target).
+	// weeks table was dropped in migration 16; plates no longer has week_id/day.
 	_, err = conn.Exec(`INSERT INTO time_slots (name_key, icon) VALUES ('slot.dinner', 'utensils')`)
 	require.NoError(t, err)
-	_, err = conn.Exec(`INSERT INTO plates (week_id, day, slot_id, date) VALUES (1, 0, 1, '2025-12-29')`)
+	_, err = conn.Exec(`INSERT INTO plates (slot_id, date) VALUES (1, '2025-12-29')`)
 	require.NoError(t, err)
 	_, err = conn.Exec(`INSERT INTO plate_feedback (plate_id, status) VALUES (1, 'loved')`)
 	require.NoError(t, err)

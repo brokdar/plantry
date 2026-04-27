@@ -47,75 +47,15 @@ func (r *PlateRepo) Create(ctx context.Context, p *plate.Plate) error {
 	return tx.Commit()
 }
 
-// upsertWeek returns the id of the week row for (year, isoWeek), creating it if absent.
-// Uses r.q (the non-transactional query set).
-func (r *PlateRepo) upsertWeek(ctx context.Context, year, isoWeek int) (int64, error) {
-	return r.upsertWeekQ(ctx, r.q, year, isoWeek)
-}
-
-// upsertWeekQ is the transactional variant of upsertWeek.
-func (r *PlateRepo) upsertWeekQ(ctx context.Context, q *sqlcgen.Queries, year, isoWeek int) (int64, error) {
-	row, err := q.GetWeekByYearAndNumber(ctx, sqlcgen.GetWeekByYearAndNumberParams{
-		Year:       int64(year),
-		WeekNumber: int64(isoWeek),
-	})
-	if err == nil {
-		return row.ID, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, err
-	}
-	created, err := q.CreateWeek(ctx, sqlcgen.CreateWeekParams{
-		Year:       int64(year),
-		WeekNumber: int64(isoWeek),
-	})
-	if err != nil {
-		return 0, err
-	}
-	return created.ID, nil
-}
-
-// legacyFromDate derives the legacy week_id and day values from a date.
-// day is 0=Mon … 6=Sun (same encoding as the plates.day column).
-func (r *PlateRepo) legacyFromDate(ctx context.Context, date time.Time) (weekID int64, day int, err error) {
-	year, week := date.ISOWeek()
-	day = (int(date.Weekday()) + 6) % 7
-	weekID, err = r.upsertWeek(ctx, year, week)
-	return
-}
-
 func (r *PlateRepo) createWith(ctx context.Context, q *sqlcgen.Queries, p *plate.Plate) error {
-	var dateStr string
-	if !p.Date.IsZero() {
-		// Date-keyed path: derive week/day from the date itself.
-		year, week := p.Date.ISOWeek()
-		weekID, err := r.upsertWeekQ(ctx, q, year, week)
-		if err != nil {
-			return fmt.Errorf("upsert week for plate date: %w", err)
-		}
-		p.WeekID = weekID
-		p.Day = (int(p.Date.Weekday()) + 6) % 7
-		dateStr = p.Date.Format(dateLayout)
-	} else {
-		// Legacy path: compute the canonical date from the plate's week_id and day.
-		weekRow, err := q.GetWeek(ctx, p.WeekID)
-		if err != nil {
-			return fmt.Errorf("look up week for plate date: %w", err)
-		}
-		monday := isoWeekStart(int(weekRow.Year), int(weekRow.WeekNumber))
-		dateStr = monday.AddDate(0, 0, p.Day).Format(dateLayout)
-	}
-
 	row, err := q.CreatePlate(ctx, sqlcgen.CreatePlateParams{
-		WeekID: p.WeekID,
-		Day:    int64(p.Day),
 		SlotID: p.SlotID,
 		Note:   toNullString(p.Note),
-		Date:   dateStr,
+		Date:   p.Date.Format(dateLayout),
 	})
 	if err != nil {
 		if isForeignKeyViolation(err) {
-			return fmt.Errorf("%w: invalid week or slot reference", domain.ErrInvalidInput)
+			return fmt.Errorf("%w: invalid slot reference", domain.ErrInvalidInput)
 		}
 		return err
 	}
@@ -158,35 +98,11 @@ func (r *PlateRepo) Get(ctx context.Context, id int64) (*plate.Plate, error) {
 }
 
 func (r *PlateRepo) Update(ctx context.Context, p *plate.Plate) error {
-	var dateStr string
-	if !p.Date.IsZero() {
-		// When a target date is set (date-keyed move), derive WeekID+Day from it
-		// so the plate is moved to the correct ISO week, even across week boundaries.
-		year, week := p.Date.ISOWeek()
-		weekID, err := r.upsertWeek(ctx, year, week)
-		if err != nil {
-			return fmt.Errorf("upsert week for plate date: %w", err)
-		}
-		p.WeekID = weekID
-		p.Day = (int(p.Date.Weekday()) + 6) % 7
-		dateStr = p.Date.Format(dateLayout)
-	} else {
-		// Legacy path: compute the canonical date from the plate's week_id and day.
-		weekRow, err := r.q.GetWeek(ctx, p.WeekID)
-		if err != nil {
-			return fmt.Errorf("look up week for plate date: %w", err)
-		}
-		monday := isoWeekStart(int(weekRow.Year), int(weekRow.WeekNumber))
-		dateStr = monday.AddDate(0, 0, p.Day).Format(dateLayout)
-	}
-
 	row, err := r.q.UpdatePlate(ctx, sqlcgen.UpdatePlateParams{
 		ID:     p.ID,
-		WeekID: p.WeekID,
-		Day:    int64(p.Day),
 		SlotID: p.SlotID,
 		Note:   toNullString(p.Note),
-		Date:   dateStr,
+		Date:   p.Date.Format(dateLayout),
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -211,35 +127,6 @@ func (r *PlateRepo) Delete(ctx context.Context, id int64) error {
 		return fmt.Errorf("%w: plate %d", domain.ErrNotFound, id)
 	}
 	return nil
-}
-
-func (r *PlateRepo) ListByWeek(ctx context.Context, weekID int64) ([]plate.Plate, error) {
-	plateRows, err := r.q.ListPlatesByWeek(ctx, weekID)
-	if err != nil {
-		return nil, err
-	}
-	if len(plateRows) == 0 {
-		return []plate.Plate{}, nil
-	}
-	pcRows, err := r.q.ListPlateComponentsByWeek(ctx, weekID)
-	if err != nil {
-		return nil, err
-	}
-	pcByPlate := make(map[int64][]plate.PlateComponent, len(plateRows))
-	for i := range pcRows {
-		var pc plate.PlateComponent
-		mapPlateComponentToDomain(&pcRows[i], &pc)
-		pcByPlate[pc.PlateID] = append(pcByPlate[pc.PlateID], pc)
-	}
-	out := make([]plate.Plate, len(plateRows))
-	for i := range plateRows {
-		mapPlateToDomain(&plateRows[i], &out[i])
-		out[i].Components = pcByPlate[out[i].ID]
-		if out[i].Components == nil {
-			out[i].Components = []plate.PlateComponent{}
-		}
-	}
-	return out, nil
 }
 
 // ListByDateRange returns all plates whose date falls within [from, to] inclusive,
@@ -406,15 +293,6 @@ func (r *PlateRepo) SetSkipped(ctx context.Context, plateID int64, skipped bool,
 	return &p, nil
 }
 
-// DeleteByWeek clears every plate in a week (used by fill-empty revert).
-func (r *PlateRepo) DeleteByWeek(ctx context.Context, weekID int64) (int64, error) {
-	res, err := r.q.DeletePlatesByWeek(ctx, weekID)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
-}
-
 func (r *PlateRepo) CountUsingTimeSlot(ctx context.Context, slotID int64) (int64, error) {
 	return r.q.CountPlatesUsingTimeSlot(ctx, slotID)
 }
@@ -433,8 +311,6 @@ func (r *PlateRepo) loadPlateChildren(ctx context.Context, p *plate.Plate) error
 
 func mapPlateToDomain(row *sqlcgen.Plate, p *plate.Plate) {
 	p.ID = row.ID
-	p.WeekID = row.WeekID
-	p.Day = int(row.Day)
 	p.SlotID = row.SlotID
 	p.Note = fromNullString(row.Note)
 	p.Skipped = row.Skipped != 0
@@ -448,13 +324,4 @@ func mapPlateComponentToDomain(row *sqlcgen.PlateComponent, pc *plate.PlateCompo
 	pc.FoodID = row.FoodID
 	pc.Portions = row.Portions
 	pc.SortOrder = int(row.SortOrder)
-}
-
-// isoWeekStart returns the Monday that begins ISO week `week` of `year`.
-// Algorithm mirrors migrations.IsoWeekStart but avoids a package dependency.
-func isoWeekStart(year, week int) time.Time {
-	jan4 := time.Date(year, 1, 4, 0, 0, 0, 0, time.UTC)
-	daysFromMonday := int(jan4.Weekday()+6) % 7
-	week1Monday := jan4.AddDate(0, 0, -daysFromMonday)
-	return week1Monday.AddDate(0, 0, (week-1)*7)
 }

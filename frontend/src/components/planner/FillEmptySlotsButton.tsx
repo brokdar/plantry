@@ -6,7 +6,6 @@ import { useChatUI } from "@/lib/stores/chat-ui"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 
 interface FillEmptySlotsButtonProps {
-  weekId: number
   rangeFrom?: string
   rangeTo?: string
 }
@@ -17,7 +16,6 @@ interface FillEmptySlotsButtonProps {
 // just created happens client-side via an effect in the planner page so the
 // AI-filled gold badge only renders for this session.
 export function FillEmptySlotsButton({
-  weekId: _weekId, // eslint-disable-line @typescript-eslint/no-unused-vars
   rangeFrom = "",
   rangeTo = "",
 }: FillEmptySlotsButtonProps) {

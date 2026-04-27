@@ -1,10 +1,6 @@
 import type { ComposedFood, LeafFood } from "@/lib/api/foods"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
 import type { Plate } from "@/lib/api/plates"
-import type {
-  ShoppingListResponse,
-  WeekNutritionResponse,
-} from "@/lib/api/weeks"
 
 export const mockChickenBreast: LeafFood = {
   id: 1,
@@ -132,30 +128,6 @@ export const mockTofuCurryVariant: ComposedFood = {
   updated_at: "2024-01-03T00:00:00Z",
 }
 
-export const mockShoppingList: ShoppingListResponse = {
-  items: [
-    { food_id: 1, name: "Chicken", total_grams: 100 },
-    { food_id: 2, name: "Rice", total_grams: 200 },
-  ],
-}
-
-export const mockWeekNutrition: WeekNutritionResponse = {
-  days: [
-    {
-      day: 0,
-      macros: {
-        kcal: 500,
-        protein: 40,
-        fat: 15,
-        carbs: 50,
-        fiber: 5,
-        sodium: 1,
-      },
-    },
-  ],
-  week: { kcal: 500, protein: 40, fat: 15, carbs: 50, fiber: 5, sodium: 1 },
-}
-
 export const mockLookupCandidate: LookupCandidate = {
   name: "Chicken Breast, Raw",
   source: "fdc",
@@ -181,7 +153,6 @@ export const mockLookupResponse: LookupResponse = {
 // 2026-04-13 = Mon W16, 2026-04-14 = Tue W16, 2026-04-20 = Mon W17
 export const mockPlateW16a: Plate = {
   id: 101,
-  week_id: 1,
   day: 0,
   slot_id: 1,
   date: "2026-04-13",
@@ -195,7 +166,6 @@ export const mockPlateW16a: Plate = {
 
 export const mockPlateW16b: Plate = {
   id: 102,
-  week_id: 1,
   day: 1,
   slot_id: 1,
   date: "2026-04-14",
@@ -209,7 +179,6 @@ export const mockPlateW16b: Plate = {
 
 export const mockPlateW17: Plate = {
   id: 103,
-  week_id: 2,
   day: 0,
   slot_id: 1,
   date: "2026-04-20",

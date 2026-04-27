@@ -43,25 +43,16 @@ func (h *AIHandler) Enabled(ctx context.Context) bool {
 	return err == nil
 }
 
-// DebugSystemPrompt handles GET /api/ai/debug/system-prompt?week_id=N.
+// DebugSystemPrompt handles GET /api/ai/debug/system-prompt.
 // Dev-only — the route must be gated by the router (guarded by DevMode). It
-// returns the composed system prompt the agent would use for the given week,
+// returns the composed system prompt the agent would use for a chat turn,
 // so e2e tests can assert that learned preferences are being injected.
 func (h *AIHandler) DebugSystemPrompt(w http.ResponseWriter, r *http.Request) {
 	if !h.Enabled(r.Context()) {
 		writeError(w, http.StatusServiceUnavailable, "error.ai.provider_missing")
 		return
 	}
-	var weekID *int64
-	if v := r.URL.Query().Get("week_id"); v != "" {
-		id, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "error.invalid_body")
-			return
-		}
-		weekID = &id
-	}
-	prompt, err := h.svc.DebugSystemPrompt(r.Context(), weekID)
+	prompt, err := h.svc.DebugSystemPrompt(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "error.server")
 		return

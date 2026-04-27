@@ -45,7 +45,6 @@ func NewPlateHandlerFromService(svc platesService) *PlateHandler {
 }
 
 type updatePlateRequest struct {
-	Day     *int    `json:"day"`
 	SlotID  *int64  `json:"slot_id"`
 	Note    *string `json:"note"`
 	Date    *string `json:"date"`
@@ -54,7 +53,6 @@ type updatePlateRequest struct {
 
 func (r *updatePlateRequest) UnmarshalJSON(b []byte) error {
 	type alias struct {
-		Day    *int    `json:"day"`
 		SlotID *int64  `json:"slot_id"`
 		Note   *string `json:"note"`
 		Date   *string `json:"date"`
@@ -63,7 +61,6 @@ func (r *updatePlateRequest) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &a); err != nil {
 		return err
 	}
-	r.Day = a.Day
 	r.SlotID = a.SlotID
 	r.Note = a.Note
 	r.Date = a.Date
@@ -154,10 +151,8 @@ func (h *PlateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	day := (int(d.Weekday()) + 6) % 7 // 0=Mon..6=Sun
 	p := &plate.Plate{
 		Date:   d,
-		Day:    day,
 		SlotID: req.SlotID,
 		Note:   req.Note,
 	}
@@ -203,9 +198,6 @@ func (h *PlateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	if req.Day != nil {
-		existing.Day = *req.Day
-	}
 	if req.SlotID != nil {
 		existing.SlotID = *req.SlotID
 	}
@@ -219,7 +211,6 @@ func (h *PlateHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		existing.Date = d
-		existing.Day = (int(d.Weekday()) + 6) % 7
 	}
 	if err := h.svc.Update(r.Context(), existing); err != nil {
 		status, key := plateError(err)

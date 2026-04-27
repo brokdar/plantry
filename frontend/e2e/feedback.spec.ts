@@ -38,16 +38,19 @@ test.describe("Plate feedback + AI memory loop", () => {
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
       await expect(cell).toBeVisible()
 
-      // Seed a plate through the UI — reuse the existing planner flow.
+      // Seed a plate through the UI — open the picker sheet, search, click food.
+      await cell.getByRole("button", { name: /plan meal/i }).click()
+      const sheet = page.getByRole("dialog")
+      await expect(sheet).toBeVisible()
+      await sheet.getByRole("textbox").fill(`Curry ${tag}`)
       const createPlateResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /plan meal/i }).click()
-      await page
+      await sheet
         .getByRole("button", { name: new RegExp(`Curry ${tag}`) })
         .click()
-      await page.getByTestId("tray-save").click()
       await createPlateResp
+      await expect(sheet).not.toBeVisible()
       await expect(cell.getByText(`Curry ${tag}`)).toBeVisible()
 
       // Click "Loved" on the slot card. Wait for the PUT feedback response.
@@ -69,11 +72,7 @@ test.describe("Plate feedback + AI memory loop", () => {
       // system prompt. This is the full round-trip: feedback → profile →
       // ComposePrompt.
       const ctx = await apiRequest.newContext({ baseURL: API })
-      const weekResp = await ctx.get("/api/weeks/current")
-      const week = (await weekResp.json()) as { id: number }
-      const prompt = await ctx.get(
-        `/api/ai/debug/system-prompt?week_id=${week.id}`
-      )
+      const prompt = await ctx.get("/api/ai/debug/system-prompt")
       expect(prompt.ok()).toBeTruthy()
       const body = (await prompt.json()) as { system_prompt: string }
       expect(body.system_prompt).toContain(`spicy-${tag}`)
@@ -107,14 +106,16 @@ test.describe("Plate feedback + AI memory loop", () => {
       await page.goto("/")
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
 
+      await cell.getByRole("button", { name: /plan meal/i }).click()
+      const sheet2 = page.getByRole("dialog")
+      await expect(sheet2).toBeVisible()
+      await sheet2.getByRole("textbox").fill(`Bowl ${tag}`)
       const createPlateResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /plan meal/i }).click()
-      await page
+      await sheet2
         .getByRole("button", { name: new RegExp(`Bowl ${tag}`) })
         .click()
-      await page.getByTestId("tray-save").click()
       await createPlateResp
 
       await cell.hover()

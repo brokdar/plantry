@@ -21,11 +21,14 @@ async function seedPlateByDate(
 ): Promise<{ id: number }> {
   const ctx = await apiRequest.newContext({ baseURL: API })
   const res = await ctx.post("/api/plates", {
-    data: { date, slot_id: slotId, food_id: foodId },
+    data: { date, slot_id: slotId },
   })
-  const body = await res.json()
+  const plate = (await res.json()) as { id: number }
+  await ctx.post(`/api/plates/${plate.id}/components`, {
+    data: { food_id: foodId, portions: 1 },
+  })
   await ctx.dispose()
-  return body as { id: number }
+  return plate
 }
 
 async function deletePlate(id: number) {
@@ -120,12 +123,8 @@ test.describe("Planner — date-range window", () => {
       await page.getByRole("button", { name: /Next 7/i }).click()
       await fwdResp
 
-      // Now go back
-      const backResp = page.waitForResponse(
-        (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
-      )
+      // Now go back — hits TanStack Query cache, no network request
       await page.getByRole("button", { name: /Previous 7/i }).click()
-      await backResp
 
       const labelAfter = await page
         .locator(".min-w-48.text-center")
@@ -165,12 +164,8 @@ test.describe("Planner — date-range window", () => {
         .textContent()
       expect(labelShifted).not.toBe(labelAt0)
 
-      // Click "Today" to reset
-      const resetResp = page.waitForResponse(
-        (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
-      )
+      // Click "Today" to reset — hits TanStack Query cache, no network request
       await page.getByRole("button", { name: /^Today$/i }).click()
-      await resetResp
 
       const labelReset = await page
         .locator(".min-w-48.text-center")

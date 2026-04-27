@@ -1,4 +1,3 @@
-import { getISOWeek, getISOWeekYear } from "date-fns"
 import {
   BarChart2,
   Bookmark,
@@ -35,7 +34,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { deletePlate } from "@/lib/api/plates"
-import { clearWeekPlates } from "@/lib/api/weeks"
 import {
   computeAnchor,
   windowRange,
@@ -48,7 +46,6 @@ import { usePlatesRange } from "@/lib/queries/plates"
 import { useSettings } from "@/lib/queries/settings"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { useNutritionRange } from "@/lib/queries/nutrition"
-import { useWeekByDate } from "@/lib/queries/weeks"
 import { useChatUI } from "@/lib/stores/chat-ui"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
@@ -122,14 +119,6 @@ function PlanPage() {
     return result
   }, [from, plates])
 
-  // TODO(phase-4): remove once ShoppingPanel and NutritionWeekSummary are range-based
-  const anchorDate = new Date(from + "T00:00:00")
-  const syntheticWeekQuery = useWeekByDate(
-    getISOWeekYear(anchorDate),
-    getISOWeek(anchorDate)
-  )
-  const syntheticWeekId = syntheticWeekQuery.data?.id ?? 0
-
   const nutritionQuery = useNutritionRange(from, to)
 
   const aiFill = usePlannerUI((s) => s.aiFill)
@@ -168,7 +157,7 @@ function PlanPage() {
     queryClient.setQueryData(plateKeys.range(from, to), { plates: [] })
     const timeoutId = setTimeout(async () => {
       try {
-        await clearWeekPlates(syntheticWeekId)
+        await Promise.all(snapshot.map((p) => deletePlate(p.id)))
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(from, to),
         })
@@ -256,7 +245,7 @@ function PlanPage() {
         actions={
           <div className="flex items-center gap-2">
             {aiSettings?.enabled && (
-              <FillEmptySlotsButton weekId={0} rangeFrom={from} rangeTo={to} />
+              <FillEmptySlotsButton rangeFrom={from} rangeTo={to} />
             )}
             <Button
               onClick={() => setShoppingOpen(true)}
@@ -407,7 +396,7 @@ function PlanPage() {
         </SheetContent>
       </Sheet>
 
-      <ChatPanel weekId={syntheticWeekId} />
+      <ChatPanel weekId={0} />
 
       <SaveAsTemplateDialog
         open={saveRangeOpen}

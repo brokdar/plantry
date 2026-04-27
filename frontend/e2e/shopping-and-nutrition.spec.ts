@@ -43,14 +43,16 @@ test.describe("Shopping List and Nutrition", () => {
       const cell = page.getByTestId(`cell-0-${slot.id}`)
       await expect(cell).toBeVisible()
 
+      await cell.getByRole("button", { name: /plan meal/i }).click()
+      const sheet1 = page.getByRole("dialog")
+      await expect(sheet1).toBeVisible()
+      await sheet1.locator("input").first().fill(`Curry ${tag}`)
       const createPlateResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /plan meal/i }).click()
-      await page
+      await sheet1
         .getByRole("button", { name: new RegExp(`Curry ${tag}`) })
         .click()
-      await page.getByTestId("tray-save").click()
       await createPlateResp
 
       // Open shopping list.
@@ -122,14 +124,16 @@ test.describe("Shopping List and Nutrition", () => {
       const cell = page.getByTestId(`cell-0-${slot.id}`)
       await expect(cell).toBeVisible()
 
+      await cell.getByRole("button", { name: /plan meal/i }).click()
+      const sheet2 = page.getByRole("dialog")
+      await expect(sheet2).toBeVisible()
+      await sheet2.locator("input").first().fill(`Bowl ${tag}`)
       const createPlateResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /plan meal/i }).click()
-      await page
+      await sheet2
         .getByRole("button", { name: new RegExp(`Bowl ${tag}`) })
         .click()
-      await page.getByTestId("tray-save").click()
       await createPlateResp
 
       // Open nutrition panel.

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
@@ -28,10 +28,10 @@ type PlanningPrefs struct {
 }
 
 // ComposePrompt builds the system prompt for a chat turn. p may be nil (no
-// profile yet); week may be nil (no week context); dateRange may be nil (no
-// date context — falls back to week-derived range if week is set).
+// profile yet); plates may be nil (no plate context); dateRange may be nil (no
+// date context).
 // prefs may be nil (omits planning preference lines).
-func ComposePrompt(p *profile.Profile, week *planner.Week, dateRange *DateRange, prefs *PlanningPrefs) string {
+func ComposePrompt(p *profile.Profile, plates []plate.Plate, dateRange *DateRange, prefs *PlanningPrefs) string {
 	var b strings.Builder
 
 	b.WriteString(rolePrefix)
@@ -39,14 +39,8 @@ func ComposePrompt(p *profile.Profile, week *planner.Week, dateRange *DateRange,
 		writeProfileSection(&b, p)
 	}
 
-	switch {
-	case dateRange != nil:
-		writeDateRangeSection(&b, dateRange, week, prefs)
-	case week != nil:
-		// Derive a date range from the week for backwards compatibility.
-		from := isoWeekStart(week.Year, week.WeekNumber)
-		dr := &DateRange{From: from, To: from.AddDate(0, 0, 6)}
-		writeDateRangeSection(&b, dr, week, nil)
+	if dateRange != nil {
+		writeDateRangeSection(&b, dateRange, plates, prefs)
 	}
 
 	b.WriteString(toolRules)
@@ -56,14 +50,6 @@ func ComposePrompt(p *profile.Profile, week *planner.Week, dateRange *DateRange,
 		s = s[:promptCharBudget-len(truncationNote)] + truncationNote
 	}
 	return s
-}
-
-// isoWeekStart returns the Monday (UTC) of the given ISO year+week.
-func isoWeekStart(year, week int) time.Time {
-	jan4 := time.Date(year, 1, 4, 0, 0, 0, 0, time.UTC)
-	daysFromMonday := int(jan4.Weekday()+6) % 7
-	week1Monday := jan4.AddDate(0, 0, -daysFromMonday)
-	return week1Monday.AddDate(0, 0, (week-1)*7)
 }
 
 const rolePrefix = `You are Plantry, an assistant for a self-hosted meal planner.
@@ -76,7 +62,7 @@ When the user asks you to plan something, proceed like this:
 1. Read the relevant date range with get_plates_range, and slot list with list_slots.
 2. Read the user profile with get_profile once per conversation (targets, dietary restrictions, preferences).
 3. Search the food library with list_foods (filter by role) to find candidates.
-4. Call the mutation tools (create_plate, add_food_to_plate, swap_food, update_plate_component, remove_plate_component, delete_plate, clear_week) to apply changes.
+4. Call the mutation tools (create_plate, add_food_to_plate, swap_food, update_plate_component, remove_plate_component, delete_plate) to apply changes.
 5. Report a short summary of what you changed. Keep your text concise — the UI already shows the plan.
 
 Respect the user's dietary restrictions and preferences. When in doubt, ask once; otherwise act and confirm briefly.
@@ -135,7 +121,7 @@ func writeProfileSection(b *strings.Builder, p *profile.Profile) {
 	b.WriteString("\n")
 }
 
-func writeDateRangeSection(b *strings.Builder, dr *DateRange, w *planner.Week, prefs *PlanningPrefs) {
+func writeDateRangeSection(b *strings.Builder, dr *DateRange, plates []plate.Plate, prefs *PlanningPrefs) {
 	fmt.Fprintf(b, "Current planning window: %s to %s\n",
 		dr.From.Format("2006-01-02"), dr.To.Format("2006-01-02"))
 	if prefs != nil {
@@ -146,12 +132,12 @@ func writeDateRangeSection(b *strings.Builder, dr *DateRange, w *planner.Week, p
 			fmt.Fprintf(b, "Plan anchor: %s\n", prefs.AnchorMode)
 		}
 	}
-	if w == nil || len(w.Plates) == 0 {
+	if len(plates) == 0 {
 		b.WriteString("This window has no plates yet.\n\n")
 		return
 	}
 	b.WriteString("Plates already planned:\n")
-	for _, p := range w.Plates {
+	for _, p := range plates {
 		dateStr := p.Date.Format("2006-01-02")
 		fmt.Fprintf(b, "- plate_id=%d date=%s slot_id=%d components=%d\n",
 			p.ID, dateStr, p.SlotID, len(p.Components))

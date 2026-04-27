@@ -1,6 +1,26 @@
 import { apiFetch } from "./client"
 import type { PlateFeedback } from "./feedback"
 
+export interface MacrosResponse {
+  kcal: number
+  protein: number
+  fat: number
+  carbs: number
+  fiber: number
+  sodium: number
+}
+
+// Week is kept as an in-memory aggregate for plate-patch helpers used by
+// optimistic component mutations (swap, add, remove). It is not fetched from
+// the server; the week cache slots are populated by the mutation hooks only.
+export interface Week {
+  id: number
+  year: number
+  week_number: number
+  plates: Plate[]
+  created_at: string
+}
+
 export interface PlateComponent {
   id: number
   plate_id: number
@@ -11,7 +31,6 @@ export interface PlateComponent {
 
 export interface Plate {
   id: number
-  week_id: number
   day: number
   slot_id: number
   date: string

@@ -3,8 +3,7 @@
 // previous Week (or undefined when the cache is empty) and returns a new Week
 // with the change applied. Unit-tested in plate-patches.test.ts.
 
-import type { Plate, PlateComponent } from "@/lib/api/plates"
-import type { Week } from "@/lib/api/weeks"
+import type { Plate, PlateComponent, Week } from "@/lib/api/plates"
 
 function mapPlate(week: Week, plateId: number, fn: (p: Plate) => Plate): Week {
   return {

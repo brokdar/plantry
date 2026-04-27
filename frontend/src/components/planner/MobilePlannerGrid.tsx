@@ -1,18 +1,21 @@
 import { format, isToday, parseISO } from "date-fns"
 import * as Lucide from "lucide-react"
-import { useNavigate } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import type { Food } from "@/lib/api/foods"
 import type { TimeSlot } from "@/lib/api/slots"
+import { addPlateComponent, createPlate } from "@/lib/api/plates"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useSetPlateSkipped } from "@/lib/queries/plates"
+import { queryClient } from "@/lib/query-client"
+import { plateKeys } from "@/lib/queries/keys"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
+import { AddComponentSheet } from "./AddComponentSheet"
 import type { PlannerDay } from "./PlannerGrid"
 import { SlotCell } from "./SlotCell"
 
@@ -41,9 +44,18 @@ function SlotIcon({ name }: { name: string }) {
   return <Icon className="h-4 w-4" aria-hidden />
 }
 
-export function MobilePlannerGrid({ days, slots }: MobilePlannerGridProps) {
+interface AddTarget {
+  dayIdx: number
+  slotId: number
+}
+
+export function MobilePlannerGrid({
+  days,
+  slots,
+  rangeFrom,
+  rangeTo,
+}: MobilePlannerGridProps) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
 
   const componentsQuery = useFoods({ limit: 200 })
   const componentsById = useMemo(() => {
@@ -56,22 +68,38 @@ export function MobilePlannerGrid({ days, slots }: MobilePlannerGridProps) {
   const todayStr = new Date().toISOString().slice(0, 10)
   const todayIdx = days.findIndex((d) => d.date === todayStr)
   const [activeDay, setActiveDay] = useState(todayIdx >= 0 ? todayIdx : 0)
+  const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
 
   const setFavoriteMut = useSetFoodFavorite()
-  // weekId=0 sentinel — mutations still work, week-cache optimistic patches
-  // are no-ops for the range view.
-  const setSkippedMut = useSetPlateSkipped(0)
+  const setSkippedMut = useSetPlateSkipped()
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
 
-  const openPicker = (dayIdx: number, slotId: number) =>
-    void navigate({
-      to: "/planner/$weekId/$day/$slotId/pick",
-      params: {
-        weekId: "0",
-        day: String(dayIdx),
-        slotId: String(slotId),
-      },
-    })
+  const openPicker = (dayIdx: number, slotId: number) => {
+    setAddTarget({ dayIdx, slotId })
+  }
+
+  async function handlePick(component: Food) {
+    if (!addTarget) return
+    const target = addTarget
+    setAddTarget(null)
+    const targetDay = days[target.dayIdx]
+    if (!targetDay) return
+    try {
+      const created = await createPlate({
+        date: targetDay.date,
+        slot_id: target.slotId,
+      })
+      await addPlateComponent(created.id, {
+        food_id: component.id,
+        portions: 1,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: plateKeys.range(rangeFrom, rangeTo),
+      })
+    } catch (err) {
+      toastError(err, t)
+    }
+  }
 
   async function handleToggleSkip(
     dayIdx: number,
@@ -200,6 +228,12 @@ export function MobilePlannerGrid({ days, slots }: MobilePlannerGridProps) {
           )
         })}
       </ul>
+
+      <AddComponentSheet
+        open={addTarget !== null}
+        onOpenChange={(o) => !o && setAddTarget(null)}
+        onPick={handlePick}
+      />
     </div>
   )
 }

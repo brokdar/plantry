@@ -16,7 +16,6 @@ import { cn } from "@/lib/utils"
 
 interface PlateFeedbackBarProps {
   plate: Plate
-  weekId: number
 }
 
 const STATUSES: {
@@ -34,10 +33,10 @@ const STATUSES: {
   },
 ]
 
-export function PlateFeedbackBar({ plate, weekId }: PlateFeedbackBarProps) {
+export function PlateFeedbackBar({ plate }: PlateFeedbackBarProps) {
   const { t } = useTranslation()
-  const record = useRecordFeedback(weekId)
-  const clear = useClearFeedback(weekId)
+  const record = useRecordFeedback()
+  const clear = useClearFeedback()
   const current = plate.feedback?.status
   const [noteDraft, setNoteDraft] = useState(plate.feedback?.note ?? "")
   const [noteOpen, setNoteOpen] = useState(false)

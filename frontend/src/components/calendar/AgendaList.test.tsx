@@ -8,9 +8,6 @@ import { mockPlateW16a, mockPlateW16b, mockPlateW17 } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
 vi.mock("@/lib/api/plates")
-vi.mock("@/lib/queries/weeks", () => ({
-  useCopyWeek: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
-}))
 
 // ---------------------------------------------------------------------------
 // AgendaList — grouping
@@ -146,36 +143,5 @@ describe("AgendaGroup", () => {
     // Click again to expand
     await userEvent.click(summary)
     expect(details.open).toBe(true)
-  })
-
-  it("renders copy button with correct testid when showCopyButton=true", async () => {
-    renderWithRouter(
-      <AgendaGroup
-        weekLabel="2026 W16"
-        plates={[mockPlateW16a]}
-        defaultOpen={true}
-        showCopyButton={true}
-      />
-    )
-
-    const btn = await screen.findByTestId(
-      `copy-to-current-agenda-${mockPlateW16a.week_id}`
-    )
-    expect(btn).toBeInTheDocument()
-  })
-
-  it("does not render copy button when showCopyButton=false (default)", async () => {
-    renderWithRouter(
-      <AgendaGroup
-        weekLabel="2026 W16"
-        plates={[mockPlateW16a]}
-        defaultOpen={true}
-      />
-    )
-
-    await screen.findAllByRole("listitem")
-    expect(
-      screen.queryByTestId(`copy-to-current-agenda-${mockPlateW16a.week_id}`)
-    ).not.toBeInTheDocument()
   })
 })

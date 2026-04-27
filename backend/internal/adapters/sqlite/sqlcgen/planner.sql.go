@@ -32,44 +32,23 @@ func (q *Queries) CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (i
 	return count, err
 }
 
-const countWeeks = `-- name: CountWeeks :one
-SELECT COUNT(*) FROM weeks
-`
-
-func (q *Queries) CountWeeks(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countWeeks)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createPlate = `-- name: CreatePlate :one
-INSERT INTO plates (week_id, day, slot_id, note, date)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, week_id, day, slot_id, note, created_at, skipped, date
+INSERT INTO plates (slot_id, note, date)
+VALUES (?, ?, ?)
+RETURNING id, slot_id, note, created_at, skipped, date
 `
 
 type CreatePlateParams struct {
-	WeekID int64
-	Day    int64
 	SlotID int64
 	Note   sql.NullString
 	Date   string
 }
 
 func (q *Queries) CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate, error) {
-	row := q.db.QueryRowContext(ctx, createPlate,
-		arg.WeekID,
-		arg.Day,
-		arg.SlotID,
-		arg.Note,
-		arg.Date,
-	)
+	row := q.db.QueryRowContext(ctx, createPlate, arg.SlotID, arg.Note, arg.Date)
 	var i Plate
 	err := row.Scan(
 		&i.ID,
-		&i.WeekID,
-		&i.Day,
 		&i.SlotID,
 		&i.Note,
 		&i.CreatedAt,
@@ -141,27 +120,6 @@ func (q *Queries) CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) 
 	return i, err
 }
 
-const createWeek = `-- name: CreateWeek :one
-INSERT INTO weeks (year, week_number) VALUES (?, ?) RETURNING id, year, week_number, created_at
-`
-
-type CreateWeekParams struct {
-	Year       int64
-	WeekNumber int64
-}
-
-func (q *Queries) CreateWeek(ctx context.Context, arg CreateWeekParams) (Week, error) {
-	row := q.db.QueryRowContext(ctx, createWeek, arg.Year, arg.WeekNumber)
-	var i Week
-	err := row.Scan(
-		&i.ID,
-		&i.Year,
-		&i.WeekNumber,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const deletePlate = `-- name: DeletePlate :execresult
 DELETE FROM plates WHERE id = ?
 `
@@ -178,14 +136,6 @@ func (q *Queries) DeletePlateComponent(ctx context.Context, id int64) (sql.Resul
 	return q.db.ExecContext(ctx, deletePlateComponent, id)
 }
 
-const deletePlatesByWeek = `-- name: DeletePlatesByWeek :execresult
-DELETE FROM plates WHERE week_id = ?
-`
-
-func (q *Queries) DeletePlatesByWeek(ctx context.Context, weekID int64) (sql.Result, error) {
-	return q.db.ExecContext(ctx, deletePlatesByWeek, weekID)
-}
-
 const deleteTimeSlot = `-- name: DeleteTimeSlot :execresult
 DELETE FROM time_slots WHERE id = ?
 `
@@ -195,7 +145,7 @@ func (q *Queries) DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, err
 }
 
 const getPlate = `-- name: GetPlate :one
-SELECT id, week_id, day, slot_id, note, created_at, skipped, date FROM plates WHERE id = ?
+SELECT id, slot_id, note, created_at, skipped, date FROM plates WHERE id = ?
 `
 
 func (q *Queries) GetPlate(ctx context.Context, id int64) (Plate, error) {
@@ -203,8 +153,6 @@ func (q *Queries) GetPlate(ctx context.Context, id int64) (Plate, error) {
 	var i Plate
 	err := row.Scan(
 		&i.ID,
-		&i.WeekID,
-		&i.Day,
 		&i.SlotID,
 		&i.Note,
 		&i.CreatedAt,
@@ -244,43 +192,6 @@ func (q *Queries) GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error) {
 		&i.Icon,
 		&i.SortOrder,
 		&i.Active,
-	)
-	return i, err
-}
-
-const getWeek = `-- name: GetWeek :one
-SELECT id, year, week_number, created_at FROM weeks WHERE id = ?
-`
-
-func (q *Queries) GetWeek(ctx context.Context, id int64) (Week, error) {
-	row := q.db.QueryRowContext(ctx, getWeek, id)
-	var i Week
-	err := row.Scan(
-		&i.ID,
-		&i.Year,
-		&i.WeekNumber,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getWeekByYearAndNumber = `-- name: GetWeekByYearAndNumber :one
-SELECT id, year, week_number, created_at FROM weeks WHERE year = ? AND week_number = ?
-`
-
-type GetWeekByYearAndNumberParams struct {
-	Year       int64
-	WeekNumber int64
-}
-
-func (q *Queries) GetWeekByYearAndNumber(ctx context.Context, arg GetWeekByYearAndNumberParams) (Week, error) {
-	row := q.db.QueryRowContext(ctx, getWeekByYearAndNumber, arg.Year, arg.WeekNumber)
-	var i Week
-	err := row.Scan(
-		&i.ID,
-		&i.Year,
-		&i.WeekNumber,
-		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -351,45 +262,8 @@ func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64)
 	return items, nil
 }
 
-const listPlateComponentsByWeek = `-- name: ListPlateComponentsByWeek :many
-SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.sort_order
-FROM plate_components pc
-JOIN plates p ON p.id = pc.plate_id
-WHERE p.week_id = ?
-ORDER BY p.day, p.slot_id, pc.sort_order, pc.id
-`
-
-func (q *Queries) ListPlateComponentsByWeek(ctx context.Context, weekID int64) ([]PlateComponent, error) {
-	rows, err := q.db.QueryContext(ctx, listPlateComponentsByWeek, weekID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []PlateComponent{}
-	for rows.Next() {
-		var i PlateComponent
-		if err := rows.Scan(
-			&i.ID,
-			&i.PlateID,
-			&i.FoodID,
-			&i.Portions,
-			&i.SortOrder,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listPlatesByDate = `-- name: ListPlatesByDate :many
-SELECT id, week_id, day, slot_id, note, created_at, skipped, date FROM plates WHERE date = ? ORDER BY slot_id, id
+SELECT id, slot_id, note, created_at, skipped, date FROM plates WHERE date = ? ORDER BY slot_id, id
 `
 
 func (q *Queries) ListPlatesByDate(ctx context.Context, date string) ([]Plate, error) {
@@ -403,8 +277,6 @@ func (q *Queries) ListPlatesByDate(ctx context.Context, date string) ([]Plate, e
 		var i Plate
 		if err := rows.Scan(
 			&i.ID,
-			&i.WeekID,
-			&i.Day,
 			&i.SlotID,
 			&i.Note,
 			&i.CreatedAt,
@@ -425,7 +297,7 @@ func (q *Queries) ListPlatesByDate(ctx context.Context, date string) ([]Plate, e
 }
 
 const listPlatesByDateRange = `-- name: ListPlatesByDateRange :many
-SELECT id, week_id, day, slot_id, note, created_at, skipped, date FROM plates WHERE date BETWEEN ? AND ? ORDER BY date, slot_id, id
+SELECT id, slot_id, note, created_at, skipped, date FROM plates WHERE date BETWEEN ? AND ? ORDER BY date, slot_id, id
 `
 
 type ListPlatesByDateRangeParams struct {
@@ -444,44 +316,6 @@ func (q *Queries) ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDat
 		var i Plate
 		if err := rows.Scan(
 			&i.ID,
-			&i.WeekID,
-			&i.Day,
-			&i.SlotID,
-			&i.Note,
-			&i.CreatedAt,
-			&i.Skipped,
-			&i.Date,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPlatesByWeek = `-- name: ListPlatesByWeek :many
-SELECT id, week_id, day, slot_id, note, created_at, skipped, date FROM plates WHERE week_id = ? ORDER BY day, slot_id, id
-`
-
-func (q *Queries) ListPlatesByWeek(ctx context.Context, weekID int64) ([]Plate, error) {
-	rows, err := q.db.QueryContext(ctx, listPlatesByWeek, weekID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Plate{}
-	for rows.Next() {
-		var i Plate
-		if err := rows.Scan(
-			&i.ID,
-			&i.WeekID,
-			&i.Day,
 			&i.SlotID,
 			&i.Note,
 			&i.CreatedAt,
@@ -534,49 +368,12 @@ func (q *Queries) ListTimeSlots(ctx context.Context) ([]TimeSlot, error) {
 	return items, nil
 }
 
-const listWeeks = `-- name: ListWeeks :many
-SELECT id, year, week_number, created_at FROM weeks ORDER BY year DESC, week_number DESC LIMIT ? OFFSET ?
-`
-
-type ListWeeksParams struct {
-	Limit  int64
-	Offset int64
-}
-
-func (q *Queries) ListWeeks(ctx context.Context, arg ListWeeksParams) ([]Week, error) {
-	rows, err := q.db.QueryContext(ctx, listWeeks, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Week{}
-	for rows.Next() {
-		var i Week
-		if err := rows.Scan(
-			&i.ID,
-			&i.Year,
-			&i.WeekNumber,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const setPlateSkipped = `-- name: SetPlateSkipped :one
 UPDATE plates SET
     skipped = ?,
     note    = ?
 WHERE id = ?
-RETURNING id, week_id, day, slot_id, note, created_at, skipped, date
+RETURNING id, slot_id, note, created_at, skipped, date
 `
 
 type SetPlateSkippedParams struct {
@@ -590,8 +387,6 @@ func (q *Queries) SetPlateSkipped(ctx context.Context, arg SetPlateSkippedParams
 	var i Plate
 	err := row.Scan(
 		&i.ID,
-		&i.WeekID,
-		&i.Day,
 		&i.SlotID,
 		&i.Note,
 		&i.CreatedAt,
@@ -603,18 +398,14 @@ func (q *Queries) SetPlateSkipped(ctx context.Context, arg SetPlateSkippedParams
 
 const updatePlate = `-- name: UpdatePlate :one
 UPDATE plates SET
-    week_id = ?,
-    day     = ?,
     slot_id = ?,
     note    = ?,
     date    = ?
 WHERE id = ?
-RETURNING id, week_id, day, slot_id, note, created_at, skipped, date
+RETURNING id, slot_id, note, created_at, skipped, date
 `
 
 type UpdatePlateParams struct {
-	WeekID int64
-	Day    int64
 	SlotID int64
 	Note   sql.NullString
 	Date   string
@@ -623,8 +414,6 @@ type UpdatePlateParams struct {
 
 func (q *Queries) UpdatePlate(ctx context.Context, arg UpdatePlateParams) (Plate, error) {
 	row := q.db.QueryRowContext(ctx, updatePlate,
-		arg.WeekID,
-		arg.Day,
 		arg.SlotID,
 		arg.Note,
 		arg.Date,
@@ -633,8 +422,6 @@ func (q *Queries) UpdatePlate(ctx context.Context, arg UpdatePlateParams) (Plate
 	var i Plate
 	err := row.Scan(
 		&i.ID,
-		&i.WeekID,
-		&i.Day,
 		&i.SlotID,
 		&i.Note,
 		&i.CreatedAt,

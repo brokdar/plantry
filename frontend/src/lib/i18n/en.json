@@ -10,8 +10,6 @@
     "components": "Components",
     "templates": "Templates",
     "import": "Import",
-    "archive": "Archive",
-    "past_weeks": "Past Weeks",
     "calendar": "Calendar",
     "settings": "Settings",
     "search_placeholder": "Search the catalog…",
@@ -34,27 +32,12 @@
     "title": "{{weekday}}, {{date}}",
     "prev_day": "Previous day",
     "next_day": "Next day",
-    "back_to_calendar": "Back to calendar"
+    "back_to_calendar": "Back to calendar",
+    "empty": "No meals planned"
   },
   "archive": {
-    "title": "Historical Collections",
-    "subtitle": "A curated archive of your seasonal journeys. Revisit past nourishments and integrate them into your current week.",
-    "empty": "No archived weeks yet.",
-    "end_of_journey": "End of your journey",
-    "end_of_journey_body": "You've reached the beginning of your Botanical Atelier journey.",
-    "load_more": "Load more history",
-    "meals_total": "{{count}} total meals",
-    "week_label": "Week {{week}}, {{year}}",
-    "back": "Back to archive",
     "forgotten": "Forgotten",
-    "most_cooked": "Most cooked",
-    "read_only": "Read only",
-    "review": "Review",
-    "copy_to_current": "Copy to current",
-    "copy_confirm_title": "Copy this week into the current week?",
-    "copy_confirm_body": "Meals will be added to week {{week}}, {{year}}. Existing meals in the current week are not overwritten.",
-    "copy_success": "Week copied to current",
-    "select_week": "Select a week to preview"
+    "most_cooked": "Most cooked"
   },
   "import": {
     "title": "Import recipe",
@@ -105,14 +88,8 @@
   },
   "planner": {
     "title": "Weekly Planner",
-    "week_label": "Week {{week}}, {{year}}",
-    "prev_week": "Previous week",
-    "next_week": "Next week",
-    "this_week": "This week",
     "today": "Today",
-    "copy_week": "Copy week to next",
     "daily_avg": "Daily Average",
-    "copy_success": "Week copied",
     "fill_empty_cta": "Fill empty slots",
     "clear_day": "Clear day",
     "day_cleared": "Day cleared",
@@ -170,9 +147,7 @@
     "next_window": "Next 7",
     "today_button": "Today",
     "anchor_today": "From today",
-    "anchor_shopping_day": "From next {{weekday}}",
-    "day_today_pill": "Today",
-    "day_past_label": "Past"
+    "anchor_shopping_day": "From next {{weekday}}"
   },
   "skip": {
     "label": "Skip",

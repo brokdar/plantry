@@ -384,7 +384,8 @@ function CalendarPage() {
             fetchNextPage={() => agendaQuery.fetchNextPage()}
             search={deferredSearch}
             weekStartsOn={weekStartsOn}
-            showCopyButton
+            foodsById={foodsById}
+            slots={slots}
           />
         )}
       </div>

@@ -18,11 +18,14 @@ async function seedPlateByDate(
 ): Promise<{ id: number }> {
   const ctx = await apiRequest.newContext({ baseURL: API })
   const res = await ctx.post("/api/plates", {
-    data: { date, slot_id: slotId, food_id: foodId },
+    data: { date, slot_id: slotId },
   })
-  const body = await res.json()
+  const plate = (await res.json()) as { id: number }
+  await ctx.post(`/api/plates/${plate.id}/components`, {
+    data: { food_id: foodId, portions: 1 },
+  })
   await ctx.dispose()
-  return body as { id: number }
+  return plate
 }
 
 async function deletePlate(id: number) {

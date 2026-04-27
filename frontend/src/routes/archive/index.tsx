@@ -1,18 +1,10 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
-import { useEffect } from "react"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/archive/")({
-  component: ArchiveRedirect,
-})
-
-function ArchiveRedirect() {
-  const navigate = useNavigate()
-  useEffect(() => {
-    void navigate({
+  beforeLoad: () => {
+    throw redirect({
       to: "/calendar",
-      search: { mode: "agenda" as const, edit: false, search: "" },
-      replace: true,
+      search: { mode: "agenda", edit: false, search: "" },
     })
-  }, [navigate])
-  return null
-}
+  },
+})

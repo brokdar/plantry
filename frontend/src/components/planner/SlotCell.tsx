@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
-import type { MacrosResponse } from "@/lib/api/weeks"
+import type { MacrosResponse } from "@/lib/api/plates"
 import { cn } from "@/lib/utils"
 
 import { AiFilledBadge } from "./AiFilledBadge"

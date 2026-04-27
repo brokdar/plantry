@@ -9,7 +9,6 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
-import { useNavigate } from "@tanstack/react-router"
 import * as Lucide from "lucide-react"
 import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -20,10 +19,9 @@ import {
   DndCellWrapper,
   type DragPayload,
 } from "@/components/planner/DndCellWrapper"
-import { addPlateComponent, deletePlate } from "@/lib/api/plates"
-import { createPlate } from "@/lib/api/weeks"
+import { addPlateComponent, createPlate, deletePlate } from "@/lib/api/plates"
 import { queryClient } from "@/lib/query-client"
-import { weekKeys } from "@/lib/queries/keys"
+import { plateKeys } from "@/lib/queries/keys"
 import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
 import type { TimeSlot } from "@/lib/api/slots"
@@ -101,21 +99,10 @@ export function PlannerGrid({
   rangeTo,
 }: PlannerGridProps) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
 
-  // Navigation to picker still needs a weekId for the legacy picker route.
-  // We use 0 as a sentinel — the picker route reads from TanStack Query which
-  // has already loaded the week data. This is temporary until phase 5 replaces
-  // the picker route with a date-based one.
-  const openPicker = (day: number, slotId: number) =>
-    void navigate({
-      to: "/planner/$weekId/$day/$slotId/pick",
-      params: {
-        weekId: "0",
-        day: String(day),
-        slotId: String(slotId),
-      },
-    })
+  const openPicker = (day: number, slotId: number) => {
+    setAddTarget({ day, slotId, plateId: null })
+  }
 
   const componentsQuery = useFoods({ limit: 200 })
   const componentsById = useMemo(() => {
@@ -130,17 +117,15 @@ export function PlannerGrid({
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null)
   const [savePlateId, setSavePlateId] = useState<number | null>(null)
 
-  // weekId=0 — optimistic patches on the week cache are no-ops for the range
-  // view; the range query invalidation (rangeFrom/rangeTo) is what matters.
-  const updatePlateMut = useUpdatePlate(0, rangeFrom, rangeTo)
-  const addCompMut = useAddPlateComponent(0)
-  const swapMut = useSwapPlateComponent(0)
-  const deletePlateMut = useDeletePlate(0)
-  const setSkippedMut = useSetPlateSkipped(0)
+  const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
+  const addCompMut = useAddPlateComponent()
+  const swapMut = useSwapPlateComponent()
+  const deletePlateMut = useDeletePlate()
+  const setSkippedMut = useSetPlateSkipped()
   const applyTemplateMut = useApplyTemplate()
   const setFavoriteMut = useSetFoodFavorite()
-  const recordFeedbackMut = useRecordFeedback(0)
-  const clearFeedbackMut = useClearFeedback(0)
+  const recordFeedbackMut = useRecordFeedback()
+  const clearFeedbackMut = useClearFeedback()
 
   const aiFill = usePlannerUI((s) => s.aiFill)
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
@@ -154,12 +139,17 @@ export function PlannerGrid({
     if (!targetDay) return
     try {
       if (target.plateId === null) {
-        await createPlate(0, {
-          day: target.day,
+        const created = await createPlate({
+          date: targetDay.date,
           slot_id: target.slotId,
-          components: [{ food_id: component.id, portions: 1 }],
         })
-        void queryClient.invalidateQueries({ queryKey: weekKeys.all })
+        await addPlateComponent(created.id, {
+          food_id: component.id,
+          portions: 1,
+        })
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
       } else {
         await addCompMut.mutateAsync({
           plateId: target.plateId,
@@ -230,7 +220,9 @@ export function PlannerGrid({
           if (!pending) return
           clearTimeout(pending.timeoutId)
           pendingDeletesRef.current.delete(plateId)
-          void queryClient.invalidateQueries({ queryKey: weekKeys.all })
+          void queryClient.invalidateQueries({
+            queryKey: plateKeys.range(rangeFrom, rangeTo),
+          })
         },
       },
       duration: 5000,
@@ -248,7 +240,9 @@ export function PlannerGrid({
       } catch (err) {
         toastError(err, t)
       } finally {
-        void queryClient.invalidateQueries({ queryKey: weekKeys.all })
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
       }
     }, 5000)
 
@@ -257,7 +251,9 @@ export function PlannerGrid({
         label: t("common.undo"),
         onClick: () => {
           clearTimeout(timeoutId)
-          void queryClient.invalidateQueries({ queryKey: weekKeys.all })
+          void queryClient.invalidateQueries({
+            queryKey: plateKeys.range(rangeFrom, rangeTo),
+          })
         },
       },
       duration: 5000,
@@ -274,12 +270,14 @@ export function PlannerGrid({
     try {
       let id = plateId
       if (id === null) {
-        const created = await createPlate(0, {
-          day: dayIdx,
+        const created = await createPlate({
+          date: targetDay.date,
           slot_id: slotId,
         })
         id = created.id
-        void queryClient.invalidateQueries({ queryKey: weekKeys.all })
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
       }
       const existing = findPlateInDay(targetDay, slotId)
       const nextSkipped = !existing?.skipped
@@ -402,10 +400,10 @@ export function PlannerGrid({
           ? findPlateInDay(srcDay, activeData.slotId!)
           : undefined
         if (!src) return
-        const created = await createPlate(0, {
-          day: overData.day!,
+        const created = await createPlate({
+          date: overData.date!,
           slot_id: overData.slotId!,
-          note: src.note,
+          note: src.note ?? undefined,
         })
         for (const pc of src.components) {
           await addPlateComponent(created.id, {
@@ -413,7 +411,9 @@ export function PlannerGrid({
             portions: pc.portions,
           })
         }
-        void queryClient.invalidateQueries({ queryKey: weekKeys.all })
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
       }
     } catch (err) {
       toastError(err, t)

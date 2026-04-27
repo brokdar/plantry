@@ -16,7 +16,6 @@ type Querier interface {
 	CountPlatesUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 	CountTemplatesUsingFood(ctx context.Context, foodID int64) (int64, error)
-	CountWeeks(ctx context.Context) (int64, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (AiConversation, error)
 	CreateFood(ctx context.Context, arg CreateFoodParams) (Food, error)
 	CreateFoodComponent(ctx context.Context, arg CreateFoodComponentParams) error
@@ -28,7 +27,6 @@ type Querier interface {
 	CreateTemplateComponent(ctx context.Context, arg CreateTemplateComponentParams) (TemplateComponent, error)
 	CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) (TimeSlot, error)
 	CreateVariantGroup(ctx context.Context, name string) (VariantGroup, error)
-	CreateWeek(ctx context.Context, arg CreateWeekParams) (Week, error)
 	DeleteConversation(ctx context.Context, id int64) (sql.Result, error)
 	DeleteFood(ctx context.Context, id int64) (sql.Result, error)
 	DeleteFoodComponents(ctx context.Context, parentID int64) error
@@ -38,7 +36,6 @@ type Querier interface {
 	DeletePlate(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateComponent(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateFeedback(ctx context.Context, plateID int64) (sql.Result, error)
-	DeletePlatesByWeek(ctx context.Context, weekID int64) (sql.Result, error)
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTemplate(ctx context.Context, id int64) (sql.Result, error)
 	DeleteTemplateComponentsByTemplate(ctx context.Context, templateID int64) (sql.Result, error)
@@ -52,8 +49,6 @@ type Querier interface {
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
 	GetTemplate(ctx context.Context, id int64) (Template, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
-	GetWeek(ctx context.Context, id int64) (Week, error)
-	GetWeekByYearAndNumber(ctx context.Context, arg GetWeekByYearAndNumberParams) (Week, error)
 	ListActiveTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
 	ListConversationsByWeek(ctx context.Context, arg ListConversationsByWeekParams) ([]AiConversation, error)
@@ -65,17 +60,13 @@ type Querier interface {
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	ListMostCookedFoods(ctx context.Context, limit int64) ([]Food, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]PlateComponent, error)
-	ListPlateComponentsByWeek(ctx context.Context, weekID int64) ([]PlateComponent, error)
-	ListPlateFeedbackByWeek(ctx context.Context, weekID int64) ([]PlateFeedback, error)
 	ListPlatesByDate(ctx context.Context, date string) ([]Plate, error)
 	ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDateRangeParams) ([]Plate, error)
-	ListPlatesByWeek(ctx context.Context, weekID int64) ([]Plate, error)
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
 	ListTemplateComponentsByTemplate(ctx context.Context, templateID int64) ([]TemplateComponent, error)
 	ListTemplates(ctx context.Context) ([]Template, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
-	ListWeeks(ctx context.Context, arg ListWeeksParams) ([]Week, error)
 	MarkFoodCooked(ctx context.Context, arg MarkFoodCookedParams) error
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).

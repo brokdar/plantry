@@ -53,7 +53,9 @@ export function ReadOnlyPlannerGrid({ days, slots }: ReadOnlyPlannerGridProps) {
       <div className="editorial-shadow min-w-[960px] rounded-3xl border border-outline-variant/40 bg-surface-container-lowest p-5">
         <div
           className="grid gap-2.5"
-          style={{ gridTemplateColumns: "130px repeat(7, minmax(0, 1fr))" }}
+          style={{
+            gridTemplateColumns: `130px repeat(${days.length}, minmax(0, 1fr))`,
+          }}
         >
           <div />
           {days.map((day, idx) => {

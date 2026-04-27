@@ -55,7 +55,7 @@ func (s *stubPlateService) Get(ctx context.Context, id int64) (*plate.Plate, err
 		return s.getFn(ctx, id)
 	}
 	d, _ := time.Parse("2006-01-02", "2025-03-10")
-	return &plate.Plate{ID: id, SlotID: 1, Day: 0, Date: d}, nil
+	return &plate.Plate{ID: id, SlotID: 1, Date: d}, nil
 }
 
 func (s *stubPlateService) Update(ctx context.Context, p *plate.Plate) error {
@@ -107,7 +107,7 @@ func TestPlatesHandler_List_200(t *testing.T) {
 	stub := &stubPlateService{
 		getRangeFn: func(_ context.Context, from, to time.Time) ([]plate.Plate, error) {
 			return []plate.Plate{
-				{ID: 1, SlotID: 2, Day: 0, Date: d},
+				{ID: 1, SlotID: 2, Date: d},
 			}, nil
 		},
 	}
@@ -158,7 +158,7 @@ func TestPlatesHandler_Day_200(t *testing.T) {
 	d, _ := time.Parse("2006-01-02", "2025-03-10")
 	stub := &stubPlateService{
 		getRangeFn: func(_ context.Context, from, to time.Time) ([]plate.Plate, error) {
-			return []plate.Plate{{ID: 7, SlotID: 1, Day: 0, Date: d}}, nil
+			return []plate.Plate{{ID: 7, SlotID: 1, Date: d}}, nil
 		},
 	}
 	r := newPlateRouter(stub)
@@ -234,7 +234,7 @@ func TestPlatesHandler_Update_AcceptsDate(t *testing.T) {
 	stub := &stubPlateService{
 		getFn: func(_ context.Context, id int64) (*plate.Plate, error) {
 			d, _ := time.Parse("2006-01-02", "2025-03-10")
-			return &plate.Plate{ID: id, SlotID: 1, Day: 0, Date: d}, nil
+			return &plate.Plate{ID: id, SlotID: 1, Date: d}, nil
 		},
 		updateFn: func(_ context.Context, p *plate.Plate) error {
 			capturedDate = p.Date

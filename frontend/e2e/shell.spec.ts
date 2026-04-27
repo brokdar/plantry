@@ -15,7 +15,7 @@ test.describe("AppShell", () => {
       /weekly planner/i,
       /recipes/i,
       /^ingredients$/i,
-      /past weeks/i,
+      /calendar/i,
       /settings/i,
     ]) {
       await expect(sidebar.getByRole("link", { name: label })).toBeVisible()

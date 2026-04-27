@@ -11,7 +11,6 @@ vi.mock("@/lib/api/plates")
 function makePlate(id: number, note: string | null = null): Plate {
   return {
     id,
-    week_id: 1,
     day: 0,
     slot_id: 1,
     date: "2026-04-26",

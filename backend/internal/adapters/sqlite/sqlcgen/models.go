@@ -109,8 +109,6 @@ type FoodsFt struct {
 
 type Plate struct {
 	ID        int64
-	WeekID    int64
-	Day       int64
 	SlotID    int64
 	Note      sql.NullString
 	CreatedAt string
@@ -173,11 +171,4 @@ type VariantGroup struct {
 	ID        int64
 	Name      string
 	CreatedAt string
-}
-
-type Week struct {
-	ID         int64
-	Year       int64
-	WeekNumber int64
-	CreatedAt  string
 }

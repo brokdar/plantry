@@ -10,8 +10,6 @@
     "components": "Komponenten",
     "templates": "Vorlagen",
     "import": "Import",
-    "archive": "Archiv",
-    "past_weeks": "Vergangene Wochen",
     "calendar": "Kalender",
     "settings": "Einstellungen",
     "search_placeholder": "Katalog durchsuchen…",
@@ -34,27 +32,12 @@
     "title": "{{weekday}}, {{date}}",
     "prev_day": "Vorheriger Tag",
     "next_day": "Nächster Tag",
-    "back_to_calendar": "Zurück zum Kalender"
+    "back_to_calendar": "Zurück zum Kalender",
+    "empty": "Keine Mahlzeiten geplant"
   },
   "archive": {
-    "title": "Historische Sammlungen",
-    "subtitle": "Ein kuratiertes Archiv deiner saisonalen Reisen. Besuche vergangene Mahlzeiten und integriere sie in deine aktuelle Woche.",
-    "empty": "Noch keine archivierten Wochen.",
-    "end_of_journey": "Ende deiner Reise",
-    "end_of_journey_body": "Du hast den Anfang deiner Botanical-Atelier-Reise erreicht.",
-    "load_more": "Mehr Historie laden",
-    "meals_total": "{{count}} Mahlzeiten insgesamt",
-    "week_label": "Woche {{week}}, {{year}}",
-    "back": "Zurück zum Archiv",
     "forgotten": "Vergessen",
-    "most_cooked": "Oft gekocht",
-    "read_only": "Nur lesen",
-    "review": "Ansehen",
-    "copy_to_current": "In aktuelle Woche kopieren",
-    "copy_confirm_title": "Diese Woche in die aktuelle kopieren?",
-    "copy_confirm_body": "Mahlzeiten werden zu Woche {{week}}, {{year}} hinzugefügt. Vorhandene Mahlzeiten werden nicht überschrieben.",
-    "copy_success": "Woche in aktuelle kopiert",
-    "select_week": "Wähle eine Woche zur Vorschau"
+    "most_cooked": "Oft gekocht"
   },
   "import": {
     "title": "Rezept importieren",
@@ -105,14 +88,8 @@
   },
   "planner": {
     "title": "Wochenplaner",
-    "week_label": "Woche {{week}}, {{year}}",
-    "prev_week": "Vorherige Woche",
-    "next_week": "Nächste Woche",
-    "this_week": "Diese Woche",
     "today": "Heute",
-    "copy_week": "Woche in nächste kopieren",
     "daily_avg": "Tagesdurchschnitt",
-    "copy_success": "Woche kopiert",
     "fill_empty_cta": "Leere Slots füllen",
     "clear_day": "Tag leeren",
     "day_cleared": "Tag geleert",
@@ -170,9 +147,7 @@
     "next_window": "Nächste 7",
     "today_button": "Heute",
     "anchor_today": "Ab heute",
-    "anchor_shopping_day": "Ab nächstem {{weekday}}",
-    "day_today_pill": "Heute",
-    "day_past_label": "Vergangen"
+    "anchor_shopping_day": "Ab nächstem {{weekday}}"
   },
   "skip": {
     "label": "Auslassen",

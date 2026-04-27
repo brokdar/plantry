@@ -103,6 +103,10 @@ function DayPage() {
       {/* Slots grid */}
       {platesQuery.isLoading || slotsQuery.isLoading ? (
         <p className="text-sm text-on-surface-variant">{t("common.loading")}</p>
+      ) : plates.every((p) => p.components.length === 0) ? (
+        <p className="py-12 text-center text-sm text-on-surface-variant">
+          {t("day.empty")}
+        </p>
       ) : (
         <ReadOnlyPlannerGrid days={days} slots={slots} />
       )}

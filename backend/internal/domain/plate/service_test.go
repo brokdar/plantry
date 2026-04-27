@@ -21,7 +21,6 @@ func (r *fakeRepo) Create(_ context.Context, _ *plate.Plate) error              
 func (r *fakeRepo) Get(_ context.Context, _ int64) (*plate.Plate, error)             { return nil, nil }
 func (r *fakeRepo) Update(_ context.Context, _ *plate.Plate) error                   { return nil }
 func (r *fakeRepo) Delete(_ context.Context, _ int64) error                          { return nil }
-func (r *fakeRepo) ListByWeek(_ context.Context, _ int64) ([]plate.Plate, error)     { return nil, nil }
 func (r *fakeRepo) CreateComponent(_ context.Context, _ *plate.PlateComponent) error { return nil }
 func (r *fakeRepo) GetComponent(_ context.Context, _ int64) (*plate.PlateComponent, error) {
 	return nil, nil
@@ -36,7 +35,6 @@ func (r *fakeRepo) CountUsingTimeSlot(_ context.Context, _ int64) (int64, error)
 func (r *fakeRepo) SetSkipped(_ context.Context, _ int64, _ bool, _ *string) (*plate.Plate, error) {
 	return nil, nil
 }
-func (r *fakeRepo) DeleteByWeek(_ context.Context, _ int64) (int64, error) { return 0, nil }
 
 func (r *fakeRepo) ListByDateRange(_ context.Context, _, _ time.Time) ([]plate.Plate, error) {
 	return r.rangeResult, r.rangeErr

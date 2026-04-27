@@ -1,15 +1,16 @@
 import { parseISO } from "date-fns"
 import { useTranslation } from "react-i18next"
 
-import { CopyToCurrentButton } from "@/components/archive/CopyToCurrentButton"
+import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
+import type { TimeSlot } from "@/lib/api/slots"
 
 interface AgendaGroupProps {
   weekLabel: string
   plates: Plate[]
   defaultOpen?: boolean
-  foodsById?: Map<number, string>
-  showCopyButton?: boolean
+  foodsById?: Map<number, Food>
+  slots?: TimeSlot[]
 }
 
 export function AgendaGroup({
@@ -17,7 +18,7 @@ export function AgendaGroup({
   plates,
   defaultOpen = true,
   foodsById,
-  showCopyButton = false,
+  slots,
 }: AgendaGroupProps) {
   const { i18n } = useTranslation()
   const locale = i18n.language
@@ -33,14 +34,6 @@ export function AgendaGroup({
         <span className="ml-auto text-xs font-normal text-on-surface-variant">
           {plates.length}
         </span>
-        {showCopyButton && plates.length > 0 && (
-          <CopyToCurrentButton
-            weekId={plates[0].week_id}
-            size="sm"
-            iconOnly
-            testId={`copy-to-current-agenda-${plates[0].week_id}`}
-          />
-        )}
       </summary>
 
       <ul className="mt-1 space-y-0.5 pl-4">
@@ -54,7 +47,7 @@ export function AgendaGroup({
             day: "numeric",
           }).format(date)
           const dishNames = plate.components
-            .map((c) => foodsById?.get(c.food_id) ?? String(c.food_id))
+            .map((c) => foodsById?.get(c.food_id)?.name ?? String(c.food_id))
             .join(", ")
 
           return (
@@ -69,7 +62,8 @@ export function AgendaGroup({
                 {dayAbbr}
               </span>
               <span className="w-8 shrink-0 text-xs text-on-surface-variant">
-                #{plate.slot_id}
+                {slots?.find((s) => s.id === plate.slot_id)?.name_key ??
+                  `#${plate.slot_id}`}
               </span>
               <span className="min-w-0 flex-1 truncate">
                 {dishNames || "—"}

@@ -1,7 +1,7 @@
 import { Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import type { MacrosResponse } from "@/lib/api/weeks"
+import type { MacrosResponse } from "@/lib/api/plates"
 import { cn } from "@/lib/utils"
 
 interface DayHeaderProps {

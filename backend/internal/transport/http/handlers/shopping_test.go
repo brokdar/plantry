@@ -154,7 +154,6 @@ func TestShoppingRange_200_HappyPath(t *testing.T) {
 	d, _ := time.Parse("2006-01-02", "2026-04-26")
 	p := &plate.Plate{
 		Date:   d,
-		Day:    6,
 		SlotID: s.ID,
 		Components: []plate.PlateComponent{
 			{FoodID: f1.ID, Portions: 1},
@@ -192,7 +191,6 @@ func TestShoppingRange_200_ItemsAlphabetical(t *testing.T) {
 	d, _ := time.Parse("2006-01-02", "2026-04-26")
 	p := &plate.Plate{
 		Date:   d,
-		Day:    6,
 		SlotID: s.ID,
 		Components: []plate.PlateComponent{
 			{FoodID: zebra.ID, Portions: 1},

@@ -147,11 +147,11 @@ func TestNutritionRange_200_HappyPath(t *testing.T) {
 	d1, _ := time.Parse("2006-01-02", "2026-04-26")
 	d2, _ := time.Parse("2006-01-02", "2026-04-27")
 	p1 := &plate.Plate{
-		Date: d1, Day: 6, SlotID: s.ID,
+		Date: d1, SlotID: s.ID,
 		Components: []plate.PlateComponent{{FoodID: f.ID, Portions: 1}},
 	}
 	p2 := &plate.Plate{
-		Date: d2, Day: 0, SlotID: s.ID,
+		Date: d2, SlotID: s.ID,
 		Components: []plate.PlateComponent{{FoodID: f.ID, Portions: 2}},
 	}
 	require.NoError(t, plateRepo.Create(ctx, p1))

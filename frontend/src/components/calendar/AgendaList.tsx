@@ -1,7 +1,9 @@
 import { getISOWeek, getISOWeekYear, startOfWeek } from "date-fns"
 import { useTranslation } from "react-i18next"
 
+import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
+import type { TimeSlot } from "@/lib/api/slots"
 
 import { AgendaGroup } from "./AgendaGroup"
 
@@ -12,8 +14,8 @@ interface AgendaListProps {
   fetchNextPage: () => void
   search: string
   weekStartsOn: 0 | 1 | 6
-  foodsById?: Map<number, string>
-  showCopyButton?: boolean
+  foodsById?: Map<number, Food>
+  slots?: TimeSlot[]
 }
 
 interface WeekBucket {
@@ -54,7 +56,7 @@ export function AgendaList({
   search,
   weekStartsOn,
   foodsById,
-  showCopyButton,
+  slots,
 }: AgendaListProps) {
   const { t } = useTranslation()
 
@@ -63,7 +65,7 @@ export function AgendaList({
       ? plates
       : plates.filter((plate) =>
           plate.components.some((c) => {
-            const name = foodsById?.get(c.food_id) ?? ""
+            const name = foodsById?.get(c.food_id)?.name ?? ""
             return name.toLowerCase().includes(search.toLowerCase())
           })
         )
@@ -87,7 +89,7 @@ export function AgendaList({
           plates={bucket.plates}
           defaultOpen={i === 0}
           foodsById={foodsById}
-          showCopyButton={showCopyButton}
+          slots={slots}
         />
       ))}
 

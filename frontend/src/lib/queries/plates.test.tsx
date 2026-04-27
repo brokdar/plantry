@@ -3,7 +3,6 @@ import { act, renderHook, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createHookWrapper, renderWithRouter } from "@/test/render"
 
-import type { Week } from "@/lib/api/weeks"
 import type { Plate } from "@/lib/api/plates"
 
 vi.mock("@/lib/api/plates", () => ({
@@ -15,15 +14,14 @@ vi.mock("@/lib/api/plates", () => ({
   updatePlateComponent: vi.fn(),
 }))
 
-import { listPlates, updatePlate, updatePlateComponent } from "@/lib/api/plates"
+import { listPlates, updatePlate } from "@/lib/api/plates"
 
-import { plateKeys, weekKeys } from "./keys"
-import { usePlatesRange, useSwapPlateComponent, useUpdatePlate } from "./plates"
+import { plateKeys } from "./keys"
+import { usePlatesRange, useUpdatePlate } from "./plates"
 
 function makePlate(overrides?: Partial<Plate>): Plate {
   return {
     id: 1,
-    week_id: 0,
     day: 0,
     slot_id: 1,
     date: "2026-04-26",
@@ -32,36 +30,6 @@ function makePlate(overrides?: Partial<Plate>): Plate {
     components: [],
     created_at: "",
     ...overrides,
-  }
-}
-
-function makeWeek(): Week {
-  return {
-    id: 7,
-    year: 2026,
-    week_number: 16,
-    created_at: "",
-    plates: [
-      {
-        id: 100,
-        week_id: 7,
-        day: 1,
-        slot_id: 1,
-        date: "2026-04-21",
-        note: null,
-        skipped: false,
-        created_at: "",
-        components: [
-          {
-            id: 200,
-            plate_id: 100,
-            food_id: 50,
-            portions: 1,
-            sort_order: 0,
-          },
-        ],
-      },
-    ],
   }
 }
 
@@ -111,8 +79,6 @@ describe("useUpdatePlate", () => {
       },
     })
 
-    qc.setQueryData(weekKeys.byId(7), makeWeek())
-
     // Seed the range cache so we can verify it gets invalidated.
     const initialPlate = makePlate({ date: "2026-04-21" })
     qc.setQueryData(plateKeys.range("2026-04-21", "2026-04-27"), {
@@ -123,7 +89,7 @@ describe("useUpdatePlate", () => {
     vi.mocked(updatePlate).mockResolvedValueOnce(updatedPlate)
 
     const { result } = renderHook(
-      () => useUpdatePlate(7, "2026-04-21", "2026-04-27"),
+      () => useUpdatePlate("2026-04-21", "2026-04-27"),
       { wrapper: createHookWrapper(qc) }
     )
 
@@ -140,7 +106,7 @@ describe("useUpdatePlate", () => {
     expect(rangeQuery?.isInvalidated).toBe(true)
   })
 
-  it("does not invalidate range key when no rangeFrom/rangeTo given", async () => {
+  it("invalidates plateKeys.all when no rangeFrom/rangeTo given", async () => {
     const qc = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -148,16 +114,14 @@ describe("useUpdatePlate", () => {
       },
     })
 
-    qc.setQueryData(weekKeys.byId(7), makeWeek())
-
-    // Seed a range cache entry — it must NOT be invalidated.
+    // Seed a range cache entry — it must be invalidated via plateKeys.all.
     qc.setQueryData(plateKeys.range("2026-04-21", "2026-04-27"), {
       plates: [],
     })
 
     vi.mocked(updatePlate).mockResolvedValueOnce(makePlate())
 
-    const { result } = renderHook(() => useUpdatePlate(7), {
+    const { result } = renderHook(() => useUpdatePlate(), {
       wrapper: createHookWrapper(qc),
     })
 
@@ -170,77 +134,6 @@ describe("useUpdatePlate", () => {
     const rangeQuery = qc.getQueryState(
       plateKeys.range("2026-04-21", "2026-04-27")
     )
-    expect(rangeQuery?.isInvalidated).toBe(false)
-  })
-})
-
-describe("useSwapPlateComponent", () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it("rolls back optimistic update when API call fails", async () => {
-    const qc = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    })
-
-    const original = makeWeek()
-    qc.setQueryData(weekKeys.byId(7), original)
-
-    vi.mocked(updatePlateComponent).mockRejectedValueOnce(new Error("boom"))
-
-    const { result } = renderHook(() => useSwapPlateComponent(7), {
-      wrapper: createHookWrapper(qc),
-    })
-
-    await act(async () => {
-      result.current.mutate(
-        { plateId: 100, pcId: 200, input: { food_id: 999 } },
-        { onError: () => {} }
-      )
-    })
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-
-    const cached = qc.getQueryData<Week>(weekKeys.byId(7))
-    expect(cached?.plates[0].components[0].food_id).toBe(50)
-  })
-
-  it("optimistically applies swap before resolution", async () => {
-    const qc = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    })
-
-    qc.setQueryData(weekKeys.byId(7), makeWeek())
-
-    let resolve!: (v: never) => void
-    vi.mocked(updatePlateComponent).mockImplementationOnce(
-      () => new Promise<never>((r) => (resolve = r))
-    )
-
-    const { result } = renderHook(() => useSwapPlateComponent(7), {
-      wrapper: createHookWrapper(qc),
-    })
-
-    act(() => {
-      result.current.mutate({
-        plateId: 100,
-        pcId: 200,
-        input: { food_id: 777 },
-      })
-    })
-
-    await waitFor(() => {
-      const cached = qc.getQueryData<Week>(weekKeys.byId(7))
-      expect(cached?.plates[0].components[0].food_id).toBe(777)
-    })
-
-    await act(async () => {
-      resolve({} as never)
-    })
+    expect(rangeQuery?.isInvalidated).toBe(true)
   })
 })

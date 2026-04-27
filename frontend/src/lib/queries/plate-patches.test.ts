@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import type { Week } from "@/lib/api/weeks"
+import type { Week } from "@/lib/api/plates"
 
 import {
   findPlateAt,
@@ -23,7 +23,6 @@ function week(): Week {
     plates: [
       {
         id: 10,
-        week_id: 1,
         day: 0,
         slot_id: 5,
         date: "2026-04-14",
@@ -49,7 +48,6 @@ function week(): Week {
       },
       {
         id: 11,
-        week_id: 1,
         day: 1,
         slot_id: 5,
         date: "2026-04-15",
@@ -75,7 +73,6 @@ describe("plate patches", () => {
     const w = week()
     const next = patchAddPlate(w, {
       id: 12,
-      week_id: 1,
       day: 2,
       slot_id: 5,
       date: "2026-04-16",
