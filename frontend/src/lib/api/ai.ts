@@ -71,10 +71,9 @@ export async function* postChatStream(
   }
 }
 
-export function listConversations(weekId?: number) {
-  const q = weekId ? `?week_id=${weekId}` : ""
+export function listConversations() {
   return apiFetch<{ items: ConversationSummary[]; total: number }>(
-    `/ai/conversations${q}`
+    "/ai/conversations"
   )
 }
 

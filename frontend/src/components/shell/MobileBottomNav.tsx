@@ -1,9 +1,9 @@
 import {
   BookOpen,
+  Calendar,
   CalendarDays,
-  History,
+  ClipboardList,
   Package,
-  Settings,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Link } from "@tanstack/react-router"
@@ -26,13 +26,13 @@ const LEFT_ENTRIES: MobileNavEntry[] = [
 
 const RIGHT_ENTRIES: MobileNavEntry[] = [
   { to: "/ingredients", labelKey: "nav.ingredients", icon: Package },
-  { to: "/settings", labelKey: "nav.settings", icon: Settings },
+  { to: "/calendar", labelKey: "nav.calendar", icon: Calendar },
 ]
 
 const MORE_ENTRY: MobileNavEntry = {
-  to: "/archive",
-  labelKey: "nav.archive",
-  icon: History,
+  to: "/templates",
+  labelKey: "nav.templates",
+  icon: ClipboardList,
 }
 
 export function MobileBottomNav() {

@@ -12,6 +12,8 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
+const dateLayout = "2006-01-02"
+
 // PlateRepo implements plate.Repository backed by SQLite.
 type PlateRepo struct {
 	db *sql.DB
@@ -47,14 +49,13 @@ func (r *PlateRepo) Create(ctx context.Context, p *plate.Plate) error {
 
 func (r *PlateRepo) createWith(ctx context.Context, q *sqlcgen.Queries, p *plate.Plate) error {
 	row, err := q.CreatePlate(ctx, sqlcgen.CreatePlateParams{
-		WeekID: p.WeekID,
-		Day:    int64(p.Day),
 		SlotID: p.SlotID,
 		Note:   toNullString(p.Note),
+		Date:   p.Date.Format(dateLayout),
 	})
 	if err != nil {
 		if isForeignKeyViolation(err) {
-			return fmt.Errorf("%w: invalid week or slot reference", domain.ErrInvalidInput)
+			return fmt.Errorf("%w: invalid slot reference", domain.ErrInvalidInput)
 		}
 		return err
 	}
@@ -99,9 +100,9 @@ func (r *PlateRepo) Get(ctx context.Context, id int64) (*plate.Plate, error) {
 func (r *PlateRepo) Update(ctx context.Context, p *plate.Plate) error {
 	row, err := r.q.UpdatePlate(ctx, sqlcgen.UpdatePlateParams{
 		ID:     p.ID,
-		Day:    int64(p.Day),
 		SlotID: p.SlotID,
 		Note:   toNullString(p.Note),
+		Date:   p.Date.Format(dateLayout),
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -128,30 +129,29 @@ func (r *PlateRepo) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (r *PlateRepo) ListByWeek(ctx context.Context, weekID int64) ([]plate.Plate, error) {
-	plateRows, err := r.q.ListPlatesByWeek(ctx, weekID)
+// ListByDateRange returns all plates whose date falls within [from, to] inclusive,
+// with their components loaded. Results are ordered by date, slot_id, id.
+func (r *PlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]plate.Plate, error) {
+	plateRows, err := r.q.ListPlatesByDateRange(ctx, sqlcgen.ListPlatesByDateRangeParams{
+		FromDate: from.Format(dateLayout),
+		ToDate:   to.Format(dateLayout),
+	})
 	if err != nil {
 		return nil, err
 	}
 	if len(plateRows) == 0 {
 		return []plate.Plate{}, nil
 	}
-	pcRows, err := r.q.ListPlateComponentsByWeek(ctx, weekID)
-	if err != nil {
-		return nil, err
-	}
-	pcByPlate := make(map[int64][]plate.PlateComponent, len(plateRows))
-	for i := range pcRows {
-		var pc plate.PlateComponent
-		mapPlateComponentToDomain(&pcRows[i], &pc)
-		pcByPlate[pc.PlateID] = append(pcByPlate[pc.PlateID], pc)
-	}
 	out := make([]plate.Plate, len(plateRows))
 	for i := range plateRows {
 		mapPlateToDomain(&plateRows[i], &out[i])
-		out[i].Components = pcByPlate[out[i].ID]
-		if out[i].Components == nil {
-			out[i].Components = []plate.PlateComponent{}
+		pcRows, err := r.q.ListPlateComponentsByPlate(ctx, out[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Components = make([]plate.PlateComponent, len(pcRows))
+		for j := range pcRows {
+			mapPlateComponentToDomain(&pcRows[j], &out[i].Components[j])
 		}
 	}
 	return out, nil
@@ -293,15 +293,6 @@ func (r *PlateRepo) SetSkipped(ctx context.Context, plateID int64, skipped bool,
 	return &p, nil
 }
 
-// DeleteByWeek clears every plate in a week (used by fill-empty revert).
-func (r *PlateRepo) DeleteByWeek(ctx context.Context, weekID int64) (int64, error) {
-	res, err := r.q.DeletePlatesByWeek(ctx, weekID)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
-}
-
 func (r *PlateRepo) CountUsingTimeSlot(ctx context.Context, slotID int64) (int64, error) {
 	return r.q.CountPlatesUsingTimeSlot(ctx, slotID)
 }
@@ -320,12 +311,11 @@ func (r *PlateRepo) loadPlateChildren(ctx context.Context, p *plate.Plate) error
 
 func mapPlateToDomain(row *sqlcgen.Plate, p *plate.Plate) {
 	p.ID = row.ID
-	p.WeekID = row.WeekID
-	p.Day = int(row.Day)
 	p.SlotID = row.SlotID
 	p.Note = fromNullString(row.Note)
 	p.Skipped = row.Skipped != 0
 	p.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
+	p.Date, _ = time.Parse(dateLayout, row.Date)
 }
 
 func mapPlateComponentToDomain(row *sqlcgen.PlateComponent, pc *plate.PlateComponent) {

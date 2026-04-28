@@ -88,7 +88,11 @@ export function configureZodI18n(i18n: I18nInstance) {
           defaultValue: "Invalid value",
         })
       }
-      case "custom":
+      case "custom": {
+        const msg = (issue as { message?: string }).message
+        if (msg) return t(msg, { defaultValue: msg })
+        return undefined
+      }
       default:
         return undefined
     }

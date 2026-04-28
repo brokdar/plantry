@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { ApiError } from "@/lib/api/client"
 import { useDeleteFood } from "@/lib/queries/foods"
 
 interface DeleteIngredientDialogProps {
@@ -41,7 +42,7 @@ export function DeleteIngredientDialog({
         onDeleted?.()
       },
       onError: (err: unknown) => {
-        const key = err instanceof Error ? err.message : "error.server"
+        const key = err instanceof ApiError ? err.messageKey : "error.server"
         setError(t(key))
       },
     })

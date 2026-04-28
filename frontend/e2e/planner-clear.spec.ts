@@ -4,6 +4,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  mockAnchorToday,
   seedComposedFood,
   seedLeafFood,
   seedSlot,
@@ -14,19 +15,19 @@ import {
 async function seedPlate(
   slotId: number,
   foodId: number,
-  day: number = 0
+  dayOffset: number = 0
 ): Promise<{ id: number }> {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  const weekRes = await ctx.get("/api/weeks/current")
-  const week = (await weekRes.json()) as { id: number }
-  const plateRes = await ctx.post(`/api/weeks/${week.id}/plates`, {
-    data: {
-      day,
-      slot_id: slotId,
-      components: [{ food_id: foodId, portions: 1 }],
-    },
+  const d = new Date()
+  d.setDate(d.getDate() + dayOffset)
+  const date = d.toISOString().slice(0, 10)
+  const plateRes = await ctx.post("/api/plates", {
+    data: { date, slot_id: slotId },
   })
   const plate = (await plateRes.json()) as { id: number }
+  await ctx.post(`/api/plates/${plate.id}/components`, {
+    data: { food_id: foodId, portions: 1 },
+  })
   await ctx.dispose()
   return plate
 }
@@ -46,6 +47,10 @@ async function seedSkippedPlate(
 }
 
 test.describe("Planner — clear shortcuts", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAnchorToday(page)
+  })
+
   test("× quick-delete removes plate optimistically and shows undo toast", async ({
     page,
   }) => {
@@ -334,8 +339,10 @@ test.describe("Planner — clear shortcuts", () => {
       await page.goto("/")
       // Navigate to next week — guaranteed no plates, isolated from parallel
       // tests that seed plates in the current week's day-0.
-      const nextWeekFetch = page.waitForResponse(/\/api\/weeks\//)
-      await page.getByRole("button", { name: "Next week" }).click()
+      const nextWeekFetch = page.waitForResponse(
+        (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
+      )
+      await page.getByRole("button", { name: /Next 7/i }).click()
       await nextWeekFetch
 
       await page.getByTestId("day-header-0").hover()

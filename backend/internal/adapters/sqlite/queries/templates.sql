@@ -14,8 +14,8 @@ DELETE FROM templates WHERE id = ?;
 SELECT * FROM templates ORDER BY name, id;
 
 -- name: CreateTemplateComponent :one
-INSERT INTO template_components (template_id, food_id, portions, sort_order)
-VALUES (?, ?, ?, ?)
+INSERT INTO template_components (template_id, food_id, portions, sort_order, day_offset)
+VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: DeleteTemplateComponentsByTemplate :execresult

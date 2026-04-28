@@ -1,11 +1,7 @@
 import { z } from "zod"
 
 export const profileSchema = z.object({
-  kcal_target: z
-    .number()
-    .positive("Calorie target must be positive")
-    .nullable()
-    .optional(),
+  kcal_target: z.number().positive().nullable().optional(),
   protein_pct: z.number().min(0).nullable().optional(),
   fat_pct: z.number().min(0).nullable().optional(),
   carbs_pct: z.number().min(0).nullable().optional(),

@@ -36,15 +36,17 @@ test.describe("Slot skip + favorite (redesign)", () => {
       await page.goto("/")
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
 
-      // Seed a plate by clicking the empty cell → picker.
+      // Seed a plate via the picker sheet.
+      await cell.getByRole("button", { name: /plan meal/i }).click()
+      const sheet1 = page.getByRole("dialog")
+      await expect(sheet1).toBeVisible()
+      await sheet1.locator("input").first().fill(`Ramen ${tag}`)
       const createResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /plan meal/i }).click()
-      await page
+      await sheet1
         .getByRole("button", { name: new RegExp(`Ramen ${tag}`) })
         .click()
-      await page.getByTestId("tray-save").click()
       await createResp
       await expect(cell.getByText(`Ramen ${tag}`)).toBeVisible()
 
@@ -96,13 +98,17 @@ test.describe("Slot skip + favorite (redesign)", () => {
       await page.goto("/")
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
 
-      // Seed a plate to have a skip target.
+      // Seed a plate via the picker sheet.
+      await cell.getByRole("button", { name: /plan meal/i }).click()
+      const sheet2 = page.getByRole("dialog")
+      await expect(sheet2).toBeVisible()
+      await sheet2.locator("input").first().fill(`Pho ${tag}`)
       const createResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await cell.getByRole("button", { name: /plan meal/i }).click()
-      await page.getByRole("button", { name: new RegExp(`Pho ${tag}`) }).click()
-      await page.getByTestId("tray-save").click()
+      await sheet2
+        .getByRole("button", { name: new RegExp(`Pho ${tag}`) })
+        .click()
       await createResp
       await expect(cell.getByText(`Pho ${tag}`)).toBeVisible()
 

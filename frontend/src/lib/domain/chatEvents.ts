@@ -49,7 +49,7 @@ export interface ToolResultPayload {
   is_error: boolean
 }
 export interface PlateChangedPayload {
-  week_id?: number
+  date?: string
 }
 export interface DonePayload {
   stop_reason: string
@@ -80,14 +80,12 @@ export type ChatEvent =
 
 export interface ChatRequest {
   conversation_id?: number
-  week_id?: number
   mode?: "fill_empty" | "replace_all" | ""
   message: string
 }
 
 export interface ConversationSummary {
   id: number
-  week_id?: number
   title?: string
   created_at: string
   updated_at: string

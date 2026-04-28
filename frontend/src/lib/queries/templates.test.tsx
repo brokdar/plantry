@@ -10,7 +10,7 @@ import {
   useTemplates,
 } from "@/lib/queries/templates"
 
-import { templateKeys, weekKeys } from "./keys"
+import { plateKeys, templateKeys } from "./keys"
 
 vi.mock("@/lib/api/templates", () => ({
   getTemplates: vi.fn(),
@@ -115,21 +115,21 @@ describe("useApplyTemplate", () => {
     const client = makeClient()
     const spy = vi.spyOn(client, "invalidateQueries")
 
-    const { result } = renderHook(() => useApplyTemplate(42), {
+    const { result } = renderHook(() => useApplyTemplate(), {
       wrapper: wrap(client),
     })
-    result.current.mutate({ id: 1, input: { plate_id: 7 } })
+    result.current.mutate({
+      templateId: 1,
+      input: { start_date: "2026-05-01", slot_id: 2 },
+    })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(applyTemplate).toHaveBeenCalledWith(1, { plate_id: 7 })
+    expect(applyTemplate).toHaveBeenCalledWith(1, {
+      start_date: "2026-05-01",
+      slot_id: 2,
+    })
 
     const calls = spy.mock.calls.map((c) => c[0]?.queryKey)
-    expect(calls).toEqual(
-      expect.arrayContaining([
-        weekKeys.all,
-        weekKeys.shoppingList(42),
-        weekKeys.nutrition(42),
-      ])
-    )
+    expect(calls).toEqual(expect.arrayContaining([plateKeys.all]))
   })
 })

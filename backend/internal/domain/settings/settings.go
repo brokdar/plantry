@@ -44,6 +44,11 @@ type Spec struct {
 	AllowEmpty bool
 	Enum       []string // valid values when Kind == KindEnum
 	ReadOnly   bool     // true for infra/system info surfaced in /api/settings/system
+	// Min and Max constrain KindInt values. Zero values are ignored unless
+	// HasRange is true.
+	HasRange bool
+	Min      int
+	Max      int
 }
 
 // Value is a resolved setting result.
@@ -88,4 +93,9 @@ const (
 	KeyAIRateLimit  = "ai.rate_limit_per_min"
 	KeyAIFakeScript = "ai.fake_script"
 	KeyFDCAPIKey    = "fdc.api_key"
+
+	KeyPlanWeekStartsOn = "plan.week_starts_on"
+	KeyPlanAnchor       = "plan.anchor"
+	KeyPlanShoppingDay  = "plan.shopping_day"
+	KeyPlanWindowDays   = "plan.window_days"
 )

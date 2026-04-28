@@ -7,9 +7,14 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 )
+
+// SettingsReader is the subset of settings.Service that the agent needs.
+type SettingsReader interface {
+	Get(ctx context.Context, key string) (settings.Value, error)
+}
 
 // Service is the facade over conversation persistence + the agent loop. The
 // HTTP handler calls this exclusively.
@@ -17,8 +22,8 @@ type Service struct {
 	repo     Repository
 	resolver llm.Resolver
 	tools    *ToolSet
-	planner  *planner.Service
 	profile  *profile.Service
+	settings SettingsReader
 }
 
 // NewService constructs the agent service. The resolver is consulted at the
@@ -28,12 +33,12 @@ func NewService(
 	repo Repository,
 	resolver llm.Resolver,
 	tools *ToolSet,
-	plannerSvc *planner.Service,
 	profileSvc *profile.Service,
+	settingsSvc SettingsReader,
 ) *Service {
 	return &Service{
 		repo: repo, resolver: resolver, tools: tools,
-		planner: plannerSvc, profile: profileSvc,
+		profile: profileSvc, settings: settingsSvc,
 	}
 }
 
@@ -169,18 +174,16 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, conv *
 	if err != nil {
 		return "", err
 	}
-	var week *planner.Week
-	weekID := conv.WeekID
-	if req.WeekID != nil {
-		weekID = req.WeekID
-	}
-	if weekID != nil {
-		w, err := s.planner.Get(ctx, *weekID)
-		if err == nil {
-			week = w
+	var prefs *PlanningPrefs
+	if s.settings != nil {
+		shoppingDayVal, _ := s.settings.Get(ctx, settings.KeyPlanShoppingDay)
+		anchorModeVal, _ := s.settings.Get(ctx, settings.KeyPlanAnchor)
+		prefs = &PlanningPrefs{
+			ShoppingDay: shoppingDayVal.Raw,
+			AnchorMode:  anchorModeVal.Raw,
 		}
 	}
-	base := ComposePrompt(p, week)
+	base := ComposePrompt(p, nil, nil, prefs)
 	if req.Mode != "" {
 		base += "\nMode hint: " + modeHint(req.Mode) + "\n"
 	}
@@ -188,23 +191,15 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, conv *
 }
 
 // DebugSystemPrompt composes and returns the system prompt that would be sent
-// to the LLM for a chat turn given the supplied weekID. It is a thin wrapper
-// over the same logic used by Chat itself, so end-to-end tests can assert on
-// what the agent actually sees. Never call this from the Chat path — it
-// reloads the profile and week and is meant strictly for debug surfaces.
-func (s *Service) DebugSystemPrompt(ctx context.Context, weekID *int64) (string, error) {
+// to the LLM for a chat turn. It is a thin wrapper over the same logic used
+// by Chat itself, so end-to-end tests can assert on what the agent actually
+// sees. Never call this from the Chat path.
+func (s *Service) DebugSystemPrompt(ctx context.Context) (string, error) {
 	p, err := s.profile.Get(ctx)
 	if err != nil {
 		return "", err
 	}
-	var week *planner.Week
-	if weekID != nil {
-		w, err := s.planner.Get(ctx, *weekID)
-		if err == nil {
-			week = w
-		}
-	}
-	return ComposePrompt(p, week), nil
+	return ComposePrompt(p, nil, nil, nil), nil
 }
 
 func modeHint(mode string) string {

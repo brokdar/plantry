@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next"
 
 import { MacroDistributionBar } from "@/components/editorial/macros"
-import type { MacrosResponse } from "@/lib/api/weeks"
+import type { MacrosResponse } from "@/lib/api/plates"
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 

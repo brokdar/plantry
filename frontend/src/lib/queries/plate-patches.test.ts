@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import type { Week } from "@/lib/api/weeks"
+import type { Week } from "@/lib/api/plates"
 
 import {
   findPlateAt,
@@ -23,9 +23,8 @@ function week(): Week {
     plates: [
       {
         id: 10,
-        week_id: 1,
-        day: 0,
         slot_id: 5,
+        date: "2026-04-14",
         note: null,
         skipped: false,
         created_at: "",
@@ -48,9 +47,8 @@ function week(): Week {
       },
       {
         id: 11,
-        week_id: 1,
-        day: 1,
         slot_id: 5,
+        date: "2026-04-15",
         note: "leftovers",
         skipped: false,
         created_at: "",
@@ -73,9 +71,8 @@ describe("plate patches", () => {
     const w = week()
     const next = patchAddPlate(w, {
       id: 12,
-      week_id: 1,
-      day: 2,
       slot_id: 5,
+      date: "2026-04-16",
       note: null,
       skipped: false,
       created_at: "",
@@ -91,9 +88,8 @@ describe("plate patches", () => {
   })
 
   test("patchUpdatePlate merges fields", () => {
-    const next = patchUpdatePlate(week(), 10, { day: 4, note: "n" })
+    const next = patchUpdatePlate(week(), 10, { note: "n" })
     const p = next?.plates.find((p) => p.id === 10)
-    expect(p?.day).toBe(4)
     expect(p?.note).toBe("n")
     expect(p?.slot_id).toBe(5)
   })
@@ -134,10 +130,10 @@ describe("plate patches", () => {
     expect(next?.plates[0].components.map((pc) => pc.id)).toEqual([101])
   })
 
-  test("findPlateAt locates by day+slot", () => {
+  test("findPlateAt locates by date+slot", () => {
     const w = week()
-    expect(findPlateAt(w, 0, 5)?.id).toBe(10)
-    expect(findPlateAt(w, 9, 5)).toBeUndefined()
+    expect(findPlateAt(w, "2026-04-14", 5)?.id).toBe(10)
+    expect(findPlateAt(w, "2026-04-99", 5)).toBeUndefined()
   })
 
   test("findPlateForComponent walks plates", () => {

@@ -60,6 +60,7 @@ func (r *TemplateRepo) createWith(ctx context.Context, q *sqlcgen.Queries, t *te
 			FoodID:     tc.FoodID,
 			Portions:   tc.Portions,
 			SortOrder:  int64(tc.SortOrder),
+			DayOffset:  int64(tc.DayOffset),
 		})
 		if err != nil {
 			if isForeignKeyViolation(err) {
@@ -162,6 +163,7 @@ func (r *TemplateRepo) replaceWith(ctx context.Context, q *sqlcgen.Queries, temp
 			FoodID:     tc.FoodID,
 			Portions:   tc.Portions,
 			SortOrder:  int64(i),
+			DayOffset:  int64(tc.DayOffset),
 		}); err != nil {
 			if isForeignKeyViolation(err) {
 				return fmt.Errorf("%w: invalid food reference", domain.ErrInvalidInput)
@@ -212,4 +214,5 @@ func mapTemplateComponentToDomain(row *sqlcgen.TemplateComponent, tc *template.T
 	tc.FoodID = row.FoodID
 	tc.Portions = row.Portions
 	tc.SortOrder = int(row.SortOrder)
+	tc.DayOffset = int(row.DayOffset)
 }

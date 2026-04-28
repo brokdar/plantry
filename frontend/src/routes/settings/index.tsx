@@ -5,7 +5,7 @@ import { SettingsShell } from "@/components/settings/SettingsShell"
 
 const searchSchema = z.object({
   tab: z
-    .enum(["general", "ai", "nutrition", "meal_slots", "system"])
+    .enum(["general", "plan", "ai", "nutrition", "meal_slots", "system"])
     .optional(),
 })
 

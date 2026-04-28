@@ -3,6 +3,7 @@ package plate
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 )
@@ -30,11 +31,8 @@ func NewService(repo Repository, slots SlotChecker, foods FoodChecker) *Service 
 }
 
 func (s *Service) validatePlate(ctx context.Context, p *Plate) error {
-	if !ValidDay(p.Day) {
-		return fmt.Errorf("%w: day must be between 0 and 6", domain.ErrInvalidDay)
-	}
-	if p.WeekID <= 0 {
-		return fmt.Errorf("%w: week_id required", domain.ErrInvalidInput)
+	if p.Date.IsZero() {
+		return fmt.Errorf("%w: date required", domain.ErrInvalidInput)
 	}
 	if p.SlotID <= 0 {
 		return fmt.Errorf("%w: slot_id required", domain.ErrSlotUnknown)
@@ -83,10 +81,10 @@ func (s *Service) Get(ctx context.Context, id int64) (*Plate, error) {
 	return s.repo.Get(ctx, id)
 }
 
-// Update persists changes to day/slot/note. Child mutations go through their own methods.
+// Update persists changes to date/slot/note. Child mutations go through their own methods.
 func (s *Service) Update(ctx context.Context, p *Plate) error {
-	if !ValidDay(p.Day) {
-		return fmt.Errorf("%w: day must be between 0 and 6", domain.ErrInvalidDay)
+	if p.Date.IsZero() {
+		return fmt.Errorf("%w: date required", domain.ErrInvalidInput)
 	}
 	if p.SlotID <= 0 {
 		return fmt.Errorf("%w: slot_id required", domain.ErrSlotUnknown)
@@ -104,11 +102,6 @@ func (s *Service) Update(ctx context.Context, p *Plate) error {
 // Delete removes a plate (cascades to plate_components via FK).
 func (s *Service) Delete(ctx context.Context, id int64) error {
 	return s.repo.Delete(ctx, id)
-}
-
-// ListByWeek returns all plates for a week, with their components loaded.
-func (s *Service) ListByWeek(ctx context.Context, weekID int64) ([]Plate, error) {
-	return s.repo.ListByWeek(ctx, weekID)
 }
 
 // AddComponent appends a food to a plate at the next sort_order.
@@ -202,8 +195,18 @@ func (s *Service) SetSkipped(ctx context.Context, plateID int64, skipped bool, n
 	return s.repo.SetSkipped(ctx, plateID, skipped, note)
 }
 
-// DeleteByWeek clears every plate in a week. Used by the Fill-empty revert flow
-// to restore the pre-snapshot state.
-func (s *Service) DeleteByWeek(ctx context.Context, weekID int64) (int64, error) {
-	return s.repo.DeleteByWeek(ctx, weekID)
+// Range returns all plates in [from, to] inclusive. from must be ≤ to; span must be ≤ 366 days.
+func (s *Service) Range(ctx context.Context, from, to time.Time) ([]Plate, error) {
+	if from.After(to) {
+		return nil, fmt.Errorf("%w: from must not be after to", domain.ErrInvalidInput)
+	}
+	if to.Sub(from) > 366*24*time.Hour {
+		return nil, fmt.Errorf("%w: range exceeds 366 days", domain.ErrInvalidInput)
+	}
+	return s.repo.ListByDateRange(ctx, from, to)
+}
+
+// Day returns all plates for a single date.
+func (s *Service) Day(ctx context.Context, date time.Time) ([]Plate, error) {
+	return s.Range(ctx, date, date)
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -14,11 +13,10 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/planner"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/template"
 )
 
 // ToolEffect classifies side-effects of a tool invocation. The agent loop uses
@@ -59,10 +57,10 @@ type ToolSet struct {
 type Services struct {
 	Foods             *food.Service
 	NutritionResolver *food.NutritionResolver
-	Planner           *planner.Service
 	Plates            *plate.Service
 	Profile           *profile.Service
 	Slots             *slot.Service
+	Templates         *template.Service
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -140,16 +138,15 @@ func defaultTools(svc Services) []Tool {
 		toolListFoods(svc),
 		toolGetFood(svc),
 		toolListSlots(svc),
-		toolGetWeek(svc),
-		toolGetWeekNutrition(svc),
+		toolGetPlatesRange(svc),
 		toolGetProfile(svc),
 		toolCreatePlate(svc),
+		toolApplyTemplate(svc),
 		toolAddFoodToPlate(svc),
 		toolSwapFood(svc),
 		toolUpdatePlateComponent(svc),
 		toolRemovePlateComponent(svc),
 		toolDeletePlate(svc),
-		toolClearWeek(svc),
 		toolRecordPreference(svc),
 	}
 }
@@ -271,69 +268,45 @@ func toolListSlots(svc Services) Tool {
 	}
 }
 
-func toolGetWeek(svc Services) Tool {
+func toolGetPlatesRange(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
-      "properties":{"week_id":{"type":"integer","minimum":1}},
+      "required":["from","to"],
+      "properties":{
+        "from":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "to":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+      },
       "additionalProperties":false
     }`)
 	return Tool{
-		Name:        "get_week",
-		Description: "Get a week with all its plates (day + slot + food list). If week_id is omitted, returns the current ISO week.",
+		Name:        "get_plates_range",
+		Description: "Get all plates for a date range (from and to inclusive, format YYYY-MM-DD). Use this instead of get_week to read plates by calendar date.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				WeekID int64 `json:"week_id"`
+				From string `json:"from"`
+				To   string `json:"to"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			week, err := resolveWeek(ctx, svc, in.WeekID)
+			from, err := time.Parse("2006-01-02", in.From)
+			if err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: from: %v", domain.ErrInvalidInput, err)
+			}
+			to, err := time.Parse("2006-01-02", in.To)
+			if err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: to: %v", domain.ErrInvalidInput, err)
+			}
+			plates, err := svc.Plates.Range(ctx, from, to)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(weekSummary(week)), ToolEffectNone, nil
-		},
-	}
-}
-
-func toolGetWeekNutrition(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "properties":{"week_id":{"type":"integer","minimum":1}},
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "get_week_nutrition",
-		Description: "Compute per-day and week-total macros (kcal, protein, fat, carbs, fiber, sodium) for a week's plates.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				WeekID int64 `json:"week_id"`
+			items := make([]map[string]any, 0, len(plates))
+			for i := range plates {
+				items = append(items, plateSummary(&plates[i]))
 			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			week, err := resolveWeek(ctx, svc, in.WeekID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			totals, err := weekNutritionTotals(ctx, svc, week)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			days := make([]map[string]any, 0, len(totals.Days))
-			for day, m := range totals.Days {
-				days = append(days, map[string]any{"day": day, "macros": macrosMap(m)})
-			}
-			sort.Slice(days, func(i, j int) bool {
-				return days[i]["day"].(int) < days[j]["day"].(int)
-			})
-			return mustJSON(map[string]any{
-				"week_id": week.ID,
-				"days":    days,
-				"week":    macrosMap(totals.Week),
-			}), ToolEffectNone, nil
+			return mustJSON(map[string]any{"plates": items}), ToolEffectNone, nil
 		},
 	}
 }
@@ -359,10 +332,9 @@ func toolGetProfile(svc Services) Tool {
 func toolCreatePlate(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
-      "required":["week_id","day","slot_id"],
+      "required":["date","slot_id"],
       "properties":{
-        "week_id":{"type":"integer","minimum":1},
-        "day":{"type":"integer","minimum":0,"maximum":6},
+        "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
         "slot_id":{"type":"integer","minimum":1},
         "note":{"type":"string"}
       },
@@ -370,23 +342,63 @@ func toolCreatePlate(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "create_plate",
-		Description: "Create an empty plate at a given day (0=Mon..6=Sun) and slot in a week. Returns the new plate's id.",
+		Description: "Create an empty plate at a given date (YYYY-MM-DD) and slot. Returns the new plate's id.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				WeekID int64   `json:"week_id"`
-				Day    int     `json:"day"`
+				Date   string  `json:"date"`
 				SlotID int64   `json:"slot_id"`
 				Note   *string `json:"note"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			p := &plate.Plate{WeekID: in.WeekID, Day: in.Day, SlotID: in.SlotID, Note: in.Note}
+			d, err := time.Parse("2006-01-02", in.Date)
+			if err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: date: %v", domain.ErrInvalidInput, err)
+			}
+			p := &plate.Plate{Date: d, SlotID: in.SlotID, Note: in.Note}
 			if err := svc.Plates.Create(ctx, p); err != nil {
 				return nil, ToolEffectNone, err
 			}
 			return mustJSON(plateSummary(p)), ToolEffectPlateChanged, nil
+		},
+	}
+}
+
+func toolApplyTemplate(svc Services) Tool {
+	schema := json.RawMessage(`{
+      "type":"object",
+      "required":["template_id","start_date","slot_id"],
+      "properties":{
+        "template_id":{"type":"integer","minimum":1},
+        "start_date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "slot_id":{"type":"integer","minimum":1}
+      },
+      "additionalProperties":false
+    }`)
+	return Tool{
+		Name:        "apply_template",
+		Description: "Apply a meal template starting from a given date. Creates one plate per day_offset entry in the template at start_date + offset, using the given slot.",
+		Schema:      schema,
+		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
+			var in struct {
+				TemplateID int64  `json:"template_id"`
+				StartDate  string `json:"start_date"`
+				SlotID     int64  `json:"slot_id"`
+			}
+			if err := json.Unmarshal(input, &in); err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
+			startDate, err := time.Parse("2006-01-02", in.StartDate)
+			if err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: start_date: %v", domain.ErrInvalidInput, err)
+			}
+			plates, err := svc.Templates.Apply(ctx, in.TemplateID, startDate, in.SlotID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			return mustJSON(map[string]any{"plates_created": len(plates), "effect": "plate_changed"}), ToolEffectPlateChanged, nil
 		},
 	}
 }
@@ -540,44 +552,6 @@ func toolDeletePlate(svc Services) Tool {
 	}
 }
 
-func toolClearWeek(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["week_id"],
-      "properties":{"week_id":{"type":"integer","minimum":1}},
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "clear_week",
-		Description: "Delete every plate in a week. Use for 'replace all' flows.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				WeekID int64 `json:"week_id"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			week, err := svc.Planner.Get(ctx, in.WeekID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			var removed int
-			for _, p := range week.Plates {
-				if err := svc.Plates.Delete(ctx, p.ID); err != nil {
-					return nil, ToolEffectPlateChanged, err
-				}
-				removed++
-			}
-			effect := ToolEffectNone
-			if removed > 0 {
-				effect = ToolEffectPlateChanged
-			}
-			return mustJSON(map[string]any{"removed": removed}), effect, nil
-		},
-	}
-}
-
 func toolRecordPreference(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
@@ -623,13 +597,6 @@ func toolRecordPreference(svc Services) Tool {
 // ---------------------------------------------------------------------------
 // helpers shared by handlers
 // ---------------------------------------------------------------------------
-
-func resolveWeek(ctx context.Context, svc Services, weekID int64) (*planner.Week, error) {
-	if weekID == 0 {
-		return svc.Planner.Current(ctx, time.Now().UTC())
-	}
-	return svc.Planner.Get(ctx, weekID)
-}
 
 func foodSummary(f *food.Food) map[string]any {
 	role := ""
@@ -711,24 +678,13 @@ func derefF(p *float64) float64 {
 	return *p
 }
 
-func weekSummary(w *planner.Week) map[string]any {
-	plates := make([]map[string]any, len(w.Plates))
-	for i, p := range w.Plates {
-		plates[i] = plateSummary(&p)
-	}
-	return map[string]any{
-		"id": w.ID, "year": w.Year, "week_number": w.WeekNumber,
-		"plates": plates,
-	}
-}
-
 func plateSummary(p *plate.Plate) map[string]any {
 	comps := make([]map[string]any, len(p.Components))
 	for i := range p.Components {
 		comps[i] = plateComponentMap(&p.Components[i])
 	}
 	return map[string]any{
-		"id": p.ID, "week_id": p.WeekID, "day": p.Day, "slot_id": p.SlotID,
+		"id": p.ID, "date": p.DateString(), "slot_id": p.SlotID,
 		"note": p.Note, "components": comps,
 	}
 }
@@ -751,42 +707,6 @@ func profileMap(p *profile.Profile) map[string]any {
 		"system_prompt":        p.SystemPrompt,
 		"locale":               p.Locale,
 	}
-}
-
-func macrosMap(m nutrition.Macros) map[string]any {
-	return map[string]any{
-		"kcal": m.Kcal, "protein": m.Protein, "fat": m.Fat,
-		"carbs": m.Carbs, "fiber": m.Fiber, "sodium": m.Sodium,
-	}
-}
-
-// weekNutritionTotals computes per-day and week-total macros for a week's
-// plates via the recursive food nutrition resolver.
-func weekNutritionTotals(ctx context.Context, svc Services, w *planner.Week) (*nutrition.WeekTotalsResult, error) {
-	perPortion := map[int64]nutrition.Macros{}
-	for _, p := range w.Plates {
-		for _, pc := range p.Components {
-			if _, ok := perPortion[pc.FoodID]; ok {
-				continue
-			}
-			m, err := svc.NutritionResolver.PerPortion(ctx, pc.FoodID)
-			if err != nil {
-				return nil, err
-			}
-			perPortion[pc.FoodID] = m
-		}
-	}
-	dayPlates := make([]nutrition.DayPlate, 0, len(w.Plates))
-	for _, p := range w.Plates {
-		cis := make([]nutrition.PlateComponentInput, 0, len(p.Components))
-		for _, pc := range p.Components {
-			m := perPortion[pc.FoodID]
-			cis = append(cis, nutrition.PlateComponentInput{Macros: m, Portions: pc.Portions})
-		}
-		dayPlates = append(dayPlates, nutrition.DayPlate{Day: p.Day, Plate: nutrition.PlateInput{Components: cis}})
-	}
-	r := nutrition.WeekTotals(dayPlates)
-	return &r, nil
 }
 
 func mustJSON(v any) json.RawMessage {

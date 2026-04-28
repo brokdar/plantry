@@ -1,6 +1,26 @@
 import { apiFetch } from "./client"
 import type { PlateFeedback } from "./feedback"
 
+export interface MacrosResponse {
+  kcal: number
+  protein: number
+  fat: number
+  carbs: number
+  fiber: number
+  sodium: number
+}
+
+// Week is kept as an in-memory aggregate for plate-patch helpers used by
+// optimistic component mutations (swap, add, remove). It is not fetched from
+// the server; the week cache slots are populated by the mutation hooks only.
+export interface Week {
+  id: number
+  year: number
+  week_number: number
+  plates: Plate[]
+  created_at: string
+}
+
 export interface PlateComponent {
   id: number
   plate_id: number
@@ -11,9 +31,8 @@ export interface PlateComponent {
 
 export interface Plate {
   id: number
-  week_id: number
-  day: number
   slot_id: number
+  date: string
   note: string | null
   skipped: boolean
   components: PlateComponent[]
@@ -22,9 +41,9 @@ export interface Plate {
 }
 
 export interface UpdatePlateInput {
-  day?: number
   slot_id?: number
   note?: string | null
+  date?: string
 }
 
 export interface AddPlateComponentInput {
@@ -35,6 +54,23 @@ export interface AddPlateComponentInput {
 export interface UpdatePlateComponentInput {
   food_id?: number
   portions?: number
+}
+
+export function listPlates(
+  from: string,
+  to: string
+): Promise<{ plates: Plate[] }> {
+  return apiFetch(
+    `/plates?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+  )
+}
+
+export function createPlate(input: {
+  date: string
+  slot_id: number
+  note?: string
+}): Promise<Plate> {
+  return apiFetch("/plates", { method: "POST", body: JSON.stringify(input) })
 }
 
 export function getPlate(id: number): Promise<Plate> {

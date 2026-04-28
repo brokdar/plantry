@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { chatStreamStore } from "../stores/chat-stream"
 
 import { useChatStream } from "./ai"
-import { weekKeys } from "./keys"
+import { plateKeys } from "./keys"
 
 function stringToReadable(s: string): ReadableStream<Uint8Array> {
   const enc = new TextEncoder()
@@ -70,10 +70,12 @@ describe("useChatStream", () => {
     expect(all.every((q) => !q.queryKey.includes("assistant_delta"))).toBe(true)
   })
 
-  it("invalidates week query caches on plate_changed", async () => {
+  it("invalidates plate range cache on plate_changed", async () => {
+    const from = "2026-04-14"
+    const to = "2026-04-20"
     const sse =
       `event: tool_exec_end\ndata: {"id":"tu_1","name":"create_plate","status":"ok","duration_ms":5}\n\n` +
-      `event: plate_changed\ndata: {"week_id":42}\n\n` +
+      `event: plate_changed\ndata: {}\n\n` +
       `event: done\ndata: {"stop_reason":"end_turn","iteration_count":1}\n\n`
 
     vi.stubGlobal(
@@ -87,10 +89,7 @@ describe("useChatStream", () => {
         mutations: { retry: false },
       },
     })
-    // Seed the three week-scoped caches.
-    qc.setQueryData(weekKeys.byId(42), { plates: [] })
-    qc.setQueryData(weekKeys.nutrition(42), { days: [] })
-    qc.setQueryData(weekKeys.shoppingList(42), { items: [] })
+    qc.setQueryData(plateKeys.range(from, to), { plates: [] })
 
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
 
@@ -98,15 +97,15 @@ describe("useChatStream", () => {
       wrapper: wrapper(qc),
     })
     await act(async () => {
-      await result.current.mutateAsync({ message: "plan", weekId: 42 })
+      await result.current.mutateAsync({ message: "plan", range: { from, to } })
     })
 
-    const weekInvalidations = invalidateSpy.mock.calls.filter(
+    const plateInvalidations = invalidateSpy.mock.calls.filter(
       (c) =>
         Array.isArray(c[0]?.queryKey) &&
-        (c[0]!.queryKey as readonly unknown[])[0] === "weeks"
+        (c[0]!.queryKey as readonly unknown[])[0] === "plates"
     )
-    expect(weekInvalidations.length).toBeGreaterThanOrEqual(3)
+    expect(plateInvalidations.length).toBeGreaterThanOrEqual(1)
   })
 
   it("tool_call_* events accumulate args in the stream buffer", async () => {

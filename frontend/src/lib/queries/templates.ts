@@ -3,16 +3,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   applyTemplate,
   createTemplate,
+  createTemplateFromRange,
   deleteTemplate,
   getTemplate,
   getTemplates,
   updateTemplate,
   type ApplyTemplateInput,
+  type CreateTemplateFromRangeInput,
   type CreateTemplateInput,
   type UpdateTemplateInput,
 } from "@/lib/api/templates"
 
-import { templateKeys, weekKeys } from "./keys"
+import { plateKeys, templateKeys } from "./keys"
 
 export function useTemplates() {
   return useQuery({
@@ -61,17 +63,31 @@ export function useDeleteTemplate() {
   })
 }
 
-// useApplyTemplate invalidates all week-rooted caches so the planner grid,
-// shopping list, and nutrition views all refetch after the plate changes.
-export function useApplyTemplate(weekId: number) {
+// useApplyTemplate accepts {templateId, input} and invalidates all plate caches
+// so the planner grid refetches after applying the template.
+export function useApplyTemplate() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, input }: { id: number; input: ApplyTemplateInput }) =>
-      applyTemplate(id, input),
+    mutationFn: ({
+      templateId,
+      input,
+    }: {
+      templateId: number
+      input: ApplyTemplateInput
+    }) => applyTemplate(templateId, input),
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: weekKeys.all })
-      void qc.invalidateQueries({ queryKey: weekKeys.shoppingList(weekId) })
-      void qc.invalidateQueries({ queryKey: weekKeys.nutrition(weekId) })
+      void qc.invalidateQueries({ queryKey: plateKeys.all })
+    },
+  })
+}
+
+export function useCreateTemplateFromRange() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: CreateTemplateFromRangeInput) =>
+      createTemplateFromRange(input),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: templateKeys.lists() })
     },
   })
 }

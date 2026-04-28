@@ -1,5 +1,6 @@
 import { useNavigate, useSearch } from "@tanstack/react-router"
 import {
+  CalendarDays,
   Cpu,
   Database,
   Palette,
@@ -15,12 +16,14 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 
 import { AITab } from "./tabs/AITab"
 import { GeneralTab } from "./tabs/GeneralTab"
+import { PlanTab } from "./tabs/PlanTab"
 import { MealSlotsTab } from "./tabs/MealSlotsTab"
 import { NutritionTab } from "./tabs/NutritionTab"
 import { SystemTab } from "./tabs/SystemTab"
 
 export type SettingsTab =
   | "general"
+  | "plan"
   | "ai"
   | "nutrition"
   | "meal_slots"
@@ -28,6 +31,7 @@ export type SettingsTab =
 
 const TABS: Array<{ value: SettingsTab; Icon: LucideIcon }> = [
   { value: "general", Icon: Palette },
+  { value: "plan", Icon: CalendarDays },
   { value: "ai", Icon: Cpu },
   { value: "nutrition", Icon: Salad },
   { value: "meal_slots", Icon: UtensilsCrossed },
@@ -75,6 +79,9 @@ export function SettingsShell() {
           <div className="min-w-0 flex-1 pl-2 md:pl-8">
             <TabsContent value="general">
               <GeneralTab />
+            </TabsContent>
+            <TabsContent value="plan">
+              <PlanTab />
             </TabsContent>
             <TabsContent value="ai">
               <AITab />

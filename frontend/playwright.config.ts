@@ -53,6 +53,9 @@ export default defineConfig({
     {
       command: "bun run dev",
       url: `http://localhost:${PORT}`,
+      // Vite has no state; safe to reuse a running dev server. The backend
+      // (above) is always spawned fresh so e2e tests never silently bind to
+      // a developer's real DB or a stale process.
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

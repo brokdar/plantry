@@ -8,8 +8,8 @@ import {
   uid,
 } from "./helpers"
 
-test.describe("Planner picker route", () => {
-  test("empty cell navigates to picker, tray accumulates, Save creates plate", async ({
+test.describe("Planner picker sheet", () => {
+  test("empty cell opens picker sheet and clicking food creates plate", async ({
     page,
   }) => {
     const tag = uid()
@@ -18,91 +18,77 @@ test.describe("Planner picker route", () => {
       { name: `Sushi ${tag}`, role: "main" },
       tag
     )
-    const { composed: side, stub: sideStub } = await seedComposedWithStub(
-      { name: `Miso ${tag}`, role: "side_veg" },
-      tag
-    )
 
     try {
       await page.goto("/")
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
       await expect(cell).toBeVisible()
 
-      // Empty cell navigates to the picker route.
+      // Empty cell opens the picker sheet (not a route navigation).
       await cell.getByRole("button", { name: /plan meal/i }).click()
-      await expect(page).toHaveURL(
-        new RegExp(`/planner/\\d+/0/${slot.id}/pick`)
-      )
+      const sheet = page.getByRole("dialog")
+      await expect(sheet).toBeVisible()
 
-      // Target context strip renders.
-      await expect(page.getByTestId("picker-target")).toBeVisible()
+      // URL stays at /.
+      await expect(page).toHaveURL(/\/$/)
 
-      // Pick main → tray shows 1 component.
-      await page.getByTestId(`picker-card-${main.id}`).click()
-      await expect(page.getByTestId(`tray-item-${main.id}`)).toBeVisible()
+      // Search for the food.
+      await sheet.locator("input").first().fill(`Sushi ${tag}`)
 
-      // Pick side → tray shows 2.
-      await page.getByTestId(`picker-card-${side.id}`).click()
-      await expect(page.getByTestId(`tray-item-${side.id}`)).toBeVisible()
-
-      // Save creates the plate and returns to planner.
+      // Clicking the food button creates the plate immediately — no tray-save.
       const createResp = page.waitForResponse(
         (r) => r.url().includes("/plates") && r.request().method() === "POST"
       )
-      await page.getByTestId("tray-save").click()
+      await sheet
+        .getByRole("button", { name: new RegExp(`Sushi ${tag}`) })
+        .click()
       await createResp
 
-      await expect(page).toHaveURL(/\/$/)
+      // Sheet closes and the cell shows the food name.
+      await expect(sheet).not.toBeVisible()
       await expect(cell.getByText(`Sushi ${tag}`)).toBeVisible()
     } finally {
-      await cleanupFood(side.id)
       await cleanupFood(main.id)
       await cleanupFood(mainStub.id)
-      await cleanupFood(sideStub.id)
       await cleanupSlot(slot.id)
     }
   })
 
-  test("favorites prefilter narrows catalog", async ({ page }) => {
+  test("search input filters the food list", async ({ page }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.lunch_${tag}`, "Sun", 995)
-    const { composed: fav, stub: favStub } = await seedComposedWithStub(
-      { name: `Tacos ${tag}`, role: "main" },
+    const { composed: food1, stub: stub1 } = await seedComposedWithStub(
+      { name: `Apricot ${tag}`, role: "main" },
       tag
     )
-    const { composed: other, stub: otherStub } = await seedComposedWithStub(
-      { name: `Lasagna ${tag}`, role: "main" },
-      tag
+    const { composed: food2, stub: stub2 } = await seedComposedWithStub(
+      { name: `Blueberry ${tag}`, role: "main" },
+      `${tag}b`
     )
 
     try {
       await page.goto("/")
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
       await cell.getByRole("button", { name: /plan meal/i }).click()
-      await expect(page.getByTestId("picker-target")).toBeVisible()
+      const sheet = page.getByRole("dialog")
+      await expect(sheet).toBeVisible()
 
-      // Mark Tacos as favorite via its card heart.
-      const favResp = page.waitForResponse(
-        (r) =>
-          /\/foods\/\d+\/favorite$/.test(r.url()) &&
-          r.request().method() === "POST"
-      )
-      await page
-        .getByTestId(`picker-card-${fav.id}`)
-        .getByRole("button", { name: /favorite/i })
-        .click()
-      await favResp
+      // Search for food1 — food2 must not appear.
+      await sheet.locator("input").first().fill(`Apricot ${tag}`)
+      await expect(
+        sheet.getByRole("button", { name: new RegExp(`Apricot ${tag}`) })
+      ).toBeVisible()
+      await expect(
+        sheet.getByRole("button", { name: new RegExp(`Blueberry ${tag}`) })
+      ).toHaveCount(0)
 
-      // Activate Favorites prefilter.
-      await page.getByTestId("picker-filter-favorites").click()
-
-      await expect(page.getByTestId(`picker-card-${fav.id}`)).toBeVisible()
-      await expect(page.getByTestId(`picker-card-${other.id}`)).toHaveCount(0)
+      // Close without picking.
+      await page.keyboard.press("Escape")
     } finally {
-      await cleanupFood(other.id)
-      await cleanupFood(fav.id)
-      await cleanupFood(favStub.id)
-      await cleanupFood(otherStub.id)
+      await cleanupFood(food1.id)
+      await cleanupFood(stub1.id)
+      await cleanupFood(food2.id)
+      await cleanupFood(stub2.id)
       await cleanupSlot(slot.id)
     }
   })

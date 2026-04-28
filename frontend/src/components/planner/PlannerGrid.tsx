@@ -1,10 +1,4 @@
-import {
-  addDays,
-  isSameDay,
-  setISOWeek,
-  setISOWeekYear,
-  startOfISOWeek,
-} from "date-fns"
+import { parseISO, isBefore, isToday, startOfDay } from "date-fns"
 import {
   DndContext,
   KeyboardSensor,
@@ -15,7 +9,6 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
-import { useNavigate } from "@tanstack/react-router"
 import * as Lucide from "lucide-react"
 import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -26,25 +19,23 @@ import {
   DndCellWrapper,
   type DragPayload,
 } from "@/components/planner/DndCellWrapper"
-import { addPlateComponent, deletePlate, updatePlate } from "@/lib/api/plates"
-import { createPlate } from "@/lib/api/weeks"
+import { addPlateComponent, createPlate, deletePlate } from "@/lib/api/plates"
 import { queryClient } from "@/lib/query-client"
-import { weekKeys } from "@/lib/queries/keys"
+import { plateKeys } from "@/lib/queries/keys"
+import { shoppingKeys } from "@/lib/queries/shopping"
 import type { Food } from "@/lib/api/foods"
+import type { Plate } from "@/lib/api/plates"
 import type { TimeSlot } from "@/lib/api/slots"
-import type { Template } from "@/lib/api/templates"
-import type { Week } from "@/lib/api/weeks"
+import type { NutritionDay } from "@/lib/api/nutrition"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
-import { findPlateAt, patchDeletePlate } from "@/lib/queries/plate-patches"
 import {
   useAddPlateComponent,
   useDeletePlate,
   useSetPlateSkipped,
   useSwapPlateComponent,
+  useUpdatePlate,
 } from "@/lib/queries/plates"
-import { useApplyTemplate } from "@/lib/queries/templates"
-import { useWeekNutrition, useCreatePlate } from "@/lib/queries/weeks"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
@@ -52,6 +43,12 @@ import { toast, toastError } from "@/lib/toast"
 import { AddComponentSheet } from "./AddComponentSheet"
 import { DayHeader } from "./DayHeader"
 import { SlotCell } from "./SlotCell"
+
+export interface PlannerDay {
+  date: string // "YYYY-MM-DD"
+  weekday: number // 0=Monday…6=Sunday (matches backend convention)
+  plates: Plate[]
+}
 
 const DAY_KEYS = [
   "planner.day_mon",
@@ -64,8 +61,11 @@ const DAY_KEYS = [
 ] as const
 
 interface PlannerGridProps {
-  week: Week
+  days: PlannerDay[]
   slots: TimeSlot[]
+  rangeFrom: string
+  rangeTo: string
+  nutritionDays?: NutritionDay[]
 }
 
 interface AddTarget {
@@ -89,19 +89,23 @@ function SlotIcon({ name }: { name: string }) {
   return <Icon className="h-4 w-4" aria-hidden />
 }
 
-export function PlannerGrid({ week, slots }: PlannerGridProps) {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
+function findPlateInDay(day: PlannerDay, slotId: number): Plate | undefined {
+  return day.plates.find((p) => p.slot_id === slotId)
+}
 
-  const openPicker = (day: number, slotId: number) =>
-    void navigate({
-      to: "/planner/$weekId/$day/$slotId/pick",
-      params: {
-        weekId: String(week.id),
-        day: String(day),
-        slotId: String(slotId),
-      },
-    })
+export function PlannerGrid({
+  days,
+  slots,
+  rangeFrom,
+  rangeTo,
+  nutritionDays,
+}: PlannerGridProps) {
+  const { t } = useTranslation()
+
+  const openPicker = (day: number, slotId: number) => {
+    setAddTarget({ day, slotId, plateId: null })
+  }
+
   const componentsQuery = useFoods({ limit: 200 })
   const componentsById = useMemo(() => {
     const map = new Map<number, Food>()
@@ -109,84 +113,51 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
     return map
   }, [componentsQuery.data])
 
-  const weekStart = useMemo(() => {
-    const d = setISOWeekYear(new Date(), week.year)
-    return startOfISOWeek(setISOWeek(d, week.week_number))
-  }, [week.year, week.week_number])
-
-  const today = new Date()
-
-  const nutritionQuery = useWeekNutrition(week.id)
-  const nutritionData = nutritionQuery.data
-  const dayMacros = useMemo(() => {
-    const m = new Map<
-      number,
-      NonNullable<typeof nutritionData>["days"][number]["macros"]
-    >()
-    for (const d of nutritionData?.days ?? []) m.set(d.day, d.macros)
-    return m
-  }, [nutritionData])
+  const today = startOfDay(new Date())
 
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null)
   const [savePlateId, setSavePlateId] = useState<number | null>(null)
 
-  const createPlateMut = useCreatePlate(week.id)
-  const addCompMut = useAddPlateComponent(week.id)
-  const swapMut = useSwapPlateComponent(week.id)
-  const deletePlateMut = useDeletePlate(week.id)
-  const setSkippedMut = useSetPlateSkipped(week.id)
-  const applyTemplateMut = useApplyTemplate(week.id)
+  const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
+  const addCompMut = useAddPlateComponent()
+  const swapMut = useSwapPlateComponent()
+  const deletePlateMut = useDeletePlate()
+  const setSkippedMut = useSetPlateSkipped()
   const setFavoriteMut = useSetFoodFavorite()
-  const recordFeedbackMut = useRecordFeedback(week.id)
-  const clearFeedbackMut = useClearFeedback(week.id)
+  const recordFeedbackMut = useRecordFeedback()
+  const clearFeedbackMut = useClearFeedback()
 
   const aiFill = usePlannerUI((s) => s.aiFill)
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
-  const aiFilledIds = useMemo(() => {
-    if (!aiFill || aiFill.weekId !== week.id) return new Set<number>()
-    return new Set(aiFill.aiFilledPlateIds)
-  }, [aiFill, week.id])
+  const aiFilledIds = useMemo(() => new Set(aiFill.plateIds), [aiFill.plateIds])
 
   async function handlePick(component: Food) {
     if (!addTarget) return
     const target = addTarget
     setAddTarget(null)
+    const targetDay = days[target.day]
+    if (!targetDay) return
     try {
       if (target.plateId === null) {
-        await createPlateMut.mutateAsync({
-          day: target.day,
+        const created = await createPlate({
+          date: targetDay.date,
           slot_id: target.slotId,
-          components: [{ food_id: component.id, portions: 1 }],
         })
+        await addPlateComponent(created.id, {
+          food_id: component.id,
+          portions: 1,
+        })
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
+        void queryClient.invalidateQueries({ queryKey: shoppingKeys.all })
       } else {
         await addCompMut.mutateAsync({
           plateId: target.plateId,
           input: { food_id: component.id, portions: 1 },
         })
       }
-    } catch (err) {
-      toastError(err, t)
-    }
-  }
-
-  async function handleApplyTemplate(template: Template) {
-    if (!addTarget) return
-    const target = addTarget
-    setAddTarget(null)
-    try {
-      let plateId = target.plateId
-      if (plateId === null) {
-        const created = await createPlateMut.mutateAsync({
-          day: target.day,
-          slot_id: target.slotId,
-        })
-        plateId = created.id
-      }
-      await applyTemplateMut.mutateAsync({
-        id: template.id,
-        input: { plate_id: plateId },
-      })
     } catch (err) {
       toastError(err, t)
     }
@@ -207,26 +178,17 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
     }
   }
 
-  function applyToAllCacheSlots(
-    patch: (w: Week | undefined) => Week | undefined
-  ) {
-    queryClient.setQueryData(weekKeys.byId(week.id), patch)
-    queryClient.setQueryData(
-      weekKeys.byDate(week.year, week.week_number),
-      patch
-    )
-    queryClient.setQueryData(weekKeys.current(), (old: Week | undefined) =>
-      old?.id === week.id ? patch(old) : old
-    )
-  }
-
-  function handleDeletePlate(plateId: number) {
+  function handleDeletePlate(plateId: number, dayIdx: number) {
     if (pendingDeletesRef.current.has(plateId)) return
 
-    const plateSnapshot = week.plates.find((p) => p.id === plateId)
+    const plateSnapshot = days[dayIdx]?.plates.find((p) => p.id === plateId)
     if (!plateSnapshot) return
 
-    applyToAllCacheSlots((w) => (w ? patchDeletePlate(w, plateId) : w))
+    // Optimistic: remove from cache immediately so the UI updates at once.
+    queryClient.setQueryData<{ plates: Plate[] }>(
+      plateKeys.range(rangeFrom, rangeTo),
+      (old) => ({ plates: (old?.plates ?? []).filter((p) => p.id !== plateId) })
+    )
 
     const timeoutId = setTimeout(async () => {
       pendingDeletesRef.current.delete(plateId)
@@ -234,6 +196,10 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
         await deletePlateMut.mutateAsync(plateId)
       } catch (err) {
         toastError(err, t)
+        queryClient.setQueryData<{ plates: Plate[] }>(
+          plateKeys.range(rangeFrom, rangeTo),
+          (old) => ({ plates: [...(old?.plates ?? []), plateSnapshot] })
+        )
       }
     }, 5000)
 
@@ -250,25 +216,28 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
           if (!pending) return
           clearTimeout(pending.timeoutId)
           pendingDeletesRef.current.delete(plateId)
-          // Restore just this plate directly — no invalidate, so other
-          // pending deletes remain removed.
-          applyToAllCacheSlots((w) => {
-            if (!w) return w
-            if (w.plates.some((p) => p.id === plateId)) return w
-            return { ...w, plates: [...w.plates, pending.snapshot] }
-          })
+          queryClient.setQueryData<{ plates: Plate[] }>(
+            plateKeys.range(rangeFrom, rangeTo),
+            (old) => ({ plates: [...(old?.plates ?? []), pending.snapshot] })
+          )
         },
       },
       duration: 5000,
     })
   }
 
-  function handleClearDay(day: number) {
-    const dayPlates = week.plates.filter((p) => p.day === day)
-    if (dayPlates.length === 0) return
+  function handleClearDay(dayIdx: number) {
+    const targetDay = days[dayIdx]
+    if (!targetDay || targetDay.plates.length === 0) return
+    const dayPlates = targetDay.plates
 
-    applyToAllCacheSlots((w) =>
-      w ? { ...w, plates: w.plates.filter((p) => p.day !== day) } : w
+    // Optimistic: remove day's plates from cache immediately.
+    const dayPlateIds = new Set(dayPlates.map((p) => p.id))
+    queryClient.setQueryData<{ plates: Plate[] }>(
+      plateKeys.range(rangeFrom, rangeTo),
+      (old) => ({
+        plates: (old?.plates ?? []).filter((p) => !dayPlateIds.has(p.id)),
+      })
     )
 
     const timeoutId = setTimeout(async () => {
@@ -277,7 +246,9 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
       } catch (err) {
         toastError(err, t)
       } finally {
-        void queryClient.invalidateQueries({ queryKey: weekKeys.all })
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
       }
     }, 5000)
 
@@ -286,14 +257,10 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
         label: t("common.undo"),
         onClick: () => {
           clearTimeout(timeoutId)
-          // Restore day's plates directly — no invalidate.
-          applyToAllCacheSlots((w) => {
-            if (!w) return w
-            const existingIds = new Set(w.plates.map((p) => p.id))
-            const toRestore = dayPlates.filter((p) => !existingIds.has(p.id))
-            if (toRestore.length === 0) return w
-            return { ...w, plates: [...w.plates, ...toRestore] }
-          })
+          queryClient.setQueryData<{ plates: Plate[] }>(
+            plateKeys.range(rangeFrom, rangeTo),
+            (old) => ({ plates: [...(old?.plates ?? []), ...dayPlates] })
+          )
         },
       },
       duration: 5000,
@@ -301,22 +268,25 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
   }
 
   async function handleToggleSkip(
-    day: number,
+    dayIdx: number,
     slotId: number,
     plateId: number | null
   ) {
+    const targetDay = days[dayIdx]
+    if (!targetDay) return
     try {
-      // Create a plate first if none exists at the target slot, then flip the
-      // skip flag atomically on the backend. Skipping clears components.
       let id = plateId
       if (id === null) {
-        const created = await createPlateMut.mutateAsync({
-          day,
+        const created = await createPlate({
+          date: targetDay.date,
           slot_id: slotId,
         })
         id = created.id
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
       }
-      const existing = findPlateAt(week, day, slotId)
+      const existing = findPlateInDay(targetDay, slotId)
       const nextSkipped = !existing?.skipped
       await setSkippedMut.mutateAsync({
         plateId: id,
@@ -364,7 +334,7 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
   const modeRef = useRef<"move" | "copy">("move")
   type PendingDelete = {
     timeoutId: ReturnType<typeof setTimeout>
-    snapshot: Week["plates"][number]
+    snapshot: Plate
   }
   const pendingDeletesRef = useRef(new Map<number, PendingDelete>())
   const sensors = useSensors(
@@ -382,7 +352,6 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
       "metaKey" in activator &&
       (activator.metaKey || activator.ctrlKey)
     modeRef.current = copyHeld ? "copy" : "move"
-    // Keep the payload helper warm for future use (e.g. custom preview).
     const payload: DragPayload | null = dragStartToPayload(event, !!copyHeld)
     if (!payload) modeRef.current = "move"
   }
@@ -392,12 +361,13 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
     const over = event.over
     if (!over) return
     const activeData = active.data.current as
-      | { plateId?: number; day?: number; slotId?: number }
+      | { plateId?: number; day?: number; slotId?: number; date?: string }
       | undefined
     const overData = over.data.current as
       | {
           day?: number
           slotId?: number
+          date?: string
           existingPlateId?: number
           skipped?: boolean
         }
@@ -423,17 +393,24 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
 
     try {
       if (modeRef.current === "move") {
-        await updatePlate(activeData.plateId, {
-          day: overData.day,
-          slot_id: overData.slotId,
+        await updatePlateMut.mutateAsync({
+          id: activeData.plateId,
+          input: {
+            date: overData.date,
+            slot_id: overData.slotId,
+          },
         })
       } else {
-        const src = findPlateAt(week, activeData.day!, activeData.slotId!)
+        const srcDayIdx = activeData.day ?? 0
+        const srcDay = days[srcDayIdx]
+        const src = srcDay
+          ? findPlateInDay(srcDay, activeData.slotId!)
+          : undefined
         if (!src) return
-        const created = await createPlate(week.id, {
-          day: overData.day!,
+        const created = await createPlate({
+          date: overData.date!,
           slot_id: overData.slotId!,
-          note: src.note,
+          note: src.note ?? undefined,
         })
         for (const pc of src.components) {
           await addPlateComponent(created.id, {
@@ -441,8 +418,10 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
             portions: pc.portions,
           })
         }
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
       }
-      await queryClient.invalidateQueries({ queryKey: weekKeys.all })
     } catch (err) {
       toastError(err, t)
     }
@@ -464,19 +443,23 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
               style={{ gridTemplateColumns: "130px repeat(7, minmax(0, 1fr))" }}
             >
               <div />
-              {DAY_KEYS.map((dayKey, idx) => {
-                const date = addDays(weekStart, idx)
-                const isToday = isSameDay(date, today)
+              {days.map((day, idx) => {
+                const date = parseISO(day.date)
+                const dayIsToday = isToday(date)
+                const dayKey = DAY_KEYS[day.weekday] ?? DAY_KEYS[idx % 7]
+                const dayMacros = nutritionDays?.find(
+                  (n) => n.date === day.date
+                )?.macros
                 return (
                   <DayHeader
-                    key={dayKey}
+                    key={day.date}
                     idx={idx}
                     dayKey={dayKey}
                     date={date}
-                    today={isToday}
-                    macros={dayMacros.get(idx)}
+                    today={dayIsToday}
+                    macros={dayMacros}
                     onClearDay={() => handleClearDay(idx)}
-                    hasPlates={week.plates.some((p) => p.day === idx)}
+                    hasPlates={day.plates.length > 0}
                   />
                 )
               })}
@@ -511,69 +494,78 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
                       {slotLabel(t, slot.name_key)}
                     </span>
                   </div>
-                  {DAY_KEYS.map((_, day) => {
-                    const plate = findPlateAt(week, day, slot.id)
+                  {days.map((day, dayIdx) => {
+                    const date = parseISO(day.date)
+                    const isPast = isBefore(date, today) && !isToday(date)
+                    const plate = findPlateInDay(day, slot.id)
                     return (
-                      <DndCellWrapper
-                        key={`${slot.id}-${day}`}
-                        day={day}
-                        slotId={slot.id}
-                        plate={plate}
+                      <div
+                        key={`${slot.id}-${day.date}`}
+                        data-today={isToday(date) ? "true" : undefined}
+                        data-past={isPast ? "true" : undefined}
+                        className={isPast ? "opacity-60" : undefined}
                       >
-                        <SlotCell
-                          day={day}
+                        <DndCellWrapper
+                          day={dayIdx}
+                          date={day.date}
                           slotId={slot.id}
                           plate={plate}
-                          componentsById={componentsById}
-                          aiFilled={plate ? aiFilledIds.has(plate.id) : false}
-                          onAdd={() => openPicker(day, slot.id)}
-                          onDeletePlate={() =>
-                            plate && handleDeletePlate(plate.id)
-                          }
-                          onSaveAsTemplate={
-                            plate ? () => setSavePlateId(plate.id) : undefined
-                          }
-                          onToggleFavorite={() => {
-                            const hero = plate?.components
-                              .slice()
-                              .sort((a, b) => a.sort_order - b.sort_order)[0]
-                            const heroComp = hero
-                              ? componentsById.get(hero.food_id)
-                              : undefined
-                            void handleToggleFavorite(
-                              heroComp?.id,
-                              heroComp?.favorite ?? false
-                            )
-                            if (plate) clearAiFillOnPlate(plate.id)
-                          }}
-                          onToggleSkip={() => {
-                            void handleToggleSkip(
-                              day,
-                              slot.id,
-                              plate?.id ?? null
-                            )
-                            if (plate) clearAiFillOnPlate(plate.id)
-                          }}
-                          onRateLoved={() => {
-                            if (!plate) return
-                            void handleRate(
-                              plate.id,
-                              "loved",
-                              plate.feedback?.status
-                            )
-                            clearAiFillOnPlate(plate.id)
-                          }}
-                          onRateDisliked={() => {
-                            if (!plate) return
-                            void handleRate(
-                              plate.id,
-                              "disliked",
-                              plate.feedback?.status
-                            )
-                            clearAiFillOnPlate(plate.id)
-                          }}
-                        />
-                      </DndCellWrapper>
+                        >
+                          <SlotCell
+                            day={dayIdx}
+                            slotId={slot.id}
+                            plate={plate}
+                            componentsById={componentsById}
+                            aiFilled={plate ? aiFilledIds.has(plate.id) : false}
+                            onAdd={() => openPicker(dayIdx, slot.id)}
+                            onDeletePlate={() =>
+                              plate && handleDeletePlate(plate.id, dayIdx)
+                            }
+                            onSaveAsTemplate={
+                              plate ? () => setSavePlateId(plate.id) : undefined
+                            }
+                            onToggleFavorite={() => {
+                              const hero = plate?.components
+                                .slice()
+                                .sort((a, b) => a.sort_order - b.sort_order)[0]
+                              const heroComp = hero
+                                ? componentsById.get(hero.food_id)
+                                : undefined
+                              void handleToggleFavorite(
+                                heroComp?.id,
+                                heroComp?.favorite ?? false
+                              )
+                              if (plate) clearAiFillOnPlate(plate.id)
+                            }}
+                            onToggleSkip={() => {
+                              void handleToggleSkip(
+                                dayIdx,
+                                slot.id,
+                                plate?.id ?? null
+                              )
+                              if (plate) clearAiFillOnPlate(plate.id)
+                            }}
+                            onRateLoved={() => {
+                              if (!plate) return
+                              void handleRate(
+                                plate.id,
+                                "loved",
+                                plate.feedback?.status
+                              )
+                              clearAiFillOnPlate(plate.id)
+                            }}
+                            onRateDisliked={() => {
+                              if (!plate) return
+                              void handleRate(
+                                plate.id,
+                                "disliked",
+                                plate.feedback?.status
+                              )
+                              clearAiFillOnPlate(plate.id)
+                            }}
+                          />
+                        </DndCellWrapper>
+                      </div>
                     )
                   })}
                 </div>
@@ -587,7 +579,9 @@ export function PlannerGrid({ week, slots }: PlannerGridProps) {
           onOpenChange={(o) => !o && setAddTarget(null)}
           defaultRole={addTarget?.defaultRole}
           onPick={handlePick}
-          onPickTemplate={handleApplyTemplate}
+          showTemplates
+          defaultSlotId={addTarget ? String(addTarget.slotId) : undefined}
+          defaultDate={addTarget ? days[addTarget.day]?.date : undefined}
         />
         <AddComponentSheet
           open={swapTarget !== null}
