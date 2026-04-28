@@ -270,7 +270,7 @@ export function ComponentEditor({
         onDeleted?.()
       },
       onError: (err: unknown) => {
-        const key = err instanceof Error ? err.message : "error.server"
+        const key = err instanceof ApiError ? err.messageKey : "error.server"
         setDeleteError(t(key))
       },
     })

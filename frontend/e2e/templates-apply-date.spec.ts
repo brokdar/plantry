@@ -5,6 +5,7 @@ import {
   cleanupSlot,
   cleanupTemplate,
   expect,
+  mockAnchorToday,
   seedLeafFood,
   seedSlot,
   test,
@@ -66,6 +67,10 @@ async function deletePlate(id: number) {
 }
 
 test.describe("Templates — apply with start_date", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAnchorToday(page)
+  })
+
   test("apply template creates plates on chosen date", async ({ page }) => {
     const tag = uid()
     const food1 = await seedLeafFood({ name: `Food1 ${tag}` })

@@ -4,6 +4,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  mockAnchorToday,
   seedComposedWithStub,
   seedSlot,
   test,
@@ -46,6 +47,10 @@ function dateOffset(offsetDays: number): string {
 }
 
 test.describe("Shopping panel — range + presets + purchased state", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAnchorToday(page)
+  })
+
   test("opens and renders shopping list for active window", async ({
     page,
   }) => {

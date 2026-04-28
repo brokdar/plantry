@@ -22,6 +22,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  mockAnchorToday,
   seedComposedWithStub,
   seedSlot,
   test,
@@ -70,6 +71,10 @@ function dateOffset(offsetDays: number): string {
 }
 
 test.describe("Planner — cross-window plate move (API + grid verification)", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAnchorToday(page)
+  })
+
   test("moving a plate to the next day via API reflects in the grid", async ({
     page,
   }) => {

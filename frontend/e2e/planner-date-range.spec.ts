@@ -4,6 +4,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  mockAnchorToday,
   seedComposedWithStub,
   seedSlot,
   test,
@@ -45,6 +46,10 @@ function dateOffset(offsetDays: number): string {
 }
 
 test.describe("Planner — date-range window", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAnchorToday(page)
+  })
+
   test("renders a 7-day grid starting from anchor date (today)", async ({
     page,
   }) => {

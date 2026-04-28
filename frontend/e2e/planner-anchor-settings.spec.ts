@@ -3,21 +3,12 @@ import {
   apiRequest,
   cleanupSlot,
   expect,
+  mockAnchorToday,
   seedSlot,
   test,
   uid,
 } from "./helpers"
 
-/** Read current value of a settings key via the API. */
-async function getSetting(key: string): Promise<string | null> {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.get("/api/settings")
-  const body = (await res.json()) as { items: { key: string; value: string }[] }
-  await ctx.dispose()
-  return body.items.find((i) => i.key === key)?.value ?? null
-}
-
-/** Write a settings key via the API. */
 async function setSetting(key: string, value: string) {
   const ctx = await apiRequest.newContext({ baseURL: API })
   await ctx.put("/api/settings", { data: { key, value } })
@@ -25,17 +16,10 @@ async function setSetting(key: string, value: string) {
 }
 
 test.describe("Planner — anchor settings", () => {
-  // Restore the original anchor after each test to avoid cross-test pollution.
-  let originalAnchor: string | null = null
-
-  test.beforeEach(async () => {
-    originalAnchor = await getSetting("plan.anchor")
-  })
-
+  // Always restore anchor to "today" after each test so parallel instances
+  // don't leak state into each other.
   test.afterEach(async () => {
-    if (originalAnchor !== null) {
-      await setSetting("plan.anchor", originalAnchor)
-    }
+    await setSetting("plan.anchor", "today")
   })
 
   test("Settings → Plan tab renders anchor radio group", async ({ page }) => {
@@ -65,6 +49,40 @@ test.describe("Planner — anchor settings", () => {
     const slot = await seedSlot(`slot.anc_fixed_${tag}`, "Sun", 959)
 
     try {
+      // Inject "today" for only the initial GET /api/settings so that the
+      // settings page always opens with "today" selected, regardless of what
+      // parallel test instances may have written to the backend. Subsequent
+      // GETs (after the radio click) pass through so the UI reacts to the real
+      // PUT response.
+      await page.route(
+        "**/api/settings",
+        async (route) => {
+          if (route.request().method() !== "GET") {
+            await route.continue()
+            return
+          }
+          const response = await route.fetch()
+          const body = (await response.json()) as {
+            items: { key: string; value: string }[]
+          }
+          const items = body.items.map((item) =>
+            item.key === "plan.anchor" ? { ...item, value: "today" } : item
+          )
+          if (!items.some((i) => i.key === "plan.anchor")) {
+            items.push({ key: "plan.anchor", value: "today" })
+          }
+          await route.fulfill({
+            status: response.status(),
+            headers: {
+              ...response.headers(),
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ ...body, items }),
+          })
+        },
+        { times: 1 }
+      )
+
       await page.goto("/settings?tab=plan")
 
       // Weekday picker should not be visible while not in fixed_weekday mode
@@ -121,8 +139,9 @@ test.describe("Planner — anchor settings", () => {
     const slot = await seedSlot(`slot.anc_today_${tag}`, "Star", 957)
 
     try {
-      // Ensure anchor is set to today
-      await setSetting("plan.anchor", "today")
+      // Use a page-level mock instead of a backend setSetting so this test is
+      // fully isolated from parallel test instances that also mutate the anchor.
+      await mockAnchorToday(page)
 
       await page.goto("/")
 
@@ -130,8 +149,8 @@ test.describe("Planner — anchor settings", () => {
       const header0 = page.getByTestId("day-header-0")
       await expect(header0).toBeVisible()
 
-      // The today marker text ("Today") should appear inside the first day header
-      await expect(header0.getByText(/Today/i)).toBeVisible()
+      // The day-header-0 element carries data-today="true" when the day is today
+      await expect(header0).toHaveAttribute("data-today", "true")
     } finally {
       await cleanupSlot(slot.id)
     }

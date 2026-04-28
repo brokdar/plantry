@@ -26,6 +26,7 @@ import { shoppingKeys } from "@/lib/queries/shopping"
 import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
 import type { TimeSlot } from "@/lib/api/slots"
+import type { NutritionDay } from "@/lib/api/nutrition"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import {
@@ -64,6 +65,7 @@ interface PlannerGridProps {
   slots: TimeSlot[]
   rangeFrom: string
   rangeTo: string
+  nutritionDays?: NutritionDay[]
 }
 
 interface AddTarget {
@@ -96,6 +98,7 @@ export function PlannerGrid({
   slots,
   rangeFrom,
   rangeTo,
+  nutritionDays,
 }: PlannerGridProps) {
   const { t } = useTranslation()
 
@@ -444,6 +447,9 @@ export function PlannerGrid({
                 const date = parseISO(day.date)
                 const dayIsToday = isToday(date)
                 const dayKey = DAY_KEYS[day.weekday] ?? DAY_KEYS[idx % 7]
+                const dayMacros = nutritionDays?.find(
+                  (n) => n.date === day.date
+                )?.macros
                 return (
                   <DayHeader
                     key={day.date}
@@ -451,6 +457,7 @@ export function PlannerGrid({
                     dayKey={dayKey}
                     date={date}
                     today={dayIsToday}
+                    macros={dayMacros}
                     onClearDay={() => handleClearDay(idx)}
                     hasPlates={day.plates.length > 0}
                   />

@@ -13,6 +13,7 @@ const defaultProps = {
   onPrev: vi.fn(),
   onNext: vi.fn(),
   onToday: vi.fn(),
+  onJumpToToday: vi.fn(),
 }
 
 describe("DateRangeNavigator", () => {
@@ -47,6 +48,16 @@ describe("DateRangeNavigator", () => {
     // Use exact name "Today" to avoid matching the "From today" chip
     await user.click(await screen.findByRole("button", { name: "Today" }))
     expect(onToday).toHaveBeenCalledTimes(1)
+  })
+
+  test("calls onJumpToToday when 'From today' chip is clicked", async () => {
+    const user = userEvent.setup()
+    const onJumpToToday = vi.fn()
+    renderWithRouter(
+      <DateRangeNavigator {...defaultProps} onJumpToToday={onJumpToToday} />
+    )
+    await user.click(await screen.findByText("From today"))
+    expect(onJumpToToday).toHaveBeenCalledTimes(1)
   })
 
   test("shows 'From next Saturday' chip only when planAnchor is next_shopping_day", async () => {

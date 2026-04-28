@@ -4,6 +4,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  mockAnchorToday,
   seedComposedFood,
   seedLeafFood,
   seedSlot,
@@ -46,6 +47,10 @@ async function seedSkippedPlate(
 }
 
 test.describe("Planner — clear shortcuts", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAnchorToday(page)
+  })
+
   test("× quick-delete removes plate optimistically and shows undo toast", async ({
     page,
   }) => {

@@ -70,7 +70,7 @@ describe("MonthCell", () => {
     expect(screen.getByText("+2 more")).toBeInTheDocument()
   })
 
-  it("highlights with ring class when isToday=true", () => {
+  it("highlights with border-primary when isToday=true", () => {
     const { container } = render(
       <MonthCell
         date="2026-04-26"
@@ -82,8 +82,8 @@ describe("MonthCell", () => {
       />
     )
     const button = container.querySelector("button")!
-    expect(button.className).toMatch(/ring-2/)
-    expect(button.className).toMatch(/ring-primary/)
+    expect(button.className).toMatch(/border-2/)
+    expect(button.className).toMatch(/border-primary/)
   })
 
   it("does not apply ring when isToday=false", () => {
@@ -101,7 +101,7 @@ describe("MonthCell", () => {
     expect(button.className).not.toMatch(/ring-2/)
   })
 
-  it("dims (opacity-40) when isCurrentMonth=false", () => {
+  it("mutes date number when isCurrentMonth=false", () => {
     const { container } = render(
       <MonthCell
         date="2026-03-31"
@@ -112,9 +112,8 @@ describe("MonthCell", () => {
         onClick={noop}
       />
     )
-    const button = container.querySelector("button")!
-    // The cell uses bg-surface-container/30 + text-on-surface-variant when not in month
-    expect(button.className).toMatch(/bg-surface-container\/30/)
+    const span = container.querySelector("button > span")!
+    expect(span.className).toMatch(/text-on-surface-variant/)
   })
 
   it("dims (opacity-40) when matchesSearch=false", () => {

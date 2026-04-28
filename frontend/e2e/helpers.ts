@@ -189,6 +189,48 @@ export async function cleanupSlot(id: number) {
   await ctx.dispose()
 }
 
+export async function getSetting(key: string): Promise<string | null> {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  const res = await ctx.get("/api/settings")
+  const body = (await res.json()) as { items: { key: string; value: string }[] }
+  await ctx.dispose()
+  return body.items.find((i) => i.key === key)?.value ?? null
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  await ctx.put("/api/settings", { data: { key, value } })
+  await ctx.dispose()
+}
+
+/**
+ * Intercepts GET /api/settings on the given page and injects plan.anchor="today".
+ * Isolated to the page context — no server state modified, safe for parallel runs.
+ */
+export async function mockAnchorToday(page: Page) {
+  await page.route("**/api/settings", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue()
+      return
+    }
+    const response = await route.fetch()
+    const body = (await response.json()) as {
+      items: { key: string; value: string }[]
+    }
+    const items = body.items.map((item) =>
+      item.key === "plan.anchor" ? { ...item, value: "today" } : item
+    )
+    if (!items.some((i) => i.key === "plan.anchor")) {
+      items.push({ key: "plan.anchor", value: "today" })
+    }
+    await route.fulfill({
+      status: response.status(),
+      headers: { ...response.headers(), "content-type": "application/json" },
+      body: JSON.stringify({ ...body, items }),
+    })
+  })
+}
+
 // ── Template seeding ──────────────────────────────────────────────────
 
 export async function seedTemplate(data: {

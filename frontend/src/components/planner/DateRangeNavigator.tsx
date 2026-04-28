@@ -12,6 +12,8 @@ interface DateRangeNavigatorProps {
   onPrev: () => void
   onNext: () => void
   onToday: () => void
+  /** Navigate to the window that starts at actual today, regardless of anchor mode. */
+  onJumpToToday: () => void
 }
 
 /**
@@ -65,6 +67,7 @@ export function DateRangeNavigator({
   onPrev,
   onNext,
   onToday,
+  onJumpToToday,
 }: DateRangeNavigatorProps) {
   const { t, i18n } = useTranslation()
   const locale = i18n.language ?? "en"
@@ -107,7 +110,7 @@ export function DateRangeNavigator({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={onToday}
+          onClick={onJumpToToday}
           className="inline-flex items-center rounded-full border border-border bg-muted px-3 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           {t("planner.anchor_today")}

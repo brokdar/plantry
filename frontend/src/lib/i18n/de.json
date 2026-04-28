@@ -48,7 +48,8 @@
       "html_label": "Seiten-HTML",
       "paste_html_toggle": "Stattdessen das Seiten-HTML einfügen",
       "url_toggle": "Zurück zur URL-Eingabe",
-      "submit": "Rezept extrahieren"
+      "submit": "Rezept extrahieren",
+      "url_or_html_required": "Bitte eine URL eingeben oder den Seiten-HTML einfügen."
     },
     "step2": {
       "title": "Zutaten prüfen",

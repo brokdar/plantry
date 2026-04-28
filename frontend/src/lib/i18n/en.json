@@ -48,7 +48,8 @@
       "html_label": "Page HTML",
       "paste_html_toggle": "Paste the page HTML instead",
       "url_toggle": "Back to URL input",
-      "submit": "Extract recipe"
+      "submit": "Extract recipe",
+      "url_or_html_required": "Enter a URL or paste the page HTML."
     },
     "step2": {
       "title": "Review ingredients",

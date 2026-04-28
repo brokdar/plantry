@@ -40,10 +40,9 @@ export function MonthCell({
       data-date={date}
       className={cn(
         "flex min-h-[80px] w-full flex-col gap-0.5 rounded-lg border p-1.5 text-left transition-[opacity,border-color,background-color] duration-150",
-        isCurrentMonth
-          ? "border-outline-variant/30 bg-surface-container-lowest hover:border-primary/40 hover:bg-surface-container-low"
-          : "border-transparent bg-surface-container/30 text-on-surface-variant",
-        isToday && "ring-2 ring-primary ring-offset-1",
+        isToday
+          ? "border-2 border-primary bg-surface-container-lowest"
+          : "border-outline-variant/30 bg-surface-container-lowest hover:border-primary/40 hover:bg-surface-container-low",
         dimmed && "opacity-40"
       )}
     >
@@ -54,8 +53,8 @@ export function MonthCell({
           isToday
             ? "flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] text-on-primary"
             : isCurrentMonth
-              ? "text-on-surface"
-              : "text-on-surface-variant/60"
+              ? "flex h-5 items-center text-on-surface"
+              : "flex h-5 items-center text-on-surface-variant/60"
         )}
       >
         {day}

@@ -38,7 +38,7 @@ function NotFoundPage() {
   )
 }
 
-function ErrorPage({ error }: { error: Error }) {
+function ErrorPage() {
   const { t } = useTranslation()
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-4 text-center">
@@ -46,7 +46,7 @@ function ErrorPage({ error }: { error: Error }) {
         {t("error.server")}
       </h1>
       <p className="text-sm text-on-surface-variant">
-        {error.message || t("error.page_error_body")}
+        {t("error.page_error_body")}
       </p>
       <Button onClick={() => window.location.reload()}>
         {t("error.reload")}

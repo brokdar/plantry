@@ -279,6 +279,10 @@ function PlanPage() {
           onPrev={() => setWindowOffset((o) => o - 7)}
           onNext={() => setWindowOffset((o) => o + 7)}
           onToday={() => setWindowOffset(0)}
+          onJumpToToday={() => {
+            const todayMs = new Date().setHours(0, 0, 0, 0)
+            setWindowOffset(Math.round((todayMs - anchor.getTime()) / 86400000))
+          }}
         />
         <TooltipProvider>
           <div className="flex flex-wrap items-center gap-3">
@@ -366,7 +370,13 @@ function PlanPage() {
       </div>
 
       <div className="-mx-2 hidden md:-mx-4 md:block">
-        <PlannerGrid days={days} slots={slots} rangeFrom={from} rangeTo={to} />
+        <PlannerGrid
+          days={days}
+          slots={slots}
+          rangeFrom={from}
+          rangeTo={to}
+          nutritionDays={nutritionQuery.data?.days}
+        />
       </div>
       <div className="md:hidden">
         <MobilePlannerGrid

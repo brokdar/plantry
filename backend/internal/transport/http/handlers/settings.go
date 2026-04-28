@@ -71,6 +71,7 @@ type settingListResponse struct {
 
 // List handles GET /api/settings.
 func (h *SettingsHandler) List(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	values, err := h.svc.List(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "error.server")

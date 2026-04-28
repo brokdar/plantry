@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { LeafFood } from "@/lib/api/foods"
+import { ApiError } from "@/lib/api/client"
 import { useFoods, useDeleteFood } from "@/lib/queries/foods"
 
 import { IngredientCard } from "./IngredientCard"
@@ -51,7 +52,7 @@ export function IngredientList() {
     deleteMutation.mutate(deleteId, {
       onSuccess: () => setDeleteId(null),
       onError: (err: unknown) => {
-        const key = err instanceof Error ? err.message : "error.server"
+        const key = err instanceof ApiError ? err.messageKey : "error.server"
         setDeleteError(t(key))
       },
     })

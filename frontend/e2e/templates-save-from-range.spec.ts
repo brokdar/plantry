@@ -5,16 +5,12 @@ import {
   cleanupSlot,
   cleanupTemplate,
   expect,
+  mockAnchorToday,
   seedComposedWithStub,
   seedSlot,
   test,
   uid,
 } from "./helpers"
-
-function todayISO(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-}
 
 function dateOffset(n: number): string {
   const d = new Date()
@@ -70,6 +66,10 @@ async function getTemplates(): Promise<{
 }
 
 test.describe("Templates — save from date range", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockAnchorToday(page)
+  })
+
   test("save plates from today+tomorrow creates a template with day_offset 0 and 1", async ({
     page,
   }) => {
@@ -84,20 +84,25 @@ test.describe("Templates — save from date range", () => {
       `${tag}b`
     )
 
-    const today = todayISO()
-    const tomorrow = dateOffset(1)
+    // Seed plates 28+ days out so parallel clear-day/clear-week tests (which
+    // operate on today's range) cannot delete these plates before the template
+    // save fires. Navigate via ?date=dateOffset(32) — using the midpoint of
+    // the +28..+34 window guarantees windowOffset=28 at any time of day
+    // (avoids the time-of-day rounding issue with exact boundary dates).
+    const base = dateOffset(28)
+    const next = dateOffset(29)
     const plateIds: number[] = []
     let templateId: number | undefined
 
     try {
-      // Seed two plates: today and tomorrow
-      const p0 = await seedPlateByDate(today, slot.id, food0.id)
-      const p1 = await seedPlateByDate(tomorrow, slot.id, food1.id)
+      // Seed two plates: base and base+1
+      const p0 = await seedPlateByDate(base, slot.id, food0.id)
+      const p1 = await seedPlateByDate(next, slot.id, food1.id)
       plateIds.push(p0.id, p1.id)
 
-      await page.goto("/")
+      await page.goto(`/?date=${dateOffset(32)}`)
 
-      // Ensure we're on today's window
+      // Ensure we're on the correct window
       await expect(page.getByTestId("planner-toolbar")).toBeVisible()
 
       // Toolbar "Save as template" saves the entire visible date range,
@@ -124,7 +129,7 @@ test.describe("Templates — save from date range", () => {
       expect(found).toBeDefined()
       expect(found!.id).toBe(templateId)
 
-      // Verify via GET /api/templates/:id that both today + tomorrow produced
+      // Verify via GET /api/templates/:id that both plates produced
       // components, with day_offsets 0 and 1.
       const detail = await getTemplate(templateId!)
       expect(detail.components.length).toBeGreaterThanOrEqual(2)
@@ -152,15 +157,15 @@ test.describe("Templates — save from date range", () => {
       tag
     )
 
-    const today = todayISO()
+    const safeDate = dateOffset(28)
     let plateId: number | undefined
     let templateId: number | undefined
 
     try {
-      const p = await seedPlateByDate(today, slot.id, food.id)
+      const p = await seedPlateByDate(safeDate, slot.id, food.id)
       plateId = p.id
 
-      await page.goto("/")
+      await page.goto(`/?date=${dateOffset(32)}`)
       await expect(page.getByTestId("planner-toolbar")).toBeVisible()
 
       await page.getByTestId("save-range-template").click()

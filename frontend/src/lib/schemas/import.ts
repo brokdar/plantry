@@ -7,7 +7,7 @@ export const importStep1Schema = z
     html: z.string().trim().optional(),
   })
   .refine((v) => v.url !== "" || (v.html && v.html !== ""), {
-    message: "url_or_html_required",
+    message: "import.step1.url_or_html_required",
   })
 
 export type ImportStep1Values = z.infer<typeof importStep1Schema>
