@@ -15,14 +15,15 @@ import (
 // ── mock implementations ────────────────────────────────────────────────────
 
 type mockRepo struct {
-	createFn                 func(ctx context.Context, t *template.Template) error
-	getFn                    func(ctx context.Context, id int64) (*template.Template, error)
-	updateNameFn             func(ctx context.Context, id int64, name string) (*template.Template, error)
-	deleteFn                 func(ctx context.Context, id int64) error
-	listFn                   func(ctx context.Context) ([]template.Template, error)
-	replaceComponentsFn      func(ctx context.Context, templateID int64, comps []template.TemplateComponent) error
-	listComponentsByTemplate func(ctx context.Context, templateID int64) ([]template.TemplateComponent, error)
-	countUsingFoodFn         func(ctx context.Context, foodID int64) (int64, error)
+	createFn              func(ctx context.Context, t *template.Template) error
+	getFn                 func(ctx context.Context, id int64) (*template.Template, error)
+	updateNameFn          func(ctx context.Context, id int64, name string) (*template.Template, error)
+	deleteFn              func(ctx context.Context, id int64) error
+	listFn                func(ctx context.Context) ([]template.Template, error)
+	listByScopeFn         func(ctx context.Context, scope template.Scope) ([]template.Template, error)
+	replaceEntriesFn      func(ctx context.Context, templateID int64, entries []template.TemplateEntry) error
+	listEntriesByTemplate func(ctx context.Context, templateID int64) ([]template.TemplateEntry, error)
+	countUsingFoodFn      func(ctx context.Context, foodID int64) (int64, error)
 }
 
 func (m *mockRepo) Create(ctx context.Context, t *template.Template) error {
@@ -61,16 +62,23 @@ func (m *mockRepo) List(ctx context.Context) ([]template.Template, error) {
 	return nil, nil
 }
 
-func (m *mockRepo) ReplaceComponents(ctx context.Context, templateID int64, comps []template.TemplateComponent) error {
-	if m.replaceComponentsFn != nil {
-		return m.replaceComponentsFn(ctx, templateID, comps)
+func (m *mockRepo) ListByScope(ctx context.Context, scope template.Scope) ([]template.Template, error) {
+	if m.listByScopeFn != nil {
+		return m.listByScopeFn(ctx, scope)
+	}
+	return nil, nil
+}
+
+func (m *mockRepo) ReplaceEntries(ctx context.Context, templateID int64, entries []template.TemplateEntry) error {
+	if m.replaceEntriesFn != nil {
+		return m.replaceEntriesFn(ctx, templateID, entries)
 	}
 	return nil
 }
 
-func (m *mockRepo) ListComponentsByTemplate(ctx context.Context, templateID int64) ([]template.TemplateComponent, error) {
-	if m.listComponentsByTemplate != nil {
-		return m.listComponentsByTemplate(ctx, templateID)
+func (m *mockRepo) ListEntriesByTemplate(ctx context.Context, templateID int64) ([]template.TemplateEntry, error) {
+	if m.listEntriesByTemplate != nil {
+		return m.listEntriesByTemplate(ctx, templateID)
 	}
 	return nil, nil
 }
@@ -113,8 +121,11 @@ func (m *mockTxRunner) RunInTemplateTx(ctx context.Context, fn func(template.Rep
 }
 
 type mockPlateRepo struct {
-	createFn func(ctx context.Context, p *plate.Plate) error
-	nextID   int64
+	createFn      func(ctx context.Context, p *plate.Plate) error
+	deleteFn      func(ctx context.Context, id int64) error
+	listByRangeFn func(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
+	nextID        int64
+	deletedPlates []int64
 }
 
 func (m *mockPlateRepo) Create(ctx context.Context, p *plate.Plate) error {
@@ -125,9 +136,15 @@ func (m *mockPlateRepo) Create(ctx context.Context, p *plate.Plate) error {
 	p.ID = m.nextID
 	return nil
 }
-func (m *mockPlateRepo) Get(_ context.Context, _ int64) (*plate.Plate, error)             { return nil, nil }
-func (m *mockPlateRepo) Update(_ context.Context, _ *plate.Plate) error                   { return nil }
-func (m *mockPlateRepo) Delete(_ context.Context, _ int64) error                          { return nil }
+func (m *mockPlateRepo) Get(_ context.Context, _ int64) (*plate.Plate, error) { return nil, nil }
+func (m *mockPlateRepo) Update(_ context.Context, _ *plate.Plate) error       { return nil }
+func (m *mockPlateRepo) Delete(ctx context.Context, id int64) error {
+	if m.deleteFn != nil {
+		return m.deleteFn(ctx, id)
+	}
+	m.deletedPlates = append(m.deletedPlates, id)
+	return nil
+}
 func (m *mockPlateRepo) CreateComponent(_ context.Context, _ *plate.PlateComponent) error { return nil }
 func (m *mockPlateRepo) GetComponent(_ context.Context, _ int64) (*plate.PlateComponent, error) {
 	return nil, nil
@@ -143,7 +160,10 @@ func (m *mockPlateRepo) SetSkipped(_ context.Context, _ int64, _ bool, _ *string
 	return nil, nil
 }
 
-func (m *mockPlateRepo) ListByDateRange(_ context.Context, _, _ time.Time) ([]plate.Plate, error) {
+func (m *mockPlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]plate.Plate, error) {
+	if m.listByRangeFn != nil {
+		return m.listByRangeFn(ctx, from, to)
+	}
 	return nil, nil
 }
 
@@ -157,72 +177,55 @@ func mustDate(s string) time.Time {
 	return t
 }
 
+func ptrInt64(v int64) *int64 { return &v }
+
 func makeService(repo *mockRepo, pr *mockPlateRepo) *template.Service {
 	return template.NewService(repo, &mockFoodChecker{}, &mockPlateComponentSource{}, &mockTxRunner{pr: pr})
 }
 
-// ── Apply tests ──────────────────────────────────────────────────────────────
+// ── Apply (slot scope) tests ────────────────────────────────────────────────
 
-func TestApply_HappyPath(t *testing.T) {
-	// Template with 3 entries: 2 at offset 0, 1 at offset 1.
-	// Start = Saturday 2026-04-25.
-	// Expect: plate at 2026-04-25 (offset 0) and 2026-04-26 (offset 1).
+func TestApplySlot_HappyPath(t *testing.T) {
+	// Slot template with 2 entries, both at offset 0 → 1 plate.
 	start := mustDate("2026-04-25")
 
 	tmpl := &template.Template{
-		ID:   10,
-		Name: "Test",
-		Components: []template.TemplateComponent{
+		ID:    10,
+		Name:  "Lunch",
+		Scope: template.ScopeSlot,
+		Entries: []template.TemplateEntry{
 			{FoodID: 1, Portions: 1, DayOffset: 0, SortOrder: 0},
 			{FoodID: 2, Portions: 2, DayOffset: 0, SortOrder: 1},
-			{FoodID: 3, Portions: 1, DayOffset: 1, SortOrder: 0},
 		},
 	}
-
 	repo := &mockRepo{
-		getFn: func(_ context.Context, id int64) (*template.Template, error) {
-			return tmpl, nil
-		},
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
 	}
 	pr := &mockPlateRepo{}
 	svc := makeService(repo, pr)
 
-	plates, err := svc.Apply(context.Background(), 10, start, 1)
+	slot := int64(1)
+	res, err := svc.Apply(context.Background(), 10, template.ApplyPayload{Date: &start, SlotID: &slot})
 	if err != nil {
 		t.Fatalf("Apply returned error: %v", err)
 	}
-
-	if len(plates) != 2 {
-		t.Fatalf("expected 2 plates, got %d", len(plates))
+	if len(res.Created) != 1 {
+		t.Fatalf("expected 1 plate, got %d", len(res.Created))
 	}
-
-	// First group (offset 0) → Saturday.
-	if plates[0].Date != mustDate("2026-04-25") {
-		t.Errorf("plates[0].Date = %s; want 2026-04-25", plates[0].Date.Format("2006-01-02"))
-	}
-	if len(plates[0].Components) != 2 {
-		t.Errorf("plates[0] components = %d; want 2", len(plates[0].Components))
-	}
-
-	// Second group (offset 1) → Sunday.
-	if plates[1].Date != mustDate("2026-04-26") {
-		t.Errorf("plates[1].Date = %s; want 2026-04-26", plates[1].Date.Format("2006-01-02"))
-	}
-	if len(plates[1].Components) != 1 {
-		t.Errorf("plates[1] components = %d; want 1", len(plates[1].Components))
+	if len(res.Created[0].Components) != 2 {
+		t.Errorf("plate components = %d; want 2", len(res.Created[0].Components))
 	}
 }
 
-func TestApply_ISOWeekBoundary(t *testing.T) {
-	// Start = Saturday 2026-04-25, offset 6 = following Friday 2026-05-01.
+func TestApplySlot_LegacyMultiOffset(t *testing.T) {
+	// Legacy slot template with multiple day_offsets → groups into multiple plates.
 	start := mustDate("2026-04-25")
-	expected := mustDate("2026-05-01")
-
 	tmpl := &template.Template{
-		ID:   11,
-		Name: "Week Span",
-		Components: []template.TemplateComponent{
-			{FoodID: 1, Portions: 1, DayOffset: 6, SortOrder: 0},
+		ID:    11,
+		Scope: template.ScopeSlot,
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1, DayOffset: 0, SortOrder: 0},
+			{FoodID: 2, Portions: 1, DayOffset: 6, SortOrder: 0},
 		},
 	}
 	repo := &mockRepo{
@@ -231,105 +234,235 @@ func TestApply_ISOWeekBoundary(t *testing.T) {
 	pr := &mockPlateRepo{}
 	svc := makeService(repo, pr)
 
-	plates, err := svc.Apply(context.Background(), 11, start, 1)
+	slot := int64(1)
+	res, err := svc.Apply(context.Background(), 11, template.ApplyPayload{Date: &start, SlotID: &slot})
 	if err != nil {
 		t.Fatalf("Apply returned error: %v", err)
 	}
-	if len(plates) != 1 {
-		t.Fatalf("expected 1 plate, got %d", len(plates))
+	if len(res.Created) != 2 {
+		t.Fatalf("expected 2 plates, got %d", len(res.Created))
 	}
-	if plates[0].Date != expected {
-		t.Errorf("plate date = %s; want %s", plates[0].Date.Format("2006-01-02"), expected.Format("2006-01-02"))
+	if res.Created[1].Date != mustDate("2026-05-01") {
+		t.Errorf("second plate date = %s; want 2026-05-01", res.Created[1].Date.Format("2006-01-02"))
 	}
 }
 
-func TestApply_ConflictPropagated(t *testing.T) {
-	tmpl := &template.Template{
-		ID:   12,
-		Name: "Conflict",
-		Components: []template.TemplateComponent{
-			{FoodID: 1, Portions: 1, DayOffset: 0, SortOrder: 0},
-		},
-	}
+func TestApplySlot_MissingSlotID(t *testing.T) {
+	tmpl := &template.Template{ID: 1, Scope: template.ScopeSlot, Entries: []template.TemplateEntry{{FoodID: 1}}}
 	repo := &mockRepo{
 		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
 	}
-	conflictErr := fmt.Errorf("%w: plate already exists", domain.ErrDuplicateName)
-	pr := &mockPlateRepo{
-		createFn: func(_ context.Context, _ *plate.Plate) error {
-			return conflictErr
-		},
-	}
-	svc := makeService(repo, pr)
-
-	_, err := svc.Apply(context.Background(), 12, mustDate("2026-04-25"), 1)
-	if err == nil {
-		t.Fatal("expected error from Apply, got nil")
-	}
-	if !errors.Is(err, domain.ErrDuplicateName) {
-		t.Errorf("error = %v; want to wrap ErrDuplicateName", err)
-	}
-}
-
-func TestApply_MissingSlotID(t *testing.T) {
-	repo := &mockRepo{}
 	svc := makeService(repo, &mockPlateRepo{})
-
-	_, err := svc.Apply(context.Background(), 1, mustDate("2026-04-25"), 0)
+	d := mustDate("2026-04-25")
+	_, err := svc.Apply(context.Background(), 1, template.ApplyPayload{Date: &d})
 	if !errors.Is(err, domain.ErrInvalidInput) {
 		t.Errorf("expected ErrInvalidInput, got %v", err)
 	}
 }
 
-func TestApply_Atomicity_ErrorReturnsNilPlates(t *testing.T) {
-	// Template with 2 components at different offsets → 2 separate plate creates.
+func TestApplySlot_ConflictPropagated(t *testing.T) {
+	tmpl := &template.Template{ID: 12, Scope: template.ScopeSlot, Entries: []template.TemplateEntry{{FoodID: 1}}}
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	conflictErr := fmt.Errorf("%w: plate already exists", domain.ErrDuplicateName)
+	pr := &mockPlateRepo{
+		createFn: func(_ context.Context, _ *plate.Plate) error { return conflictErr },
+	}
+	svc := makeService(repo, pr)
+	d := mustDate("2026-04-25")
+	slot := int64(1)
+	_, err := svc.Apply(context.Background(), 12, template.ApplyPayload{Date: &d, SlotID: &slot})
+	if !errors.Is(err, domain.ErrDuplicateName) {
+		t.Errorf("error = %v; want to wrap ErrDuplicateName", err)
+	}
+}
+
+// ── Apply (day scope) tests ─────────────────────────────────────────────────
+
+func TestApplyDay_HappyPath(t *testing.T) {
 	tmpl := &template.Template{
-		ID:   20,
-		Name: "Multi",
-		Components: []template.TemplateComponent{
-			{FoodID: 1, Portions: 1, DayOffset: 0, SortOrder: 0},
-			{FoodID: 2, Portions: 1, DayOffset: 1, SortOrder: 0},
+		ID:    20,
+		Scope: template.ScopeDay,
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1, SlotID: ptrInt64(1)},
+			{FoodID: 2, Portions: 1, SlotID: ptrInt64(2)},
 		},
 	}
 	repo := &mockRepo{
 		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
 	}
-	calls := 0
-	pr := &mockPlateRepo{
-		createFn: func(_ context.Context, _ *plate.Plate) error {
-			calls++
-			if calls == 2 {
-				return fmt.Errorf("second create failed")
-			}
-			return nil
-		},
-	}
+	pr := &mockPlateRepo{}
 	svc := makeService(repo, pr)
-
-	got, err := svc.Apply(context.Background(), 20, mustDate("2026-04-25"), 1)
-
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	d := mustDate("2026-04-25")
+	res, err := svc.Apply(context.Background(), 20, template.ApplyPayload{Date: &d})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
 	}
-	if got != nil {
-		t.Errorf("expected nil plates on error, got %v", got)
+	if len(res.Created) != 2 {
+		t.Fatalf("expected 2 plates, got %d", len(res.Created))
 	}
-	if calls != 2 {
-		t.Errorf("expected 2 create calls, got %d", calls)
+	if res.Created[0].SlotID != 1 || res.Created[1].SlotID != 2 {
+		t.Errorf("slots = %d,%d; want 1,2", res.Created[0].SlotID, res.Created[1].SlotID)
 	}
 }
 
-// ── SaveAsTemplate tests ─────────────────────────────────────────────────────
+func TestApplyDay_ConflictSkip(t *testing.T) {
+	tmpl := &template.Template{
+		ID:    21,
+		Scope: template.ScopeDay,
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1, SlotID: ptrInt64(1)},
+			{FoodID: 2, Portions: 1, SlotID: ptrInt64(2)},
+		},
+	}
+	d := mustDate("2026-04-25")
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	pr := &mockPlateRepo{
+		listByRangeFn: func(_ context.Context, _, _ time.Time) ([]plate.Plate, error) {
+			return []plate.Plate{{ID: 99, Date: d, SlotID: 1}}, nil
+		},
+	}
+	svc := makeService(repo, pr)
+	res, err := svc.Apply(context.Background(), 21, template.ApplyPayload{Date: &d, Conflict: template.ConflictSkip})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+	if len(res.Created) != 1 || res.Created[0].SlotID != 2 {
+		t.Errorf("expected only slot 2 created; got %+v", res.Created)
+	}
+	if len(res.Skipped) != 1 || res.Skipped[0].SlotID != 1 {
+		t.Errorf("expected slot 1 skipped; got %+v", res.Skipped)
+	}
+	if len(pr.deletedPlates) != 0 {
+		t.Errorf("skip should not delete; got %v", pr.deletedPlates)
+	}
+}
+
+func TestApplyDay_ConflictOverwrite(t *testing.T) {
+	tmpl := &template.Template{
+		ID:    22,
+		Scope: template.ScopeDay,
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1, SlotID: ptrInt64(1)},
+		},
+	}
+	d := mustDate("2026-04-25")
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	pr := &mockPlateRepo{
+		listByRangeFn: func(_ context.Context, _, _ time.Time) ([]plate.Plate, error) {
+			return []plate.Plate{{ID: 77, Date: d, SlotID: 1}}, nil
+		},
+	}
+	svc := makeService(repo, pr)
+	res, err := svc.Apply(context.Background(), 22, template.ApplyPayload{Date: &d, Conflict: template.ConflictOverwrite})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+	if len(res.Created) != 1 {
+		t.Fatalf("expected 1 plate, got %d", len(res.Created))
+	}
+	if len(pr.deletedPlates) != 1 || pr.deletedPlates[0] != 77 {
+		t.Errorf("expected plate 77 deleted; got %v", pr.deletedPlates)
+	}
+}
+
+// ── Apply (week scope) tests ────────────────────────────────────────────────
+
+func TestApplyWeek_DistributesByDayOffset(t *testing.T) {
+	tmpl := &template.Template{
+		ID:    30,
+		Scope: template.ScopeWeek,
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1, DayOffset: 0, SlotID: ptrInt64(1)},
+			{FoodID: 2, Portions: 1, DayOffset: 6, SlotID: ptrInt64(1)},
+		},
+	}
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	pr := &mockPlateRepo{}
+	svc := makeService(repo, pr)
+	start := mustDate("2026-04-25")
+	res, err := svc.Apply(context.Background(), 30, template.ApplyPayload{StartDate: &start})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+	if len(res.Created) != 2 {
+		t.Fatalf("expected 2 plates, got %d", len(res.Created))
+	}
+	if res.Created[1].Date != mustDate("2026-05-01") {
+		t.Errorf("second plate date = %s; want 2026-05-01", res.Created[1].Date.Format("2006-01-02"))
+	}
+}
+
+// ── Create validation per scope ─────────────────────────────────────────────
+
+func TestCreate_DayScopeRejectsMissingSlotID(t *testing.T) {
+	repo := &mockRepo{}
+	svc := makeService(repo, &mockPlateRepo{})
+	_, err := svc.Create(context.Background(), "Day", template.ScopeDay, nil, []template.TemplateEntry{
+		{FoodID: 1, Portions: 1}, // no SlotID
+	})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Errorf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestCreate_WeekScopeRejectsBadDayOffset(t *testing.T) {
+	repo := &mockRepo{}
+	svc := makeService(repo, &mockPlateRepo{})
+	_, err := svc.Create(context.Background(), "Week", template.ScopeWeek, nil, []template.TemplateEntry{
+		{FoodID: 1, Portions: 1, DayOffset: 99, SlotID: ptrInt64(1)},
+	})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Errorf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestCreate_SlotScopeRejectsSlotID(t *testing.T) {
+	repo := &mockRepo{}
+	svc := makeService(repo, &mockPlateRepo{})
+	_, err := svc.Create(context.Background(), "Slot", template.ScopeSlot, nil, []template.TemplateEntry{
+		{FoodID: 1, Portions: 1, SlotID: ptrInt64(1)},
+	})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Errorf("expected ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestCreate_DefaultsToSlotScope(t *testing.T) {
+	var captured *template.Template
+	repo := &mockRepo{
+		createFn: func(_ context.Context, t *template.Template) error {
+			captured = t
+			t.ID = 5
+			return nil
+		},
+	}
+	svc := makeService(repo, &mockPlateRepo{})
+	_, err := svc.Create(context.Background(), "X", "", nil, []template.TemplateEntry{{FoodID: 1, Portions: 1}})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	if captured.Scope != template.ScopeSlot {
+		t.Errorf("Scope = %q; want slot", captured.Scope)
+	}
+}
+
+// ── SaveAsTemplate tests ────────────────────────────────────────────────────
 
 func TestSaveAsTemplate_HappyPath(t *testing.T) {
-	// 3 plates on 3 consecutive days, anchorDate = first day.
 	anchor := mustDate("2026-04-25")
 	plates := []plate.Plate{
-		{Date: mustDate("2026-04-25"), Components: []plate.PlateComponent{{FoodID: 1, Portions: 1}}},
-		{Date: mustDate("2026-04-26"), Components: []plate.PlateComponent{{FoodID: 2, Portions: 2}}},
-		{Date: mustDate("2026-04-27"), Components: []plate.PlateComponent{{FoodID: 3, Portions: 1}}},
+		{Date: mustDate("2026-04-25"), SlotID: 1, Components: []plate.PlateComponent{{FoodID: 1, Portions: 1}}},
+		{Date: mustDate("2026-04-26"), SlotID: 2, Components: []plate.PlateComponent{{FoodID: 2, Portions: 2}}},
+		{Date: mustDate("2026-04-27"), SlotID: 3, Components: []plate.PlateComponent{{FoodID: 3, Portions: 1}}},
 	}
-
 	var created *template.Template
 	repo := &mockRepo{
 		createFn: func(_ context.Context, t *template.Template) error {
@@ -347,16 +480,20 @@ func TestSaveAsTemplate_HappyPath(t *testing.T) {
 	if tmpl.ID != 99 {
 		t.Errorf("tmpl.ID = %d; want 99", tmpl.ID)
 	}
-	if len(created.Components) != 3 {
-		t.Fatalf("expected 3 components, got %d", len(created.Components))
+	if created.Scope != template.ScopeWeek {
+		t.Errorf("Scope = %q; want week", created.Scope)
 	}
-	offsets := make([]int, len(created.Components))
-	for i, c := range created.Components {
-		offsets[i] = c.DayOffset
+	if len(created.Entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(created.Entries))
 	}
-	for i, want := range []int{0, 1, 2} {
-		if offsets[i] != want {
-			t.Errorf("component[%d].DayOffset = %d; want %d", i, offsets[i], want)
+	wantOffsets := []int{0, 1, 2}
+	wantSlots := []int64{1, 2, 3}
+	for i, e := range created.Entries {
+		if e.DayOffset != wantOffsets[i] {
+			t.Errorf("entry[%d].DayOffset = %d; want %d", i, e.DayOffset, wantOffsets[i])
+		}
+		if e.SlotID == nil || *e.SlotID != wantSlots[i] {
+			t.Errorf("entry[%d].SlotID = %v; want %d", i, e.SlotID, wantSlots[i])
 		}
 	}
 }

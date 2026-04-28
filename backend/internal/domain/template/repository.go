@@ -13,8 +13,9 @@ type Repository interface {
 	UpdateName(ctx context.Context, id int64, name string) (*Template, error)
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context) ([]Template, error)
-	ReplaceComponents(ctx context.Context, templateID int64, comps []TemplateComponent) error
-	ListComponentsByTemplate(ctx context.Context, templateID int64) ([]TemplateComponent, error)
+	ListByScope(ctx context.Context, scope Scope) ([]Template, error)
+	ReplaceEntries(ctx context.Context, templateID int64, entries []TemplateEntry) error
+	ListEntriesByTemplate(ctx context.Context, templateID int64) ([]TemplateEntry, error)
 	CountUsingFood(ctx context.Context, foodID int64) (int64, error)
 }
 

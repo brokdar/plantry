@@ -135,15 +135,18 @@ type Template struct {
 	ID        int64
 	Name      string
 	CreatedAt string
+	Scope     string
 }
 
-type TemplateComponent struct {
+type TemplateEntry struct {
 	ID         int64
 	TemplateID int64
 	FoodID     int64
 	Portions   float64
 	SortOrder  int64
 	DayOffset  int64
+	SlotID     sql.NullInt64
+	Note       sql.NullString
 }
 
 type TimeSlot struct {

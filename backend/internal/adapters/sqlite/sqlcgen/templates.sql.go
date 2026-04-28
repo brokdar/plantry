@@ -11,7 +11,7 @@ import (
 )
 
 const countTemplatesUsingFood = `-- name: CountTemplatesUsingFood :one
-SELECT COUNT(*) FROM template_components WHERE food_id = ?
+SELECT COUNT(*) FROM template_entries WHERE food_id = ?
 `
 
 func (q *Queries) CountTemplatesUsingFood(ctx context.Context, foodID int64) (int64, error) {
@@ -22,39 +22,53 @@ func (q *Queries) CountTemplatesUsingFood(ctx context.Context, foodID int64) (in
 }
 
 const createTemplate = `-- name: CreateTemplate :one
-INSERT INTO templates (name) VALUES (?) RETURNING id, name, created_at
+INSERT INTO templates (name, scope) VALUES (?, ?) RETURNING id, name, created_at, scope
 `
 
-func (q *Queries) CreateTemplate(ctx context.Context, name string) (Template, error) {
-	row := q.db.QueryRowContext(ctx, createTemplate, name)
+type CreateTemplateParams struct {
+	Name  string
+	Scope string
+}
+
+func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) (Template, error) {
+	row := q.db.QueryRowContext(ctx, createTemplate, arg.Name, arg.Scope)
 	var i Template
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.Scope,
+	)
 	return i, err
 }
 
-const createTemplateComponent = `-- name: CreateTemplateComponent :one
-INSERT INTO template_components (template_id, food_id, portions, sort_order, day_offset)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, template_id, food_id, portions, sort_order, day_offset
+const createTemplateEntry = `-- name: CreateTemplateEntry :one
+INSERT INTO template_entries (template_id, food_id, portions, sort_order, day_offset, slot_id, note)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, template_id, food_id, portions, sort_order, day_offset, slot_id, note
 `
 
-type CreateTemplateComponentParams struct {
+type CreateTemplateEntryParams struct {
 	TemplateID int64
 	FoodID     int64
 	Portions   float64
 	SortOrder  int64
 	DayOffset  int64
+	SlotID     sql.NullInt64
+	Note       sql.NullString
 }
 
-func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplateComponentParams) (TemplateComponent, error) {
-	row := q.db.QueryRowContext(ctx, createTemplateComponent,
+func (q *Queries) CreateTemplateEntry(ctx context.Context, arg CreateTemplateEntryParams) (TemplateEntry, error) {
+	row := q.db.QueryRowContext(ctx, createTemplateEntry,
 		arg.TemplateID,
 		arg.FoodID,
 		arg.Portions,
 		arg.SortOrder,
 		arg.DayOffset,
+		arg.SlotID,
+		arg.Note,
 	)
-	var i TemplateComponent
+	var i TemplateEntry
 	err := row.Scan(
 		&i.ID,
 		&i.TemplateID,
@@ -62,6 +76,8 @@ func (q *Queries) CreateTemplateComponent(ctx context.Context, arg CreateTemplat
 		&i.Portions,
 		&i.SortOrder,
 		&i.DayOffset,
+		&i.SlotID,
+		&i.Note,
 	)
 	return i, err
 }
@@ -74,38 +90,43 @@ func (q *Queries) DeleteTemplate(ctx context.Context, id int64) (sql.Result, err
 	return q.db.ExecContext(ctx, deleteTemplate, id)
 }
 
-const deleteTemplateComponentsByTemplate = `-- name: DeleteTemplateComponentsByTemplate :execresult
-DELETE FROM template_components WHERE template_id = ?
+const deleteTemplateEntriesByTemplate = `-- name: DeleteTemplateEntriesByTemplate :execresult
+DELETE FROM template_entries WHERE template_id = ?
 `
 
-func (q *Queries) DeleteTemplateComponentsByTemplate(ctx context.Context, templateID int64) (sql.Result, error) {
-	return q.db.ExecContext(ctx, deleteTemplateComponentsByTemplate, templateID)
+func (q *Queries) DeleteTemplateEntriesByTemplate(ctx context.Context, templateID int64) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deleteTemplateEntriesByTemplate, templateID)
 }
 
 const getTemplate = `-- name: GetTemplate :one
-SELECT id, name, created_at FROM templates WHERE id = ?
+SELECT id, name, created_at, scope FROM templates WHERE id = ?
 `
 
 func (q *Queries) GetTemplate(ctx context.Context, id int64) (Template, error) {
 	row := q.db.QueryRowContext(ctx, getTemplate, id)
 	var i Template
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.Scope,
+	)
 	return i, err
 }
 
-const listTemplateComponentsByTemplate = `-- name: ListTemplateComponentsByTemplate :many
-SELECT id, template_id, food_id, portions, sort_order, day_offset FROM template_components WHERE template_id = ? ORDER BY sort_order, id
+const listTemplateEntriesByTemplate = `-- name: ListTemplateEntriesByTemplate :many
+SELECT id, template_id, food_id, portions, sort_order, day_offset, slot_id, note FROM template_entries WHERE template_id = ? ORDER BY sort_order, id
 `
 
-func (q *Queries) ListTemplateComponentsByTemplate(ctx context.Context, templateID int64) ([]TemplateComponent, error) {
-	rows, err := q.db.QueryContext(ctx, listTemplateComponentsByTemplate, templateID)
+func (q *Queries) ListTemplateEntriesByTemplate(ctx context.Context, templateID int64) ([]TemplateEntry, error) {
+	rows, err := q.db.QueryContext(ctx, listTemplateEntriesByTemplate, templateID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []TemplateComponent{}
+	items := []TemplateEntry{}
 	for rows.Next() {
-		var i TemplateComponent
+		var i TemplateEntry
 		if err := rows.Scan(
 			&i.ID,
 			&i.TemplateID,
@@ -113,6 +134,8 @@ func (q *Queries) ListTemplateComponentsByTemplate(ctx context.Context, template
 			&i.Portions,
 			&i.SortOrder,
 			&i.DayOffset,
+			&i.SlotID,
+			&i.Note,
 		); err != nil {
 			return nil, err
 		}
@@ -128,7 +151,7 @@ func (q *Queries) ListTemplateComponentsByTemplate(ctx context.Context, template
 }
 
 const listTemplates = `-- name: ListTemplates :many
-SELECT id, name, created_at FROM templates ORDER BY name, id
+SELECT id, name, created_at, scope FROM templates ORDER BY name, id
 `
 
 func (q *Queries) ListTemplates(ctx context.Context) ([]Template, error) {
@@ -140,7 +163,44 @@ func (q *Queries) ListTemplates(ctx context.Context) ([]Template, error) {
 	items := []Template{}
 	for rows.Next() {
 		var i Template
-		if err := rows.Scan(&i.ID, &i.Name, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.Scope,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTemplatesByScope = `-- name: ListTemplatesByScope :many
+SELECT id, name, created_at, scope FROM templates WHERE scope = ? ORDER BY name, id
+`
+
+func (q *Queries) ListTemplatesByScope(ctx context.Context, scope string) ([]Template, error) {
+	rows, err := q.db.QueryContext(ctx, listTemplatesByScope, scope)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Template{}
+	for rows.Next() {
+		var i Template
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.Scope,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -155,7 +215,7 @@ func (q *Queries) ListTemplates(ctx context.Context) ([]Template, error) {
 }
 
 const updateTemplateName = `-- name: UpdateTemplateName :one
-UPDATE templates SET name = ? WHERE id = ? RETURNING id, name, created_at
+UPDATE templates SET name = ? WHERE id = ? RETURNING id, name, created_at, scope
 `
 
 type UpdateTemplateNameParams struct {
@@ -166,6 +226,11 @@ type UpdateTemplateNameParams struct {
 func (q *Queries) UpdateTemplateName(ctx context.Context, arg UpdateTemplateNameParams) (Template, error) {
 	row := q.db.QueryRowContext(ctx, updateTemplateName, arg.Name, arg.ID)
 	var i Template
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.Scope,
+	)
 	return i, err
 }
