@@ -1,21 +1,44 @@
-import { useDraggable, useDroppable, type DragStartEvent } from "@dnd-kit/core"
-import type { CSSProperties, ReactNode } from "react"
+import {
+  useDraggable,
+  useDroppable,
+  type DragStartEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
+} from "@dnd-kit/core"
+import type { CSSProperties } from "react"
 
 import type { Plate } from "@/lib/api/plates"
 import { cn } from "@/lib/utils"
+
+/**
+ * Drag handle exposed to the cell content. When present, the inner element
+ * that should initiate drag (the stretched-link button) attaches the ref +
+ * listeners + attributes. This keeps the outer wrapper free of role="button"
+ * / aria-roledescription / tabIndex — those a11y annotations live on the
+ * actual interactive element instead, so the cell's accessibility tree stays
+ * flat (one button per cell, not nested).
+ */
+export interface DragHandle {
+  setActivatorNodeRef: (element: HTMLElement | null) => void
+  listeners: DraggableSyntheticListeners
+  attributes: DraggableAttributes
+}
 
 interface DndCellWrapperProps {
   day: number
   date?: string
   slotId: number
   plate: Plate | undefined
-  children: ReactNode
+  /**
+   * Render-prop. Receives a DragHandle when the cell is draggable
+   * (planned + not skipped); otherwise null. Children attach the handle to
+   * the element that should initiate drag.
+   */
+  children: (handle: DragHandle | null) => React.ReactNode
 }
 
 // Each planner grid cell is BOTH a droppable target and (if it carries a
 // plate) a draggable source. Empty + skipped cells are droppable only.
-// The SlotCell ancestor remains responsible for its content; this wrapper is
-// purely a dnd-kit adapter so planner layout stays readable.
 export function DndCellWrapper({
   day,
   date,
@@ -39,17 +62,18 @@ export function DndCellWrapper({
     },
   })
 
-  const draggableId = plate ? `plate:${plate.id}` : null
+  const draggable = plate && !plate.skipped
   const {
     setNodeRef: setDragRef,
+    setActivatorNodeRef,
     listeners,
     attributes,
     transform,
     isDragging,
   } = useDraggable({
-    id: draggableId ?? `plate:noop-${day}-${slotId}`,
+    id: draggable ? `plate:${plate.id}` : `plate:noop-${day}-${slotId}`,
     data: { plateId: plate?.id, day, date, slotId },
-    disabled: !plate || plate.skipped,
+    disabled: !draggable,
   })
 
   const dragStyle: CSSProperties = transform
@@ -64,17 +88,19 @@ export function DndCellWrapper({
   // reject-and-toast still happens in onDragEnd.
   const isRejectedDrop = isOver && !!active && plate?.skipped === true
 
+  const handle: DragHandle | null = draggable
+    ? { setActivatorNodeRef, listeners, attributes }
+    : null
+
   return (
     <div
       ref={(el) => {
         setDropRef(el)
-        if (plate && !plate.skipped) setDragRef(el)
+        if (draggable) setDragRef(el)
       }}
-      {...(plate && !plate.skipped ? listeners : {})}
-      {...(plate && !plate.skipped ? attributes : {})}
       data-testid={`cell-${day}-${slotId}`}
       data-slot-drop-zone={`${day}:${slotId}`}
-      data-slot-drag-handle={plate && !plate.skipped ? plate.id : undefined}
+      data-slot-drag-handle={draggable ? plate.id : undefined}
       className={cn(
         "relative outline-offset-2",
         isOver &&
@@ -86,7 +112,7 @@ export function DndCellWrapper({
       )}
       style={dragStyle}
     >
-      {children}
+      {children(handle)}
     </div>
   )
 }

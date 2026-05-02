@@ -3,21 +3,23 @@ import * as Lucide from "lucide-react"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
 import type { Food } from "@/lib/api/foods"
 import type { TimeSlot } from "@/lib/api/slots"
-import { addPlateComponent, createPlate } from "@/lib/api/plates"
+import { addPlateComponent, createPlate, type Plate } from "@/lib/api/plates"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
-import { useSetPlateSkipped } from "@/lib/queries/plates"
+import { useDeletePlate, useSetPlateSkipped } from "@/lib/queries/plates"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
-import { toastError } from "@/lib/toast"
+import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
 import { AddComponentSheet } from "./AddComponentSheet"
 import type { PlannerDay } from "./PlannerGrid"
 import { SlotCell } from "./SlotCell"
+import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
 
 const DAY_KEYS = [
   "planner.day_mon",
@@ -69,10 +71,34 @@ export function MobilePlannerGrid({
   const todayIdx = days.findIndex((d) => d.date === todayStr)
   const [activeDay, setActiveDay] = useState(todayIdx >= 0 ? todayIdx : 0)
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
+  const [sheetTarget, setSheetTarget] = useState<SlotSheetTarget | null>(null)
+  const [savePlateId, setSavePlateId] = useState<number | null>(null)
 
   const setFavoriteMut = useSetFoodFavorite()
   const setSkippedMut = useSetPlateSkipped()
+  const deletePlateMut = useDeletePlate()
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
+
+  function openSheetForPlate(dayIdx: number, slot: TimeSlot, plate: Plate) {
+    const day = days[dayIdx]
+    if (!day) return
+    setSheetTarget({
+      plateId: plate.id,
+      date: day.date,
+      weekday: day.weekday,
+      slotId: slot.id,
+      slotNameKey: slot.name_key,
+    })
+  }
+
+  function handleDeletePlate(plateId: number) {
+    deletePlateMut
+      .mutateAsync(plateId)
+      .then(() => {
+        toast(t("plate.deleted"))
+      })
+      .catch((err) => toastError(err, t))
+  }
 
   const openPicker = (dayIdx: number, slotId: number) => {
     setAddTarget({ dayIdx, slotId })
@@ -203,7 +229,12 @@ export function MobilePlannerGrid({
                 plate={plate}
                 componentsById={componentsById}
                 onAdd={() => openPicker(activeDay, slot.id)}
-                onDeletePlate={() => {}}
+                onOpenSheet={
+                  plate
+                    ? () => openSheetForPlate(activeDay, slot, plate)
+                    : undefined
+                }
+                onDeletePlate={() => plate && handleDeletePlate(plate.id)}
                 onToggleFavorite={() => {
                   const hero = plate?.components
                     .slice()
@@ -233,6 +264,49 @@ export function MobilePlannerGrid({
         open={addTarget !== null}
         onOpenChange={(o) => !o && setAddTarget(null)}
         onPick={handlePick}
+      />
+      <SaveAsTemplateDialog
+        open={savePlateId !== null}
+        onOpenChange={(o) => !o && setSavePlateId(null)}
+        plateId={savePlateId}
+      />
+      <SlotSheet
+        target={sheetTarget}
+        days={days}
+        componentsById={componentsById}
+        rangeFrom={rangeFrom}
+        rangeTo={rangeTo}
+        side="bottom"
+        onOpenChange={(open) => {
+          if (!open) setSheetTarget(null)
+        }}
+        onAddComponent={(target) =>
+          setAddTarget({
+            dayIdx: days.findIndex((d) => d.date === target.date),
+            slotId: target.slotId,
+          })
+        }
+        onSwapComponent={() => {
+          // Swap is opened via the same picker; mobile picker handles 'add only'.
+          // Phase 5 will replace this with a dedicated swap flow.
+          if (sheetTarget) {
+            setAddTarget({
+              dayIdx: days.findIndex((d) => d.date === sheetTarget.date),
+              slotId: sheetTarget.slotId,
+            })
+          }
+        }}
+        onSaveAsTemplate={(plateId) => setSavePlateId(plateId)}
+        onToggleSkip={(target, currentSkipped) => {
+          const dayIdx = days.findIndex((d) => d.date === target.date)
+          if (dayIdx < 0) return
+          void handleToggleSkip(dayIdx, target.slotId, target.plateId)
+          if (!currentSkipped) setSheetTarget(null)
+        }}
+        onDeletePlate={(plateId) => {
+          handleDeletePlate(plateId)
+          setSheetTarget(null)
+        }}
       />
     </div>
   )

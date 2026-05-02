@@ -158,6 +158,15 @@
       "placeholder": "Notiz (optional)"
     }
   },
+  "slot_sheet": {
+    "title": "Slot-Details",
+    "empty_description": "Kein Slot ausgewählt.",
+    "open_label": "Slot-Details öffnen",
+    "description_one": "1 Komponente geplant",
+    "description_other": "{{count}} Komponenten geplant",
+    "components_label": "Komponenten",
+    "empty_components": "Noch keine Komponenten"
+  },
   "picker": {
     "search": {
       "placeholder": "Komponenten, Tags, Zutaten suchen…"
@@ -344,6 +353,7 @@
     "snack": "Snack"
   },
   "ingredient": {
+    "kind_label": "Lebensmittel",
     "title": "Das Vorrats-Archiv",
     "subtitle": "Eine kuratierte Datenbank deiner botanischen Grundzutaten, sorgfältig erfasst für handwerkliche Ernährung.",
     "create": "Neue Zutat",

@@ -22,6 +22,7 @@ import type { MacrosResponse } from "@/lib/api/plates"
 import { cn } from "@/lib/utils"
 
 import { AiFilledBadge } from "./AiFilledBadge"
+import type { DragHandle } from "./DndCellWrapper"
 import { SlotActions } from "./SlotActions"
 import { SlotChips } from "./SlotChips"
 import { SlotHero } from "./SlotHero"
@@ -34,7 +35,12 @@ interface SlotCellProps {
   componentsById: Map<number, Food>
   macros?: MacrosResponse
   aiFilled?: boolean
+  /** dnd-kit drag handle for planned cells. The stretched-link button uses
+   *  it as the drag activator so the cell remains a single interactive
+   *  element for both click-to-open and drag-to-reschedule. */
+  dragHandle?: DragHandle | null
   onAdd: () => void
+  onOpenSheet?: () => void
   onDeletePlate: () => void
   onSaveAsTemplate?: () => void
   onToggleFavorite: () => void
@@ -175,7 +181,9 @@ function PlannedSlot({
   componentsById,
   macros,
   aiFilled,
+  dragHandle,
   onAdd,
+  onOpenSheet,
   onDeletePlate,
   onSaveAsTemplate,
   onToggleFavorite,
@@ -218,6 +226,27 @@ function PlannedSlot({
           "border-[#c2974a]/40 shadow-[0_0_0_1px_rgba(194,151,74,0.3),0_4px_12px_-4px_rgba(25,28,28,0.06)]"
       )}
     >
+      {/* Stretched-link click target. z-[1] puts it ABOVE the SlotHero
+        (positioned z-auto, paint group 6) so clicks on the dish photo also
+        open the sheet — z-0 would lose the tree-order tiebreak. The action
+        row inside the body uses z-10, sitting above this button so its
+        controls remain hit-testable.
+        This same button is also the dnd-kit drag activator (when the cell
+        is draggable), unifying click-to-open and drag-to-reschedule on a
+        single interactive element so the a11y tree stays flat — one
+        button per cell, not nested. */}
+      {onOpenSheet && (
+        <button
+          type="button"
+          onClick={onOpenSheet}
+          aria-label={t("slot_sheet.open_label")}
+          data-testid="slot-open-sheet"
+          ref={dragHandle?.setActivatorNodeRef}
+          {...(dragHandle?.listeners ?? {})}
+          {...(dragHandle?.attributes ?? {})}
+          className="absolute inset-0 z-[1] cursor-pointer rounded-[14px] focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none focus-visible:ring-inset"
+        />
+      )}
       {aiFilled && <AiFilledBadge />}
       <SlotActions
         favorite={favorite}
@@ -233,7 +262,7 @@ function PlannedSlot({
         roleLabel={
           heroRole
             ? t(`planner.slot.role.${heroRole}`, { defaultValue: heroRole })
-            : t("ingredient.kind_label", { defaultValue: "Lebensmittel" })
+            : t("ingredient.kind_label")
         }
       />
       <div className="flex min-h-0 flex-1 flex-col gap-1 px-2.5 py-2">
@@ -241,17 +270,14 @@ function PlannedSlot({
           <span className="truncate font-heading text-[13.5px] leading-tight font-bold tracking-tight text-on-surface">
             {heroName}
           </span>
-          <div className="flex shrink-0 items-center">
+          <div className="relative z-10 flex shrink-0 items-center">
             <Button
               variant="ghost"
               size="icon"
               data-testid="slot-quick-delete"
               className="size-5 text-on-surface-variant/50 opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
               aria-label={t("plate.delete_plate")}
-              onClick={(e) => {
-                e.stopPropagation()
-                onDeletePlate()
-              }}
+              onClick={onDeletePlate}
             >
               <X className="h-3 w-3" />
             </Button>

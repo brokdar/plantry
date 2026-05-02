@@ -43,6 +43,7 @@ import { toast, toastError } from "@/lib/toast"
 import { AddComponentSheet } from "./AddComponentSheet"
 import { DayHeader } from "./DayHeader"
 import { SlotCell } from "./SlotCell"
+import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
 
 export interface PlannerDay {
   date: string // "YYYY-MM-DD"
@@ -118,6 +119,19 @@ export function PlannerGrid({
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null)
   const [savePlateId, setSavePlateId] = useState<number | null>(null)
+  const [sheetTarget, setSheetTarget] = useState<SlotSheetTarget | null>(null)
+
+  function openSheetForPlate(dayIdx: number, slot: TimeSlot, plate: Plate) {
+    const day = days[dayIdx]
+    if (!day) return
+    setSheetTarget({
+      plateId: plate.id,
+      date: day.date,
+      weekday: day.weekday,
+      slotId: slot.id,
+      slotNameKey: slot.name_key,
+    })
+  }
 
   const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
   const addCompMut = useAddPlateComponent()
@@ -337,6 +351,17 @@ export function PlannerGrid({
     snapshot: Plate
   }
   const pendingDeletesRef = useRef(new Map<number, PendingDelete>())
+  // PointerSensor's 6 px activation distance disambiguates click-to-open from
+  // drag-to-reschedule on the SlotCell stretched-link button (the same button
+  // is both click target and drag activator via setActivatorNodeRef).
+  // KeyboardSensor's default start keys are Space/Enter — the same keys that
+  // fire <button> click. dnd-kit calls preventDefault on the keydown when the
+  // focused element is the activator, so keyboard users tabbing to the cell
+  // and pressing Enter start a drag instead of opening the sheet. They keep
+  // full keyboard access via the cell's dropdown menu (Add / Skip / Save /
+  // Delete), so this is a missed opportunity rather than a regression. Phase 7
+  // of the redesign adds an explicit grip-dots drag handle, which separates
+  // the activator from the click target and resolves the conflict naturally.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor)
@@ -511,59 +536,73 @@ export function PlannerGrid({
                           slotId={slot.id}
                           plate={plate}
                         >
-                          <SlotCell
-                            day={dayIdx}
-                            slotId={slot.id}
-                            plate={plate}
-                            componentsById={componentsById}
-                            aiFilled={plate ? aiFilledIds.has(plate.id) : false}
-                            onAdd={() => openPicker(dayIdx, slot.id)}
-                            onDeletePlate={() =>
-                              plate && handleDeletePlate(plate.id, dayIdx)
-                            }
-                            onSaveAsTemplate={
-                              plate ? () => setSavePlateId(plate.id) : undefined
-                            }
-                            onToggleFavorite={() => {
-                              const hero = plate?.components
-                                .slice()
-                                .sort((a, b) => a.sort_order - b.sort_order)[0]
-                              const heroComp = hero
-                                ? componentsById.get(hero.food_id)
-                                : undefined
-                              void handleToggleFavorite(
-                                heroComp?.id,
-                                heroComp?.favorite ?? false
-                              )
-                              if (plate) clearAiFillOnPlate(plate.id)
-                            }}
-                            onToggleSkip={() => {
-                              void handleToggleSkip(
-                                dayIdx,
-                                slot.id,
-                                plate?.id ?? null
-                              )
-                              if (plate) clearAiFillOnPlate(plate.id)
-                            }}
-                            onRateLoved={() => {
-                              if (!plate) return
-                              void handleRate(
-                                plate.id,
-                                "loved",
-                                plate.feedback?.status
-                              )
-                              clearAiFillOnPlate(plate.id)
-                            }}
-                            onRateDisliked={() => {
-                              if (!plate) return
-                              void handleRate(
-                                plate.id,
-                                "disliked",
-                                plate.feedback?.status
-                              )
-                              clearAiFillOnPlate(plate.id)
-                            }}
-                          />
+                          {(dragHandle) => (
+                            <SlotCell
+                              day={dayIdx}
+                              slotId={slot.id}
+                              plate={plate}
+                              componentsById={componentsById}
+                              aiFilled={
+                                plate ? aiFilledIds.has(plate.id) : false
+                              }
+                              dragHandle={dragHandle}
+                              onAdd={() => openPicker(dayIdx, slot.id)}
+                              onOpenSheet={
+                                plate
+                                  ? () => openSheetForPlate(dayIdx, slot, plate)
+                                  : undefined
+                              }
+                              onDeletePlate={() =>
+                                plate && handleDeletePlate(plate.id, dayIdx)
+                              }
+                              onSaveAsTemplate={
+                                plate
+                                  ? () => setSavePlateId(plate.id)
+                                  : undefined
+                              }
+                              onToggleFavorite={() => {
+                                const hero = plate?.components
+                                  .slice()
+                                  .sort(
+                                    (a, b) => a.sort_order - b.sort_order
+                                  )[0]
+                                const heroComp = hero
+                                  ? componentsById.get(hero.food_id)
+                                  : undefined
+                                void handleToggleFavorite(
+                                  heroComp?.id,
+                                  heroComp?.favorite ?? false
+                                )
+                                if (plate) clearAiFillOnPlate(plate.id)
+                              }}
+                              onToggleSkip={() => {
+                                void handleToggleSkip(
+                                  dayIdx,
+                                  slot.id,
+                                  plate?.id ?? null
+                                )
+                                if (plate) clearAiFillOnPlate(plate.id)
+                              }}
+                              onRateLoved={() => {
+                                if (!plate) return
+                                void handleRate(
+                                  plate.id,
+                                  "loved",
+                                  plate.feedback?.status
+                                )
+                                clearAiFillOnPlate(plate.id)
+                              }}
+                              onRateDisliked={() => {
+                                if (!plate) return
+                                void handleRate(
+                                  plate.id,
+                                  "disliked",
+                                  plate.feedback?.status
+                                )
+                                clearAiFillOnPlate(plate.id)
+                              }}
+                            />
+                          )}
                         </DndCellWrapper>
                       </div>
                     )
@@ -593,6 +632,51 @@ export function PlannerGrid({
           open={savePlateId !== null}
           onOpenChange={(o) => !o && setSavePlateId(null)}
           plateId={savePlateId}
+        />
+        <SlotSheet
+          target={sheetTarget}
+          days={days}
+          componentsById={componentsById}
+          rangeFrom={rangeFrom}
+          rangeTo={rangeTo}
+          aiFilled={sheetTarget ? aiFilledIds.has(sheetTarget.plateId) : false}
+          onOpenChange={(open) => {
+            if (!open) setSheetTarget(null)
+          }}
+          onAddComponent={(target) =>
+            setAddTarget({
+              day: days.findIndex((d) => d.date === target.date),
+              slotId: target.slotId,
+              plateId: target.plateId,
+            })
+          }
+          onSwapComponent={(target, pcId, defaultRole) =>
+            setSwapTarget({
+              plateId: target.plateId,
+              pcId,
+              defaultRole,
+            })
+          }
+          onSaveAsTemplate={(plateId) => setSavePlateId(plateId)}
+          onToggleSkip={(target, currentSkipped) => {
+            const dayIdx = days.findIndex((d) => d.date === target.date)
+            if (dayIdx < 0) return
+            void handleToggleSkip(dayIdx, target.slotId, target.plateId)
+            if (currentSkipped) {
+              // Removing skip — keep sheet open for further edits.
+              return
+            }
+            // Marking skip — close the sheet so the user sees the cell update.
+            setSheetTarget(null)
+          }}
+          onDeletePlate={(plateId) => {
+            const dayIdx = days.findIndex((d) =>
+              d.plates.some((p) => p.id === plateId)
+            )
+            if (dayIdx < 0) return
+            handleDeletePlate(plateId, dayIdx)
+            setSheetTarget(null)
+          }}
         />
       </div>
     </DndContext>
