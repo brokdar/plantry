@@ -167,6 +167,37 @@
     "components_label": "Components",
     "empty_components": "No components yet"
   },
+  "tray": {
+    "title": "Add to {{slot}}",
+    "title_empty": "Add to slot",
+    "subtitle": "Stage components, then add them all at once.",
+    "tabs_label": "Browse source",
+    "tab": {
+      "foods": "Foods",
+      "templates": "Templates",
+      "favorites": "Favorites",
+      "recent": "Recent"
+    },
+    "empty": {
+      "foods": "No matching foods.",
+      "templates": "No templates yet — save a plate as a template first.",
+      "favorites": "No favorites yet — heart a food to add it here.",
+      "recent": "No recent foods in this window."
+    },
+    "staged_label": "Staged components",
+    "staged_count_one": "1 staged",
+    "staged_count_other": "{{count}} staged",
+    "empty_count": "Nothing staged",
+    "commit_one": "Add 1",
+    "commit_other": "Add {{count}}",
+    "committing": "Adding…",
+    "committed_one": "1 component added.",
+    "committed_other": "{{count}} components added.",
+    "partial_failure_one": "1 component couldn't be added — still staged.",
+    "partial_failure_other": "{{count}} components couldn't be added — still staged.",
+    "error_load_foods": "Couldn't load foods. Try again.",
+    "error_load_templates": "Couldn't load templates. Try again."
+  },
   "picker": {
     "search": {
       "placeholder": "Search components, tags, ingredients…"

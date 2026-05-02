@@ -167,6 +167,37 @@
     "components_label": "Komponenten",
     "empty_components": "Noch keine Komponenten"
   },
+  "tray": {
+    "title": "Zu {{slot}} hinzufügen",
+    "title_empty": "Zum Slot hinzufügen",
+    "subtitle": "Komponenten vormerken und gemeinsam hinzufügen.",
+    "tabs_label": "Quelle wählen",
+    "tab": {
+      "foods": "Lebensmittel",
+      "templates": "Vorlagen",
+      "favorites": "Favoriten",
+      "recent": "Zuletzt"
+    },
+    "empty": {
+      "foods": "Keine passenden Lebensmittel.",
+      "templates": "Noch keine Vorlagen — speichere zuerst einen Teller als Vorlage.",
+      "favorites": "Noch keine Favoriten — markiere ein Lebensmittel mit ❤︎.",
+      "recent": "Keine zuletzt verwendeten Lebensmittel in diesem Zeitraum."
+    },
+    "staged_label": "Vorgemerkte Komponenten",
+    "staged_count_one": "1 vorgemerkt",
+    "staged_count_other": "{{count}} vorgemerkt",
+    "empty_count": "Nichts vorgemerkt",
+    "commit_one": "1 hinzufügen",
+    "commit_other": "{{count}} hinzufügen",
+    "committing": "Wird hinzugefügt…",
+    "committed_one": "1 Komponente hinzugefügt.",
+    "committed_other": "{{count}} Komponenten hinzugefügt.",
+    "partial_failure_one": "1 Komponente konnte nicht hinzugefügt werden — bleibt vorgemerkt.",
+    "partial_failure_other": "{{count}} Komponenten konnten nicht hinzugefügt werden — bleiben vorgemerkt.",
+    "error_load_foods": "Lebensmittel konnten nicht geladen werden. Erneut versuchen.",
+    "error_load_templates": "Vorlagen konnten nicht geladen werden. Erneut versuchen."
+  },
   "picker": {
     "search": {
       "placeholder": "Komponenten, Tags, Zutaten suchen…"

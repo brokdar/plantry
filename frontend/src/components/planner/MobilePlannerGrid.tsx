@@ -16,7 +16,7 @@ import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
-import { AddComponentSheet } from "./AddComponentSheet"
+import { ComponentTraySheet, type TraySlotContext } from "./ComponentTraySheet"
 import type { PlannerDay } from "./PlannerGrid"
 import { SlotCell } from "./SlotCell"
 import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
@@ -66,6 +66,33 @@ export function MobilePlannerGrid({
     return map
   }, [componentsQuery.data])
 
+  const slotsById = useMemo(() => {
+    const map = new Map<number, TimeSlot>()
+    for (const s of slots) map.set(s.id, s)
+    return map
+  }, [slots])
+
+  const recentFoods = useMemo(() => {
+    const seen = new Set<number>()
+    const out: Food[] = []
+    const sortedDays = [...days].sort((a, b) =>
+      a.date < b.date ? 1 : a.date > b.date ? -1 : 0
+    )
+    for (const day of sortedDays) {
+      for (const plate of day.plates) {
+        for (const pc of plate.components) {
+          if (seen.has(pc.food_id)) continue
+          const food = componentsById.get(pc.food_id)
+          if (!food) continue
+          seen.add(pc.food_id)
+          out.push(food)
+          if (out.length >= 20) return out
+        }
+      }
+    }
+    return out
+  }, [days, componentsById])
+
   // Default to today's index; fall back to 0 if today isn't in the window.
   const todayStr = new Date().toISOString().slice(0, 10)
   const todayIdx = days.findIndex((d) => d.date === todayStr)
@@ -104,26 +131,74 @@ export function MobilePlannerGrid({
     setAddTarget({ dayIdx, slotId })
   }
 
-  async function handlePick(component: Food) {
-    if (!addTarget) return
+  async function handleTrayCommit(
+    items: { food_id: number; portions: number }[]
+  ): Promise<{ failedFoodIds: number[] }> {
+    if (!addTarget || items.length === 0) return { failedFoodIds: [] }
     const target = addTarget
-    setAddTarget(null)
     const targetDay = days[target.dayIdx]
-    if (!targetDay) return
+    if (!targetDay) return { failedFoodIds: [] }
+
+    let plateId: number
     try {
       const created = await createPlate({
         date: targetDay.date,
         slot_id: target.slotId,
       })
-      await addPlateComponent(created.id, {
-        food_id: component.id,
-        portions: 1,
-      })
-      void queryClient.invalidateQueries({
-        queryKey: plateKeys.range(rangeFrom, rangeTo),
-      })
+      plateId = created.id
     } catch (err) {
       toastError(err, t)
+      return { failedFoodIds: items.map((i) => i.food_id) }
+    }
+
+    const results = await Promise.allSettled(
+      items.map((it) =>
+        addPlateComponent(plateId, {
+          food_id: it.food_id,
+          portions: it.portions,
+        })
+      )
+    )
+    const failedFoodIds: number[] = []
+    let firstError: unknown
+    results.forEach((r, idx) => {
+      if (r.status === "rejected") {
+        failedFoodIds.push(items[idx]!.food_id)
+        firstError ??= r.reason
+      }
+    })
+    void queryClient.invalidateQueries({
+      queryKey: plateKeys.range(rangeFrom, rangeTo),
+    })
+
+    const ok = items.length - failedFoodIds.length
+    if (failedFoodIds.length === 0) {
+      toast(
+        ok === 1
+          ? t("tray.committed_one")
+          : t("tray.committed_other", { count: ok })
+      )
+    } else if (ok > 0) {
+      toast(
+        failedFoodIds.length === 1
+          ? t("tray.partial_failure_one")
+          : t("tray.partial_failure_other", { count: failedFoodIds.length })
+      )
+    } else {
+      toastError(firstError, t)
+    }
+    return { failedFoodIds }
+  }
+
+  function buildTrayContext(target: AddTarget): TraySlotContext | null {
+    const day = days[target.dayIdx]
+    const slot = slotsById.get(target.slotId)
+    if (!day || !slot) return null
+    return {
+      slotId: slot.id,
+      slotNameKey: slot.name_key,
+      date: day.date,
+      weekday: day.weekday,
     }
   }
 
@@ -260,10 +335,13 @@ export function MobilePlannerGrid({
         })}
       </ul>
 
-      <AddComponentSheet
+      <ComponentTraySheet
         open={addTarget !== null}
+        context={addTarget ? buildTrayContext(addTarget) : null}
+        recentFoods={recentFoods}
+        side="bottom"
         onOpenChange={(o) => !o && setAddTarget(null)}
-        onPick={handlePick}
+        onCommit={(items) => handleTrayCommit(items)}
       />
       <SaveAsTemplateDialog
         open={savePlateId !== null}

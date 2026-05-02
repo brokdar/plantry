@@ -30,7 +30,6 @@ import type { NutritionDay } from "@/lib/api/nutrition"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import {
-  useAddPlateComponent,
   useDeletePlate,
   useSetPlateSkipped,
   useSwapPlateComponent,
@@ -41,6 +40,7 @@ import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
 
 import { AddComponentSheet } from "./AddComponentSheet"
+import { ComponentTraySheet, type TraySlotContext } from "./ComponentTraySheet"
 import { DayHeader } from "./DayHeader"
 import { SlotCell } from "./SlotCell"
 import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
@@ -94,6 +94,22 @@ function findPlateInDay(day: PlannerDay, slotId: number): Plate | undefined {
   return day.plates.find((p) => p.slot_id === slotId)
 }
 
+function buildTrayContext(
+  target: AddTarget,
+  days: PlannerDay[],
+  slotsById: Map<number, TimeSlot>
+): TraySlotContext | null {
+  const day = days[target.day]
+  const slot = slotsById.get(target.slotId)
+  if (!day || !slot) return null
+  return {
+    slotId: slot.id,
+    slotNameKey: slot.name_key,
+    date: day.date,
+    weekday: day.weekday,
+  }
+}
+
 export function PlannerGrid({
   days,
   slots,
@@ -113,6 +129,38 @@ export function PlannerGrid({
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)
     return map
   }, [componentsQuery.data])
+
+  const slotsById = useMemo(() => {
+    const map = new Map<number, TimeSlot>()
+    for (const s of slots) map.set(s.id, s)
+    return map
+  }, [slots])
+
+  // Frontend-derived "Recent" tab content for the tray sheet. Walks the
+  // plates currently in cache (the visible window), de-duplicates by food id
+  // and orders most-recent-first by plate date. Capped at 20 to keep the
+  // tab focused. Cheap because it only iterates visible plates — the heavy
+  // foods catalog already lives in `componentsById`.
+  const recentFoods = useMemo(() => {
+    const seen = new Set<number>()
+    const out: Food[] = []
+    const sortedDays = [...days].sort((a, b) =>
+      a.date < b.date ? 1 : a.date > b.date ? -1 : 0
+    )
+    for (const day of sortedDays) {
+      for (const plate of day.plates) {
+        for (const pc of plate.components) {
+          if (seen.has(pc.food_id)) continue
+          const food = componentsById.get(pc.food_id)
+          if (!food) continue
+          seen.add(pc.food_id)
+          out.push(food)
+          if (out.length >= 20) return out
+        }
+      }
+    }
+    return out
+  }, [days, componentsById])
 
   const today = startOfDay(new Date())
 
@@ -134,7 +182,6 @@ export function PlannerGrid({
   }
 
   const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
-  const addCompMut = useAddPlateComponent()
   const swapMut = useSwapPlateComponent()
   const deletePlateMut = useDeletePlate()
   const setSkippedMut = useSetPlateSkipped()
@@ -146,35 +193,70 @@ export function PlannerGrid({
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
   const aiFilledIds = useMemo(() => new Set(aiFill.plateIds), [aiFill.plateIds])
 
-  async function handlePick(component: Food) {
-    if (!addTarget) return
+  async function handleTrayCommit(
+    items: { food_id: number; portions: number }[]
+  ): Promise<{ failedFoodIds: number[] }> {
+    if (!addTarget || items.length === 0) return { failedFoodIds: [] }
     const target = addTarget
-    setAddTarget(null)
     const targetDay = days[target.day]
-    if (!targetDay) return
-    try {
-      if (target.plateId === null) {
+    if (!targetDay) return { failedFoodIds: [] }
+
+    let plateId = target.plateId
+    if (plateId === null) {
+      // If creating the plate fails, nothing landed — every staged item
+      // counts as failed so the tray keeps them all for retry.
+      try {
         const created = await createPlate({
           date: targetDay.date,
           slot_id: target.slotId,
         })
-        await addPlateComponent(created.id, {
-          food_id: component.id,
-          portions: 1,
-        })
-        void queryClient.invalidateQueries({
-          queryKey: plateKeys.range(rangeFrom, rangeTo),
-        })
-        void queryClient.invalidateQueries({ queryKey: shoppingKeys.all })
-      } else {
-        await addCompMut.mutateAsync({
-          plateId: target.plateId,
-          input: { food_id: component.id, portions: 1 },
-        })
+        plateId = created.id
+      } catch (err) {
+        toastError(err, t)
+        return { failedFoodIds: items.map((i) => i.food_id) }
       }
-    } catch (err) {
-      toastError(err, t)
     }
+
+    // Add components in parallel and survive partial failure: report what
+    // didn't land so the tray sheet can keep those staged for retry.
+    const results = await Promise.allSettled(
+      items.map((it) =>
+        addPlateComponent(plateId!, {
+          food_id: it.food_id,
+          portions: it.portions,
+        })
+      )
+    )
+    const failedFoodIds: number[] = []
+    let firstError: unknown
+    results.forEach((r, idx) => {
+      if (r.status === "rejected") {
+        failedFoodIds.push(items[idx]!.food_id)
+        firstError ??= r.reason
+      }
+    })
+    void queryClient.invalidateQueries({
+      queryKey: plateKeys.range(rangeFrom, rangeTo),
+    })
+    void queryClient.invalidateQueries({ queryKey: shoppingKeys.all })
+
+    const ok = items.length - failedFoodIds.length
+    if (failedFoodIds.length === 0) {
+      toast(
+        ok === 1
+          ? t("tray.committed_one")
+          : t("tray.committed_other", { count: ok })
+      )
+    } else if (ok > 0) {
+      toast(
+        failedFoodIds.length === 1
+          ? t("tray.partial_failure_one")
+          : t("tray.partial_failure_other", { count: failedFoodIds.length })
+      )
+    } else {
+      toastError(firstError, t)
+    }
+    return { failedFoodIds }
   }
 
   async function handleSwapPick(component: Food) {
@@ -613,14 +695,14 @@ export function PlannerGrid({
           </div>
         </div>
 
-        <AddComponentSheet
+        <ComponentTraySheet
           open={addTarget !== null}
+          context={
+            addTarget ? buildTrayContext(addTarget, days, slotsById) : null
+          }
+          recentFoods={recentFoods}
           onOpenChange={(o) => !o && setAddTarget(null)}
-          defaultRole={addTarget?.defaultRole}
-          onPick={handlePick}
-          showTemplates
-          defaultSlotId={addTarget ? String(addTarget.slotId) : undefined}
-          defaultDate={addTarget ? days[addTarget.day]?.date : undefined}
+          onCommit={(items) => handleTrayCommit(items)}
         />
         <AddComponentSheet
           open={swapTarget !== null}
