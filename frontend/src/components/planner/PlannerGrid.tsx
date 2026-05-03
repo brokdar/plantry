@@ -862,6 +862,25 @@ export function PlannerGrid({
             handleDeletePlate(plateId, dayIdx)
             setSheetTarget(null)
           }}
+          onMovePlate={(target, newDate) => {
+            if (newDate === target.date) return
+            updatePlateMut
+              .mutateAsync({
+                id: target.plateId,
+                input: { date: newDate, slot_id: target.slotId },
+              })
+              .then(() => {
+                const day = days.find((d) => d.date === newDate)
+                if (day) {
+                  const dayKey = DAY_KEYS[day.weekday] ?? DAY_KEYS[0]
+                  toast(t("planner.mobile.moved_to", { day: t(dayKey) }))
+                }
+                setSheetTarget(null)
+              })
+              .catch((err) => {
+                toastError(err, t, t("planner.mobile.move_failed"))
+              })
+          }}
         />
       </div>
     </DndContext>

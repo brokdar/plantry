@@ -82,6 +82,10 @@ interface SlotSheetProps {
   onSaveAsTemplate: (plateId: number) => void
   onToggleSkip: (target: SlotSheetTarget, currentSkipped: boolean) => void
   onDeletePlate: (plateId: number) => void
+  /** Move the plate to another day in the visible window. Renders the
+   *  Move-to-day picker when present — keyboard / screen-reader path that
+   *  parallels the desktop drag and the mobile long-press gesture. */
+  onMovePlate?: (target: SlotSheetTarget, newDate: string) => void
 }
 
 export function SlotSheet({
@@ -98,6 +102,7 @@ export function SlotSheet({
   onSaveAsTemplate,
   onToggleSkip,
   onDeletePlate,
+  onMovePlate,
 }: SlotSheetProps) {
   const { t } = useTranslation()
 
@@ -131,6 +136,7 @@ export function SlotSheet({
             target={target}
             plate={plate}
             componentsById={componentsById}
+            days={days}
             rangeFrom={rangeFrom}
             rangeTo={rangeTo}
             aiFilled={!!aiFilled}
@@ -142,6 +148,11 @@ export function SlotSheet({
             onSaveAsTemplate={() => onSaveAsTemplate(target.plateId)}
             onToggleSkip={() => onToggleSkip(target, plate.skipped)}
             onDeletePlate={() => onDeletePlate(target.plateId)}
+            onMovePlate={
+              onMovePlate
+                ? (newDate) => onMovePlate(target, newDate)
+                : undefined
+            }
           />
         ) : (
           <SheetHeader>
@@ -160,6 +171,7 @@ interface SlotSheetBodyProps {
   target: SlotSheetTarget
   plate: Plate
   componentsById: Map<number, Food>
+  days: PlannerDay[]
   rangeFrom: string
   rangeTo: string
   aiFilled: boolean
@@ -169,12 +181,14 @@ interface SlotSheetBodyProps {
   onSaveAsTemplate: () => void
   onToggleSkip: () => void
   onDeletePlate: () => void
+  onMovePlate?: (newDate: string) => void
 }
 
 function SlotSheetBody({
   target,
   plate,
   componentsById,
+  days,
   rangeFrom,
   rangeTo,
   aiFilled,
@@ -184,6 +198,7 @@ function SlotSheetBody({
   onSaveAsTemplate,
   onToggleSkip,
   onDeletePlate,
+  onMovePlate,
 }: SlotSheetBodyProps) {
   const { t, i18n } = useTranslation()
 
@@ -266,6 +281,14 @@ function SlotSheetBody({
         <NoteField plate={plate} rangeFrom={rangeFrom} rangeTo={rangeTo} />
 
         <FeedbackBlock plate={plate} />
+
+        {onMovePlate && !plate.skipped && (
+          <MoveToDayPicker
+            days={days}
+            currentDate={target.date}
+            onPick={onMovePlate}
+          />
+        )}
       </div>
 
       <ActionFooter
@@ -780,6 +803,80 @@ function ActionFooter({
         </Button>
       </div>
     </footer>
+  )
+}
+
+/**
+ * Keyboard / screen-reader path for moving a plate to another day in the
+ * visible window. Mirrors the desktop drag and the mobile long-press but
+ * uses tappable / focusable chips so any input modality can trigger it.
+ * The current day's chip is rendered as `aria-current` and disabled — moves
+ * to the same day would be a no-op.
+ */
+function MoveToDayPicker({
+  days,
+  currentDate,
+  onPick,
+}: {
+  days: PlannerDay[]
+  currentDate: string
+  onPick: (newDate: string) => void
+}) {
+  const { t, i18n } = useTranslation()
+  const dateLocale = i18n.language?.startsWith("de") ? deLocale : undefined
+  return (
+    <section
+      className="flex flex-col gap-2"
+      data-testid="slot-sheet-move-picker"
+      aria-label={t("planner.mobile.move_to_picker_label")}
+    >
+      <h3 className="font-heading text-[10.5px] font-bold tracking-[0.22em] text-on-surface-variant uppercase">
+        {t("planner.mobile.move_to")}
+      </h3>
+      <div
+        className="grid gap-1.5"
+        style={{
+          gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))`,
+        }}
+        role="group"
+      >
+        {days.map((day) => {
+          const isCurrent = day.date === currentDate
+          const dayKey = DAY_KEYS[day.weekday] ?? DAY_KEYS[0]
+          const dayShort = t(dayKey)
+          const date = parseISO(day.date)
+          const dayNum = format(date, "d", { locale: dateLocale })
+          return (
+            <button
+              key={day.date}
+              type="button"
+              disabled={isCurrent}
+              aria-current={isCurrent ? "true" : undefined}
+              aria-label={
+                isCurrent
+                  ? `${dayShort} — ${t("planner.mobile.current_day")}`
+                  : `${t("planner.mobile.move_to")}: ${dayShort}`
+              }
+              onClick={() => onPick(day.date)}
+              data-testid={`slot-sheet-move-day-${day.weekday}`}
+              className={cn(
+                "flex flex-col items-center gap-0.5 rounded-xl border py-2 transition-[background-color,border-color,transform] duration-150",
+                isCurrent
+                  ? "cursor-default border-primary/50 bg-primary/10 text-primary"
+                  : "border-outline-variant/40 bg-surface-container-low/40 text-on-surface hover:-translate-y-px hover:border-primary/40 hover:bg-surface-container-low"
+              )}
+            >
+              <span className="font-heading text-[9px] font-bold tracking-[0.16em] uppercase">
+                {dayShort}
+              </span>
+              <span className="font-heading text-[13px] font-bold">
+                {dayNum}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 

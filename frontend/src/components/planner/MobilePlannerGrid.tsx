@@ -24,8 +24,9 @@ import {
   deletePlate,
   type Plate,
 } from "@/lib/api/plates"
+import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
-import { useDeletePlate, useSetPlateSkipped } from "@/lib/queries/plates"
+import { useSetPlateSkipped, useUpdatePlate } from "@/lib/queries/plates"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
 import { toggleSkip } from "@/lib/planner-skip"
@@ -40,6 +41,7 @@ import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
 import { ComponentTraySheet, type TraySlotContext } from "./ComponentTraySheet"
+import { MobileSlotRow } from "./MobileSlotRow"
 import type { PlannerDay } from "./PlannerGrid"
 import { SlotCell } from "./SlotCell"
 import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
@@ -207,8 +209,20 @@ export function MobilePlannerGrid({
 
   const setFavoriteMut = useSetFoodFavorite()
   const setSkippedMut = useSetPlateSkipped()
-  const deletePlateMut = useDeletePlate()
+  const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
+  const recordFeedbackMut = useRecordFeedback()
+  const clearFeedbackMut = useClearFeedback()
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
+
+  // Per-cell undo for delete: optimistically remove the plate from cache,
+  // surface a 5 s undo toast, and only commit the network delete after the
+  // window expires. Mirrors the desktop PlannerGrid pattern so mobile users
+  // get the same recovery affordance.
+  type PendingDelete = {
+    timeoutId: ReturnType<typeof setTimeout>
+    snapshot: Plate
+  }
+  const pendingDeletesRef = useRef(new Map<number, PendingDelete>())
 
   function openSheetForPlate(dayIdx: number, slot: TimeSlot, plate: Plate) {
     const day = days[dayIdx]
@@ -223,12 +237,73 @@ export function MobilePlannerGrid({
   }
 
   function handleDeletePlate(plateId: number) {
-    deletePlateMut
-      .mutateAsync(plateId)
-      .then(() => {
-        toast(t("plate.deleted"))
+    if (pendingDeletesRef.current.has(plateId)) return
+    let snapshot: Plate | undefined
+    for (const d of days) {
+      const p = d.plates.find((p) => p.id === plateId)
+      if (p) {
+        snapshot = p
+        break
+      }
+    }
+    if (!snapshot) return
+    queryClient.setQueryData<{ plates: Plate[] }>(
+      plateKeys.range(rangeFrom, rangeTo),
+      (old) => ({
+        plates: (old?.plates ?? []).filter((p) => p.id !== plateId),
       })
-      .catch((err) => toastError(err, t))
+    )
+    const timeoutId = setTimeout(async () => {
+      pendingDeletesRef.current.delete(plateId)
+      try {
+        await deletePlate(plateId)
+      } catch (err) {
+        toastError(err, t)
+        if (snapshot) {
+          queryClient.setQueryData<{ plates: Plate[] }>(
+            plateKeys.range(rangeFrom, rangeTo),
+            (old) => ({ plates: [...(old?.plates ?? []), snapshot!] })
+          )
+        }
+      } finally {
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
+      }
+    }, 5000)
+    pendingDeletesRef.current.set(plateId, { timeoutId, snapshot })
+    toast(t("plate.deleted"), {
+      action: {
+        label: t("common.undo"),
+        onClick: () => {
+          const pending = pendingDeletesRef.current.get(plateId)
+          if (!pending) return
+          clearTimeout(pending.timeoutId)
+          pendingDeletesRef.current.delete(plateId)
+          queryClient.setQueryData<{ plates: Plate[] }>(
+            plateKeys.range(rangeFrom, rangeTo),
+            (old) => ({ plates: [...(old?.plates ?? []), pending.snapshot] })
+          )
+        },
+      },
+      duration: 5000,
+    })
+  }
+
+  async function handleRate(
+    plateId: number,
+    status: "loved" | "disliked",
+    current?: string
+  ) {
+    try {
+      if (current === status) {
+        await clearFeedbackMut.mutateAsync(plateId)
+      } else {
+        await recordFeedbackMut.mutateAsync({ plateId, input: { status } })
+      }
+    } catch (err) {
+      toastError(err, t)
+    }
   }
 
   const openPicker = (dayIdx: number, slotId: number) => {
@@ -341,6 +416,57 @@ export function MobilePlannerGrid({
     }
   }
 
+  // Which row's swipe drawer is currently revealed (slot id, scoped to the
+  // active day). Only one drawer at a time — opening row B closes row A so
+  // the screen stays calm.
+  const [drawerSlotId, setDrawerSlotId] = useState<number | null>(null)
+  // Long-press drag bookkeeping. We hit-test the day tabs on every move so
+  // the user gets immediate visual confirmation of where the drop will land.
+  const [draggingPlateId, setDraggingPlateId] = useState<number | null>(null)
+  const [hoveredDayIdx, setHoveredDayIdx] = useState<number | null>(null)
+
+  function hitTestDayTab(clientX: number, clientY: number): number | null {
+    const els = document.elementsFromPoint(clientX, clientY)
+    for (const el of els) {
+      const v = (el as HTMLElement).dataset?.mobileDayDrop
+      if (v != null) return Number(v)
+    }
+    return null
+  }
+
+  async function handleDropOnDay(plateId: number, targetDayIdx: number) {
+    const targetDay = days[targetDayIdx]
+    if (!targetDay) return
+    let plate: Plate | undefined
+    for (const d of days) {
+      const p = d.plates.find((p) => p.id === plateId)
+      if (p) {
+        plate = p
+        break
+      }
+    }
+    if (!plate) return
+    if (plate.date === targetDay.date) return
+    try {
+      await updatePlateMut.mutateAsync({
+        id: plateId,
+        input: { date: targetDay.date, slot_id: plate.slot_id },
+      })
+      const dayKey = DAY_KEYS[targetDay.weekday] ?? DAY_KEYS[0]
+      toast(t("planner.mobile.moved_to", { day: t(dayKey) }))
+      // Follow the plate so the user sees it land.
+      setActiveDay(targetDayIdx)
+    } catch (err) {
+      toastError(err, t, t("planner.mobile.move_failed"))
+    }
+  }
+
+  // Switching active day or starting a drag should snap any open drawer shut.
+  function changeActiveDay(idx: number) {
+    setDrawerSlotId(null)
+    setActiveDay(idx)
+  }
+
   const activeData = days[activeDay]
 
   return (
@@ -358,23 +484,32 @@ export function MobilePlannerGrid({
           const active = idx === activeDay
           const dayIsToday = isToday(date)
           const dayKey = DAY_KEYS[day.weekday] ?? DAY_KEYS[idx % 7]
+          const isDropZone = draggingPlateId !== null
+          const isHovered = isDropZone && hoveredDayIdx === idx
           return (
             <button
               key={day.date}
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => setActiveDay(idx)}
+              onClick={() => changeActiveDay(idx)}
               data-testid={`mobile-day-tab-${idx}`}
+              data-mobile-day-drop={idx}
+              data-drop-active={isDropZone ? "true" : undefined}
+              data-drop-hovered={isHovered ? "true" : undefined}
               className={cn(
-                "flex flex-col items-center gap-0.5 rounded-xl py-2",
-                active && "bg-surface-container-high"
+                "relative flex flex-col items-center gap-0.5 rounded-xl py-2 transition-[transform,background-color,box-shadow] duration-150",
+                active && "bg-surface-container-high",
+                isDropZone && "ring-1 ring-primary/30",
+                isHovered &&
+                  "scale-[1.06] bg-primary/15 text-primary shadow-[0_4px_12px_-2px_rgba(74,101,77,0.35)] ring-2 ring-primary"
               )}
             >
               <span
                 className={cn(
                   "font-heading text-[10px] font-bold tracking-[0.1em] uppercase",
-                  active ? "text-primary" : "text-on-surface-variant"
+                  active ? "text-primary" : "text-on-surface-variant",
+                  isHovered && "text-primary"
                 )}
               >
                 {t(dayKey)}
@@ -406,6 +541,14 @@ export function MobilePlannerGrid({
       <ul className="flex flex-col gap-3">
         {slots.map((slot) => {
           const plate = activeData?.plates.find((p) => p.slot_id === slot.id)
+          const planned = !!plate && !plate.skipped
+          const dayKey = activeData
+            ? (DAY_KEYS[activeData.weekday] ?? DAY_KEYS[0])
+            : ""
+          const dragLabel = `${dayKey ? t(dayKey) : ""} · ${slotLabel(
+            t,
+            slot.name_key
+          )}`
           return (
             <li
               key={slot.id}
@@ -417,43 +560,88 @@ export function MobilePlannerGrid({
                   {slotLabel(t, slot.name_key)}
                 </span>
               </div>
-              <SlotCell
-                day={activeDay}
-                slotId={slot.id}
-                plate={plate}
-                componentsById={componentsById}
-                onAdd={() => openPicker(activeDay, slot.id)}
-                onOpenSheet={
-                  plate
-                    ? () => openSheetForPlate(activeDay, slot, plate)
-                    : undefined
-                }
-                onDeletePlate={() => plate && handleDeletePlate(plate.id)}
-                onToggleFavorite={() => {
-                  const hero = plate?.components
-                    .slice()
-                    .sort((a, b) => a.sort_order - b.sort_order)[0]
-                  const heroComp = hero
-                    ? componentsById.get(hero.food_id)
-                    : undefined
-                  void handleToggleFavorite(
-                    heroComp?.id,
-                    heroComp?.favorite ?? false
-                  )
+              <MobileSlotRow
+                planned={planned}
+                drawerOpen={planned && drawerSlotId === slot.id}
+                setDrawerOpen={(open) => {
+                  setDrawerSlotId(open ? slot.id : null)
+                }}
+                onSkip={() => {
+                  void handleToggleSkip(activeDay, slot.id, plate?.id ?? null)
                   if (plate) clearAiFillOnPlate(plate.id)
                 }}
-                onToggleSkip={(note) => {
-                  void handleToggleSkip(
-                    activeDay,
-                    slot.id,
-                    plate?.id ?? null,
-                    note
-                  )
-                  if (plate) clearAiFillOnPlate(plate.id)
+                onSave={plate ? () => openSaveSlot(plate.id) : undefined}
+                onDelete={() => plate && handleDeletePlate(plate.id)}
+                onDragStart={() => {
+                  if (!plate) return
+                  setDrawerSlotId(null)
+                  setDraggingPlateId(plate.id)
+                  setHoveredDayIdx(null)
                 }}
-                onRateLoved={() => {}}
-                onRateDisliked={() => {}}
-              />
+                onDragMove={(x, y) => {
+                  setHoveredDayIdx(hitTestDayTab(x, y))
+                }}
+                onDragEnd={(x, y) => {
+                  const target = hitTestDayTab(x, y)
+                  setDraggingPlateId(null)
+                  setHoveredDayIdx(null)
+                  if (plate && target !== null && target !== activeDay) {
+                    void handleDropOnDay(plate.id, target)
+                  }
+                }}
+                dragLabel={dragLabel}
+                testId={`mobile-slot-row-${slot.id}`}
+              >
+                <SlotCell
+                  day={activeDay}
+                  slotId={slot.id}
+                  plate={plate}
+                  componentsById={componentsById}
+                  onAdd={() => openPicker(activeDay, slot.id)}
+                  onOpenSheet={
+                    plate
+                      ? () => openSheetForPlate(activeDay, slot, plate)
+                      : undefined
+                  }
+                  onDeletePlate={() => plate && handleDeletePlate(plate.id)}
+                  onToggleFavorite={() => {
+                    const hero = plate?.components
+                      .slice()
+                      .sort((a, b) => a.sort_order - b.sort_order)[0]
+                    const heroComp = hero
+                      ? componentsById.get(hero.food_id)
+                      : undefined
+                    void handleToggleFavorite(
+                      heroComp?.id,
+                      heroComp?.favorite ?? false
+                    )
+                    if (plate) clearAiFillOnPlate(plate.id)
+                  }}
+                  onToggleSkip={(note) => {
+                    void handleToggleSkip(
+                      activeDay,
+                      slot.id,
+                      plate?.id ?? null,
+                      note
+                    )
+                    if (plate) clearAiFillOnPlate(plate.id)
+                  }}
+                  onRateLoved={() => {
+                    if (!plate) return
+                    void handleRate(plate.id, "loved", plate.feedback?.status)
+                    clearAiFillOnPlate(plate.id)
+                  }}
+                  onRateDisliked={() => {
+                    if (!plate) return
+                    void handleRate(
+                      plate.id,
+                      "disliked",
+                      plate.feedback?.status
+                    )
+                    clearAiFillOnPlate(plate.id)
+                  }}
+                />
+              </MobileSlotRow>
             </li>
           )
         })}
@@ -542,6 +730,12 @@ export function MobilePlannerGrid({
         onDeletePlate={(plateId) => {
           handleDeletePlate(plateId)
           setSheetTarget(null)
+        }}
+        onMovePlate={(target, newDate) => {
+          const targetIdx = days.findIndex((d) => d.date === newDate)
+          if (targetIdx < 0 || newDate === target.date) return
+          setSheetTarget(null)
+          void handleDropOnDay(target.plateId, targetIdx)
         }}
       />
     </div>

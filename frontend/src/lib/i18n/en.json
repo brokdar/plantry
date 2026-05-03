@@ -150,7 +150,21 @@
     "next_window": "Next 7",
     "today_button": "Today",
     "anchor_today": "From today",
-    "anchor_shopping_day": "From next {{weekday}}"
+    "anchor_shopping_day": "From next {{weekday}}",
+    "mobile": {
+      "row_actions": "Row actions",
+      "swipe_hint": "Swipe left for actions, hold to move",
+      "drop_to_move": "Drop to move",
+      "moved_to": "Moved to {{day}}",
+      "move_failed": "Couldn't move plate",
+      "drag_handle_label": "Drag to move",
+      "skip_short": "Skip",
+      "save_short": "Save",
+      "delete_short": "Delete",
+      "move_to": "Move to day",
+      "move_to_picker_label": "Pick destination day",
+      "current_day": "Current"
+    }
   },
   "skip": {
     "label": "Skip",

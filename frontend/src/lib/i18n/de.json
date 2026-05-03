@@ -150,7 +150,21 @@
     "next_window": "Nächste 7",
     "today_button": "Heute",
     "anchor_today": "Ab heute",
-    "anchor_shopping_day": "Ab nächstem {{weekday}}"
+    "anchor_shopping_day": "Ab nächstem {{weekday}}",
+    "mobile": {
+      "row_actions": "Zeilenaktionen",
+      "swipe_hint": "Wische nach links · halten zum Verschieben",
+      "drop_to_move": "Loslassen zum Verschieben",
+      "moved_to": "Verschoben auf {{day}}",
+      "move_failed": "Verschieben fehlgeschlagen",
+      "drag_handle_label": "Zum Verschieben ziehen",
+      "skip_short": "Auslassen",
+      "save_short": "Speichern",
+      "delete_short": "Löschen",
+      "move_to": "Auf Tag verschieben",
+      "move_to_picker_label": "Zieltag auswählen",
+      "current_day": "Aktuell"
+    }
   },
   "skip": {
     "label": "Auslassen",
