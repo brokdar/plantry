@@ -96,9 +96,24 @@ describe("trayReducer", () => {
       id: 99,
       name: "Lunch",
       created_at: "2026-04-01T00:00:00Z",
+      scope: "slot",
       components: [
-        { id: 1, template_id: 99, food_id: 1, portions: 2, sort_order: 0 },
-        { id: 2, template_id: 99, food_id: 2, portions: 1.5, sort_order: 1 },
+        {
+          id: 1,
+          template_id: 99,
+          food_id: 1,
+          portions: 2,
+          sort_order: 0,
+          day_offset: 0,
+        },
+        {
+          id: 2,
+          template_id: 99,
+          food_id: 2,
+          portions: 1.5,
+          sort_order: 1,
+          day_offset: 0,
+        },
       ],
     }
     const foodsById = new Map<number, Food>([
@@ -117,8 +132,16 @@ describe("trayReducer", () => {
       id: 99,
       name: "Lunch",
       created_at: "2026-04-01T00:00:00Z",
+      scope: "slot",
       components: [
-        { id: 1, template_id: 99, food_id: 1, portions: 0.5, sort_order: 0 },
+        {
+          id: 1,
+          template_id: 99,
+          food_id: 1,
+          portions: 0.5,
+          sort_order: 0,
+          day_offset: 0,
+        },
       ],
     }
     const foodsById = new Map<number, Food>([[1, mockChickenBreast]])
@@ -134,9 +157,24 @@ describe("trayReducer", () => {
       id: 99,
       name: "Lunch",
       created_at: "2026-04-01T00:00:00Z",
+      scope: "slot",
       components: [
-        { id: 1, template_id: 99, food_id: 1, portions: 1, sort_order: 0 },
-        { id: 2, template_id: 99, food_id: 999, portions: 1, sort_order: 1 },
+        {
+          id: 1,
+          template_id: 99,
+          food_id: 1,
+          portions: 1,
+          sort_order: 0,
+          day_offset: 0,
+        },
+        {
+          id: 2,
+          template_id: 99,
+          food_id: 999,
+          portions: 1,
+          sort_order: 1,
+          day_offset: 0,
+        },
       ],
     }
     const foodsById = new Map<number, Food>([[1, mockChickenBreast]])
@@ -310,6 +348,7 @@ describe("ComponentTraySheet integration", () => {
           id: 7,
           name: "Weekday Lunch",
           created_at: "2026-04-01T00:00:00Z",
+          scope: "slot",
           components: [
             {
               id: 1,
@@ -317,6 +356,7 @@ describe("ComponentTraySheet integration", () => {
               food_id: mockChickenBreast.id,
               portions: 1,
               sort_order: 0,
+              day_offset: 0,
             },
           ],
         },

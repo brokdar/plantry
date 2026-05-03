@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import { BookmarkPlus, Pencil, Sprout, Trash2 } from "lucide-react"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { Template, TemplateScope } from "@/lib/api/templates"
 import { useFoods } from "@/lib/queries/foods"
 import {
   useDeleteTemplate,
@@ -22,6 +23,17 @@ import {
 } from "@/lib/queries/templates"
 
 import { TemplateRenameDialog } from "./TemplateRenameDialog"
+
+const SCOPE_ORDER: TemplateScope[] = ["slot", "day", "week"]
+
+function countPlates(tpl: Template): number {
+  const seen = new Set<string>()
+  for (const e of tpl.components) {
+    if (e.slot_id == null) continue
+    seen.add(`${e.day_offset}|${e.slot_id}`)
+  }
+  return seen.size
+}
 
 export function TemplateList() {
   const { t } = useTranslation()
@@ -49,6 +61,18 @@ export function TemplateList() {
   }
 
   const templateToRename = templates?.find((tpl) => tpl.id === renameId)
+
+  const grouped = useMemo(() => {
+    const map = new Map<TemplateScope, Template[]>()
+    for (const scope of SCOPE_ORDER) map.set(scope, [])
+    for (const tpl of templates ?? []) {
+      const scope = (tpl.scope ?? "slot") as TemplateScope
+      const list = map.get(scope) ?? []
+      list.push(tpl)
+      map.set(scope, list)
+    }
+    return map
+  }, [templates])
 
   return (
     <div className="mx-auto max-w-6xl space-y-10 px-4 py-8 md:px-8 md:py-12">
@@ -84,79 +108,110 @@ export function TemplateList() {
       ) : !templates?.length ? (
         <EmptyState />
       ) : (
-        <ul
-          role="list"
-          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-          data-testid="template-grid"
-        >
-          {templates.map((tpl) => (
-            <li
-              key={tpl.id}
-              className="group relative overflow-hidden rounded-lg border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm"
-              data-testid={`template-card-${tpl.id}`}
-            >
-              <span
-                aria-hidden="true"
-                className="absolute inset-x-0 top-0 h-1 bg-accent"
-              />
-              <div className="flex w-full flex-col items-start gap-3 px-5 pt-5 pb-4">
-                <div className="flex w-full items-start justify-between gap-2">
-                  <h2 className="text-lg leading-tight font-semibold tracking-tight">
-                    {tpl.name}
+        <div className="space-y-10" data-testid="template-grid">
+          {SCOPE_ORDER.map((scope) => {
+            const list = grouped.get(scope) ?? []
+            if (list.length === 0) return null
+            return (
+              <section
+                key={scope}
+                className="space-y-4"
+                data-testid={`template-section-${scope}`}
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 className="font-heading text-base font-bold tracking-[0.18em] text-on-surface uppercase">
+                    {t(`template.scope.${scope}_section_title`)}
                   </h2>
-                  <Badge variant="secondary" className="shrink-0 text-xs">
-                    {t("template.components_count", {
-                      count: tpl.components.length,
-                    })}
+                  <Badge variant="outline" className="text-xs">
+                    {list.length}
                   </Badge>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {tpl.components.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">
-                      {t("template.no_components")}
-                    </span>
-                  ) : (
-                    tpl.components.slice(0, 4).map((tc) => {
-                      const c = componentsById.get(tc.food_id)
-                      return (
-                        <Badge
-                          key={tc.id}
-                          variant="outline"
-                          className="text-xs font-normal"
+                <ul
+                  role="list"
+                  className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                  {list.map((tpl) => (
+                    <li
+                      key={tpl.id}
+                      className="group relative overflow-hidden rounded-lg border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-sm"
+                      data-testid={`template-card-${tpl.id}`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-x-0 top-0 h-1 bg-accent"
+                      />
+                      <div className="flex w-full flex-col items-start gap-3 px-5 pt-5 pb-4">
+                        <div className="flex w-full items-start justify-between gap-2">
+                          <h3 className="text-lg leading-tight font-semibold tracking-tight">
+                            {tpl.name}
+                          </h3>
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 text-xs"
+                          >
+                            {scope === "slot"
+                              ? t("template.components_count", {
+                                  count: tpl.components.length,
+                                })
+                              : t("template.plates_count", {
+                                  count: countPlates(tpl),
+                                })}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {tpl.components.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">
+                              {t("template.no_components")}
+                            </span>
+                          ) : (
+                            tpl.components.slice(0, 4).map((tc) => {
+                              const c = componentsById.get(tc.food_id)
+                              return (
+                                <Badge
+                                  key={tc.id}
+                                  variant="outline"
+                                  className="text-xs font-normal"
+                                >
+                                  {c?.name ?? `#${tc.food_id}`}
+                                </Badge>
+                              )
+                            })
+                          )}
+                          {tpl.components.length > 4 && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs font-normal"
+                            >
+                              +{tpl.components.length - 4}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-1 border-t border-dashed border-border/60 px-3 py-2">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={t("template.rename")}
+                          onClick={() => setRenameId(tpl.id)}
                         >
-                          {c?.name ?? `#${tc.food_id}`}
-                        </Badge>
-                      )
-                    })
-                  )}
-                  {tpl.components.length > 4 && (
-                    <Badge variant="outline" className="text-xs font-normal">
-                      +{tpl.components.length - 4}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-1 border-t border-dashed border-border/60 px-3 py-2">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t("template.rename")}
-                  onClick={() => setRenameId(tpl.id)}
-                >
-                  <Pencil className="size-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t("common.delete")}
-                  onClick={() => setDeleteId(tpl.id)}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={t("common.delete")}
+                          onClick={() => setDeleteId(tpl.id)}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )
+          })}
+        </div>
       )}
 
       <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>

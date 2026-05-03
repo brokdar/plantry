@@ -573,7 +573,9 @@ function TemplateResults({
   onStage: (tpl: Template, foodsById: Map<number, Food>) => void
 }) {
   const { t } = useTranslation()
-  const templates = useTemplates()
+  // Slot scope only: day/week templates have multi-slot structure that
+  // doesn't make sense to flatten into a single slot's tray.
+  const templates = useTemplates("slot")
   // Fetch foods so we can hydrate template entries into Food objects when
   // staging into the tray. 200 is the existing convention in the planner.
   const foodsQuery = useFoods({ limit: 200 })

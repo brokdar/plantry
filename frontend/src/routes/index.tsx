@@ -1,17 +1,24 @@
 import {
   BarChart2,
-  Bookmark,
+  BookmarkPlus,
+  ChevronDown,
   Download,
+  FileDown,
   Settings,
   Sparkles,
   Trash2,
 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { ChatPanel } from "@/components/chat/ChatPanel"
 import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
+import { TemplatePicker } from "@/components/templates/TemplatePicker"
+import {
+  showApplyToasts,
+  snapshotOverwrittenPlates,
+} from "@/lib/template-apply-toast"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { DateRangeNavigator } from "@/components/planner/DateRangeNavigator"
 import { FillEmptySlotsButton } from "@/components/planner/FillEmptySlotsButton"
@@ -21,6 +28,13 @@ import { PlannerGrid, type PlannerDay } from "@/components/planner/PlannerGrid"
 import { RevertBanner } from "@/components/planner/RevertBanner"
 import { ShoppingPanel } from "@/components/planner/ShoppingPanel"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Sheet,
   SheetContent,
@@ -33,7 +47,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { deletePlate } from "@/lib/api/plates"
+import { deletePlate, type Plate } from "@/lib/api/plates"
 import {
   computeAnchor,
   windowRange,
@@ -74,6 +88,8 @@ function PlanPage() {
   const [shoppingOpen, setShoppingOpen] = useState(false)
   const [nutritionOpen, setNutritionOpen] = useState(false)
   const [saveRangeOpen, setSaveRangeOpen] = useState(false)
+  const [applyWeekOpen, setApplyWeekOpen] = useState(false)
+  const overwriteSnapshotRef = useRef<Plate[]>([])
   const openChat = useChatUI((s) => s.setOpen)
 
   const settingsQuery = useSettings()
@@ -184,6 +200,17 @@ function PlanPage() {
 
   const slots = slotsQuery.data?.items ?? []
 
+  // Skipped plates are not occupied — a skip marker means "I won't eat here",
+  // so applying a template should fill the slot without a conflict warning.
+  const occupiedSlotKeys = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of plates) {
+      if (p.skipped) continue
+      set.add(`${p.date}|${p.slot_id}`)
+    }
+    return set
+  }, [plates])
+
   if (slotsQuery.isLoading || platesQuery.isLoading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">
@@ -225,6 +252,11 @@ function PlanPage() {
     aiFill.range?.to === to &&
     !aiFill.dismissed &&
     aiFill.plateIds.length > 0
+
+  const weekTemplateName = t("template.name_suggestion_week", {
+    date: fmt.format(new Date(from + "T00:00:00")),
+    defaultValue: `Week · ${fmt.format(new Date(from + "T00:00:00"))}`,
+  })
 
   const dailyAvgKcal = (() => {
     const days_ = nutritionQuery.data?.days
@@ -296,23 +328,56 @@ function PlanPage() {
                 </span>
               </div>
             )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSaveRangeOpen(true)}
-                  aria-label={t("template.save_as")}
-                  data-testid="save-range-template"
-                  className="hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    {/* Bookmark + chevron together telegraphs "this opens
+                      a menu" instead of acting like the other toolbar icons,
+                      which all act on click. */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={t("template.title")}
+                      data-testid="week-template-menu"
+                      className="h-9 gap-1 px-2 hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150"
+                    >
+                      <BookmarkPlus className="size-4" />
+                      <ChevronDown
+                        className="size-3 text-on-surface-variant"
+                        aria-hidden
+                      />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {t("template.title")}
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem
+                  onClick={() => setApplyWeekOpen(true)}
+                  data-testid="week-template-apply"
                 >
-                  <Bookmark className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t("template.save_as")}
-              </TooltipContent>
-            </Tooltip>
+                  <FileDown className="size-4" />
+                  {t("template.apply_week")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSaveRangeOpen(true)}
+                  disabled={plates.length === 0}
+                  data-testid="week-template-save"
+                >
+                  <BookmarkPlus className="size-4" />
+                  {t("template.save_week")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/templates" data-testid="week-template-manage">
+                    {t("template.manage")}
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -412,7 +477,31 @@ function PlanPage() {
       <SaveAsTemplateDialog
         open={saveRangeOpen}
         onOpenChange={setSaveRangeOpen}
-        range={{ from, to }}
+        target={{
+          scope: "week",
+          from,
+          to,
+          plateCount: plates.filter((p) => !p.skipped).length,
+        }}
+        defaultName={weekTemplateName}
+      />
+      <TemplatePicker
+        open={applyWeekOpen}
+        onOpenChange={setApplyWeekOpen}
+        scope="week"
+        defaultDate={from}
+        overlap={{ occupied: occupiedSlotKeys }}
+        onBeforeApply={({ overwrittenKeys }) => {
+          overwriteSnapshotRef.current = snapshotOverwrittenPlates(
+            from,
+            to,
+            overwrittenKeys
+          )
+        }}
+        onApplied={(info) => {
+          showApplyToasts(info, overwriteSnapshotRef.current, from, to, t)
+          overwriteSnapshotRef.current = []
+        }}
       />
     </div>
   )

@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next"
 
 import { ComponentPicker } from "@/components/component/ComponentPicker"
-import { ApplyTemplateSection } from "@/components/templates/ApplyTemplateSection"
 import {
   Sheet,
   SheetContent,
@@ -16,9 +15,6 @@ interface AddComponentSheetProps {
   onOpenChange: (open: boolean) => void
   defaultRole?: string
   onPick: (c: Food) => void
-  showTemplates?: boolean
-  defaultSlotId?: string
-  defaultDate?: string
 }
 
 export function AddComponentSheet({
@@ -26,9 +22,6 @@ export function AddComponentSheet({
   onOpenChange,
   defaultRole,
   onPick,
-  showTemplates,
-  defaultSlotId,
-  defaultDate,
 }: AddComponentSheetProps) {
   const { t } = useTranslation()
   return (
@@ -42,12 +35,6 @@ export function AddComponentSheet({
           <SheetDescription>{t("plate.filter_by_role")}</SheetDescription>
         </SheetHeader>
         <div className="space-y-4 overflow-y-auto px-4 pb-4">
-          {showTemplates && (
-            <ApplyTemplateSection
-              defaultSlotId={defaultSlotId}
-              defaultDate={defaultDate}
-            />
-          )}
           <ComponentPicker defaultRole={defaultRole} onPick={onPick} />
         </div>
       </SheetContent>

@@ -45,6 +45,7 @@ export const profileKeys = {
 export const templateKeys = {
   all: ["templates"] as const,
   lists: () => [...templateKeys.all, "list"] as const,
+  list: (scope?: string) => [...templateKeys.lists(), { scope }] as const,
   details: () => [...templateKeys.all, "detail"] as const,
   detail: (id: number) => [...templateKeys.details(), id] as const,
 }

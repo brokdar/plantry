@@ -48,6 +48,7 @@ describe("useTemplates", () => {
       {
         id: 1,
         name: "Curry Night",
+        scope: "slot",
         components: [],
         created_at: "2026-01-01T00:00:00Z",
       },
@@ -71,6 +72,7 @@ describe("useCreateTemplate", () => {
     vi.mocked(createTemplate).mockResolvedValue({
       id: 5,
       name: "X",
+      scope: "slot",
       components: [],
       created_at: "2026-01-01T00:00:00Z",
     })
@@ -111,7 +113,7 @@ describe("useApplyTemplate", () => {
   beforeEach(() => vi.clearAllMocks())
 
   it("invalidates week, shopping-list, and nutrition caches after apply", async () => {
-    vi.mocked(applyTemplate).mockResolvedValue(undefined)
+    vi.mocked(applyTemplate).mockResolvedValue({ plates: [] })
     const client = makeClient()
     const spy = vi.spyOn(client, "invalidateQueries")
 

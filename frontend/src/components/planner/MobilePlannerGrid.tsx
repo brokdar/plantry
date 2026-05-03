@@ -1,12 +1,29 @@
 import { format, isToday, parseISO } from "date-fns"
 import * as Lucide from "lucide-react"
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
+import {
+  SaveAsTemplateDialog,
+  type SaveAsTemplateTarget,
+} from "@/components/templates/SaveAsTemplateDialog"
+import { TemplatePicker } from "@/components/templates/TemplatePicker"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import type { Food } from "@/lib/api/foods"
 import type { TimeSlot } from "@/lib/api/slots"
-import { addPlateComponent, createPlate, type Plate } from "@/lib/api/plates"
+import {
+  addPlateComponent,
+  createPlate,
+  deletePlate,
+  type Plate,
+} from "@/lib/api/plates"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useDeletePlate, useSetPlateSkipped } from "@/lib/queries/plates"
 import { queryClient } from "@/lib/query-client"
@@ -14,6 +31,11 @@ import { plateKeys } from "@/lib/queries/keys"
 import { toggleSkip } from "@/lib/planner-skip"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
+import {
+  showApplyToasts,
+  snapshotOverwrittenPlates,
+} from "@/lib/template-apply-toast"
+import { suggestDayName } from "@/lib/template-suggest"
 import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
@@ -58,7 +80,7 @@ export function MobilePlannerGrid({
   rangeFrom,
   rangeTo,
 }: MobilePlannerGridProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   const componentsQuery = useFoods({ limit: 200 })
   const componentsById = useMemo(() => {
@@ -100,7 +122,88 @@ export function MobilePlannerGrid({
   const [activeDay, setActiveDay] = useState(todayIdx >= 0 ? todayIdx : 0)
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
   const [sheetTarget, setSheetTarget] = useState<SlotSheetTarget | null>(null)
-  const [savePlateId, setSavePlateId] = useState<number | null>(null)
+  const [saveTarget, setSaveTarget] = useState<SaveAsTemplateTarget | null>(
+    null
+  )
+
+  const [applyDayDate, setApplyDayDate] = useState<string | null>(null)
+  const overwriteSnapshotRef = useRef<Plate[]>([])
+
+  function openSaveSlot(plateId: number) {
+    let plate: Plate | undefined
+    for (const d of days) {
+      const p = d.plates.find((p) => p.id === plateId)
+      if (p) {
+        plate = p
+        break
+      }
+    }
+    if (!plate) return
+    setSaveTarget({
+      scope: "slot",
+      plateId,
+      componentCount: plate.components.length,
+    })
+  }
+
+  function openSaveDay(date: string) {
+    const day = days.find((d) => d.date === date)
+    if (!day) return
+    setSaveTarget({
+      scope: "day",
+      date,
+      plateCount: day.plates.filter((p) => !p.skipped).length,
+    })
+  }
+
+  // Skipped plates are not occupied — see desktop equivalent for rationale.
+  const occupiedSlotKeys = useMemo(() => {
+    const set = new Set<string>()
+    for (const day of days) {
+      for (const p of day.plates) {
+        if (p.skipped) continue
+        set.add(`${day.date}|${p.slot_id}`)
+      }
+    }
+    return set
+  }, [days])
+
+  function handleClearDay(dayIdx: number) {
+    const targetDay = days[dayIdx]
+    if (!targetDay || targetDay.plates.length === 0) return
+    const dayPlates = targetDay.plates
+    const dayPlateIds = new Set(dayPlates.map((p) => p.id))
+    queryClient.setQueryData<{ plates: Plate[] }>(
+      plateKeys.range(rangeFrom, rangeTo),
+      (old) => ({
+        plates: (old?.plates ?? []).filter((p) => !dayPlateIds.has(p.id)),
+      })
+    )
+    const timeoutId = setTimeout(async () => {
+      try {
+        await Promise.all(dayPlates.map((p) => deletePlate(p.id)))
+      } catch (err) {
+        toastError(err, t)
+      } finally {
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
+      }
+    }, 5000)
+    toast(t("planner.day_cleared"), {
+      action: {
+        label: t("common.undo"),
+        onClick: () => {
+          clearTimeout(timeoutId)
+          queryClient.setQueryData<{ plates: Plate[] }>(
+            plateKeys.range(rangeFrom, rangeTo),
+            (old) => ({ plates: [...(old?.plates ?? []), ...dayPlates] })
+          )
+        },
+      },
+      duration: 5000,
+    })
+  }
 
   const setFavoriteMut = useSetFoodFavorite()
   const setSkippedMut = useSetPlateSkipped()
@@ -289,6 +392,17 @@ export function MobilePlannerGrid({
         })}
       </div>
 
+      {activeData && (
+        <DayActionsBar
+          dayDate={activeData.date}
+          weekday={activeData.weekday}
+          hasPlates={activeData.plates.filter((p) => !p.skipped).length > 0}
+          onSaveDay={() => openSaveDay(activeData.date)}
+          onApplyDay={() => setApplyDayDate(activeData.date)}
+          onClearDay={() => handleClearDay(activeDay)}
+        />
+      )}
+
       <ul className="flex flex-col gap-3">
         {slots.map((slot) => {
           const plate = activeData?.plates.find((p) => p.slot_id === slot.id)
@@ -354,9 +468,43 @@ export function MobilePlannerGrid({
         onCommit={(items) => handleTrayCommit(items)}
       />
       <SaveAsTemplateDialog
-        open={savePlateId !== null}
-        onOpenChange={(o) => !o && setSavePlateId(null)}
-        plateId={savePlateId}
+        open={saveTarget !== null}
+        onOpenChange={(o) => !o && setSaveTarget(null)}
+        target={saveTarget}
+        defaultName={
+          saveTarget?.scope === "day"
+            ? suggestDayName(
+                t,
+                i18n.language,
+                saveTarget.date,
+                days.find((d) => d.date === saveTarget.date)?.weekday ?? 0
+              )
+            : ""
+        }
+      />
+      <TemplatePicker
+        open={applyDayDate !== null}
+        onOpenChange={(o) => !o && setApplyDayDate(null)}
+        scope="day"
+        defaultDate={applyDayDate ?? rangeFrom}
+        overlap={{ occupied: occupiedSlotKeys }}
+        onBeforeApply={({ overwrittenKeys }) => {
+          overwriteSnapshotRef.current = snapshotOverwrittenPlates(
+            rangeFrom,
+            rangeTo,
+            overwrittenKeys
+          )
+        }}
+        onApplied={(info) => {
+          showApplyToasts(
+            info,
+            overwriteSnapshotRef.current,
+            rangeFrom,
+            rangeTo,
+            t
+          )
+          overwriteSnapshotRef.current = []
+        }}
       />
       <SlotSheet
         target={sheetTarget}
@@ -384,7 +532,7 @@ export function MobilePlannerGrid({
             })
           }
         }}
-        onSaveAsTemplate={(plateId) => setSavePlateId(plateId)}
+        onSaveAsTemplate={(plateId) => openSaveSlot(plateId)}
         onToggleSkip={(target, currentSkipped) => {
           const dayIdx = days.findIndex((d) => d.date === target.date)
           if (dayIdx < 0) return
@@ -396,6 +544,85 @@ export function MobilePlannerGrid({
           setSheetTarget(null)
         }}
       />
+    </div>
+  )
+}
+
+const DAY_ACTION_KEYS = DAY_KEYS
+
+/** Mobile equivalent of the desktop DayHeader overflow — apply-day,
+ * save-day, clear-day. Sits above the active day's slot list so a phone
+ * user has feature parity with the desktop column header. */
+function DayActionsBar({
+  dayDate,
+  weekday,
+  hasPlates,
+  onSaveDay,
+  onApplyDay,
+  onClearDay,
+}: {
+  dayDate: string
+  weekday: number
+  hasPlates: boolean
+  onSaveDay: () => void
+  onApplyDay: () => void
+  onClearDay: () => void
+}) {
+  const { t, i18n } = useTranslation()
+  const dayKey = DAY_ACTION_KEYS[weekday] ?? DAY_ACTION_KEYS[0]
+  const date = parseISO(dayDate)
+  const dateLabel = new Intl.DateTimeFormat(i18n.language, {
+    month: "short",
+    day: "numeric",
+  }).format(date)
+  return (
+    <div className="-mt-1 flex items-center justify-between gap-2 px-1">
+      <span className="font-heading text-[10.5px] font-bold tracking-[0.18em] text-on-surface-variant uppercase">
+        {t(dayKey)} · {dateLabel}
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("planner.day_actions_for", {
+              day: t(dayKey),
+              date: dateLabel,
+            })}
+            data-testid="mobile-day-menu"
+            className="size-7 text-on-surface-variant"
+          >
+            <Lucide.MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem onClick={onApplyDay} data-testid="mobile-day-apply">
+            <Lucide.FileDown className="size-4" />
+            {t("template.apply_day")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={onSaveDay}
+            disabled={!hasPlates}
+            data-testid="mobile-day-save"
+          >
+            <Lucide.BookmarkPlus className="size-4" />
+            {t("template.save_day")}
+          </DropdownMenuItem>
+          {hasPlates && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={onClearDay}
+                data-testid="mobile-day-clear"
+              >
+                <Lucide.Trash2 className="size-4" />
+                {t("planner.clear_day")}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
