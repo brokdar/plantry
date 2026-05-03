@@ -37,9 +37,9 @@ import { cn } from "@/lib/utils"
 import { AiFilledBadge } from "./AiFilledBadge"
 import type { DragHandle } from "./DndCellWrapper"
 import { SlotActions } from "./SlotActions"
-import { SlotChips } from "./SlotChips"
-import { SlotHero } from "./SlotHero"
+import { SlotHero, type SlotHeroComponent } from "./SlotHero"
 import { SlotMacroDots } from "./SlotMacroDots"
+import { SlotSides, type SlotSideItem } from "./SlotSides"
 
 interface SlotCellProps {
   day: number
@@ -47,6 +47,9 @@ interface SlotCellProps {
   plate: Plate | undefined
   componentsById: Map<number, Food>
   macros?: MacrosResponse
+  /** Per-slot kcal share of the daily target. Drives the macro-target ring on
+   *  the planned cell; omit to hide the indicator. */
+  kcalTarget?: number | null
   aiFilled?: boolean
   /** dnd-kit drag handle for planned cells. The stretched-link button uses
    *  it as the drag activator so the cell remains a single interactive
@@ -64,9 +67,12 @@ interface SlotCellProps {
   onRateDisliked: () => void
 }
 
-// SlotCell fixes a 178px height so the week grid never jitters with content
-// differences. Every state (planned / empty / skipped) shares the same outer
-// frame so rows align perfectly.
+// All states share the 178 px standard so rows scan as a single line of
+// ledger across the week. Per-state height variance was tried (empty 178,
+// planned 200, skipped 120) but the planted-cell macro line + ring was
+// never wired (no per-plate macros endpoint), leaving an ~80 px dead band
+// at the bottom of every planted cell. Until per-plate macros are fetched,
+// uniform height keeps the row honest.
 const CELL_HEIGHT = "h-[178px]"
 
 export function SlotCell(props: SlotCellProps) {
@@ -355,6 +361,7 @@ function PlannedSlot({
   plate,
   componentsById,
   macros,
+  kcalTarget,
   aiFilled,
   dragHandle,
   onAdd,
@@ -378,16 +385,21 @@ function PlannedSlot({
     return <EmptySlot onAdd={onAdd} onToggleSkip={onToggleSkip} />
   }
 
-  const hero = sorted[0]
-  const heroComp = componentsById.get(hero.food_id)
-  const sideComps = sorted.slice(1).map((pc) => {
+  const componentMeta = sorted.map((pc) => {
     const c = componentsById.get(pc.food_id)
-    return c?.name ?? `#${pc.food_id}`
+    const role = c?.kind === "composed" ? (c.role ?? null) : null
+    return {
+      name: c?.name ?? `#${pc.food_id}`,
+      imagePath: c?.image_path ?? null,
+      role,
+    }
   })
-  const heroName = heroComp?.name ?? `#${hero.food_id}`
-  const heroRole =
-    heroComp?.kind === "composed" ? (heroComp.role ?? null) : null
-  const favorite = heroComp?.favorite ?? false
+  const heroComponent = componentsById.get(sorted[0]!.food_id)
+  const heroName = componentMeta[0]!.name
+  const heroRoleKey = componentMeta[0]!.role
+  const heroComponents: SlotHeroComponent[] = componentMeta
+  const sideItems: SlotSideItem[] = componentMeta.slice(1)
+  const favorite = heroComponent?.favorite ?? false
   const loved = plate.feedback?.status === "loved"
   const disliked = plate.feedback?.status === "disliked"
 
@@ -441,12 +453,13 @@ function PlannedSlot({
         onDislike={onRateDisliked}
       />
       <SlotHero
-        imagePath={heroComp?.image_path}
-        role={heroRole}
-        roleLabel={
-          heroRole
-            ? t(`planner.slot.role.${heroRole}`, { defaultValue: heroRole })
-            : t("ingredient.kind_label")
+        components={heroComponents}
+        heroRoleLabel={
+          heroRoleKey
+            ? t(`planner.slot.role.${heroRoleKey}`, {
+                defaultValue: heroRoleKey,
+              })
+            : null
         }
       />
       <div className="flex min-h-0 flex-1 flex-col gap-1 px-2.5 py-2">
@@ -502,9 +515,9 @@ function PlannedSlot({
             </DropdownMenu>
           </div>
         </div>
-        <SlotChips names={sideComps} max={3} />
+        <SlotSides items={sideItems} max={3} />
         <div className="mt-auto">
-          <SlotMacroDots macros={macros} />
+          <SlotMacroDots macros={macros} kcalTarget={kcalTarget} />
         </div>
       </div>
     </div>

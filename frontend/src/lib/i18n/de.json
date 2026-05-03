@@ -115,6 +115,7 @@
         "label": "Mahlzeit planen"
       },
       "overflow": "+{{count}} mehr",
+      "sides_label": "Beilagen: {{names}}",
       "ai_filled": "Vom Küchen-Agenten gefüllt",
       "action": {
         "favorite": "Favorit",
@@ -792,7 +793,12 @@
     "fat_abbr": "F",
     "fiber_abbr": "B",
     "kcal": "kcal",
-    "distribution": "Makro-Aufteilung"
+    "distribution": "Makro-Aufteilung",
+    "target": {
+      "on": "Im Ziel",
+      "near": "Nahe am Ziel",
+      "off": "Außerhalb des Ziels"
+    }
   },
   "profile": {
     "title": "Profil & Ziele",

@@ -115,6 +115,7 @@
         "label": "Plan meal"
       },
       "overflow": "+{{count}} more",
+      "sides_label": "Sides: {{names}}",
       "ai_filled": "Filled by the kitchen agent",
       "action": {
         "favorite": "Favorite",
@@ -964,7 +965,12 @@
     "fat_abbr": "F",
     "fiber_abbr": "Fi",
     "kcal": "kcal",
-    "distribution": "Macro split"
+    "distribution": "Macro split",
+    "target": {
+      "on": "On target",
+      "near": "Near target",
+      "off": "Off target"
+    }
   },
   "common": {
     "save": "Save",

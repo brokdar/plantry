@@ -27,6 +27,7 @@ import {
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useSetPlateSkipped, useUpdatePlate } from "@/lib/queries/plates"
+import { useProfile } from "@/lib/queries/profile"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
 import { toggleSkip } from "@/lib/planner-skip"
@@ -117,6 +118,14 @@ export function MobilePlannerGrid({
     }
     return out
   }, [days, componentsById])
+
+  // Macro target ring shares the same per-slot share calc as the desktop
+  // planner so a plate scans identically across the two surfaces.
+  const { data: profile } = useProfile()
+  const kcalPerSlotTarget = useMemo(() => {
+    if (!profile?.kcal_target || slots.length === 0) return null
+    return profile.kcal_target / slots.length
+  }, [profile?.kcal_target, slots.length])
 
   // Default to today's index; fall back to 0 if today isn't in the window.
   const todayStr = new Date().toISOString().slice(0, 10)
@@ -597,6 +606,7 @@ export function MobilePlannerGrid({
                   slotId={slot.id}
                   plate={plate}
                   componentsById={componentsById}
+                  kcalTarget={kcalPerSlotTarget}
                   onAdd={() => openPicker(activeDay, slot.id)}
                   onOpenSheet={
                     plate

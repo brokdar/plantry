@@ -49,6 +49,7 @@ import {
   useSwapPlateComponent,
   useUpdatePlate,
 } from "@/lib/queries/plates"
+import { useProfile } from "@/lib/queries/profile"
 import { toggleSkip } from "@/lib/planner-skip"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
@@ -279,6 +280,16 @@ export function PlannerGrid({
     }
     return suggestWeekName(t, i18n.language, saveTarget.from)
   }, [saveTarget, days, slotsById, t, i18n.language])
+
+  // The macro target indicator on each cell compares plate kcal to a fair
+  // share of the daily target — daily kcal ÷ active slot count. Skipping
+  // the calculation whenever no slots or no target is set keeps the dot
+  // hidden rather than rendering a misleading 0-target state.
+  const { data: profile } = useProfile()
+  const kcalPerSlotTarget = useMemo(() => {
+    if (!profile?.kcal_target || slots.length === 0) return null
+    return profile.kcal_target / slots.length
+  }, [profile?.kcal_target, slots.length])
 
   const aiFill = usePlannerUI((s) => s.aiFill)
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
@@ -806,6 +817,7 @@ export function PlannerGrid({
                               slotId={slot.id}
                               plate={plate}
                               componentsById={componentsById}
+                              kcalTarget={kcalPerSlotTarget}
                               aiFilled={
                                 plate ? aiFilledIds.has(plate.id) : false
                               }
