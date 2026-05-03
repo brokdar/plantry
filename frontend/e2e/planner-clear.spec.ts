@@ -379,6 +379,7 @@ test.describe("Planner — clear shortcuts", () => {
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
       await expect(cell.getByText(`Curry ${tag}`)).toBeVisible()
 
+      await page.getByTestId("planner-overflow").click()
       await page.getByTestId("clear-week").click()
 
       await expect(cell.getByText(`Curry ${tag}`)).toHaveCount(0)
@@ -419,6 +420,7 @@ test.describe("Planner — clear shortcuts", () => {
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
       await expect(cell.getByText(`Sushi ${tag}`)).toBeVisible()
 
+      await page.getByTestId("planner-overflow").click()
       await page.getByTestId("clear-week").click()
       await expect(cell.getByText(`Sushi ${tag}`)).toHaveCount(0)
 

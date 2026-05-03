@@ -1,9 +1,10 @@
 import {
   BarChart2,
   BookmarkPlus,
-  ChevronDown,
   Download,
   FileDown,
+  LayoutList,
+  MoreHorizontal,
   Settings,
   Sparkles,
   Trash2,
@@ -21,7 +22,6 @@ import {
 } from "@/lib/template-apply-toast"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { DateRangeNavigator } from "@/components/planner/DateRangeNavigator"
-import { FillEmptySlotsButton } from "@/components/planner/FillEmptySlotsButton"
 import { MobilePlannerGrid } from "@/components/planner/MobilePlannerGrid"
 import { NutritionWeekSummary } from "@/components/planner/NutritionWeekSummary"
 import { PlannerGrid, type PlannerDay } from "@/components/planner/PlannerGrid"
@@ -91,6 +91,8 @@ function PlanPage() {
   const [applyWeekOpen, setApplyWeekOpen] = useState(false)
   const overwriteSnapshotRef = useRef<Plate[]>([])
   const openChat = useChatUI((s) => s.setOpen)
+  const openChatWith = useChatUI((s) => s.openWith)
+  const setChatMode = useChatUI((s) => s.setMode)
 
   const settingsQuery = useSettings()
   const settingValue = (key: string, fallback: string) =>
@@ -141,6 +143,13 @@ function PlanPage() {
   const recordAiFilledPlate = usePlannerUI((s) => s.recordAiFilledPlate)
   const dismissAiFillBanner = usePlannerUI((s) => s.dismissAiFillBanner)
   const endAiFillSession = usePlannerUI((s) => s.endAiFillSession)
+  const startAiFill = usePlannerUI((s) => s.startAiFill)
+
+  function handleAiFill() {
+    startAiFill({ from, to })
+    setChatMode("fill_empty")
+    openChatWith(t("planner.fill_empty.progress"))
+  }
 
   // Watch plates created after the fill session started. Zustand actions don't
   // trigger re-render loops, so calling recordAiFilledPlate inside an effect is safe.
@@ -242,10 +251,6 @@ function PlanPage() {
     month: "short",
     day: "numeric",
   })
-  const rangeLabel = t("planner.range_label", {
-    from: fmt.format(new Date(from + "T00:00:00")),
-    to: fmt.format(new Date(to + "T00:00:00")),
-  })
 
   const showRevertBanner =
     aiFill.range?.from === from &&
@@ -271,24 +276,7 @@ function PlanPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 md:px-8 md:py-12">
-      <PageHeader
-        eyebrow={rangeLabel}
-        title={t("planner.title")}
-        actions={
-          <div className="flex items-center gap-2">
-            {aiSettings?.enabled && (
-              <FillEmptySlotsButton rangeFrom={from} rangeTo={to} />
-            )}
-            <Button
-              onClick={() => setShoppingOpen(true)}
-              className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
-            >
-              <Download className="mr-1.5 size-4" />
-              {t("shopping.button")}
-            </Button>
-          </div>
-        }
-      />
+      <PageHeader title={t("planner.title")} />
 
       {showRevertBanner && (
         <RevertBanner
@@ -305,56 +293,48 @@ function PlanPage() {
         <DateRangeNavigator
           from={from}
           to={to}
-          days={7}
-          planAnchor={anchorMode}
-          shoppingDay={shoppingDay}
           onPrev={() => setWindowOffset((o) => o - 7)}
           onNext={() => setWindowOffset((o) => o + 7)}
           onToday={() => setWindowOffset(0)}
-          onJumpToToday={() => {
-            const todayMs = new Date().setHours(0, 0, 0, 0)
-            setWindowOffset(Math.round((todayMs - anchor.getTime()) / 86400000))
-          }}
         />
         <TooltipProvider>
-          <div className="flex flex-wrap items-center gap-3">
-            {dailyAvgKcal !== null && (
-              <div className="flex items-baseline gap-2 rounded-full bg-surface-container-highest px-4 py-1.5">
-                <span className="font-heading text-sm font-bold text-primary">
-                  {dailyAvgKcal.toLocaleString()} kcal
-                </span>
-                <span className="text-[9px] font-bold tracking-widest text-on-surface-variant uppercase">
-                  {t("planner.daily_avg")}
-                </span>
-              </div>
-            )}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-baseline gap-2 rounded-full bg-surface-container-highest px-4 py-1.5">
+              <span
+                className={
+                  "font-heading text-sm font-bold tabular-nums " +
+                  (dailyAvgKcal !== null
+                    ? "text-primary"
+                    : "text-on-surface-variant/40")
+                }
+              >
+                {dailyAvgKcal !== null ? dailyAvgKcal.toLocaleString() : "—"}{" "}
+                kcal
+              </span>
+              <span className="text-[9px] font-bold tracking-widest text-on-surface-variant uppercase">
+                {t("planner.daily_avg")}
+              </span>
+            </div>
             <DropdownMenu>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
-                    {/* Bookmark + chevron together telegraphs "this opens
-                      a menu" instead of acting like the other toolbar icons,
-                      which all act on click. */}
                     <Button
                       variant="ghost"
-                      size="sm"
-                      aria-label={t("template.title")}
-                      data-testid="week-template-menu"
-                      className="h-9 gap-1 px-2 hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150"
+                      size="icon"
+                      aria-label={t("planner.more_actions")}
+                      data-testid="planner-overflow"
+                      className="hover:bg-primary/10 hover:text-primary"
                     >
-                      <BookmarkPlus className="size-4" />
-                      <ChevronDown
-                        className="size-3 text-on-surface-variant"
-                        aria-hidden
-                      />
+                      <MoreHorizontal className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  {t("template.title")}
+                  {t("planner.more_actions")}
                 </TooltipContent>
               </Tooltip>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-60">
                 <DropdownMenuItem
                   onClick={() => setApplyWeekOpen(true)}
                   data-testid="week-template-apply"
@@ -370,66 +350,51 @@ function PlanPage() {
                   <BookmarkPlus className="size-4" />
                   {t("template.save_week")}
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to="/templates" data-testid="week-template-manage">
+                    <LayoutList className="size-4" />
                     {t("template.manage")}
                   </Link>
                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setNutritionOpen(true)}>
+                  <BarChart2 className="size-4" />
+                  {t("nutrition.button")}
+                </DropdownMenuItem>
+                {aiSettings?.enabled && (
+                  <>
+                    <DropdownMenuItem onClick={handleAiFill}>
+                      <Sparkles className="size-4" />
+                      {t("planner.fill_empty_cta")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => openChat(true)}
+                      data-testid="chat-open-button"
+                    >
+                      <Sparkles className="size-4" />
+                      {t("chat.button")}
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
                   onClick={handleClearWindow}
-                  aria-label={t("planner.clear_week")}
+                  disabled={plates.length === 0}
+                  variant="destructive"
                   data-testid="clear-week"
-                  className="hover:bg-destructive/10 hover:text-destructive [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
                 >
                   <Trash2 className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t("planner.clear_week")}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setNutritionOpen(true)}
-                  aria-label={t("nutrition.button")}
-                  className="hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
-                >
-                  <BarChart2 className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t("nutrition.button")}
-              </TooltipContent>
-            </Tooltip>
-            {aiSettings?.enabled && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openChat(true)}
-                    aria-label={t("chat.button")}
-                    data-testid="chat-open-button"
-                    className="hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
-                  >
-                    <Sparkles className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {t("chat.button")}
-                </TooltipContent>
-              </Tooltip>
-            )}
+                  {t("planner.clear_week")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              onClick={() => setShoppingOpen(true)}
+              className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
+            >
+              <Download className="mr-1.5 size-4" />
+              {t("shopping.button")}
+            </Button>
           </div>
         </TooltipProvider>
       </div>

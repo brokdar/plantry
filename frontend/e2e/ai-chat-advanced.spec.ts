@@ -15,6 +15,7 @@ test.describe("AI chat — history + new conversation", () => {
     try {
       await page.goto("/")
 
+      await page.getByTestId("planner-overflow").click()
       await page.getByTestId("chat-open-button").click()
       await page.getByTestId("chat-composer-input").fill("hello")
 
@@ -54,6 +55,7 @@ test.describe("AI chat — history + new conversation", () => {
     try {
       await page.goto("/")
 
+      await page.getByTestId("planner-overflow").click()
       await page.getByTestId("chat-open-button").click()
       await page.getByTestId("chat-composer-input").fill("hi there")
 

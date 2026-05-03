@@ -142,7 +142,8 @@ test.describe("Shopping List and Nutrition", () => {
       await addComponentResp2
 
       // Open nutrition panel.
-      await page.getByRole("button", { name: /nutrition/i }).click()
+      await page.getByTestId("planner-overflow").click()
+      await page.getByRole("menuitem", { name: /nutrition/i }).click()
 
       const panel = page.getByRole("dialog")
       await expect(
