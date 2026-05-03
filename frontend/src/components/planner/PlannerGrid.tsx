@@ -35,6 +35,7 @@ import {
   useSwapPlateComponent,
   useUpdatePlate,
 } from "@/lib/queries/plates"
+import { toggleSkip } from "@/lib/planner-skip"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
@@ -366,27 +367,20 @@ export function PlannerGrid({
   async function handleToggleSkip(
     dayIdx: number,
     slotId: number,
-    plateId: number | null
+    _plateId: number | null,
+    noteOverride?: string | null
   ) {
     const targetDay = days[dayIdx]
     if (!targetDay) return
     try {
-      let id = plateId
-      if (id === null) {
-        const created = await createPlate({
-          date: targetDay.date,
-          slot_id: slotId,
-        })
-        id = created.id
-        void queryClient.invalidateQueries({
-          queryKey: plateKeys.range(rangeFrom, rangeTo),
-        })
-      }
-      const existing = findPlateInDay(targetDay, slotId)
-      const nextSkipped = !existing?.skipped
-      await setSkippedMut.mutateAsync({
-        plateId: id,
-        input: { skipped: nextSkipped, note: existing?.note ?? null },
+      await toggleSkip({
+        date: targetDay.date,
+        slotId,
+        existing: findPlateInDay(targetDay, slotId),
+        noteOverride,
+        rangeFrom,
+        rangeTo,
+        setSkipped: setSkippedMut.mutateAsync,
       })
     } catch (err) {
       toastError(err, t)
@@ -657,11 +651,12 @@ export function PlannerGrid({
                                 )
                                 if (plate) clearAiFillOnPlate(plate.id)
                               }}
-                              onToggleSkip={() => {
+                              onToggleSkip={(note) => {
                                 void handleToggleSkip(
                                   dayIdx,
                                   slot.id,
-                                  plate?.id ?? null
+                                  plate?.id ?? null,
+                                  note
                                 )
                                 if (plate) clearAiFillOnPlate(plate.id)
                               }}

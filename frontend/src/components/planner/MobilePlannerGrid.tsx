@@ -11,6 +11,7 @@ import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useDeletePlate, useSetPlateSkipped } from "@/lib/queries/plates"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
+import { toggleSkip } from "@/lib/planner-skip"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
@@ -205,16 +206,20 @@ export function MobilePlannerGrid({
   async function handleToggleSkip(
     dayIdx: number,
     slotId: number,
-    plateId: number | null
+    _plateId: number | null,
+    noteOverride?: string | null
   ) {
     const targetDay = days[dayIdx]
     if (!targetDay) return
     try {
-      const existing = targetDay.plates.find((p) => p.slot_id === slotId)
-      if (plateId === null) return // no plate to skip in mobile view
-      await setSkippedMut.mutateAsync({
-        plateId,
-        input: { skipped: !existing?.skipped, note: existing?.note ?? null },
+      await toggleSkip({
+        date: targetDay.date,
+        slotId,
+        existing: targetDay.plates.find((p) => p.slot_id === slotId),
+        noteOverride,
+        rangeFrom,
+        rangeTo,
+        setSkipped: setSkippedMut.mutateAsync,
       })
     } catch (err) {
       toastError(err, t)
@@ -323,8 +328,13 @@ export function MobilePlannerGrid({
                   )
                   if (plate) clearAiFillOnPlate(plate.id)
                 }}
-                onToggleSkip={() => {
-                  void handleToggleSkip(activeDay, slot.id, plate?.id ?? null)
+                onToggleSkip={(note) => {
+                  void handleToggleSkip(
+                    activeDay,
+                    slot.id,
+                    plate?.id ?? null,
+                    note
+                  )
                   if (plate) clearAiFillOnPlate(plate.id)
                 }}
                 onRateLoved={() => {}}

@@ -152,10 +152,21 @@
   },
   "skip": {
     "label": "Auslassen",
+    "eating_out": "Auswärts",
     "mark": "Als ausgelassen markieren (auswärts)",
     "unmark": "Auslassen entfernen",
+    "skip_action": "Slot auslassen",
+    "edit_note": "Notiz bearbeiten",
+    "add_note_title": "Mit Notiz auslassen",
+    "add_note_title_existing": "Notiz hinzufügen",
+    "edit_note_title": "Notiz bearbeiten",
+    "save_note": "Speichern",
+    "skip_with_note": "Mit Notiz auslassen",
+    "no_note": "Keine Notiz",
+    "tooltip_empty": "Klicken zum Auslassen · Rechtsklick für Notiz",
+    "tooltip_edit_note": "Notiz bearbeiten",
     "note": {
-      "placeholder": "Notiz (optional)"
+      "placeholder": "z. B. Mamas Geburtstag — Joe's"
     }
   },
   "slot_sheet": {

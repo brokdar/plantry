@@ -152,10 +152,21 @@
   },
   "skip": {
     "label": "Skip",
+    "eating_out": "Eating out",
     "mark": "Mark as skip (eating out)",
     "unmark": "Remove skip",
+    "skip_action": "Skip slot",
+    "edit_note": "Edit note",
+    "add_note_title": "Skip with a note",
+    "add_note_title_existing": "Add a note",
+    "edit_note_title": "Edit skip note",
+    "save_note": "Save",
+    "skip_with_note": "Skip with note",
+    "no_note": "No note",
+    "tooltip_empty": "Click to skip · Right-click to add a note",
+    "tooltip_edit_note": "Edit the skip note",
     "note": {
-      "placeholder": "Add a note (optional)"
+      "placeholder": "e.g. Mom's birthday — Joe's"
     }
   },
   "slot_sheet": {

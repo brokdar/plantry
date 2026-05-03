@@ -123,9 +123,9 @@ test.describe("Slot skip + favorite (redesign)", () => {
       await page.getByRole("menuitem", { name: /mark as skip/i }).click()
       await skipResp
 
-      // Skipped cell exposes the SKIP label and no longer shows component name.
+      // Skipped cell exposes the EATING OUT label and no longer shows component name.
       await expect(cell.locator('[data-slot-state="skipped"]')).toBeVisible()
-      await expect(cell.getByText(/^skip$/i)).toBeVisible()
+      await expect(cell.getByText(/eating out/i)).toBeVisible()
       await expect(cell.getByText(`Pho ${tag}`)).toHaveCount(0)
     } finally {
       await cleanupFood(main.id)
