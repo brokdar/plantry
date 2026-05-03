@@ -49,6 +49,14 @@ function toYMD(d: Date): string {
   return `${d.getFullYear()}-${padTwo(d.getMonth() + 1)}-${padTwo(d.getDate())}`
 }
 
+/** Shifts a YYYY-MM-DD by `days` (positive or negative). DST-safe because the
+ *  Date constructor normalizes overflow at midnight. */
+export function shiftYMD(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number)
+  const dt = new Date(y, (m ?? 1) - 1, (d ?? 1) + days)
+  return toYMD(dt)
+}
+
 export function windowRange(
   anchor: Date,
   days: number

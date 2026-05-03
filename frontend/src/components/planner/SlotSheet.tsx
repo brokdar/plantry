@@ -238,7 +238,7 @@ function SlotSheetBody({
           <div className="flex items-center gap-1">
             {aiFilled && (
               <span
-                className="grid size-7 place-items-center rounded-full bg-[#c2974a]/12 text-[#9a7634]"
+                className="grid size-7 place-items-center rounded-full bg-ai-accent/12 text-ai-accent-fg"
                 title={t("planner.slot.ai_filled")}
                 aria-label={t("planner.slot.ai_filled")}
               >
@@ -360,7 +360,7 @@ function HeroBlock({
         </span>
         <div className="flex items-center gap-1.5">
           {aiFilled && (
-            <span className="rounded-full bg-[#c2974a] px-2 py-0.5 font-heading text-[9px] font-bold tracking-[0.2em] text-white uppercase">
+            <span className="rounded-full bg-ai-accent px-2 py-0.5 font-heading text-[9px] font-bold tracking-[0.2em] text-white uppercase">
               {t("planner.slot.ai_filled")}
             </span>
           )}

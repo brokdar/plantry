@@ -3,6 +3,7 @@ import {
   BookmarkPlus,
   Download,
   FileDown,
+  Keyboard,
   LayoutList,
   MoreHorizontal,
   Settings,
@@ -14,6 +15,7 @@ import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { ChatPanel } from "@/components/chat/ChatPanel"
+import { ShortcutCheatsheet } from "@/components/planner/ShortcutCheatsheet"
 import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
 import { TemplatePicker } from "@/components/templates/TemplatePicker"
 import {
@@ -22,6 +24,7 @@ import {
 } from "@/lib/template-apply-toast"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { DateRangeNavigator } from "@/components/planner/DateRangeNavigator"
+import { EmptyWeekCTA } from "@/components/planner/EmptyWeekCTA"
 import { MobilePlannerGrid } from "@/components/planner/MobilePlannerGrid"
 import { NutritionWeekSummary } from "@/components/planner/NutritionWeekSummary"
 import { PlannerGrid, type PlannerDay } from "@/components/planner/PlannerGrid"
@@ -47,9 +50,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { deletePlate, type Plate } from "@/lib/api/plates"
+import {
+  addPlateComponent,
+  createPlate,
+  deletePlate,
+  listPlates,
+  type Plate,
+} from "@/lib/api/plates"
+import { isCheatsheetShortcut } from "@/lib/planner-keynav"
 import {
   computeAnchor,
+  shiftYMD,
   windowRange,
   type AnchorMode,
 } from "@/lib/planner-window"
@@ -89,6 +100,19 @@ function PlanPage() {
   const [nutritionOpen, setNutritionOpen] = useState(false)
   const [saveRangeOpen, setSaveRangeOpen] = useState(false)
   const [applyWeekOpen, setApplyWeekOpen] = useState(false)
+  const [cheatsheetOpen, setCheatsheetOpen] = useState(false)
+
+  // Global `?` shortcut. Lives at the route level so the toolbar menu item
+  // and the keyboard shortcut share one dialog instance.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!isCheatsheetShortcut(e)) return
+      e.preventDefault()
+      setCheatsheetOpen(true)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
   const overwriteSnapshotRef = useRef<Plate[]>([])
   const openChat = useChatUI((s) => s.setOpen)
   const openChatWith = useChatUI((s) => s.openWith)
@@ -142,6 +166,7 @@ function PlanPage() {
   const aiFill = usePlannerUI((s) => s.aiFill)
   const recordAiFilledPlate = usePlannerUI((s) => s.recordAiFilledPlate)
   const dismissAiFillBanner = usePlannerUI((s) => s.dismissAiFillBanner)
+  const reopenAiFillBanner = usePlannerUI((s) => s.reopenAiFillBanner)
   const endAiFillSession = usePlannerUI((s) => s.endAiFillSession)
   const startAiFill = usePlannerUI((s) => s.startAiFill)
 
@@ -209,6 +234,59 @@ function PlanPage() {
 
   const slots = slotsQuery.data?.items ?? []
 
+  const [copyingLastWeek, setCopyingLastWeek] = useState(false)
+
+  async function handleCopyLastWeek() {
+    if (copyingLastWeek) return
+    const prevFrom = shiftYMD(from, -7)
+    const prevTo = shiftYMD(to, -7)
+    setCopyingLastWeek(true)
+    try {
+      const prev = await listPlates(prevFrom, prevTo)
+      // Skip skipped plates and components-less plates — they wouldn't add
+      // anything meaningful to the new week and the user can re-skip if needed.
+      const sourcePlates = prev.plates.filter(
+        (p) => !p.skipped && p.components.length > 0
+      )
+      if (sourcePlates.length === 0) {
+        toast(t("planner.empty_week.copy_empty"))
+        return
+      }
+      // Two-phase parallelism — create every plate at once, then add every
+      // component at once. Cuts ~N×M sequential round-trips down to two
+      // parallel waves; backend has no ordering constraints across plates.
+      const createdPlates = await Promise.all(
+        sourcePlates.map((p) =>
+          createPlate({
+            date: shiftYMD(p.date, 7),
+            slot_id: p.slot_id,
+            note: p.note ?? undefined,
+          })
+        )
+      )
+      await Promise.all(
+        createdPlates.flatMap((created, idx) =>
+          sourcePlates[idx]!.components.map((pc) =>
+            addPlateComponent(created.id, {
+              food_id: pc.food_id,
+              portions: pc.portions,
+            })
+          )
+        )
+      )
+      void queryClient.invalidateQueries({
+        queryKey: plateKeys.range(from, to),
+      })
+      toast.success(
+        t("planner.empty_week.copied", { count: sourcePlates.length })
+      )
+    } catch (err) {
+      toastError(err, t)
+    } finally {
+      setCopyingLastWeek(false)
+    }
+  }
+
   // Skipped plates are not occupied — a skip marker means "I won't eat here",
   // so applying a template should fill the slot without a conflict warning.
   const occupiedSlotKeys = useMemo(() => {
@@ -258,6 +336,14 @@ function PlanPage() {
     !aiFill.dismissed &&
     aiFill.plateIds.length > 0
 
+  // Pill shown after the user dismisses the revert banner — keeps the AI
+  // session reachable so revert never becomes a one-shot decision.
+  const showAiSessionPill =
+    aiFill.range?.from === from &&
+    aiFill.range?.to === to &&
+    aiFill.dismissed &&
+    aiFill.plateIds.length > 0
+
   const weekTemplateName = t("template.name_suggestion_week", {
     date: fmt.format(new Date(from + "T00:00:00")),
     defaultValue: `Week · ${fmt.format(new Date(from + "T00:00:00"))}`,
@@ -299,6 +385,22 @@ function PlanPage() {
         />
         <TooltipProvider>
           <div className="flex flex-wrap items-center gap-2">
+            {showAiSessionPill && (
+              <button
+                type="button"
+                onClick={reopenAiFillBanner}
+                data-testid="ai-session-pill"
+                aria-label={t("planner.ai_session_pill_aria", {
+                  count: aiFill.plateIds.length,
+                })}
+                className="flex items-center gap-1.5 rounded-full border border-ai-accent/40 bg-ai-accent-bg/70 px-3 py-1 font-heading text-[11px] font-bold tracking-[0.06em] text-ai-accent-fg uppercase transition-colors hover:bg-ai-accent-bg"
+              >
+                <Sparkles className="h-3 w-3" aria-hidden />
+                {t("planner.ai_session_pill", {
+                  count: aiFill.plateIds.length,
+                })}
+              </button>
+            )}
             <div className="flex items-baseline gap-2 rounded-full bg-surface-container-highest px-4 py-1.5">
               <span
                 className={
@@ -361,6 +463,13 @@ function PlanPage() {
                   <BarChart2 className="size-4" />
                   {t("nutrition.button")}
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setCheatsheetOpen(true)}
+                  data-testid="open-cheatsheet"
+                >
+                  <Keyboard className="size-4" />
+                  {t("planner.shortcuts.menu_item")}
+                </DropdownMenuItem>
                 {aiSettings?.enabled && (
                   <>
                     <DropdownMenuItem onClick={handleAiFill}>
@@ -399,22 +508,43 @@ function PlanPage() {
         </TooltipProvider>
       </div>
 
-      <div className="-mx-2 hidden md:-mx-4 md:block">
-        <PlannerGrid
-          days={days}
-          slots={slots}
-          rangeFrom={from}
-          rangeTo={to}
-          nutritionDays={nutritionQuery.data?.days}
+      {plates.length === 0 && (
+        <EmptyWeekCTA
+          windowFrom={from}
+          aiEnabled={!!aiSettings?.enabled}
+          copying={copyingLastWeek}
+          onCopyLastWeek={() => void handleCopyLastWeek()}
+          onApplyTemplate={() => setApplyWeekOpen(true)}
+          onAiFill={handleAiFill}
         />
-      </div>
-      <div className="md:hidden">
-        <MobilePlannerGrid
-          days={days}
-          slots={slots}
-          rangeFrom={from}
-          rangeTo={to}
-        />
+      )}
+
+      {/* Keyed by window range so React mounts a fresh subtree per window —
+          gives Tailwind's `animate-in` a clean trigger for the slide+fade.
+          Wrapped in motion-safe so users with reduced-motion get an instant
+          render. */}
+      <div
+        key={`window-${from}_${to}`}
+        className="motion-safe:animate-in motion-safe:duration-150 motion-safe:ease-out motion-safe:fade-in-30 motion-safe:slide-in-from-bottom-1"
+        data-testid="planner-window"
+      >
+        <div className="-mx-2 hidden md:-mx-4 md:block">
+          <PlannerGrid
+            days={days}
+            slots={slots}
+            rangeFrom={from}
+            rangeTo={to}
+            nutritionDays={nutritionQuery.data?.days}
+          />
+        </div>
+        <div className="md:hidden">
+          <MobilePlannerGrid
+            days={days}
+            slots={slots}
+            rangeFrom={from}
+            rangeTo={to}
+          />
+        </div>
       </div>
 
       <ShoppingPanel
@@ -467,6 +597,10 @@ function PlanPage() {
           showApplyToasts(info, overwriteSnapshotRef.current, from, to, t)
           overwriteSnapshotRef.current = []
         }}
+      />
+      <ShortcutCheatsheet
+        open={cheatsheetOpen}
+        onOpenChange={setCheatsheetOpen}
       />
     </div>
   )

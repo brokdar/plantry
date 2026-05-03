@@ -28,6 +28,9 @@ interface DndCellWrapperProps {
   day: number
   date?: string
   slotId: number
+  /** Slot row index (0-based). Used for grid arrow-key navigation via the
+   *  data-cell-pos attribute below. */
+  rowIndex: number
   plate: Plate | undefined
   /**
    * Render-prop. Receives a DragHandle when the cell is draggable
@@ -43,6 +46,7 @@ export function DndCellWrapper({
   day,
   date,
   slotId,
+  rowIndex,
   plate,
   children,
 }: DndCellWrapperProps) {
@@ -101,6 +105,7 @@ export function DndCellWrapper({
       data-testid={`cell-${day}-${slotId}`}
       data-slot-drop-zone={`${day}:${slotId}`}
       data-slot-drag-handle={draggable ? plate.id : undefined}
+      data-cell-pos={`${rowIndex}-${day}`}
       className={cn(
         "relative outline-offset-2",
         isOver &&

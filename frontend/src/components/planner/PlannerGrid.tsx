@@ -33,6 +33,7 @@ import {
   type DragPayload,
 } from "@/components/planner/DndCellWrapper"
 import { addPlateComponent, createPlate, deletePlate } from "@/lib/api/plates"
+import { handleGridArrowKey } from "@/lib/planner-keynav"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
 import { shoppingKeys } from "@/lib/queries/shopping"
@@ -56,8 +57,17 @@ import { toast, toastError } from "@/lib/toast"
 import { AddComponentSheet } from "./AddComponentSheet"
 import { ComponentTraySheet, type TraySlotContext } from "./ComponentTraySheet"
 import { DayHeader } from "./DayHeader"
+import { RowApplyTemplateDialog } from "./RowApplyTemplateDialog"
 import { SlotCell } from "./SlotCell"
 import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export interface PlannerDay {
   date: string // "YYYY-MM-DD"
@@ -185,6 +195,7 @@ export function PlannerGrid({
   )
   const [applyDayDate, setApplyDayDate] = useState<string | null>(null)
   const [sheetTarget, setSheetTarget] = useState<SlotSheetTarget | null>(null)
+  const [rowApplySlot, setRowApplySlot] = useState<TimeSlot | null>(null)
 
   function findPlateById(plateId: number): Plate | undefined {
     for (const day of days) {
@@ -271,6 +282,7 @@ export function PlannerGrid({
 
   const aiFill = usePlannerUI((s) => s.aiFill)
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
+  const markCopyHintSeen = usePlannerUI((s) => s.markCopyHintSeen)
   const aiFilledIds = useMemo(() => new Set(aiFill.plateIds), [aiFill.plateIds])
 
   async function handleTrayCommit(
@@ -443,6 +455,109 @@ export function PlannerGrid({
     })
   }
 
+  function handleClearRow(slotId: number) {
+    // Skip markers are deliberate user statements ("not eating here") and
+    // shouldn't be wiped by "Clear row" — same rule as Copy last week.
+    const rowPlates: Plate[] = []
+    for (const day of days) {
+      const p = findPlateInDay(day, slotId)
+      if (p && !p.skipped) rowPlates.push(p)
+    }
+    if (rowPlates.length === 0) return
+
+    const idSet = new Set(rowPlates.map((p) => p.id))
+    queryClient.setQueryData<{ plates: Plate[] }>(
+      plateKeys.range(rangeFrom, rangeTo),
+      (old) => ({
+        plates: (old?.plates ?? []).filter((p) => !idSet.has(p.id)),
+      })
+    )
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await Promise.all(rowPlates.map((p) => deletePlate(p.id)))
+      } catch (err) {
+        toastError(err, t)
+      } finally {
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
+      }
+    }, 5000)
+
+    toast(t("planner.row_actions.cleared", { count: rowPlates.length }), {
+      action: {
+        label: t("common.undo"),
+        onClick: () => {
+          clearTimeout(timeoutId)
+          queryClient.setQueryData<{ plates: Plate[] }>(
+            plateKeys.range(rangeFrom, rangeTo),
+            (old) => ({ plates: [...(old?.plates ?? []), ...rowPlates] })
+          )
+        },
+      },
+      duration: 5000,
+    })
+  }
+
+  async function handleCopyRowAcrossWeek(slotId: number) {
+    // First non-skipped plate with components becomes the source. Skipped
+    // markers and component-less plates would copy nothing useful.
+    let source: { plate: Plate; dayIdx: number } | null = null
+    for (let i = 0; i < days.length; i++) {
+      const day = days[i]
+      if (!day) continue
+      const p = findPlateInDay(day, slotId)
+      if (p && !p.skipped && p.components.length > 0) {
+        source = { plate: p, dayIdx: i }
+        break
+      }
+    }
+    if (!source) {
+      toast(t("planner.row_actions.copy_no_source"))
+      return
+    }
+
+    // Targets: every other day in the row that's currently empty (no plate
+    // and no skip marker). Existing plates and skips are preserved — undo
+    // would otherwise need to restore them, and silent overwrite breaks trust.
+    const targets = days.filter(
+      (d, i) => i !== source!.dayIdx && !findPlateInDay(d, slotId)
+    )
+    if (targets.length === 0) {
+      toast(t("planner.row_actions.copy_no_targets"))
+      return
+    }
+
+    try {
+      const created = await Promise.all(
+        targets.map((d) =>
+          createPlate({
+            date: d.date,
+            slot_id: slotId,
+            note: source!.plate.note ?? undefined,
+          })
+        )
+      )
+      await Promise.all(
+        created.flatMap((p) =>
+          source!.plate.components.map((pc) =>
+            addPlateComponent(p.id, {
+              food_id: pc.food_id,
+              portions: pc.portions,
+            })
+          )
+        )
+      )
+      void queryClient.invalidateQueries({
+        queryKey: plateKeys.range(rangeFrom, rangeTo),
+      })
+      toast.success(t("planner.row_actions.copied", { count: targets.length }))
+    } catch (err) {
+      toastError(err, t)
+    }
+  }
+
   async function handleToggleSkip(
     dayIdx: number,
     slotId: number,
@@ -510,17 +625,11 @@ export function PlannerGrid({
   // the post-apply toast for undo. Kept in a ref so the callback chain
   // doesn't trigger renders.
   const overwriteSnapshotRef = useRef<Plate[]>([])
-  // PointerSensor's 6 px activation distance disambiguates click-to-open from
-  // drag-to-reschedule on the SlotCell stretched-link button (the same button
-  // is both click target and drag activator via setActivatorNodeRef).
-  // KeyboardSensor's default start keys are Space/Enter — the same keys that
-  // fire <button> click. dnd-kit calls preventDefault on the keydown when the
-  // focused element is the activator, so keyboard users tabbing to the cell
-  // and pressing Enter start a drag instead of opening the sheet. They keep
-  // full keyboard access via the cell's dropdown menu (Add / Skip / Save /
-  // Delete), so this is a missed opportunity rather than a regression. Phase 7
-  // of the redesign adds an explicit grip-dots drag handle, which separates
-  // the activator from the click target and resolves the conflict naturally.
+  // Drag activates from the dedicated grip handle on the cell's left edge.
+  // The 6 px PointerSensor constraint keeps a quick grip-tap from being read
+  // as a drag. KeyboardSensor lives on the same handle, so Enter on the
+  // stretched-link button reliably opens the sheet — it no longer has the
+  // dual-purpose conflict that older revisions worked around.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor)
@@ -558,14 +667,7 @@ export function PlannerGrid({
       | undefined
     if (!activeData?.plateId || !overData) return
     if (overData.skipped) {
-      toastError(
-        new Error(
-          t("planner.dnd.reject_skipped", {
-            defaultValue: "Slot is marked skip",
-          })
-        ),
-        t
-      )
+      toastError(new Error(t("planner.dnd.reject_skipped")), t)
       return
     }
     if (
@@ -605,6 +707,7 @@ export function PlannerGrid({
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
         })
+        markCopyHintSeen()
       }
     } catch (err) {
       toastError(err, t)
@@ -666,20 +769,19 @@ export function PlannerGrid({
             <div
               className="grid gap-2.5"
               style={{ gridTemplateColumns: "130px repeat(7, minmax(0, 1fr))" }}
+              onKeyDown={(e) =>
+                handleGridArrowKey(e, { rows: slots.length, cols: 7 })
+              }
             >
-              {slots.map((slot) => (
+              {slots.map((slot, rowIndex) => (
                 <div key={slot.id} className="contents">
-                  <div
-                    className="flex flex-col items-center justify-center gap-1.5 px-3"
-                    data-testid={`slot-row-${slot.id}`}
-                  >
-                    <span className="grid size-6 place-items-center rounded-lg bg-surface-container text-on-surface-variant">
-                      <SlotIcon name={slot.icon} />
-                    </span>
-                    <span className="font-heading text-[12.5px] font-bold tracking-[0.04em] text-on-surface uppercase">
-                      {slotLabel(t, slot.name_key)}
-                    </span>
-                  </div>
+                  <SlotRowLabel
+                    slot={slot}
+                    days={days}
+                    onClearRow={() => handleClearRow(slot.id)}
+                    onCopyAcrossWeek={() => handleCopyRowAcrossWeek(slot.id)}
+                    onApplyTemplate={() => setRowApplySlot(slot)}
+                  />
                   {days.map((day, dayIdx) => {
                     const date = parseISO(day.date)
                     const isPast = isBefore(date, today) && !isToday(date)
@@ -695,6 +797,7 @@ export function PlannerGrid({
                           day={dayIdx}
                           date={day.date}
                           slotId={slot.id}
+                          rowIndex={rowIndex}
                           plate={plate}
                         >
                           {(dragHandle) => (
@@ -882,7 +985,102 @@ export function PlannerGrid({
               })
           }}
         />
+        <RowApplyTemplateDialog
+          open={rowApplySlot !== null}
+          onOpenChange={(o) => !o && setRowApplySlot(null)}
+          slotId={rowApplySlot?.id ?? 0}
+          slotName={rowApplySlot ? slotLabel(t, rowApplySlot.name_key) : ""}
+          dates={days.map((d) => d.date)}
+          rangeFrom={rangeFrom}
+          rangeTo={rangeTo}
+          occupiedKeys={occupiedSlotKeys}
+        />
       </div>
     </DndContext>
+  )
+}
+
+interface SlotRowLabelProps {
+  slot: TimeSlot
+  days: PlannerDay[]
+  onClearRow: () => void
+  onCopyAcrossWeek: () => void
+  onApplyTemplate: () => void
+}
+
+function SlotRowLabel({
+  slot,
+  days,
+  onClearRow,
+  onCopyAcrossWeek,
+  onApplyTemplate,
+}: SlotRowLabelProps) {
+  const { t } = useTranslation()
+  // Counted once per row render — drives whether destructive items render at
+  // all. Skipped plates aren't counted: "Clear row" preserves them, so the
+  // label and the action stay aligned. A row with no plates can still be the
+  // target of "apply template", so the menu itself stays available.
+  let plateCount = 0
+  for (const day of days) {
+    const p = findPlateInDay(day, slot.id)
+    if (p && !p.skipped) plateCount++
+  }
+  return (
+    <div
+      className="group/row relative flex flex-col items-center justify-center gap-1.5 px-3"
+      data-testid={`slot-row-${slot.id}`}
+    >
+      <span className="grid size-6 place-items-center rounded-lg bg-surface-container text-on-surface-variant">
+        <SlotIcon name={slot.icon} />
+      </span>
+      <span className="font-heading text-[12.5px] font-bold tracking-[0.04em] text-on-surface uppercase">
+        {slotLabel(t, slot.name_key)}
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("planner.row_actions.menu_label", {
+              slot: slotLabel(t, slot.name_key),
+            })}
+            data-testid={`slot-row-menu-${slot.id}`}
+            className="absolute top-1 right-1 size-5 text-on-surface-variant/60 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-on-surface-variant focus-visible:opacity-100 data-[state=open]:opacity-100"
+          >
+            <Lucide.MoreHorizontal className="h-3 w-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-60">
+          <DropdownMenuItem
+            onClick={onApplyTemplate}
+            data-testid={`slot-row-apply-${slot.id}`}
+          >
+            <Lucide.FileDown className="size-4" />
+            {t("planner.row_actions.apply_template")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={onCopyAcrossWeek}
+            disabled={plateCount === 0}
+            data-testid={`slot-row-copy-${slot.id}`}
+          >
+            <Lucide.Copy className="size-4" />
+            {t("planner.row_actions.copy_across")}
+          </DropdownMenuItem>
+          {plateCount > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={onClearRow}
+                variant="destructive"
+                data-testid={`slot-row-clear-${slot.id}`}
+              >
+                <Lucide.Trash2 className="size-4" />
+                {t("planner.row_actions.clear", { count: plateCount })}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }

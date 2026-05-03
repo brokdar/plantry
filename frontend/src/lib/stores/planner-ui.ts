@@ -29,6 +29,9 @@ interface PlannerUIState {
   addingTo: AddingTarget | null
   swapTarget: { plateId: number; pcId: number; role?: string } | null
   aiFill: AiFillSession
+  /** True once the user has successfully completed a ⌘+drag copy. Persists in
+   * localStorage so the "⌘ to copy" hint disappears for good after first use. */
+  copyHintSeen: boolean
 
   openEditor: (plateId: number) => void
   closeEditor: () => void
@@ -41,7 +44,29 @@ interface PlannerUIState {
   recordAiFilledPlate: (plateId: number) => void
   clearAiFillOnPlate: (plateId: number) => void
   dismissAiFillBanner: () => void
+  reopenAiFillBanner: () => void
   endAiFillSession: () => void
+  markCopyHintSeen: () => void
+}
+
+const COPY_HINT_KEY = "plantry.copyHintSeen"
+
+function readCopyHintSeen(): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    return window.localStorage.getItem(COPY_HINT_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+function persistCopyHintSeen() {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(COPY_HINT_KEY, "1")
+  } catch {
+    // Ignore — hint will keep showing, no harm done.
+  }
 }
 
 export const usePlannerUI = create<PlannerUIState>((set) => ({
@@ -49,6 +74,7 @@ export const usePlannerUI = create<PlannerUIState>((set) => ({
   addingTo: null,
   swapTarget: null,
   aiFill: { range: null, startedAt: null, plateIds: [], dismissed: false },
+  copyHintSeen: readCopyHintSeen(),
 
   openEditor: (plateId) => set({ editingPlateId: plateId }),
   closeEditor: () => set({ editingPlateId: null }),
@@ -79,8 +105,14 @@ export const usePlannerUI = create<PlannerUIState>((set) => ({
     })),
   dismissAiFillBanner: () =>
     set((state) => ({ aiFill: { ...state.aiFill, dismissed: true } })),
+  reopenAiFillBanner: () =>
+    set((state) => ({ aiFill: { ...state.aiFill, dismissed: false } })),
   endAiFillSession: () =>
     set({
       aiFill: { range: null, startedAt: null, plateIds: [], dismissed: false },
     }),
+  markCopyHintSeen: () => {
+    persistCopyHintSeen()
+    set({ copyHintSeen: true })
+  },
 }))

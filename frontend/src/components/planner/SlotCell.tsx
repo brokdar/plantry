@@ -1,5 +1,6 @@
 import {
   BookmarkPlus,
+  GripVertical,
   MoreVertical,
   NotebookPen,
   Plus,
@@ -10,6 +11,8 @@ import {
 } from "lucide-react"
 import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+
+import { usePlannerUI } from "@/lib/stores/planner-ui"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -392,6 +395,9 @@ function PlannedSlot({
     if (e.key === "s" || e.key === "S") {
       e.preventDefault()
       onToggleSkip()
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault()
+      onDeletePlate()
     }
   }
 
@@ -402,31 +408,29 @@ function PlannedSlot({
         CELL_HEIGHT,
         "group relative flex flex-col overflow-hidden rounded-[14px] border border-outline-variant/50 bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_2px_8px_rgba(25,28,28,0.06),0_4px_16px_-4px_rgba(74,101,77,0.14)]",
         aiFilled &&
-          "border-[#c2974a]/40 shadow-[0_0_0_1px_rgba(194,151,74,0.3),0_4px_12px_-4px_rgba(25,28,28,0.06)]"
+          "border-ai-accent/40 shadow-[0_0_0_1px_rgba(194,151,74,0.3),0_4px_12px_-4px_rgba(25,28,28,0.06)]"
       )}
     >
       {/* Stretched-link click target. z-[1] puts it ABOVE the SlotHero
         (positioned z-auto, paint group 6) so clicks on the dish photo also
         open the sheet — z-0 would lose the tree-order tiebreak. The action
         row inside the body uses z-10, sitting above this button so its
-        controls remain hit-testable.
-        This same button is also the dnd-kit drag activator (when the cell
-        is draggable), unifying click-to-open and drag-to-reschedule on a
-        single interactive element so the a11y tree stays flat — one
-        button per cell, not nested. */}
+        controls remain hit-testable. The drag activator lives on a dedicated
+        grip handle (below) so Enter/Space on this button opens the sheet
+        rather than starting a drag — keyboard users and click users now
+        share a clean activation path. */}
       {onOpenSheet && (
         <button
           type="button"
           onClick={onOpenSheet}
           onKeyDown={handleStretchedKeyDown}
           aria-label={t("slot_sheet.open_label")}
+          aria-keyshortcuts="S Delete"
           data-testid="slot-open-sheet"
-          ref={dragHandle?.setActivatorNodeRef}
-          {...(dragHandle?.listeners ?? {})}
-          {...(dragHandle?.attributes ?? {})}
           className="absolute inset-0 z-[1] cursor-pointer rounded-[14px] focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none focus-visible:ring-inset"
         />
       )}
+      {dragHandle && <DragGripHandle handle={dragHandle} />}
       {aiFilled && <AiFilledBadge />}
       <SlotActions
         favorite={favorite}
@@ -503,6 +507,50 @@ function PlannedSlot({
           <SlotMacroDots macros={macros} />
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Dedicated drag activator. Sits on the left edge of a planned cell so the
+ * stretched-link button stays a single-purpose click-to-open target. A subtle
+ * hint ("⌘ to copy") shows on hover until the user has done their first
+ * ⌘+drag — at which point it disappears for good (persisted via localStorage
+ * in the planner-ui store).
+ */
+function DragGripHandle({ handle }: { handle: DragHandle }) {
+  const { t } = useTranslation()
+  const copyHintSeen = usePlannerUI((s) => s.copyHintSeen)
+  // Optional chains keep ESLint's react-hooks/refs rule from flagging the
+  // dnd-kit setter as a render-time ref read. handle is non-null at the call
+  // site (DragGripHandle only mounts when one is supplied).
+  // tabIndex={-1} comes after the dnd-kit attributes spread so it overrides
+  // the tabIndex={0} dnd-kit injects. Halves the planner's tab-stop count
+  // (every planted cell otherwise contributes the stretched-link button AND
+  // the grip). Mouse drag still works; keyboard drag is dropped — keyboard
+  // users have arrow nav + Enter / S / Del, which covers the grid-internal
+  // moves the keyboard sensor previously offered.
+  return (
+    <div
+      ref={handle?.setActivatorNodeRef}
+      {...(handle?.listeners ?? {})}
+      {...(handle?.attributes ?? {})}
+      tabIndex={-1}
+      role="button"
+      aria-label={t("planner.dnd.drag_handle_label")}
+      data-testid="slot-drag-handle"
+      className="group/grip absolute top-2 bottom-2 left-0 z-[2] flex w-3 cursor-grab touch-none items-center justify-center rounded-l-[14px] text-on-surface-variant/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:bg-surface-container/60 hover:text-on-surface-variant focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none active:cursor-grabbing [@media(hover:none)]:opacity-100"
+    >
+      <GripVertical className="h-3.5 w-3.5" aria-hidden />
+      {!copyHintSeen && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-full left-1/2 mt-1 -translate-x-1/2 rounded-md bg-on-surface px-1.5 py-0.5 font-heading text-[9px] font-bold tracking-[0.12em] whitespace-nowrap text-on-primary uppercase opacity-0 shadow-sm transition-opacity duration-150 group-hover/grip:opacity-100"
+          data-testid="slot-copy-hint"
+        >
+          {t("planner.dnd.copy_hint")}
+        </span>
+      )}
     </div>
   )
 }
