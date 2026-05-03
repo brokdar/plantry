@@ -86,10 +86,9 @@ export function DndCellWrapper({
       }
     : {}
 
-  // isOver + active together distinguish hover feedback. We only flag the
-  // drop target during an actual drag. The "rejected" outline for skipped
-  // cells is rendered here so the user sees it immediately; the final
-  // reject-and-toast still happens in onDragEnd.
+  // closestCorners always resolves to the nearest droppable, so a skipped cell
+  // would silently snap drops to a neighbour if we disabled it. Keep it active
+  // and reject in onDragEnd; render a destructive outline for hover feedback.
   const isRejectedDrop = isOver && !!active && plate?.skipped === true
 
   const handle: DragHandle | null = draggable

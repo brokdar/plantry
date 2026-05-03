@@ -104,8 +104,8 @@ func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
 	if q.Limit <= 0 {
 		q.Limit = 50
 	}
-	if q.Limit > 200 {
-		q.Limit = 200
+	if q.Limit > 10000 {
+		q.Limit = 10000
 	}
 	if q.SortBy == "" {
 		q.SortBy = "name"

@@ -245,7 +245,7 @@ func TestService_List_DefaultLimit(t *testing.T) {
 func TestService_List_ClampLimit(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := food.NewService(repo)
-	_, err := svc.List(context.Background(), food.ListQuery{Limit: 999})
+	_, err := svc.List(context.Background(), food.ListQuery{Limit: 99999})
 	require.NoError(t, err)
-	assert.Equal(t, 200, repo.lastListQuery.Limit)
+	assert.Equal(t, 10000, repo.lastListQuery.Limit)
 }

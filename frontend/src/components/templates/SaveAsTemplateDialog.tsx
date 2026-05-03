@@ -28,10 +28,7 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import type { TemplateScope } from "@/lib/api/templates"
-import {
-  useCreateTemplate,
-  useCreateTemplateFromRange,
-} from "@/lib/queries/templates"
+import { useCreateTemplate } from "@/lib/queries/templates"
 import { templateSchema, type TemplateFormValues } from "@/lib/schemas/template"
 import { toast, toastError } from "@/lib/toast"
 
@@ -63,9 +60,7 @@ export function SaveAsTemplateDialog({
 }: SaveAsTemplateDialogProps) {
   const { t } = useTranslation()
   const createMutation = useCreateTemplate()
-  const createFromRangeMutation = useCreateTemplateFromRange()
-  const isPending =
-    createMutation.isPending || createFromRangeMutation.isPending
+  const isPending = createMutation.isPending
 
   const form = useForm<TemplateFormValues>({
     resolver: zodResolver(templateSchema),
@@ -129,12 +124,12 @@ export function SaveAsTemplateDialog({
       )
     } else if (target.scope === "day") {
       // Single-day range — backend auto-detects day scope from the range.
-      createFromRangeMutation.mutate(
+      createMutation.mutate(
         { name, from: target.date, to: target.date },
         handlers
       )
     } else {
-      createFromRangeMutation.mutate(
+      createMutation.mutate(
         { name, from: target.from, to: target.to },
         handlers
       )

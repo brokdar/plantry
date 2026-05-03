@@ -148,7 +148,10 @@ export function PlannerGrid({
     setAddTarget({ day, slotId, plateId: null })
   }
 
-  const componentsQuery = useFoods({ limit: 200 })
+  // Planner needs the full foods catalog to render plate components by id.
+  // Treat it as session-cached: a long staleTime stops focus/mount refetches
+  // of a multi-MB payload while still letting mutations invalidate it.
+  const componentsQuery = useFoods({ limit: 10000 }, { staleTime: 5 * 60_000 })
   const componentsById = useMemo(() => {
     const map = new Map<number, Food>()
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)
@@ -678,7 +681,7 @@ export function PlannerGrid({
       | undefined
     if (!activeData?.plateId || !overData) return
     if (overData.skipped) {
-      toastError(new Error(t("planner.dnd.reject_skipped")), t)
+      toast.error(t("planner.dnd.reject_skipped"))
       return
     }
     if (

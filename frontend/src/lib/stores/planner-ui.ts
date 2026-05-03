@@ -27,7 +27,6 @@ export interface AiFillSession {
 interface PlannerUIState {
   editingPlateId: number | null
   addingTo: AddingTarget | null
-  swapTarget: { plateId: number; pcId: number; role?: string } | null
   aiFill: AiFillSession
   /** True once the user has successfully completed a ⌘+drag copy. Persists in
    * localStorage so the "⌘ to copy" hint disappears for good after first use. */
@@ -37,8 +36,6 @@ interface PlannerUIState {
   closeEditor: () => void
   beginAdd: (target: AddingTarget) => void
   cancelAdd: () => void
-  beginSwap: (target: { plateId: number; pcId: number; role?: string }) => void
-  cancelSwap: () => void
 
   startAiFill: (range: { from: string; to: string }) => void
   recordAiFilledPlate: (plateId: number) => void
@@ -72,7 +69,6 @@ function persistCopyHintSeen() {
 export const usePlannerUI = create<PlannerUIState>((set) => ({
   editingPlateId: null,
   addingTo: null,
-  swapTarget: null,
   aiFill: { range: null, startedAt: null, plateIds: [], dismissed: false },
   copyHintSeen: readCopyHintSeen(),
 
@@ -80,8 +76,6 @@ export const usePlannerUI = create<PlannerUIState>((set) => ({
   closeEditor: () => set({ editingPlateId: null }),
   beginAdd: (target) => set({ addingTo: target }),
   cancelAdd: () => set({ addingTo: null }),
-  beginSwap: (target) => set({ swapTarget: target }),
-  cancelSwap: () => set({ swapTarget: null }),
 
   startAiFill: (range) =>
     set({

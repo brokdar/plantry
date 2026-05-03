@@ -85,7 +85,7 @@ export function MobilePlannerGrid({
 }: MobilePlannerGridProps) {
   const { t, i18n } = useTranslation()
 
-  const componentsQuery = useFoods({ limit: 200 })
+  const componentsQuery = useFoods({ limit: 10000 }, { staleTime: 5 * 60_000 })
   const componentsById = useMemo(() => {
     const map = new Map<number, Food>()
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)

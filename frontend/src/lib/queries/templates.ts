@@ -3,13 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   applyTemplate,
   createTemplate,
-  createTemplateFromRange,
   deleteTemplate,
   getTemplate,
   getTemplates,
   updateTemplate,
   type ApplyTemplateInput,
-  type CreateTemplateFromRangeInput,
   type CreateTemplateInput,
   type TemplateScope,
   type UpdateTemplateInput,
@@ -80,17 +78,6 @@ export function useApplyTemplate() {
     }) => applyTemplate(templateId, input),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
-    },
-  })
-}
-
-export function useCreateTemplateFromRange() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: CreateTemplateFromRangeInput) =>
-      createTemplateFromRange(input),
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: templateKeys.lists() })
     },
   })
 }

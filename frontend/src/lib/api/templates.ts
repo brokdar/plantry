@@ -68,12 +68,6 @@ export interface ApplyTemplateInput {
   conflict?: ApplyConflict
 }
 
-export interface CreateTemplateFromRangeInput {
-  name: string
-  from: string
-  to: string
-}
-
 export interface ApplyTemplateResultPlate {
   id: number
   date: string
@@ -130,15 +124,6 @@ export function applyTemplate(
   input: ApplyTemplateInput
 ): Promise<ApplyTemplateResult> {
   return apiFetch(`/templates/${id}/apply`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  })
-}
-
-export function createTemplateFromRange(
-  input: CreateTemplateFromRangeInput
-): Promise<Template> {
-  return apiFetch(`/templates`, {
     method: "POST",
     body: JSON.stringify(input),
   })

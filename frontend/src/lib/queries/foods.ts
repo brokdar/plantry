@@ -22,10 +22,14 @@ import {
 import { queryClient } from "@/lib/query-client"
 import { foodKeys } from "./keys"
 
-export function useFoods(params?: FoodListParams) {
+export function useFoods(
+  params?: FoodListParams,
+  options?: { staleTime?: number }
+) {
   return useQuery({
     queryKey: foodKeys.list(params ?? {}),
     queryFn: () => listFoods(params),
+    staleTime: options?.staleTime,
   })
 }
 
