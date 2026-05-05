@@ -36,6 +36,12 @@ import { addPlateComponent, createPlate, deletePlate } from "@/lib/api/plates"
 import { handleGridArrowKey } from "@/lib/planner-keynav"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
+import {
+  cancelPendingPlateDelete,
+  flushPendingPlateDeletes,
+  hasPendingPlateDelete,
+  registerPendingPlateDelete,
+} from "@/lib/queries/pending-plate-deletes"
 import { shoppingKeys } from "@/lib/queries/shopping"
 import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
@@ -44,7 +50,6 @@ import type { NutritionDay } from "@/lib/api/nutrition"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import {
-  useDeletePlate,
   useSetPlateSkipped,
   useSwapPlateComponent,
   useUpdatePlate,
@@ -243,7 +248,6 @@ export function PlannerGrid({
 
   const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
   const swapMut = useSwapPlateComponent()
-  const deletePlateMut = useDeletePlate()
   const setSkippedMut = useSetPlateSkipped()
   const setFavoriteMut = useSetFoodFavorite()
   const recordFeedbackMut = useRecordFeedback()
@@ -306,6 +310,10 @@ export function PlannerGrid({
     const target = addTarget
     const targetDay = days[target.day]
     if (!targetDay) return { failedFoodIds: [] }
+
+    // Commit any plates the user just deleted (within their undo window) so
+    // the upcoming refetch doesn't resurrect them as artifacts.
+    await flushPendingPlateDeletes()
 
     let plateId = target.plateId
     if (plateId === null) {
@@ -382,7 +390,7 @@ export function PlannerGrid({
   }
 
   function handleDeletePlate(plateId: number, dayIdx: number) {
-    if (pendingDeletesRef.current.has(plateId)) return
+    if (hasPendingPlateDelete(plateId)) return
 
     const plateSnapshot = days[dayIdx]?.plates.find((p) => p.id === plateId)
     if (!plateSnapshot) return
@@ -393,35 +401,32 @@ export function PlannerGrid({
       (old) => ({ plates: (old?.plates ?? []).filter((p) => p.id !== plateId) })
     )
 
-    const timeoutId = setTimeout(async () => {
-      pendingDeletesRef.current.delete(plateId)
+    registerPendingPlateDelete(plateId, plateSnapshot, async () => {
       try {
-        await deletePlateMut.mutateAsync(plateId)
+        await deletePlate(plateId)
       } catch (err) {
         toastError(err, t)
         queryClient.setQueryData<{ plates: Plate[] }>(
           plateKeys.range(rangeFrom, rangeTo),
           (old) => ({ plates: [...(old?.plates ?? []), plateSnapshot] })
         )
+      } finally {
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       }
-    }, 5000)
-
-    pendingDeletesRef.current.set(plateId, {
-      timeoutId,
-      snapshot: plateSnapshot,
     })
 
     toast(t("plate.deleted"), {
       action: {
         label: t("common.undo"),
         onClick: () => {
-          const pending = pendingDeletesRef.current.get(plateId)
-          if (!pending) return
-          clearTimeout(pending.timeoutId)
-          pendingDeletesRef.current.delete(plateId)
+          const snapshot = cancelPendingPlateDelete(plateId)
+          if (!snapshot) return
           queryClient.setQueryData<{ plates: Plate[] }>(
             plateKeys.range(rangeFrom, rangeTo),
-            (old) => ({ plates: [...(old?.plates ?? []), pending.snapshot] })
+            (old) => ({ plates: [...(old?.plates ?? []), snapshot] })
           )
         },
       },
@@ -445,6 +450,7 @@ export function PlannerGrid({
 
     const timeoutId = setTimeout(async () => {
       try {
+        await flushPendingPlateDeletes()
         await Promise.all(dayPlates.map((p) => deletePlate(p.id)))
       } catch (err) {
         toastError(err, t)
@@ -491,6 +497,7 @@ export function PlannerGrid({
 
     const timeoutId = setTimeout(async () => {
       try {
+        await flushPendingPlateDeletes()
         await Promise.all(rowPlates.map((p) => deletePlate(p.id)))
       } catch (err) {
         toastError(err, t)
@@ -545,6 +552,8 @@ export function PlannerGrid({
       toast(t("planner.row_actions.copy_no_targets"))
       return
     }
+
+    await flushPendingPlateDeletes()
 
     try {
       const created = await Promise.all(
@@ -634,11 +643,6 @@ export function PlannerGrid({
   const headerScrollRef = useRef<HTMLDivElement>(null)
   const bodyScrollRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<"move" | "copy">("move")
-  type PendingDelete = {
-    timeoutId: ReturnType<typeof setTimeout>
-    snapshot: Plate
-  }
-  const pendingDeletesRef = useRef(new Map<number, PendingDelete>())
   // Pre-apply snapshot the picker hands us via onBeforeApply, consumed by
   // the post-apply toast for undo. Kept in a ref so the callback chain
   // doesn't trigger renders.
@@ -711,6 +715,7 @@ export function PlannerGrid({
           ? findPlateInDay(srcDay, activeData.slotId!)
           : undefined
         if (!src) return
+        await flushPendingPlateDeletes()
         const created = await createPlate({
           date: overData.date!,
           slot_id: overData.slotId!,

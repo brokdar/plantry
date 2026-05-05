@@ -30,6 +30,12 @@ import { useSetPlateSkipped, useUpdatePlate } from "@/lib/queries/plates"
 import { useProfile } from "@/lib/queries/profile"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
+import {
+  cancelPendingPlateDelete,
+  flushPendingPlateDeletes,
+  hasPendingPlateDelete,
+  registerPendingPlateDelete,
+} from "@/lib/queries/pending-plate-deletes"
 import { toggleSkip } from "@/lib/planner-skip"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
@@ -192,6 +198,7 @@ export function MobilePlannerGrid({
     )
     const timeoutId = setTimeout(async () => {
       try {
+        await flushPendingPlateDeletes()
         await Promise.all(dayPlates.map((p) => deletePlate(p.id)))
       } catch (err) {
         toastError(err, t)
@@ -224,16 +231,6 @@ export function MobilePlannerGrid({
   const clearFeedbackMut = useClearFeedback()
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
 
-  // Per-cell undo for delete: optimistically remove the plate from cache,
-  // surface a 5 s undo toast, and only commit the network delete after the
-  // window expires. Mirrors the desktop PlannerGrid pattern so mobile users
-  // get the same recovery affordance.
-  type PendingDelete = {
-    timeoutId: ReturnType<typeof setTimeout>
-    snapshot: Plate
-  }
-  const pendingDeletesRef = useRef(new Map<number, PendingDelete>())
-
   function openSheetForPlate(dayIdx: number, slot: TimeSlot, plate: Plate) {
     const day = days[dayIdx]
     if (!day) return
@@ -247,7 +244,7 @@ export function MobilePlannerGrid({
   }
 
   function handleDeletePlate(plateId: number) {
-    if (pendingDeletesRef.current.has(plateId)) return
+    if (hasPendingPlateDelete(plateId)) return
     let snapshot: Plate | undefined
     for (const d of days) {
       const p = d.plates.find((p) => p.id === plateId)
@@ -257,43 +254,38 @@ export function MobilePlannerGrid({
       }
     }
     if (!snapshot) return
+    const plateSnapshot = snapshot
     queryClient.setQueryData<{ plates: Plate[] }>(
       plateKeys.range(rangeFrom, rangeTo),
       (old) => ({
         plates: (old?.plates ?? []).filter((p) => p.id !== plateId),
       })
     )
-    const timeoutId = setTimeout(async () => {
-      pendingDeletesRef.current.delete(plateId)
+    registerPendingPlateDelete(plateId, plateSnapshot, async () => {
       try {
         await deletePlate(plateId)
       } catch (err) {
         toastError(err, t)
-        if (snapshot) {
-          queryClient.setQueryData<{ plates: Plate[] }>(
-            plateKeys.range(rangeFrom, rangeTo),
-            (old) => ({ plates: [...(old?.plates ?? []), snapshot!] })
-          )
-        }
+        queryClient.setQueryData<{ plates: Plate[] }>(
+          plateKeys.range(rangeFrom, rangeTo),
+          (old) => ({ plates: [...(old?.plates ?? []), plateSnapshot] })
+        )
       } finally {
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
         })
         void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       }
-    }, 5000)
-    pendingDeletesRef.current.set(plateId, { timeoutId, snapshot })
+    })
     toast(t("plate.deleted"), {
       action: {
         label: t("common.undo"),
         onClick: () => {
-          const pending = pendingDeletesRef.current.get(plateId)
-          if (!pending) return
-          clearTimeout(pending.timeoutId)
-          pendingDeletesRef.current.delete(plateId)
+          const restored = cancelPendingPlateDelete(plateId)
+          if (!restored) return
           queryClient.setQueryData<{ plates: Plate[] }>(
             plateKeys.range(rangeFrom, rangeTo),
-            (old) => ({ plates: [...(old?.plates ?? []), pending.snapshot] })
+            (old) => ({ plates: [...(old?.plates ?? []), restored] })
           )
         },
       },
@@ -328,6 +320,10 @@ export function MobilePlannerGrid({
     const target = addTarget
     const targetDay = days[target.dayIdx]
     if (!targetDay) return { failedFoodIds: [] }
+
+    // Commit any plates the user just deleted (within their undo window) so
+    // the upcoming refetch doesn't resurrect them as artifacts.
+    await flushPendingPlateDeletes()
 
     let plateId: number
     try {

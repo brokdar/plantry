@@ -30,6 +30,11 @@ import {
 import { plateKeys } from "./keys"
 import { nutritionKeys } from "./nutrition"
 import {
+  __resetPendingPlateDeletesForTests,
+  hasPendingPlateDelete,
+  registerPendingPlateDelete,
+} from "./pending-plate-deletes"
+import {
   useAddPlateComponent,
   useCreatePlate,
   useDeletePlate,
@@ -325,5 +330,109 @@ describe("plate mutations invalidate nutrition cache", () => {
     })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expectNutritionInvalidated(qc)
+  })
+})
+
+// Regression: a plate "deleted" within the 5 s undo window must not reappear
+// when the user immediately fires another plate mutation. The mutation hooks'
+// onMutate flushes pending deletes — committing them server-side before the
+// new mutation's onSettled refetch runs, so the server no longer returns the
+// soft-deleted plate.
+describe("plate mutations flush pending deletes via onMutate", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    __resetPendingPlateDeletesForTests()
+  })
+
+  it("useCreatePlate fires queued deletePlate before createPlate", async () => {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+
+    vi.mocked(deletePlate).mockResolvedValue(undefined)
+    vi.mocked(createPlate).mockResolvedValue(makePlate({ id: 99 }))
+
+    registerPendingPlateDelete(7, makePlate({ id: 7 }), () => deletePlate(7))
+    expect(hasPendingPlateDelete(7)).toBe(true)
+
+    const { result } = renderHook(
+      () => useCreatePlate("2026-05-04", "2026-05-10"),
+      { wrapper: createHookWrapper(qc) }
+    )
+
+    await act(async () => {
+      await result.current.mutateAsync({ date: "2026-05-04", slot_id: 1 })
+    })
+
+    expect(deletePlate).toHaveBeenCalledWith(7)
+    expect(createPlate).toHaveBeenCalledTimes(1)
+    const deleteOrder = vi.mocked(deletePlate).mock.invocationCallOrder[0]
+    const createOrder = vi.mocked(createPlate).mock.invocationCallOrder[0]
+    expect(deleteOrder).toBeLessThan(createOrder)
+    expect(hasPendingPlateDelete(7)).toBe(false)
+  })
+
+  it("useDeletePlate flushes other pending deletes before its own delete", async () => {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+
+    vi.mocked(deletePlate).mockResolvedValue(undefined)
+
+    registerPendingPlateDelete(7, makePlate({ id: 7 }), () => deletePlate(7))
+
+    const { result } = renderHook(() => useDeletePlate(), {
+      wrapper: createHookWrapper(qc),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync(99)
+    })
+
+    const calls = vi.mocked(deletePlate).mock.calls.map((c) => c[0])
+    expect(calls).toEqual([7, 99])
+    expect(hasPendingPlateDelete(7)).toBe(false)
+  })
+
+  it("useAddPlateComponent fires queued delete before adding", async () => {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+
+    vi.mocked(deletePlate).mockResolvedValue(undefined)
+    vi.mocked(addPlateComponent).mockResolvedValue({
+      id: 1,
+      plate_id: 1,
+      food_id: 1,
+      portions: 1,
+      sort_order: 0,
+    })
+
+    registerPendingPlateDelete(7, makePlate({ id: 7 }), () => deletePlate(7))
+
+    const { result } = renderHook(() => useAddPlateComponent(), {
+      wrapper: createHookWrapper(qc),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        plateId: 1,
+        input: { food_id: 1, portions: 1 },
+      })
+    })
+
+    const deleteOrder = vi.mocked(deletePlate).mock.invocationCallOrder[0]
+    const addOrder = vi.mocked(addPlateComponent).mock.invocationCallOrder[0]
+    expect(deleteOrder).toBeLessThan(addOrder)
+    expect(hasPendingPlateDelete(7)).toBe(false)
   })
 })
