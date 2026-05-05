@@ -78,6 +78,7 @@ export function useApplyTemplate() {
     }) => applyTemplate(templateId, input),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }

@@ -153,6 +153,7 @@ function handleEvent(
       } else {
         qc.invalidateQueries({ queryKey: plateKeys.all })
       }
+      qc.invalidateQueries({ queryKey: ["nutrition"] })
       return
     }
     case "done":

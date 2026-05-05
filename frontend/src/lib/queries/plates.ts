@@ -98,6 +98,7 @@ export function useCreatePlate(rangeFrom: string, rangeTo: string) {
       void qc.invalidateQueries({
         queryKey: plateKeys.range(rangeFrom, rangeTo),
       })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -115,6 +116,7 @@ export function useUpdatePlate(rangeFrom?: string, rangeTo?: string) {
       } else {
         void qc.invalidateQueries({ queryKey: plateKeys.all })
       }
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -125,6 +127,7 @@ export function useDeletePlate() {
     mutationFn: (id: number) => deletePlate(id),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -141,6 +144,7 @@ export function useAddPlateComponent() {
     }) => addPlateComponent(plateId, input),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -159,6 +163,7 @@ export function useSwapPlateComponent() {
     }) => updatePlateComponent(plateId, pcId, input),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -177,6 +182,7 @@ export function useUpdatePlateComponentPortions() {
     }) => updatePlateComponent(plateId, pcId, { portions }),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -193,6 +199,7 @@ export function useSetPlateSkipped() {
     }) => setPlateSkipped(plateId, input),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -204,6 +211,7 @@ export function useRemovePlateComponent() {
       deletePlateComponent(plateId, pcId),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }

@@ -1,28 +1,8 @@
-import {
-  useDraggable,
-  useDroppable,
-  type DragStartEvent,
-  type DraggableAttributes,
-  type DraggableSyntheticListeners,
-} from "@dnd-kit/core"
-import type { CSSProperties } from "react"
+import { useDraggable, useDroppable, type DragStartEvent } from "@dnd-kit/core"
+import type { CSSProperties, ReactNode } from "react"
 
 import type { Plate } from "@/lib/api/plates"
 import { cn } from "@/lib/utils"
-
-/**
- * Drag handle exposed to the cell content. When present, the inner element
- * that should initiate drag (the stretched-link button) attaches the ref +
- * listeners + attributes. This keeps the outer wrapper free of role="button"
- * / aria-roledescription / tabIndex — those a11y annotations live on the
- * actual interactive element instead, so the cell's accessibility tree stays
- * flat (one button per cell, not nested).
- */
-export interface DragHandle {
-  setActivatorNodeRef: (element: HTMLElement | null) => void
-  listeners: DraggableSyntheticListeners
-  attributes: DraggableAttributes
-}
 
 interface DndCellWrapperProps {
   day: number
@@ -32,16 +12,20 @@ interface DndCellWrapperProps {
    *  data-cell-pos attribute below. */
   rowIndex: number
   plate: Plate | undefined
-  /**
-   * Render-prop. Receives a DragHandle when the cell is draggable
-   * (planned + not skipped); otherwise null. Children attach the handle to
-   * the element that should initiate drag.
-   */
-  children: (handle: DragHandle | null) => React.ReactNode
+  children: ReactNode
 }
 
 // Each planner grid cell is BOTH a droppable target and (if it carries a
 // plate) a draggable source. Empty + skipped cells are droppable only.
+//
+// The wrapper itself is the activator: dnd-kit listeners spread onto this
+// div so a pointerdown anywhere on the cell starts a drag once the
+// PointerSensor's distance threshold is met (configured in PlannerGrid).
+// We deliberately omit `attributes` — those add role="button"/tabIndex=0/
+// aria-roledescription, which would nest a button inside the stretched-link
+// "open sheet" button living below. Dropping `attributes` also drops
+// KeyboardSensor activation; arrow-nav + Enter/S/Del cover the keyboard
+// story for the grid.
 export function DndCellWrapper({
   day,
   date,
@@ -66,12 +50,10 @@ export function DndCellWrapper({
     },
   })
 
-  const draggable = plate && !plate.skipped
+  const draggable = !!plate && !plate.skipped
   const {
     setNodeRef: setDragRef,
-    setActivatorNodeRef,
     listeners,
-    attributes,
     transform,
     isDragging,
   } = useDraggable({
@@ -91,16 +73,13 @@ export function DndCellWrapper({
   // and reject in onDragEnd; render a destructive outline for hover feedback.
   const isRejectedDrop = isOver && !!active && plate?.skipped === true
 
-  const handle: DragHandle | null = draggable
-    ? { setActivatorNodeRef, listeners, attributes }
-    : null
-
   return (
     <div
       ref={(el) => {
         setDropRef(el)
         if (draggable) setDragRef(el)
       }}
+      {...(draggable ? listeners : {})}
       data-testid={`cell-${day}-${slotId}`}
       data-slot-drop-zone={`${day}:${slotId}`}
       data-slot-drag-handle={draggable ? plate.id : undefined}
@@ -116,7 +95,7 @@ export function DndCellWrapper({
       )}
       style={dragStyle}
     >
-      {children(handle)}
+      {children}
     </div>
   )
 }

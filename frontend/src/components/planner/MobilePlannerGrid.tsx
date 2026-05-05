@@ -199,6 +199,7 @@ export function MobilePlannerGrid({
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       }
     }, 5000)
     toast(t("planner.day_cleared"), {
@@ -278,6 +279,7 @@ export function MobilePlannerGrid({
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       }
     }, 5000)
     pendingDeletesRef.current.set(plateId, { timeoutId, snapshot })
@@ -358,6 +360,7 @@ export function MobilePlannerGrid({
     void queryClient.invalidateQueries({
       queryKey: plateKeys.range(rangeFrom, rangeTo),
     })
+    void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
 
     const ok = items.length - failedFoodIds.length
     if (failedFoodIds.length === 0) {

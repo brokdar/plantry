@@ -7,17 +7,39 @@ import type { Plate } from "@/lib/api/plates"
 
 vi.mock("@/lib/api/plates", () => ({
   addPlateComponent: vi.fn(),
+  createPlate: vi.fn(),
   deletePlate: vi.fn(),
   deletePlateComponent: vi.fn(),
   listPlates: vi.fn(),
+  setPlateSkipped: vi.fn(),
   updatePlate: vi.fn(),
   updatePlateComponent: vi.fn(),
 }))
 
-import { listPlates, updatePlate } from "@/lib/api/plates"
+import {
+  addPlateComponent,
+  createPlate,
+  deletePlate,
+  deletePlateComponent,
+  listPlates,
+  setPlateSkipped,
+  updatePlate,
+  updatePlateComponent,
+} from "@/lib/api/plates"
 
 import { plateKeys } from "./keys"
-import { usePlatesRange, useUpdatePlate } from "./plates"
+import { nutritionKeys } from "./nutrition"
+import {
+  useAddPlateComponent,
+  useCreatePlate,
+  useDeletePlate,
+  usePlatesRange,
+  useRemovePlateComponent,
+  useSetPlateSkipped,
+  useSwapPlateComponent,
+  useUpdatePlate,
+  useUpdatePlateComponentPortions,
+} from "./plates"
 
 function makePlate(overrides?: Partial<Plate>): Plate {
   return {
@@ -134,5 +156,174 @@ describe("useUpdatePlate", () => {
       plateKeys.range("2026-04-21", "2026-04-27")
     )
     expect(rangeQuery?.isInvalidated).toBe(true)
+  })
+})
+
+// Day-header kcal in the planner reads from the nutrition range query. If a
+// plate mutation refetches plates but leaves nutrition stale, the user sees
+// outdated calorie totals (regression: lunch added → day kcal still says
+// breakfast-only). Each plate-mutation hook must invalidate nutrition.
+describe("plate mutations invalidate nutrition cache", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function seededClient() {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    qc.setQueryData(nutritionKeys.range("2026-05-04", "2026-05-10"), {
+      days: [],
+    })
+    return qc
+  }
+
+  function expectNutritionInvalidated(qc: QueryClient) {
+    const state = qc.getQueryState(
+      nutritionKeys.range("2026-05-04", "2026-05-10")
+    )
+    expect(state?.isInvalidated).toBe(true)
+  }
+
+  it("useCreatePlate", async () => {
+    const qc = seededClient()
+    vi.mocked(createPlate).mockResolvedValueOnce(makePlate())
+
+    const { result } = renderHook(
+      () => useCreatePlate("2026-05-04", "2026-05-10"),
+      { wrapper: createHookWrapper(qc) }
+    )
+    await act(async () => {
+      result.current.mutate({ date: "2026-05-04", slot_id: 1 })
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expectNutritionInvalidated(qc)
+  })
+
+  it("useUpdatePlate", async () => {
+    const qc = seededClient()
+    vi.mocked(updatePlate).mockResolvedValueOnce(makePlate())
+
+    const { result } = renderHook(
+      () => useUpdatePlate("2026-05-04", "2026-05-10"),
+      { wrapper: createHookWrapper(qc) }
+    )
+    await act(async () => {
+      result.current.mutate({ id: 1, input: { slot_id: 2 } })
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expectNutritionInvalidated(qc)
+  })
+
+  it("useDeletePlate", async () => {
+    const qc = seededClient()
+    vi.mocked(deletePlate).mockResolvedValueOnce(undefined)
+
+    const { result } = renderHook(() => useDeletePlate(), {
+      wrapper: createHookWrapper(qc),
+    })
+    await act(async () => {
+      result.current.mutate(1)
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expectNutritionInvalidated(qc)
+  })
+
+  it("useAddPlateComponent", async () => {
+    const qc = seededClient()
+    vi.mocked(addPlateComponent).mockResolvedValueOnce({
+      id: 1,
+      plate_id: 1,
+      food_id: 1,
+      portions: 1,
+      sort_order: 0,
+    })
+
+    const { result } = renderHook(() => useAddPlateComponent(), {
+      wrapper: createHookWrapper(qc),
+    })
+    await act(async () => {
+      result.current.mutate({
+        plateId: 1,
+        input: { food_id: 1, portions: 1 },
+      })
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expectNutritionInvalidated(qc)
+  })
+
+  it("useSwapPlateComponent", async () => {
+    const qc = seededClient()
+    vi.mocked(updatePlateComponent).mockResolvedValueOnce({
+      id: 1,
+      plate_id: 1,
+      food_id: 2,
+      portions: 1,
+      sort_order: 0,
+    })
+
+    const { result } = renderHook(() => useSwapPlateComponent(), {
+      wrapper: createHookWrapper(qc),
+    })
+    await act(async () => {
+      result.current.mutate({
+        plateId: 1,
+        pcId: 1,
+        input: { food_id: 2 },
+      })
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expectNutritionInvalidated(qc)
+  })
+
+  it("useUpdatePlateComponentPortions", async () => {
+    const qc = seededClient()
+    vi.mocked(updatePlateComponent).mockResolvedValueOnce({
+      id: 1,
+      plate_id: 1,
+      food_id: 1,
+      portions: 2,
+      sort_order: 0,
+    })
+
+    const { result } = renderHook(() => useUpdatePlateComponentPortions(), {
+      wrapper: createHookWrapper(qc),
+    })
+    await act(async () => {
+      result.current.mutate({ plateId: 1, pcId: 1, portions: 2 })
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expectNutritionInvalidated(qc)
+  })
+
+  it("useSetPlateSkipped", async () => {
+    const qc = seededClient()
+    vi.mocked(setPlateSkipped).mockResolvedValueOnce(
+      makePlate({ skipped: true })
+    )
+
+    const { result } = renderHook(() => useSetPlateSkipped(), {
+      wrapper: createHookWrapper(qc),
+    })
+    await act(async () => {
+      result.current.mutate({ plateId: 1, input: { skipped: true } })
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expectNutritionInvalidated(qc)
+  })
+
+  it("useRemovePlateComponent", async () => {
+    const qc = seededClient()
+    vi.mocked(deletePlateComponent).mockResolvedValueOnce(undefined)
+
+    const { result } = renderHook(() => useRemovePlateComponent(), {
+      wrapper: createHookWrapper(qc),
+    })
+    await act(async () => {
+      result.current.mutate({ plateId: 1, pcId: 1 })
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expectNutritionInvalidated(qc)
   })
 })

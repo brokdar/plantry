@@ -49,6 +49,7 @@ export async function toggleSkip({
     void queryClient.invalidateQueries({
       queryKey: plateKeys.range(rangeFrom, rangeTo),
     })
+    void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
   }
 
   const wasSkipped = !!existing?.skipped

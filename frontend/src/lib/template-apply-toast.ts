@@ -80,6 +80,7 @@ async function restoreOverwrittenPlates(
   await queryClient.invalidateQueries({
     queryKey: plateKeys.range(rangeFrom, rangeTo),
   })
+  void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
 }
 
 /** Surfaces toasts for an apply result. When plates were overwritten, the

@@ -79,6 +79,7 @@ function RowApplyTemplateBody({
       void queryClient.invalidateQueries({
         queryKey: plateKeys.range(rangeFrom, rangeTo),
       })
+      void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       if (okCount > 0) {
         toast.success(t("planner.row_actions.applied", { count: okCount }))
       }

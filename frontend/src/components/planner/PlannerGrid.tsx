@@ -345,6 +345,7 @@ export function PlannerGrid({
       queryKey: plateKeys.range(rangeFrom, rangeTo),
     })
     void queryClient.invalidateQueries({ queryKey: shoppingKeys.all })
+    void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
 
     const ok = items.length - failedFoodIds.length
     if (failedFoodIds.length === 0) {
@@ -451,6 +452,7 @@ export function PlannerGrid({
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       }
     }, 5000)
 
@@ -496,6 +498,7 @@ export function PlannerGrid({
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       }
     }, 5000)
 
@@ -566,6 +569,7 @@ export function PlannerGrid({
       void queryClient.invalidateQueries({
         queryKey: plateKeys.range(rangeFrom, rangeTo),
       })
+      void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       toast.success(t("planner.row_actions.copied", { count: targets.length }))
     } catch (err) {
       toastError(err, t)
@@ -721,6 +725,7 @@ export function PlannerGrid({
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
         markCopyHintSeen()
       }
     } catch (err) {
@@ -814,73 +819,66 @@ export function PlannerGrid({
                           rowIndex={rowIndex}
                           plate={plate}
                         >
-                          {(dragHandle) => (
-                            <SlotCell
-                              day={dayIdx}
-                              slotId={slot.id}
-                              plate={plate}
-                              componentsById={componentsById}
-                              kcalTarget={kcalPerSlotTarget}
-                              aiFilled={
-                                plate ? aiFilledIds.has(plate.id) : false
-                              }
-                              dragHandle={dragHandle}
-                              onAdd={() => openPicker(dayIdx, slot.id)}
-                              onOpenSheet={
-                                plate
-                                  ? () => openSheetForPlate(dayIdx, slot, plate)
-                                  : undefined
-                              }
-                              onDeletePlate={() =>
-                                plate && handleDeletePlate(plate.id, dayIdx)
-                              }
-                              onSaveAsTemplate={
-                                plate ? () => openSaveSlot(plate.id) : undefined
-                              }
-                              onToggleFavorite={() => {
-                                const hero = plate?.components
-                                  .slice()
-                                  .sort(
-                                    (a, b) => a.sort_order - b.sort_order
-                                  )[0]
-                                const heroComp = hero
-                                  ? componentsById.get(hero.food_id)
-                                  : undefined
-                                void handleToggleFavorite(
-                                  heroComp?.id,
-                                  heroComp?.favorite ?? false
-                                )
-                                if (plate) clearAiFillOnPlate(plate.id)
-                              }}
-                              onToggleSkip={(note) => {
-                                void handleToggleSkip(
-                                  dayIdx,
-                                  slot.id,
-                                  plate?.id ?? null,
-                                  note
-                                )
-                                if (plate) clearAiFillOnPlate(plate.id)
-                              }}
-                              onRateLoved={() => {
-                                if (!plate) return
-                                void handleRate(
-                                  plate.id,
-                                  "loved",
-                                  plate.feedback?.status
-                                )
-                                clearAiFillOnPlate(plate.id)
-                              }}
-                              onRateDisliked={() => {
-                                if (!plate) return
-                                void handleRate(
-                                  plate.id,
-                                  "disliked",
-                                  plate.feedback?.status
-                                )
-                                clearAiFillOnPlate(plate.id)
-                              }}
-                            />
-                          )}
+                          <SlotCell
+                            day={dayIdx}
+                            slotId={slot.id}
+                            plate={plate}
+                            componentsById={componentsById}
+                            kcalTarget={kcalPerSlotTarget}
+                            aiFilled={plate ? aiFilledIds.has(plate.id) : false}
+                            onAdd={() => openPicker(dayIdx, slot.id)}
+                            onOpenSheet={
+                              plate
+                                ? () => openSheetForPlate(dayIdx, slot, plate)
+                                : undefined
+                            }
+                            onDeletePlate={() =>
+                              plate && handleDeletePlate(plate.id, dayIdx)
+                            }
+                            onSaveAsTemplate={
+                              plate ? () => openSaveSlot(plate.id) : undefined
+                            }
+                            onToggleFavorite={() => {
+                              const hero = plate?.components
+                                .slice()
+                                .sort((a, b) => a.sort_order - b.sort_order)[0]
+                              const heroComp = hero
+                                ? componentsById.get(hero.food_id)
+                                : undefined
+                              void handleToggleFavorite(
+                                heroComp?.id,
+                                heroComp?.favorite ?? false
+                              )
+                              if (plate) clearAiFillOnPlate(plate.id)
+                            }}
+                            onToggleSkip={(note) => {
+                              void handleToggleSkip(
+                                dayIdx,
+                                slot.id,
+                                plate?.id ?? null,
+                                note
+                              )
+                              if (plate) clearAiFillOnPlate(plate.id)
+                            }}
+                            onRateLoved={() => {
+                              if (!plate) return
+                              void handleRate(
+                                plate.id,
+                                "loved",
+                                plate.feedback?.status
+                              )
+                              clearAiFillOnPlate(plate.id)
+                            }}
+                            onRateDisliked={() => {
+                              if (!plate) return
+                              void handleRate(
+                                plate.id,
+                                "disliked",
+                                plate.feedback?.status
+                              )
+                              clearAiFillOnPlate(plate.id)
+                            }}
+                          />
                         </DndCellWrapper>
                       </div>
                     )

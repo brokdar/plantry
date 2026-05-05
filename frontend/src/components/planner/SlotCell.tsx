@@ -35,7 +35,6 @@ import type { MacrosResponse } from "@/lib/api/plates"
 import { cn } from "@/lib/utils"
 
 import { AiFilledBadge } from "./AiFilledBadge"
-import type { DragHandle } from "./DndCellWrapper"
 import { SlotActions } from "./SlotActions"
 import { SlotHero, type SlotHeroComponent } from "./SlotHero"
 import { SlotMacroDots } from "./SlotMacroDots"
@@ -51,10 +50,6 @@ interface SlotCellProps {
    *  the planned cell; omit to hide the indicator. */
   kcalTarget?: number | null
   aiFilled?: boolean
-  /** dnd-kit drag handle for planned cells. The stretched-link button uses
-   *  it as the drag activator so the cell remains a single interactive
-   *  element for both click-to-open and drag-to-reschedule. */
-  dragHandle?: DragHandle | null
   onAdd: () => void
   onOpenSheet?: () => void
   onDeletePlate: () => void
@@ -363,7 +358,6 @@ function PlannedSlot({
   macros,
   kcalTarget,
   aiFilled,
-  dragHandle,
   onAdd,
   onOpenSheet,
   onDeletePlate,
@@ -418,7 +412,7 @@ function PlannedSlot({
       data-slot-state="planned"
       className={cn(
         CELL_HEIGHT,
-        "group relative flex flex-col overflow-hidden rounded-[14px] border border-outline-variant/50 bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_2px_8px_rgba(25,28,28,0.06),0_4px_16px_-4px_rgba(74,101,77,0.14)]",
+        "group relative flex cursor-grab flex-col overflow-hidden rounded-[14px] border border-outline-variant/50 bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_2px_8px_rgba(25,28,28,0.06),0_4px_16px_-4px_rgba(74,101,77,0.14)] active:cursor-grabbing",
         aiFilled &&
           "border-ai-accent/40 shadow-[0_0_0_1px_rgba(194,151,74,0.3),0_4px_12px_-4px_rgba(25,28,28,0.06)]"
       )}
@@ -427,10 +421,9 @@ function PlannedSlot({
         (positioned z-auto, paint group 6) so clicks on the dish photo also
         open the sheet — z-0 would lose the tree-order tiebreak. The action
         row inside the body uses z-10, sitting above this button so its
-        controls remain hit-testable. The drag activator lives on a dedicated
-        grip handle (below) so Enter/Space on this button opens the sheet
-        rather than starting a drag — keyboard users and click users now
-        share a clean activation path. */}
+        controls remain hit-testable. Drag activation happens on the parent
+        DndCellWrapper via dnd-kit listeners + a 6px PointerSensor distance
+        constraint; short clicks land here, longer drags activate dnd-kit. */}
       {onOpenSheet && (
         <button
           type="button"
@@ -442,7 +435,7 @@ function PlannedSlot({
           className="absolute inset-0 z-[1] cursor-pointer rounded-[14px] focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none focus-visible:ring-inset"
         />
       )}
-      {dragHandle && <DragGripHandle handle={dragHandle} />}
+      <DragGripIndicator />
       {aiFilled && <AiFilledBadge />}
       <SlotActions
         favorite={favorite}
@@ -525,40 +518,25 @@ function PlannedSlot({
 }
 
 /**
- * Dedicated drag activator. Sits on the left edge of a planned cell so the
- * stretched-link button stays a single-purpose click-to-open target. A subtle
- * hint ("⌘ to copy") shows on hover until the user has done their first
- * ⌘+drag — at which point it disappears for good (persisted via localStorage
- * in the planner-ui store).
+ * Visual-only affordance for the drag-to-reschedule gesture. The whole cell
+ * is the actual drag activator (listeners live on DndCellWrapper); this grip
+ * just hints at it on hover, alongside a "⌘ to copy" tooltip until the user
+ * has done their first ⌘+drag (persisted via localStorage in planner-ui).
+ * pointer-events-none keeps it from intercepting the stretched-link click.
  */
-function DragGripHandle({ handle }: { handle: DragHandle }) {
+function DragGripIndicator() {
   const { t } = useTranslation()
   const copyHintSeen = usePlannerUI((s) => s.copyHintSeen)
-  // Optional chains keep ESLint's react-hooks/refs rule from flagging the
-  // dnd-kit setter as a render-time ref read. handle is non-null at the call
-  // site (DragGripHandle only mounts when one is supplied).
-  // tabIndex={-1} comes after the dnd-kit attributes spread so it overrides
-  // the tabIndex={0} dnd-kit injects. Halves the planner's tab-stop count
-  // (every planted cell otherwise contributes the stretched-link button AND
-  // the grip). Mouse drag still works; keyboard drag is dropped — keyboard
-  // users have arrow nav + Enter / S / Del, which covers the grid-internal
-  // moves the keyboard sensor previously offered.
   return (
     <div
-      ref={handle?.setActivatorNodeRef}
-      {...(handle?.listeners ?? {})}
-      {...(handle?.attributes ?? {})}
-      tabIndex={-1}
-      role="button"
-      aria-label={t("planner.dnd.drag_handle_label")}
-      data-testid="slot-drag-handle"
-      className="group/grip absolute top-2 bottom-2 left-0 z-[2] flex w-3 cursor-grab touch-none items-center justify-center rounded-l-[14px] text-on-surface-variant/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:bg-surface-container/60 hover:text-on-surface-variant focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none active:cursor-grabbing [@media(hover:none)]:opacity-100"
+      aria-hidden
+      data-testid="slot-drag-grip"
+      className="pointer-events-none absolute top-2 bottom-2 left-0 z-[2] flex w-3 items-center justify-center text-on-surface-variant/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
     >
-      <GripVertical className="h-3.5 w-3.5" aria-hidden />
+      <GripVertical className="h-3.5 w-3.5" />
       {!copyHintSeen && (
         <span
-          aria-hidden
-          className="pointer-events-none absolute top-full left-1/2 mt-1 -translate-x-1/2 rounded-md bg-on-surface px-1.5 py-0.5 font-heading text-[9px] font-bold tracking-[0.12em] whitespace-nowrap text-on-primary uppercase opacity-0 shadow-sm transition-opacity duration-150 group-hover/grip:opacity-100"
+          className="absolute top-full left-1/2 mt-1 -translate-x-1/2 rounded-md bg-on-surface px-1.5 py-0.5 font-heading text-[9px] font-bold tracking-[0.12em] whitespace-nowrap text-on-primary uppercase shadow-sm"
           data-testid="slot-copy-hint"
         >
           {t("planner.dnd.copy_hint")}

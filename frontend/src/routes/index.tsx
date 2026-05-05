@@ -199,6 +199,7 @@ function PlanPage() {
     }
     endAiFillSession()
     await queryClient.invalidateQueries({ queryKey: plateKeys.range(from, to) })
+    void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
   }
 
   function handleClearWindow() {
@@ -211,11 +212,13 @@ function PlanPage() {
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(from, to),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       } catch (err) {
         toastError(err, t)
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(from, to),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       }
     }, 5000)
     toast(t("planner.week_cleared"), {
@@ -277,6 +280,7 @@ function PlanPage() {
       void queryClient.invalidateQueries({
         queryKey: plateKeys.range(from, to),
       })
+      void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       toast.success(
         t("planner.empty_week.copied", { count: sourcePlates.length })
       )

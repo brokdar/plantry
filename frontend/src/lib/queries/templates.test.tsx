@@ -132,6 +132,8 @@ describe("useApplyTemplate", () => {
     })
 
     const calls = spy.mock.calls.map((c) => c[0]?.queryKey)
-    expect(calls).toEqual(expect.arrayContaining([plateKeys.all]))
+    expect(calls).toEqual(
+      expect.arrayContaining([plateKeys.all, ["nutrition"]])
+    )
   })
 })
