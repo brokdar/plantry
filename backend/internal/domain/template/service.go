@@ -271,7 +271,7 @@ func (s *Service) Apply(ctx context.Context, templateID int64, payload ApplyPayl
 }
 
 func (s *Service) applySlot(ctx context.Context, t *Template, payload ApplyPayload) (*ApplyResult, error) {
-	if payload.Date == nil {
+	if payload.Date == nil || payload.Date.IsZero() {
 		return nil, fmt.Errorf("%w: date required", domain.ErrInvalidInput)
 	}
 	if payload.SlotID == nil || *payload.SlotID <= 0 {
@@ -328,7 +328,7 @@ func (s *Service) applySlot(ctx context.Context, t *Template, payload ApplyPaylo
 }
 
 func (s *Service) applyDay(ctx context.Context, t *Template, payload ApplyPayload) (*ApplyResult, error) {
-	if payload.Date == nil {
+	if payload.Date == nil || payload.Date.IsZero() {
 		return nil, fmt.Errorf("%w: date required", domain.ErrInvalidInput)
 	}
 	conflict := payload.Conflict
@@ -342,7 +342,7 @@ func (s *Service) applyDay(ctx context.Context, t *Template, payload ApplyPayloa
 }
 
 func (s *Service) applyWeek(ctx context.Context, t *Template, payload ApplyPayload) (*ApplyResult, error) {
-	if payload.StartDate == nil {
+	if payload.StartDate == nil || payload.StartDate.IsZero() {
 		return nil, fmt.Errorf("%w: start_date required", domain.ErrInvalidInput)
 	}
 	conflict := payload.Conflict
@@ -498,7 +498,24 @@ func (s *Service) SaveAsTemplate(ctx context.Context, name string, plates []plat
 
 	scope := ScopeWeek
 	if maxOffset == 0 {
-		scope = ScopeDay
+		uniqueSlots := make(map[int64]struct{})
+		for _, e := range entries {
+			uniqueSlots[*e.SlotID] = struct{}{}
+		}
+		if len(uniqueSlots) == 1 {
+			scope = ScopeSlot
+			for i := range entries {
+				entries[i].SlotID = nil
+			}
+		} else {
+			scope = ScopeDay
+		}
+	}
+
+	for i, e := range entries {
+		if err := validateEntryForScope(scope, e, i); err != nil {
+			return nil, err
+		}
 	}
 
 	t := &Template{

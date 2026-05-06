@@ -521,3 +521,202 @@ func TestSaveAsTemplate_EmptyPlates(t *testing.T) {
 		t.Errorf("expected ErrInvalidInput, got %v", err)
 	}
 }
+
+func TestSaveAsTemplate_SingleSlotSingleDayIsScopeSlot(t *testing.T) {
+	anchor := mustDate("2026-04-25")
+	plates := []plate.Plate{
+		{
+			Date:       anchor,
+			SlotID:     3,
+			Components: []plate.PlateComponent{{FoodID: 1, Portions: 1}, {FoodID: 2, Portions: 2}},
+		},
+	}
+	var created *template.Template
+	repo := &mockRepo{
+		createFn: func(_ context.Context, t *template.Template) error {
+			t.ID = 42
+			created = t
+			return nil
+		},
+	}
+	svc := makeService(repo, &mockPlateRepo{})
+
+	tmpl, err := svc.SaveAsTemplate(context.Background(), "Slot Pattern", plates, anchor)
+	if err != nil {
+		t.Fatalf("SaveAsTemplate returned error: %v", err)
+	}
+	if tmpl.ID != 42 {
+		t.Errorf("tmpl.ID = %d; want 42", tmpl.ID)
+	}
+	if created.Scope != template.ScopeSlot {
+		t.Errorf("Scope = %q; want slot", created.Scope)
+	}
+	for i, e := range created.Entries {
+		if e.SlotID != nil {
+			t.Errorf("entries[%d].SlotID = %v; want nil (slot scope)", i, e.SlotID)
+		}
+	}
+}
+
+// ── IsZero date guards ───────────────────────────────────────────────────────
+
+func TestApplySlot_RejectsZeroDate(t *testing.T) {
+	tmpl := &template.Template{
+		ID:    1,
+		Scope: template.ScopeSlot,
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1},
+		},
+	}
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	svc := makeService(repo, &mockPlateRepo{})
+	zero := time.Time{}
+	slotID := int64(1)
+	_, err := svc.Apply(context.Background(), 1, template.ApplyPayload{Date: &zero, SlotID: &slotID})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Errorf("expected ErrInvalidInput for zero date, got %v", err)
+	}
+}
+
+func TestApplyDay_RejectsZeroDate(t *testing.T) {
+	tmpl := &template.Template{
+		ID:    2,
+		Scope: template.ScopeDay,
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1, SlotID: ptrInt64(1)},
+		},
+	}
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	svc := makeService(repo, &mockPlateRepo{})
+	zero := time.Time{}
+	_, err := svc.Apply(context.Background(), 2, template.ApplyPayload{Date: &zero})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Errorf("expected ErrInvalidInput for zero date, got %v", err)
+	}
+}
+
+func TestApplyWeek_RejectsZeroStartDate(t *testing.T) {
+	tmpl := &template.Template{
+		ID:    3,
+		Scope: template.ScopeWeek,
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1, DayOffset: 0, SlotID: ptrInt64(1)},
+		},
+	}
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	svc := makeService(repo, &mockPlateRepo{})
+	zero := time.Time{}
+	_, err := svc.Apply(context.Background(), 3, template.ApplyPayload{StartDate: &zero})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Errorf("expected ErrInvalidInput for zero start_date, got %v", err)
+	}
+}
+
+// ── Atomicity: mid-tx error returns (nil, err) ───────────────────────────────
+
+func TestApplySlot_ErrorReturnsNilPlates(t *testing.T) {
+	tmpl := &template.Template{
+		ID:    10,
+		Scope: template.ScopeSlot,
+		// Two entries at different offsets → two plates; fail on the second.
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1, DayOffset: 0},
+			{FoodID: 2, Portions: 1, DayOffset: 1},
+		},
+	}
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	calls := 0
+	pr := &mockPlateRepo{
+		createFn: func(_ context.Context, _ *plate.Plate) error {
+			calls++
+			if calls >= 2 {
+				return fmt.Errorf("db full")
+			}
+			return nil
+		},
+	}
+	svc := makeService(repo, pr)
+	d := mustDate("2026-04-25")
+	slotID := int64(1)
+	res, err := svc.Apply(context.Background(), 10, template.ApplyPayload{Date: &d, SlotID: &slotID})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if res != nil {
+		t.Errorf("expected nil result on error, got %+v", res)
+	}
+}
+
+func TestApplyDay_ErrorReturnsNilPlates(t *testing.T) {
+	tmpl := &template.Template{
+		ID:    11,
+		Scope: template.ScopeDay,
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1, SlotID: ptrInt64(1)},
+			{FoodID: 2, Portions: 1, SlotID: ptrInt64(2)},
+		},
+	}
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	calls := 0
+	pr := &mockPlateRepo{
+		createFn: func(_ context.Context, _ *plate.Plate) error {
+			calls++
+			if calls >= 2 {
+				return fmt.Errorf("db full")
+			}
+			return nil
+		},
+	}
+	svc := makeService(repo, pr)
+	d := mustDate("2026-04-25")
+	res, err := svc.Apply(context.Background(), 11, template.ApplyPayload{Date: &d})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if res != nil {
+		t.Errorf("expected nil result on error, got %+v", res)
+	}
+}
+
+func TestApplyWeek_ErrorReturnsNilPlates(t *testing.T) {
+	tmpl := &template.Template{
+		ID:    12,
+		Scope: template.ScopeWeek,
+		Entries: []template.TemplateEntry{
+			{FoodID: 1, Portions: 1, DayOffset: 0, SlotID: ptrInt64(1)},
+			{FoodID: 2, Portions: 1, DayOffset: 6, SlotID: ptrInt64(1)},
+		},
+	}
+	repo := &mockRepo{
+		getFn: func(_ context.Context, _ int64) (*template.Template, error) { return tmpl, nil },
+	}
+	calls := 0
+	pr := &mockPlateRepo{
+		createFn: func(_ context.Context, _ *plate.Plate) error {
+			calls++
+			if calls >= 2 {
+				return fmt.Errorf("db full")
+			}
+			return nil
+		},
+	}
+	svc := makeService(repo, pr)
+	start := mustDate("2026-04-25")
+	res, err := svc.Apply(context.Background(), 12, template.ApplyPayload{StartDate: &start})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if res != nil {
+		t.Errorf("expected nil result on error, got %+v", res)
+	}
+}
