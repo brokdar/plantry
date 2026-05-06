@@ -4,6 +4,7 @@ import {
   API,
   cleanupFood,
   cleanupSlot,
+  pickAndCommitFood,
   seedComposedFood,
   seedLeafFood,
   seedSlot,
@@ -42,14 +43,8 @@ test.describe("Plate feedback + AI memory loop", () => {
       await cell.getByRole("button", { name: /plan meal/i }).click()
       const sheet = page.getByRole("dialog")
       await expect(sheet).toBeVisible()
-      await sheet.getByRole("textbox").fill(`Curry ${tag}`)
-      const createPlateResp = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
-      )
-      await sheet
-        .getByRole("button", { name: new RegExp(`Curry ${tag}`) })
-        .click()
-      await createPlateResp
+      await sheet.locator("input").first().fill(`Curry ${tag}`)
+      await pickAndCommitFood(page, sheet, new RegExp(`Curry ${tag}`))
       await expect(sheet).not.toBeVisible()
       await expect(cell.getByText(`Curry ${tag}`)).toBeVisible()
 
@@ -109,14 +104,8 @@ test.describe("Plate feedback + AI memory loop", () => {
       await cell.getByRole("button", { name: /plan meal/i }).click()
       const sheet2 = page.getByRole("dialog")
       await expect(sheet2).toBeVisible()
-      await sheet2.getByRole("textbox").fill(`Bowl ${tag}`)
-      const createPlateResp = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
-      )
-      await sheet2
-        .getByRole("button", { name: new RegExp(`Bowl ${tag}`) })
-        .click()
-      await createPlateResp
+      await sheet2.locator("input").first().fill(`Bowl ${tag}`)
+      await pickAndCommitFood(page, sheet2, new RegExp(`Bowl ${tag}`))
 
       await cell.hover()
       const lovedBtn = cell.getByTestId("slot-action-love")

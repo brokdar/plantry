@@ -38,10 +38,18 @@ interface Template {
 
 async function seedTemplateWithComponents(
   name: string,
-  components: { food_id: number; portions: number; day_offset?: number }[]
+  scope: "slot" | "day" | "week",
+  components: {
+    food_id: number
+    portions: number
+    day_offset?: number
+    slot_id?: number
+  }[]
 ): Promise<Template> {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/templates", { data: { name, components } })
+  const res = await ctx.post("/api/templates", {
+    data: { name, scope, components },
+  })
   const body = await res.json()
   await ctx.dispose()
   return body as Template
@@ -82,39 +90,40 @@ test.describe("Templates — apply with start_date", () => {
     const createdPlateIds: number[] = []
 
     try {
-      // Seed template with 2 components, both at day_offset 0
-      const tpl = await seedTemplateWithComponents(`Tpl ${tag}`, [
-        { food_id: food1.id, portions: 1, day_offset: 0 },
-        { food_id: food2.id, portions: 1, day_offset: 0 },
+      // Seed a day-scope template — every entry needs slot_id and day_offset=0.
+      const tpl = await seedTemplateWithComponents(`Tpl ${tag}`, "day", [
+        { food_id: food1.id, portions: 1, day_offset: 0, slot_id: slot.id },
+        { food_id: food2.id, portions: 1, day_offset: 0, slot_id: slot.id },
       ])
       templateId = tpl.id
 
-      // Open planner and use picker sheet to access ApplyTemplateSection.
+      // Open the planner and apply the template through the day-header
+      // overflow menu — the redesigned planner exposes apply-template via
+      // TemplatePicker (a dedicated dialog) instead of inside the picker
+      // sheet. Pick the day-0 menu and choose "apply day template".
       await page.goto("/")
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
-      await expect(cell).toBeVisible()
-      await cell.getByRole("button", { name: /plan meal/i }).click()
+      await expect(page.getByTestId(`cell-0-${slot.id}`).first()).toBeVisible()
+      await page.getByTestId("day-header-0").hover()
+      await page.getByTestId("day-header-menu-0").click()
+      await page.getByTestId("day-header-apply-0").click()
 
-      const sheet = page.getByRole("dialog")
-      await expect(sheet).toBeVisible()
+      const tplDialog = page.getByRole("dialog")
+      await expect(tplDialog).toBeVisible()
 
-      // Click the template card to show the apply form.
-      const applyBtn = sheet.getByTestId(`apply-template-${templateId}`)
-      await expect(applyBtn).toBeVisible()
-      await applyBtn.click()
-
-      // Fill in the start date.
-      const dateInput = sheet.getByTestId("apply-start-date")
+      // Override the pre-filled date with the requested startDate.
+      const dateInput = tplDialog.getByTestId("template-picker-date")
       await expect(dateInput).toBeVisible()
       await dateInput.fill(startDate)
 
-      // Submit — slot is auto-selected to the first available slot.
+      // Pick the seeded template.
+      await tplDialog.getByTestId(`template-picker-item-${templateId}`).click()
+
       const applyResp = page.waitForResponse(
         (r) =>
           /\/api\/templates\/\d+\/apply$/.test(r.url()) &&
           r.request().method() === "POST"
       )
-      await sheet.getByTestId("apply-template-submit").click()
+      await tplDialog.getByTestId("template-picker-submit").click()
       const applied = await applyResp
       expect(applied.ok()).toBe(true)
 
@@ -167,33 +176,32 @@ test.describe("Templates — apply with start_date", () => {
     const createdPlateIds: number[] = []
 
     try {
-      const tpl = await seedTemplateWithComponents(`TplSlot ${tag}`, [
-        { food_id: food.id, portions: 1, day_offset: 0 },
+      const tpl = await seedTemplateWithComponents(`TplSlot ${tag}`, "day", [
+        { food_id: food.id, portions: 1, day_offset: 0, slot_id: slot.id },
       ])
       templateId = tpl.id
 
-      // Open planner and use picker sheet to access ApplyTemplateSection.
+      // Apply via the day-header overflow menu (TemplatePicker dialog).
       await page.goto("/")
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
-      await expect(cell).toBeVisible()
-      await cell.getByRole("button", { name: /plan meal/i }).click()
+      await expect(page.getByTestId(`cell-0-${slot.id}`).first()).toBeVisible()
+      await page.getByTestId("day-header-0").hover()
+      await page.getByTestId("day-header-menu-0").click()
+      await page.getByTestId("day-header-apply-0").click()
 
-      const sheet = page.getByRole("dialog")
-      await expect(sheet).toBeVisible()
+      const tplDialog = page.getByRole("dialog")
+      await expect(tplDialog).toBeVisible()
 
-      // Click the template card to show the form.
-      const applyBtn = sheet.getByTestId(`apply-template-${templateId}`)
-      await expect(applyBtn).toBeVisible()
-      await applyBtn.click()
-
-      // The form should appear with start date pre-filled to today.
-      const dateInput = sheet.getByTestId("apply-start-date")
+      // The picker pre-fills its date to the day the menu was opened on
+      // (today for day-0).
+      const dateInput = tplDialog.getByTestId("template-picker-date")
       await expect(dateInput).toBeVisible()
       const filledDate = await dateInput.inputValue()
       expect(filledDate).toBe(startDate)
 
-      // Submit button should be enabled when a slot is pre-selected.
-      const submitBtn = sheet.getByTestId("apply-template-submit")
+      // Pick the seeded template — the submit button enables once a
+      // template is selected.
+      await tplDialog.getByTestId(`template-picker-item-${templateId}`).click()
+      const submitBtn = tplDialog.getByTestId("template-picker-submit")
       await expect(submitBtn).toBeEnabled()
 
       const applyResp = page.waitForResponse(

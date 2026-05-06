@@ -12,6 +12,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  pickAndCommitFood,
   seedLeafFood,
   seedSlot,
   test,
@@ -136,14 +137,10 @@ test.describe("Leaf food directly on a plate", () => {
       await expect(sheet).toBeVisible()
 
       // Search for the leaf food by name.
-      await sheet.getByRole("textbox").fill(`Kiwi ${tag}`)
+      await sheet.locator("input").first().fill(`Kiwi ${tag}`)
 
-      // Food appears in the list; click it to create the plate.
-      const createResp = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
-      )
-      await sheet.getByRole("button", { name: `Kiwi ${tag}` }).click()
-      await createResp
+      // Food appears in the list; stage it then commit the tray to create the plate.
+      await pickAndCommitFood(page, sheet, new RegExp(`Kiwi ${tag}`))
 
       // Sheet closes and the cell now shows the food.
       await expect(sheet).not.toBeVisible()

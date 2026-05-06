@@ -3,6 +3,7 @@ import { expect, test } from "./helpers"
 import {
   cleanupFood,
   cleanupSlot,
+  pickAndCommitFood,
   seedComposedFood,
   seedLeafFood,
   seedSlot,
@@ -47,14 +48,10 @@ test.describe("Shopping List and Nutrition", () => {
       const sheet1 = page.getByRole("dialog")
       await expect(sheet1).toBeVisible()
       await sheet1.locator("input").first().fill(`Curry ${tag}`)
-      const addComponentResp = page.waitForResponse(
-        (r) =>
-          r.url().includes("/components") && r.request().method() === "POST"
-      )
-      await sheet1
-        .getByRole("button", { name: new RegExp(`Curry ${tag}`) })
-        .click()
-      await addComponentResp
+      await pickAndCommitFood(page, sheet1, new RegExp(`Curry ${tag}`), {
+        responseMatcher: (r) =>
+          r.url().includes("/components") && r.request().method() === "POST",
+      })
 
       // Open shopping list.
       await page.getByRole("button", { name: /shopping/i }).click()
@@ -132,14 +129,10 @@ test.describe("Shopping List and Nutrition", () => {
       const sheet2 = page.getByRole("dialog")
       await expect(sheet2).toBeVisible()
       await sheet2.locator("input").first().fill(`Bowl ${tag}`)
-      const addComponentResp2 = page.waitForResponse(
-        (r) =>
-          r.url().includes("/components") && r.request().method() === "POST"
-      )
-      await sheet2
-        .getByRole("button", { name: new RegExp(`Bowl ${tag}`) })
-        .click()
-      await addComponentResp2
+      await pickAndCommitFood(page, sheet2, new RegExp(`Bowl ${tag}`), {
+        responseMatcher: (r) =>
+          r.url().includes("/components") && r.request().method() === "POST",
+      })
 
       // Open nutrition panel.
       await page.getByTestId("planner-overflow").click()
@@ -150,8 +143,9 @@ test.describe("Shopping List and Nutrition", () => {
         panel.getByRole("heading", { name: /week nutrition/i })
       ).toBeVisible()
 
-      // Day bar for Monday (day 0) should show kcal.
-      await expect(panel.getByText("Mon")).toBeVisible()
+      // Today's seeded plate produces a day bar with kcal. Day labels are
+      // anchor-relative so we don't pin a specific weekday — assert that
+      // *some* day bar with kcal renders inside the panel.
       await expect(panel.getByText(/\d+ kcal/).first()).toBeVisible()
 
       // Week total row.

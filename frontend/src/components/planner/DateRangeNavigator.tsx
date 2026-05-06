@@ -60,7 +60,10 @@ export function DateRangeNavigator({
         <ChevronLeft className="size-4" />
       </Button>
 
-      <div className="min-w-32 px-2 text-center font-heading text-sm font-bold tracking-tight text-on-surface tabular-nums">
+      <div
+        data-testid="planner-range-label"
+        className="min-w-32 px-2 text-center font-heading text-sm font-bold tracking-tight text-on-surface tabular-nums"
+      >
         {rangeLabel}
       </div>
 

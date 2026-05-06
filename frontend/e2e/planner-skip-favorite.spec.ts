@@ -5,6 +5,7 @@ import {
   apiRequest,
   cleanupFood,
   cleanupSlot,
+  pickAndCommitFood,
   seedComposedFood,
   seedLeafFood,
   seedSlot,
@@ -41,13 +42,7 @@ test.describe("Slot skip + favorite (redesign)", () => {
       const sheet1 = page.getByRole("dialog")
       await expect(sheet1).toBeVisible()
       await sheet1.locator("input").first().fill(`Ramen ${tag}`)
-      const createResp = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
-      )
-      await sheet1
-        .getByRole("button", { name: new RegExp(`Ramen ${tag}`) })
-        .click()
-      await createResp
+      await pickAndCommitFood(page, sheet1, new RegExp(`Ramen ${tag}`))
       await expect(cell.getByText(`Ramen ${tag}`)).toBeVisible()
 
       // Hover reveals the favorite button; clicking flips it to pressed state.
@@ -103,13 +98,7 @@ test.describe("Slot skip + favorite (redesign)", () => {
       const sheet2 = page.getByRole("dialog")
       await expect(sheet2).toBeVisible()
       await sheet2.locator("input").first().fill(`Pho ${tag}`)
-      const createResp = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
-      )
-      await sheet2
-        .getByRole("button", { name: new RegExp(`Pho ${tag}`) })
-        .click()
-      await createResp
+      await pickAndCommitFood(page, sheet2, new RegExp(`Pho ${tag}`))
       await expect(cell.getByText(`Pho ${tag}`)).toBeVisible()
 
       // Open the per-plate dropdown menu and click "Mark as skip".

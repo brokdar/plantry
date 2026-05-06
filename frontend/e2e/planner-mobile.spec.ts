@@ -53,11 +53,20 @@ async function pointerScript(
   steps: Step[]
 ) {
   await page.evaluate(async (steps) => {
+    interface Globals {
+      __pointerTarget?: Element
+    }
+    const g = window as unknown as Globals
     const first = steps[0]
-    if (!first || first.type !== "down")
-      throw new Error("script must start with a 'down' step")
-    const target = document.elementFromPoint(first.x, first.y)
-    if (!target) throw new Error(`no element at (${first.x}, ${first.y})`)
+    if (!first) throw new Error("script must include at least one step")
+    if (first.type === "down") {
+      const target = document.elementFromPoint(first.x, first.y)
+      if (!target) throw new Error(`no element at (${first.x}, ${first.y})`)
+      g.__pointerTarget = target
+    }
+    const target = g.__pointerTarget
+    if (!target)
+      throw new Error("no captured pointer target — start with 'down'")
     function fire(type: string, x: number, y: number) {
       target!.dispatchEvent(
         new PointerEvent(type, {
@@ -128,6 +137,10 @@ test.describe("Mobile planner (day-tab layout)", () => {
       await expect(cell.getByText(`Stew ${tag}`)).toBeVisible()
 
       const row = page.getByTestId(`mobile-slot-row-${slot.id}`)
+      // Mobile day list is scroll-virtualized below the day-tab strip — the
+      // seeded slot row may sit far below the fold. Scroll it on-screen so
+      // boundingBox() and document.elementFromPoint(...) agree on coords.
+      await row.scrollIntoViewIfNeeded()
       const box = await row.boundingBox()
       if (!box) throw new Error("row has no bounding box")
       const x = box.x + box.width / 2
@@ -181,14 +194,18 @@ test.describe("Mobile planner (day-tab layout)", () => {
       ).toBeVisible()
 
       const row = page.getByTestId(`mobile-slot-row-${slot.id}`)
+      // Bring the slot row into view so its boundingBox returns valid
+      // viewport coordinates for the pointerdown step. The day-tab strip
+      // is *not* sticky in the mobile layout, so depending on slot-list
+      // length (parallel tests seed extra slots) it can be pushed off the
+      // viewport top by the scroll. We rescue it before phase 2 below.
+      await row.scrollIntoViewIfNeeded()
       const rBox = await row.boundingBox()
-      const target = page.getByTestId("mobile-day-tab-2")
-      const tBox = await target.boundingBox()
-      if (!rBox || !tBox) throw new Error("missing bounding boxes")
+      if (!rBox) throw new Error("row has no bounding box")
       const x0 = rBox.x + rBox.width / 2
       const y0 = rBox.y + rBox.height / 2
-      const xT = tBox.x + tBox.width / 2
-      const yT = tBox.y + tBox.height / 2
+
+      const target = page.getByTestId("mobile-day-tab-2")
 
       const updateResp = page.waitForResponse(
         (r) =>
@@ -196,15 +213,52 @@ test.describe("Mobile planner (day-tab layout)", () => {
           r.request().method() === "PUT"
       )
 
-      // Long-press: hold > 380 ms within tolerance, then move to tab, release.
+      // Phase 1: pointerdown alone, then wait for the long-press timer
+      // (380 ms in the row) to flip the gesture into "drag". Splitting the
+      // press from the moves into separate page.evaluate calls guarantees
+      // React commits the drag-mode state before any subsequent move
+      // events are dispatched on the same target.
+      await pointerScript(page, [{ type: "down", x: x0, y: y0, wait: 500 }])
+
+      const cardWrapper = row.locator("[data-mobile-row-state]")
+      await expect(cardWrapper).toHaveAttribute("data-mobile-row-state", "drag")
+
+      // Bring the day-tab strip on-screen now that drag mode is active —
+      // synthetic pointermoves still fire on the captured target (the row,
+      // possibly now off-screen), but hitTestDayTab uses
+      // document.elementsFromPoint(clientX, clientY) which only finds the
+      // tab if it currently sits at those viewport coords.
+      await target.scrollIntoViewIfNeeded()
+      const tBox = await target.boundingBox()
+      if (!tBox) throw new Error("day tab has no bounding box")
+      const xT = tBox.x + tBox.width / 2
+      const yT = tBox.y + tBox.height / 2
+      const hitsTab = await page.evaluate(
+        ({ x, y }) =>
+          document
+            .elementsFromPoint(x, y)
+            .some((el) => (el as HTMLElement).dataset?.mobileDayDrop === "2"),
+        { x: xT, y: yT }
+      )
+      expect(
+        hitsTab,
+        `elementsFromPoint(${xT}, ${yT}) did not hit mobile-day-tab-2 — coords are stale or covered`
+      ).toBe(true)
+
+      // Phase 2: move toward the day tab. After the moves the hovered day
+      // tab should be marked drop-hovered — assert that before releasing so
+      // a hit-test mismatch surfaces here instead of as an opaque PUT
+      // timeout downstream.
       await pointerScript(page, [
-        { type: "down", x: x0, y: y0, wait: 500 },
         { type: "move", x: x0 + (xT - x0) * 0.25, y: y0 + (yT - y0) * 0.25 },
         { type: "move", x: x0 + (xT - x0) * 0.5, y: y0 + (yT - y0) * 0.5 },
         { type: "move", x: x0 + (xT - x0) * 0.75, y: y0 + (yT - y0) * 0.75 },
         { type: "move", x: xT, y: yT },
-        { type: "up", x: xT, y: yT },
       ])
+      await expect(target).toHaveAttribute("data-drop-hovered", "true")
+
+      // Phase 3: release on top of the day tab — fires the PUT.
+      await pointerScript(page, [{ type: "up", x: xT, y: yT }])
 
       await updateResp
 

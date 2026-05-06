@@ -4,6 +4,7 @@ import {
   cleanupFood,
   cleanupSlot,
   cleanupTemplate,
+  pickAndCommitFood,
   seedComposedFood,
   seedLeafFood,
   seedSlot,
@@ -44,13 +45,7 @@ test.describe("Templates", () => {
       const sheet = page.getByRole("dialog")
       await expect(sheet).toBeVisible()
       await sheet.locator("input").first().fill(`Chicken curry ${tag}`)
-      const createPlateResp = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
-      )
-      await sheet
-        .getByRole("button", { name: new RegExp(`Chicken curry ${tag}`) })
-        .click()
-      await createPlateResp
+      await pickAndCommitFood(page, sheet, new RegExp(`Chicken curry ${tag}`))
       await expect(cell.getByText(`Chicken curry ${tag}`)).toBeVisible()
 
       // Save as template.
@@ -79,19 +74,24 @@ test.describe("Templates", () => {
       await deletePlateResp
       await expect(cell.getByText(`Chicken curry ${tag}`)).toHaveCount(0)
 
-      // Reopen the picker and apply the template via ApplyTemplateSection.
-      await cell.getByRole("button", { name: /plan meal/i }).click()
-      const sheet2 = page.getByRole("dialog")
-      await expect(sheet2).toBeVisible()
+      // Apply the saved slot-scope template via the slot-row overflow
+      // menu. The redesigned planner exposes apply for slot templates
+      // through the row menu (RowApplyTemplateDialog), not the per-day
+      // header menu — that one is scoped to "day"-scope templates only.
+      await page.getByTestId(`slot-row-${slot.id}`).first().hover()
+      await page.getByTestId(`slot-row-menu-${slot.id}`).click()
+      await page.getByTestId(`slot-row-apply-${slot.id}`).click()
 
-      // Click the template card — form appears with today pre-filled.
-      await page.getByTestId(`apply-template-${templateId}`).click()
+      const tplDialog = page.getByRole("dialog")
+      await expect(tplDialog).toBeVisible()
+      await tplDialog.getByTestId(`row-apply-item-${templateId}`).click()
+
       const applyResp = page.waitForResponse(
         (r) =>
           /\/api\/templates\/\d+\/apply$/.test(r.url()) &&
           r.request().method() === "POST"
       )
-      await page.getByTestId("apply-template-submit").click()
+      await tplDialog.getByTestId("row-apply-submit").click()
       const applied = await applyResp
       expect(applied.ok()).toBe(true)
     } finally {

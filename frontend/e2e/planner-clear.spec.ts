@@ -89,7 +89,9 @@ test.describe("Planner — clear shortcuts", () => {
 
       // Undo toast appears
       await expect(page.getByText("Plate deleted")).toBeVisible()
-      await expect(page.getByRole("button", { name: "Undo" })).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Undo", exact: true })
+      ).toBeVisible()
     } finally {
       await cleanupFood(food.id)
       await cleanupFood(stub.id)
@@ -127,7 +129,7 @@ test.describe("Planner — clear shortcuts", () => {
       await expect(cell.getByText(`Pasta ${tag}`)).toHaveCount(0)
 
       // Click Undo before the 5 s window expires
-      await page.getByRole("button", { name: "Undo" }).click()
+      await page.getByRole("button", { name: "Undo", exact: true }).click()
 
       // Plate reappears (restored from snapshot — no server refetch)
       await expect(cell.getByText(`Pasta ${tag}`)).toBeVisible()
@@ -196,7 +198,10 @@ test.describe("Planner — clear shortcuts", () => {
       // Sonner prepends new toasts: [B_toast, A_toast]. B's toast is on top and
       // actionable; A's is stacked behind and covered. Click the accessible undo
       // (B's) and verify only B is restored while A stays removed.
-      await page.getByRole("button", { name: "Undo" }).first().click()
+      await page
+        .getByRole("button", { name: "Undo", exact: true })
+        .first()
+        .click()
       await expect(cellB.getByText(`PlateB ${tag}`)).toBeVisible()
       await expect(cellA.getByText(`PlateA ${tag}`)).toHaveCount(0)
     } finally {
@@ -275,16 +280,19 @@ test.describe("Planner — clear shortcuts", () => {
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
       await expect(cell.getByText(`Tacos ${tag}`)).toBeVisible()
 
-      // Hover day-0 header to reveal the clear button
+      // Open the day-0 header overflow menu and click "Clear day"
       await page.getByTestId("day-header-0").hover()
-      await page.getByTestId("clear-day-0").click()
+      await page.getByTestId("day-header-menu-0").click()
+      await page.getByTestId("day-header-clear-0").click()
 
       await expect(cell.getByText(`Tacos ${tag}`)).toHaveCount(0)
       await expect(
         cell.getByRole("button", { name: /plan meal/i })
       ).toBeVisible()
       await expect(page.getByText("Day cleared")).toBeVisible()
-      await expect(page.getByRole("button", { name: "Undo" })).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Undo", exact: true })
+      ).toBeVisible()
     } finally {
       await cleanupFood(food.id)
       await cleanupFood(stub.id)
@@ -318,10 +326,11 @@ test.describe("Planner — clear shortcuts", () => {
       await expect(cell.getByText(`Ramen ${tag}`)).toBeVisible()
 
       await page.getByTestId("day-header-0").hover()
-      await page.getByTestId("clear-day-0").click()
+      await page.getByTestId("day-header-menu-0").click()
+      await page.getByTestId("day-header-clear-0").click()
       await expect(cell.getByText(`Ramen ${tag}`)).toHaveCount(0)
 
-      await page.getByRole("button", { name: "Undo" }).click()
+      await page.getByRole("button", { name: "Undo", exact: true }).click()
 
       await expect(cell.getByText(`Ramen ${tag}`)).toBeVisible()
     } finally {
@@ -345,8 +354,11 @@ test.describe("Planner — clear shortcuts", () => {
       await page.getByRole("button", { name: /Next 7/i }).click()
       await nextWeekFetch
 
+      // No plates → the menu still renders for save/apply template, but the
+      // "Clear day" item is gated on hasPlates and stays out of the menu.
       await page.getByTestId("day-header-0").hover()
-      await expect(page.getByTestId("clear-day-0")).toHaveCount(0)
+      await page.getByTestId("day-header-menu-0").click()
+      await expect(page.getByTestId("day-header-clear-0")).toHaveCount(0)
     } finally {
       await cleanupSlot(slot.id)
     }
@@ -387,7 +399,9 @@ test.describe("Planner — clear shortcuts", () => {
         cell.getByRole("button", { name: /plan meal/i })
       ).toBeVisible()
       await expect(page.getByText("Week cleared")).toBeVisible()
-      await expect(page.getByRole("button", { name: "Undo" })).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Undo", exact: true })
+      ).toBeVisible()
     } finally {
       await cleanupFood(food.id)
       await cleanupFood(stub.id)
@@ -424,7 +438,7 @@ test.describe("Planner — clear shortcuts", () => {
       await page.getByTestId("clear-week").click()
       await expect(cell.getByText(`Sushi ${tag}`)).toHaveCount(0)
 
-      await page.getByRole("button", { name: "Undo" }).click()
+      await page.getByRole("button", { name: "Undo", exact: true }).click()
 
       await expect(cell.getByText(`Sushi ${tag}`)).toBeVisible()
     } finally {

@@ -107,7 +107,9 @@ test.describe("Templates — save from date range", () => {
 
       // Toolbar "Save as template" saves the entire visible date range,
       // preserving each plate's day_offset relative to the window start.
-      await page.getByTestId("save-range-template").click()
+      // Save-week-as-template is now nested in the planner overflow menu.
+      await page.getByTestId("planner-overflow").click()
+      await page.getByTestId("week-template-save").click()
 
       // Dialog opens — fill in the template name
       const tplName = `RangeTemplate ${tag}`
@@ -168,7 +170,9 @@ test.describe("Templates — save from date range", () => {
       await page.goto(`/?date=${dateOffset(32)}`)
       await expect(page.getByTestId("planner-toolbar")).toBeVisible()
 
-      await page.getByTestId("save-range-template").click()
+      // Save-week-as-template is now nested in the planner overflow menu.
+      await page.getByTestId("planner-overflow").click()
+      await page.getByTestId("week-template-save").click()
 
       const tplName = `PageTemplate ${tag}`
       const createTplResp = page.waitForResponse(

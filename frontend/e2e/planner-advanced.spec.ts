@@ -2,6 +2,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  pickAndCommitFood,
   seedLeafFood,
   seedSlot,
   test,
@@ -36,9 +37,12 @@ test.describe("Planner — advanced flows", () => {
       const sheet = page.getByRole("dialog")
       await expect(sheet).toBeVisible()
       await sheet.locator("input").first().fill(`Err food ${tag}`)
-      await sheet
-        .getByRole("button", { name: new RegExp(`Err food ${tag}`) })
-        .click()
+      // Stage + commit — plate POST is intercepted to 500, so we don't
+      // await the response (the route fulfill resolves it but the test
+      // cares about the toast surface, not the response object).
+      await pickAndCommitFood(page, sheet, new RegExp(`Err food ${tag}`), {
+        awaitResponse: false,
+      })
 
       // Sonner toast surface shows the error.
       await expect(page.getByText("Something went wrong.")).toBeVisible()

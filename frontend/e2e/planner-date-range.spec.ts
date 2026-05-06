@@ -83,8 +83,7 @@ test.describe("Planner — date-range window", () => {
       await expect(toolbar).toBeVisible()
 
       const labelBefore = await page
-        .locator(".min-w-48.text-center")
-        .first()
+        .getByTestId("planner-range-label")
         .textContent()
 
       const platesResp = page.waitForResponse(
@@ -95,8 +94,7 @@ test.describe("Planner — date-range window", () => {
 
       // Range label must have changed
       const labelAfter = await page
-        .locator(".min-w-48.text-center")
-        .first()
+        .getByTestId("planner-range-label")
         .textContent()
       expect(labelAfter).not.toBe(labelBefore)
 
@@ -117,8 +115,7 @@ test.describe("Planner — date-range window", () => {
       await page.goto("/")
 
       const labelBefore = await page
-        .locator(".min-w-48.text-center")
-        .first()
+        .getByTestId("planner-range-label")
         .textContent()
 
       // Go forward one window
@@ -132,8 +129,7 @@ test.describe("Planner — date-range window", () => {
       await page.getByRole("button", { name: /Previous 7/i }).click()
 
       const labelAfter = await page
-        .locator(".min-w-48.text-center")
-        .first()
+        .getByTestId("planner-range-label")
         .textContent()
       expect(labelAfter).toBe(labelBefore)
     } finally {
@@ -149,8 +145,7 @@ test.describe("Planner — date-range window", () => {
       await page.goto("/")
 
       const labelAt0 = await page
-        .locator(".min-w-48.text-center")
-        .first()
+        .getByTestId("planner-range-label")
         .textContent()
 
       // Advance two windows
@@ -164,8 +159,7 @@ test.describe("Planner — date-range window", () => {
       }
 
       const labelShifted = await page
-        .locator(".min-w-48.text-center")
-        .first()
+        .getByTestId("planner-range-label")
         .textContent()
       expect(labelShifted).not.toBe(labelAt0)
 
@@ -173,8 +167,7 @@ test.describe("Planner — date-range window", () => {
       await page.getByRole("button", { name: /^Today$/i }).click()
 
       const labelReset = await page
-        .locator(".min-w-48.text-center")
-        .first()
+        .getByTestId("planner-range-label")
         .textContent()
       expect(labelReset).toBe(labelAt0)
     } finally {
@@ -235,9 +228,10 @@ test.describe("Planner — date-range window", () => {
       const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
       await expect(cell.getByText(`Gyoza ${tag}`)).toBeVisible()
 
-      // Hover day-0 header to reveal the clear button
+      // Open the day-0 header overflow menu and click "Clear day"
       await page.getByTestId("day-header-0").hover()
-      await page.getByTestId("clear-day-0").click()
+      await page.getByTestId("day-header-menu-0").click()
+      await page.getByTestId("day-header-clear-0").click()
 
       await expect(cell.getByText(`Gyoza ${tag}`)).toHaveCount(0)
       await expect(
