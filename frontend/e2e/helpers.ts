@@ -2,7 +2,9 @@ import {
   request as apiRequest,
   expect,
   test as baseTest,
+  type Locator,
   type Page,
+  type Response,
 } from "@playwright/test"
 
 export const API = "http://localhost:8080"
@@ -254,4 +256,44 @@ export async function cleanupTemplate(id: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
   await ctx.delete(`/api/templates/${id}`)
   await ctx.dispose()
+}
+
+// ── Picker tray helpers ───────────────────────────────────────────────
+//
+// The redesigned picker stages foods then commits via a single "Add N"
+// button (`data-testid="tray-commit"`). The plate POST + component POSTs
+// fire on commit, not on result-row click. These helpers encapsulate
+// that two-step flow so tests don't drift when the tray UI evolves.
+
+/**
+ * Stage a food result and commit the tray. Returns the response of the
+ * first matching POST (plate or component) so callers can await mutation
+ * settlement before asserting UI state. Pass a custom matcher via
+ * `responseMatcher` if your test cares about a specific POST.
+ */
+export async function pickAndCommitFood(
+  page: Page,
+  sheet: Locator,
+  foodName: string | RegExp,
+  options: {
+    /** Override the default plate/component POST matcher. */
+    responseMatcher?: (response: Response) => boolean
+    /** Skip awaiting the response (e.g. when a 500 is forced and no response is expected). */
+    awaitResponse?: boolean
+  } = {}
+): Promise<Response | undefined> {
+  const matcher =
+    options.responseMatcher ??
+    ((r: Response) =>
+      r.url().includes("/plates") && r.request().method() === "POST")
+  const nameMatcher =
+    typeof foodName === "string" ? new RegExp(foodName) : foodName
+  await sheet.getByRole("button", { name: nameMatcher }).first().click()
+  if (options.awaitResponse === false) {
+    await sheet.getByTestId("tray-commit").click()
+    return undefined
+  }
+  const resp = page.waitForResponse(matcher)
+  await sheet.getByTestId("tray-commit").click()
+  return await resp
 }

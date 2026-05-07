@@ -2,18 +2,63 @@ import { useTranslation } from "react-i18next"
 
 import { MacroDot } from "@/components/editorial/macros"
 import type { MacrosResponse } from "@/lib/api/plates"
+import { cn } from "@/lib/utils"
 
 interface SlotMacroDotsProps {
   macros?: MacrosResponse
+  /** Per-slot kcal target (daily target ÷ slot count). When provided alongside
+   *  `macros`, a coloured ring renders next to the kcal number to show how the
+   *  plate compares to its share of the day's budget. */
+  kcalTarget?: number | null
 }
 
-export function SlotMacroDots({ macros }: SlotMacroDotsProps) {
+type Tone = "good" | "near" | "off"
+
+/** Compares actual to target and bands the result the same way the planner
+ *  spec calls out: ±10 % is "good" (green), ±20 % is "near" (amber), beyond
+ *  is "off" (red). Returns null when no target is set so the caller can hide
+ *  the indicator instead of drawing a misleading dot. */
+function macrosTone(actual: number, target: number): Tone | null {
+  if (target <= 0) return null
+  const diff = Math.abs(actual - target) / target
+  if (diff <= 0.1) return "good"
+  if (diff <= 0.2) return "near"
+  return "off"
+}
+
+const TONE_COLORS: Record<Tone, string> = {
+  good: "bg-primary/85 ring-primary/35",
+  near: "bg-ai-accent ring-ai-accent/35",
+  off: "bg-destructive/85 ring-destructive/30",
+}
+
+const TONE_LABEL: Record<Tone, string> = {
+  good: "macro.target.on",
+  near: "macro.target.near",
+  off: "macro.target.off",
+}
+
+export function SlotMacroDots({ macros, kcalTarget }: SlotMacroDotsProps) {
   const { t } = useTranslation()
   if (!macros) return null
+
+  const tone =
+    kcalTarget && kcalTarget > 0 ? macrosTone(macros.kcal, kcalTarget) : null
+
   return (
     <div className="flex items-center justify-between gap-2 font-mono text-[10.5px] text-on-surface-variant tabular-nums">
-      <span className="font-heading text-[11.5px] font-bold tracking-tight text-on-surface">
-        {Math.round(macros.kcal)} {t("macro.kcal")}
+      <span className="flex items-center gap-1.5">
+        {tone && (
+          <span
+            data-testid="slot-macros-target-dot"
+            data-tone={tone}
+            aria-label={t(TONE_LABEL[tone])}
+            className={cn("size-1.5 rounded-full ring-2", TONE_COLORS[tone])}
+          />
+        )}
+        <span className="font-heading text-[11.5px] font-bold tracking-tight text-on-surface">
+          {Math.round(macros.kcal)} {t("macro.kcal")}
+        </span>
       </span>
       <span className="flex items-center gap-1.5">
         <Chip

@@ -1,13 +1,21 @@
-import { Trash2 } from "lucide-react"
+import { BookmarkPlus, FileDown, MoreHorizontal, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import type { MacrosResponse } from "@/lib/api/plates"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import type { MacrosResponse } from "@/lib/api/plates"
 import { cn } from "@/lib/utils"
 
 interface DayHeaderProps {
@@ -16,8 +24,10 @@ interface DayHeaderProps {
   idx: number
   today?: boolean
   macros?: MacrosResponse
-  onClearDay?: () => void
   hasPlates?: boolean
+  onClearDay?: () => void
+  onSaveDayTemplate?: () => void
+  onApplyDayTemplate?: () => void
 }
 
 export function DayHeader({
@@ -26,8 +36,10 @@ export function DayHeader({
   idx,
   today,
   macros,
-  onClearDay,
   hasPlates,
+  onClearDay,
+  onSaveDayTemplate,
+  onApplyDayTemplate,
 }: DayHeaderProps) {
   const { t, i18n } = useTranslation()
   // Always render kcal + macro strip on every day header so the row keeps a
@@ -40,6 +52,9 @@ export function DayHeader({
   const pPct = total > 0 ? (macros!.protein / total) * 100 : 0
   const cPct = total > 0 ? (macros!.carbs / total) * 100 : 0
   const fPct = total > 0 ? (macros!.fat / total) * 100 : 0
+
+  const hasOverflow =
+    !!onSaveDayTemplate || !!onApplyDayTemplate || (!!onClearDay && hasPlates)
 
   return (
     <div
@@ -127,16 +142,63 @@ export function DayHeader({
         )}
       </div>
 
-      {onClearDay && hasPlates && (
-        <button
-          type="button"
-          onClick={onClearDay}
-          aria-label={t("planner.clear_day")}
-          data-testid={`clear-day-${idx}`}
-          className="absolute top-1.5 right-1.5 grid size-5 place-items-center rounded text-on-surface-variant/40 opacity-0 transition-[opacity,color] group-hover:opacity-100 hover:text-destructive"
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
+      {hasOverflow && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("planner.day_actions_for", {
+                day: t(dayKey),
+                date: new Intl.DateTimeFormat(i18n.language, {
+                  month: "short",
+                  day: "numeric",
+                }).format(date),
+              })}
+              data-testid={`day-header-menu-${idx}`}
+              // Subtle at rest so the chrome stays calm, fully visible on
+              // hover/focus/open. Touch users still get a low-opacity hint
+              // they can tap (the at-rest opacity is non-zero).
+              className="absolute top-1.5 right-1.5 size-5 text-on-surface-variant/60 opacity-30 transition-opacity group-hover:opacity-100 hover:text-on-surface-variant focus-visible:opacity-100 data-[state=open]:opacity-100"
+            >
+              <MoreHorizontal className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            {onApplyDayTemplate && (
+              <DropdownMenuItem
+                onClick={onApplyDayTemplate}
+                data-testid={`day-header-apply-${idx}`}
+              >
+                <FileDown className="size-4" />
+                {t("template.apply_day")}
+              </DropdownMenuItem>
+            )}
+            {onSaveDayTemplate && (
+              <DropdownMenuItem
+                onClick={onSaveDayTemplate}
+                disabled={!hasPlates}
+                data-testid={`day-header-save-${idx}`}
+              >
+                <BookmarkPlus className="size-4" />
+                {t("template.save_day")}
+              </DropdownMenuItem>
+            )}
+            {onClearDay && hasPlates && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={onClearDay}
+                  data-testid={`day-header-clear-${idx}`}
+                >
+                  <Trash2 className="size-4" />
+                  {t("planner.clear_day")}
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   )

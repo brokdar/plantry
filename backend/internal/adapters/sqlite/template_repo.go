@@ -44,31 +44,37 @@ func (r *TemplateRepo) Create(ctx context.Context, t *template.Template) error {
 }
 
 func (r *TemplateRepo) createWith(ctx context.Context, q *sqlcgen.Queries, t *template.Template) error {
-	row, err := q.CreateTemplate(ctx, t.Name)
+	scope := t.Scope
+	if scope == "" {
+		scope = template.ScopeSlot
+	}
+	row, err := q.CreateTemplate(ctx, sqlcgen.CreateTemplateParams{Name: t.Name, Scope: string(scope)})
 	if err != nil {
 		return err
 	}
 	mapTemplateToDomain(&row, t)
-	for i := range t.Components {
-		tc := &t.Components[i]
-		tc.TemplateID = t.ID
-		if tc.SortOrder == 0 && i > 0 {
-			tc.SortOrder = i
+	for i := range t.Entries {
+		te := &t.Entries[i]
+		te.TemplateID = t.ID
+		if te.SortOrder == 0 && i > 0 {
+			te.SortOrder = i
 		}
-		tcRow, err := q.CreateTemplateComponent(ctx, sqlcgen.CreateTemplateComponentParams{
-			TemplateID: tc.TemplateID,
-			FoodID:     tc.FoodID,
-			Portions:   tc.Portions,
-			SortOrder:  int64(tc.SortOrder),
-			DayOffset:  int64(tc.DayOffset),
+		teRow, err := q.CreateTemplateEntry(ctx, sqlcgen.CreateTemplateEntryParams{
+			TemplateID: te.TemplateID,
+			FoodID:     te.FoodID,
+			Portions:   te.Portions,
+			SortOrder:  int64(te.SortOrder),
+			DayOffset:  int64(te.DayOffset),
+			SlotID:     toNullInt64(te.SlotID),
+			Note:       toNullString(te.Note),
 		})
 		if err != nil {
 			if isForeignKeyViolation(err) {
-				return fmt.Errorf("%w: invalid food reference", domain.ErrInvalidInput)
+				return fmt.Errorf("%w: invalid food or slot reference", domain.ErrInvalidInput)
 			}
 			return err
 		}
-		mapTemplateComponentToDomain(&tcRow, tc)
+		mapTemplateEntryToDomain(&teRow, te)
 	}
 	return nil
 }
@@ -125,6 +131,18 @@ func (r *TemplateRepo) List(ctx context.Context) ([]template.Template, error) {
 	if err != nil {
 		return nil, err
 	}
+	return r.hydrateTemplates(ctx, rows)
+}
+
+func (r *TemplateRepo) ListByScope(ctx context.Context, scope template.Scope) ([]template.Template, error) {
+	rows, err := r.q.ListTemplatesByScope(ctx, string(scope))
+	if err != nil {
+		return nil, err
+	}
+	return r.hydrateTemplates(ctx, rows)
+}
+
+func (r *TemplateRepo) hydrateTemplates(ctx context.Context, rows []sqlcgen.Template) ([]template.Template, error) {
 	if len(rows) == 0 {
 		return []template.Template{}, nil
 	}
@@ -138,35 +156,37 @@ func (r *TemplateRepo) List(ctx context.Context) ([]template.Template, error) {
 	return out, nil
 }
 
-func (r *TemplateRepo) ReplaceComponents(ctx context.Context, templateID int64, comps []template.TemplateComponent) error {
+func (r *TemplateRepo) ReplaceEntries(ctx context.Context, templateID int64, entries []template.TemplateEntry) error {
 	if r.db == nil {
-		return r.replaceWith(ctx, r.q, templateID, comps)
+		return r.replaceWith(ctx, r.q, templateID, entries)
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if err := r.replaceWith(ctx, sqlcgen.New(tx), templateID, comps); err != nil {
+	if err := r.replaceWith(ctx, sqlcgen.New(tx), templateID, entries); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-func (r *TemplateRepo) replaceWith(ctx context.Context, q *sqlcgen.Queries, templateID int64, comps []template.TemplateComponent) error {
-	if _, err := q.DeleteTemplateComponentsByTemplate(ctx, templateID); err != nil {
+func (r *TemplateRepo) replaceWith(ctx context.Context, q *sqlcgen.Queries, templateID int64, entries []template.TemplateEntry) error {
+	if _, err := q.DeleteTemplateEntriesByTemplate(ctx, templateID); err != nil {
 		return err
 	}
-	for i, tc := range comps {
-		if _, err := q.CreateTemplateComponent(ctx, sqlcgen.CreateTemplateComponentParams{
+	for i, te := range entries {
+		if _, err := q.CreateTemplateEntry(ctx, sqlcgen.CreateTemplateEntryParams{
 			TemplateID: templateID,
-			FoodID:     tc.FoodID,
-			Portions:   tc.Portions,
+			FoodID:     te.FoodID,
+			Portions:   te.Portions,
 			SortOrder:  int64(i),
-			DayOffset:  int64(tc.DayOffset),
+			DayOffset:  int64(te.DayOffset),
+			SlotID:     toNullInt64(te.SlotID),
+			Note:       toNullString(te.Note),
 		}); err != nil {
 			if isForeignKeyViolation(err) {
-				return fmt.Errorf("%w: invalid food reference", domain.ErrInvalidInput)
+				return fmt.Errorf("%w: invalid food or slot reference", domain.ErrInvalidInput)
 			}
 			return err
 		}
@@ -174,14 +194,14 @@ func (r *TemplateRepo) replaceWith(ctx context.Context, q *sqlcgen.Queries, temp
 	return nil
 }
 
-func (r *TemplateRepo) ListComponentsByTemplate(ctx context.Context, templateID int64) ([]template.TemplateComponent, error) {
-	rows, err := r.q.ListTemplateComponentsByTemplate(ctx, templateID)
+func (r *TemplateRepo) ListEntriesByTemplate(ctx context.Context, templateID int64) ([]template.TemplateEntry, error) {
+	rows, err := r.q.ListTemplateEntriesByTemplate(ctx, templateID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]template.TemplateComponent, len(rows))
+	out := make([]template.TemplateEntry, len(rows))
 	for i := range rows {
-		mapTemplateComponentToDomain(&rows[i], &out[i])
+		mapTemplateEntryToDomain(&rows[i], &out[i])
 	}
 	return out, nil
 }
@@ -191,13 +211,13 @@ func (r *TemplateRepo) CountUsingFood(ctx context.Context, foodID int64) (int64,
 }
 
 func (r *TemplateRepo) loadTemplateChildren(ctx context.Context, t *template.Template) error {
-	rows, err := r.q.ListTemplateComponentsByTemplate(ctx, t.ID)
+	rows, err := r.q.ListTemplateEntriesByTemplate(ctx, t.ID)
 	if err != nil {
 		return err
 	}
-	t.Components = make([]template.TemplateComponent, len(rows))
+	t.Entries = make([]template.TemplateEntry, len(rows))
 	for i := range rows {
-		mapTemplateComponentToDomain(&rows[i], &t.Components[i])
+		mapTemplateEntryToDomain(&rows[i], &t.Entries[i])
 	}
 	return nil
 }
@@ -205,14 +225,17 @@ func (r *TemplateRepo) loadTemplateChildren(ctx context.Context, t *template.Tem
 func mapTemplateToDomain(row *sqlcgen.Template, t *template.Template) {
 	t.ID = row.ID
 	t.Name = row.Name
+	t.Scope = template.Scope(row.Scope)
 	t.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt) //nolint:errcheck // layout is controlled by our migration
 }
 
-func mapTemplateComponentToDomain(row *sqlcgen.TemplateComponent, tc *template.TemplateComponent) {
-	tc.ID = row.ID
-	tc.TemplateID = row.TemplateID
-	tc.FoodID = row.FoodID
-	tc.Portions = row.Portions
-	tc.SortOrder = int(row.SortOrder)
-	tc.DayOffset = int(row.DayOffset)
+func mapTemplateEntryToDomain(row *sqlcgen.TemplateEntry, te *template.TemplateEntry) {
+	te.ID = row.ID
+	te.TemplateID = row.TemplateID
+	te.FoodID = row.FoodID
+	te.Portions = row.Portions
+	te.SortOrder = int(row.SortOrder)
+	te.DayOffset = int(row.DayOffset)
+	te.SlotID = fromNullInt64(row.SlotID)
+	te.Note = fromNullString(row.Note)
 }

@@ -2,6 +2,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  pickAndCommitFood,
   seedComposedWithStub,
   seedSlot,
   test,
@@ -35,14 +36,9 @@ test.describe("Planner picker sheet", () => {
       // Search for the food.
       await sheet.locator("input").first().fill(`Sushi ${tag}`)
 
-      // Clicking the food button creates the plate immediately — no tray-save.
-      const createResp = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
-      )
-      await sheet
-        .getByRole("button", { name: new RegExp(`Sushi ${tag}`) })
-        .click()
-      await createResp
+      // Stage the food, then commit the tray — picker uses a two-step
+      // tray pattern (stage results, commit creates plate + components).
+      await pickAndCommitFood(page, sheet, new RegExp(`Sushi ${tag}`))
 
       // Sheet closes and the cell shows the food name.
       await expect(sheet).not.toBeVisible()

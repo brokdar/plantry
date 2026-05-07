@@ -13,15 +13,35 @@ import * as Lucide from "lucide-react"
 import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
+import {
+  SaveAsTemplateDialog,
+  type SaveAsTemplateTarget,
+} from "@/components/templates/SaveAsTemplateDialog"
+import { TemplatePicker } from "@/components/templates/TemplatePicker"
+import {
+  showApplyToasts,
+  snapshotOverwrittenPlates,
+} from "@/lib/template-apply-toast"
+import {
+  suggestDayName,
+  suggestSlotName,
+  suggestWeekName,
+} from "@/lib/template-suggest"
 import {
   dragStartToPayload,
   DndCellWrapper,
   type DragPayload,
 } from "@/components/planner/DndCellWrapper"
 import { addPlateComponent, createPlate, deletePlate } from "@/lib/api/plates"
+import { handleGridArrowKey } from "@/lib/planner-keynav"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
+import {
+  cancelPendingPlateDelete,
+  flushPendingPlateDeletes,
+  hasPendingPlateDelete,
+  registerPendingPlateDelete,
+} from "@/lib/queries/pending-plate-deletes"
 import { shoppingKeys } from "@/lib/queries/shopping"
 import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
@@ -30,19 +50,30 @@ import type { NutritionDay } from "@/lib/api/nutrition"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import {
-  useAddPlateComponent,
-  useDeletePlate,
   useSetPlateSkipped,
   useSwapPlateComponent,
   useUpdatePlate,
 } from "@/lib/queries/plates"
+import { useProfile } from "@/lib/queries/profile"
+import { toggleSkip } from "@/lib/planner-skip"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
 
 import { AddComponentSheet } from "./AddComponentSheet"
+import { ComponentTraySheet, type TraySlotContext } from "./ComponentTraySheet"
 import { DayHeader } from "./DayHeader"
+import { RowApplyTemplateDialog } from "./RowApplyTemplateDialog"
 import { SlotCell } from "./SlotCell"
+import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export interface PlannerDay {
   date: string // "YYYY-MM-DD"
@@ -93,6 +124,22 @@ function findPlateInDay(day: PlannerDay, slotId: number): Plate | undefined {
   return day.plates.find((p) => p.slot_id === slotId)
 }
 
+function buildTrayContext(
+  target: AddTarget,
+  days: PlannerDay[],
+  slotsById: Map<number, TimeSlot>
+): TraySlotContext | null {
+  const day = days[target.day]
+  const slot = slotsById.get(target.slotId)
+  if (!day || !slot) return null
+  return {
+    slotId: slot.id,
+    slotNameKey: slot.name_key,
+    date: day.date,
+    weekday: day.weekday,
+  }
+}
+
 export function PlannerGrid({
   days,
   slots,
@@ -100,67 +147,231 @@ export function PlannerGrid({
   rangeTo,
   nutritionDays,
 }: PlannerGridProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   const openPicker = (day: number, slotId: number) => {
     setAddTarget({ day, slotId, plateId: null })
   }
 
-  const componentsQuery = useFoods({ limit: 200 })
+  // Planner needs the full foods catalog to render plate components by id.
+  // Treat it as session-cached: a long staleTime stops focus/mount refetches
+  // of a multi-MB payload while still letting mutations invalidate it.
+  const componentsQuery = useFoods({ limit: 10000 }, { staleTime: 5 * 60_000 })
   const componentsById = useMemo(() => {
     const map = new Map<number, Food>()
     for (const c of componentsQuery.data?.items ?? []) map.set(c.id, c)
     return map
   }, [componentsQuery.data])
 
+  const slotsById = useMemo(() => {
+    const map = new Map<number, TimeSlot>()
+    for (const s of slots) map.set(s.id, s)
+    return map
+  }, [slots])
+
+  // Frontend-derived "Recent" tab content for the tray sheet. Walks the
+  // plates currently in cache (the visible window), de-duplicates by food id
+  // and orders most-recent-first by plate date. Capped at 20 to keep the
+  // tab focused. Cheap because it only iterates visible plates — the heavy
+  // foods catalog already lives in `componentsById`.
+  const recentFoods = useMemo(() => {
+    const seen = new Set<number>()
+    const out: Food[] = []
+    const sortedDays = [...days].sort((a, b) =>
+      a.date < b.date ? 1 : a.date > b.date ? -1 : 0
+    )
+    for (const day of sortedDays) {
+      for (const plate of day.plates) {
+        for (const pc of plate.components) {
+          if (seen.has(pc.food_id)) continue
+          const food = componentsById.get(pc.food_id)
+          if (!food) continue
+          seen.add(pc.food_id)
+          out.push(food)
+          if (out.length >= 20) return out
+        }
+      }
+    }
+    return out
+  }, [days, componentsById])
+
   const today = startOfDay(new Date())
 
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null)
-  const [savePlateId, setSavePlateId] = useState<number | null>(null)
+  const [saveTarget, setSaveTarget] = useState<SaveAsTemplateTarget | null>(
+    null
+  )
+  const [applyDayDate, setApplyDayDate] = useState<string | null>(null)
+  const [sheetTarget, setSheetTarget] = useState<SlotSheetTarget | null>(null)
+  const [rowApplySlot, setRowApplySlot] = useState<TimeSlot | null>(null)
+
+  function findPlateById(plateId: number): Plate | undefined {
+    for (const day of days) {
+      const p = day.plates.find((p) => p.id === plateId)
+      if (p) return p
+    }
+    return undefined
+  }
+
+  function openSaveSlot(plateId: number) {
+    const p = findPlateById(plateId)
+    if (!p) return
+    setSaveTarget({
+      scope: "slot",
+      plateId,
+      componentCount: p.components.length,
+    })
+  }
+
+  function openSaveDay(date: string) {
+    const day = days.find((d) => d.date === date)
+    if (!day) return
+    setSaveTarget({
+      scope: "day",
+      date,
+      plateCount: day.plates.filter((p) => !p.skipped).length,
+    })
+  }
+
+  function openSheetForPlate(dayIdx: number, slot: TimeSlot, plate: Plate) {
+    const day = days[dayIdx]
+    if (!day) return
+    setSheetTarget({
+      plateId: plate.id,
+      date: day.date,
+      weekday: day.weekday,
+      slotId: slot.id,
+      slotNameKey: slot.name_key,
+    })
+  }
 
   const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
-  const addCompMut = useAddPlateComponent()
   const swapMut = useSwapPlateComponent()
-  const deletePlateMut = useDeletePlate()
   const setSkippedMut = useSetPlateSkipped()
   const setFavoriteMut = useSetFoodFavorite()
   const recordFeedbackMut = useRecordFeedback()
   const clearFeedbackMut = useClearFeedback()
 
+  // Build the set of "date|slotId" keys for already-occupied slots in the
+  // visible window — used by the apply picker to flag overlap and surface
+  // the skip/overwrite choice. Skipped plates are *not* occupied: a skip
+  // marker means "I won't eat here", so applying a template to that cell
+  // should fill it without any conflict warning.
+  const occupiedSlotKeys = useMemo(() => {
+    const set = new Set<string>()
+    for (const day of days) {
+      for (const p of day.plates) {
+        if (p.skipped) continue
+        set.add(`${day.date}|${p.slot_id}`)
+      }
+    }
+    return set
+  }, [days])
+
+  const saveTargetSuggestion = useMemo(() => {
+    if (!saveTarget) return ""
+    if (saveTarget.scope === "slot") {
+      const day = days.find((d) =>
+        d.plates.some((p) => p.id === saveTarget.plateId)
+      )
+      const plate = day?.plates.find((p) => p.id === saveTarget.plateId)
+      const slot = plate ? slotsById.get(plate.slot_id) : undefined
+      if (!day || !slot) return ""
+      return suggestSlotName(t, i18n.language, day.weekday, slot.name_key)
+    }
+    if (saveTarget.scope === "day") {
+      const day = days.find((d) => d.date === saveTarget.date)
+      if (!day) return ""
+      return suggestDayName(t, i18n.language, day.date, day.weekday)
+    }
+    return suggestWeekName(t, i18n.language, saveTarget.from)
+  }, [saveTarget, days, slotsById, t, i18n.language])
+
+  // The macro target indicator on each cell compares plate kcal to a fair
+  // share of the daily target — daily kcal ÷ active slot count. Skipping
+  // the calculation whenever no slots or no target is set keeps the dot
+  // hidden rather than rendering a misleading 0-target state.
+  const { data: profile } = useProfile()
+  const kcalPerSlotTarget = useMemo(() => {
+    if (!profile?.kcal_target || slots.length === 0) return null
+    return profile.kcal_target / slots.length
+  }, [profile?.kcal_target, slots.length])
+
   const aiFill = usePlannerUI((s) => s.aiFill)
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
+  const markCopyHintSeen = usePlannerUI((s) => s.markCopyHintSeen)
   const aiFilledIds = useMemo(() => new Set(aiFill.plateIds), [aiFill.plateIds])
 
-  async function handlePick(component: Food) {
-    if (!addTarget) return
+  async function handleTrayCommit(
+    items: { food_id: number; portions: number }[]
+  ): Promise<{ failedFoodIds: number[] }> {
+    if (!addTarget || items.length === 0) return { failedFoodIds: [] }
     const target = addTarget
-    setAddTarget(null)
     const targetDay = days[target.day]
-    if (!targetDay) return
-    try {
-      if (target.plateId === null) {
+    if (!targetDay) return { failedFoodIds: [] }
+
+    // Commit any plates the user just deleted (within their undo window) so
+    // the upcoming refetch doesn't resurrect them as artifacts.
+    await flushPendingPlateDeletes()
+
+    let plateId = target.plateId
+    if (plateId === null) {
+      // If creating the plate fails, nothing landed — every staged item
+      // counts as failed so the tray keeps them all for retry.
+      try {
         const created = await createPlate({
           date: targetDay.date,
           slot_id: target.slotId,
         })
-        await addPlateComponent(created.id, {
-          food_id: component.id,
-          portions: 1,
-        })
-        void queryClient.invalidateQueries({
-          queryKey: plateKeys.range(rangeFrom, rangeTo),
-        })
-        void queryClient.invalidateQueries({ queryKey: shoppingKeys.all })
-      } else {
-        await addCompMut.mutateAsync({
-          plateId: target.plateId,
-          input: { food_id: component.id, portions: 1 },
-        })
+        plateId = created.id
+      } catch (err) {
+        toastError(err, t)
+        return { failedFoodIds: items.map((i) => i.food_id) }
       }
-    } catch (err) {
-      toastError(err, t)
     }
+
+    // Add components in parallel and survive partial failure: report what
+    // didn't land so the tray sheet can keep those staged for retry.
+    const results = await Promise.allSettled(
+      items.map((it) =>
+        addPlateComponent(plateId!, {
+          food_id: it.food_id,
+          portions: it.portions,
+        })
+      )
+    )
+    const failedFoodIds: number[] = []
+    let firstError: unknown
+    results.forEach((r, idx) => {
+      if (r.status === "rejected") {
+        failedFoodIds.push(items[idx]!.food_id)
+        firstError ??= r.reason
+      }
+    })
+    void queryClient.invalidateQueries({
+      queryKey: plateKeys.range(rangeFrom, rangeTo),
+    })
+    void queryClient.invalidateQueries({ queryKey: shoppingKeys.all })
+    void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
+
+    const ok = items.length - failedFoodIds.length
+    if (failedFoodIds.length === 0) {
+      toast(
+        ok === 1
+          ? t("tray.committed_one")
+          : t("tray.committed_other", { count: ok })
+      )
+    } else if (ok > 0) {
+      toast(
+        failedFoodIds.length === 1
+          ? t("tray.partial_failure_one")
+          : t("tray.partial_failure_other", { count: failedFoodIds.length })
+      )
+    } else {
+      toastError(firstError, t)
+    }
+    return { failedFoodIds }
   }
 
   async function handleSwapPick(component: Food) {
@@ -179,7 +390,7 @@ export function PlannerGrid({
   }
 
   function handleDeletePlate(plateId: number, dayIdx: number) {
-    if (pendingDeletesRef.current.has(plateId)) return
+    if (hasPendingPlateDelete(plateId)) return
 
     const plateSnapshot = days[dayIdx]?.plates.find((p) => p.id === plateId)
     if (!plateSnapshot) return
@@ -190,35 +401,32 @@ export function PlannerGrid({
       (old) => ({ plates: (old?.plates ?? []).filter((p) => p.id !== plateId) })
     )
 
-    const timeoutId = setTimeout(async () => {
-      pendingDeletesRef.current.delete(plateId)
+    registerPendingPlateDelete(plateId, plateSnapshot, async () => {
       try {
-        await deletePlateMut.mutateAsync(plateId)
+        await deletePlate(plateId)
       } catch (err) {
         toastError(err, t)
         queryClient.setQueryData<{ plates: Plate[] }>(
           plateKeys.range(rangeFrom, rangeTo),
           (old) => ({ plates: [...(old?.plates ?? []), plateSnapshot] })
         )
+      } finally {
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       }
-    }, 5000)
-
-    pendingDeletesRef.current.set(plateId, {
-      timeoutId,
-      snapshot: plateSnapshot,
     })
 
     toast(t("plate.deleted"), {
       action: {
         label: t("common.undo"),
         onClick: () => {
-          const pending = pendingDeletesRef.current.get(plateId)
-          if (!pending) return
-          clearTimeout(pending.timeoutId)
-          pendingDeletesRef.current.delete(plateId)
+          const snapshot = cancelPendingPlateDelete(plateId)
+          if (!snapshot) return
           queryClient.setQueryData<{ plates: Plate[] }>(
             plateKeys.range(rangeFrom, rangeTo),
-            (old) => ({ plates: [...(old?.plates ?? []), pending.snapshot] })
+            (old) => ({ plates: [...(old?.plates ?? []), snapshot] })
           )
         },
       },
@@ -242,6 +450,7 @@ export function PlannerGrid({
 
     const timeoutId = setTimeout(async () => {
       try {
+        await flushPendingPlateDeletes()
         await Promise.all(dayPlates.map((p) => deletePlate(p.id)))
       } catch (err) {
         toastError(err, t)
@@ -249,6 +458,7 @@ export function PlannerGrid({
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       }
     }, 5000)
 
@@ -267,30 +477,131 @@ export function PlannerGrid({
     })
   }
 
+  function handleClearRow(slotId: number) {
+    // Skip markers are deliberate user statements ("not eating here") and
+    // shouldn't be wiped by "Clear row" — same rule as Copy last week.
+    const rowPlates: Plate[] = []
+    for (const day of days) {
+      const p = findPlateInDay(day, slotId)
+      if (p && !p.skipped) rowPlates.push(p)
+    }
+    if (rowPlates.length === 0) return
+
+    const idSet = new Set(rowPlates.map((p) => p.id))
+    queryClient.setQueryData<{ plates: Plate[] }>(
+      plateKeys.range(rangeFrom, rangeTo),
+      (old) => ({
+        plates: (old?.plates ?? []).filter((p) => !idSet.has(p.id)),
+      })
+    )
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await flushPendingPlateDeletes()
+        await Promise.all(rowPlates.map((p) => deletePlate(p.id)))
+      } catch (err) {
+        toastError(err, t)
+      } finally {
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
+      }
+    }, 5000)
+
+    toast(t("planner.row_actions.cleared", { count: rowPlates.length }), {
+      action: {
+        label: t("common.undo"),
+        onClick: () => {
+          clearTimeout(timeoutId)
+          queryClient.setQueryData<{ plates: Plate[] }>(
+            plateKeys.range(rangeFrom, rangeTo),
+            (old) => ({ plates: [...(old?.plates ?? []), ...rowPlates] })
+          )
+        },
+      },
+      duration: 5000,
+    })
+  }
+
+  async function handleCopyRowAcrossWeek(slotId: number) {
+    // First non-skipped plate with components becomes the source. Skipped
+    // markers and component-less plates would copy nothing useful.
+    let source: { plate: Plate; dayIdx: number } | null = null
+    for (let i = 0; i < days.length; i++) {
+      const day = days[i]
+      if (!day) continue
+      const p = findPlateInDay(day, slotId)
+      if (p && !p.skipped && p.components.length > 0) {
+        source = { plate: p, dayIdx: i }
+        break
+      }
+    }
+    if (!source) {
+      toast(t("planner.row_actions.copy_no_source"))
+      return
+    }
+
+    // Targets: every other day in the row that's currently empty (no plate
+    // and no skip marker). Existing plates and skips are preserved — undo
+    // would otherwise need to restore them, and silent overwrite breaks trust.
+    const targets = days.filter(
+      (d, i) => i !== source!.dayIdx && !findPlateInDay(d, slotId)
+    )
+    if (targets.length === 0) {
+      toast(t("planner.row_actions.copy_no_targets"))
+      return
+    }
+
+    await flushPendingPlateDeletes()
+
+    try {
+      const created = await Promise.all(
+        targets.map((d) =>
+          createPlate({
+            date: d.date,
+            slot_id: slotId,
+            note: source!.plate.note ?? undefined,
+          })
+        )
+      )
+      await Promise.all(
+        created.flatMap((p) =>
+          source!.plate.components.map((pc) =>
+            addPlateComponent(p.id, {
+              food_id: pc.food_id,
+              portions: pc.portions,
+            })
+          )
+        )
+      )
+      void queryClient.invalidateQueries({
+        queryKey: plateKeys.range(rangeFrom, rangeTo),
+      })
+      void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
+      toast.success(t("planner.row_actions.copied", { count: targets.length }))
+    } catch (err) {
+      toastError(err, t)
+    }
+  }
+
   async function handleToggleSkip(
     dayIdx: number,
     slotId: number,
-    plateId: number | null
+    _plateId: number | null,
+    noteOverride?: string | null
   ) {
     const targetDay = days[dayIdx]
     if (!targetDay) return
     try {
-      let id = plateId
-      if (id === null) {
-        const created = await createPlate({
-          date: targetDay.date,
-          slot_id: slotId,
-        })
-        id = created.id
-        void queryClient.invalidateQueries({
-          queryKey: plateKeys.range(rangeFrom, rangeTo),
-        })
-      }
-      const existing = findPlateInDay(targetDay, slotId)
-      const nextSkipped = !existing?.skipped
-      await setSkippedMut.mutateAsync({
-        plateId: id,
-        input: { skipped: nextSkipped, note: existing?.note ?? null },
+      await toggleSkip({
+        date: targetDay.date,
+        slotId,
+        existing: findPlateInDay(targetDay, slotId),
+        noteOverride,
+        rangeFrom,
+        rangeTo,
+        setSkipped: setSkippedMut.mutateAsync,
       })
     } catch (err) {
       toastError(err, t)
@@ -332,11 +643,15 @@ export function PlannerGrid({
   const headerScrollRef = useRef<HTMLDivElement>(null)
   const bodyScrollRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<"move" | "copy">("move")
-  type PendingDelete = {
-    timeoutId: ReturnType<typeof setTimeout>
-    snapshot: Plate
-  }
-  const pendingDeletesRef = useRef(new Map<number, PendingDelete>())
+  // Pre-apply snapshot the picker hands us via onBeforeApply, consumed by
+  // the post-apply toast for undo. Kept in a ref so the callback chain
+  // doesn't trigger renders.
+  const overwriteSnapshotRef = useRef<Plate[]>([])
+  // Drag activates from the dedicated grip handle on the cell's left edge.
+  // The 6 px PointerSensor constraint keeps a quick grip-tap from being read
+  // as a drag. KeyboardSensor lives on the same handle, so Enter on the
+  // stretched-link button reliably opens the sheet — it no longer has the
+  // dual-purpose conflict that older revisions worked around.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor)
@@ -374,14 +689,7 @@ export function PlannerGrid({
       | undefined
     if (!activeData?.plateId || !overData) return
     if (overData.skipped) {
-      toastError(
-        new Error(
-          t("planner.dnd.reject_skipped", {
-            defaultValue: "Slot is marked skip",
-          })
-        ),
-        t
-      )
+      toast.error(t("planner.dnd.reject_skipped"))
       return
     }
     if (
@@ -407,6 +715,7 @@ export function PlannerGrid({
           ? findPlateInDay(srcDay, activeData.slotId!)
           : undefined
         if (!src) return
+        await flushPendingPlateDeletes()
         const created = await createPlate({
           date: overData.date!,
           slot_id: overData.slotId!,
@@ -421,6 +730,8 @@ export function PlannerGrid({
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
+        markCopyHintSeen()
       }
     } catch (err) {
       toastError(err, t)
@@ -459,6 +770,8 @@ export function PlannerGrid({
                     today={dayIsToday}
                     macros={dayMacros}
                     onClearDay={() => handleClearDay(idx)}
+                    onSaveDayTemplate={() => openSaveDay(day.date)}
+                    onApplyDayTemplate={() => setApplyDayDate(day.date)}
                     hasPlates={day.plates.length > 0}
                   />
                 )
@@ -480,20 +793,19 @@ export function PlannerGrid({
             <div
               className="grid gap-2.5"
               style={{ gridTemplateColumns: "130px repeat(7, minmax(0, 1fr))" }}
+              onKeyDown={(e) =>
+                handleGridArrowKey(e, { rows: slots.length, cols: 7 })
+              }
             >
-              {slots.map((slot) => (
+              {slots.map((slot, rowIndex) => (
                 <div key={slot.id} className="contents">
-                  <div
-                    className="flex flex-col items-center justify-center gap-1.5 px-3"
-                    data-testid={`slot-row-${slot.id}`}
-                  >
-                    <span className="grid size-6 place-items-center rounded-lg bg-surface-container text-on-surface-variant">
-                      <SlotIcon name={slot.icon} />
-                    </span>
-                    <span className="font-heading text-[12.5px] font-bold tracking-[0.04em] text-on-surface uppercase">
-                      {slotLabel(t, slot.name_key)}
-                    </span>
-                  </div>
+                  <SlotRowLabel
+                    slot={slot}
+                    days={days}
+                    onClearRow={() => handleClearRow(slot.id)}
+                    onCopyAcrossWeek={() => handleCopyRowAcrossWeek(slot.id)}
+                    onApplyTemplate={() => setRowApplySlot(slot)}
+                  />
                   {days.map((day, dayIdx) => {
                     const date = parseISO(day.date)
                     const isPast = isBefore(date, today) && !isToday(date)
@@ -509,6 +821,7 @@ export function PlannerGrid({
                           day={dayIdx}
                           date={day.date}
                           slotId={slot.id}
+                          rowIndex={rowIndex}
                           plate={plate}
                         >
                           <SlotCell
@@ -516,13 +829,19 @@ export function PlannerGrid({
                             slotId={slot.id}
                             plate={plate}
                             componentsById={componentsById}
+                            kcalTarget={kcalPerSlotTarget}
                             aiFilled={plate ? aiFilledIds.has(plate.id) : false}
                             onAdd={() => openPicker(dayIdx, slot.id)}
+                            onOpenSheet={
+                              plate
+                                ? () => openSheetForPlate(dayIdx, slot, plate)
+                                : undefined
+                            }
                             onDeletePlate={() =>
                               plate && handleDeletePlate(plate.id, dayIdx)
                             }
                             onSaveAsTemplate={
-                              plate ? () => setSavePlateId(plate.id) : undefined
+                              plate ? () => openSaveSlot(plate.id) : undefined
                             }
                             onToggleFavorite={() => {
                               const hero = plate?.components
@@ -537,11 +856,12 @@ export function PlannerGrid({
                               )
                               if (plate) clearAiFillOnPlate(plate.id)
                             }}
-                            onToggleSkip={() => {
+                            onToggleSkip={(note) => {
                               void handleToggleSkip(
                                 dayIdx,
                                 slot.id,
-                                plate?.id ?? null
+                                plate?.id ?? null,
+                                note
                               )
                               if (plate) clearAiFillOnPlate(plate.id)
                             }}
@@ -574,14 +894,14 @@ export function PlannerGrid({
           </div>
         </div>
 
-        <AddComponentSheet
+        <ComponentTraySheet
           open={addTarget !== null}
+          context={
+            addTarget ? buildTrayContext(addTarget, days, slotsById) : null
+          }
+          recentFoods={recentFoods}
           onOpenChange={(o) => !o && setAddTarget(null)}
-          defaultRole={addTarget?.defaultRole}
-          onPick={handlePick}
-          showTemplates
-          defaultSlotId={addTarget ? String(addTarget.slotId) : undefined}
-          defaultDate={addTarget ? days[addTarget.day]?.date : undefined}
+          onCommit={(items) => handleTrayCommit(items)}
         />
         <AddComponentSheet
           open={swapTarget !== null}
@@ -590,11 +910,195 @@ export function PlannerGrid({
           onPick={handleSwapPick}
         />
         <SaveAsTemplateDialog
-          open={savePlateId !== null}
-          onOpenChange={(o) => !o && setSavePlateId(null)}
-          plateId={savePlateId}
+          open={saveTarget !== null}
+          onOpenChange={(o) => !o && setSaveTarget(null)}
+          target={saveTarget}
+          defaultName={saveTargetSuggestion}
+        />
+        <TemplatePicker
+          open={applyDayDate !== null}
+          onOpenChange={(o) => !o && setApplyDayDate(null)}
+          scope="day"
+          defaultDate={applyDayDate ?? rangeFrom}
+          overlap={{ occupied: occupiedSlotKeys }}
+          onBeforeApply={({ overwrittenKeys }) => {
+            overwriteSnapshotRef.current = snapshotOverwrittenPlates(
+              rangeFrom,
+              rangeTo,
+              overwrittenKeys
+            )
+          }}
+          onApplied={(info) => {
+            showApplyToasts(
+              info,
+              overwriteSnapshotRef.current,
+              rangeFrom,
+              rangeTo,
+              t
+            )
+            overwriteSnapshotRef.current = []
+          }}
+        />
+        <SlotSheet
+          target={sheetTarget}
+          days={days}
+          componentsById={componentsById}
+          rangeFrom={rangeFrom}
+          rangeTo={rangeTo}
+          aiFilled={sheetTarget ? aiFilledIds.has(sheetTarget.plateId) : false}
+          onOpenChange={(open) => {
+            if (!open) setSheetTarget(null)
+          }}
+          onAddComponent={(target) =>
+            setAddTarget({
+              day: days.findIndex((d) => d.date === target.date),
+              slotId: target.slotId,
+              plateId: target.plateId,
+            })
+          }
+          onSwapComponent={(target, pcId, defaultRole) =>
+            setSwapTarget({
+              plateId: target.plateId,
+              pcId,
+              defaultRole,
+            })
+          }
+          onSaveAsTemplate={(plateId) => openSaveSlot(plateId)}
+          onToggleSkip={(target, currentSkipped) => {
+            const dayIdx = days.findIndex((d) => d.date === target.date)
+            if (dayIdx < 0) return
+            void handleToggleSkip(dayIdx, target.slotId, target.plateId)
+            if (currentSkipped) {
+              // Removing skip — keep sheet open for further edits.
+              return
+            }
+            // Marking skip — close the sheet so the user sees the cell update.
+            setSheetTarget(null)
+          }}
+          onDeletePlate={(plateId) => {
+            const dayIdx = days.findIndex((d) =>
+              d.plates.some((p) => p.id === plateId)
+            )
+            if (dayIdx < 0) return
+            handleDeletePlate(plateId, dayIdx)
+            setSheetTarget(null)
+          }}
+          onMovePlate={(target, newDate) => {
+            if (newDate === target.date) return
+            updatePlateMut
+              .mutateAsync({
+                id: target.plateId,
+                input: { date: newDate, slot_id: target.slotId },
+              })
+              .then(() => {
+                const day = days.find((d) => d.date === newDate)
+                if (day) {
+                  const dayKey = DAY_KEYS[day.weekday] ?? DAY_KEYS[0]
+                  toast(t("planner.mobile.moved_to", { day: t(dayKey) }))
+                }
+                setSheetTarget(null)
+              })
+              .catch((err) => {
+                toastError(err, t, t("planner.mobile.move_failed"))
+              })
+          }}
+        />
+        <RowApplyTemplateDialog
+          open={rowApplySlot !== null}
+          onOpenChange={(o) => !o && setRowApplySlot(null)}
+          slotId={rowApplySlot?.id ?? 0}
+          slotName={rowApplySlot ? slotLabel(t, rowApplySlot.name_key) : ""}
+          dates={days.map((d) => d.date)}
+          rangeFrom={rangeFrom}
+          rangeTo={rangeTo}
+          occupiedKeys={occupiedSlotKeys}
         />
       </div>
     </DndContext>
+  )
+}
+
+interface SlotRowLabelProps {
+  slot: TimeSlot
+  days: PlannerDay[]
+  onClearRow: () => void
+  onCopyAcrossWeek: () => void
+  onApplyTemplate: () => void
+}
+
+function SlotRowLabel({
+  slot,
+  days,
+  onClearRow,
+  onCopyAcrossWeek,
+  onApplyTemplate,
+}: SlotRowLabelProps) {
+  const { t } = useTranslation()
+  // Counted once per row render — drives whether destructive items render at
+  // all. Skipped plates aren't counted: "Clear row" preserves them, so the
+  // label and the action stay aligned. A row with no plates can still be the
+  // target of "apply template", so the menu itself stays available.
+  let plateCount = 0
+  for (const day of days) {
+    const p = findPlateInDay(day, slot.id)
+    if (p && !p.skipped) plateCount++
+  }
+  return (
+    <div
+      className="group/row relative flex flex-col items-center justify-center gap-1.5 px-3"
+      data-testid={`slot-row-${slot.id}`}
+    >
+      <span className="grid size-6 place-items-center rounded-lg bg-surface-container text-on-surface-variant">
+        <SlotIcon name={slot.icon} />
+      </span>
+      <span className="font-heading text-[12.5px] font-bold tracking-[0.04em] text-on-surface uppercase">
+        {slotLabel(t, slot.name_key)}
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("planner.row_actions.menu_label", {
+              slot: slotLabel(t, slot.name_key),
+            })}
+            data-testid={`slot-row-menu-${slot.id}`}
+            className="absolute top-1 right-1 size-5 text-on-surface-variant/60 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-on-surface-variant focus-visible:opacity-100 data-[state=open]:opacity-100"
+          >
+            <Lucide.MoreHorizontal className="h-3 w-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-60">
+          <DropdownMenuItem
+            onClick={onApplyTemplate}
+            data-testid={`slot-row-apply-${slot.id}`}
+          >
+            <Lucide.FileDown className="size-4" />
+            {t("planner.row_actions.apply_template")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={onCopyAcrossWeek}
+            disabled={plateCount === 0}
+            data-testid={`slot-row-copy-${slot.id}`}
+          >
+            <Lucide.Copy className="size-4" />
+            {t("planner.row_actions.copy_across")}
+          </DropdownMenuItem>
+          {plateCount > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={onClearRow}
+                variant="destructive"
+                data-testid={`slot-row-clear-${slot.id}`}
+              >
+                <Lucide.Trash2 className="size-4" />
+                {t("planner.row_actions.clear", { count: plateCount })}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }

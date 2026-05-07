@@ -379,7 +379,7 @@ func toolApplyTemplate(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "apply_template",
-		Description: "Apply a meal template starting from a given date. Creates one plate per day_offset entry in the template at start_date + offset, using the given slot.",
+		Description: "Apply a slot-scope meal template at a single (date, slot). Only works for templates with scope='slot'; day-scope and week-scope templates are not supported by this tool yet — calls against them return an error naming the actual scope.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -394,11 +394,24 @@ func toolApplyTemplate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: start_date: %v", domain.ErrInvalidInput, err)
 			}
-			plates, err := svc.Templates.Apply(ctx, in.TemplateID, startDate, in.SlotID)
+			tmpl, err := svc.Templates.Get(ctx, in.TemplateID)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(map[string]any{"plates_created": len(plates), "effect": "plate_changed"}), ToolEffectPlateChanged, nil
+			if tmpl.Scope != template.ScopeSlot && tmpl.Scope != "" {
+				return nil, ToolEffectNone, fmt.Errorf(
+					"%w: template %d has scope=%s; this tool only applies slot-scope templates",
+					domain.ErrInvalidInput, in.TemplateID, tmpl.Scope,
+				)
+			}
+			result, err := svc.Templates.Apply(ctx, in.TemplateID, template.ApplyPayload{
+				Date:   &startDate,
+				SlotID: &in.SlotID,
+			})
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			return mustJSON(map[string]any{"plates_created": len(result.Created), "effect": "plate_changed"}), ToolEffectPlateChanged, nil
 		},
 	}
 }

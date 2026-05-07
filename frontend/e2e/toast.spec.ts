@@ -2,6 +2,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  pickAndCommitFood,
   seedLeafFood,
   seedSlot,
   test,
@@ -39,9 +40,11 @@ test("mutation error shows a destructive toast with i18n message", async ({
     const sheet = page.getByRole("dialog")
     await expect(sheet).toBeVisible()
     await sheet.locator("input").first().fill(`Toast food ${tag}`)
-    await sheet
-      .getByRole("button", { name: new RegExp(`Toast food ${tag}`) })
-      .click()
+    // Plate POST is intercepted to 500; the test asserts the toast surface,
+    // not the response object — skip the response wait.
+    await pickAndCommitFood(page, sheet, new RegExp(`Toast food ${tag}`), {
+      awaitResponse: false,
+    })
 
     // Toast rendered by sonner — text taken from i18n.
     await expect(page.getByText("Something went wrong.")).toBeVisible()

@@ -23,6 +23,7 @@ import {
 } from "@/lib/api/plates"
 
 import { plateKeys } from "./keys"
+import { flushPendingPlateDeletes } from "./pending-plate-deletes"
 
 export function usePlatesRange(from: string, to: string) {
   return useQuery({
@@ -94,10 +95,12 @@ export function useCreatePlate(rangeFrom: string, rangeTo: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: createPlate,
+    onMutate: () => flushPendingPlateDeletes(),
     onSettled: () => {
       void qc.invalidateQueries({
         queryKey: plateKeys.range(rangeFrom, rangeTo),
       })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -107,6 +110,7 @@ export function useUpdatePlate(rangeFrom?: string, rangeTo?: string) {
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: UpdatePlateInput }) =>
       updatePlate(id, input),
+    onMutate: () => flushPendingPlateDeletes(),
     onSettled: () => {
       if (rangeFrom && rangeTo) {
         void qc.invalidateQueries({
@@ -115,6 +119,7 @@ export function useUpdatePlate(rangeFrom?: string, rangeTo?: string) {
       } else {
         void qc.invalidateQueries({ queryKey: plateKeys.all })
       }
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -123,8 +128,10 @@ export function useDeletePlate() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => deletePlate(id),
+    onMutate: () => flushPendingPlateDeletes(),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -139,8 +146,10 @@ export function useAddPlateComponent() {
       plateId: number
       input: AddPlateComponentInput
     }) => addPlateComponent(plateId, input),
+    onMutate: () => flushPendingPlateDeletes(),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -157,8 +166,10 @@ export function useSwapPlateComponent() {
       pcId: number
       input: UpdatePlateComponentInput
     }) => updatePlateComponent(plateId, pcId, input),
+    onMutate: () => flushPendingPlateDeletes(),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -175,8 +186,10 @@ export function useUpdatePlateComponentPortions() {
       pcId: number
       portions: number
     }) => updatePlateComponent(plateId, pcId, { portions }),
+    onMutate: () => flushPendingPlateDeletes(),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -191,8 +204,10 @@ export function useSetPlateSkipped() {
       plateId: number
       input: SetPlateSkippedInput
     }) => setPlateSkipped(plateId, input),
+    onMutate: () => flushPendingPlateDeletes(),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }
@@ -202,8 +217,10 @@ export function useRemovePlateComponent() {
   return useMutation({
     mutationFn: ({ plateId, pcId }: { plateId: number; pcId: number }) =>
       deletePlateComponent(plateId, pcId),
+    onMutate: () => flushPendingPlateDeletes(),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { computeAnchor, windowRange } from "./planner-window"
+import { computeAnchor, shiftYMD, windowRange } from "./planner-window"
 
 // Helper: build a Date at midnight local time for a given YYYY-MM-DD string.
 function d(ymd: string): Date {
@@ -138,5 +138,27 @@ describe("windowRange", () => {
     const { from, to } = windowRange(anchor, 7)
     expect(from).toBe("2025-12-29")
     expect(to).toBe("2026-01-04")
+  })
+})
+
+describe("shiftYMD", () => {
+  it("shifts forward by 7", () => {
+    expect(shiftYMD("2026-04-27", 7)).toBe("2026-05-04")
+  })
+
+  it("shifts backward by 7", () => {
+    expect(shiftYMD("2026-04-27", -7)).toBe("2026-04-20")
+  })
+
+  it("crosses month boundary forward", () => {
+    expect(shiftYMD("2026-01-29", 7)).toBe("2026-02-05")
+  })
+
+  it("crosses year boundary backward", () => {
+    expect(shiftYMD("2026-01-03", -7)).toBe("2025-12-27")
+  })
+
+  it("zero shift is a no-op", () => {
+    expect(shiftYMD("2026-04-27", 0)).toBe("2026-04-27")
   })
 })

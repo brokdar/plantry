@@ -8,18 +8,29 @@ interface DndCellWrapperProps {
   day: number
   date?: string
   slotId: number
+  /** Slot row index (0-based). Used for grid arrow-key navigation via the
+   *  data-cell-pos attribute below. */
+  rowIndex: number
   plate: Plate | undefined
   children: ReactNode
 }
 
 // Each planner grid cell is BOTH a droppable target and (if it carries a
 // plate) a draggable source. Empty + skipped cells are droppable only.
-// The SlotCell ancestor remains responsible for its content; this wrapper is
-// purely a dnd-kit adapter so planner layout stays readable.
+//
+// The wrapper itself is the activator: dnd-kit listeners spread onto this
+// div so a pointerdown anywhere on the cell starts a drag once the
+// PointerSensor's distance threshold is met (configured in PlannerGrid).
+// We deliberately omit `attributes` — those add role="button"/tabIndex=0/
+// aria-roledescription, which would nest a button inside the stretched-link
+// "open sheet" button living below. Dropping `attributes` also drops
+// KeyboardSensor activation; arrow-nav + Enter/S/Del cover the keyboard
+// story for the grid.
 export function DndCellWrapper({
   day,
   date,
   slotId,
+  rowIndex,
   plate,
   children,
 }: DndCellWrapperProps) {
@@ -39,17 +50,16 @@ export function DndCellWrapper({
     },
   })
 
-  const draggableId = plate ? `plate:${plate.id}` : null
+  const draggable = !!plate && !plate.skipped
   const {
     setNodeRef: setDragRef,
     listeners,
-    attributes,
     transform,
     isDragging,
   } = useDraggable({
-    id: draggableId ?? `plate:noop-${day}-${slotId}`,
+    id: draggable ? `plate:${plate.id}` : `plate:noop-${day}-${slotId}`,
     data: { plateId: plate?.id, day, date, slotId },
-    disabled: !plate || plate.skipped,
+    disabled: !draggable,
   })
 
   const dragStyle: CSSProperties = transform
@@ -58,23 +68,22 @@ export function DndCellWrapper({
       }
     : {}
 
-  // isOver + active together distinguish hover feedback. We only flag the
-  // drop target during an actual drag. The "rejected" outline for skipped
-  // cells is rendered here so the user sees it immediately; the final
-  // reject-and-toast still happens in onDragEnd.
+  // closestCorners always resolves to the nearest droppable, so a skipped cell
+  // would silently snap drops to a neighbour if we disabled it. Keep it active
+  // and reject in onDragEnd; render a destructive outline for hover feedback.
   const isRejectedDrop = isOver && !!active && plate?.skipped === true
 
   return (
     <div
       ref={(el) => {
         setDropRef(el)
-        if (plate && !plate.skipped) setDragRef(el)
+        if (draggable) setDragRef(el)
       }}
-      {...(plate && !plate.skipped ? listeners : {})}
-      {...(plate && !plate.skipped ? attributes : {})}
+      {...(draggable ? listeners : {})}
       data-testid={`cell-${day}-${slotId}`}
       data-slot-drop-zone={`${day}:${slotId}`}
-      data-slot-drag-handle={plate && !plate.skipped ? plate.id : undefined}
+      data-slot-drag-handle={draggable ? plate.id : undefined}
+      data-cell-pos={`${rowIndex}-${day}`}
       className={cn(
         "relative outline-offset-2",
         isOver &&

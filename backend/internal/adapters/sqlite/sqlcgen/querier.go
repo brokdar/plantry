@@ -23,8 +23,8 @@ type Querier interface {
 	CreateFoodTag(ctx context.Context, arg CreateFoodTagParams) error
 	CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate, error)
 	CreatePlateComponent(ctx context.Context, arg CreatePlateComponentParams) (PlateComponent, error)
-	CreateTemplate(ctx context.Context, name string) (Template, error)
-	CreateTemplateComponent(ctx context.Context, arg CreateTemplateComponentParams) (TemplateComponent, error)
+	CreateTemplate(ctx context.Context, arg CreateTemplateParams) (Template, error)
+	CreateTemplateEntry(ctx context.Context, arg CreateTemplateEntryParams) (TemplateEntry, error)
 	CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) (TimeSlot, error)
 	CreateVariantGroup(ctx context.Context, name string) (VariantGroup, error)
 	DeleteConversation(ctx context.Context, id int64) (sql.Result, error)
@@ -38,7 +38,7 @@ type Querier interface {
 	DeletePlateFeedback(ctx context.Context, plateID int64) (sql.Result, error)
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTemplate(ctx context.Context, id int64) (sql.Result, error)
-	DeleteTemplateComponentsByTemplate(ctx context.Context, templateID int64) (sql.Result, error)
+	DeleteTemplateEntriesByTemplate(ctx context.Context, templateID int64) (sql.Result, error)
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
 	GetFood(ctx context.Context, id int64) (Food, error)
@@ -64,8 +64,9 @@ type Querier interface {
 	ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDateRangeParams) ([]Plate, error)
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
-	ListTemplateComponentsByTemplate(ctx context.Context, templateID int64) ([]TemplateComponent, error)
+	ListTemplateEntriesByTemplate(ctx context.Context, templateID int64) ([]TemplateEntry, error)
 	ListTemplates(ctx context.Context) ([]Template, error)
+	ListTemplatesByScope(ctx context.Context, scope string) ([]Template, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	MarkFoodCooked(ctx context.Context, arg MarkFoodCookedParams) error
 	// Placeholder query so sqlc has something to generate in Phase 0. Real

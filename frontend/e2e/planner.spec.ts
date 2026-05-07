@@ -3,6 +3,7 @@ import { expect, test } from "./helpers"
 import {
   cleanupFood,
   cleanupSlot,
+  pickAndCommitFood,
   seedComposedFood,
   seedLeafFood,
   seedSlot,
@@ -41,15 +42,9 @@ test.describe("Weekly planner", () => {
       const sheet = page.getByRole("dialog")
       await expect(sheet).toBeVisible()
 
-      // Search for the food and click it — plate is created immediately.
+      // Search for the food, stage it, and commit the tray.
       await sheet.locator("input").first().fill(`Chicken curry ${tag}`)
-      const createPlateResp = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
-      )
-      await sheet
-        .getByRole("button", { name: new RegExp(`Chicken curry ${tag}`) })
-        .click()
-      await createPlateResp
+      await pickAndCommitFood(page, sheet, new RegExp(`Chicken curry ${tag}`))
 
       // Hero title shows the component name.
       await expect(cell.getByText(`Chicken curry ${tag}`)).toBeVisible()

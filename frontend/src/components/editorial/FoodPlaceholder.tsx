@@ -66,10 +66,17 @@ export function FoodPlaceholder({
   "aria-label": ariaLabel,
 }: FoodPlaceholderProps) {
   const Icon = ICONS[category] ?? ICONS.default
+  // When the caller doesn't provide an aria-label, treat the placeholder as
+  // pure decoration: hide it from the accessibility tree so its text doesn't
+  // pollute the accessible name of the surrounding button/list-item (which
+  // already names the food). When an aria-label is given, expose it as an
+  // image with that label for standalone use.
+  const labelled = !!ariaLabel
   return (
     <div
-      role="img"
-      aria-label={ariaLabel ?? "food placeholder"}
+      role={labelled ? "img" : "presentation"}
+      aria-label={labelled ? ariaLabel : undefined}
+      aria-hidden={labelled ? undefined : true}
       className={cn(
         "pointer-events-none flex items-center justify-center overflow-hidden",
         ROUNDED[rounded],

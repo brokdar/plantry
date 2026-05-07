@@ -1,26 +1,43 @@
 import {
   BarChart2,
-  Bookmark,
+  BookmarkPlus,
   Download,
+  FileDown,
+  Keyboard,
+  LayoutList,
+  MoreHorizontal,
   Settings,
   Sparkles,
   Trash2,
 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { ChatPanel } from "@/components/chat/ChatPanel"
+import { ShortcutCheatsheet } from "@/components/planner/ShortcutCheatsheet"
 import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
+import { TemplatePicker } from "@/components/templates/TemplatePicker"
+import {
+  showApplyToasts,
+  snapshotOverwrittenPlates,
+} from "@/lib/template-apply-toast"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { DateRangeNavigator } from "@/components/planner/DateRangeNavigator"
-import { FillEmptySlotsButton } from "@/components/planner/FillEmptySlotsButton"
+import { EmptyWeekCTA } from "@/components/planner/EmptyWeekCTA"
 import { MobilePlannerGrid } from "@/components/planner/MobilePlannerGrid"
 import { NutritionWeekSummary } from "@/components/planner/NutritionWeekSummary"
 import { PlannerGrid, type PlannerDay } from "@/components/planner/PlannerGrid"
 import { RevertBanner } from "@/components/planner/RevertBanner"
 import { ShoppingPanel } from "@/components/planner/ShoppingPanel"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Sheet,
   SheetContent,
@@ -33,9 +50,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { deletePlate } from "@/lib/api/plates"
+import {
+  addPlateComponent,
+  createPlate,
+  deletePlate,
+  listPlates,
+  type Plate,
+} from "@/lib/api/plates"
+import { isCheatsheetShortcut } from "@/lib/planner-keynav"
 import {
   computeAnchor,
+  shiftYMD,
   windowRange,
   type AnchorMode,
 } from "@/lib/planner-window"
@@ -74,7 +99,24 @@ function PlanPage() {
   const [shoppingOpen, setShoppingOpen] = useState(false)
   const [nutritionOpen, setNutritionOpen] = useState(false)
   const [saveRangeOpen, setSaveRangeOpen] = useState(false)
+  const [applyWeekOpen, setApplyWeekOpen] = useState(false)
+  const [cheatsheetOpen, setCheatsheetOpen] = useState(false)
+
+  // Global `?` shortcut. Lives at the route level so the toolbar menu item
+  // and the keyboard shortcut share one dialog instance.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!isCheatsheetShortcut(e)) return
+      e.preventDefault()
+      setCheatsheetOpen(true)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
+  const overwriteSnapshotRef = useRef<Plate[]>([])
   const openChat = useChatUI((s) => s.setOpen)
+  const openChatWith = useChatUI((s) => s.openWith)
+  const setChatMode = useChatUI((s) => s.setMode)
 
   const settingsQuery = useSettings()
   const settingValue = (key: string, fallback: string) =>
@@ -124,7 +166,15 @@ function PlanPage() {
   const aiFill = usePlannerUI((s) => s.aiFill)
   const recordAiFilledPlate = usePlannerUI((s) => s.recordAiFilledPlate)
   const dismissAiFillBanner = usePlannerUI((s) => s.dismissAiFillBanner)
+  const reopenAiFillBanner = usePlannerUI((s) => s.reopenAiFillBanner)
   const endAiFillSession = usePlannerUI((s) => s.endAiFillSession)
+  const startAiFill = usePlannerUI((s) => s.startAiFill)
+
+  function handleAiFill() {
+    startAiFill({ from, to })
+    setChatMode("fill_empty")
+    openChatWith(t("planner.fill_empty.progress"))
+  }
 
   // Watch plates created after the fill session started. Zustand actions don't
   // trigger re-render loops, so calling recordAiFilledPlate inside an effect is safe.
@@ -149,6 +199,7 @@ function PlanPage() {
     }
     endAiFillSession()
     await queryClient.invalidateQueries({ queryKey: plateKeys.range(from, to) })
+    void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
   }
 
   function handleClearWindow() {
@@ -161,11 +212,13 @@ function PlanPage() {
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(from, to),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       } catch (err) {
         toastError(err, t)
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(from, to),
         })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
       }
     }, 5000)
     toast(t("planner.week_cleared"), {
@@ -183,6 +236,71 @@ function PlanPage() {
   }
 
   const slots = slotsQuery.data?.items ?? []
+
+  const [copyingLastWeek, setCopyingLastWeek] = useState(false)
+
+  async function handleCopyLastWeek() {
+    if (copyingLastWeek) return
+    const prevFrom = shiftYMD(from, -7)
+    const prevTo = shiftYMD(to, -7)
+    setCopyingLastWeek(true)
+    try {
+      const prev = await listPlates(prevFrom, prevTo)
+      // Skip skipped plates and components-less plates — they wouldn't add
+      // anything meaningful to the new week and the user can re-skip if needed.
+      const sourcePlates = prev.plates.filter(
+        (p) => !p.skipped && p.components.length > 0
+      )
+      if (sourcePlates.length === 0) {
+        toast(t("planner.empty_week.copy_empty"))
+        return
+      }
+      // Two-phase parallelism — create every plate at once, then add every
+      // component at once. Cuts ~N×M sequential round-trips down to two
+      // parallel waves; backend has no ordering constraints across plates.
+      const createdPlates = await Promise.all(
+        sourcePlates.map((p) =>
+          createPlate({
+            date: shiftYMD(p.date, 7),
+            slot_id: p.slot_id,
+            note: p.note ?? undefined,
+          })
+        )
+      )
+      await Promise.all(
+        createdPlates.flatMap((created, idx) =>
+          sourcePlates[idx]!.components.map((pc) =>
+            addPlateComponent(created.id, {
+              food_id: pc.food_id,
+              portions: pc.portions,
+            })
+          )
+        )
+      )
+      void queryClient.invalidateQueries({
+        queryKey: plateKeys.range(from, to),
+      })
+      void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
+      toast.success(
+        t("planner.empty_week.copied", { count: sourcePlates.length })
+      )
+    } catch (err) {
+      toastError(err, t)
+    } finally {
+      setCopyingLastWeek(false)
+    }
+  }
+
+  // Skipped plates are not occupied — a skip marker means "I won't eat here",
+  // so applying a template should fill the slot without a conflict warning.
+  const occupiedSlotKeys = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of plates) {
+      if (p.skipped) continue
+      set.add(`${p.date}|${p.slot_id}`)
+    }
+    return set
+  }, [plates])
 
   if (slotsQuery.isLoading || platesQuery.isLoading) {
     return (
@@ -215,16 +333,25 @@ function PlanPage() {
     month: "short",
     day: "numeric",
   })
-  const rangeLabel = t("planner.range_label", {
-    from: fmt.format(new Date(from + "T00:00:00")),
-    to: fmt.format(new Date(to + "T00:00:00")),
-  })
 
   const showRevertBanner =
     aiFill.range?.from === from &&
     aiFill.range?.to === to &&
     !aiFill.dismissed &&
     aiFill.plateIds.length > 0
+
+  // Pill shown after the user dismisses the revert banner — keeps the AI
+  // session reachable so revert never becomes a one-shot decision.
+  const showAiSessionPill =
+    aiFill.range?.from === from &&
+    aiFill.range?.to === to &&
+    aiFill.dismissed &&
+    aiFill.plateIds.length > 0
+
+  const weekTemplateName = t("template.name_suggestion_week", {
+    date: fmt.format(new Date(from + "T00:00:00")),
+    defaultValue: `Week · ${fmt.format(new Date(from + "T00:00:00"))}`,
+  })
 
   const dailyAvgKcal = (() => {
     const days_ = nutritionQuery.data?.days
@@ -239,24 +366,7 @@ function PlanPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 md:px-8 md:py-12">
-      <PageHeader
-        eyebrow={rangeLabel}
-        title={t("planner.title")}
-        actions={
-          <div className="flex items-center gap-2">
-            {aiSettings?.enabled && (
-              <FillEmptySlotsButton rangeFrom={from} rangeTo={to} />
-            )}
-            <Button
-              onClick={() => setShoppingOpen(true)}
-              className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
-            >
-              <Download className="mr-1.5 size-4" />
-              {t("shopping.button")}
-            </Button>
-          </div>
-        }
-      />
+      <PageHeader title={t("planner.title")} />
 
       {showRevertBanner && (
         <RevertBanner
@@ -273,118 +383,172 @@ function PlanPage() {
         <DateRangeNavigator
           from={from}
           to={to}
-          days={7}
-          planAnchor={anchorMode}
-          shoppingDay={shoppingDay}
           onPrev={() => setWindowOffset((o) => o - 7)}
           onNext={() => setWindowOffset((o) => o + 7)}
           onToday={() => setWindowOffset(0)}
-          onJumpToToday={() => {
-            const todayMs = new Date().setHours(0, 0, 0, 0)
-            setWindowOffset(Math.round((todayMs - anchor.getTime()) / 86400000))
-          }}
         />
         <TooltipProvider>
-          <div className="flex flex-wrap items-center gap-3">
-            {dailyAvgKcal !== null && (
-              <div className="flex items-baseline gap-2 rounded-full bg-surface-container-highest px-4 py-1.5">
-                <span className="font-heading text-sm font-bold text-primary">
-                  {dailyAvgKcal.toLocaleString()} kcal
-                </span>
-                <span className="text-[9px] font-bold tracking-widest text-on-surface-variant uppercase">
-                  {t("planner.daily_avg")}
-                </span>
-              </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {showAiSessionPill && (
+              <button
+                type="button"
+                onClick={reopenAiFillBanner}
+                data-testid="ai-session-pill"
+                aria-label={t("planner.ai_session_pill_aria", {
+                  count: aiFill.plateIds.length,
+                })}
+                className="flex items-center gap-1.5 rounded-full border border-ai-accent/40 bg-ai-accent-bg/70 px-3 py-1 font-heading text-[11px] font-bold tracking-[0.06em] text-ai-accent-fg uppercase transition-colors hover:bg-ai-accent-bg"
+              >
+                <Sparkles className="h-3 w-3" aria-hidden />
+                {t("planner.ai_session_pill", {
+                  count: aiFill.plateIds.length,
+                })}
+              </button>
             )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSaveRangeOpen(true)}
-                  aria-label={t("template.save_as")}
-                  data-testid="save-range-template"
-                  className="hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
-                >
-                  <Bookmark className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t("template.save_as")}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleClearWindow}
-                  aria-label={t("planner.clear_week")}
-                  data-testid="clear-week"
-                  className="hover:bg-destructive/10 hover:text-destructive [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t("planner.clear_week")}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setNutritionOpen(true)}
-                  aria-label={t("nutrition.button")}
-                  className="hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
-                >
-                  <BarChart2 className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t("nutrition.button")}
-              </TooltipContent>
-            </Tooltip>
-            {aiSettings?.enabled && (
+            <div className="flex items-baseline gap-2 rounded-full bg-surface-container-highest px-4 py-1.5">
+              <span
+                className={
+                  "font-heading text-sm font-bold tabular-nums " +
+                  (dailyAvgKcal !== null
+                    ? "text-primary"
+                    : "text-on-surface-variant/40")
+                }
+              >
+                {dailyAvgKcal !== null ? dailyAvgKcal.toLocaleString() : "—"}{" "}
+                kcal
+              </span>
+              <span className="text-[9px] font-bold tracking-widest text-on-surface-variant uppercase">
+                {t("planner.daily_avg")}
+              </span>
+            </div>
+            <DropdownMenu>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openChat(true)}
-                    aria-label={t("chat.button")}
-                    data-testid="chat-open-button"
-                    className="hover:bg-primary/10 hover:text-primary [&_svg]:transition-transform [&_svg]:duration-150 hover:[&_svg]:scale-110"
-                  >
-                    <Sparkles className="size-4" />
-                  </Button>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("planner.more_actions")}
+                      data-testid="planner-overflow"
+                      className="hover:bg-primary/10 hover:text-primary"
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  {t("chat.button")}
+                  {t("planner.more_actions")}
                 </TooltipContent>
               </Tooltip>
-            )}
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuItem
+                  onClick={() => setApplyWeekOpen(true)}
+                  data-testid="week-template-apply"
+                >
+                  <FileDown className="size-4" />
+                  {t("template.apply_week")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setSaveRangeOpen(true)}
+                  disabled={plates.length === 0}
+                  data-testid="week-template-save"
+                >
+                  <BookmarkPlus className="size-4" />
+                  {t("template.save_week")}
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/templates" data-testid="week-template-manage">
+                    <LayoutList className="size-4" />
+                    {t("template.manage")}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setNutritionOpen(true)}>
+                  <BarChart2 className="size-4" />
+                  {t("nutrition.button")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setCheatsheetOpen(true)}
+                  data-testid="open-cheatsheet"
+                >
+                  <Keyboard className="size-4" />
+                  {t("planner.shortcuts.menu_item")}
+                </DropdownMenuItem>
+                {aiSettings?.enabled && (
+                  <>
+                    <DropdownMenuItem onClick={handleAiFill}>
+                      <Sparkles className="size-4" />
+                      {t("planner.fill_empty_cta")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => openChat(true)}
+                      data-testid="chat-open-button"
+                    >
+                      <Sparkles className="size-4" />
+                      {t("chat.button")}
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleClearWindow}
+                  disabled={plates.length === 0}
+                  variant="destructive"
+                  data-testid="clear-week"
+                >
+                  <Trash2 className="size-4" />
+                  {t("planner.clear_week")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              onClick={() => setShoppingOpen(true)}
+              className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
+            >
+              <Download className="mr-1.5 size-4" />
+              {t("shopping.button")}
+            </Button>
           </div>
         </TooltipProvider>
       </div>
 
-      <div className="-mx-2 hidden md:-mx-4 md:block">
-        <PlannerGrid
-          days={days}
-          slots={slots}
-          rangeFrom={from}
-          rangeTo={to}
-          nutritionDays={nutritionQuery.data?.days}
+      {plates.length === 0 && (
+        <EmptyWeekCTA
+          windowFrom={from}
+          aiEnabled={!!aiSettings?.enabled}
+          copying={copyingLastWeek}
+          onCopyLastWeek={() => void handleCopyLastWeek()}
+          onApplyTemplate={() => setApplyWeekOpen(true)}
+          onAiFill={handleAiFill}
         />
-      </div>
-      <div className="md:hidden">
-        <MobilePlannerGrid
-          days={days}
-          slots={slots}
-          rangeFrom={from}
-          rangeTo={to}
-        />
+      )}
+
+      {/* Keyed by window range so React mounts a fresh subtree per window —
+          gives Tailwind's `animate-in` a clean trigger for the slide+fade.
+          Wrapped in motion-safe so users with reduced-motion get an instant
+          render. */}
+      <div
+        key={`window-${from}_${to}`}
+        className="motion-safe:animate-in motion-safe:duration-150 motion-safe:ease-out motion-safe:fade-in-30 motion-safe:slide-in-from-bottom-1"
+        data-testid="planner-window"
+      >
+        <div className="-mx-2 hidden md:-mx-4 md:block">
+          <PlannerGrid
+            days={days}
+            slots={slots}
+            rangeFrom={from}
+            rangeTo={to}
+            nutritionDays={nutritionQuery.data?.days}
+          />
+        </div>
+        <div className="md:hidden">
+          <MobilePlannerGrid
+            days={days}
+            slots={slots}
+            rangeFrom={from}
+            rangeTo={to}
+          />
+        </div>
       </div>
 
       <ShoppingPanel
@@ -412,7 +576,35 @@ function PlanPage() {
       <SaveAsTemplateDialog
         open={saveRangeOpen}
         onOpenChange={setSaveRangeOpen}
-        range={{ from, to }}
+        target={{
+          scope: "week",
+          from,
+          to,
+          plateCount: plates.filter((p) => !p.skipped).length,
+        }}
+        defaultName={weekTemplateName}
+      />
+      <TemplatePicker
+        open={applyWeekOpen}
+        onOpenChange={setApplyWeekOpen}
+        scope="week"
+        defaultDate={from}
+        overlap={{ occupied: occupiedSlotKeys }}
+        onBeforeApply={({ overwrittenKeys }) => {
+          overwriteSnapshotRef.current = snapshotOverwrittenPlates(
+            from,
+            to,
+            overwrittenKeys
+          )
+        }}
+        onApplied={(info) => {
+          showApplyToasts(info, overwriteSnapshotRef.current, from, to, t)
+          overwriteSnapshotRef.current = []
+        }}
+      />
+      <ShortcutCheatsheet
+        open={cheatsheetOpen}
+        onOpenChange={setCheatsheetOpen}
       />
     </div>
   )

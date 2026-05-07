@@ -3,23 +3,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   applyTemplate,
   createTemplate,
-  createTemplateFromRange,
   deleteTemplate,
   getTemplate,
   getTemplates,
   updateTemplate,
   type ApplyTemplateInput,
-  type CreateTemplateFromRangeInput,
   type CreateTemplateInput,
+  type TemplateScope,
   type UpdateTemplateInput,
 } from "@/lib/api/templates"
 
 import { plateKeys, templateKeys } from "./keys"
 
-export function useTemplates() {
+/** List templates, optionally filtered to a single scope. Pass undefined to
+ * fetch all scopes — used by the index page. */
+export function useTemplates(scope?: TemplateScope) {
   return useQuery({
-    queryKey: templateKeys.lists(),
-    queryFn: getTemplates,
+    queryKey: templateKeys.list(scope),
+    queryFn: () => getTemplates(scope),
   })
 }
 
@@ -77,17 +78,7 @@ export function useApplyTemplate() {
     }) => applyTemplate(templateId, input),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
-    },
-  })
-}
-
-export function useCreateTemplateFromRange() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (input: CreateTemplateFromRangeInput) =>
-      createTemplateFromRange(input),
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: templateKeys.lists() })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
   })
 }

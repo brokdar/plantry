@@ -74,6 +74,14 @@
   --color-macro-fiber: var(--macro-fiber);
   --color-macro-fiber-soft: var(--macro-fiber-soft);
 
+  /* AI accent — gold leaf treatment for AI-filled badges, revert banner, and
+     the AI session pill. One source of truth so theme passes don't have to
+     find every literal. */
+  --color-ai-accent: var(--ai-accent);
+  --color-ai-accent-bg: var(--ai-accent-bg);
+  --color-ai-accent-fg: var(--ai-accent-fg);
+  --color-ai-accent-border: var(--ai-accent-border);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -148,6 +156,12 @@
   --macro-fat-soft: #dbe3dc;
   --macro-fiber: #a38b6a;
   --macro-fiber-soft: #ece3d4;
+
+  /* AI accent palette (gold leaf) */
+  --ai-accent: #c2974a;
+  --ai-accent-bg: #f1e3c4;
+  --ai-accent-fg: #6a4f20;
+  --ai-accent-border: #8a6a2f;
 
   --radius: 0.625rem;
 
@@ -227,6 +241,12 @@
   --macro-fat-soft: #24302a;
   --macro-fiber: #bfa483;
   --macro-fiber-soft: #322a20;
+
+  /* AI accent — dark mode: lift the gold for legibility on dark surfaces. */
+  --ai-accent: #d6ae65;
+  --ai-accent-bg: #3b2e16;
+  --ai-accent-fg: #f1e3c4;
+  --ai-accent-border: #b88f3e;
 
   --sidebar: var(--surface-container-low);
   --sidebar-foreground: var(--on-surface);
