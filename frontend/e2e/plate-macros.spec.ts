@@ -43,7 +43,7 @@ test.describe("Plate macros — Phase 2 read-only surfaces", () => {
 
     try {
       await page.goto("/")
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
+      const cell = page.getByTestId(`cell-0-${slot.id}`).first()
       await expect(cell).toBeVisible()
 
       // Open the picker tray for the empty cell. Target the tray sheet by
@@ -52,7 +52,7 @@ test.describe("Plate macros — Phase 2 read-only surfaces", () => {
       await cell.getByRole("button", { name: /plan meal/i }).click()
       const sheet = page.getByTestId("tray-sheet")
       await expect(sheet).toBeVisible()
-      await sheet.locator("input").first().fill(`Dish ${tag}`)
+      await sheet.getByTestId("tray-search").fill(`Dish ${tag}`)
 
       // Stage the dish (1 portion) and assert the running total before commit.
       await sheet
@@ -64,12 +64,16 @@ test.describe("Plate macros — Phase 2 read-only surfaces", () => {
       await expect(runningKcal).toContainText(/200/)
 
       // Commit the staged tray. We wait for the plate POST so the planner
-      // cache invalidation has time to schedule the macros refetch.
+      // cache invalidation has time to schedule the macros refetch, and
+      // capture the plate id so the API cross-check below filters to our
+      // plate (other parallel tests on the same date share the response).
       const platePost = page.waitForResponse(
-        (r) => r.url().includes("/plates") && r.request().method() === "POST"
+        (r) =>
+          /\/api\/plates(\?|$)/.test(r.url()) && r.request().method() === "POST"
       )
       await sheet.getByTestId("tray-commit").click()
-      await platePost
+      const platePostRes = await platePost
+      const ourPlate = (await platePostRes.json()) as { id: number }
       await expect(sheet).not.toBeVisible()
 
       // 1) Cell shows kcal. Allow extra time because the macros endpoint
@@ -94,9 +98,12 @@ test.describe("Plate macros — Phase 2 read-only surfaces", () => {
       const macrosBody = (await macrosRes.json()) as {
         plates: { plate_id: number; macros: { kcal: number } }[]
       }
-      const seeded = macrosBody.plates[0]
-      expect(seeded).toBeDefined()
-      expect(Math.round(seeded.macros.kcal)).toBe(200)
+      const seeded = macrosBody.plates.find((p) => p.plate_id === ourPlate.id)
+      expect(
+        seeded,
+        `plate ${ourPlate.id} missing from macros response`
+      ).toBeDefined()
+      expect(Math.round(seeded!.macros.kcal)).toBe(200)
     } finally {
       await cleanupFood(dish.id)
       await cleanupFood(rice.id)

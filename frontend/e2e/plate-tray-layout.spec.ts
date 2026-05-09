@@ -1,37 +1,14 @@
 import {
-  API,
-  apiRequest,
   cleanupFood,
   cleanupSlot,
   expect,
   seedComposedFood,
   seedLeafFood,
+  seedPlateWithComponent,
   seedSlot,
   test,
   uid,
 } from "./helpers"
-// `seedComposedFood` is used to seed the existing-plate dish in the
-// "non-empty plate" test below.
-
-/** Seed a plate via the date-keyed POST endpoint and add one component so
- *  the tray opens on a non-empty plate. Returns the plate id for cleanup
- *  via the slot teardown helpers. */
-async function seedPlateWithComponent(
-  date: string,
-  slotId: number,
-  foodId: number
-): Promise<{ id: number }> {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/plates", {
-    data: { date, slot_id: slotId },
-  })
-  const plate = (await res.json()) as { id: number }
-  await ctx.post(`/api/plates/${plate.id}/components`, {
-    data: { food_id: foodId, portions: 1 },
-  })
-  await ctx.dispose()
-  return plate
-}
 
 function todayISO(): string {
   const d = new Date()
@@ -50,7 +27,7 @@ test.describe("Plate tray layout — Phase 4 composition-first preview", () => {
     const slot = await seedSlot(`slot.lunch_${tag}`, "Sun", 800)
     try {
       await page.goto("/")
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
+      const cell = page.getByTestId(`cell-0-${slot.id}`).first()
       await expect(cell).toBeVisible()
       await cell.getByRole("button", { name: /plan meal/i }).click()
 
@@ -77,19 +54,20 @@ test.describe("Plate tray layout — Phase 4 composition-first preview", () => {
     })
     try {
       await page.goto("/")
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
+      const cell = page.getByTestId(`cell-0-${slot.id}`).first()
       await cell.getByRole("button", { name: /plan meal/i }).click()
       const sheet = page.getByTestId("tray-sheet")
       await expect(sheet).toBeVisible()
+      const search = sheet.getByTestId("tray-search")
 
       // Stage three items and verify each shows up as a staged pill.
       for (const name of [`Tofu ${tag}`, `Rice ${tag}`, `Broccoli ${tag}`]) {
-        await sheet.locator("input").first().fill(name)
+        await search.fill(name)
         await sheet
           .getByRole("button", { name: new RegExp(name) })
           .first()
           .click()
-        await sheet.locator("input").first().fill("")
+        await search.fill("")
       }
 
       const preview = sheet.getByTestId("draft-plate-preview")
@@ -148,11 +126,14 @@ test.describe("Plate tray layout — Phase 4 composition-first preview", () => {
     // Seed a plate that already has the existing dish on it so the tray
     // opens on a non-empty plate and the preview can render the muted
     // existing-vs-staged distinction.
-    await seedPlateWithComponent(todayISO(), slot.id, existingDish.id)
+    await seedPlateWithComponent(todayISO(), slot.id, {
+      food_id: existingDish.id,
+      portions: 1,
+    })
 
     try {
       await page.goto("/")
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
+      const cell = page.getByTestId(`cell-0-${slot.id}`).first()
       await expect(cell).toBeVisible()
       // Open the slot sheet first (the cell is filled), then click the
       // "Add component" affordance which routes through the same tray.
@@ -180,7 +161,7 @@ test.describe("Plate tray layout — Phase 4 composition-first preview", () => {
       // Stage the new side; the existing pill stays, a staged pill is added
       // alongside it. This is the "what am I editing?" assertion: the user
       // can see both layers at once.
-      await sheet.locator("input").first().fill(`Salad ${tag}`)
+      await sheet.getByTestId("tray-search").fill(`Salad ${tag}`)
       await sheet
         .getByRole("button", { name: new RegExp(`Salad ${tag}`) })
         .first()
@@ -219,9 +200,7 @@ test.describe("Plate tray layout — Phase 4 composition-first preview", () => {
       try {
         await page.goto("/")
         // Mobile planner uses a different cell testid prefix.
-        const cell = page
-          .locator(`[data-testid="mobile-cell-0-${slot.id}"]`)
-          .first()
+        const cell = page.getByTestId(`mobile-cell-0-${slot.id}`).first()
         await expect(cell).toBeVisible()
         await cell.getByRole("button", { name: /plan meal/i }).click()
         const sheet = page.getByTestId("tray-sheet")
@@ -229,7 +208,7 @@ test.describe("Plate tray layout — Phase 4 composition-first preview", () => {
 
         // Stage one item so the running total is non-zero — this matters
         // because the collapsed summary still surfaces kcal.
-        await sheet.locator("input").first().fill(`Tofu ${tag}`)
+        await sheet.getByTestId("tray-search").fill(`Tofu ${tag}`)
         await sheet
           .getByRole("button", { name: new RegExp(`Tofu ${tag}`) })
           .first()

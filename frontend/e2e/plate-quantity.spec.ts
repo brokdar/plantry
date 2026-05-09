@@ -8,13 +8,12 @@
 //      and editing the amount updates the cell kcal.
 
 import {
-  API,
-  apiRequest,
   cleanupFood,
   cleanupSlot,
   expect,
   seedComposedWithStub,
   seedLeafFood,
+  seedPlateWithComponent,
   seedSlot,
   test,
   uid,
@@ -35,14 +34,14 @@ test.describe("Plate quantity — kind-aware controls", () => {
         (r) => r.url().includes("/api/plates") && r.status() === 200
       )
 
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
+      const cell = page.getByTestId(`cell-0-${slot.id}`).first()
       await expect(cell).toBeVisible()
       await cell.getByRole("button", { name: /plan meal/i }).click()
 
-      const sheet = page.getByRole("dialog")
+      const sheet = page.getByTestId("tray-sheet")
       await expect(sheet).toBeVisible()
 
-      await sheet.locator("input").first().fill(`CurryQ ${tag}`)
+      await sheet.getByTestId("tray-search").fill(`CurryQ ${tag}`)
       await sheet
         .getByRole("button", { name: new RegExp(`CurryQ ${tag}`) })
         .first()
@@ -64,18 +63,6 @@ test.describe("Plate quantity — kind-aware controls", () => {
       await sheet.getByRole("button", { name: /\+1/ }).click()
       await expect(sb).toHaveAttribute("aria-valuenow", "3")
     } finally {
-      const ctx = await apiRequest.newContext({ baseURL: API })
-      const today = new Date().toISOString().slice(0, 10)
-      const res = await ctx.get(`/api/plates?from=${today}&to=${today}`)
-      if (res.ok()) {
-        const { plates } = (await res.json()) as {
-          plates: { id: number; slot_id: number }[]
-        }
-        for (const p of plates) {
-          if (p.slot_id === slot.id) await ctx.delete(`/api/plates/${p.id}`)
-        }
-      }
-      await ctx.dispose()
       await cleanupFood(seeded.composed.id)
       await cleanupFood(seeded.stub.id)
       await cleanupSlot(slot.id)
@@ -99,13 +86,13 @@ test.describe("Plate quantity — kind-aware controls", () => {
         (r) => r.url().includes("/api/plates") && r.status() === 200
       )
 
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
+      const cell = page.getByTestId(`cell-0-${slot.id}`).first()
       await expect(cell).toBeVisible()
       await cell.getByRole("button", { name: /plan meal/i }).click()
 
-      const sheet = page.getByRole("dialog")
+      const sheet = page.getByTestId("tray-sheet")
       await expect(sheet).toBeVisible()
-      await sheet.locator("input").first().fill(`RiceQ ${tag}`)
+      await sheet.getByTestId("tray-search").fill(`RiceQ ${tag}`)
       await sheet
         .getByRole("button", { name: new RegExp(`RiceQ ${tag}`) })
         .first()
@@ -134,18 +121,6 @@ test.describe("Plate quantity — kind-aware controls", () => {
 
       await expect(cell.getByText(`RiceQ ${tag}`)).toBeVisible()
     } finally {
-      const ctx = await apiRequest.newContext({ baseURL: API })
-      const today = new Date().toISOString().slice(0, 10)
-      const res = await ctx.get(`/api/plates?from=${today}&to=${today}`)
-      if (res.ok()) {
-        const { plates } = (await res.json()) as {
-          plates: { id: number; slot_id: number }[]
-        }
-        for (const p of plates) {
-          if (p.slot_id === slot.id) await ctx.delete(`/api/plates/${p.id}`)
-        }
-      }
-      await ctx.dispose()
       await cleanupFood(rice.id)
       await cleanupSlot(slot.id)
     }
@@ -160,38 +135,20 @@ test.describe("Plate quantity — kind-aware controls", () => {
       name: `RiceE ${tag}`,
       kcal_100g: 130,
     })
-    const ctx = await apiRequest.newContext({ baseURL: API })
-    let plateId: number | null = null
 
     try {
       const today = new Date().toISOString().slice(0, 10)
-      const plateRes = await ctx.post("/api/plates", {
-        data: { date: today, slot_id: slot.id },
+      await seedPlateWithComponent(today, slot.id, {
+        food_id: rice.id,
+        amount: 200,
+        unit: "g",
       })
-      const plateBody = (await plateRes.json()) as { id: number }
-      plateId = plateBody.id
-      const compRes = await ctx.post(`/api/plates/${plateId}/components`, {
-        data: { food_id: rice.id, amount: 200, unit: "g" },
-      })
-      expect(
-        compRes.ok(),
-        `Add leaf component failed: ${compRes.status()} ${JSON.stringify(await compRes.json())}`
-      ).toBeTruthy()
-      const comp = (await compRes.json()) as {
-        id: number
-        amount: number
-        unit: string
-        grams: number
-      }
-      expect(comp.amount).toBe(200)
-      expect(comp.unit).toBe("g")
-      expect(comp.grams).toBe(200)
 
       await page.goto("/")
       await page.waitForResponse(
         (r) => r.url().includes("/api/plates") && r.status() === 200
       )
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
+      const cell = page.getByTestId(`cell-0-${slot.id}`).first()
       await cell.click()
 
       // Slot sheet shows the component row with the QuantityUnitInput, value
@@ -212,8 +169,6 @@ test.describe("Plate quantity — kind-aware controls", () => {
       expect(updated.amount).toBe(300)
       expect(updated.grams).toBe(300)
     } finally {
-      if (plateId !== null) await ctx.delete(`/api/plates/${plateId}`)
-      await ctx.dispose()
       await cleanupFood(rice.id)
       await cleanupSlot(slot.id)
     }

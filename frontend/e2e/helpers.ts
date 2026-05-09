@@ -191,6 +191,39 @@ export async function cleanupSlot(id: number) {
   await ctx.dispose()
 }
 
+/**
+ * Seed a plate at `date`/`slotId` with one component. The component shape
+ * mirrors the kind-aware POST body: composed foods carry `portions`, leaf
+ * foods carry `amount` + `unit` (grams resolved server-side).
+ */
+export async function seedPlateWithComponent(
+  date: string,
+  slotId: number,
+  component: { food_id: number } & (
+    | { portions: number }
+    | { amount: number; unit: string }
+  )
+): Promise<{ id: number }> {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  const plateRes = await ctx.post("/api/plates", {
+    data: { date, slot_id: slotId },
+  })
+  const plate = (await plateRes.json()) as { id: number }
+  expect(
+    plateRes.ok(),
+    `seed plate at ${date}/${slotId}: ${plateRes.status()} ${JSON.stringify(plate)}`
+  ).toBeTruthy()
+  const compRes = await ctx.post(`/api/plates/${plate.id}/components`, {
+    data: component,
+  })
+  expect(
+    compRes.ok(),
+    `seed component on plate ${plate.id}: ${compRes.status()} ${JSON.stringify(await compRes.json())}`
+  ).toBeTruthy()
+  await ctx.dispose()
+  return plate
+}
+
 export async function getSetting(key: string): Promise<string | null> {
   const ctx = await apiRequest.newContext({ baseURL: API })
   const res = await ctx.get("/api/settings")
