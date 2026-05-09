@@ -286,7 +286,17 @@
     "partial_failure_one": "1 component couldn't be added — still staged.",
     "partial_failure_other": "{{count}} components couldn't be added — still staged.",
     "error_load_foods": "Couldn't load foods. Try again.",
-    "error_load_templates": "Couldn't load templates. Try again."
+    "error_load_templates": "Couldn't load templates. Try again.",
+    "preview": {
+      "title": "This plate",
+      "aria_label": "Plate preview",
+      "empty": "Nothing yet",
+      "empty_hint": "Pick a food below to start composing.",
+      "summary_one": "1 component · {{kcal}} kcal",
+      "summary_other": "{{count}} components · {{kcal}} kcal",
+      "macro_bar_label": "Running macro distribution — {{kcal}} kcal",
+      "unknown_food": "Unknown food"
+    }
   },
   "picker": {
     "search": {
@@ -1002,7 +1012,8 @@
     "skip_to_content": "Skip to main content",
     "close": "Close",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "collapse": "Collapse"
   },
   "chat": {
     "title": "AI Assistant",

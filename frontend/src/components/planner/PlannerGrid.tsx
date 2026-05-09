@@ -918,6 +918,13 @@ export function PlannerGrid({
             addTarget ? buildTrayContext(addTarget, days, slotsById) : null
           }
           recentFoods={recentFoods}
+          existingComponents={
+            addTarget
+              ? (findPlateInDay(days[addTarget.day]!, addTarget.slotId)
+                  ?.components ?? [])
+              : []
+          }
+          foodById={componentsById}
           onOpenChange={(o) => !o && setAddTarget(null)}
           onCommit={(items) => handleTrayCommit(items)}
         />

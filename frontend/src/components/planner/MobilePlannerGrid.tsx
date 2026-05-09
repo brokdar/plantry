@@ -677,6 +677,14 @@ export function MobilePlannerGrid({
         open={addTarget !== null}
         context={addTarget ? buildTrayContext(addTarget) : null}
         recentFoods={recentFoods}
+        existingComponents={
+          addTarget
+            ? (days[addTarget.dayIdx]?.plates.find(
+                (p) => p.slot_id === addTarget.slotId
+              )?.components ?? [])
+            : []
+        }
+        foodById={componentsById}
         side="bottom"
         onOpenChange={(o) => !o && setAddTarget(null)}
         onCommit={(items) => handleTrayCommit(items)}

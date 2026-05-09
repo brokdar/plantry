@@ -40,13 +40,18 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import type { Food, FoodRole } from "@/lib/api/foods"
+import type { MacrosResponse, PlateComponent } from "@/lib/api/plates"
 import type { Template } from "@/lib/api/templates"
 import { useFoodMacros, useFoods } from "@/lib/queries/foods"
 import { useTemplates } from "@/lib/queries/templates"
 import { imageURL } from "@/lib/image-url"
 import { slotLabel } from "@/lib/slot-label"
-import { resolveGrams } from "@/lib/domain/units"
 import { cn } from "@/lib/utils"
+
+import {
+  DraftPlatePreview,
+  type DraftPlatePreviewExistingItem,
+} from "./DraftPlatePreview"
 
 const DAY_KEYS = [
   "planner.day_mon",
@@ -109,6 +114,18 @@ interface ComponentTraySheetProps {
   context: TraySlotContext | null
   /** Foods recently used in plates (last 20 unique, most-recent first). Frontend-derived. */
   recentFoods?: Food[]
+  /** Components already on the plate the tray is editing. Passed through to
+   *  `DraftPlatePreview` so the user can see what they're editing instead of
+   *  staging on top of an invisible plate. Empty/omitted when opening on a
+   *  fresh slot. */
+  existingComponents?: PlateComponent[]
+  /** Optional resolver: food_id → Food. Required only when `existingComponents`
+   *  is non-empty so the preview can render names + images. The planner
+   *  already keeps a foods catalog, so this is cheap to thread through. */
+  foodById?: Map<number, Food>
+  /** Per-slot kcal target (daily target ÷ slot count). Forwarded to the
+   *  preview for the running-total tone treatment. */
+  dayKcalTarget?: number | null
   side?: "right" | "bottom"
   onOpenChange: (open: boolean) => void
   onCommit: (
@@ -121,6 +138,9 @@ export function ComponentTraySheet({
   open,
   context,
   recentFoods,
+  existingComponents,
+  foodById,
+  dayKcalTarget,
   side = "right",
   onOpenChange,
   onCommit,
@@ -148,6 +168,10 @@ export function ComponentTraySheet({
             key={`${context.slotId}:${context.date}`}
             context={context}
             recentFoods={recentFoods ?? []}
+            existingComponents={existingComponents ?? []}
+            foodById={foodById}
+            dayKcalTarget={dayKcalTarget ?? null}
+            previewCollapsible={sheetSide === "bottom"}
             onClose={() => onOpenChange(false)}
             onCommit={onCommit}
           />
@@ -167,6 +191,10 @@ export function ComponentTraySheet({
 interface BodyProps {
   context: TraySlotContext
   recentFoods: Food[]
+  existingComponents: PlateComponent[]
+  foodById: Map<number, Food> | undefined
+  dayKcalTarget: number | null
+  previewCollapsible: boolean
   onClose: () => void
   onCommit: ComponentTraySheetProps["onCommit"]
 }
@@ -174,6 +202,10 @@ interface BodyProps {
 function ComponentTraySheetBody({
   context,
   recentFoods,
+  existingComponents,
+  foodById,
+  dayKcalTarget,
+  previewCollapsible,
   onClose,
   onCommit,
 }: BodyProps) {
@@ -193,6 +225,35 @@ function ComponentTraySheetBody({
   const [roles, setRoles] = useSlotRoleFilter(context.slotId)
   const [tray, dispatch] = useTray()
   const [committing, setCommitting] = useState(false)
+
+  // Hoisted from TrayFooter so the DraftPlatePreview and footer share a
+  // single per-food macros query keyed on the staged tray ids. Deferred so
+  // typing a quantity doesn't refetch on every keystroke; the batch endpoint
+  // is keyed by the sorted id list and the deferred-tray-item shape stays
+  // stable while the user types.
+  const deferredTray = useDeferredValue(tray)
+  const trayFoodIds = useMemo(
+    () => deferredTray.map((it) => it.food.id),
+    [deferredTray]
+  )
+  const { data: foodMacrosData } = useFoodMacros(trayFoodIds)
+  const macrosByFood = useMemo(() => {
+    const map = new Map<number, MacrosResponse>()
+    for (const entry of foodMacrosData?.foods ?? []) {
+      map.set(entry.food_id, entry.macros)
+    }
+    return map
+  }, [foodMacrosData])
+
+  // Resolve existing PlateComponent rows into the {pc, food} shape the
+  // preview consumes. The food map is optional (parents that don't pass it
+  // simply get pills without thumbnails / role labels).
+  const existingPreviewItems = useMemo<DraftPlatePreviewExistingItem[]>(() => {
+    return existingComponents.map((pc) => ({
+      pc,
+      food: foodById?.get(pc.food_id),
+    }))
+  }, [existingComponents, foodById])
 
   const handleStageFood = useCallback(
     (food: Food) => dispatch({ type: "stage", food }),
@@ -254,6 +315,14 @@ function ComponentTraySheetBody({
           </Button>
         </div>
       </SheetHeader>
+
+      <DraftPlatePreview
+        items={tray}
+        macrosByFood={macrosByFood}
+        existing={existingPreviewItems}
+        dayKcalTarget={dayKcalTarget}
+        collapsible={previewCollapsible}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pt-4 pb-3">
         <SearchField value={search} onChange={setSearch} />
@@ -686,50 +755,13 @@ function TrayFooter({
   const { t } = useTranslation()
   const total = items.length
 
-  // Deferred so changing quantities doesn't refetch on every keystroke; the
-  // batch endpoint is keyed by the sorted id list and the deferred-tray-item
-  // shape stays stable while the user types.
-  const deferredItems = useDeferredValue(items)
-  const foodIds = useMemo(
-    () => deferredItems.map((it) => it.food.id),
-    [deferredItems]
-  )
-  const { data: foodMacrosData } = useFoodMacros(foodIds)
-  const macrosByFood = useMemo(() => {
-    const map = new Map<number, number>() // food_id → kcal (per-portion or per-100g)
-    for (const entry of foodMacrosData?.foods ?? []) {
-      map.set(entry.food_id, entry.macros.kcal)
-    }
-    return map
-  }, [foodMacrosData])
-  const runningKcal = useMemo(() => {
-    let sum = 0
-    for (const it of deferredItems) {
-      const k = macrosByFood.get(it.food.id)
-      if (k == null) continue
-      sum += k * trayItemMultiplier(it)
-    }
-    return Math.round(sum)
-  }, [deferredItems, macrosByFood])
+  // The running total moved into `DraftPlatePreview` (Phase 4) so the
+  // user's plate-being-built is the visual anchor instead of a chip
+  // glued to the footer. The footer keeps only the staged-rows editor +
+  // commit actions to avoid double-rendering kcal.
 
   return (
     <footer className="border-t border-outline-variant/40 bg-surface-container-low/60">
-      {items.length > 0 && (
-        <div
-          className="sticky top-0 z-[1] flex items-center justify-between gap-2 border-b border-outline-variant/30 bg-surface-container-low/80 px-5 py-2 backdrop-blur"
-          data-testid="tray-running-total"
-        >
-          <span className="font-heading text-[10.5px] font-bold tracking-[0.22em] text-on-surface-variant uppercase">
-            {t("tray.running_total")}
-          </span>
-          <span
-            className="font-mono text-[12.5px] font-semibold text-on-surface tabular-nums"
-            data-testid="tray-running-kcal"
-          >
-            {runningKcal} {t("macro.kcal")}
-          </span>
-        </div>
-      )}
       {items.length > 0 && (
         <ul
           className="flex max-h-44 flex-col gap-1 overflow-y-auto px-3 py-2"
@@ -860,19 +892,6 @@ function StagedRow({
       )}
     </li>
   )
-}
-
-/** trayItemMultiplier mirrors the backend `PlateComponent.Multiplier` rule
- * for staged (not-yet-saved) tray items. Composed → portions; leaf →
- * resolved grams ÷ 100. We resolve grams in-memory here using the same
- * frontend resolver the food editor uses; the server will re-resolve at
- * commit time, so this is purely for the running-total preview. */
-function trayItemMultiplier(item: TrayItem): number {
-  if (item.quantity.kind === "composed") return item.quantity.portions
-  if (item.food.kind !== "leaf") return 0
-  const portions = item.food.portions ?? []
-  const r = resolveGrams(item.quantity.amount, item.quantity.unit, portions)
-  return r.grams / 100
 }
 
 /** toCommitItem flattens a staged tray item into the wire shape expected by
