@@ -22,10 +22,11 @@ import (
 // stubPlateService implements the platesService interface used by PlateHandler.
 // Each method has a configurable func field; unset fields return zero values.
 type stubPlateService struct {
-	getRangeFn func(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
-	createFn   func(ctx context.Context, p *plate.Plate) error
-	getFn      func(ctx context.Context, id int64) (*plate.Plate, error)
-	updateFn   func(ctx context.Context, p *plate.Plate) error
+	getRangeFn   func(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
+	createFn     func(ctx context.Context, p *plate.Plate) error
+	getFn        func(ctx context.Context, id int64) (*plate.Plate, error)
+	updateFn     func(ctx context.Context, p *plate.Plate) error
+	recentUnitFn func(foodID int64) (string, error)
 }
 
 func (s *stubPlateService) Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error) {
@@ -80,6 +81,13 @@ func (s *stubPlateService) UpdateComponentQuantity(_ context.Context, _ int64, _
 func (s *stubPlateService) RemoveComponent(_ context.Context, _ int64) error { return nil }
 func (s *stubPlateService) SetSkipped(_ context.Context, _ int64, _ bool, _ *string) (*plate.Plate, error) {
 	return &plate.Plate{}, nil
+}
+
+func (s *stubPlateService) RecentUnitForFood(_ context.Context, foodID int64) (string, error) {
+	if s.recentUnitFn != nil {
+		return s.recentUnitFn(foodID)
+	}
+	return "", nil
 }
 
 // ── router helper ─────────────────────────────────────────────────────────────

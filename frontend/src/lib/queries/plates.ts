@@ -18,6 +18,7 @@ import {
   updatePlateComponent,
   type AddPlateComponentInput,
   type Plate,
+  type PlateComponentQuantity,
   type SetPlateSkippedInput,
   type UpdatePlateComponentInput,
   type UpdatePlateInput,
@@ -186,18 +187,28 @@ export function useSwapPlateComponent() {
   })
 }
 
-export function useUpdatePlateComponentPortions() {
+/**
+ * useUpdatePlateComponentQuantity drives the quantity-only patch on a plate
+ * component. The shape is kind-aware: composed → `{ portions }`, leaf →
+ * `{ amount, unit }`. The backend re-resolves grams server-side for leaf
+ * updates so the cache will reflect a fresh `grams`/`grams_source` after
+ * invalidation.
+ *
+ * Replaces the old `useUpdatePlateComponentPortions` which hard-coded the
+ * composed-only shape.
+ */
+export function useUpdatePlateComponentQuantity() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({
       plateId,
       pcId,
-      portions,
+      quantity,
     }: {
       plateId: number
       pcId: number
-      portions: number
-    }) => updatePlateComponent(plateId, pcId, { portions }),
+      quantity: PlateComponentQuantity
+    }) => updatePlateComponent(plateId, pcId, quantity),
     onMutate: () => flushPendingPlateDeletes(),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })

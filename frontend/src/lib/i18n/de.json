@@ -333,6 +333,17 @@
     "note_placeholder": "Optionale Notiz zu dieser Mahlzeit...",
     "empty_cell": "Mahlzeit hinzufügen",
     "portions": "Portionen",
+    "quantity": {
+      "portions_label": "Portionen",
+      "amount_label": "Menge",
+      "unit_label": "Einheit",
+      "confidence": {
+        "portion": "exakt",
+        "default": "ca.",
+        "fallback": "geschätzt"
+      },
+      "unknown_unit": "Unbekannte Einheit"
+    },
     "pick_component": "Komponente wählen",
     "filter_by_role": "Nach Rolle filtern",
     "feedback": {

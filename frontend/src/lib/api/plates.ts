@@ -55,14 +55,71 @@ export interface UpdatePlateInput {
   date?: string
 }
 
-export interface AddPlateComponentInput {
-  food_id: number
-  portions: number
-}
+/**
+ * AddPlateComponentInput is kind-aware: composed foods carry an integer
+ * `portions`, leaf foods carry `amount + unit`. The two halves are exclusive —
+ * the backend rejects shapes that mix or omit them. The frontend should pick
+ * the right shape based on `food.kind` at the call site.
+ */
+export type AddPlateComponentInput =
+  | { food_id: number; portions: number }
+  | { food_id: number; amount: number; unit: string }
 
+/**
+ * UpdatePlateComponentInput supports two modes:
+ *  - swap: `food_id` set (with optional new quantity for the new food)
+ *  - quantity update: only `portions` OR `amount + unit`
+ */
 export interface UpdatePlateComponentInput {
   food_id?: number
   portions?: number
+  amount?: number
+  unit?: string
+}
+
+/**
+ * PlateComponentQuantity is the quantity-only patch shape used by quantity
+ * updates and optimistic patches. Discriminated by the keys present.
+ */
+export type PlateComponentQuantity =
+  | { portions: number }
+  | { amount: number; unit: string }
+
+/**
+ * componentMultiplier mirrors the backend `PlateComponent.Multiplier` rule:
+ *   - composed → portions
+ *   - leaf     → grams / 100
+ *   - missing both → null (caller should render a placeholder)
+ *
+ * Use this anywhere the UI needs to scale per-portion (composed) or
+ * per-100 g (leaf) macros for a plate component.
+ */
+export function componentMultiplier(pc: PlateComponent): number | null {
+  if (pc.portions != null) return pc.portions
+  if (pc.grams != null) return pc.grams / 100
+  return null
+}
+
+/**
+ * componentToAddInput projects an existing PlateComponent into the kind-aware
+ * `AddPlateComponentInput` shape used when copying / templating / cloning a
+ * plate. Composed components carry their integer portions; leaf components
+ * carry the user-entered amount + unit (grams will be re-resolved
+ * server-side at write time, mirroring the original create path).
+ *
+ * Falls back to `{ portions: 1 }` when neither shape is set — that should
+ * never happen against a real backend response but keeps the helper total.
+ */
+export function componentToAddInput(
+  pc: PlateComponent
+): AddPlateComponentInput {
+  if (pc.portions != null) {
+    return { food_id: pc.food_id, portions: pc.portions }
+  }
+  if (pc.amount != null && pc.unit != null) {
+    return { food_id: pc.food_id, amount: pc.amount, unit: pc.unit }
+  }
+  return { food_id: pc.food_id, portions: 1 }
 }
 
 export function listPlates(

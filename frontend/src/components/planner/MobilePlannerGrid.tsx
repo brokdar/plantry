@@ -52,7 +52,11 @@ import { suggestDayName } from "@/lib/template-suggest"
 import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
-import { ComponentTraySheet, type TraySlotContext } from "./ComponentTraySheet"
+import {
+  ComponentTraySheet,
+  type TrayCommitItem,
+  type TraySlotContext,
+} from "./ComponentTraySheet"
 import { MobileSlotRow } from "./MobileSlotRow"
 import type { PlannerDay } from "./PlannerGrid"
 import { SlotCell } from "./SlotCell"
@@ -329,7 +333,7 @@ export function MobilePlannerGrid({
   }
 
   async function handleTrayCommit(
-    items: { food_id: number; portions: number }[]
+    items: TrayCommitItem[]
   ): Promise<{ failedFoodIds: number[] }> {
     if (!addTarget || items.length === 0) return { failedFoodIds: [] }
     const target = addTarget
@@ -352,13 +356,10 @@ export function MobilePlannerGrid({
       return { failedFoodIds: items.map((i) => i.food_id) }
     }
 
+    // Pass the kind-aware payload through unchanged (see PlannerGrid for the
+    // rationale).
     const results = await Promise.allSettled(
-      items.map((it) =>
-        addPlateComponent(plateId, {
-          food_id: it.food_id,
-          portions: it.portions,
-        })
-      )
+      items.map((it) => addPlateComponent(plateId, it))
     )
     const failedFoodIds: number[] = []
     let firstError: unknown

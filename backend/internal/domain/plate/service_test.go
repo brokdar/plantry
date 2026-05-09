@@ -34,6 +34,10 @@ func (r *fakeRepo) ListComponentsByPlate(_ context.Context, _ int64) ([]plate.Pl
 }
 func (r *fakeRepo) CountUsingFood(_ context.Context, _ int64) (int64, error)     { return 0, nil }
 func (r *fakeRepo) CountUsingTimeSlot(_ context.Context, _ int64) (int64, error) { return 0, nil }
+func (r *fakeRepo) RecentUnitForFood(_ context.Context, _ int64) (string, error) {
+	return "", nil
+}
+
 func (r *fakeRepo) SetSkipped(_ context.Context, _ int64, _ bool, _ *string) (*plate.Plate, error) {
 	return nil, nil
 }

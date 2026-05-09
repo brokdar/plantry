@@ -390,6 +390,20 @@ func (q *Queries) ListTimeSlots(ctx context.Context) ([]TimeSlot, error) {
 	return items, nil
 }
 
+const recentUnitForFood = `-- name: RecentUnitForFood :one
+SELECT unit FROM plate_components
+WHERE food_id = ? AND unit IS NOT NULL
+ORDER BY id DESC
+LIMIT 1
+`
+
+func (q *Queries) RecentUnitForFood(ctx context.Context, foodID int64) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, recentUnitForFood, foodID)
+	var unit sql.NullString
+	err := row.Scan(&unit)
+	return unit, err
+}
+
 const setPlateSkipped = `-- name: SetPlateSkipped :one
 UPDATE plates SET
     skipped = ?,

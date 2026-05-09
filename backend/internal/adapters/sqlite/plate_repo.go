@@ -232,6 +232,23 @@ func (r *PlateRepo) CountUsingFood(ctx context.Context, foodID int64) (int64, er
 	return r.q.CountPlatesUsingFood(ctx, foodID)
 }
 
+// RecentUnitForFood returns the most-recently-stored unit for any plate
+// component on the given food, or "" if none exists. Composed components
+// have unit IS NULL and are skipped automatically by the WHERE clause.
+func (r *PlateRepo) RecentUnitForFood(ctx context.Context, foodID int64) (string, error) {
+	v, err := r.q.RecentUnitForFood(ctx, foodID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", err
+	}
+	if !v.Valid {
+		return "", nil
+	}
+	return v.String, nil
+}
+
 // SetSkipped toggles the prospective "skip this slot" marker on a plate.
 // When enabling skip, any attached components are cleared atomically.
 func (r *PlateRepo) SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*plate.Plate, error) {

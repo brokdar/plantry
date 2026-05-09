@@ -165,6 +165,10 @@ func (m *mockPlateRepo) ListComponentsByPlate(_ context.Context, _ int64) ([]pla
 }
 func (m *mockPlateRepo) CountUsingFood(_ context.Context, _ int64) (int64, error)     { return 0, nil }
 func (m *mockPlateRepo) CountUsingTimeSlot(_ context.Context, _ int64) (int64, error) { return 0, nil }
+func (m *mockPlateRepo) RecentUnitForFood(_ context.Context, _ int64) (string, error) {
+	return "", nil
+}
+
 func (m *mockPlateRepo) SetSkipped(_ context.Context, _ int64, _ bool, _ *string) (*plate.Plate, error) {
 	return nil, nil
 }

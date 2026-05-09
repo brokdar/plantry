@@ -26,6 +26,7 @@ type platesService interface {
 	UpdateComponentQuantity(ctx context.Context, plateComponentID int64, q plate.PlateComponent) (*plate.PlateComponent, error)
 	RemoveComponent(ctx context.Context, plateComponentID int64) error
 	SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*plate.Plate, error)
+	RecentUnitForFood(ctx context.Context, foodID int64) (string, error)
 }
 
 // PlateHandler exposes plate + plate_component mutation endpoints.
@@ -392,6 +393,38 @@ func (h *PlateHandler) DeleteComponent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// recentUnitResponse is returned by GET /api/foods/{id}/recent-unit. Unit is
+// nil when the food has never been used as a leaf component (or has never been
+// added to any plate). The frontend uses this to default the quantity-unit
+// input on the planner picker.
+type recentUnitResponse struct {
+	Unit *string `json:"unit"`
+}
+
+// RecentUnit handles GET /api/foods/{id}/recent-unit.
+//
+// Path lives under /api/foods to keep food-centric reads grouped client-side,
+// even though the data is owned by the plate aggregate.
+func (h *PlateHandler) RecentUnit(w http.ResponseWriter, r *http.Request) {
+	foodID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	unit, err := h.svc.RecentUnitForFood(r.Context(), foodID)
+	if err != nil {
+		status, key := plateError(err)
+		writeError(w, status, key)
+		return
+	}
+	resp := recentUnitResponse{}
+	if unit != "" {
+		v := unit
+		resp.Unit = &v
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // platesListResponse wraps a slice of plates in the standard envelope.

@@ -333,6 +333,17 @@
     "note_placeholder": "Optional note about this meal...",
     "empty_cell": "Add a meal",
     "portions": "Portions",
+    "quantity": {
+      "portions_label": "Portions",
+      "amount_label": "Amount",
+      "unit_label": "Unit",
+      "confidence": {
+        "portion": "exact",
+        "default": "approx",
+        "fallback": "estimate"
+      },
+      "unknown_unit": "Unknown unit"
+    },
     "pick_component": "Pick a component",
     "filter_by_role": "Filter by role",
     "feedback": {

@@ -12,7 +12,7 @@ import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
 // Mock the hooks the sheet depends on so it renders without a live backend.
 vi.mock("@/lib/queries/plates", () => ({
   useUpdatePlate: vi.fn(() => ({ mutateAsync: vi.fn() })),
-  useUpdatePlateComponentPortions: vi.fn(() => ({ mutateAsync: vi.fn() })),
+  useUpdatePlateComponentQuantity: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useRemovePlateComponent: vi.fn(() => ({ mutateAsync: vi.fn() })),
   // The header summary + per-component contribution both read from these.
   usePlateMacros: vi.fn(() => ({
@@ -131,5 +131,85 @@ describe("SlotSheet — Phase 2 macros", () => {
     const row = await screen.findByTestId("slot-sheet-row-kcal-100")
     // Composed food, 1 portion × 620 kcal/portion = 620 kcal contribution.
     expect(row.textContent).toMatch(/620/)
+  })
+})
+
+// Phase 3 — kind-aware quantity controls.
+describe("SlotSheet — Phase 3 kind-aware quantity", () => {
+  test("composed_component_uses_integer_stepper", async () => {
+    renderSheet()
+    // Composed → integer PortionStepper exposes a spinbutton with aria-valuenow.
+    const sb = await screen.findByRole("spinbutton")
+    expect(sb).toHaveAttribute("aria-valuenow", "1")
+    expect(sb.textContent).toMatch(/×1/)
+  })
+
+  test("leaf_component_uses_quantity_unit_input", async () => {
+    const leafFood: Food = {
+      id: 8,
+      name: "Rice",
+      kind: "leaf",
+      source: "manual",
+      barcode: null,
+      off_id: null,
+      fdc_id: null,
+      image_path: null,
+      favorite: false,
+      cook_count: 0,
+      kcal_100g: 130,
+      created_at: "",
+      updated_at: "",
+    } as unknown as Food
+    const leafPlate: Plate = {
+      id: 99,
+      slot_id: 1,
+      date: "2026-05-02",
+      note: null,
+      skipped: false,
+      components: [
+        {
+          id: 200,
+          plate_id: 99,
+          food_id: 8,
+          amount: 200,
+          unit: "g",
+          grams: 200,
+          grams_source: "direct",
+          sort_order: 0,
+        },
+      ],
+      created_at: "",
+    }
+    const leafDays: PlannerDay[] = [
+      { date: "2026-05-02", weekday: 5, plates: [leafPlate] },
+    ]
+    const leafTarget: SlotSheetTarget = {
+      plateId: 99,
+      date: "2026-05-02",
+      weekday: 5,
+      slotId: 1,
+      slotNameKey: "planner.slot_dinner",
+    }
+    renderWithRouter(
+      <SlotSheet
+        target={leafTarget}
+        days={leafDays}
+        componentsById={new Map([[8, leafFood]])}
+        rangeFrom="2026-05-02"
+        rangeTo="2026-05-02"
+        onOpenChange={vi.fn()}
+        onAddComponent={vi.fn()}
+        onSwapComponent={vi.fn()}
+        onSaveAsTemplate={vi.fn()}
+        onToggleSkip={vi.fn()}
+        onDeletePlate={vi.fn()}
+      />
+    )
+    // Leaf renders the QuantityUnitInput (numeric + unit select).
+    expect(await screen.findByTestId("quantity-unit-input")).toBeInTheDocument()
+    const amount = (await screen.findByTestId(
+      "quantity-unit-amount"
+    )) as HTMLInputElement
+    expect(amount.value).toBe("200")
   })
 })

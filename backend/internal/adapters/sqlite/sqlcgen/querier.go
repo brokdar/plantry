@@ -69,6 +69,7 @@ type Querier interface {
 	ListTemplatesByScope(ctx context.Context, scope string) ([]Template, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	MarkFoodCooked(ctx context.Context, arg MarkFoodCookedParams) error
+	RecentUnitForFood(ctx context.Context, foodID int64) (sql.NullString, error)
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)

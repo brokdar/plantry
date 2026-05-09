@@ -88,3 +88,9 @@ SELECT * FROM plates WHERE date = ? ORDER BY slot_id, id;
 
 -- name: CountPlatesUsingFood :one
 SELECT COUNT(*) FROM plate_components WHERE food_id = ?;
+
+-- name: RecentUnitForFood :one
+SELECT unit FROM plate_components
+WHERE food_id = ? AND unit IS NOT NULL
+ORDER BY id DESC
+LIMIT 1;

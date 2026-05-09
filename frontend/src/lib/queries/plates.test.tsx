@@ -46,7 +46,7 @@ import {
   useSetPlateSkipped,
   useSwapPlateComponent,
   useUpdatePlate,
-  useUpdatePlateComponentPortions,
+  useUpdatePlateComponentQuantity,
 } from "./plates"
 
 function makePlate(overrides?: Partial<Plate>): Plate {
@@ -285,7 +285,7 @@ describe("plate mutations invalidate nutrition cache", () => {
     expectNutritionInvalidated(qc)
   })
 
-  it("useUpdatePlateComponentPortions", async () => {
+  it("useUpdatePlateComponentQuantity composed", async () => {
     const qc = seededClient()
     vi.mocked(updatePlateComponent).mockResolvedValueOnce({
       id: 1,
@@ -295,14 +295,49 @@ describe("plate mutations invalidate nutrition cache", () => {
       sort_order: 0,
     })
 
-    const { result } = renderHook(() => useUpdatePlateComponentPortions(), {
+    const { result } = renderHook(() => useUpdatePlateComponentQuantity(), {
       wrapper: createHookWrapper(qc),
     })
     await act(async () => {
-      result.current.mutate({ plateId: 1, pcId: 1, portions: 2 })
+      result.current.mutate({
+        plateId: 1,
+        pcId: 1,
+        quantity: { portions: 2 },
+      })
     })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expectNutritionInvalidated(qc)
+    expect(updatePlateComponent).toHaveBeenCalledWith(1, 1, { portions: 2 })
+  })
+
+  it("useUpdatePlateComponentQuantity leaf", async () => {
+    const qc = seededClient()
+    vi.mocked(updatePlateComponent).mockResolvedValueOnce({
+      id: 2,
+      plate_id: 1,
+      food_id: 1,
+      amount: 200,
+      unit: "g",
+      grams: 200,
+      grams_source: "direct",
+      sort_order: 0,
+    })
+
+    const { result } = renderHook(() => useUpdatePlateComponentQuantity(), {
+      wrapper: createHookWrapper(qc),
+    })
+    await act(async () => {
+      result.current.mutate({
+        plateId: 1,
+        pcId: 2,
+        quantity: { amount: 200, unit: "g" },
+      })
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(updatePlateComponent).toHaveBeenCalledWith(1, 2, {
+      amount: 200,
+      unit: "g",
+    })
   })
 
   it("useSetPlateSkipped", async () => {

@@ -4,7 +4,6 @@ import {
   ArrowLeftRight,
   BookmarkPlus,
   Heart,
-  Minus,
   Plus,
   Sparkles,
   StickyNote,
@@ -17,6 +16,11 @@ import {
 import { useId, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 
+import { PortionStepper } from "@/components/component/PortionStepper"
+import {
+  QuantityUnitInput,
+  type QuantityUnitValue,
+} from "@/components/component/QuantityUnitInput"
 import {
   FoodPlaceholder,
   type FoodPlaceholderCategory,
@@ -31,14 +35,20 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import type { Food } from "@/lib/api/foods"
-import type { MacrosResponse, Plate, PlateComponent } from "@/lib/api/plates"
+import {
+  componentMultiplier,
+  type MacrosResponse,
+  type Plate,
+  type PlateComponent,
+  type PlateComponentQuantity,
+} from "@/lib/api/plates"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFoodMacros } from "@/lib/queries/foods"
 import {
   usePlateMacros,
   useRemovePlateComponent,
   useUpdatePlate,
-  useUpdatePlateComponentPortions,
+  useUpdatePlateComponentQuantity,
 } from "@/lib/queries/plates"
 import { MacroTriad } from "@/components/editorial/macros"
 import { imageURL } from "@/lib/image-url"
@@ -546,7 +556,7 @@ function ComponentRow({
   onLastRemoved: () => void
 }) {
   const { t } = useTranslation()
-  const updatePortions = useUpdatePlateComponentPortions()
+  const updateQuantity = useUpdatePlateComponentQuantity()
   const removeComponent = useRemovePlateComponent()
 
   const role = food?.kind === "composed" ? (food.role ?? undefined) : undefined
@@ -557,22 +567,23 @@ function ComponentRow({
         })
       : null
 
-  function commit(next: number) {
-    const clamped = Math.max(0.25, Math.round(next * 4) / 4)
-    if (clamped === pc.portions) return
-    updatePortions
-      .mutateAsync({ plateId: plate.id, pcId: pc.id, portions: clamped })
+  function commitQuantity(next: PlateComponentQuantity) {
+    // Cheap idempotency guard: skip the mutation when nothing actually
+    // changed. Composed and leaf are checked against their respective fields.
+    if ("portions" in next && next.portions === pc.portions) return
+    if (
+      "amount" in next &&
+      next.amount === pc.amount &&
+      next.unit === pc.unit
+    ) {
+      return
+    }
+    updateQuantity
+      .mutateAsync({ plateId: plate.id, pcId: pc.id, quantity: next })
       .catch((err) => toastError(err, t))
   }
 
-  // Mirrors backend `PlateComponent.Multiplier`: portions for composed,
-  // grams/100 for leaf. Returns null when the quantity is missing so we can
-  // fall back to a placeholder instead of pretending it's 0 kcal.
-  const multiplier = (() => {
-    if (pc.portions != null) return pc.portions
-    if (pc.grams != null) return pc.grams / 100
-    return null
-  })()
+  const multiplier = componentMultiplier(pc)
   const componentKcal =
     foodMacros && multiplier != null
       ? Math.round(foodMacros.kcal * multiplier)
@@ -590,6 +601,37 @@ function ComponentRow({
       .mutateAsync({ plateId: plate.id, pcId: pc.id })
       .catch((err) => toastError(err, t))
   }
+
+  // Pick the right quantity control by food kind. Composed → integer
+  // stepper; leaf → compact `QuantityUnitInput`. Falling back to the stepper
+  // when the food hasn't loaded yet is intentional — it shows what's stored
+  // (`pc.portions ?? 1`) rather than blanking the row.
+  const quantityControl = (() => {
+    if (food?.kind === "leaf") {
+      const initial: QuantityUnitValue = {
+        amount: pc.amount ?? 100,
+        unit: pc.unit ?? "g",
+      }
+      return (
+        <QuantityUnitInput
+          food={food}
+          value={initial}
+          onChange={(next) =>
+            commitQuantity({ amount: next.amount, unit: next.unit })
+          }
+          compact
+          className="min-w-[14rem]"
+        />
+      )
+    }
+    return (
+      <PortionStepper
+        value={pc.portions ?? 1}
+        onChange={(next) => commitQuantity({ portions: next })}
+        size="md"
+      />
+    )
+  })()
 
   return (
     <li
@@ -630,7 +672,7 @@ function ComponentRow({
           ? `${componentKcal} ${t("macro.kcal")}`
           : `— ${t("macro.kcal")}`}
       </span>
-      <PortionStepper value={pc.portions ?? 1} onChange={commit} />
+      {quantityControl}
       {/* Touch devices have no hover; force the row actions visible there.
         On hover-capable devices, fade in on hover/focus to keep the row tidy. */}
       <div className="flex items-center gap-0.5 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
@@ -659,56 +701,6 @@ function ComponentRow({
       </div>
     </li>
   )
-}
-
-function PortionStepper({
-  value,
-  onChange,
-}: {
-  value: number
-  onChange: (next: number) => void
-}) {
-  const { t } = useTranslation()
-  return (
-    <div
-      className="flex items-center gap-0 rounded-full border border-outline-variant/50 bg-surface-container-lowest"
-      role="group"
-      aria-label={t("plate.portions")}
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`${t("plate.portions")} −0.25`}
-        onClick={() => onChange(Math.max(0.25, value - 0.25))}
-        className="size-6 rounded-full text-on-surface-variant"
-        disabled={value <= 0.25}
-      >
-        <Minus className="h-3 w-3" />
-      </Button>
-      <span
-        className="min-w-[2.4rem] text-center font-mono text-[12px] font-semibold text-on-surface tabular-nums"
-        data-testid="slot-sheet-portions-value"
-      >
-        ×{formatPortions(value)}
-      </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`${t("plate.portions")} +0.25`}
-        onClick={() => onChange(value + 0.25)}
-        className="size-6 rounded-full text-on-surface-variant"
-      >
-        <Plus className="h-3 w-3" />
-      </Button>
-    </div>
-  )
-}
-
-function formatPortions(n: number): string {
-  if (Number.isInteger(n)) return `${n}.0`
-  return n.toFixed(2).replace(/0$/, "")
 }
 
 function NoteField({

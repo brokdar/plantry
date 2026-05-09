@@ -35,49 +35,105 @@ function run(initial: TrayItem[], actions: TrayAction[]): TrayItem[] {
 }
 
 describe("trayReducer", () => {
-  it("stages a fresh food with portions=1", () => {
-    const next = run([], [{ type: "stage", food: mockChickenBreast }])
-    expect(next).toEqual([{ food: mockChickenBreast, portions: 1 }])
+  it("stage_composed_initialises_portions_1", () => {
+    const next = run([], [{ type: "stage", food: mockChickenCurry }])
+    expect(next).toEqual([
+      {
+        food: mockChickenCurry,
+        quantity: { kind: "composed", portions: 1 },
+      },
+    ])
   })
 
-  it("re-staging the same food bumps portions by 0.25", () => {
+  it("stage_leaf_initialises_with_default_unit_and_amount", () => {
+    // Brown rice has no portion table → default 100 g.
+    const next = run([], [{ type: "stage", food: mockBrownRice }])
+    expect(next).toEqual([
+      {
+        food: mockBrownRice,
+        quantity: { kind: "leaf", amount: 100, unit: "g" },
+      },
+    ])
+  })
+
+  it("stage_existing_composed_increments_portions_by_1", () => {
     const next = run(
       [],
       [
-        { type: "stage", food: mockChickenBreast },
-        { type: "stage", food: mockChickenBreast },
+        { type: "stage", food: mockChickenCurry },
+        { type: "stage", food: mockChickenCurry },
       ]
     )
     expect(next).toHaveLength(1)
-    expect(next[0]?.portions).toBe(1.25)
+    expect(next[0]?.quantity).toEqual({ kind: "composed", portions: 2 })
   })
 
-  it("stages multiple distinct foods preserving order", () => {
+  it("stage_existing_leaf_increments_amount_by_50_when_grams", () => {
     const next = run(
       [],
       [
-        { type: "stage", food: mockChickenBreast },
+        { type: "stage", food: mockBrownRice },
         { type: "stage", food: mockBrownRice },
       ]
     )
-    expect(next.map((i) => i.food.id)).toEqual([1, 2])
+    expect(next).toHaveLength(1)
+    expect(next[0]?.quantity).toEqual({ kind: "leaf", amount: 150, unit: "g" })
   })
 
-  it("portion clamps to 0.25 minimum and quantises to 0.25 grid", () => {
-    let state = run([], [{ type: "stage", food: mockChickenBreast }])
-    state = trayReducer(state, {
-      type: "portion",
-      foodId: mockChickenBreast.id,
-      p: 0.1,
+  it("stage_existing_leaf_increments_amount_by_1_unit_when_count", () => {
+    const apple: Food = {
+      ...mockChickenBreast,
+      id: 50,
+      name: "Apple",
+      portions: [{ food_id: 50, unit: "apple", grams: 180 }],
+    }
+    const next = run(
+      [],
+      [
+        { type: "stage", food: apple },
+        { type: "stage", food: apple },
+      ]
+    )
+    expect(next).toHaveLength(1)
+    expect(next[0]?.quantity).toEqual({
+      kind: "leaf",
+      amount: 2,
+      unit: "apple",
     })
-    expect(state[0]?.portions).toBe(0.25)
+  })
+
+  it("commit_payload_for_composed_uses_portions_only", () => {
+    const next = run([], [{ type: "stage", food: mockChickenCurry }])
+    expect(next).toEqual([
+      {
+        food: mockChickenCurry,
+        quantity: { kind: "composed", portions: 1 },
+      },
+    ])
+  })
+
+  it("commit_payload_for_leaf_uses_amount_unit", () => {
+    const next = run([], [{ type: "stage", food: mockBrownRice }])
+    expect(next).toEqual([
+      {
+        food: mockBrownRice,
+        quantity: { kind: "leaf", amount: 100, unit: "g" },
+      },
+    ])
+  })
+
+  it("quantity action replaces the staged quantity wholesale", () => {
+    let state = run([], [{ type: "stage", food: mockBrownRice }])
     state = trayReducer(state, {
-      type: "portion",
-      foodId: mockChickenBreast.id,
-      p: 1.37,
+      type: "quantity",
+      foodId: mockBrownRice.id,
+      q: { kind: "leaf", amount: 250, unit: "g" },
     })
-    // 1.37 → round(*4)/4 = round(5.48)/4 = 5/4 = 1.25
-    expect(state[0]?.portions).toBe(1.25)
+    expect(state[0]?.quantity).toEqual({
+      kind: "leaf",
+      amount: 250,
+      unit: "g",
+    })
   })
 
   it("removes a staged food", () => {
@@ -92,7 +148,7 @@ describe("trayReducer", () => {
     expect(state.map((i) => i.food.id)).toEqual([2])
   })
 
-  it("stages all template components, hydrating from foodsById", () => {
+  it("stageTemplate hydrates per-food kind-aware quantities", () => {
     const tpl: Template = {
       id: 99,
       name: "Lunch",
@@ -102,7 +158,7 @@ describe("trayReducer", () => {
         {
           id: 1,
           template_id: 99,
-          food_id: 1,
+          food_id: 3, // composed (chicken curry)
           portions: 2,
           sort_order: 0,
           day_offset: 0,
@@ -110,7 +166,7 @@ describe("trayReducer", () => {
         {
           id: 2,
           template_id: 99,
-          food_id: 2,
+          food_id: 2, // leaf (brown rice)
           portions: 1.5,
           sort_order: 1,
           day_offset: 0,
@@ -118,87 +174,48 @@ describe("trayReducer", () => {
       ],
     }
     const foodsById = new Map<number, Food>([
-      [1, mockChickenBreast],
+      [3, mockChickenCurry],
       [2, mockBrownRice],
     ])
     const next = run([], [{ type: "stageTemplate", template: tpl, foodsById }])
     expect(next).toEqual([
-      { food: mockChickenBreast, portions: 2 },
-      { food: mockBrownRice, portions: 1.5 },
+      {
+        food: mockChickenCurry,
+        quantity: { kind: "composed", portions: 2 },
+      },
+      // Leaf templates legacy-portion 1.5 → 150 g (1.5 × 100 g).
+      {
+        food: mockBrownRice,
+        quantity: { kind: "leaf", amount: 150, unit: "g" },
+      },
     ])
-  })
-
-  it("stageTemplate adds onto existing tray entries by summing portions", () => {
-    const tpl: Template = {
-      id: 99,
-      name: "Lunch",
-      created_at: "2026-04-01T00:00:00Z",
-      scope: "slot",
-      components: [
-        {
-          id: 1,
-          template_id: 99,
-          food_id: 1,
-          portions: 0.5,
-          sort_order: 0,
-          day_offset: 0,
-        },
-      ],
-    }
-    const foodsById = new Map<number, Food>([[1, mockChickenBreast]])
-    const next = run(
-      [{ food: mockChickenBreast, portions: 1 }],
-      [{ type: "stageTemplate", template: tpl, foodsById }]
-    )
-    expect(next).toEqual([{ food: mockChickenBreast, portions: 1.5 }])
-  })
-
-  it("stageTemplate skips entries whose foodId isn't in foodsById", () => {
-    const tpl: Template = {
-      id: 99,
-      name: "Lunch",
-      created_at: "2026-04-01T00:00:00Z",
-      scope: "slot",
-      components: [
-        {
-          id: 1,
-          template_id: 99,
-          food_id: 1,
-          portions: 1,
-          sort_order: 0,
-          day_offset: 0,
-        },
-        {
-          id: 2,
-          template_id: 99,
-          food_id: 999,
-          portions: 1,
-          sort_order: 1,
-          day_offset: 0,
-        },
-      ],
-    }
-    const foodsById = new Map<number, Food>([[1, mockChickenBreast]])
-    const next = run([], [{ type: "stageTemplate", template: tpl, foodsById }])
-    expect(next).toEqual([{ food: mockChickenBreast, portions: 1 }])
-  })
-
-  it("stage handles a composed food the same way", () => {
-    const next = run([], [{ type: "stage", food: mockChickenCurry }])
-    expect(next).toEqual([{ food: mockChickenCurry, portions: 1 }])
   })
 
   it("keepOnly drops everything not in the foodIds set", () => {
     const state: TrayItem[] = [
-      { food: mockChickenBreast, portions: 1 },
-      { food: mockBrownRice, portions: 2 },
-      { food: mockChickenCurry, portions: 1.5 },
+      {
+        food: mockChickenBreast,
+        quantity: { kind: "leaf", amount: 100, unit: "g" },
+      },
+      {
+        food: mockBrownRice,
+        quantity: { kind: "leaf", amount: 200, unit: "g" },
+      },
+      {
+        food: mockChickenCurry,
+        quantity: { kind: "composed", portions: 1 },
+      },
     ]
     const next = trayReducer(state, {
       type: "keepOnly",
       foodIds: new Set([mockBrownRice.id]),
     })
-    expect(next).toEqual([{ food: mockBrownRice, portions: 2 }])
+    expect(next).toEqual([
+      {
+        food: mockBrownRice,
+        quantity: { kind: "leaf", amount: 200, unit: "g" },
+      },
+    ])
   })
 })
 
@@ -263,8 +280,11 @@ describe("ComponentTraySheet integration", () => {
     await user.click(screen.getByTestId("tray-commit"))
 
     await waitFor(() => expect(onCommit).toHaveBeenCalledTimes(1))
+    // Chicken breast is a leaf food → commit shape carries amount + unit,
+    // never portions. The default for a leaf without a portion table is
+    // `{ amount: 100, unit: "g" }`.
     expect(onCommit).toHaveBeenCalledWith(
-      [{ food_id: mockChickenBreast.id, portions: 1 }],
+      [{ food_id: mockChickenBreast.id, amount: 100, unit: "g" }],
       ctx
     )
     // Full success closes the sheet.

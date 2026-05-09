@@ -2,6 +2,7 @@ import type { TFunction } from "i18next"
 
 import {
   addPlateComponent,
+  componentToAddInput,
   createPlate,
   deletePlate,
   setPlateSkipped,
@@ -62,11 +63,7 @@ async function restoreOverwrittenPlates(
         continue
       }
       for (const pc of snap.components) {
-        await addPlateComponent(created.id, {
-          food_id: pc.food_id,
-          // TODO(plate-workflow-rework, phase 3): pass kind-aware quantity.
-          portions: pc.portions ?? 1,
-        })
+        await addPlateComponent(created.id, componentToAddInput(pc))
       }
       if (snap.feedback?.status) {
         await putFeedback(created.id, {

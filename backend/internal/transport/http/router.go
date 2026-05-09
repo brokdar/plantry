@@ -69,6 +69,9 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/variants", h.Foods.ListVariants)
 					r.Get("/portions", h.Foods.ListPortions)
 					r.Post("/portions", h.Foods.UpsertPortion)
+					if h.Plates != nil {
+						r.Get("/recent-unit", h.Plates.RecentUnit)
+					}
 					r.Delete("/portions/{unit}", h.Foods.DeletePortion)
 					r.Post("/sync-portions", h.Foods.SyncPortions)
 					if h.Lookup != nil {

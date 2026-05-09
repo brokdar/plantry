@@ -32,7 +32,12 @@ import {
   DndCellWrapper,
   type DragPayload,
 } from "@/components/planner/DndCellWrapper"
-import { addPlateComponent, createPlate, deletePlate } from "@/lib/api/plates"
+import {
+  addPlateComponent,
+  componentToAddInput,
+  createPlate,
+  deletePlate,
+} from "@/lib/api/plates"
 import { handleGridArrowKey } from "@/lib/planner-keynav"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
@@ -62,7 +67,11 @@ import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
 
 import { AddComponentSheet } from "./AddComponentSheet"
-import { ComponentTraySheet, type TraySlotContext } from "./ComponentTraySheet"
+import {
+  ComponentTraySheet,
+  type TrayCommitItem,
+  type TraySlotContext,
+} from "./ComponentTraySheet"
 import { DayHeader } from "./DayHeader"
 import { RowApplyTemplateDialog } from "./RowApplyTemplateDialog"
 import { SlotCell } from "./SlotCell"
@@ -318,7 +327,7 @@ export function PlannerGrid({
   const aiFilledIds = useMemo(() => new Set(aiFill.plateIds), [aiFill.plateIds])
 
   async function handleTrayCommit(
-    items: { food_id: number; portions: number }[]
+    items: TrayCommitItem[]
   ): Promise<{ failedFoodIds: number[] }> {
     if (!addTarget || items.length === 0) return { failedFoodIds: [] }
     const target = addTarget
@@ -347,13 +356,11 @@ export function PlannerGrid({
 
     // Add components in parallel and survive partial failure: report what
     // didn't land so the tray sheet can keep those staged for retry.
+    // Pass the kind-aware payload through unchanged. The TrayCommitItem
+    // discriminated union exactly matches AddPlateComponentInput, so the
+    // composed/leaf split is preserved end-to-end with no translation.
     const results = await Promise.allSettled(
-      items.map((it) =>
-        addPlateComponent(plateId!, {
-          food_id: it.food_id,
-          portions: it.portions,
-        })
-      )
+      items.map((it) => addPlateComponent(plateId!, it))
     )
     const failedFoodIds: number[] = []
     let firstError: unknown
@@ -582,13 +589,7 @@ export function PlannerGrid({
       await Promise.all(
         created.flatMap((p) =>
           source!.plate.components.map((pc) =>
-            addPlateComponent(p.id, {
-              food_id: pc.food_id,
-              // TODO(plate-workflow-rework, phase 3): pass kind-aware quantity.
-              // For now coerce missing portions (leaf items in the new model)
-              // to 1 so the legacy float-portions API still receives a value.
-              portions: pc.portions ?? 1,
-            })
+            addPlateComponent(p.id, componentToAddInput(pc))
           )
         )
       )
@@ -739,11 +740,7 @@ export function PlannerGrid({
           note: src.note ?? undefined,
         })
         for (const pc of src.components) {
-          await addPlateComponent(created.id, {
-            food_id: pc.food_id,
-            // TODO(plate-workflow-rework, phase 3): pass kind-aware quantity.
-            portions: pc.portions ?? 1,
-          })
+          await addPlateComponent(created.id, componentToAddInput(pc))
         }
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),

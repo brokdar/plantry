@@ -283,6 +283,14 @@ func (s *Service) RemoveComponent(ctx context.Context, plateComponentID int64) e
 	return s.repo.DeleteComponent(ctx, plateComponentID)
 }
 
+// RecentUnitForFood returns the most-recently-used canonical unit for the
+// given leaf food across any plate, or "" if none exists. Used by the
+// planner picker to default the quantity-unit input to whatever the user
+// last picked for this ingredient.
+func (s *Service) RecentUnitForFood(ctx context.Context, foodID int64) (string, error) {
+	return s.repo.RecentUnitForFood(ctx, foodID)
+}
+
 // SetSkipped marks the slot as prospectively skipped (eating out / canteen).
 // Clears attached components atomically when enabling skip.
 func (s *Service) SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*Plate, error) {

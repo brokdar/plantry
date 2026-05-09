@@ -5,7 +5,6 @@ import {
   Clock,
   Heart,
   Loader2,
-  Minus,
   Plus,
   Search,
   Sparkles,
@@ -22,6 +21,11 @@ import {
 } from "react"
 import { useTranslation } from "react-i18next"
 
+import { PortionStepper } from "@/components/component/PortionStepper"
+import {
+  QuantityUnitInput,
+  type QuantityUnitValue,
+} from "@/components/component/QuantityUnitInput"
 import {
   FoodPlaceholder,
   type FoodPlaceholderCategory,
@@ -41,6 +45,7 @@ import { useFoodMacros, useFoods } from "@/lib/queries/foods"
 import { useTemplates } from "@/lib/queries/templates"
 import { imageURL } from "@/lib/image-url"
 import { slotLabel } from "@/lib/slot-label"
+import { resolveGrams } from "@/lib/domain/units"
 import { cn } from "@/lib/utils"
 
 const DAY_KEYS = [
@@ -72,10 +77,25 @@ export interface TraySlotContext {
   weekday: number
 }
 
+/**
+ * TrayItem carries a kind-aware quantity for a staged food. The `quantity`
+ * union mirrors the backend's quantity model (composed → integer portions,
+ * leaf → amount + unit) so the tray reducer never has to invent translations.
+ */
+export type TrayQuantity =
+  | { kind: "composed"; portions: number }
+  | { kind: "leaf"; amount: number; unit: string }
+
 export interface TrayItem {
   food: Food
-  portions: number
+  quantity: TrayQuantity
 }
+
+/** Commit payload shape sent to the parent. The discriminated union mirrors
+ * the backend's add-component endpoint exactly. */
+export type TrayCommitItem =
+  | { food_id: number; portions: number }
+  | { food_id: number; amount: number; unit: string }
 
 /** Result of a tray commit. When some additions failed, the parent returns
  * the food_ids that didn't land; the sheet keeps those staged so the user
@@ -92,7 +112,7 @@ interface ComponentTraySheetProps {
   side?: "right" | "bottom"
   onOpenChange: (open: boolean) => void
   onCommit: (
-    items: { food_id: number; portions: number }[],
+    items: TrayCommitItem[],
     context: TraySlotContext
   ) => Promise<TrayCommitResult | void> | TrayCommitResult | void
 }
@@ -188,10 +208,7 @@ function ComponentTraySheetBody({
     if (tray.length === 0 || committing) return
     setCommitting(true)
     try {
-      const result = await onCommit(
-        tray.map((it) => ({ food_id: it.food.id, portions: it.portions })),
-        context
-      )
+      const result = await onCommit(tray.map(toCommitItem), context)
       const failed = result?.failedFoodIds ?? []
       if (failed.length === 0) {
         onClose()
@@ -266,7 +283,7 @@ function ComponentTraySheetBody({
 
       <TrayFooter
         items={tray}
-        onPortion={(id, p) => dispatch({ type: "portion", foodId: id, p })}
+        onQuantity={(id, q) => dispatch({ type: "quantity", foodId: id, q })}
         onRemove={(id) => dispatch({ type: "remove", foodId: id })}
         onCancel={onClose}
         onCommit={commit}
@@ -653,14 +670,14 @@ function TemplateResults({
 
 function TrayFooter({
   items,
-  onPortion,
+  onQuantity,
   onRemove,
   onCancel,
   onCommit,
   committing,
 }: {
   items: TrayItem[]
-  onPortion: (foodId: number, p: number) => void
+  onQuantity: (foodId: number, q: TrayQuantity) => void
   onRemove: (foodId: number) => void
   onCancel: () => void
   onCommit: () => void
@@ -669,7 +686,7 @@ function TrayFooter({
   const { t } = useTranslation()
   const total = items.length
 
-  // Deferred so changing portions doesn't refetch on every keystroke; the
+  // Deferred so changing quantities doesn't refetch on every keystroke; the
   // batch endpoint is keyed by the sorted id list and the deferred-tray-item
   // shape stays stable while the user types.
   const deferredItems = useDeferredValue(items)
@@ -679,7 +696,7 @@ function TrayFooter({
   )
   const { data: foodMacrosData } = useFoodMacros(foodIds)
   const macrosByFood = useMemo(() => {
-    const map = new Map<number, number>() // food_id → kcal
+    const map = new Map<number, number>() // food_id → kcal (per-portion or per-100g)
     for (const entry of foodMacrosData?.foods ?? []) {
       map.set(entry.food_id, entry.macros.kcal)
     }
@@ -689,7 +706,8 @@ function TrayFooter({
     let sum = 0
     for (const it of deferredItems) {
       const k = macrosByFood.get(it.food.id)
-      if (k != null) sum += k * it.portions
+      if (k == null) continue
+      sum += k * trayItemMultiplier(it)
     }
     return Math.round(sum)
   }, [deferredItems, macrosByFood])
@@ -722,7 +740,7 @@ function TrayFooter({
             <StagedRow
               key={it.food.id}
               item={it}
-              onPortion={(p) => onPortion(it.food.id, p)}
+              onQuantity={(q) => onQuantity(it.food.id, q)}
               onRemove={() => onRemove(it.food.id)}
             />
           ))}
@@ -774,11 +792,11 @@ function TrayFooter({
 
 function StagedRow({
   item,
-  onPortion,
+  onQuantity,
   onRemove,
 }: {
   item: TrayItem
-  onPortion: (p: number) => void
+  onQuantity: (q: TrayQuantity) => void
   onRemove: () => void
 }) {
   const { t } = useTranslation()
@@ -786,91 +804,105 @@ function StagedRow({
   return (
     <li
       data-testid={`tray-staged-${item.food.id}`}
-      className="flex items-center gap-2 rounded-lg bg-surface-container-lowest px-2 py-1.5"
+      className="flex flex-col gap-1.5 rounded-lg bg-surface-container-lowest px-2 py-1.5"
     >
-      <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-md bg-surface-container">
-        {item.food.image_path ? (
-          <img
-            src={imageURL(item.food.image_path)}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <FoodPlaceholder
-            category={(role ?? "main") as FoodPlaceholderCategory}
+      <div className="flex items-center gap-2">
+        <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-md bg-surface-container">
+          {item.food.image_path ? (
+            <img
+              src={imageURL(item.food.image_path)}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <FoodPlaceholder
+              category={(role ?? "main") as FoodPlaceholderCategory}
+              size="sm"
+              rounded="lg"
+              className="h-full w-full"
+            />
+          )}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-on-surface">
+          {item.food.name}
+        </span>
+        {item.quantity.kind === "composed" ? (
+          <PortionStepper
+            value={item.quantity.portions}
+            onChange={(p) => onQuantity({ kind: "composed", portions: p })}
             size="sm"
-            rounded="lg"
-            className="h-full w-full"
           />
-        )}
-      </span>
-      <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-on-surface">
-        {item.food.name}
-      </span>
-      <PortionStepper value={item.portions} onChange={onPortion} />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={t("common.remove", { defaultValue: "Remove" })}
-        onClick={onRemove}
-        className="size-7 text-on-surface-variant hover:text-destructive"
-      >
-        <X className="h-3.5 w-3.5" />
-      </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={t("common.remove", { defaultValue: "Remove" })}
+          onClick={onRemove}
+          className="size-7 text-on-surface-variant hover:text-destructive"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      {item.quantity.kind === "leaf" && (
+        <QuantityUnitInput
+          food={item.food}
+          value={{
+            amount: item.quantity.amount,
+            unit: item.quantity.unit,
+          }}
+          onChange={(q: QuantityUnitValue) =>
+            onQuantity({ kind: "leaf", amount: q.amount, unit: q.unit })
+          }
+          compact
+          className="pl-9"
+        />
+      )}
     </li>
   )
 }
 
-function PortionStepper({
-  value,
-  onChange,
-}: {
-  value: number
-  onChange: (n: number) => void
-}) {
-  const { t } = useTranslation()
-  function bump(delta: number) {
-    const next = Math.max(0.25, Math.round((value + delta) * 4) / 4)
-    if (next !== value) onChange(next)
-  }
-  return (
-    <div
-      className="flex items-center gap-0 rounded-full border border-outline-variant/50 bg-surface-container-lowest"
-      role="group"
-      aria-label={t("plate.portions")}
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`${t("plate.portions")} −0.25`}
-        onClick={() => bump(-0.25)}
-        className="size-6 rounded-full text-on-surface-variant"
-        disabled={value <= 0.25}
-      >
-        <Minus className="h-3 w-3" />
-      </Button>
-      <span className="min-w-[2.2rem] text-center font-mono text-[11.5px] font-semibold text-on-surface tabular-nums">
-        ×{formatPortions(value)}
-      </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`${t("plate.portions")} +0.25`}
-        onClick={() => bump(0.25)}
-        className="size-6 rounded-full text-on-surface-variant"
-      >
-        <Plus className="h-3 w-3" />
-      </Button>
-    </div>
-  )
+/** trayItemMultiplier mirrors the backend `PlateComponent.Multiplier` rule
+ * for staged (not-yet-saved) tray items. Composed → portions; leaf →
+ * resolved grams ÷ 100. We resolve grams in-memory here using the same
+ * frontend resolver the food editor uses; the server will re-resolve at
+ * commit time, so this is purely for the running-total preview. */
+function trayItemMultiplier(item: TrayItem): number {
+  if (item.quantity.kind === "composed") return item.quantity.portions
+  if (item.food.kind !== "leaf") return 0
+  const portions = item.food.portions ?? []
+  const r = resolveGrams(item.quantity.amount, item.quantity.unit, portions)
+  return r.grams / 100
 }
 
-function formatPortions(n: number): string {
-  if (Number.isInteger(n)) return `${n}.0`
-  return n.toFixed(2).replace(/0$/, "")
+/** toCommitItem flattens a staged tray item into the wire shape expected by
+ * the parent (and ultimately the backend). The two halves are mutually
+ * exclusive — composed never carries amount/unit, leaf never carries
+ * portions. Callers cannot accidentally send a mixed payload. */
+function toCommitItem(it: TrayItem): TrayCommitItem {
+  if (it.quantity.kind === "composed") {
+    return { food_id: it.food.id, portions: it.quantity.portions }
+  }
+  return {
+    food_id: it.food.id,
+    amount: it.quantity.amount,
+    unit: it.quantity.unit,
+  }
+}
+
+/** initialQuantityFor picks the starting quantity for a fresh tray entry,
+ * branching on `food.kind`:
+ *  - composed → 1 portion
+ *  - leaf with portions table → first portion entry, amount = 1
+ *  - leaf without portions → 100 g */
+function initialQuantityFor(food: Food): TrayQuantity {
+  if (food.kind === "composed") {
+    return { kind: "composed", portions: 1 }
+  }
+  if (food.portions && food.portions.length > 0) {
+    return { kind: "leaf", amount: 1, unit: food.portions[0]!.unit }
+  }
+  return { kind: "leaf", amount: 100, unit: "g" }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -938,7 +970,7 @@ function readRoles(slotId: number): Set<FoodRole> {
 export type TrayAction =
   | { type: "stage"; food: Food }
   | { type: "stageTemplate"; template: Template; foodsById: Map<number, Food> }
-  | { type: "portion"; foodId: number; p: number }
+  | { type: "quantity"; foodId: number; q: TrayQuantity }
   | { type: "remove"; foodId: number }
   | { type: "keepOnly"; foodIds: Set<number> }
 
@@ -947,39 +979,55 @@ export function trayReducer(state: TrayItem[], action: TrayAction): TrayItem[] {
     case "stage": {
       const existing = state.find((i) => i.food.id === action.food.id)
       if (existing) {
-        // Re-tapping a result bumps the portion by 0.25 — useful for adding
-        // multiple servings of the same item without leaving the result row.
+        // Re-tapping a result bumps the staged quantity. The bump rule is
+        // kind-aware: composed → +1 portion, leaf-by-count → +1 unit,
+        // leaf-by-mass-or-volume → +50 of the current unit.
         return state.map((i) =>
           i.food.id === action.food.id
-            ? { ...i, portions: clampPortion(i.portions + 0.25) }
+            ? { ...i, quantity: bumpQuantity(i.quantity) }
             : i
         )
       }
-      return [...state, { food: action.food, portions: 1 }]
+      return [
+        ...state,
+        { food: action.food, quantity: initialQuantityFor(action.food) },
+      ]
     }
     case "stageTemplate": {
       let next = state
       for (const tc of action.template.components) {
         const food = action.foodsById.get(tc.food_id)
         if (!food) continue
+        // Templates still speak the legacy float-portions vocabulary. Translate
+        // per kind: composed rounds up to ≥1 servings; leaf becomes
+        // (portions × 100) g.
+        const incoming: TrayQuantity =
+          food.kind === "composed"
+            ? {
+                kind: "composed",
+                portions: Math.max(1, Math.round(tc.portions)),
+              }
+            : {
+                kind: "leaf",
+                amount: Math.max(1, tc.portions * 100),
+                unit: "g",
+              }
         const existing = next.find((i) => i.food.id === food.id)
         if (existing) {
           next = next.map((i) =>
             i.food.id === food.id
-              ? { ...i, portions: clampPortion(i.portions + tc.portions) }
+              ? { ...i, quantity: addQuantities(i.quantity, incoming) }
               : i
           )
         } else {
-          next = [...next, { food, portions: clampPortion(tc.portions) }]
+          next = [...next, { food, quantity: incoming }]
         }
       }
       return next
     }
-    case "portion":
+    case "quantity":
       return state.map((i) =>
-        i.food.id === action.foodId
-          ? { ...i, portions: clampPortion(action.p) }
-          : i
+        i.food.id === action.foodId ? { ...i, quantity: action.q } : i
       )
     case "remove":
       return state.filter((i) => i.food.id !== action.foodId)
@@ -990,8 +1038,40 @@ export function trayReducer(state: TrayItem[], action: TrayAction): TrayItem[] {
   }
 }
 
-function clampPortion(p: number): number {
-  return Math.max(0.25, Math.round(p * 4) / 4)
+/** bumpQuantity nudges a staged quantity in response to re-tapping the same
+ *  food in the picker. Per-kind:
+ *   - composed   → +1 portion
+ *   - leaf count → +1 unit (the portion table key)
+ *   - leaf grams → +50 g (close enough to a "more" gesture without overshoot)
+ *   - leaf other → +100 (volumes / unknown) */
+function bumpQuantity(q: TrayQuantity): TrayQuantity {
+  if (q.kind === "composed") {
+    return { ...q, portions: Math.min(20, q.portions + 1) }
+  }
+  if (q.unit === "g") {
+    return { ...q, amount: q.amount + 50 }
+  }
+  // Per the spec: count-like (portion table or count units) bump by 1; mass
+  // and volume bump by their conventional steps.
+  if (q.amount < 5) {
+    return { ...q, amount: q.amount + 1 }
+  }
+  return { ...q, amount: q.amount + 50 }
+}
+
+/** addQuantities combines two same-shaped quantities. Used by the template
+ *  applier so re-applying a template onto a tray that already has the food
+ *  staged does the additive thing. Mismatched shapes (rare; mostly arises
+ *  if a template referenced a food that has since changed kind) are
+ *  resolved in favour of the incoming entry. */
+function addQuantities(a: TrayQuantity, b: TrayQuantity): TrayQuantity {
+  if (a.kind === "composed" && b.kind === "composed") {
+    return { kind: "composed", portions: Math.min(20, a.portions + b.portions) }
+  }
+  if (a.kind === "leaf" && b.kind === "leaf" && a.unit === b.unit) {
+    return { kind: "leaf", amount: a.amount + b.amount, unit: a.unit }
+  }
+  return b
 }
 
 function useTray(): readonly [TrayItem[], (action: TrayAction) => void] {

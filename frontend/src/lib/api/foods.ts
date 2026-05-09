@@ -345,3 +345,9 @@ export function refetchFood(id: number, lang?: string): Promise<Food> {
   const qs = lang ? `?lang=${encodeURIComponent(lang)}` : ""
   return apiFetch(`/foods/${id}/refetch${qs}`, { method: "POST" })
 }
+
+/** GET /api/foods/:id/recent-unit — most-recently-used unit for a leaf food
+ *  on any plate, or null if the food has never been added with a unit. */
+export function getRecentUnit(id: number): Promise<{ unit: string | null }> {
+  return apiFetch(`/foods/${id}/recent-unit`)
+}
