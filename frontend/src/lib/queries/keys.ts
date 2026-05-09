@@ -8,6 +8,15 @@ export const foodKeys = {
   variants: (id: number) => [...foodKeys.detail(id), "variants"] as const,
   portions: (id: number) => [...foodKeys.detail(id), "portions"] as const,
   insights: (params: object) => [...foodKeys.all, "insights", params] as const,
+  // Batch per-food macros, keyed by a stable comma-joined id list. Mirrors
+  // foodKeys.all so cache invalidations on a food update also drop the
+  // batched macros entries that referenced it.
+  macrosBatch: (ids: readonly number[]) =>
+    [
+      ...foodKeys.all,
+      "macros-batch",
+      ids.slice().sort((a, b) => a - b),
+    ] as const,
 }
 
 export const slotKeys = {
@@ -36,6 +45,12 @@ export const plateKeys = {
   rangeInfinite: (anchor: string) =>
     [...plateKeys.all, "range-infinite", anchor] as const,
   byDate: (date: string) => [...plateKeys.all, "by-date", date] as const,
+  // Sits UNDER `range(from, to)` so that any invalidation of the same
+  // window's plate list also drops the macros for that window. TanStack
+  // Query treats the queryKey as a prefix list, so `range(...)` matches
+  // both `["plates", "range", from, to]` and the deeper macros key below.
+  macrosRange: (from: string, to: string) =>
+    [...plateKeys.range(from, to), "macros"] as const,
 }
 
 export const profileKeys = {

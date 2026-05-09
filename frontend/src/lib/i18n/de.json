@@ -276,6 +276,7 @@
     "staged_label": "Vorgemerkte Komponenten",
     "staged_count_one": "1 vorgemerkt",
     "staged_count_other": "{{count}} vorgemerkt",
+    "running_total": "Zwischensumme",
     "empty_count": "Nichts vorgemerkt",
     "commit_one": "1 hinzufügen",
     "commit_other": "{{count}} hinzufügen",

@@ -21,12 +21,13 @@ import type { Template } from "@/lib/api/templates"
 
 vi.mock("@/lib/queries/foods", () => ({
   useFoods: vi.fn(),
+  useFoodMacros: vi.fn(() => ({ data: { foods: [] } })),
 }))
 vi.mock("@/lib/queries/templates", () => ({
   useTemplates: vi.fn(),
 }))
 
-import { useFoods } from "@/lib/queries/foods"
+import { useFoodMacros, useFoods } from "@/lib/queries/foods"
 import { useTemplates } from "@/lib/queries/templates"
 
 function run(initial: TrayItem[], actions: TrayAction[]): TrayItem[] {
@@ -374,5 +375,47 @@ describe("ComponentTraySheet integration", () => {
     const user = userEvent.setup()
     await user.click(await screen.findByTestId("tray-tab-templates"))
     expect(await screen.findByTestId("tray-template-7")).toBeInTheDocument()
+  })
+
+  it("running total updates when staging a food", async () => {
+    setupQueries()
+    // Stub useFoodMacros so the running total has macros to multiply by.
+    ;(useFoodMacros as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: {
+        foods: [
+          {
+            food_id: mockChickenBreast.id,
+            macros: {
+              kcal: 165,
+              protein: 31,
+              fat: 3.6,
+              carbs: 0,
+              fiber: 0,
+              sodium: 70,
+            },
+          },
+        ],
+      },
+    })
+
+    renderWithRouter(
+      <ComponentTraySheet
+        open
+        context={ctx}
+        recentFoods={[]}
+        onOpenChange={vi.fn()}
+        onCommit={vi.fn()}
+      />
+    )
+
+    const user = userEvent.setup()
+    const result = await screen.findByTestId(
+      `tray-result-${mockChickenBreast.id}`
+    )
+    await user.click(result)
+
+    // Default portions = 1; running total = round(165 * 1) = 165.
+    const total = await screen.findByTestId("tray-running-kcal")
+    await waitFor(() => expect(total.textContent).toMatch(/165/))
   })
 })

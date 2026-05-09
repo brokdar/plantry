@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/sheet"
 import type { Food, FoodRole } from "@/lib/api/foods"
 import type { Template } from "@/lib/api/templates"
-import { useFoods } from "@/lib/queries/foods"
+import { useFoodMacros, useFoods } from "@/lib/queries/foods"
 import { useTemplates } from "@/lib/queries/templates"
 import { imageURL } from "@/lib/image-url"
 import { slotLabel } from "@/lib/slot-label"
@@ -668,8 +668,50 @@ function TrayFooter({
 }) {
   const { t } = useTranslation()
   const total = items.length
+
+  // Deferred so changing portions doesn't refetch on every keystroke; the
+  // batch endpoint is keyed by the sorted id list and the deferred-tray-item
+  // shape stays stable while the user types.
+  const deferredItems = useDeferredValue(items)
+  const foodIds = useMemo(
+    () => deferredItems.map((it) => it.food.id),
+    [deferredItems]
+  )
+  const { data: foodMacrosData } = useFoodMacros(foodIds)
+  const macrosByFood = useMemo(() => {
+    const map = new Map<number, number>() // food_id → kcal
+    for (const entry of foodMacrosData?.foods ?? []) {
+      map.set(entry.food_id, entry.macros.kcal)
+    }
+    return map
+  }, [foodMacrosData])
+  const runningKcal = useMemo(() => {
+    let sum = 0
+    for (const it of deferredItems) {
+      const k = macrosByFood.get(it.food.id)
+      if (k != null) sum += k * it.portions
+    }
+    return Math.round(sum)
+  }, [deferredItems, macrosByFood])
+
   return (
     <footer className="border-t border-outline-variant/40 bg-surface-container-low/60">
+      {items.length > 0 && (
+        <div
+          className="sticky top-0 z-[1] flex items-center justify-between gap-2 border-b border-outline-variant/30 bg-surface-container-low/80 px-5 py-2 backdrop-blur"
+          data-testid="tray-running-total"
+        >
+          <span className="font-heading text-[10.5px] font-bold tracking-[0.22em] text-on-surface-variant uppercase">
+            {t("tray.running_total")}
+          </span>
+          <span
+            className="font-mono text-[12.5px] font-semibold text-on-surface tabular-nums"
+            data-testid="tray-running-kcal"
+          >
+            {runningKcal} {t("macro.kcal")}
+          </span>
+        </div>
+      )}
       {items.length > 0 && (
         <ul
           className="flex max-h-44 flex-col gap-1 overflow-y-auto px-3 py-2"

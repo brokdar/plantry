@@ -25,7 +25,16 @@ export interface PlateComponent {
   id: number
   plate_id: number
   food_id: number
-  portions: number
+  /** Composed-food component: integer count of servings. */
+  portions?: number
+  /** Leaf-food component: user-entered quantity. */
+  amount?: number
+  /** Leaf-food component: canonical unit key (g, ml, piece…). */
+  unit?: string
+  /** Leaf-food component: server-resolved grams snapshot. */
+  grams?: number
+  /** Leaf-food component: confidence label for the grams resolution. */
+  grams_source?: string
   sort_order: number
 }
 
@@ -132,4 +141,21 @@ export function deletePlateComponent(
   pcId: number
 ): Promise<void> {
   return apiFetch(`/plates/${plateId}/components/${pcId}`, { method: "DELETE" })
+}
+
+export interface PlateMacrosEntry {
+  plate_id: number
+  date: string
+  skipped: boolean
+  macros: MacrosResponse
+}
+
+/** GET /api/plates/macros?from=&to= — per-plate macro totals for a date range. */
+export function listPlateMacros(
+  from: string,
+  to: string
+): Promise<{ plates: PlateMacrosEntry[] }> {
+  return apiFetch(
+    `/plates/macros?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+  )
 }

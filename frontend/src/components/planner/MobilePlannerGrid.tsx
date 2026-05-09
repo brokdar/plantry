@@ -22,11 +22,16 @@ import {
   addPlateComponent,
   createPlate,
   deletePlate,
+  type MacrosResponse,
   type Plate,
 } from "@/lib/api/plates"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
-import { useSetPlateSkipped, useUpdatePlate } from "@/lib/queries/plates"
+import {
+  usePlateMacros,
+  useSetPlateSkipped,
+  useUpdatePlate,
+} from "@/lib/queries/plates"
 import { useProfile } from "@/lib/queries/profile"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
@@ -132,6 +137,16 @@ export function MobilePlannerGrid({
     if (!profile?.kcal_target || slots.length === 0) return null
     return profile.kcal_target / slots.length
   }, [profile?.kcal_target, slots.length])
+
+  // Per-plate macros for the visible window (mirrors PlannerGrid).
+  const { data: plateMacrosData } = usePlateMacros(rangeFrom, rangeTo)
+  const macrosByPlateId = useMemo(() => {
+    const map = new Map<number, MacrosResponse>()
+    for (const entry of plateMacrosData?.plates ?? []) {
+      map.set(entry.plate_id, entry.macros)
+    }
+    return map
+  }, [plateMacrosData])
 
   // Default to today's index; fall back to 0 if today isn't in the window.
   const todayStr = new Date().toISOString().slice(0, 10)
@@ -605,6 +620,7 @@ export function MobilePlannerGrid({
                   slotId={slot.id}
                   plate={plate}
                   componentsById={componentsById}
+                  macros={plate ? macrosByPlateId.get(plate.id) : undefined}
                   kcalTarget={kcalPerSlotTarget}
                   onAdd={() => openPicker(activeDay, slot.id)}
                   onOpenSheet={

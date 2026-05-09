@@ -31,13 +31,16 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import type { Food } from "@/lib/api/foods"
-import type { Plate, PlateComponent } from "@/lib/api/plates"
+import type { MacrosResponse, Plate, PlateComponent } from "@/lib/api/plates"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
+import { useFoodMacros } from "@/lib/queries/foods"
 import {
+  usePlateMacros,
   useRemovePlateComponent,
   useUpdatePlate,
   useUpdatePlateComponentPortions,
 } from "@/lib/queries/plates"
+import { MacroTriad } from "@/components/editorial/macros"
 import { imageURL } from "@/lib/image-url"
 import { slotLabel } from "@/lib/slot-label"
 import { toastError } from "@/lib/toast"
@@ -217,6 +220,31 @@ function SlotSheetBody({
   const heroPc = sorted[0]
   const heroFood = heroPc ? componentsById.get(heroPc.food_id) : undefined
 
+  // Plate-level macros (header summary). Reuses the same query the planner
+  // grid uses, so it's already in cache when the user opens the sheet.
+  const { data: plateMacrosData } = usePlateMacros(rangeFrom, rangeTo)
+  const plateMacros: MacrosResponse | undefined = useMemo(
+    () => plateMacrosData?.plates.find((p) => p.plate_id === plate.id)?.macros,
+    [plateMacrosData, plate.id]
+  )
+
+  // Per-component kcal contribution. Batched per-food macros are fetched
+  // once for all components on this plate; each row then multiplies by its
+  // own quantity using the same shape as the backend `Multiplier` (portions
+  // for composed, grams/100 for leaf).
+  const foodIds = useMemo(
+    () => Array.from(new Set(sorted.map((pc) => pc.food_id))),
+    [sorted]
+  )
+  const { data: foodMacrosData } = useFoodMacros(foodIds)
+  const foodMacrosById = useMemo(() => {
+    const map = new Map<number, MacrosResponse>()
+    for (const entry of foodMacrosData?.foods ?? []) {
+      map.set(entry.food_id, entry.macros)
+    }
+    return map
+  }, [foodMacrosData])
+
   return (
     <>
       <SheetHeader className="gap-2 border-b border-outline-variant/40 bg-surface-container-low/40 px-5 py-4">
@@ -231,9 +259,10 @@ function SlotSheetBody({
             <SheetTitle className="font-heading text-[22px] leading-tight font-bold tracking-tight text-on-surface">
               {slotName}
             </SheetTitle>
-            <SheetDescription className="text-[12.5px] text-on-surface-variant">
-              {t("slot_sheet.description", { count: sorted.length })}
-            </SheetDescription>
+            <SlotSheetMacroSummary
+              macros={plateMacros}
+              componentCount={sorted.length}
+            />
           </div>
           <div className="flex items-center gap-1">
             {aiFilled && (
@@ -273,6 +302,7 @@ function SlotSheetBody({
           plate={plate}
           sorted={sorted}
           componentsById={componentsById}
+          foodMacrosById={foodMacrosById}
           onAdd={onAddComponent}
           onSwap={onSwapComponent}
           onLastRemoved={onDeletePlate}
@@ -298,6 +328,52 @@ function SlotSheetBody({
         onDeletePlate={onDeletePlate}
       />
     </>
+  )
+}
+
+function SlotSheetMacroSummary({
+  macros,
+  componentCount,
+}: {
+  macros: MacrosResponse | undefined
+  componentCount: number
+}) {
+  const { t } = useTranslation()
+  if (!macros) {
+    // Use the existing description copy as a placeholder so the header doesn't
+    // collapse while the macros query is in flight.
+    return (
+      <SheetDescription
+        className="text-[12.5px] text-on-surface-variant"
+        data-testid="slot-sheet-macros-placeholder"
+      >
+        {t("slot_sheet.description", { count: componentCount })}
+      </SheetDescription>
+    )
+  }
+  return (
+    <div className="mt-1 flex flex-col gap-1.5" data-testid="slot-sheet-macros">
+      <div className="flex items-baseline gap-2">
+        <span
+          className="font-heading text-[22px] leading-none font-bold tracking-tight text-on-surface tabular-nums"
+          data-testid="slot-sheet-kcal"
+        >
+          {Math.round(macros.kcal)}
+        </span>
+        <span className="font-heading text-[10.5px] font-bold tracking-[0.22em] text-on-surface-variant uppercase">
+          {t("macro.kcal")}
+        </span>
+      </div>
+      <MacroTriad
+        values={{
+          protein: macros.protein,
+          carbs: macros.carbs,
+          fat: macros.fat,
+        }}
+        size="sm"
+        abbreviated
+      />
+    </div>
   )
 }
 
@@ -384,6 +460,7 @@ function ComponentList({
   plate,
   sorted,
   componentsById,
+  foodMacrosById,
   onAdd,
   onSwap,
   onLastRemoved,
@@ -391,6 +468,7 @@ function ComponentList({
   plate: Plate
   sorted: PlateComponent[]
   componentsById: Map<number, Food>
+  foodMacrosById: Map<number, MacrosResponse>
   onAdd: () => void
   onSwap: (pcId: number, defaultRole?: string) => void
   onLastRemoved: () => void
@@ -438,6 +516,7 @@ function ComponentList({
               plate={plate}
               pc={pc}
               food={componentsById.get(pc.food_id)}
+              foodMacros={foodMacrosById.get(pc.food_id)}
               isLast={sorted.length === 1}
               onSwap={(role) => onSwap(pc.id, role)}
               onLastRemoved={onLastRemoved}
@@ -453,6 +532,7 @@ function ComponentRow({
   plate,
   pc,
   food,
+  foodMacros,
   isLast,
   onSwap,
   onLastRemoved,
@@ -460,6 +540,7 @@ function ComponentRow({
   plate: Plate
   pc: PlateComponent
   food: Food | undefined
+  foodMacros: MacrosResponse | undefined
   isLast: boolean
   onSwap: (role?: string) => void
   onLastRemoved: () => void
@@ -483,6 +564,19 @@ function ComponentRow({
       .mutateAsync({ plateId: plate.id, pcId: pc.id, portions: clamped })
       .catch((err) => toastError(err, t))
   }
+
+  // Mirrors backend `PlateComponent.Multiplier`: portions for composed,
+  // grams/100 for leaf. Returns null when the quantity is missing so we can
+  // fall back to a placeholder instead of pretending it's 0 kcal.
+  const multiplier = (() => {
+    if (pc.portions != null) return pc.portions
+    if (pc.grams != null) return pc.grams / 100
+    return null
+  })()
+  const componentKcal =
+    foodMacros && multiplier != null
+      ? Math.round(foodMacros.kcal * multiplier)
+      : null
 
   function handleRemove() {
     // If this was the only component, removing it would leave an orphan
@@ -528,7 +622,15 @@ function ComponentRow({
           </span>
         )}
       </div>
-      <PortionStepper value={pc.portions} onChange={commit} />
+      <span
+        className="min-w-[3.4rem] text-right font-mono text-[11px] text-on-surface-variant tabular-nums"
+        data-testid={`slot-sheet-row-kcal-${pc.id}`}
+      >
+        {componentKcal != null
+          ? `${componentKcal} ${t("macro.kcal")}`
+          : `— ${t("macro.kcal")}`}
+      </span>
+      <PortionStepper value={pc.portions ?? 1} onChange={commit} />
       {/* Touch devices have no hover; force the row actions visible there.
         On hover-capable devices, fade in on hover/focus to keep the row tidy. */}
       <div className="flex items-center gap-0.5 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">

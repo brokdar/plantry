@@ -4,7 +4,7 @@ import { describe, expect, test, vi } from "vitest"
 
 import "@/lib/i18n"
 import type { Food } from "@/lib/api/foods"
-import type { Plate } from "@/lib/api/plates"
+import type { MacrosResponse, Plate } from "@/lib/api/plates"
 
 import { SlotCell } from "./SlotCell"
 
@@ -239,5 +239,71 @@ describe("SlotCell — skipped state", () => {
     const row = unmarkBtn.parentElement
     expect(row?.className).toContain("opacity-50")
     expect(row?.className).not.toContain("opacity-0")
+  })
+})
+
+describe("SlotCell — macros pill", () => {
+  function plannedPlate(): Plate {
+    return {
+      id: 42,
+      slot_id: 1,
+      date: "2026-05-02",
+      note: null,
+      skipped: false,
+      components: [
+        { id: 1, plate_id: 42, food_id: 7, portions: 1, sort_order: 0 },
+      ],
+      created_at: "2026-05-02T10:00:00Z",
+    }
+  }
+
+  function macros(kcal: number): MacrosResponse {
+    return { kcal, protein: 30, fat: 15, carbs: 60, fiber: 4, sodium: 200 }
+  }
+
+  const heroFood: Food = {
+    id: 7,
+    name: "Bolognese",
+    kind: "composed",
+    role: "main",
+    image_path: null,
+    favorite: false,
+    cook_count: 0,
+    last_cooked_at: null,
+    created_at: "2026-05-01T00:00:00Z",
+    updated_at: "2026-05-01T00:00:00Z",
+    children: [],
+    instructions: [],
+    tags: [],
+  } as unknown as Food
+
+  test("renders kcal pill for planted cell when macros are provided", () => {
+    render(
+      <SlotCell
+        {...defaultProps({
+          plate: plannedPlate(),
+          componentsById: new Map([[7, heroFood]]),
+          macros: macros(620),
+        })}
+      />
+    )
+    const pill = screen.getByTestId("slot-cell-kcal")
+    expect(pill).toBeInTheDocument()
+    expect(pill.textContent).toMatch(/620/)
+  })
+
+  test("renders a placeholder while macros are loading (no layout shift)", () => {
+    render(
+      <SlotCell
+        {...defaultProps({
+          plate: plannedPlate(),
+          componentsById: new Map([[7, heroFood]]),
+        })}
+      />
+    )
+    expect(
+      screen.getByTestId("slot-cell-macros-placeholder")
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId("slot-cell-kcal")).not.toBeInTheDocument()
   })
 })

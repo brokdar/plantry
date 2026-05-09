@@ -11,6 +11,7 @@ import {
   createPlate,
   deletePlate,
   deletePlateComponent,
+  listPlateMacros,
   listPlates,
   setPlateSkipped,
   updatePlate,
@@ -38,6 +39,17 @@ export function usePlatesByDate(date: string) {
     queryKey: plateKeys.byDate(date),
     queryFn: () => listPlates(date, date),
     enabled: !!date,
+  })
+}
+
+/** Per-plate macro totals for a date range. The query key sits under
+ *  `plateKeys.all`, so any mutation that already invalidates the plates list
+ *  (add/remove/update component, swap, move, skip) also drops these macros. */
+export function usePlateMacros(from: string, to: string) {
+  return useQuery({
+    queryKey: plateKeys.macrosRange(from, to),
+    queryFn: () => listPlateMacros(from, to),
+    enabled: !!from && !!to,
   })
 }
 

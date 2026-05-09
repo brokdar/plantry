@@ -64,7 +64,8 @@ async function restoreOverwrittenPlates(
       for (const pc of snap.components) {
         await addPlateComponent(created.id, {
           food_id: pc.food_id,
-          portions: pc.portions,
+          // TODO(plate-workflow-rework, phase 3): pass kind-aware quantity.
+          portions: pc.portions ?? 1,
         })
       }
       if (snap.feedback?.status) {

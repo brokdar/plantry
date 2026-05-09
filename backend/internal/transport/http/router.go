@@ -52,6 +52,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/", h.Foods.List)
 				r.Post("/", h.Foods.Create)
 				r.Get("/insights", h.Foods.Insights)
+				r.Get("/macros", h.Foods.BatchMacros)
 
 				if h.Lookup != nil {
 					r.Get("/lookup", h.Lookup.Lookup)

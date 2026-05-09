@@ -276,6 +276,7 @@
     "staged_label": "Staged components",
     "staged_count_one": "1 staged",
     "staged_count_other": "{{count}} staged",
+    "running_total": "Running total",
     "empty_count": "Nothing staged",
     "commit_one": "Add 1",
     "commit_other": "Add {{count}}",

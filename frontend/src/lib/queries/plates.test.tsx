@@ -11,6 +11,7 @@ vi.mock("@/lib/api/plates", () => ({
   deletePlate: vi.fn(),
   deletePlateComponent: vi.fn(),
   listPlates: vi.fn(),
+  listPlateMacros: vi.fn(),
   setPlateSkipped: vi.fn(),
   updatePlate: vi.fn(),
   updatePlateComponent: vi.fn(),
@@ -21,6 +22,7 @@ import {
   createPlate,
   deletePlate,
   deletePlateComponent,
+  listPlateMacros,
   listPlates,
   setPlateSkipped,
   updatePlate,
@@ -38,6 +40,7 @@ import {
   useAddPlateComponent,
   useCreatePlate,
   useDeletePlate,
+  usePlateMacros,
   usePlatesRange,
   useRemovePlateComponent,
   useSetPlateSkipped,
@@ -434,5 +437,76 @@ describe("plate mutations flush pending deletes via onMutate", () => {
     const addOrder = vi.mocked(addPlateComponent).mock.invocationCallOrder[0]
     expect(deleteOrder).toBeLessThan(addOrder)
     expect(hasPendingPlateDelete(7)).toBe(false)
+  })
+})
+
+describe("usePlateMacros", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("returns macros from the API for (from, to)", async () => {
+    vi.mocked(listPlateMacros).mockResolvedValueOnce({
+      plates: [
+        {
+          plate_id: 42,
+          date: "2026-04-28",
+          skipped: false,
+          macros: {
+            kcal: 620,
+            protein: 30,
+            fat: 15,
+            carbs: 60,
+            fiber: 4,
+            sodium: 200,
+          },
+        },
+      ],
+    })
+
+    const { result } = renderHook(
+      () => usePlateMacros("2026-04-26", "2026-05-02"),
+      { wrapper: createHookWrapper() }
+    )
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(listPlateMacros).toHaveBeenCalledWith("2026-04-26", "2026-05-02")
+    expect(result.current.data?.plates[0].plate_id).toBe(42)
+    expect(result.current.data?.plates[0].macros.kcal).toBe(620)
+  })
+
+  it("invalidates on addComponent because the macros key sits under plateKeys.all", async () => {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    qc.setQueryData(plateKeys.macrosRange("2026-05-04", "2026-05-10"), {
+      plates: [],
+    })
+
+    vi.mocked(addPlateComponent).mockResolvedValueOnce({
+      id: 9,
+      plate_id: 1,
+      food_id: 1,
+      portions: 1,
+      sort_order: 0,
+    })
+
+    const { result } = renderHook(() => useAddPlateComponent(), {
+      wrapper: createHookWrapper(qc),
+    })
+
+    await act(async () => {
+      result.current.mutate({
+        plateId: 1,
+        input: { food_id: 1, portions: 1 },
+      })
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    const state = qc.getQueryState(
+      plateKeys.macrosRange("2026-05-04", "2026-05-10")
+    )
+    expect(state?.isInvalidated).toBe(true)
   })
 })

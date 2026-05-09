@@ -44,12 +44,13 @@ import {
 } from "@/lib/queries/pending-plate-deletes"
 import { shoppingKeys } from "@/lib/queries/shopping"
 import type { Food } from "@/lib/api/foods"
-import type { Plate } from "@/lib/api/plates"
+import type { MacrosResponse, Plate } from "@/lib/api/plates"
 import type { TimeSlot } from "@/lib/api/slots"
 import type { NutritionDay } from "@/lib/api/nutrition"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import {
+  usePlateMacros,
   useSetPlateSkipped,
   useSwapPlateComponent,
   useUpdatePlate,
@@ -297,6 +298,19 @@ export function PlannerGrid({
     if (!profile?.kcal_target || slots.length === 0) return null
     return profile.kcal_target / slots.length
   }, [profile?.kcal_target, slots.length])
+
+  // Per-plate macros for the visible window. Indexed by plate id so SlotCell
+  // can render the kcal pill + P/F/C dots without each cell mounting its own
+  // query. The hook key sits under plateKeys.all so any of the existing
+  // plate-list invalidations also drops these.
+  const { data: plateMacrosData } = usePlateMacros(rangeFrom, rangeTo)
+  const macrosByPlateId = useMemo(() => {
+    const map = new Map<number, MacrosResponse>()
+    for (const entry of plateMacrosData?.plates ?? []) {
+      map.set(entry.plate_id, entry.macros)
+    }
+    return map
+  }, [plateMacrosData])
 
   const aiFill = usePlannerUI((s) => s.aiFill)
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
@@ -570,7 +584,10 @@ export function PlannerGrid({
           source!.plate.components.map((pc) =>
             addPlateComponent(p.id, {
               food_id: pc.food_id,
-              portions: pc.portions,
+              // TODO(plate-workflow-rework, phase 3): pass kind-aware quantity.
+              // For now coerce missing portions (leaf items in the new model)
+              // to 1 so the legacy float-portions API still receives a value.
+              portions: pc.portions ?? 1,
             })
           )
         )
@@ -724,7 +741,8 @@ export function PlannerGrid({
         for (const pc of src.components) {
           await addPlateComponent(created.id, {
             food_id: pc.food_id,
-            portions: pc.portions,
+            // TODO(plate-workflow-rework, phase 3): pass kind-aware quantity.
+            portions: pc.portions ?? 1,
           })
         }
         void queryClient.invalidateQueries({
@@ -829,6 +847,9 @@ export function PlannerGrid({
                             slotId={slot.id}
                             plate={plate}
                             componentsById={componentsById}
+                            macros={
+                              plate ? macrosByPlateId.get(plate.id) : undefined
+                            }
                             kcalTarget={kcalPerSlotTarget}
                             aiFilled={plate ? aiFilledIds.has(plate.id) : false}
                             onAdd={() => openPicker(dayIdx, slot.id)}

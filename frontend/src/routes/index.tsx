@@ -272,7 +272,8 @@ function PlanPage() {
           sourcePlates[idx]!.components.map((pc) =>
             addPlateComponent(created.id, {
               food_id: pc.food_id,
-              portions: pc.portions,
+              // TODO(plate-workflow-rework, phase 3): pass kind-aware quantity.
+              portions: pc.portions ?? 1,
             })
           )
         )
