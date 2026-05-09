@@ -269,13 +269,21 @@ function quickChipsForUnit(unit: string, portions: PortionLookup[]): number[] {
   return []
 }
 
+/**
+ * confidenceLabelKey mirrors the recipe editor's `GramsSourceBadge` mapping:
+ *  - direct (raw grams), portion (food's own table), and default (mass-unit
+ *    conversions like kg/oz/lb) are all *exact* — typed grams can't be more
+ *    exact than themselves, and the conversion factors are mathematical, not
+ *    estimates.
+ *  - fallback (volume on a non-volume food) and manual (user override on a
+ *    count unit without a portion entry) are estimates.
+ */
 function confidenceLabelKey(source: GramsSource): string | null {
   switch (source) {
-    case "portion":
-      return "plate.quantity.confidence.portion"
-    case "default":
     case "direct":
-      return "plate.quantity.confidence.default"
+    case "portion":
+    case "default":
+      return "plate.quantity.confidence.portion"
     case "fallback":
     case "manual":
       return "plate.quantity.confidence.fallback"

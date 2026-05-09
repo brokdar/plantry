@@ -130,12 +130,21 @@ describe("QuantityUnitInput grams pill confidence", () => {
     const pill = screen.getByTestId("quantity-unit-grams")
     expect(pill).toHaveAttribute("data-source", "portion")
     expect(pill.textContent).toMatch(/180 g/)
+    expect(pill.textContent).toMatch(/exact/)
   })
 
-  it("shows 'approx' (default) for a universal mass like oz", () => {
+  it("labels raw grams as 'exact' — typed grams is the exact case", () => {
+    render(<Host food={rice} />)
+    const pill = screen.getByTestId("quantity-unit-grams")
+    expect(pill).toHaveAttribute("data-source", "direct")
+    expect(pill.textContent).toMatch(/exact/)
+  })
+
+  it("labels mass-unit conversions (oz) as 'exact' — the factor is mathematical", () => {
     render(<Host food={rice} recentUnit="oz" />)
     const pill = screen.getByTestId("quantity-unit-grams")
     expect(pill).toHaveAttribute("data-source", "default")
+    expect(pill.textContent).toMatch(/exact/)
   })
 
   it("shows 'estimate' (fallback) for ml on a non-volume food", () => {

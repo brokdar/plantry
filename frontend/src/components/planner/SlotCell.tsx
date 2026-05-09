@@ -50,6 +50,11 @@ interface SlotCellProps {
    *  the planned cell; omit to hide the indicator. */
   kcalTarget?: number | null
   aiFilled?: boolean
+  /** When false, suppress the kcal + macro dots row at the bottom of the
+   *  planted cell. The desktop weekly view sets this to false to keep the
+   *  cell visually quiet; the mobile day-tab view keeps the default so
+   *  numbers stay accessible on that single-column layout. */
+  showMacros?: boolean
   onAdd: () => void
   onOpenSheet?: () => void
   onDeletePlate: () => void
@@ -358,6 +363,7 @@ function PlannedSlot({
   macros,
   kcalTarget,
   aiFilled,
+  showMacros = true,
   onAdd,
   onOpenSheet,
   onDeletePlate,
@@ -509,9 +515,11 @@ function PlannedSlot({
           </div>
         </div>
         <SlotSides items={sideItems} max={3} />
-        <div className="mt-auto">
-          <SlotMacroDots macros={macros} kcalTarget={kcalTarget} />
-        </div>
+        {showMacros && (
+          <div className="mt-auto">
+            <SlotMacroDots macros={macros} kcalTarget={kcalTarget} />
+          </div>
+        )}
       </div>
     </div>
   )

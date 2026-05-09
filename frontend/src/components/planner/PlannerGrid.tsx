@@ -848,6 +848,7 @@ export function PlannerGrid({
                               plate ? macrosByPlateId.get(plate.id) : undefined
                             }
                             kcalTarget={kcalPerSlotTarget}
+                            showMacros={false}
                             aiFilled={plate ? aiFilledIds.has(plate.id) : false}
                             onAdd={() => openPicker(dayIdx, slot.id)}
                             onOpenSheet={
