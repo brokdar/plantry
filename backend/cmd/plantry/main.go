@@ -210,6 +210,7 @@ func run() error {
 		Settings:       settingsHandler,
 		ShoppingRange:  handlers.NewShoppingRangeHandler(plateSvc, shoppingResolver),
 		NutritionRange: handlers.NewNutritionRangeHandler(plateSvc, nutritionResolver),
+		PlateMacros:    handlers.NewPlateMacrosHandler(plateSvc, nutritionResolver),
 		DevMode:        cfg.DevMode,
 	}
 	handler := transport.NewRouter(logger, static, h)

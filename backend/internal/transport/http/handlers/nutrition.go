@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sort"
 	"time"
@@ -48,44 +49,23 @@ func (h *NutritionRangeHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "error.server")
 		return
 	}
-
-	// Resolve per-portion macros once per unique food_id.
-	perPortion := map[int64]nutrition.Macros{}
-	for _, pl := range plates {
-		for _, pc := range pl.Components {
-			if _, ok := perPortion[pc.FoodID]; ok {
-				continue
-			}
-			m, err := h.resolver.PerPortion(r.Context(), pc.FoodID)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, "error.server")
-				return
-			}
-			perPortion[pc.FoodID] = m
-		}
+	plateMacros, err := computePlateMacros(r.Context(), h.resolver, plates)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "error.server")
+		return
 	}
 
-	// Aggregate macros per date string.
 	dayMacros := map[string]nutrition.Macros{}
 	for _, pl := range plates {
 		dateStr := pl.DateString()
-		var plateMacros nutrition.Macros
-		for _, pc := range pl.Components {
-			m := perPortion[pc.FoodID]
-			plateMacros.Kcal += m.Kcal * pc.Portions
-			plateMacros.Protein += m.Protein * pc.Portions
-			plateMacros.Fat += m.Fat * pc.Portions
-			plateMacros.Carbs += m.Carbs * pc.Portions
-			plateMacros.Fiber += m.Fiber * pc.Portions
-			plateMacros.Sodium += m.Sodium * pc.Portions
-		}
+		m := plateMacros[pl.ID]
 		d := dayMacros[dateStr]
-		d.Kcal += plateMacros.Kcal
-		d.Protein += plateMacros.Protein
-		d.Fat += plateMacros.Fat
-		d.Carbs += plateMacros.Carbs
-		d.Fiber += plateMacros.Fiber
-		d.Sodium += plateMacros.Sodium
+		d.Kcal += m.Kcal
+		d.Protein += m.Protein
+		d.Fat += m.Fat
+		d.Carbs += m.Carbs
+		d.Fiber += m.Fiber
+		d.Sodium += m.Sodium
 		dayMacros[dateStr] = d
 	}
 
@@ -99,6 +79,48 @@ func (h *NutritionRangeHandler) List(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(days, func(i, j int) bool { return days[i].Date < days[j].Date })
 
 	writeJSON(w, http.StatusOK, rangeNutritionResponse{Days: days})
+}
+
+// computePlateMacros aggregates per-plate macros for the given plates using
+// the kind-aware quantity model:
+//
+//   - composed component: multiplier = portions, macros from PerPortion (which
+//     returns per-portion macros for composed foods).
+//   - leaf component: multiplier = grams / 100, macros from PerPortion (which
+//     returns per-100g macros for leaf foods).
+//
+// PerPortion is called once per unique food_id within the request.
+func computePlateMacros(ctx context.Context, resolver *food.NutritionResolver, plates []plate.Plate) (map[int64]nutrition.Macros, error) {
+	perPortion := map[int64]nutrition.Macros{}
+	for _, pl := range plates {
+		for _, pc := range pl.Components {
+			if _, ok := perPortion[pc.FoodID]; ok {
+				continue
+			}
+			m, err := resolver.PerPortion(ctx, pc.FoodID)
+			if err != nil {
+				return nil, fmt.Errorf("resolve food %d: %w", pc.FoodID, err)
+			}
+			perPortion[pc.FoodID] = m
+		}
+	}
+
+	out := make(map[int64]nutrition.Macros, len(plates))
+	for _, pl := range plates {
+		var total nutrition.Macros
+		for _, pc := range pl.Components {
+			m := perPortion[pc.FoodID]
+			multiplier := pc.Multiplier()
+			total.Kcal += m.Kcal * multiplier
+			total.Protein += m.Protein * multiplier
+			total.Fat += m.Fat * multiplier
+			total.Carbs += m.Carbs * multiplier
+			total.Fiber += m.Fiber * multiplier
+			total.Sodium += m.Sodium * multiplier
+		}
+		out[pl.ID] = total
+	}
+	return out, nil
 }
 
 // plateRangeServiceFromFunc wraps a function as a plateRangeService.

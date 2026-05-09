@@ -117,11 +117,15 @@ type Plate struct {
 }
 
 type PlateComponent struct {
-	ID        int64
-	PlateID   int64
-	FoodID    int64
-	Portions  float64
-	SortOrder int64
+	ID          int64
+	PlateID     int64
+	FoodID      int64
+	Portions    sql.NullInt64
+	Amount      sql.NullFloat64
+	Unit        sql.NullString
+	Grams       sql.NullFloat64
+	GramsSource sql.NullString
+	SortOrder   int64
 }
 
 type PlateFeedback struct {

@@ -30,6 +30,7 @@ type Handlers struct {
 	Settings       *handlers.SettingsHandler
 	ShoppingRange  *handlers.ShoppingRangeHandler
 	NutritionRange *handlers.NutritionRangeHandler
+	PlateMacros    *handlers.PlateMacrosHandler
 	DevMode        bool // gates dev-only debug endpoints
 }
 
@@ -94,6 +95,9 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/", h.Plates.List)
 				r.Post("/", h.Plates.Create)
 				r.Get("/by-date/{date}", h.Plates.Day)
+				if h.PlateMacros != nil {
+					r.Get("/macros", h.PlateMacros.List)
+				}
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.Plates.Get)
 					r.Put("/", h.Plates.Update)

@@ -92,6 +92,7 @@ func (m *mockRepo) CountUsingFood(ctx context.Context, foodID int64) (int64, err
 
 type mockFoodChecker struct {
 	existsFn func(ctx context.Context, foodID int64) (bool, error)
+	kindFn   func(ctx context.Context, foodID int64) (string, error)
 }
 
 func (m *mockFoodChecker) Exists(ctx context.Context, foodID int64) (bool, error) {
@@ -99,6 +100,14 @@ func (m *mockFoodChecker) Exists(ctx context.Context, foodID int64) (bool, error
 		return m.existsFn(ctx, foodID)
 	}
 	return true, nil
+}
+
+func (m *mockFoodChecker) KindOf(ctx context.Context, foodID int64) (string, error) {
+	if m.kindFn != nil {
+		return m.kindFn(ctx, foodID)
+	}
+	// Default: composed (most existing template tests use composed-style integers).
+	return "composed", nil
 }
 
 type mockPlateComponentSource struct {
@@ -178,6 +187,7 @@ func mustDate(s string) time.Time {
 }
 
 func ptrInt64(v int64) *int64 { return &v }
+func ptrInt(v int) *int       { return &v }
 
 func makeService(repo *mockRepo, pr *mockPlateRepo) *template.Service {
 	return template.NewService(repo, &mockFoodChecker{}, &mockPlateComponentSource{}, &mockTxRunner{pr: pr})
@@ -459,9 +469,9 @@ func TestCreate_DefaultsToSlotScope(t *testing.T) {
 func TestSaveAsTemplate_HappyPath(t *testing.T) {
 	anchor := mustDate("2026-04-25")
 	plates := []plate.Plate{
-		{Date: mustDate("2026-04-25"), SlotID: 1, Components: []plate.PlateComponent{{FoodID: 1, Portions: 1}}},
-		{Date: mustDate("2026-04-26"), SlotID: 2, Components: []plate.PlateComponent{{FoodID: 2, Portions: 2}}},
-		{Date: mustDate("2026-04-27"), SlotID: 3, Components: []plate.PlateComponent{{FoodID: 3, Portions: 1}}},
+		{Date: mustDate("2026-04-25"), SlotID: 1, Components: []plate.PlateComponent{{FoodID: 1, Portions: ptrInt(1)}}},
+		{Date: mustDate("2026-04-26"), SlotID: 2, Components: []plate.PlateComponent{{FoodID: 2, Portions: ptrInt(2)}}},
+		{Date: mustDate("2026-04-27"), SlotID: 3, Components: []plate.PlateComponent{{FoodID: 3, Portions: ptrInt(1)}}},
 	}
 	var created *template.Template
 	repo := &mockRepo{
@@ -501,7 +511,7 @@ func TestSaveAsTemplate_HappyPath(t *testing.T) {
 func TestSaveAsTemplate_RejectsPlateBeforeAnchor(t *testing.T) {
 	anchor := mustDate("2026-04-25")
 	plates := []plate.Plate{
-		{Date: mustDate("2026-04-24"), Components: []plate.PlateComponent{{FoodID: 1, Portions: 1}}},
+		{Date: mustDate("2026-04-24"), Components: []plate.PlateComponent{{FoodID: 1, Portions: ptrInt(1)}}},
 	}
 	repo := &mockRepo{}
 	svc := makeService(repo, &mockPlateRepo{})
@@ -528,7 +538,7 @@ func TestSaveAsTemplate_SingleSlotSingleDayIsScopeSlot(t *testing.T) {
 		{
 			Date:       anchor,
 			SlotID:     3,
-			Components: []plate.PlateComponent{{FoodID: 1, Portions: 1}, {FoodID: 2, Portions: 2}},
+			Components: []plate.PlateComponent{{FoodID: 1, Portions: ptrInt(1)}, {FoodID: 2, Portions: ptrInt(2)}},
 		},
 	}
 	var created *template.Template

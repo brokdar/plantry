@@ -94,7 +94,7 @@ func (s *Service) Create(ctx context.Context, name string, scope Scope, fromPlat
 		for i, pc := range src {
 			t.Entries[i] = TemplateEntry{
 				FoodID:    pc.FoodID,
-				Portions:  pc.Portions,
+				Portions:  pc.LegacyPortionsValue(),
 				SortOrder: i,
 			}
 		}
@@ -203,6 +203,10 @@ func (s *Service) ApplyToPlate(ctx context.Context, templateID, plateID int64, m
 	if err != nil {
 		return err
 	}
+	kinds, err := s.resolveEntryKinds(ctx, t.Entries)
+	if err != nil {
+		return err
+	}
 	return s.tx.RunInTemplateTx(ctx, func(tr Repository, pr plate.Repository) error {
 		p, err := pr.Get(ctx, plateID)
 		if err != nil {
@@ -215,13 +219,9 @@ func (s *Service) ApplyToPlate(ctx context.Context, templateID, plateID int64, m
 				}
 			}
 			for i, te := range t.Entries {
-				pc := &plate.PlateComponent{
-					PlateID:   p.ID,
-					FoodID:    te.FoodID,
-					Portions:  te.Portions,
-					SortOrder: i,
-				}
-				if err := pr.CreateComponent(ctx, pc); err != nil {
+				pc := entryToComponent(te, kinds[te.FoodID], i)
+				pc.PlateID = p.ID
+				if err := pr.CreateComponent(ctx, &pc); err != nil {
 					return fmt.Errorf("add template entry: %w", err)
 				}
 			}
@@ -234,19 +234,51 @@ func (s *Service) ApplyToPlate(ctx context.Context, templateID, plateID int64, m
 			}
 		}
 		for i, te := range t.Entries {
-			pc := &plate.PlateComponent{
-				PlateID:   p.ID,
-				FoodID:    te.FoodID,
-				Portions:  te.Portions,
-				SortOrder: next + i,
-			}
-			if err := pr.CreateComponent(ctx, pc); err != nil {
+			pc := entryToComponent(te, kinds[te.FoodID], next+i)
+			pc.PlateID = p.ID
+			if err := pr.CreateComponent(ctx, &pc); err != nil {
 				return fmt.Errorf("append template entry: %w", err)
 			}
 		}
 		_ = tr
 		return nil
 	})
+}
+
+// entryToComponent translates a template entry's legacy float "portions" value
+// into the kind-aware plate.PlateComponent shape expected post-rework. The
+// food kind is supplied by the caller — resolved before the tx starts so we
+// never block on the same SQLite connection inside RunInTemplateTx.
+//
+// TODO(plate-workflow-rework): templates still store float portions; this
+// loses fidelity for leaf foods (always backfilled to grams = portions × 100).
+// Extend the template schema in a follow-up so leaf entries can express
+// (amount, unit) directly. See PLATE_WORKFLOW_REWORK.md, "Cross-cutting
+// concerns".
+func entryToComponent(te TemplateEntry, kind string, sortOrder int) plate.PlateComponent {
+	pc := plate.QuantityFromLegacyPortions(kind, te.Portions)
+	pc.FoodID = te.FoodID
+	pc.SortOrder = sortOrder
+	return pc
+}
+
+// resolveEntryKinds looks up the kind of every food referenced by the given
+// entries, returning a map keyed by food id. Called before transactional
+// blocks so the in-tx code path doesn't reach for the SQLite connection
+// pool a second time (deadlocks under SetMaxOpenConns(1)).
+func (s *Service) resolveEntryKinds(ctx context.Context, entries []TemplateEntry) (map[int64]string, error) {
+	kinds := make(map[int64]string, len(entries))
+	for _, e := range entries {
+		if _, ok := kinds[e.FoodID]; ok {
+			continue
+		}
+		kind, err := s.foods.KindOf(ctx, e.FoodID)
+		if err != nil {
+			return nil, fmt.Errorf("lookup food %d kind: %w", e.FoodID, err)
+		}
+		kinds[e.FoodID] = kind
+	}
+	return kinds, nil
 }
 
 // Apply creates new dated plates from a template, branching on the template's
@@ -298,17 +330,17 @@ func (s *Service) applySlot(ctx context.Context, t *Template, payload ApplyPaylo
 		groups[idx].entries = append(groups[idx].entries, te)
 	}
 
+	kinds, err := s.resolveEntryKinds(ctx, t.Entries)
+	if err != nil {
+		return nil, err
+	}
 	var created []plate.Plate
 	if err := s.tx.RunInTemplateTx(ctx, func(_ Repository, pr plate.Repository) error {
 		for _, g := range groups {
 			date := payload.Date.AddDate(0, 0, g.offset)
 			pcs := make([]plate.PlateComponent, len(g.entries))
 			for i, te := range g.entries {
-				pcs[i] = plate.PlateComponent{
-					FoodID:    te.FoodID,
-					Portions:  te.Portions,
-					SortOrder: i,
-				}
+				pcs[i] = entryToComponent(te, kinds[te.FoodID], i)
 			}
 			p := &plate.Plate{
 				Date:       date,
@@ -402,6 +434,10 @@ func (s *Service) applyMultiSlot(
 		c.entries = append(c.entries, te)
 	}
 
+	kinds, err := s.resolveEntryKinds(ctx, entries)
+	if err != nil {
+		return nil, err
+	}
 	var created []plate.Plate
 	var skipped []SkippedConflict
 
@@ -428,11 +464,7 @@ func (s *Service) applyMultiSlot(
 			}
 			pcs := make([]plate.PlateComponent, len(c.entries))
 			for i, te := range c.entries {
-				pcs[i] = plate.PlateComponent{
-					FoodID:    te.FoodID,
-					Portions:  te.Portions,
-					SortOrder: i,
-				}
+				pcs[i] = entryToComponent(te, kinds[te.FoodID], i)
 			}
 			p := &plate.Plate{
 				Date:       c.date,
@@ -488,7 +520,7 @@ func (s *Service) SaveAsTemplate(ctx context.Context, name string, plates []plat
 		for i, pc := range p.Components {
 			entries = append(entries, TemplateEntry{
 				FoodID:    pc.FoodID,
-				Portions:  pc.Portions,
+				Portions:  pc.LegacyPortionsValue(),
 				SortOrder: i,
 				DayOffset: offsetDays,
 				SlotID:    &slotID,

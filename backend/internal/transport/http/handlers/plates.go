@@ -21,9 +21,9 @@ type platesService interface {
 	Create(ctx context.Context, p *plate.Plate) error
 	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
 	Day(ctx context.Context, date time.Time) ([]plate.Plate, error)
-	AddComponent(ctx context.Context, plateID, foodID int64, portions float64) (*plate.PlateComponent, error)
-	SwapComponent(ctx context.Context, plateComponentID, newFoodID int64, portionsOverride *float64) (*plate.PlateComponent, error)
-	UpdateComponentPortions(ctx context.Context, plateComponentID int64, portions float64) (*plate.PlateComponent, error)
+	AddComponent(ctx context.Context, plateID int64, pc *plate.PlateComponent) (*plate.PlateComponent, error)
+	SwapComponent(ctx context.Context, plateComponentID, newFoodID int64, quantityOverride *plate.PlateComponent) (*plate.PlateComponent, error)
+	UpdateComponentQuantity(ctx context.Context, plateComponentID int64, q plate.PlateComponent) (*plate.PlateComponent, error)
 	RemoveComponent(ctx context.Context, plateComponentID int64) error
 	SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*plate.Plate, error)
 }
@@ -235,9 +235,31 @@ func (h *PlateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// addComponentRequest carries the kind-aware quantity. Exactly one of
+// (Portions) or (Amount + Unit) must be set; the service rejects malformed
+// shapes with ErrInvalidQuantityShape.
 type addComponentRequest struct {
-	FoodID   int64   `json:"food_id"`
-	Portions float64 `json:"portions"`
+	FoodID   int64    `json:"food_id"`
+	Portions *int     `json:"portions,omitempty"`
+	Amount   *float64 `json:"amount,omitempty"`
+	Unit     *string  `json:"unit,omitempty"`
+}
+
+func (req addComponentRequest) toComponent() plate.PlateComponent {
+	pc := plate.PlateComponent{FoodID: req.FoodID}
+	if req.Portions != nil {
+		v := *req.Portions
+		pc.Portions = &v
+	}
+	if req.Amount != nil {
+		v := *req.Amount
+		pc.Amount = &v
+	}
+	if req.Unit != nil {
+		v := *req.Unit
+		pc.Unit = &v
+	}
+	return pc
 }
 
 // AddComponent handles POST /api/plates/{id}/components.
@@ -252,22 +274,49 @@ func (h *PlateHandler) AddComponent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	pc, err := h.svc.AddComponent(r.Context(), plateID, req.FoodID, req.Portions)
+	pc := req.toComponent()
+	out, err := h.svc.AddComponent(r.Context(), plateID, &pc)
 	if err != nil {
 		status, key := plateError(err)
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusCreated, toPlateComponentResponse(pc))
+	writeJSON(w, http.StatusCreated, toPlateComponentResponse(out))
 }
 
+// updateComponentRequest supports two modes:
+//   - Swap: food_id present (with optional new quantity for the new food)
+//   - Quantity update: any of portions/amount/unit set (food_id absent)
 type updateComponentRequest struct {
-	FoodID   *int64   `json:"food_id"`
-	Portions *float64 `json:"portions"`
+	FoodID   *int64   `json:"food_id,omitempty"`
+	Portions *int     `json:"portions,omitempty"`
+	Amount   *float64 `json:"amount,omitempty"`
+	Unit     *string  `json:"unit,omitempty"`
+}
+
+func (req updateComponentRequest) hasQuantity() bool {
+	return req.Portions != nil || req.Amount != nil || req.Unit != nil
+}
+
+func (req updateComponentRequest) toQuantity() plate.PlateComponent {
+	var pc plate.PlateComponent
+	if req.Portions != nil {
+		v := *req.Portions
+		pc.Portions = &v
+	}
+	if req.Amount != nil {
+		v := *req.Amount
+		pc.Amount = &v
+	}
+	if req.Unit != nil {
+		v := *req.Unit
+		pc.Unit = &v
+	}
+	return pc
 }
 
 // UpdateComponent handles PUT /api/plates/{id}/components/{pcId}.
-// Supports two modes: swap (food_id provided) or rescale (portions only).
+// Supports two modes: swap (food_id provided) or quantity update (no food_id).
 func (h *PlateHandler) UpdateComponent(w http.ResponseWriter, r *http.Request) {
 	pcID, err := strconv.ParseInt(chi.URLParam(r, "pcId"), 10, 64)
 	if err != nil {
@@ -282,9 +331,14 @@ func (h *PlateHandler) UpdateComponent(w http.ResponseWriter, r *http.Request) {
 	var pc *plate.PlateComponent
 	switch {
 	case req.FoodID != nil:
-		pc, err = h.svc.SwapComponent(r.Context(), pcID, *req.FoodID, req.Portions)
-	case req.Portions != nil:
-		pc, err = h.svc.UpdateComponentPortions(r.Context(), pcID, *req.Portions)
+		var override *plate.PlateComponent
+		if req.hasQuantity() {
+			q := req.toQuantity()
+			override = &q
+		}
+		pc, err = h.svc.SwapComponent(r.Context(), pcID, *req.FoodID, override)
+	case req.hasQuantity():
+		pc, err = h.svc.UpdateComponentQuantity(r.Context(), pcID, req.toQuantity())
 	default:
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return

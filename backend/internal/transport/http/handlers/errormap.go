@@ -5,10 +5,20 @@ import (
 	"net/http"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 func toHTTPWithResource(err error, resource string) (int, string) {
 	switch {
+	// Plate quantity sentinels (more specific than ErrInvalidInput; check first).
+	case errors.Is(err, plate.ErrInvalidQuantityShape):
+		return http.StatusBadRequest, "error.plate.invalid_quantity_shape"
+	case errors.Is(err, plate.ErrInvalidQuantityForComposed):
+		return http.StatusBadRequest, "error.plate.invalid_quantity_for_composed"
+	case errors.Is(err, plate.ErrInvalidQuantityForLeaf):
+		return http.StatusBadRequest, "error.plate.invalid_quantity_for_leaf"
+	case errors.Is(err, plate.ErrUnitRequiresPortion):
+		return http.StatusBadRequest, "error.plate.unit_requires_portion"
 	case errors.Is(err, domain.ErrNotFound):
 		return http.StatusNotFound, "error.not_found"
 	case errors.Is(err, domain.ErrDuplicateName):

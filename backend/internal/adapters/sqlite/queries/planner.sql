@@ -51,8 +51,10 @@ RETURNING *;
 DELETE FROM plates WHERE id = ?;
 
 -- name: CreatePlateComponent :one
-INSERT INTO plate_components (plate_id, food_id, portions, sort_order)
-VALUES (?, ?, ?, ?)
+INSERT INTO plate_components (
+    plate_id, food_id, portions, amount, unit, grams, grams_source, sort_order
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetPlateComponent :one
@@ -60,8 +62,12 @@ SELECT * FROM plate_components WHERE id = ?;
 
 -- name: UpdatePlateComponent :one
 UPDATE plate_components SET
-    food_id  = ?,
-    portions = ?
+    food_id      = ?,
+    portions     = ?,
+    amount       = ?,
+    unit         = ?,
+    grams        = ?,
+    grams_source = ?
 WHERE id = ?
 RETURNING *;
 

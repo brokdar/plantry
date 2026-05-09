@@ -10,11 +10,15 @@ import (
 )
 
 type plateComponentResponse struct {
-	ID        int64   `json:"id"`
-	PlateID   int64   `json:"plate_id"`
-	FoodID    int64   `json:"food_id"`
-	Portions  float64 `json:"portions"`
-	SortOrder int     `json:"sort_order"`
+	ID          int64    `json:"id"`
+	PlateID     int64    `json:"plate_id"`
+	FoodID      int64    `json:"food_id"`
+	Portions    *int     `json:"portions,omitempty"`
+	Amount      *float64 `json:"amount,omitempty"`
+	Unit        *string  `json:"unit,omitempty"`
+	Grams       *float64 `json:"grams,omitempty"`
+	GramsSource *string  `json:"grams_source,omitempty"`
+	SortOrder   int      `json:"sort_order"`
 }
 
 type plateResponse struct {
@@ -40,7 +44,12 @@ type macrosResponse struct {
 func toPlateComponentResponse(pc *plate.PlateComponent) plateComponentResponse {
 	return plateComponentResponse{
 		ID: pc.ID, PlateID: pc.PlateID, FoodID: pc.FoodID,
-		Portions: pc.Portions, SortOrder: pc.SortOrder,
+		Portions:    pc.Portions,
+		Amount:      pc.Amount,
+		Unit:        pc.Unit,
+		Grams:       pc.Grams,
+		GramsSource: pc.GramsSource,
+		SortOrder:   pc.SortOrder,
 	}
 }
 

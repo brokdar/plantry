@@ -440,11 +440,19 @@ func toolAddFoodToPlate(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			pc, err := svc.Plates.AddComponent(ctx, in.PlateID, in.FoodID, in.Portions)
+			portions := in.Portions
+			if portions <= 0 {
+				portions = 1
+			}
+			pc, err := agentBuildComponent(ctx, svc, in.FoodID, portions)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(plateComponentMap(pc)), ToolEffectPlateChanged, nil
+			out, err := svc.Plates.AddComponent(ctx, in.PlateID, pc)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			return mustJSON(plateComponentMap(out)), ToolEffectPlateChanged, nil
 		},
 	}
 }
@@ -473,7 +481,15 @@ func toolSwapFood(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			pc, err := svc.Plates.SwapComponent(ctx, in.PlateComponentID, in.NewFoodID, in.Portions)
+			var override *plate.PlateComponent
+			if in.Portions != nil && *in.Portions > 0 {
+				comp, err := agentBuildComponent(ctx, svc, in.NewFoodID, *in.Portions)
+				if err != nil {
+					return nil, ToolEffectNone, err
+				}
+				override = comp
+			}
+			pc, err := svc.Plates.SwapComponent(ctx, in.PlateComponentID, in.NewFoodID, override)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -504,7 +520,13 @@ func toolUpdatePlateComponent(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			pc, err := svc.Plates.UpdateComponentPortions(ctx, in.PlateComponentID, in.Portions)
+			// The agent's "portions" vocabulary maps cleanly to composed
+			// quantities. For leaf components the model would need to
+			// pivot to (amount, unit) — which Phase 1 deliberately defers.
+			// TODO(plate-workflow-rework): give the agent an amount/unit
+			// path for leaf components.
+			q := plate.QuantityFromLegacyPortions("composed", in.Portions)
+			pc, err := svc.Plates.UpdateComponentQuantity(ctx, in.PlateComponentID, q)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -703,10 +725,40 @@ func plateSummary(p *plate.Plate) map[string]any {
 }
 
 func plateComponentMap(pc *plate.PlateComponent) map[string]any {
-	return map[string]any{
+	out := map[string]any{
 		"id": pc.ID, "plate_id": pc.PlateID, "food_id": pc.FoodID,
-		"portions": pc.Portions, "sort_order": pc.SortOrder,
+		"sort_order": pc.SortOrder,
 	}
+	if pc.Portions != nil {
+		out["portions"] = *pc.Portions
+	}
+	if pc.Amount != nil {
+		out["amount"] = *pc.Amount
+	}
+	if pc.Unit != nil {
+		out["unit"] = *pc.Unit
+	}
+	if pc.Grams != nil {
+		out["grams"] = *pc.Grams
+	}
+	if pc.GramsSource != nil {
+		out["grams_source"] = *pc.GramsSource
+	}
+	return out
+}
+
+// agentBuildComponent constructs a kind-aware plate.PlateComponent from a
+// legacy float "portions" value by looking up the food's kind. Used by the
+// add/swap tools to keep their JSON schema unchanged while feeding the new
+// plate service shape underneath.
+func agentBuildComponent(ctx context.Context, svc Services, foodID int64, portions float64) (*plate.PlateComponent, error) {
+	f, err := svc.Foods.Get(ctx, foodID)
+	if err != nil {
+		return nil, err
+	}
+	pc := plate.QuantityFromLegacyPortions(string(f.Kind), portions)
+	pc.FoodID = foodID
+	return &pc, nil
 }
 
 func profileMap(p *profile.Profile) map[string]any {

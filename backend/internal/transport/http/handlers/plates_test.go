@@ -66,15 +66,15 @@ func (s *stubPlateService) Update(ctx context.Context, p *plate.Plate) error {
 }
 
 func (s *stubPlateService) Delete(_ context.Context, _ int64) error { return nil }
-func (s *stubPlateService) AddComponent(_ context.Context, _, _ int64, _ float64) (*plate.PlateComponent, error) {
+func (s *stubPlateService) AddComponent(_ context.Context, _ int64, _ *plate.PlateComponent) (*plate.PlateComponent, error) {
 	return &plate.PlateComponent{}, nil
 }
 
-func (s *stubPlateService) SwapComponent(_ context.Context, _ int64, _ int64, _ *float64) (*plate.PlateComponent, error) {
+func (s *stubPlateService) SwapComponent(_ context.Context, _ int64, _ int64, _ *plate.PlateComponent) (*plate.PlateComponent, error) {
 	return &plate.PlateComponent{}, nil
 }
 
-func (s *stubPlateService) UpdateComponentPortions(_ context.Context, _ int64, _ float64) (*plate.PlateComponent, error) {
+func (s *stubPlateService) UpdateComponentQuantity(_ context.Context, _ int64, _ plate.PlateComponent) (*plate.PlateComponent, error) {
 	return &plate.PlateComponent{}, nil
 }
 func (s *stubPlateService) RemoveComponent(_ context.Context, _ int64) error { return nil }

@@ -67,12 +67,7 @@ func (r *PlateRepo) createWith(ctx context.Context, q *sqlcgen.Queries, p *plate
 		if pc.SortOrder == 0 && i > 0 {
 			pc.SortOrder = i
 		}
-		pcRow, err := q.CreatePlateComponent(ctx, sqlcgen.CreatePlateComponentParams{
-			PlateID:   pc.PlateID,
-			FoodID:    pc.FoodID,
-			Portions:  pc.Portions,
-			SortOrder: int64(pc.SortOrder),
-		})
+		pcRow, err := q.CreatePlateComponent(ctx, plateComponentParams(pc))
 		if err != nil {
 			return err
 		}
@@ -158,12 +153,7 @@ func (r *PlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]
 }
 
 func (r *PlateRepo) CreateComponent(ctx context.Context, pc *plate.PlateComponent) error {
-	row, err := r.q.CreatePlateComponent(ctx, sqlcgen.CreatePlateComponentParams{
-		PlateID:   pc.PlateID,
-		FoodID:    pc.FoodID,
-		Portions:  pc.Portions,
-		SortOrder: int64(pc.SortOrder),
-	})
+	row, err := r.q.CreatePlateComponent(ctx, plateComponentParams(pc))
 	if err != nil {
 		if isForeignKeyViolation(err) {
 			return fmt.Errorf("%w: invalid plate or food reference", domain.ErrInvalidInput)
@@ -188,10 +178,15 @@ func (r *PlateRepo) GetComponent(ctx context.Context, id int64) (*plate.PlateCom
 }
 
 func (r *PlateRepo) UpdateComponent(ctx context.Context, pc *plate.PlateComponent) error {
+	p := plateComponentParams(pc)
 	row, err := r.q.UpdatePlateComponent(ctx, sqlcgen.UpdatePlateComponentParams{
-		ID:       pc.ID,
-		FoodID:   pc.FoodID,
-		Portions: pc.Portions,
+		ID:          pc.ID,
+		FoodID:      p.FoodID,
+		Portions:    p.Portions,
+		Amount:      p.Amount,
+		Unit:        p.Unit,
+		Grams:       p.Grams,
+		GramsSource: p.GramsSource,
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -322,6 +317,63 @@ func mapPlateComponentToDomain(row *sqlcgen.PlateComponent, pc *plate.PlateCompo
 	pc.ID = row.ID
 	pc.PlateID = row.PlateID
 	pc.FoodID = row.FoodID
-	pc.Portions = row.Portions
 	pc.SortOrder = int(row.SortOrder)
+	if row.Portions.Valid {
+		v := int(row.Portions.Int64)
+		pc.Portions = &v
+	} else {
+		pc.Portions = nil
+	}
+	if row.Amount.Valid {
+		v := row.Amount.Float64
+		pc.Amount = &v
+	} else {
+		pc.Amount = nil
+	}
+	if row.Unit.Valid {
+		v := row.Unit.String
+		pc.Unit = &v
+	} else {
+		pc.Unit = nil
+	}
+	if row.Grams.Valid {
+		v := row.Grams.Float64
+		pc.Grams = &v
+	} else {
+		pc.Grams = nil
+	}
+	if row.GramsSource.Valid {
+		v := row.GramsSource.String
+		pc.GramsSource = &v
+	} else {
+		pc.GramsSource = nil
+	}
+}
+
+// plateComponentParams converts a domain PlateComponent into the
+// sqlc-generated insert/update params, mapping pointer fields onto the right
+// sql.Null* wrappers. Used by Create + UpdateComponent so the null-handling is
+// in one place.
+func plateComponentParams(pc *plate.PlateComponent) sqlcgen.CreatePlateComponentParams {
+	out := sqlcgen.CreatePlateComponentParams{
+		PlateID:   pc.PlateID,
+		FoodID:    pc.FoodID,
+		SortOrder: int64(pc.SortOrder),
+	}
+	if pc.Portions != nil {
+		out.Portions = sql.NullInt64{Int64: int64(*pc.Portions), Valid: true}
+	}
+	if pc.Amount != nil {
+		out.Amount = sql.NullFloat64{Float64: *pc.Amount, Valid: true}
+	}
+	if pc.Unit != nil {
+		out.Unit = sql.NullString{String: *pc.Unit, Valid: true}
+	}
+	if pc.Grams != nil {
+		out.Grams = sql.NullFloat64{Float64: *pc.Grams, Valid: true}
+	}
+	if pc.GramsSource != nil {
+		out.GramsSource = sql.NullString{String: *pc.GramsSource, Valid: true}
+	}
+	return out
 }
