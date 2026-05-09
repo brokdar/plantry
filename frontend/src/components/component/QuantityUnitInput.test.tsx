@@ -1,11 +1,16 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { useState } from "react"
 import { describe, expect, it, vi } from "vitest"
 import "@/lib/i18n"
 
 import type { LeafFood } from "@/lib/api/foods"
 
-import { QuantityUnitInput } from "./QuantityUnitInput"
+import {
+  QuantityUnitInput,
+  defaultQuantityValueForFood,
+  type QuantityUnitValue,
+} from "./QuantityUnitInput"
 
 const apple: LeafFood = {
   id: 1,
@@ -50,47 +55,61 @@ const rice: LeafFood = {
   updated_at: "",
 }
 
-describe("QuantityUnitInput defaults", () => {
+/** Controlled host that mirrors the production wiring: parent owns the
+ *  (amount, unit) state and seeds the initial value via the exported helper. */
+function Host({
+  food,
+  recentUnit,
+  onChange,
+}: {
+  food: LeafFood
+  recentUnit?: string | null
+  onChange?: (next: QuantityUnitValue) => void
+}) {
+  const [value, setValue] = useState<QuantityUnitValue>(() =>
+    defaultQuantityValueForFood(food, recentUnit)
+  )
+  return (
+    <QuantityUnitInput
+      food={food}
+      value={value}
+      onChange={(next) => {
+        setValue(next)
+        onChange?.(next)
+      }}
+    />
+  )
+}
+
+describe("defaultQuantityValueForFood", () => {
   it("default unit = first entry from food's portions", () => {
-    const onChange = vi.fn()
-    render(<QuantityUnitInput food={apple} onChange={onChange} />)
-    // Initial emit fires from a useEffect on first render.
-    expect(onChange).toHaveBeenCalled()
-    const last = onChange.mock.calls.at(-1)![0]
-    expect(last.unit).toBe("apple")
-    expect(last.amount).toBe(1)
+    const v = defaultQuantityValueForFood(apple)
+    expect(v.unit).toBe("apple")
+    expect(v.amount).toBe(1)
   })
 
   it("default unit falls back to g when food has no portions", () => {
-    const onChange = vi.fn()
-    render(<QuantityUnitInput food={rice} onChange={onChange} />)
-    expect(onChange).toHaveBeenCalled()
-    const last = onChange.mock.calls.at(-1)![0]
-    expect(last.unit).toBe("g")
-    expect(last.amount).toBe(100)
+    const v = defaultQuantityValueForFood(rice)
+    expect(v.unit).toBe("g")
+    expect(v.amount).toBe(100)
   })
 
   it("recentUnit overrides the default when set", () => {
-    const onChange = vi.fn()
-    render(
-      <QuantityUnitInput food={apple} recentUnit="g" onChange={onChange} />
-    )
-    const last = onChange.mock.calls.at(-1)![0]
-    expect(last.unit).toBe("g")
+    const v = defaultQuantityValueForFood(apple, "g")
+    expect(v.unit).toBe("g")
   })
 })
 
 describe("QuantityUnitInput chips", () => {
   it("renders gram chips for the gram unit", () => {
-    render(<QuantityUnitInput food={rice} onChange={vi.fn()} />)
-    // Default unit = g → chips 50/100/150/200/300.
+    render(<Host food={rice} />)
     for (const v of [50, 100, 150, 200, 300]) {
       expect(screen.getByTestId(`quantity-unit-chip-${v}`)).toBeInTheDocument()
     }
   })
 
   it("renders count chips (1/2/3) for portion units", () => {
-    render(<QuantityUnitInput food={apple} onChange={vi.fn()} />)
+    render(<Host food={apple} />)
     for (const v of [1, 2, 3]) {
       expect(screen.getByTestId(`quantity-unit-chip-${v}`)).toBeInTheDocument()
     }
@@ -98,8 +117,7 @@ describe("QuantityUnitInput chips", () => {
 
   it("clicking a chip emits a new amount with the same unit", async () => {
     const onChange = vi.fn()
-    render(<QuantityUnitInput food={rice} onChange={onChange} />)
-    onChange.mockClear()
+    render(<Host food={rice} onChange={onChange} />)
     const user = userEvent.setup()
     await user.click(screen.getByTestId("quantity-unit-chip-200"))
     expect(onChange).toHaveBeenCalledWith({ amount: 200, unit: "g" })
@@ -108,23 +126,20 @@ describe("QuantityUnitInput chips", () => {
 
 describe("QuantityUnitInput grams pill confidence", () => {
   it("shows 'exact' (portion) when the food's portion table covers the unit", () => {
-    render(<QuantityUnitInput food={apple} onChange={vi.fn()} />)
+    render(<Host food={apple} />)
     const pill = screen.getByTestId("quantity-unit-grams")
     expect(pill).toHaveAttribute("data-source", "portion")
     expect(pill.textContent).toMatch(/180 g/)
   })
 
   it("shows 'approx' (default) for a universal mass like oz", () => {
-    const onChange = vi.fn()
-    render(
-      <QuantityUnitInput food={rice} recentUnit="oz" onChange={onChange} />
-    )
+    render(<Host food={rice} recentUnit="oz" />)
     const pill = screen.getByTestId("quantity-unit-grams")
     expect(pill).toHaveAttribute("data-source", "default")
   })
 
   it("shows 'estimate' (fallback) for ml on a non-volume food", () => {
-    render(<QuantityUnitInput food={rice} recentUnit="ml" onChange={vi.fn()} />)
+    render(<Host food={rice} recentUnit="ml" />)
     const pill = screen.getByTestId("quantity-unit-grams")
     expect(pill).toHaveAttribute("data-source", "fallback")
   })
@@ -133,12 +148,10 @@ describe("QuantityUnitInput grams pill confidence", () => {
 describe("QuantityUnitInput emit guard", () => {
   it("never emits amount = 0 when the field is cleared", async () => {
     const onChange = vi.fn()
-    render(<QuantityUnitInput food={rice} onChange={onChange} />)
-    onChange.mockClear()
+    render(<Host food={rice} onChange={onChange} />)
     const user = userEvent.setup()
     const input = screen.getByTestId("quantity-unit-amount") as HTMLInputElement
     await user.clear(input)
-    // Clearing must not emit an amount=0 to the parent.
     for (const call of onChange.mock.calls) {
       expect(call[0].amount).not.toBe(0)
     }

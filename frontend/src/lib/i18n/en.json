@@ -276,7 +276,7 @@
     "staged_label": "Staged components",
     "staged_count_one": "1 staged",
     "staged_count_other": "{{count}} staged",
-    "running_total": "Running total",
+    "running_total": "Adding",
     "empty_count": "Nothing staged",
     "commit_one": "Add 1",
     "commit_other": "Add {{count}}",
@@ -292,8 +292,10 @@
       "aria_label": "Plate preview",
       "empty": "Nothing yet",
       "empty_hint": "Pick a food below to start composing.",
-      "summary_one": "1 component · {{kcal}} kcal",
-      "summary_other": "{{count}} components · {{kcal}} kcal",
+      "summary_one": "Adding 1 · +{{kcal}} kcal",
+      "summary_other": "Adding {{count}} · +{{kcal}} kcal",
+      "summary_existing_one": "1 on plate",
+      "summary_existing_other": "{{count}} on plate",
       "macro_bar_label": "Running macro distribution — {{kcal}} kcal",
       "unknown_food": "Unknown food"
     }
@@ -1013,7 +1015,8 @@
     "close": "Close",
     "yes": "Yes",
     "no": "No",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "remove": "Remove"
   },
   "chat": {
     "title": "AI Assistant",

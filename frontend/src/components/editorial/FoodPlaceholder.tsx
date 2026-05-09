@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import type { Food } from "@/lib/api/foods"
 import { cn } from "@/lib/utils"
 
 export type FoodPlaceholderCategory =
@@ -56,6 +57,17 @@ const ICON_SIZE: Record<NonNullable<FoodPlaceholderProps["size"]>, string> = {
   sm: "h-6 w-6",
   md: "h-12 w-12",
   lg: "h-16 w-16",
+}
+
+/**
+ * categoryForFood picks the correct placeholder category from a food. Leaf
+ * foods route to `"ingredient"` (the apple icon) instead of borrowing the
+ * composed-food role taxonomy — a banana with no image used to render under
+ * the "main course" salad icon, which is a small visual lie.
+ */
+export function categoryForFood(food: Food): FoodPlaceholderCategory {
+  if (food.kind === "leaf") return "ingredient"
+  return food.role ?? "main"
 }
 
 export function FoodPlaceholder({

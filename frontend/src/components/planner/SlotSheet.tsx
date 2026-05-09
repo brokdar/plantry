@@ -22,6 +22,7 @@ import {
   type QuantityUnitValue,
 } from "@/components/component/QuantityUnitInput"
 import {
+  categoryForFood,
   FoodPlaceholder,
   type FoodPlaceholderCategory,
 } from "@/components/editorial/FoodPlaceholder"
@@ -430,7 +431,11 @@ function HeroBlock({
         />
       ) : (
         <FoodPlaceholder
-          category={(heroRole ?? "main") as FoodPlaceholderCategory}
+          category={
+            heroFood
+              ? categoryForFood(heroFood)
+              : ((heroRole ?? "main") as FoodPlaceholderCategory)
+          }
           size="lg"
           rounded="none"
           className="h-full w-full"
@@ -647,7 +652,11 @@ function ComponentRow({
           />
         ) : (
           <FoodPlaceholder
-            category={(role ?? "main") as FoodPlaceholderCategory}
+            category={
+              food
+                ? categoryForFood(food)
+                : ((role ?? "main") as FoodPlaceholderCategory)
+            }
             size="sm"
             rounded="lg"
             className="h-full w-full"
@@ -854,11 +863,11 @@ function ActionFooter({
   const { t } = useTranslation()
   const skipLabel = skipped ? t("skip.unmark") : t("skip.mark")
   return (
-    <footer className="border-t border-outline-variant/40 bg-surface-container-low/60 px-5 py-3">
-      {/* Save and Skip share the row equally and truncate their labels in
-        long-string locales (German). Delete is always icon-only — the trash
-        glyph is universal and avoids pushing the row past the 390 px sheet
-        width on mobile. */}
+    <footer className="border-t border-outline-variant/40 bg-surface-container-low/60 px-4 py-3 sm:px-5">
+      {/* On narrow widths (mobile bottom sheet, ~375 px) the labels are
+        hidden and the buttons collapse to icon + aria-label. Above sm the
+        full labels return; the destroy icon stays icon-only at every width
+        because the trash glyph is universal. */}
       <div className="flex items-center gap-1.5">
         <Button
           type="button"
@@ -866,10 +875,14 @@ function ActionFooter({
           size="sm"
           onClick={onSaveAsTemplate}
           data-testid="slot-sheet-save-template"
-          className="h-8 min-w-0 flex-1 justify-start gap-1.5 text-on-surface-variant hover:text-on-surface"
+          aria-label={t("template.save_as")}
+          title={t("template.save_as")}
+          className="h-8 min-w-0 flex-1 justify-center gap-1.5 text-on-surface-variant hover:text-on-surface sm:justify-start"
         >
           <BookmarkPlus className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{t("template.save_as")}</span>
+          <span className="hidden truncate sm:inline">
+            {t("template.save_as")}
+          </span>
         </Button>
         <Button
           type="button"
@@ -878,10 +891,11 @@ function ActionFooter({
           onClick={onToggleSkip}
           data-testid="slot-sheet-skip"
           aria-label={skipLabel}
-          className="h-8 min-w-0 flex-1 justify-start gap-1.5 text-on-surface-variant hover:text-on-surface"
+          title={skipLabel}
+          className="h-8 min-w-0 flex-1 justify-center gap-1.5 text-on-surface-variant hover:text-on-surface sm:justify-start"
         >
           <Utensils className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{skipLabel}</span>
+          <span className="hidden truncate sm:inline">{skipLabel}</span>
         </Button>
         <Button
           type="button"

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Input } from "@/components/ui/input"
@@ -21,15 +21,10 @@ export interface QuantityUnitValue {
 
 interface QuantityUnitInputProps {
   food: Food
-  /**
-   * Initial unit. When undefined, the component picks a sensible default per
-   * the rule documented at the top of `pickDefaultUnit`. Recent-unit lookup
-   * is the parent's responsibility — pass `recentUnit` if available so the
-   * picker remembers what the user last picked.
-   */
-  recentUnit?: string | null
-  /** Parent-controlled value. When omitted the component is uncontrolled. */
-  value?: QuantityUnitValue
+  /** Parent-controlled value. The parent must seed an initial value via
+   * `defaultQuantityValueForFood` (or the equivalent reducer init) before
+   * mounting this component — there is no internal initial-emit. */
+  value: QuantityUnitValue
   /** Fired whenever the user changes amount or unit. */
   onChange: (next: QuantityUnitValue) => void
   /**
@@ -47,6 +42,10 @@ interface QuantityUnitInputProps {
  * resolved server-side at save time so the cell's kcal stays consistent with
  * the food's portion table.
  *
+ * Purely controlled — the parent owns the (amount, unit) state and seeds the
+ * initial value (typically via `defaultQuantityValueForFood`). This keeps the
+ * component free of effect-driven state writes.
+ *
  * Why two components instead of one with a `mode` prop: leaf and composed
  * carry fundamentally different shapes (numeric+select+chips vs. integer
  * stepper) and the call sites already branch on `food.kind`. A single
@@ -55,7 +54,6 @@ interface QuantityUnitInputProps {
  */
 export function QuantityUnitInput({
   food,
-  recentUnit,
   value,
   onChange,
   compact = false,
@@ -68,46 +66,22 @@ export function QuantityUnitInput({
     return food.portions.map((p) => ({ unit: p.unit, grams: p.grams }))
   }, [food])
 
-  // Default unit (picked once per food + recent-unit pair). Subsequent
-  // changes are driven by the user via the controls — never by re-running
-  // this picker.
-  const defaultUnit = useMemo(
-    () => pickDefaultUnit(food, recentUnit),
-    [food, recentUnit]
-  )
-
-  const [internal, setInternal] = useState<QuantityUnitValue>(() => ({
-    amount: defaultAmountForUnit(defaultUnit, portions),
-    unit: defaultUnit,
-  }))
-  const current = value ?? internal
-
-  // Tell the parent about the initial value the moment it's chosen so the
-  // outer state isn't 0/undefined while the user is still looking at this
-  // freshly-rendered control. Runs once per unique food+default-unit pair.
-  useEffect(() => {
-    if (value === undefined) {
-      onChange(internal)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultUnit])
-
-  function emit(next: QuantityUnitValue) {
-    if (value === undefined) setInternal(next)
-    onChange(next)
-  }
+  // Local-only buffer for the temporarily-empty-string state of the amount
+  // input. Tracked here (not pushed to the parent) so clearing the field
+  // doesn't briefly emit `amount: 0` to consumers that round into kcal.
+  const [emptyBuffer, setEmptyBuffer] = useState(false)
 
   function handleAmountChange(raw: string) {
     if (raw === "") {
-      // Allow the field to be temporarily empty; re-emit only when the user
-      // commits a positive number. Display "" via the controlled input.
-      const next = { ...current, amount: 0 }
-      if (value === undefined) setInternal(next)
+      // Allow the field to be temporarily empty; we don't emit until the
+      // user commits a positive number. Display "" via the controlled input.
+      setEmptyBuffer(true)
       return
     }
     const n = Number(raw)
     if (!Number.isFinite(n) || n <= 0) return
-    emit({ ...current, amount: n })
+    setEmptyBuffer(false)
+    onChange({ ...value, amount: n })
   }
 
   function handleUnitChange(unit: string) {
@@ -115,20 +89,23 @@ export function QuantityUnitInput({
     // When the unit changes, snap the amount to a sensible default for the
     // new unit's vocabulary so the chip set below makes sense ("200" doesn't
     // belong on `1 apple`).
-    const nextAmount = defaultAmountForUnit(canonical, portions, current.amount)
-    emit({ amount: nextAmount, unit: canonical })
+    const nextAmount = defaultAmountForUnit(canonical, portions, value.amount)
+    setEmptyBuffer(false)
+    onChange({ amount: nextAmount, unit: canonical })
   }
 
   const resolved = useMemo(
-    () => resolveGrams(current.amount, current.unit, portions),
-    [current.amount, current.unit, portions]
+    () => resolveGrams(value.amount, value.unit, portions),
+    [value.amount, value.unit, portions]
   )
   const sourceLabelKey = confidenceLabelKey(resolved.source)
 
   const chips = useMemo(
-    () => quickChipsForUnit(current.unit, portions),
-    [current.unit, portions]
+    () => quickChipsForUnit(value.unit, portions),
+    [value.unit, portions]
   )
+
+  const displayedAmount = emptyBuffer ? "" : value.amount
 
   return (
     <div
@@ -141,7 +118,7 @@ export function QuantityUnitInput({
           inputMode="decimal"
           step="any"
           min={0}
-          value={current.amount === 0 ? "" : current.amount}
+          value={displayedAmount}
           onChange={(e) => handleAmountChange(e.target.value)}
           aria-label={t("plate.quantity.amount_label")}
           data-testid="quantity-unit-amount"
@@ -152,7 +129,7 @@ export function QuantityUnitInput({
         />
         <div className="min-w-0 flex-1">
           <UnitSelect
-            value={current.unit}
+            value={value.unit}
             onValueChange={handleUnitChange}
             portions={portions}
             placeholder={t("plate.quantity.unit_label")}
@@ -183,12 +160,15 @@ export function QuantityUnitInput({
           data-testid="quantity-unit-chips"
         >
           {chips.map((c) => {
-            const active = current.amount === c
+            const active = !emptyBuffer && value.amount === c
             return (
               <button
                 key={c}
                 type="button"
-                onClick={() => emit({ ...current, amount: c })}
+                onClick={() => {
+                  setEmptyBuffer(false)
+                  onChange({ ...value, amount: c })
+                }}
                 aria-pressed={active}
                 data-testid={`quantity-unit-chip-${c}`}
                 className={cn(
@@ -206,6 +186,24 @@ export function QuantityUnitInput({
       )}
     </div>
   )
+}
+
+/**
+ * defaultQuantityValueForFood seeds a fresh `(amount, unit)` for a leaf food
+ * — the canonical initial value the parent should pass into `value`. Mirrors
+ * the rule the legacy uncontrolled mode used to apply internally so existing
+ * call sites don't have to re-derive it.
+ */
+export function defaultQuantityValueForFood(
+  food: Food,
+  recentUnit?: string | null
+): QuantityUnitValue {
+  const portions: PortionLookup[] =
+    food.kind === "leaf" && food.portions
+      ? food.portions.map((p) => ({ unit: p.unit, grams: p.grams }))
+      : []
+  const unit = pickDefaultUnit(food, recentUnit)
+  return { unit, amount: defaultAmountForUnit(unit, portions) }
 }
 
 /**

@@ -276,7 +276,7 @@
     "staged_label": "Vorgemerkte Komponenten",
     "staged_count_one": "1 vorgemerkt",
     "staged_count_other": "{{count}} vorgemerkt",
-    "running_total": "Zwischensumme",
+    "running_total": "Hinzufügen",
     "empty_count": "Nichts vorgemerkt",
     "commit_one": "1 hinzufügen",
     "commit_other": "{{count}} hinzufügen",
@@ -292,8 +292,10 @@
       "aria_label": "Tellervorschau",
       "empty": "Noch nichts",
       "empty_hint": "Wähle unten ein Lebensmittel, um zu beginnen.",
-      "summary_one": "1 Komponente · {{kcal}} kcal",
-      "summary_other": "{{count}} Komponenten · {{kcal}} kcal",
+      "summary_one": "+1 · +{{kcal}} kcal",
+      "summary_other": "+{{count}} · +{{kcal}} kcal",
+      "summary_existing_one": "1 auf Teller",
+      "summary_existing_other": "{{count}} auf Teller",
       "macro_bar_label": "Aktuelle Makroverteilung — {{kcal}} kcal",
       "unknown_food": "Unbekanntes Lebensmittel"
     }
@@ -1012,7 +1014,8 @@
     "close": "Schließen",
     "yes": "Ja",
     "no": "Nein",
-    "collapse": "Einklappen"
+    "collapse": "Einklappen",
+    "remove": "Entfernen"
   },
   "chat": {
     "title": "KI-Assistent",

@@ -39,6 +39,12 @@ interface DraftPlatePreviewProps {
    *  summary, tap to expand). Desktop right rail keeps the full preview
    *  always-on. */
   collapsible?: boolean
+  /** Monotonic counter that ticks every time the parent restages an
+   *  already-staged food. Paired with `bumpedFoodId` it lets the matching
+   *  staged pill re-key and replay its enter animation, so the user sees
+   *  visible feedback that the re-tap bumped the quantity instead of
+   *  duplicating the row. */
+  bumpToken?: { foodId: number; nonce: number } | null
 }
 
 /**
@@ -55,6 +61,7 @@ export function DraftPlatePreview({
   macrosByFood,
   existing,
   collapsible = false,
+  bumpToken,
 }: DraftPlatePreviewProps) {
   const { t } = useTranslation()
 
@@ -69,13 +76,13 @@ export function DraftPlatePreview({
   const isEmpty = !hasStaged && !hasExisting
 
   const total = computeRunningTotal(items, macrosByFood)
-  const totalCount = existingItems.length + items.length
 
   if (collapsible && !expanded) {
     return (
       <CollapsedSummary
         kcal={total.kcal}
-        count={totalCount}
+        stagedCount={items.length}
+        existingCount={existingItems.length}
         isEmpty={isEmpty}
         onExpand={() => setExpanded(true)}
       />
@@ -111,8 +118,12 @@ export function DraftPlatePreview({
       ) : (
         <>
           <PreviewHero existing={existingItems} staged={items} />
-          <PillsRow existing={existingItems} staged={items} />
-          <RunningTotal total={total} hasContent={hasStaged || hasExisting} />
+          <PillsRow
+            existing={existingItems}
+            staged={items}
+            bumpToken={bumpToken ?? null}
+          />
+          <RunningTotal total={total} hasStaged={hasStaged} />
         </>
       )}
     </section>
@@ -121,16 +132,31 @@ export function DraftPlatePreview({
 
 function CollapsedSummary({
   kcal,
-  count,
+  stagedCount,
+  existingCount,
   isEmpty,
   onExpand,
 }: {
   kcal: number
-  count: number
+  stagedCount: number
+  existingCount: number
   isEmpty: boolean
   onExpand: () => void
 }) {
   const { t } = useTranslation()
+  // The summary describes whichever story the tray is currently telling: when
+  // the user has staged additions, show "Adding N · +X kcal"; otherwise fall
+  // back to the existing-on-plate count so the count and kcal always agree on
+  // what they're counting.
+  const hasStaged = stagedCount > 0
+  const summary = isEmpty
+    ? t("tray.preview.empty")
+    : hasStaged
+      ? t("tray.preview.summary", {
+          count: stagedCount,
+          kcal: Math.round(kcal),
+        })
+      : t("tray.preview.summary_existing", { count: existingCount })
   return (
     <button
       type="button"
@@ -143,21 +169,16 @@ function CollapsedSummary({
           {t("tray.preview.title")}
         </span>
         <span className="text-[12.5px] font-medium text-on-surface">
-          {isEmpty
-            ? t("tray.preview.empty")
-            : t("tray.preview.summary", {
-                count,
-                kcal: Math.round(kcal),
-              })}
+          {summary}
         </span>
       </span>
       <span className="flex items-center gap-1.5 text-on-surface-variant">
-        {!isEmpty && (
+        {hasStaged && (
           <span
             className="font-mono text-[12px] font-semibold text-on-surface tabular-nums"
             data-testid="tray-running-kcal"
           >
-            {Math.round(kcal)} {t("macro.kcal")}
+            +{Math.round(kcal)} {t("macro.kcal")}
           </span>
         )}
         <ChevronDown className="h-3.5 w-3.5 -rotate-90" aria-hidden />
@@ -227,9 +248,11 @@ function PreviewHero({
 function PillsRow({
   existing,
   staged,
+  bumpToken,
 }: {
   existing: DraftPlatePreviewExistingItem[]
   staged: TrayItem[]
+  bumpToken: { foodId: number; nonce: number } | null
 }) {
   const { t } = useTranslation()
   return (
@@ -259,12 +282,17 @@ function PillsRow({
       })}
       {staged.map((it) => {
         const qty = formatTrayQuantity(it.quantity)
+        // When the parent reports a bump for this food, mix the bump nonce
+        // into the key so React re-mounts the pill — that replays the
+        // enter animation and visibly confirms the re-tap landed.
+        const bumpNonce =
+          bumpToken && bumpToken.foodId === it.food.id ? bumpToken.nonce : 0
         return (
           <li
-            key={`staged-${it.food.id}`}
+            key={`staged-${it.food.id}-${bumpNonce}`}
             data-testid={`draft-plate-preview-staged-${it.food.id}`}
             data-state="staged"
-            className="inline-flex items-center gap-1.5 rounded-full border border-primary/55 bg-primary/12 px-2.5 py-1 text-[11.5px] font-medium text-on-surface"
+            className="inline-flex items-center gap-1.5 rounded-full border border-primary/55 bg-primary/12 px-2.5 py-1 text-[11.5px] font-medium text-on-surface motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in motion-safe:slide-in-from-bottom-1"
           >
             <Plus className="h-3 w-3 text-primary" aria-hidden />
             <span className="max-w-[160px] truncate">{it.food.name}</span>
@@ -289,39 +317,50 @@ interface RunningTotalValue {
 
 function RunningTotal({
   total,
-  hasContent,
+  hasStaged,
 }: {
   total: RunningTotalValue
-  hasContent: boolean
+  hasStaged: boolean
 }) {
   const { t } = useTranslation()
+  // The kcal here is the *addition* — staged items only — so we show "+X kcal"
+  // and label the row "Adding". Existing components keep their kcal in the
+  // slot sheet header where it belongs to the whole-plate total.
+  const kcalRounded = Math.round(total.kcal)
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-heading text-[10px] font-bold tracking-[0.22em] text-on-surface-variant uppercase">
           {t("tray.running_total")}
         </span>
+        {/* Re-key on the rounded kcal so the value briefly fades in on each
+         *  change — the kcal is the running-total's payload, so a small
+         *  motion cue keeps the user oriented while typing quantities. */}
         <span
-          className="font-mono text-[13px] font-semibold text-on-surface tabular-nums"
+          key={kcalRounded}
+          className="font-mono text-[13px] font-semibold text-on-surface tabular-nums motion-safe:animate-in motion-safe:duration-200 motion-safe:fade-in"
           data-testid="tray-running-kcal"
         >
-          {Math.round(total.kcal)} {t("macro.kcal")}
+          {hasStaged ? "+" : ""}
+          {kcalRounded} {t("macro.kcal")}
         </span>
       </div>
-      {hasContent && (
-        <MacroDistributionBar
-          thickness="sm"
-          track="surface-container"
-          mode="kcal"
-          values={{
-            protein: total.protein,
-            carbs: total.carbs,
-            fat: total.fat,
-          }}
-          label={t("tray.preview.macro_bar_label", {
-            kcal: Math.round(total.kcal),
-          })}
-        />
+      {hasStaged && (
+        <div className="motion-safe:animate-in motion-safe:duration-300 motion-safe:fade-in motion-safe:slide-in-from-bottom-1">
+          <MacroDistributionBar
+            thickness="sm"
+            track="surface-container"
+            mode="kcal"
+            values={{
+              protein: total.protein,
+              carbs: total.carbs,
+              fat: total.fat,
+            }}
+            label={t("tray.preview.macro_bar_label", {
+              kcal: kcalRounded,
+            })}
+          />
+        </div>
       )}
     </div>
   )

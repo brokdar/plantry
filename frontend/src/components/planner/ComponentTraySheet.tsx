@@ -20,6 +20,7 @@ import {
   useState,
 } from "react"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
 
 import { PortionStepper } from "@/components/component/PortionStepper"
 import {
@@ -27,8 +28,8 @@ import {
   type QuantityUnitValue,
 } from "@/components/component/QuantityUnitInput"
 import {
+  categoryForFood,
   FoodPlaceholder,
-  type FoodPlaceholderCategory,
 } from "@/components/editorial/FoodPlaceholder"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -255,9 +256,27 @@ function ComponentTraySheetBody({
     }))
   }, [existingComponents, foodById])
 
+  // Bump token: a monotonic counter scoped to the most-recently-bumped food
+  // id. The DraftPlatePreview reads this and re-keys the matching pill so
+  // the enter animation replays — turning the otherwise-invisible re-tap
+  // bump into a visible "your bump landed" cue.
+  const [bumpToken, setBumpToken] = useState<{
+    foodId: number
+    nonce: number
+  } | null>(null)
+
   const handleStageFood = useCallback(
-    (food: Food) => dispatch({ type: "stage", food }),
-    [dispatch]
+    (food: Food) => {
+      const alreadyStaged = tray.some((it) => it.food.id === food.id)
+      dispatch({ type: "stage", food })
+      if (alreadyStaged) {
+        setBumpToken((prev) => ({
+          foodId: food.id,
+          nonce: (prev?.nonce ?? 0) + 1,
+        }))
+      }
+    },
+    [dispatch, tray]
   )
   const handleStageTemplate = useCallback(
     (tpl: Template, foodsById: Map<number, Food>) =>
@@ -278,6 +297,7 @@ function ComponentTraySheetBody({
         // can see what didn't land and retry — closing here would silently
         // drop their intent on top of an already-half-built plate.
         dispatch({ type: "keepOnly", foodIds: new Set(failed) })
+        toast.error(t("tray.partial_failure", { count: failed.length }))
       }
     } finally {
       setCommitting(false)
@@ -322,6 +342,7 @@ function ComponentTraySheetBody({
         existing={existingPreviewItems}
         dayKcalTarget={dayKcalTarget}
         collapsible={previewCollapsible}
+        bumpToken={bumpToken}
       />
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pt-4 pb-3">
@@ -600,10 +621,9 @@ function FoodResultRow({
   onStage: (f: Food) => void
 }) {
   const { t } = useTranslation()
-  const role = food.kind === "composed" ? (food.role ?? null) : null
   const subLabel =
     food.kind === "leaf"
-      ? t("ingredient.kind_label", { defaultValue: "Ingredient" })
+      ? t("ingredient.kind_label")
       : food.role
         ? t(`component.role_${food.role}`)
         : null
@@ -625,7 +645,7 @@ function FoodResultRow({
             />
           ) : (
             <FoodPlaceholder
-              category={(role ?? "main") as FoodPlaceholderCategory}
+              category={categoryForFood(food)}
               size="sm"
               rounded="lg"
               className="h-full w-full"
@@ -832,7 +852,6 @@ function StagedRow({
   onRemove: () => void
 }) {
   const { t } = useTranslation()
-  const role = item.food.kind === "composed" ? (item.food.role ?? null) : null
   return (
     <li
       data-testid={`tray-staged-${item.food.id}`}
@@ -848,7 +867,7 @@ function StagedRow({
             />
           ) : (
             <FoodPlaceholder
-              category={(role ?? "main") as FoodPlaceholderCategory}
+              category={categoryForFood(item.food)}
               size="sm"
               rounded="lg"
               className="h-full w-full"
@@ -869,7 +888,7 @@ function StagedRow({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label={t("common.remove", { defaultValue: "Remove" })}
+          aria-label={t("common.remove")}
           onClick={onRemove}
           className="size-7 text-on-surface-variant hover:text-destructive"
         >
