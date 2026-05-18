@@ -11,7 +11,7 @@ interface EmptyWeekCTAProps {
   aiEnabled: boolean
   copying: boolean
   onCopyLastWeek: () => void
-  onApplyTemplate: () => void
+  onCopyFromWeek: () => void
   onAiFill: () => void
 }
 
@@ -40,7 +40,7 @@ export function EmptyWeekCTA({
   aiEnabled,
   copying,
   onCopyLastWeek,
-  onApplyTemplate,
+  onCopyFromWeek,
   onAiFill,
 }: EmptyWeekCTAProps) {
   const { t } = useTranslation()
@@ -112,11 +112,11 @@ export function EmptyWeekCTA({
           </Button>
           <Button
             variant="outline"
-            onClick={onApplyTemplate}
-            data-testid="empty-week-apply-template"
+            onClick={onCopyFromWeek}
+            data-testid="empty-week-copy-from-week"
           >
             <FileDown className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-            {t("planner.empty_week.apply_template")}
+            {t("preset.copy_week.open")}
           </Button>
           {aiEnabled && (
             <Button

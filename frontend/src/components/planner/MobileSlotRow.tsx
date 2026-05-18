@@ -232,7 +232,7 @@ export function MobileSlotRow({
               }}
               tone="primary"
               shortLabel={t("planner.mobile.save_short")}
-              ariaLabel={t("template.save_as")}
+              ariaLabel={t("preset.save_as")}
               Icon={BookmarkPlus}
               tabIndex={drawerOpen ? 0 : -1}
               testId="mobile-row-save"

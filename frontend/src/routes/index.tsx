@@ -1,30 +1,21 @@
 import {
   BarChart2,
   Bookmark,
-  BookmarkPlus,
   CalendarRange,
   Download,
-  FileDown,
   Keyboard,
-  LayoutList,
   MoreHorizontal,
   Settings,
   Sparkles,
   Trash2,
 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { ChatPanel } from "@/components/chat/ChatPanel"
 import { ShortcutCheatsheet } from "@/components/planner/ShortcutCheatsheet"
 import { CopyFromWeekDialog } from "@/components/presets/CopyFromWeekDialog"
-import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
-import { TemplatePicker } from "@/components/templates/TemplatePicker"
-import {
-  showApplyToasts,
-  snapshotOverwrittenPlates,
-} from "@/lib/template-apply-toast"
 import { PageHeader } from "@/components/editorial/PageHeader"
 import { DateRangeNavigator } from "@/components/planner/DateRangeNavigator"
 import { EmptyWeekCTA } from "@/components/planner/EmptyWeekCTA"
@@ -59,7 +50,6 @@ import {
   createPlate,
   deletePlate,
   listPlates,
-  type Plate,
 } from "@/lib/api/plates"
 import { isCheatsheetShortcut } from "@/lib/planner-keynav"
 import {
@@ -87,7 +77,7 @@ export const Route = createFileRoute("/")({
 })
 
 function PlanPage() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const { date: dateParam } = Route.useSearch()
   // If ?date= is provided, compute initial offset so the window starts at that date.
   const [windowOffset, setWindowOffset] = useState(() => {
@@ -102,8 +92,6 @@ function PlanPage() {
   })
   const [shoppingOpen, setShoppingOpen] = useState(false)
   const [nutritionOpen, setNutritionOpen] = useState(false)
-  const [saveRangeOpen, setSaveRangeOpen] = useState(false)
-  const [applyWeekOpen, setApplyWeekOpen] = useState(false)
   const [copyWeekOpen, setCopyWeekOpen] = useState(false)
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false)
 
@@ -118,7 +106,6 @@ function PlanPage() {
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [])
-  const overwriteSnapshotRef = useRef<Plate[]>([])
   const openChat = useChatUI((s) => s.setOpen)
   const openChatWith = useChatUI((s) => s.openWith)
   const setChatMode = useChatUI((s) => s.setMode)
@@ -293,17 +280,6 @@ function PlanPage() {
     }
   }
 
-  // Skipped plates are not occupied — a skip marker means "I won't eat here",
-  // so applying a template should fill the slot without a conflict warning.
-  const occupiedSlotKeys = useMemo(() => {
-    const set = new Set<string>()
-    for (const p of plates) {
-      if (p.skipped) continue
-      set.add(`${p.date}|${p.slot_id}`)
-    }
-    return set
-  }, [plates])
-
   if (slotsQuery.isLoading || platesQuery.isLoading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">
@@ -331,11 +307,6 @@ function PlanPage() {
     )
   }
 
-  const fmt = new Intl.DateTimeFormat(i18n.language, {
-    month: "short",
-    day: "numeric",
-  })
-
   const showRevertBanner =
     aiFill.range?.from === from &&
     aiFill.range?.to === to &&
@@ -349,11 +320,6 @@ function PlanPage() {
     aiFill.range?.to === to &&
     aiFill.dismissed &&
     aiFill.plateIds.length > 0
-
-  const weekTemplateName = t("template.name_suggestion_week", {
-    date: fmt.format(new Date(from + "T00:00:00")),
-    defaultValue: `Week · ${fmt.format(new Date(from + "T00:00:00"))}`,
-  })
 
   const dailyAvgKcal = (() => {
     const days_ = nutritionQuery.data?.days
@@ -444,28 +410,6 @@ function PlanPage() {
               </Tooltip>
               <DropdownMenuContent align="end" className="w-60">
                 <DropdownMenuItem
-                  onClick={() => setApplyWeekOpen(true)}
-                  data-testid="week-template-apply"
-                >
-                  <FileDown className="size-4" />
-                  {t("template.apply_week")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setSaveRangeOpen(true)}
-                  disabled={plates.length === 0}
-                  data-testid="week-template-save"
-                >
-                  <BookmarkPlus className="size-4" />
-                  {t("template.save_week")}
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/templates" data-testid="week-template-manage">
-                    <LayoutList className="size-4" />
-                    {t("template.manage")}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
                   onClick={() => setCopyWeekOpen(true)}
                   data-testid="copy-from-week-open"
                 >
@@ -534,7 +478,7 @@ function PlanPage() {
           aiEnabled={!!aiSettings?.enabled}
           copying={copyingLastWeek}
           onCopyLastWeek={() => void handleCopyLastWeek()}
-          onApplyTemplate={() => setApplyWeekOpen(true)}
+          onCopyFromWeek={() => setCopyWeekOpen(true)}
           onAiFill={handleAiFill}
         />
       )}
@@ -589,17 +533,6 @@ function PlanPage() {
 
       <ChatPanel range={{ from, to }} />
 
-      <SaveAsTemplateDialog
-        open={saveRangeOpen}
-        onOpenChange={setSaveRangeOpen}
-        target={{
-          scope: "week",
-          from,
-          to,
-          plateCount: plates.filter((p) => !p.skipped).length,
-        }}
-        defaultName={weekTemplateName}
-      />
       <CopyFromWeekDialog
         open={copyWeekOpen}
         onOpenChange={setCopyWeekOpen}
@@ -611,24 +544,6 @@ function PlanPage() {
                 .slice(0, 10)
             : from
         }
-      />
-      <TemplatePicker
-        open={applyWeekOpen}
-        onOpenChange={setApplyWeekOpen}
-        scope="week"
-        defaultDate={from}
-        overlap={{ occupied: occupiedSlotKeys }}
-        onBeforeApply={({ overwrittenKeys }) => {
-          overwriteSnapshotRef.current = snapshotOverwrittenPlates(
-            from,
-            to,
-            overwrittenKeys
-          )
-        }}
-        onApplied={(info) => {
-          showApplyToasts(info, overwriteSnapshotRef.current, from, to, t)
-          overwriteSnapshotRef.current = []
-        }}
       />
       <ShortcutCheatsheet
         open={cheatsheetOpen}

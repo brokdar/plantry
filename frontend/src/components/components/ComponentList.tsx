@@ -162,11 +162,11 @@ export function ComponentList() {
                   {t("component.import_from_url")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => navigate({ to: "/templates" })}
-                  data-testid="catalog-menu-templates"
+                  onClick={() => navigate({ to: "/presets" })}
+                  data-testid="catalog-menu-presets"
                 >
                   <Bookmark className="size-4" />
-                  {t("component.browse_templates")}
+                  {t("preset.manage")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

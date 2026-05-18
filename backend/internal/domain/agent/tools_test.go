@@ -115,29 +115,5 @@ func TestTool_CreatePlate_NoWeekIdProp(t *testing.T) {
 	}
 }
 
-func TestTool_ApplyTemplate_Callable(t *testing.T) {
-	tools := toolsByName()
-	tool, ok := tools["apply_template"]
-	if !ok {
-		t.Fatal("apply_template tool is not registered")
-	}
-	var schema map[string]any
-	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
-	}
-	required, ok := schema["required"].([]any)
-	if !ok {
-		t.Fatal("schema missing 'required' array")
-	}
-	want := map[string]bool{"template_id": true, "start_date": true, "slot_id": true}
-	for _, r := range required {
-		delete(want, r.(string))
-	}
-	if len(want) > 0 {
-		missing := make([]string, 0, len(want))
-		for k := range want {
-			missing = append(missing, k)
-		}
-		t.Errorf("apply_template schema required missing: %v", missing)
-	}
-}
+// apply_template was removed in the Presets cutover (phase 6); applying
+// reusable plate bundles is now covered by apply_preset in preset_tools.go.

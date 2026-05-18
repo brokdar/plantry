@@ -50,13 +50,13 @@ describe("EmptyWeekCTA", () => {
         aiEnabled={false}
         copying={false}
         onCopyLastWeek={noop}
-        onApplyTemplate={noop}
+        onCopyFromWeek={noop}
         onAiFill={noop}
       />
     )
     expect(await screen.findByTestId("empty-week-cta")).toBeTruthy()
     expect(screen.getByTestId("empty-week-copy")).toBeTruthy()
-    expect(screen.getByTestId("empty-week-apply-template")).toBeTruthy()
+    expect(screen.getByTestId("empty-week-copy-from-week")).toBeTruthy()
     expect(screen.queryByTestId("empty-week-ai-fill")).toBeNull()
   })
 
@@ -67,7 +67,7 @@ describe("EmptyWeekCTA", () => {
         aiEnabled={true}
         copying={false}
         onCopyLastWeek={noop}
-        onApplyTemplate={noop}
+        onCopyFromWeek={noop}
         onAiFill={noop}
       />
     )
@@ -81,7 +81,7 @@ describe("EmptyWeekCTA", () => {
         aiEnabled={false}
         copying={false}
         onCopyLastWeek={noop}
-        onApplyTemplate={noop}
+        onCopyFromWeek={noop}
         onAiFill={noop}
       />
     )
@@ -99,7 +99,7 @@ describe("EmptyWeekCTA", () => {
         aiEnabled={false}
         copying={false}
         onCopyLastWeek={noop}
-        onApplyTemplate={noop}
+        onCopyFromWeek={noop}
         onAiFill={noop}
       />
     )
@@ -114,7 +114,7 @@ describe("EmptyWeekCTA", () => {
         aiEnabled={false}
         copying={false}
         onCopyLastWeek={noop}
-        onApplyTemplate={noop}
+        onCopyFromWeek={noop}
         onAiFill={noop}
       />
     )
@@ -129,7 +129,7 @@ describe("EmptyWeekCTA", () => {
         aiEnabled={false}
         copying={false}
         onCopyLastWeek={onCopy}
-        onApplyTemplate={noop}
+        onCopyFromWeek={noop}
         onAiFill={noop}
       />
     )

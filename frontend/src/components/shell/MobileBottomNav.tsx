@@ -1,8 +1,8 @@
 import {
   BookOpen,
+  Bookmark,
   Calendar,
   CalendarDays,
-  ClipboardList,
   Package,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -30,9 +30,9 @@ const RIGHT_ENTRIES: MobileNavEntry[] = [
 ]
 
 const MORE_ENTRY: MobileNavEntry = {
-  to: "/templates",
-  labelKey: "nav.templates",
-  icon: ClipboardList,
+  to: "/presets",
+  labelKey: "nav.presets",
+  icon: Bookmark,
 }
 
 export function MobileBottomNav() {

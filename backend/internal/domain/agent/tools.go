@@ -16,7 +16,6 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/template"
 )
 
 // ToolEffect classifies side-effects of a tool invocation. The agent loop uses
@@ -60,7 +59,6 @@ type Services struct {
 	Plates            *plate.Service
 	Profile           *profile.Service
 	Slots             *slot.Service
-	Templates         *template.Service
 	Presets           PresetService
 }
 
@@ -142,7 +140,6 @@ func defaultTools(svc Services) []Tool {
 		toolGetPlatesRange(svc),
 		toolGetProfile(svc),
 		toolCreatePlate(svc),
-		toolApplyTemplate(svc),
 		toolAddFoodToPlate(svc),
 		toolSwapFood(svc),
 		toolUpdatePlateComponent(svc),
@@ -367,56 +364,6 @@ func toolCreatePlate(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			return mustJSON(plateSummary(p)), ToolEffectPlateChanged, nil
-		},
-	}
-}
-
-func toolApplyTemplate(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["template_id","start_date","slot_id"],
-      "properties":{
-        "template_id":{"type":"integer","minimum":1},
-        "start_date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
-        "slot_id":{"type":"integer","minimum":1}
-      },
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "apply_template",
-		Description: "Apply a slot-scope meal template at a single (date, slot). Only works for templates with scope='slot'; day-scope and week-scope templates are not supported by this tool yet — calls against them return an error naming the actual scope.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				TemplateID int64  `json:"template_id"`
-				StartDate  string `json:"start_date"`
-				SlotID     int64  `json:"slot_id"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			startDate, err := time.Parse("2006-01-02", in.StartDate)
-			if err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: start_date: %v", domain.ErrInvalidInput, err)
-			}
-			tmpl, err := svc.Templates.Get(ctx, in.TemplateID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			if tmpl.Scope != template.ScopeSlot && tmpl.Scope != "" {
-				return nil, ToolEffectNone, fmt.Errorf(
-					"%w: template %d has scope=%s; this tool only applies slot-scope templates",
-					domain.ErrInvalidInput, in.TemplateID, tmpl.Scope,
-				)
-			}
-			result, err := svc.Templates.Apply(ctx, in.TemplateID, template.ApplyPayload{
-				Date:   &startDate,
-				SlotID: &in.SlotID,
-			})
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			return mustJSON(map[string]any{"plates_created": len(result.Created), "effect": "plate_changed"}), ToolEffectPlateChanged, nil
 		},
 	}
 }

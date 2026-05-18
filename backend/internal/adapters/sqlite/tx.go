@@ -9,7 +9,6 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/template"
 )
 
 // TxRunner provides transactional wrappers for multi-aggregate operations.
@@ -20,24 +19,6 @@ type TxRunner struct {
 // NewTxRunner creates a TxRunner bound to db.
 func NewTxRunner(db *sql.DB) *TxRunner {
 	return &TxRunner{db: db}
-}
-
-// RunInTemplateTx wraps fn in a single transaction, binding template + plate
-// repositories to the same tx. Both commit or both roll back.
-func (t *TxRunner) RunInTemplateTx(ctx context.Context, fn func(template.Repository, plate.Repository) error) error {
-	tx, err := t.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	templates := newTemplateRepoTx(tx)
-	plates := newPlateRepoTx(tx)
-
-	if err := fn(templates, plates); err != nil {
-		return err
-	}
-	return tx.Commit()
 }
 
 // RunInPresetTx wraps fn in a single transaction, binding preset + plate

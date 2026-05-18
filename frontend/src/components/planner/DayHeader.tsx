@@ -1,4 +1,4 @@
-import { BookmarkPlus, FileDown, MoreHorizontal, Trash2 } from "lucide-react"
+import { MoreHorizontal, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
@@ -6,7 +6,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -26,8 +25,6 @@ interface DayHeaderProps {
   macros?: MacrosResponse
   hasPlates?: boolean
   onClearDay?: () => void
-  onSaveDayTemplate?: () => void
-  onApplyDayTemplate?: () => void
 }
 
 export function DayHeader({
@@ -38,8 +35,6 @@ export function DayHeader({
   macros,
   hasPlates,
   onClearDay,
-  onSaveDayTemplate,
-  onApplyDayTemplate,
 }: DayHeaderProps) {
   const { t, i18n } = useTranslation()
   // Always render kcal + macro strip on every day header so the row keeps a
@@ -53,8 +48,7 @@ export function DayHeader({
   const cPct = total > 0 ? (macros!.carbs / total) * 100 : 0
   const fPct = total > 0 ? (macros!.fat / total) * 100 : 0
 
-  const hasOverflow =
-    !!onSaveDayTemplate || !!onApplyDayTemplate || (!!onClearDay && hasPlates)
+  const hasOverflow = !!onClearDay && hasPlates
 
   return (
     <div
@@ -165,37 +159,15 @@ export function DayHeader({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            {onApplyDayTemplate && (
-              <DropdownMenuItem
-                onClick={onApplyDayTemplate}
-                data-testid={`day-header-apply-${idx}`}
-              >
-                <FileDown className="size-4" />
-                {t("template.apply_day")}
-              </DropdownMenuItem>
-            )}
-            {onSaveDayTemplate && (
-              <DropdownMenuItem
-                onClick={onSaveDayTemplate}
-                disabled={!hasPlates}
-                data-testid={`day-header-save-${idx}`}
-              >
-                <BookmarkPlus className="size-4" />
-                {t("template.save_day")}
-              </DropdownMenuItem>
-            )}
             {onClearDay && hasPlates && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={onClearDay}
-                  data-testid={`day-header-clear-${idx}`}
-                >
-                  <Trash2 className="size-4" />
-                  {t("planner.clear_day")}
-                </DropdownMenuItem>
-              </>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={onClearDay}
+                data-testid={`day-header-clear-${idx}`}
+              >
+                <Trash2 className="size-4" />
+                {t("planner.clear_day")}
+              </DropdownMenuItem>
             )}
           </DropdownMenuContent>
         </DropdownMenu>

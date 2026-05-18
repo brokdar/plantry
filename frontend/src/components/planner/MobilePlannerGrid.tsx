@@ -1,19 +1,17 @@
 import { format, isToday, parseISO } from "date-fns"
 import * as Lucide from "lucide-react"
-import { useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
-  SaveAsTemplateDialog,
-  type SaveAsTemplateTarget,
-} from "@/components/templates/SaveAsTemplateDialog"
-import { TemplatePicker } from "@/components/templates/TemplatePicker"
+  SaveAsPresetDialog,
+  type SaveAsPresetTarget,
+} from "@/components/presets/SaveAsPresetDialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { Food } from "@/lib/api/foods"
@@ -44,11 +42,6 @@ import {
 import { toggleSkip } from "@/lib/planner-skip"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
-import {
-  showApplyToasts,
-  snapshotOverwrittenPlates,
-} from "@/lib/template-apply-toast"
-import { suggestDayName } from "@/lib/template-suggest"
 import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
@@ -98,7 +91,7 @@ export function MobilePlannerGrid({
   rangeFrom,
   rangeTo,
 }: MobilePlannerGridProps) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
 
   const componentsQuery = useFoods({ limit: 10000 }, { staleTime: 5 * 60_000 })
   const componentsById = useMemo(() => {
@@ -158,14 +151,11 @@ export function MobilePlannerGrid({
   const [activeDay, setActiveDay] = useState(todayIdx >= 0 ? todayIdx : 0)
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
   const [sheetTarget, setSheetTarget] = useState<SlotSheetTarget | null>(null)
-  const [saveTarget, setSaveTarget] = useState<SaveAsTemplateTarget | null>(
+  const [presetTarget, setPresetTarget] = useState<SaveAsPresetTarget | null>(
     null
   )
 
-  const [applyDayDate, setApplyDayDate] = useState<string | null>(null)
-  const overwriteSnapshotRef = useRef<Plate[]>([])
-
-  function openSaveSlot(plateId: number) {
+  function openSavePreset(plateId: number) {
     let plate: Plate | undefined
     for (const d of days) {
       const p = d.plates.find((p) => p.id === plateId)
@@ -175,34 +165,14 @@ export function MobilePlannerGrid({
       }
     }
     if (!plate) return
-    setSaveTarget({
-      scope: "slot",
-      plateId,
-      componentCount: plate.components.length,
+    const firstFoodID = plate.components[0]?.food_id
+    const food =
+      firstFoodID != null ? componentsById.get(firstFoodID) : undefined
+    setPresetTarget({
+      plateIds: [plateId],
+      defaultName: food?.name ?? "",
     })
   }
-
-  function openSaveDay(date: string) {
-    const day = days.find((d) => d.date === date)
-    if (!day) return
-    setSaveTarget({
-      scope: "day",
-      date,
-      plateCount: day.plates.filter((p) => !p.skipped).length,
-    })
-  }
-
-  // Skipped plates are not occupied — see desktop equivalent for rationale.
-  const occupiedSlotKeys = useMemo(() => {
-    const set = new Set<string>()
-    for (const day of days) {
-      for (const p of day.plates) {
-        if (p.skipped) continue
-        set.add(`${day.date}|${p.slot_id}`)
-      }
-    }
-    return set
-  }, [days])
 
   function handleClearDay(dayIdx: number) {
     const targetDay = days[dayIdx]
@@ -556,8 +526,6 @@ export function MobilePlannerGrid({
           dayDate={activeData.date}
           weekday={activeData.weekday}
           hasPlates={activeData.plates.filter((p) => !p.skipped).length > 0}
-          onSaveDay={() => openSaveDay(activeData.date)}
-          onApplyDay={() => setApplyDayDate(activeData.date)}
           onClearDay={() => handleClearDay(activeDay)}
         />
       )}
@@ -594,7 +562,7 @@ export function MobilePlannerGrid({
                   void handleToggleSkip(activeDay, slot.id, plate?.id ?? null)
                   if (plate) clearAiFillOnPlate(plate.id)
                 }}
-                onSave={plate ? () => openSaveSlot(plate.id) : undefined}
+                onSave={plate ? () => openSavePreset(plate.id) : undefined}
                 onDelete={() => plate && handleDeletePlate(plate.id)}
                 onDragStart={() => {
                   if (!plate) return
@@ -689,44 +657,10 @@ export function MobilePlannerGrid({
         onOpenChange={(o) => !o && setAddTarget(null)}
         onCommit={(items) => handleTrayCommit(items)}
       />
-      <SaveAsTemplateDialog
-        open={saveTarget !== null}
-        onOpenChange={(o) => !o && setSaveTarget(null)}
-        target={saveTarget}
-        defaultName={
-          saveTarget?.scope === "day"
-            ? suggestDayName(
-                t,
-                i18n.language,
-                saveTarget.date,
-                days.find((d) => d.date === saveTarget.date)?.weekday ?? 0
-              )
-            : ""
-        }
-      />
-      <TemplatePicker
-        open={applyDayDate !== null}
-        onOpenChange={(o) => !o && setApplyDayDate(null)}
-        scope="day"
-        defaultDate={applyDayDate ?? rangeFrom}
-        overlap={{ occupied: occupiedSlotKeys }}
-        onBeforeApply={({ overwrittenKeys }) => {
-          overwriteSnapshotRef.current = snapshotOverwrittenPlates(
-            rangeFrom,
-            rangeTo,
-            overwrittenKeys
-          )
-        }}
-        onApplied={(info) => {
-          showApplyToasts(
-            info,
-            overwriteSnapshotRef.current,
-            rangeFrom,
-            rangeTo,
-            t
-          )
-          overwriteSnapshotRef.current = []
-        }}
+      <SaveAsPresetDialog
+        open={presetTarget !== null}
+        onOpenChange={(o) => !o && setPresetTarget(null)}
+        target={presetTarget}
       />
       <SlotSheet
         target={sheetTarget}
@@ -754,7 +688,7 @@ export function MobilePlannerGrid({
             })
           }
         }}
-        onSaveAsTemplate={(plateId) => openSaveSlot(plateId)}
+        onSaveAsPreset={(plateId) => openSavePreset(plateId)}
         onToggleSkip={(target, currentSkipped) => {
           const dayIdx = days.findIndex((d) => d.date === target.date)
           if (dayIdx < 0) return
@@ -778,22 +712,18 @@ export function MobilePlannerGrid({
 
 const DAY_ACTION_KEYS = DAY_KEYS
 
-/** Mobile equivalent of the desktop DayHeader overflow — apply-day,
- * save-day, clear-day. Sits above the active day's slot list so a phone
- * user has feature parity with the desktop column header. */
+/** Mobile equivalent of the desktop DayHeader overflow. The day-level
+ *  template apply/save actions were removed in the Presets cutover; only
+ *  Clear Day remains. */
 function DayActionsBar({
   dayDate,
   weekday,
   hasPlates,
-  onSaveDay,
-  onApplyDay,
   onClearDay,
 }: {
   dayDate: string
   weekday: number
   hasPlates: boolean
-  onSaveDay: () => void
-  onApplyDay: () => void
   onClearDay: () => void
 }) {
   const { t, i18n } = useTranslation()
@@ -808,49 +738,34 @@ function DayActionsBar({
       <span className="font-heading text-[10.5px] font-bold tracking-[0.18em] text-on-surface-variant uppercase">
         {t(dayKey)} · {dateLabel}
       </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("planner.day_actions_for", {
-              day: t(dayKey),
-              date: dateLabel,
-            })}
-            data-testid="mobile-day-menu"
-            className="size-7 text-on-surface-variant"
-          >
-            <Lucide.MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuItem onClick={onApplyDay} data-testid="mobile-day-apply">
-            <Lucide.FileDown className="size-4" />
-            {t("template.apply_day")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={onSaveDay}
-            disabled={!hasPlates}
-            data-testid="mobile-day-save"
-          >
-            <Lucide.BookmarkPlus className="size-4" />
-            {t("template.save_day")}
-          </DropdownMenuItem>
-          {hasPlates && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={onClearDay}
-                data-testid="mobile-day-clear"
-              >
-                <Lucide.Trash2 className="size-4" />
-                {t("planner.clear_day")}
-              </DropdownMenuItem>
-            </>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {hasPlates && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t("planner.day_actions_for", {
+                day: t(dayKey),
+                date: dateLabel,
+              })}
+              data-testid="mobile-day-menu"
+              className="size-7 text-on-surface-variant"
+            >
+              <Lucide.MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={onClearDay}
+              data-testid="mobile-day-clear"
+            >
+              <Lucide.Trash2 className="size-4" />
+              {t("planner.clear_day")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   )
 }

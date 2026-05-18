@@ -18,20 +18,6 @@ import {
   type SaveAsPresetTarget,
 } from "@/components/presets/SaveAsPresetDialog"
 import {
-  SaveAsTemplateDialog,
-  type SaveAsTemplateTarget,
-} from "@/components/templates/SaveAsTemplateDialog"
-import { TemplatePicker } from "@/components/templates/TemplatePicker"
-import {
-  showApplyToasts,
-  snapshotOverwrittenPlates,
-} from "@/lib/template-apply-toast"
-import {
-  suggestDayName,
-  suggestSlotName,
-  suggestWeekName,
-} from "@/lib/template-suggest"
-import {
   dragStartToPayload,
   DndCellWrapper,
   type DragPayload,
@@ -77,7 +63,6 @@ import {
   type TraySlotContext,
 } from "./ComponentTraySheet"
 import { DayHeader } from "./DayHeader"
-import { RowApplyTemplateDialog } from "./RowApplyTemplateDialog"
 import { SlotCell } from "./SlotCell"
 import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
 import { Button } from "@/components/ui/button"
@@ -161,7 +146,7 @@ export function PlannerGrid({
   rangeTo,
   nutritionDays,
 }: PlannerGridProps) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
 
   const openPicker = (day: number, slotId: number) => {
     setAddTarget({ day, slotId, plateId: null })
@@ -213,15 +198,10 @@ export function PlannerGrid({
 
   const [addTarget, setAddTarget] = useState<AddTarget | null>(null)
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null)
-  const [saveTarget, setSaveTarget] = useState<SaveAsTemplateTarget | null>(
-    null
-  )
   const [presetTarget, setPresetTarget] = useState<SaveAsPresetTarget | null>(
     null
   )
-  const [applyDayDate, setApplyDayDate] = useState<string | null>(null)
   const [sheetTarget, setSheetTarget] = useState<SlotSheetTarget | null>(null)
-  const [rowApplySlot, setRowApplySlot] = useState<TimeSlot | null>(null)
 
   function findPlateById(plateId: number): Plate | undefined {
     for (const day of days) {
@@ -229,16 +209,6 @@ export function PlannerGrid({
       if (p) return p
     }
     return undefined
-  }
-
-  function openSaveSlot(plateId: number) {
-    const p = findPlateById(plateId)
-    if (!p) return
-    setSaveTarget({
-      scope: "slot",
-      plateId,
-      componentCount: p.components.length,
-    })
   }
 
   function openSavePreset(plateId: number) {
@@ -251,16 +221,6 @@ export function PlannerGrid({
     setPresetTarget({
       plateIds: [plateId],
       defaultName: food?.name ?? "",
-    })
-  }
-
-  function openSaveDay(date: string) {
-    const day = days.find((d) => d.date === date)
-    if (!day) return
-    setSaveTarget({
-      scope: "day",
-      date,
-      plateCount: day.plates.filter((p) => !p.skipped).length,
     })
   }
 
@@ -285,39 +245,6 @@ export function PlannerGrid({
 
   // Build the set of "date|slotId" keys for already-occupied slots in the
   // visible window — used by the apply picker to flag overlap and surface
-  // the skip/overwrite choice. Skipped plates are *not* occupied: a skip
-  // marker means "I won't eat here", so applying a template to that cell
-  // should fill it without any conflict warning.
-  const occupiedSlotKeys = useMemo(() => {
-    const set = new Set<string>()
-    for (const day of days) {
-      for (const p of day.plates) {
-        if (p.skipped) continue
-        set.add(`${day.date}|${p.slot_id}`)
-      }
-    }
-    return set
-  }, [days])
-
-  const saveTargetSuggestion = useMemo(() => {
-    if (!saveTarget) return ""
-    if (saveTarget.scope === "slot") {
-      const day = days.find((d) =>
-        d.plates.some((p) => p.id === saveTarget.plateId)
-      )
-      const plate = day?.plates.find((p) => p.id === saveTarget.plateId)
-      const slot = plate ? slotsById.get(plate.slot_id) : undefined
-      if (!day || !slot) return ""
-      return suggestSlotName(t, i18n.language, day.weekday, slot.name_key)
-    }
-    if (saveTarget.scope === "day") {
-      const day = days.find((d) => d.date === saveTarget.date)
-      if (!day) return ""
-      return suggestDayName(t, i18n.language, day.date, day.weekday)
-    }
-    return suggestWeekName(t, i18n.language, saveTarget.from)
-  }, [saveTarget, days, slotsById, t, i18n.language])
-
   // The macro target indicator on each cell compares plate kcal to a fair
   // share of the daily target — daily kcal ÷ active slot count. Skipping
   // the calculation whenever no slots or no target is set keeps the dot
@@ -682,9 +609,6 @@ export function PlannerGrid({
   const bodyScrollRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<"move" | "copy">("move")
   // Pre-apply snapshot the picker hands us via onBeforeApply, consumed by
-  // the post-apply toast for undo. Kept in a ref so the callback chain
-  // doesn't trigger renders.
-  const overwriteSnapshotRef = useRef<Plate[]>([])
   // Drag activates from the dedicated grip handle on the cell's left edge.
   // The 6 px PointerSensor constraint keeps a quick grip-tap from being read
   // as a drag. KeyboardSensor lives on the same handle, so Enter on the
@@ -805,8 +729,6 @@ export function PlannerGrid({
                     today={dayIsToday}
                     macros={dayMacros}
                     onClearDay={() => handleClearDay(idx)}
-                    onSaveDayTemplate={() => openSaveDay(day.date)}
-                    onApplyDayTemplate={() => setApplyDayDate(day.date)}
                     hasPlates={day.plates.length > 0}
                   />
                 )
@@ -839,7 +761,6 @@ export function PlannerGrid({
                     days={days}
                     onClearRow={() => handleClearRow(slot.id)}
                     onCopyAcrossWeek={() => handleCopyRowAcrossWeek(slot.id)}
-                    onApplyTemplate={() => setRowApplySlot(slot)}
                   />
                   {days.map((day, dayIdx) => {
                     const date = parseISO(day.date)
@@ -882,9 +803,6 @@ export function PlannerGrid({
                             }
                             onDeletePlate={() =>
                               plate && handleDeletePlate(plate.id, dayIdx)
-                            }
-                            onSaveAsTemplate={
-                              plate ? () => openSaveSlot(plate.id) : undefined
                             }
                             onSaveAsPreset={
                               plate ? () => openSavePreset(plate.id) : undefined
@@ -962,40 +880,10 @@ export function PlannerGrid({
           defaultRole={swapTarget?.defaultRole}
           onPick={handleSwapPick}
         />
-        <SaveAsTemplateDialog
-          open={saveTarget !== null}
-          onOpenChange={(o) => !o && setSaveTarget(null)}
-          target={saveTarget}
-          defaultName={saveTargetSuggestion}
-        />
         <SaveAsPresetDialog
           open={presetTarget !== null}
           onOpenChange={(o) => !o && setPresetTarget(null)}
           target={presetTarget}
-        />
-        <TemplatePicker
-          open={applyDayDate !== null}
-          onOpenChange={(o) => !o && setApplyDayDate(null)}
-          scope="day"
-          defaultDate={applyDayDate ?? rangeFrom}
-          overlap={{ occupied: occupiedSlotKeys }}
-          onBeforeApply={({ overwrittenKeys }) => {
-            overwriteSnapshotRef.current = snapshotOverwrittenPlates(
-              rangeFrom,
-              rangeTo,
-              overwrittenKeys
-            )
-          }}
-          onApplied={(info) => {
-            showApplyToasts(
-              info,
-              overwriteSnapshotRef.current,
-              rangeFrom,
-              rangeTo,
-              t
-            )
-            overwriteSnapshotRef.current = []
-          }}
         />
         <SlotSheet
           target={sheetTarget}
@@ -1021,7 +909,7 @@ export function PlannerGrid({
               defaultRole,
             })
           }
-          onSaveAsTemplate={(plateId) => openSaveSlot(plateId)}
+          onSaveAsPreset={(plateId) => openSavePreset(plateId)}
           onToggleSkip={(target, currentSkipped) => {
             const dayIdx = days.findIndex((d) => d.date === target.date)
             if (dayIdx < 0) return
@@ -1061,16 +949,6 @@ export function PlannerGrid({
               })
           }}
         />
-        <RowApplyTemplateDialog
-          open={rowApplySlot !== null}
-          onOpenChange={(o) => !o && setRowApplySlot(null)}
-          slotId={rowApplySlot?.id ?? 0}
-          slotName={rowApplySlot ? slotLabel(t, rowApplySlot.name_key) : ""}
-          dates={days.map((d) => d.date)}
-          rangeFrom={rangeFrom}
-          rangeTo={rangeTo}
-          occupiedKeys={occupiedSlotKeys}
-        />
       </div>
     </DndContext>
   )
@@ -1081,7 +959,6 @@ interface SlotRowLabelProps {
   days: PlannerDay[]
   onClearRow: () => void
   onCopyAcrossWeek: () => void
-  onApplyTemplate: () => void
 }
 
 function SlotRowLabel({
@@ -1089,7 +966,6 @@ function SlotRowLabel({
   days,
   onClearRow,
   onCopyAcrossWeek,
-  onApplyTemplate,
 }: SlotRowLabelProps) {
   const { t } = useTranslation()
   // Counted once per row render — drives whether destructive items render at
@@ -1127,13 +1003,6 @@ function SlotRowLabel({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-60">
-          <DropdownMenuItem
-            onClick={onApplyTemplate}
-            data-testid={`slot-row-apply-${slot.id}`}
-          >
-            <Lucide.FileDown className="size-4" />
-            {t("planner.row_actions.apply_template")}
-          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={onCopyAcrossWeek}
             disabled={plateCount === 0}
