@@ -14,6 +14,10 @@ import {
 // the cell, slot sheet, and tray running total. The numbers come from the
 // existing nutrition resolver; this spec asserts that the surfaces agree.
 test.describe("Plate macros — Phase 2 read-only surfaces", () => {
+  // Cell-level kcal is shown on the mobile day-tab layout (showMacros=true by
+  // default); the desktop weekly view hides it for visual density.
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
+
   test("planned cell, slot sheet header, and tray running total all show kcal", async ({
     page,
     request,
@@ -43,7 +47,7 @@ test.describe("Plate macros — Phase 2 read-only surfaces", () => {
 
     try {
       await page.goto("/")
-      const cell = page.getByTestId(`cell-0-${slot.id}`).first()
+      const cell = page.getByTestId(`mobile-cell-0-${slot.id}`)
       await expect(cell).toBeVisible()
 
       // Open the picker tray for the empty cell. Target the tray sheet by

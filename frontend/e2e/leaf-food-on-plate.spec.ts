@@ -52,7 +52,7 @@ test.describe("Leaf food directly on a plate", () => {
       plateId = (plateBody as { id: number }).id
 
       const compRes = await ctx.post(`/api/plates/${plateId}/components`, {
-        data: { food_id: leaf.id, portions: 1 },
+        data: { food_id: leaf.id, amount: 100, unit: "g" },
       })
       expect(
         compRes.ok(),
