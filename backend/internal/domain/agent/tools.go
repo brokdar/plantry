@@ -520,12 +520,22 @@ func toolUpdatePlateComponent(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			// The agent's "portions" vocabulary maps cleanly to composed
-			// quantities. For leaf components the model would need to
-			// pivot to (amount, unit) — which Phase 1 deliberately defers.
-			// TODO(plate-workflow-rework): give the agent an amount/unit
-			// path for leaf components.
-			q := plate.QuantityFromLegacyPortions("composed", in.Portions)
+			// The agent still speaks the legacy float-portions vocabulary, but
+			// the new validator demands a kind-aware quantity. Look up the
+			// existing component's food kind so leaf rows translate into
+			// (amount, unit) instead of crashing with ErrInvalidQuantityForLeaf.
+			// TODO(plate-workflow-rework): expose an amount/unit path so the
+			// agent can address leaf components directly instead of via the
+			// portions→grams shim in QuantityFromLegacyPortions.
+			existing, err := svc.Plates.GetComponent(ctx, in.PlateComponentID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			f, err := svc.Foods.Get(ctx, existing.FoodID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			q := plate.QuantityFromLegacyPortions(string(f.Kind), in.Portions)
 			pc, err := svc.Plates.UpdateComponentQuantity(ctx, in.PlateComponentID, q)
 			if err != nil {
 				return nil, ToolEffectNone, err

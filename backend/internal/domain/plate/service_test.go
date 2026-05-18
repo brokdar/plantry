@@ -415,3 +415,48 @@ func TestUpdateComponentQuantity_Reresolves_Grams(t *testing.T) {
 	require.NotNil(t, stored.Grams)
 	assert.InDelta(t, 360.0, *stored.Grams, 0.01)
 }
+
+// Regression: the agent tool layer translates its legacy float "portions"
+// input via QuantityFromLegacyPortions(kind, portions) before calling
+// UpdateComponentQuantity. The composed → Portions and leaf → (amount=portions×100 g)
+// translations must both clear the validator. A previous version hardcoded
+// "composed" and crashed leaf updates with ErrInvalidQuantityForLeaf.
+func TestUpdateComponentQuantity_AcceptsLegacyPortions_PerKind(t *testing.T) {
+	foods := fakeFoods{byID: map[int64]*food.Food{
+		10: composedFood(10, "Bolognese"),
+		20: leafFood(20, "Rice"),
+	}}
+	svc, _ := newComponentService(t, foods)
+
+	composed, err := svc.AddComponent(context.Background(), 1, &plate.PlateComponent{
+		FoodID:   10,
+		Portions: intPtr(1),
+	})
+	require.NoError(t, err)
+	leaf, err := svc.AddComponent(context.Background(), 1, &plate.PlateComponent{
+		FoodID: 20, Amount: float64Ptr(100), Unit: strPtr("g"),
+	})
+	require.NoError(t, err)
+
+	composedUpdate, err := svc.UpdateComponentQuantity(
+		context.Background(),
+		composed.ID,
+		plate.QuantityFromLegacyPortions("composed", 3),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, composedUpdate.Portions)
+	assert.Equal(t, 3, *composedUpdate.Portions)
+
+	leafUpdate, err := svc.UpdateComponentQuantity(
+		context.Background(),
+		leaf.ID,
+		plate.QuantityFromLegacyPortions("leaf", 2),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, leafUpdate.Amount)
+	require.NotNil(t, leafUpdate.Unit)
+	assert.InDelta(t, 200.0, *leafUpdate.Amount, 0.01)
+	assert.Equal(t, "g", *leafUpdate.Unit)
+	require.NotNil(t, leafUpdate.Grams)
+	assert.InDelta(t, 200.0, *leafUpdate.Grams, 0.01)
+}

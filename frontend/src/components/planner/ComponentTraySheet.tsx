@@ -43,6 +43,7 @@ import {
 import type { Food, FoodRole } from "@/lib/api/foods"
 import type { MacrosResponse, PlateComponent } from "@/lib/api/plates"
 import type { Template } from "@/lib/api/templates"
+import { normalizeUnit, UNIT_DEFAULTS } from "@/lib/domain/units"
 import { useFoodMacros, useFoods } from "@/lib/queries/foods"
 import { useTemplates } from "@/lib/queries/templates"
 import { imageURL } from "@/lib/image-url"
@@ -1077,24 +1078,27 @@ export function trayReducer(state: TrayItem[], action: TrayAction): TrayItem[] {
 }
 
 /** bumpQuantity nudges a staged quantity in response to re-tapping the same
- *  food in the picker. Per-kind:
- *   - composed   → +1 portion
- *   - leaf count → +1 unit (the portion table key)
- *   - leaf grams → +50 g (close enough to a "more" gesture without overshoot)
- *   - leaf other → +100 (volumes / unknown) */
+ *  food in the picker. The step is keyed on the unit's kind, not the current
+ *  amount, so 5 apples bumps to 6 (not 55) and 5 kg bumps to 6 (not 55). */
 function bumpQuantity(q: TrayQuantity): TrayQuantity {
   if (q.kind === "composed") {
     return { ...q, portions: Math.min(20, q.portions + 1) }
   }
-  if (q.unit === "g") {
-    return { ...q, amount: q.amount + 50 }
-  }
-  // Per the spec: count-like (portion table or count units) bump by 1; mass
-  // and volume bump by their conventional steps.
-  if (q.amount < 5) {
-    return { ...q, amount: q.amount + 1 }
-  }
-  return { ...q, amount: q.amount + 50 }
+  return { ...q, amount: q.amount + bumpStepForUnit(q.unit) }
+}
+
+/** bumpStepForUnit chooses the additive step that matches the unit's
+ *  conventional vocabulary (mirrors the quick-amount chips):
+ *   - g                              → +50
+ *   - other mass (kg / mg / oz / lb) → +1
+ *   - volume (ml / l / tbsp / …)     → +100
+ *   - count or portion-table units   → +1 */
+function bumpStepForUnit(unit: string): number {
+  const canonical = normalizeUnit(unit) || unit
+  if (canonical === "g") return 50
+  const def = UNIT_DEFAULTS[canonical]
+  if (def?.kind === "volume") return 100
+  return 1
 }
 
 /** addQuantities combines two same-shaped quantities. Used by the template

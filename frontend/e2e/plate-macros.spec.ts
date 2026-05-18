@@ -74,7 +74,10 @@ test.describe("Plate macros — Phase 2 read-only surfaces", () => {
       await sheet.getByTestId("tray-commit").click()
       const platePostRes = await platePost
       const ourPlate = (await platePostRes.json()) as { id: number }
-      await expect(sheet).not.toBeVisible()
+      // The tray sheet is a Radix Sheet — it unmounts when closed, so the
+      // testid leaves the DOM entirely. Asserting on count avoids the
+      // not.toBeVisible() timeout pitfall (see CLAUDE.md).
+      await expect(sheet).toHaveCount(0)
 
       // 1) Cell shows kcal. Allow extra time because the macros endpoint
       // refetches after the plate POST settles, not synchronously with it.

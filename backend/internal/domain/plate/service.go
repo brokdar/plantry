@@ -256,6 +256,13 @@ func (s *Service) SwapComponent(ctx context.Context, plateComponentID, newFoodID
 	return pc, nil
 }
 
+// GetComponent returns the stored plate_component row by id. Used by callers
+// (notably the agent tools) that need to discover the component's food before
+// constructing a kind-aware quantity for an update.
+func (s *Service) GetComponent(ctx context.Context, plateComponentID int64) (*PlateComponent, error) {
+	return s.repo.GetComponent(ctx, plateComponentID)
+}
+
 // UpdateComponentQuantity changes the quantity (portions or amount+unit) on a
 // plate_component row. The new quantity must match the food's kind and grams
 // are re-resolved for leaf updates.

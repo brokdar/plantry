@@ -13,7 +13,7 @@ import {
   Utensils,
   X,
 } from "lucide-react"
-import { useId, useMemo } from "react"
+import { useId, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { PortionStepper } from "@/components/component/PortionStepper"
@@ -611,32 +611,22 @@ function ComponentRow({
   // stepper; leaf → compact `QuantityUnitInput`. Falling back to the stepper
   // when the food hasn't loaded yet is intentional — it shows what's stored
   // (`pc.portions ?? 1`) rather than blanking the row.
-  const quantityControl = (() => {
-    if (food?.kind === "leaf") {
-      const initial: QuantityUnitValue = {
-        amount: pc.amount ?? 100,
-        unit: pc.unit ?? "g",
-      }
-      return (
-        <QuantityUnitInput
-          food={food}
-          value={initial}
-          onChange={(next) =>
-            commitQuantity({ amount: next.amount, unit: next.unit })
-          }
-          compact
-          className="min-w-[14rem]"
-        />
-      )
-    }
-    return (
+  const quantityControl =
+    food?.kind === "leaf" ? (
+      <LeafQuantityControl
+        food={food}
+        pc={pc}
+        onChange={(next) =>
+          commitQuantity({ amount: next.amount, unit: next.unit })
+        }
+      />
+    ) : (
       <PortionStepper
         value={pc.portions ?? 1}
         onChange={(next) => commitQuantity({ portions: next })}
         size="md"
       />
     )
-  })()
 
   return (
     <li
@@ -709,6 +699,41 @@ function ComponentRow({
         </Button>
       </div>
     </li>
+  )
+}
+
+/**
+ * LeafQuantityControl owns the (amount, unit) state for an editing leaf-row
+ * `QuantityUnitInput`. The local seed runs once on mount because the
+ * enclosing `<li>` is keyed by `pc.id` — when the user opens a different row
+ * the component remounts and reseeds. Holding state here (instead of
+ * re-deriving from `pc` every render) keeps in-flight keystrokes alive while
+ * the plate query refetches after each commit.
+ */
+function LeafQuantityControl({
+  food,
+  pc,
+  onChange,
+}: {
+  food: Food
+  pc: PlateComponent
+  onChange: (next: QuantityUnitValue) => void
+}) {
+  const [value, setValue] = useState<QuantityUnitValue>(() => ({
+    amount: pc.amount ?? 100,
+    unit: pc.unit ?? "g",
+  }))
+  return (
+    <QuantityUnitInput
+      food={food}
+      value={value}
+      onChange={(next) => {
+        setValue(next)
+        onChange(next)
+      }}
+      compact
+      className="min-w-[14rem]"
+    />
   )
 }
 

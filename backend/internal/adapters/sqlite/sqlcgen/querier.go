@@ -42,6 +42,7 @@ type Querier interface {
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
 	GetFood(ctx context.Context, id int64) (Food, error)
+	GetFoodKind(ctx context.Context, id int64) (string, error)
 	GetPlate(ctx context.Context, id int64) (Plate, error)
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
 	GetPlateFeedback(ctx context.Context, plateID int64) (PlateFeedback, error)

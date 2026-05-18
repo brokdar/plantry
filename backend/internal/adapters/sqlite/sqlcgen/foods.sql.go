@@ -324,6 +324,17 @@ func (q *Queries) GetFood(ctx context.Context, id int64) (Food, error) {
 	return i, err
 }
 
+const getFoodKind = `-- name: GetFoodKind :one
+SELECT kind FROM foods WHERE id = ?
+`
+
+func (q *Queries) GetFoodKind(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getFoodKind, id)
+	var kind string
+	err := row.Scan(&kind)
+	return kind, err
+}
+
 const listFoodComponents = `-- name: ListFoodComponents :many
 SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order,
        f.name AS child_name, f.kind AS child_kind
