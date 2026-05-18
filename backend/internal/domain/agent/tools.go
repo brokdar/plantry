@@ -61,6 +61,7 @@ type Services struct {
 	Profile           *profile.Service
 	Slots             *slot.Service
 	Templates         *template.Service
+	Presets           PresetService
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -134,7 +135,7 @@ func schemaErrors(r *gojsonschema.Result) string {
 // ---------------------------------------------------------------------------
 
 func defaultTools(svc Services) []Tool {
-	return []Tool{
+	tools := []Tool{
 		toolListFoods(svc),
 		toolGetFood(svc),
 		toolListSlots(svc),
@@ -149,6 +150,10 @@ func defaultTools(svc Services) []Tool {
 		toolDeletePlate(svc),
 		toolRecordPreference(svc),
 	}
+	if svc.Presets != nil {
+		tools = append(tools, presetTools(svc)...)
+	}
+	return tools
 }
 
 // --- read tools ---

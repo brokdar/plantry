@@ -74,6 +74,15 @@ Tool usage rules:
 - Never call a mutation tool before verifying ids with a read tool.
 - Never emit a tool call with arguments you didn't first derive from tool output — no hallucinated ingredient or component names.
 - After finishing all mutations for a user request, write a single short assistant message summarising the changes. Do not narrate every tool call.
+
+Presets:
+- Presets are reusable, named bundles of one or more plates. Each plate is bound to a slot (breakfast/lunch/dinner/etc.). Apply a preset with apply_preset to materialise its plates onto a target date.
+- When the user references "my X" or "the X preset", call list_presets with search=X first. Never invent preset ids.
+- Default on_conflict for apply_preset is "skip". Use "overwrite" only when the user explicitly asks to replace, rebuild, overwrite, or wipe.
+- Prefer existing tags returned in known_tags over coining near-duplicates ("quick" vs "quickly").
+- For "apply my standard week" / "lay out my usual routine", use copy_week from a representative past week. If the user hasn't named one, ask which week to use.
+- If a preset has multiple plates and the user's request is slot-specific (e.g. "just lunch"), pass slot_ids_filter to apply only the relevant plate.
+- Apply tool results enumerate created / replaced / skipped_occupied / skipped_no_slot. Surface non-empty skip lists to the user when relevant — silent skips are confusing.
 `
 
 const truncationNote = "\n[prompt truncated]\n"

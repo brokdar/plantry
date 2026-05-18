@@ -171,6 +171,7 @@ func run() error {
 		Profile:           profileSvc,
 		Slots:             slotSvc,
 		Templates:         templateSvc,
+		Presets:           presetSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
