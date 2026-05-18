@@ -10,11 +10,13 @@ import (
 )
 
 type Querier interface {
+	AddPresetTag(ctx context.Context, arg AddPresetTagParams) error
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
 	CountConversations(ctx context.Context) (int64, error)
 	CountConversationsByWeek(ctx context.Context, weekID sql.NullInt64) (int64, error)
 	CountPlatesUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
+	CountPresetsUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CountTemplatesUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (AiConversation, error)
 	CreateFood(ctx context.Context, arg CreateFoodParams) (Food, error)
@@ -23,6 +25,9 @@ type Querier interface {
 	CreateFoodTag(ctx context.Context, arg CreateFoodTagParams) error
 	CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate, error)
 	CreatePlateComponent(ctx context.Context, arg CreatePlateComponentParams) (PlateComponent, error)
+	CreatePreset(ctx context.Context, name string) (Preset, error)
+	CreatePresetComponent(ctx context.Context, arg CreatePresetComponentParams) (PresetComponent, error)
+	CreatePresetPlate(ctx context.Context, arg CreatePresetPlateParams) (PresetPlate, error)
 	CreateTemplate(ctx context.Context, arg CreateTemplateParams) (Template, error)
 	CreateTemplateEntry(ctx context.Context, arg CreateTemplateEntryParams) (TemplateEntry, error)
 	CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) (TimeSlot, error)
@@ -36,6 +41,10 @@ type Querier interface {
 	DeletePlate(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateComponent(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateFeedback(ctx context.Context, plateID int64) (sql.Result, error)
+	DeletePreset(ctx context.Context, id int64) (sql.Result, error)
+	DeletePresetPlatesByPreset(ctx context.Context, presetID int64) (sql.Result, error)
+	DeletePresetTag(ctx context.Context, arg DeletePresetTagParams) error
+	DeletePresetTagsByPreset(ctx context.Context, presetID int64) error
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTemplate(ctx context.Context, id int64) (sql.Result, error)
 	DeleteTemplateEntriesByTemplate(ctx context.Context, templateID int64) (sql.Result, error)
@@ -46,6 +55,7 @@ type Querier interface {
 	GetPlate(ctx context.Context, id int64) (Plate, error)
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
 	GetPlateFeedback(ctx context.Context, plateID int64) (PlateFeedback, error)
+	GetPreset(ctx context.Context, id int64) (Preset, error)
 	GetProfile(ctx context.Context) (UserProfile, error)
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
 	GetTemplate(ctx context.Context, id int64) (Template, error)
@@ -58,11 +68,21 @@ type Querier interface {
 	ListFoodPortions(ctx context.Context, foodID int64) ([]FoodPortion, error)
 	ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, error)
 	ListForgottenFoods(ctx context.Context, arg ListForgottenFoodsParams) ([]Food, error)
+	ListKnownTags(ctx context.Context, limit int64) ([]ListKnownTagsRow, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	ListMostCookedFoods(ctx context.Context, limit int64) ([]Food, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]PlateComponent, error)
 	ListPlatesByDate(ctx context.Context, date string) ([]Plate, error)
 	ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDateRangeParams) ([]Plate, error)
+	ListPresetComponentsByPlate(ctx context.Context, presetPlateID int64) ([]PresetComponent, error)
+	ListPresetComponentsByPreset(ctx context.Context, presetID int64) ([]PresetComponent, error)
+	ListPresetIDsBySlotID(ctx context.Context, slotID int64) ([]int64, error)
+	ListPresetIDsByTag(ctx context.Context, tag string) ([]int64, error)
+	ListPresetPlatesByPreset(ctx context.Context, presetID int64) ([]PresetPlate, error)
+	ListPresetTagsByPreset(ctx context.Context, presetID int64) ([]string, error)
+	ListPresetTagsByPresets(ctx context.Context, presetIds []int64) ([]PresetTag, error)
+	ListPresets(ctx context.Context) ([]Preset, error)
+	ListPresetsByLastUsed(ctx context.Context) ([]Preset, error)
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
 	ListTemplateEntriesByTemplate(ctx context.Context, templateID int64) ([]TemplateEntry, error)
@@ -77,10 +97,13 @@ type Querier interface {
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
 	SetPlateSkipped(ctx context.Context, arg SetPlateSkippedParams) (Plate, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
+	TouchPresetLastUsedAt(ctx context.Context, id int64) error
+	TouchPresetUpdatedAt(ctx context.Context, id int64) error
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (AiConversation, error)
 	UpdateFood(ctx context.Context, arg UpdateFoodParams) (Food, error)
 	UpdatePlate(ctx context.Context, arg UpdatePlateParams) (Plate, error)
 	UpdatePlateComponent(ctx context.Context, arg UpdatePlateComponentParams) (PlateComponent, error)
+	UpdatePresetName(ctx context.Context, arg UpdatePresetNameParams) (Preset, error)
 	UpdateTemplateName(ctx context.Context, arg UpdateTemplateNameParams) (Template, error)
 	UpdateTimeSlot(ctx context.Context, arg UpdateTimeSlotParams) (TimeSlot, error)
 	UpsertFoodPortion(ctx context.Context, arg UpsertFoodPortionParams) error

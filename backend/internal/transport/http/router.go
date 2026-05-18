@@ -23,6 +23,7 @@ type Handlers struct {
 	Plates         *handlers.PlateHandler
 	Profile        *handlers.ProfileHandler
 	Templates      *handlers.TemplateHandler
+	Presets        *handlers.PresetHandler
 	AI             *handlers.AIHandler
 	AIRateLimiter  *plantrymw.RateLimiter
 	Feedback       *handlers.FeedbackHandler
@@ -134,6 +135,21 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Put("/", h.Templates.Update)
 					r.Delete("/", h.Templates.Delete)
 					r.Post("/apply", h.Templates.Apply)
+				})
+			})
+		}
+
+		if h.Presets != nil {
+			api.Route("/presets", func(r chi.Router) {
+				r.Get("/", h.Presets.List)
+				r.Get("/known-tags", h.Presets.KnownTags)
+				r.Post("/", h.Presets.Create)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.Presets.Get)
+					r.Put("/", h.Presets.Update)
+					r.Patch("/", h.Presets.Patch)
+					r.Delete("/", h.Presets.Delete)
+					r.Post("/duplicate", h.Presets.Duplicate)
 				})
 			})
 		}

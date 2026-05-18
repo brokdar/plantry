@@ -35,6 +35,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	settingsdom "github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
@@ -136,6 +137,9 @@ func run() error {
 	templateRepo := sqlite.NewTemplateRepo(conn)
 	templateSvc := template.NewService(templateRepo, foodRepo, plateRepo, txRunner)
 
+	presetRepo := sqlite.NewPresetRepo(conn)
+	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo)
+
 	feedbackSvc := feedback.NewService(txRunner, plateRepo, foodRepo)
 
 	// AI wiring. The llm.Resolver consults settings on every request so
@@ -203,6 +207,7 @@ func run() error {
 		Plates:         handlers.NewPlateHandler(plateSvc),
 		Profile:        handlers.NewProfileHandler(profileSvc),
 		Templates:      handlers.NewTemplateHandler(templateSvc, plateSvc),
+		Presets:        handlers.NewPresetHandler(presetSvc),
 		AI:             aiHandler,
 		AIRateLimiter:  aiRateLimiter,
 		Feedback:       handlers.NewFeedbackHandler(feedbackSvc),
