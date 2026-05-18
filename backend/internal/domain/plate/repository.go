@@ -22,5 +22,10 @@ type Repository interface {
 	CountUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CountUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 
+	// RecentUnitForFood returns the most-recently-used canonical unit for the
+	// given leaf food across any plate (max id wins). Returns ("", nil) when
+	// the food has never been added with a unit (i.e., never as a leaf).
+	RecentUnitForFood(ctx context.Context, foodID int64) (string, error)
+
 	SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*Plate, error)
 }

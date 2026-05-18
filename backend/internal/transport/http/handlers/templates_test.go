@@ -312,9 +312,9 @@ func TestTemplatesHandler_Create_Range_201(t *testing.T) {
 	rr := &stubRangeReader{
 		rangeFn: func(_ context.Context, from, to time.Time) ([]plate.Plate, error) {
 			return []plate.Plate{
-				{ID: 1, Date: d0, SlotID: 1, Components: []plate.PlateComponent{{FoodID: 10, Portions: 1}}},
-				{ID: 2, Date: d1, SlotID: 1, Components: []plate.PlateComponent{{FoodID: 20, Portions: 1}}},
-				{ID: 3, Date: d2, SlotID: 1, Components: []plate.PlateComponent{{FoodID: 30, Portions: 1}}},
+				{ID: 1, Date: d0, SlotID: 1, Components: []plate.PlateComponent{composedComponent(10, 1)}},
+				{ID: 2, Date: d1, SlotID: 1, Components: []plate.PlateComponent{composedComponent(20, 1)}},
+				{ID: 3, Date: d2, SlotID: 1, Components: []plate.PlateComponent{composedComponent(30, 1)}},
 			}, nil
 		},
 	}

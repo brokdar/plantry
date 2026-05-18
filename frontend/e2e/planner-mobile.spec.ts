@@ -25,7 +25,7 @@ async function seedPlate(
   })
   const plate = (await r.json()) as { id: number }
   await ctx.post(`/api/plates/${plate.id}/components`, {
-    data: { food_id: foodId, portions: 1 },
+    data: { food_id: foodId, amount: 100, unit: "g" },
   })
   await ctx.dispose()
   return plate

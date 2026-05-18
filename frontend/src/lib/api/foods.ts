@@ -240,6 +240,20 @@ export function getFoodNutrition(id: number): Promise<FoodNutrition> {
   return apiFetch(`/foods/${id}/nutrition`)
 }
 
+export interface FoodMacrosEntry {
+  food_id: number
+  macros: FoodNutrition
+}
+
+/** GET /api/foods/macros?ids=1,2,3 — batch per-portion (composed) or per-100g
+ *  (leaf) macros. Unknown ids are silently omitted. Returns `{ foods: [] }`
+ *  when given no resolvable ids. Throws on empty/missing `ids` (400). */
+export function listFoodMacros(
+  ids: readonly number[]
+): Promise<{ foods: FoodMacrosEntry[] }> {
+  return apiFetch(`/foods/macros?ids=${ids.join(",")}`)
+}
+
 export function setFoodFavorite(id: number, favorite: boolean): Promise<Food> {
   return apiFetch(`/foods/${id}/favorite`, {
     method: "POST",
@@ -330,4 +344,10 @@ export function syncPortions(id: number): Promise<SyncPortionsResponse> {
 export function refetchFood(id: number, lang?: string): Promise<Food> {
   const qs = lang ? `?lang=${encodeURIComponent(lang)}` : ""
   return apiFetch(`/foods/${id}/refetch${qs}`, { method: "POST" })
+}
+
+/** GET /api/foods/:id/recent-unit — most-recently-used unit for a leaf food
+ *  on any plate, or null if the food has never been added with a unit. */
+export function getRecentUnit(id: number): Promise<{ unit: string | null }> {
+  return apiFetch(`/foods/${id}/recent-unit`)
 }

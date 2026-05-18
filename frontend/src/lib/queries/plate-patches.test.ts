@@ -10,7 +10,7 @@ import {
   patchDeletePlate,
   patchRemoveComponent,
   patchSwapComponent,
-  patchUpdateComponentPortions,
+  patchUpdateComponentQuantity,
   patchUpdatePlate,
 } from "./plate-patches"
 
@@ -120,9 +120,24 @@ describe("plate patches", () => {
     expect(pc?.portions).toBe(5)
   })
 
-  test("patchUpdateComponentPortions sets portions only", () => {
-    const next = patchUpdateComponentPortions(week(), 100, 7)
-    expect(next?.plates[0].components[0].portions).toBe(7)
+  test("patchUpdateComponentQuantity composed sets portions and clears leaf fields", () => {
+    const next = patchUpdateComponentQuantity(week(), 100, { portions: 7 })
+    const pc = next?.plates[0].components[0]
+    expect(pc?.portions).toBe(7)
+    expect(pc?.amount).toBeUndefined()
+    expect(pc?.unit).toBeUndefined()
+    expect(pc?.grams).toBeUndefined()
+  })
+
+  test("patchUpdateComponentQuantity leaf sets amount+unit and clears portions", () => {
+    const next = patchUpdateComponentQuantity(week(), 101, {
+      amount: 250,
+      unit: "g",
+    })
+    const pc = next?.plates[0].components[1]
+    expect(pc?.portions).toBeUndefined()
+    expect(pc?.amount).toBe(250)
+    expect(pc?.unit).toBe("g")
   })
 
   test("patchRemoveComponent strips by pcId", () => {
@@ -147,7 +162,9 @@ describe("plate patches", () => {
     expect(patchAddComponent(undefined, 1, {} as never)).toBeUndefined()
     expect(patchSwapComponent(undefined, 1, 2)).toBeUndefined()
     expect(patchRemoveComponent(undefined, 1)).toBeUndefined()
-    expect(patchUpdateComponentPortions(undefined, 1, 1)).toBeUndefined()
+    expect(
+      patchUpdateComponentQuantity(undefined, 1, { portions: 1 })
+    ).toBeUndefined()
     expect(patchUpdatePlate(undefined, 1, {})).toBeUndefined()
   })
 })

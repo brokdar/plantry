@@ -4,7 +4,6 @@ import {
   ArrowLeftRight,
   BookmarkPlus,
   Heart,
-  Minus,
   Plus,
   Sparkles,
   StickyNote,
@@ -14,10 +13,16 @@ import {
   Utensils,
   X,
 } from "lucide-react"
-import { useId, useMemo } from "react"
+import { useId, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { PortionStepper } from "@/components/component/PortionStepper"
 import {
+  QuantityUnitInput,
+  type QuantityUnitValue,
+} from "@/components/component/QuantityUnitInput"
+import {
+  categoryForFood,
   FoodPlaceholder,
   type FoodPlaceholderCategory,
 } from "@/components/editorial/FoodPlaceholder"
@@ -31,13 +36,22 @@ import {
 } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import type { Food } from "@/lib/api/foods"
-import type { Plate, PlateComponent } from "@/lib/api/plates"
-import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import {
+  componentMultiplier,
+  type MacrosResponse,
+  type Plate,
+  type PlateComponent,
+  type PlateComponentQuantity,
+} from "@/lib/api/plates"
+import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
+import { useFoodMacros } from "@/lib/queries/foods"
+import {
+  usePlateMacros,
   useRemovePlateComponent,
   useUpdatePlate,
-  useUpdatePlateComponentPortions,
+  useUpdatePlateComponentQuantity,
 } from "@/lib/queries/plates"
+import { MacroTriad } from "@/components/editorial/macros"
 import { imageURL } from "@/lib/image-url"
 import { slotLabel } from "@/lib/slot-label"
 import { toastError } from "@/lib/toast"
@@ -217,6 +231,31 @@ function SlotSheetBody({
   const heroPc = sorted[0]
   const heroFood = heroPc ? componentsById.get(heroPc.food_id) : undefined
 
+  // Plate-level macros (header summary). Reuses the same query the planner
+  // grid uses, so it's already in cache when the user opens the sheet.
+  const { data: plateMacrosData } = usePlateMacros(rangeFrom, rangeTo)
+  const plateMacros: MacrosResponse | undefined = useMemo(
+    () => plateMacrosData?.plates.find((p) => p.plate_id === plate.id)?.macros,
+    [plateMacrosData, plate.id]
+  )
+
+  // Per-component kcal contribution. Batched per-food macros are fetched
+  // once for all components on this plate; each row then multiplies by its
+  // own quantity using the same shape as the backend `Multiplier` (portions
+  // for composed, grams/100 for leaf).
+  const foodIds = useMemo(
+    () => Array.from(new Set(sorted.map((pc) => pc.food_id))),
+    [sorted]
+  )
+  const { data: foodMacrosData } = useFoodMacros(foodIds)
+  const foodMacrosById = useMemo(() => {
+    const map = new Map<number, MacrosResponse>()
+    for (const entry of foodMacrosData?.foods ?? []) {
+      map.set(entry.food_id, entry.macros)
+    }
+    return map
+  }, [foodMacrosData])
+
   return (
     <>
       <SheetHeader className="gap-2 border-b border-outline-variant/40 bg-surface-container-low/40 px-5 py-4">
@@ -231,9 +270,10 @@ function SlotSheetBody({
             <SheetTitle className="font-heading text-[22px] leading-tight font-bold tracking-tight text-on-surface">
               {slotName}
             </SheetTitle>
-            <SheetDescription className="text-[12.5px] text-on-surface-variant">
-              {t("slot_sheet.description", { count: sorted.length })}
-            </SheetDescription>
+            <SlotSheetMacroSummary
+              macros={plateMacros}
+              componentCount={sorted.length}
+            />
           </div>
           <div className="flex items-center gap-1">
             {aiFilled && (
@@ -273,6 +313,7 @@ function SlotSheetBody({
           plate={plate}
           sorted={sorted}
           componentsById={componentsById}
+          foodMacrosById={foodMacrosById}
           onAdd={onAddComponent}
           onSwap={onSwapComponent}
           onLastRemoved={onDeletePlate}
@@ -298,6 +339,52 @@ function SlotSheetBody({
         onDeletePlate={onDeletePlate}
       />
     </>
+  )
+}
+
+function SlotSheetMacroSummary({
+  macros,
+  componentCount,
+}: {
+  macros: MacrosResponse | undefined
+  componentCount: number
+}) {
+  const { t } = useTranslation()
+  if (!macros) {
+    // Use the existing description copy as a placeholder so the header doesn't
+    // collapse while the macros query is in flight.
+    return (
+      <SheetDescription
+        className="text-[12.5px] text-on-surface-variant"
+        data-testid="slot-sheet-macros-placeholder"
+      >
+        {t("slot_sheet.description", { count: componentCount })}
+      </SheetDescription>
+    )
+  }
+  return (
+    <div className="mt-1 flex flex-col gap-1.5" data-testid="slot-sheet-macros">
+      <div className="flex items-baseline gap-2">
+        <span
+          className="font-heading text-[22px] leading-none font-bold tracking-tight text-on-surface tabular-nums"
+          data-testid="slot-sheet-kcal"
+        >
+          {Math.round(macros.kcal)}
+        </span>
+        <span className="font-heading text-[10.5px] font-bold tracking-[0.22em] text-on-surface-variant uppercase">
+          {t("macro.kcal")}
+        </span>
+      </div>
+      <MacroTriad
+        values={{
+          protein: macros.protein,
+          carbs: macros.carbs,
+          fat: macros.fat,
+        }}
+        size="sm"
+        abbreviated
+      />
+    </div>
   )
 }
 
@@ -344,7 +431,11 @@ function HeroBlock({
         />
       ) : (
         <FoodPlaceholder
-          category={(heroRole ?? "main") as FoodPlaceholderCategory}
+          category={
+            heroFood
+              ? categoryForFood(heroFood)
+              : ((heroRole ?? "main") as FoodPlaceholderCategory)
+          }
           size="lg"
           rounded="none"
           className="h-full w-full"
@@ -384,6 +475,7 @@ function ComponentList({
   plate,
   sorted,
   componentsById,
+  foodMacrosById,
   onAdd,
   onSwap,
   onLastRemoved,
@@ -391,6 +483,7 @@ function ComponentList({
   plate: Plate
   sorted: PlateComponent[]
   componentsById: Map<number, Food>
+  foodMacrosById: Map<number, MacrosResponse>
   onAdd: () => void
   onSwap: (pcId: number, defaultRole?: string) => void
   onLastRemoved: () => void
@@ -438,6 +531,7 @@ function ComponentList({
               plate={plate}
               pc={pc}
               food={componentsById.get(pc.food_id)}
+              foodMacros={foodMacrosById.get(pc.food_id)}
               isLast={sorted.length === 1}
               onSwap={(role) => onSwap(pc.id, role)}
               onLastRemoved={onLastRemoved}
@@ -453,6 +547,7 @@ function ComponentRow({
   plate,
   pc,
   food,
+  foodMacros,
   isLast,
   onSwap,
   onLastRemoved,
@@ -460,12 +555,13 @@ function ComponentRow({
   plate: Plate
   pc: PlateComponent
   food: Food | undefined
+  foodMacros: MacrosResponse | undefined
   isLast: boolean
   onSwap: (role?: string) => void
   onLastRemoved: () => void
 }) {
   const { t } = useTranslation()
-  const updatePortions = useUpdatePlateComponentPortions()
+  const updateQuantity = useUpdatePlateComponentQuantity()
   const removeComponent = useRemovePlateComponent()
 
   const role = food?.kind === "composed" ? (food.role ?? undefined) : undefined
@@ -476,13 +572,27 @@ function ComponentRow({
         })
       : null
 
-  function commit(next: number) {
-    const clamped = Math.max(0.25, Math.round(next * 4) / 4)
-    if (clamped === pc.portions) return
-    updatePortions
-      .mutateAsync({ plateId: plate.id, pcId: pc.id, portions: clamped })
+  function commitQuantity(next: PlateComponentQuantity) {
+    // Cheap idempotency guard: skip the mutation when nothing actually
+    // changed. Composed and leaf are checked against their respective fields.
+    if ("portions" in next && next.portions === pc.portions) return
+    if (
+      "amount" in next &&
+      next.amount === pc.amount &&
+      next.unit === pc.unit
+    ) {
+      return
+    }
+    updateQuantity
+      .mutateAsync({ plateId: plate.id, pcId: pc.id, quantity: next })
       .catch((err) => toastError(err, t))
   }
+
+  const multiplier = componentMultiplier(pc)
+  const componentKcal =
+    foodMacros && multiplier != null
+      ? Math.round(foodMacros.kcal * multiplier)
+      : null
 
   function handleRemove() {
     // If this was the only component, removing it would leave an orphan
@@ -496,6 +606,27 @@ function ComponentRow({
       .mutateAsync({ plateId: plate.id, pcId: pc.id })
       .catch((err) => toastError(err, t))
   }
+
+  // Pick the right quantity control by food kind. Composed → integer
+  // stepper; leaf → compact `QuantityUnitInput`. Falling back to the stepper
+  // when the food hasn't loaded yet is intentional — it shows what's stored
+  // (`pc.portions ?? 1`) rather than blanking the row.
+  const quantityControl =
+    food?.kind === "leaf" ? (
+      <LeafQuantityControl
+        food={food}
+        pc={pc}
+        onChange={(next) =>
+          commitQuantity({ amount: next.amount, unit: next.unit })
+        }
+      />
+    ) : (
+      <PortionStepper
+        value={pc.portions ?? 1}
+        onChange={(next) => commitQuantity({ portions: next })}
+        size="md"
+      />
+    )
 
   return (
     <li
@@ -511,7 +642,11 @@ function ComponentRow({
           />
         ) : (
           <FoodPlaceholder
-            category={(role ?? "main") as FoodPlaceholderCategory}
+            category={
+              food
+                ? categoryForFood(food)
+                : ((role ?? "main") as FoodPlaceholderCategory)
+            }
             size="sm"
             rounded="lg"
             className="h-full w-full"
@@ -528,7 +663,15 @@ function ComponentRow({
           </span>
         )}
       </div>
-      <PortionStepper value={pc.portions} onChange={commit} />
+      <span
+        className="min-w-[3.4rem] text-right font-mono text-[11px] text-on-surface-variant tabular-nums"
+        data-testid={`slot-sheet-row-kcal-${pc.id}`}
+      >
+        {componentKcal != null
+          ? `${componentKcal} ${t("macro.kcal")}`
+          : `— ${t("macro.kcal")}`}
+      </span>
+      {quantityControl}
       {/* Touch devices have no hover; force the row actions visible there.
         On hover-capable devices, fade in on hover/focus to keep the row tidy. */}
       <div className="flex items-center gap-0.5 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100">
@@ -559,54 +702,39 @@ function ComponentRow({
   )
 }
 
-function PortionStepper({
-  value,
+/**
+ * LeafQuantityControl owns the (amount, unit) state for an editing leaf-row
+ * `QuantityUnitInput`. The local seed runs once on mount because the
+ * enclosing `<li>` is keyed by `pc.id` — when the user opens a different row
+ * the component remounts and reseeds. Holding state here (instead of
+ * re-deriving from `pc` every render) keeps in-flight keystrokes alive while
+ * the plate query refetches after each commit.
+ */
+function LeafQuantityControl({
+  food,
+  pc,
   onChange,
 }: {
-  value: number
-  onChange: (next: number) => void
+  food: Food
+  pc: PlateComponent
+  onChange: (next: QuantityUnitValue) => void
 }) {
-  const { t } = useTranslation()
+  const [value, setValue] = useState<QuantityUnitValue>(() => ({
+    amount: pc.amount ?? 100,
+    unit: pc.unit ?? "g",
+  }))
   return (
-    <div
-      className="flex items-center gap-0 rounded-full border border-outline-variant/50 bg-surface-container-lowest"
-      role="group"
-      aria-label={t("plate.portions")}
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`${t("plate.portions")} −0.25`}
-        onClick={() => onChange(Math.max(0.25, value - 0.25))}
-        className="size-6 rounded-full text-on-surface-variant"
-        disabled={value <= 0.25}
-      >
-        <Minus className="h-3 w-3" />
-      </Button>
-      <span
-        className="min-w-[2.4rem] text-center font-mono text-[12px] font-semibold text-on-surface tabular-nums"
-        data-testid="slot-sheet-portions-value"
-      >
-        ×{formatPortions(value)}
-      </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`${t("plate.portions")} +0.25`}
-        onClick={() => onChange(value + 0.25)}
-        className="size-6 rounded-full text-on-surface-variant"
-      >
-        <Plus className="h-3 w-3" />
-      </Button>
-    </div>
+    <QuantityUnitInput
+      food={food}
+      value={value}
+      onChange={(next) => {
+        setValue(next)
+        onChange(next)
+      }}
+      compact
+      className="min-w-[14rem]"
+    />
   )
-}
-
-function formatPortions(n: number): string {
-  if (Number.isInteger(n)) return `${n}.0`
-  return n.toFixed(2).replace(/0$/, "")
 }
 
 function NoteField({
@@ -760,11 +888,11 @@ function ActionFooter({
   const { t } = useTranslation()
   const skipLabel = skipped ? t("skip.unmark") : t("skip.mark")
   return (
-    <footer className="border-t border-outline-variant/40 bg-surface-container-low/60 px-5 py-3">
-      {/* Save and Skip share the row equally and truncate their labels in
-        long-string locales (German). Delete is always icon-only — the trash
-        glyph is universal and avoids pushing the row past the 390 px sheet
-        width on mobile. */}
+    <footer className="border-t border-outline-variant/40 bg-surface-container-low/60 px-4 py-3 sm:px-5">
+      {/* On narrow widths (mobile bottom sheet, ~375 px) the labels are
+        hidden and the buttons collapse to icon + aria-label. Above sm the
+        full labels return; the destroy icon stays icon-only at every width
+        because the trash glyph is universal. */}
       <div className="flex items-center gap-1.5">
         <Button
           type="button"
@@ -772,10 +900,14 @@ function ActionFooter({
           size="sm"
           onClick={onSaveAsTemplate}
           data-testid="slot-sheet-save-template"
-          className="h-8 min-w-0 flex-1 justify-start gap-1.5 text-on-surface-variant hover:text-on-surface"
+          aria-label={t("template.save_as")}
+          title={t("template.save_as")}
+          className="h-8 min-w-0 flex-1 justify-center gap-1.5 text-on-surface-variant hover:text-on-surface sm:justify-start"
         >
           <BookmarkPlus className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{t("template.save_as")}</span>
+          <span className="hidden truncate sm:inline">
+            {t("template.save_as")}
+          </span>
         </Button>
         <Button
           type="button"
@@ -784,10 +916,11 @@ function ActionFooter({
           onClick={onToggleSkip}
           data-testid="slot-sheet-skip"
           aria-label={skipLabel}
-          className="h-8 min-w-0 flex-1 justify-start gap-1.5 text-on-surface-variant hover:text-on-surface"
+          title={skipLabel}
+          className="h-8 min-w-0 flex-1 justify-center gap-1.5 text-on-surface-variant hover:text-on-surface sm:justify-start"
         >
           <Utensils className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{skipLabel}</span>
+          <span className="hidden truncate sm:inline">{skipLabel}</span>
         </Button>
         <Button
           type="button"

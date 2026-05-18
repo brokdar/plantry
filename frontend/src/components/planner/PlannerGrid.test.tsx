@@ -18,6 +18,7 @@ vi.mock("@/lib/queries/plates", () => ({
   useSetPlateSkipped: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useSwapPlateComponent: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useAddPlateComponent: vi.fn(() => ({ mutateAsync: vi.fn() })),
+  usePlateMacros: vi.fn(() => ({ data: { plates: [] } })),
 }))
 vi.mock("@/lib/queries/feedback", () => ({
   useRecordFeedback: vi.fn(() => ({ mutateAsync: vi.fn() })),

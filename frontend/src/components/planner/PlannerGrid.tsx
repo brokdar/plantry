@@ -32,7 +32,12 @@ import {
   DndCellWrapper,
   type DragPayload,
 } from "@/components/planner/DndCellWrapper"
-import { addPlateComponent, createPlate, deletePlate } from "@/lib/api/plates"
+import {
+  addPlateComponent,
+  componentToAddInput,
+  createPlate,
+  deletePlate,
+} from "@/lib/api/plates"
 import { handleGridArrowKey } from "@/lib/planner-keynav"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
@@ -44,12 +49,13 @@ import {
 } from "@/lib/queries/pending-plate-deletes"
 import { shoppingKeys } from "@/lib/queries/shopping"
 import type { Food } from "@/lib/api/foods"
-import type { Plate } from "@/lib/api/plates"
+import type { MacrosResponse, Plate } from "@/lib/api/plates"
 import type { TimeSlot } from "@/lib/api/slots"
 import type { NutritionDay } from "@/lib/api/nutrition"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import {
+  usePlateMacros,
   useSetPlateSkipped,
   useSwapPlateComponent,
   useUpdatePlate,
@@ -61,7 +67,11 @@ import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
 
 import { AddComponentSheet } from "./AddComponentSheet"
-import { ComponentTraySheet, type TraySlotContext } from "./ComponentTraySheet"
+import {
+  ComponentTraySheet,
+  type TrayCommitItem,
+  type TraySlotContext,
+} from "./ComponentTraySheet"
 import { DayHeader } from "./DayHeader"
 import { RowApplyTemplateDialog } from "./RowApplyTemplateDialog"
 import { SlotCell } from "./SlotCell"
@@ -298,13 +308,26 @@ export function PlannerGrid({
     return profile.kcal_target / slots.length
   }, [profile?.kcal_target, slots.length])
 
+  // Per-plate macros for the visible window. Indexed by plate id so SlotCell
+  // can render the kcal pill + P/F/C dots without each cell mounting its own
+  // query. The hook key sits under plateKeys.all so any of the existing
+  // plate-list invalidations also drops these.
+  const { data: plateMacrosData } = usePlateMacros(rangeFrom, rangeTo)
+  const macrosByPlateId = useMemo(() => {
+    const map = new Map<number, MacrosResponse>()
+    for (const entry of plateMacrosData?.plates ?? []) {
+      map.set(entry.plate_id, entry.macros)
+    }
+    return map
+  }, [plateMacrosData])
+
   const aiFill = usePlannerUI((s) => s.aiFill)
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
   const markCopyHintSeen = usePlannerUI((s) => s.markCopyHintSeen)
   const aiFilledIds = useMemo(() => new Set(aiFill.plateIds), [aiFill.plateIds])
 
   async function handleTrayCommit(
-    items: { food_id: number; portions: number }[]
+    items: TrayCommitItem[]
   ): Promise<{ failedFoodIds: number[] }> {
     if (!addTarget || items.length === 0) return { failedFoodIds: [] }
     const target = addTarget
@@ -333,13 +356,11 @@ export function PlannerGrid({
 
     // Add components in parallel and survive partial failure: report what
     // didn't land so the tray sheet can keep those staged for retry.
+    // Pass the kind-aware payload through unchanged. The TrayCommitItem
+    // discriminated union exactly matches AddPlateComponentInput, so the
+    // composed/leaf split is preserved end-to-end with no translation.
     const results = await Promise.allSettled(
-      items.map((it) =>
-        addPlateComponent(plateId!, {
-          food_id: it.food_id,
-          portions: it.portions,
-        })
-      )
+      items.map((it) => addPlateComponent(plateId!, it))
     )
     const failedFoodIds: number[] = []
     let firstError: unknown
@@ -568,10 +589,7 @@ export function PlannerGrid({
       await Promise.all(
         created.flatMap((p) =>
           source!.plate.components.map((pc) =>
-            addPlateComponent(p.id, {
-              food_id: pc.food_id,
-              portions: pc.portions,
-            })
+            addPlateComponent(p.id, componentToAddInput(pc))
           )
         )
       )
@@ -722,10 +740,7 @@ export function PlannerGrid({
           note: src.note ?? undefined,
         })
         for (const pc of src.components) {
-          await addPlateComponent(created.id, {
-            food_id: pc.food_id,
-            portions: pc.portions,
-          })
+          await addPlateComponent(created.id, componentToAddInput(pc))
         }
         void queryClient.invalidateQueries({
           queryKey: plateKeys.range(rangeFrom, rangeTo),
@@ -829,7 +844,11 @@ export function PlannerGrid({
                             slotId={slot.id}
                             plate={plate}
                             componentsById={componentsById}
+                            macros={
+                              plate ? macrosByPlateId.get(plate.id) : undefined
+                            }
                             kcalTarget={kcalPerSlotTarget}
+                            showMacros={false}
                             aiFilled={plate ? aiFilledIds.has(plate.id) : false}
                             onAdd={() => openPicker(dayIdx, slot.id)}
                             onOpenSheet={
@@ -900,6 +919,13 @@ export function PlannerGrid({
             addTarget ? buildTrayContext(addTarget, days, slotsById) : null
           }
           recentFoods={recentFoods}
+          existingComponents={
+            addTarget
+              ? (findPlateInDay(days[addTarget.day]!, addTarget.slotId)
+                  ?.components ?? [])
+              : []
+          }
+          foodById={componentsById}
           onOpenChange={(o) => !o && setAddTarget(null)}
           onCommit={(items) => handleTrayCommit(items)}
         />

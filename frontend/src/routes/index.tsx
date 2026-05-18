@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/tooltip"
 import {
   addPlateComponent,
+  componentToAddInput,
   createPlate,
   deletePlate,
   listPlates,
@@ -270,10 +271,7 @@ function PlanPage() {
       await Promise.all(
         createdPlates.flatMap((created, idx) =>
           sourcePlates[idx]!.components.map((pc) =>
-            addPlateComponent(created.id, {
-              food_id: pc.food_id,
-              portions: pc.portions,
-            })
+            addPlateComponent(created.id, componentToAddInput(pc))
           )
         )
       )

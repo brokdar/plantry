@@ -7,6 +7,7 @@ import {
   getFood,
   getFoodNutrition,
   getInsights,
+  listFoodMacros,
   listFoods,
   listPortions,
   listVariants,
@@ -46,6 +47,17 @@ export function useFoodNutrition(id: number) {
     queryKey: foodKeys.nutrition(id),
     queryFn: () => getFoodNutrition(id),
     enabled: id > 0,
+  })
+}
+
+/** Batch per-portion (composed) or per-100g (leaf) macros for the given food
+ *  ids. Pass an empty list to disable. The query key sorts ids so callers
+ *  passing the same set in different order share cache. */
+export function useFoodMacros(ids: readonly number[]) {
+  return useQuery({
+    queryKey: foodKeys.macrosBatch(ids),
+    queryFn: () => listFoodMacros(ids),
+    enabled: ids.length > 0,
   })
 }
 

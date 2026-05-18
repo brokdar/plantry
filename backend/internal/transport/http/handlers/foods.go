@@ -2,13 +2,16 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
@@ -503,6 +506,69 @@ func (h *FoodHandler) Nutrition(w http.ResponseWriter, r *http.Request) {
 		Kcal: m.Kcal, Protein: m.Protein, Fat: m.Fat,
 		Carbs: m.Carbs, Fiber: m.Fiber, Sodium: m.Sodium,
 	})
+}
+
+// foodMacrosEntry is one item in the batch macros response. Macros are
+// per-portion for composed foods and per-100 g for leaf foods, mirroring
+// `NutritionResolver.PerPortion`.
+type foodMacrosEntry struct {
+	FoodID int64          `json:"food_id"`
+	Macros macrosResponse `json:"macros"`
+}
+
+type foodMacrosResponse struct {
+	Foods []foodMacrosEntry `json:"foods"`
+}
+
+// BatchMacros handles GET /api/foods/macros?ids=1,2,3.
+//
+// Unknown ids are silently omitted from the response so a single bad id
+// doesn't sink the whole batch — callers (e.g. the planner tray) usually
+// want a best-effort lookup.
+func (h *FoodHandler) BatchMacros(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("ids"))
+	if raw == "" {
+		writeError(w, http.StatusBadRequest, "error.invalid_query")
+		return
+	}
+	parts := strings.Split(raw, ",")
+	ids := make([]int64, 0, len(parts))
+	seen := make(map[int64]struct{}, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(p, 10, 64)
+		if err != nil || id <= 0 {
+			writeError(w, http.StatusBadRequest, "error.invalid_query")
+			return
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		writeError(w, http.StatusBadRequest, "error.invalid_query")
+		return
+	}
+
+	out := make([]foodMacrosEntry, 0, len(ids))
+	for _, id := range ids {
+		m, err := h.resolver.PerPortion(r.Context(), id)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				continue
+			}
+			status, key := foodHTTPError(err)
+			writeError(w, status, key)
+			return
+		}
+		out = append(out, foodMacrosEntry{FoodID: id, Macros: toMacrosResponse(m)})
+	}
+	writeJSON(w, http.StatusOK, foodMacrosResponse{Foods: out})
 }
 
 type foodFavoriteRequest struct {

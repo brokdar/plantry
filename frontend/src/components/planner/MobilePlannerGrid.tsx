@@ -22,11 +22,16 @@ import {
   addPlateComponent,
   createPlate,
   deletePlate,
+  type MacrosResponse,
   type Plate,
 } from "@/lib/api/plates"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
-import { useSetPlateSkipped, useUpdatePlate } from "@/lib/queries/plates"
+import {
+  usePlateMacros,
+  useSetPlateSkipped,
+  useUpdatePlate,
+} from "@/lib/queries/plates"
 import { useProfile } from "@/lib/queries/profile"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
@@ -47,7 +52,11 @@ import { suggestDayName } from "@/lib/template-suggest"
 import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
-import { ComponentTraySheet, type TraySlotContext } from "./ComponentTraySheet"
+import {
+  ComponentTraySheet,
+  type TrayCommitItem,
+  type TraySlotContext,
+} from "./ComponentTraySheet"
 import { MobileSlotRow } from "./MobileSlotRow"
 import type { PlannerDay } from "./PlannerGrid"
 import { SlotCell } from "./SlotCell"
@@ -132,6 +141,16 @@ export function MobilePlannerGrid({
     if (!profile?.kcal_target || slots.length === 0) return null
     return profile.kcal_target / slots.length
   }, [profile?.kcal_target, slots.length])
+
+  // Per-plate macros for the visible window (mirrors PlannerGrid).
+  const { data: plateMacrosData } = usePlateMacros(rangeFrom, rangeTo)
+  const macrosByPlateId = useMemo(() => {
+    const map = new Map<number, MacrosResponse>()
+    for (const entry of plateMacrosData?.plates ?? []) {
+      map.set(entry.plate_id, entry.macros)
+    }
+    return map
+  }, [plateMacrosData])
 
   // Default to today's index; fall back to 0 if today isn't in the window.
   const todayStr = new Date().toISOString().slice(0, 10)
@@ -314,7 +333,7 @@ export function MobilePlannerGrid({
   }
 
   async function handleTrayCommit(
-    items: { food_id: number; portions: number }[]
+    items: TrayCommitItem[]
   ): Promise<{ failedFoodIds: number[] }> {
     if (!addTarget || items.length === 0) return { failedFoodIds: [] }
     const target = addTarget
@@ -337,13 +356,10 @@ export function MobilePlannerGrid({
       return { failedFoodIds: items.map((i) => i.food_id) }
     }
 
+    // Pass the kind-aware payload through unchanged (see PlannerGrid for the
+    // rationale).
     const results = await Promise.allSettled(
-      items.map((it) =>
-        addPlateComponent(plateId, {
-          food_id: it.food_id,
-          portions: it.portions,
-        })
-      )
+      items.map((it) => addPlateComponent(plateId, it))
     )
     const failedFoodIds: number[] = []
     let firstError: unknown
@@ -605,6 +621,7 @@ export function MobilePlannerGrid({
                   slotId={slot.id}
                   plate={plate}
                   componentsById={componentsById}
+                  macros={plate ? macrosByPlateId.get(plate.id) : undefined}
                   kcalTarget={kcalPerSlotTarget}
                   onAdd={() => openPicker(activeDay, slot.id)}
                   onOpenSheet={
@@ -660,6 +677,14 @@ export function MobilePlannerGrid({
         open={addTarget !== null}
         context={addTarget ? buildTrayContext(addTarget) : null}
         recentFoods={recentFoods}
+        existingComponents={
+          addTarget
+            ? (days[addTarget.dayIdx]?.plates.find(
+                (p) => p.slot_id === addTarget.slotId
+              )?.components ?? [])
+            : []
+        }
+        foodById={componentsById}
         side="bottom"
         onOpenChange={(o) => !o && setAddTarget(null)}
         onCommit={(items) => handleTrayCommit(items)}

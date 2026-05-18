@@ -146,13 +146,17 @@ func TestNutritionRange_200_HappyPath(t *testing.T) {
 	// Seed plates on two different dates.
 	d1, _ := time.Parse("2006-01-02", "2026-04-26")
 	d2, _ := time.Parse("2006-01-02", "2026-04-27")
+	leaf1 := plate.QuantityFromLegacyPortions("leaf", 1)
+	leaf1.FoodID = f.ID
+	leaf2 := plate.QuantityFromLegacyPortions("leaf", 2)
+	leaf2.FoodID = f.ID
 	p1 := &plate.Plate{
 		Date: d1, SlotID: s.ID,
-		Components: []plate.PlateComponent{{FoodID: f.ID, Portions: 1}},
+		Components: []plate.PlateComponent{leaf1},
 	}
 	p2 := &plate.Plate{
 		Date: d2, SlotID: s.ID,
-		Components: []plate.PlateComponent{{FoodID: f.ID, Portions: 2}},
+		Components: []plate.PlateComponent{leaf2},
 	}
 	require.NoError(t, plateRepo.Create(ctx, p1))
 	require.NoError(t, plateRepo.Create(ctx, p2))

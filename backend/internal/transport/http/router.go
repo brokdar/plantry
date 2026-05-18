@@ -30,6 +30,7 @@ type Handlers struct {
 	Settings       *handlers.SettingsHandler
 	ShoppingRange  *handlers.ShoppingRangeHandler
 	NutritionRange *handlers.NutritionRangeHandler
+	PlateMacros    *handlers.PlateMacrosHandler
 	DevMode        bool // gates dev-only debug endpoints
 }
 
@@ -51,6 +52,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/", h.Foods.List)
 				r.Post("/", h.Foods.Create)
 				r.Get("/insights", h.Foods.Insights)
+				r.Get("/macros", h.Foods.BatchMacros)
 
 				if h.Lookup != nil {
 					r.Get("/lookup", h.Lookup.Lookup)
@@ -67,6 +69,9 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/variants", h.Foods.ListVariants)
 					r.Get("/portions", h.Foods.ListPortions)
 					r.Post("/portions", h.Foods.UpsertPortion)
+					if h.Plates != nil {
+						r.Get("/recent-unit", h.Plates.RecentUnit)
+					}
 					r.Delete("/portions/{unit}", h.Foods.DeletePortion)
 					r.Post("/sync-portions", h.Foods.SyncPortions)
 					if h.Lookup != nil {
@@ -94,6 +99,9 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/", h.Plates.List)
 				r.Post("/", h.Plates.Create)
 				r.Get("/by-date/{date}", h.Plates.Day)
+				if h.PlateMacros != nil {
+					r.Get("/macros", h.PlateMacros.List)
+				}
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.Plates.Get)
 					r.Put("/", h.Plates.Update)

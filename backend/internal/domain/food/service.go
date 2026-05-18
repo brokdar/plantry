@@ -379,16 +379,9 @@ func validateLeafNutrition(f *Food) error {
 
 // ── Grams resolver ────────────────────────────────────────────────────
 
-// resolveGrams populates Grams + GramsSource for each child using the same
-// layered fallback chain as the old component service:
-//
-//  1. Food-specific portion (FDC/OFF-sourced or user-added) — exact.
-//  2. Universal default (mass direct, volume water-density) — exact for mass,
-//     approximate for volume.
-//  3. User-supplied explicit Grams on a count unit or unknown unit — manual.
-//
-// Leaf foods are looked up for portion overrides; composed foods only support
-// mass/volume-default units + manual grams (they don't have own portions).
+// resolveGrams populates Grams + GramsSource for each child via the shared
+// ResolveGrams chain. Each child's Unit is normalised in place so callers
+// see the canonical key on success.
 func (s *Service) resolveGrams(ctx context.Context, children []FoodComponent) error {
 	for i := range children {
 		ch := &children[i]
@@ -397,55 +390,12 @@ func (s *Service) resolveGrams(ctx context.Context, children []FoodComponent) er
 			return fmt.Errorf("%w: child[%d] unit required", domain.ErrInvalidInput, i)
 		}
 		ch.Unit = normalized
-		manualGrams := ch.Grams
-
-		// 1. Food-specific portion lookup (skip bare mass units).
-		if normalized != "g" && normalized != "kg" && normalized != "mg" {
-			portions, err := s.repo.ListPortions(ctx, ch.ChildID)
-			if err != nil {
-				return fmt.Errorf("resolve food %d portions: %w", ch.ChildID, err)
-			}
-			matched := false
-			for _, p := range portions {
-				if units.Normalize(p.Unit) == normalized {
-					ch.Grams = ch.Amount * p.Grams
-					ch.GramsSource = GramsSourcePortion
-					matched = true
-					break
-				}
-			}
-			if matched {
-				continue
-			}
+		grams, source, err := ResolveGrams(ctx, s.repo, ch.ChildID, ch.Amount, normalized, ch.Grams)
+		if err != nil {
+			return fmt.Errorf("child[%d]: %w", i, err)
 		}
-
-		// 2. Universal default.
-		if def, ok := units.LookupDefault(normalized); ok {
-			ch.Grams = ch.Amount * def.Grams
-			switch {
-			case def.Kind == units.KindMass && normalized == "g":
-				ch.GramsSource = GramsSourceDirect
-			case def.Kind == units.KindMass:
-				ch.GramsSource = GramsSourceDefault
-			default:
-				ch.GramsSource = GramsSourceFallback
-			}
-			continue
-		}
-
-		// 3. Manual fallback.
-		if manualGrams > 0 {
-			ch.Grams = manualGrams
-			ch.GramsSource = GramsSourceManual
-			continue
-		}
-
-		if units.IsCount(normalized) {
-			return fmt.Errorf("%w: child %d: unit %q requires a portion or manual grams",
-				domain.ErrInvalidInput, ch.ChildID, normalized)
-		}
-		return fmt.Errorf("%w: unknown unit %q for child %d",
-			domain.ErrInvalidInput, normalized, ch.ChildID)
+		ch.Grams = grams
+		ch.GramsSource = source
 	}
 	return nil
 }

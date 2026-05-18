@@ -42,6 +42,7 @@ type Querier interface {
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
 	GetFood(ctx context.Context, id int64) (Food, error)
+	GetFoodKind(ctx context.Context, id int64) (string, error)
 	GetPlate(ctx context.Context, id int64) (Plate, error)
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
 	GetPlateFeedback(ctx context.Context, plateID int64) (PlateFeedback, error)
@@ -69,6 +70,7 @@ type Querier interface {
 	ListTemplatesByScope(ctx context.Context, scope string) ([]Template, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	MarkFoodCooked(ctx context.Context, arg MarkFoodCookedParams) error
+	RecentUnitForFood(ctx context.Context, foodID int64) (sql.NullString, error)
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)

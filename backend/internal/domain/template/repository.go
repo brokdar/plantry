@@ -24,9 +24,13 @@ type TxRunner interface {
 	RunInTemplateTx(ctx context.Context, fn func(Repository, plate.Repository) error) error
 }
 
-// FoodChecker reports whether a food exists.
+// FoodChecker reports whether a food exists and (for legacy template apply
+// translation) what kind it is.
 type FoodChecker interface {
 	Exists(ctx context.Context, foodID int64) (bool, error)
+	// KindOf returns "leaf" or "composed". Implementations may return an
+	// error wrapping domain.ErrNotFound for unknown ids.
+	KindOf(ctx context.Context, foodID int64) (string, error)
 }
 
 // PlateComponentSource reads the components of a plate (used when cloning a

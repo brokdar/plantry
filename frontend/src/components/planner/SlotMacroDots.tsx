@@ -40,7 +40,22 @@ const TONE_LABEL: Record<Tone, string> = {
 
 export function SlotMacroDots({ macros, kcalTarget }: SlotMacroDotsProps) {
   const { t } = useTranslation()
-  if (!macros) return null
+
+  // Render a fixed-height placeholder so the cell doesn't reflow when the
+  // /plates/macros query resolves on first paint.
+  if (!macros) {
+    return (
+      <div
+        className="flex items-center justify-between gap-2 font-mono text-[10.5px] text-on-surface-variant/50 tabular-nums"
+        aria-hidden
+        data-testid="slot-cell-macros-placeholder"
+      >
+        <span className="font-heading text-[11.5px] font-bold tracking-tight">
+          — {t("macro.kcal")}
+        </span>
+      </div>
+    )
+  }
 
   const tone =
     kcalTarget && kcalTarget > 0 ? macrosTone(macros.kcal, kcalTarget) : null
@@ -56,7 +71,10 @@ export function SlotMacroDots({ macros, kcalTarget }: SlotMacroDotsProps) {
             className={cn("size-1.5 rounded-full ring-2", TONE_COLORS[tone])}
           />
         )}
-        <span className="font-heading text-[11.5px] font-bold tracking-tight text-on-surface">
+        <span
+          className="font-heading text-[11.5px] font-bold tracking-tight text-on-surface"
+          data-testid="slot-cell-kcal"
+        >
           {Math.round(macros.kcal)} {t("macro.kcal")}
         </span>
       </span>

@@ -496,6 +496,19 @@ func (r *FoodRepo) Exists(ctx context.Context, id int64) (bool, error) {
 	return true, nil
 }
 
+// KindOf returns the food's kind ("leaf" or "composed"). Used by callers that
+// need to discriminate quantity shape without paying the cost of a full Get.
+func (r *FoodRepo) KindOf(ctx context.Context, id int64) (string, error) {
+	kind, err := r.q.GetFoodKind(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("%w: food %d", domain.ErrNotFound, id)
+		}
+		return "", err
+	}
+	return kind, nil
+}
+
 // ── Internal ──────────────────────────────────────────────────────────
 
 func (r *FoodRepo) insertComposedChildren(ctx context.Context, qtx *sqlcgen.Queries, f *food.Food) error {

@@ -276,6 +276,7 @@
     "staged_label": "Vorgemerkte Komponenten",
     "staged_count_one": "1 vorgemerkt",
     "staged_count_other": "{{count}} vorgemerkt",
+    "running_total": "Hinzufügen",
     "empty_count": "Nichts vorgemerkt",
     "commit_one": "1 hinzufügen",
     "commit_other": "{{count}} hinzufügen",
@@ -285,7 +286,19 @@
     "partial_failure_one": "1 Komponente konnte nicht hinzugefügt werden — bleibt vorgemerkt.",
     "partial_failure_other": "{{count}} Komponenten konnten nicht hinzugefügt werden — bleiben vorgemerkt.",
     "error_load_foods": "Lebensmittel konnten nicht geladen werden. Erneut versuchen.",
-    "error_load_templates": "Vorlagen konnten nicht geladen werden. Erneut versuchen."
+    "error_load_templates": "Vorlagen konnten nicht geladen werden. Erneut versuchen.",
+    "preview": {
+      "title": "Dieser Teller",
+      "aria_label": "Tellervorschau",
+      "empty": "Noch nichts",
+      "empty_hint": "Wähle unten ein Lebensmittel, um zu beginnen.",
+      "summary_one": "+1 · +{{kcal}} kcal",
+      "summary_other": "+{{count}} · +{{kcal}} kcal",
+      "summary_existing_one": "1 auf Teller",
+      "summary_existing_other": "{{count}} auf Teller",
+      "macro_bar_label": "Aktuelle Makroverteilung — {{kcal}} kcal",
+      "unknown_food": "Unbekanntes Lebensmittel"
+    }
   },
   "picker": {
     "search": {
@@ -332,6 +345,17 @@
     "note_placeholder": "Optionale Notiz zu dieser Mahlzeit...",
     "empty_cell": "Mahlzeit hinzufügen",
     "portions": "Portionen",
+    "quantity": {
+      "portions_label": "Portionen",
+      "amount_label": "Menge",
+      "unit_label": "Einheit",
+      "confidence": {
+        "portion": "exakt",
+        "default": "ca.",
+        "fallback": "geschätzt"
+      },
+      "unknown_unit": "Unbekannte Einheit"
+    },
     "pick_component": "Komponente wählen",
     "filter_by_role": "Nach Rolle filtern",
     "feedback": {
@@ -989,7 +1013,9 @@
     "skip_to_content": "Zum Hauptinhalt springen",
     "close": "Schließen",
     "yes": "Ja",
-    "no": "Nein"
+    "no": "Nein",
+    "collapse": "Einklappen",
+    "remove": "Entfernen"
   },
   "chat": {
     "title": "KI-Assistent",

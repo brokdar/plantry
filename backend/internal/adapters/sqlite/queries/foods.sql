@@ -21,6 +21,9 @@ RETURNING *;
 -- name: GetFood :one
 SELECT * FROM foods WHERE id = ?;
 
+-- name: GetFoodKind :one
+SELECT kind FROM foods WHERE id = ?;
+
 -- name: UpdateFood :one
 UPDATE foods SET
     name               = ?,

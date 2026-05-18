@@ -21,6 +21,24 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
+// leafComponent builds a leaf-style plate.PlateComponent equivalent to the
+// pre-rework "Portions: n" shape: amount = n*100 g, grams = same, source =
+// "direct". Used by tests that don't care about the picky leaf vocabulary
+// and just want a component that contributes the same totals as before.
+func leafComponent(foodID int64, portions float64) plate.PlateComponent {
+	pc := plate.QuantityFromLegacyPortions("leaf", portions)
+	pc.FoodID = foodID
+	return pc
+}
+
+// composedComponent builds a composed-style plate.PlateComponent with integer
+// portions, equivalent to the pre-rework "Portions: n" shape on a recipe.
+func composedComponent(foodID int64, portions int) plate.PlateComponent {
+	pc := plate.QuantityFromLegacyPortions("composed", float64(portions))
+	pc.FoodID = foodID
+	return pc
+}
+
 // ── stub for plateRangeService ────────────────────────────────────────────────
 
 type stubShoppingRangeSvc struct {
@@ -156,8 +174,8 @@ func TestShoppingRange_200_HappyPath(t *testing.T) {
 		Date:   d,
 		SlotID: s.ID,
 		Components: []plate.PlateComponent{
-			{FoodID: f1.ID, Portions: 1},
-			{FoodID: f2.ID, Portions: 2},
+			leafComponent(f1.ID, 1),
+			leafComponent(f2.ID, 2),
 		},
 	}
 	require.NoError(t, plateRepo.Create(ctx, p))
@@ -193,8 +211,8 @@ func TestShoppingRange_200_ItemsAlphabetical(t *testing.T) {
 		Date:   d,
 		SlotID: s.ID,
 		Components: []plate.PlateComponent{
-			{FoodID: zebra.ID, Portions: 1},
-			{FoodID: apple.ID, Portions: 1},
+			leafComponent(zebra.ID, 1),
+			leafComponent(apple.ID, 1),
 		},
 	}
 	require.NoError(t, plateRepo.Create(ctx, p))

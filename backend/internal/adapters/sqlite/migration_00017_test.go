@@ -101,7 +101,11 @@ func TestMigration_TemplateScopes_EntriesPreserved(t *testing.T) {
 // test fails because applyMultiSlot rejects entries with slot_id=NULL.
 func TestMigration_TemplateScopes_LegacyApplySucceeds(t *testing.T) {
 	conn := setupMigration17DB(t)
-	require.NoError(t, goose.UpTo(conn, "migrations", 17))
+	// Apply up through the latest plate-component migration so the sqlc-
+	// generated INSERT columns line up with the live schema. The behavioural
+	// guard (legacy slot_id=NULL templates must apply cleanly) doesn't depend
+	// on the schema version.
+	require.NoError(t, goose.UpTo(conn, "migrations", 18))
 
 	templateRepo := sqlite.NewTemplateRepo(conn)
 	plateRepo := sqlite.NewPlateRepo(conn)

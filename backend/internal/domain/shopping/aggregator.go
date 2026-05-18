@@ -52,7 +52,7 @@ func (r *Resolver) FromPlates(ctx context.Context, plates []plate.Plate) ([]Item
 					e = &Item{FoodID: leafID, Name: names[leafID]}
 					totals[leafID] = e
 				}
-				e.TotalGrams += grams * pc.Portions
+				e.TotalGrams += grams * pc.Multiplier()
 			}
 		}
 	}

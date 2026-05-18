@@ -11,9 +11,12 @@ function macros(kcal: number): MacrosResponse {
 }
 
 describe("SlotMacroDots — target indicator", () => {
-  test("renders nothing when macros are missing", () => {
-    const { container } = render(<SlotMacroDots />)
-    expect(container).toBeEmptyDOMElement()
+  test("renders a placeholder when macros are missing", () => {
+    // Phase 2 reserves the row's height with an aria-hidden placeholder so
+    // the cell doesn't reflow once `usePlateMacros` settles.
+    const { getByTestId, queryByTestId } = render(<SlotMacroDots />)
+    expect(getByTestId("slot-cell-macros-placeholder")).toBeInTheDocument()
+    expect(queryByTestId("slot-cell-kcal")).not.toBeInTheDocument()
   })
 
   test("hides the dot when no kcalTarget is set", () => {
