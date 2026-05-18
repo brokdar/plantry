@@ -1,4 +1,5 @@
 import {
+  Bookmark as BookmarkIcon,
   BookmarkPlus,
   GripVertical,
   MoreVertical,
@@ -34,6 +35,8 @@ import type { Plate } from "@/lib/api/plates"
 import type { MacrosResponse } from "@/lib/api/plates"
 import { cn } from "@/lib/utils"
 
+import { EmptySlotPresetPicker } from "@/components/presets/EmptySlotPresetPicker"
+
 import { AiFilledBadge } from "./AiFilledBadge"
 import { SlotActions } from "./SlotActions"
 import { SlotHero, type SlotHeroComponent } from "./SlotHero"
@@ -43,6 +46,11 @@ import { SlotSides, type SlotSideItem } from "./SlotSides"
 interface SlotCellProps {
   day: number
   slotId: number
+  /** ISO date string (YYYY-MM-DD) for this cell. Optional so existing call
+   *  sites that don't surface a preset picker keep compiling; when present,
+   *  the empty-slot picker uses it as the apply target. */
+  date?: string
+  slotName?: string
   plate: Plate | undefined
   componentsById: Map<number, Food>
   macros?: MacrosResponse
@@ -87,7 +95,12 @@ export function SlotCell(props: SlotCellProps) {
 function EmptySlot({
   onAdd,
   onToggleSkip,
-}: Pick<SlotCellProps, "onAdd" | "onToggleSkip">) {
+  date,
+  slotId,
+  slotName,
+}: Pick<SlotCellProps, "onAdd" | "onToggleSkip" | "date" | "slotName"> & {
+  slotId?: number
+}) {
   const { t } = useTranslation()
   const [popoverOpen, setPopoverOpen] = useState(false)
 
@@ -161,6 +174,29 @@ function EmptySlot({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
+        {date != null && slotId != null && (
+          <EmptySlotPresetPicker
+            slotId={slotId}
+            slotLabel={slotName ?? ""}
+            targetDate={date}
+            trigger={
+              <button
+                type="button"
+                aria-label={t("preset.empty_slot_picker.title", {
+                  slot: slotName ?? "",
+                })}
+                data-testid="slot-empty-preset-trigger"
+                className={cn(
+                  "absolute right-1.5 bottom-9 z-[2] grid size-7 place-items-center rounded-full border border-outline-variant/60 bg-surface-container-lowest text-on-surface-variant/70 shadow-sm transition-[opacity,color,border-color,background-color,transform] duration-150 ease-out hover:-translate-y-px hover:border-primary/50 hover:bg-white hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none",
+                  "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+                )}
+              >
+                <BookmarkIcon className="h-3 w-3" aria-hidden />
+              </button>
+            }
+          />
+        )}
 
         <SkipNotePopoverContent
           initialNote=""

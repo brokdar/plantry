@@ -1,6 +1,8 @@
 import {
   BarChart2,
+  Bookmark,
   BookmarkPlus,
+  CalendarRange,
   Download,
   FileDown,
   Keyboard,
@@ -16,6 +18,7 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { ChatPanel } from "@/components/chat/ChatPanel"
 import { ShortcutCheatsheet } from "@/components/planner/ShortcutCheatsheet"
+import { CopyFromWeekDialog } from "@/components/presets/CopyFromWeekDialog"
 import { SaveAsTemplateDialog } from "@/components/templates/SaveAsTemplateDialog"
 import { TemplatePicker } from "@/components/templates/TemplatePicker"
 import {
@@ -101,6 +104,7 @@ function PlanPage() {
   const [nutritionOpen, setNutritionOpen] = useState(false)
   const [saveRangeOpen, setSaveRangeOpen] = useState(false)
   const [applyWeekOpen, setApplyWeekOpen] = useState(false)
+  const [copyWeekOpen, setCopyWeekOpen] = useState(false)
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false)
 
   // Global `?` shortcut. Lives at the route level so the toolbar menu item
@@ -461,6 +465,20 @@ function PlanPage() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => setCopyWeekOpen(true)}
+                  data-testid="copy-from-week-open"
+                >
+                  <CalendarRange className="size-4" />
+                  {t("preset.copy_week.open")}
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/presets" data-testid="presets-manage">
+                    <Bookmark className="size-4" />
+                    {t("preset.manage")}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setNutritionOpen(true)}>
                   <BarChart2 className="size-4" />
                   {t("nutrition.button")}
@@ -581,6 +599,18 @@ function PlanPage() {
           plateCount: plates.filter((p) => !p.skipped).length,
         }}
         defaultName={weekTemplateName}
+      />
+      <CopyFromWeekDialog
+        open={copyWeekOpen}
+        onOpenChange={setCopyWeekOpen}
+        targetStart={from}
+        defaultSourceStart={
+          from
+            ? new Date(new Date(from).getTime() - 7 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .slice(0, 10)
+            : from
+        }
       />
       <TemplatePicker
         open={applyWeekOpen}

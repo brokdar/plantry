@@ -862,6 +862,10 @@ export function PlannerGrid({
                           <SlotCell
                             day={dayIdx}
                             slotId={slot.id}
+                            date={day.date}
+                            slotName={t(slot.name_key, {
+                              defaultValue: slot.name_key,
+                            })}
                             plate={plate}
                             componentsById={componentsById}
                             macros={
