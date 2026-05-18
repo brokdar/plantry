@@ -14,6 +14,10 @@ import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
+  SaveAsPresetDialog,
+  type SaveAsPresetTarget,
+} from "@/components/presets/SaveAsPresetDialog"
+import {
   SaveAsTemplateDialog,
   type SaveAsTemplateTarget,
 } from "@/components/templates/SaveAsTemplateDialog"
@@ -212,6 +216,9 @@ export function PlannerGrid({
   const [saveTarget, setSaveTarget] = useState<SaveAsTemplateTarget | null>(
     null
   )
+  const [presetTarget, setPresetTarget] = useState<SaveAsPresetTarget | null>(
+    null
+  )
   const [applyDayDate, setApplyDayDate] = useState<string | null>(null)
   const [sheetTarget, setSheetTarget] = useState<SlotSheetTarget | null>(null)
   const [rowApplySlot, setRowApplySlot] = useState<TimeSlot | null>(null)
@@ -231,6 +238,19 @@ export function PlannerGrid({
       scope: "slot",
       plateId,
       componentCount: p.components.length,
+    })
+  }
+
+  function openSavePreset(plateId: number) {
+    const p = findPlateById(plateId)
+    if (!p) return
+    // Suggest the first component's food name; falls back to "Plate".
+    const firstFoodID = p.components[0]?.food_id
+    const food =
+      firstFoodID != null ? componentsById.get(firstFoodID) : undefined
+    setPresetTarget({
+      plateIds: [plateId],
+      defaultName: food?.name ?? "",
     })
   }
 
@@ -862,6 +882,9 @@ export function PlannerGrid({
                             onSaveAsTemplate={
                               plate ? () => openSaveSlot(plate.id) : undefined
                             }
+                            onSaveAsPreset={
+                              plate ? () => openSavePreset(plate.id) : undefined
+                            }
                             onToggleFavorite={() => {
                               const hero = plate?.components
                                 .slice()
@@ -940,6 +963,11 @@ export function PlannerGrid({
           onOpenChange={(o) => !o && setSaveTarget(null)}
           target={saveTarget}
           defaultName={saveTargetSuggestion}
+        />
+        <SaveAsPresetDialog
+          open={presetTarget !== null}
+          onOpenChange={(o) => !o && setPresetTarget(null)}
+          target={presetTarget}
         />
         <TemplatePicker
           open={applyDayDate !== null}

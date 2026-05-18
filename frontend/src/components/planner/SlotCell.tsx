@@ -59,6 +59,7 @@ interface SlotCellProps {
   onOpenSheet?: () => void
   onDeletePlate: () => void
   onSaveAsTemplate?: () => void
+  onSaveAsPreset?: () => void
   onToggleFavorite: () => void
   /** Toggle skip. Pass an explicit `note` (string or null) to set/clear the
    *  note alongside the toggle; omit to preserve the existing note. */
@@ -368,6 +369,7 @@ function PlannedSlot({
   onOpenSheet,
   onDeletePlate,
   onSaveAsTemplate,
+  onSaveAsPreset,
   onToggleFavorite,
   onToggleSkip,
   onRateLoved,
@@ -500,6 +502,12 @@ function PlannedSlot({
                   <DropdownMenuItem onClick={onSaveAsTemplate}>
                     <BookmarkPlus className="h-3 w-3" />
                     {t("template.save_as")}
+                  </DropdownMenuItem>
+                )}
+                {onSaveAsPreset && (
+                  <DropdownMenuItem onClick={onSaveAsPreset}>
+                    <BookmarkPlus className="h-3 w-3" />
+                    {t("preset.save_as")}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />

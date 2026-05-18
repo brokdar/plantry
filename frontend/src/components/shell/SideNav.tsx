@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import {
   BookOpen,
+  Bookmark,
   Calendar,
   CalendarDays,
   ChevronLeft,
@@ -29,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/components", labelKey: "nav.recipes", icon: BookOpen },
   { to: "/ingredients", labelKey: "nav.ingredients", icon: Package },
   { to: "/templates", labelKey: "nav.templates", icon: ClipboardList },
+  { to: "/presets", labelKey: "nav.presets", icon: Bookmark },
   { to: "/calendar", labelKey: "nav.calendar", icon: Calendar },
   { to: "/settings", labelKey: "nav.settings", icon: Settings },
 ]
