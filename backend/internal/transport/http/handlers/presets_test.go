@@ -27,6 +27,9 @@ type stubPresetService struct {
 	deleteFn    func(ctx context.Context, id int64) error
 	duplicateFn func(ctx context.Context, id int64) (*preset.Preset, error)
 	knownFn     func(ctx context.Context, limit int) ([]preset.TagUsage, error)
+	applyFn     func(ctx context.Context, id int64, req preset.ApplyRequest) (*preset.ApplyResult, error)
+	copyWeekFn  func(ctx context.Context, req preset.CopyWeekRequest) (*preset.ApplyResult, error)
+	undoFn      func(ctx context.Context, snap preset.ApplySnapshot) error
 }
 
 func (s *stubPresetService) CreateFromPlates(ctx context.Context, in preset.CreateFromPlatesInput) (*preset.Preset, error) {
@@ -87,6 +90,27 @@ func (s *stubPresetService) KnownTags(ctx context.Context, limit int) ([]preset.
 		return s.knownFn(ctx, limit)
 	}
 	return nil, nil
+}
+
+func (s *stubPresetService) Apply(ctx context.Context, id int64, req preset.ApplyRequest) (*preset.ApplyResult, error) {
+	if s.applyFn != nil {
+		return s.applyFn(ctx, id, req)
+	}
+	return &preset.ApplyResult{}, nil
+}
+
+func (s *stubPresetService) CopyWeek(ctx context.Context, req preset.CopyWeekRequest) (*preset.ApplyResult, error) {
+	if s.copyWeekFn != nil {
+		return s.copyWeekFn(ctx, req)
+	}
+	return &preset.ApplyResult{}, nil
+}
+
+func (s *stubPresetService) UndoApply(ctx context.Context, snap preset.ApplySnapshot) error {
+	if s.undoFn != nil {
+		return s.undoFn(ctx, snap)
+	}
+	return nil
 }
 
 func newPresetRouter(svc *stubPresetService) http.Handler {

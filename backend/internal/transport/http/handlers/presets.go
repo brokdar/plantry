@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 )
 
@@ -24,6 +25,9 @@ type presetService interface {
 	Delete(ctx context.Context, id int64) error
 	Duplicate(ctx context.Context, id int64) (*preset.Preset, error)
 	KnownTags(ctx context.Context, limit int) ([]preset.TagUsage, error)
+	Apply(ctx context.Context, presetID int64, req preset.ApplyRequest) (*preset.ApplyResult, error)
+	CopyWeek(ctx context.Context, req preset.CopyWeekRequest) (*preset.ApplyResult, error)
+	UndoApply(ctx context.Context, snap preset.ApplySnapshot) error
 }
 
 // PresetHandler exposes preset CRUD endpoints. Apply + copy-week routes are
@@ -384,4 +388,225 @@ func parsePresetID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+// applyResultPlateItem is one entry in the {created,replaced} arrays of an
+// apply or copy-week response.
+type applyResultPlateItem struct {
+	ID     int64  `json:"id"`
+	Date   string `json:"date"`
+	SlotID int64  `json:"slot_id"`
+}
+
+type applyResultReplacedItem struct {
+	NewPlate applyResultPlateItem `json:"new_plate"`
+	OldPlate applyResultPlateItem `json:"old_plate"`
+}
+
+type applyResultSkipItem struct {
+	Date   *string `json:"date,omitempty"`
+	SlotID int64   `json:"slot_id"`
+}
+
+type applySnapshotPayload struct {
+	CreatedPlateIDs []int64                  `json:"created_plate_ids"`
+	ReplacedPlates  []applySnapshotPlateItem `json:"replaced_plates"`
+}
+
+type applySnapshotPlateItem struct {
+	Date       string                       `json:"date"`
+	SlotID     int64                        `json:"slot_id"`
+	Note       *string                      `json:"note,omitempty"`
+	Skipped    bool                         `json:"skipped"`
+	Components []applySnapshotComponentItem `json:"components"`
+}
+
+type applySnapshotComponentItem struct {
+	FoodID      int64    `json:"food_id"`
+	Portions    *int     `json:"portions,omitempty"`
+	Amount      *float64 `json:"amount,omitempty"`
+	Unit        *string  `json:"unit,omitempty"`
+	Grams       *float64 `json:"grams,omitempty"`
+	GramsSource *string  `json:"grams_source,omitempty"`
+	SortOrder   int      `json:"sort_order"`
+}
+
+type applyResponse struct {
+	Created         []applyResultPlateItem    `json:"created"`
+	Replaced        []applyResultReplacedItem `json:"replaced"`
+	SkippedOccupied []applyResultSkipItem     `json:"skipped_occupied"`
+	SkippedNoSlot   []applyResultSkipItem     `json:"skipped_no_slot"`
+	Snapshot        applySnapshotPayload      `json:"snapshot"`
+}
+
+func toApplyResponse(r *preset.ApplyResult) applyResponse {
+	out := applyResponse{
+		Created:         make([]applyResultPlateItem, len(r.Created)),
+		Replaced:        make([]applyResultReplacedItem, len(r.Replaced)),
+		SkippedOccupied: make([]applyResultSkipItem, len(r.SkippedOccupied)),
+		SkippedNoSlot:   make([]applyResultSkipItem, len(r.SkippedNoSlot)),
+		Snapshot: applySnapshotPayload{
+			CreatedPlateIDs: append([]int64{}, r.Snapshot.CreatedPlateIDs...),
+			ReplacedPlates:  make([]applySnapshotPlateItem, len(r.Snapshot.ReplacedPlates)),
+		},
+	}
+	for i, p := range r.Created {
+		out.Created[i] = applyResultPlateItem{ID: p.ID, Date: p.DateString(), SlotID: p.SlotID}
+	}
+	for i, ri := range r.Replaced {
+		out.Replaced[i] = applyResultReplacedItem{
+			NewPlate: applyResultPlateItem{ID: ri.NewPlate.ID, Date: ri.NewPlate.DateString(), SlotID: ri.NewPlate.SlotID},
+			OldPlate: applyResultPlateItem{ID: ri.OldPlate.ID, Date: ri.OldPlate.DateString(), SlotID: ri.OldPlate.SlotID},
+		}
+	}
+	for i, s := range r.SkippedOccupied {
+		d := s.Date.Format("2006-01-02")
+		out.SkippedOccupied[i] = applyResultSkipItem{Date: &d, SlotID: s.SlotID}
+	}
+	for i, s := range r.SkippedNoSlot {
+		d := s.Date.Format("2006-01-02")
+		out.SkippedNoSlot[i] = applyResultSkipItem{Date: &d, SlotID: s.SlotID}
+	}
+	for i, p := range r.Snapshot.ReplacedPlates {
+		comps := make([]applySnapshotComponentItem, len(p.Components))
+		for j, c := range p.Components {
+			comps[j] = applySnapshotComponentItem{
+				FoodID:      c.FoodID,
+				Portions:    c.Portions,
+				Amount:      c.Amount,
+				Unit:        c.Unit,
+				Grams:       c.Grams,
+				GramsSource: c.GramsSource,
+				SortOrder:   c.SortOrder,
+			}
+		}
+		out.Snapshot.ReplacedPlates[i] = applySnapshotPlateItem{
+			Date:       p.DateString(),
+			SlotID:     p.SlotID,
+			Note:       p.Note,
+			Skipped:    p.Skipped,
+			Components: comps,
+		}
+	}
+	return out
+}
+
+type applyPresetRequest struct {
+	TargetDate    string  `json:"target_date"`
+	OnConflict    string  `json:"on_conflict,omitempty"`
+	SlotIDsFilter []int64 `json:"slot_ids_filter,omitempty"`
+}
+
+// Apply handles POST /api/presets/{id}/apply.
+func (h *PresetHandler) Apply(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePresetID(w, r)
+	if !ok {
+		return
+	}
+	var req applyPresetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	target, err := time.Parse("2006-01-02", req.TargetDate)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_date")
+		return
+	}
+	result, err := h.svc.Apply(r.Context(), id, preset.ApplyRequest{
+		TargetDate:    target,
+		OnConflict:    preset.ConflictMode(req.OnConflict),
+		SlotIDsFilter: req.SlotIDsFilter,
+	})
+	if err != nil {
+		status, key := presetError(err)
+		writeError(w, status, key)
+		return
+	}
+	writeJSON(w, http.StatusOK, toApplyResponse(result))
+}
+
+type copyWeekRequest struct {
+	SourceStart string `json:"source_start"`
+	TargetStart string `json:"target_start"`
+	OnConflict  string `json:"on_conflict,omitempty"`
+}
+
+// CopyWeek handles POST /api/presets/copy-week.
+func (h *PresetHandler) CopyWeek(w http.ResponseWriter, r *http.Request) {
+	var req copyWeekRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	src, err := time.Parse("2006-01-02", req.SourceStart)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_date")
+		return
+	}
+	tgt, err := time.Parse("2006-01-02", req.TargetStart)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_date")
+		return
+	}
+	result, err := h.svc.CopyWeek(r.Context(), preset.CopyWeekRequest{
+		SourceStart: src,
+		TargetStart: tgt,
+		OnConflict:  preset.ConflictMode(req.OnConflict),
+	})
+	if err != nil {
+		status, key := presetError(err)
+		writeError(w, status, key)
+		return
+	}
+	writeJSON(w, http.StatusOK, toApplyResponse(result))
+}
+
+type undoApplyRequest struct {
+	Snapshot applySnapshotPayload `json:"snapshot"`
+}
+
+// UndoApply handles POST /api/presets/undo-apply.
+func (h *PresetHandler) UndoApply(w http.ResponseWriter, r *http.Request) {
+	var req undoApplyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	snap := preset.ApplySnapshot{
+		CreatedPlateIDs: req.Snapshot.CreatedPlateIDs,
+		ReplacedPlates:  make([]plate.Plate, len(req.Snapshot.ReplacedPlates)),
+	}
+	for i, p := range req.Snapshot.ReplacedPlates {
+		date, err := time.Parse("2006-01-02", p.Date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "error.invalid_date")
+			return
+		}
+		comps := make([]plate.PlateComponent, len(p.Components))
+		for j, c := range p.Components {
+			comps[j] = plate.PlateComponent{
+				FoodID:      c.FoodID,
+				Portions:    c.Portions,
+				Amount:      c.Amount,
+				Unit:        c.Unit,
+				Grams:       c.Grams,
+				GramsSource: c.GramsSource,
+				SortOrder:   c.SortOrder,
+			}
+		}
+		snap.ReplacedPlates[i] = plate.Plate{
+			Date:       date,
+			SlotID:     p.SlotID,
+			Note:       p.Note,
+			Skipped:    p.Skipped,
+			Components: comps,
+		}
+	}
+	if err := h.svc.UndoApply(r.Context(), snap); err != nil {
+		status, key := presetError(err)
+		writeError(w, status, key)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

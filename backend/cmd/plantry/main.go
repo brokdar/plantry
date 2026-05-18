@@ -138,7 +138,9 @@ func run() error {
 	templateSvc := template.NewService(templateRepo, foodRepo, plateRepo, txRunner)
 
 	presetRepo := sqlite.NewPresetRepo(conn)
-	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo)
+	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).
+		WithSlots(slotSvc).
+		WithPlateRange(plateSvc)
 
 	feedbackSvc := feedback.NewService(txRunner, plateRepo, foodRepo)
 

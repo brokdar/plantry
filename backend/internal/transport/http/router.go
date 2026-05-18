@@ -144,12 +144,15 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Get("/", h.Presets.List)
 				r.Get("/known-tags", h.Presets.KnownTags)
 				r.Post("/", h.Presets.Create)
+				r.Post("/copy-week", h.Presets.CopyWeek)
+				r.Post("/undo-apply", h.Presets.UndoApply)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.Presets.Get)
 					r.Put("/", h.Presets.Update)
 					r.Patch("/", h.Presets.Patch)
 					r.Delete("/", h.Presets.Delete)
 					r.Post("/duplicate", h.Presets.Duplicate)
+					r.Post("/apply", h.Presets.Apply)
 				})
 			})
 		}

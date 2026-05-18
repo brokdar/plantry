@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -15,18 +16,25 @@ import (
 
 // Service holds business logic for presets.
 type Service struct {
-	repo     Repository
-	foods    FoodLookup
-	plateSvc PlateService
-	tx       TxRunner
-	portions food.PortionLookup
-	foodGet  FoodGetter
+	repo       Repository
+	foods      FoodLookup
+	plateSvc   PlateService
+	plateRange PlateRange
+	tx         TxRunner
+	portions   food.PortionLookup
+	foodGet    FoodGetter
+	slots      SlotLister
 }
 
 // PlateService is the subset of plate.Service we depend on (to read existing
 // plates when creating a preset from a plate id).
 type PlateService interface {
 	Get(ctx context.Context, plateID int64) (*plate.Plate, error)
+}
+
+// PlateRange reads plates over a date range (used by CopyWeek).
+type PlateRange interface {
+	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
 }
 
 // FoodGetter is the food.Repository.Get surface we need to drive grams
@@ -45,6 +53,13 @@ func NewService(
 	foodGet FoodGetter,
 ) *Service {
 	return &Service{repo: r, foods: f, plateSvc: plateSvc, tx: tx, portions: portions, foodGet: foodGet}
+}
+
+// WithPlateRange injects a plate range reader so CopyWeek can list the source
+// week's plates.
+func (s *Service) WithPlateRange(pr PlateRange) *Service {
+	s.plateRange = pr
+	return s
 }
 
 // CreateFromPlatesInput is the input to CreateFromPlates: a name, optional
