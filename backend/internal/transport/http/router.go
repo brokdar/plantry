@@ -22,7 +22,7 @@ type Handlers struct {
 	Slots          *handlers.SlotHandler
 	Plates         *handlers.PlateHandler
 	Profile        *handlers.ProfileHandler
-	Templates      *handlers.TemplateHandler
+	Presets        *handlers.PresetHandler
 	AI             *handlers.AIHandler
 	AIRateLimiter  *plantrymw.RateLimiter
 	Feedback       *handlers.FeedbackHandler
@@ -125,15 +125,20 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			})
 		}
 
-		if h.Templates != nil {
-			api.Route("/templates", func(r chi.Router) {
-				r.Get("/", h.Templates.List)
-				r.Post("/", h.Templates.Create)
+		if h.Presets != nil {
+			api.Route("/presets", func(r chi.Router) {
+				r.Get("/", h.Presets.List)
+				r.Get("/known-tags", h.Presets.KnownTags)
+				r.Post("/", h.Presets.Create)
+				r.Post("/copy-week", h.Presets.CopyWeek)
+				r.Post("/undo-apply", h.Presets.UndoApply)
 				r.Route("/{id}", func(r chi.Router) {
-					r.Get("/", h.Templates.Get)
-					r.Put("/", h.Templates.Update)
-					r.Delete("/", h.Templates.Delete)
-					r.Post("/apply", h.Templates.Apply)
+					r.Get("/", h.Presets.Get)
+					r.Put("/", h.Presets.Update)
+					r.Patch("/", h.Presets.Patch)
+					r.Delete("/", h.Presets.Delete)
+					r.Post("/duplicate", h.Presets.Duplicate)
+					r.Post("/apply", h.Presets.Apply)
 				})
 			})
 		}

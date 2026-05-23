@@ -57,12 +57,13 @@ export const profileKeys = {
   detail: ["profile"] as const,
 }
 
-export const templateKeys = {
-  all: ["templates"] as const,
-  lists: () => [...templateKeys.all, "list"] as const,
-  list: (scope?: string) => [...templateKeys.lists(), { scope }] as const,
-  details: () => [...templateKeys.all, "detail"] as const,
-  detail: (id: number) => [...templateKeys.details(), id] as const,
+export const presetKeys = {
+  all: ["presets"] as const,
+  lists: () => [...presetKeys.all, "list"] as const,
+  list: (params: object) => [...presetKeys.lists(), params] as const,
+  details: () => [...presetKeys.all, "detail"] as const,
+  detail: (id: number) => [...presetKeys.details(), id] as const,
+  knownTags: () => [...presetKeys.all, "known-tags"] as const,
 }
 
 export const aiKeys = {

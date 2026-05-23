@@ -1,8 +1,12 @@
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { CommandPalette } from "@/components/command/CommandPalette"
+import { CopyFromWeekDialog } from "@/components/presets/CopyFromWeekDialog"
 import { AppShell } from "@/components/shell/AppShell"
 import { Button } from "@/components/ui/button"
+import { useCommandPaletteHotkey } from "@/lib/use-command-palette-hotkey"
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -11,10 +15,57 @@ export const Route = createRootRoute({
 })
 
 function RootComponent() {
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [copyWeekOpen, setCopyWeekOpen] = useState(false)
+  useCommandPaletteHotkey(() => setPaletteOpen((prev) => !prev))
   return (
     <AppShell>
       <Outlet />
+      <CommandPaletteHost
+        paletteOpen={paletteOpen}
+        setPaletteOpen={setPaletteOpen}
+        copyWeekOpen={copyWeekOpen}
+        setCopyWeekOpen={setCopyWeekOpen}
+      />
     </AppShell>
+  )
+}
+
+/** Hosts CommandPalette + CopyFromWeekDialog. Computes "today" and
+ *  "seven days ago" via Date.now(), which the React compiler flags as impure
+ *  when called during render. Isolating it here keeps the rest of the root
+ *  component compiler-friendly. The Date.now() call is invoked once per
+ *  render but only used to seed dialog state. */
+function CommandPaletteHost({
+  paletteOpen,
+  setPaletteOpen,
+  copyWeekOpen,
+  setCopyWeekOpen,
+}: {
+  paletteOpen: boolean
+  setPaletteOpen: (next: boolean) => void
+  copyWeekOpen: boolean
+  setCopyWeekOpen: (next: boolean) => void
+}) {
+  const [today] = useState(() => new Date().toISOString().slice(0, 10))
+  const [sevenDaysAgo] = useState(() =>
+    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  )
+  return (
+    <>
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        onOpenCopyWeek={() => setCopyWeekOpen(true)}
+        defaultTargetDate={today}
+      />
+      <CopyFromWeekDialog
+        open={copyWeekOpen}
+        onOpenChange={setCopyWeekOpen}
+        targetStart={today}
+        defaultSourceStart={sevenDaysAgo}
+      />
+    </>
   )
 }
 

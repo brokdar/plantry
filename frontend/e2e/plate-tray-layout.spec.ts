@@ -2,6 +2,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  mockAnchorToday,
   seedComposedFood,
   seedLeafFood,
   seedPlateWithComponent,
@@ -101,6 +102,7 @@ test.describe("Plate tray layout — Phase 4 composition-first preview", () => {
   test("non-empty plate: preview shows existing components muted under staged additions", async ({
     page,
   }) => {
+    await mockAnchorToday(page)
     const tag = uid()
     const slot = await seedSlot(`slot.lunch_${tag}`, "Sun", 800)
     const stub = await seedLeafFood({ name: `Stub ${tag}`, kcal_100g: 100 })

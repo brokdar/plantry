@@ -7,8 +7,8 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/template"
 )
 
 // TxRunner provides transactional wrappers for multi-aggregate operations.
@@ -21,19 +21,21 @@ func NewTxRunner(db *sql.DB) *TxRunner {
 	return &TxRunner{db: db}
 }
 
-// RunInTemplateTx wraps fn in a single transaction, binding template + plate
-// repositories to the same tx. Both commit or both roll back.
-func (t *TxRunner) RunInTemplateTx(ctx context.Context, fn func(template.Repository, plate.Repository) error) error {
+// RunInPresetTx wraps fn in a single transaction, binding preset + plate
+// repositories to the same tx. Both commit or both roll back. Used by the
+// apply pipeline so plates are materialised atomically with the preset's
+// last_used_at update.
+func (t *TxRunner) RunInPresetTx(ctx context.Context, fn func(preset.Repository, plate.Repository) error) error {
 	tx, err := t.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	templates := newTemplateRepoTx(tx)
+	presets := newPresetRepoTx(tx)
 	plates := newPlateRepoTx(tx)
 
-	if err := fn(templates, plates); err != nil {
+	if err := fn(presets, plates); err != nil {
 		return err
 	}
 	return tx.Commit()

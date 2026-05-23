@@ -17,18 +17,13 @@ import {
   mockChickenCurry,
 } from "@/test/fixtures"
 import type { Food } from "@/lib/api/foods"
-import type { Template } from "@/lib/api/templates"
 
 vi.mock("@/lib/queries/foods", () => ({
   useFoods: vi.fn(),
   useFoodMacros: vi.fn(() => ({ data: { foods: [] } })),
 }))
-vi.mock("@/lib/queries/templates", () => ({
-  useTemplates: vi.fn(),
-}))
 
 import { useFoodMacros, useFoods } from "@/lib/queries/foods"
-import { useTemplates } from "@/lib/queries/templates"
 
 function run(initial: TrayItem[], actions: TrayAction[]): TrayItem[] {
   return actions.reduce(trayReducer, initial)
@@ -148,49 +143,6 @@ describe("trayReducer", () => {
     expect(state.map((i) => i.food.id)).toEqual([2])
   })
 
-  it("stageTemplate hydrates per-food kind-aware quantities", () => {
-    const tpl: Template = {
-      id: 99,
-      name: "Lunch",
-      created_at: "2026-04-01T00:00:00Z",
-      scope: "slot",
-      components: [
-        {
-          id: 1,
-          template_id: 99,
-          food_id: 3, // composed (chicken curry)
-          portions: 2,
-          sort_order: 0,
-          day_offset: 0,
-        },
-        {
-          id: 2,
-          template_id: 99,
-          food_id: 2, // leaf (brown rice)
-          portions: 1.5,
-          sort_order: 1,
-          day_offset: 0,
-        },
-      ],
-    }
-    const foodsById = new Map<number, Food>([
-      [3, mockChickenCurry],
-      [2, mockBrownRice],
-    ])
-    const next = run([], [{ type: "stageTemplate", template: tpl, foodsById }])
-    expect(next).toEqual([
-      {
-        food: mockChickenCurry,
-        quantity: { kind: "composed", portions: 2 },
-      },
-      // Leaf templates legacy-portion 1.5 → 150 g (1.5 × 100 g).
-      {
-        food: mockBrownRice,
-        quantity: { kind: "leaf", amount: 150, unit: "g" },
-      },
-    ])
-  })
-
   it("keepOnly drops everything not in the foodIds set", () => {
     const state: TrayItem[] = [
       {
@@ -228,20 +180,11 @@ const ctx: TraySlotContext = {
   weekday: 0,
 }
 
-function setupQueries(opts?: {
-  foods?: Food[]
-  templates?: Template[]
-  foodsError?: boolean
-}) {
+function setupQueries(opts?: { foods?: Food[]; foodsError?: boolean }) {
   ;(useFoods as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
     data: { items: opts?.foods ?? [mockChickenBreast, mockBrownRice] },
     isLoading: false,
     isError: !!opts?.foodsError,
-  })
-  ;(useTemplates as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-    data: opts?.templates ?? [],
-    isLoading: false,
-    isError: false,
   })
 }
 
@@ -360,41 +303,6 @@ describe("ComponentTraySheet integration", () => {
     )
     const err = await screen.findByTestId("tray-error")
     expect(err).toBeInTheDocument()
-  })
-
-  it("switches to the templates tab and lists templates", async () => {
-    setupQueries({
-      templates: [
-        {
-          id: 7,
-          name: "Weekday Lunch",
-          created_at: "2026-04-01T00:00:00Z",
-          scope: "slot",
-          components: [
-            {
-              id: 1,
-              template_id: 7,
-              food_id: mockChickenBreast.id,
-              portions: 1,
-              sort_order: 0,
-              day_offset: 0,
-            },
-          ],
-        },
-      ],
-    })
-    renderWithRouter(
-      <ComponentTraySheet
-        open
-        context={ctx}
-        recentFoods={[]}
-        onOpenChange={vi.fn()}
-        onCommit={vi.fn()}
-      />
-    )
-    const user = userEvent.setup()
-    await user.click(await screen.findByTestId("tray-tab-templates"))
-    expect(await screen.findByTestId("tray-template-7")).toBeInTheDocument()
   })
 
   it("running total updates when staging a food", async () => {

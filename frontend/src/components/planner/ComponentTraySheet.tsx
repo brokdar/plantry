@@ -1,7 +1,6 @@
 import { format, parseISO } from "date-fns"
 import { de as deLocale } from "date-fns/locale"
 import {
-  Bookmark,
   Clock,
   Heart,
   Loader2,
@@ -42,10 +41,8 @@ import {
 } from "@/components/ui/sheet"
 import type { Food, FoodRole } from "@/lib/api/foods"
 import type { MacrosResponse, PlateComponent } from "@/lib/api/plates"
-import type { Template } from "@/lib/api/templates"
 import { normalizeUnit, UNIT_DEFAULTS } from "@/lib/domain/units"
 import { useFoodMacros, useFoods } from "@/lib/queries/foods"
-import { useTemplates } from "@/lib/queries/templates"
 import { imageURL } from "@/lib/image-url"
 import { slotLabel } from "@/lib/slot-label"
 import { cn } from "@/lib/utils"
@@ -75,7 +72,7 @@ const ROLE_FILTERS: { key: FoodRole; labelKey: string }[] = [
   { key: "dessert", labelKey: "component.role_dessert" },
 ]
 
-type TabKey = "foods" | "templates" | "favorites" | "recent"
+type TabKey = "foods" | "favorites" | "recent"
 
 export interface TraySlotContext {
   slotId: number
@@ -279,12 +276,6 @@ function ComponentTraySheetBody({
     },
     [dispatch, tray]
   )
-  const handleStageTemplate = useCallback(
-    (tpl: Template, foodsById: Map<number, Food>) =>
-      dispatch({ type: "stageTemplate", template: tpl, foodsById }),
-    [dispatch]
-  )
-
   async function commit() {
     if (tray.length === 0 || committing) return
     setCommitting(true)
@@ -351,24 +342,16 @@ function ComponentTraySheetBody({
 
         <BrowserTabs value={tab} onChange={setTab} />
 
-        {/* Templates aren't role-tagged so the chips are hidden there.
-          Foods/Favorites/Recent all respect the persisted role filter — the
-          chips stay visible across them so the user can always widen, even
-          when a stored filter from a previous open is silently narrowing. */}
-        {tab !== "templates" && <RoleChips value={roles} onChange={setRoles} />}
+        <RoleChips value={roles} onChange={setRoles} />
 
         <div className="min-h-0 flex-1">
-          {tab === "templates" ? (
-            <TemplateResults onStage={handleStageTemplate} />
-          ) : (
-            <FoodResults
-              tab={tab}
-              search={deferredSearch}
-              roles={roles}
-              recentFoods={recentFoods}
-              onStage={handleStageFood}
-            />
-          )}
+          <FoodResults
+            tab={tab}
+            search={deferredSearch}
+            roles={roles}
+            recentFoods={recentFoods}
+            onStage={handleStageFood}
+          />
         </div>
       </div>
 
@@ -423,7 +406,6 @@ function BrowserTabs({
   const { t } = useTranslation()
   const items: { key: TabKey; label: string; Icon: typeof Heart }[] = [
     { key: "foods", label: t("tray.tab.foods"), Icon: Utensils },
-    { key: "templates", label: t("tray.tab.templates"), Icon: Bookmark },
     { key: "favorites", label: t("tray.tab.favorites"), Icon: Heart },
     { key: "recent", label: t("tray.tab.recent"), Icon: Clock },
   ]
@@ -671,90 +653,6 @@ function FoodResultRow({
         </span>
       </button>
     </li>
-  )
-}
-
-function TemplateResults({
-  onStage,
-}: {
-  onStage: (tpl: Template, foodsById: Map<number, Food>) => void
-}) {
-  const { t } = useTranslation()
-  // Slot scope only: day/week templates have multi-slot structure that
-  // doesn't make sense to flatten into a single slot's tray.
-  const templates = useTemplates("slot")
-  // Fetch foods so we can hydrate template entries into Food objects when
-  // staging into the tray. 200 is the existing convention in the planner.
-  const foodsQuery = useFoods({ limit: 200 })
-
-  const foodsById = useMemo(() => {
-    const map = new Map<number, Food>()
-    for (const f of foodsQuery.data?.items ?? []) map.set(f.id, f)
-    return map
-  }, [foodsQuery.data])
-
-  if (templates.isLoading) {
-    return (
-      <p className="px-1 py-6 text-[12.5px] text-on-surface-variant">
-        {t("common.loading")}
-      </p>
-    )
-  }
-  if (templates.isError) {
-    return (
-      <p
-        className="px-1 py-6 text-[12.5px] text-destructive"
-        data-testid="tray-error"
-        role="alert"
-      >
-        {t("tray.error_load_templates")}
-      </p>
-    )
-  }
-  const items = templates.data ?? []
-  if (items.length === 0) {
-    return (
-      <p
-        className="px-1 py-6 text-[12.5px] text-on-surface-variant"
-        data-testid="tray-empty"
-      >
-        {t("tray.empty.templates")}
-      </p>
-    )
-  }
-  return (
-    <ul className="grid grid-cols-1 gap-1.5" role="list">
-      {items.map((tpl) => (
-        <li key={tpl.id} role="listitem">
-          <button
-            type="button"
-            onClick={() => onStage(tpl, foodsById)}
-            data-testid={`tray-template-${tpl.id}`}
-            className="group flex w-full items-center gap-3 rounded-xl border border-transparent bg-surface-container-low/40 px-3 py-2 text-left transition-colors hover:border-outline-variant/40 hover:bg-surface-container-low"
-          >
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary/15 text-secondary">
-              <Bookmark className="h-3.5 w-3.5" aria-hidden />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[13px] font-medium text-on-surface">
-                {tpl.name}
-              </span>
-              <span className="font-heading text-[9px] font-bold tracking-[0.18em] text-on-surface-variant uppercase">
-                {t("template.components_count", {
-                  count: tpl.components.length,
-                })}
-              </span>
-            </span>
-            <span
-              aria-hidden
-              className="grid size-7 shrink-0 place-items-center rounded-full border border-outline-variant/40 bg-surface-container-lowest text-on-surface-variant transition-colors group-hover:border-primary/60 group-hover:text-primary"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
   )
 }
 
@@ -1008,7 +906,6 @@ function readRoles(slotId: number): Set<FoodRole> {
 
 export type TrayAction =
   | { type: "stage"; food: Food }
-  | { type: "stageTemplate"; template: Template; foodsById: Map<number, Food> }
   | { type: "quantity"; foodId: number; q: TrayQuantity }
   | { type: "remove"; foodId: number }
   | { type: "keepOnly"; foodIds: Set<number> }
@@ -1031,38 +928,6 @@ export function trayReducer(state: TrayItem[], action: TrayAction): TrayItem[] {
         ...state,
         { food: action.food, quantity: initialQuantityFor(action.food) },
       ]
-    }
-    case "stageTemplate": {
-      let next = state
-      for (const tc of action.template.components) {
-        const food = action.foodsById.get(tc.food_id)
-        if (!food) continue
-        // Templates still speak the legacy float-portions vocabulary. Translate
-        // per kind: composed rounds up to ≥1 servings; leaf becomes
-        // (portions × 100) g.
-        const incoming: TrayQuantity =
-          food.kind === "composed"
-            ? {
-                kind: "composed",
-                portions: Math.max(1, Math.round(tc.portions)),
-              }
-            : {
-                kind: "leaf",
-                amount: Math.max(1, tc.portions * 100),
-                unit: "g",
-              }
-        const existing = next.find((i) => i.food.id === food.id)
-        if (existing) {
-          next = next.map((i) =>
-            i.food.id === food.id
-              ? { ...i, quantity: addQuantities(i.quantity, incoming) }
-              : i
-          )
-        } else {
-          next = [...next, { food, quantity: incoming }]
-        }
-      }
-      return next
     }
     case "quantity":
       return state.map((i) =>
@@ -1099,21 +964,6 @@ function bumpStepForUnit(unit: string): number {
   const def = UNIT_DEFAULTS[canonical]
   if (def?.kind === "volume") return 100
   return 1
-}
-
-/** addQuantities combines two same-shaped quantities. Used by the template
- *  applier so re-applying a template onto a tray that already has the food
- *  staged does the additive thing. Mismatched shapes (rare; mostly arises
- *  if a template referenced a food that has since changed kind) are
- *  resolved in favour of the incoming entry. */
-function addQuantities(a: TrayQuantity, b: TrayQuantity): TrayQuantity {
-  if (a.kind === "composed" && b.kind === "composed") {
-    return { kind: "composed", portions: Math.min(20, a.portions + b.portions) }
-  }
-  if (a.kind === "leaf" && b.kind === "leaf" && a.unit === b.unit) {
-    return { kind: "leaf", amount: a.amount + b.amount, unit: a.unit }
-  }
-  return b
 }
 
 function useTray(): readonly [TrayItem[], (action: TrayAction) => void] {

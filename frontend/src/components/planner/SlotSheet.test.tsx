@@ -112,7 +112,7 @@ function renderSheet() {
       onOpenChange={vi.fn()}
       onAddComponent={vi.fn()}
       onSwapComponent={vi.fn()}
-      onSaveAsTemplate={vi.fn()}
+      onSaveAsPreset={vi.fn()}
       onToggleSkip={vi.fn()}
       onDeletePlate={vi.fn()}
     />
@@ -200,7 +200,7 @@ describe("SlotSheet — Phase 3 kind-aware quantity", () => {
         onOpenChange={vi.fn()}
         onAddComponent={vi.fn()}
         onSwapComponent={vi.fn()}
-        onSaveAsTemplate={vi.fn()}
+        onSaveAsPreset={vi.fn()}
         onToggleSkip={vi.fn()}
         onDeletePlate={vi.fn()}
       />

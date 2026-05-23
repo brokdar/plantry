@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
-import { ArrowRight, ChevronDown, LayoutTemplate, Link2 } from "lucide-react"
+import { ArrowRight, ChevronDown, Link2 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -57,20 +57,13 @@ export function NewComponentPathChooser() {
       className="space-y-4"
       data-testid="new-component-path-chooser"
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3">
         <PathCard
           to="/import"
           icon={Link2}
           title={t("component.new_path_chooser.import_title")}
           description={t("component.new_path_chooser.import_description")}
           testId="path-chooser-import"
-        />
-        <PathCard
-          to="/templates"
-          icon={LayoutTemplate}
-          title={t("component.new_path_chooser.template_title")}
-          description={t("component.new_path_chooser.template_description")}
-          testId="path-chooser-templates"
         />
       </div>
       <p className="flex items-center justify-center gap-1.5 text-xs tracking-wide text-on-surface-variant uppercase">

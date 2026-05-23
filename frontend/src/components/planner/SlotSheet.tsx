@@ -93,7 +93,7 @@ interface SlotSheetProps {
     pcId: number,
     defaultRole?: string
   ) => void
-  onSaveAsTemplate: (plateId: number) => void
+  onSaveAsPreset: (plateId: number) => void
   onToggleSkip: (target: SlotSheetTarget, currentSkipped: boolean) => void
   onDeletePlate: (plateId: number) => void
   /** Move the plate to another day in the visible window. Renders the
@@ -113,7 +113,7 @@ export function SlotSheet({
   onOpenChange,
   onAddComponent,
   onSwapComponent,
-  onSaveAsTemplate,
+  onSaveAsPreset,
   onToggleSkip,
   onDeletePlate,
   onMovePlate,
@@ -159,7 +159,7 @@ export function SlotSheet({
             onSwapComponent={(pcId, role) =>
               onSwapComponent(target, pcId, role)
             }
-            onSaveAsTemplate={() => onSaveAsTemplate(target.plateId)}
+            onSaveAsPreset={() => onSaveAsPreset(target.plateId)}
             onToggleSkip={() => onToggleSkip(target, plate.skipped)}
             onDeletePlate={() => onDeletePlate(target.plateId)}
             onMovePlate={
@@ -192,7 +192,7 @@ interface SlotSheetBodyProps {
   onClose: () => void
   onAddComponent: () => void
   onSwapComponent: (pcId: number, defaultRole?: string) => void
-  onSaveAsTemplate: () => void
+  onSaveAsPreset: () => void
   onToggleSkip: () => void
   onDeletePlate: () => void
   onMovePlate?: (newDate: string) => void
@@ -209,7 +209,7 @@ function SlotSheetBody({
   onClose,
   onAddComponent,
   onSwapComponent,
-  onSaveAsTemplate,
+  onSaveAsPreset,
   onToggleSkip,
   onDeletePlate,
   onMovePlate,
@@ -334,7 +334,7 @@ function SlotSheetBody({
 
       <ActionFooter
         skipped={plate.skipped}
-        onSaveAsTemplate={onSaveAsTemplate}
+        onSaveAsPreset={onSaveAsPreset}
         onToggleSkip={onToggleSkip}
         onDeletePlate={onDeletePlate}
       />
@@ -876,12 +876,12 @@ function FeedbackBlock({ plate }: { plate: Plate }) {
 
 function ActionFooter({
   skipped,
-  onSaveAsTemplate,
+  onSaveAsPreset,
   onToggleSkip,
   onDeletePlate,
 }: {
   skipped: boolean
-  onSaveAsTemplate: () => void
+  onSaveAsPreset: () => void
   onToggleSkip: () => void
   onDeletePlate: () => void
 }) {
@@ -898,15 +898,15 @@ function ActionFooter({
           type="button"
           variant="ghost"
           size="sm"
-          onClick={onSaveAsTemplate}
-          data-testid="slot-sheet-save-template"
-          aria-label={t("template.save_as")}
-          title={t("template.save_as")}
+          onClick={onSaveAsPreset}
+          data-testid="slot-sheet-save-preset"
+          aria-label={t("preset.save_as")}
+          title={t("preset.save_as")}
           className="h-8 min-w-0 flex-1 justify-center gap-1.5 text-on-surface-variant hover:text-on-surface sm:justify-start"
         >
           <BookmarkPlus className="h-3.5 w-3.5 shrink-0" />
           <span className="hidden truncate sm:inline">
-            {t("template.save_as")}
+            {t("preset.save_as")}
           </span>
         </Button>
         <Button

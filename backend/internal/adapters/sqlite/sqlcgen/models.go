@@ -135,22 +135,41 @@ type PlateFeedback struct {
 	RatedAt string
 }
 
-type Template struct {
-	ID        int64
-	Name      string
-	CreatedAt string
-	Scope     string
+type Preset struct {
+	ID         int64
+	Name       string
+	CreatedAt  string
+	UpdatedAt  string
+	LastUsedAt sql.NullString
 }
 
-type TemplateEntry struct {
-	ID         int64
-	TemplateID int64
-	FoodID     int64
-	Portions   float64
-	SortOrder  int64
-	DayOffset  int64
-	SlotID     sql.NullInt64
-	Note       sql.NullString
+type PresetComponent struct {
+	ID            int64
+	PresetPlateID int64
+	FoodID        int64
+	Portions      sql.NullInt64
+	Amount        sql.NullFloat64
+	Unit          sql.NullString
+	Grams         sql.NullFloat64
+	GramsSource   sql.NullString
+	Note          sql.NullString
+	SortOrder     int64
+}
+
+type PresetPlate struct {
+	ID        int64
+	PresetID  int64
+	SlotID    int64
+	SortOrder int64
+}
+
+type PresetTag struct {
+	PresetID int64
+	Tag      string
+}
+
+type PresetsFt struct {
+	Name string
 }
 
 type TimeSlot struct {

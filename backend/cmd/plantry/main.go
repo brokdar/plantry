@@ -35,11 +35,11 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	settingsdom "github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/template"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 	plantrymw "github.com/jaltszeimer/plantry/backend/internal/transport/http/middleware"
@@ -133,8 +133,10 @@ func run() error {
 	profileRepo := sqlite.NewProfileRepo(conn)
 	profileSvc := profile.NewService(profileRepo)
 
-	templateRepo := sqlite.NewTemplateRepo(conn)
-	templateSvc := template.NewService(templateRepo, foodRepo, plateRepo, txRunner)
+	presetRepo := sqlite.NewPresetRepo(conn)
+	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).
+		WithSlots(slotSvc).
+		WithPlateRange(plateSvc)
 
 	feedbackSvc := feedback.NewService(txRunner, plateRepo, foodRepo)
 
@@ -164,7 +166,7 @@ func run() error {
 		Plates:            plateSvc,
 		Profile:           profileSvc,
 		Slots:             slotSvc,
-		Templates:         templateSvc,
+		Presets:           presetSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
@@ -202,7 +204,7 @@ func run() error {
 		Slots:          handlers.NewSlotHandler(slotSvc),
 		Plates:         handlers.NewPlateHandler(plateSvc),
 		Profile:        handlers.NewProfileHandler(profileSvc),
-		Templates:      handlers.NewTemplateHandler(templateSvc, plateSvc),
+		Presets:        handlers.NewPresetHandler(presetSvc),
 		AI:             aiHandler,
 		AIRateLimiter:  aiRateLimiter,
 		Feedback:       handlers.NewFeedbackHandler(feedbackSvc),

@@ -3,6 +3,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  mockAnchorToday,
   seedComposedFood,
   seedLeafFood,
   seedSlot,
@@ -17,6 +18,10 @@ test.describe("Plate macros — Phase 2 read-only surfaces", () => {
   // Cell-level kcal is shown on the mobile day-tab layout (showMacros=true by
   // default); the desktop weekly view hides it for visual density.
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
+
+  test.beforeEach(async ({ page }) => {
+    await mockAnchorToday(page)
+  })
 
   test("planned cell, slot sheet header, and tray running total all show kcal", async ({
     page,
