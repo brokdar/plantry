@@ -231,7 +231,7 @@ test.describe("Recipe Catalog (card grid)", () => {
     }
   })
 
-  test("secondary actions menu links to import and templates", async ({
+  test("secondary actions menu links to import and presets", async ({
     page,
   }) => {
     await test.step("Import from URL navigates to /import", async () => {
@@ -241,11 +241,11 @@ test.describe("Recipe Catalog (card grid)", () => {
       await expect(page).toHaveURL(/\/import$/)
     })
 
-    await test.step("Browse Templates navigates to /templates", async () => {
+    await test.step("Manage Presets navigates to /presets", async () => {
       await page.goto("/components")
       await page.getByTestId("catalog-secondary-actions").click()
-      await page.getByRole("menuitem", { name: /browse templates/i }).click()
-      await expect(page).toHaveURL(/\/templates$/)
+      await page.getByTestId("catalog-menu-presets").click()
+      await expect(page).toHaveURL(/\/presets$/)
     })
   })
 

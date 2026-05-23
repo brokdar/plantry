@@ -11,6 +11,7 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
+  mockAnchorToday,
   seedComposedWithStub,
   seedLeafFood,
   seedPlateWithComponent,
@@ -129,6 +130,7 @@ test.describe("Plate quantity — kind-aware controls", () => {
   test("slot sheet edits a leaf component's amount and re-resolves grams", async ({
     page,
   }) => {
+    await mockAnchorToday(page)
     const tag = uid()
     const slot = await seedSlot(`slot.q_leaf_edit_${tag}`, "Apple", 989)
     const rice = await seedLeafFood({

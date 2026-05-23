@@ -354,11 +354,10 @@ test.describe("Planner — clear shortcuts", () => {
       await page.getByRole("button", { name: /Next 7/i }).click()
       await nextWeekFetch
 
-      // No plates → the menu still renders for save/apply template, but the
-      // "Clear day" item is gated on hasPlates and stays out of the menu.
+      // No plates → the overflow menu button itself is absent (its only item
+      // is "Clear day", which is gated on hasPlates).
       await page.getByTestId("day-header-0").hover()
-      await page.getByTestId("day-header-menu-0").click()
-      await expect(page.getByTestId("day-header-clear-0")).toHaveCount(0)
+      await expect(page.getByTestId("day-header-menu-0")).toHaveCount(0)
     } finally {
       await cleanupSlot(slot.id)
     }
