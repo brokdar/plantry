@@ -171,30 +171,16 @@ type UpdateInput struct {
 }
 
 // Update applies an editor save: rename, replace tags, replace plates.
-// All fields are optional; nil pointer means "leave as-is".
+// All fields are optional; nil pointer means "leave as-is". Name, tags, and
+// plate replacement commit in a single transaction so a partial write can
+// never leave the preset in a half-updated state.
 func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) (*Preset, error) {
 	existing, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	if in.Name != nil {
-		name := strings.TrimSpace(*in.Name)
-		if name == "" {
-			return nil, fmt.Errorf("%w: name required", domain.ErrInvalidInput)
-		}
-		if _, err := s.repo.UpdateName(ctx, id, name); err != nil {
-			return nil, err
-		}
-	}
-
-	if in.Tags != nil {
-		tags := normalizeTags(*in.Tags)
-		if err := s.repo.ReplaceTags(ctx, id, tags); err != nil {
-			return nil, err
-		}
-	}
-
+	// Validate plates up-front so a bad payload fails before we open the tx.
 	if in.Plates != nil {
 		next := &Preset{ID: existing.ID, Name: existing.Name, Plates: *in.Plates, Tags: existing.Tags}
 		if in.Name != nil {
@@ -203,9 +189,30 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) (*Preset
 		if err := s.validatePlates(ctx, next); err != nil {
 			return nil, err
 		}
-		if err := s.repo.ReplacePlates(ctx, id, *in.Plates); err != nil {
-			return nil, err
+	}
+	if in.Name != nil && strings.TrimSpace(*in.Name) == "" {
+		return nil, fmt.Errorf("%w: name required", domain.ErrInvalidInput)
+	}
+
+	if err := s.tx.RunInPresetTx(ctx, func(presets Repository, _ plate.Repository) error {
+		if in.Name != nil {
+			if _, err := presets.UpdateName(ctx, id, strings.TrimSpace(*in.Name)); err != nil {
+				return err
+			}
 		}
+		if in.Tags != nil {
+			if err := presets.ReplaceTags(ctx, id, normalizeTags(*in.Tags)); err != nil {
+				return err
+			}
+		}
+		if in.Plates != nil {
+			if err := presets.ReplacePlates(ctx, id, *in.Plates); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return s.repo.Get(ctx, id)

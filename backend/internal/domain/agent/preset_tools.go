@@ -357,6 +357,9 @@ func presetDetail(p *preset.Preset) map[string]any {
 			if c.Grams != nil {
 				cm["grams"] = *c.Grams
 			}
+			if c.GramsSource != nil {
+				cm["grams_source"] = *c.GramsSource
+			}
 			if c.Note != nil {
 				cm["note"] = *c.Note
 			}
@@ -395,6 +398,7 @@ func applyResultSummary(r *preset.ApplyResult) map[string]any {
 	skippedNoSlot := make([]map[string]any, len(r.SkippedNoSlot))
 	for i, s := range r.SkippedNoSlot {
 		skippedNoSlot[i] = map[string]any{
+			"date":    s.Date.Format("2006-01-02"),
 			"slot_id": s.SlotID,
 		}
 	}
