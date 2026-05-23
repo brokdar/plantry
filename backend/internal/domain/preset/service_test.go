@@ -22,6 +22,15 @@ type stubRepo struct {
 	creating  error
 	createErr error
 	storage   map[int64]*preset.Preset
+
+	// optional overrides; when nil the defaults apply
+	getFn func(ctx context.Context, id int64) (*preset.Preset, error)
+
+	// call recorders
+	addTagCalls    []string
+	removeTagCalls []string
+	createCount    int
+	updateNameCnt  int
 }
 
 func (r *stubRepo) Create(_ context.Context, p *preset.Preset) error {
@@ -34,10 +43,14 @@ func (r *stubRepo) Create(_ context.Context, p *preset.Preset) error {
 	p.ID = int64(len(r.storage) + 1)
 	r.storage[p.ID] = p
 	r.created = p
+	r.createCount++
 	return nil
 }
 
-func (r *stubRepo) Get(_ context.Context, id int64) (*preset.Preset, error) {
+func (r *stubRepo) Get(ctx context.Context, id int64) (*preset.Preset, error) {
+	if r.getFn != nil {
+		return r.getFn(ctx, id)
+	}
 	if p, ok := r.storage[id]; ok {
 		return p, nil
 	}
@@ -49,14 +62,22 @@ func (r *stubRepo) List(_ context.Context, _ preset.ListFilter) (*preset.ListRes
 }
 
 func (r *stubRepo) UpdateName(_ context.Context, _ int64, _ string) (*preset.Preset, error) {
+	r.updateNameCnt++
 	return nil, nil
 }
 func (r *stubRepo) ReplacePlates(_ context.Context, _ int64, _ []preset.Plate) error { return nil }
 func (r *stubRepo) ReplaceTags(_ context.Context, _ int64, _ []string) error         { return nil }
-func (r *stubRepo) AddTag(_ context.Context, _ int64, _ string) error                { return nil }
-func (r *stubRepo) RemoveTag(_ context.Context, _ int64, _ string) error             { return nil }
-func (r *stubRepo) TouchLastUsed(_ context.Context, _ int64) error                   { return nil }
-func (r *stubRepo) Delete(_ context.Context, _ int64) error                          { return nil }
+func (r *stubRepo) AddTag(_ context.Context, _ int64, tag string) error {
+	r.addTagCalls = append(r.addTagCalls, tag)
+	return nil
+}
+
+func (r *stubRepo) RemoveTag(_ context.Context, _ int64, tag string) error {
+	r.removeTagCalls = append(r.removeTagCalls, tag)
+	return nil
+}
+func (r *stubRepo) TouchLastUsed(_ context.Context, _ int64) error { return nil }
+func (r *stubRepo) Delete(_ context.Context, _ int64) error        { return nil }
 func (r *stubRepo) KnownTags(_ context.Context, _ int) ([]preset.TagUsage, error) {
 	return nil, nil
 }
@@ -235,4 +256,146 @@ func TestCreateFromPlates_MultiPlate_OrdersByDateThenSlot(t *testing.T) {
 
 func dayUTC(y, m, d int) time.Time {
 	return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
+}
+
+// --- Update tests ---
+
+func ptr[T any](v T) *T { return &v }
+
+// seedExistingPreset directly registers a preset into the stub repo's storage
+// without going through repo.Create (which would invoke the validate path).
+func seedExistingPreset(r *stubRepo, p *preset.Preset) {
+	if r.storage == nil {
+		r.storage = map[int64]*preset.Preset{}
+	}
+	if p.ID == 0 {
+		p.ID = int64(len(r.storage) + 1)
+	}
+	r.storage[p.ID] = p
+}
+
+func TestUpdate_EmptyName_IsRejected(t *testing.T) {
+	svc, repo := makeService(nil, nil)
+	seedExistingPreset(repo, &preset.Preset{ID: 1, Name: "Existing", Tags: []string{}})
+
+	_, err := svc.Update(context.Background(), 1, preset.UpdateInput{Name: ptr("")})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, domain.ErrInvalidInput))
+	// No tx work should have occurred.
+	assert.Zero(t, repo.updateNameCnt)
+}
+
+func TestUpdate_ZeroSlotID_IsRejected(t *testing.T) {
+	foods := map[int64]*food.Food{
+		7: {ID: 7, Kind: food.KindComposed, Name: "Pasta"},
+	}
+	svc, repo := makeService(foods, nil)
+	seedExistingPreset(repo, &preset.Preset{ID: 1, Name: "Existing", Tags: []string{}})
+
+	portions := 1
+	badPlates := []preset.Plate{{
+		SlotID: 0, // invalid
+		Components: []preset.Component{
+			{FoodID: 7, Portions: &portions},
+		},
+	}}
+	_, err := svc.Update(context.Background(), 1, preset.UpdateInput{Plates: &badPlates})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, domain.ErrInvalidInput))
+}
+
+func TestUpdate_PresetNotFound_IsRejected(t *testing.T) {
+	svc, repo := makeService(nil, nil)
+	repo.getFn = func(_ context.Context, _ int64) (*preset.Preset, error) {
+		return nil, domain.ErrNotFound
+	}
+	_, err := svc.Update(context.Background(), 42, preset.UpdateInput{Name: ptr("X")})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, domain.ErrNotFound))
+}
+
+// --- Patch tests ---
+
+func TestPatch_BlankName_IsRejected(t *testing.T) {
+	svc, repo := makeService(nil, nil)
+	seedExistingPreset(repo, &preset.Preset{ID: 1, Name: "Existing", Tags: []string{}})
+
+	_, err := svc.Patch(context.Background(), 1, preset.PatchInput{Name: ptr("  ")})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, domain.ErrInvalidInput))
+	assert.Zero(t, repo.updateNameCnt)
+}
+
+func TestPatch_PresetNotFound(t *testing.T) {
+	svc, repo := makeService(nil, nil)
+	repo.getFn = func(_ context.Context, _ int64) (*preset.Preset, error) {
+		return nil, domain.ErrNotFound
+	}
+	_, err := svc.Patch(context.Background(), 42, preset.PatchInput{AddTags: []string{"quick"}})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, domain.ErrNotFound))
+	assert.Empty(t, repo.addTagCalls)
+}
+
+func TestPatch_TagsNormalised(t *testing.T) {
+	svc, repo := makeService(nil, nil)
+	seedExistingPreset(repo, &preset.Preset{ID: 1, Name: "Existing", Tags: []string{}})
+
+	_, err := svc.Patch(context.Background(), 1, preset.PatchInput{
+		AddTags: []string{"QUICK", " Vegan "},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"quick", "vegan"}, repo.addTagCalls)
+}
+
+func TestPatch_BlankAddTag_IsSkipped(t *testing.T) {
+	svc, repo := makeService(nil, nil)
+	seedExistingPreset(repo, &preset.Preset{ID: 1, Name: "Existing", Tags: []string{}})
+
+	_, err := svc.Patch(context.Background(), 1, preset.PatchInput{AddTags: []string{"  "}})
+	require.NoError(t, err)
+	assert.Empty(t, repo.addTagCalls)
+}
+
+// --- Duplicate tests ---
+
+func TestDuplicate_CopiesWithSuffix(t *testing.T) {
+	svc, repo := makeService(nil, nil)
+	portions := 2
+	last := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	seedExistingPreset(repo, &preset.Preset{
+		ID:   1,
+		Name: "Pasta",
+		Tags: []string{"italian", "quick"},
+		Plates: []preset.Plate{{
+			SlotID: 3,
+			Components: []preset.Component{
+				{FoodID: 7, Portions: &portions, SortOrder: 0},
+			},
+		}},
+		LastUsedAt: &last,
+	})
+
+	got, err := svc.Duplicate(context.Background(), 1)
+	require.NoError(t, err)
+	assert.Equal(t, "Pasta (copy)", got.Name)
+	assert.Equal(t, []string{"italian", "quick"}, got.Tags)
+	require.Len(t, got.Plates, 1)
+	assert.Equal(t, int64(3), got.Plates[0].SlotID)
+	require.Len(t, got.Plates[0].Components, 1)
+	c := got.Plates[0].Components[0]
+	require.NotNil(t, c.Portions)
+	assert.Equal(t, 2, *c.Portions)
+	assert.Nil(t, got.LastUsedAt)
+}
+
+func TestDuplicate_NotFound(t *testing.T) {
+	svc, repo := makeService(nil, nil)
+	repo.getFn = func(_ context.Context, _ int64) (*preset.Preset, error) {
+		return nil, domain.ErrNotFound
+	}
+	_, err := svc.Duplicate(context.Background(), 99)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, domain.ErrNotFound))
+	assert.Zero(t, repo.createCount)
 }

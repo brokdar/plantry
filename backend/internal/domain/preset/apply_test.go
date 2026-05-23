@@ -246,6 +246,90 @@ func TestApply_SlotIDsFilter(t *testing.T) {
 	assert.Empty(t, res.SkippedNoSlot)
 }
 
+func TestCopyWeek_EmptySourceWeek(t *testing.T) {
+	e := newApplyTestEnv(t)
+
+	// No source plates seeded — call CopyWeek with a clean source week.
+	sourceStart := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	targetStart := time.Date(2026, 3, 9, 0, 0, 0, 0, time.UTC)
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{
+		SourceStart: sourceStart,
+		TargetStart: targetStart,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.Empty(t, res.Created)
+	assert.Empty(t, res.Replaced)
+	assert.Empty(t, res.SkippedOccupied)
+	assert.Empty(t, res.SkippedNoSlot)
+	assert.Empty(t, res.Snapshot.CreatedPlateIDs)
+	assert.Empty(t, res.Snapshot.ReplacedPlates)
+}
+
+func TestCopyWeek_OverwriteConflict(t *testing.T) {
+	e := newApplyTestEnv(t)
+
+	amount := 100.0
+	unit := "g"
+	grams := 100.0
+	src := "direct"
+	mkLeafPC := func() plate.PlateComponent {
+		return plate.PlateComponent{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src}
+	}
+
+	sourceStart := time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC)  // Monday
+	targetStart := time.Date(2026, 4, 13, 0, 0, 0, 0, time.UTC) // next Monday
+
+	// Seed one source plate (Monday of source week).
+	srcPlate := &plate.Plate{
+		Date:       sourceStart,
+		SlotID:     e.slotID,
+		Components: []plate.PlateComponent{mkLeafPC()},
+	}
+	require.NoError(t, e.plateSvc.Create(e.ctx, srcPlate))
+
+	// Seed a conflicting plate on the target week, same offset, same slot.
+	conflictAmount := 50.0
+	conflictGrams := 50.0
+	conflictPlate := &plate.Plate{
+		Date:   targetStart,
+		SlotID: e.slotID,
+		Components: []plate.PlateComponent{
+			{FoodID: e.foodID, Amount: &conflictAmount, Unit: &unit, Grams: &conflictGrams, GramsSource: &src},
+		},
+	}
+	require.NoError(t, e.plateSvc.Create(e.ctx, conflictPlate))
+
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{
+		SourceStart: sourceStart,
+		TargetStart: targetStart,
+		OnConflict:  preset.ConflictOverwrite,
+	})
+	require.NoError(t, err)
+	require.Len(t, res.Replaced, 1)
+	require.Len(t, res.Snapshot.ReplacedPlates, 1)
+	require.Len(t, res.Snapshot.CreatedPlateIDs, 1)
+
+	// Target slot now holds the new plate (100g from source, not 50g).
+	day, err := e.plateSvc.Day(e.ctx, targetStart)
+	require.NoError(t, err)
+	require.Len(t, day, 1)
+	require.Len(t, day[0].Components, 1)
+	require.NotNil(t, day[0].Components[0].Amount)
+	assert.Equal(t, 100.0, *day[0].Components[0].Amount, "target slot now holds the source plate's amount")
+}
+
+func TestUndoApply_ToleratesAlreadyDeletedPlates(t *testing.T) {
+	e := newApplyTestEnv(t)
+
+	// Build a snapshot whose CreatedPlateIDs contains a plate ID that doesn't exist.
+	snap := preset.ApplySnapshot{
+		CreatedPlateIDs: []int64{99999},
+	}
+	err := e.presetSvc.UndoApply(e.ctx, snap)
+	require.NoError(t, err, "UndoApply should be idempotent when created plates already gone")
+}
+
 func TestCopyWeek_HappyPath(t *testing.T) {
 	e := newApplyTestEnv(t)
 

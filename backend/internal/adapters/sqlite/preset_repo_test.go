@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -270,4 +271,221 @@ func TestPresetRepo_Get_NotFoundErrorsIs(t *testing.T) {
 	repo := sqlite.NewPresetRepo(db)
 	_, err := repo.Get(context.Background(), 99999)
 	assert.True(t, errors.Is(err, domain.ErrNotFound))
+}
+
+// --- UpdateName ---
+
+func TestPresetRepo_UpdateName_Roundtrip(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+
+	slotID := seedSlot(t, db)
+	foodID := seedLeafFood(t, db, "Beans")
+	repo := sqlite.NewPresetRepo(db)
+
+	p := &preset.Preset{
+		Name: "Old",
+		Tags: []string{"quick"},
+		Plates: []preset.Plate{{
+			SlotID:     slotID,
+			Components: []preset.Component{mkLeafComponent(foodID)},
+		}},
+	}
+	require.NoError(t, repo.Create(ctx, p))
+
+	updated, err := repo.UpdateName(ctx, p.ID, "New")
+	require.NoError(t, err)
+	assert.Equal(t, "New", updated.Name)
+
+	got, err := repo.Get(ctx, p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "New", got.Name)
+	assert.Equal(t, []string{"quick"}, got.Tags)
+	require.Len(t, got.Plates, 1)
+	require.Len(t, got.Plates[0].Components, 1)
+	assert.Equal(t, foodID, got.Plates[0].Components[0].FoodID)
+}
+
+func TestPresetRepo_UpdateName_NotFound(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewPresetRepo(db)
+	_, err := repo.UpdateName(context.Background(), 99999, "X")
+	assert.True(t, errors.Is(err, domain.ErrNotFound))
+}
+
+// --- ReplacePlates ---
+
+func TestPresetRepo_ReplacePlates_SwapsContent(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+
+	slotA := seedSlot(t, db)
+	// seed a second slot
+	res, err := db.ExecContext(ctx,
+		`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.lunch', 'utensils', 2, 1)`)
+	require.NoError(t, err)
+	slotB, err := res.LastInsertId()
+	require.NoError(t, err)
+
+	foodA := seedLeafFood(t, db, "FoodA")
+	foodB := seedLeafFood(t, db, "FoodB")
+
+	repo := sqlite.NewPresetRepo(db)
+	p := &preset.Preset{
+		Name: "Test",
+		Plates: []preset.Plate{{
+			SlotID:     slotA,
+			Components: []preset.Component{mkLeafComponent(foodA)},
+		}},
+	}
+	require.NoError(t, repo.Create(ctx, p))
+
+	// Sanity: one plate row before swap.
+	var count int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM preset_plates WHERE preset_id = ?`, p.ID).Scan(&count))
+	require.Equal(t, 1, count)
+
+	newPlates := []preset.Plate{{
+		SlotID:     slotB,
+		Components: []preset.Component{mkLeafComponent(foodB)},
+	}}
+	require.NoError(t, repo.ReplacePlates(ctx, p.ID, newPlates))
+
+	got, err := repo.Get(ctx, p.ID)
+	require.NoError(t, err)
+	require.Len(t, got.Plates, 1)
+	assert.Equal(t, slotB, got.Plates[0].SlotID)
+	require.Len(t, got.Plates[0].Components, 1)
+	assert.Equal(t, foodB, got.Plates[0].Components[0].FoodID)
+
+	// Old plate row is gone.
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM preset_plates WHERE preset_id = ?`, p.ID).Scan(&count))
+	assert.Equal(t, 1, count, "exactly one plate after swap (the new one)")
+}
+
+func TestPresetRepo_ReplacePlates_InvalidFoodFK(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+
+	slotID := seedSlot(t, db)
+	foodID := seedLeafFood(t, db, "RealFood")
+	repo := sqlite.NewPresetRepo(db)
+
+	p := &preset.Preset{
+		Name:   "Test",
+		Plates: []preset.Plate{{SlotID: slotID, Components: []preset.Component{mkLeafComponent(foodID)}}},
+	}
+	require.NoError(t, repo.Create(ctx, p))
+
+	// Build a component referencing a non-existent food id.
+	amount := 100.0
+	unit := "g"
+	grams := 100.0
+	src := "direct"
+	bad := []preset.Plate{{
+		SlotID: slotID,
+		Components: []preset.Component{{
+			FoodID: 999999, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src,
+		}},
+	}}
+	err := repo.ReplacePlates(ctx, p.ID, bad)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, domain.ErrInvalidInput))
+}
+
+// --- AddTag / RemoveTag ---
+
+func TestPresetRepo_AddRemoveTag_Roundtrip(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+
+	slotID := seedSlot(t, db)
+	foodID := seedLeafFood(t, db, "Tofu2")
+	repo := sqlite.NewPresetRepo(db)
+
+	p := &preset.Preset{
+		Name:   "Test",
+		Plates: []preset.Plate{{SlotID: slotID, Components: []preset.Component{mkLeafComponent(foodID)}}},
+	}
+	require.NoError(t, repo.Create(ctx, p))
+
+	before, err := repo.Get(ctx, p.ID)
+	require.NoError(t, err)
+	updatedBefore := before.UpdatedAt
+
+	// Sleep 1.1s so timestamps (1-second granularity) advance.
+	time.Sleep(1100 * time.Millisecond)
+
+	require.NoError(t, repo.AddTag(ctx, p.ID, "quick"))
+	got, err := repo.Get(ctx, p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"quick"}, got.Tags)
+	assert.True(t, got.UpdatedAt.After(updatedBefore), "updated_at advances after AddTag")
+	updatedAfterAdd := got.UpdatedAt
+
+	time.Sleep(1100 * time.Millisecond)
+	require.NoError(t, repo.RemoveTag(ctx, p.ID, "quick"))
+	got, err = repo.Get(ctx, p.ID)
+	require.NoError(t, err)
+	assert.Empty(t, got.Tags)
+	assert.True(t, got.UpdatedAt.After(updatedAfterAdd), "updated_at advances after RemoveTag")
+}
+
+// --- CountUsingFood ---
+
+func TestPresetRepo_CountUsingFood(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+
+	slotID := seedSlot(t, db)
+	usedFoodID := seedLeafFood(t, db, "Used")
+	unusedFoodID := seedLeafFood(t, db, "Unused")
+	repo := sqlite.NewPresetRepo(db)
+
+	makePreset := func(name string) {
+		t.Helper()
+		p := &preset.Preset{
+			Name:   name,
+			Plates: []preset.Plate{{SlotID: slotID, Components: []preset.Component{mkLeafComponent(usedFoodID)}}},
+		}
+		require.NoError(t, repo.Create(ctx, p))
+	}
+	makePreset("A")
+	makePreset("B")
+
+	usedCount, err := repo.CountUsingFood(ctx, usedFoodID)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, usedCount)
+
+	unusedCount, err := repo.CountUsingFood(ctx, unusedFoodID)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, unusedCount)
+}
+
+// --- List filter by SlotID ---
+
+func TestPresetRepo_List_FilterBySlotID(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+
+	slotA := seedSlot(t, db)
+	res, err := db.ExecContext(ctx,
+		`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.lunch', 'utensils', 2, 1)`)
+	require.NoError(t, err)
+	slotB, err := res.LastInsertId()
+	require.NoError(t, err)
+
+	foodID := seedLeafFood(t, db, "Rice2")
+	repo := sqlite.NewPresetRepo(db)
+
+	a := &preset.Preset{Name: "A", Plates: []preset.Plate{{SlotID: slotA, Components: []preset.Component{mkLeafComponent(foodID)}}}}
+	require.NoError(t, repo.Create(ctx, a))
+	b := &preset.Preset{Name: "B", Plates: []preset.Plate{{SlotID: slotB, Components: []preset.Component{mkLeafComponent(foodID)}}}}
+	require.NoError(t, repo.Create(ctx, b))
+
+	got, err := repo.List(ctx, preset.ListFilter{SlotIDs: []int64{slotA}})
+	require.NoError(t, err)
+	require.Len(t, got.Items, 1)
+	assert.Equal(t, "A", got.Items[0].Name)
+	assert.Equal(t, 1, got.Total)
 }
