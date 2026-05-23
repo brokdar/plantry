@@ -46,6 +46,7 @@ Load these before writing or modifying the relevant code:
 - **`playwright-best-practices`** — e2e tests
 - **`vercel-react-best-practices`** — React components
 - **`vercel-composition-patterns`** — component API design / refactoring prop interfaces
+- **`shadcn`** — shadcn/ui component usage and customization
 - **`golang-testing`** — Go tests
 - **`golang-patterns`** — Go code
 
@@ -55,7 +56,13 @@ Load these before writing or modifying the relevant code:
 
 ```
 backend/internal/
-├── adapters/sqlite/   # sqlc queries (queries/ + sqlcgen/) + goose migrations
+├── adapters/sqlite/    # sqlc queries (queries/ + sqlcgen/) + goose migrations
+├── adapters/anthropic/ # Anthropic SDK client
+├── adapters/openai/    # OpenAI client (food lookup)
+├── adapters/fdc/       # FoodData Central API
+├── adapters/off/       # Open Food Facts API
+├── adapters/imagestore/ # image storage
+├── adapters/httpfetch/ # generic HTTP fetch adapter
 ├── domain/            # aggregates, services, repo interfaces
 ├── transport/http/
 │   ├── router.go      # chi route registrations
@@ -67,17 +74,29 @@ backend/internal/
 
 Aggregates are plain exported structs. `*.Service` holds business logic, takes repo interfaces as constructor args.
 
+The `domain/` package includes an `agent` aggregate and `llm` service — the AI layer uses the Anthropic adapter for preset generation and food lookup assistance.
+
 ### Frontend — TanStack Router (file-based)
 
 ```
 frontend/src/
 ├── routes/            # file-based (auto-generates routeTree.gen.ts — never edit)
-├── components/ui/     # shadcn primitives
+├── components/
+│   ├── ui/            # shadcn primitives
+│   ├── shell/         # app shell, sidebar, layout
+│   ├── planner/       # planner-specific components
+│   ├── presets/       # preset library + editor
+│   ├── picker/        # food picker
+│   ├── editorial/     # design system editorial components
+│   └── ...            # chat, calendar, images, settings, etc.
 ├── lib/
 │   ├── api/           # fetch wrappers per resource
 │   ├── queries/       # TanStack Query hooks + key factories
 │   ├── schemas/       # zod validation schemas
-│   └── i18n/          # i18next (react-i18next)
+│   ├── hooks/         # shared React hooks
+│   ├── stores/        # client-side state stores
+│   ├── i18n/          # i18next (react-i18next)
+│   └── *.ts           # utility modules (planner logic, slot labels, etc.)
 └── test/              # render.tsx (renderWithRouter), fixtures.ts (mock data)
 ```
 
