@@ -1,5 +1,5 @@
 import { format, isToday, parseISO } from "date-fns"
-import * as Lucide from "lucide-react"
+import { MoreHorizontal, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -40,6 +40,7 @@ import {
   registerPendingPlateDelete,
 } from "@/lib/queries/pending-plate-deletes"
 import { toggleSkip } from "@/lib/planner-skip"
+import { SLOT_ICONS, SLOT_ICON_FALLBACK } from "@/lib/slot-icons"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
@@ -73,10 +74,7 @@ interface MobilePlannerGridProps {
 }
 
 function SlotIcon({ name }: { name: string }) {
-  const Icon = (
-    Lucide as unknown as Record<string, Lucide.LucideIcon | undefined>
-  )[name]
-  if (!Icon) return <Lucide.HelpCircle className="h-4 w-4" aria-hidden />
+  const Icon = SLOT_ICONS[name] ?? SLOT_ICON_FALLBACK
   return <Icon className="h-4 w-4" aria-hidden />
 }
 
@@ -751,7 +749,7 @@ function DayActionsBar({
               data-testid="mobile-day-menu"
               className="size-7 text-on-surface-variant"
             >
-              <Lucide.MoreHorizontal className="h-4 w-4" />
+              <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
@@ -760,7 +758,7 @@ function DayActionsBar({
               onClick={onClearDay}
               data-testid="mobile-day-clear"
             >
-              <Lucide.Trash2 className="size-4" />
+              <Trash2 className="size-4" />
               {t("planner.clear_day")}
             </DropdownMenuItem>
           </DropdownMenuContent>

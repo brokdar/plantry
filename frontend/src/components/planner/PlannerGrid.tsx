@@ -9,7 +9,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
-import * as Lucide from "lucide-react"
+import { Copy, MoreHorizontal, Trash2 } from "lucide-react"
 import { useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -52,6 +52,7 @@ import {
 } from "@/lib/queries/plates"
 import { useProfile } from "@/lib/queries/profile"
 import { toggleSkip } from "@/lib/planner-skip"
+import { SLOT_ICONS, SLOT_ICON_FALLBACK } from "@/lib/slot-icons"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
 import { toast, toastError } from "@/lib/toast"
@@ -112,10 +113,7 @@ interface SwapTarget {
 }
 
 function SlotIcon({ name }: { name: string }) {
-  const Icon = (
-    Lucide as unknown as Record<string, Lucide.LucideIcon | undefined>
-  )[name]
-  if (!Icon) return <Lucide.HelpCircle className="h-4 w-4" aria-hidden />
+  const Icon = SLOT_ICONS[name] ?? SLOT_ICON_FALLBACK
   return <Icon className="h-4 w-4" aria-hidden />
 }
 
@@ -999,7 +997,7 @@ function SlotRowLabel({
             data-testid={`slot-row-menu-${slot.id}`}
             className="absolute top-1 right-1 size-5 text-on-surface-variant/60 opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-on-surface-variant focus-visible:opacity-100 data-[state=open]:opacity-100"
           >
-            <Lucide.MoreHorizontal className="h-3 w-3" />
+            <MoreHorizontal className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-60">
@@ -1008,7 +1006,7 @@ function SlotRowLabel({
             disabled={plateCount === 0}
             data-testid={`slot-row-copy-${slot.id}`}
           >
-            <Lucide.Copy className="size-4" />
+            <Copy className="size-4" />
             {t("planner.row_actions.copy_across")}
           </DropdownMenuItem>
           {plateCount > 0 && (
@@ -1019,7 +1017,7 @@ function SlotRowLabel({
                 variant="destructive"
                 data-testid={`slot-row-clear-${slot.id}`}
               >
-                <Lucide.Trash2 className="size-4" />
+                <Trash2 className="size-4" />
                 {t("planner.row_actions.clear", { count: plateCount })}
               </DropdownMenuItem>
             </>

@@ -1,6 +1,5 @@
 import { useState, useDeferredValue } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
-import * as Lucide from "lucide-react"
 import { ChevronsUpDown, Search, Trash2 } from "lucide-react"
 import { useForm, type Resolver } from "react-hook-form"
 import { useTranslation } from "react-i18next"
@@ -29,58 +28,17 @@ import {
   useTimeSlots,
 } from "@/lib/queries/slots"
 import { slotSchema, type SlotFormValues } from "@/lib/schemas/slot"
+import {
+  SLOT_ICONS,
+  SLOT_ICON_FALLBACK,
+  SLOT_ICON_NAMES,
+} from "@/lib/slot-icons"
 import { slotLabel } from "@/lib/slot-label"
 import { toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
-const RECOMMENDED_ICONS = [
-  "Coffee",
-  "Sun",
-  "Sunrise",
-  "Sunset",
-  "Moon",
-  "UtensilsCrossed",
-  "Pizza",
-  "Apple",
-  "Egg",
-  "Fish",
-  "Carrot",
-  "Cookie",
-  "Milk",
-  "Wheat",
-  "Leaf",
-  "Soup",
-  "Sandwich",
-  "Cherry",
-  "Heart",
-  "Star",
-  "Clock",
-  "Timer",
-  "Salad",
-  "FlameKindling",
-]
-
-// Lucide exports each icon under three aliases (e.g. Coffee, CoffeeIcon,
-// LucideCoffee). Keep the canonical PascalCase form and drop provider/helper
-// exports that happen to start with a capital letter.
-const ALL_ICON_NAMES: string[] = Object.keys(Lucide as Record<string, unknown>)
-  .filter(
-    (k) =>
-      /^[A-Z]/.test(k) &&
-      !/Icon$/.test(k) &&
-      !/^Lucide/.test(k) &&
-      k !== "createLucideIcon"
-  )
-  .sort()
-
 function SlotIcon({ name, className }: { name: string; className?: string }) {
-  const Icon = (
-    Lucide as unknown as Record<string, Lucide.LucideIcon | undefined>
-  )[name]
-  if (!Icon)
-    return (
-      <Lucide.HelpCircle className={cn("h-4 w-4", className)} aria-hidden />
-    )
+  const Icon = SLOT_ICONS[name] ?? SLOT_ICON_FALLBACK
   return <Icon className={cn("h-4 w-4", className)} aria-hidden />
 }
 
@@ -96,10 +54,10 @@ function IconPicker({
   const deferred = useDeferredValue(search)
 
   const icons = deferred
-    ? ALL_ICON_NAMES.filter((n) =>
+    ? SLOT_ICON_NAMES.filter((n) =>
         n.toLowerCase().includes(deferred.toLowerCase())
-      ).slice(0, 100)
-    : RECOMMENDED_ICONS
+      )
+    : SLOT_ICON_NAMES
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

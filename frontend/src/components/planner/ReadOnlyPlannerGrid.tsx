@@ -1,5 +1,4 @@
 import { format, parseISO } from "date-fns"
-import * as Lucide from "lucide-react"
 import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -7,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import type { Food } from "@/lib/api/foods"
 import type { TimeSlot } from "@/lib/api/slots"
 import { useFoods } from "@/lib/queries/foods"
+import { SLOT_ICONS, SLOT_ICON_FALLBACK } from "@/lib/slot-icons"
 import { slotLabel } from "@/lib/slot-label"
 
 import type { PlannerDay } from "./PlannerGrid"
@@ -29,10 +29,7 @@ interface ReadOnlyPlannerGridProps {
 }
 
 function SlotIcon({ name }: { name: string }) {
-  const Icon = (
-    Lucide as unknown as Record<string, Lucide.LucideIcon | undefined>
-  )[name]
-  if (!Icon) return <Lucide.HelpCircle className="h-4 w-4" aria-hidden />
+  const Icon = SLOT_ICONS[name] ?? SLOT_ICON_FALLBACK
   return <Icon className="h-4 w-4" aria-hidden />
 }
 
