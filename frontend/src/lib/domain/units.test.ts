@@ -1,11 +1,42 @@
-import { describe, expect, it } from "vitest"
+import { beforeAll, describe, expect, it } from "vitest"
 import {
   availableUnits,
+  initUnitsVocabulary,
   isCountUnit,
   normalizeUnit,
   resolveGrams,
   unitGroups,
 } from "./units"
+
+// Seed the module-level vocabulary with the same canonical data the backend
+// serves at GET /api/units so tests run without a real network request.
+beforeAll(() => {
+  initUnitsVocabulary([
+    { id: "g", group: "mass", grams: 1, approximate: false },
+    { id: "kg", group: "mass", grams: 1000, approximate: false },
+    { id: "mg", group: "mass", grams: 0.001, approximate: false },
+    { id: "oz", group: "mass", grams: 28.3495, approximate: false },
+    { id: "lb", group: "mass", grams: 453.592, approximate: false },
+    { id: "ml", group: "volume", grams: 1, approximate: true },
+    { id: "l", group: "volume", grams: 1000, approximate: true },
+    { id: "cl", group: "volume", grams: 10, approximate: true },
+    { id: "dl", group: "volume", grams: 100, approximate: true },
+    { id: "tbsp", group: "volume", grams: 15, approximate: true },
+    { id: "tsp", group: "volume", grams: 5, approximate: true },
+    { id: "cup", group: "volume", grams: 240, approximate: true },
+    { id: "floz", group: "volume", grams: 29.5735, approximate: true },
+    { id: "piece", group: "count" },
+    { id: "clove", group: "count" },
+    { id: "slice", group: "count" },
+    { id: "bunch", group: "count" },
+    { id: "pinch", group: "count" },
+    { id: "stick", group: "count" },
+    { id: "can", group: "count" },
+    { id: "jar", group: "count" },
+    { id: "packet", group: "count" },
+    { id: "serving", group: "count" },
+  ])
+})
 
 describe("normalizeUnit", () => {
   it.each([

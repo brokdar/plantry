@@ -280,49 +280,45 @@ func (s *Service) materialiseOnto(
 		if err != nil {
 			return fmt.Errorf("load existing plates: %w", err)
 		}
-		occupancy := make(map[int64]plate.Plate, len(existing))
-		for _, ep := range existing {
-			occupancy[ep.SlotID] = ep
-		}
 
-		// Sort by sort_order so duplicate slot_ids inside a preset land in
-		// stable order (first wins; rest hit "occupied" semantics).
-		sort.SliceStable(plates, func(i, j int) bool { return plates[i].SortOrder < plates[j].SortOrder })
+		plan := PlanApply(ApplyInput{
+			Plates:         plates,
+			TargetDate:     targetDate,
+			ExistingPlates: existing,
+			ActiveSlots:    activeSlots,
+			OnConflict:     conflict,
+		})
 
-		for _, pp := range plates {
-			if !isSlotActive(activeSlots, pp.SlotID) {
-				result.SkippedNoSlot = append(result.SkippedNoSlot, SkipItem{Date: targetDate, SlotID: pp.SlotID})
-				continue
-			}
-			if existingPlate, taken := occupancy[pp.SlotID]; taken {
-				if conflict == ConflictSkip {
-					result.SkippedOccupied = append(result.SkippedOccupied, SkipItem{Date: targetDate, SlotID: pp.SlotID})
-					continue
-				}
-				oldFull, err := plateRepo.Get(ctx, existingPlate.ID)
+		result.SkippedNoSlot = plan.SkippedNoSlot
+		result.SkippedOccupied = plan.SkippedOccupied
+
+		// Execute the plan: delete old plates, create new ones.
+		for i, entry := range plan.ToCreate {
+			deleteID := plan.ToDeleteBeforeCreate[i]
+			if deleteID != 0 {
+				// Overwrite path: load full plate for snapshot before deleting.
+				oldFull, err := plateRepo.Get(ctx, deleteID)
 				if err != nil {
-					return fmt.Errorf("load plate %d for snapshot: %w", existingPlate.ID, err)
+					return fmt.Errorf("load plate %d for snapshot: %w", deleteID, err)
 				}
-				if err := plateRepo.Delete(ctx, existingPlate.ID); err != nil {
-					return fmt.Errorf("delete plate %d: %w", existingPlate.ID, err)
+				if err := plateRepo.Delete(ctx, deleteID); err != nil {
+					return fmt.Errorf("delete plate %d: %w", deleteID, err)
 				}
-				newPlate, err := materialiseFromPresetComponents(ctx, plateRepo, targetDate, pp.SlotID, pp.Components)
+				newPlate, err := materialiseFromPresetComponents(ctx, plateRepo, targetDate, entry.SlotID, entry.Components)
 				if err != nil {
 					return err
 				}
 				result.Replaced = append(result.Replaced, ReplacedItem{NewPlate: *newPlate, OldPlate: *oldFull})
 				result.Snapshot.CreatedPlateIDs = append(result.Snapshot.CreatedPlateIDs, newPlate.ID)
 				result.Snapshot.ReplacedPlates = append(result.Snapshot.ReplacedPlates, *oldFull)
-				occupancy[pp.SlotID] = *newPlate
 				continue
 			}
-			newPlate, err := materialiseFromPresetComponents(ctx, plateRepo, targetDate, pp.SlotID, pp.Components)
+			newPlate, err := materialiseFromPresetComponents(ctx, plateRepo, targetDate, entry.SlotID, entry.Components)
 			if err != nil {
 				return err
 			}
 			result.Created = append(result.Created, *newPlate)
 			result.Snapshot.CreatedPlateIDs = append(result.Snapshot.CreatedPlateIDs, newPlate.ID)
-			occupancy[pp.SlotID] = *newPlate
 		}
 
 		// Only bump last_used_at if at least one plate was created or replaced.

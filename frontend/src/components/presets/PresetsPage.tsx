@@ -24,7 +24,7 @@ import {
   useUpdatePreset,
 } from "@/lib/queries/presets"
 import { useTimeSlots } from "@/lib/queries/slots"
-import { toast, toastError } from "@/lib/toast"
+import { toast } from "@/lib/toast"
 
 import { PresetCard } from "./PresetCard"
 import { PresetEditorDrawer } from "./PresetEditorDrawer"
@@ -241,7 +241,6 @@ export function PresetsPage() {
                       toast.success(
                         t("preset.duplicated", { name: created.name })
                       ),
-                    onError: (err) => toastError(err, t),
                   })
                 }}
                 onDelete={(p) => setDeleteTarget(p)}
@@ -271,7 +270,6 @@ export function PresetsPage() {
                   toast.success(t("preset.renamed"))
                   setRenameTarget(null)
                 },
-                onError: (err) => toastError(err, t),
               }
             )
           }
@@ -308,7 +306,6 @@ export function PresetsPage() {
                     toast.success(t("preset.deleted"))
                     setDeleteTarget(null)
                   },
-                  onError: (err) => toastError(err, t),
                 })
               }}
             >

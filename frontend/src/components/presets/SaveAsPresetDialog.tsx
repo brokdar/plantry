@@ -28,7 +28,7 @@ import {
   savePresetFormSchema,
   type SavePresetFormValues,
 } from "@/lib/schemas/preset"
-import { toast, toastError } from "@/lib/toast"
+import { toast } from "@/lib/toast"
 
 export interface SaveAsPresetTarget {
   /** Plate IDs to materialise into the preset's plates list. */
@@ -102,7 +102,6 @@ export function SaveAsPresetDialog({
           toast.success(t("preset.created", { name }))
           handleOpenChange(false)
         },
-        onError: (err) => toastError(err, t),
       }
     )
   }

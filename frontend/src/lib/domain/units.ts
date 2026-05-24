@@ -1,6 +1,9 @@
-// Canonical unit vocabulary for recipe ingredients. Mirrors the backend
-// package `backend/internal/domain/units`. When adding a unit, update both
-// sides.
+// Unit vocabulary for recipe ingredients. The canonical unit list is served
+// by the backend at GET /api/units. Call `initUnitsVocabulary` once (e.g. in
+// the app root after the units query resolves) to populate the module-level
+// state used by `resolveGrams`, `unitGroups`, and friends.
+
+import type { UnitDescriptor } from "@/lib/api/units"
 
 export type UnitKind = "mass" | "volume" | "count"
 
@@ -18,43 +21,45 @@ export interface UnitDefault {
   approximate: boolean
 }
 
-export const UNIT_DEFAULTS: Record<string, UnitDefault> = {
-  g: { grams: 1, kind: "mass", approximate: false },
-  kg: { grams: 1000, kind: "mass", approximate: false },
-  mg: { grams: 0.001, kind: "mass", approximate: false },
-  oz: { grams: 28.3495, kind: "mass", approximate: false },
-  lb: { grams: 453.592, kind: "mass", approximate: false },
-  ml: { grams: 1, kind: "volume", approximate: true },
-  l: { grams: 1000, kind: "volume", approximate: true },
-  cl: { grams: 10, kind: "volume", approximate: true },
-  dl: { grams: 100, kind: "volume", approximate: true },
-  tbsp: { grams: 15, kind: "volume", approximate: true },
-  tsp: { grams: 5, kind: "volume", approximate: true },
-  cup: { grams: 240, kind: "volume", approximate: true },
-  floz: { grams: 29.5735, kind: "volume", approximate: true },
-  pt: { grams: 473.176, kind: "volume", approximate: true },
-  qt: { grams: 946.353, kind: "volume", approximate: true },
-  gal: { grams: 3785.41, kind: "volume", approximate: true },
-}
+// Module-level vocabulary — populated via initUnitsVocabulary().
+export let UNIT_DEFAULTS: Record<string, UnitDefault> = {}
+export let COUNT_UNITS: Set<string> = new Set()
+let _massUnits: string[] = []
+let _volumeUnits: string[] = []
+let _countUnitsOrdered: string[] = []
 
-export const COUNT_UNITS = new Set([
-  "piece",
-  "clove",
-  "slice",
-  "bunch",
-  "pinch",
-  "stick",
-  "can",
-  "jar",
-  "packet",
-  "stalk",
-  "pod",
-  "head",
-  "leaf",
-  "leaves",
-  "sprig",
-  "serving", // treated as count so a serving without grams is clearly unresolved
-])
+/**
+ * Populate the module-level unit vocabulary from the backend's canonical list.
+ * Call once after `useUnits()` data is available (typically in the app root).
+ */
+export function initUnitsVocabulary(descriptors: UnitDescriptor[]): void {
+  const defaults: Record<string, UnitDefault> = {}
+  const countSet = new Set<string>()
+  const mass: string[] = []
+  const volume: string[] = []
+  const count: string[] = []
+
+  for (const d of descriptors) {
+    if (d.group === "mass" || d.group === "volume") {
+      defaults[d.id] = {
+        grams: d.grams ?? 0,
+        kind: d.group,
+        approximate: d.approximate ?? false,
+      }
+      if (d.group === "mass") mass.push(d.id)
+      else volume.push(d.id)
+    } else {
+      countSet.add(d.id)
+      count.push(d.id)
+    }
+  }
+
+  UNIT_DEFAULTS = defaults
+  COUNT_UNITS = countSet
+  _massUnits = mass
+  _volumeUnits = volume
+  _countUnitsOrdered = count
+}
 
 const ALIASES: Record<string, string> = {
   // Mass
@@ -277,30 +282,6 @@ export interface UnitOption {
   grams?: number
 }
 
-const MASS_UNITS = ["g", "kg", "mg", "oz", "lb"] as const
-const VOLUME_UNITS = [
-  "ml",
-  "l",
-  "cl",
-  "dl",
-  "tbsp",
-  "tsp",
-  "cup",
-  "floz",
-] as const
-const COUNT_UNITS_ORDERED = [
-  "piece",
-  "clove",
-  "slice",
-  "bunch",
-  "pinch",
-  "stick",
-  "can",
-  "jar",
-  "packet",
-  "serving",
-] as const
-
 /**
  * Partitions unit options into labelled groups for a grouped dropdown.
  * Ingredient-specific portions come first (most relevant), then mass → volume
@@ -324,21 +305,21 @@ export function unitGroups(portions: PortionLookup[] = []): {
   }
 
   const mass: UnitOption[] = []
-  for (const key of MASS_UNITS) {
+  for (const key of _massUnits) {
     if (seen.has(key)) continue
     seen.add(key)
     mass.push({ key, group: "mass" })
   }
 
   const volume: UnitOption[] = []
-  for (const key of VOLUME_UNITS) {
+  for (const key of _volumeUnits) {
     if (seen.has(key)) continue
     seen.add(key)
     volume.push({ key, group: "volume" })
   }
 
   const count: UnitOption[] = []
-  for (const key of COUNT_UNITS_ORDERED) {
+  for (const key of _countUnitsOrdered) {
     if (seen.has(key)) continue
     seen.add(key)
     count.push({ key, group: "count" })

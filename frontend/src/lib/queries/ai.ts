@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback, useRef } from "react"
+import { useTranslation } from "react-i18next"
 
 import {
   deleteConversation,
@@ -11,6 +12,8 @@ import {
 import type { ChatEvent, ChatRequest } from "../domain/chatEvents"
 import { chatStreamStore } from "../stores/chat-stream"
 import { useChatUI } from "../stores/chat-ui"
+
+import { toastError } from "@/lib/toast"
 
 import { aiKeys, plateKeys, shoppingKeys } from "./keys"
 
@@ -40,11 +43,13 @@ export function useConversation(id: number | null) {
 
 export function useDeleteConversation() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (id: number) => deleteConversation(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: aiKeys.all })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 

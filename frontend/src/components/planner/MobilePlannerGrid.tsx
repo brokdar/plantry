@@ -285,14 +285,12 @@ export function MobilePlannerGrid({
     status: "loved" | "disliked",
     current?: string
   ) {
-    try {
-      if (current === status) {
-        await clearFeedbackMut.mutateAsync(plateId)
-      } else {
-        await recordFeedbackMut.mutateAsync({ plateId, input: { status } })
-      }
-    } catch (err) {
-      toastError(err, t)
+    if (current === status) {
+      await clearFeedbackMut.mutateAsync(plateId).catch(() => {})
+    } else {
+      await recordFeedbackMut
+        .mutateAsync({ plateId, input: { status } })
+        .catch(() => {})
     }
   }
 
@@ -381,19 +379,15 @@ export function MobilePlannerGrid({
   ) {
     const targetDay = days[dayIdx]
     if (!targetDay) return
-    try {
-      await toggleSkip({
-        date: targetDay.date,
-        slotId,
-        existing: targetDay.plates.find((p) => p.slot_id === slotId),
-        noteOverride,
-        rangeFrom,
-        rangeTo,
-        setSkipped: setSkippedMut.mutateAsync,
-      })
-    } catch (err) {
-      toastError(err, t)
-    }
+    await toggleSkip({
+      date: targetDay.date,
+      slotId,
+      existing: targetDay.plates.find((p) => p.slot_id === slotId),
+      noteOverride,
+      rangeFrom,
+      rangeTo,
+      setSkipped: setSkippedMut.mutateAsync,
+    }).catch(() => {})
   }
 
   async function handleToggleFavorite(
@@ -401,11 +395,9 @@ export function MobilePlannerGrid({
     current: boolean
   ) {
     if (!componentId) return
-    try {
-      await setFavoriteMut.mutateAsync({ id: componentId, favorite: !current })
-    } catch (err) {
-      toastError(err, t)
-    }
+    await setFavoriteMut
+      .mutateAsync({ id: componentId, favorite: !current })
+      .catch(() => {})
   }
 
   // Which row's swipe drawer is currently revealed (slot id, scoped to the
@@ -687,22 +679,6 @@ export function MobilePlannerGrid({
           }
         }}
         onSaveAsPreset={(plateId) => openSavePreset(plateId)}
-        onToggleSkip={(target, currentSkipped) => {
-          const dayIdx = days.findIndex((d) => d.date === target.date)
-          if (dayIdx < 0) return
-          void handleToggleSkip(dayIdx, target.slotId, target.plateId)
-          if (!currentSkipped) setSheetTarget(null)
-        }}
-        onDeletePlate={(plateId) => {
-          handleDeletePlate(plateId)
-          setSheetTarget(null)
-        }}
-        onMovePlate={(target, newDate) => {
-          const targetIdx = days.findIndex((d) => d.date === newDate)
-          if (targetIdx < 0 || newDate === target.date) return
-          setSheetTarget(null)
-          void handleDropOnDay(target.plateId, targetIdx)
-        }}
       />
     </div>
   )
