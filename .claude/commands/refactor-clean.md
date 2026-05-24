@@ -6,7 +6,6 @@ description: Safely identify and remove dead code with verification after each c
 
 Safely identify and remove dead code with test verification at every step.
 
-**Project root:** `/Users/jaltszeimer/Developer/apps/plantry`
 **Stacks:** Go backend (`backend/`) · TypeScript/Svelte frontend (`frontend/`)
 **Agent:** invoke `refactor-cleaner` to run this workflow autonomously.
 
@@ -59,6 +58,7 @@ Do not delete RISKY items without explicit user instruction. Report them separat
 ## Step 6: Consolidate Duplicates
 
 After removing dead code, look for:
+
 - Near-duplicate functions (>80% similar) — merge into one
 - Redundant type definitions — consolidate
 - Wrapper functions that add no value — inline them
