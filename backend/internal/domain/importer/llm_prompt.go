@@ -46,9 +46,9 @@ func (s *Service) llmExtract(ctx context.Context, htmlBody string) (*RawRecipe, 
 		MaxTokens:   4096,
 	}
 
-	text, err := runLLMOnce(ctx, client, req)
+	text, err := client.Complete(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", domain.ErrImportLLMFailed, err)
 	}
 
 	rec, parseErr := parseLLMResponse(text)
@@ -65,9 +65,9 @@ func (s *Service) llmExtract(ctx context.Context, htmlBody string) (*RawRecipe, 
 		llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: text}}},
 		llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "Your previous response was not valid JSON. Output only the JSON object, nothing else."}}},
 	)
-	text2, err := runLLMOnce(ctx, client, req)
+	text2, err := client.Complete(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", domain.ErrImportLLMFailed, err)
 	}
 	rec, parseErr = parseLLMResponse(text2)
 	if parseErr != nil {
@@ -77,36 +77,6 @@ func (s *Service) llmExtract(ctx context.Context, htmlBody string) (*RawRecipe, 
 		return nil, fmt.Errorf("%w: %v", domain.ErrImportLLMFailed, parseErr)
 	}
 	return rec, nil
-}
-
-// runLLMOnce sends a single request through the streaming interface, drains the
-// event channel, and returns the assembled assistant text.
-func runLLMOnce(ctx context.Context, client llm.Client, req llm.Request) (string, error) {
-	events := make(chan llm.Event, 16)
-	// Drain events in a goroutine — we only care about the final Response.
-	done := make(chan struct{})
-	go func() {
-		for range events {
-		}
-		close(done)
-	}()
-
-	resp, err := client.Stream(ctx, req, events)
-	<-done
-	if err != nil {
-		return "", fmt.Errorf("%w: %v", domain.ErrImportLLMFailed, err)
-	}
-	if resp == nil {
-		return "", domain.ErrImportLLMFailed
-	}
-
-	var sb strings.Builder
-	for _, block := range resp.Message.Content {
-		if block.Type == llm.ContentTypeText {
-			sb.WriteString(block.Text)
-		}
-	}
-	return sb.String(), nil
 }
 
 // parseLLMResponse converts the strict-JSON assistant output into a RawRecipe.

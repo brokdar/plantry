@@ -103,6 +103,11 @@ type Response struct {
 // return promptly. The returned error is non-nil only for network/protocol
 // failures; a successful turn that ended in tool_use still returns a non-nil
 // Response whose StopReason == StopReasonToolUse.
+//
+// Complete sends req and returns the assembled text content of the assistant
+// turn. It drains the event channel internally and is equivalent to calling
+// Stream with a throwaway channel. Use when streaming events are not needed.
 type Client interface {
 	Stream(ctx context.Context, req Request, out chan<- Event) (*Response, error)
+	Complete(ctx context.Context, req Request) (string, error)
 }

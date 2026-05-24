@@ -31,6 +31,45 @@ Rules:
 - Return ONLY a JSON array of integers with the same number of elements as the number of ingredients
 - No markdown, no explanation, just the JSON array`
 
+// llmTranslator implements QueryTranslator using an LLM.
+type llmTranslator struct {
+	resolver llm.Resolver
+}
+
+func (t *llmTranslator) Translate(ctx context.Context, query string, trace *LookupTrace) string {
+	client, model, err := t.resolver.Current(ctx)
+	if err != nil || client == nil {
+		if err != nil {
+			trace.Add(TraceEntry{
+				Step: "ai.translate", Level: TraceLevelInfo,
+				Summary: "AI skipped: " + err.Error(),
+				Detail:  AITranslationDetail{InputQuery: query, Error: err.Error()},
+			})
+		}
+		return query
+	}
+	return translateQuery(ctx, client, model, query, trace)
+}
+
+// llmPicker implements CandidatePicker using an LLM.
+type llmPicker struct {
+	resolver llm.Resolver
+}
+
+func (p *llmPicker) Pick(ctx context.Context, query string, candidates []Candidate, trace *LookupTrace) int {
+	client, model, err := p.resolver.Current(ctx)
+	if err != nil || client == nil {
+		if err != nil {
+			trace.Add(TraceEntry{
+				Step: "ai.pick_best", Level: TraceLevelInfo,
+				Summary: "AI skipped: " + err.Error(),
+			})
+		}
+		return 0
+	}
+	return pickBest(ctx, client, model, query, candidates, trace)
+}
+
 func translateQuery(ctx context.Context, client llm.Client, model, query string, trace *LookupTrace) string {
 	if client == nil || strings.TrimSpace(query) == "" {
 		return query
@@ -38,7 +77,7 @@ func translateQuery(ctx context.Context, client llm.Client, model, query string,
 
 	start := time.Now()
 	userMsg := mustJSONString([]string{query})
-	raw, err := runOneShot(ctx, client, llm.Request{
+	raw, err := client.Complete(ctx, llm.Request{
 		Model:       model,
 		System:      translateQueryPrompt,
 		Messages:    []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: userMsg}}}},
@@ -102,7 +141,7 @@ Candidates for ingredient 1:
 	)
 
 	start := time.Now()
-	raw, err := runOneShot(ctx, client, llm.Request{
+	raw, err := client.Complete(ctx, llm.Request{
 		Model:       model,
 		System:      pickBestPrompt,
 		Messages:    []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: userMsg}}}},
@@ -170,33 +209,6 @@ func formatCandidateDescriptions(candidates []Candidate) []string {
 		out[i] = fmt.Sprintf(`[%d] %q (%s%s)`, i, name, c.Source, kcal)
 	}
 	return out
-}
-
-func runOneShot(ctx context.Context, client llm.Client, req llm.Request) (string, error) {
-	events := make(chan llm.Event, 16)
-	done := make(chan struct{})
-	go func() {
-		for range events {
-		}
-		close(done)
-	}()
-
-	resp, err := client.Stream(ctx, req, events)
-	<-done
-	if err != nil {
-		return "", err
-	}
-	if resp == nil {
-		return "", fmt.Errorf("nil response")
-	}
-
-	var sb strings.Builder
-	for _, block := range resp.Message.Content {
-		if block.Type == llm.ContentTypeText {
-			sb.WriteString(block.Text)
-		}
-	}
-	return sb.String(), nil
 }
 
 func stripFences(s string) string {

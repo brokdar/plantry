@@ -2,6 +2,18 @@ package food
 
 import "context"
 
+// QueryTranslator rewrites a (possibly non-English) query into an English
+// FDC search term. Returns the original query unchanged if no translation is possible.
+type QueryTranslator interface {
+	Translate(ctx context.Context, query string, trace *LookupTrace) string
+}
+
+// CandidatePicker selects the best-matching candidate for a query.
+// Returns 0 (first result) if no confident pick can be made.
+type CandidatePicker interface {
+	Pick(ctx context.Context, query string, candidates []Candidate, trace *LookupTrace) int
+}
+
 // Candidate represents an external lookup result (OFF, FDC) that can be
 // promoted into a leaf food. Only leaf foods have provenance and direct
 // per-100g nutrition, so composed foods never come from a Candidate.

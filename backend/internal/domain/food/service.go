@@ -24,10 +24,17 @@ type ImageDeleter interface {
 	Delete(category string, id int64) error
 }
 
+// ImageSaver downloads and stores an image from a URL.
+// Returns the relative path of the saved image (e.g., "foods/42.jpg").
+type ImageSaver interface {
+	SaveFromURL(ctx context.Context, url, category string, id int64) (string, error)
+}
+
 // Service holds business logic for foods (both leaf and composed).
 type Service struct {
 	repo            Repository
 	images          ImageDeleter    // optional; nil-safe
+	imgStore        ImageSaver      // optional; nil-safe
 	portionProvider PortionProvider // optional; SyncPortionsFromFDC returns ErrLookupFailed when nil
 }
 
@@ -39,6 +46,12 @@ func NewService(repo Repository) *Service {
 // WithImageStore wires an image deleter so Delete cleans up orphaned image files.
 func (s *Service) WithImageStore(img ImageDeleter) *Service {
 	s.images = img
+	return s
+}
+
+// WithImageSaver wires an image saver so CreateFromLookup can download images.
+func (s *Service) WithImageSaver(img ImageSaver) *Service {
+	s.imgStore = img
 	return s
 }
 
@@ -64,6 +77,40 @@ func (s *Service) Create(ctx context.Context, f *Food) error {
 		}
 	}
 	return s.repo.Create(ctx, f)
+}
+
+// CreateFromLookup creates a leaf food and runs best-effort post-create
+// enrichment: FDC portion sync, a serving-size portion, and image download.
+// Returns the hydrated food (with portions loaded).
+func (s *Service) CreateFromLookup(ctx context.Context, f *Food, servingQuantityG *float64, imageURL *string) (*Food, error) {
+	if err := s.Create(ctx, f); err != nil {
+		return nil, err
+	}
+
+	// Best-effort FDC portion sync so the user gets honey tbsp=21g etc.
+	if f.FdcID != nil && *f.FdcID != "" {
+		_, _ = s.SyncPortionsFromFDC(ctx, f.ID)
+	}
+
+	// OFF-sourced products carry a per-serving gram weight.
+	if servingQuantityG != nil && *servingQuantityG > 0 {
+		_ = s.UpsertPortion(ctx, &Portion{
+			FoodID: f.ID,
+			Unit:   "serving",
+			Grams:  *servingQuantityG,
+		})
+	}
+
+	// Download image if URL provided + image store available.
+	if imageURL != nil && *imageURL != "" && s.imgStore != nil {
+		imgPath, err := s.imgStore.SaveFromURL(ctx, *imageURL, "foods", f.ID)
+		if err == nil {
+			f.ImagePath = &imgPath
+			_ = s.Update(ctx, f)
+		}
+	}
+
+	return s.Get(ctx, f.ID)
 }
 
 // Get retrieves a food by ID with its children, instructions, tags, and portions.

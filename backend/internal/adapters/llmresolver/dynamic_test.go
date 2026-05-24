@@ -61,6 +61,10 @@ func (s *stubClient) Stream(_ context.Context, _ llm.Request, out chan<- llm.Eve
 	return nil, nil
 }
 
+func (s *stubClient) Complete(_ context.Context, _ llm.Request) (string, error) {
+	return "", nil
+}
+
 const testSecret = "0123456789abcdef0123456789abcdef"
 
 func TestCurrent_ProviderMissing(t *testing.T) {

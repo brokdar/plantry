@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -97,6 +98,32 @@ func (c *Client) reload() error {
 	}
 	c.script = &s
 	return nil
+}
+
+// Complete implements llm.Client.Complete.
+func (c *Client) Complete(ctx context.Context, req llm.Request) (string, error) {
+	events := make(chan llm.Event, 16)
+	done := make(chan struct{})
+	go func() {
+		for range events {
+		}
+		close(done)
+	}()
+	resp, err := c.Stream(ctx, req, events)
+	<-done
+	if err != nil {
+		return "", err
+	}
+	if resp == nil {
+		return "", fmt.Errorf("fake: nil response")
+	}
+	var sb strings.Builder
+	for _, block := range resp.Message.Content {
+		if block.Type == llm.ContentTypeText {
+			sb.WriteString(block.Text)
+		}
+	}
+	return sb.String(), nil
 }
 
 // Stream replays the next scripted turn. The final turn is reused for any

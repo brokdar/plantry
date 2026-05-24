@@ -120,6 +120,7 @@ func run() error {
 			return fmt.Errorf("image store: %w", err)
 		}
 		foodSvc.WithImageStore(imgStore)
+		foodSvc.WithImageSaver(imgStore)
 	}
 
 	slotRepo := sqlite.NewSlotRepo(conn)
@@ -198,7 +199,7 @@ func run() error {
 
 	h := transport.Handlers{
 		Foods:          handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore),
-		Lookup:         handlers.NewLookupHandler(resolver, imgStore, foodSvc),
+		Lookup:         handlers.NewLookupHandler(resolver, foodSvc),
 		ImageProxy:     handlers.NewImageProxyHandler(),
 		ImageStore:     imgStore,
 		Slots:          handlers.NewSlotHandler(slotSvc),
