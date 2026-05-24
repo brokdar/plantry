@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import type { ApplySnapshot } from "@/lib/api/presets"
 import { useCopyWeek, useUndoApply } from "@/lib/queries/presets"
 import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
 import { toastError } from "@/lib/toast"
@@ -32,6 +33,16 @@ export function CopyFromWeekDialog({
   targetStart,
   defaultSourceStart,
 }: CopyFromWeekDialogProps) {
+  const { t } = useTranslation()
+  // Kept at this always-mounted level so the mutation observer survives dialog
+  // close — DialogBody unmounts on close, which would destroy the observer
+  // before the toast's Undo action fires.
+  const undoMutation = useUndoApply()
+
+  function handleUndo(snapshot: ApplySnapshot) {
+    undoMutation.mutate(snapshot, { onError: (err) => toastError(err, t) })
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent data-testid="copy-from-week-dialog">
@@ -43,6 +54,7 @@ export function CopyFromWeekDialog({
             defaultSourceStart={defaultSourceStart}
             targetStart={targetStart}
             onClose={() => onOpenChange(false)}
+            onUndo={handleUndo}
           />
         )}
       </DialogContent>
@@ -54,19 +66,20 @@ interface DialogBodyProps {
   defaultSourceStart: string
   targetStart: string
   onClose: () => void
+  onUndo: (snapshot: ApplySnapshot) => void
 }
 
 function DialogBody({
   defaultSourceStart,
   targetStart,
   onClose,
+  onUndo,
 }: DialogBodyProps) {
   const { t } = useTranslation()
   const [sourceStart, setSourceStart] = useState(defaultSourceStart)
   const [conflict, setConflict] = useState<"skip" | "overwrite">("skip")
 
   const copyMutation = useCopyWeek()
-  const undoMutation = useUndoApply()
 
   function handleSubmit() {
     copyMutation.mutate(
@@ -77,11 +90,7 @@ function DialogBody({
       },
       {
         onSuccess: (result) => {
-          showPresetApplyToasts(result, t, (snap) =>
-            undoMutation.mutate(snap, {
-              onError: (err) => toastError(err, t),
-            })
-          )
+          showPresetApplyToasts(result, t, onUndo)
           onClose()
         },
         onError: (err) => toastError(err, t),

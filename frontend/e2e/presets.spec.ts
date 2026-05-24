@@ -317,6 +317,12 @@ test.describe("Presets", () => {
       const applied = await applyResp
       expect(applied.status()).toBe(200)
 
+      // Assert the Undo toast is visible immediately after apply, before the
+      // planner refetch completes — this prevents racing Sonner's 4 s auto-dismiss
+      // on slow CI machines.
+      const undoButton = page.getByRole("button", { name: "Undo", exact: true })
+      await expect(undoButton).toBeVisible()
+
       // Slot now shows Pasta (the preset content), not Rice.
       await expect(cell.getByText(`Pasta ${tag}`)).toBeVisible()
 
@@ -326,7 +332,7 @@ test.describe("Presets", () => {
           /\/api\/presets\/undo-apply$/.test(r.url()) &&
           r.request().method() === "POST"
       )
-      await page.getByRole("button", { name: /undo/i }).first().click()
+      await undoButton.click()
       const undone = await undoResp
       expect(undone.status()).toBe(204)
 

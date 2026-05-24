@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import type { Preset } from "@/lib/api/presets"
+import type { ApplySnapshot, Preset } from "@/lib/api/presets"
 import { useApplyPreset, usePresets, useUndoApply } from "@/lib/queries/presets"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
@@ -31,6 +31,14 @@ export function CommandPalette({
   const navigate = useNavigate()
   const [query, setQuery] = useState("")
   const [targetForPreset, setTargetForPreset] = useState<Preset | null>(null)
+  // Kept at this always-mounted level so the mutation observer survives dialog
+  // close — TargetPicker unmounts on close, which would destroy the observer
+  // before the toast's Undo action fires.
+  const undoMutation = useUndoApply()
+
+  function handleUndo(snapshot: ApplySnapshot) {
+    undoMutation.mutate(snapshot, { onError: (err) => toastError(err, t) })
+  }
 
   // Reset query each time the palette opens via re-mount key.
   return (
@@ -54,6 +62,7 @@ export function CommandPalette({
             setQuery={setQuery}
             targetForPreset={targetForPreset}
             setTargetForPreset={setTargetForPreset}
+            onUndo={handleUndo}
           />
         )}
       </DialogContent>
@@ -71,6 +80,7 @@ interface PaletteBodyProps {
   setQuery: (q: string) => void
   targetForPreset: Preset | null
   setTargetForPreset: (p: Preset | null) => void
+  onUndo: (snapshot: ApplySnapshot) => void
 }
 
 function PaletteBody({
@@ -83,6 +93,7 @@ function PaletteBody({
   setQuery,
   targetForPreset,
   setTargetForPreset,
+  onUndo,
 }: PaletteBodyProps) {
   const presetsQuery = usePresets({
     search: query || undefined,
@@ -96,6 +107,7 @@ function PaletteBody({
         defaultTargetDate={defaultTargetDate}
         onCancel={() => setTargetForPreset(null)}
         onDone={close}
+        onUndo={onUndo}
       />
     )
   }
@@ -166,6 +178,7 @@ interface TargetPickerProps {
   defaultTargetDate: string
   onCancel: () => void
   onDone: () => void
+  onUndo: (snapshot: ApplySnapshot) => void
 }
 
 function TargetPicker({
@@ -173,13 +186,13 @@ function TargetPicker({
   defaultTargetDate,
   onCancel,
   onDone,
+  onUndo,
 }: TargetPickerProps) {
   const { t } = useTranslation()
   const [date, setDate] = useState(defaultTargetDate)
   const [slotsFilter, setSlotsFilter] = useState<Set<number>>(new Set())
   const slotsQuery = useTimeSlots(true)
   const applyMutation = useApplyPreset()
-  const undoMutation = useUndoApply()
 
   const presetSlotIDs = useMemo(
     () => new Set(preset.plates.map((p) => p.slot_id)),
@@ -202,11 +215,7 @@ function TargetPicker({
       },
       {
         onSuccess: (result) => {
-          showPresetApplyToasts(result, t, (snap) =>
-            undoMutation.mutate(snap, {
-              onError: (err) => toastError(err, t),
-            })
-          )
+          showPresetApplyToasts(result, t, onUndo)
           onDone()
         },
         onError: (err) => toastError(err, t),
