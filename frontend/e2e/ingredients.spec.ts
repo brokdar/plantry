@@ -210,7 +210,7 @@ test.describe("Ingredient Catalogue", () => {
       // Backend returns 409 with message_key error.food.duplicate_name; the
       // form surfaces the translated message (or the key if untranslated).
       await expect(
-        page.getByText(/already exists|food\.duplicate_name/i)
+        page.locator("#main").getByText(/already exists|food\.duplicate_name/i)
       ).toBeVisible()
     } finally {
       await cleanupFood(existing.id)
