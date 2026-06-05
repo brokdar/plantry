@@ -1,0 +1,31 @@
+{
+  "name": "Plantry",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.25"
+    },
+    "ghcr.io/devcontainers/features/node:2.0.0": {
+      "version": "22"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "forwardPorts": [
+    8080,
+    5173
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "go.toolsManagement.checkForUpdates": "off",
+        "go.lintTool": "golangci-lint"
+      }
+    }
+  }
+}
