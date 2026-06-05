@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 
 import {
   clearSetting,
@@ -7,6 +8,8 @@ import {
   listSettings,
   setSetting,
 } from "../api/settings"
+
+import { toastError } from "@/lib/toast"
 
 import { aiKeys, settingsKeys } from "./keys"
 
@@ -28,6 +31,7 @@ export function useSystemInfo() {
 
 export function useSetSetting() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({ key, value }: { key: string; value: string }) =>
       setSetting(key, value),
@@ -35,17 +39,20 @@ export function useSetSetting() {
       qc.invalidateQueries({ queryKey: settingsKeys.all })
       qc.invalidateQueries({ queryKey: aiKeys.settings() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useClearSetting() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (key: string) => clearSetting(key),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: settingsKeys.all })
       qc.invalidateQueries({ queryKey: aiKeys.settings() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 

@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 import {
   createFood,
   createVariant,
@@ -21,6 +22,7 @@ import {
   type InsightsParams,
 } from "@/lib/api/foods"
 import { queryClient } from "@/lib/query-client"
+import { toastError } from "@/lib/toast"
 import { foodKeys } from "./keys"
 
 export function useFoods(
@@ -62,15 +64,18 @@ export function useFoodMacros(ids: readonly number[]) {
 }
 
 export function useCreateFood() {
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (input: FoodInput) => createFood(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useUpdateFood() {
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: FoodInput }) =>
       updateFood(id, data),
@@ -80,15 +85,18 @@ export function useUpdateFood() {
         queryKey: foodKeys.detail(variables.id),
       })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useDeleteFood() {
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (id: number) => deleteFood(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
@@ -108,6 +116,7 @@ export function useInsights(params?: InsightsParams) {
 }
 
 export function useSetFoodFavorite() {
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({ id, favorite }: { id: number; favorite: boolean }) =>
       setFoodFavorite(id, favorite),
@@ -115,10 +124,12 @@ export function useSetFoodFavorite() {
       void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: foodKeys.detail(id) })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useCreateVariant() {
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (id: number) => createVariant(id),
     onSuccess: (_data, id) => {
@@ -126,20 +137,24 @@ export function useCreateVariant() {
       void queryClient.invalidateQueries({ queryKey: foodKeys.detail(id) })
       void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useSyncPortions() {
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (id: number) => syncPortions(id),
     onSuccess: (_data, id) => {
       void queryClient.invalidateQueries({ queryKey: foodKeys.portions(id) })
       void queryClient.invalidateQueries({ queryKey: foodKeys.detail(id) })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useRefetchFood() {
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({ id, lang }: { id: number; lang?: string }) =>
       refetchFood(id, lang),
@@ -149,6 +164,7 @@ export function useRefetchFood() {
         queryKey: foodKeys.detail(variables.id),
       })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
@@ -161,6 +177,7 @@ export function usePortions(foodId: number) {
 }
 
 export function useUpsertPortion() {
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({
       foodId,
@@ -174,10 +191,12 @@ export function useUpsertPortion() {
         queryKey: foodKeys.portions(foodId),
       })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useDeletePortion() {
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({ foodId, unit }: { foodId: number; unit: string }) =>
       deletePortion(foodId, unit),
@@ -186,5 +205,6 @@ export function useDeletePortion() {
         queryKey: foodKeys.portions(foodId),
       })
     },
+    onError: (err) => toastError(err, t),
   })
 }

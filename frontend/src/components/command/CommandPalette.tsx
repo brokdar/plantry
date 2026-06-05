@@ -11,7 +11,6 @@ import type { ApplySnapshot, Preset } from "@/lib/api/presets"
 import { useApplyPreset, usePresets, useUndoApply } from "@/lib/queries/presets"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
-import { toastError } from "@/lib/toast"
 
 interface CommandPaletteProps {
   open: boolean
@@ -37,7 +36,7 @@ export function CommandPalette({
   const undoMutation = useUndoApply()
 
   function handleUndo(snapshot: ApplySnapshot) {
-    undoMutation.mutate(snapshot, { onError: (err) => toastError(err, t) })
+    undoMutation.mutate(snapshot)
   }
 
   // Reset query each time the palette opens via re-mount key.
@@ -218,7 +217,6 @@ function TargetPicker({
           showPresetApplyToasts(result, t, onUndo)
           onDone()
         },
-        onError: (err) => toastError(err, t),
       }
     )
   }

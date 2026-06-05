@@ -92,4 +92,8 @@ export const importKeys = {
     [...importKeys.all, "line-lookup", query] as const,
 }
 
+export const unitKeys = {
+  list: () => ["units"] as const,
+}
+
 export { lookupKeys } from "./lookup"

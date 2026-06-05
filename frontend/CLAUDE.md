@@ -72,7 +72,7 @@ src/components/
 **Server state — TanStack Query only.** Never mirror server data in Zustand.
 
 - `src/lib/api/` — one file per resource, all calls go through `apiFetch` in `lib/api/client.ts`. `ApiError` carries `status` + `messageKey` for i18n error display.
-- `src/lib/queries/` — TanStack Query hooks + `keys.ts` (centralized key factories). Key hierarchies are intentional: invalidating a parent key also drops all child keys (e.g. invalidating `plateKeys.range(from, to)` also drops `plateKeys.macrosRange(from, to)`).
+- `src/lib/queries/` — TanStack Query hooks + `keys.ts` (centralized key factories). Key hierarchies are intentional: invalidating a parent key also drops all child keys (e.g. invalidating `plateKeys.range(from, to)` also drops `plateKeys.macrosRange(from, to)`). **Each `useMutation` hook owns its own `invalidateQueries` (onSuccess) and `toastError` (onError) — call sites just call `mutate()` with no cache or error knowledge.**
 
 **Client-only state — Zustand stores.**
 
@@ -104,7 +104,7 @@ All user-visible strings go through `react-i18next`. Keys live in `src/lib/i18n/
 
 Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own unit tests:
 
-- `planner-window.ts` — date window calculations
+- `planner-window.ts` — date window calculations + calendar view helpers (`padTwo`, `toYMD`, `todayISO`, `currentMonthISO`, `weekStartDate`, `parseYearMonth`, `monthGridRange`)
 - `planner-keynav.ts` — keyboard navigation logic
 - `planner-skip.ts` — slot-skip logic
 - `slot-label.ts` — slot display names
@@ -137,6 +137,10 @@ Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own u
 - **No setState in effects** (`react-hooks/set-state-in-effect`). Move state resets to event handlers.
 - **Prefer `useDeferredValue`** over `useState`+`useEffect` debounce.
 - `Date.now()` / `new Date()` during render is flagged by the React compiler as impure — isolate into a `useState` initializer or a separate component.
+
+### Units vocabulary
+
+`domain/units.ts` is not self-initializing. It must be seeded at app boot via `initUnitsVocabulary(units)` in `__root.tsx` (called from a `useEffect` on the `useUnits()` query result). Any component that calls unit-conversion helpers before this resolves will get empty conversions.
 
 ### shadcn
 

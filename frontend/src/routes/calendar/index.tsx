@@ -1,4 +1,4 @@
-import { addDays, addMonths, getDaysInMonth, subMonths } from "date-fns"
+import { addDays, addMonths, subMonths } from "date-fns"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useDeferredValue, useMemo } from "react"
 import { useTranslation } from "react-i18next"
@@ -13,6 +13,15 @@ import { usePlatesRange, usePlatesRangeInfinite } from "@/lib/queries/plates"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { useFoods } from "@/lib/queries/foods"
 import type { Food } from "@/lib/api/foods"
+import {
+  currentMonthISO,
+  monthGridRange,
+  padTwo,
+  parseYearMonth,
+  todayISO,
+  toYMD,
+  weekStartDate,
+} from "@/lib/planner-window"
 
 import { AgendaView } from "./-agenda"
 import { MonthView } from "./-month"
@@ -38,54 +47,6 @@ export const Route = createFileRoute("/calendar/")({
   }),
   component: CalendarPage,
 })
-
-function padTwo(n: number): string {
-  return String(n).padStart(2, "0")
-}
-
-function toYMD(d: Date): string {
-  return `${d.getFullYear()}-${padTwo(d.getMonth() + 1)}-${padTwo(d.getDate())}`
-}
-
-function todayISO(): string {
-  return toYMD(new Date())
-}
-
-function currentMonthISO(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${padTwo(now.getMonth() + 1)}`
-}
-
-function weekStartDate(weekStartsOn: 0 | 1 | 6): string {
-  const today = new Date()
-  const dow = today.getDay() // 0=Sun…6=Sat
-  const diff = (dow - weekStartsOn + 7) % 7
-  return toYMD(addDays(today, -diff))
-}
-
-/** Parse a YYYY-MM date string to { year, month (0-based) }. */
-function parseYearMonth(s: string): { year: number; month: number } {
-  const [y, m] = s.split("-").map(Number)
-  return { year: y, month: (m ?? 1) - 1 }
-}
-
-/** Compute the visible grid range for a month view (partial leading/trailing weeks). */
-function monthGridRange(
-  year: number,
-  month: number,
-  weekStartsOn: 0 | 1 | 6
-): { from: string; to: string } {
-  const firstOfMonth = new Date(year, month, 1)
-  const dow = firstOfMonth.getDay()
-  const startDiff = (dow - weekStartsOn + 7) % 7
-  const gridStart = addDays(firstOfMonth, -startDiff)
-  const daysInMonth = getDaysInMonth(firstOfMonth)
-  const totalGridDays = Math.ceil((startDiff + daysInMonth) / 7) * 7
-  return {
-    from: toYMD(gridStart),
-    to: toYMD(addDays(gridStart, totalGridDays - 1)),
-  }
-}
 
 function CalendarPage() {
   const { t, i18n } = useTranslation()

@@ -5,6 +5,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 
 import {
   addPlateComponent,
@@ -23,6 +24,8 @@ import {
   type UpdatePlateComponentInput,
   type UpdatePlateInput,
 } from "@/lib/api/plates"
+
+import { toastError } from "@/lib/toast"
 
 import { plateKeys } from "./keys"
 import { flushPendingPlateDeletes } from "./pending-plate-deletes"
@@ -106,6 +109,7 @@ export function flattenPlatesPages(
 
 export function useCreatePlate(rangeFrom: string, rangeTo: string) {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: createPlate,
     onMutate: () => flushPendingPlateDeletes(),
@@ -115,11 +119,13 @@ export function useCreatePlate(rangeFrom: string, rangeTo: string) {
       })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useUpdatePlate(rangeFrom?: string, rangeTo?: string) {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: UpdatePlateInput }) =>
       updatePlate(id, input),
@@ -134,11 +140,13 @@ export function useUpdatePlate(rangeFrom?: string, rangeTo?: string) {
       }
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useDeletePlate() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (id: number) => deletePlate(id),
     onMutate: () => flushPendingPlateDeletes(),
@@ -146,11 +154,13 @@ export function useDeletePlate() {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useAddPlateComponent() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({
       plateId,
@@ -164,11 +174,13 @@ export function useAddPlateComponent() {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useSwapPlateComponent() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({
       plateId,
@@ -184,6 +196,7 @@ export function useSwapPlateComponent() {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
@@ -199,6 +212,7 @@ export function useSwapPlateComponent() {
  */
 export function useUpdatePlateComponentQuantity() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({
       plateId,
@@ -214,11 +228,13 @@ export function useUpdatePlateComponentQuantity() {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useSetPlateSkipped() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({
       plateId,
@@ -232,11 +248,13 @@ export function useSetPlateSkipped() {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useRemovePlateComponent() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({ plateId, pcId }: { plateId: number; pcId: number }) =>
       deletePlateComponent(plateId, pcId),
@@ -245,5 +263,6 @@ export function useRemovePlateComponent() {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
+    onError: (err) => toastError(err, t),
   })
 }

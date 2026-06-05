@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest"
-import { computeAnchor, shiftYMD, windowRange } from "./planner-window"
+import {
+  computeAnchor,
+  monthGridRange,
+  parseYearMonth,
+  shiftYMD,
+  toYMD,
+  weekStartDate,
+  windowRange,
+} from "./planner-window"
 
 // Helper: build a Date at midnight local time for a given YYYY-MM-DD string.
 function d(ymd: string): Date {
@@ -138,6 +146,80 @@ describe("windowRange", () => {
     const { from, to } = windowRange(anchor, 7)
     expect(from).toBe("2025-12-29")
     expect(to).toBe("2026-01-04")
+  })
+})
+
+describe("toYMD", () => {
+  it("formats a date to YYYY-MM-DD", () => {
+    expect(toYMD(new Date(2026, 3, 27))).toBe("2026-04-27")
+  })
+
+  it("zero-pads month and day", () => {
+    expect(toYMD(new Date(2026, 0, 5))).toBe("2026-01-05")
+  })
+})
+
+describe("parseYearMonth", () => {
+  it("parses YYYY-MM to year and 0-based month", () => {
+    expect(parseYearMonth("2026-04")).toEqual({ year: 2026, month: 3 })
+  })
+
+  it("parses January correctly (month 0)", () => {
+    expect(parseYearMonth("2026-01")).toEqual({ year: 2026, month: 0 })
+  })
+})
+
+describe("weekStartDate", () => {
+  it("returns a YYYY-MM-DD string", () => {
+    const result = weekStartDate(1)
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it("returned date is always a Monday when weekStartsOn=1", () => {
+    const result = weekStartDate(1)
+    const [y, m, day] = result.split("-").map(Number)
+    const dow = new Date(y, m - 1, day).getDay()
+    expect(dow).toBe(1) // Monday
+  })
+
+  it("returned date is always a Sunday when weekStartsOn=0", () => {
+    const result = weekStartDate(0)
+    const [y, m, day] = result.split("-").map(Number)
+    const dow = new Date(y, m - 1, day).getDay()
+    expect(dow).toBe(0) // Sunday
+  })
+})
+
+describe("monthGridRange", () => {
+  it("grid starts on a Monday for April 2026 when weekStartsOn=1", () => {
+    // April 2026: first day is Wed (JS=3); nearest Monday back is 2026-03-30
+    const { from, to } = monthGridRange(2026, 3, 1)
+    expect(from).toBe("2026-03-30")
+    // 5 weeks × 7 = 35 days grid → last day 2026-05-03
+    expect(to).toBe("2026-05-03")
+  })
+
+  it("grid starts on a Sunday for April 2026 when weekStartsOn=0", () => {
+    // April 2026 first is Wed (JS=3); nearest Sunday back is 2026-03-29
+    const { from } = monthGridRange(2026, 3, 0)
+    expect(from).toBe("2026-03-29")
+  })
+
+  it("grid covers the entire month", () => {
+    const { from, to } = monthGridRange(2026, 3, 1) // April 2026
+    const fromDate = new Date(from)
+    const toDate = new Date(to)
+    expect(fromDate <= new Date(2026, 3, 1)).toBe(true)
+    expect(toDate >= new Date(2026, 3, 30)).toBe(true)
+  })
+
+  it("returns a multiple of 7 days", () => {
+    const { from, to } = monthGridRange(2026, 0, 1) // January 2026
+    const fromDate = new Date(from)
+    const toDate = new Date(to)
+    const days =
+      (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24) + 1
+    expect(days % 7).toBe(0)
   })
 })
 

@@ -1,8 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 
 import type { PlateFeedback, PutFeedbackInput } from "@/lib/api/feedback"
 import { deleteFeedback, putFeedback } from "@/lib/api/feedback"
 import type { Plate } from "@/lib/api/plates"
+
+import { toastError } from "@/lib/toast"
 
 import { plateKeys } from "./keys"
 
@@ -29,6 +32,7 @@ function patchFeedbackInCache(
 
 export function useRecordFeedback() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({
       plateId,
@@ -40,15 +44,18 @@ export function useRecordFeedback() {
     onSuccess: (feedback, { plateId }) => {
       patchFeedbackInCache(qc, plateId, feedback)
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useClearFeedback() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (plateId: number) => deleteFeedback(plateId),
     onSuccess: (_, plateId) => {
       patchFeedbackInCache(qc, plateId, null)
     },
+    onError: (err) => toastError(err, t),
   })
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
@@ -50,6 +51,32 @@ func New(apiKey string, opts ...Option) *Client {
 		o(c)
 	}
 	return c
+}
+
+// Complete implements llm.Client.Complete.
+func (c *Client) Complete(ctx context.Context, req llm.Request) (string, error) {
+	events := make(chan llm.Event, 16)
+	done := make(chan struct{})
+	go func() {
+		for range events {
+		}
+		close(done)
+	}()
+	resp, err := c.Stream(ctx, req, events)
+	<-done
+	if err != nil {
+		return "", err
+	}
+	if resp == nil {
+		return "", fmt.Errorf("openai: nil response")
+	}
+	var sb strings.Builder
+	for _, block := range resp.Message.Content {
+		if block.Type == llm.ContentTypeText {
+			sb.WriteString(block.Text)
+		}
+	}
+	return sb.String(), nil
 }
 
 // Stream implements llm.Client.Stream.

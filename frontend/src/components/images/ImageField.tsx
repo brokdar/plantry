@@ -185,8 +185,8 @@ export function ImageField(props: ImageFieldProps) {
       })
       bound.onImageChange(result.image_path)
       setImgVersion(Date.now())
-    } catch (err) {
-      toastError(err, t)
+    } catch {
+      // error handled by hook
     }
   }
 
@@ -202,8 +202,8 @@ export function ImageField(props: ImageFieldProps) {
       })
       bound.onImageChange(null)
       setImgVersion(Date.now())
-    } catch (err) {
-      toastError(err, t)
+    } catch {
+      // error handled by hook
     }
   }
 

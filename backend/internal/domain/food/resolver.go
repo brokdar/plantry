@@ -2,7 +2,6 @@ package food
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,16 +13,31 @@ import (
 // the local catalogue. It only resolves leaf foods — composed foods are user-
 // authored and don't come from external sources.
 type Resolver struct {
-	repo Repository
-	off  BarcodeProvider // may be nil
-	fdc  FoodProvider    // may be nil
-	llm  llm.Resolver    // may be nil — when set, powers AI translation + pick-best
+	repo       Repository
+	off        BarcodeProvider // may be nil
+	fdc        FoodProvider    // may be nil
+	translator QueryTranslator
+	picker     CandidatePicker
 }
 
+type noopTranslator struct{}
+
+func (noopTranslator) Translate(_ context.Context, q string, _ *LookupTrace) string { return q }
+
+type noopPicker struct{}
+
+func (noopPicker) Pick(_ context.Context, _ string, _ []Candidate, _ *LookupTrace) int { return 0 }
+
 // NewResolver creates a Resolver with optional external providers and LLM.
-// A nil llm disables AI features entirely.
+// A nil llmResolver disables AI features entirely.
 func NewResolver(repo Repository, off BarcodeProvider, fdc FoodProvider, llmResolver llm.Resolver) *Resolver {
-	return &Resolver{repo: repo, off: off, fdc: fdc, llm: llmResolver}
+	var t QueryTranslator = noopTranslator{}
+	var p CandidatePicker = noopPicker{}
+	if llmResolver != nil {
+		t = &llmTranslator{resolver: llmResolver}
+		p = &llmPicker{resolver: llmResolver}
+	}
+	return &Resolver{repo: repo, off: off, fdc: fdc, translator: t, picker: p}
 }
 
 // Lookup searches for leaf-food candidates by barcode or text query.
@@ -107,16 +121,8 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 	originalQuery := query
 	searchTerm := query
 
-	if r.llm != nil && lang != "" && lang != "en" {
-		if client, model, err := r.llm.Current(ctx); err == nil && client != nil {
-			searchTerm = translateQuery(ctx, client, model, originalQuery, trace)
-		} else if err != nil {
-			trace.Add(TraceEntry{
-				Step: "ai.translate", Level: TraceLevelInfo,
-				Summary: "AI skipped: " + err.Error(),
-				Detail:  AITranslationDetail{InputQuery: originalQuery, Error: err.Error()},
-			})
-		}
+	if lang != "" && lang != "en" {
+		searchTerm = r.translator.Translate(ctx, originalQuery, trace)
 	}
 
 	start := time.Now()
@@ -155,20 +161,10 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 }
 
 func (r *Resolver) pickRecommended(ctx context.Context, originalQuery string, candidates []Candidate, trace *LookupTrace) int {
-	if r.llm == nil || len(candidates) <= 1 {
+	if len(candidates) <= 1 {
 		return 0
 	}
-	client, model, err := r.llm.Current(ctx)
-	if err != nil || client == nil {
-		if err != nil && !errors.Is(err, context.Canceled) {
-			trace.Add(TraceEntry{
-				Step: "ai.pick_best", Level: TraceLevelInfo,
-				Summary: "AI skipped: " + err.Error(),
-			})
-		}
-		return 0
-	}
-	return pickBest(ctx, client, model, originalQuery, candidates, trace)
+	return r.picker.Pick(ctx, originalQuery, candidates, trace)
 }
 
 // fillMissingKcal derives kcal_100g from macros using Atwater factors whenever

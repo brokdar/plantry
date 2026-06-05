@@ -245,7 +245,7 @@ test.describe("Ingredient Resolution", () => {
       // returns error.food.duplicate_name; the form surfaces the translated
       // message or the key when no translation is registered).
       await expect(
-        page.getByText(/already exists|food\.duplicate_name/i)
+        page.locator("#main").getByText(/already exists|food\.duplicate_name/i)
       ).toBeVisible()
     } finally {
       await cleanupFood(seededId)

@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge"
 import type { Preset } from "@/lib/api/presets"
 import { useApplyPreset, usePresets, useUndoApply } from "@/lib/queries/presets"
 import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
-import { toastError } from "@/lib/toast"
 
 interface EmptySlotPresetPickerProps {
   slotId: number
@@ -55,14 +54,9 @@ export function EmptySlotPresetPicker({
       },
       {
         onSuccess: (result) => {
-          showPresetApplyToasts(result, t, (snap) =>
-            undoMutation.mutate(snap, {
-              onError: (err) => toastError(err, t),
-            })
-          )
+          showPresetApplyToasts(result, t, (snap) => undoMutation.mutate(snap))
           setOpen(false)
         },
-        onError: (err) => toastError(err, t),
       }
     )
   }

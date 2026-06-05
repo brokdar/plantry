@@ -344,15 +344,11 @@ export function PlannerGrid({
     if (!swapTarget) return
     const target = swapTarget
     setSwapTarget(null)
-    try {
-      await swapMut.mutateAsync({
-        plateId: target.plateId,
-        pcId: target.pcId,
-        input: { food_id: component.id },
-      })
-    } catch (err) {
-      toastError(err, t)
-    }
+    await swapMut.mutateAsync({
+      plateId: target.plateId,
+      pcId: target.pcId,
+      input: { food_id: component.id },
+    })
   }
 
   function handleDeletePlate(plateId: number, dayIdx: number) {
@@ -556,19 +552,15 @@ export function PlannerGrid({
   ) {
     const targetDay = days[dayIdx]
     if (!targetDay) return
-    try {
-      await toggleSkip({
-        date: targetDay.date,
-        slotId,
-        existing: findPlateInDay(targetDay, slotId),
-        noteOverride,
-        rangeFrom,
-        rangeTo,
-        setSkipped: setSkippedMut.mutateAsync,
-      })
-    } catch (err) {
-      toastError(err, t)
-    }
+    await toggleSkip({
+      date: targetDay.date,
+      slotId,
+      existing: findPlateInDay(targetDay, slotId),
+      noteOverride,
+      rangeFrom,
+      rangeTo,
+      setSkipped: setSkippedMut.mutateAsync,
+    })
   }
 
   async function handleToggleFavorite(
@@ -576,11 +568,7 @@ export function PlannerGrid({
     current: boolean
   ) {
     if (!componentId) return
-    try {
-      await setFavoriteMut.mutateAsync({ id: componentId, favorite: !current })
-    } catch (err) {
-      toastError(err, t)
-    }
+    await setFavoriteMut.mutateAsync({ id: componentId, favorite: !current })
   }
 
   async function handleRate(
@@ -588,14 +576,10 @@ export function PlannerGrid({
     status: "loved" | "disliked",
     current?: string
   ) {
-    try {
-      if (current === status) {
-        await clearFeedbackMut.mutateAsync(plateId)
-      } else {
-        await recordFeedbackMut.mutateAsync({ plateId, input: { status } })
-      }
-    } catch (err) {
-      toastError(err, t)
+    if (current === status) {
+      await clearFeedbackMut.mutateAsync(plateId)
+    } else {
+      await recordFeedbackMut.mutateAsync({ plateId, input: { status } })
     }
   }
 
@@ -908,44 +892,6 @@ export function PlannerGrid({
             })
           }
           onSaveAsPreset={(plateId) => openSavePreset(plateId)}
-          onToggleSkip={(target, currentSkipped) => {
-            const dayIdx = days.findIndex((d) => d.date === target.date)
-            if (dayIdx < 0) return
-            void handleToggleSkip(dayIdx, target.slotId, target.plateId)
-            if (currentSkipped) {
-              // Removing skip — keep sheet open for further edits.
-              return
-            }
-            // Marking skip — close the sheet so the user sees the cell update.
-            setSheetTarget(null)
-          }}
-          onDeletePlate={(plateId) => {
-            const dayIdx = days.findIndex((d) =>
-              d.plates.some((p) => p.id === plateId)
-            )
-            if (dayIdx < 0) return
-            handleDeletePlate(plateId, dayIdx)
-            setSheetTarget(null)
-          }}
-          onMovePlate={(target, newDate) => {
-            if (newDate === target.date) return
-            updatePlateMut
-              .mutateAsync({
-                id: target.plateId,
-                input: { date: newDate, slot_id: target.slotId },
-              })
-              .then(() => {
-                const day = days.find((d) => d.date === newDate)
-                if (day) {
-                  const dayKey = DAY_KEYS[day.weekday] ?? DAY_KEYS[0]
-                  toast(t("planner.mobile.moved_to", { day: t(dayKey) }))
-                }
-                setSheetTarget(null)
-              })
-              .catch((err) => {
-                toastError(err, t, t("planner.mobile.move_failed"))
-              })
-          }}
         />
       </div>
     </DndContext>

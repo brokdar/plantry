@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
@@ -15,13 +14,12 @@ import (
 // new leaf food" + refetch flows.
 type LookupHandler struct {
 	resolver *food.Resolver
-	imgStore *imagestore.Store
 	svc      *food.Service
 }
 
 // NewLookupHandler constructs a LookupHandler.
-func NewLookupHandler(resolver *food.Resolver, imgStore *imagestore.Store, svc *food.Service) *LookupHandler {
-	return &LookupHandler{resolver: resolver, imgStore: imgStore, svc: svc}
+func NewLookupHandler(resolver *food.Resolver, svc *food.Service) *LookupHandler {
+	return &LookupHandler{resolver: resolver, svc: svc}
 }
 
 type lookupResponse struct {
@@ -146,37 +144,7 @@ func (h *LookupHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		Folate100g:       req.Folate100g,
 	}
 
-	if err := h.svc.Create(r.Context(), f); err != nil {
-		status, key := toHTTP(err)
-		writeError(w, status, key)
-		return
-	}
-
-	// Best-effort FDC portion sync so the user gets honey tbsp=21g etc.
-	if f.FdcID != nil && *f.FdcID != "" {
-		_, _ = h.svc.SyncPortionsFromFDC(r.Context(), f.ID)
-	}
-
-	// OFF-sourced products carry a per-serving gram weight.
-	if req.ServingQuantityG != nil && *req.ServingQuantityG > 0 {
-		_ = h.svc.UpsertPortion(r.Context(), &food.Portion{
-			FoodID: f.ID,
-			Unit:   "serving",
-			Grams:  *req.ServingQuantityG,
-		})
-	}
-
-	// Download image if URL provided + image store available.
-	if req.ImageURL != nil && *req.ImageURL != "" && h.imgStore != nil {
-		imgPath, err := h.imgStore.SaveFromURL(r.Context(), *req.ImageURL, "foods", f.ID)
-		if err == nil {
-			f.ImagePath = &imgPath
-			_ = h.svc.Update(r.Context(), f)
-		}
-	}
-
-	// Re-load to hydrate portions in response.
-	loaded, err := h.svc.Get(r.Context(), f.ID)
+	loaded, err := h.svc.CreateFromLookup(r.Context(), f, req.ServingQuantityG, req.ImageURL)
 	if err != nil {
 		status, key := toHTTP(err)
 		writeError(w, status, key)

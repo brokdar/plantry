@@ -1,5 +1,5 @@
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { CommandPalette } from "@/components/command/CommandPalette"
@@ -7,6 +7,8 @@ import { CopyFromWeekDialog } from "@/components/presets/CopyFromWeekDialog"
 import { AppShell } from "@/components/shell/AppShell"
 import { Button } from "@/components/ui/button"
 import { useCommandPaletteHotkey } from "@/lib/use-command-palette-hotkey"
+import { initUnitsVocabulary } from "@/lib/domain/units"
+import { useUnits } from "@/lib/queries/units"
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -18,6 +20,11 @@ function RootComponent() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [copyWeekOpen, setCopyWeekOpen] = useState(false)
   useCommandPaletteHotkey(() => setPaletteOpen((prev) => !prev))
+
+  const { data: units } = useUnits()
+  useEffect(() => {
+    if (units) initUnitsVocabulary(units)
+  }, [units])
   return (
     <AppShell>
       <Outlet />

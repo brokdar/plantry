@@ -34,7 +34,7 @@ import {
   SLOT_ICON_NAMES,
 } from "@/lib/slot-icons"
 import { slotLabel } from "@/lib/slot-label"
-import { toastError } from "@/lib/toast"
+
 import { cn } from "@/lib/utils"
 
 function SlotIcon({ name, className }: { name: string; className?: string }) {
@@ -166,11 +166,7 @@ export function TimeSlotsEditor() {
 
   async function handleDelete(s: TimeSlot) {
     if (!window.confirm(t("slot.delete_confirm_body"))) return
-    try {
-      await deleteMut.mutateAsync(s.id)
-    } catch (err) {
-      toastError(err, t)
-    }
+    await deleteMut.mutateAsync(s.id).catch(() => {})
   }
 
   const items = slotsQuery.data?.items ?? []

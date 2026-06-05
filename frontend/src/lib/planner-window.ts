@@ -1,3 +1,5 @@
+import { addDays, getDaysInMonth } from "date-fns"
+
 export type AnchorMode = "today" | "next_shopping_day" | "fixed_weekday"
 
 /**
@@ -41,11 +43,11 @@ export function computeAnchor(opts: {
   return nextOccurrence(today, jsFixed)
 }
 
-function padTwo(n: number): string {
+export function padTwo(n: number): string {
   return String(n).padStart(2, "0")
 }
 
-function toYMD(d: Date): string {
+export function toYMD(d: Date): string {
   return `${d.getFullYear()}-${padTwo(d.getMonth() + 1)}-${padTwo(d.getDate())}`
 }
 
@@ -68,4 +70,44 @@ export function windowRange(
     from.getDate() + days - 1
   )
   return { from: toYMD(from), to: toYMD(to) }
+}
+
+export function todayISO(): string {
+  return toYMD(new Date())
+}
+
+export function currentMonthISO(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${padTwo(now.getMonth() + 1)}`
+}
+
+export function weekStartDate(weekStartsOn: 0 | 1 | 6): string {
+  const today = new Date()
+  const dow = today.getDay() // 0=Sun…6=Sat
+  const diff = (dow - weekStartsOn + 7) % 7
+  return toYMD(addDays(today, -diff))
+}
+
+/** Parse a YYYY-MM date string to { year, month (0-based) }. */
+export function parseYearMonth(s: string): { year: number; month: number } {
+  const [y, m] = s.split("-").map(Number)
+  return { year: y, month: (m ?? 1) - 1 }
+}
+
+/** Compute the visible grid range for a month view (partial leading/trailing weeks). */
+export function monthGridRange(
+  year: number,
+  month: number,
+  weekStartsOn: 0 | 1 | 6
+): { from: string; to: string } {
+  const firstOfMonth = new Date(year, month, 1)
+  const dow = firstOfMonth.getDay()
+  const startDiff = (dow - weekStartsOn + 7) % 7
+  const gridStart = addDays(firstOfMonth, -startDiff)
+  const daysInMonth = getDaysInMonth(firstOfMonth)
+  const totalGridDays = Math.ceil((startDiff + daysInMonth) / 7) * 7
+  return {
+    from: toYMD(gridStart),
+    to: toYMD(addDays(gridStart, totalGridDays - 1)),
+  }
 }

@@ -14,6 +14,7 @@ vi.mock("@/lib/queries/plates", () => ({
   useUpdatePlate: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useUpdatePlateComponentQuantity: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useRemovePlateComponent: vi.fn(() => ({ mutateAsync: vi.fn() })),
+  useSetPlateSkipped: vi.fn(() => ({ mutateAsync: vi.fn() })),
   // The header summary + per-component contribution both read from these.
   usePlateMacros: vi.fn(() => ({
     data: {
@@ -113,8 +114,6 @@ function renderSheet() {
       onAddComponent={vi.fn()}
       onSwapComponent={vi.fn()}
       onSaveAsPreset={vi.fn()}
-      onToggleSkip={vi.fn()}
-      onDeletePlate={vi.fn()}
     />
   )
 }
@@ -201,8 +200,6 @@ describe("SlotSheet — Phase 3 kind-aware quantity", () => {
         onAddComponent={vi.fn()}
         onSwapComponent={vi.fn()}
         onSaveAsPreset={vi.fn()}
-        onToggleSkip={vi.fn()}
-        onDeletePlate={vi.fn()}
       />
     )
     // Leaf renders the QuantityUnitInput (numeric + unit select).

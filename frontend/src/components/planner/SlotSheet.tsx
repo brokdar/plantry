@@ -38,6 +38,7 @@ import { Textarea } from "@/components/ui/textarea"
 import type { Food } from "@/lib/api/foods"
 import {
   componentMultiplier,
+  deletePlate,
   type MacrosResponse,
   type Plate,
   type PlateComponent,
@@ -45,16 +46,25 @@ import {
 } from "@/lib/api/plates"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFoodMacros } from "@/lib/queries/foods"
+import { plateKeys } from "@/lib/queries/keys"
+import {
+  cancelPendingPlateDelete,
+  hasPendingPlateDelete,
+  registerPendingPlateDelete,
+} from "@/lib/queries/pending-plate-deletes"
 import {
   usePlateMacros,
   useRemovePlateComponent,
+  useSetPlateSkipped,
   useUpdatePlate,
   useUpdatePlateComponentQuantity,
 } from "@/lib/queries/plates"
 import { MacroTriad } from "@/components/editorial/macros"
 import { imageURL } from "@/lib/image-url"
+import { toggleSkip } from "@/lib/planner-skip"
+import { queryClient } from "@/lib/query-client"
 import { slotLabel } from "@/lib/slot-label"
-import { toastError } from "@/lib/toast"
+import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
 import type { PlannerDay } from "./PlannerGrid"
@@ -94,12 +104,6 @@ interface SlotSheetProps {
     defaultRole?: string
   ) => void
   onSaveAsPreset: (plateId: number) => void
-  onToggleSkip: (target: SlotSheetTarget, currentSkipped: boolean) => void
-  onDeletePlate: (plateId: number) => void
-  /** Move the plate to another day in the visible window. Renders the
-   *  Move-to-day picker when present — keyboard / screen-reader path that
-   *  parallels the desktop drag and the mobile long-press gesture. */
-  onMovePlate?: (target: SlotSheetTarget, newDate: string) => void
 }
 
 export function SlotSheet({
@@ -114,9 +118,6 @@ export function SlotSheet({
   onAddComponent,
   onSwapComponent,
   onSaveAsPreset,
-  onToggleSkip,
-  onDeletePlate,
-  onMovePlate,
 }: SlotSheetProps) {
   const { t } = useTranslation()
 
@@ -160,13 +161,6 @@ export function SlotSheet({
               onSwapComponent(target, pcId, role)
             }
             onSaveAsPreset={() => onSaveAsPreset(target.plateId)}
-            onToggleSkip={() => onToggleSkip(target, plate.skipped)}
-            onDeletePlate={() => onDeletePlate(target.plateId)}
-            onMovePlate={
-              onMovePlate
-                ? (newDate) => onMovePlate(target, newDate)
-                : undefined
-            }
           />
         ) : (
           <SheetHeader>
@@ -193,9 +187,6 @@ interface SlotSheetBodyProps {
   onAddComponent: () => void
   onSwapComponent: (pcId: number, defaultRole?: string) => void
   onSaveAsPreset: () => void
-  onToggleSkip: () => void
-  onDeletePlate: () => void
-  onMovePlate?: (newDate: string) => void
 }
 
 function SlotSheetBody({
@@ -210,9 +201,6 @@ function SlotSheetBody({
   onAddComponent,
   onSwapComponent,
   onSaveAsPreset,
-  onToggleSkip,
-  onDeletePlate,
-  onMovePlate,
 }: SlotSheetBodyProps) {
   const { t, i18n } = useTranslation()
 
@@ -255,6 +243,96 @@ function SlotSheetBody({
     }
     return map
   }, [foodMacrosData])
+
+  const setSkippedMut = useSetPlateSkipped()
+  const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
+
+  async function handleToggleSkip() {
+    try {
+      await toggleSkip({
+        date: target.date,
+        slotId: target.slotId,
+        existing: plate,
+        rangeFrom,
+        rangeTo,
+        setSkipped: setSkippedMut.mutateAsync,
+      })
+    } catch {
+      return
+    }
+    if (!plate.skipped) {
+      // Marking skip — close the sheet so the user sees the cell update.
+      onClose()
+    }
+    // Removing skip — keep sheet open for further edits.
+  }
+
+  function handleDeletePlate() {
+    if (hasPendingPlateDelete(plate.id)) return
+    const snapshot = plate
+
+    // Optimistic: remove from cache immediately so the UI updates at once.
+    queryClient.setQueryData<{ plates: Plate[] }>(
+      plateKeys.range(rangeFrom, rangeTo),
+      (old) => ({
+        plates: (old?.plates ?? []).filter((p) => p.id !== snapshot.id),
+      })
+    )
+
+    registerPendingPlateDelete(snapshot.id, snapshot, async () => {
+      try {
+        await deletePlate(snapshot.id)
+      } catch (err) {
+        toastError(err, t)
+        queryClient.setQueryData<{ plates: Plate[] }>(
+          plateKeys.range(rangeFrom, rangeTo),
+          (old) => ({ plates: [...(old?.plates ?? []), snapshot] })
+        )
+      } finally {
+        void queryClient.invalidateQueries({
+          queryKey: plateKeys.range(rangeFrom, rangeTo),
+        })
+        void queryClient.invalidateQueries({ queryKey: ["nutrition"] })
+      }
+    })
+
+    toast(t("plate.deleted"), {
+      action: {
+        label: t("common.undo"),
+        onClick: () => {
+          const restored = cancelPendingPlateDelete(snapshot.id)
+          if (!restored) return
+          queryClient.setQueryData<{ plates: Plate[] }>(
+            plateKeys.range(rangeFrom, rangeTo),
+            (old) => ({ plates: [...(old?.plates ?? []), restored] })
+          )
+        },
+      },
+      duration: 5000,
+    })
+
+    onClose()
+  }
+
+  function handleMovePlate(newDate: string) {
+    if (newDate === target.date) return
+    updatePlateMut
+      .mutateAsync({
+        id: target.plateId,
+        input: { date: newDate, slot_id: target.slotId },
+      })
+      .then(() => {
+        const day = days.find((d) => d.date === newDate)
+        if (day) {
+          const movedDayKey = DAY_KEYS[day.weekday] ?? DAY_KEYS[0]
+          toast(t("planner.mobile.moved_to", { day: t(movedDayKey) }))
+        }
+        onClose()
+      })
+      .catch((err) => {
+        toastError(err, t, t("planner.mobile.move_failed"))
+      })
+  }
 
   return (
     <>
@@ -316,18 +394,18 @@ function SlotSheetBody({
           foodMacrosById={foodMacrosById}
           onAdd={onAddComponent}
           onSwap={onSwapComponent}
-          onLastRemoved={onDeletePlate}
+          onLastRemoved={handleDeletePlate}
         />
 
         <NoteField plate={plate} rangeFrom={rangeFrom} rangeTo={rangeTo} />
 
         <FeedbackBlock plate={plate} />
 
-        {onMovePlate && !plate.skipped && (
+        {!plate.skipped && (
           <MoveToDayPicker
             days={days}
             currentDate={target.date}
-            onPick={onMovePlate}
+            onPick={handleMovePlate}
           />
         )}
       </div>
@@ -335,8 +413,8 @@ function SlotSheetBody({
       <ActionFooter
         skipped={plate.skipped}
         onSaveAsPreset={onSaveAsPreset}
-        onToggleSkip={onToggleSkip}
-        onDeletePlate={onDeletePlate}
+        onToggleSkip={handleToggleSkip}
+        onDeletePlate={handleDeletePlate}
       />
     </>
   )
@@ -583,9 +661,11 @@ function ComponentRow({
     ) {
       return
     }
-    updateQuantity
-      .mutateAsync({ plateId: plate.id, pcId: pc.id, quantity: next })
-      .catch((err) => toastError(err, t))
+    void updateQuantity.mutateAsync({
+      plateId: plate.id,
+      pcId: pc.id,
+      quantity: next,
+    })
   }
 
   const multiplier = componentMultiplier(pc)
@@ -602,9 +682,7 @@ function ComponentRow({
       onLastRemoved()
       return
     }
-    removeComponent
-      .mutateAsync({ plateId: plate.id, pcId: pc.id })
-      .catch((err) => toastError(err, t))
+    void removeComponent.mutateAsync({ plateId: plate.id, pcId: pc.id })
   }
 
   // Pick the right quantity control by food kind. Composed → integer
@@ -754,12 +832,10 @@ function NoteField({
   function commit(value: string) {
     const next = value.trim()
     if (next === initial) return
-    updatePlate
-      .mutateAsync({
-        id: plate.id,
-        input: { note: next === "" ? null : next },
-      })
-      .catch((err) => toastError(err, t))
+    void updatePlate.mutateAsync({
+      id: plate.id,
+      input: { note: next === "" ? null : next },
+    })
   }
 
   return (
@@ -795,14 +871,14 @@ function FeedbackBlock({ plate }: { plate: Plate }) {
   const current = plate.feedback?.status
 
   function toggle(status: "cooked" | "loved" | "disliked") {
-    const action =
-      current === status
-        ? clear.mutateAsync(plate.id)
-        : record.mutateAsync({
-            plateId: plate.id,
-            input: { status, note: plate.feedback?.note ?? null },
-          })
-    action.catch((err) => toastError(err, t))
+    if (current === status) {
+      void clear.mutateAsync(plate.id)
+    } else {
+      void record.mutateAsync({
+        plateId: plate.id,
+        input: { status, note: plate.feedback?.note ?? null },
+      })
+    }
   }
 
   const buttons: {

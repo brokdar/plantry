@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useTranslation } from "react-i18next"
 
 import {
   applyPreset,
@@ -20,6 +21,8 @@ import {
   type PatchPresetInput,
   type UpdatePresetInput,
 } from "@/lib/api/presets"
+
+import { toastError } from "@/lib/toast"
 
 import { plateKeys, presetKeys } from "./keys"
 
@@ -48,17 +51,20 @@ export function useKnownTags() {
 
 export function useCreatePreset() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (input: CreatePresetInput) => createPreset(input),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: presetKeys.lists() })
       void qc.invalidateQueries({ queryKey: presetKeys.knownTags() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useUpdatePreset() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: UpdatePresetInput }) =>
       updatePreset(id, input),
@@ -67,11 +73,13 @@ export function useUpdatePreset() {
       void qc.invalidateQueries({ queryKey: presetKeys.detail(vars.id) })
       void qc.invalidateQueries({ queryKey: presetKeys.knownTags() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function usePatchPreset() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: PatchPresetInput }) =>
       patchPreset(id, input),
@@ -80,26 +88,31 @@ export function usePatchPreset() {
       void qc.invalidateQueries({ queryKey: presetKeys.detail(vars.id) })
       void qc.invalidateQueries({ queryKey: presetKeys.knownTags() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useDeletePreset() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (id: number) => deletePreset(id),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: presetKeys.lists() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useDuplicatePreset() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (id: number) => duplicatePreset(id),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: presetKeys.lists() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
@@ -107,6 +120,7 @@ export function useDuplicatePreset() {
  * planner refetches after the mutation. */
 export function useApplyPreset() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: ({
       presetId,
@@ -120,27 +134,32 @@ export function useApplyPreset() {
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
       void qc.invalidateQueries({ queryKey: presetKeys.lists() })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useCopyWeek() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (input: CopyWeekInput) => copyWeek(input),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
+    onError: (err) => toastError(err, t),
   })
 }
 
 export function useUndoApply() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   return useMutation({
     mutationFn: (snapshot: ApplySnapshot) => undoApply(snapshot),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
     },
+    onError: (err) => toastError(err, t),
   })
 }

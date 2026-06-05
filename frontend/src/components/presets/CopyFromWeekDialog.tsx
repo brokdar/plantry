@@ -15,7 +15,6 @@ import { Input } from "@/components/ui/input"
 import type { ApplySnapshot } from "@/lib/api/presets"
 import { useCopyWeek, useUndoApply } from "@/lib/queries/presets"
 import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
-import { toastError } from "@/lib/toast"
 
 interface CopyFromWeekDialogProps {
   open: boolean
@@ -33,14 +32,13 @@ export function CopyFromWeekDialog({
   targetStart,
   defaultSourceStart,
 }: CopyFromWeekDialogProps) {
-  const { t } = useTranslation()
   // Kept at this always-mounted level so the mutation observer survives dialog
   // close — DialogBody unmounts on close, which would destroy the observer
   // before the toast's Undo action fires.
   const undoMutation = useUndoApply()
 
   function handleUndo(snapshot: ApplySnapshot) {
-    undoMutation.mutate(snapshot, { onError: (err) => toastError(err, t) })
+    undoMutation.mutate(snapshot)
   }
 
   return (
@@ -93,7 +91,6 @@ function DialogBody({
           showPresetApplyToasts(result, t, onUndo)
           onClose()
         },
-        onError: (err) => toastError(err, t),
       }
     )
   }

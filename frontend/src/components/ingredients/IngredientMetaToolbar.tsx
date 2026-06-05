@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { toast, toastError } from "@/lib/toast"
+import { toast } from "@/lib/toast"
 import { useRefetchFood, useSyncPortions } from "@/lib/queries/foods"
 import type { LeafFood } from "@/lib/api/foods"
 import { cn } from "@/lib/utils"
@@ -41,23 +41,18 @@ export function IngredientMetaToolbar({
 
   async function handleRefetch() {
     if (!canRefetch) return
-    try {
-      const updated = await refetchMutation.mutateAsync({
-        id: ingredient.id,
-        lang: undefined,
-      })
-      onRefetched(updated as LeafFood)
-    } catch (err) {
-      toastError(err, t)
-    }
+    const updated = await refetchMutation
+      .mutateAsync({ id: ingredient.id, lang: undefined })
+      .catch(() => null)
+    if (updated) onRefetched(updated as LeafFood)
   }
 
   async function handleSyncPortions() {
     try {
       const result = await syncPortionsMutation.mutateAsync(ingredient.id)
       toast.success(t("ingredient.sync_portions_done", { count: result.added }))
-    } catch (err) {
-      toastError(err, t)
+    } catch {
+      // error handled by hook
     }
   }
 
