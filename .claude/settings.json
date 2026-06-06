@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/config-protection.js",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/config-protection.js\"",
             "timeout": 5
           }
         ]
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/post-edit-accumulator.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-accumulator.js\""
           }
         ]
       },
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/quality-gate.js",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/quality-gate.js\"",
             "async": true,
             "timeout": 30
           }
@@ -68,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/post-edit-console-warn.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-console-warn.js\""
           }
         ]
       }
@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/stop-format-typecheck.js",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-format-typecheck.js\"",
             "timeout": 300
           }
         ]
@@ -89,7 +89,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/check-console-log.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-console-log.js\""
           }
         ]
       },
@@ -98,7 +98,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/session-end.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-end.js\""
           }
         ]
       }
@@ -109,7 +109,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/session-start.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.js\""
           }
         ]
       }
@@ -120,7 +120,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/pre-compact.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-compact.js\""
           }
         ]
       }
