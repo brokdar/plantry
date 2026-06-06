@@ -205,9 +205,15 @@ func (s *Service) DebugSystemPrompt(ctx context.Context) (string, error) {
 func modeHint(mode string) string {
 	switch mode {
 	case "fill_empty":
-		return "Only create plates in empty (day, slot) cells. Do not modify existing plates unless the user asks. Never modify plates where skipped=true — treat them as immutable (the user marked that slot as eating out, canteen, or otherwise off-plan). When candidates are otherwise equivalent, prefer components where favorite=true."
+		return "Get to work right away — the user already asked you to fill the empty slots, so don't ask for confirmation. " +
+			"Only create plates in empty (day, slot) cells. Do not modify existing plates unless the user asks. Never modify plates where skipped=true — treat them as immutable (the user marked that slot as eating out, canteen, or otherwise off-plan). " +
+			"Plan for variety: before choosing, call get_plates_range over the current window AND the two preceding weeks so you can see what the user has eaten recently. Do not repeat meals they just had, and never reuse the same component across multiple slots in this window — each week should look different from the last. " +
+			"favorite=true is a tie-breaker between otherwise-equivalent candidates, never a reason to plan the same favorites week after week. Rotate through the food library for diversity. " +
+			"When you're done, give the user a brief rundown — one short line per slot you filled, naming the meal and why you picked it (variety, a favorite, or macro fit)."
 	case "replace_all":
-		return "You may clear the week and plan it from scratch. Confirm with the user before deleting existing plates. Respect skipped plates — do not overwrite them. When candidates are otherwise equivalent, prefer components where favorite=true."
+		return "You may clear the week and plan it from scratch. Confirm with the user before deleting existing plates. Respect skipped plates — do not overwrite them. " +
+			"Plan for variety: call get_plates_range over the preceding weeks and avoid repeating the meals the user just had; don't reuse the same component across multiple slots. Use swap_food to vary a slot when a candidate would otherwise repeat. " +
+			"favorite=true is a tie-breaker between otherwise-equivalent candidates, not a reason to repeat the same favorites every week."
 	default:
 		return mode
 	}

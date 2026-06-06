@@ -144,6 +144,7 @@
       "error": "Could not revert"
     },
     "fill_empty": {
+      "prompt": "Fill the empty slots in my current week. For each meal you add, tell me briefly what you picked and why.",
       "progress": "Filling empty slots…",
       "done": "Empty slots filled",
       "error": "Could not fill empty slots"

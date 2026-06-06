@@ -144,6 +144,7 @@
       "error": "Konnte nicht rückgängig gemacht werden"
     },
     "fill_empty": {
+      "prompt": "Fülle die leeren Slots meiner aktuellen Woche. Sag mir zu jedem hinzugefügten Gericht kurz, was du gewählt hast und warum.",
       "progress": "Fülle leere Slots…",
       "done": "Leere Slots gefüllt",
       "error": "Füllen fehlgeschlagen"

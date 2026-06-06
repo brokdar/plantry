@@ -108,8 +108,7 @@ function PlanPage() {
     return () => window.removeEventListener("keydown", onKey)
   }, [])
   const openChat = useChatUI((s) => s.setOpen)
-  const openChatWith = useChatUI((s) => s.openWith)
-  const setChatMode = useChatUI((s) => s.setMode)
+  const requestAutoFill = useChatUI((s) => s.requestAutoFill)
 
   const settingsQuery = useSettings()
   const settingValue = (key: string, fallback: string) =>
@@ -165,8 +164,7 @@ function PlanPage() {
 
   function handleAiFill() {
     startAiFill({ from, to })
-    setChatMode("fill_empty")
-    openChatWith(t("planner.fill_empty.progress"))
+    requestAutoFill(t("planner.fill_empty.prompt"))
   }
 
   // Watch plates created after the fill session started. Zustand actions don't
