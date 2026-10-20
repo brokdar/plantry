@@ -17,7 +17,6 @@ test("chat panel streams assistant text and tool-call states", async ({
   try {
     await page.goto("/")
 
-    await page.getByTestId("planner-overflow").click()
     const openBtn = page.getByTestId("chat-open-button")
     await expect(openBtn).toBeVisible()
     await openBtn.click()
@@ -59,7 +58,6 @@ test("chat composer submits on Ctrl+Enter", async ({ page }) => {
 
   try {
     await page.goto("/")
-    await page.getByTestId("planner-overflow").click()
     await page.getByTestId("chat-open-button").click()
 
     const input = page.getByTestId("chat-composer-input")

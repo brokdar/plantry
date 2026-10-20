@@ -2,6 +2,7 @@ import {
   BarChart2,
   Bookmark,
   CalendarRange,
+  ChevronDown,
   Download,
   Keyboard,
   MoreHorizontal,
@@ -107,8 +108,7 @@ function PlanPage() {
     return () => window.removeEventListener("keydown", onKey)
   }, [])
   const openChat = useChatUI((s) => s.setOpen)
-  const openChatWith = useChatUI((s) => s.openWith)
-  const setChatMode = useChatUI((s) => s.setMode)
+  const requestAutoFill = useChatUI((s) => s.requestAutoFill)
 
   const settingsQuery = useSettings()
   const settingValue = (key: string, fallback: string) =>
@@ -164,8 +164,7 @@ function PlanPage() {
 
   function handleAiFill() {
     startAiFill({ from, to })
-    setChatMode("fill_empty")
-    openChatWith(t("planner.fill_empty.progress"))
+    requestAutoFill(t("planner.fill_empty.prompt"))
   }
 
   // Watch plates created after the fill session started. Zustand actions don't
@@ -389,6 +388,48 @@ function PlanPage() {
                 {t("planner.daily_avg")}
               </span>
             </div>
+            {aiSettings?.enabled && (
+              <DropdownMenu>
+                <div className="flex items-center overflow-hidden rounded-md border border-ai-accent-border/40 bg-ai-accent-bg/60">
+                  <Button
+                    variant="ghost"
+                    onClick={() => openChat(true)}
+                    data-testid="chat-open-button"
+                    className="h-9 gap-1.5 rounded-none px-3 font-medium text-ai-accent-fg hover:bg-ai-accent-bg hover:text-ai-accent-fg"
+                  >
+                    <Sparkles className="size-4" aria-hidden />
+                    {t("chat.button")}
+                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("planner.ai_more_actions")}
+                          data-testid="ai-menu"
+                          className="h-9 w-8 rounded-none border-l border-ai-accent-border/40 text-ai-accent-fg hover:bg-ai-accent-bg hover:text-ai-accent-fg"
+                        >
+                          <ChevronDown className="size-4" aria-hidden />
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {t("planner.ai_more_actions")}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem
+                    onClick={handleAiFill}
+                    data-testid="ai-fill-empty"
+                  >
+                    <Sparkles className="size-4" />
+                    {t("planner.fill_empty_cta")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <DropdownMenu>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -434,21 +475,6 @@ function PlanPage() {
                   <Keyboard className="size-4" />
                   {t("planner.shortcuts.menu_item")}
                 </DropdownMenuItem>
-                {aiSettings?.enabled && (
-                  <>
-                    <DropdownMenuItem onClick={handleAiFill}>
-                      <Sparkles className="size-4" />
-                      {t("planner.fill_empty_cta")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => openChat(true)}
-                      data-testid="chat-open-button"
-                    >
-                      <Sparkles className="size-4" />
-                      {t("chat.button")}
-                    </DropdownMenuItem>
-                  </>
-                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleClearWindow}

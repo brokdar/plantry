@@ -52,3 +52,34 @@ func TestPrompt_NoGetWeekMention(t *testing.T) {
 		t.Errorf("system prompt must not recommend 'get_week' as an available tool; got:\n%s", prompt)
 	}
 }
+
+func TestModeHint_FillEmpty_StartsAndExplains(t *testing.T) {
+	h := modeHint("fill_empty")
+	// The Fill-empty action auto-sends, so the assistant must not stall on a
+	// confirmation prompt, and it must report its picks back to the user.
+	for _, want := range []string{"don't ask for confirmation", "rundown", "why you picked"} {
+		if !strings.Contains(h, want) {
+			t.Errorf("fill_empty mode hint must mention %q so the assistant starts and explains itself; got:\n%s", want, h)
+		}
+	}
+}
+
+func TestModeHint_FillEmpty_PlansForVariety(t *testing.T) {
+	h := modeHint("fill_empty")
+	// Guard against the old behaviour of repeating the same favourites every
+	// week: it must read recent weeks and treat favourites as a tie-breaker.
+	for _, want := range []string{"preceding weeks", "Do not repeat meals", "tie-breaker"} {
+		if !strings.Contains(h, want) {
+			t.Errorf("fill_empty mode hint must drive variety via %q; got:\n%s", want, h)
+		}
+	}
+}
+
+func TestModeHint_ReplaceAll_PlansForVariety(t *testing.T) {
+	h := modeHint("replace_all")
+	for _, want := range []string{"swap_food", "tie-breaker"} {
+		if !strings.Contains(h, want) {
+			t.Errorf("replace_all mode hint must drive variety via %q; got:\n%s", want, h)
+		}
+	}
+}
