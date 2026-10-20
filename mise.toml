@@ -1,0 +1,31 @@
+# Dev toolchain, run directly in WSL (no devcontainer). Exact versions pinned.
+#   mise install && mise run bootstrap     # once per machine
+# `go test -race` needs a system C compiler; e2e needs Chromium system libs (sudo apt install build-essential, sudo ./frontend/node_modules/.bin/playwright install-deps chromium).
+
+[tools]
+go = "1.25.14"
+node = "24.21.0"            # vite, eslint, playwright run on node; bun is the package manager
+bun = "1.4.3"
+golangci-lint = "2.15.0"
+gofumpt = "0.12.0"
+sqlc = "1.31.1"
+prek = "0.5.5"
+
+[settings]
+lockfile = true
+
+[tasks.bootstrap]
+description = "Install git hooks and project dependencies"
+run = """
+set -e
+prek install
+mise run deps
+"""
+
+[tasks.deps]
+description = "Download Go modules, install frontend deps and the pinned Playwright Chromium"
+run = """
+set -e
+(cd backend && go mod download)
+(cd frontend && bun install --frozen-lockfile && ./node_modules/.bin/playwright install chromium)
+"""
