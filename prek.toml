@@ -20,16 +20,15 @@ hooks = [
 [[repos]]
 repo = "local"
 hooks = [
-  # gofumpt: prek installs via go install (language = "golang"), auto-fixes
+  # gofumpt: pinned in mise.toml, auto-fixes
   {
-    id                      = "gofumpt",
-    name                    = "gofumpt",
-    language                = "golang",
-    entry                   = "gofumpt",
-    args                    = ["-w"],
-    files                   = "^backend/.*\\.go$",
-    pass_filenames          = true,
-    additional_dependencies = ["mvdan.cc/gofumpt@latest"],
+    id             = "gofumpt",
+    name           = "gofumpt",
+    language       = "system",
+    entry          = "gofumpt",
+    args           = ["-w"],
+    files          = "^backend/.*\\.go$",
+    pass_filenames = true,
   },
 
   # golangci-lint: run from backend/ to pick up the module root
