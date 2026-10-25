@@ -1,5 +1,8 @@
 minimum_prek_version = "0.3.8"
 
+# Vendored third-party skills stay byte-identical to upstream (see skills-lock.json)
+exclude = "^\\.claude/skills/"
+
 # ── Builtin (Rust-native, instant, zero deps) ─────────────────────────────────
 [[repos]]
 repo = "builtin"

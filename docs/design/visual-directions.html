@@ -1,0 +1,304 @@
+<title>Plantry Visual Directions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,400&family=Source+Sans+3:wght@400;600&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one neutral comparison page; each direction is a self-contained band
+   rendering the SAME week (board + phone Today) with its own tokens. */
+:root{
+  --page-bg:#f3f4f2; --page-fg:#1d211f; --page-muted:#5d6560; --page-line:#d9ddd9;
+  --ui:"Public Sans",system-ui,sans-serif;
+
+  /* A Market */
+  --a-ground:#f6f7f3; --a-panel:#ffffff; --a-ink:#1f2a22; --a-muted:#5f6b62; --a-line:#dfe3dc;
+  --a-rail:#24402f; --a-rail-fg:#eef3ea;
+  --a-b1:#a3294e; --a-b1t:#f6dde5;   /* beet  */
+  --a-b2:#d9801a; --a-b2t:#fbe8cf;   /* squash */
+  --a-b3:#5a7d2a; --a-b3t:#e3ecd2;   /* leek */
+  --a-ok:#2f7d4f; --a-warn:#b9661a;
+
+  /* B Cookbook */
+  --b-ground:#fbfbfa; --b-panel:#ffffff; --b-ink:#1c2233; --b-muted:#5a6175; --b-line:#e3e5ea;
+  --b-rail:#ffffff; --b-rail-fg:#1c2233; --b-accent:#27407a;
+  --b-b1:#7a3b2e; --b-b1t:#f3e7e2;
+  --b-b2:#8a6a12; --b-b2t:#f4eedb;
+  --b-b3:#2f6b5a; --b-b3t:#e1efe9;
+  --b-ok:#2f6b5a; --b-warn:#8a6a12;
+
+  /* C Prep tape */
+  --c-ground:#e9ecee; --c-panel:#f7f8f9; --c-ink:#23282d; --c-muted:#5c656e; --c-line:#cfd5da;
+  --c-rail:#2e353c; --c-rail-fg:#e6eaee;
+  --c-b1:#f0cf55; --c-b1i:#3b3000;   /* masking-tape yellow */
+  --c-b2:#8fc6e6; --c-b2i:#0d3247;   /* tape blue */
+  --c-b3:#a6d394; --c-b3i:#1d3b12;   /* tape green */
+  --c-ok:#2e7a46; --c-warn:#b45f12;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --page-bg:#151816; --page-fg:#e6e9e6; --page-muted:#9aa39d; --page-line:#2c322e;
+  --a-ground:#171c18; --a-panel:#1f2621; --a-ink:#e7ece6; --a-muted:#a2ada4; --a-line:#313a33;
+  --a-rail:#10241a; --a-rail-fg:#dfe9db;
+  --a-b1:#e0668b; --a-b1t:#3d1a26; --a-b2:#eea24b; --a-b2t:#3d2a12; --a-b3:#9cc261; --a-b3t:#26321a;
+  --a-ok:#6cc48f; --a-warn:#eea24b;
+  --b-ground:#161821; --b-panel:#1d2030; --b-ink:#e6e8f0; --b-muted:#a3a8bb; --b-line:#2e3245;
+  --b-rail:#1d2030; --b-rail-fg:#e6e8f0; --b-accent:#9db2ea;
+  --b-b1:#e29a88; --b-b1t:#35231f; --b-b2:#d8b75a; --b-b2t:#332b14; --b-b3:#7cc4ad; --b-b3t:#1b302a;
+  --b-ok:#7cc4ad; --b-warn:#d8b75a;
+  --c-ground:#1b1f23; --c-panel:#23282d; --c-ink:#e3e7eb; --c-muted:#9ea7b0; --c-line:#363d44;
+  --c-rail:#121518; --c-rail-fg:#dfe4e8;
+  --c-b1:#d9b93f; --c-b1i:#241c00; --c-b2:#6fa9cb; --c-b2i:#06202f; --c-b3:#86b874; --c-b3i:#10240a;
+  --c-ok:#6cc48f; --c-warn:#e39a52;
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --page-bg:#151816; --page-fg:#e6e9e6; --page-muted:#9aa39d; --page-line:#2c322e;
+  --a-ground:#171c18; --a-panel:#1f2621; --a-ink:#e7ece6; --a-muted:#a2ada4; --a-line:#313a33;
+  --a-rail:#10241a; --a-rail-fg:#dfe9db;
+  --a-b1:#e0668b; --a-b1t:#3d1a26; --a-b2:#eea24b; --a-b2t:#3d2a12; --a-b3:#9cc261; --a-b3t:#26321a;
+  --a-ok:#6cc48f; --a-warn:#eea24b;
+  --b-ground:#161821; --b-panel:#1d2030; --b-ink:#e6e8f0; --b-muted:#a3a8bb; --b-line:#2e3245;
+  --b-rail:#1d2030; --b-rail-fg:#e6e8f0; --b-accent:#9db2ea;
+  --b-b1:#e29a88; --b-b1t:#35231f; --b-b2:#d8b75a; --b-b2t:#332b14; --b-b3:#7cc4ad; --b-b3t:#1b302a;
+  --b-ok:#7cc4ad; --b-warn:#d8b75a;
+  --c-ground:#1b1f23; --c-panel:#23282d; --c-ink:#e3e7eb; --c-muted:#9ea7b0; --c-line:#363d44;
+  --c-rail:#121518; --c-rail-fg:#dfe4e8;
+  --c-b1:#d9b93f; --c-b1i:#241c00; --c-b2:#6fa9cb; --c-b2i:#06202f; --c-b3:#86b874; --c-b3i:#10240a;
+  --c-ok:#6cc48f; --c-warn:#e39a52;
+  color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--page-bg);color:var(--page-fg);font-family:var(--ui);font-size:15px;line-height:1.5;margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 56px}
+header.intro{display:grid;gap:8px;max-width:68ch;margin-bottom:28px}
+header.intro h1{font-size:1.6rem;line-height:1.2;margin:0;text-wrap:balance;font-weight:600}
+header.intro p{margin:0;color:var(--page-muted)}
+nav.jump{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+nav.jump a{color:var(--page-fg);text-decoration:none;border:1px solid var(--page-line);padding:6px 12px;border-radius:999px;font-size:.9rem}
+nav.jump a:focus-visible,nav.jump a:hover{border-color:var(--page-fg)}
+section.dir{margin-top:40px;display:grid;gap:14px}
+.dir-head{display:grid;gap:4px;max-width:72ch}
+.dir-head h2{margin:0;font-size:1.25rem;font-weight:600}
+.dir-head p{margin:0;color:var(--page-muted)}
+.dir-head .move{color:var(--page-fg)}
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+@media (max-width:900px){.stage{grid-template-columns:minmax(0,1fr)}}
+.scroll{overflow-x:auto;border-radius:12px}
+
+/* ---------- shared mock structure ---------- */
+.app{display:grid;grid-template-columns:64px minmax(0,1fr);min-width:860px;border-radius:12px;overflow:hidden}
+.rail{display:flex;flex-direction:column;align-items:center;gap:18px;padding:16px 0}
+.rail .logo{width:30px;height:30px;border-radius:8px}
+.rail span{font-size:.62rem;text-align:center;opacity:.75}
+.rail span.on{opacity:1;font-weight:600}
+.main{padding:18px 20px;display:grid;gap:14px}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.top h3{margin:0}
+.top .sub{font-size:.85rem}
+.btns{display:flex;gap:8px}
+.btn{font:inherit;font-size:.85rem;padding:7px 14px;border-radius:8px;border:1px solid transparent;cursor:pointer}
+.cookstrip{display:flex;gap:8px;flex-wrap:wrap;font-size:.85rem;align-items:center}
+.board{display:grid;grid-template-columns:72px repeat(7,minmax(0,1fr));gap:6px}
+.dayh{font-size:.8rem;display:grid;gap:4px;padding-bottom:4px}
+.dayh b{font-weight:600}
+.meter{height:4px;border-radius:2px;overflow:hidden}
+.meter i{display:block;height:100%}
+.rowh{font-size:.78rem;align-self:center}
+.cell{min-height:64px;border-radius:8px;padding:7px 8px;font-size:.8rem;line-height:1.3;display:grid;align-content:start;gap:3px;position:relative}
+.cell .n{font-weight:600}
+.cell .m{font-size:.72rem}
+.attention{font-size:.82rem}
+
+.phone{border-radius:28px;padding:12px;width:300px;max-width:100%;justify-self:center}
+.screen{border-radius:18px;overflow:hidden;min-height:540px;display:grid;align-content:start}
+.ph-top{padding:16px 16px 10px;display:grid;gap:2px}
+.ph-top .d{font-size:.8rem}
+.ph-top h4{margin:0}
+.now{margin:0 12px;border-radius:14px;padding:14px;display:grid;gap:6px}
+.now .k{font-size:.75rem}
+.now .t{font-weight:600;font-size:1.05rem;line-height:1.25}
+.list{padding:14px 16px;display:grid;gap:10px;font-size:.85rem}
+.li{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid transparent;padding-bottom:8px}
+.rate{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.rate .pair{display:flex;gap:6px}
+.rate button{font:inherit;font-size:.8rem;padding:5px 10px;border-radius:999px;cursor:pointer}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);font-size:.68rem;text-align:center;padding:10px 4px;margin-top:auto}
+
+/* ---------- A  Market: produce-colour price tags ---------- */
+.A .app,.A .screen{background:var(--a-ground);color:var(--a-ink);font-family:"Public Sans",system-ui,sans-serif}
+.A .rail{background:var(--a-rail);color:var(--a-rail-fg)}
+.A .rail .logo{background:var(--a-b3)}
+.A h3,.A h4{font-family:"Bricolage Grotesque","Public Sans",sans-serif;font-weight:700;font-size:1.45rem;letter-spacing:-.01em}
+.A h4{font-size:1.3rem}
+.A .sub,.A .rowh,.A .m,.A .dayh,.A .d,.A .k{color:var(--a-muted)}
+.A .btn{background:var(--a-panel);border-color:var(--a-line);color:var(--a-ink)}
+.A .btn.primary{background:var(--a-rail);color:var(--a-rail-fg)}
+.A .cell{background:var(--a-panel);border:1px solid var(--a-line)}
+.A .cell.none{background:transparent;border-style:dashed;color:var(--a-muted)}
+.A .cell.routine{background:transparent}
+.A .tag{justify-self:start;font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:.7rem;padding:1px 8px 1px 6px;border-radius:3px 10px 10px 3px;color:#fff}
+.A .cell.b1{background:var(--a-b1t);border-color:transparent} .A .b1 .tag,.A .chip.b1{background:var(--a-b1)}
+.A .cell.b2{background:var(--a-b2t);border-color:transparent} .A .b2 .tag,.A .chip.b2{background:var(--a-b2)}
+.A .cell.b3{background:var(--a-b3t);border-color:transparent} .A .b3 .tag,.A .chip.b3{background:var(--a-b3)}
+.A .cell.fresh{box-shadow:inset 0 0 0 2px currentColor}
+.A .cell.fresh.b1{color:var(--a-b1)} .A .cell.fresh.b2{color:var(--a-b2)} .A .cell.fresh.b3{color:var(--a-b3)}
+.A .cell.fresh .n,.A .cell.fresh .m{color:var(--a-ink)}
+.A .chip{color:#fff;font-weight:600;padding:3px 10px 3px 8px;border-radius:3px 12px 12px 3px;font-size:.8rem}
+.A .meter{background:var(--a-line)} .A .meter i{background:var(--a-ok)} .A .meter i.w{background:var(--a-warn)}
+.A .attention{color:var(--a-warn)}
+.A .phone{background:var(--a-rail)}
+.A .now{background:var(--a-b1t)} .A .now .t{color:var(--a-ink)}
+.A .li{border-color:var(--a-line)}
+.A .rate button{background:var(--a-panel);border:1px solid var(--a-line);color:var(--a-ink)}
+.A .tabs{background:var(--a-panel);color:var(--a-muted)} .A .tabs .on{color:var(--a-rail);font-weight:600}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .A .tabs .on{color:var(--a-b3)} }
+:root[data-theme="dark"] .A .tabs .on{color:var(--a-b3)}
+
+/* ---------- B  Cookbook: margin brackets and annotations ---------- */
+.B .app,.B .screen{background:var(--b-ground);color:var(--b-ink);font-family:"Source Sans 3",system-ui,sans-serif}
+.B .rail{background:var(--b-rail);color:var(--b-rail-fg);border-right:1px solid var(--b-line)}
+.B .rail .logo{background:var(--b-accent);border-radius:50%}
+.B h3,.B h4{font-family:"Newsreader",Georgia,serif;font-weight:600;font-size:1.6rem}
+.B h4{font-size:1.4rem}
+.B .sub,.B .rowh,.B .m,.B .dayh,.B .d,.B .k{color:var(--b-muted)}
+.B .rowh{font-family:"Newsreader",Georgia,serif;font-style:italic;font-size:.9rem}
+.B .btn{background:transparent;border-color:var(--b-line);color:var(--b-ink)}
+.B .btn.primary{background:var(--b-accent);color:var(--b-ground);border-color:var(--b-accent)}
+.B .cell{background:var(--b-panel);border:1px solid var(--b-line);border-radius:4px}
+.B .cell.none{background:transparent;border:none;color:var(--b-muted);font-style:italic;font-family:"Newsreader",serif}
+.B .cell.routine{background:transparent;border-style:dotted}
+.B .cell.b1,.B .cell.b2,.B .cell.b3{border-left-width:3px}
+.B .cell.b1{border-left-color:var(--b-b1)} .B .cell.b2{border-left-color:var(--b-b2)} .B .cell.b3{border-left-color:var(--b-b3)}
+.B .cell.fresh.b1{background:var(--b-b1t)} .B .cell.fresh.b2{background:var(--b-b2t)} .B .cell.fresh.b3{background:var(--b-b3t)}
+.B .tag{font-family:"Newsreader",Georgia,serif;font-style:italic;font-size:.82rem}
+.B .b1 .tag{color:var(--b-b1)} .B .b2 .tag{color:var(--b-b2)} .B .b3 .tag{color:var(--b-b3)}
+.B .chip{font-family:"Newsreader",Georgia,serif;font-size:.95rem;padding-left:10px;border-left:3px solid}
+.B .chip.b1{border-color:var(--b-b1)} .B .chip.b2{border-color:var(--b-b2)} .B .chip.b3{border-color:var(--b-b3)}
+.B .meter{background:var(--b-line);height:3px} .B .meter i{background:var(--b-ok)} .B .meter i.w{background:var(--b-warn)}
+.B .attention{color:var(--b-warn);font-family:"Newsreader",serif;font-style:italic}
+.B .phone{background:var(--b-line)}
+.B .now{background:var(--b-panel);border:1px solid var(--b-line);border-left:3px solid var(--b-b1)}
+.B .now .t{font-family:"Newsreader",Georgia,serif;font-size:1.25rem}
+.B .li{border-color:var(--b-line)}
+.B .rate button{background:transparent;border:1px solid var(--b-line);color:var(--b-ink)}
+.B .tabs{background:var(--b-panel);color:var(--b-muted);border-top:1px solid var(--b-line)} .B .tabs .on{color:var(--b-accent);font-weight:600}
+
+/* ---------- C  Prep tape: masking-tape container labels ---------- */
+.C .app,.C .screen{background:var(--c-ground);color:var(--c-ink);font-family:"Barlow",system-ui,sans-serif}
+.C .rail{background:var(--c-rail);color:var(--c-rail-fg)}
+.C .rail .logo{background:var(--c-b1);border-radius:4px}
+.C .rail span{font-family:"Barlow Condensed",sans-serif;letter-spacing:.06em;text-transform:uppercase;font-size:.68rem}
+.C h3,.C h4{font-family:"Barlow Condensed","Barlow",sans-serif;font-weight:700;font-size:1.7rem;letter-spacing:.01em}
+.C h4{font-size:1.5rem}
+.C .sub,.C .rowh,.C .m,.C .dayh,.C .d,.C .k{color:var(--c-muted)}
+.C .rowh,.C .dayh b{font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.06em}
+.C .btn{background:var(--c-panel);border-color:var(--c-line);color:var(--c-ink);font-weight:500}
+.C .btn.primary{background:var(--c-rail);color:var(--c-rail-fg)}
+.C .cell{background:var(--c-panel);border:1px solid var(--c-line);border-radius:6px;padding-top:24px}
+.C .cell.none{background:transparent;border-style:dashed;padding-top:7px;color:var(--c-muted)}
+.C .cell.routine{padding-top:7px}
+.C .tag{position:absolute;top:-4px;left:6px;right:10px;padding:2px 6px;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;transform:rotate(-1.2deg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  -webkit-mask:linear-gradient(90deg,transparent 0,#000 3px,#000 calc(100% - 3px),transparent 100%);mask:linear-gradient(90deg,transparent 0,#000 3px,#000 calc(100% - 3px),transparent 100%)}
+.C .b1 .tag,.C .chip.b1{background:var(--c-b1);color:var(--c-b1i)}
+.C .b2 .tag,.C .chip.b2{background:var(--c-b2);color:var(--c-b2i)}
+.C .b3 .tag,.C .chip.b3{background:var(--c-b3);color:var(--c-b3i)}
+.C .cell.fresh{border:2px solid var(--c-ink)}
+.C .chip{font-family:"Barlow Condensed",sans-serif;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;transform:rotate(-1deg);display:inline-block}
+.C .meter{background:var(--c-line);height:6px;border-radius:0} .C .meter i{background:var(--c-ok)} .C .meter i.w{background:var(--c-warn)}
+.C .attention{color:var(--c-warn);font-weight:600}
+.C .phone{background:var(--c-rail)}
+.C .now{background:var(--c-panel);border:2px solid var(--c-ink);position:relative;padding-top:30px}
+.C .now .tagline{position:absolute;top:-6px;left:12px;padding:3px 10px;background:var(--c-b1);color:var(--c-b1i);font-family:"Barlow Condensed",sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:.8rem;transform:rotate(-1.5deg)}
+.C .now .t{font-family:"Barlow Condensed",sans-serif;font-size:1.35rem;font-weight:600}
+.C .li{border-color:var(--c-line)}
+.C .rate button{background:var(--c-panel);border:1px solid var(--c-line);color:var(--c-ink)}
+.C .tabs{background:var(--c-rail);color:var(--c-rail-fg);font-family:"Barlow Condensed",sans-serif;text-transform:uppercase;letter-spacing:.06em} .C .tabs .on{color:var(--c-b1)}
+
+/* ---------- Chosen: Cookbook + Market batch badges ---------- */
+.BA .cell.b1,.BA .cell.b2,.BA .cell.b3{border-left-width:1px;border-left-color:var(--b-line)}
+.BA .tag{justify-self:start;font-family:"Source Sans 3",system-ui,sans-serif;font-style:normal;font-weight:600;font-size:.72rem;padding:1px 8px 1px 6px;border-radius:3px 10px 10px 3px;color:var(--b-ground)}
+.BA .b1 .tag,.BA .chip.b1{background:var(--b-b1);color:var(--b-ground)}
+.BA .b2 .tag,.BA .chip.b2{background:var(--b-b2);color:var(--b-ground)}
+.BA .b3 .tag,.BA .chip.b3{background:var(--b-b3);color:var(--b-ground)}
+.BA .chip{font-family:"Source Sans 3",system-ui,sans-serif;font-size:.8rem;font-weight:600;border-left:none;padding:3px 10px 3px 8px;border-radius:3px 12px 12px 3px}
+.BA .cell.fresh{box-shadow:inset 0 0 0 1.5px var(--b-ink)}
+.BA .now{border-left:1px solid var(--b-line)}
+.BA .now .badge{justify-self:start;background:var(--b-b1);color:var(--b-ground);font-weight:600;font-size:.75rem;padding:1px 8px 1px 6px;border-radius:3px 10px 10px 3px}
+section.chosen{padding:20px;border:1px solid var(--page-line);border-radius:14px}
+.btn:focus-visible,.rate button:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+footer{margin-top:44px;color:var(--page-muted);font-size:.9rem;max-width:72ch}
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <h1>Three directions for Plantry</h1>
+    <p>Each direction shows the same planned week (Sat 31 Oct to Fri 6 Nov) on the desktop week board, plus the phone Today screen for Monday. Same layout and controls in all three; only type, colour, density and one signature detail change. That signature detail is how a batch and its leftovers are marked.</p>
+    <nav class="jump" aria-label="Directions"><a href="#chosen">Chosen</a><a href="#a">A · Market</a><a href="#b">B · Cookbook</a><a href="#c">C · Prep tape</a></nav>
+  </header>
+
+  <section class="dir B BA chosen" id="chosen">
+    <div class="dir-head">
+      <h2>Chosen · Cookbook with batch badges</h2>
+      <p>Direction B's serif headings, quiet paper ground and ink-blue actions. <span class="move">Batches use A's badges directly on the slots: "Cook × 4" where it is cooked, "2/4" on each leftover, in the batch's colour.</span></p>
+    </div>
+    <div class="stage" data-stage></div>
+  </section>
+
+  <section class="dir A" id="a">
+    <div class="dir-head">
+      <h2>A · Market</h2>
+      <p>Produce colours from the market stall: beet, squash, leek. A deep leek-green shell. <span class="move">Signature: every batch is a coloured price tag; its leftover plates carry the same tag with the portion count.</span></p>
+    </div>
+    <div class="stage" data-stage></div>
+  </section>
+
+  <section class="dir B" id="b">
+    <div class="dir-head">
+      <h2>B · Cookbook</h2>
+      <p>A well-used cookbook: serif headings, quiet paper ground, ink-blue actions. <span class="move">Signature: a batch is a coloured margin rule with an italic note ("Chili, day 2 of 4"), like a handwritten annotation.</span></p>
+    </div>
+    <div class="stage" data-stage></div>
+  </section>
+
+  <section class="dir C" id="c">
+    <div class="dir-head">
+      <h2>C · Prep tape</h2>
+      <p>The meal-prep kitchen: stainless greys, a graphite shell, condensed labels. <span class="move">Signature: leftovers wear masking-tape labels like real prep containers ("Chili 2/4, use by Wed").</span></p>
+    </div>
+    <div class="stage" data-stage></div>
+  </section>
+
+  <footer>Example data only. Batches: Chili sin carne × 4 (cooked Sunday), Thai green curry × 3 (cooked Wednesday), Pasta al limone × 1 (Saturday). Tuesday dinner and Friday dinner are marked "No plate".</footer>
+</div>
+
+<script>
+const days=[["Sat","31",88],["Sun","1",97],["Mon","2",92],["Tue","3",61],["Wed","4",76],["Thu","5",99],["Fri","6",58]];
+const B={b1:["Chili sin carne",4,"Wed"],b2:["Thai green curry",3,"Sat"],b3:["Pasta al limone",1,"Sat"]};
+function tag(b,i,dir){const[n,c,u]=B[b];
+  if(dir==="A"||dir==="BA")return i===1?`Cook × ${c}`:`${i}/${c}`;
+  if(dir==="B")return i===1?`cook for ${c}`:`day ${i} of ${c}`;
+  return i===1?`${n.split(" ")[0]} · cook ${c}`:`${n.split(" ")[0]} ${i}/${c} · use by ${u}`;}
+const lunch=[["none","No plate","market day"],["routine","Bread & soup","routine"],["b1",2],["b1",4],["none","Canteen menu","no plate"],["b2",2],["b2",3]];
+const dinner=[["b3",1],["b1",1],["b1",3],["none","No plate","away"],["b2",1],["fresh-q","Omelette, salad","quick, cook here"],["none","No plate","eating out"]];
+function cell(x,dir){
+  if(x[0]==="none")return `<div class="cell none"><span class="n">${x[1]}</span><span class="m">${x[2]}</span></div>`;
+  if(x[0]==="routine")return `<div class="cell routine"><span class="n">${x[1]}</span><span class="m">${x[2]}</span></div>`;
+  if(x[0]==="fresh-q")return `<div class="cell fresh"><span class="n">${x[1]}</span><span class="m">${x[2]}</span></div>`;
+  const[b,i]=x;const fresh=i===1;
+  return `<div class="cell ${b} ${fresh?"fresh":"left"}"><span class="tag">${tag(b,i,dir)}</span><span class="n">${B[b][0]}</span><span class="m">${fresh?"cook here":"leftover"}</span></div>`;}
+function board(dir){
+  const h=days.map(([d,n,p])=>`<div class="dayh"><b>${d} ${n}</b><div class="meter" title="${p}% of kcal target"><i class="${p<70?"w":""}" style="width:${p}%"></i></div></div>`).join("");
+  return `<div class="scroll"><div class="app"><div class="rail"><div class="logo" aria-hidden="true"></div><span>Today</span><span class="on">Plan</span><span>Recipes</span><span>Shop</span><span>Settings</span></div>
+  <div class="main"><div class="top"><div><h3>Week of 31 Oct</h3><div class="sub">Draft · 10 plates · 4 cook days</div></div>
+  <div class="btns"><button class="btn" type="button">Ask assistant</button><button class="btn primary" type="button">Accept and shop</button></div></div>
+  <div class="cookstrip"><span class="sub">Cook days</span><span class="chip b3">Sat · Pasta × 1</span><span class="chip b1">Sun · Chili × 4</span><span class="chip b2">Wed · Curry × 3</span><span class="sub">Thu · Omelette (quick)</span></div>
+  <div class="board"><div></div>${h}<div class="rowh">Lunch</div>${lunch.map(x=>cell(x,dir)).join("")}<div class="rowh">Dinner</div>${dinner.map(x=>cell(x,dir)).join("")}</div>
+  <div class="attention">Tue, Wed and Fri are below target because a meal is marked "No plate". Tap a day for details.</div></div></div></div>`;}
+function phone(dir){
+  const label=dir==="C"?`<span class="tagline">Chili 3/4 · use by Wed</span>`:dir==="BA"?`<span class="badge">3/4 · use by Wed</span>`:"";
+  return `<div class="phone"><div class="screen"><div class="ph-top"><span class="d">Monday, 2 November</span><h4>Nothing to cook today</h4></div>
+  <div class="now">${label}<span class="k">Dinner, 19:00</span><span class="t">Chili sin carne, leftover ${dir==="B"?"day 3 of 4":"3/4"}</span><span class="k">Reheat 1 portion · 610 kcal · 34 g protein</span></div>
+  <div class="list"><div class="li"><span>Breakfast</span><span>Oats (routine)</span></div><div class="li"><span>Lunch</span><span>Chili, lunchbox</span></div>
+  <div class="li"><span>Tomorrow</span><span>Lunch is the last Chili</span></div>
+  <div class="rate"><span>How was Sunday's Chili?</span><span class="pair"><button type="button">Loved it</button><button type="button">Not again</button></span></div></div>
+  <div class="tabs"><span class="on">Today</span><span>Plan</span><span>Recipes</span><span>Shop</span></div></div></div>`;}
+document.querySelectorAll("section.dir").forEach(s=>{const dir=s.classList.contains("BA")?"BA":s.classList.contains("A")?"A":s.classList.contains("B")?"B":"C";s.querySelector("[data-stage]").innerHTML=board(dir)+phone(dir);});
+</script>
