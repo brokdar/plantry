@@ -1,10 +1,14 @@
 import { apiFetch } from "./client"
 import type { Food } from "./foods"
 
+// "local" marks a food already in the catalogue (existing_id is set); it is
+// a navigation target, never a payload to create a new food from.
+export type LookupSource = "local" | "off" | "fdc"
+
 export interface LookupCandidate {
   name: string
   source_name?: string
-  source: string
+  source: LookupSource
   barcode: string | null
   fdc_id: number | null
   image_url: string | null

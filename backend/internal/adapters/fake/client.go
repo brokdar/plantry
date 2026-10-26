@@ -57,8 +57,10 @@ type ScriptedBlock struct {
 
 // ScriptedUsage matches llm.Usage.
 type ScriptedUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens      int `json:"input_tokens"`
+	OutputTokens     int `json:"output_tokens"`
+	CacheReadTokens  int `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
 }
 
 // Client implements llm.Client backed by a scripted file.
@@ -71,7 +73,9 @@ type Client struct {
 	path   string
 	script *Script
 	call   int
-	mu     sync.Mutex
+	// requests records every request received, in call order.
+	requests []llm.Request
+	mu       sync.Mutex
 }
 
 // New loads the script and returns a Client. Returns an error if the file
@@ -87,6 +91,14 @@ func New(path string) (*Client, error) {
 // NewFromScript creates a Client from an already-loaded Script. Handy for tests.
 func NewFromScript(s *Script) *Client { return &Client{script: s} }
 
+// Requests returns a copy of every request received by Stream and Complete,
+// in call order. The copy is shallow: slices inside each Request are shared.
+func (c *Client) Requests() []llm.Request {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]llm.Request(nil), c.requests...)
+}
+
 func (c *Client) reload() error {
 	data, err := os.ReadFile(c.path)
 	if err != nil {
@@ -100,7 +112,8 @@ func (c *Client) reload() error {
 	return nil
 }
 
-// Complete implements llm.Client.Complete.
+// Complete implements llm.Client.Complete. It delegates to Stream, which
+// records the request.
 func (c *Client) Complete(ctx context.Context, req llm.Request) (string, error) {
 	events := make(chan llm.Event, 16)
 	done := make(chan struct{})
@@ -129,9 +142,10 @@ func (c *Client) Complete(ctx context.Context, req llm.Request) (string, error) 
 // Stream replays the next scripted turn. The final turn is reused for any
 // subsequent calls, so later chat sessions still see a valid terminal turn
 // without needing to reload the script.
-func (c *Client) Stream(ctx context.Context, _ llm.Request, out chan<- llm.Event) (*llm.Response, error) {
+func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Event) (*llm.Response, error) {
 	defer close(out)
 	c.mu.Lock()
+	c.requests = append(c.requests, req)
 	if c.script == nil || len(c.script.Turns) == 0 {
 		c.mu.Unlock()
 		return nil, fmt.Errorf("fake: empty script")
@@ -174,7 +188,10 @@ func (c *Client) Stream(ctx context.Context, _ llm.Request, out chan<- llm.Event
 	return &llm.Response{
 		Message:    assembleMessage(turn.Message),
 		StopReason: mapStopReason(turn.StopReason),
-		Usage:      llm.Usage{InputTokens: turn.Usage.InputTokens, OutputTokens: turn.Usage.OutputTokens},
+		Usage: llm.Usage{
+			InputTokens: turn.Usage.InputTokens, OutputTokens: turn.Usage.OutputTokens,
+			CacheReadTokens: turn.Usage.CacheReadTokens, CacheWriteTokens: turn.Usage.CacheWriteTokens,
+		},
 	}, nil
 }
 

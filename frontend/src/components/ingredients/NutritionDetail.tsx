@@ -1,5 +1,11 @@
 import { useTranslation } from "react-i18next"
-import { Database, Globe, Sparkles, TriangleAlert } from "lucide-react"
+import {
+  BookOpen,
+  Database,
+  Globe,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react"
 
 import {
   MacroDistributionBar,
@@ -138,9 +144,13 @@ export function NutritionDetail({
     anyFilled(vitamins)
   if (!hasAnything) return null
 
-  const SourceIcon = candidate.source === "off" ? Globe : Database
-  const sourceLabel =
-    candidate.source === "off" ? t("lookup.source_off") : t("lookup.source_fdc")
+  const SourceIcon =
+    candidate.source === "local"
+      ? BookOpen
+      : candidate.source === "off"
+        ? Globe
+        : Database
+  const sourceLabel = t(`lookup.source_${candidate.source}`)
 
   return (
     <div

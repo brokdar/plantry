@@ -43,3 +43,6 @@ frontend/test-results/
 .claude/worktrees/
 .worktrees/
 .DS_Store
+
+# Generated encryption key (see backend/internal/config EnsureSecretKey)
+secret.key

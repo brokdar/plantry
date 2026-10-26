@@ -78,15 +78,14 @@ func run() error {
 	}
 
 	// Settings + crypto: editable app settings live in SQLite with env-var
-	// fallback. PLANTRY_SECRET_KEY, when set, enables encryption for API
-	// keys stored in the database.
-	var cipher crypto.Cipher = crypto.NilCipher{}
-	if cfg.SecretKey != "" {
-		c, err := crypto.New(cfg.SecretKey)
-		if err != nil {
-			return fmt.Errorf("crypto: %w", err)
-		}
-		cipher = c
+	// fallback. API keys stored in the database are encrypted with
+	// PLANTRY_SECRET_KEY, or with a key auto-generated in the data directory.
+	if err := cfg.EnsureSecretKey(); err != nil {
+		return fmt.Errorf("secret key: %w", err)
+	}
+	cipher, err := crypto.New(cfg.SecretKey)
+	if err != nil {
+		return fmt.Errorf("crypto: %w", err)
 	}
 	settingsRepo := sqlite.NewAppSettingsRepo(conn)
 	envSnapshot := settingsdom.NewEnvSnapshot(map[string]string{
@@ -199,7 +198,7 @@ func run() error {
 
 	h := transport.Handlers{
 		Foods:          handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore),
-		Lookup:         handlers.NewLookupHandler(resolver, foodSvc),
+		Lookup:         handlers.NewLookupHandler(resolver, foodSvc, fdcProvider),
 		ImageProxy:     handlers.NewImageProxyHandler(),
 		ImageStore:     imgStore,
 		Slots:          handlers.NewSlotHandler(slotSvc),

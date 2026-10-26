@@ -120,12 +120,13 @@ function IconPicker({
                     setOpen(false)
                   }}
                   className={cn(
-                    "flex flex-col items-center gap-1 rounded-md p-2 text-center hover:bg-accent focus:bg-accent focus:outline-none",
-                    value === name && "bg-accent ring-1 ring-ring"
+                    "flex flex-col items-center gap-1 rounded-md p-2 text-center hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none",
+                    value === name &&
+                      "bg-accent text-accent-foreground ring-1 ring-ring"
                   )}
                 >
                   <SlotIcon name={name} className="h-5 w-5" />
-                  <span className="w-full truncate text-[9px] text-muted-foreground">
+                  <span className="w-full truncate text-[9px] opacity-70">
                     {name}
                   </span>
                 </button>

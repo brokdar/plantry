@@ -2,7 +2,10 @@ package fdc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
@@ -23,6 +26,22 @@ func (p *Provider) SearchByName(ctx context.Context, query string, limit int) ([
 		return nil, err
 	}
 	return toDomainCandidates(results), nil
+}
+
+// GetByID fetches a single FDC food by ID and normalises its nutrients.
+// A missing food keeps domain.ErrNotFound; any other upstream failure is
+// reported as domain.ErrLookupFailed.
+func (p *Provider) GetByID(ctx context.Context, fdcID int) (food.Candidate, error) {
+	detail, err := p.client.GetFood(ctx, fdcID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return food.Candidate{}, err
+		}
+		return food.Candidate{}, fmt.Errorf("%w: %v", domain.ErrLookupFailed, err)
+	}
+	c := toDomainCandidate(detail.candidate())
+	food.FillMissingKcal(&c)
+	return c, nil
 }
 
 // GetFoodPortions fetches per-unit gram weights for a single FDC food. This
@@ -47,34 +66,38 @@ func (p *Provider) GetFoodPortions(ctx context.Context, fdcID int) ([]food.Porti
 func toDomainCandidates(candidates []Candidate) []food.Candidate {
 	out := make([]food.Candidate, len(candidates))
 	for i, c := range candidates {
-		out[i] = food.Candidate{
-			Name:             c.Name,
-			SourceName:       c.Name,
-			Source:           food.SourceFDC,
-			FdcID:            c.FdcID,
-			Kcal100g:         c.Kcal100g,
-			Protein100g:      c.Protein100g,
-			Fat100g:          c.Fat100g,
-			Carbs100g:        c.Carbs100g,
-			Fiber100g:        c.Fiber100g,
-			Sodium100g:       c.Sodium100g,
-			SaturatedFat100g: c.SaturatedFat100g,
-			TransFat100g:     c.TransFat100g,
-			Cholesterol100g:  c.Cholesterol100g,
-			Sugar100g:        c.Sugar100g,
-			Potassium100g:    c.Potassium100g,
-			Calcium100g:      c.Calcium100g,
-			Iron100g:         c.Iron100g,
-			Magnesium100g:    c.Magnesium100g,
-			Phosphorus100g:   c.Phosphorus100g,
-			Zinc100g:         c.Zinc100g,
-			VitaminA100g:     c.VitaminA100g,
-			VitaminC100g:     c.VitaminC100g,
-			VitaminD100g:     c.VitaminD100g,
-			VitaminB12100g:   c.VitaminB12100g,
-			VitaminB6100g:    c.VitaminB6100g,
-			Folate100g:       c.Folate100g,
-		}
+		out[i] = toDomainCandidate(c)
 	}
 	return out
+}
+
+func toDomainCandidate(c Candidate) food.Candidate {
+	return food.Candidate{
+		Name:             c.Name,
+		SourceName:       c.Name,
+		Source:           food.SourceFDC,
+		FdcID:            c.FdcID,
+		Kcal100g:         c.Kcal100g,
+		Protein100g:      c.Protein100g,
+		Fat100g:          c.Fat100g,
+		Carbs100g:        c.Carbs100g,
+		Fiber100g:        c.Fiber100g,
+		Sodium100g:       c.Sodium100g,
+		SaturatedFat100g: c.SaturatedFat100g,
+		TransFat100g:     c.TransFat100g,
+		Cholesterol100g:  c.Cholesterol100g,
+		Sugar100g:        c.Sugar100g,
+		Potassium100g:    c.Potassium100g,
+		Calcium100g:      c.Calcium100g,
+		Iron100g:         c.Iron100g,
+		Magnesium100g:    c.Magnesium100g,
+		Phosphorus100g:   c.Phosphorus100g,
+		Zinc100g:         c.Zinc100g,
+		VitaminA100g:     c.VitaminA100g,
+		VitaminC100g:     c.VitaminC100g,
+		VitaminD100g:     c.VitaminD100g,
+		VitaminB12100g:   c.VitaminB12100g,
+		VitaminB6100g:    c.VitaminB6100g,
+		Folate100g:       c.Folate100g,
+	}
 }

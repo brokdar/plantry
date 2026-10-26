@@ -65,5 +65,8 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     css: true,
     exclude: ["**/node_modules/**", "**/e2e/**", "**/dist/**"],
+    // Default is one jsdom worker per core (~8 GB on a 28-core dev box).
+    // Several parallel runs (agents, pre-commit hook) exhausted WSL memory.
+    maxWorkers: 4,
   },
 })

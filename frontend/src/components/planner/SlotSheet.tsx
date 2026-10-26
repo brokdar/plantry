@@ -529,7 +529,7 @@ function HeroBlock({
         </span>
         <div className="flex items-center gap-1.5">
           {aiFilled && (
-            <span className="rounded-full bg-ai-accent px-2 py-0.5 font-heading text-[9px] font-bold tracking-[0.2em] text-white uppercase">
+            <span className="rounded-full bg-ai-accent px-2 py-0.5 font-heading text-[9px] font-bold tracking-[0.2em] text-on-accent uppercase">
               {t("planner.slot.ai_filled")}
             </span>
           )}

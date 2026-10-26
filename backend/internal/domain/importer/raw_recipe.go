@@ -22,4 +22,7 @@ type RawRecipe struct {
 	AuthorName         string
 	Keywords           []string
 	URL                string
+	// SourceKcalPerServing is the site's own calorie claim (nutrition.calories).
+	// Display/comparison only — never a source for macros.
+	SourceKcalPerServing *float64
 }

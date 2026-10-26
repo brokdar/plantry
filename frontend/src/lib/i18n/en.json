@@ -679,6 +679,8 @@
     "searching": "Searching...",
     "source_off": "Open Food Facts",
     "source_fdc": "USDA",
+    "source_local": "Your catalogue",
+    "in_catalogue": "In your catalogue",
     "create_manually": "Create manually",
     "back_to_search": "Back to search",
     "select_match": "Select a match",
@@ -971,9 +973,9 @@
     "description": "Ingredients for this week",
     "button": "Shopping",
     "empty": "No ingredients — add meals to the planner first.",
-    "preset_next7": "Next 7 days",
-    "preset_until_shopping_day": "Until next {{day}}",
-    "preset_this_cycle": "This {{day}} cycle",
+    "preset_rest_of_window": "Rest of this window",
+    "preset_this_window": "This window",
+    "preset_next_window": "Next window",
     "range_label": "{{from}} — {{to}}"
   },
   "nutrition": {

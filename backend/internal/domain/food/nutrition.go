@@ -1,8 +1,11 @@
 package food
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
@@ -24,55 +27,109 @@ func NewNutritionResolver(repo Repository) *NutritionResolver {
 	return &NutritionResolver{repo: repo}
 }
 
+// Detailed is the per-portion macros plus a completeness flag. Complete is
+// false when any leaf in the tree lacks kcal, protein, fat or carbs per 100 g;
+// those leaves still contribute 0 for the missing values. Missing holds the
+// incomplete leaves, unique by ID and sorted case-insensitively by name (then
+// ID); it is empty (never nil) when Complete is true.
+type Detailed struct {
+	Macros   nutrition.Macros
+	Complete bool
+	Missing  []MissingLeaf
+}
+
+// MissingLeaf identifies a leaf food that lacks core macros.
+type MissingLeaf struct {
+	ID   int64
+	Name string
+}
+
 // PerPortion returns the per-portion macros for a composed food. For a leaf
 // food it returns macros for 100 g (the unit the leaf reports its nutrition
 // in).
 func (r *NutritionResolver) PerPortion(ctx context.Context, foodID int64) (nutrition.Macros, error) {
+	d, err := r.PerPortionDetailed(ctx, foodID)
+	if err != nil {
+		return nutrition.Macros{}, err
+	}
+	return d.Macros, nil
+}
+
+// PerPortionDetailed is PerPortion plus which leaves lack core macros.
+func (r *NutritionResolver) PerPortionDetailed(ctx context.Context, foodID int64) (Detailed, error) {
 	// LookupByIDs fetches only the food row — no children/instructions/tags — which
 	// is all we need here. Children are loaded separately via ListChildren so that
 	// recursive nodes also avoid full hydration.
 	foods, err := r.repo.LookupByIDs(ctx, []int64{foodID})
 	if err != nil {
-		return nutrition.Macros{}, err
+		return Detailed{}, err
 	}
 	f, ok := foods[foodID]
 	if !ok {
-		return nutrition.Macros{}, fmt.Errorf("%w: id %d", domain.ErrNotFound, foodID)
+		return Detailed{}, fmt.Errorf("%w: id %d", domain.ErrNotFound, foodID)
 	}
 	if f.Kind == KindComposed {
 		f.Children, err = r.repo.ListChildren(ctx, foodID)
 		if err != nil {
-			return nutrition.Macros{}, err
+			return Detailed{}, err
 		}
 	}
-	cache := map[int64]nutrition.Macros{} // per-100g macros, memoised per food id
-	total, err := r.totalMacros(ctx, f, cache, 0)
+	// cache memoises per-100g macros per food id. A cached subtree has already
+	// recorded its incomplete leaves in missing, so cache hits need not re-add.
+	w := &walk{cache: map[int64]nutrition.Macros{}, missing: map[int64]string{}}
+	total, err := r.totalMacros(ctx, f, w, 0)
 	if err != nil {
-		return nutrition.Macros{}, err
+		return Detailed{}, err
 	}
+	d := Detailed{Macros: total, Missing: make([]MissingLeaf, 0, len(w.missing))}
+	for id, name := range w.missing {
+		d.Missing = append(d.Missing, MissingLeaf{ID: id, Name: name})
+	}
+	slices.SortFunc(d.Missing, func(a, b MissingLeaf) int {
+		if c := strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
+	d.Complete = len(d.Missing) == 0
 	if f.Kind == KindLeaf {
-		return total, nil
+		return d, nil
 	}
 	portions := float64(1)
 	if f.ReferencePortions != nil && *f.ReferencePortions > 0 {
 		portions = *f.ReferencePortions
 	}
-	return scale(total, 1/portions), nil
+	d.Macros = scale(total, 1/portions)
+	return d, nil
+}
+
+// walk is the per-call state of one resolve.
+type walk struct {
+	cache   map[int64]nutrition.Macros // per-100g macros by food id
+	missing map[int64]string           // id → name of leaves lacking core macros
+}
+
+// leaf returns a leaf's per-100g macros and records it if incomplete.
+func (w *walk) leaf(f *Food) nutrition.Macros {
+	if f.Kcal100g == nil || f.Protein100g == nil || f.Fat100g == nil || f.Carbs100g == nil {
+		w.missing[f.ID] = f.Name
+	}
+	return leafPer100g(f)
 }
 
 // totalMacros returns absolute macros for a whole food (all ingredients
 // summed). For a leaf that means "macros for 100 g"; for a composed food
 // that means "macros for the total recipe at reference_portions servings".
-func (r *NutritionResolver) totalMacros(ctx context.Context, f *Food, cache map[int64]nutrition.Macros, depth int) (nutrition.Macros, error) {
+func (r *NutritionResolver) totalMacros(ctx context.Context, f *Food, w *walk, depth int) (nutrition.Macros, error) {
 	if depth > maxResolveDepth {
 		return nutrition.Macros{}, fmt.Errorf("%w: food tree deeper than %d", domain.ErrInvalidInput, maxResolveDepth)
 	}
 	if f.Kind == KindLeaf {
-		return leafPer100g(f), nil
+		return w.leaf(f), nil
 	}
 	var total nutrition.Macros
 	for _, ch := range f.Children {
-		per100g, err := r.per100gFor(ctx, ch.ChildID, cache, depth+1)
+		per100g, err := r.per100gFor(ctx, ch.ChildID, w, depth+1)
 		if err != nil {
 			return nutrition.Macros{}, err
 		}
@@ -85,8 +142,8 @@ func (r *NutritionResolver) totalMacros(ctx context.Context, f *Food, cache map[
 // per100gFor returns the per-100g macros for any food (leaf or composed).
 // Composed foods normalise their total by the computed total child grams so
 // callers can use them as if they were a leaf.
-func (r *NutritionResolver) per100gFor(ctx context.Context, id int64, cache map[int64]nutrition.Macros, depth int) (nutrition.Macros, error) {
-	if m, ok := cache[id]; ok {
+func (r *NutritionResolver) per100gFor(ctx context.Context, id int64, w *walk, depth int) (nutrition.Macros, error) {
+	if m, ok := w.cache[id]; ok {
 		return m, nil
 	}
 	if depth > maxResolveDepth {
@@ -101,15 +158,15 @@ func (r *NutritionResolver) per100gFor(ctx context.Context, id int64, cache map[
 		return nutrition.Macros{}, fmt.Errorf("%w: food %d not found during nutrition resolve", domain.ErrNotFound, id)
 	}
 	if f.Kind == KindLeaf {
-		m := leafPer100g(f)
-		cache[id] = m
+		m := w.leaf(f)
+		w.cache[id] = m
 		return m, nil
 	}
 	f.Children, err = r.repo.ListChildren(ctx, id)
 	if err != nil {
 		return nutrition.Macros{}, err
 	}
-	total, err := r.totalMacros(ctx, f, cache, depth)
+	total, err := r.totalMacros(ctx, f, w, depth)
 	if err != nil {
 		return nutrition.Macros{}, err
 	}
@@ -118,11 +175,11 @@ func (r *NutritionResolver) per100gFor(ctx context.Context, id int64, cache map[
 		totalGrams += ch.Grams
 	}
 	if totalGrams <= 0 {
-		cache[id] = nutrition.Macros{}
+		w.cache[id] = nutrition.Macros{}
 		return nutrition.Macros{}, nil
 	}
 	per100g := scale(total, 100/totalGrams)
-	cache[id] = per100g
+	w.cache[id] = per100g
 	return per100g, nil
 }
 

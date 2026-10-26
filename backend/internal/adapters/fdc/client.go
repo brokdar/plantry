@@ -96,6 +96,9 @@ type Food struct {
 	Description  string
 	DataType     string
 	FoodPortions []FoodPortion
+	// Nutrients holds per-100g amounts keyed by FDC nutrient ID, in FDC
+	// native units.
+	Nutrients map[int]float64
 }
 
 // GetFood fetches the detail record for a single FDC ID. Used primarily to
@@ -150,11 +153,19 @@ func (c *Client) GetFood(ctx context.Context, fdcID int) (*Food, error) {
 		})
 	}
 
+	nutrients := make(map[int]float64, len(fr.FoodNutrients))
+	for _, n := range fr.FoodNutrients {
+		if n.Amount != nil {
+			nutrients[n.Nutrient.ID] = *n.Amount
+		}
+	}
+
 	return &Food{
 		FdcID:        fr.FdcID,
 		Description:  fr.Description,
 		DataType:     fr.DataType,
 		FoodPortions: portions,
+		Nutrients:    nutrients,
 	}, nil
 }
 
@@ -205,10 +216,18 @@ func (c *Client) SearchByName(ctx context.Context, query string, dataTypes []str
 // --- internal FDC response types ---
 
 type fdcFoodResponse struct {
-	FdcID        int                  `json:"fdcId"`
-	Description  string               `json:"description"`
-	DataType     string               `json:"dataType"`
-	FoodPortions []fdcFoodPortionJSON `json:"foodPortions"`
+	FdcID         int                   `json:"fdcId"`
+	Description   string                `json:"description"`
+	DataType      string                `json:"dataType"`
+	FoodPortions  []fdcFoodPortionJSON  `json:"foodPortions"`
+	FoodNutrients []fdcFoodNutrientJSON `json:"foodNutrients"`
+}
+
+type fdcFoodNutrientJSON struct {
+	Nutrient struct {
+		ID int `json:"id"`
+	} `json:"nutrient"`
+	Amount *float64 `json:"amount"`
 }
 
 type fdcFoodPortionJSON struct {
@@ -253,12 +272,42 @@ func normaliseFDC(f fdcSearchFood) Candidate {
 	for _, n := range f.FoodNutrients {
 		vals[n.NutrientID] = n.Value
 	}
+	c := candidateFromNutrients(vals)
+	c.Name = f.Description
+	c.FdcID = f.FdcID
+	c.DataType = f.DataType
+	c.Category = f.FoodCategory
+	return c
+}
+
+// candidate normalises a detail record into the same shape as a search
+// result, so a refetch by ID yields the values a search would.
+func (f *Food) candidate() Candidate {
+	c := candidateFromNutrients(f.Nutrients)
+	c.Name = f.Description
+	c.FdcID = f.FdcID
+	c.DataType = f.DataType
+	return c
+}
+
+// candidateFromNutrients maps FDC nutrient IDs to Candidate fields.
+func candidateFromNutrients(vals map[int]float64) Candidate {
 	ptr := func(id int) *float64 {
 		if v, ok := vals[id]; ok {
 			cp := v
 			return &cp
 		}
 		return nil
+	}
+
+	// Prefer the generic energy value; Foundation foods often report only the
+	// Atwater-factor variants (2048 specific, 2047 general).
+	kcal := ptr(1008)
+	if kcal == nil {
+		kcal = ptr(2048)
+	}
+	if kcal == nil {
+		kcal = ptr(2047)
 	}
 
 	// Convert sodium from mg to g.
@@ -269,11 +318,7 @@ func normaliseFDC(f fdcSearchFood) Candidate {
 	}
 
 	return Candidate{
-		Name:             f.Description,
-		FdcID:            f.FdcID,
-		DataType:         f.DataType,
-		Category:         f.FoodCategory,
-		Kcal100g:         ptr(1008),
+		Kcal100g:         kcal,
 		Protein100g:      ptr(1003),
 		Fat100g:          ptr(1004),
 		Carbs100g:        ptr(1005),

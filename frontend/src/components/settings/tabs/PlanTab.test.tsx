@@ -127,6 +127,18 @@ describe("PlanTab", () => {
       const trigger = await screen.findByTestId("plan-shopping-day-select")
       expect(trigger).toHaveTextContent(/monday/i)
     })
+
+    it("falls back to shopping day 0 (Monday) when the setting is missing", async () => {
+      const data = makeSettingsData()
+      data.items = data.items.filter((i) => i.key !== "plan.shopping_day")
+      vi.mocked(useSettings).mockReturnValue({
+        data,
+        isLoading: false,
+      } as ReturnType<typeof useSettings>)
+      renderTab()
+      const trigger = await screen.findByTestId("plan-shopping-day-select")
+      expect(trigger).toHaveTextContent(/monday/i)
+    })
   })
 
   describe("calls useSetSetting on change", () => {

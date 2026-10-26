@@ -2,8 +2,10 @@ package fdc
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 )
@@ -36,6 +38,27 @@ func (d *DynamicProvider) SearchByName(ctx context.Context, query string, limit 
 	}
 	p := d.providerFor(key)
 	return p.SearchByName(ctx, query, limit)
+}
+
+// Configured reports whether an FDC API key is set. It reads the same key
+// SearchByName and GetByID use; a settings error counts as not configured.
+func (d *DynamicProvider) Configured(ctx context.Context) bool {
+	key, err := d.settings.EffectiveFDCKey(ctx)
+	return err == nil && key != ""
+}
+
+// GetByID implements food.FoodByIDProvider. Without a configured FDC key
+// there is nothing to fetch, so it returns domain.ErrLookupFailed.
+func (d *DynamicProvider) GetByID(ctx context.Context, fdcID int) (food.Candidate, error) {
+	key, err := d.settings.EffectiveFDCKey(ctx)
+	if err != nil {
+		return food.Candidate{}, err
+	}
+	if key == "" {
+		return food.Candidate{}, fmt.Errorf("%w: fdc api key not configured", domain.ErrLookupFailed)
+	}
+	p := d.providerFor(key)
+	return p.GetByID(ctx, fdcID)
 }
 
 // GetFoodPortions implements food.PortionProvider. Returns an empty

@@ -26,7 +26,7 @@ export function RevertBanner({
           "linear-gradient(90deg, var(--ai-accent-bg) 0%, color-mix(in oklab, var(--ai-accent-bg) 50%, var(--surface-container-lowest)) 100%)",
       }}
     >
-      <span className="grid size-7 place-items-center rounded-lg bg-ai-accent text-white">
+      <span className="grid size-7 place-items-center rounded-lg bg-ai-accent text-on-accent">
         <Sparkles className="h-3.5 w-3.5" aria-hidden />
       </span>
       <div className="flex-1">

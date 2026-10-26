@@ -9,8 +9,8 @@ import type { LeafFood } from "@/lib/api/foods"
 import { cn } from "@/lib/utils"
 
 const SOURCE_DOT: Record<string, string> = {
-  fdc: "bg-primary",
-  off: "bg-tertiary",
+  fdc: "bg-accent",
+  off: "bg-batch-2",
   manual: "bg-on-surface-variant/50",
 }
 

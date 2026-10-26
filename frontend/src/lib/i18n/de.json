@@ -678,6 +678,8 @@
     "searching": "Suche...",
     "source_off": "Open Food Facts",
     "source_fdc": "USDA",
+    "source_local": "Dein Katalog",
+    "in_catalogue": "In deinem Katalog",
     "create_manually": "Manuell erstellen",
     "back_to_search": "Zurück zur Suche",
     "select_match": "Treffer auswählen",
@@ -772,9 +774,9 @@
     "description": "Zutaten für diese Woche",
     "button": "Einkaufen",
     "empty": "Keine Zutaten – füge zuerst Mahlzeiten zum Planer hinzu.",
-    "preset_next7": "Nächste 7 Tage",
-    "preset_until_shopping_day": "Bis nächsten {{day}}",
-    "preset_this_cycle": "Dieser {{day}}-Zyklus",
+    "preset_rest_of_window": "Rest dieses Zeitraums",
+    "preset_this_window": "Dieser Zeitraum",
+    "preset_next_window": "Nächster Zeitraum",
     "range_label": "{{from}} — {{to}}"
   },
   "nutrition": {

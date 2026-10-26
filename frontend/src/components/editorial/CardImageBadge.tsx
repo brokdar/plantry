@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils"
 
-type DotColor = "primary" | "tertiary" | "secondary" | "muted"
+type DotColor = "accent" | "batch" | "secondary" | "muted"
 
 const DOT_COLORS: Record<DotColor, string> = {
-  primary: "bg-primary",
-  tertiary: "bg-tertiary",
+  accent: "bg-accent",
+  batch: "bg-batch-2",
   secondary: "bg-secondary",
   muted: "bg-on-surface-variant/50",
 }

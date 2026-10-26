@@ -232,14 +232,15 @@ func (s *Service) Finalize(_ context.Context, in FinalizeInput) (*FinalizedFood,
 
 func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string) *Draft {
 	d := &Draft{
-		Name:              rec.Name,
-		Description:       rec.Description,
-		SourceURL:         sourceURL,
-		Instructions:      append([]string{}, rec.RecipeInstructions...),
-		Tags:              append([]string{}, rec.Keywords...),
-		ExtractMethod:     method,
-		ReferencePortions: float64(rec.RecipeYieldNumber),
-		Warnings:          []string{},
+		Name:                 rec.Name,
+		Description:          rec.Description,
+		SourceURL:            sourceURL,
+		Instructions:         append([]string{}, rec.RecipeInstructions...),
+		Tags:                 append([]string{}, rec.Keywords...),
+		ExtractMethod:        method,
+		ReferencePortions:    float64(rec.RecipeYieldNumber),
+		Warnings:             []string{},
+		SourceKcalPerServing: rec.SourceKcalPerServing,
 	}
 	if d.ReferencePortions == 0 {
 		d.ReferencePortions = 1
