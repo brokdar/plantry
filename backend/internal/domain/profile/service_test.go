@@ -188,6 +188,60 @@ func TestProfileService_Update_PlanningPrefsValidation(t *testing.T) {
 	}
 }
 
+func TestProfileService_Replace_MergesAbsentDietAndHousehold(t *testing.T) {
+	ctx := context.Background()
+	svc := profile.NewService(newFakeRepo())
+
+	vegan := profile.DietVegan
+	in := profile.ReplaceInput{Profile: validProfile(), DietType: &vegan, HouseholdPortions: ptr(2.5)}
+	in.Profile.MeatDaysPerWeekMax = ptr(3)
+	_, err := svc.Replace(ctx, in)
+	require.NoError(t, err)
+
+	// Nil DietType/HouseholdPortions keep the stored values; the rest is replaced.
+	in = profile.ReplaceInput{Profile: validProfile()}
+	in.Profile.KcalTarget = ptr(2000.0)
+	got, err := svc.Replace(ctx, in)
+	require.NoError(t, err)
+	require.Equal(t, profile.DietVegan, got.DietType)
+	require.InDelta(t, 2.5, got.HouseholdPortions, 1e-9)
+	require.Nil(t, got.MeatDaysPerWeekMax)
+	require.Equal(t, ptr(2000.0), got.KcalTarget)
+
+	// Profile.DietType/HouseholdPortions are ignored in favour of the pointers.
+	in = profile.ReplaceInput{Profile: validProfile()}
+	in.Profile.DietType = "keto"
+	in.Profile.HouseholdPortions = 99
+	got, err = svc.Replace(ctx, in)
+	require.NoError(t, err)
+	require.Equal(t, profile.DietVegan, got.DietType)
+	require.InDelta(t, 2.5, got.HouseholdPortions, 1e-9)
+}
+
+func TestProfileService_Replace_ValidatesMergedValues(t *testing.T) {
+	svc := profile.NewService(newFakeRepo())
+	keto := profile.DietType("keto")
+
+	_, err := svc.Replace(context.Background(), profile.ReplaceInput{Profile: validProfile(), DietType: &keto})
+	require.ErrorIs(t, err, domain.ErrInvalidDietType)
+
+	_, err = svc.Replace(context.Background(), profile.ReplaceInput{Profile: validProfile(), HouseholdPortions: ptr(20.5)})
+	require.ErrorIs(t, err, domain.ErrInvalidHouseholdPortions)
+}
+
+func TestProfileService_Replace_GetErrorPropagates(t *testing.T) {
+	svc := profile.NewService(&failingGetRepo{err: domain.ErrNotFound})
+	_, err := svc.Replace(context.Background(), profile.ReplaceInput{Profile: validProfile()})
+	require.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+type failingGetRepo struct {
+	fakeRepo
+	err error
+}
+
+func (r *failingGetRepo) Get(_ context.Context) (*profile.Profile, error) { return nil, r.err }
+
 func TestProfileDietType_Valid(t *testing.T) {
 	for _, d := range []profile.DietType{profile.DietVegan, profile.DietVegetarian, profile.DietPescetarian, profile.DietOmnivore} {
 		require.Truef(t, d.Valid(), "%q should be valid", d)
