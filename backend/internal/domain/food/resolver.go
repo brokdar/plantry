@@ -125,13 +125,19 @@ func (r *Resolver) lookupBarcode(ctx context.Context, barcode string, _ int) ([]
 func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit int) ([]Candidate, int, error) {
 	trace := TraceFromContext(ctx)
 
+	originalQuery := query
+
+	// A catalogue failure must not hide external results: trace it and carry
+	// on without local leaves.
 	leaves, err := r.listLeaves(ctx)
 	if err != nil {
-		return nil, -1, err
+		trace.Add(TraceEntry{
+			Step: "local.search", Level: TraceLevelError,
+			Summary: "Local catalogue search failed",
+			Detail:  ExternalAPIDetail{Source: SourceLocal, Query: originalQuery, Error: err.Error()},
+		})
 	}
-	originalQuery := query
-	results := localCandidates(leaves, normalizeName(originalQuery))
-	exactLocal := len(results) > 0 && normalizeName(results[0].Name) == normalizeName(originalQuery)
+	results, exactLocal := localCandidates(leaves, normalizeName(originalQuery))
 
 	var external []Candidate
 	if r.fdc != nil {
@@ -249,15 +255,26 @@ func (r *Resolver) enrichFromCatalogue(ctx context.Context, candidates []Candida
 	enrichExistingIDs(leaves, candidates)
 }
 
-// listLeaves loads every leaf food in the catalogue, page by page.
-func (r *Resolver) listLeaves(ctx context.Context) ([]Food, error) {
-	var out []Food
+// catalogueLeaf pairs a local leaf with its normalized name, computed once
+// per lookup.
+type catalogueLeaf struct {
+	food *Food
+	norm string
+}
+
+// listLeaves loads every leaf food in the catalogue, page by page. This
+// assumes a small single-user catalogue; if it grows large, switch to
+// List{Search} and re-rank the hits with normalizeName instead.
+func (r *Resolver) listLeaves(ctx context.Context) ([]catalogueLeaf, error) {
+	var out []catalogueLeaf
 	for offset := 0; ; offset += leafPageSize {
 		page, err := r.repo.List(ctx, ListQuery{Kind: KindLeaf, Limit: leafPageSize, Offset: offset})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("list local leaves (offset %d): %w", offset, err)
 		}
-		out = append(out, page.Items...)
+		for i := range page.Items {
+			out = append(out, catalogueLeaf{food: &page.Items[i], norm: normalizeName(page.Items[i].Name)})
+		}
 		if len(page.Items) < leafPageSize {
 			return out, nil
 		}
@@ -266,31 +283,30 @@ func (r *Resolver) listLeaves(ctx context.Context) ([]Food, error) {
 
 // localCandidates returns up to maxLocalCandidates leaves whose normalized
 // name equals the normalized query, then those starting with it, then those
-// containing it.
-func localCandidates(leaves []Food, normQuery string) []Candidate {
+// containing it. exact reports whether the first candidate is an exact match.
+func localCandidates(leaves []catalogueLeaf, normQuery string) (cs []Candidate, exact bool) {
 	if normQuery == "" {
-		return []Candidate{}
+		return []Candidate{}, false
 	}
-	var exact, prefix, contains []Candidate
-	for i := range leaves {
-		name := normalizeName(leaves[i].Name)
+	var exacts, prefix, contains []Candidate
+	for _, l := range leaves {
 		switch {
-		case name == normQuery:
-			exact = append(exact, localCandidate(&leaves[i]))
-		case strings.HasPrefix(name, normQuery):
-			prefix = append(prefix, localCandidate(&leaves[i]))
-		case strings.Contains(name, normQuery):
-			contains = append(contains, localCandidate(&leaves[i]))
+		case l.norm == normQuery:
+			exacts = append(exacts, localCandidate(l.food))
+		case strings.HasPrefix(l.norm, normQuery):
+			prefix = append(prefix, localCandidate(l.food))
+		case strings.Contains(l.norm, normQuery):
+			contains = append(contains, localCandidate(l.food))
 		}
 	}
-	out := append(append(exact, prefix...), contains...)
+	out := append(append(exacts, prefix...), contains...)
 	if len(out) > maxLocalCandidates {
 		out = out[:maxLocalCandidates]
 	}
 	if out == nil {
-		return []Candidate{}
+		return []Candidate{}, false
 	}
-	return out
+	return out, len(exacts) > 0
 }
 
 func localCandidate(f *Food) Candidate {
@@ -332,12 +348,11 @@ func localCandidate(f *Food) Candidate {
 // name matches a local leaf. Query lookups call it after FDC results have
 // been renamed to the original query, so the match is against the query and
 // not the FDC description.
-func enrichExistingIDs(leaves []Food, candidates []Candidate) {
+func enrichExistingIDs(leaves []catalogueLeaf, candidates []Candidate) {
 	byName := make(map[string]int64, len(leaves))
 	for _, l := range leaves {
-		key := normalizeName(l.Name)
-		if _, ok := byName[key]; !ok {
-			byName[key] = l.ID
+		if _, ok := byName[l.norm]; !ok {
+			byName[l.norm] = l.food.ID
 		}
 	}
 	for i := range candidates {

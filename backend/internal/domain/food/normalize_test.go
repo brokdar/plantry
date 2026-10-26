@@ -16,6 +16,11 @@ func TestNormalizeName(t *testing.T) {
 		{"eszett", "Weißkohl", "weisskohl"},
 		{"other latin diacritics", "Crème Brûlée Jalapeño Façade", "creme brulee jalapeno facade"},
 		{"trim and collapse spaces", "  Rote \t  Bete  ", "rote bete"},
+		{"decomposed umlaut (NFD)", "Mo\u0308hre", "mohre"},
+		{"uppercase double s", "STRASSE", "strasse"},
+		{"eszett matches double s", "Weiß", "weiss"},
+		{"non-breaking space", "Rote\u00a0Bete", "rote bete"},
+		{"non-latin passes through", "Морковь", "морковь"},
 		{"empty", "", ""},
 		{"only spaces", "   ", ""},
 	}

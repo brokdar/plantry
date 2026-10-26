@@ -1,6 +1,9 @@
 package food
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // diacriticFolds maps lowercase Latin letters with diacritics to their plain
 // ASCII form. The standard library has no Unicode decomposition, so the
@@ -26,8 +29,15 @@ var diacriticFolds = strings.NewReplacer(
 )
 
 // normalizeName lowercases, trims, collapses whitespace and folds Latin
-// diacritics so that "Möhre", "mohre" and "MÖHRE" compare equal.
+// diacritics so that "Möhre", "mohre" and "MÖHRE" compare equal. Combining
+// marks are dropped so decomposed (NFD) input folds the same as precomposed.
 func normalizeName(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Mn, r) {
+			return -1
+		}
+		return r
+	}, s)
 	s = diacriticFolds.Replace(strings.ToLower(s))
 	return strings.Join(strings.Fields(s), " ")
 }
