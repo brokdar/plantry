@@ -272,6 +272,34 @@ describe("ImportWizard", () => {
     expect(screen.getByRole("button", { name: /save recipe/i })).toBeDisabled()
   })
 
+  it.each([
+    ["resolving the import", "resolve"],
+    ["creating the recipe", "create"],
+  ] as const)(
+    "reports a save failure while %s once, as a toast",
+    async (_, failing) => {
+      mockLookup([localMehl])
+      const err = new ApiError(500, "error.server")
+      if (failing === "resolve") {
+        vi.mocked(resolveImport).mockRejectedValue(err)
+      } else {
+        vi.mocked(resolveImport).mockResolvedValue({ food: finalized })
+        vi.mocked(createFood).mockRejectedValue(err)
+      }
+      const user = await openReview()
+
+      const save = screen.getByRole("button", { name: /save recipe/i })
+      await waitFor(() => expect(save).toBeEnabled())
+      await user.click(save)
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
+      expect(
+        screen.queryByText(/something went wrong/i)
+      ).not.toBeInTheDocument()
+      expect(save).toBeEnabled()
+    }
+  )
+
   it("shows the computed kcal per portion beside the source value", async () => {
     mockLookup([localMehl])
     vi.mocked(getFoodNutrition).mockResolvedValue({

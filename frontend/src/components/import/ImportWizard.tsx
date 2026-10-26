@@ -77,7 +77,6 @@ export function ImportWizard() {
 
   async function onSave() {
     if (!draft) return
-    setSubmitError(null)
     try {
       const resolveRes = await resolve.mutateAsync({
         name: recipeName,
@@ -121,9 +120,8 @@ export function ImportWizard() {
         to: "/components/$id",
         params: { id: String(created.id) },
       })
-    } catch (err) {
-      if (err instanceof ApiError) setSubmitError(err.messageKey)
-      else setSubmitError("error.server")
+    } catch {
+      // The failing mutation has already toasted the error.
     }
   }
 
@@ -305,10 +303,6 @@ export function ImportWizard() {
               ))}
             </div>
           </div>
-
-          {submitError && (
-            <p className="text-sm text-destructive">{t(submitError)}</p>
-          )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Button variant="outline" onClick={() => setStep(1)}>
