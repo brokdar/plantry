@@ -83,6 +83,9 @@ interface SlotCellProps {
 // at the bottom of every planted cell. Until per-plate macros are fetched,
 // uniform height keeps the row honest.
 const CELL_HEIGHT = "h-[178px]"
+// The kcal row (showMacros, phone day view only) needs 16 px more; that view
+// stacks one cell per row, so the taller cell breaks no grid alignment.
+const CELL_HEIGHT_WITH_MACROS = "h-[194px]"
 
 export function SlotCell(props: SlotCellProps) {
   const { plate } = props
@@ -455,7 +458,7 @@ function PlannedSlot({
     <div
       data-slot-state="planned"
       className={cn(
-        CELL_HEIGHT,
+        showMacros ? CELL_HEIGHT_WITH_MACROS : CELL_HEIGHT,
         "group relative flex cursor-grab flex-col overflow-hidden rounded-[14px] border border-outline-variant/50 bg-surface-container-lowest transition-[border-color,box-shadow,transform] duration-150 ease-out hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_2px_8px_rgba(25,28,28,0.06),0_4px_16px_-4px_rgba(74,101,77,0.14)] active:cursor-grabbing",
         aiFilled &&
           "border-ai-accent/40 shadow-[0_0_0_1px_rgba(194,151,74,0.3),0_4px_12px_-4px_rgba(25,28,28,0.06)]"

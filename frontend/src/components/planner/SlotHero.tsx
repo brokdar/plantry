@@ -54,7 +54,16 @@ export function SlotHero({
       )}
 
       {heroRoleLabel && (
-        <span className="absolute bottom-2 left-2 font-heading text-[9.5px] font-bold tracking-[0.16em] text-white uppercase drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]">
+        <span
+          className={cn(
+            "absolute bottom-2 left-2 font-heading text-[9.5px] font-bold tracking-[0.16em] uppercase",
+            // White only over a photo's dark gradient; the placeholder is
+            // a light panel in light mode.
+            hero?.imagePath
+              ? "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]"
+              : "text-ink"
+          )}
+        >
           {heroRoleLabel}
         </span>
       )}

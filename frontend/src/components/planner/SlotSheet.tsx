@@ -519,12 +519,23 @@ function HeroBlock({
           className="h-full w-full"
         />
       )}
-      <div
-        className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent"
-        aria-hidden
-      />
+      {heroFood?.image_path && (
+        <div
+          className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent"
+          aria-hidden
+        />
+      )}
       <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-2 px-4 pt-10 pb-4">
-        <span className="font-heading text-[15.5px] leading-tight font-bold tracking-tight text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)]">
+        <span
+          className={cn(
+            "font-heading text-[15.5px] leading-tight font-bold tracking-tight",
+            // White only over the photo's dark gradient; the placeholder is
+            // a light panel in light mode.
+            heroFood?.image_path
+              ? "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)]"
+              : "text-ink"
+          )}
+        >
           {heroFood?.name ?? `#${heroPc.food_id}`}
         </span>
         <div className="flex items-center gap-1.5">
