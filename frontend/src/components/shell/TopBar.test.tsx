@@ -31,7 +31,7 @@ describe("TopBar", () => {
     renderWithRouter(<TopBar />)
     const bar = await screen.findByTestId("topbar")
     const generate = within(bar).getByTestId("generate-plan-compact")
-    expect(generate).toHaveAccessibleName("Generate Plan")
+    expect(generate).toHaveAccessibleName("Generate plan")
     // Same trailing group as the gear, placed before it.
     const gear = within(bar).getByTestId("topbar-settings")
     expect(generate.parentElement).toBe(gear.parentElement)

@@ -11,14 +11,14 @@ async function stubRecipesReady(page: Page) {
   )
 }
 
-// These tests verify the "Generate Plan" CTA wiring end-to-end: clicking any
+// These tests verify the "Generate plan" CTA wiring end-to-end: clicking any
 // of the variants (default sidebar button, compact phone top-bar button)
 // should navigate to the planner and open the AI chat panel with a localized
 // prefill in the composer. We deliberately avoid submitting the chat here —
 // the fake AI provider (plan-dinner.json) has a finite scripted turn set that
 // is shared with ai-chat.spec.ts. Chat streaming is covered there.
 
-test.describe("Generate Plan CTA", () => {
+test.describe("Generate plan CTA", () => {
   test.beforeEach(async ({ page }) => {
     await stubRecipesReady(page)
   })

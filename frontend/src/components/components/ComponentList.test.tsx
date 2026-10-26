@@ -133,7 +133,7 @@ describe("ComponentList", () => {
 
     renderWithRouter(<ComponentList />)
 
-    const create = await screen.findByRole("link", { name: "New Recipe" })
+    const create = await screen.findByRole("link", { name: "New recipe" })
     expect(create).toHaveAttribute("href", "/components/new")
     expect(create).toHaveAttribute("data-variant", "default")
     expect(create.className).not.toMatch(/gradient-primary|editorial-shadow/)

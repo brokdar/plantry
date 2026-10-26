@@ -88,7 +88,7 @@ describe("GeneratePlanButton", () => {
     setupWith(4)
     renderWithRouter(<GeneratePlanButton variant="compact" />)
     const button = await screen.findByTestId("generate-plan-compact")
-    expect(button).toHaveAccessibleName("Generate Plan")
+    expect(button).toHaveAccessibleName("Generate plan")
     await vi.waitFor(() =>
       expect(button).toHaveAttribute("aria-disabled", "true")
     )

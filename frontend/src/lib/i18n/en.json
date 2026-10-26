@@ -1,7 +1,7 @@
 {
   "nav": {
     "brand": "Plantry",
-    "generate_plan": "Generate Plan",
+    "generate_plan": "Generate plan",
     "planner": "Weekly Planner",
     "ingredients": "Ingredients",
     "recipes": "Recipes",
@@ -735,7 +735,7 @@
   "component": {
     "title": "Recipe Catalog",
     "subtitle": "Curated nourishment for your digital kitchen sanctuary. Explore seasonal flavors and mindful preparations.",
-    "create": "New Recipe",
+    "create": "New recipe",
     "edit": "Edit Recipe",
     "edit_eyebrow": "Editor",
     "edit_title": "Refining Your Creation",

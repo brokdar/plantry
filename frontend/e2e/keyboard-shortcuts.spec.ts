@@ -34,7 +34,7 @@ test.describe("Keyboard shortcuts", () => {
     page,
   }) => {
     // Serial-safe: we don't seed a conversation — we open chat via the
-    // Generate Plan button and rely on the existing fake-AI script
+    // Generate plan button and rely on the existing fake-AI script
     // having turns available. If chat turns are exhausted in shared state,
     // the fake provider short-circuits but the composer still clears on
     // submit, which is what we assert.

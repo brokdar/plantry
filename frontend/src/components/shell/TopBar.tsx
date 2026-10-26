@@ -18,7 +18,7 @@ export function TopBar({ leading, trailing, className }: TopBarProps) {
       className={cn(
         // Phone only: from 768 px up nothing renders here (the rail carries
         // Settings), so the bar would be an empty sticky band.
-        "glass-header sticky top-0 z-30 flex h-16 items-center justify-between px-6 md:hidden",
+        "sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-ground px-6 md:hidden",
         className
       )}
       data-testid="topbar"
