@@ -36,6 +36,7 @@ type Recorder struct {
 	retentionDays func(context.Context) (int, error)
 	pruneMu       sync.Mutex
 	lastPrune     time.Time
+	pruning       sync.WaitGroup // background prunes started by Finish
 }
 
 // NewRecorder builds a Recorder. now is injected so tests can pin time.
@@ -65,7 +66,15 @@ func (r *Recorder) Prune(ctx context.Context) {
 	r.prune(ctx, now)
 }
 
-// pruneThrottled prunes unless the last prune was less than pruneInterval ago.
+// Wait blocks until the background prunes started by Finish are done. Tests
+// call it before inspecting the store; main calls it before closing the DB.
+func (r *Recorder) Wait() {
+	r.pruning.Wait()
+}
+
+// pruneThrottled starts a background prune unless the last one began less
+// than pruneInterval ago. The timestamp is taken before the prune runs, so a
+// failed prune is not retried for an hour.
 func (r *Recorder) pruneThrottled(ctx context.Context) {
 	if r.retentionDays == nil {
 		return
@@ -77,10 +86,15 @@ func (r *Recorder) pruneThrottled(ctx context.Context) {
 		return
 	}
 	r.lastPrune = now
+	r.pruning.Add(1)
 	r.pruneMu.Unlock()
-	r.prune(ctx, now)
+	go func() {
+		defer r.pruning.Done()
+		r.prune(ctx, now)
+	}()
 }
 
+// prune ignores ctx cancellation: it outlives the request that triggered it.
 func (r *Recorder) prune(ctx context.Context, now time.Time) {
 	ctx = context.WithoutCancel(ctx)
 	days, err := r.retentionDays(ctx)
@@ -126,11 +140,13 @@ type Run struct {
 	provider         string
 	model            string
 	promptHash       string
-	promptTried      bool // the first call with a system prompt was seen
-	prompts          map[string]bool
-	toolSchemas      map[string]bool
-	// lastMsgs are the messages of the last recorded llm_call, so the next
-	// call can store only what it appends.
+	firstPrompt      string // hash of the first call's system prompt
+	// prompts and toolSchemas hold the hashes stored (or being stored) by
+	// this run; a failed upsert removes its hash so a later call retries.
+	prompts     map[string]bool
+	toolSchemas map[string]bool
+	// lastMsgs is a copy of the last recorded llm_call's messages, so the
+	// next call can store only what it appends.
 	lastMsgs []llm.Message
 	finished bool
 }

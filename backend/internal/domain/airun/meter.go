@@ -120,13 +120,18 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	if n := len(run.lastMsgs); n > 0 && len(req.Messages) >= n && reflect.DeepEqual(run.lastMsgs, req.Messages[:n]) {
 		offset = n
 	}
-	run.lastMsgs = req.Messages
+	// Callers grow their history append-only (the agent loop, the import
+	// retry), so a continuing call resends the recorded messages unchanged.
+	// The slice is copied so a caller reusing its backing array cannot make
+	// a changed history look like a continuation; the messages' own content
+	// is assumed not to be mutated after the call.
+	run.lastMsgs = append(run.lastMsgs[:0:0], req.Messages...)
 	// Every distinct system prompt and tool set is stored once per run; the
 	// run itself points at the first call's prompt.
-	firstPrompt := systemHash != "" && !run.promptTried
-	if firstPrompt {
-		run.promptTried = true
+	if run.firstPrompt == "" {
+		run.firstPrompt = systemHash
 	}
+	firstPrompt := systemHash != "" && systemHash == run.firstPrompt
 	storePrompt := systemHash != "" && !run.prompts[systemHash] && run.id != 0
 	if storePrompt {
 		if run.prompts == nil {
@@ -146,6 +151,9 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	if storePrompt {
 		if err := run.rec.store.UpsertPrompt(context.WithoutCancel(ctx), systemHash, req.System); err != nil {
 			run.warn(ctx, "ai.run.prompt failed", err)
+			run.mu.Lock()
+			delete(run.prompts, systemHash)
+			run.mu.Unlock()
 		} else if firstPrompt {
 			// Set only once stored, so the run never points at a missing prompt.
 			run.mu.Lock()
@@ -156,6 +164,9 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	if storeTools {
 		if err := run.rec.store.UpsertToolSchema(context.WithoutCancel(ctx), toolsHash, string(toolsJSON)); err != nil {
 			run.warn(ctx, "ai.run.tools failed", err)
+			run.mu.Lock()
+			delete(run.toolSchemas, toolsHash)
+			run.mu.Unlock()
 		}
 	}
 

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -42,6 +43,9 @@ type memStore struct {
 	stepErr   error
 	upsertErr error
 	pruneErr  error
+	// failUpserts fails that many UpsertPrompt / UpsertToolSchema calls
+	// before they start succeeding.
+	failUpserts int
 }
 
 func newMemStore() *memStore {
@@ -52,6 +56,10 @@ func (s *memStore) UpsertToolSchema(ctx context.Context, hash, json string) erro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.toolUps++
+	if s.failUpserts > 0 {
+		s.failUpserts--
+		return errors.New("db busy")
+	}
 	s.tools[hash] = json
 	return nil
 }
@@ -103,6 +111,10 @@ func (s *memStore) UpsertPrompt(ctx context.Context, hash, text string) error {
 	s.upserts++
 	if s.upsertErr != nil {
 		return s.upsertErr
+	}
+	if s.failUpserts > 0 {
+		s.failUpserts--
+		return errors.New("db busy")
 	}
 	s.prompts[hash] = text
 	return nil
@@ -579,11 +591,63 @@ func TestMeter_PromptHashUnsetWhenUpsertFails(t *testing.T) {
 	run.Finish(ctx, airun.StatusOK, "")
 
 	_, finishes, _, upserts := store.snapshot()
-	if upserts != 1 {
-		t.Errorf("UpsertPrompt calls = %d; want 1 (no retry)", upserts)
+	if upserts != 2 {
+		t.Errorf("UpsertPrompt calls = %d; want 2 (a failed upsert is retried by the next call)", upserts)
 	}
 	if finishes[0].PromptHash != "" {
-		t.Errorf("prompt hash = %q; want empty after failed upsert", finishes[0].PromptHash)
+		t.Errorf("prompt hash = %q; want empty after failed upserts", finishes[0].PromptHash)
+	}
+}
+
+func TestMeter_FailedUpsertsRetriedByNextCall(t *testing.T) {
+	store := newMemStore()
+	store.failUpserts = 2 // the first prompt and the first tools upsert
+	rec, _ := newRecorder(t, store)
+	client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}}), "openai")
+	tools := []llm.Tool{{Name: "a", Schema: json.RawMessage(`{}`)}}
+
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	for i := 0; i < 3; i++ {
+		if _, err := client.Complete(ctx, llm.Request{Model: "m", System: "s", Tools: tools}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	_, finishes, _, upserts := store.snapshot()
+	store.mu.Lock()
+	toolUps, stored := store.toolUps, len(store.tools)
+	store.mu.Unlock()
+	if upserts != 2 || toolUps != 2 || stored != 1 {
+		t.Errorf("prompt upserts = %d, tool upserts = %d (%d stored); want 2, 2, 1", upserts, toolUps, stored)
+	}
+	if finishes[0].PromptHash != sha("s") {
+		t.Errorf("prompt hash = %q; want the first call's prompt once stored by the retry", finishes[0].PromptHash)
+	}
+}
+
+func TestMeter_InPlaceReuseOfCallerSliceDoesNotBreakDeltas(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}}), "openai")
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+
+	// The caller reuses its backing array: the second request overwrites
+	// the first one's message in place.
+	buf := make([]llm.Message, 1, 4)
+	buf[0] = textMsg(llm.RoleUser, "a")
+	if _, err := client.Complete(ctx, llm.Request{Model: "m", Messages: buf}); err != nil {
+		t.Fatal(err)
+	}
+	buf[0] = textMsg(llm.RoleUser, "b")
+	buf = append(buf, textMsg(llm.RoleUser, "c"))
+	if _, err := client.Complete(ctx, llm.Request{Model: "m", Messages: buf}); err != nil {
+		t.Fatal(err)
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	if b := decodeRequest(t, stepsBySeq(store)[1]); b.MessageOffset != 0 || len(b.Messages) != 2 {
+		t.Errorf("offset %d, %d messages; want 0, 2 (the recorded prefix changed)", b.MessageOffset, len(b.Messages))
 	}
 }
 
@@ -986,6 +1050,9 @@ func TestRecorder_PruneAfterFinishAtMostHourly(t *testing.T) {
 	clock.advance(31 * time.Minute)
 	finish() // prunes again
 	finish() // throttled
+	rec.Wait()
+	// Prunes run in the background, so they may land in either order.
+	slices.SortFunc(store.prunes, time.Time.Compare)
 
 	store.mu.Lock()
 	prunes := append([]time.Time(nil), store.prunes...)
@@ -1009,6 +1076,7 @@ func TestRecorder_PruneNowAndFailuresLogged(t *testing.T) {
 	rec.Prune(context.Background()) // startup prune
 	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
 	run.Finish(ctx, airun.StatusOK, "") // within the hour: no second prune
+	rec.Wait()
 
 	store.mu.Lock()
 	prunes := append([]time.Time(nil), store.prunes...)
@@ -1027,6 +1095,7 @@ func TestRecorder_NoRetentionNeverPrunes(t *testing.T) {
 	rec.Prune(context.Background())
 	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
 	run.Finish(ctx, airun.StatusOK, "")
+	rec.Wait()
 	if len(store.prunes) != 0 {
 		t.Errorf("prunes = %v; want none without a retention source", store.prunes)
 	}
@@ -1053,6 +1122,7 @@ func TestRecorder_RetentionPrunesRealDB(t *testing.T) {
 
 	rec.WithRetention(func(context.Context) (int, error) { return 180, nil })
 	rec.Prune(context.Background())
+	rec.Wait()
 
 	rows, err := db.Query(`SELECT r.id, COUNT(s.id) FROM ai_runs r LEFT JOIN ai_run_steps s ON s.run_id = r.id GROUP BY r.id ORDER BY r.id`)
 	if err != nil {
@@ -1072,5 +1142,49 @@ func TestRecorder_RetentionPrunesRealDB(t *testing.T) {
 	}
 	if want := [][2]int64{{1, 0}, {2, 1}}; fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("runs/steps = %v; want %v (old run kept without steps)", got, want)
+	}
+}
+
+func TestRecorder_ParallelFinishesPruneOnce(t *testing.T) {
+	const n = 20
+	store := newMemStore()
+	rec, _ := newRecorder(t, store) // fixed clock: every Finish is within the hour
+	rec.WithRetention(func(context.Context) (int, error) { return 180, nil })
+	t.Cleanup(rec.Wait)
+
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+			run.Finish(ctx, airun.StatusOK, "")
+		}()
+	}
+	wg.Wait()
+	rec.Wait()
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.prunes) != 1 {
+		t.Errorf("PruneSteps calls = %d; want 1", len(store.prunes))
+	}
+}
+
+func TestRecorder_PruneAfterFinishIgnoresCancelledCtx(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	rec.WithRetention(func(ctx context.Context) (int, error) { return 180, ctx.Err() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx, run := rec.Start(ctx, airun.Start{Kind: airun.KindChat})
+	cancel()
+	run.Finish(ctx, airun.StatusCancelled, "")
+	rec.Wait()
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.prunes) != 1 {
+		t.Errorf("PruneSteps calls = %d; want 1 despite the cancelled request ctx", len(store.prunes))
 	}
 }
