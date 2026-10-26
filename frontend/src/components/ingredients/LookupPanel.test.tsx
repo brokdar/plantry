@@ -155,4 +155,72 @@ describe("LookupPanel", () => {
       expect.objectContaining({ query: "3017620422003" })
     )
   })
+
+  describe("local catalogue candidates", () => {
+    const localCandidate = {
+      ...mockLookupCandidate,
+      name: "Chicken Breast",
+      source: "local" as const,
+      fdc_id: null,
+      existing_id: 42,
+    }
+    const offCandidate = {
+      ...mockLookupCandidate,
+      name: "Bio Hähnchenbrust",
+      source: "off" as const,
+      fdc_id: null,
+      barcode: "4001",
+    }
+
+    async function search(results: (typeof mockLookupCandidate)[]) {
+      const user = userEvent.setup()
+      const onSelect = vi.fn()
+      vi.mocked(lookupFoods).mockResolvedValue({
+        results,
+        recommended_index: 0,
+      })
+      renderWithRouter(<LookupPanel onSelect={onSelect} />)
+      await user.type(
+        await screen.findByPlaceholderText(/search by name or barcode/i),
+        "chicken"
+      )
+      return { user, onSelect }
+    }
+
+    test("renders a local candidate as a link to its editor", async () => {
+      await search([localCandidate, offCandidate])
+
+      const link = await screen.findByRole("link", { name: /chicken breast/i })
+      expect(link).toHaveAttribute("href", "/ingredients/42/edit")
+      expect(screen.getByText(/in your catalogue/i)).toBeInTheDocument()
+      expect(
+        screen.queryByRole("option", { name: /chicken breast/i })
+      ).not.toBeInTheDocument()
+    })
+
+    test("does not auto-select a recommended local candidate", async () => {
+      const { user, onSelect } = await search([localCandidate, offCandidate])
+
+      await screen.findByRole("link", { name: /chicken breast/i })
+      expect(
+        screen.queryByRole("button", { name: /use this match/i })
+      ).not.toBeInTheDocument()
+
+      await user.click(
+        screen.getByRole("option", { name: /bio hähnchenbrust/i })
+      )
+      await user.click(screen.getByRole("button", { name: /use this match/i }))
+      expect(onSelect).toHaveBeenCalledWith(offCandidate)
+    })
+
+    test("a lone local candidate is never offered for copying", async () => {
+      const { onSelect } = await search([localCandidate])
+
+      await screen.findByRole("link", { name: /chicken breast/i })
+      expect(
+        screen.queryByRole("button", { name: /use this match/i })
+      ).not.toBeInTheDocument()
+      expect(onSelect).not.toHaveBeenCalled()
+    })
+  })
 })

@@ -66,4 +66,16 @@ describe("NutritionDetail", () => {
     )
     expect(screen.getByText("500 mg")).toBeInTheDocument()
   })
+
+  test.each(["fdc", "off", "local"] as const)(
+    "labels %s candidates with their own source key",
+    (source) => {
+      render(
+        <NutritionDetail
+          candidate={baseCandidate({ source, kcal_100g: 100 })}
+        />
+      )
+      expect(screen.getByText(`lookup.source_${source}`)).toBeInTheDocument()
+    }
+  )
 })

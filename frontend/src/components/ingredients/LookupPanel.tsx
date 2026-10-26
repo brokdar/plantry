@@ -1,7 +1,9 @@
 import { useState, useDeferredValue } from "react"
 import { useTranslation } from "react-i18next"
-import { useRouterState } from "@tanstack/react-router"
+import { Link, useRouterState } from "@tanstack/react-router"
 import {
+  ArrowUpRight,
+  BookOpen,
   Check,
   Database,
   Globe,
@@ -77,6 +79,13 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
 
   const results = data?.results ?? []
   const recommendedIndex = data?.recommended_index ?? -1
+  // Catalogue matches link to the existing food; only external candidates
+  // can be copied into the form. Indices stay aligned with `results` so the
+  // server's recommended_index keeps pointing at the right entry.
+  const localMatches = results.filter((c) => c.source === "local")
+  const external = results
+    .map((candidate, index) => ({ candidate, index }))
+    .filter(({ candidate }) => candidate.source !== "local")
   const hasQuery = !!(
     barcode ||
     typedBarcode ||
@@ -93,13 +102,14 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
     setUserSelectedIndex(null)
   }
 
-  const effectiveIndex =
-    userSelectedIndex ?? (recommendedIndex >= 0 ? recommendedIndex : 0)
-  const selectedIndex = Math.min(
-    Math.max(0, effectiveIndex),
-    Math.max(0, results.length - 1)
-  )
-  const selected = results.length > 0 ? results[selectedIndex] : null
+  // Never auto-select a catalogue match: follow the recommendation only when
+  // it points at an external candidate, otherwise wait for the user's pick.
+  const recommendedExternal =
+    results[recommendedIndex] && results[recommendedIndex].source !== "local"
+      ? recommendedIndex
+      : -1
+  const selectedIndex = userSelectedIndex ?? recommendedExternal
+  const selected = selectedIndex >= 0 ? (results[selectedIndex] ?? null) : null
 
   function handleBarcodeScan(scanned: string) {
     setBarcode(scanned)
@@ -158,16 +168,52 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
 
       {!isLoading && results.length > 0 && (
         <div className="space-y-3">
-          {results.length > 1 && (
+          {localMatches.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-[10px] font-semibold tracking-[0.18em] text-on-surface-variant/70 uppercase">
-                {t("lookup.candidates", { count: results.length })}
+                {t("lookup.in_catalogue")}
+              </p>
+              <ul className="space-y-0.5 rounded-xl bg-surface-container p-1">
+                {localMatches.map((candidate) => (
+                  <li key={`local-${candidate.existing_id}`}>
+                    <Link
+                      to="/ingredients/$id/edit"
+                      params={{ id: String(candidate.existing_id) }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-on-surface transition-colors hover:bg-surface-container-high"
+                    >
+                      <BookOpen
+                        className="size-3 shrink-0 opacity-70"
+                        aria-hidden
+                      />
+                      <span className="min-w-0 flex-1 truncate">
+                        {candidate.name}
+                      </span>
+                      {candidate.kcal_100g != null && (
+                        <span className="shrink-0 font-mono text-[10px] tabular-nums opacity-60">
+                          {Math.round(candidate.kcal_100g)} kcal
+                        </span>
+                      )}
+                      <ArrowUpRight
+                        className="size-3 shrink-0 opacity-70"
+                        aria-hidden
+                      />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(external.length > 1 || (external.length === 1 && !selected)) && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold tracking-[0.18em] text-on-surface-variant/70 uppercase">
+                {t("lookup.candidates", { count: external.length })}
               </p>
               <ul
                 className="max-h-44 space-y-0.5 overflow-y-auto rounded-xl bg-surface-container p-1"
                 role="listbox"
               >
-                {results.map((candidate, index) => {
+                {external.map(({ candidate, index }) => {
                   const SourceIcon =
                     candidate.source === "off" ? Globe : Database
                   const isSelected = index === selectedIndex
@@ -233,9 +279,7 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
               />
               <div className="flex items-center justify-between gap-2">
                 <Badge variant="secondary" className="text-[10px] font-medium">
-                  {selected.source === "off"
-                    ? t("lookup.source_off")
-                    : t("lookup.source_fdc")}
+                  {t(`lookup.source_${selected.source}`)}
                 </Badge>
                 <Button
                   type="button"

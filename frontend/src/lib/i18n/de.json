@@ -678,6 +678,8 @@
     "searching": "Suche...",
     "source_off": "Open Food Facts",
     "source_fdc": "USDA",
+    "source_local": "Dein Katalog",
+    "in_catalogue": "In deinem Katalog",
     "create_manually": "Manuell erstellen",
     "back_to_search": "Zurück zur Suche",
     "select_match": "Treffer auswählen",
