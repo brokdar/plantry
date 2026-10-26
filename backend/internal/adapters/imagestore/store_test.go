@@ -190,6 +190,36 @@ func TestSaveUpload_OversizedRejected(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestSaveFromURL_OversizedRejected(t *testing.T) {
+	// A valid PNG followed by padding past the 5 MiB download cap: it would
+	// decode fine if silently truncated, so only an explicit check rejects it.
+	body := append(createTestImage(t, 10, 10), make([]byte, 5<<20)...)
+	srv := serveImage(t, body)
+
+	base := t.TempDir()
+	store, err := imagestore.New(base, srv.Client())
+	require.NoError(t, err)
+
+	_, err = store.SaveFromURL(context.Background(), srv.URL+"/big.png", "foods", 1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds")
+
+	_, statErr := os.Stat(filepath.Join(base, "foods", "1.jpg"))
+	assert.True(t, os.IsNotExist(statErr), "nothing must be saved")
+}
+
+func TestSaveFromURL_AtLimitAccepted(t *testing.T) {
+	body := createTestImage(t, 10, 10)
+	body = append(body, make([]byte, 5<<20-len(body))...)
+	srv := serveImage(t, body)
+
+	store, err := imagestore.New(t.TempDir(), srv.Client())
+	require.NoError(t, err)
+
+	_, err = store.SaveFromURL(context.Background(), srv.URL+"/ok.png", "foods", 1)
+	assert.NoError(t, err)
+}
+
 func TestSaveFromURL_InvalidImage(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("this is not an image"))

@@ -1,6 +1,7 @@
 package imagestore
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -19,7 +20,9 @@ import (
 const (
 	maxDimension = 1200
 	jpegQuality  = 85
-	maxBodyBytes = 10 << 20 // 10 MB
+	maxBodyBytes = 10 << 20 // 10 MB, uploads
+
+	maxDownloadBytes = 5 << 20 // 5 MiB, SaveFromURL; matches httpfetch
 )
 
 // Store handles filesystem-based image storage with resize.
@@ -40,7 +43,12 @@ func New(basePath string, httpClient *http.Client) (*Store, error) {
 }
 
 // SaveFromURL downloads an image from url, resizes it, and saves as JPEG.
-// Returns the relative path (e.g., "ingredients/42.jpg").
+// Returns the relative path (e.g., "ingredients/42.jpg"). Bodies larger than
+// maxDownloadBytes are rejected.
+//
+// There is deliberately no SSRF guard (private/loopback addresses are
+// allowed): Plantry is a single-user, LAN-only app, httpfetch makes the same
+// choice, and the response is only ever decoded as an image, never echoed.
 func (s *Store) SaveFromURL(ctx context.Context, url, category string, id int64) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -57,8 +65,16 @@ func (s *Store) SaveFromURL(ctx context.Context, url, category string, id int64)
 		return "", fmt.Errorf("download image: status %d", resp.StatusCode)
 	}
 
-	limited := io.LimitReader(resp.Body, maxBodyBytes)
-	return s.processAndSave(limited, category, id)
+	// Read one byte past the cap so an oversized body is rejected rather than
+	// silently truncated.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadBytes+1))
+	if err != nil {
+		return "", fmt.Errorf("download image: %w", err)
+	}
+	if len(data) > maxDownloadBytes {
+		return "", fmt.Errorf("download image: body exceeds %d bytes", maxDownloadBytes)
+	}
+	return s.processAndSave(bytes.NewReader(data), category, id)
 }
 
 // SaveUpload processes an uploaded image from reader, resizes, and saves as JPEG.
