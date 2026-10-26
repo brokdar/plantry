@@ -691,32 +691,36 @@ describe("useNoPlateActions", () => {
     expect(createPlate).not.toHaveBeenCalled()
   })
 
-  it("planMeal deletes an override, and puts plan over a default", async () => {
-    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
+  it("planMeal puts a plan override over a No plate override", async () => {
     vi.mocked(setAvailabilityOverride).mockResolvedValue({ cell: cell() })
-
-    const overridden = renderHook(() => useNoPlateActions(from, to), {
+    const { result } = renderHook(() => useNoPlateActions(from, to), {
       wrapper: createHookWrapper(
         clientWith(cell({ mode: "none", source: "override" }))
       ),
     })
     await act(async () => {
-      await overridden.result.current.planMeal("2026-10-27", 3)
+      await result.current.planMeal("2026-10-27", 3)
     })
-    expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3)
-    expect(setAvailabilityOverride).not.toHaveBeenCalled()
+    expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3, {
+      mode: "plan",
+    })
+    expect(clearAvailabilityOverride).not.toHaveBeenCalled()
+  })
 
-    const byDefault = renderHook(() => useNoPlateActions(from, to), {
+  it("planMeal puts plan when the weekday default is none, so the cell ends in plan", async () => {
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({ cell: cell() })
+    const { result } = renderHook(() => useNoPlateActions(from, to), {
       wrapper: createHookWrapper(
         clientWith(cell({ mode: "none", source: "default" }))
       ),
     })
     await act(async () => {
-      await byDefault.result.current.planMeal("2026-10-27", 3)
+      await result.current.planMeal("2026-10-27", 3)
     })
     expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3, {
       mode: "plan",
     })
+    expect(clearAvailabilityOverride).not.toHaveBeenCalled()
   })
 
   it("editNote keeps the cell none and writes the note", async () => {
