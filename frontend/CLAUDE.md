@@ -91,7 +91,7 @@ All forms use `react-hook-form` + `zod` via `@hookform/resolvers/zod`. Schema de
 
 ### Design system
 
-**Cookbook** — `docs/UX_DESIGN_SPEC.md` §3. Tokens are hex CSS variables in `src/index.css` (`:root` + `.dark`), exposed to Tailwind via `@theme inline`. `src/test/tokens.test.ts` checks values and WCAG contrast.
+**Cookbook** — full reference: [`DESIGN.md`](../DESIGN.md); spec: `docs/UX_DESIGN_SPEC.md` §3. This section is the short summary. Tokens are hex CSS variables in `src/index.css` (`:root` + `.dark`), exposed to Tailwind via `@theme inline`. `src/test/tokens.test.ts` checks values and WCAG contrast.
 
 Full reference: [`DESIGN.md`](../DESIGN.md) at the repo root.
 
