@@ -31,6 +31,8 @@ type Querier interface {
 	CreatePresetPlate(ctx context.Context, arg CreatePresetPlateParams) (PresetPlate, error)
 	CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) (TimeSlot, error)
 	CreateVariantGroup(ctx context.Context, name string) (VariantGroup, error)
+	DeleteActiveSlotAvailabilityDefaults(ctx context.Context) error
+	DeleteAvailabilityOverride(ctx context.Context, arg DeleteAvailabilityOverrideParams) error
 	DeleteConversation(ctx context.Context, id int64) (sql.Result, error)
 	DeleteFood(ctx context.Context, id int64) (sql.Result, error)
 	DeleteFoodComponents(ctx context.Context, parentID int64) error
@@ -49,6 +51,8 @@ type Querier interface {
 	// prompt_hash resolves to NULL when the hash is not in ai_prompts, so a failed
 	// UpsertPrompt never makes this UPDATE fail and leave the run 'running'.
 	FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.Result, error)
+	GetAvailabilityDefault(ctx context.Context, arg GetAvailabilityDefaultParams) (GetAvailabilityDefaultRow, error)
+	GetAvailabilityOverride(ctx context.Context, arg GetAvailabilityOverrideParams) (GetAvailabilityOverrideRow, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
 	GetFood(ctx context.Context, id int64) (Food, error)
 	GetFoodKind(ctx context.Context, id int64) (string, error)
@@ -60,7 +64,10 @@ type Querier interface {
 	GetProfile(ctx context.Context) (UserProfile, error)
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
+	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
 	ListActiveTimeSlots(ctx context.Context) ([]TimeSlot, error)
+	ListAvailabilityDefaults(ctx context.Context) ([]ListAvailabilityDefaultsRow, error)
+	ListAvailabilityOverridesByRange(ctx context.Context, arg ListAvailabilityOverridesByRangeParams) ([]ListAvailabilityOverridesByRangeRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
 	ListConversationsByWeek(ctx context.Context, arg ListConversationsByWeekParams) ([]AiConversation, error)
 	ListFoodComponents(ctx context.Context, parentID int64) ([]ListFoodComponentsRow, error)
@@ -103,6 +110,7 @@ type Querier interface {
 	UpdatePresetName(ctx context.Context, arg UpdatePresetNameParams) (Preset, error)
 	UpdateTimeSlot(ctx context.Context, arg UpdateTimeSlotParams) (TimeSlot, error)
 	UpsertAIPrompt(ctx context.Context, arg UpsertAIPromptParams) error
+	UpsertAvailabilityOverride(ctx context.Context, arg UpsertAvailabilityOverrideParams) error
 	UpsertFoodPortion(ctx context.Context, arg UpsertFoodPortionParams) error
 	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
 	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)

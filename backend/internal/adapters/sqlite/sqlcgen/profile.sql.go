@@ -11,7 +11,7 @@ import (
 )
 
 const getProfile = `-- name: GetProfile :one
-SELECT id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at FROM user_profile WHERE id = 1
+SELECT id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions FROM user_profile WHERE id = 1
 `
 
 func (q *Queries) GetProfile(ctx context.Context) (UserProfile, error) {
@@ -28,6 +28,9 @@ func (q *Queries) GetProfile(ctx context.Context) (UserProfile, error) {
 		&i.SystemPrompt,
 		&i.Locale,
 		&i.UpdatedAt,
+		&i.DietType,
+		&i.MeatDaysPerWeekMax,
+		&i.HouseholdPortions,
 	)
 	return i, err
 }
@@ -42,9 +45,12 @@ SET kcal_target           = ?,
     preferences           = ?,
     system_prompt         = ?,
     locale                = ?,
+    diet_type             = ?,
+    meat_days_per_week_max = ?,
+    household_portions    = ?,
     updated_at            = datetime('now')
 WHERE id = 1
-RETURNING id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at
+RETURNING id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions
 `
 
 type UpsertProfileParams struct {
@@ -56,6 +62,9 @@ type UpsertProfileParams struct {
 	Preferences         string
 	SystemPrompt        sql.NullString
 	Locale              string
+	DietType            string
+	MeatDaysPerWeekMax  sql.NullInt64
+	HouseholdPortions   float64
 }
 
 func (q *Queries) UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error) {
@@ -68,6 +77,9 @@ func (q *Queries) UpsertProfile(ctx context.Context, arg UpsertProfileParams) (U
 		arg.Preferences,
 		arg.SystemPrompt,
 		arg.Locale,
+		arg.DietType,
+		arg.MeatDaysPerWeekMax,
+		arg.HouseholdPortions,
 	)
 	var i UserProfile
 	err := row.Scan(
@@ -81,6 +93,9 @@ func (q *Queries) UpsertProfile(ctx context.Context, arg UpsertProfileParams) (U
 		&i.SystemPrompt,
 		&i.Locale,
 		&i.UpdatedAt,
+		&i.DietType,
+		&i.MeatDaysPerWeekMax,
+		&i.HouseholdPortions,
 	)
 	return i, err
 }

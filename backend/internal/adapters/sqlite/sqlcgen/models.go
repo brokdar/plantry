@@ -79,6 +79,23 @@ type AppSetting struct {
 	UpdatedAt string
 }
 
+type AvailabilityDefault struct {
+	Weekday  int64
+	SlotID   int64
+	Mode     string
+	PresetID sql.NullInt64
+}
+
+type AvailabilityOverride struct {
+	Date      string
+	SlotID    int64
+	Mode      string
+	PresetID  sql.NullInt64
+	Note      sql.NullString
+	CreatedAt string
+	UpdatedAt string
+}
+
 type Food struct {
 	ID                int64
 	Name              string
@@ -241,6 +258,9 @@ type UserProfile struct {
 	SystemPrompt        sql.NullString
 	Locale              string
 	UpdatedAt           string
+	DietType            string
+	MeatDaysPerWeekMax  sql.NullInt64
+	HouseholdPortions   float64
 }
 
 type VariantGroup struct {

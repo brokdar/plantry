@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -57,6 +58,23 @@ func (t *TxRunner) RunInFeedbackTx(ctx context.Context, fn func(feedback.Reposit
 	profileRepo := newProfileRepoTx(tx)
 
 	if err := fn(feedbackRepo, foodRepo, profileRepo); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RunInAvailabilityTx wraps fn in a single transaction, binding availability
+// and plate repositories to the same tx. Used to replace the default grid
+// atomically and to write a "none" override together with removing the
+// cell's plate.
+func (t *TxRunner) RunInAvailabilityTx(ctx context.Context, fn func(availability.Repository, plate.Repository) error) error {
+	tx, err := t.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := fn(newAvailabilityRepoTx(tx), newPlateRepoTx(tx)); err != nil {
 		return err
 	}
 	return tx.Commit()

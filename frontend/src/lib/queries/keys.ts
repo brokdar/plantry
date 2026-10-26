@@ -53,6 +53,14 @@ export const plateKeys = {
     [...plateKeys.range(from, to), "macros"] as const,
 }
 
+export const availabilityKeys = {
+  all: ["availability"] as const,
+  defaults: () => [...availabilityKeys.all, "defaults"] as const,
+  ranges: () => [...availabilityKeys.all, "range"] as const,
+  range: (from: string, to: string) =>
+    [...availabilityKeys.ranges(), from, to] as const,
+}
+
 export const profileKeys = {
   detail: ["profile"] as const,
 }

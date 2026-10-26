@@ -97,5 +97,15 @@ const (
 	KeyPlanWeekStartsOn = "plan.week_starts_on"
 	KeyPlanAnchor       = "plan.anchor"
 	KeyPlanShoppingDay  = "plan.shopping_day"
-	KeyPlanWindowDays   = "plan.window_days"
+
+	KeySetupCompleted             = "setup.completed"
+	KeyPlanMaxCookOccasionsPerDay = "plan.max_cook_occasions_per_day"
+	KeyPlanBatchCooking           = "plan.batch_cooking"
+	KeyPlanDefaultKeepDays        = "plan.default_keep_days"
+	KeyPlanFreezingEnabled        = "plan.freezing_enabled"
+	KeyPlanFreezerKeepDays        = "plan.freezer_keep_days"
+	KeyPlanVarietyWeeks           = "plan.variety_weeks"
+	KeyPlanExplorePerWeek         = "plan.explore_per_week"
+	KeyDiscoveryDailyEnabled      = "discovery.daily_enabled"
+	KeyAIRunRetentionDays         = "ai.run_retention_days"
 )

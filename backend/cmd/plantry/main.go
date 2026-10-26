@@ -31,6 +31,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/config"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
@@ -145,6 +146,8 @@ func run() error {
 
 	feedbackSvc := feedback.NewService(txRunner, plateRepo, foodRepo)
 
+	availabilitySvc := availability.NewService(sqlite.NewAvailabilityRepo(conn), txRunner, presetRepo)
+
 	// AI wiring. The llm.Resolver consults settings on every request so
 	// provider / model / API-key changes take effect without a restart.
 	// Every client is metered so each LLM call lands in the AI run log.
@@ -228,6 +231,7 @@ func run() error {
 		ShoppingRange:  handlers.NewShoppingRangeHandler(plateSvc, shoppingResolver),
 		NutritionRange: handlers.NewNutritionRangeHandler(plateSvc, nutritionResolver),
 		PlateMacros:    handlers.NewPlateMacrosHandler(plateSvc, nutritionResolver),
+		Availability:   handlers.NewAvailabilityHandler(availabilitySvc),
 		DevMode:        cfg.DevMode,
 	}
 	handler := transport.NewRouter(logger, static, h)

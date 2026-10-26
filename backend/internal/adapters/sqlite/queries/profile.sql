@@ -11,6 +11,9 @@ SET kcal_target           = ?,
     preferences           = ?,
     system_prompt         = ?,
     locale                = ?,
+    diet_type             = ?,
+    meat_days_per_week_max = ?,
+    household_portions    = ?,
     updated_at            = datetime('now')
 WHERE id = 1
 RETURNING *;

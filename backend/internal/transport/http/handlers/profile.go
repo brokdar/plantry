@@ -26,6 +26,10 @@ type profileRequest struct {
 	Preferences         map[string]any `json:"preferences"`
 	SystemPrompt        *string        `json:"system_prompt"`
 	Locale              string         `json:"locale"`
+	// DietType and HouseholdPortions keep the stored value when absent.
+	DietType           *profile.DietType `json:"diet_type"`
+	MeatDaysPerWeekMax *int              `json:"meat_days_per_week_max"`
+	HouseholdPortions  *float64          `json:"household_portions"`
 }
 
 type profileResponse struct {
@@ -37,6 +41,9 @@ type profileResponse struct {
 	Preferences         map[string]any `json:"preferences"`
 	SystemPrompt        *string        `json:"system_prompt"`
 	Locale              string         `json:"locale"`
+	DietType            string         `json:"diet_type"`
+	MeatDaysPerWeekMax  *int           `json:"meat_days_per_week_max"`
+	HouseholdPortions   float64        `json:"household_portions"`
 	UpdatedAt           string         `json:"updated_at"`
 }
 
@@ -62,6 +69,9 @@ func toProfileResponse(p *profile.Profile) profileResponse {
 		Preferences:         prefs,
 		SystemPrompt:        p.SystemPrompt,
 		Locale:              p.Locale,
+		DietType:            string(p.DietType),
+		MeatDaysPerWeekMax:  p.MeatDaysPerWeekMax,
+		HouseholdPortions:   p.HouseholdPortions,
 		UpdatedAt:           updatedAt,
 	}
 }
@@ -97,18 +107,23 @@ func (h *ProfileHandler) Update(w http.ResponseWriter, r *http.Request) {
 		locale = "en"
 	}
 
-	p := &profile.Profile{
-		KcalTarget:          req.KcalTarget,
-		ProteinPct:          req.ProteinPct,
-		FatPct:              req.FatPct,
-		CarbsPct:            req.CarbsPct,
-		DietaryRestrictions: restrictions,
-		Preferences:         prefs,
-		SystemPrompt:        req.SystemPrompt,
-		Locale:              locale,
+	in := profile.ReplaceInput{
+		Profile: profile.Profile{
+			KcalTarget:          req.KcalTarget,
+			ProteinPct:          req.ProteinPct,
+			FatPct:              req.FatPct,
+			CarbsPct:            req.CarbsPct,
+			DietaryRestrictions: restrictions,
+			Preferences:         prefs,
+			SystemPrompt:        req.SystemPrompt,
+			Locale:              locale,
+			MeatDaysPerWeekMax:  req.MeatDaysPerWeekMax,
+		},
+		DietType:          req.DietType,
+		HouseholdPortions: req.HouseholdPortions,
 	}
 
-	updated, err := h.svc.Update(r.Context(), p)
+	updated, err := h.svc.Replace(r.Context(), in)
 	if err != nil {
 		status, key := toHTTPWithResource(err, "profile")
 		writeError(w, status, key)

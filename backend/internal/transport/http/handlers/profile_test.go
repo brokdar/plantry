@@ -79,6 +79,69 @@ func TestProfileHandler_Update_InvalidKcal(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, resp.Code)
 }
 
+func putProfile(t *testing.T, r http.Handler, payload string) (int, map[string]any) {
+	t.Helper()
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPut, "/api/profile", bytes.NewBufferString(payload)))
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	return resp.Code, body
+}
+
+func TestProfileHandler_Get_DefaultPlanningPrefs(t *testing.T) {
+	r := setupProfileRouter(t)
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/api/profile", nil))
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+
+	var body map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	assert.Equal(t, "omnivore", body["diet_type"])
+	assert.Contains(t, body, "meat_days_per_week_max")
+	assert.Nil(t, body["meat_days_per_week_max"])
+	assert.Equal(t, float64(1), body["household_portions"])
+}
+
+func TestProfileHandler_Update_PlanningPrefs(t *testing.T) {
+	r := setupProfileRouter(t)
+
+	code, body := putProfile(t, r, `{"diet_type":"vegan","meat_days_per_week_max":3,"household_portions":2.5}`)
+	require.Equal(t, http.StatusOK, code, body)
+	assert.Equal(t, "vegan", body["diet_type"])
+	assert.Equal(t, float64(3), body["meat_days_per_week_max"])
+	assert.Equal(t, 2.5, body["household_portions"])
+
+	// Absent diet_type and household_portions keep the stored values;
+	// meat_days_per_week_max: null clears.
+	code, body = putProfile(t, r, `{"kcal_target":2000,"meat_days_per_week_max":null}`)
+	require.Equal(t, http.StatusOK, code, body)
+	assert.Equal(t, "vegan", body["diet_type"])
+	assert.Equal(t, 2.5, body["household_portions"])
+	assert.Nil(t, body["meat_days_per_week_max"])
+	assert.Equal(t, float64(2000), body["kcal_target"])
+}
+
+func TestProfileHandler_Update_InvalidPlanningPrefs(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		wantKey string
+	}{
+		{"unknown diet", `{"diet_type":"keto"}`, "error.profile.invalid_diet_type"},
+		{"meat days 8", `{"meat_days_per_week_max":8}`, "error.profile.invalid_meat_days"},
+		{"household zero", `{"household_portions":0}`, "error.profile.invalid_household_portions"},
+		{"household too large", `{"household_portions":20.5}`, "error.profile.invalid_household_portions"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := setupProfileRouter(t)
+			code, body := putProfile(t, r, tc.payload)
+			require.Equal(t, http.StatusBadRequest, code)
+			assert.Equal(t, tc.wantKey, body["message_key"])
+		})
+	}
+}
+
 func TestProfileHandler_Update_MalformedJSON(t *testing.T) {
 	r := setupProfileRouter(t)
 
