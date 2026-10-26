@@ -1,121 +1,118 @@
-import { screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
-import type { Profile } from "@/lib/api/profile"
-import { renderWithRouter } from "@/test/render"
+import "@/lib/i18n"
+import { NUTRITION_PRESETS } from "@/lib/nutrition-presets"
 
-vi.mock("@/lib/api/profile", () => ({
-  getProfile: vi.fn(),
-  updateProfile: vi.fn(),
-}))
+import {
+  AllergiesInput,
+  DietTypePicker,
+  NutritionGoalFields,
+} from "./ProfileEditor"
 
-import { getProfile, updateProfile } from "@/lib/api/profile"
-import { ProfileEditor } from "./ProfileEditor"
-
-const mockProfile: Profile = {
+const noGoal = {
   kcal_target: null,
   protein_pct: null,
   fat_pct: null,
   carbs_pct: null,
-  dietary_restrictions: [],
-  preferences: {},
-  system_prompt: null,
-  locale: "en",
-  updated_at: "2026-01-01T00:00:00Z",
 }
 
-describe("ProfileEditor", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    vi.mocked(getProfile).mockResolvedValue(mockProfile)
-    vi.mocked(updateProfile).mockResolvedValue({
-      ...mockProfile,
-      kcal_target: 1800,
-      protein_pct: 35,
-      fat_pct: 30,
-      carbs_pct: 35,
-    })
+describe("NutritionGoalFields", () => {
+  it("marks the preset the stored targets match", () => {
+    render(
+      <NutritionGoalFields
+        value={NUTRITION_PRESETS.maintain}
+        onCommit={vi.fn()}
+      />
+    )
+    expect(screen.getByRole("radio", { name: /^Maintain/ })).toBeChecked()
+    expect(screen.getByRole("radio", { name: /^Cut/ })).not.toBeChecked()
+    expect(screen.queryByLabelText(/calorie target/i)).toBeNull()
   })
 
-  it("renders with loaded profile values", async () => {
-    renderWithRouter(<ProfileEditor />)
-    await screen.findByRole("button", { name: /cut/i })
-    expect(
-      screen.getByRole("button", { name: /maintain/i })
-    ).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /bulk/i })).toBeInTheDocument()
+  it("shows the bulk card at 2700 kcal and commits it", async () => {
+    const onCommit = vi.fn()
+    render(<NutritionGoalFields value={noGoal} onCommit={onCommit} />)
+    const bulk = screen.getByRole("radio", { name: /^Bulk/ })
+    expect(bulk.closest("label")).toHaveTextContent("2700 kcal")
+    await userEvent.click(bulk)
+    expect(onCommit).toHaveBeenCalledWith(NUTRITION_PRESETS.bulk)
   })
 
-  it("clicking Cut preset populates correct field values", async () => {
-    renderWithRouter(<ProfileEditor />)
-    await screen.findByRole("button", { name: /cut/i })
-
-    await userEvent.click(screen.getByRole("button", { name: /cut/i }))
-
-    await waitFor(() => {
-      expect(
-        (screen.getByLabelText(/calorie target/i) as HTMLInputElement).value
-      ).toBe("1800")
-    })
-    expect(
-      (screen.getByLabelText(/protein %/i) as HTMLInputElement).value
-    ).toBe("35")
-  })
-
-  it("clicking Maintain preset populates maintain values", async () => {
-    renderWithRouter(<ProfileEditor />)
-    await screen.findByRole("button", { name: /maintain/i })
-
-    await userEvent.click(screen.getByRole("button", { name: /maintain/i }))
-
-    await waitFor(() => {
-      expect(
-        (screen.getByLabelText(/calorie target/i) as HTMLInputElement).value
-      ).toBe("2200")
-    })
-  })
-
-  it("custom override of a pct field updates independently", async () => {
-    renderWithRouter(<ProfileEditor />)
-    await screen.findByRole("button", { name: /cut/i })
-
-    await userEvent.click(screen.getByRole("button", { name: /cut/i }))
-    await waitFor(() => {
-      expect(
-        (screen.getByLabelText(/protein %/i) as HTMLInputElement).value
-      ).toBe("35")
-    })
-
-    const proteinInput = screen.getByLabelText(/protein %/i)
-    await userEvent.clear(proteinInput)
-    await userEvent.type(proteinInput, "40")
-
-    expect((proteinInput as HTMLInputElement).value).toBe("40")
-  })
-
-  it("save calls updateProfile with correct payload", async () => {
-    renderWithRouter(<ProfileEditor />)
-    await screen.findByRole("button", { name: /cut/i })
-
-    await userEvent.click(screen.getByRole("button", { name: /cut/i }))
-    await waitFor(() => {
-      expect(
-        (screen.getByLabelText(/calorie target/i) as HTMLInputElement).value
-      ).toBe("1800")
-    })
-
-    await userEvent.click(screen.getByRole("button", { name: /save profile/i }))
-
-    await waitFor(() => {
-      expect(updateProfile).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kcal_target: 1800,
-          protein_pct: 35,
+  it("opens custom fields prefilled with targets that match no preset", () => {
+    render(
+      <NutritionGoalFields
+        value={{
+          kcal_target: 2000,
+          protein_pct: 30,
           fat_pct: 30,
-          carbs_pct: 35,
-        })
-      )
-    })
+          carbs_pct: 40,
+        }}
+        onCommit={vi.fn()}
+      />
+    )
+    expect(screen.getByRole("radio", { name: /^Custom/ })).toBeChecked()
+    expect(screen.getByLabelText(/calorie target/i)).toHaveValue(2000)
+    expect(screen.getByLabelText(/protein %/i)).toHaveValue(30)
+  })
+
+  it("editing one custom field updates only that field", async () => {
+    const onCommit = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <NutritionGoalFields
+        value={{
+          kcal_target: 2000,
+          protein_pct: 30,
+          fat_pct: 30,
+          carbs_pct: 40,
+        }}
+        onCommit={onCommit}
+      />
+    )
+    const protein = screen.getByLabelText(/protein %/i)
+    await user.clear(protein)
+    await user.type(protein, "25")
+    await user.click(document.body)
+    await waitFor(() =>
+      expect(onCommit).toHaveBeenCalledWith({
+        kcal_target: 2000,
+        protein_pct: 25,
+        fat_pct: 30,
+        carbs_pct: 40,
+      })
+    )
+  })
+})
+
+describe("DietTypePicker", () => {
+  it("offers the four diet types", async () => {
+    const onChange = vi.fn()
+    render(<DietTypePicker value="omnivore" onChange={onChange} />)
+    for (const name of ["Vegan", "Vegetarian", "Pescetarian", "Omnivore"]) {
+      expect(screen.getByRole("radio", { name })).toBeInTheDocument()
+    }
+    await userEvent.click(screen.getByRole("radio", { name: "Pescetarian" }))
+    expect(onChange).toHaveBeenCalledWith("pescetarian")
+  })
+})
+
+describe("AllergiesInput", () => {
+  it("adds and removes chips", async () => {
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <AllergiesInput value={[]} onChange={onChange} />
+    )
+    await user.type(
+      screen.getByLabelText("Allergies and restrictions"),
+      "gluten{Enter}"
+    )
+    expect(onChange).toHaveBeenLastCalledWith(["gluten"])
+
+    rerender(<AllergiesInput value={["gluten"]} onChange={onChange} />)
+    await user.click(screen.getByRole("button", { name: "Remove gluten" }))
+    expect(onChange).toHaveBeenLastCalledWith([])
   })
 })

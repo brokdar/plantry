@@ -26,82 +26,102 @@ async function getProfile() {
   return body as {
     kcal_target: number | null
     protein_pct: number | null
+    fat_pct: number | null
+    carbs_pct: number | null
+    dietary_restrictions: string[]
     locale: string
   }
 }
 
-test.describe("Profile settings", () => {
+const isProfilePut = (r: { url(): string; request(): { method(): string } }) =>
+  r.url().includes("/api/profile") && r.request().method() === "PUT"
+
+test.describe("Profile settings (You & household)", () => {
+  test.beforeEach(async () => {
+    await resetProfile()
+  })
   test.afterEach(async () => {
     await resetProfile()
   })
 
-  test("Cut preset populates fields and saves correctly", async ({ page }) => {
-    await page.goto("/settings?tab=nutrition")
+  test("the Cut card saves its targets at once", async ({ page }) => {
+    await page.goto("/settings/household")
+    const cut = page.getByRole("radio", { name: /^Cut/ })
+    await expect(cut).not.toBeChecked()
 
-    // Profile card should be visible
-    await expect(page.getByText(/profile & targets/i).first()).toBeVisible()
+    const saved = page.waitForResponse(isProfilePut)
+    await page.getByText("Cut", { exact: true }).click()
+    expect((await saved).status()).toBe(200)
+    await expect(cut).toBeChecked()
+    await expect(
+      page.getByText(
+        "Plantry aims for 1800 kcal a day: 35 % protein, 30 % fat, 35 % carbs."
+      )
+    ).toBeVisible()
 
-    // Click Cut preset
-    await page.getByRole("button", { name: /^cut$/i }).click()
-
-    // Assert fields are populated
-    await expect(page.getByLabel(/calorie target/i)).toHaveValue("1800")
-    await expect(page.getByLabel(/protein %/i)).toHaveValue("35")
-    await expect(page.getByLabel(/fat %/i)).toHaveValue("30")
-    await expect(page.getByLabel(/carbs %/i)).toHaveValue("35")
-
-    // Save
-    const saveResp = page.waitForResponse(
-      (r) => r.url().includes("/api/profile") && r.request().method() === "PUT"
-    )
-    await page.getByRole("button", { name: /save profile/i }).click()
-    const response = await saveResp
-    expect(response.status()).toBe(200)
-
-    // Verify via API
     const profile = await getProfile()
     expect(profile.kcal_target).toBe(1800)
     expect(profile.protein_pct).toBe(35)
   })
 
-  test("Maintain preset sets correct values", async ({ page }) => {
-    await page.goto("/settings?tab=nutrition")
-    await expect(page.getByText(/profile & targets/i).first()).toBeVisible()
-
-    await page.getByRole("button", { name: /^maintain$/i }).click()
-
-    await expect(page.getByLabel(/calorie target/i)).toHaveValue("2200")
+  test("the Maintain card saves 2200 kcal", async ({ page }) => {
+    await page.goto("/settings/household")
+    const saved = page.waitForResponse(isProfilePut)
+    await page.getByText("Maintain", { exact: true }).click()
+    await saved
+    expect((await getProfile()).kcal_target).toBe(2200)
   })
 
-  test("dietary restriction chip editor adds and removes tags", async ({
+  test("custom targets save when focus leaves the fields", async ({ page }) => {
+    await page.goto("/settings/household")
+    await page.getByText("Custom", { exact: true }).click()
+    await page.getByLabel(/calorie target/i).fill("2100")
+    await page.getByLabel(/protein %/i).fill("30")
+    await page.getByLabel(/fat %/i).fill("30")
+    await page.getByLabel(/carbs %/i).fill("40")
+
+    const saved = page.waitForResponse(isProfilePut)
+    await page.getByRole("heading", { name: "You & household" }).click()
+    expect((await saved).status()).toBe(200)
+    const profile = await getProfile()
+    expect(profile.kcal_target).toBe(2100)
+    expect(profile.carbs_pct).toBe(40)
+  })
+
+  test("an invalid macro sum shows an error and is not saved", async ({
     page,
   }) => {
-    await page.goto("/settings?tab=nutrition")
-    await expect(page.getByText(/profile & targets/i).first()).toBeVisible()
-
-    // Add a restriction
-    await page.getByPlaceholder(/vegetarian/i).fill("vegan")
-    await page.keyboard.press("Enter")
-    await expect(page.getByText("vegan")).toBeVisible()
-
-    // Remove it
-    await page.getByRole("button", { name: /remove vegan/i }).click()
-    await expect(page.getByText("vegan")).toHaveCount(0)
-  })
-
-  test("invalid macro sum shows error from server", async ({ page }) => {
-    await page.goto("/settings?tab=nutrition")
-    await expect(page.getByText(/profile & targets/i).first()).toBeVisible()
-
+    let puts = 0
+    page.on("request", (r) => {
+      if (r.url().includes("/api/profile") && r.method() === "PUT") puts++
+    })
+    await page.goto("/settings/household")
+    await page.getByText("Custom", { exact: true }).click()
+    await page.getByLabel(/calorie target/i).fill("2000")
     await page.getByLabel(/protein %/i).fill("60")
     await page.getByLabel(/fat %/i).fill("30")
     await page.getByLabel(/carbs %/i).fill("30")
+    await page.getByRole("heading", { name: "You & household" }).click()
 
-    const saveResp = page.waitForResponse(
-      (r) => r.url().includes("/api/profile") && r.request().method() === "PUT"
-    )
-    await page.getByRole("button", { name: /save profile/i }).click()
-    const response = await saveResp
-    expect(response.status()).toBe(400)
+    await expect(
+      page.getByText("Protein, fat and carbs add up to more than 100 %.")
+    ).toBeVisible()
+    expect(puts).toBe(0)
+  })
+
+  test("the allergy chip editor adds and removes tags", async ({ page }) => {
+    await page.goto("/settings/household")
+
+    const added = page.waitForResponse(isProfilePut)
+    await page.getByPlaceholder(/vegetarian/i).fill("peanuts")
+    await page.keyboard.press("Enter")
+    await added
+    await expect(page.getByText("peanuts", { exact: true })).toBeVisible()
+    expect((await getProfile()).dietary_restrictions).toEqual(["peanuts"])
+
+    const removed = page.waitForResponse(isProfilePut)
+    await page.getByRole("button", { name: /remove peanuts/i }).click()
+    await removed
+    await expect(page.getByText("peanuts", { exact: true })).toHaveCount(0)
   })
 })

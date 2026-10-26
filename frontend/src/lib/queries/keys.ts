@@ -89,6 +89,11 @@ export const settingsKeys = {
     [...settingsKeys.all, "ai", "models", provider] as const,
 }
 
+export const setupKeys = {
+  all: ["setup"] as const,
+  status: () => [...setupKeys.all, "status"] as const,
+}
+
 export const shoppingKeys = {
   all: ["shopping"] as const,
   list: (from: string, to: string) => ["shopping", "list", from, to] as const,

@@ -22,14 +22,16 @@ test.describe("Planner — anchor settings", () => {
     await setSetting("plan.anchor", "today")
   })
 
-  test("Settings → Plan tab renders anchor radio group", async ({ page }) => {
+  test("Settings → Cooking & variety renders the anchor radio group", async ({
+    page,
+  }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.anc_radio_${tag}`, "Moon", 960)
 
     try {
-      await page.goto("/settings?tab=plan")
+      await page.goto("/settings/cooking")
 
-      // Plan tab content should be active
+      // The Cooking section holds the anchor setting
       await expect(page.getByTestId("plan-anchor-radio-today")).toBeVisible()
       await expect(
         page.getByTestId("plan-anchor-radio-next_shopping_day")
@@ -83,7 +85,7 @@ test.describe("Planner — anchor settings", () => {
         { times: 1 }
       )
 
-      await page.goto("/settings?tab=plan")
+      await page.goto("/settings/cooking")
 
       // Weekday picker should not be visible while not in fixed_weekday mode
       await expect(page.getByTestId("plan-fixed-weekday-picker")).toHaveCount(0)
