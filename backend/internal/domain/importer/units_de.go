@@ -42,8 +42,8 @@ var aliasesDE = map[string]unitInfo{
 	// Count-as-grams
 	"prise":    {"g", 0.5, true, "Prise"},
 	"prisen":   {"g", 0.5, true, "Prise"},
-	"zehe":     {"g", 4, true, "Zehe"},
-	"zehen":    {"g", 4, true, "Zehe"},
+	"zehe":     {"g", 5, true, "Zehe"},
+	"zehen":    {"g", 5, true, "Zehe"},
 	"bund":     {"g", 30, true, "Bund"},
 	"stange":   {"g", 60, true, "Stange"},
 	"stangen":  {"g", 60, true, "Stange"},

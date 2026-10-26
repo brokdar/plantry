@@ -240,6 +240,8 @@ func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string) *Draft
 		ExtractMethod:     method,
 		ReferencePortions: float64(rec.RecipeYieldNumber),
 		Warnings:          []string{},
+
+		SourceKcalPerServing: rec.SourceKcalPerServing,
 	}
 	if d.ReferencePortions == 0 {
 		d.ReferencePortions = 1

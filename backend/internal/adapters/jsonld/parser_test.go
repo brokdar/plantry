@@ -142,6 +142,64 @@ func TestParseISODuration(t *testing.T) {
 	}
 }
 
+func TestExtractRecipe_YieldShapes(t *testing.T) {
+	cases := []struct {
+		name       string
+		yield      string
+		wantYield  string
+		wantNumber int
+	}{
+		{"number", `4`, "4", 4},
+		{"float number", `2.0`, "2", 2},
+		{"array of strings", `["4", "4 Portionen"]`, "4", 4},
+		{"array skips unparsable", `["Portionen", "6 Stück"]`, "6 Stück", 6},
+		{"array of numbers", `[3]`, "3", 3},
+		{"string", `"5 Portionen"`, "5 Portionen", 5},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec, err := jsonld.ExtractRecipe(recipeHTML(`"recipeYield": ` + tc.yield))
+			require.NoError(t, err)
+			require.Equal(t, tc.wantYield, rec.RecipeYield)
+			require.Equal(t, tc.wantNumber, rec.RecipeYieldNumber)
+		})
+	}
+}
+
+func TestExtractRecipe_NutritionCalories(t *testing.T) {
+	kcal := func(v float64) *float64 { return &v }
+	cases := []struct {
+		name      string
+		nutrition string
+		want      *float64
+	}{
+		{"kcal string", `{"@type": "NutritionInformation", "calories": "520 kcal"}`, kcal(520)},
+		{"decimal comma", `{"calories": "412,5 kcal"}`, kcal(412.5)},
+		{"number", `{"calories": 300}`, kcal(300)},
+		{"no calories", `{"proteinContent": "20 g"}`, nil},
+		{"garbage", `{"calories": "viel"}`, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec, err := jsonld.ExtractRecipe(recipeHTML(`"nutrition": ` + tc.nutrition))
+			require.NoError(t, err)
+			require.Equal(t, tc.want, rec.SourceKcalPerServing)
+		})
+	}
+
+	t.Run("absent", func(t *testing.T) {
+		rec, err := jsonld.ExtractRecipe(recipeHTML(`"recipeYield": "4"`))
+		require.NoError(t, err)
+		require.Nil(t, rec.SourceKcalPerServing)
+	})
+}
+
+// recipeHTML wraps one extra JSON field in a minimal Recipe JSON-LD page.
+func recipeHTML(field string) string {
+	return `<html><head><script type="application/ld+json">{"@type": "Recipe", "name": "Test", "recipeIngredient": ["100 g Mehl"], ` +
+		field + `}</script></head></html>`
+}
+
 func TestParseYield(t *testing.T) {
 	cases := []struct {
 		in   string

@@ -34,4 +34,7 @@ type Draft struct {
 	Language          string            `json:"language"`       // "de" | "en" | "unknown".
 	ExtractMethod     string            `json:"extract_method"` // "jsonld" | "llm".
 	Warnings          []string          `json:"warnings"`
+	// SourceKcalPerServing is the source page's calorie claim, for display and
+	// comparison only — never used for macros.
+	SourceKcalPerServing *float64 `json:"source_kcal_per_serving"`
 }
