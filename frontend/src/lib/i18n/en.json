@@ -47,7 +47,7 @@
   },
   "import": {
     "title": "Import recipe",
-    "subtitle": "Paste a recipe URL and we'll turn it into a component.",
+    "subtitle": "Paste a recipe link. Plantry reads the ingredients and steps for you.",
     "step1": {
       "title": "Where is the recipe?",
       "url_label": "Recipe URL",
@@ -69,13 +69,17 @@
       "searching": "Searching…",
       "no_match": "No match in library.",
       "create_new": "Create as new ingredient",
-      "change": "change",
+      "change": "Change",
       "unparsed_warning": "Could not parse — please review",
       "llm_warning": "Extracted with AI — please review every row.",
       "source_local": "In library",
       "source_fdc": "USDA",
       "source_off": "Open Food Facts",
-      "kcal_100g": "{{kcal}} kcal/100 g"
+      "kcal_100g": "{{kcal}} kcal/100 g",
+      "optional_skipped": "Optional, skipped",
+      "amount_for": "Amount for {{name}}",
+      "unit_for": "Unit for {{name}}",
+      "resolution_for": "How to use {{name}}"
     },
     "step3": {
       "role_label": "Role",
@@ -90,7 +94,8 @@
       "kcal_per_portion": "{{kcal}} kcal per portion",
       "kcal_pending": "kcal per portion appear once every ingredient is chosen.",
       "source_kcal": "Source: {{kcal}} kcal",
-      "image_download_failed": "Recipe saved, but the photo could not be downloaded."
+      "image_download_failed": "Recipe saved, but the photo could not be downloaded.",
+      "portions_invalid": "Enter at least 1 portion."
     },
     "status": {
       "extracting": "Extracting…",
@@ -1069,7 +1074,9 @@
     "yes": "Yes",
     "no": "No",
     "collapse": "Collapse",
-    "remove": "Remove"
+    "remove": "Remove",
+    "opens_new_tab": "(opens in a new tab)",
+    "retry": "Try again"
   },
   "chat": {
     "title": "AI Assistant",

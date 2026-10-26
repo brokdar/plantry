@@ -47,7 +47,7 @@
   },
   "import": {
     "title": "Rezept importieren",
-    "subtitle": "Füge die URL eines Rezepts ein — wir machen eine Komponente daraus.",
+    "subtitle": "Füge den Link zu einem Rezept ein. Plantry liest Zutaten und Schritte für dich aus.",
     "step1": {
       "title": "Wo ist das Rezept?",
       "url_label": "Rezept-URL",
@@ -75,7 +75,11 @@
       "source_local": "In der Bibliothek",
       "source_fdc": "USDA",
       "source_off": "Open Food Facts",
-      "kcal_100g": "{{kcal}} kcal/100 g"
+      "kcal_100g": "{{kcal}} kcal/100 g",
+      "optional_skipped": "Optional, übersprungen",
+      "amount_for": "Menge für {{name}}",
+      "unit_for": "Einheit für {{name}}",
+      "resolution_for": "Verwendung von {{name}}"
     },
     "step3": {
       "role_label": "Rolle",
@@ -90,7 +94,8 @@
       "kcal_per_portion": "{{kcal}} kcal pro Portion",
       "kcal_pending": "kcal pro Portion erscheinen, sobald jede Zutat gewählt ist.",
       "source_kcal": "Quelle: {{kcal}} kcal",
-      "image_download_failed": "Rezept gespeichert, aber das Foto konnte nicht geladen werden."
+      "image_download_failed": "Rezept gespeichert, aber das Foto konnte nicht geladen werden.",
+      "portions_invalid": "Gib mindestens 1 Portion ein."
     },
     "status": {
       "extracting": "Extrahiere…",
@@ -1068,7 +1073,9 @@
     "yes": "Ja",
     "no": "Nein",
     "collapse": "Einklappen",
-    "remove": "Entfernen"
+    "remove": "Entfernen",
+    "opens_new_tab": "(öffnet in neuem Tab)",
+    "retry": "Erneut versuchen"
   },
   "chat": {
     "title": "KI-Assistent",

@@ -317,6 +317,109 @@ describe("ImportWizard", () => {
     ).toHaveTextContent("Mehl")
   })
 
+  it("opens the completeness warning's links in a new tab", async () => {
+    mockLookup([localMehl])
+    vi.mocked(getFoodNutrition).mockResolvedValue({
+      ...mehlNutrition,
+      complete: false,
+      missing: [{ id: 7, name: "Mehl" }],
+    })
+    await openReview()
+
+    // Same-tab navigation would discard the unsaved review.
+    const link = await screen.findByRole("link", { name: /mehl/i })
+    expect(link).toHaveAttribute("target", "_blank")
+    expect(link).toHaveAttribute("rel", "noopener noreferrer")
+    expect(link).toHaveAccessibleName(/^Mehl\s*\(opens in a new tab\)$/)
+  })
+
+  it("creates a manual ingredient with null macros", async () => {
+    mockLookup([])
+    vi.mocked(createFood).mockResolvedValue(createdLeaf)
+    const user = await openReview()
+
+    await user.click(
+      await screen.findByRole("button", { name: /create as new ingredient/i })
+    )
+
+    await waitFor(() => expect(createFood).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(createFood).mock.calls[0][0]).toMatchObject({
+      kind: "leaf",
+      name: "Mehl",
+      source: "manual",
+      kcal_100g: null,
+      protein_100g: null,
+      fat_100g: null,
+      carbs_100g: null,
+    })
+  })
+
+  it("marks a skipped quantity-less line as optional, not as a parse error", async () => {
+    mockLookup([localMehl])
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: {
+        ...draft,
+        ingredients: [
+          ...draft.ingredients,
+          {
+            raw_text: "2 Handvoll Kräuter",
+            amount: 2,
+            unit: "",
+            original_unit: "Handvoll",
+            name: "Kräuter",
+            note: "",
+            confidence: "unparsed",
+          },
+        ],
+      },
+    })
+    await openReview()
+
+    expect(await screen.findByText("Optional, skipped")).toBeInTheDocument()
+    // Only the line with an amount still asks for a review.
+    expect(screen.getAllByText("Could not parse — please review")).toHaveLength(
+      1
+    )
+  })
+
+  it("labels each row's controls with the ingredient name", async () => {
+    mockLookup([localMehl])
+    await openReview()
+
+    expect(
+      await screen.findByRole("spinbutton", { name: "Amount for Mehl" })
+    ).toHaveValue(200)
+    expect(
+      screen.getByRole("combobox", { name: "Unit for Mehl" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("combobox", { name: "How to use Salz und Pfeffer" })
+    ).toBeInTheDocument()
+  })
+
+  it("lets the portions field be cleared and checks it on save", async () => {
+    mockLookup([localMehl])
+    vi.mocked(resolveImport).mockResolvedValue({ food: finalized })
+    const user = await openReview()
+
+    const portions = screen.getByLabelText("Reference portions")
+    await user.clear(portions)
+    expect(portions).toHaveValue(null)
+    await user.type(portions, "6")
+    expect(portions).toHaveValue(6)
+
+    await user.clear(portions)
+    const save = screen.getByRole("button", { name: /save recipe/i })
+    await waitFor(() => expect(save).toBeEnabled())
+    await user.click(save)
+
+    expect(
+      await screen.findByText("Enter at least 1 portion.")
+    ).toBeInTheDocument()
+    expect(portions).toHaveAttribute("aria-invalid", "true")
+    expect(resolveImport).not.toHaveBeenCalled()
+  })
+
   it("saves the description, source URL and image, not notes", async () => {
     mockLookup([localMehl])
     vi.mocked(resolveImport).mockResolvedValue({ food: finalized })

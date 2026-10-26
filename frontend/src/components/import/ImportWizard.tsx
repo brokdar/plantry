@@ -40,8 +40,14 @@ export function ImportWizard() {
   const [rows, setRows] = useState<RowState[]>([])
   const [recipeName, setRecipeName] = useState("")
   const [role, setRole] = useState<(typeof FOOD_ROLES)[number]>("main")
-  const [referencePortions, setReferencePortions] = useState(1)
+  // Kept as the raw input string so the field can be cleared while typing;
+  // validated (≥ 1) on save.
+  const [portionsInput, setPortionsInput] = useState("1")
+  const [portionsError, setPortionsError] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const referencePortions = Number(portionsInput)
+  const portionsValid =
+    Number.isFinite(referencePortions) && referencePortions >= 1
 
   const extract = useExtractRecipe()
   const resolve = useResolveImport()
@@ -57,7 +63,8 @@ export function ImportWizard() {
       const d = res.draft
       setDraft(d)
       setRecipeName(d.name)
-      setReferencePortions(d.reference_portions || 1)
+      setPortionsInput(String(d.reference_portions || 1))
+      setPortionsError(false)
       setRows(
         d.ingredients.map((ing) => ({
           resolution:
@@ -77,6 +84,10 @@ export function ImportWizard() {
 
   async function onSave() {
     if (!draft) return
+    if (!portionsValid) {
+      setPortionsError(true)
+      return
+    }
     try {
       const resolveRes = await resolve.mutateAsync({
         name: recipeName,
@@ -268,16 +279,29 @@ export function ImportWizard() {
                   id="import-portions"
                   type="number"
                   min={1}
-                  value={referencePortions}
-                  onChange={(e) =>
-                    setReferencePortions(Math.max(1, Number(e.target.value)))
+                  value={portionsInput}
+                  onChange={(e) => {
+                    setPortionsInput(e.target.value)
+                    setPortionsError(false)
+                  }}
+                  aria-invalid={portionsError || undefined}
+                  aria-describedby={
+                    portionsError ? "import-portions-error" : undefined
                   }
                 />
+                {portionsError && (
+                  <p
+                    id="import-portions-error"
+                    className="text-small text-danger"
+                  >
+                    {t("import.review.portions_invalid")}
+                  </p>
+                )}
               </div>
             </div>
             <ImportNutritionSummary
               rows={rows}
-              complete={unresolvedCount === 0}
+              complete={unresolvedCount === 0 && portionsValid}
               referencePortions={referencePortions}
               sourceKcalPerServing={draft.source_kcal_per_serving}
             />

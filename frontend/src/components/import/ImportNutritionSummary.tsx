@@ -88,7 +88,7 @@ export function ImportNutritionSummary({
           </p>
         )}
       </div>
-      <NutritionCompletenessWarning missing={missing} />
+      <NutritionCompletenessWarning missing={missing} openInNewTab />
     </div>
   )
 }

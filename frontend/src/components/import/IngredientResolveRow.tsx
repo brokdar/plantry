@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useId } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
@@ -36,6 +36,14 @@ interface RowProps {
 export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
   const { t } = useTranslation()
   const ensureLeaf = useEnsureLeaf()
+  const amountId = useId()
+  const label = ing.name || ing.raw_text
+  // Quantity-less lines ("Salz und Pfeffer") default to Skip; that is the
+  // expected outcome, not a parse error to review.
+  const optionalSkipped =
+    ing.confidence === "unparsed" &&
+    ing.amount === 0 &&
+    state.resolution === "skip"
 
   const lookup = useImportLineLookup(ing.name, lang)
   const results = lookup.data?.results ?? []
@@ -68,16 +76,25 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
   }
 
   function onCreateManual() {
+    // Macros stay null (not 0) so the completeness warning names the leaf.
     ensureLeaf.mutate(
-      { kind: "leaf", name: ing.name, source: "manual" },
+      {
+        kind: "leaf",
+        name: ing.name,
+        source: "manual",
+        kcal_100g: null,
+        protein_100g: null,
+        fat_100g: null,
+        carbs_100g: null,
+      },
       { onSuccess: link }
     )
   }
 
   return (
     <div className="rounded border border-border p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-40 flex-1">
           <div className="text-sm font-medium">
             {ing.amount > 0
               ? `${ing.amount} ${ing.unit || ing.original_unit} `
@@ -88,10 +105,22 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
             )}
           </div>
           <div className="text-xs text-muted-foreground">{ing.raw_text}</div>
-          {ing.confidence === "unparsed" && (
-            <Badge variant="destructive" className="mt-1">
-              {t("import.step2.unparsed_warning")}
+          {optionalSkipped ? (
+            <Badge
+              variant="outline"
+              className="mt-1 h-auto border-line whitespace-normal text-ink-muted"
+            >
+              {t("import.step2.optional_skipped")}
             </Badge>
+          ) : (
+            ing.confidence === "unparsed" && (
+              <Badge
+                variant="destructive"
+                className="mt-1 h-auto whitespace-normal"
+              >
+                {t("import.step2.unparsed_warning")}
+              </Badge>
+            )
           )}
         </div>
 
@@ -102,7 +131,10 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
               onChange({ resolution: v as Resolution, foodId: null })
             }
           >
-            <SelectTrigger className="w-40">
+            <SelectTrigger
+              className="w-40"
+              aria-label={t("import.step2.resolution_for", { name: label })}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -187,8 +219,12 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
 
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <Label className="text-xs">{t("import.step2.amount")}</Label>
+              <Label htmlFor={amountId} className="text-xs">
+                {t("import.step2.amount")}
+              </Label>
               <Input
+                id={amountId}
+                aria-label={t("import.step2.amount_for", { name: label })}
                 type="number"
                 step="any"
                 value={state.amount}
@@ -201,7 +237,9 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
                 value={state.unit}
                 onValueChange={(v) => onChange({ unit: v })}
               >
-                <SelectTrigger>
+                <SelectTrigger
+                  aria-label={t("import.step2.unit_for", { name: label })}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
