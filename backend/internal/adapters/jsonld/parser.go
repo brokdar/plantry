@@ -115,7 +115,7 @@ func decodeRecipe(node map[string]any) *importer.RawRecipe {
 		Description:      stringOf(node["description"]),
 		URL:              stringOf(node["url"]),
 		Image:            normalizeImage(node["image"]),
-		RecipeYield:      stringOf(node["recipeYield"]),
+		RecipeYield:      yieldOf(node["recipeYield"]),
 		RecipeIngredient: stringSlice(node["recipeIngredient"]),
 		Keywords:         collectTags(node),
 		AuthorName:       extractAuthorName(node["author"]),
@@ -131,8 +131,62 @@ func decodeRecipe(node map[string]any) *importer.RawRecipe {
 		r.CookMinutes = r.TotalMinutes
 	}
 	r.RecipeInstructions = normalizeInstructions(node["recipeInstructions"])
+	r.SourceKcalPerServing = caloriesOf(node["nutrition"])
 
 	return r
+}
+
+// yieldOf normalizes recipeYield, which sites publish as a string, a bare
+// number, or an array (chefkoch: ["4", "4 Portionen"]). For arrays the first
+// element containing a number wins.
+func yieldOf(v any) string {
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t)
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	case []any:
+		for _, item := range t {
+			if s := yieldOf(item); yieldNumberRE.MatchString(s) {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// caloriesNumberRE grabs the leading number from a calories string like "520 kcal".
+var caloriesNumberRE = regexp.MustCompile(`\d+(?:[.,]\d+)?`)
+
+// thousandsDotRE matches a "." used as a German thousands separator: "2.000 kcal".
+var thousandsDotRE = regexp.MustCompile(`(\d)\.(\d{3})(\D|$)`)
+
+// caloriesOf reads nutrition.calories ("520 kcal" or 520). Returns nil when
+// the block or a number is missing, or when the value is only given in kJ.
+func caloriesOf(v any) *float64 {
+	n, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	switch t := n["calories"].(type) {
+	case float64:
+		return &t
+	case string:
+		low := strings.ToLower(t)
+		if strings.Contains(low, "kj") && !strings.Contains(low, "kcal") {
+			return nil
+		}
+		m := caloriesNumberRE.FindString(thousandsDotRE.ReplaceAllString(t, "${1}${2}${3}"))
+		if m == "" {
+			return nil
+		}
+		f, err := strconv.ParseFloat(strings.ReplaceAll(m, ",", "."), 64)
+		if err != nil {
+			return nil
+		}
+		return &f
+	}
+	return nil
 }
 
 // collectTags merges recipeCategory, recipeCuisine, and keywords into a single

@@ -55,6 +55,14 @@ var singleTasteMarkers = map[string]string{
 
 var whitespaceRE = regexp.MustCompile(`\s+`)
 
+// pluralSuffixRE matches chefkoch-style plural markers glued to a word —
+// "Zwiebel(n)", "Zehe/n", "Steak(s)", "Pilz(e)" — so they can be dropped
+// before parentheticals are turned into notes.
+var pluralSuffixRE = regexp.MustCompile(`(\p{L})(?:\([nse]\)|/[ns])(\s|,|$)`)
+
+// gluedAmountUnitRE splits a number glued to a unit token: "100g", "1,5kg".
+var gluedAmountUnitRE = regexp.MustCompile(`^(\d+(?:[.,]\d+)?)(\p{L}+\.?)$`)
+
 // ParseLineDE parses a German-language ingredient line into a DraftIngredient.
 // The parser is best-effort: lines it cannot interpret still produce a
 // DraftIngredient with Confidence=ConfidenceUnparsed that the UI can show for
@@ -67,6 +75,9 @@ func ParseLineDE(raw string) DraftIngredient {
 	if s == "" {
 		return out
 	}
+
+	// Drop plural markers so they never end up in the unit, name, or note.
+	s = pluralSuffixRE.ReplaceAllString(s, "${1}${2}")
 
 	// Pull parenthetical content into a note candidate and strip it from the working string.
 	s, parenNote := extractParenthetical(s)
@@ -105,6 +116,8 @@ func ParseLineDE(raw string) DraftIngredient {
 			return out
 		}
 	}
+
+	tokens = splitGluedUnit(tokens)
 
 	amount, amountApprox, consumed, ok := parseAmount(tokens)
 	if !ok {
@@ -460,6 +473,22 @@ func matchCompoundUnit(name string) (unitInfo, string, bool) {
 		}
 	}
 	return unitInfo{}, "", false
+}
+
+// splitGluedUnit turns a leading "100g" token into "100", "g" when the glued
+// suffix is a known unit alias; anything else is returned unchanged.
+func splitGluedUnit(tokens []string) []string {
+	if len(tokens) == 0 {
+		return tokens
+	}
+	m := gluedAmountUnitRE.FindStringSubmatch(tokens[0])
+	if m == nil {
+		return tokens
+	}
+	if _, ok := aliasesDE[strings.TrimSuffix(strings.ToLower(m[2]), ".")]; !ok {
+		return tokens
+	}
+	return append([]string{m[1], m[2]}, tokens[1:]...)
 }
 
 // matchUnit looks at the first token against the alias table.
