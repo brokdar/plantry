@@ -60,7 +60,8 @@ func TestClient_RecordsConcurrentRequests(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = c.Complete(context.Background(), llm.Request{Model: "m"})
+			_, err := c.Complete(context.Background(), llm.Request{Model: "m"})
+			assert.NoError(t, err)
 			_ = c.Requests()
 		}()
 	}

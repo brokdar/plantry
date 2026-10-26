@@ -92,7 +92,7 @@ func New(path string) (*Client, error) {
 func NewFromScript(s *Script) *Client { return &Client{script: s} }
 
 // Requests returns a copy of every request received by Stream and Complete,
-// in call order.
+// in call order. The copy is shallow: slices inside each Request are shared.
 func (c *Client) Requests() []llm.Request {
 	c.mu.Lock()
 	defer c.mu.Unlock()
