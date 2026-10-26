@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
@@ -20,11 +24,16 @@ import (
 
 func setupFoodRouter(t *testing.T) http.Handler {
 	t.Helper()
+	return setupFoodRouterWithStore(t, nil)
+}
+
+func setupFoodRouterWithStore(t *testing.T, store *imagestore.Store) http.Handler {
+	t.Helper()
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewFoodRepo(db)
 	svc := food.NewService(repo)
 	resolver := food.NewNutritionResolver(repo)
-	h := handlers.NewFoodHandler(svc, resolver, nil)
+	h := handlers.NewFoodHandler(svc, resolver, store)
 	r := chi.NewRouter()
 	r.Route("/api/foods", func(r chi.Router) {
 		r.Get("/", h.List)
@@ -89,12 +98,130 @@ func TestFoodHandler_Create_MalformedJSON(t *testing.T) {
 
 func TestFoodHandler_Create_DuplicateName(t *testing.T) {
 	r := setupFoodRouter(t)
-	createLeaf(t, r, "Rice")
+	existingID := createLeaf(t, r, "Rice")
 
 	body := `{"name":"Rice","kind":"leaf"}`
 	resp := httptest.NewRecorder()
 	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods", bytes.NewBufferString(body)))
-	assert.Equal(t, http.StatusConflict, resp.Code)
+	require.Equal(t, http.StatusConflict, resp.Code)
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Equal(t, "error.food.duplicate_name", got["message_key"])
+	assert.Equal(t, float64(existingID), got["existing_id"])
+}
+
+func TestFoodHandler_Create_SourceURLAndDescription(t *testing.T) {
+	r := setupFoodRouter(t)
+	basilID := createLeaf(t, r, "Basil")
+	body := fmt.Sprintf(`{"name":"Pesto","kind":"composed","role":"sauce","reference_portions":4,`+
+		`"children":[{"child_id":%d,"amount":50,"unit":"g"}],`+
+		`"source_url":"https://example.com/pesto","description":"Basil sauce."}`, basilID)
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods", bytes.NewBufferString(body)))
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Equal(t, "https://example.com/pesto", got["source_url"])
+	assert.Equal(t, "Basil sauce.", got["description"])
+	assert.NotContains(t, got, "warnings")
+}
+
+func TestFoodHandler_Update_PreservesSourceURLWhenOmitted(t *testing.T) {
+	r := setupFoodRouter(t)
+	body := `{"name":"Apple","kind":"leaf","source_url":"https://example.com/apple","description":"Crisp."}`
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods", bytes.NewBufferString(body)))
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&created))
+	id := int64(created["id"].(float64))
+
+	// An editor that doesn't know the new fields must not wipe them.
+	resp = httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/foods/%d", id),
+		bytes.NewBufferString(`{"name":"Apple","kind":"leaf","kcal_100g":52}`)))
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Equal(t, "https://example.com/apple", got["source_url"])
+	assert.Equal(t, "Crisp.", got["description"])
+
+	// An explicit value replaces it.
+	resp = httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/foods/%d", id),
+		bytes.NewBufferString(`{"name":"Apple","kind":"leaf","description":"Sweet."}`)))
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	var updated map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&updated))
+	assert.Equal(t, "Sweet.", updated["description"])
+	assert.Equal(t, "https://example.com/apple", updated["source_url"])
+}
+
+func smallPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for x := range 4 {
+		for y := range 4 {
+			img.Set(x, y, color.RGBA{R: 200, G: 50, B: 50, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, img))
+	return buf.Bytes()
+}
+
+func TestFoodHandler_Create_ImageURL_Downloads(t *testing.T) {
+	data := smallPNG(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(data)
+	}))
+	defer srv.Close()
+
+	store, err := imagestore.New(t.TempDir(), srv.Client())
+	require.NoError(t, err)
+	r := setupFoodRouterWithStore(t, store)
+
+	body := fmt.Sprintf(`{"name":"Tomato","kind":"leaf","image_url":%q}`, srv.URL+"/tomato.png")
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods", bytes.NewBufferString(body)))
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	id := int64(got["id"].(float64))
+	assert.Equal(t, fmt.Sprintf("foods/%d.jpg", id), got["image_path"])
+	assert.NotContains(t, got, "warnings")
+
+	// Persisted, not just echoed.
+	resp = httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/foods/%d", id), nil))
+	require.Equal(t, http.StatusOK, resp.Code)
+	var reloaded map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&reloaded))
+	assert.Equal(t, got["image_path"], reloaded["image_path"])
+}
+
+func TestFoodHandler_Create_ImageURL_DownloadFailsStillCreates(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	defer srv.Close()
+
+	store, err := imagestore.New(t.TempDir(), srv.Client())
+	require.NoError(t, err)
+	r := setupFoodRouterWithStore(t, store)
+
+	body := fmt.Sprintf(`{"name":"Tomato","kind":"leaf","image_url":%q}`, srv.URL+"/missing.png")
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods", bytes.NewBufferString(body)))
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.NotZero(t, got["id"])
+	assert.NotContains(t, got, "image_path")
+	assert.Equal(t, []any{"image_download_failed"}, got["warnings"])
 }
 
 func TestFoodHandler_Create_InvalidKind(t *testing.T) {

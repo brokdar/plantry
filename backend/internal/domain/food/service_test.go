@@ -26,6 +26,11 @@ func (r *fakeRepo) Get(_ context.Context, _ int64) (*food.Food, error) {
 	}
 	return &food.Food{Kind: food.KindLeaf}, nil
 }
+
+func (r *fakeRepo) LeafIDByName(_ context.Context, _ string) (int64, error) {
+	return 0, domain.ErrNotFound
+}
+
 func (r *fakeRepo) Update(_ context.Context, _ *food.Food) error { return nil }
 func (r *fakeRepo) Delete(_ context.Context, _ int64) error      { return nil }
 func (r *fakeRepo) List(_ context.Context, q food.ListQuery) (*food.ListResult, error) {

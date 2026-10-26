@@ -40,6 +40,7 @@ var foodCols = []string{
 	"variant_group_id", "reference_portions", "prep_minutes", "cook_minutes",
 	"notes", "image_path", "favorite", "last_cooked_at", "cook_count",
 	"created_at", "updated_at",
+	"source_url", "description",
 }
 
 // FoodRepo implements food.Repository backed by SQLite.
@@ -108,6 +109,17 @@ func (r *FoodRepo) Get(ctx context.Context, id int64) (*food.Food, error) {
 		f.Portions = portions
 	}
 	return &f, nil
+}
+
+func (r *FoodRepo) LeafIDByName(ctx context.Context, name string) (int64, error) {
+	id, err := r.q.GetLeafFoodIDByName(ctx, name)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("%w: leaf %q", domain.ErrNotFound, name)
+		}
+		return 0, err
+	}
+	return id, nil
 }
 
 func (r *FoodRepo) Update(ctx context.Context, f *food.Food) error {
@@ -637,6 +649,8 @@ func foodCreateParams(f *food.Food) sqlcgen.CreateFoodParams {
 		CookMinutes:       toNullInt64FromIntPtr(f.CookMinutes),
 		Notes:             toNullString(f.Notes),
 		Favorite:          fav,
+		SourceUrl:         toNullString(f.SourceURL),
+		Description:       toNullString(f.Description),
 	}
 }
 
@@ -682,6 +696,8 @@ func foodUpdateParams(f *food.Food) sqlcgen.UpdateFoodParams {
 		CookMinutes:       toNullInt64FromIntPtr(f.CookMinutes),
 		Notes:             toNullString(f.Notes),
 		Favorite:          fav,
+		SourceUrl:         toNullString(f.SourceURL),
+		Description:       toNullString(f.Description),
 	}
 }
 
@@ -721,6 +737,8 @@ func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {
 	f.PrepMinutes = fromNullInt64ToIntPtr(row.PrepMinutes)
 	f.CookMinutes = fromNullInt64ToIntPtr(row.CookMinutes)
 	f.Notes = fromNullString(row.Notes)
+	f.SourceURL = fromNullString(row.SourceUrl)
+	f.Description = fromNullString(row.Description)
 	f.ImagePath = fromNullString(row.ImagePath)
 	f.Favorite = row.Favorite != 0
 	f.CookCount = int(row.CookCount)
@@ -779,6 +797,7 @@ func scanFoodRow(rows *sql.Rows) (*sqlcgen.Food, error) {
 		&row.VariantGroupID, &row.ReferencePortions, &row.PrepMinutes, &row.CookMinutes,
 		&row.Notes, &row.ImagePath, &row.Favorite, &row.LastCookedAt, &row.CookCount,
 		&row.CreatedAt, &row.UpdatedAt,
+		&row.SourceUrl, &row.Description,
 	); err != nil {
 		return nil, err
 	}

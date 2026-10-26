@@ -101,6 +101,74 @@ func TestFoodRepo_NullableRoundtrip(t *testing.T) {
 	assert.Nil(t, got.Kcal100g)
 }
 
+func TestFoodRepo_SourceURLDescription_RoundTrip(t *testing.T) {
+	repo := newFoodRepo(t)
+	ctx := context.Background()
+
+	f := &food.Food{
+		Name:              "Pesto",
+		Kind:              food.KindComposed,
+		Role:              ptrR(food.RoleSauce),
+		ReferencePortions: ptrF(4),
+		SourceURL:         ptrS("https://example.com/pesto"),
+		Description:       ptrS("Classic Genovese pesto."),
+	}
+	require.NoError(t, repo.Create(ctx, f))
+	require.NotNil(t, f.SourceURL, "Create must map returned row")
+
+	got, err := repo.Get(ctx, f.ID)
+	require.NoError(t, err)
+	require.NotNil(t, got.SourceURL)
+	require.NotNil(t, got.Description)
+	assert.Equal(t, "https://example.com/pesto", *got.SourceURL)
+	assert.Equal(t, "Classic Genovese pesto.", *got.Description)
+
+	listed, err := repo.List(ctx, food.ListQuery{Limit: 10, SortBy: "name"})
+	require.NoError(t, err)
+	require.Len(t, listed.Items, 1)
+	require.NotNil(t, listed.Items[0].SourceURL)
+	assert.Equal(t, "https://example.com/pesto", *listed.Items[0].SourceURL)
+
+	byID, err := repo.LookupByIDs(ctx, []int64{f.ID})
+	require.NoError(t, err)
+	require.NotNil(t, byID[f.ID].Description)
+	assert.Equal(t, "Classic Genovese pesto.", *byID[f.ID].Description)
+
+	// Clear both back to null.
+	got.SourceURL = nil
+	got.Description = nil
+	require.NoError(t, repo.Update(ctx, got))
+	cleared, err := repo.Get(ctx, f.ID)
+	require.NoError(t, err)
+	assert.Nil(t, cleared.SourceURL)
+	assert.Nil(t, cleared.Description)
+}
+
+func TestFoodRepo_SourceURLDescription_NullOnCreate(t *testing.T) {
+	repo := newFoodRepo(t)
+	ctx := context.Background()
+
+	id := createTestLeaf(t, repo, "Salt")
+	got, err := repo.Get(ctx, id)
+	require.NoError(t, err)
+	assert.Nil(t, got.SourceURL)
+	assert.Nil(t, got.Description)
+}
+
+func TestFoodRepo_LeafIDByName(t *testing.T) {
+	repo := newFoodRepo(t)
+	ctx := context.Background()
+
+	id := createTestLeaf(t, repo, "Rice")
+
+	got, err := repo.LeafIDByName(ctx, "Rice")
+	require.NoError(t, err)
+	assert.Equal(t, id, got)
+
+	_, err = repo.LeafIDByName(ctx, "Quinoa")
+	assert.True(t, errors.Is(err, domain.ErrNotFound))
+}
+
 func TestFoodRepo_Composed_RoundTrip(t *testing.T) {
 	repo := newFoodRepo(t)
 	ctx := context.Background()
