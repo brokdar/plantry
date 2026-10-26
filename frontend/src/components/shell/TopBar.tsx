@@ -3,6 +3,7 @@ import { Settings } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { cn } from "@/lib/utils"
+import { GeneratePlanButton } from "./GeneratePlanButton"
 
 type TopBarProps = {
   leading?: React.ReactNode
@@ -25,6 +26,7 @@ export function TopBar({ leading, trailing, className }: TopBarProps) {
       <div className="flex flex-1 items-center gap-4">{leading}</div>
       <div className="flex items-center gap-2">
         {trailing}
+        <GeneratePlanButton variant="compact" />
         {/* Phone only: the rail carries Settings from 768 px up (UX §2.1). */}
         <Link
           to="/settings"

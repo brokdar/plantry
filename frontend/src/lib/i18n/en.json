@@ -19,7 +19,9 @@
     "archive": "Archive",
     "primary": "Primary",
     "go_to": "Go to",
-    "recipes_sections": "Recipe sections"
+    "recipes_sections": "Recipe sections",
+    "generate_locked_one": "Add {{count}} more recipe to start planning",
+    "generate_locked_other": "Add {{count}} more recipes to start planning"
   },
   "calendar": {
     "title": "Calendar",
@@ -844,7 +846,20 @@
     "source_url": "Source URL",
     "source_url_placeholder": "https://…",
     "description": "Description",
-    "description_hint": "Text that came with the recipe. Shown muted below your notes."
+    "description_hint": "Text that came with the recipe. Shown muted below your notes.",
+    "guide": {
+      "label": "Get started with recipes",
+      "progress": "{{count}} of {{target}} recipes. Plantry needs {{target}} to plan a varied week.",
+      "progress_value": "{{count}} of {{target}} recipes",
+      "progress_label": "Recipes collected",
+      "import_title": "Import from a link",
+      "import_body": "Paste the link to a recipe page and Plantry reads the ingredients and steps. This is the fastest way to fill your cookbook.",
+      "import_action": "Import a recipe",
+      "create_title": "Create manually",
+      "create_body": "Type in a recipe you know by heart, one ingredient at a time. For your own take on a saved recipe, open it and create a variant.",
+      "create_action": "Create a recipe",
+      "milestone": "{{count}} recipes. You're ready to plan your first week."
+    }
   },
   "lookup": {
     "title": "Find ingredient",
