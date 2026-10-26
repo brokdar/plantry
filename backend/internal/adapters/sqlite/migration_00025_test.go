@@ -204,6 +204,25 @@ func TestMigration00025_DuplicatesMergeIntoLowestID(t *testing.T) {
 	assert.Equal(t, 1, other)
 }
 
+func TestMigration00025_MergeKeepsFirstNonNullNote(t *testing.T) {
+	conn := setupMigration25DB(t)
+	seedPlate25(t, conn, 5, "2026-05-04", false, nil)
+	seedPlate25(t, conn, 6, "2026-05-04", false, nil)
+	seedPlate25(t, conn, 7, "2026-05-04", false, strPtr25("seven"))
+	seedPlate25(t, conn, 8, "2026-05-04", false, strPtr25("eight"))
+	mustExec(t, conn, `INSERT INTO plate_feedback (plate_id, status) VALUES (7, 'loved')`)
+
+	require.NoError(t, goose.UpTo(conn, "migrations", 25))
+
+	assert.Equal(t, []int64{5}, plateIDs25(t, conn))
+	var note sql.NullString
+	require.NoError(t, conn.QueryRow(`SELECT note FROM plates WHERE id = 5`).Scan(&note))
+	assert.Equal(t, sql.NullString{String: "seven", Valid: true}, note, "the survivor takes the first non-null duplicate note")
+	var fb int
+	require.NoError(t, conn.QueryRow(`SELECT COUNT(*) FROM plate_feedback`).Scan(&fb))
+	assert.Equal(t, 0, fb, "feedback stays survivor-only")
+}
+
 func TestMigration00025_ColumnDroppedAndCellUnique(t *testing.T) {
 	conn := setupMigration25DB(t)
 	require.NoError(t, goose.UpTo(conn, "migrations", 25))

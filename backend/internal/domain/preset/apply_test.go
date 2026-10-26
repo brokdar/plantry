@@ -2,6 +2,8 @@ package preset_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -174,6 +177,63 @@ func TestCopyWeek_OnlyNoneOverrides(t *testing.T) {
 }
 
 func ptrStr(s string) *string { return &s }
+
+// failingAvailability wraps the real availability service and fails
+// SetNoneIfUnset for the cells in setErrs.
+type failingAvailability struct {
+	*availability.Service
+	setErrs map[string]error // key: YYYY-MM-DD
+}
+
+func (f failingAvailability) SetNoneIfUnset(ctx context.Context, date time.Time, slotID int64, note *string) (bool, error) {
+	if err, ok := f.setErrs[date.Format("2006-01-02")]; ok {
+		return false, err
+	}
+	return f.Service.SetNoneIfUnset(ctx, date, slotID, note)
+}
+
+func TestCopyWeek_OverrideCopyIsBestEffort(t *testing.T) {
+	e := newApplyTestEnv(t)
+	src := time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC)
+	tgt := src.AddDate(0, 0, 7)
+	e.leafPlate(t, src)
+	for i := 1; i <= 3; i++ {
+		e.setNone(t, src.AddDate(0, 0, i), nil)
+	}
+	e.presetSvc.WithAvailability(failingAvailability{Service: e.availSvc, setErrs: map[string]error{
+		tgt.AddDate(0, 0, 1).Format("2006-01-02"): fmt.Errorf("race: %w", domain.ErrCellHasPlate),
+		tgt.AddDate(0, 0, 2).Format("2006-01-02"): errors.New("disk on fire"),
+	}})
+
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: src, TargetStart: tgt})
+	require.NoError(t, err, "a failed override copy must not lose the undo snapshot")
+
+	require.Len(t, res.Snapshot.CreatedPlateIDs, 1)
+	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 1), SlotID: e.slotID}}, res.SkippedOccupied,
+		"a plate that appeared in the cell is reported as occupied")
+	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 3), SlotID: e.slotID}}, res.Snapshot.CreatedOverrides,
+		"only overrides that were written are in the snapshot")
+	assert.Equal(t, availability.ModePlan, e.cell(t, tgt.AddDate(0, 0, 2)).Mode)
+}
+
+func TestUndoApply_PlateFailureKeepsOverrides(t *testing.T) {
+	e := newApplyTestEnv(t)
+	d := time.Date(2026, 4, 14, 0, 0, 0, 0, time.UTC)
+	e.setNone(t, d, nil)
+
+	err := e.presetSvc.UndoApply(e.ctx, preset.ApplySnapshot{
+		// The slot does not exist, so restoring the plate fails.
+		ReplacedPlates:   []plate.Plate{{Date: d.AddDate(0, 0, 1), SlotID: 99999}},
+		CreatedOverrides: []preset.SkipItem{{Date: d, SlotID: e.slotID}},
+	})
+	require.Error(t, err)
+	assert.Equal(t, availability.ModeNone, e.cell(t, d).Mode, "overrides stay when the plate undo fails, so a retry is safe")
+
+	require.NoError(t, e.presetSvc.UndoApply(e.ctx, preset.ApplySnapshot{
+		CreatedOverrides: []preset.SkipItem{{Date: d, SlotID: e.slotID}},
+	}))
+	assert.Equal(t, availability.ModePlan, e.cell(t, d).Mode)
+}
 
 func mkLeafComp(foodID int64, amount float64) preset.Component {
 	unit := "g"

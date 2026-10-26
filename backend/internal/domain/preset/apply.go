@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"time"
@@ -333,12 +334,19 @@ func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResu
 		return nil, err
 	}
 
-	// The plates are committed; now write the copied overrides. A failure here
-	// leaves the copied plates in place, and the error tells the caller.
+	// The plates are committed, so the result (and its undo snapshot) must
+	// reach the caller: copying an override is best-effort. A cell that
+	// gained a plate meanwhile is reported as occupied; other failures are
+	// logged and the cell is left as it was.
 	for _, c := range toMark {
 		created, err := s.avail.SetNoneIfUnset(ctx, c.Date, c.SlotID, c.Note)
 		if err != nil {
-			return nil, fmt.Errorf("copy no-plate cell %s slot %d: %w", c.Date.Format("2006-01-02"), c.SlotID, err)
+			slog.WarnContext(ctx, "copy_week.override_copy_failed",
+				"date", c.Date.Format("2006-01-02"), "slot_id", c.SlotID, "error", err)
+			if errors.Is(err, domain.ErrCellHasPlate) {
+				result.SkippedOccupied = append(result.SkippedOccupied, SkipItem{Date: c.Date, SlotID: c.SlotID})
+			}
+			continue
 		}
 		if created {
 			result.Snapshot.CreatedOverrides = append(result.Snapshot.CreatedOverrides, SkipItem{Date: c.Date, SlotID: c.SlotID})
@@ -382,17 +390,26 @@ func (s *Service) sourceNoPlateCells(ctx context.Context, start time.Time, activ
 	return out, nil
 }
 
-// UndoApply reverses a previous Apply or CopyWeek by clearing the overrides
-// it created, deleting the plates it created and restoring the plates it
-// replaced.
+// UndoApply reverses a previous Apply or CopyWeek by deleting the plates it
+// created, restoring the plates it replaced and then clearing the overrides
+// it created. The plates go first, so a failed plate undo leaves the
+// overrides intact; clearing is idempotent, so a retry is safe.
 func (s *Service) UndoApply(ctx context.Context, snap ApplySnapshot) error {
-	if s.avail != nil {
-		for _, c := range snap.CreatedOverrides {
-			if err := s.avail.ClearOverride(ctx, c.Date, c.SlotID); err != nil {
-				return fmt.Errorf("clear copied override (date=%s slot=%d): %w", c.Date.Format("2006-01-02"), c.SlotID, err)
-			}
+	if err := s.undoPlates(ctx, snap); err != nil {
+		return err
+	}
+	if s.avail == nil {
+		return nil
+	}
+	for _, c := range snap.CreatedOverrides {
+		if err := s.avail.ClearOverride(ctx, c.Date, c.SlotID); err != nil {
+			return fmt.Errorf("clear copied override (date=%s slot=%d): %w", c.Date.Format("2006-01-02"), c.SlotID, err)
 		}
 	}
+	return nil
+}
+
+func (s *Service) undoPlates(ctx context.Context, snap ApplySnapshot) error {
 	return s.tx.RunInPresetTx(ctx, func(_ Repository, plates plate.Repository) error {
 		// Delete the plates that the apply created. Order doesn't matter; FK
 		// cascade handles components.

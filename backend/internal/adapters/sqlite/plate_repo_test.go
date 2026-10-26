@@ -142,20 +142,37 @@ func TestPlatesRepo_GetByCell(t *testing.T) {
 	assert.Equal(t, d, got.Date)
 }
 
-func TestPlatesRepo_SecondPlateInCellIsOccupied(t *testing.T) {
-	db := testhelper.NewTestDB(t)
+// TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied writes straight through
+// the repo, with no service pre-check, so the insert or update hits
+// ux_plates_date_slot the way a lost race would. Both the standalone repo
+// and the tx-bound repo (used by preset apply) map it to ErrCellOccupied.
+func TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied(t *testing.T) {
 	ctx := context.Background()
-	slotID := seedSlot(t, db)
-	repo := NewPlateRepo(db)
 	d1 := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
 	d2 := d1.AddDate(0, 0, 1)
 
-	require.NoError(t, repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID}))
-	err := repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID})
-	require.ErrorIs(t, err, domain.ErrCellOccupied, "create")
+	run := func(t *testing.T, repo *PlateRepo, slotID int64) {
+		t.Helper()
+		require.NoError(t, repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID}))
+		err := repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID})
+		require.ErrorIs(t, err, domain.ErrCellOccupied, "create")
 
-	other := &plate.Plate{Date: d2, SlotID: slotID}
-	require.NoError(t, repo.Create(ctx, other))
-	other.Date = d1
-	require.ErrorIs(t, repo.Update(ctx, other), domain.ErrCellOccupied, "update")
+		other := &plate.Plate{Date: d2, SlotID: slotID}
+		require.NoError(t, repo.Create(ctx, other))
+		other.Date = d1
+		require.ErrorIs(t, repo.Update(ctx, other), domain.ErrCellOccupied, "update")
+	}
+
+	t.Run("standalone repo", func(t *testing.T) {
+		db := testhelper.NewTestDB(t)
+		run(t, NewPlateRepo(db), seedSlot(t, db))
+	})
+	t.Run("tx-bound repo", func(t *testing.T) {
+		db := testhelper.NewTestDB(t)
+		slotID := seedSlot(t, db)
+		tx, err := db.BeginTx(ctx, nil)
+		require.NoError(t, err)
+		defer func() { _ = tx.Rollback() }()
+		run(t, newPlateRepoTx(tx), slotID)
+	})
 }

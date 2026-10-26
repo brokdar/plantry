@@ -80,7 +80,9 @@ type plateCell struct {
 // mergeDuplicatePlates re-parents the components of every extra plate in a
 // cell onto the cell's lowest-id plate, appending them after the survivor's
 // components in (plate id, sort_order, id) order, and deletes the extras
-// (cascading their feedback). It returns the number of plates deleted.
+// (cascading their feedback). The survivor keeps its note, or takes the
+// first non-null note of the extras when it has none. It returns the number
+// of plates deleted.
 func mergeDuplicatePlates(ctx context.Context, tx *sql.Tx) (int64, error) {
 	cells, err := queryCells(ctx, tx)
 	if err != nil {
@@ -93,6 +95,17 @@ func mergeDuplicatePlates(ctx context.Context, tx *sql.Tx) (int64, error) {
 			c.date, c.slotID, c.survivor)
 		if err != nil {
 			return 0, fmt.Errorf("list duplicates of plate %d: %w", c.survivor, err)
+		}
+		// A survivor without a note takes the first non-null note of its
+		// duplicates, by id.
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE plates SET note = (
+				SELECT d.note FROM plates d
+				WHERE d.date = ? AND d.slot_id = ? AND d.id <> ? AND d.note IS NOT NULL
+				ORDER BY d.id LIMIT 1)
+			WHERE id = ? AND note IS NULL`,
+			c.date, c.slotID, c.survivor, c.survivor); err != nil {
+			return 0, fmt.Errorf("merge note into plate %d: %w", c.survivor, err)
 		}
 		var next int64
 		if err := tx.QueryRowContext(ctx,
