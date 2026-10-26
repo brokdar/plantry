@@ -72,7 +72,7 @@ docker compose up --build
 Open [http://localhost:8080](http://localhost:8080).
 
 > [!NOTE]
-> Data is persisted in a Docker volume (`plantry-data`). The SQLite database lives at `/data/plantry.db` inside the container.
+> Data is persisted in a Docker volume (`plantry-data`). The SQLite database lives at `/data/plantry.db` inside the container, next to `secret.key` (see below).
 
 ---
 
@@ -89,9 +89,12 @@ All configuration is via environment variables. Set them in `docker-compose.yml`
 | `PLANTRY_AI_PROVIDER` | — | `openai` or `anthropic` (optional) |
 | `PLANTRY_AI_MODEL` | — | Model name for chosen provider |
 | `PLANTRY_AI_API_KEY` | — | API key for the AI provider |
-| `PLANTRY_AUTH_PASSWORD` | — | Single-password gate for household deployments (optional) |
+| `PLANTRY_SECRET_KEY` | auto-generated | Key that encrypts API keys saved in the UI (optional, at least 32 chars) |
+| `PLANTRY_OFF_DISABLED` | `false` | Skip Open Food Facts lookups (used by the e2e tests) |
 
 AI features are entirely optional. Plantry is fully usable without an API key.
+
+API keys entered in Settings are stored encrypted in the database. On first start Plantry generates a random key (64 hex chars) and saves it as `secret.key` next to the database, mode 0600. Keep that file with the database: without it, stored API keys cannot be decrypted. Setting `PLANTRY_SECRET_KEY` overrides the file, and no file is written.
 
 ---
 
@@ -153,7 +156,7 @@ plantry/
 
 **Backend:** hexagonal-lite — domain (pure Go, no DB/HTTP), adapters (infrastructure), transport (HTTP translation). Aggregates are plain exported structs; services hold all business logic.
 
-**Frontend:** TanStack Router with file-based auto code-splitting; TanStack Query for server state; Tailwind v4 OKLch tokens for the botanical visual theme.
+**Frontend:** TanStack Router with file-based auto code-splitting; TanStack Query for server state; Tailwind v4 with CSS-variable design tokens.
 
 **Database:** Single SQLite file, WAL mode, managed by goose migrations. `sqlc` generates compile-time type-safe query code. After any schema or query change, run `sqlc generate`.
 
@@ -176,16 +179,16 @@ plantry/
 
 ## Design tokens
 
-The UI uses a botanical OKLch theme — sage green, warm amber, soft off-white:
+The UI uses the "Cookbook" palette: a paper-white ground, ink-blue accent, and six earthy batch colours. Headings use Newsreader, everything else Source Sans 3.
 
 ```css
---primary:    oklch(0.55 0.08 145);   /* sage green  */
---accent:     oklch(0.88 0.06 75);    /* warm amber  */
---background: oklch(0.98 0.01 85);    /* warm off-white */
---foreground: oklch(0.22 0.02 145);   /* deep moss   */
+--ground:  #FBFBFA;   /* page background */
+--ink:     #1C2233;   /* primary text    */
+--accent:  #27407A;   /* actions, focus  */
+--line:    #E3E5EA;   /* borders         */
 ```
 
-Authoritative token source: `frontend/src/index.css`.
+Full token list (light and dark): `docs/UX_DESIGN_SPEC.md` §3. Authoritative source: `frontend/src/index.css`.
 
 ---
 

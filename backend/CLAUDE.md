@@ -98,8 +98,36 @@ All optional unless noted. Prefix: `PLANTRY_`.
 | `AI_API_KEY` | — | **Required** for `openai` / `anthropic` |
 | `AI_RATE_LIMIT_PER_MIN` | `10` | AI request rate cap |
 | `AI_FAKE_SCRIPT` | — | JSON script path; **required** for `fake` provider |
-| `SECRET_KEY` | — | 32-char hex; enables DB encryption for stored API keys |
+| `SECRET_KEY` | `<dir of DB_PATH>/secret.key` | Encrypts API keys stored in the DB. Any string ≥ 32 chars (`crypto.MinSecretLen`) |
 | `DEV_MODE` | `false` | Exposes debug-only endpoints |
+| `OFF_DISABLED` | `false` | Skip Open Food Facts lookups (hermetic e2e runs) |
+
+**Secret key.** `config.EnsureSecretKey` runs at startup. If `PLANTRY_SECRET_KEY` is set it wins and no file is written. Otherwise the key is read from `secret.key` next to the database (`filepath.Dir(PLANTRY_DB_PATH)`), or generated there on first start: 32 random bytes as 64 hex chars, mode 0600. A key file shorter than 32 chars fails startup. In Docker the `/data` volume holds both the DB and the key; losing the key makes stored API keys undecryptable. `crypto.NilCipher` exists only for tests.
+
+## AI run log
+
+Migration `00021_ai_runs.sql`, package `domain/airun`, repo `adapters/sqlite/ai_run_repo.go`. Every LLM call goes through the metered client (`Recorder.Meter`, wrapped around each client in the `llmFactory` closure in `main.go`), so nothing reaches a provider unrecorded.
+
+- **`ai_runs`** — one row per user-visible AI action.
+  - `kind`: `chat`, `lookup` (food-lookup translate and pick-best), `import_fallback`; `generate`, `regenerate`, `discovery`, `classify` are reserved for later phases. `untracked` marks a metered call made without a started run — a call site that forgot `Recorder.Start`.
+  - `status`: `running` until finished, then `ok` / `error` / `iterations_exceeded` / `cancelled` / `partial`. `error_key` holds the message key on failure.
+  - `provider`, `model`, `prompt_version` (the `PromptVersion` const of the agent, `food` or `importer` package — bump it on every prompt change), `prompt_hash` → `ai_prompts`.
+  - Token totals summed over all calls: `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`; `iterations`.
+  - `window_start`/`window_end`/`instruction` are set for chat; the scoring/outcome columns (`scope_json`, `chooser`, `violations_json`, `score_json`, `judge_json`, `outcome*`, `repair_attempts`) are reserved.
+- **`ai_run_steps`** — one row per LLM call (`type = 'llm_call'`, `name` = model, per-call tokens) or agent tool call (`type = 'tool_call'`, `name` = tool, `args_json`, `result_json` capped at 8 KB, `is_error`), ordered by `seq`, with `duration_ms`.
+- **`ai_prompts`** — system prompt text stored once per distinct hash.
+- **Cost is not stored.** It is computed from tokens on read (Phase 3). There is no runs API yet; slog also emits `ai.run.start` / `ai.run.end` with `run_id`.
+
+Query it with the `sqlite3` CLI if installed, otherwise Python's stdlib `sqlite3` module (the path is `PLANTRY_DB_PATH`):
+
+```bash
+sqlite3 /data/plantry.db "SELECT id, kind, status, model, input_tokens, output_tokens, started_at FROM ai_runs ORDER BY id DESC LIMIT 20"
+
+python3 -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); [print(r) for r in c.execute("SELECT id, kind, status, model, input_tokens, output_tokens, started_at FROM ai_runs ORDER BY id DESC LIMIT 20")]' /data/plantry.db
+
+# steps of one run
+sqlite3 /data/plantry.db "SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens FROM ai_run_steps WHERE run_id = 42 ORDER BY seq"
+```
 
 ## Key Dependencies
 
@@ -136,6 +164,10 @@ Every feature must cover happy path **and** edge cases before it's complete:
 - Input sanitization: FTS operators, SQL-sensitive chars, unicode
 - Nullable roundtrips: create with value → update to null → verify null
 - HTTP edge cases: malformed JSON, non-numeric IDs, invalid query params
+
+## Worktrees
+
+Inside `.claude/worktrees/*`, prefix Go commands with `GOWORK=off` (e.g. `GOWORK=off go test ./...`). The root `go.work` created by `mise run lsp` lists only the main checkout's `./backend`, so without it Go fails with "directory prefix . does not contain modules listed in go.work".
 
 ## SQLite Gotchas
 

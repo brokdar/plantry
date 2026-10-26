@@ -14,7 +14,6 @@ services:
       PLANTRY_AI_PROVIDER: "${PLANTRY_AI_PROVIDER:-}"
       PLANTRY_AI_MODEL: "${PLANTRY_AI_MODEL:-}"
       PLANTRY_AI_API_KEY: "${PLANTRY_AI_API_KEY:-}"
-      PLANTRY_AUTH_PASSWORD: "${PLANTRY_AUTH_PASSWORD:-}"
     volumes:
       - plantry-data:/data
     restart: unless-stopped

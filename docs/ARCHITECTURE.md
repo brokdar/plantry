@@ -67,26 +67,9 @@ This document is the technical contract for the Plantry redesign. It defines the
 | e2e tests        | Playwright                               | Mature, trace viewer, multi-browser                    |
 | Package manager  | Bun                                      | Fast installs, lockfile convention                     |
 
-### Colors (kept from current design)
+### Colors
 
-OKLch-based botanical theme, sage green primary. The following tokens are authoritative:
-
-```
---primary:    oklch(0.55 0.08 145)   /* sage green ~ #4a654d */
---secondary:  oklch(0.92 0.03 145)
---accent:     oklch(0.88 0.06 75)    /* warm amber */
---background: oklch(0.98 0.01 85)    /* warm off-white */
---foreground: oklch(0.22 0.02 145)   /* deep moss */
---muted:      oklch(0.94 0.02 85)
---border:     oklch(0.88 0.02 110)
---destructive: oklch(0.55 0.18 25)
---chart-protein: oklch(0.62 0.12 25)
---chart-carbs:   oklch(0.72 0.10 85)
---chart-fat:     oklch(0.66 0.11 55)
---chart-fiber:   oklch(0.55 0.08 145)
-```
-
-Dark mode mirrors with inverted lightness. Full token list lives in `frontend/src/routes/layout.css`.
+The "Cookbook" palette (paper-white ground, ink-blue accent, six batch colours) with Newsreader headings and Source Sans 3 for UI. Tokens and values: `docs/UX_DESIGN_SPEC.md` §3. Implementation: `frontend/src/index.css`, where the older shadcn and Material token names are aliased onto the new ones.
 
 ### Deployment
 
@@ -105,7 +88,7 @@ PLANTRY_FDC_API_KEY=            # optional
 PLANTRY_AI_PROVIDER=            # openai | anthropic | (empty)
 PLANTRY_AI_MODEL=
 PLANTRY_AI_API_KEY=
-PLANTRY_AUTH_PASSWORD=          # optional single password gate
+PLANTRY_SECRET_KEY=             # optional; default: generated into /data/secret.key
 PLANTRY_LOG_LEVEL=info
 ```
 
@@ -1103,7 +1086,7 @@ Repositories expose both `Create` (auto-tx) and `CreateTx(tx, ...)` variants. Se
 
 ### 9.4 Auth
 
-Optional. If `PLANTRY_AUTH_PASSWORD` is set, a middleware requires either a session cookie (set via `POST /api/auth/login`) or a `X-Plantry-Password` header. No user system; a single shared password is the household model. Sessions are signed cookies with HMAC, no server-side store.
+None. Plantry is a single-user app on a trusted LAN; there is no login, session or password gate. Put it behind a reverse proxy with auth if it must be reachable from outside the LAN.
 
 ### 9.5 Rate limiting
 
@@ -1113,6 +1096,7 @@ Token bucket on the LLM chat endpoint (default 10 req/min per IP) to prevent run
 
 - `/api/health` returns `{status, version, db_ok}`.
 - Request logs via slog.
+- AI run log: every LLM call is recorded in `ai_runs` / `ai_run_steps` (kind, status, model, prompt version, tokens, per-call steps). Schema and example queries: `backend/CLAUDE.md` ("AI run log").
 - Optional Prometheus endpoint `/metrics` gated by env flag (deferred past v1 unless trivial).
 
 ### 9.7 i18n

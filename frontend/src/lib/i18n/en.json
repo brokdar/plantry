@@ -414,7 +414,7 @@
       "provider_none": "Disabled",
       "provider_fake": "Fake (testing)",
       "api_key_label": "API key",
-      "api_key_description": "Your provider API key. Stored encrypted at rest when PLANTRY_SECRET_KEY is set.",
+      "api_key_description": "Your provider API key. Stored encrypted at rest with a key generated in the data directory (or PLANTRY_SECRET_KEY, if set).",
       "api_key_stored": "A key is already stored ({{preview}}). Enter a new value to replace it.",
       "api_key_placeholder": "sk-…",
       "api_key_placeholder_replace": "Enter a new key to replace the stored one",
@@ -430,8 +430,8 @@
       "rate_limit_description": "Maximum /api/ai/chat requests per minute per IP. 0 disables limiting.",
       "fake_script_label": "Fake provider script",
       "fake_script_description": "Only used when provider = Fake. Path to a JSONL file of scripted replies.",
-      "secret_key_banner_title": "PLANTRY_SECRET_KEY is not set",
-      "secret_key_banner_body": "Set the PLANTRY_SECRET_KEY environment variable to enable editing API keys in the UI. Keys provided via environment variables continue to work without it.",
+      "secret_key_banner_title": "Encryption key unavailable",
+      "secret_key_banner_body": "API keys cannot be saved in the UI because no encryption key is loaded. Plantry generates one in the data directory on startup; PLANTRY_SECRET_KEY is optional. Keys provided via environment variables continue to work.",
       "wizard": {
         "step1_title": "Pick a provider",
         "step1_description": "Choose which model provider should power the meal-planning assistant.",
@@ -463,7 +463,7 @@
       "env_tooltip": "Set via {{envVar}}. Restart required to change.",
       "restart_required": "Restart required",
       "secret_key_banner_title": "Encryption disabled",
-      "secret_key_banner_body": "PLANTRY_SECRET_KEY is not set — API keys cannot be saved through the UI until it is configured."
+      "secret_key_banner_body": "No encryption key is loaded — API keys cannot be saved through the UI. Plantry generates one in the data directory on startup; PLANTRY_SECRET_KEY is optional."
     }
   },
   "settings": {
@@ -987,7 +987,7 @@
       "readonly_key": "This setting can only be changed via environment variable.",
       "invalid_value": "Invalid value for this setting.",
       "invalid_api_key": "The API key was not accepted. Double-check it and try again.",
-      "secret_key_missing": "PLANTRY_SECRET_KEY is not set — cannot save encrypted values.",
+      "secret_key_missing": "No encryption key is loaded — cannot save encrypted values.",
       "unknown_provider": "Unknown AI provider."
     }
   },
