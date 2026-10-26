@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -331,6 +332,20 @@ func TestMeter_InnerErrorIdentityPreserved(t *testing.T) {
 	_, finishes, _, _ := store.snapshot()
 	if len(finishes) != 1 || finishes[0].Status != airun.StatusError {
 		t.Errorf("finishes = %+v; want one untracked error run", finishes)
+	}
+}
+
+func TestMeter_UntrackedCancelledCallFinishesCancelled(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	cancelErr := fmt.Errorf("stream: %w", context.Canceled)
+	_, err := drainStream(context.Background(), rec.Meter(errClient{cancelErr}, "openai"), llm.Request{Model: "m"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v; want context.Canceled", err)
+	}
+	_, finishes, _, _ := store.snapshot()
+	if len(finishes) != 1 || finishes[0].Status != airun.StatusCancelled {
+		t.Errorf("finishes = %+v; want one untracked cancelled run", finishes)
 	}
 }
 

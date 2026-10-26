@@ -38,7 +38,10 @@ func (m *meteredClient) Stream(ctx context.Context, req llm.Request, out chan<- 
 
 	if implicit {
 		status := StatusOK
-		if err != nil {
+		switch {
+		case errors.Is(err, context.Canceled):
+			status = StatusCancelled
+		case err != nil:
 			status = StatusError
 		}
 		run.Finish(ctx, status, "")

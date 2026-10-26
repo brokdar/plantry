@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -431,10 +432,12 @@ func (h *FoodHandler) saveImageFromURL(r *http.Request, f *food.Food, imageURL s
 	}
 	imgPath, err := h.store.SaveFromURL(r.Context(), imageURL, "foods", f.ID)
 	if err != nil {
+		slog.WarnContext(r.Context(), "food image download failed", "food_id", f.ID, "err", err)
 		return false
 	}
 	f.ImagePath = &imgPath
 	if err := h.svc.Update(r.Context(), f); err != nil {
+		slog.WarnContext(r.Context(), "food image path update failed", "food_id", f.ID, "err", err)
 		// The row doesn't reference the file, so don't leave it orphaned.
 		_ = h.store.Delete("foods", f.ID)
 		f.ImagePath = nil
