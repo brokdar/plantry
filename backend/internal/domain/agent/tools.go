@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"math"
 	"strings"
 	"time"
 
@@ -172,7 +174,7 @@ func toolListFoods(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "list_foods",
-		Description: "List foods in the library. A food is either a LEAF (single edible item with direct nutrition — apple, rice, chicken) or COMPOSED (built from child foods — curry, schnitzel). Filter by kind, role, tag, or search substring. Use this to find a food by name before referencing it by id.",
+		Description: "List foods in the library. A food is either a LEAF (single edible item with direct nutrition — apple, rice, chicken) or COMPOSED (built from child foods — curry, schnitzel). Filter by kind, role, tag, or search substring. Use this to find a food by name before referencing it by id. Each item carries favorite, cook_count, last_cooked_at (YYYY-MM-DD or null), per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -203,7 +205,17 @@ func toolListFoods(svc Services) Tool {
 			}
 			items := make([]map[string]any, 0, len(res.Items))
 			for i := range res.Items {
-				items = append(items, foodSummary(&res.Items[i]))
+				f := &res.Items[i]
+				item := foodSummary(f)
+				// A failed macro lookup for one food must not sink the whole
+				// page: that item simply goes without per_portion data.
+				if err := addPerPortion(ctx, svc, item, f); err != nil {
+					if ctxErr := ctx.Err(); ctxErr != nil {
+						return nil, ToolEffectNone, ctxErr
+					}
+					slog.WarnContext(ctx, "list_foods: per-portion lookup failed", "food_id", f.ID, "err", err)
+				}
+				items = append(items, item)
 			}
 			return mustJSON(map[string]any{"items": items, "total": res.Total}), ToolEffectNone, nil
 		},
@@ -219,7 +231,7 @@ func toolGetFood(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "get_food",
-		Description: "Fetch a food by id. Composed foods include children (child food + grams), instructions, and tags; leaf foods include direct nutrition and portion overrides.",
+		Description: "Fetch a food by id. Composed foods include children (child food + grams), instructions, and tags; leaf foods include direct nutrition and portion overrides. Also returns favorite, cook_count, last_cooked_at (YYYY-MM-DD or null), per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -232,7 +244,11 @@ func toolGetFood(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(foodDetail(f)), ToolEffectNone, nil
+			out := foodDetail(f)
+			if err := addPerPortion(ctx, svc, out, f); err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("get_food nutrition: %w", err)
+			}
+			return mustJSON(out), ToolEffectNone, nil
 		},
 	}
 }
@@ -282,7 +298,7 @@ func toolGetPlatesRange(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "get_plates_range",
-		Description: "Get all plates for a date range (from and to inclusive, format YYYY-MM-DD). Use this instead of get_week to read plates by calendar date.",
+		Description: "Get all plates for a date range (from and to inclusive, format YYYY-MM-DD). Use this instead of get_week to read plates by calendar date. Each plate carries skipped (true when the user marked that slot as skipped, e.g. eating out).",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -611,6 +627,9 @@ func foodSummary(f *food.Food) map[string]any {
 		"role":               role,
 		"reference_portions": ref,
 		"tags":               f.Tags,
+		"favorite":           f.Favorite,
+		"cook_count":         f.CookCount,
+		"last_cooked_at":     lastCookedDate(f),
 	}
 }
 
@@ -631,10 +650,13 @@ func foodDetail(f *food.Food) map[string]any {
 		instrs[i] = map[string]any{"step_number": inst.StepNumber, "text": inst.Text}
 	}
 	out := map[string]any{
-		"id":   f.ID,
-		"name": f.Name,
-		"kind": string(f.Kind),
-		"tags": f.Tags,
+		"id":             f.ID,
+		"name":           f.Name,
+		"kind":           string(f.Kind),
+		"tags":           f.Tags,
+		"favorite":       f.Favorite,
+		"cook_count":     f.CookCount,
+		"last_cooked_at": lastCookedDate(f),
 	}
 	if f.Role != nil {
 		out["role"] = string(*f.Role)
@@ -668,6 +690,47 @@ func foodDetail(f *food.Food) map[string]any {
 	return out
 }
 
+// lastCookedDate renders LastCookedAt as YYYY-MM-DD, or nil when never cooked.
+func lastCookedDate(f *food.Food) any {
+	if f.LastCookedAt == nil {
+		return nil
+	}
+	return f.LastCookedAt.UTC().Format("2006-01-02")
+}
+
+// addPerPortion writes per_portion, basis, nutrition_complete and (when
+// incomplete) missing_nutrition into out. On error out is left untouched.
+// Leaf macros are per 100 g; composed macros are per serving.
+func addPerPortion(ctx context.Context, svc Services, out map[string]any, f *food.Food) error {
+	d, err := svc.NutritionResolver.PerPortionDetailed(ctx, f.ID)
+	if err != nil {
+		return err
+	}
+	out["per_portion"] = map[string]any{
+		"kcal":    round1(d.Macros.Kcal),
+		"protein": round1(d.Macros.Protein),
+		"fat":     round1(d.Macros.Fat),
+		"carbs":   round1(d.Macros.Carbs),
+	}
+	out["basis"] = "per_portion"
+	if f.Kind == food.KindLeaf {
+		out["basis"] = "per_100g"
+	}
+	out["nutrition_complete"] = d.Complete
+	if !d.Complete {
+		names := make([]string, len(d.Missing))
+		for i, m := range d.Missing {
+			names[i] = m.Name
+		}
+		out["missing_nutrition"] = names
+	}
+	return nil
+}
+
+func round1(v float64) float64 {
+	return math.Round(v*10) / 10
+}
+
 func derefF(p *float64) float64 {
 	if p == nil {
 		return 0
@@ -682,7 +745,7 @@ func plateSummary(p *plate.Plate) map[string]any {
 	}
 	return map[string]any{
 		"id": p.ID, "date": p.DateString(), "slot_id": p.SlotID,
-		"note": p.Note, "components": comps,
+		"note": p.Note, "skipped": p.Skipped, "components": comps,
 	}
 }
 
