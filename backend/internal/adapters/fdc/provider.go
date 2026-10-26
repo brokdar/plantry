@@ -37,7 +37,7 @@ func (p *Provider) GetByID(ctx context.Context, fdcID int) (food.Candidate, erro
 		if errors.Is(err, domain.ErrNotFound) {
 			return food.Candidate{}, err
 		}
-		return food.Candidate{}, fmt.Errorf("%w: %v", domain.ErrLookupFailed, err)
+		return food.Candidate{}, fmt.Errorf("%w: %w", domain.ErrLookupFailed, err)
 	}
 	c := toDomainCandidate(detail.candidate())
 	food.FillMissingKcal(&c)

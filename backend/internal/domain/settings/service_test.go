@@ -1,8 +1,10 @@
 package settings_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -203,8 +205,17 @@ func TestGet_DecryptFailure_FallsBackToEnv(t *testing.T) {
 	require.NoError(t, err)
 	svc2 := settings.NewService(repo, env, other)
 
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
 	v, err := svc2.Get(ctx, settings.KeyAIAPIKey)
 	require.NoError(t, err)
+	assert.Contains(t, logs.String(), "level=WARN")
+	assert.Contains(t, logs.String(), "key="+settings.KeyAIAPIKey)
+	assert.Contains(t, logs.String(), "error=")
+	assert.NotContains(t, logs.String(), "original-db-key")
 	// Source is still SourceDB (there IS a db row) but the raw value is
 	// empty because decryption failed. Callers that rely on EffectiveAI
 	// for the actual API key see an empty string and gracefully disable

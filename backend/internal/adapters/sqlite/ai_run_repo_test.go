@@ -235,3 +235,20 @@ func TestAIRunRepo_ResultJSONTruncation(t *testing.T) {
 		})
 	}
 }
+
+func TestAIRunRepo_ArgsJSONTruncation(t *testing.T) {
+	const limit = 8192
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+
+	id, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: time.Now()})
+	require.NoError(t, err)
+	require.NoError(t, repo.AddStep(ctx, airun.Step{
+		RunID: id, Seq: 1, Type: airun.StepToolCall, Name: "t", ArgsJSON: strings.Repeat("a", limit+10),
+	}))
+
+	var got string
+	require.NoError(t, db.QueryRow(`SELECT args_json FROM ai_run_steps WHERE run_id = ?`, id).Scan(&got))
+	assert.Equal(t, strings.Repeat("a", limit)+"…[truncated]", got)
+}
