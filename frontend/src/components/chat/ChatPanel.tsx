@@ -39,6 +39,13 @@ export function ChatPanel({ range }: ChatPanelProps) {
   const chatStream = useChatStream()
   const stream = useChatStreamStore()
 
+  // Once a stream completes, useChatStream has refetched the conversation, so
+  // the final reply is already in persistedTurns. Keep the buffered text only
+  // while streaming, or after a failed/aborted stream that may not have been
+  // persisted.
+  const showStreamText =
+    stream.text !== "" && (chatStream.isStreaming || chatStream.isError)
+
   const persistedTurns = useMemo(
     () => (conversation?.messages ?? []).filter((m) => m.role !== "tool"),
     [conversation]
@@ -140,10 +147,10 @@ export function ChatPanel({ range }: ChatPanelProps) {
           ))}
 
           {(chatStream.isStreaming ||
-            stream.text ||
+            showStreamText ||
             stream.toolCalls.length > 0) && (
             <div data-testid="chat-streaming">
-              {stream.text && (
+              {showStreamText && (
                 <ChatMessage role="assistant" text={stream.text} />
               )}
               {stream.toolCalls.map((tc) => (
