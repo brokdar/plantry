@@ -101,7 +101,7 @@ describe("design tokens (index.css)", () => {
     }
   })
 
-  it("collapses motion and slide transforms under prefers-reduced-motion", () => {
+  it("turns slides into short fades under prefers-reduced-motion", () => {
     const match =
       /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?)\n\}/.exec(
         css
@@ -109,7 +109,7 @@ describe("design tokens (index.css)", () => {
     expect(match, "no reduced-motion block").not.toBeNull()
     const body = match![1]
     expect(body).toMatch(/transition-duration:\s*0\.01ms\s*!important/)
-    expect(body).toMatch(/animation-duration:\s*0\.01ms\s*!important/)
+    expect(body).toMatch(/animation-duration:\s*150ms\s*!important/)
     for (const v of [
       "--tw-enter-translate-x",
       "--tw-enter-translate-y",

@@ -1,3 +1,4 @@
+import { badgeVariants } from "./badge"
 import { buttonVariants } from "./button"
 
 const VARIANTS = [
@@ -22,6 +23,12 @@ describe("buttonVariants", () => {
       expect(classes.split(" ")).not.toContain("outline-none")
     }
   )
+
+  it("badge relies on the global focus outline, not a ring", () => {
+    for (const variant of ["default", "destructive"] as const) {
+      expect(badgeVariants({ variant })).not.toMatch(/focus-visible:ring/)
+    }
+  })
 
   it("keeps the press feedback", () => {
     expect(buttonVariants()).toContain(

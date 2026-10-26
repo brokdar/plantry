@@ -450,15 +450,16 @@
   }
 }
 
-/* UX §3.4, §8: under reduced motion, transitions and animations collapse to
-   near zero and tw-animate slides lose their offset, so nothing travels.
-   Unlayered and !important so it beats utilities and inline styles. */
+/* UX §3.4, §8: under reduced motion, transitions collapse to near zero and
+   tw-animate slides lose their offset, so sheets only fade (150ms) instead
+   of sliding. Unlayered and !important so it beats utilities and inline
+   styles. */
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
   ::after {
     transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
+    animation-duration: 150ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     --tw-enter-translate-x: 0 !important;
