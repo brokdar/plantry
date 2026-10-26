@@ -26,7 +26,6 @@ function week(): Week {
         slot_id: 5,
         date: "2026-04-14",
         note: null,
-        skipped: false,
         created_at: "",
         components: [
           {
@@ -50,7 +49,6 @@ function week(): Week {
         slot_id: 5,
         date: "2026-04-15",
         note: "leftovers",
-        skipped: false,
         created_at: "",
         components: [
           {
@@ -74,7 +72,6 @@ describe("plate patches", () => {
       slot_id: 5,
       date: "2026-04-16",
       note: null,
-      skipped: false,
       created_at: "",
       components: [],
     })

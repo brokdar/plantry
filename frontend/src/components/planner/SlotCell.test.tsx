@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest"
 
 import "@/lib/i18n"
 import type { Food } from "@/lib/api/foods"
+import type { AvailabilityCell } from "@/lib/api/availability"
 import type { MacrosResponse, Plate } from "@/lib/api/plates"
 
 import { SlotCell } from "./SlotCell"
@@ -17,228 +18,169 @@ function defaultProps(overrides: Partial<Parameters<typeof SlotCell>[0]> = {}) {
     onAdd: vi.fn(),
     onDeletePlate: vi.fn(),
     onToggleFavorite: vi.fn(),
-    onToggleSkip: vi.fn(),
+    onMarkNoPlate: vi.fn(),
+    onPlanMeal: vi.fn(),
+    onEditNote: vi.fn(),
     onRateLoved: vi.fn(),
     onRateDisliked: vi.fn(),
     ...overrides,
   }
 }
 
+function cell(overrides: Partial<AvailabilityCell> = {}): AvailabilityCell {
+  return {
+    date: "2026-05-02",
+    slot_id: 1,
+    mode: "plan",
+    source: "default",
+    preset_id: null,
+    preset_name: null,
+    note: null,
+    ...overrides,
+  }
+}
+
 describe("SlotCell — empty state", () => {
-  test("renders inline skip button alongside the add affordance", () => {
+  test("renders the Mark as No plate button alongside the add affordance", () => {
     render(<SlotCell {...defaultProps()} />)
 
     expect(screen.getByTestId("slot-empty-add")).toBeInTheDocument()
-    expect(screen.getByTestId("slot-empty-skip")).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Mark as No plate" })
+    ).toBeInTheDocument()
   })
 
-  test("clicking the inline skip button toggles skip without a note", async () => {
-    const onToggleSkip = vi.fn()
-    render(<SlotCell {...defaultProps({ onToggleSkip })} />)
+  test("clicking Mark as No plate calls onMarkNoPlate without a note", async () => {
+    const onMarkNoPlate = vi.fn()
+    render(<SlotCell {...defaultProps({ onMarkNoPlate })} />)
 
-    await userEvent.click(screen.getByTestId("slot-empty-skip"))
+    await userEvent.click(screen.getByTestId("slot-empty-no-plate"))
 
-    expect(onToggleSkip).toHaveBeenCalledTimes(1)
-    expect(onToggleSkip).toHaveBeenCalledWith()
+    expect(onMarkNoPlate).toHaveBeenCalledTimes(1)
+    expect(onMarkNoPlate).toHaveBeenCalledWith()
   })
 
-  test("right-click opens the note popover", async () => {
-    render(<SlotCell {...defaultProps()} />)
+  test("right-click opens the note popover and passes the trimmed note", async () => {
+    const onMarkNoPlate = vi.fn()
+    render(<SlotCell {...defaultProps({ onMarkNoPlate })} />)
 
-    fireEvent.contextMenu(screen.getByTestId("slot-empty-skip"))
+    fireEvent.contextMenu(screen.getByTestId("slot-empty-no-plate"))
+    const input = await screen.findByTestId("no-plate-note-input")
+    await userEvent.type(input, "  Dinner at Mum's ")
+    await userEvent.click(screen.getByTestId("no-plate-note-save"))
 
-    expect(await screen.findByTestId("skip-note-popover")).toBeInTheDocument()
-  })
-
-  test("submitting the popover with text passes the note to onToggleSkip", async () => {
-    const onToggleSkip = vi.fn()
-    render(<SlotCell {...defaultProps({ onToggleSkip })} />)
-
-    fireEvent.contextMenu(screen.getByTestId("slot-empty-skip"))
-    const input = await screen.findByTestId("skip-note-input")
-    await userEvent.type(input, "Eating at Joe's")
-    await userEvent.click(screen.getByTestId("skip-note-save"))
-
-    expect(onToggleSkip).toHaveBeenCalledWith("Eating at Joe's")
+    expect(onMarkNoPlate).toHaveBeenCalledWith("Dinner at Mum's")
   })
 
   test("submitting the popover with empty text passes null", async () => {
-    const onToggleSkip = vi.fn()
-    render(<SlotCell {...defaultProps({ onToggleSkip })} />)
+    const onMarkNoPlate = vi.fn()
+    render(<SlotCell {...defaultProps({ onMarkNoPlate })} />)
 
-    fireEvent.contextMenu(screen.getByTestId("slot-empty-skip"))
-    await screen.findByTestId("skip-note-input")
-    await userEvent.click(screen.getByTestId("skip-note-save"))
+    fireEvent.contextMenu(screen.getByTestId("slot-empty-no-plate"))
+    await screen.findByTestId("no-plate-note-input")
+    await userEvent.click(screen.getByTestId("no-plate-note-save"))
 
-    expect(onToggleSkip).toHaveBeenCalledWith(null)
+    expect(onMarkNoPlate).toHaveBeenCalledWith(null)
   })
 
-  test("pressing 'S' on the focused add button toggles skip", async () => {
-    const onToggleSkip = vi.fn()
-    render(<SlotCell {...defaultProps({ onToggleSkip })} />)
+  test("pressing 'N' on the focused add button marks No plate", async () => {
+    const onMarkNoPlate = vi.fn()
+    render(<SlotCell {...defaultProps({ onMarkNoPlate })} />)
 
-    const addBtn = screen.getByTestId("slot-empty-add")
-    addBtn.focus()
-    await userEvent.keyboard("s")
+    screen.getByTestId("slot-empty-add").focus()
+    await userEvent.keyboard("n")
 
-    expect(onToggleSkip).toHaveBeenCalledTimes(1)
-    expect(onToggleSkip).toHaveBeenCalledWith()
+    expect(onMarkNoPlate).toHaveBeenCalledTimes(1)
   })
 
-  test("clicking the add button calls onAdd, not onToggleSkip", async () => {
+  test("clicking the add button calls onAdd, not onMarkNoPlate", async () => {
     const onAdd = vi.fn()
-    const onToggleSkip = vi.fn()
-    render(<SlotCell {...defaultProps({ onAdd, onToggleSkip })} />)
+    const onMarkNoPlate = vi.fn()
+    render(<SlotCell {...defaultProps({ onAdd, onMarkNoPlate })} />)
 
     await userEvent.click(screen.getByTestId("slot-empty-add"))
 
     expect(onAdd).toHaveBeenCalledTimes(1)
-    expect(onToggleSkip).not.toHaveBeenCalled()
+    expect(onMarkNoPlate).not.toHaveBeenCalled()
+  })
+
+  test("a routine cell without a plate shows its routine and still offers add", async () => {
+    const onAdd = vi.fn()
+    render(
+      <SlotCell
+        {...defaultProps({
+          onAdd,
+          availability: cell({
+            mode: "routine",
+            preset_id: 7,
+            preset_name: "Oats",
+          }),
+        })}
+      />
+    )
+
+    expect(screen.getByText("Routine · Oats")).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId("slot-empty-add"))
+    expect(onAdd).toHaveBeenCalledTimes(1)
   })
 })
 
-describe("SlotCell — skipped state", () => {
-  function skippedPlate(note: string | null = null): Plate {
-    return {
-      id: 999,
-      slot_id: 1,
-      date: "2026-05-02",
-      note,
-      skipped: true,
-      components: [],
-      created_at: "2026-05-02T10:00:00Z",
-    }
-  }
+describe("SlotCell — No plate state", () => {
+  const noPlate = (note: string | null = null) =>
+    cell({ mode: "none", source: "override", note })
 
-  test("renders the eating-out label", () => {
-    render(<SlotCell {...defaultProps({ plate: skippedPlate() })} />)
+  test("renders 'No plate' and the note", () => {
+    const { container } = render(
+      <SlotCell {...defaultProps({ availability: noPlate("Canteen") })} />
+    )
 
-    expect(screen.getByText(/eating out/i)).toBeInTheDocument()
+    expect(container.querySelector('[data-slot-state="none"]')).not.toBeNull()
+    expect(screen.getByText("No plate")).toBeInTheDocument()
+    expect(screen.getByTestId("slot-no-plate-note")).toHaveTextContent(
+      "Canteen"
+    )
+    expect(screen.queryByTestId("slot-empty-add")).not.toBeInTheDocument()
   })
 
-  test("renders the full note when present", () => {
+  test("offers Plan this meal", async () => {
+    const onPlanMeal = vi.fn()
     render(
-      <SlotCell {...defaultProps({ plate: skippedPlate("Mom's birthday") })} />
+      <SlotCell {...defaultProps({ availability: noPlate(), onPlanMeal })} />
     )
 
-    expect(screen.getByTestId("slot-skip-note")).toHaveTextContent(
-      "Mom's birthday"
+    await userEvent.click(
+      screen.getByRole("button", { name: "Plan this meal" })
     )
+
+    expect(onPlanMeal).toHaveBeenCalledTimes(1)
   })
 
-  test("unmark button toggles skip without overriding the note", async () => {
-    const onToggleSkip = vi.fn()
+  test("Edit note opens the popover with the note and saves the new one", async () => {
+    const onEditNote = vi.fn()
     render(
       <SlotCell
-        {...defaultProps({ plate: skippedPlate("note"), onToggleSkip })}
+        {...defaultProps({ availability: noPlate("old"), onEditNote })}
       />
     )
 
-    await userEvent.click(screen.getByTestId("slot-skip-unmark"))
-
-    expect(onToggleSkip).toHaveBeenCalledTimes(1)
-    expect(onToggleSkip).toHaveBeenCalledWith()
-  })
-
-  test("edit-note button opens the popover with the existing note", async () => {
-    render(
-      <SlotCell {...defaultProps({ plate: skippedPlate("Mom's birthday") })} />
-    )
-
-    await userEvent.click(screen.getByTestId("slot-skip-edit-note"))
-
+    await userEvent.click(screen.getByRole("button", { name: "Edit note" }))
     const input = (await screen.findByTestId(
-      "skip-note-input"
+      "no-plate-note-input"
     )) as HTMLInputElement
-    expect(input.value).toBe("Mom's birthday")
-  })
-
-  test("saving the popover passes the trimmed note", async () => {
-    const onToggleSkip = vi.fn()
-    render(
-      <SlotCell
-        {...defaultProps({ plate: skippedPlate("old"), onToggleSkip })}
-      />
-    )
-
-    await userEvent.click(screen.getByTestId("slot-skip-edit-note"))
-    const input = (await screen.findByTestId(
-      "skip-note-input"
-    )) as HTMLInputElement
+    expect(input.value).toBe("old")
     await userEvent.clear(input)
-    await userEvent.type(input, "  Joe's diner  ")
-    await userEvent.click(screen.getByTestId("skip-note-save"))
+    await userEvent.type(input, "Canteen")
+    await userEvent.click(screen.getByTestId("no-plate-note-save"))
 
-    expect(onToggleSkip).toHaveBeenCalledWith("Joe's diner")
+    expect(onEditNote).toHaveBeenCalledWith("Canteen")
   })
 
-  test("pressing 'S' while focused on the cell toggles skip", async () => {
-    const onToggleSkip = vi.fn()
-    const { container } = render(
-      <SlotCell {...defaultProps({ plate: skippedPlate(), onToggleSkip })} />
-    )
-    const cell = container.querySelector(
-      '[data-slot-state="skipped"]'
-    ) as HTMLElement
-    cell.focus()
-    await userEvent.keyboard("s")
+  test("without a note the action reads Add a note", () => {
+    render(<SlotCell {...defaultProps({ availability: noPlate() })} />)
 
-    expect(onToggleSkip).toHaveBeenCalledTimes(1)
-    expect(onToggleSkip).toHaveBeenCalledWith()
-  })
-
-  test("pressing Delete while focused on the cell deletes the plate", async () => {
-    const onDeletePlate = vi.fn()
-    const { container } = render(
-      <SlotCell {...defaultProps({ plate: skippedPlate(), onDeletePlate })} />
-    )
-    const cell = container.querySelector(
-      '[data-slot-state="skipped"]'
-    ) as HTMLElement
-    cell.focus()
-    await userEvent.keyboard("{Delete}")
-
-    expect(onDeletePlate).toHaveBeenCalledTimes(1)
-  })
-
-  test("popover title for skipped-no-note state uses the existing-note key", async () => {
-    render(<SlotCell {...defaultProps({ plate: skippedPlate(null) })} />)
-
-    await userEvent.click(screen.getByTestId("slot-skip-edit-note"))
-
-    // Reads "Add a note" — not "Skip with a note", since the slot is
-    // already skipped and Save just adds the note.
-    expect(await screen.findByText(/^add a note$/i)).toBeInTheDocument()
-  })
-
-  test("popover title for skipped-with-note state uses the edit key", async () => {
-    render(
-      <SlotCell {...defaultProps({ plate: skippedPlate("Mom's birthday") })} />
-    )
-
-    await userEvent.click(screen.getByTestId("slot-skip-edit-note"))
-
-    expect(await screen.findByText(/edit skip note/i)).toBeInTheDocument()
-  })
-
-  test("action row stays in tab order with non-zero opacity", () => {
-    render(<SlotCell {...defaultProps({ plate: skippedPlate() })} />)
-    const editBtn = screen.getByTestId("slot-skip-edit-note")
-    const unmarkBtn = screen.getByTestId("slot-skip-unmark")
-    const deleteBtn = screen.getByTestId("slot-quick-delete")
-    // None of the action-row buttons are aria-hidden or tabindex=-1 — they
-    // remain reachable to keyboard users alongside the cell-level S /
-    // Delete shortcuts.
-    for (const btn of [editBtn, unmarkBtn, deleteBtn]) {
-      expect(btn).not.toHaveAttribute("aria-hidden", "true")
-      expect(btn.getAttribute("tabindex")).not.toBe("-1")
-    }
-    // The wrapping row is opacity-50 at rest, not opacity-0. unmarkBtn is
-    // a direct child of the row (the edit button has a TooltipTrigger that
-    // also lives inline with asChild, so the same parent applies).
-    const row = unmarkBtn.parentElement
-    expect(row?.className).toContain("opacity-50")
-    expect(row?.className).not.toContain("opacity-0")
+    expect(
+      screen.getByRole("button", { name: "Add a note" })
+    ).toBeInTheDocument()
   })
 })
 
@@ -249,7 +191,6 @@ describe("SlotCell — macros pill", () => {
       slot_id: 1,
       date: "2026-05-02",
       note: null,
-      skipped: false,
       components: [
         { id: 1, plate_id: 42, food_id: 7, portions: 1, sort_order: 0 },
       ],

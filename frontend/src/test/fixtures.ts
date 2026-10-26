@@ -160,7 +160,6 @@ export const mockPlateW16a: Plate = {
   slot_id: 1,
   date: "2026-04-13",
   note: null,
-  skipped: false,
   components: [
     { id: 1, plate_id: 101, food_id: 1, portions: 1, sort_order: 0 },
   ],
@@ -172,7 +171,6 @@ export const mockPlateW16b: Plate = {
   slot_id: 1,
   date: "2026-04-14",
   note: null,
-  skipped: false,
   components: [
     { id: 2, plate_id: 102, food_id: 2, portions: 1, sort_order: 0 },
   ],
@@ -184,7 +182,6 @@ export const mockPlateW17: Plate = {
   slot_id: 1,
   date: "2026-04-20",
   note: null,
-  skipped: false,
   components: [
     { id: 3, plate_id: 103, food_id: 3, portions: 1, sort_order: 0 },
   ],

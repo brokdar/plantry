@@ -26,8 +26,8 @@ import {
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import {
+  useNoPlateActions,
   usePlateMacros,
-  useSetPlateSkipped,
   useUpdatePlate,
 } from "@/lib/queries/plates"
 import { useProfile } from "@/lib/queries/profile"
@@ -39,7 +39,6 @@ import {
   hasPendingPlateDelete,
   registerPendingPlateDelete,
 } from "@/lib/queries/pending-plate-deletes"
-import { toggleSkip } from "@/lib/planner-skip"
 import { SLOT_ICONS, SLOT_ICON_FALLBACK } from "@/lib/slot-icons"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
@@ -51,8 +50,9 @@ import {
   type TrayCommitItem,
   type TraySlotContext,
 } from "./ComponentTraySheet"
+import { dropRejectionKey } from "./DndCellWrapper"
 import { MobileSlotRow } from "./MobileSlotRow"
-import type { PlannerDay } from "./PlannerGrid"
+import type { CellLookup, PlannerDay } from "./PlannerGrid"
 import { SlotCell } from "./SlotCell"
 import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
 
@@ -71,6 +71,8 @@ interface MobilePlannerGridProps {
   slots: TimeSlot[]
   rangeFrom: string
   rangeTo: string
+  /** The window's availability; cells it doesn't cover render as `plan`. */
+  cellAt?: CellLookup
 }
 
 function SlotIcon({ name }: { name: string }) {
@@ -88,6 +90,7 @@ export function MobilePlannerGrid({
   slots,
   rangeFrom,
   rangeTo,
+  cellAt,
 }: MobilePlannerGridProps) {
   const { t } = useTranslation()
 
@@ -212,7 +215,7 @@ export function MobilePlannerGrid({
   }
 
   const setFavoriteMut = useSetFoodFavorite()
-  const setSkippedMut = useSetPlateSkipped()
+  const noPlate = useNoPlateActions(rangeFrom, rangeTo)
   const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
   const recordFeedbackMut = useRecordFeedback()
   const clearFeedbackMut = useClearFeedback()
@@ -371,25 +374,6 @@ export function MobilePlannerGrid({
     }
   }
 
-  async function handleToggleSkip(
-    dayIdx: number,
-    slotId: number,
-    _plateId: number | null,
-    noteOverride?: string | null
-  ) {
-    const targetDay = days[dayIdx]
-    if (!targetDay) return
-    await toggleSkip({
-      date: targetDay.date,
-      slotId,
-      existing: targetDay.plates.find((p) => p.slot_id === slotId),
-      noteOverride,
-      rangeFrom,
-      rangeTo,
-      setSkipped: setSkippedMut.mutateAsync,
-    }).catch(() => {})
-  }
-
   async function handleToggleFavorite(
     componentId: number | undefined,
     current: boolean
@@ -431,6 +415,20 @@ export function MobilePlannerGrid({
     }
     if (!plate) return
     if (plate.date === targetDay.date) return
+    // D10, as on the desktop grid: refuse before calling the API.
+    const rejection = dropRejectionKey(
+      {
+        mode: cellAt?.(targetDay.date, plate.slot_id)?.mode,
+        existingPlateId: targetDay.plates.find(
+          (p) => p.slot_id === plate.slot_id
+        )?.id,
+      },
+      plate.id
+    )
+    if (rejection) {
+      toast.error(t(rejection))
+      return
+    }
     try {
       await updatePlateMut.mutateAsync({
         id: plateId,
@@ -515,7 +513,7 @@ export function MobilePlannerGrid({
         <DayActionsBar
           dayDate={activeData.date}
           weekday={activeData.weekday}
-          hasPlates={activeData.plates.filter((p) => !p.skipped).length > 0}
+          hasPlates={activeData.plates.length > 0}
           onClearDay={() => handleClearDay(activeDay)}
         />
       )}
@@ -523,7 +521,10 @@ export function MobilePlannerGrid({
       <ul className="flex flex-col gap-3">
         {slots.map((slot) => {
           const plate = activeData?.plates.find((p) => p.slot_id === slot.id)
-          const planned = !!plate && !plate.skipped
+          const planned = !!plate
+          const availability = activeData
+            ? cellAt?.(activeData.date, slot.id)
+            : undefined
           const dayKey = activeData
             ? (DAY_KEYS[activeData.weekday] ?? DAY_KEYS[0])
             : ""
@@ -548,8 +549,9 @@ export function MobilePlannerGrid({
                 setDrawerOpen={(open) => {
                   setDrawerSlotId(open ? slot.id : null)
                 }}
-                onSkip={() => {
-                  void handleToggleSkip(activeDay, slot.id, plate?.id ?? null)
+                onMarkNoPlate={() => {
+                  if (!activeData) return
+                  void noPlate.markNoPlate(activeData.date, slot.id)
                   if (plate) clearAiFillOnPlate(plate.id)
                 }}
                 onSave={plate ? () => openSavePreset(plate.id) : undefined}
@@ -601,14 +603,21 @@ export function MobilePlannerGrid({
                     )
                     if (plate) clearAiFillOnPlate(plate.id)
                   }}
-                  onToggleSkip={(note) => {
-                    void handleToggleSkip(
-                      activeDay,
-                      slot.id,
-                      plate?.id ?? null,
-                      note
-                    )
+                  availability={availability}
+                  onMarkNoPlate={(note) => {
+                    if (!activeData) return
+                    void noPlate.markNoPlate(activeData.date, slot.id, note)
                     if (plate) clearAiFillOnPlate(plate.id)
+                  }}
+                  onPlanMeal={() => {
+                    if (activeData) {
+                      void noPlate.planMeal(activeData.date, slot.id)
+                    }
+                  }}
+                  onEditNote={(note) => {
+                    if (activeData) {
+                      void noPlate.editNote(activeData.date, slot.id, note)
+                    }
                   }}
                   onRateLoved={() => {
                     if (!plate) return
