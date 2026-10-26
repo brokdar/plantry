@@ -54,7 +54,10 @@ func (s *Service) Defaults(ctx context.Context) ([]Default, error) {
 }
 
 // SetDefaults validates every row and replaces the defaults of all active
-// slots in one transaction. "plan" rows are not stored.
+// slots in one transaction. "plan" rows are not stored. Unlike SetOverride,
+// a default change never deletes or blocks on plates already in its cells,
+// even when it makes them "none": explicit plates are user content, and the
+// Phase 3 checker reports plates in "none" cells.
 func (s *Service) SetDefaults(ctx context.Context, rows []Default) error {
 	seen := make(map[defaultKey]bool, len(rows))
 	keep := make([]Default, 0, len(rows))
@@ -67,7 +70,7 @@ func (s *Service) SetDefaults(ctx context.Context, rows []Default) error {
 			return fmt.Errorf("%w: duplicate default for weekday %d slot %d", domain.ErrInvalidInput, r.Weekday, r.SlotID)
 		}
 		seen[k] = true
-		if _, err := s.validateCell(ctx, r.SlotID, r.Mode, r.PresetID); err != nil {
+		if _, err := s.validateCell(ctx, r.SlotID, r.Mode, r.PresetID, domain.ErrAvailabilitySlotUnknown); err != nil {
 			return err
 		}
 		if r.Mode != ModePlan {
@@ -162,7 +165,7 @@ func (s *Service) SetOverride(ctx context.Context, in OverrideInput) (Cell, *pla
 		return Cell{}, nil, fmt.Errorf("%w: date required", domain.ErrInvalidInput)
 	}
 	date := dateOnly(in.Date)
-	presetName, err := s.validateCell(ctx, in.SlotID, in.Mode, in.PresetID)
+	presetName, err := s.validateCell(ctx, in.SlotID, in.Mode, in.PresetID, domain.ErrNotFound)
 	if err != nil {
 		return Cell{}, nil, err
 	}
@@ -269,8 +272,10 @@ func removeCellPlates(ctx context.Context, plates plate.Repository, date time.Ti
 }
 
 // validateCell checks the slot, mode and preset of a default or override and
-// returns the preset name for a routine.
-func (s *Service) validateCell(ctx context.Context, slotID int64, mode Mode, presetID *int64) (*string, error) {
+// returns the preset name for a routine. A missing slot fails with
+// unknownSlot: ErrNotFound when the slot is the URL resource (override),
+// ErrAvailabilitySlotUnknown when it is named in the body (defaults).
+func (s *Service) validateCell(ctx context.Context, slotID int64, mode Mode, presetID *int64, unknownSlot error) (*string, error) {
 	if err := validateMode(mode); err != nil {
 		return nil, err
 	}
@@ -279,7 +284,7 @@ func (s *Service) validateCell(ctx context.Context, slotID int64, mode Mode, pre
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("%w: slot %d", domain.ErrNotFound, slotID)
+		return nil, fmt.Errorf("%w: slot %d", unknownSlot, slotID)
 	}
 	if !active {
 		return nil, fmt.Errorf("%w: slot %d", domain.ErrSlotInactive, slotID)
@@ -298,7 +303,7 @@ func (s *Service) validateCell(ctx context.Context, slotID int64, mode Mode, pre
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("%w: preset %d", domain.ErrNotFound, *presetID)
+		return nil, fmt.Errorf("%w: preset %d", domain.ErrAvailabilityPresetUnknown, *presetID)
 	}
 	return &name, nil
 }

@@ -1199,7 +1199,9 @@
       "cell_has_plate": "Für diese Mahlzeit ist schon etwas geplant. Entferne es, bevor du „Kein Essen“ setzt.",
       "preset_required": "Wähle aus, welcher Routine diese Mahlzeit folgt.",
       "preset_not_allowed": "Nur Routine-Mahlzeiten können eine Routine haben.",
-      "slot_inactive": "Diese Mahlzeit ist ausgeschaltet. Schalte sie in den Einstellungen ein, um sie zu ändern."
+      "slot_inactive": "Diese Mahlzeit ist ausgeschaltet. Schalte sie in den Einstellungen ein, um sie zu ändern.",
+      "slot_unknown": "Diese Mahlzeit gibt es nicht mehr. Lade die Seite neu und versuche es noch einmal.",
+      "preset_unknown": "Diese Routine gibt es nicht mehr. Wähle eine andere aus."
     },
     "page_not_found": "Seite nicht gefunden.",
     "page_not_found_body": "Die gesuchte Seite existiert nicht.",

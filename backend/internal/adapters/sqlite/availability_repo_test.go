@@ -252,21 +252,26 @@ func TestAvailabilitySetOverride_RemovesPlateInTx(t *testing.T) {
 	assert.Equal(t, 1, countAvailabilityRows(t, conn, "availability_overrides"))
 }
 
-func TestAvailabilityRepo_ForeignKeyFailureIsNotFound(t *testing.T) {
+func TestAvailabilityRepo_ForeignKeyFailureNamesTheMissingRow(t *testing.T) {
 	conn := testhelper.NewTestDB(t)
 	ctx := context.Background()
 	repo := sqlite.NewAvailabilityRepo(conn)
 	lunch := insertSlot(t, conn, "slot.lunch", 1, true)
 	missingPreset := int64(9999)
 
+	// The override's slot is the URL resource: a missing one is not found.
 	err := repo.UpsertOverride(ctx, availability.Override{Date: availDate("2026-10-26"), SlotID: 9999, Mode: availability.ModeNone})
 	assert.ErrorIs(t, err, domain.ErrNotFound)
+	err = repo.UpsertOverride(ctx, availability.Override{Date: availDate("2026-10-26"), SlotID: 9999, Mode: availability.ModeRoutine, PresetID: &missingPreset})
+	assert.ErrorIs(t, err, domain.ErrNotFound)
 	err = repo.UpsertOverride(ctx, availability.Override{Date: availDate("2026-10-26"), SlotID: lunch, Mode: availability.ModeRoutine, PresetID: &missingPreset})
-	assert.ErrorIs(t, err, domain.ErrNotFound)
+	assert.ErrorIs(t, err, domain.ErrAvailabilityPresetUnknown)
 	err = repo.ReplaceActiveDefaults(ctx, []availability.Default{{Weekday: 0, SlotID: lunch, Mode: availability.ModeRoutine, PresetID: &missingPreset}})
-	assert.ErrorIs(t, err, domain.ErrNotFound)
+	assert.ErrorIs(t, err, domain.ErrAvailabilityPresetUnknown)
 	err = repo.ReplaceActiveDefaults(ctx, []availability.Default{{Weekday: 0, SlotID: 9999, Mode: availability.ModeNone}})
-	assert.ErrorIs(t, err, domain.ErrNotFound)
+	assert.ErrorIs(t, err, domain.ErrAvailabilitySlotUnknown)
+	err = repo.ReplaceActiveDefaults(ctx, []availability.Default{{Weekday: 0, SlotID: 9999, Mode: availability.ModeRoutine, PresetID: &missingPreset}})
+	assert.ErrorIs(t, err, domain.ErrAvailabilitySlotUnknown)
 }
 
 // failingUpsertRepo fails the override write so the tx must roll back the
@@ -300,4 +305,66 @@ func TestAvailabilitySetOverride_RollsBackPlateDeleteOnWriteFailure(t *testing.T
 	assert.Nil(t, removed)
 	assert.Equal(t, 1, countAvailabilityRows(t, conn, "plates"), "plate delete rolled back")
 	assert.Equal(t, 0, countAvailabilityRows(t, conn, "availability_overrides"))
+}
+
+// A default change never deletes or blocks on plates already in its cells:
+// explicit plates are user content (the Phase 3 checker reports them).
+func TestAvailabilitySetDefaults_NoneKeepsExistingPlates(t *testing.T) {
+	conn := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	svc := newAvailabilityService(conn)
+	lunch := insertSlot(t, conn, "slot.lunch", 1, true)
+	_, err := conn.Exec(`INSERT INTO plates (slot_id, date) VALUES (?, '2026-10-26')`, lunch) // a Monday
+	require.NoError(t, err)
+
+	require.NoError(t, svc.SetDefaults(ctx, []availability.Default{{Weekday: 0, SlotID: lunch, Mode: availability.ModeNone}}))
+
+	assert.Equal(t, 1, countAvailabilityRows(t, conn, "plates"), "plate kept")
+	mode, err := svc.ModeAt(ctx, availDate("2026-10-26"), lunch)
+	require.NoError(t, err)
+	assert.Equal(t, availability.ModeNone, mode)
+}
+
+// halfReplaceRepo writes the first default and then fails, so the tx must
+// roll back both the delete of the old defaults and the partial insert.
+type halfReplaceRepo struct {
+	availability.Repository
+}
+
+func (r halfReplaceRepo) ReplaceActiveDefaults(ctx context.Context, rows []availability.Default) error {
+	if err := r.Repository.ReplaceActiveDefaults(ctx, rows[:1]); err != nil {
+		return err
+	}
+	return errors.New("write failed")
+}
+
+type halfReplaceTx struct{ inner *sqlite.TxRunner }
+
+func (f halfReplaceTx) RunInAvailabilityTx(ctx context.Context, fn func(availability.Repository, plate.Repository) error) error {
+	return f.inner.RunInAvailabilityTx(ctx, func(r availability.Repository, p plate.Repository) error {
+		return fn(halfReplaceRepo{r}, p)
+	})
+}
+
+func TestAvailabilitySetDefaults_RollsBackOnWriteFailure(t *testing.T) {
+	conn := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	lunch := insertSlot(t, conn, "slot.lunch", 1, true)
+	dinner := insertSlot(t, conn, "slot.dinner", 2, true)
+	require.NoError(t, newAvailabilityService(conn).SetDefaults(ctx, []availability.Default{
+		{Weekday: 5, SlotID: dinner, Mode: availability.ModeNone},
+	}))
+
+	svc := availability.NewService(sqlite.NewAvailabilityRepo(conn), halfReplaceTx{sqlite.NewTxRunner(conn)}, sqlite.NewPresetRepo(conn))
+	err := svc.SetDefaults(ctx, []availability.Default{
+		{Weekday: 0, SlotID: lunch, Mode: availability.ModeNone},
+		{Weekday: 1, SlotID: lunch, Mode: availability.ModeNone},
+	})
+	require.Error(t, err)
+
+	rows, err := sqlite.NewAvailabilityRepo(conn).ListDefaults(ctx)
+	require.NoError(t, err)
+	require.Len(t, rows, 1, "no partial rows")
+	assert.Equal(t, 5, rows[0].Weekday)
+	assert.Equal(t, dinner, rows[0].SlotID)
 }

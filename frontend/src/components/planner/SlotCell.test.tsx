@@ -175,6 +175,41 @@ describe("SlotCell — No plate state", () => {
     expect(onEditNote).toHaveBeenCalledWith("Canteen")
   })
 
+  test("a plate in a none cell (default changed later) still renders with its actions", async () => {
+    const onDeletePlate = vi.fn()
+    const plate: Plate = {
+      id: 42,
+      slot_id: 1,
+      date: "2026-05-02",
+      note: null,
+      components: [
+        { id: 1, plate_id: 42, food_id: 7, portions: 1, sort_order: 0 },
+      ],
+      created_at: "2026-05-02T10:00:00Z",
+    }
+    const food = { id: 7, name: "Bolognese" } as unknown as Food
+    const { container } = render(
+      <SlotCell
+        {...defaultProps({
+          plate,
+          componentsById: new Map([[7, food]]),
+          availability: cell({ mode: "none", source: "default" }),
+          onDeletePlate,
+        })}
+      />
+    )
+
+    expect(
+      container.querySelector('[data-slot-state="planned"]')
+    ).not.toBeNull()
+    expect(container.querySelector('[data-slot-state="none"]')).toBeNull()
+    expect(screen.getByText("Bolognese")).toBeInTheDocument()
+    expect(screen.queryByText("No plate")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Actions" })).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId("slot-quick-delete"))
+    expect(onDeletePlate).toHaveBeenCalledTimes(1)
+  })
+
   test("without a note the action reads Add a note", () => {
     render(<SlotCell {...defaultProps({ availability: noPlate() })} />)
 

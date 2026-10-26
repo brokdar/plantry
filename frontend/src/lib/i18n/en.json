@@ -1142,7 +1142,9 @@
       "cell_has_plate": "This meal already has a plate. Remove it before marking it No plate.",
       "preset_required": "Choose which routine this meal follows.",
       "preset_not_allowed": "Only Routine meals can have a routine attached.",
-      "slot_inactive": "This meal is turned off. Turn it on in Settings to change it."
+      "slot_inactive": "This meal is turned off. Turn it on in Settings to change it.",
+      "slot_unknown": "This meal no longer exists. Reload the page and try again.",
+      "preset_unknown": "This routine no longer exists. Choose another one."
     },
     "page_not_found": "Page not found.",
     "page_not_found_body": "The page you're looking for doesn't exist.",
