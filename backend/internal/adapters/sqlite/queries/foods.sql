@@ -93,6 +93,9 @@ WHERE kind = 'composed' AND (last_cooked_at IS NULL OR last_cooked_at < ?)
 ORDER BY (last_cooked_at IS NOT NULL), last_cooked_at ASC, name ASC
 LIMIT ?;
 
+-- name: CountComposedFoods :one
+SELECT COUNT(*) FROM foods WHERE kind = 'composed';
+
 -- name: ListMostCookedFoods :many
 SELECT * FROM foods
 WHERE kind = 'composed' AND cook_count > 0

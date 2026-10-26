@@ -449,6 +449,11 @@ func (r *FoodRepo) MarkCooked(ctx context.Context, id int64, at time.Time) error
 	})
 }
 
+// CountComposedFoods returns the number of composed foods (recipes).
+func (r *FoodRepo) CountComposedFoods(ctx context.Context) (int64, error) {
+	return r.q.CountComposedFoods(ctx)
+}
+
 func (r *FoodRepo) Insights(ctx context.Context, cutoff time.Time, forgottenLimit, mostCookedLimit int) (food.Insights, error) {
 	forgottenRows, err := r.q.ListForgottenFoods(ctx, sqlcgen.ListForgottenFoodsParams{
 		LastCookedAt: sql.NullString{String: cutoff.UTC().Format(timeLayout), Valid: true},

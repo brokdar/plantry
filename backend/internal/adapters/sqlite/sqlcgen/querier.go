@@ -12,6 +12,7 @@ import (
 type Querier interface {
 	AddPresetTag(ctx context.Context, arg AddPresetTagParams) error
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
+	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
 	CountConversationsByWeek(ctx context.Context, weekID sql.NullInt64) (int64, error)
 	CountPlatesUsingFood(ctx context.Context, foodID int64) (int64, error)

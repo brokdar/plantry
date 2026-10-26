@@ -32,6 +32,7 @@ type Handlers struct {
 	NutritionRange *handlers.NutritionRangeHandler
 	PlateMacros    *handlers.PlateMacrosHandler
 	Availability   *handlers.AvailabilityHandler
+	Setup          *handlers.SetupHandler
 	DevMode        bool // gates dev-only debug endpoints
 }
 
@@ -202,6 +203,11 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Put("/{date}/{slotId}", h.Availability.PutOverride)
 				r.Delete("/{date}/{slotId}", h.Availability.DeleteOverride)
 			})
+		}
+
+		if h.Setup != nil {
+			api.Get("/setup", h.Setup.Get)
+			api.Post("/setup/complete", h.Setup.Complete)
 		}
 	})
 
