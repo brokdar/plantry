@@ -252,15 +252,18 @@ func (run *Run) ToolStep(ctx context.Context, name string, args, result json.Raw
 	})
 }
 
-// addStep writes step for this run, ignoring ctx cancellation.
-func (run *Run) addStep(ctx context.Context, step Step) {
+// addStep writes step for this run, ignoring ctx cancellation. It reports
+// whether the step was stored.
+func (run *Run) addStep(ctx context.Context, step Step) bool {
 	if run.id == 0 {
-		return
+		return false
 	}
 	step.RunID = run.id
 	if err := run.rec.store.AddStep(context.WithoutCancel(ctx), step); err != nil {
 		run.warn(ctx, "ai.run.step failed", err)
+		return false
 	}
+	return true
 }
 
 func (run *Run) warn(ctx context.Context, msg string, err error) {

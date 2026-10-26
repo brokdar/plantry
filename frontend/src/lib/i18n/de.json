@@ -853,7 +853,6 @@
       "label": "Erste Rezepte anlegen",
       "progress": "{{count}} von {{target}} Rezepten. Für eine abwechslungsreiche Woche braucht Plantry {{target}}.",
       "progress_value": "{{count}} von {{target}} Rezepten",
-      "progress_label": "Gesammelte Rezepte",
       "import_title": "Per Link importieren",
       "import_body": "Füge den Link zu einer Rezeptseite ein, und Plantry übernimmt Zutaten und Schritte. So füllst du dein Kochbuch am schnellsten.",
       "import_action": "Rezept importieren",

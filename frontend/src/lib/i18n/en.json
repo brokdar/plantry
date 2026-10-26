@@ -854,7 +854,6 @@
       "label": "Get started with recipes",
       "progress": "{{count}} of {{target}} recipes. Plantry needs {{target}} to plan a varied week.",
       "progress_value": "{{count}} of {{target}} recipes",
-      "progress_label": "Recipes collected",
       "import_title": "Import from a link",
       "import_body": "Paste the link to a recipe page and Plantry reads the ingredients and steps. This is the fastest way to fill your cookbook.",
       "import_action": "Import a recipe",

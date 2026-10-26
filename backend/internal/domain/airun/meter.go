@@ -120,12 +120,6 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	if n := len(run.lastMsgs); n > 0 && len(req.Messages) >= n && reflect.DeepEqual(run.lastMsgs, req.Messages[:n]) {
 		offset = n
 	}
-	// Callers grow their history append-only (the agent loop, the import
-	// retry), so a continuing call resends the recorded messages unchanged.
-	// The slice is copied so a caller reusing its backing array cannot make
-	// a changed history look like a continuation; the messages' own content
-	// is assumed not to be mutated after the call.
-	run.lastMsgs = append(run.lastMsgs[:0:0], req.Messages...)
 	// Every distinct system prompt and tool set is stored once per run; the
 	// run itself points at the first call's prompt.
 	if run.firstPrompt == "" {
@@ -189,7 +183,20 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 			run.warn(ctx, "ai.run.response encode failed", err)
 		}
 	}
-	run.addStep(ctx, step)
+	// Callers grow their history append-only (the agent loop, the import
+	// retry), so a continuing call resends the recorded messages unchanged.
+	// The slice is copied so a caller reusing its backing array cannot make
+	// a changed history look like a continuation; the messages' own content
+	// is assumed not to be mutated after the call. A step that was not
+	// stored resets the history, so the next call is recorded from offset 0
+	// instead of continuing a call replay cannot see.
+	var lastMsgs []llm.Message
+	if run.addStep(ctx, step) {
+		lastMsgs = append([]llm.Message(nil), req.Messages...)
+	}
+	run.mu.Lock()
+	run.lastMsgs = lastMsgs
+	run.mu.Unlock()
 }
 
 func sha256Hex(b []byte) string {

@@ -34,14 +34,12 @@ describe("GeneratePlanButton", () => {
     renderWithRouter(<GeneratePlanButton />)
 
     const button = await screen.findByTestId("generate-plan-default")
-    await vi.waitFor(() =>
-      expect(button).toHaveAttribute("aria-disabled", "true")
-    )
-    // Still focusable: aria-disabled, not the disabled attribute.
-    expect(button).not.toBeDisabled()
-    const link = screen.getByRole("link", {
+    const link = await screen.findByRole("link", {
       name: "Add 6 more recipes to start planning",
     })
+    expect(button).toHaveAttribute("aria-disabled", "true")
+    // Still focusable: aria-disabled, not the disabled attribute.
+    expect(button).not.toBeDisabled()
     expect(link).toHaveAttribute("href", "/components")
     expect(button).toHaveAccessibleDescription(
       "Add 6 more recipes to start planning"
@@ -72,8 +70,7 @@ describe("GeneratePlanButton", () => {
     renderWithRouter(<GeneratePlanButton />)
 
     const button = await screen.findByTestId("generate-plan-default")
-    await vi.waitFor(() => expect(getSetupStatus).toHaveBeenCalled())
-    expect(button).not.toHaveAttribute("aria-disabled")
+    await vi.waitFor(() => expect(button).not.toHaveAttribute("aria-disabled"))
     expect(screen.queryByRole("link", { name: /more recipe/ })).toBeNull()
 
     await user.click(button)
@@ -84,14 +81,34 @@ describe("GeneratePlanButton", () => {
     )
   })
 
+  test("until the status loads it is locked, without a count or link", async () => {
+    vi.mocked(getSetupStatus).mockReturnValue(new Promise(() => {}))
+    const openWith = vi.fn()
+    useChatUI.setState({ openWith })
+    const user = userEvent.setup()
+    renderWithRouter(<GeneratePlanButton />)
+
+    const button = await screen.findByTestId("generate-plan-default")
+    expect(button).toHaveAttribute("aria-disabled", "true")
+    expect(button).not.toHaveAccessibleDescription()
+    expect(screen.queryByRole("link")).toBeNull()
+
+    await user.click(button)
+    expect(openWith).not.toHaveBeenCalled()
+    expect(screen.queryByRole("tooltip")).toBeNull()
+  })
+
   test("the compact variant is an icon button with no visible link", async () => {
     setupWith(4)
     renderWithRouter(<GeneratePlanButton variant="compact" />)
     const button = await screen.findByTestId("generate-plan-compact")
     expect(button).toHaveAccessibleName("Generate plan")
     await vi.waitFor(() =>
-      expect(button).toHaveAttribute("aria-disabled", "true")
+      expect(button).toHaveAccessibleDescription(
+        "Add 6 more recipes to start planning"
+      )
     )
+    expect(button).toHaveAttribute("aria-disabled", "true")
     expect(screen.queryByRole("link")).toBeNull()
   })
 })

@@ -47,4 +47,9 @@ describe("/ setup redirect (plan D2)", () => {
     })
     expect(await runBeforeLoad()).toBeUndefined()
   })
+
+  it("opens the planner when the setup status fails to load", async () => {
+    vi.mocked(getSetupStatus).mockRejectedValue(new Error("offline"))
+    expect(await runBeforeLoad()).toBeUndefined()
+  })
 })

@@ -233,16 +233,8 @@ describe("SetupWizard", () => {
   })
 
   it("Skip, use defaults on step 2 writes the step 3–6 defaults and reaches Finish", async () => {
-    // Stored values that differ from every default, as on a re-run.
-    const server = serve({
-      "plan.max_cook_occasions_per_day": "2",
-      "plan.batch_cooking": "false",
-      "plan.default_keep_days": "5",
-      "plan.freezing_enabled": "true",
-      "plan.variety_weeks": "6",
-      "plan.shopping_day": "2",
-      "plan.explore_per_week": "2",
-    })
+    // A fresh install: every setting is at its registry default.
+    const server = serve()
     const u = user()
     renderWizard()
     await screen.findByText("Step 1 of 7")
@@ -262,15 +254,10 @@ describe("SetupWizard", () => {
     // The default slots are created; the usual week is left as stored.
     expect(createTimeSlot).toHaveBeenCalledTimes(3)
     expect(setAvailabilityDefaults).not.toHaveBeenCalled()
-    expect(Object.fromEntries(server.settings)).toMatchObject({
-      "plan.max_cook_occasions_per_day": "1",
-      "plan.batch_cooking": "true",
-      "plan.default_keep_days": "3",
-      "plan.freezing_enabled": "false",
-      "plan.variety_weeks": "3",
-      "plan.shopping_day": "5",
-      "plan.explore_per_week": "0",
-    })
+    // Only the suggested Saturday differs from the registry defaults.
+    expect(vi.mocked(setSetting).mock.calls).toEqual([
+      ["plan.shopping_day", "5"],
+    ])
     expect(completeSetup).not.toHaveBeenCalled()
   })
 
@@ -330,6 +317,26 @@ describe("SetupWizard", () => {
     for (const [input] of vi.mocked(updateProfile).mock.calls) {
       expect(input.kcal_target).toBe(1800)
     }
+  })
+
+  it("Skip on a re-run keeps the stored cooking, variety and daily settings", async () => {
+    serve()
+    vi.mocked(listSettings).mockResolvedValue(
+      mockSettingsList([
+        { key: "plan.default_keep_days", value: "5", source: "db" },
+        { key: "plan.variety_weeks", value: "2", source: "db" },
+        { key: "plan.shopping_day", value: "3", source: "db" },
+        { key: "discovery.daily_enabled", value: "false", source: "db" },
+      ])
+    )
+    const u = user()
+    renderWizard()
+    await screen.findByText("Step 1 of 7")
+    await next(u, 2)
+    await u.click(screen.getByTestId("setup-skip"))
+
+    await screen.findByTestId("setup-finish")
+    expect(setSetting).not.toHaveBeenCalled()
   })
 
   it("Skip on a re-run keeps the stored slots and usual week", async () => {
@@ -405,6 +412,75 @@ describe("SetupWizard", () => {
       sort_order: 0,
       active: true,
     })
+  })
+
+  it("re-run lists inactive slots and keeps sort_order over all slots", async () => {
+    serve()
+    vi.mocked(listTimeSlots).mockResolvedValue({
+      items: [
+        {
+          id: 3,
+          name_key: "slot.dinner",
+          icon: "Moon",
+          sort_order: 2,
+          active: true,
+        },
+        {
+          id: 2,
+          name_key: "slot.lunch",
+          icon: "Sun",
+          sort_order: 1,
+          active: false,
+        },
+        {
+          id: 1,
+          name_key: "slot.breakfast",
+          icon: "Coffee",
+          sort_order: 0,
+          active: true,
+        },
+      ],
+    })
+    const u = user()
+    renderWizard()
+    await screen.findByText("Step 1 of 7")
+    await next(u, 2)
+    await next(u, 3)
+    await next(u, 4)
+
+    expect(screen.getByLabelText("Name of meal 1")).toHaveValue("Breakfast")
+    expect(screen.getByLabelText("Name of meal 2")).toHaveValue("Lunch")
+    expect(screen.getByLabelText("Name of meal 3")).toHaveValue("Dinner")
+    expect(screen.getByRole("switch", { name: "Plan Lunch" })).not.toBeChecked()
+    // The usual week covers only the slots that are on.
+    const grid = screen.getByRole("grid", { name: "Your usual week" })
+    expect(
+      within(grid)
+        .getAllByRole("rowheader")
+        .map((h) => h.textContent)
+    ).toEqual(["Breakfast", "Dinner"])
+
+    await next(u, 5)
+    expect(createTimeSlot).not.toHaveBeenCalled()
+    expect(vi.mocked(updateTimeSlot).mock.calls).toEqual([
+      [
+        1,
+        {
+          name_key: "slot.breakfast",
+          icon: "Coffee",
+          sort_order: 0,
+          active: true,
+        },
+      ],
+      [
+        2,
+        { name_key: "slot.lunch", icon: "Sun", sort_order: 1, active: false },
+      ],
+      [
+        3,
+        { name_key: "slot.dinner", icon: "Moon", sort_order: 2, active: true },
+      ],
+    ])
   })
 
   it("the assistant step renders with a provider set from the environment", async () => {

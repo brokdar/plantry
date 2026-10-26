@@ -11,9 +11,7 @@ import { NUTRITION_PRESETS } from "@/lib/nutrition-presets"
 import type { AvailabilityGridValue } from "@/components/availability/AvailabilityGrid"
 
 import {
-  COOKING_DEFAULTS,
   SETTING_KEYS,
-  VARIETY_DEFAULTS,
   slotNameKey,
   type AssistantDraft,
   type CookingDraft,
@@ -147,8 +145,8 @@ export function useWizardSave() {
   }
 
   /**
-   * Plan D16: saves the current step as shown, then writes the defaults of
-   * every later step. Settings are written only where they differ.
+   * Plan D16: saves the current step as shown, then every later step as
+   * prefilled. Settings are written only where they differ.
    */
   async function skipFrom(step: number, draft: WizardDraft) {
     const stored = await saveStep(step, draft)
@@ -163,9 +161,15 @@ export function useWizardSave() {
     if (step < 3 && stored.meals.slots.some((s) => s.id < 0)) {
       later.push(saveSlots(stored.meals.slots))
     }
-    if (step < 4) later.push(saveCooking(COOKING_DEFAULTS))
-    if (step < 5) later.push(saveVariety(VARIETY_DEFAULTS))
-    if (step < 6) later.push(settings([[SETTING_KEYS.daily, "true"]]))
+    // The draft was prefilled from the stored values (a fresh install's are
+    // the defaults, with Saturday suggested), so a re-run keeps its own.
+    if (step < 4) later.push(saveCooking(stored.cooking))
+    if (step < 5) later.push(saveVariety(stored.variety))
+    if (step < 6) {
+      later.push(
+        settings([[SETTING_KEYS.daily, String(stored.assistant.daily)]])
+      )
+    }
     await Promise.all(later)
   }
 

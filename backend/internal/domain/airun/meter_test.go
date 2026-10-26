@@ -46,6 +46,8 @@ type memStore struct {
 	// failUpserts fails that many UpsertPrompt / UpsertToolSchema calls
 	// before they start succeeding.
 	failUpserts int
+	// failStepAt fails the AddStep call with this step seq.
+	failStepAt int
 }
 
 func newMemStore() *memStore {
@@ -100,6 +102,9 @@ func (s *memStore) AddStep(ctx context.Context, step airun.Step) error {
 	defer s.mu.Unlock()
 	if s.stepErr != nil {
 		return s.stepErr
+	}
+	if s.failStepAt != 0 && step.Seq == s.failStepAt {
+		return errors.New("db busy")
 	}
 	s.steps = append(s.steps, step)
 	return nil
@@ -787,6 +792,34 @@ func TestMeter_RecordsRequestDeltas(t *testing.T) {
 	}
 	if got := decodeRequest(t, steps[1]).Messages[0].Role; got != llm.RoleAssistant {
 		t.Errorf("second delta starts with %q; want the assistant reply", got)
+	}
+}
+
+func TestMeter_FailedStepResetsDeltaOffset(t *testing.T) {
+	store := newMemStore()
+	store.failStepAt = 2
+	rec, _ := newRecorder(t, store)
+	client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}}), "openai")
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+
+	history := []llm.Message{textMsg(llm.RoleUser, "u1")}
+	for i := 0; i < 3; i++ {
+		if _, err := client.Complete(ctx, llm.Request{Model: "m", Messages: history}); err != nil {
+			t.Fatal(err)
+		}
+		history = append(history, textMsg(llm.RoleUser, fmt.Sprintf("u%d", i+2)))
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	_, _, steps, _ := store.snapshot() // calls are sequential, so in seq order
+	if len(steps) != 2 {
+		t.Fatalf("stored %d steps; want 2 (the second insert fails)", len(steps))
+	}
+	// The call after the unstored one must not continue it: replaying from
+	// stored steps alone needs its full history.
+	b := decodeRequest(t, steps[1])
+	if steps[1].Seq != 3 || b.MessageOffset != 0 || len(b.Messages) != 3 {
+		t.Errorf("step seq %d: offset %d, %d messages; want seq 3, offset 0, 3 messages", steps[1].Seq, b.MessageOffset, len(b.Messages))
 	}
 }
 

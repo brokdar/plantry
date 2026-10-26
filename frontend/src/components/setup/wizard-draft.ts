@@ -145,9 +145,9 @@ export function buildDraft({
     return v ? v === "true" : fallback
   }
   const shopping = settings[SETTING_KEYS.shoppingDay]
-  const active = slots
-    .filter((s) => s.active)
-    .sort((a, b) => a.sort_order - b.sort_order)
+  // Every slot, the inactive ones too, so saving renumbers sort_order over
+  // all of them.
+  const sorted = [...slots].sort((a, b) => a.sort_order - b.sort_order)
 
   return {
     language: toLanguage(language),
@@ -168,13 +168,13 @@ export function buildDraft({
           },
     meals: {
       slots:
-        active.length > 0
-          ? active.map((s) => ({
+        sorted.length > 0
+          ? sorted.map((s) => ({
               id: s.id,
               name_key: s.name_key,
               label: slotLabel(t, s.name_key),
               icon: s.icon,
-              active: true,
+              active: s.active,
             }))
           : defaultSlotDrafts(t),
       grid: defaultsToGridValue(defaults),

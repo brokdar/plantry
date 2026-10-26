@@ -77,13 +77,16 @@ export const Route = createFileRoute("/")({
     date: (search.date as string) ?? undefined,
   }),
   // Plan D2: only `/` sends a new install to the setup wizard; deep links
-  // keep working.
+  // keep working. A status that fails to load opens the planner rather
+  // than the router's error page.
   beforeLoad: async () => {
-    const status = await queryClient.ensureQueryData({
-      queryKey: setupKeys.status(),
-      queryFn: getSetupStatus,
-    })
-    if (!status.completed) throw redirect({ to: "/setup" })
+    const status = await queryClient
+      .ensureQueryData({
+        queryKey: setupKeys.status(),
+        queryFn: getSetupStatus,
+      })
+      .catch(() => null)
+    if (status?.completed === false) throw redirect({ to: "/setup" })
   },
   component: PlanPage,
 })

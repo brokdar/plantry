@@ -70,10 +70,12 @@ export function GeneratePlanButton({
 
   const label = t("nav.generate_plan")
   const { root, showLabel, testId, tooltipSide } = VARIANTS[variant]
+  // Locked until the status loads; the reason shows only once it is known.
   const missing = setup
     ? Math.max(0, setup.recipe_target - setup.recipe_count)
     : 0
-  const locked = missing > 0
+  const short = missing > 0
+  const locked = !setup || short
   const reason = t("nav.generate_locked", { count: missing })
 
   async function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
@@ -89,14 +91,14 @@ export function GeneratePlanButton({
 
   const button = (
     <TooltipProvider delayDuration={200}>
-      <Tooltip open={locked && tipOpen} onOpenChange={setTipOpen}>
+      <Tooltip open={short && tipOpen} onOpenChange={setTipOpen}>
         <TooltipTrigger asChild>
           <button
             type="button"
             onClick={handleClick}
             aria-label={showLabel ? undefined : label}
             aria-disabled={locked || undefined}
-            aria-describedby={locked ? reasonId : undefined}
+            aria-describedby={short ? reasonId : undefined}
             className={cn(BASE, root)}
             data-testid={testId}
           >
@@ -108,12 +110,12 @@ export function GeneratePlanButton({
             {showLabel && label}
           </button>
         </TooltipTrigger>
-        {locked && <TooltipContent side={tooltipSide}>{reason}</TooltipContent>}
+        {short && <TooltipContent side={tooltipSide}>{reason}</TooltipContent>}
       </Tooltip>
     </TooltipProvider>
   )
 
-  const description = locked && (
+  const description = short && (
     <span id={reasonId} className="sr-only">
       {reason}
     </span>
@@ -132,7 +134,7 @@ export function GeneratePlanButton({
     <div className="flex w-full flex-col items-center gap-1">
       {button}
       {description}
-      {locked && (
+      {short && (
         <Link
           to="/components"
           className="inline-flex min-h-11 items-center text-center text-small text-accent underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
