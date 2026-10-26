@@ -138,15 +138,60 @@ test.describe("Component Library", () => {
       const response = await responsePromise
       expect(response.status()).toBe(200)
 
-      // Editor redirects to list on save — the updated card is visible.
-      const editSearchResp = page.waitForResponse((r) =>
-        r.url().includes(`search=${tag}`)
+      // Editor returns to the recipe detail on save, showing the new name.
+      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}$`))
+      await expect(
+        page.getByRole("heading", { level: 1, name: `Updated ${tag}` })
+      ).toBeVisible()
+    } finally {
+      await cleanupFood(comp.id)
+      await cleanupFood(stub.id)
+    }
+  })
+
+  test("opening a card shows the recipe detail and Edit reaches the editor", async ({
+    page,
+  }) => {
+    const tag = uid()
+    // The stub leaf has no macros, so the recipe's nutrition is incomplete.
+    const { composed: comp, stub } = await seedComposedWithStub(
+      {
+        name: `Detail ${tag}`,
+        role: "main",
+        instructions: [{ step_number: 1, text: `Simmer gently ${tag}` }],
+      },
+      tag
+    )
+
+    try {
+      await page.goto("/components")
+      const searchResp = page.waitForResponse(
+        (res) =>
+          res.url().includes("/api/foods") &&
+          res.url().includes(`search=${tag}`)
       )
       await page.getByTestId("catalog-search").fill(tag)
-      await editSearchResp
-      await expect(page.getByTestId(`component-card-${comp.id}`)).toContainText(
-        `Updated ${tag}`
-      )
+      await searchResp
+
+      await page
+        .getByTestId(`component-card-${comp.id}`)
+        .getByRole("link", { name: `Detail ${tag}`, exact: true })
+        .click()
+
+      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}$`))
+      await expect(
+        page.getByRole("heading", { level: 1, name: `Detail ${tag}` })
+      ).toBeVisible()
+      await expect(page.getByText(`Simmer gently ${tag}`)).toBeVisible()
+
+      const warning = page.getByTestId("nutrition-completeness-warning")
+      await expect(
+        warning.getByRole("link", { name: stub.name, exact: true })
+      ).toHaveAttribute("href", `/ingredients/${stub.id}/edit`)
+
+      await page.getByRole("link", { name: "Edit", exact: true }).click()
+      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}/edit$`))
+      await expect(page.getByLabel(/^name/i)).toHaveValue(`Detail ${tag}`)
     } finally {
       await cleanupFood(comp.id)
       await cleanupFood(stub.id)
@@ -428,7 +473,7 @@ test.describe("Component Library", () => {
     }
   })
 
-  test("editor sticky action bar Cancel returns to /components without saving", async ({
+  test("editor sticky action bar Cancel returns to the recipe detail without saving", async ({
     page,
   }) => {
     const tag = uid()
@@ -445,7 +490,10 @@ test.describe("Component Library", () => {
       await nameInput.fill(`Edited ${tag}`)
 
       await page.getByRole("link", { name: /^cancel$/i }).click()
-      await expect(page).toHaveURL(/\/components\/?$/)
+      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}$`))
+      await expect(
+        page.getByRole("heading", { level: 1, name: `Cancel Recipe ${tag}` })
+      ).toBeVisible()
 
       // Reload editor — name unchanged because we navigated away without saving.
       await page.goto(`/components/${comp.id}/edit`)

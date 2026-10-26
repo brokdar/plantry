@@ -201,7 +201,7 @@ test.describe("Recipe Catalog (card grid)", () => {
     }
   })
 
-  test("clicking a card body navigates to the editor", async ({ page }) => {
+  test("clicking a card body opens the recipe detail", async ({ page }) => {
     const tag = uid()
     const { composed: main, stub } = await seedComposedWithStub(
       { name: `Click Body ${tag}`, role: "main" },
@@ -223,8 +223,10 @@ test.describe("Recipe Catalog (card grid)", () => {
         .getByRole("link", { name: `Click Body ${tag}`, exact: true })
         .click()
 
-      await expect(page).toHaveURL(new RegExp(`/components/${main.id}/edit$`))
-      await expect(page.getByLabel(/^name/i)).toHaveValue(`Click Body ${tag}`)
+      await expect(page).toHaveURL(new RegExp(`/components/${main.id}$`))
+      await expect(
+        page.getByRole("heading", { level: 1, name: `Click Body ${tag}` })
+      ).toBeVisible()
     } finally {
       await cleanupFood(main.id)
       await cleanupFood(stub.id)

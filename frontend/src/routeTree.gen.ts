@@ -21,6 +21,7 @@ import { Route as ArchiveIndexRouteImport } from './routes/archive/index'
 import { Route as IngredientsNewRouteImport } from './routes/ingredients/new'
 import { Route as ComponentsNewRouteImport } from './routes/components/new'
 import { Route as DayDateIndexRouteImport } from './routes/day/$date/index'
+import { Route as ComponentsIdIndexRouteImport } from './routes/components/$id/index'
 import { Route as IngredientsIdEditRouteImport } from './routes/ingredients/$id/edit'
 import { Route as ComponentsIdEditRouteImport } from './routes/components/$id/edit'
 
@@ -84,6 +85,11 @@ const DayDateIndexRoute = DayDateIndexRouteImport.update({
   path: '/day/$date/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ComponentsIdIndexRoute = ComponentsIdIndexRouteImport.update({
+  id: '/components/$id/',
+  path: '/components/$id/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IngredientsIdEditRoute = IngredientsIdEditRouteImport.update({
   id: '/ingredients/$id/edit',
   path: '/ingredients/$id/edit',
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/shop/': typeof ShopIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
+  '/components/$id/': typeof ComponentsIdIndexRoute
   '/day/$date/': typeof DayDateIndexRoute
 }
 export interface FileRoutesByTo {
@@ -125,6 +132,7 @@ export interface FileRoutesByTo {
   '/shop': typeof ShopIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
+  '/components/$id': typeof ComponentsIdIndexRoute
   '/day/$date': typeof DayDateIndexRoute
 }
 export interface FileRoutesById {
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/shop/': typeof ShopIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
+  '/components/$id/': typeof ComponentsIdIndexRoute
   '/day/$date/': typeof DayDateIndexRoute
 }
 export interface FileRouteTypes {
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/shop/'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
+    | '/components/$id/'
     | '/day/$date/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
     | '/shop'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
+    | '/components/$id'
     | '/day/$date'
   id:
     | '__root__'
@@ -192,6 +203,7 @@ export interface FileRouteTypes {
     | '/shop/'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
+    | '/components/$id/'
     | '/day/$date/'
   fileRoutesById: FileRoutesById
 }
@@ -209,6 +221,7 @@ export interface RootRouteChildren {
   ShopIndexRoute: typeof ShopIndexRoute
   ComponentsIdEditRoute: typeof ComponentsIdEditRoute
   IngredientsIdEditRoute: typeof IngredientsIdEditRoute
+  ComponentsIdIndexRoute: typeof ComponentsIdIndexRoute
   DayDateIndexRoute: typeof DayDateIndexRoute
 }
 
@@ -298,6 +311,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DayDateIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/components/$id/': {
+      id: '/components/$id/'
+      path: '/components/$id'
+      fullPath: '/components/$id/'
+      preLoaderRoute: typeof ComponentsIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ingredients/$id/edit': {
       id: '/ingredients/$id/edit'
       path: '/ingredients/$id/edit'
@@ -329,6 +349,7 @@ const rootRouteChildren: RootRouteChildren = {
   ShopIndexRoute: ShopIndexRoute,
   ComponentsIdEditRoute: ComponentsIdEditRoute,
   IngredientsIdEditRoute: IngredientsIdEditRoute,
+  ComponentsIdIndexRoute: ComponentsIdIndexRoute,
   DayDateIndexRoute: DayDateIndexRoute,
 }
 export const routeTree = rootRouteImport
