@@ -93,8 +93,6 @@ All forms use `react-hook-form` + `zod` via `@hookform/resolvers/zod`. Schema de
 
 **Cookbook** — full reference: [`DESIGN.md`](../DESIGN.md); spec: `docs/UX_DESIGN_SPEC.md` §3. This section is the short summary. Tokens are hex CSS variables in `src/index.css` (`:root` + `.dark`), exposed to Tailwind via `@theme inline`. `src/test/tokens.test.ts` checks values and WCAG contrast.
 
-Full reference: [`DESIGN.md`](../DESIGN.md) at the repo root.
-
 Use these names in new and rebuilt code:
 
 - Colour: `bg-ground` (page), `bg-panel` (cells, sheets, cards), `bg-panel-sunken` (rail, toolbars), `text-ink`, `text-ink-muted`, `border-line`, `bg-accent` + `text-on-accent`, `bg-batch-1`…`bg-batch-6` and `bg-batch-N-tint`, `text-success` / `text-warning` / `text-danger`.
