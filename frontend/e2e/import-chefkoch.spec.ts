@@ -101,36 +101,11 @@ test.describe("Recipe import — chefkoch", () => {
       for (const ing of INGREDIENTS) {
         leaves.push(await seedLeafFood({ ...ing, name: `${ing.name} ${tag}` }))
       }
-      const byName = new Map(leaves.map((l) => [l.name, l]))
-
-      // The real lookup also queries Open Food Facts, a live site, so the
-      // browser answers it with the catalogue match the resolver lists first:
-      // the seeded leaf whose name equals the parsed ingredient name. A line
-      // the parser mangled would find nothing and keep Save disabled.
-      await page.route("**/api/import/lookup*", async (route) => {
-        const query = new URL(route.request().url()).searchParams.get("query")
-        const leaf = query ? byName.get(query) : undefined
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            results: leaf
-              ? [
-                  {
-                    name: leaf.name,
-                    source: "local",
-                    existing_id: leaf.id,
-                    barcode: null,
-                    fdc_id: null,
-                    image_url: null,
-                    portions: [],
-                  },
-                ]
-              : [],
-            recommended_index: leaf ? 0 : -1,
-          }),
-        })
-      })
+      // No lookup stub: the backend runs with PLANTRY_OFF_DISABLED and no FDC
+      // key, so /api/import/lookup answers from the local catalogue alone.
+      // The seeded leaf whose name equals the parsed ingredient name is the
+      // exact match C1 ranks first; a line the parser mangled would match
+      // nothing (or a weaker prefix hit) and fail the child-id check below.
 
       await page.goto("/import")
       await page.getByRole("button", { name: /paste the page html/i }).click()
@@ -169,7 +144,15 @@ test.describe("Recipe import — chefkoch", () => {
       await save.click()
       const createRes = await createPromise
       expect(createRes.status()).toBe(201)
-      createdId = ((await createRes.json()) as { id: number }).id
+      const created = (await createRes.json()) as {
+        id: number
+        children: { child_id: number }[]
+      }
+      createdId = created.id
+      // Each row auto-linked to its own seeded leaf.
+      expect(created.children.map((c) => c.child_id).sort()).toEqual(
+        leaves.map((l) => l.id).sort()
+      )
 
       // The recipe detail shows the kcal computed by the backend.
       await expect(

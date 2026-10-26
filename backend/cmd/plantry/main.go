@@ -100,8 +100,12 @@ func run() error {
 	settingsSvc := settingsdom.NewService(settingsRepo, envSnapshot, cipher)
 
 	// External food providers.
-	offClient := off.New()
-	offProvider := off.NewProvider(offClient)
+	// A nil interface (not a nil *off.Provider) so the resolver's nil checks
+	// skip OFF entirely.
+	var offProvider food.BarcodeProvider
+	if !cfg.OFFDisabled {
+		offProvider = off.NewProvider(off.New())
+	}
 
 	// FDC provider is always constructed — it reads the key from settings
 	// per-request and gracefully returns empty results when no key is set.
