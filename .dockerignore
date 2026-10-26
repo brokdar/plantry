@@ -19,6 +19,7 @@ backend/bin
 backend/tmp
 backend/**/*.db
 backend/**/*.db-*
+**/secret.key
 backend/internal/webui/files/*
 !backend/internal/webui/files/.keep
 
