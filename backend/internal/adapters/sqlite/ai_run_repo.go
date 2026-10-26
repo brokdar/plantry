@@ -31,12 +31,14 @@ var _ airun.Store = (*AIRunRepo)(nil)
 
 func (r *AIRunRepo) CreateRun(ctx context.Context, start airun.RunStart) (int64, error) {
 	id, err := r.q.CreateAIRun(ctx, sqlcgen.CreateAIRunParams{
-		Kind:          string(start.Kind),
-		StartedAt:     formatTime(start.StartedAt),
-		PromptVersion: start.PromptVersion,
-		WindowStart:   toNullDate(start.WindowStart),
-		WindowEnd:     toNullDate(start.WindowEnd),
-		Instruction:   toNullString(start.Instruction),
+		Kind:           string(start.Kind),
+		StartedAt:      formatTime(start.StartedAt),
+		PromptVersion:  start.PromptVersion,
+		WindowStart:    toNullDate(start.WindowStart),
+		WindowEnd:      toNullDate(start.WindowEnd),
+		Instruction:    toNullString(start.Instruction),
+		ConversationID: toNullInt64(start.ConversationID),
+		RequestID:      toNullStringEmpty(start.RequestID),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("create ai run: %w", err)
@@ -88,6 +90,9 @@ func (r *AIRunRepo) AddStep(ctx context.Context, step airun.Step) error {
 		DurationMs:   step.DurationMs,
 		InputTokens:  step.InputTokens,
 		OutputTokens: step.OutputTokens,
+		RequestJson:  toNullStringEmpty(step.RequestJSON),
+		ResponseJson: toNullStringEmpty(step.ResponseJSON),
+		StopReason:   toNullStringEmpty(step.StopReason),
 	})
 	if err != nil {
 		if isForeignKeyViolation(err) {
@@ -103,6 +108,25 @@ func (r *AIRunRepo) UpsertPrompt(ctx context.Context, hash, text string) error {
 		return fmt.Errorf("upsert ai prompt: %w", err)
 	}
 	return nil
+}
+
+func (r *AIRunRepo) UpsertToolSchema(ctx context.Context, hash, json string) error {
+	if err := r.q.UpsertAIToolSchema(ctx, sqlcgen.UpsertAIToolSchemaParams{Hash: hash, Json: json}); err != nil {
+		return fmt.Errorf("upsert ai tool schema: %w", err)
+	}
+	return nil
+}
+
+func (r *AIRunRepo) PruneSteps(ctx context.Context, before time.Time) (int64, error) {
+	res, err := r.q.PruneAIRunSteps(ctx, formatTime(before))
+	if err != nil {
+		return 0, fmt.Errorf("prune ai run steps: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("prune ai run steps: %w", err)
+	}
+	return n, nil
 }
 
 func formatTime(t time.Time) string {

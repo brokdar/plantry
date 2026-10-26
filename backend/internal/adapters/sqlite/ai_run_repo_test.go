@@ -252,3 +252,110 @@ func TestAIRunRepo_ArgsJSONTruncation(t *testing.T) {
 	require.NoError(t, db.QueryRow(`SELECT args_json FROM ai_run_steps WHERE run_id = ?`, id).Scan(&got))
 	assert.Equal(t, strings.Repeat("a", limit)+"…[truncated]", got)
 }
+
+func TestAIRunRepo_RunIdentityRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+
+	conv := int64(42)
+	withID, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: time.Now(), ConversationID: &conv, RequestID: "host/abc-000001"})
+	require.NoError(t, err)
+	without, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindLookup, StartedAt: time.Now()})
+	require.NoError(t, err)
+
+	var convID sql.NullInt64
+	var reqID sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT conversation_id, request_id FROM ai_runs WHERE id = ?`, withID).Scan(&convID, &reqID))
+	assert.Equal(t, sql.NullInt64{Int64: 42, Valid: true}, convID)
+	assert.Equal(t, sql.NullString{String: "host/abc-000001", Valid: true}, reqID)
+
+	require.NoError(t, db.QueryRow(`SELECT conversation_id, request_id FROM ai_runs WHERE id = ?`, without).Scan(&convID, &reqID))
+	assert.False(t, convID.Valid)
+	assert.False(t, reqID.Valid)
+}
+
+func TestAIRunRepo_StepTraceRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+
+	id, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: time.Now()})
+	require.NoError(t, err)
+	// Bodies are capped by the meter, not the repo: 20 KB passes unchanged.
+	big := `{"messages":["` + strings.Repeat("a", 20000) + `"]}`
+	require.NoError(t, repo.AddStep(ctx, airun.Step{
+		RunID: id, Seq: 1, Type: airun.StepLLMCall, Name: "m",
+		RequestJSON: big, ResponseJSON: `{"content":[]}`, StopReason: "end_turn",
+	}))
+	require.NoError(t, repo.AddStep(ctx, airun.Step{RunID: id, Seq: 2, Type: airun.StepToolCall, Name: "t"}))
+
+	var req, resp, stop sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT request_json, response_json, stop_reason FROM ai_run_steps WHERE run_id = ? AND seq = 1`, id).
+		Scan(&req, &resp, &stop))
+	assert.Equal(t, big, req.String)
+	assert.Equal(t, `{"content":[]}`, resp.String)
+	assert.Equal(t, "end_turn", stop.String)
+
+	require.NoError(t, db.QueryRow(`SELECT request_json, response_json, stop_reason FROM ai_run_steps WHERE run_id = ? AND seq = 2`, id).
+		Scan(&req, &resp, &stop))
+	assert.False(t, req.Valid)
+	assert.False(t, resp.Valid)
+	assert.False(t, stop.Valid)
+}
+
+func TestAIRunRepo_UpsertToolSchemaIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+
+	require.NoError(t, repo.UpsertToolSchema(ctx, "t1", `[{"name":"a"}]`))
+	require.NoError(t, repo.UpsertToolSchema(ctx, "t1", `[{"name":"a"}]`))
+
+	var n int
+	var js string
+	require.NoError(t, db.QueryRow(`SELECT count(*), max(json) FROM ai_tool_schemas WHERE hash = 't1'`).Scan(&n, &js))
+	assert.Equal(t, 1, n)
+	assert.Equal(t, `[{"name":"a"}]`, js)
+}
+
+func TestAIRunRepo_PruneSteps(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	addRun := func(age time.Duration) int64 {
+		id, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: now.Add(-age)})
+		require.NoError(t, err)
+		for seq := 1; seq <= 2; seq++ {
+			require.NoError(t, repo.AddStep(ctx, airun.Step{RunID: id, Seq: seq, Type: airun.StepLLMCall, Name: "m", RequestJSON: `{}`}))
+		}
+		return id
+	}
+	old := addRun(200 * 24 * time.Hour)
+	recent := addRun(10 * 24 * time.Hour)
+	require.NoError(t, repo.UpsertPrompt(ctx, "p", "prompt"))
+
+	n, err := repo.PruneSteps(ctx, now.Add(-180*24*time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), n)
+
+	countSteps := func(runID int64) int {
+		var c int
+		require.NoError(t, db.QueryRow(`SELECT count(*) FROM ai_run_steps WHERE run_id = ?`, runID).Scan(&c))
+		return c
+	}
+	assert.Zero(t, countSteps(old))
+	assert.Equal(t, 2, countSteps(recent))
+
+	var runs, prompts int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM ai_runs`).Scan(&runs))
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM ai_prompts`).Scan(&prompts))
+	assert.Equal(t, 2, runs, "runs survive the prune")
+	assert.Equal(t, 1, prompts)
+
+	n, err = repo.PruneSteps(ctx, now.Add(-180*24*time.Hour))
+	require.NoError(t, err)
+	assert.Zero(t, n)
+}

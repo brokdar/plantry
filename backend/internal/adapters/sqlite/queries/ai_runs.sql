@@ -1,6 +1,6 @@
 -- name: CreateAIRun :one
-INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction, conversation_id, request_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: FinishAIRun :execresult
@@ -21,9 +21,20 @@ UPDATE ai_runs SET
 WHERE id = ?;
 
 -- name: CreateAIRunStep :exec
-INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens,
+    request_json, response_json, stop_reason)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpsertAIPrompt :exec
 INSERT INTO ai_prompts (hash, text) VALUES (?, ?)
 ON CONFLICT(hash) DO NOTHING;
+
+-- name: UpsertAIToolSchema :exec
+INSERT INTO ai_tool_schemas (hash, json) VALUES (?, ?)
+ON CONFLICT(hash) DO NOTHING;
+
+-- name: PruneAIRunSteps :execresult
+-- Deletes the steps of runs started before the cutoff; the runs, prompts and
+-- tool schemas stay.
+DELETE FROM ai_run_steps
+WHERE run_id IN (SELECT id FROM ai_runs WHERE started_at < sqlc.arg(before));

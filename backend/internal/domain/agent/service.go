@@ -168,11 +168,12 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	if s.recorder != nil {
 		var run *airun.Run
 		ctx, run = s.recorder.Start(ctx, airun.Start{
-			Kind:          airun.KindChat,
-			PromptVersion: PromptVersion,
-			WindowStart:   &req.From,
-			WindowEnd:     &req.To,
-			Instruction:   &req.UserText,
+			Kind:           airun.KindChat,
+			PromptVersion:  PromptVersion,
+			WindowStart:    &req.From,
+			WindowEnd:      &req.To,
+			Instruction:    &req.UserText,
+			ConversationID: &conv.ID,
 		})
 		defer func() {
 			status, errKey := chatOutcome(ctx, err)
