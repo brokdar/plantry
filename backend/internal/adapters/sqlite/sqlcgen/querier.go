@@ -58,6 +58,7 @@ type Querier interface {
 	GetFoodKind(ctx context.Context, id int64) (string, error)
 	GetLeafFoodIDByName(ctx context.Context, name string) (int64, error)
 	GetPlate(ctx context.Context, id int64) (Plate, error)
+	GetPlateByCell(ctx context.Context, arg GetPlateByCellParams) (Plate, error)
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
 	GetPlateFeedback(ctx context.Context, plateID int64) (PlateFeedback, error)
 	GetPreset(ctx context.Context, id int64) (Preset, error)
@@ -99,7 +100,6 @@ type Querier interface {
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
-	SetPlateSkipped(ctx context.Context, arg SetPlateSkippedParams) (Plate, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error
 	TouchPresetUpdatedAt(ctx context.Context, id int64) error

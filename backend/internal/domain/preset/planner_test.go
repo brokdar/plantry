@@ -190,6 +190,21 @@ func TestPlanApply(t *testing.T) {
 	}
 }
 
+func TestPlanApply_UnavailableSlots(t *testing.T) {
+	plan := preset.PlanApply(preset.ApplyInput{
+		Plates:           []preset.Plate{plannerPresetPlate(10, 0), plannerPresetPlate(20, 1)},
+		TargetDate:       plannerTargetDate,
+		ExistingPlates:   []plate.Plate{plannerExistingPlate(100, 10)},
+		UnavailableSlots: activeSlotSet(10),
+		OnConflict:       preset.ConflictOverwrite,
+	})
+	require.Len(t, plan.ToCreate, 1)
+	assert.Equal(t, int64(20), plan.ToCreate[0].SlotID)
+	assert.Equal(t, []int64{0}, plan.ToDeleteBeforeCreate, "a none cell's plate is never overwritten")
+	assert.Equal(t, []preset.SkipItem{{Date: plannerTargetDate, SlotID: 10}}, plan.SkippedUnavailable)
+	assert.Empty(t, plan.SkippedOccupied)
+}
+
 func TestPlanApply_SkipItems_CarryCorrectDate(t *testing.T) {
 	target := time.Date(2026, 7, 4, 0, 0, 0, 0, time.UTC)
 	plan := preset.PlanApply(preset.ApplyInput{

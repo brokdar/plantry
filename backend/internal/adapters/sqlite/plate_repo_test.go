@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
@@ -120,4 +121,41 @@ func TestPlatesRepo_UpdatePlate_UpdatesDate(t *testing.T) {
 	).Scan(&dateStr))
 
 	assert.Equal(t, "2026-04-27", dateStr, "date column after update")
+}
+
+func TestPlatesRepo_GetByCell(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	slotID := seedSlot(t, db)
+	repo := NewPlateRepo(db)
+	d := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+
+	_, err := repo.GetByCell(ctx, d, slotID)
+	require.ErrorIs(t, err, domain.ErrNotFound, "empty cell")
+
+	p := &plate.Plate{Date: d, SlotID: slotID}
+	require.NoError(t, repo.Create(ctx, p))
+
+	got, err := repo.GetByCell(ctx, d, slotID)
+	require.NoError(t, err)
+	assert.Equal(t, p.ID, got.ID)
+	assert.Equal(t, d, got.Date)
+}
+
+func TestPlatesRepo_SecondPlateInCellIsOccupied(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	slotID := seedSlot(t, db)
+	repo := NewPlateRepo(db)
+	d1 := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	d2 := d1.AddDate(0, 0, 1)
+
+	require.NoError(t, repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID}))
+	err := repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID})
+	require.ErrorIs(t, err, domain.ErrCellOccupied, "create")
+
+	other := &plate.Plate{Date: d2, SlotID: slotID}
+	require.NoError(t, repo.Create(ctx, other))
+	other.Date = d1
+	require.ErrorIs(t, repo.Update(ctx, other), domain.ErrCellOccupied, "update")
 }

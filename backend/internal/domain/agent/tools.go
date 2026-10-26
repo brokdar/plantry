@@ -14,6 +14,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -63,6 +64,8 @@ type Services struct {
 	Profile           *profile.Service
 	Slots             *slot.Service
 	Presets           PresetService
+	// Availability may be nil: get_plates_range then lists no cells.
+	Availability AvailabilityResolver
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -311,7 +314,7 @@ func toolGetPlatesRange(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "get_plates_range",
-		Description: "Get all plates for a date range (from and to inclusive, format YYYY-MM-DD). Use this instead of get_week to read plates by calendar date. Each plate carries skipped (true when the user marked that slot as skipped, e.g. eating out).",
+		Description: "Get all plates for a date range (from and to inclusive, format YYYY-MM-DD). Use this instead of get_week to read plates by calendar date. The availability array lists every cell in the range that is not plan: mode none (No plate: the user eats elsewhere, never create a plate there) or routine (covered by preset_name).",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -337,7 +340,24 @@ func toolGetPlatesRange(svc Services) Tool {
 			for i := range plates {
 				items = append(items, plateSummary(&plates[i]))
 			}
-			return mustJSON(map[string]any{"plates": items}), ToolEffectNone, nil
+			cells := []map[string]any{}
+			if svc.Availability != nil {
+				resolved, err := svc.Availability.Resolve(ctx, from, to)
+				if err != nil {
+					return nil, ToolEffectNone, err
+				}
+				for _, c := range resolved {
+					if c.Mode == availability.ModePlan {
+						continue
+					}
+					cell := map[string]any{"date": c.Date.Format("2006-01-02"), "slot_id": c.SlotID, "mode": string(c.Mode)}
+					if c.PresetName != nil {
+						cell["preset_name"] = *c.PresetName
+					}
+					cells = append(cells, cell)
+				}
+			}
+			return mustJSON(map[string]any{"plates": items, "availability": cells}), ToolEffectNone, nil
 		},
 	}
 }
@@ -373,7 +393,7 @@ func toolCreatePlate(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "create_plate",
-		Description: "Create an empty plate at a given date (YYYY-MM-DD) and slot. Returns the new plate's id.",
+		Description: "Create an empty plate at a given date (YYYY-MM-DD) and slot. Returns the new plate's id. A cell holds at most one plate; creating into an occupied cell or a No-plate cell fails.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -758,7 +778,7 @@ func plateSummary(p *plate.Plate) map[string]any {
 	}
 	return map[string]any{
 		"id": p.ID, "date": p.DateString(), "slot_id": p.SlotID,
-		"note": p.Note, "skipped": p.Skipped, "components": comps,
+		"note": p.Note, "components": comps,
 	}
 }
 

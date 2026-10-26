@@ -26,7 +26,6 @@ type plateResponse struct {
 	Date       string                   `json:"date"`
 	SlotID     int64                    `json:"slot_id"`
 	Note       *string                  `json:"note,omitempty"`
-	Skipped    bool                     `json:"skipped"`
 	Components []plateComponentResponse `json:"components"`
 	Feedback   *feedbackResponse        `json:"feedback,omitempty"`
 	CreatedAt  string                   `json:"created_at"`
@@ -60,7 +59,7 @@ func toPlateResponse(p *plate.Plate, fb *feedback.PlateFeedback) plateResponse {
 	}
 	resp := plateResponse{
 		ID: p.ID, Date: p.DateString(), SlotID: p.SlotID,
-		Note: p.Note, Skipped: p.Skipped, Components: comps,
+		Note: p.Note, Components: comps,
 		CreatedAt: p.CreatedAt.Format(time.RFC3339),
 	}
 	if fb != nil {

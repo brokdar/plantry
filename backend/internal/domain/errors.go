@@ -37,4 +37,8 @@ var (
 	ErrPresetRequired   = errors.New("routine requires a preset")
 	ErrPresetNotAllowed = errors.New("preset only allowed for routine")
 	ErrSlotInactive     = errors.New("slot inactive")
+
+	// Plate cell errors (D10).
+	ErrCellUnavailable = errors.New("cell is marked no plate")
+	ErrCellOccupied    = errors.New("cell already has a plate")
 )

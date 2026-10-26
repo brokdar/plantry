@@ -255,6 +255,10 @@ func errorMessageKey(err error) string {
 		return "error.invalid_body"
 	case errors.Is(err, domain.ErrSlotUnknown):
 		return "error.plate.slot_unknown"
+	case errors.Is(err, domain.ErrCellUnavailable):
+		return "error.plate.cell_unavailable"
+	case errors.Is(err, domain.ErrCellOccupied):
+		return "error.plate.cell_occupied"
 	case errors.Is(err, ErrToolNotFound):
 		return "error.ai.tool_not_found"
 	default:

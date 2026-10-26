@@ -108,7 +108,6 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/", h.Plates.Get)
 					r.Put("/", h.Plates.Update)
 					r.Delete("/", h.Plates.Delete)
-					r.Post("/skip", h.Plates.SetSkipped)
 					r.Post("/components", h.Plates.AddComponent)
 					r.Put("/components/{pcId}", h.Plates.UpdateComponent)
 					r.Delete("/components/{pcId}", h.Plates.DeleteComponent)

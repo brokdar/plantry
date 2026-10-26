@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
@@ -24,6 +25,7 @@ type applyTestEnv struct {
 	presetSvc *preset.Service
 	plateSvc  *plate.Service
 	slotSvc   *slot.Service
+	availSvc  *availability.Service
 	slotID    int64
 	foodID    int64
 }
@@ -49,17 +51,129 @@ func newApplyTestEnv(t *testing.T) *applyTestEnv {
 	foodRepo := sqlite.NewFoodRepo(db)
 	slotRepo := sqlite.NewSlotRepo(db)
 	plateRepo := sqlite.NewPlateRepo(db)
-	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo)
-	slotSvc := slot.NewService(slotRepo)
 	presetRepo := sqlite.NewPresetRepo(db)
 	txRunner := sqlite.NewTxRunner(db)
+	availSvc := availability.NewService(sqlite.NewAvailabilityRepo(db), txRunner, presetRepo)
+	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo).WithCells(availSvc)
+	slotSvc := slot.NewService(slotRepo)
 
 	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).
 		WithSlots(slotSvc).
-		WithPlateRange(plateSvc)
+		WithPlateRange(plateSvc).
+		WithAvailability(availSvc)
 
-	return &applyTestEnv{ctx: ctx, presetSvc: presetSvc, plateSvc: plateSvc, slotSvc: slotSvc, slotID: slotID, foodID: foodID}
+	return &applyTestEnv{
+		ctx: ctx, presetSvc: presetSvc, plateSvc: plateSvc, slotSvc: slotSvc, availSvc: availSvc,
+		slotID: slotID, foodID: foodID,
+	}
 }
+
+// setNone marks a cell "none" with an optional note.
+func (e *applyTestEnv) setNone(t *testing.T, date time.Time, note *string) {
+	t.Helper()
+	_, _, err := e.availSvc.SetOverride(e.ctx, availability.OverrideInput{
+		Date: date, SlotID: e.slotID, Mode: availability.ModeNone, Note: note,
+	})
+	require.NoError(t, err)
+}
+
+// leafPlate creates a plate with one 100 g leaf component.
+func (e *applyTestEnv) leafPlate(t *testing.T, date time.Time) *plate.Plate {
+	t.Helper()
+	amount, grams, unit, src := 100.0, 100.0, "g", "direct"
+	p := &plate.Plate{Date: date, SlotID: e.slotID, Components: []plate.PlateComponent{
+		{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
+	}}
+	require.NoError(t, e.plateSvc.Create(e.ctx, p))
+	return p
+}
+
+func (e *applyTestEnv) cell(t *testing.T, date time.Time) availability.Cell {
+	t.Helper()
+	cells, err := e.availSvc.Resolve(e.ctx, date, date)
+	require.NoError(t, err)
+	require.Len(t, cells, 1)
+	return cells[0]
+}
+
+func TestApply_NoneCell_SkippedUnavailable(t *testing.T) {
+	for _, conflict := range []preset.ConflictMode{preset.ConflictSkip, preset.ConflictOverwrite} {
+		t.Run(string(conflict), func(t *testing.T) {
+			e := newApplyTestEnv(t)
+			p := e.seedPreset(t, "X")
+			target := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+			e.setNone(t, target, nil)
+
+			res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: target, OnConflict: conflict})
+			require.NoError(t, err)
+			assert.Empty(t, res.Created)
+			assert.Empty(t, res.SkippedOccupied)
+			require.Len(t, res.SkippedUnavailable, 1)
+			assert.Equal(t, preset.SkipItem{Date: target, SlotID: e.slotID}, res.SkippedUnavailable[0])
+
+			day, err := e.plateSvc.Day(e.ctx, target)
+			require.NoError(t, err)
+			assert.Empty(t, day)
+		})
+	}
+}
+
+func TestCopyWeek_AvailabilityAndUndo(t *testing.T) {
+	e := newApplyTestEnv(t)
+	src := time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC) // Monday
+	tgt := src.AddDate(0, 0, 7)
+
+	e.leafPlate(t, src)                                   // Mon: plate → copied
+	e.setNone(t, src.AddDate(0, 0, 1), ptrStr("canteen")) // Tue: none → copied with note
+	e.leafPlate(t, src.AddDate(0, 0, 2))                  // Wed: plate, but target Wed is none
+	e.setNone(t, tgt.AddDate(0, 0, 2), nil)
+	e.setNone(t, src.AddDate(0, 0, 3), nil) // Thu: none, but target Thu has a plate
+	e.leafPlate(t, tgt.AddDate(0, 0, 3))
+
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: src, TargetStart: tgt})
+	require.NoError(t, err)
+
+	require.Len(t, res.Created, 1)
+	assert.Equal(t, tgt, res.Created[0].Date)
+	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 2), SlotID: e.slotID}}, res.SkippedUnavailable)
+	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 3), SlotID: e.slotID}}, res.SkippedOccupied)
+	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 1), SlotID: e.slotID}}, res.Snapshot.CreatedOverrides)
+
+	tue := e.cell(t, tgt.AddDate(0, 0, 1))
+	assert.Equal(t, availability.ModeNone, tue.Mode)
+	assert.Equal(t, availability.SourceOverride, tue.Source)
+	assert.Equal(t, ptrStr("canteen"), tue.Note)
+
+	require.NoError(t, e.presetSvc.UndoApply(e.ctx, res.Snapshot))
+
+	assert.Equal(t, availability.ModePlan, e.cell(t, tgt.AddDate(0, 0, 1)).Mode, "undo removes the copied override")
+	assert.Equal(t, availability.ModeNone, e.cell(t, tgt.AddDate(0, 0, 2)).Mode, "undo keeps overrides it did not create")
+	day, err := e.plateSvc.Day(e.ctx, tgt)
+	require.NoError(t, err)
+	assert.Empty(t, day, "undo removes the copied plate")
+}
+
+func TestCopyWeek_OnlyNoneOverrides(t *testing.T) {
+	e := newApplyTestEnv(t)
+	src := time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC)
+	tgt := src.AddDate(0, 0, 7)
+	e.setNone(t, src.AddDate(0, 0, 4), nil)
+	// A routine override in the source is not copied.
+	presetP := e.seedPreset(t, "Oats")
+	_, _, err := e.availSvc.SetOverride(e.ctx, availability.OverrideInput{
+		Date: src.AddDate(0, 0, 5), SlotID: e.slotID, Mode: availability.ModeRoutine, PresetID: &presetP.ID,
+	})
+	require.NoError(t, err)
+
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: src, TargetStart: tgt})
+	require.NoError(t, err)
+	assert.Empty(t, res.Created)
+	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 4), SlotID: e.slotID}}, res.Snapshot.CreatedOverrides)
+	assert.Equal(t, availability.ModeNone, e.cell(t, tgt.AddDate(0, 0, 4)).Mode)
+	assert.Equal(t, availability.ModePlan, e.cell(t, tgt.AddDate(0, 0, 5)).Mode, "routine overrides are not copied")
+}
+
+func ptrStr(s string) *string { return &s }
 
 func mkLeafComp(foodID int64, amount float64) preset.Component {
 	unit := "g"

@@ -239,7 +239,7 @@ func toolApplyPreset(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "apply_preset",
-		Description: "Apply a preset's plates onto target_date. Default on_conflict is 'skip' — leaves existing plates untouched. Use 'overwrite' only when the user explicitly asks to replace / rebuild / wipe. If the user's request targets a specific slot, set slot_ids_filter so multi-plate presets only land the relevant plate. The result enumerates created, replaced, skipped_occupied, and skipped_no_slot — surface any non-empty skip list to the user.",
+		Description: "Apply a preset's plates onto target_date. Default on_conflict is 'skip' — leaves existing plates untouched. Use 'overwrite' only when the user explicitly asks to replace / rebuild / wipe. If the user's request targets a specific slot, set slot_ids_filter so multi-plate presets only land the relevant plate. The result enumerates created, replaced, skipped_occupied, skipped_unavailable (No-plate cells), and skipped_no_slot — surface any non-empty skip list to the user.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -402,11 +402,19 @@ func applyResultSummary(r *preset.ApplyResult) map[string]any {
 			"slot_id": s.SlotID,
 		}
 	}
+	skippedUnavailable := make([]map[string]any, len(r.SkippedUnavailable))
+	for i, s := range r.SkippedUnavailable {
+		skippedUnavailable[i] = map[string]any{
+			"date":    s.Date.Format("2006-01-02"),
+			"slot_id": s.SlotID,
+		}
+	}
 	return map[string]any{
-		"created_plate_ids": createdIDs,
-		"replaced":          replaced,
-		"skipped_occupied":  skippedOcc,
-		"skipped_no_slot":   skippedNoSlot,
-		"effect":            "plate_changed",
+		"created_plate_ids":   createdIDs,
+		"replaced":            replaced,
+		"skipped_occupied":    skippedOcc,
+		"skipped_unavailable": skippedUnavailable,
+		"skipped_no_slot":     skippedNoSlot,
+		"effect":              "plate_changed",
 	}
 }

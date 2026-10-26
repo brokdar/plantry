@@ -26,12 +26,22 @@ type DateRange struct {
 // PromptPlate is a plate in the planning window with its slot and food names
 // resolved for the system prompt.
 type PromptPlate struct {
-	ID      int64
-	Date    time.Time
-	SlotID  int64
-	Slot    string // slot name key
-	Foods   []string
-	Skipped bool
+	ID     int64
+	Date   time.Time
+	SlotID int64
+	Slot   string // slot name key
+	Foods  []string
+}
+
+// PromptCell is a window cell whose availability is not "plan": "none" (no
+// plate wanted) or "routine" (filled from a preset).
+type PromptCell struct {
+	Date       time.Time
+	SlotID     int64
+	Slot       string // slot name key
+	Mode       string // "none" | "routine"
+	PresetName string // routine only
+	Note       string // none only; may be empty
 }
 
 // PlanningPrefs holds the user's plan settings that drive the system prompt.
@@ -41,11 +51,11 @@ type PlanningPrefs struct {
 }
 
 // ComposePrompt builds the system prompt for a chat turn. p may be nil (no
-// profile yet); plates may be nil (no plate context); dateRange may be nil (no
-// date context).
+// profile yet); plates may be nil (no plate context); cells may be nil (every
+// cell is "plan"); dateRange may be nil (no date context).
 // prefs may be nil (omits planning preference lines). modeHint may be empty
 // (no mode section).
-func ComposePrompt(p *profile.Profile, plates []PromptPlate, dateRange *DateRange, prefs *PlanningPrefs, modeHint string) string {
+func ComposePrompt(p *profile.Profile, plates []PromptPlate, cells []PromptCell, dateRange *DateRange, prefs *PlanningPrefs, modeHint string) string {
 	var b strings.Builder
 
 	// The mode hint and tool rules always survive; anything over budget is
@@ -62,6 +72,8 @@ func ComposePrompt(p *profile.Profile, plates []PromptPlate, dateRange *DateRang
 
 	if dateRange != nil {
 		writeDateRangeSection(&b, dateRange, prefs)
+		// Cells may use at most half of what is left, so plates keep room.
+		writeCellsSection(&b, cells, (promptCharBudget-b.Len()-len(tail))/2)
 		writePlatesSection(&b, plates, promptCharBudget-b.Len()-len(tail))
 	}
 
@@ -76,7 +88,7 @@ const rolePrefix = `You are Plantry, an assistant for a self-hosted meal planner
 
 You help the user plan meals by composing plates (meals) out of foods onto a date-based grid. You use tools to read the library, read plates by date range, and mutate plates. You never invent ids — always look them up first with list_foods / list_slots / get_plates_range.
 
-Plates live on calendar dates (YYYY-MM-DD). A plate belongs to exactly one (date, slot) cell. A plate has one or more foods with a portion multiplier each. Always reason in calendar dates — never in day indexes.
+Plates live on calendar dates (YYYY-MM-DD). A plate belongs to exactly one (date, slot) cell, and a cell holds at most one plate. A cell marked "no plate" must stay empty; a "routine" cell is covered by its preset, so leave it alone unless the user asks. A plate has one or more foods with a portion multiplier each. Always reason in calendar dates — never in day indexes.
 
 When the user asks you to plan something, proceed like this:
 1. Read the relevant date range with get_plates_range, and slot list with list_slots.
@@ -102,7 +114,7 @@ Presets:
 - Prefer existing tags returned in known_tags over coining near-duplicates ("quick" vs "quickly").
 - For "apply my standard week" / "lay out my usual routine", use copy_week from a representative past week. If the user hasn't named one, ask which week to use.
 - If a preset has multiple plates and the user's request is slot-specific (e.g. "just lunch"), pass slot_ids_filter to apply only the relevant plate.
-- Apply tool results enumerate created / replaced / skipped_occupied / skipped_no_slot. Surface non-empty skip lists to the user when relevant — silent skips are confusing.
+- Apply tool results enumerate created / replaced / skipped_occupied / skipped_unavailable / skipped_no_slot. Surface non-empty skip lists to the user when relevant — silent skips are confusing.
 `
 
 const truncationNote = "\n[prompt truncated]\n"
@@ -184,6 +196,19 @@ func writeDateRangeSection(b *strings.Builder, dr *DateRange, prefs *PlanningPre
 	}
 }
 
+// writeCellsSection lists the window's "none" and "routine" cells in at most
+// room bytes. It writes nothing when there are none.
+func writeCellsSection(b *strings.Builder, cells []PromptCell, room int) {
+	if len(cells) == 0 {
+		return
+	}
+	lines := make([]string, len(cells))
+	for i, c := range cells {
+		lines[i] = cellLine(c)
+	}
+	writeCappedList(b, "No-plate and routine cells:\n", lines, room, omittedCellsLine, false)
+}
+
 // writePlatesSection lists plates in at most room bytes, ending with an
 // omitted-count line when not all of them fit.
 func writePlatesSection(b *strings.Builder, plates []PromptPlate, room int) {
@@ -191,13 +216,22 @@ func writePlatesSection(b *strings.Builder, plates []PromptPlate, room int) {
 		b.WriteString("This window has no plates yet.\n\n")
 		return
 	}
-	const header = "Plates already planned:\n"
+	lines := make([]string, len(plates))
+	for i, p := range plates {
+		lines[i] = plateLine(p)
+	}
+	writeCappedList(b, "Plates already planned:\n", lines, room, omittedLine, true)
+}
+
+// writeCappedList writes header and as many lines as fit in room bytes, then
+// an omitted-count line (omittedFmt) when some were left out, then a blank
+// line when blank is set.
+func writeCappedList(b *strings.Builder, header string, lines []string, room int, omittedFmt string, blank bool) {
 	// Keep room for the header, an omitted-count line and the blank line.
-	left := room - len(header) - len(fmt.Sprintf(omittedLine, len(plates))) - 1
+	left := room - len(header) - len(fmt.Sprintf(omittedFmt, len(lines))) - 1
 	b.WriteString(header)
 	written := 0
-	for _, p := range plates {
-		line := plateLine(p)
+	for _, line := range lines {
 		if len(line) > left {
 			break
 		}
@@ -205,20 +239,41 @@ func writePlatesSection(b *strings.Builder, plates []PromptPlate, room int) {
 		left -= len(line)
 		written++
 	}
-	if omitted := len(plates) - written; omitted > 0 {
-		fmt.Fprintf(b, omittedLine, omitted)
+	if omitted := len(lines) - written; omitted > 0 {
+		fmt.Fprintf(b, omittedFmt, omitted)
 	}
-	b.WriteString("\n")
+	if blank {
+		b.WriteString("\n")
+	}
 }
 
-const omittedLine = "(%d more plates omitted)\n"
+const (
+	omittedLine      = "(%d more plates omitted)\n"
+	omittedCellsLine = "(%d more cells omitted)\n"
+)
+
+func cellLine(c PromptCell) string {
+	slot := ""
+	if c.Slot != "" {
+		slot = " " + c.Slot
+	}
+	var what string
+	switch c.Mode {
+	case "routine":
+		what = "routine (preset: " + c.PresetName + ")"
+	default:
+		what = "no plate"
+		if c.Note != "" {
+			what += " (" + c.Note + ")"
+		}
+	}
+	return fmt.Sprintf("- %s %s%s (slot_id=%d): %s\n",
+		c.Date.Weekday(), c.Date.Format("2006-01-02"), slot, c.SlotID, what)
+}
 
 func plateLine(p PromptPlate) string {
 	contents := strings.Join(p.Foods, ", ")
-	switch {
-	case p.Skipped:
-		contents = "skipped"
-	case contents == "":
+	if contents == "" {
 		contents = "(no foods)"
 	}
 	slot := ""

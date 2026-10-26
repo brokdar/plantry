@@ -199,6 +199,42 @@ func (s *Service) SetOverride(ctx context.Context, in OverrideInput) (Cell, *pla
 	}, removed, nil
 }
 
+// NoneOverride returns the note of the cell's "none" override. ok is false
+// when the cell has no override or one of another mode. Copy week uses it to
+// carry No-plate cells over (D12).
+func (s *Service) NoneOverride(ctx context.Context, date time.Time, slotID int64) (note *string, ok bool, err error) {
+	o, err := s.repo.GetOverride(ctx, dateOnly(date), slotID)
+	if err != nil || o == nil || o.Mode != ModeNone {
+		return nil, false, err
+	}
+	return o.Note, true, nil
+}
+
+// SetNoneIfUnset writes a "none" override with note on a cell that has no
+// override and does not already resolve to "none", and reports whether it
+// wrote one. A plate in the cell fails with ErrCellHasPlate. Copy week uses
+// it so that undo can clear exactly the overrides it created (D12).
+func (s *Service) SetNoneIfUnset(ctx context.Context, date time.Time, slotID int64, note *string) (bool, error) {
+	o, err := s.repo.GetOverride(ctx, dateOnly(date), slotID)
+	if err != nil {
+		return false, err
+	}
+	if o != nil {
+		return false, nil
+	}
+	mode, err := s.ModeAt(ctx, date, slotID)
+	if err != nil {
+		return false, err
+	}
+	if mode == ModeNone {
+		return false, nil
+	}
+	if _, _, err := s.SetOverride(ctx, OverrideInput{Date: date, SlotID: slotID, Mode: ModeNone, Note: note}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // ClearOverride removes the override of one cell. It is idempotent.
 func (s *Service) ClearOverride(ctx context.Context, date time.Time, slotID int64) error {
 	return s.repo.DeleteOverride(ctx, dateOnly(date), slotID)

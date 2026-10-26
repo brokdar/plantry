@@ -53,7 +53,10 @@ type ApplyResult struct {
 	Replaced        []ReplacedItem // overwritten plates (only with ConflictOverwrite)
 	SkippedOccupied []SkipItem     // {Date, SlotID} for plates skipped due to conflict
 	SkippedNoSlot   []SkipItem     // {SlotID} for plates whose slot was inactive/missing on the day
-	Snapshot        ApplySnapshot  // for UndoApply
+	// SkippedUnavailable lists {Date, SlotID} target cells that resolve to
+	// "none", so no plate was placed there (D12).
+	SkippedUnavailable []SkipItem
+	Snapshot           ApplySnapshot // for UndoApply
 }
 
 // ReplacedItem captures one overwrite: the new plate and the old plate that
@@ -77,6 +80,44 @@ type SkipItem struct {
 type ApplySnapshot struct {
 	CreatedPlateIDs []int64
 	ReplacedPlates  []plate.Plate
+	// CreatedOverrides are the "none" overrides copy week wrote; undo clears them.
+	CreatedOverrides []SkipItem
+}
+
+// cellNone is the CellChecker mode of a No-plate cell.
+const cellNone = "none"
+
+// CellChecker resolves a cell's availability mode ("plan", "routine" or
+// "none"). Same shape as plate.CellChecker, so the availability service
+// satisfies both (D12).
+type CellChecker interface {
+	CellMode(ctx context.Context, date time.Time, slotID int64) (string, error)
+}
+
+// NoPlateOverrides reads and writes the "none" overrides copy week carries
+// from the source week to the target week.
+type NoPlateOverrides interface {
+	// NoneOverride returns the note of the cell's "none" override; ok is
+	// false when the cell has none.
+	NoneOverride(ctx context.Context, date time.Time, slotID int64) (note *string, ok bool, err error)
+	// SetNoneIfUnset writes a "none" override on a cell that has no override
+	// and is not already "none", and reports whether it wrote one.
+	SetNoneIfUnset(ctx context.Context, date time.Time, slotID int64, note *string) (bool, error)
+	// ClearOverride removes the cell's override; a missing one is no error.
+	ClearOverride(ctx context.Context, date time.Time, slotID int64) error
+}
+
+// Availability is everything apply and copy week need from availability.
+type Availability interface {
+	CellChecker
+	NoPlateOverrides
+}
+
+// WithAvailability makes Apply and CopyWeek respect "none" cells and lets
+// copy week carry "none" overrides. Without it every cell counts as "plan".
+func (s *Service) WithAvailability(a Availability) *Service {
+	s.avail = a
+	return s
 }
 
 // SlotLister is the minimal time_slots surface the apply pipeline needs:
@@ -116,8 +157,33 @@ func (s *Service) Apply(ctx context.Context, presetID int64, req ApplyRequest) (
 	if err != nil {
 		return nil, err
 	}
+	// Read cell modes before the plate transaction: the availability service
+	// uses its own connection, and the pool holds only one.
+	unavailable := map[int64]struct{}{}
+	for _, pp := range plates {
+		none, err := s.isNone(ctx, req.TargetDate, pp.SlotID)
+		if err != nil {
+			return nil, err
+		}
+		if none {
+			unavailable[pp.SlotID] = struct{}{}
+		}
+	}
 
-	return s.materialiseOnto(ctx, presetID, req.TargetDate, conflict, plates, activeSlots)
+	return s.materialiseOnto(ctx, presetID, req.TargetDate, conflict, plates, activeSlots, unavailable)
+}
+
+// isNone reports whether the cell resolves to "none". Without an injected
+// Availability no cell does.
+func (s *Service) isNone(ctx context.Context, date time.Time, slotID int64) (bool, error) {
+	if s.avail == nil {
+		return false, nil
+	}
+	mode, err := s.avail.CellMode(ctx, date, slotID)
+	if err != nil {
+		return false, fmt.Errorf("cell mode: %w", err)
+	}
+	return mode == cellNone, nil
 }
 
 // CopyWeekRequest copies the plates from [source_start, source_start+6 days]
@@ -131,6 +197,13 @@ type CopyWeekRequest struct {
 // CopyWeek implements the past-week-copy flow described in feature.md §6.7.
 // It is decoupled from Preset records: source is the planner's history, target
 // is the planner. No preset is created or consumed.
+//
+// Availability (D12): a source plate whose target cell resolves to "none" is
+// not copied and is reported in SkippedUnavailable. The source week's "none"
+// overrides are copied onto the matching target cells; a target cell that
+// holds a plate keeps it and is reported in SkippedOccupied (whatever the
+// conflict mode), and a target cell that already has an override or is
+// already "none" is left alone. Routine overrides are not copied.
 func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResult, error) {
 	if req.SourceStart.IsZero() || req.TargetStart.IsZero() {
 		return nil, fmt.Errorf("%w: source_start and target_start required", domain.ErrInvalidInput)
@@ -147,9 +220,6 @@ func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResu
 	if err != nil {
 		return nil, fmt.Errorf("load source week: %w", err)
 	}
-	if len(sources) == 0 {
-		return &ApplyResult{}, nil
-	}
 
 	// Reify each source plate as a preset-shaped "plate" so we can reuse the
 	// apply pipeline. Each source plate's date is preserved as an offset from
@@ -159,9 +229,32 @@ func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResu
 		return nil, err
 	}
 
+	// Availability reads go before the plate transaction: the availability
+	// service uses its own connection, and the pool holds only one.
+	noPlate, err := s.sourceNoPlateCells(ctx, req.SourceStart, activeSlots)
+	if err != nil {
+		return nil, err
+	}
+	if len(sources) == 0 && len(noPlate) == 0 {
+		return &ApplyResult{}, nil
+	}
+	targetOf := func(d time.Time) time.Time {
+		return req.TargetStart.AddDate(0, 0, int(d.Sub(req.SourceStart).Hours()/24))
+	}
+	unavailable := map[string]bool{}
+	for _, src := range sources {
+		td := targetOf(src.Date)
+		none, err := s.isNone(ctx, td, src.SlotID)
+		if err != nil {
+			return nil, err
+		}
+		unavailable[occupancyKey(td, src.SlotID)] = none
+	}
+
 	result := &ApplyResult{
 		Snapshot: ApplySnapshot{},
 	}
+	var toMark []noPlateCell
 	if err := s.tx.RunInPresetTx(ctx, func(_ Repository, plates plate.Repository) error {
 		// Bucket existing plates on the target week to detect occupancy once.
 		targetEnd := req.TargetStart.AddDate(0, 0, 6)
@@ -183,8 +276,7 @@ func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResu
 		})
 
 		for _, src := range sources {
-			offset := int(src.Date.Sub(req.SourceStart).Hours() / 24)
-			targetDate := req.TargetStart.AddDate(0, 0, offset)
+			targetDate := targetOf(src.Date)
 
 			if !isSlotActive(activeSlots, src.SlotID) {
 				result.SkippedNoSlot = append(result.SkippedNoSlot, SkipItem{Date: targetDate, SlotID: src.SlotID})
@@ -192,6 +284,10 @@ func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResu
 			}
 
 			key := occupancyKey(targetDate, src.SlotID)
+			if unavailable[key] {
+				result.SkippedUnavailable = append(result.SkippedUnavailable, SkipItem{Date: targetDate, SlotID: src.SlotID})
+				continue
+			}
 			if existingPlate, taken := occupancy[key]; taken {
 				if conflict == ConflictSkip {
 					result.SkippedOccupied = append(result.SkippedOccupied, SkipItem{Date: targetDate, SlotID: src.SlotID})
@@ -223,16 +319,80 @@ func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResu
 			result.Snapshot.CreatedPlateIDs = append(result.Snapshot.CreatedPlateIDs, newPlate.ID)
 			occupancy[key] = *newPlate
 		}
+
+		for _, c := range noPlate {
+			td := targetOf(c.Date)
+			if _, taken := occupancy[occupancyKey(td, c.SlotID)]; taken {
+				result.SkippedOccupied = append(result.SkippedOccupied, SkipItem{Date: td, SlotID: c.SlotID})
+				continue
+			}
+			toMark = append(toMark, noPlateCell{Date: td, SlotID: c.SlotID, Note: c.Note})
+		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
+
+	// The plates are committed; now write the copied overrides. A failure here
+	// leaves the copied plates in place, and the error tells the caller.
+	for _, c := range toMark {
+		created, err := s.avail.SetNoneIfUnset(ctx, c.Date, c.SlotID, c.Note)
+		if err != nil {
+			return nil, fmt.Errorf("copy no-plate cell %s slot %d: %w", c.Date.Format("2006-01-02"), c.SlotID, err)
+		}
+		if created {
+			result.Snapshot.CreatedOverrides = append(result.Snapshot.CreatedOverrides, SkipItem{Date: c.Date, SlotID: c.SlotID})
+		}
+	}
 	return result, nil
 }
 
-// UndoApply reverses a previous Apply or CopyWeek by deleting the plates it
-// created and restoring the plates it replaced.
+// noPlateCell is a source "none" override to copy.
+type noPlateCell struct {
+	Date   time.Time
+	SlotID int64
+	Note   *string
+}
+
+// sourceNoPlateCells returns the "none" overrides of the active slots in the
+// 7 days from start, date-major. It returns nothing without an Availability
+// or a SlotLister (the active slots are unknown then).
+func (s *Service) sourceNoPlateCells(ctx context.Context, start time.Time, activeSlots map[int64]struct{}) ([]noPlateCell, error) {
+	if s.avail == nil || activeSlots == nil {
+		return nil, nil
+	}
+	slotIDs := make([]int64, 0, len(activeSlots))
+	for id := range activeSlots {
+		slotIDs = append(slotIDs, id)
+	}
+	sort.Slice(slotIDs, func(i, j int) bool { return slotIDs[i] < slotIDs[j] })
+	var out []noPlateCell
+	for i := range 7 {
+		d := start.AddDate(0, 0, i)
+		for _, slotID := range slotIDs {
+			note, ok, err := s.avail.NoneOverride(ctx, d, slotID)
+			if err != nil {
+				return nil, fmt.Errorf("read no-plate cell: %w", err)
+			}
+			if ok {
+				out = append(out, noPlateCell{Date: d, SlotID: slotID, Note: note})
+			}
+		}
+	}
+	return out, nil
+}
+
+// UndoApply reverses a previous Apply or CopyWeek by clearing the overrides
+// it created, deleting the plates it created and restoring the plates it
+// replaced.
 func (s *Service) UndoApply(ctx context.Context, snap ApplySnapshot) error {
+	if s.avail != nil {
+		for _, c := range snap.CreatedOverrides {
+			if err := s.avail.ClearOverride(ctx, c.Date, c.SlotID); err != nil {
+				return fmt.Errorf("clear copied override (date=%s slot=%d): %w", c.Date.Format("2006-01-02"), c.SlotID, err)
+			}
+		}
+	}
 	return s.tx.RunInPresetTx(ctx, func(_ Repository, plates plate.Repository) error {
 		// Delete the plates that the apply created. Order doesn't matter; FK
 		// cascade handles components.
@@ -273,6 +433,7 @@ func (s *Service) materialiseOnto(
 	conflict ConflictMode,
 	plates []Plate,
 	activeSlots map[int64]struct{},
+	unavailable map[int64]struct{},
 ) (*ApplyResult, error) {
 	result := &ApplyResult{}
 	if err := s.tx.RunInPresetTx(ctx, func(presets Repository, plateRepo plate.Repository) error {
@@ -282,15 +443,17 @@ func (s *Service) materialiseOnto(
 		}
 
 		plan := PlanApply(ApplyInput{
-			Plates:         plates,
-			TargetDate:     targetDate,
-			ExistingPlates: existing,
-			ActiveSlots:    activeSlots,
-			OnConflict:     conflict,
+			Plates:           plates,
+			TargetDate:       targetDate,
+			ExistingPlates:   existing,
+			ActiveSlots:      activeSlots,
+			UnavailableSlots: unavailable,
+			OnConflict:       conflict,
 		})
 
 		result.SkippedNoSlot = plan.SkippedNoSlot
 		result.SkippedOccupied = plan.SkippedOccupied
+		result.SkippedUnavailable = plan.SkippedUnavailable
 
 		// Execute the plan: delete old plates, create new ones.
 		for i, entry := range plan.ToCreate {
