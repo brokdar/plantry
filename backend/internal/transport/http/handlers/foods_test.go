@@ -297,11 +297,11 @@ func TestFoodHandler_Nutrition_CompletenessFields(t *testing.T) {
 		assert.Contains(t, body, `"missing":[]`)
 	})
 
-	t.Run("incomplete recipe names the leaf", func(t *testing.T) {
+	t.Run("incomplete recipe lists the leaf id and name", func(t *testing.T) {
 		var got map[string]any
 		require.NoError(t, json.Unmarshal([]byte(get(t, incomplete.ID)), &got))
 		assert.Equal(t, false, got["complete"])
-		assert.Equal(t, []any{"Mystery Spice"}, got["missing"])
+		assert.Equal(t, []any{map[string]any{"id": float64(spice.ID), "name": "Mystery Spice"}}, got["missing"])
 		assert.InDelta(t, 145.0, got["kcal"].(float64), 0.01)
 	})
 }

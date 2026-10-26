@@ -1,9 +1,11 @@
 package food
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
@@ -28,12 +30,18 @@ func NewNutritionResolver(repo Repository) *NutritionResolver {
 // Detailed is the per-portion macros plus a completeness flag. Complete is
 // false when any leaf in the tree lacks kcal, protein, fat or carbs per 100 g;
 // those leaves still contribute 0 for the missing values. Missing holds the
-// unique names of the incomplete leaves, sorted; it is empty (never nil) when
-// Complete is true.
+// incomplete leaves, unique by ID and sorted case-insensitively by name (then
+// ID); it is empty (never nil) when Complete is true.
 type Detailed struct {
 	Macros   nutrition.Macros
 	Complete bool
-	Missing  []string
+	Missing  []MissingLeaf
+}
+
+// MissingLeaf identifies a leaf food that lacks core macros.
+type MissingLeaf struct {
+	ID   int64
+	Name string
 }
 
 // PerPortion returns the per-portion macros for a composed food. For a leaf
@@ -68,16 +76,21 @@ func (r *NutritionResolver) PerPortionDetailed(ctx context.Context, foodID int64
 	}
 	// cache memoises per-100g macros per food id. A cached subtree has already
 	// recorded its incomplete leaves in missing, so cache hits need not re-add.
-	w := &walk{cache: map[int64]nutrition.Macros{}, missing: map[string]struct{}{}}
+	w := &walk{cache: map[int64]nutrition.Macros{}, missing: map[int64]string{}}
 	total, err := r.totalMacros(ctx, f, w, 0)
 	if err != nil {
 		return Detailed{}, err
 	}
-	d := Detailed{Macros: total, Missing: make([]string, 0, len(w.missing))}
-	for name := range w.missing {
-		d.Missing = append(d.Missing, name)
+	d := Detailed{Macros: total, Missing: make([]MissingLeaf, 0, len(w.missing))}
+	for id, name := range w.missing {
+		d.Missing = append(d.Missing, MissingLeaf{ID: id, Name: name})
 	}
-	slices.Sort(d.Missing)
+	slices.SortFunc(d.Missing, func(a, b MissingLeaf) int {
+		if c := strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
 	d.Complete = len(d.Missing) == 0
 	if f.Kind == KindLeaf {
 		return d, nil
@@ -93,13 +106,13 @@ func (r *NutritionResolver) PerPortionDetailed(ctx context.Context, foodID int64
 // walk is the per-call state of one resolve.
 type walk struct {
 	cache   map[int64]nutrition.Macros // per-100g macros by food id
-	missing map[string]struct{}        // names of leaves lacking core macros
+	missing map[int64]string           // id → name of leaves lacking core macros
 }
 
 // leaf returns a leaf's per-100g macros and records it if incomplete.
 func (w *walk) leaf(f *Food) nutrition.Macros {
 	if f.Kcal100g == nil || f.Protein100g == nil || f.Fat100g == nil || f.Carbs100g == nil {
-		w.missing[f.Name] = struct{}{}
+		w.missing[f.ID] = f.Name
 	}
 	return leafPer100g(f)
 }

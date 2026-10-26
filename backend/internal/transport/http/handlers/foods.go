@@ -183,9 +183,14 @@ type foodNutritionResponse struct {
 	Fiber   float64 `json:"fiber"`
 	Sodium  float64 `json:"sodium"`
 	// Complete is false when a leaf lacks kcal/protein/fat/carbs; Missing
-	// names those leaves.
-	Complete bool     `json:"complete"`
-	Missing  []string `json:"missing"`
+	// lists those leaves.
+	Complete bool                  `json:"complete"`
+	Missing  []missingLeafResponse `json:"missing"`
+}
+
+type missingLeafResponse struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // ── Mapping ───────────────────────────────────────────────────────────
@@ -506,11 +511,15 @@ func (h *FoodHandler) Nutrition(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
+	missing := make([]missingLeafResponse, len(d.Missing))
+	for i, l := range d.Missing {
+		missing[i] = missingLeafResponse{ID: l.ID, Name: l.Name}
+	}
 	m := d.Macros
 	writeJSON(w, http.StatusOK, foodNutritionResponse{
 		Kcal: m.Kcal, Protein: m.Protein, Fat: m.Fat,
 		Carbs: m.Carbs, Fiber: m.Fiber, Sodium: m.Sodium,
-		Complete: d.Complete, Missing: d.Missing,
+		Complete: d.Complete, Missing: missing,
 	})
 }
 

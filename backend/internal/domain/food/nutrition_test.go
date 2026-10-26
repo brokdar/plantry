@@ -47,7 +47,7 @@ func TestNutritionResolver_PerPortionDetailed_LeafWithoutKcal(t *testing.T) {
 	d, err := food.NewNutritionResolver(repo).PerPortionDetailed(context.Background(), 1)
 	require.NoError(t, err)
 	assert.False(t, d.Complete)
-	assert.Equal(t, []string{"Mystery Spice"}, d.Missing)
+	assert.Equal(t, []food.MissingLeaf{{ID: 1, Name: "Mystery Spice"}}, d.Missing)
 	assert.Zero(t, d.Macros.Kcal)
 	assert.InDelta(t, 10.0, d.Macros.Protein, 1e-9)
 }
@@ -69,7 +69,7 @@ func TestNutritionResolver_PerPortionDetailed_RecipeOneIncomplete(t *testing.T) 
 	d, err := food.NewNutritionResolver(repo).PerPortionDetailed(context.Background(), 10)
 	require.NoError(t, err)
 	assert.False(t, d.Complete)
-	assert.Equal(t, []string{"Tofu"}, d.Missing)
+	assert.Equal(t, []food.MissingLeaf{{ID: 2, Name: "Tofu"}}, d.Missing)
 	// Incomplete leaves still contribute what they have; missing fields count as 0.
 	assert.InDelta(t, 200.0, d.Macros.Kcal, 1e-9)
 	assert.InDelta(t, 8.0, d.Macros.Carbs, 1e-9)
@@ -90,7 +90,7 @@ func TestNutritionResolver_PerPortionDetailed_NestedPropagates(t *testing.T) {
 		},
 		children: map[int64][]food.FoodComponent{
 			20: {{ChildID: 3, Grams: 50}, {ChildID: 4, Grams: 10}},
-			// Sauce appears twice and Miso also directly: names must stay unique.
+			// Sauce appears twice and Miso also directly: leaves must stay unique.
 			10: {{ChildID: 20, Grams: 30}, {ChildID: 1, Grams: 100}, {ChildID: 3, Grams: 5}, {ChildID: 20, Grams: 10}},
 		},
 	}
@@ -98,7 +98,33 @@ func TestNutritionResolver_PerPortionDetailed_NestedPropagates(t *testing.T) {
 	d, err := food.NewNutritionResolver(repo).PerPortionDetailed(context.Background(), 10)
 	require.NoError(t, err)
 	assert.False(t, d.Complete)
-	assert.Equal(t, []string{"Butter", "Miso"}, d.Missing)
+	assert.Equal(t, []food.MissingLeaf{{ID: 4, Name: "Butter"}, {ID: 3, Name: "Miso"}}, d.Missing)
+}
+
+func TestNutritionResolver_PerPortionDetailed_MissingSortedCaseInsensitiveThenID(t *testing.T) {
+	incomplete := func(id int64, name string) *food.Food {
+		f := completeLeaf(id, name)
+		f.Kcal100g = nil
+		return f
+	}
+	repo := &treeRepo{
+		foods: map[int64]*food.Food{
+			7:  incomplete(7, "basil"),
+			5:  incomplete(5, "Salt"),
+			9:  incomplete(9, "Apple"),
+			6:  incomplete(6, "Salt"), // same name, distinct leaf: kept, ordered by ID
+			10: {ID: 10, Name: "Mix", Kind: food.KindComposed},
+		},
+		children: map[int64][]food.FoodComponent{
+			10: {{ChildID: 7, Grams: 1}, {ChildID: 5, Grams: 1}, {ChildID: 9, Grams: 1}, {ChildID: 6, Grams: 1}},
+		},
+	}
+
+	d, err := food.NewNutritionResolver(repo).PerPortionDetailed(context.Background(), 10)
+	require.NoError(t, err)
+	assert.Equal(t, []food.MissingLeaf{
+		{ID: 9, Name: "Apple"}, {ID: 7, Name: "basil"}, {ID: 5, Name: "Salt"}, {ID: 6, Name: "Salt"},
+	}, d.Missing)
 }
 
 func TestNutritionResolver_PerPortionDetailed_AllComplete(t *testing.T) {
