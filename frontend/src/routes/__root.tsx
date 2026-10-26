@@ -1,4 +1,9 @@
-import { createRootRoute, Link, Outlet } from "@tanstack/react-router"
+import {
+  createRootRoute,
+  Link,
+  Outlet,
+  useRouterState,
+} from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -6,6 +11,7 @@ import { CommandPalette } from "@/components/command/CommandPalette"
 import { CopyFromWeekDialog } from "@/components/presets/CopyFromWeekDialog"
 import { AppShell } from "@/components/shell/AppShell"
 import { Button } from "@/components/ui/button"
+import { Toaster } from "@/components/ui/sonner"
 import { useCommandPaletteHotkey } from "@/lib/use-command-palette-hotkey"
 import { initUnitsVocabulary } from "@/lib/domain/units"
 import { useUnits } from "@/lib/queries/units"
@@ -25,6 +31,21 @@ function RootComponent() {
   useEffect(() => {
     if (units) initUnitsVocabulary(units)
   }, [units])
+
+  // The setup wizard is a centred single column without the app shell
+  // (UX §5.1), so a new install isn't offered navigation it can't use yet.
+  const isSetup = useRouterState({
+    select: (s) => s.location.pathname.startsWith("/setup"),
+  })
+  if (isSetup) {
+    return (
+      <>
+        <Outlet />
+        <Toaster />
+      </>
+    )
+  }
+
   return (
     <AppShell>
       <Outlet />

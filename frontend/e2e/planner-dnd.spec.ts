@@ -189,6 +189,7 @@ test.describe("Planner — drag-and-drop", () => {
       const source = page.locator(`[data-testid="cell-0-${slot.id}"]`).first()
       const target = page.locator(`[data-testid="cell-3-${slot.id}"]`).first()
       await expect(source.getByText(`Pho ${tag}`)).toBeVisible()
+      await source.scrollIntoViewIfNeeded()
 
       const moveResp = page.waitForResponse(
         (r) =>

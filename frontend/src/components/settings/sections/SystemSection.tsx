@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import { ArrowRight, Lock } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -35,21 +36,19 @@ export function SystemSection() {
           label={t("settings_page.system_section.setup_label")}
           description={t("settings_page.system_section.setup_effect")}
         >
-          {/* /setup arrives with the wizard (Phase 1 S2); a plain anchor
-              until the route exists, so the typed router `to` compiles. */}
           <Button
             asChild
             variant="outline"
             className="self-start pointer-coarse:h-11"
           >
-            <a href="/setup" data-testid="rerun-setup">
+            <Link to="/setup" data-testid="rerun-setup">
               {t("settings_page.system_section.setup_link")}
               <ArrowRight
                 data-icon="inline-end"
                 strokeWidth={1.5}
                 aria-hidden
               />
-            </a>
+            </Link>
           </Button>
         </SettingRow>
         <DebugRow />
