@@ -67,3 +67,21 @@ func TestDynamicProvider_GetByID_EmptyKey_ReturnsLookupFailed(t *testing.T) {
 	_, err := p.GetByID(context.Background(), 1234)
 	require.ErrorIs(t, err, domain.ErrLookupFailed)
 }
+
+func TestDynamicProvider_Configured(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{"no key", nil, false},
+		{"env key", map[string]string{"PLANTRY_FDC_API_KEY": "abc"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := settings.NewService(newMemRepo(), settings.NewEnvSnapshot(tt.env), newTestCipher(t))
+			p := fdc.NewDynamicProvider(svc)
+			assert.Equal(t, tt.want, p.Configured(context.Background()))
+		})
+	}
+}

@@ -80,16 +80,20 @@ func TestLookupHandler_Refetch_FDCUsesGetByID(t *testing.T) {
 	assert.Empty(t, stub.searches, "refetch must not search FDC by the id as text")
 }
 
-func TestLookupHandler_Refetch_FDCUnparsableID(t *testing.T) {
-	stub := &stubFDC{}
-	r, svc := setupLookupRouter(t, stub)
-	id := createFDCLeaf(t, svc, "not-a-number")
+func TestLookupHandler_Refetch_FDCInvalidID(t *testing.T) {
+	for _, fdcID := range []string{"not-a-number", "0", "-5"} {
+		t.Run(fdcID, func(t *testing.T) {
+			stub := &stubFDC{}
+			r, svc := setupLookupRouter(t, stub)
+			id := createFDCLeaf(t, svc, fdcID)
 
-	resp := postRefetch(t, r, id)
-	assert.Equal(t, http.StatusBadRequest, resp.Code)
-	assert.Contains(t, resp.Body.String(), "error.invalid_body")
-	assert.Empty(t, stub.byIDCalls)
-	assert.Empty(t, stub.searches)
+			resp := postRefetch(t, r, id)
+			assert.Equal(t, http.StatusBadRequest, resp.Code)
+			assert.Contains(t, resp.Body.String(), "error.invalid_body")
+			assert.Empty(t, stub.byIDCalls)
+			assert.Empty(t, stub.searches)
+		})
+	}
 }
 
 func TestLookupHandler_Refetch_FDCNotFound(t *testing.T) {

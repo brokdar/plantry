@@ -40,6 +40,13 @@ func (d *DynamicProvider) SearchByName(ctx context.Context, query string, limit 
 	return p.SearchByName(ctx, query, limit)
 }
 
+// Configured reports whether an FDC API key is set. It reads the same key
+// SearchByName and GetByID use; a settings error counts as not configured.
+func (d *DynamicProvider) Configured(ctx context.Context) bool {
+	key, err := d.settings.EffectiveFDCKey(ctx)
+	return err == nil && key != ""
+}
+
 // GetByID implements food.FoodByIDProvider. Without a configured FDC key
 // there is nothing to fetch, so it returns domain.ErrLookupFailed.
 func (d *DynamicProvider) GetByID(ctx context.Context, fdcID int) (food.Candidate, error) {

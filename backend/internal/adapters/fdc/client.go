@@ -280,9 +280,9 @@ func normaliseFDC(f fdcSearchFood) Candidate {
 	return c
 }
 
-// Candidate normalises a detail record into the same shape as a search
+// candidate normalises a detail record into the same shape as a search
 // result, so a refetch by ID yields the values a search would.
-func (f *Food) Candidate() Candidate {
+func (f *Food) candidate() Candidate {
 	c := candidateFromNutrients(f.Nutrients)
 	c.Name = f.Description
 	c.FdcID = f.FdcID
@@ -300,6 +300,16 @@ func candidateFromNutrients(vals map[int]float64) Candidate {
 		return nil
 	}
 
+	// Prefer the generic energy value; Foundation foods often report only the
+	// Atwater-factor variants (2048 specific, 2047 general).
+	kcal := ptr(1008)
+	if kcal == nil {
+		kcal = ptr(2048)
+	}
+	if kcal == nil {
+		kcal = ptr(2047)
+	}
+
 	// Convert sodium from mg to g.
 	sodiumG := ptr(1093)
 	if sodiumG != nil {
@@ -308,7 +318,7 @@ func candidateFromNutrients(vals map[int]float64) Candidate {
 	}
 
 	return Candidate{
-		Kcal100g:         ptr(1008),
+		Kcal100g:         kcal,
 		Protein100g:      ptr(1003),
 		Fat100g:          ptr(1004),
 		Carbs100g:        ptr(1005),

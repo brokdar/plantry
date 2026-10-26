@@ -196,7 +196,7 @@ func (h *LookupHandler) Refetch(w http.ResponseWriter, r *http.Request) {
 		candidate = results[0]
 	case existing.FdcID != nil && *existing.FdcID != "":
 		fdcID, err := strconv.Atoi(*existing.FdcID)
-		if err != nil {
+		if err != nil || fdcID <= 0 {
 			status, key := toHTTP(fmt.Errorf("%w: invalid fdc_id %q", domain.ErrInvalidInput, *existing.FdcID))
 			writeError(w, status, key)
 			return
