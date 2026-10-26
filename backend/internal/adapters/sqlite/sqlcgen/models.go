@@ -241,6 +241,9 @@ type UserProfile struct {
 	SystemPrompt        sql.NullString
 	Locale              string
 	UpdatedAt           string
+	DietType            string
+	MeatDaysPerWeekMax  sql.NullInt64
+	HouseholdPortions   float64
 }
 
 type VariantGroup struct {

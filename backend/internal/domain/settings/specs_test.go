@@ -63,24 +63,87 @@ func TestSettingsSpec_ShoppingDay(t *testing.T) {
 	}
 }
 
-func TestSettingsSpec_WindowDays(t *testing.T) {
+func TestSettingsSpec_Phase1Defaults(t *testing.T) {
 	svc := newSpecTestService(t)
 	ctx := context.Background()
 
-	// boundary values — 5 and 14 must be accepted
-	for _, v := range []string{"5", "7", "10", "14"} {
-		require.NoErrorf(t, svc.Set(ctx, settings.KeyPlanWindowDays, v), "expected %q to be accepted", v)
+	defaults := map[string]string{
+		settings.KeySetupCompleted:             "false",
+		settings.KeyPlanMaxCookOccasionsPerDay: "1",
+		settings.KeyPlanBatchCooking:           "true",
+		settings.KeyPlanDefaultKeepDays:        "3",
+		settings.KeyPlanFreezingEnabled:        "false",
+		settings.KeyPlanFreezerKeepDays:        "90",
+		settings.KeyPlanVarietyWeeks:           "3",
+		settings.KeyPlanExplorePerWeek:         "0",
+		settings.KeyDiscoveryDailyEnabled:      "true",
+		settings.KeyAIRunRetentionDays:         "180",
+		settings.KeyPlanAnchor:                 "next_shopping_day",
 	}
-
-	// below minimum
-	for _, v := range []string{"4", "1", "0"} {
-		err := svc.Set(ctx, settings.KeyPlanWindowDays, v)
-		assert.ErrorIsf(t, err, settings.ErrInvalidKind, "expected %q to be rejected (below min)", v)
+	for key, want := range defaults {
+		t.Run(key, func(t *testing.T) {
+			v, err := svc.Get(ctx, key)
+			require.NoError(t, err)
+			assert.Equal(t, want, v.Raw)
+			assert.Equal(t, settings.SourceDefault, v.Source)
+		})
 	}
+}
 
-	// above maximum
-	for _, v := range []string{"15", "20", "100"} {
-		err := svc.Set(ctx, settings.KeyPlanWindowDays, v)
-		assert.ErrorIsf(t, err, settings.ErrInvalidKind, "expected %q to be rejected (above max)", v)
+func TestSettingsSpec_Phase1IntRanges(t *testing.T) {
+	cases := []struct {
+		key      string
+		accepted []string
+		rejected []string
+	}{
+		{settings.KeyPlanMaxCookOccasionsPerDay, []string{"1", "3"}, []string{"0", "4"}},
+		{settings.KeyPlanDefaultKeepDays, []string{"1", "7"}, []string{"0", "8"}},
+		{settings.KeyPlanFreezerKeepDays, []string{"1", "365"}, []string{"0", "366"}},
+		{settings.KeyPlanVarietyWeeks, []string{"0", "8"}, []string{"-1", "9"}},
+		{settings.KeyPlanExplorePerWeek, []string{"0", "3"}, []string{"-1", "4"}},
+		{settings.KeyAIRunRetentionDays, []string{"7", "3650"}, []string{"6", "3651"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.key, func(t *testing.T) {
+			svc := newSpecTestService(t)
+			ctx := context.Background()
+			for _, v := range tc.accepted {
+				require.NoErrorf(t, svc.Set(ctx, tc.key, v), "expected %q to be accepted", v)
+			}
+			for _, v := range append(tc.rejected, "abc", "") {
+				assert.ErrorIsf(t, svc.Set(ctx, tc.key, v), settings.ErrInvalidKind, "expected %q to be rejected", v)
+			}
+		})
+	}
+}
+
+func TestSettingsSpec_Phase1Bools(t *testing.T) {
+	keys := []string{
+		settings.KeySetupCompleted,
+		settings.KeyPlanBatchCooking,
+		settings.KeyPlanFreezingEnabled,
+		settings.KeyDiscoveryDailyEnabled,
+	}
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			svc := newSpecTestService(t)
+			ctx := context.Background()
+			require.NoError(t, svc.Set(ctx, key, "true"))
+			require.NoError(t, svc.Set(ctx, key, "false"))
+			for _, v := range []string{"yes", "maybe", ""} {
+				assert.ErrorIsf(t, svc.Set(ctx, key, v), settings.ErrInvalidKind, "expected %q to be rejected", v)
+			}
+		})
+	}
+}
+
+func TestSettingsSpec_RemovedAndDeferredKeysUnknown(t *testing.T) {
+	svc := newSpecTestService(t)
+	ctx := context.Background()
+
+	for _, key := range []string{"plan.window_days", "ai.price_overrides", "discovery.cuisines"} {
+		_, err := svc.Get(ctx, key)
+		assert.ErrorIsf(t, err, settings.ErrUnknownKey, "Get(%q)", key)
+		assert.ErrorIsf(t, svc.Set(ctx, key, "7"), settings.ErrUnknownKey, "Set(%q)", key)
 	}
 }

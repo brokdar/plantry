@@ -30,7 +30,50 @@ func (s *Service) Update(ctx context.Context, p *Profile) (*Profile, error) {
 	return s.repo.Update(ctx, p)
 }
 
+// ReplaceInput is a full replace of the profile, except that a nil DietType or
+// HouseholdPortions keeps the stored value. Profile.DietType and
+// Profile.HouseholdPortions are ignored.
+type ReplaceInput struct {
+	Profile           Profile
+	DietType          *DietType
+	HouseholdPortions *float64
+}
+
+// Replace merges in with the stored profile, then validates and persists it.
+func (s *Service) Replace(ctx context.Context, in ReplaceInput) (*Profile, error) {
+	p := in.Profile
+	if in.DietType == nil || in.HouseholdPortions == nil {
+		stored, err := s.repo.Get(ctx)
+		if err != nil {
+			return nil, err
+		}
+		p.DietType = stored.DietType
+		p.HouseholdPortions = stored.HouseholdPortions
+	}
+	if in.DietType != nil {
+		p.DietType = *in.DietType
+	}
+	if in.HouseholdPortions != nil {
+		p.HouseholdPortions = *in.HouseholdPortions
+	}
+
+	return s.Update(ctx, &p)
+}
+
+// MaxHouseholdPortions caps Profile.HouseholdPortions.
+const MaxHouseholdPortions float64 = 20
+
 func validate(p *Profile) error {
+	if !p.DietType.Valid() {
+		return fmt.Errorf("%w: %q", domain.ErrInvalidDietType, p.DietType)
+	}
+	if p.MeatDaysPerWeekMax != nil && (*p.MeatDaysPerWeekMax < 0 || *p.MeatDaysPerWeekMax > 7) {
+		return fmt.Errorf("%w: must be between 0 and 7", domain.ErrInvalidMeatDays)
+	}
+	if p.HouseholdPortions <= 0 || p.HouseholdPortions > MaxHouseholdPortions {
+		return fmt.Errorf("%w: must be > 0 and <= %g", domain.ErrInvalidHouseholdPortions, MaxHouseholdPortions)
+	}
+
 	if p.KcalTarget != nil && *p.KcalTarget <= 0 {
 		return fmt.Errorf("%w: kcal_target must be positive", domain.ErrInvalidMacros)
 	}

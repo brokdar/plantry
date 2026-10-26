@@ -29,7 +29,48 @@ func TestProfileRepo_GetDefault(t *testing.T) {
 	assert.Nil(t, p.SystemPrompt)
 	assert.Equal(t, []string{}, p.DietaryRestrictions)
 	assert.NotNil(t, p.Preferences)
+	assert.Equal(t, profile.DietOmnivore, p.DietType)
+	assert.Nil(t, p.MeatDaysPerWeekMax)
+	assert.InDelta(t, 1.0, p.HouseholdPortions, 1e-9)
 	assert.False(t, p.UpdatedAt.IsZero())
+}
+
+func TestProfileRepo_PlanningPrefsRoundTrip(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewProfileRepo(db)
+	ctx := context.Background()
+
+	three := 3
+	steps := []struct {
+		name      string
+		diet      profile.DietType
+		meatDays  *int
+		household float64
+	}{
+		{"meat days null", profile.DietVegetarian, nil, 2.5},
+		{"meat days 3", profile.DietPescetarian, &three, 4},
+		{"meat days back to null", profile.DietVegan, nil, 1},
+	}
+	for _, s := range steps {
+		t.Run(s.name, func(t *testing.T) {
+			updated, err := repo.Update(ctx, &profile.Profile{
+				DietaryRestrictions: []string{},
+				Preferences:         map[string]any{},
+				Locale:              "en",
+				DietType:            s.diet,
+				MeatDaysPerWeekMax:  s.meatDays,
+				HouseholdPortions:   s.household,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, s.meatDays, updated.MeatDaysPerWeekMax)
+
+			got, err := repo.Get(ctx)
+			require.NoError(t, err)
+			assert.Equal(t, s.diet, got.DietType)
+			assert.Equal(t, s.meatDays, got.MeatDaysPerWeekMax)
+			assert.InDelta(t, s.household, got.HouseholdPortions, 1e-9)
+		})
+	}
 }
 
 func TestProfileRepo_Update(t *testing.T) {
@@ -44,6 +85,8 @@ func TestProfileRepo_Update(t *testing.T) {
 		CarbsPct:            ptr64(35),
 		DietaryRestrictions: []string{"vegetarian"},
 		Preferences:         map[string]any{},
+		DietType:            profile.DietOmnivore,
+		HouseholdPortions:   1,
 		SystemPrompt:        ptrStr("Prefer quick meals"),
 		Locale:              "de",
 	}
@@ -73,6 +116,8 @@ func TestProfileRepo_ClearTargets(t *testing.T) {
 		KcalTarget:          ptr64(2000),
 		DietaryRestrictions: []string{},
 		Preferences:         map[string]any{},
+		DietType:            profile.DietOmnivore,
+		HouseholdPortions:   1,
 		Locale:              "en",
 	})
 	require.NoError(t, err)
@@ -82,6 +127,8 @@ func TestProfileRepo_ClearTargets(t *testing.T) {
 		KcalTarget:          nil,
 		DietaryRestrictions: []string{},
 		Preferences:         map[string]any{},
+		DietType:            profile.DietOmnivore,
+		HouseholdPortions:   1,
 		Locale:              "en",
 	})
 	require.NoError(t, err)

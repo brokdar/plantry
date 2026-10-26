@@ -57,6 +57,9 @@ func (r *ProfileRepo) Update(ctx context.Context, p *profile.Profile) (*profile.
 		Preferences:         string(prefsJSON),
 		SystemPrompt:        toNullString(p.SystemPrompt),
 		Locale:              p.Locale,
+		DietType:            string(p.DietType),
+		MeatDaysPerWeekMax:  toNullInt64FromIntPtr(p.MeatDaysPerWeekMax),
+		HouseholdPortions:   p.HouseholdPortions,
 	})
 	if err != nil {
 		return nil, err
@@ -69,6 +72,9 @@ func mapProfileToDomain(row sqlcgen.UserProfile) *profile.Profile {
 		Locale:              row.Locale,
 		DietaryRestrictions: []string{},
 		Preferences:         map[string]any{},
+		DietType:            profile.DietType(row.DietType),
+		MeatDaysPerWeekMax:  fromNullInt64ToIntPtr(row.MeatDaysPerWeekMax),
+		HouseholdPortions:   row.HouseholdPortions,
 	}
 
 	if row.KcalTarget.Valid {
