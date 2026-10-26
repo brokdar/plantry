@@ -44,7 +44,10 @@ func (r *memFoodRepo) List(_ context.Context, _ food.ListQuery) (*food.ListResul
 	return &food.ListResult{Items: items, Total: len(items)}, nil
 }
 
-func (r *memFoodRepo) LookupByIDs(_ context.Context, ids []int64) (map[int64]*food.Food, error) {
+func (r *memFoodRepo) LookupByIDs(ctx context.Context, ids []int64) (map[int64]*food.Food, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	out := map[int64]*food.Food{}
 	for _, id := range ids {
 		if id == 4 {
@@ -69,7 +72,8 @@ func ptr[T any](v T) *T { return &v }
 // whose nutrition lookup fails.
 func newPayloadToolSet(t *testing.T) *ToolSet {
 	t.Helper()
-	cooked := time.Date(2026, 10, 20, 18, 30, 0, 0, time.UTC)
+	// 01:30 on the 21st at UTC+2 is 23:30 on the 20th UTC; the UTC date wins.
+	cooked := time.Date(2026, 10, 21, 1, 30, 0, 0, time.FixedZone("UTC+2", 2*60*60))
 	repo := &memFoodRepo{
 		foods: map[int64]*food.Food{
 			1: {
@@ -112,6 +116,7 @@ func assertCurryPayload(t *testing.T, m map[string]any) {
 	assert.Equal(t, true, m["favorite"])
 	assert.Equal(t, float64(3), m["cook_count"])
 	assert.Equal(t, "2026-10-20", m["last_cooked_at"])
+	assert.Equal(t, "per_portion", m["basis"])
 	assert.Equal(t, false, m["nutrition_complete"])
 	assert.Equal(t, []any{"Mystery sauce"}, m["missing_nutrition"])
 	// 200 g rice / 2 portions = 100 g rice per portion.
@@ -144,6 +149,7 @@ func TestTool_ListFoods_PayloadIncludesFavoriteCookDataAndMacros(t *testing.T) {
 	assert.Equal(t, float64(0), rice["cook_count"])
 	assert.Contains(t, rice, "last_cooked_at")
 	assert.Nil(t, rice["last_cooked_at"])
+	assert.Equal(t, "per_100g", rice["basis"])
 	assert.Equal(t, true, rice["nutrition_complete"])
 	assert.NotContains(t, rice, "missing_nutrition")
 	assert.Equal(t, map[string]any{
@@ -154,6 +160,7 @@ func TestTool_ListFoods_PayloadIncludesFavoriteCookDataAndMacros(t *testing.T) {
 	broken := byName["Broken"]
 	assert.NotContains(t, broken, "per_portion")
 	assert.NotContains(t, broken, "nutrition_complete")
+	assert.NotContains(t, broken, "basis")
 	assert.Equal(t, false, broken["favorite"])
 }
 
@@ -162,4 +169,12 @@ func TestPlateSummary_IncludesSkipped(t *testing.T) {
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(mustJSON(plateSummary(p)), &m))
 	assert.Equal(t, true, m["skipped"])
+}
+
+func TestTool_ListFoods_CancelledContextAborts(t *testing.T) {
+	ts := newPayloadToolSet(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, err := ts.Execute(ctx, "list_foods", json.RawMessage(`{}`))
+	require.ErrorIs(t, err, context.Canceled)
 }
