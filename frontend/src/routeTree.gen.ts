@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShopIndexRouteImport } from './routes/shop/index'
+import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as PresetsIndexRouteImport } from './routes/presets/index'
 import { Route as IngredientsIndexRouteImport } from './routes/ingredients/index'
@@ -34,6 +35,11 @@ const IndexRoute = IndexRouteImport.update({
 const ShopIndexRoute = ShopIndexRouteImport.update({
   id: '/shop/',
   path: '/shop/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupIndexRoute = SetupIndexRouteImport.update({
+  id: '/setup/',
+  path: '/setup/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/ingredients/': typeof IngredientsIndexRoute
   '/presets/': typeof PresetsIndexRoute
   '/settings/': typeof SettingsIndexRoute
+  '/setup/': typeof SetupIndexRoute
   '/shop/': typeof ShopIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/ingredients': typeof IngredientsIndexRoute
   '/presets': typeof PresetsIndexRoute
   '/settings': typeof SettingsIndexRoute
+  '/setup': typeof SetupIndexRoute
   '/shop': typeof ShopIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/ingredients/': typeof IngredientsIndexRoute
   '/presets/': typeof PresetsIndexRoute
   '/settings/': typeof SettingsIndexRoute
+  '/setup/': typeof SetupIndexRoute
   '/shop/': typeof ShopIndexRoute
   '/components/$id/edit': typeof ComponentsIdEditRoute
   '/ingredients/$id/edit': typeof IngredientsIdEditRoute
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
     | '/ingredients/'
     | '/presets/'
     | '/settings/'
+    | '/setup/'
     | '/shop/'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
@@ -194,6 +204,7 @@ export interface FileRouteTypes {
     | '/ingredients'
     | '/presets'
     | '/settings'
+    | '/setup'
     | '/shop'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
@@ -212,6 +223,7 @@ export interface FileRouteTypes {
     | '/ingredients/'
     | '/presets/'
     | '/settings/'
+    | '/setup/'
     | '/shop/'
     | '/components/$id/edit'
     | '/ingredients/$id/edit'
@@ -231,6 +243,7 @@ export interface RootRouteChildren {
   IngredientsIndexRoute: typeof IngredientsIndexRoute
   PresetsIndexRoute: typeof PresetsIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
+  SetupIndexRoute: typeof SetupIndexRoute
   ShopIndexRoute: typeof ShopIndexRoute
   ComponentsIdEditRoute: typeof ComponentsIdEditRoute
   IngredientsIdEditRoute: typeof IngredientsIdEditRoute
@@ -252,6 +265,13 @@ declare module '@tanstack/react-router' {
       path: '/shop'
       fullPath: '/shop/'
       preLoaderRoute: typeof ShopIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup/': {
+      id: '/setup/'
+      path: '/setup'
+      fullPath: '/setup/'
+      preLoaderRoute: typeof SetupIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings/': {
@@ -367,6 +387,7 @@ const rootRouteChildren: RootRouteChildren = {
   IngredientsIndexRoute: IngredientsIndexRoute,
   PresetsIndexRoute: PresetsIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,
+  SetupIndexRoute: SetupIndexRoute,
   ShopIndexRoute: ShopIndexRoute,
   ComponentsIdEditRoute: ComponentsIdEditRoute,
   IngredientsIdEditRoute: IngredientsIdEditRoute,

@@ -1402,5 +1402,58 @@
   "units": {
     "kcal": "kcal",
     "g": "g"
+  },
+  "setup": {
+    "step_of": "Schritt {{step}} von {{total}}",
+    "back": "Zurück",
+    "next": "Weiter",
+    "skip": "Überspringen und Standardwerte nehmen",
+    "welcome": {
+      "title": "Willkommen bei Plantry",
+      "why": "Wähle deine Sprache. Plantry nutzt sie für Rezepte, Pläne und die Einkaufsliste."
+    },
+    "household": {
+      "title": "Du & dein Haushalt",
+      "why": "Plantry bemisst jede Mahlzeit für deinen Haushalt und lässt weg, was ihr nicht esst.",
+      "portions_one": "= {{portions}} Portion pro Mahlzeit",
+      "portions_other": "= {{portions}} Portionen pro Mahlzeit",
+      "allergies_why": "Plantry lässt Rezepte mit diesen Zutaten weg.",
+      "meat_days_optional": "Optional. Plantry plant Fleisch an höchstens so vielen Tagen pro Woche."
+    },
+    "nutrition": {
+      "title": "Ernährungsziel",
+      "why": "Plantry stimmt die Mahlzeiten jedes Tages auf dieses Ziel ab. Du kannst es später ändern."
+    },
+    "meals": {
+      "title": "Mahlzeiten & Woche",
+      "why": "Plantry plant jede Mahlzeit, die auf „Planen“ steht. Was ihr woanders esst, setzt du auf „Kein Essen“.",
+      "name_label": "Name der Mahlzeit {{n}}",
+      "move_up": "{{name}} nach oben",
+      "move_down": "{{name}} nach unten",
+      "plan_toggle": "{{name}} planen",
+      "unnamed": "Mahlzeit ohne Namen",
+      "none_active": "Schalte mindestens eine Mahlzeit ein, um deine Woche einzurichten.",
+      "error_unnamed": "Gib jeder Mahlzeit einen Namen.",
+      "error_none_active": "Schalte mindestens eine Mahlzeit ein."
+    },
+    "cooking": {
+      "title": "Kochstil",
+      "why": "Plantry fasst Mahlzeiten zu Kochterminen zusammen, die zu deinem Kochalltag passen."
+    },
+    "variety": {
+      "title": "Abwechslung & Einkauf",
+      "why": "Plantry plant von einem Einkaufstag zum nächsten und sorgt dafür, dass Rezepte nicht zu schnell wiederkommen.",
+      "shopping_why": "Du kaufst am {{day}} ein. Plantry plant die Tage danach."
+    },
+    "assistant": {
+      "title": "Assistent (optional)",
+      "why": "Der Assistent schlägt Mahlzeiten vor und kann deine Woche für dich füllen.",
+      "later": "Das kannst du später nachholen. Planen klappt auch ohne."
+    },
+    "finish": {
+      "title": "Alles eingerichtet",
+      "body": "Leg 10 Rezepte an, dann kann Plantry deine Wochen planen.",
+      "add_recipes": "Rezepte hinzufügen"
+    }
   }
 }
