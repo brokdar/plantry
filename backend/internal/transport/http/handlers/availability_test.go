@@ -111,8 +111,8 @@ func TestAvailabilityHandler_PutDefaults_Errors(t *testing.T) {
 		{"duplicate", fmt.Sprintf(`{"items":[{"weekday":1,"slot_id":%d,"mode":"none"},{"weekday":1,"slot_id":%d,"mode":"none"}]}`, e.slotA, e.slotA), http.StatusBadRequest, "error.invalid_body"},
 		{"routine without preset", fmt.Sprintf(`{"items":[{"weekday":1,"slot_id":%d,"mode":"routine"}]}`, e.slotA), http.StatusBadRequest, "error.availability.preset_required"},
 		{"none with preset", fmt.Sprintf(`{"items":[{"weekday":1,"slot_id":%d,"mode":"none","preset_id":%d}]}`, e.slotA, e.preset), http.StatusBadRequest, "error.availability.preset_not_allowed"},
-		{"unknown slot", `{"items":[{"weekday":1,"slot_id":9999,"mode":"none"}]}`, http.StatusNotFound, "error.not_found"},
-		{"unknown preset", fmt.Sprintf(`{"items":[{"weekday":1,"slot_id":%d,"mode":"routine","preset_id":9999}]}`, e.slotA), http.StatusNotFound, "error.not_found"},
+		{"unknown slot", `{"items":[{"weekday":1,"slot_id":9999,"mode":"none"}]}`, http.StatusBadRequest, "error.availability.slot_unknown"},
+		{"unknown preset", fmt.Sprintf(`{"items":[{"weekday":1,"slot_id":%d,"mode":"routine","preset_id":9999}]}`, e.slotA), http.StatusBadRequest, "error.availability.preset_unknown"},
 		{"inactive slot", fmt.Sprintf(`{"items":[{"weekday":1,"slot_id":%d,"mode":"none"}]}`, e.inactive), http.StatusBadRequest, "error.availability.slot_inactive"},
 	}
 	for _, tt := range tests {
@@ -193,7 +193,7 @@ func TestAvailabilityHandler_PutOverride_Errors(t *testing.T) {
 		{"bad date", fmt.Sprintf("/api/availability/2026-02-30/%d", e.slotA), `{"mode":"none"}`, http.StatusBadRequest, "error.invalid_body"},
 		{"bad mode", fmt.Sprintf("/api/availability/2026-10-26/%d", e.slotA), `{"mode":"away"}`, http.StatusBadRequest, "error.invalid_body"},
 		{"unknown slot", "/api/availability/2026-10-26/9999", `{"mode":"none"}`, http.StatusNotFound, "error.not_found"},
-		{"unknown preset", fmt.Sprintf("/api/availability/2026-10-26/%d", e.slotA), `{"mode":"routine","preset_id":9999}`, http.StatusNotFound, "error.not_found"},
+		{"unknown preset", fmt.Sprintf("/api/availability/2026-10-26/%d", e.slotA), `{"mode":"routine","preset_id":9999}`, http.StatusBadRequest, "error.availability.preset_unknown"},
 		{"routine without preset", fmt.Sprintf("/api/availability/2026-10-26/%d", e.slotA), `{"mode":"routine"}`, http.StatusBadRequest, "error.availability.preset_required"},
 	}
 	for _, tt := range tests {

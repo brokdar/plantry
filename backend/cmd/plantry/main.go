@@ -166,8 +166,8 @@ func run() error {
 			}
 			return strconv.Atoi(v.Raw)
 		})
-	runRecorder.Prune(context.Background())
-	defer runRecorder.Wait() // runs before conn.Close
+	runRecorder.Prune(context.Background()) // in the background
+	defer runRecorder.Wait()                // runs before conn.Close
 	newLLMClient := func(provider, apiKey, fakeScript string) (llm.Client, error) {
 		switch provider {
 		case "anthropic":

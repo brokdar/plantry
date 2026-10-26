@@ -117,16 +117,24 @@ func (r *AIRunRepo) UpsertToolSchema(ctx context.Context, hash, json string) err
 	return nil
 }
 
+// PruneSteps deletes the steps of runs started before the cutoff in batches
+// and returns how many were deleted in total.
 func (r *AIRunRepo) PruneSteps(ctx context.Context, before time.Time) (int64, error) {
-	res, err := r.q.PruneAIRunSteps(ctx, formatTime(before))
-	if err != nil {
-		return 0, fmt.Errorf("prune ai run steps: %w", err)
+	var total int64
+	for {
+		res, err := r.q.PruneAIRunSteps(ctx, formatTime(before))
+		if err != nil {
+			return total, fmt.Errorf("prune ai run steps: %w", err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return total, fmt.Errorf("prune ai run steps: %w", err)
+		}
+		if n == 0 {
+			return total, nil
+		}
+		total += n
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("prune ai run steps: %w", err)
-	}
-	return n, nil
 }
 
 func formatTime(t time.Time) string {

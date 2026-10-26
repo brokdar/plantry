@@ -96,8 +96,9 @@ type Querier interface {
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	MarkFoodCooked(ctx context.Context, arg MarkFoodCookedParams) error
-	// Deletes the steps of runs started before the cutoff; the runs, prompts and
-	// tool schemas stay.
+	// Deletes up to 500 steps of runs started before the cutoff; the runs,
+	// prompts and tool schemas stay. The repo repeats it until nothing is left,
+	// so no single statement holds the write lock for long.
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
 	RecentUnitForFood(ctx context.Context, foodID int64) (sql.NullString, error)
 	// Placeholder query so sqlc has something to generate in Phase 0. Real

@@ -1221,3 +1221,57 @@ func TestRecorder_PruneAfterFinishIgnoresCancelledCtx(t *testing.T) {
 		t.Errorf("PruneSteps calls = %d; want 1 despite the cancelled request ctx", len(store.prunes))
 	}
 }
+
+func TestRecorder_NoPruneAfterWait(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	rec.WithRetention(func(context.Context) (int, error) { return 180, nil })
+	rec.Wait() // shutdown: the DB is about to close
+
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// A request that outlived srv.Shutdown's timeout.
+			ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+			run.Finish(ctx, airun.StatusOK, "")
+			rec.Prune(context.Background())
+		}()
+	}
+	wg.Wait()
+	rec.Wait()
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.prunes) != 0 {
+		t.Errorf("prunes = %v; want none after Wait", store.prunes)
+	}
+}
+
+// blockingPruneStore holds PruneSteps until release is closed.
+type blockingPruneStore struct {
+	*memStore
+	release chan struct{}
+}
+
+func (s *blockingPruneStore) PruneSteps(ctx context.Context, before time.Time) (int64, error) {
+	<-s.release
+	return s.memStore.PruneSteps(ctx, before)
+}
+
+func TestRecorder_PruneRunsInBackground(t *testing.T) {
+	store := &blockingPruneStore{memStore: newMemStore(), release: make(chan struct{})}
+	rec, _ := newRecorder(t, store)
+	rec.WithRetention(func(context.Context) (int, error) { return 30, nil })
+
+	rec.Prune(context.Background()) // must return without waiting for the store
+	close(store.release)
+	rec.Wait()
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.prunes) != 1 {
+		t.Errorf("prunes = %v; want one, covered by Wait", store.prunes)
+	}
+}

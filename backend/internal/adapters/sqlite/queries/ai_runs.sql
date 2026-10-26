@@ -34,7 +34,13 @@ INSERT INTO ai_tool_schemas (hash, json) VALUES (?, ?)
 ON CONFLICT(hash) DO NOTHING;
 
 -- name: PruneAIRunSteps :execresult
--- Deletes the steps of runs started before the cutoff; the runs, prompts and
--- tool schemas stay.
+-- Deletes up to 500 steps of runs started before the cutoff; the runs,
+-- prompts and tool schemas stay. The repo repeats it until nothing is left,
+-- so no single statement holds the write lock for long.
 DELETE FROM ai_run_steps
-WHERE run_id IN (SELECT id FROM ai_runs WHERE started_at < sqlc.arg(before));
+WHERE id IN (
+    SELECT s.id FROM ai_run_steps s
+    JOIN ai_runs r ON r.id = s.run_id
+    WHERE r.started_at < sqlc.arg(before)
+    LIMIT 500
+);

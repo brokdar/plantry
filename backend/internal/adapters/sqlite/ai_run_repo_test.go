@@ -359,3 +359,30 @@ func TestAIRunRepo_PruneSteps(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, n)
 }
+
+func TestAIRunRepo_PruneStepsDeletesInBatches(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	const oldSteps = 1234 // more than two batches
+	old, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: now.Add(-200 * 24 * time.Hour)})
+	require.NoError(t, err)
+	for seq := 1; seq <= oldSteps; seq++ {
+		require.NoError(t, repo.AddStep(ctx, airun.Step{RunID: old, Seq: seq, Type: airun.StepToolCall, Name: "t"}))
+	}
+	recent, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: now.Add(-10 * 24 * time.Hour)})
+	require.NoError(t, err)
+	require.NoError(t, repo.AddStep(ctx, airun.Step{RunID: recent, Seq: 1, Type: airun.StepToolCall, Name: "t"}))
+
+	n, err := repo.PruneSteps(ctx, now.Add(-180*24*time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, int64(oldSteps), n, "total across all batches")
+
+	var left, kept int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM ai_run_steps WHERE run_id = ?`, old).Scan(&left))
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM ai_run_steps WHERE run_id = ?`, recent).Scan(&kept))
+	assert.Zero(t, left)
+	assert.Equal(t, 1, kept)
+}

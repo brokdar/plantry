@@ -99,7 +99,7 @@ func (r *AvailabilityRepo) ReplaceActiveDefaults(ctx context.Context, rows []ava
 		}); err != nil {
 			if isForeignKeyViolation(err) {
 				// The slot or preset was deleted after validation.
-				return fmt.Errorf("%w: slot %d or preset of weekday %d", domain.ErrNotFound, d.SlotID, d.Weekday)
+				return r.missingRef(ctx, d.SlotID, domain.ErrAvailabilitySlotUnknown)
 			}
 			return fmt.Errorf("insert default weekday %d slot %d: %w", d.Weekday, d.SlotID, err)
 		}
@@ -150,10 +150,23 @@ func (r *AvailabilityRepo) UpsertOverride(ctx context.Context, o availability.Ov
 		Note:     toNullString(o.Note),
 	})
 	if isForeignKeyViolation(err) {
-		// The slot or preset was deleted after validation.
-		return fmt.Errorf("%w: slot %d or its preset", domain.ErrNotFound, o.SlotID)
+		// The slot or preset was deleted after validation. The slot is the
+		// URL resource, so a missing one is not found.
+		return r.missingRef(ctx, o.SlotID, domain.ErrNotFound)
 	}
 	return err
+}
+
+// missingRef names the row behind a foreign key failure on slotID or its
+// preset: unknownSlot when the slot is gone, else the preset.
+func (r *AvailabilityRepo) missingRef(ctx context.Context, slotID int64, unknownSlot error) error {
+	if _, err := r.q.GetTimeSlot(ctx, slotID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("%w: slot %d", unknownSlot, slotID)
+		}
+		return fmt.Errorf("check slot %d: %w", slotID, err)
+	}
+	return fmt.Errorf("%w: preset of slot %d", domain.ErrAvailabilityPresetUnknown, slotID)
 }
 
 func (r *AvailabilityRepo) DeleteOverride(ctx context.Context, date time.Time, slotID int64) error {

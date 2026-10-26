@@ -59,7 +59,9 @@ test.describe("Planner — advanced flows", () => {
 
     try {
       await page.goto("/")
-      await expect(page.getByRole("button", { name: "Next 7", exact: true })).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Next 7", exact: true })
+      ).toBeVisible()
 
       await page.getByRole("button", { name: "Next 7", exact: true }).click()
       await page.getByRole("button", { name: /Previous 7/i }).click()

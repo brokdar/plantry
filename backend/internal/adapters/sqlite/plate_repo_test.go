@@ -3,6 +3,8 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -142,6 +144,47 @@ func TestPlatesRepo_GetIDByCell(t *testing.T) {
 
 	_, err = repo.GetIDByCell(ctx, d.AddDate(0, 0, 1), slotID)
 	require.ErrorIs(t, err, domain.ErrNotFound, "other date")
+}
+
+// Two concurrent creates into one cell: exactly one wins, the other gets
+// ErrCellOccupied from ux_plates_date_slot.
+func TestPlatesRepo_ConcurrentCreateSameCell(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	slotID := seedSlot(t, db)
+	repo := NewPlateRepo(db)
+	d := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+
+	errs := make([]error, 2)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := range errs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs[i] = repo.Create(ctx, &plate.Plate{Date: d, SlotID: slotID})
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	var ok, occupied int
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			ok++
+		case errors.Is(err, domain.ErrCellOccupied):
+			occupied++
+		default:
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	assert.Equal(t, 1, ok)
+	assert.Equal(t, 1, occupied)
+	var n int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM plates WHERE slot_id = ?`, slotID).Scan(&n))
+	assert.Equal(t, 1, n)
 }
 
 // TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied writes straight through
