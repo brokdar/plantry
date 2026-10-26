@@ -112,6 +112,47 @@ func TestResolver_Query_NoFDCKeyGivesLocalAndOFF(t *testing.T) {
 	assert.Zero(t, spy.calls, "translator and picker only run when FDC is queried")
 }
 
+// configurableProvider is a stubProvider that reports whether it has a key.
+type configurableProvider struct {
+	stubProvider
+	configured bool
+}
+
+func (p *configurableProvider) Configured(_ context.Context) bool { return p.configured }
+
+func TestResolver_Query_UnconfiguredFDCIsSkipped(t *testing.T) {
+	repo := &leafRepo{leaves: []food.Food{leaf(7, "Karottensaft")}}
+	off := &stubProvider{results: []food.Candidate{{Name: "Bio Karotten", Source: food.SourceOFF, Barcode: "4001"}}}
+	fdc := &configurableProvider{stubProvider: stubProvider{results: []food.Candidate{{Name: "Carrots, raw", Source: food.SourceFDC, FdcID: 1}}}}
+	spy := &spyLLM{}
+	r := food.NewResolver(repo, off, fdc, spy)
+
+	results, rec, err := r.Lookup(context.Background(), "", "Karotte", "de", 5)
+	require.NoError(t, err)
+
+	require.Len(t, results, 2)
+	assert.Equal(t, food.SourceLocal, results[0].Source)
+	assert.Equal(t, food.SourceOFF, results[1].Source)
+	assert.Equal(t, 0, rec)
+	assert.Empty(t, fdc.queries, "FDC is not searched without a key")
+	assert.Zero(t, spy.calls, "translator and picker only run when FDC is queried")
+}
+
+func TestResolver_Query_ConfiguredFDCIsQueried(t *testing.T) {
+	repo := &leafRepo{leaves: []food.Food{leaf(7, "Karottensaft")}}
+	fdc := &configurableProvider{stubProvider: stubProvider{results: []food.Candidate{{Name: "Carrots, raw", Source: food.SourceFDC, FdcID: 1}}}, configured: true}
+	spy := &spyLLM{}
+	r := food.NewResolver(repo, nil, fdc, spy)
+
+	results, _, err := r.Lookup(context.Background(), "", "Karotte", "de", 5)
+	require.NoError(t, err)
+
+	require.Len(t, results, 2)
+	assert.Equal(t, food.SourceFDC, results[1].Source)
+	assert.Len(t, fdc.queries, 1)
+	assert.Equal(t, 2, spy.calls, "translate + pick")
+}
+
 func TestResolver_Query_FDCDescriptionDoesNotOverrideLocalMatch(t *testing.T) {
 	repo := &leafRepo{leaves: []food.Food{leaf(7, "Karotte"), leaf(8, "Carrots, raw")}}
 	fdc := &stubProvider{results: []food.Candidate{{Name: "Carrots, raw", Source: food.SourceFDC, FdcID: 11124}}}

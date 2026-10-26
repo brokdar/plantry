@@ -29,6 +29,12 @@ const (
 	leafPageSize       = 500
 )
 
+// configurable is optionally implemented by providers that may lack
+// credentials; a provider reporting false is treated as absent.
+type configurable interface {
+	Configured(ctx context.Context) bool
+}
+
 type noopTranslator struct{}
 
 func (noopTranslator) Translate(_ context.Context, q string, _ *LookupTrace) string { return q }
@@ -139,8 +145,13 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 	}
 	results, exactLocal := localCandidates(leaves, normalizeName(originalQuery))
 
+	useFDC := r.fdc != nil
+	if c, ok := r.fdc.(configurable); ok && !c.Configured(ctx) {
+		useFDC = false
+	}
+
 	var external []Candidate
-	if r.fdc != nil {
+	if useFDC {
 		searchTerm := query
 		if lang != "" && lang != "en" {
 			searchTerm = r.translator.Translate(ctx, originalQuery, trace)
@@ -203,7 +214,7 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 	switch {
 	case len(results) == 0:
 		return results, -1, nil
-	case exactLocal || r.fdc == nil:
+	case exactLocal || !useFDC:
 		return results, 0, nil
 	}
 	return results, r.pickRecommended(ctx, originalQuery, results, trace), nil
