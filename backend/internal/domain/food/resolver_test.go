@@ -89,6 +89,20 @@ func TestResolver_Query_LocalMatchBeforeFDC(t *testing.T) {
 	assert.Equal(t, 0, rec)
 }
 
+func TestResolver_Query_OnlyExactLocalMatchIsMarkedExact(t *testing.T) {
+	repo := &leafRepo{leaves: []food.Food{leaf(1, "Zwiebelsuppe"), leaf(2, " ZWIEBEL "), leaf(3, "Rote Zwiebel")}}
+	r := food.NewResolver(repo, nil, nil, nil)
+
+	results, _, err := r.Lookup(context.Background(), "", "Zwiebel", "de", 5)
+	require.NoError(t, err)
+
+	require.Len(t, results, 3)
+	assert.Equal(t, int64(2), *results[0].ExistingID)
+	assert.True(t, results[0].Exact, "normalized-equal local match")
+	assert.False(t, results[1].Exact, "prefix match")
+	assert.False(t, results[2].Exact, "contains match")
+}
+
 func TestResolver_Query_LocalCappedAtFive(t *testing.T) {
 	repo := &leafRepo{}
 	for i := range 8 {

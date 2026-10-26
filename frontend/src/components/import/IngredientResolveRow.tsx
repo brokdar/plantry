@@ -40,12 +40,13 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
   const lookup = useImportLineLookup(ing.name, lang)
   const results = lookup.data?.results ?? []
 
-  // Auto-select the first returned candidate that has an existing_id.
+  // Auto-select only an exact catalogue match; prefix/contains matches
+  // ("Zwiebelsuppe" for "Zwiebel") stay pickable but need a user choice.
   useEffect(() => {
     if (state.resolution !== "existing") return
     if (state.foodId) return
     if (!lookup.data) return
-    const hit = results.find((r) => r.existing_id)
+    const hit = results.find((r) => r.source === "local" && r.exact)
     if (hit && hit.existing_id) {
       onChange({ foodId: hit.existing_id, foodName: hit.name })
     }

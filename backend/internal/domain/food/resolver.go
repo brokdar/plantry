@@ -325,7 +325,9 @@ func localCandidates(leaves []catalogueLeaf, normQuery string) (cs []Candidate, 
 	for _, l := range leaves {
 		switch {
 		case l.norm == normQuery:
-			exacts = append(exacts, localCandidate(l.food))
+			c := localCandidate(l.food)
+			c.Exact = true
+			exacts = append(exacts, c)
 		case strings.HasPrefix(l.norm, normQuery):
 			prefix = append(prefix, localCandidate(l.food))
 		case strings.Contains(l.norm, normQuery):

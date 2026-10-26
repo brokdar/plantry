@@ -82,6 +82,14 @@ const localMehl: LookupCandidate = {
   source: "local",
   fdc_id: null,
   existing_id: 7,
+  exact: true,
+}
+
+const prefixLocal: LookupCandidate = {
+  ...localMehl,
+  name: "Mehlschwitze",
+  existing_id: 8,
+  exact: false,
 }
 
 const externalMehl: LookupCandidate = {
@@ -238,6 +246,29 @@ describe("ImportWizard", () => {
     expect(
       await screen.findByText("1 ingredient needs a choice")
     ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /save recipe/i })).toBeDisabled()
+  })
+
+  it("auto-links an exact catalogue match", async () => {
+    mockLookup([localMehl])
+    await openReview()
+
+    expect(await screen.findByText(/linked/i)).toBeInTheDocument()
+    expect(
+      screen.queryByText("1 ingredient needs a choice")
+    ).not.toBeInTheDocument()
+  })
+
+  it("does not auto-link a catalogue match that only starts with the name", async () => {
+    mockLookup([prefixLocal])
+    await openReview()
+
+    // The prefix match stays pickable but is not chosen for the user.
+    expect(
+      await screen.findByRole("button", { name: /mehlschwitze/i })
+    ).toBeInTheDocument()
+    expect(screen.getByText("1 ingredient needs a choice")).toBeInTheDocument()
+    expect(screen.queryByText(/linked/i)).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /save recipe/i })).toBeDisabled()
   })
 

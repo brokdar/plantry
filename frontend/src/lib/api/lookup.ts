@@ -13,6 +13,9 @@ export interface LookupCandidate {
   fdc_id: number | null
   image_url: string | null
   existing_id: number | null
+  // Set on a local candidate whose name matches the query exactly; only
+  // these may be linked without asking.
+  exact?: boolean
   kcal_100g: number | null
   protein_100g: number | null
   fat_100g: number | null
