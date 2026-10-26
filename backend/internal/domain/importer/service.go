@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
@@ -34,6 +35,7 @@ type Service struct {
 	jsonld      JSONLDExtractor
 	llmResolver llm.Resolver // may be nil — LLM fallback then returns ErrAIProviderMissing.
 	resolver    Resolver
+	recorder    *airun.Recorder // may be nil: the LLM fallback is then not recorded
 }
 
 // NewService builds an import Service. llmResolver may be nil; when set, it
@@ -41,6 +43,12 @@ type Service struct {
 // restart.
 func NewService(f Fetcher, j JSONLDExtractor, llmResolver llm.Resolver, r Resolver) *Service {
 	return &Service{fetcher: f, jsonld: j, llmResolver: llmResolver, resolver: r}
+}
+
+// WithRecorder records each LLM fallback extraction as an import_fallback AI run.
+func (s *Service) WithRecorder(rec *airun.Recorder) *Service {
+	s.recorder = rec
+	return s
 }
 
 // ExtractInput selects the source for extraction. Exactly one of URL or HTML
