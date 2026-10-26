@@ -61,7 +61,10 @@ backend/
     │   ├── shopping/                # shopping list derivation
     │   ├── profile/                 # user profile
     │   ├── settings/                # app settings
+    │   ├── availability/            # cell availability (plan / routine / no plate)
+    │   ├── setup/                   # first-run setup status
     │   ├── agent/                   # AI agent aggregate
+    │   ├── airun/                   # AI run log (metered LLM client)
     │   ├── llm/                     # LLM service interface
     │   ├── importer/                # recipe import orchestration
     │   ├── feedback/                # plate feedback
@@ -104,6 +107,36 @@ All optional unless noted. Prefix: `PLANTRY_`.
 
 **Secret key.** `config.EnsureSecretKey` runs at startup. If `PLANTRY_SECRET_KEY` is set it wins and no file is written. Otherwise the key is read from `secret.key` next to the database (`filepath.Dir(PLANTRY_DB_PATH)`), or generated there on first start: 32 random bytes as 64 hex chars, mode 0600. A key file shorter than 32 chars fails startup. In Docker the `/data` volume holds both the DB and the key; losing the key makes stored API keys undecryptable. `crypto.NilCipher` exists only for tests.
 
+## Settings
+
+Key-value rows in `app_settings`. The registry in `domain/settings/specs.go` lists every key with its kind (string, int, bool, enum), default and range; unknown keys are rejected. A value resolves as DB → env var → default, and `GET /api/settings` reports each value's `source`. `PUT /api/settings/{key}` (body `{value}`) writes a DB override; `DELETE` removes it.
+
+| Key | Default | Notes |
+|---|---|---|
+| `ai.provider`, `ai.model`, `ai.api_key`, `ai.rate_limit_per_min`, `ai.fake_script`, `fdc.api_key` | env | Fall back to the `PLANTRY_*` env vars; the API keys are stored encrypted |
+| `plan.week_starts_on` | `monday` | `monday` / `sunday` / `saturday` |
+| `plan.anchor` | `next_shopping_day` | `today` / `next_shopping_day` / `fixed_weekday` |
+| `plan.shopping_day` | `0` | 0 = Monday … 6 = Sunday |
+| `setup.completed` | `false` | Set by `POST /api/setup/complete` |
+| `plan.max_cook_occasions_per_day`, `plan.batch_cooking`, `plan.default_keep_days`, `plan.freezing_enabled`, `plan.freezer_keep_days`, `plan.variety_weeks`, `plan.explore_per_week`, `discovery.daily_enabled` | see `specs.go` | Stored and edited in Settings; read by later phases |
+| `ai.run_retention_days` | `180` | 7–3650; see AI run log |
+
+The profile (`domain/profile`) also carries `diet_type`, `meat_days_per_week_max` and `household_portions` (00023).
+
+## Availability
+
+Migration `00024_availability.sql`, package `domain/availability`. A cell is (date, slot) and its mode is `plan`, `routine` (needs a `preset_id`; a label only for now, nothing applies the preset) or `none` (No plate). It resolves as per-date override → weekday default (weekday 0 = Monday) → `plan`. `plan` defaults are never stored.
+
+- `GET /api/availability?from=&to=` — resolved cells with `source` (`override` / `default` / `fallback`), at most 62 days.
+- `GET` / `PUT /api/availability/defaults` — `{items: [{weekday, slot_id, mode, preset_id}]}`; PUT replaces the defaults of all active slots.
+- `PUT /api/availability/{date}/{slotId}` — `{mode, preset_id?, note?, remove_plate?}`. `none` on a cell with a plate is `409 error.availability.cell_has_plate` unless `remove_plate` is set; then the plate is deleted in the same transaction and returned as `removed_plate`. `DELETE` clears the override.
+
+A cell holds at most one plate: migration `00025_plates_cell_unique.go` turned the old per-plate skip flag into `none` overrides (with its note), merged duplicates, dropped the flag column and made `(date, slot_id)` unique. Creating or moving a plate into a `none` cell is `409 error.plate.cell_unavailable`; into an occupied cell, `409 error.plate.cell_occupied`. The agent sees `none` and `routine` cells and must not plan them.
+
+## Setup
+
+Package `domain/setup`. `GET /api/setup` returns `{completed, recipe_count, recipe_target}` (`setup.completed` and the count of composed foods against `setup.RecipeTarget` = 10); `POST /api/setup/complete` sets `setup.completed` and returns the same. Migration 00023 marks existing installs (any time slots) as completed.
+
 ## AI run log
 
 Migrations `00021_ai_runs.sql` and `00026_ai_trace.sql`, package `domain/airun`, repo `adapters/sqlite/ai_run_repo.go`. Every LLM call goes through the metered client (`Recorder.Meter`, wrapped around each client in the `llmFactory` closure in `main.go`), so nothing reaches a provider unrecorded.
@@ -116,7 +149,7 @@ Migrations `00021_ai_runs.sql` and `00026_ai_trace.sql`, package `domain/airun`,
   - `window_start`/`window_end`/`instruction` are set for chat; the scoring/outcome columns (`scope_json`, `chooser`, `violations_json`, `score_json`, `judge_json`, `outcome*`, `repair_attempts`) are reserved.
   - `conversation_id` (chat runs; no FK, indexed) and `request_id` (chi `middleware.GetReqID` of the HTTP request that started the run; NULL outside a request).
 - **`ai_run_steps`** — one row per LLM call (`type = 'llm_call'`, `name` = model, per-call tokens) or agent tool call (`type = 'tool_call'`, `name` = tool, `args_json` and `result_json` each capped at 8 KB, `is_error`), ordered by `seq`, with `duration_ms`. LLM calls also store:
-  - `request_json` = `{message_offset, messages, temperature, max_tokens, system_hash, tools_hash, truncated}`. `messages` is `req.Messages[message_offset:]`: the offset is the message count of the run's previous LLM call when this call resends those messages unchanged, else 0. `system_hash` → `ai_prompts`, `tools_hash` → `ai_tool_schemas` (sha256 of the JSON of `req.Tools`), each null when absent.
+  - `request_json` = `{message_offset, messages, temperature, max_tokens, system_hash, tools_hash, truncated}`. `messages` is `req.Messages[message_offset:]`: the offset is the message count of the run's previous LLM call when this call resends those messages unchanged, else 0 (also 0 after a step that failed to store). `system_hash` → `ai_prompts`, `tools_hash` → `ai_tool_schemas` (sha256 of the JSON of `req.Tools`), each null when absent.
   - `response_json` = `{content, stop_reason}` (the reply's text and tool_use blocks) and `stop_reason`; both NULL when the call failed (`is_error = 1`).
   - Each body is capped at 256 KiB: the largest text / tool payloads are shortened (ending in `…[truncated]`) so it stays valid JSON, and `truncated` is set.
 - **`ai_prompts`** — system prompt text stored once per distinct hash. Every distinct system prompt of a run is stored (a lookup has two: translate and pick-best); `ai_runs.prompt_hash` is the first call's.

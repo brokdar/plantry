@@ -715,10 +715,29 @@ GET    /api/settings/slots                          time slots
 POST   /api/settings/slots                          create
 PUT    /api/settings/slots/{id}                     update
 DELETE /api/settings/slots/{id}                     delete (409 if used by plates)
+GET    /api/settings                                all keys with value and source (db / env / default)
+PUT    /api/settings/{key}                          body: {value} — DB override
+DELETE /api/settings/{key}                          remove the override
 GET    /api/settings/ai                             read current AI config: {enabled, provider, model}
+GET    /api/settings/ai/models                      provider model list
 ```
 
-**Deferred (post-v1):** generic `PUT /api/settings/{key}` and `PUT /api/settings/{provider|model|api_key}` plus `GET /api/settings/ai/models` (provider-list proxy). AI provider/model/API key come exclusively from `PLANTRY_AI_*` env vars at process startup; changing them requires a restart.
+Keys live in the registry in `domain/settings/specs.go`; `backend/CLAUDE.md` lists them. AI provider, model and API key resolve DB → `PLANTRY_AI_*` env var → default at request time, so no restart is needed.
+
+#### Availability and setup
+
+```
+GET    /api/availability?from=&to=                  resolved cells (plan / routine / none) and their source
+GET    /api/availability/defaults                   weekday × slot defaults
+PUT    /api/availability/defaults                   replace the defaults
+PUT    /api/availability/{date}/{slotId}            override one cell (none on a planted cell: 409 unless remove_plate)
+DELETE /api/availability/{date}/{slotId}            clear the override
+
+GET    /api/setup                                   {completed, recipe_count, recipe_target}
+POST   /api/setup/complete                          mark setup done
+```
+
+A cell (date, slot) holds at most one plate, and none when it resolves to No plate.
 
 #### AI
 
@@ -1010,7 +1029,8 @@ TanStack Router file-based routes with typed params (`$id` segments):
 | `/ingredients/$id/edit`      | Edit ingredient                                      |
 | `/templates`                 | Template library                                     |
 | `/import`                    | Recipe import wizard                                 |
-| `/settings`                  | Profile, targets, time slots, API keys, AI config    |
+| `/setup`                     | First-run setup wizard                               |
+| `/settings/$section`         | Household, meals, cooking, assistant, system         |
 
 ### 8.6 Forms
 

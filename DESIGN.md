@@ -208,7 +208,7 @@ The scale is fixed rem with a ratio of about 1.2. Utilities: `text-h1`, `text-h2
 ## Layout
 
 - **Spacing:** the spec scale is 4, 8, 12, 16, 24, 32 and 48px. There are no custom spacing tokens. Use Tailwind's default 4px steps that land on that scale (`1, 2, 3, 4, 6, 8, 12`). Lay out with `gap`, not margins.
-- **Shell** (*implemented*): below 768px, a fixed bottom tab bar (Today, Plan, Recipes, Shop) on panel with rounded top corners and a 4rem height plus safe-area inset (`--tab-bar-h`, `--tab-bar-inset`). Main content reserves that height as bottom padding. From 768px up there is a sunken left rail: an 80px icon rail at 768–1023px and when collapsed, and a 256px labelled rail from 1024px. Settings sits at the bottom of the rail; on phone it is a gear in the top bar.
+- **Shell** (*implemented*): below 768px, a fixed bottom tab bar (Today, Plan, Recipes, Shop) on panel with rounded top corners and a 4rem height plus safe-area inset (`--tab-bar-h`, `--tab-bar-inset`). Main content reserves that height as bottom padding. From 768px up there is a sunken left rail: an 80px icon rail at 768–1023px and when collapsed, and a 256px labelled rail from 1024px. Settings sits at the bottom of the rail; on phone it is a gear in a sticky top bar (ground with a hairline bottom border; no glass) that renders below 768px only. There is no centre action button in the tab bar. The setup wizard (`/setup`) renders without the shell.
 - **Content width:** detail pages centre at `max-w-5xl` with 16px side padding on phone and 32px from 768px up. Two-column detail layouts use a 12-column grid (for example 5/7 for the header and 4/8 for ingredients and steps).
 - **Verification widths:** 375px phone, 820px iPad portrait, 1180px iPad landscape, 1440px desktop, each in light and dark.
 
@@ -218,7 +218,7 @@ Flat by default. Depth comes from the two neutral layers (`panel` on `ground`, `
 
 ### Shadow Vocabulary
 
-- **Soft sheet shadow** (`--shadow-soft`, utility `shadow-sheet`): two-layer ambient shadow tinted with ink (deeper black in dark mode). For sheets and popovers only. *Token implemented*; no rebuilt component uses `shadow-sheet` yet.
+- **Soft sheet shadow** (`--shadow-soft`, utility `shadow-sheet`): two-layer ambient shadow tinted with ink (deeper black in dark mode). For sheets and popovers only. *Implemented*; `RoutinePicker` uses it.
 
 **The One Shadow Rule.** Board cells and list cards get no shadow; the border carries separation. The only shadow is the sheet shadow, on overlays.
 
@@ -231,20 +231,21 @@ Corner radius is assigned by role, so not everything gets the same curve:
 - **Sheet** (`rounded-sheet`): sheets and the phone tab bar, top corners only. The tab bar uses `rounded-t-2xl` today, which is the same 16px.
 - **Tag** (`rounded-tag`): batch badges, an asymmetric tag silhouette that is square at the left and round at the right.
 
-The `rounded-cell`, `rounded-sheet` and `rounded-tag` utilities are *implemented* but not yet used by any component. Some legacy screens still use `rounded` (also 4px) or larger radii.
+The `rounded-cell`, `rounded-sheet` and `rounded-tag` utilities are *implemented*. `rounded-cell` is in use (availability and slot cells, settings inputs, `SourceBadge`); `rounded-sheet` and `rounded-tag` are not used yet. Some legacy screens still use `rounded` (also 4px) or larger radii.
 
 **Icons:** Lucide at a 1.5px stroke (`strokeWidth={1.5}`), 16px or 20px (`size-4`, `size-5`), always `aria-hidden` next to a text label or an `aria-label`. No emoji in the UI.
 
 ## Components
 
-Built on shadcn/Radix primitives (sheet, dialog, popover, tabs, dropdown-menu, tooltip), sonner toasts, cmdk and dnd-kit. Screens rebuilt in Phase 0 that show the system: the shell (`components/shell/*`), recipe detail (`RecipeDetail.tsx`), `NutritionCompletenessWarning.tsx`, and the import summary and resolve rows (`components/import/*`).
+Built on shadcn/Radix primitives (sheet, dialog, popover, tabs, dropdown-menu, tooltip), sonner toasts, cmdk and dnd-kit. Screens rebuilt in Phase 0 that show the system: the shell (`components/shell/*`), recipe detail (`RecipeDetail.tsx`), `NutritionCompletenessWarning.tsx`, and the import summary and resolve rows (`components/import/*`). Phase 1 added the setup wizard (`components/setup/*`), the settings sections (`components/settings/*`), `AvailabilityGrid` and the guided Recipes state.
 
 ### Buttons
 
 - **Shape:** button radius, 32px tall by default (`components/ui/button.tsx`).
 - **Primary:** accent fill with on-accent text. **Outline / secondary / ghost** use the neutral layers. **Destructive** is a danger-tinted fill with danger text.
-- **Focus:** a ring in the accent colour.
-- **Motion:** the button variants still carry Botanical hover lifts and a sage-tinted hover shadow. These are legacy, not part of this system; see Do's and Don'ts.
+- **Focus:** the global 2px accent outline (see Focus).
+- **Motion:** colour changes only, 150ms ease-out; a press nudges the button down 1px. No hover lift or shadow. Badges (`components/ui/badge.tsx`) follow the same rule.
+- **Generate plan** (`GeneratePlanButton`): a solid accent button. Below the recipe target it stays focusable but `aria-disabled`, and a tooltip (plus a link to Recipes in the wide rail) says how many recipes are missing.
 
 ### Navigation (implemented)
 
@@ -270,7 +271,27 @@ A serif h1 name. Meta values use h3-size tabular sans over small muted labels. T
 - **Surplus:** a dashed-outline badge, "2 spare".
 - **Linked highlight:** hovering or tapping a badge outlines every cell of that batch for 2s.
 
-Also specified: `PlateCell`, `DayMeter`, `PlateSheet`, `CookStrip`, `AvailabilityGrid`, `SuggestionCard`, `ShoppingRow` and `StepPager`. See UX spec §4 and §9.
+Also specified: `PlateCell`, `DayMeter`, `PlateSheet`, `CookStrip`, `SuggestionCard`, `ShoppingRow` and `StepPager`. See UX spec §4 and §9.
+
+### Availability grid (implemented: `AvailabilityGrid`)
+
+A weekday (or date) × slot table of cell modes, used in Settings → Meals and the setup wizard. It holds no server state; the parent owns the value.
+
+- **Plan:** panel cell with a hairline border and muted "Plan".
+- **No plate:** no border or fill, muted italic "No plate". The hairline appears on hover.
+- **Routine:** panel cell with a muted "Routine" caption over the preset name in ink.
+- **Interaction:** a tap cycles Plan → No plate → Routine. Routine first asks for a preset in `RoutinePicker` (a popover with the sheet shadow); focus returns to the cell when it closes. An optional column-header menu sets "No plate all day" or "Plan all day".
+- **Shape:** `rounded-cell` buttons at least 44px tall, 150ms colour transitions.
+- **Accessibility:** `role="grid"` with one tab stop (roving tabindex); arrow keys, Home and End move between cells. Each cell's name reads the full day, the slot and the state.
+- **Narrow screens:** below 768px the grid scrolls sideways inside its own box, and the slot column stays sticky. The `surface` prop (`ground` or `panel`) gives the sticky column the background the grid sits on.
+
+### Guided state (implemented: `RecipeOnboarding`)
+
+Shown on Recipes while the library is below the planning target (10 recipes).
+
+- **Progress row:** "n of 10 recipes …" in body ink above a thin accent bar on `panel-sunken`, exposed as a `progressbar`.
+- **Option cards:** two cards (Import, Create), one column on phone and two from 640px. Each is panel with a hairline border and button radius: a 20px accent icon, an h3 title, a muted body, and a 44px button at the bottom (primary for Import, outline for Create).
+- When the target is reached the state disappears and a one-time milestone toast fires.
 
 **The Never-Colour-Alone Rule.** A badge always carries text ("Cook × 4", "2/4"). Colour alone never identifies a batch or a state.
 
@@ -281,9 +302,15 @@ Also specified: `PlateCell`, `DayMeter`, `PlateSheet`, `CookStrip`, `Availabilit
 - Show skeletons in place of content, not centred spinners.
 - Errors state what happened and what to do, with no apology.
 
+### Focus (implemented)
+
+One indicator everywhere: a base `:focus-visible` rule in `index.css` draws a 2px solid accent outline with a 2px offset. A component's `outline-none` still wins; nav items and `GeneratePlanButton` draw an equivalent 2px accent ring instead.
+
 ### Motion
 
-150–250ms ease-out, and only for state change: a sheet slides in, a plate cross-fades on swap, a ticked item slides down, linked batch cells highlight. There is no page-load choreography and no hover animation on cards. Under `prefers-reduced-motion`, slides become fades. *Partly implemented:* nav uses 150–200ms colour and width transitions. There is no global reduced-motion rule in `index.css` yet; only `AnimatedNumber` checks the preference.
+150–250ms ease-out, and only for state change: a sheet slides in, a plate cross-fades on swap, a ticked item slides down, linked batch cells highlight. There is no page-load choreography and no hover animation on cards. Nav uses 150–200ms colour and width transitions.
+
+**Reduced motion** (*implemented*): under `prefers-reduced-motion`, a global rule in `index.css` collapses transitions to near zero, runs animations once at 150ms and removes the slide offsets of sheet and popover animations, so slides become fades. `.animate-spin` is exempt: loading spinners keep turning because they convey state. `AnimatedNumber` also checks the preference.
 
 ### Voice
 
@@ -304,7 +331,7 @@ A plain, calm tool. Short factual sentences, sentence case, active verbs. No exc
 - `destructive` resolves to **danger**.
 - `shadow-editorial` resolves to **shadow-soft**.
 
-The legacy utilities `gradient-primary`, `editorial-shadow`, `glass-header` and `btn-shimmer` still exist. `gradient-primary` is now a solid accent fill.
+The legacy utilities `gradient-primary`, `editorial-shadow`, `glass-header` and `btn-shimmer` still exist in `index.css`. `gradient-primary` is now a solid accent fill. `gradient-primary` and `editorial-shadow` are still used by unrebuilt screens (planner, ingredient list, recipe cards, the rail logo); `glass-header` and `btn-shimmer` are unused.
 
 - New and rebuilt code uses the Cookbook names: `bg-ground`, `bg-panel`, `text-ink`, `border-line`, `text-accent`, `text-on-accent`, and so on.
 - Legacy names stay until each screen is rebuilt in Phases 1–3. Do not add new uses of them.
@@ -326,7 +353,7 @@ The legacy utilities `gradient-primary`, `editorial-shadow`, `glass-header` and 
 
 - **Don't** use Newsreader for buttons, inputs, labels, nav or data.
 - **Don't** use batch colours for state, category or decoration.
-- **Don't** add gradients, glass or blur, shimmer sweeps, hover lifts, or sage-tinted shadows. These are Botanical Atelier leftovers still found in `GeneratePlanButton`, `components/ui/button.tsx` and `TopBar`'s `glass-header`.
+- **Don't** add gradients, glass or blur, shimmer sweeps, hover lifts, or sage-tinted shadows. These are Botanical Atelier leftovers still found in unrebuilt screens: recipe, ingredient and preset cards, `EditorialCard`, and the planner's `SlotCell`, `SlotSheet` and `SlotHero`.
 - **Don't** add shadows to cells or list cards, or a second shadow style.
 - **Don't** use all-caps or letter-spaced labels.
 - **Don't** use emoji in the UI.
