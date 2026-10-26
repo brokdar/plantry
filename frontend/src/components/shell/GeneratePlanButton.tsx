@@ -1,69 +1,148 @@
-import { useNavigate } from "@tanstack/react-router"
+import { useId, useState } from "react"
+import { Link, useNavigate } from "@tanstack/react-router"
 import { Sparkles } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { useSetupStatus } from "@/lib/queries/setup"
 import { useChatUI } from "@/lib/stores/chat-ui"
 import { cn } from "@/lib/utils"
 
-export type GeneratePlanVariant = "default" | "rail" | "fab"
+/** `default`: labelled, in the wide rail. `rail`: icon, in the narrow rail.
+ *  `compact`: icon, in the phone TopBar next to the Settings gear. */
+export type GeneratePlanVariant = "default" | "rail" | "compact"
 
 type GeneratePlanButtonProps = {
   variant?: GeneratePlanVariant
 }
 
-const VARIANT_CLASSES: Record<
+const BASE =
+  "inline-flex items-center justify-center rounded-lg bg-accent text-on-accent transition-colors duration-150 ease-out hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-ground focus-visible:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-accent"
+
+const VARIANTS: Record<
   GeneratePlanVariant,
   {
     root: string
-    icon: string
     showLabel: boolean
     testId: string
+    tooltipSide: "top" | "right" | "bottom"
   }
 > = {
   default: {
-    root: "btn-shimmer group gradient-primary editorial-shadow flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold text-on-primary transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_20px_-4px_rgba(74,101,77,0.50)] active:translate-y-0 active:scale-[0.98] active:shadow-none",
-    icon: "size-4 transition-transform duration-300 group-hover:rotate-12",
+    root: "h-11 w-full gap-2 px-4 text-body font-semibold",
     showLabel: true,
     testId: "generate-plan-default",
+    tooltipSide: "top",
   },
   rail: {
-    root: "gradient-primary group flex size-10 items-center justify-center rounded-full text-on-primary shadow-md transition-[transform,box-shadow,opacity] duration-150 ease-out hover:scale-110 hover:shadow-[0_4px_14px_-2px_rgba(74,101,77,0.50)] active:scale-95 active:opacity-80",
-    icon: "size-5 transition-transform duration-300 group-hover:rotate-12",
+    root: "size-11",
     showLabel: false,
     testId: "generate-plan-rail",
+    tooltipSide: "right",
   },
-  fab: {
-    root: "btn-shimmer group gradient-primary editorial-shadow flex size-14 items-center justify-center rounded-full text-on-primary transition-[transform,box-shadow] duration-150 ease-out hover:scale-105 hover:shadow-[0_8px_24px_-4px_rgba(74,101,77,0.55)] active:scale-95",
-    icon: "size-6 transition-transform duration-300 group-hover:rotate-12",
+  compact: {
+    root: "size-11",
     showLabel: false,
-    testId: "generate-plan-fab",
+    testId: "generate-plan-compact",
+    tooltipSide: "bottom",
   },
 }
 
+/**
+ * Plan decision D19: always visible, but `aria-disabled` (still focusable)
+ * while the library is below the recipe target. The tooltip explains why on
+ * hover, focus and tap; the default variant also shows a link to Recipes.
+ */
 export function GeneratePlanButton({
   variant = "default",
 }: GeneratePlanButtonProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const openWith = useChatUI((s) => s.openWith)
-  const label = t("nav.generate_plan")
-  const { root, icon, showLabel, testId } = VARIANT_CLASSES[variant]
+  const { data: setup } = useSetupStatus()
+  const [tipOpen, setTipOpen] = useState(false)
+  const reasonId = useId()
 
-  async function handleClick() {
+  const label = t("nav.generate_plan")
+  const { root, showLabel, testId, tooltipSide } = VARIANTS[variant]
+  // Locked until the status loads; the reason shows only once it is known.
+  const missing = setup
+    ? Math.max(0, setup.recipe_target - setup.recipe_count)
+    : 0
+  const short = missing > 0
+  const locked = !setup || short
+  const reason = t("nav.generate_locked", { count: missing })
+
+  async function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+    if (locked) {
+      // Keeps Radix from closing the tooltip on click, so a tap shows it.
+      e.preventDefault()
+      setTipOpen(true)
+      return
+    }
     await navigate({ to: "/" })
     openWith(t("planner.generate_prompt"))
   }
 
+  const button = (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip open={short && tipOpen} onOpenChange={setTipOpen}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={handleClick}
+            aria-label={showLabel ? undefined : label}
+            aria-disabled={locked || undefined}
+            aria-describedby={short ? reasonId : undefined}
+            className={cn(BASE, root)}
+            data-testid={testId}
+          >
+            <Sparkles
+              className={showLabel ? "size-4" : "size-5"}
+              strokeWidth={1.5}
+              aria-hidden
+            />
+            {showLabel && label}
+          </button>
+        </TooltipTrigger>
+        {short && <TooltipContent side={tooltipSide}>{reason}</TooltipContent>}
+      </Tooltip>
+    </TooltipProvider>
+  )
+
+  const description = short && (
+    <span id={reasonId} className="sr-only">
+      {reason}
+    </span>
+  )
+
+  if (!showLabel) {
+    return (
+      <>
+        {button}
+        {description}
+      </>
+    )
+  }
+
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      aria-label={showLabel ? undefined : label}
-      className={cn(root)}
-      data-testid={testId}
-    >
-      <Sparkles className={icon} aria-hidden />
-      {showLabel && label}
-    </button>
+    <div className="flex w-full flex-col items-center gap-1">
+      {button}
+      {description}
+      {short && (
+        <Link
+          to="/components"
+          className="inline-flex min-h-11 items-center text-center text-small text-accent underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+          data-testid="generate-plan-locked-link"
+        >
+          {reason}
+        </Link>
+      )}
+    </div>
   )
 }

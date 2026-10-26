@@ -8,16 +8,22 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
 
-// Start describes a run being started.
+// Start describes a run being started. ConversationID is set by chat runs.
 type Start struct {
-	Kind          Kind
-	PromptVersion string
-	WindowStart   *time.Time
-	WindowEnd     *time.Time
-	Instruction   *string
+	Kind           Kind
+	PromptVersion  string
+	WindowStart    *time.Time
+	WindowEnd      *time.Time
+	Instruction    *string
+	ConversationID *int64
 }
+
+// pruneInterval is the minimum time between two prunes triggered by Finish.
+const pruneInterval = time.Hour
 
 // Recorder starts runs and meters LLM clients. Store failures are logged at
 // warn and never surface to the caller.
@@ -25,11 +31,85 @@ type Recorder struct {
 	store  Store
 	logger *slog.Logger
 	now    func() time.Time
+
+	// retentionDays returns how long run steps are kept; nil disables pruning.
+	retentionDays func(context.Context) (int, error)
+	pruneMu       sync.Mutex
+	lastPrune     time.Time
+	pruning       sync.WaitGroup // background prunes started by Finish
 }
 
 // NewRecorder builds a Recorder. now is injected so tests can pin time.
 func NewRecorder(store Store, logger *slog.Logger, now func() time.Time) *Recorder {
 	return &Recorder{store: store, logger: logger, now: now}
+}
+
+// WithRetention enables pruning: Prune, and Finish at most once per hour,
+// delete the steps of runs started more than days() days ago. days is read
+// on every prune so a changed setting applies without a restart. Call it
+// before the Recorder is used.
+func (r *Recorder) WithRetention(days func(context.Context) (int, error)) *Recorder {
+	r.retentionDays = days
+	return r
+}
+
+// Prune deletes the steps of runs older than the retention now. Failures are
+// logged at warn.
+func (r *Recorder) Prune(ctx context.Context) {
+	if r.retentionDays == nil {
+		return
+	}
+	r.pruneMu.Lock()
+	now := r.now()
+	r.lastPrune = now
+	r.pruneMu.Unlock()
+	r.prune(ctx, now)
+}
+
+// Wait blocks until the background prunes started by Finish are done. Tests
+// call it before inspecting the store; main calls it before closing the DB.
+func (r *Recorder) Wait() {
+	r.pruning.Wait()
+}
+
+// pruneThrottled starts a background prune unless the last one began less
+// than pruneInterval ago. The timestamp is taken before the prune runs, so a
+// failed prune is not retried for an hour.
+func (r *Recorder) pruneThrottled(ctx context.Context) {
+	if r.retentionDays == nil {
+		return
+	}
+	r.pruneMu.Lock()
+	now := r.now()
+	if !r.lastPrune.IsZero() && now.Sub(r.lastPrune) < pruneInterval {
+		r.pruneMu.Unlock()
+		return
+	}
+	r.lastPrune = now
+	r.pruning.Add(1)
+	r.pruneMu.Unlock()
+	go func() {
+		defer r.pruning.Done()
+		r.prune(ctx, now)
+	}()
+}
+
+// prune ignores ctx cancellation: it outlives the request that triggered it.
+func (r *Recorder) prune(ctx context.Context, now time.Time) {
+	ctx = context.WithoutCancel(ctx)
+	days, err := r.retentionDays(ctx)
+	if err != nil {
+		r.logger.WarnContext(ctx, "ai.run.prune failed", "error", err)
+		return
+	}
+	n, err := r.store.PruneSteps(ctx, now.AddDate(0, 0, -days))
+	if err != nil {
+		r.logger.WarnContext(ctx, "ai.run.prune failed", "error", err)
+		return
+	}
+	if n > 0 {
+		r.logger.InfoContext(ctx, "ai.run.prune", "deleted_steps", n, "retention_days", days)
+	}
 }
 
 type ctxKey struct{}
@@ -60,8 +140,15 @@ type Run struct {
 	provider         string
 	model            string
 	promptHash       string
-	promptTried      bool
-	finished         bool
+	firstPrompt      string // hash of the first call's system prompt
+	// prompts and toolSchemas hold the hashes stored (or being stored) by
+	// this run; a failed upsert removes its hash so a later call retries.
+	prompts     map[string]bool
+	toolSchemas map[string]bool
+	// lastMsgs is a copy of the last recorded llm_call's messages, so the
+	// next call can store only what it appends.
+	lastMsgs []llm.Message
+	finished bool
 }
 
 // Start creates the run row, returns a ctx carrying the run and logs
@@ -75,12 +162,14 @@ func (r *Recorder) Start(ctx context.Context, s Start) (context.Context, *Run) {
 		startedAt: r.now(),
 	}
 	id, err := r.store.CreateRun(context.WithoutCancel(ctx), RunStart{
-		Kind:          s.Kind,
-		StartedAt:     run.startedAt,
-		PromptVersion: s.PromptVersion,
-		WindowStart:   s.WindowStart,
-		WindowEnd:     s.WindowEnd,
-		Instruction:   s.Instruction,
+		Kind:           s.Kind,
+		StartedAt:      run.startedAt,
+		PromptVersion:  s.PromptVersion,
+		WindowStart:    s.WindowStart,
+		WindowEnd:      s.WindowEnd,
+		Instruction:    s.Instruction,
+		ConversationID: s.ConversationID,
+		RequestID:      run.requestID,
 	})
 	if err != nil {
 		r.logger.WarnContext(ctx, "ai.run.create failed", "request_id", run.requestID, "kind", s.Kind, "error", err)
@@ -139,6 +228,7 @@ func (run *Run) Finish(ctx context.Context, status Status, errKey string) {
 		"status", status,
 		"duration_ms", end.FinishedAt.Sub(run.startedAt).Milliseconds(),
 	)
+	run.rec.pruneThrottled(ctx)
 }
 
 // ToolStep records one tool call. It is the hook used by agent tools.
@@ -162,15 +252,18 @@ func (run *Run) ToolStep(ctx context.Context, name string, args, result json.Raw
 	})
 }
 
-// addStep writes step for this run, ignoring ctx cancellation.
-func (run *Run) addStep(ctx context.Context, step Step) {
+// addStep writes step for this run, ignoring ctx cancellation. It reports
+// whether the step was stored.
+func (run *Run) addStep(ctx context.Context, step Step) bool {
 	if run.id == 0 {
-		return
+		return false
 	}
 	step.RunID = run.id
 	if err := run.rec.store.AddStep(context.WithoutCancel(ctx), step); err != nil {
 		run.warn(ctx, "ai.run.step failed", err)
+		return false
 	}
+	return true
 }
 
 func (run *Run) warn(ctx context.Context, msg string, err error) {

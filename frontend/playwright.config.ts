@@ -18,6 +18,8 @@ const AI_SERIAL_SPECS = [
   "settings-preferences.spec.ts",
 ]
 
+const SETUP_SPEC = "setup-wizard.spec.ts"
+
 export default defineConfig({
   globalSetup: "./e2e/global-setup.ts",
   testDir: "./e2e",
@@ -34,14 +36,27 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
+    // Plan D22: walks the setup wizard on the fresh DB (so `/` stops
+    // redirecting to /setup) and sets `plan.anchor = today` (D21). Every
+    // other project depends on it; don't run with `--no-deps`.
+    {
+      name: "setup",
+      testMatch: `**/${SETUP_SPEC}`,
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
     {
       name: "chromium",
-      testIgnore: AI_SERIAL_SPECS.map((s) => `**/${s}`),
+      testIgnore: [...AI_SERIAL_SPECS, SETUP_SPEC].map((s) => `**/${s}`),
+      dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"] },
     },
     {
       name: "ai-serial",
       testMatch: AI_SERIAL_SPECS.map((s) => `**/${s}`),
+      testIgnore: `**/${SETUP_SPEC}`,
+      dependencies: ["setup"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },

@@ -19,7 +19,9 @@
     "archive": "Archiv",
     "primary": "Hauptnavigation",
     "go_to": "Gehe zu",
-    "recipes_sections": "Rezeptbereiche"
+    "recipes_sections": "Rezeptbereiche",
+    "generate_locked_one": "Noch {{count}} Rezept, dann kannst du planen",
+    "generate_locked_other": "Noch {{count}} Rezepte, dann kannst du planen"
   },
   "calendar": {
     "title": "Kalender",
@@ -418,7 +420,10 @@
       "api_key_placeholder_replace": "Gib einen neuen Schlüssel ein, um den gespeicherten zu ersetzen",
       "api_key_saved": "API-Schlüssel gespeichert.",
       "test_connection": "Verbindung testen",
-      "validated": "Verbindung bestätigt.",
+      "validated_saved_one": "Schlüssel gespeichert. {{count}} Modell verfügbar",
+      "validated_saved_other": "Schlüssel gespeichert. {{count}} Modelle verfügbar",
+      "validated_works_one": "Schlüssel funktioniert, {{count}} Modell verfügbar",
+      "validated_works_other": "Schlüssel funktioniert, {{count}} Modelle verfügbar",
       "model_label": "Modell",
       "model_placeholder": "Modell auswählen…",
       "model_saved": "Modell gespeichert.",
@@ -843,7 +848,19 @@
     "source_url": "Quell-URL",
     "source_url_placeholder": "https://…",
     "description": "Beschreibung",
-    "description_hint": "Text, der mit dem Rezept kam. Erscheint gedämpft unter deinen Notizen."
+    "description_hint": "Text, der mit dem Rezept kam. Erscheint gedämpft unter deinen Notizen.",
+    "guide": {
+      "label": "Erste Rezepte anlegen",
+      "progress": "{{count}} von {{target}} Rezepten. Für eine abwechslungsreiche Woche braucht Plantry {{target}}.",
+      "progress_value": "{{count}} von {{target}} Rezepten",
+      "import_title": "Per Link importieren",
+      "import_body": "Füge den Link zu einer Rezeptseite ein, und Plantry übernimmt Zutaten und Schritte. So füllst du dein Kochbuch am schnellsten.",
+      "import_action": "Rezept importieren",
+      "create_title": "Selbst anlegen",
+      "create_body": "Trag ein Rezept ein, das du auswendig kennst, Zutat für Zutat. Für deine eigene Version eines gespeicherten Rezepts öffnest du es und legst eine Variante an.",
+      "create_action": "Rezept anlegen",
+      "milestone": "{{count}} Rezepte. Du kannst deine erste Woche planen."
+    }
   },
   "lookup": {
     "title": "Zutat finden",
@@ -1387,5 +1404,58 @@
   "units": {
     "kcal": "kcal",
     "g": "g"
+  },
+  "setup": {
+    "step_of": "Schritt {{step}} von {{total}}",
+    "back": "Zurück",
+    "next": "Weiter",
+    "skip": "Überspringen und Standardwerte nehmen",
+    "welcome": {
+      "title": "Willkommen bei Plantry",
+      "why": "Wähle deine Sprache. Plantry nutzt sie für Rezepte, Pläne und die Einkaufsliste."
+    },
+    "household": {
+      "title": "Du & dein Haushalt",
+      "why": "Plantry bemisst jede Mahlzeit für deinen Haushalt und lässt weg, was ihr nicht esst.",
+      "portions_one": "= {{portions}} Portion pro Mahlzeit",
+      "portions_other": "= {{portions}} Portionen pro Mahlzeit",
+      "allergies_why": "Plantry lässt Rezepte mit diesen Zutaten weg.",
+      "meat_days_optional": "Optional. Plantry plant Fleisch an höchstens so vielen Tagen pro Woche."
+    },
+    "nutrition": {
+      "title": "Ernährungsziel",
+      "why": "Plantry stimmt die Mahlzeiten jedes Tages auf dieses Ziel ab. Du kannst es später ändern."
+    },
+    "meals": {
+      "title": "Mahlzeiten & Woche",
+      "why": "Plantry plant jede Mahlzeit, die auf „Planen“ steht. Was ihr woanders esst, setzt du auf „Kein Essen“.",
+      "name_label": "Name der Mahlzeit {{n}}",
+      "move_up": "{{name}} nach oben",
+      "move_down": "{{name}} nach unten",
+      "plan_toggle": "{{name}} planen",
+      "unnamed": "Mahlzeit ohne Namen",
+      "none_active": "Schalte mindestens eine Mahlzeit ein, um deine Woche einzurichten.",
+      "error_unnamed": "Gib jeder Mahlzeit einen Namen.",
+      "error_none_active": "Schalte mindestens eine Mahlzeit ein."
+    },
+    "cooking": {
+      "title": "Kochstil",
+      "why": "Plantry fasst Mahlzeiten zu Kochterminen zusammen, die zu deinem Kochalltag passen."
+    },
+    "variety": {
+      "title": "Abwechslung & Einkauf",
+      "why": "Plantry plant von einem Einkaufstag zum nächsten und sorgt dafür, dass Rezepte nicht zu schnell wiederkommen.",
+      "shopping_why": "Du kaufst am {{day}} ein. Plantry plant die Tage danach."
+    },
+    "assistant": {
+      "title": "Assistent (optional)",
+      "why": "Der Assistent schlägt Mahlzeiten vor und kann deine Woche für dich füllen.",
+      "later": "Das kannst du später nachholen. Planen klappt auch ohne."
+    },
+    "finish": {
+      "title": "Alles eingerichtet",
+      "body": "Leg 10 Rezepte an, dann kann Plantry deine Wochen planen.",
+      "add_recipes": "Rezepte hinzufügen"
+    }
   }
 }

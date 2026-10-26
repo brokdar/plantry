@@ -89,7 +89,7 @@ test.describe("Planner — date-range window", () => {
       const platesResp = page.waitForResponse(
         (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
       )
-      await page.getByRole("button", { name: /Next 7/i }).click()
+      await page.getByRole("button", { name: "Next 7", exact: true }).click()
       await platesResp
 
       // Range label must have changed
@@ -122,7 +122,7 @@ test.describe("Planner — date-range window", () => {
       const fwdResp = page.waitForResponse(
         (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
       )
-      await page.getByRole("button", { name: /Next 7/i }).click()
+      await page.getByRole("button", { name: "Next 7", exact: true }).click()
       await fwdResp
 
       // Now go back — hits TanStack Query cache, no network request
@@ -154,7 +154,7 @@ test.describe("Planner — date-range window", () => {
           (r) =>
             r.url().includes("/api/plates") && r.request().method() === "GET"
         )
-        await page.getByRole("button", { name: /Next 7/i }).click()
+        await page.getByRole("button", { name: "Next 7", exact: true }).click()
         await resp
       }
 

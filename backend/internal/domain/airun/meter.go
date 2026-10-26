@@ -4,9 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
@@ -77,12 +80,26 @@ func (m *meteredClient) Complete(ctx context.Context, req llm.Request) (string, 
 	return sb.String(), nil
 }
 
-// llmCall folds one LLM call into the run totals and records it as a step.
-// The provider, model and prompt hash of the first call are kept.
+// llmCall folds one LLM call into the run totals and records it as a step
+// whose request_json and response_json let the call be replayed. The
+// provider, model and prompt hash of the first call are kept.
 func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, resp *llm.Response, callErr error, dur time.Duration) {
 	var usage llm.Usage
 	if resp != nil {
 		usage = resp.Usage
+	}
+	systemHash := ""
+	if req.System != "" {
+		systemHash = sha256Hex([]byte(req.System))
+	}
+	toolsHash, toolsJSON := "", []byte(nil)
+	if len(req.Tools) > 0 {
+		var err error
+		if toolsJSON, err = json.Marshal(req.Tools); err != nil {
+			run.warn(ctx, "ai.run.tools failed", err)
+		} else {
+			toolsHash = sha256Hex(toolsJSON)
+		}
 	}
 
 	run.mu.Lock()
@@ -97,26 +114,57 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 		run.provider = provider
 		run.model = req.Model
 	}
-	// Only the first call with a system prompt tries to store it.
-	storePrompt := !run.promptTried && req.System != "" && run.id != 0
+	// The call continues the last recorded one when it resends its messages
+	// unchanged; otherwise the full history is stored from offset 0.
+	offset := 0
+	if n := len(run.lastMsgs); n > 0 && len(req.Messages) >= n && reflect.DeepEqual(run.lastMsgs, req.Messages[:n]) {
+		offset = n
+	}
+	// Every distinct system prompt and tool set is stored once per run; the
+	// run itself points at the first call's prompt.
+	if run.firstPrompt == "" {
+		run.firstPrompt = systemHash
+	}
+	firstPrompt := systemHash != "" && systemHash == run.firstPrompt
+	storePrompt := systemHash != "" && !run.prompts[systemHash] && run.id != 0
 	if storePrompt {
-		run.promptTried = true
+		if run.prompts == nil {
+			run.prompts = map[string]bool{}
+		}
+		run.prompts[systemHash] = true
+	}
+	storeTools := toolsHash != "" && !run.toolSchemas[toolsHash] && run.id != 0
+	if storeTools {
+		if run.toolSchemas == nil {
+			run.toolSchemas = map[string]bool{}
+		}
+		run.toolSchemas[toolsHash] = true
 	}
 	run.mu.Unlock()
 
 	if storePrompt {
-		sum := sha256.Sum256([]byte(req.System))
-		hash := hex.EncodeToString(sum[:])
-		if err := run.rec.store.UpsertPrompt(context.WithoutCancel(ctx), hash, req.System); err != nil {
+		if err := run.rec.store.UpsertPrompt(context.WithoutCancel(ctx), systemHash, req.System); err != nil {
 			run.warn(ctx, "ai.run.prompt failed", err)
-		} else {
+			run.mu.Lock()
+			delete(run.prompts, systemHash)
+			run.mu.Unlock()
+		} else if firstPrompt {
 			// Set only once stored, so the run never points at a missing prompt.
 			run.mu.Lock()
-			run.promptHash = hash
+			run.promptHash = systemHash
 			run.mu.Unlock()
 		}
 	}
-	run.addStep(ctx, Step{
+	if storeTools {
+		if err := run.rec.store.UpsertToolSchema(context.WithoutCancel(ctx), toolsHash, string(toolsJSON)); err != nil {
+			run.warn(ctx, "ai.run.tools failed", err)
+			run.mu.Lock()
+			delete(run.toolSchemas, toolsHash)
+			run.mu.Unlock()
+		}
+	}
+
+	step := Step{
 		Seq:          seq,
 		Type:         StepLLMCall,
 		Name:         req.Model,
@@ -124,5 +172,171 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 		DurationMs:   dur.Milliseconds(),
 		InputTokens:  int64(usage.InputTokens),
 		OutputTokens: int64(usage.OutputTokens),
-	})
+	}
+	var err error
+	if step.RequestJSON, err = encodeRequest(req, offset, systemHash, toolsHash); err != nil {
+		run.warn(ctx, "ai.run.request encode failed", err)
+	}
+	if callErr == nil && resp != nil {
+		step.StopReason = string(resp.StopReason)
+		if step.ResponseJSON, err = encodeResponse(resp); err != nil {
+			run.warn(ctx, "ai.run.response encode failed", err)
+		}
+	}
+	// Callers grow their history append-only (the agent loop, the import
+	// retry), so a continuing call resends the recorded messages unchanged.
+	// The slice is copied so a caller reusing its backing array cannot make
+	// a changed history look like a continuation; the messages' own content
+	// is assumed not to be mutated after the call. A step that was not
+	// stored resets the history, so the next call is recorded from offset 0
+	// instead of continuing a call replay cannot see.
+	var lastMsgs []llm.Message
+	if run.addStep(ctx, step) {
+		lastMsgs = append([]llm.Message(nil), req.Messages...)
+	}
+	run.mu.Lock()
+	run.lastMsgs = lastMsgs
+	run.mu.Unlock()
+}
+
+func sha256Hex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// maxBodyBytes caps request_json and response_json of an llm_call step.
+const maxBodyBytes = 256 << 10
+
+// cutMarker ends a payload shortened to fit maxBodyBytes.
+const cutMarker = "…[truncated]"
+
+// minCutBytes is the smallest payload worth shortening; anything shorter
+// would barely shrink once the marker is appended.
+const minCutBytes = 64
+
+// requestBody is the stored request_json: the messages the call appended
+// (Messages[MessageOffset:]), its parameters, and the hashes of its system
+// prompt (ai_prompts) and tools (ai_tool_schemas), null when absent.
+type requestBody struct {
+	MessageOffset int           `json:"message_offset"`
+	Messages      []llm.Message `json:"messages"`
+	Temperature   float64       `json:"temperature"`
+	MaxTokens     int           `json:"max_tokens"`
+	SystemHash    *string       `json:"system_hash"`
+	ToolsHash     *string       `json:"tools_hash"`
+	Truncated     bool          `json:"truncated"`
+}
+
+// responseBody is the stored response_json: the reply's content blocks.
+type responseBody struct {
+	Content    []llm.ContentBlock `json:"content"`
+	StopReason llm.StopReason     `json:"stop_reason"`
+	Truncated  bool               `json:"truncated,omitempty"`
+}
+
+func encodeRequest(req llm.Request, offset int, systemHash, toolsHash string) (string, error) {
+	delta := make([]llm.Message, len(req.Messages)-offset)
+	var blocks []*llm.ContentBlock
+	for i, m := range req.Messages[offset:] {
+		delta[i] = llm.Message{Role: m.Role, Content: append([]llm.ContentBlock(nil), m.Content...)}
+		for j := range delta[i].Content {
+			blocks = append(blocks, &delta[i].Content[j])
+		}
+	}
+	body := requestBody{
+		MessageOffset: offset,
+		Messages:      delta,
+		Temperature:   req.Temperature,
+		MaxTokens:     req.MaxTokens,
+		SystemHash:    nilIfEmpty(systemHash),
+		ToolsHash:     nilIfEmpty(toolsHash),
+	}
+	return encodeCapped(&body, blocks, &body.Truncated)
+}
+
+func encodeResponse(resp *llm.Response) (string, error) {
+	content := append([]llm.ContentBlock{}, resp.Message.Content...)
+	blocks := make([]*llm.ContentBlock, len(content))
+	for i := range content {
+		blocks[i] = &content[i]
+	}
+	body := responseBody{Content: content, StopReason: resp.StopReason}
+	return encodeCapped(&body, blocks, &body.Truncated)
+}
+
+func nilIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// encodeCapped marshals body. While the result exceeds maxBodyBytes it
+// shortens the largest payload among blocks (which body references) and sets
+// *truncated, so the stored body stays valid JSON.
+func encodeCapped(body any, blocks []*llm.ContentBlock, truncated *bool) (string, error) {
+	data, err := json.Marshal(body)
+	for err == nil && len(data) > maxBodyBytes {
+		if !shrinkLargest(blocks, len(data)-maxBodyBytes) {
+			break // nothing left to shorten
+		}
+		*truncated = true
+		data, err = json.Marshal(body)
+	}
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// shrinkLargest cuts the largest text, tool input or tool result among blocks
+// by at least excess bytes. A cut JSON payload is replaced by a JSON string
+// holding its shortened text. It reports false when no payload is long
+// enough to cut.
+func shrinkLargest(blocks []*llm.ContentBlock, excess int) bool {
+	var text *string
+	var raw *json.RawMessage
+	size := minCutBytes
+	for _, b := range blocks {
+		if len(b.Text) > size {
+			text, raw, size = &b.Text, nil, len(b.Text)
+		}
+		for _, r := range []*json.RawMessage{&b.ToolUseInput, &b.ToolResultContent} {
+			if len(*r) > size {
+				text, raw, size = nil, r, len(*r)
+			}
+		}
+	}
+	switch {
+	case text != nil:
+		*text = cutUTF8(*text, max(len(*text)-excess-len(cutMarker), 0)) + cutMarker
+	case raw != nil:
+		// Cut the text of a payload already turned into a JSON string, so
+		// repeated cuts never escape it twice.
+		s := string(*raw)
+		var str string
+		if s[0] == '"' && json.Unmarshal(*raw, &str) == nil {
+			s = str
+		}
+		cut, err := json.Marshal(cutUTF8(s, max(len(s)-excess-len(cutMarker), 0)) + cutMarker)
+		if err != nil {
+			return false
+		}
+		*raw = cut
+	default:
+		return false
+	}
+	return true
+}
+
+// cutUTF8 returns the longest prefix of s of at most n bytes that ends on a
+// rune boundary.
+func cutUTF8(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

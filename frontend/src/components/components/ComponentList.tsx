@@ -37,11 +37,13 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ComposedFood, FoodRole } from "@/lib/api/foods"
 import { useFoods, useDeleteFood, useInsights } from "@/lib/queries/foods"
+import { useSetupStatus } from "@/lib/queries/setup"
 import { useLocalStorageState } from "@/lib/hooks/useLocalStorageState"
 import { FOOD_ROLES } from "@/lib/schemas/food"
 import { cn } from "@/lib/utils"
 
 import { ComponentCard, type ComponentCardLayout } from "./ComponentCard"
+import { RecipeOnboarding } from "./RecipeOnboarding"
 
 const PAGE_SIZE = 16
 
@@ -76,6 +78,12 @@ export function ComponentList() {
     limit,
     offset: 0,
   })
+
+  const setup = useSetupStatus()
+  const guided =
+    setup.data !== undefined &&
+    setup.data.recipe_count < setup.data.recipe_target
+  const hasFilters = !!deferredSearch || !!roleFilter || !!tagFilter
 
   const deleteMutation = useDeleteFood()
   const { data: insights } = useInsights()
@@ -151,12 +159,9 @@ export function ComponentList() {
                 </Link>
               </Button>
             </nav>
-            <Button
-              asChild
-              className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
-            >
+            <Button asChild>
               <Link to="/components/new">
-                <Plus className="mr-1.5 size-4" aria-hidden />
+                <Plus data-icon="inline-start" strokeWidth={1.5} aria-hidden />
                 {t("component.create")}
               </Link>
             </Button>
@@ -191,6 +196,13 @@ export function ComponentList() {
           </>
         }
       />
+
+      {setup.data && (
+        <RecipeOnboarding
+          count={setup.data.recipe_count}
+          target={setup.data.recipe_target}
+        />
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Input
@@ -250,10 +262,10 @@ export function ComponentList() {
       {isLoading ? (
         <ListSkeleton layout={layout} />
       ) : items.length === 0 ? (
-        <EmptyState
-          hasFilters={!!deferredSearch || !!roleFilter || !!tagFilter}
-          t={t}
-        />
+        // An unfiltered empty library is covered by the onboarding cards.
+        hasFilters || (!guided && !setup.isPending) ? (
+          <EmptyState hasFilters={hasFilters} t={t} />
+        ) : null
       ) : (
         <>
           <div
@@ -412,12 +424,9 @@ function EmptyState({
             : t("component.empty_state")}
         </p>
       </div>
-      <Button
-        asChild
-        className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"
-      >
+      <Button asChild>
         <Link to="/components/new">
-          <Plus className="mr-1.5 size-4" aria-hidden />
+          <Plus data-icon="inline-start" strokeWidth={1.5} aria-hidden />
           {t("component.create")}
         </Link>
       </Button>

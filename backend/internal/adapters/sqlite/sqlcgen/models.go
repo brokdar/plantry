@@ -56,6 +56,8 @@ type AiRun struct {
 	Outcome          sql.NullString
 	OutcomeAt        sql.NullString
 	ErrorKey         sql.NullString
+	ConversationID   sql.NullInt64
+	RequestID        sql.NullString
 }
 
 type AiRunStep struct {
@@ -70,6 +72,14 @@ type AiRunStep struct {
 	DurationMs   int64
 	InputTokens  int64
 	OutputTokens int64
+	RequestJson  sql.NullString
+	ResponseJson sql.NullString
+	StopReason   sql.NullString
+}
+
+type AiToolSchema struct {
+	Hash string
+	Json string
 }
 
 type AppSetting struct {

@@ -1,7 +1,7 @@
 {
   "nav": {
     "brand": "Plantry",
-    "generate_plan": "Generate Plan",
+    "generate_plan": "Generate plan",
     "planner": "Weekly Planner",
     "ingredients": "Ingredients",
     "recipes": "Recipes",
@@ -19,7 +19,9 @@
     "archive": "Archive",
     "primary": "Primary",
     "go_to": "Go to",
-    "recipes_sections": "Recipe sections"
+    "recipes_sections": "Recipe sections",
+    "generate_locked_one": "Add {{count}} more recipe to start planning",
+    "generate_locked_other": "Add {{count}} more recipes to start planning"
   },
   "calendar": {
     "title": "Calendar",
@@ -418,7 +420,10 @@
       "api_key_placeholder_replace": "Enter a new key to replace the stored one",
       "api_key_saved": "API key saved.",
       "test_connection": "Test connection",
-      "validated": "Connection validated.",
+      "validated_saved_one": "Key saved. {{count}} model available",
+      "validated_saved_other": "Key saved. {{count}} models available",
+      "validated_works_one": "Key works, {{count}} model available",
+      "validated_works_other": "Key works, {{count}} models available",
       "model_label": "Model",
       "model_placeholder": "Select a model…",
       "model_saved": "Model saved.",
@@ -733,7 +738,7 @@
   "component": {
     "title": "Recipe Catalog",
     "subtitle": "Curated nourishment for your digital kitchen sanctuary. Explore seasonal flavors and mindful preparations.",
-    "create": "New Recipe",
+    "create": "New recipe",
     "edit": "Edit Recipe",
     "edit_eyebrow": "Editor",
     "edit_title": "Refining Your Creation",
@@ -844,7 +849,19 @@
     "source_url": "Source URL",
     "source_url_placeholder": "https://…",
     "description": "Description",
-    "description_hint": "Text that came with the recipe. Shown muted below your notes."
+    "description_hint": "Text that came with the recipe. Shown muted below your notes.",
+    "guide": {
+      "label": "Get started with recipes",
+      "progress": "{{count}} of {{target}} recipes. Plantry needs {{target}} to plan a varied week.",
+      "progress_value": "{{count}} of {{target}} recipes",
+      "import_title": "Import from a link",
+      "import_body": "Paste the link to a recipe page and Plantry reads the ingredients and steps. This is the fastest way to fill your cookbook.",
+      "import_action": "Import a recipe",
+      "create_title": "Create manually",
+      "create_body": "Type in a recipe you know by heart, one ingredient at a time. For your own take on a saved recipe, open it and create a variant.",
+      "create_action": "Create a recipe",
+      "milestone": "{{count}} recipes. You're ready to plan your first week."
+    }
   },
   "lookup": {
     "title": "Find ingredient",
@@ -1388,5 +1405,58 @@
   "units": {
     "kcal": "kcal",
     "g": "g"
+  },
+  "setup": {
+    "step_of": "Step {{step}} of {{total}}",
+    "back": "Back",
+    "next": "Next",
+    "skip": "Skip, use defaults",
+    "welcome": {
+      "title": "Welcome to Plantry",
+      "why": "Choose your language. Plantry uses it for recipes, plans and the shopping list."
+    },
+    "household": {
+      "title": "You & household",
+      "why": "Plantry sizes every plate for your household and leaves out what you don't eat.",
+      "portions_one": "= {{portions}} portion per plate",
+      "portions_other": "= {{portions}} portions per plate",
+      "allergies_why": "Plantry leaves out recipes with these ingredients.",
+      "meat_days_optional": "Optional. Plantry keeps meat to this many days a week."
+    },
+    "nutrition": {
+      "title": "Nutrition goal",
+      "why": "Plantry balances each day's plates against this target. You can change it later."
+    },
+    "meals": {
+      "title": "Meals & week",
+      "why": "Plantry plans a plate for every meal marked Plan. Mark the meals you eat elsewhere as No plate.",
+      "name_label": "Name of meal {{n}}",
+      "move_up": "Move {{name}} up",
+      "move_down": "Move {{name}} down",
+      "plan_toggle": "Plan {{name}}",
+      "unnamed": "Unnamed meal",
+      "none_active": "Turn on at least one meal to set up your week.",
+      "error_unnamed": "Give every meal a name.",
+      "error_none_active": "Turn on at least one meal."
+    },
+    "cooking": {
+      "title": "Cooking style",
+      "why": "Plantry groups plates into cooking sessions that match how often you cook."
+    },
+    "variety": {
+      "title": "Variety & shopping",
+      "why": "Plantry plans from one shopping day to the next and keeps recipes from coming back too soon.",
+      "shopping_why": "You shop on {{day}}. Plantry plans the days after it."
+    },
+    "assistant": {
+      "title": "Assistant (optional)",
+      "why": "The assistant suggests plates and can fill your week for you.",
+      "later": "You can add this later. Planning works without it."
+    },
+    "finish": {
+      "title": "You're set up",
+      "body": "Add 10 recipes and Plantry can plan your weeks.",
+      "add_recipes": "Add recipes"
+    }
   }
 }

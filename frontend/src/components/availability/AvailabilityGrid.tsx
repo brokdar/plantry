@@ -131,7 +131,9 @@ export function AvailabilityGrid({
   }
 
   return (
-    <div className="overflow-x-auto overscroll-x-contain p-1">
+    // `relative` makes this scroll box the containing block of the cells'
+    // sr-only labels, so they scroll with it instead of widening the page.
+    <div className="relative overflow-x-auto overscroll-x-contain p-1">
       <table
         role="grid"
         aria-label={label}

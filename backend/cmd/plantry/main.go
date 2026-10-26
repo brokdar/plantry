@@ -9,6 +9,7 @@ import (
 	nethttp "net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -155,7 +156,18 @@ func run() error {
 	// AI wiring. The llm.Resolver consults settings on every request so
 	// provider / model / API-key changes take effect without a restart.
 	// Every client is metered so each LLM call lands in the AI run log.
-	runRecorder := airun.NewRecorder(sqlite.NewAIRunRepo(conn), logger, time.Now)
+	// Steps of runs older than ai.run_retention_days are pruned now and after
+	// a finished run, at most once per hour.
+	runRecorder := airun.NewRecorder(sqlite.NewAIRunRepo(conn), logger, time.Now).
+		WithRetention(func(ctx context.Context) (int, error) {
+			v, err := settingsSvc.Get(ctx, settingsdom.KeyAIRunRetentionDays)
+			if err != nil {
+				return 0, err
+			}
+			return strconv.Atoi(v.Raw)
+		})
+	runRecorder.Prune(context.Background())
+	defer runRecorder.Wait() // runs before conn.Close
 	newLLMClient := func(provider, apiKey, fakeScript string) (llm.Client, error) {
 		switch provider {
 		case "anthropic":

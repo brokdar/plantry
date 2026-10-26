@@ -61,7 +61,7 @@ export function MacroFieldSet({ control, disabled }: MacroFieldSetProps) {
                       onChange={(e) => {
                         const raw = e.target.value
                         if (raw === "") {
-                          fieldProps.onChange(0)
+                          fieldProps.onChange(null)
                           return
                         }
                         const parsed = Number(raw)

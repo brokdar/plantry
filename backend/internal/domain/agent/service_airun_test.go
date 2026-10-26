@@ -280,3 +280,41 @@ func TestChat_ProviderMissingRecordsNothing(t *testing.T) {
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM ai_runs`).Scan(&n))
 	assert.Zero(t, n)
 }
+
+func TestChat_RunStoresConversationID(t *testing.T) {
+	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}})
+
+	evts, err := chat(context.Background(), svc, "first", nil)
+	require.NoError(t, err)
+	var convID int64
+	for _, e := range evts {
+		if e.Type == llm.EventConversationReady {
+			convID = e.Payload.(llm.ConversationReadyPayload).ConversationID
+		}
+	}
+	require.NotZero(t, convID)
+
+	// A follow-up turn in the same conversation is a second run with the same id.
+	_, err = chatReq(context.Background(), svc, agent.ChatRequest{
+		ConversationID: &convID, UserText: "second", From: chatWindowStart, To: chatWindowEnd,
+	}, nil)
+	require.NoError(t, err)
+
+	rows, err := db.Query(`SELECT conversation_id FROM ai_runs ORDER BY id`)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	var got []sql.NullInt64
+	for rows.Next() {
+		var c sql.NullInt64
+		require.NoError(t, rows.Scan(&c))
+		got = append(got, c)
+	}
+	require.NoError(t, rows.Err())
+	want := sql.NullInt64{Int64: convID, Valid: true}
+	assert.Equal(t, []sql.NullInt64{want, want}, got)
+
+	// The chat's tool set is stored once, though both runs sent it.
+	var schemas int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM ai_tool_schemas`).Scan(&schemas))
+	assert.Equal(t, 1, schemas)
+}

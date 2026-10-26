@@ -11,18 +11,20 @@ import (
 )
 
 const createAIRun = `-- name: CreateAIRun :one
-INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction, conversation_id, request_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id
 `
 
 type CreateAIRunParams struct {
-	Kind          string
-	StartedAt     string
-	PromptVersion string
-	WindowStart   sql.NullString
-	WindowEnd     sql.NullString
-	Instruction   sql.NullString
+	Kind           string
+	StartedAt      string
+	PromptVersion  string
+	WindowStart    sql.NullString
+	WindowEnd      sql.NullString
+	Instruction    sql.NullString
+	ConversationID sql.NullInt64
+	RequestID      sql.NullString
 }
 
 func (q *Queries) CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error) {
@@ -33,6 +35,8 @@ func (q *Queries) CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64
 		arg.WindowStart,
 		arg.WindowEnd,
 		arg.Instruction,
+		arg.ConversationID,
+		arg.RequestID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -40,8 +44,9 @@ func (q *Queries) CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64
 }
 
 const createAIRunStep = `-- name: CreateAIRunStep :exec
-INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens,
+    request_json, response_json, stop_reason)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateAIRunStepParams struct {
@@ -55,6 +60,9 @@ type CreateAIRunStepParams struct {
 	DurationMs   int64
 	InputTokens  int64
 	OutputTokens int64
+	RequestJson  sql.NullString
+	ResponseJson sql.NullString
+	StopReason   sql.NullString
 }
 
 func (q *Queries) CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error {
@@ -69,6 +77,9 @@ func (q *Queries) CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams
 		arg.DurationMs,
 		arg.InputTokens,
 		arg.OutputTokens,
+		arg.RequestJson,
+		arg.ResponseJson,
+		arg.StopReason,
 	)
 	return err
 }
@@ -123,6 +134,17 @@ func (q *Queries) FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.R
 	)
 }
 
+const pruneAIRunSteps = `-- name: PruneAIRunSteps :execresult
+DELETE FROM ai_run_steps
+WHERE run_id IN (SELECT id FROM ai_runs WHERE started_at < ?1)
+`
+
+// Deletes the steps of runs started before the cutoff; the runs, prompts and
+// tool schemas stay.
+func (q *Queries) PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error) {
+	return q.db.ExecContext(ctx, pruneAIRunSteps, before)
+}
+
 const upsertAIPrompt = `-- name: UpsertAIPrompt :exec
 INSERT INTO ai_prompts (hash, text) VALUES (?, ?)
 ON CONFLICT(hash) DO NOTHING
@@ -135,5 +157,20 @@ type UpsertAIPromptParams struct {
 
 func (q *Queries) UpsertAIPrompt(ctx context.Context, arg UpsertAIPromptParams) error {
 	_, err := q.db.ExecContext(ctx, upsertAIPrompt, arg.Hash, arg.Text)
+	return err
+}
+
+const upsertAIToolSchema = `-- name: UpsertAIToolSchema :exec
+INSERT INTO ai_tool_schemas (hash, json) VALUES (?, ?)
+ON CONFLICT(hash) DO NOTHING
+`
+
+type UpsertAIToolSchemaParams struct {
+	Hash string
+	Json string
+}
+
+func (q *Queries) UpsertAIToolSchema(ctx context.Context, arg UpsertAIToolSchemaParams) error {
+	_, err := q.db.ExecContext(ctx, upsertAIToolSchema, arg.Hash, arg.Json)
 	return err
 }

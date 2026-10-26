@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute, Link, redirect } from "@tanstack/react-router"
 
 import { ChatPanel } from "@/components/chat/ChatPanel"
 import { ShortcutCheatsheet } from "@/components/planner/ShortcutCheatsheet"
@@ -60,10 +60,11 @@ import { isCheatsheetShortcut } from "@/lib/planner-keynav"
 import { usePlannerWindow } from "@/lib/hooks/usePlannerWindow"
 import { shiftYMD } from "@/lib/planner-window"
 import type { AvailabilityCell } from "@/lib/api/availability"
+import { getSetupStatus } from "@/lib/api/setup"
 import { useAISettings } from "@/lib/queries/ai"
 import { useAvailabilityRange } from "@/lib/queries/availability"
 import { queryClient } from "@/lib/query-client"
-import { plateKeys } from "@/lib/queries/keys"
+import { plateKeys, setupKeys } from "@/lib/queries/keys"
 import { usePlatesRange } from "@/lib/queries/plates"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { useNutritionRange } from "@/lib/queries/nutrition"
@@ -75,6 +76,18 @@ export const Route = createFileRoute("/")({
   validateSearch: (search): { date?: string } => ({
     date: (search.date as string) ?? undefined,
   }),
+  // Plan D2: only `/` sends a new install to the setup wizard; deep links
+  // keep working. A status that fails to load opens the planner rather
+  // than the router's error page.
+  beforeLoad: async () => {
+    const status = await queryClient
+      .ensureQueryData({
+        queryKey: setupKeys.status(),
+        queryFn: getSetupStatus,
+      })
+      .catch(() => null)
+    if (status?.completed === false) throw redirect({ to: "/setup" })
+  },
   component: PlanPage,
 })
 

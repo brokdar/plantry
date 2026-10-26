@@ -1,4 +1,15 @@
+import type { Page } from "@playwright/test"
+
 import { cleanupSlot, expect, seedSlot, test, uid } from "./helpers"
+
+// D22: the shared e2e DB accumulates recipes, so pin the Generate gate open.
+async function stubRecipesReady(page: Page) {
+  await page.route("**/api/setup", (route) =>
+    route.fulfill({
+      json: { completed: true, recipe_count: 10, recipe_target: 10 },
+    })
+  )
+}
 
 test.describe("Keyboard shortcuts", () => {
   test("pressing 'd' toggles the theme", async ({ page }) => {
@@ -23,12 +34,13 @@ test.describe("Keyboard shortcuts", () => {
     page,
   }) => {
     // Serial-safe: we don't seed a conversation — we open chat via the
-    // Generate Plan FAB on mobile and rely on the existing fake-AI script
+    // Generate plan button and rely on the existing fake-AI script
     // having turns available. If chat turns are exhausted in shared state,
     // the fake provider short-circuits but the composer still clears on
     // submit, which is what we assert.
     const slot = await seedSlot(`slot.kb-${uid()}`, "Moon", 994)
     try {
+      await stubRecipesReady(page)
       await page.setViewportSize({ width: 1440, height: 900 })
       await page.goto("/")
       // All routes render the default sidebar, so the default variant opens chat.

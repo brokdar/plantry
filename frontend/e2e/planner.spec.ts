@@ -50,7 +50,7 @@ test.describe("Weekly planner", () => {
       await expect(cell.getByText(`Chicken curry ${tag}`)).toBeVisible()
 
       // Navigate forward — cell still renders (just empty there).
-      await page.getByRole("button", { name: /Next 7/i }).click()
+      await page.getByRole("button", { name: "Next 7", exact: true }).click()
       await expect(
         page.locator(`[data-testid="cell-0-${slot.id}"]`)
       ).toBeVisible()

@@ -96,6 +96,9 @@ type Querier interface {
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	MarkFoodCooked(ctx context.Context, arg MarkFoodCookedParams) error
+	// Deletes the steps of runs started before the cutoff; the runs, prompts and
+	// tool schemas stay.
+	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
 	RecentUnitForFood(ctx context.Context, foodID int64) (sql.NullString, error)
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
@@ -111,6 +114,7 @@ type Querier interface {
 	UpdatePresetName(ctx context.Context, arg UpdatePresetNameParams) (Preset, error)
 	UpdateTimeSlot(ctx context.Context, arg UpdateTimeSlotParams) (TimeSlot, error)
 	UpsertAIPrompt(ctx context.Context, arg UpsertAIPromptParams) error
+	UpsertAIToolSchema(ctx context.Context, arg UpsertAIToolSchemaParams) error
 	UpsertAvailabilityOverride(ctx context.Context, arg UpsertAvailabilityOverrideParams) error
 	UpsertFoodPortion(ctx context.Context, arg UpsertFoodPortionParams) error
 	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
