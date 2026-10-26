@@ -510,6 +510,6 @@ Every setting shows its effect in one line ("Plantry plans at most 1 cooking ses
 
 ## 11. Resolved decisions (defaults accepted 2026-10-25, may be overridden)
 
-1. **Store section order:** fixed for now, using the walk order in §5.7. It becomes reorderable in Settings only if requested.
+1. **Store section order:** fixed for now, using the walk order in §5.7. It becomes reorderable in Settings only if requested. (Decided 2026-10-26; the original question stated no default.)
 2. **Week start column:** the board starts on the shopping day (Saturday for this user), matching the planning window. There is no Monday-first board with a highlighted window.
 3. **Photos for manual recipes:** uploading from the phone camera roll is allowed in the recipe editor, using the existing image crop UI.

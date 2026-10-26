@@ -1,6 +1,6 @@
 # Phase 0 implementation plan: Foundations
 
-Status: ready to execute. Written 2026-10-26 against `main` at ec7a239.
+Status: ready to execute. Written 2026-10-26 against `main` at e0a9e68.
 
 Sources of truth:
 - `docs/PLANNING_ASSISTANT_SPEC.md`: §14 Phase 0, plus §4.4, §8.1 and §10.
@@ -28,7 +28,8 @@ The user may override any of these.
 
 | # | Decision | Reason |
 |---|---|---|
-| D1 | **Nav targets.** Today → `/day/<today>`. Plan → `/`. Recipes → `/components`, with Ingredients and Import linked from its header. Shop → a new thin `/shop` page. Route paths stay unchanged; the renames (`/recipes`, `/today`, `/plan`) happen with the rebuilt screens in Phases 1–3. | Four destinations now, without building Phase 2 screens early. |
+| D1 | **Nav targets.** Today → `/day/<today>`. Plan → `/`. Recipes → `/components`, with Ingredients and Import linked from its header. Shop → a new thin `/shop` page. Route paths stay unchanged; the renames (`/recipes`, `/today`, `/plan`) happen with the rebuilt screens in Phases 1–3. On phones the Settings gear sits in the global TopBar in Phase 0, because the Today header it belongs in (UX §2.1) arrives with the Phase 2 Today screen. | Four destinations now, without building Phase 2 screens early. |
+| D1a | **Nav restructure is Phase 0.** UX §9 places it in Phase 0, which overrides planning spec §14 listing "Nav fixes" under Phase 1. | The UX spec is the newer, more specific source. |
 | D2 | **Tokens by aliasing.** The new §3.1 tokens are the source. Legacy Material utilities (`bg-surface-container-*`, `text-on-surface*`, `border-outline*`, `*-ai-accent*`) and shadcn variables are remapped onto them in `index.css`. The ~800 class usages are not renamed in Phase 0; each screen moves to the new names when it is rebuilt. | The whole app changes in one step and the diff stays reviewable. |
 | D3 | **Run-log scope.** Phase 0 adds only the tables, recording and logs. The cost table (`llm.Cost`), `ai.price_overrides`, any runs API and the insights page move to Phase 3. In Phase 0, `ai_runs` is verified by tests and by `sqlite3`. | DoD 3 only needs the rows. |
 | D4 | **Extra run kinds.** `lookup` covers food-lookup translate and pick-best. `untracked` is a safety net for a metered call made without a started run. `running` is the in-progress status. | §8.1 has no kind for food lookup, and a forgotten call site should still be visible. |
@@ -80,11 +81,11 @@ The user may override any of these.
     - `onCreateManual` (~`:380`) swallows errors and fails on the unique leaf name `ux_foods_name_leaf`.
   - `frontend/e2e/import.spec.ts` posts fixture HTML to `/api/import/extract` with `{html}`. Reuse that pattern; no network.
 - **Images:** `adapters/imagestore` has `SaveFromURL(ctx, url, category, id)`.
-- **Config:** `PLANTRY_SECRET_KEY` is read at `config/config.go:95-96`; the cipher is chosen at `main.go:81-90`. `DBPath` defaults to `/data/plantry.db`, and there is no data-dir setting.
+- **Config:** `PLANTRY_SECRET_KEY` is read at `config/config.go:95-96`; the cipher is chosen at `main.go:83-90`. `DBPath` defaults to `/data/plantry.db`, and there is no data-dir setting.
 - **Frontend chat:** `ChatPanel.tsx` passes `range` into the mutation, but `lib/queries/ai.ts` only uses it to invalidate caches (`:151`). The request body sends `conversation_id`, `week_id` and `mode`.
 - **Shopping:**
   - `ShoppingPanel.tsx:78-101` anchors its presets on `new Date()`. `routes/index.tsx:540` mounts it with a key.
-  - The fallback shopping day disagrees: backend `specs.go` uses `"0"`, `routes/index.tsx:118` uses `"1"`, `settings/tabs/PlanTab.tsx:71` uses `"5"`.
+  - The fallback shopping day disagrees: backend `specs.go` uses `"0"`, `routes/index.tsx:118` uses `"1"`, `components/settings/tabs/PlanTab.tsx:71` uses `"5"`.
 - **Shell:**
   - `SideNav.tsx` has 6 items (/, /components, /ingredients, /presets, /calendar, /settings). `MobileBottomNav.tsx` has 5 and no settings.
   - `index.css` imports Inter and Manrope (`package.json:22-23`).
@@ -242,9 +243,10 @@ Needs A3. Runs after A4 because both edit `agent/service.go`.
     - `src/lib/queries/ai.ts` and its test
     - `ChatPanel.tsx` and any other chat caller, e.g. `GeneratePlanButton`; grep for the chat mutation
 - **Behaviour**
-  - **Request body.** It gains `today`, `from` and `to` (`YYYY-MM-DD`), all required.
-    - The handler returns 400 when the dates are malformed, when `to < from`, or when the span is over 31 days. Each case has its own i18n `messageKey`; follow the existing error pattern.
-    - Missing `today` falls back to the server's `now()` (D8).
+  - **Request body.** It gains `today`, `from` and `to` (`YYYY-MM-DD`).
+    - `from` and `to` are required. The handler returns 400 when either is missing, when the dates are malformed, when `to < from`, or when the span is over 31 days. Each case has its own i18n `messageKey`; follow the existing error pattern.
+    - `today` is optional; when missing it falls back to the server's `now()` (D8).
+    - Every frontend chat caller (`ChatPanel`, `GeneratePlanButton` and any other caller of the chat mutation) sends all three.
   - **`ChatRequest`** gains `Today`, `From` and `To` as `time.Time` values.
   - **Service.** `NewService` takes a `now func() time.Time`, defaulting to `time.Now` in main.
     - **Prompt contents.** `buildSystemPrompt` loads the plates in `[from, to]` and calls `ComposePrompt(p, plates, &DateRange{From, To}, prefs)`, plus a new today line, e.g.:
@@ -261,7 +263,7 @@ Needs A3. Runs after A4 because both edit `agent/service.go`.
 - **Tests first**
   - `prompt_test`: golden assertions on the date lines for a window that crosses a month boundary, today inside and outside the window, and an empty plate list.
   - `service_test`: run a chat with the fake client and assert that `fake.Requests()[0].System` contains the today line and every window date with its weekday.
-  - Handler tests: 400 for a bad date, for `to < from` and for a span over 31 days; 200 passes the dates through.
+  - Handler tests: 400 for missing `from`/`to`, for a bad date, for `to < from` and for a span over 31 days; 200 passes the dates through.
   - Vitest: the chat mutation posts `today`, `from` and `to`.
 - **Verify:**
   ```bash
@@ -459,7 +461,7 @@ Needs C2 and C4. It can run beside C6, but merge C6 after C7 or stub the navigat
   - If the file is missing, it writes 32 random bytes (`crypto/rand`) as 64 hex chars with mode 0600. Write to a temp file, then rename. Create the directory if it is missing.
   - `dir` is `filepath.Dir(cfg.DBPath)`. The env var `PLANTRY_SECRET_KEY` still wins and no file is written.
   - Log at info when a key is generated; never log the key.
-  - The cipher setup at `main.go:81-90` then always has a key, so `crypto.NilCipher` stays only for tests.
+  - The cipher setup at `main.go:83-90` then always has a key, so `crypto.NilCipher` stays only for tests.
 - **Tests first** (`t.TempDir()`):
   - A new key has 64 hex chars and mode 0600.
   - A second call returns the same key.
@@ -483,7 +485,7 @@ Last, after all other steps.
     - Add `/shop` and `/components/$id`.
   - Rewrite the design-system section: new tokens, Newsreader and Source Sans 3, the legacy aliases and when to use which names.
   - If the user approved the impeccable `document` pass, add a link to `DESIGN.md`.
-- **Verify:** `grep -rn 'AUTH_PASSWORD\|Manrope\|Inter Variable\|32-char hex' README.md docker-compose.yml docs backend/CLAUDE.md frontend/CLAUDE.md` returns nothing, apart from historical mentions inside the specs.
+- **Verify:** `grep -rn --exclude=PHASE_0_PLAN.md 'AUTH_PASSWORD\|Manrope\|Inter Variable\|32-char hex' README.md docker-compose.yml docs backend/CLAUDE.md frontend/CLAUDE.md` returns nothing, apart from historical mentions inside the specs.
 
 ### Track E: Frontend design and navigation
 
@@ -518,6 +520,7 @@ Last, after all other steps.
   - **Fonts.** Body and UI use `Source Sans 3 Variable`. The existing heading/display font utility uses `Newsreader Variable` (opsz axis), so wherever headings used Manrope they now get Newsreader. Add a `tabular-nums` helper class if none exists.
   - **Type scale:** body 0.9375rem, small 0.8125rem, caption 0.75rem, h3 1.1875rem, h2 1.4375rem, h1 1.75rem (Newsreader 600). No all-caps label utilities: remove `uppercase tracking-*` only where it is defined as a token or utility in `index.css`, not in components.
   - **Radii:** `--radius` 8px for buttons; add `--radius-cell` 4px, `--radius-sheet` 16px and `--radius-tag` `3px 10px 10px 3px`.
+    - Inputs keep the shadcn `--radius`-derived radius in Phase 0; the 4px input radius from UX §3.3 is applied when screens are rebuilt (same reasoning as D2).
   - **Shadows:** one soft shadow for sheets and popovers.
 - **Tests first** (`tokens.test.ts`, which reads `index.css` as text):
   - Every §3.1 token is defined in both themes with the exact hex values.
@@ -529,6 +532,7 @@ Last, after all other steps.
   - With the app running (`bun run dev` plus the backend), the `agent-browser` skill takes screenshots of the planner, `/components`, `/ingredients`, `/import` and `/settings` at 375, 820, 1180 and 1440 px in light and dark. Compare them against the "Chosen" section of `docs/design/visual-directions.html`.
   - Fix the obvious breakage caused by aliasing (unreadable text, invisible borders) in `index.css` only.
   - Run an impeccable `critique` by reading project context directly (D9). Record findings in the step summary; component-level fixes belong to later phases unless they are breakage.
+  - The per-screen impeccable `audit` (UX §9) is covered by the final review in §4 (`frontend-review` on `/`, `/components/$id`, `/import`), not at E1.
 
 #### E2. Four-destination navigation
 
@@ -564,7 +568,7 @@ Last, after all other steps.
 - **Files**
   - `src/components/planner/ShoppingPanel.tsx` and its test
   - `src/routes/index.tsx` (`:118` fallback)
-  - `src/routes/settings/tabs/PlanTab.tsx` (`:71` fallback)
+  - `src/components/settings/tabs/PlanTab.tsx` (`:71` fallback)
   - i18n files
 - **Behaviour**
   - **Presets** are computed from the `range` prop, not `new Date()`:
