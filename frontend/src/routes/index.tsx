@@ -53,17 +53,12 @@ import {
   listPlates,
 } from "@/lib/api/plates"
 import { isCheatsheetShortcut } from "@/lib/planner-keynav"
-import {
-  computeAnchor,
-  shiftYMD,
-  windowRange,
-  type AnchorMode,
-} from "@/lib/planner-window"
+import { usePlannerWindow } from "@/lib/hooks/usePlannerWindow"
+import { shiftYMD } from "@/lib/planner-window"
 import { useAISettings } from "@/lib/queries/ai"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
 import { usePlatesRange } from "@/lib/queries/plates"
-import { useSettings } from "@/lib/queries/settings"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { useNutritionRange } from "@/lib/queries/nutrition"
 import { useChatUI } from "@/lib/stores/chat-ui"
@@ -110,22 +105,7 @@ function PlanPage() {
   const openChat = useChatUI((s) => s.setOpen)
   const requestAutoFill = useChatUI((s) => s.requestAutoFill)
 
-  const settingsQuery = useSettings()
-  const settingValue = (key: string, fallback: string) =>
-    settingsQuery.data?.items.find((i) => i.key === key)?.value ?? fallback
-
-  const anchorMode = settingValue("plan.anchor", "today") as AnchorMode
-  const shoppingDay = Number(settingValue("plan.shopping_day", "0"))
-  const weekStartsOn = settingValue("plan.week_starts_on", "monday") as
-    | "monday"
-    | "sunday"
-    | "saturday"
-
-  // Derive anchor fresh each render (pure derivation — no state)
-  const anchor = computeAnchor({ mode: anchorMode, shoppingDay, weekStartsOn })
-  const shifted = new Date(anchor)
-  shifted.setDate(anchor.getDate() + windowOffset)
-  const { from, to } = windowRange(shifted, 7)
+  const { from, to } = usePlannerWindow(windowOffset)
 
   const slotsQuery = useTimeSlots(true)
   const platesQuery = usePlatesRange(from, to)

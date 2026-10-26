@@ -14,7 +14,14 @@
     "settings": "Settings",
     "search_placeholder": "Search the catalog…",
     "collapse_sidebar": "Collapse sidebar",
-    "expand_sidebar": "Expand sidebar"
+    "expand_sidebar": "Expand sidebar",
+    "today": "Today",
+    "plan": "Plan",
+    "shop": "Shop",
+    "archive": "Archive",
+    "primary": "Primary",
+    "go_to": "Go to",
+    "recipes_sections": "Recipe sections"
   },
   "calendar": {
     "title": "Calendar",
@@ -969,6 +976,7 @@
     }
   },
   "shopping": {
+    "page_title": "Shopping list",
     "title": "Shopping List",
     "description": "Ingredients for this week",
     "button": "Shopping",

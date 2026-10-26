@@ -32,13 +32,6 @@ interface DateRange {
   to: string
 }
 
-interface ShoppingPanelProps {
-  /** The viewed plan window. All presets are derived from it. */
-  range: DateRange
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}
-
 // ── presets ───────────────────────────────────────────────────────────────────
 
 type PresetKey = "restOfWindow" | "thisWindow" | "nextWindow"
@@ -117,23 +110,23 @@ function savePurchased(from: string, to: string, ids: Set<number>) {
   }
 }
 
-// ── component ─────────────────────────────────────────────────────────────────
+// ── state ─────────────────────────────────────────────────────────────────────
 
-export function ShoppingPanel({
-  range,
-  open,
-  onOpenChange,
-}: ShoppingPanelProps) {
-  const { t, i18n } = useTranslation()
+/**
+ * Active range, presets and purchased state for one viewed window. The caller
+ * keys its component on the range so this state resets when the window
+ * navigates. ShoppingPanel holds it outside the Sheet so chip and tick state
+ * survive closing the sheet.
+ */
+function useShoppingListState(range: DateRange) {
+  const { i18n } = useTranslation()
 
   // Today is read once at mount so render stays pure.
   const [today] = useState(todayISO)
   const presets = computePresets(range, today)
 
   // Active range — defaults to the first preset ("Rest of this window" when
-  // today is inside the window, else "This window"). Parent passes a key based
-  // on the range so this component remounts when the window navigates,
-  // resetting all state without needing a sync effect.
+  // today is inside the window, else "This window").
   const [activeRange, setActiveRange] = useState<DateRange>(
     () => presets.restOfWindow ?? range
   )
@@ -171,11 +164,50 @@ export function ShoppingPanel({
     })
   }
 
-  function isActive(preset: DateRange) {
-    return activeRange.from === preset.from && activeRange.to === preset.to
+  function selectPreset(preset: DateRange) {
+    setActiveRange(preset)
+    setPurchased(loadPurchased(preset.from, preset.to))
   }
 
-  const items = data?.items ?? []
+  const fmt = new Intl.DateTimeFormat(i18n.language, {
+    month: "short",
+    day: "numeric",
+  })
+  const rangeLabel = {
+    from: fmt.format(new Date(activeRange.from + "T00:00:00")),
+    to: fmt.format(new Date(activeRange.to + "T00:00:00")),
+  }
+
+  return {
+    presets,
+    activeRange,
+    selectPreset,
+    rangeLabel,
+    items: data?.items ?? [],
+    isLoading,
+    purchased: effectivePurchased,
+    toggle,
+  }
+}
+
+type ShoppingListState = ReturnType<typeof useShoppingListState>
+
+// ── components ────────────────────────────────────────────────────────────────
+
+interface ShoppingPanelProps {
+  /** The viewed plan window. All presets are derived from it. */
+  range: DateRange
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function ShoppingPanel({
+  range,
+  open,
+  onOpenChange,
+}: ShoppingPanelProps) {
+  const { t } = useTranslation()
+  const state = useShoppingListState(range)
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -186,94 +218,108 @@ export function ShoppingPanel({
             {t("shopping.title")}
           </SheetTitle>
           <SheetDescription>
-            {(() => {
-              const fmt = new Intl.DateTimeFormat(i18n.language, {
-                month: "short",
-                day: "numeric",
-              })
-              return t("shopping.range_label", {
-                from: fmt.format(new Date(activeRange.from + "T00:00:00")),
-                to: fmt.format(new Date(activeRange.to + "T00:00:00")),
-              })
-            })()}
+            {t("shopping.range_label", state.rangeLabel)}
           </SheetDescription>
         </SheetHeader>
-
-        {/* Preset chips */}
-        <div className="flex flex-wrap gap-1.5 px-0 pt-1 pb-2">
-          {(Object.keys(PRESET_LABEL_KEYS) as PresetKey[]).map((key) => {
-            const preset = presets[key]
-            if (!preset) return null
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={isActive(preset)}
-                onClick={() => {
-                  setActiveRange(preset)
-                  setPurchased(loadPurchased(preset.from, preset.to))
-                }}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                  isActive(preset)
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background text-foreground hover:bg-muted"
-                )}
-              >
-                {t(PRESET_LABEL_KEYS[key])}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="flex-1 overflow-y-auto py-4">
-          {isLoading && (
-            <p className="text-sm text-muted-foreground">
-              {t("common.loading")}
-            </p>
-          )}
-
-          {!isLoading && items.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              {t("shopping.empty")}
-            </p>
-          )}
-
-          {items.length > 0 && (
-            <ul className="space-y-2">
-              {items.map((item) => {
-                const checked = effectivePurchased.has(item.food_id)
-                return (
-                  <li
-                    key={item.food_id}
-                    className="flex items-center gap-3 rounded-md px-1 py-1.5 hover:bg-muted/50"
-                  >
-                    <input
-                      type="checkbox"
-                      id={`shop-${item.food_id}`}
-                      checked={checked}
-                      onChange={() => toggle(item.food_id)}
-                      className="h-4 w-4 rounded border-input accent-primary"
-                    />
-                    <label
-                      htmlFor={`shop-${item.food_id}`}
-                      className={cn(
-                        "flex flex-1 cursor-pointer items-center justify-between text-sm",
-                        checked && "text-muted-foreground line-through"
-                      )}
-                    >
-                      <span>{item.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground tabular-nums">
-                        {Math.round(item.total_grams)} g
-                      </span>
-                    </label>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
+        <ShoppingListBody state={state} />
       </SheetContent>
     </Sheet>
+  )
+}
+
+/** The shopping list rendered inline on a page (`/shop`), no sheet. Key it on
+ *  the range, like ShoppingPanel. */
+export function ShoppingList({ range }: { range: DateRange }) {
+  const { t } = useTranslation()
+  const state = useShoppingListState(range)
+
+  return (
+    <div className="flex flex-col">
+      <p className="text-sm text-ink-muted tabular-nums">
+        {t("shopping.range_label", state.rangeLabel)}
+      </p>
+      <ShoppingListBody state={state} />
+    </div>
+  )
+}
+
+function ShoppingListBody({ state }: { state: ShoppingListState }) {
+  const { t } = useTranslation()
+  const { presets, activeRange, items, isLoading } = state
+
+  function isActive(preset: DateRange) {
+    return activeRange.from === preset.from && activeRange.to === preset.to
+  }
+
+  return (
+    <>
+      {/* Preset chips */}
+      <div className="flex flex-wrap gap-1.5 px-0 pt-1 pb-2">
+        {(Object.keys(PRESET_LABEL_KEYS) as PresetKey[]).map((key) => {
+          const preset = presets[key]
+          if (!preset) return null
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={isActive(preset)}
+              onClick={() => state.selectPreset(preset)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                isActive(preset)
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background text-foreground hover:bg-muted"
+              )}
+            >
+              {t(PRESET_LABEL_KEYS[key])}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="flex-1 overflow-y-auto py-4">
+        {isLoading && (
+          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+        )}
+
+        {!isLoading && items.length === 0 && (
+          <p className="text-sm text-muted-foreground">{t("shopping.empty")}</p>
+        )}
+
+        {items.length > 0 && (
+          <ul className="space-y-2">
+            {items.map((item) => {
+              const checked = state.purchased.has(item.food_id)
+              return (
+                <li
+                  key={item.food_id}
+                  className="flex items-center gap-3 rounded-md px-1 py-1.5 hover:bg-muted/50"
+                >
+                  <input
+                    type="checkbox"
+                    id={`shop-${item.food_id}`}
+                    checked={checked}
+                    onChange={() => state.toggle(item.food_id)}
+                    className="h-4 w-4 rounded border-input accent-primary"
+                  />
+                  <label
+                    htmlFor={`shop-${item.food_id}`}
+                    className={cn(
+                      "flex flex-1 cursor-pointer items-center justify-between text-sm",
+                      checked && "text-muted-foreground line-through"
+                    )}
+                  >
+                    <span>{item.name}</span>
+                    <span className="ml-2 text-xs text-muted-foreground tabular-nums">
+                      {Math.round(item.total_grams)} g
+                    </span>
+                  </label>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </>
   )
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { screen } from "@testing-library/react"
+import { screen, within } from "@testing-library/react"
 import { renderWithRouter } from "@/test/render"
 import { ComponentList } from "./ComponentList"
 import { mockChickenCurry, mockTofuBowl } from "@/test/fixtures"
@@ -33,6 +33,23 @@ describe("ComponentList", () => {
     )
     expect(mainCard).toHaveTextContent("Main")
     expect(standaloneCard).toHaveTextContent("Standalone")
+  })
+
+  it("links to Ingredients and Import from the header", async () => {
+    vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
+    vi.mocked(getInsights).mockResolvedValue(noInsights)
+
+    renderWithRouter(<ComponentList />)
+
+    const sections = await screen.findByRole("navigation", {
+      name: "Recipe sections",
+    })
+    expect(
+      within(sections).getByRole("link", { name: "Ingredients" })
+    ).toHaveAttribute("href", "/ingredients")
+    expect(
+      within(sections).getByRole("link", { name: "Import" })
+    ).toHaveAttribute("href", "/import")
   })
 
   it("renders empty state when no components", async () => {

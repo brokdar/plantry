@@ -8,6 +8,7 @@ import {
   List,
   Loader2,
   MoreHorizontal,
+  Package,
   Plus,
   Utensils,
 } from "lucide-react"
@@ -133,6 +134,23 @@ export function ComponentList() {
         description={t("component.subtitle")}
         actions={
           <>
+            <nav
+              aria-label={t("nav.recipes_sections")}
+              className="flex items-center gap-1"
+            >
+              <Button asChild variant="ghost" className="text-ink-muted">
+                <Link to="/ingredients" data-testid="catalog-link-ingredients">
+                  <Package data-icon="inline-start" strokeWidth={1.5} />
+                  {t("nav.ingredients")}
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" className="text-ink-muted">
+                <Link to="/import" data-testid="catalog-link-import">
+                  <Download data-icon="inline-start" strokeWidth={1.5} />
+                  {t("nav.import")}
+                </Link>
+              </Button>
+            </nav>
             <Button
               asChild
               className="gradient-primary editorial-shadow border-0 text-on-primary hover:opacity-90"

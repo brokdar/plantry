@@ -7,7 +7,7 @@ type SideNavItemProps = {
   to: string
   label: string
   icon: LucideIcon
-  exact?: boolean
+  active: boolean
   variant?: "default" | "rail"
 }
 
@@ -15,43 +15,29 @@ export function SideNavItem({
   to,
   label,
   icon: Icon,
-  exact,
+  active,
   variant = "default",
 }: SideNavItemProps) {
-  if (variant === "rail") {
-    return (
-      <Link
-        to={to}
-        activeOptions={{ exact }}
-        className={cn(
-          "group flex flex-col items-center gap-1 rounded-xl p-2 text-on-surface-variant transition-[color,background-color,box-shadow] duration-150 ease-out",
-          "hover:bg-primary/10 hover:text-primary",
-          "[&.active]:bg-primary/15 [&.active]:text-primary [&.active]:shadow-sm"
-        )}
-      >
-        <Icon
-          className="size-5 transition-transform duration-150 ease-out group-hover:scale-110 [.active_&]:scale-100"
-          aria-hidden
-        />
-      </Link>
-    )
-  }
+  const testId = `sidenav-${to.replace(/\W+/g, "-").replace(/^-|-$/g, "") || "root"}`
 
   return (
     <Link
       to={to}
-      activeOptions={{ exact }}
+      activeOptions={{ exact: true }}
+      aria-current={active ? "page" : undefined}
+      data-active={active}
       className={cn(
-        "group flex items-center gap-3 rounded-r-full py-3 pr-4 pl-4 text-sm font-medium transition-[color,background-color,box-shadow] duration-150 ease-out",
-        "text-on-surface-variant hover:bg-primary/10 hover:text-on-surface hover:shadow-[inset_3px_0_0_rgba(74,101,77,0.45)]",
-        "[&.active]:bg-primary/15 [&.active]:font-bold [&.active]:text-primary [&.active]:shadow-[inset_3px_0_0_#4a654d]"
+        "flex text-ink-muted transition-colors duration-150 ease-out",
+        "hover:bg-panel hover:text-ink",
+        "focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none",
+        "data-[active=true]:bg-accent/10 data-[active=true]:font-semibold data-[active=true]:text-accent",
+        variant === "rail"
+          ? "flex-col items-center gap-1 rounded-lg px-1 py-2 text-xs"
+          : "items-center gap-3 rounded-lg px-4 py-2.5 text-sm"
       )}
-      data-testid={`sidenav-${to.replace(/\W+/g, "-").replace(/^-|-$/g, "") || "root"}`}
+      data-testid={testId}
     >
-      <Icon
-        className="size-5 transition-transform duration-150 ease-out group-hover:scale-110 [.active_&]:scale-100"
-        aria-hidden
-      />
+      <Icon className="size-5 shrink-0" strokeWidth={1.5} aria-hidden />
       <span>{label}</span>
     </Link>
   )

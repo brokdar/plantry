@@ -1,6 +1,16 @@
 import { useNavigate } from "@tanstack/react-router"
 import { Command } from "cmdk"
-import { Bookmark, CalendarRange, LayoutList, Search } from "lucide-react"
+import {
+  Archive,
+  Bookmark,
+  Calendar,
+  CalendarRange,
+  Download,
+  LayoutList,
+  Package,
+  Search,
+} from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -11,6 +21,14 @@ import type { ApplySnapshot, Preset } from "@/lib/api/presets"
 import { useApplyPreset, usePresets, useUndoApply } from "@/lib/queries/presets"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
+
+// Routes that left the nav (plan D1) stay reachable here.
+const GO_TO_ENTRIES: { to: string; labelKey: string; icon: LucideIcon }[] = [
+  { to: "/calendar", labelKey: "nav.calendar", icon: Calendar },
+  { to: "/archive", labelKey: "nav.archive", icon: Archive },
+  { to: "/ingredients", labelKey: "nav.ingredients", icon: Package },
+  { to: "/import", labelKey: "nav.import", icon: Download },
+]
 
 interface CommandPaletteProps {
   open: boolean
@@ -163,6 +181,23 @@ function PaletteBody({
             <LayoutList className="size-3.5 text-muted-foreground" />
             {t("preset.command.action_open_library")}
           </Command.Item>
+        </Command.Group>
+
+        <Command.Group heading={t("nav.go_to")}>
+          {GO_TO_ENTRIES.map(({ to, labelKey, icon: Icon }) => (
+            <Command.Item
+              key={to}
+              value={`go-to${to} ${t(labelKey)}`}
+              onSelect={() => navigate(to)}
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm aria-selected:bg-surface-container-low"
+            >
+              <Icon
+                className="size-3.5 text-muted-foreground"
+                strokeWidth={1.5}
+              />
+              {t(labelKey)}
+            </Command.Item>
+          ))}
         </Command.Group>
       </Command.List>
       <p className="border-t border-border/40 px-3 py-2 text-[10px] text-muted-foreground">
