@@ -26,4 +26,9 @@ var (
 	ErrImportNoRecipe          = errors.New("import no recipe found")
 	ErrImportLLMFailed         = errors.New("import llm extraction failed")
 	ErrImportInvalidResolution = errors.New("import invalid resolution")
+
+	// Profile planning preference errors.
+	ErrInvalidDietType          = errors.New("invalid diet type")
+	ErrInvalidMeatDays          = errors.New("invalid meat days per week")
+	ErrInvalidHouseholdPortions = errors.New("invalid household portions")
 )

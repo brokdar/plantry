@@ -30,7 +30,20 @@ func (s *Service) Update(ctx context.Context, p *Profile) (*Profile, error) {
 	return s.repo.Update(ctx, p)
 }
 
+// MaxHouseholdPortions caps Profile.HouseholdPortions.
+const MaxHouseholdPortions = 20
+
 func validate(p *Profile) error {
+	if !p.DietType.Valid() {
+		return fmt.Errorf("%w: %q", domain.ErrInvalidDietType, p.DietType)
+	}
+	if p.MeatDaysPerWeekMax != nil && (*p.MeatDaysPerWeekMax < 0 || *p.MeatDaysPerWeekMax > 7) {
+		return fmt.Errorf("%w: must be between 0 and 7", domain.ErrInvalidMeatDays)
+	}
+	if p.HouseholdPortions <= 0 || p.HouseholdPortions > MaxHouseholdPortions {
+		return fmt.Errorf("%w: must be > 0 and <= %d", domain.ErrInvalidHouseholdPortions, MaxHouseholdPortions)
+	}
+
 	if p.KcalTarget != nil && *p.KcalTarget <= 0 {
 		return fmt.Errorf("%w: kcal_target must be positive", domain.ErrInvalidMacros)
 	}

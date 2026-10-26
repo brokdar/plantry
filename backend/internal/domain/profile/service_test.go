@@ -20,6 +20,8 @@ func newFakeRepo() *fakeRepo {
 	return &fakeRepo{stored: &profile.Profile{
 		DietaryRestrictions: []string{},
 		Preferences:         map[string]any{},
+		DietType:            profile.DietOmnivore,
+		HouseholdPortions:   1,
 		Locale:              "en",
 	}}
 }
@@ -49,7 +51,7 @@ func TestService_Get_ReturnsDefault(t *testing.T) {
 
 func TestService_Update_NilTargetsPass(t *testing.T) {
 	svc := profile.NewService(newFakeRepo())
-	in := &profile.Profile{Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}}
+	in := &profile.Profile{Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}, DietType: profile.DietOmnivore, HouseholdPortions: 1}
 	_, err := svc.Update(context.Background(), in)
 	require.NoError(t, err)
 }
@@ -61,24 +63,24 @@ func TestService_Update_Validation(t *testing.T) {
 	}{
 		{
 			name: "kcal_target zero",
-			in:   profile.Profile{KcalTarget: ptr(0.0), Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}},
+			in:   profile.Profile{KcalTarget: ptr(0.0), Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}, DietType: profile.DietOmnivore, HouseholdPortions: 1},
 		},
 		{
 			name: "kcal_target negative",
-			in:   profile.Profile{KcalTarget: ptr(-100.0), Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}},
+			in:   profile.Profile{KcalTarget: ptr(-100.0), Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}, DietType: profile.DietOmnivore, HouseholdPortions: 1},
 		},
 		{
 			name: "pct sum over 100",
 			in: profile.Profile{
 				ProteinPct: ptr(50.0), FatPct: ptr(30.0), CarbsPct: ptr(30.0),
-				Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{},
+				Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}, DietType: profile.DietOmnivore, HouseholdPortions: 1,
 			},
 		},
 		{
 			name: "negative pct",
 			in: profile.Profile{
 				ProteinPct: ptr(-1.0),
-				Locale:     "en", DietaryRestrictions: []string{}, Preferences: map[string]any{},
+				Locale:     "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}, DietType: profile.DietOmnivore, HouseholdPortions: 1,
 			},
 		},
 	}
@@ -96,7 +98,7 @@ func TestService_Update_ValidPctSum(t *testing.T) {
 	svc := profile.NewService(newFakeRepo())
 	in := &profile.Profile{
 		ProteinPct: ptr(35.0), FatPct: ptr(30.0), CarbsPct: ptr(35.0),
-		Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{},
+		Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}, DietType: profile.DietOmnivore, HouseholdPortions: 1,
 	}
 	_, err := svc.Update(context.Background(), in)
 	require.NoError(t, err)
@@ -106,7 +108,7 @@ func TestService_Update_PctSumExactly100(t *testing.T) {
 	svc := profile.NewService(newFakeRepo())
 	in := &profile.Profile{
 		ProteinPct: ptr(40.0), FatPct: ptr(30.0), CarbsPct: ptr(30.0),
-		Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{},
+		Locale: "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}, DietType: profile.DietOmnivore, HouseholdPortions: 1,
 	}
 	_, err := svc.Update(context.Background(), in)
 	require.NoError(t, err)
@@ -116,7 +118,7 @@ func TestService_Update_PartialPctPass(t *testing.T) {
 	svc := profile.NewService(newFakeRepo())
 	in := &profile.Profile{
 		ProteinPct: ptr(35.0), // only protein set — valid
-		Locale:     "en", DietaryRestrictions: []string{}, Preferences: map[string]any{},
+		Locale:     "en", DietaryRestrictions: []string{}, Preferences: map[string]any{}, DietType: profile.DietOmnivore, HouseholdPortions: 1,
 	}
 	_, err := svc.Update(context.Background(), in)
 	require.NoError(t, err)
@@ -126,7 +128,7 @@ func TestService_Update_Idempotent(t *testing.T) {
 	svc := profile.NewService(newFakeRepo())
 	in := &profile.Profile{
 		KcalTarget: ptr(2000.0), ProteinPct: ptr(30.0),
-		Locale: "de", DietaryRestrictions: []string{"vegan"}, Preferences: map[string]any{},
+		Locale: "de", DietaryRestrictions: []string{"vegan"}, Preferences: map[string]any{}, DietType: profile.DietOmnivore, HouseholdPortions: 1,
 	}
 	_, err := svc.Update(context.Background(), in)
 	require.NoError(t, err)
@@ -137,4 +139,60 @@ func TestService_Update_Idempotent(t *testing.T) {
 	require.Equal(t, ptr(30.0), got.ProteinPct)
 	require.Equal(t, "de", got.Locale)
 	require.Equal(t, []string{"vegan"}, got.DietaryRestrictions)
+}
+
+func validProfile() profile.Profile {
+	return profile.Profile{
+		Locale:              "en",
+		DietaryRestrictions: []string{},
+		Preferences:         map[string]any{},
+		DietType:            profile.DietOmnivore,
+		HouseholdPortions:   1,
+	}
+}
+
+func TestProfileService_Update_PlanningPrefsValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		mutate  func(p *profile.Profile)
+		wantErr error
+	}{
+		{"household 0", func(p *profile.Profile) { p.HouseholdPortions = 0 }, domain.ErrInvalidHouseholdPortions},
+		{"household negative", func(p *profile.Profile) { p.HouseholdPortions = -1 }, domain.ErrInvalidHouseholdPortions},
+		{"household 0.5", func(p *profile.Profile) { p.HouseholdPortions = 0.5 }, nil},
+		{"household 20", func(p *profile.Profile) { p.HouseholdPortions = 20 }, nil},
+		{"household 20.5", func(p *profile.Profile) { p.HouseholdPortions = 20.5 }, domain.ErrInvalidHouseholdPortions},
+		{"meat -1", func(p *profile.Profile) { p.MeatDaysPerWeekMax = ptr(-1) }, domain.ErrInvalidMeatDays},
+		{"meat 0", func(p *profile.Profile) { p.MeatDaysPerWeekMax = ptr(0) }, nil},
+		{"meat 7", func(p *profile.Profile) { p.MeatDaysPerWeekMax = ptr(7) }, nil},
+		{"meat 8", func(p *profile.Profile) { p.MeatDaysPerWeekMax = ptr(8) }, domain.ErrInvalidMeatDays},
+		{"meat nil", func(p *profile.Profile) { p.MeatDaysPerWeekMax = nil }, nil},
+		{"diet keto", func(p *profile.Profile) { p.DietType = "keto" }, domain.ErrInvalidDietType},
+		{"diet empty", func(p *profile.Profile) { p.DietType = "" }, domain.ErrInvalidDietType},
+		{"diet vegan", func(p *profile.Profile) { p.DietType = profile.DietVegan }, nil},
+		{"diet vegetarian", func(p *profile.Profile) { p.DietType = profile.DietVegetarian }, nil},
+		{"diet pescetarian", func(p *profile.Profile) { p.DietType = profile.DietPescetarian }, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := profile.NewService(newFakeRepo())
+			in := validProfile()
+			tc.mutate(&in)
+			_, err := svc.Update(context.Background(), &in)
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestProfileDietType_Valid(t *testing.T) {
+	for _, d := range []profile.DietType{profile.DietVegan, profile.DietVegetarian, profile.DietPescetarian, profile.DietOmnivore} {
+		require.Truef(t, d.Valid(), "%q should be valid", d)
+	}
+	for _, d := range []profile.DietType{"", "keto", "Vegan"} {
+		require.Falsef(t, d.Valid(), "%q should be invalid", d)
+	}
 }

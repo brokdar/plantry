@@ -26,6 +26,10 @@ type profileRequest struct {
 	Preferences         map[string]any `json:"preferences"`
 	SystemPrompt        *string        `json:"system_prompt"`
 	Locale              string         `json:"locale"`
+	// DietType and HouseholdPortions keep the stored value when absent.
+	DietType           *string  `json:"diet_type"`
+	MeatDaysPerWeekMax *int     `json:"meat_days_per_week_max"`
+	HouseholdPortions  *float64 `json:"household_portions"`
 }
 
 type profileResponse struct {
@@ -37,6 +41,9 @@ type profileResponse struct {
 	Preferences         map[string]any `json:"preferences"`
 	SystemPrompt        *string        `json:"system_prompt"`
 	Locale              string         `json:"locale"`
+	DietType            string         `json:"diet_type"`
+	MeatDaysPerWeekMax  *int           `json:"meat_days_per_week_max"`
+	HouseholdPortions   float64        `json:"household_portions"`
 	UpdatedAt           string         `json:"updated_at"`
 }
 
@@ -62,6 +69,9 @@ func toProfileResponse(p *profile.Profile) profileResponse {
 		Preferences:         prefs,
 		SystemPrompt:        p.SystemPrompt,
 		Locale:              p.Locale,
+		DietType:            string(p.DietType),
+		MeatDaysPerWeekMax:  p.MeatDaysPerWeekMax,
+		HouseholdPortions:   p.HouseholdPortions,
 		UpdatedAt:           updatedAt,
 	}
 }
@@ -97,6 +107,20 @@ func (h *ProfileHandler) Update(w http.ResponseWriter, r *http.Request) {
 		locale = "en"
 	}
 
+	current, err := h.svc.Get(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "error.server")
+		return
+	}
+	dietType := current.DietType
+	if req.DietType != nil {
+		dietType = profile.DietType(*req.DietType)
+	}
+	household := current.HouseholdPortions
+	if req.HouseholdPortions != nil {
+		household = *req.HouseholdPortions
+	}
+
 	p := &profile.Profile{
 		KcalTarget:          req.KcalTarget,
 		ProteinPct:          req.ProteinPct,
@@ -106,6 +130,9 @@ func (h *ProfileHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Preferences:         prefs,
 		SystemPrompt:        req.SystemPrompt,
 		Locale:              locale,
+		DietType:            dietType,
+		MeatDaysPerWeekMax:  req.MeatDaysPerWeekMax,
+		HouseholdPortions:   household,
 	}
 
 	updated, err := h.svc.Update(r.Context(), p)
