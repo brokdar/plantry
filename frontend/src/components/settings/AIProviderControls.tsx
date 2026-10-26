@@ -36,15 +36,18 @@ type ModelOption = { id: string; display_name?: string }
  * wizard's assistant step.
  */
 export function AIProviderControls({
-  layout,
+  variant,
 }: {
-  /** "stacked" puts each label above its control, for narrow columns such
-   *  as the setup wizard. By default rows go side by side on wide screens. */
-  layout?: "stacked"
+  /** "wizard" (the setup wizard's narrow column, under its h1): each label
+   *  above its control, h2 step titles, and none of the Settings-only details
+   *  (source badges, clear override, the test provider, key-storage
+   *  internals). By default rows go side by side on wide screens and the step
+   *  titles are h4 under the Settings group's h3. */
+  variant?: "wizard"
 } = {}) {
   const { data: items } = useSettingItems()
   if (!items) return null
-  return <ProviderSteps items={items} layout={layout} />
+  return <ProviderSteps items={items} wizard={variant === "wizard"} />
 }
 
 /** The inline result of a successful key check (plan D17). Anthropic keys
@@ -57,10 +60,10 @@ function validatedKey(provider: string): string {
 
 function ProviderSteps({
   items,
-  layout,
+  wizard,
 }: {
   items: NonNullable<ReturnType<typeof useSettingItems>["data"]>
-  layout?: "stacked"
+  wizard: boolean
 }) {
   const { t } = useTranslation()
   const providerItem = items[KEY_PROVIDER]
@@ -75,7 +78,17 @@ function ProviderSteps({
   const [validationError, setValidationError] = useState<string | null>(null)
   const [validated, setValidated] = useState(false)
 
-  const rowClass = layout === "stacked" ? "lg:grid-cols-1 lg:gap-3" : undefined
+  const rowClass = wizard ? "lg:grid-cols-1 lg:gap-3" : undefined
+  const heading = wizard ? "h2" : "h4"
+  /** Settings shows where a value comes from and lets an override go. */
+  const source = (item: typeof providerItem, key: string) =>
+    wizard
+      ? {}
+      : {
+          item,
+          onClearOverride:
+            item?.source === "db" ? () => clearSetting.mutate(key) : undefined,
+        }
   const providerNote = useSavedNote()
   const keyNote = useSavedNote()
   const modelNote = useSavedNote()
@@ -155,6 +168,7 @@ function ProviderSteps({
   return (
     <div className="flex flex-col gap-6">
       <Step
+        heading={heading}
         index={1}
         title={t("settings_page.ai.wizard.step1_title")}
         description={t("settings_page.ai.wizard.step1_description")}
@@ -163,13 +177,8 @@ function ProviderSteps({
         <SettingRow
           className={rowClass}
           label={t("settings_page.ai.provider_label")}
-          item={providerItem}
+          {...source(providerItem, KEY_PROVIDER)}
           saved={providerNote.saved}
-          onClearOverride={
-            providerItem?.source === "db"
-              ? () => clearSetting.mutate(KEY_PROVIDER)
-              : undefined
-          }
         >
           <Select
             value={provider || "none"}
@@ -191,9 +200,11 @@ function ProviderSteps({
                 </SelectItem>
                 <SelectItem value="openai">OpenAI</SelectItem>
                 <SelectItem value="anthropic">Anthropic</SelectItem>
-                <SelectItem value="fake">
-                  {t("settings_page.ai.provider_fake")}
-                </SelectItem>
+                {(!wizard || provider === "fake") && (
+                  <SelectItem value="fake">
+                    {t("settings_page.ai.provider_fake")}
+                  </SelectItem>
+                )}
               </SelectGroup>
             </SelectContent>
           </Select>
@@ -201,6 +212,7 @@ function ProviderSteps({
       </Step>
 
       <Step
+        heading={heading}
         index={2}
         title={t("settings_page.ai.wizard.step2_title")}
         description={t("settings_page.ai.wizard.step2_description")}
@@ -215,16 +227,15 @@ function ProviderSteps({
               ? t("settings_page.ai.api_key_stored", {
                   preview: keyItem?.masked_preview ?? "",
                 })
-              : t("settings_page.ai.api_key_description")
+              : t(
+                  wizard
+                    ? "setup.assistant.api_key_description"
+                    : "settings_page.ai.api_key_description"
+                )
           }
-          item={keyItem}
+          {...source(keyItem, KEY_API_KEY)}
           saved={keyNote.saved}
           htmlFor="ai-api-key"
-          onClearOverride={
-            keyItem?.source === "db"
-              ? () => clearSetting.mutate(KEY_API_KEY)
-              : undefined
-          }
         >
           <div className="flex flex-col gap-3 sm:flex-row">
             <Input
@@ -292,6 +303,7 @@ function ProviderSteps({
       </Step>
 
       <Step
+        heading={heading}
         index={3}
         title={t("settings_page.ai.wizard.step3_title")}
         description={t("settings_page.ai.wizard.step3_description")}
@@ -301,13 +313,8 @@ function ProviderSteps({
         <SettingRow
           className={rowClass}
           label={t("settings_page.ai.model_label")}
-          item={modelItem}
+          {...source(modelItem, KEY_MODEL)}
           saved={modelNote.saved}
-          onClearOverride={
-            modelItem?.source === "db"
-              ? () => clearSetting.mutate(KEY_MODEL)
-              : undefined
-          }
         >
           <Select
             value={model || ""}
@@ -348,6 +355,7 @@ function ProviderSteps({
 }
 
 function Step({
+  heading: Heading,
   index,
   title,
   description,
@@ -355,6 +363,7 @@ function Step({
   disabled,
   children,
 }: {
+  heading: "h2" | "h4"
   index: number
   title: string
   description: string
@@ -383,7 +392,9 @@ function Step({
         {complete ? <Check className="size-4" strokeWidth={1.5} /> : index}
       </span>
       <div className="flex flex-col gap-1">
-        <h4 className="font-sans text-body font-semibold text-ink">{title}</h4>
+        <Heading className="font-sans text-body font-semibold text-ink">
+          {title}
+        </Heading>
         <p className="text-small text-ink-muted">{description}</p>
         <fieldset disabled={disabled}>{children}</fieldset>
       </div>

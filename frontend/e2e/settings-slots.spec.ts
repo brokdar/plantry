@@ -75,6 +75,25 @@ test.describe("Time slots settings", () => {
     }
   })
 
+  for (const width of [820, 1180]) {
+    test(`the meals section fits a ${width}px window without sideways scroll`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto("/settings/meals")
+      await expect(
+        page.getByRole("button", { name: "Save", exact: true })
+      ).toBeVisible()
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth - window.innerWidth
+          )
+        )
+        .toBeLessThanOrEqual(0)
+    })
+  }
+
   test("validation surfaces when name_key is empty", async ({ page }) => {
     await page.goto("/settings/meals")
     await page.getByRole("button", { name: "Save", exact: true }).click()

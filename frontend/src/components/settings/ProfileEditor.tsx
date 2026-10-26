@@ -196,8 +196,15 @@ export function NutritionGoalFields({
             <span>
               {p.kcal_target} {unit}
             </span>
-            <span>
+            <span aria-hidden>
               {t("settings_page.household.goal_split", {
+                protein: p.protein_pct,
+                fat: p.fat_pct,
+                carbs: p.carbs_pct,
+              })}
+            </span>
+            <span className="sr-only">
+              {t("settings_page.household.goal_split_label", {
                 protein: p.protein_pct,
                 fat: p.fat_pct,
                 carbs: p.carbs_pct,

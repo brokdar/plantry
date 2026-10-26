@@ -18,13 +18,13 @@ import { listAIModels, listSettings } from "@/lib/api/settings"
 
 import { AIProviderControls } from "./AIProviderControls"
 
-function renderWithProvider(provider: string, layout?: "stacked") {
+function renderWithProvider(provider: string, variant?: "wizard") {
   vi.mocked(listSettings).mockResolvedValue(
     mockSettingsList([{ key: "ai.provider", value: provider, source: "db" }])
   )
   return renderWithRouter(
     <TooltipProvider>
-      <AIProviderControls layout={layout} />
+      <AIProviderControls variant={variant} />
     </TooltipProvider>
   )
 }
@@ -55,11 +55,36 @@ describe("AIProviderControls key check (plan D17)", () => {
     expect(await screen.findByText(text)).toBeInTheDocument()
   })
 
-  it("the stacked layout keeps every row in one column", async () => {
-    renderWithProvider("openai", "stacked")
+  it("the wizard variant keeps every row in one column", async () => {
+    renderWithProvider("openai", "wizard")
     const select = await screen.findByTestId("ai-provider-select")
     const row = select.closest(".grid") as HTMLElement
     expect(row.className).toContain("lg:grid-cols-1")
     expect(row.className).not.toContain("lg:grid-cols-[")
+  })
+
+  it("in Settings the steps are h4 under the group and show the source", async () => {
+    renderWithProvider("openai")
+    expect(
+      await screen.findByRole("heading", { level: 4, name: "Pick a provider" })
+    ).toBeInTheDocument()
+    expect(screen.getByText("Database")).toBeInTheDocument()
+    expect(screen.getByText(/PLANTRY_SECRET_KEY/)).toBeInTheDocument()
+  })
+
+  it("in the wizard the steps are h2 under the step title, without developer details", async () => {
+    renderWithProvider("openai", "wizard")
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Pick a provider" })
+    ).toBeInTheDocument()
+    expect(screen.queryAllByRole("heading", { level: 4 })).toHaveLength(0)
+    expect(screen.queryByText("Database")).toBeNull()
+    expect(screen.queryByTestId("clear-override-ai.provider")).toBeNull()
+    expect(screen.queryByText(/PLANTRY_SECRET_KEY/)).toBeNull()
+    expect(
+      screen.getByText(
+        "Your key from the provider. Plantry stores it encrypted."
+      )
+    ).toBeInTheDocument()
   })
 })

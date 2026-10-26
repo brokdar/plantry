@@ -534,7 +534,8 @@
         "bulk": "Bulk",
         "custom": "Custom"
       },
-      "goal_split": "{{protein}} / {{fat}} / {{carbs}} %",
+      "goal_split": "P {{protein}} / F {{fat}} / C {{carbs}} %",
+      "goal_split_label": "{{protein}} % protein, {{fat}} % fat, {{carbs}} % carbs",
       "goal_custom_detail": "Your own numbers",
       "goal_effect": "Plantry aims for {{kcal}} kcal a day: {{protein}} % protein, {{fat}} % fat, {{carbs}} % carbs.",
       "goal_effect_kcal_only": "Plantry aims for {{kcal}} kcal a day.",
@@ -1451,7 +1452,8 @@
     "assistant": {
       "title": "Assistant (optional)",
       "why": "The assistant suggests plates and can fill your week for you.",
-      "later": "You can add this later. Planning works without it."
+      "later": "You can add this later. Planning works without it.",
+      "api_key_description": "Your key from the provider. Plantry stores it encrypted."
     },
     "finish": {
       "title": "You're set up",

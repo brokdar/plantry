@@ -16,7 +16,8 @@ export function FinishStep({
 
   function addRecipes() {
     complete.mutate(undefined, {
-      onSuccess: () => void navigate({ to: "/components" }),
+      onSuccess: () =>
+        void navigate({ to: "/components", state: { focusMain: true } }),
     })
   }
 

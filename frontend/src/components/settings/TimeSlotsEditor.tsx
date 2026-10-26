@@ -189,7 +189,9 @@ export function TimeSlotsEditor() {
           <form
             noValidate
             onSubmit={form.handleSubmit(onSubmit)}
-            className="grid gap-4 sm:grid-cols-[2fr_1fr_1fr_auto] sm:items-end"
+            // Two columns until the content column is wide enough for all
+            // four controls; minmax(0, …) lets the icon picker shrink.
+            className="grid gap-4 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
           >
             {form.formState.errors.root && (
               <p role="alert" className="col-span-full text-small text-danger">
@@ -247,7 +249,7 @@ export function TimeSlotsEditor() {
             <Button
               type="submit"
               disabled={createMut.isPending}
-              className="pointer-coarse:h-11"
+              className="justify-self-start pointer-coarse:h-11"
             >
               {t("common.save")}
             </Button>

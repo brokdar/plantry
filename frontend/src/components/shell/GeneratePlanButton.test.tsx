@@ -72,6 +72,9 @@ describe("GeneratePlanButton", () => {
     const button = await screen.findByTestId("generate-plan-default")
     await vi.waitFor(() => expect(button).not.toHaveAttribute("aria-disabled"))
     expect(screen.queryByRole("link", { name: /more recipe/ })).toBeNull()
+    // on-accent on accent is ≥4.5:1 (tokens.test.ts); the size class must not
+    // knock the colour out of the merged class list.
+    expect(button).toHaveClass("bg-accent", "text-on-accent", "text-body")
 
     await user.click(button)
     await vi.waitFor(() =>

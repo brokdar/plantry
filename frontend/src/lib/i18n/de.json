@@ -534,7 +534,8 @@
         "bulk": "Aufbauen",
         "custom": "Eigene Werte"
       },
-      "goal_split": "{{protein}} / {{fat}} / {{carbs}} %",
+      "goal_split": "E {{protein}} / F {{fat}} / K {{carbs}} %",
+      "goal_split_label": "{{protein}} % Eiweiß, {{fat}} % Fett, {{carbs}} % Kohlenhydrate",
       "goal_custom_detail": "Deine eigenen Zahlen",
       "goal_effect": "Plantry zielt auf {{kcal}} kcal am Tag: {{protein}} % Eiweiß, {{fat}} % Fett, {{carbs}} % Kohlenhydrate.",
       "goal_effect_kcal_only": "Plantry zielt auf {{kcal}} kcal am Tag.",
@@ -1450,7 +1451,8 @@
     "assistant": {
       "title": "Assistent (optional)",
       "why": "Der Assistent schlägt Mahlzeiten vor und kann deine Woche für dich füllen.",
-      "later": "Das kannst du später nachholen. Planen klappt auch ohne."
+      "later": "Das kannst du später nachholen. Planen klappt auch ohne.",
+      "api_key_description": "Dein Schlüssel vom Anbieter. Plantry speichert ihn verschlüsselt."
     },
     "finish": {
       "title": "Alles eingerichtet",

@@ -37,6 +37,16 @@ describe("RoutinePicker", () => {
     expect(onPick).toHaveBeenCalledWith(7)
   })
 
+  it("opens with focus on the first routine", async () => {
+    renderPicker({})
+    const picker = await screen.findByRole("dialog", { name: "Pick a routine" })
+    await vi.waitFor(() =>
+      expect(
+        within(picker).getByRole("button", { name: "Overnight oats" })
+      ).toHaveFocus()
+    )
+  })
+
   it("marks the current preset", async () => {
     renderPicker({ selectedId: 8 })
     const picker = await screen.findByRole("dialog", { name: "Pick a routine" })

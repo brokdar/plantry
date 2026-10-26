@@ -88,10 +88,17 @@ function DefaultWeek() {
     [presetsQuery.data]
   )
 
-  function save(next: AvailabilityGridValue) {
-    setDefaults.mutate(gridValueToDefaults(next, slots), {
-      onSuccess: markSaved,
-    })
+  // Applied to the latest cached grid, not this render's `value`, so quick
+  // clicks before a re-render don't overwrite each other.
+  function save(patch: AvailabilityGridValue) {
+    setDefaults.mutate(
+      (current) =>
+        gridValueToDefaults(
+          { ...defaultsToGridValue(current), ...patch },
+          slots
+        ),
+      { onSuccess: markSaved }
+    )
   }
 
   const loading = slotsQuery.isLoading || defaultsQuery.isLoading
@@ -119,9 +126,9 @@ function DefaultWeek() {
             presets={presets}
             surface="ground"
             onChange={(colKey, slotId, cell) =>
-              save({ ...value, [`${colKey}:${slotId}`]: cell })
+              save({ [`${colKey}:${slotId}`]: cell })
             }
-            onBulkChange={(patch) => save({ ...value, ...patch })}
+            onBulkChange={save}
           />
         )}
       </div>

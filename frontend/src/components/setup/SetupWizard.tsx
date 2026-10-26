@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { TooltipProvider } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 import { useAvailabilityDefaults } from "@/lib/queries/availability"
 import { useProfile } from "@/lib/queries/profile"
 import { useSettingItems } from "@/lib/queries/settings"
@@ -37,7 +37,7 @@ const STEP_IDS = [
  * seven steps; each Next saves its step. Re-running it opens prefilled.
  */
 export function SetupWizard() {
-  const { t, i18n } = useTranslation()
+  const { i18n } = useTranslation()
   const profile = useProfile()
   const settings = useSettingItems()
   const slots = useTimeSlots(false)
@@ -58,7 +58,6 @@ export function SetupWizard() {
   return (
     <WizardFlow
       initial={buildDraft({
-        t,
         language: i18n.language,
         profile: profile.data,
         settings: settings.data,
@@ -71,17 +70,14 @@ export function SetupWizard() {
 
 function WizardColumn({ children }: { children: React.ReactNode }) {
   return (
-    // The assistant step's setting rows use tooltips (source badges).
-    <TooltipProvider>
-      <div className="min-h-svh bg-ground text-ink">
-        <main
-          id="main"
-          className="mx-auto flex w-full max-w-[560px] flex-col gap-8 px-4 py-8 md:py-16"
-        >
-          {children}
-        </main>
-      </div>
-    </TooltipProvider>
+    <div className="min-h-svh bg-ground text-ink">
+      <main
+        id="main"
+        className="mx-auto flex w-full max-w-[560px] flex-col gap-8 px-4 py-8 md:py-16"
+      >
+        {children}
+      </main>
+    </div>
   )
 }
 
@@ -153,6 +149,8 @@ function WizardFlow({ initial }: { initial: WizardDraft }) {
   }
 
   const id = STEP_IDS[step]!
+  // On the last step Skip would do the same as Next.
+  const showSkip = step > 0 && step < STEP_COUNT - 1
 
   return (
     <WizardColumn>
@@ -205,7 +203,9 @@ function WizardFlow({ initial }: { initial: WizardDraft }) {
             {blocked}
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Phone: Back | Next on one row, Skip right-aligned below it.
+            From sm: Back … Skip Next on one row. */}
+        <div className="grid grid-cols-2 items-center gap-2 sm:flex">
           {step > 0 && (
             <Button
               type="button"
@@ -216,36 +216,37 @@ function WizardFlow({ initial }: { initial: WizardDraft }) {
               }}
               disabled={saving}
               size="lg"
-              className="pointer-coarse:h-11"
+              className="justify-self-start pointer-coarse:h-11"
             >
               {t("setup.back")}
             </Button>
           )}
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            {step > 0 && (
-              <Button
-                type="button"
-                variant="link"
-                onClick={skip}
-                disabled={saving}
-                size="lg"
-                className="pointer-coarse:h-11"
-                data-testid="setup-skip"
-              >
-                {t("setup.skip")}
-              </Button>
-            )}
+          {showSkip && (
             <Button
               type="button"
-              onClick={next}
+              variant="link"
+              onClick={skip}
               disabled={saving}
               size="lg"
-              className="min-w-24 pointer-coarse:h-11"
-              data-testid="setup-next"
+              className="col-span-2 row-start-2 justify-self-end px-0 sm:ml-auto sm:px-2.5 pointer-coarse:h-11"
+              data-testid="setup-skip"
             >
-              {t("setup.next")}
+              {t("setup.skip")}
             </Button>
-          </div>
+          )}
+          <Button
+            type="button"
+            onClick={next}
+            disabled={saving}
+            size="lg"
+            className={cn(
+              "col-start-2 row-start-1 min-w-24 justify-self-end pointer-coarse:h-11",
+              !showSkip && "sm:ml-auto"
+            )}
+            data-testid="setup-next"
+          >
+            {t("setup.next")}
+          </Button>
         </div>
       </footer>
     </WizardColumn>
