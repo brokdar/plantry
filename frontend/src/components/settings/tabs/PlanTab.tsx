@@ -68,7 +68,7 @@ export function PlanTab() {
 
   const weekStartsOn = items[KEY_WEEK_STARTS_ON]?.value ?? "monday"
   const planAnchor = (items[KEY_ANCHOR]?.value ?? "today") as AnchorValue
-  const shoppingDay = items[KEY_SHOPPING_DAY]?.value ?? "5"
+  const shoppingDay = items[KEY_SHOPPING_DAY]?.value ?? "0"
 
   function handleWeekStartsOn(value: string) {
     setSetting.mutate({ key: KEY_WEEK_STARTS_ON, value })
