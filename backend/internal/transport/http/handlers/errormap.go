@@ -69,6 +69,10 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 		return http.StatusBadRequest, "error.availability.preset_not_allowed"
 	case errors.Is(err, domain.ErrSlotInactive):
 		return http.StatusBadRequest, "error.availability.slot_inactive"
+	case errors.Is(err, domain.ErrAvailabilitySlotUnknown):
+		return http.StatusBadRequest, "error.availability.slot_unknown"
+	case errors.Is(err, domain.ErrAvailabilityPresetUnknown):
+		return http.StatusBadRequest, "error.availability.preset_unknown"
 	// Plate cells (D10).
 	case errors.Is(err, domain.ErrCellUnavailable):
 		return http.StatusConflict, "error.plate.cell_unavailable"

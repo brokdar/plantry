@@ -37,6 +37,10 @@ var (
 	ErrPresetRequired   = errors.New("routine requires a preset")
 	ErrPresetNotAllowed = errors.New("preset only allowed for routine")
 	ErrSlotInactive     = errors.New("slot inactive")
+	// ErrAvailabilitySlotUnknown and ErrAvailabilityPresetUnknown name a
+	// slot or preset in a request body that does not exist (400, not 404).
+	ErrAvailabilitySlotUnknown   = errors.New("availability slot unknown")
+	ErrAvailabilityPresetUnknown = errors.New("availability preset unknown")
 
 	// Plate cell errors (D10).
 	ErrCellUnavailable = errors.New("cell is marked no plate")

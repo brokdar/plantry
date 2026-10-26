@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react"
+import { useRouterState } from "@tanstack/react-router"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Toaster } from "@/components/ui/sonner"
@@ -15,6 +16,16 @@ type AppShellProps = {
 export function AppShell({ children }: AppShellProps) {
   const { t, i18n } = useTranslation()
   const { data: profile } = useProfile()
+  const mainRef = useRef<HTMLElement>(null)
+  const focusMain = useRouterState({
+    select: (s) => s.location.state.focusMain === true,
+  })
+
+  // A navigation that asks for it (Finish in the setup wizard) lands focus on
+  // the page, not on <body>.
+  useEffect(() => {
+    if (focusMain) mainRef.current?.focus()
+  }, [focusMain])
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("sidenav-collapsed") === "true"
@@ -49,7 +60,12 @@ export function AppShell({ children }: AppShellProps) {
       <SideNav collapsed={collapsed} onToggle={handleToggle} />
       <div className="flex min-w-0 flex-1 flex-col pb-[var(--tab-bar-inset)] md:pb-0">
         <TopBar />
-        <main id="main" className="flex-1">
+        <main
+          id="main"
+          ref={mainRef}
+          tabIndex={-1}
+          className="flex-1 outline-none"
+        >
           {children}
         </main>
       </div>

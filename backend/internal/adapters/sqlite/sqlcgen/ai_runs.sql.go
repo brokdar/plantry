@@ -136,11 +136,17 @@ func (q *Queries) FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.R
 
 const pruneAIRunSteps = `-- name: PruneAIRunSteps :execresult
 DELETE FROM ai_run_steps
-WHERE run_id IN (SELECT id FROM ai_runs WHERE started_at < ?1)
+WHERE id IN (
+    SELECT s.id FROM ai_run_steps s
+    JOIN ai_runs r ON r.id = s.run_id
+    WHERE r.started_at < ?1
+    LIMIT 500
+)
 `
 
-// Deletes the steps of runs started before the cutoff; the runs, prompts and
-// tool schemas stay.
+// Deletes up to 500 steps of runs started before the cutoff; the runs,
+// prompts and tool schemas stay. The repo repeats it until nothing is left,
+// so no single statement holds the write lock for long.
 func (q *Queries) PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error) {
 	return q.db.ExecContext(ctx, pruneAIRunSteps, before)
 }

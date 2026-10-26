@@ -36,7 +36,8 @@ type Recorder struct {
 	retentionDays func(context.Context) (int, error)
 	pruneMu       sync.Mutex
 	lastPrune     time.Time
-	pruning       sync.WaitGroup // background prunes started by Finish
+	pruning       sync.WaitGroup // background prunes
+	closed        bool           // set by Wait: no new prunes start
 }
 
 // NewRecorder builds a Recorder. now is injected so tests can pin time.
@@ -53,22 +54,31 @@ func (r *Recorder) WithRetention(days func(context.Context) (int, error)) *Recor
 	return r
 }
 
-// Prune deletes the steps of runs older than the retention now. Failures are
-// logged at warn.
+// Prune starts a background prune of the steps of runs older than the
+// retention now; Wait covers it. Failures are logged at warn.
 func (r *Recorder) Prune(ctx context.Context) {
 	if r.retentionDays == nil {
 		return
 	}
 	r.pruneMu.Lock()
+	if r.closed {
+		r.pruneMu.Unlock()
+		return
+	}
 	now := r.now()
 	r.lastPrune = now
+	r.startPrune(ctx, now)
 	r.pruneMu.Unlock()
-	r.prune(ctx, now)
 }
 
-// Wait blocks until the background prunes started by Finish are done. Tests
-// call it before inspecting the store; main calls it before closing the DB.
+// Wait blocks until the background prunes are done. Once it is called no
+// new prune starts, so a request that outlives the server shutdown cannot
+// prune after the DB is closed. main calls it before closing the DB; tests
+// call it before inspecting the store.
 func (r *Recorder) Wait() {
+	r.pruneMu.Lock()
+	r.closed = true
+	r.pruneMu.Unlock()
 	r.pruning.Wait()
 }
 
@@ -80,14 +90,22 @@ func (r *Recorder) pruneThrottled(ctx context.Context) {
 		return
 	}
 	r.pruneMu.Lock()
+	defer r.pruneMu.Unlock()
+	if r.closed {
+		return
+	}
 	now := r.now()
 	if !r.lastPrune.IsZero() && now.Sub(r.lastPrune) < pruneInterval {
-		r.pruneMu.Unlock()
 		return
 	}
 	r.lastPrune = now
+	r.startPrune(ctx, now)
+}
+
+// startPrune runs prune in a goroutine tracked by pruning. The caller holds
+// pruneMu, so the Add cannot race with Wait.
+func (r *Recorder) startPrune(ctx context.Context, now time.Time) {
 	r.pruning.Add(1)
-	r.pruneMu.Unlock()
 	go func() {
 		defer r.pruning.Done()
 		r.prune(ctx, now)

@@ -34,7 +34,7 @@ export function Toaster(props: ToasterProps) {
         classNames: {
           toast:
             "editorial-shadow rounded-xl border border-outline-variant/20 bg-surface-container-highest text-on-surface",
-          title: "font-heading font-bold text-on-surface",
+          title: "font-semibold text-ink",
           description: "text-on-surface-variant",
           actionButton: "bg-primary text-on-primary",
           cancelButton: "bg-surface-container-high text-on-surface",

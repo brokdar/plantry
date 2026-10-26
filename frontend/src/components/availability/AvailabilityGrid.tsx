@@ -62,8 +62,11 @@ const cellKey = (colKey: string, slotId: number) => `${colKey}:${slotId}`
 
 /**
  * Presentational weekday (or date) × slot grid of availability modes. A tap
- * cycles Plan → No plate → Routine; Routine first asks for a preset in
- * `RoutinePicker`. It owns no server state: the parent holds `value`.
+ * cycles Plan → No plate → Routine → Plan. Routine first asks for a preset in
+ * `RoutinePicker`; closing the picker without a pick (Cancel, Escape, outside
+ * click) skips Routine and lands on Plan, so No plate is never a dead end.
+ * With no presets the cycle is Plan ↔ No plate. It owns no server state: the
+ * parent holds `value`.
  */
 export function AvailabilityGrid({
   label,
@@ -117,10 +120,13 @@ export function AvailabilityGrid({
     focusCell(target[0], target[1])
   }
 
+  const canRoutine = presets.length > 0
+
   function handleCellClick(colKey: string, slotId: number) {
     const current = value[cellKey(colKey, slotId)] ?? PLAN
     if (current.mode === "plan") onChange(colKey, slotId, { mode: "none" })
-    else if (current.mode === "none") setPickerFor(cellKey(colKey, slotId))
+    else if (current.mode === "none" && canRoutine)
+      setPickerFor(cellKey(colKey, slotId))
     else onChange(colKey, slotId, PLAN)
   }
 
@@ -134,13 +140,17 @@ export function AvailabilityGrid({
     // `relative` makes this scroll box the containing block of the cells'
     // sr-only labels, so they scroll with it instead of widening the page.
     <div className="relative overflow-x-auto overscroll-x-contain p-1">
+      {/* 32rem = slot column (5rem) + seven 3.5rem day columns + spacing:
+          the narrowest width where "Mon ⋯", "Routine" and each wrapped word
+          of "Kein Essen" still fit. Below it the box scrolls; above it the
+          day columns share the extra width. */}
       <table
         role="grid"
         aria-label={label}
-        className="w-full min-w-[36rem] table-fixed border-separate border-spacing-1 md:min-w-0"
+        className="w-full min-w-[32rem] table-fixed border-separate border-spacing-1"
       >
         <colgroup>
-          <col className="w-24" />
+          <col className="w-20" />
           {columns.map((c) => (
             <col key={c.key} />
           ))}
@@ -159,9 +169,9 @@ export function AvailabilityGrid({
                 key={col.key}
                 role="columnheader"
                 scope="col"
-                className="px-1 pb-1 text-left align-bottom font-normal"
+                className="pb-1 pl-1 text-left align-bottom font-normal"
               >
-                <div className="flex items-end justify-between gap-1">
+                <div className="flex items-end justify-between gap-0.5">
                   <span className="flex min-w-0 flex-col">
                     <span
                       aria-hidden={col.fullLabel ? true : undefined}
@@ -185,7 +195,7 @@ export function AvailabilityGrid({
                         aria-label={t("availability.column_actions", {
                           column: col.fullLabel ?? col.label,
                         })}
-                        className="flex size-7 shrink-0 items-center justify-center rounded-cell text-ink-muted hover:bg-panel-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50 pointer-coarse:size-11"
+                        className="relative flex size-6 shrink-0 items-center justify-center rounded-cell text-ink-muted after:absolute after:inset-0 hover:bg-panel-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50 pointer-coarse:after:-top-5 pointer-coarse:after:-left-5"
                       >
                         <MoreHorizontal
                           aria-hidden
@@ -221,7 +231,7 @@ export function AvailabilityGrid({
                 role="rowheader"
                 scope="row"
                 className={cn(
-                  "sticky left-0 z-10 truncate pr-2 text-left text-small font-normal text-ink-muted",
+                  "sticky left-0 z-10 pr-2 text-left text-small font-normal wrap-break-word hyphens-auto text-ink-muted",
                   stickyBg
                 )}
               >
@@ -238,7 +248,10 @@ export function AvailabilityGrid({
                     <RoutinePicker
                       open={pickerFor === key}
                       onOpenChange={(open) => {
-                        if (!open) setPickerFor(null)
+                        if (open) return
+                        // Closed without a pick: skip Routine, back to Plan.
+                        setPickerFor(null)
+                        onChange(col.key, slot.id, PLAN)
                       }}
                       presets={presets}
                       selectedId={cell.presetId}
@@ -271,16 +284,20 @@ export function AvailabilityGrid({
                           state,
                         })}
                         aria-haspopup={
-                          cell.mode === "none" ? "dialog" : undefined
+                          cell.mode === "none" && canRoutine
+                            ? "dialog"
+                            : undefined
                         }
                         aria-expanded={
-                          cell.mode === "none" ? pickerFor === key : undefined
+                          cell.mode === "none" && canRoutine
+                            ? pickerFor === key
+                            : undefined
                         }
                         onFocus={() => setActive({ row, col: colIndex })}
                         onKeyDown={(e) => handleKeyDown(e, row, colIndex)}
                         onClick={() => handleCellClick(col.key, slot.id)}
                         className={cn(
-                          "flex min-h-11 w-full min-w-0 flex-col items-start justify-center rounded-cell border px-2 py-1 text-left text-small transition-colors duration-150 ease-out",
+                          "flex min-h-11 w-full min-w-0 flex-col items-start justify-center rounded-cell border px-1.5 py-1 text-left text-small leading-tight transition-colors duration-150 ease-out",
                           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
                           "disabled:cursor-not-allowed disabled:opacity-50",
                           cell.mode === "none"
@@ -295,13 +312,15 @@ export function AvailabilityGrid({
                               {t("availability.mode.routine")}
                             </span>
                             {presetName ? (
-                              <span className="w-full truncate text-ink">
+                              <span className="line-clamp-2 w-full wrap-anywhere text-ink">
                                 {presetName}
                               </span>
                             ) : null}
                           </>
                         ) : (
-                          <span className="w-full truncate">{state}</span>
+                          <span className="w-full wrap-break-word">
+                            {state}
+                          </span>
                         )}
                       </button>
                     </RoutinePicker>

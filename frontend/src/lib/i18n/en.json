@@ -534,7 +534,8 @@
         "bulk": "Bulk",
         "custom": "Custom"
       },
-      "goal_split": "{{protein}} / {{fat}} / {{carbs}} %",
+      "goal_split": "P {{protein}} / F {{fat}} / C {{carbs}} %",
+      "goal_split_label": "{{protein}} % protein, {{fat}} % fat, {{carbs}} % carbs",
       "goal_custom_detail": "Your own numbers",
       "goal_effect": "Plantry aims for {{kcal}} kcal a day: {{protein}} % protein, {{fat}} % fat, {{carbs}} % carbs.",
       "goal_effect_kcal_only": "Plantry aims for {{kcal}} kcal a day.",
@@ -1142,7 +1143,9 @@
       "cell_has_plate": "This meal already has a plate. Remove it before marking it No plate.",
       "preset_required": "Choose which routine this meal follows.",
       "preset_not_allowed": "Only Routine meals can have a routine attached.",
-      "slot_inactive": "This meal is turned off. Turn it on in Settings to change it."
+      "slot_inactive": "This meal is turned off. Turn it on in Settings to change it.",
+      "slot_unknown": "This meal no longer exists. Reload the page and try again.",
+      "preset_unknown": "This routine no longer exists. Choose another one."
     },
     "page_not_found": "Page not found.",
     "page_not_found_body": "The page you're looking for doesn't exist.",
@@ -1451,7 +1454,8 @@
     "assistant": {
       "title": "Assistant (optional)",
       "why": "The assistant suggests plates and can fill your week for you.",
-      "later": "You can add this later. Planning works without it."
+      "later": "You can add this later. Planning works without it.",
+      "api_key_description": "Your key from the provider. Plantry stores it encrypted."
     },
     "finish": {
       "title": "You're set up",

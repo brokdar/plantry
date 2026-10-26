@@ -31,9 +31,10 @@ export interface HouseholdDraft {
 export interface SlotDraft {
   id: number
   name_key: string
-  /** The name as typed; becomes `name_key` when it no longer matches the
-   *  translated label of the original key. */
-  label: string
+  /** The name as typed, or null while the slot keeps its stored name (shown
+   *  as `slotLabel(name_key)` in the current language). A typed name becomes
+   *  `name_key` when it no longer matches that translation. */
+  label: string | null
   icon: string
   active: boolean
 }
@@ -106,11 +107,11 @@ export const SETTING_KEYS = {
   daily: "discovery.daily_enabled",
 } as const
 
-export function defaultSlotDrafts(t: TFunction): SlotDraft[] {
+export function defaultSlotDrafts(): SlotDraft[] {
   return DEFAULT_SLOTS.map((s, i) => ({
     id: -(i + 1),
     name_key: s.name_key,
-    label: slotLabel(t, s.name_key),
+    label: null,
     icon: s.icon,
     active: true,
   }))
@@ -122,14 +123,12 @@ export function toLanguage(lang: string | undefined): Language {
 }
 
 export function buildDraft({
-  t,
   language,
   profile,
   settings,
   slots,
   defaults,
 }: {
-  t: TFunction
   language: string
   profile: Profile
   settings: Record<string, SettingItem>
@@ -172,11 +171,11 @@ export function buildDraft({
           ? sorted.map((s) => ({
               id: s.id,
               name_key: s.name_key,
-              label: slotLabel(t, s.name_key),
+              label: null,
               icon: s.icon,
               active: s.active,
             }))
-          : defaultSlotDrafts(t),
+          : defaultSlotDrafts(),
       grid: defaultsToGridValue(defaults),
     },
     cooking: {
@@ -208,9 +207,16 @@ export function buildDraft({
   }
 }
 
-/** The `name_key` to store for a slot: the original key while the name
- *  still matches its translation, else the typed name. */
+/** A slot's name as shown now: the typed one, else its stored name in the
+ *  current language. Computed at render so a language switch applies. */
+export function slotDraftName(t: TFunction, slot: SlotDraft): string {
+  return slot.label ?? slotLabel(t, slot.name_key)
+}
+
+/** The `name_key` to store for a slot: the original key while the name is
+ *  untouched or still matches its translation, else the typed name. */
 export function slotNameKey(t: TFunction, slot: SlotDraft): string {
+  if (slot.label === null) return slot.name_key
   const label = slot.label.trim()
   return label === slotLabel(t, slot.name_key) ? slot.name_key : label
 }
@@ -219,7 +225,7 @@ export function slotNameKey(t: TFunction, slot: SlotDraft): string {
 export function mealsError(
   value: MealsDraft
 ): "unnamed" | "none_active" | null {
-  if (value.slots.some((s) => s.label.trim() === "")) return "unnamed"
+  if (value.slots.some((s) => s.label?.trim() === "")) return "unnamed"
   if (!value.slots.some((s) => s.active)) return "none_active"
   return null
 }

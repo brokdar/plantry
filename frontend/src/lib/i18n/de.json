@@ -534,7 +534,8 @@
         "bulk": "Aufbauen",
         "custom": "Eigene Werte"
       },
-      "goal_split": "{{protein}} / {{fat}} / {{carbs}} %",
+      "goal_split": "E {{protein}} / F {{fat}} / K {{carbs}} %",
+      "goal_split_label": "{{protein}} % Eiweiß, {{fat}} % Fett, {{carbs}} % Kohlenhydrate",
       "goal_custom_detail": "Deine eigenen Zahlen",
       "goal_effect": "Plantry zielt auf {{kcal}} kcal am Tag: {{protein}} % Eiweiß, {{fat}} % Fett, {{carbs}} % Kohlenhydrate.",
       "goal_effect_kcal_only": "Plantry zielt auf {{kcal}} kcal am Tag.",
@@ -1199,7 +1200,9 @@
       "cell_has_plate": "Für diese Mahlzeit ist schon etwas geplant. Entferne es, bevor du „Kein Essen“ setzt.",
       "preset_required": "Wähle aus, welcher Routine diese Mahlzeit folgt.",
       "preset_not_allowed": "Nur Routine-Mahlzeiten können eine Routine haben.",
-      "slot_inactive": "Diese Mahlzeit ist ausgeschaltet. Schalte sie in den Einstellungen ein, um sie zu ändern."
+      "slot_inactive": "Diese Mahlzeit ist ausgeschaltet. Schalte sie in den Einstellungen ein, um sie zu ändern.",
+      "slot_unknown": "Diese Mahlzeit gibt es nicht mehr. Lade die Seite neu und versuche es noch einmal.",
+      "preset_unknown": "Diese Routine gibt es nicht mehr. Wähle eine andere aus."
     },
     "page_not_found": "Seite nicht gefunden.",
     "page_not_found_body": "Die gesuchte Seite existiert nicht.",
@@ -1450,7 +1453,8 @@
     "assistant": {
       "title": "Assistent (optional)",
       "why": "Der Assistent schlägt Mahlzeiten vor und kann deine Woche für dich füllen.",
-      "later": "Das kannst du später nachholen. Planen klappt auch ohne."
+      "later": "Das kannst du später nachholen. Planen klappt auch ohne.",
+      "api_key_description": "Dein Schlüssel vom Anbieter. Plantry speichert ihn verschlüsselt."
     },
     "finish": {
       "title": "Alles eingerichtet",

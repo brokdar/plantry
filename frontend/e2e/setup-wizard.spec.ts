@@ -31,6 +31,11 @@ test.describe("Setup wizard", () => {
         await next.click()
         await expect(page.getByText(`Step ${step} of 7`)).toBeVisible()
         if (step === 4) {
+          // On a desktop column the grid fits without scrolling.
+          const box = page.getByRole("grid").locator("..")
+          await expect
+            .poll(() => box.evaluate((el) => el.scrollWidth - el.clientWidth))
+            .toBeLessThanOrEqual(0)
           // The availability grid scrolls inside its own box on a phone.
           await page.setViewportSize({ width: 375, height: 800 })
           await expect
@@ -63,6 +68,9 @@ test.describe("Setup wizard", () => {
       const guide = page.getByTestId("recipe-onboarding")
       await expect(guide).toBeVisible()
       await expect(guide.getByText(/^0 of 10 recipes/)).toBeVisible()
+      // Focus lands on the page, not on <body>. (Checked once Recipes has
+      // rendered: until then the shell briefly wraps the wizard's own main.)
+      await expect(page.getByRole("main")).toBeFocused()
     })
 
     await test.step("the defaults are stored", async () => {

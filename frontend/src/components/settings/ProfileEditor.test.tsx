@@ -36,6 +36,11 @@ describe("NutritionGoalFields", () => {
     render(<NutritionGoalFields value={noGoal} onCommit={onCommit} />)
     const bulk = screen.getByRole("radio", { name: /^Bulk/ })
     expect(bulk.closest("label")).toHaveTextContent("2700 kcal")
+    // The split names its macros, visibly and for screen readers.
+    expect(bulk.closest("label")).toHaveTextContent("P 25 / F 25 / C 50 %")
+    expect(bulk).toHaveAccessibleName(
+      expect.stringContaining("25 % protein, 25 % fat, 50 % carbs")
+    )
     await userEvent.click(bulk)
     expect(onCommit).toHaveBeenCalledWith(NUTRITION_PRESETS.bulk)
   })
