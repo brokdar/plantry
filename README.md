@@ -124,7 +124,7 @@ cd frontend
 bun install             # install dependencies
 bun run dev             # dev server on port 5173 (proxies /api to :8080)
 bun run check           # lint + typecheck + unit tests
-bun run e2e             # Playwright tests (requires a running backend)
+bun run e2e             # Playwright tests (starts its own backend and dev server)
 ```
 
 ### Docker
