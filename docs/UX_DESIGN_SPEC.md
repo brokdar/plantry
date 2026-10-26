@@ -508,8 +508,8 @@ Every setting shows its effect in one line ("Plantry plans at most 1 cooking ses
 | Voice | Plain, calm tool |
 | Navigation | 4 tabs (Today, Plan, Recipes, Shop); Settings behind an icon or at the bottom of the rail |
 
-## 11. Open decisions
+## 11. Resolved decisions (defaults accepted 2026-10-25, may be overridden)
 
-1. **Store section order.** The walk order in §5.7 is a sensible default for German supermarkets. Make it reorderable in Settings now, or only if requested?
-2. **Week start column.** The board starts on the shopping day (Saturday for this user). Confirm that this reads naturally, rather than a Monday-first board with the window highlighted.
-3. **Photos for manual recipes.** Allow uploading from the phone camera roll in the editor (existing image crop UI)? Assumed yes.
+1. **Store section order:** fixed for now, using the walk order in §5.7. It becomes reorderable in Settings only if requested.
+2. **Week start column:** the board starts on the shopping day (Saturday for this user), matching the planning window. There is no Monday-first board with a highlighted window.
+3. **Photos for manual recipes:** uploading from the phone camera roll is allowed in the recipe editor, using the existing image crop UI.
