@@ -19,7 +19,8 @@ vi.mock("@/lib/api/import", () => ({
   resolveImport: vi.fn(),
 }))
 
-vi.mock("@/lib/api/foods", () => ({
+vi.mock("@/lib/api/foods", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/foods")>()),
   createFood: vi.fn(),
   getFoodNutrition: vi.fn(),
 }))

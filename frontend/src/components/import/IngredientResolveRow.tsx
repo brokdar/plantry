@@ -14,9 +14,9 @@ import {
 } from "@/components/ui/select"
 import type { DraftIngredient, Resolution } from "@/lib/api/import"
 import type { LookupCandidate } from "@/lib/api/lookup"
+import { leafInputFromCandidate } from "@/lib/api/foods"
+import { useEnsureLeaf } from "@/lib/queries/foods"
 import { useImportLineLookup } from "@/lib/queries/import"
-
-import { leafInputFromCandidate, useEnsureLeaf } from "./useEnsureLeaf"
 
 export type RowState = {
   resolution: Resolution

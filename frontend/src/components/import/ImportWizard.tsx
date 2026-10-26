@@ -231,7 +231,7 @@ export function ImportWizard() {
           <div className="flex flex-col gap-4">
             <div className="space-y-2">
               <Label htmlFor="import-name">
-                {t("import.step3.name_label")}
+                {t("import.review.name_label")}
               </Label>
               <Input
                 id="import-name"

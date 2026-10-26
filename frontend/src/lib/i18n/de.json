@@ -78,11 +78,11 @@
       "kcal_100g": "{{kcal}} kcal/100 g"
     },
     "step3": {
-      "name_label": "Komponentenname",
       "role_label": "Rolle",
       "portions_label": "Referenzportionen"
     },
     "review": {
+      "name_label": "Rezeptname",
       "title": "Rezept prüfen",
       "save": "Rezept speichern",
       "needs_choice_one": "{{count}} Zutat braucht noch eine Auswahl",
