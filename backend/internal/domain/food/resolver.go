@@ -20,6 +20,15 @@ type Resolver struct {
 	picker     CandidatePicker
 }
 
+// SourceLocal marks a lookup candidate that already exists in the local
+// catalogue; its ExistingID is always set.
+const SourceLocal Source = "local"
+
+const (
+	maxLocalCandidates = 5
+	leafPageSize       = 500
+)
+
 type noopTranslator struct{}
 
 func (noopTranslator) Translate(_ context.Context, q string, _ *LookupTrace) string { return q }
@@ -42,10 +51,11 @@ func NewResolver(repo Repository, off BarcodeProvider, fdc FoodProvider, llmReso
 
 // Lookup searches for leaf-food candidates by barcode or text query.
 //
-// Barcode: tries OFF first, then FDC branded search. Query: FDC only. When an
-// LLM is configured and the query is non-English, the query is translated to
-// an English FDC search term; after results come back, the LLM picks the best
-// semantic match.
+// Barcode: tries OFF first, then FDC branded search. Query: local catalogue
+// leaves first (exact, prefix, contains; at most 5), then FDC, then OFF by
+// name. When FDC is queried with an LLM configured and a non-English query,
+// the query is translated to an English FDC search term and the LLM picks the
+// best semantic match, unless an exact local match is already recommended.
 //
 // Returns (candidates, recommended_index, error). Empty results → index = -1.
 func (r *Resolver) Lookup(ctx context.Context, barcode, query, lang string, limit int) ([]Candidate, int, error) {
@@ -80,7 +90,7 @@ func (r *Resolver) lookupBarcode(ctx context.Context, barcode string, _ int) ([]
 		})
 		if len(results) > 0 {
 			fillMissingKcal(results)
-			r.enrichExistingIDs(ctx, results)
+			r.enrichFromCatalogue(ctx, results)
 			return results, r.pickRecommended(ctx, barcode, results, trace), nil
 		}
 	}
@@ -104,7 +114,7 @@ func (r *Resolver) lookupBarcode(ctx context.Context, barcode string, _ int) ([]
 		})
 		if len(results) > 0 {
 			fillMissingKcal(results)
-			r.enrichExistingIDs(ctx, results)
+			r.enrichFromCatalogue(ctx, results)
 			return results, r.pickRecommended(ctx, barcode, results, trace), nil
 		}
 	}
@@ -113,49 +123,82 @@ func (r *Resolver) lookupBarcode(ctx context.Context, barcode string, _ int) ([]
 }
 
 func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit int) ([]Candidate, int, error) {
-	if r.fdc == nil {
-		return []Candidate{}, -1, nil
-	}
 	trace := TraceFromContext(ctx)
 
-	originalQuery := query
-	searchTerm := query
-
-	if lang != "" && lang != "en" {
-		searchTerm = r.translator.Translate(ctx, originalQuery, trace)
-	}
-
-	start := time.Now()
-	results, err := r.fdc.SearchByName(ctx, searchTerm, limit)
-	dur := time.Since(start).Milliseconds()
+	leaves, err := r.listLeaves(ctx)
 	if err != nil {
-		trace.Add(TraceEntry{
-			Step: "fdc.search", Level: TraceLevelError,
-			Summary: "FDC search failed", DurationMs: dur,
-			Detail: ExternalAPIDetail{Source: "fdc", Query: searchTerm, Error: err.Error()},
-		})
 		return nil, -1, err
 	}
-	trace.Add(TraceEntry{
-		Step: "fdc.search", Level: TraceLevelSuccess,
-		Summary: resultCountSummary("FDC", len(results)), DurationMs: dur,
-		Detail: ExternalAPIDetail{Source: "fdc", Query: searchTerm, ResultCount: len(results)},
-	})
+	originalQuery := query
+	results := localCandidates(leaves, normalizeName(originalQuery))
+	exactLocal := len(results) > 0 && normalizeName(results[0].Name) == normalizeName(originalQuery)
 
-	fillMissingKcal(results)
-	r.enrichExistingIDs(ctx, results)
+	var external []Candidate
+	if r.fdc != nil {
+		searchTerm := query
+		if lang != "" && lang != "en" {
+			searchTerm = r.translator.Translate(ctx, originalQuery, trace)
+		}
 
-	for i := range results {
-		if results[i].Source == SourceFDC {
-			if results[i].SourceName == "" {
-				results[i].SourceName = results[i].Name
+		start := time.Now()
+		fdcResults, err := r.fdc.SearchByName(ctx, searchTerm, limit)
+		dur := time.Since(start).Milliseconds()
+		if err != nil {
+			trace.Add(TraceEntry{
+				Step: "fdc.search", Level: TraceLevelError,
+				Summary: "FDC search failed", DurationMs: dur,
+				Detail: ExternalAPIDetail{Source: "fdc", Query: searchTerm, Error: err.Error()},
+			})
+			return nil, -1, err
+		}
+		trace.Add(TraceEntry{
+			Step: "fdc.search", Level: TraceLevelSuccess,
+			Summary: resultCountSummary("FDC", len(fdcResults)), DurationMs: dur,
+			Detail: ExternalAPIDetail{Source: "fdc", Query: searchTerm, ResultCount: len(fdcResults)},
+		})
+
+		for i := range fdcResults {
+			if fdcResults[i].Source == SourceFDC {
+				if fdcResults[i].SourceName == "" {
+					fdcResults[i].SourceName = fdcResults[i].Name
+				}
+				fdcResults[i].Name = originalQuery
 			}
-			results[i].Name = originalQuery
+		}
+		external = append(external, fdcResults...)
+	}
+
+	if r.off != nil {
+		// OFF is a supplementary source: a failure is traced but does not
+		// discard the local and FDC results.
+		start := time.Now()
+		offResults, err := r.off.SearchByName(ctx, originalQuery, limit)
+		dur := time.Since(start).Milliseconds()
+		if err != nil {
+			trace.Add(TraceEntry{
+				Step: "off.search", Level: TraceLevelError,
+				Summary: "OFF search failed", DurationMs: dur,
+				Detail: ExternalAPIDetail{Source: "off", Query: originalQuery, Error: err.Error()},
+			})
+		} else {
+			trace.Add(TraceEntry{
+				Step: "off.search", Level: TraceLevelSuccess,
+				Summary: resultCountSummary("OFF", len(offResults)), DurationMs: dur,
+				Detail: ExternalAPIDetail{Source: "off", Query: originalQuery, ResultCount: len(offResults)},
+			})
+			external = append(external, offResults...)
 		}
 	}
 
-	if len(results) == 0 {
+	fillMissingKcal(external)
+	enrichExistingIDs(leaves, external)
+	results = dedupeCandidates(append(results, external...))
+
+	switch {
+	case len(results) == 0:
 		return results, -1, nil
+	case exactLocal || r.fdc == nil:
+		return results, 0, nil
 	}
 	return results, r.pickRecommended(ctx, originalQuery, results, trace), nil
 }
@@ -196,18 +239,142 @@ func fillMissingKcal(cs []Candidate) {
 	}
 }
 
-// enrichExistingIDs checks if any candidate matches a local leaf food by name.
-func (r *Resolver) enrichExistingIDs(ctx context.Context, candidates []Candidate) {
-	for i := range candidates {
-		result, err := r.repo.List(ctx, ListQuery{Kind: KindLeaf, Search: candidates[i].Name, Limit: 1})
-		if err != nil || len(result.Items) == 0 {
-			continue
+// enrichFromCatalogue sets ExistingID on barcode results that match a local
+// leaf. Catalogue errors are ignored: enrichment is best-effort.
+func (r *Resolver) enrichFromCatalogue(ctx context.Context, candidates []Candidate) {
+	leaves, err := r.listLeaves(ctx)
+	if err != nil {
+		return
+	}
+	enrichExistingIDs(leaves, candidates)
+}
+
+// listLeaves loads every leaf food in the catalogue, page by page.
+func (r *Resolver) listLeaves(ctx context.Context) ([]Food, error) {
+	var out []Food
+	for offset := 0; ; offset += leafPageSize {
+		page, err := r.repo.List(ctx, ListQuery{Kind: KindLeaf, Limit: leafPageSize, Offset: offset})
+		if err != nil {
+			return nil, err
 		}
-		if strings.EqualFold(result.Items[0].Name, candidates[i].Name) {
-			id := result.Items[0].ID
+		out = append(out, page.Items...)
+		if len(page.Items) < leafPageSize {
+			return out, nil
+		}
+	}
+}
+
+// localCandidates returns up to maxLocalCandidates leaves whose normalized
+// name equals the normalized query, then those starting with it, then those
+// containing it.
+func localCandidates(leaves []Food, normQuery string) []Candidate {
+	if normQuery == "" {
+		return []Candidate{}
+	}
+	var exact, prefix, contains []Candidate
+	for i := range leaves {
+		name := normalizeName(leaves[i].Name)
+		switch {
+		case name == normQuery:
+			exact = append(exact, localCandidate(&leaves[i]))
+		case strings.HasPrefix(name, normQuery):
+			prefix = append(prefix, localCandidate(&leaves[i]))
+		case strings.Contains(name, normQuery):
+			contains = append(contains, localCandidate(&leaves[i]))
+		}
+	}
+	out := append(append(exact, prefix...), contains...)
+	if len(out) > maxLocalCandidates {
+		out = out[:maxLocalCandidates]
+	}
+	if out == nil {
+		return []Candidate{}
+	}
+	return out
+}
+
+func localCandidate(f *Food) Candidate {
+	id := f.ID
+	c := Candidate{
+		Name:             f.Name,
+		Source:           SourceLocal,
+		ExistingID:       &id,
+		Kcal100g:         f.Kcal100g,
+		Protein100g:      f.Protein100g,
+		Fat100g:          f.Fat100g,
+		Carbs100g:        f.Carbs100g,
+		Fiber100g:        f.Fiber100g,
+		Sodium100g:       f.Sodium100g,
+		SaturatedFat100g: f.SaturatedFat100g,
+		TransFat100g:     f.TransFat100g,
+		Cholesterol100g:  f.Cholesterol100g,
+		Sugar100g:        f.Sugar100g,
+		Potassium100g:    f.Potassium100g,
+		Calcium100g:      f.Calcium100g,
+		Iron100g:         f.Iron100g,
+		Magnesium100g:    f.Magnesium100g,
+		Phosphorus100g:   f.Phosphorus100g,
+		Zinc100g:         f.Zinc100g,
+		VitaminA100g:     f.VitaminA100g,
+		VitaminC100g:     f.VitaminC100g,
+		VitaminD100g:     f.VitaminD100g,
+		VitaminB12100g:   f.VitaminB12100g,
+		VitaminB6100g:    f.VitaminB6100g,
+		Folate100g:       f.Folate100g,
+	}
+	if f.Barcode != nil {
+		c.Barcode = *f.Barcode
+	}
+	return c
+}
+
+// enrichExistingIDs sets ExistingID on candidates whose normalized display
+// name matches a local leaf. Query lookups call it after FDC results have
+// been renamed to the original query, so the match is against the query and
+// not the FDC description.
+func enrichExistingIDs(leaves []Food, candidates []Candidate) {
+	byName := make(map[string]int64, len(leaves))
+	for _, l := range leaves {
+		key := normalizeName(l.Name)
+		if _, ok := byName[key]; !ok {
+			byName[key] = l.ID
+		}
+	}
+	for i := range candidates {
+		if id, ok := byName[normalizeName(candidates[i].Name)]; ok {
 			candidates[i].ExistingID = &id
 		}
 	}
+}
+
+// dedupeCandidates drops repeated (source, external id) pairs, keeping the
+// first occurrence. Candidates without an external id are always kept.
+func dedupeCandidates(cs []Candidate) []Candidate {
+	seen := make(map[string]struct{}, len(cs))
+	out := cs[:0]
+	for _, c := range cs {
+		key := candidateKey(c)
+		if key != "" {
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+func candidateKey(c Candidate) string {
+	switch {
+	case c.Source == SourceLocal && c.ExistingID != nil:
+		return fmt.Sprintf("local:%d", *c.ExistingID)
+	case c.Source == SourceFDC && c.FdcID != 0:
+		return fmt.Sprintf("fdc:%d", c.FdcID)
+	case c.Source == SourceOFF && c.Barcode != "":
+		return "off:" + c.Barcode
+	}
+	return ""
 }
 
 func resultCountSummary(source string, n int) string {
