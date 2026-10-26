@@ -20,7 +20,7 @@ type Config struct {
 	AIRateLimitPerMin int
 	AIFakeScript      string
 	DevMode           bool   // exposes dev-only debug endpoints; PLANTRY_DEV_MODE
-	SecretKey         string // PLANTRY_SECRET_KEY: optional; enables DB encryption for API keys
+	SecretKey         string // PLANTRY_SECRET_KEY: optional; falls back to <data>/secret.key (see EnsureSecretKey)
 }
 
 func Load() (Config, error) {
