@@ -32,6 +32,7 @@ type memStore struct {
 	upserts   int
 	createErr error
 	stepErr   error
+	upsertErr error
 }
 
 func newMemStore() *memStore {
@@ -76,6 +77,9 @@ func (s *memStore) UpsertPrompt(ctx context.Context, hash, text string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.upserts++
+	if s.upsertErr != nil {
+		return s.upsertErr
+	}
 	s.prompts[hash] = text
 	return nil
 }
@@ -94,9 +98,26 @@ var fixedNow = time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
 
 func newRecorder(t *testing.T, store airun.Store) (*airun.Recorder, *bytes.Buffer) {
 	t.Helper()
+	return newRecorderWithClock(t, store, func() time.Time { return fixedNow })
+}
+
+func newRecorderWithClock(t *testing.T, store airun.Store, now func() time.Time) (*airun.Recorder, *bytes.Buffer) {
+	t.Helper()
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	return airun.NewRecorder(store, logger, func() time.Time { return fixedNow }), &buf
+	return airun.NewRecorder(store, logger, now), &buf
+}
+
+// steppingClock returns a clock that advances by step on every call.
+func steppingClock(step time.Duration) func() time.Time {
+	var mu sync.Mutex
+	t := fixedNow
+	return func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		t = t.Add(step)
+		return t
+	}
 }
 
 func textTurn(text string, usage fake.ScriptedUsage) fake.Turn {
@@ -481,5 +502,95 @@ func TestRecorder_LogsStartAndEnd(t *testing.T) {
 	}
 	if _, ok := end["duration_ms"]; !ok {
 		t.Errorf("end log missing duration_ms: %v", end)
+	}
+}
+
+func TestRecorder_DurationsFromClock(t *testing.T) {
+	store := newMemStore()
+	rec, logs := newRecorderWithClock(t, store, steppingClock(5*time.Millisecond))
+	inner := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}})
+
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	if _, err := rec.Meter(inner, "openai").Complete(ctx, llm.Request{Model: "m"}); err != nil {
+		t.Fatal(err)
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	_, _, steps, _ := store.snapshot()
+	if len(steps) != 1 || steps[0].DurationMs != 5 {
+		t.Errorf("steps = %+v; want one step with DurationMs 5", steps)
+	}
+	// Clock reads: start, call start, call end, finish => 15ms from start.
+	if !strings.Contains(logs.String(), `"duration_ms":15`) {
+		t.Errorf("end log missing duration_ms 15: %s", logs.String())
+	}
+}
+
+func TestMeter_PromptHashUnsetWhenUpsertFails(t *testing.T) {
+	store := newMemStore()
+	store.upsertErr = errors.New("db down")
+	rec, _ := newRecorder(t, store)
+	inner := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}})
+
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	for i := 0; i < 2; i++ {
+		if _, err := rec.Meter(inner, "openai").Complete(ctx, llm.Request{Model: "m", System: "s"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	_, finishes, _, upserts := store.snapshot()
+	if upserts != 1 {
+		t.Errorf("UpsertPrompt calls = %d; want 1 (no retry)", upserts)
+	}
+	if finishes[0].PromptHash != "" {
+		t.Errorf("prompt hash = %q; want empty after failed upsert", finishes[0].PromptHash)
+	}
+}
+
+func TestMeter_ConcurrentStreamsAndFinishes(t *testing.T) {
+	const streams, finishers = 30, 5
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	inner := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{InputTokens: 1})}})
+	client := rec.Meter(inner, "openai")
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+
+	var wg sync.WaitGroup
+	for i := 0; i < streams; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := drainStream(ctx, client, llm.Request{Model: "m", System: "shared"}); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	for i := 0; i < finishers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			run.Finish(ctx, airun.StatusOK, "")
+		}()
+	}
+	wg.Wait()
+
+	_, finishes, steps, upserts := store.snapshot()
+	if upserts != 1 {
+		t.Errorf("UpsertPrompt calls = %d; want 1", upserts)
+	}
+	if len(finishes) != 1 {
+		t.Errorf("FinishRun writes = %d; want 1", len(finishes))
+	}
+	if len(steps) != streams {
+		t.Fatalf("steps = %d; want %d", len(steps), streams)
+	}
+	seen := map[int]bool{}
+	for _, s := range steps {
+		if seen[s.Seq] {
+			t.Errorf("duplicate seq %d", s.Seq)
+		}
+		seen[s.Seq] = true
 	}
 }

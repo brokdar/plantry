@@ -94,19 +94,23 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 		run.provider = provider
 		run.model = req.Model
 	}
-	storePrompt := false
-	if !run.promptStored && req.System != "" {
-		sum := sha256.Sum256([]byte(req.System))
-		run.promptHash = hex.EncodeToString(sum[:])
-		run.promptStored = true
-		storePrompt = true
+	// Only the first call with a system prompt tries to store it.
+	storePrompt := !run.promptTried && req.System != "" && run.id != 0
+	if storePrompt {
+		run.promptTried = true
 	}
-	hash := run.promptHash
 	run.mu.Unlock()
 
-	if storePrompt && run.id != 0 {
+	if storePrompt {
+		sum := sha256.Sum256([]byte(req.System))
+		hash := hex.EncodeToString(sum[:])
 		if err := run.rec.store.UpsertPrompt(context.WithoutCancel(ctx), hash, req.System); err != nil {
 			run.warn(ctx, "ai.run.prompt failed", err)
+		} else {
+			// Set only once stored, so the run never points at a missing prompt.
+			run.mu.Lock()
+			run.promptHash = hash
+			run.mu.Unlock()
 		}
 	}
 	run.addStep(ctx, Step{

@@ -41,7 +41,8 @@ func FromContext(ctx context.Context) *Run {
 }
 
 // Run is one user-visible AI action in progress. Its methods are safe for
-// concurrent use and nil-safe.
+// concurrent use and nil-safe. Steps recorded after Finish are still written
+// but are not reflected in the run totals.
 type Run struct {
 	rec       *Recorder
 	id        int64 // 0 when CreateRun failed: nothing more is written
@@ -59,7 +60,7 @@ type Run struct {
 	provider         string
 	model            string
 	promptHash       string
-	promptStored     bool
+	promptTried      bool
 	finished         bool
 }
 
