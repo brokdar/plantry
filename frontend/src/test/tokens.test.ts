@@ -101,6 +101,32 @@ describe("design tokens (index.css)", () => {
     }
   })
 
+  it("collapses motion and slide transforms under prefers-reduced-motion", () => {
+    const match =
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?)\n\}/.exec(
+        css
+      )
+    expect(match, "no reduced-motion block").not.toBeNull()
+    const body = match![1]
+    expect(body).toMatch(/transition-duration:\s*0\.01ms\s*!important/)
+    expect(body).toMatch(/animation-duration:\s*0\.01ms\s*!important/)
+    for (const v of [
+      "--tw-enter-translate-x",
+      "--tw-enter-translate-y",
+      "--tw-exit-translate-x",
+      "--tw-exit-translate-y",
+    ]) {
+      expect(body).toMatch(new RegExp(`${v}:\\s*0\\s*!important`))
+    }
+  })
+
+  it("gives every focusable element a 2px accent focus outline", () => {
+    const match = /\n\s*:focus-visible\s*\{([^}]*)\}/.exec(css)
+    expect(match, "no :focus-visible rule").not.toBeNull()
+    expect(match![1]).toMatch(/outline:\s*2px solid var\(--accent\);/)
+    expect(match![1]).toMatch(/outline-offset:\s*2px;/)
+  })
+
   it("no longer references Inter or Manrope", () => {
     expect(css).not.toMatch(/\bInter\b|Manrope|fontsource-variable\/inter/i)
   })
