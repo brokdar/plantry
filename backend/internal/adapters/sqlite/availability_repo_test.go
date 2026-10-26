@@ -3,6 +3,7 @@ package sqlite_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
@@ -248,4 +250,54 @@ func TestAvailabilitySetOverride_RemovesPlateInTx(t *testing.T) {
 	assert.Equal(t, 0, countAvailabilityRows(t, conn, "plate_components"))
 	assert.Equal(t, 0, countAvailabilityRows(t, conn, "plate_feedback"))
 	assert.Equal(t, 1, countAvailabilityRows(t, conn, "availability_overrides"))
+}
+
+func TestAvailabilityRepo_ForeignKeyFailureIsNotFound(t *testing.T) {
+	conn := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	repo := sqlite.NewAvailabilityRepo(conn)
+	lunch := insertSlot(t, conn, "slot.lunch", 1, true)
+	missingPreset := int64(9999)
+
+	err := repo.UpsertOverride(ctx, availability.Override{Date: availDate("2026-10-26"), SlotID: 9999, Mode: availability.ModeNone})
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+	err = repo.UpsertOverride(ctx, availability.Override{Date: availDate("2026-10-26"), SlotID: lunch, Mode: availability.ModeRoutine, PresetID: &missingPreset})
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+	err = repo.ReplaceActiveDefaults(ctx, []availability.Default{{Weekday: 0, SlotID: lunch, Mode: availability.ModeRoutine, PresetID: &missingPreset}})
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+	err = repo.ReplaceActiveDefaults(ctx, []availability.Default{{Weekday: 0, SlotID: 9999, Mode: availability.ModeNone}})
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+// failingUpsertRepo fails the override write so the tx must roll back the
+// plate delete that ran before it.
+type failingUpsertRepo struct {
+	availability.Repository
+}
+
+func (failingUpsertRepo) UpsertOverride(context.Context, availability.Override) error {
+	return errors.New("write failed")
+}
+
+type failingUpsertTx struct{ inner *sqlite.TxRunner }
+
+func (f failingUpsertTx) RunInAvailabilityTx(ctx context.Context, fn func(availability.Repository, plate.Repository) error) error {
+	return f.inner.RunInAvailabilityTx(ctx, func(r availability.Repository, p plate.Repository) error {
+		return fn(failingUpsertRepo{r}, p)
+	})
+}
+
+func TestAvailabilitySetOverride_RollsBackPlateDeleteOnWriteFailure(t *testing.T) {
+	conn := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	svc := availability.NewService(sqlite.NewAvailabilityRepo(conn), failingUpsertTx{sqlite.NewTxRunner(conn)}, sqlite.NewPresetRepo(conn))
+	lunch := insertSlot(t, conn, "slot.lunch", 1, true)
+	_, err := conn.Exec(`INSERT INTO plates (slot_id, date) VALUES (?, '2026-10-26')`, lunch)
+	require.NoError(t, err)
+
+	_, removed, err := svc.SetOverride(ctx, availability.OverrideInput{Date: availDate("2026-10-26"), SlotID: lunch, Mode: availability.ModeNone, RemovePlate: true})
+	require.Error(t, err)
+	assert.Nil(t, removed)
+	assert.Equal(t, 1, countAvailabilityRows(t, conn, "plates"), "plate delete rolled back")
+	assert.Equal(t, 0, countAvailabilityRows(t, conn, "availability_overrides"))
 }

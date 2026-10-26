@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite/sqlcgen"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 )
 
@@ -87,7 +88,7 @@ func (r *AvailabilityRepo) GetDefault(ctx context.Context, weekday int, slotID i
 // ReplaceActiveDefaults must run inside a transaction (TxRunner) to be atomic.
 func (r *AvailabilityRepo) ReplaceActiveDefaults(ctx context.Context, rows []availability.Default) error {
 	if err := r.q.DeleteActiveSlotAvailabilityDefaults(ctx); err != nil {
-		return err
+		return fmt.Errorf("delete defaults: %w", err)
 	}
 	for _, d := range rows {
 		if err := r.q.InsertAvailabilityDefault(ctx, sqlcgen.InsertAvailabilityDefaultParams{
@@ -96,6 +97,10 @@ func (r *AvailabilityRepo) ReplaceActiveDefaults(ctx context.Context, rows []ava
 			Mode:     string(d.Mode),
 			PresetID: toNullInt64(d.PresetID),
 		}); err != nil {
+			if isForeignKeyViolation(err) {
+				// The slot or preset was deleted after validation.
+				return fmt.Errorf("%w: slot %d or preset of weekday %d", domain.ErrNotFound, d.SlotID, d.Weekday)
+			}
 			return fmt.Errorf("insert default weekday %d slot %d: %w", d.Weekday, d.SlotID, err)
 		}
 	}
@@ -137,13 +142,18 @@ func (r *AvailabilityRepo) GetOverride(ctx context.Context, date time.Time, slot
 }
 
 func (r *AvailabilityRepo) UpsertOverride(ctx context.Context, o availability.Override) error {
-	return r.q.UpsertAvailabilityOverride(ctx, sqlcgen.UpsertAvailabilityOverrideParams{
+	err := r.q.UpsertAvailabilityOverride(ctx, sqlcgen.UpsertAvailabilityOverrideParams{
 		Date:     o.Date.Format(dateLayout),
 		SlotID:   o.SlotID,
 		Mode:     string(o.Mode),
 		PresetID: toNullInt64(o.PresetID),
 		Note:     toNullString(o.Note),
 	})
+	if isForeignKeyViolation(err) {
+		// The slot or preset was deleted after validation.
+		return fmt.Errorf("%w: slot %d or its preset", domain.ErrNotFound, o.SlotID)
+	}
+	return err
 }
 
 func (r *AvailabilityRepo) DeleteOverride(ctx context.Context, date time.Time, slotID int64) error {

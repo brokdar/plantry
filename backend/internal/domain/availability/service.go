@@ -80,7 +80,9 @@ func (s *Service) SetDefaults(ctx context.Context, rows []Default) error {
 }
 
 // Resolve returns every date in [from, to] × active slot, date-major in slot
-// order, with override > default > plan. It reads each table once.
+// order, with override > default > plan. It reads each table once. The
+// range is not capped here: callers must bound it (the HTTP handler allows
+// at most 62 days).
 func (s *Service) Resolve(ctx context.Context, from, to time.Time) ([]Cell, error) {
 	from, to = dateOnly(from), dateOnly(to)
 	if to.Before(from) {

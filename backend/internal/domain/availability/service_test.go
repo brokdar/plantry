@@ -516,6 +516,18 @@ func TestAvailabilitySetOverride_NoneOnPlate(t *testing.T) {
 		assert.Equal(t, 1, f.tx.calls)
 	})
 
+	t.Run("with remove_plate deletes every plate in the cell", func(t *testing.T) {
+		f := newFixture()
+		seed(f)
+		f.plates.plates = append(f.plates.plates, plate.Plate{ID: 9, Date: day(monday), SlotID: slotLunch})
+		_, removed, err := f.svc.SetOverride(context.Background(), availability.OverrideInput{Date: day(monday), SlotID: slotLunch, Mode: availability.ModeNone, RemovePlate: true})
+		require.NoError(t, err)
+		require.NotNil(t, removed)
+		assert.Equal(t, int64(7), removed.ID, "first plate returned")
+		require.Len(t, f.plates.plates, 1)
+		assert.Equal(t, int64(8), f.plates.plates[0].ID, "only the other cell's plate remains")
+	})
+
 	t.Run("remove_plate on empty cell removes nothing", func(t *testing.T) {
 		f := newFixture()
 		_, removed, err := f.svc.SetOverride(context.Background(), availability.OverrideInput{Date: day(monday), SlotID: slotLunch, Mode: availability.ModeNone, RemovePlate: true})
