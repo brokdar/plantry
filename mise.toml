@@ -10,6 +10,9 @@ golangci-lint = "2.15.0"
 gofumpt = "0.12.0"
 sqlc = "1.31.1"
 prek = "0.5.5"
+"go:golang.org/x/tools/gopls" = "0.24.0"
+"npm:typescript" = "5.9.3"
+"npm:typescript-language-server" = "6.0.2"
 
 [settings]
 lockfile = true
@@ -28,4 +31,13 @@ run = """
 set -e
 (cd backend && go mod download)
 (cd frontend && bun install --frozen-lockfile && ./node_modules/.bin/playwright install chromium)
+mise run lsp
+"""
+
+[tasks.lsp]
+description = "Let Claude Code's gopls/typescript LSP servers (started at the repo root) find the backend module and frontend typescript"
+run = """
+set -e
+[ -f go.work ] || go work init ./backend
+[ -e node_modules ] || ln -s frontend/node_modules node_modules
 """
