@@ -25,6 +25,8 @@ function mockResponse(body: ReadableStream<Uint8Array>): Response {
   })
 }
 
+const testRange = { from: "2026-04-14", to: "2026-04-20" }
+
 function wrapper(qc: QueryClient) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
@@ -35,6 +37,45 @@ describe("useChatStream", () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     chatStreamStore.reset()
+  })
+
+  it("posts today, from and to with the message", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(2026, 9, 26, 23, 30))
+    try {
+      const sse = `event: done\ndata: {"stop_reason":"end_turn","iteration_count":1}\n\n`
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(mockResponse(stringToReadable(sse)))
+      vi.stubGlobal("fetch", fetchMock)
+
+      const qc = new QueryClient({
+        defaultOptions: { mutations: { retry: false } },
+      })
+      const { result } = renderHook(() => useChatStream(), {
+        wrapper: wrapper(qc),
+      })
+      await act(async () => {
+        await result.current.mutateAsync({
+          message: "plan",
+          mode: "fill_empty",
+          range: { from: "2026-10-31", to: "2026-11-06" },
+        })
+      })
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+      expect(url).toBe("/api/ai/chat")
+      expect(JSON.parse(init.body as string)).toEqual({
+        mode: "fill_empty",
+        message: "plan",
+        today: "2026-10-26",
+        from: "2026-10-31",
+        to: "2026-11-06",
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("routes deltas into chatStreamStore, not query cache", async () => {
@@ -60,7 +101,7 @@ describe("useChatStream", () => {
     })
 
     await act(async () => {
-      await result.current.mutateAsync({ message: "hi" })
+      await result.current.mutateAsync({ message: "hi", range: testRange })
     })
 
     // Buffer preserved after done so the UI can keep showing the last turn.
@@ -158,7 +199,7 @@ describe("useChatStream", () => {
       wrapper: wrapper(qc),
     })
     await act(async () => {
-      await result.current.mutateAsync({ message: "x" })
+      await result.current.mutateAsync({ message: "x", range: testRange })
     })
     unsub()
 
@@ -206,7 +247,10 @@ describe("useChatStream", () => {
 
     let mutationPromise: Promise<unknown> | undefined
     act(() => {
-      mutationPromise = result.current.mutateAsync({ message: "x" })
+      mutationPromise = result.current.mutateAsync({
+        message: "x",
+        range: testRange,
+      })
     })
     await waitFor(() => expect(result.current.isStreaming).toBe(true))
 

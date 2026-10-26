@@ -26,6 +26,9 @@ type Candidate struct {
 	FdcID      int    `json:"fdc_id,omitempty"`
 	ImageURL   string `json:"image_url,omitempty"`
 	ExistingID *int64 `json:"existing_id,omitempty"`
+	// Exact marks a local candidate whose normalized name equals the
+	// normalized query; only these are safe to link without asking.
+	Exact bool `json:"exact,omitempty"`
 
 	// ServingQuantityG is grams per serving as reported by the upstream source
 	// (currently OFF). Used to seed a "serving" portion on leaf food create.

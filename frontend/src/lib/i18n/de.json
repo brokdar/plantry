@@ -68,20 +68,29 @@
       "pick_match": "Passende Zutat auswählen",
       "searching": "Suche…",
       "no_match": "Keine Zutat in der Bibliothek gefunden.",
-      "not_in_library": "noch nicht in der Bibliothek",
       "create_new": "Als neue Zutat anlegen",
       "change": "Ändern",
       "unparsed_warning": "Nicht geparst — bitte prüfen",
       "llm_warning": "Mit KI extrahiert — bitte jede Zeile prüfen.",
-      "resolve_first_one": "{{count}} Zutat benötigt noch eine Zuordnung.",
-      "resolve_first_other": "{{count}} Zutaten benötigen noch eine Zuordnung."
+      "source_local": "In der Bibliothek",
+      "source_fdc": "USDA",
+      "source_off": "Open Food Facts",
+      "kcal_100g": "{{kcal}} kcal/100 g"
     },
     "step3": {
-      "title": "Abschließen",
-      "name_label": "Komponentenname",
       "role_label": "Rolle",
-      "portions_label": "Referenzportionen",
-      "save": "Komponente speichern"
+      "portions_label": "Referenzportionen"
+    },
+    "review": {
+      "name_label": "Rezeptname",
+      "title": "Rezept prüfen",
+      "save": "Rezept speichern",
+      "needs_choice_one": "{{count}} Zutat braucht noch eine Auswahl",
+      "needs_choice_other": "{{count}} Zutaten brauchen noch eine Auswahl",
+      "kcal_per_portion": "{{kcal}} kcal pro Portion",
+      "kcal_pending": "kcal pro Portion erscheinen, sobald jede Zutat gewählt ist.",
+      "source_kcal": "Quelle: {{kcal}} kcal",
+      "image_download_failed": "Rezept gespeichert, aber das Foto konnte nicht geladen werden."
     },
     "status": {
       "extracting": "Extrahiere…",
@@ -673,7 +682,11 @@
     "total_count_other": "{{count}} Rezepte",
     "load_more": "Mehr laden",
     "empty_title": "Noch keine Rezepte",
-    "no_results_body": "Passe die Filter an oder erstelle ein neues Rezept."
+    "no_results_body": "Passe die Filter an oder erstelle ein neues Rezept.",
+    "source_url": "Quell-URL",
+    "source_url_placeholder": "https://…",
+    "description": "Beschreibung",
+    "description_hint": "Text, der mit dem Rezept kam. Erscheint gedämpft unter deinen Notizen."
   },
   "lookup": {
     "title": "Zutat finden",
@@ -1011,7 +1024,11 @@
       "stream_interrupted": "Der AI-Stream wurde unterbrochen. Bitte versuche es erneut.",
       "tool_not_found": "Die AI hat versucht, ein unbekanntes Tool zu verwenden.",
       "iterations_exceeded": "Die AI hat zu viele Schritte gemacht — bitte formuliere die Anfrage einfacher.",
-      "rate_limit_exceeded": "Zu viele AI-Anfragen. Bitte warte eine Minute."
+      "rate_limit_exceeded": "Zu viele AI-Anfragen. Bitte warte eine Minute.",
+      "window_missing": "Der Chat-Anfrage fehlen die Daten des Planungszeitraums.",
+      "invalid_date": "Ein Chat-Datum ist kein gültiges Datum im Format JJJJ-MM-TT.",
+      "window_inverted": "Der Planungszeitraum endet vor seinem Beginn.",
+      "window_too_long": "Der Planungszeitraum darf höchstens 31 Tage umfassen."
     },
     "import": {
       "fetch_failed": "Die Rezeptseite konnte nicht geladen werden. Füge stattdessen den Quelltext ein.",
@@ -1134,5 +1151,22 @@
       "ipv4": "Ungültige IPv4-Adresse",
       "ipv6": "Ungültige IPv6-Adresse"
     }
+  },
+  "recipe_detail": {
+    "favorite": "Favorit",
+    "source": "Von {{host}}",
+    "portions": "Portionen",
+    "kcal_per_portion": "kcal pro Portion",
+    "protein_per_portion": "Eiweiß pro Portion",
+    "grams": "{{value}} g",
+    "no_ingredients": "Noch keine Zutaten.",
+    "no_steps": "Noch keine Schritte.",
+    "my_notes": "Meine Notizen",
+    "description": "Beschreibung aus der Quelle"
+  },
+  "nutrition_warning": {
+    "title": "Nährwerte unvollständig",
+    "body_one": "In kcal und Makros fehlt 1 Zutat ohne Nährwerte:",
+    "body_other": "In kcal und Makros fehlen {{count}} Zutaten ohne Nährwerte:"
   }
 }

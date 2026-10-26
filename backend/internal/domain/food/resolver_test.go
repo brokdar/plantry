@@ -2,15 +2,22 @@ package food_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // leafRepo serves a fixed list of leaf foods from List, honouring Limit and
@@ -80,6 +87,20 @@ func TestResolver_Query_LocalMatchBeforeFDC(t *testing.T) {
 	assert.Equal(t, int64(2), *results[0].ExistingID)
 	assert.Equal(t, food.SourceFDC, results[3].Source)
 	assert.Equal(t, 0, rec)
+}
+
+func TestResolver_Query_OnlyExactLocalMatchIsMarkedExact(t *testing.T) {
+	repo := &leafRepo{leaves: []food.Food{leaf(1, "Zwiebelsuppe"), leaf(2, " ZWIEBEL "), leaf(3, "Rote Zwiebel")}}
+	r := food.NewResolver(repo, nil, nil, nil)
+
+	results, _, err := r.Lookup(context.Background(), "", "Zwiebel", "de", 5)
+	require.NoError(t, err)
+
+	require.Len(t, results, 3)
+	assert.Equal(t, int64(2), *results[0].ExistingID)
+	assert.True(t, results[0].Exact, "normalized-equal local match")
+	assert.False(t, results[1].Exact, "prefix match")
+	assert.False(t, results[2].Exact, "contains match")
 }
 
 func TestResolver_Query_LocalCappedAtFive(t *testing.T) {
@@ -315,5 +336,125 @@ func TestResolver_Query_BlankQuery(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, results, "query %q", q)
 		assert.Equal(t, -1, rec, "query %q", q)
+	}
+}
+
+const lookupModel = "fake-lookup"
+
+// newRecordedResolver builds a resolver whose LLM calls are metered into a
+// real SQLite DB. llmResolver nil means a metered fake client with turns.
+func newRecordedResolver(t *testing.T, repo food.Repository, fdc food.FoodProvider, llmResolver llm.Resolver, turns ...fake.Turn) (*food.Resolver, *sql.DB) {
+	t.Helper()
+	db := testhelper.NewTestDB(t)
+	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
+	if llmResolver == nil {
+		llmResolver = llm.StaticResolver(rec.Meter(fake.NewFromScript(&fake.Script{Turns: turns}), "fake"), lookupModel)
+	}
+	return food.NewResolver(repo, nil, fdc, llmResolver).WithRecorder(rec), db
+}
+
+func lookupTurn(text, stopReason string, in, out int) fake.Turn {
+	return fake.Turn{
+		StopReason: stopReason,
+		Message:    fake.ScriptedMessage{Content: []fake.ScriptedBlock{{Type: "text", Text: text}}},
+		Usage:      fake.ScriptedUsage{InputTokens: in, OutputTokens: out},
+	}
+}
+
+func countRuns(t *testing.T, db *sql.DB) int {
+	t.Helper()
+	var n int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM ai_runs`).Scan(&n))
+	return n
+}
+
+func TestResolver_Query_TranslateAndPickShareOneLookupRun(t *testing.T) {
+	tests := []struct {
+		name       string
+		turns      []fake.Turn
+		wantStatus string
+		wantIn     int64
+		wantOut    int64
+		wantErrs   int
+	}{
+		{
+			name: "ok",
+			// The first turn must not be terminal: the fake rewinds after one.
+			turns:      []fake.Turn{lookupTurn(`["carrot raw"]`, "max_tokens", 10, 2), lookupTurn(`[1]`, "end_turn", 20, 1)},
+			wantStatus: "ok",
+			wantIn:     30,
+			wantOut:    3,
+		},
+		{
+			name:       "client errors",
+			turns:      nil, // empty script: every call fails
+			wantStatus: "error",
+			wantErrs:   2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &leafRepo{leaves: []food.Food{leaf(7, "Karottensaft")}}
+			fdc := &stubProvider{results: []food.Candidate{
+				{Name: "Carrot juice", Source: food.SourceFDC, FdcID: 1},
+				{Name: "Carrots, raw", Source: food.SourceFDC, FdcID: 2},
+			}}
+			r, db := newRecordedResolver(t, repo, fdc, nil, tt.turns...)
+
+			_, _, err := r.Lookup(context.Background(), "", "Karotte", "de", 5)
+			require.NoError(t, err)
+
+			require.Equal(t, 1, countRuns(t, db))
+			var kind, provider, model, promptVersion, status string
+			var iterations int
+			var in, out int64
+			var errKey sql.NullString
+			require.NoError(t, db.QueryRow(`SELECT kind, provider, model, prompt_version, status, error_key,
+				iterations, input_tokens, output_tokens FROM ai_runs`).Scan(
+				&kind, &provider, &model, &promptVersion, &status, &errKey, &iterations, &in, &out))
+			assert.Equal(t, "lookup", kind)
+			assert.Equal(t, "fake", provider)
+			assert.Equal(t, lookupModel, model)
+			assert.Equal(t, food.PromptVersion, promptVersion)
+			assert.Equal(t, tt.wantStatus, status)
+			assert.False(t, errKey.Valid)
+			assert.Equal(t, 2, iterations, "translate + pick")
+			assert.Equal(t, tt.wantIn, in)
+			assert.Equal(t, tt.wantOut, out)
+
+			var steps, errs int
+			require.NoError(t, db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(is_error), 0) FROM ai_run_steps
+				WHERE type = 'llm_call' AND name = ?`, lookupModel).Scan(&steps, &errs))
+			assert.Equal(t, 2, steps)
+			assert.Equal(t, tt.wantErrs, errs)
+		})
+	}
+}
+
+func TestResolver_Query_NoLLMCallStartsNoRun(t *testing.T) {
+	fdcResults := []food.Candidate{
+		{Name: "Carrot juice", Source: food.SourceFDC, FdcID: 1},
+		{Name: "Carrots, raw", Source: food.SourceFDC, FdcID: 2},
+	}
+	tests := []struct {
+		name        string
+		leaves      []food.Food
+		lang        string
+		llmResolver llm.Resolver
+	}{
+		{name: "english query with exact local match", leaves: []food.Food{leaf(7, "Carrot")}, lang: "en"},
+		{name: "llm not configured", leaves: []food.Food{leaf(7, "Karottensaft")}, lang: "de", llmResolver: &spyLLM{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fdc := &stubProvider{results: fdcResults}
+			r, db := newRecordedResolver(t, &leafRepo{leaves: tt.leaves}, fdc, tt.llmResolver,
+				lookupTurn(`[0]`, "end_turn", 1, 1))
+
+			_, _, err := r.Lookup(context.Background(), "", "Carrot", tt.lang, 5)
+			require.NoError(t, err)
+			assert.Len(t, fdc.queries, 1, "FDC is queried")
+			assert.Zero(t, countRuns(t, db))
+		})
 	}
 }

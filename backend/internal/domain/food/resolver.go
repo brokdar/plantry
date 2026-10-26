@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
 
@@ -18,6 +19,7 @@ type Resolver struct {
 	fdc        FoodProvider    // may be nil
 	translator QueryTranslator
 	picker     CandidatePicker
+	recorder   *airun.Recorder // may be nil: LLM calls are then not recorded
 }
 
 // SourceLocal marks a lookup candidate that already exists in the local
@@ -55,6 +57,12 @@ func NewResolver(repo Repository, off BarcodeProvider, fdc FoodProvider, llmReso
 	return &Resolver{repo: repo, off: off, fdc: fdc, translator: t, picker: p}
 }
 
+// WithRecorder records the LLM calls of each lookup as one lookup AI run.
+func (r *Resolver) WithRecorder(rec *airun.Recorder) *Resolver {
+	r.recorder = rec
+	return r
+}
+
 // Lookup searches for leaf-food candidates by barcode or text query.
 //
 // Barcode: tries OFF first, then FDC branded search. Query: local catalogue
@@ -64,7 +72,15 @@ func NewResolver(repo Repository, off BarcodeProvider, fdc FoodProvider, llmReso
 // best semantic match, unless an exact local match is already recommended.
 //
 // Returns (candidates, recommended_index, error). Empty results → index = -1.
+//
+// Translate and pick-best calls of one lookup share one lookup AI run, which
+// is only started when an LLM call is made.
 func (r *Resolver) Lookup(ctx context.Context, barcode, query, lang string, limit int) ([]Candidate, int, error) {
+	if r.recorder != nil {
+		lr := &lookupRun{rec: r.recorder}
+		ctx = context.WithValue(ctx, lookupRunKey{}, lr)
+		defer lr.finish(ctx)
+	}
 	if barcode != "" {
 		return r.lookupBarcode(ctx, barcode, limit)
 	}
@@ -309,7 +325,9 @@ func localCandidates(leaves []catalogueLeaf, normQuery string) (cs []Candidate, 
 	for _, l := range leaves {
 		switch {
 		case l.norm == normQuery:
-			exacts = append(exacts, localCandidate(l.food))
+			c := localCandidate(l.food)
+			c.Exact = true
+			exacts = append(exacts, c)
 		case strings.HasPrefix(l.norm, normQuery):
 			prefix = append(prefix, localCandidate(l.food))
 		case strings.Contains(l.norm, normQuery):

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
-import { Clock, MoreVertical, PencilLine } from "lucide-react"
+import { Clock, MoreVertical } from "lucide-react"
 
 import { CardImageBadge } from "@/components/editorial/CardImageBadge"
 import { EditorialCard } from "@/components/editorial/EditorialCard"
@@ -69,7 +69,7 @@ function ComponentCardGrid({
     <div className="group relative" data-testid={`component-card-${id}`}>
       <EditorialCard interactive>
         <Link
-          to="/components/$id/edit"
+          to="/components/$id"
           params={{ id: String(id) }}
           className="absolute inset-0 z-0"
           aria-label={name}
@@ -100,17 +100,6 @@ function ComponentCardGrid({
               )}
             </EditorialCard.ImageOverlay>
           )}
-          <EditorialCard.ImageOverlay
-            position="top-right"
-            className="opacity-100 transition-opacity duration-200 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
-          >
-            <span
-              aria-hidden
-              className="hidden size-7 items-center justify-center rounded-full bg-surface-container-lowest/85 backdrop-blur-md md:flex"
-            >
-              <PencilLine className="size-3.5 text-on-surface" />
-            </span>
-          </EditorialCard.ImageOverlay>
         </div>
         <EditorialCard.Body>
           <EditorialCard.Title className="line-clamp-2">
@@ -204,7 +193,7 @@ function ComponentCardList({
   return (
     <div className="group relative" data-testid={`component-card-${id}`}>
       <Link
-        to="/components/$id/edit"
+        to="/components/$id"
         params={{ id: String(id) }}
         className="editorial-shadow flex items-center gap-4 rounded-2xl bg-surface-container-lowest p-3 transition-all duration-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         aria-label={name}
@@ -270,7 +259,6 @@ function ComponentCardList({
             )}
           </div>
         </div>
-        <PencilLine className="hidden size-4 shrink-0 text-on-surface-variant/40 transition-colors group-hover:text-on-surface-variant md:block" />
       </Link>
       <div className="absolute top-3 right-3 z-20 opacity-100 transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">
         <DropdownMenu>

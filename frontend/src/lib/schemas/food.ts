@@ -81,6 +81,12 @@ export const composedFoodSchema = z.object({
   prep_minutes: z.coerce.number().min(0).default(0),
   cook_minutes: z.coerce.number().min(0).default(0),
   notes: z.string().nullable().optional(),
+  // "" → undefined so an empty field passes; the editor sends "" to clear.
+  source_url: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() !== "" ? v.trim() : undefined),
+    z.url({ protocol: /^https?$/ }).optional()
+  ),
+  description: z.string().nullable().optional(),
   children: z.array(composedChildSchema).default([]),
   instructions: z.array(composedInstructionSchema).default([]),
   tags: z.array(z.string().min(1)).default([]),

@@ -68,20 +68,29 @@
       "pick_match": "Pick a match",
       "searching": "Searching…",
       "no_match": "No match in library.",
-      "not_in_library": "not in library",
       "create_new": "Create as new ingredient",
       "change": "change",
       "unparsed_warning": "Could not parse — please review",
       "llm_warning": "Extracted with AI — please review every row.",
-      "resolve_first_one": "{{count}} ingredient still needs a match.",
-      "resolve_first_other": "{{count}} ingredients still need a match."
+      "source_local": "In library",
+      "source_fdc": "USDA",
+      "source_off": "Open Food Facts",
+      "kcal_100g": "{{kcal}} kcal/100 g"
     },
     "step3": {
-      "title": "Finalize",
-      "name_label": "Component name",
       "role_label": "Role",
-      "portions_label": "Reference portions",
-      "save": "Save component"
+      "portions_label": "Reference portions"
+    },
+    "review": {
+      "name_label": "Recipe name",
+      "title": "Review recipe",
+      "save": "Save recipe",
+      "needs_choice_one": "{{count}} ingredient needs a choice",
+      "needs_choice_other": "{{count}} ingredients need a choice",
+      "kcal_per_portion": "{{kcal}} kcal per portion",
+      "kcal_pending": "kcal per portion appear once every ingredient is chosen.",
+      "source_kcal": "Source: {{kcal}} kcal",
+      "image_download_failed": "Recipe saved, but the photo could not be downloaded."
     },
     "status": {
       "extracting": "Extracting…",
@@ -674,7 +683,11 @@
     "total_count_other": "{{count}} recipes",
     "load_more": "Load more",
     "empty_title": "No recipes yet",
-    "no_results_body": "Adjust the filters or create a new recipe."
+    "no_results_body": "Adjust the filters or create a new recipe.",
+    "source_url": "Source URL",
+    "source_url_placeholder": "https://…",
+    "description": "Description",
+    "description_hint": "Text that came with the recipe. Shown muted below your notes."
   },
   "lookup": {
     "title": "Find ingredient",
@@ -954,7 +967,11 @@
       "stream_interrupted": "The AI stream was interrupted. Please try again.",
       "tool_not_found": "The AI tried to use an unknown tool.",
       "iterations_exceeded": "The AI ran too many tool steps — try a simpler request.",
-      "rate_limit_exceeded": "You're sending too many AI requests. Please wait a minute."
+      "rate_limit_exceeded": "You're sending too many AI requests. Please wait a minute.",
+      "window_missing": "The chat request is missing the planning window dates.",
+      "invalid_date": "A chat date is not a valid YYYY-MM-DD date.",
+      "window_inverted": "The planning window ends before it starts.",
+      "window_too_long": "The planning window can cover at most 31 days."
     },
     "import": {
       "fetch_failed": "Could not load the recipe page. Try pasting the page source instead.",
@@ -1135,5 +1152,22 @@
       "ipv4": "Invalid IPv4 address",
       "ipv6": "Invalid IPv6 address"
     }
+  },
+  "recipe_detail": {
+    "favorite": "Favorite",
+    "source": "From {{host}}",
+    "portions": "Portions",
+    "kcal_per_portion": "kcal per portion",
+    "protein_per_portion": "Protein per portion",
+    "grams": "{{value}} g",
+    "no_ingredients": "No ingredients yet.",
+    "no_steps": "No steps yet.",
+    "my_notes": "My notes",
+    "description": "Description from the source"
+  },
+  "nutrition_warning": {
+    "title": "Nutrition is incomplete",
+    "body_one": "kcal and macros leave out 1 ingredient without data:",
+    "body_other": "kcal and macros leave out {{count}} ingredients without data:"
   }
 }

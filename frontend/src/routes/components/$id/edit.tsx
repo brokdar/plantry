@@ -54,7 +54,9 @@ function EditComponentPage() {
       />
       <ComponentEditor
         component={food as ComposedFood}
-        onSuccess={() => navigate({ to: "/components" })}
+        onSuccess={() =>
+          navigate({ to: "/components/$id", params: { id: String(food.id) } })
+        }
         onDeleted={() => navigate({ to: "/components" })}
       />
     </div>

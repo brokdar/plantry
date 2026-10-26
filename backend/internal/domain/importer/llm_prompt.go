@@ -9,8 +9,13 @@ import (
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
+
+// PromptVersion identifies the LLM extraction prompts. Bump it on every
+// change to llmSystemPrompt, buildUserPrompt or the retry message.
+const PromptVersion = "v1"
 
 // htmlBodyLimit caps how many characters of stripped HTML we send to the LLM.
 const htmlBodyLimit = 60000
@@ -18,8 +23,9 @@ const htmlBodyLimit = 60000
 // llmExtract runs the LLM fallback pipeline: strip HTML → send prompt → parse JSON.
 // Returns a non-nil Recipe on success. Errors surface as domain.ErrAIProviderMissing
 // (nil client), domain.ErrImportLLMFailed (invalid JSON after retry), or
-// domain.ErrImportNoRecipe (LLM replied {"not_a_recipe": true}).
-func (s *Service) llmExtract(ctx context.Context, htmlBody string) (*RawRecipe, error) {
+// domain.ErrImportNoRecipe (LLM replied {"not_a_recipe": true}). Both attempts
+// are recorded as steps of one import_fallback run.
+func (s *Service) llmExtract(ctx context.Context, htmlBody string) (_ *RawRecipe, err error) {
 	if s.llmResolver == nil {
 		return nil, domain.ErrAIProviderMissing
 	}
@@ -29,6 +35,15 @@ func (s *Service) llmExtract(ctx context.Context, htmlBody string) (*RawRecipe, 
 			return nil, domain.ErrAIProviderMissing
 		}
 		return nil, err
+	}
+
+	if s.recorder != nil {
+		var run *airun.Run
+		ctx, run = s.recorder.Start(ctx, airun.Start{Kind: airun.KindImportFallback, PromptVersion: PromptVersion})
+		defer func() {
+			status, errKey := importOutcome(ctx, err)
+			run.Finish(ctx, status, errKey)
+		}()
 	}
 
 	stripped := stripHTMLForLLM(htmlBody)
@@ -77,6 +92,23 @@ func (s *Service) llmExtract(ctx context.Context, htmlBody string) (*RawRecipe, 
 		return nil, fmt.Errorf("%w: %v", domain.ErrImportLLMFailed, parseErr)
 	}
 	return rec, nil
+}
+
+// importOutcome maps the result of llmExtract to the run status and the i18n
+// key the import handler shows for it.
+func importOutcome(ctx context.Context, err error) (airun.Status, string) {
+	switch {
+	case err == nil:
+		return airun.StatusOK, ""
+	case errors.Is(err, context.Canceled) || ctx.Err() != nil:
+		return airun.StatusCancelled, ""
+	case errors.Is(err, domain.ErrImportNoRecipe):
+		return airun.StatusError, "error.import.no_recipe"
+	case errors.Is(err, domain.ErrImportLLMFailed):
+		return airun.StatusError, "error.import.llm_failed"
+	default:
+		return airun.StatusError, "error.server"
+	}
 }
 
 // parseLLMResponse converts the strict-JSON assistant output into a RawRecipe.

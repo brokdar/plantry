@@ -30,6 +30,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/config"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
@@ -99,8 +100,12 @@ func run() error {
 	settingsSvc := settingsdom.NewService(settingsRepo, envSnapshot, cipher)
 
 	// External food providers.
-	offClient := off.New()
-	offProvider := off.NewProvider(offClient)
+	// A nil interface (not a nil *off.Provider) so the resolver's nil checks
+	// skip OFF entirely.
+	var offProvider food.BarcodeProvider
+	if !cfg.OFFDisabled {
+		offProvider = off.NewProvider(off.New())
+	}
 
 	// FDC provider is always constructed — it reads the key from settings
 	// per-request and gracefully returns empty results when no key is set.
@@ -142,7 +147,9 @@ func run() error {
 
 	// AI wiring. The llm.Resolver consults settings on every request so
 	// provider / model / API-key changes take effect without a restart.
-	llmFactory := func(provider, apiKey, fakeScript string) (llm.Client, error) {
+	// Every client is metered so each LLM call lands in the AI run log.
+	runRecorder := airun.NewRecorder(sqlite.NewAIRunRepo(conn), logger, time.Now)
+	newLLMClient := func(provider, apiKey, fakeScript string) (llm.Client, error) {
 		switch provider {
 		case "anthropic":
 			return anthropic.New(apiKey), nil
@@ -153,11 +160,18 @@ func run() error {
 		}
 		return nil, fmt.Errorf("unknown provider %q", provider)
 	}
+	llmFactory := func(provider, apiKey, fakeScript string) (llm.Client, error) {
+		client, err := newLLMClient(provider, apiKey, fakeScript)
+		if err != nil {
+			return nil, err
+		}
+		return runRecorder.Meter(client, provider), nil
+	}
 	llmResolver := llmresolver.New(settingsSvc, llmFactory)
 
 	// Food resolver depends on llmResolver for optional AI translation
 	// and pick-best ranking; nil llmResolver disables those features.
-	resolver := food.NewResolver(foodRepo, offProvider, fdcProvider, llmResolver)
+	resolver := food.NewResolver(foodRepo, offProvider, fdcProvider, llmResolver).WithRecorder(runRecorder)
 
 	aiRepo := sqlite.NewAIRepo(conn)
 	tools, err := agent.NewToolSet(agent.Services{
@@ -171,12 +185,13 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
 	}
-	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc)
+	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc,
+		agent.WindowSources{Plates: plateSvc, Slots: slotSvc, Foods: foodRepo}, time.Now).WithRecorder(runRecorder)
 	aiHandler := handlers.NewAIHandler(agentSvc, llmResolver)
 
 	// Recipe importer (Phase 11).
 	importFetcher := httpfetch.New()
-	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver)
+	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver).WithRecorder(runRecorder)
 	importHandler := handlers.NewImportHandler(importSvc)
 
 	// Rate limiter for /api/ai/chat. Initial limit comes from effective

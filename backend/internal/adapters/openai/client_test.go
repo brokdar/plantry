@@ -133,8 +133,11 @@ func TestStream_RateLimitError(t *testing.T) {
 
 func TestStream_RequestEncoding(t *testing.T) {
 	var received struct {
-		Model    string `json:"model"`
-		Stream   bool   `json:"stream"`
+		Model         string `json:"model"`
+		Stream        bool   `json:"stream"`
+		StreamOptions struct {
+			IncludeUsage bool `json:"include_usage"`
+		} `json:"stream_options"`
 		Messages []struct {
 			Role       string `json:"role"`
 			Content    string `json:"content,omitempty"`
@@ -195,6 +198,7 @@ func TestStream_RequestEncoding(t *testing.T) {
 
 	assert.Equal(t, "gpt-5.4-mini", received.Model)
 	assert.True(t, received.Stream)
+	assert.True(t, received.StreamOptions.IncludeUsage, "streaming requests must ask for the final usage chunk")
 
 	// System first, then user, then assistant (with tool_calls), then tool.
 	require.GreaterOrEqual(t, len(received.Messages), 4)

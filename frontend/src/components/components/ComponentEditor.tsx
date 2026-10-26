@@ -38,6 +38,7 @@ import {
   FormItem,
   FormLabel,
   FormControl,
+  FormDescription,
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
@@ -63,6 +64,7 @@ import {
   useUpdateFood,
   useDeleteFood,
   useCreateVariant,
+  useFoodNutrition,
   useVariants,
 } from "@/lib/queries/foods"
 import { fromIngredients, type IngredientInput } from "@/lib/domain/nutrition"
@@ -71,6 +73,7 @@ import type { ComposedFood } from "@/lib/api/foods"
 import { ApiError } from "@/lib/api/client"
 
 import { IngredientRow } from "./IngredientRow"
+import { NutritionCompletenessWarning } from "./NutritionCompletenessWarning"
 
 interface ComponentEditorProps {
   component?: ComposedFood
@@ -99,6 +102,8 @@ export function ComponentEditor({
           prep_minutes: component.prep_minutes ?? 0,
           cook_minutes: component.cook_minutes ?? 0,
           notes: component.notes,
+          source_url: component.source_url ?? "",
+          description: component.description ?? null,
           children: (component.children ?? []).map((ci) => ({
             child_id: ci.child_id,
             child_name: ci.child_name,
@@ -122,6 +127,8 @@ export function ComponentEditor({
           prep_minutes: 0,
           cook_minutes: 0,
           notes: null,
+          source_url: "",
+          description: null,
           children: [],
           instructions: [],
           tags: [],
@@ -147,6 +154,7 @@ export function ComponentEditor({
   const uploadMutation = useUploadImage()
   const navigate = useNavigate()
   const { data: variantsData } = useVariants(component?.id ?? 0)
+  const { data: savedNutrition } = useFoodNutrition(component?.id ?? 0)
 
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -200,6 +208,9 @@ export function ComponentEditor({
       prep_minutes: values.prep_minutes,
       cook_minutes: values.cook_minutes,
       notes: values.notes,
+      // "" clears the stored value on update; omitting would keep it.
+      source_url: values.source_url ?? "",
+      description: values.description ?? "",
       children: values.children.map((ci, idx) => ({
         child_id: ci.child_id,
         amount: ci.amount,
@@ -374,6 +385,10 @@ export function ComponentEditor({
           </div>
         )}
 
+        {savedNutrition && !savedNutrition.complete && (
+          <NutritionCompletenessWarning missing={savedNutrition.missing} />
+        )}
+
         {isEdit && component && (
           <div className="flex justify-end">
             <Button
@@ -458,6 +473,47 @@ export function ComponentEditor({
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="source_url"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("component.source_url")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="url"
+                        inputMode="url"
+                        autoComplete="off"
+                        placeholder={t("component.source_url_placeholder")}
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("component.description")}</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        rows={3}
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={(e) => field.onChange(e.target.value || null)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t("component.description_hint")}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -842,7 +898,16 @@ export function ComponentEditor({
           }
           secondary={
             <Button variant="outline" asChild>
-              <Link to="/components">{t("common.cancel")}</Link>
+              {isEdit && component ? (
+                <Link
+                  to="/components/$id"
+                  params={{ id: String(component.id) }}
+                >
+                  {t("common.cancel")}
+                </Link>
+              ) : (
+                <Link to="/components">{t("common.cancel")}</Link>
+              )}
             </Button>
           }
           destructive={

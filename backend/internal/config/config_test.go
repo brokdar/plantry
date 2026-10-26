@@ -73,3 +73,30 @@ func TestLoadDevModeInvalid(t *testing.T) {
 	_, err := config.Load()
 	assert.Error(t, err)
 }
+
+func TestLoadOFFDisabled(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"", false},
+		{"1", true},
+		{"true", true},
+		{"0", false},
+		{"false", false},
+	}
+	for _, c := range cases {
+		t.Run(c.in, func(t *testing.T) {
+			t.Setenv("PLANTRY_OFF_DISABLED", c.in)
+			cfg, err := config.Load()
+			require.NoError(t, err)
+			assert.Equal(t, c.want, cfg.OFFDisabled)
+		})
+	}
+}
+
+func TestLoadOFFDisabledInvalid(t *testing.T) {
+	t.Setenv("PLANTRY_OFF_DISABLED", "bogus")
+	_, err := config.Load()
+	assert.Error(t, err)
+}

@@ -117,11 +117,18 @@ type reqBody struct {
 	Messages []messageBody `json:"messages"`
 	Tools    []toolBody    `json:"tools,omitempty"`
 	Stream   bool          `json:"stream,omitempty"`
+	// StreamOptions asks for the usage-only final chunk; without it a
+	// streamed response carries no token counts.
+	StreamOptions *streamOptions `json:"stream_options,omitempty"`
 	// OpenAI deprecated `max_tokens` for reasoning models (o1/o3/gpt-5.x).
 	// `max_completion_tokens` is accepted by every current chat-completions
 	// model, including the older gpt-4o family, so we send only the new key.
 	MaxCompletionTokens int      `json:"max_completion_tokens,omitempty"`
 	Temperature         *float64 `json:"temperature,omitempty"`
+}
+
+type streamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 type messageBody struct {
@@ -162,6 +169,9 @@ func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
 		Model:               req.Model,
 		Stream:              stream,
 		MaxCompletionTokens: maxTok,
+	}
+	if stream {
+		body.StreamOptions = &streamOptions{IncludeUsage: true}
 	}
 	if req.Temperature > 0 {
 		tmp := req.Temperature
