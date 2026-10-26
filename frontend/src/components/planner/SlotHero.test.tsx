@@ -60,3 +60,26 @@ describe("SlotHero — collage layouts", () => {
     ).toBeGreaterThanOrEqual(3)
   })
 })
+
+describe("SlotHero — role label contrast", () => {
+  test("uses ink text over a placeholder", () => {
+    const { getByText } = render(
+      <SlotHero components={[comp()]} heroRoleLabel="MAIN" />
+    )
+    const label = getByText("MAIN")
+    expect(label).toHaveClass("text-ink")
+    expect(label).not.toHaveClass("text-white")
+  })
+
+  test("uses white text over a photo", () => {
+    const { getByText } = render(
+      <SlotHero
+        components={[comp({ imagePath: "/images/chicken.jpg" })]}
+        heroRoleLabel="MAIN"
+      />
+    )
+    const label = getByText("MAIN")
+    expect(label).toHaveClass("text-white")
+    expect(label).not.toHaveClass("text-ink")
+  })
+})

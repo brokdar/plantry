@@ -306,4 +306,23 @@ describe("SlotCell — macros pill", () => {
     ).toBeInTheDocument()
     expect(screen.queryByTestId("slot-cell-kcal")).not.toBeInTheDocument()
   })
+
+  test.each([
+    [true, "h-[194px]"],
+    [false, "h-[178px]"],
+  ])("showMacros=%s sizes the cell %s", (showMacros, height) => {
+    const { container } = render(
+      <SlotCell
+        {...defaultProps({
+          plate: plannedPlate(),
+          componentsById: new Map([[7, heroFood]]),
+          macros: macros(620),
+          showMacros,
+        })}
+      />
+    )
+    expect(container.querySelector("[data-slot-state='planned']")).toHaveClass(
+      height
+    )
+  })
 })

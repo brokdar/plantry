@@ -40,7 +40,7 @@ export function useFoods(
 
 /** Retry transient failures like the query default (3 times), but not a 404:
  *  a missing food won't appear on retry. */
-export function retryUnlessNotFound(failureCount: number, error: Error) {
+function retryUnlessNotFound(failureCount: number, error: Error) {
   if (error instanceof ApiError && error.status === 404) return false
   return failureCount < 3
 }

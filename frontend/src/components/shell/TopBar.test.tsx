@@ -12,4 +12,9 @@ describe("TopBar", () => {
     // md (768 px) and up hides it; the rail carries Settings there.
     expect(gear).toHaveClass("md:hidden")
   })
+
+  test("the whole bar is hidden from md up", async () => {
+    renderWithRouter(<TopBar />)
+    expect(await screen.findByTestId("topbar")).toHaveClass("md:hidden")
+  })
 })

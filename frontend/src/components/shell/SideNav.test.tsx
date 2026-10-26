@@ -74,6 +74,13 @@ describe("SideNav", () => {
     expect(current.map((l) => l.textContent)).toEqual([active])
   })
 
+  test("the brand is a link, not a page heading", async () => {
+    stubMatchMedia(true)
+    renderWithRouter(<SideNav collapsed={false} onToggle={vi.fn()} />)
+    const brand = await screen.findByTestId("sidenav-brand")
+    expect(within(brand).queryByRole("heading", { level: 1 })).toBeNull()
+  })
+
   test("calendar and presets are no longer destinations", async () => {
     stubMatchMedia(true)
     renderWithRouter(<SideNav collapsed={false} onToggle={vi.fn()} />)

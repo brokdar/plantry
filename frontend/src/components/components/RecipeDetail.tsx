@@ -49,11 +49,11 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
   const notes = recipe.notes?.trim()
   const description = recipe.description?.trim()
   // Metric and imperial symbols read the same in every language; kitchen
-  // units ("tbsp", "can") show their translated name.
-  const unitLabel = (unit: string) => {
+  // units ("tbsp", "can") show their translated name, pluralised by amount.
+  const unitLabel = (unit: string, count: number) => {
     const key = normalizeUnit(unit)
     if (!key || SYMBOL_UNITS.has(key)) return key || unit
-    return t(`unit.${key}.name`, { defaultValue: unit })
+    return t(`unit.${key}.name`, { count, defaultValue: unit })
   }
 
   return (
@@ -185,7 +185,8 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
               {children.map((child) => (
                 <li key={child.id} className="flex gap-3 py-2.5">
                   <span className="w-20 shrink-0 text-right text-ink-muted tabular-nums">
-                    {number.format(child.amount)} {unitLabel(child.unit)}
+                    {number.format(child.amount)}{" "}
+                    {unitLabel(child.unit, child.amount)}
                   </span>
                   <span>{child.child_name}</span>
                 </li>

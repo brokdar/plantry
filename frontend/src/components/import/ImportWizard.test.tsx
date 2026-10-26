@@ -360,7 +360,18 @@ describe("ImportWizard", () => {
       draft: {
         ...draft,
         ingredients: [
-          ...draft.ingredients,
+          draft.ingredients[0]!,
+          // Quantity-less and unparsed: skipped, so it reads as optional.
+          {
+            raw_text: "Petersilie zum Garnieren",
+            amount: 0,
+            unit: "",
+            original_unit: "",
+            name: "Petersilie",
+            note: "zum Garnieren",
+            confidence: "unparsed",
+          },
+          // Unparsed but with an amount: still a parse error to review.
           {
             raw_text: "2 Handvoll Kräuter",
             amount: 2,
@@ -375,7 +386,7 @@ describe("ImportWizard", () => {
     })
     await openReview()
 
-    expect(await screen.findByText("Optional, skipped")).toBeInTheDocument()
+    expect(await screen.findAllByText("Optional, skipped")).toHaveLength(1)
     // Only the line with an amount still asks for a review.
     expect(screen.getAllByText("Could not parse — please review")).toHaveLength(
       1

@@ -152,18 +152,28 @@ describe("RecipeDetail", () => {
           amount: 2,
           unit: "tbsp",
         },
+        {
+          ...recipe.children![0]!,
+          id: 4,
+          child_id: 4,
+          child_name: "Lime juice",
+          amount: 1,
+          unit: "tbsp",
+        },
       ],
     }
     renderWithRouter(<RecipeDetail recipe={withUnits} />)
 
     expect(await screen.findByText("300 g")).toBeInTheDocument()
     expect(screen.getByText("1 can")).toBeInTheDocument()
-    expect(screen.getByText("2 tablespoon")).toBeInTheDocument()
+    expect(screen.getByText("2 tablespoons")).toBeInTheDocument()
+    expect(screen.getByText("1 tablespoon")).toBeInTheDocument()
 
     await act(() => i18n.changeLanguage("de"))
     try {
       expect(await screen.findByText("2 Esslöffel")).toBeInTheDocument()
       expect(screen.getByText("1 Dose")).toBeInTheDocument()
+      expect(screen.getByText("1 Esslöffel")).toBeInTheDocument()
       expect(screen.getByText("300 g")).toBeInTheDocument()
     } finally {
       await act(() => i18n.changeLanguage("en"))
