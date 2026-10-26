@@ -8,13 +8,19 @@
     "recipes": "Rezepte",
     "pantry": "Vorratskammer",
     "components": "Komponenten",
-    "presets": "Presets",
     "import": "Import",
     "calendar": "Kalender",
     "settings": "Einstellungen",
     "search_placeholder": "Katalog durchsuchen…",
     "collapse_sidebar": "Seitenleiste einklappen",
-    "expand_sidebar": "Seitenleiste ausklappen"
+    "expand_sidebar": "Seitenleiste ausklappen",
+    "today": "Heute",
+    "plan": "Plan",
+    "shop": "Einkauf",
+    "archive": "Archiv",
+    "primary": "Hauptnavigation",
+    "go_to": "Gehe zu",
+    "recipes_sections": "Rezeptbereiche"
   },
   "calendar": {
     "title": "Kalender",
@@ -770,6 +776,7 @@
     }
   },
   "shopping": {
+    "page_title": "Einkaufsliste",
     "title": "Einkaufsliste",
     "description": "Zutaten für diese Woche",
     "button": "Einkaufen",

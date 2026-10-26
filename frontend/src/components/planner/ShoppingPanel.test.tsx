@@ -10,7 +10,7 @@ import {
 import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
-import { ShoppingPanel } from "./ShoppingPanel"
+import { ShoppingList, ShoppingPanel } from "./ShoppingPanel"
 
 vi.mock("@/lib/queries/shopping", () => ({
   useShoppingList: vi.fn(),
@@ -221,5 +221,18 @@ describe("ShoppingPanel", () => {
         screen.getByRole("button", { name: "Next window" })
       ).toHaveAttribute("aria-pressed", "true")
     })
+  })
+})
+
+describe("ShoppingList (inline)", () => {
+  test("renders the presets and list without a sheet", async () => {
+    mockEmptyList()
+    renderWithRouter(<ShoppingList range={defaultRange} />, "/")
+    await screen.findByText(/No ingredients/)
+    expect(screen.queryByRole("dialog")).toBeNull()
+    expect(
+      screen.getByRole("button", { name: "This window" })
+    ).toBeInTheDocument()
+    expect(useShoppingList).toHaveBeenLastCalledWith("2026-04-26", "2026-05-02")
   })
 })

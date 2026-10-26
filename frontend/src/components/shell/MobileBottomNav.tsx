@@ -1,83 +1,60 @@
-import {
-  BookOpen,
-  Bookmark,
-  Calendar,
-  CalendarDays,
-  Package,
-} from "lucide-react"
-import type { LucideIcon } from "lucide-react"
 import { Link } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 
 import { cn } from "@/lib/utils"
 import { GeneratePlanButton } from "./GeneratePlanButton"
-
-type MobileNavEntry = {
-  to: string
-  labelKey: string
-  icon: LucideIcon
-  exact?: boolean
-}
-
-const LEFT_ENTRIES: MobileNavEntry[] = [
-  { to: "/", labelKey: "nav.planner", icon: CalendarDays, exact: true },
-  { to: "/components", labelKey: "nav.recipes", icon: BookOpen },
-]
-
-const RIGHT_ENTRIES: MobileNavEntry[] = [
-  { to: "/ingredients", labelKey: "nav.ingredients", icon: Package },
-  { to: "/calendar", labelKey: "nav.calendar", icon: Calendar },
-]
-
-const MORE_ENTRY: MobileNavEntry = {
-  to: "/presets",
-  labelKey: "nav.presets",
-  icon: Bookmark,
-}
+import { usePrimaryNav, type PrimaryNavEntry } from "./primary-nav"
 
 export function MobileBottomNav() {
   const { t } = useTranslation()
+  const items = usePrimaryNav()
+  const left = items.slice(0, 2)
+  const right = items.slice(2)
 
   return (
     <nav
+      aria-label={t("nav.primary")}
       className={cn(
-        "glass-header fixed bottom-0 left-0 z-40 flex w-full items-center justify-between",
-        "border-t border-outline-variant/15 px-6 py-3 md:hidden"
+        "fixed bottom-0 left-0 z-40 grid w-full grid-cols-[1fr_1fr_auto_1fr_1fr] items-center gap-1 md:hidden",
+        "h-[var(--tab-bar-inset)] rounded-t-2xl border-t border-line bg-panel px-2 pb-[env(safe-area-inset-bottom)]"
       )}
       data-testid="mobile-bottom-nav"
     >
-      {LEFT_ENTRIES.map((item) => (
-        <BottomNavLink key={item.to} item={item} t={t} />
+      {left.map((item) => (
+        <BottomNavLink key={item.id} item={item} label={t(item.labelKey)} />
       ))}
-      <div className="relative -top-6">
+      <div className="relative -top-5 px-1">
         <GeneratePlanButton variant="fab" />
       </div>
-      {RIGHT_ENTRIES.map((item) => (
-        <BottomNavLink key={item.to} item={item} t={t} />
+      {right.map((item) => (
+        <BottomNavLink key={item.id} item={item} label={t(item.labelKey)} />
       ))}
-      <BottomNavLink item={MORE_ENTRY} t={t} />
     </nav>
   )
 }
 
 function BottomNavLink({
   item,
-  t,
+  label,
 }: {
-  item: MobileNavEntry
-  t: (k: string) => string
+  item: PrimaryNavEntry
+  label: string
 }) {
   const Icon = item.icon
   return (
     <Link
       to={item.to}
-      activeOptions={{ exact: item.exact }}
-      className="flex flex-col items-center gap-1 text-on-surface-variant [&.active]:font-bold [&.active]:text-primary"
+      activeOptions={{ exact: true }}
+      aria-current={item.active ? "page" : undefined}
+      data-active={item.active}
+      className={cn(
+        "flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg text-ink-muted",
+        "focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none",
+        "data-[active=true]:font-semibold data-[active=true]:text-accent"
+      )}
     >
-      <Icon className="size-5" aria-hidden />
-      <span className="text-xs font-bold tracking-wide uppercase">
-        {t(item.labelKey)}
-      </span>
+      <Icon className="size-5" strokeWidth={1.5} aria-hidden />
+      <span className="max-w-full truncate text-xs">{label}</span>
     </Link>
   )
 }

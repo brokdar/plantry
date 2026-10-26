@@ -62,6 +62,8 @@ export interface FoodInstruction {
 interface FoodBase {
   id: number
   name: string
+  source_url?: string | null
+  description?: string | null
   image_path: string | null
   favorite: boolean
   last_cooked_at?: string | null
@@ -137,6 +139,11 @@ export interface FoodInstructionInput {
 export interface LeafFoodInput {
   kind: "leaf"
   name: string
+  /** Shared. On update, omitting these keeps the stored value. */
+  source_url?: string | null
+  description?: string | null
+  /** Create only: downloaded into the image store after the food is created. */
+  image_url?: string
   source?: string
   barcode?: string | null
   off_id?: string | null
@@ -168,6 +175,11 @@ export interface LeafFoodInput {
 export interface ComposedFoodInput {
   kind: "composed"
   name: string
+  /** Shared. On update, omitting these keeps the stored value. */
+  source_url?: string | null
+  description?: string | null
+  /** Create only: downloaded into the image store after the food is created. */
+  image_url?: string
   role?: FoodRole
   reference_portions?: number
   prep_minutes?: number | null
@@ -209,7 +221,14 @@ export function getFood(id: number): Promise<Food> {
   return apiFetch(`/foods/${id}`)
 }
 
-export function createFood(input: FoodInput): Promise<Food> {
+/** Non-fatal problems hit while creating a food. */
+export type FoodCreateWarning = "image_download_failed"
+
+/** POST /api/foods. A duplicate leaf name rejects with 409
+ *  `{ message_key: "error.food.duplicate_name", status: 409, existing_id }`. */
+export function createFood(
+  input: FoodInput
+): Promise<Food & { warnings?: FoodCreateWarning[] }> {
   return apiFetch("/foods", {
     method: "POST",
     body: JSON.stringify(input),

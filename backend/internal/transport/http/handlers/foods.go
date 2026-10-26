@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -50,6 +51,12 @@ type foodInstructionRequest struct {
 type foodRequest struct {
 	Name string `json:"name"`
 	Kind string `json:"kind"`
+
+	// Shared. On update a nil SourceURL/Description keeps the stored value.
+	SourceURL   *string `json:"source_url,omitempty"`
+	Description *string `json:"description,omitempty"`
+	// ImageURL is downloaded into the image store after create; ignored on update.
+	ImageURL *string `json:"image_url,omitempty"`
 
 	// LEAF
 	Source           string   `json:"source,omitempty"`
@@ -162,6 +169,8 @@ type foodResponse struct {
 	Tags              []string                  `json:"tags,omitempty"`
 
 	// Shared
+	SourceURL    *string `json:"source_url,omitempty"`
+	Description  *string `json:"description,omitempty"`
 	ImagePath    *string `json:"image_path,omitempty"`
 	Favorite     bool    `json:"favorite"`
 	LastCookedAt *string `json:"last_cooked_at,omitempty"`
@@ -169,6 +178,16 @@ type foodResponse struct {
 	CreatedAt    string  `json:"created_at"`
 	UpdatedAt    string  `json:"updated_at"`
 }
+
+// foodCreateResponse is a food plus non-fatal problems hit while creating it
+// (e.g. "image_download_failed").
+type foodCreateResponse struct {
+	foodResponse
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// Create warnings.
+const warnImageDownloadFailed = "image_download_failed"
 
 type foodListResponse struct {
 	Items []foodResponse `json:"items"`
@@ -197,8 +216,10 @@ type missingLeafResponse struct {
 
 func requestToFood(req *foodRequest) *food.Food {
 	f := &food.Food{
-		Name: req.Name,
-		Kind: food.Kind(req.Kind),
+		Name:        req.Name,
+		Kind:        food.Kind(req.Kind),
+		SourceURL:   req.SourceURL,
+		Description: req.Description,
 	}
 
 	if req.Kind == string(food.KindLeaf) {
@@ -271,14 +292,16 @@ func requestToFood(req *foodRequest) *food.Food {
 
 func toFoodResponse(f *food.Food) foodResponse {
 	resp := foodResponse{
-		ID:        f.ID,
-		Name:      f.Name,
-		Kind:      string(f.Kind),
-		ImagePath: f.ImagePath,
-		Favorite:  f.Favorite,
-		CookCount: f.CookCount,
-		CreatedAt: f.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: f.UpdatedAt.Format(time.RFC3339),
+		ID:          f.ID,
+		Name:        f.Name,
+		Kind:        string(f.Kind),
+		SourceURL:   f.SourceURL,
+		Description: f.Description,
+		ImagePath:   f.ImagePath,
+		Favorite:    f.Favorite,
+		CookCount:   f.CookCount,
+		CreatedAt:   f.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:   f.UpdatedAt.Format(time.RFC3339),
 	}
 	if f.LastCookedAt != nil {
 		s := f.LastCookedAt.Format(time.RFC3339)
@@ -371,8 +394,24 @@ func (h *FoodHandler) Create(w http.ResponseWriter, r *http.Request) {
 	f := requestToFood(&req)
 	if err := h.svc.Create(r.Context(), f); err != nil {
 		status, key := foodHTTPError(err)
+		if errors.Is(err, domain.ErrDuplicateName) && f.Kind == food.KindLeaf {
+			if existingID, lookupErr := h.svc.LeafIDByName(r.Context(), f.Name); lookupErr == nil {
+				writeJSON(w, status, map[string]any{
+					"message_key": key,
+					"status":      status,
+					"existing_id": existingID,
+				})
+				return
+			}
+		}
 		writeError(w, status, key)
 		return
+	}
+	var warnings []string
+	if req.ImageURL != nil && *req.ImageURL != "" {
+		if !h.saveImageFromURL(r, f, *req.ImageURL) {
+			warnings = append(warnings, warnImageDownloadFailed)
+		}
 	}
 	// Re-load to hydrate child names + portions after create.
 	loaded, err := h.svc.Get(r.Context(), f.ID)
@@ -381,7 +420,30 @@ func (h *FoodHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusCreated, toFoodResponse(loaded))
+	writeJSON(w, http.StatusCreated, foodCreateResponse{foodResponse: toFoodResponse(loaded), Warnings: warnings})
+}
+
+// saveImageFromURL downloads imageURL into the image store and records the
+// path on f. Reports false when no store is configured or any step fails;
+// the food itself stays created either way.
+func (h *FoodHandler) saveImageFromURL(r *http.Request, f *food.Food, imageURL string) bool {
+	if h.store == nil {
+		return false
+	}
+	imgPath, err := h.store.SaveFromURL(r.Context(), imageURL, "foods", f.ID)
+	if err != nil {
+		slog.WarnContext(r.Context(), "food image download failed", "food_id", f.ID, "err", err)
+		return false
+	}
+	f.ImagePath = &imgPath
+	if err := h.svc.Update(r.Context(), f); err != nil {
+		slog.WarnContext(r.Context(), "food image path update failed", "food_id", f.ID, "err", err)
+		// The row doesn't reference the file, so don't leave it orphaned.
+		_ = h.store.Delete("foods", f.ID)
+		f.ImagePath = nil
+		return false
+	}
+	return true
 }
 
 func (h *FoodHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -425,6 +487,13 @@ func (h *FoodHandler) Update(w http.ResponseWriter, r *http.Request) {
 	f.Kind = existing.Kind // kind is immutable after creation
 	// image_path managed separately
 	f.ImagePath = existing.ImagePath
+	// Editors unaware of these fields must not wipe them.
+	if f.SourceURL == nil {
+		f.SourceURL = existing.SourceURL
+	}
+	if f.Description == nil {
+		f.Description = existing.Description
+	}
 	// cook tracking preserved
 	f.Favorite = existing.Favorite
 	f.CookCount = existing.CookCount

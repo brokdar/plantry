@@ -118,6 +118,12 @@ func (s *Service) Get(ctx context.Context, id int64) (*Food, error) {
 	return s.repo.Get(ctx, id)
 }
 
+// LeafIDByName returns the ID of the leaf food with exactly this name, so a
+// caller hitting ErrDuplicateName can point at the existing food.
+func (s *Service) LeafIDByName(ctx context.Context, name string) (int64, error) {
+	return s.repo.LeafIDByName(ctx, name)
+}
+
 // Update validates and persists changes, replacing all children. Detects
 // cycles on composed foods before writing.
 func (s *Service) Update(ctx context.Context, f *Food) error {

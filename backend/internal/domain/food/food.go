@@ -98,6 +98,8 @@ type Food struct {
 	Notes             *string
 
 	// Shared.
+	SourceURL    *string // where the food was imported from
+	Description  *string
 	ImagePath    *string
 	Favorite     bool
 	LastCookedAt *time.Time

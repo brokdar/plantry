@@ -121,6 +121,8 @@ type Food struct {
 	CookCount         int64
 	CreatedAt         string
 	UpdatedAt         string
+	SourceUrl         sql.NullString
+	Description       sql.NullString
 }
 
 type FoodComponent struct {

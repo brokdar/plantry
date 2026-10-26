@@ -11,6 +11,9 @@ import (
 type Repository interface {
 	Create(ctx context.Context, f *Food) error
 	Get(ctx context.Context, id int64) (*Food, error)
+	// LeafIDByName returns the ID of the leaf food with exactly this name, or
+	// domain.ErrNotFound. Leaf names are unique.
+	LeafIDByName(ctx context.Context, name string) (int64, error)
 	Update(ctx context.Context, f *Food) error
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context, q ListQuery) (*ListResult, error)
