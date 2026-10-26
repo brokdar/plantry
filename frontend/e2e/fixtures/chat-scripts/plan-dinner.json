@@ -39,7 +39,8 @@
             "tool_input": {}
           }
         ]
-      }
+      },
+      "usage": { "input_tokens": 1200, "output_tokens": 40 }
     },
     {
       "events": [
@@ -64,7 +65,8 @@
             "text": "Here are your configured time slots. Once you pick one I can plan a plate."
           }
         ]
-      }
+      },
+      "usage": { "input_tokens": 1350, "output_tokens": 25 }
     }
   ]
 }

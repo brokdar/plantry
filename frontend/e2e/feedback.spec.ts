@@ -67,7 +67,9 @@ test.describe("Plate feedback + AI memory loop", () => {
       // system prompt. This is the full round-trip: feedback → profile →
       // ComposePrompt.
       const ctx = await apiRequest.newContext({ baseURL: API })
-      const prompt = await ctx.get("/api/ai/debug/system-prompt")
+      const prompt = await ctx.get(
+        "/api/ai/debug/system-prompt?from=2026-01-05&to=2026-01-11"
+      )
       expect(prompt.ok()).toBeTruthy()
       const body = (await prompt.json()) as { system_prompt: string }
       expect(body.system_prompt).toContain(`spicy-${tag}`)
