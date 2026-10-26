@@ -687,8 +687,9 @@ export function PlannerGrid({
       onDragEnd={handleDragEnd}
     >
       <div>
-        {/* Sticky header row — lives outside overflow-x-auto so page-scroll sticky works */}
-        <div className="sticky top-16 z-20">
+        {/* Sticky header row — lives outside overflow-x-auto so page-scroll sticky works.
+            Below md it clears the 64 px phone top bar; from md up there is none. */}
+        <div className="sticky top-16 z-20 md:top-0">
           <div ref={headerScrollRef} className="hide-scrollbar overflow-x-auto">
             <div
               className="grid min-w-[960px] gap-2.5 rounded-t-3xl border-t border-r border-l border-outline-variant/40 bg-surface-container-lowest px-5 pt-5"
