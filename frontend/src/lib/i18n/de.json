@@ -68,20 +68,29 @@
       "pick_match": "Passende Zutat auswählen",
       "searching": "Suche…",
       "no_match": "Keine Zutat in der Bibliothek gefunden.",
-      "not_in_library": "noch nicht in der Bibliothek",
       "create_new": "Als neue Zutat anlegen",
       "change": "Ändern",
       "unparsed_warning": "Nicht geparst — bitte prüfen",
       "llm_warning": "Mit KI extrahiert — bitte jede Zeile prüfen.",
-      "resolve_first_one": "{{count}} Zutat benötigt noch eine Zuordnung.",
-      "resolve_first_other": "{{count}} Zutaten benötigen noch eine Zuordnung."
+      "source_local": "In der Bibliothek",
+      "source_fdc": "USDA",
+      "source_off": "Open Food Facts",
+      "kcal_100g": "{{kcal}} kcal/100 g"
     },
     "step3": {
-      "title": "Abschließen",
       "name_label": "Komponentenname",
       "role_label": "Rolle",
-      "portions_label": "Referenzportionen",
-      "save": "Komponente speichern"
+      "portions_label": "Referenzportionen"
+    },
+    "review": {
+      "title": "Rezept prüfen",
+      "save": "Rezept speichern",
+      "needs_choice_one": "{{count}} Zutat braucht noch eine Auswahl",
+      "needs_choice_other": "{{count}} Zutaten brauchen noch eine Auswahl",
+      "kcal_per_portion": "{{kcal}} kcal pro Portion",
+      "kcal_pending": "kcal pro Portion erscheinen, sobald jede Zutat gewählt ist.",
+      "source_kcal": "Quelle: {{kcal}} kcal",
+      "image_download_failed": "Rezept gespeichert, aber das Foto konnte nicht geladen werden."
     },
     "status": {
       "extracting": "Extrahiere…",

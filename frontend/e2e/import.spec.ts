@@ -5,6 +5,8 @@ import { cleanupFood, seedLeafFood, uid } from "./helpers"
 // Chefkoch-shaped HTML pasted directly into the wizard. Avoids any live fetch
 // of chefkoch.de — Playwright cannot intercept the backend's outbound request,
 // but /api/import/extract accepts {html} first-class for exactly this reason.
+// The image points at port 9 on loopback, which refuses the connection: the
+// download fails at once without leaving the machine, so the save warns.
 function chefkochHTML(tag: string): string {
   return `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
 <script type="application/ld+json">
@@ -13,7 +15,7 @@ function chefkochHTML(tag: string): string {
   "@type":"Recipe",
   "name":"E2E Carbonara ${tag}",
   "description":"Test recipe",
-  "image":["https://example.com/c.jpg"],
+  "image":["http://127.0.0.1:9/c.jpg"],
   "recipeYield":"4 Portionen",
   "prepTime":"PT15M",
   "cookTime":"PT20M",
@@ -99,44 +101,51 @@ test.describe("Recipe Import", () => {
       const extractRes = await extractPromise
       expect(extractRes.status()).toBe(200)
 
-      // Step 2 — wait until the lookups resolve to existing ids.
-      // The first ingredient line uses "E2E Spaghetti <tag>" which matches our
-      // seeded ingredient; we assert the "Linked" badge appears for it.
+      // Review — wait until the lookups resolve to existing ids. The salt row
+      // is quantity-less, defaults to skip and does not block saving.
+      await expect(
+        page.getByRole("heading", { name: /review recipe|rezept prüfen/i })
+      ).toBeVisible()
       await expect(page.getByText(`E2E Spaghetti ${tag}`).first()).toBeVisible()
 
-      // Resolve the skip-default row (salt) manually by switching to Skip
-      // (it's already skip by default because confidence=unparsed).
-      // The salt row keeps resolution=skip; no action needed.
-
-      // Wait until the "Next" button is enabled (no unresolved existing rows).
-      const nextBtn = page.getByRole("button", { name: /next|weiter/i })
-      await expect(nextBtn).toBeEnabled({ timeout: 10_000 })
-      await nextBtn.click()
-
-      // Step 3 — name is pre-filled, role defaults to "main".
-      await expect(
-        page.getByRole("heading", { name: /finalize|abschließen/i })
-      ).toBeVisible()
+      const saveBtn = page.getByRole("button", {
+        name: /save recipe|rezept speichern/i,
+      })
+      await expect(saveBtn).toBeEnabled({ timeout: 10_000 })
 
       const componentPromise = page.waitForResponse(
         (res) =>
           res.url().match(/\/api\/foods$/) !== null &&
           res.request().method() === "POST"
       )
-      await page
-        .getByRole("button", { name: /save component|komponente speichern/i })
-        .click()
+      await saveBtn.click()
       const componentRes = await componentPromise
       expect(componentRes.status()).toBe(201)
       const body = (await componentRes.json()) as {
         id: number
         children: { unit: string }[]
+        description?: string | null
+        notes?: string | null
+        warnings?: string[]
       }
       createdId = body.id
       // All children must be canonicalized to g or ml.
       for (const child of body.children) {
         expect(["g", "ml"]).toContain(child.unit)
       }
+      // The imported description lands in description, not in notes.
+      expect(body.description).toBe("Test recipe")
+      expect(body.notes ?? null).toBeNull()
+      // The unreachable image only warns; the recipe is still saved.
+      expect(body.warnings).toEqual(["image_download_failed"])
+      await expect(
+        page.getByText(/photo could not be downloaded|foto konnte nicht/i)
+      ).toBeVisible()
+
+      // After saving, the recipe detail opens.
+      await expect(
+        page.getByRole("heading", { level: 1, name: `E2E Carbonara ${tag}` })
+      ).toBeVisible()
     } finally {
       if (createdId) await cleanupFood(createdId)
       await cleanupFood(spa.id)

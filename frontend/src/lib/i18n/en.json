@@ -68,20 +68,29 @@
       "pick_match": "Pick a match",
       "searching": "Searching…",
       "no_match": "No match in library.",
-      "not_in_library": "not in library",
       "create_new": "Create as new ingredient",
       "change": "change",
       "unparsed_warning": "Could not parse — please review",
       "llm_warning": "Extracted with AI — please review every row.",
-      "resolve_first_one": "{{count}} ingredient still needs a match.",
-      "resolve_first_other": "{{count}} ingredients still need a match."
+      "source_local": "In library",
+      "source_fdc": "USDA",
+      "source_off": "Open Food Facts",
+      "kcal_100g": "{{kcal}} kcal/100 g"
     },
     "step3": {
-      "title": "Finalize",
       "name_label": "Component name",
       "role_label": "Role",
-      "portions_label": "Reference portions",
-      "save": "Save component"
+      "portions_label": "Reference portions"
+    },
+    "review": {
+      "title": "Review recipe",
+      "save": "Save recipe",
+      "needs_choice_one": "{{count}} ingredient needs a choice",
+      "needs_choice_other": "{{count}} ingredients need a choice",
+      "kcal_per_portion": "{{kcal}} kcal per portion",
+      "kcal_pending": "kcal per portion appear once every ingredient is chosen.",
+      "source_kcal": "Source: {{kcal}} kcal",
+      "image_download_failed": "Recipe saved, but the photo could not be downloaded."
     },
     "status": {
       "extracting": "Extracting…",
