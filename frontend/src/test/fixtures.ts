@@ -1,3 +1,7 @@
+import type {
+  AvailabilityCell,
+  AvailabilityDefault,
+} from "@/lib/api/availability"
 import type { ComposedFood, LeafFood } from "@/lib/api/foods"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
 import type { Plate } from "@/lib/api/plates"
@@ -186,3 +190,70 @@ export const mockPlateW17: Plate = {
   ],
   created_at: "2026-04-20T10:00:00Z",
 }
+
+// Availability: three active slots (1 breakfast, 2 lunch, 3 dinner).
+// Weekday 0 = Monday … 6 = Sunday.
+export const mockAvailabilityDefaults: AvailabilityDefault[] = [
+  0, 1, 2, 3, 4, 5, 6,
+].flatMap((weekday) =>
+  [1, 2, 3].map((slot_id) => {
+    if (slot_id === 1)
+      return { weekday, slot_id, mode: "routine" as const, preset_id: 7 }
+    if (slot_id === 2 && weekday < 5)
+      return { weekday, slot_id, mode: "none" as const, preset_id: null }
+    return { weekday, slot_id, mode: "plan" as const, preset_id: null }
+  })
+)
+
+// 2026-10-26 is a Monday.
+export const mockAvailabilityCells: AvailabilityCell[] = [
+  {
+    date: "2026-10-26",
+    slot_id: 1,
+    mode: "routine",
+    source: "default",
+    preset_id: 7,
+    preset_name: "Overnight oats",
+    note: null,
+  },
+  {
+    date: "2026-10-26",
+    slot_id: 2,
+    mode: "none",
+    source: "override",
+    preset_id: null,
+    preset_name: null,
+    note: "Canteen",
+  },
+  {
+    date: "2026-10-26",
+    slot_id: 3,
+    mode: "plan",
+    source: "fallback",
+    preset_id: null,
+    preset_name: null,
+    note: null,
+  },
+]
+
+/** Props-shaped data for AvailabilityGrid tests. */
+export const mockAvailabilityColumns = [
+  { key: "0", label: "Monday" },
+  { key: "1", label: "Tuesday" },
+  { key: "2", label: "Wednesday" },
+  { key: "3", label: "Thursday" },
+  { key: "4", label: "Friday" },
+  { key: "5", label: "Saturday" },
+  { key: "6", label: "Sunday" },
+]
+
+export const mockAvailabilitySlots = [
+  { id: 1, label: "Breakfast" },
+  { id: 2, label: "Lunch" },
+  { id: 3, label: "Dinner" },
+]
+
+export const mockAvailabilityPresets = [
+  { id: 7, name: "Overnight oats" },
+  { id: 8, name: "Bread and soup" },
+]
