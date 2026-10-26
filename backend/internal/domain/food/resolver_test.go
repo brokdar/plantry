@@ -233,11 +233,24 @@ func TestResolver_Query_OFFErrorIsSkipped(t *testing.T) {
 	assert.Equal(t, food.SourceFDC, results[1].Source)
 }
 
-func TestResolver_Query_FDCErrorFailsLookup(t *testing.T) {
+func TestResolver_Query_FDCErrorKeepsOtherResults(t *testing.T) {
 	repo := &leafRepo{leaves: []food.Food{leaf(7, "Karotte")}}
+	fdc := &stubProvider{err: errors.New("fdc down")}
+	off := &stubProvider{results: []food.Candidate{{Name: "Bio Karotten", Source: food.SourceOFF, Barcode: "4001"}}}
+	r := food.NewResolver(repo, off, fdc, nil)
+
+	results, rec, err := r.Lookup(context.Background(), "", "Karotte", "de", 5)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.Equal(t, food.SourceLocal, results[0].Source)
+	assert.Equal(t, food.SourceOFF, results[1].Source)
+	assert.Equal(t, 0, rec)
+}
+
+func TestResolver_Query_FDCErrorWithoutOtherResultsFailsLookup(t *testing.T) {
 	fdcErr := errors.New("fdc down")
 	fdc := &stubProvider{err: fdcErr}
-	r := food.NewResolver(repo, nil, fdc, nil)
+	r := food.NewResolver(&leafRepo{}, nil, fdc, nil)
 
 	_, rec, err := r.Lookup(context.Background(), "", "Karotte", "de", 5)
 	require.ErrorIs(t, err, fdcErr)

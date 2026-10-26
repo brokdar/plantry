@@ -151,6 +151,7 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 	}
 
 	var external []Candidate
+	var fdcErr error
 	if useFDC {
 		searchTerm := query
 		if lang != "" && lang != "en" {
@@ -158,21 +159,24 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 		}
 
 		start := time.Now()
-		fdcResults, err := r.fdc.SearchByName(ctx, searchTerm, limit)
+		var fdcResults []Candidate
+		fdcResults, fdcErr = r.fdc.SearchByName(ctx, searchTerm, limit)
 		dur := time.Since(start).Milliseconds()
-		if err != nil {
+		if fdcErr != nil {
+			// An FDC failure is traced but does not discard local and OFF
+			// results; it only fails the lookup when nothing else was found.
 			trace.Add(TraceEntry{
 				Step: "fdc.search", Level: TraceLevelError,
 				Summary: "FDC search failed", DurationMs: dur,
-				Detail: ExternalAPIDetail{Source: "fdc", Query: searchTerm, Error: err.Error()},
+				Detail: ExternalAPIDetail{Source: "fdc", Query: searchTerm, Error: fdcErr.Error()},
 			})
-			return nil, -1, err
+		} else {
+			trace.Add(TraceEntry{
+				Step: "fdc.search", Level: TraceLevelSuccess,
+				Summary: resultCountSummary("FDC", len(fdcResults)), DurationMs: dur,
+				Detail: ExternalAPIDetail{Source: "fdc", Query: searchTerm, ResultCount: len(fdcResults)},
+			})
 		}
-		trace.Add(TraceEntry{
-			Step: "fdc.search", Level: TraceLevelSuccess,
-			Summary: resultCountSummary("FDC", len(fdcResults)), DurationMs: dur,
-			Detail: ExternalAPIDetail{Source: "fdc", Query: searchTerm, ResultCount: len(fdcResults)},
-		})
 
 		for i := range fdcResults {
 			if fdcResults[i].Source == SourceFDC {
@@ -212,6 +216,8 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 	results = dedupeCandidates(append(results, external...))
 
 	switch {
+	case len(results) == 0 && fdcErr != nil:
+		return nil, -1, fdcErr
 	case len(results) == 0:
 		return results, -1, nil
 	case exactLocal || !useFDC:
