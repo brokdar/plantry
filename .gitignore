@@ -24,6 +24,10 @@ profile.cov
 go.work
 go.work.sum
 
+# Editor-tooling shims created by `mise run lsp` (LSP servers resolve from repo root)
+/node_modules
+.mise/locks/
+
 # env file
 .env
 
