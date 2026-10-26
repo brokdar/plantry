@@ -105,3 +105,14 @@ func TestLookupHandler_Refetch_FDCNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.Code)
 	assert.Equal(t, []int{1234}, stub.byIDCalls)
 }
+
+func TestLookupHandler_Refetch_FDCUpstreamErrorIs502(t *testing.T) {
+	stub := &stubFDC{byIDErr: fmt.Errorf("%w: fdc: status 503", domain.ErrLookupFailed)}
+	r, svc := setupLookupRouter(t, stub)
+	id := createFDCLeaf(t, svc, "1234")
+
+	resp := postRefetch(t, r, id)
+	assert.Equal(t, http.StatusBadGateway, resp.Code)
+	assert.Contains(t, resp.Body.String(), "error.food.lookup_failed")
+	assert.Equal(t, []int{1234}, stub.byIDCalls)
+}
