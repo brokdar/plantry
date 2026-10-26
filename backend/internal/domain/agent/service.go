@@ -289,11 +289,11 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest) (strin
 			AnchorMode:  anchorModeVal.Raw,
 		}
 	}
-	base := ComposePrompt(p, plates, &DateRange{Today: today, From: req.From, To: req.To}, prefs)
+	hint := ""
 	if req.Mode != "" {
-		base += "\nMode hint: " + modeHint(req.Mode) + "\n"
+		hint = modeHint(req.Mode)
 	}
-	return base, nil
+	return ComposePrompt(p, plates, &DateRange{Today: today, From: req.From, To: req.To}, prefs, hint), nil
 }
 
 // windowPlates loads the plates in [from, to] with their slot and food names.

@@ -10,7 +10,7 @@ import (
 )
 
 func TestPrompt_NoLegacyDayIndex(t *testing.T) {
-	prompt := ComposePrompt(nil, nil, nil, nil)
+	prompt := ComposePrompt(nil, nil, nil, nil, "")
 	if strings.Contains(prompt, "0=Monday") {
 		t.Error("system prompt must not contain legacy day-index notation '0=Monday'")
 	}
@@ -21,7 +21,7 @@ func TestPrompt_ContainsDateRange(t *testing.T) {
 	to := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 	dr := &DateRange{From: from, To: to}
 
-	prompt := ComposePrompt(nil, nil, dr, nil)
+	prompt := ComposePrompt(nil, nil, dr, nil, "")
 
 	if !strings.Contains(prompt, "2025-06-09") {
 		t.Errorf("system prompt must contain from date '2025-06-09'; got:\n%s", prompt)
@@ -37,7 +37,7 @@ func TestPrompt_ContainsPlanningPrefs(t *testing.T) {
 	dr := &DateRange{From: from, To: to}
 	prefs := &PlanningPrefs{ShoppingDay: "Saturday", AnchorMode: "today"}
 
-	prompt := ComposePrompt(nil, nil, dr, prefs)
+	prompt := ComposePrompt(nil, nil, dr, prefs, "")
 
 	if !strings.Contains(prompt, "Saturday") {
 		t.Errorf("prompt must contain shopping day 'Saturday'; got:\n%s", prompt)
@@ -48,7 +48,7 @@ func TestPrompt_ContainsPlanningPrefs(t *testing.T) {
 }
 
 func TestPrompt_NoGetWeekMention(t *testing.T) {
-	prompt := ComposePrompt(nil, nil, nil, nil)
+	prompt := ComposePrompt(nil, nil, nil, nil, "")
 	// The role prefix should guide the model to use get_plates_range, not get_week.
 	// Verify "get_week" does not appear as a recommended tool in the role instructions.
 	if strings.Contains(prompt, "get_week\n") || strings.Contains(prompt, "get_week,") || strings.Contains(prompt, "get_week)") {
@@ -159,7 +159,7 @@ This window has no plates yet.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := dateSection(t, ComposePrompt(nil, tt.plates, &tt.dr, tt.prefs))
+			got := dateSection(t, ComposePrompt(nil, tt.plates, &tt.dr, tt.prefs, ""))
 			if got != tt.want {
 				t.Errorf("date section mismatch\ngot:\n%s\nwant:\n%s", got, tt.want)
 			}
@@ -174,7 +174,7 @@ func TestPrompt_PlateLineFallbacks(t *testing.T) {
 		{ID: 8, Date: day(2026, 10, 31), SlotID: 9, Foods: []string{"Pasta"}},
 	}
 
-	prompt := ComposePrompt(nil, plates, dr, nil)
+	prompt := ComposePrompt(nil, plates, dr, nil, "")
 
 	for _, want := range []string{
 		"- 2026-10-31 slot.dinner (plate_id=7, slot_id=2): (no foods)\n",
@@ -203,19 +203,30 @@ func TestPrompt_FullMonthOfPlatesStaysWithinBudget(t *testing.T) {
 		}
 	}
 
-	prompt := ComposePrompt(nil, plates, dr, nil)
+	for _, mode := range []string{"", "fill_empty", "replace_all"} {
+		t.Run("mode="+mode, func(t *testing.T) {
+			hint := ""
+			if mode != "" {
+				hint = modeHint(mode)
+			}
+			prompt := ComposePrompt(nil, plates, dr, nil, hint)
 
-	if len(prompt) > promptCharBudget {
-		t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)
-	}
-	if !strings.HasSuffix(prompt, toolRules) {
-		t.Error("an over-budget prompt must keep the tool rules verbatim")
-	}
-	if !strings.Contains(prompt, "more plates omitted)\n") {
-		t.Errorf("prompt must say how many plates were omitted; got:\n%s", prompt)
-	}
-	if !utf8.ValidString(prompt) {
-		t.Error("prompt must be valid UTF-8")
+			if len(prompt) > promptCharBudget {
+				t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)
+			}
+			if !strings.HasSuffix(prompt, toolRules) {
+				t.Error("an over-budget prompt must keep the tool rules verbatim")
+			}
+			if hint != "" && !strings.Contains(prompt, "Mode hint: "+hint+"\n") {
+				t.Error("an over-budget prompt must keep the mode hint verbatim")
+			}
+			if !strings.Contains(prompt, "more plates omitted)\n") {
+				t.Errorf("prompt must say how many plates were omitted; got:\n%s", prompt)
+			}
+			if !utf8.ValidString(prompt) {
+				t.Error("prompt must be valid UTF-8")
+			}
+		})
 	}
 }
 
@@ -223,7 +234,7 @@ func TestPrompt_OversizedProfileCutsOnRuneBoundary(t *testing.T) {
 	long := strings.Repeat("Ich esse gern Käse, Möhren und Brötchen. ", 600)
 	p := &profile.Profile{SystemPrompt: &long}
 
-	prompt := ComposePrompt(p, nil, nil, nil)
+	prompt := ComposePrompt(p, nil, nil, nil, "")
 
 	if len(prompt) > promptCharBudget {
 		t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)

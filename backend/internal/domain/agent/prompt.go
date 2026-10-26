@@ -43,9 +43,17 @@ type PlanningPrefs struct {
 // ComposePrompt builds the system prompt for a chat turn. p may be nil (no
 // profile yet); plates may be nil (no plate context); dateRange may be nil (no
 // date context).
-// prefs may be nil (omits planning preference lines).
-func ComposePrompt(p *profile.Profile, plates []PromptPlate, dateRange *DateRange, prefs *PlanningPrefs) string {
+// prefs may be nil (omits planning preference lines). modeHint may be empty
+// (no mode section).
+func ComposePrompt(p *profile.Profile, plates []PromptPlate, dateRange *DateRange, prefs *PlanningPrefs, modeHint string) string {
 	var b strings.Builder
+
+	// The mode hint and tool rules always survive; anything over budget is
+	// cut before them.
+	tail := toolRules
+	if modeHint != "" {
+		tail = "\nMode hint: " + modeHint + "\n" + toolRules
+	}
 
 	b.WriteString(rolePrefix)
 	if p != nil {
@@ -54,15 +62,14 @@ func ComposePrompt(p *profile.Profile, plates []PromptPlate, dateRange *DateRang
 
 	if dateRange != nil {
 		writeDateRangeSection(&b, dateRange, prefs)
-		writePlatesSection(&b, plates, promptCharBudget-b.Len()-len(toolRules))
+		writePlatesSection(&b, plates, promptCharBudget-b.Len()-len(tail))
 	}
 
-	// The tool rules always survive; anything over budget is cut before them.
 	body := b.String()
-	if room := promptCharBudget - len(toolRules); len(body) > room {
+	if room := promptCharBudget - len(tail); len(body) > room {
 		body = truncateRunes(body, room-len(truncationNote)) + truncationNote
 	}
-	return body + toolRules
+	return body + tail
 }
 
 const rolePrefix = `You are Plantry, an assistant for a self-hosted meal planner.
