@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils"
  * with each other or with native vertical scroll:
  *
  *   • tap        → forwarded to inner stretched-link button (opens sheet)
- *   • swipe-left → reveals action drawer (Skip / Save / Delete)
+ *   • swipe-left → reveals action drawer (No plate / Save / Delete)
  *   • long-press → enters drag mode; parent does day-tab hit-testing and
  *                  emits the move on drop
  *
@@ -44,7 +44,7 @@ interface MobileSlotRowProps {
   planned: boolean
   drawerOpen: boolean
   setDrawerOpen: (open: boolean) => void
-  onSkip: () => void
+  onMarkNoPlate: () => void
   onSave?: () => void
   onDelete: () => void
   /** Called when long-press elapses and drag mode begins. */
@@ -63,7 +63,7 @@ export function MobileSlotRow({
   planned,
   drawerOpen,
   setDrawerOpen,
-  onSkip,
+  onMarkNoPlate,
   onSave,
   onDelete,
   onDragStart,
@@ -214,15 +214,15 @@ export function MobileSlotRow({
         >
           <DrawerButton
             onClick={() => {
-              onSkip()
+              onMarkNoPlate()
               setDrawerOpen(false)
             }}
             tone="tertiary"
-            shortLabel={t("planner.mobile.skip_short")}
-            ariaLabel={t("skip.mark")}
+            shortLabel={t("planner.availability.mobile_short")}
+            ariaLabel={t("planner.availability.mark")}
             Icon={Utensils}
             tabIndex={drawerOpen ? 0 : -1}
-            testId="mobile-row-skip"
+            testId="mobile-row-no-plate"
           />
           {onSave && (
             <DrawerButton
@@ -271,7 +271,7 @@ export function MobileSlotRow({
         {/* React 19 supports `inert` natively; covering the SlotCell while
             the drawer is exposed pulls its inner stretched-link button out of
             the focus order so keyboard users land on the drawer actions
-            (skip / save / delete) instead of the hidden card behind them. */}
+            (No plate / save / delete) instead of the hidden card behind them. */}
         <div inert={drawerOpen}>{children}</div>
 
         {/* Persistent grip glyph on planned rows: gives the swipe + long-

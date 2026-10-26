@@ -5,7 +5,6 @@ import {
   MoreVertical,
   NotebookPen,
   Plus,
-  RotateCcw,
   Trash2,
   Utensils,
   X,
@@ -30,6 +29,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import type { AvailabilityCell } from "@/lib/api/availability"
 import type { Food } from "@/lib/api/foods"
 import type { Plate } from "@/lib/api/plates"
 import type { MacrosResponse } from "@/lib/api/plates"
@@ -69,16 +69,22 @@ interface SlotCellProps {
   onSaveAsTemplate?: () => void
   onSaveAsPreset?: () => void
   onToggleFavorite: () => void
-  /** Toggle skip. Pass an explicit `note` (string or null) to set/clear the
-   *  note alongside the toggle; omit to preserve the existing note. */
-  onToggleSkip: (note?: string | null) => void
+  /** The cell's resolved availability. A `none` cell without a plate renders
+   *  the No plate state; a `routine` one names its routine. */
+  availability?: AvailabilityCell
+  /** Mark the cell No plate, optionally with a note (removes its plate). */
+  onMarkNoPlate: (note?: string | null) => void
+  /** No plate cell: make the meal plannable again. */
+  onPlanMeal?: () => void
+  /** No plate cell: set or clear its note. */
+  onEditNote?: (note: string | null) => void
   onRateLoved: () => void
   onRateDisliked: () => void
 }
 
 // All states share the 178 px standard so rows scan as a single line of
 // ledger across the week. Per-state height variance was tried (empty 178,
-// planned 200, skipped 120) but the planted-cell macro line + ring was
+// planned 200, no plate 120) but the planted-cell macro line + ring was
 // never wired (no per-plate macros endpoint), leaving an ~80 px dead band
 // at the bottom of every planted cell. Until per-plate macros are fetched,
 // uniform height keeps the row honest.
@@ -88,36 +94,55 @@ const CELL_HEIGHT = "h-[178px]"
 const CELL_HEIGHT_WITH_MACROS = "h-[194px]"
 
 export function SlotCell(props: SlotCellProps) {
-  const { plate } = props
+  const { plate, availability } = props
 
-  if (!plate) return <EmptySlot {...props} />
-  if (plate.skipped) return <SkippedSlot {...props} plate={plate} />
-  return <PlannedSlot {...props} plate={plate} />
+  if (plate) return <PlannedSlot {...props} plate={plate} />
+  if (availability?.mode === "none") {
+    return <NoPlateSlot {...props} availability={availability} />
+  }
+  return <EmptySlot {...props} />
+}
+
+function isMarkNoPlateKey(e: React.KeyboardEvent) {
+  return e.key === "n" || e.key === "N"
 }
 
 function EmptySlot({
   onAdd,
-  onToggleSkip,
+  onMarkNoPlate,
+  availability,
   date,
   slotId,
   slotName,
-}: Pick<SlotCellProps, "onAdd" | "onToggleSkip" | "date" | "slotName"> & {
+}: Pick<
+  SlotCellProps,
+  "onAdd" | "onMarkNoPlate" | "availability" | "date" | "slotName"
+> & {
   slotId?: number
 }) {
   const { t } = useTranslation()
   const [popoverOpen, setPopoverOpen] = useState(false)
 
-  function handleSkipKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "s" || e.key === "S") {
+  function handleMarkKeyDown(e: React.KeyboardEvent) {
+    if (isMarkNoPlateKey(e)) {
       e.preventDefault()
-      onToggleSkip()
+      onMarkNoPlate()
     }
   }
+
+  // D8: a routine is a label in Phase 1; the cell still takes a plate by hand.
+  const routineLabel =
+    availability?.mode === "routine"
+      ? availability.preset_name
+        ? t("availability.routine_named", { name: availability.preset_name })
+        : t("availability.mode.routine")
+      : null
 
   return (
     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
       <div
         data-slot-state="empty"
+        data-availability={availability?.mode}
         onContextMenu={(e) => {
           e.preventDefault()
           setPopoverOpen(true)
@@ -130,8 +155,13 @@ function EmptySlot({
         <button
           type="button"
           onClick={onAdd}
-          onKeyDown={handleSkipKeyDown}
-          aria-label={t("planner.slot.empty.label")}
+          onKeyDown={handleMarkKeyDown}
+          aria-label={
+            routineLabel
+              ? `${t("planner.slot.empty.label")}, ${routineLabel}`
+              : t("planner.slot.empty.label")
+          }
+          aria-keyshortcuts="N"
           data-testid="slot-empty-add"
           className="group/add absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-[14px] text-on-surface-variant transition-transform duration-150 ease-out hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none focus-visible:ring-inset"
         >
@@ -141,6 +171,14 @@ function EmptySlot({
           <span className="font-heading text-[9.5px] font-bold tracking-[0.18em] uppercase">
             {t("planner.slot.empty.label")}
           </span>
+          {routineLabel && (
+            <span
+              className="max-w-full truncate px-2 text-small text-ink-muted"
+              data-testid="slot-routine-label"
+            >
+              {routineLabel}
+            </span>
+          )}
         </button>
 
         <TooltipProvider delayDuration={500}>
@@ -151,17 +189,17 @@ function EmptySlot({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation()
-                    onToggleSkip()
+                    onMarkNoPlate()
                   }}
-                  onKeyDown={handleSkipKeyDown}
+                  onKeyDown={handleMarkKeyDown}
                   onContextMenu={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
                     setPopoverOpen(true)
                   }}
-                  aria-label={t("skip.skip_action")}
-                  aria-keyshortcuts="S"
-                  data-testid="slot-empty-skip"
+                  aria-label={t("planner.availability.mark")}
+                  aria-keyshortcuts="N"
+                  data-testid="slot-empty-no-plate"
                   className={cn(
                     "absolute right-1.5 bottom-1.5 z-[2] grid size-7 place-items-center rounded-full border border-outline-variant/60 bg-surface-container-lowest text-on-surface-variant/70 shadow-sm transition-[opacity,color,border-color,background-color,transform] duration-150 ease-out hover:-translate-y-px hover:border-tertiary/50 hover:bg-white hover:text-tertiary focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none",
                     // Subtle on desktop until hover, always-visible on touch.
@@ -173,7 +211,7 @@ function EmptySlot({
               </PopoverAnchor>
             </TooltipTrigger>
             <TooltipContent side="left" sideOffset={4}>
-              {t("skip.tooltip_empty")}
+              {t("planner.availability.mark_tooltip")}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -201,11 +239,12 @@ function EmptySlot({
           />
         )}
 
-        <SkipNotePopoverContent
+        <NoPlateNotePopoverContent
           initialNote=""
-          title={t("skip.add_note_title")}
+          title={t("planner.availability.mark_with_note_title")}
+          submitLabel={t("planner.availability.mark")}
           onSubmit={(note) => {
-            onToggleSkip(note.length > 0 ? note : null)
+            onMarkNoPlate(note.length > 0 ? note : null)
             setPopoverOpen(false)
           }}
           onCancel={() => setPopoverOpen(false)}
@@ -215,179 +254,86 @@ function EmptySlot({
   )
 }
 
-interface SkippedSlotPropsExt extends SlotCellProps {
-  plate: Plate
-}
-
-function SkippedSlot({
-  plate,
-  onToggleSkip,
-  onDeletePlate,
-}: SkippedSlotPropsExt) {
+/**
+ * A meal the user won't eat at home (availability `none`, UX §5.5): a quiet,
+ * transparent italic "No plate" with its reason. There is no plate here, so
+ * the only actions are making the meal plannable again and editing the note.
+ */
+function NoPlateSlot({
+  availability,
+  onPlanMeal,
+  onEditNote,
+}: SlotCellProps & { availability: AvailabilityCell }) {
   const { t } = useTranslation()
   const [popoverOpen, setPopoverOpen] = useState(false)
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "s" || e.key === "S") {
-      e.preventDefault()
-      onToggleSkip()
-    } else if (e.key === "Delete" || e.key === "Backspace") {
-      e.preventDefault()
-      onDeletePlate()
-    }
-  }
+  const note = availability.note
+  const label = t("planner.availability.no_plate")
+  const noteLabel = note
+    ? t("planner.availability.edit_note")
+    : t("planner.availability.add_note")
 
   return (
     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
       <PopoverAnchor asChild>
         <div
-          data-slot-state="skipped"
+          data-slot-state="none"
           role="group"
           tabIndex={0}
-          onKeyDown={handleKeyDown}
+          aria-label={note ? `${label}, ${note}` : label}
           onContextMenu={(e) => {
             e.preventDefault()
             setPopoverOpen(true)
           }}
-          aria-label={
-            plate.note
-              ? `${t("skip.eating_out")} — ${plate.note}`
-              : t("skip.eating_out")
-          }
-          aria-keyshortcuts="S Delete"
           className={cn(
             CELL_HEIGHT,
-            "group relative flex flex-col items-center justify-center gap-2 overflow-hidden rounded-[14px] border border-tertiary/30 px-3 text-center focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none focus-visible:ring-inset"
+            "flex flex-col items-center justify-center gap-1 rounded-cell border border-dashed border-line bg-transparent px-2 text-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           )}
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(45deg, transparent 0 7px, rgba(75,96,120,0.16) 7px 8px), var(--surface-container-low)",
-          }}
         >
-          {/* Big diagonal X overlay — purely decorative, painted under content.
-              Fades in over ~250 ms when the cell first mounts as skipped
-              (motion-safe so users with reduced-motion get an instant
-              render). */}
-          <svg
-            aria-hidden
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            className="pointer-events-none absolute inset-0 h-full w-full text-tertiary/35 motion-safe:animate-in motion-safe:duration-300 motion-safe:fade-in-0"
-          >
-            <line
-              x1="8"
-              y1="8"
-              x2="92"
-              y2="92"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-            <line
-              x1="92"
-              y1="8"
-              x2="8"
-              y2="92"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
-
-          <span className="relative grid size-9 place-items-center rounded-full border border-tertiary/40 bg-white text-tertiary shadow-sm">
-            <Utensils className="h-4 w-4" aria-hidden />
-          </span>
-          <span className="relative font-heading text-[11px] font-bold tracking-[0.2em] text-tertiary uppercase">
-            {t("skip.eating_out")}
-          </span>
-          {plate.note && (
+          <span className="text-body text-ink-muted italic">{label}</span>
+          {note && (
             <span
-              className="relative line-clamp-2 max-w-full px-1 text-[12px] leading-snug text-on-surface"
-              data-testid="slot-skip-note"
+              className="line-clamp-2 max-w-full text-small text-ink"
+              data-testid="slot-no-plate-note"
             >
-              {plate.note}
+              {note}
             </span>
           )}
-
-          {/* Action overlay — explicit edit-note + unskip + delete. Always
-              rendered in the tab order at low opacity so keyboard focus
-              never lands on an invisible target (WCAG 2.4.7). Pops to full
-              opacity on hover, focus-within, or touch. */}
-          <div className="absolute top-1.5 right-1.5 z-[2] flex items-center gap-1 opacity-50 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
-            <TooltipProvider delayDuration={500}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    data-testid="slot-skip-edit-note"
-                    className="h-7 w-7 rounded-full bg-white/90 text-on-surface-variant shadow-sm hover:text-primary"
-                    aria-label={
-                      plate.note
-                        ? t("skip.edit_note")
-                        : t("skip.add_note_title_existing")
-                    }
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setPopoverOpen(true)
-                    }}
-                  >
-                    <NotebookPen className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}>
-                  {t("skip.tooltip_edit_note")}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+          <div className="mt-2 flex flex-col items-stretch gap-0.5">
             <Button
+              type="button"
               variant="ghost"
-              size="icon"
-              data-testid="slot-skip-unmark"
-              className="h-7 w-7 rounded-full bg-white/90 text-on-surface-variant shadow-sm hover:text-tertiary"
-              aria-label={t("skip.unmark")}
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleSkip()
-              }}
+              size="sm"
+              onClick={onPlanMeal}
+              data-testid="slot-no-plate-plan"
+              className="min-h-11 text-small text-accent hover:bg-panel-sunken hover:text-accent pointer-fine:min-h-7"
             >
-              <RotateCcw className="h-3 w-3" />
+              <Plus aria-hidden />
+              {t("planner.availability.plan_meal")}
             </Button>
             <Button
+              type="button"
               variant="ghost"
-              size="icon"
-              data-testid="slot-quick-delete"
-              className="h-7 w-7 rounded-full bg-white/90 text-destructive/70 shadow-sm hover:text-destructive"
-              aria-label={t("plate.delete_plate")}
-              onClick={(e) => {
-                e.stopPropagation()
-                onDeletePlate()
-              }}
+              size="sm"
+              onClick={() => setPopoverOpen(true)}
+              data-testid="slot-no-plate-edit-note"
+              className="min-h-11 text-small text-ink-muted hover:bg-panel-sunken hover:text-ink pointer-fine:min-h-7"
             >
-              <X className="h-3 w-3" />
+              <NotebookPen aria-hidden />
+              {noteLabel}
             </Button>
           </div>
         </div>
       </PopoverAnchor>
 
-      <SkipNotePopoverContent
-        initialNote={plate.note ?? ""}
-        title={
-          plate.note
-            ? t("skip.edit_note_title")
-            : t("skip.add_note_title_existing")
-        }
-        onSubmit={(note) => {
-          onToggleSkip(note.length > 0 ? note : null)
-          // Stay skipped — only the note changed. toggleSkip() in
-          // lib/planner-skip.ts treats "noteOverride + already skipped" as
-          // an edit and keeps skipped=true.
+      <NoPlateNotePopoverContent
+        initialNote={note ?? ""}
+        title={noteLabel}
+        submitLabel={t("planner.availability.save_note")}
+        onSubmit={(next) => {
+          onEditNote?.(next.length > 0 ? next : null)
           setPopoverOpen(false)
         }}
         onCancel={() => setPopoverOpen(false)}
-        skipOnly
       />
     </Popover>
   )
@@ -410,7 +356,8 @@ function PlannedSlot({
   onSaveAsTemplate,
   onSaveAsPreset,
   onToggleFavorite,
-  onToggleSkip,
+  onMarkNoPlate,
+  availability,
   onRateLoved,
   onRateDisliked,
 }: PlannedSlotPropsExt) {
@@ -423,7 +370,13 @@ function PlannedSlot({
     (a, b) => a.sort_order - b.sort_order
   )
   if (sorted.length === 0) {
-    return <EmptySlot onAdd={onAdd} onToggleSkip={onToggleSkip} />
+    return (
+      <EmptySlot
+        onAdd={onAdd}
+        onMarkNoPlate={onMarkNoPlate}
+        availability={availability}
+      />
+    )
   }
 
   const componentMeta = sorted.map((pc) => {
@@ -445,9 +398,9 @@ function PlannedSlot({
   const disliked = plate.feedback?.status === "disliked"
 
   function handleStretchedKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "s" || e.key === "S") {
+    if (isMarkNoPlateKey(e)) {
       e.preventDefault()
-      onToggleSkip()
+      onMarkNoPlate()
     } else if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault()
       onDeletePlate()
@@ -477,7 +430,7 @@ function PlannedSlot({
           onClick={onOpenSheet}
           onKeyDown={handleStretchedKeyDown}
           aria-label={t("slot_sheet.open_label")}
-          aria-keyshortcuts="S Delete"
+          aria-keyshortcuts="N Delete"
           data-testid="slot-open-sheet"
           className="absolute inset-0 z-[1] cursor-pointer rounded-[14px] focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none focus-visible:ring-inset"
         />
@@ -534,8 +487,9 @@ function PlannedSlot({
                   <Plus className="h-3 w-3" />
                   {t("plate.add_component")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onToggleSkip()}>
-                  {t("skip.mark")}
+                <DropdownMenuItem onClick={() => onMarkNoPlate()}>
+                  <Utensils className="h-3 w-3" />
+                  {t("planner.availability.mark")}
                 </DropdownMenuItem>
                 {onSaveAsTemplate && (
                   <DropdownMenuItem onClick={onSaveAsTemplate}>
@@ -603,26 +557,22 @@ function DragGripIndicator() {
 
 /**
  * Inline note-editor body of a Popover. Caller wraps it with a `<Popover>`
- * containing a `<PopoverAnchor>` so the popover positions next to the relevant
- * skip-related control. Uses an uncontrolled input keyed by mount so it
- * resets cleanly on each open (Radix unmounts content when closed).
+ * containing a `<PopoverAnchor>` so the popover positions next to the cell.
+ * Uses an uncontrolled input keyed by mount so it resets cleanly on each
+ * open (Radix unmounts content when closed).
  */
-function SkipNotePopoverContent({
+function NoPlateNotePopoverContent({
   initialNote,
   title,
+  submitLabel,
   onSubmit,
   onCancel,
-  skipOnly = false,
 }: {
   initialNote: string
   title: string
+  submitLabel: string
   onSubmit: (note: string) => void
   onCancel: () => void
-  /** When true, render only "Save" as the primary action (used in the
-   *  already-skipped state where Save just updates the note). When false,
-   *  the primary action says "Skip with note" since clicking it both skips
-   *  the slot AND saves the note. */
-  skipOnly?: boolean
 }) {
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -647,19 +597,18 @@ function SkipNotePopoverContent({
       }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
-      data-testid="skip-note-popover"
+      data-testid="no-plate-note-popover"
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
-        <div className="font-heading text-[10px] font-bold tracking-[0.18em] text-on-surface-variant uppercase">
-          {title}
-        </div>
+        <div className="text-small font-semibold text-ink">{title}</div>
         <input
           ref={inputRef}
           defaultValue={initialNote}
-          placeholder={t("skip.note.placeholder")}
+          placeholder={t("planner.availability.note_placeholder")}
+          aria-label={title}
           maxLength={200}
-          data-testid="skip-note-input"
-          className="w-full rounded-md border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm transition-[border-color,box-shadow] outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+          data-testid="no-plate-note-input"
+          className="w-full rounded-cell border border-line bg-panel px-2.5 py-1.5 text-body text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         />
         <div className="flex justify-end gap-1.5">
           <Button
@@ -667,12 +616,12 @@ function SkipNotePopoverContent({
             variant="ghost"
             size="sm"
             onClick={onCancel}
-            data-testid="skip-note-cancel"
+            data-testid="no-plate-note-cancel"
           >
             {t("common.cancel")}
           </Button>
-          <Button type="submit" size="sm" data-testid="skip-note-save">
-            {skipOnly ? t("skip.save_note") : t("skip.skip_with_note")}
+          <Button type="submit" size="sm" data-testid="no-plate-note-save">
+            {submitLabel}
           </Button>
         </div>
       </form>

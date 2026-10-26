@@ -32,18 +32,25 @@ async function seedPlate(
   return plate
 }
 
-async function seedSkippedPlate(
-  slotId: number,
-  foodId: number,
-  day: number = 0
-) {
-  const plate = await seedPlate(slotId, foodId, day)
+function localDate(dayOffset: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + dayOffset)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
+async function setNoPlate(date: string, slotId: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.post(`/api/plates/${plate.id}/skip`, {
-    data: { skipped: true, note: null },
+  const res = await ctx.put(`/api/availability/${date}/${slotId}`, {
+    data: { mode: "none", remove_plate: true },
   })
+  expect(res.ok(), `no plate ${date}/${slotId}: ${res.status()}`).toBeTruthy()
   await ctx.dispose()
-  return plate
+}
+
+async function clearOverride(date: string, slotId: number) {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  await ctx.delete(`/api/availability/${date}/${slotId}`)
+  await ctx.dispose()
 }
 
 test.describe("Planner — clear shortcuts", () => {
@@ -213,11 +220,12 @@ test.describe("Planner — clear shortcuts", () => {
     }
   })
 
-  test("× button on skipped slot removes it and shows undo toast", async ({
+  test("clear row removes plates and leaves No plate cells alone", async ({
     page,
   }) => {
     const tag = uid()
-    const slot = await seedSlot(`slot.skipdel_${tag}`, "Moon", 988)
+    const slot = await seedSlot(`slot.noplaterow_${tag}`, "Moon", 988)
+    const day1 = localDate(1)
     const stub = await seedLeafFood({ name: `Stub ${tag}` })
     const food = await seedComposedFood({
       name: `Stew ${tag}`,
@@ -234,21 +242,25 @@ test.describe("Planner — clear shortcuts", () => {
     })
 
     try {
-      await seedSkippedPlate(slot.id, food.id)
+      await seedPlate(slot.id, food.id, 0)
+      await setNoPlate(day1, slot.id)
       await page.goto("/")
 
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
-      await expect(cell.locator('[data-slot-state="skipped"]')).toBeVisible()
+      const planned = page.locator(`[data-testid="cell-0-${slot.id}"]`)
+      const noPlate = page.locator(`[data-testid="cell-1-${slot.id}"]`)
+      await expect(planned.getByText(`Stew ${tag}`)).toBeVisible()
+      await expect(noPlate.locator('[data-slot-state="none"]')).toBeVisible()
 
-      await cell.hover()
-      await cell.getByTestId("slot-quick-delete").click()
+      await page.getByTestId(`slot-row-menu-${slot.id}`).click()
+      await page.getByTestId(`slot-row-clear-${slot.id}`).click()
 
-      // Cell returns to empty state
+      await expect(planned.getByText(`Stew ${tag}`)).toHaveCount(0)
       await expect(
-        cell.getByRole("button", { name: /plan meal/i })
+        planned.getByRole("button", { name: /plan meal/i })
       ).toBeVisible()
-      await expect(page.getByText("Plate deleted")).toBeVisible()
+      await expect(noPlate.locator('[data-slot-state="none"]')).toBeVisible()
     } finally {
+      await clearOverride(day1, slot.id)
       await cleanupFood(food.id)
       await cleanupFood(stub.id)
       await cleanupSlot(slot.id)

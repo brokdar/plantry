@@ -25,7 +25,7 @@ const NAV_ROWS: Row[] = [
 ]
 
 const ACTION_ROWS: Row[] = [
-  { keys: ["S"], labelKey: "planner.shortcuts.skip" },
+  { keys: ["N"], labelKey: "planner.shortcuts.no_plate" },
   { keys: ["Del"], labelKey: "planner.shortcuts.delete" },
   { keys: ["⌘", "Drag"], labelKey: "planner.shortcuts.copy_drag" },
   { keys: ["?"], labelKey: "planner.shortcuts.this_panel" },

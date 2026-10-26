@@ -8,26 +8,35 @@ import {
 import { useTranslation } from "react-i18next"
 
 import {
+  clearAvailabilityOverride,
+  setAvailabilityOverride,
+  type AvailabilityCell,
+  type AvailabilityRangeResponse,
+} from "@/lib/api/availability"
+import {
   addPlateComponent,
+  componentToAddInput,
   createPlate,
   deletePlate,
   deletePlateComponent,
   listPlateMacros,
   listPlates,
-  setPlateSkipped,
   updatePlate,
   updatePlateComponent,
   type AddPlateComponentInput,
   type Plate,
   type PlateComponentQuantity,
-  type SetPlateSkippedInput,
   type UpdatePlateComponentInput,
   type UpdatePlateInput,
 } from "@/lib/api/plates"
 
-import { toastError } from "@/lib/toast"
+import { toast, toastError } from "@/lib/toast"
 
-import { plateKeys } from "./keys"
+import {
+  useClearAvailabilityOverride,
+  useSetAvailabilityOverride,
+} from "./availability"
+import { availabilityKeys, plateKeys } from "./keys"
 import { flushPendingPlateDeletes } from "./pending-plate-deletes"
 
 export function usePlatesRange(from: string, to: string) {
@@ -48,7 +57,7 @@ export function usePlatesByDate(date: string) {
 
 /** Per-plate macro totals for a date range. The query key sits under
  *  `plateKeys.all`, so any mutation that already invalidates the plates list
- *  (add/remove/update component, swap, move, skip) also drops these macros. */
+ *  (add/remove/update component, swap, move) also drops these macros. */
 export function usePlateMacros(from: string, to: string) {
   return useQuery({
     queryKey: plateKeys.macrosRange(from, to),
@@ -232,26 +241,6 @@ export function useUpdatePlateComponentQuantity() {
   })
 }
 
-export function useSetPlateSkipped() {
-  const qc = useQueryClient()
-  const { t } = useTranslation()
-  return useMutation({
-    mutationFn: ({
-      plateId,
-      input,
-    }: {
-      plateId: number
-      input: SetPlateSkippedInput
-    }) => setPlateSkipped(plateId, input),
-    onMutate: () => flushPendingPlateDeletes(),
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: plateKeys.all })
-      void qc.invalidateQueries({ queryKey: ["nutrition"] })
-    },
-    onError: (err) => toastError(err, t),
-  })
-}
-
 export function useRemovePlateComponent() {
   const qc = useQueryClient()
   const { t } = useTranslation()
@@ -265,4 +254,128 @@ export function useRemovePlateComponent() {
     },
     onError: (err) => toastError(err, t),
   })
+}
+
+/** How long the "Mark as No plate" undo stays on offer (UX §6). */
+const NO_PLATE_UNDO_MS = 6000
+
+/**
+ * The planner's No-plate actions for one window (D9). The cell's current
+ * availability is read from the window's availability range cache, which the
+ * planner route has already loaded.
+ *
+ * - `markNoPlate` puts a `none` override with `remove_plate: true` and offers
+ *   Undo: first the previous override state comes back (cleared, or re-put
+ *   with its mode, preset and note), then the removed plate is recreated with
+ *   its components. Its feedback is not restored.
+ * - `planMeal` drops the cell's override, or puts `plan` over a `none` default.
+ * - `editNote` keeps the cell `none` and writes its note.
+ *
+ * Failures are toasted by the underlying mutation hooks.
+ */
+export function useNoPlateActions(rangeFrom: string, rangeTo: string) {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  const setOverride = useSetAvailabilityOverride()
+  const clearOverride = useClearAvailabilityOverride()
+
+  function cellAt(date: string, slotId: number): AvailabilityCell | undefined {
+    return qc
+      .getQueryData<AvailabilityRangeResponse>(
+        availabilityKeys.range(rangeFrom, rangeTo)
+      )
+      ?.items.find((c) => c.date === date && c.slot_id === slotId)
+  }
+
+  async function undoMarkNoPlate(
+    date: string,
+    slotId: number,
+    previous: AvailabilityCell | undefined,
+    removed: Plate | undefined
+  ) {
+    try {
+      if (previous?.source === "override") {
+        await setAvailabilityOverride(date, slotId, {
+          mode: previous.mode,
+          preset_id: previous.preset_id,
+          note: previous.note,
+        })
+      } else {
+        await clearAvailabilityOverride(date, slotId)
+      }
+      if (removed) {
+        const created = await createPlate({
+          date,
+          slot_id: slotId,
+          note: removed.note ?? undefined,
+        })
+        const components = [...removed.components].sort(
+          (a, b) => a.sort_order - b.sort_order
+        )
+        for (const pc of components) {
+          await addPlateComponent(created.id, componentToAddInput(pc))
+        }
+      }
+    } catch (err) {
+      toastError(err, t)
+    } finally {
+      void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
+      void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: ["nutrition"] })
+    }
+  }
+
+  async function markNoPlate(
+    date: string,
+    slotId: number,
+    note?: string | null
+  ) {
+    const previous = cellAt(date, slotId)
+    await flushPendingPlateDeletes()
+    let removed: Plate | undefined
+    try {
+      const res = await setOverride.mutateAsync({
+        date,
+        slotId,
+        input: { mode: "none", note: note ?? null, remove_plate: true },
+      })
+      removed = res.removed_plate
+    } catch {
+      return
+    }
+    void qc.invalidateQueries({ queryKey: ["nutrition"] })
+    toast(t("planner.availability.marked"), {
+      action: {
+        label: t("common.undo"),
+        onClick: () => void undoMarkNoPlate(date, slotId, previous, removed),
+      },
+      duration: NO_PLATE_UNDO_MS,
+    })
+  }
+
+  async function planMeal(date: string, slotId: number) {
+    try {
+      if (cellAt(date, slotId)?.source === "override") {
+        await clearOverride.mutateAsync({ date, slotId })
+      } else {
+        await setOverride.mutateAsync({ date, slotId, input: { mode: "plan" } })
+      }
+    } catch {
+      // toasted by the mutation hook
+    }
+  }
+
+  async function editNote(date: string, slotId: number, note: string | null) {
+    try {
+      await setOverride.mutateAsync({
+        date,
+        slotId,
+        input: { mode: "none", note },
+      })
+    } catch {
+      // toasted by the mutation hook
+    }
+  }
+
+  return { markNoPlate, planMeal, editNote }
 }

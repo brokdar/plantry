@@ -15,7 +15,7 @@ export interface GridKeyNavOptions {
 }
 
 const FOCUS_SELECTOR =
-  'button[data-testid="slot-open-sheet"], button[data-testid="slot-empty-add"], [data-slot-state="skipped"]'
+  'button[data-testid="slot-open-sheet"], button[data-testid="slot-empty-add"], [data-slot-state="none"]'
 
 function focusableInCell(cell: Element): HTMLElement | null {
   return cell.querySelector(FOCUS_SELECTOR) as HTMLElement | null

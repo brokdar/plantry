@@ -173,9 +173,23 @@
     "ai_session_pill_aria_one": "KI-Banner wieder öffnen ({{count}} Teller)",
     "ai_session_pill_aria_other": "KI-Banner wieder öffnen ({{count}} Teller)",
     "dnd": {
-      "reject_skipped": "Slot ist als ausgelassen markiert",
+      "reject_no_plate": "Für diese Mahlzeit ist „Kein Essen“ eingetragen.",
+      "reject_occupied": "Für diese Mahlzeit ist schon etwas geplant.",
       "drag_handle_label": "Zum Verschieben ziehen · ⌘ zum Kopieren",
       "copy_hint": "⌘ kopieren"
+    },
+    "availability": {
+      "no_plate": "Kein Essen",
+      "mark": "Auf „Kein Essen“ setzen",
+      "mark_tooltip": "Auf „Kein Essen“ setzen · Rechtsklick für eine Notiz",
+      "mark_with_note_title": "Kein Essen, mit Notiz",
+      "plan_meal": "Diese Mahlzeit planen",
+      "add_note": "Notiz hinzufügen",
+      "edit_note": "Notiz bearbeiten",
+      "save_note": "Speichern",
+      "note_placeholder": "z. B. Abendessen bei Mama",
+      "marked": "Auf „Kein Essen“ gesetzt.",
+      "mobile_short": "Kein Essen"
     },
     "shortcuts": {
       "title": "Tastenkürzel",
@@ -186,7 +200,7 @@
       "move_focus": "Zwischen Zellen wechseln",
       "row_edge": "Zum Zeilenanfang/-ende springen",
       "open_or_add": "Slot-Details öffnen oder Mahlzeit hinzufügen",
-      "skip": "Diesen Slot auslassen",
+      "no_plate": "Auf „Kein Essen“ setzen",
       "delete": "Diesen Teller löschen",
       "copy_drag": "Beim Ziehen einen Teller kopieren",
       "this_panel": "Diese Übersicht öffnen"
@@ -241,31 +255,11 @@
       "moved_to": "Verschoben auf {{day}}",
       "move_failed": "Verschieben fehlgeschlagen",
       "drag_handle_label": "Zum Verschieben ziehen",
-      "skip_short": "Auslassen",
       "save_short": "Speichern",
       "delete_short": "Löschen",
       "move_to": "Auf Tag verschieben",
       "move_to_picker_label": "Zieltag auswählen",
       "current_day": "Aktuell"
-    }
-  },
-  "skip": {
-    "label": "Auslassen",
-    "eating_out": "Auswärts",
-    "mark": "Als ausgelassen markieren (auswärts)",
-    "unmark": "Auslassen entfernen",
-    "skip_action": "Slot auslassen",
-    "edit_note": "Notiz bearbeiten",
-    "add_note_title": "Mit Notiz auslassen",
-    "add_note_title_existing": "Notiz hinzufügen",
-    "edit_note_title": "Notiz bearbeiten",
-    "save_note": "Speichern",
-    "skip_with_note": "Mit Notiz auslassen",
-    "no_note": "Keine Notiz",
-    "tooltip_empty": "Klicken zum Auslassen · Rechtsklick für Notiz",
-    "tooltip_edit_note": "Notiz bearbeiten",
-    "note": {
-      "placeholder": "z. B. Mamas Geburtstag — Joe's"
     }
   },
   "slot_sheet": {
@@ -940,6 +934,8 @@
       "result_replaced_other": "{{count}} Teller ersetzt.",
       "result_skipped_occupied_one": "{{count}} belegten Slot übersprungen.",
       "result_skipped_occupied_other": "{{count}} belegte Slots übersprungen.",
+      "result_skipped_unavailable_one": "{{count}} Mahlzeit mit „Kein Essen“ ausgelassen.",
+      "result_skipped_unavailable_other": "{{count}} Mahlzeiten mit „Kein Essen“ ausgelassen.",
       "result_skipped_no_slot_one": "{{count}} Teller fand seinen Slot nicht.",
       "result_skipped_no_slot_other": "{{count}} Teller fanden ihren Slot nicht.",
       "undo": "Rückgängig",
@@ -1049,7 +1045,9 @@
     },
     "plate": {
       "slot_unknown": "Diese Mahlzeitzeit existiert nicht.",
-      "feedback_invalid_status": "Bewertung muss gekocht, ausgelassen, geliebt oder nicht gemocht sein."
+      "feedback_invalid_status": "Bewertung muss gekocht, ausgelassen, geliebt oder nicht gemocht sein.",
+      "cell_unavailable": "Für diese Mahlzeit ist „Kein Essen“ eingetragen. Plane sie zuerst.",
+      "cell_occupied": "Für diese Mahlzeit ist schon etwas geplant."
     },
     "slot": {
       "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."

@@ -65,12 +65,7 @@ export function MonthCell({
         {visible.map((plate) => (
           <div
             key={plate.id}
-            className={cn(
-              "truncate rounded px-1 py-px text-[10px] leading-tight",
-              plate.skipped
-                ? "bg-outline-variant/20 text-on-surface-variant/60 line-through"
-                : "bg-primary/10 text-primary"
-            )}
+            className="truncate rounded bg-primary/10 px-1 py-px text-[10px] leading-tight text-primary"
           >
             {foodsById?.get(plate.components[0]?.food_id)?.name ??
               plate.note ??

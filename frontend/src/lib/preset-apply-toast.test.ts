@@ -48,6 +48,7 @@ function skip(slotID: number): ApplyResultSkip {
 
 const emptySnapshot: ApplySnapshot = {
   created_plate_ids: [],
+  created_overrides: [],
   replaced_plates: [],
 }
 
@@ -57,6 +58,7 @@ function result(overrides: Partial<ApplyResult> = {}): ApplyResult {
     replaced: [],
     skipped_occupied: [],
     skipped_no_slot: [],
+    skipped_unavailable: [],
     snapshot: emptySnapshot,
     ...overrides,
   }
@@ -85,12 +87,12 @@ describe("showPresetApplyToasts", () => {
     const onUndo = vi.fn()
     const snapshot: ApplySnapshot = {
       created_plate_ids: [42],
+      created_overrides: [],
       replaced_plates: [
         {
           date: "2026-05-20",
           slot_id: 1,
           note: null,
-          skipped: false,
           components: [],
         },
       ],
@@ -134,6 +136,32 @@ describe("showPresetApplyToasts", () => {
     const successOrder = mockedToast.success.mock.invocationCallOrder[0]
     const warningOrder = mockedToast.warning.mock.invocationCallOrder[0]
     expect(successOrder).toBeLessThan(warningOrder)
+  })
+
+  test("skipped_unavailable: reports No-plate cells after the success", () => {
+    showPresetApplyToasts(
+      result({ created: [plate(1)], skipped_unavailable: [skip(2), skip(3)] }),
+      t,
+      vi.fn()
+    )
+
+    expect(mockedToast.success).toHaveBeenCalledTimes(1)
+    expect(mockedToast.warning).toHaveBeenCalledWith(
+      "preset.apply.result_skipped_unavailable:2"
+    )
+  })
+
+  test("only_skipped_unavailable: warning only, no success", () => {
+    showPresetApplyToasts(
+      result({ skipped_unavailable: [skip(2)] }),
+      t,
+      vi.fn()
+    )
+
+    expect(mockedToast.success).not.toHaveBeenCalled()
+    expect(mockedToast.warning).toHaveBeenCalledWith(
+      "preset.apply.result_skipped_unavailable:1"
+    )
   })
 
   test("totally_empty_result: neither success nor warning called", () => {

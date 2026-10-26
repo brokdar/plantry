@@ -120,26 +120,6 @@ function ReadOnlySlot({ plate, componentsById }: ReadOnlySlotProps) {
       <div className="h-[178px] rounded-[14px] border border-dashed border-outline-variant/40 bg-surface-container-low/30" />
     )
   }
-  if (plate.skipped) {
-    return (
-      <div
-        className="flex h-[178px] flex-col items-center justify-center gap-1.5 rounded-[14px] border border-tertiary/25 text-center"
-        style={{
-          backgroundImage:
-            "repeating-linear-gradient(45deg, transparent 0 7px, rgba(75,96,120,0.16) 7px 8px), var(--surface-container-low)",
-        }}
-      >
-        <span className="font-heading text-[10px] font-bold tracking-[0.18em] text-tertiary uppercase">
-          {t("skip.label")}
-        </span>
-        {plate.note && (
-          <span className="max-w-full truncate px-2 text-[11px] text-on-tertiary-fixed-variant italic">
-            {plate.note}
-          </span>
-        )}
-      </div>
-    )
-  }
   const sorted = [...plate.components].sort(
     (a, b) => a.sort_order - b.sort_order
   )

@@ -173,9 +173,23 @@
     "ai_session_pill_aria_one": "Reopen AI fill banner ({{count}} plate)",
     "ai_session_pill_aria_other": "Reopen AI fill banner ({{count}} plates)",
     "dnd": {
-      "reject_skipped": "Slot is marked skip",
+      "reject_no_plate": "This meal is marked No plate.",
+      "reject_occupied": "This meal already has a plate.",
       "drag_handle_label": "Drag to move · ⌘ to copy",
       "copy_hint": "⌘ to copy"
+    },
+    "availability": {
+      "no_plate": "No plate",
+      "mark": "Mark as No plate",
+      "mark_tooltip": "Mark as No plate · Right-click to add a note",
+      "mark_with_note_title": "No plate, with a note",
+      "plan_meal": "Plan this meal",
+      "add_note": "Add a note",
+      "edit_note": "Edit note",
+      "save_note": "Save",
+      "note_placeholder": "e.g. Dinner at Mum's",
+      "marked": "Marked as No plate.",
+      "mobile_short": "No plate"
     },
     "shortcuts": {
       "title": "Keyboard shortcuts",
@@ -186,7 +200,7 @@
       "move_focus": "Move between cells",
       "row_edge": "Jump to row start / end",
       "open_or_add": "Open slot details or add a meal",
-      "skip": "Skip this slot",
+      "no_plate": "Mark as No plate",
       "delete": "Delete this plate",
       "copy_drag": "Copy a plate while dragging",
       "this_panel": "Open this panel"
@@ -241,31 +255,11 @@
       "moved_to": "Moved to {{day}}",
       "move_failed": "Couldn't move plate",
       "drag_handle_label": "Drag to move",
-      "skip_short": "Skip",
       "save_short": "Save",
       "delete_short": "Delete",
       "move_to": "Move to day",
       "move_to_picker_label": "Pick destination day",
       "current_day": "Current"
-    }
-  },
-  "skip": {
-    "label": "Skip",
-    "eating_out": "Eating out",
-    "mark": "Mark as skip (eating out)",
-    "unmark": "Remove skip",
-    "skip_action": "Skip slot",
-    "edit_note": "Edit note",
-    "add_note_title": "Skip with a note",
-    "add_note_title_existing": "Add a note",
-    "edit_note_title": "Edit skip note",
-    "save_note": "Save",
-    "skip_with_note": "Skip with note",
-    "no_note": "No note",
-    "tooltip_empty": "Click to skip · Right-click to add a note",
-    "tooltip_edit_note": "Edit the skip note",
-    "note": {
-      "placeholder": "e.g. Mom's birthday — Joe's"
     }
   },
   "slot_sheet": {
@@ -883,6 +877,8 @@
       "result_replaced_other": "Replaced {{count}} plates.",
       "result_skipped_occupied_one": "Skipped {{count}} occupied slot.",
       "result_skipped_occupied_other": "Skipped {{count}} occupied slots.",
+      "result_skipped_unavailable_one": "Left out {{count}} No-plate meal.",
+      "result_skipped_unavailable_other": "Left out {{count}} No-plate meals.",
       "result_skipped_no_slot_one": "{{count}} plate could not find its slot.",
       "result_skipped_no_slot_other": "{{count}} plates could not find their slot.",
       "undo": "Undo",
@@ -992,7 +988,9 @@
     },
     "plate": {
       "slot_unknown": "That time slot doesn't exist.",
-      "feedback_invalid_status": "Feedback status must be cooked, skipped, loved, or disliked."
+      "feedback_invalid_status": "Feedback status must be cooked, skipped, loved, or disliked.",
+      "cell_unavailable": "This meal is marked No plate. Plan it first.",
+      "cell_occupied": "This meal already has a plate."
     },
     "slot": {
       "in_use": "This time slot is used by plates and cannot be deleted."

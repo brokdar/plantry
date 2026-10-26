@@ -19,9 +19,12 @@ import {
 } from "@/components/presets/SaveAsPresetDialog"
 import {
   dragStartToPayload,
+  dropRejectionKey,
   DndCellWrapper,
   type DragPayload,
+  type DropCellData,
 } from "@/components/planner/DndCellWrapper"
+import type { AvailabilityCell } from "@/lib/api/availability"
 import {
   addPlateComponent,
   componentToAddInput,
@@ -45,13 +48,12 @@ import type { NutritionDay } from "@/lib/api/nutrition"
 import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import {
+  useNoPlateActions,
   usePlateMacros,
-  useSetPlateSkipped,
   useSwapPlateComponent,
   useUpdatePlate,
 } from "@/lib/queries/plates"
 import { useProfile } from "@/lib/queries/profile"
-import { toggleSkip } from "@/lib/planner-skip"
 import { SLOT_ICONS, SLOT_ICON_FALLBACK } from "@/lib/slot-icons"
 import { slotLabel } from "@/lib/slot-label"
 import { usePlannerUI } from "@/lib/stores/planner-ui"
@@ -81,6 +83,12 @@ export interface PlannerDay {
   plates: Plate[]
 }
 
+/** Resolves a date × slot to its availability cell, when loaded. */
+export type CellLookup = (
+  date: string,
+  slotId: number
+) => AvailabilityCell | undefined
+
 const DAY_KEYS = [
   "planner.day_mon",
   "planner.day_tue",
@@ -97,6 +105,8 @@ interface PlannerGridProps {
   rangeFrom: string
   rangeTo: string
   nutritionDays?: NutritionDay[]
+  /** The window's availability; cells it doesn't cover render as `plan`. */
+  cellAt?: CellLookup
 }
 
 interface AddTarget {
@@ -143,6 +153,7 @@ export function PlannerGrid({
   rangeFrom,
   rangeTo,
   nutritionDays,
+  cellAt,
 }: PlannerGridProps) {
   const { t } = useTranslation()
 
@@ -236,7 +247,7 @@ export function PlannerGrid({
 
   const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
   const swapMut = useSwapPlateComponent()
-  const setSkippedMut = useSetPlateSkipped()
+  const noPlate = useNoPlateActions(rangeFrom, rangeTo)
   const setFavoriteMut = useSetFoodFavorite()
   const recordFeedbackMut = useRecordFeedback()
   const clearFeedbackMut = useClearFeedback()
@@ -440,12 +451,12 @@ export function PlannerGrid({
   }
 
   function handleClearRow(slotId: number) {
-    // Skip markers are deliberate user statements ("not eating here") and
-    // shouldn't be wiped by "Clear row" — same rule as Copy last week.
+    // No plate cells are availability, not plates, so "Clear row" leaves
+    // them alone.
     const rowPlates: Plate[] = []
     for (const day of days) {
       const p = findPlateInDay(day, slotId)
-      if (p && !p.skipped) rowPlates.push(p)
+      if (p) rowPlates.push(p)
     }
     if (rowPlates.length === 0) return
 
@@ -487,14 +498,14 @@ export function PlannerGrid({
   }
 
   async function handleCopyRowAcrossWeek(slotId: number) {
-    // First non-skipped plate with components becomes the source. Skipped
-    // markers and component-less plates would copy nothing useful.
+    // First plate with components becomes the source. Component-less plates
+    // would copy nothing useful.
     let source: { plate: Plate; dayIdx: number } | null = null
     for (let i = 0; i < days.length; i++) {
       const day = days[i]
       if (!day) continue
       const p = findPlateInDay(day, slotId)
-      if (p && !p.skipped && p.components.length > 0) {
+      if (p && p.components.length > 0) {
         source = { plate: p, dayIdx: i }
         break
       }
@@ -504,11 +515,14 @@ export function PlannerGrid({
       return
     }
 
-    // Targets: every other day in the row that's currently empty (no plate
-    // and no skip marker). Existing plates and skips are preserved — undo
-    // would otherwise need to restore them, and silent overwrite breaks trust.
+    // Targets: every other day in the row that's currently empty and not a
+    // No plate cell. Existing plates are preserved — undo would otherwise
+    // need to restore them, and silent overwrite breaks trust.
     const targets = days.filter(
-      (d, i) => i !== source!.dayIdx && !findPlateInDay(d, slotId)
+      (d, i) =>
+        i !== source!.dayIdx &&
+        !findPlateInDay(d, slotId) &&
+        cellAt?.(d.date, slotId)?.mode !== "none"
     )
     if (targets.length === 0) {
       toast(t("planner.row_actions.copy_no_targets"))
@@ -542,25 +556,6 @@ export function PlannerGrid({
     } catch (err) {
       toastError(err, t)
     }
-  }
-
-  async function handleToggleSkip(
-    dayIdx: number,
-    slotId: number,
-    _plateId: number | null,
-    noteOverride?: string | null
-  ) {
-    const targetDay = days[dayIdx]
-    if (!targetDay) return
-    await toggleSkip({
-      date: targetDay.date,
-      slotId,
-      existing: findPlateInDay(targetDay, slotId),
-      noteOverride,
-      rangeFrom,
-      rangeTo,
-      setSkipped: setSkippedMut.mutateAsync,
-    })
   }
 
   async function handleToggleFavorite(
@@ -622,24 +617,19 @@ export function PlannerGrid({
     const activeData = active.data.current as
       | { plateId?: number; day?: number; slotId?: number; date?: string }
       | undefined
-    const overData = over.data.current as
-      | {
-          day?: number
-          slotId?: number
-          date?: string
-          existingPlateId?: number
-          skipped?: boolean
-        }
-      | undefined
+    const overData = over.data.current as DropCellData | undefined
     if (!activeData?.plateId || !overData) return
-    if (overData.skipped) {
-      toast.error(t("planner.dnd.reject_skipped"))
-      return
-    }
     if (
       activeData.day === overData.day &&
       activeData.slotId === overData.slotId
     ) {
+      return
+    }
+    // D10: one plate per cell and none in No plate cells. Refuse here so no
+    // request is made; a 409 from a race still toasts its own message key.
+    const rejection = dropRejectionKey(overData, activeData.plateId)
+    if (rejection) {
+      toast.error(t(rejection))
       return
     }
 
@@ -749,6 +739,7 @@ export function PlannerGrid({
                     const date = parseISO(day.date)
                     const isPast = isBefore(date, today) && !isToday(date)
                     const plate = findPlateInDay(day, slot.id)
+                    const availability = cellAt?.(day.date, slot.id)
                     return (
                       <div
                         key={`${slot.id}-${day.date}`}
@@ -762,6 +753,7 @@ export function PlannerGrid({
                           slotId={slot.id}
                           rowIndex={rowIndex}
                           plate={plate}
+                          mode={availability?.mode}
                         >
                           <SlotCell
                             day={dayIdx}
@@ -803,15 +795,17 @@ export function PlannerGrid({
                               )
                               if (plate) clearAiFillOnPlate(plate.id)
                             }}
-                            onToggleSkip={(note) => {
-                              void handleToggleSkip(
-                                dayIdx,
-                                slot.id,
-                                plate?.id ?? null,
-                                note
-                              )
+                            availability={availability}
+                            onMarkNoPlate={(note) => {
+                              void noPlate.markNoPlate(day.date, slot.id, note)
                               if (plate) clearAiFillOnPlate(plate.id)
                             }}
+                            onPlanMeal={() =>
+                              void noPlate.planMeal(day.date, slot.id)
+                            }
+                            onEditNote={(note) =>
+                              void noPlate.editNote(day.date, slot.id, note)
+                            }
                             onRateLoved={() => {
                               if (!plate) return
                               void handleRate(
@@ -914,13 +908,11 @@ function SlotRowLabel({
 }: SlotRowLabelProps) {
   const { t } = useTranslation()
   // Counted once per row render — drives whether destructive items render at
-  // all. Skipped plates aren't counted: "Clear row" preserves them, so the
-  // label and the action stay aligned. A row with no plates can still be the
-  // target of "apply template", so the menu itself stays available.
+  // all. A row with no plates can still be the target of "apply template",
+  // so the menu itself stays available.
   let plateCount = 0
   for (const day of days) {
-    const p = findPlateInDay(day, slot.id)
-    if (p && !p.skipped) plateCount++
+    if (findPlateInDay(day, slot.id)) plateCount++
   }
   return (
     <div

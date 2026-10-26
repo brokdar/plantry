@@ -120,13 +120,14 @@ test.describe("Mobile planner (day-tab layout)", () => {
     }
   })
 
-  test("swipe-left reveals action drawer; tap Skip marks slot skipped", async ({
+  test("swipe-left reveals action drawer; tap No plate marks the meal No plate", async ({
     page,
   }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.lunch_${tag}`, "Soup", 995)
     const food = await seedLeafFood({ name: `Stew ${tag}` })
-    const plate = await seedPlate(slot.id, food.id, 0)
+    await seedPlate(slot.id, food.id, 0)
+    let overridePath: string | null = null
 
     try {
       await mockAnchorToday(page)
@@ -160,17 +161,25 @@ test.describe("Mobile planner (day-tab layout)", () => {
       const cardWrapper = row.locator("[data-mobile-row-state]")
       await expect(cardWrapper).toHaveAttribute("data-drawer-open", "true")
 
-      const skipResp = page.waitForResponse(
+      const markResp = page.waitForResponse(
         (r) =>
-          r.url().includes(`/api/plates/${plate.id}/skip`) &&
-          r.request().method() === "POST"
+          new RegExp(`/api/availability/[\\d-]+/${slot.id}$`).test(r.url()) &&
+          r.request().method() === "PUT"
       )
-      await row.getByTestId("mobile-row-skip").click()
-      await skipResp
+      await row.getByTestId("mobile-row-no-plate").click()
+      const res = await markResp
+      overridePath = new URL(res.url()).pathname
+      expect(res.ok()).toBeTruthy()
 
-      // The card now renders the skipped variant.
-      await expect(cell.locator('[data-slot-state="skipped"]')).toBeVisible()
+      // The plate is gone and the card renders the No plate state.
+      await expect(cell.locator('[data-slot-state="none"]')).toBeVisible()
+      await expect(cell.getByText(`Stew ${tag}`)).toHaveCount(0)
     } finally {
+      if (overridePath) {
+        const ctx = await apiRequest.newContext({ baseURL: API })
+        await ctx.delete(overridePath)
+        await ctx.dispose()
+      }
       await cleanupSlot(slot.id)
       await cleanupFood(food.id)
     }
@@ -297,9 +306,12 @@ test.describe("Mobile planner (day-tab layout)", () => {
 
       // Drawer button labels are the short verb form; aria-label keeps the
       // descriptive long form for screen readers.
-      const skip = row.getByTestId("mobile-row-skip")
-      await expect(skip).toHaveAttribute("aria-label", /skip|auslassen/i)
-      await expect(skip).toContainText(/^skip$|^auslassen$/i)
+      const noPlate = row.getByTestId("mobile-row-no-plate")
+      await expect(noPlate).toHaveAttribute(
+        "aria-label",
+        /mark as no plate|kein essen/i
+      )
+      await expect(noPlate).toContainText(/^no plate$|^kein essen$/i)
     } finally {
       await cleanupSlot(slot.id)
       await cleanupFood(food.id)
