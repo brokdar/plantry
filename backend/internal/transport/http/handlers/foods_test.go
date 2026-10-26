@@ -248,3 +248,60 @@ func TestFoodHandler_Portions_UpsertAndList(t *testing.T) {
 	require.Len(t, items, 1)
 	assert.Equal(t, "cup", items[0].(map[string]any)["unit"])
 }
+
+// ── Nutrition ─────────────────────────────────────────────────────────────────
+
+func TestFoodHandler_Nutrition_CompletenessFields(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewFoodRepo(db)
+	h := handlers.NewFoodHandler(food.NewService(repo), food.NewNutritionResolver(repo), nil)
+	r := chi.NewRouter()
+	r.Get("/api/foods/{id}/nutrition", h.Nutrition)
+	ctx := t.Context()
+
+	src := food.SourceManual
+	rice := &food.Food{
+		Name: "Rice", Kind: food.KindLeaf, Source: &src,
+		Kcal100g: ptrFloat64(130), Protein100g: ptrFloat64(2.7), Fat100g: ptrFloat64(0.3), Carbs100g: ptrFloat64(28),
+	}
+	require.NoError(t, repo.Create(ctx, rice))
+	spice := &food.Food{Name: "Mystery Spice", Kind: food.KindLeaf, Source: &src, Kcal100g: ptrFloat64(300)}
+	require.NoError(t, repo.Create(ctx, spice))
+
+	role := food.RoleMain
+	complete := &food.Food{
+		Name: "Plain Rice", Kind: food.KindComposed, Role: &role, ReferencePortions: ptrFloat64(1),
+		Children: []food.FoodComponent{{ChildID: rice.ID, Amount: 100, Unit: "g", Grams: 100}},
+	}
+	require.NoError(t, repo.Create(ctx, complete))
+	incomplete := &food.Food{
+		Name: "Spiced Rice", Kind: food.KindComposed, Role: &role, ReferencePortions: ptrFloat64(1),
+		Children: []food.FoodComponent{
+			{ChildID: rice.ID, Amount: 100, Unit: "g", Grams: 100},
+			{ChildID: spice.ID, Amount: 5, Unit: "g", Grams: 5, SortOrder: 1},
+		},
+	}
+	require.NoError(t, repo.Create(ctx, incomplete))
+
+	get := func(t *testing.T, id int64) string {
+		t.Helper()
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/foods/%d/nutrition", id), nil))
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		return w.Body.String()
+	}
+
+	t.Run("complete recipe serializes empty missing list", func(t *testing.T) {
+		body := get(t, complete.ID)
+		assert.Contains(t, body, `"complete":true`)
+		assert.Contains(t, body, `"missing":[]`)
+	})
+
+	t.Run("incomplete recipe lists the leaf id and name", func(t *testing.T) {
+		var got map[string]any
+		require.NoError(t, json.Unmarshal([]byte(get(t, incomplete.ID)), &got))
+		assert.Equal(t, false, got["complete"])
+		assert.Equal(t, []any{map[string]any{"id": float64(spice.ID), "name": "Mystery Spice"}}, got["missing"])
+		assert.InDelta(t, 145.0, got["kcal"].(float64), 0.01)
+	})
+}
