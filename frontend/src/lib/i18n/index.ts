@@ -5,6 +5,11 @@ import { initReactI18next } from "react-i18next"
 import en from "./en.json"
 import de from "./de.json"
 
+// Registered before init so the initial language is applied too.
+i18n.on("languageChanged", () => {
+  document.documentElement.lang = i18n.resolvedLanguage ?? i18n.language
+})
+
 void i18n
   .use(LanguageDetector)
   .use(initReactI18next)

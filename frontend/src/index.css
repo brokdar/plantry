@@ -363,6 +363,12 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* UX §6: one focus indicator everywhere. An `outline-none` utility on a
+     component still wins over this base rule. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
   body {
     @apply bg-background text-foreground;
     font-size: var(--text-body);
@@ -441,5 +447,24 @@
   }
   .btn-shimmer:hover::after {
     animation: shimmer-sweep 0.55s ease-out forwards;
+  }
+}
+
+/* UX §3.4, §8: under reduced motion, transitions collapse to near zero and
+   tw-animate slides lose their offset, so sheets only fade (150ms) instead
+   of sliding. Unlayered and !important so it beats utilities and inline
+   styles. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 150ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    --tw-enter-translate-x: 0 !important;
+    --tw-enter-translate-y: 0 !important;
+    --tw-exit-translate-x: 0 !important;
+    --tw-exit-translate-y: 0 !important;
   }
 }
