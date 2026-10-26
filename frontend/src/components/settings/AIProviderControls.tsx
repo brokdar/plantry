@@ -35,16 +35,32 @@ type ModelOption = { id: string; display_name?: string }
  * (the key on its Save button). Reused by Settings → Assistant and the setup
  * wizard's assistant step.
  */
-export function AIProviderControls() {
+export function AIProviderControls({
+  layout,
+}: {
+  /** "stacked" puts each label above its control, for narrow columns such
+   *  as the setup wizard. By default rows go side by side on wide screens. */
+  layout?: "stacked"
+} = {}) {
   const { data: items } = useSettingItems()
   if (!items) return null
-  return <ProviderSteps items={items} />
+  return <ProviderSteps items={items} layout={layout} />
+}
+
+/** The inline result of a successful key check (plan D17). Anthropic keys
+ *  aren't really checked until Phase 5, so that copy only says it's saved. */
+function validatedKey(provider: string): string {
+  return provider === "anthropic"
+    ? "settings_page.ai.validated_saved"
+    : "settings_page.ai.validated_works"
 }
 
 function ProviderSteps({
   items,
+  layout,
 }: {
   items: NonNullable<ReturnType<typeof useSettingItems>["data"]>
+  layout?: "stacked"
 }) {
   const { t } = useTranslation()
   const providerItem = items[KEY_PROVIDER]
@@ -59,6 +75,7 @@ function ProviderSteps({
   const [validationError, setValidationError] = useState<string | null>(null)
   const [validated, setValidated] = useState(false)
 
+  const rowClass = layout === "stacked" ? "lg:grid-cols-1 lg:gap-3" : undefined
   const providerNote = useSavedNote()
   const keyNote = useSavedNote()
   const modelNote = useSavedNote()
@@ -144,6 +161,7 @@ function ProviderSteps({
         complete={step1Complete}
       >
         <SettingRow
+          className={rowClass}
           label={t("settings_page.ai.provider_label")}
           item={providerItem}
           saved={providerNote.saved}
@@ -190,6 +208,7 @@ function ProviderSteps({
         disabled={!step1Complete}
       >
         <SettingRow
+          className={rowClass}
           label={t("settings_page.ai.api_key_label")}
           description={
             hasStoredKey
@@ -266,7 +285,7 @@ function ProviderSteps({
               className="inline-flex items-center gap-1 text-small text-success"
             >
               <Check className="size-4" strokeWidth={1.5} aria-hidden />
-              {t("settings_page.ai.validated")}
+              {t(validatedKey(provider), { count: models.length })}
             </p>
           )}
         </SettingRow>
@@ -280,6 +299,7 @@ function ProviderSteps({
         disabled={!step2Complete}
       >
         <SettingRow
+          className={rowClass}
           label={t("settings_page.ai.model_label")}
           item={modelItem}
           saved={modelNote.saved}

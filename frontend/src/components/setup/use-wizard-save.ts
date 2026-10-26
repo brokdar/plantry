@@ -4,6 +4,7 @@ import { gridValueToDefaults } from "@/lib/availability-grid"
 import { useSetAvailabilityDefaults } from "@/lib/queries/availability"
 import { usePatchProfile } from "@/lib/queries/profile"
 import { useSetSetting, useSettingItems } from "@/lib/queries/settings"
+import type { TimeSlot } from "@/lib/api/slots"
 import { useCreateTimeSlot, useUpdateTimeSlot } from "@/lib/queries/slots"
 import { NUTRITION_PRESETS } from "@/lib/nutrition-presets"
 
@@ -17,6 +18,7 @@ import {
   type AssistantDraft,
   type CookingDraft,
   type MealsDraft,
+  type SlotDraft,
   type VarietyDraft,
   type WizardDraft,
 } from "./wizard-draft"
@@ -47,11 +49,10 @@ export function useWizardSave() {
         .map(([key, value]) => setSetting.mutateAsync({ key, value }))
     )
 
-  /** Creates or updates the slots, then writes the defaults grid over the
-   *  active ones. Returns the meals draft with the real slot ids. */
-  async function saveMeals(meals: MealsDraft): Promise<MealsDraft> {
-    const saved = await Promise.all(
-      meals.slots.map((slot, sort_order) => {
+  /** Creates the new slots and updates the stored ones, in list order. */
+  function saveSlots(slots: SlotDraft[]): Promise<TimeSlot[]> {
+    return Promise.all(
+      slots.map((slot, sort_order) => {
         const input = {
           name_key: slotNameKey(t, slot),
           icon: slot.icon,
@@ -63,6 +64,12 @@ export function useWizardSave() {
           : updateSlot.mutateAsync({ id: slot.id, data: input })
       })
     )
+  }
+
+  /** Saves the slots, then writes the defaults grid over the active ones.
+   *  Returns the meals draft with the real slot ids. */
+  async function saveMeals(meals: MealsDraft): Promise<MealsDraft> {
+    const saved = await saveSlots(meals.slots)
     const idMap = new Map(meals.slots.map((s, i) => [s.id, saved[i]!.id]))
     const grid: AvailabilityGridValue = {}
     for (const [key, cell] of Object.entries(meals.grid)) {
@@ -140,15 +147,19 @@ export function useWizardSave() {
 
   /**
    * Plan D16: saves the current step as shown, then writes the defaults of
-   * every later step. Step 4 keeps the slots it shows (the defaults on an
-   * install with none) with every cell planned.
+   * every later step. Settings are written only where they differ.
    */
   async function skipFrom(step: number, draft: WizardDraft) {
     const stored = await saveStep(step, draft)
     const later: Promise<unknown>[] = []
     if (step < 2)
       later.push(patchProfile.mutateAsync(NUTRITION_PRESETS.maintain))
-    if (step < 3) later.push(saveMeals({ slots: stored.meals.slots, grid: {} }))
+    // Step 4 leaves the usual week alone (a re-run keeps its routines; a new
+    // install's stored week is already all Plan) and only creates the
+    // default slots when there are none yet.
+    if (step < 3 && stored.meals.slots.some((s) => s.id < 0)) {
+      later.push(saveSlots(stored.meals.slots))
+    }
     if (step < 4) later.push(saveCooking(COOKING_DEFAULTS))
     if (step < 5) later.push(saveVariety(VARIETY_DEFAULTS))
     if (step < 6) later.push(settings([[SETTING_KEYS.daily, "true"]]))

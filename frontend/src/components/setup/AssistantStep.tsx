@@ -35,7 +35,7 @@ export function AssistantStep({
         </p>
       )}
       <div className="border-b border-line py-5">
-        <AIProviderControls />
+        <AIProviderControls layout="stacked" />
       </div>
 
       <SetupField

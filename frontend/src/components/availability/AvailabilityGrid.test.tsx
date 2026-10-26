@@ -61,6 +61,14 @@ describe("AvailabilityGrid", () => {
     expect(within(grid).getAllByRole("gridcell")).toHaveLength(21)
   })
 
+  it("scrolls inside a box that contains its sr-only labels", async () => {
+    // Without `relative`, the labels position against the page and widen it
+    // on a phone (jsdom has no layout, so this guards the class).
+    renderWithRouter(<Harness />)
+    const grid = await screen.findByRole("grid", { name: "Default week" })
+    expect(grid.parentElement).toHaveClass("relative", "overflow-x-auto")
+  })
+
   it("names every cell in full and shows the state as text", async () => {
     renderWithRouter(
       <Harness

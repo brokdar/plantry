@@ -256,13 +256,9 @@ describe("SetupWizard", () => {
       fat_pct: 30,
       carbs_pct: 40,
     })
+    // The default slots are created; the usual week is left as stored.
     expect(createTimeSlot).toHaveBeenCalledTimes(3)
-    expect(setAvailabilityDefaults).toHaveBeenCalledTimes(1)
-    expect(
-      vi
-        .mocked(setAvailabilityDefaults)
-        .mock.calls[0]![0].every((c) => c.mode === "plan")
-    ).toBe(true)
+    expect(setAvailabilityDefaults).not.toHaveBeenCalled()
     expect(Object.fromEntries(server.settings)).toMatchObject({
       "plan.max_cook_occasions_per_day": "1",
       "plan.batch_cooking": "true",
@@ -307,6 +303,39 @@ describe("SetupWizard", () => {
     await waitFor(() => expect(updateProfile).toHaveBeenCalled())
     await waitFor(() => expect(screen.getByTestId("setup-next")).toBeEnabled())
     expect(screen.getByText("Step 1 of 7")).toBeInTheDocument()
+  })
+
+  it("Skip on a re-run keeps the stored slots and usual week", async () => {
+    serve()
+    vi.mocked(listTimeSlots).mockResolvedValue({
+      items: [
+        {
+          id: 7,
+          name_key: "slot.dinner",
+          icon: "Moon",
+          sort_order: 0,
+          active: true,
+        },
+      ],
+    })
+    vi.mocked(getAvailabilityDefaults).mockResolvedValue({
+      items: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
+        weekday,
+        slot_id: 7,
+        mode: weekday < 5 ? ("routine" as const) : ("plan" as const),
+        preset_id: weekday < 5 ? 3 : null,
+      })),
+    })
+    const u = user()
+    renderWizard()
+    await screen.findByText("Step 1 of 7")
+    await next(u, 2)
+    await u.click(screen.getByTestId("setup-skip"))
+
+    await screen.findByTestId("setup-finish")
+    expect(createTimeSlot).not.toHaveBeenCalled()
+    expect(updateTimeSlot).not.toHaveBeenCalled()
+    expect(setAvailabilityDefaults).not.toHaveBeenCalled()
   })
 
   it("re-run opens prefilled with the stored slots and values", async () => {
