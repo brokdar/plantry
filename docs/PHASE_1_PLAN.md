@@ -44,10 +44,10 @@ The user may override any of these.
 | D6 | **Nutrition goal presets** (wizard step 3, settings): cut = 1800 kcal at 35/30/35 (P/F/C); maintain = 2200 at 30/30/40; bulk = 2700 at 25/25/50; custom = free entry. The presets live in the frontend only, and the profile stores just the numbers. The DB defaults stay NULL; the wizard writes maintain. | The spec names maintain only. These are common reference splits. |
 | D7 | **Availability shape.** As spec §5.1, plus `note TEXT NULL` on `availability_overrides` (UX §5.5: "No plate" shows its reason, and migrated skipped plates carry their note). `preset_id` uses `ON DELETE CASCADE` on both tables, so deleting a routine preset drops its rows and the cell falls back to the next level (override → default → `plan`). CHECK: `preset_id IS NOT NULL` iff `mode = 'routine'`. Weekday 0 = Monday. Only active slots are resolved. | A routine without a preset is meaningless. Cascading keeps resolution simple. |
 | D8 | **Routine in Phase 1 is a label.** A `routine` cell shows "Routine · \<preset name\>" in the planner and grids. Applying the preset to the cell is the generator's job (Phase 3). The user can still add a plate by hand in a routine cell. | The generator owns routine application (§3.2). |
-| D9 | **Marking a planned cell "No plate".** `PUT /api/availability/{date}/{slotId}` with `mode: none` on a cell that has a plate returns 409 `error.availability.cell_has_plate`, unless the body has `remove_plate: true`. In that case the override is written and the plate deleted in one transaction, and the response carries `removed_plate` (the full plate JSON). The planner always sends `remove_plate: true` and offers a 6 s Undo that restores the previous override state and recreates the plate from `removed_plate` (the same copy path as the existing ctrl-drag copy). | UX §6: undo over confirm. The old skip silently cleared components. |
-| D10 | **Cell rules in the plate service.** Creating a plate, or moving one (`PUT /api/plates/{id}` with a new date or slot), into a cell that resolves to `none` returns 409 `error.plate.cell_unavailable`. Into an occupied cell it returns 409 `error.plate.cell_occupied`. The planner rejects such drops client-side with a toast before calling the API, extending the existing `reject_skipped` path at `PlannerGrid.tsx:634-637`. There is no swap. | H1 and UNIQUE (date, slot) as one rule set. Swap would need a two-step update against the unique index. |
-| D11 | **Skipped-plate migration** (spec §11), in order, in one Go migration: (1) each skipped plate becomes a `none` override for its cell, carrying the plate's `note`, then the plate is deleted. If the same cell also holds a non-skipped plate with components, that plate wins: no override is created and the skipped plate is just deleted. (2) Duplicate plates per (date, slot) merge into the lowest id: components are re-parented with `sort_order` appended after the survivor's, the survivor keeps its own feedback, and the others are deleted. (3) `ALTER TABLE plates DROP COLUMN skipped` and `CREATE UNIQUE INDEX ux_plates_date_slot ON plates(date, slot_id)`. No table rebuild is needed: the column has only its own CHECK. | Spec §11. Dropping a column plus a unique index avoids rebuilding a table with FK children. |
-| D12 | **Copy week and preset apply respect availability.** Cells resolving to `none` in the target get no plate and are reported in a new `skipped_unavailable` list, next to `skipped_occupied`. Copy week also copies the source window's `none` overrides onto the matching target dates, so "copy last week" keeps last week's No-plate cells (the bug noted in spec §2.2, where skipped plates were dropped). Routine overrides are not copied. | §11: "the HTTP copy-week endpoint … stay[s] for manual use, now preserving availability". |
+| D9 | **Marking a planned cell "No plate".** `PUT /api/availability/{date}/{slotId}` with `mode: none` on a cell that has a plate returns 409 `error.availability.cell_has_plate`, unless the body has `remove_plate: true`. In that case the override is written and the plate deleted in one transaction, and the response carries `removed_plate` (the full plate JSON). The planner always sends `remove_plate: true` and offers a 6 s Undo in this order: first restore the previous override state (clear it, or re-put the previous mode/preset/note), then recreate the plate with its components from `removed_plate` (the same copy path as the existing ctrl-drag copy). Plate feedback deleted by the cascade is not restored. | UX §6: undo over confirm. The old skip silently cleared components. |
+| D10 | **Cell rules in the plate service.** Creating a plate, or moving one (`PUT /api/plates/{id}` with a new date or slot), into a cell that resolves to `none` returns 409 `error.plate.cell_unavailable`. Into an occupied cell it returns 409 `error.plate.cell_occupied`. The plate service checks the cell through its own port `CellChecker` with `CellMode(ctx, date time.Time, slotID int64) (string, error)`, returning `"plan"`, `"routine"` or `"none"`. The port and its types live in `domain/plate`, so `plate` never imports `availability` (`availability` may import `plate`, since it returns the removed plate, D9). An adapter in `main.go`, or a method on the availability service, satisfies it. The planner rejects such drops client-side with a toast before calling the API, extending the existing `reject_skipped` path at `PlannerGrid.tsx:634-637`. There is no swap. | H1 and UNIQUE (date, slot) as one rule set. Swap would need a two-step update against the unique index. |
+| D11 | **Skipped-plate migration** (spec §11), in order, in one Go migration: (1) each skipped plate becomes a `none` override for its cell, carrying the plate's `note`, then the plate is deleted. If the same cell also holds any non-skipped plate, with or without components, that plate wins: no override is created and the skipped plate is just deleted. (2) Duplicate plates per (date, slot) merge into the lowest id: components are re-parented with `sort_order` appended after the survivor's, the survivor keeps its own feedback, and the others are deleted. (3) `ALTER TABLE plates DROP COLUMN skipped` and `CREATE UNIQUE INDEX ux_plates_date_slot ON plates(date, slot_id)`. No table rebuild is needed: the column has only its own CHECK. | Spec §11. Dropping a column plus a unique index avoids rebuilding a table with FK children. |
+| D12 | **Copy week and preset apply respect availability.** Cells resolving to `none` in the target get no plate and are reported in a new `skipped_unavailable` list, next to `skipped_occupied`. Copy week also copies the source window's `none` overrides onto the matching target dates, so "copy last week" keeps last week's No-plate cells (the bug noted in spec §2.2, where skipped plates were dropped). Routine overrides are not copied. Preset apply reads the cell mode through a same-shaped port defined in `domain/preset` with local types; the D10 adapter satisfies both. | §11: "the HTTP copy-week endpoint … stay[s] for manual use, now preserving availability". |
 | D13 | **Agent interim.** The chat prompt lists the window's `none` and `routine` cells instead of skipped plates. The plate tools drop `skipped`. `get_plates_range` gains an `availability` array of `{date, slot_id, mode, preset_name?}` for non-`plan` cells. The fill-mode hints say "never create plates in No-plate cells" instead of "respect skipped". `Shopping day:` prints the weekday name. Agent `PromptVersion` becomes `"v3"`. | The chat stays usable until Phase 4. The plate service enforces D10 anyway. |
 | D14 | **Setup API.** `GET /api/setup` → `{completed, recipe_count, recipe_target}`, where `recipe_count` is the number of composed foods and `recipe_target` is 10. `POST /api/setup/complete` sets `setup.completed = true` and returns the same shape. The spec's `steps_done` is dropped: the wizard saves each step on Next and always reopens at step 1, prefilled from the current values. | One request serves the redirect, the guided state and the Generate gate. Resumable steps add nothing a prefilled wizard doesn't give. |
 | D15 | **Wizard slots.** Step 4 shows the existing active slots. On an install with none, it shows Breakfast, Lunch and Dinner (`slot.breakfast`/`slot.lunch`/`slot.dinner`, icons as in `TimeSlotsEditor`) and creates them on Next through the existing slots API. The slots can be renamed, reordered and toggled in the step. The availability grid in the same step uses the resulting slots. | Spec §7.1 step 4: "pre-created, editable". |
@@ -57,8 +57,8 @@ The user may override any of these.
 | D19 | **Generate gate.** `GeneratePlanButton` stays visible and is disabled while `recipe_count < 10`, with a tooltip and a link "Add N more recipes" to `/components`. It keeps opening the chat with the generate prompt; navigating to `/plan` is Phase 3. The phone centre FAB is removed (UX §2.1: the tab bar has exactly four items), and on phones the button moves to the TopBar next to the Settings gear. | Spec §7.2 and the Phase 0 follow-up. |
 | D20 | **Settings restructure** (UX §5.11). The route becomes `/settings/$section` with sections `household`, `meals`, `cooking`, `assistant` and `system`. `/settings` redirects to `/settings/household`, and the legacy `?tab=` values map onto the sections (general/nutrition→household, plan→cooking, meal_slots→meals, ai→assistant, system→system). Theme and language (today's General tab) go to Data & system. Existing panels (`ProfileEditor`, `TimeSlotsEditor`, `AITab`, `PlanTab`, `SystemTab`) are moved and extended, not rewritten. Presets keep their own page in Phase 1; "Routines" in Settings → Meals is a link to `/presets`. | UX §5.11. Moving keeps the diff reviewable. |
 | D21 | **Planner window.** With `plan.anchor` defaulting to `next_shopping_day`, the e2e setup project sets `plan.anchor = today`, so the existing planner specs (which seed plates on today's dates) stay valid. `planner-anchor-settings.spec.ts` keeps covering the other modes. | Avoids rewriting about 15 planner specs that Phase 2/3 replaces anyway. |
-| D22 | **E2E global state.** A new Playwright project `setup` runs `setup-wizard.spec.ts` serially against the fresh e2e DB (no slots, so `setup.completed` is false), walks the wizard to Finish, then sets `plan.anchor = today`. `chromium` and `ai-serial` declare `dependencies: ["setup"]`, so a filtered run still completes setup first. Specs that need a "below 10 recipes" state stub `GET /api/setup` with `page.route`, because the shared e2e DB accumulates recipes. | Setup state is global, and parallel specs would otherwise be redirected. |
-| D23 | **AI trace storage.** Each `llm_call` step stores `request_json` and `response_json` in new columns, separate from the 8 KB `args_json`/`result_json` used by tool calls.<br>**`request_json`** holds `{message_offset, messages, temperature, max_tokens, tools_hash, truncated}`:<br>- `messages` holds only the messages not already recorded by an earlier `llm_call` of the same run (`req.Messages[offset:]`). The first call, or any call whose history is shorter than what has already been recorded, records from offset 0.<br>- `tools_hash` is the sha256 of the canonical JSON of `req.Tools`, stored once in a new `ai_tool_schemas(hash, json)` table, the same pattern as `ai_prompts`.<br>**`response_json`** holds `{content: [blocks], stop_reason}`.<br>Each body is capped at 256 KiB. A cut sets `truncated: true` and stays valid JSON: the over-long text is shortened, never the JSON syntax. | Linear storage for multi-iteration chats. The import fallback sends up to 60 000 chars (`importer/llm_prompt.go:21`), so a lookup or import run fits uncapped. |
+| D22 | **E2E global state.** A new Playwright project `setup` runs `setup-wizard.spec.ts` serially against the fresh e2e DB (no slots, so `setup.completed` is false), walks the wizard to Finish, then sets `plan.anchor = today`. The `setup` project matches only that spec (`testMatch`, `fullyParallel: false`, `workers: 1`); `chromium` and `ai-serial` exclude it (`testIgnore`) and declare `dependencies: ["setup"]`, so a filtered run still completes setup first. Don't run with `--no-deps`: it skips the `setup` project, and the planner specs then get redirected to `/setup`. Specs that need a "below 10 recipes" state stub `GET /api/setup` with `page.route`, because the shared e2e DB accumulates recipes. | Setup state is global, and parallel specs would otherwise be redirected. |
+| D23 | **AI trace storage.** Each `llm_call` step stores `request_json` and `response_json` in new columns, separate from the 8 KB `args_json`/`result_json` used by tool calls.<br>**`request_json`** holds `{message_offset, messages, temperature, max_tokens, system_hash, tools_hash, truncated}`:<br>- `system_hash` is the sha256 of that call's `req.System`. The meter upserts every distinct system prompt of the run into `ai_prompts`, not only the first call's (today `airun/meter.go:100-117` stores only the first, guarded by `promptTried`). `ai_runs.prompt_hash` stays the first call's prompt.<br>- `messages` holds only the messages not already recorded by an earlier `llm_call` of the same run (`req.Messages[offset:]`). The first call, or any call whose history is shorter than what has already been recorded, records from offset 0.<br>- `tools_hash` is the sha256 of the canonical JSON of `req.Tools`, stored once in a new `ai_tool_schemas(hash, json)` table, the same pattern as `ai_prompts`.<br>**`response_json`** holds `{content: [blocks], stop_reason}`.<br>Each body is capped at 256 KiB. A cut sets `truncated: true` and stays valid JSON: the over-long text is shortened, never the JSON syntax. | Linear storage for multi-iteration chats. The import fallback sends up to 60 000 chars (`importer/llm_prompt.go:21`), so a lookup or import run fits uncapped. |
 | D24 | **Run identity and retention.** `ai_runs` gains `conversation_id INTEGER NULL` (set by chat runs; no FK, so a run outlives its conversation) and `request_id TEXT NULL` (from chi `middleware.GetReqID`, already captured in `Run.requestID`, `airun/recorder.go:74`). At startup, and after each finished run at most once per hour, steps of runs that started more than `ai.run_retention_days` ago are deleted. The `ai_runs` rows and prompts stay (spec §13). | Spec §13 storage rules, with no background scheduler (§15). |
 | D25 | **Outcome labels and the plate audit trail stay out.** `ai_runs.outcome*` remains reserved for Phase 3, and `plate_events` (§8.2) arrives in Phase 2. | User instruction. |
 | D26 | **Impeccable without the helper binary** (Phase 0 D9 still applies). Never run `.claude/skills/impeccable/scripts/impeccable`. Read `docs/PRODUCT.md`, `DESIGN.md` and the skill's `reference/*.md` directly. | User instruction. |
@@ -71,26 +71,26 @@ The user may override any of these.
   - The numbers are fixed: **00023 = P1**, **00024 = A1**, **00025 = A2** (Go), **00026 = T1**.
   - sqlc reads `db/migrations` and `db/schema_patches` (`backend/sqlc.yaml`). A Go migration needs a matching `db/schema_patches/000NN_*.sql` so sqlc sees the schema change; see `schema_patches/00016_drop_week_aggregate.sql`.
   - **Generated-file conflicts:** take either side and re-run `sqlc generate` on the merged tree. Never hand-merge `sqlcgen/`.
-  - Both DSNs enable `foreign_keys(1)` (`cmd/plantry/main.go:282`, `testhelper/db.go:22`).
+  - Both DSNs enable `foreign_keys(1)` (`cmd/plantry/main.go:283`, `testhelper/db.go:22`).
 - **Profile:**
   - The table is `00007_profile.sql`, with all targets nullable.
   - Domain `domain/profile/profile.go` and validation `profile/service.go:33-63`.
   - The handler `handlers/profile.go:80-118` is a full replace that defaults `locale` to `en`.
 - **Settings:**
   - Registry `domain/settings/specs.go:5-73`; key constants `settings.go:88-101`.
-  - Kinds are string, int, bool and enum; bools parse with `strconv.ParseBool` (`settings/service.go:225`).
+  - Kinds are string, int, bool and enum; bools parse with `strconv.ParseBool` (`settings/service.go:229`).
   - `plan.anchor` defaults to `today` (`specs.go:51-56`). `plan.window_days` is unused (`specs.go:65-72`, with no reader outside the registry).
   - `PUT /api/settings/{key}` and `DELETE /api/settings/{key}` are in `router.go:166-175`.
 - **Plates:**
   - The current table is `id, slot_id, note, created_at, skipped, date`, last rebuilt in `00016_drop_week_aggregate.go:27-34`. Indexes are `ix_plates_date` and `ix_plates_date_slot`; there is no uniqueness.
   - `plate_feedback.plate_id` is `PRIMARY KEY REFERENCES plates(id) ON DELETE CASCADE` (`00009_plate_feedback.sql:3`).
   - `Plate.Skipped` is at `domain/plate/plate.go:13`. The repo port has `SetSkipped` (`repository.go:30`), the service `SetSkipped` (`service.go:301-305`) and `Update` (`service.go:176-191`, date/slot moves). The query is `SetPlateSkipped` (`queries/planner.sql:43`).
-  - The handler `SetSkipped` is at `handlers/plates.go:355-380`, the route at `router.go:110`, and the `skipped` JSON field at `plate_response.go:29,63`.
+  - The handler `SetSkipped` is at `handlers/plates.go:360-381` (`skipRequest` at `:355`), the route at `router.go:110`, and the `skipped` JSON field at `plate_response.go:29,63`.
 - **Skipped in other backend code:**
   - Agent: `prompt.go:34` (`PromptPlate.Skipped`), `:219-220` (plate line), `:179` (`Shopping day: %s` prints the raw int), `service.go:336` and `:357-362` (mode hints), `tools.go:314` (tool description) and `:761` (`plateSummary`).
   - Presets: `handlers/presets.go:487` and `:602`. Copy week is at `preset/apply.go:134`, with `SkippedOccupied`/`SkippedNoSlot` at `:54-55`.
 - **Presets** (routine source): `presets` → `preset_plates(slot_id)` → `preset_components` (`00019_presets.sql`).
-- **Transactions:** per-domain `RunIn…Tx` helpers on `adapters/sqlite/tx.go:15` (`RunInPresetTx`, `RunInFeedbackTx`), with matching `TxRunner` ports in each domain (`preset/repository.go:79`, `feedback/repository.go:21`).
+- **Transactions:** per-domain `RunIn…Tx` helpers on the `TxRunner` struct (`adapters/sqlite/tx.go:15`): `RunInPresetTx` (`:28`) and `RunInFeedbackTx` (`:48`), with matching `TxRunner` ports in each domain (`preset/repository.go:79`, `feedback/repository.go:21`).
 - **Slots:** there is no seeding migration. `time_slots(name_key, icon, sort_order, active)`. The frontend labels slots with `slotLabel` (`lib/slot-label.ts:11`), which translates keys like `slot.breakfast`.
 - **Foods:** `GET /api/foods` returns `{items, total}` (`handlers/foods.go:194,568`). Count composed foods with a dedicated query; don't page through the list.
 - **AI run log:**
@@ -143,6 +143,7 @@ Every step:
   - `adapters/sqlite/queries/profile.sql`, regenerated `sqlcgen/`, `adapters/sqlite/profile_repo.go` and its test
   - `domain/profile/profile.go`, `service.go` and `service_test.go`
   - `domain/settings/specs.go`, `settings.go` and `specs_test.go`
+  - `backend/internal/domain/errors.go` and `transport/http/handlers/errormap.go` (new profile error keys; additive, §4)
   - `transport/http/handlers/profile.go` and `profile_test.go`
 - **Behaviour**
   - **Migration 00023:**
@@ -176,7 +177,9 @@ Every step:
   - new `adapters/sqlite/queries/availability.sql`, regenerated `sqlcgen/`, new `adapters/sqlite/availability_repo.go` and its test
   - `adapters/sqlite/tx.go`: new `RunInAvailabilityTx`
   - new `domain/availability/availability.go`, `repository.go`, `service.go` and `service_test.go`
-  - new `transport/http/handlers/availability.go` and its test; `handlers/errormap.go`
+  - `adapters/sqlite/preset_repo.go`: a `PresetName(ctx, id) (string, bool, error)` method that satisfies the availability `PresetLookup` port
+  - `domain/errors.go` (new availability errors) and `handlers/errormap.go`; both additive (§4)
+  - new `transport/http/handlers/availability.go` and its test
   - `transport/http/router.go` and `cmd/plantry/main.go` (wiring only)
 - **Schema** (D7):
   ```sql
@@ -204,6 +207,7 @@ Every step:
 - **Domain** (`domain/availability`):
   - `Mode` (`plan`/`routine`/`none`) and `Source` (`default`/`override`/`fallback`).
   - `Cell{Date, SlotID, Mode, Source, PresetID *int64, PresetName *string, Note *string}`.
+  - **Ports with local types** (no import of `preset`): `Repository`, and `PresetLookup` with `PresetName(ctx, id) (string, bool, error)` (false when the preset doesn't exist), implemented by the sqlite preset repo. `availability` may import `plate`, since it returns the removed plate (D9).
   - **Service:**
     - `Defaults(ctx) ([]Default, error)`: the full weekday × active-slot grid, with missing rows as `plan`.
     - `SetDefaults(ctx, []Default) error`: replaces all rows in one tx and validates every row.
@@ -213,7 +217,7 @@ Every step:
     - `ClearOverride(ctx, date, slotID) error`
   - **Validation:**
     - the slot exists and is active
-    - a routine needs an existing preset, and a non-routine has no preset (`error.availability.preset_required`, `error.availability.preset_not_allowed`)
+    - a routine needs an existing preset (checked through `PresetLookup`), and a non-routine has no preset (`error.availability.preset_required`, `error.availability.preset_not_allowed`)
     - a valid date
     - a note of at most 200 chars, kept only for `none`
     - `SetDefaults` rejects a weekday outside 0–6 and duplicates
@@ -240,9 +244,11 @@ Needs A1. It replaces every backend use of `skipped`.
   - new `db/migrations/00025_plates_cell_unique.go` and its test (beside `00014_date_keyed_plates_test.go`, or `adapters/sqlite/migration_00025_test.go`, following whichever pattern the 00014/00016 tests use)
   - new `db/schema_patches/00025_plates_cell_unique.sql` (`ALTER TABLE plates DROP COLUMN skipped;` plus the index)
   - `queries/planner.sql` (remove `SetPlateSkipped` and `skipped` from selects; add a cell lookup, e.g. `GetPlateByCell`), regenerated `sqlcgen/`, `plate_repo.go` and its test
-  - `domain/plate/plate.go`, `repository.go`, `service.go` and `service_test.go`: drop `Skipped`/`SetSkipped`; add a `CellChecker` port (`ModeAt`) and the D10 rules in `Create` and `Update`
-  - `domain/preset/apply.go` and `apply_test.go`: D12
+  - `domain/plate/plate.go`, `repository.go`, `service.go` and `service_test.go`: drop `Skipped`/`SetSkipped`; add the `CellChecker` port (`CellMode(ctx, date time.Time, slotID int64) (string, error)`, returning `"plan"`/`"routine"`/`"none"`, D10) and the D10 rules in `Create` and `Update`
+  - `domain/preset/apply.go` and `apply_test.go`: D12, through a same-shaped local cell-mode port in `domain/preset`
+  - the adapter that satisfies both ports: in `cmd/plantry/main.go`, or a `CellMode` method on the availability service (wrapping `ModeAt`)
   - `domain/agent/prompt.go`, `service.go`, `tools.go`, their tests and `tools_payload_test.go`: D13
+  - `domain/errors.go` (`ErrCellUnavailable`, `ErrCellOccupied`; additive, §4)
   - `handlers/plates.go` (remove `SetSkipped`), `plate_response.go`, `presets.go`, `errormap.go` and their tests
   - `router.go` (remove `/skip`) and `cmd/plantry/main.go` (pass the availability service to the plate and preset services and to the agent `WindowSources`)
 - **Behaviour**
@@ -256,7 +262,7 @@ Needs A1. It replaces every backend use of `skipped`.
 - **Tests first**
   - Migration on a seeded DB:
     - a skipped plate with a note becomes a `none` override with that note
-    - a cell with a skipped plate and a real plate keeps the real plate and gets no override
+    - a cell with a skipped plate and a real plate keeps the real plate and gets no override, both when the real plate has components and when it has none
     - three duplicates merge into the lowest id, with all components kept in order and the survivor's feedback kept
     - the column is gone and a duplicate insert fails
     - Down/Up round-trips
@@ -332,6 +338,7 @@ Needs S1 and F3 (setup client hooks).
   - `src/components/ingredients/IngredientEditor.tsx` and its test (Phase 0 follow-up)
   - i18n files
   - new `e2e/recipes-guided.spec.ts`; update `e2e/shell.spec.ts` (the FAB is gone)
+  - `e2e/generate-plan.spec.ts` and `e2e/keyboard-shortcuts.spec.ts`: stub `GET /api/setup` with `recipe_count: 10` (`page.route`) so the Generate button is enabled regardless of the shared DB
 - **Behaviour**
   - **Guided state** (D18, UX §5.8):
     - Above the grid: "4 of 10 recipes. Plantry needs 10 to plan a varied week." with a progress bar (`role="progressbar"`, with value text).
@@ -347,7 +354,7 @@ Needs S1 and F3 (setup client hooks).
 - **Tests first**
   - Vitest: the guided state at count 4 shows the progress text and both cards; at 10 there are no cards; the toast fires once across re-renders when the flag is set; the Generate button is disabled below 10 with the right count text and enabled at 10; MobileBottomNav renders exactly four links and no FAB; IngredientEditor submits `kcal_100g: null` for an empty field.
   - E2E `recipes-guided.spec.ts` (parallel project): stub `GET /api/setup` (D22) at counts 3 and 10 and assert cards, progress text and the Generate state; the import card navigates to `/import`.
-- **Verify:** `cd frontend && bun run check && GOWORK=off bun run e2e -- recipes-guided shell components ingredients`
+- **Verify:** `cd frontend && bun run check && GOWORK=off bun run e2e -- recipes-guided shell components ingredients generate-plan keyboard-shortcuts`
 
 ### Track F: Frontend screens and shared pieces
 
@@ -391,7 +398,7 @@ Needs F1 and A2 (API shape: no `skipped` and no `/skip`; the 409 keys from D10).
   - The planner fetches `useAvailabilityRange(window)` next to the plates and passes a cell-mode lookup to both grids.
   - **`none` cell:** italic "No plate", plus the note if one is set. Its actions are "Plan this meal" (`DELETE` the override if its source is `override`, otherwise `PUT` mode `plan`) and "Edit note".
   - **`routine` cell without a plate:** "Routine · Oats", plus the normal add action (D8).
-  - **"Mark as No plate"** in the empty-cell actions, `SlotSheet` and the mobile swipe drawer: `PUT` override `none` with `remove_plate: true`, then a 6 s Undo toast (D9). Undo restores the previous override state (clear, or re-put the previous mode/preset/note) and, when a plate was removed, recreates it with its components.
+  - **"Mark as No plate"** in the empty-cell actions, `SlotSheet` and the mobile swipe drawer: `PUT` override `none` with `remove_plate: true`, then a 6 s Undo toast (D9). Undo first restores the previous override state (clear, or re-put the previous mode/preset/note), then, when a plate was removed, recreates it with its components. Its feedback is not restored.
   - **DnD:** `DndCellWrapper` exposes `mode` and `existingPlateId`. Drops onto `none` cells (`planner.dnd.reject_no_plate`) or occupied cells (`planner.dnd.reject_occupied`) are rejected with a toast and no API call. A 409 from the server, from a race, shows its message key.
   - **Copy/apply toasts** report `skipped_unavailable` (`preset-apply-toast.ts`).
   - `ReadOnlyPlannerGrid` and `MonthCell` drop the skipped hatch. They show `none` only where availability data is already at hand; the calendar views go away in Phase 2, so don't add fetching there.
@@ -470,17 +477,19 @@ Runs after A2 (both touch `agent/service.go`).
   - **`llmCall` records, per call:**
     - the request delta (tracked per run as `recordedMsgs int`)
     - temperature, `max_tokens` and `tools_hash` (upserting the schema once per distinct hash per run, the way `UpsertPrompt` is used)
+    - `system_hash`, upserting every distinct system prompt of the run into `ai_prompts`. This replaces the first-call-only `promptTried` guard (`meter.go:100-117`); `ai_runs.prompt_hash` stays the first call's prompt.
     - the response content blocks (text and tool_use) and `stop_reason`; on error, `response_json` is null and `is_error` is set as today
   - **Caps:** each body ≤ 256 KiB, cut with valid JSON and `truncated: true`. The 8 KB cap for tool-call `args_json`/`result_json` is unchanged.
   - **Store:** the `Store` port gains `UpsertToolSchema(ctx, hash, json)` and `PruneSteps(ctx, before time.Time) (int64, error)`. `Step` gains `RequestJSON`, `ResponseJSON` and `StopReason`.
   - **Retention:** at startup, `main.go` reads `ai.run_retention_days` and calls `PruneSteps(now − days)`. The recorder runs the same prune after a `Finish`, at most once per hour (mutex-guarded timestamp, injected clock). Prune failures are logged at warn.
-  - **Replay helper** (test-only, `replay_test.go`): `reconstruct(db, runID) []llm.Request`. It loads the steps in `seq` order, concatenates the message deltas with the previous responses, and resolves the prompt hash and tools hash back to text.
+  - **Replay helper** (test-only, `replay_test.go`): `reconstruct(db, runID) []llm.Request`. It loads the `llm_call` steps in `seq` order. The request for call i is the system prompt (by `system_hash`), the concatenation of the message deltas of calls 0..i, the parameters, and the tools (by `tools_hash`). Callers already append assistant replies to `req.Messages` (`importer/llm_prompt.go:79-83`, the agent loop at `agent/loop.go:97`), so those replies are part of the deltas. Recorded responses are compared against what the fake returned and are never inserted into the reconstruction.
 - **Tests first**
   - Migration: columns and the table exist; old rows read back with nulls.
   - Meter:
     - a three-call chat-like run stores deltas of the expected lengths
     - a call with a shorter history resets the offset to 0
     - tools are stored once per hash
+    - a `lookup` run stores both system prompts in `ai_prompts` (translate and pick-best use different ones, `food/ai.go:133` and `:199`), each step's `system_hash` points at its own prompt, and `ai_runs.prompt_hash` is the translate prompt
     - a 300 KiB message is truncated to valid JSON with `truncated:true`
     - an error call has a null response
   - **Reconstruction**, against a real SQLite test DB and the fake client:
@@ -513,11 +522,14 @@ Last, after all other steps.
 
 ## 4. Waves and parallelism
 
-The same hand-written file must never be edited by two parallel steps. Shared files:
-- `sqlcgen/`: P1, A1, A2, S1, T1. Regenerate on conflict.
+No hand-written file is edited by two parallel steps, except the registration files `router.go`, `main.go`, `domain/errors.go`, `handlers/errormap.go`, the i18n json, `keys.ts` and `fixtures.ts`, where each step adds its own lines; those are merged one after another and the later one is rebased. Shared files:
+- `sqlcgen/`: P1, A1, A2, S1, T1. Generated, not hand-written: regenerate on conflict.
 - `router.go` and `main.go`: A1 (wave 1); A2 and S1 (wave 2, different handlers and lines); T1 (wave 3, main only).
+- `domain/errors.go` and `handlers/errormap.go`: P1 and A1 (wave 1); A2 (wave 2). Each adds its own errors and mappings.
 - `agent/service.go`: A2 (wave 2), then T1 (wave 3).
 - `en.json`/`de.json`, `lib/queries/keys.ts` and `test/fixtures.ts`: most frontend steps. Each adds keys under its own namespace or fixture names, so merges are additive.
+
+**Merge order:** within a wave, merge steps in migration-number order, then the rest. Wave 1: P1 (00023) before A1 (00024). Wave 2: A2 (00025) before S1 when S1 touches `sqlcgen/`. Wave 3: T1 (00026).
 - `routes/index.tsx`: F2 (wave 2), then S2 (wave 3).
 - `components/settings/*`: F3 (wave 2) only. Z1 touches none of them.
 - `playwright.config.ts`: S2 only.
