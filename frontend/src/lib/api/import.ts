@@ -26,6 +26,8 @@ export interface Draft {
   language: "de" | "en" | "unknown"
   extract_method: "jsonld" | "llm"
   warnings: string[]
+  /** kcal per serving from the page's JSON-LD, for comparison only. */
+  source_kcal_per_serving: number | null
 }
 
 export interface ExtractRequest {

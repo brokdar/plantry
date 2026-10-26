@@ -3,12 +3,15 @@ const BASE = "/api"
 export class ApiError extends Error {
   status: number
   messageKey: string
+  /** Set on a duplicate-name 409: the id of the food that already exists. */
+  existingId?: number
 
-  constructor(status: number, messageKey: string) {
+  constructor(status: number, messageKey: string, existingId?: number) {
     super(messageKey)
     this.name = "ApiError"
     this.status = status
     this.messageKey = messageKey
+    this.existingId = existingId
   }
 }
 
@@ -28,7 +31,7 @@ export async function apiFetch<T>(
       message_key: "error.server",
       status: res.status,
     }))
-    throw new ApiError(body.status, body.message_key)
+    throw new ApiError(body.status, body.message_key, body.existing_id)
   }
   if (res.status === 204) return undefined as T
   return res.json()

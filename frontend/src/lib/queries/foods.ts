@@ -18,9 +18,11 @@ import {
   updateFood,
   upsertPortion,
   type FoodInput,
+  type LeafFoodInput,
   type FoodListParams,
   type InsightsParams,
 } from "@/lib/api/foods"
+import { ApiError } from "@/lib/api/client"
 import { queryClient } from "@/lib/query-client"
 import { toastError } from "@/lib/toast"
 import { foodKeys } from "./keys"
@@ -67,6 +69,38 @@ export function useCreateFood() {
   const { t } = useTranslation()
   return useMutation({
     mutationFn: (input: FoodInput) => createFood(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
+    },
+    onError: (err) => toastError(err, t),
+  })
+}
+
+export interface EnsuredLeaf {
+  id: number
+  name: string
+}
+
+/** Creates the leaf, or — when a leaf with that name already exists (409) —
+ *  returns the existing one instead. */
+async function createLeafOrReuse(input: LeafFoodInput): Promise<EnsuredLeaf> {
+  try {
+    const food = await createFood(input)
+    return { id: food.id, name: food.name }
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409 && err.existingId) {
+      return { id: err.existingId, name: input.name }
+    }
+    throw err
+  }
+}
+
+/** Like useCreateFood for a leaf, but a duplicate name resolves to the
+ *  existing leaf instead of failing (and toasting). */
+export function useEnsureLeaf() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: createLeafOrReuse,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
     },

@@ -21,6 +21,7 @@ type Config struct {
 	AIFakeScript      string
 	DevMode           bool   // exposes dev-only debug endpoints; PLANTRY_DEV_MODE
 	SecretKey         string // PLANTRY_SECRET_KEY: optional; falls back to <data>/secret.key (see EnsureSecretKey)
+	OFFDisabled       bool   // PLANTRY_OFF_DISABLED: skip Open Food Facts lookups (hermetic e2e)
 }
 
 func Load() (Config, error) {
@@ -104,6 +105,17 @@ func Load() (Config, error) {
 			cfg.DevMode = false
 		default:
 			return Config{}, fmt.Errorf("PLANTRY_DEV_MODE invalid: %q", v)
+		}
+	}
+
+	if v := os.Getenv("PLANTRY_OFF_DISABLED"); v != "" {
+		switch strings.ToLower(v) {
+		case "1", "true", "yes", "on":
+			cfg.OFFDisabled = true
+		case "0", "false", "no", "off":
+			cfg.OFFDisabled = false
+		default:
+			return Config{}, fmt.Errorf("PLANTRY_OFF_DISABLED invalid: %q", v)
 		}
 	}
 
