@@ -61,6 +61,11 @@ type FoodProvider interface {
 	SearchByName(ctx context.Context, query string, limit int) ([]Candidate, error)
 }
 
+// FoodByIDProvider fetches a single food by its upstream FDC ID.
+type FoodByIDProvider interface {
+	GetByID(ctx context.Context, fdcID int) (Candidate, error)
+}
+
 // BarcodeProvider extends FoodProvider with barcode lookup.
 type BarcodeProvider interface {
 	FoodProvider
