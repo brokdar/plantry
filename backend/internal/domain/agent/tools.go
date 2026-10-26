@@ -13,6 +13,7 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -104,7 +105,19 @@ func (s *ToolSet) Describe() []llm.Tool {
 // Execute validates input against the tool's schema then dispatches to its
 // handler. Schema violations surface as domain.ErrInvalidInput so the model
 // sees a structured tool_result and can retry with corrected arguments.
+// Each call is recorded as a tool_call step of the AI run in ctx, if any.
 func (s *ToolSet) Execute(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
+	start := time.Now()
+	output, effect, err := s.execute(ctx, name, input)
+	result := output
+	if err != nil {
+		result = mustMarshal(map[string]string{"error": err.Error()})
+	}
+	airun.FromContext(ctx).ToolStep(ctx, name, input, result, err != nil, time.Since(start))
+	return output, effect, err
+}
+
+func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 	t, ok := s.byName[name]
 	if !ok {
 		return nil, ToolEffectNone, fmt.Errorf("%w: %s", ErrToolNotFound, name)

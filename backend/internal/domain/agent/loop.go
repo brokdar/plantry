@@ -47,6 +47,7 @@ type RunRequest struct {
 // error it persists a role=error message and emits an Error event.
 func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet, repo Repository, out chan<- llm.Event) error {
 	history := append([]llm.Message{}, req.History...)
+	var usage llm.Usage
 
 	for iter := 0; iter < MaxIterations; iter++ {
 		providerReq := llm.Request{
@@ -78,19 +79,20 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		}
 		res := <-done
 		if res.err != nil {
-			emitAndPersistError(ctx, out, repo, req.ConversationID, "error.ai.stream_interrupted", res.err)
-			return res.err
+			return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.ai.stream_interrupted", res.err)
 		}
 		if res.resp == nil {
 			err := errors.New("llm client returned nil response without error")
-			emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", err)
-			return err
+			return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", err)
 		}
+		usage.InputTokens += res.resp.Usage.InputTokens
+		usage.OutputTokens += res.resp.Usage.OutputTokens
+		usage.CacheReadTokens += res.resp.Usage.CacheReadTokens
+		usage.CacheWriteTokens += res.resp.Usage.CacheWriteTokens
 
 		// Persist the assistant message (text + any tool_use blocks).
 		if err := persistMessage(ctx, repo, req.ConversationID, RoleAssistant, res.resp.Message.Content); err != nil {
-			emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", err)
-			return err
+			return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", err)
 		}
 		history = append(history, res.resp.Message)
 
@@ -100,7 +102,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		if res.resp.StopReason == llm.StopReasonEndTurn || len(toolUses) == 0 {
 			send(ctx, out, llm.Event{Type: llm.EventDone, Payload: llm.DonePayload{
 				StopReason:     res.resp.StopReason,
-				Usage:          res.resp.Usage,
+				Usage:          usage,
 				IterationCount: iter + 1,
 			}})
 			return nil
@@ -172,15 +174,13 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 
 		// Persist and append the tool message carrying all result blocks.
 		if err := persistMessage(ctx, repo, req.ConversationID, RoleTool, resultBlocks); err != nil {
-			emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", err)
-			return err
+			return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", err)
 		}
 		history = append(history, llm.Message{Role: llm.RoleUser, Content: resultBlocks})
 	}
 
 	err := fmt.Errorf("%w: %d iterations reached", ErrIterationsExceeded, MaxIterations)
-	emitAndPersistError(ctx, out, repo, req.ConversationID, "error.ai.iterations_exceeded", err)
-	return err
+	return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.ai.iterations_exceeded", err)
 }
 
 // send writes evt to out unless ctx is done. Returns false if the context was
@@ -216,7 +216,19 @@ func persistMessage(ctx context.Context, repo Repository, convID int64, role Rol
 	})
 }
 
-func emitAndPersistError(ctx context.Context, out chan<- llm.Event, repo Repository, convID int64, key string, err error) {
+// keyedError carries the i18n message key the loop emitted for a fatal error.
+// It wraps the original error, so errors.Is and Error() are unchanged.
+type keyedError struct {
+	key string
+	err error
+}
+
+func (e *keyedError) Error() string { return e.err.Error() }
+func (e *keyedError) Unwrap() error { return e.err }
+
+// emitAndPersistError reports a fatal loop error and returns err tagged with
+// key for the caller to return.
+func emitAndPersistError(ctx context.Context, out chan<- llm.Event, repo Repository, convID int64, key string, err error) error {
 	send(ctx, out, llm.Event{Type: llm.EventError, Payload: llm.StreamErrorPayload{
 		MessageKey: key, Message: err.Error(),
 	}})
@@ -230,6 +242,7 @@ func emitAndPersistError(ctx context.Context, out chan<- llm.Event, repo Reposit
 		Role:           RoleError,
 		Content:        b,
 	})
+	return &keyedError{key: key, err: err}
 }
 
 // errorMessageKey returns a stable i18n key for domain-level error types.
