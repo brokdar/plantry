@@ -57,7 +57,19 @@ func TestLoadOrCreateSecretKey_ShortFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "secret.key"), []byte("tooshort\n"), 0o600))
 
 	_, err := config.LoadOrCreateSecretKey(dir)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "must be at least 32 chars")
+}
+
+func TestLoadOrCreateSecretKey_EmptyFile(t *testing.T) {
+	for name, content := range map[string]string{"empty": "", "whitespace only": " \n\t\n"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "secret.key"), []byte(content), 0o600))
+
+			_, err := config.LoadOrCreateSecretKey(dir)
+			require.ErrorContains(t, err, "must be at least 32 chars")
+		})
+	}
 }
 
 func TestLoadOrCreateSecretKey_UnreadableFile(t *testing.T) {
@@ -66,7 +78,7 @@ func TestLoadOrCreateSecretKey_UnreadableFile(t *testing.T) {
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "secret.key"), 0o700))
 
 	_, err := config.LoadOrCreateSecretKey(dir)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "read secret key file")
 }
 
 func TestEnsureSecretKey_EnvWins(t *testing.T) {
