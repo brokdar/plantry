@@ -986,6 +986,24 @@
     }
   },
   "availability": {
+    "weekday_short": {
+      "0": "Mo",
+      "1": "Di",
+      "2": "Mi",
+      "3": "Do",
+      "4": "Fr",
+      "5": "Sa",
+      "6": "So"
+    },
+    "weekday_long": {
+      "0": "Montag",
+      "1": "Dienstag",
+      "2": "Mittwoch",
+      "3": "Donnerstag",
+      "4": "Freitag",
+      "5": "Samstag",
+      "6": "Sonntag"
+    },
     "mode": {
       "plan": "Planen",
       "none": "Kein Essen",
@@ -1008,7 +1026,8 @@
     "availability": {
       "cell_has_plate": "Für diese Mahlzeit ist schon etwas geplant. Entferne es, bevor du „Kein Essen“ setzt.",
       "preset_required": "Wähle aus, welcher Routine diese Mahlzeit folgt.",
-      "preset_not_allowed": "Nur Routine-Mahlzeiten können eine Routine haben."
+      "preset_not_allowed": "Nur Routine-Mahlzeiten können eine Routine haben.",
+      "slot_inactive": "Diese Mahlzeit ist ausgeschaltet. Schalte sie in den Einstellungen ein, um sie zu ändern."
     },
     "page_not_found": "Seite nicht gefunden.",
     "page_not_found_body": "Die gesuchte Seite existiert nicht.",

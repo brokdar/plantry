@@ -16,7 +16,10 @@ import { RoutinePicker, type RoutinePreset } from "./RoutinePicker"
 
 export interface AvailabilityGridColumn {
   key: string
+  /** Shown in the header; may be short ("Mon"). */
   label: string
+  /** Full name for headers and cell names read by assistive tech ("Monday"). */
+  fullLabel?: string
   sublabel?: string
 }
 
@@ -49,6 +52,8 @@ export interface AvailabilityGridProps {
    *  "Plan all day"; it receives one patch covering every slot of the column. */
   onBulkChange?: (patch: AvailabilityGridValue) => void
   disabled?: boolean
+  /** Background the grid sits on, so the sticky slot column matches it. */
+  surface?: "ground" | "panel"
 }
 
 const PLAN: AvailabilityCellValue = { mode: "plan" }
@@ -69,6 +74,7 @@ export function AvailabilityGrid({
   onChange,
   onBulkChange,
   disabled = false,
+  surface = "ground",
 }: AvailabilityGridProps) {
   const { t } = useTranslation()
   const [active, setActive] = useState({ row: 0, col: 0 })
@@ -78,6 +84,7 @@ export function AvailabilityGrid({
   const presetNames = new Map(presets.map((p) => [p.id, p.name]))
   const activeRow = Math.min(active.row, slots.length - 1)
   const activeCol = Math.min(active.col, columns.length - 1)
+  const stickyBg = surface === "panel" ? "bg-panel" : "bg-ground"
 
   function stateText(cell: AvailabilityCellValue) {
     if (cell.mode === "none") return t("availability.mode.none")
@@ -141,7 +148,7 @@ export function AvailabilityGrid({
             <th
               role="columnheader"
               scope="col"
-              className="sticky left-0 z-10 bg-ground"
+              className={cn("sticky left-0 z-10", stickyBg)}
             >
               <span className="sr-only">{t("availability.slot_header")}</span>
             </th>
@@ -154,9 +161,15 @@ export function AvailabilityGrid({
               >
                 <div className="flex items-end justify-between gap-1">
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-small font-semibold text-ink">
+                    <span
+                      aria-hidden={col.fullLabel ? true : undefined}
+                      className="truncate text-small font-semibold text-ink"
+                    >
                       {col.label}
                     </span>
+                    {col.fullLabel ? (
+                      <span className="sr-only">{col.fullLabel}</span>
+                    ) : null}
                     {col.sublabel ? (
                       <span className="truncate text-caption text-ink-muted tabular-nums">
                         {col.sublabel}
@@ -168,7 +181,7 @@ export function AvailabilityGrid({
                       <DropdownMenuTrigger
                         disabled={disabled}
                         aria-label={t("availability.column_actions", {
-                          column: col.label,
+                          column: col.fullLabel ?? col.label,
                         })}
                         className="flex size-7 shrink-0 items-center justify-center rounded-cell text-ink-muted hover:bg-panel-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50 pointer-coarse:size-11"
                       >
@@ -205,7 +218,10 @@ export function AvailabilityGrid({
               <th
                 role="rowheader"
                 scope="row"
-                className="sticky left-0 z-10 truncate bg-ground pr-2 text-left text-small font-normal text-ink-muted"
+                className={cn(
+                  "sticky left-0 z-10 truncate pr-2 text-left text-small font-normal text-ink-muted",
+                  stickyBg
+                )}
               >
                 {slot.label}
               </th>
@@ -247,7 +263,7 @@ export function AvailabilityGrid({
                         }
                         disabled={disabled}
                         aria-label={t("availability.cell_name", {
-                          column: col.label,
+                          column: col.fullLabel ?? col.label,
                           slot: slot.label,
                           slotLower: slot.label.toLowerCase(),
                           state,

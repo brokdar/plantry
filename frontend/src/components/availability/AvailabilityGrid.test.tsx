@@ -194,6 +194,32 @@ describe("AvailabilityGrid", () => {
     expect(spy).toHaveBeenLastCalledWith("1", 1, { mode: "none" })
   })
 
+  it("sticky header cells match the surface", async () => {
+    const { unmount } = renderWithRouter(<Harness />)
+    expect(await screen.findByRole("rowheader", { name: "Lunch" })).toHaveClass(
+      "bg-ground"
+    )
+    unmount()
+
+    renderWithRouter(<Harness surface="panel" />)
+    const rowHeader = await screen.findByRole("rowheader", { name: "Lunch" })
+    expect(rowHeader).toHaveClass("bg-panel")
+    expect(rowHeader).not.toHaveClass("bg-ground")
+    expect(screen.getByRole("columnheader", { name: "Meal" })).toHaveClass(
+      "bg-panel"
+    )
+  })
+
+  it("uses the full column name for headers and cells", async () => {
+    renderWithRouter(
+      <Harness columns={[{ key: "0", label: "Mon", fullLabel: "Monday" }]} />
+    )
+    expect(
+      await screen.findByRole("columnheader", { name: "Monday" })
+    ).toBeInTheDocument()
+    expect(await cell("Monday lunch, Plan")).toBeInTheDocument()
+  })
+
   it("disables every cell when disabled", async () => {
     renderWithRouter(<Harness disabled />)
     expect(await cell("Monday breakfast, Plan")).toBeDisabled()

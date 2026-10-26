@@ -929,6 +929,24 @@
     }
   },
   "availability": {
+    "weekday_short": {
+      "0": "Mon",
+      "1": "Tue",
+      "2": "Wed",
+      "3": "Thu",
+      "4": "Fri",
+      "5": "Sat",
+      "6": "Sun"
+    },
+    "weekday_long": {
+      "0": "Monday",
+      "1": "Tuesday",
+      "2": "Wednesday",
+      "3": "Thursday",
+      "4": "Friday",
+      "5": "Saturday",
+      "6": "Sunday"
+    },
     "mode": {
       "plan": "Plan",
       "none": "No plate",
@@ -951,7 +969,8 @@
     "availability": {
       "cell_has_plate": "This meal already has a plate. Remove it before marking it No plate.",
       "preset_required": "Choose which routine this meal follows.",
-      "preset_not_allowed": "Only Routine meals can have a routine attached."
+      "preset_not_allowed": "Only Routine meals can have a routine attached.",
+      "slot_inactive": "This meal is turned off. Turn it on in Settings to change it."
     },
     "page_not_found": "Page not found.",
     "page_not_found_body": "The page you're looking for doesn't exist.",
