@@ -163,11 +163,11 @@ test.describe("Planner — No plate + favorite", () => {
       await expect(cell.locator('[data-slot-state="none"]')).toBeVisible()
       await expect(cell.getByText(`Pho ${tag}`)).toHaveCount(0)
 
-      // "Plan this meal" puts a plan override: the cell is plannable again.
+      // "Plan this meal" drops the none override: the plan default applies.
       const planned = page.waitForResponse(
         (r) =>
           r.url().endsWith(`/api/availability/${day0}/${slot.id}`) &&
-          r.request().method() === "PUT"
+          r.request().method() === "DELETE"
       )
       await cell.getByRole("button", { name: "Plan this meal" }).click()
       expect((await planned).ok()).toBeTruthy()

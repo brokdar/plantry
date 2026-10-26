@@ -40,8 +40,8 @@ UPDATE plates SET
 WHERE id = ?
 RETURNING *;
 
--- name: GetPlateByCell :one
-SELECT * FROM plates WHERE date = ? AND slot_id = ?;
+-- name: GetPlateIDByCell :one
+SELECT id FROM plates WHERE date = ? AND slot_id = ?;
 
 -- name: DeletePlate :execresult
 DELETE FROM plates WHERE id = ?;

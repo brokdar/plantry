@@ -89,14 +89,14 @@ func (s *Service) checkCell(ctx context.Context, date time.Time, slotID, selfID 
 			return fmt.Errorf("%w: %s slot %d", domain.ErrCellUnavailable, date.Format("2006-01-02"), slotID)
 		}
 	}
-	existing, err := s.repo.GetByCell(ctx, date, slotID)
+	existingID, err := s.repo.GetIDByCell(ctx, date, slotID)
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		return nil
 	case err != nil:
 		return fmt.Errorf("check cell: %w", err)
-	case existing.ID != selfID:
-		return fmt.Errorf("%w: plate %d", domain.ErrCellOccupied, existing.ID)
+	case existingID != selfID:
+		return fmt.Errorf("%w: plate %d", domain.ErrCellOccupied, existingID)
 	}
 	return nil
 }

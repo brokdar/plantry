@@ -174,28 +174,6 @@ func (q *Queries) GetPlate(ctx context.Context, id int64) (Plate, error) {
 	return i, err
 }
 
-const getPlateByCell = `-- name: GetPlateByCell :one
-SELECT id, slot_id, note, created_at, date FROM plates WHERE date = ? AND slot_id = ?
-`
-
-type GetPlateByCellParams struct {
-	Date   string
-	SlotID int64
-}
-
-func (q *Queries) GetPlateByCell(ctx context.Context, arg GetPlateByCellParams) (Plate, error) {
-	row := q.db.QueryRowContext(ctx, getPlateByCell, arg.Date, arg.SlotID)
-	var i Plate
-	err := row.Scan(
-		&i.ID,
-		&i.SlotID,
-		&i.Note,
-		&i.CreatedAt,
-		&i.Date,
-	)
-	return i, err
-}
-
 const getPlateComponent = `-- name: GetPlateComponent :one
 SELECT id, plate_id, food_id, portions, amount, unit, grams, grams_source, sort_order FROM plate_components WHERE id = ?
 `
@@ -215,6 +193,22 @@ func (q *Queries) GetPlateComponent(ctx context.Context, id int64) (PlateCompone
 		&i.SortOrder,
 	)
 	return i, err
+}
+
+const getPlateIDByCell = `-- name: GetPlateIDByCell :one
+SELECT id FROM plates WHERE date = ? AND slot_id = ?
+`
+
+type GetPlateIDByCellParams struct {
+	Date   string
+	SlotID int64
+}
+
+func (q *Queries) GetPlateIDByCell(ctx context.Context, arg GetPlateIDByCellParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getPlateIDByCell, arg.Date, arg.SlotID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getTimeSlot = `-- name: GetTimeSlot :one

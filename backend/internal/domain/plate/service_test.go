@@ -16,7 +16,7 @@ import (
 )
 
 // fakeRepo is a minimal Repository stub. byID backs Get, byCell backs
-// GetByCell; createErr/updateErr are returned by Create/Update.
+// GetIDByCell; createErr/updateErr are returned by Create/Update.
 type fakeRepo struct {
 	rangeResult []plate.Plate
 	rangeErr    error
@@ -45,12 +45,11 @@ func (r *fakeRepo) Get(_ context.Context, id int64) (*plate.Plate, error) {
 	return &plate.Plate{ID: id}, nil
 }
 
-func (r *fakeRepo) GetByCell(_ context.Context, date time.Time, slotID int64) (*plate.Plate, error) {
+func (r *fakeRepo) GetIDByCell(_ context.Context, date time.Time, slotID int64) (int64, error) {
 	if p, ok := r.byCell[cellKey(date, slotID)]; ok {
-		cp := *p
-		return &cp, nil
+		return p.ID, nil
 	}
-	return nil, domain.ErrNotFound
+	return 0, domain.ErrNotFound
 }
 
 func (r *fakeRepo) Update(_ context.Context, _ *plate.Plate) error {

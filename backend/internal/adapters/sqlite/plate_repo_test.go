@@ -123,23 +123,25 @@ func TestPlatesRepo_UpdatePlate_UpdatesDate(t *testing.T) {
 	assert.Equal(t, "2026-04-27", dateStr, "date column after update")
 }
 
-func TestPlatesRepo_GetByCell(t *testing.T) {
+func TestPlatesRepo_GetIDByCell(t *testing.T) {
 	db := testhelper.NewTestDB(t)
 	ctx := context.Background()
 	slotID := seedSlot(t, db)
 	repo := NewPlateRepo(db)
 	d := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
 
-	_, err := repo.GetByCell(ctx, d, slotID)
+	_, err := repo.GetIDByCell(ctx, d, slotID)
 	require.ErrorIs(t, err, domain.ErrNotFound, "empty cell")
 
 	p := &plate.Plate{Date: d, SlotID: slotID}
 	require.NoError(t, repo.Create(ctx, p))
 
-	got, err := repo.GetByCell(ctx, d, slotID)
+	got, err := repo.GetIDByCell(ctx, d, slotID)
 	require.NoError(t, err)
-	assert.Equal(t, p.ID, got.ID)
-	assert.Equal(t, d, got.Date)
+	assert.Equal(t, p.ID, got)
+
+	_, err = repo.GetIDByCell(ctx, d.AddDate(0, 0, 1), slotID)
+	require.ErrorIs(t, err, domain.ErrNotFound, "other date")
 }
 
 // TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied writes straight through

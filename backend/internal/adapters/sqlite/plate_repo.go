@@ -115,24 +115,19 @@ func (r *PlateRepo) Update(ctx context.Context, p *plate.Plate) error {
 	return nil
 }
 
-// GetByCell returns the plate of the (date, slot) cell with its components.
-func (r *PlateRepo) GetByCell(ctx context.Context, date time.Time, slotID int64) (*plate.Plate, error) {
-	row, err := r.q.GetPlateByCell(ctx, sqlcgen.GetPlateByCellParams{
+// GetIDByCell returns the id of the (date, slot) cell's plate.
+func (r *PlateRepo) GetIDByCell(ctx context.Context, date time.Time, slotID int64) (int64, error) {
+	id, err := r.q.GetPlateIDByCell(ctx, sqlcgen.GetPlateIDByCellParams{
 		Date:   date.Format(dateLayout),
 		SlotID: slotID,
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("%w: no plate at %s slot %d", domain.ErrNotFound, date.Format(dateLayout), slotID)
+			return 0, fmt.Errorf("%w: no plate at %s slot %d", domain.ErrNotFound, date.Format(dateLayout), slotID)
 		}
-		return nil, err
+		return 0, err
 	}
-	var p plate.Plate
-	mapPlateToDomain(&row, &p)
-	if err := r.loadPlateChildren(ctx, &p); err != nil {
-		return nil, err
-	}
-	return &p, nil
+	return id, nil
 }
 
 func (r *PlateRepo) Delete(ctx context.Context, id int64) error {

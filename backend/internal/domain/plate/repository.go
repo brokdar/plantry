@@ -9,9 +9,9 @@ import (
 type Repository interface {
 	Create(ctx context.Context, p *Plate) error
 	Get(ctx context.Context, id int64) (*Plate, error)
-	// GetByCell returns the plate of the (date, slot) cell, or an error
-	// wrapping domain.ErrNotFound when the cell is empty.
-	GetByCell(ctx context.Context, date time.Time, slotID int64) (*Plate, error)
+	// GetIDByCell returns the id of the (date, slot) cell's plate, or an
+	// error wrapping domain.ErrNotFound when the cell is empty.
+	GetIDByCell(ctx context.Context, date time.Time, slotID int64) (int64, error)
 	Update(ctx context.Context, p *Plate) error
 	Delete(ctx context.Context, id int64) error
 	ListByDateRange(ctx context.Context, from, to time.Time) ([]Plate, error)

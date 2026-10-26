@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next"
 
 import {
   clearAvailabilityOverride,
+  getAvailabilityRange,
   setAvailabilityOverride,
   type AvailabilityCell,
   type AvailabilityRangeResponse,
@@ -32,7 +33,10 @@ import {
 
 import { toast, toastError } from "@/lib/toast"
 
-import { useSetAvailabilityOverride } from "./availability"
+import {
+  useClearAvailabilityOverride,
+  useSetAvailabilityOverride,
+} from "./availability"
 import { availabilityKeys, plateKeys } from "./keys"
 import { flushPendingPlateDeletes } from "./pending-plate-deletes"
 
@@ -265,8 +269,8 @@ const NO_PLATE_UNDO_MS = 6000
  *   Undo: first the previous override state comes back (cleared, or re-put
  *   with its mode, preset and note), then the removed plate is recreated with
  *   its components. Its feedback is not restored.
- * - `planMeal` puts a `plan` override, so the meal is plannable even over a
- *   `none` weekday default.
+ * - `planMeal` drops a cell's override so it falls back to its weekday
+ *   default, and puts a `plan` override only when that default is `none`.
  * - `editNote` keeps the cell `none` and writes its note.
  *
  * Failures are toasted by the underlying mutation hooks.
@@ -275,6 +279,7 @@ export function useNoPlateActions(rangeFrom: string, rangeTo: string) {
   const qc = useQueryClient()
   const { t } = useTranslation()
   const setOverride = useSetAvailabilityOverride()
+  const clearOverride = useClearAvailabilityOverride()
 
   function cellAt(date: string, slotId: number): AvailabilityCell | undefined {
     return qc
@@ -351,12 +356,24 @@ export function useNoPlateActions(rangeFrom: string, rangeTo: string) {
   }
 
   async function planMeal(date: string, slotId: number) {
-    // Always an explicit `plan` override: clearing the override would leave
-    // the cell No plate whenever the weekday default is `none`.
+    // Prefer reverting to the weekday default so the date is not pinned;
+    // only a `none` default needs an explicit `plan` override.
     try {
+      if (cellAt(date, slotId)?.source === "override") {
+        await clearOverride.mutateAsync({ date, slotId })
+        let resolved: AvailabilityCell | undefined
+        try {
+          const res = await getAvailabilityRange(date, date)
+          resolved = res.items.find((c) => c.slot_id === slotId)
+        } catch (err) {
+          toastError(err, t)
+          return
+        }
+        if (resolved?.mode !== "none") return
+      }
       await setOverride.mutateAsync({ date, slotId, input: { mode: "plan" } })
     } catch {
-      // toasted by the mutation hook
+      // toasted by the mutation hooks
     }
   }
 
