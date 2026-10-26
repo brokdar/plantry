@@ -33,7 +33,7 @@ export function useSetAvailabilityDefaults() {
       setAvailabilityDefaults(items),
     onSuccess: (data) => {
       qc.setQueryData(availabilityKeys.defaults(), data)
-      void qc.invalidateQueries({ queryKey: availabilityKeys.all })
+      void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
     },
     onError: (err) => toastError(err, t),
   })

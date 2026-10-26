@@ -84,11 +84,11 @@ describe("availability queries", () => {
     expect(getAvailabilityRange).not.toHaveBeenCalled()
   })
 
-  it("useSetAvailabilityDefaults PUTs the grid and invalidates availability", async () => {
+  it("useSetAvailabilityDefaults PUTs the grid, caches it and invalidates only ranges", async () => {
     vi.mocked(setAvailabilityDefaults).mockResolvedValueOnce({
       items: mockAvailabilityDefaults,
     })
-    const { wrapper, invalidate } = setup()
+    const { qc, wrapper, invalidate } = setup()
     const { result } = renderHook(() => useSetAvailabilityDefaults(), {
       wrapper,
     })
@@ -96,7 +96,10 @@ describe("availability queries", () => {
     expect(setAvailabilityDefaults).toHaveBeenCalledWith(
       mockAvailabilityDefaults
     )
-    expect(invalidatedKeys(invalidate)).toContainEqual(availabilityKeys.all)
+    expect(qc.getQueryData(availabilityKeys.defaults())).toEqual({
+      items: mockAvailabilityDefaults,
+    })
+    expect(invalidatedKeys(invalidate)).toEqual([availabilityKeys.ranges()])
   })
 
   it("useSetAvailabilityOverride invalidates ranges but not plates without removed_plate", async () => {

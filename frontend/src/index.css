@@ -467,4 +467,11 @@
     --tw-exit-translate-x: 0 !important;
     --tw-exit-translate-y: 0 !important;
   }
+
+  /* Loading spinners convey state, not decoration: keep them turning.
+     Class specificity (and source order) beats the * rule above. */
+  .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
 }

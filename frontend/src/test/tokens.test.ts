@@ -118,6 +118,14 @@ describe("design tokens (index.css)", () => {
     ]) {
       expect(body).toMatch(new RegExp(`${v}:\\s*0\\s*!important`))
     }
+    // Spinners are exempt: they keep spinning, declared after the * rule.
+    const spin = /\.animate-spin\s*\{([^}]*)\}/.exec(body)
+    expect(spin, "no .animate-spin exemption").not.toBeNull()
+    expect(spin!.index).toBeGreaterThan(body.indexOf("*,"))
+    expect(spin![1]).toMatch(/animation-duration:\s*1s\s*!important/)
+    expect(spin![1]).toMatch(
+      /animation-iteration-count:\s*infinite\s*!important/
+    )
   })
 
   it("gives every focusable element a 2px accent focus outline", () => {
