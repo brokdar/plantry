@@ -181,7 +181,8 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
 	}
-	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc).WithRecorder(runRecorder)
+	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc,
+		agent.WindowSources{Plates: plateSvc, Slots: slotSvc, Foods: foodRepo}, time.Now).WithRecorder(runRecorder)
 	aiHandler := handlers.NewAIHandler(agentSvc, llmResolver)
 
 	// Recipe importer (Phase 11).

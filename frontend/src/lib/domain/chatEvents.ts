@@ -82,6 +82,11 @@ export interface ChatRequest {
   conversation_id?: number
   mode?: "fill_empty" | "replace_all" | ""
   message: string
+  /** The browser's date (YYYY-MM-DD). */
+  today: string
+  /** Planning window bounds (YYYY-MM-DD, inclusive). */
+  from: string
+  to: string
 }
 
 export interface ConversationSummary {

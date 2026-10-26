@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { postChatStream } from "./ai"
 import { ApiError } from "./client"
 
+const dates = { today: "2026-10-26", from: "2026-10-26", to: "2026-11-01" }
+
 function stringToReadable(s: string): ReadableStream<Uint8Array> {
   const enc = new TextEncoder()
   return new ReadableStream({
@@ -52,7 +54,10 @@ describe("postChatStream", () => {
 
     const ac = new AbortController()
     const events: { type: string; data: unknown }[] = []
-    for await (const e of postChatStream({ message: "hi" }, ac.signal)) {
+    for await (const e of postChatStream(
+      { message: "hi", ...dates },
+      ac.signal
+    )) {
       events.push({ type: e.type, data: e.data })
     }
 
@@ -78,7 +83,7 @@ describe("postChatStream", () => {
 
     const events: { type: string; data: unknown }[] = []
     for await (const e of postChatStream(
-      { message: "hi" },
+      { message: "hi", ...dates },
       new AbortController().signal
     )) {
       events.push({ type: e.type, data: e.data })
@@ -103,7 +108,7 @@ describe("postChatStream", () => {
 
     await expect(async () => {
       for await (const evt of postChatStream(
-        { message: "hi" },
+        { message: "hi", ...dates },
         new AbortController().signal
       )) {
         void evt
@@ -123,7 +128,7 @@ describe("postChatStream", () => {
 
     const events: { type: string }[] = []
     for await (const e of postChatStream(
-      { message: "x" },
+      { message: "x", ...dates },
       new AbortController().signal
     )) {
       events.push({ type: e.type })
@@ -141,7 +146,7 @@ describe("postChatStream", () => {
 
     const events: { type: string; data: unknown }[] = []
     for await (const e of postChatStream(
-      { message: "x" },
+      { message: "x", ...dates },
       new AbortController().signal
     )) {
       events.push({ type: e.type, data: e.data })

@@ -44,18 +44,31 @@ func newChatService(t *testing.T, script *fake.Script) (*agent.Service, *sql.DB)
 		tools,
 		profile.NewService(sqlite.NewProfileRepo(db)),
 		nil,
+		windowSources(db),
+		time.Now,
 	).WithRecorder(rec)
 	return svc, db
 }
 
-// chat runs one Chat turn, draining events. onEvent (optional) sees each
-// event as it arrives.
+// chatWindowStart / chatWindowEnd are the planning window chat() sends.
+var (
+	chatWindowStart = time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
+	chatWindowEnd   = time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
+)
+
+// chat runs one Chat turn over the default window, draining events. onEvent
+// (optional) sees each event as it arrives.
 func chat(ctx context.Context, svc *agent.Service, text string, onEvent func(llm.Event)) ([]llm.Event, error) {
+	return chatReq(ctx, svc, agent.ChatRequest{UserText: text, From: chatWindowStart, To: chatWindowEnd}, onEvent)
+}
+
+// chatReq runs one Chat turn for req, draining events.
+func chatReq(ctx context.Context, svc *agent.Service, req agent.ChatRequest, onEvent func(llm.Event)) ([]llm.Event, error) {
 	out := make(chan llm.Event, 32)
 	errCh := make(chan error, 1)
 	go func() {
 		defer close(out)
-		errCh <- svc.Chat(ctx, agent.ChatRequest{UserText: text}, out)
+		errCh <- svc.Chat(ctx, req, out)
 	}()
 	var evts []llm.Event
 	for e := range out {
@@ -70,6 +83,7 @@ func chat(ctx context.Context, svc *agent.Service, text string, onEvent func(llm
 type runRow struct {
 	Kind, Provider, Model, PromptVersion, Status string
 	Instruction, ErrorKey                        sql.NullString
+	WindowStart, WindowEnd                       sql.NullString
 	Iterations                                   int
 	InputTokens, OutputTokens                    int64
 	CacheReadTokens, CacheWriteTokens            int64
@@ -95,10 +109,10 @@ func onlyRun(t *testing.T, db *sql.DB) (runRow, []stepRow) {
 	var r runRow
 	var id int64
 	require.NoError(t, db.QueryRow(`SELECT id, kind, provider, model, prompt_version, status,
-		instruction, error_key, iterations, input_tokens, output_tokens,
+		instruction, error_key, window_start, window_end, iterations, input_tokens, output_tokens,
 		cache_read_tokens, cache_write_tokens, finished_at FROM ai_runs`).Scan(
 		&id, &r.Kind, &r.Provider, &r.Model, &r.PromptVersion, &r.Status,
-		&r.Instruction, &r.ErrorKey, &r.Iterations, &r.InputTokens, &r.OutputTokens,
+		&r.Instruction, &r.ErrorKey, &r.WindowStart, &r.WindowEnd, &r.Iterations, &r.InputTokens, &r.OutputTokens,
 		&r.CacheReadTokens, &r.CacheWriteTokens, &r.FinishedAt))
 
 	rows, err := db.Query(`SELECT seq, type, name, is_error, input_tokens, output_tokens
@@ -151,6 +165,8 @@ func TestChat_RecordsChatRun(t *testing.T) {
 	assert.Equal(t, agent.PromptVersion, run.PromptVersion)
 	assert.Equal(t, "ok", run.Status)
 	assert.Equal(t, "plan my dinners", run.Instruction.String)
+	assert.Equal(t, "2026-10-31", run.WindowStart.String)
+	assert.Equal(t, "2026-11-06", run.WindowEnd.String)
 	assert.False(t, run.ErrorKey.Valid)
 	assert.True(t, run.FinishedAt.Valid)
 	assert.Equal(t, 2, run.Iterations)
@@ -208,10 +224,12 @@ func TestChat_ErrorStatusAndKey(t *testing.T) {
 }
 
 func TestChat_CancelledStatus(t *testing.T) {
-	// The first scripted event waits long enough for the test to cancel.
+	// The test cancels on the first delta, once the loop (and so the run) has
+	// started; the second scripted event waits long enough for that.
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{{
 		StopReason: "end_turn",
 		Events: []fake.ScriptedEvent{
+			{Type: string(llm.EventAssistantDelta), Payload: json.RawMessage(`{"text":"early"}`)},
 			{DelayMs: 10_000, Type: string(llm.EventAssistantDelta), Payload: json.RawMessage(`{"text":"late"}`)},
 		},
 	}}})
@@ -219,7 +237,7 @@ func TestChat_CancelledStatus(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, err := chat(ctx, svc, "hi", func(e llm.Event) {
-		if e.Type == llm.EventConversationReady {
+		if e.Type == llm.EventAssistantDelta {
 			cancel()
 		}
 	})
@@ -237,10 +255,26 @@ func TestChat_NoRecorderRecordsNothing(t *testing.T) {
 	require.NoError(t, err)
 	svc := agent.NewService(sqlite.NewAIRepo(db),
 		llm.StaticResolver(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}}), chatModel),
-		tools, profile.NewService(sqlite.NewProfileRepo(db)), nil)
+		tools, profile.NewService(sqlite.NewProfileRepo(db)), nil, windowSources(db), time.Now)
 
 	_, err = chat(context.Background(), svc, "hi", nil)
 	require.NoError(t, err)
+
+	var n int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM ai_runs`).Scan(&n))
+	assert.Zero(t, n)
+}
+
+func TestChat_ProviderMissingRecordsNothing(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
+	tools, err := agent.NewToolSet(agent.Services{Foods: food.NewService(sqlite.NewFoodRepo(db))})
+	require.NoError(t, err)
+	svc := agent.NewService(sqlite.NewAIRepo(db), llm.StaticResolver(nil, ""), tools,
+		profile.NewService(sqlite.NewProfileRepo(db)), nil, windowSources(db), time.Now).WithRecorder(rec)
+
+	_, err = chat(context.Background(), svc, "hi", nil)
+	require.Error(t, err)
 
 	var n int
 	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM ai_runs`).Scan(&n))

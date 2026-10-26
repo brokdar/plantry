@@ -52,7 +52,15 @@ func (h *AIHandler) DebugSystemPrompt(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "error.ai.provider_missing")
 		return
 	}
-	prompt, err := h.svc.DebugSystemPrompt(r.Context())
+	q := r.URL.Query()
+	dates, key := parseChatDates(q.Get("today"), q.Get("from"), q.Get("to"))
+	if key != "" {
+		writeError(w, http.StatusBadRequest, key)
+		return
+	}
+	prompt, err := h.svc.DebugSystemPrompt(r.Context(), agent.ChatRequest{
+		Today: dates.today, From: dates.from, To: dates.to,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "error.server")
 		return
@@ -65,6 +73,42 @@ type chatRequestBody struct {
 	WeekID         *int64 `json:"week_id,omitempty"`
 	Mode           string `json:"mode,omitempty"`
 	Message        string `json:"message"`
+	Today          string `json:"today,omitempty"` // YYYY-MM-DD; server clock when empty
+	From           string `json:"from"`            // YYYY-MM-DD, required
+	To             string `json:"to"`              // YYYY-MM-DD, required
+}
+
+// maxChatWindowDays caps the planning window a chat turn may cover.
+const maxChatWindowDays = 31
+
+type chatDates struct{ today, from, to time.Time }
+
+// parseChatDates validates the chat planning window. today is optional (zero
+// when empty); from and to are required. On failure it returns the i18n key.
+func parseChatDates(todayStr, fromStr, toStr string) (chatDates, string) {
+	var d chatDates
+	if fromStr == "" || toStr == "" {
+		return d, "error.ai.window_missing"
+	}
+	var err error
+	if d.from, err = time.Parse("2006-01-02", fromStr); err != nil {
+		return d, "error.ai.invalid_date"
+	}
+	if d.to, err = time.Parse("2006-01-02", toStr); err != nil {
+		return d, "error.ai.invalid_date"
+	}
+	if todayStr != "" {
+		if d.today, err = time.Parse("2006-01-02", todayStr); err != nil {
+			return d, "error.ai.invalid_date"
+		}
+	}
+	if d.to.Before(d.from) {
+		return d, "error.ai.window_inverted"
+	}
+	if d.to.Sub(d.from) >= maxChatWindowDays*24*time.Hour {
+		return d, "error.ai.window_too_long"
+	}
+	return d, ""
 }
 
 // Chat handles POST /api/ai/chat (SSE).
@@ -83,6 +127,11 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
+	dates, key := parseChatDates(body.Today, body.From, body.To)
+	if key != "" {
+		writeError(w, http.StatusBadRequest, key)
+		return
+	}
 
 	writer := sse.New(w)
 	ctx := r.Context()
@@ -96,6 +145,9 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 			WeekID:         body.WeekID,
 			Mode:           body.Mode,
 			UserText:       body.Message,
+			Today:          dates.today,
+			From:           dates.from,
+			To:             dates.to,
 		}, events)
 	}()
 

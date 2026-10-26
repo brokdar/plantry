@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
@@ -15,10 +14,23 @@ import (
 const promptCharBudget = 16_000
 
 // DateRange is the active planning window passed to ComposePrompt.
-// Both From and To are inclusive, time-of-day is ignored (date only).
+// Both From and To are inclusive, time-of-day is ignored (date only). Today
+// is the user's current date; zero omits the today line.
 type DateRange struct {
-	From time.Time
-	To   time.Time
+	Today time.Time
+	From  time.Time
+	To    time.Time
+}
+
+// PromptPlate is a plate in the planning window with its slot and food names
+// resolved for the system prompt.
+type PromptPlate struct {
+	ID      int64
+	Date    time.Time
+	SlotID  int64
+	Slot    string // slot name key
+	Foods   []string
+	Skipped bool
 }
 
 // PlanningPrefs holds the user's plan settings that drive the system prompt.
@@ -31,7 +43,7 @@ type PlanningPrefs struct {
 // profile yet); plates may be nil (no plate context); dateRange may be nil (no
 // date context).
 // prefs may be nil (omits planning preference lines).
-func ComposePrompt(p *profile.Profile, plates []plate.Plate, dateRange *DateRange, prefs *PlanningPrefs) string {
+func ComposePrompt(p *profile.Profile, plates []PromptPlate, dateRange *DateRange, prefs *PlanningPrefs) string {
 	var b strings.Builder
 
 	b.WriteString(rolePrefix)
@@ -130,9 +142,30 @@ func writeProfileSection(b *strings.Builder, p *profile.Profile) {
 	b.WriteString("\n")
 }
 
-func writeDateRangeSection(b *strings.Builder, dr *DateRange, plates []plate.Plate, prefs *PlanningPrefs) {
-	fmt.Fprintf(b, "Current planning window: %s to %s\n",
-		dr.From.Format("2006-01-02"), dr.To.Format("2006-01-02"))
+func writeDateRangeSection(b *strings.Builder, dr *DateRange, plates []PromptPlate, prefs *PlanningPrefs) {
+	const ymd = "2006-01-02"
+	if !dr.Today.IsZero() {
+		fmt.Fprintf(b, "Today is %s, %s.\n", dr.Today.Weekday(), dr.Today.Format(ymd))
+	}
+	var dates []time.Time
+	for d := dr.From; !d.After(dr.To); d = d.AddDate(0, 0, 1) {
+		dates = append(dates, d)
+	}
+	unit := "days"
+	if len(dates) == 1 {
+		unit = "day"
+	}
+	fmt.Fprintf(b, "Planning window: %s %s to %s %s (%d %s).\n",
+		dr.From.Weekday(), dr.From.Format(ymd), dr.To.Weekday(), dr.To.Format(ymd), len(dates), unit)
+	b.WriteString("Dates in the window:\n")
+	today := dr.Today.Format(ymd)
+	for _, d := range dates {
+		fmt.Fprintf(b, "- %s %s", d.Weekday(), d.Format(ymd))
+		if d.Format(ymd) == today {
+			b.WriteString(" (today)")
+		}
+		b.WriteString("\n")
+	}
 	if prefs != nil {
 		if prefs.ShoppingDay != "" {
 			fmt.Fprintf(b, "Shopping day: %s\n", prefs.ShoppingDay)
@@ -147,9 +180,12 @@ func writeDateRangeSection(b *strings.Builder, dr *DateRange, plates []plate.Pla
 	}
 	b.WriteString("Plates already planned:\n")
 	for _, p := range plates {
-		dateStr := p.Date.Format("2006-01-02")
-		fmt.Fprintf(b, "- plate_id=%d date=%s slot_id=%d components=%d\n",
-			p.ID, dateStr, p.SlotID, len(p.Components))
+		contents := strings.Join(p.Foods, ", ")
+		if p.Skipped {
+			contents = "skipped"
+		}
+		fmt.Fprintf(b, "- %s %s (plate_id=%d, slot_id=%d): %s\n",
+			p.Date.Format(ymd), p.Slot, p.ID, p.SlotID, contents)
 	}
 	b.WriteString("\n")
 }

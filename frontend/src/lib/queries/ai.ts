@@ -13,6 +13,7 @@ import type { ChatEvent, ChatRequest } from "../domain/chatEvents"
 import { chatStreamStore } from "../stores/chat-stream"
 import { useChatUI } from "../stores/chat-ui"
 
+import { todayISO } from "@/lib/planner-window"
 import { toastError } from "@/lib/toast"
 
 import { aiKeys, plateKeys, shoppingKeys } from "./keys"
@@ -62,7 +63,7 @@ export function useDeleteConversation() {
  */
 export interface ChatStreamParams {
   conversationId?: number
-  range?: { from: string; to: string }
+  range: { from: string; to: string }
   mode?: "fill_empty" | "replace_all" | ""
   message: string
 }
@@ -88,6 +89,9 @@ export function useChatStream() {
         conversation_id: params.conversationId,
         mode: params.mode,
         message: params.message,
+        today: todayISO(),
+        from: params.range.from,
+        to: params.range.to,
       }
 
       try {
