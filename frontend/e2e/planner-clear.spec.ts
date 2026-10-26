@@ -363,7 +363,7 @@ test.describe("Planner — clear shortcuts", () => {
       const nextWeekFetch = page.waitForResponse(
         (r) => r.url().includes("/api/plates") && r.request().method() === "GET"
       )
-      await page.getByRole("button", { name: /Next 7/i }).click()
+      await page.getByRole("button", { name: "Next 7", exact: true }).click()
       await nextWeekFetch
 
       // No plates → the overflow menu button itself is absent (its only item
