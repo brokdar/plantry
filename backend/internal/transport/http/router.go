@@ -31,6 +31,7 @@ type Handlers struct {
 	ShoppingRange  *handlers.ShoppingRangeHandler
 	NutritionRange *handlers.NutritionRangeHandler
 	PlateMacros    *handlers.PlateMacrosHandler
+	Availability   *handlers.AvailabilityHandler
 	DevMode        bool // gates dev-only debug endpoints
 }
 
@@ -192,6 +193,16 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 		if h.NutritionRange != nil {
 			api.Get("/nutrition", h.NutritionRange.List)
+		}
+
+		if h.Availability != nil {
+			api.Route("/availability", func(r chi.Router) {
+				r.Get("/", h.Availability.List)
+				r.Get("/defaults", h.Availability.GetDefaults)
+				r.Put("/defaults", h.Availability.PutDefaults)
+				r.Put("/{date}/{slotId}", h.Availability.PutOverride)
+				r.Delete("/{date}/{slotId}", h.Availability.DeleteOverride)
+			})
 		}
 	})
 

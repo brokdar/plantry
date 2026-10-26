@@ -79,6 +79,23 @@ type AppSetting struct {
 	UpdatedAt string
 }
 
+type AvailabilityDefault struct {
+	Weekday  int64
+	SlotID   int64
+	Mode     string
+	PresetID sql.NullInt64
+}
+
+type AvailabilityOverride struct {
+	Date      string
+	SlotID    int64
+	Mode      string
+	PresetID  sql.NullInt64
+	Note      sql.NullString
+	CreatedAt string
+	UpdatedAt string
+}
+
 type Food struct {
 	ID                int64
 	Name              string

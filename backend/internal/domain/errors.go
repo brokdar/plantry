@@ -31,4 +31,10 @@ var (
 	ErrInvalidDietType          = errors.New("invalid diet type")
 	ErrInvalidMeatDays          = errors.New("invalid meat days per week")
 	ErrInvalidHouseholdPortions = errors.New("invalid household portions")
+
+	// Availability errors.
+	ErrCellHasPlate     = errors.New("cell has a plate")
+	ErrPresetRequired   = errors.New("routine requires a preset")
+	ErrPresetNotAllowed = errors.New("preset only allowed for routine")
+	ErrSlotInactive     = errors.New("slot inactive")
 )

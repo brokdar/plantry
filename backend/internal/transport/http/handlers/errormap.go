@@ -60,6 +60,15 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 		return http.StatusBadRequest, "error.profile.invalid_meat_days"
 	case errors.Is(err, domain.ErrInvalidHouseholdPortions):
 		return http.StatusBadRequest, "error.profile.invalid_household_portions"
+	// Availability.
+	case errors.Is(err, domain.ErrCellHasPlate):
+		return http.StatusConflict, "error.availability.cell_has_plate"
+	case errors.Is(err, domain.ErrPresetRequired):
+		return http.StatusBadRequest, "error.availability.preset_required"
+	case errors.Is(err, domain.ErrPresetNotAllowed):
+		return http.StatusBadRequest, "error.availability.preset_not_allowed"
+	case errors.Is(err, domain.ErrSlotInactive):
+		return http.StatusBadRequest, "error.availability.slot_inactive"
 	default:
 		return http.StatusInternalServerError, "error.server"
 	}
