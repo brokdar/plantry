@@ -1,7 +1,6 @@
 {
   "nav": {
     "brand": "Plantry",
-    "atelier_tagline": "Redaktionelle Ernährung",
     "generate_plan": "Plan generieren",
     "planner": "Wochenplan",
     "ingredients": "Zutaten",
@@ -47,7 +46,7 @@
   },
   "import": {
     "title": "Rezept importieren",
-    "subtitle": "Füge die URL eines Rezepts ein — wir machen eine Komponente daraus.",
+    "subtitle": "Füge den Link zu einem Rezept ein. Plantry liest Zutaten und Schritte für dich aus.",
     "step1": {
       "title": "Wo ist das Rezept?",
       "url_label": "Rezept-URL",
@@ -75,7 +74,11 @@
       "source_local": "In der Bibliothek",
       "source_fdc": "USDA",
       "source_off": "Open Food Facts",
-      "kcal_100g": "{{kcal}} kcal/100 g"
+      "kcal_100g": "{{kcal}} kcal/100 g",
+      "optional_skipped": "Optional, übersprungen",
+      "amount_for": "Menge für {{name}}",
+      "unit_for": "Einheit für {{name}}",
+      "resolution_for": "Verwendung von {{name}}"
     },
     "step3": {
       "role_label": "Rolle",
@@ -90,7 +93,8 @@
       "kcal_per_portion": "{{kcal}} kcal pro Portion",
       "kcal_pending": "kcal pro Portion erscheinen, sobald jede Zutat gewählt ist.",
       "source_kcal": "Quelle: {{kcal}} kcal",
-      "image_download_failed": "Rezept gespeichert, aber das Foto konnte nicht geladen werden."
+      "image_download_failed": "Rezept gespeichert, aber das Foto konnte nicht geladen werden.",
+      "portions_invalid": "Gib mindestens 1 Portion ein."
     },
     "status": {
       "extracting": "Extrahiere…",
@@ -414,7 +418,7 @@
       "provider_none": "Deaktiviert",
       "provider_fake": "Fake (Tests)",
       "api_key_label": "API-Schlüssel",
-      "api_key_description": "Dein API-Schlüssel des Anbieters. Wird verschlüsselt gespeichert, wenn PLANTRY_SECRET_KEY gesetzt ist.",
+      "api_key_description": "Dein API-Schlüssel des Anbieters. Wird verschlüsselt gespeichert, mit einem im Datenverzeichnis erzeugten Schlüssel (oder PLANTRY_SECRET_KEY, falls gesetzt).",
       "api_key_stored": "Es ist bereits ein Schlüssel gespeichert ({{preview}}). Gib einen neuen Wert ein, um ihn zu ersetzen.",
       "api_key_placeholder": "sk-…",
       "api_key_placeholder_replace": "Gib einen neuen Schlüssel ein, um den gespeicherten zu ersetzen",
@@ -430,8 +434,8 @@
       "rate_limit_description": "Maximale /api/ai/chat-Anfragen pro Minute pro IP. 0 deaktiviert das Limit.",
       "fake_script_label": "Fake-Provider-Skript",
       "fake_script_description": "Nur für Anbieter „Fake“. Pfad zu einer JSONL-Datei mit vorbereiteten Antworten.",
-      "secret_key_banner_title": "PLANTRY_SECRET_KEY ist nicht gesetzt",
-      "secret_key_banner_body": "Setze die Umgebungsvariable PLANTRY_SECRET_KEY, um API-Schlüssel über die UI zu bearbeiten. Über Umgebungsvariablen bereitgestellte Schlüssel funktionieren auch ohne sie.",
+      "secret_key_banner_title": "Kein Verschlüsselungsschlüssel verfügbar",
+      "secret_key_banner_body": "API-Schlüssel können nicht über die UI gespeichert werden, weil kein Verschlüsselungsschlüssel geladen ist. Plantry erzeugt ihn beim Start im Datenverzeichnis; PLANTRY_SECRET_KEY ist optional. Über Umgebungsvariablen bereitgestellte Schlüssel funktionieren weiterhin.",
       "wizard": {
         "step1_title": "Anbieter wählen",
         "step1_description": "Wähle, welcher Modellanbieter den Ernährungsassistenten antreiben soll.",
@@ -462,8 +466,8 @@
       },
       "env_tooltip": "Gesetzt via {{envVar}}. Neustart erforderlich.",
       "restart_required": "Neustart erforderlich",
-      "secret_key_banner_title": "Verschlüsselung deaktiviert",
-      "secret_key_banner_body": "PLANTRY_SECRET_KEY ist nicht gesetzt — API-Schlüssel können erst über die UI gespeichert werden, wenn er konfiguriert ist."
+      "secret_key_banner_title": "Kein Verschlüsselungsschlüssel verfügbar",
+      "secret_key_banner_body": "Kein Verschlüsselungsschlüssel geladen — API-Schlüssel können nicht über die UI gespeichert werden. Plantry erzeugt ihn beim Start im Datenverzeichnis; PLANTRY_SECRET_KEY ist optional."
     }
   },
   "settings": {
@@ -750,27 +754,27 @@
     "dl": { "name": "Deziliter" },
     "tbsp": { "name": "Esslöffel" },
     "tsp": { "name": "Teelöffel" },
-    "cup": { "name": "Tasse" },
+    "cup": { "name": "Tasse", "name_other": "Tassen" },
     "floz": { "name": "Fl. oz." },
     "pt": { "name": "Pint" },
     "qt": { "name": "Quart" },
-    "gal": { "name": "Gallone" },
+    "gal": { "name": "Gallone", "name_other": "Gallonen" },
     "piece": { "name": "Stück" },
-    "clove": { "name": "Zehe" },
-    "slice": { "name": "Scheibe" },
+    "clove": { "name": "Zehe", "name_other": "Zehen" },
+    "slice": { "name": "Scheibe", "name_other": "Scheiben" },
     "bunch": { "name": "Bund" },
-    "pinch": { "name": "Prise" },
-    "stick": { "name": "Stange" },
-    "can": { "name": "Dose" },
-    "jar": { "name": "Glas" },
+    "pinch": { "name": "Prise", "name_other": "Prisen" },
+    "stick": { "name": "Stange", "name_other": "Stangen" },
+    "can": { "name": "Dose", "name_other": "Dosen" },
+    "jar": { "name": "Glas", "name_other": "Gläser" },
     "packet": { "name": "Päckchen" },
-    "serving": { "name": "Portion" },
-    "stalk": { "name": "Stiel" },
-    "pod": { "name": "Schote" },
-    "head": { "name": "Kopf" },
-    "leaf": { "name": "Blatt" },
+    "serving": { "name": "Portion", "name_other": "Portionen" },
+    "stalk": { "name": "Stiel", "name_other": "Stiele" },
+    "pod": { "name": "Schote", "name_other": "Schoten" },
+    "head": { "name": "Kopf", "name_other": "Köpfe" },
+    "leaf": { "name": "Blatt", "name_other": "Blätter" },
     "leaves": { "name": "Blätter" },
-    "sprig": { "name": "Zweig" }
+    "sprig": { "name": "Zweig", "name_other": "Zweige" }
   },
   "image": {
     "section_title": "Bild",
@@ -1044,7 +1048,7 @@
       "readonly_key": "Diese Einstellung kann nur über eine Umgebungsvariable geändert werden.",
       "invalid_value": "Ungültiger Wert für diese Einstellung.",
       "invalid_api_key": "Der API-Schlüssel wurde abgelehnt. Bitte überprüfe ihn.",
-      "secret_key_missing": "PLANTRY_SECRET_KEY ist nicht gesetzt — verschlüsselte Werte können nicht gespeichert werden.",
+      "secret_key_missing": "Kein Verschlüsselungsschlüssel geladen — verschlüsselte Werte können nicht gespeichert werden.",
       "unknown_provider": "Unbekannter KI-Anbieter."
     }
   },
@@ -1068,7 +1072,9 @@
     "yes": "Ja",
     "no": "Nein",
     "collapse": "Einklappen",
-    "remove": "Entfernen"
+    "remove": "Entfernen",
+    "opens_new_tab": "(öffnet in neuem Tab)",
+    "retry": "Erneut versuchen"
   },
   "chat": {
     "title": "KI-Assistent",
@@ -1162,7 +1168,13 @@
     "no_ingredients": "Noch keine Zutaten.",
     "no_steps": "Noch keine Schritte.",
     "my_notes": "Meine Notizen",
-    "description": "Beschreibung aus der Quelle"
+    "description": "Beschreibung aus der Quelle",
+    "back": "Zu Rezepten",
+    "steps": "Schritte",
+    "not_found_title": "Rezept nicht gefunden",
+    "not_found_body": "Vielleicht wurde es gelöscht, oder der Link stimmt nicht.",
+    "load_error_title": "Rezept konnte nicht geladen werden",
+    "load_error_body": "Prüfe die Verbindung und versuche es erneut."
   },
   "nutrition_warning": {
     "title": "Nährwerte unvollständig",

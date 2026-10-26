@@ -237,9 +237,10 @@ test.describe("AI settings", () => {
     await page.goto("/settings?tab=system")
     await expect(page.getByRole("heading", { name: "System" })).toBeVisible()
     // The playwright backend sets PLANTRY_SECRET_KEY so encryption is
-    // enabled; the "Encryption disabled" banner must not appear.
+    // enabled; the System tab's "Encryption key unavailable" banner
+    // (settings_page.system.secret_key_banner_title) must not appear.
     await expect(
-      page.getByText("Encryption disabled", { exact: true })
+      page.getByText("Encryption key unavailable", { exact: true })
     ).toHaveCount(0)
   })
 })

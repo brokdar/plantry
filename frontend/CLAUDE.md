@@ -37,27 +37,32 @@ Routes live in `src/routes/`. The router plugin auto-generates `src/routeTree.ge
 ```
 src/routes/
 ├── __root.tsx         # AppShell, CommandPalette, CopyFromWeekDialog
-├── index.tsx          # redirects to /day/today
-├── day/               # planner (date-keyed views)
+├── index.tsx          # `/` — the planner (week grid, chat, shopping panel)
+├── day/$date/         # single-day view
+├── components/        # recipe library; new.tsx, $id/ (detail), $id/edit.tsx
+├── ingredients/       # food/ingredient CRUD; new.tsx, $id/edit.tsx
+├── import/            # recipe import from URL (ImportWizard)
+├── shop/              # shopping list for the current planner window
 ├── presets/           # preset library + editor
-├── ingredients/       # food/ingredient CRUD
-├── settings/          # app + AI settings
-├── calendar/          # read-only calendar view
-├── import/            # barcode / bulk import
-└── archive/           # past week archive
+├── calendar/          # read-only calendar (month / week / agenda)
+├── archive/           # redirects to /calendar agenda mode
+└── settings/          # app + AI settings
 ```
+
+**Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/day/<today>`, Plan → `/`, Recipes → `/components` (also active on `/ingredients*` and `/import`, which are linked from the recipe list header), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the phone top bar. Calendar, Presets and Archive are not in the nav; they are reachable via ⌘K (`CommandPalette`).
 
 ### Components
 
 ```
 src/components/
 ├── ui/                # shadcn primitives (never hand-edit generated files)
-├── shell/             # AppShell, SideNav, TopBar, MobileBottomNav
-├── planner/           # SlotCell, SlotSheet, PlannerGrid, DnD wrappers
+├── shell/             # AppShell, SideNav, TopBar, MobileBottomNav, primary-nav.ts
+├── planner/           # SlotCell, SlotSheet, PlannerGrid, DnD wrappers, ShoppingPanel
 ├── presets/           # preset library, editor, CopyFromWeekDialog
-├── picker/            # food picker (search + barcode)
 ├── component/         # shared input widgets: ComponentPicker, PortionStepper, QuantityUnitInput
-├── components/        # food component CRUD: ComponentEditor, ComponentList, ComponentCard
+├── components/        # food component CRUD: ComponentEditor, ComponentList, ComponentCard, RecipeDetail,
+│                      #   NutritionCompletenessWarning (shared by editor, detail and import)
+├── import/            # ImportWizard, IngredientResolveRow, ImportNutritionSummary
 ├── ingredients/       # ingredient CRUD + lookup: IngredientEditor, IngredientList, LookupPanel
 ├── editorial/         # design system editorial primitives
 ├── chat/              # AI chat panel
@@ -86,9 +91,17 @@ All forms use `react-hook-form` + `zod` via `@hookform/resolvers/zod`. Schema de
 
 ### Design system
 
-Tokens are defined in `src/index.css` (OKLch via Tailwind 4 `@theme inline`). The design system is **Botanical Atelier**: a Material-style surface ladder (`--surface`, `--surface-container-*`, `--on-surface`, `--on-surface-variant`) with OKLch color values. Heading font: `Manrope Variable`. Body font: `Inter Variable`.
+**Cookbook** — full reference: [`DESIGN.md`](../DESIGN.md); spec: `docs/UX_DESIGN_SPEC.md` §3. This section is the short summary. Tokens are hex CSS variables in `src/index.css` (`:root` + `.dark`), exposed to Tailwind via `@theme inline`. `src/test/tokens.test.ts` checks values and WCAG contrast.
 
-Custom Tailwind utilities available: `bg-surface`, `bg-surface-container`, `bg-surface-container-low`, `bg-surface-container-high`, `text-on-surface`, `text-on-surface-variant`, `border-outline`, `border-outline-variant`, etc.
+Use these names in new and rebuilt code:
+
+- Colour: `bg-ground` (page), `bg-panel` (cells, sheets, cards), `bg-panel-sunken` (rail, toolbars), `text-ink`, `text-ink-muted`, `border-line`, `bg-accent` + `text-on-accent`, `bg-batch-1`…`bg-batch-6` and `bg-batch-N-tint`, `text-success` / `text-warning` / `text-danger`.
+- Type: `text-caption`, `text-small`, `text-body`, `text-h3`, `text-h2`, `text-h1`. Body/UI font is Source Sans 3 (`font-sans`, the default); `font-heading` is Newsreader, for display only (page titles, recipe names, headlines) — never labels, buttons, inputs or data. `h1`–`h6` get Newsreader from the base layer. Numbers use `tabular-nums`. Sentence case, no all-caps labels.
+- Shape: `rounded-cell` (4 px), `rounded-sheet` (16 px), `rounded-tag` (batch badge); buttons keep shadcn's `--radius` (8 px). `shadow-sheet` is the only shadow, for sheets and popovers.
+
+**Legacy aliases (plan decision D2).** The shadcn variables (`--background`, `--primary`, `--muted`, `--border`, …) and the old Material utilities (`bg-surface*`, `text-on-surface*`, `border-outline*`, `*-ai-accent*`, `*-primary-container`, `*-tertiary*`) are remapped onto the Cookbook tokens; the mapping table is the comment above the alias block in `index.css`. Existing screens still use them and keep working in both themes. Don't add new usages; a screen moves to the new names when it is rebuilt.
+
+**Gotcha:** shadcn's `--accent` is the same variable as the Cookbook accent (solid ink blue), so `bg-accent` (including shadcn menu/select highlights) needs `text-on-accent` / `text-accent-foreground` for text, never `text-ink`.
 
 ### i18n
 
@@ -114,6 +127,7 @@ Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own u
 
 ### Vitest (unit)
 
+- `vite.config.ts` caps `maxWorkers: 4` (memory: the default jsdom worker per core exhausted WSL when runs overlapped). Don't raise it.
 - Mock at `@/lib/api/*` module level — TanStack Query works normally with mocked fetch fns.
 - Use `renderWithRouter` from `@/test/render` — wraps in `QueryClientProvider` (retry: false) + `RouterProvider` (createMemoryHistory).
 - Use shared fixtures from `@/test/fixtures` — don't duplicate mock data per test file.
@@ -122,6 +136,8 @@ Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own u
 ### Playwright (e2e)
 
 - `bun run e2e` is fully self-contained: playwright spawns the backend (`go run ./cmd/plantry` with test env vars, always fresh) and reuses or starts the Vite dev server. No manual server setup needed.
+- The e2e backend runs with `PLANTRY_OFF_DISABLED=1` (no Open Food Facts calls) and the `fake` AI provider, so runs are hermetic.
+- Local runs use `workers: 4` (CI: 1) to cap memory; don't raise it.
 - Self-contained seeding: call the backend API directly (`http://localhost:8080`), cleanup in `finally`. Always bypass Vite proxy for seeding.
 - Unique data: append `crypto.randomUUID().slice(0,8)` to names.
 - After form submit: `waitForResponse` on the specific API call. Never `waitForURL`, never `waitForTimeout`.

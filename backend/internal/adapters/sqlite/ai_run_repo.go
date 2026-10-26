@@ -12,7 +12,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 )
 
-// maxStepResultBytes caps the stored size of a step's result_json.
+// maxStepResultBytes caps the stored size of a step's args_json and result_json.
 const maxStepResultBytes = 8192
 
 const truncatedMarker = "…[truncated]"
@@ -82,7 +82,7 @@ func (r *AIRunRepo) AddStep(ctx context.Context, step airun.Step) error {
 		Seq:          int64(step.Seq),
 		Type:         string(step.Type),
 		Name:         step.Name,
-		ArgsJson:     toNullStringEmpty(step.ArgsJSON),
+		ArgsJson:     toNullStringEmpty(truncateUTF8(step.ArgsJSON, maxStepResultBytes)),
 		ResultJson:   toNullStringEmpty(truncateUTF8(step.ResultJSON, maxStepResultBytes)),
 		IsError:      isErr,
 		DurationMs:   step.DurationMs,

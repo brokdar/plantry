@@ -68,6 +68,19 @@ func TestProvider_GetByID_UpstreamErrorIsLookupFailed(t *testing.T) {
 	assert.NotErrorIs(t, err, domain.ErrNotFound)
 }
 
+func TestProvider_GetByID_LookupFailedKeepsCause(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	p := fdc.NewProvider(fdc.New("test-key", fdc.WithBaseURL(srv.URL)))
+	_, err := p.GetByID(ctx, 169640)
+	require.ErrorIs(t, err, domain.ErrLookupFailed)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestProvider_GetByID_Energy(t *testing.T) {
 	f := func(v float64) *float64 { return &v }
 	tests := []struct {

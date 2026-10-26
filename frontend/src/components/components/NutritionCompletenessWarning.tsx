@@ -9,6 +9,9 @@ import { cn } from "@/lib/utils"
 type NutritionCompletenessWarningProps = {
   /** Ingredients without core macros. Renders nothing when empty. */
   missing: readonly MissingNutritionLeaf[]
+  /** Open the ingredient links in a new tab, for screens holding unsaved
+   *  work (the import review). */
+  openInNewTab?: boolean
   className?: string
 }
 
@@ -17,6 +20,7 @@ type NutritionCompletenessWarningProps = {
  *  review. */
 export function NutritionCompletenessWarning({
   missing,
+  openInNewTab = false,
   className,
 }: NutritionCompletenessWarningProps) {
   const { t } = useTranslation()
@@ -47,8 +51,13 @@ export function NutritionCompletenessWarning({
                 to="/ingredients/$id/edit"
                 params={{ id: String(leaf.id) }}
                 className="text-accent underline underline-offset-2 hover:no-underline"
+                target={openInNewTab ? "_blank" : undefined}
+                rel={openInNewTab ? "noopener noreferrer" : undefined}
               >
                 {leaf.name}
+                {openInNewTab && (
+                  <span className="sr-only"> {t("common.opens_new_tab")}</span>
+                )}
               </Link>
             </Fragment>
           ))}

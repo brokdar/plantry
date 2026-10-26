@@ -1,7 +1,6 @@
 {
   "nav": {
     "brand": "Plantry",
-    "atelier_tagline": "Editorial Nourishment",
     "generate_plan": "Generate Plan",
     "planner": "Weekly Planner",
     "ingredients": "Ingredients",
@@ -47,7 +46,7 @@
   },
   "import": {
     "title": "Import recipe",
-    "subtitle": "Paste a recipe URL and we'll turn it into a component.",
+    "subtitle": "Paste a recipe link. Plantry reads the ingredients and steps for you.",
     "step1": {
       "title": "Where is the recipe?",
       "url_label": "Recipe URL",
@@ -69,13 +68,17 @@
       "searching": "Searching…",
       "no_match": "No match in library.",
       "create_new": "Create as new ingredient",
-      "change": "change",
+      "change": "Change",
       "unparsed_warning": "Could not parse — please review",
       "llm_warning": "Extracted with AI — please review every row.",
       "source_local": "In library",
       "source_fdc": "USDA",
       "source_off": "Open Food Facts",
-      "kcal_100g": "{{kcal}} kcal/100 g"
+      "kcal_100g": "{{kcal}} kcal/100 g",
+      "optional_skipped": "Optional, skipped",
+      "amount_for": "Amount for {{name}}",
+      "unit_for": "Unit for {{name}}",
+      "resolution_for": "How to use {{name}}"
     },
     "step3": {
       "role_label": "Role",
@@ -90,7 +93,8 @@
       "kcal_per_portion": "{{kcal}} kcal per portion",
       "kcal_pending": "kcal per portion appear once every ingredient is chosen.",
       "source_kcal": "Source: {{kcal}} kcal",
-      "image_download_failed": "Recipe saved, but the photo could not be downloaded."
+      "image_download_failed": "Recipe saved, but the photo could not be downloaded.",
+      "portions_invalid": "Enter at least 1 portion."
     },
     "status": {
       "extracting": "Extracting…",
@@ -414,7 +418,7 @@
       "provider_none": "Disabled",
       "provider_fake": "Fake (testing)",
       "api_key_label": "API key",
-      "api_key_description": "Your provider API key. Stored encrypted at rest when PLANTRY_SECRET_KEY is set.",
+      "api_key_description": "Your provider API key. Stored encrypted at rest with a key generated in the data directory (or PLANTRY_SECRET_KEY, if set).",
       "api_key_stored": "A key is already stored ({{preview}}). Enter a new value to replace it.",
       "api_key_placeholder": "sk-…",
       "api_key_placeholder_replace": "Enter a new key to replace the stored one",
@@ -430,8 +434,8 @@
       "rate_limit_description": "Maximum /api/ai/chat requests per minute per IP. 0 disables limiting.",
       "fake_script_label": "Fake provider script",
       "fake_script_description": "Only used when provider = Fake. Path to a JSONL file of scripted replies.",
-      "secret_key_banner_title": "PLANTRY_SECRET_KEY is not set",
-      "secret_key_banner_body": "Set the PLANTRY_SECRET_KEY environment variable to enable editing API keys in the UI. Keys provided via environment variables continue to work without it.",
+      "secret_key_banner_title": "Encryption key unavailable",
+      "secret_key_banner_body": "API keys cannot be saved in the UI because no encryption key is loaded. Plantry generates one in the data directory on startup; PLANTRY_SECRET_KEY is optional. Keys provided via environment variables continue to work.",
       "wizard": {
         "step1_title": "Pick a provider",
         "step1_description": "Choose which model provider should power the meal-planning assistant.",
@@ -462,8 +466,8 @@
       },
       "env_tooltip": "Set via {{envVar}}. Restart required to change.",
       "restart_required": "Restart required",
-      "secret_key_banner_title": "Encryption disabled",
-      "secret_key_banner_body": "PLANTRY_SECRET_KEY is not set — API keys cannot be saved through the UI until it is configured."
+      "secret_key_banner_title": "Encryption key unavailable",
+      "secret_key_banner_body": "No encryption key is loaded — API keys cannot be saved through the UI. Plantry generates one in the data directory on startup; PLANTRY_SECRET_KEY is optional."
     }
   },
   "settings": {
@@ -749,29 +753,29 @@
     "l": { "name": "liter" },
     "cl": { "name": "centiliter" },
     "dl": { "name": "deciliter" },
-    "tbsp": { "name": "tablespoon" },
-    "tsp": { "name": "teaspoon" },
-    "cup": { "name": "cup" },
-    "floz": { "name": "fluid ounce" },
-    "pt": { "name": "pint" },
-    "qt": { "name": "quart" },
-    "gal": { "name": "gallon" },
-    "piece": { "name": "piece" },
-    "clove": { "name": "clove" },
-    "slice": { "name": "slice" },
-    "bunch": { "name": "bunch" },
-    "pinch": { "name": "pinch" },
-    "stick": { "name": "stick" },
-    "can": { "name": "can" },
-    "jar": { "name": "jar" },
-    "packet": { "name": "packet" },
-    "serving": { "name": "serving" },
-    "stalk": { "name": "stalk" },
-    "pod": { "name": "pod" },
-    "head": { "name": "head" },
-    "leaf": { "name": "leaf" },
+    "tbsp": { "name": "tablespoon", "name_other": "tablespoons" },
+    "tsp": { "name": "teaspoon", "name_other": "teaspoons" },
+    "cup": { "name": "cup", "name_other": "cups" },
+    "floz": { "name": "fluid ounce", "name_other": "fluid ounces" },
+    "pt": { "name": "pint", "name_other": "pints" },
+    "qt": { "name": "quart", "name_other": "quarts" },
+    "gal": { "name": "gallon", "name_other": "gallons" },
+    "piece": { "name": "piece", "name_other": "pieces" },
+    "clove": { "name": "clove", "name_other": "cloves" },
+    "slice": { "name": "slice", "name_other": "slices" },
+    "bunch": { "name": "bunch", "name_other": "bunches" },
+    "pinch": { "name": "pinch", "name_other": "pinches" },
+    "stick": { "name": "stick", "name_other": "sticks" },
+    "can": { "name": "can", "name_other": "cans" },
+    "jar": { "name": "jar", "name_other": "jars" },
+    "packet": { "name": "packet", "name_other": "packets" },
+    "serving": { "name": "serving", "name_other": "servings" },
+    "stalk": { "name": "stalk", "name_other": "stalks" },
+    "pod": { "name": "pod", "name_other": "pods" },
+    "head": { "name": "head", "name_other": "heads" },
+    "leaf": { "name": "leaf", "name_other": "leaves" },
     "leaves": { "name": "leaves" },
-    "sprig": { "name": "sprig" }
+    "sprig": { "name": "sprig", "name_other": "sprigs" }
   },
   "image": {
     "section_title": "Image",
@@ -987,7 +991,7 @@
       "readonly_key": "This setting can only be changed via environment variable.",
       "invalid_value": "Invalid value for this setting.",
       "invalid_api_key": "The API key was not accepted. Double-check it and try again.",
-      "secret_key_missing": "PLANTRY_SECRET_KEY is not set — cannot save encrypted values.",
+      "secret_key_missing": "No encryption key is loaded — cannot save encrypted values.",
       "unknown_provider": "Unknown AI provider."
     }
   },
@@ -1069,7 +1073,9 @@
     "yes": "Yes",
     "no": "No",
     "collapse": "Collapse",
-    "remove": "Remove"
+    "remove": "Remove",
+    "opens_new_tab": "(opens in a new tab)",
+    "retry": "Try again"
   },
   "chat": {
     "title": "AI Assistant",
@@ -1163,7 +1169,13 @@
     "no_ingredients": "No ingredients yet.",
     "no_steps": "No steps yet.",
     "my_notes": "My notes",
-    "description": "Description from the source"
+    "description": "Description from the source",
+    "back": "Back to recipes",
+    "steps": "Steps",
+    "not_found_title": "Recipe not found",
+    "not_found_body": "It may have been deleted, or the link is wrong.",
+    "load_error_title": "Couldn't load this recipe",
+    "load_error_body": "Check your connection and try again."
   },
   "nutrition_warning": {
     "title": "Nutrition is incomplete",

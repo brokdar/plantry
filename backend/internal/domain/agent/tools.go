@@ -226,7 +226,7 @@ func toolListFoods(svc Services) Tool {
 					if ctxErr := ctx.Err(); ctxErr != nil {
 						return nil, ToolEffectNone, ctxErr
 					}
-					slog.WarnContext(ctx, "list_foods: per-portion lookup failed", "food_id", f.ID, "err", err)
+					slog.WarnContext(ctx, "list_foods: per-portion lookup failed", "food_id", f.ID, "error", err)
 				}
 				items = append(items, item)
 			}

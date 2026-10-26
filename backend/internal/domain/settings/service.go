@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
@@ -160,10 +161,9 @@ func (s *Service) resolve(ctx context.Context, spec Spec) (Value, error) {
 		if row.Encrypted {
 			plain, decErr := s.cipher.Decrypt(row.Value)
 			if decErr != nil {
-				// Fall through to env/default. Surface the decryption error
-				// in logs at the call site if needed; for API responses we
-				// want the user to see env/default rather than a broken
-				// entry.
+				// Treat the row as unreadable rather than failing the API
+				// response; warn so a lost or rotated secret.key is visible.
+				slog.WarnContext(ctx, "settings: decrypt failed", "key", spec.Key, "error", decErr)
 				raw = ""
 			} else {
 				raw = string(plain)

@@ -102,12 +102,12 @@ const target: SlotSheetTarget = {
   slotNameKey: "planner.slot_dinner",
 }
 
-function renderSheet() {
+function renderSheet(food: Food = heroFood) {
   return renderWithRouter(
     <SlotSheet
       target={target}
       days={days}
-      componentsById={new Map([[7, heroFood]])}
+      componentsById={new Map([[7, food]])}
       rangeFrom="2026-05-02"
       rangeTo="2026-05-02"
       onOpenChange={vi.fn()}
@@ -130,6 +130,28 @@ describe("SlotSheet — Phase 2 macros", () => {
     const row = await screen.findByTestId("slot-sheet-row-kcal-100")
     // Composed food, 1 portion × 620 kcal/portion = 620 kcal contribution.
     expect(row.textContent).toMatch(/620/)
+  })
+})
+
+describe("SlotSheet — hero title contrast", () => {
+  // The hero title is the large heading-font name over the hero image.
+  async function heroTitle() {
+    const matches = await screen.findAllByText("Bolognese")
+    return matches.find((el) => el.classList.contains("font-heading"))!
+  }
+
+  test("uses ink text over a placeholder", async () => {
+    renderSheet()
+    const title = await heroTitle()
+    expect(title).toHaveClass("text-ink")
+    expect(title).not.toHaveClass("text-white")
+  })
+
+  test("uses white text over a photo", async () => {
+    renderSheet({ ...heroFood, image_path: "bolognese.jpg" } as Food)
+    const title = await heroTitle()
+    expect(title).toHaveClass("text-white")
+    expect(title).not.toHaveClass("text-ink")
   })
 })
 

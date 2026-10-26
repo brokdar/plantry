@@ -63,12 +63,9 @@ export function SideNav({ collapsed, onToggle }: SideNavProps) {
           className="mb-10 block px-4"
           data-testid="sidenav-brand"
         >
-          <h1 className="font-heading text-xl font-bold tracking-tight text-ink">
+          <span className="font-heading text-xl font-bold tracking-tight text-ink">
             {t("nav.brand")}
-          </h1>
-          <p className="mt-1 text-xs font-medium text-ink-muted">
-            {t("nav.atelier_tagline")}
-          </p>
+          </span>
         </Link>
       )}
 
