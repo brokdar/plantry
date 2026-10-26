@@ -234,8 +234,15 @@ export async function getSetting(key: string): Promise<string | null> {
 
 export async function setSetting(key: string, value: string): Promise<void> {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.put("/api/settings", { data: { key, value } })
+  const res = await ctx.put(`/api/settings/${encodeURIComponent(key)}`, {
+    data: { value },
+  })
+  const status = res.status()
+  const body = res.ok() ? "" : await res.text()
   await ctx.dispose()
+  if (!res.ok()) {
+    throw new Error(`PUT /api/settings/${key} failed: ${status} ${body}`)
+  }
 }
 
 /**
@@ -243,6 +250,17 @@ export async function setSetting(key: string, value: string): Promise<void> {
  * Isolated to the page context — no server state modified, safe for parallel runs.
  */
 export async function mockAnchorToday(page: Page) {
+  await mockSettingValues(page, { "plan.anchor": "today" })
+}
+
+/**
+ * Intercepts GET /api/settings on the given page and overrides the given
+ * values. Page-scoped, so parallel specs never see them.
+ */
+export async function mockSettingValues(
+  page: Page,
+  values: Record<string, string>
+) {
   await page.route("**/api/settings", async (route) => {
     if (route.request().method() !== "GET") {
       await route.continue()
@@ -253,10 +271,10 @@ export async function mockAnchorToday(page: Page) {
       items: { key: string; value: string }[]
     }
     const items = body.items.map((item) =>
-      item.key === "plan.anchor" ? { ...item, value: "today" } : item
+      item.key in values ? { ...item, value: values[item.key] } : item
     )
-    if (!items.some((i) => i.key === "plan.anchor")) {
-      items.push({ key: "plan.anchor", value: "today" })
+    for (const [key, value] of Object.entries(values)) {
+      if (!items.some((i) => i.key === key)) items.push({ key, value })
     }
     await route.fulfill({
       status: response.status(),

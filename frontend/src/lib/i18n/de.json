@@ -661,7 +661,12 @@
     "breakfast": "Frühstück",
     "lunch": "Mittagessen",
     "dinner": "Abendessen",
-    "snack": "Snack"
+    "snack": "Snack",
+    "icon_pick_placeholder": "Symbol wählen",
+    "icon_search_placeholder": "Symbole suchen…",
+    "icon_suggested": "Vorschläge",
+    "icon_none_found": "Keine Symbole gefunden",
+    "row_detail": "{{key}}, Reihenfolge {{order}}"
   },
   "ingredient": {
     "kind_label": "Lebensmittel",

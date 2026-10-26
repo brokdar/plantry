@@ -661,7 +661,12 @@
     "breakfast": "Breakfast",
     "lunch": "Lunch",
     "dinner": "Dinner",
-    "snack": "Snack"
+    "snack": "Snack",
+    "icon_pick_placeholder": "Pick an icon",
+    "icon_search_placeholder": "Search icons…",
+    "icon_suggested": "Suggested",
+    "icon_none_found": "No icons found",
+    "row_detail": "{{key}}, order {{order}}"
   },
   "ingredient": {
     "kind_label": "Ingredient",

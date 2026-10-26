@@ -1,19 +1,13 @@
 import {
-  API,
-  apiRequest,
   cleanupSlot,
   expect,
   mockAnchorToday,
+  mockSettingValues,
   seedSlot,
+  setSetting,
   test,
   uid,
 } from "./helpers"
-
-async function setSetting(key: string, value: string) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.put("/api/settings", { data: { key, value } })
-  await ctx.dispose()
-}
 
 test.describe("Planner — anchor settings", () => {
   // Always restore anchor to "today" after each test so parallel instances
@@ -114,9 +108,13 @@ test.describe("Planner — anchor settings", () => {
     const slot = await seedSlot(`slot.anc_fwd_${tag}`, "Moon", 958)
 
     try {
-      // Set anchor = fixed_weekday + weekday = Monday (0)
-      await setSetting("plan.anchor", "fixed_weekday")
-      await setSetting("plan.shopping_day", "0") // 0 = Monday (backend convention)
+      // Anchor = fixed_weekday + weekday = Monday (0, backend convention),
+      // mocked per page: a backend write would move the window of every
+      // parallel planner spec.
+      await mockSettingValues(page, {
+        "plan.anchor": "fixed_weekday",
+        "plan.shopping_day": "0",
+      })
 
       await page.goto("/")
 

@@ -16,9 +16,9 @@ type SourceBadgeProps = {
 }
 
 const VARIANT_STYLES: Record<SettingSource, string> = {
-  db: "bg-primary/10 text-primary border border-primary/20",
-  env: "bg-tertiary/10 text-tertiary border border-tertiary/20",
-  default: "bg-transparent text-on-surface-variant border border-outline/60",
+  db: "border-accent/30 bg-accent/10 text-accent",
+  env: "border-line bg-panel-sunken text-ink",
+  default: "border-line bg-transparent text-ink-muted",
 }
 
 /**
@@ -45,7 +45,7 @@ export function SourceBadge({
         <Badge
           variant="outline"
           className={cn(
-            "font-body text-[0.65rem] tracking-[0.18em] uppercase",
+            "rounded-cell text-caption font-normal",
             VARIANT_STYLES[source],
             className
           )}
