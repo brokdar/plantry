@@ -1,0 +1,297 @@
+package availability
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+)
+
+const dateLayout = "2006-01-02"
+
+// Service holds availability business logic.
+type Service struct {
+	repo    Repository
+	tx      TxRunner
+	presets PresetLookup
+}
+
+// NewService creates an availability service.
+func NewService(repo Repository, tx TxRunner, presets PresetLookup) *Service {
+	return &Service{repo: repo, tx: tx, presets: presets}
+}
+
+// Defaults returns the full weekday × active-slot grid, weekday-major in slot
+// order. Cells without a stored row are "plan".
+func (s *Service) Defaults(ctx context.Context) ([]Default, error) {
+	slots, err := s.repo.ActiveSlotIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.repo.ListDefaults(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stored := make(map[defaultKey]Default, len(rows))
+	for _, r := range rows {
+		stored[defaultKey{r.Weekday, r.SlotID}] = r
+	}
+	out := make([]Default, 0, 7*len(slots))
+	for wd := 0; wd < 7; wd++ {
+		for _, slotID := range slots {
+			if d, ok := stored[defaultKey{wd, slotID}]; ok {
+				out = append(out, d)
+				continue
+			}
+			out = append(out, Default{Weekday: wd, SlotID: slotID, Mode: ModePlan})
+		}
+	}
+	return out, nil
+}
+
+// SetDefaults validates every row and replaces the defaults of all active
+// slots in one transaction. "plan" rows are not stored.
+func (s *Service) SetDefaults(ctx context.Context, rows []Default) error {
+	seen := make(map[defaultKey]bool, len(rows))
+	keep := make([]Default, 0, len(rows))
+	for _, r := range rows {
+		if r.Weekday < 0 || r.Weekday > 6 {
+			return fmt.Errorf("%w: weekday %d out of range 0-6", domain.ErrInvalidInput, r.Weekday)
+		}
+		k := defaultKey{r.Weekday, r.SlotID}
+		if seen[k] {
+			return fmt.Errorf("%w: duplicate default for weekday %d slot %d", domain.ErrInvalidInput, r.Weekday, r.SlotID)
+		}
+		seen[k] = true
+		if _, err := s.validateCell(ctx, r.SlotID, r.Mode, r.PresetID); err != nil {
+			return err
+		}
+		if r.Mode != ModePlan {
+			keep = append(keep, Default{Weekday: r.Weekday, SlotID: r.SlotID, Mode: r.Mode, PresetID: r.PresetID})
+		}
+	}
+	return s.tx.RunInAvailabilityTx(ctx, func(repo Repository, _ plate.Repository) error {
+		return repo.ReplaceActiveDefaults(ctx, keep)
+	})
+}
+
+// Resolve returns every date in [from, to] × active slot, date-major in slot
+// order, with override > default > plan. It reads each table once. The
+// range is not capped here: callers must bound it (the HTTP handler allows
+// at most 62 days).
+func (s *Service) Resolve(ctx context.Context, from, to time.Time) ([]Cell, error) {
+	from, to = dateOnly(from), dateOnly(to)
+	if to.Before(from) {
+		return nil, fmt.Errorf("%w: to before from", domain.ErrInvalidInput)
+	}
+	slots, err := s.repo.ActiveSlotIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defaults, err := s.repo.ListDefaults(ctx)
+	if err != nil {
+		return nil, err
+	}
+	overrides, err := s.repo.ListOverrides(ctx, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defByKey := make(map[defaultKey]Default, len(defaults))
+	for _, d := range defaults {
+		defByKey[defaultKey{d.Weekday, d.SlotID}] = d
+	}
+	ovByKey := make(map[cellKey]Override, len(overrides))
+	for _, o := range overrides {
+		ovByKey[cellKey{o.Date.Format(dateLayout), o.SlotID}] = o
+	}
+
+	days := int(to.Sub(from).Hours()/24) + 1
+	out := make([]Cell, 0, days*len(slots))
+	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+		ds, wd := d.Format(dateLayout), WeekdayOf(d)
+		for _, slotID := range slots {
+			var o *Override
+			if v, ok := ovByKey[cellKey{ds, slotID}]; ok {
+				o = &v
+			}
+			var def *Default
+			if v, ok := defByKey[defaultKey{wd, slotID}]; ok {
+				def = &v
+			}
+			out = append(out, resolve(d, slotID, o, def))
+		}
+	}
+	return out, nil
+}
+
+// ModeAt resolves the mode of one cell. It does not check the slot.
+func (s *Service) ModeAt(ctx context.Context, date time.Time, slotID int64) (Mode, error) {
+	date = dateOnly(date)
+	o, err := s.repo.GetOverride(ctx, date, slotID)
+	if err != nil {
+		return "", err
+	}
+	if o != nil {
+		return o.Mode, nil
+	}
+	d, err := s.repo.GetDefault(ctx, WeekdayOf(date), slotID)
+	if err != nil {
+		return "", err
+	}
+	return resolve(date, slotID, nil, d).Mode, nil
+}
+
+// CellMode is ModeAt as a plain string ("plan", "routine" or "none"), so a
+// port in another domain (plate.CellChecker, D10) can be satisfied without
+// importing this package.
+func (s *Service) CellMode(ctx context.Context, date time.Time, slotID int64) (string, error) {
+	m, err := s.ModeAt(ctx, date, slotID)
+	return string(m), err
+}
+
+// SetOverride writes the override of one cell. Setting "none" on a cell that
+// holds a plate fails with ErrCellHasPlate unless in.RemovePlate is set; then
+// the plate is deleted in the same transaction and returned (loaded before
+// the delete).
+func (s *Service) SetOverride(ctx context.Context, in OverrideInput) (Cell, *plate.Plate, error) {
+	if in.Date.IsZero() {
+		return Cell{}, nil, fmt.Errorf("%w: date required", domain.ErrInvalidInput)
+	}
+	date := dateOnly(in.Date)
+	presetName, err := s.validateCell(ctx, in.SlotID, in.Mode, in.PresetID)
+	if err != nil {
+		return Cell{}, nil, err
+	}
+	var note *string
+	if in.Mode == ModeNone && in.Note != nil {
+		n := strings.TrimSpace(*in.Note)
+		if utf8.RuneCountInString(n) > MaxNoteLen {
+			return Cell{}, nil, fmt.Errorf("%w: note longer than %d characters", domain.ErrInvalidInput, MaxNoteLen)
+		}
+		if n != "" {
+			note = &n
+		}
+	}
+
+	var removed *plate.Plate
+	err = s.tx.RunInAvailabilityTx(ctx, func(repo Repository, plates plate.Repository) error {
+		if in.Mode == ModeNone {
+			r, err := removeCellPlates(ctx, plates, date, in.SlotID, in.RemovePlate)
+			if err != nil {
+				return err
+			}
+			removed = r
+		}
+		return repo.UpsertOverride(ctx, Override{
+			Date: date, SlotID: in.SlotID, Mode: in.Mode, PresetID: in.PresetID, Note: note,
+		})
+	})
+	if err != nil {
+		return Cell{}, nil, err
+	}
+	return Cell{
+		Date: date, SlotID: in.SlotID, Mode: in.Mode, Source: SourceOverride,
+		PresetID: in.PresetID, PresetName: presetName, Note: note,
+	}, removed, nil
+}
+
+// ClearOverride removes the override of one cell. It is idempotent.
+func (s *Service) ClearOverride(ctx context.Context, date time.Time, slotID int64) error {
+	return s.repo.DeleteOverride(ctx, dateOnly(date), slotID)
+}
+
+// removeCellPlates deletes the plates in the cell when remove is set, and
+// returns the first one. Without remove, a plate in the cell is an error.
+// A cell holds at most one plate once the unique index lands (A2); until
+// then every plate in the cell is deleted.
+func removeCellPlates(ctx context.Context, plates plate.Repository, date time.Time, slotID int64, remove bool) (*plate.Plate, error) {
+	day, err := plates.ListByDateRange(ctx, date, date)
+	if err != nil {
+		return nil, err
+	}
+	var removed *plate.Plate
+	for i := range day {
+		p := day[i]
+		if p.SlotID != slotID {
+			continue
+		}
+		if !remove {
+			return nil, fmt.Errorf("%w: plate %d", domain.ErrCellHasPlate, p.ID)
+		}
+		if err := plates.Delete(ctx, p.ID); err != nil {
+			return nil, err
+		}
+		if removed == nil {
+			removed = &p
+		}
+	}
+	return removed, nil
+}
+
+// validateCell checks the slot, mode and preset of a default or override and
+// returns the preset name for a routine.
+func (s *Service) validateCell(ctx context.Context, slotID int64, mode Mode, presetID *int64) (*string, error) {
+	if err := validateMode(mode); err != nil {
+		return nil, err
+	}
+	exists, active, err := s.repo.SlotState(ctx, slotID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("%w: slot %d", domain.ErrNotFound, slotID)
+	}
+	if !active {
+		return nil, fmt.Errorf("%w: slot %d", domain.ErrSlotInactive, slotID)
+	}
+	if mode != ModeRoutine {
+		if presetID != nil {
+			return nil, fmt.Errorf("%w: mode %q", domain.ErrPresetNotAllowed, mode)
+		}
+		return nil, nil
+	}
+	if presetID == nil {
+		return nil, domain.ErrPresetRequired
+	}
+	name, ok, err := s.presets.PresetName(ctx, *presetID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("%w: preset %d", domain.ErrNotFound, *presetID)
+	}
+	return &name, nil
+}
+
+// resolve applies override > default > plan to one cell.
+func resolve(date time.Time, slotID int64, o *Override, d *Default) Cell {
+	c := Cell{Date: date, SlotID: slotID}
+	switch {
+	case o != nil:
+		c.Mode, c.Source, c.PresetID, c.PresetName, c.Note = o.Mode, SourceOverride, o.PresetID, o.PresetName, o.Note
+	case d != nil:
+		c.Mode, c.Source, c.PresetID, c.PresetName = d.Mode, SourceDefault, d.PresetID, d.PresetName
+	default:
+		c.Mode, c.Source = ModePlan, SourceFallback
+	}
+	return c
+}
+
+func dateOnly(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+type defaultKey struct {
+	weekday int
+	slotID  int64
+}
+
+type cellKey struct {
+	date   string
+	slotID int64
+}

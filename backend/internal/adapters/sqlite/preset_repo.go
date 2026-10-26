@@ -117,6 +117,19 @@ func (r *PresetRepo) Get(ctx context.Context, id int64) (*preset.Preset, error) 
 	return &p, nil
 }
 
+// PresetName returns the preset's name; ok is false when it doesn't exist.
+// It satisfies availability.PresetLookup.
+func (r *PresetRepo) PresetName(ctx context.Context, id int64) (string, bool, error) {
+	row, err := r.q.GetPreset(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return row.Name, true, nil
+}
+
 func (r *PresetRepo) loadChildren(ctx context.Context, p *preset.Preset) error {
 	plateRows, err := r.q.ListPresetPlatesByPreset(ctx, p.ID)
 	if err != nil {
