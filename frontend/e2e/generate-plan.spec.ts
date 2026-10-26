@@ -1,13 +1,28 @@
+import type { Page } from "@playwright/test"
+
 import { cleanupSlot, expect, seedSlot, test, uid } from "./helpers"
 
-// These tests verify the "Generate Plan" CTA wiring end-to-end: clicking any
-// of the three variants (default sidebar button, rail button, mobile FAB)
+// D22: the shared e2e DB accumulates recipes, so pin the Generate gate open.
+async function stubRecipesReady(page: Page) {
+  await page.route("**/api/setup", (route) =>
+    route.fulfill({
+      json: { completed: true, recipe_count: 10, recipe_target: 10 },
+    })
+  )
+}
+
+// These tests verify the "Generate plan" CTA wiring end-to-end: clicking any
+// of the variants (default sidebar button, compact phone top-bar button)
 // should navigate to the planner and open the AI chat panel with a localized
 // prefill in the composer. We deliberately avoid submitting the chat here —
 // the fake AI provider (plan-dinner.json) has a finite scripted turn set that
 // is shared with ai-chat.spec.ts. Chat streaming is covered there.
 
-test.describe("Generate Plan CTA", () => {
+test.describe("Generate plan CTA", () => {
+  test.beforeEach(async ({ page }) => {
+    await stubRecipesReady(page)
+  })
+
   test("default variant opens chat with prefilled composer from the planner", async ({
     page,
   }) => {
@@ -49,17 +64,17 @@ test.describe("Generate Plan CTA", () => {
     }
   })
 
-  test("fab variant opens chat with prefilled composer on mobile", async ({
+  test("compact variant opens chat with prefilled composer on mobile", async ({
     page,
   }) => {
-    const slot = await seedSlot(`slot.gen-fab-${uid()}`, "coffee", 10)
+    const slot = await seedSlot(`slot.gen-compact-${uid()}`, "coffee", 10)
 
     try {
       await page.setViewportSize({ width: 390, height: 844 })
       await page.goto("/")
 
-      await expect(page.getByTestId("mobile-bottom-nav")).toBeVisible()
-      await page.getByTestId("generate-plan-fab").click()
+      await expect(page.getByTestId("topbar")).toBeVisible()
+      await page.getByTestId("generate-plan-compact").click()
 
       const composer = page.getByTestId("chat-composer-input")
       await expect(composer).toBeVisible()

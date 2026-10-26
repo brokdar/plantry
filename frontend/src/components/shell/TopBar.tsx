@@ -3,6 +3,7 @@ import { Settings } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { cn } from "@/lib/utils"
+import { GeneratePlanButton } from "./GeneratePlanButton"
 
 type TopBarProps = {
   leading?: React.ReactNode
@@ -17,7 +18,7 @@ export function TopBar({ leading, trailing, className }: TopBarProps) {
       className={cn(
         // Phone only: from 768 px up nothing renders here (the rail carries
         // Settings), so the bar would be an empty sticky band.
-        "glass-header sticky top-0 z-30 flex h-16 items-center justify-between px-6 md:hidden",
+        "sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-ground px-6 md:hidden",
         className
       )}
       data-testid="topbar"
@@ -25,6 +26,7 @@ export function TopBar({ leading, trailing, className }: TopBarProps) {
       <div className="flex flex-1 items-center gap-4">{leading}</div>
       <div className="flex items-center gap-2">
         {trailing}
+        <GeneratePlanButton variant="compact" />
         {/* Phone only: the rail carries Settings from 768 px up (UX §2.1). */}
         <Link
           to="/settings"

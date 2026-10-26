@@ -69,7 +69,7 @@ test.describe("AppShell", () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     const recipes = page
       .getByTestId("sidenav")
-      .getByRole("link", { name: "Recipes" })
+      .getByRole("link", { name: "Recipes", exact: true })
 
     for (const path of ["/components", "/ingredients", "/import"]) {
       await page.goto(path)
@@ -87,7 +87,8 @@ test.describe("AppShell", () => {
     await sidebar.getByRole("link", { name: "Today" }).click()
     await expect(page).toHaveURL(new RegExp(`/day/${localToday()}`))
 
-    await sidebar.getByRole("link", { name: "Recipes" }).click()
+    // exact: the Generate gate's "Add N more recipes" link also matches.
+    await sidebar.getByRole("link", { name: "Recipes", exact: true }).click()
     await expect(page).toHaveURL(/\/components$/)
     await page.getByTestId("catalog-link-ingredients").click()
     await expect(page).toHaveURL(/\/ingredients$/)
@@ -173,7 +174,7 @@ test.describe("AppShell", () => {
       .toBe(initial)
   })
 
-  test("phone shows the four tabs, the generate FAB and a settings gear", async ({
+  test("phone shows the four tabs, a compact generate button and a settings gear", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 375, height: 812 })
@@ -185,7 +186,12 @@ test.describe("AppShell", () => {
     await expect(
       bottomNav.getByRole("link", { name: "Recipes" })
     ).toHaveAttribute("aria-current", "page")
-    await expect(bottomNav.getByTestId("generate-plan-fab")).toBeVisible()
+    // UX §2.1: exactly four tab items; Generate lives in the top bar.
+    await expect(bottomNav.getByRole("link")).toHaveCount(4)
+    await expect(bottomNav.getByRole("button")).toHaveCount(0)
+    await expect(
+      page.getByTestId("topbar").getByTestId("generate-plan-compact")
+    ).toBeVisible()
 
     // Desktop sidebar must be hidden on mobile (rendered but not visible).
     await expect(page.getByTestId("sidenav")).toBeHidden()

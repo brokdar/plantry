@@ -94,8 +94,53 @@ describe("IngredientEditor", () => {
     const nameInput = await screen.findByLabelText("Name")
     expect(nameInput).toHaveValue("")
 
+    // Unknown, not zero (Phase 0 C2: completeness must stay honest).
     const kcalInput = screen.getByLabelText("Calories (kcal)")
-    expect(kcalInput).toHaveValue(0)
+    expect(kcalInput).toHaveValue(null)
+  })
+
+  test("submits empty macro fields as null and keeps a typed zero", async () => {
+    const user = userEvent.setup()
+    vi.mocked(createFood).mockResolvedValue({
+      ...mockChickenBreast,
+      id: 3,
+      name: "Salt",
+    })
+
+    renderWithRouter(<IngredientEditor />)
+
+    await user.type(await screen.findByLabelText("Name"), "Salt")
+    await user.type(screen.getByLabelText("Fat (g)"), "0")
+    await user.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() => {
+      expect(createFood).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Salt",
+          kcal_100g: null,
+          protein_100g: null,
+          carbs_100g: null,
+          fat_100g: 0,
+        })
+      )
+    })
+  })
+
+  test("clearing a filled macro sends null", async () => {
+    const user = userEvent.setup()
+    vi.mocked(updateFood).mockResolvedValue(mockChickenBreast)
+
+    renderWithRouter(<IngredientEditor ingredient={mockChickenBreast} />)
+
+    await user.clear(await screen.findByLabelText("Calories (kcal)"))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() => {
+      expect(updateFood).toHaveBeenCalledWith(
+        mockChickenBreast.id,
+        expect.objectContaining({ kcal_100g: null, protein_100g: 31 })
+      )
+    })
   })
 
   test("renders edit mode with pre-filled values", async () => {

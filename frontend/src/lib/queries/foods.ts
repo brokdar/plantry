@@ -25,7 +25,7 @@ import {
 import { ApiError } from "@/lib/api/client"
 import { queryClient } from "@/lib/query-client"
 import { toastError } from "@/lib/toast"
-import { foodKeys } from "./keys"
+import { foodKeys, setupKeys } from "./keys"
 
 export function useFoods(
   params?: FoodListParams,
@@ -79,6 +79,8 @@ export function useCreateFood() {
     mutationFn: (input: FoodInput) => createFood(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
+      // The recipe count drives the Generate gate and the guided state.
+      void queryClient.invalidateQueries({ queryKey: setupKeys.status() })
     },
     onError: (err) => toastError(err, t),
   })
@@ -137,6 +139,7 @@ export function useDeleteFood() {
     mutationFn: (id: number) => deleteFood(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: setupKeys.status() })
     },
     onError: (err) => toastError(err, t),
   })
@@ -178,6 +181,7 @@ export function useCreateVariant() {
       void queryClient.invalidateQueries({ queryKey: foodKeys.variants(id) })
       void queryClient.invalidateQueries({ queryKey: foodKeys.detail(id) })
       void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: setupKeys.status() })
     },
     onError: (err) => toastError(err, t),
   })

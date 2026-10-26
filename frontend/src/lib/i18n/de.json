@@ -19,7 +19,9 @@
     "archive": "Archiv",
     "primary": "Hauptnavigation",
     "go_to": "Gehe zu",
-    "recipes_sections": "Rezeptbereiche"
+    "recipes_sections": "Rezeptbereiche",
+    "generate_locked_one": "Noch {{count}} Rezept, dann kannst du planen",
+    "generate_locked_other": "Noch {{count}} Rezepte, dann kannst du planen"
   },
   "calendar": {
     "title": "Kalender",
@@ -843,7 +845,20 @@
     "source_url": "Quell-URL",
     "source_url_placeholder": "https://…",
     "description": "Beschreibung",
-    "description_hint": "Text, der mit dem Rezept kam. Erscheint gedämpft unter deinen Notizen."
+    "description_hint": "Text, der mit dem Rezept kam. Erscheint gedämpft unter deinen Notizen.",
+    "guide": {
+      "label": "Erste Rezepte anlegen",
+      "progress": "{{count}} von {{target}} Rezepten. Für eine abwechslungsreiche Woche braucht Plantry {{target}}.",
+      "progress_value": "{{count}} von {{target}} Rezepten",
+      "progress_label": "Gesammelte Rezepte",
+      "import_title": "Per Link importieren",
+      "import_body": "Füge den Link zu einer Rezeptseite ein, und Plantry übernimmt Zutaten und Schritte. So füllst du dein Kochbuch am schnellsten.",
+      "import_action": "Rezept importieren",
+      "create_title": "Selbst anlegen",
+      "create_body": "Trag ein Rezept ein, das du auswendig kennst, Zutat für Zutat. Für deine eigene Version eines gespeicherten Rezepts öffnest du es und legst eine Variante an.",
+      "create_action": "Rezept anlegen",
+      "milestone": "{{count}} Rezepte. Du kannst deine erste Woche planen."
+    }
   },
   "lookup": {
     "title": "Zutat finden",
