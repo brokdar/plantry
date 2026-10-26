@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -9,6 +10,7 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -159,6 +161,36 @@ func TestFoodHandler_Update_PreservesSourceURLWhenOmitted(t *testing.T) {
 	assert.Equal(t, "https://example.com/apple", updated["source_url"])
 }
 
+func TestFoodHandler_Update_EmptyStringClearsToNull(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewFoodRepo(db)
+	h := handlers.NewFoodHandler(food.NewService(repo), food.NewNutritionResolver(repo), nil)
+	r := chi.NewRouter()
+	r.Post("/api/foods", h.Create)
+	r.Put("/api/foods/{id}", h.Update)
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods",
+		bytes.NewBufferString(`{"name":"Apple","kind":"leaf","source_url":"https://example.com/apple","description":"Crisp."}`)))
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+	var created map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&created))
+	id := int64(created["id"].(float64))
+
+	resp = httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/foods/%d", id),
+		bytes.NewBufferString(`{"name":"Apple","kind":"leaf","description":""}`)))
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.NotContains(t, got, "description")
+	assert.Equal(t, "https://example.com/apple", got["source_url"])
+
+	var desc sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT description FROM foods WHERE id = ?`, id).Scan(&desc))
+	assert.False(t, desc.Valid, "empty description must be stored as NULL")
+}
+
 func smallPNG(t *testing.T) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
@@ -222,6 +254,44 @@ func TestFoodHandler_Create_ImageURL_DownloadFailsStillCreates(t *testing.T) {
 	assert.NotZero(t, got["id"])
 	assert.NotContains(t, got, "image_path")
 	assert.Equal(t, []any{"image_download_failed"}, got["warnings"])
+}
+
+func TestFoodHandler_Create_ImageURL_NoStoreWarns(t *testing.T) {
+	r := setupFoodRouter(t) // nil image store
+
+	body := `{"name":"Tomato","kind":"leaf","image_url":"http://127.0.0.1:1/tomato.png"}`
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods", bytes.NewBufferString(body)))
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.NotContains(t, got, "image_path")
+	assert.Equal(t, []any{"image_download_failed"}, got["warnings"])
+}
+
+func TestFoodHandler_Create_EmptyImageURLIgnored(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	store, err := imagestore.New(t.TempDir(), srv.Client())
+	require.NoError(t, err)
+	r := setupFoodRouterWithStore(t, store)
+
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods",
+		bytes.NewBufferString(`{"name":"Tomato","kind":"leaf","image_url":""}`)))
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.NotContains(t, got, "warnings")
+	assert.NotContains(t, got, "image_path")
+	assert.Zero(t, hits.Load(), "no fetch for an empty image_url")
 }
 
 func TestFoodHandler_Create_InvalidKind(t *testing.T) {

@@ -649,8 +649,8 @@ func foodCreateParams(f *food.Food) sqlcgen.CreateFoodParams {
 		CookMinutes:       toNullInt64FromIntPtr(f.CookMinutes),
 		Notes:             toNullString(f.Notes),
 		Favorite:          fav,
-		SourceUrl:         toNullString(f.SourceURL),
-		Description:       toNullString(f.Description),
+		SourceUrl:         toNullStringEmpty(derefString(f.SourceURL)),
+		Description:       toNullStringEmpty(derefString(f.Description)),
 	}
 }
 
@@ -696,9 +696,18 @@ func foodUpdateParams(f *food.Food) sqlcgen.UpdateFoodParams {
 		CookMinutes:       toNullInt64FromIntPtr(f.CookMinutes),
 		Notes:             toNullString(f.Notes),
 		Favorite:          fav,
-		SourceUrl:         toNullString(f.SourceURL),
-		Description:       toNullString(f.Description),
+		SourceUrl:         toNullStringEmpty(derefString(f.SourceURL)),
+		Description:       toNullStringEmpty(derefString(f.Description)),
 	}
+}
+
+// derefString returns *s, or "" for nil. Paired with toNullStringEmpty so
+// both nil and "" are stored as NULL.
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {

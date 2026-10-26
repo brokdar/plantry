@@ -434,7 +434,13 @@ func (h *FoodHandler) saveImageFromURL(r *http.Request, f *food.Food, imageURL s
 		return false
 	}
 	f.ImagePath = &imgPath
-	return h.svc.Update(r.Context(), f) == nil
+	if err := h.svc.Update(r.Context(), f); err != nil {
+		// The row doesn't reference the file, so don't leave it orphaned.
+		_ = h.store.Delete("foods", f.ID)
+		f.ImagePath = nil
+		return false
+	}
+	return true
 }
 
 func (h *FoodHandler) Get(w http.ResponseWriter, r *http.Request) {
