@@ -133,8 +133,9 @@ test.describe("AI settings", () => {
       await page.getByTestId("ai-test-connection").click()
       await getModels
 
+      // Plan D17: Anthropic keys aren't really checked yet, so it says saved.
       await expect(
-        page.getByText("Connection validated.", { exact: true })
+        page.getByText(/^Key saved\. \d+ models? available$/)
       ).toBeVisible()
 
       const putKey = page.waitForResponse(
