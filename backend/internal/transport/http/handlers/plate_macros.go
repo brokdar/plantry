@@ -28,7 +28,6 @@ func NewPlateMacrosHandlerFromService(plates plateRangeService, resolver *food.N
 type plateMacrosEntry struct {
 	PlateID int64          `json:"plate_id"`
 	Date    string         `json:"date"`
-	Skipped bool           `json:"skipped"`
 	Macros  macrosResponse `json:"macros"`
 }
 
@@ -58,7 +57,6 @@ func (h *PlateMacrosHandler) List(w http.ResponseWriter, r *http.Request) {
 		out = append(out, plateMacrosEntry{
 			PlateID: pl.ID,
 			Date:    pl.DateString(),
-			Skipped: pl.Skipped,
 			Macros:  toMacrosResponse(macros[pl.ID]),
 		})
 	}
@@ -72,7 +70,3 @@ func (h *PlateMacrosHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, plateMacrosResponse{Plates: out})
 }
-
-// Compile-time assertion: plate.Plate must expose Skipped — guards against
-// silent removal during refactors that would leave the JSON shape lying.
-var _ = plate.Plate{}.Skipped

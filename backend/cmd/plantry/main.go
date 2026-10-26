@@ -131,22 +131,25 @@ func run() error {
 	slotRepo := sqlite.NewSlotRepo(conn)
 	slotSvc := slot.NewService(slotRepo)
 
-	plateRepo := sqlite.NewPlateRepo(conn)
-	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo)
-
 	txRunner := sqlite.NewTxRunner(conn)
+	presetRepo := sqlite.NewPresetRepo(conn)
+
+	// Availability gates where plates may go (D10, D12), so it is built
+	// before the plate and preset services.
+	availabilitySvc := availability.NewService(sqlite.NewAvailabilityRepo(conn), txRunner, presetRepo)
+
+	plateRepo := sqlite.NewPlateRepo(conn)
+	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo).WithCells(availabilitySvc)
 
 	profileRepo := sqlite.NewProfileRepo(conn)
 	profileSvc := profile.NewService(profileRepo)
 
-	presetRepo := sqlite.NewPresetRepo(conn)
 	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).
 		WithSlots(slotSvc).
-		WithPlateRange(plateSvc)
+		WithPlateRange(plateSvc).
+		WithAvailability(availabilitySvc)
 
 	feedbackSvc := feedback.NewService(txRunner, plateRepo, foodRepo)
-
-	availabilitySvc := availability.NewService(sqlite.NewAvailabilityRepo(conn), txRunner, presetRepo)
 
 	// AI wiring. The llm.Resolver consults settings on every request so
 	// provider / model / API-key changes take effect without a restart.
@@ -184,12 +187,13 @@ func run() error {
 		Profile:           profileSvc,
 		Slots:             slotSvc,
 		Presets:           presetSvc,
+		Availability:      availabilitySvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
 	}
 	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc,
-		agent.WindowSources{Plates: plateSvc, Slots: slotSvc, Foods: foodRepo}, time.Now).WithRecorder(runRecorder)
+		agent.WindowSources{Plates: plateSvc, Slots: slotSvc, Foods: foodRepo, Availability: availabilitySvc}, time.Now).WithRecorder(runRecorder)
 	aiHandler := handlers.NewAIHandler(agentSvc, llmResolver)
 
 	// Recipe importer (Phase 11).

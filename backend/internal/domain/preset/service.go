@@ -24,6 +24,7 @@ type Service struct {
 	portions   food.PortionLookup
 	foodGet    FoodGetter
 	slots      SlotLister
+	avail      Availability
 }
 
 // PlateService is the subset of plate.Service we depend on (to read existing

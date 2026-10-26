@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
@@ -120,4 +121,58 @@ func TestPlatesRepo_UpdatePlate_UpdatesDate(t *testing.T) {
 	).Scan(&dateStr))
 
 	assert.Equal(t, "2026-04-27", dateStr, "date column after update")
+}
+
+func TestPlatesRepo_GetByCell(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	slotID := seedSlot(t, db)
+	repo := NewPlateRepo(db)
+	d := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+
+	_, err := repo.GetByCell(ctx, d, slotID)
+	require.ErrorIs(t, err, domain.ErrNotFound, "empty cell")
+
+	p := &plate.Plate{Date: d, SlotID: slotID}
+	require.NoError(t, repo.Create(ctx, p))
+
+	got, err := repo.GetByCell(ctx, d, slotID)
+	require.NoError(t, err)
+	assert.Equal(t, p.ID, got.ID)
+	assert.Equal(t, d, got.Date)
+}
+
+// TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied writes straight through
+// the repo, with no service pre-check, so the insert or update hits
+// ux_plates_date_slot the way a lost race would. Both the standalone repo
+// and the tx-bound repo (used by preset apply) map it to ErrCellOccupied.
+func TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied(t *testing.T) {
+	ctx := context.Background()
+	d1 := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	d2 := d1.AddDate(0, 0, 1)
+
+	run := func(t *testing.T, repo *PlateRepo, slotID int64) {
+		t.Helper()
+		require.NoError(t, repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID}))
+		err := repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID})
+		require.ErrorIs(t, err, domain.ErrCellOccupied, "create")
+
+		other := &plate.Plate{Date: d2, SlotID: slotID}
+		require.NoError(t, repo.Create(ctx, other))
+		other.Date = d1
+		require.ErrorIs(t, repo.Update(ctx, other), domain.ErrCellOccupied, "update")
+	}
+
+	t.Run("standalone repo", func(t *testing.T) {
+		db := testhelper.NewTestDB(t)
+		run(t, NewPlateRepo(db), seedSlot(t, db))
+	})
+	t.Run("tx-bound repo", func(t *testing.T) {
+		db := testhelper.NewTestDB(t)
+		slotID := seedSlot(t, db)
+		tx, err := db.BeginTx(ctx, nil)
+		require.NoError(t, err)
+		defer func() { _ = tx.Rollback() }()
+		run(t, newPlateRepoTx(tx), slotID)
+	})
 }

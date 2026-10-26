@@ -99,7 +99,7 @@ func TestPlateMacros_ComposedComponent_KcalMatchesPerPortion(t *testing.T) {
 	macros := first["macros"].(map[string]any)
 	// 1 portion × (200g × 1.30 kcal/g) = 260 kcal.
 	assert.InDelta(t, 260.0, macros["kcal"].(float64), 0.5)
-	assert.Equal(t, false, first["skipped"].(bool))
+	assert.NotContains(t, first, "skipped")
 }
 
 func TestPlateMacros_LeafComponent_KcalScalesWithGrams(t *testing.T) {
@@ -140,7 +140,7 @@ func TestPlateMacros_LeafComponent_KcalScalesWithGrams(t *testing.T) {
 	assert.InDelta(t, 260.0, macros["kcal"].(float64), 0.5)
 }
 
-func TestPlateMacros_SkippedPlateIncluded(t *testing.T) {
+func TestPlateMacros_EmptyPlateIncluded(t *testing.T) {
 	r, foodRepo, plateRepo, slotRepo := newPlateMacrosRouter(t)
 	ctx := context.Background()
 
@@ -154,8 +154,6 @@ func TestPlateMacros_SkippedPlateIncluded(t *testing.T) {
 	d, _ := time.Parse("2006-01-02", "2026-04-26")
 	p := &plate.Plate{Date: d, SlotID: s.ID}
 	require.NoError(t, plateRepo.Create(ctx, p))
-	_, err := plateRepo.SetSkipped(ctx, p.ID, true, nil)
-	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/plates/macros?from=2026-04-26&to=2026-04-26", nil)
 	w := httptest.NewRecorder()
@@ -167,7 +165,7 @@ func TestPlateMacros_SkippedPlateIncluded(t *testing.T) {
 	plates := body["plates"].([]any)
 	require.Len(t, plates, 1)
 	first := plates[0].(map[string]any)
-	assert.Equal(t, true, first["skipped"].(bool))
+	assert.NotContains(t, first, "skipped")
 	macros := first["macros"].(map[string]any)
 	assert.InDelta(t, 0.0, macros["kcal"].(float64), 0.01)
 }
