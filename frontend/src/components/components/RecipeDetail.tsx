@@ -100,7 +100,7 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
           )}
         </div>
         <div className="flex flex-col gap-4 md:col-span-7">
-          <h1 className="font-heading text-[2rem] leading-tight font-semibold text-balance md:text-[2.5rem]">
+          <h1 className="font-heading text-h1 leading-tight font-semibold text-balance">
             {recipe.name}
           </h1>
           {source && (

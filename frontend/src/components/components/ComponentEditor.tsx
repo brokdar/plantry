@@ -898,7 +898,16 @@ export function ComponentEditor({
           }
           secondary={
             <Button variant="outline" asChild>
-              <Link to="/components">{t("common.cancel")}</Link>
+              {isEdit && component ? (
+                <Link
+                  to="/components/$id"
+                  params={{ id: String(component.id) }}
+                >
+                  {t("common.cancel")}
+                </Link>
+              ) : (
+                <Link to="/components">{t("common.cancel")}</Link>
+              )}
             </Button>
           }
           destructive={

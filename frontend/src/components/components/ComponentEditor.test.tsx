@@ -53,6 +53,24 @@ describe("ComponentEditor", () => {
     expect(screen.getByDisplayValue("Add curry paste")).toBeInTheDocument()
   })
 
+  it("links Cancel to the recipe detail in edit mode", async () => {
+    renderWithRouter(<ComponentEditor component={mockChickenCurry} />)
+
+    expect(await screen.findByRole("link", { name: "Cancel" })).toHaveAttribute(
+      "href",
+      `/components/${mockChickenCurry.id}`
+    )
+  })
+
+  it("links Cancel to the recipe list in create mode", async () => {
+    renderWithRouter(<ComponentEditor />)
+
+    expect(await screen.findByRole("link", { name: "Cancel" })).toHaveAttribute(
+      "href",
+      "/components"
+    )
+  })
+
   it("saves the source URL and description", async () => {
     vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)
     const user = userEvent.setup()

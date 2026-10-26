@@ -138,15 +138,11 @@ test.describe("Component Library", () => {
       const response = await responsePromise
       expect(response.status()).toBe(200)
 
-      // Editor redirects to list on save — the updated card is visible.
-      const editSearchResp = page.waitForResponse((r) =>
-        r.url().includes(`search=${tag}`)
-      )
-      await page.getByTestId("catalog-search").fill(tag)
-      await editSearchResp
-      await expect(page.getByTestId(`component-card-${comp.id}`)).toContainText(
-        `Updated ${tag}`
-      )
+      // Editor returns to the recipe detail on save, showing the new name.
+      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}$`))
+      await expect(
+        page.getByRole("heading", { level: 1, name: `Updated ${tag}` })
+      ).toBeVisible()
     } finally {
       await cleanupFood(comp.id)
       await cleanupFood(stub.id)
@@ -477,7 +473,7 @@ test.describe("Component Library", () => {
     }
   })
 
-  test("editor sticky action bar Cancel returns to /components without saving", async ({
+  test("editor sticky action bar Cancel returns to the recipe detail without saving", async ({
     page,
   }) => {
     const tag = uid()
@@ -494,7 +490,10 @@ test.describe("Component Library", () => {
       await nameInput.fill(`Edited ${tag}`)
 
       await page.getByRole("link", { name: /^cancel$/i }).click()
-      await expect(page).toHaveURL(/\/components\/?$/)
+      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}$`))
+      await expect(
+        page.getByRole("heading", { level: 1, name: `Cancel Recipe ${tag}` })
+      ).toBeVisible()
 
       // Reload editor — name unchanged because we navigated away without saving.
       await page.goto(`/components/${comp.id}/edit`)
