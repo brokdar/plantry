@@ -29,7 +29,7 @@ test.describe("Time slots settings", () => {
     let createdId: number | undefined
 
     try {
-      await page.goto("/settings?tab=meal_slots")
+      await page.goto("/settings/meals")
 
       await page.getByLabel(/translation key/i).fill(nameKey)
       // Icon field is a custom Popover combobox — open it, search, then click.
@@ -76,7 +76,7 @@ test.describe("Time slots settings", () => {
   })
 
   test("validation surfaces when name_key is empty", async ({ page }) => {
-    await page.goto("/settings?tab=meal_slots")
+    await page.goto("/settings/meals")
     await page.getByRole("button", { name: "Save", exact: true }).click()
     // UI should show the validation error inline.
     await expect(page.getByText("name_key required")).toBeVisible()

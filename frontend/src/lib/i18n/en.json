@@ -428,8 +428,6 @@
       "rate_limit_description": "Maximum /api/ai/chat requests per minute per IP. 0 disables limiting.",
       "fake_script_label": "Fake provider script",
       "fake_script_description": "Only used when provider = Fake. Path to a JSONL file of scripted replies.",
-      "secret_key_banner_title": "Encryption key unavailable",
-      "secret_key_banner_body": "API keys cannot be saved in the UI because no encryption key is loaded. Plantry generates one in the data directory on startup; PLANTRY_SECRET_KEY is optional. Keys provided via environment variables continue to work.",
       "wizard": {
         "step1_title": "Pick a provider",
         "step1_description": "Choose which model provider should power the meal-planning assistant.",
@@ -459,10 +457,166 @@
         "build_commit": "Build commit"
       },
       "env_tooltip": "Set via {{envVar}}. Restart required to change.",
-      "restart_required": "Restart required",
-      "secret_key_banner_title": "Encryption key unavailable",
-      "secret_key_banner_body": "No encryption key is loaded — API keys cannot be saved through the UI. Plantry generates one in the data directory on startup; PLANTRY_SECRET_KEY is optional."
-    }
+      "restart_required": "Restart required"
+    },
+    "heading": "Settings",
+    "nav_label": "Settings sections",
+    "back": "Settings",
+    "back_label": "Back to all settings",
+    "saved": "Saved",
+    "number_range": "Enter a whole number from {{min}} to {{max}}.",
+    "decrease": "Decrease {{label}}",
+    "increase": "Increase {{label}}",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "weeks_one": "{{count}} week",
+    "weeks_other": "{{count}} weeks",
+    "sections": {
+      "household": {
+        "title": "You & household",
+        "summary": "Diet, portions, allergies and nutrition goal"
+      },
+      "meals": {
+        "title": "Meals & week",
+        "summary": "Meal slots, your usual week and routines"
+      },
+      "cooking": {
+        "title": "Cooking & variety",
+        "summary": "Cooking sessions, leftovers, variety and shopping day"
+      },
+      "assistant": {
+        "title": "Assistant",
+        "summary": "Provider, key, notes and daily suggestion"
+      },
+      "system": {
+        "title": "Data & system",
+        "summary": "Language, theme, setup wizard and version"
+      }
+    },
+    "household": {
+      "diet_label": "Diet",
+      "diet": {
+        "vegan": "Vegan",
+        "vegetarian": "Vegetarian",
+        "pescetarian": "Pescetarian",
+        "omnivore": "Omnivore"
+      },
+      "diet_effect": {
+        "vegan": "Plantry plans only plant-based recipes.",
+        "vegetarian": "Plantry plans no meat or fish.",
+        "pescetarian": "Plantry plans fish but no meat.",
+        "omnivore": "Plantry plans from all your recipes."
+      },
+      "household_label": "Household",
+      "adults": "Adults",
+      "children": "Children",
+      "household_hint": "Adults count as 1 portion, children as half a portion.",
+      "household_effect_one": "Each plate is planned for {{portions}} portion.",
+      "household_effect_other": "Each plate is planned for {{portions}} portions.",
+      "allergies_label": "Allergies and restrictions",
+      "allergies_effect_none": "None set. Plantry plans from all your recipes.",
+      "allergies_effect": "Plantry leaves out recipes with these.",
+      "meat_days_label": "Meat days per week",
+      "meat_days_none": "No limit",
+      "meat_days_effect_none": "Plantry puts no limit on meat days.",
+      "meat_days_effect_zero": "Plantry plans no meat.",
+      "meat_days_effect_one": "Plantry plans meat on at most {{count}} day a week.",
+      "meat_days_effect_other": "Plantry plans meat on at most {{count}} days a week.",
+      "goal_label": "Nutrition goal",
+      "goal": {
+        "cut": "Cut",
+        "maintain": "Maintain",
+        "bulk": "Bulk",
+        "custom": "Custom"
+      },
+      "goal_split": "{{protein}} / {{fat}} / {{carbs}} %",
+      "goal_custom_detail": "Your own numbers",
+      "goal_effect": "Plantry aims for {{kcal}} kcal a day: {{protein}} % protein, {{fat}} % fat, {{carbs}} % carbs.",
+      "goal_effect_kcal_only": "Plantry aims for {{kcal}} kcal a day.",
+      "goal_effect_none": "No goal set. Plantry doesn't balance plates for nutrition.",
+      "macro_split_hint": "Protein / fat / carbs",
+      "macro_sum_invalid": "Protein, fat and carbs add up to more than 100 %."
+    },
+    "meals": {
+      "slots_label": "Meal slots",
+      "slots_effect": "Plantry plans one plate per meal slot and day.",
+      "grid_label": "Your usual week",
+      "grid_effect": "Plantry plans the Plan meals, leaves No plate meals empty and fills Routine meals from a saved routine.",
+      "grid_no_slots": "Add a meal slot first, then set up your usual week.",
+      "routines_label": "Routines",
+      "routines_effect": "Routines are saved plates for recurring meals, such as your weekday breakfast.",
+      "routines_link": "Manage routines"
+    },
+    "cooking": {
+      "cooking_group": "Cooking",
+      "leftovers_group": "Leftovers and freezing",
+      "variety_group": "Variety",
+      "calendar_group": "Shopping and calendar",
+      "occasions_label": "Cooking sessions per day",
+      "occasions_effect_one": "Plantry plans at most {{count}} cooking session per day.",
+      "occasions_effect_other": "Plantry plans at most {{count}} cooking sessions per day.",
+      "batch_label": "Batch cooking",
+      "batch_effect_on": "Plantry cooks larger batches and plans the leftovers.",
+      "batch_effect_off": "Plantry cooks every plate fresh.",
+      "keep_label": "Leftovers keep for",
+      "keep_effect_one": "Plantry plans leftovers up to {{count}} day after cooking.",
+      "keep_effect_other": "Plantry plans leftovers up to {{count}} days after cooking.",
+      "keep_warning": "Cooked food usually keeps 3 to 4 days in the fridge. Longer is a food-safety risk.",
+      "freezing_label": "Freezing",
+      "freezing_effect_on": "Plantry can freeze portions and plan them for later.",
+      "freezing_effect_off": "Plantry doesn't freeze portions.",
+      "freezer_keep_label": "Frozen portions keep for",
+      "freezer_keep_effect_one": "Plantry uses frozen portions within {{count}} day.",
+      "freezer_keep_effect_other": "Plantry uses frozen portions within {{count}} days.",
+      "variety_label": "No repeats within",
+      "variety_effect_zero": "Recipes can come back every week.",
+      "variety_effect_one": "Plantry doesn't repeat a recipe within {{count}} week.",
+      "variety_effect_other": "Plantry doesn't repeat a recipe within {{count}} weeks.",
+      "explore_label": "New recipes per week",
+      "explore_effect_zero": "Plantry plans only from your recipes.",
+      "explore_effect_one": "Plantry suggests {{count}} new recipe a week.",
+      "explore_effect_other": "Plantry suggests {{count}} new recipes a week.",
+      "shopping_effect": "You shop on {{day}}.",
+      "anchor_effect": {
+        "today": "The plan view starts today.",
+        "next_shopping_day": "The plan view starts on your next shopping day.",
+        "fixed_weekday": "The plan view starts on {{day}}."
+      },
+      "week_starts_effect": "Calendars start the week on {{day}}."
+    },
+    "assistant": {
+      "connection_group": "Connection",
+      "notes_label": "Notes to your assistant",
+      "notes_placeholder": "For example: we don't like coriander, and dinner should be ready in 30 minutes.",
+      "notes_effect": "The assistant reads these notes before every plan and chat.",
+      "daily_label": "Daily suggestion",
+      "daily_effect_on": "Plantry suggests one new recipe each day.",
+      "daily_effect_off": "Plantry doesn't suggest a recipe each day.",
+      "retention_label": "Keep run details for",
+      "retention_effect_one": "Assistant run details older than {{count}} day are deleted.",
+      "retention_effect_other": "Assistant run details older than {{count}} days are deleted.",
+      "rate_limit_effect_zero": "The assistant chat has no rate limit.",
+      "rate_limit_effect_one": "The assistant answers at most {{count}} chat message per minute.",
+      "rate_limit_effect_other": "The assistant answers at most {{count}} chat messages per minute."
+    },
+    "system_section": {
+      "appearance_group": "Language and theme",
+      "data_group": "Data",
+      "about_group": "About",
+      "language_effect": "Plantry shows its labels in {{language}}.",
+      "theme_effect": {
+        "light": "Plantry uses the light theme.",
+        "dark": "Plantry uses the dark theme.",
+        "system": "Plantry follows your device's light or dark setting."
+      },
+      "setup_label": "Setup wizard",
+      "setup_effect": "Walk through the setup steps again. Your current values are filled in.",
+      "setup_link": "Re-run setup wizard",
+      "debug_effect_on": "The ingredient lookup shows its trace. Stored in this browser only.",
+      "debug_effect_off": "The ingredient lookup hides its trace. Stored in this browser only."
+    },
+    "days_unit_one": "day",
+    "days_unit_other": "days"
   },
   "settings": {
     "plan_tab": "Planning",
@@ -507,7 +661,12 @@
     "breakfast": "Breakfast",
     "lunch": "Lunch",
     "dinner": "Dinner",
-    "snack": "Snack"
+    "snack": "Snack",
+    "icon_pick_placeholder": "Pick an icon",
+    "icon_search_placeholder": "Search icons…",
+    "icon_suggested": "Suggested",
+    "icon_none_found": "No icons found",
+    "row_detail": "{{key}}, order {{order}}"
   },
   "ingredient": {
     "kind_label": "Ingredient",
@@ -1002,7 +1161,10 @@
       "url_blocked": "That address is not allowed."
     },
     "profile": {
-      "invalid_macros": "Macro percentages must sum to 100 or less, and calorie target must be positive."
+      "invalid_macros": "Macro percentages must sum to 100 or less, and calorie target must be positive.",
+      "invalid_diet_type": "Pick one of the listed diets.",
+      "invalid_meat_days": "Meat days per week must be between 0 and 7.",
+      "invalid_household_portions": "Household portions must be more than 0 and at most 20."
     },
     "preset": {
       "in_use": "This preset still references a missing food."
@@ -1222,5 +1384,9 @@
     "title": "Nutrition is incomplete",
     "body_one": "kcal and macros leave out 1 ingredient without data:",
     "body_other": "kcal and macros leave out {{count}} ingredients without data:"
+  },
+  "units": {
+    "kcal": "kcal",
+    "g": "g"
   }
 }

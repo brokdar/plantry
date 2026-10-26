@@ -12,6 +12,10 @@ const AI_SERIAL_SPECS = [
   "keyboard-shortcuts.spec.ts",
   "generate-plan.spec.ts",
   "feedback.spec.ts",
+  // The profile and plan settings are global too; these two write them
+  // through the UI and must not interleave.
+  "profile.spec.ts",
+  "settings-preferences.spec.ts",
 ]
 
 export default defineConfig({

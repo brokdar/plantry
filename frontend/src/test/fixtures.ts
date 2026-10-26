@@ -5,6 +5,9 @@ import type {
 import type { ComposedFood, LeafFood } from "@/lib/api/foods"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
 import type { Plate } from "@/lib/api/plates"
+import type { Profile } from "@/lib/api/profile"
+import type { SettingItem, SettingsList, SystemInfo } from "@/lib/api/settings"
+import type { TimeSlot } from "@/lib/api/slots"
 
 export const mockChickenBreast: LeafFood = {
   id: 1,
@@ -253,4 +256,92 @@ export const mockAvailabilitySlots = [
 export const mockAvailabilityPresets = [
   { id: 7, name: "Overnight oats" },
   { id: 8, name: "Bread and soup" },
+]
+
+// Profile with the Phase 1 defaults and no nutrition goal.
+export const mockProfile: Profile = {
+  kcal_target: null,
+  protein_pct: null,
+  fat_pct: null,
+  carbs_pct: null,
+  dietary_restrictions: [],
+  preferences: {},
+  system_prompt: null,
+  locale: "en",
+  diet_type: "omnivore",
+  meat_days_per_week_max: null,
+  household_portions: 1,
+  updated_at: "2026-01-01T00:00:00Z",
+}
+
+export function mockSettingItem(
+  key: string,
+  value: string,
+  source: SettingItem["source"] = "default",
+  extra: Partial<SettingItem> = {}
+): SettingItem {
+  return { key, value, source, is_secret: false, env_also_set: false, ...extra }
+}
+
+/** Every editable settings key at its registry default (plan D4). */
+export const mockSettingDefaults: Record<string, string> = {
+  "ai.provider": "",
+  "ai.model": "",
+  "ai.api_key": "",
+  "ai.rate_limit_per_min": "10",
+  "ai.fake_script": "",
+  "fdc.api_key": "",
+  "plan.week_starts_on": "monday",
+  "plan.anchor": "next_shopping_day",
+  "plan.shopping_day": "0",
+  "setup.completed": "true",
+  "plan.max_cook_occasions_per_day": "1",
+  "plan.batch_cooking": "true",
+  "plan.default_keep_days": "3",
+  "plan.freezing_enabled": "false",
+  "plan.freezer_keep_days": "90",
+  "plan.variety_weeks": "3",
+  "plan.explore_per_week": "0",
+  "discovery.daily_enabled": "true",
+  "ai.run_retention_days": "180",
+}
+
+const SECRET_KEYS = new Set(["ai.api_key", "fdc.api_key"])
+
+/** The settings list with every key at its default; `overrides` replace
+ *  single items by key. */
+export function mockSettingsList(
+  overrides: Partial<SettingItem>[] = []
+): SettingsList {
+  const items = Object.entries(mockSettingDefaults).map(([key, value]) => {
+    const base = mockSettingItem(key, value, "default", {
+      is_secret: SECRET_KEYS.has(key),
+    })
+    const override = overrides.find((o) => o.key === key)
+    return override ? { ...base, ...override } : base
+  })
+  return { items, cipher_available: true }
+}
+
+export const mockSystemInfo: SystemInfo = {
+  port: 8080,
+  db_path: "/data/plantry.db",
+  log_level: "info",
+  image_path: "/data/images",
+  dev_mode: false,
+  version: "1.2.3",
+  build_commit: "abc1234",
+  cipher_available: true,
+}
+
+export const mockTimeSlots: TimeSlot[] = [
+  {
+    id: 1,
+    name_key: "slot.breakfast",
+    icon: "Coffee",
+    sort_order: 0,
+    active: true,
+  },
+  { id: 2, name_key: "slot.lunch", icon: "Sun", sort_order: 1, active: true },
+  { id: 3, name_key: "slot.dinner", icon: "Moon", sort_order: 2, active: true },
 ]

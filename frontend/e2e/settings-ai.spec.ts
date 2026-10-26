@@ -65,7 +65,7 @@ test.describe("AI settings", () => {
   test("shows env-sourced badges before any DB override exists", async ({
     page,
   }) => {
-    await page.goto("/settings?tab=ai")
+    await page.goto("/settings/assistant")
 
     await test.step("wizard rows render", async () => {
       await expect(
@@ -90,10 +90,10 @@ test.describe("AI settings", () => {
   }) => {
     const tag = uid()
 
-    await test.step("navigate to AI tab", async () => {
-      await page.goto("/settings?tab=ai")
+    await test.step("navigate to the Assistant section", async () => {
+      await page.goto("/settings/assistant")
       await expect(
-        page.getByRole("heading", { name: "Assistant Configuration" })
+        page.getByRole("heading", { name: "Connection" })
       ).toBeVisible()
     })
 
@@ -203,7 +203,7 @@ test.describe("AI settings", () => {
     })
     expect(seed.ok()).toBeTruthy()
 
-    await page.goto("/settings?tab=ai")
+    await page.goto("/settings/assistant")
     // Exactly one DB badge — ai.provider.
     await expect(page.getByTestId("source-badge-db")).toHaveCount(1)
     await expect(page.getByTestId("ai-provider-select")).toContainText(
@@ -233,14 +233,16 @@ test.describe("AI settings", () => {
     expect(body.message_key).toBe("error.settings.invalid_value")
   })
 
-  test("system tab reports cipher availability", async ({ page }) => {
+  test("legacy ?tab=system opens Data & system, without a secret-key banner", async ({
+    page,
+  }) => {
     await page.goto("/settings?tab=system")
-    await expect(page.getByRole("heading", { name: "System" })).toBeVisible()
-    // The playwright backend sets PLANTRY_SECRET_KEY so encryption is
-    // enabled; the System tab's "Encryption key unavailable" banner
-    // (settings_page.system.secret_key_banner_title) must not appear.
+    await expect(page).toHaveURL(/\/settings\/system$/)
     await expect(
-      page.getByText("Encryption key unavailable", { exact: true })
-    ).toHaveCount(0)
+      page.getByRole("heading", { name: "Data & system" })
+    ).toBeVisible()
+    await expect(page.getByTestId("system-info")).toBeVisible()
+    // The secret-key banners were removed (the cipher always exists).
+    await expect(page.getByText(/encryption key/i)).toHaveCount(0)
   })
 })

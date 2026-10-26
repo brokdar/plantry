@@ -1,19 +1,13 @@
 import {
-  API,
-  apiRequest,
   cleanupSlot,
   expect,
   mockAnchorToday,
+  mockSettingValues,
   seedSlot,
+  setSetting,
   test,
   uid,
 } from "./helpers"
-
-async function setSetting(key: string, value: string) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.put("/api/settings", { data: { key, value } })
-  await ctx.dispose()
-}
 
 test.describe("Planner — anchor settings", () => {
   // Always restore anchor to "today" after each test so parallel instances
@@ -22,14 +16,16 @@ test.describe("Planner — anchor settings", () => {
     await setSetting("plan.anchor", "today")
   })
 
-  test("Settings → Plan tab renders anchor radio group", async ({ page }) => {
+  test("Settings → Cooking & variety renders the anchor radio group", async ({
+    page,
+  }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.anc_radio_${tag}`, "Moon", 960)
 
     try {
-      await page.goto("/settings?tab=plan")
+      await page.goto("/settings/cooking")
 
-      // Plan tab content should be active
+      // The Cooking section holds the anchor setting
       await expect(page.getByTestId("plan-anchor-radio-today")).toBeVisible()
       await expect(
         page.getByTestId("plan-anchor-radio-next_shopping_day")
@@ -83,7 +79,7 @@ test.describe("Planner — anchor settings", () => {
         { times: 1 }
       )
 
-      await page.goto("/settings?tab=plan")
+      await page.goto("/settings/cooking")
 
       // Weekday picker should not be visible while not in fixed_weekday mode
       await expect(page.getByTestId("plan-fixed-weekday-picker")).toHaveCount(0)
@@ -112,9 +108,13 @@ test.describe("Planner — anchor settings", () => {
     const slot = await seedSlot(`slot.anc_fwd_${tag}`, "Moon", 958)
 
     try {
-      // Set anchor = fixed_weekday + weekday = Monday (0)
-      await setSetting("plan.anchor", "fixed_weekday")
-      await setSetting("plan.shopping_day", "0") // 0 = Monday (backend convention)
+      // Anchor = fixed_weekday + weekday = Monday (0, backend convention),
+      // mocked per page: a backend write would move the window of every
+      // parallel planner spec.
+      await mockSettingValues(page, {
+        "plan.anchor": "fixed_weekday",
+        "plan.shopping_day": "0",
+      })
 
       await page.goto("/")
 
