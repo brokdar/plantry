@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
 func TestPrompt_NoLegacyDayIndex(t *testing.T) {
@@ -164,22 +167,71 @@ This window has no plates yet.
 	}
 }
 
-func TestPrompt_DateSection_StaysWithinBudget(t *testing.T) {
-	dr := &DateRange{Today: day(2026, 1, 1), From: day(2026, 1, 1), To: day(2026, 1, 31)}
-	plates := make([]PromptPlate, 0, 400)
-	for i := range 400 {
-		plates = append(plates, PromptPlate{
-			ID: int64(i), Date: day(2026, 1, 1+i%31), SlotID: 1, Slot: "slot.dinner",
-			Foods: []string{strings.Repeat("Very long food name ", 3)},
-		})
+func TestPrompt_PlateLineFallbacks(t *testing.T) {
+	dr := &DateRange{From: day(2026, 10, 31), To: day(2026, 10, 31)}
+	plates := []PromptPlate{
+		{ID: 7, Date: day(2026, 10, 31), SlotID: 2, Slot: "slot.dinner"},
+		{ID: 8, Date: day(2026, 10, 31), SlotID: 9, Foods: []string{"Pasta"}},
+	}
+
+	prompt := ComposePrompt(nil, plates, dr, nil)
+
+	for _, want := range []string{
+		"- 2026-10-31 slot.dinner (plate_id=7, slot_id=2): (no foods)\n",
+		"- 2026-10-31 (plate_id=8, slot_id=9): Pasta\n",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt must contain %q; got:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestPrompt_FullMonthOfPlatesStaysWithinBudget(t *testing.T) {
+	dr := &DateRange{Today: day(2026, 10, 1), From: day(2026, 10, 1), To: day(2026, 10, 31)}
+	slots := []string{"slot.breakfast", "slot.lunch", "slot.dinner", "slot.snack"}
+	var plates []PromptPlate
+	for d := range 31 {
+		for s, name := range slots {
+			plates = append(plates, PromptPlate{
+				ID: int64(d*len(slots) + s + 1), Date: day(2026, 10, 1+d), SlotID: int64(s + 1), Slot: name,
+				Foods: []string{
+					"Rindergulasch mit Spätzle nach Großmutters Art",
+					"Gemischter Blattsalat mit Kürbiskernöl-Dressing",
+					"Apfelstrudel mit Vanillesoße",
+				},
+			})
+		}
 	}
 
 	prompt := ComposePrompt(nil, plates, dr, nil)
 
 	if len(prompt) > promptCharBudget {
-		t.Errorf("prompt is %d chars, budget is %d", len(prompt), promptCharBudget)
+		t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)
 	}
-	if !strings.HasSuffix(prompt, truncationNote) {
-		t.Errorf("an over-budget prompt must end with the truncation note")
+	if !strings.HasSuffix(prompt, toolRules) {
+		t.Error("an over-budget prompt must keep the tool rules verbatim")
+	}
+	if !strings.Contains(prompt, "more plates omitted)\n") {
+		t.Errorf("prompt must say how many plates were omitted; got:\n%s", prompt)
+	}
+	if !utf8.ValidString(prompt) {
+		t.Error("prompt must be valid UTF-8")
+	}
+}
+
+func TestPrompt_OversizedProfileCutsOnRuneBoundary(t *testing.T) {
+	long := strings.Repeat("Ich esse gern Käse, Möhren und Brötchen. ", 600)
+	p := &profile.Profile{SystemPrompt: &long}
+
+	prompt := ComposePrompt(p, nil, nil, nil)
+
+	if len(prompt) > promptCharBudget {
+		t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)
+	}
+	if !strings.HasSuffix(prompt, truncationNote+toolRules) {
+		t.Error("a cut prompt must end with the truncation note followed by the tool rules")
+	}
+	if !utf8.ValidString(prompt) {
+		t.Error("prompt must be cut on a UTF-8 rune boundary")
 	}
 }

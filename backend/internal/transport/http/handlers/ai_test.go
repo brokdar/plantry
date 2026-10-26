@@ -1,7 +1,11 @@
 package handlers_test
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +17,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
@@ -28,6 +33,13 @@ import (
 func newAIHandler(t *testing.T) (*handlers.AIHandler, *fake.Client) {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
+	return newAIHandlerWithPlates(t, db, plate.NewService(sqlite.NewPlateRepo(db), sqlite.NewSlotRepo(db), sqlite.NewFoodRepo(db)))
+}
+
+// newAIHandlerWithPlates is newAIHandler with the prompt's plate reader
+// swapped out.
+func newAIHandlerWithPlates(t *testing.T, db *sql.DB, plates agent.PlateRanger) (*handlers.AIHandler, *fake.Client) {
+	t.Helper()
 	slotRepo := sqlite.NewSlotRepo(db)
 	foodRepo := sqlite.NewFoodRepo(db)
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{{
@@ -40,7 +52,7 @@ func newAIHandler(t *testing.T) (*handlers.AIHandler, *fake.Client) {
 	svc := agent.NewService(sqlite.NewAIRepo(db), resolver, tools,
 		profile.NewService(sqlite.NewProfileRepo(db)), nil,
 		agent.WindowSources{
-			Plates: plate.NewService(sqlite.NewPlateRepo(db), slotRepo, foodRepo),
+			Plates: plates,
 			Slots:  slot.NewService(slotRepo),
 			Foods:  foodRepo,
 		},
@@ -101,16 +113,29 @@ func TestAIChat_RejectsBadDates(t *testing.T) {
 
 func TestAIChat_PassesDatesThrough(t *testing.T) {
 	tests := []struct {
-		name, today, wantToday string
+		name, today, from, to string
+		wantToday, wantWindow string
 	}{
-		{"client today", "2026-10-30", "Today is Friday, 2026-10-30."},
-		{"today falls back to server clock", "", "Today is Monday, 2026-10-26."},
+		{
+			"client today", "2026-10-30", "2026-10-31", "2026-11-06",
+			"Today is Friday, 2026-10-30.",
+			"Planning window: Saturday 2026-10-31 to Friday 2026-11-06 (7 days).",
+		},
+		{
+			"today falls back to server clock", "", "2026-10-31", "2026-11-06",
+			"Today is Monday, 2026-10-26.",
+			"Planning window: Saturday 2026-10-31 to Friday 2026-11-06 (7 days).",
+		},
+		{
+			"exactly 31 days inclusive", "2026-10-26", "2026-10-01", "2026-10-31",
+			"Today is Monday, 2026-10-26.",
+			"Planning window: Thursday 2026-10-01 to Saturday 2026-10-31 (31 days).",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h, client := newAIHandler(t)
-			// 31 days inclusive is the longest allowed window.
-			req := httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody(tt.today, "2026-10-31", "2026-11-30")))
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody(tt.today, tt.from, tt.to)))
 			w := httptest.NewRecorder()
 
 			h.Chat(w, req)
@@ -120,7 +145,36 @@ func TestAIChat_PassesDatesThrough(t *testing.T) {
 			reqs := client.Requests()
 			require.NotEmpty(t, reqs)
 			assert.Contains(t, reqs[0].System, tt.wantToday)
-			assert.Contains(t, reqs[0].System, "Planning window: Saturday 2026-10-31 to Monday 2026-11-30 (31 days).")
+			assert.Contains(t, reqs[0].System, tt.wantWindow)
+		})
+	}
+}
+
+type failingPlates struct{ err error }
+
+func (f failingPlates) Range(context.Context, time.Time, time.Time) ([]plate.Plate, error) {
+	return nil, f.err
+}
+
+func TestAIDebugSystemPrompt_MapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantKey    string
+	}{
+		{"invalid input", fmt.Errorf("%w: bad range", domain.ErrInvalidInput), http.StatusBadRequest, "error.invalid_body"},
+		{"unexpected", errors.New("disk on fire"), http.StatusInternalServerError, "error.server"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, _ := newAIHandlerWithPlates(t, testhelper.NewTestDB(t), failingPlates{tt.err})
+			w := httptest.NewRecorder()
+
+			h.DebugSystemPrompt(w, httptest.NewRequest(http.MethodGet, debugURL("", "2026-10-31", "2026-11-01"), nil))
+
+			assert.Equal(t, tt.wantStatus, w.Code)
+			assert.Equal(t, tt.wantKey, messageKey(t, w))
 		})
 	}
 }

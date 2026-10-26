@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
@@ -52,16 +53,16 @@ func ComposePrompt(p *profile.Profile, plates []PromptPlate, dateRange *DateRang
 	}
 
 	if dateRange != nil {
-		writeDateRangeSection(&b, dateRange, plates, prefs)
+		writeDateRangeSection(&b, dateRange, prefs)
+		writePlatesSection(&b, plates, promptCharBudget-b.Len()-len(toolRules))
 	}
 
-	b.WriteString(toolRules)
-
-	s := b.String()
-	if len(s) > promptCharBudget {
-		s = s[:promptCharBudget-len(truncationNote)] + truncationNote
+	// The tool rules always survive; anything over budget is cut before them.
+	body := b.String()
+	if room := promptCharBudget - len(toolRules); len(body) > room {
+		body = truncateRunes(body, room-len(truncationNote)) + truncationNote
 	}
-	return s
+	return body + toolRules
 }
 
 const rolePrefix = `You are Plantry, an assistant for a self-hosted meal planner.
@@ -142,7 +143,7 @@ func writeProfileSection(b *strings.Builder, p *profile.Profile) {
 	b.WriteString("\n")
 }
 
-func writeDateRangeSection(b *strings.Builder, dr *DateRange, plates []PromptPlate, prefs *PlanningPrefs) {
+func writeDateRangeSection(b *strings.Builder, dr *DateRange, prefs *PlanningPrefs) {
 	const ymd = "2006-01-02"
 	if !dr.Today.IsZero() {
 		fmt.Fprintf(b, "Today is %s, %s.\n", dr.Today.Weekday(), dr.Today.Format(ymd))
@@ -174,18 +175,63 @@ func writeDateRangeSection(b *strings.Builder, dr *DateRange, plates []PromptPla
 			fmt.Fprintf(b, "Plan anchor: %s\n", prefs.AnchorMode)
 		}
 	}
+}
+
+// writePlatesSection lists plates in at most room bytes, ending with an
+// omitted-count line when not all of them fit.
+func writePlatesSection(b *strings.Builder, plates []PromptPlate, room int) {
 	if len(plates) == 0 {
 		b.WriteString("This window has no plates yet.\n\n")
 		return
 	}
-	b.WriteString("Plates already planned:\n")
+	const header = "Plates already planned:\n"
+	// Keep room for the header, an omitted-count line and the blank line.
+	left := room - len(header) - len(fmt.Sprintf(omittedLine, len(plates))) - 1
+	b.WriteString(header)
+	written := 0
 	for _, p := range plates {
-		contents := strings.Join(p.Foods, ", ")
-		if p.Skipped {
-			contents = "skipped"
+		line := plateLine(p)
+		if len(line) > left {
+			break
 		}
-		fmt.Fprintf(b, "- %s %s (plate_id=%d, slot_id=%d): %s\n",
-			p.Date.Format(ymd), p.Slot, p.ID, p.SlotID, contents)
+		b.WriteString(line)
+		left -= len(line)
+		written++
+	}
+	if omitted := len(plates) - written; omitted > 0 {
+		fmt.Fprintf(b, omittedLine, omitted)
 	}
 	b.WriteString("\n")
+}
+
+const omittedLine = "(%d more plates omitted)\n"
+
+func plateLine(p PromptPlate) string {
+	contents := strings.Join(p.Foods, ", ")
+	switch {
+	case p.Skipped:
+		contents = "skipped"
+	case contents == "":
+		contents = "(no foods)"
+	}
+	slot := ""
+	if p.Slot != "" {
+		slot = " " + p.Slot
+	}
+	return fmt.Sprintf("- %s%s (plate_id=%d, slot_id=%d): %s\n",
+		p.Date.Format("2006-01-02"), slot, p.ID, p.SlotID, contents)
+}
+
+// truncateRunes cuts s to at most n bytes on a UTF-8 rune boundary.
+func truncateRunes(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if n >= len(s) {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

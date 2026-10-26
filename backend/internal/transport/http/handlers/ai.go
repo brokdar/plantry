@@ -62,7 +62,8 @@ func (h *AIHandler) DebugSystemPrompt(w http.ResponseWriter, r *http.Request) {
 		Today: dates.today, From: dates.from, To: dates.to,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "error.server")
+		status, key := toHTTPWithResource(err, "ai")
+		writeError(w, status, key)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"system_prompt": prompt})
