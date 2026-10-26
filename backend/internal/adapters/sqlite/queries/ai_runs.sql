@@ -4,12 +4,14 @@ VALUES (?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: FinishAIRun :execresult
+-- prompt_hash resolves to NULL when the hash is not in ai_prompts, so a failed
+-- UpsertPrompt never makes this UPDATE fail and leave the run 'running'.
 UPDATE ai_runs SET
     status             = ?,
     finished_at        = ?,
     provider           = ?,
     model              = ?,
-    prompt_hash        = ?,
+    prompt_hash        = (SELECT hash FROM ai_prompts WHERE hash = ?),
     iterations         = ?,
     input_tokens       = ?,
     output_tokens      = ?,

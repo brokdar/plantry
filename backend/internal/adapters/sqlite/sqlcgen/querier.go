@@ -46,6 +46,8 @@ type Querier interface {
 	DeletePresetTagsByPreset(ctx context.Context, presetID int64) error
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
+	// prompt_hash resolves to NULL when the hash is not in ai_prompts, so a failed
+	// UpsertPrompt never makes this UPDATE fail and leave the run 'running'.
 	FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.Result, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
 	GetFood(ctx context.Context, id int64) (Food, error)

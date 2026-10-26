@@ -148,6 +148,30 @@ func TestAIRunRepo_FinishRunErrorKey(t *testing.T) {
 	assert.False(t, hash.Valid, "empty prompt hash is stored as NULL")
 }
 
+func TestAIRunRepo_FinishRunUnknownPromptHashStoresNull(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+
+	id, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: time.Now()})
+	require.NoError(t, err)
+	require.NoError(t, repo.FinishRun(ctx, airun.RunEnd{
+		ID: id, Status: airun.StatusOK, FinishedAt: time.Now(), PromptHash: "never-upserted",
+		Iterations: 2, InputTokens: 10, OutputTokens: 20,
+	}))
+
+	var status string
+	var hash sql.NullString
+	var iterations int
+	var in, out int64
+	require.NoError(t, db.QueryRow(`SELECT status, prompt_hash, iterations, input_tokens, output_tokens FROM ai_runs WHERE id = ?`, id).
+		Scan(&status, &hash, &iterations, &in, &out))
+	assert.Equal(t, "ok", status)
+	assert.False(t, hash.Valid, "unknown prompt hash is stored as NULL")
+	assert.Equal(t, 2, iterations)
+	assert.Equal(t, []int64{10, 20}, []int64{in, out})
+}
+
 func TestAIRunRepo_FinishRunMissingReturnsNotFound(t *testing.T) {
 	repo := sqlite.NewAIRunRepo(testhelper.NewTestDB(t))
 

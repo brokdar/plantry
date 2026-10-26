@@ -79,7 +79,7 @@ UPDATE ai_runs SET
     finished_at        = ?,
     provider           = ?,
     model              = ?,
-    prompt_hash        = ?,
+    prompt_hash        = (SELECT hash FROM ai_prompts WHERE hash = ?),
     iterations         = ?,
     input_tokens       = ?,
     output_tokens      = ?,
@@ -94,7 +94,7 @@ type FinishAIRunParams struct {
 	FinishedAt       sql.NullString
 	Provider         string
 	Model            string
-	PromptHash       sql.NullString
+	Hash             string
 	Iterations       int64
 	InputTokens      int64
 	OutputTokens     int64
@@ -104,13 +104,15 @@ type FinishAIRunParams struct {
 	ID               int64
 }
 
+// prompt_hash resolves to NULL when the hash is not in ai_prompts, so a failed
+// UpsertPrompt never makes this UPDATE fail and leave the run 'running'.
 func (q *Queries) FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.Result, error) {
 	return q.db.ExecContext(ctx, finishAIRun,
 		arg.Status,
 		arg.FinishedAt,
 		arg.Provider,
 		arg.Model,
-		arg.PromptHash,
+		arg.Hash,
 		arg.Iterations,
 		arg.InputTokens,
 		arg.OutputTokens,

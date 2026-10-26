@@ -52,8 +52,8 @@ type RunStart struct {
 	Instruction   *string
 }
 
-// RunEnd holds the totals written when a run finishes. An empty PromptHash
-// or ErrorKey is stored as NULL.
+// RunEnd holds the totals written when a run finishes. An empty ErrorKey is
+// stored as NULL, as is a PromptHash that is empty or not in the prompt store.
 type RunEnd struct {
 	ID               int64
 	Status           Status
@@ -84,7 +84,9 @@ type Step struct {
 	OutputTokens int64
 }
 
-// Store persists runs, steps and system prompts.
+// Store persists runs, steps and system prompts. Implementations are safe for
+// concurrent use. Keeping Step.Seq unique per run is the caller's
+// responsibility.
 type Store interface {
 	CreateRun(ctx context.Context, start RunStart) (int64, error)
 	FinishRun(ctx context.Context, end RunEnd) error

@@ -30,7 +30,7 @@ func NewAIRunRepo(db *sql.DB) *AIRunRepo {
 var _ airun.Store = (*AIRunRepo)(nil)
 
 func (r *AIRunRepo) CreateRun(ctx context.Context, start airun.RunStart) (int64, error) {
-	return r.q.CreateAIRun(ctx, sqlcgen.CreateAIRunParams{
+	id, err := r.q.CreateAIRun(ctx, sqlcgen.CreateAIRunParams{
 		Kind:          string(start.Kind),
 		StartedAt:     formatTime(start.StartedAt),
 		PromptVersion: start.PromptVersion,
@@ -38,6 +38,10 @@ func (r *AIRunRepo) CreateRun(ctx context.Context, start airun.RunStart) (int64,
 		WindowEnd:     toNullDate(start.WindowEnd),
 		Instruction:   toNullString(start.Instruction),
 	})
+	if err != nil {
+		return 0, fmt.Errorf("create ai run: %w", err)
+	}
+	return id, nil
 }
 
 func (r *AIRunRepo) FinishRun(ctx context.Context, end airun.RunEnd) error {
@@ -46,7 +50,7 @@ func (r *AIRunRepo) FinishRun(ctx context.Context, end airun.RunEnd) error {
 		FinishedAt:       sql.NullString{String: formatTime(end.FinishedAt), Valid: true},
 		Provider:         end.Provider,
 		Model:            end.Model,
-		PromptHash:       toNullStringEmpty(end.PromptHash),
+		Hash:             end.PromptHash,
 		Iterations:       int64(end.Iterations),
 		InputTokens:      end.InputTokens,
 		OutputTokens:     end.OutputTokens,
@@ -56,14 +60,11 @@ func (r *AIRunRepo) FinishRun(ctx context.Context, end airun.RunEnd) error {
 		ID:               end.ID,
 	})
 	if err != nil {
-		if isForeignKeyViolation(err) {
-			return fmt.Errorf("%w: prompt reference", domain.ErrInvalidInput)
-		}
-		return err
+		return fmt.Errorf("finish ai run %d: %w", end.ID, err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("finish ai run %d: %w", end.ID, err)
 	}
 	if n == 0 {
 		return fmt.Errorf("%w: ai run %d", domain.ErrNotFound, end.ID)
@@ -88,14 +89,20 @@ func (r *AIRunRepo) AddStep(ctx context.Context, step airun.Step) error {
 		InputTokens:  step.InputTokens,
 		OutputTokens: step.OutputTokens,
 	})
-	if err != nil && isForeignKeyViolation(err) {
-		return fmt.Errorf("%w: ai run %d", domain.ErrInvalidInput, step.RunID)
+	if err != nil {
+		if isForeignKeyViolation(err) {
+			return fmt.Errorf("add ai run step: %w: ai run %d", domain.ErrInvalidInput, step.RunID)
+		}
+		return fmt.Errorf("add ai run step %d/%d: %w", step.RunID, step.Seq, err)
 	}
-	return err
+	return nil
 }
 
 func (r *AIRunRepo) UpsertPrompt(ctx context.Context, hash, text string) error {
-	return r.q.UpsertAIPrompt(ctx, sqlcgen.UpsertAIPromptParams{Hash: hash, Text: text})
+	if err := r.q.UpsertAIPrompt(ctx, sqlcgen.UpsertAIPromptParams{Hash: hash, Text: text}); err != nil {
+		return fmt.Errorf("upsert ai prompt: %w", err)
+	}
+	return nil
 }
 
 func formatTime(t time.Time) string {
