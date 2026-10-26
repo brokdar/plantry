@@ -342,7 +342,7 @@ function DrawerButton({
 }) {
   const toneCls = {
     primary: "bg-primary text-on-primary hover:bg-primary/90",
-    tertiary: "bg-tertiary text-on-tertiary hover:bg-tertiary/90",
+    tertiary: "bg-tertiary text-on-accent hover:bg-tertiary/90",
     destructive:
       "bg-destructive text-destructive-foreground hover:bg-destructive/90",
   }[tone]

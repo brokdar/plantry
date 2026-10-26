@@ -20,9 +20,9 @@ import {
 import { imageURL } from "@/lib/image-url"
 import type { LeafFood } from "@/lib/api/foods"
 
-const SOURCE_DOT: Record<string, "primary" | "tertiary" | "muted"> = {
-  fdc: "primary",
-  off: "tertiary",
+const SOURCE_DOT: Record<string, "accent" | "batch" | "muted"> = {
+  fdc: "accent",
+  off: "batch",
   manual: "muted",
 }
 

@@ -602,7 +602,7 @@ export function ComponentEditor({
                 <ol className="space-y-3">
                   {instructionFields.map((field, index) => (
                     <li key={field.id} className="flex items-start gap-3">
-                      <span className="text-on-primary-container mt-2 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-container font-heading text-xs font-bold">
+                      <span className="mt-2 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-container font-heading text-xs font-bold text-on-accent">
                         {index + 1}
                       </span>
                       <FormField
