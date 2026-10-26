@@ -17,6 +17,8 @@ type Querier interface {
 	CountPlatesUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 	CountPresetsUsingFood(ctx context.Context, foodID int64) (int64, error)
+	CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error)
+	CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (AiConversation, error)
 	CreateFood(ctx context.Context, arg CreateFoodParams) (Food, error)
 	CreateFoodComponent(ctx context.Context, arg CreateFoodComponentParams) error
@@ -44,6 +46,7 @@ type Querier interface {
 	DeletePresetTagsByPreset(ctx context.Context, presetID int64) error
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
+	FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.Result, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
 	GetFood(ctx context.Context, id int64) (Food, error)
 	GetFoodKind(ctx context.Context, id int64) (string, error)
@@ -96,6 +99,7 @@ type Querier interface {
 	UpdatePlateComponent(ctx context.Context, arg UpdatePlateComponentParams) (PlateComponent, error)
 	UpdatePresetName(ctx context.Context, arg UpdatePresetNameParams) (Preset, error)
 	UpdateTimeSlot(ctx context.Context, arg UpdateTimeSlotParams) (TimeSlot, error)
+	UpsertAIPrompt(ctx context.Context, arg UpsertAIPromptParams) error
 	UpsertFoodPortion(ctx context.Context, arg UpsertFoodPortionParams) error
 	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
 	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)
