@@ -473,3 +473,37 @@ func assertContainsInOrder(t *testing.T, evtTypes []llm.EventType, wantTypes ...
 			evtTypes, wantTypes, idx)
 	}
 }
+
+// TestRun_DoneUsageSumsIterations verifies that DonePayload.Usage is the sum
+// over every iteration, not just the last one.
+func TestRun_DoneUsageSumsIterations(t *testing.T) {
+	t.Parallel()
+
+	const toolName = "noop"
+	toolTurn := scriptToolUseTurn("tu_1", toolName)
+	toolTurn.Usage = fake.ScriptedUsage{InputTokens: 100, OutputTokens: 10, CacheReadTokens: 50, CacheWriteTokens: 5}
+	endTurn := scriptEndTurn("done")
+	endTurn.Usage = fake.ScriptedUsage{InputTokens: 200, OutputTokens: 20, CacheReadTokens: 70, CacheWriteTokens: 7}
+	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{toolTurn, endTurn}})
+	ts := minimalToolSet(t, toolName, json.RawMessage(`{}`), ToolEffectNone, nil)
+
+	out := make(chan llm.Event, 64)
+	var evts []llm.Event
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		evts = collectEvents(out)
+	}()
+
+	err := Run(context.Background(), makeReq(7), client, ts, &memRepo{}, out)
+	close(out)
+	wg.Wait()
+	require.NoError(t, err)
+
+	last := evts[len(evts)-1]
+	require.Equal(t, llm.EventDone, last.Type)
+	done := last.Payload.(llm.DonePayload)
+	assert.Equal(t, 2, done.IterationCount)
+	assert.Equal(t, llm.Usage{InputTokens: 300, OutputTokens: 30, CacheReadTokens: 120, CacheWriteTokens: 12}, done.Usage)
+}

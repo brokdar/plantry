@@ -3,13 +3,19 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 )
+
+// PromptVersion identifies the chat system prompt template. Bump it on every
+// change to the prompt.
+const PromptVersion = "v1"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -24,6 +30,7 @@ type Service struct {
 	tools    *ToolSet
 	profile  *profile.Service
 	settings SettingsReader
+	recorder *airun.Recorder // may be nil: chat turns are then not recorded
 }
 
 // NewService constructs the agent service. The resolver is consulted at the
@@ -42,6 +49,12 @@ func NewService(
 	}
 }
 
+// WithRecorder records every Chat turn as a chat AI run.
+func (s *Service) WithRecorder(rec *airun.Recorder) *Service {
+	s.recorder = rec
+	return s
+}
+
 // ChatRequest is what the HTTP handler receives.
 type ChatRequest struct {
 	ConversationID *int64
@@ -53,9 +66,22 @@ type ChatRequest struct {
 // Chat drives a single turn-taking interaction with the model, starting with
 // the user's new message. Events stream on out; the caller must read them
 // until the channel closes.
-func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Event) error {
+func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Event) (err error) {
 	if req.UserText == "" {
 		return fmt.Errorf("%w: user_text required", domain.ErrInvalidInput)
+	}
+
+	if s.recorder != nil {
+		var run *airun.Run
+		ctx, run = s.recorder.Start(ctx, airun.Start{
+			Kind:          airun.KindChat,
+			PromptVersion: PromptVersion,
+			Instruction:   &req.UserText,
+		})
+		defer func() {
+			status, errKey := chatOutcome(ctx, err)
+			run.Finish(ctx, status, errKey)
+		}()
 	}
 
 	client, model, err := s.resolver.Current(ctx)
@@ -110,6 +136,26 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		History:        history,
 		Tools:          s.tools.Describe(),
 	}, client, s.tools, s.repo, out)
+}
+
+// chatOutcome maps the result of a Chat turn to the run status and, for
+// failures, the i18n key the client was shown.
+func chatOutcome(ctx context.Context, err error) (airun.Status, string) {
+	var keyed *keyedError
+	switch {
+	case err == nil:
+		return airun.StatusOK, ""
+	case errors.Is(err, ErrIterationsExceeded):
+		return airun.StatusIterationsExceeded, ""
+	case errors.Is(err, context.Canceled) || ctx.Err() != nil:
+		return airun.StatusCancelled, ""
+	case errors.As(err, &keyed):
+		return airun.StatusError, keyed.key
+	default:
+		// Errors outside the loop are surfaced by the chat handler under
+		// this key.
+		return airun.StatusError, "error.ai.stream_interrupted"
+	}
 }
 
 // ListConversations returns a page of conversations, optionally scoped to a week.
