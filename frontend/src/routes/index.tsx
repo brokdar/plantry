@@ -115,7 +115,7 @@ function PlanPage() {
     settingsQuery.data?.items.find((i) => i.key === key)?.value ?? fallback
 
   const anchorMode = settingValue("plan.anchor", "today") as AnchorMode
-  const shoppingDay = Number(settingValue("plan.shopping_day", "1"))
+  const shoppingDay = Number(settingValue("plan.shopping_day", "0"))
   const weekStartsOn = settingValue("plan.week_starts_on", "monday") as
     | "monday"
     | "sunday"
@@ -540,7 +540,6 @@ function PlanPage() {
       <ShoppingPanel
         key={from + "_" + to}
         range={{ from, to }}
-        shoppingDay={shoppingDay}
         open={shoppingOpen}
         onOpenChange={setShoppingOpen}
       />

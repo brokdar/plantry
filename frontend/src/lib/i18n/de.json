@@ -772,9 +772,9 @@
     "description": "Zutaten für diese Woche",
     "button": "Einkaufen",
     "empty": "Keine Zutaten – füge zuerst Mahlzeiten zum Planer hinzu.",
-    "preset_next7": "Nächste 7 Tage",
-    "preset_until_shopping_day": "Bis nächsten {{day}}",
-    "preset_this_cycle": "Dieser {{day}}-Zyklus",
+    "preset_rest_of_window": "Rest dieses Zeitraums",
+    "preset_this_window": "Dieser Zeitraum",
+    "preset_next_window": "Nächster Zeitraum",
     "range_label": "{{from}} — {{to}}"
   },
   "nutrition": {

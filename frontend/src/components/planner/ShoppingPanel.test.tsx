@@ -1,4 +1,12 @@
-import { describe, expect, test, vi, beforeEach, beforeAll } from "vitest"
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from "vitest"
 import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
@@ -32,10 +40,20 @@ beforeAll(() => {
 const defaultRange = { from: "2026-04-26", to: "2026-05-02" }
 const defaultProps = {
   range: defaultRange,
-  shoppingDay: 6, // Saturday
   open: true,
   onOpenChange: vi.fn(),
 }
+
+function mockEmptyList() {
+  vi.mocked(useShoppingList).mockReturnValue({
+    data: { items: [] },
+    isLoading: false,
+  } as unknown as ReturnType<typeof useShoppingList>)
+}
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -96,8 +114,12 @@ describe("ShoppingPanel", () => {
     renderWithRouter(<ShoppingPanel {...defaultProps} />, "/")
     await screen.findByText(/No ingredients/)
 
-    // All three preset buttons should be rendered.
-    expect(screen.getByText(/Next 7 days/i)).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "This window" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Next window" })
+    ).toBeInTheDocument()
   })
 
   test("localStorage key uses range:{from}:{to}", async () => {
@@ -142,5 +164,62 @@ describe("ShoppingPanel", () => {
       "plantry:migrated:v4-shopping",
       "1"
     )
+  })
+
+  describe("presets anchored on the viewed window", () => {
+    // Today: Wednesday 2026-10-28.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] })
+      vi.setSystemTime(new Date(2026, 9, 28, 12, 0, 0))
+      mockEmptyList()
+    })
+
+    test("viewing next week's window defaults to that window's start, not today", async () => {
+      const range = { from: "2026-11-02", to: "2026-11-08" }
+      renderWithRouter(<ShoppingPanel {...defaultProps} range={range} />, "/")
+      await screen.findByText(/No ingredients/)
+
+      expect(useShoppingList).toHaveBeenLastCalledWith(
+        "2026-11-02",
+        "2026-11-08"
+      )
+      expect(
+        screen.getByRole("button", { name: "This window" })
+      ).toHaveAttribute("aria-pressed", "true")
+      expect(
+        screen.queryByRole("button", { name: "Rest of this window" })
+      ).not.toBeInTheDocument()
+    })
+
+    test("viewing the current window on its third day defaults to today", async () => {
+      const range = { from: "2026-10-26", to: "2026-11-01" }
+      renderWithRouter(<ShoppingPanel {...defaultProps} range={range} />, "/")
+      await screen.findByText(/No ingredients/)
+
+      expect(useShoppingList).toHaveBeenLastCalledWith(
+        "2026-10-28",
+        "2026-11-01"
+      )
+      expect(
+        screen.getByRole("button", { name: "Rest of this window" })
+      ).toHaveAttribute("aria-pressed", "true")
+    })
+
+    test("'Next window' selects the following 7 days", async () => {
+      const user = userEvent.setup()
+      const range = { from: "2026-10-26", to: "2026-11-01" }
+      renderWithRouter(<ShoppingPanel {...defaultProps} range={range} />, "/")
+      await user.click(
+        await screen.findByRole("button", { name: "Next window" })
+      )
+
+      expect(useShoppingList).toHaveBeenLastCalledWith(
+        "2026-11-02",
+        "2026-11-08"
+      )
+      expect(
+        screen.getByRole("button", { name: "Next window" })
+      ).toHaveAttribute("aria-pressed", "true")
+    })
   })
 })
