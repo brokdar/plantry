@@ -1169,7 +1169,13 @@
     "no_ingredients": "Noch keine Zutaten.",
     "no_steps": "Noch keine Schritte.",
     "my_notes": "Meine Notizen",
-    "description": "Beschreibung aus der Quelle"
+    "description": "Beschreibung aus der Quelle",
+    "back": "Zu Rezepten",
+    "steps": "Schritte",
+    "not_found_title": "Rezept nicht gefunden",
+    "not_found_body": "Vielleicht wurde es gelöscht, oder der Link stimmt nicht.",
+    "load_error_title": "Rezept konnte nicht geladen werden",
+    "load_error_body": "Prüfe die Verbindung und versuche es erneut."
   },
   "nutrition_warning": {
     "title": "Nährwerte unvollständig",

@@ -1170,7 +1170,13 @@
     "no_ingredients": "No ingredients yet.",
     "no_steps": "No steps yet.",
     "my_notes": "My notes",
-    "description": "Description from the source"
+    "description": "Description from the source",
+    "back": "Back to recipes",
+    "steps": "Steps",
+    "not_found_title": "Recipe not found",
+    "not_found_body": "It may have been deleted, or the link is wrong.",
+    "load_error_title": "Couldn't load this recipe",
+    "load_error_body": "Check your connection and try again."
   },
   "nutrition_warning": {
     "title": "Nutrition is incomplete",

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { screen, within } from "@testing-library/react"
+import { act, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
+import i18n from "@/lib/i18n"
 import { RecipeDetail } from "./RecipeDetail"
 import { mockChickenCurry } from "@/test/fixtures"
 import type { ComposedFood, FoodNutritionDetail } from "@/lib/api/foods"
@@ -94,6 +95,7 @@ describe("RecipeDetail", () => {
     expect(source).toHaveAttribute("target", "_blank")
     expect(source).toHaveAttribute("rel", "noopener noreferrer")
     expect(source).toHaveTextContent("chefkoch.de")
+    expect(source).toHaveAccessibleName(/opens in a new tab/)
   })
 
   it("shows no completeness warning when nutrition is complete", async () => {
@@ -123,6 +125,57 @@ describe("RecipeDetail", () => {
     expect(
       within(warning).getByRole("link", { name: "Red curry paste" })
     ).toHaveAttribute("href", "/ingredients/9/edit")
+    // Nothing unsaved here, so the links stay in the same tab.
+    expect(
+      within(warning).getByRole("link", { name: "Coconut milk" })
+    ).not.toHaveAttribute("target")
+  })
+
+  it("shows translated kitchen units and keeps metric symbols", async () => {
+    const withUnits: ComposedFood = {
+      ...recipe,
+      children: [
+        ...(recipe.children ?? []),
+        {
+          ...recipe.children![0]!,
+          id: 2,
+          child_id: 2,
+          child_name: "Coconut milk",
+          amount: 1,
+          unit: "can",
+        },
+        {
+          ...recipe.children![0]!,
+          id: 3,
+          child_id: 3,
+          child_name: "Fish sauce",
+          amount: 2,
+          unit: "tbsp",
+        },
+      ],
+    }
+    renderWithRouter(<RecipeDetail recipe={withUnits} />)
+
+    expect(await screen.findByText("300 g")).toBeInTheDocument()
+    expect(screen.getByText("1 can")).toBeInTheDocument()
+    expect(screen.getByText("2 tablespoon")).toBeInTheDocument()
+
+    await act(() => i18n.changeLanguage("de"))
+    try {
+      expect(await screen.findByText("2 Esslöffel")).toBeInTheDocument()
+      expect(screen.getByText("1 Dose")).toBeInTheDocument()
+      expect(screen.getByText("300 g")).toBeInTheDocument()
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
+  })
+
+  it("titles the steps section Steps", async () => {
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Steps" })
+    ).toBeInTheDocument()
   })
 
   it("links Edit to the editor", async () => {

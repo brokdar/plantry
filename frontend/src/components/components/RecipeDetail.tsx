@@ -4,11 +4,24 @@ import { ArrowLeft, ExternalLink, Heart, PencilLine } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import type { ComposedFood } from "@/lib/api/foods"
+import { normalizeUnit } from "@/lib/domain/units"
 import { imageURL } from "@/lib/image-url"
 import { useFoodNutrition, useSetFoodFavorite } from "@/lib/queries/foods"
 import { cn } from "@/lib/utils"
 
 import { NutritionCompletenessWarning } from "./NutritionCompletenessWarning"
+
+const SYMBOL_UNITS = new Set([
+  "g",
+  "kg",
+  "mg",
+  "ml",
+  "l",
+  "cl",
+  "dl",
+  "oz",
+  "lb",
+])
 
 type RecipeDetailProps = {
   recipe: ComposedFood
@@ -35,16 +48,23 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
     .sort((a, b) => a.step_number - b.step_number)
   const notes = recipe.notes?.trim()
   const description = recipe.description?.trim()
+  // Metric and imperial symbols read the same in every language; kitchen
+  // units ("tbsp", "can") show their translated name.
+  const unitLabel = (unit: string) => {
+    const key = normalizeUnit(unit)
+    if (!key || SYMBOL_UNITS.has(key)) return key || unit
+    return t(`unit.${key}.name`, { defaultValue: unit })
+  }
 
   return (
     <article className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-6 text-ink md:px-8 md:py-10">
       <div className="flex items-center justify-between gap-3">
         <Link
           to="/components"
-          className="inline-flex items-center gap-1.5 rounded-md text-sm text-ink-muted hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
+          className="inline-flex items-center gap-1.5 rounded-md text-sm whitespace-nowrap text-ink-muted hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none max-md:min-h-11"
         >
           <ArrowLeft className="size-4" strokeWidth={1.5} aria-hidden />
-          {t("component.breadcrumb_back")}
+          {t("recipe_detail.back")}
         </Link>
         <div className="flex items-center gap-2">
           <Button
@@ -55,6 +75,7 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
             onClick={() =>
               setFavorite.mutate({ id: recipe.id, favorite: !recipe.favorite })
             }
+            className="max-md:min-h-11"
             data-testid="recipe-favorite"
           >
             <Heart
@@ -65,7 +86,7 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
             />
             {t("recipe_detail.favorite")}
           </Button>
-          <Button asChild>
+          <Button asChild className="max-md:min-h-11">
             <Link
               to="/components/$id/edit"
               params={{ id: String(recipe.id) }}
@@ -108,10 +129,11 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
               href={source.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex w-fit items-center gap-1.5 text-sm text-accent underline-offset-2 hover:underline"
+              className="inline-flex w-fit items-center gap-1.5 rounded-md text-sm text-accent underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none max-md:min-h-11"
               data-testid="recipe-source"
             >
               <span>{t("recipe_detail.source", { host: source.host })}</span>
+              <span className="sr-only">{t("common.opens_new_tab")}</span>
               <ExternalLink
                 className="size-3.5"
                 strokeWidth={1.5}
@@ -163,7 +185,7 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
               {children.map((child) => (
                 <li key={child.id} className="flex gap-3 py-2.5">
                   <span className="w-20 shrink-0 text-right text-ink-muted tabular-nums">
-                    {number.format(child.amount)} {child.unit}
+                    {number.format(child.amount)} {unitLabel(child.unit)}
                   </span>
                   <span>{child.child_name}</span>
                 </li>
@@ -181,7 +203,7 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
               id="recipe-steps"
               className="font-heading text-h2 font-semibold"
             >
-              {t("component.instructions")}
+              {t("recipe_detail.steps")}
             </h2>
             {steps.length === 0 ? (
               <p className="text-sm text-ink-muted">
