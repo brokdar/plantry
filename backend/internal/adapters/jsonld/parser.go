@@ -158,8 +158,11 @@ func yieldOf(v any) string {
 // caloriesNumberRE grabs the leading number from a calories string like "520 kcal".
 var caloriesNumberRE = regexp.MustCompile(`\d+(?:[.,]\d+)?`)
 
+// thousandsDotRE matches a "." used as a German thousands separator: "2.000 kcal".
+var thousandsDotRE = regexp.MustCompile(`(\d)\.(\d{3})(\D|$)`)
+
 // caloriesOf reads nutrition.calories ("520 kcal" or 520). Returns nil when
-// the block or a number is missing.
+// the block or a number is missing, or when the value is only given in kJ.
 func caloriesOf(v any) *float64 {
 	n, ok := v.(map[string]any)
 	if !ok {
@@ -169,7 +172,11 @@ func caloriesOf(v any) *float64 {
 	case float64:
 		return &t
 	case string:
-		m := caloriesNumberRE.FindString(t)
+		low := strings.ToLower(t)
+		if strings.Contains(low, "kj") && !strings.Contains(low, "kcal") {
+			return nil
+		}
+		m := caloriesNumberRE.FindString(thousandsDotRE.ReplaceAllString(t, "${1}${2}${3}"))
 		if m == "" {
 			return nil
 		}

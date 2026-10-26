@@ -176,6 +176,11 @@ func TestExtractRecipe_NutritionCalories(t *testing.T) {
 		{"kcal string", `{"@type": "NutritionInformation", "calories": "520 kcal"}`, kcal(520)},
 		{"decimal comma", `{"calories": "412,5 kcal"}`, kcal(412.5)},
 		{"number", `{"calories": 300}`, kcal(300)},
+		{"thousands dot", `{"calories": "2.000 kcal"}`, kcal(2000)},
+		{"thousands dot at end", `{"calories": "1.250"}`, kcal(1250)},
+		{"decimal dot", `{"calories": "520.5 kcal"}`, kcal(520.5)},
+		{"kJ only", `{"calories": "2176 kJ"}`, nil},
+		{"kJ and kcal", `{"calories": "520 kcal / 2176 kJ"}`, kcal(520)},
 		{"no calories", `{"proteinContent": "20 g"}`, nil},
 		{"garbage", `{"calories": "viel"}`, nil},
 	}

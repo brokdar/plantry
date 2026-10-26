@@ -72,6 +72,7 @@ func TestParseLineDE(t *testing.T) {
 		{"glued kilograms comma", "1,5kg Kartoffeln", 1500, "g", "kg", "Kartoffeln", "", ConfidenceParsed},
 		{"glued milliliters", "250ml Milch", 250, "ml", "ml", "Milch", "", ConfidenceParsed},
 		{"glued spoon", "2EL Olivenöl", 30, "ml", "EL", "Olivenöl", "", ConfidenceApproximate},
+		{"glued unit with period", "2Stk. Eier", 240, "g", "Stk.", "Eier", "", ConfidenceApproximate},
 		{"glued after qualifier", "ca. 200g Mehl", 200, "g", "g", "Mehl", "", ConfidenceParsed},
 
 		// 11. plural suffixes are stripped, never notes.
