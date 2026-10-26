@@ -59,8 +59,11 @@ import { getAvailabilityDefaults } from "@/lib/api/availability"
 import { SetupWizard } from "./SetupWizard"
 
 /** A tiny server: GETs return what the writes stored. */
-function serve(initialSettings: Record<string, string> = {}) {
-  let profile: Profile = { ...mockProfile }
+function serve(
+  initialSettings: Record<string, string> = {},
+  initialProfile: Partial<Profile> = {}
+) {
+  let profile: Profile = { ...mockProfile, ...initialProfile }
   const settings = new Map<string, string>(Object.entries(initialSettings))
   const slots: TimeSlot[] = []
   vi.mocked(getProfile).mockImplementation(async () => profile)
@@ -303,6 +306,30 @@ describe("SetupWizard", () => {
     await waitFor(() => expect(updateProfile).toHaveBeenCalled())
     await waitFor(() => expect(screen.getByTestId("setup-next")).toBeEnabled())
     expect(screen.getByText("Step 1 of 7")).toBeInTheDocument()
+  })
+
+  it("Skip on a re-run keeps the stored nutrition goal", async () => {
+    const server = serve(
+      {},
+      { kcal_target: 1800, protein_pct: 35, fat_pct: 30, carbs_pct: 35 }
+    )
+    const u = user()
+    renderWizard()
+    await screen.findByText("Step 1 of 7")
+    await next(u, 2)
+    await u.click(screen.getByTestId("setup-skip"))
+
+    await screen.findByTestId("setup-finish")
+    expect(server.getProfile()).toMatchObject({
+      kcal_target: 1800,
+      protein_pct: 35,
+      fat_pct: 30,
+      carbs_pct: 35,
+    })
+    // usePatchProfile sends the full profile; the goal must be the stored one.
+    for (const [input] of vi.mocked(updateProfile).mock.calls) {
+      expect(input.kcal_target).toBe(1800)
+    }
   })
 
   it("Skip on a re-run keeps the stored slots and usual week", async () => {

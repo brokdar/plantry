@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next"
 
 import { gridValueToDefaults } from "@/lib/availability-grid"
 import { useSetAvailabilityDefaults } from "@/lib/queries/availability"
-import { usePatchProfile } from "@/lib/queries/profile"
+import { usePatchProfile, useProfile } from "@/lib/queries/profile"
 import { useSetSetting, useSettingItems } from "@/lib/queries/settings"
 import type { TimeSlot } from "@/lib/api/slots"
 import { useCreateTimeSlot, useUpdateTimeSlot } from "@/lib/queries/slots"
@@ -39,6 +39,7 @@ export function useWizardSave() {
   const updateSlot = useUpdateTimeSlot()
   const setDefaults = useSetAvailabilityDefaults()
   const { data: stored } = useSettingItems()
+  const { data: profile } = useProfile()
 
   // Only values that differ from the stored ones are written, so accepting
   // a default doesn't turn it into a database override.
@@ -152,8 +153,10 @@ export function useWizardSave() {
   async function skipFrom(step: number, draft: WizardDraft) {
     const stored = await saveStep(step, draft)
     const later: Promise<unknown>[] = []
-    if (step < 2)
+    // A returning user's goal stays; only a missing one gets maintain.
+    if (step < 2 && profile?.kcal_target == null) {
       later.push(patchProfile.mutateAsync(NUTRITION_PRESETS.maintain))
+    }
     // Step 4 leaves the usual week alone (a re-run keeps its routines; a new
     // install's stored week is already all Plan) and only creates the
     // default slots when there are none yet.
