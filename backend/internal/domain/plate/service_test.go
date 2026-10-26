@@ -3,6 +3,8 @@ package plate_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -13,15 +15,47 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeRepo is a minimal Repository stub. Only ListByDateRange is exercised by Range/Day.
+// fakeRepo is a minimal Repository stub. byID backs Get, byCell backs
+// GetIDByCell; createErr/updateErr are returned by Create/Update.
 type fakeRepo struct {
 	rangeResult []plate.Plate
 	rangeErr    error
+	byID        map[int64]*plate.Plate
+	byCell      map[string]*plate.Plate
+	createErr   error
+	updateErr   error
+	created     int
+	updated     int
 }
 
-func (r *fakeRepo) Create(_ context.Context, _ *plate.Plate) error                   { return nil }
-func (r *fakeRepo) Get(_ context.Context, _ int64) (*plate.Plate, error)             { return nil, nil }
-func (r *fakeRepo) Update(_ context.Context, _ *plate.Plate) error                   { return nil }
+func cellKey(date time.Time, slotID int64) string {
+	return date.Format("2006-01-02") + "/" + strconv.FormatInt(slotID, 10)
+}
+
+func (r *fakeRepo) Create(_ context.Context, _ *plate.Plate) error {
+	r.created++
+	return r.createErr
+}
+
+func (r *fakeRepo) Get(_ context.Context, id int64) (*plate.Plate, error) {
+	if p, ok := r.byID[id]; ok {
+		cp := *p
+		return &cp, nil
+	}
+	return &plate.Plate{ID: id}, nil
+}
+
+func (r *fakeRepo) GetIDByCell(_ context.Context, date time.Time, slotID int64) (int64, error) {
+	if p, ok := r.byCell[cellKey(date, slotID)]; ok {
+		return p.ID, nil
+	}
+	return 0, domain.ErrNotFound
+}
+
+func (r *fakeRepo) Update(_ context.Context, _ *plate.Plate) error {
+	r.updated++
+	return r.updateErr
+}
 func (r *fakeRepo) Delete(_ context.Context, _ int64) error                          { return nil }
 func (r *fakeRepo) CreateComponent(_ context.Context, _ *plate.PlateComponent) error { return nil }
 func (r *fakeRepo) GetComponent(_ context.Context, _ int64) (*plate.PlateComponent, error) {
@@ -36,10 +70,6 @@ func (r *fakeRepo) CountUsingFood(_ context.Context, _ int64) (int64, error)    
 func (r *fakeRepo) CountUsingTimeSlot(_ context.Context, _ int64) (int64, error) { return 0, nil }
 func (r *fakeRepo) RecentUnitForFood(_ context.Context, _ int64) (string, error) {
 	return "", nil
-}
-
-func (r *fakeRepo) SetSkipped(_ context.Context, _ int64, _ bool, _ *string) (*plate.Plate, error) {
-	return nil, nil
 }
 
 func (r *fakeRepo) ListByDateRange(_ context.Context, _, _ time.Time) ([]plate.Plate, error) {
@@ -459,4 +489,115 @@ func TestUpdateComponentQuantity_AcceptsLegacyPortions_PerKind(t *testing.T) {
 	assert.Equal(t, "g", *leafUpdate.Unit)
 	require.NotNil(t, leafUpdate.Grams)
 	assert.InDelta(t, 200.0, *leafUpdate.Grams, 0.01)
+}
+
+// fakeCells maps "date/slot" to a mode; missing cells are "plan".
+type fakeCells map[string]string
+
+func (c fakeCells) CellMode(_ context.Context, date time.Time, slotID int64) (string, error) {
+	if m, ok := c[cellKey(date, slotID)]; ok {
+		return m, nil
+	}
+	return plate.CellPlan, nil
+}
+
+func TestPlateService_CellRules(t *testing.T) {
+	mon := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	tue := mon.AddDate(0, 0, 1)
+	cells := fakeCells{
+		cellKey(mon, 2): plate.CellNone,
+		cellKey(mon, 3): plate.CellRoutine,
+	}
+	// Plate 10 sits at (mon, 1); plate 11 at (tue, 1).
+	newRepo := func() *fakeRepo {
+		p10 := &plate.Plate{ID: 10, Date: mon, SlotID: 1}
+		p11 := &plate.Plate{ID: 11, Date: tue, SlotID: 1}
+		return &fakeRepo{
+			byID:   map[int64]*plate.Plate{10: p10, 11: p11},
+			byCell: map[string]*plate.Plate{cellKey(mon, 1): p10, cellKey(tue, 1): p11},
+		}
+	}
+	note := "moved"
+
+	tests := []struct {
+		name    string
+		run     func(*plate.Service) error
+		wantErr error
+	}{
+		{"create into none cell", func(s *plate.Service) error {
+			return s.Create(context.Background(), &plate.Plate{Date: mon, SlotID: 2})
+		}, domain.ErrCellUnavailable},
+		{"create into occupied cell", func(s *plate.Service) error {
+			return s.Create(context.Background(), &plate.Plate{Date: mon, SlotID: 1})
+		}, domain.ErrCellOccupied},
+		{"create into routine cell", func(s *plate.Service) error {
+			return s.Create(context.Background(), &plate.Plate{Date: mon, SlotID: 3})
+		}, nil},
+		{"create into empty plan cell", func(s *plate.Service) error {
+			return s.Create(context.Background(), &plate.Plate{Date: tue, SlotID: 2})
+		}, nil},
+		{"move into none cell", func(s *plate.Service) error {
+			return s.Update(context.Background(), &plate.Plate{ID: 10, Date: mon, SlotID: 2})
+		}, domain.ErrCellUnavailable},
+		{"move into occupied cell", func(s *plate.Service) error {
+			return s.Update(context.Background(), &plate.Plate{ID: 10, Date: tue, SlotID: 1})
+		}, domain.ErrCellOccupied},
+		{"move into empty routine cell", func(s *plate.Service) error {
+			return s.Update(context.Background(), &plate.Plate{ID: 10, Date: mon, SlotID: 3})
+		}, nil},
+		{"note-only update in same cell", func(s *plate.Service) error {
+			return s.Update(context.Background(), &plate.Plate{ID: 10, Date: mon, SlotID: 1, Note: &note})
+		}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newRepo()
+			svc := newService(repo).WithCells(cells)
+			err := tt.run(svc)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				assert.Zero(t, repo.created+repo.updated, "nothing is written on a rejected cell")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, 1, repo.created+repo.updated)
+		})
+	}
+}
+
+func TestPlateService_NoteOnlyUpdateInNoneCellIsAllowed(t *testing.T) {
+	// A plate left in a cell that later became "none" can still be edited
+	// in place; only moves are checked.
+	mon := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	p := &plate.Plate{ID: 10, Date: mon, SlotID: 1}
+	repo := &fakeRepo{byID: map[int64]*plate.Plate{10: p}, byCell: map[string]*plate.Plate{cellKey(mon, 1): p}}
+	svc := newService(repo).WithCells(fakeCells{cellKey(mon, 1): plate.CellNone})
+
+	require.NoError(t, svc.Update(context.Background(), &plate.Plate{ID: 10, Date: mon, SlotID: 1}))
+}
+
+func TestPlateService_RepoConstraintRaceMapsToOccupied(t *testing.T) {
+	mon := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	// The cell looks empty to the service, but the insert loses the race.
+	repo := &fakeRepo{createErr: fmt.Errorf("create plate: %w", domain.ErrCellOccupied)}
+	svc := newService(repo).WithCells(fakeCells{})
+
+	err := svc.Create(context.Background(), &plate.Plate{Date: mon, SlotID: 1})
+	require.ErrorIs(t, err, domain.ErrCellOccupied)
+}
+
+func TestPlateService_UpdateUnknownPlate(t *testing.T) {
+	mon := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	repo := &missingRepo{}
+	svc := plate.NewService(repo, fakeSlots{}, fakeFoods{})
+
+	err := svc.Update(context.Background(), &plate.Plate{ID: 99, Date: mon, SlotID: 1})
+	require.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+// missingRepo reports every plate as missing.
+type missingRepo struct{ fakeRepo }
+
+func (*missingRepo) Get(_ context.Context, id int64) (*plate.Plate, error) {
+	return nil, fmt.Errorf("%w: plate %d", domain.ErrNotFound, id)
 }

@@ -14,7 +14,6 @@ function makePlate(id: number, note: string | null = null): Plate {
     slot_id: 1,
     date: "2026-04-26",
     note,
-    skipped: false,
     components: [],
     created_at: "2026-04-26T00:00:00Z",
   }
@@ -43,6 +42,20 @@ describe("MonthCell", () => {
     expect(screen.getByText("Salad")).toBeInTheDocument()
     expect(screen.getByText("Soup")).toBeInTheDocument()
     expect(screen.queryByText(/more/)).not.toBeInTheDocument()
+  })
+
+  it("previews every plate alike, with no struck-through skipped style", () => {
+    render(
+      <MonthCell
+        date="2026-04-26"
+        plates={[makePlate(1, "Pasta")]}
+        isCurrentMonth={true}
+        isToday={false}
+        matchesSearch={null}
+        onClick={noop}
+      />
+    )
+    expect(screen.getByText("Pasta").className).not.toMatch(/line-through/)
   })
 
   it("shows +N more overflow when 4+ plates provided", () => {

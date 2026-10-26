@@ -125,12 +125,13 @@ export interface ApplySnapshotPlate {
   date: string
   slot_id: number
   note?: string | null
-  skipped: boolean
   components: ApplySnapshotComponent[]
 }
 
 export interface ApplySnapshot {
   created_plate_ids: number[]
+  /** No plate overrides copy week wrote; undo clears them (D12). */
+  created_overrides: ApplyResultSkip[]
   replaced_plates: ApplySnapshotPlate[]
 }
 
@@ -139,6 +140,8 @@ export interface ApplyResult {
   replaced: ApplyResultReplaced[]
   skipped_occupied: ApplyResultSkip[]
   skipped_no_slot: ApplyResultSkip[]
+  /** Target cells that resolve to No plate (D12). */
+  skipped_unavailable: ApplyResultSkip[]
   snapshot: ApplySnapshot
 }
 

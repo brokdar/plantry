@@ -32,6 +32,7 @@ type Handlers struct {
 	NutritionRange *handlers.NutritionRangeHandler
 	PlateMacros    *handlers.PlateMacrosHandler
 	Availability   *handlers.AvailabilityHandler
+	Setup          *handlers.SetupHandler
 	DevMode        bool // gates dev-only debug endpoints
 }
 
@@ -108,7 +109,6 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/", h.Plates.Get)
 					r.Put("/", h.Plates.Update)
 					r.Delete("/", h.Plates.Delete)
-					r.Post("/skip", h.Plates.SetSkipped)
 					r.Post("/components", h.Plates.AddComponent)
 					r.Put("/components/{pcId}", h.Plates.UpdateComponent)
 					r.Delete("/components/{pcId}", h.Plates.DeleteComponent)
@@ -203,6 +203,11 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Put("/{date}/{slotId}", h.Availability.PutOverride)
 				r.Delete("/{date}/{slotId}", h.Availability.DeleteOverride)
 			})
+		}
+
+		if h.Setup != nil {
+			api.Get("/setup", h.Setup.Get)
+			api.Post("/setup/complete", h.Setup.Complete)
 		}
 	})
 

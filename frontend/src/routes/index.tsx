@@ -22,7 +22,11 @@ import { DateRangeNavigator } from "@/components/planner/DateRangeNavigator"
 import { EmptyWeekCTA } from "@/components/planner/EmptyWeekCTA"
 import { MobilePlannerGrid } from "@/components/planner/MobilePlannerGrid"
 import { NutritionWeekSummary } from "@/components/planner/NutritionWeekSummary"
-import { PlannerGrid, type PlannerDay } from "@/components/planner/PlannerGrid"
+import {
+  PlannerGrid,
+  type CellLookup,
+  type PlannerDay,
+} from "@/components/planner/PlannerGrid"
 import { RevertBanner } from "@/components/planner/RevertBanner"
 import { ShoppingPanel } from "@/components/planner/ShoppingPanel"
 import { Button } from "@/components/ui/button"
@@ -55,7 +59,9 @@ import {
 import { isCheatsheetShortcut } from "@/lib/planner-keynav"
 import { usePlannerWindow } from "@/lib/hooks/usePlannerWindow"
 import { shiftYMD } from "@/lib/planner-window"
+import type { AvailabilityCell } from "@/lib/api/availability"
 import { useAISettings } from "@/lib/queries/ai"
+import { useAvailabilityRange } from "@/lib/queries/availability"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
 import { usePlatesRange } from "@/lib/queries/plates"
@@ -109,7 +115,18 @@ function PlanPage() {
 
   const slotsQuery = useTimeSlots(true)
   const platesQuery = usePlatesRange(from, to)
+  const availabilityQuery = useAvailabilityRange(from, to)
   const { data: aiSettings } = useAISettings()
+
+  // Cell-mode lookup for both grids. Until the range loads, cells render as
+  // `plan`, which is what the server resolves when nothing is configured.
+  const cellAt = useMemo<CellLookup>(() => {
+    const byCell = new Map<string, AvailabilityCell>()
+    for (const c of availabilityQuery.data?.items ?? []) {
+      byCell.set(`${c.date}|${c.slot_id}`, c)
+    }
+    return (date, slotId) => byCell.get(`${date}|${slotId}`)
+  }, [availabilityQuery.data])
 
   const plates = useMemo(
     () => platesQuery.data?.plates ?? [],
@@ -217,10 +234,13 @@ function PlanPage() {
     setCopyingLastWeek(true)
     try {
       const prev = await listPlates(prevFrom, prevTo)
-      // Skip skipped plates and components-less plates — they wouldn't add
-      // anything meaningful to the new week and the user can re-skip if needed.
+      // Skip components-less plates — they wouldn't add anything meaningful
+      // to the new week — and plates whose target cell is No plate, which
+      // the server would refuse.
       const sourcePlates = prev.plates.filter(
-        (p) => !p.skipped && p.components.length > 0
+        (p) =>
+          p.components.length > 0 &&
+          cellAt(shiftYMD(p.date, 7), p.slot_id)?.mode !== "none"
       )
       if (sourcePlates.length === 0) {
         toast(t("planner.empty_week.copy_empty"))
@@ -505,6 +525,7 @@ function PlanPage() {
             rangeFrom={from}
             rangeTo={to}
             nutritionDays={nutritionQuery.data?.days}
+            cellAt={cellAt}
           />
         </div>
         <div className="md:hidden">
@@ -513,6 +534,7 @@ function PlanPage() {
             slots={slots}
             rangeFrom={from}
             rangeTo={to}
+            cellAt={cellAt}
           />
         </div>
       </div>

@@ -3,6 +3,9 @@ package handlers_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,7 +16,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
@@ -79,9 +84,6 @@ func (s *stubPlateService) UpdateComponentQuantity(_ context.Context, _ int64, _
 	return &plate.PlateComponent{}, nil
 }
 func (s *stubPlateService) RemoveComponent(_ context.Context, _ int64) error { return nil }
-func (s *stubPlateService) SetSkipped(_ context.Context, _ int64, _ bool, _ *string) (*plate.Plate, error) {
-	return &plate.Plate{}, nil
-}
 
 func (s *stubPlateService) RecentUnitForFood(_ context.Context, foodID int64) (string, error) {
 	if s.recentUnitFn != nil {
@@ -213,6 +215,80 @@ func TestPlatesHandler_Create_201(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 	assert.Equal(t, float64(42), resp["id"])
 	assert.Equal(t, "2025-03-10", resp["date"])
+}
+
+func TestPlatesHandler_PlateJSONHasNoSkipped(t *testing.T) {
+	r := newPlateRouter(&stubPlateService{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/plates/7", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.NotContains(t, resp, "skipped")
+	assert.Equal(t, float64(7), resp["id"])
+}
+
+func TestPlatesHandler_CellConflicts_409(t *testing.T) {
+	tests := []struct {
+		name    string
+		method  string
+		path    string
+		body    string
+		err     error
+		wantKey string
+	}{
+		{
+			"create into none cell", http.MethodPost, "/api/plates", `{"date":"2025-03-10","slot_id":1}`,
+			domain.ErrCellUnavailable, "error.plate.cell_unavailable",
+		},
+		{
+			"create into occupied cell", http.MethodPost, "/api/plates", `{"date":"2025-03-10","slot_id":1}`,
+			domain.ErrCellOccupied, "error.plate.cell_occupied",
+		},
+		{
+			"move into none cell", http.MethodPut, "/api/plates/1", `{"date":"2025-03-11"}`,
+			domain.ErrCellUnavailable, "error.plate.cell_unavailable",
+		},
+		{
+			"move into occupied cell", http.MethodPut, "/api/plates/1", `{"slot_id":2}`,
+			domain.ErrCellOccupied, "error.plate.cell_occupied",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wrapped := fmt.Errorf("check cell: %w", tt.err)
+			r := newPlateRouter(&stubPlateService{
+				createFn: func(context.Context, *plate.Plate) error { return wrapped },
+				updateFn: func(context.Context, *plate.Plate) error { return wrapped },
+			})
+			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusConflict, w.Code, w.Body.String())
+			var resp map[string]any
+			require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+			assert.Equal(t, tt.wantKey, resp["message_key"])
+			assert.Equal(t, float64(http.StatusConflict), resp["status"])
+		})
+	}
+}
+
+func TestPlatesRouter_SkipRouteIsGone(t *testing.T) {
+	r := transport.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), http.NotFoundHandler(), transport.Handlers{
+		Plates: handlers.NewPlateHandlerFromService(&stubPlateService{}),
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/plates/1/skip", strings.NewReader(`{"skipped":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Contains(t, []int{http.StatusNotFound, http.StatusMethodNotAllowed}, w.Code, w.Body.String())
 }
 
 func TestPlatesHandler_Create_400_MissingDate(t *testing.T) {

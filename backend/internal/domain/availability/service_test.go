@@ -545,6 +545,66 @@ func TestAvailabilitySetOverride_NoneOnPlate(t *testing.T) {
 	})
 }
 
+func TestAvailabilityNoneOverride(t *testing.T) {
+	f := newFixture()
+	ctx := context.Background()
+	f.repo.overrides[overrideKey{monday, slotLunch}] = availability.Override{
+		Date: day(monday), SlotID: slotLunch, Mode: availability.ModeNone, Note: ptr("canteen"),
+	}
+	f.repo.overrides[overrideKey{monday, slotDinner}] = availability.Override{
+		Date: day(monday), SlotID: slotDinner, Mode: availability.ModeRoutine, PresetID: ptr(presetOatmeal),
+	}
+
+	note, ok, err := f.svc.NoneOverride(ctx, day(monday), slotLunch)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, ptr("canteen"), note)
+
+	_, ok, err = f.svc.NoneOverride(ctx, day(monday), slotDinner)
+	require.NoError(t, err)
+	assert.False(t, ok, "a routine override is not a none override")
+
+	_, ok, err = f.svc.NoneOverride(ctx, day(monday), slotBreakfast)
+	require.NoError(t, err)
+	assert.False(t, ok, "no override")
+}
+
+func TestAvailabilitySetNoneIfUnset(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("writes on a plain cell", func(t *testing.T) {
+		f := newFixture()
+		ok, err := f.svc.SetNoneIfUnset(ctx, day(monday), slotLunch, ptr("canteen"))
+		require.NoError(t, err)
+		assert.True(t, ok)
+		got := f.repo.overrides[overrideKey{monday, slotLunch}]
+		assert.Equal(t, availability.ModeNone, got.Mode)
+		assert.Equal(t, ptr("canteen"), got.Note)
+	})
+	t.Run("keeps an existing override", func(t *testing.T) {
+		f := newFixture()
+		f.repo.overrides[overrideKey{monday, slotLunch}] = availability.Override{Date: day(monday), SlotID: slotLunch, Mode: availability.ModePlan}
+		ok, err := f.svc.SetNoneIfUnset(ctx, day(monday), slotLunch, nil)
+		require.NoError(t, err)
+		assert.False(t, ok)
+		assert.Equal(t, availability.ModePlan, f.repo.overrides[overrideKey{monday, slotLunch}].Mode)
+	})
+	t.Run("skips a cell that is none by default", func(t *testing.T) {
+		f := newFixture()
+		f.repo.defaults[defaultKey{0, slotLunch}] = availability.Default{Weekday: 0, SlotID: slotLunch, Mode: availability.ModeNone}
+		ok, err := f.svc.SetNoneIfUnset(ctx, day(monday), slotLunch, nil)
+		require.NoError(t, err)
+		assert.False(t, ok)
+		assert.Empty(t, f.repo.overrides)
+	})
+	t.Run("a plate in the cell is an error", func(t *testing.T) {
+		f := newFixture()
+		f.plates.plates = []plate.Plate{{ID: 1, Date: day(monday), SlotID: slotLunch}}
+		_, err := f.svc.SetNoneIfUnset(ctx, day(monday), slotLunch, nil)
+		require.ErrorIs(t, err, domain.ErrCellHasPlate)
+	})
+}
+
 func TestAvailabilityClearOverride_Idempotent(t *testing.T) {
 	f := newFixture()
 	f.repo.overrides[overrideKey{monday, slotLunch}] = availability.Override{Date: day(monday), SlotID: slotLunch, Mode: availability.ModeNone}

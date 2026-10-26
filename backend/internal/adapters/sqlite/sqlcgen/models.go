@@ -179,7 +179,6 @@ type Plate struct {
 	SlotID    int64
 	Note      sql.NullString
 	CreatedAt string
-	Skipped   int64
 	Date      string
 }
 

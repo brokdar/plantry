@@ -53,15 +53,14 @@ import {
   registerPendingPlateDelete,
 } from "@/lib/queries/pending-plate-deletes"
 import {
+  useNoPlateActions,
   usePlateMacros,
   useRemovePlateComponent,
-  useSetPlateSkipped,
   useUpdatePlate,
   useUpdatePlateComponentQuantity,
 } from "@/lib/queries/plates"
 import { MacroTriad } from "@/components/editorial/macros"
 import { imageURL } from "@/lib/image-url"
-import { toggleSkip } from "@/lib/planner-skip"
 import { queryClient } from "@/lib/query-client"
 import { slotLabel } from "@/lib/slot-label"
 import { toast, toastError } from "@/lib/toast"
@@ -244,27 +243,14 @@ function SlotSheetBody({
     return map
   }, [foodMacrosData])
 
-  const setSkippedMut = useSetPlateSkipped()
+  const noPlate = useNoPlateActions(rangeFrom, rangeTo)
   const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
 
-  async function handleToggleSkip() {
-    try {
-      await toggleSkip({
-        date: target.date,
-        slotId: target.slotId,
-        existing: plate,
-        rangeFrom,
-        rangeTo,
-        setSkipped: setSkippedMut.mutateAsync,
-      })
-    } catch {
-      return
-    }
-    if (!plate.skipped) {
-      // Marking skip — close the sheet so the user sees the cell update.
-      onClose()
-    }
-    // Removing skip — keep sheet open for further edits.
+  function handleMarkNoPlate() {
+    // The plate goes away with the mark, so close the sheet; the toast
+    // carries the Undo.
+    void noPlate.markNoPlate(target.date, target.slotId)
+    onClose()
   }
 
   function handleDeletePlate() {
@@ -401,19 +387,16 @@ function SlotSheetBody({
 
         <FeedbackBlock plate={plate} />
 
-        {!plate.skipped && (
-          <MoveToDayPicker
-            days={days}
-            currentDate={target.date}
-            onPick={handleMovePlate}
-          />
-        )}
+        <MoveToDayPicker
+          days={days}
+          currentDate={target.date}
+          onPick={handleMovePlate}
+        />
       </div>
 
       <ActionFooter
-        skipped={plate.skipped}
         onSaveAsPreset={onSaveAsPreset}
-        onToggleSkip={handleToggleSkip}
+        onMarkNoPlate={handleMarkNoPlate}
         onDeletePlate={handleDeletePlate}
       />
     </>
@@ -962,18 +945,16 @@ function FeedbackBlock({ plate }: { plate: Plate }) {
 }
 
 function ActionFooter({
-  skipped,
   onSaveAsPreset,
-  onToggleSkip,
+  onMarkNoPlate,
   onDeletePlate,
 }: {
-  skipped: boolean
   onSaveAsPreset: () => void
-  onToggleSkip: () => void
+  onMarkNoPlate: () => void
   onDeletePlate: () => void
 }) {
   const { t } = useTranslation()
-  const skipLabel = skipped ? t("skip.unmark") : t("skip.mark")
+  const markLabel = t("planner.availability.mark")
   return (
     <footer className="border-t border-outline-variant/40 bg-surface-container-low/60 px-4 py-3 sm:px-5">
       {/* On narrow widths (mobile bottom sheet, ~375 px) the labels are
@@ -1000,14 +981,14 @@ function ActionFooter({
           type="button"
           variant="ghost"
           size="sm"
-          onClick={onToggleSkip}
-          data-testid="slot-sheet-skip"
-          aria-label={skipLabel}
-          title={skipLabel}
+          onClick={onMarkNoPlate}
+          data-testid="slot-sheet-no-plate"
+          aria-label={markLabel}
+          title={markLabel}
           className="h-8 min-w-0 flex-1 justify-center gap-1.5 text-on-surface-variant hover:text-on-surface sm:justify-start"
         >
           <Utensils className="h-3.5 w-3.5 shrink-0" />
-          <span className="hidden truncate sm:inline">{skipLabel}</span>
+          <span className="hidden truncate sm:inline">{markLabel}</span>
         </Button>
         <Button
           type="button"

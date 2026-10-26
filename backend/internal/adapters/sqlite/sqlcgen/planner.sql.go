@@ -35,7 +35,7 @@ func (q *Queries) CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (i
 const createPlate = `-- name: CreatePlate :one
 INSERT INTO plates (slot_id, note, date)
 VALUES (?, ?, ?)
-RETURNING id, slot_id, note, created_at, skipped, date
+RETURNING id, slot_id, note, created_at, date
 `
 
 type CreatePlateParams struct {
@@ -52,7 +52,6 @@ func (q *Queries) CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate
 		&i.SlotID,
 		&i.Note,
 		&i.CreatedAt,
-		&i.Skipped,
 		&i.Date,
 	)
 	return i, err
@@ -159,7 +158,7 @@ func (q *Queries) DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, err
 }
 
 const getPlate = `-- name: GetPlate :one
-SELECT id, slot_id, note, created_at, skipped, date FROM plates WHERE id = ?
+SELECT id, slot_id, note, created_at, date FROM plates WHERE id = ?
 `
 
 func (q *Queries) GetPlate(ctx context.Context, id int64) (Plate, error) {
@@ -170,7 +169,6 @@ func (q *Queries) GetPlate(ctx context.Context, id int64) (Plate, error) {
 		&i.SlotID,
 		&i.Note,
 		&i.CreatedAt,
-		&i.Skipped,
 		&i.Date,
 	)
 	return i, err
@@ -195,6 +193,22 @@ func (q *Queries) GetPlateComponent(ctx context.Context, id int64) (PlateCompone
 		&i.SortOrder,
 	)
 	return i, err
+}
+
+const getPlateIDByCell = `-- name: GetPlateIDByCell :one
+SELECT id FROM plates WHERE date = ? AND slot_id = ?
+`
+
+type GetPlateIDByCellParams struct {
+	Date   string
+	SlotID int64
+}
+
+func (q *Queries) GetPlateIDByCell(ctx context.Context, arg GetPlateIDByCellParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getPlateIDByCell, arg.Date, arg.SlotID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getTimeSlot = `-- name: GetTimeSlot :one
@@ -285,7 +299,7 @@ func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64)
 }
 
 const listPlatesByDate = `-- name: ListPlatesByDate :many
-SELECT id, slot_id, note, created_at, skipped, date FROM plates WHERE date = ? ORDER BY slot_id, id
+SELECT id, slot_id, note, created_at, date FROM plates WHERE date = ? ORDER BY slot_id, id
 `
 
 func (q *Queries) ListPlatesByDate(ctx context.Context, date string) ([]Plate, error) {
@@ -302,7 +316,6 @@ func (q *Queries) ListPlatesByDate(ctx context.Context, date string) ([]Plate, e
 			&i.SlotID,
 			&i.Note,
 			&i.CreatedAt,
-			&i.Skipped,
 			&i.Date,
 		); err != nil {
 			return nil, err
@@ -319,7 +332,7 @@ func (q *Queries) ListPlatesByDate(ctx context.Context, date string) ([]Plate, e
 }
 
 const listPlatesByDateRange = `-- name: ListPlatesByDateRange :many
-SELECT id, slot_id, note, created_at, skipped, date FROM plates WHERE date BETWEEN ? AND ? ORDER BY date, slot_id, id
+SELECT id, slot_id, note, created_at, date FROM plates WHERE date BETWEEN ? AND ? ORDER BY date, slot_id, id
 `
 
 type ListPlatesByDateRangeParams struct {
@@ -341,7 +354,6 @@ func (q *Queries) ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDat
 			&i.SlotID,
 			&i.Note,
 			&i.CreatedAt,
-			&i.Skipped,
 			&i.Date,
 		); err != nil {
 			return nil, err
@@ -404,41 +416,13 @@ func (q *Queries) RecentUnitForFood(ctx context.Context, foodID int64) (sql.Null
 	return unit, err
 }
 
-const setPlateSkipped = `-- name: SetPlateSkipped :one
-UPDATE plates SET
-    skipped = ?,
-    note    = ?
-WHERE id = ?
-RETURNING id, slot_id, note, created_at, skipped, date
-`
-
-type SetPlateSkippedParams struct {
-	Skipped int64
-	Note    sql.NullString
-	ID      int64
-}
-
-func (q *Queries) SetPlateSkipped(ctx context.Context, arg SetPlateSkippedParams) (Plate, error) {
-	row := q.db.QueryRowContext(ctx, setPlateSkipped, arg.Skipped, arg.Note, arg.ID)
-	var i Plate
-	err := row.Scan(
-		&i.ID,
-		&i.SlotID,
-		&i.Note,
-		&i.CreatedAt,
-		&i.Skipped,
-		&i.Date,
-	)
-	return i, err
-}
-
 const updatePlate = `-- name: UpdatePlate :one
 UPDATE plates SET
     slot_id = ?,
     note    = ?,
     date    = ?
 WHERE id = ?
-RETURNING id, slot_id, note, created_at, skipped, date
+RETURNING id, slot_id, note, created_at, date
 `
 
 type UpdatePlateParams struct {
@@ -461,7 +445,6 @@ func (q *Queries) UpdatePlate(ctx context.Context, arg UpdatePlateParams) (Plate
 		&i.SlotID,
 		&i.Note,
 		&i.CreatedAt,
-		&i.Skipped,
 		&i.Date,
 	)
 	return i, err

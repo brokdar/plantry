@@ -10,7 +10,6 @@ type Plate struct {
 	Date       time.Time // time-of-day always 00:00 UTC; YYYY-MM-DD
 	SlotID     int64
 	Note       *string
-	Skipped    bool
 	Components []PlateComponent
 	CreatedAt  time.Time
 }

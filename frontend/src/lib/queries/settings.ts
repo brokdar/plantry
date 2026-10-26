@@ -7,6 +7,8 @@ import {
   listAIModels,
   listSettings,
   setSetting,
+  type SettingItem,
+  type SettingsList,
 } from "../api/settings"
 
 import { toastError } from "@/lib/toast"
@@ -19,6 +21,20 @@ export function useSettings() {
     queryFn: listSettings,
     staleTime: 30_000,
   })
+}
+
+/** The settings list indexed by key. */
+export function useSettingItems() {
+  return useQuery({
+    queryKey: settingsKeys.list(),
+    queryFn: listSettings,
+    staleTime: 30_000,
+    select: indexSettings,
+  })
+}
+
+function indexSettings(data: SettingsList): Record<string, SettingItem> {
+  return Object.fromEntries(data.items.map((it) => [it.key, it]))
 }
 
 export function useSystemInfo() {
@@ -35,11 +51,33 @@ export function useSetSetting() {
   return useMutation({
     mutationFn: ({ key, value }: { key: string; value: string }) =>
       setSetting(key, value),
+    // Show the new value at once; the invalidation below confirms it. The
+    // cache write happens before the first await, so a controlled input
+    // re-renders with the new value in the same event (no flicker back).
+    onMutate: async ({ key, value }) => {
+      const cancelled = qc.cancelQueries({ queryKey: settingsKeys.list() })
+      qc.setQueryData<SettingsList>(settingsKeys.list(), (prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((it) =>
+                it.key === key && !it.is_secret
+                  ? { ...it, value, source: "db" }
+                  : it
+              ),
+            }
+          : prev
+      )
+      await cancelled
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: settingsKeys.all })
       qc.invalidateQueries({ queryKey: aiKeys.settings() })
     },
-    onError: (err) => toastError(err, t),
+    onError: (err) => {
+      toastError(err, t)
+      qc.invalidateQueries({ queryKey: settingsKeys.list() })
+    },
   })
 }
 

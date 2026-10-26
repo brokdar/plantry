@@ -283,8 +283,71 @@ func TestPresetHandler_Apply_HappyPath(t *testing.T) {
 	body := w.Body.String()
 	assert.Contains(t, body, `"replaced":[]`)
 	assert.Contains(t, body, `"skipped_occupied":[]`)
+	assert.Contains(t, body, `"skipped_unavailable":[]`)
 	assert.Contains(t, body, `"skipped_no_slot":[]`)
 	assert.Contains(t, body, `"replaced_plates":[]`)
+	assert.Contains(t, body, `"created_overrides":[]`)
+}
+
+func TestPresetHandler_CopyWeek_AvailabilityJSON(t *testing.T) {
+	target := mustDate(t, "2026-05-19")
+	note := "kept"
+	svc := &stubPresetService{
+		copyWeekFn: func(_ context.Context, _ preset.CopyWeekRequest) (*preset.ApplyResult, error) {
+			return &preset.ApplyResult{
+				SkippedUnavailable: []preset.SkipItem{{Date: target, SlotID: 2}},
+				Snapshot: preset.ApplySnapshot{
+					CreatedOverrides: []preset.SkipItem{{Date: target.AddDate(0, 0, 1), SlotID: 3}},
+					ReplacedPlates:   []plate.Plate{{ID: 4, Date: target, SlotID: 1, Note: &note}},
+				},
+			}, nil
+		},
+	}
+	r := newPresetRouter(svc)
+	req := httptest.NewRequest(http.MethodPost, "/api/presets/copy-week",
+		strings.NewReader(`{"source_start":"2026-05-12","target_start":"2026-05-19"}`))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	var got struct {
+		SkippedUnavailable []map[string]any `json:"skipped_unavailable"`
+		Snapshot           struct {
+			CreatedOverrides []map[string]any `json:"created_overrides"`
+			ReplacedPlates   []map[string]any `json:"replaced_plates"`
+		} `json:"snapshot"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, []map[string]any{{"date": "2026-05-19", "slot_id": float64(2)}}, got.SkippedUnavailable)
+	assert.Equal(t, []map[string]any{{"date": "2026-05-20", "slot_id": float64(3)}}, got.Snapshot.CreatedOverrides)
+	require.Len(t, got.Snapshot.ReplacedPlates, 1)
+	assert.NotContains(t, got.Snapshot.ReplacedPlates[0], "skipped")
+}
+
+func TestPresetHandler_UndoApply_CreatedOverrides(t *testing.T) {
+	var got preset.ApplySnapshot
+	svc := &stubPresetService{
+		undoFn: func(_ context.Context, snap preset.ApplySnapshot) error {
+			got = snap
+			return nil
+		},
+	}
+	r := newPresetRouter(svc)
+	body := `{"snapshot":{"created_plate_ids":[],"replaced_plates":[],"created_overrides":[{"date":"2026-05-20","slot_id":3}]}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/presets/undo-apply", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	assert.Equal(t, []preset.SkipItem{{Date: mustDate(t, "2026-05-20"), SlotID: 3}}, got.CreatedOverrides)
+}
+
+func TestPresetHandler_UndoApply_InvalidOverrideDate(t *testing.T) {
+	r := newPresetRouter(&stubPresetService{})
+	body := `{"snapshot":{"created_plate_ids":[],"replaced_plates":[],"created_overrides":[{"date":"bad","slot_id":3}]}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/presets/undo-apply", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestPresetHandler_Apply_InvalidDate(t *testing.T) {
@@ -393,7 +456,7 @@ func TestPresetHandler_UndoApply_HappyPath(t *testing.T) {
 
 func TestPresetHandler_UndoApply_InvalidDateInSnapshot(t *testing.T) {
 	r := newPresetRouter(&stubPresetService{})
-	body := `{"snapshot":{"created_plate_ids":[],"replaced_plates":[{"date":"not-a-date","slot_id":1,"skipped":false,"components":[]}]}}`
+	body := `{"snapshot":{"created_plate_ids":[],"replaced_plates":[{"date":"not-a-date","slot_id":1,"components":[]}]}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/presets/undo-apply",
 		strings.NewReader(body))
 	w := httptest.NewRecorder()

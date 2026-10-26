@@ -18,6 +18,7 @@ import { Route as ImportIndexRouteImport } from './routes/import/index'
 import { Route as ComponentsIndexRouteImport } from './routes/components/index'
 import { Route as CalendarIndexRouteImport } from './routes/calendar/index'
 import { Route as ArchiveIndexRouteImport } from './routes/archive/index'
+import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 import { Route as IngredientsNewRouteImport } from './routes/ingredients/new'
 import { Route as ComponentsNewRouteImport } from './routes/components/new'
 import { Route as DayDateIndexRouteImport } from './routes/day/$date/index'
@@ -70,6 +71,11 @@ const ArchiveIndexRoute = ArchiveIndexRouteImport.update({
   path: '/archive/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsSectionRoute = SettingsSectionRouteImport.update({
+  id: '/settings/$section',
+  path: '/settings/$section',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IngredientsNewRoute = IngredientsNewRouteImport.update({
   id: '/ingredients/new',
   path: '/ingredients/new',
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/components/new': typeof ComponentsNewRoute
   '/ingredients/new': typeof IngredientsNewRoute
+  '/settings/$section': typeof SettingsSectionRoute
   '/archive/': typeof ArchiveIndexRoute
   '/calendar/': typeof CalendarIndexRoute
   '/components/': typeof ComponentsIndexRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/components/new': typeof ComponentsNewRoute
   '/ingredients/new': typeof IngredientsNewRoute
+  '/settings/$section': typeof SettingsSectionRoute
   '/archive': typeof ArchiveIndexRoute
   '/calendar': typeof CalendarIndexRoute
   '/components': typeof ComponentsIndexRoute
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/components/new': typeof ComponentsNewRoute
   '/ingredients/new': typeof IngredientsNewRoute
+  '/settings/$section': typeof SettingsSectionRoute
   '/archive/': typeof ArchiveIndexRoute
   '/calendar/': typeof CalendarIndexRoute
   '/components/': typeof ComponentsIndexRoute
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/'
     | '/components/new'
     | '/ingredients/new'
+    | '/settings/$section'
     | '/archive/'
     | '/calendar/'
     | '/components/'
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
     | '/'
     | '/components/new'
     | '/ingredients/new'
+    | '/settings/$section'
     | '/archive'
     | '/calendar'
     | '/components'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/'
     | '/components/new'
     | '/ingredients/new'
+    | '/settings/$section'
     | '/archive/'
     | '/calendar/'
     | '/components/'
@@ -211,6 +223,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ComponentsNewRoute: typeof ComponentsNewRoute
   IngredientsNewRoute: typeof IngredientsNewRoute
+  SettingsSectionRoute: typeof SettingsSectionRoute
   ArchiveIndexRoute: typeof ArchiveIndexRoute
   CalendarIndexRoute: typeof CalendarIndexRoute
   ComponentsIndexRoute: typeof ComponentsIndexRoute
@@ -290,6 +303,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ArchiveIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/$section': {
+      id: '/settings/$section'
+      path: '/settings/$section'
+      fullPath: '/settings/$section'
+      preLoaderRoute: typeof SettingsSectionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ingredients/new': {
       id: '/ingredients/new'
       path: '/ingredients/new'
@@ -339,6 +359,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ComponentsNewRoute: ComponentsNewRoute,
   IngredientsNewRoute: IngredientsNewRoute,
+  SettingsSectionRoute: SettingsSectionRoute,
   ArchiveIndexRoute: ArchiveIndexRoute,
   CalendarIndexRoute: CalendarIndexRoute,
   ComponentsIndexRoute: ComponentsIndexRoute,

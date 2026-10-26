@@ -18,6 +18,9 @@ type ApplyInput struct {
 	// ActiveSlots is the set of active slot IDs. A nil map means all slots
 	// are considered active (matches the behaviour of isSlotActive).
 	ActiveSlots map[int64]struct{}
+	// UnavailableSlots is the set of slot IDs whose cell on TargetDate
+	// resolves to "none". Nil means none are unavailable.
+	UnavailableSlots map[int64]struct{}
 	// OnConflict controls behaviour when a target slot is already occupied.
 	OnConflict ConflictMode
 }
@@ -43,6 +46,8 @@ type ApplyPlan struct {
 	SkippedOccupied []SkipItem
 	// SkippedNoSlot lists (date, slotID) cells whose slot was inactive.
 	SkippedNoSlot []SkipItem
+	// SkippedUnavailable lists (date, slotID) cells that resolve to "none".
+	SkippedUnavailable []SkipItem
 }
 
 // PlanApply is a pure function: given the current state of the world (preset
@@ -68,6 +73,10 @@ func PlanApply(in ApplyInput) ApplyPlan {
 	for _, pp := range plates {
 		if !isSlotActive(in.ActiveSlots, pp.SlotID) {
 			plan.SkippedNoSlot = append(plan.SkippedNoSlot, SkipItem{Date: in.TargetDate, SlotID: pp.SlotID})
+			continue
+		}
+		if _, none := in.UnavailableSlots[pp.SlotID]; none {
+			plan.SkippedUnavailable = append(plan.SkippedUnavailable, SkipItem{Date: in.TargetDate, SlotID: pp.SlotID})
 			continue
 		}
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -164,11 +166,25 @@ func TestTool_ListFoods_PayloadIncludesFavoriteCookDataAndMacros(t *testing.T) {
 	assert.Equal(t, false, broken["favorite"])
 }
 
-func TestPlateSummary_IncludesSkipped(t *testing.T) {
-	p := &plate.Plate{ID: 7, Date: time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC), SlotID: 1, Skipped: true}
+func TestPlateSummary_HasNoSkipped(t *testing.T) {
+	p := &plate.Plate{ID: 7, Date: time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC), SlotID: 1}
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(mustJSON(plateSummary(p)), &m))
-	assert.Equal(t, true, m["skipped"])
+	assert.NotContains(t, m, "skipped")
+	assert.Equal(t, "2026-10-26", m["date"])
+}
+
+func TestErrorMessageKey_CellErrors(t *testing.T) {
+	assert.Equal(t, "error.plate.cell_unavailable", errorMessageKey(fmt.Errorf("x: %w", domain.ErrCellUnavailable)))
+	assert.Equal(t, "error.plate.cell_occupied", errorMessageKey(fmt.Errorf("x: %w", domain.ErrCellOccupied)))
+}
+
+func TestPlateTools_DescriptionsDropSkipped(t *testing.T) {
+	for _, tool := range defaultTools(Services{}) {
+		assert.NotContains(t, strings.ToLower(tool.Description), "skipped=", tool.Name)
+		assert.NotContains(t, strings.ToLower(tool.Description), "carries skipped", tool.Name)
+	}
+	assert.Contains(t, toolsByName()["get_plates_range"].Description, "availability")
 }
 
 func TestTool_ListFoods_CancelledContextAborts(t *testing.T) {

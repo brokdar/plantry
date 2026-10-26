@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { describe, expect, test, vi } from "vitest"
 
 import "@/lib/i18n"
@@ -9,12 +10,18 @@ import type { Plate } from "@/lib/api/plates"
 import type { PlannerDay } from "./PlannerGrid"
 import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
 
+const mocks = vi.hoisted(() => ({ markNoPlate: vi.fn() }))
+
 // Mock the hooks the sheet depends on so it renders without a live backend.
 vi.mock("@/lib/queries/plates", () => ({
   useUpdatePlate: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useUpdatePlateComponentQuantity: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useRemovePlateComponent: vi.fn(() => ({ mutateAsync: vi.fn() })),
-  useSetPlateSkipped: vi.fn(() => ({ mutateAsync: vi.fn() })),
+  useNoPlateActions: vi.fn(() => ({
+    markNoPlate: mocks.markNoPlate,
+    planMeal: vi.fn(),
+    editNote: vi.fn(),
+  })),
   // The header summary + per-component contribution both read from these.
   usePlateMacros: vi.fn(() => ({
     data: {
@@ -22,7 +29,6 @@ vi.mock("@/lib/queries/plates", () => ({
         {
           plate_id: 42,
           date: "2026-05-02",
-          skipped: false,
           macros: {
             kcal: 620,
             protein: 30,
@@ -85,7 +91,6 @@ const plate: Plate = {
   slot_id: 1,
   date: "2026-05-02",
   note: null,
-  skipped: false,
   components: [
     { id: 100, plate_id: 42, food_id: 7, portions: 1, sort_order: 0 },
   ],
@@ -186,7 +191,6 @@ describe("SlotSheet — Phase 3 kind-aware quantity", () => {
       slot_id: 1,
       date: "2026-05-02",
       note: null,
-      skipped: false,
       components: [
         {
           id: 200,
@@ -230,5 +234,31 @@ describe("SlotSheet — Phase 3 kind-aware quantity", () => {
       "quantity-unit-amount"
     )) as HTMLInputElement
     expect(amount.value).toBe("200")
+  })
+})
+
+describe("SlotSheet — Mark as No plate", () => {
+  test("marks the cell No plate through the shared action and closes", async () => {
+    const onOpenChange = vi.fn()
+    renderWithRouter(
+      <SlotSheet
+        target={target}
+        days={days}
+        componentsById={new Map([[7, heroFood]])}
+        rangeFrom="2026-05-02"
+        rangeTo="2026-05-02"
+        onOpenChange={onOpenChange}
+        onAddComponent={vi.fn()}
+        onSwapComponent={vi.fn()}
+        onSaveAsPreset={vi.fn()}
+      />
+    )
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Mark as No plate" })
+    )
+
+    expect(mocks.markNoPlate).toHaveBeenCalledWith("2026-05-02", 1)
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })

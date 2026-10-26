@@ -9,6 +9,9 @@ import (
 type Repository interface {
 	Create(ctx context.Context, p *Plate) error
 	Get(ctx context.Context, id int64) (*Plate, error)
+	// GetIDByCell returns the id of the (date, slot) cell's plate, or an
+	// error wrapping domain.ErrNotFound when the cell is empty.
+	GetIDByCell(ctx context.Context, date time.Time, slotID int64) (int64, error)
 	Update(ctx context.Context, p *Plate) error
 	Delete(ctx context.Context, id int64) error
 	ListByDateRange(ctx context.Context, from, to time.Time) ([]Plate, error)
@@ -26,6 +29,4 @@ type Repository interface {
 	// given leaf food across any plate (max id wins). Returns ("", nil) when
 	// the food has never been added with a unit (i.e., never as a leaf).
 	RecentUnitForFood(ctx context.Context, foodID int64) (string, error)
-
-	SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*Plate, error)
 }

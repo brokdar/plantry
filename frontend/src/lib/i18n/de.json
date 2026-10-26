@@ -173,9 +173,23 @@
     "ai_session_pill_aria_one": "KI-Banner wieder öffnen ({{count}} Teller)",
     "ai_session_pill_aria_other": "KI-Banner wieder öffnen ({{count}} Teller)",
     "dnd": {
-      "reject_skipped": "Slot ist als ausgelassen markiert",
+      "reject_no_plate": "Für diese Mahlzeit ist „Kein Essen“ eingetragen.",
+      "reject_occupied": "Für diese Mahlzeit ist schon etwas geplant.",
       "drag_handle_label": "Zum Verschieben ziehen · ⌘ zum Kopieren",
       "copy_hint": "⌘ kopieren"
+    },
+    "availability": {
+      "no_plate": "Kein Essen",
+      "mark": "Auf „Kein Essen“ setzen",
+      "mark_tooltip": "Auf „Kein Essen“ setzen · Rechtsklick für eine Notiz",
+      "mark_with_note_title": "Kein Essen, mit Notiz",
+      "plan_meal": "Diese Mahlzeit planen",
+      "add_note": "Notiz hinzufügen",
+      "edit_note": "Notiz bearbeiten",
+      "save_note": "Speichern",
+      "note_placeholder": "z. B. Abendessen bei Mama",
+      "marked": "Auf „Kein Essen“ gesetzt.",
+      "mobile_short": "Kein Essen"
     },
     "shortcuts": {
       "title": "Tastenkürzel",
@@ -186,7 +200,7 @@
       "move_focus": "Zwischen Zellen wechseln",
       "row_edge": "Zum Zeilenanfang/-ende springen",
       "open_or_add": "Slot-Details öffnen oder Mahlzeit hinzufügen",
-      "skip": "Diesen Slot auslassen",
+      "no_plate": "Auf „Kein Essen“ setzen",
       "delete": "Diesen Teller löschen",
       "copy_drag": "Beim Ziehen einen Teller kopieren",
       "this_panel": "Diese Übersicht öffnen"
@@ -241,31 +255,11 @@
       "moved_to": "Verschoben auf {{day}}",
       "move_failed": "Verschieben fehlgeschlagen",
       "drag_handle_label": "Zum Verschieben ziehen",
-      "skip_short": "Auslassen",
       "save_short": "Speichern",
       "delete_short": "Löschen",
       "move_to": "Auf Tag verschieben",
       "move_to_picker_label": "Zieltag auswählen",
       "current_day": "Aktuell"
-    }
-  },
-  "skip": {
-    "label": "Auslassen",
-    "eating_out": "Auswärts",
-    "mark": "Als ausgelassen markieren (auswärts)",
-    "unmark": "Auslassen entfernen",
-    "skip_action": "Slot auslassen",
-    "edit_note": "Notiz bearbeiten",
-    "add_note_title": "Mit Notiz auslassen",
-    "add_note_title_existing": "Notiz hinzufügen",
-    "edit_note_title": "Notiz bearbeiten",
-    "save_note": "Speichern",
-    "skip_with_note": "Mit Notiz auslassen",
-    "no_note": "Keine Notiz",
-    "tooltip_empty": "Klicken zum Auslassen · Rechtsklick für Notiz",
-    "tooltip_edit_note": "Notiz bearbeiten",
-    "note": {
-      "placeholder": "z. B. Mamas Geburtstag — Joe's"
     }
   },
   "slot_sheet": {
@@ -434,8 +428,6 @@
       "rate_limit_description": "Maximale /api/ai/chat-Anfragen pro Minute pro IP. 0 deaktiviert das Limit.",
       "fake_script_label": "Fake-Provider-Skript",
       "fake_script_description": "Nur für Anbieter „Fake“. Pfad zu einer JSONL-Datei mit vorbereiteten Antworten.",
-      "secret_key_banner_title": "Kein Verschlüsselungsschlüssel verfügbar",
-      "secret_key_banner_body": "API-Schlüssel können nicht über die UI gespeichert werden, weil kein Verschlüsselungsschlüssel geladen ist. Plantry erzeugt ihn beim Start im Datenverzeichnis; PLANTRY_SECRET_KEY ist optional. Über Umgebungsvariablen bereitgestellte Schlüssel funktionieren weiterhin.",
       "wizard": {
         "step1_title": "Anbieter wählen",
         "step1_description": "Wähle, welcher Modellanbieter den Ernährungsassistenten antreiben soll.",
@@ -465,10 +457,166 @@
         "build_commit": "Build-Commit"
       },
       "env_tooltip": "Gesetzt via {{envVar}}. Neustart erforderlich.",
-      "restart_required": "Neustart erforderlich",
-      "secret_key_banner_title": "Kein Verschlüsselungsschlüssel verfügbar",
-      "secret_key_banner_body": "Kein Verschlüsselungsschlüssel geladen — API-Schlüssel können nicht über die UI gespeichert werden. Plantry erzeugt ihn beim Start im Datenverzeichnis; PLANTRY_SECRET_KEY ist optional."
-    }
+      "restart_required": "Neustart erforderlich"
+    },
+    "heading": "Einstellungen",
+    "nav_label": "Bereiche der Einstellungen",
+    "back": "Einstellungen",
+    "back_label": "Zurück zu allen Einstellungen",
+    "saved": "Gespeichert",
+    "number_range": "Gib eine ganze Zahl von {{min}} bis {{max}} ein.",
+    "decrease": "{{label}} verringern",
+    "increase": "{{label}} erhöhen",
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage",
+    "weeks_one": "{{count}} Woche",
+    "weeks_other": "{{count}} Wochen",
+    "sections": {
+      "household": {
+        "title": "Du & Haushalt",
+        "summary": "Ernährung, Portionen, Allergien und Ernährungsziel"
+      },
+      "meals": {
+        "title": "Mahlzeiten & Woche",
+        "summary": "Mahlzeiten, deine übliche Woche und Routinen"
+      },
+      "cooking": {
+        "title": "Kochen & Abwechslung",
+        "summary": "Kochtermine, Reste, Abwechslung und Einkaufstag"
+      },
+      "assistant": {
+        "title": "Assistent",
+        "summary": "Anbieter, Schlüssel, Hinweise und Tagesvorschlag"
+      },
+      "system": {
+        "title": "Daten & System",
+        "summary": "Sprache, Design, Einrichtung und Version"
+      }
+    },
+    "household": {
+      "diet_label": "Ernährung",
+      "diet": {
+        "vegan": "Vegan",
+        "vegetarian": "Vegetarisch",
+        "pescetarian": "Pescetarisch",
+        "omnivore": "Alles"
+      },
+      "diet_effect": {
+        "vegan": "Plantry plant nur pflanzliche Rezepte.",
+        "vegetarian": "Plantry plant weder Fleisch noch Fisch.",
+        "pescetarian": "Plantry plant Fisch, aber kein Fleisch.",
+        "omnivore": "Plantry plant aus all deinen Rezepten."
+      },
+      "household_label": "Haushalt",
+      "adults": "Erwachsene",
+      "children": "Kinder",
+      "household_hint": "Erwachsene zählen als 1 Portion, Kinder als halbe Portion.",
+      "household_effect_one": "Jede Mahlzeit wird für {{portions}} Portion geplant.",
+      "household_effect_other": "Jede Mahlzeit wird für {{portions}} Portionen geplant.",
+      "allergies_label": "Allergien und Einschränkungen",
+      "allergies_effect_none": "Keine angegeben. Plantry plant aus all deinen Rezepten.",
+      "allergies_effect": "Plantry lässt Rezepte damit weg.",
+      "meat_days_label": "Fleischtage pro Woche",
+      "meat_days_none": "Keine Grenze",
+      "meat_days_effect_none": "Plantry begrenzt die Fleischtage nicht.",
+      "meat_days_effect_zero": "Plantry plant kein Fleisch.",
+      "meat_days_effect_one": "Plantry plant Fleisch an höchstens {{count}} Tag pro Woche.",
+      "meat_days_effect_other": "Plantry plant Fleisch an höchstens {{count}} Tagen pro Woche.",
+      "goal_label": "Ernährungsziel",
+      "goal": {
+        "cut": "Abnehmen",
+        "maintain": "Halten",
+        "bulk": "Aufbauen",
+        "custom": "Eigene Werte"
+      },
+      "goal_split": "{{protein}} / {{fat}} / {{carbs}} %",
+      "goal_custom_detail": "Deine eigenen Zahlen",
+      "goal_effect": "Plantry zielt auf {{kcal}} kcal am Tag: {{protein}} % Eiweiß, {{fat}} % Fett, {{carbs}} % Kohlenhydrate.",
+      "goal_effect_kcal_only": "Plantry zielt auf {{kcal}} kcal am Tag.",
+      "goal_effect_none": "Kein Ziel gesetzt. Plantry gleicht die Mahlzeiten nicht nach Nährwerten ab.",
+      "macro_split_hint": "Eiweiß / Fett / Kohlenhydrate",
+      "macro_sum_invalid": "Eiweiß, Fett und Kohlenhydrate ergeben zusammen mehr als 100 %."
+    },
+    "meals": {
+      "slots_label": "Mahlzeiten",
+      "slots_effect": "Plantry plant pro Mahlzeit und Tag ein Essen.",
+      "grid_label": "Deine übliche Woche",
+      "grid_effect": "Plantry plant die Mahlzeiten mit „Planen“, lässt „Kein Essen“ frei und füllt Routinen aus einer gespeicherten Routine.",
+      "grid_no_slots": "Lege zuerst eine Mahlzeit an, dann deine übliche Woche.",
+      "routines_label": "Routinen",
+      "routines_effect": "Routinen sind gespeicherte Mahlzeiten, die regelmäßig wiederkehren, etwa dein Frühstück unter der Woche.",
+      "routines_link": "Routinen verwalten"
+    },
+    "cooking": {
+      "cooking_group": "Kochen",
+      "leftovers_group": "Reste und Einfrieren",
+      "variety_group": "Abwechslung",
+      "calendar_group": "Einkauf und Kalender",
+      "occasions_label": "Kochtermine pro Tag",
+      "occasions_effect_one": "Plantry plant höchstens {{count}} Kochtermin am Tag.",
+      "occasions_effect_other": "Plantry plant höchstens {{count}} Kochtermine am Tag.",
+      "batch_label": "Vorkochen",
+      "batch_effect_on": "Plantry kocht größere Mengen vor und plant die Reste ein.",
+      "batch_effect_off": "Plantry kocht jede Mahlzeit frisch.",
+      "keep_label": "Reste halten",
+      "keep_effect_one": "Plantry plant Reste bis {{count}} Tag nach dem Kochen ein.",
+      "keep_effect_other": "Plantry plant Reste bis {{count}} Tage nach dem Kochen ein.",
+      "keep_warning": "Gekochtes hält im Kühlschrank meist 3 bis 4 Tage. Länger ist ein Risiko für die Lebensmittelsicherheit.",
+      "freezing_label": "Einfrieren",
+      "freezing_effect_on": "Plantry kann Portionen einfrieren und später einplanen.",
+      "freezing_effect_off": "Plantry friert keine Portionen ein.",
+      "freezer_keep_label": "Eingefrorenes hält",
+      "freezer_keep_effect_one": "Plantry verbraucht eingefrorene Portionen innerhalb von {{count}} Tag.",
+      "freezer_keep_effect_other": "Plantry verbraucht eingefrorene Portionen innerhalb von {{count}} Tagen.",
+      "variety_label": "Keine Wiederholung innerhalb von",
+      "variety_effect_zero": "Rezepte dürfen jede Woche wiederkommen.",
+      "variety_effect_one": "Plantry wiederholt ein Rezept frühestens nach {{count}} Woche.",
+      "variety_effect_other": "Plantry wiederholt ein Rezept frühestens nach {{count}} Wochen.",
+      "explore_label": "Neue Rezepte pro Woche",
+      "explore_effect_zero": "Plantry plant nur aus deinen Rezepten.",
+      "explore_effect_one": "Plantry schlägt {{count}} neues Rezept pro Woche vor.",
+      "explore_effect_other": "Plantry schlägt {{count}} neue Rezepte pro Woche vor.",
+      "shopping_effect": "Du kaufst am {{day}} ein.",
+      "anchor_effect": {
+        "today": "Die Planungsansicht beginnt heute.",
+        "next_shopping_day": "Die Planungsansicht beginnt an deinem nächsten Einkaufstag.",
+        "fixed_weekday": "Die Planungsansicht beginnt am {{day}}."
+      },
+      "week_starts_effect": "Kalender beginnen die Woche am {{day}}."
+    },
+    "assistant": {
+      "connection_group": "Verbindung",
+      "notes_label": "Hinweise für deinen Assistenten",
+      "notes_placeholder": "Zum Beispiel: Wir mögen keinen Koriander, und das Abendessen soll in 30 Minuten fertig sein.",
+      "notes_effect": "Der Assistent liest diese Hinweise vor jedem Plan und jedem Chat.",
+      "daily_label": "Tagesvorschlag",
+      "daily_effect_on": "Plantry schlägt jeden Tag ein neues Rezept vor.",
+      "daily_effect_off": "Plantry schlägt nicht jeden Tag ein Rezept vor.",
+      "retention_label": "Laufdetails aufbewahren",
+      "retention_effect_one": "Details zu Assistenten-Läufen, die älter als {{count}} Tag sind, werden gelöscht.",
+      "retention_effect_other": "Details zu Assistenten-Läufen, die älter als {{count}} Tage sind, werden gelöscht.",
+      "rate_limit_effect_zero": "Der Assistenten-Chat hat kein Limit.",
+      "rate_limit_effect_one": "Der Assistent beantwortet höchstens {{count}} Chatnachricht pro Minute.",
+      "rate_limit_effect_other": "Der Assistent beantwortet höchstens {{count}} Chatnachrichten pro Minute."
+    },
+    "system_section": {
+      "appearance_group": "Sprache und Design",
+      "data_group": "Daten",
+      "about_group": "Über Plantry",
+      "language_effect": "Plantry zeigt seine Beschriftungen auf {{language}}.",
+      "theme_effect": {
+        "light": "Plantry nutzt das helle Design.",
+        "dark": "Plantry nutzt das dunkle Design.",
+        "system": "Plantry folgt der Hell-Dunkel-Einstellung deines Geräts."
+      },
+      "setup_label": "Einrichtung",
+      "setup_effect": "Geh die Einrichtung noch einmal durch. Deine aktuellen Werte sind schon eingetragen.",
+      "setup_link": "Einrichtung erneut starten",
+      "debug_effect_on": "Die Zutatensuche zeigt ihren Ablauf. Nur in diesem Browser gespeichert.",
+      "debug_effect_off": "Die Zutatensuche blendet ihren Ablauf aus. Nur in diesem Browser gespeichert."
+    },
+    "days_unit_one": "Tag",
+    "days_unit_other": "Tage"
   },
   "settings": {
     "plan_tab": "Planung",
@@ -513,7 +661,12 @@
     "breakfast": "Frühstück",
     "lunch": "Mittagessen",
     "dinner": "Abendessen",
-    "snack": "Snack"
+    "snack": "Snack",
+    "icon_pick_placeholder": "Symbol wählen",
+    "icon_search_placeholder": "Symbole suchen…",
+    "icon_suggested": "Vorschläge",
+    "icon_none_found": "Keine Symbole gefunden",
+    "row_detail": "{{key}}, Reihenfolge {{order}}"
   },
   "ingredient": {
     "kind_label": "Lebensmittel",
@@ -940,6 +1093,8 @@
       "result_replaced_other": "{{count}} Teller ersetzt.",
       "result_skipped_occupied_one": "{{count}} belegten Slot übersprungen.",
       "result_skipped_occupied_other": "{{count}} belegte Slots übersprungen.",
+      "result_skipped_unavailable_one": "{{count}} Mahlzeit mit „Kein Essen“ ausgelassen.",
+      "result_skipped_unavailable_other": "{{count}} Mahlzeiten mit „Kein Essen“ ausgelassen.",
       "result_skipped_no_slot_one": "{{count}} Teller fand seinen Slot nicht.",
       "result_skipped_no_slot_other": "{{count}} Teller fanden ihren Slot nicht.",
       "undo": "Rückgängig",
@@ -1049,7 +1204,9 @@
     },
     "plate": {
       "slot_unknown": "Diese Mahlzeitzeit existiert nicht.",
-      "feedback_invalid_status": "Bewertung muss gekocht, ausgelassen, geliebt oder nicht gemocht sein."
+      "feedback_invalid_status": "Bewertung muss gekocht, ausgelassen, geliebt oder nicht gemocht sein.",
+      "cell_unavailable": "Für diese Mahlzeit ist „Kein Essen“ eingetragen. Plane sie zuerst.",
+      "cell_occupied": "Für diese Mahlzeit ist schon etwas geplant."
     },
     "slot": {
       "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."
@@ -1061,7 +1218,10 @@
       "url_blocked": "Diese Adresse ist nicht erlaubt."
     },
     "profile": {
-      "invalid_macros": "Die Makroprozentsätze dürfen zusammen höchstens 100 ergeben, und das Kalorienziel muss positiv sein."
+      "invalid_macros": "Die Makroprozentsätze dürfen zusammen höchstens 100 ergeben, und das Kalorienziel muss positiv sein.",
+      "invalid_diet_type": "Wähle eine der angebotenen Ernährungsweisen.",
+      "invalid_meat_days": "Fleischtage pro Woche müssen zwischen 0 und 7 liegen.",
+      "invalid_household_portions": "Die Portionen im Haushalt müssen über 0 und höchstens 20 liegen."
     },
     "preset": {
       "in_use": "Dieses Preset verweist noch auf ein fehlendes Lebensmittel."
@@ -1223,5 +1383,9 @@
     "title": "Nährwerte unvollständig",
     "body_one": "In kcal und Makros fehlt 1 Zutat ohne Nährwerte:",
     "body_other": "In kcal und Makros fehlen {{count}} Zutaten ohne Nährwerte:"
+  },
+  "units": {
+    "kcal": "kcal",
+    "g": "g"
   }
 }

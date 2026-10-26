@@ -17,7 +17,6 @@ function plate(id: number): Plate {
     slot_id: 1,
     date: "2026-05-05",
     note: null,
-    skipped: false,
     components: [],
     created_at: "",
   }

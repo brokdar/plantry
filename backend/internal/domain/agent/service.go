@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -19,7 +21,7 @@ import (
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v2"
+const PromptVersion = "v3"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -41,11 +43,19 @@ type FoodLookup interface {
 	LookupByIDs(ctx context.Context, ids []int64) (map[int64]*food.Food, error)
 }
 
+// AvailabilityResolver resolves the availability of every cell in an
+// inclusive date range.
+type AvailabilityResolver interface {
+	Resolve(ctx context.Context, from, to time.Time) ([]availability.Cell, error)
+}
+
 // WindowSources read the planning window shown in the system prompt.
+// Availability may be nil: every cell is then "plan".
 type WindowSources struct {
-	Plates PlateRanger
-	Slots  SlotLister
-	Foods  FoodLookup
+	Plates       PlateRanger
+	Slots        SlotLister
+	Foods        FoodLookup
+	Availability AvailabilityResolver
 }
 
 // Service is the facade over conversation persistence + the agent loop. The
@@ -271,7 +281,15 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest) (strin
 	if err != nil {
 		return "", err
 	}
-	plates, err := s.windowPlates(ctx, req.From, req.To)
+	slotNames, err := s.slotNames(ctx)
+	if err != nil {
+		return "", err
+	}
+	plates, err := s.windowPlates(ctx, req.From, req.To, slotNames)
+	if err != nil {
+		return "", err
+	}
+	cells, err := s.windowCells(ctx, req.From, req.To, slotNames)
 	if err != nil {
 		return "", err
 	}
@@ -285,7 +303,7 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest) (strin
 		shoppingDayVal, _ := s.settings.Get(ctx, settings.KeyPlanShoppingDay)
 		anchorModeVal, _ := s.settings.Get(ctx, settings.KeyPlanAnchor)
 		prefs = &PlanningPrefs{
-			ShoppingDay: shoppingDayVal.Raw,
+			ShoppingDay: weekdayName(shoppingDayVal.Raw),
 			AnchorMode:  anchorModeVal.Raw,
 		}
 	}
@@ -293,25 +311,40 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest) (strin
 	if req.Mode != "" {
 		hint = modeHint(req.Mode)
 	}
-	return ComposePrompt(p, plates, &DateRange{Today: today, From: req.From, To: req.To}, prefs, hint), nil
+	return ComposePrompt(p, plates, cells, &DateRange{Today: today, From: req.From, To: req.To}, prefs, hint), nil
+}
+
+// weekdayName turns a plan.shopping_day value (0 = Monday … 6 = Sunday) into
+// its English weekday name. Any other value is returned unchanged.
+func weekdayName(raw string) string {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 || n > 6 {
+		return raw
+	}
+	return time.Weekday((n + 1) % 7).String()
+}
+
+// slotNames maps every slot id to its name key.
+func (s *Service) slotNames(ctx context.Context) (map[int64]string, error) {
+	slots, err := s.window.Slots.List(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[int64]string, len(slots))
+	for _, sl := range slots {
+		names[sl.ID] = sl.NameKey
+	}
+	return names, nil
 }
 
 // windowPlates loads the plates in [from, to] with their slot and food names.
-func (s *Service) windowPlates(ctx context.Context, from, to time.Time) ([]PromptPlate, error) {
+func (s *Service) windowPlates(ctx context.Context, from, to time.Time, slotNames map[int64]string) ([]PromptPlate, error) {
 	plates, err := s.window.Plates.Range(ctx, from, to)
 	if err != nil {
 		return nil, err
 	}
 	if len(plates) == 0 {
 		return nil, nil
-	}
-	slots, err := s.window.Slots.List(ctx, false)
-	if err != nil {
-		return nil, err
-	}
-	slotNames := make(map[int64]string, len(slots))
-	for _, sl := range slots {
-		slotNames[sl.ID] = sl.NameKey
 	}
 	var foodIDs []int64
 	for _, p := range plates {
@@ -333,8 +366,34 @@ func (s *Service) windowPlates(ctx context.Context, from, to time.Time) ([]Promp
 		}
 		out[i] = PromptPlate{
 			ID: p.ID, Date: p.Date, SlotID: p.SlotID, Slot: slotNames[p.SlotID],
-			Foods: names, Skipped: p.Skipped,
+			Foods: names,
 		}
+	}
+	return out, nil
+}
+
+// windowCells loads the "none" and "routine" cells in [from, to].
+func (s *Service) windowCells(ctx context.Context, from, to time.Time, slotNames map[int64]string) ([]PromptCell, error) {
+	if s.window.Availability == nil {
+		return nil, nil
+	}
+	cells, err := s.window.Availability.Resolve(ctx, from, to)
+	if err != nil {
+		return nil, err
+	}
+	var out []PromptCell
+	for _, c := range cells {
+		if c.Mode == availability.ModePlan {
+			continue
+		}
+		pc := PromptCell{Date: c.Date, SlotID: c.SlotID, Slot: slotNames[c.SlotID], Mode: string(c.Mode)}
+		if c.PresetName != nil {
+			pc.PresetName = *c.PresetName
+		}
+		if c.Note != nil {
+			pc.Note = *c.Note
+		}
+		out = append(out, pc)
 	}
 	return out, nil
 }
@@ -354,12 +413,12 @@ func modeHint(mode string) string {
 	switch mode {
 	case "fill_empty":
 		return "Get to work right away — the user already asked you to fill the empty slots, so don't ask for confirmation. " +
-			"Only create plates in empty (day, slot) cells. Do not modify existing plates unless the user asks. Never modify plates where skipped=true — treat them as immutable (the user marked that slot as eating out, canteen, or otherwise off-plan). " +
+			"Only create plates in empty (day, slot) cells. Do not modify existing plates unless the user asks. Leave routine cells alone, and never create plates in No-plate cells (the user is eating out, at the canteen, or otherwise off-plan there). " +
 			"Plan for variety: before choosing, call get_plates_range over the current window AND the two preceding weeks so you can see what the user has eaten recently. Do not repeat meals they just had, and never reuse the same component across multiple slots in this window — each week should look different from the last. " +
 			"favorite=true is a tie-breaker between otherwise-equivalent candidates, never a reason to plan the same favorites week after week. Rotate through the food library for diversity. " +
 			"When you're done, give the user a brief rundown — one short line per slot you filled, naming the meal and why you picked it (variety, a favorite, or macro fit)."
 	case "replace_all":
-		return "You may clear the week and plan it from scratch. Confirm with the user before deleting existing plates. Respect skipped plates — do not overwrite them. " +
+		return "You may clear the week and plan it from scratch. Confirm with the user before deleting existing plates. Leave routine cells alone, and never create plates in No-plate cells. " +
 			"Plan for variety: call get_plates_range over the preceding weeks and avoid repeating the meals the user just had; don't reuse the same component across multiple slots. Use swap_food to vary a slot when a candidate would otherwise repeat. " +
 			"favorite=true is a tie-breaker between otherwise-equivalent candidates, not a reason to repeat the same favorites every week."
 	default:

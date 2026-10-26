@@ -12,6 +12,7 @@ import (
 type Querier interface {
 	AddPresetTag(ctx context.Context, arg AddPresetTagParams) error
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
+	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
 	CountConversationsByWeek(ctx context.Context, weekID sql.NullInt64) (int64, error)
 	CountPlatesUsingFood(ctx context.Context, foodID int64) (int64, error)
@@ -60,6 +61,7 @@ type Querier interface {
 	GetPlate(ctx context.Context, id int64) (Plate, error)
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
 	GetPlateFeedback(ctx context.Context, plateID int64) (PlateFeedback, error)
+	GetPlateIDByCell(ctx context.Context, arg GetPlateIDByCellParams) (int64, error)
 	GetPreset(ctx context.Context, id int64) (Preset, error)
 	GetProfile(ctx context.Context) (UserProfile, error)
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
@@ -99,7 +101,6 @@ type Querier interface {
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
-	SetPlateSkipped(ctx context.Context, arg SetPlateSkippedParams) (Plate, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error
 	TouchPresetUpdatedAt(ctx context.Context, id int64) error

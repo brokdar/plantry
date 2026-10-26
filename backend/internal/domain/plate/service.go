@@ -35,6 +35,19 @@ type SlotChecker interface {
 	Exists(ctx context.Context, slotID int64) (bool, error)
 }
 
+// Cell modes returned by CellChecker.
+const (
+	CellPlan    = "plan"
+	CellRoutine = "routine"
+	CellNone    = "none"
+)
+
+// CellChecker resolves a cell's availability mode: CellPlan, CellRoutine or
+// CellNone. The availability service satisfies it (D10).
+type CellChecker interface {
+	CellMode(ctx context.Context, date time.Time, slotID int64) (string, error)
+}
+
 // FoodLookup is the food-side surface the plate service depends on:
 // kind discrimination + portion overrides for grams resolution.
 // food.Repository satisfies it directly via its Get / ListPortions methods;
@@ -49,11 +62,43 @@ type Service struct {
 	repo  Repository
 	slots SlotChecker
 	foods FoodLookup
+	cells CellChecker
 }
 
 // NewService creates a plate service.
 func NewService(repo Repository, slots SlotChecker, foods FoodLookup) *Service {
 	return &Service{repo: repo, slots: slots, foods: foods}
+}
+
+// WithCells injects the availability check. Without it every cell counts as
+// "plan"; the one-plate-per-cell rule applies either way.
+func (s *Service) WithCells(c CellChecker) *Service {
+	s.cells = c
+	return s
+}
+
+// checkCell rejects a cell that resolves to "none" (ErrCellUnavailable) or
+// holds a plate other than selfID (ErrCellOccupied). selfID is 0 on create.
+func (s *Service) checkCell(ctx context.Context, date time.Time, slotID, selfID int64) error {
+	if s.cells != nil {
+		mode, err := s.cells.CellMode(ctx, date, slotID)
+		if err != nil {
+			return fmt.Errorf("check cell: %w", err)
+		}
+		if mode == CellNone {
+			return fmt.Errorf("%w: %s slot %d", domain.ErrCellUnavailable, date.Format("2006-01-02"), slotID)
+		}
+	}
+	existingID, err := s.repo.GetIDByCell(ctx, date, slotID)
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		return nil
+	case err != nil:
+		return fmt.Errorf("check cell: %w", err)
+	case existingID != selfID:
+		return fmt.Errorf("%w: plate %d", domain.ErrCellOccupied, existingID)
+	}
+	return nil
 }
 
 func (s *Service) validatePlate(ctx context.Context, p *Plate) error {
@@ -161,6 +206,9 @@ func (s *Service) Create(ctx context.Context, p *Plate) error {
 	if err := s.validatePlate(ctx, p); err != nil {
 		return err
 	}
+	if err := s.checkCell(ctx, p.Date, p.SlotID, 0); err != nil {
+		return err
+	}
 	for i := range p.Components {
 		p.Components[i].SortOrder = i
 	}
@@ -172,7 +220,9 @@ func (s *Service) Get(ctx context.Context, id int64) (*Plate, error) {
 	return s.repo.Get(ctx, id)
 }
 
-// Update persists changes to date/slot/note. Child mutations go through their own methods.
+// Update persists changes to date/slot/note. Child mutations go through their
+// own methods. A move to another date or slot must land in an empty cell that
+// is not "none" (D10); an update within the same cell is not checked.
 func (s *Service) Update(ctx context.Context, p *Plate) error {
 	if p.Date.IsZero() {
 		return fmt.Errorf("%w: date required", domain.ErrInvalidInput)
@@ -186,6 +236,15 @@ func (s *Service) Update(ctx context.Context, p *Plate) error {
 	}
 	if !ok {
 		return fmt.Errorf("%w: slot %d does not exist", domain.ErrSlotUnknown, p.SlotID)
+	}
+	cur, err := s.repo.Get(ctx, p.ID)
+	if err != nil {
+		return err
+	}
+	if !cur.Date.Equal(p.Date) || cur.SlotID != p.SlotID {
+		if err := s.checkCell(ctx, p.Date, p.SlotID, p.ID); err != nil {
+			return err
+		}
 	}
 	return s.repo.Update(ctx, p)
 }
@@ -296,12 +355,6 @@ func (s *Service) RemoveComponent(ctx context.Context, plateComponentID int64) e
 // last picked for this ingredient.
 func (s *Service) RecentUnitForFood(ctx context.Context, foodID int64) (string, error) {
 	return s.repo.RecentUnitForFood(ctx, foodID)
-}
-
-// SetSkipped marks the slot as prospectively skipped (eating out / canteen).
-// Clears attached components atomically when enabling skip.
-func (s *Service) SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*Plate, error) {
-	return s.repo.SetSkipped(ctx, plateID, skipped, note)
 }
 
 // Range returns all plates in [from, to] inclusive. from must be ≤ to; span must be ≤ 366 days.

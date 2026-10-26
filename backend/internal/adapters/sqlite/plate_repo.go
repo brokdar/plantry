@@ -57,6 +57,9 @@ func (r *PlateRepo) createWith(ctx context.Context, q *sqlcgen.Queries, p *plate
 		if isForeignKeyViolation(err) {
 			return fmt.Errorf("%w: invalid slot reference", domain.ErrInvalidInput)
 		}
+		if isUniqueViolation(err, "plates.date") {
+			return fmt.Errorf("%w: %s slot %d", domain.ErrCellOccupied, p.DateString(), p.SlotID)
+		}
 		return err
 	}
 	mapPlateToDomain(&row, p)
@@ -103,10 +106,28 @@ func (r *PlateRepo) Update(ctx context.Context, p *plate.Plate) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: plate %d", domain.ErrNotFound, p.ID)
 		}
+		if isUniqueViolation(err, "plates.date") {
+			return fmt.Errorf("%w: %s slot %d", domain.ErrCellOccupied, p.DateString(), p.SlotID)
+		}
 		return err
 	}
 	mapPlateToDomain(&row, p)
 	return nil
+}
+
+// GetIDByCell returns the id of the (date, slot) cell's plate.
+func (r *PlateRepo) GetIDByCell(ctx context.Context, date time.Time, slotID int64) (int64, error) {
+	id, err := r.q.GetPlateIDByCell(ctx, sqlcgen.GetPlateIDByCellParams{
+		Date:   date.Format(dateLayout),
+		SlotID: slotID,
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("%w: no plate at %s slot %d", domain.ErrNotFound, date.Format(dateLayout), slotID)
+		}
+		return 0, err
+	}
+	return id, nil
 }
 
 func (r *PlateRepo) Delete(ctx context.Context, id int64) error {
@@ -249,62 +270,6 @@ func (r *PlateRepo) RecentUnitForFood(ctx context.Context, foodID int64) (string
 	return v.String, nil
 }
 
-// SetSkipped toggles the prospective "skip this slot" marker on a plate.
-// When enabling skip, any attached components are cleared atomically.
-func (r *PlateRepo) SetSkipped(ctx context.Context, plateID int64, skipped bool, note *string) (*plate.Plate, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	qtx := sqlcgen.New(tx)
-	s := int64(0)
-	if skipped {
-		s = 1
-		// Empty plates' components before marking skipped.
-		rows, err := qtx.ListPlateComponentsByPlate(ctx, plateID)
-		if err != nil {
-			return nil, err
-		}
-		for _, row := range rows {
-			if _, err := qtx.DeletePlateComponent(ctx, row.ID); err != nil {
-				return nil, err
-			}
-		}
-	}
-	row, err := qtx.SetPlateSkipped(ctx, sqlcgen.SetPlateSkippedParams{
-		ID:      plateID,
-		Skipped: s,
-		Note:    toNullString(note),
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("%w: plate %d", domain.ErrNotFound, plateID)
-		}
-		return nil, err
-	}
-
-	var p plate.Plate
-	mapPlateToDomain(&row, &p)
-	if skipped {
-		p.Components = []plate.PlateComponent{}
-	} else {
-		pcRows, err := qtx.ListPlateComponentsByPlate(ctx, plateID)
-		if err != nil {
-			return nil, err
-		}
-		p.Components = make([]plate.PlateComponent, len(pcRows))
-		for i := range pcRows {
-			mapPlateComponentToDomain(&pcRows[i], &p.Components[i])
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
-	}
-	return &p, nil
-}
-
 func (r *PlateRepo) CountUsingTimeSlot(ctx context.Context, slotID int64) (int64, error) {
 	return r.q.CountPlatesUsingTimeSlot(ctx, slotID)
 }
@@ -325,7 +290,6 @@ func mapPlateToDomain(row *sqlcgen.Plate, p *plate.Plate) {
 	p.ID = row.ID
 	p.SlotID = row.SlotID
 	p.Note = fromNullString(row.Note)
-	p.Skipped = row.Skipped != 0
 	p.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
 	p.Date, _ = time.Parse(dateLayout, row.Date)
 }

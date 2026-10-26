@@ -5,14 +5,14 @@ import { createHookWrapper, renderWithRouter } from "@/test/render"
 
 import type { Plate } from "@/lib/api/plates"
 
-vi.mock("@/lib/api/plates", () => ({
+vi.mock("@/lib/api/plates", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/plates")>()),
   addPlateComponent: vi.fn(),
   createPlate: vi.fn(),
   deletePlate: vi.fn(),
   deletePlateComponent: vi.fn(),
   listPlates: vi.fn(),
   listPlateMacros: vi.fn(),
-  setPlateSkipped: vi.fn(),
   updatePlate: vi.fn(),
   updatePlateComponent: vi.fn(),
 }))
@@ -24,12 +24,29 @@ import {
   deletePlateComponent,
   listPlateMacros,
   listPlates,
-  setPlateSkipped,
   updatePlate,
   updatePlateComponent,
 } from "@/lib/api/plates"
 
-import { plateKeys } from "./keys"
+vi.mock("@/lib/api/availability", () => ({
+  getAvailabilityRange: vi.fn(),
+  setAvailabilityOverride: vi.fn(),
+  clearAvailabilityOverride: vi.fn(),
+}))
+
+const toastMock = vi.hoisted(() =>
+  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() })
+)
+vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
+
+import type { AvailabilityCell } from "@/lib/api/availability"
+import {
+  clearAvailabilityOverride,
+  getAvailabilityRange,
+  setAvailabilityOverride,
+} from "@/lib/api/availability"
+
+import { availabilityKeys, plateKeys } from "./keys"
 import { nutritionKeys } from "./nutrition"
 import {
   __resetPendingPlateDeletesForTests,
@@ -40,10 +57,10 @@ import {
   useAddPlateComponent,
   useCreatePlate,
   useDeletePlate,
+  useNoPlateActions,
   usePlateMacros,
   usePlatesRange,
   useRemovePlateComponent,
-  useSetPlateSkipped,
   useSwapPlateComponent,
   useUpdatePlate,
   useUpdatePlateComponentQuantity,
@@ -55,7 +72,6 @@ function makePlate(overrides?: Partial<Plate>): Plate {
     slot_id: 1,
     date: "2026-04-26",
     note: null,
-    skipped: false,
     components: [],
     created_at: "",
     ...overrides,
@@ -340,22 +356,6 @@ describe("plate mutations invalidate nutrition cache", () => {
     })
   })
 
-  it("useSetPlateSkipped", async () => {
-    const qc = seededClient()
-    vi.mocked(setPlateSkipped).mockResolvedValueOnce(
-      makePlate({ skipped: true })
-    )
-
-    const { result } = renderHook(() => useSetPlateSkipped(), {
-      wrapper: createHookWrapper(qc),
-    })
-    await act(async () => {
-      result.current.mutate({ plateId: 1, input: { skipped: true } })
-    })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expectNutritionInvalidated(qc)
-  })
-
   it("useRemovePlateComponent", async () => {
     const qc = seededClient()
     vi.mocked(deletePlateComponent).mockResolvedValueOnce(undefined)
@@ -484,7 +484,6 @@ describe("usePlateMacros", () => {
         {
           plate_id: 42,
           date: "2026-04-28",
-          skipped: false,
           macros: {
             kcal: 620,
             protein: 30,
@@ -543,5 +542,234 @@ describe("usePlateMacros", () => {
       plateKeys.macrosRange("2026-05-04", "2026-05-10")
     )
     expect(state?.isInvalidated).toBe(true)
+  })
+})
+
+describe("useNoPlateActions", () => {
+  const from = "2026-10-26"
+  const to = "2026-11-01"
+
+  function cell(overrides: Partial<AvailabilityCell> = {}): AvailabilityCell {
+    return {
+      date: "2026-10-27",
+      slot_id: 3,
+      mode: "plan",
+      source: "default",
+      preset_id: null,
+      preset_name: null,
+      note: null,
+      ...overrides,
+    }
+  }
+
+  function clientWith(c: AvailabilityCell) {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    qc.setQueryData(availabilityKeys.range(from, to), { items: [c] })
+    return qc
+  }
+
+  const removed = makePlate({
+    id: 55,
+    date: "2026-10-27",
+    slot_id: 3,
+    note: "leftovers",
+    components: [
+      { id: 2, plate_id: 55, food_id: 9, amount: 80, unit: "g", sort_order: 1 },
+      { id: 1, plate_id: 55, food_id: 4, portions: 2, sort_order: 0 },
+    ],
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    __resetPendingPlateDeletesForTests()
+  })
+
+  function undoAction(): () => void {
+    const opts = toastMock.mock.calls.at(-1)?.[1] as {
+      action: { onClick: () => void }
+      duration: number
+    }
+    expect(opts.duration).toBe(6000)
+    return opts.action.onClick
+  }
+
+  it("markNoPlate puts a none override with remove_plate and offers a 6 s undo", async () => {
+    vi.mocked(setAvailabilityOverride).mockResolvedValueOnce({
+      cell: cell({ mode: "none", source: "override" }),
+      removed_plate: removed,
+    })
+    const { result } = renderHook(() => useNoPlateActions(from, to), {
+      wrapper: createHookWrapper(clientWith(cell())),
+    })
+
+    await act(async () => {
+      await result.current.markNoPlate("2026-10-27", 3, "Dinner at Mum's")
+    })
+
+    expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3, {
+      mode: "none",
+      note: "Dinner at Mum's",
+      remove_plate: true,
+    })
+    expect(toastMock).toHaveBeenCalledTimes(1)
+    undoAction()
+  })
+
+  it("undo clears a default-sourced cell, then recreates the plate with its components in order", async () => {
+    vi.mocked(setAvailabilityOverride).mockResolvedValueOnce({
+      cell: cell({ mode: "none", source: "override" }),
+      removed_plate: removed,
+    })
+    vi.mocked(clearAvailabilityOverride).mockResolvedValueOnce(undefined)
+    vi.mocked(createPlate).mockResolvedValueOnce(makePlate({ id: 77 }))
+    vi.mocked(addPlateComponent).mockResolvedValue({
+      id: 1,
+      plate_id: 77,
+      food_id: 4,
+      portions: 2,
+      sort_order: 0,
+    })
+    const { result } = renderHook(() => useNoPlateActions(from, to), {
+      wrapper: createHookWrapper(clientWith(cell())),
+    })
+    await act(async () => {
+      await result.current.markNoPlate("2026-10-27", 3)
+    })
+
+    await act(async () => {
+      undoAction()()
+    })
+
+    await waitFor(() => expect(addPlateComponent).toHaveBeenCalledTimes(2))
+    expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3)
+    expect(createPlate).toHaveBeenCalledWith({
+      date: "2026-10-27",
+      slot_id: 3,
+      note: "leftovers",
+    })
+    const clearOrder = vi.mocked(clearAvailabilityOverride).mock
+      .invocationCallOrder[0]!
+    const createOrder = vi.mocked(createPlate).mock.invocationCallOrder[0]!
+    expect(clearOrder).toBeLessThan(createOrder)
+    expect(vi.mocked(addPlateComponent).mock.calls).toEqual([
+      [77, { food_id: 4, portions: 2 }],
+      [77, { food_id: 9, amount: 80, unit: "g" }],
+    ])
+  })
+
+  it("undo re-puts a previous override's mode, preset and note", async () => {
+    const previous = cell({
+      mode: "routine",
+      source: "override",
+      preset_id: 7,
+      preset_name: "Oats",
+    })
+    vi.mocked(setAvailabilityOverride)
+      .mockResolvedValueOnce({ cell: cell({ mode: "none" }) })
+      .mockResolvedValueOnce({ cell: previous })
+    const { result } = renderHook(() => useNoPlateActions(from, to), {
+      wrapper: createHookWrapper(clientWith(previous)),
+    })
+    await act(async () => {
+      await result.current.markNoPlate("2026-10-27", 3)
+    })
+    await act(async () => {
+      undoAction()()
+    })
+
+    await waitFor(() =>
+      expect(setAvailabilityOverride).toHaveBeenLastCalledWith(
+        "2026-10-27",
+        3,
+        { mode: "routine", preset_id: 7, note: null }
+      )
+    )
+    expect(clearAvailabilityOverride).not.toHaveBeenCalled()
+    expect(createPlate).not.toHaveBeenCalled()
+  })
+
+  it("planMeal over a plan default only clears the override", async () => {
+    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
+    vi.mocked(getAvailabilityRange).mockResolvedValue({
+      items: [cell({ mode: "plan", source: "default" })],
+    })
+    const qc = clientWith(cell({ mode: "none", source: "override" }))
+    const invalidate = vi.spyOn(qc, "invalidateQueries")
+    const { result } = renderHook(() => useNoPlateActions(from, to), {
+      wrapper: createHookWrapper(qc),
+    })
+    await act(async () => {
+      await result.current.planMeal("2026-10-27", 3)
+    })
+    expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3)
+    expect(getAvailabilityRange).toHaveBeenCalledWith(
+      "2026-10-27",
+      "2026-10-27"
+    )
+    expect(setAvailabilityOverride).not.toHaveBeenCalled()
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: availabilityKeys.ranges(),
+    })
+  })
+
+  it("planMeal over a none default clears the override, then puts plan", async () => {
+    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
+    vi.mocked(getAvailabilityRange).mockResolvedValue({
+      items: [cell({ mode: "none", source: "default" })],
+    })
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({ cell: cell() })
+    const { result } = renderHook(() => useNoPlateActions(from, to), {
+      wrapper: createHookWrapper(
+        clientWith(cell({ mode: "none", source: "override" }))
+      ),
+    })
+    await act(async () => {
+      await result.current.planMeal("2026-10-27", 3)
+    })
+    expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3)
+    expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3, {
+      mode: "plan",
+    })
+    const clearOrder = vi.mocked(clearAvailabilityOverride).mock
+      .invocationCallOrder[0]!
+    const putOrder = vi.mocked(setAvailabilityOverride).mock
+      .invocationCallOrder[0]!
+    expect(clearOrder).toBeLessThan(putOrder)
+  })
+
+  it("planMeal over a none default cell puts plan directly", async () => {
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({ cell: cell() })
+    const { result } = renderHook(() => useNoPlateActions(from, to), {
+      wrapper: createHookWrapper(
+        clientWith(cell({ mode: "none", source: "default" }))
+      ),
+    })
+    await act(async () => {
+      await result.current.planMeal("2026-10-27", 3)
+    })
+    expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3, {
+      mode: "plan",
+    })
+    expect(clearAvailabilityOverride).not.toHaveBeenCalled()
+    expect(getAvailabilityRange).not.toHaveBeenCalled()
+  })
+
+  it("editNote keeps the cell none and writes the note", async () => {
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({ cell: cell() })
+    const { result } = renderHook(() => useNoPlateActions(from, to), {
+      wrapper: createHookWrapper(clientWith(cell({ mode: "none" }))),
+    })
+    await act(async () => {
+      await result.current.editNote("2026-10-27", 3, "Canteen")
+    })
+    expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3, {
+      mode: "none",
+      note: "Canteen",
+    })
   })
 })

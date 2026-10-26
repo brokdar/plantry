@@ -409,15 +409,21 @@ type applyResultSkipItem struct {
 }
 
 type applySnapshotPayload struct {
-	CreatedPlateIDs []int64                  `json:"created_plate_ids"`
-	ReplacedPlates  []applySnapshotPlateItem `json:"replaced_plates"`
+	CreatedPlateIDs  []int64                  `json:"created_plate_ids"`
+	ReplacedPlates   []applySnapshotPlateItem `json:"replaced_plates"`
+	CreatedOverrides []applySnapshotCellItem  `json:"created_overrides"`
+}
+
+// applySnapshotCellItem is a "none" override copy week created.
+type applySnapshotCellItem struct {
+	Date   string `json:"date"`
+	SlotID int64  `json:"slot_id"`
 }
 
 type applySnapshotPlateItem struct {
 	Date       string                       `json:"date"`
 	SlotID     int64                        `json:"slot_id"`
 	Note       *string                      `json:"note,omitempty"`
-	Skipped    bool                         `json:"skipped"`
 	Components []applySnapshotComponentItem `json:"components"`
 }
 
@@ -432,23 +438,33 @@ type applySnapshotComponentItem struct {
 }
 
 type applyResponse struct {
-	Created         []applyResultPlateItem    `json:"created"`
-	Replaced        []applyResultReplacedItem `json:"replaced"`
-	SkippedOccupied []applyResultSkipItem     `json:"skipped_occupied"`
-	SkippedNoSlot   []applyResultSkipItem     `json:"skipped_no_slot"`
-	Snapshot        applySnapshotPayload      `json:"snapshot"`
+	Created            []applyResultPlateItem    `json:"created"`
+	Replaced           []applyResultReplacedItem `json:"replaced"`
+	SkippedOccupied    []applyResultSkipItem     `json:"skipped_occupied"`
+	SkippedUnavailable []applyResultSkipItem     `json:"skipped_unavailable"`
+	SkippedNoSlot      []applyResultSkipItem     `json:"skipped_no_slot"`
+	Snapshot           applySnapshotPayload      `json:"snapshot"`
 }
 
 func toApplyResponse(r *preset.ApplyResult) applyResponse {
 	out := applyResponse{
-		Created:         make([]applyResultPlateItem, len(r.Created)),
-		Replaced:        make([]applyResultReplacedItem, len(r.Replaced)),
-		SkippedOccupied: make([]applyResultSkipItem, len(r.SkippedOccupied)),
-		SkippedNoSlot:   make([]applyResultSkipItem, len(r.SkippedNoSlot)),
+		Created:            make([]applyResultPlateItem, len(r.Created)),
+		Replaced:           make([]applyResultReplacedItem, len(r.Replaced)),
+		SkippedOccupied:    make([]applyResultSkipItem, len(r.SkippedOccupied)),
+		SkippedUnavailable: make([]applyResultSkipItem, len(r.SkippedUnavailable)),
+		SkippedNoSlot:      make([]applyResultSkipItem, len(r.SkippedNoSlot)),
 		Snapshot: applySnapshotPayload{
-			CreatedPlateIDs: append([]int64{}, r.Snapshot.CreatedPlateIDs...),
-			ReplacedPlates:  make([]applySnapshotPlateItem, len(r.Snapshot.ReplacedPlates)),
+			CreatedPlateIDs:  append([]int64{}, r.Snapshot.CreatedPlateIDs...),
+			ReplacedPlates:   make([]applySnapshotPlateItem, len(r.Snapshot.ReplacedPlates)),
+			CreatedOverrides: make([]applySnapshotCellItem, len(r.Snapshot.CreatedOverrides)),
 		},
+	}
+	for i, s := range r.SkippedUnavailable {
+		d := s.Date.Format("2006-01-02")
+		out.SkippedUnavailable[i] = applyResultSkipItem{Date: &d, SlotID: s.SlotID}
+	}
+	for i, c := range r.Snapshot.CreatedOverrides {
+		out.Snapshot.CreatedOverrides[i] = applySnapshotCellItem{Date: c.Date.Format("2006-01-02"), SlotID: c.SlotID}
 	}
 	for i, p := range r.Created {
 		out.Created[i] = applyResultPlateItem{ID: p.ID, Date: p.DateString(), SlotID: p.SlotID}
@@ -484,7 +500,6 @@ func toApplyResponse(r *preset.ApplyResult) applyResponse {
 			Date:       p.DateString(),
 			SlotID:     p.SlotID,
 			Note:       p.Note,
-			Skipped:    p.Skipped,
 			Components: comps,
 		}
 	}
@@ -599,9 +614,17 @@ func (h *PresetHandler) UndoApply(w http.ResponseWriter, r *http.Request) {
 			Date:       date,
 			SlotID:     p.SlotID,
 			Note:       p.Note,
-			Skipped:    p.Skipped,
 			Components: comps,
 		}
+	}
+	snap.CreatedOverrides = make([]preset.SkipItem, len(req.Snapshot.CreatedOverrides))
+	for i, c := range req.Snapshot.CreatedOverrides {
+		date, err := time.Parse("2006-01-02", c.Date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "error.invalid_date")
+			return
+		}
+		snap.CreatedOverrides[i] = preset.SkipItem{Date: date, SlotID: c.SlotID}
 	}
 	if err := h.svc.UndoApply(r.Context(), snap); err != nil {
 		status, key := presetError(err)

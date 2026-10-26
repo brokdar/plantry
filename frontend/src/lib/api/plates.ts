@@ -43,7 +43,6 @@ export interface Plate {
   slot_id: number
   date: string
   note: string | null
-  skipped: boolean
   components: PlateComponent[]
   feedback?: PlateFeedback | null
   created_at: string
@@ -157,21 +156,6 @@ export function deletePlate(id: number): Promise<void> {
   return apiFetch(`/plates/${id}`, { method: "DELETE" })
 }
 
-export interface SetPlateSkippedInput {
-  skipped: boolean
-  note?: string | null
-}
-
-export function setPlateSkipped(
-  id: number,
-  input: SetPlateSkippedInput
-): Promise<Plate> {
-  return apiFetch(`/plates/${id}/skip`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  })
-}
-
 export function addPlateComponent(
   plateId: number,
   input: AddPlateComponentInput
@@ -203,7 +187,6 @@ export function deletePlateComponent(
 export interface PlateMacrosEntry {
   plate_id: number
   date: string
-  skipped: boolean
   macros: MacrosResponse
 }
 

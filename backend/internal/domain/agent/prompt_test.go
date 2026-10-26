@@ -10,7 +10,7 @@ import (
 )
 
 func TestPrompt_NoLegacyDayIndex(t *testing.T) {
-	prompt := ComposePrompt(nil, nil, nil, nil, "")
+	prompt := ComposePrompt(nil, nil, nil, nil, nil, "")
 	if strings.Contains(prompt, "0=Monday") {
 		t.Error("system prompt must not contain legacy day-index notation '0=Monday'")
 	}
@@ -21,7 +21,7 @@ func TestPrompt_ContainsDateRange(t *testing.T) {
 	to := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
 	dr := &DateRange{From: from, To: to}
 
-	prompt := ComposePrompt(nil, nil, dr, nil, "")
+	prompt := ComposePrompt(nil, nil, nil, dr, nil, "")
 
 	if !strings.Contains(prompt, "2025-06-09") {
 		t.Errorf("system prompt must contain from date '2025-06-09'; got:\n%s", prompt)
@@ -37,7 +37,7 @@ func TestPrompt_ContainsPlanningPrefs(t *testing.T) {
 	dr := &DateRange{From: from, To: to}
 	prefs := &PlanningPrefs{ShoppingDay: "Saturday", AnchorMode: "today"}
 
-	prompt := ComposePrompt(nil, nil, dr, prefs, "")
+	prompt := ComposePrompt(nil, nil, nil, dr, prefs, "")
 
 	if !strings.Contains(prompt, "Saturday") {
 		t.Errorf("prompt must contain shopping day 'Saturday'; got:\n%s", prompt)
@@ -48,7 +48,7 @@ func TestPrompt_ContainsPlanningPrefs(t *testing.T) {
 }
 
 func TestPrompt_NoGetWeekMention(t *testing.T) {
-	prompt := ComposePrompt(nil, nil, nil, nil, "")
+	prompt := ComposePrompt(nil, nil, nil, nil, nil, "")
 	// The role prefix should guide the model to use get_plates_range, not get_week.
 	// Verify "get_week" does not appear as a recommended tool in the role instructions.
 	if strings.Contains(prompt, "get_week\n") || strings.Contains(prompt, "get_week,") || strings.Contains(prompt, "get_week)") {
@@ -87,6 +87,54 @@ func TestModeHint_ReplaceAll_PlansForVariety(t *testing.T) {
 	}
 }
 
+func TestModeHint_NoPlateCellsInsteadOfSkipped(t *testing.T) {
+	for _, mode := range []string{"fill_empty", "replace_all"} {
+		h := modeHint(mode)
+		if !strings.Contains(h, "never create plates in No-plate cells") {
+			t.Errorf("%s mode hint must forbid plates in No-plate cells; got:\n%s", mode, h)
+		}
+		if strings.Contains(strings.ToLower(h), "skipped") {
+			t.Errorf("%s mode hint must not mention skipped plates; got:\n%s", mode, h)
+		}
+	}
+}
+
+func TestPrompt_ManyCellsStayWithinBudget(t *testing.T) {
+	dr := &DateRange{Today: day(2026, 10, 1), From: day(2026, 10, 1), To: day(2026, 10, 31)}
+	long := strings.Repeat("Kantine im Büro, bitte nichts planen. ", 5)
+	var cells []PromptCell
+	var plates []PromptPlate
+	for d := range 31 {
+		for s := range 4 {
+			cells = append(cells, PromptCell{
+				Date: day(2026, 10, 1+d), SlotID: int64(s + 1), Slot: "slot.lunch", Mode: "none", Note: long,
+			})
+			plates = append(plates, PromptPlate{
+				ID: int64(d*4 + s + 1), Date: day(2026, 10, 1+d), SlotID: int64(s + 10), Slot: "slot.dinner",
+				Foods: []string{"Rindergulasch mit Spätzle nach Großmutters Art"},
+			})
+		}
+	}
+
+	prompt := ComposePrompt(nil, plates, cells, dr, nil, modeHint("fill_empty"))
+
+	if len(prompt) > promptCharBudget {
+		t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)
+	}
+	if !strings.HasSuffix(prompt, toolRules) {
+		t.Error("an over-budget prompt must keep the tool rules verbatim")
+	}
+	if !strings.Contains(prompt, "No-plate and routine cells:\n") {
+		t.Error("the cells section must be present")
+	}
+	if !strings.Contains(prompt, "more cells omitted)\n") {
+		t.Errorf("prompt must say how many cells were omitted; got:\n%s", prompt)
+	}
+	if !utf8.ValidString(prompt) {
+		t.Error("prompt must be valid UTF-8")
+	}
+}
+
 func day(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
 
 // dateSection returns the prompt from the today line up to the tool rules.
@@ -105,6 +153,7 @@ func TestPrompt_DateSection(t *testing.T) {
 		name   string
 		dr     DateRange
 		plates []PromptPlate
+		cells  []PromptCell
 		prefs  *PlanningPrefs
 		want   string
 	}{
@@ -113,7 +162,12 @@ func TestPrompt_DateSection(t *testing.T) {
 			dr:   DateRange{Today: day(2026, 10, 26), From: day(2026, 10, 31), To: day(2026, 11, 6)},
 			plates: []PromptPlate{
 				{ID: 5, Date: day(2026, 10, 31), SlotID: 2, Slot: "slot.dinner", Foods: []string{"Pasta", "Green salad"}},
-				{ID: 6, Date: day(2026, 11, 2), SlotID: 1, Slot: "slot.lunch", Skipped: true},
+				{ID: 6, Date: day(2026, 11, 3), SlotID: 2, Slot: "slot.dinner"},
+			},
+			cells: []PromptCell{
+				{Date: day(2026, 11, 2), SlotID: 1, Slot: "slot.lunch", Mode: "none", Note: "canteen"},
+				{Date: day(2026, 11, 3), SlotID: 3, Slot: "slot.breakfast", Mode: "routine", PresetName: "Oatmeal"},
+				{Date: day(2026, 11, 4), SlotID: 1, Mode: "none"},
 			},
 			want: `Today is Monday, 2026-10-26.
 Planning window: Saturday 2026-10-31 to Friday 2026-11-06 (7 days).
@@ -125,9 +179,13 @@ Dates in the window:
 - Wednesday 2026-11-04
 - Thursday 2026-11-05
 - Friday 2026-11-06
+No-plate and routine cells:
+- Monday 2026-11-02 slot.lunch (slot_id=1): no plate (canteen)
+- Tuesday 2026-11-03 slot.breakfast (slot_id=3): routine (preset: Oatmeal)
+- Wednesday 2026-11-04 (slot_id=1): no plate
 Plates already planned:
 - 2026-10-31 slot.dinner (plate_id=5, slot_id=2): Pasta, Green salad
-- 2026-11-02 slot.lunch (plate_id=6, slot_id=1): skipped
+- 2026-11-03 slot.dinner (plate_id=6, slot_id=2): (no foods)
 `,
 		},
 		{
@@ -159,7 +217,7 @@ This window has no plates yet.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := dateSection(t, ComposePrompt(nil, tt.plates, &tt.dr, tt.prefs, ""))
+			got := dateSection(t, ComposePrompt(nil, tt.plates, tt.cells, &tt.dr, tt.prefs, ""))
 			if got != tt.want {
 				t.Errorf("date section mismatch\ngot:\n%s\nwant:\n%s", got, tt.want)
 			}
@@ -174,7 +232,7 @@ func TestPrompt_PlateLineFallbacks(t *testing.T) {
 		{ID: 8, Date: day(2026, 10, 31), SlotID: 9, Foods: []string{"Pasta"}},
 	}
 
-	prompt := ComposePrompt(nil, plates, dr, nil, "")
+	prompt := ComposePrompt(nil, plates, nil, dr, nil, "")
 
 	for _, want := range []string{
 		"- 2026-10-31 slot.dinner (plate_id=7, slot_id=2): (no foods)\n",
@@ -209,7 +267,7 @@ func TestPrompt_FullMonthOfPlatesStaysWithinBudget(t *testing.T) {
 			if mode != "" {
 				hint = modeHint(mode)
 			}
-			prompt := ComposePrompt(nil, plates, dr, nil, hint)
+			prompt := ComposePrompt(nil, plates, nil, dr, nil, hint)
 
 			if len(prompt) > promptCharBudget {
 				t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)
@@ -234,7 +292,7 @@ func TestPrompt_OversizedProfileCutsOnRuneBoundary(t *testing.T) {
 	long := strings.Repeat("Ich esse gern Käse, Möhren und Brötchen. ", 600)
 	p := &profile.Profile{SystemPrompt: &long}
 
-	prompt := ComposePrompt(p, nil, nil, nil, "")
+	prompt := ComposePrompt(p, nil, nil, nil, nil, "")
 
 	if len(prompt) > promptCharBudget {
 		t.Errorf("prompt is %d bytes, budget is %d", len(prompt), promptCharBudget)

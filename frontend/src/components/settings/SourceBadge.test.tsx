@@ -37,6 +37,28 @@ describe("SourceBadge", () => {
     expect(el.textContent?.toLowerCase()).toContain("default")
   })
 
+  it.each([
+    ["db", "Database"],
+    ["env", "Env var"],
+    ["default", "Default"],
+  ] as const)(
+    "labels source=%s in sentence case without letter-spacing",
+    async (source, label) => {
+      const { findByTestId } = renderBadge({ source })
+      const el = await findByTestId(`source-badge-${source}`)
+      expect(el).toHaveTextContent(new RegExp(`^${label}$`))
+      expect(el.className).not.toMatch(/uppercase|tracking-/)
+    }
+  )
+
+  it("uses Cookbook tokens only", async () => {
+    const { findByTestId } = renderBadge({ source: "env" })
+    const el = await findByTestId("source-badge-env")
+    expect(el.className).not.toMatch(
+      /on-surface|tertiary|outline|text-primary|bg-primary/
+    )
+  })
+
   it("uses a distinct test id per source so assertions stay precise", async () => {
     const { findByTestId, queryByTestId } = renderBadge({
       source: "db",
