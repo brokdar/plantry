@@ -69,6 +69,20 @@ describe("AvailabilityGrid", () => {
     expect(grid.parentElement).toHaveClass("relative", "overflow-x-auto")
   })
 
+  it("keeps its minimum width at every breakpoint and wraps state words", async () => {
+    // jsdom has no layout: guard the classes that keep cells readable. The
+    // grid scrolls in its box below its minimum width instead of shrinking
+    // cells to "Pla…".
+    renderWithRouter(<Harness initial={{ "0:2": { mode: "none" } }} />)
+    const grid = await screen.findByRole("grid", { name: "Default week" })
+    expect(grid).toHaveClass("min-w-[32rem]", "table-fixed")
+    expect(grid.className).not.toMatch(/\b\w+:min-w-0\b/)
+    const state = within(await cell("Monday lunch, No plate")).getByText(
+      "No plate"
+    )
+    expect(state).not.toHaveClass("truncate")
+  })
+
   it("names every cell in full and shows the state as text", async () => {
     renderWithRouter(
       <Harness
@@ -110,7 +124,7 @@ describe("AvailabilityGrid", () => {
     expect(await cell("Monday lunch, Plan")).toBeInTheDocument()
   })
 
-  it("cancelling the picker leaves the cell unchanged", async () => {
+  it("Escape on the picker skips Routine and moves on to Plan", async () => {
     const user = userEvent.setup()
     const spy = vi.fn()
     renderWithRouter(
@@ -122,11 +136,12 @@ describe("AvailabilityGrid", () => {
     await user.keyboard("{Escape}")
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
-    expect(spy).not.toHaveBeenCalled()
-    expect(await cell("Monday lunch, No plate")).toBeInTheDocument()
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenLastCalledWith("0", 2, { mode: "plan" })
+    expect(await cell("Monday lunch, Plan")).toHaveFocus()
   })
 
-  it("the picker's cancel button also leaves the cell unchanged", async () => {
+  it("the picker's cancel button also moves on to Plan", async () => {
     const user = userEvent.setup()
     const spy = vi.fn()
     renderWithRouter(
@@ -137,18 +152,45 @@ describe("AvailabilityGrid", () => {
     const picker = await screen.findByRole("dialog", { name: "Pick a routine" })
     await user.click(within(picker).getByRole("button", { name: "Cancel" }))
 
-    expect(spy).not.toHaveBeenCalled()
-    expect(await cell("Monday lunch, No plate")).toBeInTheDocument()
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenLastCalledWith("0", 2, { mode: "plan" })
+    expect(await cell("Monday lunch, Plan")).toBeInTheDocument()
   })
 
-  it("shows an empty state linking to routines when there are no presets", async () => {
+  it("picking a routine is the only change the picker makes", async () => {
     const user = userEvent.setup()
+    const spy = vi.fn()
     renderWithRouter(
-      <Harness presets={[]} initial={{ "0:2": { mode: "none" } }} />
+      <Harness spy={spy} initial={{ "0:2": { mode: "none" } }} />
     )
     await user.click(await cell("Monday lunch, No plate"))
     const picker = await screen.findByRole("dialog", { name: "Pick a routine" })
-    expect(within(picker).getByRole("link")).toHaveAttribute("href", "/presets")
+    await user.click(
+      within(picker).getByRole("button", { name: "Overnight oats" })
+    )
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenLastCalledWith("0", 2, {
+      mode: "routine",
+      presetId: 7,
+    })
+  })
+
+  it("without routines, No plate cycles straight back to Plan", async () => {
+    const user = userEvent.setup()
+    const spy = vi.fn()
+    renderWithRouter(<Harness spy={spy} presets={[]} />)
+
+    await user.click(await cell("Monday lunch, Plan"))
+    const none = await cell("Monday lunch, No plate")
+    expect(none).not.toHaveAttribute("aria-haspopup")
+    await user.click(none)
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(spy.mock.calls).toEqual([
+      ["0", 2, { mode: "none" }],
+      ["0", 2, { mode: "plan" }],
+    ])
+    expect(await cell("Monday lunch, Plan")).toBeInTheDocument()
   })
 
   it("emits onChange with the column key, slot id and next value", async () => {

@@ -25,6 +25,7 @@ import {
   getAvailabilityRange,
   setAvailabilityDefaults,
   setAvailabilityOverride,
+  type AvailabilityDefault,
 } from "@/lib/api/availability"
 import { ApiError } from "@/lib/api/client"
 import { toastError } from "@/lib/toast"
@@ -100,6 +101,69 @@ describe("availability queries", () => {
       items: mockAvailabilityDefaults,
     })
     expect(invalidatedKeys(invalidate)).toEqual([availabilityKeys.ranges()])
+  })
+
+  it("useSetAvailabilityDefaults applies quick edits at once and the last PUT holds all of them", async () => {
+    const plan = (weekday: number): AvailabilityDefault => ({
+      weekday,
+      slot_id: 1,
+      mode: "plan" as const,
+      preset_id: null,
+    })
+    const stored = [0, 1, 2].map(plan)
+    const sent: AvailabilityDefault[][] = []
+    vi.mocked(setAvailabilityDefaults).mockImplementation(async (items) => {
+      sent.push(items)
+      return { items }
+    })
+    const { qc, wrapper } = setup()
+    qc.setQueryData(availabilityKeys.defaults(), { items: stored })
+    const { result } = renderHook(() => useSetAvailabilityDefaults(), {
+      wrapper,
+    })
+
+    // Three edits in one tick, each against the same (stale) render.
+    const none = (weekday: number) => (current: AvailabilityDefault[]) =>
+      current.map((c) =>
+        c.weekday === weekday ? { ...c, mode: "none" as const } : c
+      )
+    act(() => {
+      result.current.mutate(none(0))
+      result.current.mutate(none(1))
+      result.current.mutate(none(2))
+    })
+    const allNone = [0, 1, 2].map((weekday) => ({
+      ...plan(weekday),
+      mode: "none",
+    }))
+    // Optimistic: the cache shows all three before any response.
+    expect(qc.getQueryData(availabilityKeys.defaults())).toEqual({
+      items: allNone,
+    })
+
+    await waitFor(() => expect(qc.isMutating()).toBe(0))
+    // Serialized PUTs; the last one carries every change.
+    expect(sent.at(-1)).toEqual(allNone)
+    expect(qc.getQueryData(availabilityKeys.defaults())).toEqual({
+      items: allNone,
+    })
+  })
+
+  it("useSetAvailabilityDefaults refetches the stored grid when a save fails", async () => {
+    vi.mocked(setAvailabilityDefaults).mockRejectedValueOnce(
+      new ApiError(500, "error.server")
+    )
+    const { wrapper, invalidate } = setup()
+    const { result } = renderHook(() => useSetAvailabilityDefaults(), {
+      wrapper,
+    })
+    await act(() =>
+      result.current.mutateAsync(mockAvailabilityDefaults).catch(() => {})
+    )
+    expect(toastError).toHaveBeenCalled()
+    expect(invalidatedKeys(invalidate)).toContainEqual(
+      availabilityKeys.defaults()
+    )
   })
 
   it("useSetAvailabilityOverride invalidates ranges but not plates without removed_plate", async () => {

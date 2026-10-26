@@ -13,3 +13,11 @@ declare module "@tanstack/react-router" {
     router: typeof router
   }
 }
+
+declare module "@tanstack/history" {
+  interface HistoryState {
+    /** AppShell moves focus to `<main>` on arrival (e.g. from the setup
+     *  wizard, which renders without the shell). */
+    focusMain?: boolean
+  }
+}

@@ -200,7 +200,8 @@ describe("SetupWizard", () => {
     expect(server.settings.get("plan.shopping_day")).toBe("5")
     expect(setSetting).toHaveBeenCalledTimes(1)
 
-    // 7 Assistant: no key yet, so the calm note.
+    // 7 Assistant: no key yet, so the calm note. Skip would equal Next.
+    expect(screen.queryByTestId("setup-skip")).toBeNull()
     expect(
       screen.getByText("You can add this later. Planning works without it.")
     ).toBeInTheDocument()
@@ -272,7 +273,10 @@ describe("SetupWizard", () => {
 
     await u.click(screen.getByRole("button", { name: "Add recipes" }))
     await waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({ to: "/components" })
+      expect(navigate).toHaveBeenCalledWith({
+        to: "/components",
+        state: { focusMain: true },
+      })
     )
     expect(completeSetup).toHaveBeenCalledTimes(1)
     expect(vi.mocked(completeSetup).mock.invocationCallOrder[0]).toBeLessThan(
@@ -480,6 +484,81 @@ describe("SetupWizard", () => {
         3,
         { name_key: "slot.dinner", icon: "Moon", sort_order: 2, active: true },
       ],
+    ])
+  })
+
+  it("switching to German in step 1 shows German meal names and keeps the slot keys", async () => {
+    serve()
+    const u = user()
+    renderWizard()
+    await screen.findByText("Step 1 of 7")
+    await u.click(screen.getByRole("radio", { name: "Deutsch" }))
+    await u.click(screen.getByTestId("setup-next"))
+    await screen.findByText("Schritt 2 von 7")
+    for (const step of [3, 4]) {
+      await u.click(screen.getByTestId("setup-next"))
+      await screen.findByText(`Schritt ${step} von 7`)
+    }
+
+    expect(screen.getByLabelText("Name der Mahlzeit 1")).toHaveValue(
+      "Frühstück"
+    )
+    expect(screen.getByLabelText("Name der Mahlzeit 2")).toHaveValue(
+      "Mittagessen"
+    )
+    expect(screen.getByLabelText("Name der Mahlzeit 3")).toHaveValue(
+      "Abendessen"
+    )
+    await u.click(screen.getByTestId("setup-next"))
+    await screen.findByText("Schritt 5 von 7")
+    expect(
+      vi.mocked(createTimeSlot).mock.calls.map((c) => c[0].name_key)
+    ).toEqual(["slot.breakfast", "slot.lunch", "slot.dinner"])
+  })
+
+  it("a re-run in German keeps stored slot keys and stores a real rename", async () => {
+    serve()
+    await i18n.changeLanguage("de")
+    vi.mocked(listTimeSlots).mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          name_key: "slot.breakfast",
+          icon: "Coffee",
+          sort_order: 0,
+          active: true,
+        },
+        {
+          id: 2,
+          name_key: "slot.dinner",
+          icon: "Moon",
+          sort_order: 1,
+          active: true,
+        },
+      ],
+    })
+    const u = user()
+    renderWizard()
+    await screen.findByText("Schritt 1 von 7")
+    for (const step of [2, 3, 4]) {
+      await u.click(screen.getByTestId("setup-next"))
+      await screen.findByText(`Schritt ${step} von 7`)
+    }
+    expect(screen.getByLabelText("Name der Mahlzeit 1")).toHaveValue(
+      "Frühstück"
+    )
+    const dinner = screen.getByLabelText("Name der Mahlzeit 2")
+    await u.clear(dinner)
+    await u.type(dinner, "Brotzeit")
+    await u.click(screen.getByTestId("setup-next"))
+    await screen.findByText("Schritt 5 von 7")
+    expect(
+      vi
+        .mocked(updateTimeSlot)
+        .mock.calls.map(([id, input]) => [id, input.name_key])
+    ).toEqual([
+      [1, "slot.breakfast"],
+      [2, "Brotzeit"],
     ])
   })
 

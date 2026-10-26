@@ -11,7 +11,7 @@ import { usePresets } from "@/lib/queries/presets"
 import { SLOT_ICONS, SLOT_ICON_FALLBACK } from "@/lib/slot-icons"
 
 import { SetupField } from "./SetupField"
-import type { MealsDraft, SlotDraft } from "./wizard-draft"
+import { slotDraftName, type MealsDraft, type SlotDraft } from "./wizard-draft"
 
 const PRESET_PARAMS = { sort: "name", limit: 200 } as const
 
@@ -49,7 +49,7 @@ export function MealsStep({
 
   const gridSlots = slots
     .filter((s) => s.active)
-    .map((s) => ({ id: s.id, label: s.label.trim() || "—" }))
+    .map((s) => ({ id: s.id, label: slotDraftName(t, s).trim() || "—" }))
   const gridLabel = t("settings_page.meals.grid_label")
 
   return (
@@ -61,7 +61,8 @@ export function MealsStep({
         <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-panel">
           {slots.map((slot, i) => {
             const Icon = SLOT_ICONS[slot.icon] ?? SLOT_ICON_FALLBACK
-            const name = slot.label.trim() || t("setup.meals.unnamed")
+            const shown = slotDraftName(t, slot)
+            const name = shown.trim() || t("setup.meals.unnamed")
             return (
               <li
                 key={slot.id}
@@ -74,10 +75,10 @@ export function MealsStep({
                   aria-hidden
                 />
                 <Input
-                  value={slot.label}
+                  value={shown}
                   onChange={(e) => setSlot(i, { label: e.target.value })}
                   aria-label={t("setup.meals.name_label", { n: i + 1 })}
-                  aria-invalid={slot.label.trim() === "" || undefined}
+                  aria-invalid={shown.trim() === "" || undefined}
                   className="min-w-0 flex-1 pointer-coarse:h-11"
                 />
                 <Button

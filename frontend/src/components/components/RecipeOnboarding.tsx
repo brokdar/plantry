@@ -77,7 +77,7 @@ export function RecipeOnboarding({ count, target }: RecipeOnboardingProps) {
             count,
             target,
           })}
-          className="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-panel-sunken"
+          className="h-2 w-full max-w-md overflow-hidden rounded-full border border-ink-muted bg-panel"
         >
           <div
             className="h-full rounded-full bg-accent transition-[width] duration-200 ease-out"
@@ -131,7 +131,7 @@ function OptionCard({
     <div className="flex flex-col items-start gap-3 rounded-lg border border-line bg-panel p-4">
       <Icon className="size-5 text-accent" strokeWidth={1.5} aria-hidden />
       <div className="flex flex-col gap-1">
-        <h3 className="text-h3 font-semibold text-ink">{title}</h3>
+        <h2 className="text-h3 font-semibold text-ink">{title}</h2>
         <p className="max-w-[60ch] text-small text-ink-muted">{body}</p>
       </div>
       <div className="mt-auto pt-1">{action}</div>

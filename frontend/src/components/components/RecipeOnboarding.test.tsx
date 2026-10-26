@@ -26,12 +26,15 @@ describe("RecipeOnboarding", () => {
     expect(bar).toHaveAttribute("aria-valuenow", "4")
     expect(bar).toHaveAttribute("aria-valuemax", "10")
     expect(bar).toHaveAttribute("aria-valuetext", "4 of 10 recipes")
+    // The empty track is outlined so 0/10 still shows a bar (≥3:1 on ground).
+    expect(bar).toHaveClass("border", "border-ink-muted")
 
+    // Directly under the page h1.
     expect(
-      screen.getByRole("heading", { name: "Import from a link" })
+      screen.getByRole("heading", { level: 2, name: "Import from a link" })
     ).toBeInTheDocument()
     expect(
-      screen.getByRole("heading", { name: "Create manually" })
+      screen.getByRole("heading", { level: 2, name: "Create manually" })
     ).toBeInTheDocument()
     expect(
       screen.getByRole("link", { name: "Import a recipe" })
