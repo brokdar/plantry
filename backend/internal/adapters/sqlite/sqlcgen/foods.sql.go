@@ -10,6 +10,17 @@ import (
 	"database/sql"
 )
 
+const countComposedFoods = `-- name: CountComposedFoods :one
+SELECT COUNT(*) FROM foods WHERE kind = 'composed'
+`
+
+func (q *Queries) CountComposedFoods(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countComposedFoods)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createFood = `-- name: CreateFood :one
 INSERT INTO foods (
     name, kind, role, source, barcode, off_id, fdc_id, image_path,

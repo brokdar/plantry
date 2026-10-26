@@ -40,6 +40,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	settingsdom "github.com/jaltszeimer/plantry/backend/internal/domain/settings"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/setup"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
@@ -236,6 +237,7 @@ func run() error {
 		NutritionRange: handlers.NewNutritionRangeHandler(plateSvc, nutritionResolver),
 		PlateMacros:    handlers.NewPlateMacrosHandler(plateSvc, nutritionResolver),
 		Availability:   handlers.NewAvailabilityHandler(availabilitySvc),
+		Setup:          handlers.NewSetupHandler(setup.NewService(settingsSvc, foodRepo)),
 		DevMode:        cfg.DevMode,
 	}
 	handler := transport.NewRouter(logger, static, h)

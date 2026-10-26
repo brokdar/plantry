@@ -270,3 +270,25 @@ func TestFoodRepo_Portions_UpsertAndDelete(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, portions)
 }
+
+func TestFoodRepo_CountComposedFoods(t *testing.T) {
+	repo := newFoodRepo(t)
+	ctx := context.Background()
+
+	n, err := repo.CountComposedFoods(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), n)
+
+	leafID := createTestLeaf(t, repo, "Rice")
+	createTestLeaf(t, repo, "Beans")
+	for _, name := range []string{"Rice Bowl", "Bean Stew"} {
+		require.NoError(t, repo.Create(ctx, &food.Food{
+			Name: name, Kind: food.KindComposed, ReferencePortions: ptrF(1),
+			Children: []food.FoodComponent{{ChildID: leafID, Amount: 100, Unit: "g", Grams: 100}},
+		}))
+	}
+
+	n, err = repo.CountComposedFoods(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), n)
+}
