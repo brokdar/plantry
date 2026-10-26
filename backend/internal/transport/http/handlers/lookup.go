@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
@@ -15,11 +17,12 @@ import (
 type LookupHandler struct {
 	resolver *food.Resolver
 	svc      *food.Service
+	fdc      food.FoodByIDProvider
 }
 
 // NewLookupHandler constructs a LookupHandler.
-func NewLookupHandler(resolver *food.Resolver, svc *food.Service) *LookupHandler {
-	return &LookupHandler{resolver: resolver, svc: svc}
+func NewLookupHandler(resolver *food.Resolver, svc *food.Service, fdc food.FoodByIDProvider) *LookupHandler {
+	return &LookupHandler{resolver: resolver, svc: svc, fdc: fdc}
 }
 
 type lookupResponse struct {
@@ -173,33 +176,43 @@ func (h *LookupHandler) Refetch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var barcode, query, lang string
-	lang = r.URL.Query().Get("lang")
+	lang := r.URL.Query().Get("lang")
 	if lang == "" {
 		lang = "en"
 	}
+	var candidate food.Candidate
 	switch {
 	case existing.Barcode != nil && *existing.Barcode != "":
-		barcode = *existing.Barcode
+		results, _, err := h.resolver.Lookup(r.Context(), *existing.Barcode, "", lang, 1)
+		if err != nil {
+			status, key := toHTTP(err)
+			writeError(w, status, key)
+			return
+		}
+		if len(results) == 0 {
+			writeError(w, http.StatusNotFound, "error.food.refetch.no_results")
+			return
+		}
+		candidate = results[0]
 	case existing.FdcID != nil && *existing.FdcID != "":
-		query = *existing.FdcID
+		fdcID, err := strconv.Atoi(*existing.FdcID)
+		if err != nil {
+			status, key := toHTTP(fmt.Errorf("%w: invalid fdc_id %q", domain.ErrInvalidInput, *existing.FdcID))
+			writeError(w, status, key)
+			return
+		}
+		candidate, err = h.fdc.GetByID(r.Context(), fdcID)
+		if err != nil {
+			status, key := toHTTP(err)
+			writeError(w, status, key)
+			return
+		}
 	default:
 		writeError(w, http.StatusBadRequest, "error.food.refetch.no_source")
 		return
 	}
 
-	results, _, err := h.resolver.Lookup(r.Context(), barcode, query, lang, 1)
-	if err != nil {
-		status, key := toHTTP(err)
-		writeError(w, status, key)
-		return
-	}
-	if len(results) == 0 {
-		writeError(w, http.StatusNotFound, "error.food.refetch.no_results")
-		return
-	}
-
-	applyCandidateNutrients(existing, &results[0])
+	applyCandidateNutrients(existing, &candidate)
 	if err := h.svc.Update(r.Context(), existing); err != nil {
 		status, key := toHTTP(err)
 		writeError(w, status, key)

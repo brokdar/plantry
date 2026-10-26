@@ -199,7 +199,7 @@ func run() error {
 
 	h := transport.Handlers{
 		Foods:          handlers.NewFoodHandler(foodSvc, nutritionResolver, imgStore),
-		Lookup:         handlers.NewLookupHandler(resolver, foodSvc),
+		Lookup:         handlers.NewLookupHandler(resolver, foodSvc, fdcProvider),
 		ImageProxy:     handlers.NewImageProxyHandler(),
 		ImageStore:     imgStore,
 		Slots:          handlers.NewSlotHandler(slotSvc),

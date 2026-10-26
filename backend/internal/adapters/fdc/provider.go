@@ -25,6 +25,15 @@ func (p *Provider) SearchByName(ctx context.Context, query string, limit int) ([
 	return toDomainCandidates(results), nil
 }
 
+// GetByID fetches a single FDC food by ID and normalises its nutrients.
+func (p *Provider) GetByID(ctx context.Context, fdcID int) (food.Candidate, error) {
+	detail, err := p.client.GetFood(ctx, fdcID)
+	if err != nil {
+		return food.Candidate{}, err
+	}
+	return toDomainCandidates([]Candidate{detail.Candidate()})[0], nil
+}
+
 // GetFoodPortions fetches per-unit gram weights for a single FDC food. This
 // is what supplies ingredient-specific density data (e.g., 1 tbsp honey = 21g)
 // to the portions table.

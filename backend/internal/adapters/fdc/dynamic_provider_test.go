@@ -10,6 +10,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fdc"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 )
 
@@ -57,4 +58,12 @@ func TestDynamicProvider_EmptyKey_ReturnsEmptyResults(t *testing.T) {
 	got, err := p.SearchByName(context.Background(), "chicken", 5)
 	require.NoError(t, err)
 	assert.Empty(t, got)
+}
+
+func TestDynamicProvider_GetByID_EmptyKey_ReturnsLookupFailed(t *testing.T) {
+	svc := settings.NewService(newMemRepo(), settings.NewEnvSnapshot(nil), newTestCipher(t))
+	p := fdc.NewDynamicProvider(svc)
+
+	_, err := p.GetByID(context.Background(), 1234)
+	require.ErrorIs(t, err, domain.ErrLookupFailed)
 }
