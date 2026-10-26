@@ -673,7 +673,11 @@
     "total_count_other": "{{count}} Rezepte",
     "load_more": "Mehr laden",
     "empty_title": "Noch keine Rezepte",
-    "no_results_body": "Passe die Filter an oder erstelle ein neues Rezept."
+    "no_results_body": "Passe die Filter an oder erstelle ein neues Rezept.",
+    "source_url": "Quell-URL",
+    "source_url_placeholder": "https://…",
+    "description": "Beschreibung",
+    "description_hint": "Text, der mit dem Rezept kam. Erscheint gedämpft unter deinen Notizen."
   },
   "lookup": {
     "title": "Zutat finden",
@@ -1134,5 +1138,22 @@
       "ipv4": "Ungültige IPv4-Adresse",
       "ipv6": "Ungültige IPv6-Adresse"
     }
+  },
+  "recipe_detail": {
+    "favorite": "Favorit",
+    "source": "Von {{host}}",
+    "portions": "Portionen",
+    "kcal_per_portion": "kcal pro Portion",
+    "protein_per_portion": "Eiweiß pro Portion",
+    "grams": "{{value}} g",
+    "no_ingredients": "Noch keine Zutaten.",
+    "no_steps": "Noch keine Schritte.",
+    "my_notes": "Meine Notizen",
+    "description": "Beschreibung aus der Quelle"
+  },
+  "nutrition_warning": {
+    "title": "Nährwerte unvollständig",
+    "body_one": "In kcal und Makros fehlt 1 Zutat ohne Nährwerte:",
+    "body_other": "In kcal und Makros fehlen {{count}} Zutaten ohne Nährwerte:"
   }
 }

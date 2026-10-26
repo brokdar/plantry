@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
-import { screen } from "@testing-library/react"
+import { screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
 import { ComponentEditor } from "./ComponentEditor"
 import { mockChickenCurry } from "@/test/fixtures"
@@ -12,7 +13,19 @@ vi.mock("@/lib/api/foods", () => ({
   listPortions: vi.fn().mockResolvedValue({ items: [] }),
   listVariants: vi.fn().mockResolvedValue({ items: [] }),
   createVariant: vi.fn(),
+  getFoodNutrition: vi.fn().mockResolvedValue({
+    kcal: 0,
+    protein: 0,
+    fat: 0,
+    carbs: 0,
+    fiber: 0,
+    sodium: 0,
+    complete: true,
+    missing: [],
+  }),
 }))
+
+import { getFoodNutrition, updateFood } from "@/lib/api/foods"
 
 describe("ComponentEditor", () => {
   it("renders empty form in create mode with role selector", async () => {
@@ -38,5 +51,73 @@ describe("ComponentEditor", () => {
 
     expect(await screen.findByDisplayValue("Cook chicken")).toBeInTheDocument()
     expect(screen.getByDisplayValue("Add curry paste")).toBeInTheDocument()
+  })
+
+  it("saves the source URL and description", async () => {
+    vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)
+    const user = userEvent.setup()
+    renderWithRouter(<ComponentEditor component={mockChickenCurry} />)
+
+    await user.type(
+      await screen.findByLabelText("Source URL"),
+      "https://example.com/curry"
+    )
+    await user.type(
+      screen.getByLabelText("Description"),
+      "Imported blurb about the dish."
+    )
+    await user.click(screen.getByRole("button", { name: /save/i }))
+
+    await vi.waitFor(() => expect(updateFood).toHaveBeenCalled())
+    expect(vi.mocked(updateFood).mock.calls[0]).toEqual([
+      mockChickenCurry.id,
+      expect.objectContaining({
+        source_url: "https://example.com/curry",
+        description: "Imported blurb about the dish.",
+      }),
+    ])
+  })
+
+  it("sends empty strings to clear the source URL and description", async () => {
+    vi.mocked(updateFood).mockClear()
+    vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)
+    const user = userEvent.setup()
+    renderWithRouter(
+      <ComponentEditor
+        component={{
+          ...mockChickenCurry,
+          source_url: "https://example.com/old",
+          description: "Old blurb",
+        }}
+      />
+    )
+
+    await user.clear(await screen.findByLabelText("Source URL"))
+    await user.clear(screen.getByLabelText("Description"))
+    await user.click(screen.getByRole("button", { name: /save/i }))
+
+    await vi.waitFor(() => expect(updateFood).toHaveBeenCalled())
+    expect(vi.mocked(updateFood).mock.calls[0][1]).toEqual(
+      expect.objectContaining({ source_url: "", description: "" })
+    )
+  })
+
+  it("shows the completeness warning for incomplete saved nutrition", async () => {
+    vi.mocked(getFoodNutrition).mockResolvedValueOnce({
+      kcal: 0,
+      protein: 0,
+      fat: 0,
+      carbs: 0,
+      fiber: 0,
+      sodium: 0,
+      complete: false,
+      missing: [{ id: 1, name: "Chicken breast" }],
+    })
+    renderWithRouter(<ComponentEditor component={mockChickenCurry} />)
+
+    const warning = await screen.findByTestId("nutrition-completeness-warning")
+    expect(
+      within(warning).getByRole("link", { name: "Chicken breast" })
+    ).toHaveAttribute("href", "/ingredients/1/edit")
   })
 })

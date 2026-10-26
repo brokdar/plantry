@@ -153,6 +153,55 @@ test.describe("Component Library", () => {
     }
   })
 
+  test("opening a card shows the recipe detail and Edit reaches the editor", async ({
+    page,
+  }) => {
+    const tag = uid()
+    // The stub leaf has no macros, so the recipe's nutrition is incomplete.
+    const { composed: comp, stub } = await seedComposedWithStub(
+      {
+        name: `Detail ${tag}`,
+        role: "main",
+        instructions: [{ step_number: 1, text: `Simmer gently ${tag}` }],
+      },
+      tag
+    )
+
+    try {
+      await page.goto("/components")
+      const searchResp = page.waitForResponse(
+        (res) =>
+          res.url().includes("/api/foods") &&
+          res.url().includes(`search=${tag}`)
+      )
+      await page.getByTestId("catalog-search").fill(tag)
+      await searchResp
+
+      await page
+        .getByTestId(`component-card-${comp.id}`)
+        .getByRole("link", { name: `Detail ${tag}`, exact: true })
+        .click()
+
+      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}$`))
+      await expect(
+        page.getByRole("heading", { level: 1, name: `Detail ${tag}` })
+      ).toBeVisible()
+      await expect(page.getByText(`Simmer gently ${tag}`)).toBeVisible()
+
+      const warning = page.getByTestId("nutrition-completeness-warning")
+      await expect(
+        warning.getByRole("link", { name: stub.name, exact: true })
+      ).toHaveAttribute("href", `/ingredients/${stub.id}/edit`)
+
+      await page.getByRole("link", { name: "Edit", exact: true }).click()
+      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}/edit$`))
+      await expect(page.getByLabel(/^name/i)).toHaveValue(`Detail ${tag}`)
+    } finally {
+      await cleanupFood(comp.id)
+      await cleanupFood(stub.id)
+    }
+  })
+
   test("delete a component", async ({ page }) => {
     const tag = uid()
     const { composed: keep, stub: keepStub } = await seedComposedWithStub(

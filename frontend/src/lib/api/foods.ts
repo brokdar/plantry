@@ -255,7 +255,22 @@ export interface FoodNutrition {
   sodium: number
 }
 
-export function getFoodNutrition(id: number): Promise<FoodNutrition> {
+/** A leaf whose kcal/protein/fat/carbs are missing, so the recipe total
+ *  under-counts. */
+export interface MissingNutritionLeaf {
+  id: number
+  name: string
+}
+
+/** GET /api/foods/:id/nutrition — per-portion macros for composed foods.
+ *  `complete` is false when any leaf lacks core macros; `missing` lists them
+ *  (`[]` when complete). */
+export interface FoodNutritionDetail extends FoodNutrition {
+  complete: boolean
+  missing: MissingNutritionLeaf[]
+}
+
+export function getFoodNutrition(id: number): Promise<FoodNutritionDetail> {
   return apiFetch(`/foods/${id}/nutrition`)
 }
 
