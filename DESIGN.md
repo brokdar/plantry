@@ -280,17 +280,17 @@ A weekday (or date) × slot table of cell modes, used in Settings → Meals and 
 - **Plan:** panel cell with a hairline border and muted "Plan".
 - **No plate:** no border or fill, muted italic "No plate". The hairline appears on hover.
 - **Routine:** panel cell with a muted "Routine" caption over the preset name in ink.
-- **Interaction:** a tap cycles Plan → No plate → Routine. Routine first asks for a preset in `RoutinePicker` (a popover with the sheet shadow); focus returns to the cell when it closes. An optional column-header menu sets "No plate all day" or "Plan all day".
+- **Interaction:** a tap cycles Plan → No plate → Routine → Plan. Routine first asks for a preset in `RoutinePicker` (a popover with the sheet shadow); closing it without a pick (Cancel, Escape, outside click) lands on Plan, so No plate is never a dead end. With no presets the cycle is Plan ↔ No plate. Focus returns to the cell when the picker closes. An optional column-header menu sets "No plate all day" or "Plan all day".
 - **Shape:** `rounded-cell` buttons at least 44px tall, 150ms colour transitions.
 - **Accessibility:** `role="grid"` with one tab stop (roving tabindex); arrow keys, Home and End move between cells. Each cell's name reads the full day, the slot and the state.
-- **Narrow screens:** below 768px the grid scrolls sideways inside its own box, and the slot column stays sticky. The `surface` prop (`ground` or `panel`) gives the sticky column the background the grid sits on.
+- **Width:** the grid keeps a 32rem minimum width at every breakpoint and scrolls sideways inside its own box when its container is narrower; the slot column stays sticky. State words wrap; preset names clamp to two lines. The `surface` prop (`ground` or `panel`) gives the sticky column the background the grid sits on.
 
 ### Guided state (implemented: `RecipeOnboarding`)
 
 Shown on Recipes while the library is below the planning target (10 recipes).
 
-- **Progress row:** "n of 10 recipes …" in body ink above a thin accent bar on `panel-sunken`, exposed as a `progressbar`.
-- **Option cards:** two cards (Import, Create), one column on phone and two from 640px. Each is panel with a hairline border and button radius: a 20px accent icon, an h3 title, a muted body, and a 44px button at the bottom (primary for Import, outline for Create).
+- **Progress row:** "n of 10 recipes …" in body ink above an 8px accent bar on `panel` with an `ink-muted` border, exposed as a `progressbar`.
+- **Option cards:** two cards (Import, Create), one column on phone and two from 640px. Each is panel with a hairline border and button radius: a 20px accent icon, a title (an `h2` styled `text-h3`), a muted body, and a 44px button at the bottom (primary for Import, outline for Create).
 - When the target is reached the state disappears and a one-time milestone toast fires.
 
 **The Never-Colour-Alone Rule.** A badge always carries text ("Cook × 4", "2/4"). Colour alone never identifies a batch or a state.

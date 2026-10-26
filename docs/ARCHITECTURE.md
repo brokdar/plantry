@@ -718,6 +718,7 @@ DELETE /api/settings/slots/{id}                     delete (409 if used by plate
 GET    /api/settings                                all keys with value and source (db / env / default)
 PUT    /api/settings/{key}                          body: {value} — DB override
 DELETE /api/settings/{key}                          remove the override
+GET    /api/settings/system                         read-only runtime info: port, paths, log level, version, cipher_available
 GET    /api/settings/ai                             read current AI config: {enabled, provider, model}
 GET    /api/settings/ai/models                      provider model list
 ```
