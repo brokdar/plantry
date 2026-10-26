@@ -70,21 +70,26 @@ test.describe("Archive redirects + sidebar", () => {
     }
   })
 
-  test("sidebar shows 'Calendar' link pointing at /calendar", async ({
+  test("Archive left the sidebar but is reachable via the command palette", async ({
     page,
   }) => {
-    await page.goto("/calendar")
-
-    // The sidebar nav item for Calendar should be present.
-    // SideNav renders on md+ viewports. Use a desktop viewport.
     await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto("/")
 
-    const calendarLink = page
-      .getByTestId("sidenav")
-      .getByRole("link", { name: /calendar/i })
-    await expect(calendarLink).toBeVisible()
+    const sidebar = page.getByTestId("sidenav")
+    await expect(
+      sidebar.getByRole("navigation", { name: "Primary" }).getByRole("link")
+    ).toHaveCount(4)
+    await expect(sidebar.getByRole("link", { name: /archive/i })).toHaveCount(0)
+    await expect(sidebar.getByRole("link", { name: /calendar/i })).toHaveCount(
+      0
+    )
 
-    const href = await calendarLink.getAttribute("href")
-    expect(href).toMatch(/\/calendar/)
+    await page.keyboard.press("ControlOrMeta+k")
+    await page
+      .getByRole("dialog")
+      .getByRole("option", { name: "Archive", exact: true })
+      .click()
+    await expect(page).toHaveURL(/\/calendar.*mode=agenda/)
   })
 })
