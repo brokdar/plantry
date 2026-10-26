@@ -59,9 +59,9 @@ import { getAvailabilityDefaults } from "@/lib/api/availability"
 import { SetupWizard } from "./SetupWizard"
 
 /** A tiny server: GETs return what the writes stored. */
-function serve() {
+function serve(initialSettings: Record<string, string> = {}) {
   let profile: Profile = { ...mockProfile }
-  const settings = new Map<string, string>()
+  const settings = new Map<string, string>(Object.entries(initialSettings))
   const slots: TimeSlot[] = []
   vi.mocked(getProfile).mockImplementation(async () => profile)
   vi.mocked(updateProfile).mockImplementation(async (input) => {
@@ -180,8 +180,8 @@ describe("SetupWizard", () => {
     ).toHaveTextContent("3 days")
     expect(screen.getByLabelText("Freezing")).not.toBeChecked()
     await next(u, 6)
-    expect(server.settings.get("plan.max_cook_occasions_per_day")).toBe("1")
-    expect(server.settings.get("plan.default_keep_days")).toBe("3")
+    // The defaults were kept, so nothing becomes an override.
+    expect(setSetting).not.toHaveBeenCalled()
 
     // 6 Variety & shopping: Saturday preselected.
     expect(
@@ -195,6 +195,7 @@ describe("SetupWizard", () => {
     ).toHaveTextContent("0")
     await next(u, 7)
     expect(server.settings.get("plan.shopping_day")).toBe("5")
+    expect(setSetting).toHaveBeenCalledTimes(1)
 
     // 7 Assistant: no key yet, so the calm note.
     expect(
@@ -205,7 +206,7 @@ describe("SetupWizard", () => {
     await u.click(screen.getByTestId("setup-next"))
 
     await screen.findByTestId("setup-finish")
-    expect(server.settings.get("discovery.daily_enabled")).toBe("true")
+    expect(server.settings.has("discovery.daily_enabled")).toBe(false)
     expect(screen.getByRole("heading", { name: "You're set up" })).toBeVisible()
   })
 
@@ -229,7 +230,16 @@ describe("SetupWizard", () => {
   })
 
   it("Skip, use defaults on step 2 writes the step 3–6 defaults and reaches Finish", async () => {
-    const server = serve()
+    // Stored values that differ from every default, as on a re-run.
+    const server = serve({
+      "plan.max_cook_occasions_per_day": "2",
+      "plan.batch_cooking": "false",
+      "plan.default_keep_days": "5",
+      "plan.freezing_enabled": "true",
+      "plan.variety_weeks": "6",
+      "plan.shopping_day": "2",
+      "plan.explore_per_week": "2",
+    })
     const u = user()
     renderWizard()
     await screen.findByText("Step 1 of 7")

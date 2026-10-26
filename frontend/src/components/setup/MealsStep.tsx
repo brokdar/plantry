@@ -122,23 +122,28 @@ export function MealsStep({
             {t("setup.meals.none_active")}
           </p>
         ) : (
-          <AvailabilityGrid
-            label={gridLabel}
-            columns={weekdayColumns(t)}
-            slots={gridSlots}
-            value={grid}
-            presets={presets}
-            surface="ground"
-            onChange={(colKey, slotId, cell) =>
-              onChange({
-                ...value,
-                grid: { ...grid, [`${colKey}:${slotId}`]: cell },
-              })
-            }
-            onBulkChange={(patch) =>
-              onChange({ ...value, grid: { ...grid, ...patch } })
-            }
-          />
+          // The grid scrolls sideways in its own container; its sr-only
+          // labels are positioned against the page unless something
+          // closer is, so this clips them and keeps the page from scrolling.
+          <div className="relative overflow-x-clip">
+            <AvailabilityGrid
+              label={gridLabel}
+              columns={weekdayColumns(t)}
+              slots={gridSlots}
+              value={grid}
+              presets={presets}
+              surface="ground"
+              onChange={(colKey, slotId, cell) =>
+                onChange({
+                  ...value,
+                  grid: { ...grid, [`${colKey}:${slotId}`]: cell },
+                })
+              }
+              onBulkChange={(patch) =>
+                onChange({ ...value, grid: { ...grid, ...patch } })
+              }
+            />
+          </div>
         )}
       </SetupField>
     </div>

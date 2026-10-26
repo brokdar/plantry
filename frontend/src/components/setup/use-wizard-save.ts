@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { gridValueToDefaults } from "@/lib/availability-grid"
 import { useSetAvailabilityDefaults } from "@/lib/queries/availability"
 import { usePatchProfile } from "@/lib/queries/profile"
-import { useSetSetting } from "@/lib/queries/settings"
+import { useSetSetting, useSettingItems } from "@/lib/queries/settings"
 import { useCreateTimeSlot, useUpdateTimeSlot } from "@/lib/queries/slots"
 import { NUTRITION_PRESETS } from "@/lib/nutrition-presets"
 
@@ -36,10 +36,15 @@ export function useWizardSave() {
   const createSlot = useCreateTimeSlot()
   const updateSlot = useUpdateTimeSlot()
   const setDefaults = useSetAvailabilityDefaults()
+  const { data: stored } = useSettingItems()
 
+  // Only values that differ from the stored ones are written, so accepting
+  // a default doesn't turn it into a database override.
   const settings = (pairs: [string, string][]) =>
     Promise.all(
-      pairs.map(([key, value]) => setSetting.mutateAsync({ key, value }))
+      pairs
+        .filter(([key, value]) => stored?.[key]?.value !== value)
+        .map(([key, value]) => setSetting.mutateAsync({ key, value }))
     )
 
   /** Creates or updates the slots, then writes the defaults grid over the

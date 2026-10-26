@@ -30,6 +30,16 @@ test.describe("Setup wizard", () => {
       for (let step = 2; step <= 7; step++) {
         await next.click()
         await expect(page.getByText(`Step ${step} of 7`)).toBeVisible()
+        if (step === 4) {
+          // The availability grid scrolls inside its own box on a phone.
+          await page.setViewportSize({ width: 375, height: 800 })
+          await expect
+            .poll(() =>
+              page.evaluate(() => document.documentElement.scrollWidth)
+            )
+            .toBeLessThanOrEqual(375)
+          await page.setViewportSize({ width: 1280, height: 720 })
+        }
       }
       await expect(
         page.getByText("You can add this later. Planning works without it.")
@@ -49,6 +59,10 @@ test.describe("Setup wizard", () => {
       await page.getByRole("button", { name: "Add recipes" }).click()
       expect((await completed).ok()).toBe(true)
       await expect(page).toHaveURL(/\/components\/?$/)
+      // The guided state, with the real count of a fresh DB.
+      const guide = page.getByTestId("recipe-onboarding")
+      await expect(guide).toBeVisible()
+      await expect(guide.getByText(/^0 of 10 recipes/)).toBeVisible()
     })
 
     await test.step("the defaults are stored", async () => {
