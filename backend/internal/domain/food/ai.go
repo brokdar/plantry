@@ -7,8 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
+
+// PromptVersion identifies the translate and pick-best prompts. Bump it on
+// every change to either.
+const PromptVersion = "v1"
 
 // translateQueryPrompt asks the model to rewrite a (possibly non-English)
 // ingredient name as an English FDC search term.
@@ -30,6 +35,53 @@ Rules:
 - Prefer generic forms over branded products
 - Return ONLY a JSON array of integers with the same number of elements as the number of ingredients
 - No markdown, no explanation, just the JSON array`
+
+// lookupRun lazily starts one lookup AI run for the LLM calls of a single
+// Resolver.Lookup, so a lookup that makes no LLM call records nothing. A
+// lookup is sequential, so it needs no locking.
+type lookupRun struct {
+	rec    *airun.Recorder
+	run    *airun.Run
+	runCtx context.Context // carries run once started
+	failed bool
+}
+
+type lookupRunKey struct{}
+
+// llmCallContext returns the ctx to make an LLM call with, starting the
+// lookup run carried by ctx on first use. Both are unchanged and nil when
+// ctx carries no lookup run.
+func llmCallContext(ctx context.Context) (context.Context, *lookupRun) {
+	lr, _ := ctx.Value(lookupRunKey{}).(*lookupRun)
+	if lr == nil {
+		return ctx, nil
+	}
+	if lr.run == nil {
+		lr.runCtx, lr.run = lr.rec.Start(ctx, airun.Start{Kind: airun.KindLookup, PromptVersion: PromptVersion})
+	}
+	return lr.runCtx, lr
+}
+
+func (lr *lookupRun) callFailed() {
+	if lr != nil {
+		lr.failed = true
+	}
+}
+
+// finish ends the run if one was started: error when any LLM call failed.
+func (lr *lookupRun) finish(ctx context.Context) {
+	if lr.run == nil {
+		return
+	}
+	status := airun.StatusOK
+	switch {
+	case ctx.Err() != nil:
+		status = airun.StatusCancelled
+	case lr.failed:
+		status = airun.StatusError
+	}
+	lr.run.Finish(lr.runCtx, status, "")
+}
 
 // llmTranslator implements QueryTranslator using an LLM.
 type llmTranslator struct {
@@ -75,9 +127,10 @@ func translateQuery(ctx context.Context, client llm.Client, model, query string,
 		return query
 	}
 
+	callCtx, run := llmCallContext(ctx)
 	start := time.Now()
 	userMsg := mustJSONString([]string{query})
-	raw, err := client.Complete(ctx, llm.Request{
+	raw, err := client.Complete(callCtx, llm.Request{
 		Model:       model,
 		System:      translateQueryPrompt,
 		Messages:    []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: userMsg}}}},
@@ -87,6 +140,7 @@ func translateQuery(ctx context.Context, client llm.Client, model, query string,
 	dur := time.Since(start).Milliseconds()
 
 	if err != nil {
+		run.callFailed()
 		trace.Add(TraceEntry{
 			Step: "ai.translate", Level: TraceLevelWarning,
 			Summary: "AI translation failed; using original query", DurationMs: dur,
@@ -140,8 +194,9 @@ Candidates for ingredient 1:
 		strings.Join(descriptions, "\n"),
 	)
 
+	callCtx, run := llmCallContext(ctx)
 	start := time.Now()
-	raw, err := client.Complete(ctx, llm.Request{
+	raw, err := client.Complete(callCtx, llm.Request{
 		Model:       model,
 		System:      pickBestPrompt,
 		Messages:    []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: userMsg}}}},
@@ -151,6 +206,7 @@ Candidates for ingredient 1:
 	dur := time.Since(start).Milliseconds()
 
 	if err != nil {
+		run.callFailed()
 		trace.Add(TraceEntry{
 			Step: "ai.pick_best", Level: TraceLevelWarning,
 			Summary: "AI pick-best failed; using first result", DurationMs: dur,
