@@ -928,7 +928,31 @@
       "no_matches": "No presets cover this slot yet."
     }
   },
+  "availability": {
+    "mode": {
+      "plan": "Plan",
+      "none": "No plate",
+      "routine": "Routine"
+    },
+    "routine_named": "Routine · {{name}}",
+    "cell_name": "{{column}} {{slotLower}}, {{state}}",
+    "slot_header": "Meal",
+    "column_actions": "{{column}} actions",
+    "bulk_none": "No plate all day",
+    "bulk_plan": "Plan all day",
+    "picker": {
+      "title": "Pick a routine",
+      "empty": "No routines saved yet.",
+      "empty_hint": "Save a day of plates as a routine, then pick it here.",
+      "create": "Create a routine"
+    }
+  },
   "error": {
+    "availability": {
+      "cell_has_plate": "This meal already has a plate. Remove it before marking it No plate.",
+      "preset_required": "Choose which routine this meal follows.",
+      "preset_not_allowed": "Only Routine meals can have a routine attached."
+    },
     "page_not_found": "Page not found.",
     "page_not_found_body": "The page you're looking for doesn't exist.",
     "page_error_body": "An unexpected error occurred.",
