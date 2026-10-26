@@ -106,7 +106,7 @@ All optional unless noted. Prefix: `PLANTRY_`.
 
 ## AI run log
 
-Migration `00021_ai_runs.sql`, package `domain/airun`, repo `adapters/sqlite/ai_run_repo.go`. Every LLM call goes through the metered client (`Recorder.Meter`, wrapped around each client in the `llmFactory` closure in `main.go`), so nothing reaches a provider unrecorded.
+Migrations `00021_ai_runs.sql` and `00026_ai_trace.sql`, package `domain/airun`, repo `adapters/sqlite/ai_run_repo.go`. Every LLM call goes through the metered client (`Recorder.Meter`, wrapped around each client in the `llmFactory` closure in `main.go`), so nothing reaches a provider unrecorded.
 
 - **`ai_runs`** — one row per user-visible AI action.
   - `kind`: `chat`, `lookup` (food-lookup translate and pick-best), `import_fallback`; `generate`, `regenerate`, `discovery`, `classify` are reserved for later phases. `untracked` marks a metered call made without a started run — a call site that forgot `Recorder.Start`.
@@ -114,8 +114,15 @@ Migration `00021_ai_runs.sql`, package `domain/airun`, repo `adapters/sqlite/ai_
   - `provider`, `model`, `prompt_version` (the `PromptVersion` const of the agent, `food` or `importer` package — bump it on every prompt change), `prompt_hash` → `ai_prompts`.
   - Token totals summed over all calls: `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`; `iterations`.
   - `window_start`/`window_end`/`instruction` are set for chat; the scoring/outcome columns (`scope_json`, `chooser`, `violations_json`, `score_json`, `judge_json`, `outcome*`, `repair_attempts`) are reserved.
-- **`ai_run_steps`** — one row per LLM call (`type = 'llm_call'`, `name` = model, per-call tokens) or agent tool call (`type = 'tool_call'`, `name` = tool, `args_json` and `result_json` each capped at 8 KB, `is_error`), ordered by `seq`, with `duration_ms`.
-- **`ai_prompts`** — system prompt text stored once per distinct hash.
+  - `conversation_id` (chat runs; no FK, indexed) and `request_id` (chi `middleware.GetReqID` of the HTTP request that started the run; NULL outside a request).
+- **`ai_run_steps`** — one row per LLM call (`type = 'llm_call'`, `name` = model, per-call tokens) or agent tool call (`type = 'tool_call'`, `name` = tool, `args_json` and `result_json` each capped at 8 KB, `is_error`), ordered by `seq`, with `duration_ms`. LLM calls also store:
+  - `request_json` = `{message_offset, messages, temperature, max_tokens, system_hash, tools_hash, truncated}`. `messages` is `req.Messages[message_offset:]`: the offset is the message count of the run's previous LLM call when this call resends those messages unchanged, else 0. `system_hash` → `ai_prompts`, `tools_hash` → `ai_tool_schemas` (sha256 of the JSON of `req.Tools`), each null when absent.
+  - `response_json` = `{content, stop_reason}` (the reply's text and tool_use blocks) and `stop_reason`; both NULL when the call failed (`is_error = 1`).
+  - Each body is capped at 256 KiB: the largest text / tool payloads are shortened (ending in `…[truncated]`) so it stays valid JSON, and `truncated` is set.
+- **`ai_prompts`** — system prompt text stored once per distinct hash. Every distinct system prompt of a run is stored (a lookup has two: translate and pick-best); `ai_runs.prompt_hash` is the first call's.
+- **`ai_tool_schemas`** — tool definitions (`json`, a `[]llm.Tool`) stored once per distinct hash.
+- **Replay.** Call *i*'s request is call *i−1*'s messages cut to `message_offset` plus call *i*'s `messages`, the prompt by `system_hash`, the tools by `tools_hash`, `temperature`, `max_tokens` and the step's `name` as model. Callers append the assistant reply to their history themselves, so replies are already in the next delta; never insert `response_json` into a reconstruction. `domain/airun/replay_test.go` (`reconstruct`) is the reference.
+- **Retention.** At startup and after a finished run (at most once per hour, in a goroutine; `Recorder.Wait` waits for it) the steps of runs started more than `ai.run_retention_days` days ago (setting, default 180) are deleted. `ai_runs`, `ai_prompts` and `ai_tool_schemas` rows stay. There is no background scheduler; prune failures are logged at warn and not retried for an hour.
 - **Cost is not stored.** It is computed from tokens on read (Phase 3). There is no runs API yet; slog also emits `ai.run.start` / `ai.run.end` with `run_id`.
 
 Query it with the `sqlite3` CLI if installed, otherwise Python's stdlib `sqlite3` module (the path is `PLANTRY_DB_PATH`):
@@ -127,6 +134,9 @@ python3 -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); [print(r) for r 
 
 # steps of one run
 sqlite3 /data/plantry.db "SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens FROM ai_run_steps WHERE run_id = 42 ORDER BY seq"
+
+# what call 1 of run 42 sent and got back
+sqlite3 /data/plantry.db "SELECT request_json, response_json FROM ai_run_steps WHERE run_id = 42 AND type = 'llm_call' ORDER BY seq LIMIT 1"
 ```
 
 ## Key Dependencies

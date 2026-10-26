@@ -42,14 +42,17 @@ const (
 	StepToolCall StepType = "tool_call"
 )
 
-// RunStart holds the fields known when a run begins.
+// RunStart holds the fields known when a run begins. A nil ConversationID
+// and an empty RequestID are stored as NULL.
 type RunStart struct {
-	Kind          Kind
-	StartedAt     time.Time
-	PromptVersion string
-	WindowStart   *time.Time
-	WindowEnd     *time.Time
-	Instruction   *string
+	Kind           Kind
+	StartedAt      time.Time
+	PromptVersion  string
+	WindowStart    *time.Time
+	WindowEnd      *time.Time
+	Instruction    *string
+	ConversationID *int64
+	RequestID      string
 }
 
 // RunEnd holds the totals written when a run finishes. An empty ErrorKey is
@@ -69,8 +72,10 @@ type RunEnd struct {
 	ErrorKey         string
 }
 
-// Step is one LLM call or tool call within a run. An empty ArgsJSON or
-// ResultJSON is stored as NULL.
+// Step is one LLM call or tool call within a run. Empty string fields are
+// stored as NULL. ArgsJSON and ResultJSON (tool calls) are capped by the
+// store; RequestJSON, ResponseJSON and StopReason (LLM calls) are stored as
+// given.
 type Step struct {
 	RunID        int64
 	Seq          int
@@ -82,6 +87,9 @@ type Step struct {
 	DurationMs   int64
 	InputTokens  int64
 	OutputTokens int64
+	RequestJSON  string
+	ResponseJSON string
+	StopReason   string
 }
 
 // Store persists runs, steps and system prompts. Implementations are safe for
@@ -92,4 +100,8 @@ type Store interface {
 	FinishRun(ctx context.Context, end RunEnd) error
 	AddStep(ctx context.Context, step Step) error
 	UpsertPrompt(ctx context.Context, hash, text string) error
+	UpsertToolSchema(ctx context.Context, hash, json string) error
+	// PruneSteps deletes the steps of runs started before before and returns
+	// how many were deleted. Runs, prompts and tool schemas stay.
+	PruneSteps(ctx context.Context, before time.Time) (int64, error)
 }

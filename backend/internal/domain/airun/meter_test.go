@@ -9,6 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -17,8 +20,10 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
 // memStore is an in-memory airun.Store. FinishRun and AddStep fail on a
@@ -31,13 +36,39 @@ type memStore struct {
 	steps     []airun.Step
 	prompts   map[string]string
 	upserts   int
+	tools     map[string]string
+	toolUps   int
+	prunes    []time.Time
 	createErr error
 	stepErr   error
 	upsertErr error
+	pruneErr  error
+	// failUpserts fails that many UpsertPrompt / UpsertToolSchema calls
+	// before they start succeeding.
+	failUpserts int
 }
 
 func newMemStore() *memStore {
-	return &memStore{runs: map[int64]airun.RunStart{}, prompts: map[string]string{}}
+	return &memStore{runs: map[int64]airun.RunStart{}, prompts: map[string]string{}, tools: map[string]string{}}
+}
+
+func (s *memStore) UpsertToolSchema(ctx context.Context, hash, json string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.toolUps++
+	if s.failUpserts > 0 {
+		s.failUpserts--
+		return errors.New("db busy")
+	}
+	s.tools[hash] = json
+	return nil
+}
+
+func (s *memStore) PruneSteps(ctx context.Context, before time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.prunes = append(s.prunes, before)
+	return 0, s.pruneErr
 }
 
 func (s *memStore) CreateRun(ctx context.Context, start airun.RunStart) (int64, error) {
@@ -80,6 +111,10 @@ func (s *memStore) UpsertPrompt(ctx context.Context, hash, text string) error {
 	s.upserts++
 	if s.upsertErr != nil {
 		return s.upsertErr
+	}
+	if s.failUpserts > 0 {
+		s.failUpserts--
+		return errors.New("db busy")
 	}
 	s.prompts[hash] = text
 	return nil
@@ -556,11 +591,63 @@ func TestMeter_PromptHashUnsetWhenUpsertFails(t *testing.T) {
 	run.Finish(ctx, airun.StatusOK, "")
 
 	_, finishes, _, upserts := store.snapshot()
-	if upserts != 1 {
-		t.Errorf("UpsertPrompt calls = %d; want 1 (no retry)", upserts)
+	if upserts != 2 {
+		t.Errorf("UpsertPrompt calls = %d; want 2 (a failed upsert is retried by the next call)", upserts)
 	}
 	if finishes[0].PromptHash != "" {
-		t.Errorf("prompt hash = %q; want empty after failed upsert", finishes[0].PromptHash)
+		t.Errorf("prompt hash = %q; want empty after failed upserts", finishes[0].PromptHash)
+	}
+}
+
+func TestMeter_FailedUpsertsRetriedByNextCall(t *testing.T) {
+	store := newMemStore()
+	store.failUpserts = 2 // the first prompt and the first tools upsert
+	rec, _ := newRecorder(t, store)
+	client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}}), "openai")
+	tools := []llm.Tool{{Name: "a", Schema: json.RawMessage(`{}`)}}
+
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	for i := 0; i < 3; i++ {
+		if _, err := client.Complete(ctx, llm.Request{Model: "m", System: "s", Tools: tools}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	_, finishes, _, upserts := store.snapshot()
+	store.mu.Lock()
+	toolUps, stored := store.toolUps, len(store.tools)
+	store.mu.Unlock()
+	if upserts != 2 || toolUps != 2 || stored != 1 {
+		t.Errorf("prompt upserts = %d, tool upserts = %d (%d stored); want 2, 2, 1", upserts, toolUps, stored)
+	}
+	if finishes[0].PromptHash != sha("s") {
+		t.Errorf("prompt hash = %q; want the first call's prompt once stored by the retry", finishes[0].PromptHash)
+	}
+}
+
+func TestMeter_InPlaceReuseOfCallerSliceDoesNotBreakDeltas(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}}), "openai")
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+
+	// The caller reuses its backing array: the second request overwrites
+	// the first one's message in place.
+	buf := make([]llm.Message, 1, 4)
+	buf[0] = textMsg(llm.RoleUser, "a")
+	if _, err := client.Complete(ctx, llm.Request{Model: "m", Messages: buf}); err != nil {
+		t.Fatal(err)
+	}
+	buf[0] = textMsg(llm.RoleUser, "b")
+	buf = append(buf, textMsg(llm.RoleUser, "c"))
+	if _, err := client.Complete(ctx, llm.Request{Model: "m", Messages: buf}); err != nil {
+		t.Fatal(err)
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	if b := decodeRequest(t, stepsBySeq(store)[1]); b.MessageOffset != 0 || len(b.Messages) != 2 {
+		t.Errorf("offset %d, %d messages; want 0, 2 (the recorded prefix changed)", b.MessageOffset, len(b.Messages))
 	}
 }
 
@@ -607,5 +694,497 @@ func TestMeter_ConcurrentStreamsAndFinishes(t *testing.T) {
 			t.Errorf("duplicate seq %d", s.Seq)
 		}
 		seen[s.Seq] = true
+	}
+}
+
+// requestBody mirrors the request_json shape of an llm_call step.
+type requestBody struct {
+	MessageOffset int           `json:"message_offset"`
+	Messages      []llm.Message `json:"messages"`
+	Temperature   float64       `json:"temperature"`
+	MaxTokens     int           `json:"max_tokens"`
+	SystemHash    *string       `json:"system_hash"`
+	ToolsHash     *string       `json:"tools_hash"`
+	Truncated     bool          `json:"truncated"`
+}
+
+// responseBody mirrors the response_json shape of an llm_call step.
+type responseBody struct {
+	Content    []llm.ContentBlock `json:"content"`
+	StopReason string             `json:"stop_reason"`
+	Truncated  bool               `json:"truncated"`
+}
+
+func decodeRequest(t *testing.T, s airun.Step) requestBody {
+	t.Helper()
+	var b requestBody
+	if err := json.Unmarshal([]byte(s.RequestJSON), &b); err != nil {
+		t.Fatalf("request_json of step %d is not valid JSON: %v", s.Seq, err)
+	}
+	return b
+}
+
+func decodeResponse(t *testing.T, s airun.Step) responseBody {
+	t.Helper()
+	var b responseBody
+	if err := json.Unmarshal([]byte(s.ResponseJSON), &b); err != nil {
+		t.Fatalf("response_json of step %d is not valid JSON: %v", s.Seq, err)
+	}
+	return b
+}
+
+func textMsg(role llm.Role, text string) llm.Message {
+	return llm.Message{Role: role, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: text}}}
+}
+
+// stepsBySeq returns the snapshot's steps ordered by seq.
+func stepsBySeq(store *memStore) []airun.Step {
+	_, _, steps, _ := store.snapshot()
+	out := make([]airun.Step, len(steps))
+	for _, s := range steps {
+		out[s.Seq-1] = s
+	}
+	return out
+}
+
+func TestMeter_RecordsRequestDeltas(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	inner := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{
+		toolTurn(fake.ScriptedUsage{}), toolTurn(fake.ScriptedUsage{}), textTurn("done", fake.ScriptedUsage{}),
+	}})
+	client := rec.Meter(inner, "anthropic")
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+
+	// A chat-like run: each call resends the history plus new messages.
+	history := []llm.Message{textMsg(llm.RoleUser, "u1")}
+	for i := 0; i < 3; i++ {
+		req := llm.Request{Model: "m", System: "sys", Messages: history, Temperature: 0.5, MaxTokens: 1000}
+		resp, err := drainStream(ctx, client, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		history = append(history, resp.Message, textMsg(llm.RoleUser, fmt.Sprintf("u%d", i+2)))
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	steps := stepsBySeq(store)
+	wantOffsets, wantLens := []int{0, 1, 3}, []int{1, 2, 2}
+	for i, s := range steps {
+		b := decodeRequest(t, s)
+		if b.MessageOffset != wantOffsets[i] || len(b.Messages) != wantLens[i] {
+			t.Errorf("step %d: offset %d, %d messages; want %d, %d", i+1, b.MessageOffset, len(b.Messages), wantOffsets[i], wantLens[i])
+		}
+		if b.Temperature != 0.5 || b.MaxTokens != 1000 || b.Truncated {
+			t.Errorf("step %d params = %+v", i+1, b)
+		}
+		if b.SystemHash == nil || *b.SystemHash != sha("sys") {
+			t.Errorf("step %d system_hash = %v", i+1, b.SystemHash)
+		}
+		if b.ToolsHash != nil {
+			t.Errorf("step %d tools_hash = %q; want null without tools", i+1, *b.ToolsHash)
+		}
+	}
+	if got := decodeRequest(t, steps[1]).Messages[0].Role; got != llm.RoleAssistant {
+		t.Errorf("second delta starts with %q; want the assistant reply", got)
+	}
+}
+
+func TestMeter_DeltaResetsWhenHistoryDoesNotContinue(t *testing.T) {
+	tests := []struct {
+		name   string
+		second []llm.Message
+	}{
+		{"shorter history", []llm.Message{textMsg(llm.RoleUser, "a")}},
+		{"same length, different messages", []llm.Message{textMsg(llm.RoleUser, "x"), textMsg(llm.RoleUser, "y")}},
+		{"longer, different prefix", []llm.Message{textMsg(llm.RoleUser, "x"), textMsg(llm.RoleUser, "y"), textMsg(llm.RoleUser, "z")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newMemStore()
+			rec, _ := newRecorder(t, store)
+			client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}}), "openai")
+			ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindLookup})
+
+			first := []llm.Message{textMsg(llm.RoleUser, "a"), textMsg(llm.RoleAssistant, "b")}
+			for _, msgs := range [][]llm.Message{first, tt.second} {
+				if _, err := client.Complete(ctx, llm.Request{Model: "m", Messages: msgs}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			run.Finish(ctx, airun.StatusOK, "")
+
+			b := decodeRequest(t, stepsBySeq(store)[1])
+			if b.MessageOffset != 0 || len(b.Messages) != len(tt.second) {
+				t.Errorf("offset %d, %d messages; want 0, %d", b.MessageOffset, len(b.Messages), len(tt.second))
+			}
+		})
+	}
+}
+
+func TestMeter_ToolsStoredOncePerHash(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}}), "anthropic")
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+
+	toolsA := []llm.Tool{{Name: "a", Description: "A", Schema: json.RawMessage(`{"type":"object"}`)}}
+	toolsB := []llm.Tool{{Name: "b", Description: "B", Schema: json.RawMessage(`{"type":"object"}`)}}
+	for _, tools := range [][]llm.Tool{toolsA, toolsA, toolsB, toolsA, nil} {
+		if _, err := client.Complete(ctx, llm.Request{Model: "m", Tools: tools}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	store.mu.Lock()
+	toolUps, tools := store.toolUps, store.tools
+	store.mu.Unlock()
+	if toolUps != 2 || len(tools) != 2 {
+		t.Fatalf("tool schema upserts = %d (%d hashes); want 2", toolUps, len(tools))
+	}
+	steps := stepsBySeq(store)
+	hashA := decodeRequest(t, steps[0]).ToolsHash
+	if hashA == nil {
+		t.Fatal("tools_hash is null")
+	}
+	var stored []llm.Tool
+	if err := json.Unmarshal([]byte(tools[*hashA]), &stored); err != nil || len(stored) != 1 || stored[0].Name != "a" {
+		t.Errorf("stored tools for hash A = %s (%v)", tools[*hashA], err)
+	}
+	if h := decodeRequest(t, steps[1]).ToolsHash; h == nil || *h != *hashA {
+		t.Errorf("second call tools_hash = %v; want %s", h, *hashA)
+	}
+	if h := decodeRequest(t, steps[2]).ToolsHash; h == nil || *h == *hashA {
+		t.Errorf("toolsB hash = %v; want a different hash", h)
+	}
+	if h := decodeRequest(t, steps[4]).ToolsHash; h != nil {
+		t.Errorf("call without tools has tools_hash %q", *h)
+	}
+}
+
+func TestMeter_EveryDistinctSystemPromptStored(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}}), "openai")
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindLookup})
+
+	for _, sys := range []string{"", "first", "second", "first"} {
+		if _, err := client.Complete(ctx, llm.Request{Model: "m", System: sys}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	_, finishes, _, upserts := store.snapshot()
+	if upserts != 2 || store.prompts[sha("first")] != "first" || store.prompts[sha("second")] != "second" {
+		t.Errorf("upserts = %d, prompts = %v; want first and second once each", upserts, store.prompts)
+	}
+	if finishes[0].PromptHash != sha("first") {
+		t.Errorf("run prompt hash = %q; want the first call's prompt", finishes[0].PromptHash)
+	}
+	steps := stepsBySeq(store)
+	if h := decodeRequest(t, steps[0]).SystemHash; h != nil {
+		t.Errorf("call without system prompt has system_hash %q", *h)
+	}
+	for i, want := range []string{"first", "second", "first"} {
+		if h := decodeRequest(t, steps[i+1]).SystemHash; h == nil || *h != sha(want) {
+			t.Errorf("step %d system_hash = %v; want hash of %q", i+2, h, want)
+		}
+	}
+}
+
+func TestMeter_RecordsResponseAndStopReason(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	inner := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{{
+		StopReason: "tool_use",
+		Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
+			{Type: "text", Text: "let me look"},
+			{Type: "tool_use", ToolUseID: "t1", ToolName: "search", ToolInput: json.RawMessage(`{"q":"fish"}`)},
+		}},
+	}}})
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	resp, err := drainStream(ctx, rec.Meter(inner, "anthropic"), llm.Request{Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	s := stepsBySeq(store)[0]
+	if s.StopReason != "tool_use" {
+		t.Errorf("stop reason = %q", s.StopReason)
+	}
+	b := decodeResponse(t, s)
+	if b.StopReason != "tool_use" || b.Truncated {
+		t.Errorf("response = %+v", b)
+	}
+	got, _ := json.Marshal(b.Content)
+	want, _ := json.Marshal(resp.Message.Content)
+	if string(got) != string(want) {
+		t.Errorf("content = %s\nwant      %s", got, want)
+	}
+}
+
+func TestMeter_ErrorCallHasNullResponse(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	_, err := drainStream(ctx, rec.Meter(errClient{errors.New("boom")}, "openai"),
+		llm.Request{Model: "m", Messages: []llm.Message{textMsg(llm.RoleUser, "hi")}})
+	if err == nil {
+		t.Fatal("want error")
+	}
+	run.Finish(ctx, airun.StatusError, "")
+
+	s := stepsBySeq(store)[0]
+	if !s.IsError || s.ResponseJSON != "" || s.StopReason != "" {
+		t.Errorf("step = %+v; want is_error with null response and stop reason", s)
+	}
+	if b := decodeRequest(t, s); len(b.Messages) != 1 {
+		t.Errorf("request messages = %d; want the request recorded", len(b.Messages))
+	}
+}
+
+func TestMeter_LargeBodiesTruncatedToValidJSON(t *testing.T) {
+	const limit = 256 << 10
+	big := strings.Repeat("é\"<", 300<<10/4)
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	inner := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn(big, fake.ScriptedUsage{})}})
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindImportFallback})
+	req := llm.Request{Model: "m", Messages: []llm.Message{
+		textMsg(llm.RoleUser, "keep me"),
+		{Role: llm.RoleUser, Content: []llm.ContentBlock{
+			{Type: llm.ContentTypeText, Text: big},
+			{Type: llm.ContentTypeToolResult, ToolResultID: "r", ToolResultContent: json.RawMessage(`{"blob":"` + strings.Repeat("x", 300<<10) + `"}`)},
+		}},
+	}}
+	if _, err := rec.Meter(inner, "openai").Complete(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	s := stepsBySeq(store)[0]
+	if len(s.RequestJSON) > limit || len(s.ResponseJSON) > limit {
+		t.Fatalf("bodies = %d / %d bytes; want ≤ %d", len(s.RequestJSON), len(s.ResponseJSON), limit)
+	}
+	b := decodeRequest(t, s)
+	if !b.Truncated {
+		t.Error("request truncated = false")
+	}
+	if b.Messages[0].Content[0].Text != "keep me" {
+		t.Errorf("small message changed: %q", b.Messages[0].Content[0].Text)
+	}
+	if !json.Valid(b.Messages[1].Content[1].ToolResultContent) {
+		t.Error("cut tool result is not valid JSON")
+	}
+	if !strings.HasSuffix(b.Messages[1].Content[0].Text, "…[truncated]") {
+		t.Error("cut text lacks the marker")
+	}
+	if r := decodeResponse(t, s); !r.Truncated || len(r.Content) != 1 {
+		t.Errorf("response truncated = %v, %d blocks", r.Truncated, len(r.Content))
+	}
+	// The caller's request is untouched.
+	if req.Messages[1].Content[0].Text != big {
+		t.Error("meter mutated the caller's request")
+	}
+}
+
+func TestRecorder_StoresRunIdentity(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+
+	conv := int64(7)
+	_, chatRun := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat, ConversationID: &conv})
+	chatRun.Finish(context.Background(), airun.StatusOK, "")
+
+	var seen string
+	h := middleware.RequestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = middleware.GetReqID(r.Context())
+		_, run := rec.Start(r.Context(), airun.Start{Kind: airun.KindLookup})
+		run.Finish(r.Context(), airun.StatusOK, "")
+	}))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+
+	runs, _, _, _ := store.snapshot()
+	if runs[1].ConversationID == nil || *runs[1].ConversationID != 7 || runs[1].RequestID != "" {
+		t.Errorf("chat run start = %+v", runs[1])
+	}
+	if seen == "" || runs[2].RequestID != seen || runs[2].ConversationID != nil {
+		t.Errorf("request run id = %q; want %q", runs[2].RequestID, seen)
+	}
+}
+
+// manualClock is a clock tests move by hand.
+type manualClock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (c *manualClock) now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.t
+}
+
+func (c *manualClock) advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.t = c.t.Add(d)
+}
+
+func TestRecorder_PruneAfterFinishAtMostHourly(t *testing.T) {
+	store := newMemStore()
+	clock := &manualClock{t: fixedNow}
+	rec, _ := newRecorderWithClock(t, store, clock.now)
+	rec.WithRetention(func(context.Context) (int, error) { return 180, nil })
+
+	finish := func() {
+		ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+		run.Finish(ctx, airun.StatusOK, "")
+	}
+	finish() // prunes
+	clock.advance(30 * time.Minute)
+	finish() // throttled
+	clock.advance(31 * time.Minute)
+	finish() // prunes again
+	finish() // throttled
+	rec.Wait()
+	// Prunes run in the background, so they may land in either order.
+	slices.SortFunc(store.prunes, time.Time.Compare)
+
+	store.mu.Lock()
+	prunes := append([]time.Time(nil), store.prunes...)
+	store.mu.Unlock()
+	want := []time.Time{
+		fixedNow.Add(-180 * 24 * time.Hour),
+		fixedNow.Add(61*time.Minute - 180*24*time.Hour),
+	}
+	if len(prunes) != len(want) || !prunes[0].Equal(want[0]) || !prunes[1].Equal(want[1]) {
+		t.Errorf("prunes = %v; want %v", prunes, want)
+	}
+}
+
+func TestRecorder_PruneNowAndFailuresLogged(t *testing.T) {
+	store := newMemStore()
+	store.pruneErr = errors.New("db locked")
+	clock := &manualClock{t: fixedNow}
+	rec, logs := newRecorderWithClock(t, store, clock.now)
+	rec.WithRetention(func(context.Context) (int, error) { return 30, nil })
+
+	rec.Prune(context.Background()) // startup prune
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	run.Finish(ctx, airun.StatusOK, "") // within the hour: no second prune
+	rec.Wait()
+
+	store.mu.Lock()
+	prunes := append([]time.Time(nil), store.prunes...)
+	store.mu.Unlock()
+	if len(prunes) != 1 || !prunes[0].Equal(fixedNow.Add(-30*24*time.Hour)) {
+		t.Errorf("prunes = %v", prunes)
+	}
+	if !strings.Contains(logs.String(), `"level":"WARN","msg":"ai.run.prune failed"`) {
+		t.Errorf("want a warn log for the failed prune, got %s", logs.String())
+	}
+}
+
+func TestRecorder_NoRetentionNeverPrunes(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	rec.Prune(context.Background())
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	run.Finish(ctx, airun.StatusOK, "")
+	rec.Wait()
+	if len(store.prunes) != 0 {
+		t.Errorf("prunes = %v; want none without a retention source", store.prunes)
+	}
+}
+
+func TestRecorder_RetentionPrunesRealDB(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+	clock := &manualClock{t: fixedNow.Add(-200 * 24 * time.Hour)}
+	rec, _ := newRecorderWithClock(t, repo, clock.now)
+	inner := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("ok", fake.ScriptedUsage{})}})
+
+	call := func() {
+		ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindLookup})
+		if _, err := rec.Meter(inner, "fake").Complete(ctx, llm.Request{Model: "m"}); err != nil {
+			t.Fatal(err)
+		}
+		run.Finish(ctx, airun.StatusOK, "")
+	}
+	call() // 200 days old
+	clock.advance(190 * 24 * time.Hour)
+	call() // 10 days old
+	clock.advance(10 * 24 * time.Hour)
+
+	rec.WithRetention(func(context.Context) (int, error) { return 180, nil })
+	rec.Prune(context.Background())
+	rec.Wait()
+
+	rows, err := db.Query(`SELECT r.id, COUNT(s.id) FROM ai_runs r LEFT JOIN ai_run_steps s ON s.run_id = r.id GROUP BY r.id ORDER BY r.id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var got [][2]int64
+	for rows.Next() {
+		var id, n int64
+		if err := rows.Scan(&id, &n); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, [2]int64{id, n})
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if want := [][2]int64{{1, 0}, {2, 1}}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("runs/steps = %v; want %v (old run kept without steps)", got, want)
+	}
+}
+
+func TestRecorder_ParallelFinishesPruneOnce(t *testing.T) {
+	const n = 20
+	store := newMemStore()
+	rec, _ := newRecorder(t, store) // fixed clock: every Finish is within the hour
+	rec.WithRetention(func(context.Context) (int, error) { return 180, nil })
+	t.Cleanup(rec.Wait)
+
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+			run.Finish(ctx, airun.StatusOK, "")
+		}()
+	}
+	wg.Wait()
+	rec.Wait()
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.prunes) != 1 {
+		t.Errorf("PruneSteps calls = %d; want 1", len(store.prunes))
+	}
+}
+
+func TestRecorder_PruneAfterFinishIgnoresCancelledCtx(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	rec.WithRetention(func(ctx context.Context) (int, error) { return 180, ctx.Err() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx, run := rec.Start(ctx, airun.Start{Kind: airun.KindChat})
+	cancel()
+	run.Finish(ctx, airun.StatusCancelled, "")
+	rec.Wait()
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.prunes) != 1 {
+		t.Errorf("PruneSteps calls = %d; want 1 despite the cancelled request ctx", len(store.prunes))
 	}
 }
