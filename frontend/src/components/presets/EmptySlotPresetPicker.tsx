@@ -54,7 +54,9 @@ export function EmptySlotPresetPicker({
       },
       {
         onSuccess: (result) => {
-          showPresetApplyToasts(result, t, (snap) => undoMutation.mutate(snap))
+          showPresetApplyToasts(result, t, (applied) =>
+            undoMutation.mutate(applied)
+          )
           setOpen(false)
         },
       }

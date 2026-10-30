@@ -17,7 +17,7 @@ import { useTranslation } from "react-i18next"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import type { ApplySnapshot, Preset } from "@/lib/api/presets"
+import type { ApplyResult, Preset } from "@/lib/api/presets"
 import { useApplyPreset, usePresets, useUndoApply } from "@/lib/queries/presets"
 import { useTimeSlots } from "@/lib/queries/slots"
 import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
@@ -53,8 +53,8 @@ export function CommandPalette({
   // before the toast's Undo action fires.
   const undoMutation = useUndoApply()
 
-  function handleUndo(snapshot: ApplySnapshot) {
-    undoMutation.mutate(snapshot)
+  function handleUndo(result: ApplyResult) {
+    undoMutation.mutate(result)
   }
 
   // Reset query each time the palette opens via re-mount key.
@@ -97,7 +97,7 @@ interface PaletteBodyProps {
   setQuery: (q: string) => void
   targetForPreset: Preset | null
   setTargetForPreset: (p: Preset | null) => void
-  onUndo: (snapshot: ApplySnapshot) => void
+  onUndo: (result: ApplyResult) => void
 }
 
 function PaletteBody({
@@ -212,7 +212,7 @@ interface TargetPickerProps {
   defaultTargetDate: string
   onCancel: () => void
   onDone: () => void
-  onUndo: (snapshot: ApplySnapshot) => void
+  onUndo: (result: ApplyResult) => void
 }
 
 function TargetPicker({

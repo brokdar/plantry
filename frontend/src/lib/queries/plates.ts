@@ -14,9 +14,9 @@ import {
   type AvailabilityCell,
   type AvailabilityRangeResponse,
 } from "@/lib/api/availability"
+import { restorePlan } from "@/lib/api/plan"
 import {
   addPlateComponent,
-  componentToAddInput,
   createPlate,
   deletePlate,
   deletePlateComponent,
@@ -26,6 +26,7 @@ import {
   updatePlateComponent,
   type ComponentInput,
   type CreatePlateInput,
+  type PlanSnapshot,
   type Plate,
   type PlateComponentQuantity,
   type UpdatePlateComponentInput,
@@ -317,8 +318,8 @@ const NO_PLATE_UNDO_MS = 6000
  *
  * - `markNoPlate` puts a `none` override with `remove_plate: true` and offers
  *   Undo: first the previous override state comes back (cleared, or re-put
- *   with its mode, preset and note), then the removed plate is recreated with
- *   its components. Its feedback is not restored.
+ *   with its mode, preset and note), then the removed plate is restored from
+ *   the snapshot the server returned (`POST /api/plan/restore`), sessions included.
  * - `planMeal` drops a cell's override so it falls back to its weekday
  *   default, and puts a `plan` override only when that default is `none`.
  * - `editNote` keeps the cell `none` and writes its note.
@@ -343,7 +344,7 @@ export function useNoPlateActions(rangeFrom: string, rangeTo: string) {
     date: string,
     slotId: number,
     previous: AvailabilityCell | undefined,
-    removed: Plate | undefined
+    removed: PlanSnapshot | null
   ) {
     try {
       if (previous?.source === "override") {
@@ -355,19 +356,7 @@ export function useNoPlateActions(rangeFrom: string, rangeTo: string) {
       } else {
         await clearAvailabilityOverride(date, slotId)
       }
-      if (removed) {
-        const created = await createPlate({
-          date,
-          slot_id: slotId,
-          note: removed.note ?? undefined,
-        })
-        const components = [...removed.components].sort(
-          (a, b) => a.sort_order - b.sort_order
-        )
-        for (const pc of components) {
-          await addPlateComponent(created.id, componentToAddInput(pc))
-        }
-      }
+      if (removed) await restorePlan(removed)
     } catch (err) {
       toastError(err, t)
     } finally {
@@ -384,14 +373,14 @@ export function useNoPlateActions(rangeFrom: string, rangeTo: string) {
   ) {
     const previous = cellAt(date, slotId)
     await flushPendingPlateDeletes()
-    let removed: Plate | undefined
+    let removed: PlanSnapshot | null = null
     try {
       const res = await setOverride.mutateAsync({
         date,
         slotId,
         input: { mode: "none", note: note ?? null, remove_plate: true },
       })
-      removed = res.removed_plate
+      removed = res.removed
     } catch {
       return
     }

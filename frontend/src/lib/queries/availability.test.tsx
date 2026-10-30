@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   mockAvailabilityCells,
   mockAvailabilityDefaults,
-  mockPlateW16a,
 } from "@/test/fixtures"
 import { createHookWrapper } from "@/test/render"
 
@@ -166,9 +165,10 @@ describe("availability queries", () => {
     )
   })
 
-  it("useSetAvailabilityOverride invalidates ranges but not plates without removed_plate", async () => {
+  it("useSetAvailabilityOverride invalidates ranges but not plates when nothing was removed", async () => {
     vi.mocked(setAvailabilityOverride).mockResolvedValueOnce({
       cell: mockAvailabilityCells[0],
+      removed: null,
     })
     const { wrapper, invalidate } = setup()
     const { result } = renderHook(() => useSetAvailabilityOverride(), {
@@ -192,7 +192,7 @@ describe("availability queries", () => {
   it("useSetAvailabilityOverride invalidates plates when a plate was removed", async () => {
     vi.mocked(setAvailabilityOverride).mockResolvedValueOnce({
       cell: mockAvailabilityCells[0],
-      removed_plate: mockPlateW16a,
+      removed: { plates: [], sessions: [] },
     })
     const { wrapper, invalidate } = setup()
     const { result } = renderHook(() => useSetAvailabilityOverride(), {
