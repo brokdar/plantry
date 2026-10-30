@@ -1,3 +1,5 @@
+import type { ShoppingRange } from "@/lib/api/shopping"
+
 export const foodKeys = {
   all: ["foods"] as const,
   lists: () => [...foodKeys.all, "list"] as const,
@@ -7,7 +9,10 @@ export const foodKeys = {
   nutrition: (id: number) => [...foodKeys.detail(id), "nutrition"] as const,
   variants: (id: number) => [...foodKeys.detail(id), "variants"] as const,
   portions: (id: number) => [...foodKeys.detail(id), "portions"] as const,
-  insights: (params: object) => [...foodKeys.all, "insights", params] as const,
+  // Under detail(id): a food update also drops its scaled lists.
+  scaled: (id: number, portions: number) =>
+    [...foodKeys.detail(id), "scaled", portions] as const,
+  insights: () => [...foodKeys.all, "insights"] as const,
   // Batch per-food macros, keyed by a stable comma-joined id list. Mirrors
   // foodKeys.all so cache invalidations on a food update also drop the
   // batched macros entries that referenced it.
@@ -25,16 +30,25 @@ export const slotKeys = {
   list: (activeOnly: boolean) => [...slotKeys.lists(), { activeOnly }] as const,
 }
 
-export const weekKeys = {
-  all: ["weeks"] as const,
-  current: () => [...weekKeys.all, "current"] as const,
-  byDate: (year: number, week: number) =>
-    [...weekKeys.all, "by-date", { year, week }] as const,
-  byId: (id: number) => [...weekKeys.all, id] as const,
-  list: (limit: number, offset: number) =>
-    [...weekKeys.all, "list", { limit, offset }] as const,
-  shoppingList: (id: number) => [...weekKeys.all, id, "shopping-list"] as const,
-  nutrition: (id: number) => [...weekKeys.all, id, "nutrition"] as const,
+// Read models (D23). Every plan mutation invalidates planKeys.all,
+// todayKeys.all and shoppingKeys.all.
+export const planKeys = {
+  all: ["plan"] as const,
+  /** `start` undefined = the anchored window. */
+  window: (start?: string) => [...planKeys.all, "window", start ?? ""] as const,
+}
+
+export const todayKeys = {
+  all: ["today"] as const,
+  date: (date: string) => [...todayKeys.all, date] as const,
+}
+
+export const sessionKeys = {
+  all: ["sessions"] as const,
+  detail: (id: number) => [...sessionKeys.all, id] as const,
+  // Under detail(id): a session mutation also drops its leftover cells.
+  leftoverCells: (id: number, count: number) =>
+    [...sessionKeys.detail(id), "leftover-cells", count] as const,
 }
 
 export const plateKeys = {
@@ -96,7 +110,12 @@ export const setupKeys = {
 
 export const shoppingKeys = {
   all: ["shopping"] as const,
-  list: (from: string, to: string) => ["shopping", "list", from, to] as const,
+  /** `range` undefined = the server default for the anchored window. */
+  list: (range?: ShoppingRange) =>
+    [...shoppingKeys.all, "list", range ?? {}] as const,
+  /** The old planner's `{items}` list; F7 deletes it with ShoppingPanel. */
+  planner: (from: string, to: string) =>
+    [...shoppingKeys.all, "planner", from, to] as const,
 }
 
 export const importKeys = {

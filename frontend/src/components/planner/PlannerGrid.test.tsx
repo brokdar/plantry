@@ -38,10 +38,9 @@ vi.mock("@/lib/queries/foods", () => ({
   useSetFoodFavorite: vi.fn(() => ({ mutateAsync: vi.fn() })),
 }))
 vi.mock("@/lib/queries/plates", () => ({
-  useUpdatePlate: vi.fn(() => ({ mutateAsync: mocks.updatePlate })),
+  usePlannerUpdatePlate: vi.fn(() => ({ mutateAsync: mocks.updatePlate })),
   useDeletePlate: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useSwapPlateComponent: vi.fn(() => ({ mutateAsync: vi.fn() })),
-  useAddPlateComponent: vi.fn(() => ({ mutateAsync: vi.fn() })),
   usePlateMacros: vi.fn(() => ({ data: { plates: [] } })),
   useNoPlateActions: vi.fn(() => ({
     markNoPlate: mocks.markNoPlate,
@@ -70,6 +69,7 @@ vi.mock("@/lib/toast", () => ({
 
 import { createPlate } from "@/lib/api/plates"
 import { toast } from "@/lib/toast"
+import { mockPlate, mockPlateComponent } from "@/test/fixtures"
 
 const today = format(new Date(), "yyyy-MM-dd")
 const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd")
@@ -90,16 +90,12 @@ const days: PlannerDay[] = [
 ]
 
 function plate(id: number, date: string): Plate {
-  return {
+  return mockPlate({
     id,
     slot_id: 1,
     date,
-    note: null,
-    components: [
-      { id: id * 10, plate_id: id, food_id: 1, portions: 1, sort_order: 0 },
-    ],
-    created_at: "",
-  }
+    components: [mockPlateComponent({ id: id * 10, plate_id: id, food_id: 1 })],
+  })
 }
 
 function cell(

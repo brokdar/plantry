@@ -1,5 +1,8 @@
+import { todayISO } from "@/lib/planner-window"
+
 import { apiFetch } from "./client"
 import type { LookupCandidate } from "./lookup"
+import type { Quantity, ShopSection } from "./shopping"
 
 export type FoodKind = "leaf" | "composed"
 export type FoodSource = "manual" | "off" | "fdc"
@@ -67,8 +70,6 @@ interface FoodBase {
   description?: string | null
   image_path: string | null
   favorite: boolean
-  last_cooked_at?: string | null
-  cook_count: number
   created_at: string
   updated_at: string
 }
@@ -102,6 +103,18 @@ export interface LeafFood extends FoodBase {
   vitamin_b6_100g?: number | null
   folate_100g?: number | null
   portions?: FoodPortion[]
+  /** Effective store section: the user override, else the classifier (D18). */
+  shop_section: ShopSection
+  shop_section_source: "auto" | "user"
+  /** Number of recipes using this ingredient. */
+  used_in_count: number
+}
+
+/** Per-portion nutrition summary of a recipe. */
+export interface PerPortionSummary {
+  kcal: number
+  protein: number
+  complete: boolean
 }
 
 export interface ComposedFood extends FoodBase {
@@ -112,9 +125,16 @@ export interface ComposedFood extends FoodBase {
   prep_minutes?: number | null
   cook_minutes?: number | null
   notes?: string | null
+  /** 1–7 days; null falls back to `plan.default_keep_days` (D15). */
+  keep_days?: number | null
+  freezable?: boolean | null
   children?: FoodChild[]
   instructions?: FoodInstruction[]
   tags?: string[]
+  /** Derived eating history relative to `today` (D16). */
+  last_eaten: string | null
+  times_cooked: number
+  per_portion: PerPortionSummary
 }
 
 export type Food = LeafFood | ComposedFood
@@ -186,6 +206,8 @@ export interface ComposedFoodInput {
   prep_minutes?: number | null
   cook_minutes?: number | null
   notes?: string | null
+  keep_days?: number | null
+  freezable?: boolean | null
   children?: FoodChildInput[]
   instructions?: FoodInstructionInput[]
   tags?: string[]
@@ -234,12 +256,19 @@ export interface FoodListParams {
   role?: FoodRole
   tag?: string
   favorite?: 0 | 1
+  /** Prep + cook minutes at most. */
+  max_minutes?: number
+  /** Only recipes not eaten within this many weeks. */
+  not_eaten_weeks?: number
+  created_within_days?: number
   limit?: number
   offset?: number
+  /** Recipes: `name`, `last_eaten` (never eaten first) or `created`. */
   sort?: string
   order?: string
 }
 
+/** GET /api/foods. History fields are relative to `today` (D25). */
 export function listFoods(params?: FoodListParams): Promise<FoodListResponse> {
   const query = new URLSearchParams()
   if (params) {
@@ -249,12 +278,12 @@ export function listFoods(params?: FoodListParams): Promise<FoodListResponse> {
       }
     })
   }
-  const qs = query.toString()
-  return apiFetch(`/foods${qs ? `?${qs}` : ""}`)
+  query.set("today", todayISO())
+  return apiFetch(`/foods?${query}`)
 }
 
 export function getFood(id: number): Promise<Food> {
-  return apiFetch(`/foods/${id}`)
+  return apiFetch(`/foods/${id}?today=${todayISO()}`)
 }
 
 /** Non-fatal problems hit while creating a food. */
@@ -343,39 +372,55 @@ export function listVariants(id: number): Promise<VariantListResponse> {
   return apiFetch(`/foods/${id}/variants`)
 }
 
-export interface FoodSummary {
-  id: number
+// Kept for the old recipe library's Forgotten/Most cooked badges until B7
+// removes the endpoint.
+interface InsightsResponse {
+  forgotten: { id: number }[]
+  most_cooked: { id: number }[]
+}
+
+export function getInsights(): Promise<InsightsResponse> {
+  return apiFetch("/foods/insights")
+}
+
+// ── Scaling and store section ─────────────────────────────────────────
+
+export interface ScaledIngredient {
+  child_id: number
   name: string
-  role?: FoodRole | null
-  image_path?: string | null
-  cook_count: number
-  last_cooked_at?: string | null
+  kind: FoodKind
+  /** Exact scaled amount in the child's own unit. */
+  amount: number
+  unit: string
+  grams: number
+  /** Display-rounded (D26). */
+  display: Quantity
+  /** Count units only: what to buy (ceil). */
+  buy: Quantity | null
 }
 
-export interface InsightsResponse {
-  forgotten: FoodSummary[]
-  most_cooked: FoodSummary[]
+export interface ScaledRecipe {
+  food_id: number
+  portions: number
+  reference_portions: number
+  factor: number
+  ingredients: ScaledIngredient[]
 }
 
-export interface InsightsParams {
-  forgotten_weeks?: number
-  forgotten_limit?: number
-  most_cooked_limit?: number
+/** GET /api/foods/{id}/scaled?portions= — 0 < portions ≤ 100. */
+export function getScaled(id: number, portions: number): Promise<ScaledRecipe> {
+  return apiFetch(`/foods/${id}/scaled?portions=${portions}`)
 }
 
-export function getInsights(
-  params?: InsightsParams
-): Promise<InsightsResponse> {
-  const query = new URLSearchParams()
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        query.set(key, String(value))
-      }
-    })
-  }
-  const qs = query.toString()
-  return apiFetch(`/foods/insights${qs ? `?${qs}` : ""}`)
+/** PUT /api/foods/{id}/shop-section — `null` reverts to the classifier. */
+export function setShopSection(
+  id: number,
+  section: ShopSection | null
+): Promise<LeafFood> {
+  return apiFetch(`/foods/${id}/shop-section`, {
+    method: "PUT",
+    body: JSON.stringify({ section }),
+  })
 }
 
 // ── Portions ──────────────────────────────────────────────────────────

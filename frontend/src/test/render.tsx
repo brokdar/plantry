@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react"
+import { act, render, renderHook } from "@testing-library/react"
 import {
   createMemoryHistory,
   createRootRoute,
@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ReactNode } from "react"
+import { vi } from "vitest"
 import "@/lib/i18n"
 
 const defaultOptions = {
@@ -20,6 +21,21 @@ export function createHookWrapper(qc?: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>
   }
+}
+
+/** Runs a mutation hook to success and returns the query keys it
+ *  invalidated, in call order. */
+export async function invalidatedBy<V>(
+  hook: () => { mutateAsync: (v: V) => Promise<unknown> },
+  variables: V
+): Promise<unknown[]> {
+  const qc = new QueryClient({ defaultOptions })
+  const spy = vi.spyOn(qc, "invalidateQueries")
+  const { result } = renderHook(hook, { wrapper: createHookWrapper(qc) })
+  await act(async () => {
+    await result.current.mutateAsync(variables)
+  })
+  return spy.mock.calls.map((c) => c[0]?.queryKey)
 }
 
 export function renderWithRouter(ui: React.ReactElement, path = "/") {

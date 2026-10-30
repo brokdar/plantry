@@ -1,9 +1,16 @@
 import { QueryClient } from "@tanstack/react-query"
 import { act, renderHook, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { createHookWrapper, renderWithRouter } from "@/test/render"
-
-import type { Plate } from "@/lib/api/plates"
+import {
+  createHookWrapper,
+  invalidatedBy,
+  renderWithRouter,
+} from "@/test/render"
+import {
+  mockPlate as makePlate,
+  mockPlateComponent,
+  mockRemovedBatch,
+} from "@/test/fixtures"
 
 vi.mock("@/lib/api/plates", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/plates")>()),
@@ -28,6 +35,8 @@ import {
   updatePlateComponent,
 } from "@/lib/api/plates"
 
+vi.mock("@/lib/api/plan", () => ({ restorePlan: vi.fn() }))
+
 vi.mock("@/lib/api/availability", () => ({
   getAvailabilityRange: vi.fn(),
   setAvailabilityOverride: vi.fn(),
@@ -46,7 +55,13 @@ import {
   setAvailabilityOverride,
 } from "@/lib/api/availability"
 
-import { availabilityKeys, plateKeys } from "./keys"
+import {
+  availabilityKeys,
+  planKeys,
+  plateKeys,
+  shoppingKeys,
+  todayKeys,
+} from "./keys"
 import { nutritionKeys } from "./nutrition"
 import {
   __resetPendingPlateDeletesForTests,
@@ -54,29 +69,94 @@ import {
   registerPendingPlateDelete,
 } from "./pending-plate-deletes"
 import {
-  useAddPlateComponent,
+  useAddComponent,
   useCreatePlate,
   useDeletePlate,
   useNoPlateActions,
+  usePlannerUpdatePlate,
   usePlateMacros,
   usePlatesRange,
+  useRemoveComponent,
   useRemovePlateComponent,
   useSwapPlateComponent,
+  useUpdateComponent,
   useUpdatePlate,
   useUpdatePlateComponentQuantity,
 } from "./plates"
 
-function makePlate(overrides?: Partial<Plate>): Plate {
-  return {
-    id: 1,
-    slot_id: 1,
-    date: "2026-04-26",
-    note: null,
-    components: [],
-    created_at: "",
-    ...overrides,
-  }
-}
+const PLAN_VIEWS = [planKeys.all, todayKeys.all, shoppingKeys.all]
+
+// F1-AC2: the new plate mutations invalidate exactly the plan views.
+describe("plate mutations (§3.1) invalidate the plan views", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("useCreatePlate", async () => {
+    vi.mocked(createPlate).mockResolvedValueOnce(makePlate())
+    const input = {
+      date: "2026-11-01",
+      slot_id: 3,
+      eaters: 2,
+      components: [{ food_id: 42 }],
+    }
+    expect(await invalidatedBy(() => useCreatePlate(), input)).toEqual(
+      PLAN_VIEWS
+    )
+    expect(createPlate).toHaveBeenCalledWith(input)
+  })
+
+  it("useUpdatePlate", async () => {
+    vi.mocked(updatePlate).mockResolvedValueOnce(makePlate())
+    expect(
+      await invalidatedBy(() => useUpdatePlate(), {
+        id: 1,
+        input: { eaters: 3 },
+      })
+    ).toEqual(PLAN_VIEWS)
+    expect(updatePlate).toHaveBeenCalledWith(1, { eaters: 3 })
+  })
+
+  it("useDeletePlate also offers Undo", async () => {
+    vi.mocked(deletePlate).mockResolvedValueOnce(mockRemovedBatch)
+    expect(await invalidatedBy(() => useDeletePlate(), 1)).toEqual(PLAN_VIEWS)
+    expect(deletePlate).toHaveBeenCalledWith(1)
+    expect(toastMock).toHaveBeenCalledWith(
+      "Plate removed",
+      expect.objectContaining({ duration: 6000 })
+    )
+  })
+
+  it("useAddComponent", async () => {
+    vi.mocked(addPlateComponent).mockResolvedValueOnce(makePlate())
+    const input = { food_id: 42, portions: 1, cook_session_id: 7 }
+    expect(
+      await invalidatedBy(() => useAddComponent(), { plateId: 2, input })
+    ).toEqual(PLAN_VIEWS)
+    expect(addPlateComponent).toHaveBeenCalledWith(2, input)
+  })
+
+  it("useUpdateComponent", async () => {
+    vi.mocked(updatePlateComponent).mockResolvedValueOnce(makePlate())
+    expect(
+      await invalidatedBy(() => useUpdateComponent(), {
+        plateId: 2,
+        componentId: 10,
+        input: { portions: 1.5 },
+      })
+    ).toEqual(PLAN_VIEWS)
+    expect(updatePlateComponent).toHaveBeenCalledWith(2, 10, { portions: 1.5 })
+  })
+
+  it("useRemoveComponent", async () => {
+    vi.mocked(deletePlateComponent).mockResolvedValueOnce(makePlate())
+    expect(
+      await invalidatedBy(() => useRemoveComponent(), {
+        plateId: 2,
+        componentId: 10,
+      })
+    ).toEqual(PLAN_VIEWS)
+    expect(deletePlateComponent).toHaveBeenCalledWith(2, 10)
+  })
+})
 
 describe("usePlatesRange", () => {
   beforeEach(() => vi.clearAllMocks())
@@ -113,7 +193,7 @@ describe("usePlatesRange", () => {
   })
 })
 
-describe("useUpdatePlate", () => {
+describe("usePlannerUpdatePlate", () => {
   beforeEach(() => vi.clearAllMocks())
 
   it("invalidates plateKeys.range when rangeFrom/rangeTo are provided", async () => {
@@ -134,7 +214,7 @@ describe("useUpdatePlate", () => {
     vi.mocked(updatePlate).mockResolvedValueOnce(updatedPlate)
 
     const { result } = renderHook(
-      () => useUpdatePlate("2026-04-21", "2026-04-27"),
+      () => usePlannerUpdatePlate("2026-04-21", "2026-04-27"),
       { wrapper: createHookWrapper(qc) }
     )
 
@@ -166,7 +246,7 @@ describe("useUpdatePlate", () => {
 
     vi.mocked(updatePlate).mockResolvedValueOnce(makePlate())
 
-    const { result } = renderHook(() => useUpdatePlate(), {
+    const { result } = renderHook(() => usePlannerUpdatePlate(), {
       wrapper: createHookWrapper(qc),
     })
 
@@ -210,27 +290,12 @@ describe("plate mutations invalidate nutrition cache", () => {
     expect(state?.isInvalidated).toBe(true)
   }
 
-  it("useCreatePlate", async () => {
-    const qc = seededClient()
-    vi.mocked(createPlate).mockResolvedValueOnce(makePlate())
-
-    const { result } = renderHook(
-      () => useCreatePlate("2026-05-04", "2026-05-10"),
-      { wrapper: createHookWrapper(qc) }
-    )
-    await act(async () => {
-      result.current.mutate({ date: "2026-05-04", slot_id: 1 })
-    })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expectNutritionInvalidated(qc)
-  })
-
-  it("useUpdatePlate", async () => {
+  it("usePlannerUpdatePlate", async () => {
     const qc = seededClient()
     vi.mocked(updatePlate).mockResolvedValueOnce(makePlate())
 
     const { result } = renderHook(
-      () => useUpdatePlate("2026-05-04", "2026-05-10"),
+      () => usePlannerUpdatePlate("2026-05-04", "2026-05-10"),
       { wrapper: createHookWrapper(qc) }
     )
     await act(async () => {
@@ -240,52 +305,9 @@ describe("plate mutations invalidate nutrition cache", () => {
     expectNutritionInvalidated(qc)
   })
 
-  it("useDeletePlate", async () => {
-    const qc = seededClient()
-    vi.mocked(deletePlate).mockResolvedValueOnce(undefined)
-
-    const { result } = renderHook(() => useDeletePlate(), {
-      wrapper: createHookWrapper(qc),
-    })
-    await act(async () => {
-      result.current.mutate(1)
-    })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expectNutritionInvalidated(qc)
-  })
-
-  it("useAddPlateComponent", async () => {
-    const qc = seededClient()
-    vi.mocked(addPlateComponent).mockResolvedValueOnce({
-      id: 1,
-      plate_id: 1,
-      food_id: 1,
-      portions: 1,
-      sort_order: 0,
-    })
-
-    const { result } = renderHook(() => useAddPlateComponent(), {
-      wrapper: createHookWrapper(qc),
-    })
-    await act(async () => {
-      result.current.mutate({
-        plateId: 1,
-        input: { food_id: 1, portions: 1 },
-      })
-    })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expectNutritionInvalidated(qc)
-  })
-
   it("useSwapPlateComponent", async () => {
     const qc = seededClient()
-    vi.mocked(updatePlateComponent).mockResolvedValueOnce({
-      id: 1,
-      plate_id: 1,
-      food_id: 2,
-      portions: 1,
-      sort_order: 0,
-    })
+    vi.mocked(updatePlateComponent).mockResolvedValueOnce(makePlate())
 
     const { result } = renderHook(() => useSwapPlateComponent(), {
       wrapper: createHookWrapper(qc),
@@ -303,13 +325,7 @@ describe("plate mutations invalidate nutrition cache", () => {
 
   it("useUpdatePlateComponentQuantity composed", async () => {
     const qc = seededClient()
-    vi.mocked(updatePlateComponent).mockResolvedValueOnce({
-      id: 1,
-      plate_id: 1,
-      food_id: 1,
-      portions: 2,
-      sort_order: 0,
-    })
+    vi.mocked(updatePlateComponent).mockResolvedValueOnce(makePlate())
 
     const { result } = renderHook(() => useUpdatePlateComponentQuantity(), {
       wrapper: createHookWrapper(qc),
@@ -328,16 +344,7 @@ describe("plate mutations invalidate nutrition cache", () => {
 
   it("useUpdatePlateComponentQuantity leaf", async () => {
     const qc = seededClient()
-    vi.mocked(updatePlateComponent).mockResolvedValueOnce({
-      id: 2,
-      plate_id: 1,
-      food_id: 1,
-      amount: 200,
-      unit: "g",
-      grams: 200,
-      grams_source: "direct",
-      sort_order: 0,
-    })
+    vi.mocked(updatePlateComponent).mockResolvedValueOnce(makePlate())
 
     const { result } = renderHook(() => useUpdatePlateComponentQuantity(), {
       wrapper: createHookWrapper(qc),
@@ -358,7 +365,7 @@ describe("plate mutations invalidate nutrition cache", () => {
 
   it("useRemovePlateComponent", async () => {
     const qc = seededClient()
-    vi.mocked(deletePlateComponent).mockResolvedValueOnce(undefined)
+    vi.mocked(deletePlateComponent).mockResolvedValueOnce(makePlate())
 
     const { result } = renderHook(() => useRemovePlateComponent(), {
       wrapper: createHookWrapper(qc),
@@ -382,7 +389,7 @@ describe("plate mutations flush pending deletes via onMutate", () => {
     __resetPendingPlateDeletesForTests()
   })
 
-  it("useCreatePlate fires queued deletePlate before createPlate", async () => {
+  it("useRemovePlateComponent fires queued delete before removing", async () => {
     const qc = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -390,87 +397,25 @@ describe("plate mutations flush pending deletes via onMutate", () => {
       },
     })
 
-    vi.mocked(deletePlate).mockResolvedValue(undefined)
-    vi.mocked(createPlate).mockResolvedValue(makePlate({ id: 99 }))
+    vi.mocked(deletePlate).mockResolvedValue(mockRemovedBatch)
+    vi.mocked(deletePlateComponent).mockResolvedValue(makePlate())
 
-    registerPendingPlateDelete(7, makePlate({ id: 7 }), () => deletePlate(7))
-    expect(hasPendingPlateDelete(7)).toBe(true)
-
-    const { result } = renderHook(
-      () => useCreatePlate("2026-05-04", "2026-05-10"),
-      { wrapper: createHookWrapper(qc) }
-    )
-
-    await act(async () => {
-      await result.current.mutateAsync({ date: "2026-05-04", slot_id: 1 })
+    registerPendingPlateDelete(7, makePlate({ id: 7 }), async () => {
+      await deletePlate(7)
     })
 
-    expect(deletePlate).toHaveBeenCalledWith(7)
-    expect(createPlate).toHaveBeenCalledTimes(1)
-    const deleteOrder = vi.mocked(deletePlate).mock.invocationCallOrder[0]
-    const createOrder = vi.mocked(createPlate).mock.invocationCallOrder[0]
-    expect(deleteOrder).toBeLessThan(createOrder)
-    expect(hasPendingPlateDelete(7)).toBe(false)
-  })
-
-  it("useDeletePlate flushes other pending deletes before its own delete", async () => {
-    const qc = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    })
-
-    vi.mocked(deletePlate).mockResolvedValue(undefined)
-
-    registerPendingPlateDelete(7, makePlate({ id: 7 }), () => deletePlate(7))
-
-    const { result } = renderHook(() => useDeletePlate(), {
+    const { result } = renderHook(() => useRemovePlateComponent(), {
       wrapper: createHookWrapper(qc),
     })
 
     await act(async () => {
-      await result.current.mutateAsync(99)
-    })
-
-    const calls = vi.mocked(deletePlate).mock.calls.map((c) => c[0])
-    expect(calls).toEqual([7, 99])
-    expect(hasPendingPlateDelete(7)).toBe(false)
-  })
-
-  it("useAddPlateComponent fires queued delete before adding", async () => {
-    const qc = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    })
-
-    vi.mocked(deletePlate).mockResolvedValue(undefined)
-    vi.mocked(addPlateComponent).mockResolvedValue({
-      id: 1,
-      plate_id: 1,
-      food_id: 1,
-      portions: 1,
-      sort_order: 0,
-    })
-
-    registerPendingPlateDelete(7, makePlate({ id: 7 }), () => deletePlate(7))
-
-    const { result } = renderHook(() => useAddPlateComponent(), {
-      wrapper: createHookWrapper(qc),
-    })
-
-    await act(async () => {
-      await result.current.mutateAsync({
-        plateId: 1,
-        input: { food_id: 1, portions: 1 },
-      })
+      await result.current.mutateAsync({ plateId: 1, pcId: 1 })
     })
 
     const deleteOrder = vi.mocked(deletePlate).mock.invocationCallOrder[0]
-    const addOrder = vi.mocked(addPlateComponent).mock.invocationCallOrder[0]
-    expect(deleteOrder).toBeLessThan(addOrder)
+    const removeOrder =
+      vi.mocked(deletePlateComponent).mock.invocationCallOrder[0]
+    expect(deleteOrder).toBeLessThan(removeOrder)
     expect(hasPendingPlateDelete(7)).toBe(false)
   })
 })
@@ -507,7 +452,7 @@ describe("usePlateMacros", () => {
     expect(result.current.data?.plates[0].macros.kcal).toBe(620)
   })
 
-  it("invalidates on addComponent because the macros key sits under plateKeys.all", async () => {
+  it("invalidates on a swap because the macros key sits under plateKeys.all", async () => {
     const qc = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -518,23 +463,14 @@ describe("usePlateMacros", () => {
       plates: [],
     })
 
-    vi.mocked(addPlateComponent).mockResolvedValueOnce({
-      id: 9,
-      plate_id: 1,
-      food_id: 1,
-      portions: 1,
-      sort_order: 0,
-    })
+    vi.mocked(updatePlateComponent).mockResolvedValueOnce(makePlate())
 
-    const { result } = renderHook(() => useAddPlateComponent(), {
+    const { result } = renderHook(() => useSwapPlateComponent(), {
       wrapper: createHookWrapper(qc),
     })
 
     await act(async () => {
-      result.current.mutate({
-        plateId: 1,
-        input: { food_id: 1, portions: 1 },
-      })
+      result.current.mutate({ plateId: 1, pcId: 1, input: { food_id: 2 } })
     })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
@@ -579,8 +515,18 @@ describe("useNoPlateActions", () => {
     slot_id: 3,
     note: "leftovers",
     components: [
-      { id: 2, plate_id: 55, food_id: 9, amount: 80, unit: "g", sort_order: 1 },
-      { id: 1, plate_id: 55, food_id: 4, portions: 2, sort_order: 0 },
+      mockPlateComponent({
+        id: 2,
+        plate_id: 55,
+        food_id: 9,
+        kind: "leaf",
+        portions: undefined,
+        cook_session_id: undefined,
+        amount: 80,
+        unit: "g",
+        sort_order: 1,
+      }),
+      mockPlateComponent({ id: 1, plate_id: 55, food_id: 4, portions: 2 }),
     ],
   })
 
@@ -627,13 +573,7 @@ describe("useNoPlateActions", () => {
     })
     vi.mocked(clearAvailabilityOverride).mockResolvedValueOnce(undefined)
     vi.mocked(createPlate).mockResolvedValueOnce(makePlate({ id: 77 }))
-    vi.mocked(addPlateComponent).mockResolvedValue({
-      id: 1,
-      plate_id: 77,
-      food_id: 4,
-      portions: 2,
-      sort_order: 0,
-    })
+    vi.mocked(addPlateComponent).mockResolvedValue(makePlate())
     const { result } = renderHook(() => useNoPlateActions(from, to), {
       wrapper: createHookWrapper(clientWith(cell())),
     })

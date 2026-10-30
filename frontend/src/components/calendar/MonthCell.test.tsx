@@ -13,9 +13,12 @@ function makePlate(id: number, note: string | null = null): Plate {
     id,
     slot_id: 1,
     date: "2026-04-26",
+    eaters: 1,
     note,
     components: [],
+    feedback: null,
     created_at: "2026-04-26T00:00:00Z",
+    updated_at: "2026-04-26T00:00:00Z",
   }
 }
 

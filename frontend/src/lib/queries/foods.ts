@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "@tanstack/react-query"
+import { keepPreviousData, useQuery, useMutation } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 import {
   createFood,
@@ -8,24 +8,26 @@ import {
   getFood,
   getFoodNutrition,
   getInsights,
+  getScaled,
   listFoodMacros,
   listFoods,
   listPortions,
   listVariants,
   refetchFood,
   setFoodFavorite,
+  setShopSection,
   syncPortions,
   updateFood,
   upsertPortion,
   type FoodInput,
   type LeafFoodInput,
   type FoodListParams,
-  type InsightsParams,
 } from "@/lib/api/foods"
+import type { ShopSection } from "@/lib/api/shopping"
 import { ApiError } from "@/lib/api/client"
 import { queryClient } from "@/lib/query-client"
 import { toastError } from "@/lib/toast"
-import { foodKeys, setupKeys } from "./keys"
+import { foodKeys, setupKeys, shoppingKeys } from "./keys"
 
 export function useFoods(
   params?: FoodListParams,
@@ -153,10 +155,42 @@ export function useVariants(id: number) {
   })
 }
 
-export function useInsights(params?: InsightsParams) {
+/** Old recipe library only; the endpoint goes in B7. */
+export function useInsights() {
   return useQuery({
-    queryKey: foodKeys.insights(params ?? {}),
-    queryFn: () => getInsights(params),
+    queryKey: foodKeys.insights(),
+    queryFn: getInsights,
+  })
+}
+
+/** A recipe's ingredients scaled to `portions`. Keeps showing the previous
+ *  list while a new portion count loads, so a stepper doesn't flash. */
+export function useScaled(foodId: number, portions: number) {
+  return useQuery({
+    queryKey: foodKeys.scaled(foodId, portions),
+    queryFn: () => getScaled(foodId, portions),
+    enabled: foodId > 0 && portions > 0,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** Moves a leaf to a store section; `null` reverts to the classifier. */
+export function useSetShopSection() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({
+      id,
+      section,
+    }: {
+      id: number
+      section: ShopSection | null
+    }) => setShopSection(id, section),
+    onSuccess: (_data, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: shoppingKeys.all })
+      void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
+      void queryClient.invalidateQueries({ queryKey: foodKeys.detail(id) })
+    },
+    onError: (err) => toastError(err, t),
   })
 }
 

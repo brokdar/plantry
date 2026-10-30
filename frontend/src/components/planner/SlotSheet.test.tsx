@@ -9,12 +9,13 @@ import type { Plate } from "@/lib/api/plates"
 
 import type { PlannerDay } from "./PlannerGrid"
 import { SlotSheet, type SlotSheetTarget } from "./SlotSheet"
+import { mockPlate, mockPlateComponent } from "@/test/fixtures"
 
 const mocks = vi.hoisted(() => ({ markNoPlate: vi.fn() }))
 
 // Mock the hooks the sheet depends on so it renders without a live backend.
 vi.mock("@/lib/queries/plates", () => ({
-  useUpdatePlate: vi.fn(() => ({ mutateAsync: vi.fn() })),
+  usePlannerUpdatePlate: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useUpdatePlateComponentQuantity: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useRemovePlateComponent: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useNoPlateActions: vi.fn(() => ({
@@ -86,16 +87,12 @@ const heroFood: Food = {
   tags: [],
 } as unknown as Food
 
-const plate: Plate = {
+const plate: Plate = mockPlate({
   id: 42,
   slot_id: 1,
   date: "2026-05-02",
-  note: null,
-  components: [
-    { id: 100, plate_id: 42, food_id: 7, portions: 1, sort_order: 0 },
-  ],
-  created_at: "2026-05-02T10:00:00Z",
-}
+  components: [mockPlateComponent({ id: 100, plate_id: 42, food_id: 7 })],
+})
 
 const days: PlannerDay[] = [{ date: "2026-05-02", weekday: 5, plates: [plate] }]
 
@@ -186,16 +183,17 @@ describe("SlotSheet — Phase 3 kind-aware quantity", () => {
       created_at: "",
       updated_at: "",
     } as unknown as Food
-    const leafPlate: Plate = {
+    const leafPlate: Plate = mockPlate({
       id: 99,
       slot_id: 1,
       date: "2026-05-02",
-      note: null,
       components: [
         {
           id: 200,
           plate_id: 99,
           food_id: 8,
+          food_name: "Rice",
+          kind: "leaf",
           amount: 200,
           unit: "g",
           grams: 200,
@@ -203,8 +201,7 @@ describe("SlotSheet — Phase 3 kind-aware quantity", () => {
           sort_order: 0,
         },
       ],
-      created_at: "",
-    }
+    })
     const leafDays: PlannerDay[] = [
       { date: "2026-05-02", weekday: 5, plates: [leafPlate] },
     ]

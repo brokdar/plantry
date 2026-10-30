@@ -10,16 +10,10 @@ import {
   hasPendingPlateDelete,
   registerPendingPlateDelete,
 } from "./pending-plate-deletes"
+import { mockPlate } from "@/test/fixtures"
 
 function plate(id: number): Plate {
-  return {
-    id,
-    slot_id: 1,
-    date: "2026-05-05",
-    note: null,
-    components: [],
-    created_at: "",
-  }
+  return mockPlate({ id, slot_id: 1, date: "2026-05-05" })
 }
 
 beforeEach(() => {

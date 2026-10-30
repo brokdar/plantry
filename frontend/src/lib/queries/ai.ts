@@ -16,7 +16,8 @@ import { useChatUI } from "../stores/chat-ui"
 import { todayISO } from "@/lib/planner-window"
 import { toastError } from "@/lib/toast"
 
-import { aiKeys, plateKeys, shoppingKeys } from "./keys"
+import { aiKeys, plateKeys } from "./keys"
+import { invalidatePlanViews } from "./plan"
 
 export function useAISettings() {
   return useQuery({
@@ -156,13 +157,11 @@ function handleEvent(
         qc.invalidateQueries({
           queryKey: plateKeys.range(range.from, range.to),
         })
-        qc.invalidateQueries({
-          queryKey: shoppingKeys.list(range.from, range.to),
-        })
       } else {
         qc.invalidateQueries({ queryKey: plateKeys.all })
       }
       qc.invalidateQueries({ queryKey: ["nutrition"] })
+      invalidatePlanViews(qc)
       return
     }
     case "done":

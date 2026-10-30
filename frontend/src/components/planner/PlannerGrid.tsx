@@ -40,7 +40,7 @@ import {
   hasPendingPlateDelete,
   registerPendingPlateDelete,
 } from "@/lib/queries/pending-plate-deletes"
-import { shoppingKeys } from "@/lib/queries/shopping"
+import { shoppingKeys } from "@/lib/queries/keys"
 import type { Food } from "@/lib/api/foods"
 import type { MacrosResponse, Plate } from "@/lib/api/plates"
 import type { TimeSlot } from "@/lib/api/slots"
@@ -51,7 +51,7 @@ import {
   useNoPlateActions,
   usePlateMacros,
   useSwapPlateComponent,
-  useUpdatePlate,
+  usePlannerUpdatePlate,
 } from "@/lib/queries/plates"
 import { useProfile } from "@/lib/queries/profile"
 import { SLOT_ICONS, SLOT_ICON_FALLBACK } from "@/lib/slot-icons"
@@ -245,7 +245,7 @@ export function PlannerGrid({
     })
   }
 
-  const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
+  const updatePlateMut = usePlannerUpdatePlate(rangeFrom, rangeTo)
   const swapMut = useSwapPlateComponent()
   const noPlate = useNoPlateActions(rangeFrom, rangeTo)
   const setFavoriteMut = useSetFoodFavorite()
@@ -313,7 +313,7 @@ export function PlannerGrid({
     // Add components in parallel and survive partial failure: report what
     // didn't land so the tray sheet can keep those staged for retry.
     // Pass the kind-aware payload through unchanged. The TrayCommitItem
-    // discriminated union exactly matches AddPlateComponentInput, so the
+    // discriminated union exactly matches ComponentInput, so the
     // composed/leaf split is preserved end-to-end with no translation.
     const results = await Promise.allSettled(
       items.map((it) => addPlateComponent(plateId!, it))

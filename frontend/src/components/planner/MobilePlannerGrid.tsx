@@ -28,7 +28,7 @@ import { useFoods, useSetFoodFavorite } from "@/lib/queries/foods"
 import {
   useNoPlateActions,
   usePlateMacros,
-  useUpdatePlate,
+  usePlannerUpdatePlate,
 } from "@/lib/queries/plates"
 import { useProfile } from "@/lib/queries/profile"
 import { queryClient } from "@/lib/query-client"
@@ -216,7 +216,7 @@ export function MobilePlannerGrid({
 
   const setFavoriteMut = useSetFoodFavorite()
   const noPlate = useNoPlateActions(rangeFrom, rangeTo)
-  const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
+  const updatePlateMut = usePlannerUpdatePlate(rangeFrom, rangeTo)
   const recordFeedbackMut = useRecordFeedback()
   const clearFeedbackMut = useClearFeedback()
   const clearAiFillOnPlate = usePlannerUI((s) => s.clearAiFillOnPlate)
