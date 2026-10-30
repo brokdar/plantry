@@ -96,6 +96,8 @@
       "save": "Rezept speichern",
       "needs_choice_one": "{{count}} Zutat braucht noch eine Auswahl",
       "needs_choice_other": "{{count}} Zutaten brauchen noch eine Auswahl",
+      "needs_weight_one": "Gewicht pro Einheit für {{count}} Zutat eingeben",
+      "needs_weight_other": "Gewicht pro Einheit für {{count}} Zutaten eingeben",
       "kcal_per_portion": "{{kcal}} kcal pro Portion",
       "kcal_pending": "kcal pro Portion erscheinen, sobald jede Zutat gewählt ist.",
       "source_kcal": "Quelle: {{kcal}} kcal",

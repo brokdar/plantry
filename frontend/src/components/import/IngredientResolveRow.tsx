@@ -54,6 +54,18 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
     ing.amount === 0 &&
     state.resolution === "skip"
 
+  // A weight typed for one leaf must not be written to another: changing the
+  // linked food drops the edit and falls back to the estimate until the new
+  // leaf's saved portion loads.
+  function relink(foodId: number | null, foodName: string | null) {
+    return {
+      foodId,
+      foodName,
+      portionGrams: ing.portion_grams,
+      portionEdited: false,
+    } satisfies Partial<RowState>
+  }
+
   const lookup = useImportLineLookup(ing.name, lang)
   const results = lookup.data?.results ?? []
 
@@ -78,13 +90,13 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
     if (!lookup.data) return
     const hit = results.find((r) => r.source === "local" && r.exact)
     if (hit && hit.existing_id) {
-      onChange({ foodId: hit.existing_id, foodName: hit.name })
+      onChange(relink(hit.existing_id, hit.name))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lookup.data])
 
   function link(leaf: { id: number; name: string }) {
-    onChange({ resolution: "existing", foodId: leaf.id, foodName: leaf.name })
+    onChange({ resolution: "existing", ...relink(leaf.id, leaf.name) })
   }
 
   function onPickCandidate(r: LookupCandidate) {
@@ -154,7 +166,7 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
           <Select
             value={state.resolution}
             onValueChange={(v) =>
-              onChange({ resolution: v as Resolution, foodId: null })
+              onChange({ resolution: v as Resolution, ...relink(null, null) })
             }
           >
             <SelectTrigger
@@ -181,7 +193,7 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
               <span>{state.foodName}</span>
               <button
                 className="text-xs text-muted-foreground underline underline-offset-2"
-                onClick={() => onChange({ foodId: null, foodName: null })}
+                onClick={() => onChange(relink(null, null))}
               >
                 {t("import.step2.change")}
               </button>

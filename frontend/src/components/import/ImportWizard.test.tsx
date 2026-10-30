@@ -479,6 +479,12 @@ describe("ImportWizard", () => {
       name: "Zwiebel",
       existing_id: 12,
     }
+    const roteZwiebel: LookupCandidate = {
+      ...localMehl,
+      name: "Rote Zwiebel",
+      existing_id: 13,
+      exact: false,
+    }
     const countDraft: Draft = {
       ...draft,
       ingredients: [
@@ -498,7 +504,7 @@ describe("ImportWizard", () => {
     beforeEach(() => {
       vi.mocked(extractRecipe).mockResolvedValue({ draft: countDraft })
       vi.mocked(lookupImportLine).mockImplementation(async (query) => ({
-        results: query === "Zwiebel" ? [zwiebel] : [],
+        results: query === "Zwiebel" ? [zwiebel, roteZwiebel] : [],
         recommended_index: query === "Zwiebel" ? 0 : -1,
       }))
       vi.mocked(resolveImport).mockResolvedValue({ food: finalized })
@@ -577,6 +583,43 @@ describe("ImportWizard", () => {
       expect(
         screen.getByRole("button", { name: /save recipe/i })
       ).toBeDisabled()
+      expect(
+        screen.getByText("Enter a weight per unit for 1 ingredient")
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/needs a choice/)).not.toBeInTheDocument()
+    })
+
+    it("drops an edited weight when the row is linked to another leaf", async () => {
+      vi.mocked(listPortions).mockImplementation(async (id) => ({
+        items: id === 13 ? [{ food_id: 13, unit: "piece", grams: 80 }] : [],
+      }))
+      const user = await openReview()
+
+      const grams = await screen.findByRole("spinbutton", {
+        name: "Grams per piece of Zwiebel",
+      })
+      await waitFor(() => expect(grams).toHaveValue(120))
+      await user.clear(grams)
+      await user.type(grams, "150")
+
+      // Unlinking falls back to the estimate.
+      await user.click(screen.getByRole("button", { name: "Change" }))
+      await user.click(
+        await screen.findByRole("button", { name: /rote zwiebel/i })
+      )
+
+      // The new leaf's saved weight replaces the 150 g typed for the old one.
+      const relinked = await screen.findByRole("spinbutton", {
+        name: "Grams per piece of Zwiebel",
+      })
+      await waitFor(() => expect(relinked).toHaveValue(80))
+      expect(screen.getByText("saved for this ingredient")).toBeInTheDocument()
+
+      await user.click(screen.getByRole("button", { name: /save recipe/i }))
+      await waitFor(() => expect(resolveImport).toHaveBeenCalled())
+      expect(
+        vi.mocked(resolveImport).mock.calls[0][0].children[0]
+      ).toMatchObject({ food_id: 13, unit: "piece", portion_grams: null })
     })
   })
 })

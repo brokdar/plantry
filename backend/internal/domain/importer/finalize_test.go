@@ -155,6 +155,14 @@ func TestFinalize_CountUnitPortionGrams(t *testing.T) {
 			wantPortions: []food.Portion{{Unit: "Stück", Grams: 110}},
 		},
 		{
+			name:         "edited grams update a portion stored under an alias in place",
+			existing:     &food.Portion{Unit: "Stück", Grams: 110},
+			portionGrams: grams(90),
+			unit:         "piece",
+			wantGrams:    180,
+			wantPortions: []food.Portion{{Unit: "Stück", Grams: 90}},
+		},
+		{
 			name:         "unit alias in the request is normalised",
 			unit:         "Zehen",
 			wantGrams:    10,

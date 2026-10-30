@@ -34,6 +34,9 @@ func TestDisplay(t *testing.T) {
 		{"alias is normalised", 2, "Zehen", 2, "clove"},
 		{"other units pass through", 1.37, "cup", 1.37, "cup"},
 		{"zero", 0, "g", 0, "g"},
+		{"999.9 g rounds to 1000 then kg", 999.9, "g", 1, "kg"},
+		{"99.5 g rounds up into the 5 g band", 99.5, "g", 100, "g"},
+		{"float noise in kg input", 0.1 + 0.2, "kg", 300, "g"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

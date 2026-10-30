@@ -145,12 +145,18 @@ export function ImportWizard() {
 
   // Skipped rows (including quantity-less lines like "Salz und Pfeffer")
   // count as resolved.
-  // A count row also needs a positive weight per unit.
   const unresolvedCount = rows.filter(
+    (r) => r.resolution === "existing" && !r.foodId
+  ).length
+  // A linked count row also needs a positive weight per unit.
+  const missingWeightCount = rows.filter(
     (r) =>
       r.resolution === "existing" &&
-      (!r.foodId || (r.unit === r.countUnit && !((r.portionGrams ?? 0) > 0)))
+      r.foodId &&
+      r.unit === r.countUnit &&
+      !((r.portionGrams ?? 0) > 0)
   ).length
+  const blocked = unresolvedCount > 0 || missingWeightCount > 0
   const saving = resolve.isPending || createComp.isPending
 
   return (
@@ -343,21 +349,25 @@ export function ImportWizard() {
               {t("common.back")}
             </Button>
             <div className="flex flex-wrap items-center justify-end gap-3">
-              {unresolvedCount > 0 && (
+              {blocked && (
                 <p
                   id="import-save-hint"
                   role="status"
                   className="text-sm text-ink-muted"
                 >
-                  {t("import.review.needs_choice", { count: unresolvedCount })}
+                  {unresolvedCount > 0
+                    ? t("import.review.needs_choice", {
+                        count: unresolvedCount,
+                      })
+                    : t("import.review.needs_weight", {
+                        count: missingWeightCount,
+                      })}
                 </p>
               )}
               <Button
                 onClick={onSave}
-                disabled={unresolvedCount > 0 || saving}
-                aria-describedby={
-                  unresolvedCount > 0 ? "import-save-hint" : undefined
-                }
+                disabled={blocked || saving}
+                aria-describedby={blocked ? "import-save-hint" : undefined}
               >
                 {saving ? t("common.loading") : t("import.review.save")}
               </Button>

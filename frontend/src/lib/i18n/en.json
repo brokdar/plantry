@@ -96,6 +96,8 @@
       "save": "Save recipe",
       "needs_choice_one": "{{count}} ingredient needs a choice",
       "needs_choice_other": "{{count}} ingredients need a choice",
+      "needs_weight_one": "Enter a weight per unit for {{count}} ingredient",
+      "needs_weight_other": "Enter a weight per unit for {{count}} ingredients",
       "kcal_per_portion": "{{kcal}} kcal per portion",
       "kcal_pending": "kcal per portion appear once every ingredient is chosen.",
       "source_kcal": "Source: {{kcal}} kcal",
