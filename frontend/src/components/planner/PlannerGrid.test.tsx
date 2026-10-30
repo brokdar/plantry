@@ -41,7 +41,6 @@ vi.mock("@/lib/queries/plates", () => ({
   usePlannerUpdatePlate: vi.fn(() => ({ mutateAsync: mocks.updatePlate })),
   useDeletePlate: vi.fn(() => ({ mutateAsync: vi.fn() })),
   useSwapPlateComponent: vi.fn(() => ({ mutateAsync: vi.fn() })),
-  useAddPlateComponent: vi.fn(() => ({ mutateAsync: vi.fn() })),
   usePlateMacros: vi.fn(() => ({ data: { plates: [] } })),
   useNoPlateActions: vi.fn(() => ({
     markNoPlate: mocks.markNoPlate,

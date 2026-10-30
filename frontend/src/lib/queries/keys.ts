@@ -113,6 +113,9 @@ export const shoppingKeys = {
   /** `range` undefined = the server default for the anchored window. */
   list: (range?: ShoppingRange) =>
     [...shoppingKeys.all, "list", range ?? {}] as const,
+  /** The old planner's `{items}` list; F7 deletes it with ShoppingPanel. */
+  planner: (from: string, to: string) =>
+    [...shoppingKeys.all, "planner", from, to] as const,
 }
 
 export const importKeys = {

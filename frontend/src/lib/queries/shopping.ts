@@ -17,11 +17,10 @@ export function useShoppingList(range?: ShoppingRange) {
   })
 }
 
-/** Old planner ShoppingPanel only; deleted by F7. Its own key keeps the old
- *  `{items}` shape out of the new list's cache entries. */
+/** Old planner ShoppingPanel only; deleted by F7. */
 export function usePlannerShoppingList(from: string, to: string) {
   return useQuery({
-    queryKey: [...shoppingKeys.all, "planner", from, to],
+    queryKey: shoppingKeys.planner(from, to),
     queryFn: () => getPlannerShoppingList(from, to),
     enabled: !!from && !!to,
   })

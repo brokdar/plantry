@@ -235,27 +235,6 @@ export function usePlannerUpdatePlate(rangeFrom?: string, rangeTo?: string) {
   })
 }
 
-export function useAddPlateComponent() {
-  const qc = useQueryClient()
-  const { t } = useTranslation()
-  return useMutation({
-    mutationFn: ({
-      plateId,
-      input,
-    }: {
-      plateId: number
-      input: ComponentInput
-    }) => addPlateComponent(plateId, input),
-    onMutate: () => flushPendingPlateDeletes(),
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: plateKeys.all })
-      void qc.invalidateQueries({ queryKey: ["nutrition"] })
-      invalidatePlanViews(qc)
-    },
-    onError: (err) => toastError(err, t),
-  })
-}
-
 export function useSwapPlateComponent() {
   const qc = useQueryClient()
   const { t } = useTranslation()

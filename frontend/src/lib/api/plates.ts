@@ -194,10 +194,6 @@ export function createPlate(input: CreatePlateInput): Promise<Plate> {
   return apiFetch("/plates", { method: "POST", body: JSON.stringify(input) })
 }
 
-export function getPlate(id: number): Promise<Plate> {
-  return apiFetch(`/plates/${id}`)
-}
-
 export function updatePlate(
   id: number,
   input: UpdatePlateInput
