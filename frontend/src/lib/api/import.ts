@@ -4,11 +4,15 @@ import { apiFetch } from "./client"
 export interface DraftIngredient {
   raw_text: string
   amount: number
+  /** "g", "ml", a count unit ("piece", "clove"), or "" when unparsed. */
   unit: string
   original_unit: string
   name: string
   note: string
   confidence: "parsed" | "approximate" | "unparsed"
+  /** Estimated grams per count unit (backend `units.CountGrams`); null for
+   *  mass, volume and unparsed lines. */
+  portion_grams: number | null
 }
 
 export interface Draft {
@@ -62,6 +66,9 @@ export interface ResolveChildInput {
   food_id: number
   amount: number
   unit: string
+  /** Grams per count unit the user edited in the review; null keeps the
+   *  leaf's portion or the default estimate. */
+  portion_grams: number | null
 }
 
 export interface ResolveInstructionInput {
@@ -86,6 +93,7 @@ export interface FinalizedFoodChild {
   amount: number
   unit: string
   grams: number
+  grams_source: string
   sort_order: number
 }
 

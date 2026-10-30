@@ -12,6 +12,9 @@ var (
 	ErrSlotUnknown   = errors.New("slot unknown")
 	ErrInvalidMacros = errors.New("invalid macros")
 
+	// ErrInvalidPortions: a scaled recipe needs 0 < portions ≤ 100.
+	ErrInvalidPortions = errors.New("invalid portions")
+
 	// AI / agent errors.
 	ErrAIProviderMissing   = errors.New("ai provider not configured")
 	ErrAIStreamInterrupted = errors.New("ai stream interrupted")

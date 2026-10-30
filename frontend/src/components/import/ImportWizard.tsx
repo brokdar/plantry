@@ -73,6 +73,9 @@ export function ImportWizard() {
           foodName: null,
           amount: ing.amount,
           unit: ing.unit || "g",
+          countUnit: ing.portion_grams !== null ? ing.unit : null,
+          portionGrams: ing.portion_grams,
+          portionEdited: false,
         }))
       )
       setStep(2)
@@ -106,6 +109,10 @@ export function ImportWizard() {
           food_id: row.foodId ?? 0,
           amount: row.amount,
           unit: row.unit,
+          portion_grams:
+            row.portionEdited && row.unit === row.countUnit
+              ? row.portionGrams
+              : null,
         })),
       })
       const resolved = resolveRes.food
@@ -138,8 +145,11 @@ export function ImportWizard() {
 
   // Skipped rows (including quantity-less lines like "Salz und Pfeffer")
   // count as resolved.
+  // A count row also needs a positive weight per unit.
   const unresolvedCount = rows.filter(
-    (r) => r.resolution === "existing" && !r.foodId
+    (r) =>
+      r.resolution === "existing" &&
+      (!r.foodId || (r.unit === r.countUnit && !((r.portionGrams ?? 0) > 0)))
   ).length
   const saving = resolve.isPending || createComp.isPending
 

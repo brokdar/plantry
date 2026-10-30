@@ -23,6 +23,7 @@ vi.mock("@/lib/api/foods", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/foods")>()),
   createFood: vi.fn(),
   getFoodNutrition: vi.fn(),
+  listPortions: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({
@@ -34,7 +35,7 @@ import {
   lookupImportLine,
   resolveImport,
 } from "@/lib/api/import"
-import { createFood, getFoodNutrition } from "@/lib/api/foods"
+import { createFood, getFoodNutrition, listPortions } from "@/lib/api/foods"
 import { toast } from "sonner"
 
 import { ImportWizard } from "./ImportWizard"
@@ -58,6 +59,7 @@ const draft: Draft = {
       name: "Mehl",
       note: "",
       confidence: "parsed",
+      portion_grams: null,
     },
     {
       raw_text: "Salz und Pfeffer",
@@ -67,6 +69,7 @@ const draft: Draft = {
       name: "Salz und Pfeffer",
       note: "",
       confidence: "unparsed",
+      portion_grams: null,
     },
   ],
   tags: [],
@@ -135,7 +138,14 @@ const finalized: FinalizedFood = {
   cook_minutes: 40,
   notes: null,
   children: [
-    { child_id: 7, amount: 200, unit: "g", grams: 200, sort_order: 0 },
+    {
+      child_id: 7,
+      amount: 200,
+      unit: "g",
+      grams: 200,
+      grams_source: "direct",
+      sort_order: 0,
+    },
   ],
   instructions: [
     { step_number: 1, text: "Teig kneten." },
@@ -168,6 +178,7 @@ describe("ImportWizard", () => {
     vi.clearAllMocks()
     vi.mocked(extractRecipe).mockResolvedValue({ draft })
     vi.mocked(getFoodNutrition).mockResolvedValue(mehlNutrition)
+    vi.mocked(listPortions).mockResolvedValue({ items: [] })
   })
 
   it("creates a leaf with the nutrition of a candidate that is not in the library", async () => {
@@ -370,6 +381,7 @@ describe("ImportWizard", () => {
             name: "Petersilie",
             note: "zum Garnieren",
             confidence: "unparsed",
+            portion_grams: null,
           },
           // Unparsed but with an amount: still a parse error to review.
           {
@@ -380,6 +392,7 @@ describe("ImportWizard", () => {
             name: "Kräuter",
             note: "",
             confidence: "unparsed",
+            portion_grams: null,
           },
         ],
       },
@@ -458,5 +471,112 @@ describe("ImportWizard", () => {
       draft.description
     )
     await waitFor(() => expect(toast.warning).toHaveBeenCalledTimes(1))
+  })
+
+  describe("count units", () => {
+    const zwiebel: LookupCandidate = {
+      ...localMehl,
+      name: "Zwiebel",
+      existing_id: 12,
+    }
+    const countDraft: Draft = {
+      ...draft,
+      ingredients: [
+        {
+          raw_text: "2 Zwiebel(n)",
+          amount: 2,
+          unit: "piece",
+          original_unit: "Stück",
+          name: "Zwiebel",
+          note: "",
+          confidence: "approximate",
+          portion_grams: 120,
+        },
+      ],
+    }
+
+    beforeEach(() => {
+      vi.mocked(extractRecipe).mockResolvedValue({ draft: countDraft })
+      vi.mocked(lookupImportLine).mockImplementation(async (query) => ({
+        results: query === "Zwiebel" ? [zwiebel] : [],
+        recommended_index: query === "Zwiebel" ? 0 : -1,
+      }))
+      vi.mocked(resolveImport).mockResolvedValue({ food: finalized })
+      vi.mocked(createFood).mockResolvedValue({
+        ...finalized,
+        id: 99,
+      } as unknown as ComposedFood)
+    })
+
+    it("shows the editable estimate and saves the edited weight", async () => {
+      const user = await openReview()
+
+      const grams = await screen.findByRole("spinbutton", {
+        name: "Grams per piece of Zwiebel",
+      })
+      await waitFor(() => expect(grams).toHaveValue(120))
+      expect(screen.getByText("1 piece ≈")).toBeInTheDocument()
+      expect(screen.getByText("estimate")).toBeInTheDocument()
+      expect(
+        screen.getByRole("combobox", { name: "Unit for Zwiebel" })
+      ).toHaveTextContent("piece")
+      // 2 × 120 g × 350 kcal/100 g ÷ 4 portions = 210 kcal.
+      expect(
+        await screen.findByText("210 kcal per portion")
+      ).toBeInTheDocument()
+
+      await user.clear(grams)
+      await user.type(grams, "150")
+      expect(screen.queryByText("estimate")).not.toBeInTheDocument()
+      // 2 × 150 g × 350 kcal/100 g ÷ 4 portions ≈ 263 kcal.
+      expect(
+        await screen.findByText("263 kcal per portion")
+      ).toBeInTheDocument()
+
+      await user.click(screen.getByRole("button", { name: /save recipe/i }))
+      await waitFor(() => expect(resolveImport).toHaveBeenCalled())
+      expect(
+        vi.mocked(resolveImport).mock.calls[0][0].children[0]
+      ).toMatchObject({
+        food_id: 12,
+        amount: 2,
+        unit: "piece",
+        portion_grams: 150,
+      })
+    })
+
+    it("uses the leaf's saved weight and leaves it untouched on save", async () => {
+      vi.mocked(listPortions).mockResolvedValue({
+        items: [{ food_id: 12, unit: "piece", grams: 90 }],
+      })
+      const user = await openReview()
+
+      const grams = await screen.findByRole("spinbutton", {
+        name: "Grams per piece of Zwiebel",
+      })
+      await waitFor(() => expect(grams).toHaveValue(90))
+      expect(screen.getByText("saved for this ingredient")).toBeInTheDocument()
+
+      await user.click(screen.getByRole("button", { name: /save recipe/i }))
+      await waitFor(() => expect(resolveImport).toHaveBeenCalled())
+      expect(
+        vi.mocked(resolveImport).mock.calls[0][0].children[0]
+      ).toMatchObject({ unit: "piece", portion_grams: null })
+    })
+
+    it("blocks saving while the weight per piece is empty", async () => {
+      const user = await openReview()
+
+      const grams = await screen.findByRole("spinbutton", {
+        name: "Grams per piece of Zwiebel",
+      })
+      await waitFor(() => expect(grams).toHaveValue(120))
+      await user.clear(grams)
+
+      expect(grams).toHaveAttribute("aria-invalid", "true")
+      expect(
+        screen.getByRole("button", { name: /save recipe/i })
+      ).toBeDisabled()
+    })
   })
 })

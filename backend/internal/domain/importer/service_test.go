@@ -30,7 +30,7 @@ func TestService_Extract_PassesSourceKcalThrough(t *testing.T) {
 		RecipeIngredient:     []string{"200 g Spaghetti"},
 		SourceKcalPerServing: &kcal,
 	}
-	svc := importer.NewService(nil, stubExtractor{rec: rec}, nil, nil)
+	svc := importer.NewService(nil, stubExtractor{rec: rec}, nil, nil, nil)
 
 	d, err := svc.Extract(context.Background(), importer.ExtractInput{HTML: "<html></html>"})
 	require.NoError(t, err)
@@ -47,7 +47,7 @@ func newRecordedImport(t *testing.T, turns ...fake.Turn) (*importer.Service, *sq
 	db := testhelper.NewTestDB(t)
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
 	client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: turns}), "fake")
-	svc := importer.NewService(nil, stubExtractor{rec: &importer.RawRecipe{}}, llm.StaticResolver(client, importModel), nil).
+	svc := importer.NewService(nil, stubExtractor{rec: &importer.RawRecipe{}}, llm.StaticResolver(client, importModel), nil, nil).
 		WithRecorder(rec)
 	return svc, db
 }

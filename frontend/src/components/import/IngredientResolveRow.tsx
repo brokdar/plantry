@@ -15,7 +15,8 @@ import {
 import type { DraftIngredient, Resolution } from "@/lib/api/import"
 import type { LookupCandidate } from "@/lib/api/lookup"
 import { leafInputFromCandidate } from "@/lib/api/foods"
-import { useEnsureLeaf } from "@/lib/queries/foods"
+import { normalizeUnit } from "@/lib/domain/units"
+import { useEnsureLeaf, usePortions } from "@/lib/queries/foods"
 import { useImportLineLookup } from "@/lib/queries/import"
 
 export type RowState = {
@@ -24,6 +25,14 @@ export type RowState = {
   foodName: string | null
   amount: number
   unit: string
+  /** The draft's count unit ("piece", "clove"), or null for mass/volume. */
+  countUnit: string | null
+  /** Grams per count unit: the edited value, else the linked leaf's
+   *  portion, else the draft's estimate. */
+  portionGrams: number | null
+  /** True once the user typed a weight; only then is it sent to the
+   *  backend, which writes it to the leaf's portion. */
+  portionEdited: boolean
 }
 
 interface RowProps {
@@ -47,6 +56,19 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
 
   const lookup = useImportLineLookup(ing.name, lang)
   const results = lookup.data?.results ?? []
+
+  const isCountRow = state.countUnit !== null && state.unit === state.countUnit
+  // The linked leaf's own weight for the count unit beats the estimate.
+  const portions = usePortions(isCountRow && state.foodId ? state.foodId : 0)
+  const leafPortion = portions.data?.items.find(
+    (p) => normalizeUnit(p.unit) === state.countUnit
+  )
+  useEffect(() => {
+    if (!isCountRow || state.portionEdited || !portions.data) return
+    const grams = leafPortion?.grams ?? ing.portion_grams
+    if (grams !== state.portionGrams) onChange({ portionGrams: grams })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [portions.data, leafPortion?.grams])
 
   // Auto-select only an exact catalogue match; prefix/contains matches
   // ("Zwiebelsuppe" for "Zwiebel") stay pickable but need a user choice.
@@ -97,7 +119,11 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
         <div className="min-w-40 flex-1">
           <div className="text-sm font-medium">
             {ing.amount > 0
-              ? `${ing.amount} ${ing.unit || ing.original_unit} `
+              ? `${ing.amount} ${
+                  ing.portion_grams !== null
+                    ? t(`unit.${ing.unit}.name`, { count: ing.amount })
+                    : ing.unit || ing.original_unit
+                } `
               : ""}
             {ing.name || ing.raw_text}
             {ing.note && (
@@ -245,10 +271,53 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
                 <SelectContent>
                   <SelectItem value="g">g</SelectItem>
                   <SelectItem value="ml">ml</SelectItem>
+                  {state.countUnit && (
+                    <SelectItem value={state.countUnit}>
+                      {t(`unit.${state.countUnit}.name`)}
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {isCountRow && (
+            <div className="flex flex-wrap items-center gap-2 text-small text-ink-muted">
+              <span aria-hidden="true">
+                {t("import.step2.portion_estimate", {
+                  unit: t(`unit.${state.countUnit}.name`, { count: 1 }),
+                })}
+              </span>
+              <Input
+                aria-label={t("import.step2.portion_grams_for", {
+                  unit: t(`unit.${state.countUnit}.name`, { count: 1 }),
+                  name: label,
+                })}
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="any"
+                className="h-11 w-24 tabular-nums"
+                value={state.portionGrams ?? ""}
+                aria-invalid={!((state.portionGrams ?? 0) > 0) || undefined}
+                onChange={(e) =>
+                  onChange({
+                    portionGrams:
+                      e.target.value === "" ? null : Number(e.target.value),
+                    portionEdited: true,
+                  })
+                }
+              />
+              <span>{t("units.g")}</span>
+              {!state.portionEdited && (
+                <span>
+                  {leafPortion
+                    ? t("import.step2.portion_saved")
+                    : t("import.step2.portion_estimated")}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

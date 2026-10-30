@@ -49,26 +49,29 @@ var Defaults = map[string]Default{
 	"gal":  {Grams: 3785.41, Kind: KindVolume, Approximate: true},
 }
 
-// CountUnits is a set of canonical count-unit keys. These carry no
-// universal gram weight and must be resolved via a per-ingredient portion.
-// Resolvers use this set to report "grams required" errors distinctly from
-// "unknown unit" errors.
-var CountUnits = map[string]struct{}{
-	"piece":  {},
-	"clove":  {},
-	"slice":  {},
-	"bunch":  {},
-	"pinch":  {},
-	"stick":  {},
-	"can":    {},
-	"jar":    {},
-	"packet": {},
-	"stalk":  {},
-	"pod":    {},
-	"head":   {},
-	"leaf":   {},
-	"leaves": {},
-	"sprig":  {},
+// CountGrams maps each canonical count-unit key to its default grams per
+// unit. It is the single estimate table: the importer seeds a leaf's missing
+// food_portions row from it, and the review step shows it as an editable
+// estimate. Real weights vary per ingredient (an egg is not an onion), so a
+// leaf's own portion row always wins over this table.
+var CountGrams = map[string]float64{
+	"piece":   120,
+	"clove":   5,
+	"slice":   30,
+	"bunch":   30,
+	"pinch":   0.5,
+	"stick":   60,
+	"can":     400,
+	"jar":     200,
+	"packet":  8,
+	"tub":     200,
+	"handful": 30,
+	"stalk":   60,
+	"pod":     5,
+	"head":    500,
+	"leaf":    1,
+	"leaves":  1,
+	"sprig":   1,
 }
 
 // aliases maps user-entered tokens (lowercased, trimmed, dot-less) to
@@ -130,7 +133,7 @@ var aliases = map[string]string{
 	"gal":         "gal",
 	"gallon":      "gal",
 	"gallons":     "gal",
-	// Count — canonical keys that CountUnits tracks.
+	// Count — canonical keys that CountGrams tracks.
 	"piece":    "piece",
 	"pieces":   "piece",
 	"pc":       "piece",
@@ -170,6 +173,12 @@ var aliases = map[string]string{
 	"pck":      "packet",
 	"päckchen": "packet",
 	"packung":  "packet",
+	"tub":      "tub",
+	"tubs":     "tub",
+	"becher":   "tub",
+	"handful":  "handful",
+	"handfuls": "handful",
+	"handvoll": "handful",
 	"stalk":    "stalk",
 	"stalks":   "stalk",
 	"pod":      "pod",
@@ -180,6 +189,9 @@ var aliases = map[string]string{
 	"leaves":   "leaves",
 	"sprig":    "sprig",
 	"sprigs":   "sprig",
+	// Knife tip: close enough to a pinch to share its estimate.
+	"msp":          "pinch",
+	"messerspitze": "pinch",
 	// "serving" is used for OFF-imported per-serving portions; no default grams.
 	"serving":  "serving",
 	"servings": "serving",
@@ -205,7 +217,7 @@ func Normalize(unit string) string {
 // IsCount reports whether the normalized unit is a count unit (per-ingredient
 // conversion required).
 func IsCount(normalized string) bool {
-	_, ok := CountUnits[normalized]
+	_, ok := CountGrams[normalized]
 	return ok
 }
 

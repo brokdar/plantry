@@ -180,7 +180,7 @@ func TestReplay_ImportFallbackRetry(t *testing.T) {
 		replyTurn("not json", "max_tokens"),
 		replyTurn(validJSON, "end_turn"),
 	}})
-	svc := importer.NewService(nil, noRecipe{}, llm.StaticResolver(rec.Meter(inner, "fake"), "fake-import"), nil).
+	svc := importer.NewService(nil, noRecipe{}, llm.StaticResolver(rec.Meter(inner, "fake"), "fake-import"), nil, nil).
 		WithRecorder(rec)
 
 	d, err := svc.Extract(context.Background(), importer.ExtractInput{HTML: "<html><body>soup</body></html>"})

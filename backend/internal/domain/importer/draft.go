@@ -2,8 +2,8 @@ package importer
 
 // Confidence levels for a parsed ingredient line.
 const (
-	ConfidenceParsed      = "parsed"      // exact unit (g, kg, ml, l, cl, mg).
-	ConfidenceApproximate = "approximate" // conventional unit (EL, Prise, Zehe, Stück…).
+	ConfidenceParsed      = "parsed"      // exact unit (g, kg, mg, ml, l, cl, dl).
+	ConfidenceApproximate = "approximate" // conventional or count unit (EL, Prise, Zehe, Stück…).
 	ConfidenceUnparsed    = "unparsed"    // could not determine amount or unit.
 )
 
@@ -11,11 +11,15 @@ const (
 type DraftIngredient struct {
 	RawText      string  `json:"raw_text"`
 	Amount       float64 `json:"amount"`
-	Unit         string  `json:"unit"`          // canonical "g" or "ml", or "" when unparsed.
+	Unit         string  `json:"unit"`          // "g", "ml", a canonical count unit ("piece", "clove"), or "" when unparsed.
 	OriginalUnit string  `json:"original_unit"` // user-visible original (e.g. "EL", "Zehe").
 	Name         string  `json:"name"`
 	Note         string  `json:"note"`
 	Confidence   string  `json:"confidence"`
+	// PortionGrams is the estimated grams per count unit from
+	// units.CountGrams ("1 piece ≈ 120 g"); nil for mass, volume and
+	// unparsed lines. A leaf's own portion overrides it on Finalize.
+	PortionGrams *float64 `json:"portion_grams"`
 }
 
 // Draft is the whole recipe as extracted from a page, before the user resolves it.

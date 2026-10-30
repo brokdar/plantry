@@ -38,9 +38,10 @@ function chefkochHTML(tag: string): string {
 </script></head><body></body></html>`
 }
 
-// Per-100 g values seeded for each ingredient, and the grams the parser
-// yields for its line (C3 defaults: count without unit = 120 g per piece,
-// Zehe = 5 g, EL = 15 ml at 1 g/ml since the leaf has no ml portion):
+// Per-100 g values seeded for each ingredient, and the grams each line
+// resolves to (counts keep their unit and get a portion from units.CountGrams:
+// a unit-less count is 120 g per piece, Zehe = 5 g; EL = 15 ml at 1 g/ml
+// since the leaf has no ml portion):
 //
 //   Reis       250 g          × 350 kcal = 875.0
 //   Zwiebel    2 × 120 = 240 g × 40 kcal =  96.0
