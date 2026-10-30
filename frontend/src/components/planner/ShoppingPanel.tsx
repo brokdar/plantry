@@ -24,7 +24,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { shiftYMD, todayISO } from "@/lib/planner-window"
-import { useShoppingList } from "@/lib/queries/shopping"
+import { usePlannerShoppingList } from "@/lib/queries/shopping"
 import { cn } from "@/lib/utils"
 
 interface DateRange {
@@ -136,7 +136,10 @@ function useShoppingListState(range: DateRange) {
     migrateLocalStorage()
   }, [])
 
-  const { data, isLoading } = useShoppingList(activeRange.from, activeRange.to)
+  const { data, isLoading } = usePlannerShoppingList(
+    activeRange.from,
+    activeRange.to
+  )
 
   const [purchased, setPurchased] = useState<Set<number>>(() =>
     loadPurchased(activeRange.from, activeRange.to)

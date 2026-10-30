@@ -24,7 +24,8 @@ import {
   listPlates,
   updatePlate,
   updatePlateComponent,
-  type AddPlateComponentInput,
+  type ComponentInput,
+  type CreatePlateInput,
   type Plate,
   type PlateComponentQuantity,
   type UpdatePlateComponentInput,
@@ -39,6 +40,7 @@ import {
 } from "./availability"
 import { availabilityKeys, plateKeys } from "./keys"
 import { flushPendingPlateDeletes } from "./pending-plate-deletes"
+import { invalidatePlanViews, useUndoableRemoval } from "./plan"
 
 export function usePlatesRange(from: string, to: string) {
   return useQuery({
@@ -117,23 +119,101 @@ export function flattenPlatesPages(
   return data.pages.flatMap((p) => p.plates)
 }
 
-export function useCreatePlate(rangeFrom: string, rangeTo: string) {
+// ── Plate mutations for the new screens (§3.1) ───────────────────────
+// Each invalidates exactly the plan views (planKeys, todayKeys, shoppingKeys).
+
+export function useCreatePlate() {
   const qc = useQueryClient()
   const { t } = useTranslation()
   return useMutation({
-    mutationFn: createPlate,
-    onMutate: () => flushPendingPlateDeletes(),
-    onSettled: () => {
-      void qc.invalidateQueries({
-        queryKey: plateKeys.range(rangeFrom, rangeTo),
-      })
-      void qc.invalidateQueries({ queryKey: ["nutrition"] })
+    mutationFn: (input: CreatePlateInput) => createPlate(input),
+    onSuccess: () => invalidatePlanViews(qc),
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/** Move (date, slot), eaters and note. */
+export function useUpdatePlate() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({ id, input }: { id: number; input: UpdatePlateInput }) =>
+      updatePlate(id, input),
+    onSuccess: () => invalidatePlanViews(qc),
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/** Deletes the plate and offers Undo through the returned snapshot. */
+export function useDeletePlate() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  const offerUndo = useUndoableRemoval()
+  return useMutation({
+    mutationFn: (id: number) => deletePlate(id),
+    onSuccess: (res) => {
+      invalidatePlanViews(qc)
+      offerUndo(res, "plate_removed")
     },
     onError: (err) => toastError(err, t),
   })
 }
 
-export function useUpdatePlate(rangeFrom?: string, rangeTo?: string) {
+export function useAddComponent() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({
+      plateId,
+      input,
+    }: {
+      plateId: number
+      input: ComponentInput
+    }) => addPlateComponent(plateId, input),
+    onSuccess: () => invalidatePlanViews(qc),
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/** Swap (`food_id`) or quantity (`portions` | `amount` + `unit`). */
+export function useUpdateComponent() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({
+      plateId,
+      componentId,
+      input,
+    }: {
+      plateId: number
+      componentId: number
+      input: UpdatePlateComponentInput
+    }) => updatePlateComponent(plateId, componentId, input),
+    onSuccess: () => invalidatePlanViews(qc),
+    onError: (err) => toastError(err, t),
+  })
+}
+
+export function useRemoveComponent() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({
+      plateId,
+      componentId,
+    }: {
+      plateId: number
+      componentId: number
+    }) => deletePlateComponent(plateId, componentId),
+    onSuccess: () => invalidatePlanViews(qc),
+    onError: (err) => toastError(err, t),
+  })
+}
+
+// ── Old planner (kept until F4 deletes it) ───────────────────────────
+// These also invalidate the plan views so Today, Plan and Shop stay current.
+
+export function usePlannerUpdatePlate(rangeFrom?: string, rangeTo?: string) {
   const qc = useQueryClient()
   const { t } = useTranslation()
   return useMutation({
@@ -149,20 +229,7 @@ export function useUpdatePlate(rangeFrom?: string, rangeTo?: string) {
         void qc.invalidateQueries({ queryKey: plateKeys.all })
       }
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
-    },
-    onError: (err) => toastError(err, t),
-  })
-}
-
-export function useDeletePlate() {
-  const qc = useQueryClient()
-  const { t } = useTranslation()
-  return useMutation({
-    mutationFn: (id: number) => deletePlate(id),
-    onMutate: () => flushPendingPlateDeletes(),
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: plateKeys.all })
-      void qc.invalidateQueries({ queryKey: ["nutrition"] })
+      invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })
@@ -177,12 +244,13 @@ export function useAddPlateComponent() {
       input,
     }: {
       plateId: number
-      input: AddPlateComponentInput
+      input: ComponentInput
     }) => addPlateComponent(plateId, input),
     onMutate: () => flushPendingPlateDeletes(),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
+      invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })
@@ -205,6 +273,7 @@ export function useSwapPlateComponent() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
+      invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })
@@ -237,6 +306,7 @@ export function useUpdatePlateComponentQuantity() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
+      invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })
@@ -252,6 +322,7 @@ export function useRemovePlateComponent() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
+      invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })

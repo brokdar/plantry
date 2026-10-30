@@ -13,10 +13,10 @@ import { renderWithRouter } from "@/test/render"
 import { ShoppingList, ShoppingPanel } from "./ShoppingPanel"
 
 vi.mock("@/lib/queries/shopping", () => ({
-  useShoppingList: vi.fn(),
+  usePlannerShoppingList: vi.fn(),
 }))
 
-import { useShoppingList } from "@/lib/queries/shopping"
+import { usePlannerShoppingList } from "@/lib/queries/shopping"
 
 // Stub localStorage for the test environment.
 const store: Record<string, string> = {}
@@ -45,10 +45,10 @@ const defaultProps = {
 }
 
 function mockEmptyList() {
-  vi.mocked(useShoppingList).mockReturnValue({
+  vi.mocked(usePlannerShoppingList).mockReturnValue({
     data: { items: [] },
     isLoading: false,
-  } as unknown as ReturnType<typeof useShoppingList>)
+  } as unknown as ReturnType<typeof usePlannerShoppingList>)
 }
 
 afterEach(() => {
@@ -71,45 +71,45 @@ beforeEach(() => {
 
 describe("ShoppingPanel", () => {
   test("renders loading state", async () => {
-    vi.mocked(useShoppingList).mockReturnValue({
+    vi.mocked(usePlannerShoppingList).mockReturnValue({
       data: undefined,
       isLoading: true,
-    } as unknown as ReturnType<typeof useShoppingList>)
+    } as unknown as ReturnType<typeof usePlannerShoppingList>)
 
     renderWithRouter(<ShoppingPanel {...defaultProps} />, "/")
     expect(await screen.findByText("Loading...")).toBeInTheDocument()
   })
 
   test("renders empty state when no items", async () => {
-    vi.mocked(useShoppingList).mockReturnValue({
+    vi.mocked(usePlannerShoppingList).mockReturnValue({
       data: { items: [] },
       isLoading: false,
-    } as unknown as ReturnType<typeof useShoppingList>)
+    } as unknown as ReturnType<typeof usePlannerShoppingList>)
 
     renderWithRouter(<ShoppingPanel {...defaultProps} />, "/")
     expect(await screen.findByText(/No ingredients/)).toBeInTheDocument()
   })
 
-  test("calls useShoppingList with from/to range", async () => {
-    vi.mocked(useShoppingList).mockReturnValue({
+  test("calls usePlannerShoppingList with from/to range", async () => {
+    vi.mocked(usePlannerShoppingList).mockReturnValue({
       data: { items: [] },
       isLoading: false,
-    } as unknown as ReturnType<typeof useShoppingList>)
+    } as unknown as ReturnType<typeof usePlannerShoppingList>)
 
     renderWithRouter(<ShoppingPanel {...defaultProps} />, "/")
     await screen.findByText(/No ingredients/)
 
-    expect(useShoppingList).toHaveBeenCalledWith(
+    expect(usePlannerShoppingList).toHaveBeenCalledWith(
       defaultRange.from,
       defaultRange.to
     )
   })
 
   test("renders preset chips", async () => {
-    vi.mocked(useShoppingList).mockReturnValue({
+    vi.mocked(usePlannerShoppingList).mockReturnValue({
       data: { items: [] },
       isLoading: false,
-    } as unknown as ReturnType<typeof useShoppingList>)
+    } as unknown as ReturnType<typeof usePlannerShoppingList>)
 
     renderWithRouter(<ShoppingPanel {...defaultProps} />, "/")
     await screen.findByText(/No ingredients/)
@@ -124,12 +124,12 @@ describe("ShoppingPanel", () => {
 
   test("localStorage key uses range:{from}:{to}", async () => {
     const user = userEvent.setup()
-    vi.mocked(useShoppingList).mockReturnValue({
+    vi.mocked(usePlannerShoppingList).mockReturnValue({
       data: {
         items: [{ food_id: 5, name: "Broccoli", total_grams: 100 }],
       },
       isLoading: false,
-    } as unknown as ReturnType<typeof useShoppingList>)
+    } as unknown as ReturnType<typeof usePlannerShoppingList>)
 
     renderWithRouter(<ShoppingPanel {...defaultProps} />, "/")
     const checkbox = await screen.findByRole("checkbox")
@@ -149,10 +149,10 @@ describe("ShoppingPanel", () => {
       "plantry:purchased:week:42" as unknown as null
     )
 
-    vi.mocked(useShoppingList).mockReturnValue({
+    vi.mocked(usePlannerShoppingList).mockReturnValue({
       data: { items: [] },
       isLoading: false,
-    } as unknown as ReturnType<typeof useShoppingList>)
+    } as unknown as ReturnType<typeof usePlannerShoppingList>)
 
     renderWithRouter(<ShoppingPanel {...defaultProps} />, "/")
     await screen.findByText(/No ingredients/)
@@ -179,7 +179,7 @@ describe("ShoppingPanel", () => {
       renderWithRouter(<ShoppingPanel {...defaultProps} range={range} />, "/")
       await screen.findByText(/No ingredients/)
 
-      expect(useShoppingList).toHaveBeenLastCalledWith(
+      expect(usePlannerShoppingList).toHaveBeenLastCalledWith(
         "2026-11-02",
         "2026-11-08"
       )
@@ -196,7 +196,7 @@ describe("ShoppingPanel", () => {
       renderWithRouter(<ShoppingPanel {...defaultProps} range={range} />, "/")
       await screen.findByText(/No ingredients/)
 
-      expect(useShoppingList).toHaveBeenLastCalledWith(
+      expect(usePlannerShoppingList).toHaveBeenLastCalledWith(
         "2026-10-28",
         "2026-11-01"
       )
@@ -213,7 +213,7 @@ describe("ShoppingPanel", () => {
         await screen.findByRole("button", { name: "Next window" })
       )
 
-      expect(useShoppingList).toHaveBeenLastCalledWith(
+      expect(usePlannerShoppingList).toHaveBeenLastCalledWith(
         "2026-11-02",
         "2026-11-08"
       )
@@ -233,6 +233,9 @@ describe("ShoppingList (inline)", () => {
     expect(
       screen.getByRole("button", { name: "This window" })
     ).toBeInTheDocument()
-    expect(useShoppingList).toHaveBeenLastCalledWith("2026-04-26", "2026-05-02")
+    expect(usePlannerShoppingList).toHaveBeenLastCalledWith(
+      "2026-04-26",
+      "2026-05-02"
+    )
   })
 })

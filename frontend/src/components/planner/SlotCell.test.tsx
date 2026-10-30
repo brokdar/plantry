@@ -8,6 +8,7 @@ import type { AvailabilityCell } from "@/lib/api/availability"
 import type { MacrosResponse, Plate } from "@/lib/api/plates"
 
 import { SlotCell } from "./SlotCell"
+import { mockPlate, mockPlateComponent } from "@/test/fixtures"
 
 function defaultProps(overrides: Partial<Parameters<typeof SlotCell>[0]> = {}) {
   return {
@@ -177,16 +178,12 @@ describe("SlotCell — No plate state", () => {
 
   test("a plate in a none cell (default changed later) still renders with its actions", async () => {
     const onDeletePlate = vi.fn()
-    const plate: Plate = {
+    const plate: Plate = mockPlate({
       id: 42,
       slot_id: 1,
       date: "2026-05-02",
-      note: null,
-      components: [
-        { id: 1, plate_id: 42, food_id: 7, portions: 1, sort_order: 0 },
-      ],
-      created_at: "2026-05-02T10:00:00Z",
-    }
+      components: [mockPlateComponent({ id: 1, plate_id: 42, food_id: 7 })],
+    })
     const food = { id: 7, name: "Bolognese" } as unknown as Food
     const { container } = render(
       <SlotCell
@@ -221,16 +218,12 @@ describe("SlotCell — No plate state", () => {
 
 describe("SlotCell — macros pill", () => {
   function plannedPlate(): Plate {
-    return {
+    return mockPlate({
       id: 42,
       slot_id: 1,
       date: "2026-05-02",
-      note: null,
-      components: [
-        { id: 1, plate_id: 42, food_id: 7, portions: 1, sort_order: 0 },
-      ],
-      created_at: "2026-05-02T10:00:00Z",
-    }
+      components: [mockPlateComponent({ id: 1, plate_id: 42, food_id: 7 })],
+    })
   }
 
   function macros(kcal: number): MacrosResponse {

@@ -56,7 +56,7 @@ import {
   useNoPlateActions,
   usePlateMacros,
   useRemovePlateComponent,
-  useUpdatePlate,
+  usePlannerUpdatePlate,
   useUpdatePlateComponentQuantity,
 } from "@/lib/queries/plates"
 import { MacroTriad } from "@/components/editorial/macros"
@@ -244,7 +244,7 @@ function SlotSheetBody({
   }, [foodMacrosData])
 
   const noPlate = useNoPlateActions(rangeFrom, rangeTo)
-  const updatePlateMut = useUpdatePlate(rangeFrom, rangeTo)
+  const updatePlateMut = usePlannerUpdatePlate(rangeFrom, rangeTo)
 
   function handleMarkNoPlate() {
     // The plate goes away with the mark, so close the sheet; the toast
@@ -473,11 +473,6 @@ function HeroBlock({
       return {
         label: t("plate.feedback.disliked"),
         tone: "bg-destructive/10 text-destructive",
-      }
-    if (plate.feedback?.status === "cooked")
-      return {
-        label: t("plate.feedback.cooked"),
-        tone: "bg-tertiary/12 text-tertiary",
       }
     return null
   })()
@@ -819,7 +814,7 @@ function NoteField({
   rangeTo: string
 }) {
   const { t } = useTranslation()
-  const updatePlate = useUpdatePlate(rangeFrom, rangeTo)
+  const updatePlate = usePlannerUpdatePlate(rangeFrom, rangeTo)
   const id = useId()
   const initial = plate.note ?? ""
 
@@ -864,7 +859,7 @@ function FeedbackBlock({ plate }: { plate: Plate }) {
   const clear = useClearFeedback()
   const current = plate.feedback?.status
 
-  function toggle(status: "cooked" | "loved" | "disliked") {
+  function toggle(status: "loved" | "disliked") {
     if (current === status) {
       void clear.mutateAsync(plate.id)
     } else {
@@ -876,17 +871,11 @@ function FeedbackBlock({ plate }: { plate: Plate }) {
   }
 
   const buttons: {
-    key: "cooked" | "loved" | "disliked"
+    key: "loved" | "disliked"
     label: string
     Icon: typeof Heart
     activeClass: string
   }[] = [
-    {
-      key: "cooked",
-      label: t("plate.feedback.cooked"),
-      Icon: Utensils,
-      activeClass: "border-tertiary/60 bg-tertiary/10 text-tertiary",
-    },
     {
       key: "loved",
       label: t("plate.feedback.loved"),
@@ -910,7 +899,7 @@ function FeedbackBlock({ plate }: { plate: Plate }) {
       <h3 className="font-heading text-[10.5px] font-bold tracking-[0.22em] text-on-surface-variant uppercase">
         {t("plate.feedback.label")}
       </h3>
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
         {buttons.map(({ key, label, Icon, activeClass }) => {
           const active = current === key
           return (

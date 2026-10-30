@@ -59,6 +59,8 @@ describe("DraftPlatePreview", () => {
           id: 11,
           plate_id: 1,
           food_id: mockBrownRice.id,
+          food_name: mockBrownRice.name,
+          kind: "leaf",
           amount: 200,
           unit: "g",
           grams: 200,

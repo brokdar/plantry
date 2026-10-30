@@ -381,8 +381,6 @@
     "filter_by_role": "Filter by role",
     "feedback": {
       "label": "How did it go?",
-      "cooked": "Cooked",
-      "skipped": "Skipped",
       "loved": "Loved",
       "disliked": "Disliked",
       "add_note": "Add note",
@@ -1484,6 +1482,13 @@
       "title": "You're set up",
       "body": "Add 10 recipes and Plantry can plan your weeks.",
       "add_recipes": "Add recipes"
+    }
+  },
+  "plan": {
+    "undo": {
+      "plate_removed": "Plate removed",
+      "batch_removed": "Batch removed",
+      "plan_cleared": "Plan cleared"
     }
   }
 }

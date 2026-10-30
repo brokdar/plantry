@@ -381,8 +381,6 @@
     "filter_by_role": "Nach Rolle filtern",
     "feedback": {
       "label": "Wie lief es?",
-      "cooked": "Gekocht",
-      "skipped": "Ausgelassen",
       "loved": "Geliebt",
       "disliked": "Nicht gemocht",
       "add_note": "Notiz hinzufügen",
@@ -1483,6 +1481,13 @@
       "title": "Alles eingerichtet",
       "body": "Leg 10 Rezepte an, dann kann Plantry deine Wochen planen.",
       "add_recipes": "Rezepte hinzufügen"
+    }
+  },
+  "plan": {
+    "undo": {
+      "plate_removed": "Essen entfernt",
+      "batch_removed": "Vorkochen entfernt",
+      "plan_cleared": "Plan geleert"
     }
   }
 }

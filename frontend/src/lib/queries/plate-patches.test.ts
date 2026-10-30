@@ -13,6 +13,7 @@ import {
   patchUpdateComponentQuantity,
   patchUpdatePlate,
 } from "./plate-patches"
+import { mockPlate, mockPlateComponent } from "@/test/fixtures"
 
 function week(): Week {
   return {
@@ -21,45 +22,30 @@ function week(): Week {
     week_number: 16,
     created_at: "",
     plates: [
-      {
+      mockPlate({
         id: 10,
         slot_id: 5,
         date: "2026-04-14",
-        note: null,
-        created_at: "",
         components: [
-          {
-            id: 100,
-            plate_id: 10,
-            food_id: 1000,
-            portions: 1,
-            sort_order: 0,
-          },
-          {
+          mockPlateComponent({ id: 100, plate_id: 10, food_id: 1000 }),
+          mockPlateComponent({
             id: 101,
             plate_id: 10,
             food_id: 1001,
             portions: 2,
             sort_order: 1,
-          },
+          }),
         ],
-      },
-      {
+      }),
+      mockPlate({
         id: 11,
         slot_id: 5,
         date: "2026-04-15",
         note: "leftovers",
-        created_at: "",
         components: [
-          {
-            id: 102,
-            plate_id: 11,
-            food_id: 1002,
-            portions: 1,
-            sort_order: 0,
-          },
+          mockPlateComponent({ id: 102, plate_id: 11, food_id: 1002 }),
         ],
-      },
+      }),
     ],
   }
 }
@@ -67,14 +53,10 @@ function week(): Week {
 describe("plate patches", () => {
   test("patchAddPlate appends a plate", () => {
     const w = week()
-    const next = patchAddPlate(w, {
-      id: 12,
-      slot_id: 5,
-      date: "2026-04-16",
-      note: null,
-      created_at: "",
-      components: [],
-    })
+    const next = patchAddPlate(
+      w,
+      mockPlate({ id: 12, slot_id: 5, date: "2026-04-16" })
+    )
     expect(next?.plates).toHaveLength(3)
     expect(w.plates).toHaveLength(2) // immutable
   })
@@ -92,13 +74,16 @@ describe("plate patches", () => {
   })
 
   test("patchAddComponent appends to plate.components", () => {
-    const next = patchAddComponent(week(), 10, {
-      id: 999,
-      plate_id: 10,
-      food_id: 2000,
-      portions: 1,
-      sort_order: 99,
-    })
+    const next = patchAddComponent(
+      week(),
+      10,
+      mockPlateComponent({
+        id: 999,
+        plate_id: 10,
+        food_id: 2000,
+        sort_order: 99,
+      })
+    )
     const p = next?.plates.find((p) => p.id === 10)
     expect(p?.components).toHaveLength(3)
   })

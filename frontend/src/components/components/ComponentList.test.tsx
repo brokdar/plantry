@@ -161,26 +161,8 @@ describe("ComponentList", () => {
       total: 2,
     })
     vi.mocked(getInsights).mockResolvedValue({
-      forgotten: [
-        {
-          id: mockChickenCurry.id,
-          name: mockChickenCurry.name,
-          role: mockChickenCurry.role,
-          image_path: null,
-          cook_count: 0,
-          last_cooked_at: null,
-        },
-      ],
-      most_cooked: [
-        {
-          id: mockTofuBowl.id,
-          name: mockTofuBowl.name,
-          role: mockTofuBowl.role,
-          image_path: null,
-          cook_count: 4,
-          last_cooked_at: "2026-04-15T00:00:00Z",
-        },
-      ],
+      forgotten: [{ id: mockChickenCurry.id }],
+      most_cooked: [{ id: mockTofuBowl.id }],
     })
 
     renderWithRouter(<ComponentList />)
