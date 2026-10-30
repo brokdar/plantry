@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
@@ -20,6 +22,7 @@ import (
 
 type availabilityEnv struct {
 	db       *sql.DB
+	plates   *plate.Service
 	router   http.Handler
 	slotA    int64
 	slotB    int64
@@ -30,8 +33,9 @@ type availabilityEnv struct {
 func setupAvailabilityRouter(t *testing.T) *availabilityEnv {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
-	_, svc := testsvc.Plan(db)
+	plates, svc := testsvc.Plan(db)
 	h := handlers.NewAvailabilityHandler(svc)
+	pw := handlers.NewPlanWriteHandler(plates)
 	r := chi.NewRouter()
 	r.Route("/api/availability", func(r chi.Router) {
 		r.Get("/", h.List)
@@ -40,19 +44,22 @@ func setupAvailabilityRouter(t *testing.T) *availabilityEnv {
 		r.Put("/{date}/{slotId}", h.PutOverride)
 		r.Delete("/{date}/{slotId}", h.DeleteOverride)
 	})
-	env := &availabilityEnv{db: db, router: r}
-	insert := func(q string, args ...any) int64 {
-		res, err := db.Exec(q, args...)
-		require.NoError(t, err)
-		id, err := res.LastInsertId()
-		require.NoError(t, err)
-		return id
-	}
-	env.slotA = insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.breakfast', 'Coffee', 0, 1)`)
-	env.slotB = insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.dinner', 'Soup', 1, 1)`)
-	env.inactive = insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.snack', 'Apple', 2, 0)`)
-	env.preset = insert(`INSERT INTO presets (name) VALUES ('Oatmeal')`)
+	r.Post("/api/plan/restore", pw.Restore)
+	env := &availabilityEnv{db: db, plates: plates, router: r}
+	env.slotA = env.insert(t, `INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.breakfast', 'Coffee', 0, 1)`)
+	env.slotB = env.insert(t, `INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.dinner', 'Soup', 1, 1)`)
+	env.inactive = env.insert(t, `INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.snack', 'Apple', 2, 0)`)
+	env.preset = env.insert(t, `INSERT INTO presets (name) VALUES ('Oatmeal')`)
 	return env
+}
+
+func (e *availabilityEnv) insert(t *testing.T, q string, args ...any) int64 {
+	t.Helper()
+	res, err := e.db.Exec(q, args...)
+	require.NoError(t, err)
+	id, err := res.LastInsertId()
+	require.NoError(t, err)
+	return id
 }
 
 func (e *availabilityEnv) do(t *testing.T, method, path, body string) *httptest.ResponseRecorder {
@@ -174,8 +181,9 @@ func TestAvailabilityHandler_PutOverride_Routine(t *testing.T) {
 		"date": "2026-10-26", "slot_id": float64(e.slotA), "mode": "routine", "source": "override",
 		"preset_id": float64(e.preset), "preset_name": "Oatmeal", "note": nil,
 	}, body["cell"])
-	_, has := body["removed_plate"]
-	assert.False(t, has)
+	assert.Contains(t, body, "removed")
+	assert.Nil(t, body["removed"])
+	assert.NotContains(t, body, "removed_plate")
 }
 
 func TestAvailabilityHandler_PutOverride_Errors(t *testing.T) {
@@ -206,9 +214,7 @@ func TestAvailabilityHandler_PutOverride_Errors(t *testing.T) {
 
 func TestAvailabilityHandler_PutOverride_CellHasPlate(t *testing.T) {
 	e := setupAvailabilityRouter(t)
-	res, err := e.db.Exec(`INSERT INTO plates (slot_id, date, note) VALUES (?, '2026-10-26', 'curry night')`, e.slotB)
-	require.NoError(t, err)
-	plateID, err := res.LastInsertId()
+	_, err := e.db.Exec(`INSERT INTO plates (slot_id, date, note) VALUES (?, '2026-10-26', 'curry night')`, e.slotB)
 	require.NoError(t, err)
 	path := fmt.Sprintf("/api/availability/2026-10-26/%d", e.slotB)
 
@@ -221,16 +227,56 @@ func TestAvailabilityHandler_PutOverride_CellHasPlate(t *testing.T) {
 	body := decodeMap(t, resp)
 	assert.Equal(t, "none", body["cell"].(map[string]any)["mode"])
 	assert.Equal(t, "invited", body["cell"].(map[string]any)["note"])
-	removed, ok := body["removed_plate"].(map[string]any)
-	require.True(t, ok, "removed_plate present")
-	assert.Equal(t, float64(plateID), removed["id"])
-	assert.Equal(t, "2026-10-26", removed["date"])
-	assert.Equal(t, "curry night", removed["note"])
-	assert.Equal(t, []any{}, removed["components"])
+	assert.NotContains(t, body, "removed_plate")
+	assert.Equal(t, map[string]any{
+		"plates": []any{map[string]any{
+			"date": "2026-10-26", "slot_id": float64(e.slotB), "eaters": float64(1), "note": "curry night", "components": []any{},
+		}},
+		"sessions": []any{},
+	}, body["removed"])
 
 	var n int
 	require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM plates`).Scan(&n))
 	assert.Equal(t, 0, n)
+}
+
+// B2-AC4: the snapshot remove_plate returns brings the plate back, with its
+// session link, once the override is cleared.
+func TestAvailabilityHandler_RemovePlate_RestoreBringsItBack(t *testing.T) {
+	e := setupAvailabilityRouter(t)
+	chili := e.insert(t, `INSERT INTO foods (name, kind, role, reference_portions) VALUES ('Chili', 'composed', 'main', 4)`)
+	day := mustDate(t, "2026-10-26")
+	cook, err := e.plates.Create(context.Background(), plate.PlateInput{
+		Date: day, SlotID: e.slotB, Eaters: ptrFloat64(2), Components: []plate.PlateComponent{{FoodID: chili, Portions: ptrFloat64(1)}},
+	})
+	require.NoError(t, err)
+	sid := *cook.Components[0].CookSessionID
+	_, err = e.plates.AddLeftovers(context.Background(), sid, []plate.CellKey{{Date: day.AddDate(0, 0, 1), SlotID: e.slotA}})
+	require.NoError(t, err)
+	path := fmt.Sprintf("/api/availability/2026-10-26/%d", e.slotB)
+
+	resp := e.do(t, http.MethodPut, path, `{"mode":"none","remove_plate":true}`)
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	var body struct {
+		Removed plate.PlanSnapshot `json:"removed"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+	require.Len(t, body.Removed.Plates, 1)
+	assert.Equal(t, &plate.SessionLink{ID: sid}, body.Removed.Plates[0].Components[0].Session, "the batch survives on its leftover")
+
+	resp = e.do(t, http.MethodDelete, path, "")
+	require.Equal(t, http.StatusNoContent, resp.Code)
+	raw, err := json.Marshal(body.Removed)
+	require.NoError(t, err)
+	resp = e.do(t, http.MethodPost, "/api/plan/restore", string(raw))
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+
+	v, err := e.plates.Session(context.Background(), sid)
+	require.NoError(t, err)
+	assert.Equal(t, 2, v.Meals)
+	assert.InDelta(t, 3.0, v.Portions, 1e-9, "2 eaters on the restored plate + 1 on the leftover")
+	assert.Equal(t, day, v.Links[0].Cell.Date)
+	assert.Equal(t, e.slotB, v.Links[0].Cell.SlotID)
 }
 
 func TestAvailabilityHandler_DeleteOverride(t *testing.T) {

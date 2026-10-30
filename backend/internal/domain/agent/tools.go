@@ -380,26 +380,53 @@ func toolGetProfile(svc Services) Tool {
 
 // --- write tools ---
 
+// quantitySchema is the JSON schema of a per-eater component quantity:
+// portions for a composed food, amount + unit for a leaf food.
+const quantitySchema = `
+        "portions":{"type":"number","exclusiveMinimum":0},
+        "amount":{"type":"number","exclusiveMinimum":0},
+        "unit":{"type":"string","minLength":1}`
+
+// quantityHelp tells the model how to fill quantitySchema.
+const quantityHelp = "Quantities are per eater: a composed food (recipe) takes portions (REAL, usually 1); a leaf food (ingredient) takes amount + unit (e.g. 150 + \"g\", 1 + \"piece\") and rejects portions."
+
+// quantityInput is the per-eater quantity the plate tools accept.
+type quantityInput struct {
+	Portions *float64 `json:"portions"`
+	Amount   *float64 `json:"amount"`
+	Unit     *string  `json:"unit"`
+}
+
+func (q quantityInput) empty() bool { return q.Portions == nil && q.Amount == nil && q.Unit == nil }
+
+// component turns the quantity into a plate component. The plate service
+// checks it against the food's kind.
+func (q quantityInput) component(foodID int64) plate.PlateComponent {
+	return plate.PlateComponent{FoodID: foodID, Portions: q.Portions, Amount: q.Amount, Unit: q.Unit}
+}
+
 func toolCreatePlate(svc Services) Tool {
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
       "type":"object",
       "required":["date","slot_id"],
       "properties":{
         "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
         "slot_id":{"type":"integer","minimum":1},
+        "eaters":{"type":"number","exclusiveMinimum":0,"maximum":%g},
         "note":{"type":"string"}
       },
       "additionalProperties":false
-    }`)
+    }`, plate.MaxEaters))
 	return Tool{
 		Name:        "create_plate",
-		Description: "Create an empty plate at a given date (YYYY-MM-DD) and slot. Returns the new plate's id. A cell holds at most one plate; creating into an occupied cell or a No-plate cell fails.",
+		Description: "Create an empty plate at a given date (YYYY-MM-DD) and slot. eaters is how many people it serves (defaults to the household's portions); component quantities are per eater. Returns the new plate's id. A cell holds at most one plate; creating into an occupied cell or a No-plate cell fails.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				Date   string  `json:"date"`
-				SlotID int64   `json:"slot_id"`
-				Note   *string `json:"note"`
+				Date   string   `json:"date"`
+				SlotID int64    `json:"slot_id"`
+				Eaters *float64 `json:"eaters"`
+				Note   *string  `json:"note"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
@@ -408,7 +435,7 @@ func toolCreatePlate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: date: %v", domain.ErrInvalidInput, err)
 			}
-			p, err := svc.Plates.Create(ctx, plate.PlateInput{Date: d, SlotID: in.SlotID, Note: in.Note})
+			p, err := svc.Plates.Create(ctx, plate.PlateInput{Date: d, SlotID: in.SlotID, Eaters: in.Eaters, Note: in.Note})
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -423,33 +450,24 @@ func toolAddFoodToPlate(svc Services) Tool {
       "required":["plate_id","food_id"],
       "properties":{
         "plate_id":{"type":"integer","minimum":1},
-        "food_id":{"type":"integer","minimum":1},
-        "portions":{"type":"number","exclusiveMinimum":0}
+        "food_id":{"type":"integer","minimum":1},` + quantitySchema + `
       },
       "additionalProperties":false
     }`)
 	return Tool{
 		Name:        "add_food_to_plate",
-		Description: "Append a food (leaf or composed) to a plate with the given portion count (defaults to 1).",
+		Description: "Append a food (leaf or composed) to a plate. " + quantityHelp + " A composed food without portions gets 1 per eater and its own fresh cook session.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				PlateID  int64   `json:"plate_id"`
-				FoodID   int64   `json:"food_id"`
-				Portions float64 `json:"portions"`
+				PlateID int64 `json:"plate_id"`
+				FoodID  int64 `json:"food_id"`
+				quantityInput
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			portions := in.Portions
-			if portions <= 0 {
-				portions = 1
-			}
-			pc, err := agentBuildComponent(ctx, svc, in.FoodID, portions)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			p, err := svc.Plates.AddComponent(ctx, in.PlateID, *pc)
+			p, err := svc.Plates.AddComponent(ctx, in.PlateID, in.component(in.FoodID))
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -464,33 +482,29 @@ func toolSwapFood(svc Services) Tool {
       "required":["plate_component_id","new_food_id"],
       "properties":{
         "plate_component_id":{"type":"integer","minimum":1},
-        "new_food_id":{"type":"integer","minimum":1},
-        "portions":{"type":"number","exclusiveMinimum":0}
+        "new_food_id":{"type":"integer","minimum":1},` + quantitySchema + `
       },
       "additionalProperties":false
     }`)
 	return Tool{
 		Name:        "swap_food",
-		Description: "Replace the food on an existing plate_component row, preserving sort order. Optionally override portions.",
+		Description: "Replace the food on an existing plate_component row, preserving sort order. Without a quantity the current one is kept, which must fit the new food's kind. " + quantityHelp,
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				PlateComponentID int64    `json:"plate_component_id"`
-				NewFoodID        int64    `json:"new_food_id"`
-				Portions         *float64 `json:"portions"`
+				PlateComponentID int64 `json:"plate_component_id"`
+				NewFoodID        int64 `json:"new_food_id"`
+				quantityInput
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			var override *plate.PlateComponent
-			if in.Portions != nil && *in.Portions > 0 {
-				comp, err := agentBuildComponent(ctx, svc, in.NewFoodID, *in.Portions)
-				if err != nil {
-					return nil, ToolEffectNone, err
-				}
-				override = comp
+			var quantity *plate.PlateComponent
+			if !in.empty() {
+				q := in.component(in.NewFoodID)
+				quantity = &q
 			}
-			p, err := svc.Plates.SwapComponent(ctx, in.PlateComponentID, in.NewFoodID, override)
+			p, err := svc.Plates.SwapComponent(ctx, in.PlateComponentID, in.NewFoodID, quantity)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -506,34 +520,26 @@ func toolSwapFood(svc Services) Tool {
 func toolUpdatePlateComponent(svc Services) Tool {
 	schema := json.RawMessage(`{
       "type":"object",
-      "required":["plate_component_id","portions"],
+      "required":["plate_component_id"],
       "properties":{
-        "plate_component_id":{"type":"integer","minimum":1},
-        "portions":{"type":"number","exclusiveMinimum":0}
+        "plate_component_id":{"type":"integer","minimum":1},` + quantitySchema + `
       },
+      "anyOf":[{"required":["portions"]},{"required":["amount","unit"]}],
       "additionalProperties":false
     }`)
 	return Tool{
 		Name:        "update_plate_component",
-		Description: "Change the portion count on an existing plate_component row without swapping the food.",
+		Description: "Change the quantity of an existing plate_component row without swapping the food. " + quantityHelp,
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				PlateComponentID int64   `json:"plate_component_id"`
-				Portions         float64 `json:"portions"`
+				PlateComponentID int64 `json:"plate_component_id"`
+				quantityInput
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			existing, err := svc.Plates.GetComponent(ctx, in.PlateComponentID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			f, err := svc.Foods.Get(ctx, existing.FoodID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			p, err := svc.Plates.UpdateComponentQuantity(ctx, in.PlateComponentID, toolQuantity(f.Kind, in.Portions))
+			p, err := svc.Plates.UpdateComponentQuantity(ctx, in.PlateComponentID, in.component(0))
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -777,11 +783,12 @@ func plateSummary(p *plate.Plate) map[string]any {
 		comps[i] = plateComponentMap(&p.Components[i])
 	}
 	return map[string]any{
-		"id": p.ID, "date": p.DateString(), "slot_id": p.SlotID,
+		"id": p.ID, "date": p.DateString(), "slot_id": p.SlotID, "eaters": p.Eaters,
 		"note": p.Note, "components": comps,
 	}
 }
 
+// plateComponentMap renders a component. Quantities are per eater.
 func plateComponentMap(pc *plate.PlateComponent) map[string]any {
 	out := map[string]any{
 		"id": pc.ID, "plate_id": pc.PlateID, "food_id": pc.FoodID,
@@ -802,31 +809,10 @@ func plateComponentMap(pc *plate.PlateComponent) map[string]any {
 	if pc.GramsSource != nil {
 		out["grams_source"] = *pc.GramsSource
 	}
+	if pc.CookSessionID != nil {
+		out["cook_session_id"] = *pc.CookSessionID
+	}
 	return out
-}
-
-// agentBuildComponent builds the component for the tools' "portions" input
-// by looking up the food's kind (see toolQuantity).
-func agentBuildComponent(ctx context.Context, svc Services, foodID int64, portions float64) (*plate.PlateComponent, error) {
-	f, err := svc.Foods.Get(ctx, foodID)
-	if err != nil {
-		return nil, err
-	}
-	pc := toolQuantity(f.Kind, portions)
-	pc.FoodID = foodID
-	return &pc, nil
-}
-
-// toolQuantity maps the plate tools' "portions" input onto a component
-// quantity: a composed food takes it as portions per eater; a leaf food as
-// portions × 100 g.
-func toolQuantity(kind food.Kind, portions float64) plate.PlateComponent {
-	if kind == food.KindLeaf {
-		grams := portions * 100
-		unit := "g"
-		return plate.PlateComponent{Amount: &grams, Unit: &unit, Grams: &grams}
-	}
-	return plate.PlateComponent{Portions: &portions}
 }
 
 // lastComponent returns the plate's component with the highest sort order:
@@ -862,6 +848,7 @@ func profileMap(p *profile.Profile) map[string]any {
 		"preferences":          p.Preferences,
 		"system_prompt":        p.SystemPrompt,
 		"locale":               p.Locale,
+		"household_portions":   p.HouseholdPortions,
 	}
 }
 

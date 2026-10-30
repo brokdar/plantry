@@ -21,11 +21,10 @@ func TestAIRepo_CreateAndGet(t *testing.T) {
 	repo := sqlite.NewAIRepo(db)
 
 	title := "Plan dinner"
-	c, err := repo.CreateConversation(ctx, nil, &title)
+	c, err := repo.CreateConversation(ctx, &title)
 	require.NoError(t, err)
 	assert.NotZero(t, c.ID)
 	assert.Equal(t, "Plan dinner", *c.Title)
-	assert.Nil(t, c.WeekID)
 	assert.Empty(t, c.Messages)
 	assert.False(t, c.CreatedAt.IsZero())
 
@@ -46,7 +45,7 @@ func TestAIRepo_AppendAndListMessages(t *testing.T) {
 	ctx := context.Background()
 	repo := sqlite.NewAIRepo(testhelper.NewTestDB(t))
 
-	c, err := repo.CreateConversation(ctx, nil, nil)
+	c, err := repo.CreateConversation(ctx, nil)
 	require.NoError(t, err)
 
 	userMsg := &agent.Message{
@@ -80,7 +79,7 @@ func TestAIRepo_AppendAndListMessages(t *testing.T) {
 func TestAIRepo_AppendMessageInvalidRole(t *testing.T) {
 	ctx := context.Background()
 	repo := sqlite.NewAIRepo(testhelper.NewTestDB(t))
-	c, err := repo.CreateConversation(ctx, nil, nil)
+	c, err := repo.CreateConversation(ctx, nil)
 	require.NoError(t, err)
 
 	err = repo.AppendMessage(ctx, &agent.Message{
@@ -107,7 +106,7 @@ func TestAIRepo_DeleteCascadesMessages(t *testing.T) {
 	ctx := context.Background()
 	repo := sqlite.NewAIRepo(testhelper.NewTestDB(t))
 
-	c, err := repo.CreateConversation(ctx, nil, nil)
+	c, err := repo.CreateConversation(ctx, nil)
 	require.NoError(t, err)
 	require.NoError(t, repo.AppendMessage(ctx, &agent.Message{
 		ConversationID: c.ID,
@@ -124,42 +123,32 @@ func TestAIRepo_DeleteCascadesMessages(t *testing.T) {
 	assert.True(t, errors.Is(err, domain.ErrNotFound))
 }
 
-func TestAIRepo_List_FiltersByWeek(t *testing.T) {
+func TestAIRepo_List(t *testing.T) {
 	ctx := context.Background()
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewAIRepo(db)
 
-	// weeks table is gone (migration 16); week_id on ai_conversations is now a
-	// plain nullable INTEGER. Use an arbitrary sentinel value.
-	weekID := int64(17)
-
-	_, err := repo.CreateConversation(ctx, &weekID, nil)
-	require.NoError(t, err)
-	_, err = repo.CreateConversation(ctx, &weekID, nil)
-	require.NoError(t, err)
-	_, err = repo.CreateConversation(ctx, nil, nil)
-	require.NoError(t, err)
+	for range 3 {
+		_, err := repo.CreateConversation(ctx, nil)
+		require.NoError(t, err)
+	}
 
 	all, err := repo.ListConversations(ctx, agent.ListQuery{})
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), all.Total)
 	assert.Len(t, all.Items, 3)
 
-	byWeek, err := repo.ListConversations(ctx, agent.ListQuery{WeekID: &weekID})
+	page, err := repo.ListConversations(ctx, agent.ListQuery{Limit: 2, Offset: 2})
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), byWeek.Total)
-	assert.Len(t, byWeek.Items, 2)
-	for _, c := range byWeek.Items {
-		require.NotNil(t, c.WeekID)
-		assert.Equal(t, weekID, *c.WeekID)
-	}
+	assert.Equal(t, int64(3), page.Total)
+	assert.Len(t, page.Items, 1)
 }
 
 func TestAIRepo_UpdateTitleAndTouch(t *testing.T) {
 	ctx := context.Background()
 	repo := sqlite.NewAIRepo(testhelper.NewTestDB(t))
 
-	c, err := repo.CreateConversation(ctx, nil, nil)
+	c, err := repo.CreateConversation(ctx, nil)
 	require.NoError(t, err)
 	assert.Nil(t, c.Title)
 

@@ -129,7 +129,7 @@ Migration `00024_availability.sql`, package `domain/availability`. A cell is (da
 
 - `GET /api/availability?from=&to=` — resolved cells with `source` (`override` / `default` / `fallback`), at most 62 days.
 - `GET` / `PUT /api/availability/defaults` — `{items: [{weekday, slot_id, mode, preset_id}]}`; PUT replaces the defaults of all active slots.
-- `PUT /api/availability/{date}/{slotId}` — `{mode, preset_id?, note?, remove_plate?}`. `none` on a cell with a plate is `409 error.availability.cell_has_plate` unless `remove_plate` is set; then the plate is deleted in the same transaction and returned as `removed_plate`. `DELETE` clears the override.
+- `PUT /api/availability/{date}/{slotId}` — `{mode, preset_id?, note?, remove_plate?}`. `none` on a cell with a plate is `409 error.availability.cell_has_plate` unless `remove_plate` is set; then the plate is deleted through `plate.Service.Delete` in the same unit of work and the response `{cell, removed}` carries the `PlanSnapshot` that restores it (`POST /api/plan/restore`; `removed` is null when nothing was removed). `DELETE` clears the override.
 
 A cell holds at most one plate: migration `00025_plates_cell_unique.go` turned the old per-plate skip flag into `none` overrides (with its note), merged duplicates, dropped the flag column and made `(date, slot_id)` unique. Creating or moving a plate into a `none` cell is `409 error.plate.cell_unavailable`; into an occupied cell, `409 error.plate.cell_occupied`. The agent sees `none` and `routine` cells and must not plan them.
 

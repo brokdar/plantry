@@ -46,30 +46,14 @@ func (q *Queries) CountConversations(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const countConversationsByWeek = `-- name: CountConversationsByWeek :one
-SELECT COUNT(*) FROM ai_conversations WHERE week_id = ?
-`
-
-func (q *Queries) CountConversationsByWeek(ctx context.Context, weekID sql.NullInt64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countConversationsByWeek, weekID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createConversation = `-- name: CreateConversation :one
-INSERT INTO ai_conversations (week_id, title)
-VALUES (?, ?)
+INSERT INTO ai_conversations (title)
+VALUES (?)
 RETURNING id, week_id, title, created_at, updated_at
 `
 
-type CreateConversationParams struct {
-	WeekID sql.NullInt64
-	Title  sql.NullString
-}
-
-func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversationParams) (AiConversation, error) {
-	row := q.db.QueryRowContext(ctx, createConversation, arg.WeekID, arg.Title)
+func (q *Queries) CreateConversation(ctx context.Context, title sql.NullString) (AiConversation, error) {
+	row := q.db.QueryRowContext(ctx, createConversation, title)
 	var i AiConversation
 	err := row.Scan(
 		&i.ID,
@@ -119,48 +103,6 @@ type ListConversationsParams struct {
 
 func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error) {
 	rows, err := q.db.QueryContext(ctx, listConversations, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AiConversation{}
-	for rows.Next() {
-		var i AiConversation
-		if err := rows.Scan(
-			&i.ID,
-			&i.WeekID,
-			&i.Title,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listConversationsByWeek = `-- name: ListConversationsByWeek :many
-SELECT id, week_id, title, created_at, updated_at FROM ai_conversations
-WHERE week_id = ?
-ORDER BY updated_at DESC, id DESC
-LIMIT ? OFFSET ?
-`
-
-type ListConversationsByWeekParams struct {
-	WeekID sql.NullInt64
-	Limit  int64
-	Offset int64
-}
-
-func (q *Queries) ListConversationsByWeek(ctx context.Context, arg ListConversationsByWeekParams) ([]AiConversation, error) {
-	rows, err := q.db.QueryContext(ctx, listConversationsByWeek, arg.WeekID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

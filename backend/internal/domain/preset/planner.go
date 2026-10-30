@@ -2,105 +2,104 @@ package preset
 
 import (
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
-// ApplyInput holds all data PlanApply needs — no repo calls required.
-type ApplyInput struct {
-	// Plates is the filtered, pre-validated list of preset plates to apply.
-	Plates []Plate
-	// TargetDate is the calendar date to materialise plates onto.
-	TargetDate time.Time
-	// ExistingPlates are the plates already occupying the target date.
-	ExistingPlates []plate.Plate
-	// ActiveSlots is the set of active slot IDs. A nil map means all slots
-	// are considered active (matches the behaviour of isSlotActive).
-	ActiveSlots map[int64]struct{}
-	// UnavailableSlots is the set of slot IDs whose cell on TargetDate
-	// resolves to "none". Nil means none are unavailable.
-	UnavailableSlots map[int64]struct{}
-	// OnConflict controls behaviour when a target slot is already occupied.
-	OnConflict ConflictMode
-}
+const dateLayout = "2006-01-02"
 
-// PlateToCreate describes one new plate the caller should persist.
-type PlateToCreate struct {
-	SlotID     int64
-	Components []Component
-}
+// PresetSnapshot maps a preset's plates onto target as a plate.PlanSnapshot:
+// one plate per preset slot, in sort order, with the household's eaters.
+// Composed components carry no session, so each gets a fresh one. A plate
+// whose slot is not active is reported in noSlot; a second plate for a slot
+// already taken by the preset is reported in duplicate. active nil means
+// every slot is active.
+func PresetSnapshot(plates []Plate, target time.Time, active map[int64]struct{}) (snap plate.PlanSnapshot, noSlot, duplicate []plate.CellKey) {
+	sorted := make([]Plate, len(plates))
+	copy(sorted, plates)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].SortOrder < sorted[j].SortOrder })
 
-// ApplyPlan is the decision the algorithm produces — no side effects.
-type ApplyPlan struct {
-	// ToCreate holds one entry per preset plate that should be materialised.
-	// When a slot must be overwritten, the corresponding plate ID to delete
-	// is in ToDeleteBeforeCreate at the same index.
-	ToCreate []PlateToCreate
-	// ToDeleteBeforeCreate holds the existing plate ID that must be deleted
-	// before materialising ToCreate[i]. A value of 0 means no deletion
-	// needed (clean slot). Len(ToDeleteBeforeCreate) == Len(ToCreate).
-	ToDeleteBeforeCreate []int64
-	// SkippedOccupied lists (date, slotID) cells that were skipped due to
-	// conflict when OnConflict == ConflictSkip.
-	SkippedOccupied []SkipItem
-	// SkippedNoSlot lists (date, slotID) cells whose slot was inactive.
-	SkippedNoSlot []SkipItem
-	// SkippedUnavailable lists (date, slotID) cells that resolve to "none".
-	SkippedUnavailable []SkipItem
-}
-
-// PlanApply is a pure function: given the current state of the world (preset
-// plates + existing occupancy + active slots), it returns a plan describing
-// what to create, what to delete, and what to skip. No I/O, no global state.
-func PlanApply(in ApplyInput) ApplyPlan {
-	// Sort by sort_order so duplicate slot_ids inside a preset land in stable
-	// order (first wins; rest hit "occupied" semantics).
-	plates := make([]Plate, len(in.Plates))
-	copy(plates, in.Plates)
-	sort.SliceStable(plates, func(i, j int) bool {
-		return plates[i].SortOrder < plates[j].SortOrder
-	})
-
-	// Build occupancy map keyed by slot_id.
-	occupancy := make(map[int64]plate.Plate, len(in.ExistingPlates))
-	for _, ep := range in.ExistingPlates {
-		occupancy[ep.SlotID] = ep
-	}
-
-	var plan ApplyPlan
-
-	for _, pp := range plates {
-		if !isSlotActive(in.ActiveSlots, pp.SlotID) {
-			plan.SkippedNoSlot = append(plan.SkippedNoSlot, SkipItem{Date: in.TargetDate, SlotID: pp.SlotID})
+	snap = plate.PlanSnapshot{Plates: []plate.SnapshotPlate{}, Sessions: []plate.SnapshotSession{}}
+	taken := map[int64]bool{}
+	for _, pp := range sorted {
+		cell := plate.CellKey{Date: target, SlotID: pp.SlotID}
+		if !isSlotActive(active, pp.SlotID) {
+			noSlot = append(noSlot, cell)
 			continue
 		}
-		if _, none := in.UnavailableSlots[pp.SlotID]; none {
-			plan.SkippedUnavailable = append(plan.SkippedUnavailable, SkipItem{Date: in.TargetDate, SlotID: pp.SlotID})
+		if taken[pp.SlotID] {
+			duplicate = append(duplicate, cell)
 			continue
 		}
-
-		var deleteID int64
-		existingPlate, taken := occupancy[pp.SlotID]
-		if taken {
-			if in.OnConflict == ConflictSkip {
-				plan.SkippedOccupied = append(plan.SkippedOccupied, SkipItem{Date: in.TargetDate, SlotID: pp.SlotID})
-				continue
+		taken[pp.SlotID] = true
+		comps := make([]plate.SnapshotComponent, len(pp.Components))
+		for i, c := range pp.Components {
+			comps[i] = plate.SnapshotComponent{
+				FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, Grams: c.Grams, SortOrder: i,
 			}
-			// Overwrite: record which existing plate must be deleted first.
-			deleteID = existingPlate.ID
 		}
-
-		plan.ToCreate = append(plan.ToCreate, PlateToCreate{
-			SlotID:     pp.SlotID,
-			Components: pp.Components,
+		snap.Plates = append(snap.Plates, plate.SnapshotPlate{
+			Date: target.Format(dateLayout), SlotID: pp.SlotID, Components: comps,
 		})
-		plan.ToDeleteBeforeCreate = append(plan.ToDeleteBeforeCreate, deleteID)
-
-		// Mark slot as occupied so duplicate slot_ids in the preset hit the
-		// "occupied" path on subsequent iterations.
-		occupancy[pp.SlotID] = plate.Plate{SlotID: pp.SlotID}
 	}
+	return snap, noSlot, duplicate
+}
 
-	return plan
+// CopySnapshot maps the plates of the 7-day window from sourceStart onto the
+// window shiftDays later as a plate.PlanSnapshot. Every plate keeps its slot,
+// eaters, note and components. A session cooking in the source window is
+// copied, shifted, with the same portions and note, no frozen portions and
+// not cooked, and its components stay linked to the copy. A component whose
+// session cooks outside the window gets a fresh session. sessions holds the
+// sources' sessions by id. A plate whose slot is not active is reported in
+// noSlot at its target cell. active nil means every slot is active.
+func CopySnapshot(sources []plate.Plate, sessions map[int64]plate.CookSession, sourceStart time.Time, shiftDays int, active map[int64]struct{}) (snap plate.PlanSnapshot, noSlot []plate.CellKey) {
+	sorted := make([]plate.Plate, len(sources))
+	copy(sorted, sources)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if !sorted[i].Date.Equal(sorted[j].Date) {
+			return sorted[i].Date.Before(sorted[j].Date)
+		}
+		return sorted[i].SlotID < sorted[j].SlotID
+	})
+	sourceEnd := sourceStart.AddDate(0, 0, 6)
+	inWindow := func(d time.Time) bool { return !d.Before(sourceStart) && !d.After(sourceEnd) }
+	shift := func(d time.Time) time.Time { return d.AddDate(0, 0, shiftDays) }
+
+	snap = plate.PlanSnapshot{Plates: []plate.SnapshotPlate{}, Sessions: []plate.SnapshotSession{}}
+	refs := map[int64]string{}
+	for _, src := range sorted {
+		target := shift(src.Date)
+		if !isSlotActive(active, src.SlotID) {
+			noSlot = append(noSlot, plate.CellKey{Date: target, SlotID: src.SlotID})
+			continue
+		}
+		comps := make([]plate.SnapshotComponent, len(src.Components))
+		for i, c := range src.Components {
+			sc := plate.SnapshotComponent{
+				FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, Grams: c.Grams, SortOrder: c.SortOrder,
+			}
+			if c.CookSessionID != nil {
+				if sess, ok := sessions[*c.CookSessionID]; ok && inWindow(sess.CookDate) {
+					ref, seen := refs[sess.ID]
+					if !seen {
+						ref = "s" + strconv.Itoa(len(refs)+1)
+						refs[sess.ID] = ref
+						snap.Sessions = append(snap.Sessions, plate.SnapshotSession{
+							Ref: ref, FoodID: sess.FoodID, CookDate: shift(sess.CookDate).Format(dateLayout), CookSlotID: sess.CookSlotID,
+							Portions: sess.Portions, Note: sess.Note,
+						})
+					}
+					sc.Session = &plate.SessionLink{Ref: ref}
+				}
+			}
+			comps[i] = sc
+		}
+		snap.Plates = append(snap.Plates, plate.SnapshotPlate{
+			Date: target.Format(dateLayout), SlotID: src.SlotID, Eaters: src.Eaters, Note: src.Note, Components: comps,
+		})
+	}
+	return snap, noSlot
 }

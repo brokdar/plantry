@@ -790,6 +790,11 @@ func (s *Service) DeleteSession(ctx context.Context, id int64) (PlanSnapshot, er
 // that must still exist, else ErrSessionNotFound and nothing is written) or,
 // without a link, to a new fresh session. Every re-linked existing session
 // follows D11. A "none" cell or an occupied one is handled per OnConflict.
+//
+// Apply decides every plate's placement before it writes anything. The plates
+// ConflictOverwrite replaces are then removed together, so a session they
+// share is recorded once; only the {id} sessions of plates Apply writes count
+// as surviving that removal (they are linked again before the final settle).
 func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOptions) (*ApplyResult, error) {
 	switch opts.OnConflict {
 	case ConflictFail, ConflictSkip, ConflictOverwrite:
@@ -806,11 +811,15 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 		if err != nil {
 			return err
 		}
+		steps, replace, err := s.placeSnapshot(ctx, snap, opts.OnConflict, res)
+		if err != nil {
+			return err
+		}
 		t := newTracker()
 		pinned := map[int64]bool{}
-		for _, sp := range snap.Plates {
-			for _, c := range sp.Components {
-				if c.Session == nil || c.Session.ID == 0 {
+		for _, st := range steps {
+			for _, c := range st.sp.Components {
+				if c.Session == nil || c.Session.ID == 0 || pinned[c.Session.ID] {
 					continue
 				}
 				pinned[c.Session.ID] = true
@@ -825,74 +834,37 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 				}
 			}
 		}
-		created := map[string]int64{}
-		removedRefs := &refAlloc{}
-		for _, sp := range snap.Plates {
-			date, _ := time.Parse(dateLayout, sp.Date) // validated
-			cell := CellKey{Date: date, SlotID: sp.SlotID}
-
-			if sp.PlateID != nil {
-				merged, err := s.mergeInto(ctx, *sp.PlateID, cell, sp, sessByRef, created, e, t)
-				if err != nil {
-					return err
-				}
-				if merged {
-					res.PlateIDs = append(res.PlateIDs, *sp.PlateID)
-					continue
-				}
-			}
-
-			mode, err := s.cellMode(ctx, cell)
+		if len(replace) > 0 {
+			// The overwrite shares Apply's tracker and keeps the pinned
+			// sessions: Apply settles D11 and GC once, after relinking.
+			res.Removed, err = s.remove(ctx, replace, allComponents, false, &refAlloc{}, t, pinned)
 			if err != nil {
 				return err
 			}
-			if mode == CellNone {
-				if opts.OnConflict == ConflictFail {
-					return fmt.Errorf("%w: %s slot %d", domain.ErrCellUnavailable, sp.Date, sp.SlotID)
-				}
-				res.SkippedUnavailable = append(res.SkippedUnavailable, cell)
-				continue
-			}
-			existingID, err := s.plates.GetIDByCell(ctx, cell.Date, cell.SlotID)
-			switch {
-			case errors.Is(err, domain.ErrNotFound):
-			case err != nil:
-				return err
-			case opts.OnConflict == ConflictFail:
-				return fmt.Errorf("%w: %s slot %d", domain.ErrCellOccupied, sp.Date, sp.SlotID)
-			case opts.OnConflict == ConflictSkip:
-				res.SkippedOccupied = append(res.SkippedOccupied, cell)
-				continue
-			default:
-				old, err := s.plates.Get(ctx, existingID)
-				if err != nil {
+		}
+		created := map[string]int64{}
+		for _, st := range steps {
+			if st.merge != nil {
+				if err := s.mergeInto(ctx, st.merge, st.sp, sessByRef, created, e, t); err != nil {
 					return err
 				}
-				// The overwrite shares Apply's tracker and keeps the {id}
-				// sessions: Apply settles D11 and GC once, after relinking.
-				removed, err := s.remove(ctx, []Plate{*old}, allComponents, false, removedRefs, t, pinned)
-				if err != nil {
-					return err
-				}
-				res.Removed.Plates = append(res.Removed.Plates, removed.Plates...)
-				res.Removed.Sessions = append(res.Removed.Sessions, removed.Sessions...)
+				res.PlateIDs = append(res.PlateIDs, st.merge.ID)
+				continue
 			}
-
-			comps, err := s.snapshotComponents(ctx, sp.Components, sessByRef, created)
+			comps, err := s.snapshotComponents(ctx, st.sp.Components, sessByRef, created)
 			if err != nil {
 				return err
 			}
 			var eaters *float64
-			if sp.Eaters > 0 {
-				eaters = &sp.Eaters
+			if st.sp.Eaters > 0 {
+				eaters = &st.sp.Eaters
 			}
-			id, err := s.createPlate(ctx, PlateInput{Date: date, SlotID: sp.SlotID, Eaters: eaters, Note: sp.Note, Components: comps}, e, t, false)
+			id, err := s.createPlate(ctx, PlateInput{Date: st.cell.Date, SlotID: st.cell.SlotID, Eaters: eaters, Note: st.sp.Note, Components: comps}, e, t, false)
 			if err != nil {
 				return err
 			}
-			if sp.Feedback != nil {
-				fb := Feedback{Status: sp.Feedback.Status, Note: sp.Feedback.Note, RatedAt: sp.Feedback.RatedAt}
-				if err := s.plates.RestoreFeedback(ctx, id, fb); err != nil {
+			if fb := st.sp.Feedback; fb != nil {
+				if err := s.plates.RestoreFeedback(ctx, id, Feedback{Status: fb.Status, Note: fb.Note, RatedAt: fb.RatedAt}); err != nil {
 					return err
 				}
 			}
@@ -906,39 +878,90 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 	return res, nil
 }
 
-// mergeInto adds a snapshot plate's components back to the surviving plate
-// plateID. It reports false (and writes nothing) when that plate is gone or
-// has moved off cell.
-func (s *Service) mergeInto(ctx context.Context, plateID int64, cell CellKey, sp SnapshotPlate, sessByRef map[string]SnapshotSession, created map[string]int64, e env, t *tracker) (bool, error) {
-	p, err := s.plates.Get(ctx, plateID)
-	if errors.Is(err, domain.ErrNotFound) {
-		return false, nil
+// placement is where Apply writes one snapshot plate: into the surviving
+// plate merge, or as a new plate on cell.
+type placement struct {
+	sp    SnapshotPlate
+	cell  CellKey
+	merge *Plate
+}
+
+// placeSnapshot decides, without writing, where each snapshot plate goes. It
+// records skipped cells in res and returns the plates to write, in snapshot
+// order, and the plates ConflictOverwrite replaces.
+func (s *Service) placeSnapshot(ctx context.Context, snap PlanSnapshot, mode ConflictMode, res *ApplyResult) ([]placement, []Plate, error) {
+	var steps []placement
+	var replace []Plate
+	for _, sp := range snap.Plates {
+		date, _ := time.Parse(dateLayout, sp.Date) // validated
+		cell := CellKey{Date: date, SlotID: sp.SlotID}
+
+		if sp.PlateID != nil {
+			p, err := s.plates.Get(ctx, *sp.PlateID)
+			switch {
+			case errors.Is(err, domain.ErrNotFound):
+			case err != nil:
+				return nil, nil, err
+			case p.Cell().Equal(cell):
+				steps = append(steps, placement{sp: sp, cell: cell, merge: p})
+				continue
+			}
+		}
+
+		cellMode, err := s.cellMode(ctx, cell)
+		if err != nil {
+			return nil, nil, err
+		}
+		if cellMode == CellNone {
+			if mode == ConflictFail {
+				return nil, nil, fmt.Errorf("%w: %s slot %d", domain.ErrCellUnavailable, sp.Date, sp.SlotID)
+			}
+			res.SkippedUnavailable = append(res.SkippedUnavailable, cell)
+			continue
+		}
+		existingID, err := s.plates.GetIDByCell(ctx, cell.Date, cell.SlotID)
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+		case err != nil:
+			return nil, nil, err
+		case mode == ConflictFail:
+			return nil, nil, fmt.Errorf("%w: %s slot %d", domain.ErrCellOccupied, sp.Date, sp.SlotID)
+		case mode == ConflictSkip:
+			res.SkippedOccupied = append(res.SkippedOccupied, cell)
+			continue
+		default:
+			old, err := s.plates.Get(ctx, existingID)
+			if err != nil {
+				return nil, nil, err
+			}
+			replace = append(replace, *old)
+		}
+		steps = append(steps, placement{sp: sp, cell: cell})
 	}
-	if err != nil {
-		return false, err
-	}
-	if !p.Cell().Equal(cell) {
-		return false, nil
-	}
+	return steps, replace, nil
+}
+
+// mergeInto adds a snapshot plate's components back to its surviving plate p.
+func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, sessByRef map[string]SnapshotSession, created map[string]int64, e env, t *tracker) error {
 	comps, err := s.snapshotComponents(ctx, sp.Components, sessByRef, created)
 	if err != nil {
-		return false, err
+		return err
 	}
 	for i := range comps {
 		pc := &comps[i]
 		f, err := s.normaliseComponent(ctx, pc)
 		if err != nil {
-			return false, err
+			return err
 		}
-		if err := s.attach(ctx, t, pc, f, cell, p.Eaters, e, false); err != nil {
-			return false, err
+		if err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, false); err != nil {
+			return err
 		}
-		pc.PlateID = plateID
+		pc.PlateID = p.ID
 		if err := s.plates.CreateComponent(ctx, pc); err != nil {
-			return false, err
+			return err
 		}
 	}
-	return true, s.plates.Touch(ctx, plateID)
+	return s.plates.Touch(ctx, p.ID)
 }
 
 // snapshotComponents turns snapshot components into plate components,
@@ -998,10 +1021,17 @@ func validateSnapshot(snap PlanSnapshot) (map[string]SnapshotSession, error) {
 		}
 		byRef[ss.Ref] = ss
 	}
+	cells := make(map[CellKey]bool, len(snap.Plates))
 	for i, sp := range snap.Plates {
-		if _, err := time.Parse(dateLayout, sp.Date); err != nil {
+		date, err := time.Parse(dateLayout, sp.Date)
+		if err != nil {
 			return nil, fmt.Errorf("%w: plates[%d] date", domain.ErrInvalidInput, i)
 		}
+		c := CellKey{Date: date, SlotID: sp.SlotID}
+		if cells[c] {
+			return nil, fmt.Errorf("%w: plates[%d] duplicate cell %s slot %d", domain.ErrInvalidInput, i, sp.Date, sp.SlotID)
+		}
+		cells[c] = true
 		if sp.Eaters < 0 {
 			return nil, fmt.Errorf("%w: plates[%d] eaters", domain.ErrInvalidInput, i)
 		}

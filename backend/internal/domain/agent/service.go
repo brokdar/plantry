@@ -21,7 +21,7 @@ import (
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v3"
+const PromptVersion = "v4"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -100,8 +100,6 @@ func (s *Service) WithRecorder(rec *airun.Recorder) *Service {
 // ChatRequest is what the HTTP handler receives.
 type ChatRequest struct {
 	ConversationID *int64
-	WeekID         *int64
-	Mode           string // "fill_empty" | "replace_all" | ""
 	UserText       string
 	// Today is the user's current date; zero falls back to the server clock.
 	Today time.Time
@@ -184,7 +182,6 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	// Drive the loop.
 	return Run(ctx, RunRequest{
 		ConversationID: conv.ID,
-		WeekID:         conv.WeekID,
 		Model:          model,
 		SystemPrompt:   prompt,
 		History:        history,
@@ -212,7 +209,7 @@ func chatOutcome(ctx context.Context, err error) (airun.Status, string) {
 	}
 }
 
-// ListConversations returns a page of conversations, optionally scoped to a week.
+// ListConversations returns a page of conversations.
 func (s *Service) ListConversations(ctx context.Context, q ListQuery) (*ListResult, error) {
 	return s.repo.ListConversations(ctx, q)
 }
@@ -233,7 +230,7 @@ func (s *Service) resolveConversation(ctx context.Context, req ChatRequest) (*Co
 	if req.ConversationID != nil {
 		return s.repo.GetConversation(ctx, *req.ConversationID)
 	}
-	return s.repo.CreateConversation(ctx, req.WeekID, nil)
+	return s.repo.CreateConversation(ctx, nil)
 }
 
 // loadHistory translates persisted agent.Message rows back into llm.Message
@@ -308,11 +305,7 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest) (strin
 			AnchorMode:  anchorModeVal.Raw,
 		}
 	}
-	hint := ""
-	if req.Mode != "" {
-		hint = modeHint(req.Mode)
-	}
-	return ComposePrompt(p, plates, cells, &DateRange{Today: today, From: req.From, To: req.To}, prefs, hint), nil
+	return ComposePrompt(p, plates, cells, &DateRange{Today: today, From: req.From, To: req.To}, prefs), nil
 }
 
 // weekdayName turns a plan.shopping_day value (0 = Monday … 6 = Sunday) into
@@ -387,7 +380,7 @@ func (s *Service) windowCells(ctx context.Context, from, to time.Time, slotNames
 		if c.Mode == availability.ModePlan {
 			continue
 		}
-		pc := PromptCell{Date: c.Date, SlotID: c.SlotID, Slot: slotNames[c.SlotID], Mode: string(c.Mode)}
+		pc := PromptCell{Date: c.Date, SlotID: c.SlotID, Slot: slotNames[c.SlotID], Availability: string(c.Mode)}
 		if c.PresetName != nil {
 			pc.PresetName = *c.PresetName
 		}
@@ -400,7 +393,7 @@ func (s *Service) windowCells(ctx context.Context, from, to time.Time, slotNames
 }
 
 // DebugSystemPrompt composes and returns the system prompt that would be sent
-// to the LLM for a chat turn with req's dates and mode. It goes through the
+// to the LLM for a chat turn with req's dates. It goes through the
 // same path as Chat, so end-to-end tests can assert on what the agent
 // actually sees. Never call this from the Chat path.
 func (s *Service) DebugSystemPrompt(ctx context.Context, req ChatRequest) (string, error) {
@@ -408,21 +401,4 @@ func (s *Service) DebugSystemPrompt(ctx context.Context, req ChatRequest) (strin
 		return "", err
 	}
 	return s.buildSystemPrompt(ctx, req)
-}
-
-func modeHint(mode string) string {
-	switch mode {
-	case "fill_empty":
-		return "Get to work right away — the user already asked you to fill the empty slots, so don't ask for confirmation. " +
-			"Only create plates in empty (day, slot) cells. Do not modify existing plates unless the user asks. Leave routine cells alone, and never create plates in No-plate cells (the user is eating out, at the canteen, or otherwise off-plan there). " +
-			"Plan for variety: before choosing, call get_plates_range over the current window AND the two preceding weeks so you can see what the user has eaten recently. Do not repeat meals they just had, and never reuse the same component across multiple slots in this window — each week should look different from the last. " +
-			"favorite=true is a tie-breaker between otherwise-equivalent candidates, never a reason to plan the same favorites week after week. Rotate through the food library for diversity. " +
-			"When you're done, give the user a brief rundown — one short line per slot you filled, naming the meal and why you picked it (variety, a favorite, or macro fit)."
-	case "replace_all":
-		return "You may clear the week and plan it from scratch. Confirm with the user before deleting existing plates. Leave routine cells alone, and never create plates in No-plate cells. " +
-			"Plan for variety: call get_plates_range over the preceding weeks and avoid repeating the meals the user just had; don't reuse the same component across multiple slots. Use swap_food to vary a slot when a candidate would otherwise repeat. " +
-			"favorite=true is a tie-breaker between otherwise-equivalent candidates, not a reason to repeat the same favorites every week."
-	default:
-		return mode
-	}
 }

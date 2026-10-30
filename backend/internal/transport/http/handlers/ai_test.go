@@ -151,6 +151,42 @@ func TestAIChat_PassesDatesThrough(t *testing.T) {
 	}
 }
 
+// B2-AC6: the old chat modes and week ids are unknown fields now: the turn
+// runs as a plain chat and the prompt carries no mode hint.
+func TestAIChat_IgnoresLegacyFields(t *testing.T) {
+	h, client := newAIHandler(t)
+	body := `{"message":"plan my week","from":"2026-10-31","to":"2026-11-06","mode":"fill_empty","week_id":17}`
+	w := httptest.NewRecorder()
+
+	h.Chat(w, httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(body)))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "event: done")
+	reqs := client.Requests()
+	require.NotEmpty(t, reqs)
+	assert.NotContains(t, reqs[0].System, "Mode hint")
+	assert.NotContains(t, reqs[0].System, "fill the empty slots")
+}
+
+func TestAIConversations_ListIgnoresLegacyFilter(t *testing.T) {
+	h, _ := newAIHandler(t)
+	w := httptest.NewRecorder()
+	h.Chat(w, httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody("", "2026-10-31", "2026-11-06"))))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	w = httptest.NewRecorder()
+	h.ListConversations(w, httptest.NewRequest(http.MethodGet, "/api/ai/conversations?week_id=17", nil))
+	require.Equal(t, http.StatusOK, w.Code, "the old filter is ignored")
+	var list struct {
+		Items []map[string]any `json:"items"`
+		Total int              `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &list))
+	assert.Equal(t, 1, list.Total)
+	require.Len(t, list.Items, 1)
+	assert.NotContains(t, list.Items[0], "week_id")
+}
+
 type failingPlates struct{ err error }
 
 func (f failingPlates) Range(context.Context, time.Time, time.Time) ([]plate.Plate, error) {

@@ -162,7 +162,7 @@ func (p *fakePlates) Delete(_ context.Context, id int64) (plate.PlanSnapshot, er
 	for i, pl := range p.plates {
 		if pl.ID == id {
 			p.plates = append(p.plates[:i], p.plates[i+1:]...)
-			return plate.PlanSnapshot{}, nil
+			return plate.PlanSnapshot{Plates: []plate.SnapshotPlate{{Date: pl.DateString(), SlotID: pl.SlotID, Components: []plate.SnapshotComponent{}}}}, nil
 		}
 	}
 	return plate.PlanSnapshot{}, domain.ErrNotFound
@@ -498,31 +498,20 @@ func TestAvailabilitySetOverride_NoneOnPlate(t *testing.T) {
 		assert.Len(t, f.plates.plates, 2)
 	})
 
-	t.Run("with remove_plate deletes and returns the plate", func(t *testing.T) {
+	t.Run("with remove_plate deletes the plate and returns what restores it", func(t *testing.T) {
 		f := newFixture()
 		seed(f)
 		cell, removed, err := f.svc.SetOverride(context.Background(), availability.OverrideInput{Date: day(monday), SlotID: slotLunch, Mode: availability.ModeNone, RemovePlate: true, Note: ptr("restaurant")})
 		require.NoError(t, err)
 		require.NotNil(t, removed)
-		assert.Equal(t, int64(7), removed.ID)
-		assert.Len(t, removed.Components, 1, "plate loaded with components before delete")
+		require.Len(t, removed.Plates, 1)
+		assert.Equal(t, monday, removed.Plates[0].Date)
+		assert.Equal(t, slotLunch, removed.Plates[0].SlotID)
 		require.Len(t, f.plates.plates, 1)
 		assert.Equal(t, int64(8), f.plates.plates[0].ID)
 		assert.Equal(t, availability.ModeNone, cell.Mode)
 		assert.Equal(t, "restaurant", *cell.Note)
 		assert.Equal(t, 1, f.tx.calls)
-	})
-
-	t.Run("with remove_plate deletes every plate in the cell", func(t *testing.T) {
-		f := newFixture()
-		seed(f)
-		f.plates.plates = append(f.plates.plates, plate.Plate{ID: 9, Date: day(monday), SlotID: slotLunch})
-		_, removed, err := f.svc.SetOverride(context.Background(), availability.OverrideInput{Date: day(monday), SlotID: slotLunch, Mode: availability.ModeNone, RemovePlate: true})
-		require.NoError(t, err)
-		require.NotNil(t, removed)
-		assert.Equal(t, int64(7), removed.ID, "first plate returned")
-		require.Len(t, f.plates.plates, 1)
-		assert.Equal(t, int64(8), f.plates.plates[0].ID, "only the other cell's plate remains")
 	})
 
 	t.Run("remove_plate on empty cell removes nothing", func(t *testing.T) {

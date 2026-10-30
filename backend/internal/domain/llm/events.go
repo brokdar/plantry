@@ -110,11 +110,9 @@ type ToolResultPayload struct {
 	IsError bool            `json:"is_error"`
 }
 
-// PlateChangedPayload accompanies EventPlateChanged.
-// WeekID, if nonzero, lets the frontend target invalidation precisely.
-type PlateChangedPayload struct {
-	WeekID int64 `json:"week_id,omitempty"`
-}
+// PlateChangedPayload accompanies EventPlateChanged; the event alone tells
+// the client to reload the plan.
+type PlateChangedPayload struct{}
 
 // DonePayload accompanies EventDone.
 type DonePayload struct {

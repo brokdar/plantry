@@ -16,30 +16,24 @@ import (
 
 // Service holds business logic for presets.
 type Service struct {
-	repo       Repository
-	foods      FoodLookup
-	plateSvc   PlateService
-	plateRange PlateRange
-	tx         domain.Transactor
-	portions   food.PortionLookup
-	foodGet    FoodGetter
-	slots      SlotLister
-	avail      Availability
+	repo     Repository
+	foods    FoodLookup
+	plateSvc PlateService
+	tx       domain.Transactor
+	portions food.PortionLookup
+	foodGet  FoodGetter
+	slots    SlotLister
+	avail    NoPlateOverrides
 }
 
 // PlateService is the subset of plate.Service presets use: reading plates
-// for CreateFromPlates and writing the plates apply and copy week place.
-// Every call joins the caller's unit of work.
+// and sessions for CreateFromPlates and copy week, and Apply, the write path
+// of apply and copy week. Every call joins the caller's unit of work.
 type PlateService interface {
 	Get(ctx context.Context, plateID int64) (*plate.Plate, error)
 	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
-	Create(ctx context.Context, in plate.PlateInput) (*plate.Plate, error)
-	Delete(ctx context.Context, id int64) (plate.PlanSnapshot, error)
-}
-
-// PlateRange reads plates over a date range (used by CopyWeek).
-type PlateRange interface {
-	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
+	Session(ctx context.Context, id int64) (*plate.SessionView, error)
+	Apply(ctx context.Context, snap plate.PlanSnapshot, opts plate.ApplyOptions) (*plate.ApplyResult, error)
 }
 
 // FoodGetter is the food.Repository.Get surface we need to drive grams
@@ -58,13 +52,6 @@ func NewService(
 	foodGet FoodGetter,
 ) *Service {
 	return &Service{repo: r, foods: f, plateSvc: plateSvc, tx: tx, portions: portions, foodGet: foodGet}
-}
-
-// WithPlateRange injects a plate range reader so CopyWeek can list the source
-// week's plates.
-func (s *Service) WithPlateRange(pr PlateRange) *Service {
-	s.plateRange = pr
-	return s
 }
 
 // CreateFromPlatesInput is the input to CreateFromPlates: a name, optional

@@ -168,9 +168,9 @@ func (s *Service) CellMode(ctx context.Context, date time.Time, slotID int64) (s
 
 // SetOverride writes the override of one cell. Setting "none" on a cell that
 // holds a plate fails with ErrCellHasPlate unless in.RemovePlate is set; then
-// the plate is deleted in the same transaction and returned (loaded before
-// the delete).
-func (s *Service) SetOverride(ctx context.Context, in OverrideInput) (Cell, *plate.Plate, error) {
+// the plate is deleted through the plate service in the same unit of work and
+// the snapshot that restores it is returned (nil when nothing was removed).
+func (s *Service) SetOverride(ctx context.Context, in OverrideInput) (Cell, *plate.PlanSnapshot, error) {
 	if in.Date.IsZero() {
 		return Cell{}, nil, fmt.Errorf("%w: date required", domain.ErrInvalidInput)
 	}
@@ -190,10 +190,10 @@ func (s *Service) SetOverride(ctx context.Context, in OverrideInput) (Cell, *pla
 		}
 	}
 
-	var removed *plate.Plate
+	var removed *plate.PlanSnapshot
 	err = s.tx.InTx(ctx, func(ctx context.Context) error {
 		if in.Mode == ModeNone {
-			r, err := s.removeCellPlates(ctx, date, in.SlotID, in.RemovePlate)
+			r, err := s.removeCellPlate(ctx, date, in.SlotID, in.RemovePlate)
 			if err != nil {
 				return err
 			}
@@ -253,11 +253,10 @@ func (s *Service) ClearOverride(ctx context.Context, date time.Time, slotID int6
 	return s.repo.DeleteOverride(ctx, dateOnly(date), slotID)
 }
 
-// removeCellPlates deletes the plates in the cell when remove is set, and
-// returns the first one. Without remove, a plate in the cell is an error.
-// A cell holds at most one plate once the unique index lands (A2); until
-// then every plate in the cell is deleted.
-func (s *Service) removeCellPlates(ctx context.Context, date time.Time, slotID int64, remove bool) (*plate.Plate, error) {
+// removeCellPlate deletes the cell's plate when remove is set and returns the
+// snapshot that restores it, or nil when the cell is empty. Without remove, a
+// plate in the cell is an error.
+func (s *Service) removeCellPlate(ctx context.Context, date time.Time, slotID int64, remove bool) (*plate.PlanSnapshot, error) {
 	if s.plates == nil {
 		return nil, errors.New("availability: plate service not wired")
 	}
@@ -265,23 +264,20 @@ func (s *Service) removeCellPlates(ctx context.Context, date time.Time, slotID i
 	if err != nil {
 		return nil, err
 	}
-	var removed *plate.Plate
-	for i := range day {
-		p := day[i]
+	for _, p := range day {
 		if p.SlotID != slotID {
 			continue
 		}
 		if !remove {
 			return nil, fmt.Errorf("%w: plate %d", domain.ErrCellHasPlate, p.ID)
 		}
-		if _, err := s.plates.Delete(ctx, p.ID); err != nil {
+		snap, err := s.plates.Delete(ctx, p.ID)
+		if err != nil {
 			return nil, err
 		}
-		if removed == nil {
-			removed = &p
-		}
+		return &snap, nil
 	}
-	return removed, nil
+	return nil, nil
 }
 
 // validateCell checks the slot, mode and preset of a default or override and

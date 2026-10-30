@@ -2,8 +2,10 @@ package preset_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 
@@ -13,7 +15,6 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
@@ -21,56 +22,53 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
-// applyTestEnv wires a full real-SQLite stack so the apply pipeline can be
-// exercised against the actual repos. The plate.Service is required because
-// preset.Service expects a PlateService (Get) and PlateRange (Range).
+// applyTestEnv wires a full real-SQLite stack so apply and copy week run
+// through the real plate write path. Household portions are 2.
 type applyTestEnv struct {
 	ctx       context.Context
+	db        *sql.DB
 	presetSvc *preset.Service
 	plateSvc  *plate.Service
 	slotSvc   *slot.Service
 	availSvc  *availability.Service
-	slotID    int64
-	foodID    int64
+	slotID    int64 // dinner
+	lunchID   int64
+	foodID    int64 // leaf Rice
+	chiliID   int64 // composed
 }
 
 func newApplyTestEnv(t *testing.T) *applyTestEnv {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
 	ctx := context.Background()
-
-	// Seed: one slot, one leaf food.
-	res, err := db.ExecContext(ctx,
-		`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.dinner', 'utensils', 1, 1)`)
-	require.NoError(t, err)
-	slotID, err := res.LastInsertId()
-	require.NoError(t, err)
-
-	res, err = db.ExecContext(ctx,
-		`INSERT INTO foods (name, kind, source) VALUES ('Rice', 'leaf', 'manual')`)
-	require.NoError(t, err)
-	foodID, err := res.LastInsertId()
+	insert := func(q string) int64 {
+		res, err := db.ExecContext(ctx, q)
+		require.NoError(t, err, q)
+		id, err := res.LastInsertId()
+		require.NoError(t, err)
+		return id
+	}
+	slotID := insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.dinner', 'utensils', 1, 1)`)
+	lunchID := insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.lunch', 'sun', 0, 1)`)
+	foodID := insert(`INSERT INTO foods (name, kind, source) VALUES ('Rice', 'leaf', 'manual')`)
+	chiliID := insert(`INSERT INTO foods (name, kind, role, reference_portions) VALUES ('Chili', 'composed', 'main', 4)`)
+	_, err := db.ExecContext(ctx, `UPDATE user_profile SET household_portions = 2 WHERE id = 1`)
 	require.NoError(t, err)
 
 	foodRepo := sqlite.NewFoodRepo(db)
-	slotRepo := sqlite.NewSlotRepo(db)
-	presetRepo := sqlite.NewPresetRepo(db)
-	txRunner := sqlite.NewTxRunner(db)
 	plateSvc, availSvc := testsvc.Plan(db)
-	slotSvc := slot.NewService(slotRepo)
-
-	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).
+	slotSvc := slot.NewService(sqlite.NewSlotRepo(db))
+	presetSvc := preset.NewService(sqlite.NewPresetRepo(db), foodRepo, plateSvc, sqlite.NewTxRunner(db), foodRepo, foodRepo).
 		WithSlots(slotSvc).
-		WithPlateRange(plateSvc).
 		WithAvailability(availSvc)
 
 	return &applyTestEnv{
-		ctx: ctx, presetSvc: presetSvc, plateSvc: plateSvc, slotSvc: slotSvc, availSvc: availSvc,
-		slotID: slotID, foodID: foodID,
+		ctx: ctx, db: db, presetSvc: presetSvc, plateSvc: plateSvc, slotSvc: slotSvc, availSvc: availSvc,
+		slotID: slotID, lunchID: lunchID, foodID: foodID, chiliID: chiliID,
 	}
 }
 
-// setNone marks a cell "none" with an optional note.
+// setNone marks a dinner cell "none" with an optional note.
 func (e *applyTestEnv) setNone(t *testing.T, date time.Time, note *string) {
 	t.Helper()
 	_, _, err := e.availSvc.SetOverride(e.ctx, availability.OverrideInput{
@@ -79,23 +77,26 @@ func (e *applyTestEnv) setNone(t *testing.T, date time.Time, note *string) {
 	require.NoError(t, err)
 }
 
-// leafPlate creates a plate with one 100 g leaf component.
-func (e *applyTestEnv) leafPlate(t *testing.T, date time.Time) *plate.Plate {
-	t.Helper()
-	amount, grams, unit, src := 100.0, 100.0, "g", "direct"
-	p := &plate.Plate{Date: date, SlotID: e.slotID, Components: []plate.PlateComponent{
-		{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
-	}}
-	e.create(t, p)
-	return p
+func leafComp(foodID int64, amount float64) plate.PlateComponent {
+	unit := "g"
+	return plate.PlateComponent{FoodID: foodID, Amount: &amount, Unit: &unit}
 }
 
-// create writes p through the plate service and stores the result in p.
-func (e *applyTestEnv) create(t *testing.T, p *plate.Plate) {
+func composedComp(foodID int64) plate.PlateComponent {
+	return plate.PlateComponent{FoodID: foodID, Portions: ptr(1.0)}
+}
+
+// leafPlate creates a dinner plate with one 100 g leaf component.
+func (e *applyTestEnv) leafPlate(t *testing.T, date time.Time) *plate.Plate {
 	t.Helper()
-	out, err := e.plateSvc.Create(e.ctx, plate.PlateInput{Date: p.Date, SlotID: p.SlotID, Note: p.Note, Components: p.Components})
+	return e.create(t, date, e.slotID, leafComp(e.foodID, 100))
+}
+
+func (e *applyTestEnv) create(t *testing.T, date time.Time, slotID int64, comps ...plate.PlateComponent) *plate.Plate {
+	t.Helper()
+	out, err := e.plateSvc.Create(e.ctx, plate.PlateInput{Date: date, SlotID: slotID, Components: comps})
 	require.NoError(t, err)
-	*p = *out
+	return out
 }
 
 func (e *applyTestEnv) remove(t *testing.T, id int64) {
@@ -108,8 +109,127 @@ func (e *applyTestEnv) cell(t *testing.T, date time.Time) availability.Cell {
 	t.Helper()
 	cells, err := e.availSvc.Resolve(e.ctx, date, date)
 	require.NoError(t, err)
-	require.Len(t, cells, 1)
-	return cells[0]
+	for _, c := range cells {
+		if c.SlotID == e.slotID {
+			return c
+		}
+	}
+	t.Fatalf("no cell for %s", date)
+	return availability.Cell{}
+}
+
+func (e *applyTestEnv) count(t *testing.T, table string) int {
+	t.Helper()
+	var n int
+	require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM `+table).Scan(&n))
+	return n
+}
+
+// undo reverses an apply or copy week the way the client does: delete the
+// created plates, restore Removed, clear the created overrides.
+func (e *applyTestEnv) undo(t *testing.T, res *preset.ApplyResult) {
+	t.Helper()
+	for _, id := range res.CreatedPlateIDs {
+		e.remove(t, id)
+	}
+	_, err := e.plateSvc.Apply(e.ctx, res.Removed, plate.ApplyOptions{OnConflict: plate.ConflictFail})
+	require.NoError(t, err)
+	for _, c := range res.CreatedOverrides {
+		require.NoError(t, e.availSvc.ClearOverride(e.ctx, c.Date, c.SlotID))
+	}
+}
+
+// plan describes the plates and sessions in [from, to] without ids, so two
+// plans compare equal after an undo.
+func (e *applyTestEnv) plan(t *testing.T, from, to time.Time) []string {
+	t.Helper()
+	plates, err := e.plateSvc.Range(e.ctx, from, to)
+	require.NoError(t, err)
+	out := []string{}
+	for _, p := range plates {
+		line := fmt.Sprintf("%s/%d eaters=%g", p.DateString(), p.SlotID, p.Eaters)
+		for _, c := range p.Components {
+			line += fmt.Sprintf(" [food=%d", c.FoodID)
+			if c.Portions != nil {
+				line += fmt.Sprintf(" portions=%g", *c.Portions)
+			}
+			if c.Grams != nil {
+				line += fmt.Sprintf(" grams=%g", *c.Grams)
+			}
+			if c.CookSessionID != nil {
+				v, err := e.plateSvc.Session(e.ctx, *c.CookSessionID)
+				require.NoError(t, err)
+				line += fmt.Sprintf(" session=%s/%d portions=%g meals=%d", v.CookDate.Format(time.DateOnly), v.CookSlotID, v.Portions, v.Meals)
+			}
+			line += "]"
+		}
+		out = append(out, line)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// seedPreset creates a 1-plate dinner preset holding comps.
+func (e *applyTestEnv) seedPreset(t *testing.T, name string, comps ...plate.PlateComponent) *preset.Preset {
+	t.Helper()
+	if len(comps) == 0 {
+		comps = []plate.PlateComponent{leafComp(e.foodID, 150)}
+	}
+	src := e.create(t, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), e.slotID, comps...)
+	p, err := e.presetSvc.CreateFromPlates(e.ctx, preset.CreateFromPlatesInput{Name: name, PlateIDs: []int64{src.ID}})
+	require.NoError(t, err)
+	e.remove(t, src.ID)
+	return p
+}
+
+var applyTarget = time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+
+// ── Apply ───────────────────────────────────────────────────────────────
+
+func TestApply_HappyPath_CreatesPlate(t *testing.T) {
+	e := newApplyTestEnv(t)
+	p := e.seedPreset(t, "X")
+
+	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: applyTarget})
+	require.NoError(t, err)
+	require.Len(t, res.CreatedPlateIDs, 1)
+	got, err := e.plateSvc.Get(e.ctx, res.CreatedPlateIDs[0])
+	require.NoError(t, err)
+	assert.Equal(t, e.slotID, got.SlotID)
+	assert.InDelta(t, 2.0, got.Eaters, 1e-9, "eaters default to the household")
+	assert.Empty(t, res.Removed.Plates)
+
+	gotPreset, err := e.presetSvc.Get(e.ctx, p.ID)
+	require.NoError(t, err)
+	require.NotNil(t, gotPreset.LastUsedAt)
+}
+
+// B2-AC2
+func TestApply_ComposedComponent_FreshSessionOrSkippedOnNone(t *testing.T) {
+	e := newApplyTestEnv(t)
+	p := e.seedPreset(t, "Chili night", composedComp(e.chiliID))
+	require.Equal(t, 0, e.count(t, "cook_sessions"))
+
+	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: applyTarget})
+	require.NoError(t, err)
+	require.Len(t, res.CreatedPlateIDs, 1)
+	got, err := e.plateSvc.Get(e.ctx, res.CreatedPlateIDs[0])
+	require.NoError(t, err)
+	require.NotNil(t, got.Components[0].CookSessionID)
+	v, err := e.plateSvc.Session(e.ctx, *got.Components[0].CookSessionID)
+	require.NoError(t, err)
+	assert.Equal(t, applyTarget, v.CookDate)
+	assert.Equal(t, e.slotID, v.CookSlotID)
+	assert.InDelta(t, 2.0, v.Portions, 1e-9, "1 portion per eater × 2 eaters")
+	assert.Equal(t, 1, v.Meals)
+
+	none := applyTarget.AddDate(0, 0, 1)
+	e.setNone(t, none, nil)
+	res, err = e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: none})
+	require.NoError(t, err)
+	assert.Empty(t, res.CreatedPlateIDs)
+	assert.Equal(t, []plate.CellKey{{Date: none, SlotID: e.slotID}}, res.SkippedUnavailable)
+	assert.Equal(t, 1, e.count(t, "cook_sessions"), "a skipped plate creates no session")
 }
 
 func TestApply_NoneCell_SkippedUnavailable(t *testing.T) {
@@ -117,27 +237,220 @@ func TestApply_NoneCell_SkippedUnavailable(t *testing.T) {
 		t.Run(string(conflict), func(t *testing.T) {
 			e := newApplyTestEnv(t)
 			p := e.seedPreset(t, "X")
-			target := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-			e.setNone(t, target, nil)
+			e.setNone(t, applyTarget, nil)
 
-			res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: target, OnConflict: conflict})
+			res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: applyTarget, OnConflict: conflict})
 			require.NoError(t, err)
-			assert.Empty(t, res.Created)
+			assert.Empty(t, res.CreatedPlateIDs)
 			assert.Empty(t, res.SkippedOccupied)
-			require.Len(t, res.SkippedUnavailable, 1)
-			assert.Equal(t, preset.SkipItem{Date: target, SlotID: e.slotID}, res.SkippedUnavailable[0])
+			assert.Equal(t, []plate.CellKey{{Date: applyTarget, SlotID: e.slotID}}, res.SkippedUnavailable)
 
-			day, err := e.plateSvc.Day(e.ctx, target)
+			day, err := e.plateSvc.Day(e.ctx, applyTarget)
 			require.NoError(t, err)
 			assert.Empty(t, day)
+			got, err := e.presetSvc.Get(e.ctx, p.ID)
+			require.NoError(t, err)
+			assert.Nil(t, got.LastUsedAt, "nothing placed, so the preset was not used")
 		})
 	}
 }
 
+func TestApply_OccupiedSkip(t *testing.T) {
+	e := newApplyTestEnv(t)
+	p := e.seedPreset(t, "X")
+	e.create(t, applyTarget, e.slotID, leafComp(e.foodID, 50))
+
+	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: applyTarget, OnConflict: preset.ConflictSkip})
+	require.NoError(t, err)
+	assert.Empty(t, res.CreatedPlateIDs)
+	assert.Equal(t, []plate.CellKey{{Date: applyTarget, SlotID: e.slotID}}, res.SkippedOccupied)
+}
+
+// B2-AC3: overwrite apply then undo yields the pre-apply plan, sessions
+// included.
+func TestApply_Overwrite_UndoRestoresThePlan(t *testing.T) {
+	e := newApplyTestEnv(t)
+	p := e.seedPreset(t, "X")
+	// The target cell holds the fresh plate of a batch with a leftover the
+	// next day: the batch survives the overwrite with one link.
+	cook := e.create(t, applyTarget, e.slotID, composedComp(e.chiliID), leafComp(e.foodID, 30))
+	sid := *cook.Components[0].CookSessionID
+	_, err := e.plateSvc.AddLeftovers(e.ctx, sid, []plate.CellKey{{Date: applyTarget.AddDate(0, 0, 1), SlotID: e.lunchID}})
+	require.NoError(t, err)
+	window := applyTarget.AddDate(0, 0, 1)
+	before := e.plan(t, applyTarget, window)
+
+	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: applyTarget, OnConflict: preset.ConflictOverwrite})
+	require.NoError(t, err)
+	require.Len(t, res.CreatedPlateIDs, 1)
+	require.Len(t, res.Removed.Plates, 1)
+	assert.Equal(t, sid, res.Removed.Plates[0].Components[0].Session.ID, "the batch survives, so it is recorded by id")
+	day, err := e.plateSvc.Day(e.ctx, applyTarget)
+	require.NoError(t, err)
+	require.Len(t, day, 1)
+	assert.Equal(t, res.CreatedPlateIDs[0], day[0].ID)
+	assert.InDelta(t, 150.0, *day[0].Components[0].Amount, 1e-9)
+
+	e.undo(t, res)
+	assert.Equal(t, before, e.plan(t, applyTarget, window))
+}
+
+func TestApply_InactiveSlot_SkippedNoSlot(t *testing.T) {
+	e := newApplyTestEnv(t)
+	p := e.seedPreset(t, "X")
+	require.NoError(t, e.slotSvc.Update(e.ctx, &slot.TimeSlot{
+		ID: e.slotID, NameKey: "slot.dinner", Icon: "utensils", SortOrder: 1, Active: false,
+	}))
+
+	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: applyTarget})
+	require.NoError(t, err)
+	assert.Empty(t, res.CreatedPlateIDs)
+	assert.Equal(t, []plate.CellKey{{Date: applyTarget, SlotID: e.slotID}}, res.SkippedNoSlot)
+}
+
+func TestApply_SlotIDsFilter(t *testing.T) {
+	e := newApplyTestEnv(t)
+	p := e.seedPreset(t, "OneSlot")
+
+	// Filter to a slot ID the preset does NOT contain → zero plates apply.
+	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: applyTarget, SlotIDsFilter: []int64{99999}})
+	require.NoError(t, err)
+	assert.Empty(t, res.CreatedPlateIDs)
+	assert.Empty(t, res.SkippedOccupied)
+	assert.Empty(t, res.SkippedNoSlot)
+}
+
+func TestApply_Validation(t *testing.T) {
+	e := newApplyTestEnv(t)
+	p := e.seedPreset(t, "X")
+	_, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+	_, err = e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: applyTarget, OnConflict: "merge"})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+	_, err = e.presetSvc.Apply(e.ctx, 9999, preset.ApplyRequest{TargetDate: applyTarget})
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+// ── Copy week ───────────────────────────────────────────────────────────
+
+var (
+	copySource = time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC) // Monday
+	copyTarget = copySource.AddDate(0, 0, 7)
+)
+
+func ptrStr(s string) *string { return &s }
+
+func TestCopyWeek_HappyPath(t *testing.T) {
+	e := newApplyTestEnv(t)
+	for offset := range 3 {
+		e.leafPlate(t, copySource.AddDate(0, 0, offset))
+	}
+
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: copySource, TargetStart: copyTarget})
+	require.NoError(t, err)
+	require.Len(t, res.CreatedPlateIDs, 3, "three plates copied")
+	for i, id := range res.CreatedPlateIDs {
+		p, err := e.plateSvc.Get(e.ctx, id)
+		require.NoError(t, err)
+		assert.Equal(t, copyTarget.AddDate(0, 0, i), p.Date, "plate %d landed on the right day", i)
+		assert.InDelta(t, 100.0, *p.Components[0].Amount, 1e-9)
+	}
+}
+
+// B2-AC1: a Sun batch with 2 leftovers copies as one session with the same
+// portions and 3 links, not 3 fresh sessions.
+func TestCopyWeek_BatchStaysOneSession(t *testing.T) {
+	e := newApplyTestEnv(t)
+	sat := copySource.AddDate(0, 0, 5)
+	sun := copySource.AddDate(0, 0, 6)
+	cook := e.create(t, sat, e.slotID, composedComp(e.chiliID))
+	sid := *cook.Components[0].CookSessionID
+	_, err := e.plateSvc.AddLeftovers(e.ctx, sid, []plate.CellKey{{Date: sun, SlotID: e.lunchID}, {Date: sun, SlotID: e.slotID}})
+	require.NoError(t, err)
+	src, err := e.plateSvc.Session(e.ctx, sid)
+	require.NoError(t, err)
+	require.InDelta(t, 6.0, src.Portions, 1e-9)
+	_, err = e.plateSvc.SetCooked(e.ctx, sid, true)
+	require.NoError(t, err)
+
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: copySource, TargetStart: copyTarget})
+	require.NoError(t, err)
+	require.Len(t, res.CreatedPlateIDs, 3)
+	assert.Equal(t, 2, e.count(t, "cook_sessions"), "one session per week, not one per plate")
+
+	first, err := e.plateSvc.Get(e.ctx, res.CreatedPlateIDs[0])
+	require.NoError(t, err)
+	copied := *first.Components[0].CookSessionID
+	for _, id := range res.CreatedPlateIDs {
+		p, err := e.plateSvc.Get(e.ctx, id)
+		require.NoError(t, err)
+		assert.Equal(t, copied, *p.Components[0].CookSessionID)
+	}
+	v, err := e.plateSvc.Session(e.ctx, copied)
+	require.NoError(t, err)
+	assert.Equal(t, sat.AddDate(0, 0, 7), v.CookDate)
+	assert.Equal(t, e.slotID, v.CookSlotID)
+	assert.InDelta(t, 6.0, v.Portions, 1e-9)
+	assert.Zero(t, v.FrozenPortions)
+	assert.Nil(t, v.CookedAt, "the copy is not cooked yet")
+	assert.Equal(t, 3, v.Meals)
+	assert.Equal(t, []plate.LinkKind{plate.KindFresh, plate.KindLeftover, plate.KindLeftover},
+		[]plate.LinkKind{v.Links[0].Kind, v.Links[1].Kind, v.Links[2].Kind})
+}
+
+// A leftover whose batch was cooked before the source window becomes a fresh
+// session of its own in the target window.
+func TestCopyWeek_SessionCookedBeforeWindowBecomesFresh(t *testing.T) {
+	e := newApplyTestEnv(t)
+	sun := copySource.AddDate(0, 0, -1)
+	cook := e.create(t, sun, e.slotID, composedComp(e.chiliID))
+	sid := *cook.Components[0].CookSessionID
+	_, err := e.plateSvc.AddLeftovers(e.ctx, sid, []plate.CellKey{{Date: copySource, SlotID: e.lunchID}})
+	require.NoError(t, err)
+
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: copySource, TargetStart: copyTarget})
+	require.NoError(t, err)
+	require.Len(t, res.CreatedPlateIDs, 1)
+	p, err := e.plateSvc.Get(e.ctx, res.CreatedPlateIDs[0])
+	require.NoError(t, err)
+	v, err := e.plateSvc.Session(e.ctx, *p.Components[0].CookSessionID)
+	require.NoError(t, err)
+	assert.NotEqual(t, sid, v.ID)
+	assert.Equal(t, copyTarget, v.CookDate)
+	assert.Equal(t, e.lunchID, v.CookSlotID)
+	assert.InDelta(t, 2.0, v.Portions, 1e-9)
+	assert.Equal(t, 1, v.Meals)
+}
+
+// B2-AC3 for copy week: overwriting a week that holds a batch, then undoing,
+// restores the batch.
+func TestCopyWeek_Overwrite_UndoRestoresThePlan(t *testing.T) {
+	e := newApplyTestEnv(t)
+	e.leafPlate(t, copySource)
+	e.leafPlate(t, copySource.AddDate(0, 0, 1))
+	// The target week: a batch on its first two days, plus a lunch.
+	cook := e.create(t, copyTarget, e.slotID, composedComp(e.chiliID))
+	sid := *cook.Components[0].CookSessionID
+	_, err := e.plateSvc.AddLeftovers(e.ctx, sid, []plate.CellKey{{Date: copyTarget.AddDate(0, 0, 1), SlotID: e.slotID}})
+	require.NoError(t, err)
+	e.create(t, copyTarget, e.lunchID, leafComp(e.foodID, 20))
+	targetEnd := copyTarget.AddDate(0, 0, 6)
+	before := e.plan(t, copyTarget, targetEnd)
+
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: copySource, TargetStart: copyTarget, OnConflict: preset.ConflictOverwrite})
+	require.NoError(t, err)
+	require.Len(t, res.CreatedPlateIDs, 2)
+	require.Len(t, res.Removed.Plates, 2)
+	require.Len(t, res.Removed.Sessions, 1, "the whole batch went, recorded once by ref")
+	assert.Equal(t, 0, e.count(t, "cook_sessions"))
+
+	e.undo(t, res)
+	assert.Equal(t, before, e.plan(t, copyTarget, targetEnd))
+}
+
 func TestCopyWeek_AvailabilityAndUndo(t *testing.T) {
 	e := newApplyTestEnv(t)
-	src := time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC) // Monday
-	tgt := src.AddDate(0, 0, 7)
+	src, tgt := copySource, copyTarget
 
 	e.leafPlate(t, src)                                   // Mon: plate → copied
 	e.setNone(t, src.AddDate(0, 0, 1), ptrStr("canteen")) // Tue: none → copied with note
@@ -149,18 +462,17 @@ func TestCopyWeek_AvailabilityAndUndo(t *testing.T) {
 	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: src, TargetStart: tgt})
 	require.NoError(t, err)
 
-	require.Len(t, res.Created, 1)
-	assert.Equal(t, tgt, res.Created[0].Date)
-	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 2), SlotID: e.slotID}}, res.SkippedUnavailable)
-	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 3), SlotID: e.slotID}}, res.SkippedOccupied)
-	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 1), SlotID: e.slotID}}, res.Snapshot.CreatedOverrides)
+	require.Len(t, res.CreatedPlateIDs, 1)
+	assert.Equal(t, []plate.CellKey{{Date: tgt.AddDate(0, 0, 2), SlotID: e.slotID}}, res.SkippedUnavailable)
+	assert.Equal(t, []plate.CellKey{{Date: tgt.AddDate(0, 0, 3), SlotID: e.slotID}}, res.SkippedOccupied)
+	assert.Equal(t, []plate.CellKey{{Date: tgt.AddDate(0, 0, 1), SlotID: e.slotID}}, res.CreatedOverrides)
 
 	tue := e.cell(t, tgt.AddDate(0, 0, 1))
 	assert.Equal(t, availability.ModeNone, tue.Mode)
 	assert.Equal(t, availability.SourceOverride, tue.Source)
 	assert.Equal(t, ptrStr("canteen"), tue.Note)
 
-	require.NoError(t, e.presetSvc.UndoApply(e.ctx, res.Snapshot))
+	e.undo(t, res)
 
 	assert.Equal(t, availability.ModePlan, e.cell(t, tgt.AddDate(0, 0, 1)).Mode, "undo removes the copied override")
 	assert.Equal(t, availability.ModeNone, e.cell(t, tgt.AddDate(0, 0, 2)).Mode, "undo keeps overrides it did not create")
@@ -171,8 +483,7 @@ func TestCopyWeek_AvailabilityAndUndo(t *testing.T) {
 
 func TestCopyWeek_OnlyNoneOverrides(t *testing.T) {
 	e := newApplyTestEnv(t)
-	src := time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC)
-	tgt := src.AddDate(0, 0, 7)
+	src, tgt := copySource, copyTarget
 	e.setNone(t, src.AddDate(0, 0, 4), nil)
 	// A routine override in the source is not copied.
 	presetP := e.seedPreset(t, "Oats")
@@ -183,13 +494,11 @@ func TestCopyWeek_OnlyNoneOverrides(t *testing.T) {
 
 	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: src, TargetStart: tgt})
 	require.NoError(t, err)
-	assert.Empty(t, res.Created)
-	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 4), SlotID: e.slotID}}, res.Snapshot.CreatedOverrides)
+	assert.Empty(t, res.CreatedPlateIDs)
+	assert.Equal(t, []plate.CellKey{{Date: tgt.AddDate(0, 0, 4), SlotID: e.slotID}}, res.CreatedOverrides)
 	assert.Equal(t, availability.ModeNone, e.cell(t, tgt.AddDate(0, 0, 4)).Mode)
 	assert.Equal(t, availability.ModePlan, e.cell(t, tgt.AddDate(0, 0, 5)).Mode, "routine overrides are not copied")
 }
-
-func ptrStr(s string) *string { return &s }
 
 // failingAvailability wraps the real availability service and fails
 // SetNoneIfUnset for the cells in setErrs.
@@ -207,8 +516,7 @@ func (f failingAvailability) SetNoneIfUnset(ctx context.Context, date time.Time,
 
 func TestCopyWeek_OverrideCopyIsBestEffort(t *testing.T) {
 	e := newApplyTestEnv(t)
-	src := time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC)
-	tgt := src.AddDate(0, 0, 7)
+	src, tgt := copySource, copyTarget
 	e.leafPlate(t, src)
 	for i := 1; i <= 3; i++ {
 		e.setNone(t, src.AddDate(0, 0, i), nil)
@@ -219,334 +527,48 @@ func TestCopyWeek_OverrideCopyIsBestEffort(t *testing.T) {
 	}})
 
 	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: src, TargetStart: tgt})
-	require.NoError(t, err, "a failed override copy must not lose the undo snapshot")
+	require.NoError(t, err, "a failed override copy must not lose what undoes the copy")
 
-	require.Len(t, res.Snapshot.CreatedPlateIDs, 1)
-	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 1), SlotID: e.slotID}}, res.SkippedOccupied,
+	require.Len(t, res.CreatedPlateIDs, 1)
+	assert.Equal(t, []plate.CellKey{{Date: tgt.AddDate(0, 0, 1), SlotID: e.slotID}}, res.SkippedOccupied,
 		"a plate that appeared in the cell is reported as occupied")
-	assert.Equal(t, []preset.SkipItem{{Date: tgt.AddDate(0, 0, 3), SlotID: e.slotID}}, res.Snapshot.CreatedOverrides,
-		"only overrides that were written are in the snapshot")
+	assert.Equal(t, []plate.CellKey{{Date: tgt.AddDate(0, 0, 3), SlotID: e.slotID}}, res.CreatedOverrides,
+		"only overrides that were written are reported")
 	assert.Equal(t, availability.ModePlan, e.cell(t, tgt.AddDate(0, 0, 2)).Mode)
-}
-
-func TestUndoApply_PlateFailureKeepsOverrides(t *testing.T) {
-	e := newApplyTestEnv(t)
-	d := time.Date(2026, 4, 14, 0, 0, 0, 0, time.UTC)
-	e.setNone(t, d, nil)
-
-	err := e.presetSvc.UndoApply(e.ctx, preset.ApplySnapshot{
-		// The slot does not exist, so restoring the plate fails.
-		ReplacedPlates:   []plate.Plate{{Date: d.AddDate(0, 0, 1), SlotID: 99999}},
-		CreatedOverrides: []preset.SkipItem{{Date: d, SlotID: e.slotID}},
-	})
-	require.Error(t, err)
-	assert.Equal(t, availability.ModeNone, e.cell(t, d).Mode, "overrides stay when the plate undo fails, so a retry is safe")
-
-	require.NoError(t, e.presetSvc.UndoApply(e.ctx, preset.ApplySnapshot{
-		CreatedOverrides: []preset.SkipItem{{Date: d, SlotID: e.slotID}},
-	}))
-	assert.Equal(t, availability.ModePlan, e.cell(t, d).Mode)
-}
-
-func mkLeafComp(foodID int64, amount float64) preset.Component {
-	unit := "g"
-	grams := amount
-	src := "direct"
-	return preset.Component{
-		FoodID:      foodID,
-		Amount:      &amount,
-		Unit:        &unit,
-		Grams:       &grams,
-		GramsSource: &src,
-	}
-}
-
-// seedPreset creates a 1-plate preset bound to env.slotID with one leaf comp.
-func (e *applyTestEnv) seedPreset(t *testing.T, name string) *preset.Preset {
-	t.Helper()
-	// Seed a real plate so CreateFromPlates has something to read.
-	amount := 150.0
-	unit := "g"
-	grams := 150.0
-	src := "direct"
-	srcPlate := &plate.Plate{
-		Date:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		SlotID: e.slotID,
-		Components: []plate.PlateComponent{
-			{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
-		},
-	}
-	e.create(t, srcPlate)
-
-	p, err := e.presetSvc.CreateFromPlates(e.ctx, preset.CreateFromPlatesInput{
-		Name: name, PlateIDs: []int64{srcPlate.ID},
-	})
-	require.NoError(t, err)
-
-	// Delete the source plate so the target date stays clean for later apply tests.
-	e.remove(t, srcPlate.ID)
-	_ = mkLeafComp // keep helper referenced
-	return p
-}
-
-func TestApply_HappyPath_CreatesPlate(t *testing.T) {
-	e := newApplyTestEnv(t)
-	p := e.seedPreset(t, "X")
-
-	target := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: target})
-	require.NoError(t, err)
-	require.Len(t, res.Created, 1)
-	assert.Equal(t, e.slotID, res.Created[0].SlotID)
-
-	// last_used_at gets touched.
-	got, err := e.presetSvc.Get(e.ctx, p.ID)
-	require.NoError(t, err)
-	require.NotNil(t, got.LastUsedAt)
-}
-
-func TestApply_OccupiedSkip(t *testing.T) {
-	e := newApplyTestEnv(t)
-	p := e.seedPreset(t, "X")
-
-	// Occupy the target slot first.
-	amount := 50.0
-	unit := "g"
-	grams := 50.0
-	src := "direct"
-	occ := &plate.Plate{
-		Date:   time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
-		SlotID: e.slotID,
-		Components: []plate.PlateComponent{
-			{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
-		},
-	}
-	e.create(t, occ)
-
-	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{
-		TargetDate: occ.Date, OnConflict: preset.ConflictSkip,
-	})
-	require.NoError(t, err)
-	assert.Empty(t, res.Created)
-	require.Len(t, res.SkippedOccupied, 1)
-	assert.Equal(t, e.slotID, res.SkippedOccupied[0].SlotID)
-}
-
-func TestApply_OccupiedOverwrite_AndUndo(t *testing.T) {
-	e := newApplyTestEnv(t)
-	p := e.seedPreset(t, "X")
-
-	// Occupy the target slot.
-	amount := 50.0
-	unit := "g"
-	grams := 50.0
-	src := "direct"
-	occ := &plate.Plate{
-		Date:   time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
-		SlotID: e.slotID,
-		Components: []plate.PlateComponent{
-			{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
-		},
-	}
-	e.create(t, occ)
-	originalID := occ.ID
-
-	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{
-		TargetDate: occ.Date, OnConflict: preset.ConflictOverwrite,
-	})
-	require.NoError(t, err)
-	require.Len(t, res.Replaced, 1)
-	assert.Equal(t, originalID, res.Replaced[0].OldPlate.ID)
-	// Snapshot has one created, one replaced.
-	require.Len(t, res.Snapshot.CreatedPlateIDs, 1)
-	require.Len(t, res.Snapshot.ReplacedPlates, 1)
-
-	// Day should now have exactly one plate (the new one).
-	day, err := e.plateSvc.Day(e.ctx, occ.Date)
-	require.NoError(t, err)
-	require.Len(t, day, 1)
-	assert.Equal(t, res.Replaced[0].NewPlate.ID, day[0].ID)
-
-	// Undo restores the original.
-	require.NoError(t, e.presetSvc.UndoApply(e.ctx, res.Snapshot))
-	day, err = e.plateSvc.Day(e.ctx, occ.Date)
-	require.NoError(t, err)
-	require.Len(t, day, 1)
-	// New ID after undo because Create allocates fresh ID. Components must match.
-	require.Len(t, day[0].Components, 1)
-	require.NotNil(t, day[0].Components[0].Amount)
-	assert.Equal(t, 50.0, *day[0].Components[0].Amount, "undo restored original components")
-}
-
-func TestApply_InactiveSlot_SkippedNoSlot(t *testing.T) {
-	e := newApplyTestEnv(t)
-	p := e.seedPreset(t, "X")
-
-	// Deactivate the slot.
-	require.NoError(t, e.slotSvc.Update(e.ctx, &slot.TimeSlot{
-		ID: e.slotID, NameKey: "slot.dinner", Icon: "utensils", SortOrder: 1, Active: false,
-	}))
-
-	target := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: target})
-	require.NoError(t, err)
-	assert.Empty(t, res.Created)
-	require.Len(t, res.SkippedNoSlot, 1)
-}
-
-var _ = food.KindLeaf
-
-func TestApply_SlotIDsFilter(t *testing.T) {
-	e := newApplyTestEnv(t)
-
-	// Seed a second slot.
-	// We can't easily seed via plateSvc, so build a preset with two plates
-	// (both bound to env.slotID — feature.md allows it; second plate hits
-	// "occupied" on the same slot).
-	amount := 150.0
-	unit := "g"
-	grams := 150.0
-	src := "direct"
-	source := &plate.Plate{
-		Date:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		SlotID: e.slotID,
-		Components: []plate.PlateComponent{
-			{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
-		},
-	}
-	e.create(t, source)
-	p, err := e.presetSvc.CreateFromPlates(e.ctx, preset.CreateFromPlatesInput{
-		Name: "OneSlot", PlateIDs: []int64{source.ID},
-	})
-	require.NoError(t, err)
-	e.remove(t, source.ID)
-
-	target := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
-
-	// Filter to a slot ID the preset does NOT contain → zero plates apply.
-	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{
-		TargetDate: target, SlotIDsFilter: []int64{99999},
-	})
-	require.NoError(t, err)
-	assert.Empty(t, res.Created)
-	assert.Empty(t, res.SkippedOccupied)
-	assert.Empty(t, res.SkippedNoSlot)
 }
 
 func TestCopyWeek_EmptySourceWeek(t *testing.T) {
 	e := newApplyTestEnv(t)
-
-	// No source plates seeded — call CopyWeek with a clean source week.
-	sourceStart := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
-	targetStart := time.Date(2026, 3, 9, 0, 0, 0, 0, time.UTC)
-	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{
-		SourceStart: sourceStart,
-		TargetStart: targetStart,
-	})
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: copySource, TargetStart: copyTarget})
 	require.NoError(t, err)
-	require.NotNil(t, res)
-	assert.Empty(t, res.Created)
-	assert.Empty(t, res.Replaced)
+	assert.Empty(t, res.CreatedPlateIDs)
 	assert.Empty(t, res.SkippedOccupied)
 	assert.Empty(t, res.SkippedNoSlot)
-	assert.Empty(t, res.Snapshot.CreatedPlateIDs)
-	assert.Empty(t, res.Snapshot.ReplacedPlates)
+	assert.Empty(t, res.Removed.Plates)
+	assert.Empty(t, res.CreatedOverrides)
 }
 
 func TestCopyWeek_OverwriteConflict(t *testing.T) {
 	e := newApplyTestEnv(t)
+	e.leafPlate(t, copySource)
+	e.create(t, copyTarget, e.slotID, leafComp(e.foodID, 50))
 
-	amount := 100.0
-	unit := "g"
-	grams := 100.0
-	src := "direct"
-	mkLeafPC := func() plate.PlateComponent {
-		return plate.PlateComponent{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src}
-	}
-
-	sourceStart := time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC)  // Monday
-	targetStart := time.Date(2026, 4, 13, 0, 0, 0, 0, time.UTC) // next Monday
-
-	// Seed one source plate (Monday of source week).
-	srcPlate := &plate.Plate{
-		Date:       sourceStart,
-		SlotID:     e.slotID,
-		Components: []plate.PlateComponent{mkLeafPC()},
-	}
-	e.create(t, srcPlate)
-
-	// Seed a conflicting plate on the target week, same offset, same slot.
-	conflictAmount := 50.0
-	conflictGrams := 50.0
-	conflictPlate := &plate.Plate{
-		Date:   targetStart,
-		SlotID: e.slotID,
-		Components: []plate.PlateComponent{
-			{FoodID: e.foodID, Amount: &conflictAmount, Unit: &unit, Grams: &conflictGrams, GramsSource: &src},
-		},
-	}
-	e.create(t, conflictPlate)
-
-	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{
-		SourceStart: sourceStart,
-		TargetStart: targetStart,
-		OnConflict:  preset.ConflictOverwrite,
-	})
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: copySource, TargetStart: copyTarget, OnConflict: preset.ConflictOverwrite})
 	require.NoError(t, err)
-	require.Len(t, res.Replaced, 1)
-	require.Len(t, res.Snapshot.ReplacedPlates, 1)
-	require.Len(t, res.Snapshot.CreatedPlateIDs, 1)
+	require.Len(t, res.CreatedPlateIDs, 1)
+	require.Len(t, res.Removed.Plates, 1)
+	assert.InDelta(t, 50.0, *res.Removed.Plates[0].Components[0].Amount, 1e-9)
 
-	// Target slot now holds the new plate (100g from source, not 50g).
-	day, err := e.plateSvc.Day(e.ctx, targetStart)
+	day, err := e.plateSvc.Day(e.ctx, copyTarget)
 	require.NoError(t, err)
 	require.Len(t, day, 1)
-	require.Len(t, day[0].Components, 1)
-	require.NotNil(t, day[0].Components[0].Amount)
-	assert.Equal(t, 100.0, *day[0].Components[0].Amount, "target slot now holds the source plate's amount")
+	assert.InDelta(t, 100.0, *day[0].Components[0].Amount, 1e-9, "target slot now holds the source plate's amount")
 }
 
-func TestUndoApply_ToleratesAlreadyDeletedPlates(t *testing.T) {
+func TestCopyWeek_Validation(t *testing.T) {
 	e := newApplyTestEnv(t)
-
-	// Build a snapshot whose CreatedPlateIDs contains a plate ID that doesn't exist.
-	snap := preset.ApplySnapshot{
-		CreatedPlateIDs: []int64{99999},
-	}
-	err := e.presetSvc.UndoApply(e.ctx, snap)
-	require.NoError(t, err, "UndoApply should be idempotent when created plates already gone")
-}
-
-func TestCopyWeek_HappyPath(t *testing.T) {
-	e := newApplyTestEnv(t)
-
-	// Seed plates in source week.
-	amount := 100.0
-	unit := "g"
-	grams := 100.0
-	src := "direct"
-	mkLeafPC := func() plate.PlateComponent {
-		return plate.PlateComponent{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src}
-	}
-	sourceStart := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC) // Monday
-	for offset := 0; offset < 3; offset++ {
-		p := &plate.Plate{
-			Date:       sourceStart.AddDate(0, 0, offset),
-			SlotID:     e.slotID,
-			Components: []plate.PlateComponent{mkLeafPC()},
-		}
-		e.create(t, p)
-	}
-
-	targetStart := time.Date(2026, 3, 9, 0, 0, 0, 0, time.UTC) // next Monday
-	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{
-		SourceStart: sourceStart,
-		TargetStart: targetStart,
-	})
-	require.NoError(t, err)
-	require.Len(t, res.Created, 3, "three plates copied")
-	for i, p := range res.Created {
-		expected := targetStart.AddDate(0, 0, i)
-		assert.Equal(t, expected.Format("2006-01-02"), p.DateString(), "plate %d landed on right day", i)
-	}
+	_, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: copySource})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+	_, err = e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: copySource, TargetStart: copyTarget, OnConflict: "merge"})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput)
 }

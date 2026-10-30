@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 )
 
@@ -239,7 +240,7 @@ func toolApplyPreset(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "apply_preset",
-		Description: "Apply a preset's plates onto target_date. Default on_conflict is 'skip' — leaves existing plates untouched. Use 'overwrite' only when the user explicitly asks to replace / rebuild / wipe. If the user's request targets a specific slot, set slot_ids_filter so multi-plate presets only land the relevant plate. The result enumerates created, replaced, skipped_occupied, skipped_unavailable (No-plate cells), and skipped_no_slot — surface any non-empty skip list to the user.",
+		Description: "Apply a preset's plates onto target_date. Default on_conflict is 'skip' — leaves existing plates untouched. Use 'overwrite' only when the user explicitly asks to replace / rebuild / wipe. If the user's request targets a specific slot, set slot_ids_filter so multi-plate presets only land the relevant plate. The result enumerates created_plate_ids, replaced, skipped_occupied, skipped_unavailable (No-plate cells), and skipped_no_slot — surface any non-empty skip list to the user.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -281,7 +282,7 @@ func toolCopyWeek(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "copy_week",
-		Description: "Copy every plate in [source_start, source_start+6 days] onto the corresponding day of [target_start, target_start+6 days]. Use this for 'apply my usual routine' style requests by copying a representative past week. Default on_conflict is 'skip'.",
+		Description: "Copy every plate in [source_start, source_start+6 days] onto the corresponding day of [target_start, target_start+6 days]. Use this for 'apply my usual routine' style requests by copying a representative past week. A batch cooked in the source week stays one batch (one cook session with its leftovers) in the copy. Default on_conflict is 'skip'.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -316,12 +317,12 @@ func toolCopyWeek(svc Services) Tool {
 func presetSummary(p *preset.Preset) map[string]any {
 	slotIDs := make([]int64, 0, len(p.Plates))
 	seen := map[int64]struct{}{}
-	for _, plate := range p.Plates {
-		if _, ok := seen[plate.SlotID]; ok {
+	for _, pp := range p.Plates {
+		if _, ok := seen[pp.SlotID]; ok {
 			continue
 		}
-		seen[plate.SlotID] = struct{}{}
-		slotIDs = append(slotIDs, plate.SlotID)
+		seen[pp.SlotID] = struct{}{}
+		slotIDs = append(slotIDs, pp.SlotID)
 	}
 	out := map[string]any{
 		"id":          p.ID,
@@ -338,9 +339,9 @@ func presetSummary(p *preset.Preset) map[string]any {
 
 func presetDetail(p *preset.Preset) map[string]any {
 	plates := make([]map[string]any, len(p.Plates))
-	for i, plate := range p.Plates {
-		comps := make([]map[string]any, len(plate.Components))
-		for j, c := range plate.Components {
+	for i, pp := range p.Plates {
+		comps := make([]map[string]any, len(pp.Components))
+		for j, c := range pp.Components {
 			cm := map[string]any{
 				"food_id":    c.FoodID,
 				"sort_order": c.SortOrder,
@@ -366,8 +367,8 @@ func presetDetail(p *preset.Preset) map[string]any {
 			comps[j] = cm
 		}
 		plates[i] = map[string]any{
-			"slot_id":    plate.SlotID,
-			"sort_order": plate.SortOrder,
+			"slot_id":    pp.SlotID,
+			"sort_order": pp.SortOrder,
 			"components": comps,
 		}
 	}
@@ -377,44 +378,30 @@ func presetDetail(p *preset.Preset) map[string]any {
 }
 
 func applyResultSummary(r *preset.ApplyResult) map[string]any {
-	createdIDs := make([]int64, len(r.Created))
-	for i, p := range r.Created {
-		createdIDs[i] = p.ID
+	replaced := make([]plate.CellKey, len(r.Removed.Plates))
+	for i, p := range r.Removed.Plates {
+		d, _ := time.Parse("2006-01-02", p.Date)
+		replaced[i] = plate.CellKey{Date: d, SlotID: p.SlotID}
 	}
-	replaced := make([]map[string]any, len(r.Replaced))
-	for i, ri := range r.Replaced {
-		replaced[i] = map[string]any{
-			"new_plate_id": ri.NewPlate.ID,
-			"old_plate_id": ri.OldPlate.ID,
-		}
-	}
-	skippedOcc := make([]map[string]any, len(r.SkippedOccupied))
-	for i, s := range r.SkippedOccupied {
-		skippedOcc[i] = map[string]any{
-			"date":    s.Date.Format("2006-01-02"),
-			"slot_id": s.SlotID,
-		}
-	}
-	skippedNoSlot := make([]map[string]any, len(r.SkippedNoSlot))
-	for i, s := range r.SkippedNoSlot {
-		skippedNoSlot[i] = map[string]any{
-			"date":    s.Date.Format("2006-01-02"),
-			"slot_id": s.SlotID,
-		}
-	}
-	skippedUnavailable := make([]map[string]any, len(r.SkippedUnavailable))
-	for i, s := range r.SkippedUnavailable {
-		skippedUnavailable[i] = map[string]any{
-			"date":    s.Date.Format("2006-01-02"),
-			"slot_id": s.SlotID,
-		}
+	createdIDs := r.CreatedPlateIDs
+	if createdIDs == nil {
+		createdIDs = []int64{}
 	}
 	return map[string]any{
 		"created_plate_ids":   createdIDs,
-		"replaced":            replaced,
-		"skipped_occupied":    skippedOcc,
-		"skipped_unavailable": skippedUnavailable,
-		"skipped_no_slot":     skippedNoSlot,
+		"replaced":            cellList(replaced),
+		"skipped_occupied":    cellList(r.SkippedOccupied),
+		"skipped_unavailable": cellList(r.SkippedUnavailable),
+		"skipped_no_slot":     cellList(r.SkippedNoSlot),
+		"created_overrides":   cellList(r.CreatedOverrides),
 		"effect":              "plate_changed",
 	}
+}
+
+func cellList(cells []plate.CellKey) []map[string]any {
+	out := make([]map[string]any, len(cells))
+	for i, c := range cells {
+		out[i] = map[string]any{"date": c.Date.Format("2006-01-02"), "slot_id": c.SlotID}
+	}
+	return out
 }

@@ -31,10 +31,9 @@ var validRoles = map[Role]bool{
 // ValidRole reports whether r is one of the persisted roles.
 func ValidRole(r Role) bool { return validRoles[r] }
 
-// Conversation aggregates an AI chat session, optionally tied to a week.
+// Conversation aggregates an AI chat session.
 type Conversation struct {
 	ID        int64
-	WeekID    *int64
 	Title     *string
 	Messages  []Message
 	CreatedAt time.Time
@@ -54,7 +53,6 @@ type Message struct {
 
 // ListQuery filters + paginates a conversation list.
 type ListQuery struct {
-	WeekID *int64
 	Limit  int
 	Offset int
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // maxAvailabilityRangeDays caps GET /api/availability (inclusive day count).
@@ -52,9 +53,11 @@ type setOverrideRequest struct {
 	RemovePlate bool    `json:"remove_plate"`
 }
 
+// setOverrideResponse carries the cell and, when remove_plate deleted the
+// cell's plate, the snapshot that restores it (POST /api/plan/restore).
 type setOverrideResponse struct {
-	Cell         availabilityCellJSON `json:"cell"`
-	RemovedPlate *plateResponse       `json:"removed_plate,omitempty"`
+	Cell    availabilityCellJSON `json:"cell"`
+	Removed *plate.PlanSnapshot  `json:"removed"`
 }
 
 func availabilityError(w http.ResponseWriter, err error) {
@@ -168,12 +171,7 @@ func (h *AvailabilityHandler) PutOverride(w http.ResponseWriter, r *http.Request
 		availabilityError(w, err)
 		return
 	}
-	resp := setOverrideResponse{Cell: toAvailabilityCellJSON(cell)}
-	if removed != nil {
-		p := toPlateResponse(removed)
-		resp.RemovedPlate = &p
-	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, setOverrideResponse{Cell: toAvailabilityCellJSON(cell), Removed: removed})
 }
 
 // DeleteOverride handles DELETE /api/availability/{date}/{slotId}. Idempotent.

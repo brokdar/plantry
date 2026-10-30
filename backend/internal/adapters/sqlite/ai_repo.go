@@ -23,15 +23,9 @@ func NewAIRepo(db *sql.DB) *AIRepo {
 	return &AIRepo{conn: conn{db: db}}
 }
 
-func (r *AIRepo) CreateConversation(ctx context.Context, weekID *int64, title *string) (*agent.Conversation, error) {
-	row, err := r.queriesFor(ctx).CreateConversation(ctx, sqlcgen.CreateConversationParams{
-		WeekID: toNullInt64(weekID),
-		Title:  toNullString(title),
-	})
+func (r *AIRepo) CreateConversation(ctx context.Context, title *string) (*agent.Conversation, error) {
+	row, err := r.queriesFor(ctx).CreateConversation(ctx, toNullString(title))
 	if err != nil {
-		if isForeignKeyViolation(err) {
-			return nil, fmt.Errorf("%w: week reference", domain.ErrInvalidInput)
-		}
 		return nil, err
 	}
 	c := &agent.Conversation{}
@@ -111,36 +105,16 @@ func (r *AIRepo) DeleteConversation(ctx context.Context, id int64) error {
 
 func (r *AIRepo) ListConversations(ctx context.Context, q agent.ListQuery) (*agent.ListResult, error) {
 	limit, offset := clampPagination(q.Limit, q.Offset, 25, 100)
-	var (
-		rows  []sqlcgen.AiConversation
-		total int64
-		err   error
-	)
-	if q.WeekID != nil {
-		rows, err = r.queriesFor(ctx).ListConversationsByWeek(ctx, sqlcgen.ListConversationsByWeekParams{
-			WeekID: toNullInt64(q.WeekID),
-			Limit:  int64(limit),
-			Offset: int64(offset),
-		})
-		if err != nil {
-			return nil, err
-		}
-		total, err = r.queriesFor(ctx).CountConversationsByWeek(ctx, toNullInt64(q.WeekID))
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		rows, err = r.queriesFor(ctx).ListConversations(ctx, sqlcgen.ListConversationsParams{
-			Limit:  int64(limit),
-			Offset: int64(offset),
-		})
-		if err != nil {
-			return nil, err
-		}
-		total, err = r.queriesFor(ctx).CountConversations(ctx)
-		if err != nil {
-			return nil, err
-		}
+	rows, err := r.queriesFor(ctx).ListConversations(ctx, sqlcgen.ListConversationsParams{
+		Limit:  int64(limit),
+		Offset: int64(offset),
+	})
+	if err != nil {
+		return nil, err
+	}
+	total, err := r.queriesFor(ctx).CountConversations(ctx)
+	if err != nil {
+		return nil, err
 	}
 	out := make([]agent.Conversation, len(rows))
 	for i := range rows {
@@ -189,10 +163,6 @@ func (r *AIRepo) ListMessages(ctx context.Context, conversationID int64) ([]agen
 
 func mapConversationToDomain(row *sqlcgen.AiConversation, c *agent.Conversation) {
 	c.ID = row.ID
-	if row.WeekID.Valid {
-		v := row.WeekID.Int64
-		c.WeekID = &v
-	}
 	if row.Title.Valid {
 		v := row.Title.String
 		c.Title = &v
