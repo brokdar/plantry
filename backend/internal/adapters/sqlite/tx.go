@@ -26,7 +26,8 @@ func NewTxRunner(db *sql.DB) *TxRunner {
 
 // InTx runs fn in a transaction: commit when fn returns nil, roll back
 // otherwise. A nested call joins the outer transaction, so only the outermost
-// InTx commits.
+// InTx commits; there are no savepoints, so an outer fn must not swallow a
+// nested error after partial writes.
 func (t *TxRunner) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	return inTx(ctx, t.db, fn)
 }
