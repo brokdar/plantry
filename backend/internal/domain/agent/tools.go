@@ -494,7 +494,11 @@ func toolSwapFood(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(plateComponentMap(componentByID(p, in.PlateComponentID))), ToolEffectPlateChanged, nil
+			pc, err := componentByID(p, in.PlateComponentID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			return mustJSON(plateComponentMap(pc)), ToolEffectPlateChanged, nil
 		},
 	}
 }
@@ -533,7 +537,11 @@ func toolUpdatePlateComponent(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(plateComponentMap(componentByID(p, in.PlateComponentID))), ToolEffectPlateChanged, nil
+			pc, err := componentByID(p, in.PlateComponentID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			return mustJSON(plateComponentMap(pc)), ToolEffectPlateChanged, nil
 		},
 	}
 }
@@ -833,14 +841,15 @@ func lastComponent(p *plate.Plate) *plate.PlateComponent {
 	return last
 }
 
-// componentByID returns the plate's component id.
-func componentByID(p *plate.Plate, id int64) *plate.PlateComponent {
+// componentByID returns the plate's component id, or an error wrapping
+// domain.ErrNotFound when the plate does not hold it.
+func componentByID(p *plate.Plate, id int64) (*plate.PlateComponent, error) {
 	for i := range p.Components {
 		if p.Components[i].ID == id {
-			return &p.Components[i]
+			return &p.Components[i], nil
 		}
 	}
-	return &plate.PlateComponent{ID: id, PlateID: p.ID}
+	return nil, fmt.Errorf("%w: plate_component %d on plate %d", domain.ErrNotFound, id, p.ID)
 }
 
 func profileMap(p *profile.Profile) map[string]any {

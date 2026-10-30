@@ -306,7 +306,7 @@ func (s *Service) Delete(ctx context.Context, id int64) (PlanSnapshot, error) {
 		if err != nil {
 			return err
 		}
-		snap, err = s.remove(ctx, []Plate{*p}, allComponents, false, &refAlloc{})
+		snap, err = s.remove(ctx, []Plate{*p}, allComponents, false, &refAlloc{}, nil, nil)
 		return err
 	})
 	if err != nil {
@@ -327,7 +327,7 @@ func (s *Service) ClearRange(ctx context.Context, from, to time.Time) (PlanSnaps
 		if err != nil {
 			return err
 		}
-		snap, err = s.remove(ctx, plates, allComponents, false, &refAlloc{})
+		snap, err = s.remove(ctx, plates, allComponents, false, &refAlloc{}, nil, nil)
 		return err
 	})
 	if err != nil {
@@ -774,7 +774,7 @@ func (s *Service) DeleteSession(ctx context.Context, id int64) (PlanSnapshot, er
 		}
 		sortPlates(plates, order)
 		pick := func(pc PlateComponent) bool { return pc.CookSessionID != nil && *pc.CookSessionID == id }
-		snap, err = s.remove(ctx, plates, pick, true, &refAlloc{})
+		snap, err = s.remove(ctx, plates, pick, true, &refAlloc{}, nil, nil)
 		return err
 	})
 	if err != nil {
@@ -807,11 +807,13 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 			return err
 		}
 		t := newTracker()
+		pinned := map[int64]bool{}
 		for _, sp := range snap.Plates {
 			for _, c := range sp.Components {
 				if c.Session == nil || c.Session.ID == 0 {
 					continue
 				}
+				pinned[c.Session.ID] = true
 				if _, err := s.sessions.GetSession(ctx, c.Session.ID); err != nil {
 					if errors.Is(err, domain.ErrNotFound) {
 						return fmt.Errorf("%w: session %d", domain.ErrSessionNotFound, c.Session.ID)
@@ -866,7 +868,9 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 				if err != nil {
 					return err
 				}
-				removed, err := s.remove(ctx, []Plate{*old}, allComponents, false, removedRefs)
+				// The overwrite shares Apply's tracker and keeps the {id}
+				// sessions: Apply settles D11 and GC once, after relinking.
+				removed, err := s.remove(ctx, []Plate{*old}, allComponents, false, removedRefs, t, pinned)
 				if err != nil {
 					return err
 				}
@@ -1035,7 +1039,11 @@ func (r *refAlloc) next() string {
 // plate, or with keepPartial only those left without components. It returns
 // the snapshot that restores what it removed: a component whose session
 // survives links {id}, one whose session goes links {ref}.
-func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateComponent) bool, keepPartial bool, refs *refAlloc) (PlanSnapshot, error) {
+//
+// With a nil t, remove settles its own tracker. With the caller's t it only
+// records into it and leaves the settle to the caller, and the pinned
+// sessions count as surviving: the caller links them again before it settles.
+func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateComponent) bool, keepPartial bool, refs *refAlloc, t *tracker, pinned map[int64]bool) (PlanSnapshot, error) {
 	snap := emptySnapshot()
 	removed := map[int64]bool{}
 	var sessionIDs []int64
@@ -1053,7 +1061,10 @@ func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateCom
 		}
 	}
 
-	t := newTracker()
+	settleHere := t == nil
+	if settleHere {
+		t = newTracker()
+	}
 	refOf := map[int64]string{}
 	for _, sid := range sessionIDs {
 		links, err := s.sessions.ListLinks(ctx, sid)
@@ -1061,7 +1072,7 @@ func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateCom
 			return PlanSnapshot{}, err
 		}
 		t.record(sid, totalPortions(links))
-		survives := false
+		survives := pinned[sid]
 		for _, l := range links {
 			if !removed[l.ComponentID] {
 				survives = true
@@ -1127,8 +1138,10 @@ func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateCom
 			}
 		}
 	}
-	if err := s.settle(ctx, t); err != nil {
-		return PlanSnapshot{}, err
+	if settleHere {
+		if err := s.settle(ctx, t); err != nil {
+			return PlanSnapshot{}, err
+		}
 	}
 	for i, p := range plates {
 		if deletePlate[i] {
@@ -1236,11 +1249,11 @@ func (s *Service) loadEnv(ctx context.Context) (env, error) {
 	if err != nil {
 		return e, err
 	}
-	freezing, err := s.settings.Get(ctx, settings.KeyPlanFreezingEnabled)
+	freezing, err := s.boolSetting(ctx, settings.KeyPlanFreezingEnabled)
 	if err != nil {
-		return e, fmt.Errorf("read %s: %w", settings.KeyPlanFreezingEnabled, err)
+		return e, err
 	}
-	e.set = BatchSettings{DefaultKeepDays: keep, FreezingEnabled: freezing.Raw == "true", FreezerKeepDays: freezerDays}
+	e.set = BatchSettings{DefaultKeepDays: keep, FreezingEnabled: freezing, FreezerKeepDays: freezerDays}
 	e.order, err = s.slotOrder(ctx)
 	return e, err
 }
@@ -1255,6 +1268,20 @@ func (s *Service) intSetting(ctx context.Context, key string) (int, error) {
 		return 0, fmt.Errorf("parse %s: %w", key, err)
 	}
 	return n, nil
+}
+
+// boolSetting parses a bool setting the way the settings validator accepts
+// it (strconv.ParseBool).
+func (s *Service) boolSetting(ctx context.Context, key string) (bool, error) {
+	v, err := s.settings.Get(ctx, key)
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", key, err)
+	}
+	b, err := strconv.ParseBool(v.Raw)
+	if err != nil {
+		return false, fmt.Errorf("parse %s: %w", key, err)
+	}
+	return b, nil
 }
 
 func (s *Service) slotOrder(ctx context.Context) (SlotOrder, error) {
