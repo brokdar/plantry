@@ -1428,7 +1428,13 @@
   },
   "units": {
     "kcal": "kcal",
-    "g": "g"
+    "g": "g",
+    "kg": "kg",
+    "ml": "ml",
+    "l": "l",
+    "piece": "pcs",
+    "tbsp": "tbsp",
+    "tsp": "tsp"
   },
   "setup": {
     "step_of": "Step {{step}} of {{total}}",
@@ -1490,5 +1496,32 @@
       "batch_removed": "Batch removed",
       "plan_cleared": "Plan cleared"
     }
+  },
+  "batch": {
+    "cook": "Cook × {{portions}}",
+    "strip": "{{weekday}} · {{name}} × {{portions}}",
+    "linked": "{{position}}/{{meals}}",
+    "frozen": "{{position}}/{{meals}} · frozen",
+    "surplus": "{{count}} spare",
+    "to_freeze": "{{count}} to freeze",
+    "cell": "{{weekday}} {{slot, lowercase}}",
+    "covers": "Covers {{cells}}",
+    "cook_days": "Cook days"
+  },
+  "day_meter": {
+    "name": "Energy",
+    "value": "{{kcal}} of {{target}} {{unit}}",
+    "value_no_target": "{{kcal}} {{unit}}",
+    "value_incomplete": "{{value}}, incomplete",
+    "open": "Nutrition, {{day}}",
+    "per_person": "Per person",
+    "kcal": "Energy",
+    "protein": "Protein",
+    "fat": "Fat",
+    "carbs": "Carbs",
+    "amount": "{{value}} {{unit}}",
+    "amount_of": "{{value}} / {{target}} {{unit}}",
+    "incomplete": "Incomplete",
+    "missing": "No nutrition data for {{names}}."
   }
 }

@@ -1427,7 +1427,13 @@
   },
   "units": {
     "kcal": "kcal",
-    "g": "g"
+    "g": "g",
+    "kg": "kg",
+    "ml": "ml",
+    "l": "l",
+    "piece": "Stk.",
+    "tbsp": "EL",
+    "tsp": "TL"
   },
   "setup": {
     "step_of": "Schritt {{step}} von {{total}}",
@@ -1489,5 +1495,32 @@
       "batch_removed": "Vorkochen entfernt",
       "plan_cleared": "Plan geleert"
     }
+  },
+  "batch": {
+    "cook": "Koche × {{portions}}",
+    "strip": "{{weekday}} · {{name}} × {{portions}}",
+    "linked": "{{position}}/{{meals}}",
+    "frozen": "{{position}}/{{meals}} · gefroren",
+    "surplus": "{{count}} übrig",
+    "to_freeze": "{{count}} zum Einfrieren",
+    "cell": "{{weekday}} {{slot}}",
+    "covers": "Reicht für {{cells}}",
+    "cook_days": "Kochtage"
+  },
+  "day_meter": {
+    "name": "Energie",
+    "value": "{{kcal}} von {{target}} {{unit}}",
+    "value_no_target": "{{kcal}} {{unit}}",
+    "value_incomplete": "{{value}}, unvollständig",
+    "open": "Nährwerte, {{day}}",
+    "per_person": "Pro Person",
+    "kcal": "Energie",
+    "protein": "Eiweiß",
+    "fat": "Fett",
+    "carbs": "Kohlenhydrate",
+    "amount": "{{value}} {{unit}}",
+    "amount_of": "{{value}} / {{target}} {{unit}}",
+    "incomplete": "Unvollständig",
+    "missing": "Keine Nährwerte für {{names}}."
   }
 }
