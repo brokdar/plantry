@@ -50,7 +50,7 @@ func NewPresetHandlerFromInterfaces(svc presetService) *PresetHandler {
 type presetComponentResponse struct {
 	ID          int64    `json:"id"`
 	FoodID      int64    `json:"food_id"`
-	Portions    *int     `json:"portions,omitempty"`
+	Portions    *float64 `json:"portions,omitempty"`
 	Amount      *float64 `json:"amount,omitempty"`
 	Unit        *string  `json:"unit,omitempty"`
 	Grams       *float64 `json:"grams,omitempty"`
@@ -286,7 +286,7 @@ type updatePresetPlateInput struct {
 
 type updatePresetComponentInput struct {
 	FoodID   int64    `json:"food_id"`
-	Portions *int     `json:"portions,omitempty"`
+	Portions *float64 `json:"portions,omitempty"`
 	Amount   *float64 `json:"amount,omitempty"`
 	Unit     *string  `json:"unit,omitempty"`
 	Note     *string  `json:"note,omitempty"`
@@ -429,7 +429,7 @@ type applySnapshotPlateItem struct {
 
 type applySnapshotComponentItem struct {
 	FoodID      int64    `json:"food_id"`
-	Portions    *int     `json:"portions,omitempty"`
+	Portions    *float64 `json:"portions,omitempty"`
 	Amount      *float64 `json:"amount,omitempty"`
 	Unit        *string  `json:"unit,omitempty"`
 	Grams       *float64 `json:"grams,omitempty"`

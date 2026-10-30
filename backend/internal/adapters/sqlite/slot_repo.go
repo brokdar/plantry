@@ -13,17 +13,16 @@ import (
 
 // SlotRepo implements slot.Repository backed by SQLite.
 type SlotRepo struct {
-	db *sql.DB
-	q  *sqlcgen.Queries
+	conn
 }
 
 // NewSlotRepo creates a SQLite-backed time slot repository.
 func NewSlotRepo(db *sql.DB) *SlotRepo {
-	return &SlotRepo{db: db, q: sqlcgen.New(db)}
+	return &SlotRepo{conn: conn{db: db}}
 }
 
 func (r *SlotRepo) Create(ctx context.Context, s *slot.TimeSlot) error {
-	row, err := r.q.CreateTimeSlot(ctx, sqlcgen.CreateTimeSlotParams{
+	row, err := r.queriesFor(ctx).CreateTimeSlot(ctx, sqlcgen.CreateTimeSlotParams{
 		NameKey:   s.NameKey,
 		Icon:      s.Icon,
 		SortOrder: int64(s.SortOrder),
@@ -37,7 +36,7 @@ func (r *SlotRepo) Create(ctx context.Context, s *slot.TimeSlot) error {
 }
 
 func (r *SlotRepo) Get(ctx context.Context, id int64) (*slot.TimeSlot, error) {
-	row, err := r.q.GetTimeSlot(ctx, id)
+	row, err := r.queriesFor(ctx).GetTimeSlot(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
@@ -50,7 +49,7 @@ func (r *SlotRepo) Get(ctx context.Context, id int64) (*slot.TimeSlot, error) {
 }
 
 func (r *SlotRepo) Update(ctx context.Context, s *slot.TimeSlot) error {
-	row, err := r.q.UpdateTimeSlot(ctx, sqlcgen.UpdateTimeSlotParams{
+	row, err := r.queriesFor(ctx).UpdateTimeSlot(ctx, sqlcgen.UpdateTimeSlotParams{
 		ID:        s.ID,
 		NameKey:   s.NameKey,
 		Icon:      s.Icon,
@@ -68,7 +67,7 @@ func (r *SlotRepo) Update(ctx context.Context, s *slot.TimeSlot) error {
 }
 
 func (r *SlotRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.q.DeleteTimeSlot(ctx, id)
+	res, err := r.queriesFor(ctx).DeleteTimeSlot(ctx, id)
 	if err != nil {
 		if isForeignKeyViolation(err) {
 			return fmt.Errorf("%w: id %d", domain.ErrInUse, id)
@@ -89,9 +88,9 @@ func (r *SlotRepo) List(ctx context.Context, activeOnly bool) ([]slot.TimeSlot, 
 	var rows []sqlcgen.TimeSlot
 	var err error
 	if activeOnly {
-		rows, err = r.q.ListActiveTimeSlots(ctx)
+		rows, err = r.queriesFor(ctx).ListActiveTimeSlots(ctx)
 	} else {
-		rows, err = r.q.ListTimeSlots(ctx)
+		rows, err = r.queriesFor(ctx).ListTimeSlots(ctx)
 	}
 	if err != nil {
 		return nil, err
@@ -104,13 +103,13 @@ func (r *SlotRepo) List(ctx context.Context, activeOnly bool) ([]slot.TimeSlot, 
 }
 
 func (r *SlotRepo) CountPlatesUsing(ctx context.Context, slotID int64) (int64, error) {
-	return r.q.CountPlatesUsingTimeSlot(ctx, slotID)
+	return r.queriesFor(ctx).CountPlatesUsingTimeSlot(ctx, slotID)
 }
 
 // Exists reports whether a time slot with the given ID exists.
 // Implements plate.SlotChecker.
 func (r *SlotRepo) Exists(ctx context.Context, id int64) (bool, error) {
-	_, err := r.q.GetTimeSlot(ctx, id)
+	_, err := r.queriesFor(ctx).GetTimeSlot(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil

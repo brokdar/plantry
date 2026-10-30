@@ -20,17 +20,21 @@ type Service struct {
 	foods      FoodLookup
 	plateSvc   PlateService
 	plateRange PlateRange
-	tx         TxRunner
+	tx         domain.Transactor
 	portions   food.PortionLookup
 	foodGet    FoodGetter
 	slots      SlotLister
 	avail      Availability
 }
 
-// PlateService is the subset of plate.Service we depend on (to read existing
-// plates when creating a preset from a plate id).
+// PlateService is the subset of plate.Service presets use: reading plates
+// for CreateFromPlates and writing the plates apply and copy week place.
+// Every call joins the caller's unit of work.
 type PlateService interface {
 	Get(ctx context.Context, plateID int64) (*plate.Plate, error)
+	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
+	Create(ctx context.Context, in plate.PlateInput) (*plate.Plate, error)
+	Delete(ctx context.Context, id int64) (plate.PlanSnapshot, error)
 }
 
 // PlateRange reads plates over a date range (used by CopyWeek).
@@ -49,7 +53,7 @@ func NewService(
 	r Repository,
 	f FoodLookup,
 	plateSvc PlateService,
-	tx TxRunner,
+	tx domain.Transactor,
 	portions food.PortionLookup,
 	foodGet FoodGetter,
 ) *Service {
@@ -195,7 +199,8 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) (*Preset
 		return nil, fmt.Errorf("%w: name required", domain.ErrInvalidInput)
 	}
 
-	if err := s.tx.RunInPresetTx(ctx, func(presets Repository, _ plate.Repository) error {
+	if err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		presets := s.repo
 		if in.Name != nil {
 			if _, err := presets.UpdateName(ctx, id, strings.TrimSpace(*in.Name)); err != nil {
 				return err

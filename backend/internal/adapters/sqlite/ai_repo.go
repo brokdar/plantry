@@ -15,17 +15,16 @@ import (
 
 // AIRepo implements agent.Repository backed by SQLite.
 type AIRepo struct {
-	db *sql.DB
-	q  *sqlcgen.Queries
+	conn
 }
 
 // NewAIRepo creates a SQLite-backed AI repository.
 func NewAIRepo(db *sql.DB) *AIRepo {
-	return &AIRepo{db: db, q: sqlcgen.New(db)}
+	return &AIRepo{conn: conn{db: db}}
 }
 
 func (r *AIRepo) CreateConversation(ctx context.Context, weekID *int64, title *string) (*agent.Conversation, error) {
-	row, err := r.q.CreateConversation(ctx, sqlcgen.CreateConversationParams{
+	row, err := r.queriesFor(ctx).CreateConversation(ctx, sqlcgen.CreateConversationParams{
 		WeekID: toNullInt64(weekID),
 		Title:  toNullString(title),
 	})
@@ -42,7 +41,7 @@ func (r *AIRepo) CreateConversation(ctx context.Context, weekID *int64, title *s
 }
 
 func (r *AIRepo) GetConversation(ctx context.Context, id int64) (*agent.Conversation, error) {
-	row, err := r.q.GetConversation(ctx, id)
+	row, err := r.queriesFor(ctx).GetConversation(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: conversation %d", domain.ErrNotFound, id)
@@ -60,7 +59,7 @@ func (r *AIRepo) GetConversation(ctx context.Context, id int64) (*agent.Conversa
 }
 
 func (r *AIRepo) UpdateConversationTitle(ctx context.Context, id int64, title *string) (*agent.Conversation, error) {
-	row, err := r.q.UpdateConversationTitle(ctx, sqlcgen.UpdateConversationTitleParams{
+	row, err := r.queriesFor(ctx).UpdateConversationTitle(ctx, sqlcgen.UpdateConversationTitleParams{
 		Title: toNullString(title),
 		ID:    id,
 	})
@@ -81,7 +80,7 @@ func (r *AIRepo) UpdateConversationTitle(ctx context.Context, id int64, title *s
 }
 
 func (r *AIRepo) TouchConversation(ctx context.Context, id int64) error {
-	res, err := r.q.TouchConversation(ctx, id)
+	res, err := r.queriesFor(ctx).TouchConversation(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -96,7 +95,7 @@ func (r *AIRepo) TouchConversation(ctx context.Context, id int64) error {
 }
 
 func (r *AIRepo) DeleteConversation(ctx context.Context, id int64) error {
-	res, err := r.q.DeleteConversation(ctx, id)
+	res, err := r.queriesFor(ctx).DeleteConversation(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -118,7 +117,7 @@ func (r *AIRepo) ListConversations(ctx context.Context, q agent.ListQuery) (*age
 		err   error
 	)
 	if q.WeekID != nil {
-		rows, err = r.q.ListConversationsByWeek(ctx, sqlcgen.ListConversationsByWeekParams{
+		rows, err = r.queriesFor(ctx).ListConversationsByWeek(ctx, sqlcgen.ListConversationsByWeekParams{
 			WeekID: toNullInt64(q.WeekID),
 			Limit:  int64(limit),
 			Offset: int64(offset),
@@ -126,19 +125,19 @@ func (r *AIRepo) ListConversations(ctx context.Context, q agent.ListQuery) (*age
 		if err != nil {
 			return nil, err
 		}
-		total, err = r.q.CountConversationsByWeek(ctx, toNullInt64(q.WeekID))
+		total, err = r.queriesFor(ctx).CountConversationsByWeek(ctx, toNullInt64(q.WeekID))
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		rows, err = r.q.ListConversations(ctx, sqlcgen.ListConversationsParams{
+		rows, err = r.queriesFor(ctx).ListConversations(ctx, sqlcgen.ListConversationsParams{
 			Limit:  int64(limit),
 			Offset: int64(offset),
 		})
 		if err != nil {
 			return nil, err
 		}
-		total, err = r.q.CountConversations(ctx)
+		total, err = r.queriesFor(ctx).CountConversations(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -157,7 +156,7 @@ func (r *AIRepo) AppendMessage(ctx context.Context, m *agent.Message) error {
 	if len(m.Content) == 0 {
 		m.Content = json.RawMessage("[]")
 	}
-	row, err := r.q.AppendMessage(ctx, sqlcgen.AppendMessageParams{
+	row, err := r.queriesFor(ctx).AppendMessage(ctx, sqlcgen.AppendMessageParams{
 		ConversationID: m.ConversationID,
 		Role:           string(m.Role),
 		Content:        string(m.Content),
@@ -170,14 +169,14 @@ func (r *AIRepo) AppendMessage(ctx context.Context, m *agent.Message) error {
 	}
 	mapMessageToDomain(&row, m)
 	// Touch the parent so list ordering reflects recent activity.
-	if _, err := r.q.TouchConversation(ctx, m.ConversationID); err != nil {
+	if _, err := r.queriesFor(ctx).TouchConversation(ctx, m.ConversationID); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (r *AIRepo) ListMessages(ctx context.Context, conversationID int64) ([]agent.Message, error) {
-	rows, err := r.q.ListMessages(ctx, conversationID)
+	rows, err := r.queriesFor(ctx).ListMessages(ctx, conversationID)
 	if err != nil {
 		return nil, err
 	}

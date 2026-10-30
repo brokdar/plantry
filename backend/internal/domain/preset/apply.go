@@ -256,10 +256,11 @@ func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResu
 		Snapshot: ApplySnapshot{},
 	}
 	var toMark []noPlateCell
-	if err := s.tx.RunInPresetTx(ctx, func(_ Repository, plates plate.Repository) error {
+	if err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		plates := s.plateSvc
 		// Bucket existing plates on the target week to detect occupancy once.
 		targetEnd := req.TargetStart.AddDate(0, 0, 6)
-		existing, err := plates.ListByDateRange(ctx, req.TargetStart, targetEnd)
+		existing, err := plates.Range(ctx, req.TargetStart, targetEnd)
 		if err != nil {
 			return fmt.Errorf("load target week: %w", err)
 		}
@@ -299,7 +300,7 @@ func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResu
 				if err != nil {
 					return fmt.Errorf("load plate %d for snapshot: %w", existingPlate.ID, err)
 				}
-				if err := plates.Delete(ctx, existingPlate.ID); err != nil {
+				if _, err := plates.Delete(ctx, existingPlate.ID); err != nil {
 					return fmt.Errorf("delete plate %d: %w", existingPlate.ID, err)
 				}
 				newPlate, err := materialiseFromPlate(ctx, plates, targetDate, src.SlotID, src.Components)
@@ -410,11 +411,12 @@ func (s *Service) UndoApply(ctx context.Context, snap ApplySnapshot) error {
 }
 
 func (s *Service) undoPlates(ctx context.Context, snap ApplySnapshot) error {
-	return s.tx.RunInPresetTx(ctx, func(_ Repository, plates plate.Repository) error {
+	return s.tx.InTx(ctx, func(ctx context.Context) error {
+		plates := s.plateSvc
 		// Delete the plates that the apply created. Order doesn't matter; FK
 		// cascade handles components.
 		for _, id := range snap.CreatedPlateIDs {
-			if err := plates.Delete(ctx, id); err != nil {
+			if _, err := plates.Delete(ctx, id); err != nil {
 				// Tolerate already-gone plates so undo is idempotent.
 				if errIsNotFound(err) {
 					continue
@@ -423,15 +425,8 @@ func (s *Service) undoPlates(ctx context.Context, snap ApplySnapshot) error {
 			}
 		}
 		// Recreate the replaced plates with their original components.
-		for i := range snap.ReplacedPlates {
-			p := snap.ReplacedPlates[i]
-			// Drop the original ID so SQLite allocates a fresh one.
-			p.ID = 0
-			for j := range p.Components {
-				p.Components[j].ID = 0
-				p.Components[j].PlateID = 0
-			}
-			if err := plates.Create(ctx, &p); err != nil {
+		for _, p := range snap.ReplacedPlates {
+			if _, err := materialiseFromPlate(ctx, plates, p.Date, p.SlotID, p.Components); err != nil {
 				return fmt.Errorf("restore replaced plate (date=%s slot=%d): %w", p.DateString(), p.SlotID, err)
 			}
 		}
@@ -441,7 +436,7 @@ func (s *Service) undoPlates(ctx context.Context, snap ApplySnapshot) error {
 
 // materialiseOnto is the shared apply implementation: for each preset plate
 // determine the target slot on target_date, then create/skip/overwrite per
-// policy. Runs entirely inside RunInPresetTx so all writes are atomic with
+// policy. Runs entirely inside one unit of work so all writes are atomic with
 // last_used_at.
 func (s *Service) materialiseOnto(
 	ctx context.Context,
@@ -453,8 +448,9 @@ func (s *Service) materialiseOnto(
 	unavailable map[int64]struct{},
 ) (*ApplyResult, error) {
 	result := &ApplyResult{}
-	if err := s.tx.RunInPresetTx(ctx, func(presets Repository, plateRepo plate.Repository) error {
-		existing, err := plateRepo.ListByDateRange(ctx, targetDate, targetDate)
+	if err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		presets, plateRepo := s.repo, s.plateSvc
+		existing, err := plateRepo.Range(ctx, targetDate, targetDate)
 		if err != nil {
 			return fmt.Errorf("load existing plates: %w", err)
 		}
@@ -481,7 +477,7 @@ func (s *Service) materialiseOnto(
 				if err != nil {
 					return fmt.Errorf("load plate %d for snapshot: %w", deleteID, err)
 				}
-				if err := plateRepo.Delete(ctx, deleteID); err != nil {
+				if _, err := plateRepo.Delete(ctx, deleteID); err != nil {
 					return fmt.Errorf("delete plate %d: %w", deleteID, err)
 				}
 				newPlate, err := materialiseFromPresetComponents(ctx, plateRepo, targetDate, entry.SlotID, entry.Components)
@@ -533,7 +529,7 @@ func filterPresetPlates(in []Plate, slotIDs []int64) []Plate {
 
 func materialiseFromPresetComponents(
 	ctx context.Context,
-	plates plate.Repository,
+	plates PlateService,
 	date time.Time,
 	slotID int64,
 	source []Component,
@@ -550,8 +546,8 @@ func materialiseFromPresetComponents(
 			SortOrder:   i,
 		}
 	}
-	p := &plate.Plate{Date: date, SlotID: slotID, Components: comps}
-	if err := plates.Create(ctx, p); err != nil {
+	p, err := plates.Create(ctx, plate.PlateInput{Date: date, SlotID: slotID, Components: comps})
+	if err != nil {
 		return nil, fmt.Errorf("create plate (date=%s slot=%d): %w", date.Format("2006-01-02"), slotID, err)
 	}
 	return p, nil
@@ -559,7 +555,7 @@ func materialiseFromPresetComponents(
 
 func materialiseFromPlate(
 	ctx context.Context,
-	plates plate.Repository,
+	plates PlateService,
 	date time.Time,
 	slotID int64,
 	source []plate.PlateComponent,
@@ -576,8 +572,8 @@ func materialiseFromPlate(
 			SortOrder:   i,
 		}
 	}
-	p := &plate.Plate{Date: date, SlotID: slotID, Components: comps}
-	if err := plates.Create(ctx, p); err != nil {
+	p, err := plates.Create(ctx, plate.PlateInput{Date: date, SlotID: slotID, Components: comps})
+	if err != nil {
 		return nil, fmt.Errorf("create plate (date=%s slot=%d): %w", date.Format("2006-01-02"), slotID, err)
 	}
 	return p, nil

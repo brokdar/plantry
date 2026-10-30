@@ -29,7 +29,7 @@ INSERT INTO foods (
     potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g,
     vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g,
     variant_group_id, reference_portions, prep_minutes, cook_minutes, notes,
-    favorite, source_url, description
+    favorite, source_url, description, keep_days, freezable
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?, ?,
@@ -37,9 +37,9 @@ INSERT INTO foods (
     ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?,
-    ?, ?, ?
+    ?, ?, ?, ?, ?
 )
-RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description
+RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable
 `
 
 type CreateFoodParams struct {
@@ -81,6 +81,8 @@ type CreateFoodParams struct {
 	Favorite          int64
 	SourceUrl         sql.NullString
 	Description       sql.NullString
+	KeepDays          sql.NullInt64
+	Freezable         sql.NullInt64
 }
 
 func (q *Queries) CreateFood(ctx context.Context, arg CreateFoodParams) (Food, error) {
@@ -123,6 +125,8 @@ func (q *Queries) CreateFood(ctx context.Context, arg CreateFoodParams) (Food, e
 		arg.Favorite,
 		arg.SourceUrl,
 		arg.Description,
+		arg.KeepDays,
+		arg.Freezable,
 	)
 	var i Food
 	err := row.Scan(
@@ -169,6 +173,8 @@ func (q *Queries) CreateFood(ctx context.Context, arg CreateFoodParams) (Food, e
 		&i.UpdatedAt,
 		&i.SourceUrl,
 		&i.Description,
+		&i.KeepDays,
+		&i.Freezable,
 	)
 	return i, err
 }
@@ -289,7 +295,7 @@ func (q *Queries) DeleteFoodTags(ctx context.Context, foodID int64) error {
 }
 
 const getFood = `-- name: GetFood :one
-SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description FROM foods WHERE id = ?
+SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable FROM foods WHERE id = ?
 `
 
 func (q *Queries) GetFood(ctx context.Context, id int64) (Food, error) {
@@ -339,6 +345,8 @@ func (q *Queries) GetFood(ctx context.Context, id int64) (Food, error) {
 		&i.UpdatedAt,
 		&i.SourceUrl,
 		&i.Description,
+		&i.KeepDays,
+		&i.Freezable,
 	)
 	return i, err
 }
@@ -509,7 +517,7 @@ func (q *Queries) ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, er
 }
 
 const listForgottenFoods = `-- name: ListForgottenFoods :many
-SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description FROM foods
+SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable FROM foods
 WHERE kind = 'composed' AND (last_cooked_at IS NULL OR last_cooked_at < ?)
 ORDER BY (last_cooked_at IS NOT NULL), last_cooked_at ASC, name ASC
 LIMIT ?
@@ -573,6 +581,8 @@ func (q *Queries) ListForgottenFoods(ctx context.Context, arg ListForgottenFoods
 			&i.UpdatedAt,
 			&i.SourceUrl,
 			&i.Description,
+			&i.KeepDays,
+			&i.Freezable,
 		); err != nil {
 			return nil, err
 		}
@@ -588,7 +598,7 @@ func (q *Queries) ListForgottenFoods(ctx context.Context, arg ListForgottenFoods
 }
 
 const listMostCookedFoods = `-- name: ListMostCookedFoods :many
-SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description FROM foods
+SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable FROM foods
 WHERE kind = 'composed' AND cook_count > 0
 ORDER BY cook_count DESC, last_cooked_at DESC, name ASC
 LIMIT ?
@@ -647,6 +657,8 @@ func (q *Queries) ListMostCookedFoods(ctx context.Context, limit int64) ([]Food,
 			&i.UpdatedAt,
 			&i.SourceUrl,
 			&i.Description,
+			&i.KeepDays,
+			&i.Freezable,
 		); err != nil {
 			return nil, err
 		}
@@ -662,7 +674,7 @@ func (q *Queries) ListMostCookedFoods(ctx context.Context, limit int64) ([]Food,
 }
 
 const listSiblingFoods = `-- name: ListSiblingFoods :many
-SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description FROM foods
+SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable FROM foods
 WHERE kind = 'composed' AND variant_group_id = ? AND id != ?
 ORDER BY name
 `
@@ -725,6 +737,8 @@ func (q *Queries) ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsPara
 			&i.UpdatedAt,
 			&i.SourceUrl,
 			&i.Description,
+			&i.KeepDays,
+			&i.Freezable,
 		); err != nil {
 			return nil, err
 		}
@@ -762,7 +776,7 @@ UPDATE foods SET
     favorite   = ?,
     updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description
+RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable
 `
 
 type SetFoodFavoriteParams struct {
@@ -817,6 +831,8 @@ func (q *Queries) SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams
 		&i.UpdatedAt,
 		&i.SourceUrl,
 		&i.Description,
+		&i.KeepDays,
+		&i.Freezable,
 	)
 	return i, err
 }
@@ -860,9 +876,11 @@ UPDATE foods SET
     favorite           = ?,
     source_url         = ?,
     description        = ?,
+    keep_days          = ?,
+    freezable          = ?,
     updated_at         = datetime('now')
 WHERE id = ?
-RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description
+RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable
 `
 
 type UpdateFoodParams struct {
@@ -903,6 +921,8 @@ type UpdateFoodParams struct {
 	Favorite          int64
 	SourceUrl         sql.NullString
 	Description       sql.NullString
+	KeepDays          sql.NullInt64
+	Freezable         sql.NullInt64
 	ID                int64
 }
 
@@ -945,6 +965,8 @@ func (q *Queries) UpdateFood(ctx context.Context, arg UpdateFoodParams) (Food, e
 		arg.Favorite,
 		arg.SourceUrl,
 		arg.Description,
+		arg.KeepDays,
+		arg.Freezable,
 		arg.ID,
 	)
 	var i Food
@@ -992,6 +1014,8 @@ func (q *Queries) UpdateFood(ctx context.Context, arg UpdateFoodParams) (Food, e
 		&i.UpdatedAt,
 		&i.SourceUrl,
 		&i.Description,
+		&i.KeepDays,
+		&i.Freezable,
 	)
 	return i, err
 }

@@ -140,18 +140,28 @@ func run() error {
 	// before the plate and preset services.
 	availabilitySvc := availability.NewService(sqlite.NewAvailabilityRepo(conn), txRunner, presetRepo)
 
-	plateRepo := sqlite.NewPlateRepo(conn)
-	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo).WithCells(availabilitySvc)
-
 	profileRepo := sqlite.NewProfileRepo(conn)
 	profileSvc := profile.NewService(profileRepo)
+
+	plateRepo := sqlite.NewPlateRepo(conn)
+	plateSvc := plate.NewService(plate.Deps{
+		Plates:   plateRepo,
+		Sessions: sqlite.NewCookSessionRepo(conn),
+		Slots:    slotRepo,
+		Foods:    foodRepo,
+		Cells:    availabilitySvc,
+		Profile:  profileSvc,
+		Settings: settingsSvc,
+		Tx:       txRunner,
+	})
+	availabilitySvc.WithPlates(plateSvc)
 
 	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).
 		WithSlots(slotSvc).
 		WithPlateRange(plateSvc).
 		WithAvailability(availabilitySvc)
 
-	feedbackSvc := feedback.NewService(txRunner, plateRepo, foodRepo)
+	feedbackSvc := feedback.NewService(txRunner, sqlite.NewFeedbackRepo(conn), plateRepo, foodRepo, profileRepo)
 
 	// AI wiring. The llm.Resolver consults settings on every request so
 	// provider / model / API-key changes take effect without a restart.
@@ -238,6 +248,8 @@ func run() error {
 		ImageStore:     imgStore,
 		Slots:          handlers.NewSlotHandler(slotSvc),
 		Plates:         handlers.NewPlateHandler(plateSvc),
+		CookSessions:   handlers.NewCookSessionHandler(plateSvc),
+		PlanWrite:      handlers.NewPlanWriteHandler(plateSvc),
 		Profile:        handlers.NewProfileHandler(profileSvc),
 		Presets:        handlers.NewPresetHandler(presetSvc),
 		AI:             aiHandler,

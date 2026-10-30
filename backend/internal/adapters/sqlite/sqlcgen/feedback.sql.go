@@ -34,6 +34,67 @@ func (q *Queries) GetPlateFeedback(ctx context.Context, plateID int64) (PlateFee
 	return i, err
 }
 
+const listPlateFeedbackByDateRange = `-- name: ListPlateFeedbackByDateRange :many
+SELECT pf.plate_id, pf.status, pf.note, pf.rated_at FROM plate_feedback pf
+JOIN plates p ON p.id = pf.plate_id
+WHERE p.date BETWEEN ?1 AND ?2
+`
+
+type ListPlateFeedbackByDateRangeParams struct {
+	FromDate string
+	ToDate   string
+}
+
+func (q *Queries) ListPlateFeedbackByDateRange(ctx context.Context, arg ListPlateFeedbackByDateRangeParams) ([]PlateFeedback, error) {
+	rows, err := q.db.QueryContext(ctx, listPlateFeedbackByDateRange, arg.FromDate, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PlateFeedback{}
+	for rows.Next() {
+		var i PlateFeedback
+		if err := rows.Scan(
+			&i.PlateID,
+			&i.Status,
+			&i.Note,
+			&i.RatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const restorePlateFeedback = `-- name: RestorePlateFeedback :exec
+INSERT INTO plate_feedback (plate_id, status, note, rated_at)
+VALUES (?, ?, ?, ?)
+`
+
+type RestorePlateFeedbackParams struct {
+	PlateID int64
+	Status  string
+	Note    sql.NullString
+	RatedAt string
+}
+
+func (q *Queries) RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error {
+	_, err := q.db.ExecContext(ctx, restorePlateFeedback,
+		arg.PlateID,
+		arg.Status,
+		arg.Note,
+		arg.RatedAt,
+	)
+	return err
+}
+
 const upsertPlateFeedback = `-- name: UpsertPlateFeedback :one
 INSERT INTO plate_feedback (plate_id, status, note, rated_at)
 VALUES (?, ?, ?, datetime('now'))

@@ -14,21 +14,16 @@ import (
 
 // AvailabilityRepo implements availability.Repository backed by SQLite.
 type AvailabilityRepo struct {
-	q *sqlcgen.Queries
+	conn
 }
 
 // NewAvailabilityRepo creates a SQLite-backed availability repository.
 func NewAvailabilityRepo(db *sql.DB) *AvailabilityRepo {
-	return &AvailabilityRepo{q: sqlcgen.New(db)}
-}
-
-// newAvailabilityRepoTx returns an AvailabilityRepo bound to a transaction.
-func newAvailabilityRepoTx(tx *sql.Tx) *AvailabilityRepo {
-	return &AvailabilityRepo{q: sqlcgen.New(tx)}
+	return &AvailabilityRepo{conn: conn{db: db}}
 }
 
 func (r *AvailabilityRepo) ActiveSlotIDs(ctx context.Context) ([]int64, error) {
-	rows, err := r.q.ListActiveTimeSlots(ctx)
+	rows, err := r.queriesFor(ctx).ListActiveTimeSlots(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +35,7 @@ func (r *AvailabilityRepo) ActiveSlotIDs(ctx context.Context) ([]int64, error) {
 }
 
 func (r *AvailabilityRepo) SlotState(ctx context.Context, slotID int64) (exists, active bool, err error) {
-	row, err := r.q.GetTimeSlot(ctx, slotID)
+	row, err := r.queriesFor(ctx).GetTimeSlot(ctx, slotID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, false, nil
 	}
@@ -51,7 +46,7 @@ func (r *AvailabilityRepo) SlotState(ctx context.Context, slotID int64) (exists,
 }
 
 func (r *AvailabilityRepo) ListDefaults(ctx context.Context) ([]availability.Default, error) {
-	rows, err := r.q.ListAvailabilityDefaults(ctx)
+	rows, err := r.queriesFor(ctx).ListAvailabilityDefaults(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +64,7 @@ func (r *AvailabilityRepo) ListDefaults(ctx context.Context) ([]availability.Def
 }
 
 func (r *AvailabilityRepo) GetDefault(ctx context.Context, weekday int, slotID int64) (*availability.Default, error) {
-	row, err := r.q.GetAvailabilityDefault(ctx, sqlcgen.GetAvailabilityDefaultParams{Weekday: int64(weekday), SlotID: slotID})
+	row, err := r.queriesFor(ctx).GetAvailabilityDefault(ctx, sqlcgen.GetAvailabilityDefaultParams{Weekday: int64(weekday), SlotID: slotID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -87,11 +82,11 @@ func (r *AvailabilityRepo) GetDefault(ctx context.Context, weekday int, slotID i
 
 // ReplaceActiveDefaults must run inside a transaction (TxRunner) to be atomic.
 func (r *AvailabilityRepo) ReplaceActiveDefaults(ctx context.Context, rows []availability.Default) error {
-	if err := r.q.DeleteActiveSlotAvailabilityDefaults(ctx); err != nil {
+	if err := r.queriesFor(ctx).DeleteActiveSlotAvailabilityDefaults(ctx); err != nil {
 		return fmt.Errorf("delete defaults: %w", err)
 	}
 	for _, d := range rows {
-		if err := r.q.InsertAvailabilityDefault(ctx, sqlcgen.InsertAvailabilityDefaultParams{
+		if err := r.queriesFor(ctx).InsertAvailabilityDefault(ctx, sqlcgen.InsertAvailabilityDefaultParams{
 			Weekday:  int64(d.Weekday),
 			SlotID:   d.SlotID,
 			Mode:     string(d.Mode),
@@ -108,7 +103,7 @@ func (r *AvailabilityRepo) ReplaceActiveDefaults(ctx context.Context, rows []ava
 }
 
 func (r *AvailabilityRepo) ListOverrides(ctx context.Context, from, to time.Time) ([]availability.Override, error) {
-	rows, err := r.q.ListAvailabilityOverridesByRange(ctx, sqlcgen.ListAvailabilityOverridesByRangeParams{
+	rows, err := r.queriesFor(ctx).ListAvailabilityOverridesByRange(ctx, sqlcgen.ListAvailabilityOverridesByRangeParams{
 		FromDate: from.Format(dateLayout),
 		ToDate:   to.Format(dateLayout),
 	})
@@ -127,7 +122,7 @@ func (r *AvailabilityRepo) ListOverrides(ctx context.Context, from, to time.Time
 }
 
 func (r *AvailabilityRepo) GetOverride(ctx context.Context, date time.Time, slotID int64) (*availability.Override, error) {
-	row, err := r.q.GetAvailabilityOverride(ctx, sqlcgen.GetAvailabilityOverrideParams{Date: date.Format(dateLayout), SlotID: slotID})
+	row, err := r.queriesFor(ctx).GetAvailabilityOverride(ctx, sqlcgen.GetAvailabilityOverrideParams{Date: date.Format(dateLayout), SlotID: slotID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -142,7 +137,7 @@ func (r *AvailabilityRepo) GetOverride(ctx context.Context, date time.Time, slot
 }
 
 func (r *AvailabilityRepo) UpsertOverride(ctx context.Context, o availability.Override) error {
-	err := r.q.UpsertAvailabilityOverride(ctx, sqlcgen.UpsertAvailabilityOverrideParams{
+	err := r.queriesFor(ctx).UpsertAvailabilityOverride(ctx, sqlcgen.UpsertAvailabilityOverrideParams{
 		Date:     o.Date.Format(dateLayout),
 		SlotID:   o.SlotID,
 		Mode:     string(o.Mode),
@@ -160,7 +155,7 @@ func (r *AvailabilityRepo) UpsertOverride(ctx context.Context, o availability.Ov
 // missingRef names the row behind a foreign key failure on slotID or its
 // preset: unknownSlot when the slot is gone, else the preset.
 func (r *AvailabilityRepo) missingRef(ctx context.Context, slotID int64, unknownSlot error) error {
-	if _, err := r.q.GetTimeSlot(ctx, slotID); err != nil {
+	if _, err := r.queriesFor(ctx).GetTimeSlot(ctx, slotID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("%w: slot %d", unknownSlot, slotID)
 		}
@@ -170,7 +165,7 @@ func (r *AvailabilityRepo) missingRef(ctx context.Context, slotID int64, unknown
 }
 
 func (r *AvailabilityRepo) DeleteOverride(ctx context.Context, date time.Time, slotID int64) error {
-	return r.q.DeleteAvailabilityOverride(ctx, sqlcgen.DeleteAvailabilityOverrideParams{Date: date.Format(dateLayout), SlotID: slotID})
+	return r.queriesFor(ctx).DeleteAvailabilityOverride(ctx, sqlcgen.DeleteAvailabilityOverrideParams{Date: date.Format(dateLayout), SlotID: slotID})
 }
 
 func mapOverride(date string, slotID int64, mode string, presetID sql.NullInt64, note, presetName sql.NullString) (availability.Override, error) {

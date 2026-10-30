@@ -143,13 +143,12 @@ func (r *fakeRepo) DeleteOverride(_ context.Context, date time.Time, slotID int6
 	return nil
 }
 
-// fakePlates implements the plate.Repository methods the service uses.
+// fakePlates implements availability.CellPlates.
 type fakePlates struct {
-	plate.Repository
 	plates []plate.Plate
 }
 
-func (p *fakePlates) ListByDateRange(_ context.Context, from, to time.Time) ([]plate.Plate, error) {
+func (p *fakePlates) Range(_ context.Context, from, to time.Time) ([]plate.Plate, error) {
 	var out []plate.Plate
 	for _, pl := range p.plates {
 		if !pl.Date.Before(from) && !pl.Date.After(to) {
@@ -159,25 +158,23 @@ func (p *fakePlates) ListByDateRange(_ context.Context, from, to time.Time) ([]p
 	return out, nil
 }
 
-func (p *fakePlates) Delete(_ context.Context, id int64) error {
+func (p *fakePlates) Delete(_ context.Context, id int64) (plate.PlanSnapshot, error) {
 	for i, pl := range p.plates {
 		if pl.ID == id {
 			p.plates = append(p.plates[:i], p.plates[i+1:]...)
-			return nil
+			return plate.PlanSnapshot{}, nil
 		}
 	}
-	return domain.ErrNotFound
+	return plate.PlanSnapshot{}, domain.ErrNotFound
 }
 
 type fakeTx struct {
-	repo   *fakeRepo
-	plates *fakePlates
-	calls  int
+	calls int
 }
 
-func (t *fakeTx) RunInAvailabilityTx(_ context.Context, fn func(availability.Repository, plate.Repository) error) error {
+func (t *fakeTx) InTx(ctx context.Context, fn func(context.Context) error) error {
 	t.calls++
-	return fn(t.repo, t.plates)
+	return fn(ctx)
 }
 
 type fakePresets map[int64]string
@@ -213,8 +210,8 @@ func newFixture() *fixture {
 	repo.addSlot(slotInactive, false)
 	repo.presets[presetOatmeal] = "Oatmeal"
 	plates := &fakePlates{}
-	tx := &fakeTx{repo: repo, plates: plates}
-	svc := availability.NewService(repo, tx, fakePresets{presetOatmeal: "Oatmeal"})
+	tx := &fakeTx{}
+	svc := availability.NewService(repo, tx, fakePresets{presetOatmeal: "Oatmeal"}).WithPlates(plates)
 	return &fixture{repo: repo, plates: plates, tx: tx, svc: svc}
 }
 

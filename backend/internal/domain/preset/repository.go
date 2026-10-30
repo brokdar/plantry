@@ -73,13 +73,6 @@ type TagUsage struct {
 	Count int64
 }
 
-// TxRunner runs fn inside a single transaction with preset + plate repos bound to it.
-// Mirrors template.TxRunner so apply pipelines can write plates atomically with
-// the preset's last_used_at update.
-type TxRunner interface {
-	RunInPresetTx(ctx context.Context, fn func(Repository, plate.Repository) error) error
-}
-
 // FoodLookup is the food-side surface presets need for kind-aware quantity
 // validation and grams resolution on apply.
 type FoodLookup interface {

@@ -408,8 +408,8 @@ func toolCreatePlate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: date: %v", domain.ErrInvalidInput, err)
 			}
-			p := &plate.Plate{Date: d, SlotID: in.SlotID, Note: in.Note}
-			if err := svc.Plates.Create(ctx, p); err != nil {
+			p, err := svc.Plates.Create(ctx, plate.PlateInput{Date: d, SlotID: in.SlotID, Note: in.Note})
+			if err != nil {
 				return nil, ToolEffectNone, err
 			}
 			return mustJSON(plateSummary(p)), ToolEffectPlateChanged, nil
@@ -449,11 +449,11 @@ func toolAddFoodToPlate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			out, err := svc.Plates.AddComponent(ctx, in.PlateID, pc)
+			p, err := svc.Plates.AddComponent(ctx, in.PlateID, *pc)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(plateComponentMap(out)), ToolEffectPlateChanged, nil
+			return mustJSON(plateComponentMap(lastComponent(p))), ToolEffectPlateChanged, nil
 		},
 	}
 }
@@ -490,7 +490,11 @@ func toolSwapFood(svc Services) Tool {
 				}
 				override = comp
 			}
-			pc, err := svc.Plates.SwapComponent(ctx, in.PlateComponentID, in.NewFoodID, override)
+			p, err := svc.Plates.SwapComponent(ctx, in.PlateComponentID, in.NewFoodID, override)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			pc, err := componentByID(p, in.PlateComponentID)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -521,13 +525,6 @@ func toolUpdatePlateComponent(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			// The agent still speaks the legacy float-portions vocabulary, but
-			// the new validator demands a kind-aware quantity. Look up the
-			// existing component's food kind so leaf rows translate into
-			// (amount, unit) instead of crashing with ErrInvalidQuantityForLeaf.
-			// TODO(plate-workflow-rework): expose an amount/unit path so the
-			// agent can address leaf components directly instead of via the
-			// portions→grams shim in QuantityFromLegacyPortions.
 			existing, err := svc.Plates.GetComponent(ctx, in.PlateComponentID)
 			if err != nil {
 				return nil, ToolEffectNone, err
@@ -536,8 +533,11 @@ func toolUpdatePlateComponent(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			q := plate.QuantityFromLegacyPortions(string(f.Kind), in.Portions)
-			pc, err := svc.Plates.UpdateComponentQuantity(ctx, in.PlateComponentID, q)
+			p, err := svc.Plates.UpdateComponentQuantity(ctx, in.PlateComponentID, toolQuantity(f.Kind, in.Portions))
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			pc, err := componentByID(p, in.PlateComponentID)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -564,7 +564,7 @@ func toolRemovePlateComponent(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			if err := svc.Plates.RemoveComponent(ctx, in.PlateComponentID); err != nil {
+			if _, err := svc.Plates.RemoveComponent(ctx, in.PlateComponentID); err != nil {
 				return nil, ToolEffectNone, err
 			}
 			return mustJSON(map[string]any{"removed": true}), ToolEffectPlateChanged, nil
@@ -590,7 +590,7 @@ func toolDeletePlate(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			if err := svc.Plates.Delete(ctx, in.PlateID); err != nil {
+			if _, err := svc.Plates.Delete(ctx, in.PlateID); err != nil {
 				return nil, ToolEffectNone, err
 			}
 			return mustJSON(map[string]any{"deleted": true}), ToolEffectPlateChanged, nil
@@ -805,18 +805,51 @@ func plateComponentMap(pc *plate.PlateComponent) map[string]any {
 	return out
 }
 
-// agentBuildComponent constructs a kind-aware plate.PlateComponent from a
-// legacy float "portions" value by looking up the food's kind. Used by the
-// add/swap tools to keep their JSON schema unchanged while feeding the new
-// plate service shape underneath.
+// agentBuildComponent builds the component for the tools' "portions" input
+// by looking up the food's kind (see toolQuantity).
 func agentBuildComponent(ctx context.Context, svc Services, foodID int64, portions float64) (*plate.PlateComponent, error) {
 	f, err := svc.Foods.Get(ctx, foodID)
 	if err != nil {
 		return nil, err
 	}
-	pc := plate.QuantityFromLegacyPortions(string(f.Kind), portions)
+	pc := toolQuantity(f.Kind, portions)
 	pc.FoodID = foodID
 	return &pc, nil
+}
+
+// toolQuantity maps the plate tools' "portions" input onto a component
+// quantity: a composed food takes it as portions per eater; a leaf food as
+// portions × 100 g.
+func toolQuantity(kind food.Kind, portions float64) plate.PlateComponent {
+	if kind == food.KindLeaf {
+		grams := portions * 100
+		unit := "g"
+		return plate.PlateComponent{Amount: &grams, Unit: &unit, Grams: &grams}
+	}
+	return plate.PlateComponent{Portions: &portions}
+}
+
+// lastComponent returns the plate's component with the highest sort order:
+// the one AddComponent appended.
+func lastComponent(p *plate.Plate) *plate.PlateComponent {
+	var last *plate.PlateComponent
+	for i := range p.Components {
+		if last == nil || p.Components[i].SortOrder >= last.SortOrder {
+			last = &p.Components[i]
+		}
+	}
+	return last
+}
+
+// componentByID returns the plate's component id, or an error wrapping
+// domain.ErrNotFound when the plate does not hold it.
+func componentByID(p *plate.Plate, id int64) (*plate.PlateComponent, error) {
+	for i := range p.Components {
+		if p.Components[i].ID == id {
+			return &p.Components[i], nil
+		}
+	}
+	return nil, fmt.Errorf("%w: plate_component %d on plate %d", domain.ErrNotFound, id, p.ID)
 }
 
 func profileMap(p *profile.Profile) map[string]any {

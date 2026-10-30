@@ -25,6 +25,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
 func ymd(t *testing.T, s string) time.Time {
@@ -39,7 +40,7 @@ func windowSources(db *sql.DB) agent.WindowSources {
 	slotRepo := sqlite.NewSlotRepo(db)
 	foodRepo := sqlite.NewFoodRepo(db)
 	return agent.WindowSources{
-		Plates:       plate.NewService(sqlite.NewPlateRepo(db), slotRepo, foodRepo),
+		Plates:       testsvc.Plates(db),
 		Slots:        slot.NewService(slotRepo),
 		Foods:        foodRepo,
 		Availability: availabilityService(db),
@@ -47,7 +48,8 @@ func windowSources(db *sql.DB) agent.WindowSources {
 }
 
 func availabilityService(db *sql.DB) *availability.Service {
-	return availability.NewService(sqlite.NewAvailabilityRepo(db), sqlite.NewTxRunner(db), sqlite.NewPresetRepo(db))
+	_, svc := testsvc.Plan(db)
+	return svc
 }
 
 // newPromptService wires an unrecorded service over db with the given client
@@ -86,9 +88,9 @@ func TestChat_SystemPromptCarriesDatesAndPlates(t *testing.T) {
 	src := food.SourceManual
 	pasta := &food.Food{Name: "Pasta", Kind: food.KindLeaf, Source: &src}
 	require.NoError(t, foodRepo.Create(ctx, pasta))
-	pc := plate.QuantityFromLegacyPortions("leaf", 1)
-	pc.FoodID = pasta.ID
-	planned := &plate.Plate{Date: ymd(t, "2026-10-31"), SlotID: dinner.ID, Components: []plate.PlateComponent{pc}}
+	grams, unit, source := 100.0, "g", "direct"
+	pc := plate.PlateComponent{FoodID: pasta.ID, Amount: &grams, Unit: &unit, Grams: &grams, GramsSource: &source}
+	planned := &plate.Plate{Date: ymd(t, "2026-10-31"), SlotID: dinner.ID, Eaters: 1, Components: []plate.PlateComponent{pc}}
 	require.NoError(t, plateRepo.Create(ctx, planned))
 	avail := availabilityService(db)
 	_, _, err := avail.SetOverride(ctx, availability.OverrideInput{
@@ -101,7 +103,7 @@ func TestChat_SystemPromptCarriesDatesAndPlates(t *testing.T) {
 	require.NoError(t, avail.SetDefaults(ctx, []availability.Default{
 		{Weekday: 0, SlotID: dinner.ID, Mode: availability.ModeRoutine, PresetID: &oats.ID},
 	}))
-	outside := &plate.Plate{Date: ymd(t, "2026-11-07"), SlotID: dinner.ID, Components: []plate.PlateComponent{pc}}
+	outside := &plate.Plate{Date: ymd(t, "2026-11-07"), SlotID: dinner.ID, Eaters: 1, Components: []plate.PlateComponent{pc}}
 	require.NoError(t, plateRepo.Create(ctx, outside))
 
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}})
@@ -174,7 +176,7 @@ func cellToolSet(t *testing.T) (*agent.ToolSet, *sql.DB, int64, int64) {
 	require.NoError(t, avail.SetDefaults(ctx, []availability.Default{
 		{Weekday: 1, SlotID: dinner.ID, Mode: availability.ModeRoutine, PresetID: &oats.ID},
 	}))
-	plates := plate.NewService(sqlite.NewPlateRepo(db), slotRepo, foodRepo).WithCells(avail)
+	plates := testsvc.Plates(db)
 	ts, err := agent.NewToolSet(agent.Services{
 		Foods: food.NewService(foodRepo), Plates: plates, Slots: slot.NewService(slotRepo), Availability: avail,
 	})

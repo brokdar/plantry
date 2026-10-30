@@ -2,6 +2,7 @@ package availability
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -16,13 +17,22 @@ const dateLayout = "2006-01-02"
 // Service holds availability business logic.
 type Service struct {
 	repo    Repository
-	tx      TxRunner
+	tx      domain.Transactor
 	presets PresetLookup
+	plates  CellPlates
 }
 
-// NewService creates an availability service.
-func NewService(repo Repository, tx TxRunner, presets PresetLookup) *Service {
+// NewService creates an availability service. WithPlates must be called
+// before SetOverride can mark a cell "none".
+func NewService(repo Repository, tx domain.Transactor, presets PresetLookup) *Service {
 	return &Service{repo: repo, tx: tx, presets: presets}
+}
+
+// WithPlates injects the plate service. It is a setter because the plate
+// service itself depends on availability (CellMode).
+func (s *Service) WithPlates(p CellPlates) *Service {
+	s.plates = p
+	return s
 }
 
 // Defaults returns the full weekday × active-slot grid, weekday-major in slot
@@ -77,8 +87,8 @@ func (s *Service) SetDefaults(ctx context.Context, rows []Default) error {
 			keep = append(keep, Default{Weekday: r.Weekday, SlotID: r.SlotID, Mode: r.Mode, PresetID: r.PresetID})
 		}
 	}
-	return s.tx.RunInAvailabilityTx(ctx, func(repo Repository, _ plate.Repository) error {
-		return repo.ReplaceActiveDefaults(ctx, keep)
+	return s.tx.InTx(ctx, func(ctx context.Context) error {
+		return s.repo.ReplaceActiveDefaults(ctx, keep)
 	})
 }
 
@@ -181,15 +191,15 @@ func (s *Service) SetOverride(ctx context.Context, in OverrideInput) (Cell, *pla
 	}
 
 	var removed *plate.Plate
-	err = s.tx.RunInAvailabilityTx(ctx, func(repo Repository, plates plate.Repository) error {
+	err = s.tx.InTx(ctx, func(ctx context.Context) error {
 		if in.Mode == ModeNone {
-			r, err := removeCellPlates(ctx, plates, date, in.SlotID, in.RemovePlate)
+			r, err := s.removeCellPlates(ctx, date, in.SlotID, in.RemovePlate)
 			if err != nil {
 				return err
 			}
 			removed = r
 		}
-		return repo.UpsertOverride(ctx, Override{
+		return s.repo.UpsertOverride(ctx, Override{
 			Date: date, SlotID: in.SlotID, Mode: in.Mode, PresetID: in.PresetID, Note: note,
 		})
 	})
@@ -247,8 +257,11 @@ func (s *Service) ClearOverride(ctx context.Context, date time.Time, slotID int6
 // returns the first one. Without remove, a plate in the cell is an error.
 // A cell holds at most one plate once the unique index lands (A2); until
 // then every plate in the cell is deleted.
-func removeCellPlates(ctx context.Context, plates plate.Repository, date time.Time, slotID int64, remove bool) (*plate.Plate, error) {
-	day, err := plates.ListByDateRange(ctx, date, date)
+func (s *Service) removeCellPlates(ctx context.Context, date time.Time, slotID int64, remove bool) (*plate.Plate, error) {
+	if s.plates == nil {
+		return nil, errors.New("availability: plate service not wired")
+	}
+	day, err := s.plates.Range(ctx, date, date)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +274,7 @@ func removeCellPlates(ctx context.Context, plates plate.Repository, date time.Ti
 		if !remove {
 			return nil, fmt.Errorf("%w: plate %d", domain.ErrCellHasPlate, p.ID)
 		}
-		if err := plates.Delete(ctx, p.ID); err != nil {
+		if _, err := s.plates.Delete(ctx, p.ID); err != nil {
 			return nil, err
 		}
 		if removed == nil {

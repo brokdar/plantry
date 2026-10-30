@@ -1,0 +1,45 @@
+// Package testsvc wires the real plan services over a test database, the way
+// cmd/plantry/main.go does, so tests outside the sqlite adapter can drive the
+// plate write path without repeating its dependency list.
+package testsvc
+
+import (
+	"database/sql"
+
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
+)
+
+// Plan returns the plate and availability services over db, wired to each
+// other and to one unit of work.
+func Plan(db *sql.DB) (*plate.Service, *availability.Service) {
+	tx := sqlite.NewTxRunner(db)
+	avail := availability.NewService(sqlite.NewAvailabilityRepo(db), tx, sqlite.NewPresetRepo(db))
+	plates := plate.NewService(plate.Deps{
+		Plates:   sqlite.NewPlateRepo(db),
+		Sessions: sqlite.NewCookSessionRepo(db),
+		Slots:    sqlite.NewSlotRepo(db),
+		Foods:    sqlite.NewFoodRepo(db),
+		Cells:    avail,
+		Profile:  profile.NewService(sqlite.NewProfileRepo(db)),
+		Settings: Settings(db),
+		Tx:       tx,
+	})
+	avail.WithPlates(plates)
+	return plates, avail
+}
+
+// Plates returns the plate service of Plan.
+func Plates(db *sql.DB) *plate.Service {
+	p, _ := Plan(db)
+	return p
+}
+
+// Settings returns a settings service over db without env overrides.
+func Settings(db *sql.DB) *settings.Service {
+	return settings.NewService(sqlite.NewAppSettingsRepo(db), settings.NewEnvSnapshot(nil), crypto.NilCipher{})
+}

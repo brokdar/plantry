@@ -12,3 +12,12 @@ SELECT * FROM plate_feedback WHERE plate_id = ?;
 
 -- name: DeletePlateFeedback :execresult
 DELETE FROM plate_feedback WHERE plate_id = ?;
+
+-- name: RestorePlateFeedback :exec
+INSERT INTO plate_feedback (plate_id, status, note, rated_at)
+VALUES (?, ?, ?, ?);
+
+-- name: ListPlateFeedbackByDateRange :many
+SELECT pf.* FROM plate_feedback pf
+JOIN plates p ON p.id = pf.plate_id
+WHERE p.date BETWEEN sqlc.arg(from_date) AND sqlc.arg(to_date);

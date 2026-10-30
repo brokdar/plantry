@@ -60,6 +60,15 @@ func (s *Service) Replace(ctx context.Context, in ReplaceInput) (*Profile, error
 	return s.Update(ctx, &p)
 }
 
+// HouseholdPortions returns the default eaters of a new plate (Phase 2 D10).
+func (s *Service) HouseholdPortions(ctx context.Context) (float64, error) {
+	p, err := s.Get(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return p.HouseholdPortions, nil
+}
+
 // MaxHouseholdPortions caps Profile.HouseholdPortions.
 const MaxHouseholdPortions float64 = 20
 

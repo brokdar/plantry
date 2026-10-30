@@ -41,13 +41,13 @@ func TestPlatesRepo_ListByDateRange_Ordering(t *testing.T) {
 	d2 := time.Date(2026, 4, 21, 0, 0, 0, 0, time.UTC) // Tuesday
 	d3 := time.Date(2026, 4, 27, 0, 0, 0, 0, time.UTC) // Monday next week
 
-	pA := &plate.Plate{Date: d1, SlotID: slotID}
+	pA := &plate.Plate{Date: d1, SlotID: slotID, Eaters: 1}
 	require.NoError(t, repo.Create(ctx, pA))
 
-	pB := &plate.Plate{Date: d2, SlotID: slotID}
+	pB := &plate.Plate{Date: d2, SlotID: slotID, Eaters: 1}
 	require.NoError(t, repo.Create(ctx, pB))
 
-	pC := &plate.Plate{Date: d3, SlotID: slotID}
+	pC := &plate.Plate{Date: d3, SlotID: slotID, Eaters: 1}
 	require.NoError(t, repo.Create(ctx, pC))
 
 	from := time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC)
@@ -87,7 +87,7 @@ func TestPlatesRepo_CreatePlate_WritesDate(t *testing.T) {
 	slotID := seedSlot(t, db)
 
 	repo := NewPlateRepo(db)
-	p := &plate.Plate{Date: target, SlotID: slotID}
+	p := &plate.Plate{Date: target, SlotID: slotID, Eaters: 1}
 	require.NoError(t, repo.Create(ctx, p))
 	require.NotZero(t, p.ID)
 
@@ -111,7 +111,7 @@ func TestPlatesRepo_UpdatePlate_UpdatesDate(t *testing.T) {
 	slotID := seedSlot(t, db)
 
 	repo := NewPlateRepo(db)
-	p := &plate.Plate{Date: d1, SlotID: slotID}
+	p := &plate.Plate{Date: d1, SlotID: slotID, Eaters: 1}
 	require.NoError(t, repo.Create(ctx, p))
 
 	p.Date = d2
@@ -135,7 +135,7 @@ func TestPlatesRepo_GetIDByCell(t *testing.T) {
 	_, err := repo.GetIDByCell(ctx, d, slotID)
 	require.ErrorIs(t, err, domain.ErrNotFound, "empty cell")
 
-	p := &plate.Plate{Date: d, SlotID: slotID}
+	p := &plate.Plate{Date: d, SlotID: slotID, Eaters: 1}
 	require.NoError(t, repo.Create(ctx, p))
 
 	got, err := repo.GetIDByCell(ctx, d, slotID)
@@ -163,7 +163,7 @@ func TestPlatesRepo_ConcurrentCreateSameCell(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			errs[i] = repo.Create(ctx, &plate.Plate{Date: d, SlotID: slotID})
+			errs[i] = repo.Create(ctx, &plate.Plate{Date: d, SlotID: slotID, Eaters: 1})
 		}()
 	}
 	close(start)
@@ -189,8 +189,8 @@ func TestPlatesRepo_ConcurrentCreateSameCell(t *testing.T) {
 
 // TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied writes straight through
 // the repo, with no service pre-check, so the insert or update hits
-// ux_plates_date_slot the way a lost race would. Both the standalone repo
-// and the tx-bound repo (used by preset apply) map it to ErrCellOccupied.
+// ux_plates_date_slot the way a lost race would. The repo maps it to
+// ErrCellOccupied both on its own and inside a unit of work.
 func TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied(t *testing.T) {
 	ctx := context.Background()
 	d1 := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
@@ -198,11 +198,11 @@ func TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied(t *testing.T) {
 
 	run := func(t *testing.T, repo *PlateRepo, slotID int64) {
 		t.Helper()
-		require.NoError(t, repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID}))
-		err := repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID})
+		require.NoError(t, repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID, Eaters: 1}))
+		err := repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID, Eaters: 1})
 		require.ErrorIs(t, err, domain.ErrCellOccupied, "create")
 
-		other := &plate.Plate{Date: d2, SlotID: slotID}
+		other := &plate.Plate{Date: d2, SlotID: slotID, Eaters: 1}
 		require.NoError(t, repo.Create(ctx, other))
 		other.Date = d1
 		require.ErrorIs(t, repo.Update(ctx, other), domain.ErrCellOccupied, "update")
@@ -212,12 +212,14 @@ func TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied(t *testing.T) {
 		db := testhelper.NewTestDB(t)
 		run(t, NewPlateRepo(db), seedSlot(t, db))
 	})
-	t.Run("tx-bound repo", func(t *testing.T) {
+	t.Run("inside a unit of work", func(t *testing.T) {
 		db := testhelper.NewTestDB(t)
 		slotID := seedSlot(t, db)
-		tx, err := db.BeginTx(ctx, nil)
-		require.NoError(t, err)
-		defer func() { _ = tx.Rollback() }()
-		run(t, newPlateRepoTx(tx), slotID)
+		repo := NewPlateRepo(db)
+		require.NoError(t, NewTxRunner(db).InTx(ctx, func(ctx context.Context) error {
+			require.NoError(t, repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID, Eaters: 1}))
+			require.ErrorIs(t, repo.Create(ctx, &plate.Plate{Date: d1, SlotID: slotID, Eaters: 1}), domain.ErrCellOccupied)
+			return nil
+		}))
 	})
 }

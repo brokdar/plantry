@@ -1171,6 +1171,18 @@
       "cell_unavailable": "This meal is marked No plate. Plan it first.",
       "cell_occupied": "This meal already has a plate."
     },
+    "session": {
+      "before_cook": "Leftovers can only come after the batch is cooked.",
+      "past_keep_days": "That's past the use-by day. Turn on freezing to plan it later.",
+      "past_freezer_days": "That's longer than frozen portions keep.",
+      "food_mismatch": "This batch is a different dish.",
+      "freezing_disabled": "Freezing is turned off in Settings.",
+      "not_freezable": "This recipe doesn't freeze well.",
+      "not_found": "That batch no longer exists."
+    },
+    "plan": {
+      "cell_occupied": "Couldn't restore: a meal is already planned there."
+    },
     "slot": {
       "in_use": "This time slot is used by plates and cannot be deleted."
     },

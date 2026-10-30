@@ -96,6 +96,11 @@ type Food struct {
 	PrepMinutes       *int
 	CookMinutes       *int
 	Notes             *string
+	// KeepDays is how many days after cooking leftovers stay good; nil means
+	// the plan.default_keep_days setting applies.
+	KeepDays *int
+	// Freezable is nil when unknown; false forbids freezer portions (D14).
+	Freezable *bool
 
 	// Shared.
 	SourceURL    *string // where the food was imported from

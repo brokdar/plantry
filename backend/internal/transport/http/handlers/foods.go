@@ -92,6 +92,8 @@ type foodRequest struct {
 	PrepMinutes       *int                     `json:"prep_minutes,omitempty"`
 	CookMinutes       *int                     `json:"cook_minutes,omitempty"`
 	Notes             *string                  `json:"notes,omitempty"`
+	KeepDays          *int                     `json:"keep_days,omitempty"`
+	Freezable         *bool                    `json:"freezable,omitempty"`
 	Children          []foodChildRequest       `json:"children,omitempty"`
 	Instructions      []foodInstructionRequest `json:"instructions,omitempty"`
 	Tags              []string                 `json:"tags,omitempty"`
@@ -164,6 +166,8 @@ type foodResponse struct {
 	PrepMinutes       *int                      `json:"prep_minutes,omitempty"`
 	CookMinutes       *int                      `json:"cook_minutes,omitempty"`
 	Notes             *string                   `json:"notes,omitempty"`
+	KeepDays          *int                      `json:"keep_days,omitempty"`
+	Freezable         *bool                     `json:"freezable,omitempty"`
 	Children          []foodChildResponse       `json:"children,omitempty"`
 	Instructions      []foodInstructionResponse `json:"instructions,omitempty"`
 	Tags              []string                  `json:"tags,omitempty"`
@@ -264,6 +268,8 @@ func requestToFood(req *foodRequest) *food.Food {
 	f.PrepMinutes = req.PrepMinutes
 	f.CookMinutes = req.CookMinutes
 	f.Notes = req.Notes
+	f.KeepDays = req.KeepDays
+	f.Freezable = req.Freezable
 
 	f.Children = make([]food.FoodComponent, len(req.Children))
 	for i, ch := range req.Children {
@@ -357,6 +363,8 @@ func toFoodResponse(f *food.Food) foodResponse {
 	resp.PrepMinutes = f.PrepMinutes
 	resp.CookMinutes = f.CookMinutes
 	resp.Notes = f.Notes
+	resp.KeepDays = f.KeepDays
+	resp.Freezable = f.Freezable
 	resp.Children = make([]foodChildResponse, len(f.Children))
 	for i, ch := range f.Children {
 		resp.Children[i] = foodChildResponse{

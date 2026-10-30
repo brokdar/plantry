@@ -1228,6 +1228,18 @@
       "cell_unavailable": "Für diese Mahlzeit ist „Kein Essen“ eingetragen. Plane sie zuerst.",
       "cell_occupied": "Für diese Mahlzeit ist schon etwas geplant."
     },
+    "session": {
+      "before_cook": "Reste gibt es erst, nachdem vorgekocht wurde.",
+      "past_keep_days": "Das liegt nach dem Verbrauchsdatum. Schalte das Einfrieren ein, um es später einzuplanen.",
+      "past_freezer_days": "So lange halten eingefrorene Portionen nicht.",
+      "food_mismatch": "Hier wird ein anderes Gericht vorgekocht.",
+      "freezing_disabled": "Einfrieren ist in den Einstellungen ausgeschaltet.",
+      "not_freezable": "Dieses Rezept lässt sich nicht gut einfrieren.",
+      "not_found": "Dieses Vorkochen gibt es nicht mehr."
+    },
+    "plan": {
+      "cell_occupied": "Wiederherstellen nicht möglich: Dort ist schon etwas geplant."
+    },
     "slot": {
       "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."
     },

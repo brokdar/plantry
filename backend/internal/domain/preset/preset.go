@@ -38,7 +38,7 @@ type Plate struct {
 
 // Component is a single food entry inside a preset plate. Mirrors the
 // kind-aware quantity model of plate.PlateComponent:
-//   - composed food (recipe): Portions is an integer count of servings;
+//   - composed food (recipe): Portions is the servings per eater;
 //     Amount/Unit/Grams/GramsSource are nil.
 //   - leaf food (ingredient): Amount + Unit are user-entered; Grams is
 //     resolved server-side via food.ResolveGrams. Portions is nil.
@@ -50,7 +50,7 @@ type Component struct {
 	ID            int64
 	PresetPlateID int64
 	FoodID        int64
-	Portions      *int     // composed only
+	Portions      *float64 // composed only — per eater
 	Amount        *float64 // leaf only
 	Unit          *string  // leaf only — canonical unit key
 	Grams         *float64 // leaf only — resolved by service before persist

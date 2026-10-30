@@ -25,6 +25,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
@@ -33,7 +34,7 @@ import (
 func newAIHandler(t *testing.T) (*handlers.AIHandler, *fake.Client) {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
-	return newAIHandlerWithPlates(t, db, plate.NewService(sqlite.NewPlateRepo(db), sqlite.NewSlotRepo(db), sqlite.NewFoodRepo(db)))
+	return newAIHandlerWithPlates(t, db, testsvc.Plates(db))
 }
 
 // newAIHandlerWithPlates is newAIHandler with the prompt's plate reader

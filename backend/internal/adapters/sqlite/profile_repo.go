@@ -12,22 +12,16 @@ import (
 
 // ProfileRepo implements profile.Repository backed by SQLite.
 type ProfileRepo struct {
-	db *sql.DB
-	q  *sqlcgen.Queries
+	conn
 }
 
 // NewProfileRepo creates a SQLite-backed profile repository.
 func NewProfileRepo(db *sql.DB) *ProfileRepo {
-	return &ProfileRepo{db: db, q: sqlcgen.New(db)}
-}
-
-// newProfileRepoTx binds a ProfileRepo to an open transaction.
-func newProfileRepoTx(tx *sql.Tx) *ProfileRepo {
-	return &ProfileRepo{db: nil, q: sqlcgen.New(tx)}
+	return &ProfileRepo{conn: conn{db: db}}
 }
 
 func (r *ProfileRepo) Get(ctx context.Context) (*profile.Profile, error) {
-	row, err := r.q.GetProfile(ctx)
+	row, err := r.queriesFor(ctx).GetProfile(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +42,7 @@ func (r *ProfileRepo) Update(ctx context.Context, p *profile.Profile) (*profile.
 		return nil, err
 	}
 
-	row, err := r.q.UpsertProfile(ctx, sqlcgen.UpsertProfileParams{
+	row, err := r.queriesFor(ctx).UpsertProfile(ctx, sqlcgen.UpsertProfileParams{
 		KcalTarget:          toNullFloat64(p.KcalTarget),
 		ProteinPct:          toNullFloat64(p.ProteinPct),
 		FatPct:              toNullFloat64(p.FatPct),

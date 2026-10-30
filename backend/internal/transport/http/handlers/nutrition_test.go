@@ -17,6 +17,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
@@ -43,18 +44,17 @@ func newValidationNutritionRouter() http.Handler {
 }
 
 // newNutritionRouterWithDB wires real repos backed by testhelper.NewTestDB.
-func newNutritionRouterWithDB(t *testing.T) (http.Handler, *sqlite.FoodRepo, *sqlite.PlateRepo, *sqlite.SlotRepo) {
+func newNutritionRouterWithDB(t *testing.T) (http.Handler, *sqlite.FoodRepo, *plate.Service, *sqlite.SlotRepo) {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
 	foodRepo := sqlite.NewFoodRepo(db)
-	plateRepo := sqlite.NewPlateRepo(db)
 	slotRepo := sqlite.NewSlotRepo(db)
 	resolver := food.NewNutritionResolver(foodRepo)
-	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo)
+	plateSvc := testsvc.Plates(db)
 	h := handlers.NewNutritionRangeHandler(plateSvc, resolver)
 	r := chi.NewRouter()
 	r.Get("/api/nutrition", h.List)
-	return r, foodRepo, plateRepo, slotRepo
+	return r, foodRepo, plateSvc, slotRepo
 }
 
 // ── validation tests ──────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ func TestNutritionRange_200_EmptyRange(t *testing.T) {
 }
 
 func TestNutritionRange_200_HappyPath(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newNutritionRouterWithDB(t)
+	r, foodRepo, plateSvc, slotRepo := newNutritionRouterWithDB(t)
 	ctx := context.Background()
 
 	// Seed a slot (FK required by plates table).
@@ -146,9 +146,9 @@ func TestNutritionRange_200_HappyPath(t *testing.T) {
 	// Seed plates on two different dates.
 	d1, _ := time.Parse("2006-01-02", "2026-04-26")
 	d2, _ := time.Parse("2006-01-02", "2026-04-27")
-	leaf1 := plate.QuantityFromLegacyPortions("leaf", 1)
+	leaf1 := leafGrams(100)
 	leaf1.FoodID = f.ID
-	leaf2 := plate.QuantityFromLegacyPortions("leaf", 2)
+	leaf2 := leafGrams(200)
 	leaf2.FoodID = f.ID
 	p1 := &plate.Plate{
 		Date: d1, SlotID: s.ID,
@@ -158,8 +158,8 @@ func TestNutritionRange_200_HappyPath(t *testing.T) {
 		Date: d2, SlotID: s.ID,
 		Components: []plate.PlateComponent{leaf2},
 	}
-	require.NoError(t, plateRepo.Create(ctx, p1))
-	require.NoError(t, plateRepo.Create(ctx, p2))
+	seedPlate(t, plateSvc, p1)
+	seedPlate(t, plateSvc, p2)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/nutrition?from=2026-04-26&to=2026-04-27", nil)
 	w := httptest.NewRecorder()

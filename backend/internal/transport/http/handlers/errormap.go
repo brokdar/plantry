@@ -78,6 +78,21 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 		return http.StatusConflict, "error.plate.cell_unavailable"
 	case errors.Is(err, domain.ErrCellOccupied):
 		return http.StatusConflict, "error.plate.cell_occupied"
+	// Cook sessions (Phase 2 D13, D14).
+	case errors.Is(err, domain.ErrSessionBeforeCook):
+		return http.StatusConflict, "error.session.before_cook"
+	case errors.Is(err, domain.ErrSessionPastKeepDays):
+		return http.StatusConflict, "error.session.past_keep_days"
+	case errors.Is(err, domain.ErrSessionPastFreezerDays):
+		return http.StatusConflict, "error.session.past_freezer_days"
+	case errors.Is(err, domain.ErrSessionFoodMismatch):
+		return http.StatusConflict, "error.session.food_mismatch"
+	case errors.Is(err, domain.ErrSessionFreezingDisabled):
+		return http.StatusConflict, "error.session.freezing_disabled"
+	case errors.Is(err, domain.ErrSessionNotFreezable):
+		return http.StatusConflict, "error.session.not_freezable"
+	case errors.Is(err, domain.ErrSessionNotFound):
+		return http.StatusConflict, "error.session.not_found"
 	default:
 		return http.StatusInternalServerError, "error.server"
 	}

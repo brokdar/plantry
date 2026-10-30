@@ -15,12 +15,12 @@ type Querier interface {
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
 	CountConversationsByWeek(ctx context.Context, weekID sql.NullInt64) (int64, error)
-	CountPlatesUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 	CountPresetsUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error)
 	CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (AiConversation, error)
+	CreateCookSession(ctx context.Context, arg CreateCookSessionParams) (CookSession, error)
 	CreateFood(ctx context.Context, arg CreateFoodParams) (Food, error)
 	CreateFoodComponent(ctx context.Context, arg CreateFoodComponentParams) error
 	CreateFoodInstruction(ctx context.Context, arg CreateFoodInstructionParams) error
@@ -35,6 +35,7 @@ type Querier interface {
 	DeleteActiveSlotAvailabilityDefaults(ctx context.Context) error
 	DeleteAvailabilityOverride(ctx context.Context, arg DeleteAvailabilityOverrideParams) error
 	DeleteConversation(ctx context.Context, id int64) (sql.Result, error)
+	DeleteCookSession(ctx context.Context, id int64) (sql.Result, error)
 	DeleteFood(ctx context.Context, id int64) (sql.Result, error)
 	DeleteFoodComponents(ctx context.Context, parentID int64) error
 	DeleteFoodInstructions(ctx context.Context, foodID int64) error
@@ -55,6 +56,7 @@ type Querier interface {
 	GetAvailabilityDefault(ctx context.Context, arg GetAvailabilityDefaultParams) (GetAvailabilityDefaultRow, error)
 	GetAvailabilityOverride(ctx context.Context, arg GetAvailabilityOverrideParams) (GetAvailabilityOverrideRow, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
+	GetCookSession(ctx context.Context, id int64) (CookSession, error)
 	GetFood(ctx context.Context, id int64) (Food, error)
 	GetFoodKind(ctx context.Context, id int64) (string, error)
 	GetLeafFoodIDByName(ctx context.Context, name string) (int64, error)
@@ -72,6 +74,7 @@ type Querier interface {
 	ListAvailabilityOverridesByRange(ctx context.Context, arg ListAvailabilityOverridesByRangeParams) ([]ListAvailabilityOverridesByRangeRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
 	ListConversationsByWeek(ctx context.Context, arg ListConversationsByWeekParams) ([]AiConversation, error)
+	ListCookSessionLinks(ctx context.Context, cookSessionID sql.NullInt64) ([]ListCookSessionLinksRow, error)
 	ListFoodComponents(ctx context.Context, parentID int64) ([]ListFoodComponentsRow, error)
 	ListFoodInstructions(ctx context.Context, foodID int64) ([]FoodInstruction, error)
 	ListFoodPortions(ctx context.Context, foodID int64) ([]FoodPortion, error)
@@ -80,7 +83,9 @@ type Querier interface {
 	ListKnownTags(ctx context.Context, limit int64) ([]ListKnownTagsRow, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	ListMostCookedFoods(ctx context.Context, limit int64) ([]Food, error)
-	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]PlateComponent, error)
+	ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error)
+	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
+	ListPlateFeedbackByDateRange(ctx context.Context, arg ListPlateFeedbackByDateRangeParams) ([]PlateFeedback, error)
 	ListPlatesByDate(ctx context.Context, date string) ([]Plate, error)
 	ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDateRangeParams) ([]Plate, error)
 	ListPresetComponentsByPlate(ctx context.Context, presetPlateID int64) ([]PresetComponent, error)
@@ -101,14 +106,17 @@ type Querier interface {
 	// so no single statement holds the write lock for long.
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
 	RecentUnitForFood(ctx context.Context, foodID int64) (sql.NullString, error)
+	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
 	// Placeholder query so sqlc has something to generate in Phase 0. Real
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
+	TouchPlate(ctx context.Context, id int64) error
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error
 	TouchPresetUpdatedAt(ctx context.Context, id int64) error
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (AiConversation, error)
+	UpdateCookSession(ctx context.Context, arg UpdateCookSessionParams) (CookSession, error)
 	UpdateFood(ctx context.Context, arg UpdateFoodParams) (Food, error)
 	UpdatePlate(ctx context.Context, arg UpdatePlateParams) (Plate, error)
 	UpdatePlateComponent(ctx context.Context, arg UpdatePlateComponentParams) (PlateComponent, error)

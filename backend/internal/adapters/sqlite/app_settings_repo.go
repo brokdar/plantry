@@ -11,17 +11,16 @@ import (
 
 // AppSettingsRepo implements settings.Repository backed by SQLite.
 type AppSettingsRepo struct {
-	db *sql.DB
-	q  *sqlcgen.Queries
+	conn
 }
 
 // NewAppSettingsRepo creates a SQLite-backed repo.
 func NewAppSettingsRepo(db *sql.DB) *AppSettingsRepo {
-	return &AppSettingsRepo{db: db, q: sqlcgen.New(db)}
+	return &AppSettingsRepo{conn: conn{db: db}}
 }
 
 func (r *AppSettingsRepo) Get(ctx context.Context, key string) (settings.Row, bool, error) {
-	row, err := r.q.GetSetting(ctx, key)
+	row, err := r.queriesFor(ctx).GetSetting(ctx, key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return settings.Row{}, false, nil
 	}
@@ -36,7 +35,7 @@ func (r *AppSettingsRepo) Get(ctx context.Context, key string) (settings.Row, bo
 }
 
 func (r *AppSettingsRepo) List(ctx context.Context) ([]settings.Row, error) {
-	rows, err := r.q.ListSettings(ctx)
+	rows, err := r.queriesFor(ctx).ListSettings(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +55,7 @@ func (r *AppSettingsRepo) Upsert(ctx context.Context, row settings.Row) error {
 	if row.Encrypted {
 		enc = 1
 	}
-	return r.q.UpsertSetting(ctx, sqlcgen.UpsertSettingParams{
+	return r.queriesFor(ctx).UpsertSetting(ctx, sqlcgen.UpsertSettingParams{
 		Key:       row.Key,
 		Value:     row.Value,
 		Encrypted: enc,
@@ -64,5 +63,5 @@ func (r *AppSettingsRepo) Upsert(ctx context.Context, row settings.Row) error {
 }
 
 func (r *AppSettingsRepo) Delete(ctx context.Context, key string) error {
-	return r.q.DeleteSetting(ctx, key)
+	return r.queriesFor(ctx).DeleteSetting(ctx, key)
 }

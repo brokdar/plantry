@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
@@ -17,25 +16,21 @@ type PlateReader interface {
 	Get(ctx context.Context, id int64) (*plate.Plate, error)
 }
 
-// FoodReader loads a food (with its tags) by ID. Reads happen outside the tx
-// — we only need tags to feed the preference heuristic.
-type FoodReader interface {
-	Get(ctx context.Context, id int64) (*food.Food, error)
-}
-
 // Service records and deletes per-plate feedback, cascading its side effects
 // (cook-count updates on composed foods; preference tag accumulation on the
 // user profile) atomically inside a single transaction.
 type Service struct {
-	tx     TxRunner
-	plates PlateReader
-	foods  FoodReader
-	now    func() time.Time
+	tx       domain.Transactor
+	repo     Repository
+	plates   PlateReader
+	foods    FoodStore
+	profiles ProfileStore
+	now      func() time.Time
 }
 
 // NewService constructs a feedback service.
-func NewService(tx TxRunner, plates PlateReader, foods FoodReader) *Service {
-	return &Service{tx: tx, plates: plates, foods: foods, now: func() time.Time { return time.Now().UTC() }}
+func NewService(tx domain.Transactor, repo Repository, plates PlateReader, foods FoodStore, profiles ProfileStore) *Service {
+	return &Service{tx: tx, repo: repo, plates: plates, foods: foods, profiles: profiles, now: func() time.Time { return time.Now().UTC() }}
 }
 
 // RecordFeedback upserts feedback for a plate and cascades side effects:
@@ -69,14 +64,14 @@ func (s *Service) RecordFeedback(ctx context.Context, plateID int64, status Stat
 	now := s.now()
 	var result *PlateFeedback
 
-	err = s.tx.RunInFeedbackTx(ctx, func(fbRepo Repository, foodRepo food.Repository, prfRepo profile.Repository) error {
-		prior, err := fbRepo.Get(ctx, plateID)
+	err = s.tx.InTx(ctx, func(ctx context.Context) error {
+		prior, err := s.repo.Get(ctx, plateID)
 		if err != nil && !errors.Is(err, domain.ErrNotFound) {
 			return err
 		}
 
 		fb := &PlateFeedback{PlateID: plateID, Status: status, Note: note}
-		if err := fbRepo.Upsert(ctx, fb); err != nil {
+		if err := s.repo.Upsert(ctx, fb); err != nil {
 			return err
 		}
 		result = fb
@@ -84,19 +79,19 @@ func (s *Service) RecordFeedback(ctx context.Context, plateID int64, status Stat
 		priorCooks := prior != nil && prior.Status.IncrementsCookCount()
 		if status.IncrementsCookCount() && !priorCooks {
 			for _, pc := range p.Components {
-				if err := foodRepo.MarkCooked(ctx, pc.FoodID, now); err != nil {
+				if err := s.foods.MarkCooked(ctx, pc.FoodID, now); err != nil {
 					return err
 				}
 			}
 		}
 
 		if status.TouchesPreferences() && len(tags) > 0 {
-			prof, err := prfRepo.Get(ctx)
+			prof, err := s.profiles.Get(ctx)
 			if err != nil {
 				return err
 			}
 			prof.Preferences = profile.ApplyFeedback(prof.Preferences, string(status), tags)
-			if _, err := prfRepo.Update(ctx, prof); err != nil {
+			if _, err := s.profiles.Update(ctx, prof); err != nil {
 				return err
 			}
 		}
@@ -112,9 +107,7 @@ func (s *Service) RecordFeedback(ctx context.Context, plateID int64, status Stat
 // DeleteFeedback removes the feedback row for a plate. Existing cook-count
 // increments on foods are NOT reversed.
 func (s *Service) DeleteFeedback(ctx context.Context, plateID int64) error {
-	return s.tx.RunInFeedbackTx(ctx, func(fbRepo Repository, _ food.Repository, _ profile.Repository) error {
-		return fbRepo.Delete(ctx, plateID)
-	})
+	return s.repo.Delete(ctx, plateID)
 }
 
 // collectTags returns the deduped union of tags across every food on the
