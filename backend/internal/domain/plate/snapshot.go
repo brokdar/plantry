@@ -11,9 +11,6 @@ type PlanSnapshot struct {
 	Sessions []SnapshotSession `json:"sessions"`
 }
 
-// IsEmpty reports whether the snapshot holds nothing.
-func (s PlanSnapshot) IsEmpty() bool { return len(s.Plates) == 0 && len(s.Sessions) == 0 }
-
 // SnapshotPlate is one plate by cell.
 //
 // PlateID is set when the plate itself survived the mutation and only some of

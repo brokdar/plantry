@@ -15,7 +15,6 @@ type Querier interface {
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
 	CountConversationsByWeek(ctx context.Context, weekID sql.NullInt64) (int64, error)
-	CountPlatesUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 	CountPresetsUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error)

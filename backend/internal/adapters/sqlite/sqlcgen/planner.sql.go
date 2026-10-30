@@ -10,17 +10,6 @@ import (
 	"database/sql"
 )
 
-const countPlatesUsingFood = `-- name: CountPlatesUsingFood :one
-SELECT COUNT(*) FROM plate_components WHERE food_id = ?
-`
-
-func (q *Queries) CountPlatesUsingFood(ctx context.Context, foodID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPlatesUsingFood, foodID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countPlatesUsingTimeSlot = `-- name: CountPlatesUsingTimeSlot :one
 SELECT COUNT(*) FROM plates WHERE slot_id = ?
 `
