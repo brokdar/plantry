@@ -21,6 +21,8 @@ type Handlers struct {
 	ImageStore     *imagestore.Store
 	Slots          *handlers.SlotHandler
 	Plates         *handlers.PlateHandler
+	CookSessions   *handlers.CookSessionHandler
+	PlanWrite      *handlers.PlanWriteHandler
 	Profile        *handlers.ProfileHandler
 	Presets        *handlers.PresetHandler
 	AI             *handlers.AIHandler
@@ -117,6 +119,24 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 						r.Delete("/feedback", h.Feedback.Delete)
 					}
 				})
+			})
+		}
+
+		if h.CookSessions != nil {
+			api.Route("/cook-sessions/{id}", func(r chi.Router) {
+				r.Get("/", h.CookSessions.Get)
+				r.Put("/", h.CookSessions.Update)
+				r.Delete("/", h.CookSessions.Delete)
+				r.Post("/cooked", h.CookSessions.Cooked)
+				r.Get("/leftover-cells", h.CookSessions.LeftoverCells)
+				r.Post("/leftovers", h.CookSessions.Leftovers)
+			})
+		}
+
+		if h.PlanWrite != nil {
+			api.Route("/plan", func(r chi.Router) {
+				r.Delete("/", h.PlanWrite.Clear)
+				r.Post("/restore", h.PlanWrite.Restore)
 			})
 		}
 

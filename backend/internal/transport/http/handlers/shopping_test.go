@@ -18,6 +18,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
@@ -26,17 +27,14 @@ import (
 // "direct". Used by tests that don't care about the picky leaf vocabulary
 // and just want a component that contributes the same totals as before.
 func leafComponent(foodID int64, portions float64) plate.PlateComponent {
-	pc := plate.QuantityFromLegacyPortions("leaf", portions)
+	pc := leafGrams(portions * 100)
 	pc.FoodID = foodID
 	return pc
 }
 
-// composedComponent builds a composed-style plate.PlateComponent with integer
-// portions, equivalent to the pre-rework "Portions: n" shape on a recipe.
-func composedComponent(foodID int64, portions int) plate.PlateComponent {
-	pc := plate.QuantityFromLegacyPortions("composed", float64(portions))
-	pc.FoodID = foodID
-	return pc
+// composedComponent builds a composed-style plate.PlateComponent.
+func composedComponent(foodID int64, portions float64) plate.PlateComponent {
+	return plate.PlateComponent{FoodID: foodID, Portions: &portions}
 }
 
 // ── stub for plateRangeService ────────────────────────────────────────────────
@@ -67,18 +65,17 @@ func newValidationShoppingRouter() http.Handler {
 
 // newShoppingRouterWithDB wires real repos backed by testhelper.NewTestDB.
 // Returns the handler, food repo, plate repo, and slot repo so tests can seed data.
-func newShoppingRouterWithDB(t *testing.T) (http.Handler, *sqlite.FoodRepo, *sqlite.PlateRepo, *sqlite.SlotRepo) {
+func newShoppingRouterWithDB(t *testing.T) (http.Handler, *sqlite.FoodRepo, *plate.Service, *sqlite.SlotRepo) {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
 	foodRepo := sqlite.NewFoodRepo(db)
-	plateRepo := sqlite.NewPlateRepo(db)
 	slotRepo := sqlite.NewSlotRepo(db)
 	resolver := shopping.NewResolver(foodRepo)
-	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo)
+	plateSvc := testsvc.Plates(db)
 	h := handlers.NewShoppingRangeHandler(plateSvc, resolver)
 	r := chi.NewRouter()
 	r.Get("/api/shopping-list", h.List)
-	return r, foodRepo, plateRepo, slotRepo
+	return r, foodRepo, plateSvc, slotRepo
 }
 
 // ── validation tests ──────────────────────────────────────────────────────────
@@ -154,7 +151,7 @@ func TestShoppingRange_200_EmptyRange(t *testing.T) {
 }
 
 func TestShoppingRange_200_HappyPath(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newShoppingRouterWithDB(t)
+	r, foodRepo, plateSvc, slotRepo := newShoppingRouterWithDB(t)
 	ctx := context.Background()
 
 	// Seed a slot (FK required by plates table).
@@ -178,7 +175,7 @@ func TestShoppingRange_200_HappyPath(t *testing.T) {
 			leafComponent(f2.ID, 2),
 		},
 	}
-	require.NoError(t, plateRepo.Create(ctx, p))
+	seedPlate(t, plateSvc, p)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?from=2026-04-26&to=2026-04-26", nil)
 	w := httptest.NewRecorder()
@@ -193,7 +190,7 @@ func TestShoppingRange_200_HappyPath(t *testing.T) {
 }
 
 func TestShoppingRange_200_ItemsAlphabetical(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newShoppingRouterWithDB(t)
+	r, foodRepo, plateSvc, slotRepo := newShoppingRouterWithDB(t)
 	ctx := context.Background()
 
 	s := &slot.TimeSlot{NameKey: "lunch", Icon: "🥗", SortOrder: 0, Active: true}
@@ -215,7 +212,7 @@ func TestShoppingRange_200_ItemsAlphabetical(t *testing.T) {
 			leafComponent(apple.ID, 1),
 		},
 	}
-	require.NoError(t, plateRepo.Create(ctx, p))
+	seedPlate(t, plateSvc, p)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?from=2026-04-26&to=2026-04-26", nil)
 	w := httptest.NewRecorder()

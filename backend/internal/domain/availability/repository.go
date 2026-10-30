@@ -32,9 +32,12 @@ type Repository interface {
 	DeleteOverride(ctx context.Context, date time.Time, slotID int64) error
 }
 
-// TxRunner runs fn in one transaction with availability and plate repos bound to it.
-type TxRunner interface {
-	RunInAvailabilityTx(ctx context.Context, fn func(Repository, plate.Repository) error) error
+// CellPlates finds and removes plates through the plate service, so a
+// removed plate's cook sessions stay consistent. It joins the caller's unit
+// of work.
+type CellPlates interface {
+	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
+	Delete(ctx context.Context, id int64) (plate.PlanSnapshot, error)
 }
 
 // PresetLookup resolves a preset's name. ok is false when it doesn't exist.

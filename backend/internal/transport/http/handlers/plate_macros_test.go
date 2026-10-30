@@ -17,25 +17,24 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
-func newPlateMacrosRouter(t *testing.T) (http.Handler, *sqlite.FoodRepo, *sqlite.PlateRepo, *sqlite.SlotRepo) {
+func newPlateMacrosRouter(t *testing.T) (http.Handler, *sqlite.FoodRepo, *plate.Service, *sqlite.SlotRepo) {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
 	foodRepo := sqlite.NewFoodRepo(db)
-	plateRepo := sqlite.NewPlateRepo(db)
 	slotRepo := sqlite.NewSlotRepo(db)
 	resolver := food.NewNutritionResolver(foodRepo)
-	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo)
+	plateSvc := testsvc.Plates(db)
 	h := handlers.NewPlateMacrosHandler(plateSvc, resolver)
 	r := chi.NewRouter()
 	r.Get("/api/plates/macros", h.List)
-	return r, foodRepo, plateRepo, slotRepo
+	return r, foodRepo, plateSvc, slotRepo
 }
 
 func ptrFloat64(v float64) *float64 { return &v }
-func ptrInt(v int) *int             { return &v }
 func ptrStr(v string) *string       { return &v }
 
 func TestPlateMacros_EmptyRange(t *testing.T) {
@@ -53,7 +52,7 @@ func TestPlateMacros_EmptyRange(t *testing.T) {
 }
 
 func TestPlateMacros_ComposedComponent_KcalMatchesPerPortion(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newPlateMacrosRouter(t)
+	r, foodRepo, plateSvc, slotRepo := newPlateMacrosRouter(t)
 	ctx := context.Background()
 
 	// Seed slot.
@@ -82,9 +81,9 @@ func TestPlateMacros_ComposedComponent_KcalMatchesPerPortion(t *testing.T) {
 	d, _ := time.Parse("2006-01-02", "2026-04-26")
 	p := &plate.Plate{
 		Date: d, SlotID: s.ID,
-		Components: []plate.PlateComponent{{FoodID: curry.ID, Portions: ptrInt(1)}},
+		Components: []plate.PlateComponent{{FoodID: curry.ID, Portions: ptrFloat64(1)}},
 	}
-	require.NoError(t, plateRepo.Create(ctx, p))
+	seedPlate(t, plateSvc, p)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/plates/macros?from=2026-04-26&to=2026-04-26", nil)
 	w := httptest.NewRecorder()
@@ -103,7 +102,7 @@ func TestPlateMacros_ComposedComponent_KcalMatchesPerPortion(t *testing.T) {
 }
 
 func TestPlateMacros_LeafComponent_KcalScalesWithGrams(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newPlateMacrosRouter(t)
+	r, foodRepo, plateSvc, slotRepo := newPlateMacrosRouter(t)
 	ctx := context.Background()
 
 	s := &slot.TimeSlot{NameKey: "dinner", Icon: "🍽", SortOrder: 0, Active: true}
@@ -124,7 +123,7 @@ func TestPlateMacros_LeafComponent_KcalScalesWithGrams(t *testing.T) {
 			GramsSource: ptrStr("direct"),
 		}},
 	}
-	require.NoError(t, plateRepo.Create(ctx, p))
+	seedPlate(t, plateSvc, p)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/plates/macros?from=2026-04-26&to=2026-04-26", nil)
 	w := httptest.NewRecorder()
@@ -141,7 +140,7 @@ func TestPlateMacros_LeafComponent_KcalScalesWithGrams(t *testing.T) {
 }
 
 func TestPlateMacros_EmptyPlateIncluded(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newPlateMacrosRouter(t)
+	r, foodRepo, plateSvc, slotRepo := newPlateMacrosRouter(t)
 	ctx := context.Background()
 
 	s := &slot.TimeSlot{NameKey: "dinner", Icon: "🍽", SortOrder: 0, Active: true}
@@ -153,7 +152,7 @@ func TestPlateMacros_EmptyPlateIncluded(t *testing.T) {
 
 	d, _ := time.Parse("2006-01-02", "2026-04-26")
 	p := &plate.Plate{Date: d, SlotID: s.ID}
-	require.NoError(t, plateRepo.Create(ctx, p))
+	seedPlate(t, plateSvc, p)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/plates/macros?from=2026-04-26&to=2026-04-26", nil)
 	w := httptest.NewRecorder()
@@ -171,7 +170,7 @@ func TestPlateMacros_EmptyPlateIncluded(t *testing.T) {
 }
 
 func TestPlateMacros_ComposedAndLeaf_Sum(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newPlateMacrosRouter(t)
+	r, foodRepo, plateSvc, slotRepo := newPlateMacrosRouter(t)
 	ctx := context.Background()
 
 	s := &slot.TimeSlot{NameKey: "dinner", Icon: "🍽", SortOrder: 0, Active: true}
@@ -193,14 +192,14 @@ func TestPlateMacros_ComposedAndLeaf_Sum(t *testing.T) {
 	p := &plate.Plate{
 		Date: d, SlotID: s.ID,
 		Components: []plate.PlateComponent{
-			{FoodID: curry.ID, Portions: ptrInt(1)}, // 260 kcal
+			{FoodID: curry.ID, Portions: ptrFloat64(1)}, // 260 kcal
 			{
 				FoodID: rice.ID, Amount: ptrFloat64(100), Unit: ptrStr("g"),
 				Grams: ptrFloat64(100), GramsSource: ptrStr("direct"),
 			}, // 130 kcal
 		},
 	}
-	require.NoError(t, plateRepo.Create(ctx, p))
+	seedPlate(t, plateSvc, p)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/plates/macros?from=2026-04-26&to=2026-04-26", nil)
 	w := httptest.NewRecorder()

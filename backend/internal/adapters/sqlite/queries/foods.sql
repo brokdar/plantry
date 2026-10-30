@@ -6,7 +6,7 @@ INSERT INTO foods (
     potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g,
     vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g,
     variant_group_id, reference_portions, prep_minutes, cook_minutes, notes,
-    favorite, source_url, description
+    favorite, source_url, description, keep_days, freezable
 ) VALUES (
     ?, ?, ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?, ?,
@@ -14,7 +14,7 @@ INSERT INTO foods (
     ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?,
-    ?, ?, ?
+    ?, ?, ?, ?, ?
 )
 RETURNING *;
 
@@ -66,6 +66,8 @@ UPDATE foods SET
     favorite           = ?,
     source_url         = ?,
     description        = ?,
+    keep_days          = ?,
+    freezable          = ?,
     updated_at         = datetime('now')
 WHERE id = ?
 RETURNING *;

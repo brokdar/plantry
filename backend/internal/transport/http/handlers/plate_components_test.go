@@ -19,18 +19,18 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
 // newComponentRouterWithDB wires a real-DB plate handler so the JSON shapes
 // round-trip through both the service and the repo.
-func newComponentRouterWithDB(t *testing.T) (http.Handler, *sqlite.FoodRepo, *sqlite.PlateRepo, *sqlite.SlotRepo) {
+func newComponentRouterWithDB(t *testing.T) (http.Handler, *sqlite.FoodRepo, *plate.Service, *sqlite.SlotRepo) {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
 	foodRepo := sqlite.NewFoodRepo(db)
-	plateRepo := sqlite.NewPlateRepo(db)
 	slotRepo := sqlite.NewSlotRepo(db)
-	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo)
+	plateSvc := testsvc.Plates(db)
 	h := handlers.NewPlateHandler(plateSvc)
 	r := chi.NewRouter()
 	r.Route("/api/plates", func(r chi.Router) {
@@ -38,10 +38,10 @@ func newComponentRouterWithDB(t *testing.T) (http.Handler, *sqlite.FoodRepo, *sq
 		r.Put("/{id}/components/{pcId}", h.UpdateComponent)
 		r.Get("/", h.List)
 	})
-	return r, foodRepo, plateRepo, slotRepo
+	return r, foodRepo, plateSvc, slotRepo
 }
 
-func seedComponentTestData(t *testing.T, foodRepo *sqlite.FoodRepo, plateRepo *sqlite.PlateRepo, slotRepo *sqlite.SlotRepo) (slotID, leafID, composedID, plateID int64) {
+func seedComponentTestData(t *testing.T, foodRepo *sqlite.FoodRepo, plateSvc *plate.Service, slotRepo *sqlite.SlotRepo) (slotID, leafID, composedID, plateID int64) {
 	t.Helper()
 	ctx := context.Background()
 	s := &slot.TimeSlot{NameKey: "dinner", Icon: "🍽", SortOrder: 0, Active: true}
@@ -61,8 +61,20 @@ func seedComponentTestData(t *testing.T, foodRepo *sqlite.FoodRepo, plateRepo *s
 
 	d, _ := time.Parse("2006-01-02", "2026-04-26")
 	p := &plate.Plate{Date: d, SlotID: s.ID}
-	require.NoError(t, plateRepo.Create(ctx, p))
+	seedPlate(t, plateSvc, p)
 	return s.ID, leaf.ID, composed.ID, p.ID
+}
+
+// lastComponentJSON decodes the plate a component endpoint returns and
+// gives its last component.
+func lastComponentJSON(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
+	t.Helper()
+	var plateJSON map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&plateJSON))
+	comps, ok := plateJSON["components"].([]any)
+	require.True(t, ok, "response is a plate with components")
+	require.NotEmpty(t, comps)
+	return comps[len(comps)-1].(map[string]any)
 }
 
 func postComponent(t *testing.T, r http.Handler, plateID int64, body string) *httptest.ResponseRecorder {
@@ -76,31 +88,34 @@ func postComponent(t *testing.T, r http.Handler, plateID int64, body string) *ht
 }
 
 func TestAddComponent_HTTP_Composed_201(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newComponentRouterWithDB(t)
-	_, _, composedID, plateID := seedComponentTestData(t, foodRepo, plateRepo, slotRepo)
+	r, foodRepo, plateSvc, slotRepo := newComponentRouterWithDB(t)
+	_, _, composedID, plateID := seedComponentTestData(t, foodRepo, plateSvc, slotRepo)
 
 	w := postComponent(t, r, plateID,
 		fmt.Sprintf(`{"food_id":%d,"portions":2}`, composedID))
 
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-	var resp map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	resp := lastComponentJSON(t, w)
 	assert.EqualValues(t, 2, resp["portions"])
+	assert.Equal(t, "Curry", resp["food_name"])
+	assert.Equal(t, "composed", resp["kind"])
+	assert.NotNil(t, resp["cook_session_id"], "a composed component gets a fresh session")
 	_, hasAmount := resp["amount"]
 	assert.False(t, hasAmount, "composed response must omit amount")
 }
 
 func TestAddComponent_HTTP_Leaf_201(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newComponentRouterWithDB(t)
-	_, leafID, _, plateID := seedComponentTestData(t, foodRepo, plateRepo, slotRepo)
+	r, foodRepo, plateSvc, slotRepo := newComponentRouterWithDB(t)
+	_, leafID, _, plateID := seedComponentTestData(t, foodRepo, plateSvc, slotRepo)
 
 	w := postComponent(t, r, plateID,
 		fmt.Sprintf(`{"food_id":%d,"amount":200,"unit":"g"}`, leafID))
 
 	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
-	var resp map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	resp := lastComponentJSON(t, w)
 	assert.InDelta(t, 200.0, resp["amount"].(float64), 0.01)
+	_, hasSession := resp["cook_session_id"]
+	assert.False(t, hasSession, "leaf response must omit cook_session_id")
 	assert.Equal(t, "g", resp["unit"])
 	assert.InDelta(t, 200.0, resp["grams"].(float64), 0.01)
 	assert.Equal(t, "direct", resp["grams_source"])
@@ -109,8 +124,8 @@ func TestAddComponent_HTTP_Leaf_201(t *testing.T) {
 }
 
 func TestAddComponent_HTTP_BothShapes_400(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newComponentRouterWithDB(t)
-	_, leafID, _, plateID := seedComponentTestData(t, foodRepo, plateRepo, slotRepo)
+	r, foodRepo, plateSvc, slotRepo := newComponentRouterWithDB(t)
+	_, leafID, _, plateID := seedComponentTestData(t, foodRepo, plateSvc, slotRepo)
 
 	w := postComponent(t, r, plateID,
 		fmt.Sprintf(`{"food_id":%d,"portions":1,"amount":100,"unit":"g"}`, leafID))
@@ -122,8 +137,8 @@ func TestAddComponent_HTTP_BothShapes_400(t *testing.T) {
 }
 
 func TestAddComponent_HTTP_Composed_With_Amount_400(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newComponentRouterWithDB(t)
-	_, _, composedID, plateID := seedComponentTestData(t, foodRepo, plateRepo, slotRepo)
+	r, foodRepo, plateSvc, slotRepo := newComponentRouterWithDB(t)
+	_, _, composedID, plateID := seedComponentTestData(t, foodRepo, plateSvc, slotRepo)
 
 	w := postComponent(t, r, plateID,
 		fmt.Sprintf(`{"food_id":%d,"amount":100,"unit":"g"}`, composedID))
@@ -135,8 +150,8 @@ func TestAddComponent_HTTP_Composed_With_Amount_400(t *testing.T) {
 }
 
 func TestAddComponent_HTTP_Leaf_UnknownUnit_400(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newComponentRouterWithDB(t)
-	_, leafID, _, plateID := seedComponentTestData(t, foodRepo, plateRepo, slotRepo)
+	r, foodRepo, plateSvc, slotRepo := newComponentRouterWithDB(t)
+	_, leafID, _, plateID := seedComponentTestData(t, foodRepo, plateSvc, slotRepo)
 
 	w := postComponent(t, r, plateID,
 		fmt.Sprintf(`{"food_id":%d,"amount":1,"unit":"slice"}`, leafID))
@@ -148,8 +163,8 @@ func TestAddComponent_HTTP_Leaf_UnknownUnit_400(t *testing.T) {
 }
 
 func TestList_HTTP_RoundTrips_BothShapes(t *testing.T) {
-	r, foodRepo, plateRepo, slotRepo := newComponentRouterWithDB(t)
-	_, leafID, composedID, plateID := seedComponentTestData(t, foodRepo, plateRepo, slotRepo)
+	r, foodRepo, plateSvc, slotRepo := newComponentRouterWithDB(t)
+	_, leafID, composedID, plateID := seedComponentTestData(t, foodRepo, plateSvc, slotRepo)
 
 	require.Equal(t, http.StatusCreated,
 		postComponent(t, r, plateID, fmt.Sprintf(`{"food_id":%d,"portions":2}`, composedID)).Code)

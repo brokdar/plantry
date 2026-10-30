@@ -13,9 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
@@ -31,7 +30,7 @@ type availabilityEnv struct {
 func setupAvailabilityRouter(t *testing.T) *availabilityEnv {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
-	svc := availability.NewService(sqlite.NewAvailabilityRepo(db), sqlite.NewTxRunner(db), sqlite.NewPresetRepo(db))
+	_, svc := testsvc.Plan(db)
 	h := handlers.NewAvailabilityHandler(svc)
 	r := chi.NewRouter()
 	r.Route("/api/availability", func(r chi.Router) {

@@ -2,6 +2,7 @@ package feedback
 
 import (
 	"context"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -14,10 +15,14 @@ type Repository interface {
 	Delete(ctx context.Context, plateID int64) error
 }
 
-// TxRunner runs fn inside a single transaction. The closure receives
-// transactional copies of the feedback, food, and profile repositories so
-// recording a feedback event atomically updates feedback rows, cook-count on
-// each food of the plate, and the profile's preferences JSON.
-type TxRunner interface {
-	RunInFeedbackTx(ctx context.Context, fn func(Repository, food.Repository, profile.Repository) error) error
+// FoodStore loads a food (with its tags) and records that it was cooked.
+type FoodStore interface {
+	Get(ctx context.Context, id int64) (*food.Food, error)
+	MarkCooked(ctx context.Context, id int64, at time.Time) error
+}
+
+// ProfileStore reads and writes the user profile.
+type ProfileStore interface {
+	Get(ctx context.Context) (*profile.Profile, error)
+	Update(ctx context.Context, p *profile.Profile) (*profile.Profile, error)
 }

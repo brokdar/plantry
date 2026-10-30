@@ -40,39 +40,26 @@ var foodCols = []string{
 	"variant_group_id", "reference_portions", "prep_minutes", "cook_minutes",
 	"notes", "image_path", "favorite", "last_cooked_at", "cook_count",
 	"created_at", "updated_at",
-	"source_url", "description",
+	"source_url", "description", "keep_days", "freezable",
 }
 
 // FoodRepo implements food.Repository backed by SQLite.
 type FoodRepo struct {
-	pool *sql.DB      // nil for tx-bound repos; used only for BeginTx
-	dbtx sqlcgen.DBTX // always non-nil; *sql.DB or *sql.Tx
-	q    *sqlcgen.Queries
+	conn
 }
 
 // NewFoodRepo constructs a FoodRepo.
 func NewFoodRepo(db *sql.DB) *FoodRepo {
-	return &FoodRepo{pool: db, dbtx: db, q: sqlcgen.New(db)}
-}
-
-// newFoodRepoTx returns a FoodRepo bound to an existing transaction.
-// pool is nil; Create/Update/Delete (which open their own tx) must not be
-// called on a tx-bound repo.
-func newFoodRepoTx(tx *sql.Tx) *FoodRepo {
-	return &FoodRepo{pool: nil, dbtx: tx, q: sqlcgen.New(tx)}
+	return &FoodRepo{conn: conn{db: db}}
 }
 
 func (r *FoodRepo) Create(ctx context.Context, f *food.Food) error {
-	if r.pool == nil {
-		return fmt.Errorf("FoodRepo.Create: must not be called on a tx-bound repo")
-	}
-	tx, err := r.pool.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
+	return r.inTx(ctx, func(ctx context.Context) error {
+		return r.createWith(ctx, r.queriesFor(ctx), f)
+	})
+}
 
-	qtx := sqlcgen.New(tx)
+func (r *FoodRepo) createWith(ctx context.Context, qtx *sqlcgen.Queries, f *food.Food) error {
 	row, err := qtx.CreateFood(ctx, foodCreateParams(f))
 	if err != nil {
 		if isUniqueViolation(err, "foods.name") {
@@ -82,14 +69,11 @@ func (r *FoodRepo) Create(ctx context.Context, f *food.Food) error {
 	}
 	mapFoodToDomain(&row, f)
 
-	if err := r.insertComposedChildren(ctx, qtx, f); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return r.insertComposedChildren(ctx, qtx, f)
 }
 
 func (r *FoodRepo) Get(ctx context.Context, id int64) (*food.Food, error) {
-	row, err := r.q.GetFood(ctx, id)
+	row, err := r.queriesFor(ctx).GetFood(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
@@ -98,7 +82,7 @@ func (r *FoodRepo) Get(ctx context.Context, id int64) (*food.Food, error) {
 	}
 	var f food.Food
 	mapFoodToDomain(&row, &f)
-	if err := r.loadComposed(ctx, r.q, &f); err != nil {
+	if err := r.loadComposed(ctx, r.queriesFor(ctx), &f); err != nil {
 		return nil, err
 	}
 	if f.Kind == food.KindLeaf {
@@ -112,7 +96,7 @@ func (r *FoodRepo) Get(ctx context.Context, id int64) (*food.Food, error) {
 }
 
 func (r *FoodRepo) LeafIDByName(ctx context.Context, name string) (int64, error) {
-	id, err := r.q.GetLeafFoodIDByName(ctx, name)
+	id, err := r.queriesFor(ctx).GetLeafFoodIDByName(ctx, name)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return 0, fmt.Errorf("%w: leaf %q", domain.ErrNotFound, name)
@@ -123,16 +107,12 @@ func (r *FoodRepo) LeafIDByName(ctx context.Context, name string) (int64, error)
 }
 
 func (r *FoodRepo) Update(ctx context.Context, f *food.Food) error {
-	if r.pool == nil {
-		return fmt.Errorf("FoodRepo.Update: must not be called on a tx-bound repo")
-	}
-	tx, err := r.pool.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
+	return r.inTx(ctx, func(ctx context.Context) error {
+		return r.updateWith(ctx, r.queriesFor(ctx), f)
+	})
+}
 
-	qtx := sqlcgen.New(tx)
+func (r *FoodRepo) updateWith(ctx context.Context, qtx *sqlcgen.Queries, f *food.Food) error {
 	row, err := qtx.UpdateFood(ctx, foodUpdateParams(f))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -154,14 +134,11 @@ func (r *FoodRepo) Update(ctx context.Context, f *food.Food) error {
 	if err := qtx.DeleteFoodTags(ctx, f.ID); err != nil {
 		return err
 	}
-	if err := r.insertComposedChildren(ctx, qtx, f); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return r.insertComposedChildren(ctx, qtx, f)
 }
 
 func (r *FoodRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.q.DeleteFood(ctx, id)
+	res, err := r.queriesFor(ctx).DeleteFood(ctx, id)
 	if err != nil {
 		if isForeignKeyViolation(err) {
 			return fmt.Errorf("%w: id %d", domain.ErrInUse, id)
@@ -234,7 +211,7 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 		return nil, err
 	}
 	var total int
-	if err := r.dbtx.QueryRowContext(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+	if err := r.dbtx(ctx).QueryRowContext(ctx, countSQL, countArgs...).Scan(&total); err != nil {
 		return nil, err
 	}
 
@@ -242,7 +219,7 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.dbtx.QueryContext(ctx, listSQL, listArgs...)
+	rows, err := r.dbtx(ctx).QueryContext(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +247,7 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 		if items[i].Kind != food.KindComposed {
 			continue
 		}
-		tagRows, err := r.q.ListFoodTags(ctx, items[i].ID)
+		tagRows, err := r.queriesFor(ctx).ListFoodTags(ctx, items[i].ID)
 		if err != nil {
 			return nil, err
 		}
@@ -291,7 +268,7 @@ func (r *FoodRepo) Reachable(ctx context.Context, parentID int64) (map[int64]str
 	for len(queue) > 0 {
 		head := queue[0]
 		queue = queue[1:]
-		rows, err := r.dbtx.QueryContext(ctx,
+		rows, err := r.dbtx(ctx).QueryContext(ctx,
 			`SELECT child_id FROM food_components WHERE parent_id = ?`, head)
 		if err != nil {
 			return nil, err
@@ -324,7 +301,7 @@ func (r *FoodRepo) LookupByIDs(ctx context.Context, ids []int64) (map[int64]*foo
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.dbtx.QueryContext(ctx, query, args...)
+	rows, err := r.dbtx(ctx).QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +324,7 @@ func (r *FoodRepo) LookupByIDs(ctx context.Context, ids []int64) (map[int64]*foo
 }
 
 func (r *FoodRepo) ListChildren(ctx context.Context, parentID int64) ([]food.FoodComponent, error) {
-	rows, err := r.q.ListFoodComponents(ctx, parentID)
+	rows, err := r.queriesFor(ctx).ListFoodComponents(ctx, parentID)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +348,7 @@ func (r *FoodRepo) ListChildren(ctx context.Context, parentID int64) ([]food.Foo
 // ── Portions ──────────────────────────────────────────────────────────
 
 func (r *FoodRepo) ListPortions(ctx context.Context, foodID int64) ([]food.Portion, error) {
-	rows, err := r.q.ListFoodPortions(ctx, foodID)
+	rows, err := r.queriesFor(ctx).ListFoodPortions(ctx, foodID)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +364,7 @@ func (r *FoodRepo) ListPortions(ctx context.Context, foodID int64) ([]food.Porti
 }
 
 func (r *FoodRepo) UpsertPortion(ctx context.Context, p *food.Portion) error {
-	return r.q.UpsertFoodPortion(ctx, sqlcgen.UpsertFoodPortionParams{
+	return r.queriesFor(ctx).UpsertFoodPortion(ctx, sqlcgen.UpsertFoodPortionParams{
 		FoodID: p.FoodID,
 		Unit:   p.Unit,
 		Grams:  p.Grams,
@@ -395,7 +372,7 @@ func (r *FoodRepo) UpsertPortion(ctx context.Context, p *food.Portion) error {
 }
 
 func (r *FoodRepo) DeletePortion(ctx context.Context, foodID int64, unit string) error {
-	res, err := r.q.DeleteFoodPortion(ctx, sqlcgen.DeleteFoodPortionParams{
+	res, err := r.queriesFor(ctx).DeleteFoodPortion(ctx, sqlcgen.DeleteFoodPortionParams{
 		FoodID: foodID,
 		Unit:   unit,
 	})
@@ -415,7 +392,7 @@ func (r *FoodRepo) DeletePortion(ctx context.Context, foodID int64, unit string)
 // ── Variants ──────────────────────────────────────────────────────────
 
 func (r *FoodRepo) CreateVariantGroup(ctx context.Context, name string) (int64, error) {
-	g, err := r.q.CreateVariantGroup(ctx, name)
+	g, err := r.queriesFor(ctx).CreateVariantGroup(ctx, name)
 	if err != nil {
 		return 0, err
 	}
@@ -423,7 +400,7 @@ func (r *FoodRepo) CreateVariantGroup(ctx context.Context, name string) (int64, 
 }
 
 func (r *FoodRepo) Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]food.Food, error) {
-	rows, err := r.q.ListSiblingFoods(ctx, sqlcgen.ListSiblingFoodsParams{
+	rows, err := r.queriesFor(ctx).ListSiblingFoods(ctx, sqlcgen.ListSiblingFoodsParams{
 		VariantGroupID: sql.NullInt64{Int64: variantGroupID, Valid: true},
 		ID:             excludeID,
 	})
@@ -433,7 +410,7 @@ func (r *FoodRepo) Siblings(ctx context.Context, variantGroupID int64, excludeID
 	items := make([]food.Food, len(rows))
 	for i := range rows {
 		mapFoodToDomain(&rows[i], &items[i])
-		if err := r.loadComposed(ctx, r.q, &items[i]); err != nil {
+		if err := r.loadComposed(ctx, r.queriesFor(ctx), &items[i]); err != nil {
 			return nil, err
 		}
 	}
@@ -443,7 +420,7 @@ func (r *FoodRepo) Siblings(ctx context.Context, variantGroupID int64, excludeID
 // ── Cook tracking / insights ──────────────────────────────────────────
 
 func (r *FoodRepo) MarkCooked(ctx context.Context, id int64, at time.Time) error {
-	return r.q.MarkFoodCooked(ctx, sqlcgen.MarkFoodCookedParams{
+	return r.queriesFor(ctx).MarkFoodCooked(ctx, sqlcgen.MarkFoodCookedParams{
 		LastCookedAt: sql.NullString{String: at.UTC().Format(timeLayout), Valid: true},
 		ID:           id,
 	})
@@ -451,18 +428,18 @@ func (r *FoodRepo) MarkCooked(ctx context.Context, id int64, at time.Time) error
 
 // CountComposedFoods returns the number of composed foods (recipes).
 func (r *FoodRepo) CountComposedFoods(ctx context.Context) (int64, error) {
-	return r.q.CountComposedFoods(ctx)
+	return r.queriesFor(ctx).CountComposedFoods(ctx)
 }
 
 func (r *FoodRepo) Insights(ctx context.Context, cutoff time.Time, forgottenLimit, mostCookedLimit int) (food.Insights, error) {
-	forgottenRows, err := r.q.ListForgottenFoods(ctx, sqlcgen.ListForgottenFoodsParams{
+	forgottenRows, err := r.queriesFor(ctx).ListForgottenFoods(ctx, sqlcgen.ListForgottenFoodsParams{
 		LastCookedAt: sql.NullString{String: cutoff.UTC().Format(timeLayout), Valid: true},
 		Limit:        int64(forgottenLimit),
 	})
 	if err != nil {
 		return food.Insights{}, err
 	}
-	mostCookedRows, err := r.q.ListMostCookedFoods(ctx, int64(mostCookedLimit))
+	mostCookedRows, err := r.queriesFor(ctx).ListMostCookedFoods(ctx, int64(mostCookedLimit))
 	if err != nil {
 		return food.Insights{}, err
 	}
@@ -482,7 +459,7 @@ func (r *FoodRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*f
 	if favorite {
 		fav = 1
 	}
-	row, err := r.q.SetFoodFavorite(ctx, sqlcgen.SetFoodFavoriteParams{
+	row, err := r.queriesFor(ctx).SetFoodFavorite(ctx, sqlcgen.SetFoodFavoriteParams{
 		ID:       id,
 		Favorite: fav,
 	})
@@ -494,7 +471,7 @@ func (r *FoodRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*f
 	}
 	var f food.Food
 	mapFoodToDomain(&row, &f)
-	if err := r.loadComposed(ctx, r.q, &f); err != nil {
+	if err := r.loadComposed(ctx, r.queriesFor(ctx), &f); err != nil {
 		return nil, err
 	}
 	return &f, nil
@@ -503,7 +480,7 @@ func (r *FoodRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*f
 // Exists reports whether a food with the given ID exists. Implements
 // food.ChildExistsChecker (used by plate + template services).
 func (r *FoodRepo) Exists(ctx context.Context, id int64) (bool, error) {
-	_, err := r.q.GetFood(ctx, id)
+	_, err := r.queriesFor(ctx).GetFood(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
@@ -516,7 +493,7 @@ func (r *FoodRepo) Exists(ctx context.Context, id int64) (bool, error) {
 // KindOf returns the food's kind ("leaf" or "composed"). Used by callers that
 // need to discriminate quantity shape without paying the cost of a full Get.
 func (r *FoodRepo) KindOf(ctx context.Context, id int64) (string, error) {
-	kind, err := r.q.GetFoodKind(ctx, id)
+	kind, err := r.queriesFor(ctx).GetFoodKind(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", fmt.Errorf("%w: food %d", domain.ErrNotFound, id)
@@ -656,6 +633,8 @@ func foodCreateParams(f *food.Food) sqlcgen.CreateFoodParams {
 		Favorite:          fav,
 		SourceUrl:         toNullStringEmpty(derefString(f.SourceURL)),
 		Description:       toNullStringEmpty(derefString(f.Description)),
+		KeepDays:          toNullInt64FromIntPtr(f.KeepDays),
+		Freezable:         boolPtrToNullInt64(f.Freezable),
 	}
 }
 
@@ -703,7 +682,16 @@ func foodUpdateParams(f *food.Food) sqlcgen.UpdateFoodParams {
 		Favorite:          fav,
 		SourceUrl:         toNullStringEmpty(derefString(f.SourceURL)),
 		Description:       toNullStringEmpty(derefString(f.Description)),
+		KeepDays:          toNullInt64FromIntPtr(f.KeepDays),
+		Freezable:         boolPtrToNullInt64(f.Freezable),
 	}
+}
+
+func boolPtrToNullInt64(b *bool) sql.NullInt64 {
+	if b == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: boolToInt(*b), Valid: true}
 }
 
 // derefString returns *s, or "" for nil. Paired with toNullStringEmpty so
@@ -756,6 +744,13 @@ func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {
 	f.ImagePath = fromNullString(row.ImagePath)
 	f.Favorite = row.Favorite != 0
 	f.CookCount = int(row.CookCount)
+	f.KeepDays = fromNullInt64ToIntPtr(row.KeepDays)
+	if row.Freezable.Valid {
+		v := row.Freezable.Int64 == 1
+		f.Freezable = &v
+	} else {
+		f.Freezable = nil
+	}
 	f.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
 	f.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
 	if row.LastCookedAt.Valid {
@@ -811,7 +806,7 @@ func scanFoodRow(rows *sql.Rows) (*sqlcgen.Food, error) {
 		&row.VariantGroupID, &row.ReferencePortions, &row.PrepMinutes, &row.CookMinutes,
 		&row.Notes, &row.ImagePath, &row.Favorite, &row.LastCookedAt, &row.CookCount,
 		&row.CreatedAt, &row.UpdatedAt,
-		&row.SourceUrl, &row.Description,
+		&row.SourceUrl, &row.Description, &row.KeepDays, &row.Freezable,
 	); err != nil {
 		return nil, err
 	}

@@ -45,4 +45,15 @@ var (
 	// Plate cell errors (D10).
 	ErrCellUnavailable = errors.New("cell is marked no plate")
 	ErrCellOccupied    = errors.New("cell already has a plate")
+
+	// Cook session errors (Phase 2 D13, D14). All are conflicts (409).
+	ErrSessionBeforeCook       = errors.New("cell is before the session's cook cell")
+	ErrSessionPastKeepDays     = errors.New("cell is past the session's use-by date")
+	ErrSessionPastFreezerDays  = errors.New("cell is past the session's freezer keep days")
+	ErrSessionFoodMismatch     = errors.New("food differs from the session's food")
+	ErrSessionFreezingDisabled = errors.New("freezing is disabled")
+	ErrSessionNotFreezable     = errors.New("recipe is not freezable")
+	// ErrSessionNotFound is a session a component asks to link to that does
+	// not exist (409, unlike a missing session resource, which is 404).
+	ErrSessionNotFound = errors.New("linked cook session not found")
 )

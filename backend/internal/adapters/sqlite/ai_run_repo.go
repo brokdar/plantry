@@ -19,18 +19,18 @@ const truncatedMarker = "…[truncated]"
 
 // AIRunRepo implements airun.Store backed by SQLite.
 type AIRunRepo struct {
-	q *sqlcgen.Queries
+	conn
 }
 
 // NewAIRunRepo creates a SQLite-backed AI run store.
 func NewAIRunRepo(db *sql.DB) *AIRunRepo {
-	return &AIRunRepo{q: sqlcgen.New(db)}
+	return &AIRunRepo{conn: conn{db: db}}
 }
 
 var _ airun.Store = (*AIRunRepo)(nil)
 
 func (r *AIRunRepo) CreateRun(ctx context.Context, start airun.RunStart) (int64, error) {
-	id, err := r.q.CreateAIRun(ctx, sqlcgen.CreateAIRunParams{
+	id, err := r.queriesFor(ctx).CreateAIRun(ctx, sqlcgen.CreateAIRunParams{
 		Kind:           string(start.Kind),
 		StartedAt:      formatTime(start.StartedAt),
 		PromptVersion:  start.PromptVersion,
@@ -47,7 +47,7 @@ func (r *AIRunRepo) CreateRun(ctx context.Context, start airun.RunStart) (int64,
 }
 
 func (r *AIRunRepo) FinishRun(ctx context.Context, end airun.RunEnd) error {
-	res, err := r.q.FinishAIRun(ctx, sqlcgen.FinishAIRunParams{
+	res, err := r.queriesFor(ctx).FinishAIRun(ctx, sqlcgen.FinishAIRunParams{
 		Status:           string(end.Status),
 		FinishedAt:       sql.NullString{String: formatTime(end.FinishedAt), Valid: true},
 		Provider:         end.Provider,
@@ -79,7 +79,7 @@ func (r *AIRunRepo) AddStep(ctx context.Context, step airun.Step) error {
 	if step.IsError {
 		isErr = 1
 	}
-	err := r.q.CreateAIRunStep(ctx, sqlcgen.CreateAIRunStepParams{
+	err := r.queriesFor(ctx).CreateAIRunStep(ctx, sqlcgen.CreateAIRunStepParams{
 		RunID:        step.RunID,
 		Seq:          int64(step.Seq),
 		Type:         string(step.Type),
@@ -104,14 +104,14 @@ func (r *AIRunRepo) AddStep(ctx context.Context, step airun.Step) error {
 }
 
 func (r *AIRunRepo) UpsertPrompt(ctx context.Context, hash, text string) error {
-	if err := r.q.UpsertAIPrompt(ctx, sqlcgen.UpsertAIPromptParams{Hash: hash, Text: text}); err != nil {
+	if err := r.queriesFor(ctx).UpsertAIPrompt(ctx, sqlcgen.UpsertAIPromptParams{Hash: hash, Text: text}); err != nil {
 		return fmt.Errorf("upsert ai prompt: %w", err)
 	}
 	return nil
 }
 
 func (r *AIRunRepo) UpsertToolSchema(ctx context.Context, hash, json string) error {
-	if err := r.q.UpsertAIToolSchema(ctx, sqlcgen.UpsertAIToolSchemaParams{Hash: hash, Json: json}); err != nil {
+	if err := r.queriesFor(ctx).UpsertAIToolSchema(ctx, sqlcgen.UpsertAIToolSchemaParams{Hash: hash, Json: json}); err != nil {
 		return fmt.Errorf("upsert ai tool schema: %w", err)
 	}
 	return nil
@@ -122,7 +122,7 @@ func (r *AIRunRepo) UpsertToolSchema(ctx context.Context, hash, json string) err
 func (r *AIRunRepo) PruneSteps(ctx context.Context, before time.Time) (int64, error) {
 	var total int64
 	for {
-		res, err := r.q.PruneAIRunSteps(ctx, formatTime(before))
+		res, err := r.queriesFor(ctx).PruneAIRunSteps(ctx, formatTime(before))
 		if err != nil {
 			return total, fmt.Errorf("prune ai run steps: %w", err)
 		}

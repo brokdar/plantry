@@ -13,8 +13,8 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
 func availDate(s string) time.Time {
@@ -48,7 +48,8 @@ func insertPreset(t *testing.T, conn *sql.DB, name string) int64 {
 }
 
 func newAvailabilityService(conn *sql.DB) *availability.Service {
-	return availability.NewService(sqlite.NewAvailabilityRepo(conn), sqlite.NewTxRunner(conn), sqlite.NewPresetRepo(conn))
+	_, svc := testsvc.Plan(conn)
+	return svc
 }
 
 func TestAvailabilityRepo_DefaultsRoundTrip(t *testing.T) {
@@ -227,7 +228,11 @@ func TestAvailabilitySetOverride_RemovesPlateInTx(t *testing.T) {
 	require.NoError(t, err)
 	plateID, err := res.LastInsertId()
 	require.NoError(t, err)
-	_, err = conn.Exec(`INSERT INTO plate_components (plate_id, food_id, portions, sort_order) VALUES (?, ?, 2, 0)`, plateID, foodID)
+	res, err = conn.Exec(`INSERT INTO cook_sessions (food_id, cook_date, cook_slot_id, portions) VALUES (?, '2026-10-26', ?, 2)`, foodID, lunch)
+	require.NoError(t, err)
+	sessionID, err := res.LastInsertId()
+	require.NoError(t, err)
+	_, err = conn.Exec(`INSERT INTO plate_components (plate_id, food_id, portions, cook_session_id, sort_order) VALUES (?, ?, 2, ?, 0)`, plateID, foodID, sessionID)
 	require.NoError(t, err)
 	_, err = conn.Exec(`INSERT INTO plate_feedback (plate_id, status) VALUES (?, 'loved')`, plateID)
 	require.NoError(t, err)
@@ -249,6 +254,7 @@ func TestAvailabilitySetOverride_RemovesPlateInTx(t *testing.T) {
 	assert.Equal(t, 0, countAvailabilityRows(t, conn, "plates"))
 	assert.Equal(t, 0, countAvailabilityRows(t, conn, "plate_components"))
 	assert.Equal(t, 0, countAvailabilityRows(t, conn, "plate_feedback"))
+	assert.Equal(t, 0, countAvailabilityRows(t, conn, "cook_sessions"), "the orphaned session goes with the plate")
 	assert.Equal(t, 1, countAvailabilityRows(t, conn, "availability_overrides"))
 }
 
@@ -284,18 +290,11 @@ func (failingUpsertRepo) UpsertOverride(context.Context, availability.Override) 
 	return errors.New("write failed")
 }
 
-type failingUpsertTx struct{ inner *sqlite.TxRunner }
-
-func (f failingUpsertTx) RunInAvailabilityTx(ctx context.Context, fn func(availability.Repository, plate.Repository) error) error {
-	return f.inner.RunInAvailabilityTx(ctx, func(r availability.Repository, p plate.Repository) error {
-		return fn(failingUpsertRepo{r}, p)
-	})
-}
-
 func TestAvailabilitySetOverride_RollsBackPlateDeleteOnWriteFailure(t *testing.T) {
 	conn := testhelper.NewTestDB(t)
 	ctx := context.Background()
-	svc := availability.NewService(sqlite.NewAvailabilityRepo(conn), failingUpsertTx{sqlite.NewTxRunner(conn)}, sqlite.NewPresetRepo(conn))
+	svc := availability.NewService(failingUpsertRepo{sqlite.NewAvailabilityRepo(conn)}, sqlite.NewTxRunner(conn), sqlite.NewPresetRepo(conn)).
+		WithPlates(testsvc.Plates(conn))
 	lunch := insertSlot(t, conn, "slot.lunch", 1, true)
 	_, err := conn.Exec(`INSERT INTO plates (slot_id, date) VALUES (?, '2026-10-26')`, lunch)
 	require.NoError(t, err)
@@ -338,14 +337,6 @@ func (r halfReplaceRepo) ReplaceActiveDefaults(ctx context.Context, rows []avail
 	return errors.New("write failed")
 }
 
-type halfReplaceTx struct{ inner *sqlite.TxRunner }
-
-func (f halfReplaceTx) RunInAvailabilityTx(ctx context.Context, fn func(availability.Repository, plate.Repository) error) error {
-	return f.inner.RunInAvailabilityTx(ctx, func(r availability.Repository, p plate.Repository) error {
-		return fn(halfReplaceRepo{r}, p)
-	})
-}
-
 func TestAvailabilitySetDefaults_RollsBackOnWriteFailure(t *testing.T) {
 	conn := testhelper.NewTestDB(t)
 	ctx := context.Background()
@@ -355,7 +346,7 @@ func TestAvailabilitySetDefaults_RollsBackOnWriteFailure(t *testing.T) {
 		{Weekday: 5, SlotID: dinner, Mode: availability.ModeNone},
 	}))
 
-	svc := availability.NewService(sqlite.NewAvailabilityRepo(conn), halfReplaceTx{sqlite.NewTxRunner(conn)}, sqlite.NewPresetRepo(conn))
+	svc := availability.NewService(halfReplaceRepo{sqlite.NewAvailabilityRepo(conn)}, sqlite.NewTxRunner(conn), sqlite.NewPresetRepo(conn))
 	err := svc.SetDefaults(ctx, []availability.Default{
 		{Weekday: 0, SlotID: lunch, Mode: availability.ModeNone},
 		{Weekday: 1, SlotID: lunch, Mode: availability.ModeNone},

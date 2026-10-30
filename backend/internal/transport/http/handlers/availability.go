@@ -170,7 +170,7 @@ func (h *AvailabilityHandler) PutOverride(w http.ResponseWriter, r *http.Request
 	}
 	resp := setOverrideResponse{Cell: toAvailabilityCellJSON(cell)}
 	if removed != nil {
-		p := toPlateResponse(removed, nil)
+		p := toPlateResponse(removed)
 		resp.RemovedPlate = &p
 	}
 	writeJSON(w, http.StatusOK, resp)

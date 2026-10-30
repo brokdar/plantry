@@ -377,6 +377,9 @@ func (s *Service) validate(f *Food) error {
 		if f.VariantGroupID != nil {
 			return fmt.Errorf("%w: leaf foods cannot have a variant group", domain.ErrInvalidInput)
 		}
+		if f.KeepDays != nil || f.Freezable != nil {
+			return fmt.Errorf("%w: leaf foods cannot have keep_days or freezable", domain.ErrInvalidInput)
+		}
 	case KindComposed:
 		if f.Role == nil || !ValidRole(*f.Role) {
 			return fmt.Errorf("%w: invalid or missing role", domain.ErrInvalidInput)
@@ -390,6 +393,9 @@ func (s *Service) validate(f *Food) error {
 		}
 		if f.Source != nil {
 			return fmt.Errorf("%w: composed foods cannot have a source", domain.ErrInvalidInput)
+		}
+		if f.KeepDays != nil && (*f.KeepDays < MinKeepDays || *f.KeepDays > MaxKeepDays) {
+			return fmt.Errorf("%w: keep_days must be between %d and %d", domain.ErrInvalidInput, MinKeepDays, MaxKeepDays)
 		}
 		if f.Barcode != nil || f.OffID != nil || f.FdcID != nil {
 			return fmt.Errorf("%w: composed foods cannot have provenance ids", domain.ErrInvalidInput)
@@ -415,6 +421,13 @@ func (s *Service) validate(f *Food) error {
 	}
 	return nil
 }
+
+// Keep-days bounds of a composed food (Phase 2 D15); they match the
+// plan.default_keep_days setting.
+const (
+	MinKeepDays = 1
+	MaxKeepDays = 7
+)
 
 // validateLeafNutrition allows all-nil nutrition — OFF/FDC imports often have
 // incomplete data and rejecting them would block valid ingredient creation.

@@ -18,6 +18,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
 // applyTestEnv wires a full real-SQLite stack so the apply pipeline can be
@@ -53,11 +54,9 @@ func newApplyTestEnv(t *testing.T) *applyTestEnv {
 
 	foodRepo := sqlite.NewFoodRepo(db)
 	slotRepo := sqlite.NewSlotRepo(db)
-	plateRepo := sqlite.NewPlateRepo(db)
 	presetRepo := sqlite.NewPresetRepo(db)
 	txRunner := sqlite.NewTxRunner(db)
-	availSvc := availability.NewService(sqlite.NewAvailabilityRepo(db), txRunner, presetRepo)
-	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo).WithCells(availSvc)
+	plateSvc, availSvc := testsvc.Plan(db)
 	slotSvc := slot.NewService(slotRepo)
 
 	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).
@@ -87,8 +86,22 @@ func (e *applyTestEnv) leafPlate(t *testing.T, date time.Time) *plate.Plate {
 	p := &plate.Plate{Date: date, SlotID: e.slotID, Components: []plate.PlateComponent{
 		{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
 	}}
-	require.NoError(t, e.plateSvc.Create(e.ctx, p))
+	e.create(t, p)
 	return p
+}
+
+// create writes p through the plate service and stores the result in p.
+func (e *applyTestEnv) create(t *testing.T, p *plate.Plate) {
+	t.Helper()
+	out, err := e.plateSvc.Create(e.ctx, plate.PlateInput{Date: p.Date, SlotID: p.SlotID, Note: p.Note, Components: p.Components})
+	require.NoError(t, err)
+	*p = *out
+}
+
+func (e *applyTestEnv) remove(t *testing.T, id int64) {
+	t.Helper()
+	_, err := e.plateSvc.Delete(e.ctx, id)
+	require.NoError(t, err)
 }
 
 func (e *applyTestEnv) cell(t *testing.T, date time.Time) availability.Cell {
@@ -263,7 +276,7 @@ func (e *applyTestEnv) seedPreset(t *testing.T, name string) *preset.Preset {
 			{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
 		},
 	}
-	require.NoError(t, e.plateSvc.Create(e.ctx, srcPlate))
+	e.create(t, srcPlate)
 
 	p, err := e.presetSvc.CreateFromPlates(e.ctx, preset.CreateFromPlatesInput{
 		Name: name, PlateIDs: []int64{srcPlate.ID},
@@ -271,7 +284,7 @@ func (e *applyTestEnv) seedPreset(t *testing.T, name string) *preset.Preset {
 	require.NoError(t, err)
 
 	// Delete the source plate so the target date stays clean for later apply tests.
-	require.NoError(t, e.plateSvc.Delete(e.ctx, srcPlate.ID))
+	e.remove(t, srcPlate.ID)
 	_ = mkLeafComp // keep helper referenced
 	return p
 }
@@ -308,7 +321,7 @@ func TestApply_OccupiedSkip(t *testing.T) {
 			{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
 		},
 	}
-	require.NoError(t, e.plateSvc.Create(e.ctx, occ))
+	e.create(t, occ)
 
 	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{
 		TargetDate: occ.Date, OnConflict: preset.ConflictSkip,
@@ -335,7 +348,7 @@ func TestApply_OccupiedOverwrite_AndUndo(t *testing.T) {
 			{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
 		},
 	}
-	require.NoError(t, e.plateSvc.Create(e.ctx, occ))
+	e.create(t, occ)
 	originalID := occ.ID
 
 	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{
@@ -401,12 +414,12 @@ func TestApply_SlotIDsFilter(t *testing.T) {
 			{FoodID: e.foodID, Amount: &amount, Unit: &unit, Grams: &grams, GramsSource: &src},
 		},
 	}
-	require.NoError(t, e.plateSvc.Create(e.ctx, source))
+	e.create(t, source)
 	p, err := e.presetSvc.CreateFromPlates(e.ctx, preset.CreateFromPlatesInput{
 		Name: "OneSlot", PlateIDs: []int64{source.ID},
 	})
 	require.NoError(t, err)
-	require.NoError(t, e.plateSvc.Delete(e.ctx, source.ID))
+	e.remove(t, source.ID)
 
 	target := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 
@@ -460,7 +473,7 @@ func TestCopyWeek_OverwriteConflict(t *testing.T) {
 		SlotID:     e.slotID,
 		Components: []plate.PlateComponent{mkLeafPC()},
 	}
-	require.NoError(t, e.plateSvc.Create(e.ctx, srcPlate))
+	e.create(t, srcPlate)
 
 	// Seed a conflicting plate on the target week, same offset, same slot.
 	conflictAmount := 50.0
@@ -472,7 +485,7 @@ func TestCopyWeek_OverwriteConflict(t *testing.T) {
 			{FoodID: e.foodID, Amount: &conflictAmount, Unit: &unit, Grams: &conflictGrams, GramsSource: &src},
 		},
 	}
-	require.NoError(t, e.plateSvc.Create(e.ctx, conflictPlate))
+	e.create(t, conflictPlate)
 
 	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{
 		SourceStart: sourceStart,
@@ -522,7 +535,7 @@ func TestCopyWeek_HappyPath(t *testing.T) {
 			SlotID:     e.slotID,
 			Components: []plate.PlateComponent{mkLeafPC()},
 		}
-		require.NoError(t, e.plateSvc.Create(e.ctx, p))
+		e.create(t, p)
 	}
 
 	targetStart := time.Date(2026, 3, 9, 0, 0, 0, 0, time.UTC) // next Monday

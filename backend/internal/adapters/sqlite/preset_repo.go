@@ -17,42 +17,18 @@ import (
 
 // PresetRepo implements preset.Repository backed by SQLite.
 type PresetRepo struct {
-	db   *sql.DB
-	dbtx dbtxRunner
-	q    *sqlcgen.Queries
-}
-
-// dbtxRunner is the minimal Query interface satisfied by *sql.DB and *sql.Tx.
-// Used by the squirrel-driven List query which sqlc can't express (FTS5 MATCH).
-type dbtxRunner interface {
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	conn
 }
 
 // NewPresetRepo creates a SQLite-backed preset repository.
 func NewPresetRepo(db *sql.DB) *PresetRepo {
-	return &PresetRepo{db: db, dbtx: db, q: sqlcgen.New(db)}
-}
-
-// newPresetRepoTx returns a PresetRepo bound to an outer transaction.
-func newPresetRepoTx(tx *sql.Tx) *PresetRepo {
-	return &PresetRepo{db: nil, dbtx: tx, q: sqlcgen.New(tx)}
+	return &PresetRepo{conn: conn{db: db}}
 }
 
 func (r *PresetRepo) Create(ctx context.Context, p *preset.Preset) error {
-	if r.db == nil {
-		return r.createWith(ctx, r.q, p)
-	}
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	if err := r.createWith(ctx, sqlcgen.New(tx), p); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return r.inTx(ctx, func(ctx context.Context) error {
+		return r.createWith(ctx, r.queriesFor(ctx), p)
+	})
 }
 
 func (r *PresetRepo) createWith(ctx context.Context, q *sqlcgen.Queries, p *preset.Preset) error {
@@ -102,7 +78,7 @@ func (r *PresetRepo) createWith(ctx context.Context, q *sqlcgen.Queries, p *pres
 }
 
 func (r *PresetRepo) Get(ctx context.Context, id int64) (*preset.Preset, error) {
-	row, err := r.q.GetPreset(ctx, id)
+	row, err := r.queriesFor(ctx).GetPreset(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: preset %d", domain.ErrNotFound, id)
@@ -120,7 +96,7 @@ func (r *PresetRepo) Get(ctx context.Context, id int64) (*preset.Preset, error) 
 // PresetName returns the preset's name; ok is false when it doesn't exist.
 // It satisfies availability.PresetLookup.
 func (r *PresetRepo) PresetName(ctx context.Context, id int64) (string, bool, error) {
-	row, err := r.q.GetPreset(ctx, id)
+	row, err := r.queriesFor(ctx).GetPreset(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -131,7 +107,7 @@ func (r *PresetRepo) PresetName(ctx context.Context, id int64) (string, bool, er
 }
 
 func (r *PresetRepo) loadChildren(ctx context.Context, p *preset.Preset) error {
-	plateRows, err := r.q.ListPresetPlatesByPreset(ctx, p.ID)
+	plateRows, err := r.queriesFor(ctx).ListPresetPlatesByPreset(ctx, p.ID)
 	if err != nil {
 		return err
 	}
@@ -142,7 +118,7 @@ func (r *PresetRepo) loadChildren(ctx context.Context, p *preset.Preset) error {
 		pp.PresetID = plateRows[i].PresetID
 		pp.SlotID = plateRows[i].SlotID
 		pp.SortOrder = int(plateRows[i].SortOrder)
-		compRows, err := r.q.ListPresetComponentsByPlate(ctx, pp.ID)
+		compRows, err := r.queriesFor(ctx).ListPresetComponentsByPlate(ctx, pp.ID)
 		if err != nil {
 			return err
 		}
@@ -151,7 +127,7 @@ func (r *PresetRepo) loadChildren(ctx context.Context, p *preset.Preset) error {
 			mapPresetComponentRowToDomain(&compRows[j], &pp.Components[j])
 		}
 	}
-	tags, err := r.q.ListPresetTagsByPreset(ctx, p.ID)
+	tags, err := r.queriesFor(ctx).ListPresetTagsByPreset(ctx, p.ID)
 	if err != nil {
 		return err
 	}
@@ -227,7 +203,7 @@ func (r *PresetRepo) List(ctx context.Context, f preset.ListFilter) (*preset.Lis
 		return nil, err
 	}
 	var total int
-	if err := r.dbtx.QueryRowContext(ctx, countSQL, countArgs...).Scan(&total); err != nil {
+	if err := r.dbtx(ctx).QueryRowContext(ctx, countSQL, countArgs...).Scan(&total); err != nil {
 		return nil, err
 	}
 
@@ -235,7 +211,7 @@ func (r *PresetRepo) List(ctx context.Context, f preset.ListFilter) (*preset.Lis
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.dbtx.QueryContext(ctx, listSQL, listArgs...)
+	rows, err := r.dbtx(ctx).QueryContext(ctx, listSQL, listArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +241,7 @@ func (r *PresetRepo) List(ctx context.Context, f preset.ListFilter) (*preset.Lis
 }
 
 func (r *PresetRepo) UpdateName(ctx context.Context, id int64, name string) (*preset.Preset, error) {
-	row, err := r.q.UpdatePresetName(ctx, sqlcgen.UpdatePresetNameParams{Name: name, ID: id})
+	row, err := r.queriesFor(ctx).UpdatePresetName(ctx, sqlcgen.UpdatePresetNameParams{Name: name, ID: id})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: preset %d", domain.ErrNotFound, id)
@@ -281,18 +257,9 @@ func (r *PresetRepo) UpdateName(ctx context.Context, id int64, name string) (*pr
 }
 
 func (r *PresetRepo) ReplacePlates(ctx context.Context, presetID int64, plates []preset.Plate) error {
-	if r.db == nil {
-		return r.replacePlatesWith(ctx, r.q, presetID, plates)
-	}
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	if err := r.replacePlatesWith(ctx, sqlcgen.New(tx), presetID, plates); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return r.inTx(ctx, func(ctx context.Context) error {
+		return r.replacePlatesWith(ctx, r.queriesFor(ctx), presetID, plates)
+	})
 }
 
 func (r *PresetRepo) replacePlatesWith(ctx context.Context, q *sqlcgen.Queries, presetID int64, plates []preset.Plate) error {
@@ -336,18 +303,9 @@ func (r *PresetRepo) replacePlatesWith(ctx context.Context, q *sqlcgen.Queries, 
 }
 
 func (r *PresetRepo) ReplaceTags(ctx context.Context, presetID int64, tags []string) error {
-	if r.db == nil {
-		return r.replaceTagsWith(ctx, r.q, presetID, tags)
-	}
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	if err := r.replaceTagsWith(ctx, sqlcgen.New(tx), presetID, tags); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return r.inTx(ctx, func(ctx context.Context) error {
+		return r.replaceTagsWith(ctx, r.queriesFor(ctx), presetID, tags)
+	})
 }
 
 func (r *PresetRepo) replaceTagsWith(ctx context.Context, q *sqlcgen.Queries, presetID int64, tags []string) error {
@@ -366,25 +324,25 @@ func (r *PresetRepo) replaceTagsWith(ctx context.Context, q *sqlcgen.Queries, pr
 }
 
 func (r *PresetRepo) AddTag(ctx context.Context, presetID int64, tag string) error {
-	if err := r.q.AddPresetTag(ctx, sqlcgen.AddPresetTagParams{PresetID: presetID, Tag: tag}); err != nil {
+	if err := r.queriesFor(ctx).AddPresetTag(ctx, sqlcgen.AddPresetTagParams{PresetID: presetID, Tag: tag}); err != nil {
 		return err
 	}
-	return r.q.TouchPresetUpdatedAt(ctx, presetID)
+	return r.queriesFor(ctx).TouchPresetUpdatedAt(ctx, presetID)
 }
 
 func (r *PresetRepo) RemoveTag(ctx context.Context, presetID int64, tag string) error {
-	if err := r.q.DeletePresetTag(ctx, sqlcgen.DeletePresetTagParams{PresetID: presetID, Tag: tag}); err != nil {
+	if err := r.queriesFor(ctx).DeletePresetTag(ctx, sqlcgen.DeletePresetTagParams{PresetID: presetID, Tag: tag}); err != nil {
 		return err
 	}
-	return r.q.TouchPresetUpdatedAt(ctx, presetID)
+	return r.queriesFor(ctx).TouchPresetUpdatedAt(ctx, presetID)
 }
 
 func (r *PresetRepo) TouchLastUsed(ctx context.Context, presetID int64) error {
-	return r.q.TouchPresetLastUsedAt(ctx, presetID)
+	return r.queriesFor(ctx).TouchPresetLastUsedAt(ctx, presetID)
 }
 
 func (r *PresetRepo) Delete(ctx context.Context, id int64) error {
-	res, err := r.q.DeletePreset(ctx, id)
+	res, err := r.queriesFor(ctx).DeletePreset(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -399,7 +357,7 @@ func (r *PresetRepo) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *PresetRepo) KnownTags(ctx context.Context, limit int) ([]preset.TagUsage, error) {
-	rows, err := r.q.ListKnownTags(ctx, int64(limit))
+	rows, err := r.queriesFor(ctx).ListKnownTags(ctx, int64(limit))
 	if err != nil {
 		return nil, err
 	}
@@ -411,14 +369,14 @@ func (r *PresetRepo) KnownTags(ctx context.Context, limit int) ([]preset.TagUsag
 }
 
 func (r *PresetRepo) CountUsingFood(ctx context.Context, foodID int64) (int64, error) {
-	return r.q.CountPresetsUsingFood(ctx, foodID)
+	return r.queriesFor(ctx).CountPresetsUsingFood(ctx, foodID)
 }
 
 func presetComponentParams(c *preset.Component) sqlcgen.CreatePresetComponentParams {
 	return sqlcgen.CreatePresetComponentParams{
 		PresetPlateID: c.PresetPlateID,
 		FoodID:        c.FoodID,
-		Portions:      toNullInt64FromIntPtr(c.Portions),
+		Portions:      toNullFloat(c.Portions),
 		Amount:        toNullFloat(c.Amount),
 		Unit:          toNullString(c.Unit),
 		Grams:         toNullFloat(c.Grams),
@@ -445,7 +403,7 @@ func mapPresetComponentRowToDomain(row *sqlcgen.PresetComponent, c *preset.Compo
 	c.ID = row.ID
 	c.PresetPlateID = row.PresetPlateID
 	c.FoodID = row.FoodID
-	c.Portions = fromNullInt64ToIntPtr(row.Portions)
+	c.Portions = fromNullFloat(row.Portions)
 	c.Amount = fromNullFloat(row.Amount)
 	c.Unit = fromNullString(row.Unit)
 	c.Grams = fromNullFloat(row.Grams)

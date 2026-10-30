@@ -14,21 +14,16 @@ import (
 
 // FeedbackRepo implements feedback.Repository backed by SQLite.
 type FeedbackRepo struct {
-	q *sqlcgen.Queries
+	conn
 }
 
 // NewFeedbackRepo creates a SQLite-backed feedback repository.
 func NewFeedbackRepo(db *sql.DB) *FeedbackRepo {
-	return &FeedbackRepo{q: sqlcgen.New(db)}
-}
-
-// newFeedbackRepoTx binds a FeedbackRepo to an open transaction.
-func newFeedbackRepoTx(tx *sql.Tx) *FeedbackRepo {
-	return &FeedbackRepo{q: sqlcgen.New(tx)}
+	return &FeedbackRepo{conn: conn{db: db}}
 }
 
 func (r *FeedbackRepo) Upsert(ctx context.Context, f *feedback.PlateFeedback) error {
-	row, err := r.q.UpsertPlateFeedback(ctx, sqlcgen.UpsertPlateFeedbackParams{
+	row, err := r.queriesFor(ctx).UpsertPlateFeedback(ctx, sqlcgen.UpsertPlateFeedbackParams{
 		PlateID: f.PlateID,
 		Status:  string(f.Status),
 		Note:    toNullString(f.Note),
@@ -46,7 +41,7 @@ func (r *FeedbackRepo) Upsert(ctx context.Context, f *feedback.PlateFeedback) er
 }
 
 func (r *FeedbackRepo) Get(ctx context.Context, plateID int64) (*feedback.PlateFeedback, error) {
-	row, err := r.q.GetPlateFeedback(ctx, plateID)
+	row, err := r.queriesFor(ctx).GetPlateFeedback(ctx, plateID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%w: feedback for plate %d", domain.ErrNotFound, plateID)
@@ -63,7 +58,7 @@ func (r *FeedbackRepo) Get(ctx context.Context, plateID int64) (*feedback.PlateF
 }
 
 func (r *FeedbackRepo) Delete(ctx context.Context, plateID int64) error {
-	res, err := r.q.DeletePlateFeedback(ctx, plateID)
+	res, err := r.queriesFor(ctx).DeletePlateFeedback(ctx, plateID)
 	if err != nil {
 		return err
 	}

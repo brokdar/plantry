@@ -127,9 +127,22 @@ func (s *stubPlateService) Get(_ context.Context, id int64) (*plate.Plate, error
 	return nil, domain.ErrNotFound
 }
 
+func (s *stubPlateService) Range(context.Context, time.Time, time.Time) ([]plate.Plate, error) {
+	return nil, nil
+}
+
+func (s *stubPlateService) Create(context.Context, plate.PlateInput) (*plate.Plate, error) {
+	return nil, errors.New("stub: no plate writes")
+}
+
+func (s *stubPlateService) Delete(context.Context, int64) (plate.PlanSnapshot, error) {
+	return plate.PlanSnapshot{}, errors.New("stub: no plate writes")
+}
+
+// stubTxRunner skips the unit of work: these tests only check validation.
 type stubTxRunner struct{}
 
-func (stubTxRunner) RunInPresetTx(_ context.Context, _ func(preset.Repository, plate.Repository) error) error {
+func (stubTxRunner) InTx(context.Context, func(context.Context) error) error {
 	return nil
 }
 
@@ -172,7 +185,7 @@ func TestCreateFromPlates_RequiresPlateIDs(t *testing.T) {
 }
 
 func TestCreateFromPlates_ComposedCopy(t *testing.T) {
-	portions := 2
+	portions := 2.0
 	foods := map[int64]*food.Food{
 		7: {ID: 7, Kind: food.KindComposed, Name: "Pasta"},
 	}
@@ -198,7 +211,7 @@ func TestCreateFromPlates_ComposedCopy(t *testing.T) {
 	require.Len(t, got.Plates[0].Components, 1)
 	c := got.Plates[0].Components[0]
 	require.NotNil(t, c.Portions)
-	assert.Equal(t, 2, *c.Portions)
+	assert.InDelta(t, 2.0, *c.Portions, 1e-9)
 	assert.Nil(t, c.Amount)
 }
 
@@ -233,7 +246,7 @@ func TestCreateFromPlates_LeafCopyResolvesGrams(t *testing.T) {
 }
 
 func TestCreateFromPlates_MultiPlate_OrdersByDateThenSlot(t *testing.T) {
-	portions := 1
+	portions := 1.0
 	foods := map[int64]*food.Food{
 		1: {ID: 1, Kind: food.KindComposed, Name: "X"},
 	}
@@ -292,7 +305,7 @@ func TestUpdate_ZeroSlotID_IsRejected(t *testing.T) {
 	svc, repo := makeService(foods, nil)
 	seedExistingPreset(repo, &preset.Preset{ID: 1, Name: "Existing", Tags: []string{}})
 
-	portions := 1
+	portions := 1.0
 	badPlates := []preset.Plate{{
 		SlotID: 0, // invalid
 		Components: []preset.Component{
@@ -361,7 +374,7 @@ func TestPatch_BlankAddTag_IsSkipped(t *testing.T) {
 
 func TestDuplicate_CopiesWithSuffix(t *testing.T) {
 	svc, repo := makeService(nil, nil)
-	portions := 2
+	portions := 2.0
 	last := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	seedExistingPreset(repo, &preset.Preset{
 		ID:   1,
@@ -385,7 +398,7 @@ func TestDuplicate_CopiesWithSuffix(t *testing.T) {
 	require.Len(t, got.Plates[0].Components, 1)
 	c := got.Plates[0].Components[0]
 	require.NotNil(t, c.Portions)
-	assert.Equal(t, 2, *c.Portions)
+	assert.InDelta(t, 2.0, *c.Portions, 1e-9)
 	assert.Nil(t, got.LastUsedAt)
 }
 

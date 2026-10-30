@@ -18,23 +18,24 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
 // newRecentUnitRouter wires the recent-unit endpoint exactly the way the
 // production router does (under /api/foods/{id}/recent-unit) so tests cover
 // the URL the frontend actually calls.
-func newRecentUnitRouter(t *testing.T) (http.Handler, *sqlite.FoodRepo, *sqlite.PlateRepo, *sqlite.SlotRepo) {
+func newRecentUnitRouter(t *testing.T) (http.Handler, *sqlite.FoodRepo, *sqlite.PlateRepo, *sqlite.SlotRepo, *plate.Service) {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
 	foodRepo := sqlite.NewFoodRepo(db)
 	plateRepo := sqlite.NewPlateRepo(db)
 	slotRepo := sqlite.NewSlotRepo(db)
-	plateSvc := plate.NewService(plateRepo, slotRepo, foodRepo)
+	plateSvc := testsvc.Plates(db)
 	h := handlers.NewPlateHandler(plateSvc)
 	r := chi.NewRouter()
 	r.Get("/api/foods/{id}/recent-unit", h.RecentUnit)
-	return r, foodRepo, plateRepo, slotRepo
+	return r, foodRepo, plateRepo, slotRepo, plateSvc
 }
 
 // seedFoods creates one leaf (apple) and one composed (curry) food and a
@@ -68,7 +69,7 @@ func seedFoodsForRecent(t *testing.T, fr *sqlite.FoodRepo, sr *sqlite.SlotRepo) 
 }
 
 func TestRecentUnit_NoPriorPlates(t *testing.T) {
-	r, fr, _, sr := newRecentUnitRouter(t)
+	r, fr, _, sr, _ := newRecentUnitRouter(t)
 	_, leafID, _ := seedFoodsForRecent(t, fr, sr)
 
 	req := httptest.NewRequest("GET", "/api/foods/"+strconv.FormatInt(leafID, 10)+"/recent-unit", nil)
@@ -83,13 +84,14 @@ func TestRecentUnit_NoPriorPlates(t *testing.T) {
 }
 
 func TestRecentUnit_ReturnsLastUnit(t *testing.T) {
-	r, fr, pr, sr := newRecentUnitRouter(t)
+	r, fr, pr, sr, _ := newRecentUnitRouter(t)
 	slotID, leafID, _ := seedFoodsForRecent(t, fr, sr)
 
 	ctx := context.Background()
 	require.NoError(t, pr.Create(ctx, &plate.Plate{
 		Date:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		SlotID: slotID,
+		Eaters: 1,
 	}))
 	// Two leaf components — the most recent (max id) wins.
 	plates, err := pr.ListByDateRange(ctx, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -130,13 +132,14 @@ func TestRecentUnit_ReturnsLastUnit(t *testing.T) {
 func TestRecentUnit_SkipsComposedRows(t *testing.T) {
 	// A composed plate row sets unit IS NULL; the query's WHERE clause must
 	// skip it and fall through to the next leaf usage.
-	r, fr, pr, sr := newRecentUnitRouter(t)
+	r, fr, pr, sr, plateSvc := newRecentUnitRouter(t)
 	slotID, leafID, composedID := seedFoodsForRecent(t, fr, sr)
 
 	ctx := context.Background()
 	require.NoError(t, pr.Create(ctx, &plate.Plate{
 		Date:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		SlotID: slotID,
+		Eaters: 1,
 	}))
 	plates, err := pr.ListByDateRange(ctx, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	require.NoError(t, err)
@@ -153,11 +156,9 @@ func TestRecentUnit_SkipsComposedRows(t *testing.T) {
 	}))
 	// Then a composed usage on a *different* food (unit IS NULL); this must
 	// not affect the leaf food's recent unit.
-	pp := 2
-	require.NoError(t, pr.CreateComponent(ctx, &plate.PlateComponent{
-		PlateID: plateID, FoodID: composedID,
-		Portions: &pp,
-	}))
+	pp := 2.0
+	_, err = plateSvc.AddComponent(ctx, plateID, plate.PlateComponent{FoodID: composedID, Portions: &pp})
+	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/api/foods/"+strconv.FormatInt(leafID, 10)+"/recent-unit", nil)
 	w := httptest.NewRecorder()
@@ -173,7 +174,7 @@ func TestRecentUnit_SkipsComposedRows(t *testing.T) {
 }
 
 func TestRecentUnit_InvalidID(t *testing.T) {
-	r, _, _, _ := newRecentUnitRouter(t)
+	r, _, _, _, _ := newRecentUnitRouter(t)
 	req := httptest.NewRequest("GET", "/api/foods/not-a-number/recent-unit", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

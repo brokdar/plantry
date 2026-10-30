@@ -63,7 +63,7 @@ RETURNING id, preset_plate_id, food_id, portions, amount, unit, grams, grams_sou
 type CreatePresetComponentParams struct {
 	PresetPlateID int64
 	FoodID        int64
-	Portions      sql.NullInt64
+	Portions      sql.NullFloat64
 	Amount        sql.NullFloat64
 	Unit          sql.NullString
 	Grams         sql.NullFloat64

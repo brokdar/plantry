@@ -28,9 +28,9 @@ import (
 // Each method has a configurable func field; unset fields return zero values.
 type stubPlateService struct {
 	getRangeFn   func(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
-	createFn     func(ctx context.Context, p *plate.Plate) error
+	createFn     func(ctx context.Context, in plate.PlateInput) (*plate.Plate, error)
 	getFn        func(ctx context.Context, id int64) (*plate.Plate, error)
-	updateFn     func(ctx context.Context, p *plate.Plate) error
+	updateFn     func(ctx context.Context, id int64, patch plate.PlatePatch) (*plate.Plate, error)
 	recentUnitFn func(foodID int64) (string, error)
 }
 
@@ -48,12 +48,11 @@ func (s *stubPlateService) Day(ctx context.Context, d time.Time) ([]plate.Plate,
 	return nil, nil
 }
 
-func (s *stubPlateService) Create(ctx context.Context, p *plate.Plate) error {
+func (s *stubPlateService) Create(ctx context.Context, in plate.PlateInput) (*plate.Plate, error) {
 	if s.createFn != nil {
-		return s.createFn(ctx, p)
+		return s.createFn(ctx, in)
 	}
-	p.ID = 1
-	return nil
+	return &plate.Plate{ID: 1, Date: in.Date, SlotID: in.SlotID}, nil
 }
 
 func (s *stubPlateService) Get(ctx context.Context, id int64) (*plate.Plate, error) {
@@ -64,26 +63,32 @@ func (s *stubPlateService) Get(ctx context.Context, id int64) (*plate.Plate, err
 	return &plate.Plate{ID: id, SlotID: 1, Date: d}, nil
 }
 
-func (s *stubPlateService) Update(ctx context.Context, p *plate.Plate) error {
+func (s *stubPlateService) Update(ctx context.Context, id int64, patch plate.PlatePatch) (*plate.Plate, error) {
 	if s.updateFn != nil {
-		return s.updateFn(ctx, p)
+		return s.updateFn(ctx, id, patch)
 	}
-	return nil
+	return s.Get(ctx, id)
 }
 
-func (s *stubPlateService) Delete(_ context.Context, _ int64) error { return nil }
-func (s *stubPlateService) AddComponent(_ context.Context, _ int64, _ *plate.PlateComponent) (*plate.PlateComponent, error) {
-	return &plate.PlateComponent{}, nil
+func (s *stubPlateService) Delete(_ context.Context, _ int64) (plate.PlanSnapshot, error) {
+	return plate.PlanSnapshot{Plates: []plate.SnapshotPlate{}, Sessions: []plate.SnapshotSession{}}, nil
 }
 
-func (s *stubPlateService) SwapComponent(_ context.Context, _ int64, _ int64, _ *plate.PlateComponent) (*plate.PlateComponent, error) {
-	return &plate.PlateComponent{}, nil
+func (s *stubPlateService) AddComponent(_ context.Context, id int64, _ plate.PlateComponent) (*plate.Plate, error) {
+	return &plate.Plate{ID: id}, nil
 }
 
-func (s *stubPlateService) UpdateComponentQuantity(_ context.Context, _ int64, _ plate.PlateComponent) (*plate.PlateComponent, error) {
-	return &plate.PlateComponent{}, nil
+func (s *stubPlateService) SwapComponent(_ context.Context, _ int64, _ int64, _ *plate.PlateComponent) (*plate.Plate, error) {
+	return &plate.Plate{}, nil
 }
-func (s *stubPlateService) RemoveComponent(_ context.Context, _ int64) error { return nil }
+
+func (s *stubPlateService) UpdateComponentQuantity(_ context.Context, _ int64, _ plate.PlateComponent) (*plate.Plate, error) {
+	return &plate.Plate{}, nil
+}
+
+func (s *stubPlateService) RemoveComponent(_ context.Context, _ int64) (*plate.Plate, error) {
+	return &plate.Plate{}, nil
+}
 
 func (s *stubPlateService) RecentUnitForFood(_ context.Context, foodID int64) (string, error) {
 	if s.recentUnitFn != nil {
@@ -197,9 +202,8 @@ func TestPlatesHandler_Day_400_BadDate(t *testing.T) {
 
 func TestPlatesHandler_Create_201(t *testing.T) {
 	stub := &stubPlateService{
-		createFn: func(_ context.Context, p *plate.Plate) error {
-			p.ID = 42
-			return nil
+		createFn: func(_ context.Context, in plate.PlateInput) (*plate.Plate, error) {
+			return &plate.Plate{ID: 42, Date: in.Date, SlotID: in.SlotID}, nil
 		},
 	}
 	r := newPlateRouter(stub)
@@ -261,8 +265,8 @@ func TestPlatesHandler_CellConflicts_409(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			wrapped := fmt.Errorf("check cell: %w", tt.err)
 			r := newPlateRouter(&stubPlateService{
-				createFn: func(context.Context, *plate.Plate) error { return wrapped },
-				updateFn: func(context.Context, *plate.Plate) error { return wrapped },
+				createFn: func(context.Context, plate.PlateInput) (*plate.Plate, error) { return nil, wrapped },
+				updateFn: func(context.Context, int64, plate.PlatePatch) (*plate.Plate, error) { return nil, wrapped },
 			})
 			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -320,9 +324,9 @@ func TestPlatesHandler_Update_AcceptsDate(t *testing.T) {
 			d, _ := time.Parse("2006-01-02", "2025-03-10")
 			return &plate.Plate{ID: id, SlotID: 1, Date: d}, nil
 		},
-		updateFn: func(_ context.Context, p *plate.Plate) error {
-			capturedDate = p.Date
-			return nil
+		updateFn: func(_ context.Context, id int64, patch plate.PlatePatch) (*plate.Plate, error) {
+			capturedDate = *patch.Date
+			return &plate.Plate{ID: id, SlotID: 1, Date: *patch.Date}, nil
 		},
 	}
 	r := newPlateRouter(stub)

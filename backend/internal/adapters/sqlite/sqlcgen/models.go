@@ -106,6 +106,19 @@ type AvailabilityOverride struct {
 	UpdatedAt string
 }
 
+type CookSession struct {
+	ID             int64
+	FoodID         int64
+	CookDate       string
+	CookSlotID     int64
+	Portions       float64
+	FrozenPortions float64
+	CookedAt       sql.NullString
+	Note           sql.NullString
+	CreatedAt      string
+	UpdatedAt      string
+}
+
 type Food struct {
 	ID                int64
 	Name              string
@@ -150,6 +163,8 @@ type Food struct {
 	UpdatedAt         string
 	SourceUrl         sql.NullString
 	Description       sql.NullString
+	KeepDays          sql.NullInt64
+	Freezable         sql.NullInt64
 }
 
 type FoodComponent struct {
@@ -190,18 +205,21 @@ type Plate struct {
 	Note      sql.NullString
 	CreatedAt string
 	Date      string
+	Eaters    float64
+	UpdatedAt string
 }
 
 type PlateComponent struct {
-	ID          int64
-	PlateID     int64
-	FoodID      int64
-	Portions    sql.NullInt64
-	Amount      sql.NullFloat64
-	Unit        sql.NullString
-	Grams       sql.NullFloat64
-	GramsSource sql.NullString
-	SortOrder   int64
+	ID            int64
+	PlateID       int64
+	FoodID        int64
+	Portions      sql.NullFloat64
+	Amount        sql.NullFloat64
+	Unit          sql.NullString
+	Grams         sql.NullFloat64
+	GramsSource   sql.NullString
+	CookSessionID sql.NullInt64
+	SortOrder     int64
 }
 
 type PlateFeedback struct {
@@ -223,7 +241,7 @@ type PresetComponent struct {
 	ID            int64
 	PresetPlateID int64
 	FoodID        int64
-	Portions      sql.NullInt64
+	Portions      sql.NullFloat64
 	Amount        sql.NullFloat64
 	Unit          sql.NullString
 	Grams         sql.NullFloat64
