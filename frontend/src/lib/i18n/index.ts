@@ -23,4 +23,10 @@ void i18n
     react: { useSuspense: false },
   })
 
+// `{{slot, lowercase}}`: English writes slot names in lower case mid-phrase
+// ("Sun dinner"); German keeps its capitalised nouns by not using it.
+i18n.services.formatter?.add("lowercase", (value, lng) =>
+  String(value).toLocaleLowerCase(lng)
+)
+
 export default i18n

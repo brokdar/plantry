@@ -163,7 +163,7 @@ Two neutral layers and an ink pair, one accent, six batch colours with tints, an
 
 ### Batch palette
 
-Six earthy colours, each with a solid badge colour and a pale tint: **1 Rust, 2 Ochre, 3 Herb, 4 Plum, 5 Olive, 6 Slate**. Tokens and utilities exist (`batch-N`, `batch-N-tint`). *Implemented.* The component that assigns and renders them (`BatchBadge`) is *specified*. Until then the only use is the recipe detail placeholder image (Herb tint with a Herb serif initial).
+Six earthy colours, each with a solid badge colour and a pale tint: **1 Rust, 2 Ochre, 3 Herb, 4 Plum, 5 Olive, 6 Slate**. Tokens and utilities exist (`batch-N`, `batch-N-tint`). *Implemented.* `lib/plan/batch-colours.ts` assigns them (`colourBatches`: cook-cell order within the window, cycling after six) and `BatchBadge` renders them. *Implemented.* The recipe detail placeholder image also uses Herb (tint with a Herb serif initial).
 
 **The Batches-Only Rule.** Batch colours mean "this food comes from batch N". Never use them for state, decoration, or category colour. Batches take colours in order and cycle after six.
 
@@ -231,7 +231,7 @@ Corner radius is assigned by role, so not everything gets the same curve:
 - **Sheet** (`rounded-sheet`): sheets and the phone tab bar, top corners only. The tab bar uses `rounded-t-2xl` today, which is the same 16px.
 - **Tag** (`rounded-tag`): batch badges, an asymmetric tag silhouette that is square at the left and round at the right.
 
-The `rounded-cell`, `rounded-sheet` and `rounded-tag` utilities are *implemented*. `rounded-cell` is in use (availability and slot cells, settings inputs, `SourceBadge`); `rounded-sheet` and `rounded-tag` are not used yet. Some legacy screens still use `rounded` (also 4px) or larger radii.
+The `rounded-cell`, `rounded-sheet` and `rounded-tag` utilities are *implemented*. `rounded-cell` is in use (availability and slot cells, settings inputs, `SourceBadge`); `rounded-tag` is used by `BatchBadge`; `rounded-sheet` is not used yet. Some legacy screens still use `rounded` (also 4px) or larger radii.
 
 **Icons:** Lucide at a 1.5px stroke (`strokeWidth={1.5}`), 16px or 20px (`size-4`, `size-5`), always `aria-hidden` next to a text label or an `aria-label`. No emoji in the UI.
 
@@ -261,17 +261,17 @@ Panel background, hairline border, button radius, 12px by 16px padding. A warnin
 
 A serif h1 name. Meta values use h3-size tabular sans over small muted labels. The ingredient list has hairline dividers and right-aligned tabular quantities. Steps are numbered in muted tabular sans, capped at 68ch. Notes sit in a sunken panel block. With no image, the placeholder is a Herb-tint tile with a large serif initial.
 
-### Batch badge and plate cell (specified, Phase 2)
+### Batch primitives (implemented: `components/batch/*`)
 
-`BatchBadge` will own the colour assignment and the linked highlight. It will be the same component on the board, Today, cook mode, recipe detail and the shopping list.
+`BatchBadge` is the same component on the board, Today, cook mode, recipe detail and the shopping list. Its colour comes from `colourBatches` (`lib/plan/batch-colours.ts`); the linked highlight from `BatchHighlightProvider`.
 
-- **Cook cell:** batch tint, a 1.5px ink inset outline, badge "Cook × 4".
-- **Leftover cell:** plain panel, badge "2/4" in the batch colour.
-- **Frozen:** "2/4 · frozen" with a snowflake icon.
-- **Surplus:** a dashed-outline badge, "2 spare".
-- **Linked highlight:** hovering or tapping a badge outlines every cell of that batch for 2s.
+- **Badge:** a `rounded-tag` in caption semibold with tabular numerals, `ground` text on the solid batch colour. Variants: cook "Cook × 4", leftover "2/4", frozen "2/4 · frozen" with a 12px snowflake, and in the cook strip the dashed-outline extras "2 spare" and "2 to freeze" (batch-colour text and dashed border, no fill). German: "Koche × 4", "2/4 · gefroren", "2 übrig", "2 zum Einfrieren".
+- **Linked highlight:** pointing at a badge (hover, or the tap that starts a touch) outlines every cell of that batch for 2s. Cells opt in with `useBatchCell` and style `data-highlighted` with `BATCH_HIGHLIGHT_CLASS` (a 2px ink outline, offset 2px). The outline snaps on and off, so reduced motion needs no special case.
+- **Cook strip** (`CookStrip`): a "Cook days" region with one 44px button per batch in cook order, "Sun · Chili × 4" plus any dashed extras. Pressing one scrolls its cook cell into view (instantly under reduced motion) and highlights the batch. The row scrolls sideways when it overflows.
+- **Day meter** (`DayMeter`): a 4px rounded bar on a `line` track. Success fill between 70% and 115% of the kcal target, warning fill outside, `ink-muted` with no target. A 6px warning dot marks an incomplete day. It is a `meter` with value text "1,840 of 2,200 kcal"; a transparent button stretched over the 44px row opens the popover.
+- **Nutrition popover** (`NutritionPopover`): panel with the sheet shadow. The day as title, "Per person", then kcal, protein, fat and carbs as "value / target unit" in tabular numerals. An incomplete day ends with a warning triangle, "Incomplete" and the foods without data.
 
-Also specified: `PlateCell`, `DayMeter`, `PlateSheet`, `CookStrip`, `SuggestionCard`, `ShoppingRow` and `StepPager`. See UX spec §4 and §9.
+*Specified* (Phase 2, later steps): the cook cell (batch tint, a 1.5px ink inset outline), the leftover cell (plain panel), `PlateCell`, `PlateSheet`, `SuggestionCard`, `ShoppingRow` and `StepPager`. See UX spec §4 and §9.
 
 ### Availability grid (implemented: `AvailabilityGrid`)
 

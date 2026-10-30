@@ -62,6 +62,8 @@ src/components/
 ├── ui/                # shadcn primitives (never hand-edit generated files)
 ├── shell/             # AppShell, SideNav, TopBar, MobileBottomNav, primary-nav.ts
 ├── planner/           # SlotCell, SlotSheet, PlannerGrid, DnD wrappers, ShoppingPanel
+├── batch/             # BatchBadge, BatchHighlightProvider (hooks in batch-highlight.ts), CookStrip,
+│                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
 ├── availability/      # AvailabilityGrid (weekday/date × slot modes), RoutinePicker
 ├── setup/             # SetupWizard and its steps; wizard-draft.ts, use-wizard-save.ts
 ├── presets/           # preset library, editor, CopyFromWeekDialog
