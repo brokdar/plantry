@@ -47,11 +47,40 @@ describe("CookStrip", () => {
     const batches = colourBatches([curry, mockSession, pasta], mockPlan.slots)
     render(<CookStrip batches={batches} />)
     const items = within(screen.getByRole("list")).getAllByRole("button")
-    expect(items.map((b) => b.textContent)).toEqual([
-      "Sat · Pasta × 2",
-      "Sun · Chili × 6",
-      "Wed · Curry × 82 spare2 to freeze",
-    ])
+    expect(items).toHaveLength(3)
+    expect(items[0]).toHaveAccessibleName("Sat · Pasta × 2")
+    expect(items[1]).toHaveAccessibleName("Sun · Chili × 6")
+    expect(items[2]).toHaveAccessibleName(
+      "Wed · Curry × 8, 2 spare, 2 to freeze"
+    )
+  })
+
+  it.each([
+    // 6 cooked, 2 for the freezer, 5 eaten (none frozen): only 1 is left,
+    // and it is the freezer's.
+    [
+      "a surplus smaller than the planned freezer portions",
+      { portions: 6, frozen_portions: 2, consumed: 5, surplus: 1 },
+      "Wed · Curry × 6, 1 to freeze",
+    ],
+    // Eaters outrun the pot: nothing is left to freeze or spare.
+    [
+      "a deficit",
+      { portions: 4, frozen_portions: 2, consumed: 6, surplus: 0 },
+      "Wed · Curry × 4",
+    ],
+    [
+      "a plain surplus",
+      { portions: 8, frozen_portions: 0, consumed: 6, surplus: 2 },
+      "Wed · Curry × 8, 2 spare",
+    ],
+  ])("splits %s into spare and to-freeze", (_, patch, name) => {
+    render(
+      <CookStrip
+        batches={colourBatches([{ ...curry, ...patch }], mockPlan.slots)}
+      />
+    )
+    expect(screen.getByRole("button", { name })).toBeInTheDocument()
   })
 
   it("adds dashed spare and to-freeze badges in the batch colour", () => {

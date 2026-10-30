@@ -5,6 +5,7 @@ import {
   HIGHLIGHT_MS,
   HighlightedContext,
   type BatchHighlightActions,
+  type Highlight,
 } from "./batch-highlight"
 
 /**
@@ -13,21 +14,24 @@ import {
  * `useBatchCell`. One highlight at a time, for HIGHLIGHT_MS.
  */
 export function BatchHighlightProvider({ children }: { children: ReactNode }) {
-  const [highlighted, setHighlighted] = useState<number | null>(null)
+  const [highlighted, setHighlighted] = useState<Highlight | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cookCells = useRef(new Map<number, HTMLElement>())
 
   useEffect(() => () => clearTimeout(timer.current), [])
 
   const actions = useMemo<BatchHighlightActions>(() => {
-    const highlight = (sessionId: number) => {
+    const highlight: BatchHighlightActions["highlight"] = (
+      sessionId,
+      colour
+    ) => {
       clearTimeout(timer.current)
-      setHighlighted(sessionId)
+      setHighlighted({ sessionId, colour })
       timer.current = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS)
     }
     return {
       highlight,
-      reveal(sessionId) {
+      reveal(sessionId, colour) {
         const reduce = window.matchMedia?.(
           "(prefers-reduced-motion: reduce)"
         ).matches
@@ -36,7 +40,7 @@ export function BatchHighlightProvider({ children }: { children: ReactNode }) {
           inline: "center",
           behavior: reduce ? "auto" : "smooth",
         })
-        highlight(sessionId)
+        highlight(sessionId, colour)
       },
       registerCookCell(sessionId, el) {
         cookCells.current.set(sessionId, el)

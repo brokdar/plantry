@@ -3,11 +3,36 @@ import { describe, expect, it } from "vitest"
 import { mockPlan, mockSession } from "@/test/fixtures"
 import type { Session } from "@/lib/api/sessions"
 
-import { batchColour, colourBatches } from "./batch-colours"
+import {
+  BATCH_HIGHLIGHT_CLASS,
+  batchColour,
+  colourBatches,
+} from "./batch-colours"
 
 function session(id: number, cook_date: string, cook_slot_id: number): Session {
   return { ...mockSession, id, cook_date, cook_slot_id }
 }
+
+describe("BATCH_HIGHLIGHT_CLASS", () => {
+  const classes = BATCH_HIGHLIGHT_CLASS.split(" ")
+
+  it("draws a ring in the highlighted batch's colour", () => {
+    expect(classes).toContain("data-highlighted:ring-2")
+    for (const c of [1, 2, 3, 4, 5, 6]) {
+      expect(classes).toContain(`data-[highlighted=${c}]:ring-batch-${c}`)
+    }
+    expect(classes).toEqual(
+      expect.arrayContaining(["ring-offset-2", "ring-offset-ground"])
+    )
+  })
+
+  it("leaves the outline to the focus ring and fades the ring in", () => {
+    expect(classes.filter((c) => c.includes("outline"))).toEqual([])
+    expect(classes).toEqual(
+      expect.arrayContaining(["transition-shadow", "duration-200", "ease-out"])
+    )
+  })
+})
 
 describe("batchColour", () => {
   it("cycles 1–6 then starts again at 1", () => {

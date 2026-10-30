@@ -119,3 +119,44 @@ export function coverageText(
   )
   return f.t("batch.covers", { cells: cells.join(", ") })
 }
+
+/** What a batch badge says (D28). */
+export type BatchBadgeContent =
+  /** The cook cell: "Cook × 6". With `strip`, the cook strip's
+   *  "Sun · Chili × 6". */
+  | {
+      variant: "cook"
+      portions: number
+      strip?: { weekday: string; name: string }
+    }
+  /** A linked cell: "2/3"; `frozen` adds "· frozen". */
+  | { variant: "leftover" | "frozen"; position: number; meals: number }
+  /** Cook strip extras: "2 spare", "2 to freeze". */
+  | { variant: "surplus" | "toFreeze"; count: number }
+
+/** The badge text for `content`, e.g. "Cook × 6", "2/3 · frozen". */
+export function batchBadgeText(
+  content: BatchBadgeContent,
+  f: Formatter
+): string {
+  switch (content.variant) {
+    case "cook": {
+      const portions = formatAmount(content.portions, f)
+      return content.strip
+        ? f.t("batch.strip", { ...content.strip, portions })
+        : f.t("batch.cook", { portions })
+    }
+    case "leftover":
+    case "frozen":
+      return f.t(
+        content.variant === "frozen" ? "batch.frozen" : "batch.linked",
+        { position: content.position, meals: content.meals }
+      )
+    case "surplus":
+    case "toFreeze":
+      return f.t(
+        content.variant === "surplus" ? "batch.surplus" : "batch.to_freeze",
+        { count: formatAmount(content.count, f) }
+      )
+  }
+}

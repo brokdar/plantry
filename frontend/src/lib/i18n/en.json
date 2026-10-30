@@ -1512,6 +1512,7 @@
     "name": "Energy",
     "value": "{{kcal}} of {{target}} {{unit}}",
     "value_no_target": "{{kcal}} {{unit}}",
+    "value_incomplete": "{{value}}, incomplete",
     "open": "Nutrition, {{day}}",
     "per_person": "Per person",
     "kcal": "Energy",

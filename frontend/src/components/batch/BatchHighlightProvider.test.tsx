@@ -63,6 +63,11 @@ describe("BatchHighlightProvider (F2-AC3)", () => {
       pointerType: "mouse",
     })
     expect(highlighted()).toEqual(["sun-dinner", "mon-lunch", "mon-dinner"])
+    // The value is the batch colour, so the ring takes it.
+    expect(screen.getByTestId("mon-lunch")).toHaveAttribute(
+      "data-highlighted",
+      "1"
+    )
 
     act(() => vi.advanceTimersByTime(HIGHLIGHT_MS - 1))
     expect(highlighted()).toEqual(["sun-dinner", "mon-lunch", "mon-dinner"])
@@ -77,6 +82,10 @@ describe("BatchHighlightProvider (F2-AC3)", () => {
       pointerType: "touch",
     })
     expect(highlighted()).toEqual(["mon-dinner", "tue-lunch"])
+    expect(screen.getByTestId("mon-dinner")).toHaveAttribute(
+      "data-highlighted",
+      "2"
+    )
   })
 
   it("a second badge replaces the highlight and restarts the 2 s", () => {
@@ -97,7 +106,7 @@ describe("BatchHighlightProvider (F2-AC3)", () => {
     function RevealButton() {
       const { reveal } = useBatchHighlight()
       return (
-        <button type="button" onClick={() => reveal(8)}>
+        <button type="button" onClick={() => reveal(8, 2)}>
           reveal
         </button>
       )
@@ -112,7 +121,10 @@ describe("BatchHighlightProvider (F2-AC3)", () => {
     fireEvent.click(screen.getByText("reveal"))
     expect(scroll).toHaveBeenCalledTimes(1)
     expect(scroll.mock.contexts[0]).toBe(screen.getByTestId("mon-dinner"))
-    expect(screen.getByTestId("tue-lunch")).toHaveAttribute("data-highlighted")
+    expect(screen.getByTestId("tue-lunch")).toHaveAttribute(
+      "data-highlighted",
+      "2"
+    )
     scroll.mockRestore()
   })
 

@@ -57,18 +57,50 @@ describe("DayMeter (F2-AC4)", () => {
     )
   })
 
-  it("caps the fill at the full width", () => {
-    render(<DayMeter day={day(2640)} targets={targets} />)
-    const fill = screen.getByRole("meter").firstElementChild as HTMLElement
-    expect(fill.style.width).toBe("100%")
+  it.each([
+    [2200, "80%"], // on target: up to the tick
+    [2640, "96%"], // 120 %: past the tick, so overshoot reads by length
+    [3300, "100%"], // beyond 125 %: capped at the track end
+  ])(
+    "scales %s kcal to a %s fill on a track of 125 %% of the target",
+    (kcal, width) => {
+      render(<DayMeter day={day(kcal)} targets={targets} />)
+      const fill = screen.getByRole("meter").firstElementChild as HTMLElement
+      expect(parseFloat(fill.style.width)).toBeCloseTo(parseFloat(width))
+    }
+  )
+
+  it("marks the target with a tick at 80 % of the track", () => {
+    render(<DayMeter day={day(1840)} targets={targets} />)
+    const tick = screen.getByTestId("day-meter-target")
+    expect(tick).toHaveClass("w-px", "bg-ink")
+    expect(tick.style.left).toBe("80%")
   })
 
-  it("shows a neutral bar without a target", () => {
+  it("shows a neutral full bar without a target, and no tick", () => {
     render(<DayMeter day={day(1840)} targets={null} />)
     const meter = screen.getByRole("meter")
     expect(meter).toHaveAttribute("data-status", "neutral")
     expect(meter).toHaveAttribute("aria-valuetext", "1,840 kcal")
     expect(meter.firstElementChild).toHaveClass("bg-ink-muted")
+    expect((meter.firstElementChild as HTMLElement).style.width).toBe("100%")
+    expect(screen.queryByTestId("day-meter-target")).toBeNull()
+  })
+
+  it("adds incomplete to the value text, in en and de", async () => {
+    const incomplete = day(1840, { complete: false, missing: ["Onion"] })
+    const { unmount } = render(<DayMeter day={incomplete} targets={targets} />)
+    expect(screen.getByRole("meter")).toHaveAttribute(
+      "aria-valuetext",
+      "1,840 of 2,200 kcal, incomplete"
+    )
+    unmount()
+    await act(() => i18n.changeLanguage("de"))
+    render(<DayMeter day={incomplete} targets={targets} />)
+    expect(screen.getByRole("meter")).toHaveAttribute(
+      "aria-valuetext",
+      "1.840 von 2.200 kcal, unvollständig"
+    )
   })
 
   it("marks an incomplete day with a warning dot and says so in the popover", async () => {

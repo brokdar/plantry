@@ -75,8 +75,9 @@ export const BATCH_CLASSES: Record<
   },
 }
 
-/** Outline for a cell while its batch is highlighted (`data-highlighted`,
- *  set by `useBatchCell`). It snaps on and off, so reduced motion needs no
- *  special case. */
+/** Ring for a cell while a batch is highlighted. `useBatchCell` sets
+ *  `data-highlighted` to the batch colour, so the ring takes that colour. A
+ *  ring (box-shadow) leaves the outline free for the accent focus ring; the
+ *  global reduced-motion rule collapses the fade. */
 export const BATCH_HIGHLIGHT_CLASS =
-  "data-highlighted:outline-2 data-highlighted:outline-offset-2 data-highlighted:outline-ink"
+  "ring-offset-2 ring-offset-ground transition-shadow duration-200 ease-out data-highlighted:ring-2 data-[highlighted=1]:ring-batch-1 data-[highlighted=2]:ring-batch-2 data-[highlighted=3]:ring-batch-3 data-[highlighted=4]:ring-batch-4 data-[highlighted=5]:ring-batch-5 data-[highlighted=6]:ring-batch-6"
