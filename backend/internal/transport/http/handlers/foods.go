@@ -14,6 +14,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
 // FoodHandler hosts the HTTP surface for the unified food resource.
@@ -851,6 +852,62 @@ func (h *FoodHandler) DeleteImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ── Scaled ingredient list (composed foods) ───────────────────────────
+
+type scaledIngredientResponse struct {
+	ChildID int64           `json:"child_id"`
+	Name    string          `json:"name"`
+	Kind    string          `json:"kind"`
+	Amount  float64         `json:"amount"`
+	Unit    string          `json:"unit"`
+	Grams   float64         `json:"grams"`
+	Display units.Quantity  `json:"display"`
+	Buy     *units.Quantity `json:"buy"`
+}
+
+type scaledResponse struct {
+	FoodID            int64                      `json:"food_id"`
+	Portions          float64                    `json:"portions"`
+	ReferencePortions float64                    `json:"reference_portions"`
+	Factor            float64                    `json:"factor"`
+	Ingredients       []scaledIngredientResponse `json:"ingredients"`
+}
+
+// Scaled handles GET /api/foods/{id}/scaled?portions=N.
+func (h *FoodHandler) Scaled(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	portions, err := strconv.ParseFloat(r.URL.Query().Get("portions"), 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.food.invalid_portions")
+		return
+	}
+	sc, err := h.svc.Scaled(r.Context(), id, portions)
+	if err != nil {
+		status, key := foodHTTPError(err)
+		writeError(w, status, key)
+		return
+	}
+	resp := scaledResponse{
+		FoodID:            sc.FoodID,
+		Portions:          sc.Portions,
+		ReferencePortions: sc.ReferencePortions,
+		Factor:            sc.Factor,
+		Ingredients:       make([]scaledIngredientResponse, len(sc.Ingredients)),
+	}
+	for i, in := range sc.Ingredients {
+		resp.Ingredients[i] = scaledIngredientResponse{
+			ChildID: in.ChildID, Name: in.Name, Kind: string(in.Kind),
+			Amount: in.Amount, Unit: in.Unit, Grams: in.Grams,
+			Display: in.Display, Buy: in.Buy,
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ── Portions (leaf foods only) ────────────────────────────────────────

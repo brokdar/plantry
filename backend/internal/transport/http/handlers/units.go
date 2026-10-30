@@ -26,7 +26,7 @@ var (
 var countOrder = []string{
 	"piece", "clove", "slice", "bunch", "pinch",
 	"stick", "can", "jar", "packet", "serving",
-	"stalk", "pod", "head", "leaf",
+	"tub", "handful", "stalk", "pod", "head", "leaf",
 }
 
 // Units handles GET /units and returns the canonical unit vocabulary.

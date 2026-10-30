@@ -108,10 +108,9 @@ test.describe("Recipe Import", () => {
         warnings?: string[]
       }
       createdId = body.id
-      // All children must be canonicalized to g or ml.
-      for (const child of body.children) {
-        expect(["g", "ml"]).toContain(child.unit)
-      }
+      // Mass and volume are canonicalized to g or ml; the garlic count
+      // keeps its unit (D19) with grams from the leaf's clove portion.
+      expect(body.children.map((c) => c.unit).sort()).toEqual(["clove", "g"])
       // The imported description lands in description, not in notes.
       expect(body.description).toBe("Test recipe")
       expect(body.notes ?? null).toBeNull()

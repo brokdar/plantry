@@ -17,6 +17,15 @@ interface ImportNutritionSummaryProps {
   sourceKcalPerServing: number | null
 }
 
+/** Grams of a row as it will be saved: a count unit goes through its
+ *  grams per unit, anything else through the shared unit defaults. */
+function rowGrams(row: RowState): number {
+  if (row.countUnit !== null && row.unit === row.countUnit) {
+    return row.amount * (row.portionGrams ?? 0)
+  }
+  return resolveGrams(row.amount, row.unit).grams
+}
+
 /** kcal per portion of the recipe as it will be saved: each linked leaf's
  *  per-100 g nutrition (GET /api/foods/:id/nutrition) scaled by the row's
  *  grams, through the shared `perPortion` helper. */
@@ -54,7 +63,7 @@ export function ImportNutritionSummary({
     kcal = perPortion({
       ingredients: linked.map((r) => ({
         per_100g: nutrition.get(r.foodId)!,
-        grams: resolveGrams(r.amount, r.unit).grams,
+        grams: rowGrams(r),
       })),
       reference_portions: referencePortions,
     }).kcal

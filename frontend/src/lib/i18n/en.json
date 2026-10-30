@@ -80,7 +80,11 @@
       "optional_skipped": "Optional, skipped",
       "amount_for": "Amount for {{name}}",
       "unit_for": "Unit for {{name}}",
-      "resolution_for": "How to use {{name}}"
+      "resolution_for": "How to use {{name}}",
+      "portion_estimate": "1 {{unit}} ≈",
+      "portion_grams_for": "Grams per {{unit}} of {{name}}",
+      "portion_estimated": "estimate",
+      "portion_saved": "saved for this ingredient"
     },
     "step3": {
       "role_label": "Role",
@@ -92,6 +96,8 @@
       "save": "Save recipe",
       "needs_choice_one": "{{count}} ingredient needs a choice",
       "needs_choice_other": "{{count}} ingredients need a choice",
+      "needs_weight_one": "Enter a weight per unit for {{count}} ingredient",
+      "needs_weight_other": "Enter a weight per unit for {{count}} ingredients",
       "kcal_per_portion": "{{kcal}} kcal per portion",
       "kcal_pending": "kcal per portion appear once every ingredient is chosen.",
       "source_kcal": "Source: {{kcal}} kcal",
@@ -946,7 +952,9 @@
     "head": { "name": "head", "name_other": "heads" },
     "leaf": { "name": "leaf", "name_other": "leaves" },
     "leaves": { "name": "leaves" },
-    "sprig": { "name": "sprig", "name_other": "sprigs" }
+    "sprig": { "name": "sprig", "name_other": "sprigs" },
+    "tub": { "name": "tub", "name_other": "tubs" },
+    "handful": { "name": "handful", "name_other": "handfuls" }
   },
   "image": {
     "section_title": "Image",
@@ -1220,6 +1228,9 @@
       "llm_failed": "AI could not extract the recipe.",
       "invalid_url": "Invalid URL.",
       "invalid_resolution": "Invalid ingredient resolution."
+    },
+    "food": {
+      "invalid_portions": "Portions must be more than 0 and at most 100."
     },
     "settings": {
       "unknown_key": "Unknown settings key.",

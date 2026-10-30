@@ -69,6 +69,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Put("/", h.Foods.Update)
 					r.Delete("/", h.Foods.Delete)
 					r.Get("/nutrition", h.Foods.Nutrition)
+					r.Get("/scaled", h.Foods.Scaled)
 					r.Post("/favorite", h.Foods.SetFavorite)
 					r.Post("/variant", h.Foods.CreateVariant)
 					r.Get("/variants", h.Foods.ListVariants)

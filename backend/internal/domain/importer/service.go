@@ -29,20 +29,28 @@ type Resolver interface {
 	Lookup(ctx context.Context, barcode, query, lang string, limit int) ([]food.Candidate, int, error)
 }
 
+// PortionStore reads and writes a leaf's unit → grams portions. Finalize
+// resolves count lines through it. Implemented by food.Service.
+type PortionStore interface {
+	ListPortions(ctx context.Context, foodID int64) ([]food.Portion, error)
+	UpsertPortion(ctx context.Context, p *food.Portion) error
+}
+
 // Service orchestrates recipe import: fetch → JSON-LD → LLM fallback → parse lines.
 type Service struct {
 	fetcher     Fetcher
 	jsonld      JSONLDExtractor
 	llmResolver llm.Resolver // may be nil — LLM fallback then returns ErrAIProviderMissing.
 	resolver    Resolver
+	portions    PortionStore
 	recorder    *airun.Recorder // may be nil: the LLM fallback is then not recorded
 }
 
 // NewService builds an import Service. llmResolver may be nil; when set, it
 // is consulted per-request so configuration changes take effect without a
 // restart.
-func NewService(f Fetcher, j JSONLDExtractor, llmResolver llm.Resolver, r Resolver) *Service {
-	return &Service{fetcher: f, jsonld: j, llmResolver: llmResolver, resolver: r}
+func NewService(f Fetcher, j JSONLDExtractor, llmResolver llm.Resolver, r Resolver, portions PortionStore) *Service {
+	return &Service{fetcher: f, jsonld: j, llmResolver: llmResolver, resolver: r, portions: portions}
 }
 
 // WithRecorder records each LLM fallback extraction as an import_fallback AI run.
@@ -137,6 +145,10 @@ type FinalizedChild struct {
 	FoodID     int64
 	Amount     float64
 	Unit       string
+	// PortionGrams is the grams per count unit the user confirmed in the
+	// review ("1 piece ≈ 120 g"). nil keeps the leaf's portion, or seeds a
+	// missing one from units.CountGrams. Ignored for mass and volume.
+	PortionGrams *float64
 }
 
 // FinalizedInstruction is a reviewed cooking step ready to write.
@@ -162,11 +174,12 @@ type FinalizedFood struct {
 
 // FinalizedFoodChild mirrors one food_components row on the target food.
 type FinalizedFoodChild struct {
-	ChildID   int64   `json:"child_id"`
-	Amount    float64 `json:"amount"`
-	Unit      string  `json:"unit"`
-	Grams     float64 `json:"grams"`
-	SortOrder int     `json:"sort_order"`
+	ChildID     int64   `json:"child_id"`
+	Amount      float64 `json:"amount"`
+	Unit        string  `json:"unit"`
+	Grams       float64 `json:"grams"`
+	GramsSource string  `json:"grams_source"`
+	SortOrder   int     `json:"sort_order"`
 }
 
 // FinalizedFoodStep is one reviewed instruction step.
@@ -176,8 +189,10 @@ type FinalizedFoodStep struct {
 }
 
 // Finalize validates the reviewed draft and returns a payload that POSTs
-// directly to /api/foods. No DB writes happen here.
-func (s *Service) Finalize(_ context.Context, in FinalizeInput) (*FinalizedFood, error) {
+// directly to /api/foods. Its only writes are leaf portions: a count line
+// (D19) resolves its grams from the leaf's portion for that unit, which is
+// created from units.CountGrams (or the reviewed PortionGrams) when missing.
+func (s *Service) Finalize(ctx context.Context, in FinalizeInput) (*FinalizedFood, error) {
 	if in.Name == "" || in.Role == "" || in.ReferencePortions <= 0 {
 		return nil, fmt.Errorf("%w: name, role, reference_portions required", domain.ErrInvalidInput)
 	}
@@ -218,16 +233,22 @@ func (s *Service) Finalize(_ context.Context, in FinalizeInput) (*FinalizedFood,
 		if normalizedUnit == "" {
 			return nil, fmt.Errorf("%w: unit required", domain.ErrImportInvalidResolution)
 		}
-		var grams float64
-		if def, ok := units.LookupDefault(normalizedUnit); ok {
-			grams = row.Amount * def.Grams
+		if units.IsCount(normalizedUnit) {
+			if err := s.ensurePortion(ctx, row.FoodID, normalizedUnit, row.PortionGrams); err != nil {
+				return nil, err
+			}
+		}
+		grams, source, err := food.ResolveGrams(ctx, s.portions, row.FoodID, row.Amount, normalizedUnit, 0)
+		if err != nil {
+			return nil, err
 		}
 		out.Children = append(out.Children, FinalizedFoodChild{
-			ChildID:   row.FoodID,
-			Amount:    row.Amount,
-			Unit:      normalizedUnit,
-			Grams:     grams,
-			SortOrder: sort,
+			ChildID:     row.FoodID,
+			Amount:      row.Amount,
+			Unit:        normalizedUnit,
+			Grams:       grams,
+			GramsSource: source,
+			SortOrder:   sort,
 		})
 		sort++
 	}
@@ -236,6 +257,34 @@ func (s *Service) Finalize(_ context.Context, in FinalizeInput) (*FinalizedFood,
 		return nil, fmt.Errorf("%w: at least one child food required", domain.ErrInvalidInput)
 	}
 	return out, nil
+}
+
+// ensurePortion makes sure leaf foodID has a portion for the count unit. An
+// existing portion is kept unless the user reviewed a different weight;
+// a missing one is created from reviewed grams or units.CountGrams.
+func (s *Service) ensurePortion(ctx context.Context, foodID int64, unit string, reviewed *float64) error {
+	if reviewed != nil && *reviewed <= 0 {
+		return fmt.Errorf("%w: portion grams must be > 0", domain.ErrImportInvalidResolution)
+	}
+	ps, err := s.portions.ListPortions(ctx, foodID)
+	if err != nil {
+		return fmt.Errorf("list portions of food %d: %w", foodID, err)
+	}
+	for _, p := range ps {
+		if units.Normalize(p.Unit) != unit {
+			continue
+		}
+		if reviewed == nil || *reviewed == p.Grams {
+			return nil
+		}
+		// Keep the stored unit spelling so the upsert replaces this row.
+		return s.portions.UpsertPortion(ctx, &food.Portion{FoodID: foodID, Unit: p.Unit, Grams: *reviewed})
+	}
+	grams := units.CountGrams[unit]
+	if reviewed != nil {
+		grams = *reviewed
+	}
+	return s.portions.UpsertPortion(ctx, &food.Portion{FoodID: foodID, Unit: unit, Grams: grams})
 }
 
 func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string) *Draft {

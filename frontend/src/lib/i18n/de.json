@@ -80,7 +80,11 @@
       "optional_skipped": "Optional, übersprungen",
       "amount_for": "Menge für {{name}}",
       "unit_for": "Einheit für {{name}}",
-      "resolution_for": "Verwendung von {{name}}"
+      "resolution_for": "Verwendung von {{name}}",
+      "portion_estimate": "1 {{unit}} ≈",
+      "portion_grams_for": "Gramm pro {{unit}} {{name}}",
+      "portion_estimated": "geschätzt",
+      "portion_saved": "für diese Zutat hinterlegt"
     },
     "step3": {
       "role_label": "Rolle",
@@ -92,6 +96,8 @@
       "save": "Rezept speichern",
       "needs_choice_one": "{{count}} Zutat braucht noch eine Auswahl",
       "needs_choice_other": "{{count}} Zutaten brauchen noch eine Auswahl",
+      "needs_weight_one": "Gewicht pro Einheit für {{count}} Zutat eingeben",
+      "needs_weight_other": "Gewicht pro Einheit für {{count}} Zutaten eingeben",
       "kcal_per_portion": "{{kcal}} kcal pro Portion",
       "kcal_pending": "kcal pro Portion erscheinen, sobald jede Zutat gewählt ist.",
       "source_kcal": "Quelle: {{kcal}} kcal",
@@ -945,7 +951,9 @@
     "head": { "name": "Kopf", "name_other": "Köpfe" },
     "leaf": { "name": "Blatt", "name_other": "Blätter" },
     "leaves": { "name": "Blätter" },
-    "sprig": { "name": "Zweig", "name_other": "Zweige" }
+    "sprig": { "name": "Zweig", "name_other": "Zweige" },
+    "tub": { "name": "Becher" },
+    "handful": { "name": "Handvoll" }
   },
   "image": {
     "section_title": "Bild",
@@ -1277,6 +1285,9 @@
       "llm_failed": "Die KI konnte das Rezept nicht extrahieren.",
       "invalid_url": "Ungültige URL.",
       "invalid_resolution": "Ungültige Zutatenauswahl."
+    },
+    "food": {
+      "invalid_portions": "Die Portionen müssen größer als 0 und höchstens 100 sein."
     },
     "settings": {
       "unknown_key": "Unbekannter Einstellungsschlüssel.",

@@ -221,7 +221,7 @@ func run() error {
 
 	// Recipe importer (Phase 11).
 	importFetcher := httpfetch.New()
-	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver).WithRecorder(runRecorder)
+	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver, foodSvc).WithRecorder(runRecorder)
 	importHandler := handlers.NewImportHandler(importSvc)
 
 	// Rate limiter for /api/ai/chat. Initial limit comes from effective

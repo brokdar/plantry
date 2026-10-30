@@ -45,6 +45,9 @@ type resolveChildRequest struct {
 	FoodID     int64   `json:"food_id"`
 	Amount     float64 `json:"amount"`
 	Unit       string  `json:"unit"`
+	// PortionGrams is the reviewed grams per count unit; null keeps the
+	// leaf's portion or the units.CountGrams estimate.
+	PortionGrams *float64 `json:"portion_grams"`
 }
 
 type resolveInstructionRequest struct {
@@ -138,7 +141,7 @@ func (h *ImportHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 	for _, ch := range req.Children {
 		input.Children = append(input.Children, importer.FinalizedChild{
 			Resolution: ch.Resolution, FoodID: ch.FoodID,
-			Amount: ch.Amount, Unit: ch.Unit,
+			Amount: ch.Amount, Unit: ch.Unit, PortionGrams: ch.PortionGrams,
 		})
 	}
 	out, err := h.svc.Finalize(r.Context(), input)

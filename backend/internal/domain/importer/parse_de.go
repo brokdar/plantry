@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
 // unicodeFractions maps standalone Unicode vulgar fractions to their numeric value.
@@ -130,7 +132,7 @@ func ParseLineDE(raw string) DraftIngredient {
 	tokens = tokens[consumed:]
 
 	// Peel the unit token, if any.
-	unitInfo, unitToken, hasUnit := matchUnit(tokens)
+	unit, unitToken, hasUnit := matchUnit(tokens)
 	if hasUnit {
 		tokens = tokens[1:]
 	}
@@ -140,29 +142,38 @@ func ParseLineDE(raw string) DraftIngredient {
 	// Compound-word suffix match: "Knoblauchzehe(n)" is really a Zehe count.
 	// Only fires when no explicit unit was peeled.
 	if !hasUnit {
-		if info, disp, matched := matchCompoundUnit(name); matched {
-			unitInfo = info
+		if u, disp, matched := matchCompoundUnit(name); matched {
+			unit = u
 			unitToken = disp
 			hasUnit = true
 		}
 	}
 
-	switch {
-	case hasUnit:
-		out.Amount = amount * unitInfo.FactorToBase
-		out.Unit = unitInfo.Canonical
-		out.OriginalUnit = preserveUnitCase(unitToken, unitInfo.Display)
-		if amountApprox || unitInfo.Approximate {
-			out.Confidence = ConfidenceApproximate
-		} else {
+	if !hasUnit {
+		// Unit-less count ("1 Zwiebel") → piece.
+		unit = "piece"
+		unitToken = unitlessDisplay
+	}
+	out.OriginalUnit = unitToken
+	out.Confidence = ConfidenceApproximate
+	if units.IsCount(unit) {
+		// Count units are kept (D19); grams come from the leaf's portion on
+		// Finalize, estimated from units.CountGrams until then.
+		out.Amount = amount
+		out.Unit = unit
+		estimate := units.CountGrams[unit]
+		out.PortionGrams = &estimate
+	} else {
+		def, _ := units.LookupDefault(unit)
+		out.Amount = amount * def.Grams
+		out.Unit = "g"
+		if def.Kind == units.KindVolume {
+			// Volume defaults assume water density, so grams equal ml.
+			out.Unit = "ml"
+		}
+		if !amountApprox && (def.Kind == units.KindMass || metricVolume[unit]) {
 			out.Confidence = ConfidenceParsed
 		}
-	default:
-		// Unit-less count → treat as Stück.
-		out.Amount = amount * stückFactor
-		out.Unit = "g"
-		out.OriginalUnit = stückDisplay
-		out.Confidence = ConfidenceApproximate
 	}
 
 	// "3 EL, gestr. Mehl" leaves name="" and note="gestr. Mehl" after the split.
@@ -451,32 +462,38 @@ func splitLeadingDigitsAndFraction(tok string) (float64, string, bool) {
 	return v, rest, true
 }
 
-// compoundUnitSuffixes lists count-style units that commonly appear as the tail
-// of a German compound word (e.g. "Knoblauchzehe" ending in "-zehe"). Ordered
-// longest-suffix-first so "zehen" beats "zehe" on plural forms.
-var compoundUnitSuffixes = []string{
-	"knoblauchzehen", "knoblauchzehe", "zehen", "zehe",
-	"scheiben", "scheibe",
-	"stangen", "stange",
+// metricVolume lists the volume units that convert to ml exactly; spoons and
+// cups stay approximate.
+var metricVolume = map[string]bool{"ml": true, "l": true, "cl": true, "dl": true}
+
+// lookupUnit maps a unit token to its canonical key when it is a mass,
+// volume or count unit. Lookup is case-insensitive and ignores a single
+// trailing period ("Stk." → piece).
+func lookupUnit(token string) (string, bool) {
+	u := units.Normalize(token)
+	if _, ok := units.LookupDefault(u); ok {
+		return u, true
+	}
+	return u, units.IsCount(u)
 }
 
 // matchCompoundUnit checks whether the (lowercased) first whitespace-delimited
-// word of name ends with one of the compound suffixes. Returns the matching
-// unitInfo + display form when found.
-func matchCompoundUnit(name string) (unitInfo, string, bool) {
+// word of name ends with one of the compound suffixes. Returns the canonical
+// unit + display form when found.
+func matchCompoundUnit(name string) (string, string, bool) {
 	first := strings.ToLower(strings.SplitN(name, " ", 2)[0])
-	for _, suf := range compoundUnitSuffixes {
-		if len(first) > len(suf) && strings.HasSuffix(first, suf) {
-			if info, ok := aliasesDE[suf]; ok {
-				return info, info.Display, true
+	for _, c := range compoundUnitSuffixes {
+		if len(first) > len(c.suffix) && strings.HasSuffix(first, c.suffix) {
+			if u, ok := lookupUnit(c.display); ok {
+				return u, c.display, true
 			}
 		}
 	}
-	return unitInfo{}, "", false
+	return "", "", false
 }
 
 // splitGluedUnit turns a leading "100g" token into "100", "g" when the glued
-// suffix is a known unit alias; anything else is returned unchanged.
+// suffix is a known unit; anything else is returned unchanged.
 func splitGluedUnit(tokens []string) []string {
 	if len(tokens) == 0 {
 		return tokens
@@ -485,32 +502,20 @@ func splitGluedUnit(tokens []string) []string {
 	if m == nil {
 		return tokens
 	}
-	if _, ok := aliasesDE[strings.TrimSuffix(strings.ToLower(m[2]), ".")]; !ok {
+	if _, ok := lookupUnit(m[2]); !ok {
 		return tokens
 	}
 	return append([]string{m[1], m[2]}, tokens[1:]...)
 }
 
-// matchUnit looks at the first token against the alias table.
-// Lookup is case-insensitive and ignores a single trailing period ("Stk." → "stk").
-func matchUnit(tokens []string) (unitInfo, string, bool) {
+// matchUnit looks up the first token as a unit and returns its canonical key
+// plus the token as the user wrote it.
+func matchUnit(tokens []string) (string, string, bool) {
 	if len(tokens) == 0 {
-		return unitInfo{}, "", false
+		return "", "", false
 	}
-	raw := tokens[0]
-	key := strings.ToLower(raw)
-	key = strings.TrimSuffix(key, ".")
-	if info, ok := aliasesDE[key]; ok {
-		return info, raw, true
+	if u, ok := lookupUnit(tokens[0]); ok {
+		return u, tokens[0], true
 	}
-	return unitInfo{}, "", false
-}
-
-// preserveUnitCase returns the original-case token the user wrote when it differs
-// from the display form, falling back to the canonical display otherwise.
-func preserveUnitCase(userToken, display string) string {
-	if userToken == "" {
-		return display
-	}
-	return userToken
+	return "", "", false
 }
