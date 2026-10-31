@@ -40,7 +40,7 @@ describe("GeneratePlanButton", () => {
     expect(button).toHaveAttribute("aria-disabled", "true")
     // Still focusable: aria-disabled, not the disabled attribute.
     expect(button).not.toBeDisabled()
-    expect(link).toHaveAttribute("href", "/components")
+    expect(link).toHaveAttribute("href", "/recipes")
     expect(button).toHaveAccessibleDescription(
       "Add 6 more recipes to start planning"
     )

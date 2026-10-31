@@ -191,7 +191,7 @@ describe("LookupPanel", () => {
       await search([localCandidate, offCandidate])
 
       const link = await screen.findByRole("link", { name: /chicken breast/i })
-      expect(link).toHaveAttribute("href", "/ingredients/42/edit")
+      expect(link).toHaveAttribute("href", "/recipes/ingredients/42/edit")
       expect(screen.getByText(/in your catalogue/i)).toBeInTheDocument()
       expect(
         screen.queryByRole("option", { name: /chicken breast/i })

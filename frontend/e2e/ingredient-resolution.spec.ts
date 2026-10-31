@@ -34,7 +34,7 @@ test.describe("Ingredient Resolution", () => {
 
     let createdId: number | undefined
     try {
-      await page.goto("/ingredients/new")
+      await page.goto("/recipes/ingredients/new")
 
       // Search tab is visible by default
       const searchInput = page.getByPlaceholder(/search by name or barcode/i)
@@ -71,7 +71,7 @@ test.describe("Ingredient Resolution", () => {
 
     let createdId: number | undefined
     try {
-      await page.goto("/ingredients/new")
+      await page.goto("/recipes/ingredients/new")
 
       await page.getByLabel(/name/i).fill(name)
       await page.getByLabel(/calories/i).fill("100")
@@ -124,7 +124,7 @@ test.describe("Ingredient Resolution", () => {
 
     let createdId: number | undefined
     try {
-      await page.goto("/ingredients/new")
+      await page.goto("/recipes/ingredients/new")
 
       // Open barcode scanner dialog
       await page.getByRole("button", { name: /scan barcode/i }).click()
@@ -172,7 +172,7 @@ test.describe("Ingredient Resolution", () => {
     })
 
     try {
-      await page.goto(`/ingredients/${ingredientId}/edit`)
+      await page.goto(`/recipes/ingredients/${ingredientId}/edit`)
 
       // Wait for the portions section to load
       await expect(
@@ -229,7 +229,7 @@ test.describe("Ingredient Resolution", () => {
     })
 
     try {
-      await page.goto("/ingredients/new")
+      await page.goto("/recipes/ingredients/new")
 
       await page.getByLabel(/name/i).fill(name)
       await page.getByLabel(/calories/i).fill("200")

@@ -17,7 +17,7 @@ async function expectFourDestinations(nav: Locator) {
   )
   await expect(nav.getByRole("link", { name: "Recipes" })).toHaveAttribute(
     "href",
-    "/components"
+    "/recipes"
   )
   await expect(nav.getByRole("link", { name: "Shop" })).toHaveAttribute(
     "href",
@@ -61,13 +61,15 @@ test.describe("AppShell", () => {
     await expect(sidebar.getByTestId("sidenav-settings")).toBeVisible()
   })
 
-  test("Recipes stays active on ingredients and import", async ({ page }) => {
+  test("Recipes stays active on ingredients and recipe pages", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     const recipes = page
       .getByTestId("sidenav")
       .getByRole("link", { name: "Recipes", exact: true })
 
-    for (const path of ["/components", "/ingredients", "/import"]) {
+    for (const path of ["/recipes", "/recipes/ingredients", "/recipes/new"]) {
       await page.goto(path)
       await expect(recipes).toHaveAttribute("aria-current", "page")
     }
@@ -89,9 +91,9 @@ test.describe("AppShell", () => {
 
     // exact: the Generate gate's "Add N more recipes" link also matches.
     await sidebar.getByRole("link", { name: "Recipes", exact: true }).click()
-    await expect(page).toHaveURL(/\/components$/)
-    await page.getByTestId("catalog-link-ingredients").click()
-    await expect(page).toHaveURL(/\/ingredients$/)
+    await expect(page).toHaveURL(/\/recipes$/)
+    await page.getByTestId("recipes-tab-ingredients").click()
+    await expect(page).toHaveURL(/\/recipes\/ingredients$/)
 
     await sidebar.getByRole("link", { name: "Shop" }).click()
     await expect(page).toHaveURL(/\/shop$/)
@@ -114,11 +116,11 @@ test.describe("AppShell", () => {
     await page.unrouteAll({ behavior: "ignoreErrors" })
   })
 
-  test("the palette keeps Ingredients and Import; Calendar and Archive are gone", async ({
+  test("the palette keeps Ingredients; Import, Calendar and Archive are gone", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto("/components")
+    await page.goto("/recipes")
     const sidebar = page.getByTestId("sidenav")
     await expect(
       sidebar.getByRole("navigation", { name: "Primary" }).getByRole("link")
@@ -126,12 +128,10 @@ test.describe("AppShell", () => {
 
     await page.keyboard.press("ControlOrMeta+k")
     const palette = page.getByRole("dialog")
-    for (const name of ["Ingredients", "Import"]) {
-      await expect(
-        palette.getByRole("option", { name, exact: true })
-      ).toBeVisible()
-    }
-    for (const name of ["Calendar", "Archive"]) {
+    await expect(
+      palette.getByRole("option", { name: "Ingredients", exact: true })
+    ).toBeVisible()
+    for (const name of ["Import", "Calendar", "Archive"]) {
       await expect(
         palette.getByRole("option", { name, exact: true })
       ).toHaveCount(0)

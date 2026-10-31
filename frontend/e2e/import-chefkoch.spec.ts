@@ -108,7 +108,7 @@ test.describe("Recipe import — chefkoch", () => {
       // exact match C1 ranks first; a line the parser mangled would match
       // nothing (or a weaker prefix hit) and fail the child-id check below.
 
-      await page.goto("/import")
+      await page.goto("/recipes?add=url")
       await page.getByRole("button", { name: /paste the page html/i }).click()
       await page.getByLabel(/page html/i).fill(chefkochHTML(tag))
 

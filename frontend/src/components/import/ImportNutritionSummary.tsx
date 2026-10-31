@@ -1,7 +1,7 @@
 import { useQueries } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 
-import { NutritionCompletenessWarning } from "@/components/components/NutritionCompletenessWarning"
+import { NutritionCompletenessWarning } from "@/components/recipes/NutritionCompletenessWarning"
 import { getFoodNutrition, type MissingNutritionLeaf } from "@/lib/api/foods"
 import { perPortion } from "@/lib/domain/nutrition"
 import { resolveGrams } from "@/lib/domain/units"

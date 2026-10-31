@@ -18,7 +18,7 @@ test.describe("Guided Recipes state", () => {
   }) => {
     await stubRecipeCount(page, 3)
     await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto("/components")
+    await page.goto("/recipes")
 
     const guide = page.getByTestId("recipe-onboarding")
     await expect(
@@ -47,7 +47,7 @@ test.describe("Guided Recipes state", () => {
       sidebar.getByRole("link", {
         name: "Add 7 more recipes to start planning",
       })
-    ).toHaveAttribute("href", "/components")
+    ).toHaveAttribute("href", "/recipes")
 
     // aria-disabled stays focusable, and focus explains the gate.
     await generate.focus()
@@ -56,16 +56,19 @@ test.describe("Guided Recipes state", () => {
     )
     // Playwright treats aria-disabled as not enabled, hence force.
     await generate.click({ force: true })
-    await expect(page).toHaveURL(/\/components$/)
+    await expect(page).toHaveURL(/\/recipes$/)
     await expect(page.getByTestId("chat-composer-input")).toHaveCount(0)
   })
 
-  test("the import card navigates to /import", async ({ page }) => {
+  test("the import card opens the import sheet", async ({ page }) => {
     await stubRecipeCount(page, 3)
-    await page.goto("/components")
+    await page.goto("/recipes")
 
     await page.getByTestId("onboarding-import").click()
-    await expect(page).toHaveURL(/\/import$/)
+    await expect(page).toHaveURL(/\/recipes\?add=url$/)
+    await expect(
+      page.getByRole("dialog", { name: "Import recipe" })
+    ).toBeVisible()
   })
 
   test("at 10 recipes: no cards and an enabled Generate button", async ({
@@ -74,10 +77,10 @@ test.describe("Guided Recipes state", () => {
     await stubRecipeCount(page, 10)
     await page.setViewportSize({ width: 1440, height: 900 })
     const setupLoaded = page.waitForResponse("**/api/setup")
-    await page.goto("/components")
+    await page.goto("/recipes")
     await setupLoaded
 
-    await expect(page.getByTestId("component-sort")).toBeVisible()
+    await expect(page.getByTestId("recipes-sort")).toBeVisible()
     await expect(page.getByTestId("recipe-onboarding")).toHaveCount(0)
     const generate = page
       .getByTestId("sidenav")
@@ -91,7 +94,7 @@ test.describe("Guided Recipes state", () => {
     page,
   }) => {
     await stubRecipeCount(page, 9)
-    await page.goto("/components")
+    await page.goto("/recipes")
     await expect(page.getByTestId("recipe-onboarding")).toBeVisible()
 
     await page.unroute("**/api/setup")
@@ -107,7 +110,7 @@ test.describe("Guided Recipes state", () => {
     const setupLoaded = page.waitForResponse("**/api/setup")
     await page.reload()
     await setupLoaded
-    await expect(page.getByTestId("component-sort")).toBeVisible()
+    await expect(page.getByTestId("recipes-sort")).toBeVisible()
     await expect(
       page.getByText("10 recipes. You're ready to plan your first week.")
     ).toHaveCount(0)

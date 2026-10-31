@@ -213,7 +213,7 @@ describe("IngredientEditor", () => {
 
     renderWithRouter(
       <IngredientEditor ingredient={mockChickenBreast} onSuccess={onSuccess} />,
-      "/ingredients/1/edit"
+      "/recipes/ingredients/1/edit"
     )
 
     const kcalInput = await screen.findByLabelText("Calories (kcal)")

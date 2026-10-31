@@ -56,7 +56,7 @@ test.describe("Unit conversion", () => {
     await seedPortion(ing.id, "tbsp", 21)
 
     try {
-      await page.goto("/components/new")
+      await page.goto("/recipes/new")
       await page.getByLabel(/^name/i).fill(`Sauce ${tag}`)
       await page.getByTestId("add-ingredient").click()
 
@@ -82,7 +82,7 @@ test.describe("Unit conversion", () => {
     const ing = await seedLeafFood({ name: `E2E Flour ${tag}` })
 
     try {
-      await page.goto("/components/new")
+      await page.goto("/recipes/new")
       await page.getByLabel(/^name/i).fill(`Bake ${tag}`)
       await page.getByTestId("add-ingredient").click()
 
@@ -107,7 +107,7 @@ test.describe("Unit conversion", () => {
     const ing = await seedLeafFood({ name: `E2E Garlic ${tag}` })
 
     try {
-      await page.goto("/components/new")
+      await page.goto("/recipes/new")
       await page.getByLabel(/^name/i).fill(`Dish ${tag}`)
       await page.getByTestId("add-ingredient").click()
 

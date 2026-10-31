@@ -177,7 +177,7 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
                 {localMatches.map((candidate) => (
                   <li key={`local-${candidate.existing_id}`}>
                     <Link
-                      to="/ingredients/$id/edit"
+                      to="/recipes/ingredients/$id/edit"
                       params={{ id: String(candidate.existing_id) }}
                       className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-on-surface transition-colors hover:bg-surface-container-high"
                     >

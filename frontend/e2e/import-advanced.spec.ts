@@ -4,7 +4,7 @@ test.describe("Recipe import — error paths", () => {
   test("malformed HTML paste shows a helpful inline error", async ({
     page,
   }) => {
-    await page.goto("/import")
+    await page.goto("/recipes?add=url")
 
     // Switch to the HTML paste panel.
     await page

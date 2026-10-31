@@ -152,7 +152,7 @@ function SetupCards({
           <p className="text-small text-ink-muted">{t("today.setup.body")}</p>
         </div>
         <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
-          <Link to="/components">{t("today.setup.action")}</Link>
+          <Link to="/recipes">{t("today.setup.action")}</Link>
         </Button>
       </section>
     )

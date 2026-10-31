@@ -274,7 +274,7 @@ describe("SetupWizard", () => {
     await u.click(screen.getByRole("button", { name: "Add recipes" }))
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledWith({
-        to: "/components",
+        to: "/recipes",
         state: { focusMain: true },
       })
     )
