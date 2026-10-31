@@ -10,7 +10,13 @@ import { RecipeDetail } from "./RecipeDetail"
 
 /** Loads a recipe by its route id and renders the detail, or a not-found /
  *  load-error state with a way back to Recipes. */
-export function RecipeDetailPage({ id }: { id: string }) {
+export function RecipeDetailPage({
+  id,
+  portions,
+}: {
+  id: string
+  portions?: number
+}) {
   const { t } = useTranslation()
   const numericId = Number(id)
 
@@ -47,7 +53,7 @@ export function RecipeDetailPage({ id }: { id: string }) {
     return <RecipeUnavailable reason="not_found" />
   }
 
-  return <RecipeDetail recipe={food} />
+  return <RecipeDetail key={food.id} recipe={food} portions={portions} />
 }
 
 function RecipeUnavailable({

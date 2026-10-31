@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router"
 
 import { CookRecipePage } from "@/components/cook/CookPages"
+import { MAX_PORTIONS } from "@/lib/portions"
 
-/** Portions the scaling endpoint accepts: 0 < p ≤ 100. */
+/** Portions the scaling endpoint accepts: 0 < p ≤ MAX_PORTIONS. */
 function parsePortions(value: unknown): number | undefined {
   const n = typeof value === "string" ? Number(value) : value
-  return typeof n === "number" && n > 0 && n <= 100 ? n : undefined
+  return typeof n === "number" && n > 0 && n <= MAX_PORTIONS ? n : undefined
 }
 
 export const Route = createFileRoute("/recipes/$id/cook")({

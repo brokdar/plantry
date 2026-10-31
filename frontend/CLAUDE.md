@@ -44,8 +44,9 @@ src/routes/
 ├── cook/              # `/cook/$sessionId` — cook mode for a planned batch (components/cook)
 ├── recipes/           # `/recipes?q&role&quick&stale&fav&new&sort&add` — the library (filters are search
 │                      #   params, `lib/recipes/library.ts`; `add=url` opens the import sheet); new.tsx,
-│                      #   $id/ (detail), $id/edit.tsx, $id/cook.tsx (`?portions=`, cook mode without a
-│                      #   plan, D30); ingredients/ — the Ingredients tab (table),
+│                      #   $id/ (detail, `?portions` starts its stepper), $id/edit.tsx, $id/cook.tsx
+│                      #   (`?portions=`, cook mode without a plan, D30); ingredients/ — the
+│                      #   Ingredients tab (table),
 │                      #   ingredients/new.tsx, ingredients/$id/edit.tsx
 ├── plan/              # `/plan?start&cell&day` — the plan board (components/plan, view model
 │                      #   lib/plan/board.ts); `day` focuses that day (Today's week strip)

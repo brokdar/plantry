@@ -1,18 +1,74 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { act, screen, within } from "@testing-library/react"
+import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderWithRouter } from "@/test/render"
-import i18n from "@/lib/i18n"
 import { RecipeDetail } from "./RecipeDetail"
-import { mockChickenCurry } from "@/test/fixtures"
-import type { ComposedFood, FoodNutritionDetail } from "@/lib/api/foods"
+import { mockChickenCurry, mockSettingsList } from "@/test/fixtures"
+import type {
+  ComposedFood,
+  FoodNutritionDetail,
+  ScaledRecipe,
+} from "@/lib/api/foods"
 
 vi.mock("@/lib/api/foods", () => ({
   getFoodNutrition: vi.fn(),
   setFoodFavorite: vi.fn(),
+  getScaled: vi.fn(),
+  createVariant: vi.fn(),
+  updateFood: vi.fn(),
 }))
 
-import { getFoodNutrition, setFoodFavorite } from "@/lib/api/foods"
+vi.mock("@/lib/api/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/settings")>()),
+  listSettings: vi.fn(),
+}))
+
+vi.mock("@/lib/dates", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/dates")>()),
+  todayISO: () => "2026-10-31",
+}))
+
+import {
+  createVariant,
+  getFoodNutrition,
+  getScaled,
+  setFoodFavorite,
+  updateFood,
+} from "@/lib/api/foods"
+import { listSettings } from "@/lib/api/settings"
+
+/** Beans 200 g per reference portion and one onion per two portions. */
+function scaledFor(_id: number, portions: number): Promise<ScaledRecipe> {
+  const onions = portions / 2
+  return Promise.resolve({
+    food_id: 3,
+    portions,
+    reference_portions: 2,
+    factor: portions / 2,
+    ingredients: [
+      {
+        child_id: 1,
+        name: "Kidney beans",
+        kind: "leaf",
+        amount: 200 * portions,
+        unit: "g",
+        grams: 200 * portions,
+        display: { amount: 200 * portions, unit: "g" },
+        buy: null,
+      },
+      {
+        child_id: 2,
+        name: "Onion",
+        kind: "leaf",
+        amount: onions,
+        unit: "piece",
+        grams: 120 * onions,
+        display: { amount: onions, unit: "piece" },
+        buy: { amount: Math.ceil(onions), unit: "piece" },
+      },
+    ],
+  })
+}
 
 const completeNutrition: FoodNutritionDetail = {
   kcal: 412.4,
@@ -34,7 +90,10 @@ const recipe: ComposedFood = {
 
 describe("RecipeDetail", () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.mocked(getFoodNutrition).mockResolvedValue(completeNutrition)
+    vi.mocked(getScaled).mockImplementation(scaledFor)
+    vi.mocked(listSettings).mockResolvedValue(mockSettingsList())
   })
 
   it("renders the title, ingredients and steps", async () => {
@@ -43,7 +102,7 @@ describe("RecipeDetail", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "Chicken Curry" })
     ).toBeInTheDocument()
-    expect(screen.getByText("Chicken breast")).toBeInTheDocument()
+    expect(await screen.findByText("Kidney beans")).toBeInTheDocument()
     expect(screen.getByText("Cook chicken")).toBeInTheDocument()
     expect(screen.getByText("Add curry paste")).toBeInTheDocument()
   })
@@ -54,7 +113,7 @@ describe("RecipeDetail", () => {
     const facts = await screen.findByTestId("recipe-facts")
     expect(await within(facts).findByText("412")).toBeInTheDocument()
     expect(within(facts).getByText("32 g")).toBeInTheDocument()
-    expect(within(facts).getByText("2")).toBeInTheDocument()
+    expect(within(facts).getByText("40 min")).toBeInTheDocument()
   })
 
   it("keeps My notes and the imported description in separate blocks", async () => {
@@ -131,53 +190,125 @@ describe("RecipeDetail", () => {
     ).not.toHaveAttribute("target")
   })
 
-  it("shows translated kitchen units and keeps metric symbols", async () => {
-    const withUnits: ComposedFood = {
-      ...recipe,
-      children: [
-        ...(recipe.children ?? []),
-        {
-          ...recipe.children![0]!,
-          id: 2,
-          child_id: 2,
-          child_name: "Coconut milk",
-          amount: 1,
-          unit: "can",
-        },
-        {
-          ...recipe.children![0]!,
-          id: 3,
-          child_id: 3,
-          child_name: "Fish sauce",
-          amount: 2,
-          unit: "tbsp",
-        },
-        {
-          ...recipe.children![0]!,
-          id: 4,
-          child_id: 4,
-          child_name: "Lime juice",
-          amount: 1,
-          unit: "tbsp",
-        },
-      ],
-    }
-    renderWithRouter(<RecipeDetail recipe={withUnits} />)
+  it("F9-AC1: the stepper scales the ingredients without a write", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
 
-    expect(await screen.findByText("300 g")).toBeInTheDocument()
-    expect(screen.getByText("1 can")).toBeInTheDocument()
-    expect(screen.getByText("2 tablespoons")).toBeInTheDocument()
-    expect(screen.getByText("1 tablespoon")).toBeInTheDocument()
+    const list = await screen.findByTestId("recipe-ingredients-list")
+    expect(await within(list).findByText("400 g")).toBeInTheDocument()
+    expect(getScaled).toHaveBeenLastCalledWith(3, 2)
 
-    await act(() => i18n.changeLanguage("de"))
-    try {
-      expect(await screen.findByText("2 Esslöffel")).toBeInTheDocument()
-      expect(screen.getByText("1 Dose")).toBeInTheDocument()
-      expect(screen.getByText("1 Esslöffel")).toBeInTheDocument()
-      expect(screen.getByText("300 g")).toBeInTheDocument()
-    } finally {
-      await act(() => i18n.changeLanguage("en"))
-    }
+    const stepper = screen.getByTestId("recipe-portions")
+    await user.click(
+      within(stepper).getByRole("button", { name: "Increase Portions" })
+    )
+    expect(await within(list).findByText("600 g")).toBeInTheDocument()
+    expect(getScaled).toHaveBeenLastCalledWith(3, 3)
+    expect(updateFood).not.toHaveBeenCalled()
+    expect(setFoodFavorite).not.toHaveBeenCalled()
+  })
+
+  it("starts the stepper at ?portions", async () => {
+    renderWithRouter(<RecipeDetail recipe={recipe} portions={6} />)
+
+    expect(await screen.findByText("1,200 g")).toBeInTheDocument()
+    expect(getScaled).toHaveBeenCalledWith(3, 6)
+  })
+
+  it("shows count fractions and the buy hint", async () => {
+    renderWithRouter(<RecipeDetail recipe={recipe} portions={3} />)
+
+    const list = await screen.findByTestId("recipe-ingredients-list")
+    expect(await within(list).findByText("1½ pcs")).toBeInTheDocument()
+    expect(within(list).getByText("buy 2 pcs")).toBeInTheDocument()
+  })
+
+  it("F9-AC4: Cook now opens cook mode with the stepper's portions", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+
+    const cook = await screen.findByRole("link", { name: "Cook now" })
+    expect(cook).toHaveAttribute("href", "/recipes/3/cook?portions=2")
+    await user.click(
+      within(screen.getByTestId("recipe-portions")).getByRole("button", {
+        name: "Increase Portions",
+      })
+    )
+    expect(cook).toHaveAttribute("href", "/recipes/3/cook?portions=3")
+  })
+
+  it("F9-AC3: the history line reads B7's fields", async () => {
+    renderWithRouter(
+      <RecipeDetail
+        recipe={{ ...recipe, times_cooked: 6, last_eaten: "2026-10-10" }}
+      />
+    )
+    expect(await screen.findByTestId("recipe-history")).toHaveTextContent(
+      "Cooked 6 times, last 3 weeks ago"
+    )
+  })
+
+  it("says Cooked N times without a last-eaten date", async () => {
+    renderWithRouter(
+      <RecipeDetail recipe={{ ...recipe, times_cooked: 2, last_eaten: null }} />
+    )
+    expect(await screen.findByTestId("recipe-history")).toHaveTextContent(
+      /^Cooked 2 times$/
+    )
+  })
+
+  it("shows an error with Retry when scaling fails, and Retry recovers", async () => {
+    vi.mocked(getScaled).mockRejectedValueOnce(new Error("offline"))
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+
+    const error = await screen.findByTestId("recipe-ingredients-error")
+    expect(error).toHaveTextContent("The ingredients didn't load.")
+    await user.click(within(error).getByRole("button", { name: "Try again" }))
+    expect(await screen.findByText("400 g")).toBeInTheDocument()
+    expect(screen.queryByTestId("recipe-ingredients-error")).toBeNull()
+  })
+
+  it("shows a skeleton while the scaled list loads", async () => {
+    vi.mocked(getScaled).mockReturnValueOnce(new Promise(() => {}))
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+    expect(
+      await screen.findByTestId("recipe-ingredients-loading")
+    ).toBeInTheDocument()
+  })
+
+  it("says Not cooked yet without history", async () => {
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+    expect(await screen.findByTestId("recipe-history")).toHaveTextContent(
+      "Not cooked yet"
+    )
+  })
+
+  it("shows keep days (or the default) and freezable", async () => {
+    const { unmount } = renderWithRouter(<RecipeDetail recipe={recipe} />)
+    const facts = await screen.findByTestId("recipe-facts")
+    expect(await within(facts).findByText("3 days")).toBeInTheDocument()
+    expect(within(facts).queryByText("Freezable")).not.toBeInTheDocument()
+    unmount()
+
+    renderWithRouter(
+      <RecipeDetail recipe={{ ...recipe, keep_days: 5, freezable: true }} />
+    )
+    const facts2 = await screen.findByTestId("recipe-facts")
+    expect(within(facts2).getByText("5 days")).toBeInTheDocument()
+    expect(within(facts2).getByText("Freezable")).toBeInTheDocument()
+    expect(within(facts2).getByText("Yes")).toBeInTheDocument()
+  })
+
+  it("Create variant calls the variant endpoint", async () => {
+    vi.mocked(createVariant).mockResolvedValue({ ...recipe, id: 99 })
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+
+    await user.click(
+      await screen.findByRole("button", { name: "Create variant" })
+    )
+    expect(createVariant).toHaveBeenCalledWith(3)
   })
 
   it("titles the steps section Steps", async () => {
