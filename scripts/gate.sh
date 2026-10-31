@@ -54,6 +54,6 @@ if [ "$status" -eq 0 ] && [ -z "${GATE_SKIP_E2E:-}" ]; then
 fi
 
 echo "--- summaries"
-grep -hE '^(ok|FAIL|---)|^\s*(Test Files|Tests)\s|[0-9]+ (passed|failed|flaky|skipped)|issues?\.|error' \
+grep -hE '^(ok|FAIL|---)|^\s*(Test Files|Tests)\s|[0-9]+ (passed|failed|flaky|skipped)|^[0-9]+ issues?\.' \
   "$LOG"/*.log 2>/dev/null | grep -vE '^ok\s' | tail -40
 exit "$status"
