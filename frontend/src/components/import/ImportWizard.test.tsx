@@ -113,6 +113,8 @@ const createdLeaf: LeafFood = {
   name: "Mehl",
   image_path: null,
   favorite: false,
+  diet_class: "vegan",
+  diet_class_source: "auto",
   shop_section: "produce",
   shop_section_source: "auto",
   used_in_count: 0,

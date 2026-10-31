@@ -1,5 +1,5 @@
-// F1-AC1: every fetcher of the Phase 2 contract (§3) calls the documented
-// method, path and query. Requests with a `today` parameter send todayISO()
+// F1-AC1 (Phase 2 and Phase 3): every fetcher of the API contract (§3)
+// calls the documented method, path and query. Requests with a `today` parameter send todayISO()
 // (D25).
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -10,22 +10,45 @@ vi.mock("@/lib/dates", () => ({ todayISO: () => "2026-10-30" }))
 
 import { apiFetch } from "./client"
 import { deleteFeedback, putFeedback } from "./feedback"
-import { getFood, getScaled, listFoods, setShopSection } from "./foods"
-import { clearPlan, getPlan, restorePlan } from "./plan"
+import {
+  getFood,
+  getScaled,
+  listFoods,
+  setDietClass,
+  setShopSection,
+} from "./foods"
+import { generatePlan, getPlanRun, regeneratePlan } from "./generation"
+import { getInsights } from "./insights"
+import {
+  acceptPlan,
+  clearPlan,
+  discardPlan,
+  getPlan,
+  getReplanPreview,
+  replan,
+  restorePlan,
+  unacceptPlan,
+} from "./plan"
 import {
   addPlateComponent,
+  confirmPlate,
   createPlate,
   deletePlate,
   deletePlateComponent,
+  unlockPlate,
   updatePlate,
   updatePlateComponent,
 } from "./plates"
+import { getPrice } from "./prices"
+import { getRun, listRuns } from "./runs"
 import {
   addLeftovers,
+  confirmSession,
   deleteSession,
   getLeftoverCells,
   getSession,
   setSessionCooked,
+  unlockSession,
   updateSession,
 } from "./sessions"
 import { getShoppingList } from "./shopping"
@@ -241,6 +264,199 @@ const cases: Case[] = [
     method: "PUT",
     path: "/foods/50/shop-section",
     body: { section: null },
+  },
+  // ── Phase 3 ──
+  // State (§3.1)
+  {
+    name: "confirmPlate",
+    call: () => confirmPlate(1),
+    method: "POST",
+    path: "/plates/1/confirm",
+  },
+  {
+    name: "unlockPlate",
+    call: () => unlockPlate(1),
+    method: "POST",
+    path: "/plates/1/unlock",
+  },
+  {
+    name: "confirmSession",
+    call: () => confirmSession(7),
+    method: "POST",
+    path: "/cook-sessions/7/confirm",
+  },
+  {
+    name: "unlockSession",
+    call: () => unlockSession(7),
+    method: "POST",
+    path: "/cook-sessions/7/unlock",
+  },
+  {
+    name: "acceptPlan",
+    call: () => acceptPlan("2026-10-31", "2026-11-06"),
+    method: "POST",
+    path: "/plan/accept",
+    body: { from: "2026-10-31", to: "2026-11-06" },
+  },
+  {
+    name: "unacceptPlan",
+    call: () => unacceptPlan({ plate_ids: [1, 2], session_ids: [7] }),
+    method: "POST",
+    path: "/plan/unaccept",
+    body: { plate_ids: [1, 2], session_ids: [7] },
+  },
+  {
+    name: "discardPlan",
+    call: () => discardPlan("2026-10-31", "2026-11-06"),
+    method: "POST",
+    path: "/plan/discard",
+    body: { from: "2026-10-31", to: "2026-11-06" },
+  },
+  // Generation (§3.2)
+  {
+    name: "generatePlan",
+    call: () =>
+      generatePlan({
+        start: "2026-10-31",
+        chooser: "heuristic",
+        instruction: "Less meat",
+        eaters_by_date: { "2026-11-01": 4 },
+        include_new_recipe: true,
+      }),
+    method: "POST",
+    path: "/plan/generate",
+    body: {
+      start: "2026-10-31",
+      chooser: "heuristic",
+      instruction: "Less meat",
+      eaters_by_date: { "2026-11-01": 4 },
+      include_new_recipe: true,
+    },
+  },
+  {
+    name: "regeneratePlan (day)",
+    call: () =>
+      regeneratePlan({
+        scope: { kind: "day", date: "2026-11-02" },
+        start: "2026-10-31",
+      }),
+    method: "POST",
+    path: "/plan/regenerate",
+    body: { scope: { kind: "day", date: "2026-11-02" }, start: "2026-10-31" },
+  },
+  {
+    name: "regeneratePlan (empty_cells)",
+    call: () =>
+      regeneratePlan({
+        scope: { kind: "empty_cells" },
+        start: "2026-10-31",
+        chooser: "llm",
+      }),
+    method: "POST",
+    path: "/plan/regenerate",
+    body: {
+      scope: { kind: "empty_cells" },
+      start: "2026-10-31",
+      chooser: "llm",
+    },
+  },
+  {
+    name: "getPlanRun",
+    call: () => getPlanRun(12),
+    method: "GET",
+    path: "/plan/runs/12",
+  },
+  {
+    name: "getReplanPreview",
+    call: () => getReplanPreview("2026-11-04", "2026-11-06"),
+    method: "GET",
+    path: "/plan/replan/preview?from=2026-11-04&to=2026-11-06&today=2026-10-30",
+  },
+  {
+    name: "replan",
+    call: () =>
+      replan({
+        from: "2026-11-04",
+        to: "2026-11-06",
+        unlock_confirmed: true,
+        spare: "freeze",
+        regenerate: true,
+      }),
+    method: "POST",
+    path: "/plan/replan",
+    body: {
+      from: "2026-11-04",
+      to: "2026-11-06",
+      unlock_confirmed: true,
+      spare: "freeze",
+      regenerate: true,
+    },
+  },
+  // Read models (§3.3)
+  {
+    name: "getShoppingList (include drafts)",
+    call: () => getShoppingList({ from: "2026-11-01", to: "2026-11-06" }, true),
+    method: "GET",
+    path: "/shopping-list?from=2026-11-01&to=2026-11-06&include_drafts=true&today=2026-10-30",
+  },
+  // Diet (§3.4)
+  {
+    name: "listFoods (diet)",
+    call: () => listFoods({ kind: "composed", diet: "vegetarian" }),
+    method: "GET",
+    path: "/foods?kind=composed&diet=vegetarian&today=2026-10-30",
+  },
+  {
+    name: "setDietClass",
+    call: () => setDietClass(50, "vegan"),
+    method: "PUT",
+    path: "/foods/50/diet-class",
+    body: { class: "vegan" },
+  },
+  {
+    name: "setDietClass (revert)",
+    call: () => setDietClass(50, null),
+    method: "PUT",
+    path: "/foods/50/diet-class",
+    body: { class: null },
+  },
+  // Runs and insights (§3.5)
+  {
+    name: "listRuns (first page)",
+    call: () => listRuns(),
+    method: "GET",
+    path: "/ai/runs",
+  },
+  {
+    name: "listRuns (filtered page)",
+    call: () =>
+      listRuns({
+        kind: "generate",
+        from: "2026-10-01",
+        to: "2026-10-31",
+        cursor: "11",
+        limit: 50,
+      }),
+    method: "GET",
+    path: "/ai/runs?kind=generate&from=2026-10-01&to=2026-10-31&cursor=11&limit=50",
+  },
+  {
+    name: "getRun",
+    call: () => getRun(12),
+    method: "GET",
+    path: "/ai/runs/12",
+  },
+  {
+    name: "getInsights",
+    call: () => getInsights({ from: "2026-10-01", to: "2026-10-31" }),
+    method: "GET",
+    path: "/ai/insights?from=2026-10-01&to=2026-10-31&bucket=week",
+  },
+  {
+    name: "getPrice",
+    call: () => getPrice("claude-sonnet-4-5"),
+    method: "GET",
+    path: "/ai/prices?model=claude-sonnet-4-5",
   },
 ]
 

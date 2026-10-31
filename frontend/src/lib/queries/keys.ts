@@ -35,6 +35,9 @@ export const planKeys = {
   all: ["plan"] as const,
   /** `start` undefined = the anchored window. */
   window: (start?: string) => [...planKeys.all, "window", start ?? ""] as const,
+  /** Under all: every plan mutation refreshes an open re-plan preview. */
+  replanPreview: (from: string, to: string) =>
+    [...planKeys.all, "replan-preview", from, to] as const,
 }
 
 export const todayKeys = {
@@ -103,6 +106,24 @@ export const importKeys = {
   all: ["import"] as const,
   lineLookup: (query: string) =>
     [...importKeys.all, "line-lookup", query] as const,
+}
+
+// Generation runs (`/api/plan/runs/{id}`, polled) and the run log
+// (`/api/ai/runs`).
+export const runKeys = {
+  all: ["runs"] as const,
+  plan: (id: number) => [...runKeys.all, "plan", id] as const,
+  lists: () => [...runKeys.all, "list"] as const,
+  list: (params: object) => [...runKeys.lists(), params] as const,
+  detail: (id: number) => [...runKeys.all, "detail", id] as const,
+}
+
+// Insights and prices. A price override re-prices runs on read, so it
+// invalidates insightKeys.all and runKeys.all.
+export const insightKeys = {
+  all: ["insights"] as const,
+  summary: (params: object) => [...insightKeys.all, "summary", params] as const,
+  price: (model: string) => [...insightKeys.all, "price", model] as const,
 }
 
 export const unitKeys = {

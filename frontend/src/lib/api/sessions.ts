@@ -1,5 +1,5 @@
 import { apiFetch } from "./client"
-import type { RemovedResponse } from "./plates"
+import type { PlanState, RemovedResponse, StateChange } from "./plates"
 
 /** Where a linked component sits relative to the cook cell (D12). */
 export type SessionLinkKind = "fresh" | "leftover" | "frozen"
@@ -46,6 +46,9 @@ export interface Session {
   links: SessionLink[]
   meals: number
   warnings: SessionWarning[]
+  state: PlanState
+  ai_run_id: number | null
+  reason: string | null
 }
 
 export interface Cell {
@@ -102,4 +105,14 @@ export function addLeftovers(id: number, cells: Cell[]): Promise<Session> {
 /** "Remove batch": deletes the session, its links and emptied plates. */
 export function deleteSession(id: number): Promise<RemovedResponse> {
   return apiFetch(`/cook-sessions/${id}`, { method: "DELETE" })
+}
+
+/** POST /api/cook-sessions/{id}/confirm: confirms the session's closure. */
+export function confirmSession(id: number): Promise<StateChange> {
+  return apiFetch(`/cook-sessions/${id}/confirm`, { method: "POST" })
+}
+
+/** POST /api/cook-sessions/{id}/unlock: returns its closure to draft. */
+export function unlockSession(id: number): Promise<StateChange> {
+  return apiFetch(`/cook-sessions/${id}/unlock`, { method: "POST" })
 }
