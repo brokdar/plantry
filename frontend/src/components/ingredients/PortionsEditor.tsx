@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Plus, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -120,6 +120,7 @@ function PortionsEditorView({
 }: PortionsEditorViewProps) {
   const [newUnit, setNewUnit] = useState("")
   const [newGrams, setNewGrams] = useState("")
+  const gramsId = useId()
 
   const usedUnits = portions.map((p) => normalizeUnit(p.unit))
 
@@ -173,13 +174,18 @@ function PortionsEditorView({
               defaultValue: t("unit.placeholder"),
             })}
             testId="portion-unit"
+            ariaLabel={t("portion.unit")}
           />
         </div>
         <div className="w-24">
-          <label className="mb-1 block text-xs text-muted-foreground">
+          <label
+            htmlFor={gramsId}
+            className="mb-1 block text-xs text-muted-foreground"
+          >
             {t("portion.grams")}
           </label>
           <Input
+            id={gramsId}
             type="number"
             step="0.1"
             min="0"
