@@ -232,7 +232,7 @@ function TargetPicker({
   )
 
   function submit(conflict: ApplyConflict) {
-    if (!date) return
+    if (!date || apply.isPending) return
     apply.mutate(
       {
         presetId: routine.id,

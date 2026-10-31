@@ -65,10 +65,13 @@ export function useCreatePreset() {
   })
 }
 
-export function useUpdatePreset() {
+/** Full editor save. Pass the routine's id to run its saves one at a time,
+ *  in order, so the last full-replacement PUT always lands last. */
+export function useUpdatePreset(serialId?: number) {
   const qc = useQueryClient()
   const { t } = useTranslation()
   return useMutation({
+    scope: serialId ? { id: `routine-${serialId}` } : undefined,
     mutationFn: ({ id, input }: { id: number; input: UpdatePresetInput }) =>
       updatePreset(id, input),
     onSettled: (_data, _err, vars) => {

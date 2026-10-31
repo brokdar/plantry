@@ -26,6 +26,7 @@ import {
   getKnownTags,
   getPreset,
   getPresets,
+  patchPreset,
   updatePreset,
 } from "@/lib/api/presets"
 import { listTimeSlots } from "@/lib/api/slots"
@@ -152,6 +153,61 @@ describe("RoutinesEditor (F10-AC1)", () => {
         ],
       })
     )
+  })
+
+  it("sends quick edits one at a time, ending with the final value", async () => {
+    vi.mocked(getPreset).mockResolvedValue(soup)
+    let release!: () => void
+    vi.mocked(updatePreset)
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (release = () => resolve(soup)))
+      )
+      .mockResolvedValue(soup)
+    const user = userEvent.setup()
+    renderWithRouter(<RoutinesEditor />)
+    await user.click(
+      await screen.findByRole("button", { name: /^Bread and soup/ })
+    )
+    const sheet = await screen.findByTestId("routine-sheet")
+    const increase = await within(sheet).findByRole("button", {
+      name: "Increase Portions of Lentil soup",
+    })
+
+    await user.click(increase)
+    await user.click(increase)
+    await waitFor(() => expect(updatePreset).toHaveBeenCalledTimes(1))
+    // The second PUT waits for the first.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(updatePreset).toHaveBeenCalledTimes(1)
+
+    release()
+    await waitFor(() => expect(updatePreset).toHaveBeenCalledTimes(2))
+    const portions = (call: number) =>
+      vi.mocked(updatePreset).mock.calls[call]![1].plates![0]!.components[0]!
+        .portions
+    expect(portions(0)).toBe(1.25)
+    expect(portions(1)).toBe(1.5)
+  })
+
+  it.each([
+    ["Enter", "{Enter}"],
+    ["Escape (closing the sheet)", "{Escape}"],
+  ])("saves a renamed routine on %s", async (_, key) => {
+    vi.mocked(getPreset).mockResolvedValue(soup)
+    vi.mocked(patchPreset).mockResolvedValue({ ...soup, name: "Soup" })
+    const user = userEvent.setup()
+    renderWithRouter(<RoutinesEditor />)
+    await user.click(
+      await screen.findByRole("button", { name: /^Bread and soup/ })
+    )
+    const sheet = await screen.findByTestId("routine-sheet")
+    const field = await within(sheet).findByLabelText("Name")
+    await user.clear(field)
+    await user.type(field, `Soup${key}`)
+    await waitFor(() =>
+      expect(patchPreset).toHaveBeenCalledWith(8, { name: "Soup" })
+    )
+    expect(patchPreset).toHaveBeenCalledTimes(1)
   })
 
   it("renames a routine", async () => {

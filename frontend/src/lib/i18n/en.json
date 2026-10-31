@@ -1512,7 +1512,6 @@
     "loading": "Loading the shopping list"
   },
   "routines": {
-    "manage": "Manage routines",
     "new": "New routine",
     "name": "Name",
     "tags_label": "Tags",
@@ -1546,9 +1545,6 @@
       "title_new": "New routine",
       "description": "Changes save as you make them.",
       "description_new": "Name it, pick a meal and add its foods.",
-      "saving": "Saving…",
-      "saved": "Saved",
-      "save_error": "Couldn't save. Check the routine, then try again.",
       "meal_label": "Meal",
       "add_meal": "Add a meal",
       "remove_meal": "Remove {{meal}}",

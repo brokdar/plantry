@@ -1501,7 +1501,6 @@
     "loading": "Einkaufsliste wird geladen"
   },
   "routines": {
-    "manage": "Routinen verwalten",
     "new": "Neue Routine",
     "name": "Name",
     "tags_label": "Schlagwörter",
@@ -1535,9 +1534,6 @@
       "title_new": "Neue Routine",
       "description": "Änderungen werden sofort gespeichert.",
       "description_new": "Gib ihr einen Namen, wähle eine Mahlzeit und füge Lebensmittel hinzu.",
-      "saving": "Wird gespeichert…",
-      "saved": "Gespeichert",
-      "save_error": "Speichern hat nicht geklappt. Prüfe die Routine und versuch es noch einmal.",
       "meal_label": "Mahlzeit",
       "add_meal": "Mahlzeit hinzufügen",
       "remove_meal": "{{meal}} entfernen",

@@ -1,5 +1,12 @@
 import { Plus, Trash2, X } from "lucide-react"
-import { useDeferredValue, useId, useMemo, useState } from "react"
+import {
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { useTranslation } from "react-i18next"
 
 import { QuantityStepper } from "@/components/plan/QuantityStepper"
@@ -241,29 +248,46 @@ function EditRoutine({
 }) {
   const { t } = useTranslation()
   const patch = usePatchPreset()
-  const update = useUpdatePreset()
+  // Scoped per routine: its full-replacement PUTs run one at a time, in
+  // order, so the last change always lands last.
+  const update = useUpdatePreset(preset.id)
   const { saved, markSaved } = useSavedNote()
   const [name, setName] = useState(preset.name)
   const [savedName, setSavedName] = useState(preset.name)
   const [plates, setPlates] = useState(() => draftFrom(preset))
+  // The typed name and the last name sent, for the flush on close.
+  const draftName = useRef(preset.name)
+  const sentName = useRef(preset.name)
 
-  function commitName() {
-    const next = name.trim()
-    if (next === "") {
-      setName(savedName)
-      return
-    }
-    if (next === savedName) return
+  function sendName(onSaved?: (name: string) => void) {
+    const next = draftName.current.trim()
+    if (next === "" || next === sentName.current) return
+    sentName.current = next
     patch.mutate(
       { id: preset.id, input: { name: next } },
-      {
-        onSuccess: () => {
-          setSavedName(next)
-          markSaved()
-        },
-      }
+      { onSuccess: () => onSaved?.(next) }
     )
   }
+
+  function commitName() {
+    if (name.trim() === "") {
+      draftName.current = sentName.current
+      setName(sentName.current)
+      return
+    }
+    sendName((next) => {
+      setSavedName(next)
+      markSaved()
+    })
+  }
+
+  // Closing the sheet (Escape, outside click) unmounts it, possibly without
+  // a blur: send a pending rename then.
+  const flushName = useRef(sendName)
+  useEffect(() => {
+    flushName.current = sendName
+  })
+  useEffect(() => () => flushName.current(), [])
 
   function changePlates(next: DraftPlate[]) {
     setPlates(next)
@@ -286,7 +310,14 @@ function EditRoutine({
         </SheetDescription>
       </SheetHeader>
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pb-6">
-        <NameField value={name} onChange={setName} onBlur={commitName} />
+        <NameField
+          value={name}
+          onChange={(v) => {
+            draftName.current = v
+            setName(v)
+          }}
+          onCommit={commitName}
+        />
         <TagsField
           tags={preset.tags}
           onAdd={(tag) =>
@@ -316,12 +347,13 @@ function EditRoutine({
 function NameField({
   value,
   onChange,
-  onBlur,
+  onCommit,
   autoFocus,
 }: {
   value: string
   onChange: (v: string) => void
-  onBlur?: () => void
+  /** Saves the name, on blur and on Enter. */
+  onCommit?: () => void
   autoFocus?: boolean
 }) {
   const { t } = useTranslation()
@@ -335,7 +367,13 @@ function NameField({
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
+        onBlur={onCommit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && onCommit) {
+            e.preventDefault()
+            onCommit()
+          }
+        }}
         autoFocus={autoFocus}
         className="pointer-coarse:h-11"
       />

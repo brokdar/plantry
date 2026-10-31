@@ -29,7 +29,7 @@ export interface RoutinePickerProps {
 /**
  * A popover that lists saved routines (presets). Picking one calls `onPick`;
  * Escape, an outside click or Cancel close it without a pick. With no
- * routines it links to `/presets` to create one.
+ * routines it links to Settings → Meals & week to create one.
  */
 export function RoutinePicker({
   open,
