@@ -10,6 +10,10 @@ import (
 )
 
 type Querier interface {
+	// D24 per run with ids in [min_id, max_id]: the plates the generator created
+	// for the run, and how many of them got a user update or delete before the
+	// plate's first accept or confirm event.
+	AIRunCorrections(ctx context.Context, arg AIRunCorrectionsParams) ([]AIRunCorrectionsRow, error)
 	AddPresetTag(ctx context.Context, arg AddPresetTagParams) error
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
@@ -59,6 +63,7 @@ type Querier interface {
 	// times_cooked counts the food's confirmed sessions cooked on or before today
 	// with at least one linked plate not marked not_eaten.
 	FoodHistory(ctx context.Context, arg FoodHistoryParams) ([]FoodHistoryRow, error)
+	GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailRow, error)
 	GetAvailabilityDefault(ctx context.Context, arg GetAvailabilityDefaultParams) (GetAvailabilityDefaultRow, error)
 	GetAvailabilityOverride(ctx context.Context, arg GetAvailabilityOverrideParams) (GetAvailabilityOverrideRow, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
@@ -77,6 +82,13 @@ type Querier interface {
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
+	// A run's steps in seq order. args and result are cut to 8192 characters
+	// (an llm_call shows its request_json and response_json there); the *_cut
+	// flags say a value was longer.
+	ListAIRunStepViews(ctx context.Context, runID int64) ([]ListAIRunStepViewsRow, error)
+	// Runs newest first (by id), optionally filtered by kind, a started_at range
+	// [from_ts, to_ts) and a cursor (ids below before_id). lim -1 lists all.
+	ListAIRuns(ctx context.Context, arg ListAIRunsParams) ([]ListAIRunsRow, error)
 	ListActiveTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	ListAvailabilityDefaults(ctx context.Context) ([]ListAvailabilityDefaultsRow, error)
 	ListAvailabilityOverridesByRange(ctx context.Context, arg ListAvailabilityOverridesByRangeParams) ([]ListAvailabilityOverridesByRangeRow, error)

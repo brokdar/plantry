@@ -12,7 +12,8 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
 
-// Start describes a run being started. ConversationID is set by chat runs.
+// Start describes a run being started. ConversationID is set by chat runs;
+// Chooser and ScopeJSON by generation runs.
 type Start struct {
 	Kind           Kind
 	PromptVersion  string
@@ -20,6 +21,16 @@ type Start struct {
 	WindowEnd      *time.Time
 	Instruction    *string
 	ConversationID *int64
+	Chooser        Chooser
+	ScopeJSON      string
+}
+
+// Result is what a generation run reports when it finishes, beside its status.
+type Result struct {
+	RepairAttempts int
+	ViolationsJSON string
+	ScoreJSON      string
+	Notes          string
 }
 
 // pruneInterval is the minimum time between two prunes triggered by Finish.
@@ -197,6 +208,8 @@ func (r *Recorder) Start(ctx context.Context, s Start) (context.Context, *Run) {
 		Instruction:    s.Instruction,
 		ConversationID: s.ConversationID,
 		RequestID:      run.requestID,
+		Chooser:        s.Chooser,
+		ScopeJSON:      s.ScopeJSON,
 	})
 	if err != nil {
 		r.logger.WarnContext(ctx, "ai.run.create failed", "request_id", run.requestID, "kind", s.Kind, "error", err)
@@ -211,6 +224,11 @@ func (r *Recorder) Start(ctx context.Context, s Start) (context.Context, *Run) {
 // an effect. The write ignores ctx cancellation so a cancelled request still
 // records its status.
 func (run *Run) Finish(ctx context.Context, status Status, errKey string) {
+	run.FinishWith(ctx, status, errKey, Result{})
+}
+
+// FinishWith is Finish for a generation run, which also stores res.
+func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, res Result) {
 	if run == nil {
 		return
 	}
@@ -233,6 +251,10 @@ func (run *Run) Finish(ctx context.Context, status Status, errKey string) {
 		CacheReadTokens:  run.cacheReadTokens,
 		CacheWriteTokens: run.cacheWriteTokens,
 		ErrorKey:         errKey,
+		RepairAttempts:   res.RepairAttempts,
+		ViolationsJSON:   res.ViolationsJSON,
+		ScoreJSON:        res.ScoreJSON,
+		Notes:            res.Notes,
 	}
 	run.mu.Unlock()
 

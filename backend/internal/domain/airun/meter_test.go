@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
@@ -1071,6 +1073,35 @@ func TestRecorder_StoresRunIdentity(t *testing.T) {
 	if seen == "" || runs[2].RequestID != seen || runs[2].ConversationID != nil {
 		t.Errorf("request run id = %q; want %q", runs[2].RequestID, seen)
 	}
+}
+
+func TestRecorder_StoresGenerationFields(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+
+	ctx, run := rec.Start(context.Background(), airun.Start{
+		Kind: airun.KindRegenerate, Chooser: airun.ChooserLLM, ScopeJSON: `{"kind":"day","date":"2026-11-02"}`,
+	})
+	run.FinishWith(ctx, airun.StatusPartial, "", airun.Result{
+		RepairAttempts: 2, ViolationsJSON: `[{"rule":"H2"}]`, ScoreJSON: `{"coverage":1}`, Notes: "Kept Monday.",
+	})
+	run.Finish(ctx, airun.StatusOK, "") // only the first finish counts
+
+	_, chatRun := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	chatRun.Finish(context.Background(), airun.StatusOK, "")
+
+	runs, finishes, _, _ := store.snapshot()
+	assert.Equal(t, airun.ChooserLLM, runs[1].Chooser)
+	assert.Equal(t, `{"kind":"day","date":"2026-11-02"}`, runs[1].ScopeJSON)
+	assert.Equal(t, airun.Chooser(""), runs[2].Chooser, "chat runs have no chooser")
+	require.Len(t, finishes, 2)
+	f := finishes[0]
+	assert.Equal(t, airun.StatusPartial, f.Status)
+	assert.Equal(t, 2, f.RepairAttempts)
+	assert.Equal(t, `[{"rule":"H2"}]`, f.ViolationsJSON)
+	assert.Equal(t, `{"coverage":1}`, f.ScoreJSON)
+	assert.Equal(t, "Kept Monday.", f.Notes)
+	assert.Equal(t, airun.RunEnd{ID: 2, Status: airun.StatusOK, FinishedAt: finishes[1].FinishedAt}, finishes[1])
 }
 
 // manualClock is a clock tests move by hand.

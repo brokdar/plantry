@@ -14,8 +14,8 @@ import (
 type Price struct {
 	In         float64  `json:"in"`
 	Out        float64  `json:"out"`
-	CacheRead  *float64 `json:"cache_read,omitempty"`
-	CacheWrite *float64 `json:"cache_write,omitempty"`
+	CacheRead  *float64 `json:"cache_read"`
+	CacheWrite *float64 `json:"cache_write"`
 }
 
 // Tokens are a run's summed token counts. For OpenAI, Input includes the

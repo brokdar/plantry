@@ -77,6 +77,8 @@ func (r *AIRunRepo) CreateRun(ctx context.Context, start airun.RunStart) (int64,
 		Instruction:    toNullString(start.Instruction),
 		ConversationID: toNullInt64(start.ConversationID),
 		RequestID:      toNullStringEmpty(start.RequestID),
+		Chooser:        toNullStringEmpty(string(start.Chooser)),
+		ScopeJson:      toNullStringEmpty(start.ScopeJSON),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("create ai run: %w", err)
@@ -97,6 +99,10 @@ func (r *AIRunRepo) FinishRun(ctx context.Context, end airun.RunEnd) error {
 		CacheReadTokens:  end.CacheReadTokens,
 		CacheWriteTokens: end.CacheWriteTokens,
 		ErrorKey:         toNullStringEmpty(end.ErrorKey),
+		RepairAttempts:   int64(end.RepairAttempts),
+		ViolationsJson:   toNullStringEmpty(end.ViolationsJSON),
+		ScoreJson:        toNullStringEmpty(end.ScoreJSON),
+		Notes:            toNullStringEmpty(end.Notes),
 		ID:               end.ID,
 	})
 	if err != nil {
