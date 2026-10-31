@@ -48,6 +48,41 @@ describe("lib/plan/today", () => {
       await i18n.changeLanguage("de")
       expect(verdictText(verdict, i18n)).toBe(copy[kind].de)
     })
+
+    // Another day than today names its weekday instead of saying "today".
+    const otherDay: Record<TodayVerdictKind, { en: string; de: string }> = {
+      cook: { en: "Cook Chili × 6", de: "Am Sonntag kochen: Chili × 6" },
+      quick_cook: {
+        en: "Quick cook: Omelette",
+        de: "Am Sonntag schnell: Omelette",
+      },
+      nothing_to_cook: {
+        en: "Nothing to cook on Sunday",
+        de: "Am Sonntag wird nicht gekocht",
+      },
+      no_plates: {
+        en: "No plates planned for Sunday",
+        de: "Für Sonntag ist kein Essen geplant",
+      },
+      no_plan: {
+        en: "No plan for Sunday yet",
+        de: "Für Sonntag gibt es noch keinen Plan",
+      },
+    }
+    it.each(Object.keys(otherDay) as TodayVerdictKind[])(
+      "%s on another day",
+      async (kind) => {
+        const today = { ...mockTodayByVerdict[kind], date: SUNDAY }
+        await i18n.changeLanguage("en")
+        expect(buildTodayHeader(today, MONDAY, i18n).headline).toBe(
+          otherDay[kind].en
+        )
+        await i18n.changeLanguage("de")
+        expect(buildTodayHeader(today, MONDAY, i18n).headline).toBe(
+          otherDay[kind].de
+        )
+      }
+    )
   })
 
   // F5-AC1 (AC-1 step 4): Monday is a leftover day.

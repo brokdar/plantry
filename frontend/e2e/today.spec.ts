@@ -111,12 +111,14 @@ async function seedAc1(): Promise<Ac1> {
   }
 }
 
-function weekdayShort(iso: string) {
+function weekday(iso: string, style: "short" | "long") {
   const [y, m, d] = iso.split("-").map(Number)
-  return new Intl.DateTimeFormat("en", { weekday: "short" }).format(
+  return new Intl.DateTimeFormat("en", { weekday: style }).format(
     new Date(y, m - 1, d)
   )
 }
+const weekdayShort = (iso: string) => weekday(iso, "short")
+const weekdayLong = (iso: string) => weekday(iso, "long")
 
 test.describe("Today", () => {
   // F5-AC1 (AC-1 steps 4–5).
@@ -128,8 +130,9 @@ test.describe("Today", () => {
       await page.setViewportSize({ width: 375, height: 812 })
       await page.goto(`/today?date=${ac1.leftoverDay}`)
 
+      // Not today: the headline names the day.
       await expect(page.getByTestId("today-verdict")).toHaveText(
-        "Nothing to cook today"
+        `Nothing to cook on ${weekdayLong(ac1.leftoverDay)}`
       )
       const card = page.getByTestId("today-leftover-card")
       await expect(

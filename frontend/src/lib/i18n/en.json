@@ -1258,6 +1258,13 @@
       "no_plates": "No plates planned today",
       "no_plan": "No plan for today"
     },
+    "verdict_day": {
+      "cook": "Cook {{name}} × {{portions}}",
+      "quick_cook": "Quick cook: {{name}}",
+      "nothing_to_cook": "Nothing to cook on {{weekday}}",
+      "no_plates": "No plates planned for {{weekday}}",
+      "no_plan": "No plan for {{weekday}} yet"
+    },
     "prev_day": "Previous day",
     "next_day": "Next day",
     "back_to_today": "Back to today",

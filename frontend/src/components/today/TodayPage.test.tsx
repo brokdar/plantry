@@ -215,7 +215,7 @@ describe("TodayPage", () => {
   })
 
   it("no plan: Plan this week and the Plan next week banner", async () => {
-    renderToday(mockTodayByVerdict.no_plan)
+    renderToday(mockTodayByVerdict.no_plan, "2026-11-09")
     expect(await screen.findByTestId("today-verdict")).toHaveTextContent(
       "No plan for today"
     )
