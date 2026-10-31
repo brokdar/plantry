@@ -8,7 +8,6 @@ import type { Today } from "@/lib/api/today"
 import {
   buildTodayHeader,
   buildTodayPlan,
-  type TodayHeaderView,
   type TodayPlanView,
 } from "@/lib/plan/today"
 import { usePlan } from "@/lib/queries/plan"
@@ -78,6 +77,10 @@ function TodayLoaded({ data, today }: { data: Today; today: string }) {
     () => (plan.data ? buildTodayPlan(data, plan.data, today, i18n) : null),
     [data, plan.data, today, i18n]
   )
+  // A day with a cook or leftover card leads with it; the setup nag follows.
+  const busyDay =
+    data.cook.length > 0 ||
+    data.meals.some((m) => m.link !== null && m.link.kind !== "fresh")
 
   return (
     <Frame>
@@ -90,7 +93,8 @@ function TodayLoaded({ data, today }: { data: Today; today: string }) {
               dateLine={header.dateLine}
               headline={header.headline}
             />
-            <SetupCards header={header} windowStart={data.window_start} />
+            {header.noPlan && <NoPlanCard windowStart={data.window_start} />}
+            {!busyDay && <RecipesCard missing={header.recipesMissing} />}
             {view ? (
               <DayPlan view={view} />
             ) : plan.isError ? (
@@ -98,6 +102,7 @@ function TodayLoaded({ data, today }: { data: Today; today: string }) {
             ) : (
               <PlanSkeleton />
             )}
+            {busyDay && <RecipesCard missing={header.recipesMissing} />}
             <RateQuestion rate={header.rate} />
             {header.planNext && (
               <PlanBanner nextStart={header.planNext} today={today} />
@@ -127,39 +132,35 @@ function TodayLoaded({ data, today }: { data: Today; today: string }) {
   )
 }
 
-/** Below the recipe target, "Add N more recipes"; otherwise, on an
- *  unplanned window, "Plan this week". */
-function SetupCards({
-  header,
-  windowStart,
-}: {
-  header: TodayHeaderView
-  windowStart: string
-}) {
+/** Below the recipe target, "Add N more recipes". */
+function RecipesCard({ missing }: { missing: number }) {
   const { t } = useTranslation()
-  if (header.recipesMissing > 0) {
-    return (
-      <section
-        aria-labelledby="today-setup"
-        className="flex flex-col items-start gap-3 rounded-lg border border-line bg-panel p-4"
-        data-testid="today-setup-card"
-      >
-        <div className="flex flex-col gap-0.5">
-          <h2
-            id="today-setup"
-            className="font-sans text-body font-semibold text-ink"
-          >
-            {t("today.setup.title", { count: header.recipesMissing })}
-          </h2>
-          <p className="text-small text-ink-muted">{t("today.setup.body")}</p>
-        </div>
-        <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
-          <Link to="/recipes">{t("today.setup.action")}</Link>
-        </Button>
-      </section>
-    )
-  }
-  if (!header.noPlan) return null
+  if (missing <= 0) return null
+  return (
+    <section
+      aria-labelledby="today-setup"
+      className="flex flex-col items-start gap-3 rounded-lg border border-line bg-panel p-4"
+      data-testid="today-setup-card"
+    >
+      <div className="flex flex-col gap-0.5">
+        <h2
+          id="today-setup"
+          className="font-sans text-body font-semibold text-ink"
+        >
+          {t("today.setup.title", { count: missing })}
+        </h2>
+        <p className="text-small text-ink-muted">{t("today.setup.body")}</p>
+      </div>
+      <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
+        <Link to="/recipes">{t("today.setup.action")}</Link>
+      </Button>
+    </section>
+  )
+}
+
+/** On an unplanned window, "Plan this week". */
+function NoPlanCard({ windowStart }: { windowStart: string }) {
+  const { t } = useTranslation()
   return (
     <section
       className="flex flex-col items-start gap-3 rounded-lg border border-line bg-panel p-4"
