@@ -38,10 +38,10 @@ export function usePrimaryNav(): PrimaryNavEntry[] {
     },
     {
       id: "plan",
-      to: "/",
+      to: "/plan",
       labelKey: "nav.plan",
       icon: CalendarDays,
-      active: pathname === "/",
+      active: pathname === "/plan" || pathname.startsWith("/plan/"),
     },
     {
       id: "recipes",

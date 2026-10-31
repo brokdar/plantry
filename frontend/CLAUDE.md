@@ -44,7 +44,8 @@ src/routes/
 ├── components/        # recipe library; new.tsx, $id/ (detail), $id/edit.tsx
 ├── ingredients/       # food/ingredient CRUD; new.tsx, $id/edit.tsx
 ├── import/            # recipe import from URL (ImportWizard)
-├── shop/              # shopping list for the current planner window
+├── plan/              # `/plan?start=` — the plan board (components/plan, view model lib/plan/board.ts)
+├── shop/              # shopping list for the current planner window, or `?from&to`
 ├── presets/           # preset library + editor
 ├── calendar/          # read-only calendar (month / week / agenda)
 ├── archive/           # redirects to /calendar agenda mode
@@ -53,7 +54,7 @@ src/routes/
                        #   assistant, system — `settings-sections.ts`)
 ```
 
-**Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/day/<today>`, Plan → `/`, Recipes → `/components` (also active on `/ingredients*` and `/import`, which are linked from the recipe list header), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the phone top bar. Calendar, Presets and Archive are not in the nav; they are reachable via ⌘K (`CommandPalette`).
+**Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/day/<today>`, Plan → `/plan`, Recipes → `/components` (also active on `/ingredients*` and `/import`, which are linked from the recipe list header), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the phone top bar. Calendar, Presets and Archive are not in the nav; they are reachable via ⌘K (`CommandPalette`).
 
 ### Components
 
@@ -62,6 +63,8 @@ src/components/
 ├── ui/                # shadcn primitives (never hand-edit generated files)
 ├── shell/             # AppShell, SideNav, TopBar, MobileBottomNav, primary-nav.ts
 ├── planner/           # SlotCell, SlotSheet, PlannerGrid, DnD wrappers, ShoppingPanel
+├── plan/              # the board: PlanPage, Board (BoardGrid ≥768 px, DayList phone), PlateCell,
+│                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog; keynav in lib/plan/keynav.ts
 ├── batch/             # BatchBadge, BatchHighlightProvider (hooks in batch-highlight.ts), CookStrip,
 │                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
 ├── availability/      # AvailabilityGrid (weekday/date × slot modes), RoutinePicker
@@ -128,7 +131,6 @@ All user-visible strings go through `react-i18next`. Keys live in `src/lib/i18n/
 Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own unit tests:
 
 - `planner-window.ts` — date window calculations + calendar view helpers (`padTwo`, `toYMD`, `todayISO`, `currentMonthISO`, `weekStartDate`, `parseYearMonth`, `monthGridRange`)
-- `planner-keynav.ts` — keyboard navigation logic
 - `slot-label.ts` — slot display names
 - `preset-apply-toast.ts` — toast message logic after preset apply
 - `availability-grid.ts` — AvailabilityGrid columns and value ↔ availability defaults mapping

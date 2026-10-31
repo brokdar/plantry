@@ -44,7 +44,7 @@ describe("SideNav", () => {
       ])
       expect(links.map((l) => l.getAttribute("href"))).toEqual([
         "/day/2026-10-26",
-        "/",
+        "/plan",
         "/components",
         "/shop",
       ])
@@ -60,7 +60,7 @@ describe("SideNav", () => {
     ["/ingredients/12/edit", "Recipes"],
     ["/components/3", "Recipes"],
     ["/import", "Recipes"],
-    ["/", "Plan"],
+    ["/plan", "Plan"],
     ["/day/2026-10-20", "Today"],
     ["/shop", "Shop"],
   ])("marks the right destination active on %s", async (path, active) => {

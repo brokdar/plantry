@@ -1,5 +1,5 @@
 import { useId, useState } from "react"
-import { Link, useNavigate } from "@tanstack/react-router"
+import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import { Sparkles } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -63,6 +63,7 @@ export function GeneratePlanButton({
 }: GeneratePlanButtonProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const pathname = useLocation({ select: (l) => l.pathname })
   const openWith = useChatUI((s) => s.openWith)
   const { data: setup } = useSetupStatus()
   const [tipOpen, setTipOpen] = useState(false)
@@ -85,7 +86,8 @@ export function GeneratePlanButton({
       setTipOpen(true)
       return
     }
-    await navigate({ to: "/" })
+    // On the board already: keep its window, the chat works on it.
+    if (pathname !== "/plan") await navigate({ to: "/plan" })
     openWith(t("planner.generate_prompt"))
   }
 

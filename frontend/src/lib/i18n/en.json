@@ -1488,7 +1488,70 @@
     "undo": {
       "plate_removed": "Plate removed",
       "batch_removed": "Batch removed",
-      "plan_cleared": "Plan cleared"
+      "plan_cleared": "Plan cleared",
+      "marked_no_plate": "Marked as No plate"
+    },
+    "board": {
+      "label": "Meal plan, {{range}}",
+      "meal_column": "Meal",
+      "loading": "Loading the plan",
+      "error": "Couldn't load this week. Check that Plantry is running, then try again."
+    },
+    "cell": {
+      "with": "with {{names}}",
+      "routine": "Routine",
+      "routine_named": "Routine · {{name}}",
+      "no_plate": "No plate",
+      "add": "Add",
+      "nothing_planned": "nothing planned",
+      "empty_plate": "empty plate",
+      "name": "{{weekday}} {{slot, lowercase}}",
+      "needs_attention": "needs attention",
+      "speech_cook": "cook here, {{portions}} portions",
+      "speech_leftover": "leftover {{position}} of {{meals}}",
+      "speech_frozen": "frozen, {{position}} of {{meals}}",
+      "subline_cook": "cook here",
+      "subline_leftover": "leftover",
+      "subline_routine": "routine"
+    },
+    "row": {
+      "collapsed": "{{slot}}: {{routine}} every day"
+    },
+    "toolbar": {
+      "plates_one": "{{count}} plate",
+      "plates_other": "{{count}} plates",
+      "cook_days_one": "{{count}} cook day",
+      "cook_days_other": "{{count}} cook days",
+      "warnings_one": "{{count}} plate needs attention",
+      "warnings_other": "{{count}} plates need attention",
+      "prev": "Previous week",
+      "next": "Next week",
+      "this_week": "This week",
+      "ask": "Ask assistant",
+      "shop": "Shop",
+      "more": "More plan actions",
+      "copy_week": "Copy a previous week",
+      "clear": "Clear this week",
+      "shortcuts": "Keyboard shortcuts",
+      "read_only": "This week is over. You can still rate its meals.",
+      "weeks": "Weeks"
+    },
+    "empty": {
+      "title": "Nothing planned for this week yet",
+      "body": "Add meals one at a time, copy a week that worked, or let the assistant draft one.",
+      "by_hand": "Plan by hand",
+      "copy": "Copy a previous week"
+    },
+    "shortcuts": {
+      "title": "Keyboard shortcuts",
+      "description": "Move around the plan and change meals without the mouse.",
+      "move": "Move between meals",
+      "edges": "Jump to the first or last day",
+      "open": "Open the meal",
+      "no_plate": "Mark as No plate",
+      "copy_drag": "Copy a plate while dragging",
+      "this_panel": "Show these shortcuts",
+      "drag": "Drag"
     }
   },
   "batch": {

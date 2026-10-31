@@ -1487,7 +1487,70 @@
     "undo": {
       "plate_removed": "Essen entfernt",
       "batch_removed": "Vorkochen entfernt",
-      "plan_cleared": "Plan geleert"
+      "plan_cleared": "Plan geleert",
+      "marked_no_plate": "Als „Kein Essen“ markiert"
+    },
+    "board": {
+      "label": "Essensplan, {{range}}",
+      "meal_column": "Mahlzeit",
+      "loading": "Plan wird geladen",
+      "error": "Diese Woche ließ sich nicht laden. Prüfe, ob Plantry läuft, und versuche es dann noch einmal."
+    },
+    "cell": {
+      "with": "mit {{names}}",
+      "routine": "Routine",
+      "routine_named": "Routine · {{name}}",
+      "no_plate": "Kein Essen",
+      "add": "Hinzufügen",
+      "nothing_planned": "nichts geplant",
+      "empty_plate": "leere Mahlzeit",
+      "name": "{{weekday}} {{slot}}",
+      "needs_attention": "bitte prüfen",
+      "speech_cook": "hier kochen, {{portions}} Portionen",
+      "speech_leftover": "Rest {{position}} von {{meals}}",
+      "speech_frozen": "gefroren, {{position}} von {{meals}}",
+      "subline_cook": "hier kochen",
+      "subline_leftover": "Rest",
+      "subline_routine": "Routine"
+    },
+    "row": {
+      "collapsed": "{{slot}}: jeden Tag {{routine}}"
+    },
+    "toolbar": {
+      "plates_one": "{{count}} Mahlzeit",
+      "plates_other": "{{count}} Mahlzeiten",
+      "cook_days_one": "{{count}} Kochtag",
+      "cook_days_other": "{{count}} Kochtage",
+      "warnings_one": "{{count}} Mahlzeit bitte prüfen",
+      "warnings_other": "{{count}} Mahlzeiten bitte prüfen",
+      "prev": "Vorherige Woche",
+      "next": "Nächste Woche",
+      "this_week": "Diese Woche",
+      "ask": "Assistent fragen",
+      "shop": "Einkaufen",
+      "more": "Weitere Aktionen für den Plan",
+      "copy_week": "Frühere Woche kopieren",
+      "clear": "Diese Woche leeren",
+      "shortcuts": "Tastenkürzel",
+      "read_only": "Diese Woche ist vorbei. Bewerten kannst du ihre Mahlzeiten trotzdem.",
+      "weeks": "Wochen"
+    },
+    "empty": {
+      "title": "Für diese Woche ist noch nichts geplant",
+      "body": "Plane Mahlzeit für Mahlzeit, übernimm eine Woche, die gut lief, oder lass den Assistenten einen Entwurf machen.",
+      "by_hand": "Selbst planen",
+      "copy": "Frühere Woche kopieren"
+    },
+    "shortcuts": {
+      "title": "Tastenkürzel",
+      "description": "Im Plan bewegen und Mahlzeiten ändern, ganz ohne Maus.",
+      "move": "Zwischen Mahlzeiten wechseln",
+      "edges": "Zum ersten oder letzten Tag springen",
+      "open": "Mahlzeit öffnen",
+      "no_plate": "Auf „Kein Essen“ setzen",
+      "copy_drag": "Beim Ziehen eine Mahlzeit kopieren",
+      "this_panel": "Diese Übersicht zeigen",
+      "drag": "Ziehen"
     }
   },
   "batch": {

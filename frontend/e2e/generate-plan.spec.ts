@@ -43,7 +43,7 @@ test.describe("Generate plan CTA", () => {
     }
   })
 
-  test("default variant on another route navigates to planner and opens chat", async ({
+  test("default variant on another route navigates to the plan and opens chat", async ({
     page,
   }) => {
     const slot = await seedSlot(`slot.gen-default-${uid()}`, "coffee", 10)
@@ -55,7 +55,7 @@ test.describe("Generate plan CTA", () => {
       await expect(page.getByTestId("sidenav")).toBeVisible()
       await page.getByTestId("generate-plan-default").click()
 
-      await expect(page).toHaveURL("/")
+      await expect(page).toHaveURL("/plan")
       const composer = page.getByTestId("chat-composer-input")
       await expect(composer).toBeVisible()
       await expect(composer).toHaveValue(/plan my week/i)

@@ -149,6 +149,7 @@ export function useCopyWeek() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
+      invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })

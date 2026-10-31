@@ -163,6 +163,7 @@ function EmptySlot({
           }
           aria-keyshortcuts="N"
           data-testid="slot-empty-add"
+          data-cell-focus=""
           className="group/add absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-[14px] text-on-surface-variant transition-transform duration-150 ease-out hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none focus-visible:ring-inset"
         >
           <span className="grid size-8 place-items-center rounded-full border border-outline-variant bg-surface-container-lowest text-on-surface transition-[background-color,border-color,color,transform] duration-150 ease-out group-hover/add:scale-110 group-hover/add:border-primary group-hover/add:bg-primary group-hover/add:text-on-primary">
@@ -277,6 +278,7 @@ function NoPlateSlot({
       <PopoverAnchor asChild>
         <div
           data-slot-state="none"
+          data-cell-focus=""
           role="group"
           tabIndex={0}
           aria-label={note ? `${label}, ${note}` : label}
@@ -432,6 +434,7 @@ function PlannedSlot({
           aria-label={t("slot_sheet.open_label")}
           aria-keyshortcuts="N Delete"
           data-testid="slot-open-sheet"
+          data-cell-focus=""
           className="absolute inset-0 z-[1] cursor-pointer rounded-[14px] focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none focus-visible:ring-inset"
         />
       )}
