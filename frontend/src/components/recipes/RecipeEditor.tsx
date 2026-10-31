@@ -2,13 +2,14 @@ import { useCallback, useMemo, useState } from "react"
 import {
   useForm,
   useFieldArray,
+  useFormContext,
   useWatch,
   type Resolver,
 } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useTranslation } from "react-i18next"
-import { Link, useNavigate } from "@tanstack/react-router"
-import { GitBranch, Loader2, Plus, Trash2, X } from "lucide-react"
+import { Link } from "@tanstack/react-router"
+import { Loader2, Plus, Trash2, TriangleAlert, X } from "lucide-react"
 
 import {
   FoodPlaceholder,
@@ -18,6 +19,7 @@ import { imageURL } from "@/lib/image-url"
 
 import { NutritionPanel } from "@/components/editorial/NutritionPanel"
 import { SectionCard } from "@/components/editorial/SectionCard"
+import { useSettingField } from "@/components/settings/setting-field"
 import { StickyActionBar } from "@/components/editorial/StickyActionBar"
 import { ImageField } from "@/components/images/ImageField"
 import { useUploadImage } from "@/lib/queries/images"
@@ -63,7 +65,6 @@ import {
   useCreateFood,
   useUpdateFood,
   useDeleteFood,
-  useCreateVariant,
   useFoodNutrition,
   useVariants,
 } from "@/lib/queries/foods"
@@ -101,6 +102,8 @@ export function RecipeEditor({
           reference_portions: component.reference_portions ?? 1,
           prep_minutes: component.prep_minutes ?? 0,
           cook_minutes: component.cook_minutes ?? 0,
+          keep_days: component.keep_days ?? null,
+          freezable: component.freezable ?? null,
           notes: component.notes,
           source_url: component.source_url ?? "",
           description: component.description ?? null,
@@ -126,6 +129,8 @@ export function RecipeEditor({
           reference_portions: 1,
           prep_minutes: 0,
           cook_minutes: 0,
+          keep_days: null,
+          freezable: null,
           notes: null,
           source_url: "",
           description: null,
@@ -150,9 +155,7 @@ export function RecipeEditor({
   const createMutation = useCreateFood()
   const updateMutation = useUpdateFood()
   const deleteMutation = useDeleteFood()
-  const createVariant = useCreateVariant()
   const uploadMutation = useUploadImage()
-  const navigate = useNavigate()
   const { data: variantsData } = useVariants(component?.id ?? 0)
   const { data: savedNutrition } = useFoodNutrition(component?.id ?? 0)
 
@@ -207,6 +210,8 @@ export function RecipeEditor({
       reference_portions: values.reference_portions,
       prep_minutes: values.prep_minutes,
       cook_minutes: values.cook_minutes,
+      keep_days: values.keep_days,
+      freezable: values.freezable,
       notes: values.notes,
       // "" clears the stored value on update; omitting would keep it.
       source_url: values.source_url ?? "",
@@ -389,30 +394,6 @@ export function RecipeEditor({
           <NutritionCompletenessWarning missing={savedNutrition.missing} />
         )}
 
-        {isEdit && component && (
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={createVariant.isPending}
-              onClick={() =>
-                createVariant.mutate(component.id, {
-                  onSuccess: (variant) => {
-                    void navigate({
-                      to: "/recipes/$id/edit",
-                      params: { id: String(variant.id) },
-                    })
-                  },
-                })
-              }
-              data-testid="component-create-variant"
-            >
-              <GitBranch className="mr-1.5 size-4" aria-hidden />
-              {t("component.create_variant")}
-            </Button>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* Left column */}
           <div className="space-y-4 lg:col-span-8">
@@ -555,6 +536,8 @@ export function RecipeEditor({
                 </p>
               )}
             </SectionCard>
+
+            <StorageFields />
 
             <SectionCard title={t("component.tags")}>
               {watchedTags.length > 0 && (
@@ -987,4 +970,101 @@ function computePerPortionMacros(
     fiber: total.fiber / portions,
     sodium: total.sodium / portions,
   }
+}
+
+const FREEZABLE_OPTIONS = [
+  { value: "unknown", stored: null, label: "component.freezable_unknown" },
+  { value: "yes", stored: true, label: "component.freezable_yes" },
+  { value: "no", stored: false, label: "component.freezable_no" },
+] as const
+
+/** Keep days (1–7, empty = the household default) and freezable (D15, F9).
+ *  Above 4 days a food-safety note appears. */
+function StorageFields() {
+  const { t } = useTranslation()
+  const form = useFormContext<ComposedFoodFormValues>()
+  const defaultKeep = Number(
+    useSettingField("plan.default_keep_days", "3").value
+  )
+  const keep = Number(useWatch({ control: form.control, name: "keep_days" }))
+
+  return (
+    <SectionCard title={t("component.storage")}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField
+          control={form.control}
+          name="keep_days"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t("component.keep_days")}</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={7}
+                  placeholder={t("component.keep_days_placeholder", {
+                    count: defaultKeep,
+                  })}
+                  {...field}
+                  value={field.value ?? ""}
+                  data-testid="recipe-keep-days"
+                />
+              </FormControl>
+              <FormDescription>{t("component.keep_days_hint")}</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="freezable"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t("component.freezable")}</FormLabel>
+              <Select
+                value={
+                  FREEZABLE_OPTIONS.find((o) => o.stored === field.value)
+                    ?.value ?? "unknown"
+                }
+                onValueChange={(v) =>
+                  field.onChange(
+                    FREEZABLE_OPTIONS.find((o) => o.value === v)?.stored ?? null
+                  )
+                }
+              >
+                <FormControl>
+                  <SelectTrigger data-testid="recipe-freezable">
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent position="popper">
+                  {FREEZABLE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {t(o.label)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+      {keep > 4 && (
+        <p
+          role="status"
+          className="flex items-start gap-2 text-small text-ink"
+          data-testid="recipe-keep-days-warning"
+        >
+          <TriangleAlert
+            className="mt-0.5 size-4 shrink-0 text-warning"
+            strokeWidth={1.5}
+            aria-hidden
+          />
+          {t("component.keep_days_warning")}
+        </p>
+      )}
+    </SectionCard>
+  )
 }

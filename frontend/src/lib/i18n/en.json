@@ -569,7 +569,17 @@
       "create_body": "Type in a recipe you know by heart, one ingredient at a time. For your own take on a saved recipe, open it and create a variant.",
       "create_action": "Create a recipe",
       "milestone": "{{count}} recipes. You're ready to plan your first week."
-    }
+    },
+    "storage": "Storage",
+    "keep_days": "Keeps (days)",
+    "keep_days_placeholder_one": "Default ({{count}} day)",
+    "keep_days_placeholder_other": "Default ({{count}} days)",
+    "keep_days_hint": "Days in the fridge after cooking, 1 to 7. Leave empty to use the default.",
+    "keep_days_warning": "Cooked food usually keeps 3 to 4 days in the fridge. Only go above 4 when you know this dish keeps longer.",
+    "freezable": "Freezable",
+    "freezable_unknown": "Not set",
+    "freezable_yes": "Yes",
+    "freezable_no": "No"
   },
   "lookup": {
     "title": "Find ingredient",
@@ -1075,7 +1085,19 @@
     "not_found_title": "Recipe not found",
     "not_found_body": "It may have been deleted, or the link is wrong.",
     "load_error_title": "Couldn't load this recipe",
-    "load_error_body": "Check your connection and try again."
+    "load_error_body": "Check your connection and try again.",
+    "time": "Time",
+    "minutes": "{{count}} min",
+    "keeps": "Keeps",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "freezable": "Freezable",
+    "history_one": "Cooked once, last {{when}}",
+    "history_other": "Cooked {{count}} times, last {{when}}",
+    "history_count_one": "Cooked once",
+    "history_count_other": "Cooked {{count}} times",
+    "history_never": "Not cooked yet",
+    "buy": "buy {{quantity}}"
   },
   "nutrition_warning": {
     "title": "Nutrition is incomplete",

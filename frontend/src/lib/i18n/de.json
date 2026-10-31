@@ -568,7 +568,17 @@
       "create_body": "Trag ein Rezept ein, das du auswendig kennst, Zutat für Zutat. Für deine eigene Version eines gespeicherten Rezepts öffnest du es und legst eine Variante an.",
       "create_action": "Rezept anlegen",
       "milestone": "{{count}} Rezepte. Du kannst deine erste Woche planen."
-    }
+    },
+    "storage": "Aufbewahrung",
+    "keep_days": "Hält sich (Tage)",
+    "keep_days_placeholder_one": "Standard ({{count}} Tag)",
+    "keep_days_placeholder_other": "Standard ({{count}} Tage)",
+    "keep_days_hint": "Tage im Kühlschrank nach dem Kochen, 1 bis 7. Leer lassen für den Standardwert.",
+    "keep_days_warning": "Gekochtes hält sich im Kühlschrank meist 3 bis 4 Tage. Geh nur darüber, wenn du weißt, dass sich dieses Gericht länger hält.",
+    "freezable": "Einfrierbar",
+    "freezable_unknown": "Keine Angabe",
+    "freezable_yes": "Ja",
+    "freezable_no": "Nein"
   },
   "lookup": {
     "title": "Zutat finden",
@@ -1064,7 +1074,19 @@
     "not_found_title": "Rezept nicht gefunden",
     "not_found_body": "Vielleicht wurde es gelöscht, oder der Link stimmt nicht.",
     "load_error_title": "Rezept konnte nicht geladen werden",
-    "load_error_body": "Prüfe die Verbindung und versuche es erneut."
+    "load_error_body": "Prüfe die Verbindung und versuche es erneut.",
+    "time": "Zeit",
+    "minutes": "{{count}} Min.",
+    "keeps": "Hält sich",
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage",
+    "freezable": "Einfrierbar",
+    "history_one": "Einmal gekocht, zuletzt {{when}}",
+    "history_other": "{{count}}-mal gekocht, zuletzt {{when}}",
+    "history_count_one": "Einmal gekocht",
+    "history_count_other": "{{count}}-mal gekocht",
+    "history_never": "Noch nicht gekocht",
+    "buy": "{{quantity}} kaufen"
   },
   "nutrition_warning": {
     "title": "Nährwerte unvollständig",

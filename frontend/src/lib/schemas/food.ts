@@ -81,6 +81,12 @@ export const composedFoodSchema = z.object({
   reference_portions: z.coerce.number().positive().default(1),
   prep_minutes: z.coerce.number().min(0).default(0),
   cook_minutes: z.coerce.number().min(0).default(0),
+  // 1–7 days; empty means "use plan.default_keep_days" (D15).
+  keep_days: z.preprocess(
+    (v) => (v === "" || v === undefined ? null : v),
+    z.coerce.number().int().min(1).max(7).nullable()
+  ),
+  freezable: z.boolean().nullable().default(null),
   notes: z.string().nullable().optional(),
   // "" → undefined so an empty field passes; the editor sends "" to clear.
   source_url: z.preprocess(
