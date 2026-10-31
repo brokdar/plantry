@@ -44,7 +44,11 @@ function CookShell({ message }: { message?: string }) {
           </Button>
         </>
       ) : (
-        <div aria-hidden className="flex flex-col gap-4">
+        <div
+          role="status"
+          aria-label={t("cook.loading")}
+          className="flex flex-col gap-4"
+        >
           <div className="h-10 w-2/3 animate-pulse rounded-cell bg-panel-sunken" />
           <div className="h-11 w-1/2 animate-pulse rounded-cell bg-panel-sunken" />
           <div className="h-56 w-full animate-pulse rounded-cell bg-panel-sunken" />
@@ -62,14 +66,15 @@ function CookShell({ message }: { message?: string }) {
 export function CookSessionPage({ sessionId }: { sessionId: number }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
-  const session = useSession(sessionId)
+  const valid = Number.isInteger(sessionId) && sessionId > 0
+  const session = useSession(valid ? sessionId : 0)
   const food = useFood(session.data?.food_id ?? 0)
   const slots = useTimeSlots()
   const { portions, change, flush } = useSessionPortions(session.data)
   const scaled = useScaled(session.data?.food_id ?? 0, portions)
   const cooked = useSetSessionCooked()
 
-  if (session.isError || food.isError) {
+  if (!valid || session.isError || food.isError) {
     return <CookShell message={t("cook.missing")} />
   }
   const s = session.data
@@ -105,12 +110,10 @@ export function CookSessionPage({ sessionId }: { sessionId: number }) {
         </CloseButton>
       }
       donePending={cooked.isPending}
-      onDone={() => {
+      onDone={async () => {
         flush()
-        cooked.mutate(
-          { id: s.id, cooked: true },
-          { onSuccess: () => void navigate({ to: "/today" }) }
-        )
+        await cooked.mutateAsync({ id: s.id, cooked: true })
+        await navigate({ to: "/today" })
       }}
     />
   )

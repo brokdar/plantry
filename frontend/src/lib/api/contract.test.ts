@@ -186,7 +186,7 @@ const cases: Case[] = [
   },
   {
     name: "getToday",
-    call: () => getToday("2026-11-02"),
+    call: () => getToday("2026-11-02", "2026-10-30"),
     method: "GET",
     path: "/today?date=2026-11-02&today=2026-10-30",
   },

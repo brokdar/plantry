@@ -7,7 +7,10 @@ import { cn } from "@/lib/utils"
 
 export interface RunningTimer {
   id: number
-  /** The step's wording, e.g. "20 Minuten". */
+  /** The duration that started it: step index and match offset, e.g.
+   *  "2:31". One timer per key at a time. */
+  key: string
+  /** The step and its wording, e.g. "Step 3 · 20 Minuten". */
   label: string
   /** Epoch ms when it rings. */
   endsAt: number

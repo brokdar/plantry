@@ -173,6 +173,25 @@ describe("cook pages", () => {
         await screen.findByText("This batch no longer exists.")
       ).toBeVisible()
     })
+
+    it.each([0, -3, Number.NaN, 1.5])(
+      "says so for the invalid id %s without fetching",
+      async (id) => {
+        renderWithRouter(<CookSessionPage sessionId={id} />)
+        expect(
+          await screen.findByText("This batch no longer exists.")
+        ).toBeVisible()
+        expect(getSession).not.toHaveBeenCalled()
+      }
+    )
+
+    it("announces the loading skeleton", async () => {
+      vi.mocked(getSession).mockReturnValue(new Promise(() => {}))
+      renderWithRouter(<CookSessionPage sessionId={7} />)
+      expect(
+        await screen.findByRole("status", { name: "Loading the recipe" })
+      ).toBeInTheDocument()
+    })
   })
 
   describe("recipe mode", () => {

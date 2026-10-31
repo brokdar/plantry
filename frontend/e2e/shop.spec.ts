@@ -294,10 +294,9 @@ test.describe("Shop", () => {
     page,
   }) => {
     await page.goto("/shop?from=2026-01-01&to=2027-06-30")
+    // A 4xx is not retried, so the error shows at once.
     await expect(page.getByRole("alert")).toContainText(
-      "That range is longer than a year",
-      // Until 4xx stops retrying (query-client), the error takes ~7 s.
-      { timeout: 15_000 }
+      "That range is longer than a year"
     )
     await page.getByTestId("shop-range").click()
     await page.getByRole("button", { name: /This window/ }).click()

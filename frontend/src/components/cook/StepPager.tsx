@@ -11,8 +11,8 @@ const SWIPE_PX = 48
 interface StepPagerProps {
   /** Step texts in order. */
   steps: readonly string[]
-  /** A duration button in the step was pressed. */
-  onStartTimer: (timer: DetectedTimer) => void
+  /** A duration button in step `step` (0-based) was pressed. */
+  onStartTimer: (timer: DetectedTimer, step: number) => void
   /** Shown under the last step (or alone without steps): "Done cooking". */
   finish: ReactNode
   /** Shown on the last step only, e.g. "Freeze 2 portions". */
@@ -109,7 +109,7 @@ export function StepPager({
               <button
                 key={i}
                 type="button"
-                onClick={() => onStartTimer(part)}
+                onClick={() => onStartTimer(part, index)}
                 aria-label={t("cook.timer.start", { label: part.text })}
                 className="mx-0.5 inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-accent px-2 align-middle font-sans text-h3 font-semibold text-accent tabular-nums hover:bg-accent hover:text-on-accent"
               >

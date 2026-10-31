@@ -1081,7 +1081,8 @@
       "empty_plate": "empty plate",
       "name": "{{weekday}} {{slot, lowercase}}",
       "needs_attention": "needs attention",
-      "speech_cook": "cook here, {{portions}} portions",
+      "speech_cook_one": "cook here, {{portions}} portion",
+      "speech_cook_other": "cook here, {{portions}} portions",
       "speech_leftover": "leftover {{position}} of {{meals}}",
       "speech_frozen": "frozen, {{position}} of {{meals}}",
       "subline_cook": "cook here",
@@ -1256,6 +1257,13 @@
       "nothing_to_cook": "Nothing to cook today",
       "no_plates": "No plates planned today",
       "no_plan": "No plan for today"
+    },
+    "verdict_day": {
+      "cook": "Cook {{name}} × {{portions}} on {{weekday}}",
+      "quick_cook": "Quick cook on {{weekday}}: {{name}}",
+      "nothing_to_cook": "Nothing to cook on {{weekday}}",
+      "no_plates": "No plates planned for {{weekday}}",
+      "no_plan": "No plan for {{weekday}} yet"
     },
     "prev_day": "Previous day",
     "next_day": "Next day",
@@ -1526,13 +1534,21 @@
     "freeze_other": "Freeze {{portions}} portions",
     "done": "Done cooking",
     "missing": "This batch no longer exists.",
+    "loading": "Loading the recipe",
     "recipe_missing": "This recipe no longer exists.",
     "timer": {
       "group": "Timers",
-      "start": "Start a {{label}} timer",
-      "stop": "Stop the {{label}} timer",
+      "start": "Start timer: {{label}}",
+      "stop": "Stop timer: {{label}}",
       "done": "Done",
-      "finished": "{{label}} timer done"
+      "finished": "Timer done: {{label}}",
+      "label": "Step {{step}} · {{label}}"
+    },
+    "leave": {
+      "title": "Leave cook mode?",
+      "body": "Your running timers will stop.",
+      "stay": "Keep cooking",
+      "leave": "Leave"
     }
   }
 }

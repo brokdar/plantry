@@ -81,18 +81,27 @@ export interface TodayPlanView {
   reminders: TodayReminderView[]
 }
 
-/** The headline for a verdict (UX §5.2), e.g. "Cook Chili × 6". */
-export function verdictText(verdict: TodayVerdict, f: Formatter): string {
+/** The headline for a verdict (UX §5.2), e.g. "Cook Chili × 6". On a day
+ *  other than today, `weekday` names it instead of saying "today". */
+export function verdictText(
+  verdict: TodayVerdict,
+  f: Formatter,
+  weekday?: string
+): string {
+  const key = weekday
+    ? (`today.verdict_day.${verdict.kind}` as const)
+    : (`today.verdict.${verdict.kind}` as const)
   switch (verdict.kind) {
     case "cook":
-      return f.t("today.verdict.cook", {
+      return f.t(key, {
+        weekday,
         name: verdict.food_name,
         portions: formatAmount(verdict.portions, f),
       })
     case "quick_cook":
-      return f.t("today.verdict.quick_cook", { name: verdict.food_name })
+      return f.t(key, { weekday, name: verdict.food_name })
     default:
-      return f.t(`today.verdict.${verdict.kind}`)
+      return f.t(key, { weekday })
   }
 }
 
@@ -118,7 +127,13 @@ export function buildTodayHeader(
       day: "numeric",
       month: "long",
     }),
-    headline: verdictText(today.verdict, f),
+    headline: verdictText(
+      today.verdict,
+      f,
+      today.date === realToday
+        ? undefined
+        : formatDate(today.date, f, { weekday: "long" })
+    ),
     rate:
       today.rate && today.date <= realToday
         ? {

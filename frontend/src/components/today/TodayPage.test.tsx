@@ -215,7 +215,7 @@ describe("TodayPage", () => {
   })
 
   it("no plan: Plan this week and the Plan next week banner", async () => {
-    renderToday(mockTodayByVerdict.no_plan)
+    renderToday(mockTodayByVerdict.no_plan, "2026-11-09")
     expect(await screen.findByTestId("today-verdict")).toHaveTextContent(
       "No plan for today"
     )
@@ -260,7 +260,27 @@ describe("TodayPage", () => {
     expect(
       within(card).getByRole("link", { name: "Add recipes" })
     ).toHaveAttribute("href", "/recipes")
-    expect(screen.queryByTestId("today-no-plan")).toBeNull()
+    // Planning by hand needs no 10 recipes: the way to the board stays.
+    expect(
+      within(screen.getByTestId("today-no-plan")).getByRole("link", {
+        name: "Plan this week",
+      })
+    ).toHaveAttribute("href", "/plan?start=2026-11-07")
+  })
+
+  it("below the recipe target on a cook day: the cook card comes first", async () => {
+    renderToday(
+      {
+        ...mockTodayByVerdict.cook,
+        setup: { recipe_count: 7, recipe_target: 10 },
+      },
+      SUNDAY
+    )
+    const cook = await screen.findByTestId("today-cook-card")
+    const setup = screen.getByTestId("today-setup-card")
+    expect(
+      cook.compareDocumentPosition(setup) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
   })
 
   // F5-AC6: the Settings gear lives in the Today header on phones.

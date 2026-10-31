@@ -179,14 +179,30 @@ test.describe("Cook mode", () => {
       )
 
       // The duration is a timer button; its pill stays across steps.
-      await page.getByRole("button", { name: "Start a 5 min timer" }).click()
-      await expect(page.getByTestId("cook-timer")).toContainText("5 min")
+      const start = page.getByRole("button", { name: "Start timer: 5 min" })
+      await start.click()
+      await expect(page.getByTestId("cook-timer")).toContainText(
+        "Step 2 · 5 min"
+      )
+      // A second press while it runs starts no duplicate.
+      await start.click()
+      await expect(page.getByTestId("cook-timer")).toHaveCount(1)
 
       await page.keyboard.press("ArrowRight")
       await expect(position).toHaveText("Step 3 of 5")
       await expect(page.getByTestId("cook-timer")).toBeVisible()
       await page.keyboard.press("ArrowLeft")
       await expect(position).toHaveText("Step 2 of 5")
+
+      // Closing with a running timer asks first.
+      await page.getByRole("link", { name: "Close cook mode" }).click()
+      const leave = page.getByRole("dialog", { name: "Leave cook mode?" })
+      await leave.getByRole("button", { name: "Keep cooking" }).click()
+      await expect(leave).toHaveCount(0)
+      await expect(page).toHaveURL(new RegExp(`/cook/${seed.sessionId}$`))
+      await page.getByRole("link", { name: "Close cook mode" }).click()
+      await leave.getByRole("button", { name: "Leave" }).click()
+      await expect(page).toHaveURL(/\/today$/)
     } finally {
       await seed.cleanup()
     }
@@ -218,6 +234,10 @@ test.describe("Cook mode", () => {
       const card = page.getByTestId("today-cook-card")
       await expect(card.getByTestId("today-cooked")).toHaveText("Cooked")
       await expect(card.getByTestId("today-start-cooking")).toHaveCount(0)
+      // A cooked batch no longer heads the day.
+      await expect(page.getByTestId("today-verdict")).not.toContainText(
+        seed.name
+      )
     } finally {
       await seed.cleanup()
     }

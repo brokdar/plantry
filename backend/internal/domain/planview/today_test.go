@@ -97,6 +97,33 @@ func TestToday_Verdicts(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, big, td.Verdict.SessionID)
 	})
+
+	t.Run("a cooked session yields to the uncooked one", func(t *testing.T) {
+		f := newFixture()
+		big := f.session(chiliID, "2026-11-03", dinner, 6)
+		f.composed("2026-11-03", dinner, chiliID, big)
+		small := f.session(omeletID, "2026-11-03", breakfast, 2)
+		f.composed("2026-11-03", breakfast, omeletID, small)
+		cs := f.sessions[big]
+		cs.CookedAt = ptr(date("2026-11-03"))
+		f.sessions[big] = cs
+		td, err := f.service().Today(ctx, date("2026-11-03"))
+		require.NoError(t, err)
+		assert.Equal(t, small, td.Verdict.SessionID)
+		require.Len(t, td.Cook, 2, "cooked sessions stay in the cook list")
+	})
+
+	t.Run("every session cooked has nothing left to cook", func(t *testing.T) {
+		f := newFixture()
+		sid := f.ac1()
+		cs := f.sessions[sid]
+		cs.CookedAt = ptr(date("2026-11-01"))
+		f.sessions[sid] = cs
+		td, err := f.service().Today(ctx, date("2026-11-01"))
+		require.NoError(t, err)
+		assert.Equal(t, Verdict{Kind: VerdictNothingToCook}, td.Verdict)
+		require.Len(t, td.Cook, 1)
+	})
 }
 
 func TestToday_MealsAndSetup(t *testing.T) {

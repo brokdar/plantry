@@ -1081,7 +1081,8 @@
       "empty_plate": "leere Mahlzeit",
       "name": "{{weekday}} {{slot}}",
       "needs_attention": "bitte prüfen",
-      "speech_cook": "hier kochen, {{portions}} Portionen",
+      "speech_cook_one": "hier kochen, {{portions}} Portion",
+      "speech_cook_other": "hier kochen, {{portions}} Portionen",
       "speech_leftover": "Rest {{position}} von {{meals}}",
       "speech_frozen": "gefroren, {{position}} von {{meals}}",
       "subline_cook": "hier kochen",
@@ -1223,7 +1224,7 @@
     }
   },
   "batch": {
-    "cook": "Koche × {{portions}}",
+    "cook": "Kochen × {{portions}}",
     "strip": "{{weekday}} · {{name}} × {{portions}}",
     "linked": "{{position}}/{{meals}}",
     "frozen": "{{position}}/{{meals}} · gefroren",
@@ -1256,6 +1257,13 @@
       "nothing_to_cook": "Heute wird nicht gekocht",
       "no_plates": "Heute ist kein Essen geplant",
       "no_plan": "Für heute gibt es noch keinen Plan"
+    },
+    "verdict_day": {
+      "cook": "Am {{weekday}} kochen: {{name}} × {{portions}}",
+      "quick_cook": "Am {{weekday}} schnell gekocht: {{name}}",
+      "nothing_to_cook": "Am {{weekday}} wird nicht gekocht",
+      "no_plates": "Für {{weekday}} ist kein Essen geplant",
+      "no_plan": "Für {{weekday}} gibt es noch keinen Plan"
     },
     "prev_day": "Vorheriger Tag",
     "next_day": "Nächster Tag",
@@ -1526,13 +1534,21 @@
     "freeze_other": "{{portions}} Portionen einfrieren",
     "done": "Fertig gekocht",
     "missing": "Dieses Vorkochen gibt es nicht mehr.",
+    "loading": "Rezept wird geladen",
     "recipe_missing": "Dieses Rezept gibt es nicht mehr.",
     "timer": {
       "group": "Timer",
-      "start": "Timer für {{label}} starten",
-      "stop": "Timer für {{label}} stoppen",
+      "start": "Timer starten: {{label}}",
+      "stop": "Timer stoppen: {{label}}",
       "done": "Fertig",
-      "finished": "Timer für {{label}} abgelaufen"
+      "finished": "Timer abgelaufen: {{label}}",
+      "label": "Schritt {{step}} · {{label}}"
+    },
+    "leave": {
+      "title": "Kochmodus verlassen?",
+      "body": "Laufende Timer werden dann beendet.",
+      "stay": "Weiterkochen",
+      "leave": "Verlassen"
     }
   }
 }

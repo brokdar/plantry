@@ -17,12 +17,12 @@ const cases: Array<{
   {
     props: { sessionId: 7, colour: 1, variant: "cook", portions: 6 },
     en: "Cook × 6",
-    de: "Koche × 6",
+    de: "Kochen × 6",
   },
   {
     props: { sessionId: 7, colour: 1, variant: "cook", portions: 3.5 },
     en: "Cook × 3½",
-    de: "Koche × 3½",
+    de: "Kochen × 3½",
   },
   {
     props: {
@@ -71,14 +71,14 @@ const cases: Array<{
 
 describe("BatchBadge texts (F2-AC2)", () => {
   it.each(cases)("$props.variant → en $en", ({ props, en }) => {
-    render(<BatchBadge {...props} />)
-    expect(screen.getByText(en)).toBeInTheDocument()
+    const { container } = render(<BatchBadge {...props} />)
+    expect(container.querySelector("[data-batch-badge]")?.textContent).toBe(en)
   })
 
   it.each(cases)("$props.variant → de $de", async ({ props, de }) => {
     await act(() => i18n.changeLanguage("de"))
-    render(<BatchBadge {...props} />)
-    expect(screen.getByText(de)).toBeInTheDocument()
+    const { container } = render(<BatchBadge {...props} />)
+    expect(container.querySelector("[data-batch-badge]")?.textContent).toBe(de)
   })
 })
 

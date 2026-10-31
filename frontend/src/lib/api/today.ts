@@ -1,5 +1,3 @@
-import { todayISO } from "@/lib/dates"
-
 import type { AvailabilityMode } from "./availability"
 import { apiFetch } from "./client"
 import type { Plate } from "./plates"
@@ -61,7 +59,7 @@ export interface Today {
 }
 
 /** GET /api/today?date&today. */
-export function getToday(date: string): Promise<Today> {
-  const qs = new URLSearchParams({ date, today: todayISO() })
+export function getToday(date: string, today: string): Promise<Today> {
+  const qs = new URLSearchParams({ date, today })
   return apiFetch(`/today?${qs}`)
 }

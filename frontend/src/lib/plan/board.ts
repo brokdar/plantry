@@ -306,6 +306,7 @@ function badgeSpeech(badge: CellBadge, f: Formatter): string {
   switch (badge.variant) {
     case "cook":
       return f.t("plan.cell.speech_cook", {
+        count: badge.portions,
         portions: formatAmount(badge.portions, f),
       })
     case "leftover":

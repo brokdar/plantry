@@ -1,10 +1,19 @@
 import { Snowflake } from "lucide-react"
+import { useBlocker } from "@tanstack/react-router"
 import { Tabs as TabsPrimitive } from "radix-ui"
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 
 import { QuantityStepper } from "@/components/plan/QuantityStepper"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import type { ScaledIngredient } from "@/lib/api/foods"
 import type { DetectedTimer } from "@/lib/cook/timers"
 import { formatAmount } from "@/lib/plan/format"
@@ -32,7 +41,9 @@ export interface CookModeProps {
   freezePortions?: number
   /** The way out, e.g. a link back to Today or the recipe. */
   close: ReactNode
-  onDone: () => void
+  /** Finishes and leaves. A promise that rejects (Done cooking failed)
+   *  keeps cook mode, and the leave guard, in place. */
+  onDone: () => void | Promise<unknown>
   donePending?: boolean
 }
 
@@ -65,15 +76,33 @@ export function CookMode({
   const [timers, setTimers] = useState<RunningTimer[]>([])
   useWakeLock()
 
-  function startTimer(timer: DetectedTimer) {
-    setTimers((prev) => [
-      ...prev,
-      {
-        id: (prev.at(-1)?.id ?? 0) + 1,
-        label: timer.text,
-        endsAt: Date.now() + timer.seconds * 1000,
-      },
-    ])
+  // Leaving drops the timers, so ask first while one still runs; Done
+  // cooking is a deliberate exit and doesn't ask.
+  const finishing = useRef(false)
+  const running = () =>
+    !finishing.current && timers.some((x) => x.endsAt > Date.now())
+  const leave = useBlocker({
+    shouldBlockFn: running,
+    enableBeforeUnload: running,
+    withResolver: true,
+  })
+
+  function startTimer(timer: DetectedTimer, step: number) {
+    const key = `${step}:${timer.start}`
+    setTimers((prev) => {
+      const same = prev.find((x) => x.key === key)
+      // A second press of a running timer is a no-op; a rung one restarts.
+      if (same && same.endsAt > Date.now()) return prev
+      return [
+        ...prev.filter((x) => x !== same),
+        {
+          id: (prev.at(-1)?.id ?? 0) + 1,
+          key,
+          label: t("cook.timer.label", { step: step + 1, label: timer.text }),
+          endsAt: Date.now() + timer.seconds * 1000,
+        },
+      ]
+    })
   }
 
   const finish = (
@@ -81,7 +110,15 @@ export function CookMode({
       type="button"
       className="h-14 w-full text-h3"
       disabled={donePending}
-      onClick={onDone}
+      onClick={async () => {
+        finishing.current = true
+        try {
+          await onDone()
+        } catch {
+          // The mutation already reported it; stay and keep guarding.
+          finishing.current = false
+        }
+      }}
       data-testid="cook-done"
     >
       {t("cook.done")}
@@ -212,6 +249,28 @@ export function CookMode({
           </TabsPrimitive.Content>
         </div>
       </TabsPrimitive.Root>
+
+      <Dialog
+        open={leave.status === "blocked"}
+        onOpenChange={(open) => {
+          if (!open) leave.reset?.()
+        }}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{t("cook.leave.title")}</DialogTitle>
+            <DialogDescription>{t("cook.leave.body")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => leave.reset?.()}>
+              {t("cook.leave.stay")}
+            </Button>
+            <Button onClick={() => leave.proceed?.()}>
+              {t("cook.leave.leave")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }

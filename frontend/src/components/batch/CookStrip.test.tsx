@@ -122,8 +122,25 @@ describe("CookStrip", () => {
   it("reads in German", async () => {
     await act(() => i18n.changeLanguage("de"))
     render(<CookStrip batches={colourBatches([mockSession], mockPlan.slots)} />)
-    expect(screen.getByText(/^So\.? · Chili × 6$/)).toBeInTheDocument()
+    expect(screen.getByRole("button")).toHaveAccessibleName(
+      /^So\.? · Chili × 6$/
+    )
     expect(screen.getByRole("region", { name: "Kochtage" })).toBeInTheDocument()
+  })
+
+  it("truncates a long name but keeps the portions, with the name in title", () => {
+    const name = "Slow-cooked smoky black bean and sweet potato chili"
+    render(
+      <CookStrip
+        batches={colourBatches([{ ...curry, food_name: name }], mockPlan.slots)}
+      />
+    )
+    const label = screen.getByTitle(name)
+    expect(label).toHaveTextContent(name)
+    expect(label).toHaveClass("truncate")
+    expect(label.closest("[data-batch-badge]")).toHaveTextContent(
+      `Wed · ${name} × 8`
+    )
   })
 
   it("renders nothing without batches", () => {

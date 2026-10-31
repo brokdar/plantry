@@ -55,15 +55,16 @@ export function BoardGrid({
   }
 
   return (
-    // The scroll box: below 1024 px it scrolls sideways (4 days visible)
-    // and vertically, so the day headers can stick inside it.
+    // The scroll box: below 1024 px it scrolls sideways (4½ days visible,
+    // so the cut-off fifth hints at the rest) and vertically, so the day
+    // headers can stick inside it.
     <div className="@container max-h-[70dvh] snap-x snap-mandatory scroll-pl-24 overflow-auto overscroll-x-contain lg:max-h-none lg:overflow-visible">
       <div
         role="grid"
         aria-label={label}
         aria-readonly={board.readOnly || undefined}
         onKeyDown={onKeyDown}
-        className="grid grid-cols-[6rem_repeat(7,calc((100cqw-7rem)/4))] gap-1 p-1 lg:grid-cols-[7rem_repeat(7,minmax(0,1fr))]"
+        className="grid grid-cols-[6rem_repeat(7,calc((100cqw-7rem)/4.5))] gap-1 p-1 lg:grid-cols-[7rem_repeat(7,minmax(0,1fr))]"
       >
         <div role="row" className="contents">
           <div

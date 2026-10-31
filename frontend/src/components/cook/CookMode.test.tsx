@@ -1,4 +1,5 @@
-import { act, fireEvent, screen, within } from "@testing-library/react"
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
+import { Link } from "@tanstack/react-router"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -206,11 +207,11 @@ describe("CookMode", () => {
         await screen.findByTestId("step-pager")
         fireEvent.keyDown(window, { key: "ArrowRight" })
         fireEvent.click(
-          screen.getByRole("button", { name: "Start a 5 min timer" })
+          screen.getByRole("button", { name: "Start timer: 5 min" })
         )
 
         const pill = screen.getByTestId("cook-timer")
-        expect(pill).toHaveTextContent("5 min")
+        expect(pill).toHaveTextContent("Step 2 · 5 min")
         expect(pill).toHaveTextContent("5:00")
 
         fireEvent.keyDown(window, { key: "ArrowRight" })
@@ -223,12 +224,86 @@ describe("CookMode", () => {
         expect(vibrate).toHaveBeenCalledTimes(1)
 
         fireEvent.click(
-          screen.getByRole("button", { name: "Stop the 5 min timer" })
+          screen.getByRole("button", { name: "Stop timer: Step 2 · 5 min" })
         )
         expect(screen.queryByTestId("cook-timer")).toBeNull()
       } finally {
         delete (navigator as { vibrate?: unknown }).vibrate
       }
+    })
+
+    it("a second press of a running step timer starts no duplicate", async () => {
+      renderCook()
+      await screen.findByTestId("step-pager")
+      fireEvent.keyDown(window, { key: "ArrowRight" })
+      const start = screen.getByRole("button", { name: "Start timer: 5 min" })
+      fireEvent.click(start)
+      fireEvent.click(start)
+      expect(screen.getAllByTestId("cook-timer")).toHaveLength(1)
+    })
+
+    it("asks before leaving while a timer runs", async () => {
+      renderCook({
+        close: (
+          <Link to="/today" data-testid="cook-close">
+            x
+          </Link>
+        ),
+      })
+      await screen.findByTestId("step-pager")
+      fireEvent.keyDown(window, { key: "ArrowRight" })
+      fireEvent.click(
+        screen.getByRole("button", { name: "Start timer: 5 min" })
+      )
+      fireEvent.click(screen.getByTestId("cook-close"))
+      const dialog = await screen.findByRole("dialog", {
+        name: "Leave cook mode?",
+      })
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Keep cooking" })
+      )
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+      expect(screen.getByTestId("cook-timer")).toBeVisible()
+    })
+
+    it("still asks before leaving after a failed Done cooking", async () => {
+      renderCook({
+        onDone: vi.fn().mockRejectedValue(new Error("offline")),
+        close: (
+          <Link to="/today" data-testid="cook-close">
+            x
+          </Link>
+        ),
+      })
+      await screen.findByTestId("step-pager")
+      fireEvent.keyDown(window, { key: "ArrowRight" })
+      fireEvent.click(
+        screen.getByRole("button", { name: "Start timer: 5 min" })
+      )
+      for (let i = 0; i < 3; i++) {
+        fireEvent.keyDown(window, { key: "ArrowRight" })
+      }
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("cook-done"))
+      })
+      fireEvent.click(screen.getByTestId("cook-close"))
+      expect(
+        await screen.findByRole("dialog", { name: "Leave cook mode?" })
+      ).toBeVisible()
+    })
+
+    it("leaves without asking when no timer runs", async () => {
+      renderCook({
+        close: (
+          <Link to="/today" data-testid="cook-close">
+            x
+          </Link>
+        ),
+      })
+      await screen.findByTestId("step-pager")
+      fireEvent.click(screen.getByTestId("cook-close"))
+      await act(() => vi.advanceTimersByTimeAsync(50))
+      expect(screen.queryByRole("dialog")).toBeNull()
     })
   })
 })
