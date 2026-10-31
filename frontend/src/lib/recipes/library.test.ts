@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   hasLibraryFilters,
@@ -30,6 +30,36 @@ describe("rememberLibrarySearch", () => {
     expect(rememberedLibrarySearch()).toEqual(parseLibrarySearch({}))
     sessionStorage.setItem("plantry:recipes:search", "null")
     expect(rememberedLibrarySearch()).toEqual(parseLibrarySearch({}))
+  })
+
+  it("never hands back the import sheet, even from a stored add", () => {
+    sessionStorage.setItem(
+      "plantry:recipes:search",
+      JSON.stringify({ q: "chili", add: "url" })
+    )
+    expect(rememberedLibrarySearch()).toEqual(
+      parseLibrarySearch({ q: "chili" })
+    )
+  })
+
+  it("survives storage that throws on write and read", () => {
+    const set = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("quota", "QuotaExceededError")
+      })
+    const get = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new DOMException("denied", "SecurityError")
+      })
+    try {
+      expect(() => rememberLibrarySearch({ q: "chili" })).not.toThrow()
+      expect(rememberedLibrarySearch()).toEqual(parseLibrarySearch({}))
+    } finally {
+      set.mockRestore()
+      get.mockRestore()
+    }
   })
 })
 
