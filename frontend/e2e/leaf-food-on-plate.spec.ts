@@ -50,6 +50,7 @@ test.describe("Leaf food directly on a plate", () => {
         `Create plate failed: ${plateRes.status()} ${JSON.stringify(plateBody)}`
       ).toBeTruthy()
       plateId = (plateBody as { id: number }).id
+      const eaters = (plateBody as { eaters: number }).eaters
 
       const compRes = await ctx.post(`/api/plates/${plateId}/components`, {
         data: { food_id: leaf.id, amount: 100, unit: "g" },
@@ -68,8 +69,8 @@ test.describe("Leaf food directly on a plate", () => {
       await expect(cell).toBeVisible()
       await expect(cell.getByText(`Banana ${tag}`)).toBeVisible()
 
-      // Shopping list contains exactly one row for the leaf food, weighted at
-      // 100 g (one portion of a leaf = 100 g per the model convention).
+      // Shopping list contains one row for the leaf food: 100 g per eater,
+      // times the plate's eaters.
       const tomorrow = new Date()
       tomorrow.setDate(tomorrow.getDate() + 1)
       const tomorrowStr = tomorrow.toISOString().slice(0, 10)
@@ -78,12 +79,24 @@ test.describe("Leaf food directly on a plate", () => {
       )
       expect(shopRes.ok()).toBeTruthy()
       const shop = (await shopRes.json()) as {
-        items: { food_id: number; name: string; total_grams: number }[]
+        sections: {
+          items: {
+            food_id: number
+            name: string
+            total_grams: number
+            used_in: { session_id: number | null }[]
+          }[]
+        }[]
       }
-      const row = shop.items.find((i) => i.food_id === leaf.id)
+      const row = shop.sections
+        .flatMap((s) => s.items)
+        .find((i) => i.food_id === leaf.id)
       expect(row, "shopping list missing leaf food row").toBeTruthy()
       expect(row?.name).toBe(`Banana ${tag}`)
-      expect(row?.total_grams).toBeCloseTo(100, 1)
+      expect(row?.total_grams).toBeCloseTo(100 * eaters, 1)
+      expect(row?.used_in).toEqual([
+        expect.objectContaining({ session_id: null }),
+      ])
 
       // Nutrition range rolls up the leaf's per-100g macros (1 portion = 100g).
       const nutRes = await ctx.get(
