@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { screen, within } from "@testing-library/react"
+import { fireEvent, screen, within } from "@testing-library/react"
 
 import { renderWithRouter } from "@/test/render"
 import { SideNav } from "./SideNav"
@@ -87,5 +87,19 @@ describe("SideNav", () => {
     await screen.findByRole("navigation", { name: /primary/i })
     expect(screen.queryByRole("link", { name: /calendar/i })).toBeNull()
     expect(screen.queryByRole("link", { name: /presets/i })).toBeNull()
+  })
+
+  test("the width animates only on a toggle, never on load", async () => {
+    stubMatchMedia(true)
+    const onToggle = vi.fn()
+    renderWithRouter(<SideNav collapsed={true} onToggle={onToggle} />)
+
+    const aside = await screen.findByTestId("sidenav")
+    expect(aside).toHaveAttribute("data-collapsed", "true")
+    expect(aside.className).not.toContain("transition-[width]")
+
+    fireEvent.click(screen.getByRole("button", { name: /expand sidebar/i }))
+    expect(onToggle).toHaveBeenCalledTimes(1)
+    expect(aside.className).toContain("transition-[width]")
   })
 })
