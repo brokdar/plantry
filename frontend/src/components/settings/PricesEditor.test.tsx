@@ -123,4 +123,75 @@ describe("PricesEditor", () => {
     await user.tab()
     expect(setSetting).not.toHaveBeenCalled()
   })
+
+  it("keeps a saved price while its row is incomplete; only Remove deletes", async () => {
+    serveSettings([
+      { key: "ai.model", value: "claude-sonnet-5-5" },
+      {
+        key: "ai.price_overrides",
+        value: JSON.stringify({
+          fake: { in: 1, out: 2, cache_read: null, cache_write: null },
+          other: { in: 3, out: 4, cache_read: null, cache_write: null },
+        }),
+        source: "db",
+      },
+    ])
+    const user = userEvent.setup()
+    renderWithRouter(<PricesEditor />)
+
+    const [fake] = await screen.findAllByTestId("price-override-row")
+    await user.clear(within(fake).getByLabelText("Input"))
+    await user.tab()
+    expect(setSetting).not.toHaveBeenCalled()
+    expect(within(fake).getByText(/Needs a model id/)).toBeInTheDocument()
+
+    // Removing the other row deletes only its stored price.
+    const [, other] = screen.getAllByTestId("price-override-row")
+    await user.click(
+      within(other).getByRole("button", { name: "Remove the price for other" })
+    )
+    expect(setSetting).toHaveBeenCalledWith(
+      "ai.price_overrides",
+      JSON.stringify({
+        fake: { in: 1, out: 2, cache_read: null, cache_write: null },
+      })
+    )
+  })
+
+  it("flags a duplicate model id and does not save", async () => {
+    serveSettings([
+      { key: "ai.model", value: "claude-sonnet-5-5" },
+      {
+        key: "ai.price_overrides",
+        value: JSON.stringify({ fake: { in: 1, out: 2 } }),
+        source: "db",
+      },
+    ])
+    const user = userEvent.setup()
+    renderWithRouter(<PricesEditor />)
+
+    await user.click(await screen.findByTestId("price-override-add"))
+    const [, row] = screen.getAllByTestId("price-override-row")
+    await user.type(within(row).getByLabelText("Model id"), "fake")
+    await user.type(within(row).getByLabelText("Input"), "5")
+    await user.type(within(row).getByLabelText("Output"), "6")
+    await user.tab()
+    expect(setSetting).not.toHaveBeenCalled()
+    expect(within(row).getByLabelText("Model id")).toHaveAttribute(
+      "aria-invalid",
+      "true"
+    )
+    expect(
+      within(row).getByText(/Another row already prices this model/)
+    ).toBeInTheDocument()
+  })
+
+  it("says when the price can't be loaded", async () => {
+    vi.mocked(getPrice).mockRejectedValue(new Error("boom"))
+    renderWithRouter(<PricesEditor />)
+
+    expect(await screen.findByTestId("current-price")).toHaveTextContent(
+      "Couldn't load the price for this model."
+    )
+  })
 })

@@ -16,7 +16,7 @@ const COMPONENTS: { path: string; label: string; share: boolean }[] = [
   {
     path: "preference_fit",
     label: "settings_page.insights.score.preference_fit",
-    share: true,
+    share: false,
   },
   {
     path: "macro_deviation.weekly_pct",

@@ -15,7 +15,7 @@ describe("VersionTable", () => {
             ...mockInsights.by_version[0],
             score_avg: {
               coverage: 1,
-              preference_fit: 0.8,
+              preference_fit: 3.5,
               "macro_deviation.weekly_pct": 3.25,
               "variety.distinct": 6,
               waste_portions: 0,
@@ -37,7 +37,7 @@ describe("VersionTable", () => {
       "heuristic",
       "2",
       "100%",
-      "80%",
+      "3.5",
       "3.3",
       "6",
       "0",

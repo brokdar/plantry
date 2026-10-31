@@ -50,6 +50,30 @@ describe("RunsTable", () => {
     expect(within(row).getByText("fake")).toBeInTheDocument()
   })
 
+  it("counts cached tokens and breaks them down on hover", async () => {
+    vi.mocked(listRuns).mockResolvedValue({
+      items: [
+        {
+          ...mockRunsPage.items[1],
+          tokens: {
+            input: 1000,
+            output: 200,
+            cache_read: 3000,
+            cache_write: 50,
+          },
+        },
+      ],
+      next_cursor: null,
+    })
+    renderWithRouter(<RunsTable onOpen={vi.fn()} />)
+
+    const cell = await screen.findByText("4,250")
+    expect(cell).toHaveAttribute(
+      "title",
+      "1,000 in · 200 out · 3,000 cache read · 50 cache write"
+    )
+  })
+
   it("pages by cursor", async () => {
     renderWithRouter(<RunsTable onOpen={vi.fn()} />)
 

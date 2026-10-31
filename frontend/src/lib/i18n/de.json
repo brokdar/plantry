@@ -305,7 +305,9 @@
       "prices_add": "Preis hinzufügen",
       "prices_remove": "Preis für {{model}} entfernen",
       "prices_new_row": "das neue Modell",
-      "prices_incomplete": "Wird gespeichert, sobald Modell-ID sowie Eingabe- und Ausgabepreis (0 oder mehr) eingetragen sind."
+      "prices_incomplete": "Wird gespeichert, sobald Modell-ID sowie Eingabe- und Ausgabepreis (0 oder mehr) eingetragen sind.",
+      "prices_duplicate": "Für dieses Modell gibt es schon eine Zeile. Pro Modell-ID wird nur ein Preis gespeichert.",
+      "prices_error": "Der Preis für dieses Modell konnte nicht geladen werden."
     },
     "system_section": {
       "appearance_group": "Sprache und Design",
@@ -338,8 +340,8 @@
       "no_data": "Keine Daten",
       "week_of": "Woche ab {{date}}",
       "weeks_table": "Als Tabelle zeigen",
-      "excludes_runs_one": "Ohne {{count}} Lauf ohne Preis",
-      "excludes_runs_other": "Ohne {{count}} Läufe ohne Preis",
+      "excludes_runs_one": "{{count}} Lauf ohne Preis nicht enthalten",
+      "excludes_runs_other": "{{count}} Läufe ohne Preis nicht enthalten",
       "runs_title": "Läufe",
       "runs_error": "Die Läufe konnten nicht geladen werden.",
       "runs_empty": "Noch keine Läufe. Erstelle einen Plan oder schreib dem Assistenten, dann erscheint hier jeder Lauf.",
@@ -438,9 +440,10 @@
         "macro_weekly": "Wöchentliche Makro-Abweichung (%)",
         "variety_distinct": "Verschiedene Rezepte",
         "waste_portions": "Übrige Portionen",
-        "unknown_data": "Unbekannte Nährwerte"
+        "unknown_data": "Unvollständige Angaben"
       },
-      "prices_note": "Preise mit Stand {{date}}. Die Kosten sind Schätzungen; Preise änderst du unter Assistent → Preise."
+      "prices_note": "Preise mit Stand {{date}}. Die Kosten sind Schätzungen; Preise änderst du unter Assistent → Preise.",
+      "tokens_breakdown": "{{input}} Eingabe · {{output}} Ausgabe · {{cache_read}} Cache gelesen · {{cache_write}} Cache geschrieben"
     }
   },
   "settings": {

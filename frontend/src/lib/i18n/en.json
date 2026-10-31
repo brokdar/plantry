@@ -305,7 +305,9 @@
       "prices_add": "Add a price",
       "prices_remove": "Remove the price for {{model}}",
       "prices_new_row": "the new model",
-      "prices_incomplete": "Needs a model id and input and output prices of 0 or more before it saves."
+      "prices_incomplete": "Needs a model id and input and output prices of 0 or more before it saves.",
+      "prices_duplicate": "Another row already prices this model. Only one price per model id saves.",
+      "prices_error": "Couldn't load the price for this model."
     },
     "system_section": {
       "appearance_group": "Language and theme",
@@ -438,9 +440,10 @@
         "macro_weekly": "Weekly macro deviation (%)",
         "variety_distinct": "Distinct recipes",
         "waste_portions": "Spare portions",
-        "unknown_data": "Unknown nutrition"
+        "unknown_data": "Incomplete data"
       },
-      "prices_note": "Prices as of {{date}}. Costs are estimates; change prices under Assistant → Prices."
+      "prices_note": "Prices as of {{date}}. Costs are estimates; change prices under Assistant → Prices.",
+      "tokens_breakdown": "{{input}} in · {{output}} out · {{cache_read}} cache read · {{cache_write}} cache write"
     }
   },
   "settings": {

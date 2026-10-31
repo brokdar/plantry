@@ -12,6 +12,7 @@ import {
 } from "@/lib/api/prices"
 import { formatDate, type Formatter } from "@/lib/plan/format"
 import { useModelPrice } from "@/lib/queries/runs"
+import { cn } from "@/lib/utils"
 
 import { formatUSD } from "./insights/format"
 import { SavedNote, SettingsGroup } from "./controls"
@@ -24,6 +25,8 @@ type Field = (typeof FIELDS)[number]
 interface Row {
   key: number
   model: string
+  /** The model id this row is stored under; null until saved. */
+  saved: string | null
   /** Typed text per price, USD per 1M tokens; "" = not set. */
   prices: Record<Field, string>
 }
@@ -38,6 +41,7 @@ function parseRows(raw: string): Row[] {
   return Object.entries(parsed).map(([model, price], i) => ({
     key: i,
     model,
+    saved: model,
     prices: {
       in: String(price.in),
       out: String(price.out),
@@ -60,6 +64,17 @@ function rowPrice(row: Row): ModelPrice | null {
   if (row.model.trim() === "" || inP === null || outP === null) return null
   if ([inP, outP, read, write].some((v) => Number.isNaN(v))) return null
   return { in: inP!, out: outP!, cache_read: read, cache_write: write }
+}
+
+type RowIssue = "incomplete" | "duplicate"
+
+/** Why a row can't be saved, or null. */
+function rowIssue(row: Row, rows: Row[]): RowIssue | null {
+  if (rowPrice(row) === null) return "incomplete"
+  const id = row.model.trim()
+  return rows.some((r) => r !== row && r.model.trim() === id)
+    ? "duplicate"
+    : null
 }
 
 function serialize(rows: Row[]): string {
@@ -126,6 +141,13 @@ function CurrentPrice({ model }: { model: string }) {
       </p>
     )
   }
+  if (info.isError) {
+    return (
+      <p className="text-body text-ink" data-testid="current-price">
+        {t("settings_page.assistant.prices_error")}
+      </p>
+    )
+  }
   if (!info.data) return <p className="text-body text-ink-muted">…</p>
   return (
     <p className="text-body text-ink" data-testid="current-price">
@@ -161,19 +183,34 @@ function OverrideRows({
   const [rows, setRows] = useState<Row[]>(() => parseRows(stored))
   const [nextKey, setNextKey] = useState(rows.length)
 
-  function commit(next: Row[]) {
-    const value = serialize(next)
-    if (!sameOverrides(value, stored)) save(value)
+  // A blur saves only when every row is complete and unique, so editing
+  // a saved row never drops its stored price; only Remove deletes.
+  function commit() {
+    if (rows.some((r) => rowIssue(r, rows) !== null)) return
+    const value = serialize(rows)
+    if (sameOverrides(value, stored)) return
+    save(value)
+    setRows((rs) => rs.map((r) => ({ ...r, saved: r.model.trim() })))
   }
 
   function update(key: number, patch: (row: Row) => Row) {
     setRows((rs) => rs.map((r) => (r.key === key ? patch(r) : r)))
   }
 
+  /** Drops the row and, if it was saved, only its stored price. */
   function remove(key: number) {
-    const next = rows.filter((r) => r.key !== key)
-    setRows(next)
-    commit(next)
+    const row = rows.find((r) => r.key === key)
+    setRows((rs) => rs.filter((r) => r.key !== key))
+    if (!row?.saved) return
+    let current: PriceOverrides = {}
+    try {
+      current = JSON.parse(stored || "{}") as PriceOverrides
+    } catch {
+      // Unreadable: the save below replaces it.
+    }
+    delete current[row.saved]
+    const value = JSON.stringify(current)
+    if (!sameOverrides(value, stored)) save(value)
   }
 
   function add() {
@@ -182,6 +219,7 @@ function OverrideRows({
       {
         key: nextKey,
         model: "",
+        saved: null,
         prices: { in: "", out: "", cache_read: "", cache_write: "" },
       },
     ])
@@ -205,8 +243,9 @@ function OverrideRows({
             <OverrideRow
               key={row.key}
               row={row}
+              issue={rowIssue(row, rows)}
               onChange={(patch) => update(row.key, patch)}
-              onCommit={() => commit(rows)}
+              onCommit={commit}
               onRemove={() => remove(row.key)}
             />
           ))}
@@ -235,18 +274,19 @@ const FIELD_LABELS: Record<Field, string> = {
 
 function OverrideRow({
   row,
+  issue,
   onChange,
   onCommit,
   onRemove,
 }: {
   row: Row
+  issue: RowIssue | null
   onChange: (patch: (row: Row) => Row) => void
   onCommit: () => void
   onRemove: () => void
 }) {
   const { t } = useTranslation()
   const id = useId()
-  const incomplete = rowPrice(row) === null
   const name = row.model || t("settings_page.assistant.prices_new_row")
 
   return (
@@ -265,7 +305,8 @@ function OverrideRow({
             onChange((r) => ({ ...r, model }))
           }}
           onBlur={onCommit}
-          aria-describedby={incomplete ? `${id}-hint` : undefined}
+          aria-describedby={issue ? `${id}-hint` : undefined}
+          aria-invalid={issue === "duplicate" || undefined}
           className="pointer-coarse:h-11"
           data-testid="price-override-model"
         />
@@ -303,12 +344,19 @@ function OverrideRow({
       >
         <Trash2 strokeWidth={1.5} aria-hidden />
       </Button>
-      {incomplete && (
+      {issue && (
         <p
           id={`${id}-hint`}
-          className="col-span-full text-caption text-ink-muted"
+          className={cn(
+            "col-span-full text-caption",
+            issue === "duplicate" ? "text-danger" : "text-ink-muted"
+          )}
         >
-          {t("settings_page.assistant.prices_incomplete")}
+          {t(
+            issue === "duplicate"
+              ? "settings_page.assistant.prices_duplicate"
+              : "settings_page.assistant.prices_incomplete"
+          )}
         </p>
       )}
     </li>

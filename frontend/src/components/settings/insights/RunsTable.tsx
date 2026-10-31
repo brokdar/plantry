@@ -134,7 +134,8 @@ function RunRow({
   onOpen: (id: number) => void
 }) {
   const { t, i18n } = useTranslation()
-  const tokens = run.tokens.input + run.tokens.output
+  const { input, output, cache_read, cache_write } = run.tokens
+  const tokens = input + output + cache_read + cache_write
 
   return (
     <tr
@@ -159,7 +160,15 @@ function RunRow({
       </td>
       <td className="px-3 py-2">{modelText(run, i18n)}</td>
       <td className="px-3 py-2">{run.prompt_version ?? "–"}</td>
-      <td className="px-3 py-2 text-right tabular-nums">
+      <td
+        className="px-3 py-2 text-right tabular-nums"
+        title={t("settings_page.insights.tokens_breakdown", {
+          input: formatNumber(input, i18n),
+          output: formatNumber(output, i18n),
+          cache_read: formatNumber(cache_read, i18n),
+          cache_write: formatNumber(cache_write, i18n),
+        })}
+      >
         {formatNumber(tokens, i18n)}
       </td>
       <td className="px-3 py-2 text-right whitespace-nowrap tabular-nums">
