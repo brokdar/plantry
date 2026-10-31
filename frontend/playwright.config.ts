@@ -23,6 +23,7 @@ const AI_SERIAL_SPECS = [
   "settings-ai.spec.ts",
   "keyboard-shortcuts.spec.ts",
   "generate-plan.spec.ts",
+  "settings-insights.spec.ts",
 ]
 
 // Specs that write the profile or plan settings through the UI. Those are

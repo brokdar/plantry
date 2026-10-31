@@ -21,3 +21,9 @@ export function getPrice(model: string): Promise<PriceInfo> {
   const qs = new URLSearchParams({ model })
   return apiFetch(`/ai/prices?${qs}`)
 }
+
+/** The `ai.price_overrides` setting: model id → its price. An override
+ *  re-prices every run of that model on read. */
+export type PriceOverrides = Record<string, ModelPrice>
+
+export const PRICE_OVERRIDES_KEY = "ai.price_overrides"

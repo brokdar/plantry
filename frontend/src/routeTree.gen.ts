@@ -21,6 +21,7 @@ import { Route as RecipesNewRouteImport } from './routes/recipes/new'
 import { Route as CookSessionIdRouteImport } from './routes/cook/$sessionId'
 import { Route as RecipesIngredientsIndexRouteImport } from './routes/recipes/ingredients/index'
 import { Route as RecipesIdIndexRouteImport } from './routes/recipes/$id/index'
+import { Route as SettingsAssistantInsightsRouteImport } from './routes/settings/assistant/insights'
 import { Route as RecipesIngredientsNewRouteImport } from './routes/recipes/ingredients/new'
 import { Route as RecipesIdEditRouteImport } from './routes/recipes/$id/edit'
 import { Route as RecipesIdCookRouteImport } from './routes/recipes/$id/cook'
@@ -86,6 +87,12 @@ const RecipesIdIndexRoute = RecipesIdIndexRouteImport.update({
   path: '/recipes/$id/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsAssistantInsightsRoute =
+  SettingsAssistantInsightsRouteImport.update({
+    id: '/settings/assistant/insights',
+    path: '/settings/assistant/insights',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const RecipesIngredientsNewRoute = RecipesIngredientsNewRouteImport.update({
   id: '/recipes/ingredients/new',
   path: '/recipes/ingredients/new',
@@ -122,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/recipes/$id/cook': typeof RecipesIdCookRoute
   '/recipes/$id/edit': typeof RecipesIdEditRoute
   '/recipes/ingredients/new': typeof RecipesIngredientsNewRoute
+  '/settings/assistant/insights': typeof SettingsAssistantInsightsRoute
   '/recipes/$id/': typeof RecipesIdIndexRoute
   '/recipes/ingredients/': typeof RecipesIngredientsIndexRoute
   '/recipes/ingredients/$id/edit': typeof RecipesIngredientsIdEditRoute
@@ -140,6 +148,7 @@ export interface FileRoutesByTo {
   '/recipes/$id/cook': typeof RecipesIdCookRoute
   '/recipes/$id/edit': typeof RecipesIdEditRoute
   '/recipes/ingredients/new': typeof RecipesIngredientsNewRoute
+  '/settings/assistant/insights': typeof SettingsAssistantInsightsRoute
   '/recipes/$id': typeof RecipesIdIndexRoute
   '/recipes/ingredients': typeof RecipesIngredientsIndexRoute
   '/recipes/ingredients/$id/edit': typeof RecipesIngredientsIdEditRoute
@@ -159,6 +168,7 @@ export interface FileRoutesById {
   '/recipes/$id/cook': typeof RecipesIdCookRoute
   '/recipes/$id/edit': typeof RecipesIdEditRoute
   '/recipes/ingredients/new': typeof RecipesIngredientsNewRoute
+  '/settings/assistant/insights': typeof SettingsAssistantInsightsRoute
   '/recipes/$id/': typeof RecipesIdIndexRoute
   '/recipes/ingredients/': typeof RecipesIngredientsIndexRoute
   '/recipes/ingredients/$id/edit': typeof RecipesIngredientsIdEditRoute
@@ -179,6 +189,7 @@ export interface FileRouteTypes {
     | '/recipes/$id/cook'
     | '/recipes/$id/edit'
     | '/recipes/ingredients/new'
+    | '/settings/assistant/insights'
     | '/recipes/$id/'
     | '/recipes/ingredients/'
     | '/recipes/ingredients/$id/edit'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/recipes/$id/cook'
     | '/recipes/$id/edit'
     | '/recipes/ingredients/new'
+    | '/settings/assistant/insights'
     | '/recipes/$id'
     | '/recipes/ingredients'
     | '/recipes/ingredients/$id/edit'
@@ -215,6 +227,7 @@ export interface FileRouteTypes {
     | '/recipes/$id/cook'
     | '/recipes/$id/edit'
     | '/recipes/ingredients/new'
+    | '/settings/assistant/insights'
     | '/recipes/$id/'
     | '/recipes/ingredients/'
     | '/recipes/ingredients/$id/edit'
@@ -234,6 +247,7 @@ export interface RootRouteChildren {
   RecipesIdCookRoute: typeof RecipesIdCookRoute
   RecipesIdEditRoute: typeof RecipesIdEditRoute
   RecipesIngredientsNewRoute: typeof RecipesIngredientsNewRoute
+  SettingsAssistantInsightsRoute: typeof SettingsAssistantInsightsRoute
   RecipesIdIndexRoute: typeof RecipesIdIndexRoute
   RecipesIngredientsIndexRoute: typeof RecipesIngredientsIndexRoute
   RecipesIngredientsIdEditRoute: typeof RecipesIngredientsIdEditRoute
@@ -325,6 +339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecipesIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/assistant/insights': {
+      id: '/settings/assistant/insights'
+      path: '/settings/assistant/insights'
+      fullPath: '/settings/assistant/insights'
+      preLoaderRoute: typeof SettingsAssistantInsightsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/recipes/ingredients/new': {
       id: '/recipes/ingredients/new'
       path: '/recipes/ingredients/new'
@@ -370,6 +391,7 @@ const rootRouteChildren: RootRouteChildren = {
   RecipesIdCookRoute: RecipesIdCookRoute,
   RecipesIdEditRoute: RecipesIdEditRoute,
   RecipesIngredientsNewRoute: RecipesIngredientsNewRoute,
+  SettingsAssistantInsightsRoute: SettingsAssistantInsightsRoute,
   RecipesIdIndexRoute: RecipesIdIndexRoute,
   RecipesIngredientsIndexRoute: RecipesIngredientsIndexRoute,
   RecipesIngredientsIdEditRoute: RecipesIngredientsIdEditRoute,

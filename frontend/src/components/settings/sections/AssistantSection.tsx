@@ -1,12 +1,16 @@
+import { Link } from "@tanstack/react-router"
+import { ChevronRight } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { usePatchProfile, useProfile } from "@/lib/queries/profile"
 import { useSettingItems } from "@/lib/queries/settings"
 
 import { AIProviderControls } from "../AIProviderControls"
+import { PricesEditor } from "../PricesEditor"
 import { NumberField, SettingsGroup, Switch } from "../controls"
 import { useSavedNote, useSettingField } from "../setting-field"
 import { SettingRow } from "../SettingRow"
@@ -28,6 +32,22 @@ export function AssistantSection() {
         <DailySuggestionRow />
         <RetentionRow />
       </SettingsGroup>
+
+      <SettingsGroup title={t("settings_page.assistant.insights_group")}>
+        <SettingRow
+          label={t("settings_page.insights.title")}
+          description={t("settings_page.assistant.insights_effect")}
+        >
+          <Button asChild variant="outline" className="self-start">
+            <Link to="/settings/assistant/insights" data-testid="insights-link">
+              {t("settings_page.assistant.insights_open")}
+              <ChevronRight strokeWidth={1.5} aria-hidden />
+            </Link>
+          </Button>
+        </SettingRow>
+      </SettingsGroup>
+
+      <PricesEditor />
 
       <SettingsGroup title={t("settings_page.ai.advanced_title")}>
         <RateLimitRow />

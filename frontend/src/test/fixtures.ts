@@ -4,7 +4,8 @@ import type { PlanRun, PlanRunStatus, RunStage } from "@/lib/api/generation"
 import type { Insights } from "@/lib/api/insights"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
 import type { Plan, PlanCell, ReplanPreview } from "@/lib/api/plan"
-import type { RunsPage } from "@/lib/api/runs"
+import type { PriceInfo } from "@/lib/api/prices"
+import type { RunDetail, RunsPage } from "@/lib/api/runs"
 import type { Plate, PlateComponent, RemovedResponse } from "@/lib/api/plates"
 import type { Preset } from "@/lib/api/presets"
 import type { Session } from "@/lib/api/sessions"
@@ -328,6 +329,7 @@ export const mockSettingDefaults: Record<string, string> = {
   "plan.explore_per_week": "0",
   "discovery.daily_enabled": "true",
   "ai.run_retention_days": "180",
+  "ai.price_overrides": "{}",
 }
 
 const SECRET_KEYS = new Set(["ai.api_key", "fdc.api_key"])
@@ -1049,4 +1051,50 @@ export const mockInsights: Insights = {
     },
   ],
   prices_as_of: "2026-10-01",
+}
+
+/** GET /api/ai/runs/11: the unpriced chat turn with one model call and one
+ *  tool call. */
+export const mockRunDetail: RunDetail = {
+  ...mockRunsPage.items[1],
+  scope: null,
+  instruction: null,
+  notes: null,
+  violations: null,
+  error_key: null,
+  steps: [
+    {
+      seq: 1,
+      type: "llm_call",
+      name: "fake",
+      args: null,
+      args_truncated: false,
+      result: null,
+      result_truncated: false,
+      is_error: false,
+      duration_ms: 420,
+      tokens: { input: 1200, output: 300 },
+    },
+    {
+      seq: 2,
+      type: "tool_call",
+      name: "list_slots",
+      args: "{}",
+      args_truncated: false,
+      result: '{"slots":[]}',
+      result_truncated: true,
+      is_error: false,
+      duration_ms: 3,
+      tokens: { input: 0, output: 0 },
+    },
+  ],
+  prompt_text: "You are Plantry's assistant.",
+}
+
+/** GET /api/ai/prices?model=claude-sonnet-5-5: a built-in price. */
+export const mockPriceInfo: PriceInfo = {
+  model: "claude-sonnet-5-5",
+  price: { in: 3, out: 15, cache_read: 0.3, cache_write: 3.75 },
+  source: "builtin",
+  as_of: "2026-10-31",
 }

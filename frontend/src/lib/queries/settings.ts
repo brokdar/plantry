@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -10,9 +15,10 @@ import {
   type SettingsList,
 } from "../api/settings"
 
+import { PRICE_OVERRIDES_KEY } from "@/lib/api/prices"
 import { toastError } from "@/lib/toast"
 
-import { aiKeys, settingsKeys } from "./keys"
+import { aiKeys, insightKeys, runKeys, settingsKeys } from "./keys"
 
 /** The settings list indexed by key. */
 export function useSettingItems() {
@@ -61,9 +67,10 @@ export function useSetSetting() {
       )
       await cancelled
     },
-    onSuccess: () => {
+    onSuccess: (_, { key }) => {
       qc.invalidateQueries({ queryKey: settingsKeys.all })
       qc.invalidateQueries({ queryKey: aiKeys.settings() })
+      invalidatePrices(qc, key)
     },
     onError: (err) => {
       toastError(err, t)
@@ -77,10 +84,18 @@ export function useClearSetting() {
   const { t } = useTranslation()
   return useMutation({
     mutationFn: (key: string) => clearSetting(key),
-    onSuccess: () => {
+    onSuccess: (_, key) => {
       qc.invalidateQueries({ queryKey: settingsKeys.all })
       qc.invalidateQueries({ queryKey: aiKeys.settings() })
+      invalidatePrices(qc, key)
     },
     onError: (err) => toastError(err, t),
   })
+}
+
+/** A price override re-prices runs on read: drop the cached costs. */
+function invalidatePrices(qc: QueryClient, key: string) {
+  if (key !== PRICE_OVERRIDES_KEY) return
+  qc.invalidateQueries({ queryKey: runKeys.all })
+  qc.invalidateQueries({ queryKey: insightKeys.all })
 }
