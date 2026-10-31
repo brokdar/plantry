@@ -186,14 +186,31 @@ test.describe("Recipe library", () => {
       await expect(page.getByTestId(`recipe-card-${main.id}`)).toBeVisible()
       await expect(page).toHaveURL(/role=main/)
 
+      // Clear filters also empties the search box (an outside change).
       await page.getByRole("button", { name: "Clear filters" }).click()
-      await expect(page.getByTestId(`recipe-card-${sauce.id}`)).toBeVisible()
+      await expect(page.getByTestId("recipes-search")).toHaveValue("")
+      await expect(page).not.toHaveURL(/role=|q=/)
     } finally {
       await cleanupFood(main.id)
       await cleanupFood(sauce.id)
       await cleanupFood(mainStub.id)
       await cleanupFood(sauceStub.id)
     }
+  })
+
+  test("typing in the middle of the search keeps the caret", async ({
+    page,
+  }) => {
+    await page.goto("/recipes?q=chicken%20soup")
+    const box = page.getByTestId("recipes-search")
+    await expect(box).toHaveValue("chicken soup")
+    await box.click()
+    await box.press("Home")
+    await box.press("ArrowRight")
+    await box.press("ArrowRight")
+    await box.pressSequentially("XY")
+    await expect(box).toHaveValue("chXYicken soup")
+    await expect(page).toHaveURL(/q=chXYicken/)
   })
 
   test("a search without results says so", async ({ page }) => {

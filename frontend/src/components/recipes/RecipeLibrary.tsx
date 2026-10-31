@@ -82,22 +82,10 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-48 flex-1 sm:max-w-sm">
-            <Search
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-muted"
-              strokeWidth={1.5}
-              aria-hidden
-            />
-            <Input
-              type="search"
-              aria-label={t("recipes.library.search")}
-              placeholder={t("recipes.library.search")}
-              value={search.q ?? ""}
-              onChange={(e) => set({ q: e.target.value || undefined }, true)}
-              className="h-11 rounded-cell border-line bg-panel pl-9 text-body md:pointer-fine:h-9"
-              data-testid="recipes-search"
-            />
-          </div>
+          <SearchField
+            value={search.q ?? ""}
+            onChange={(q) => set({ q: q || undefined }, true)}
+          />
           <Select
             value={search.sort ?? "name"}
             onValueChange={(v) =>
@@ -192,6 +180,57 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
       <ImportSheet
         open={search.add === "url"}
         onClose={() => set({ add: undefined })}
+      />
+    </div>
+  )
+}
+
+/**
+ * The search box keeps its own text, so the caret stays put while the URL
+ * (which the router updates asynchronously) catches up. It takes the URL's
+ * value only when that changes from outside: Clear filters, back/forward.
+ * Values it wrote itself are recognised on arrival and ignored.
+ */
+function SearchField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (value: string) => void
+}) {
+  const { t } = useTranslation()
+  const [draft, setDraft] = useState(value)
+  const [sync, setSync] = useState({ value, pending: [] as string[] })
+  if (value !== sync.value) {
+    const own = sync.pending.indexOf(value)
+    if (own >= 0) {
+      setSync({ value, pending: sync.pending.slice(own + 1) })
+    } else {
+      setSync({ value, pending: [] })
+      setDraft(value)
+    }
+  }
+
+  return (
+    <div className="relative min-w-48 flex-1 sm:max-w-sm">
+      <Search
+        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-muted"
+        strokeWidth={1.5}
+        aria-hidden
+      />
+      <Input
+        type="search"
+        aria-label={t("recipes.library.search")}
+        placeholder={t("recipes.library.search")}
+        value={draft}
+        onChange={(e) => {
+          const next = e.target.value
+          setDraft(next)
+          setSync((s) => ({ ...s, pending: [...s.pending, next] }))
+          onChange(next)
+        }}
+        className="h-11 rounded-cell border-line bg-panel pl-9 text-body md:pointer-fine:h-9"
+        data-testid="recipes-search"
       />
     </div>
   )

@@ -54,6 +54,12 @@ describe("parseLibrarySearch", () => {
   })
 })
 
+describe("parseLibrarySearch q", () => {
+  it("keeps a numeric search as text", () => {
+    expect(parseLibrarySearch({ q: 123 }).q).toBe("123")
+  })
+})
+
 describe("libraryQuery", () => {
   it("maps every chip onto the B7 list params", () => {
     expect(

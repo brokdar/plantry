@@ -40,7 +40,12 @@ const oneOf = <T extends string>(
 export function parseLibrarySearch(
   raw: Record<string, unknown>
 ): LibrarySearch {
-  const q = typeof raw.q === "string" && raw.q !== "" ? raw.q : undefined
+  // The router JSON-parses search values, so a typed `?q=123` arrives as a
+  // number.
+  const q =
+    typeof raw.q === "string" || typeof raw.q === "number"
+      ? String(raw.q) || undefined
+      : undefined
   return {
     q,
     role: oneOf(FOOD_ROLES, raw.role),

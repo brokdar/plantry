@@ -156,6 +156,21 @@ describe("RecipeLibrary", () => {
     expect(onSearchChange).toHaveBeenLastCalledWith({ q: "c" }, true)
   })
 
+  it("editing in the middle of the search keeps the caret", async () => {
+    vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
+    const user = userEvent.setup()
+
+    const onSearchChange = renderLibrary({ q: "chicken soup" })
+    const box = await screen.findByRole("searchbox", { name: "Search recipes" })
+    await user.click(box)
+    await user.keyboard("{Home}{ArrowRight}{ArrowRight}XY")
+    expect(box).toHaveValue("chXYicken soup")
+    expect(onSearchChange).toHaveBeenLastCalledWith(
+      { q: "chXYicken soup" },
+      true
+    )
+  })
+
   it("the Add menu offers import from a link and create manually", async () => {
     vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
     const user = userEvent.setup()
