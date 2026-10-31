@@ -36,7 +36,7 @@ export function Toaster(props: ToasterProps) {
             "rounded-xl border border-line/20 bg-line text-ink shadow-sheet",
           title: "font-semibold text-ink",
           description: "text-ink-muted",
-          actionButton: "bg-primary text-on-accent",
+          actionButton: "bg-accent text-on-accent",
           cancelButton: "bg-line text-ink",
           closeButton: "bg-line text-ink-muted hover:text-ink",
         },

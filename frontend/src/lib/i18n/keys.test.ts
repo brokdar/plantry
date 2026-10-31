@@ -34,17 +34,22 @@ const sources = import.meta.glob<string>(
 )
 const code = Object.values(sources).join("\n")
 
-/** Every string literal in the code, and the static heads of template
- *  literals (`plan.cell.${x}` → "plan.cell."). */
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+/** Every string literal in the code, and every template literal with a
+ *  static head as a pattern for one key segment: `unit.${key}.name` matches
+ *  "unit.<segment>.name", not every "unit.*" key. */
 const literals = new Set<string>()
 for (const m of code.matchAll(/["'`]([\w.-]+)["'`]/g)) literals.add(m[1])
-const templateHeads = [...code.matchAll(/`([\w.-]+)\$\{/g)].map((m) => m[1])
+const templates = [...code.matchAll(/`([\w.-]+)\$\{[^}`]*\}([\w.-]*)/g)].map(
+  (m) => new RegExp(`^${esc(m[1])}[\\w-]+${esc(m[2])}$`)
+)
 
 function used(key: string): boolean {
   const base = key.replace(PLURAL, "")
   if (literals.has(key) || literals.has(base)) return true
   if (DYNAMIC_PREFIXES.some((p) => key.startsWith(p))) return true
-  return templateHeads.some((head) => key.startsWith(head))
+  return templates.some((r) => r.test(key) || r.test(base))
 }
 
 const enKeys = flatten(en as Tree)

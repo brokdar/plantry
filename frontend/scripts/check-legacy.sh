@@ -20,8 +20,13 @@ patterns=(
 
 status=0
 for p in "${patterns[@]}"; do
-  if grep -rnE --include='*.ts' --include='*.tsx' --include='*.css' -e "$p" src e2e; then
+  rc=0
+  grep -rnE --include='*.ts' --include='*.tsx' --include='*.css' -e "$p" src e2e || rc=$?
+  if [ "$rc" -eq 0 ]; then
     echo "legacy pattern found: $p" >&2
+    status=1
+  elif [ "$rc" -gt 1 ]; then
+    echo "grep failed ($rc) for: $p" >&2
     status=1
   fi
 done
