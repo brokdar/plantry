@@ -174,6 +174,7 @@ func run() error {
 		Profile:      profileSvc,
 		Recipes:      foodRepo,
 		Runs:         aiRunRepo,
+		Diets:        foodSvc,
 		Tx:           txRunner,
 	})
 

@@ -70,10 +70,10 @@ type Recipes interface {
 	ComposedFoodIDs(ctx context.Context) ([]int64, error)
 }
 
-// DietClasses resolves foods' effective diet classes (D28): vegan,
-// vegetarian, pescetarian, omnivore or unknown.
-type DietClasses interface {
-	DietClasses(ctx context.Context, ids []int64) (map[int64]string, error)
+// Diets sets foods' effective diet classes (D28). *food.Service satisfies
+// it.
+type Diets interface {
+	DeriveDiet(ctx context.Context, foods ...*food.Food) error
 }
 
 // RunNote is what the plan's draft summary shows of an AI run.
@@ -107,9 +107,7 @@ type Deps struct {
 	Profile      Profile
 	Recipes      Recipes
 	Runs         RunNotes
-	// Diets is nil until foods carry a diet class: without one H5 has
-	// nothing to check and the plan reports no H5 issues.
-	Diets DietClasses
+	Diets        Diets
 	// Progress is nil while no generation runner is wired: running_run_id
 	// is then always null.
 	Progress Progress

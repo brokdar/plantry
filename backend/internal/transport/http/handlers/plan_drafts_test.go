@@ -68,6 +68,10 @@ func TestPlanHTTP_Draft(t *testing.T) {
 // B2-AC2 (HTTP half; H1 none cells and H5 are covered in planview)
 func TestPlanHTTP_Issues(t *testing.T) {
 	a := newReadAPI(t)
+	// The curry has no ingredients, so its class is unknown without an
+	// override (H5 diet_unknown).
+	_, err := a.db.Exec(`UPDATE foods SET diet_class = 'vegan' WHERE id = ?`, a.curry)
+	require.NoError(t, err)
 	a.sunChili()
 	code, body := a.do(http.MethodPost, "/api/plates",
 		fmt.Sprintf(`{"date":"2026-11-01","slot_id":%d,"components":[{"food_id":%d,"portions":1}]}`, a.lunch, a.curry))
@@ -96,7 +100,7 @@ func TestPlanHTTP_Issues(t *testing.T) {
 	assert.Zero(t, missing, "empty cells of a window without drafts need no attention")
 
 	// As a draft, the window's empty cells from today on miss their plates.
-	_, err := a.db.Exec(`UPDATE plates SET state = 'draft'`)
+	_, err = a.db.Exec(`UPDATE plates SET state = 'draft'`)
 	require.NoError(t, err)
 	_, err = a.db.Exec(`UPDATE cook_sessions SET state = 'draft'`)
 	require.NoError(t, err)

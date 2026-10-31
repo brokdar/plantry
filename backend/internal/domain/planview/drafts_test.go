@@ -183,7 +183,6 @@ func TestPlan_Issues(t *testing.T) {
 	t.Run("chili on a vegetarian profile", func(t *testing.T) {
 		f := newFixture()
 		f.profile.p.DietType = profile.DietVegetarian
-		f.diets = fakeDiets{chiliID: "omnivore", appleID: "vegan"}
 		f.ac1()
 		f.fill()
 		p, err := f.service().Plan(ctx, &ac1Start, date("2026-10-30"))
@@ -195,14 +194,16 @@ func TestPlan_Issues(t *testing.T) {
 		}
 	})
 
-	t.Run("without a diet source H5 stays silent", func(t *testing.T) {
+	t.Run("a recipe of unknown class warns", func(t *testing.T) {
 		f := newFixture()
-		f.profile.p.DietType = profile.DietVegetarian
-		f.ac1()
+		delete(f.diets, omeletID)
+		sid := f.session(omeletID, "2026-11-03", breakfast, 2)
+		f.composed("2026-11-03", breakfast, omeletID, sid)
 		f.fill()
 		p, err := f.service().Plan(ctx, &ac1Start, date("2026-10-30"))
 		require.NoError(t, err)
-		assert.Empty(t, p.Issues)
+		require.Equal(t, [][2]string{{"H5", planning.CodeDietUnknown}}, rulesAndCodes(p.Issues))
+		assert.Equal(t, planning.SeverityWarning, p.Issues[0].Severity)
 	})
 
 	t.Run("a draft repeats a recently eaten main", func(t *testing.T) {

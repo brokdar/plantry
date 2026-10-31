@@ -7,6 +7,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -211,19 +212,19 @@ func (s *store) RunNote(ctx context.Context, id int64) (RunNote, error) {
 	return n, nil
 }
 
-// fakeDiets is the diet-class port over a fixed table.
-type fakeDiets map[int64]string
+// fakeDiets sets diet classes from a fixed table; foods missing from it are
+// unknown.
+type fakeDiets map[int64]diet.Class
 
-func (f fakeDiets) DietClasses(_ context.Context, ids []int64) (map[int64]string, error) {
-	out := map[int64]string{}
-	for _, id := range ids {
-		if c, ok := f[id]; ok {
-			out[id] = c
-		} else {
-			out[id] = "unknown"
+func (f fakeDiets) DeriveDiet(_ context.Context, foods ...*food.Food) error {
+	for _, fd := range foods {
+		c, ok := f[fd.ID]
+		if !ok {
+			c = diet.Unknown
 		}
+		fd.DietClass = c
 	}
-	return out, nil
+	return nil
 }
 
 // fakeProgress reports one running generation per window start.
@@ -284,7 +285,7 @@ type fixture struct {
 	profile  *fakeProfile
 	tx       *fakeTx
 	nextID   int64
-	diets    DietClasses
+	diets    fakeDiets
 	progress Progress
 }
 
@@ -322,6 +323,7 @@ func newFixture() *fixture {
 		},
 		profile: &fakeProfile{p: profile.Profile{HouseholdPortions: 2}},
 		tx:      &fakeTx{},
+		diets:   fakeDiets{chiliID: diet.Omnivore, omeletID: diet.Vegetarian, saladID: diet.Vegan},
 		nextID:  100,
 	}
 }

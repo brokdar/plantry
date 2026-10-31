@@ -30,7 +30,6 @@ type checkInput struct {
 // issues checks the window as persisted with planning.Check over all its
 // cells and keeps the rules the board shows (D21): H1, H2, H5 and H8. H3/H4
 // already appear as session warnings; H6/H7 cannot occur in persisted data.
-// H5 needs diet classes, so it is left out while no diet source is wired.
 // An empty plan cell (missing_plate) needs attention only while the window
 // is a draft, and only from today on: a hand-planned or accepted window may
 // leave cells empty, and past cells are history.
@@ -58,11 +57,7 @@ func (s *Service) issues(ctx context.Context, in checkInput) ([]planning.Issue, 
 			if is.Code == planning.CodeMissingPlate && (!drafts || is.Date < today) {
 				continue
 			}
-		case "H2", "H8":
-		case "H5":
-			if s.d.Diets == nil {
-				continue
-			}
+		case "H2", "H5", "H8":
 		default:
 			continue
 		}
@@ -151,12 +146,14 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 	}
 
 	ids := make([]int64, 0, len(foods))
+	loaded := make([]*food.Food, 0, len(foods))
 	var composed []int64
 	for id, f := range foods {
 		if f == nil {
 			continue
 		}
 		ids = append(ids, id)
+		loaded = append(loaded, f)
 		if f.Kind == food.KindComposed {
 			composed = append(composed, id)
 		}
@@ -167,17 +164,14 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 			return planning.State{}, fmt.Errorf("food history: %w", err)
 		}
 	}
-	var classes map[int64]string
-	if s.d.Diets != nil && len(ids) > 0 {
-		if classes, err = s.d.Diets.DietClasses(ctx, ids); err != nil {
-			return planning.State{}, fmt.Errorf("diet classes: %w", err)
-		}
+	if err := s.d.Diets.DeriveDiet(ctx, loaded...); err != nil {
+		return planning.State{}, fmt.Errorf("diet classes: %w", err)
 	}
 	st.Foods = make(map[int64]planning.FoodFacts, len(ids))
 	for _, id := range ids {
 		f := foods[id]
 		ff := planning.FoodFacts{
-			ID: id, Name: f.Name, Kind: f.Kind, DietClass: classes[id],
+			ID: id, Name: f.Name, Kind: f.Kind, DietClass: f.DietClass,
 			KeepDays: f.KeepDays, Favorite: f.Favorite,
 			LastEaten: hist[id].LastEaten,
 		}
