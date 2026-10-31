@@ -1,7 +1,4 @@
-import type {
-  AvailabilityCell,
-  AvailabilityDefault,
-} from "@/lib/api/availability"
+import type { AvailabilityDefault } from "@/lib/api/availability"
 import type { ComposedFood, LeafFood, ScaledRecipe } from "@/lib/api/foods"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
 import type { Plan, PlanCell } from "@/lib/api/plan"
@@ -252,37 +249,6 @@ export const mockAvailabilityDefaults: AvailabilityDefault[] = [
     return { weekday, slot_id, mode: "plan" as const, preset_id: null }
   })
 )
-
-// 2026-10-26 is a Monday.
-export const mockAvailabilityCells: AvailabilityCell[] = [
-  {
-    date: "2026-10-26",
-    slot_id: 1,
-    mode: "routine",
-    source: "default",
-    preset_id: 7,
-    preset_name: "Overnight oats",
-    note: null,
-  },
-  {
-    date: "2026-10-26",
-    slot_id: 2,
-    mode: "none",
-    source: "override",
-    preset_id: null,
-    preset_name: null,
-    note: "Canteen",
-  },
-  {
-    date: "2026-10-26",
-    slot_id: 3,
-    mode: "plan",
-    source: "fallback",
-    preset_id: null,
-    preset_name: null,
-    note: null,
-  },
-]
 
 /** Props-shaped data for AvailabilityGrid tests. */
 export const mockAvailabilityColumns = [

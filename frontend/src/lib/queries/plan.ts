@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next"
 
 import {
   clearAvailabilityOverride,
+  getAvailabilityRange,
   setAvailabilityOverride,
 } from "@/lib/api/availability"
 import { clearPlan, getPlan, restorePlan, type PlanCell } from "@/lib/api/plan"
@@ -16,11 +17,16 @@ import { toast, toastError } from "@/lib/toast"
 
 import { availabilityKeys, planKeys, shoppingKeys, todayKeys } from "./keys"
 
-/** Every plan mutation refreshes the read models and the shopping list. */
-export function invalidatePlanViews(qc: QueryClient) {
-  void qc.invalidateQueries({ queryKey: planKeys.all })
-  void qc.invalidateQueries({ queryKey: todayKeys.all })
-  void qc.invalidateQueries({ queryKey: shoppingKeys.all })
+/** Every plan mutation refreshes the read models and the shopping list.
+ *  Returned from `onSuccess`, the mutation stays pending until the active
+ *  views have refetched, so a control showing a pending value never flashes
+ *  back to the old one. */
+export function invalidatePlanViews(qc: QueryClient): Promise<unknown> {
+  return Promise.all([
+    qc.invalidateQueries({ queryKey: planKeys.all }),
+    qc.invalidateQueries({ queryKey: todayKeys.all }),
+    qc.invalidateQueries({ queryKey: shoppingKeys.all }),
+  ])
 }
 
 /** The board's read model. Without `start` the server opens the anchored
@@ -94,7 +100,7 @@ export function useClearWindow() {
     mutationFn: ({ from, to }: { from: string; to: string }) =>
       clearPlan(from, to),
     onSuccess: (res) => {
-      invalidatePlanViews(qc)
+      void invalidatePlanViews(qc)
       offerUndo(res, "plan_cleared")
     },
     onError: (err) => toastError(err, t),
@@ -112,7 +118,7 @@ export function useMarkNoPlate() {
   const { t } = useTranslation()
 
   function refresh() {
-    invalidatePlanViews(qc)
+    void invalidatePlanViews(qc)
     void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
   }
 
@@ -162,6 +168,48 @@ export function useMarkNoPlate() {
         onDismiss: close,
         onAutoClose: close,
       })
+    },
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/**
+ * "Plan this meal" on a No plate cell. A date override is dropped so the
+ * cell falls back to its weekday default; only when that default is `none`
+ * too does it get an explicit `plan` override, so dates are not pinned
+ * needlessly.
+ */
+export function usePlanMeal() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: async (cell: PlanCell) => {
+      if (cell.source === "override") {
+        await clearAvailabilityOverride(cell.date, cell.slot_id)
+        const { items } = await getAvailabilityRange(cell.date, cell.date)
+        const resolved = items.find((c) => c.slot_id === cell.slot_id)
+        if (resolved?.mode !== "none") return
+      }
+      await setAvailabilityOverride(cell.date, cell.slot_id, { mode: "plan" })
+    },
+    onSuccess: () => {
+      void invalidatePlanViews(qc)
+      void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
+    },
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/** The reason on a No plate cell ("Eating out"); empty clears it. */
+export function useSetNoPlateNote() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({ cell, note }: { cell: PlanCell; note: string | null }) =>
+      setAvailabilityOverride(cell.date, cell.slot_id, { mode: "none", note }),
+    onSuccess: () => {
+      void invalidatePlanViews(qc)
+      void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
     },
     onError: (err) => toastError(err, t),
   })

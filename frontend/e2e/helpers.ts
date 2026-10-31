@@ -4,7 +4,6 @@ import {
   test as baseTest,
   type Locator,
   type Page,
-  type Response,
 } from "@playwright/test"
 
 export const API = "http://localhost:8080"
@@ -77,6 +76,8 @@ export interface SeedComposedInput {
   name: string
   role: string
   reference_portions?: number
+  /** Days a cooked batch keeps (1–7); null uses the plan default. */
+  keep_days?: number
   children?: SeedComposedChild[]
   instructions?: { step_number: number; text: string }[]
   tags?: string[]
@@ -309,42 +310,55 @@ export async function cleanupTemplate(id: number) {
   await ctx.dispose()
 }
 
-// ── Picker tray helpers ───────────────────────────────────────────────
-//
-// The redesigned picker stages foods then commits via a single "Add N"
-// button (`data-testid="tray-commit"`). The plate POST + component POSTs
-// fire on commit, not on result-row click. These helpers encapsulate
-// that two-step flow so tests don't drift when the tray UI evolves.
+// ── Plan board helpers ────────────────────────────────────────────────
 
-/**
- * Stage a food result and commit the tray. Returns the response of the
- * first matching POST (plate or component) so callers can await mutation
- * settlement before asserting UI state. Pass a custom matcher via
- * `responseMatcher` if your test cares about a specific POST.
- */
-export async function pickAndCommitFood(
+/** `iso` plus `n` calendar days (YYYY-MM-DD). */
+export function addDays(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
+}
+
+/** A window 8–51 windows after the anchored one (inside the year
+ *  cleanupSlot covers), so parallel specs that clear or fill the current
+ *  window never touch it. Returns its start and its seven dates. */
+export async function futureWindow(): Promise<{
+  start: string
+  days: string[]
+}> {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  const res = await ctx.get("/api/plan")
+  expect(res.ok()).toBeTruthy()
+  const { window } = (await res.json()) as { window: { start: string } }
+  await ctx.dispose()
+  const weeksAhead = 8 + Math.floor(Math.random() * 44)
+  const start = addDays(window.start, 7 * weeksAhead)
+  return { start, days: Array.from({ length: 7 }, (_, i) => addDays(start, i)) }
+}
+
+/** The board cell at (date, slotId). */
+export function planCell(page: Page, date: string, slotId: number): Locator {
+  return page.locator(`[data-cell-key="${date}|${slotId}"]`)
+}
+
+/** Opens a board cell and returns its sheet. */
+export async function openCellSheet(
   page: Page,
+  date: string,
+  slotId: number
+): Promise<Locator> {
+  await planCell(page, date, slotId).getByTestId("plan-cell").click()
+  const sheet = page.getByTestId("plan-sheet")
+  await expect(sheet).toBeVisible()
+  return sheet
+}
+
+/** In the food picker: searches `name` on `tab` and stages the food. */
+export async function stageFood(
   sheet: Locator,
-  foodName: string | RegExp,
-  options: {
-    /** Override the default plate/component POST matcher. */
-    responseMatcher?: (response: Response) => boolean
-    /** Skip awaiting the response (e.g. when a 500 is forced and no response is expected). */
-    awaitResponse?: boolean
-  } = {}
-): Promise<Response | undefined> {
-  const matcher =
-    options.responseMatcher ??
-    ((r: Response) =>
-      r.url().includes("/plates") && r.request().method() === "POST")
-  const nameMatcher =
-    typeof foodName === "string" ? new RegExp(foodName) : foodName
-  await sheet.getByRole("button", { name: nameMatcher }).first().click()
-  if (options.awaitResponse === false) {
-    await sheet.getByTestId("tray-commit").click()
-    return undefined
-  }
-  const resp = page.waitForResponse(matcher)
-  await sheet.getByTestId("tray-commit").click()
-  return await resp
+  name: string,
+  tab: "Recipes" | "Ingredients" = "Recipes"
+) {
+  await sheet.getByRole("tab", { name: tab }).click()
+  await sheet.getByTestId("food-picker-search").fill(name)
+  await sheet.getByTestId("food-picker-row").filter({ hasText: name }).click()
 }

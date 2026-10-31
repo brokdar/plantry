@@ -37,8 +37,8 @@ Routes live in `src/routes/`. The router plugin auto-generates `src/routeTree.ge
 ```
 src/routes/
 ├── __root.tsx         # AppShell, CommandPalette, CopyFromWeekDialog
-├── index.tsx          # `/` — the planner (week grid, chat, shopping panel); redirects to /setup
-│                      #   while `GET /api/setup` says not completed (only `/` does)
+├── index.tsx          # `/` — redirects to /setup while `GET /api/setup` says not completed
+│                      #   (only `/` does), else to /plan
 ├── setup/             # `/setup` — first-run SetupWizard
 ├── day/$date/         # single-day view
 ├── components/        # recipe library; new.tsx, $id/ (detail), $id/edit.tsx
@@ -62,15 +62,17 @@ src/routes/
 src/components/
 ├── ui/                # shadcn primitives (never hand-edit generated files)
 ├── shell/             # AppShell, SideNav, TopBar, MobileBottomNav, primary-nav.ts
-├── planner/           # SlotCell, SlotSheet, PlannerGrid, DnD wrappers, ShoppingPanel
+├── planner/           # ShoppingPanel only (used by /shop until F7)
 ├── plan/              # the board: PlanPage, Board (BoardGrid ≥768 px, DayList phone), PlateCell,
-│                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog; keynav in lib/plan/keynav.ts
+│                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog; keynav in lib/plan/keynav.ts;
+│                      #   PlanSheet (one sheet per cell: PlateSheet, CellSheet or FoodPicker), BatchSection,
+│                      #   QuantityStepper
 ├── batch/             # BatchBadge, BatchHighlightProvider (hooks in batch-highlight.ts), CookStrip,
 │                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
 ├── availability/      # AvailabilityGrid (weekday/date × slot modes), RoutinePicker
 ├── setup/             # SetupWizard and its steps; wizard-draft.ts, use-wizard-save.ts
 ├── presets/           # preset library, editor, CopyFromWeekDialog
-├── component/         # shared input widgets: ComponentPicker, PortionStepper, QuantityUnitInput
+├── component/         # shared input widget: QuantityUnitInput (leaf amount + unit)
 ├── components/        # food component CRUD: ComponentEditor, ComponentList, ComponentCard, RecipeDetail,
 │                      #   NutritionCompletenessWarning (shared by editor, detail and import)
 ├── import/            # ImportWizard, IngredientResolveRow, ImportNutritionSummary
@@ -90,12 +92,11 @@ src/components/
 **Server state — TanStack Query only.** Never mirror server data in Zustand.
 
 - `src/lib/api/` — one file per resource, all calls go through `apiFetch` in `lib/api/client.ts`. `ApiError` carries `status` + `messageKey` for i18n error display.
-- `src/lib/queries/` — TanStack Query hooks + `keys.ts` (centralized key factories). Key hierarchies are intentional: invalidating a parent key also drops all child keys (e.g. invalidating `plateKeys.range(from, to)` also drops `plateKeys.macrosRange(from, to)`). **Each `useMutation` hook owns its own `invalidateQueries` (onSuccess) and `toastError` (onError) — call sites just call `mutate()` with no cache or error knowledge.**
+- `src/lib/queries/` — TanStack Query hooks + `keys.ts` (centralized key factories). Key hierarchies are intentional: invalidating a parent key also drops all child keys (e.g. invalidating `sessionKeys.detail(id)` also drops `sessionKeys.leftoverCells(id, count)`). **Each `useMutation` hook owns its own `invalidateQueries` (onSuccess) and `toastError` (onError) — call sites just call `mutate()` with no cache or error knowledge.**
 
 **Client-only state — Zustand stores.**
 
-- `src/lib/stores/planner-ui.ts` — ephemeral planner UI: which plate is being edited, the "add" sheet target, AI-fill session state, copy-hint-seen flag. One `localStorage` key: `plantry.copyHintSeen`.
-- `src/lib/stores/chat-ui.ts` — chat panel open/closed state.
+- `src/lib/stores/chat-ui.ts` — chat panel open/closed state and the composer draft.
 - `src/lib/stores/chat-stream.ts` — streaming AI message state.
 
 ### Forms

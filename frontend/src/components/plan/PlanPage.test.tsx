@@ -27,6 +27,21 @@ vi.mock("@/lib/api/setup", () => ({
     recipe_target: 10,
   }),
 }))
+vi.mock("@/lib/api/settings", () => ({
+  listSettings: vi
+    .fn()
+    .mockResolvedValue({ items: [], cipher_available: true }),
+}))
+vi.mock("@/lib/api/foods", () => ({
+  listFoods: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  listFoodMacros: vi.fn().mockResolvedValue({ foods: [] }),
+  getFood: vi.fn(),
+}))
+vi.mock("@/lib/api/presets", () => ({
+  getPresets: vi
+    .fn()
+    .mockResolvedValue({ items: [], total: 0, known_tags: [] }),
+}))
 // The chat panel has its own tests; here only its opening matters.
 vi.mock("@/components/chat/ChatPanel", () => ({ ChatPanel: () => null }))
 
@@ -264,5 +279,62 @@ describe("PlanPage", () => {
     ).toBeInTheDocument()
     expect(screen.queryByTestId("plan-empty")).not.toBeInTheDocument()
     expect(screen.queryByText("Add")).not.toBeInTheDocument()
+  })
+
+  it("a plate cell opens its plate sheet, and Open batch moves to the cook cell", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(<PlanPage />)
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Monday dinner, Chili, leftover 3 of 3",
+      })
+    )
+    const sheet = await screen.findByRole("dialog", { name: "Chili" })
+    expect(sheet).toHaveTextContent("Monday dinner")
+    expect(sheet).toHaveTextContent("From Sun · Chili (3 of 3)")
+    await user.click(within(sheet).getByRole("button", { name: "Open batch" }))
+    await waitFor(() =>
+      expect(screen.getByRole("dialog", { name: "Chili" })).toHaveTextContent(
+        "Sunday dinner"
+      )
+    )
+    expect(
+      screen.getByRole("button", { name: "Increase Portions to cook" })
+    ).toBeInTheDocument()
+  })
+
+  it("an empty cell opens its sheet, and Add food switches to the picker in place", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(<PlanPage />)
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Tuesday lunch, nothing planned",
+      })
+    )
+    const sheet = await screen.findByRole("dialog", { name: "Tuesday lunch" })
+    await user.click(within(sheet).getByRole("button", { name: "Add food" }))
+    expect(
+      await screen.findByRole("dialog", { name: "Add food" })
+    ).toContainElement(screen.getByTestId("food-picker"))
+    expect(screen.getAllByRole("dialog")).toHaveLength(1)
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    expect(
+      await screen.findByRole("dialog", { name: "Tuesday lunch" })
+    ).toBeInTheDocument()
+  })
+
+  it("a past window opens no sheet for an empty cell", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      window: { ...mockPlan.window, today: "2026-12-01", is_current: false },
+    })
+    renderWithRouter(<PlanPage start="2026-10-31" />)
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Tuesday lunch, nothing planned",
+      })
+    )
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
   })
 })

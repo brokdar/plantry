@@ -40,7 +40,7 @@ async function deletePlate(id: number) {
 }
 
 test.describe("Calendar — week view", () => {
-  test("seeded plate visible in read-only grid; edit toggle adds edit param to URL; toggling off removes it", async ({
+  test("week view shows the read-only grid without an edit mode", async ({
     page,
   }) => {
     const tag = uid()
@@ -63,29 +63,9 @@ test.describe("Calendar — week view", () => {
       // Open week view for that Monday.
       await page.goto(`/calendar?mode=week&date=${monday}`)
 
-      // The read-only grid should be visible (no edit mode yet).
+      // The read-only grid; editing lives on the plan board (/plan).
       await expect(page).toHaveURL(/mode=week/)
-      await expect(page).not.toHaveURL(/edit=true/) // edit off by default
-
-      // The edit toggle button should be present.
-      const editBtn = page.getByRole("button", { name: /edit/i })
-      await expect(editBtn).toBeVisible()
-
-      // Click Edit — URL should gain edit=true (TanStack Router boolean serialization).
-      await editBtn.click()
-      await expect(page).toHaveURL(/edit=true/)
-
-      // The PlannerGrid (editable) should now be rendered.
-      await expect(
-        page.locator("main, [data-testid='day-page'], .mx-auto").first()
-      ).toBeVisible()
-
-      // Toggle Edit off — button now reads "Done" when active.
-      const editBtnActive = page.getByRole("button", { name: /done/i })
-      await editBtnActive.click()
-
-      // edit=true should be gone from URL (edit=false is fine, mode is off).
-      await expect(page).not.toHaveURL(/edit=true/)
+      await expect(page.getByRole("button", { name: /^edit$/i })).toHaveCount(0)
     } finally {
       if (plateId) await deletePlate(plateId)
       await cleanupFood(composed.id)

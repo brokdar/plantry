@@ -11,6 +11,7 @@ vi.mock("@/lib/api/plan", () => ({
   restorePlan: vi.fn(),
 }))
 vi.mock("@/lib/api/availability", () => ({
+  getAvailabilityRange: vi.fn(),
   setAvailabilityOverride: vi.fn(),
   clearAvailabilityOverride: vi.fn(),
 }))
@@ -27,17 +28,20 @@ vi.mock("@/lib/toast", () => ({
 
 import {
   clearAvailabilityOverride,
+  getAvailabilityRange,
   setAvailabilityOverride,
 } from "@/lib/api/availability"
 import { clearPlan, getPlan, restorePlan } from "@/lib/api/plan"
 import { getToday } from "@/lib/api/today"
 
-import { planKeys, shoppingKeys, todayKeys } from "./keys"
+import { availabilityKeys, planKeys, shoppingKeys, todayKeys } from "./keys"
 import {
   useClearWindow,
   useMarkNoPlate,
   usePlan,
+  usePlanMeal,
   useRestorePlan,
+  useSetNoPlateNote,
   useUndoableRemoval,
 } from "./plan"
 import { useToday } from "./today"
@@ -223,4 +227,77 @@ describe("useMarkNoPlate", () => {
       expect(restorePlan).not.toHaveBeenCalled()
     }
   )
+})
+
+describe("No plate cell actions", () => {
+  const none = {
+    ...mockPlan.cells[0],
+    mode: "none" as const,
+    note: "Eating out",
+  }
+  const resolved = (mode: "plan" | "none") => ({
+    items: [
+      {
+        date: none.date,
+        slot_id: none.slot_id,
+        mode,
+        source: "default" as const,
+        preset_id: null,
+        preset_name: null,
+        note: null,
+      },
+    ],
+  })
+
+  it("Plan this meal drops a date override when the default plans", async () => {
+    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
+    vi.mocked(getAvailabilityRange).mockResolvedValue(resolved("plan"))
+    const keys = await invalidatedBy(() => usePlanMeal(), {
+      ...none,
+      source: "override" as const,
+    })
+    expect(clearAvailabilityOverride).toHaveBeenCalledWith(
+      none.date,
+      none.slot_id
+    )
+    expect(setAvailabilityOverride).not.toHaveBeenCalled()
+    expect(keys).toEqual([...PLAN_VIEWS, availabilityKeys.ranges()])
+  })
+
+  it("Plan this meal puts a plan override when the default is No plate", async () => {
+    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
+    vi.mocked(getAvailabilityRange).mockResolvedValue(resolved("none"))
+    await invalidatedBy(() => usePlanMeal(), {
+      ...none,
+      source: "override" as const,
+    })
+    expect(setAvailabilityOverride).toHaveBeenCalledWith(
+      none.date,
+      none.slot_id,
+      { mode: "plan" }
+    )
+  })
+
+  it("Plan this meal on a weekday default puts a plan override directly", async () => {
+    await invalidatedBy(() => usePlanMeal(), none)
+    expect(clearAvailabilityOverride).not.toHaveBeenCalled()
+    expect(setAvailabilityOverride).toHaveBeenCalledWith(
+      none.date,
+      none.slot_id,
+      { mode: "plan" }
+    )
+  })
+
+  it("Edit note keeps the cell No plate", async () => {
+    const keys = await invalidatedBy(() => useSetNoPlateNote(), {
+      cell: none,
+      note: "At grandma's",
+    })
+    expect(setAvailabilityOverride).toHaveBeenCalledWith(
+      none.date,
+      none.slot_id,
+      { mode: "none", note: "At grandma's" }
+    )
+    expect(keys).toEqual([...PLAN_VIEWS, availabilityKeys.ranges()])
+  })
 })

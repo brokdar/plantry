@@ -90,7 +90,6 @@ describe("useUndoApply", () => {
     expect(keys).toEqual([
       plateKeys.all,
       availabilityKeys.ranges(),
-      ["nutrition"],
       planKeys.all,
       todayKeys.all,
       shoppingKeys.all,

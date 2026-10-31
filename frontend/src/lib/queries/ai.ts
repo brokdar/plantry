@@ -65,7 +65,6 @@ export function useDeleteConversation() {
 export interface ChatStreamParams {
   conversationId?: number
   range: { from: string; to: string }
-  mode?: "fill_empty" | "replace_all" | ""
   message: string
 }
 
@@ -88,7 +87,6 @@ export function useChatStream() {
 
       const req: ChatRequest = {
         conversation_id: params.conversationId,
-        mode: params.mode,
         message: params.message,
         today: todayISO(),
         from: params.range.from,
@@ -160,8 +158,7 @@ function handleEvent(
       } else {
         qc.invalidateQueries({ queryKey: plateKeys.all })
       }
-      qc.invalidateQueries({ queryKey: ["nutrition"] })
-      invalidatePlanViews(qc)
+      void invalidatePlanViews(qc)
       return
     }
     case "done":

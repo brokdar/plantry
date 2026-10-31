@@ -66,47 +66,31 @@ beforeEach(() => {
     chatStreamStore.reset()
     useChatUI.setState({
       open: false,
-      mode: "",
-      autoSend: null,
       activeConversationId: null,
     })
   })
 })
 
-describe("ChatPanel auto-send", () => {
-  test("auto-submits the queued fill message in fill_empty mode", async () => {
+describe("ChatPanel composer", () => {
+  test("sends the typed message for the window, without a mode", async () => {
     const { mutateAsync } = stubQueries({ enabled: true })
     act(() => {
-      useChatUI.getState().requestAutoFill("fill my week")
+      useChatUI.setState({ open: true, draftMessage: "plan my dinner" })
     })
 
     render(<ChatPanel range={range} />)
 
+    expect(screen.queryByTestId("chat-composer-mode")).not.toBeInTheDocument()
+    act(() => {
+      screen.getByTestId("chat-composer-submit").click()
+    })
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith({
         conversationId: undefined,
         range,
-        mode: "fill_empty",
-        message: "fill my week",
+        message: "plan my dinner",
       })
     })
-    // Fires exactly once and clears the queue so it never re-sends.
-    expect(mutateAsync).toHaveBeenCalledTimes(1)
-    expect(useChatUI.getState().autoSend).toBeNull()
-  })
-
-  test("does not auto-send when AI is disabled", async () => {
-    const { mutateAsync } = stubQueries({ enabled: false })
-    act(() => {
-      useChatUI.getState().requestAutoFill("fill my week")
-    })
-
-    render(<ChatPanel range={range} />)
-
-    // Give the effect a chance to run, then confirm it stayed put.
-    await Promise.resolve()
-    expect(mutateAsync).not.toHaveBeenCalled()
-    expect(useChatUI.getState().autoSend).toBe("fill my week")
   })
 })
 

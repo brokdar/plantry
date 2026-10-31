@@ -15,23 +15,20 @@ import { useChatUI } from "@/lib/stores/chat-ui"
 import { Board } from "./Board"
 import { BoardSkeleton } from "./BoardSkeleton"
 import { EmptyWindow } from "./EmptyWindow"
+import { PlanSheet, type SheetState } from "./PlanSheet"
 import { PlanToolbar } from "./PlanToolbar"
 import { ShortcutsDialog } from "./ShortcutsDialog"
 
 interface PlanPageProps {
   /** The window start from the URL; undefined opens the anchored window. */
   start?: string
-  /** Opens a cell (the plate sheet, F4). */
-  onOpenCell?: (cell: BoardCell) => void
 }
-
-const noop = () => {}
 
 /**
  * `/plan`: the plan board for one window (UX §5.5, D3). One query
  * (`GET /api/plan`) feeds the toolbar, the cook strip and the board.
  */
-export function PlanPage({ start, onOpenCell = noop }: PlanPageProps) {
+export function PlanPage({ start }: PlanPageProps) {
   const { t } = useTranslation()
   const plan = usePlan(start)
 
@@ -54,7 +51,7 @@ export function PlanPage({ start, onOpenCell = noop }: PlanPageProps) {
       </PageFrame>
     )
   }
-  return <PlanView plan={plan.data} anchored={!start} onOpenCell={onOpenCell} />
+  return <PlanView plan={plan.data} anchored={!start} />
 }
 
 function PageFrame({ children }: { children: React.ReactNode }) {
@@ -70,21 +67,14 @@ function parseDate(iso: string) {
   return new Date(y, m - 1, d)
 }
 
-function PlanView({
-  plan,
-  anchored,
-  onOpenCell,
-}: {
-  plan: Plan
-  anchored: boolean
-  onOpenCell: (cell: BoardCell) => void
-}) {
+function PlanView({ plan, anchored }: { plan: Plan; anchored: boolean }) {
   const { t, i18n } = useTranslation()
   const board = useMemo(() => buildBoard(plan, i18n), [plan, i18n])
   const boardRef = useRef<HTMLDivElement>(null)
   const [copyOpen, setCopyOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [warningIndex, setWarningIndex] = useState(0)
+  const [sheet, setSheet] = useState<SheetState | null>(null)
   const openChat = useChatUI((s) => s.setOpen)
   const clearWindow = useClearWindow()
   const markNoPlate = useMarkNoPlate()
@@ -119,6 +109,12 @@ function PlanView({
     const i = warningIndex % keys.length
     focusCell(`[data-cell-key="${keys[i]}"]`)
     setWarningIndex(i + 1)
+  }
+
+  function openCell(cell: BoardCell) {
+    // A past window has nothing to do in a cell without a plate.
+    if (board.readOnly && !cell.plate) return
+    setSheet({ key: cell.key })
   }
 
   function markCell(cell: BoardCell) {
@@ -158,7 +154,7 @@ function PlanView({
             board={board}
             targets={plan.targets}
             label={t("plan.board.label", { range: rangeLabel })}
-            onOpenCell={onOpenCell}
+            onOpenCell={openCell}
             onMarkNoPlate={markCell}
           />
         </div>
@@ -170,6 +166,7 @@ function PlanView({
         defaultSourceStart={win.prev_start}
       />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <PlanSheet plan={plan} board={board} state={sheet} onChange={setSheet} />
       <ChatPanel range={{ from: win.start, to: win.end }} />
     </PageFrame>
   )

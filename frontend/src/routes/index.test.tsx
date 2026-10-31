@@ -39,17 +39,20 @@ describe("/ setup redirect (plan D2)", () => {
     expect((thrown as { options: { to: string } }).options.to).toBe("/setup")
   })
 
-  it("opens the planner once setup is completed", async () => {
+  it("opens the plan board once setup is completed", async () => {
     vi.mocked(getSetupStatus).mockResolvedValue({
       completed: true,
       recipe_count: 3,
       recipe_target: 10,
     })
-    expect(await runBeforeLoad()).toBeUndefined()
+    const thrown = await runBeforeLoad()
+    expect(isRedirect(thrown)).toBe(true)
+    expect((thrown as { options: { to: string } }).options.to).toBe("/plan")
   })
 
-  it("opens the planner when the setup status fails to load", async () => {
+  it("opens the plan board when the setup status fails to load", async () => {
     vi.mocked(getSetupStatus).mockRejectedValue(new Error("offline"))
-    expect(await runBeforeLoad()).toBeUndefined()
+    const thrown = await runBeforeLoad()
+    expect((thrown as { options: { to: string } }).options.to).toBe("/plan")
   })
 })

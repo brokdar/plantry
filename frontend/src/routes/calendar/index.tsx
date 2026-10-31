@@ -7,7 +7,7 @@ import {
   CalendarHeader,
   type CalendarMode,
 } from "@/components/calendar/CalendarHeader"
-import type { PlannerDay } from "@/components/planner/PlannerGrid"
+import type { PlannerDay } from "@/components/calendar/ReadOnlyPlannerGrid"
 import { useSettings } from "@/lib/queries/settings"
 import { usePlatesRange, usePlatesRangeInfinite } from "@/lib/queries/plates"
 import { useTimeSlots } from "@/lib/queries/slots"
@@ -35,14 +35,12 @@ export const Route = createFileRoute("/calendar/")({
     date?: string
     from?: string
     to?: string
-    edit: boolean
     search: string
   } => ({
     mode: ((search.mode as string) ?? "month") as CalendarMode,
     date: (search.date as string) ?? undefined,
     from: (search.from as string) ?? undefined,
     to: (search.to as string) ?? undefined,
-    edit: search.edit === "1" || search.edit === true || search.edit === "true",
     search: (search.search as string) ?? "",
   }),
   component: CalendarPage,
@@ -52,7 +50,7 @@ function CalendarPage() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
 
-  const { mode, date, to: toParam, edit, search } = Route.useSearch()
+  const { mode, date, to: toParam, search } = Route.useSearch()
 
   const deferredSearch = useDeferredValue(search)
 
@@ -159,13 +157,13 @@ function CalendarPage() {
       const newDate = `${prev.getFullYear()}-${padTwo(prev.getMonth() + 1)}`
       void navigate({
         to: "/calendar",
-        search: (s) => ({ ...s, mode, date: newDate, edit, search }),
+        search: (s) => ({ ...s, mode, date: newDate, search }),
       })
     } else if (mode === "week") {
       const prev = addDays(new Date(weekFrom + "T00:00:00"), -7)
       void navigate({
         to: "/calendar",
-        search: (s) => ({ ...s, mode, date: toYMD(prev), edit, search }),
+        search: (s) => ({ ...s, mode, date: toYMD(prev), search }),
       })
     } else {
       // agenda: shift back 60 days
@@ -174,7 +172,7 @@ function CalendarPage() {
         : toYMD(addDays(new Date(), -60))
       void navigate({
         to: "/calendar",
-        search: (s) => ({ ...s, mode, to: newTo, edit, search }),
+        search: (s) => ({ ...s, mode, to: newTo, search }),
       })
     }
   }
@@ -185,13 +183,13 @@ function CalendarPage() {
       const newDate = `${next.getFullYear()}-${padTwo(next.getMonth() + 1)}`
       void navigate({
         to: "/calendar",
-        search: (s) => ({ ...s, mode, date: newDate, edit, search }),
+        search: (s) => ({ ...s, mode, date: newDate, search }),
       })
     } else if (mode === "week") {
       const next = addDays(new Date(weekFrom + "T00:00:00"), 7)
       void navigate({
         to: "/calendar",
-        search: (s) => ({ ...s, mode, date: toYMD(next), edit, search }),
+        search: (s) => ({ ...s, mode, date: toYMD(next), search }),
       })
     } else {
       const newTo = toParam
@@ -199,7 +197,7 @@ function CalendarPage() {
         : toYMD(addDays(new Date(), 60))
       void navigate({
         to: "/calendar",
-        search: (s) => ({ ...s, mode, to: newTo, edit, search }),
+        search: (s) => ({ ...s, mode, to: newTo, search }),
       })
     }
   }
@@ -208,7 +206,7 @@ function CalendarPage() {
     if (mode === "month") {
       void navigate({
         to: "/calendar",
-        search: (s) => ({ ...s, mode, date: currentMonthISO(), edit, search }),
+        search: (s) => ({ ...s, mode, date: currentMonthISO(), search }),
       })
     } else if (mode === "week") {
       void navigate({
@@ -217,7 +215,6 @@ function CalendarPage() {
           ...s,
           mode,
           date: weekStartDate(weekStartsOn),
-          edit,
           search,
         }),
       })
@@ -229,7 +226,6 @@ function CalendarPage() {
           mode,
           to: todayISO(),
           from: undefined,
-          edit,
           search,
         }),
       })
@@ -242,7 +238,6 @@ function CalendarPage() {
       search: (s) => ({
         ...s,
         mode: newMode,
-        edit: false,
         search: "",
         date: undefined,
         from: undefined,
@@ -257,7 +252,7 @@ function CalendarPage() {
       const newDate = pickedDate.slice(0, 7)
       void navigate({
         to: "/calendar",
-        search: (s) => ({ ...s, mode, date: newDate, edit, search }),
+        search: (s) => ({ ...s, mode, date: newDate, search }),
       })
     } else if (mode === "week") {
       // Navigate to the week containing that date
@@ -267,12 +262,12 @@ function CalendarPage() {
       const weekStart = addDays(d, -diff)
       void navigate({
         to: "/calendar",
-        search: (s) => ({ ...s, mode, date: toYMD(weekStart), edit, search }),
+        search: (s) => ({ ...s, mode, date: toYMD(weekStart), search }),
       })
     } else {
       void navigate({
         to: "/calendar",
-        search: (s) => ({ ...s, mode, to: pickedDate, edit, search }),
+        search: (s) => ({ ...s, mode, to: pickedDate, search }),
       })
     }
   }
@@ -280,14 +275,7 @@ function CalendarPage() {
   function handleSearchChange(newSearch: string) {
     void navigate({
       to: "/calendar",
-      search: (s) => ({ ...s, mode, search: newSearch, edit }),
-    })
-  }
-
-  function handleEditToggle() {
-    void navigate({
-      to: "/calendar",
-      search: (s) => ({ ...s, mode, edit: !edit, search }),
+      search: (s) => ({ ...s, mode, search: newSearch }),
     })
   }
 
@@ -326,16 +314,7 @@ function CalendarPage() {
           />
         )}
 
-        {mode === "week" && (
-          <WeekView
-            days={weekDays}
-            slots={slots}
-            edit={edit}
-            rangeFrom={weekFrom}
-            rangeTo={weekTo}
-            onEditToggle={handleEditToggle}
-          />
-        )}
+        {mode === "week" && <WeekView days={weekDays} slots={slots} />}
 
         {mode === "agenda" && (
           <AgendaView

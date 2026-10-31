@@ -4,14 +4,20 @@ import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
 import type { Food } from "@/lib/api/foods"
+import type { Plate } from "@/lib/api/plates"
 import type { TimeSlot } from "@/lib/api/slots"
 import { useFoods } from "@/lib/queries/foods"
 import { SLOT_ICONS, SLOT_ICON_FALLBACK } from "@/lib/slot-icons"
 import { slotLabel } from "@/lib/slot-label"
 
-import type { PlannerDay } from "./PlannerGrid"
 import { SlotHero, type SlotHeroComponent } from "./SlotHero"
 import { SlotSides, type SlotSideItem } from "./SlotSides"
+
+export interface PlannerDay {
+  date: string // "YYYY-MM-DD"
+  weekday: number // 0=Monday…6=Sunday (matches backend convention)
+  plates: Plate[]
+}
 
 const DAY_KEYS = [
   "planner.day_mon",
@@ -105,8 +111,6 @@ export function ReadOnlyPlannerGrid({ days, slots }: ReadOnlyPlannerGridProps) {
     </div>
   )
 }
-
-import type { Plate } from "@/lib/api/plates"
 
 interface ReadOnlySlotProps {
   plate: Plate | undefined

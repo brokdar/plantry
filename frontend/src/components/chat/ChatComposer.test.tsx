@@ -24,7 +24,7 @@ describe("ChatComposer", () => {
     )
     await user.type(screen.getByTestId("chat-composer-input"), "hello")
     await user.click(screen.getByTestId("chat-composer-submit"))
-    expect(onSubmit).toHaveBeenCalledWith("hello", "")
+    expect(onSubmit).toHaveBeenCalledWith("hello")
   })
 
   it("submits on ctrl+enter", async () => {
@@ -36,22 +36,15 @@ describe("ChatComposer", () => {
     const input = screen.getByTestId("chat-composer-input")
     await user.type(input, "hello")
     await user.keyboard("{Control>}{Enter}{/Control}")
-    expect(onSubmit).toHaveBeenCalledWith("hello", "")
+    expect(onSubmit).toHaveBeenCalledWith("hello")
   })
 
-  it("pipes the selected mode through onSubmit", async () => {
-    const onSubmit = vi.fn()
-    const user = userEvent.setup()
+  it("has no mode select", () => {
     render(
-      <ChatComposer streaming={false} onSubmit={onSubmit} onAbort={vi.fn()} />
+      <ChatComposer streaming={false} onSubmit={vi.fn()} onAbort={vi.fn()} />
     )
-    await user.selectOptions(
-      screen.getByTestId("chat-composer-mode"),
-      "fill_empty"
-    )
-    await user.type(screen.getByTestId("chat-composer-input"), "plan")
-    await user.click(screen.getByTestId("chat-composer-submit"))
-    expect(onSubmit).toHaveBeenCalledWith("plan", "fill_empty")
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("chat-composer-mode")).not.toBeInTheDocument()
   })
 
   it("does not submit empty text", async () => {

@@ -3,11 +3,11 @@ import { useRef } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
-import { type ChatMode, useChatUI } from "@/lib/stores/chat-ui"
+import { useChatUI } from "@/lib/stores/chat-ui"
 
 interface ChatComposerProps {
   streaming: boolean
-  onSubmit: (text: string, mode: ChatMode) => void
+  onSubmit: (text: string) => void
   onAbort: () => void
   disabled?: boolean
 }
@@ -21,14 +21,12 @@ export function ChatComposer({
   const { t } = useTranslation()
   const draft = useChatUI((s) => s.draftMessage)
   const setDraft = useChatUI((s) => s.setDraft)
-  const mode = useChatUI((s) => s.mode)
-  const setMode = useChatUI((s) => s.setMode)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   function send() {
     const trimmed = draft.trim()
     if (!trimmed || streaming || disabled) return
-    onSubmit(trimmed, mode)
+    onSubmit(trimmed)
     setDraft("")
   }
 
@@ -47,28 +45,6 @@ export function ChatComposer({
         send()
       }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <label htmlFor="chat-mode" className="text-xs text-muted-foreground">
-          {t("chat.composer.mode_label")}
-        </label>
-        <select
-          id="chat-mode"
-          value={mode}
-          onChange={(e) => setMode(e.target.value as ChatMode)}
-          disabled={disabled || streaming}
-          aria-label={t("chat.composer.mode_label")}
-          data-testid="chat-composer-mode"
-          className="h-7 rounded-md border border-input bg-background px-2 text-xs"
-        >
-          <option value="">{t("chat.composer.mode.default")}</option>
-          <option value="fill_empty">
-            {t("chat.composer.mode.fill_empty")}
-          </option>
-          <option value="replace_all">
-            {t("chat.composer.mode.replace_all")}
-          </option>
-        </select>
-      </div>
       <div className="flex items-end gap-2">
         <textarea
           ref={textareaRef}

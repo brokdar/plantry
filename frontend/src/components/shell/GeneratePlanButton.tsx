@@ -88,7 +88,7 @@ export function GeneratePlanButton({
     }
     // On the board already: keep its window, the chat works on it.
     if (pathname !== "/plan") await navigate({ to: "/plan" })
-    openWith(t("planner.generate_prompt"))
+    openWith(t("plan.generate_prompt"))
   }
 
   const button = (
