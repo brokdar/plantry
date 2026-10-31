@@ -50,8 +50,9 @@ src/routes/
 │                      #   (`?portions=`, cook mode without a plan, D30); ingredients/ — the
 │                      #   Ingredients tab (table),
 │                      #   ingredients/new.tsx, ingredients/$id/edit.tsx
-├── plan/              # `/plan?start&cell&day` — the plan board (components/plan, view model
-│                      #   lib/plan/board.ts); `day` focuses that day (Today's week strip)
+├── plan/              # `/plan?start&cell&day&run` — the plan board (components/plan, view model
+│                      #   lib/plan/board.ts); `day` focuses that day (Today's week strip); `run`
+│                      #   is the generation the board follows (progress bar, D35)
 ├── shop/              # `/shop?from&to&drafts` — Shop (components/shop); without a range, the server's
 │                      #   default for the anchored window; `drafts=1` includes draft plates
 └── settings/          # index.tsx: `/settings` (section list on phone, else redirects);
@@ -78,7 +79,8 @@ src/components/
 ├── plan/              # the board: PlanPage, Board (BoardGrid ≥768 px, DayList phone), PlateCell,
 │                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog, CopyFromWeekDialog; keynav in lib/plan/keynav.ts;
 │                      #   PlanSheet (one sheet per cell: PlateSheet, CellSheet or FoodPicker), BatchSection,
-│                      #   QuantityStepper
+│                      #   QuantityStepper; review (D33–D35): UnlockDialog, DiscardDialog, DraftBar (phone),
+│                      #   GenerationProgress
 ├── batch/             # BatchBadge, BatchHighlightProvider (hooks in batch-highlight.ts), CookStrip,
 │                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
 ├── availability/      # AvailabilityGrid (weekday/date × slot modes), RoutinePicker
