@@ -51,7 +51,7 @@ export function SideNav({ collapsed, onToggle }: SideNavProps) {
           <Link
             to="/"
             aria-label={t("nav.brand")}
-            className="gradient-primary flex size-10 items-center justify-center rounded-lg text-on-primary"
+            className="flex size-10 items-center justify-center rounded-lg bg-accent text-on-accent"
           >
             <Leaf className="size-5" aria-hidden />
           </Link>

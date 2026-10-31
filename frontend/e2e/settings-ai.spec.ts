@@ -232,11 +232,10 @@ test.describe("AI settings", () => {
     expect(body.message_key).toBe("error.settings.invalid_value")
   })
 
-  test("legacy ?tab=system opens Data & system, without a secret-key banner", async ({
+  test("Data & system shows the system info, without a secret-key banner", async ({
     page,
   }) => {
-    await page.goto("/settings?tab=system")
-    await expect(page).toHaveURL(/\/settings\/system$/)
+    await page.goto("/settings/system")
     await expect(
       page.getByRole("heading", { name: "Data & system" })
     ).toBeVisible()

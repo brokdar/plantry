@@ -116,12 +116,6 @@ export const mockTofuBowl: ComposedFood = {
   updated_at: "2024-01-02T00:00:00Z",
 }
 
-export const mockChickenCurryWithVariantGroup: ComposedFood = {
-  ...mockChickenCurry,
-  id: 10,
-  variant_group_id: 1,
-}
-
 export const mockTofuCurryVariant: ComposedFood = {
   id: 11,
   kind: "composed",

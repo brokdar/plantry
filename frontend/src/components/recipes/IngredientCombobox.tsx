@@ -58,7 +58,7 @@ export function IngredientCombobox({
           data-testid={testId}
           className={cn(
             "w-full justify-between",
-            !hasSelection && "text-on-surface-variant"
+            !hasSelection && "text-ink-muted"
           )}
         >
           <span className="truncate">
@@ -73,11 +73,8 @@ export function IngredientCombobox({
         align="start"
         className="w-[var(--radix-popover-trigger-width)] gap-0 p-0"
       >
-        <div className="flex items-center gap-2 border-b border-outline-variant/20 px-3 py-2">
-          <Search
-            className="size-4 shrink-0 text-on-surface-variant"
-            aria-hidden
-          />
+        <div className="flex items-center gap-2 border-b border-line/20 px-3 py-2">
+          <Search className="size-4 shrink-0 text-ink-muted" aria-hidden />
           <Input
             autoFocus
             value={search}
@@ -95,7 +92,7 @@ export function IngredientCombobox({
               ))}
             </div>
           ) : items.length === 0 ? (
-            <p className="px-3 py-6 text-center text-xs text-on-surface-variant">
+            <p className="px-3 py-6 text-center text-xs text-ink-muted">
               {t("ingredient.no_results")}
             </p>
           ) : (
@@ -116,7 +113,7 @@ export function IngredientCombobox({
                       data-testid={
                         testId ? `${testId}-option-${item.id}` : undefined
                       }
-                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-surface-container focus:bg-surface-container focus:outline-none"
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-panel-sunken focus:bg-panel-sunken focus:outline-none"
                     >
                       <Check
                         className={cn(
@@ -125,10 +122,10 @@ export function IngredientCombobox({
                         )}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-on-surface">
+                        <p className="truncate font-medium text-ink">
                           {item.name}
                         </p>
-                        <p className="truncate text-[11px] text-on-surface-variant">
+                        <p className="truncate text-[11px] text-ink-muted">
                           {Math.round(item.kcal_100g ?? 0)} kcal ·{" "}
                           {(item.protein_100g ?? 0).toFixed(0)}P ·{" "}
                           {(item.carbs_100g ?? 0).toFixed(0)}C ·{" "}
@@ -142,7 +139,7 @@ export function IngredientCombobox({
             </ul>
           )}
         </div>
-        <div className="border-t border-outline-variant/20 px-1.5 py-1.5">
+        <div className="border-t border-line/20 px-1.5 py-1.5">
           <Button
             type="button"
             variant="ghost"

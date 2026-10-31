@@ -82,8 +82,6 @@ export const settingsKeys = {
   all: ["settings"] as const,
   list: () => [...settingsKeys.all, "list"] as const,
   system: () => [...settingsKeys.all, "system"] as const,
-  aiModels: (provider: string) =>
-    [...settingsKeys.all, "ai", "models", provider] as const,
 }
 
 export const setupKeys = {
@@ -107,5 +105,3 @@ export const importKeys = {
 export const unitKeys = {
   list: () => ["units"] as const,
 }
-
-export { lookupKeys } from "./lookup"

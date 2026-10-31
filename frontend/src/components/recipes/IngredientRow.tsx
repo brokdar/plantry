@@ -160,7 +160,7 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
 
   return (
     <div
-      className="space-y-3 rounded-xl border border-outline-variant/30 bg-surface-container/40 p-3"
+      className="space-y-3 rounded-xl border border-line/30 bg-panel-sunken/40 p-3"
       data-testid={`ingredient-row-${index}`}
     >
       <div className="flex items-start gap-2">
@@ -185,7 +185,7 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
 
       {showProactivePortionHint && (
         <div
-          className="flex flex-wrap items-start gap-2 rounded-lg border border-primary-fixed/60 bg-primary-fixed/30 px-3 py-2 text-xs text-on-primary-fixed"
+          className="flex flex-wrap items-start gap-2 rounded-lg border border-panel-sunken/60 bg-panel-sunken/30 px-3 py-2 text-xs text-ink"
           data-testid={`ingredient-row-${index}-proactive-hint`}
         >
           <Lightbulb className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -201,7 +201,7 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
           <button
             type="button"
             aria-label={t("common.delete")}
-            className="text-on-primary-fixed/70 hover:text-on-primary-fixed"
+            className="text-ink/70 hover:text-ink"
             onClick={() => setProactiveHintDismissed(true)}
           >
             ×
@@ -258,8 +258,7 @@ function IngredientRowImpl({ index, form, onRemove }: IngredientRowProps) {
                       disabled={!gramsEditable}
                       className={cn(
                         "tabular-nums",
-                        !gramsEditable &&
-                          "bg-surface-container-high/40 text-on-surface/80"
+                        !gramsEditable && "bg-line/40 text-ink/80"
                       )}
                       data-testid={`ingredient-row-${index}-grams`}
                     />

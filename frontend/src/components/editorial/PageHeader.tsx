@@ -27,7 +27,7 @@ export function PageHeader({
     >
       <div className="max-w-2xl space-y-2">
         {breadcrumb && (
-          <nav className="flex items-center gap-2 text-sm text-on-surface-variant">
+          <nav className="flex items-center gap-2 text-sm text-ink-muted">
             {breadcrumb}
           </nav>
         )}
@@ -36,11 +36,11 @@ export function PageHeader({
             {eyebrow}
           </span>
         )}
-        <h1 className="font-heading text-4xl leading-tight font-extrabold tracking-tight text-on-surface md:text-5xl">
+        <h1 className="font-heading text-4xl leading-tight font-extrabold tracking-tight text-ink md:text-5xl">
           {title}
         </h1>
         {description && (
-          <p className="max-w-lg text-base leading-relaxed text-on-surface-variant md:text-lg">
+          <p className="max-w-lg text-base leading-relaxed text-ink-muted md:text-lg">
             {description}
           </p>
         )}

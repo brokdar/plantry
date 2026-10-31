@@ -281,7 +281,7 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="g">g</SelectItem>
+                  <SelectItem value="g">{t("units.g")}</SelectItem>
                   <SelectItem value="ml">ml</SelectItem>
                   {state.countUnit && (
                     <SelectItem value={state.countUnit}>

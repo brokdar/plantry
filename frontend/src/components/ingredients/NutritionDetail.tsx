@@ -7,11 +7,7 @@ import {
   TriangleAlert,
 } from "lucide-react"
 
-import {
-  MacroDistributionBar,
-  MacroKcalHero,
-  MacroTriad,
-} from "@/components/editorial/macros"
+import { MacroLine } from "@/components/editorial/MacroLine"
 import { Badge } from "@/components/ui/badge"
 import type { LookupCandidate } from "@/lib/api/lookup"
 import { cn } from "@/lib/utils"
@@ -40,8 +36,7 @@ function fmt(value: number, unit: string) {
 /**
  * NutritionDetail renders the macros + extended nutrient sections for a
  * lookup candidate. Layout is deliberately compact and editorial — inline
- * flex-wrap groups with tight tracking, matching the Botanical Atelier
- * surface-container treatment used elsewhere in the app.
+ * flex-wrap groups on a sunken panel.
  *
  * Sections without any upstream data are elided so a candidate with only
  * basic macros does not render empty minerals/vitamins bands.
@@ -154,10 +149,7 @@ export function NutritionDetail({
 
   return (
     <div
-      className={cn(
-        "space-y-3 rounded-2xl bg-surface-container p-4",
-        className
-      )}
+      className={cn("space-y-3 rounded-2xl bg-panel-sunken p-4", className)}
       data-testid="nutrition-detail"
     >
       <div className="flex items-start gap-3">
@@ -171,7 +163,7 @@ export function NutritionDetail({
         )}
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold text-on-surface">
+            <p className="truncate text-sm font-semibold text-ink">
               {candidate.name}
             </p>
             {recommended && (
@@ -183,7 +175,7 @@ export function NutritionDetail({
           </div>
           {candidate.source_name &&
             candidate.source_name !== candidate.name && (
-              <p className="truncate font-mono text-[11px] text-on-surface-variant/80">
+              <p className="truncate font-mono text-[11px] text-ink-muted/80">
                 {candidate.source_name}
               </p>
             )}
@@ -198,7 +190,7 @@ export function NutritionDetail({
       </div>
 
       {candidate.existing_id != null && (
-        <div className="flex items-center gap-2 rounded-lg bg-primary-fixed/60 px-3 py-1.5 text-xs text-on-primary-fixed">
+        <div className="flex items-center gap-2 rounded-lg bg-panel-sunken/60 px-3 py-1.5 text-xs text-ink">
           <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
           {t("lookup.existing_warning")}
         </div>
@@ -206,31 +198,17 @@ export function NutritionDetail({
 
       {hasCoreMacros && (
         <div className="space-y-2">
-          <p className="text-[10px] font-semibold tracking-[0.18em] text-on-surface-variant/70 uppercase">
+          <p className="text-[10px] font-semibold tracking-[0.18em] text-ink-muted/70 uppercase">
             {t("nutrition.section_core")}
           </p>
-          <div className="flex items-baseline justify-between gap-3">
-            <MacroKcalHero
-              kcal={candidate.kcal_100g}
-              size="sm"
-              hint={t("ingredient.per_100g")}
-            />
-          </div>
-          <MacroDistributionBar
-            thickness="sm"
-            values={{
-              protein: candidate.protein_100g,
-              carbs: candidate.carbs_100g,
-              fat: candidate.fat_100g,
-            }}
-          />
-          <MacroTriad
-            size="sm"
-            values={{
-              protein: candidate.protein_100g,
-              carbs: candidate.carbs_100g,
-              fat: candidate.fat_100g,
-            }}
+          <p className="text-caption text-ink-muted">
+            {t("ingredient.per_100g")}
+          </p>
+          <MacroLine
+            kcal={candidate.kcal_100g}
+            protein={candidate.protein_100g}
+            fat={candidate.fat_100g}
+            carbs={candidate.carbs_100g}
           />
         </div>
       )}
@@ -267,24 +245,25 @@ function NutrientRow({
   const visible = rows.filter((r) => r.value != null)
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] font-semibold tracking-[0.18em] text-on-surface-variant/70 uppercase">
+      <p className="text-[10px] font-semibold tracking-[0.18em] text-ink-muted/70 uppercase">
         {t(titleKey)}
       </p>
       <div
         className={cn(
           "flex flex-wrap gap-x-4 gap-y-1 tabular-nums",
           size === "md"
-            ? "text-xs text-on-surface-variant"
-            : "text-[11px] text-on-surface-variant/80"
+            ? "text-xs text-ink-muted"
+            : "text-[11px] text-ink-muted/80"
         )}
       >
         {visible.map((row) => (
           <span key={row.labelKey} className="inline-flex items-baseline gap-1">
-            <span className="text-on-surface-variant/70">
-              {t(row.labelKey)}
-            </span>
-            <span className="font-medium text-on-surface">
-              {fmt(row.value as number, row.unit)}
+            <span className="text-ink-muted/70">{t(row.labelKey)}</span>
+            <span className="font-medium text-ink">
+              {fmt(
+                row.value as number,
+                row.unit === "g" ? t("units.g") : row.unit
+              )}
             </span>
           </span>
         ))}

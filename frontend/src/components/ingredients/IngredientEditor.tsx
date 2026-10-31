@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next"
 import { useRouter } from "@tanstack/react-router"
 import { AlertCircle, Loader2 } from "lucide-react"
 
-import { MacroDistributionBar, MacroTriad } from "@/components/editorial/macros"
+import { MacroLine } from "@/components/editorial/MacroLine"
 import { NutritionPanel } from "@/components/editorial/NutritionPanel"
 import { SectionCard } from "@/components/editorial/SectionCard"
 import { StickyActionBar } from "@/components/editorial/StickyActionBar"
@@ -328,14 +328,11 @@ export function IngredientEditor({
                 description={t("ingredient.section_macros_hint")}
               >
                 <MacroFieldSet control={form.control} disabled={isPending} />
-                <MacroDistributionBar
-                  thickness="md"
-                  values={{ protein, carbs, fat }}
-                />
-                <MacroTriad
-                  size="sm"
-                  values={{ protein, carbs, fat }}
-                  className="text-xs"
+                <MacroLine
+                  kcal={kcal}
+                  protein={protein}
+                  fat={fat}
+                  carbs={carbs}
                 />
               </SectionCard>
 
@@ -415,7 +412,7 @@ export function IngredientEditor({
                   title={t("ingredient.per_100g")}
                   testId="ingredient-nutrition-summary-empty"
                 >
-                  <p className="text-sm text-on-surface-variant">
+                  <p className="text-sm text-ink-muted">
                     {t("ingredient.nutrition_preview_empty")}
                   </p>
                 </SectionCard>

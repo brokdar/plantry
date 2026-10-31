@@ -52,17 +52,17 @@ export function ExtendedNutrientFieldSet({
               <FormItem className="space-y-0">
                 <div
                   className={cn(
-                    "group relative rounded-xl bg-surface-container-low p-3 transition-colors",
-                    "focus-within:bg-surface-container focus-within:ring-1 focus-within:ring-primary/30",
+                    "group relative rounded-xl bg-panel-sunken p-3 transition-colors",
+                    "focus-within:bg-panel-sunken focus-within:ring-1 focus-within:ring-primary/30",
                     filled && "border-l-2 border-primary/40",
                     fieldState.invalid && "ring-1 ring-destructive/60"
                   )}
                 >
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <FormLabel className="text-xs font-normal text-on-surface-variant">
+                    <FormLabel className="text-xs font-normal text-ink-muted">
                       {t(field.labelKey)}
                     </FormLabel>
-                    <span className="font-mono text-[10px] text-on-surface-variant/60">
+                    <span className="font-mono text-[10px] text-ink-muted/60">
                       {field.unit}
                     </span>
                   </div>
@@ -89,11 +89,11 @@ export function ExtendedNutrientFieldSet({
                         fieldProps.onChange(parsed)
                       }}
                       className={cn(
-                        "w-full bg-transparent text-lg font-semibold text-on-surface tabular-nums",
+                        "w-full bg-transparent text-lg font-semibold text-ink tabular-nums",
                         "[appearance:textfield] focus:outline-none",
                         "[&::-webkit-inner-spin-button]:appearance-none",
                         "[&::-webkit-outer-spin-button]:appearance-none",
-                        "placeholder:font-normal placeholder:text-on-surface-variant/40"
+                        "placeholder:font-normal placeholder:text-ink-muted/40"
                       )}
                     />
                   </FormControl>

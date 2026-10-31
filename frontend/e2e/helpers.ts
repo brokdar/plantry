@@ -224,14 +224,6 @@ export async function seedPlateWithComponent(
   return plate
 }
 
-export async function getSetting(key: string): Promise<string | null> {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.get("/api/settings")
-  const body = (await res.json()) as { items: { key: string; value: string }[] }
-  await ctx.dispose()
-  return body.items.find((i) => i.key === key)?.value ?? null
-}
-
 export async function setSetting(key: string, value: string): Promise<void> {
   const ctx = await apiRequest.newContext({ baseURL: API })
   const res = await ctx.put(`/api/settings/${encodeURIComponent(key)}`, {
@@ -282,31 +274,6 @@ export async function mockSettingValues(
       body: JSON.stringify({ ...body, items }),
     })
   })
-}
-
-// ── Template seeding ──────────────────────────────────────────────────
-
-export async function seedTemplate(data: {
-  name: string
-  components?: { food_id: number; portions: number }[]
-}) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const res = await ctx.post("/api/templates", {
-    data: { components: [], ...data },
-  })
-  const body = await res.json()
-  expect(
-    res.ok(),
-    `Seed template "${data.name}" failed: ${res.status()} ${JSON.stringify(body)}`
-  ).toBeTruthy()
-  await ctx.dispose()
-  return body as { id: number; name: string }
-}
-
-export async function cleanupTemplate(id: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/templates/${id}`)
-  await ctx.dispose()
 }
 
 // ── Plan board helpers ────────────────────────────────────────────────

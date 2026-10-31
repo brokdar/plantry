@@ -22,7 +22,6 @@ vi.mock("@/lib/api/foods", async (importOriginal) => {
 
 vi.mock("@/lib/api/lookup", () => ({
   lookupFoods: vi.fn(),
-  resolveCandidate: vi.fn(),
 }))
 
 vi.mock("@/lib/api/images", () => ({

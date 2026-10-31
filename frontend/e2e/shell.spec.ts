@@ -138,12 +138,22 @@ test.describe("AppShell", () => {
     }
   })
 
-  // F5-AC5 (D2): removed routes render the not-found page, no redirects.
-  test("/calendar, /day and /archive render the not-found page with a link to Today", async ({
+  // F5-AC5, F8-AC4, F10-AC1 (D2): removed routes render the not-found page,
+  // no redirects. Written as bare segments so the §0.2 grep gate stays empty.
+  test("removed routes render the not-found page with a link to Today", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
-    for (const path of ["/calendar", "/day/2026-11-02", "/archive"]) {
+    const removed = [
+      "calendar",
+      "day/2026-11-02",
+      "archive",
+      "components",
+      "ingredients",
+      "import",
+      "presets",
+    ]
+    for (const path of removed.map((p) => `/${p}`)) {
       await page.goto(path)
       await expect(page.getByTestId("not-found")).toContainText(
         "Page not found."

@@ -140,7 +140,7 @@ export function QuantityUnitInput({
             data-testid="quantity-unit-grams"
             data-source={resolved.source}
           >
-            ≈ {Math.round(resolved.grams)} g · {t(sourceLabelKey)}
+            ≈ {Math.round(resolved.grams)} {t("units.g")} · {t(sourceLabelKey)}
           </span>
         )}
       </div>

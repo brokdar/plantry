@@ -28,7 +28,7 @@ function NewIngredientPage() {
         breadcrumb={
           <Link
             to="/recipes/ingredients"
-            className="inline-flex items-center gap-1 hover:text-on-surface"
+            className="inline-flex items-center gap-1 hover:text-ink"
           >
             <ChevronLeft className="size-3" aria-hidden />
             {t("ingredient.breadcrumb_back")}

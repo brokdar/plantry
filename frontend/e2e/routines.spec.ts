@@ -142,12 +142,6 @@ test.describe("Routines", () => {
     }
   })
 
-  // F10-AC1, plan D2
-  test("/presets is not found", async ({ page }) => {
-    await page.goto("/presets")
-    await expect(page.getByTestId("not-found")).toBeVisible()
-  })
-
   // F10-AC2
   test("applying a routine from the palette creates the plates; Undo removes them and restores the replaced one", async ({
     page,

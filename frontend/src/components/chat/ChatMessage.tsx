@@ -1,7 +1,7 @@
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
-import type { ChatEvent, ConversationMessage } from "@/lib/domain/chatEvents"
+import type { ConversationMessage } from "@/lib/domain/chatEvents"
 import { cn } from "@/lib/utils"
 
 interface ChatMessageProps {
@@ -63,7 +63,3 @@ export function messageToText(m: ConversationMessage): string {
     .filter(Boolean)
     .join("\n\n")
 }
-
-// Compatibility placeholder export; ChatEvent may be used by history renderers
-// to interleave live deltas with persisted turns.
-export type { ChatEvent }

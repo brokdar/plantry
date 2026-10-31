@@ -49,10 +49,10 @@ export function AppShell({ children }: AppShellProps) {
   }, [profile?.locale, i18n])
 
   return (
-    <div className="flex min-h-svh bg-surface text-on-surface">
+    <div className="flex min-h-svh bg-ground text-ink">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-on-primary focus:shadow-lg focus:outline-none"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-on-accent focus:shadow-lg focus:outline-none"
       >
         {t("common.skip_to_content")}
       </a>

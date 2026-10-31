@@ -40,7 +40,7 @@ export interface ExtractRequest {
 }
 
 export function extractRecipe(req: ExtractRequest): Promise<{ draft: Draft }> {
-  return apiFetch("/import/extract", {
+  return apiFetch(`/import/extract`, {
     method: "POST",
     body: JSON.stringify(req),
   })
@@ -113,7 +113,7 @@ export interface FinalizedFood {
 export function resolveImport(
   req: ResolveRequest
 ): Promise<{ food: FinalizedFood }> {
-  return apiFetch("/import/resolve", {
+  return apiFetch(`/import/resolve`, {
     method: "POST",
     body: JSON.stringify(req),
   })

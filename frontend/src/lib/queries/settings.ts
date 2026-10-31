@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next"
 import {
   clearSetting,
   getSystemInfo,
-  listAIModels,
   listSettings,
   setSetting,
   type SettingItem,
@@ -14,14 +13,6 @@ import {
 import { toastError } from "@/lib/toast"
 
 import { aiKeys, settingsKeys } from "./keys"
-
-export function useSettings() {
-  return useQuery({
-    queryKey: settingsKeys.list(),
-    queryFn: listSettings,
-    staleTime: 30_000,
-  })
-}
 
 /** The settings list indexed by key. */
 export function useSettingItems() {
@@ -91,19 +82,5 @@ export function useClearSetting() {
       qc.invalidateQueries({ queryKey: aiKeys.settings() })
     },
     onError: (err) => toastError(err, t),
-  })
-}
-
-export function useAIModels(
-  provider: string | undefined,
-  apiKey: string | undefined,
-  enabled: boolean
-) {
-  return useQuery({
-    queryKey: [...settingsKeys.aiModels(provider ?? ""), apiKey ?? "stored"],
-    queryFn: () => listAIModels(provider!, apiKey || undefined),
-    enabled: enabled && !!provider,
-    staleTime: 5 * 60_000,
-    retry: false,
   })
 }

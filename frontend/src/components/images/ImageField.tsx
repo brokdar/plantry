@@ -236,7 +236,7 @@ export function ImageField(props: ImageFieldProps) {
     >
       {hasImage && (
         <div
-          className="w-64 overflow-hidden rounded-md bg-surface-container-high"
+          className="w-64 overflow-hidden rounded-md bg-line"
           style={{ aspectRatio: aspect }}
         >
           <img

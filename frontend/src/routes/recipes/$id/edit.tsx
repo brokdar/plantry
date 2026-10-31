@@ -21,7 +21,7 @@ function EditComponentPage() {
 
   if (Number.isNaN(numericId)) {
     return (
-      <p className="py-12 text-center text-on-surface-variant">
+      <p className="py-12 text-center text-ink-muted">
         {t("error.invalid_id")}
       </p>
     )
@@ -39,9 +39,7 @@ function EditComponentPage() {
 
   if (!food) {
     return (
-      <p className="py-12 text-center text-on-surface-variant">
-        {t("error.not_found")}
-      </p>
+      <p className="py-12 text-center text-ink-muted">{t("error.not_found")}</p>
     )
   }
 
