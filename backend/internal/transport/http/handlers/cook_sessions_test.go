@@ -240,7 +240,8 @@ func TestCookSessionsHTTP_BadRequests(t *testing.T) {
 		{"put malformed", http.MethodPut, path, `{`, http.StatusBadRequest, "error.invalid_body"},
 		{"put zero portions", http.MethodPut, path, `{"portions":0}`, http.StatusBadRequest, "error.invalid_body"},
 		{"cooked without flag", http.MethodPost, path + "/cooked", `{}`, http.StatusBadRequest, "error.invalid_body"},
-		{"cells without count", http.MethodGet, path + "/leftover-cells", "", http.StatusBadRequest, "error.invalid_body"},
+		{"cells without count", http.MethodGet, path + "/leftover-cells", "", http.StatusBadRequest, "error.invalid_query"},
+		{"cells with non-numeric count", http.MethodGet, path + "/leftover-cells?count=x", "", http.StatusBadRequest, "error.invalid_query"},
 		{"cells with zero count", http.MethodGet, path + "/leftover-cells?count=0", "", http.StatusBadRequest, "error.invalid_body"},
 		{"leftovers bad date", http.MethodPost, path + "/leftovers", `{"cells":[{"date":"02.11.","slot_id":1}]}`, http.StatusBadRequest, "error.invalid_body"},
 		{"leftovers empty", http.MethodPost, path + "/leftovers", `{"cells":[]}`, http.StatusBadRequest, "error.invalid_body"},
@@ -315,11 +316,14 @@ func TestPlanWriteHTTP_ClearRange(t *testing.T) {
 	require.Equal(t, http.StatusOK, code)
 	assert.Equal(t, map[string]any{"plates": []any{}, "sessions": []any{}}, body["removed"], "an empty range removes nothing")
 
-	for _, q := range []string{"", "?from=2026-11-01", "?from=x&to=2026-11-07", "?from=2026-11-07&to=2026-11-01"} {
+	for _, q := range []string{"", "?from=2026-11-01", "?from=x&to=2026-11-07"} {
 		code, body = a.do(http.MethodDelete, "/api/plan"+q, "")
 		assert.Equal(t, http.StatusBadRequest, code, q)
-		assert.Equal(t, "error.invalid_body", body["message_key"], q)
+		assert.Equal(t, "error.invalid_query", body["message_key"], q)
 	}
+	code, body = a.do(http.MethodDelete, "/api/plan?from=2026-11-07&to=2026-11-01", "")
+	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Equal(t, "error.invalid_body", body["message_key"], "an inverted range is the service's validation")
 }
 
 // slot_id narrows the clear to one slot's plates (the e2e slot cleanup).
@@ -339,9 +343,14 @@ func TestPlanWriteHTTP_ClearRangeOneSlot(t *testing.T) {
 	require.NoError(t, a.db.QueryRow(`SELECT COUNT(*) FROM plates WHERE slot_id = ?`, a.dinner).Scan(&n))
 	assert.Equal(t, 1, n, "the dinner plate stays")
 
-	code, body = a.do(http.MethodDelete, "/api/plan?from=2026-11-01&to=2026-11-07&slot_id=x", "")
-	assert.Equal(t, http.StatusBadRequest, code)
-	assert.Equal(t, "error.invalid_body", body["message_key"])
+	for _, q := range []string{"slot_id=x", "slot_id=0", "slot_id=-1", "from=x&to=2026-11-07", "from=2026-11-01&to="} {
+		if !strings.HasPrefix(q, "from") {
+			q = "from=2026-11-01&to=2026-11-07&" + q
+		}
+		code, body = a.do(http.MethodDelete, "/api/plan?"+q, "")
+		assert.Equal(t, http.StatusBadRequest, code, q)
+		assert.Equal(t, "error.invalid_query", body["message_key"], q)
+	}
 }
 
 func TestPlanWriteHTTP_RestoreErrors(t *testing.T) {
