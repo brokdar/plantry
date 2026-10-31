@@ -114,7 +114,7 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
               </span>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent align="end">
+            <SelectContent position="popper" align="end">
               {LIBRARY_SORTS.map((s) => (
                 <SelectItem key={s} value={s}>
                   {t(`recipes.library.sort_${s}`)}
@@ -145,7 +145,7 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               <SelectItem value={ALL_ROLES}>
                 {t("recipes.library.role_all")}
               </SelectItem>

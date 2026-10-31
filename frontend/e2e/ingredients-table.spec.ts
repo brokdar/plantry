@@ -34,6 +34,7 @@ test.describe("Ingredients table", () => {
     })
     const recipe = await seedComposedFood({
       name: `Table Recipe ${tag}`,
+      role: "main",
       children: [
         {
           child_id: chicken.id,

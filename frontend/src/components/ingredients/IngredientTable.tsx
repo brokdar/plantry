@@ -116,7 +116,7 @@ function IngredientRows({ search }: { search: string }) {
       </p>
       <div className="overflow-x-auto rounded-lg border border-line bg-panel">
         <table className="w-full text-body" data-testid="ingredients-table">
-          <thead className="border-b border-line bg-panel-sunken text-left text-small text-ink-muted">
+          <thead className="border-b border-line bg-panel-sunken text-left text-small whitespace-nowrap text-ink-muted">
             <tr>
               <th scope="col" className="px-3 py-2 font-semibold">
                 {t("recipes.ingredients.col_name")}
@@ -228,7 +228,7 @@ function SectionSelect({ ingredient }: { ingredient: LeafFood }) {
           )}
         </span>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent position="popper">
         <SelectItem value={AUTO}>
           {t("recipes.ingredients.section_auto")}
         </SelectItem>

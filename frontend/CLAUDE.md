@@ -41,9 +41,10 @@ src/routes/
 │                      #   else to /today (`lib/setup-redirect.ts`, shared with /today)
 ├── today/             # `/today?date=` — Today (components/today, view model lib/plan/today.ts)
 ├── setup/             # `/setup` — first-run SetupWizard
-├── components/        # recipe library; new.tsx, $id/ (detail), $id/edit.tsx
-├── ingredients/       # food/ingredient CRUD; new.tsx, $id/edit.tsx
-├── import/            # recipe import from URL (ImportWizard)
+├── recipes/           # `/recipes?q&role&quick&stale&fav&new&sort&add` — the library (filters are search
+│                      #   params, `lib/recipes/library.ts`; `add=url` opens the import sheet); new.tsx,
+│                      #   $id/ (detail), $id/edit.tsx; ingredients/ — the Ingredients tab (table),
+│                      #   ingredients/new.tsx, ingredients/$id/edit.tsx
 ├── plan/              # `/plan?start&cell&day` — the plan board (components/plan, view model
 │                      #   lib/plan/board.ts); `day` focuses that day (Today's week strip)
 ├── shop/              # `/shop?from&to` — Shop (components/shop); without a range, the server's
@@ -54,7 +55,7 @@ src/routes/
                        #   assistant, system — `settings-sections.ts`)
 ```
 
-**Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/today`, Plan → `/plan`, Recipes → `/components` (also active on `/ingredients*` and `/import`, which are linked from the recipe list header), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the Today header on phones; the compact Generate button sits in the `/plan` header on phones (there is no top bar). Presets is not in the nav; it is reachable via ⌘K (`CommandPalette`). Unknown paths (including the removed `/calendar`, `/day/…`, `/archive`) render the root not-found page with a link to Today.
+**Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/today`, Plan → `/plan`, Recipes → `/recipes` (active on `/recipes*`), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the Today header on phones; the compact Generate button sits in the `/plan` header on phones (there is no top bar). Presets is not in the nav; it is reachable via ⌘K (`CommandPalette`). Unknown paths (including the removed `/calendar`, `/day/…`, `/archive`, `/components`, `/ingredients`, `/import`) render the root not-found page with a link to Today.
 
 ### Components
 
@@ -76,10 +77,11 @@ src/components/
 ├── setup/             # SetupWizard and its steps; wizard-draft.ts, use-wizard-save.ts
 ├── presets/           # preset library, editor, CopyFromWeekDialog
 ├── component/         # shared input widget: QuantityUnitInput (leaf amount + unit)
-├── components/        # food component CRUD: ComponentEditor, ComponentList, ComponentCard, RecipeDetail,
-│                      #   NutritionCompletenessWarning (shared by editor, detail and import)
-├── import/            # ImportWizard, IngredientResolveRow, ImportNutritionSummary
-├── ingredients/       # ingredient CRUD + lookup: IngredientEditor, IngredientList, LookupPanel
+├── recipes/           # RecipeLibrary, RecipeCard, RecipesHeader (tabs), AddRecipeMenu, ImportSheet,
+│                      #   RecipeOnboarding, RecipeEditor, RecipeDetail, NutritionCompletenessWarning
+│                      #   (shared by editor, detail and import)
+├── import/            # ImportWizard (hosted by ImportSheet), IngredientResolveRow, ImportNutritionSummary
+├── ingredients/       # ingredient CRUD + lookup: IngredientEditor, IngredientTable, LookupPanel
 ├── editorial/         # design system editorial primitives
 ├── chat/              # AI chat panel
 ├── command/           # CommandPalette (cmdk)
