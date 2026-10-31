@@ -1,13 +1,16 @@
 import { Link } from "@tanstack/react-router"
 import {
   CalendarRange,
+  Check,
   ChevronLeft,
   ChevronRight,
   Eraser,
   Keyboard,
   MessageSquare,
   MoreHorizontal,
+  RefreshCw,
   ShoppingBasket,
+  Trash2,
   TriangleAlert,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -21,11 +24,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { PlanStats, PlanWindow } from "@/lib/api/plan"
+import type { DraftSummary } from "@/lib/plan/board"
 import { cn } from "@/lib/utils"
 
 interface PlanToolbarProps {
   window: PlanWindow
   stats: PlanStats
+  /** The board's summary line (`Board.summary`). */
+  summary: string
   /** "31 Oct – 6 Nov". */
   rangeLabel: string
   /** The board shows the anchored window (no `start` in the URL). */
@@ -38,20 +44,33 @@ interface PlanToolbarProps {
   onCopyWeek: () => void
   onClear: () => void
   onShortcuts: () => void
+  /** The window's drafts; null when there are none (D33 review actions). */
+  draft: DraftSummary | null
+  /** A generation runs for this window: review actions wait for it. */
+  running: boolean
+  accepting: boolean
+  onAcceptAndShop: () => void
+  onRegenerateWeek: () => void
+  onDiscard: () => void
+  /** The progress bar of a running generation (D35). */
+  progress?: React.ReactNode
 }
 
 const NAV_LINK =
   "inline-flex min-h-11 items-center justify-center rounded-lg text-small text-ink transition-colors duration-150 ease-out hover:bg-panel-sunken md:pointer-fine:min-h-9"
 
 /**
- * The board header (UX §5.5): the range and its stats, window navigation
- * (previous, "This week", next), and the actions: Ask assistant, Shop and an
- * overflow menu with Copy a previous week, Clear this week and the keyboard
- * shortcuts. Past windows lose the editing actions.
+ * The board header (UX §5.5): the range and its stats ("Draft · …" with
+ * drafts), the run's notes, window navigation (previous, "This week", next),
+ * the generation progress, and the actions: Ask assistant, Shop, Accept and
+ * shop (with drafts) and an overflow menu with Regenerate week and Discard
+ * draft (with drafts), Copy a previous week, Clear this week and the
+ * keyboard shortcuts. Past windows lose the editing actions.
  */
 export function PlanToolbar({
   window,
   stats,
+  summary,
   rangeLabel,
   anchored,
   readOnly,
@@ -61,8 +80,16 @@ export function PlanToolbar({
   onCopyWeek,
   onClear,
   onShortcuts,
+  draft,
+  running,
+  accepting,
+  onAcceptAndShop,
+  onRegenerateWeek,
+  onDiscard,
+  progress,
 }: PlanToolbarProps) {
   const { t } = useTranslation()
+  const review = draft !== null && !readOnly
 
   return (
     <header className="flex flex-col gap-3">
@@ -70,10 +97,7 @@ export function PlanToolbar({
         <div className="flex min-w-0 flex-col gap-1">
           <h1 className="text-h1 text-ink">{rangeLabel}</h1>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-ink-muted tabular-nums">
-            <span>
-              {t("plan.toolbar.plates", { count: stats.plates })},{" "}
-              {t("plan.toolbar.cook_days", { count: stats.cook_days })}
-            </span>
+            <span data-testid="plan-summary">{summary}</span>
             {warningCount > 0 && (
               <button
                 type="button"
@@ -93,6 +117,14 @@ export function PlanToolbar({
           {readOnly && (
             <p className="text-small text-ink-muted">
               {t("plan.toolbar.read_only")}
+            </p>
+          )}
+          {draft?.notes && (
+            <p
+              data-testid="plan-notes"
+              className="max-w-prose text-small text-ink"
+            >
+              {draft.notes}
             </p>
           )}
         </div>
@@ -122,6 +154,17 @@ export function PlanToolbar({
               <span className="max-sm:sr-only">{t("plan.toolbar.shop")}</span>
             </Link>
           </Button>
+          {/* Phones get Accept and shop in the sticky DraftBar. */}
+          {review && (
+            <Button
+              onClick={onAcceptAndShop}
+              disabled={running || accepting}
+              className="h-11 gap-2 px-3 max-md:hidden md:pointer-fine:h-9"
+            >
+              <Check strokeWidth={1.5} aria-hidden="true" />
+              {t("plan.review.accept_and_shop")}
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -133,6 +176,21 @@ export function PlanToolbar({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {review && (
+                <>
+                  <DropdownMenuItem
+                    disabled={running}
+                    onSelect={onRegenerateWeek}
+                  >
+                    <RefreshCw strokeWidth={1.5} aria-hidden="true" />
+                    {t("plan.review.regenerate_week")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled={running} onSelect={onDiscard}>
+                    <Trash2 strokeWidth={1.5} aria-hidden="true" />
+                    {t("plan.review.discard")}
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuItem disabled={readOnly} onSelect={onCopyWeek}>
                 <CalendarRange strokeWidth={1.5} aria-hidden="true" />
                 {t("plan.toolbar.copy_week")}
@@ -194,6 +252,7 @@ export function PlanToolbar({
           />
         </Link>
       </nav>
+      {progress}
     </header>
   )
 }

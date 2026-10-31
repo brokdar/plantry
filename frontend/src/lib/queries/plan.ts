@@ -299,14 +299,24 @@ export interface StateTarget {
   id: number
 }
 
-/** Confirm: the target's whole batch closure becomes confirmed. */
+/**
+ * Confirm: the target's whole batch closure becomes confirmed, with the
+ * shared undo toast (D34: no dialog). Undo unlocks the same closure.
+ */
 export function useConfirm() {
   const qc = useQueryClient()
   const { t } = useTranslation()
+  const offer = useUndoToast()
+  const unlock = useUnlock()
   return useMutation({
     mutationFn: ({ kind, id }: StateTarget) =>
       kind === "plate" ? confirmPlate(id) : confirmSession(id),
-    onSuccess: () => invalidatePlanViews(qc),
+    onSuccess: (rows, target) => {
+      offer(t("plan.state.confirmed", { count: rows.plate_ids.length }), () =>
+        unlock.mutate(target)
+      )
+      return invalidatePlanViews(qc)
+    },
     onError: (err) => toastError(err, t),
   })
 }

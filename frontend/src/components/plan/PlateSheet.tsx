@@ -1,4 +1,15 @@
-import { ArrowLeftRight, Plus, TriangleAlert, X } from "lucide-react"
+import {
+  ArrowLeftRight,
+  CalendarSync,
+  Check,
+  Lock,
+  LockOpen,
+  Plus,
+  RefreshCw,
+  Shuffle,
+  TriangleAlert,
+  X,
+} from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -11,17 +22,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { PlateFeedbackStatus } from "@/lib/api/feedback"
-import type { Plan } from "@/lib/api/plan"
+import type { RegenerateScope } from "@/lib/api/generation"
+import { KNOWN_ISSUE_CODES, type Plan } from "@/lib/api/plan"
 import type { Plate, PlateComponent } from "@/lib/api/plates"
 import type { Session, SessionWarning } from "@/lib/api/sessions"
 import { todayISO } from "@/lib/dates"
 import { colourBatches } from "@/lib/plan/batch-colours"
-import type { BoardCell } from "@/lib/plan/board"
-import { formatAmount, formatNumber } from "@/lib/plan/format"
+import { closureCells, type BoardCell } from "@/lib/plan/board"
+import { formatAmount, formatDate, formatNumber } from "@/lib/plan/format"
 import { plateMacros } from "@/lib/plan/plate-macros"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFood, useFoodMacros } from "@/lib/queries/foods"
-import { useMarkNoPlate } from "@/lib/queries/plan"
+import { useRegenerate } from "@/lib/queries/generation"
+import { useConfirm, useMarkNoPlate, useUnlock } from "@/lib/queries/plan"
 import {
   useDeletePlate,
   useRemoveComponent,
@@ -36,6 +49,7 @@ import { cn } from "@/lib/utils"
 import { BatchSection } from "./BatchSection"
 import type { PickerTarget } from "./FoodPicker"
 import { QuantityStepper } from "./QuantityStepper"
+import { UnlockDialog } from "./UnlockDialog"
 
 const FEEDBACK: PlateFeedbackStatus[] = ["loved", "disliked", "not_eaten"]
 
@@ -57,10 +71,11 @@ function sorted(plate: Plate) {
 }
 
 /**
- * The plate sheet, manual actions only (UX §5.5, D3): the components with
- * their quantities, swap and remove; eaters; batch controls per recipe;
- * macros for one eater; note; feedback; and Mark as No plate, Save as
- * routine and Delete plate.
+ * The plate sheet (UX §5.5, D33): the plate's issues, "Why this?", the
+ * components with their quantities, swap and remove; eaters; batch controls
+ * per recipe; macros for one eater; note; feedback; the review actions
+ * (Confirm or Unlock, Replace, Different side, Regenerate day); and Mark as
+ * No plate, Save as routine and Delete plate.
  */
 export function PlateSheet({
   cell,
@@ -96,6 +111,8 @@ export function PlateSheet({
       )}
 
       <SessionWarnings plate={plate} sessions={plan.sessions} />
+      <IssueList cell={cell} />
+      {plate.reason && <WhyThis reason={plate.reason} />}
 
       <section
         className="flex flex-col gap-3"
@@ -183,9 +200,208 @@ export function PlateSheet({
       {plate.date <= today && <FeedbackButtons plate={plate} />}
 
       {!readOnly && (
+        <ReviewActions
+          cell={cell}
+          plan={plan}
+          slotName={slotName}
+          onClose={onClose}
+        />
+      )}
+
+      {!readOnly && (
         <PlateActions plate={plate} cell={cell} plan={plan} onClose={onClose} />
       )}
     </div>
+  )
+}
+
+/** The checker's issues on this cell (D22): `plan.issue.<code>` with its
+ *  params, a generic line for codes the UI has no copy for. */
+function IssueList({ cell }: { cell: BoardCell }) {
+  const { t, i18n } = useTranslation()
+  const issues = cell.warnings.flatMap((w) => (w.issue ? [w.issue] : []))
+  if (issues.length === 0) return null
+  return (
+    <ul className="flex flex-col gap-2" data-testid="sheet-issues">
+      {issues.map((issue, i) => (
+        <li
+          key={`${issue.code}-${i}`}
+          className={cn(
+            "flex items-start gap-2 rounded-cell border p-3 text-small text-ink",
+            issue.severity === "violation" ? "border-warning/60" : "border-line"
+          )}
+        >
+          <TriangleAlert
+            className={cn(
+              "mt-0.5 size-4 shrink-0",
+              issue.severity === "violation" ? "text-warning" : "text-ink-muted"
+            )}
+            strokeWidth={2}
+            aria-hidden
+          />
+          {(KNOWN_ISSUE_CODES as readonly string[]).includes(issue.code)
+            ? t(`plan.issue.${issue.code}`, {
+                ...issue.params,
+                ...(typeof issue.params.last_eaten === "string" && {
+                  last_eaten: formatDate(issue.params.last_eaten, i18n, {
+                    day: "numeric",
+                    month: "short",
+                  }),
+                }),
+              })
+            : t("plan.issue.other", { rule: issue.rule })}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** "Why this?": the chooser's one-line reason (spec §8.3). */
+function WhyThis({ reason }: { reason: string }) {
+  const { t } = useTranslation()
+  return (
+    <section aria-labelledby="sheet-why" className="flex flex-col gap-1">
+      <h3
+        id="sheet-why"
+        className="font-sans text-small font-semibold text-ink"
+      >
+        {t("plan.review.why")}
+      </h3>
+      <p className="text-small text-ink" data-testid="sheet-why">
+        {reason}
+      </p>
+    </section>
+  )
+}
+
+/**
+ * Review actions (D33, D34): Confirm (with Undo) or Unlock (asks first,
+ * naming the batch closure), then Replace, Different side and Regenerate
+ * day. Confirm closes the sheet (its Undo toast sits behind it);
+ * regenerating does too: the board follows the run.
+ */
+function ReviewActions({
+  cell,
+  plan,
+  slotName,
+  onClose,
+}: {
+  cell: BoardCell & { plate: Plate }
+  plan: Plan
+  slotName: (slotId: number) => string
+  onClose: () => void
+}) {
+  const { t, i18n } = useTranslation()
+  const confirm = useConfirm()
+  const unlock = useUnlock()
+  const regenerate = useRegenerate()
+  const [unlocking, setUnlocking] = useState(false)
+  const plate = cell.plate
+  const draft = plate.state === "draft"
+  const target = { kind: "plate", id: plate.id } as const
+  const start = plan.window.start
+
+  function regen(scope: RegenerateScope) {
+    onClose()
+    regenerate.mutate({ scope, start })
+  }
+
+  const alsoUnlocks = unlocking
+    ? closureCells(plan, plate.id).map((c) =>
+        t("plan.cell.name", {
+          weekday: formatDate(c.date, i18n, { weekday: "long" }),
+          slot: slotName(c.slotId),
+        })
+      )
+    : []
+
+  const button = "h-11 justify-start md:pointer-fine:h-9"
+  return (
+    <section
+      className="flex flex-col gap-2 border-t border-line pt-4"
+      data-testid="sheet-review"
+    >
+      <p className="flex items-center gap-1.5 text-small text-ink-muted">
+        {!draft && (
+          <Lock className="size-3 shrink-0" strokeWidth={2} aria-hidden />
+        )}
+        {t(draft ? "plan.review.draft_note" : "plan.review.confirmed_note")}
+      </p>
+      {draft ? (
+        <Button
+          type="button"
+          className={button}
+          onClick={() => {
+            // Like every action with Undo, it closes the sheet: the toast
+            // can't be reached behind it, and the board shows the padlocks.
+            confirm.mutate(target)
+            onClose()
+          }}
+        >
+          <Check strokeWidth={1.5} aria-hidden />
+          {t("plan.review.confirm")}
+        </Button>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          className={button}
+          onClick={() => setUnlocking(true)}
+        >
+          <LockOpen strokeWidth={1.5} aria-hidden />
+          {t("plan.review.unlock")}
+        </Button>
+      )}
+      {draft && (
+        <Button
+          type="button"
+          variant="outline"
+          className={button}
+          onClick={() => regen({ kind: "plate", plate_id: plate.id })}
+        >
+          <RefreshCw strokeWidth={1.5} aria-hidden />
+          {t("plan.review.replace")}
+        </Button>
+      )}
+      {draft && cell.sideComponentId !== null && (
+        <Button
+          type="button"
+          variant="outline"
+          className={button}
+          onClick={() =>
+            regen({ kind: "side", component_id: cell.sideComponentId! })
+          }
+        >
+          <Shuffle strokeWidth={1.5} aria-hidden />
+          {t("plan.review.different_side")}
+        </Button>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        className={button}
+        onClick={() => regen({ kind: "day", date: plate.date })}
+      >
+        <CalendarSync strokeWidth={1.5} aria-hidden />
+        {t("plan.review.regenerate_day")}
+      </Button>
+      <UnlockDialog
+        open={unlocking}
+        onOpenChange={setUnlocking}
+        alsoUnlocks={alsoUnlocks}
+        pending={unlock.isPending}
+        onUnlock={() =>
+          unlock.mutate(target, {
+            onSuccess: (rows) => {
+              setUnlocking(false)
+              toast.success(
+                t("plan.state.unlocked", { count: rows.plate_ids.length })
+              )
+            },
+          })
+        }
+      />
+    </section>
   )
 }
 

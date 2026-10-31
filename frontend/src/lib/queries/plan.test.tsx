@@ -67,6 +67,7 @@ import { getToday } from "@/lib/api/today"
 
 import { availabilityKeys, planKeys, shoppingKeys, todayKeys } from "./keys"
 import {
+  UNDO_MS,
   useAccept,
   useClearWindow,
   useConfirm,
@@ -440,6 +441,17 @@ describe("confirm and unlock act on the closure", () => {
       PLAN_VIEWS
     )
     expect(unlock).toHaveBeenCalledWith(7)
+  })
+
+  it("F2-AC2: Confirm offers a 6 s Undo that unlocks the same target", async () => {
+    vi.mocked(confirmPlate).mockResolvedValue(ACCEPTED)
+    vi.mocked(unlockPlate).mockResolvedValue(ACCEPTED)
+    await invalidatedBy(() => useConfirm(), { kind: "plate", id: 2 })
+    const { message, opts } = lastToast()
+    expect(message).toBe("3 plates confirmed.")
+    expect(opts.duration).toBe(UNDO_MS)
+    opts.action.onClick()
+    await waitFor(() => expect(unlockPlate).toHaveBeenCalledWith(2))
   })
 })
 

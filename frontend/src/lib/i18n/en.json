@@ -1238,7 +1238,9 @@
       "speech_frozen": "frozen, {{position}} of {{meals}}",
       "subline_cook": "cook here",
       "subline_leftover": "leftover",
-      "subline_routine": "routine"
+      "subline_routine": "routine",
+      "state_draft": "draft",
+      "state_confirmed": "confirmed"
     },
     "row": {
       "collapsed": "{{slot}}: {{routine}} every day"
@@ -1260,7 +1262,8 @@
       "clear": "Clear this week",
       "shortcuts": "Keyboard shortcuts",
       "read_only": "This week is over. You can still rate its meals.",
-      "weeks": "Weeks"
+      "weeks": "Weeks",
+      "draft_summary": "Draft · {{plates}} · {{cook_days}}"
     },
     "empty": {
       "title": "Nothing planned for this week yet",
@@ -1277,7 +1280,10 @@
       "no_plate": "Mark as No plate",
       "copy_drag": "Copy a plate while dragging",
       "this_panel": "Show these shortcuts",
-      "drag": "Drag"
+      "drag": "Drag",
+      "replace": "Replace the meal",
+      "different_side": "Choose a different side",
+      "accept": "Accept and shop"
     },
     "generate_prompt": "Plan my week based on my goals and time slots.",
     "dnd": {
@@ -1374,7 +1380,66 @@
       "submit": "Copy week"
     },
     "accepted_one": "Plan accepted. {{count}} plate confirmed.",
-    "accepted_other": "Plan accepted. {{count}} plates confirmed."
+    "accepted_other": "Plan accepted. {{count}} plates confirmed.",
+    "review": {
+      "confirm": "Confirm",
+      "unlock": "Unlock",
+      "replace": "Replace",
+      "different_side": "Different side",
+      "regenerate_day": "Regenerate day",
+      "regenerate_week": "Regenerate week",
+      "accept_and_shop": "Accept and shop",
+      "discard": "Discard draft",
+      "why": "Why this?",
+      "draft_note": "Draft. Confirmed plates stay when you regenerate.",
+      "confirmed_note": "Confirmed. Its ingredients may already be bought."
+    },
+    "state": {
+      "confirmed_one": "Plate confirmed.",
+      "confirmed_other": "{{count}} plates confirmed.",
+      "unlocked_one": "Plate unlocked.",
+      "unlocked_other": "{{count}} plates unlocked."
+    },
+    "unlock": {
+      "title": "Unlock this plate?",
+      "body": "Its ingredients may already be bought. An unlocked plate is a draft again and can be replaced.",
+      "also": "Unlocking also unlocks: {{cells}}."
+    },
+    "discard": {
+      "title": "Discard this draft?",
+      "body_one": "This deletes {{count}} draft plate. Confirmed plates stay.",
+      "body_other": "This deletes {{count}} draft plates. Confirmed plates stay."
+    },
+    "progress": {
+      "label": "Planning",
+      "resolving": "Reading your week",
+      "choosing": "Choosing recipes",
+      "checking": "Checking batches and keep days",
+      "repairing": "Fixing what the check found",
+      "saving": "Saving draft"
+    },
+    "run": {
+      "planned": "Planned {{plates}}, {{cook_days}}.",
+      "regenerated": "Plan regenerated.",
+      "regenerated_kept_one": "Plan regenerated. {{count}} confirmed plate kept.",
+      "regenerated_kept_other": "Plan regenerated. {{count}} confirmed plates kept.",
+      "failed": "Planning didn't finish. Try again."
+    },
+    "issue": {
+      "missing_plate": "This meal still needs a plate.",
+      "plate_in_none_cell": "This meal is marked No plate but has a plate.",
+      "too_many_cook_occasions": "{{count}} cooking occasions on this day; your limit is {{max}}.",
+      "diet_incompatible": "This recipe doesn't fit your diet.",
+      "meat_days_exceeded": "Meat on {{days}} days this week; your limit is {{max}}.",
+      "diet_unknown": "The diet of this recipe is unknown.",
+      "variety_repeat": "You had this recently, on {{last_eaten}}.",
+      "variety_relaxed": "You had this recently, on {{last_eaten}}. There aren't enough other recipes to avoid it.",
+      "leftover_before_cook": "Eaten before the batch is cooked.",
+      "past_keep_days": "Eaten after the batch's keep days.",
+      "deficit": "The batch is short of portions.",
+      "frozen_deficit": "Not enough frozen portions.",
+      "other": "Breaks a planning rule ({{rule}})."
+    }
   },
   "batch": {
     "cook": "Cook × {{portions}}",

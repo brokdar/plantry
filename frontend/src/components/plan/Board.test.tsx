@@ -71,7 +71,7 @@ describe("Board layouts", () => {
     ).toEqual(["Breakfast", "Lunch", "Dinner"])
     expect(
       within(grid).getByRole("button", {
-        name: "Monday dinner, Chili, leftover 3 of 3",
+        name: "Monday dinner, Chili, leftover 3 of 3, confirmed",
       })
     ).toBeInTheDocument()
   })
@@ -89,7 +89,7 @@ describe("Board layouts", () => {
     )
     await user.keyboard("{ArrowDown}{ArrowDown}{ArrowRight}")
     expect(document.activeElement).toHaveAccessibleName(
-      "Sunday dinner, Chili, cook here, 6 portions"
+      "Sunday dinner, Chili, cook here, 6 portions, confirmed"
     )
     // Wraps from the end of the breakfast row to the start of lunch.
     await user.keyboard("{ArrowUp}{ArrowUp}{End}{ArrowRight}")
@@ -103,7 +103,9 @@ describe("Board layouts", () => {
     const p = props()
     renderGrid(p)
     screen
-      .getByRole("button", { name: "Monday lunch, Chili, leftover 2 of 3" })
+      .getByRole("button", {
+        name: "Monday lunch, Chili, leftover 2 of 3, confirmed",
+      })
       .focus()
     await user.keyboard("{Enter}")
     expect(p.onOpenCell).toHaveBeenCalledWith(

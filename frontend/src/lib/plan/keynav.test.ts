@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { handleGridArrowKey, isCheatsheetShortcut, readCellPos } from "./keynav"
+import {
+  cellShortcut,
+  handleGridArrowKey,
+  isAcceptShortcut,
+  isCheatsheetShortcut,
+  readCellPos,
+} from "./keynav"
 
 function makeGrid(rows: number, cols: number): HTMLDivElement {
   const root = document.createElement("div")
@@ -221,5 +227,51 @@ describe("isCheatsheetShortcut", () => {
     const e = new KeyboardEvent("keydown", { key: "?" })
     Object.defineProperty(e, "target", { value: div })
     expect(isCheatsheetShortcut(e)).toBe(false)
+  })
+})
+
+describe("isAcceptShortcut", () => {
+  it("F2-AC7: matches ⌘+Enter and Ctrl+Enter", () => {
+    for (const mod of [{ metaKey: true }, { ctrlKey: true }]) {
+      expect(
+        isAcceptShortcut(new KeyboardEvent("keydown", { key: "Enter", ...mod }))
+      ).toBe(true)
+    }
+  })
+
+  it("ignores plain Enter, other modifiers and editable fields", () => {
+    expect(
+      isAcceptShortcut(new KeyboardEvent("keydown", { key: "Enter" }))
+    ).toBe(false)
+    expect(
+      isAcceptShortcut(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          ctrlKey: true,
+          altKey: true,
+        })
+      )
+    ).toBe(false)
+    const area = document.createElement("textarea")
+    const e = new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true })
+    Object.defineProperty(e, "target", { value: area })
+    expect(isAcceptShortcut(e)).toBe(false)
+  })
+})
+
+describe("cellShortcut", () => {
+  it("F2-AC7: maps N, R and S in either case", () => {
+    const at = (key: string) =>
+      cellShortcut({ key, metaKey: false, ctrlKey: false, altKey: false })
+    expect(at("n")).toBe("no_plate")
+    expect(at("R")).toBe("replace")
+    expect(at("s")).toBe("side")
+    expect(at("x")).toBeNull()
+  })
+
+  it("leaves modified keys to the browser", () => {
+    expect(
+      cellShortcut({ key: "r", metaKey: true, ctrlKey: false, altKey: false })
+    ).toBeNull()
   })
 })
