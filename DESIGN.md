@@ -126,7 +126,7 @@ Source of truth: `frontend/src/index.css`, checked against [`docs/UX_DESIGN_SPEC
 
 A well-used home cookbook: serif headings like a recipe title, a quiet paper-white ground, ink-blue for actions, and the earthy colours of cooked food (rust, ochre, herb) reserved for batches. Plantry is an **Operate** tool. It should feel familiar, scannable and calm. Its identity lives in type, palette and one signature detail (the batch badge on every slot), never in unusual controls.
 
-The system replaced the earlier *Botanical Atelier* look (sage green, Manrope/Inter, gradients, glass). Some of that look survives in legacy aliases and unrebuilt screens (see Legacy aliases under Components); it is not part of this system.
+The system replaced the earlier *Botanical Atelier* look (sage green, Manrope/Inter, gradients, glass). Its aliases, palettes and utilities were removed in Phase 2 (Z1); it is not part of this system.
 
 Principles (UX spec §1.2):
 
@@ -177,9 +177,9 @@ Six earthy colours, each with a solid badge colour and a pale tint: **1 Rust, 2 
 
 **The Meaningful State Rule.** State colours appear only where they carry meaning, and always with an icon or a word. They are separate from batch colours and must never be used to tell batches apart.
 
-### Outside the Cookbook palette (implemented, legacy)
+### Nutrition
 
-`index.css` still defines a **macro palette** (`macro-protein`, `macro-carbs`, `macro-fat`, `macro-fiber`, each with a `-soft` variant; terracotta, wheat, sage and bark) and **chart tokens** `chart-1`…`chart-5`. These come from Botanical Atelier, are not in UX spec §3.1, and are not checked by the token test. They remain in use on nutrition surfaces. Do not extend them. Their future is an open question for the screens that show macros.
+There is no per-macro palette. Nutrition reads as one line of text, `MacroLine`: kcal in ink, then protein, fat and carbs in ink-muted ("452 kcal · P 31 g · F 12 g · C 50 g"), with tabular numerals and the `units.*` labels.
 
 ## Typography
 
@@ -316,25 +316,16 @@ One indicator everywhere: a base `:focus-visible` rule in `index.css` draws a 2p
 
 A plain, calm tool. Short factual sentences, sentence case, active verbs. No exclamation marks (except the 10-recipe milestone toast), no "Oops", no apologies. A toast names the result using the control's verb ("Accept and shop" gives "Plan accepted"). Every string exists in English and German, and the German is written natively. Vocabulary: plate, batch, leftover, no plate, routine, draft and confirmed, assistant (never "AI", "agent" or "LLM" in labels). See spec §7.
 
-### Legacy aliases
+### shadcn names
 
-`index.css` remaps the shadcn and Material names from Botanical Atelier onto the Cookbook tokens, in both themes (the table in the file's comment is authoritative). The main mappings:
+The shadcn primitives in `components/ui` read the shadcn theme variables. `index.css` maps each onto a Cookbook token in both themes (the table in the file's comment is authoritative):
 
-- `background` and `surface` resolve to **ground**.
-- `card`, `popover` and `surface-container-lowest` resolve to **panel**.
-- `secondary`, `muted`, `sidebar` and `surface-container(-low)` resolve to **panel-sunken**.
-- `foreground` and `on-surface` resolve to **ink**.
-- `muted-foreground`, `on-surface-variant` and `outline` resolve to **ink-muted**.
-- `border`, `input`, `outline-variant` and `surface-container-high(est)` resolve to **line**.
-- `primary`, `ring`, `tertiary` and `ai-accent` resolve to **accent**.
-- `primary-foreground`, `on-primary` and `accent-foreground` resolve to **on-accent**.
-- `destructive` resolves to **danger**.
-- `shadow-editorial` resolves to **shadow-soft**.
+- `background` resolves to **ground**; `card` and `popover` to **panel**; `secondary` and `muted` to **panel-sunken**.
+- `foreground` resolves to **ink**; `muted-foreground` to **ink-muted**; `border` and `input` to **line**.
+- `primary` and `ring` resolve to **accent**; `primary-foreground` and `accent-foreground` to **on-accent**; `destructive` to **danger**.
 
-The legacy utilities `gradient-primary`, `editorial-shadow`, `glass-header` and `btn-shimmer` still exist in `index.css`. `gradient-primary` is now a solid accent fill. `gradient-primary` and `editorial-shadow` are still used by unrebuilt screens (planner, the rail logo); `glass-header` and `btn-shimmer` are unused.
+App code uses the Cookbook names: `bg-ground`, `bg-panel`, `text-ink`, `border-line`, `text-accent`, `text-on-accent`, and so on. The Botanical Atelier Material aliases, the macro and chart palettes and the `gradient-primary`, `editorial-shadow`, `glass-header` and `btn-shimmer` utilities are gone; `src/test/tokens.test.ts` allowlists every custom property `index.css` defines.
 
-- New and rebuilt code uses the Cookbook names: `bg-ground`, `bg-panel`, `text-ink`, `border-line`, `text-accent`, `text-on-accent`, and so on.
-- Legacy names stay until each screen is rebuilt in Phases 1–3. Do not add new uses of them.
 - **The Accent Collision.** `--accent` is both the Cookbook accent and shadcn's hover/focus fill, because they share a variable name. Menu and select highlights therefore render solid accent. Text on any accent fill must use `text-on-accent` (shadcn's `accent-foreground` resolves to the same value). Never put `text-ink` or `text-accent` on an accent fill.
 
 ## Do's and Don'ts
@@ -353,9 +344,9 @@ The legacy utilities `gradient-primary`, `editorial-shadow`, `glass-header` and 
 
 - **Don't** use Newsreader for buttons, inputs, labels, nav or data.
 - **Don't** use batch colours for state, category or decoration.
-- **Don't** add gradients, glass or blur, shimmer sweeps, hover lifts, or sage-tinted shadows. These are Botanical Atelier leftovers still found in unrebuilt screens: recipe, ingredient and preset cards, and `EditorialCard`.
+- **Don't** add gradients, glass or blur, shimmer sweeps, hover lifts or zooms, or sage-tinted shadows (the Botanical Atelier look).
 - **Don't** add shadows to cells or list cards, or a second shadow style.
 - **Don't** use all-caps or letter-spaced labels.
 - **Don't** use emoji in the UI.
 - **Don't** use centred spinners.
-- **Don't** add new uses of the legacy Material or shadcn aliases, or extend the macro and chart palettes.
+- **Don't** use the shadcn names in app code, or add a per-macro or chart palette.
