@@ -1097,7 +1097,8 @@
     "history_count_one": "Cooked once",
     "history_count_other": "Cooked {{count}} times",
     "history_never": "Not cooked yet",
-    "buy": "buy {{quantity}}"
+    "buy": "buy {{quantity}}",
+    "cook_now": "Cook now"
   },
   "nutrition_warning": {
     "title": "Nutrition is incomplete",

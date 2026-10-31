@@ -191,3 +191,27 @@ test("F9-AC2: keep days 5 warns, saves, and a new batch's use-by follows it", as
     await cleanup()
   }
 })
+
+test("F9-AC4: Cook now opens cook mode with the stepper's portions", async ({
+  page,
+}) => {
+  const { chili, cleanup } = await seedChili(uid())
+  try {
+    await page.goto(`/recipes/${chili.id}`)
+    await expect(page.getByTestId("recipe-ingredients-list")).toContainText(
+      "400 g"
+    )
+    const more = page
+      .getByTestId("recipe-portions")
+      .getByRole("button", { name: "Increase Portions" })
+    await more.click()
+    await more.click()
+    await page.getByRole("link", { name: "Cook now" }).click()
+    await expect(page).toHaveURL(
+      new RegExp(`/recipes/${chili.id}/cook\\?portions=6$`)
+    )
+    await expect(page.getByText("600 g")).toBeVisible()
+  } finally {
+    await cleanup()
+  }
+})

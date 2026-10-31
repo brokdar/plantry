@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 import {
   ArrowLeft,
+  CookingPot,
   ExternalLink,
   GitBranch,
   Heart,
@@ -131,6 +132,21 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
                 aria-hidden
               />
               {t("common.edit")}
+            </Link>
+          </Button>
+          <Button asChild className="max-md:min-h-11">
+            <Link
+              to="/recipes/$id/cook"
+              params={{ id: String(recipe.id) }}
+              search={{ portions }}
+              data-testid="recipe-cook-now"
+            >
+              <CookingPot
+                data-icon="inline-start"
+                strokeWidth={1.5}
+                aria-hidden
+              />
+              {t("recipe_detail.cook_now")}
             </Link>
           </Button>
         </div>

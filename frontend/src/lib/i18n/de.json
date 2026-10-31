@@ -1086,7 +1086,8 @@
     "history_count_one": "Einmal gekocht",
     "history_count_other": "{{count}}-mal gekocht",
     "history_never": "Noch nicht gekocht",
-    "buy": "{{quantity}} kaufen"
+    "buy": "{{quantity}} kaufen",
+    "cook_now": "Jetzt kochen"
   },
   "nutrition_warning": {
     "title": "Nährwerte unvollständig",

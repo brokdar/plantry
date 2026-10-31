@@ -223,6 +223,20 @@ describe("RecipeDetail", () => {
     expect(within(list).getByText("buy 2 pcs")).toBeInTheDocument()
   })
 
+  it("F9-AC4: Cook now opens cook mode with the stepper's portions", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+
+    const cook = await screen.findByRole("link", { name: "Cook now" })
+    expect(cook).toHaveAttribute("href", "/recipes/3/cook?portions=2")
+    await user.click(
+      within(screen.getByTestId("recipe-portions")).getByRole("button", {
+        name: "Increase Portions",
+      })
+    )
+    expect(cook).toHaveAttribute("href", "/recipes/3/cook?portions=3")
+  })
+
   it("F9-AC3: the history line reads B7's fields", async () => {
     renderWithRouter(
       <RecipeDetail
