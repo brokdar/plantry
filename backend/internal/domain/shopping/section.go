@@ -62,6 +62,7 @@ var phrases = []struct {
 	{"stückige tomaten", food.SectionCansJars},
 	{"pizzatomaten", food.SectionCansJars},
 	{"tomato paste", food.SectionCansJars},
+	{"chopped tomatoes", food.SectionCansJars},
 	{"diced tomatoes", food.SectionCansJars},
 	{"crushed tomatoes", food.SectionCansJars},
 	{"essiggurke", food.SectionCansJars},
