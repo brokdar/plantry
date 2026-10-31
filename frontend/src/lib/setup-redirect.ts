@@ -11,6 +11,8 @@ export async function redirectIfSetupIncomplete(): Promise<void> {
     .ensureQueryData({
       queryKey: setupKeys.status(),
       queryFn: getSetupStatus,
+      // Open the page at once rather than wait out the default retries.
+      retry: false,
     })
     .catch(() => null)
   if (status?.completed === false) throw redirect({ to: "/setup" })

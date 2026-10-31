@@ -61,11 +61,12 @@ describe("RecipeDetailPage", () => {
     })
     renderWithRouter(<RecipeDetailPage id="3" />)
 
-    // Transient errors keep the default retries before giving up.
+    // Retries of transient errors are the app client's default
+    // (`retryTransient`, lib/query-client.test.ts); this client has none.
     await act(() => vi.advanceTimersByTimeAsync(10_000))
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("Couldn't load this recipe")
-    expect(getFood).toHaveBeenCalledTimes(4)
+    expect(getFood).toHaveBeenCalledTimes(1)
     expect(screen.getByRole("link", { name: "Back to recipes" })).toBeVisible()
 
     vi.mocked(getFood).mockResolvedValue(mockChickenCurry)
