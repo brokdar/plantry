@@ -1,5 +1,5 @@
 import { ArrowLeftRight, Plus, TriangleAlert, X } from "lucide-react"
-import { useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { BatchBadge } from "@/components/batch/BatchBadge"
@@ -372,6 +372,7 @@ function SessionWarnings({
               {t(`plan.warning.${warning.code}`, {
                 name: session.food_name,
                 count: short,
+                amount: formatAmount(short, i18n),
               })}
             </span>
             {warning.code === "deficit" && short > 0 && (
@@ -448,26 +449,49 @@ function Macros({ components }: { components: PlateComponent[] }) {
   )
 }
 
+/** The plate note, saved on blur and, if still unsaved, when the sheet
+ *  closes: Escape unmounts the sheet without a blur. */
 function NoteField({ plate, readOnly }: { plate: Plate; readOnly: boolean }) {
   const { t } = useTranslation()
-  const update = useUpdatePlate()
+  const { mutate } = useUpdatePlate()
+  const [draft, setDraft] = useState(plate.note ?? "")
+  // What the server holds, or the last value sent: never send it twice.
+  const saved = useRef(plate.note)
+  const latest = useRef({ draft, readOnly })
+  useEffect(() => {
+    latest.current = { draft, readOnly }
+  })
+
+  const save = useCallback(
+    (text: string) => {
+      const note = text.trim() || null
+      if (note === saved.current) return
+      saved.current = note
+      mutate({ id: plate.id, input: { note } })
+    },
+    [mutate, plate.id]
+  )
+
+  useEffect(
+    () => () => {
+      if (!latest.current.readOnly) save(latest.current.draft)
+    },
+    [save]
+  )
+
   return (
     <label className="flex flex-col gap-1">
       <span className="font-sans text-small font-semibold text-ink">
         {t("plan.sheet.note")}
       </span>
       <Textarea
-        defaultValue={plate.note ?? ""}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
         readOnly={readOnly}
         rows={2}
         placeholder={t("plan.sheet.note_placeholder")}
         data-testid="sheet-note"
-        onBlur={(e) => {
-          const note = e.target.value.trim() || null
-          if (note !== plate.note) {
-            update.mutate({ id: plate.id, input: { note } })
-          }
-        }}
+        onBlur={() => save(draft)}
       />
     </label>
   )

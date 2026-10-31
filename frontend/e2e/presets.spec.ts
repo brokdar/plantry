@@ -78,6 +78,7 @@ test.describe("Presets", () => {
     const ctx0 = await apiRequest.newContext({ baseURL: API })
     await ctx0.delete(`/api/plates/${sourcePlate.id}`)
     await ctx0.dispose()
+    let deleted = false
 
     try {
       await page.goto("/presets")
@@ -106,14 +107,20 @@ test.describe("Presets", () => {
       await dialog.getByRole("button", { name: /^delete$/i }).click()
       const resp = await deleteResp
       expect(resp.status()).toBe(204)
+      deleted = true
       await listRefetch
 
+      // Preset ids are reused (no AUTOINCREMENT), so a parallel spec's new
+      // preset can take this card's id: check the unique name instead.
       await expect(
-        page.locator(`[data-testid="preset-card-${preset.id}"]`)
+        page
+          .getByTestId(/^preset-card-/)
+          .filter({ hasText: `Breakfast ${tag}` })
       ).toHaveCount(0)
     } finally {
-      // Idempotent cleanup in case the test failed before delete.
-      await cleanupPreset(preset.id)
+      // Only if the test failed before the delete: the id may already
+      // belong to another spec's preset.
+      if (!deleted) await cleanupPreset(preset.id)
       await cleanupFood(food.id)
       await cleanupSlot(slot.id)
     }

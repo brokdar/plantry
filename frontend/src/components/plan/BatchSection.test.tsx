@@ -123,6 +123,22 @@ describe("BatchSection on a fresh single meal", () => {
     expect(screen.getByRole("button", { name: "Create batch" })).toBeDisabled()
   })
 
+  it("starts again from 2 meals after Cancel", async () => {
+    await renderSection(single, 9)
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cook as a batch" })
+    )
+    await userEvent.click(
+      screen.getByRole("button", { name: "Increase Meals" })
+    )
+    expect(screen.getByRole("group", { name: "Meals" })).toHaveTextContent("3")
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }))
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cook as a batch" })
+    )
+    expect(screen.getByRole("group", { name: "Meals" })).toHaveTextContent("2")
+  })
+
   it("is hidden in a past window", async () => {
     await renderSection(single, 9, { readOnly: true })
     expect(

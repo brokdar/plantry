@@ -160,20 +160,28 @@ export function FoodPicker({ target, onDone, onCancel }: FoodPickerProps) {
   }
 
   async function commit() {
-    const components = staged.map(toInput)
     if (target.kind === "create") {
       createPlate.mutate(
-        { date: target.date, slot_id: target.slotId, components },
+        {
+          date: target.date,
+          slot_id: target.slotId,
+          components: staged.map(toInput),
+        },
         { onSuccess: onDone }
       )
     } else if (target.kind === "add") {
       try {
-        for (const input of components) {
-          await addComponent.mutateAsync({ plateId: target.plateId, input })
+        for (const item of staged) {
+          await addComponent.mutateAsync({
+            plateId: target.plateId,
+            input: toInput(item),
+          })
+          // Saved: a retry after a later failure must not add it again.
+          setStaged((list) => list.filter((s) => s.food.id !== item.food.id))
         }
         onDone()
       } catch {
-        // Toasted by the mutation; the staged foods stay for another try.
+        // Toasted by the mutation; the unsaved foods stay for another try.
       }
     }
   }

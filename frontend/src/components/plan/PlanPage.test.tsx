@@ -42,6 +42,11 @@ vi.mock("@/lib/api/presets", () => ({
     .fn()
     .mockResolvedValue({ items: [], total: 0, known_tags: [] }),
 }))
+const navigateMock = vi.hoisted(() => vi.fn())
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+  useNavigate: () => navigateMock,
+}))
 // The chat panel has its own tests; here only its opening matters.
 vi.mock("@/components/chat/ChatPanel", () => ({ ChatPanel: () => null }))
 
@@ -336,5 +341,87 @@ describe("PlanPage", () => {
       })
     )
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  it("returns focus to the cell when the sheet closes", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(<PlanPage />)
+    const cell = await screen.findByRole("button", {
+      name: "Monday dinner, Chili, leftover 3 of 3",
+    })
+    cell.focus()
+    await user.keyboard("{Enter}")
+    expect(await screen.findByRole("dialog", { name: "Chili" })).toBeVisible()
+    await user.keyboard("{Escape}")
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    )
+    expect(cell).toHaveFocus()
+  })
+
+  it("has a 44 px, translated close button", async () => {
+    const user = userEvent.setup()
+    await i18n.changeLanguage("de")
+    renderWithRouter(<PlanPage />)
+    await user.click(
+      await screen.findByRole("button", { name: /Chili, Rest 3 von 3/ })
+    )
+    const close = await screen.findByTestId("plan-sheet-close")
+    expect(close).toHaveAccessibleName("Schließen")
+    expect(close.className.split(/\s+/)).toContain("size-11")
+    expect(screen.queryAllByRole("button", { name: "Close" })).toHaveLength(0)
+  })
+
+  it("opens the cell given in ?cell=", async () => {
+    renderWithRouter(<PlanPage cell="2026-11-02|2" />)
+    expect(
+      await screen.findByRole("dialog", { name: "Chili" })
+    ).toHaveTextContent("Monday lunch")
+  })
+
+  it("Open batch to a cook cell before the window opens it in the previous window", async () => {
+    const user = userEvent.setup()
+    // The window starts on Monday; the batch cooked on Sunday is in the
+    // previous window.
+    const days = [
+      "2026-11-02",
+      "2026-11-03",
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-06",
+      "2026-11-07",
+      "2026-11-08",
+    ]
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      window: {
+        ...mockPlan.window,
+        start: "2026-11-02",
+        end: "2026-11-08",
+        prev_start: "2026-10-26",
+        next_start: "2026-11-09",
+      },
+      cells: days.flatMap((date) =>
+        [1, 2, 3].map(
+          (slot_id) =>
+            mockPlan.cells.find(
+              (c) => c.date === date && c.slot_id === slot_id
+            ) ?? { ...mockPlan.cells[0], date, slot_id, plate: null }
+        )
+      ),
+      days: mockPlan.days.filter((d) => days.includes(d.date)),
+    })
+    renderWithRouter(<PlanPage start="2026-11-02" />)
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Monday lunch, Chili, leftover 2 of 3",
+      })
+    )
+    const sheet = await screen.findByRole("dialog", { name: "Chili" })
+    await user.click(within(sheet).getByRole("button", { name: "Open batch" }))
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: "/plan",
+      search: { start: "2026-10-26", cell: "2026-11-01|3" },
+    })
   })
 })

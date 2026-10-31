@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import type { Plan, PlanCell } from "@/lib/api/plan"
 import type { Session } from "@/lib/api/sessions"
 import { colourBatches } from "@/lib/plan/batch-colours"
-import { formatAmount, weekdayShort } from "@/lib/plan/format"
+import { weekdayShort } from "@/lib/plan/format"
 import { usePresets, useApplyPreset, useUndoApply } from "@/lib/queries/presets"
 import {
   useMarkNoPlate,
@@ -175,7 +175,6 @@ function Leftovers({
                 {t("plan.cell_sheet.leftover_item", {
                   name: s.food_name,
                   weekday: weekdayShort(s.cook_date, i18n),
-                  count: formatAmount(s.surplus, i18n),
                 })}
               </span>
             </button>

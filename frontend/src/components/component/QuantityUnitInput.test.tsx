@@ -104,6 +104,16 @@ describe("defaultQuantityValueForFood", () => {
   })
 })
 
+describe("QuantityUnitInput fields", () => {
+  it("names the amount and the unit", () => {
+    render(<Host food={rice} />)
+    expect(
+      screen.getByRole("spinbutton", { name: "Amount" })
+    ).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Unit" })).toBeInTheDocument()
+  })
+})
+
 describe("QuantityUnitInput chips", () => {
   it("renders gram chips for the gram unit", () => {
     render(<Host food={rice} />)

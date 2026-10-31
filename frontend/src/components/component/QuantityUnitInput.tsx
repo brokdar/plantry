@@ -130,6 +130,7 @@ export function QuantityUnitInput({
             portions={portions}
             placeholder={t("plate.quantity.unit_label")}
             testId="quantity-unit-unit"
+            ariaLabel={t("plate.quantity.unit_label")}
             className="h-11 border-line bg-panel text-body md:pointer-fine:h-9"
           />
         </div>

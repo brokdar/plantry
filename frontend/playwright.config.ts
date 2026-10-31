@@ -11,9 +11,13 @@ const AI_SERIAL_SPECS = [
   "settings-ai.spec.ts",
   "keyboard-shortcuts.spec.ts",
   "generate-plan.spec.ts",
-  "feedback.spec.ts",
-  // The profile and plan settings are global too; these two write them
-  // through the UI and must not interleave.
+]
+
+// Specs that write the profile or plan settings through the UI. Those are
+// global: the anchor moves every window other specs open, so they run last,
+// alone, after the other projects.
+const GLOBAL_SETTINGS_SPECS = [
+  "plan-anchor-settings.spec.ts",
   "profile.spec.ts",
   "settings-preferences.spec.ts",
 ]
@@ -48,7 +52,11 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      testIgnore: [...AI_SERIAL_SPECS, SETUP_SPEC].map((s) => `**/${s}`),
+      testIgnore: [
+        ...AI_SERIAL_SPECS,
+        ...GLOBAL_SETTINGS_SPECS,
+        SETUP_SPEC,
+      ].map((s) => `**/${s}`),
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"] },
     },
@@ -57,6 +65,14 @@ export default defineConfig({
       testMatch: AI_SERIAL_SPECS.map((s) => `**/${s}`),
       testIgnore: `**/${SETUP_SPEC}`,
       dependencies: ["setup"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "global-settings",
+      testMatch: GLOBAL_SETTINGS_SPECS.map((s) => `**/${s}`),
+      dependencies: ["chromium", "ai-serial"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },

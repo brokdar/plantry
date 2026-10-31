@@ -96,7 +96,7 @@ async function renderSheet(
   const onPick = vi.fn()
   const onOpenCell = vi.fn()
   const onClose = vi.fn()
-  renderWithRouter(
+  const view = renderWithRouter(
     <PlateSheet
       cell={cellOf(plan, key)}
       plan={plan}
@@ -109,7 +109,7 @@ async function renderSheet(
     />
   )
   await screen.findAllByTestId("sheet-component")
-  return { onPick, onOpenCell, onClose }
+  return { onPick, onOpenCell, onClose, unmount: view.unmount }
 }
 
 beforeEach(async () => {
@@ -319,6 +319,22 @@ describe("PlateSheet", () => {
     )
   })
 
+  it("formats a fractional deficit", async () => {
+    const short = {
+      ...mockSession,
+      portions: 4,
+      consumed: 4.5,
+      warnings: [{ code: "deficit" as const, plate_id: null }],
+    }
+    await renderSheet({ ...mockPlan, sessions: [short] })
+    const warnings = screen.getByTestId("sheet-warnings")
+    expect(warnings).toHaveTextContent("Chili is ½ portions short.")
+    expect(warnings).not.toHaveTextContent("0.5")
+    expect(
+      within(warnings).getByRole("button", { name: "Cook ½ more" })
+    ).toBeInTheDocument()
+  })
+
   it("marks the cell No plate, removing the plate", async () => {
     const { onClose } = await renderSheet()
     await userEvent.click(
@@ -395,5 +411,23 @@ describe("PlateSheet", () => {
     await waitFor(() =>
       expect(putFeedback).toHaveBeenCalledWith(1, { status: "loved" })
     )
+  })
+
+  it("saves a typed note when the sheet closes without a blur (Escape)", async () => {
+    const { unmount } = await renderSheet()
+    await userEvent.type(screen.getByTestId("sheet-note"), "Make it spicy")
+    expect(updatePlate).not.toHaveBeenCalled()
+    unmount()
+    await waitFor(() =>
+      expect(updatePlate).toHaveBeenCalledWith(1, { note: "Make it spicy" })
+    )
+  })
+
+  it("saves a note once when it blurs and then closes", async () => {
+    const { unmount } = await renderSheet()
+    await userEvent.type(screen.getByTestId("sheet-note"), "Spicy")
+    await userEvent.tab()
+    unmount()
+    await waitFor(() => expect(updatePlate).toHaveBeenCalledTimes(1))
   })
 })

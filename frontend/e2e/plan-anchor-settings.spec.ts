@@ -21,6 +21,8 @@ test.describe("Plan anchor settings", () => {
   })
 
   test("picking an anchor saves it", async ({ page }) => {
+    // Start from "today" so the first pick is always a change.
+    await setSetting("plan.anchor", "today")
     await page.goto("/settings/cooking")
 
     for (const anchor of ["next_shopping_day", "today"] as const) {

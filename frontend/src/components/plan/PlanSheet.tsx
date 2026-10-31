@@ -1,7 +1,10 @@
+import { X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
+import { Button } from "@/components/ui/button"
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -31,6 +34,8 @@ interface PlanSheetProps {
   board: Board
   state: SheetState | null
   onChange: (state: SheetState | null) => void
+  /** After the sheet closed: return focus to the cell it was opened for. */
+  onClosed: () => void
 }
 
 function findCell(board: Board, key: string): BoardCell | undefined {
@@ -47,7 +52,13 @@ function findCell(board: Board, key: string): BoardCell | undefined {
  * sheet, the empty-cell sheet or the food picker for one cell, always from
  * the latest plan, so it follows every refetch.
  */
-export function PlanSheet({ plan, board, state, onChange }: PlanSheetProps) {
+export function PlanSheet({
+  plan,
+  board,
+  state,
+  onChange,
+  onClosed,
+}: PlanSheetProps) {
   const { t, i18n } = useTranslation()
   const phone = useIsPhone()
   const freezing = useSettingField("plan.freezing_enabled", "false")
@@ -85,7 +96,24 @@ export function PlanSheet({ plan, board, state, onChange }: PlanSheetProps) {
             : "w-full sm:max-w-md md:max-w-md"
         )}
         data-testid="plan-sheet"
+        showCloseButton={false}
+        onCloseAutoFocus={(e) => {
+          // No trigger to return to: focus the cell the sheet was for.
+          e.preventDefault()
+          onClosed()
+        }}
       >
+        <SheetClose asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            className="absolute top-3 right-3 size-11 md:pointer-fine:size-8"
+            aria-label={t("common.close")}
+            data-testid="plan-sheet-close"
+          >
+            <X strokeWidth={1.5} aria-hidden />
+          </Button>
+        </SheetClose>
         <SheetHeader className="px-4 pt-5 pr-14 pb-3">
           <SheetTitle className="font-heading text-h2 font-normal text-ink">
             {title}

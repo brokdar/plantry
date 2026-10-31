@@ -100,7 +100,7 @@ describe("CellSheet on an empty cell", () => {
   it("eats a leftover from a batch with spare portions", async () => {
     const { onClose } = await renderCell(cell("2026-11-03", 2))
     const leftover = await screen.findByTestId("cell-leftover")
-    expect(leftover).toHaveTextContent("Chili from Sun, 2 spare")
+    expect(leftover).toHaveTextContent("2 spareChili from Sun")
     await userEvent.click(leftover)
     await waitFor(() =>
       expect(createPlate).toHaveBeenCalledWith({

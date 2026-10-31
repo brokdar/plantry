@@ -133,9 +133,6 @@
       }
     }
   },
-  "tray": {
-    "error_load_templates": "Couldn't load templates. Try again."
-  },
   "picker": {
     "filter": {
       "favorites": "Favorites",
@@ -182,13 +179,7 @@
       },
       "unknown_unit": "Unknown unit"
     },
-    "filter_by_role": "Filter by role",
-    "feedback": {
-      "add_note": "Add note",
-      "note_placeholder": "Notes about this meal…",
-      "clear": "Clear feedback",
-      "save_note": "Save note"
-    }
+    "filter_by_role": "Filter by role"
   },
   "settings_page": {
     "eyebrow": "Settings",
@@ -976,10 +967,6 @@
       "title": "Presets",
       "toggle": "Toggle preset drawer",
       "drag_hint": "Drag onto a slot, day, or week. Shift+drop to overwrite."
-    },
-    "empty_slot_picker": {
-      "recents": "Recent",
-      "all_matching": "All matching"
     }
   },
   "availability": {
@@ -1162,12 +1149,7 @@
     "fat_abbr": "F",
     "fiber_abbr": "Fi",
     "kcal": "kcal",
-    "distribution": "Macro split",
-    "target": {
-      "on": "On target",
-      "near": "Near target",
-      "off": "Off target"
-    }
+    "distribution": "Macro split"
   },
   "common": {
     "save": "Save",
@@ -1188,8 +1170,6 @@
     "close": "Close",
     "yes": "Yes",
     "no": "No",
-    "collapse": "Collapse",
-    "remove": "Remove",
     "opens_new_tab": "(opens in a new tab)",
     "retry": "Try again"
   },
@@ -1459,8 +1439,8 @@
       "not_eaten": "Didn't eat it"
     },
     "warning": {
-      "deficit_one": "{{name}} is {{count}} portion short.",
-      "deficit_other": "{{name}} is {{count}} portions short.",
+      "deficit_one": "{{name}} is {{amount}} portion short.",
+      "deficit_other": "{{name}} is {{amount}} portions short.",
       "frozen_deficit": "{{name}} has too few frozen portions for its frozen meals.",
       "past_keep_days": "{{name}} is past its use-by date here.",
       "leftover_before_cook": "{{name}} is eaten here before it is cooked.",
@@ -1487,7 +1467,7 @@
       "use_routine": "Use a routine",
       "no_routines": "No routines for this meal yet. Save a plate as a routine to reuse it.",
       "eat_leftover": "Eat a leftover",
-      "leftover_item": "{{name}} from {{weekday}}, {{count}} spare",
+      "leftover_item": "{{name}} from {{weekday}}",
       "plan_meal": "Plan this meal",
       "note": "Reason",
       "note_placeholder": "Eating out, at work, …",

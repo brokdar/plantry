@@ -28,6 +28,8 @@ interface UnitSelectProps {
   disabled?: boolean
   placeholder?: string
   testId?: string
+  /** Accessible name when no label points at the trigger. */
+  ariaLabel?: string
   className?: string
 }
 
@@ -47,6 +49,7 @@ export function UnitSelect({
   disabled,
   placeholder,
   testId,
+  ariaLabel,
   className,
 }: UnitSelectProps) {
   const { t } = useTranslation()
@@ -72,6 +75,7 @@ export function UnitSelect({
     >
       <SelectTrigger
         data-testid={testId}
+        aria-label={ariaLabel}
         className={cn("w-full justify-between", className)}
       >
         <SelectValue placeholder={placeholder ?? t("unit.placeholder")} />

@@ -115,6 +115,27 @@ describe("FoodPicker", () => {
     })
   })
 
+  it("a retry after a failed add does not add the saved food again", async () => {
+    vi.mocked(addPlateComponent)
+      .mockResolvedValueOnce(mockPlate())
+      .mockRejectedValueOnce(new Error("offline"))
+    const { onDone } = renderPicker({ kind: "add", plateId: 5 })
+    await userEvent.click(await row("Chili"))
+    await userEvent.click(await row("Chicken Curry"))
+    await userEvent.click(screen.getByRole("button", { name: "Add 2 foods" }))
+    await waitFor(() => expect(addPlateComponent).toHaveBeenCalledTimes(2))
+    expect(onDone).not.toHaveBeenCalled()
+    // Only the food that failed stays staged.
+    expect(
+      await screen.findByRole("button", { name: "Add 1 food" })
+    ).toBeEnabled()
+    await userEvent.click(screen.getByRole("button", { name: "Add 1 food" }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(
+      vi.mocked(addPlateComponent).mock.calls.map((c) => c[1].food_id)
+    ).toEqual([42, mockChickenCurry.id, mockChickenCurry.id])
+  })
+
   it("swaps a component at the first tap", async () => {
     const { onDone } = renderPicker({
       kind: "swap",

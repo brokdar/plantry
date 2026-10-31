@@ -1,11 +1,13 @@
 import type { APIRequestContext, Locator, Page } from "@playwright/test"
 
 import {
+  addDays,
   API,
   apiRequest,
   cleanupFood,
   cleanupSlot,
   expect,
+  futureWindow,
   seedComposedWithStub,
   seedSlot,
   test,
@@ -35,11 +37,6 @@ interface Seeded {
   cleanup: () => Promise<void>
 }
 
-function addDays(iso: string, n: number): string {
-  const [y, m, d] = iso.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
-}
-
 async function api(): Promise<APIRequestContext> {
   return apiRequest.newContext({ baseURL: API })
 }
@@ -53,14 +50,11 @@ async function anchoredWindow(): Promise<PlanWindow> {
   return body.window
 }
 
-/** Seeds AC-1 in a random window 8–51 windows after the anchored one
- *  (inside the year cleanupSlot covers), on two fresh slots. */
+/** Seeds AC-1 in this worker's own future window (`futureWindow`), on
+ *  two fresh slots. */
 async function seedAc1(): Promise<Seeded> {
-  const weeksAhead = 8 + Math.floor(Math.random() * 44)
   const tag = uid()
-  const anchored = await anchoredWindow()
-  const start = addDays(anchored.start, 7 * weeksAhead)
-  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i))
+  const { start, days } = await futureWindow()
   const lunch = await seedSlot(`slot.pb-lunch-${tag}`, "Sun", 901)
   const dinner = await seedSlot(`slot.pb-dinner-${tag}`, "Moon", 902)
   const { composed: chili, stub } = await seedComposedWithStub(

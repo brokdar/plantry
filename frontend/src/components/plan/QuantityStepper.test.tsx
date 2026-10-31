@@ -47,6 +47,28 @@ describe("QuantityStepper", () => {
     ).toBeDisabled()
   })
 
+  it("steps an off-grid value to the next grid point, not past it", async () => {
+    const onChange = vi.fn()
+    render(
+      <QuantityStepper
+        label="Batch"
+        value={3.5}
+        min={1}
+        max={100}
+        step={1}
+        onChange={onChange}
+      />
+    )
+    await userEvent.click(
+      screen.getByRole("button", { name: "Increase Batch" })
+    )
+    expect(onChange).toHaveBeenLastCalledWith(4)
+    await userEvent.click(
+      screen.getByRole("button", { name: "Decrease Batch" })
+    )
+    expect(onChange).toHaveBeenLastCalledWith(3)
+  })
+
   it("clamps and snaps to the step grid", async () => {
     const onChange = vi.fn()
     render(

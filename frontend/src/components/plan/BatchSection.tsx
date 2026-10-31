@@ -210,7 +210,11 @@ function CookAsBatch({ session, slotName }: BatchSectionProps) {
           type="button"
           variant="outline"
           className="h-11 md:pointer-fine:h-9"
-          onClick={() => setOpen(false)}
+          onClick={() => {
+            // A new start next time: the default meals, every cell ticked.
+            setOpen(false)
+            changeMeals(MIN_MEALS)
+          }}
         >
           {t("common.cancel")}
         </Button>

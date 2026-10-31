@@ -133,9 +133,6 @@
       }
     }
   },
-  "tray": {
-    "error_load_templates": "Vorlagen konnten nicht geladen werden. Erneut versuchen."
-  },
   "picker": {
     "filter": {
       "favorites": "Favoriten",
@@ -182,13 +179,7 @@
       },
       "unknown_unit": "Unbekannte Einheit"
     },
-    "filter_by_role": "Nach Rolle filtern",
-    "feedback": {
-      "add_note": "Notiz hinzufügen",
-      "note_placeholder": "Notizen zu dieser Mahlzeit…",
-      "clear": "Bewertung entfernen",
-      "save_note": "Notiz speichern"
-    }
+    "filter_by_role": "Nach Rolle filtern"
   },
   "settings_page": {
     "eyebrow": "Einstellungen",
@@ -889,12 +880,7 @@
     "fat_abbr": "F",
     "fiber_abbr": "B",
     "kcal": "kcal",
-    "distribution": "Makro-Aufteilung",
-    "target": {
-      "on": "Im Ziel",
-      "near": "Nahe am Ziel",
-      "off": "Außerhalb des Ziels"
-    }
+    "distribution": "Makro-Aufteilung"
   },
   "profile": {
     "title": "Profil & Ziele",
@@ -1015,10 +1001,6 @@
       "title": "Presets",
       "toggle": "Preset-Schublade umschalten",
       "drag_hint": "Auf Slot, Tag oder Woche ziehen. Shift+Drop überschreibt."
-    },
-    "empty_slot_picker": {
-      "recents": "Zuletzt",
-      "all_matching": "Alle passenden"
     }
   },
   "availability": {
@@ -1177,8 +1159,6 @@
     "close": "Schließen",
     "yes": "Ja",
     "no": "Nein",
-    "collapse": "Einklappen",
-    "remove": "Entfernen",
     "opens_new_tab": "(öffnet in neuem Tab)",
     "retry": "Erneut versuchen"
   },
@@ -1448,8 +1428,8 @@
       "not_eaten": "Nicht gegessen"
     },
     "warning": {
-      "deficit_one": "Bei {{name}} fehlt {{count}} Portion.",
-      "deficit_other": "Bei {{name}} fehlen {{count}} Portionen.",
+      "deficit_one": "Bei {{name}} fehlt {{amount}} Portion.",
+      "deficit_other": "Bei {{name}} fehlen {{amount}} Portionen.",
       "frozen_deficit": "Von {{name}} sind zu wenige Portionen für die gefrorenen Mahlzeiten eingefroren.",
       "past_keep_days": "{{name}} ist hier schon über dem Haltbarkeitsdatum.",
       "leftover_before_cook": "{{name}} wird hier gegessen, bevor es gekocht ist.",
@@ -1476,7 +1456,7 @@
       "use_routine": "Routine verwenden",
       "no_routines": "Für diese Mahlzeit gibt es noch keine Routine. Speichere eine Mahlzeit als Routine, um sie wiederzuverwenden.",
       "eat_leftover": "Rest essen",
-      "leftover_item": "{{name}} von {{weekday}}, {{count}} übrig",
+      "leftover_item": "{{name}} von {{weekday}}",
       "plan_meal": "Diese Mahlzeit planen",
       "note": "Grund",
       "note_placeholder": "Auswärts, bei der Arbeit, …",

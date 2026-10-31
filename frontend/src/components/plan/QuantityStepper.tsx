@@ -20,9 +20,17 @@ interface QuantityStepperProps {
   testId?: string
 }
 
-/** Snaps to the step grid, so 0.25 steps never drift into 0.7500000001. */
-function snap(value: number, step: number) {
-  return Math.round(value / step) * step
+const EPSILON = 1e-9
+
+/** The next point of the step grid above (`dir` 1) or below (`dir` -1)
+ *  `value`. On the grid that is value ± step; off it (3.5 with step 1) it
+ *  is the nearest grid point in that direction (4 or 3), never past it.
+ *  Rounded, so 0.25 steps never drift into 0.7500000001. */
+function stepFrom(value: number, step: number, dir: 1 | -1) {
+  const n = value / step
+  const next =
+    dir === 1 ? Math.floor(n + EPSILON) + 1 : Math.ceil(n - EPSILON) - 1
+  return Math.round(next * step * 1e6) / 1e6
 }
 
 /**
@@ -45,8 +53,8 @@ export function QuantityStepper({
   const { t, i18n } = useTranslation()
   const shown = format ? format(value) : formatAmount(value, i18n)
 
-  function set(next: number) {
-    onChange(Math.min(max, Math.max(min, snap(next, step))))
+  function set(dir: 1 | -1) {
+    onChange(Math.min(max, Math.max(min, stepFrom(value, step, dir))))
   }
 
   return (
@@ -62,7 +70,7 @@ export function QuantityStepper({
         className="size-11 md:pointer-fine:size-9"
         aria-label={t("plan.stepper.decrease", { label })}
         disabled={disabled || value <= min}
-        onClick={() => set(value - step)}
+        onClick={() => set(-1)}
       >
         <Minus strokeWidth={1.5} aria-hidden />
       </Button>
@@ -78,7 +86,7 @@ export function QuantityStepper({
         className="size-11 md:pointer-fine:size-9"
         aria-label={t("plan.stepper.increase", { label })}
         disabled={disabled || value >= max}
-        onClick={() => set(value + step)}
+        onClick={() => set(1)}
       >
         <Plus strokeWidth={1.5} aria-hidden />
       </Button>

@@ -168,19 +168,22 @@ export async function seedSlot(
   return body
 }
 
+/** Deletes the slot's plates from a year back to two years ahead. The API
+ *  lists at most 366 days at a time, so this pages through the range. */
 export async function deletePlatesUsingSlot(slotId: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  const now = new Date()
-  const from = new Date(now.getFullYear() - 1, 0, 1).toISOString().slice(0, 10)
-  const to = new Date(now.getFullYear() + 1, 11, 31).toISOString().slice(0, 10)
-  const platesRes = await ctx.get(`/api/plates?from=${from}&to=${to}`)
-  const body = (await platesRes.json()) as {
-    plates?: { id: number; slot_id: number }[]
-  }
-  for (const p of body.plates ?? []) {
-    if (p.slot_id === slotId) {
-      await ctx.delete(`/api/plates/${p.id}`)
+  const today = new Date().toISOString().slice(0, 10)
+  for (let from = addDays(today, -360); from < addDays(today, 720); ) {
+    const to = addDays(from, 359)
+    const platesRes = await ctx.get(`/api/plates?from=${from}&to=${to}`)
+    expect(platesRes.ok(), await platesRes.text()).toBeTruthy()
+    const body = (await platesRes.json()) as {
+      plates: { id: number; slot_id: number }[]
     }
+    for (const p of body.plates) {
+      if (p.slot_id === slotId) await ctx.delete(`/api/plates/${p.id}`)
+    }
+    from = addDays(to, 1)
   }
   await ctx.dispose()
 }
@@ -318,9 +321,17 @@ export function addDays(iso: string, n: number): string {
   return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
 }
 
-/** A window 8–51 windows after the anchored one (inside the year
- *  cleanupSlot covers), so parallel specs that clear or fill the current
- *  window never touch it. Returns its start and its seven dates. */
+/** Tests started by this worker; rotates its windows. */
+let windowsUsed = 0
+
+/**
+ * A future window for the running test, 8–50 windows after the anchored one
+ * (inside the year cleanupSlot covers). Each parallel worker owns its own
+ * band of ten windows (`parallelIndex` × 11, a spare week between bands),
+ * and only one test runs per worker at a time, so concurrent tests never
+ * share a window: one test's Clear this week or No plate overrides cannot
+ * touch another's plates. Returns the start and the seven dates.
+ */
 export async function futureWindow(): Promise<{
   start: string
   days: string[]
@@ -330,7 +341,8 @@ export async function futureWindow(): Promise<{
   expect(res.ok()).toBeTruthy()
   const { window } = (await res.json()) as { window: { start: string } }
   await ctx.dispose()
-  const weeksAhead = 8 + Math.floor(Math.random() * 44)
+  const band = baseTest.info().parallelIndex
+  const weeksAhead = 8 + band * 11 + (windowsUsed++ % 10)
   const start = addDays(window.start, 7 * weeksAhead)
   return { start, days: Array.from({ length: 7 }, (_, i) => addDays(start, i)) }
 }
