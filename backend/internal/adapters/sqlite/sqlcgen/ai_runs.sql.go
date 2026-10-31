@@ -10,9 +10,68 @@ import (
 	"database/sql"
 )
 
+const aIRunCorrections = `-- name: AIRunCorrections :many
+SELECT CAST(g.run_id AS INTEGER) AS run_id,
+       COUNT(*) AS generated_plates,
+       CAST(SUM(EXISTS (
+           SELECT 1 FROM plate_events u
+           WHERE u.plate_id = g.plate_id AND u.actor = 'user' AND u.action IN ('update', 'delete')
+             AND u.id > g.created_id
+             AND u.id < COALESCE((SELECT MIN(a.id) FROM plate_events a
+                                  WHERE a.plate_id = g.plate_id AND a.id > g.created_id
+                                    AND a.action IN ('accept', 'confirm')), 9223372036854775807)
+       )) AS INTEGER) AS corrected_plates
+FROM (
+    SELECT e.ai_run_id AS run_id, e.plate_id, MIN(e.id) AS created_id
+    FROM plate_events e
+    WHERE e.actor = 'generator' AND e.action = 'create' AND e.plate_id IS NOT NULL
+      AND e.ai_run_id >= ?1 AND e.ai_run_id <= ?2
+    GROUP BY e.ai_run_id, e.plate_id
+) g
+GROUP BY g.run_id
+`
+
+type AIRunCorrectionsParams struct {
+	MinID sql.NullInt64
+	MaxID sql.NullInt64
+}
+
+type AIRunCorrectionsRow struct {
+	RunID           int64
+	GeneratedPlates int64
+	CorrectedPlates int64
+}
+
+// D24 per run with ids in [min_id, max_id]: the plates the generator created
+// for the run, and how many of them got a user update or delete before the
+// plate's first accept or confirm event.
+func (q *Queries) AIRunCorrections(ctx context.Context, arg AIRunCorrectionsParams) ([]AIRunCorrectionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, aIRunCorrections, arg.MinID, arg.MaxID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AIRunCorrectionsRow{}
+	for rows.Next() {
+		var i AIRunCorrectionsRow
+		if err := rows.Scan(&i.RunID, &i.GeneratedPlates, &i.CorrectedPlates); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createAIRun = `-- name: CreateAIRun :one
-INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction, conversation_id, request_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction, conversation_id, request_id,
+    chooser, scope_json)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id
 `
 
@@ -25,6 +84,8 @@ type CreateAIRunParams struct {
 	Instruction    sql.NullString
 	ConversationID sql.NullInt64
 	RequestID      sql.NullString
+	Chooser        sql.NullString
+	ScopeJson      sql.NullString
 }
 
 func (q *Queries) CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error) {
@@ -37,6 +98,8 @@ func (q *Queries) CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64
 		arg.Instruction,
 		arg.ConversationID,
 		arg.RequestID,
+		arg.Chooser,
+		arg.ScopeJson,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -96,7 +159,11 @@ UPDATE ai_runs SET
     output_tokens      = ?,
     cache_read_tokens  = ?,
     cache_write_tokens = ?,
-    error_key          = ?
+    error_key          = ?,
+    repair_attempts    = ?,
+    violations_json    = ?,
+    score_json         = ?,
+    notes              = ?
 WHERE id = ?
 `
 
@@ -112,6 +179,10 @@ type FinishAIRunParams struct {
 	CacheReadTokens  int64
 	CacheWriteTokens int64
 	ErrorKey         sql.NullString
+	RepairAttempts   int64
+	ViolationsJson   sql.NullString
+	ScoreJson        sql.NullString
+	Notes            sql.NullString
 	ID               int64
 }
 
@@ -130,20 +201,243 @@ func (q *Queries) FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.R
 		arg.CacheReadTokens,
 		arg.CacheWriteTokens,
 		arg.ErrorKey,
+		arg.RepairAttempts,
+		arg.ViolationsJson,
+		arg.ScoreJson,
+		arg.Notes,
 		arg.ID,
 	)
 }
 
-const getRunNote = `-- name: GetRunNote :one
-SELECT chooser FROM ai_runs WHERE id = ?
+const getAIRunDetail = `-- name: GetAIRunDetail :one
+SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model, r.prompt_version, r.chooser,
+       r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens,
+       r.score_json, r.violations_json, r.outcome,
+       r.scope_json, r.instruction, r.notes, r.error_key, p.text AS prompt_text
+FROM ai_runs r
+LEFT JOIN ai_prompts p ON p.hash = r.prompt_hash
+WHERE r.id = ?
 `
 
+type GetAIRunDetailRow struct {
+	ID               int64
+	Kind             string
+	StartedAt        string
+	FinishedAt       sql.NullString
+	Status           string
+	Provider         string
+	Model            string
+	PromptVersion    string
+	Chooser          sql.NullString
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	ScoreJson        sql.NullString
+	ViolationsJson   sql.NullString
+	Outcome          sql.NullString
+	ScopeJson        sql.NullString
+	Instruction      sql.NullString
+	Notes            sql.NullString
+	ErrorKey         sql.NullString
+	PromptText       sql.NullString
+}
+
+func (q *Queries) GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailRow, error) {
+	row := q.db.QueryRowContext(ctx, getAIRunDetail, id)
+	var i GetAIRunDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.Status,
+		&i.Provider,
+		&i.Model,
+		&i.PromptVersion,
+		&i.Chooser,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.CacheReadTokens,
+		&i.CacheWriteTokens,
+		&i.ScoreJson,
+		&i.ViolationsJson,
+		&i.Outcome,
+		&i.ScopeJson,
+		&i.Instruction,
+		&i.Notes,
+		&i.ErrorKey,
+		&i.PromptText,
+	)
+	return i, err
+}
+
+const getRunNote = `-- name: GetRunNote :one
+SELECT chooser, notes FROM ai_runs WHERE id = ?
+`
+
+type GetRunNoteRow struct {
+	Chooser sql.NullString
+	Notes   sql.NullString
+}
+
 // What the plan's draft summary shows of a run (D26).
-func (q *Queries) GetRunNote(ctx context.Context, id int64) (sql.NullString, error) {
+func (q *Queries) GetRunNote(ctx context.Context, id int64) (GetRunNoteRow, error) {
 	row := q.db.QueryRowContext(ctx, getRunNote, id)
-	var chooser sql.NullString
-	err := row.Scan(&chooser)
-	return chooser, err
+	var i GetRunNoteRow
+	err := row.Scan(&i.Chooser, &i.Notes)
+	return i, err
+}
+
+const listAIRunStepViews = `-- name: ListAIRunStepViews :many
+SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens,
+       CAST(COALESCE(substr(COALESCE(args_json, request_json), 1, 8192), '') AS TEXT) AS args,
+       COALESCE(length(COALESCE(args_json, request_json)), 0) > 8192 AS args_cut,
+       CAST(COALESCE(substr(COALESCE(result_json, response_json), 1, 8192), '') AS TEXT) AS result,
+       COALESCE(length(COALESCE(result_json, response_json)), 0) > 8192 AS result_cut
+FROM ai_run_steps
+WHERE run_id = ?
+ORDER BY seq
+`
+
+type ListAIRunStepViewsRow struct {
+	Seq          int64
+	Type         string
+	Name         string
+	IsError      int64
+	DurationMs   int64
+	InputTokens  int64
+	OutputTokens int64
+	Args         string
+	ArgsCut      bool
+	Result       string
+	ResultCut    bool
+}
+
+// A run's steps in seq order. args and result are cut to 8192 characters
+// (an llm_call shows its request_json and response_json there); the *_cut
+// flags say a value was longer.
+func (q *Queries) ListAIRunStepViews(ctx context.Context, runID int64) ([]ListAIRunStepViewsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAIRunStepViews, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAIRunStepViewsRow{}
+	for rows.Next() {
+		var i ListAIRunStepViewsRow
+		if err := rows.Scan(
+			&i.Seq,
+			&i.Type,
+			&i.Name,
+			&i.IsError,
+			&i.DurationMs,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.Args,
+			&i.ArgsCut,
+			&i.Result,
+			&i.ResultCut,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAIRuns = `-- name: ListAIRuns :many
+SELECT id, kind, started_at, finished_at, status, provider, model, prompt_version, chooser,
+       input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+       score_json, violations_json, outcome
+FROM ai_runs
+WHERE (CAST(?1 AS TEXT) IS NULL OR kind = ?1)
+  AND (CAST(?2 AS TEXT) IS NULL OR started_at >= ?2)
+  AND (CAST(?3 AS TEXT) IS NULL OR started_at < ?3)
+  AND (CAST(?4 AS INTEGER) IS NULL OR id < ?4)
+ORDER BY id DESC
+LIMIT ?5
+`
+
+type ListAIRunsParams struct {
+	Kind     sql.NullString
+	FromTs   sql.NullString
+	ToTs     sql.NullString
+	BeforeID sql.NullInt64
+	Lim      int64
+}
+
+type ListAIRunsRow struct {
+	ID               int64
+	Kind             string
+	StartedAt        string
+	FinishedAt       sql.NullString
+	Status           string
+	Provider         string
+	Model            string
+	PromptVersion    string
+	Chooser          sql.NullString
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	ScoreJson        sql.NullString
+	ViolationsJson   sql.NullString
+	Outcome          sql.NullString
+}
+
+// Runs newest first (by id), optionally filtered by kind, a started_at range
+// [from_ts, to_ts) and a cursor (ids below before_id). lim -1 lists all.
+func (q *Queries) ListAIRuns(ctx context.Context, arg ListAIRunsParams) ([]ListAIRunsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAIRuns,
+		arg.Kind,
+		arg.FromTs,
+		arg.ToTs,
+		arg.BeforeID,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAIRunsRow{}
+	for rows.Next() {
+		var i ListAIRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.Status,
+			&i.Provider,
+			&i.Model,
+			&i.PromptVersion,
+			&i.Chooser,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.CacheReadTokens,
+			&i.CacheWriteTokens,
+			&i.ScoreJson,
+			&i.ViolationsJson,
+			&i.Outcome,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const pruneAIRunSteps = `-- name: PruneAIRunSteps :execresult

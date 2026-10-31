@@ -253,6 +253,41 @@ func TestAIRunRepo_ArgsJSONTruncation(t *testing.T) {
 	assert.Equal(t, strings.Repeat("a", limit)+"…[truncated]", got)
 }
 
+func TestAIRunRepo_GenerationFieldsRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+
+	gen, err := repo.CreateRun(ctx, airun.RunStart{
+		Kind: airun.KindGenerate, StartedAt: time.Now(), Chooser: airun.ChooserHeuristic, ScopeJSON: `{"kind":"empty_cells"}`,
+	})
+	require.NoError(t, err)
+	require.NoError(t, repo.FinishRun(ctx, airun.RunEnd{
+		ID: gen, Status: airun.StatusOK, FinishedAt: time.Now(),
+		RepairAttempts: 1, ViolationsJSON: `[]`, ScoreJSON: `{"coverage":1}`, Notes: "Two cook days.",
+	}))
+	chat, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: time.Now()})
+	require.NoError(t, err)
+	require.NoError(t, repo.FinishRun(ctx, airun.RunEnd{ID: chat, Status: airun.StatusOK, FinishedAt: time.Now()}))
+
+	var chooser, scope, violations, score, notes sql.NullString
+	var repairs int
+	q := `SELECT chooser, scope_json, repair_attempts, violations_json, score_json, notes FROM ai_runs WHERE id = ?`
+	require.NoError(t, db.QueryRow(q, gen).Scan(&chooser, &scope, &repairs, &violations, &score, &notes))
+	assert.Equal(t, "heuristic", chooser.String)
+	assert.Equal(t, `{"kind":"empty_cells"}`, scope.String)
+	assert.Equal(t, 1, repairs)
+	assert.Equal(t, sql.NullString{String: "[]", Valid: true}, violations)
+	assert.Equal(t, `{"coverage":1}`, score.String)
+	assert.Equal(t, "Two cook days.", notes.String)
+
+	require.NoError(t, db.QueryRow(q, chat).Scan(&chooser, &scope, &repairs, &violations, &score, &notes))
+	for _, v := range []sql.NullString{chooser, scope, violations, score, notes} {
+		assert.False(t, v.Valid, "empty fields are stored as NULL")
+	}
+	assert.Zero(t, repairs)
+}
+
 func TestAIRunRepo_RunIdentityRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	db := testhelper.NewTestDB(t)

@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
@@ -704,13 +706,14 @@ func TestMeter_ConcurrentStreamsAndFinishes(t *testing.T) {
 
 // requestBody mirrors the request_json shape of an llm_call step.
 type requestBody struct {
-	MessageOffset int           `json:"message_offset"`
-	Messages      []llm.Message `json:"messages"`
-	Temperature   float64       `json:"temperature"`
-	MaxTokens     int           `json:"max_tokens"`
-	SystemHash    *string       `json:"system_hash"`
-	ToolsHash     *string       `json:"tools_hash"`
-	Truncated     bool          `json:"truncated"`
+	MessageOffset int             `json:"message_offset"`
+	Messages      []llm.Message   `json:"messages"`
+	ToolChoice    *llm.ToolChoice `json:"tool_choice"`
+	Temperature   float64         `json:"temperature"`
+	MaxTokens     int             `json:"max_tokens"`
+	SystemHash    *string         `json:"system_hash"`
+	ToolsHash     *string         `json:"tools_hash"`
+	Truncated     bool            `json:"truncated"`
 }
 
 // responseBody mirrors the response_json shape of an llm_call step.
@@ -792,6 +795,29 @@ func TestMeter_RecordsRequestDeltas(t *testing.T) {
 	}
 	if got := decodeRequest(t, steps[1]).Messages[0].Role; got != llm.RoleAssistant {
 		t.Errorf("second delta starts with %q; want the assistant reply", got)
+	}
+}
+
+func TestMeter_RecordsToolChoice(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	inner := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("a", fake.ScriptedUsage{}), textTurn("b", fake.ScriptedUsage{})}})
+	client := rec.Meter(inner, "anthropic")
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindGenerate})
+	msgs := []llm.Message{textMsg(llm.RoleUser, "u1")}
+	for _, choice := range []*llm.ToolChoice{{Name: "submit_plan"}, nil} {
+		if _, err := drainStream(ctx, client, llm.Request{Model: "m", Messages: msgs, ToolChoice: choice}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	steps := stepsBySeq(store)
+	if got := decodeRequest(t, steps[0]).ToolChoice; got == nil || got.Name != "submit_plan" {
+		t.Errorf("step 1 tool_choice = %+v; want submit_plan", got)
+	}
+	if got := decodeRequest(t, steps[1]).ToolChoice; got != nil {
+		t.Errorf("step 2 tool_choice = %+v; want none", got)
 	}
 }
 
@@ -1047,6 +1073,35 @@ func TestRecorder_StoresRunIdentity(t *testing.T) {
 	if seen == "" || runs[2].RequestID != seen || runs[2].ConversationID != nil {
 		t.Errorf("request run id = %q; want %q", runs[2].RequestID, seen)
 	}
+}
+
+func TestRecorder_StoresGenerationFields(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+
+	ctx, run := rec.Start(context.Background(), airun.Start{
+		Kind: airun.KindRegenerate, Chooser: airun.ChooserLLM, ScopeJSON: `{"kind":"day","date":"2026-11-02"}`,
+	})
+	run.FinishWith(ctx, airun.StatusPartial, "", airun.Result{
+		RepairAttempts: 2, ViolationsJSON: `[{"rule":"H2"}]`, ScoreJSON: `{"coverage":1}`, Notes: "Kept Monday.",
+	})
+	run.Finish(ctx, airun.StatusOK, "") // only the first finish counts
+
+	_, chatRun := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	chatRun.Finish(context.Background(), airun.StatusOK, "")
+
+	runs, finishes, _, _ := store.snapshot()
+	assert.Equal(t, airun.ChooserLLM, runs[1].Chooser)
+	assert.Equal(t, `{"kind":"day","date":"2026-11-02"}`, runs[1].ScopeJSON)
+	assert.Equal(t, airun.Chooser(""), runs[2].Chooser, "chat runs have no chooser")
+	require.Len(t, finishes, 2)
+	f := finishes[0]
+	assert.Equal(t, airun.StatusPartial, f.Status)
+	assert.Equal(t, 2, f.RepairAttempts)
+	assert.Equal(t, `[{"rule":"H2"}]`, f.ViolationsJSON)
+	assert.Equal(t, `{"coverage":1}`, f.ScoreJSON)
+	assert.Equal(t, "Kept Monday.", f.Notes)
+	assert.Equal(t, airun.RunEnd{ID: 2, Status: airun.StatusOK, FinishedAt: finishes[1].FinishedAt}, finishes[1])
 }
 
 // manualClock is a clock tests move by hand.

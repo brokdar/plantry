@@ -28,6 +28,7 @@ type Handlers struct {
 	Profile       *handlers.ProfileHandler
 	Presets       *handlers.PresetHandler
 	AI            *handlers.AIHandler
+	AIRuns        *handlers.AIRunsHandler
 	AIRateLimiter *plantrymw.RateLimiter
 	Feedback      *handlers.FeedbackHandler
 	Import        *handlers.ImportHandler
@@ -175,21 +176,29 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			})
 		}
 
-		if h.AI != nil {
-			limiter := h.AIRateLimiter
-			if limiter == nil {
-				limiter = plantrymw.NewRateLimiter(0)
-			}
+		if h.AI != nil || h.AIRuns != nil {
 			api.Route("/ai", func(r chi.Router) {
-				r.With(limiter.Middleware("error.ai.rate_limit_exceeded")).
-					Post("/chat", h.AI.Chat)
-				r.Get("/conversations", h.AI.ListConversations)
-				r.Route("/conversations/{id}", func(r chi.Router) {
-					r.Get("/", h.AI.GetConversation)
-					r.Delete("/", h.AI.DeleteConversation)
-				})
-				if h.DevMode {
-					r.Get("/debug/system-prompt", h.AI.DebugSystemPrompt)
+				if h.AI != nil {
+					limiter := h.AIRateLimiter
+					if limiter == nil {
+						limiter = plantrymw.NewRateLimiter(0)
+					}
+					r.With(limiter.Middleware("error.ai.rate_limit_exceeded")).
+						Post("/chat", h.AI.Chat)
+					r.Get("/conversations", h.AI.ListConversations)
+					r.Route("/conversations/{id}", func(r chi.Router) {
+						r.Get("/", h.AI.GetConversation)
+						r.Delete("/", h.AI.DeleteConversation)
+					})
+					if h.DevMode {
+						r.Get("/debug/system-prompt", h.AI.DebugSystemPrompt)
+					}
+				}
+				if h.AIRuns != nil {
+					r.Get("/runs", h.AIRuns.List)
+					r.Get("/runs/{id}", h.AIRuns.Get)
+					r.Get("/insights", h.AIRuns.Insights)
+					r.Get("/prices", h.AIRuns.Prices)
 				}
 			})
 		}

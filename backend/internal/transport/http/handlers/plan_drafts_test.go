@@ -12,11 +12,12 @@ import (
 // Phase 3 §3.3: draft state in the read models and the food history.
 
 // draftChili plans Chili Sun 2026-11-01 dinner with a Mon lunch leftover as
-// a draft batch of AI run 7 (chooser heuristic). It returns the session id.
+// a draft batch of AI run 7 (chooser heuristic, with notes). It returns the
+// session id.
 func (a *readAPI) draftChili() int64 {
 	a.t.Helper()
 	sid := a.ac1()
-	a.insert(`INSERT INTO ai_runs (id, kind, started_at, chooser) VALUES (7, 'generate', '2026-10-30 10:00:00', 'heuristic')`)
+	a.insert(`INSERT INTO ai_runs (id, kind, started_at, chooser, notes) VALUES (7, 'generate', '2026-10-30 10:00:00', 'heuristic', 'Chili twice, one cook day.')`)
 	code, body := a.do(http.MethodPost, fmt.Sprintf("/api/cook-sessions/%d/unlock", sid), "")
 	require.Equal(a.t, http.StatusOK, code, body)
 	_, err := a.db.Exec(`UPDATE plates SET ai_run_id = 7 WHERE state = 'draft'`)
@@ -35,7 +36,7 @@ func TestPlanHTTP_Draft(t *testing.T) {
 		code, body := a.do(http.MethodGet, "/api/plan?start=2026-10-31&today=2026-10-30", "")
 		require.Equal(t, http.StatusOK, code, body)
 		assert.Equal(t, map[string]any{
-			"plates": float64(3), "sessions": float64(1), "run_id": float64(7), "notes": nil, "chooser": "heuristic",
+			"plates": float64(3), "sessions": float64(1), "run_id": float64(7), "notes": "Chili twice, one cook day.", "chooser": "heuristic",
 		}, body["draft"])
 		assert.Contains(t, body, "running_run_id")
 		assert.Nil(t, body["running_run_id"])

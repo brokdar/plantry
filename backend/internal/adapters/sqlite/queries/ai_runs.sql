@@ -1,6 +1,7 @@
 -- name: CreateAIRun :one
-INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction, conversation_id, request_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction, conversation_id, request_id,
+    chooser, scope_json)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: FinishAIRun :execresult
@@ -17,7 +18,11 @@ UPDATE ai_runs SET
     output_tokens      = ?,
     cache_read_tokens  = ?,
     cache_write_tokens = ?,
-    error_key          = ?
+    error_key          = ?,
+    repair_attempts    = ?,
+    violations_json    = ?,
+    score_json         = ?,
+    notes              = ?
 WHERE id = ?;
 
 -- name: CreateAIRunStep :exec
@@ -47,7 +52,7 @@ WHERE id IN (
 
 -- name: GetRunNote :one
 -- What the plan's draft summary shows of a run (D26).
-SELECT chooser FROM ai_runs WHERE id = ?;
+SELECT chooser, notes FROM ai_runs WHERE id = ?;
 
 -- name: SetRunOutcome :exec
 -- D25: a run's outcome after its rows were accepted, discarded or un-accepted
@@ -66,3 +71,62 @@ UPDATE ai_runs SET
     END,
     outcome_at = datetime('now')
 WHERE id = sqlc.arg(id);
+
+-- name: ListAIRuns :many
+-- Runs newest first (by id), optionally filtered by kind, a started_at range
+-- [from_ts, to_ts) and a cursor (ids below before_id). lim -1 lists all.
+SELECT id, kind, started_at, finished_at, status, provider, model, prompt_version, chooser,
+       input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+       score_json, violations_json, outcome
+FROM ai_runs
+WHERE (CAST(sqlc.narg(kind) AS TEXT) IS NULL OR kind = sqlc.narg(kind))
+  AND (CAST(sqlc.narg(from_ts) AS TEXT) IS NULL OR started_at >= sqlc.narg(from_ts))
+  AND (CAST(sqlc.narg(to_ts) AS TEXT) IS NULL OR started_at < sqlc.narg(to_ts))
+  AND (CAST(sqlc.narg(before_id) AS INTEGER) IS NULL OR id < sqlc.narg(before_id))
+ORDER BY id DESC
+LIMIT sqlc.arg(lim);
+
+-- name: GetAIRunDetail :one
+SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model, r.prompt_version, r.chooser,
+       r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens,
+       r.score_json, r.violations_json, r.outcome,
+       r.scope_json, r.instruction, r.notes, r.error_key, p.text AS prompt_text
+FROM ai_runs r
+LEFT JOIN ai_prompts p ON p.hash = r.prompt_hash
+WHERE r.id = ?;
+
+-- name: ListAIRunStepViews :many
+-- A run's steps in seq order. args and result are cut to 8192 characters
+-- (an llm_call shows its request_json and response_json there); the *_cut
+-- flags say a value was longer.
+SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens,
+       CAST(COALESCE(substr(COALESCE(args_json, request_json), 1, 8192), '') AS TEXT) AS args,
+       COALESCE(length(COALESCE(args_json, request_json)), 0) > 8192 AS args_cut,
+       CAST(COALESCE(substr(COALESCE(result_json, response_json), 1, 8192), '') AS TEXT) AS result,
+       COALESCE(length(COALESCE(result_json, response_json)), 0) > 8192 AS result_cut
+FROM ai_run_steps
+WHERE run_id = ?
+ORDER BY seq;
+
+-- name: AIRunCorrections :many
+-- D24 per run with ids in [min_id, max_id]: the plates the generator created
+-- for the run, and how many of them got a user update or delete before the
+-- plate's first accept or confirm event.
+SELECT CAST(g.run_id AS INTEGER) AS run_id,
+       COUNT(*) AS generated_plates,
+       CAST(SUM(EXISTS (
+           SELECT 1 FROM plate_events u
+           WHERE u.plate_id = g.plate_id AND u.actor = 'user' AND u.action IN ('update', 'delete')
+             AND u.id > g.created_id
+             AND u.id < COALESCE((SELECT MIN(a.id) FROM plate_events a
+                                  WHERE a.plate_id = g.plate_id AND a.id > g.created_id
+                                    AND a.action IN ('accept', 'confirm')), 9223372036854775807)
+       )) AS INTEGER) AS corrected_plates
+FROM (
+    SELECT e.ai_run_id AS run_id, e.plate_id, MIN(e.id) AS created_id
+    FROM plate_events e
+    WHERE e.actor = 'generator' AND e.action = 'create' AND e.plate_id IS NOT NULL
+      AND e.ai_run_id >= sqlc.arg(min_id) AND e.ai_run_id <= sqlc.arg(max_id)
+    GROUP BY e.ai_run_id, e.plate_id
+) g
+GROUP BY g.run_id;

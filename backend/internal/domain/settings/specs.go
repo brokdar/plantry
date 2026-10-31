@@ -1,5 +1,7 @@
 package settings
 
+import "github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+
 // registry defines every setting the app knows about. Unknown keys are
 // rejected by the service. Order matters only for List.
 var registry = []Spec{
@@ -123,6 +125,17 @@ var registry = []Spec{
 		HasRange: true,
 		Min:      7,
 		Max:      3650,
+	},
+	{
+		// JSON map model id → {in, out, cache_read?, cache_write?} in USD
+		// per 1M tokens; overrides or extends the built-in price table.
+		Key:     KeyAIPriceOverrides,
+		Kind:    KindString,
+		Default: "{}",
+		Validate: func(raw string) error {
+			_, err := airun.ParsePriceOverrides(raw)
+			return err
+		},
 	},
 }
 

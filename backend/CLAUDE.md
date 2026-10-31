@@ -127,6 +127,7 @@ Key-value rows in `app_settings`. The registry in `domain/settings/specs.go` lis
 | `setup.completed` | `false` | Set by `POST /api/setup/complete` |
 | `plan.max_cook_occasions_per_day`, `plan.batch_cooking`, `plan.default_keep_days`, `plan.freezing_enabled`, `plan.freezer_keep_days`, `plan.variety_weeks`, `plan.explore_per_week`, `discovery.daily_enabled` | see `specs.go` | Stored and edited in Settings; read by later phases |
 | `ai.run_retention_days` | `180` | 7–3650; see AI run log |
+| `ai.price_overrides` | `{}` | JSON map model id → `{in, out, cache_read?, cache_write?}` USD per 1M tokens, validated by `airun.ParsePriceOverrides` (`Spec.Validate`); see AI run log |
 
 The profile (`domain/profile`) also carries `diet_type`, `meat_days_per_week_max` and `household_portions` (00023).
 
@@ -230,7 +231,7 @@ Migrations `00021_ai_runs.sql` and `00026_ai_trace.sql`, package `domain/airun`,
   - `status`: `running` until finished, then `ok` / `error` / `iterations_exceeded` / `cancelled` / `partial`. `error_key` holds the message key on failure.
   - `provider`, `model`, `prompt_version` (the `PromptVersion` const of the agent, `food` or `importer` package — bump it on every prompt change), `prompt_hash` → `ai_prompts`.
   - Token totals summed over all calls: `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`; `iterations`.
-  - `window_start`/`window_end`/`instruction` are set for chat; the scoring/outcome columns (`scope_json`, `chooser`, `violations_json`, `score_json`, `judge_json`, `outcome*`, `repair_attempts`) are reserved.
+  - `window_start`/`window_end`/`instruction` are set for chat. Generation runs set `chooser` (`llm`/`heuristic`) and `scope_json` through `Start`, and `repair_attempts`, `violations_json`, `score_json` and `notes` (00036) through `Run.FinishWith(…, Result)`; chat runs leave them NULL. `judge_json` is unused (D20).
   - `conversation_id` (chat runs; no FK, indexed) and `request_id` (chi `middleware.GetReqID` of the HTTP request that started the run; NULL outside a request).
 - **`ai_run_steps`** — one row per LLM call (`type = 'llm_call'`, `name` = model, per-call tokens) or agent tool call (`type = 'tool_call'`, `name` = tool, `args_json` and `result_json` each capped at 8 KB, `is_error`), ordered by `seq`, with `duration_ms`. LLM calls also store:
   - `request_json` = `{message_offset, messages, temperature, max_tokens, system_hash, tools_hash, truncated}`. `messages` is `req.Messages[message_offset:]`: the offset is the message count of the run's previous LLM call when this call resends those messages unchanged, else 0 (also 0 after a step that failed to store). `system_hash` → `ai_prompts`, `tools_hash` → `ai_tool_schemas` (sha256 of the JSON of `req.Tools`), each null when absent.
@@ -240,7 +241,14 @@ Migrations `00021_ai_runs.sql` and `00026_ai_trace.sql`, package `domain/airun`,
 - **`ai_tool_schemas`** — tool definitions (`json`, a `[]llm.Tool`) stored once per distinct hash.
 - **Replay.** Call *i*'s request is call *i−1*'s messages cut to `message_offset` plus call *i*'s `messages`, the prompt by `system_hash`, the tools by `tools_hash`, `temperature`, `max_tokens` and the step's `name` as model. Callers append the assistant reply to their history themselves, so replies are already in the next delta; never insert `response_json` into a reconstruction. `domain/airun/replay_test.go` (`reconstruct`) is the reference.
 - **Retention.** At startup and after a finished run (at most once per hour; both in a goroutine, deleting in batches of 500; `Recorder.Wait` waits for them and stops new ones from starting) the steps of runs started more than `ai.run_retention_days` days ago (setting, default 180) are deleted. `ai_runs`, `ai_prompts` and `ai_tool_schemas` rows stay. There is no background scheduler; prune failures are logged at warn and not retried for an hour.
-- **Cost is not stored.** It is computed from tokens on read (Phase 3). There is no runs API yet; slog also emits `ai.run.start` / `ai.run.end` with `run_id`.
+- **Cost is not stored.** `airun.Cost(model, provider, tokens, overrides)` (`cost.go`) computes it on read: an `ai.price_overrides` entry for the exact model id wins, else the built-in table entry with the longest model-id prefix (`PricesAsOf`, sources cited next to the table). Missing cache prices default to 0.1× / 1.25× of the input price (0.5× / 0 for OpenAI, whose input count includes the cached tokens, which are subtracted). An unpriced model is `nil` ("cost unknown"); a run without tokens costs 0. slog also emits `ai.run.start` / `ai.run.end` with `run_id`.
+- **Read API** (`handlers/ai_runs.go`, `airun.Insights`, repo `ai_run_insights_repo.go`; one query per aggregate):
+  - `GET /api/ai/runs?kind&from&to&cursor&limit` (50, max 200) — newest first, `next_cursor` is the last id of the page; items carry `tokens`, `cost_estimate_usd`, `score`, `outcome`, `correction_rate`.
+  - `GET /api/ai/runs/{id}` — plus `scope`, `instruction`, `notes`, `violations`, `error_key`, `prompt_text` and `steps` in seq order; a step's `args`/`result` are text cut to 8192 characters (`*_truncated`), an llm_call's are its request/response JSON.
+  - `GET /api/ai/insights?from&to&bucket=week` (default: the last 12 weeks) — Monday weeks with `runs`, `accepted` (incl. partially), `discarded`, `correction_rate`, `cost_usd` (priced runs), `cost_per_accepted`, `unpriced_runs`; `by_version` groups by kind, prompt version and model with `score_avg` (numeric leaves of `score_json`, dotted keys) and violation counts by rule.
+  - `GET /api/ai/prices?model=` (default: the configured model) — `{model, price|null, source: builtin|override|none, as_of}`.
+  - Correction rate (D24, sqlc `AIRunCorrections`): plates a run's `generator` `create` events made, and how many of them got a `user` `update`/`delete` event before the plate's first `accept`/`confirm` event.
+- **Tool choice.** `llm.Request.ToolChoice` forces a tool: Anthropic sends `tool_choice: {type: tool, name}`, OpenAI `{type: function, function: {name}}`; both send `temperature` only when it is > 0. The metered client stores it as `tool_choice` in `request_json`. The fake client's script already replays scripted `tool_use` turns.
 
 Query it with the `sqlite3` CLI if installed, otherwise Python's stdlib `sqlite3` module (the path is `PLANTRY_DB_PATH`):
 

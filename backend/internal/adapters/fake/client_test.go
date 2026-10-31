@@ -28,6 +28,42 @@ func stream(t *testing.T, c *Client, req llm.Request) *llm.Response {
 	return resp
 }
 
+// The existing script format already carries tool_use turns with JSON input,
+// so a forced submit_plan call and its repair are scripted without changes.
+func TestClient_ScriptedForcedToolCalls(t *testing.T) {
+	raw := `{"turns":[
+		{"stop_reason":"tool_use","message":{"content":[{"type":"tool_use","tool_use_id":"tu_1","tool_name":"submit_plan","tool_input":{"plates":[],"notes":"first"}}]}},
+		{"stop_reason":"tool_use","message":{"content":[{"type":"tool_use","tool_use_id":"tu_2","tool_name":"submit_plan","tool_input":{"plates":[],"notes":"repaired"}}]}}
+	]}`
+	var s Script
+	require.NoError(t, json.Unmarshal([]byte(raw), &s))
+	c := NewFromScript(&s)
+
+	tools := []llm.Tool{{Name: "submit_plan", Schema: json.RawMessage(`{"type":"object"}`)}}
+	choice := &llm.ToolChoice{Name: "submit_plan"}
+	user := llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "plan"}}}
+
+	first := stream(t, c, llm.Request{Messages: []llm.Message{user}, Tools: tools, ToolChoice: choice, Temperature: 0.4})
+	assert.Equal(t, llm.StopReasonToolUse, first.StopReason)
+	require.Len(t, first.Message.Content, 1)
+	assert.Equal(t, "submit_plan", first.Message.Content[0].ToolUseName)
+	assert.JSONEq(t, `{"plates":[],"notes":"first"}`, string(first.Message.Content[0].ToolUseInput))
+
+	repair := llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{
+		Type: llm.ContentTypeToolResult, ToolResultID: "tu_1", ToolResultContent: json.RawMessage(`"violations: H1"`), ToolResultIsError: true,
+	}}}
+	second := stream(t, c, llm.Request{Messages: []llm.Message{user, first.Message, repair}, Tools: tools, ToolChoice: choice})
+	assert.JSONEq(t, `{"plates":[],"notes":"repaired"}`, string(second.Message.Content[0].ToolUseInput))
+
+	reqs := c.Requests()
+	require.Len(t, reqs, 2)
+	for _, r := range reqs {
+		require.NotNil(t, r.ToolChoice)
+		assert.Equal(t, "submit_plan", r.ToolChoice.Name)
+	}
+	assert.InDelta(t, 0.4, reqs[0].Temperature, 1e-9)
+}
+
 func TestClient_RecordsRequests(t *testing.T) {
 	t.Parallel()
 

@@ -240,6 +240,20 @@ func run() error {
 		agent.WindowSources{Plates: plateSvc, Slots: slotSvc, Foods: foodRepo, Availability: availabilitySvc}, time.Now).WithRecorder(runRecorder)
 	aiHandler := handlers.NewAIHandler(agentSvc, llmResolver)
 
+	// Run log read side: runs, insights and prices. Costs are computed on
+	// read from the built-in table plus ai.price_overrides.
+	insightsSvc := airun.NewInsights(aiRunRepo, func(ctx context.Context) (map[string]airun.Price, error) {
+		v, err := settingsSvc.Get(ctx, settingsdom.KeyAIPriceOverrides)
+		if err != nil {
+			return nil, err
+		}
+		return airun.ParsePriceOverrides(v.Raw)
+	})
+	aiRunsHandler := handlers.NewAIRunsHandler(insightsSvc, func(ctx context.Context) (string, error) {
+		cfg, err := settingsSvc.EffectiveAI(ctx)
+		return cfg.Model, err
+	})
+
 	// Recipe importer (Phase 11).
 	importFetcher := httpfetch.New()
 	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver, foodSvc).WithRecorder(runRecorder)
@@ -276,6 +290,7 @@ func run() error {
 		Profile:       handlers.NewProfileHandler(profileSvc),
 		Presets:       handlers.NewPresetHandler(presetSvc),
 		AI:            aiHandler,
+		AIRuns:        aiRunsHandler,
 		AIRateLimiter: aiRateLimiter,
 		Feedback:      handlers.NewFeedbackHandler(feedbackSvc),
 		Import:        importHandler,

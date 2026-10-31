@@ -57,6 +57,7 @@ type AiRun struct {
 	ErrorKey         sql.NullString
 	ConversationID   sql.NullInt64
 	RequestID        sql.NullString
+	Notes            sql.NullString
 }
 
 type AiRunStep struct {

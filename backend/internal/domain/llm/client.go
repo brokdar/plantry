@@ -59,12 +59,20 @@ type Tool struct {
 	Schema      json.RawMessage `json:"schema"`
 }
 
-// Request is the provider-neutral prompt sent to a Client.
+// ToolChoice forces the model to call the named tool.
+type ToolChoice struct {
+	Name string `json:"name"`
+}
+
+// Request is the provider-neutral prompt sent to a Client. A zero
+// Temperature leaves the provider default; a nil ToolChoice lets the model
+// decide whether to call a tool.
 type Request struct {
 	Model       string
 	System      string
 	Messages    []Message
 	Tools       []Tool
+	ToolChoice  *ToolChoice
 	Temperature float64
 	MaxTokens   int
 }

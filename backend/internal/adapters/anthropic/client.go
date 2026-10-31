@@ -122,13 +122,21 @@ func (c *Client) buildRequest(ctx context.Context, body []byte) (*http.Request, 
 // ---------------------------------------------------------------------------
 
 type reqBody struct {
-	Model     string           `json:"model"`
-	MaxTokens int              `json:"max_tokens"`
-	System    []systemBlock    `json:"system,omitempty"`
-	Messages  []messageBody    `json:"messages"`
-	Tools     []toolBody       `json:"tools,omitempty"`
-	Stream    bool             `json:"stream,omitempty"`
-	Metadata  *requestMetadata `json:"metadata,omitempty"`
+	Model       string           `json:"model"`
+	MaxTokens   int              `json:"max_tokens"`
+	Temperature *float64         `json:"temperature,omitempty"`
+	System      []systemBlock    `json:"system,omitempty"`
+	Messages    []messageBody    `json:"messages"`
+	Tools       []toolBody       `json:"tools,omitempty"`
+	ToolChoice  *toolChoiceBody  `json:"tool_choice,omitempty"`
+	Stream      bool             `json:"stream,omitempty"`
+	Metadata    *requestMetadata `json:"metadata,omitempty"`
+}
+
+// toolChoiceBody forces one tool: {"type":"tool","name":...}.
+type toolChoiceBody struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
 }
 
 type requestMetadata struct {
@@ -178,6 +186,13 @@ func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
 		Model:     req.Model,
 		MaxTokens: maxTok,
 		Stream:    stream,
+	}
+	if req.Temperature > 0 {
+		tmp := req.Temperature
+		body.Temperature = &tmp
+	}
+	if req.ToolChoice != nil {
+		body.ToolChoice = &toolChoiceBody{Type: "tool", Name: req.ToolChoice.Name}
 	}
 	if req.System != "" {
 		body.System = []systemBlock{{

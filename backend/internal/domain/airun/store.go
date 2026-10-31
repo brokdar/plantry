@@ -22,6 +22,15 @@ const (
 	KindUntracked Kind = "untracked"
 )
 
+// Valid reports whether k is a known kind.
+func (k Kind) Valid() bool {
+	switch k {
+	case KindGenerate, KindRegenerate, KindChat, KindDiscovery, KindClassify, KindImportFallback, KindLookup, KindUntracked:
+		return true
+	}
+	return false
+}
+
 // Status is the terminal (or in-progress) state of a run.
 type Status string
 
@@ -42,8 +51,17 @@ const (
 	StepToolCall StepType = "tool_call"
 )
 
+// Chooser is what picked a generation run's plates. Chat and lookup runs
+// have none (empty).
+type Chooser string
+
+const (
+	ChooserLLM       Chooser = "llm"
+	ChooserHeuristic Chooser = "heuristic"
+)
+
 // RunStart holds the fields known when a run begins. A nil ConversationID
-// and an empty RequestID are stored as NULL.
+// and an empty RequestID, Chooser or ScopeJSON are stored as NULL.
 type RunStart struct {
 	Kind           Kind
 	StartedAt      time.Time
@@ -53,10 +71,13 @@ type RunStart struct {
 	Instruction    *string
 	ConversationID *int64
 	RequestID      string
+	Chooser        Chooser
+	ScopeJSON      string
 }
 
 // RunEnd holds the totals written when a run finishes. An empty ErrorKey is
-// stored as NULL, as is a PromptHash that is empty or not in the prompt store.
+// stored as NULL, as is a PromptHash that is empty or not in the prompt store,
+// and an empty ViolationsJSON, ScoreJSON or Notes.
 type RunEnd struct {
 	ID               int64
 	Status           Status
@@ -70,6 +91,10 @@ type RunEnd struct {
 	CacheReadTokens  int64
 	CacheWriteTokens int64
 	ErrorKey         string
+	RepairAttempts   int
+	ViolationsJSON   string
+	ScoreJSON        string
+	Notes            string
 }
 
 // Step is one LLM call or tool call within a run. Empty string fields are
