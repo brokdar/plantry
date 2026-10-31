@@ -15,34 +15,45 @@ import {
 // F5-AC4 / AC-3 (Today part): a plate that eats frozen portions of a batch
 // makes the day before it say "Take Chili out of the freezer tonight".
 // `plan.freezing_enabled` is global, so this spec runs in the serial
-// `global-settings` project and resets the setting afterwards.
+// `global-settings` project and resets the setting however it ends.
 
 test("the day before a frozen meal reminds to take it out of the freezer", async ({
   page,
 }) => {
   const tag = uid()
   const ctx = await apiRequest.newContext({ baseURL: API })
-  const enabled = await ctx.put("/api/settings/plan.freezing_enabled", {
-    data: { value: "true" },
-  })
-  expect(enabled.ok(), await enabled.text()).toBeTruthy()
-
-  const { days } = await futureWindow()
-  const slot = await seedSlot(`slot.tdyfz-${tag}`, "Moon", 1_000_000)
-  const beans = await seedLeafFood({ name: `Beans ${tag}`, kcal_100g: 100 })
-  const name = `Chili ${tag}`
-  const chili = await seedComposedFood({
-    name,
-    role: "main",
-    reference_portions: 4,
-    // Cooked on day 0, use by day 1: day 5 eats frozen portions.
-    keep_days: 1,
-    children: [
-      { child_id: beans.id, amount: 400, unit: "g", grams: 400, sort_order: 0 },
-    ],
-  })
-
+  const seeded: { slot?: number; foods: number[] } = { foods: [] }
   try {
+    const enabled = await ctx.put("/api/settings/plan.freezing_enabled", {
+      data: { value: "true" },
+    })
+    expect(enabled.ok(), await enabled.text()).toBeTruthy()
+
+    const { days } = await futureWindow()
+    const slot = await seedSlot(`slot.tdyfz-${tag}`, "Moon", 1_000_000)
+    seeded.slot = slot.id
+    const beans = await seedLeafFood({ name: `Beans ${tag}`, kcal_100g: 100 })
+    seeded.foods.push(beans.id)
+    const name = `Chili ${tag}`
+    const chili = await seedComposedFood({
+      name,
+      role: "main",
+      reference_portions: 4,
+      // Cooked on day 0, use by day 1: day 5 eats frozen portions.
+      keep_days: 1,
+      children: [
+        {
+          child_id: beans.id,
+          amount: 400,
+          unit: "g",
+          grams: 400,
+          sort_order: 0,
+        },
+      ],
+    })
+    // Recipes before their ingredients: a used ingredient can't be deleted.
+    seeded.foods.unshift(chili.id)
+
     const cookRes = await ctx.post("/api/plates", {
       data: {
         date: days[0],
@@ -95,10 +106,17 @@ test("the day before a frozen meal reminds to take it out of the freezer", async
     await expect(page.getByTestId("today-verdict")).toBeVisible()
     await expect(page.getByTestId("today-reminder-defrost")).toHaveCount(0)
   } finally {
-    await cleanupSlot(slot.id)
-    await cleanupFood(chili.id)
-    await cleanupFood(beans.id)
-    await ctx.delete("/api/settings/plan.freezing_enabled")
+    // Each step on its own, so one failure can't skip the setting reset.
+    const steps: (() => Promise<unknown>)[] = [
+      ...(seeded.slot !== undefined ? [() => cleanupSlot(seeded.slot!)] : []),
+      ...seeded.foods.map((id) => () => cleanupFood(id)),
+      () => ctx.delete("/api/settings/plan.freezing_enabled"),
+    ]
+    for (const step of steps) {
+      await step().catch((err: unknown) =>
+        console.warn("today-freezer cleanup:", err)
+      )
+    }
     await ctx.dispose()
   }
 })

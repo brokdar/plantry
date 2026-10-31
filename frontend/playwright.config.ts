@@ -21,6 +21,7 @@ const GLOBAL_SETTINGS_SPECS = [
   "profile.spec.ts",
   "settings-preferences.spec.ts",
   "today-freezer.spec.ts",
+  "today-rate.spec.ts",
 ]
 
 const SETUP_SPEC = "setup-wizard.spec.ts"
