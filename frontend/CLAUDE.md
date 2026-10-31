@@ -13,7 +13,7 @@ bun run lint                          # eslint
 bun run format                        # prettier (ts/tsx)
 bun run test                          # vitest (unit, run once)
 bun run test:watch                    # vitest watch mode
-bun run e2e                           # playwright (auto-spawns backend + frontend via webServer)
+bun run e2e                           # playwright (spawns its own backend + frontend; E2E_LANE=N for a parallel lane)
 bun run check                         # lint + typecheck + unit tests
 ```
 
@@ -57,7 +57,7 @@ src/routes/
                        #   assistant, system — `settings-sections.ts`)
 ```
 
-**Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/today`, Plan → `/plan`, Recipes → `/recipes` (active on `/recipes*`), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the Today header on phones; the compact Generate button sits in the `/plan` header on phones (there is no top bar). ⌘K opens the `CommandPalette`: routines (apply to a day, with Undo), Copy a previous week, Manage routines (→ Settings → Meals & week) and the go-to entries (`command/palette-entries.ts`). Unknown paths (including the removed `/calendar`, `/day/…`, `/archive`, `/components`, `/ingredients`, `/import`, `/presets`) render the root not-found page with a link to Today.
+**Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/today`, Plan → `/plan`, Recipes → `/recipes` (active on `/recipes*`), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the Today header on phones; the compact Generate button sits in the `/plan` header on phones (there is no top bar). ⌘K opens the `CommandPalette`: routines (apply to a day, with Undo), Copy a previous week, Manage routines (→ Settings → Meals & week) and the go-to entries (`command/palette-entries.ts`). Any other path renders the root not-found page with a link to Today.
 
 ### Components
 
@@ -80,7 +80,7 @@ src/components/
 │                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
 ├── availability/      # AvailabilityGrid (weekday/date × slot modes), RoutinePicker
 ├── setup/             # SetupWizard and its steps; wizard-draft.ts, use-wizard-save.ts
-├── component/         # shared input widget: QuantityUnitInput (leaf amount + unit)
+├── component/         # shared inputs: QuantityUnitInput (leaf amount + unit), ComponentPicker
 ├── recipes/           # RecipeLibrary, RecipeCard, RecipesHeader (tabs), AddRecipeMenu, ImportSheet,
 │                      #   RecipeOnboarding, RecipeEditor, RecipeDetail, NutritionCompletenessWarning
 │                      #   (shared by editor, detail and import)
@@ -103,7 +103,11 @@ src/components/
 - `src/lib/api/` — one file per resource, all calls go through `apiFetch` in `lib/api/client.ts`. `ApiError` carries `status` + `messageKey` for i18n error display.
 - `src/lib/queries/` — TanStack Query hooks + `keys.ts` (centralized key factories). Key hierarchies are intentional: invalidating a parent key also drops all child keys (e.g. invalidating `sessionKeys.detail(id)` also drops `sessionKeys.leftoverCells(id, count)`). **Each `useMutation` hook owns its own `invalidateQueries` (onSuccess) and `toastError` (onError) — call sites just call `mutate()` with no cache or error knowledge.**
 
-**Client-only state — Zustand stores.**
+- **Read models.** The planning screens read `usePlan(start?)` (`GET /api/plan`, key `planKeys.window`) and `useToday(date)` (`GET /api/today`, key `todayKeys.date`) — server-composed views, not plates assembled client-side. View models are pure functions of them (`lib/plan/board.ts` `buildBoard`, `lib/plan/today.ts`). `useShoppingList(range?)` reads `/api/shopping-list`.
+- **Invalidation.** Every mutation that changes the plan returns `invalidatePlanViews(qc)` from `onSuccess` (`lib/queries/plan.ts`): it invalidates `planKeys.all`, `todayKeys.all` and `shoppingKeys.all` together, and returning the promise keeps the mutation pending until the active views refetch. Plate edits are not optimistic; the views refetch.
+- **Undo.** Removals return `{removed}`; `useUndoableRemoval().offerUndo(res, verb)` shows the shared 6 s undo toast (`useUndoToast().offer(message, undo)` is the lower-level form) and Undo calls `POST /api/plan/restore` via `useRestorePlan`. Don't build per-screen undo toasts.
+
+**Client-only state — Zustand stores.** Only the chat ones; everything else is local state, URL search params or `localStorage`.
 
 - `src/lib/stores/chat-ui.ts` — chat panel open/closed state and the composer draft.
 - `src/lib/stores/chat-stream.ts` — streaming AI message state.
@@ -157,10 +161,11 @@ Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own u
 
 ### Playwright (e2e)
 
-- `bun run e2e` is fully self-contained: playwright spawns the backend (`go run ./cmd/plantry` with test env vars, always fresh) and reuses or starts the Vite dev server. No manual server setup needed.
+- `bun run e2e` is fully self-contained: playwright spawns the backend (`go run ./cmd/plantry` with test env vars, always fresh) and a Vite dev server. `reuseExistingServer` is false for both, so a leftover server on the port makes the run fail rather than be reused.
+- **Lanes.** `E2E_LANE=N bun run e2e` (N = 0–9) gives a run its own backend port (8080+N), Vite port (5173+N), DB (`/tmp/plantry-e2e-N.db`) and image dir, so several worktrees can run e2e at once. Lane 0 (unset) uses 8080/5173. Parallel agents each take their own lane and never use lane 0.
 - The e2e backend runs with `PLANTRY_OFF_DISABLED=1` (no Open Food Facts calls) and the `fake` AI provider, so runs are hermetic.
 - Local runs use `workers: 4` (CI: 1) to cap memory; don't raise it.
-- Self-contained seeding: call the backend API directly (`http://localhost:8080`), cleanup in `finally`. Always bypass Vite proxy for seeding.
+- Self-contained seeding: call the backend API directly through the `API` constant from `e2e/helpers.ts` (lane-aware: `http://localhost:${E2E_API_PORT ?? 8080}`), never a literal `localhost:8080`. Cleanup in `finally`. Always bypass the Vite proxy for seeding.
 - Unique data: append `crypto.randomUUID().slice(0,8)` to names.
 - After form submit: `waitForResponse` on the specific API call. Never `waitForURL`, never `waitForTimeout`.
 - For elements absent from DOM (server-filtered): use `toHaveCount(0)`, never `not.toBeVisible()` (causes timeouts).
