@@ -74,13 +74,19 @@ export const composedInstructionSchema = z.object({
   text: z.string().min(1),
 })
 
+const optionalMinutes = z.preprocess(
+  (v) => (v === "" || v === undefined ? null : v),
+  z.coerce.number().int().min(0).nullable()
+)
+
 export const composedFoodSchema = z.object({
   kind: z.literal("composed"),
   name: z.string().min(1),
   role: z.enum(FOOD_ROLES).optional(),
   reference_portions: z.coerce.number().positive().default(1),
-  prep_minutes: z.coerce.number().min(0).default(0),
-  cook_minutes: z.coerce.number().min(0).default(0),
+  // Empty means unknown (null), not 0: 0 would read as a quick cook.
+  prep_minutes: optionalMinutes,
+  cook_minutes: optionalMinutes,
   // 1–7 days; empty means "use plan.default_keep_days" (D15).
   keep_days: z.preprocess(
     (v) => (v === "" || v === undefined ? null : v),

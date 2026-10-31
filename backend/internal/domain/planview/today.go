@@ -206,7 +206,7 @@ func (s *Service) today(ctx context.Context, date time.Time) (*Today, error) {
 
 // verdict applies the §3.2 rules in order: no plate in the window, no plate on
 // the date, a session cooking (the main with the most portions), otherwise
-// nothing to cook.
+// nothing to cook. Zero recorded minutes count as unknown, never quick.
 func verdict(inWindow, onDate int, cook []Cook, foods map[int64]*food.Food) Verdict {
 	switch {
 	case inWindow == 0:
@@ -223,7 +223,7 @@ func verdict(inWindow, onDate int, cook []Cook, foods map[int64]*food.Food) Verd
 		}
 	}
 	kind := VerdictCook
-	if best.Minutes != nil && *best.Minutes <= QuickCookMinutes {
+	if best.Minutes != nil && *best.Minutes > 0 && *best.Minutes <= QuickCookMinutes {
 		kind = VerdictQuickCook
 	}
 	v := best.Session

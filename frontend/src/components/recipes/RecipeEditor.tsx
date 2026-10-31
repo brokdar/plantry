@@ -100,8 +100,8 @@ export function RecipeEditor({
           name: component.name,
           role: (component.role ?? "main") as ComposedFoodFormValues["role"],
           reference_portions: component.reference_portions ?? 1,
-          prep_minutes: component.prep_minutes ?? 0,
-          cook_minutes: component.cook_minutes ?? 0,
+          prep_minutes: component.prep_minutes ?? null,
+          cook_minutes: component.cook_minutes ?? null,
           keep_days: component.keep_days ?? null,
           freezable: component.freezable ?? null,
           notes: component.notes,
@@ -127,8 +127,8 @@ export function RecipeEditor({
           name: "",
           role: "main" as const,
           reference_portions: 1,
-          prep_minutes: 0,
-          cook_minutes: 0,
+          prep_minutes: null,
+          cook_minutes: null,
           keep_days: null,
           freezable: null,
           notes: null,
@@ -510,7 +510,12 @@ export function RecipeEditor({
                     <FormItem>
                       <FormLabel>{t("component.prep_minutes")}</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" {...field} />
+                        <Input
+                          type="number"
+                          min="0"
+                          {...field}
+                          value={field.value ?? ""}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -523,7 +528,12 @@ export function RecipeEditor({
                     <FormItem>
                       <FormLabel>{t("component.cook_minutes")}</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0" {...field} />
+                        <Input
+                          type="number"
+                          min="0"
+                          {...field}
+                          value={field.value ?? ""}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

@@ -46,6 +46,16 @@ func TestToday_Verdicts(t *testing.T) {
 		assert.Equal(t, "Omelette", td.Verdict.FoodName)
 	})
 
+	t.Run("zero recorded minutes are unknown, not quick", func(t *testing.T) {
+		f := newFixture()
+		f.store.foods[chiliID].PrepMinutes = ptr(0)
+		f.store.foods[chiliID].CookMinutes = ptr(0)
+		sid := f.ac1()
+		td, err := f.service().Today(ctx, date("2026-11-01"))
+		require.NoError(t, err)
+		assert.Equal(t, Verdict{Kind: VerdictCook, SessionID: sid, FoodName: "Chili", Portions: 6, SlotID: dinner}, td.Verdict)
+	})
+
 	t.Run("an empty day in a planned window has no plates", func(t *testing.T) {
 		f := newFixture()
 		f.ac1()
