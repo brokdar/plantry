@@ -210,6 +210,8 @@ describe("SetupWizard", () => {
     await u.click(screen.getByTestId("setup-next"))
 
     await screen.findByTestId("setup-finish")
+    // Reaching the finish screen marks setup done (a reload lands on Today).
+    expect(completeSetup).toHaveBeenCalledTimes(1)
     expect(server.settings.has("discovery.daily_enabled")).toBe(false)
     expect(screen.getByRole("heading", { name: "You're set up" })).toBeVisible()
   })
@@ -259,10 +261,13 @@ describe("SetupWizard", () => {
     expect(vi.mocked(setSetting).mock.calls).toEqual([
       ["plan.shopping_day", "5"],
     ])
-    expect(completeSetup).not.toHaveBeenCalled()
+    expect(completeSetup).toHaveBeenCalledTimes(1)
+    expect(
+      vi.mocked(completeSetup).mock.invocationCallOrder[0]
+    ).toBeGreaterThan(vi.mocked(setSetting).mock.invocationCallOrder.at(-1)!)
   })
 
-  it("Add recipes completes setup, then opens Recipes", async () => {
+  it("Add recipes only opens Recipes; setup was completed on reaching Finish", async () => {
     serve()
     const u = user()
     renderWizard()
@@ -282,6 +287,22 @@ describe("SetupWizard", () => {
     expect(vi.mocked(completeSetup).mock.invocationCallOrder[0]).toBeLessThan(
       navigate.mock.invocationCallOrder[0]!
     )
+  })
+
+  it("stays on the last step when completing setup fails", async () => {
+    serve()
+    vi.mocked(completeSetup).mockRejectedValueOnce(
+      new ApiError(500, "error.server")
+    )
+    const u = user()
+    renderWizard()
+    await screen.findByText("Step 1 of 7")
+    await next(u, 2)
+    await u.click(screen.getByTestId("setup-skip"))
+
+    await waitFor(() => expect(completeSetup).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByTestId("setup-next")).toBeEnabled())
+    expect(screen.queryByTestId("setup-finish")).toBeNull()
   })
 
   it("stays on the step when saving fails", async () => {

@@ -113,6 +113,12 @@ describe("cook pages", () => {
       })
     })
 
+    it("has a main landmark holding the steps", async () => {
+      renderWithRouter(<CookSessionPage sessionId={7} />)
+      const step = await screen.findByTestId("step-text")
+      expect(screen.getByRole("main")).toContainElement(step)
+    })
+
     it("lists the steps in order", async () => {
       renderWithRouter(<CookSessionPage sessionId={7} />)
       expect(await screen.findByTestId("step-text")).toHaveTextContent("Chop.")

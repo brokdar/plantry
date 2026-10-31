@@ -231,6 +231,25 @@ describe("TodayPage", () => {
     ).toHaveAttribute("href", "/plan?start=2026-11-14")
   })
 
+  it("the banner says when the next week starts today or tomorrow", async () => {
+    const banner = async () =>
+      (await screen.findByTestId("today-plan-banner")).textContent
+
+    const a = renderToday(mockTodayByVerdict.no_plan, "2026-11-12")
+    expect(await banner()).toContain(
+      "Your next week starts Saturday, November 14."
+    )
+    a.unmount()
+
+    const b = renderToday(mockTodayByVerdict.no_plan, "2026-11-13")
+    expect(await banner()).toContain("Your next week starts tomorrow.")
+    b.unmount()
+
+    await i18n.changeLanguage("de")
+    renderToday(mockTodayByVerdict.no_plan, "2026-11-14")
+    expect(await banner()).toContain("Deine nächste Woche beginnt heute.")
+  })
+
   it("below the recipe target: Add N more recipes", async () => {
     renderToday({
       ...mockTodayByVerdict.no_plan,

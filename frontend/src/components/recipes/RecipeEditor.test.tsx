@@ -167,6 +167,31 @@ describe("RecipeEditor", () => {
     )
   })
 
+  it("empty prep and cook minutes save null, not 0", async () => {
+    vi.mocked(updateFood).mockClear()
+    vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)
+    const user = userEvent.setup()
+    renderWithRouter(
+      <RecipeEditor
+        component={{
+          ...mockChickenCurry,
+          prep_minutes: null,
+          cook_minutes: 30,
+        }}
+      />
+    )
+
+    const prep = await screen.findByLabelText("Prep (min)")
+    expect(prep).toHaveValue(null)
+    await user.clear(screen.getByLabelText("Cook (min)"))
+    await user.click(screen.getByRole("button", { name: /save/i }))
+
+    await vi.waitFor(() => expect(updateFood).toHaveBeenCalled())
+    expect(vi.mocked(updateFood).mock.calls[0][1]).toEqual(
+      expect.objectContaining({ prep_minutes: null, cook_minutes: null })
+    )
+  })
+
   it("shows the completeness warning for incomplete saved nutrition", async () => {
     vi.mocked(getFoodNutrition).mockResolvedValueOnce({
       kcal: 0,

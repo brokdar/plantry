@@ -99,7 +99,9 @@ function TodayLoaded({ data, today }: { data: Today; today: string }) {
               <PlanSkeleton />
             )}
             <RateQuestion rate={header.rate} />
-            {header.planNext && <PlanBanner nextStart={header.planNext} />}
+            {header.planNext && (
+              <PlanBanner nextStart={header.planNext} today={today} />
+            )}
           </div>
           <aside className="hidden md:block">
             {view ? (

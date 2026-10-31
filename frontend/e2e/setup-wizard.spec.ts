@@ -49,20 +49,30 @@ test.describe("Setup wizard", () => {
       await expect(
         page.getByText("You can add this later. Planning works without it.")
       ).toBeVisible()
-      await next.click()
-      await expect(
-        page.getByRole("heading", { name: "You're set up" })
-      ).toBeVisible()
-    })
-
-    await test.step("Add recipes completes setup and opens Recipes", async () => {
       const completed = page.waitForResponse(
         (r) =>
           r.url().endsWith("/api/setup/complete") &&
           r.request().method() === "POST"
       )
-      await page.getByRole("button", { name: "Add recipes" }).click()
+      await next.click()
       expect((await completed).ok()).toBe(true)
+      await expect(
+        page.getByRole("heading", { name: "You're set up" })
+      ).toBeVisible()
+    })
+
+    await test.step("reaching Finish completed setup: / opens Today", async () => {
+      await page.reload()
+      await page.goto("/")
+      await expect(page).toHaveURL(/\/today\/?$/)
+    })
+
+    await test.step("Add recipes opens Recipes", async () => {
+      // Re-entering /setup re-runs the wizard; skip to its finish screen.
+      await page.goto("/setup")
+      await page.getByTestId("setup-next").click()
+      await page.getByTestId("setup-skip").click()
+      await page.getByRole("button", { name: "Add recipes" }).click()
       await expect(page).toHaveURL(/\/recipes\/?$/)
       // The guided state, with the real count of a fresh DB.
       const guide = page.getByTestId("recipe-onboarding")

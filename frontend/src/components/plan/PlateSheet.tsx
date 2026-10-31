@@ -14,6 +14,7 @@ import type { PlateFeedbackStatus } from "@/lib/api/feedback"
 import type { Plan } from "@/lib/api/plan"
 import type { Plate, PlateComponent } from "@/lib/api/plates"
 import type { Session, SessionWarning } from "@/lib/api/sessions"
+import { todayISO } from "@/lib/dates"
 import { colourBatches } from "@/lib/plan/batch-colours"
 import type { BoardCell } from "@/lib/plan/board"
 import { formatAmount, formatNumber } from "@/lib/plan/format"
@@ -83,6 +84,8 @@ export function PlateSheet({
   const sessions = new Map(plan.sessions.map((s) => [s.id, s]))
   const updatePlate = useUpdatePlate()
   const [eaters, setEaters] = useState<number | null>(null)
+  // Feedback is asked only once the plate's day has come.
+  const [today] = useState(todayISO)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pb-6">
@@ -177,7 +180,7 @@ export function PlateSheet({
 
       <NoteField key={plate.id} plate={plate} readOnly={readOnly} />
 
-      <FeedbackButtons plate={plate} />
+      {plate.date <= today && <FeedbackButtons plate={plate} />}
 
       {!readOnly && (
         <PlateActions plate={plate} cell={cell} plan={plan} onClose={onClose} />

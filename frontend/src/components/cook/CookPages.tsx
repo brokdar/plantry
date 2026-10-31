@@ -32,7 +32,10 @@ function CloseButton({ children }: { children: ReactNode }) {
 function CookShell({ message }: { message?: string }) {
   const { t } = useTranslation()
   return (
-    <div className="flex min-h-dvh flex-col gap-4 bg-ground px-4 py-6 md:px-8">
+    <main
+      id="main"
+      className="flex min-h-dvh flex-col gap-4 bg-ground px-4 py-6 md:px-8"
+    >
       {message ? (
         <>
           <p className="text-h3 text-ink">{message}</p>
@@ -47,7 +50,7 @@ function CookShell({ message }: { message?: string }) {
           <div className="h-56 w-full animate-pulse rounded-cell bg-panel-sunken" />
         </div>
       )}
-    </div>
+    </main>
   )
 }
 

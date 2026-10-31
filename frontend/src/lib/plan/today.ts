@@ -169,7 +169,8 @@ export function buildTodayPlan(
     colour: colours.get(session.id) ?? 1,
     slotName: nameOf(session.cook_slot_id),
     coverage: coverageText(session.links, nameOf, f),
-    minutes,
+    // 0 is what an untouched recipe form saves: no estimate, not "0 min".
+    minutes: minutes || null,
   }))
 
   const cells = day?.cells ?? []

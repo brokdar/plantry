@@ -89,7 +89,10 @@ export function CookMode({
   )
 
   return (
-    <div className="flex min-h-dvh flex-col bg-ground text-h3 text-ink">
+    <main
+      id="main"
+      className="flex min-h-dvh flex-col bg-ground text-h3 text-ink"
+    >
       <header className="sticky top-0 z-10 border-b border-line bg-ground">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-3 md:px-8">
           <div className="flex items-start gap-3">
@@ -209,6 +212,6 @@ export function CookMode({
           </TabsPrimitive.Content>
         </div>
       </TabsPrimitive.Root>
-    </div>
+    </main>
   )
 }

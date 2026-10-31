@@ -122,6 +122,18 @@ describe("lib/plan/today", () => {
     expect(view.rows).toHaveLength(3)
   })
 
+  // DoD walkthrough: a recipe saved with 0 minutes has no time estimate.
+  it("treats 0 minutes as unknown on the cook card", () => {
+    const cook = mockTodayByVerdict.cook
+    const today: Today = {
+      ...cook,
+      cook: cook.cook.map((c) => ({ ...c, minutes: 0 })),
+    }
+    expect(buildTodayPlan(today, mockPlan, SUNDAY, i18n).cook[0].minutes).toBe(
+      null
+    )
+  })
+
   // F5-AC4: tomorrow eats frozen portions → the defrost reminder.
   it("lists a defrost reminder once per batch", () => {
     const reminder = {

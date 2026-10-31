@@ -34,13 +34,16 @@ export function SideNav({ collapsed, onToggle }: SideNavProps) {
   const settingsActive = useLocation({
     select: (l) => l.pathname.startsWith("/settings"),
   })
+  // The width animates only once the user toggles it: on load the persisted
+  // state renders at its final width instead of visibly settling.
+  const [animate, setAnimate] = useState(false)
 
   return (
     <aside
       className={cn(
         "hide-scrollbar hidden h-screen shrink-0 flex-col overflow-y-auto md:flex",
         "sticky top-0 left-0 border-r border-line bg-panel-sunken",
-        "transition-[width] duration-200",
+        animate && "transition-[width] duration-200",
         isRail ? "w-20 px-3 pt-8 pb-10" : "w-64 py-8 pr-0 pl-4"
       )}
       data-testid="sidenav"
@@ -117,7 +120,10 @@ export function SideNav({ collapsed, onToggle }: SideNavProps) {
         {isLg && (
           <button
             type="button"
-            onClick={onToggle}
+            onClick={() => {
+              setAnimate(true)
+              onToggle()
+            }}
             aria-label={
               collapsed ? t("nav.expand_sidebar") : t("nav.collapse_sidebar")
             }

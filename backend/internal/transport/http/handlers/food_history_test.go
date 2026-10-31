@@ -198,6 +198,9 @@ func TestFoodList_RecipeFiltersAndLastEatenSort(t *testing.T) {
 		a.insert(fmt.Sprintf(`UPDATE foods SET cook_minutes = 25 WHERE id = %d`, soup))
 		// Stew has no times at all: unknown is not quick.
 		assert.Equal(t, []string{"Curry", "Soup"}, a.listNames("max_minutes=30&today=2026-10-30"))
+		// 0 + 0 is what an untouched recipe form used to save: unknown too.
+		a.insert(fmt.Sprintf(`UPDATE foods SET prep_minutes = 0, cook_minutes = 0 WHERE id = %d`, stew))
+		assert.Equal(t, []string{"Curry", "Soup"}, a.listNames("max_minutes=30&today=2026-10-30"))
 	})
 
 	t.Run("created_within_days=30 filters on created_at", func(t *testing.T) {

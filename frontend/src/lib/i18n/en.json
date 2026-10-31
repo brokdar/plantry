@@ -1292,6 +1292,8 @@
     "banner": {
       "title": "Plan next week",
       "body": "Your next week starts {{date}}.",
+      "body_today": "Your next week starts today.",
+      "body_tomorrow": "Your next week starts tomorrow.",
       "action": "Plan next week"
     },
     "no_plan": {

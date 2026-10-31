@@ -39,6 +39,18 @@ describe("PortionsEditor", () => {
     ).toBeInTheDocument()
   })
 
+  test("the new-portion unit and grams fields have accessible names", async () => {
+    vi.mocked(listPortions).mockResolvedValue({ items: [] })
+    renderWithRouter(<PortionsEditor mode="bound" foodId={1} />)
+
+    expect(
+      await screen.findByRole("combobox", { name: "Unit" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("spinbutton", { name: "Grams" })
+    ).toBeInTheDocument()
+  })
+
   test("adds a new portion via the unit picker", async () => {
     const user = userEvent.setup()
     vi.mocked(listPortions).mockResolvedValue({ items: [] })
