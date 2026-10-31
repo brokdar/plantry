@@ -237,8 +237,6 @@ describe("SlotCell — macros pill", () => {
     role: "main",
     image_path: null,
     favorite: false,
-    cook_count: 0,
-    last_cooked_at: null,
     created_at: "2026-05-01T00:00:00Z",
     updated_at: "2026-05-01T00:00:00Z",
     children: [],
