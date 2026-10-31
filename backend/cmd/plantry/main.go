@@ -154,6 +154,7 @@ func run() error {
 		Cells:    availabilitySvc,
 		Profile:  profileSvc,
 		Settings: settingsSvc,
+		Events:   sqlite.NewPlateEventRepo(conn),
 		Tx:       txRunner,
 	})
 	availabilitySvc.WithPlates(plateSvc)

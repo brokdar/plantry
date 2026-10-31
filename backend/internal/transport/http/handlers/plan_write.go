@@ -57,7 +57,7 @@ func (h *PlanWriteHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	res, err := h.svc.Apply(r.Context(), snap, plate.ApplyOptions{OnConflict: plate.ConflictFail})
+	res, err := h.svc.Apply(r.Context(), snap, plate.ApplyOptions{OnConflict: plate.ConflictFail, Restore: true})
 	if errors.Is(err, domain.ErrCellOccupied) {
 		writeError(w, http.StatusConflict, "error.plan.cell_occupied")
 		return

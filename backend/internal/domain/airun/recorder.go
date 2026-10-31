@@ -169,6 +169,15 @@ type Run struct {
 	finished bool
 }
 
+// ID returns the run's row id: 0 for a nil run or one whose row could not be
+// created.
+func (run *Run) ID() int64 {
+	if run == nil {
+		return 0
+	}
+	return run.id
+}
+
 // Start creates the run row, returns a ctx carrying the run and logs
 // ai.run.start. If the row cannot be created the run is still returned (so
 // metered calls do not fall back to untracked runs) but records nothing.

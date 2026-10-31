@@ -220,6 +220,20 @@ type PlateComponent struct {
 	SortOrder     int64
 }
 
+type PlateEvent struct {
+	ID            int64
+	PlateID       sql.NullInt64
+	CookSessionID sql.NullInt64
+	Date          string
+	SlotID        int64
+	Action        string
+	Actor         string
+	AiRunID       sql.NullInt64
+	BeforeJson    sql.NullString
+	AfterJson     sql.NullString
+	At            string
+}
+
 type PlateFeedback struct {
 	PlateID int64
 	Status  string

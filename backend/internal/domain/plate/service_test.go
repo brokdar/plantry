@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -50,8 +51,19 @@ type env struct {
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
+	return newEnvWithEvents(t, nil)
+}
+
+// newEnvWithEvents is newEnv with the plate service's event log wrapped by
+// wrap (nil: the sqlite repo as is).
+func newEnvWithEvents(t *testing.T, wrap func(plate.EventLog) plate.EventLog) *env {
+	t.Helper()
 	db := testhelper.NewTestDB(t)
-	svc, avail := testsvc.Plan(db)
+	var events plate.EventLog = sqlite.NewPlateEventRepo(db)
+	if wrap != nil {
+		events = wrap(events)
+	}
+	svc, avail := testsvc.PlanWithEvents(db, events)
 	e := &env{t: t, ctx: context.Background(), db: db, svc: svc, avail: avail, settings: testsvc.Settings(db)}
 	e.lunch = e.insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.lunch', 'sun', 1, 1)`)
 	e.dinner = e.insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.dinner', 'moon', 2, 1)`)

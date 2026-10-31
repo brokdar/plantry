@@ -142,6 +142,19 @@ Package `domain/planview` builds the read models; it never writes and takes its 
 - `GET /api/today?date&today` — `verdict` (`no_plan`, `no_plates`, `cook`/`quick_cook` for the main with most portions, ≤ 20 min is quick, else `nothing_to_cook`), `cook`, `meals`, `reminders` (`defrost`, `use_by`), `rate`, `plan_banner` and `setup`.
 - `today` defaults to the server's local date; `date` defaults to `today`.
 
+## Plate audit trail
+
+Go migration `00030_plate_events.go` (sqlc reads `schema_patches/00030_plate_events.sql`), `domain/plate/events.go`, repo `adapters/sqlite/plate_event_repo.go` (D20). 00030 also rebuilt `plates` and `cook_sessions` with `AUTOINCREMENT`, so an id never names two rows over time.
+
+Every `plate.Service` mutation writes its events last, in its own unit of work:
+- One row per plate it touches: `create` / `restore` (`before_json` null), `update`, or `delete` (`after_json` null), with full plate snapshots in the `SnapshotPlate` shape (its own `plate_id`, sessions by id). `Apply` logs `restore` when `ApplyOptions.Restore` is set (`POST /api/plan/restore`), else `create`.
+- One row with `plate_id` NULL per cook session whose row changed (`{id, food_id, cook_date, …}`): fresh and snapshot sessions (`create`), D11 resizes and D13 cook-cell moves (`update`), sessions left without links (`delete`). A tracked session D11 left unchanged writes nothing.
+- The explicit session edits (`SetSessionPortions`, `SetCooked`, `AddLeftovers`, `DeleteSession`) always write their session's row and set `cook_session_id` on their plate rows; `SetSessionPortions`/`SetCooked` also log every linked plate.
+
+No FKs, so rows outlive what they describe; there is no read API yet.
+
+The actor comes from `domain/actor` in ctx: the HTTP middleware `middleware.Actor` sets `user`, `agent.ToolSet.Execute` sets `agent` with the run's `ai_run_id`, and `actor.From` falls back to `user`.
+
 ## Setup
 
 Package `domain/setup`. `GET /api/setup` returns `{completed, recipe_count, recipe_target}` (`setup.completed` and the count of composed foods against `setup.RecipeTarget` = 10); `POST /api/setup/complete` sets `setup.completed` and returns the same. Migration 00023 marks existing installs (any time slots) as completed.
