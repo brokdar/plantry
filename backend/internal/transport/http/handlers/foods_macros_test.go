@@ -194,3 +194,5 @@ func TestFoodMacros_AllUnknown_EmptyArray(t *testing.T) {
 	foods := body["foods"].([]any)
 	assert.Empty(t, foods)
 }
+
+func ptrFloat64(v float64) *float64 { return &v }

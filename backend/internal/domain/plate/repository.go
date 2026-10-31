@@ -34,11 +34,6 @@ type Repository interface {
 	// RestoreFeedback writes a plate's feedback row as it was, rated_at
 	// included.
 	RestoreFeedback(ctx context.Context, plateID int64, fb Feedback) error
-
-	// RecentUnitForFood returns the most-recently-used canonical unit for the
-	// given leaf food across any plate (max id wins). Returns ("", nil) when
-	// the food has never been added with a unit (i.e., never as a leaf).
-	RecentUnitForFood(ctx context.Context, foodID int64) (string, error)
 }
 
 // SessionRepository is the port adapters implement for cook sessions.

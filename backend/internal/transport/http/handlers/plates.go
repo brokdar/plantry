@@ -19,13 +19,10 @@ type platesService interface {
 	Create(ctx context.Context, in plate.PlateInput) (*plate.Plate, error)
 	Update(ctx context.Context, id int64, patch plate.PlatePatch) (*plate.Plate, error)
 	Delete(ctx context.Context, id int64) (plate.PlanSnapshot, error)
-	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
-	Day(ctx context.Context, date time.Time) ([]plate.Plate, error)
 	AddComponent(ctx context.Context, plateID int64, pc plate.PlateComponent) (*plate.Plate, error)
 	SwapComponent(ctx context.Context, componentID, newFoodID int64, quantity *plate.PlateComponent) (*plate.Plate, error)
 	UpdateComponentQuantity(ctx context.Context, componentID int64, q plate.PlateComponent) (*plate.Plate, error)
 	RemoveComponent(ctx context.Context, componentID int64) (*plate.Plate, error)
-	RecentUnitForFood(ctx context.Context, foodID int64) (string, error)
 }
 
 // PlateHandler exposes plate + plate_component mutation endpoints.
@@ -68,52 +65,6 @@ func (c componentInput) toComponent() plate.PlateComponent {
 	return plate.PlateComponent{
 		FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, CookSessionID: c.CookSessionID,
 	}
-}
-
-// List handles GET /api/plates?from=YYYY-MM-DD&to=YYYY-MM-DD.
-func (h *PlateHandler) List(w http.ResponseWriter, r *http.Request) {
-	fromStr := r.URL.Query().Get("from")
-	toStr := r.URL.Query().Get("to")
-	if fromStr == "" || toStr == "" {
-		writeError(w, http.StatusBadRequest, "error.invalid_body")
-		return
-	}
-	from, err := time.Parse("2006-01-02", fromStr)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "error.invalid_body")
-		return
-	}
-	to, err := time.Parse("2006-01-02", toStr)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "error.invalid_body")
-		return
-	}
-	if from.After(to) {
-		writeError(w, http.StatusBadRequest, "error.invalid_body")
-		return
-	}
-	plates, err := h.svc.Range(r.Context(), from, to)
-	if err != nil {
-		writePlateError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, platesListResponse(plates))
-}
-
-// Day handles GET /api/plates/by-date/{date}.
-func (h *PlateHandler) Day(w http.ResponseWriter, r *http.Request) {
-	dateStr := chi.URLParam(r, "date")
-	d, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "error.invalid_body")
-		return
-	}
-	plates, err := h.svc.Day(r.Context(), d)
-	if err != nil {
-		writePlateError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, platesListResponse(plates))
 }
 
 type createPlateRequest struct {
@@ -320,45 +271,6 @@ func (h *PlateHandler) DeleteComponent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toPlateResponse(p))
-}
-
-// recentUnitResponse is returned by GET /api/foods/{id}/recent-unit. Unit is
-// nil when the food has never been used as a leaf component (or has never been
-// added to any plate). The frontend uses this to default the quantity-unit
-// input on the planner picker.
-type recentUnitResponse struct {
-	Unit *string `json:"unit"`
-}
-
-// RecentUnit handles GET /api/foods/{id}/recent-unit.
-//
-// Path lives under /api/foods to keep food-centric reads grouped client-side,
-// even though the data is owned by the plate aggregate.
-func (h *PlateHandler) RecentUnit(w http.ResponseWriter, r *http.Request) {
-	foodID, ok := parseIDParam(w, r, "id")
-	if !ok {
-		return
-	}
-	unit, err := h.svc.RecentUnitForFood(r.Context(), foodID)
-	if err != nil {
-		writePlateError(w, err)
-		return
-	}
-	resp := recentUnitResponse{}
-	if unit != "" {
-		v := unit
-		resp.Unit = &v
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
-// platesListResponse wraps a slice of plates in the standard envelope.
-func platesListResponse(plates []plate.Plate) map[string]any {
-	resp := make([]plateResponse, len(plates))
-	for i := range plates {
-		resp[i] = toPlateResponse(&plates[i])
-	}
-	return map[string]any{"plates": resp}
 }
 
 // parseIDParam parses the int64 URL parameter name, writing 400

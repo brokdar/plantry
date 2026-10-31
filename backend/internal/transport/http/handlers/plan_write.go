@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -14,7 +15,7 @@ import (
 // planWriteService is the subset of plate.Service the plan-wide write
 // endpoints use.
 type planWriteService interface {
-	ClearRange(ctx context.Context, from, to time.Time) (plate.PlanSnapshot, error)
+	ClearRange(ctx context.Context, from, to time.Time, slotID int64) (plate.PlanSnapshot, error)
 	Apply(ctx context.Context, snap plate.PlanSnapshot, opts plate.ApplyOptions) (*plate.ApplyResult, error)
 }
 
@@ -29,7 +30,7 @@ func NewPlanWriteHandler(svc planWriteService) *PlanWriteHandler {
 	return &PlanWriteHandler{svc: svc}
 }
 
-// Clear handles DELETE /api/plan?from&to and returns what restores it.
+// Clear handles DELETE /api/plan?from&to[&slot_id] and returns what restores it.
 func (h *PlanWriteHandler) Clear(w http.ResponseWriter, r *http.Request) {
 	from, err := time.Parse(time.DateOnly, r.URL.Query().Get("from"))
 	if err != nil {
@@ -41,7 +42,14 @@ func (h *PlanWriteHandler) Clear(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	snap, err := h.svc.ClearRange(r.Context(), from, to)
+	var slotID int64
+	if v := r.URL.Query().Get("slot_id"); v != "" {
+		if slotID, err = strconv.ParseInt(v, 10, 64); err != nil {
+			writeError(w, http.StatusBadRequest, "error.invalid_body")
+			return
+		}
+	}
+	snap, err := h.svc.ClearRange(r.Context(), from, to, slotID)
 	if err != nil {
 		writePlateError(w, err)
 		return

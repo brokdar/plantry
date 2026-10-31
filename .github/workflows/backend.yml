@@ -43,3 +43,5 @@ jobs:
         run: |
           sqlc generate
           git diff --exit-code internal/adapters/sqlite/sqlcgen/
+      - name: Every sqlc query has a caller
+        run: ./scripts/check-sqlc-usage.sh

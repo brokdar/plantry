@@ -96,12 +96,3 @@ SELECT COUNT(*) FROM plates WHERE slot_id = ?;
 
 -- name: ListPlatesByDateRange :many
 SELECT * FROM plates WHERE date BETWEEN sqlc.arg(from_date) AND sqlc.arg(to_date) ORDER BY date, slot_id, id;
-
--- name: ListPlatesByDate :many
-SELECT * FROM plates WHERE date = ? ORDER BY slot_id, id;
-
--- name: RecentUnitForFood :one
-SELECT unit FROM plate_components
-WHERE food_id = ? AND unit IS NOT NULL
-ORDER BY id DESC
-LIMIT 1;

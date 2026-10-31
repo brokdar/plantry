@@ -27,9 +27,3 @@ func seedPlate(t *testing.T, svc *plate.Service, p *plate.Plate) {
 	require.NoError(t, err)
 	*p = *out
 }
-
-// leafGrams is a leaf quantity of grams g.
-func leafGrams(grams float64) plate.PlateComponent {
-	unit := "g"
-	return plate.PlateComponent{Amount: &grams, Unit: &unit, Grams: &grams}
-}

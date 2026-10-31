@@ -135,12 +135,3 @@ func SpecFor(key string) (Spec, bool) {
 	}
 	return Spec{}, false
 }
-
-// Keys returns all known keys in registry order.
-func Keys() []string {
-	out := make([]string, len(registry))
-	for i, s := range registry {
-		out[i] = s.Key
-	}
-	return out
-}

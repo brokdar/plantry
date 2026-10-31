@@ -322,6 +322,28 @@ func TestPlanWriteHTTP_ClearRange(t *testing.T) {
 	}
 }
 
+// slot_id narrows the clear to one slot's plates (the e2e slot cleanup).
+func TestPlanWriteHTTP_ClearRangeOneSlot(t *testing.T) {
+	a := newPlanAPI(t)
+	a.sunChili()
+	code, body := a.do(http.MethodPost, "/api/plates",
+		fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d,"components":[{"food_id":%d}]}`, a.lunch, a.curry))
+	require.Equal(t, http.StatusCreated, code, body)
+
+	code, body = a.do(http.MethodDelete, fmt.Sprintf("/api/plan?from=2026-11-01&to=2026-11-07&slot_id=%d", a.lunch), "")
+	require.Equal(t, http.StatusOK, code, body)
+	removed := body["removed"].(map[string]any)["plates"].([]any)
+	require.Len(t, removed, 1)
+	assert.Equal(t, float64(a.lunch), removed[0].(map[string]any)["slot_id"])
+	var n int
+	require.NoError(t, a.db.QueryRow(`SELECT COUNT(*) FROM plates WHERE slot_id = ?`, a.dinner).Scan(&n))
+	assert.Equal(t, 1, n, "the dinner plate stays")
+
+	code, body = a.do(http.MethodDelete, "/api/plan?from=2026-11-01&to=2026-11-07&slot_id=x", "")
+	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Equal(t, "error.invalid_body", body["message_key"])
+}
+
 func TestPlanWriteHTTP_RestoreErrors(t *testing.T) {
 	a := newPlanAPI(t)
 	code, body := a.do(http.MethodPost, "/api/plan/restore", `{`)

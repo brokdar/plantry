@@ -374,41 +374,6 @@ func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64)
 	return items, nil
 }
 
-const listPlatesByDate = `-- name: ListPlatesByDate :many
-SELECT id, slot_id, note, created_at, date, eaters, updated_at FROM plates WHERE date = ? ORDER BY slot_id, id
-`
-
-func (q *Queries) ListPlatesByDate(ctx context.Context, date string) ([]Plate, error) {
-	rows, err := q.db.QueryContext(ctx, listPlatesByDate, date)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Plate{}
-	for rows.Next() {
-		var i Plate
-		if err := rows.Scan(
-			&i.ID,
-			&i.SlotID,
-			&i.Note,
-			&i.CreatedAt,
-			&i.Date,
-			&i.Eaters,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listPlatesByDateRange = `-- name: ListPlatesByDateRange :many
 SELECT id, slot_id, note, created_at, date, eaters, updated_at FROM plates WHERE date BETWEEN ?1 AND ?2 ORDER BY date, slot_id, id
 `
@@ -480,20 +445,6 @@ func (q *Queries) ListTimeSlots(ctx context.Context) ([]TimeSlot, error) {
 		return nil, err
 	}
 	return items, nil
-}
-
-const recentUnitForFood = `-- name: RecentUnitForFood :one
-SELECT unit FROM plate_components
-WHERE food_id = ? AND unit IS NOT NULL
-ORDER BY id DESC
-LIMIT 1
-`
-
-func (q *Queries) RecentUnitForFood(ctx context.Context, foodID int64) (sql.NullString, error) {
-	row := q.db.QueryRowContext(ctx, recentUnitForFood, foodID)
-	var unit sql.NullString
-	err := row.Scan(&unit)
-	return unit, err
 }
 
 const touchPlate = `-- name: TouchPlate :exec

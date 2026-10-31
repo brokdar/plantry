@@ -103,15 +103,7 @@ func (r *CookSessionRepo) ListLinks(ctx context.Context, sessionID int64) ([]pla
 	}
 	out := make([]plate.Link, len(rows))
 	for i, row := range rows {
-		date, _ := time.Parse(dateLayout, row.Date) //nolint:errcheck // layout controlled by the service
-		out[i] = plate.Link{
-			PlateID:     row.PlateID,
-			ComponentID: row.ComponentID,
-			FoodID:      row.FoodID,
-			Cell:        plate.CellKey{Date: date, SlotID: row.SlotID},
-			PerEater:    row.Portions.Float64,
-			Eaters:      row.Eaters,
-		}
+		out[i] = linkFromRow(row.PlateID, row.ComponentID, row.FoodID, row.Date, row.SlotID, row.Portions, row.Eaters)
 	}
 	return out, nil
 }
@@ -136,18 +128,23 @@ func (r *CookSessionRepo) ListInRange(ctx context.Context, from, to time.Time) (
 	}
 	links := make(map[int64][]plate.Link, len(sessions))
 	for _, row := range linkRows {
-		date, _ := time.Parse(dateLayout, row.Date) //nolint:errcheck // layout controlled by the service
 		sid := row.CookSessionID.Int64
-		links[sid] = append(links[sid], plate.Link{
-			PlateID:     row.PlateID,
-			ComponentID: row.ComponentID,
-			FoodID:      row.FoodID,
-			Cell:        plate.CellKey{Date: date, SlotID: row.SlotID},
-			PerEater:    row.Portions.Float64,
-			Eaters:      row.Eaters,
-		})
+		links[sid] = append(links[sid], linkFromRow(row.PlateID, row.ComponentID, row.FoodID, row.Date, row.SlotID, row.Portions, row.Eaters))
 	}
 	return sessions, links, nil
+}
+
+// linkFromRow maps the columns both link queries share to a plate.Link.
+func linkFromRow(plateID, componentID, foodID int64, date string, slotID int64, portions sql.NullFloat64, eaters float64) plate.Link {
+	d, _ := time.Parse(dateLayout, date) //nolint:errcheck // layout controlled by the service
+	return plate.Link{
+		PlateID:     plateID,
+		ComponentID: componentID,
+		FoodID:      foodID,
+		Cell:        plate.CellKey{Date: d, SlotID: slotID},
+		PerEater:    portions.Float64,
+		Eaters:      eaters,
+	}
 }
 
 func mapCookSessionToDomain(row *sqlcgen.CookSession, s *plate.CookSession) {

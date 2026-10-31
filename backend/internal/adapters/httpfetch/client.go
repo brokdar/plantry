@@ -55,30 +55,11 @@ type Client struct {
 // Option configures a Client.
 type Option func(*Client)
 
-// WithHTTPClient replaces the underlying http.Client (useful in tests to dial httptest.Server).
-func WithHTTPClient(hc *http.Client) Option { return func(c *Client) { c.hc = hc } }
-
-// WithUserAgent overrides the User-Agent header.
-func WithUserAgent(ua string) Option { return func(c *Client) { c.ua = ua } }
-
 // WithMaxBytes caps the number of bytes read from a response body.
 func WithMaxBytes(n int64) Option { return func(c *Client) { c.maxBytes = n } }
 
 // WithMaxRedirects caps the number of HTTP redirects followed.
 func WithMaxRedirects(n int) Option { return func(c *Client) { c.maxRedirects = n } }
-
-// WithTimeout sets the per-request timeout on the underlying http.Client.
-func WithTimeout(d time.Duration) Option {
-	return func(c *Client) {
-		if c.hc == nil {
-			c.hc = &http.Client{}
-		}
-		c.hc.Timeout = d
-	}
-}
-
-// WithAcceptLanguage overrides the Accept-Language header.
-func WithAcceptLanguage(v string) Option { return func(c *Client) { c.acceptLang = v } }
 
 // New creates a Client with sensible defaults.
 func New(opts ...Option) *Client {

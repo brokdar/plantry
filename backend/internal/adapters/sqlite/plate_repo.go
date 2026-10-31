@@ -263,23 +263,6 @@ func (r *PlateRepo) RestoreFeedback(ctx context.Context, plateID int64, fb plate
 	})
 }
 
-// RecentUnitForFood returns the most-recently-stored unit for any plate
-// component on the given food, or "" if none exists. Composed components
-// have unit IS NULL and are skipped automatically by the WHERE clause.
-func (r *PlateRepo) RecentUnitForFood(ctx context.Context, foodID int64) (string, error) {
-	v, err := r.queriesFor(ctx).RecentUnitForFood(ctx, foodID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", nil
-		}
-		return "", err
-	}
-	if !v.Valid {
-		return "", nil
-	}
-	return v.String, nil
-}
-
 func mapPlateToDomain(row *sqlcgen.Plate, p *plate.Plate) {
 	p.ID = row.ID
 	p.SlotID = row.SlotID

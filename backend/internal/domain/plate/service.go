@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -332,9 +333,10 @@ func (s *Service) Delete(ctx context.Context, id int64) (PlanSnapshot, error) {
 	return snap, nil
 }
 
-// ClearRange removes every plate in [from, to] and the sessions left without
-// links, and returns what restores them.
-func (s *Service) ClearRange(ctx context.Context, from, to time.Time) (PlanSnapshot, error) {
+// ClearRange removes every plate in [from, to] (only slotID's plates when
+// slotID is not 0) and the sessions left without links, and returns what
+// restores them.
+func (s *Service) ClearRange(ctx context.Context, from, to time.Time, slotID int64) (PlanSnapshot, error) {
 	if err := validateRange(from, to); err != nil {
 		return PlanSnapshot{}, err
 	}
@@ -343,6 +345,9 @@ func (s *Service) ClearRange(ctx context.Context, from, to time.Time) (PlanSnaps
 		plates, err := s.plates.ListByDateRange(ctx, dateOnly(from), dateOnly(to))
 		if err != nil {
 			return err
+		}
+		if slotID != 0 {
+			plates = slices.DeleteFunc(plates, func(p Plate) bool { return p.SlotID != slotID })
 		}
 		j := newJournal()
 		snap, err = s.remove(ctx, plates, allComponents, false, &refAlloc{}, nil, nil, j)
@@ -364,17 +369,6 @@ func (s *Service) Range(ctx context.Context, from, to time.Time) ([]Plate, error
 		return nil, err
 	}
 	return s.plates.ListByDateRange(ctx, from, to)
-}
-
-// Day returns all plates for a single date.
-func (s *Service) Day(ctx context.Context, date time.Time) ([]Plate, error) {
-	return s.Range(ctx, date, date)
-}
-
-// RecentUnitForFood returns the most-recently-used canonical unit for the
-// given leaf food across any plate, or "" if none exists.
-func (s *Service) RecentUnitForFood(ctx context.Context, foodID int64) (string, error) {
-	return s.plates.RecentUnitForFood(ctx, foodID)
 }
 
 // ── Components ──────────────────────────────────────────────────────────

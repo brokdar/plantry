@@ -15,29 +15,27 @@ import (
 
 // Handlers groups all per-aggregate HTTP handlers for route registration.
 type Handlers struct {
-	Foods          *handlers.FoodHandler
-	Lookup         *handlers.LookupHandler
-	ImageProxy     *handlers.ImageProxyHandler
-	ImageStore     *imagestore.Store
-	Slots          *handlers.SlotHandler
-	Plates         *handlers.PlateHandler
-	CookSessions   *handlers.CookSessionHandler
-	PlanWrite      *handlers.PlanWriteHandler
-	PlanRead       *handlers.PlanReadHandler
-	Today          *handlers.TodayHandler
-	Profile        *handlers.ProfileHandler
-	Presets        *handlers.PresetHandler
-	AI             *handlers.AIHandler
-	AIRateLimiter  *plantrymw.RateLimiter
-	Feedback       *handlers.FeedbackHandler
-	Import         *handlers.ImportHandler
-	Settings       *handlers.SettingsHandler
-	Shopping       *handlers.ShoppingHandler
-	NutritionRange *handlers.NutritionRangeHandler
-	PlateMacros    *handlers.PlateMacrosHandler
-	Availability   *handlers.AvailabilityHandler
-	Setup          *handlers.SetupHandler
-	DevMode        bool // gates dev-only debug endpoints
+	Foods         *handlers.FoodHandler
+	Lookup        *handlers.LookupHandler
+	ImageProxy    *handlers.ImageProxyHandler
+	ImageStore    *imagestore.Store
+	Slots         *handlers.SlotHandler
+	Plates        *handlers.PlateHandler
+	CookSessions  *handlers.CookSessionHandler
+	PlanWrite     *handlers.PlanWriteHandler
+	PlanRead      *handlers.PlanReadHandler
+	Today         *handlers.TodayHandler
+	Profile       *handlers.ProfileHandler
+	Presets       *handlers.PresetHandler
+	AI            *handlers.AIHandler
+	AIRateLimiter *plantrymw.RateLimiter
+	Feedback      *handlers.FeedbackHandler
+	Import        *handlers.ImportHandler
+	Settings      *handlers.SettingsHandler
+	Shopping      *handlers.ShoppingHandler
+	Availability  *handlers.AvailabilityHandler
+	Setup         *handlers.SetupHandler
+	DevMode       bool // gates dev-only debug endpoints
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -78,9 +76,6 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/variants", h.Foods.ListVariants)
 					r.Get("/portions", h.Foods.ListPortions)
 					r.Post("/portions", h.Foods.UpsertPortion)
-					if h.Plates != nil {
-						r.Get("/recent-unit", h.Plates.RecentUnit)
-					}
 					r.Delete("/portions/{unit}", h.Foods.DeletePortion)
 					r.Post("/sync-portions", h.Foods.SyncPortions)
 					if h.Lookup != nil {
@@ -105,12 +100,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 		if h.Plates != nil {
 			api.Route("/plates", func(r chi.Router) {
-				r.Get("/", h.Plates.List)
 				r.Post("/", h.Plates.Create)
-				r.Get("/by-date/{date}", h.Plates.Day)
-				if h.PlateMacros != nil {
-					r.Get("/macros", h.PlateMacros.List)
-				}
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.Plates.Get)
 					r.Put("/", h.Plates.Update)
@@ -221,10 +211,6 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 		if h.Shopping != nil {
 			api.Get("/shopping-list", h.Shopping.List)
-		}
-
-		if h.NutritionRange != nil {
-			api.Get("/nutrition", h.NutritionRange.List)
 		}
 
 		if h.Availability != nil {

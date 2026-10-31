@@ -253,17 +253,17 @@ func fetchOpenAIModels(ctx context.Context, client *http.Client, apiKey string) 
 	}
 	out := make([]modelItem, 0, len(payload.Data))
 	for _, m := range payload.Data {
-		if isOpenAIChatModel(m.ID) {
+		if isOpenAIChatFamily(m.ID) {
 			out = append(out, modelItem{ID: m.ID, DisplayName: m.ID})
 		}
 	}
 	return out, nil
 }
 
-// isOpenAIChatModel filters /v1/models output to chat-capable families. The
+// isOpenAIChatFamily filters /v1/models output to chat-capable families. The
 // endpoint lists every model (including embeddings, audio, moderation) — we
 // want only the ones that accept messages + tools.
-func isOpenAIChatModel(id string) bool {
+func isOpenAIChatFamily(id string) bool {
 	low := strings.ToLower(id)
 	for _, prefix := range []string{"gpt-", "chatgpt-", "o1-", "o3-", "o4-"} {
 		if strings.HasPrefix(low, prefix) {

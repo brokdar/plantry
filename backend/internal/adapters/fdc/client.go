@@ -65,11 +65,6 @@ func New(apiKey string, opts ...Option) *Client {
 	return c
 }
 
-// WithHTTPClient overrides the default HTTP client.
-func WithHTTPClient(c *http.Client) Option {
-	return func(cl *Client) { cl.httpClient = c }
-}
-
 // WithBaseURL overrides the default base URL.
 func WithBaseURL(u string) Option {
 	return func(cl *Client) { cl.baseURL = u }

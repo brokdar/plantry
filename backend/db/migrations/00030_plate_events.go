@@ -54,7 +54,7 @@ func upPlateEvents(ctx context.Context, db *sql.DB) (err error) {
 			return fmt.Errorf("00030: %w", err)
 		}
 	}
-	if err := checkForeignKeys(ctx, tx); err != nil {
+	if err := checkForeignKeys(ctx, tx, "00030"); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -120,11 +120,12 @@ var plateEventsUp = []string{
 	`CREATE INDEX ix_plate_events_run ON plate_events(ai_run_id)`,
 }
 
-// checkForeignKeys fails when any row violates a foreign key.
-func checkForeignKeys(ctx context.Context, tx *sql.Tx) error {
+// checkForeignKeys fails when any row violates a foreign key; errors carry
+// the migration's version prefix.
+func checkForeignKeys(ctx context.Context, tx *sql.Tx, version string) error {
 	rows, err := tx.QueryContext(ctx, `PRAGMA foreign_key_check`)
 	if err != nil {
-		return fmt.Errorf("00030: foreign_key_check: %w", err)
+		return fmt.Errorf("%s: foreign_key_check: %w", version, err)
 	}
 	defer func() { _ = rows.Close() }()
 	if rows.Next() {
@@ -133,9 +134,9 @@ func checkForeignKeys(ctx context.Context, tx *sql.Tx) error {
 		var parent string
 		var fkid int64
 		if err := rows.Scan(&table, &rowid, &parent, &fkid); err != nil {
-			return fmt.Errorf("00030: foreign_key_check: %w", err)
+			return fmt.Errorf("%s: foreign_key_check: %w", version, err)
 		}
-		return fmt.Errorf("00030: foreign key violation: %s row %d → %s", table, rowid.Int64, parent)
+		return fmt.Errorf("%s: foreign key violation: %s row %d → %s", version, table, rowid.Int64, parent)
 	}
 	return rows.Err()
 }
