@@ -63,6 +63,16 @@ export interface FoodInstruction {
   text: string
 }
 
+/** Diet classes in order: a recipe's class is the max of its children. */
+export type DietClass = "vegan" | "vegetarian" | "pescetarian" | "omnivore"
+
+/** The effective class: `unknown` when the classifier (or a child) can't
+ *  tell (D28). */
+export type EffectiveDietClass = DietClass | "unknown"
+
+/** `user` = override, `auto` = classifier (leaf), `derived` = children. */
+export type DietClassSource = "auto" | "user" | "derived"
+
 interface FoodBase {
   id: number
   name: string
@@ -70,6 +80,8 @@ interface FoodBase {
   description?: string | null
   image_path: string | null
   favorite: boolean
+  diet_class: EffectiveDietClass
+  diet_class_source: DietClassSource
   created_at: string
   updated_at: string
 }
@@ -261,6 +273,8 @@ export interface FoodListParams {
   /** Only recipes not eaten within this many weeks. */
   not_eaten_weeks?: number
   created_within_days?: number
+  /** At most this diet class (composed and leaf). */
+  diet?: DietClass
   limit?: number
   offset?: number
   /** Recipes: `name`, `last_eaten` (never eaten first) or `created`. */
@@ -386,6 +400,7 @@ export interface ScaledIngredient {
   display: Quantity
   /** Count units only: what to buy (ceil). */
   buy: Quantity | null
+  diet_class: EffectiveDietClass
 }
 
 export interface ScaledRecipe {
@@ -409,6 +424,17 @@ export function setShopSection(
   return apiFetch(`/foods/${id}/shop-section`, {
     method: "PUT",
     body: JSON.stringify({ section }),
+  })
+}
+
+/** PUT /api/foods/{id}/diet-class — `null` drops the override (D28). */
+export function setDietClass(
+  id: number,
+  dietClass: DietClass | null
+): Promise<Food> {
+  return apiFetch(`/foods/${id}/diet-class`, {
+    method: "PUT",
+    body: JSON.stringify({ class: dietClass }),
   })
 }
 

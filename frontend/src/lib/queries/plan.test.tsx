@@ -2,14 +2,34 @@ import { act, renderHook, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ApiError } from "@/lib/api/client"
-import { mockPlan, mockRemovedBatch, mockTodayByVerdict } from "@/test/fixtures"
+import {
+  mockPlan,
+  mockRemovedBatch,
+  mockReplanPreview,
+  mockTodayByVerdict,
+} from "@/test/fixtures"
 import { createHookWrapper, invalidatedBy } from "@/test/render"
 
 vi.mock("@/lib/api/plan", () => ({
   getPlan: vi.fn(),
   clearPlan: vi.fn(),
   restorePlan: vi.fn(),
+  acceptPlan: vi.fn(),
+  unacceptPlan: vi.fn(),
+  discardPlan: vi.fn(),
+  getReplanPreview: vi.fn(),
+  replan: vi.fn(),
 }))
+vi.mock("@/lib/api/plates", () => ({
+  confirmPlate: vi.fn(),
+  unlockPlate: vi.fn(),
+}))
+vi.mock("@/lib/api/sessions", () => ({
+  confirmSession: vi.fn(),
+  unlockSession: vi.fn(),
+}))
+const navigateMock = vi.hoisted(() => vi.fn())
+vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigateMock }))
 vi.mock("@/lib/api/availability", () => ({
   getAvailabilityRange: vi.fn(),
   setAvailabilityOverride: vi.fn(),
@@ -31,18 +51,36 @@ import {
   getAvailabilityRange,
   setAvailabilityOverride,
 } from "@/lib/api/availability"
-import { clearPlan, getPlan, restorePlan } from "@/lib/api/plan"
+import {
+  acceptPlan,
+  clearPlan,
+  discardPlan,
+  getPlan,
+  getReplanPreview,
+  replan,
+  restorePlan,
+  unacceptPlan,
+} from "@/lib/api/plan"
+import { confirmPlate, unlockPlate } from "@/lib/api/plates"
+import { confirmSession, unlockSession } from "@/lib/api/sessions"
 import { getToday } from "@/lib/api/today"
 
 import { availabilityKeys, planKeys, shoppingKeys, todayKeys } from "./keys"
 import {
+  useAccept,
   useClearWindow,
+  useConfirm,
+  useDiscard,
   useMarkNoPlate,
   usePlan,
   usePlanMeal,
+  useReplan,
+  useReplanPreview,
   useRestorePlan,
   useSetNoPlateNote,
+  useUnaccept,
   useUndoableRemoval,
+  useUnlock,
 } from "./plan"
 import { useToday } from "./today"
 
@@ -379,5 +417,132 @@ describe("No plate cell actions", () => {
       { mode: "none", note: "At grandma's" }
     )
     expect(keys).toEqual([...PLAN_VIEWS, availabilityKeys.ranges()])
+  })
+})
+
+// ── Phase 3: draft / confirmed, accept, discard, re-plan ──────────────
+
+const WINDOW = { from: "2026-10-31", to: "2026-11-06" }
+const ACCEPTED = { plate_ids: [1, 2, 3], session_ids: [7] }
+
+describe("confirm and unlock act on the closure", () => {
+  it.each([
+    ["plate", confirmPlate, unlockPlate],
+    ["session", confirmSession, unlockSession],
+  ] as const)("%s target", async (kind, confirm, unlock) => {
+    vi.mocked(confirm).mockResolvedValue(ACCEPTED)
+    vi.mocked(unlock).mockResolvedValue(ACCEPTED)
+    expect(await invalidatedBy(() => useConfirm(), { kind, id: 7 })).toEqual(
+      PLAN_VIEWS
+    )
+    expect(confirm).toHaveBeenCalledWith(7)
+    expect(await invalidatedBy(() => useUnlock(), { kind, id: 7 })).toEqual(
+      PLAN_VIEWS
+    )
+    expect(unlock).toHaveBeenCalledWith(7)
+  })
+})
+
+// Phase 3 F1-AC3
+describe("useAccept", () => {
+  async function accept() {
+    vi.mocked(acceptPlan).mockResolvedValue(ACCEPTED)
+    vi.mocked(unacceptPlan).mockResolvedValue(ACCEPTED)
+    const keys = await invalidatedBy(() => useAccept(), WINDOW)
+    return { keys, ...lastToast() }
+  }
+
+  it("accepts the window and offers Undo", async () => {
+    const { keys, message, opts } = await accept()
+    expect(acceptPlan).toHaveBeenCalledWith(WINDOW.from, WINDOW.to)
+    expect(keys).toEqual(PLAN_VIEWS)
+    expect(message).toBe("Plan accepted. 3 plates confirmed.")
+    expect(opts.duration).toBe(6000)
+  })
+
+  it("Undo unaccepts exactly the returned ids, once", async () => {
+    const { opts } = await accept()
+    act(() => {
+      opts.action.onClick()
+      opts.action.onClick()
+    })
+    await waitFor(() => expect(unacceptPlan).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(unacceptPlan).mock.calls[0][0]).toEqual(ACCEPTED)
+    await waitFor(() =>
+      expect(toastMock.success).toHaveBeenCalledWith("Restored")
+    )
+  })
+
+  it("nothing to accept offers no Undo", async () => {
+    vi.mocked(acceptPlan).mockResolvedValue({ plate_ids: [], session_ids: [] })
+    await invalidatedBy(() => useAccept(), WINDOW)
+    expect(toastMock).not.toHaveBeenCalled()
+  })
+
+  it("useUnaccept on its own invalidates the plan views", async () => {
+    vi.mocked(unacceptPlan).mockResolvedValue(ACCEPTED)
+    expect(await invalidatedBy(() => useUnaccept(), ACCEPTED)).toEqual(
+      PLAN_VIEWS
+    )
+  })
+})
+
+describe("useDiscard", () => {
+  it("discards the drafts and Undo restores them", async () => {
+    vi.mocked(discardPlan).mockResolvedValue(mockRemovedBatch)
+    expect(await invalidatedBy(() => useDiscard(), WINDOW)).toEqual(PLAN_VIEWS)
+    expect(discardPlan).toHaveBeenCalledWith(WINDOW.from, WINDOW.to)
+    const { message, opts } = lastToast()
+    expect(message).toBe("Draft discarded")
+    act(() => opts.action.onClick())
+    await waitFor(() =>
+      expect(restorePlan).toHaveBeenCalledWith(mockRemovedBatch.removed)
+    )
+  })
+})
+
+describe("re-plan", () => {
+  const input = {
+    from: "2026-11-04",
+    to: "2026-11-06",
+    unlock_confirmed: true,
+    spare: "freeze" as const,
+    regenerate: true,
+  }
+
+  it("useReplanPreview fetches the range", async () => {
+    vi.mocked(getReplanPreview).mockResolvedValue(mockReplanPreview)
+    const { result } = renderHook(
+      () => useReplanPreview("2026-11-04", "2026-11-06"),
+      { wrapper: createHookWrapper() }
+    )
+    await waitFor(() => expect(result.current.data).toEqual(mockReplanPreview))
+    expect(getReplanPreview).toHaveBeenCalledWith("2026-11-04", "2026-11-06")
+  })
+
+  it("useReplanPreview waits while disabled", () => {
+    renderHook(() => useReplanPreview("2026-11-04", "2026-11-06", false), {
+      wrapper: createHookWrapper(),
+    })
+    expect(getReplanPreview).not.toHaveBeenCalled()
+  })
+
+  it("useReplan with a started run attaches the board to it", async () => {
+    vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: 14 })
+    expect(await invalidatedBy(() => useReplan(), input)).toEqual(PLAN_VIEWS)
+    expect(replan).toHaveBeenCalledWith(input)
+    expect(navigateMock).toHaveBeenCalledTimes(1)
+    const { to, search } = navigateMock.mock.calls[0][0]
+    expect(to).toBe("/plan")
+    expect(search({ start: "2026-10-31" })).toEqual({
+      start: "2026-10-31",
+      run: 14,
+    })
+  })
+
+  it("useReplan without a run stays on the board", async () => {
+    vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: null })
+    await invalidatedBy(() => useReplan(), { ...input, regenerate: false })
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 })

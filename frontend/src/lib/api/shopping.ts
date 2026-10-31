@@ -51,6 +51,8 @@ export interface ShoppingList {
   range: { from: string; to: string; window_start: string; window_end: string }
   sections: ShoppingSection[]
   count: number
+  /** The range holds draft plates (the "Include draft plates" toggle). */
+  has_drafts: boolean
 }
 
 export interface ShoppingRange {
@@ -58,14 +60,19 @@ export interface ShoppingRange {
   to: string
 }
 
-/** GET /api/shopping-list?from&to&today. Without a range the server uses
- *  the default of the anchored window. */
-export function getShoppingList(range?: ShoppingRange): Promise<ShoppingList> {
+/** GET /api/shopping-list?from&to&include_drafts&today. Without a range the
+ *  server uses the default of the anchored window; without
+ *  `includeDrafts` it lists confirmed rows only (D26). */
+export function getShoppingList(
+  range?: ShoppingRange,
+  includeDrafts = false
+): Promise<ShoppingList> {
   const qs = new URLSearchParams()
   if (range) {
     qs.set("from", range.from)
     qs.set("to", range.to)
   }
+  if (includeDrafts) qs.set("include_drafts", "true")
   qs.set("today", todayISO())
   return apiFetch(`/shopping-list?${qs}`)
 }

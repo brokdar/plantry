@@ -1,7 +1,10 @@
 import type { AvailabilityDefault } from "@/lib/api/availability"
 import type { ComposedFood, LeafFood, ScaledRecipe } from "@/lib/api/foods"
+import type { PlanRun, PlanRunStatus, RunStage } from "@/lib/api/generation"
+import type { Insights } from "@/lib/api/insights"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
-import type { Plan, PlanCell } from "@/lib/api/plan"
+import type { Plan, PlanCell, ReplanPreview } from "@/lib/api/plan"
+import type { RunsPage } from "@/lib/api/runs"
 import type { Plate, PlateComponent, RemovedResponse } from "@/lib/api/plates"
 import type { Preset } from "@/lib/api/presets"
 import type { Session } from "@/lib/api/sessions"
@@ -21,6 +24,8 @@ export const mockChickenBreast: LeafFood = {
   fdc_id: null,
   image_path: null,
   favorite: false,
+  diet_class: "omnivore",
+  diet_class_source: "auto",
   shop_section: "meat_fish",
   shop_section_source: "auto",
   used_in_count: 1,
@@ -44,6 +49,8 @@ export const mockBrownRice: LeafFood = {
   fdc_id: null,
   image_path: null,
   favorite: false,
+  diet_class: "vegan",
+  diet_class_source: "auto",
   shop_section: "dry_goods",
   shop_section_source: "auto",
   used_in_count: 0,
@@ -69,6 +76,8 @@ export const mockChickenCurry: ComposedFood = {
   image_path: null,
   notes: null,
   favorite: false,
+  diet_class: "omnivore",
+  diet_class_source: "derived",
   last_eaten: null,
   times_cooked: 0,
   per_portion: { kcal: 0, protein: 0, complete: true },
@@ -106,6 +115,8 @@ export const mockTofuBowl: ComposedFood = {
   image_path: null,
   notes: null,
   favorite: false,
+  diet_class: "vegan",
+  diet_class_source: "derived",
   last_eaten: null,
   times_cooked: 0,
   per_portion: { kcal: 0, protein: 0, complete: true },
@@ -128,6 +139,8 @@ export const mockTofuCurryVariant: ComposedFood = {
   image_path: null,
   notes: null,
   favorite: false,
+  diet_class: "vegan",
+  diet_class_source: "derived",
   last_eaten: null,
   times_cooked: 0,
   per_portion: { kcal: 0, protein: 0, complete: true },
@@ -187,6 +200,9 @@ export function mockPlate(overrides: Partial<Plate> = {}): Plate {
     note: null,
     components: [],
     feedback: null,
+    state: "confirmed",
+    ai_run_id: null,
+    reason: null,
     created_at: "2026-04-26T10:00:00Z",
     updated_at: "2026-04-26T10:00:00Z",
     ...overrides,
@@ -374,6 +390,8 @@ export const mockChili: ComposedFood = {
   keep_days: 3,
   freezable: true,
   favorite: false,
+  diet_class: "vegan",
+  diet_class_source: "derived",
   children: [
     {
       id: 21,
@@ -455,6 +473,9 @@ export const mockSession: Session = {
   ],
   meals: 3,
   warnings: [],
+  state: "confirmed",
+  ai_run_id: null,
+  reason: null,
 }
 
 /** A batch that needs attention: cooked for 4 but eats 6, and a leftover
@@ -557,6 +578,9 @@ export const mockPlan: Plan = {
   }),
   targets: { kcal: 2200, protein_g: 140, fat_g: 70, carbs_g: 250 },
   stats: { plates: 3, cook_days: 1, warnings: 0 },
+  issues: [],
+  draft: null,
+  running_run_id: null,
 }
 
 const mockTodayBase: Omit<Today, "verdict"> = {
@@ -738,6 +762,7 @@ export const mockShoppingList: ShoppingList = {
     },
   ],
   count: 2,
+  has_drafts: false,
 }
 
 /** GET /api/foods/42/scaled?portions=6 (factor 6/4). */
@@ -756,6 +781,7 @@ export const mockScaled: ScaledRecipe = {
       grams: 600,
       display: { amount: 600, unit: "g" },
       buy: null,
+      diet_class: "vegan",
     },
     {
       child_id: 51,
@@ -766,6 +792,7 @@ export const mockScaled: ScaledRecipe = {
       grams: 360,
       display: { amount: 3, unit: "piece" },
       buy: { amount: 3, unit: "piece" },
+      diet_class: "vegan",
     },
   ],
 }
@@ -795,4 +822,225 @@ export const mockRemovedBatch: RemovedResponse = {
       },
     ],
   },
+}
+
+// ── Phase 3: drafts, generation runs, insights ────────────────────────
+
+const DRAFT_RUN_ID = 12
+const CHILI_REASON = "Batch on Sunday feeds Monday lunch and dinner."
+
+/** The AC-1 window after a generation: the Chili batch (session 7, plates
+ *  1–3) is a draft of run 12, the Tofu bowl on Tuesday dinner (plate 4,
+ *  session 9) is confirmed, and Sunday has two cook occasions (H2). */
+export const mockDraftPlan: Plan = (() => {
+  const drafts = mockAc1Plates.map((p) => ({
+    ...p,
+    state: "draft" as const,
+    ai_run_id: DRAFT_RUN_ID,
+    reason: CHILI_REASON,
+  }))
+  const tofu = mockPlate({
+    id: 4,
+    date: "2026-11-03",
+    slot_id: 3,
+    eaters: 2,
+    components: [
+      mockPlateComponent({
+        id: 12,
+        plate_id: 4,
+        food_id: 4,
+        food_name: "Tofu bowl",
+        role: "standalone",
+        cook_session_id: 9,
+      }),
+    ],
+  })
+  const plates = [...drafts, tofu]
+  const tofuSession: Session = {
+    ...mockSession,
+    id: 9,
+    food_id: 4,
+    food_name: "Tofu bowl",
+    cook_date: "2026-11-03",
+    portions: 2,
+    use_by: "2026-11-06",
+    consumed: 2,
+    links: [
+      {
+        plate_id: 4,
+        component_id: 12,
+        date: "2026-11-03",
+        slot_id: 3,
+        portions: 2,
+        kind: "fresh",
+        position: 1,
+      },
+    ],
+    meals: 1,
+  }
+  return {
+    ...mockPlan,
+    cells: mockPlan.cells.map((c) => ({
+      ...c,
+      plate:
+        plates.find((p) => p.date === c.date && p.slot_id === c.slot_id) ??
+        null,
+    })),
+    sessions: [
+      {
+        ...mockSession,
+        state: "draft",
+        ai_run_id: DRAFT_RUN_ID,
+        reason: CHILI_REASON,
+      },
+      tofuSession,
+    ],
+    stats: { plates: 4, cook_days: 2, warnings: 0 },
+    issues: [
+      {
+        rule: "H2",
+        code: "too_many_cook_occasions",
+        severity: "violation",
+        date: "2026-11-01",
+        params: { count: 2, max: 1 },
+      },
+    ],
+    draft: {
+      plates: 3,
+      sessions: 1,
+      run_id: DRAFT_RUN_ID,
+      notes: "Cooks once on Sunday and eats leftovers on Monday.",
+      chooser: "heuristic",
+    },
+  }
+})()
+
+const mockScore: NonNullable<PlanRun["score"]> = {
+  coverage: 1,
+  hard_violations: {},
+  macro_deviation: { daily_pct: 8.5, weekly_pct: 3.2 },
+  cook_occasions: { per_day: { "2026-11-01": 1 }, days_with_prepared: 3 },
+  variety: { distinct: 1, repeats: 0, new_recipes: 0 },
+  preference_fit: 0.8,
+  waste_portions: 0,
+  unknown_data_share: 0,
+}
+
+/** GET /api/plan/runs/12 in the given status and stage. */
+export function mockRun(
+  status: PlanRunStatus,
+  stage: RunStage | null = status === "running" ? "choosing" : null
+): PlanRun {
+  const done = status !== "running"
+  return {
+    id: DRAFT_RUN_ID,
+    kind: "generate",
+    status,
+    stage,
+    chooser: "heuristic",
+    notes: done ? "Cooks once on Sunday and eats leftovers on Monday." : null,
+    error_key: status === "error" ? "error.ai.provider_missing" : null,
+    counts: done
+      ? { plates: 3, sessions: 1, cook_days: 1, kept_confirmed: 1 }
+      : { plates: 0, sessions: 0, cook_days: 0, kept_confirmed: 0 },
+    issues: status === "partial" ? mockDraftPlan.issues : [],
+    score: done && status !== "error" ? mockScore : null,
+    window: { start: "2026-10-31", end: "2026-11-06" },
+  }
+}
+
+/** Re-plan of mockDraftPlan from Tuesday: Tue and Wed dinner are No plate
+ *  now, the confirmed Tofu bowl was already bought for, and two Chili
+ *  portions are spare. */
+export const mockReplanPreview: ReplanPreview = {
+  none_cells: [
+    { date: "2026-11-03", slot_id: 3 },
+    { date: "2026-11-04", slot_id: 3 },
+  ],
+  confirmed_affected: [
+    {
+      plate_id: 4,
+      date: "2026-11-03",
+      slot_id: 3,
+      food_name: "Tofu bowl",
+    },
+  ],
+  spare: [{ session_id: 7, food_name: "Chili", portions: 2, freezable: true }],
+}
+
+/** GET /api/ai/runs: one accepted heuristic generation and one unpriced
+ *  chat turn, with a next page. */
+export const mockRunsPage: RunsPage = {
+  items: [
+    {
+      id: DRAFT_RUN_ID,
+      kind: "generate",
+      started_at: "2026-10-30T18:00:00Z",
+      finished_at: "2026-10-30T18:00:02Z",
+      status: "ok",
+      provider: null,
+      model: null,
+      prompt_version: "v1",
+      chooser: "heuristic",
+      tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+      cost_estimate_usd: 0,
+      score: mockScore,
+      outcome: "accepted",
+      correction_rate: 0.25,
+    },
+    {
+      id: 11,
+      kind: "chat",
+      started_at: "2026-10-30T17:00:00Z",
+      finished_at: "2026-10-30T17:00:09Z",
+      status: "ok",
+      provider: "fake",
+      model: "fake",
+      prompt_version: "v4",
+      chooser: null,
+      tokens: { input: 1200, output: 300, cache_read: 0, cache_write: 0 },
+      cost_estimate_usd: null,
+      score: null,
+      outcome: null,
+      correction_rate: null,
+    },
+  ],
+  next_cursor: 11,
+}
+
+/** GET /api/ai/insights: two weeks, one with an unpriced run. */
+export const mockInsights: Insights = {
+  weeks: [
+    {
+      start: "2026-10-24",
+      runs: 2,
+      accepted: 1,
+      discarded: 1,
+      correction_rate: 0.5,
+      cost_usd: 0.04,
+      cost_per_accepted: 0.04,
+      unpriced_runs: 0,
+    },
+    {
+      start: "2026-10-31",
+      runs: 2,
+      accepted: 1,
+      discarded: 0,
+      correction_rate: 0.25,
+      cost_usd: 0,
+      cost_per_accepted: 0,
+      unpriced_runs: 1,
+    },
+  ],
+  by_version: [
+    {
+      kind: "generate",
+      prompt_version: "v1",
+      model: "heuristic",
+      runs: 2,
+      score_avg: { coverage: 1, preference_fit: 0.8, waste_portions: 0 },
+      violations: { H2: 1 },
+    },
+  ],
+  prices_as_of: "2026-10-01",
 }

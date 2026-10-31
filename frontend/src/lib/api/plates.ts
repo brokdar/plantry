@@ -24,6 +24,10 @@ export interface PlateComponent {
   sort_order: number
 }
 
+/** Draft rows are proposals, confirmed rows are fixed (D1). The state is
+ *  uniform per batch closure (D3). */
+export type PlanState = "draft" | "confirmed"
+
 export interface Plate {
   id: number
   date: string
@@ -33,6 +37,11 @@ export interface Plate {
   note: string | null
   components: PlateComponent[]
   feedback: PlateFeedback | null
+  state: PlanState
+  /** The generation run that proposed the plate; null for hand-made ones. */
+  ai_run_id: number | null
+  /** The chooser's reason ("Why this?"); null for hand-made plates. */
+  reason: string | null
   created_at: string
   updated_at: string
 }
@@ -83,6 +92,10 @@ export interface SnapshotPlate {
   note: string | null
   feedback?: PlateFeedback
   components: SnapshotComponent[]
+  /** Optional on input: the actor decides (D2) unless restoring (D5). */
+  state?: PlanState
+  ai_run_id?: number | null
+  reason?: string | null
 }
 
 export interface SnapshotSession {
@@ -94,6 +107,9 @@ export interface SnapshotSession {
   frozen_portions: number
   cooked_at: string | null
   note: string | null
+  state?: PlanState
+  ai_run_id?: number | null
+  reason?: string | null
 }
 
 export interface PlanSnapshot {
@@ -104,6 +120,12 @@ export interface PlanSnapshot {
 /** The body of every removing mutation: what restores it. */
 export interface RemovedResponse {
   removed: PlanSnapshot
+}
+
+/** The rows a state change touched: the whole batch closure (D3). */
+export interface StateChange {
+  plate_ids: number[]
+  session_ids: number[]
 }
 
 /**
@@ -162,4 +184,14 @@ export function deletePlateComponent(
   pcId: number
 ): Promise<Plate> {
   return apiFetch(`/plates/${plateId}/components/${pcId}`, { method: "DELETE" })
+}
+
+/** POST /api/plates/{id}/confirm: confirms the plate's batch closure. */
+export function confirmPlate(id: number): Promise<StateChange> {
+  return apiFetch(`/plates/${id}/confirm`, { method: "POST" })
+}
+
+/** POST /api/plates/{id}/unlock: returns the plate's closure to draft. */
+export function unlockPlate(id: number): Promise<StateChange> {
+  return apiFetch(`/plates/${id}/unlock`, { method: "POST" })
 }

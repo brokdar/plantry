@@ -56,6 +56,7 @@ function scaledFor(_id: number, portions: number): Promise<ScaledRecipe> {
         grams: 200 * portions,
         display: { amount: 200 * portions, unit: "g" },
         buy: null,
+        diet_class: "vegan",
       },
       {
         child_id: 2,
@@ -66,6 +67,7 @@ function scaledFor(_id: number, portions: number): Promise<ScaledRecipe> {
         grams: 120 * onions,
         display: { amount: onions, unit: "piece" },
         buy: { amount: Math.ceil(onions), unit: "piece" },
+        diet_class: "vegan",
       },
     ],
   })

@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 patterns=(
   'LegacyPortions|QuantityFromLegacyPortions|plate-workflow-rework'
-  'cook_count|last_cooked|MarkCooked|MostCooked|Forgotten|insights'
+  'cook_count|last_cooked|MarkCooked|MostCooked|Forgotten|foods/insights|useInsights'
   'fill_empty|replace_all|aiFill|RevertBanner|AiFilledBadge|ChatMode'
   'WeekID|week_id|weekKeys|week_starts_on|fixed_weekday'
   'ReadOnlyPlannerGrid|MobilePlannerGrid|PlannerGrid|SlotSheet|ComponentTraySheet|components/planner|components/calendar'

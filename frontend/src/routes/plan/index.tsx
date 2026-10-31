@@ -10,10 +10,11 @@ export const Route = createFileRoute("/plan/")({
   // with a 400 if it is not. Without it the anchored window opens.
   // `cell` (`date|slotId`) opens that cell's sheet, e.g. a batch's cook
   // cell from a leftover in the next window. `day` focuses that day's
-  // first cell (Today's week strip).
+  // first cell (Today's week strip). `run` is the generation the board
+  // follows (D35), set by useGenerate/useRegenerate.
   validateSearch: (
     search
-  ): { start?: string; cell?: string; day?: string } => ({
+  ): { start?: string; cell?: string; day?: string; run?: number } => ({
     start:
       typeof search.start === "string" && DATE.test(search.start)
         ? search.start
@@ -25,6 +26,12 @@ export const Route = createFileRoute("/plan/")({
     day:
       typeof search.day === "string" && DATE.test(search.day)
         ? search.day
+        : undefined,
+    run:
+      typeof search.run === "number" &&
+      Number.isInteger(search.run) &&
+      search.run > 0
+        ? search.run
         : undefined,
   }),
   component: PlanRoute,

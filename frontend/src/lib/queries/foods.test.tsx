@@ -14,15 +14,17 @@ import {
   useCreateVariant,
   useDeleteFood,
   useScaled,
+  useSetDietClass,
   useSetShopSection,
 } from "./foods"
-import { foodKeys, setupKeys, shoppingKeys } from "./keys"
+import { foodKeys, planKeys, setupKeys, shoppingKeys } from "./keys"
 
 vi.mock("@/lib/api/foods", () => ({
   createFood: vi.fn(),
   deleteFood: vi.fn(),
   createVariant: vi.fn(),
   getScaled: vi.fn(),
+  setDietClass: vi.fn(),
   setShopSection: vi.fn(),
 }))
 
@@ -31,6 +33,7 @@ import {
   createVariant,
   deleteFood,
   getScaled,
+  setDietClass,
   setShopSection,
 } from "@/lib/api/foods"
 
@@ -136,4 +139,30 @@ describe("useSetShopSection", () => {
         .mock.calls.map((c) => c[0]?.queryKey)
     ).toEqual([shoppingKeys.all, foodKeys.lists(), foodKeys.detail(1)])
   })
+})
+
+describe("useSetDietClass", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue()
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  it.each(["vegan", null] as const)(
+    "sets %s and refreshes every food and the plan",
+    async (dietClass) => {
+      vi.mocked(setDietClass).mockResolvedValue(mockChickenBreast)
+      const { result } = renderHook(() => useSetDietClass(), {
+        wrapper: createHookWrapper(),
+      })
+      result.current.mutate({ id: 1, dietClass })
+      await waitFor(() => expect(result.current.isSuccess).toBe(true))
+      expect(setDietClass).toHaveBeenCalledWith(1, dietClass)
+      expect(
+        vi
+          .mocked(queryClient.invalidateQueries)
+          .mock.calls.map((c) => c[0]?.queryKey)
+      ).toEqual([foodKeys.all, planKeys.all])
+    }
+  )
 })

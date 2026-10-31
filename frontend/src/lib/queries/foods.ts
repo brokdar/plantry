@@ -13,11 +13,13 @@ import {
   listPortions,
   listVariants,
   refetchFood,
+  setDietClass,
   setFoodFavorite,
   setShopSection,
   syncPortions,
   updateFood,
   upsertPortion,
+  type DietClass,
   type FoodInput,
   type LeafFoodInput,
   type FoodListParams,
@@ -26,7 +28,7 @@ import type { ShopSection } from "@/lib/api/shopping"
 import { ApiError } from "@/lib/api/client"
 import { queryClient } from "@/lib/query-client"
 import { toastError } from "@/lib/toast"
-import { foodKeys, setupKeys, shoppingKeys } from "./keys"
+import { foodKeys, planKeys, setupKeys, shoppingKeys } from "./keys"
 
 export function useFoods(
   params?: FoodListParams,
@@ -173,6 +175,28 @@ export function useSetShopSection() {
       void queryClient.invalidateQueries({ queryKey: foodKeys.lists() })
       void queryClient.invalidateQueries({ queryKey: foodKeys.detail(id) })
     },
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/** Overrides a food's diet class; `null` drops the override (D28). Every
+ *  recipe above the food derives its class from it, and the plan's diet
+ *  issues (H5) read it, so all foods and the plan refetch. */
+export function useSetDietClass() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({
+      id,
+      dietClass,
+    }: {
+      id: number
+      dietClass: DietClass | null
+    }) => setDietClass(id, dietClass),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: foodKeys.all }),
+        queryClient.invalidateQueries({ queryKey: planKeys.all }),
+      ]),
     onError: (err) => toastError(err, t),
   })
 }

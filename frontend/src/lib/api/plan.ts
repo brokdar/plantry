@@ -2,7 +2,13 @@ import { todayISO } from "@/lib/dates"
 
 import type { AvailabilityMode, AvailabilitySource } from "./availability"
 import { apiFetch } from "./client"
-import type { Plate, PlanSnapshot, RemovedResponse } from "./plates"
+import type { Chooser } from "./generation"
+import type {
+  Plate,
+  PlanSnapshot,
+  RemovedResponse,
+  StateChange,
+} from "./plates"
 import type { Session } from "./sessions"
 
 export interface PlanWindow {
@@ -62,6 +68,53 @@ export interface PlanStats {
   warnings: number
 }
 
+/** The hard rules of spec §6.4. */
+export type IssueRule = "H1" | "H2" | "H3" | "H4" | "H5" | "H6" | "H7" | "H8"
+
+/** The D22 codes the UI has copy for; H3/H4 reuse the session warning
+ *  codes. */
+export const KNOWN_ISSUE_CODES = [
+  "missing_plate",
+  "plate_in_none_cell",
+  "too_many_cook_occasions",
+  "diet_incompatible",
+  "meat_days_exceeded",
+  "diet_unknown",
+  "variety_repeat",
+  "variety_relaxed",
+  "leftover_before_cook",
+  "past_keep_days",
+  "deficit",
+  "frozen_deficit",
+] as const
+
+export type KnownIssueCode = (typeof KNOWN_ISSUE_CODES)[number]
+
+/** A checker finding (D22). Message key `plan.issue.<code>` with `params`.
+ *  `code` is open: run issues also carry the generator's structural codes
+ *  (`extra_plate`, `unknown_food`, …), so callers need a fallback for codes
+ *  outside KNOWN_ISSUE_CODES. */
+export interface Issue {
+  rule: IssueRule
+  code: string
+  severity: "violation" | "warning"
+  date?: string
+  slot_id?: number
+  plate_id?: number
+  session_id?: number
+  params: Record<string, string | number>
+}
+
+/** The window's drafts (D26); `run_id`/`notes` from the newest run with
+ *  drafts in the window. */
+export interface PlanDraft {
+  plates: number
+  sessions: number
+  run_id: number | null
+  notes: string | null
+  chooser: Chooser | null
+}
+
 export interface Plan {
   window: PlanWindow
   slots: PlanSlot[]
@@ -71,6 +124,12 @@ export interface Plan {
   days: PlanDay[]
   targets: PlanTargets | null
   stats: PlanStats
+  /** H1, H2, H5 and H8 findings on the window (D21). */
+  issues: Issue[]
+  /** null when the window holds no drafts. */
+  draft: PlanDraft | null
+  /** The generation running for this window, if any (D9). */
+  running_run_id: number | null
 }
 
 /** GET /api/plan?start&today. Without `start` the server opens the anchored
@@ -95,5 +154,85 @@ export function restorePlan(
   return apiFetch("/plan/restore", {
     method: "POST",
     body: JSON.stringify(snapshot),
+  })
+}
+
+/** POST /api/plan/accept: confirms every draft row in the window closure
+ *  (D4) and returns them for Undo. */
+export function acceptPlan(from: string, to: string): Promise<StateChange> {
+  return apiFetch("/plan/accept", {
+    method: "POST",
+    body: JSON.stringify({ from, to }),
+  })
+}
+
+/** POST /api/plan/unaccept: Undo of accept, returns exactly those rows to
+ *  draft. */
+export function unacceptPlan(rows: StateChange): Promise<StateChange> {
+  return apiFetch("/plan/unaccept", {
+    method: "POST",
+    body: JSON.stringify(rows),
+  })
+}
+
+/** POST /api/plan/discard: deletes every draft row in the window closure;
+ *  Undo is restorePlan. */
+export function discardPlan(
+  from: string,
+  to: string
+): Promise<RemovedResponse> {
+  return apiFetch("/plan/discard", {
+    method: "POST",
+    body: JSON.stringify({ from, to }),
+  })
+}
+
+// ── Mid-week re-plan (§3.2) ───────────────────────────────────────────
+
+export interface ReplanPreview {
+  none_cells: { date: string; slot_id: number }[]
+  confirmed_affected: {
+    plate_id: number
+    date: string
+    slot_id: number
+    food_name: string
+  }[]
+  spare: {
+    session_id: number
+    food_name: string
+    portions: number
+    freezable: boolean
+  }[]
+}
+
+export interface ReplanInput {
+  from: string
+  to: string
+  unlock_confirmed: boolean
+  spare: "freeze" | "keep"
+  regenerate: boolean
+  instruction?: string
+}
+
+export interface ReplanResponse extends RemovedResponse {
+  /** The generation started for the remaining cells, if `regenerate`. */
+  run_id: number | null
+}
+
+/** GET /api/plan/replan/preview?from&to&today. */
+export function getReplanPreview(
+  from: string,
+  to: string
+): Promise<ReplanPreview> {
+  const qs = new URLSearchParams({ from, to, today: todayISO() })
+  return apiFetch(`/plan/replan/preview?${qs}`)
+}
+
+/** POST /api/plan/replan: 409 `error.plan.confirmed_affected` when confirmed
+ *  plates are affected and `unlock_confirmed` is false. */
+export function replan(input: ReplanInput): Promise<ReplanResponse> {
+  return apiFetch("/plan/replan", {
+    method: "POST",
+    body: JSON.stringify(input),
   })
 }

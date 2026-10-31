@@ -779,7 +779,11 @@
     },
     "plan": {
       "cell_occupied": "Couldn't restore: a meal is already planned there.",
-      "invalid_start": "That week can't open: a plan week starts on your shopping day."
+      "invalid_start": "That week can't open: a plan week starts on your shopping day.",
+      "generation_running": "A plan is already being made for this week. Wait for it to finish.",
+      "scope_confirmed": "This plate is confirmed, so it stays as it is.",
+      "confirmed_affected": "Some of these plates are confirmed and were already shopped for.",
+      "replan_past": "Re-planning starts today at the earliest."
     },
     "slot": {
       "in_use": "This time slot is used by plates and cannot be deleted."
@@ -1063,7 +1067,8 @@
       "plan_cleared": "Plan cleared",
       "marked_no_plate": "Marked as No plate",
       "restored": "Restored",
-      "conflict": "Can't undo: that meal was changed in the meantime."
+      "conflict": "Can't undo: that meal was changed in the meantime.",
+      "draft_discarded": "Draft discarded"
     },
     "board": {
       "label": "Meal plan, {{range}}",
@@ -1221,7 +1226,9 @@
       "body": "Pick the first day of a past week. Its plates are copied onto this week, day by day.",
       "source_label": "Copy the week starting",
       "submit": "Copy week"
-    }
+    },
+    "accepted_one": "Plan accepted. {{count}} plate confirmed.",
+    "accepted_other": "Plan accepted. {{count}} plates confirmed."
   },
   "batch": {
     "cook": "Cook × {{portions}}",
