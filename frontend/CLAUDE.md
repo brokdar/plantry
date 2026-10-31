@@ -16,6 +16,7 @@ bun run test:watch                    # vitest watch mode
 bun run e2e                           # playwright (spawns its own backend + frontend; E2E_LANE=N for a parallel lane)
 bun run check                         # lint + typecheck + knip + legacy grep gate + unit tests
 bun run knip                          # unused files, exports, dependencies (knip.json)
+bun run check:legacy                  # scripts/check-legacy.sh: grep gate for removed Phase 2 patterns
 ```
 
 ## Required Skills
@@ -131,9 +132,13 @@ Use these names in new and rebuilt code:
 
 **Gotcha:** shadcn's `--accent` is the same variable as the Cookbook accent (solid ink blue), so `bg-accent` (including shadcn menu/select highlights) needs `text-on-accent` / `text-accent-foreground` for text, never `text-ink`.
 
+### Dead code and legacy gates
+
+`bun run check` also runs `knip` (config `knip.json`; entry points are the route files, so an unused file, export or dependency fails the run; `components/ui/**` exports are exempt) and `scripts/check-legacy.sh`, which greps `src/` and `e2e/` for removed Phase 2 patterns (old routes, week/template names, Material and Botanical utilities). Remove the dead code instead of allowlisting it; if a legacy pattern is a legitimate new use, change the pattern list in the script deliberately.
+
 ### i18n
 
-All user-visible strings go through `react-i18next`. Keys live in `src/lib/i18n/`. Use `useTranslation()` in components; never hardcode English strings (units too: `units.kcal`, `units.g`). `src/lib/i18n/keys.test.ts` fails when en/de key sets differ or a key is not referenced in `src/` (a string literal, a template-literal head such as `` `unit.${key}` ``, or a prefix in its small allowlist for keys that come from API data). `src/lib/hooks/useWakeLock` keeps the screen on (cook mode, in-store mode).
+All user-visible strings go through `react-i18next`. Keys live in `src/lib/i18n/`. Use `useTranslation()` in components; never hardcode English strings (units too: `units.kcal`, `units.g`). `src/lib/i18n/keys.test.ts` fails when en/de key sets differ or a key is not referenced in `src/` (a string literal, a template-literal head such as `` `unit.${key}` ``, or a prefix in `DYNAMIC_PREFIXES`, the allowlist for keys composed from API data: `error.` for backend message keys and `slot.` for slot `name_key`s). Add a prefix there only for keys that really are built at runtime. `src/lib/hooks/useWakeLock` keeps the screen on (cook mode, in-store mode).
 
 ### Utility modules
 

@@ -118,7 +118,7 @@ components:
 
 Source of truth: `frontend/src/index.css`, checked against [`docs/UX_DESIGN_SPEC.md`](docs/UX_DESIGN_SPEC.md) §3 by `frontend/src/test/tokens.test.ts` (values and WCAG contrast). If this file and `index.css` disagree, `index.css` wins and this file is stale.
 
-**Status key:** *Implemented* means it is in `index.css` or a shipped component today. *Specified* means the UX spec defines it but it is not built yet (scheduled for Phases 1–3).
+**Status key:** *Implemented* means it is in `index.css` or a shipped component today. *Specified* means the UX spec defines it but it is not built yet.
 
 ## Overview
 
@@ -271,7 +271,14 @@ A serif h1 name. Meta values use h3-size tabular sans over small muted labels. T
 - **Day meter** (`DayMeter`): a 4px rounded bar on a `line` track that runs to 125% of the kcal target, with a 1px `ink` tick at the target (80%), so an overshoot reads by length as well as colour. Success fill between 70% and 115% of the target, warning fill outside, a full `ink-muted` bar with no target. A 6px warning dot marks an incomplete day. It is a `meter` with value text "1,840 of 2,200 kcal" ("…, incomplete" on an incomplete day); a transparent button stretched over the 44px row opens the popover.
 - **Nutrition popover** (`NutritionPopover`): panel with the sheet shadow. The day as title, "Per person", then kcal, protein, fat and carbs as "value / target unit" in tabular numerals. An incomplete day ends with a warning triangle, "Incomplete" and the foods without data.
 
-*Specified* (Phase 2, later steps): the cook cell (batch tint, a 1.5px ink inset outline), the leftover cell (plain panel), `PlateCell`, `PlateSheet`, `SuggestionCard`, `ShoppingRow` and `StepPager`. See UX spec §4 and §9.
+### Plan and shop components (implemented)
+
+- **PlateCell** (`components/plan/PlateCell`): one board cell, a `rounded-cell` button with a 56px (phone) or 96px (grid) minimum height. A plate cell is panel with a hairline inset ring: a batch badge, the plate name (small, semibold, two lines), a muted caption and the macro summary. The **cook cell** has the batch tint and a 1.5px ink inset ring (inset, so the outer batch highlight ring and the focus outline stay free); the **leftover cell** is plain panel. An empty cell shows a plus; a **No plate** cell has no fill and a muted italic label, with the hairline on hover. A warning triangle marks plates with warnings. A drag over a free cell turns it into an accent wash with a 2px accent ring.
+- **PlateSheet** (`components/plan/PlateSheet`, hosted by `PlanSheet`): the editor for one cell, a side sheet from 768px and a bottom sheet on phones. It lists the plate's components (swap and remove buttons 44px on touch, 32px with a fine pointer), a `QuantityStepper` per component, the batch section, and warnings as `rounded-cell` blocks with a warning border and an action.
+- **ShoppingRow** (`components/shop/ShoppingRow`): a 44px checkbox with the name and the quantity in shopping units; ticked rows are struck through and muted, and the section list moves them to the bottom. An expandable "used in" list shows batch badges, and a row menu moves the item to another store section. The in-store mode enlarges the row to 56px with h3 type.
+- **StepPager** (`components/cook/StepPager`): one recipe step per screen in 22px Newsreader (max 68ch), with detected durations as accent-outlined timer buttons (44px). Previous and Next are 56px targets; the arrow keys and a horizontal swipe turn the page, and the last step swaps Next for Finish. It carries `aria-roledescription` and a "Step n of m" label.
+
+*Specified, not built:* `SuggestionCard`. See UX spec §4 and §9.
 
 ### Availability grid (implemented: `AvailabilityGrid`)
 
