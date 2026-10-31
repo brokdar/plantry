@@ -47,8 +47,13 @@ export type RunStage =
 export interface Score {
   coverage: number
   hard_violations: Record<string, number>
-  macro_deviation: { daily_pct: number; weekly_pct: number }
-  cook_occasions: { per_day: number; days_with_prepared: number }
+  /** null when there are no targets to deviate from. */
+  macro_deviation: { daily_pct: number | null; weekly_pct: number | null }
+  /** `per_day`: cook occasions per date. */
+  cook_occasions: {
+    per_day: Record<string, number>
+    days_with_prepared: number
+  }
   variety: { distinct: number; repeats: number; new_recipes: number }
   preference_fit: number
   waste_portions: number

@@ -9,7 +9,7 @@ import type {
   RemovedResponse,
   StateChange,
 } from "./plates"
-import type { Session, SessionWarningCode } from "./sessions"
+import type { Session } from "./sessions"
 
 export interface PlanWindow {
   start: string
@@ -71,22 +71,32 @@ export interface PlanStats {
 /** The hard rules of spec §6.4. */
 export type IssueRule = "H1" | "H2" | "H3" | "H4" | "H5" | "H6" | "H7" | "H8"
 
-/** D22 codes; H3/H4 reuse the session warning codes. */
-export type IssueCode =
-  | "missing_plate"
-  | "plate_in_none_cell"
-  | "too_many_cook_occasions"
-  | "diet_incompatible"
-  | "meat_days_exceeded"
-  | "diet_unknown"
-  | "variety_repeat"
-  | "variety_relaxed"
-  | SessionWarningCode
+/** The D22 codes the UI has copy for; H3/H4 reuse the session warning
+ *  codes. */
+export const KNOWN_ISSUE_CODES = [
+  "missing_plate",
+  "plate_in_none_cell",
+  "too_many_cook_occasions",
+  "diet_incompatible",
+  "meat_days_exceeded",
+  "diet_unknown",
+  "variety_repeat",
+  "variety_relaxed",
+  "leftover_before_cook",
+  "past_keep_days",
+  "deficit",
+  "frozen_deficit",
+] as const
 
-/** A checker finding (D22). Message key `plan.issue.<code>` with `params`. */
+export type KnownIssueCode = (typeof KNOWN_ISSUE_CODES)[number]
+
+/** A checker finding (D22). Message key `plan.issue.<code>` with `params`.
+ *  `code` is open: run issues also carry the generator's structural codes
+ *  (`extra_plate`, `unknown_food`, …), so callers need a fallback for codes
+ *  outside KNOWN_ISSUE_CODES. */
 export interface Issue {
   rule: IssueRule
-  code: IssueCode
+  code: string
   severity: "violation" | "warning"
   date?: string
   slot_id?: number
