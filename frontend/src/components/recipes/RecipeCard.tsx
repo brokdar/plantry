@@ -6,6 +6,8 @@ import type { ComposedFood } from "@/lib/api/foods"
 import { imageURL } from "@/lib/image-url"
 import { lastEatenAgo } from "@/lib/recipes/library"
 
+import { DietIcon } from "./DietIcon"
+
 type RecipeCardProps = {
   recipe: ComposedFood
   /** YYYY-MM-DD, the reference day for "last eaten". */
@@ -15,7 +17,8 @@ type RecipeCardProps = {
 /**
  * A library card (UX §5.8): 4:3 photo or the typographic placeholder (the
  * initial on the Herb tint, as on recipe detail), the name in Newsreader and
- * one meta line: time, kcal per portion and when it was last eaten.
+ * one meta line led by the diet icon: time, kcal per portion and when it was
+ * last eaten.
  */
 export function RecipeCard({ recipe, today }: RecipeCardProps) {
   const { t, i18n } = useTranslation()
@@ -71,10 +74,11 @@ export function RecipeCard({ recipe, today }: RecipeCardProps) {
         {name}
       </h2>
       <p
-        className="text-small text-ink-muted tabular-nums"
+        className="flex items-start gap-1.5 text-small text-ink-muted tabular-nums"
         data-testid={`recipe-card-${id}-meta`}
       >
-        {meta.join(" · ")}
+        <DietIcon dietClass={recipe.diet_class} className="mt-0.5" />
+        <span>{meta.join(" · ")}</span>
       </p>
     </Link>
   )

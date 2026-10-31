@@ -237,7 +237,9 @@ test("at 375 px Back has its own row and Cook now leads the actions; facts line 
     expect(actionsBox!.y).toBeGreaterThanOrEqual(backBox!.y + backBox!.height)
     expect(cookBox!.x).toBeLessThan(favBox!.x)
     expect(Math.abs(cookBox!.y - favBox!.y)).toBeLessThan(2)
-    expect(cookBox!.width).toBeGreaterThan(actionsBox!.width / 2)
+    // Four icon-only secondaries (Favorite, Create variant, Add to plan,
+    // Edit) share the row; Cook now takes the rest.
+    expect(cookBox!.width).toBeGreaterThan(favBox!.width * 2)
 
     // The fact labels of the first row (Time, Portions, …) share one top.
     const tops = await page

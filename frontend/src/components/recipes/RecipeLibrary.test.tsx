@@ -70,6 +70,15 @@ describe("RecipeLibrary", () => {
     expect(
       screen.getByTestId(`recipe-card-${mockTofuBowl.id}-meta`)
     ).toHaveTextContent("20 min · never eaten")
+    // The diet icon leads the meta line, named for screen readers.
+    expect(
+      within(curry).getByRole("img", { name: "Diet: With meat" })
+    ).toBeInTheDocument()
+    expect(
+      within(
+        screen.getByTestId(`recipe-card-${mockTofuBowl.id}-meta`)
+      ).getByRole("img", { name: "Diet: Vegan" })
+    ).toBeInTheDocument()
     expect(screen.getByRole("link", { name: /Chicken Curry/ })).toHaveAttribute(
       "href",
       `/recipes/${mockChickenCurry.id}`
@@ -94,6 +103,7 @@ describe("RecipeLibrary", () => {
 
     renderLibrary({
       role: "main",
+      diet: "vegetarian",
       quick: true,
       stale: true,
       fav: true,
@@ -106,6 +116,7 @@ describe("RecipeLibrary", () => {
       expect.objectContaining({
         kind: "composed",
         role: "main",
+        diet: "vegetarian",
         max_minutes: 30,
         not_eaten_weeks: 4,
         favorite: 1,
@@ -117,6 +128,25 @@ describe("RecipeLibrary", () => {
       screen.getByRole("button", { name: "Not eaten lately" })
     ).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByText("No recipes match")).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Diet" })).toHaveTextContent(
+      "Vegetarian"
+    )
+  })
+
+  it("F6-AC1: the Diet chip writes ?diet= without a With meat choice", async () => {
+    vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
+    const user = userEvent.setup()
+
+    const onSearchChange = renderLibrary({ sort: "created" })
+    await user.click(await screen.findByRole("combobox", { name: "Diet" }))
+    expect(
+      screen.queryByRole("option", { name: "With meat" })
+    ).not.toBeInTheDocument()
+    await user.click(screen.getByRole("option", { name: "Pescetarian" }))
+    expect(onSearchChange).toHaveBeenLastCalledWith(
+      { sort: "created", diet: "pescetarian" },
+      undefined
+    )
   })
 
   it("a chip toggles its filter in the URL", async () => {

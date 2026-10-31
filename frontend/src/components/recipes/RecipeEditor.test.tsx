@@ -13,6 +13,7 @@ vi.mock("@/lib/api/foods", () => ({
   listPortions: vi.fn().mockResolvedValue({ items: [] }),
   listVariants: vi.fn().mockResolvedValue({ items: [] }),
   createVariant: vi.fn(),
+  setDietClass: vi.fn(),
   getFoodNutrition: vi.fn().mockResolvedValue({
     kcal: 0,
     protein: 0,
@@ -25,7 +26,12 @@ vi.mock("@/lib/api/foods", () => ({
   }),
 }))
 
-import { getFoodNutrition, updateFood } from "@/lib/api/foods"
+import {
+  createFood,
+  getFoodNutrition,
+  setDietClass,
+  updateFood,
+} from "@/lib/api/foods"
 
 describe("RecipeEditor", () => {
   it("renders empty form in create mode with role selector", async () => {
@@ -144,6 +150,104 @@ describe("RecipeEditor", () => {
     expect(vi.mocked(updateFood).mock.calls[0][1]).toEqual(
       expect.objectContaining({ keep_days: 5, freezable: false })
     )
+  })
+
+  it("F6: the diet override saves through the diet-class endpoint", async () => {
+    vi.mocked(updateFood).mockClear()
+    vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)
+    vi.mocked(setDietClass).mockResolvedValue(mockChickenCurry)
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeEditor component={mockChickenCurry} />)
+
+    const diet = await screen.findByRole("combobox", { name: "Diet" })
+    expect(diet).toHaveTextContent("With meatauto")
+    await user.click(diet)
+    await user.click(await screen.findByRole("option", { name: "Pescetarian" }))
+    await user.click(screen.getByRole("button", { name: /save/i }))
+
+    await vi.waitFor(() =>
+      expect(setDietClass).toHaveBeenCalledWith(
+        mockChickenCurry.id,
+        "pescetarian"
+      )
+    )
+    expect(vi.mocked(updateFood).mock.calls[0][1]).not.toHaveProperty(
+      "diet_class"
+    )
+  })
+
+  it("an unchanged diet class makes no diet-class call", async () => {
+    vi.mocked(setDietClass).mockClear()
+    vi.mocked(updateFood).mockClear()
+    vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)
+    const user = userEvent.setup()
+    renderWithRouter(
+      <RecipeEditor
+        component={{
+          ...mockChickenCurry,
+          diet_class: "vegan",
+          diet_class_source: "user",
+        }}
+      />
+    )
+
+    expect(
+      await screen.findByRole("combobox", { name: "Diet" })
+    ).toHaveTextContent(/^Vegan$/)
+    await user.click(screen.getByRole("button", { name: /save/i }))
+    await vi.waitFor(() => expect(updateFood).toHaveBeenCalled())
+    expect(setDietClass).not.toHaveBeenCalled()
+  })
+
+  it("a new recipe with a diet override sets it after create", async () => {
+    vi.mocked(createFood).mockResolvedValue({ ...mockChickenCurry, id: 77 })
+    vi.mocked(setDietClass).mockClear()
+    vi.mocked(setDietClass).mockResolvedValue(mockChickenCurry)
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeEditor />)
+
+    await user.type(await screen.findByLabelText(/^name/i), "Lentil soup")
+    const diet = screen.getByRole("combobox", { name: "Diet" })
+    expect(diet).toHaveTextContent(/^Automatic$/)
+    await user.click(diet)
+    await user.click(await screen.findByRole("option", { name: "Vegan" }))
+    await user.click(screen.getByRole("button", { name: /save/i }))
+
+    await vi.waitFor(() =>
+      expect(setDietClass).toHaveBeenCalledWith(77, "vegan")
+    )
+  })
+
+  it("a failed diet override on create still finishes the save", async () => {
+    vi.mocked(createFood).mockResolvedValue({ ...mockChickenCurry, id: 78 })
+    vi.mocked(setDietClass).mockRejectedValue(new Error("boom"))
+    const onSuccess = vi.fn()
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeEditor onSuccess={onSuccess} />)
+
+    await user.type(await screen.findByLabelText(/^name/i), "Bean chili")
+    await user.click(screen.getByRole("combobox", { name: "Diet" }))
+    await user.click(await screen.findByRole("option", { name: "Vegan" }))
+    await user.click(screen.getByRole("button", { name: /save/i }))
+
+    await vi.waitFor(() => expect(onSuccess).toHaveBeenCalled())
+  })
+
+  it("an overridden recipe shows no derived class in the editor", async () => {
+    renderWithRouter(
+      <RecipeEditor
+        component={{
+          ...mockChickenCurry,
+          diet_class: "vegan",
+          diet_class_source: "user",
+        }}
+      />
+    )
+    const user = userEvent.setup()
+    const diet = await screen.findByRole("combobox", { name: "Diet" })
+    await user.click(diet)
+    await user.click(await screen.findByRole("option", { name: "Automatic" }))
+    expect(diet).toHaveTextContent(/^Automatic$/)
   })
 
   it("an empty keep days field saves null (use the default)", async () => {

@@ -1703,5 +1703,37 @@
       "stay": "Weiterkochen",
       "leave": "Verlassen"
     }
+  },
+  "diet": {
+    "label": "Ernährung",
+    "class": {
+      "vegan": "Vegan",
+      "vegetarian": "Vegetarisch",
+      "pescetarian": "Pescetarisch",
+      "omnivore": "Mit Fleisch",
+      "unknown": "Unbekannt"
+    },
+    "icon_label": "Ernährung: {{class}}",
+    "auto": "Automatisch",
+    "auto_hint": "auto",
+    "filter_all": "Alle Ernährungsformen",
+    "for": "Ernährung für {{name}}",
+    "editor_hint": "Automatisch richtet sich nach den Zutaten.",
+    "unknown_title": "Ernährung unbekannt",
+    "unknown_body_one": "Der Planer kann dieses Rezept nicht mit deiner Ernährung abgleichen. Lege sie oben fest oder bei dieser Zutat:",
+    "unknown_body_other": "Der Planer kann dieses Rezept nicht mit deiner Ernährung abgleichen. Lege sie oben fest oder bei diesen Zutaten:"
+  },
+  "add_to_plan": {
+    "action": "Zum Plan hinzufügen",
+    "title": "Zum Plan hinzufügen",
+    "description": "{{name}} kommt frisch gekocht auf die Mahlzeit, die du wählst.",
+    "meals": "Freie Mahlzeiten",
+    "cell": "{{day}}, {{meal}}",
+    "add": "Hinzufügen",
+    "added": "{{name}} für {{day}}, {{meal}} eingeplant.",
+    "open_plan": "Plan öffnen",
+    "empty_title": "Keine freien Mahlzeiten",
+    "empty_body": "Diese und nächste Woche sind schon verplant. Öffne den Plan, um Platz zu schaffen.",
+    "load_error": "Der Plan konnte nicht geladen werden. Prüfe, ob Plantry läuft, und versuche es erneut."
   }
 }

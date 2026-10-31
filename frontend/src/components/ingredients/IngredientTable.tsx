@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 import { Loader2, Plus, Search } from "lucide-react"
 
+import { FoodDietSelect } from "@/components/recipes/DietClassSelect"
 import { RecipesHeader } from "@/components/recipes/RecipesHeader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,8 +22,9 @@ const PAGE_SIZE = 50
 const AUTO = "auto"
 
 /** The Ingredients tab of Recipes (UX §5.8): a dense table with name,
- *  kcal/100 g, the editable store section, how many recipes use it and the
- *  data source. */
+ *  kcal/100 g, the editable diet class and store section, how many recipes
+ *  use it and the data source. Below sm the diet class sits above the
+ *  section, so the table fits a phone. */
 export function IngredientTable() {
   const { t } = useTranslation()
   const [search, setSearch] = useState("")
@@ -124,6 +126,12 @@ function IngredientRows({ search }: { search: string }) {
               <th scope="col" className="px-3 py-2 text-right font-semibold">
                 {t("recipes.ingredients.col_kcal")}
               </th>
+              <th
+                scope="col"
+                className="hidden px-3 py-2 font-semibold sm:table-cell"
+              >
+                {t("diet.label")}
+              </th>
               <th scope="col" className="px-3 py-2 font-semibold">
                 {t("recipes.ingredients.col_section")}
               </th>
@@ -160,7 +168,24 @@ function IngredientRows({ search }: { search: string }) {
                 <td className="px-3 py-1 text-right text-ink-muted tabular-nums">
                   {item.kcal_100g == null ? "–" : kcal.format(item.kcal_100g)}
                 </td>
+                <td className="hidden px-3 py-1 sm:table-cell">
+                  <FoodDietSelect
+                    food={item}
+                    label={t("diet.for", { name: item.name })}
+                    className="w-full min-w-36"
+                    testId={`ingredient-diet-${item.id}`}
+                  />
+                </td>
                 <td className="px-3 py-1">
+                  <div className="pb-1 sm:hidden">
+                    <FoodDietSelect
+                      food={item}
+                      label={t("diet.for", { name: item.name })}
+                      compact
+                      className="w-fit"
+                      testId={`ingredient-diet-phone-${item.id}`}
+                    />
+                  </div>
                   <SectionSelect ingredient={item} />
                 </td>
                 <td className="hidden px-3 py-1 text-right text-ink-muted tabular-nums sm:table-cell">

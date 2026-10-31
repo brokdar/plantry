@@ -1703,5 +1703,37 @@
       "stay": "Keep cooking",
       "leave": "Leave"
     }
+  },
+  "diet": {
+    "label": "Diet",
+    "class": {
+      "vegan": "Vegan",
+      "vegetarian": "Vegetarian",
+      "pescetarian": "Pescetarian",
+      "omnivore": "With meat",
+      "unknown": "Unknown"
+    },
+    "icon_label": "Diet: {{class}}",
+    "auto": "Automatic",
+    "auto_hint": "auto",
+    "filter_all": "All diets",
+    "for": "Diet for {{name}}",
+    "editor_hint": "Automatic follows the ingredients.",
+    "unknown_title": "Diet unknown",
+    "unknown_body_one": "The planner can't check this recipe against your diet. Set the diet above, or on this ingredient:",
+    "unknown_body_other": "The planner can't check this recipe against your diet. Set the diet above, or on these ingredients:"
+  },
+  "add_to_plan": {
+    "action": "Add to plan",
+    "title": "Add to plan",
+    "description": "{{name}} goes on the meal you pick, cooked fresh.",
+    "meals": "Free meals",
+    "cell": "{{day}}, {{meal}}",
+    "add": "Add",
+    "added": "{{name}} planned for {{day}}, {{meal}}.",
+    "open_plan": "Open plan",
+    "empty_title": "No free meals",
+    "empty_body": "This week and next are planned. Open the plan to make room.",
+    "load_error": "The plan didn't load. Check that Plantry is running, then try again."
   }
 }

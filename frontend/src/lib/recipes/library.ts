@@ -1,5 +1,15 @@
-import type { FoodListParams, FoodRole } from "@/lib/api/foods"
+import type { DietClass, FoodListParams, FoodRole } from "@/lib/api/foods"
 import { FOOD_ROLES } from "@/lib/schemas/food"
+
+/** The Diet chip's choices. Each keeps recipes at most that class
+ *  ("Vegetarian" includes vegan ones); "with meat" would only drop the
+ *  unknown ones, so it is not offered. */
+export const DIET_FILTERS = [
+  "vegan",
+  "vegetarian",
+  "pescetarian",
+] as const satisfies readonly DietClass[]
+export type DietFilter = (typeof DIET_FILTERS)[number]
 
 export const LIBRARY_SORTS = ["name", "last_eaten", "created"] as const
 export type LibrarySort = (typeof LIBRARY_SORTS)[number]
@@ -10,6 +20,8 @@ export type LibrarySort = (typeof LIBRARY_SORTS)[number]
 export interface LibrarySearch {
   q?: string
   role?: FoodRole
+  /** At most this diet class (D28). */
+  diet?: DietFilter
   /** ≤ 30 min prep + cook. */
   quick?: true
   /** Not eaten in the last 4 weeks. */
@@ -49,6 +61,7 @@ export function parseLibrarySearch(
   return {
     q,
     role: oneOf(FOOD_ROLES, raw.role),
+    diet: oneOf(DIET_FILTERS, raw.diet),
     quick: flag(raw.quick),
     stale: flag(raw.stale),
     fav: flag(raw.fav),
@@ -87,7 +100,7 @@ export function rememberedLibrarySearch(): LibrarySearch {
 
 /** True when any filter (not the sort) narrows the list. */
 export function hasLibraryFilters(s: LibrarySearch): boolean {
-  return !!(s.q || s.role || s.quick || s.stale || s.fav || s.new)
+  return !!(s.q || s.role || s.diet || s.quick || s.stale || s.fav || s.new)
 }
 
 /** Maps the filters onto `GET /api/foods` (B7 list params). */
@@ -96,6 +109,7 @@ export function libraryQuery(s: LibrarySearch): FoodListParams {
     kind: "composed",
     search: s.q,
     role: s.role,
+    diet: s.diet,
     max_minutes: s.quick ? QUICK_MINUTES : undefined,
     not_eaten_weeks: s.stale ? STALE_WEEKS : undefined,
     favorite: s.fav ? 1 : undefined,
