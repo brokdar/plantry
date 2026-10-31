@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 	"unicode/utf8"
@@ -10,6 +11,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite/sqlcgen"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
@@ -31,7 +33,25 @@ func NewAIRunRepo(db *sql.DB) *AIRunRepo {
 var (
 	_ airun.Store       = (*AIRunRepo)(nil)
 	_ plate.RunOutcomes = (*AIRunRepo)(nil)
+	_ planview.RunNotes = (*AIRunRepo)(nil)
 )
+
+// RunNote returns the run's chooser for the plan's draft summary. Notes stay
+// nil: ai_runs has no notes column yet.
+func (r *AIRunRepo) RunNote(ctx context.Context, id int64) (planview.RunNote, error) {
+	chooser, err := r.queriesFor(ctx).GetRunNote(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return planview.RunNote{}, fmt.Errorf("%w: ai run %d", domain.ErrNotFound, id)
+	}
+	if err != nil {
+		return planview.RunNote{}, err
+	}
+	var n planview.RunNote
+	if chooser.Valid {
+		n.Chooser = &chooser.String
+	}
+	return n, nil
+}
 
 // Record moves the run's outcome by ev (D25; the transitions are in the
 // SetRunOutcome query) and stamps outcome_at.

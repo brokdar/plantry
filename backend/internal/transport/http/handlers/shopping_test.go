@@ -132,7 +132,8 @@ type shopBody struct {
 			} `json:"used_in"`
 		} `json:"items"`
 	} `json:"sections"`
-	Count int `json:"count"`
+	Count     int  `json:"count"`
+	HasDrafts bool `json:"has_drafts"`
 }
 
 func (e *shopEnv) get(t *testing.T, query string) (int, shopBody, string) {

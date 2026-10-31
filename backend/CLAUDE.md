@@ -146,8 +146,8 @@ Package `domain/window` (pure): a window is the 7 days starting on `plan.shoppin
 
 Package `domain/planview` builds the read models; it never writes and takes its dates as arguments. Plates load with one `ListByDateRange` call for the whole range and sessions with `CookSessionRepo.ListInRange` (two queries), never per plate.
 
-- `GET /api/plan?start&today` — the window at `start` (must be a shopping day, else `400 error.plan.invalid_start`) or the anchored one: `window`, active `slots`, `cells` (date × active slot with availability and plate), `sessions` (cooking in the window or linked to a plate in it), `days` (per-eater macros with `complete`/`missing`), `targets` (null without a kcal target) and `stats`.
-- `GET /api/today?date&today` — `verdict` (`no_plan`, `no_plates`, `cook`/`quick_cook` for the uncooked main with most portions, ≤ 20 min is quick, else `nothing_to_cook`), `cook`, `meals`, `reminders` (`defrost`, `use_by`), `rate`, `plan_banner` and `setup`.
+- `GET /api/plan?start&today` — the window at `start` (must be a shopping day, else `400 error.plan.invalid_start`) or the anchored one: `window`, active `slots`, `cells` (date × active slot with availability and plate), `sessions` (cooking in the window or linked to a plate in it), `days` (per-eater macros with `complete`/`missing`), `targets` (null without a kcal target), `stats`, `issues` (`planning.Check` over every cell of the window, filtered to H1, H2, H5 and H8; H5 only when a diet-class source is wired), `draft` (`{plates, sessions, run_id, notes, chooser}` of the newest run with drafts in the window, read through the `RunNotes` port; null without drafts) and `running_run_id` (from the `Progress` port; null while none is wired). The recipe list H8 needs loads only when the window has drafts.
+- `GET /api/today?date&today` — confirmed rows only (D26); `verdict` (`draft_only` when the date has no confirmed plate and the window has drafts, `no_plan`, `no_plates`, `cook`/`quick_cook` for the uncooked main with most portions, ≤ 20 min is quick, else `nothing_to_cook`), `cook`, `meals`, `reminders` (`defrost`, `use_by`), `rate`, `plan_banner` and `setup`.
 - `today` defaults to the server's local date; `date` defaults to `today`.
 
 ## Unit of work
@@ -177,7 +177,7 @@ D11 (`plate.Sync`): when a change alters what a session's links consume, a sessi
 
 ## Food history and list filters
 
-Eating history is derived, never stored (D16): `food.Service.Derive(ctx, today, foods...)` sets `LastEaten` and `TimesCooked` on composed foods and `UsedInCount` on leaves, with one query per kind (sqlc `FoodHistory`, `UsedInCount`). Plates marked `not_eaten` do not count.
+Eating history is derived, never stored (D16): `food.Service.Derive(ctx, today, foods...)` sets `LastEaten` and `TimesCooked` on composed foods and `UsedInCount` on leaves, with one query per kind (sqlc `FoodHistory`, `UsedInCount`). Plates marked `not_eaten` and draft rows do not count.
 
 `GET /api/foods` filters: `max_minutes`, `not_eaten_weeks`, `created_within_days`, `today`, `sort=name|last_eaten|created` (`last_eaten` ignores favorites). Recipes carry `last_eaten` (`YYYY-MM-DD`), `times_cooked` and `per_portion` (batched `PerPortionDetailedMany`); leaves carry `used_in_count`. Plate feedback statuses are `loved`, `disliked`, `not_eaten`; others are `400 error.feedback.invalid_status`. `GET /api/foods/macros` serves the plate sheet's macro preview. `GET /api/foods/{id}/scaled?portions=` (required, 0 < p <= 100) returns the scaled ingredient list.
 
@@ -197,6 +197,7 @@ Plate feedback (spec §6.6): loved/disliked move the plate's recipe tags into `l
 
 Package `domain/shopping`; `GET /api/shopping-list` returns sections in walk order. Rules:
 
+- Confirmed rows only; `include_drafts=true` adds draft sessions and draft leaf plates, and `has_drafts` reports whether the range has any either way.
 - It buys the cook sessions' `portions` (not what plates consume) plus leaf components (amount × eaters), for the range's dates. The default range is `ShoppingDefault` of the anchored window; `from`/`to` override it inside the window containing `from`.
 - Amounts sum in metric base units (`units.ToBase`); `display` is in the contributions' unit when they share one, otherwise grams; `buy` is set for count units only.
 - `used_in` lists the sessions or leaves an item is bought for, in cell order.

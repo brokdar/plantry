@@ -12,7 +12,7 @@ export type TodayVerdict =
       portions: number
       slot_id: number
     }
-  | { kind: "nothing_to_cook" | "no_plates" | "no_plan" }
+  | { kind: "nothing_to_cook" | "draft_only" | "no_plates" | "no_plan" }
 
 export type TodayVerdictKind = TodayVerdict["kind"]
 

@@ -57,6 +57,7 @@ func (r *ShoppingRepo) LeafUses(ctx context.Context, from, to time.Time) ([]shop
 			Amount: row.Amount.Float64,
 			Unit:   row.Unit.String,
 			Grams:  row.Grams.Float64,
+			Draft:  plate.State(row.State) == plate.StateDraft,
 		}
 	}
 	return out, nil

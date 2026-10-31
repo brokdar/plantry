@@ -53,10 +53,11 @@ type Querier interface {
 	// prompt_hash resolves to NULL when the hash is not in ai_prompts, so a failed
 	// UpsertPrompt never makes this UPDATE fail and leave the run 'running'.
 	FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.Result, error)
-	// Derived eating history (D16) relative to today. last_eaten is the latest
-	// plate dated on or before today that holds the food and is not marked
-	// not_eaten (empty when none); times_cooked counts the food's sessions cooked
-	// on or before today with at least one linked plate not marked not_eaten.
+	// Derived eating history (D16) relative to today, over confirmed rows only
+	// (D26). last_eaten is the latest confirmed plate dated on or before today
+	// that holds the food and is not marked not_eaten (empty when none);
+	// times_cooked counts the food's confirmed sessions cooked on or before today
+	// with at least one linked plate not marked not_eaten.
 	FoodHistory(ctx context.Context, arg FoodHistoryParams) ([]FoodHistoryRow, error)
 	GetAvailabilityDefault(ctx context.Context, arg GetAvailabilityDefaultParams) (GetAvailabilityDefaultRow, error)
 	GetAvailabilityOverride(ctx context.Context, arg GetAvailabilityOverrideParams) (GetAvailabilityOverrideRow, error)
@@ -71,6 +72,8 @@ type Querier interface {
 	GetPlateIDByCell(ctx context.Context, arg GetPlateIDByCellParams) (int64, error)
 	GetPreset(ctx context.Context, id int64) (Preset, error)
 	GetProfile(ctx context.Context) (UserProfile, error)
+	// What the plan's draft summary shows of a run (D26).
+	GetRunNote(ctx context.Context, id int64) (sql.NullString, error)
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
@@ -78,6 +81,7 @@ type Querier interface {
 	ListAvailabilityDefaults(ctx context.Context) ([]ListAvailabilityDefaultsRow, error)
 	ListAvailabilityOverridesByRange(ctx context.Context, arg ListAvailabilityOverridesByRangeParams) ([]ListAvailabilityOverridesByRangeRow, error)
 	ListChildrenByParents(ctx context.Context, parentIds []int64) ([]ListChildrenByParentsRow, error)
+	ListComposedFoodIDs(ctx context.Context) ([]int64, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
 	ListCookSessionLinks(ctx context.Context, cookSessionID sql.NullInt64) ([]ListCookSessionLinksRow, error)
 	// Every link of the sessions ListCookSessionsInRange returns.
@@ -94,7 +98,7 @@ type Querier interface {
 	ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, error)
 	ListKnownTags(ctx context.Context, limit int64) ([]ListKnownTagsRow, error)
 	// Leaf components on plates dated in [from_date, to_date] with their plate's
-	// cell and eaters: the ingredient sources of a shopping list.
+	// cell, eaters and state: the ingredient sources of a shopping list.
 	ListLeafPlateComponentsInRange(ctx context.Context, arg ListLeafPlateComponentsInRangeParams) ([]ListLeafPlateComponentsInRangeRow, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error)

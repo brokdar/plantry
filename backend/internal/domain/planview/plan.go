@@ -12,7 +12,9 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
@@ -37,6 +39,23 @@ type Plan struct {
 	// Targets is nil when the profile has no kcal target.
 	Targets *Targets
 	Stats   Stats
+	// Issues are the checker's H1, H2, H5 and H8 findings over the window
+	// (D21); H3/H4 show as session warnings instead.
+	Issues []planning.Issue
+	// Draft is nil when the window holds no draft rows.
+	Draft *Draft
+	// RunningRunID is the generation running for the window, nil when none.
+	RunningRunID *int64
+}
+
+// Draft summarises the window's draft rows (D26). RunID is the newest run
+// that wrote one of them; Chooser and Notes are that run's.
+type Draft struct {
+	Plates   int
+	Sessions int
+	RunID    *int64
+	Chooser  *string
+	Notes    *string
 }
 
 // Cell is a cell's resolved availability and its plate, if any.
@@ -112,7 +131,7 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 	if err != nil {
 		return nil, fmt.Errorf("resolve availability: %w", err)
 	}
-	sessions, _, err := s.sessionViews(ctx, w.Start, w.End, e)
+	sessions, foods, err := s.sessionViews(ctx, w.Start, w.End, e)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +139,15 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 	if err != nil {
 		return nil, err
 	}
-	targets, err := s.targets(ctx)
+	prof, err := s.d.Profile.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get profile: %w", err)
+	}
+	issues, err := s.issues(ctx, checkInput{w: w, today: today, env: e, cells: avail, plates: plates, sessions: sessions, foods: foods, profile: prof})
+	if err != nil {
+		return nil, err
+	}
+	draft, err := s.draft(ctx, plates, sessions)
 	if err != nil {
 		return nil, err
 	}
@@ -140,10 +167,17 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 	}
 	stats.CookDays = len(cookDays)
 
-	return &Plan{
+	p := &Plan{
 		Window: w, Today: today, IsCurrent: w.Contains(today), ShoppingDay: e.shoppingDay,
-		Slots: e.active, Cells: cells, Sessions: sessions, Days: days, Targets: targets, Stats: stats,
-	}, nil
+		Slots: e.active, Cells: cells, Sessions: sessions, Days: days, Targets: targets(prof), Stats: stats,
+		Issues: issues, Draft: draft,
+	}
+	if s.d.Progress != nil {
+		if id, ok := s.d.Progress.Running(w.Start); ok {
+			p.RunningRunID = &id
+		}
+	}
+	return p, nil
 }
 
 // env is what both read models need from settings and slots.
@@ -282,13 +316,9 @@ const (
 
 // targets returns the profile's targets, nil without a kcal target. A missing
 // percentage gives 0 g.
-func (s *Service) targets(ctx context.Context) (*Targets, error) {
-	p, err := s.d.Profile.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get profile: %w", err)
-	}
+func targets(p *profile.Profile) *Targets {
 	if p.KcalTarget == nil {
-		return nil, nil
+		return nil
 	}
 	kcal := *p.KcalTarget
 	grams := func(pct *float64, perGram float64) float64 {
@@ -302,7 +332,7 @@ func (s *Service) targets(ctx context.Context) (*Targets, error) {
 		ProteinG: grams(p.ProteinPct, kcalPerGramProtein),
 		FatG:     grams(p.FatPct, kcalPerGramFat),
 		CarbsG:   grams(p.CarbsPct, kcalPerGramCarbs),
-	}, nil
+	}
 }
 
 type cellKey struct {

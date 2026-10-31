@@ -20,6 +20,7 @@ const (
 	VerdictQuickCook     = "quick_cook"
 	VerdictNothingToCook = "nothing_to_cook"
 	VerdictNoPlates      = "no_plates"
+	VerdictDraftOnly     = "draft_only"
 	VerdictNoPlan        = "no_plan"
 )
 
@@ -139,14 +140,31 @@ func (s *Service) today(ctx context.Context, date time.Time) (*Today, error) {
 	if w.End.After(to) {
 		to = w.End
 	}
-	plates, err := s.d.Plates.ListByDateRange(ctx, from, to)
+	all, err := s.d.Plates.ListByDateRange(ctx, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("list plates: %w", err)
 	}
 	tomorrow := date.AddDate(0, 0, 1)
-	sessions, foods, err := s.sessionViews(ctx, date, tomorrow, e)
+	allSessions, foods, err := s.sessionViews(ctx, date, tomorrow, e)
 	if err != nil {
 		return nil, err
+	}
+	// Today reads confirmed rows only (D26); drafts only decide draft_only
+	// and whether the next window is planned already.
+	sessions := slices.DeleteFunc(allSessions, func(v plate.SessionView) bool { return v.State == plate.StateDraft })
+	plates := make([]plate.Plate, 0, len(all))
+	var drafts, inNext int
+	for _, p := range all {
+		if next.Contains(p.Date) {
+			inNext++
+		}
+		if p.State == plate.StateDraft {
+			if w.Contains(p.Date) {
+				drafts++
+			}
+			continue
+		}
+		plates = append(plates, p)
 	}
 	avail, err := s.d.Availability.Resolve(ctx, date, date)
 	if err != nil {
@@ -164,16 +182,13 @@ func (s *Service) today(ctx context.Context, date time.Time) (*Today, error) {
 		Setup:      Setup{RecipeCount: int(recipes), RecipeTarget: setup.RecipeTarget},
 	}
 
-	var inWindow, onDate, inNext int
+	var inWindow, onDate int
 	for _, p := range plates {
 		if p.Date.Equal(date) {
 			onDate++
 		}
 		if w.Contains(p.Date) {
 			inWindow++
-		}
-		if next.Contains(p.Date) {
-			inNext++
 		}
 	}
 	out.PlanBanner.Due = !date.Before(next.Start.AddDate(0, 0, -1)) && inNext == 0
@@ -183,7 +198,7 @@ func (s *Service) today(ctx context.Context, date time.Time) (*Today, error) {
 			out.Cook = append(out.Cook, Cook{Session: v, Minutes: minutes(foods[v.FoodID])})
 		}
 	}
-	out.Verdict = verdict(inWindow, onDate, out.Cook, foods)
+	out.Verdict = verdict(inWindow, onDate, drafts, out.Cook, foods)
 
 	links := linksByComponent(sessions)
 	byCell := platesByCell(plates)
@@ -204,12 +219,15 @@ func (s *Service) today(ctx context.Context, date time.Time) (*Today, error) {
 	return out, nil
 }
 
-// verdict applies the §3.2 rules in order: no plate in the window, no plate on
-// the date, a session still to cook (the main with the most portions),
-// otherwise nothing to cook. Sessions already marked cooked never head it;
-// zero recorded minutes count as unknown, never quick.
-func verdict(inWindow, onDate int, cook []Cook, foods map[int64]*food.Food) Verdict {
+// verdict applies the §3.2 rules in order over confirmed rows: no confirmed
+// plate on the date while the window has drafts, no plate in the window, no
+// plate on the date, a session still to cook (the main with the most
+// portions), otherwise nothing to cook. Sessions already marked cooked never
+// head it; zero recorded minutes count as unknown, never quick.
+func verdict(inWindow, onDate, drafts int, cook []Cook, foods map[int64]*food.Food) Verdict {
 	switch {
+	case onDate == 0 && drafts > 0:
+		return Verdict{Kind: VerdictDraftOnly}
 	case inWindow == 0:
 		return Verdict{Kind: VerdictNoPlan}
 	case onDate == 0:

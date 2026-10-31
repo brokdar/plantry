@@ -303,6 +303,7 @@ SELECT f.id AS food_id,
            JOIN plates p ON p.id = pc.plate_id
            WHERE pc.food_id = f.id
              AND p.date <= ?1
+             AND p.state = 'confirmed'
              AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
                              WHERE pf.plate_id = p.id AND pf.status = 'not_eaten')
        ), '') AS TEXT) AS last_eaten,
@@ -311,6 +312,7 @@ SELECT f.id AS food_id,
            FROM cook_sessions cs
            WHERE cs.food_id = f.id
              AND cs.cook_date <= ?1
+             AND cs.state = 'confirmed'
              AND EXISTS (SELECT 1 FROM plate_components pc
                          WHERE pc.cook_session_id = cs.id
                            AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
@@ -331,10 +333,11 @@ type FoodHistoryRow struct {
 	TimesCooked int64
 }
 
-// Derived eating history (D16) relative to today. last_eaten is the latest
-// plate dated on or before today that holds the food and is not marked
-// not_eaten (empty when none); times_cooked counts the food's sessions cooked
-// on or before today with at least one linked plate not marked not_eaten.
+// Derived eating history (D16) relative to today, over confirmed rows only
+// (D26). last_eaten is the latest confirmed plate dated on or before today
+// that holds the food and is not marked not_eaten (empty when none);
+// times_cooked counts the food's confirmed sessions cooked on or before today
+// with at least one linked plate not marked not_eaten.
 func (q *Queries) FoodHistory(ctx context.Context, arg FoodHistoryParams) ([]FoodHistoryRow, error) {
 	query := foodHistory
 	var queryParams []interface{}
@@ -502,6 +505,33 @@ func (q *Queries) ListChildrenByParents(ctx context.Context, parentIds []int64) 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listComposedFoodIDs = `-- name: ListComposedFoodIDs :many
+SELECT id FROM foods WHERE kind = 'composed' ORDER BY id
+`
+
+func (q *Queries) ListComposedFoodIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listComposedFoodIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

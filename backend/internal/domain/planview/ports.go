@@ -29,9 +29,12 @@ type SessionReader interface {
 	ListInRange(ctx context.Context, from, to time.Time) ([]plate.CookSession, map[int64][]plate.Link, error)
 }
 
-// FoodReader loads food headers by id.
+// FoodReader loads food headers by id and their eating history.
 type FoodReader interface {
 	LookupByIDs(ctx context.Context, ids []int64) (map[int64]*food.Food, error)
+	// History returns each food's history over confirmed plates as of
+	// today; foods never eaten may be missing.
+	History(ctx context.Context, ids []int64, today time.Time) (map[int64]food.History, error)
 }
 
 // Nutrition resolves a food's macros: per portion for a composed food, per
@@ -60,9 +63,36 @@ type Profile interface {
 	Get(ctx context.Context) (*profile.Profile, error)
 }
 
-// RecipeCounter counts composed foods (setup progress).
-type RecipeCounter interface {
+// Recipes counts composed foods (setup progress) and lists their ids (the
+// recipes the variety rule H8 could pick instead).
+type Recipes interface {
 	CountComposedFoods(ctx context.Context) (int64, error)
+	ComposedFoodIDs(ctx context.Context) ([]int64, error)
+}
+
+// DietClasses resolves foods' effective diet classes (D28): vegan,
+// vegetarian, pescetarian, omnivore or unknown.
+type DietClasses interface {
+	DietClasses(ctx context.Context, ids []int64) (map[int64]string, error)
+}
+
+// RunNote is what the plan's draft summary shows of an AI run.
+type RunNote struct {
+	Chooser *string
+	Notes   *string
+}
+
+// RunNotes reads an AI run's chooser and notes from the run log.
+type RunNotes interface {
+	RunNote(ctx context.Context, id int64) (RunNote, error)
+}
+
+// Progress reports the generation running for a window (D9). The planning
+// runner implements it; it never touches the database.
+type Progress interface {
+	// Running returns the id of the run generating the window that starts
+	// on start, if one runs.
+	Running(start time.Time) (runID int64, ok bool)
 }
 
 // Deps are the service's dependencies.
@@ -75,7 +105,14 @@ type Deps struct {
 	Slots        Slots
 	Settings     Settings
 	Profile      Profile
-	Recipes      RecipeCounter
+	Recipes      Recipes
+	Runs         RunNotes
+	// Diets is nil until foods carry a diet class: without one H5 has
+	// nothing to check and the plan reports no H5 issues.
+	Diets DietClasses
+	// Progress is nil while no generation runner is wired: running_run_id
+	// is then always null.
+	Progress Progress
 	// Tx runs each read model's reads in one transaction, so a concurrent
 	// write cannot produce an inconsistent view.
 	Tx domain.Transactor
