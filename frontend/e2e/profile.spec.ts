@@ -1,6 +1,4 @@
-import { apiRequest, expect, test } from "./helpers"
-
-const API = "http://localhost:8080"
+import { API, apiRequest, expect, test } from "./helpers"
 
 async function resetProfile() {
   const ctx = await apiRequest.newContext({ baseURL: API })

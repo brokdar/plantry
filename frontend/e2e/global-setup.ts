@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises"
 
-const DB_PATH = "/tmp/plantry-e2e.db"
+const DB_PATH = process.env.E2E_DB_PATH ?? "/tmp/plantry-e2e.db"
 
 export default async function globalSetup() {
   await rm(DB_PATH, { force: true })

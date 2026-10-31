@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process"
 import { test, expect } from "@playwright/test"
 
+import { API } from "./helpers"
+
 test("no week references in src", () => {
   // Playwright workers may not inherit the user's full PATH; augment it so
   // rg (ripgrep) can be found in Homebrew's default prefix.
@@ -28,6 +30,6 @@ test("no week references in src", () => {
 test("GET /api/weeks returns 404", async ({ request }) => {
   // Accept any 4xx: 404 on the new binary (route gone), 400 on an old
   // binary reused via reuseExistingServer. Either means no valid week data.
-  const response = await request.get("http://localhost:8080/api/weeks/1")
+  const response = await request.get(`${API}/api/weeks/1`)
   expect(response.status()).toBeGreaterThanOrEqual(400)
 })

@@ -6,7 +6,7 @@ import {
   type Page,
 } from "@playwright/test"
 
-export const API = "http://localhost:8080"
+export const API = `http://localhost:${process.env.E2E_API_PORT ?? 8080}`
 
 /**
  * Extended `test` that auto-installs the dialog guard on every page.

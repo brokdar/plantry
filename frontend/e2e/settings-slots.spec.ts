@@ -1,6 +1,4 @@
-import { apiRequest, expect, test } from "./helpers"
-
-const API = "http://localhost:8080"
+import { API, apiRequest, expect, test } from "./helpers"
 
 function uid() {
   return crypto.randomUUID().slice(0, 8)
