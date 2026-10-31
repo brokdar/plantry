@@ -1593,6 +1593,6 @@
     "open_plan": "Plan öffnen",
     "empty_title": "Keine freien Mahlzeiten",
     "empty_body": "Diese und nächste Woche sind schon verplant. Öffne den Plan, um Platz zu schaffen.",
-    "load_error": "Der Plan wurde nicht geladen. Prüfe, ob Plantry läuft, und versuche es erneut."
+    "load_error": "Der Plan konnte nicht geladen werden. Prüfe, ob Plantry läuft, und versuche es erneut."
   }
 }

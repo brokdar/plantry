@@ -218,6 +218,38 @@ describe("RecipeEditor", () => {
     )
   })
 
+  it("a failed diet override on create still finishes the save", async () => {
+    vi.mocked(createFood).mockResolvedValue({ ...mockChickenCurry, id: 78 })
+    vi.mocked(setDietClass).mockRejectedValue(new Error("boom"))
+    const onSuccess = vi.fn()
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeEditor onSuccess={onSuccess} />)
+
+    await user.type(await screen.findByLabelText(/^name/i), "Bean chili")
+    await user.click(screen.getByRole("combobox", { name: "Diet" }))
+    await user.click(await screen.findByRole("option", { name: "Vegan" }))
+    await user.click(screen.getByRole("button", { name: /save/i }))
+
+    await vi.waitFor(() => expect(onSuccess).toHaveBeenCalled())
+  })
+
+  it("an overridden recipe shows no derived class in the editor", async () => {
+    renderWithRouter(
+      <RecipeEditor
+        component={{
+          ...mockChickenCurry,
+          diet_class: "vegan",
+          diet_class_source: "user",
+        }}
+      />
+    )
+    const user = userEvent.setup()
+    const diet = await screen.findByRole("combobox", { name: "Diet" })
+    await user.click(diet)
+    await user.click(await screen.findByRole("option", { name: "Automatic" }))
+    expect(diet).toHaveTextContent(/^Automatic$/)
+  })
+
   it("an empty keep days field saves null (use the default)", async () => {
     vi.mocked(updateFood).mockClear()
     vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)

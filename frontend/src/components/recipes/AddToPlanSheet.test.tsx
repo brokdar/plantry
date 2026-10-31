@@ -125,6 +125,16 @@ describe("AddToPlanSheet", () => {
     expect(screen.getAllByRole("radio")).toHaveLength(3)
   })
 
+  it("leaves eaters to the server while the profile loads", async () => {
+    vi.mocked(getProfile).mockReturnValue(new Promise(() => {}))
+    const user = userEvent.setup()
+    renderSheet()
+
+    await user.click(await screen.findByTestId("add-to-plan-submit"))
+    await vi.waitFor(() => expect(createPlate).toHaveBeenCalled())
+    expect(vi.mocked(createPlate).mock.calls[0][0].eaters).toBeUndefined()
+  })
+
   it("says so when both windows are full", async () => {
     vi.mocked(getPlan).mockResolvedValue({ ...current, cells: [] })
     renderSheet()

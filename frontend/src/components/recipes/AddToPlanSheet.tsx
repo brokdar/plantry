@@ -127,7 +127,8 @@ function AddToPlanBody({
       {
         date: selected.date,
         slot_id: selected.slot.id,
-        eaters: shownEaters,
+        // Until the profile is in, the server's household default applies.
+        eaters: eaters ?? profile.data?.household_portions,
         components: [{ food_id: recipe.id, portions: 1 }],
       },
       {
