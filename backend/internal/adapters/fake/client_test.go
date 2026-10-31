@@ -87,3 +87,24 @@ func TestClient_UsageIncludesCacheTokens(t *testing.T) {
 		InputTokens: 10, OutputTokens: 20, CacheReadTokens: 30, CacheWriteTokens: 40,
 	}, resp.Usage)
 }
+
+func TestClient_AbandonedSessionDoesNotLeakIntoNewSession(t *testing.T) {
+	c := NewFromScript(&Script{Turns: []Turn{
+		{StopReason: "tool_use", Message: ScriptedMessage{Content: []ScriptedBlock{{Type: "tool_use", ToolUseID: "t1", ToolName: "x"}}}},
+		{StopReason: "end_turn", Message: ScriptedMessage{Content: []ScriptedBlock{{Type: "text", Text: "done"}}}},
+	}})
+	tools := []llm.Tool{{Name: "x"}}
+	user := llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "hi"}}}
+
+	// Session 1 takes the tool_use turn and is abandoned before the tool result.
+	assert.Equal(t, llm.StopReasonToolUse, stream(t, c, llm.Request{Tools: tools, Messages: []llm.Message{user}}).StopReason)
+
+	// Session 2 starts with a fresh user message and must get turn 0 again.
+	resp := stream(t, c, llm.Request{Tools: tools, Messages: []llm.Message{user}})
+	assert.Equal(t, llm.StopReasonToolUse, resp.StopReason)
+
+	// Its tool-result round trip advances to the end turn.
+	result := llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeToolResult, ToolResultID: "t1"}}}
+	resp = stream(t, c, llm.Request{Tools: tools, Messages: []llm.Message{user, resp.Message, result}})
+	assert.Equal(t, llm.StopReasonEndTurn, resp.StopReason)
+}

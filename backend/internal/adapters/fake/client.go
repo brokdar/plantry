@@ -69,6 +69,7 @@ type ScriptedUsage struct {
 // on the next Stream() call, and the very last turn is reused indefinitely.
 // This keeps chat sessions self-terminating (so a test doesn't hang) while
 // allowing later chat requests in the same process to replay the script.
+// A request that ends in a plain user message always restarts at turn 0.
 type Client struct {
 	path   string
 	script *Script
@@ -150,6 +151,11 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 		c.mu.Unlock()
 		return nil, fmt.Errorf("fake: empty script")
 	}
+	// A request whose last message is a plain user message starts a new
+	// user turn, so it begins at turn 0 regardless of any abandoned session.
+	if startsNewTurn(req) {
+		c.call = 0
+	}
 	idx := c.call
 	if idx >= len(c.script.Turns) {
 		idx = len(c.script.Turns) - 1
@@ -193,6 +199,25 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 			CacheReadTokens: turn.Usage.CacheReadTokens, CacheWriteTokens: turn.Usage.CacheWriteTokens,
 		},
 	}, nil
+}
+
+// startsNewTurn reports whether a chat request (one that carries tools) ends in
+// a user message that is not a tool_result carrier. Tool-less one-shot calls
+// (Complete) script sequential turns and keep the cursor as-is.
+func startsNewTurn(req llm.Request) bool {
+	if len(req.Tools) == 0 || len(req.Messages) == 0 {
+		return false
+	}
+	last := req.Messages[len(req.Messages)-1]
+	if last.Role != llm.RoleUser {
+		return false
+	}
+	for _, b := range last.Content {
+		if b.Type == llm.ContentTypeToolResult {
+			return false
+		}
+	}
+	return true
 }
 
 func decodePayload(evtType string, raw json.RawMessage) (any, error) {
