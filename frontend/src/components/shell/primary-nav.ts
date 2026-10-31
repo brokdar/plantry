@@ -15,8 +15,6 @@ export type PrimaryNavEntry = {
   active: boolean
 }
 
-const RECIPES_PATH = /^\/(components|ingredients|import)(\/|$)/
-
 /**
  * The four destinations (UX §2.1, plan D1), shared by the rail and the phone
  * tab bar.
@@ -41,10 +39,10 @@ export function usePrimaryNav(): PrimaryNavEntry[] {
     },
     {
       id: "recipes",
-      to: "/components",
+      to: "/recipes",
       labelKey: "nav.recipes",
       icon: BookOpen,
-      active: RECIPES_PATH.test(pathname),
+      active: pathname === "/recipes" || pathname.startsWith("/recipes/"),
     },
     {
       id: "shop",

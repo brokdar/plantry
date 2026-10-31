@@ -63,7 +63,7 @@ test.describe("Setup wizard", () => {
       )
       await page.getByRole("button", { name: "Add recipes" }).click()
       expect((await completed).ok()).toBe(true)
-      await expect(page).toHaveURL(/\/components\/?$/)
+      await expect(page).toHaveURL(/\/recipes\/?$/)
       // The guided state, with the real count of a fresh DB.
       const guide = page.getByTestId("recipe-onboarding")
       await expect(guide).toBeVisible()

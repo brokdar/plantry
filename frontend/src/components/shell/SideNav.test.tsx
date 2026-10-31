@@ -45,7 +45,7 @@ describe("SideNav", () => {
       expect(links.map((l) => l.getAttribute("href"))).toEqual([
         "/today",
         "/plan",
-        "/components",
+        "/recipes",
         "/shop",
       ])
 
@@ -56,10 +56,9 @@ describe("SideNav", () => {
   )
 
   test.each([
-    ["/ingredients", "Recipes"],
-    ["/ingredients/12/edit", "Recipes"],
-    ["/components/3", "Recipes"],
-    ["/import", "Recipes"],
+    ["/recipes/ingredients", "Recipes"],
+    ["/recipes/ingredients/12/edit", "Recipes"],
+    ["/recipes/3", "Recipes"],
     ["/plan", "Plan"],
     ["/today", "Today"],
     ["/today?date=2026-10-20", "Today"],

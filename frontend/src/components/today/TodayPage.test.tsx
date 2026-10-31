@@ -219,7 +219,7 @@ describe("TodayPage", () => {
     expect(card).toHaveTextContent("Add 3 more recipes to start planning")
     expect(
       within(card).getByRole("link", { name: "Add recipes" })
-    ).toHaveAttribute("href", "/components")
+    ).toHaveAttribute("href", "/recipes")
     expect(screen.queryByTestId("today-no-plan")).toBeNull()
   })
 

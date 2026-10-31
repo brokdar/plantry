@@ -2,11 +2,12 @@ import { cleanupFood, expect, seedLeafFood, test, uid } from "./helpers"
 
 test.describe("Ingredient Catalogue", () => {
   test("create an ingredient via the form", async ({ page }) => {
-    const name = `Chicken breast ${uid()}`
+    const tag = uid()
+    const name = `Chicken breast ${tag}`
     let createdId: number | undefined
 
     try {
-      await page.goto("/ingredients/new")
+      await page.goto("/recipes/ingredients/new")
       await page.getByLabel(/^name/i).fill(name)
       await page.getByLabel(/calories/i).fill("165")
       await page.getByLabel(/protein/i).fill("31")
@@ -24,13 +25,12 @@ test.describe("Ingredient Catalogue", () => {
       const body = (await response.json()) as { id: number }
       createdId = body.id
 
-      // Should navigate back to list and show the ingredient card
+      // Back on the table, the new row shows its kcal.
+      await expect(page).toHaveURL(/\/recipes\/ingredients$/)
+      await page.getByTestId("ingredients-search").fill(tag)
       await expect(
-        page.getByTestId(`ingredient-card-${createdId}`)
-      ).toBeVisible()
-      await expect(
-        page.getByTestId(`ingredient-card-${createdId}`)
-      ).toContainText("165kcal")
+        page.getByTestId(`ingredient-row-${createdId}`)
+      ).toContainText("165")
     } finally {
       if (createdId) await cleanupFood(createdId)
     }
@@ -52,10 +52,10 @@ test.describe("Ingredient Catalogue", () => {
     })
 
     try {
-      await page.goto("/ingredients")
+      await page.goto("/recipes/ingredients")
 
       // Narrow to seeded items only — shared DB accumulates across runs.
-      await page.getByTestId("inventory-search").fill(tag)
+      await page.getByTestId("ingredients-search").fill(tag)
       await page.waitForResponse(
         (res) =>
           res.url().includes("/api/foods") &&
@@ -64,13 +64,13 @@ test.describe("Ingredient Catalogue", () => {
 
       // All three seeded items visible
       await expect(
-        page.getByTestId(`ingredient-card-${chicken.id}`)
+        page.getByTestId(`ingredient-row-${chicken.id}`)
       ).toBeVisible()
-      await expect(page.getByTestId(`ingredient-card-${tofu.id}`)).toBeVisible()
-      await expect(page.getByTestId(`ingredient-card-${rice.id}`)).toBeVisible()
+      await expect(page.getByTestId(`ingredient-row-${tofu.id}`)).toBeVisible()
+      await expect(page.getByTestId(`ingredient-row-${rice.id}`)).toBeVisible()
 
       // Search — only chicken matches
-      await page.getByTestId("inventory-search").fill(`chicken ${tag}`)
+      await page.getByTestId("ingredients-search").fill(`chicken ${tag}`)
       await page.waitForResponse(
         (res) =>
           res.url().includes("/api/foods") &&
@@ -79,14 +79,10 @@ test.describe("Ingredient Catalogue", () => {
       )
 
       await expect(
-        page.getByTestId(`ingredient-card-${chicken.id}`)
+        page.getByTestId(`ingredient-row-${chicken.id}`)
       ).toBeVisible()
-      await expect(page.getByTestId(`ingredient-card-${tofu.id}`)).toHaveCount(
-        0
-      )
-      await expect(page.getByTestId(`ingredient-card-${rice.id}`)).toHaveCount(
-        0
-      )
+      await expect(page.getByTestId(`ingredient-row-${tofu.id}`)).toHaveCount(0)
+      await expect(page.getByTestId(`ingredient-row-${rice.id}`)).toHaveCount(0)
     } finally {
       await cleanupFood(chicken.id)
       await cleanupFood(tofu.id)
@@ -99,7 +95,7 @@ test.describe("Ingredient Catalogue", () => {
     const ingredient = await seedLeafFood({ name, kcal_100g: 112 })
 
     try {
-      await page.goto(`/ingredients/${ingredient.id}/edit`)
+      await page.goto(`/recipes/ingredients/${ingredient.id}/edit`)
       await expect(page.getByLabel(/^name/i)).toHaveValue(name)
 
       // Change kcal
@@ -114,68 +110,42 @@ test.describe("Ingredient Catalogue", () => {
       const response = await responsePromise
       expect(response.status()).toBe(200)
 
-      // Back on list, verify updated value on the card
+      // Back on the table, the row shows the new value.
+      await expect(page).toHaveURL(/\/recipes\/ingredients$/)
+      await page.getByTestId("ingredients-search").fill(name)
       await expect(
-        page.getByTestId(`ingredient-card-${ingredient.id}`)
-      ).toContainText("120kcal")
+        page.getByTestId(`ingredient-row-${ingredient.id}`)
+      ).toContainText("120")
     } finally {
       await cleanupFood(ingredient.id)
     }
   })
 
-  test("delete an ingredient", async ({ page }) => {
-    const tag = uid()
-    const keep = await seedLeafFood({
-      name: `Olive oil ${tag}`,
-      kcal_100g: 884,
-    })
+  test("delete an ingredient from its editor", async ({ page }) => {
     const toDelete = await seedLeafFood({
-      name: `Butter ${tag}`,
+      name: `Butter ${uid()}`,
       kcal_100g: 717,
     })
 
-    try {
-      await page.goto("/ingredients")
-      await page.getByTestId("inventory-search").fill(tag)
-      await page.waitForResponse(
-        (res) =>
-          res.url().includes("/api/foods") &&
-          res.url().includes(`search=${tag}`)
-      )
-      await expect(
-        page.getByTestId(`ingredient-card-${toDelete.id}`)
-      ).toBeVisible()
+    await page.goto(`/recipes/ingredients/${toDelete.id}/edit`)
+    await page.getByTestId("ingredient-delete").click()
+    const responsePromise = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/api/foods/${toDelete.id}`) &&
+        res.request().method() === "DELETE"
+    )
+    await page.getByRole("dialog").getByTestId("confirm-delete").click()
+    expect((await responsePromise).ok()).toBeTruthy()
+    await expect(page).toHaveURL(/\/recipes\/ingredients$/)
 
-      // Open the Butter card's menu and choose Delete
-      await page.getByTestId(`ingredient-card-${toDelete.id}-menu`).click()
-      await page.getByTestId(`ingredient-card-${toDelete.id}-delete`).click()
-
-      // Confirm deletion
-      const responsePromise = page.waitForResponse(
-        (res) =>
-          res.url().includes(`/api/foods/${toDelete.id}`) &&
-          res.request().method() === "DELETE"
-      )
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Delete", exact: true })
-        .click()
-      await responsePromise
-
-      // Deleted ingredient gone, kept ingredient remains
-      await expect(
-        page.getByTestId(`ingredient-card-${toDelete.id}`)
-      ).toHaveCount(0)
-      await expect(page.getByTestId(`ingredient-card-${keep.id}`)).toBeVisible()
-    } finally {
-      await cleanupFood(keep.id)
-    }
+    await page.getByTestId("ingredients-search").fill(toDelete.name)
+    await expect(page.getByTestId("ingredients-empty")).toBeVisible()
   })
 
   test("shows validation error when submitting empty name", async ({
     page,
   }) => {
-    await page.goto("/ingredients/new")
+    await page.goto("/recipes/ingredients/new")
 
     // Fill a macro field but leave name empty
     await page.getByLabel(/calories/i).fill("100")
@@ -195,7 +165,7 @@ test.describe("Ingredient Catalogue", () => {
     const existing = await seedLeafFood({ name, kcal_100g: 100 })
 
     try {
-      await page.goto("/ingredients/new")
+      await page.goto("/recipes/ingredients/new")
       await page.getByLabel(/^name/i).fill(name)
       await page.getByLabel(/calories/i).fill("200")
 

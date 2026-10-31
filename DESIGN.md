@@ -331,7 +331,7 @@ A plain, calm tool. Short factual sentences, sentence case, active verbs. No exc
 - `destructive` resolves to **danger**.
 - `shadow-editorial` resolves to **shadow-soft**.
 
-The legacy utilities `gradient-primary`, `editorial-shadow`, `glass-header` and `btn-shimmer` still exist in `index.css`. `gradient-primary` is now a solid accent fill. `gradient-primary` and `editorial-shadow` are still used by unrebuilt screens (planner, ingredient list, recipe cards, the rail logo); `glass-header` and `btn-shimmer` are unused.
+The legacy utilities `gradient-primary`, `editorial-shadow`, `glass-header` and `btn-shimmer` still exist in `index.css`. `gradient-primary` is now a solid accent fill. `gradient-primary` and `editorial-shadow` are still used by unrebuilt screens (planner, the rail logo); `glass-header` and `btn-shimmer` are unused.
 
 - New and rebuilt code uses the Cookbook names: `bg-ground`, `bg-panel`, `text-ink`, `border-line`, `text-accent`, `text-on-accent`, and so on.
 - Legacy names stay until each screen is rebuilt in Phases 1–3. Do not add new uses of them.

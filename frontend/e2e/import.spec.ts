@@ -59,7 +59,7 @@ test.describe("Recipe Import", () => {
       // The real /api/import/lookup answers from the local catalogue (OFF is
       // disabled and FDC has no key in e2e): each seeded leaf is the exact
       // match for its line and gets auto-linked.
-      await page.goto("/import")
+      await page.goto("/recipes?add=url")
 
       // Step 1 — paste HTML (avoids needing to hit the network).
       await page
@@ -120,7 +120,9 @@ test.describe("Recipe Import", () => {
         page.getByText(/photo could not be downloaded|foto konnte nicht/i)
       ).toBeVisible()
 
-      // After saving, the recipe detail opens.
+      // F8-AC2: after saving, the recipe detail opens and the sheet is gone.
+      await expect(page).toHaveURL(new RegExp(`/recipes/${createdId}$`))
+      await expect(page.getByTestId("import-sheet")).toHaveCount(0)
       await expect(
         page.getByRole("heading", { level: 1, name: `E2E Carbonara ${tag}` })
       ).toBeVisible()

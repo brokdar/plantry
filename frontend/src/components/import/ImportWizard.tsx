@@ -3,7 +3,6 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -135,7 +134,7 @@ export function ImportWizard() {
         toast.warning(t("import.review.image_download_failed"))
       }
       navigate({
-        to: "/components/$id",
+        to: "/recipes/$id",
         params: { id: String(created.id) },
       })
     } catch {
@@ -160,18 +159,9 @@ export function ImportWizard() {
   const saving = resolve.isPending || createComp.isPending
 
   return (
-    <section className="mx-auto max-w-4xl space-y-8 px-4 py-8 md:px-8 md:py-12">
-      <header className="space-y-2">
-        <h1 className="font-heading text-4xl font-extrabold tracking-tight text-on-surface md:text-5xl">
-          {t("import.title")}
-        </h1>
-        <p className="max-w-lg text-on-surface-variant md:text-lg">
-          {t("import.subtitle")}
-        </p>
-      </header>
-
+    <div className="flex flex-col gap-6">
       {step === 1 && (
-        <Card className="space-y-4 p-6">
+        <div className="flex flex-col gap-4">
           <h2 className="text-lg font-medium">{t("import.step1.title")}</h2>
           <form className="space-y-4" onSubmit={onSubmitStep1}>
             {!showHtml ? (
@@ -234,11 +224,11 @@ export function ImportWizard() {
                 : t("import.step1.submit")}
             </Button>
           </form>
-        </Card>
+        </div>
       )}
 
       {step === 2 && draft && (
-        <Card className="flex flex-col gap-6 p-6">
+        <div className="flex flex-col gap-6">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium">{t("import.review.title")}</h2>
             <Badge variant="secondary">
@@ -373,8 +363,8 @@ export function ImportWizard() {
               </Button>
             </div>
           </div>
-        </Card>
+        </div>
       )}
-    </section>
+    </div>
   )
 }

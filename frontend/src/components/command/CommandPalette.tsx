@@ -3,7 +3,6 @@ import { Command } from "cmdk"
 import {
   Bookmark,
   CalendarRange,
-  Download,
   LayoutList,
   Package,
   Search,
@@ -22,8 +21,7 @@ import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
 
 // Routes that left the nav (plan D1) stay reachable here.
 const GO_TO_ENTRIES: { to: string; labelKey: string; icon: LucideIcon }[] = [
-  { to: "/ingredients", labelKey: "nav.ingredients", icon: Package },
-  { to: "/import", labelKey: "nav.import", icon: Download },
+  { to: "/recipes/ingredients", labelKey: "nav.ingredients", icon: Package },
 ]
 
 interface CommandPaletteProps {

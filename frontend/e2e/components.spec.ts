@@ -20,7 +20,7 @@ test.describe("Component Library", () => {
     let createdId: number | undefined
 
     try {
-      await page.goto("/components/new")
+      await page.goto("/recipes/new")
       await page.getByLabel(/^name/i).fill(`Curry ${tag}`)
       await page.getByLabel(/servings/i).fill("2")
 
@@ -52,11 +52,9 @@ test.describe("Component Library", () => {
           res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
-      await page.getByTestId("catalog-search").fill(tag)
+      await page.getByTestId("recipes-search").fill(tag)
       await searchResp
-      await expect(
-        page.getByTestId(`component-card-${createdId}`)
-      ).toBeVisible()
+      await expect(page.getByTestId(`recipe-card-${createdId}`)).toBeVisible()
     } finally {
       if (createdId) await cleanupFood(createdId)
       await cleanupFood(ing.id)
@@ -79,7 +77,7 @@ test.describe("Component Library", () => {
     )
 
     try {
-      await page.goto("/components")
+      await page.goto("/recipes")
 
       // Narrow to seeded items only — shared DB accumulates over test runs.
       const resp1 = page.waitForResponse(
@@ -87,12 +85,12 @@ test.describe("Component Library", () => {
           res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
-      await page.getByTestId("catalog-search").fill(tag)
+      await page.getByTestId("recipes-search").fill(tag)
       await resp1
 
-      await expect(page.getByTestId(`component-card-${c1.id}`)).toBeVisible()
-      await expect(page.getByTestId(`component-card-${c2.id}`)).toBeVisible()
-      await expect(page.getByTestId(`component-card-${c3.id}`)).toBeVisible()
+      await expect(page.getByTestId(`recipe-card-${c1.id}`)).toBeVisible()
+      await expect(page.getByTestId(`recipe-card-${c2.id}`)).toBeVisible()
+      await expect(page.getByTestId(`recipe-card-${c3.id}`)).toBeVisible()
 
       const resp2 = page.waitForResponse(
         (res) =>
@@ -100,12 +98,12 @@ test.describe("Component Library", () => {
           res.url().includes("chicken") &&
           res.url().includes(tag)
       )
-      await page.getByTestId("catalog-search").fill(`chicken ${tag}`)
+      await page.getByTestId("recipes-search").fill(`chicken ${tag}`)
       await resp2
 
-      await expect(page.getByTestId(`component-card-${c1.id}`)).toBeVisible()
-      await expect(page.getByTestId(`component-card-${c2.id}`)).toHaveCount(0)
-      await expect(page.getByTestId(`component-card-${c3.id}`)).toHaveCount(0)
+      await expect(page.getByTestId(`recipe-card-${c1.id}`)).toBeVisible()
+      await expect(page.getByTestId(`recipe-card-${c2.id}`)).toHaveCount(0)
+      await expect(page.getByTestId(`recipe-card-${c3.id}`)).toHaveCount(0)
     } finally {
       await cleanupFood(c1.id)
       await cleanupFood(c2.id)
@@ -124,7 +122,7 @@ test.describe("Component Library", () => {
     )
 
     try {
-      await page.goto(`/components/${comp.id}/edit`)
+      await page.goto(`/recipes/${comp.id}/edit`)
       await expect(page.getByLabel(/^name/i)).toHaveValue(`Edit Test ${tag}`)
 
       await page.getByLabel(/^name/i).fill(`Updated ${tag}`)
@@ -139,7 +137,7 @@ test.describe("Component Library", () => {
       expect(response.status()).toBe(200)
 
       // Editor returns to the recipe detail on save, showing the new name.
-      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}$`))
+      await expect(page).toHaveURL(new RegExp(`/recipes/${comp.id}$`))
       await expect(
         page.getByRole("heading", { level: 1, name: `Updated ${tag}` })
       ).toBeVisible()
@@ -164,21 +162,18 @@ test.describe("Component Library", () => {
     )
 
     try {
-      await page.goto("/components")
+      await page.goto("/recipes")
       const searchResp = page.waitForResponse(
         (res) =>
           res.url().includes("/api/foods") &&
           res.url().includes(`search=${tag}`)
       )
-      await page.getByTestId("catalog-search").fill(tag)
+      await page.getByTestId("recipes-search").fill(tag)
       await searchResp
 
-      await page
-        .getByTestId(`component-card-${comp.id}`)
-        .getByRole("link", { name: `Detail ${tag}`, exact: true })
-        .click()
+      await page.getByTestId(`recipe-card-${comp.id}`).click()
 
-      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}$`))
+      await expect(page).toHaveURL(new RegExp(`/recipes/${comp.id}$`))
       await expect(
         page.getByRole("heading", { level: 1, name: `Detail ${tag}` })
       ).toBeVisible()
@@ -187,10 +182,10 @@ test.describe("Component Library", () => {
       const warning = page.getByTestId("nutrition-completeness-warning")
       await expect(
         warning.getByRole("link", { name: stub.name, exact: true })
-      ).toHaveAttribute("href", `/ingredients/${stub.id}/edit`)
+      ).toHaveAttribute("href", `/recipes/ingredients/${stub.id}/edit`)
 
       await page.getByRole("link", { name: "Edit", exact: true }).click()
-      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}/edit$`))
+      await expect(page).toHaveURL(new RegExp(`/recipes/${comp.id}/edit$`))
       await expect(page.getByLabel(/^name/i)).toHaveValue(`Detail ${tag}`)
     } finally {
       await cleanupFood(comp.id)
@@ -198,52 +193,29 @@ test.describe("Component Library", () => {
     }
   })
 
-  test("delete a component", async ({ page }) => {
+  test("delete a recipe from its editor", async ({ page }) => {
     const tag = uid()
-    const { composed: keep, stub: keepStub } = await seedComposedWithStub(
-      { name: `Keep ${tag}`, role: "main" },
-      tag
-    )
-    const { composed: toDelete, stub: delStub } = await seedComposedWithStub(
+    const { composed: toDelete, stub } = await seedComposedWithStub(
       { name: `Delete ${tag}`, role: "side_veg" },
       tag
     )
 
     try {
-      await page.goto("/components")
-      const deleteSearchResp = page.waitForResponse(
-        (res) =>
-          res.url().includes("/api/foods") &&
-          res.url().includes(`search=${tag}`)
-      )
-      await page.getByTestId("catalog-search").fill(tag)
-      await deleteSearchResp
-      await expect(
-        page.getByTestId(`component-card-${toDelete.id}`)
-      ).toBeVisible()
-
-      await page.getByTestId(`component-card-${toDelete.id}-menu`).click()
-      await page.getByTestId(`component-card-${toDelete.id}-delete`).click()
-
+      await page.goto(`/recipes/${toDelete.id}/edit`)
+      await page.getByTestId("component-delete").click()
       const responsePromise = page.waitForResponse(
         (res) =>
           res.url().includes(`/api/foods/${toDelete.id}`) &&
           res.request().method() === "DELETE"
       )
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Delete", exact: true })
-        .click()
-      await responsePromise
+      await page.getByRole("dialog").getByTestId("confirm-delete").click()
+      expect((await responsePromise).ok()).toBeTruthy()
+      await expect(page).toHaveURL(/\/recipes$/)
 
-      await expect(
-        page.getByTestId(`component-card-${toDelete.id}`)
-      ).toHaveCount(0)
-      await expect(page.getByTestId(`component-card-${keep.id}`)).toBeVisible()
+      await page.getByTestId("recipes-search").fill(tag)
+      await expect(page.getByTestId("recipes-empty")).toBeVisible()
     } finally {
-      await cleanupFood(keep.id)
-      await cleanupFood(keepStub.id)
-      await cleanupFood(delStub.id)
+      await cleanupFood(stub.id)
     }
   })
 
@@ -284,7 +256,7 @@ test.describe("Component Library", () => {
         await ctx.dispose()
       })
 
-      await page.goto(`/components/${comp.id}/edit`)
+      await page.goto(`/recipes/${comp.id}/edit`)
       const panel = page.getByTestId("section-card-nutrition")
       const portionBtn = page.getByRole("button", { name: /per portion/i })
       const totalBtn = page.getByRole("button", { name: /^total$/i })
@@ -338,7 +310,7 @@ test.describe("Component Library", () => {
     })
 
     try {
-      await page.goto(`/components/${comp.id}/edit`)
+      await page.goto(`/recipes/${comp.id}/edit`)
 
       // The seed populates row 0 with a stub child; the test exercises the
       // appended row 1.
@@ -393,7 +365,7 @@ test.describe("Component Library", () => {
       })
 
       await test.step("reloading the editor shows the persisted ingredient row", async () => {
-        await page.goto(`/components/${comp.id}/edit`)
+        await page.goto(`/recipes/${comp.id}/edit`)
         await expect(trigger).toContainText(`Combo Chicken ${tag}`)
         await expect(amountInput).toHaveValue("250")
       })
@@ -414,7 +386,7 @@ test.describe("Component Library", () => {
     )
 
     try {
-      await page.goto(`/components/${comp.id}/edit`)
+      await page.goto(`/recipes/${comp.id}/edit`)
 
       await page.getByRole("button", { name: /add step/i }).click()
 
@@ -430,7 +402,7 @@ test.describe("Component Library", () => {
       const response = await resp
       expect(response.status()).toBe(200)
 
-      await page.goto(`/components/${comp.id}/edit`)
+      await page.goto(`/recipes/${comp.id}/edit`)
       const persistedStep = page.locator('textarea[name="instructions.0.text"]')
       await expect(persistedStep).toHaveValue("Mix everything together")
     } finally {
@@ -448,7 +420,7 @@ test.describe("Component Library", () => {
     )
 
     try {
-      await page.goto(`/components/${comp.id}/edit`)
+      await page.goto(`/recipes/${comp.id}/edit`)
 
       const tagInput = page.getByPlaceholder(/spicy, quick|scharf, schnell/)
       await tagInput.fill(newTag)
@@ -465,7 +437,7 @@ test.describe("Component Library", () => {
       const response = await resp
       expect(response.status()).toBe(200)
 
-      await page.goto(`/components/${comp.id}/edit`)
+      await page.goto(`/recipes/${comp.id}/edit`)
       await expect(page.getByText(newTag, { exact: true })).toBeVisible()
     } finally {
       await cleanupFood(comp.id)
@@ -483,20 +455,20 @@ test.describe("Component Library", () => {
     )
 
     try {
-      await page.goto(`/components/${comp.id}/edit`)
+      await page.goto(`/recipes/${comp.id}/edit`)
 
       // Make a dirty change that should NOT persist.
       const nameInput = page.getByLabel(/^name/i)
       await nameInput.fill(`Edited ${tag}`)
 
       await page.getByRole("link", { name: /^cancel$/i }).click()
-      await expect(page).toHaveURL(new RegExp(`/components/${comp.id}$`))
+      await expect(page).toHaveURL(new RegExp(`/recipes/${comp.id}$`))
       await expect(
         page.getByRole("heading", { level: 1, name: `Cancel Recipe ${tag}` })
       ).toBeVisible()
 
       // Reload editor — name unchanged because we navigated away without saving.
-      await page.goto(`/components/${comp.id}/edit`)
+      await page.goto(`/recipes/${comp.id}/edit`)
       await expect(page.getByLabel(/^name/i)).toHaveValue(
         `Cancel Recipe ${tag}`
       )

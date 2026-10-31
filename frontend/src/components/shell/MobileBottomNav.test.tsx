@@ -45,7 +45,7 @@ describe("MobileBottomNav", () => {
   })
 
   test("Recipes is active on /ingredients", async () => {
-    renderWithRouter(<MobileBottomNav />, "/ingredients")
+    renderWithRouter(<MobileBottomNav />, "/recipes/ingredients")
     const nav = await screen.findByTestId("mobile-bottom-nav")
     expect(within(nav).getByRole("link", { name: "Recipes" })).toHaveAttribute(
       "aria-current",

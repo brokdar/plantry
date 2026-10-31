@@ -138,7 +138,7 @@ export function GeneratePlanButton({
       {description}
       {short && (
         <Link
-          to="/components"
+          to="/recipes"
           className="inline-flex min-h-11 items-center text-center text-small text-accent underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
           data-testid="generate-plan-locked-link"
         >

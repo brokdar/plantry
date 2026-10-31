@@ -21,7 +21,7 @@ test.describe("Variant Components", () => {
 
     try {
       // Editor is the only detail surface — navigate there.
-      await page.goto(`/components/${parent.id}/edit`)
+      await page.goto(`/recipes/${parent.id}/edit`)
       await expect(page.getByLabel(/^name/i)).toHaveValue(
         `Chicken Curry ${tag}`
       )
@@ -34,9 +34,7 @@ test.describe("Variant Components", () => {
 
       // Click the variant card to navigate to its editor.
       await variantCard.click()
-      await expect(page).toHaveURL(
-        new RegExp(`/components/${variant.id}/edit$`)
-      )
+      await expect(page).toHaveURL(new RegExp(`/recipes/${variant.id}/edit$`))
       await expect(page.getByLabel(/^name/i)).toHaveValue(variant.name)
 
       // The variant editor surfaces the parent in its variants section.
@@ -59,7 +57,7 @@ test.describe("Variant Components", () => {
 
     let variantId: number | undefined
     try {
-      await page.goto(`/components/${parent.id}/edit`)
+      await page.goto(`/recipes/${parent.id}/edit`)
       await expect(page.getByLabel(/^name/i)).toHaveValue(`Tofu Bowl ${tag}`)
 
       const responsePromise = page.waitForResponse(
@@ -75,7 +73,7 @@ test.describe("Variant Components", () => {
       variantId = variant.id
 
       // Should navigate to the variant's edit page.
-      await expect(page).toHaveURL(new RegExp(`/components/${variantId}/edit$`))
+      await expect(page).toHaveURL(new RegExp(`/recipes/${variantId}/edit$`))
       await expect(page.getByLabel(/^name/i)).toBeVisible()
     } finally {
       if (variantId) await cleanupFood(variantId)
@@ -94,7 +92,7 @@ test.describe("Variant Components", () => {
     )
 
     try {
-      await page.goto(`/components/${comp.id}/edit`)
+      await page.goto(`/recipes/${comp.id}/edit`)
       await expect(page.getByLabel(/^name/i)).toHaveValue(
         `Solo Component ${tag}`
       )
