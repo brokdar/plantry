@@ -47,6 +47,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(plantrymw.SecurityHeaders())
+	r.Use(plantrymw.Actor())
 	r.Use(requestLogger(logger))
 
 	r.Route("/api", func(api chi.Router) {

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/actor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 )
 
@@ -145,4 +146,29 @@ func TestApplyPreset_OverwriteFlag(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, preset.ConflictOverwrite, captured.OnConflict)
 	assert.Equal(t, []int64{2, 3}, captured.SlotIDsFilter)
+}
+
+// Preset apply and copy week write plates through the plate service, so they
+// run as the agent too (D20), over the user actor of the HTTP request.
+func TestPresetTools_RunAsAgent(t *testing.T) {
+	var got []actor.Actor
+	svc := &stubPresetSvc{
+		applyFn: func(ctx context.Context, _ int64, _ preset.ApplyRequest) (*preset.ApplyResult, error) {
+			got = append(got, actor.From(ctx))
+			return &preset.ApplyResult{}, nil
+		},
+		copyWeekFn: func(ctx context.Context, _ preset.CopyWeekRequest) (*preset.ApplyResult, error) {
+			got = append(got, actor.From(ctx))
+			return &preset.ApplyResult{}, nil
+		},
+	}
+	ts, err := NewToolSet(Services{Presets: svc})
+	require.NoError(t, err)
+	ctx := actor.With(context.Background(), actor.User, 0)
+
+	_, _, err = ts.Execute(ctx, "apply_preset", json.RawMessage(`{"preset_id":1,"target_date":"2026-05-20"}`))
+	require.NoError(t, err)
+	_, _, err = ts.Execute(ctx, "copy_week", json.RawMessage(`{"source_start":"2026-05-11","target_start":"2026-05-18"}`))
+	require.NoError(t, err)
+	assert.Equal(t, []actor.Actor{{Kind: actor.Agent}, {Kind: actor.Agent}}, got)
 }

@@ -96,6 +96,7 @@ type Deps struct {
 	Cells    CellChecker
 	Profile  ProfileReader
 	Settings SettingsReader
+	Events   EventLog
 	Tx       domain.Transactor
 	Now      func() time.Time
 }
@@ -110,6 +111,7 @@ type Service struct {
 	cells    CellChecker
 	profile  ProfileReader
 	settings SettingsReader
+	events   EventLog
 	tx       domain.Transactor
 	now      func() time.Time
 }
@@ -122,7 +124,7 @@ func NewService(d Deps) *Service {
 	}
 	return &Service{
 		plates: d.Plates, sessions: d.Sessions, slots: d.Slots, foods: d.Foods,
-		cells: d.Cells, profile: d.Profile, settings: d.Settings, tx: d.Tx, now: now,
+		cells: d.Cells, profile: d.Profile, settings: d.Settings, events: d.Events, tx: d.Tx, now: now,
 	}
 }
 
@@ -153,12 +155,16 @@ func (s *Service) Create(ctx context.Context, in PlateInput) (*Plate, error) {
 		if err != nil {
 			return err
 		}
-		t := newTracker()
+		t, j := newTracker(), newJournal()
 		id, err := s.createPlate(ctx, in, e, t, true)
 		if err != nil {
 			return err
 		}
+		j.create(id)
 		if err := s.settle(ctx, t); err != nil {
+			return err
+		}
+		if err := s.commit(ctx, j); err != nil {
 			return err
 		}
 		out, err = s.plates.Get(ctx, id)
@@ -267,6 +273,8 @@ func (s *Service) Update(ctx context.Context, id int64, patch PlatePatch) (*Plat
 				return err
 			}
 		}
+		j := newJournal()
+		j.touch(*cur)
 		if err := s.plates.Update(ctx, &next); err != nil {
 			return err
 		}
@@ -288,6 +296,9 @@ func (s *Service) Update(ctx context.Context, id int64, patch PlatePatch) (*Plat
 		if err := s.settle(ctx, t); err != nil {
 			return err
 		}
+		if err := s.commit(ctx, j); err != nil {
+			return err
+		}
 		out, err = s.plates.Get(ctx, id)
 		return err
 	})
@@ -306,8 +317,12 @@ func (s *Service) Delete(ctx context.Context, id int64) (PlanSnapshot, error) {
 		if err != nil {
 			return err
 		}
-		snap, err = s.remove(ctx, []Plate{*p}, allComponents, false, &refAlloc{}, nil, nil)
-		return err
+		j := newJournal()
+		snap, err = s.remove(ctx, []Plate{*p}, allComponents, false, &refAlloc{}, nil, nil, j)
+		if err != nil {
+			return err
+		}
+		return s.commit(ctx, j)
 	})
 	if err != nil {
 		return PlanSnapshot{}, err
@@ -327,8 +342,12 @@ func (s *Service) ClearRange(ctx context.Context, from, to time.Time) (PlanSnaps
 		if err != nil {
 			return err
 		}
-		snap, err = s.remove(ctx, plates, allComponents, false, &refAlloc{}, nil, nil)
-		return err
+		j := newJournal()
+		snap, err = s.remove(ctx, plates, allComponents, false, &refAlloc{}, nil, nil, j)
+		if err != nil {
+			return err
+		}
+		return s.commit(ctx, j)
 	})
 	if err != nil {
 		return PlanSnapshot{}, err
@@ -386,7 +405,7 @@ func (s *Service) AddComponent(ctx context.Context, plateID int64, pc PlateCompo
 		if err := s.plates.CreateComponent(ctx, &pc); err != nil {
 			return err
 		}
-		out, err = s.finishComponentChange(ctx, t, plateID)
+		out, err = s.finishComponentChange(ctx, t, p)
 		return err
 	})
 	if err != nil {
@@ -419,10 +438,14 @@ func (s *Service) UpdateComponentQuantity(ctx context.Context, componentID int64
 		if _, err := s.normaliseComponent(ctx, pc); err != nil {
 			return err
 		}
+		p, err := s.plates.Get(ctx, pc.PlateID)
+		if err != nil {
+			return err
+		}
 		if err := s.plates.UpdateComponent(ctx, pc); err != nil {
 			return err
 		}
-		out, err = s.finishComponentChange(ctx, t, pc.PlateID)
+		out, err = s.finishComponentChange(ctx, t, p)
 		return err
 	})
 	if err != nil {
@@ -472,7 +495,7 @@ func (s *Service) SwapComponent(ctx context.Context, componentID, newFoodID int6
 		if err := s.plates.UpdateComponent(ctx, pc); err != nil {
 			return err
 		}
-		out, err = s.finishComponentChange(ctx, t, pc.PlateID)
+		out, err = s.finishComponentChange(ctx, t, p)
 		return err
 	})
 	if err != nil {
@@ -490,6 +513,10 @@ func (s *Service) RemoveComponent(ctx context.Context, componentID int64) (*Plat
 		if err != nil {
 			return err
 		}
+		p, err := s.plates.Get(ctx, pc.PlateID)
+		if err != nil {
+			return err
+		}
 		t := newTracker()
 		if pc.CookSessionID != nil {
 			if err := s.track(ctx, t, *pc.CookSessionID); err != nil {
@@ -499,7 +526,7 @@ func (s *Service) RemoveComponent(ctx context.Context, componentID int64) (*Plat
 		if err := s.plates.DeleteComponent(ctx, componentID); err != nil {
 			return err
 		}
-		out, err = s.finishComponentChange(ctx, t, pc.PlateID)
+		out, err = s.finishComponentChange(ctx, t, p)
 		return err
 	})
 	if err != nil {
@@ -508,14 +535,21 @@ func (s *Service) RemoveComponent(ctx context.Context, componentID int64) (*Plat
 	return out, nil
 }
 
-func (s *Service) finishComponentChange(ctx context.Context, t *tracker, plateID int64) (*Plate, error) {
+// finishComponentChange settles D11, bumps the plate and logs its event;
+// before is the plate as it was before the change.
+func (s *Service) finishComponentChange(ctx context.Context, t *tracker, before *Plate) (*Plate, error) {
 	if err := s.settle(ctx, t); err != nil {
 		return nil, err
 	}
-	if err := s.plates.Touch(ctx, plateID); err != nil {
+	if err := s.plates.Touch(ctx, before.ID); err != nil {
 		return nil, err
 	}
-	return s.plates.Get(ctx, plateID)
+	j := newJournal()
+	j.touch(*before)
+	if err := s.commit(ctx, j); err != nil {
+		return nil, err
+	}
+	return s.plates.Get(ctx, before.ID)
 }
 
 // ── Sessions ────────────────────────────────────────────────────────────
@@ -594,8 +628,15 @@ func (s *Service) SetSessionPortions(ctx context.Context, id int64, in SessionPo
 				return fmt.Errorf("%w: food %d", domain.ErrSessionNotFreezable, f.ID)
 			}
 		}
+		j, err := s.sessionJournal(ctx, *sess)
+		if err != nil {
+			return err
+		}
 		sess.Portions, sess.FrozenPortions, sess.Note = in.Portions, in.FrozenPortions, note
 		if err := s.sessions.UpdateSession(ctx, sess); err != nil {
+			return err
+		}
+		if err := s.commit(ctx, j); err != nil {
 			return err
 		}
 		out, err = s.view(ctx, sess, e)
@@ -615,12 +656,19 @@ func (s *Service) SetCooked(ctx context.Context, id int64, cooked bool) (*Sessio
 		if err != nil {
 			return err
 		}
+		j, err := s.sessionJournal(ctx, *sess)
+		if err != nil {
+			return err
+		}
 		sess.CookedAt = nil
 		if cooked {
 			at := s.now().UTC().Truncate(time.Second)
 			sess.CookedAt = &at
 		}
 		if err := s.sessions.UpdateSession(ctx, sess); err != nil {
+			return err
+		}
+		if err := s.commit(ctx, j); err != nil {
 			return err
 		}
 		e, err := s.loadEnv(ctx)
@@ -716,7 +764,8 @@ func (s *Service) AddLeftovers(ctx context.Context, id int64, cells []CellKey) (
 		if ordered := OrderLinks(*sess, links, e.set.DefaultKeepDays, e.order); len(ordered) > 0 {
 			perEater = ordered[0].PerEater
 		}
-		t := newTracker()
+		t, j := newTracker(), newJournal()
+		j.editSession(*sess)
 		for _, c := range cells {
 			portions := perEater
 			sid := id
@@ -724,11 +773,16 @@ func (s *Service) AddLeftovers(ctx context.Context, id int64, cells []CellKey) (
 				Date: c.Date, SlotID: c.SlotID,
 				Components: []PlateComponent{{FoodID: sess.FoodID, Portions: &portions, CookSessionID: &sid}},
 			}
-			if _, err := s.createPlate(ctx, in, e, t, true); err != nil {
+			pid, err := s.createPlate(ctx, in, e, t, true)
+			if err != nil {
 				return fmt.Errorf("leftover %s slot %d: %w", c.Date.Format(dateLayout), c.SlotID, err)
 			}
+			j.create(pid)
 		}
 		if err := s.settle(ctx, t); err != nil {
+			return err
+		}
+		if err := s.commit(ctx, j); err != nil {
 			return err
 		}
 		sess, err = s.sessions.GetSession(ctx, id)
@@ -750,16 +804,22 @@ func (s *Service) AddLeftovers(ctx context.Context, id int64, cells []CellKey) (
 func (s *Service) DeleteSession(ctx context.Context, id int64) (PlanSnapshot, error) {
 	var snap PlanSnapshot
 	err := s.tx.InTx(ctx, func(ctx context.Context) error {
-		if _, err := s.sessions.GetSession(ctx, id); err != nil {
+		sess, err := s.sessions.GetSession(ctx, id)
+		if err != nil {
 			return err
 		}
+		j := newJournal()
+		j.editSession(*sess)
 		links, err := s.sessions.ListLinks(ctx, id)
 		if err != nil {
 			return err
 		}
 		if len(links) == 0 {
 			snap = emptySnapshot()
-			return s.sessions.DeleteSession(ctx, id)
+			if err := s.sessions.DeleteSession(ctx, id); err != nil {
+				return err
+			}
+			return s.commit(ctx, j)
 		}
 		var plates []Plate
 		seen := map[int64]bool{}
@@ -780,13 +840,38 @@ func (s *Service) DeleteSession(ctx context.Context, id int64) (PlanSnapshot, er
 		}
 		sortPlates(plates, order)
 		pick := func(pc PlateComponent) bool { return pc.CookSessionID != nil && *pc.CookSessionID == id }
-		snap, err = s.remove(ctx, plates, pick, true, &refAlloc{}, nil, nil)
-		return err
+		snap, err = s.remove(ctx, plates, pick, true, &refAlloc{}, nil, nil, j)
+		if err != nil {
+			return err
+		}
+		return s.commit(ctx, j)
 	})
 	if err != nil {
 		return PlanSnapshot{}, err
 	}
 	return snap, nil
+}
+
+// sessionJournal starts the journal of an edit of sess: the session and
+// every plate linked to it.
+func (s *Service) sessionJournal(ctx context.Context, sess CookSession) (*journal, error) {
+	j := newJournal()
+	j.editSession(sess)
+	links, err := s.sessions.ListLinks(ctx, sess.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range links {
+		if _, seen := j.open[l.PlateID]; seen {
+			continue
+		}
+		p, err := s.plates.Get(ctx, l.PlateID)
+		if err != nil {
+			return nil, err
+		}
+		j.touch(*p)
+	}
+	return j, nil
 }
 
 // ── Snapshot apply ──────────────────────────────────────────────────────
@@ -821,7 +906,10 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 		if err != nil {
 			return err
 		}
-		t := newTracker()
+		t, j := newTracker(), newJournal()
+		if opts.Restore {
+			j.created = ActionRestore
+		}
 		pinned := map[int64]bool{}
 		for _, st := range steps {
 			for _, c := range st.sp.Components {
@@ -843,7 +931,7 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 		if len(replace) > 0 {
 			// The overwrite shares Apply's tracker and keeps the pinned
 			// sessions: Apply settles D11 and GC once, after relinking.
-			res.Removed, err = s.remove(ctx, replace, allComponents, false, &refAlloc{}, t, pinned)
+			res.Removed, err = s.remove(ctx, replace, allComponents, false, &refAlloc{}, t, pinned, j)
 			if err != nil {
 				return err
 			}
@@ -851,6 +939,7 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 		created := map[string]int64{}
 		for _, st := range steps {
 			if st.merge != nil {
+				j.touch(*st.merge)
 				if err := s.mergeInto(ctx, st.merge, st.sp, sessByRef, created, e, t); err != nil {
 					return err
 				}
@@ -874,9 +963,13 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 					return err
 				}
 			}
+			j.create(id)
 			res.PlateIDs = append(res.PlateIDs, id)
 		}
-		return s.settle(ctx, t)
+		if err := s.settle(ctx, t); err != nil {
+			return err
+		}
+		return s.commit(ctx, j)
 	})
 	if err != nil {
 		return nil, err
@@ -1079,7 +1172,11 @@ func (r *refAlloc) next() string {
 // With a nil t, remove settles its own tracker. With the caller's t it only
 // records into it and leaves the settle to the caller, and the pinned
 // sessions count as surviving: the caller links them again before it settles.
-func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateComponent) bool, keepPartial bool, refs *refAlloc, t *tracker, pinned map[int64]bool) (PlanSnapshot, error) {
+// Every plate is touched in j; the caller commits j.
+func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateComponent) bool, keepPartial bool, refs *refAlloc, t *tracker, pinned map[int64]bool, j *journal) (PlanSnapshot, error) {
+	for _, p := range plates {
+		j.touch(p)
+	}
 	snap := emptySnapshot()
 	removed := map[int64]bool{}
 	var sessionIDs []int64
@@ -1184,6 +1281,7 @@ func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateCom
 			if err := s.plates.Delete(ctx, p.ID); err != nil {
 				return PlanSnapshot{}, err
 			}
+			j.remove(p.ID)
 			continue
 		}
 		if err := s.plates.Touch(ctx, p.ID); err != nil {

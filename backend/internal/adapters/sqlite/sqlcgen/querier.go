@@ -26,6 +26,7 @@ type Querier interface {
 	CreateFoodTag(ctx context.Context, arg CreateFoodTagParams) error
 	CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate, error)
 	CreatePlateComponent(ctx context.Context, arg CreatePlateComponentParams) (PlateComponent, error)
+	CreatePlateEvent(ctx context.Context, arg CreatePlateEventParams) error
 	CreatePreset(ctx context.Context, name string) (Preset, error)
 	CreatePresetComponent(ctx context.Context, arg CreatePresetComponentParams) (PresetComponent, error)
 	CreatePresetPlate(ctx context.Context, arg CreatePresetPlateParams) (PresetPlate, error)
@@ -91,6 +92,7 @@ type Querier interface {
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
+	ListPlateEvents(ctx context.Context) ([]PlateEvent, error)
 	ListPlateFeedbackByDateRange(ctx context.Context, arg ListPlateFeedbackByDateRangeParams) ([]PlateFeedback, error)
 	ListPlatesByDate(ctx context.Context, date string) ([]Plate, error)
 	ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDateRangeParams) ([]Plate, error)

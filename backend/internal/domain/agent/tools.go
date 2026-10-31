@@ -13,6 +13,7 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/actor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -108,9 +109,11 @@ func (s *ToolSet) Describe() []llm.Tool {
 // Execute validates input against the tool's schema then dispatches to its
 // handler. Schema violations surface as domain.ErrInvalidInput so the model
 // sees a structured tool_result and can retry with corrected arguments.
-// Each call is recorded as a tool_call step of the AI run in ctx, if any.
+// Each call is recorded as a tool_call step of the AI run in ctx, if any, and
+// its plan changes are made as the agent of that run (D20).
 func (s *ToolSet) Execute(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 	start := time.Now()
+	ctx = actor.With(ctx, actor.Agent, airun.FromContext(ctx).ID())
 	output, effect, err := s.execute(ctx, name, input)
 	result := output
 	if err != nil {

@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -30,6 +31,7 @@ import (
 // slot, leaf Rice, composed Chili, household portions 2.
 type plateToolEnv struct {
 	ctx    context.Context
+	db     *sql.DB
 	ts     *agent.ToolSet
 	plates *plate.Service
 	slotID int64
@@ -48,7 +50,7 @@ func newPlateToolEnv(t *testing.T) *plateToolEnv {
 		require.NoError(t, err)
 		return id
 	}
-	e := &plateToolEnv{ctx: ctx}
+	e := &plateToolEnv{ctx: ctx, db: db}
 	e.slotID = insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.dinner', 'moon', 1, 1)`)
 	e.rice = insert(`INSERT INTO foods (name, kind, source) VALUES ('Rice', 'leaf', 'manual')`)
 	e.chili = insert(`INSERT INTO foods (name, kind, role, reference_portions) VALUES ('Chili', 'composed', 'main', 4)`)

@@ -57,7 +57,7 @@ type SessionLink struct {
 
 // SnapshotSession is a session the snapshot recreates.
 type SnapshotSession struct {
-	Ref            string     `json:"ref"`
+	Ref            string     `json:"ref,omitempty"`
 	FoodID         int64      `json:"food_id"`
 	CookDate       string     `json:"cook_date"`
 	CookSlotID     int64      `json:"cook_slot_id"`
@@ -86,6 +86,9 @@ const (
 // ApplyOptions configures Apply.
 type ApplyOptions struct {
 	OnConflict ConflictMode
+	// Restore logs the plates Apply creates as "restore" instead of
+	// "create" (D20).
+	Restore bool
 }
 
 // ApplyResult reports what Apply did.

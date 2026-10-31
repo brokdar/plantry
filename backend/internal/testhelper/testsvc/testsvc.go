@@ -30,6 +30,7 @@ func Plan(db *sql.DB) (*plate.Service, *availability.Service) {
 		Cells:    avail,
 		Profile:  profile.NewService(sqlite.NewProfileRepo(db)),
 		Settings: Settings(db),
+		Events:   sqlite.NewPlateEventRepo(db),
 		Tx:       tx,
 	})
 	avail.WithPlates(plates)
