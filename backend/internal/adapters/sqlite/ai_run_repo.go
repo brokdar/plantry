@@ -36,21 +36,16 @@ var (
 	_ planview.RunNotes = (*AIRunRepo)(nil)
 )
 
-// RunNote returns the run's chooser for the plan's draft summary. Notes stay
-// nil: ai_runs has no notes column yet.
+// RunNote returns the run's chooser and notes for the plan's draft summary.
 func (r *AIRunRepo) RunNote(ctx context.Context, id int64) (planview.RunNote, error) {
-	chooser, err := r.queriesFor(ctx).GetRunNote(ctx, id)
+	row, err := r.queriesFor(ctx).GetRunNote(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return planview.RunNote{}, fmt.Errorf("%w: ai run %d", domain.ErrNotFound, id)
 	}
 	if err != nil {
 		return planview.RunNote{}, err
 	}
-	var n planview.RunNote
-	if chooser.Valid {
-		n.Chooser = &chooser.String
-	}
-	return n, nil
+	return planview.RunNote{Chooser: fromNullString(row.Chooser), Notes: fromNullString(row.Notes)}, nil
 }
 
 // Record moves the run's outcome by ev (D25; the transitions are in the

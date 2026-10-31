@@ -52,7 +52,7 @@ WHERE id IN (
 
 -- name: GetRunNote :one
 -- What the plan's draft summary shows of a run (D26).
-SELECT chooser FROM ai_runs WHERE id = ?;
+SELECT chooser, notes FROM ai_runs WHERE id = ?;
 
 -- name: SetRunOutcome :exec
 -- D25: a run's outcome after its rows were accepted, discarded or un-accepted

@@ -273,15 +273,20 @@ func (q *Queries) GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailR
 }
 
 const getRunNote = `-- name: GetRunNote :one
-SELECT chooser FROM ai_runs WHERE id = ?
+SELECT chooser, notes FROM ai_runs WHERE id = ?
 `
 
+type GetRunNoteRow struct {
+	Chooser sql.NullString
+	Notes   sql.NullString
+}
+
 // What the plan's draft summary shows of a run (D26).
-func (q *Queries) GetRunNote(ctx context.Context, id int64) (sql.NullString, error) {
+func (q *Queries) GetRunNote(ctx context.Context, id int64) (GetRunNoteRow, error) {
 	row := q.db.QueryRowContext(ctx, getRunNote, id)
-	var chooser sql.NullString
-	err := row.Scan(&chooser)
-	return chooser, err
+	var i GetRunNoteRow
+	err := row.Scan(&i.Chooser, &i.Notes)
+	return i, err
 }
 
 const listAIRunStepViews = `-- name: ListAIRunStepViews :many

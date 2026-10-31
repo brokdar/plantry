@@ -78,7 +78,7 @@ type Querier interface {
 	GetPreset(ctx context.Context, id int64) (Preset, error)
 	GetProfile(ctx context.Context) (UserProfile, error)
 	// What the plan's draft summary shows of a run (D26).
-	GetRunNote(ctx context.Context, id int64) (sql.NullString, error)
+	GetRunNote(ctx context.Context, id int64) (GetRunNoteRow, error)
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
