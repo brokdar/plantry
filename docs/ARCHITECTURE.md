@@ -56,11 +56,11 @@ This document is the technical contract for the Plantry redesign. It defines the
 | Component library| shadcn/ui                                | Gold-standard copy-paste primitives, a11y by default   |
 | Icons            | Lucide React                             | Tree-shakeable, consistent                             |
 | Routing          | TanStack Router                          | Fully type-safe params, file-based, SPA-native         |
-| Server state     | TanStack Query                           | Caching, mutations, optimistic updates with rollback   |
+| Server state     | TanStack Query                           | Caching, mutations, targeted invalidation              |
 | Client state     | Zustand                                  | ~1 KB, only for ephemeral UI state                     |
 | Forms            | `react-hook-form` + `zod`                | Uncontrolled, fast, schema-validated                   |
 | Drag-and-drop    | `dnd-kit`                                | Accessible, composable, the React standard            |
-| Barcode scanning | `BarcodeDetector` API + `@zxing/library` | Native where supported, cross-browser fallback         |
+| Barcode scanning | `barcode-detector`                       | `BarcodeDetector` API with a cross-browser fallback    |
 | HTTP             | `fetch` wrapped in typed client          | Consumed through TanStack Query hooks                  |
 | i18n             | `react-i18next`                          | Mature, lazy load, locale switching                    |
 | Unit tests       | Vitest + React Testing Library           | Fast, colocated with Vite                              |
@@ -76,7 +76,7 @@ The "Cookbook" palette (paper-white ground, ink-blue accent, six batch colours) 
 Single Docker image (multi-stage build):
 
 1. **Stage A (Bun):** installs frontend deps, builds static SPA.
-2. **Stage B (Go):** copies Stage A output into `static/`, compiles backend with `//go:embed` of `static/`, outputs single binary.
+2. **Stage B (Go):** copies Stage A output (`dist/`) into `backend/internal/webui/files/`, compiles backend with `//go:embed` of that directory, outputs single binary.
 3. **Stage C (Alpine):** copies binary only. Final image ~30 MB. Volume `/data` holds the SQLite file and `images/` directory.
 
 Environment variables:
@@ -564,199 +564,100 @@ Capped at 4k tokens. Rebuild every turn (cheap; keeps context fresh).
 
 ### 8.1 Directory layout
 
+Routes, component directories and the data layer are described in full in `frontend/CLAUDE.md`. In short:
+
 ```text
-frontend/
-├── public/                            # static assets
-├── index.html
-├── vite.config.ts
-├── tailwind.config.ts
-├── tsconfig.json
-└── src/
-    ├── main.tsx                       # React root: QueryClient + RouterProvider + I18nProvider
-    ├── styles/
-    │   └── globals.css                # Tailwind + OKLch tokens
-    ├── routes/                        # TanStack Router file-based routes
-    │   ├── __root.tsx                 # shell, nav, toast host, error boundary
-    │   ├── index.tsx                  # planner (home, current week)
-    │   ├── archive/
-    │   │   ├── index.tsx
-    │   │   └── $id.tsx
-    │   ├── components/
-    │   │   ├── index.tsx
-    │   │   ├── new.tsx
-    │   │   └── $id/
-    │   │       ├── index.tsx
-    │   │       └── edit.tsx
-    │   ├── ingredients/
-    │   ├── templates/
-    │   ├── import/
-    │   └── settings/
-    └── lib/
-        ├── domain/                    # PURE TypeScript types + calculators
-        │   ├── types.ts               # Component, Plate, Ingredient, Role, etc.
-        │   ├── nutrition.ts           # mirror of Go calculator, pure functions
-        │   ├── roles.ts
-        │   └── units.ts
-        ├── api/                       # raw typed HTTP client (used only by queries/)
-        │   ├── client.ts              # fetch wrapper, error mapping
-        │   ├── ingredients.ts
-        │   ├── components.ts
-        │   ├── plates.ts
-        │   ├── weeks.ts
-        │   ├── templates.ts
-        │   ├── profile.ts
-        │   ├── ai.ts                  # SSE stream reader
-        │   └── index.ts
-        ├── queries/                   # TanStack Query hooks (server state)
-        │   ├── keys.ts                # centralized query-key factory
-        │   ├── ingredients.ts         # useIngredients, useCreateIngredient, ...
-        │   ├── components.ts
-        │   ├── weeks.ts
-        │   ├── plates.ts              # useSwapComponent w/ optimistic update
-        │   ├── templates.ts
-        │   ├── profile.ts
-        │   └── ai.ts                  # useChatStream
-        ├── stores/                    # Zustand stores (ephemeral UI state only)
-        │   ├── planner-ui.ts          # edited plate, drag state, panel visibility
-        │   ├── chat-ui.ts             # draft message, panel visibility
-        │   └── toast.ts
-        ├── components/
-        │   ├── ui/                    # shadcn/ui primitives
-        │   ├── planner/               # PlannerGrid, PlateCell, PlateEditor, ComponentChip
-        │   ├── component/             # ComponentEditor, ComponentPicker, VariantList
-        │   ├── ingredient/            # IngredientEditor, LookupPanel, BarcodeScanner
-        │   ├── chat/                  # ChatPanel, ChatMessage, ToolCallBlock
-        │   ├── shopping/              # ShoppingPanel
-        │   ├── nutrition/             # MacroBar, DaySummary, WeekSummary
-        │   └── shared/                # EmptyState, PageHeader, FormBreadcrumb
-        ├── hooks/                     # small reusable hooks
-        ├── i18n/
-        │   ├── index.ts               # react-i18next init
-        │   ├── en.json
-        │   └── de.json
-        └── utils/                     # cn(), date helpers, formatters
+frontend/src/
+├── main.tsx          # ErrorBoundary > ThemeProvider > QueryClientProvider > RouterProvider
+├── router.ts         # createRouter from the generated routeTree.gen.ts
+├── index.css         # Cookbook design tokens (see DESIGN.md)
+├── routes/           # TanStack Router file-based routes (validate search params, mount a page)
+├── components/       # by feature: shell, today, plan, batch, shop, cook, recipes, ingredients, import,
+│                     #   availability, setup, settings, chat, command, images, editorial, ui (shadcn)
+├── lib/
+│   ├── api/          # one typed fetch module per resource; all calls go through apiFetch (client.ts)
+│   ├── queries/      # TanStack Query hooks and the key factories (keys.ts)
+│   ├── stores/       # Zustand stores (chat only)
+│   ├── plan/         # view models and pure helpers: board, today, keynav, batch-colours, format
+│   ├── recipes/      # library URL params <-> list params
+│   ├── cook/         # timer detection in step text
+│   ├── domain/       # nutrition and unit helpers, chat event parsing
+│   ├── schemas/      # zod schemas for forms
+│   ├── i18n/         # react-i18next init, en.json, de.json
+│   └── dates.ts      # todayISO, shiftYMD
+└── test/             # fixtures, renderWithRouter, token tests
 ```
 
 ### 8.2 State philosophy — three buckets, strict boundaries
 
-**Server state** lives in TanStack Query. No exceptions. Anything that came from the API or will be written to it (components, ingredients, plates, weeks, shopping list, nutrition, profile, AI conversations) is a Query or Mutation. Cache keys are centralized in `lib/queries/keys.ts` so two hooks never drift apart.
+**Server state** lives in TanStack Query. No exceptions. Anything that came from the API or will be written to it (foods, plates, sessions, the plan and today read models, the shopping list, settings, profile, AI conversations) is a Query or Mutation. Cache keys are centralized in `lib/queries/keys.ts` so two hooks never drift apart.
 
-**Client state** lives in small Zustand stores. Only genuinely client-only UI state: which panel is open, which plate is being edited, draft chat message text, in-progress drag state. If a piece of state would need to be synced across tabs or persisted server-side, it belongs in TanStack Query instead.
+**Client state** is small. The only Zustand stores are the chat ones: `lib/stores/chat-ui.ts` (panel open state and the composer draft) and `lib/stores/chat-stream.ts` (the streaming AI message). Other UI state is local component state, URL search params (plan window, open cell, library filters) or `localStorage` (shopping ticks, wizard draft).
 
-**Derived state** is computed inline with `useMemo` or via TanStack Query's `select` option. No reactive libraries, no signals, no global event bus.
+**Derived state** is computed inline with `useMemo` or via the query `select` option. View models such as `buildBoard(plan, i18n)` (`lib/plan/board.ts`) and the Today model (`lib/plan/today.ts`) are pure functions of the read models. No reactive libraries, no signals, no global event bus.
 
-This three-bucket discipline is enforced in code review: a new `useState` holding anything fetched from the API is wrong — it should be a query hook. A new Zustand store that mirrors server data is wrong — delete it and use a query.
+A new `useState` holding anything fetched from the API is wrong, and so is a new Zustand store that mirrors server data.
 
 ### 8.3 TanStack Query patterns
 
-**Query keys** come from a single factory to prevent drift:
+**Read models.** The planning screens read server-composed views instead of assembling plates client-side:
 
-```ts
-// lib/queries/keys.ts
-export const qk = {
-  components: {
-    all: ['components'] as const,
-    list: (q: ListQuery) => ['components', 'list', q] as const,
-    detail: (id: number) => ['components', 'detail', id] as const,
-    variants: (id: number) => ['components', 'variants', id] as const,
-  },
-  weeks: {
-    current: ['weeks', 'current'] as const,
-    byId: (id: number) => ['weeks', id] as const,
-    shoppingList: (id: number) => ['weeks', id, 'shopping-list'] as const,
-    nutrition: (id: number) => ['weeks', id, 'nutrition'] as const,
-  },
-  profile: ['profile'] as const,
-  ai: {
-    conversation: (id: number) => ['ai', 'conversation', id] as const,
-  },
-};
-```
+- `usePlan(start?)` calls `GET /api/plan`: the window's cells, batches and day stats. Without `start` the server opens the anchored window. Key: `planKeys.window(start)`.
+- `useToday(date)` calls `GET /api/today` for one date; the client sends its own date (`todayISO` in `lib/dates.ts`). Key: `todayKeys.date(date)`.
+- `useShoppingList(range?)` calls `GET /api/shopping-list`. Key: `shoppingKeys.list(range)`.
 
-**Optimistic updates** follow the canonical pattern. Every mutation in the planner uses the same shape — cancel in-flight queries, snapshot previous data, apply patch, roll back on error, invalidate on settle:
+**Query keys** come from the factories in `keys.ts` (`foodKeys`, `slotKeys`, `planKeys`, `todayKeys`, `sessionKeys`, `shoppingKeys`, `availabilityKeys`, `presetKeys`, `profileKeys`, `settingsKeys`, `setupKeys`, `aiKeys`, `importKeys`, `unitKeys`). The hierarchies are intentional: invalidating a parent drops its children (for example `sessionKeys.detail(id)` also drops its leftover-cell lists).
 
-```ts
-useMutation({
-  mutationFn: ({ pcId, componentId }) =>
-    api.plates.swapComponent(plateId, pcId, componentId),
-  onMutate: async ({ pcId, componentId }) => {
-    await queryClient.cancelQueries({ queryKey: qk.weeks.byId(weekId) });
-    const previous = queryClient.getQueryData(qk.weeks.byId(weekId));
-    queryClient.setQueryData(qk.weeks.byId(weekId), (old) =>
-      patchPlateComponent(old, pcId, componentId)
-    );
-    return { previous };
-  },
-  onError: (_err, _vars, ctx) => {
-    queryClient.setQueryData(qk.weeks.byId(weekId), ctx?.previous);
-  },
-  onSettled: () => {
-    queryClient.invalidateQueries({ queryKey: qk.weeks.byId(weekId) });
-    queryClient.invalidateQueries({ queryKey: qk.weeks.shoppingList(weekId) });
-    queryClient.invalidateQueries({ queryKey: qk.weeks.nutrition(weekId) });
-  },
-});
-```
+**Mutations own their cache and error handling.** Each `useMutation` hook runs its own `invalidateQueries` in `onSuccess` and `toastError` in `onError`; call sites just call `mutate()`. Every mutation that changes the plan calls `invalidatePlanViews(qc)` (`lib/queries/plan.ts`), which invalidates `planKeys.all`, `todayKeys.all` and `shoppingKeys.all` together. Returning that promise from `onSuccess` keeps the mutation pending until the active views have refetched. Plate edits use no optimistic cache patches: the server returns the truth and the views refetch. Only settings, profile and availability defaults patch the cache optimistically (`onMutate`, rolled back on error).
 
-This replaces the hand-rolled optimistic state class that a Svelte design would need. Write the mutation hook once; every caller gets rollback for free.
+**Undo.** Removing mutations return the removed snapshot (`{removed}`); Undo sends it to `POST /api/plan/restore`.
 
-**AI streaming** uses a custom hook that owns the SSE reader and writes into the React Query cache on `plate_changed` events:
+- `useUndoToast()` returns `offer(message, undo)`, the one toast every undoable action shares: it shows the message for 6 s with an Undo action that runs `undo` once.
+- `useUndoableRemoval()` returns `offerUndo(res, verb)` for `{removed}` responses (`plate_removed`, `batch_removed`, `plan_cleared`); Undo calls `useRestorePlan`. An empty snapshot offers nothing.
 
-```ts
-useChatStream({
-  weekId,
-  onPlateChanged: () => {
-    queryClient.invalidateQueries({ queryKey: qk.weeks.byId(weekId) });
-    queryClient.invalidateQueries({ queryKey: qk.weeks.nutrition(weekId) });
-    queryClient.invalidateQueries({ queryKey: qk.weeks.shoppingList(weekId) });
-  },
-});
-```
+**AI streaming.** `useChatStream` (`lib/queries/ai.ts`) owns the SSE reader and feeds the chat stores; on a `plate_changed` event it calls `invalidatePlanViews`.
 
 ### 8.4 Nutrition math on the frontend
 
-Frontend pulls numbers from the API as the single source of truth. The `lib/domain/nutrition.ts` module exists only as a pure TypeScript mirror for live-preview situations (e.g. showing macros while editing a component before save). It must stay in lock-step with the Go calculator via a shared fixture file: a Vitest test reads `testdata/nutrition-cases.json` and a Go test reads the same file. CI fails on divergence.
+The API is the single source of truth. `lib/domain/nutrition.ts` is a pure TypeScript mirror for live previews (for example macros while editing a recipe before save). It stays in lock-step with the Go calculator through a shared fixture: the Vitest test reads `lib/domain/testdata/nutrition-cases.json`.
 
 ### 8.5 Routes and flows
 
-TanStack Router file-based routes with typed params (`$id` segments):
+File-based routes with typed params (`$id`) and validated search params:
 
-| Route                        | Purpose                                              |
-| ---------------------------- | ---------------------------------------------------- |
-| `/`                          | Current week planner (primary screen)                |
-| `/archive`                   | Paginated past weeks                                 |
-| `/archive/$id`               | Read-only week view                                  |
-| `/components`                | Component library (list, search, role filter)        |
-| `/components/new`            | Create component                                     |
-| `/components/$id`            | Detail + variants + nutrition                        |
-| `/components/$id/edit`       | Edit component                                       |
-| `/ingredients`               | Ingredient catalog                                   |
-| `/ingredients/new`           | Create ingredient (or via lookup)                    |
-| `/ingredients/$id/edit`      | Edit ingredient                                      |
-| `/templates`                 | Template library                                     |
-| `/import`                    | Recipe import wizard                                 |
-| `/setup`                     | First-run setup wizard                               |
-| `/settings/$section`         | Household, meals, cooking, assistant, system         |
+| Route                                               | Purpose                                                             |
+| --------------------------------------------------- | ------------------------------------------------------------------- |
+| `/`                                                 | Redirects to `/setup` until setup is completed, else to `/today`    |
+| `/today`                                            | Today: verdict, cook or leftover card, meals, reminders, week strip |
+| `/plan`                                             | The plan board; `?start`, `?cell=date\|slot`, `?day`                |
+| `/shop`                                             | Shopping list by store section; `?from&to`                          |
+| `/recipes`                                          | Recipe library; filters are search params; `?add=url` opens import  |
+| `/recipes/new`, `/recipes/$id`, `/recipes/$id/edit` | Create, detail (scaling, cook history) and edit                     |
+| `/recipes/ingredients` (+ `new`, `$id/edit`)        | Ingredient table and ingredient editor                              |
+| `/cook/$sessionId`, `/recipes/$id/cook`             | Cook mode for a planned batch, or for a recipe without a plan       |
+| `/setup`                                            | First-run setup wizard                                              |
+| `/settings`, `/settings/$section`                   | Household, meals, cooking, assistant, system                        |
+
+`/setup` and cook mode render without the app shell. Unknown paths render the root not-found page with a link to Today.
 
 ### 8.6 Forms
 
-Every form uses `react-hook-form` with a `zod` resolver. Schemas are colocated with the form and mirror the shape of the API payload — one type definition, automatic client-side validation, clean integration with shadcn/ui inputs. Server validation errors (4xx with a `message_key`) are surfaced into the form via `setError` so the user sees them inline, not only as a toast.
+Every form uses `react-hook-form` with a `zod` resolver; schemas live in `lib/schemas/` and mirror the API payload. Server errors carry a message key and are shown through i18n, inline where a field is known and otherwise as a toast.
 
 ### 8.7 Drag-and-drop
 
-The planner grid uses `dnd-kit`: move plates between day/slot cells, reorder components inside a plate. `dnd-kit` handles keyboard accessibility out of the box (Tab + Space to grab, arrow keys to move, Escape to cancel), which matters for a tool people use daily. Touch support is built in for mobile.
+The plan `Board` uses `dnd-kit` (mouse and touch sensors): dragging a plate to an empty cell moves it (`useUpdatePlate`); holding Ctrl/⌘ at drag start copies it as a fresh meal through `restore`. Drops onto No plate or occupied cells are refused with a toast before any request. Keyboard users get the same moves through the plate sheet and board key navigation (`lib/plan/keynav.ts`).
 
 ### 8.8 Barcode scanning
 
-The `BarcodeScanner` component uses the native `BarcodeDetector` API when available (Chromium-based browsers) and falls back to `@zxing/library` on Firefox and Safari. The fallback is lazy-loaded (`import()` on first camera open) so desktop Chromium users never pay its ~100 KB cost. Both paths expose the same callback interface.
+`BarcodeScannerModal` (`components/ingredients/`) uses the `barcode-detector` package, a `BarcodeDetector` implementation that works across browsers.
 
 ### 8.9 Accessibility
 
-- shadcn/ui primitives ship with correct ARIA by default.
-- Every interactive element is keyboard-reachable; focus rings always visible.
-- Color contrast meets WCAG AA on both themes.
-- e2e tests include keyboard-only flows for the planner and chat.
-- `dnd-kit` keyboard sensors are enabled on all drag surfaces.
+- shadcn/ui (Radix) primitives ship with correct ARIA.
+- Every interactive element is keyboard-reachable; focus rings stay visible.
+- Colour contrast meets WCAG AA on both themes; `src/test/tokens.test.ts` checks the token pairs.
+- The plan board is keyboard-navigable (`ShortcutsDialog` lists the keys).
 
 ---
 
@@ -841,8 +742,8 @@ Token bucket on the LLM chat endpoint (default 10 req/min per IP) to prevent run
 | HTTP handlers      | `httptest`      | Status codes, message keys, happy + error paths        |
 | LLM adapters       | `testing` + httptest fake upstream | Wire format, tool call parsing          |
 | Frontend pure      | Vitest          | Nutrition calc, unit conversions, SSE parser           |
-| React components   | Vitest + React Testing Library | Critical components (PlateEditor, ComponentPicker) |
-| React hooks        | Vitest + `@testing-library/react` | Query hooks, mutation optimistic rollback paths  |
+| React components   | Vitest + React Testing Library | Critical components (PlateSheet, BatchSection) |
+| React hooks        | Vitest + `@testing-library/react` | Query hooks, mutation invalidation and undo paths |
 | End-to-end         | Playwright      | Every user-facing feature, per phase                   |
 
 Rule: no feature ships without at least one domain test, one adapter test (if it touches adapters), and one e2e test.
