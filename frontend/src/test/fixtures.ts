@@ -339,7 +339,6 @@ export const mockSettingDefaults: Record<string, string> = {
   "ai.rate_limit_per_min": "10",
   "ai.fake_script": "",
   "fdc.api_key": "",
-  "plan.week_starts_on": "monday",
   "plan.anchor": "next_shopping_day",
   "plan.shopping_day": "0",
   "setup.completed": "true",

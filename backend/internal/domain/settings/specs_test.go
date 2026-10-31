@@ -15,32 +15,22 @@ func newSpecTestService(t *testing.T) *settings.Service {
 	return settings.NewService(newMemRepo(), settings.NewEnvSnapshot(nil), newTestCipher(t))
 }
 
-func TestSettingsSpec_WeekStartsOn(t *testing.T) {
+func TestSettingsSpec_WeekStartsOnIsUnknown(t *testing.T) {
 	svc := newSpecTestService(t)
-	ctx := context.Background()
-
-	valid := []string{"monday", "sunday", "saturday"}
-	for _, v := range valid {
-		require.NoErrorf(t, svc.Set(ctx, settings.KeyPlanWeekStartsOn, v), "expected %q to be accepted", v)
-	}
-
-	invalid := []string{"tuesday", "wednesday", "MONDAY", "Mon", "", "0"}
-	for _, v := range invalid {
-		err := svc.Set(ctx, settings.KeyPlanWeekStartsOn, v)
-		assert.ErrorIsf(t, err, settings.ErrInvalidKind, "expected %q to be rejected", v)
-	}
+	err := svc.Set(context.Background(), "plan.week_starts_on", "monday")
+	assert.ErrorIs(t, err, settings.ErrUnknownKey)
 }
 
 func TestSettingsSpec_Anchor(t *testing.T) {
 	svc := newSpecTestService(t)
 	ctx := context.Background()
 
-	valid := []string{"today", "next_shopping_day", "fixed_weekday"}
+	valid := []string{"today", "next_shopping_day"}
 	for _, v := range valid {
 		require.NoErrorf(t, svc.Set(ctx, settings.KeyPlanAnchor, v), "expected %q to be accepted", v)
 	}
 
-	invalid := []string{"tomorrow", "week_start", "Today", "", "0"}
+	invalid := []string{"fixed_weekday", "tomorrow", "week_start", "Today", "", "0"}
 	for _, v := range invalid {
 		err := svc.Set(ctx, settings.KeyPlanAnchor, v)
 		assert.ErrorIsf(t, err, settings.ErrInvalidKind, "expected %q to be rejected", v)

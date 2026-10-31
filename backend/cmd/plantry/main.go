@@ -37,6 +37,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -144,9 +145,10 @@ func run() error {
 	profileSvc := profile.NewService(profileRepo)
 
 	plateRepo := sqlite.NewPlateRepo(conn)
+	sessionRepo := sqlite.NewCookSessionRepo(conn)
 	plateSvc := plate.NewService(plate.Deps{
 		Plates:   plateRepo,
-		Sessions: sqlite.NewCookSessionRepo(conn),
+		Sessions: sessionRepo,
 		Slots:    slotRepo,
 		Foods:    foodRepo,
 		Cells:    availabilitySvc,
@@ -155,6 +157,18 @@ func run() error {
 		Tx:       txRunner,
 	})
 	availabilitySvc.WithPlates(plateSvc)
+
+	planViewSvc := planview.NewService(planview.Deps{
+		Plates:       plateRepo,
+		Sessions:     sessionRepo,
+		Foods:        foodRepo,
+		Nutrition:    nutritionResolver,
+		Availability: availabilitySvc,
+		Slots:        slotRepo,
+		Settings:     settingsSvc,
+		Profile:      profileSvc,
+		Recipes:      foodRepo,
+	})
 
 	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).
 		WithSlots(slotSvc).
@@ -249,6 +263,8 @@ func run() error {
 		Plates:         handlers.NewPlateHandler(plateSvc),
 		CookSessions:   handlers.NewCookSessionHandler(plateSvc),
 		PlanWrite:      handlers.NewPlanWriteHandler(plateSvc),
+		PlanRead:       handlers.NewPlanReadHandler(planViewSvc),
+		Today:          handlers.NewTodayHandler(planViewSvc),
 		Profile:        handlers.NewProfileHandler(profileSvc),
 		Presets:        handlers.NewPresetHandler(presetSvc),
 		AI:             aiHandler,

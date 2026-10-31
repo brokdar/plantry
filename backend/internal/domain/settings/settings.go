@@ -94,9 +94,8 @@ const (
 	KeyAIFakeScript = "ai.fake_script"
 	KeyFDCAPIKey    = "fdc.api_key"
 
-	KeyPlanWeekStartsOn = "plan.week_starts_on"
-	KeyPlanAnchor       = "plan.anchor"
-	KeyPlanShoppingDay  = "plan.shopping_day"
+	KeyPlanAnchor      = "plan.anchor"
+	KeyPlanShoppingDay = "plan.shopping_day"
 
 	KeySetupCompleted             = "setup.completed"
 	KeyPlanMaxCookOccasionsPerDay = "plan.max_cook_occasions_per_day"

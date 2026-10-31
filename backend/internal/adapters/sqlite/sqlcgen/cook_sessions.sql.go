@@ -131,6 +131,121 @@ func (q *Queries) ListCookSessionLinks(ctx context.Context, cookSessionID sql.Nu
 	return items, nil
 }
 
+const listCookSessionLinksInRange = `-- name: ListCookSessionLinksInRange :many
+SELECT pc.cook_session_id, pc.id AS component_id, pc.plate_id, pc.food_id, pc.portions, p.date, p.slot_id, p.eaters
+FROM plate_components pc
+JOIN plates p ON p.id = pc.plate_id
+WHERE pc.cook_session_id IN (
+    SELECT cs.id FROM cook_sessions cs
+    WHERE cs.cook_date BETWEEN ?1 AND ?2
+       OR cs.id IN (
+           SELECT pc2.cook_session_id FROM plate_components pc2
+           JOIN plates p2 ON p2.id = pc2.plate_id
+           WHERE p2.date BETWEEN ?1 AND ?2
+             AND pc2.cook_session_id IS NOT NULL))
+ORDER BY pc.cook_session_id, p.date, p.slot_id, pc.id
+`
+
+type ListCookSessionLinksInRangeParams struct {
+	FromDate string
+	ToDate   string
+}
+
+type ListCookSessionLinksInRangeRow struct {
+	CookSessionID sql.NullInt64
+	ComponentID   int64
+	PlateID       int64
+	FoodID        int64
+	Portions      sql.NullFloat64
+	Date          string
+	SlotID        int64
+	Eaters        float64
+}
+
+// Every link of the sessions ListCookSessionsInRange returns.
+func (q *Queries) ListCookSessionLinksInRange(ctx context.Context, arg ListCookSessionLinksInRangeParams) ([]ListCookSessionLinksInRangeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCookSessionLinksInRange, arg.FromDate, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCookSessionLinksInRangeRow{}
+	for rows.Next() {
+		var i ListCookSessionLinksInRangeRow
+		if err := rows.Scan(
+			&i.CookSessionID,
+			&i.ComponentID,
+			&i.PlateID,
+			&i.FoodID,
+			&i.Portions,
+			&i.Date,
+			&i.SlotID,
+			&i.Eaters,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCookSessionsInRange = `-- name: ListCookSessionsInRange :many
+SELECT id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at FROM cook_sessions
+WHERE cook_date BETWEEN ?1 AND ?2
+   OR id IN (
+       SELECT pc.cook_session_id FROM plate_components pc
+       JOIN plates p ON p.id = pc.plate_id
+       WHERE p.date BETWEEN ?1 AND ?2
+         AND pc.cook_session_id IS NOT NULL)
+ORDER BY cook_date, cook_slot_id, id
+`
+
+type ListCookSessionsInRangeParams struct {
+	FromDate string
+	ToDate   string
+}
+
+// Sessions cooking in [from_date, to_date] or linked to a plate dated in it.
+func (q *Queries) ListCookSessionsInRange(ctx context.Context, arg ListCookSessionsInRangeParams) ([]CookSession, error) {
+	rows, err := q.db.QueryContext(ctx, listCookSessionsInRange, arg.FromDate, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CookSession{}
+	for rows.Next() {
+		var i CookSession
+		if err := rows.Scan(
+			&i.ID,
+			&i.FoodID,
+			&i.CookDate,
+			&i.CookSlotID,
+			&i.Portions,
+			&i.FrozenPortions,
+			&i.CookedAt,
+			&i.Note,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateCookSession = `-- name: UpdateCookSession :one
 UPDATE cook_sessions SET
     cook_date       = ?,

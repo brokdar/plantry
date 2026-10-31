@@ -95,6 +95,8 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 		return http.StatusConflict, "error.session.not_freezable"
 	case errors.Is(err, domain.ErrSessionNotFound):
 		return http.StatusConflict, "error.session.not_found"
+	case errors.Is(err, domain.ErrInvalidPlanStart):
+		return http.StatusBadRequest, "error.plan.invalid_start"
 	default:
 		return http.StatusInternalServerError, "error.server"
 	}

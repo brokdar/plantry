@@ -116,6 +116,40 @@ func (r *CookSessionRepo) ListLinks(ctx context.Context, sessionID int64) ([]pla
 	return out, nil
 }
 
+// ListInRange returns the sessions cooking in [from, to] or linked to a plate
+// dated in it, with every link of each keyed by session id: two queries for
+// the whole range.
+func (r *CookSessionRepo) ListInRange(ctx context.Context, from, to time.Time) ([]plate.CookSession, map[int64][]plate.Link, error) {
+	q := r.queriesFor(ctx)
+	fromS, toS := from.Format(dateLayout), to.Format(dateLayout)
+	rows, err := q.ListCookSessionsInRange(ctx, sqlcgen.ListCookSessionsInRangeParams{FromDate: fromS, ToDate: toS})
+	if err != nil {
+		return nil, nil, err
+	}
+	sessions := make([]plate.CookSession, len(rows))
+	for i := range rows {
+		mapCookSessionToDomain(&rows[i], &sessions[i])
+	}
+	linkRows, err := q.ListCookSessionLinksInRange(ctx, sqlcgen.ListCookSessionLinksInRangeParams{FromDate: fromS, ToDate: toS})
+	if err != nil {
+		return nil, nil, err
+	}
+	links := make(map[int64][]plate.Link, len(sessions))
+	for _, row := range linkRows {
+		date, _ := time.Parse(dateLayout, row.Date) //nolint:errcheck // layout controlled by the service
+		sid := row.CookSessionID.Int64
+		links[sid] = append(links[sid], plate.Link{
+			PlateID:     row.PlateID,
+			ComponentID: row.ComponentID,
+			FoodID:      row.FoodID,
+			Cell:        plate.CellKey{Date: date, SlotID: row.SlotID},
+			PerEater:    row.Portions.Float64,
+			Eaters:      row.Eaters,
+		})
+	}
+	return sessions, links, nil
+}
+
 func mapCookSessionToDomain(row *sqlcgen.CookSession, s *plate.CookSession) {
 	s.ID = row.ID
 	s.FoodID = row.FoodID

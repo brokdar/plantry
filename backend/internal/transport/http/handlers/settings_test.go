@@ -270,26 +270,20 @@ func TestSet_RateLimitChange_ReconfiguresLimiter(t *testing.T) {
 	// package's own tests; here we just ensure the PUT path succeeded.
 }
 
-func TestSettings_WeekStartsOn_RoundTrip(t *testing.T) {
-	r, svc := newSettingsRouter(t)
-	ctx := context.Background()
+// B4-AC10: the retired week-start key is unknown and fixed_weekday is no
+// longer an anchor.
+func TestSettings_RetiredPlanWindowSettings(t *testing.T) {
+	r, _ := newSettingsRouter(t)
 
-	// PUT plan.week_starts_on = sunday
 	req := httptest.NewRequest(http.MethodPut, "/api/settings/plan.week_starts_on",
 		strings.NewReader(`{"value":"sunday"}`))
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	require.Equal(t, 204, w.Code)
+	assert.Equal(t, 400, w.Code)
+	assert.Contains(t, w.Body.String(), "error.settings.unknown_key")
 
-	// GET plan.week_starts_on — verify stored value
-	v, err := svc.Get(ctx, settings.KeyPlanWeekStartsOn)
-	require.NoError(t, err)
-	assert.Equal(t, "sunday", v.Raw)
-	assert.Equal(t, settings.SourceDB, v.Source)
-
-	// PUT plan.week_starts_on = invalid → 400
-	req = httptest.NewRequest(http.MethodPut, "/api/settings/plan.week_starts_on",
-		strings.NewReader(`{"value":"invalid"}`))
+	req = httptest.NewRequest(http.MethodPut, "/api/settings/plan.anchor",
+		strings.NewReader(`{"value":"fixed_weekday"}`))
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)

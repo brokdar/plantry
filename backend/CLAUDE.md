@@ -114,8 +114,7 @@ Key-value rows in `app_settings`. The registry in `domain/settings/specs.go` lis
 | Key | Default | Notes |
 |---|---|---|
 | `ai.provider`, `ai.model`, `ai.api_key`, `ai.rate_limit_per_min`, `ai.fake_script`, `fdc.api_key` | env | Fall back to the `PLANTRY_*` env vars; the API keys are stored encrypted |
-| `plan.week_starts_on` | `monday` | `monday` / `sunday` / `saturday` |
-| `plan.anchor` | `next_shopping_day` | `today` / `next_shopping_day` / `fixed_weekday` |
+| `plan.anchor` | `next_shopping_day` | `today` / `next_shopping_day` (00028 retired `fixed_weekday` and `plan.week_starts_on`) |
 | `plan.shopping_day` | `0` | 0 = Monday … 6 = Sunday |
 | `setup.completed` | `false` | Set by `POST /api/setup/complete` |
 | `plan.max_cook_occasions_per_day`, `plan.batch_cooking`, `plan.default_keep_days`, `plan.freezing_enabled`, `plan.freezer_keep_days`, `plan.variety_weeks`, `plan.explore_per_week`, `discovery.daily_enabled` | see `specs.go` | Stored and edited in Settings; read by later phases |
@@ -132,6 +131,16 @@ Migration `00024_availability.sql`, package `domain/availability`. A cell is (da
 - `PUT /api/availability/{date}/{slotId}` — `{mode, preset_id?, note?, remove_plate?}`. `none` on a cell with a plate is `409 error.availability.cell_has_plate` unless `remove_plate` is set; then the plate is deleted through `plate.Service.Delete` in the same unit of work and the response `{cell, removed}` carries the `PlanSnapshot` that restores it (`POST /api/plan/restore`; `removed` is null when nothing was removed). `DELETE` clears the override.
 
 A cell holds at most one plate: migration `00025_plates_cell_unique.go` turned the old per-plate skip flag into `none` overrides (with its note), merged duplicates, dropped the flag column and made `(date, slot_id)` unique. Creating or moving a plate into a `none` cell is `409 error.plate.cell_unavailable`; into an occupied cell, `409 error.plate.cell_occupied`. The agent sees `none` and `routine` cells and must not plan them.
+
+## Plan window and read models
+
+Package `domain/window` (pure): a window is the 7 days starting on `plan.shopping_day`. `Containing(date, sd)` starts on the latest shopping day ≤ date; `Anchored(today, anchor, sd)` is the window containing today (`today`) or starting on the first shopping day ≥ today (`next_shopping_day`).
+
+Package `domain/planview` builds the read models; it never writes and takes its dates as arguments. Plates load with one `ListByDateRange` call for the whole range and sessions with `CookSessionRepo.ListInRange` (two queries), never per plate.
+
+- `GET /api/plan?start&today` — the window at `start` (must be a shopping day, else `400 error.plan.invalid_start`) or the anchored one: `window`, active `slots`, `cells` (date × active slot with availability and plate), `sessions` (cooking in the window or linked to a plate in it), `days` (per-eater macros with `complete`/`missing`), `targets` (null without a kcal target) and `stats`.
+- `GET /api/today?date&today` — `verdict` (`no_plan`, `no_plates`, `cook`/`quick_cook` for the main with most portions, ≤ 20 min is quick, else `nothing_to_cook`), `cook`, `meals`, `reminders` (`defrost`, `use_by`), `rate`, `plan_banner` and `setup`.
+- `today` defaults to the server's local date; `date` defaults to `today`.
 
 ## Setup
 
