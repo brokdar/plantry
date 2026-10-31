@@ -7,6 +7,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -75,6 +76,9 @@ type Deps struct {
 	Settings     Settings
 	Profile      Profile
 	Recipes      RecipeCounter
+	// Tx runs each read model's reads in one transaction, so a concurrent
+	// write cannot produce an inconsistent view.
+	Tx domain.Transactor
 }
 
 // Service builds the read models.

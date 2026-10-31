@@ -75,6 +75,16 @@ type Stats struct {
 // Plan returns the window starting at start, or the anchored window when
 // start is nil. A start that is not a shopping day is ErrInvalidPlanStart.
 func (s *Service) Plan(ctx context.Context, start *time.Time, today time.Time) (*Plan, error) {
+	var p *Plan
+	err := s.d.Tx.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		p, err = s.plan(ctx, start, today)
+		return err
+	})
+	return p, err
+}
+
+func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (*Plan, error) {
 	e, err := s.loadEnv(ctx)
 	if err != nil {
 		return nil, err

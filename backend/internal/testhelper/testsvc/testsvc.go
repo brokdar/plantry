@@ -63,6 +63,7 @@ func PlanView(db *sql.DB) *planview.Service {
 		Settings:     Settings(db),
 		Profile:      profile.NewService(sqlite.NewProfileRepo(db)),
 		Recipes:      foods,
+		Tx:           sqlite.NewTxRunner(db),
 	})
 }
 
