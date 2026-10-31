@@ -261,7 +261,7 @@ func (x *index) h6() []Issue {
 // plate.
 func (x *index) h7() []Issue {
 	var out []Issue
-	for key := range x.dupKeys {
+	for _, key := range x.dupKeys {
 		out = append(out, issue("H7", CodeDuplicateSessionKey, SeverityViolation).with("session_key", key))
 	}
 	for _, ss := range x.s.Sessions {
@@ -285,6 +285,9 @@ func (x *index) h7() []Issue {
 		}
 		if p.Proposed() {
 			out = append(out, x.placement(p)...)
+			if !(p.Eaters > 0) {
+				out = append(out, issue("H7", CodeInvalidPortions, SeverityViolation).onPlate(p).with("eaters", p.Eaters))
+			}
 		}
 		for _, c := range p.Components {
 			out = append(out, x.component(p, c)...)
@@ -342,22 +345,23 @@ func (x *index) component(p Plate, c Component) []Issue {
 	return out
 }
 
-// h8: no draft session in the target cooks a main eaten (or cooked in an
-// earlier session) within variety_weeks. When fewer eligible recipes exist
-// than such sessions, repeats are warnings (variety_relaxed).
+// h8: no unconfirmed cook in the target (a session, or a composed
+// component cooked fresh without one) cooks a main eaten, or cooked earlier,
+// within variety_weeks. Routine cells repeat by design and are skipped. When fewer eligible recipes exist than such cooks,
+// repeats are warnings (variety_relaxed).
 func (x *index) h8() []Issue {
 	weeks := x.s.Settings.VarietyWeeks
 	if weeks <= 0 {
 		return nil
 	}
 	span := 7 * weeks
-	var subject []Session
-	for _, ss := range x.s.Sessions {
-		f, ok := x.food(ss.FoodID)
-		if ss.Confirmed || !ok || !f.Composed() || !varietyRole(f.Role) || !x.inTarget(ss.CookCell()) {
+	var subject []int
+	for i, ev := range x.cooks {
+		f, ok := x.food(ev.foodID)
+		if ev.confirmed || !ok || !f.Composed() || !varietyRole(f.Role) || !x.inTarget(ev.cell) || x.routine(ev.cell) {
 			continue
 		}
-		subject = append(subject, ss)
+		subject = append(subject, i)
 	}
 	if len(subject) == 0 {
 		return nil
@@ -367,29 +371,40 @@ func (x *index) h8() []Issue {
 		code, sev = CodeVarietyRelaxed, SeverityWarning
 	}
 	var out []Issue
-	for _, ss := range subject {
-		since := ss.CookDate.AddDate(0, 0, -span)
-		f := x.s.Foods[ss.FoodID]
-		if le := f.LastEaten; le != nil && !le.Before(since) && le.Before(ss.CookDate) {
-			out = append(out, issue("H8", code, sev).onSession(ss).with("food_id", f.ID).with("last_eaten", le.Format(time.DateOnly)))
+	for _, i := range subject {
+		ev := x.cooks[i]
+		since := ev.cell.Date.AddDate(0, 0, -span)
+		var prev time.Time
+		var repeat bool
+		if le := x.s.Foods[ev.foodID].LastEaten; le != nil && !le.Before(since) && le.Before(ev.cell.Date) {
+			prev, repeat = *le, true
+		} else {
+			prev, repeat = x.earlierCook(i, since)
+		}
+		if !repeat {
 			continue
 		}
-		if prev, ok := x.earlierSession(ss, since); ok {
-			out = append(out, issue("H8", code, sev).onSession(ss).with("food_id", f.ID).with("last_eaten", prev.Format(time.DateOnly)))
+		is := issue("H8", code, sev)
+		if ev.session >= 0 {
+			is = is.onSession(x.s.Sessions[ev.session])
+		} else {
+			is = is.onPlate(x.s.Plates[ev.plate])
 		}
+		out = append(out, is.with("food_id", ev.foodID).with("last_eaten", prev.Format(time.DateOnly)))
 	}
 	return out
 }
 
-// earlierSession finds another session of the same food cooking before ss
-// and on or after since.
-func (x *index) earlierSession(ss Session, since time.Time) (time.Time, bool) {
-	for _, o := range x.s.Sessions {
-		if o.FoodID != ss.FoodID || o.ref() == ss.ref() || o.CookDate.Before(since) {
+// earlierCook finds another cook of cook i's food at an earlier cell, on or
+// after since.
+func (x *index) earlierCook(i int, since time.Time) (time.Time, bool) {
+	ev := x.cooks[i]
+	for j, o := range x.cooks {
+		if j == i || o.foodID != ev.foodID || o.cell.Date.Before(since) || x.routine(o.cell) {
 			continue
 		}
-		if plate.Before(o.CookCell(), ss.CookCell(), x.s.SlotOrder) {
-			return o.CookDate, true
+		if plate.Before(o.cell, ev.cell, x.s.SlotOrder) {
+			return o.cell.Date, true
 		}
 	}
 	return time.Time{}, false

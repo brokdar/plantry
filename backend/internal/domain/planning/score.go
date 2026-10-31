@@ -45,7 +45,8 @@ type CookOccasions struct {
 	DaysWithPrepared int            `json:"days_with_prepared"`
 }
 
-// Variety counts the distinct mains cooked in the target, the H8 repeats
+// Variety counts the distinct mains cooked in the target outside routine
+// cells, the H8 repeats
 // among them and the never-eaten ones (D15).
 type Variety struct {
 	Distinct   int `json:"distinct"`
@@ -72,13 +73,13 @@ func ComputeScore(s State, t Target, issues []Issue) Score {
 		}
 	}
 	mains := map[int64]bool{}
-	for _, c := range x.cooks() {
+	for _, c := range x.targetCooks() {
 		f := x.s.Foods[c.foodID]
 		if f.Favorite {
 			sc.PreferenceFit++
 		}
 		sc.PreferenceFit += f.LikeScore
-		if varietyRole(f.Role) && !mains[f.ID] {
+		if varietyRole(f.Role) && !c.routine && !mains[f.ID] {
 			mains[f.ID] = true
 			if f.LastEaten == nil {
 				sc.Variety.NewRecipes++
@@ -108,35 +109,28 @@ func (x *index) coverage() float64 {
 	return float64(filled) / float64(cells)
 }
 
-// cook is one recipe cooked on a target cell: a session, or a composed
-// component without one (cooked fresh for its plate, no waste).
+// cook is one cook event on a target cell with its waste: a session's
+// portions neither frozen nor eaten fresh; 0 for a component cooked fresh
+// for its plate.
 type cook struct {
-	foodID int64
-	waste  float64
+	foodID  int64
+	waste   float64
+	routine bool
 }
 
-func (x *index) cooks() []cook {
+func (x *index) targetCooks() []cook {
 	var out []cook
-	for _, ss := range x.s.Sessions {
-		if _, ok := x.food(ss.FoodID); !ok || !x.inTarget(ss.CookCell()) {
+	for _, ev := range x.cooks {
+		if _, ok := x.food(ev.foodID); !ok || !x.inTarget(ev.cell) {
 			continue
 		}
-		use := x.usage(ss)
-		waste := (ss.Portions - ss.FrozenPortions) - (use.Total - use.Frozen)
-		out = append(out, cook{foodID: ss.FoodID, waste: math.Max(0, waste)})
-	}
-	for _, p := range x.s.Plates {
-		if !x.inTarget(p.Cell()) {
-			continue
+		c := cook{foodID: ev.foodID, routine: x.routine(ev.cell)}
+		if ev.session >= 0 {
+			ss := x.s.Sessions[ev.session]
+			use := x.usage(ss)
+			c.waste = math.Max(0, (ss.Portions-ss.FrozenPortions)-(use.Total-use.Frozen))
 		}
-		for _, c := range p.Components {
-			if _, linked := refOf(c); linked || c.Portions == nil {
-				continue
-			}
-			if _, ok := x.food(c.FoodID); ok {
-				out = append(out, cook{foodID: c.FoodID})
-			}
-		}
+		out = append(out, c)
 	}
 	return out
 }

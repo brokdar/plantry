@@ -346,7 +346,27 @@ func TestCheck_H7(t *testing.T) {
 			Sessions: []planning.ProposedSession{session("s1", curry, sun, dinner, 1), session("s1", curry, sun, dinner, 1)},
 			Plates:   []planning.ProposedPlate{pplate(sun, dinner, onKey(curry, "s1"))},
 		}, want: []string{planning.CodeDuplicateSessionKey}},
+		{name: "no eaters", state: func() planning.State {
+			s := baseState()
+			s.Profile.HouseholdPortions = 0
+			return s
+		}, target: sunDinner, prop: one(fresh(curry)), want: []string{planning.CodeInvalidPortions}},
 	})
+}
+
+func TestCheck_H7DuplicateKeysInFirstSeenOrder(t *testing.T) {
+	keys := []string{"s9", "s1", "s5", "s3"}
+	var p planning.Proposal
+	for _, k := range keys {
+		p.Sessions = append(p.Sessions, session(k, curry, sun, dinner, 1), session(k, curry, sun, dinner, 1), session(k, curry, sun, dinner, 1))
+	}
+	got := []any{}
+	for _, is := range only(check(baseState(), targetCells(cell(sun, dinner)), p), "H7") {
+		if is.Code == planning.CodeDuplicateSessionKey {
+			got = append(got, is.Params["session_key"])
+		}
+	}
+	assert.Equal(t, []any{"s9", "s1", "s5", "s3"}, got)
 }
 
 // manyMains adds n vegan mains never eaten.
@@ -400,6 +420,33 @@ func TestCheck_H8(t *testing.T) {
 			name: "same main cooked twice in the window", state: eatenLastWeek(5), target: windowTarget,
 			prop: cooks(session("s1", 100, sat, dinner, 1), session("s2", 100, tue, dinner, 1)),
 			want: []string{planning.CodeVarietyRepeat},
+		},
+		{
+			name: "fresh main eaten last week", state: eatenLastWeek(5), target: windowTarget,
+			prop: planning.Proposal{Plates: []planning.ProposedPlate{pplate(sat, dinner, fresh(chili))}},
+			want: []string{planning.CodeVarietyRepeat},
+		},
+		{
+			name: "same fresh main twice in window", state: eatenLastWeek(5), target: windowTarget,
+			prop: planning.Proposal{Plates: []planning.ProposedPlate{pplate(sat, dinner, fresh(100)), pplate(tue, dinner, fresh(100))}},
+			want: []string{planning.CodeVarietyRepeat},
+		},
+		{
+			name: "fresh main after a session of it", state: eatenLastWeek(5), target: windowTarget,
+			prop: planning.Proposal{
+				Sessions: []planning.ProposedSession{session("s1", 100, sat, dinner, 1)},
+				Plates:   []planning.ProposedPlate{pplate(sat, dinner, onKey(100, "s1")), pplate(tue, dinner, fresh(100))},
+			},
+			want: []string{planning.CodeVarietyRepeat},
+		},
+		{
+			name: "routine breakfasts repeat freely", state: func() planning.State {
+				s := eatenLastWeek(5)()
+				setMode(&s, cell(sat, breakfast), availability.ModeRoutine)
+				setMode(&s, cell(sun, breakfast), availability.ModeRoutine)
+				return s
+			}, target: windowTarget,
+			prop: planning.Proposal{Plates: []planning.ProposedPlate{pplate(sat, breakfast, fresh(oats)), pplate(sun, breakfast, fresh(oats))}},
 		},
 		{
 			name: "sides repeat freely", state: eatenLastWeek(5), target: windowTarget,

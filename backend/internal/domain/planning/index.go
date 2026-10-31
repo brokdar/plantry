@@ -42,6 +42,17 @@ func (s Session) ref() sessionRef {
 	return sessionRef{id: s.ID}
 }
 
+// cookEvent is one recipe cooked at a cell: a session (session ≥ 0), or a
+// composed component without a session on an unconfirmed plate (plate ≥ 0),
+// which Apply cooks fresh for its plate.
+type cookEvent struct {
+	foodID    int64
+	cell      plate.CellKey
+	confirmed bool
+	session   int
+	plate     int
+}
+
 // index is a State with the lookups the rules and the score share, built
 // once per Check or Score.
 type index struct {
@@ -53,8 +64,12 @@ type index struct {
 	byCell  map[cellID][]int
 	byPlate map[int64]int
 	byRef   map[sessionRef]int
-	dupKeys map[string]bool
+	// dupKeys are the proposed session keys used more than once, in
+	// first-seen order.
+	dupKeys []string
 	links   map[sessionRef][]plate.Link
+	// cooks are the state's cook events (see cookEvent), sessions first.
+	cooks []cookEvent
 	// occasions holds each day's cooking occasions (H2): the distinct cook
 	// cells of sessions and of fresh components without a session, routine
 	// cells excluded.
@@ -70,7 +85,6 @@ func newIndex(s State, t Target) *index {
 		byCell:    make(map[cellID][]int, len(s.Plates)),
 		byPlate:   make(map[int64]int, len(s.Plates)),
 		byRef:     make(map[sessionRef]int, len(s.Sessions)),
-		dupKeys:   map[string]bool{},
 		links:     make(map[sessionRef][]plate.Link, len(s.Sessions)),
 		occasions: map[int]map[cellID]bool{},
 	}
@@ -89,11 +103,14 @@ func newIndex(s State, t Target) *index {
 	for i, ss := range s.Sessions {
 		r := ss.ref()
 		if _, dup := x.byRef[r]; dup && ss.Proposed() {
-			x.dupKeys[ss.Key] = true
+			if !slices.Contains(x.dupKeys, ss.Key) {
+				x.dupKeys = append(x.dupKeys, ss.Key)
+			}
 			continue
 		}
 		x.byRef[r] = i
 		x.addOccasion(ss.CookCell())
+		x.cooks = append(x.cooks, cookEvent{foodID: ss.FoodID, cell: ss.CookCell(), confirmed: ss.Confirmed, session: i, plate: -1})
 	}
 	for i, p := range s.Plates {
 		cid := idOf(p.Cell())
@@ -104,6 +121,9 @@ func newIndex(s State, t Target) *index {
 			if !linked {
 				if c.Portions != nil {
 					x.addOccasion(p.Cell())
+					if !p.Confirmed {
+						x.cooks = append(x.cooks, cookEvent{foodID: c.FoodID, cell: p.Cell(), session: -1, plate: i})
+					}
 				}
 				continue
 			}
@@ -119,9 +139,15 @@ func newIndex(s State, t Target) *index {
 	return x
 }
 
+// routine reports whether c is a routine cell.
+func (x *index) routine(c plate.CellKey) bool {
+	cell, ok := x.cells[idOf(c)]
+	return ok && cell.Mode == availability.ModeRoutine
+}
+
 func (x *index) addOccasion(c plate.CellKey) {
 	cid := idOf(c)
-	if cell, ok := x.cells[cid]; ok && cell.Mode == availability.ModeRoutine {
+	if x.routine(c) {
 		return
 	}
 	if x.occasions[cid.day] == nil {
