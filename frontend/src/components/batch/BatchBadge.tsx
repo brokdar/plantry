@@ -50,8 +50,31 @@ export function BatchBadge({
       {content.variant === "frozen" && (
         <Snowflake className="size-3" strokeWidth={1.5} aria-hidden="true" />
       )}
-      {batchBadgeText(content, i18n)}
+      <BadgeText content={content} text={batchBadgeText(content, i18n)} />
       {suffix && ` · ${suffix}`}
     </span>
+  )
+}
+
+/** The cook strip's recipe name truncates (full name in `title`) so a long
+ *  name can't stretch the strip, while the weekday and portions stay. */
+function BadgeText({
+  content,
+  text,
+}: {
+  content: BatchBadgeContent
+  text: string
+}) {
+  const name = content.variant === "cook" ? content.strip?.name : undefined
+  const at = name ? text.indexOf(name) : -1
+  if (!name || at < 0) return text
+  return (
+    <>
+      {text.slice(0, at)}
+      <span title={name} className="max-w-48 min-w-0 truncate">
+        {name}
+      </span>
+      {text.slice(at + name.length)}
+    </>
   )
 }

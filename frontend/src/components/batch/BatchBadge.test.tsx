@@ -71,14 +71,14 @@ const cases: Array<{
 
 describe("BatchBadge texts (F2-AC2)", () => {
   it.each(cases)("$props.variant → en $en", ({ props, en }) => {
-    render(<BatchBadge {...props} />)
-    expect(screen.getByText(en)).toBeInTheDocument()
+    const { container } = render(<BatchBadge {...props} />)
+    expect(container.querySelector("[data-batch-badge]")?.textContent).toBe(en)
   })
 
   it.each(cases)("$props.variant → de $de", async ({ props, de }) => {
     await act(() => i18n.changeLanguage("de"))
-    render(<BatchBadge {...props} />)
-    expect(screen.getByText(de)).toBeInTheDocument()
+    const { container } = render(<BatchBadge {...props} />)
+    expect(container.querySelector("[data-batch-badge]")?.textContent).toBe(de)
   })
 })
 
