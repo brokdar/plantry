@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 )
 
 // Score holds the quality components of a plan (spec §6.5, D23). There is
@@ -244,7 +245,7 @@ func (x *index) unknownDataShare() float64 {
 				continue
 			}
 			seen[f.ID] = true
-			if !dietKnown(f.DietClass) || !f.NutritionComplete {
+			if !diet.Valid(f.DietClass) || !f.NutritionComplete {
 				unknown++
 			}
 		}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -110,7 +111,7 @@ type FoodFacts struct {
 	Name              string
 	Kind              food.Kind
 	Role              food.Role
-	DietClass         string
+	DietClass         diet.Class
 	Macros            nutrition.Macros
 	NutritionComplete bool
 	Minutes           int

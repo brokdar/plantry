@@ -1,5 +1,7 @@
 package importer
 
+import "github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+
 // Confidence levels for a parsed ingredient line.
 const (
 	ConfidenceParsed      = "parsed"      // exact unit (g, kg, mg, ml, l, cl, dl).
@@ -20,6 +22,9 @@ type DraftIngredient struct {
 	// units.CountGrams ("1 piece ≈ 120 g"); nil for mass, volume and
 	// unparsed lines. A leaf's own portion overrides it on Finalize.
 	PortionGrams *float64 `json:"portion_grams"`
+	// DietClass is the line's diet class from its name (diet.Classify), shown
+	// read-only on review (D30).
+	DietClass diet.Class `json:"diet_class"`
 }
 
 // Draft is the whole recipe as extracted from a page, before the user resolves it.

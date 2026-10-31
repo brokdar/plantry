@@ -4,9 +4,9 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
 // Severity tells whether an issue breaks a hard rule or only warns.
@@ -179,22 +179,6 @@ func (x *index) h3h4() []Issue {
 	return out
 }
 
-// dietRank orders the diet classes from most to least restrictive.
-var dietRank = map[string]int{"vegan": 0, "vegetarian": 1, "pescetarian": 2, "omnivore": 3}
-
-// dietKnown reports whether class is one of the four classes.
-func dietKnown(class string) bool {
-	_, ok := dietRank[class]
-	return ok
-}
-
-// dietCompatible reports whether a food of a known class fits the diet
-// type. An empty diet type allows everything.
-func dietCompatible(class string, t profile.DietType) bool {
-	limit, ok := dietRank[string(t)]
-	return !ok || dietRank[class] <= limit
-}
-
 // h5: every food on a target plate fits the diet type (unknown is a
 // warning) and the window's days with an omnivore food stay within
 // meat_days_per_week_max.
@@ -210,19 +194,21 @@ func (x *index) h5() []Issue {
 			if !ok {
 				continue
 			}
-			if inWindow && f.DietClass == "omnivore" {
+			if inWindow && f.DietClass == diet.Omnivore {
 				meatDays[dayOf(p.Date)] = true
 			}
 			if !inTarget || seen[c.FoodID] {
 				continue
 			}
 			seen[c.FoodID] = true
+			// An empty diet type allows everything.
+			t := diet.Class(x.s.Profile.DietType)
 			switch {
-			case !dietKnown(f.DietClass):
+			case !diet.Valid(f.DietClass):
 				out = append(out, issue("H5", CodeDietUnknown, SeverityWarning).onPlate(p).with("food_id", f.ID))
-			case !dietCompatible(f.DietClass, x.s.Profile.DietType):
+			case t != "" && !diet.Compatible(f.DietClass, t):
 				out = append(out, issue("H5", CodeDietIncompatible, SeverityViolation).onPlate(p).
-					with("food_id", f.ID).with("diet_class", f.DietClass).with("diet_type", string(x.s.Profile.DietType)))
+					with("food_id", f.ID).with("diet_class", string(f.DietClass)).with("diet_type", string(t)))
 			}
 		}
 	}
@@ -414,9 +400,14 @@ func (x *index) earlierCook(i int, since time.Time) (time.Time, bool) {
 // that fit the diet and were not eaten within span days before its start.
 func (x *index) eligibleRecipes(span int) int {
 	since := x.s.Window.Start.AddDate(0, 0, -span)
+	t := diet.Class(x.s.Profile.DietType)
 	n := 0
 	for _, f := range x.s.Foods {
-		if !f.Composed() || !varietyRole(f.Role) || !dietCompatible(f.DietClass, x.s.Profile.DietType) {
+		if !f.Composed() || !varietyRole(f.Role) {
+			continue
+		}
+		// An unknown class is only a warning (H5), so it stays eligible.
+		if t != "" && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t) {
 			continue
 		}
 		if f.LastEaten == nil || f.LastEaten.Before(since) {

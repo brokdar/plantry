@@ -3,6 +3,7 @@ package food_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
@@ -24,6 +26,8 @@ type fakeRepo struct {
 	usedInIDs     []int64
 	// shopSectionSet records a SetShopSection write.
 	shopSectionSet bool
+	// dietClassSet records a SetDietClass write.
+	dietClassSet bool
 }
 
 func (r *fakeRepo) Create(_ context.Context, _ *food.Food) error { return nil }
@@ -49,8 +53,16 @@ func (r *fakeRepo) Reachable(_ context.Context, _ int64) (map[int64]struct{}, er
 	return map[int64]struct{}{}, nil
 }
 
-func (r *fakeRepo) LookupByIDs(_ context.Context, _ []int64) (map[int64]*food.Food, error) {
-	return map[int64]*food.Food{}, nil
+// LookupByIDs serves the listed foods by id (copies, without children).
+func (r *fakeRepo) LookupByIDs(_ context.Context, ids []int64) (map[int64]*food.Food, error) {
+	out := map[int64]*food.Food{}
+	for _, f := range r.listItems {
+		if slices.Contains(ids, f.ID) {
+			f.Children = nil
+			out[f.ID] = &f
+		}
+	}
+	return out, nil
 }
 
 func (r *fakeRepo) ListChildrenByParents(_ context.Context, _ []int64) (map[int64][]food.FoodComponent, error) {
@@ -87,6 +99,11 @@ func (r *fakeRepo) SetFavorite(_ context.Context, _ int64, _ bool) (*food.Food, 
 func (r *fakeRepo) SetShopSection(_ context.Context, id int64, section *food.ShopSection) (*food.Food, error) {
 	r.shopSectionSet = true
 	return &food.Food{ID: id, Kind: food.KindLeaf, ShopSection: section}, nil
+}
+
+func (r *fakeRepo) SetDietClass(_ context.Context, id int64, class *diet.Class) (*food.Food, error) {
+	r.dietClassSet = true
+	return &food.Food{ID: id, Kind: food.KindLeaf, DietOverride: class}, nil
 }
 
 func ptrF64(v float64) *float64      { return &v }

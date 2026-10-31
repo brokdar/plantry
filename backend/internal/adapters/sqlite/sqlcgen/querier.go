@@ -116,6 +116,7 @@ type Querier interface {
 	// so no single statement holds the write lock for long.
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
+	SetFoodDietClass(ctx context.Context, arg SetFoodDietClassParams) (Food, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
 	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)
 	SetPlatesState(ctx context.Context, arg SetPlatesStateParams) error

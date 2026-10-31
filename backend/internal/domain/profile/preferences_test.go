@@ -91,11 +91,18 @@ func TestApplyFeedback(t *testing.T) {
 			want:   map[string]any{"foo": "bar", "baz": 1.0, "likes": []string{"spicy"}},
 		},
 		{
-			name:   "append-only: disliked on already-liked keeps both",
-			prefs:  map[string]any{"likes": []string{"spicy"}},
+			name:   "disliked moves an already-liked tag out of likes",
+			prefs:  map[string]any{"likes": []string{"spicy", "quick"}},
 			status: "disliked",
 			tags:   []string{"spicy"},
-			want:   map[string]any{"likes": []string{"spicy"}, "dislikes": []string{"spicy"}},
+			want:   map[string]any{"likes": []string{"quick"}, "dislikes": []string{"spicy"}},
+		},
+		{
+			name:   "loved moves an already-disliked tag out of dislikes (JSON round-trip)",
+			prefs:  map[string]any{"dislikes": []any{"spicy"}},
+			status: "loved",
+			tags:   []string{"spicy"},
+			want:   map[string]any{"likes": []string{"spicy"}, "dislikes": []string{}},
 		},
 		{
 			name:   "nil prefs map tolerated",

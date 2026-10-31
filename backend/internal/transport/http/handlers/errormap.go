@@ -12,6 +12,7 @@ import (
 // agent shares).
 var sentinelStatus = map[error]int{
 	domain.ErrInvalidShopSection:        http.StatusBadRequest,
+	domain.ErrInvalidDietClass:          http.StatusBadRequest,
 	domain.ErrShopSectionLeafOnly:       http.StatusBadRequest,
 	domain.ErrInvalidPortions:           http.StatusBadRequest,
 	domain.ErrNotFound:                  http.StatusNotFound,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
@@ -32,6 +33,8 @@ type ScaledIngredient struct {
 	Grams   float64
 	Display units.Quantity
 	Buy     *units.Quantity
+	// DietClass is the child's effective diet class; set by Service.Scaled.
+	DietClass diet.Class
 }
 
 // Scale scales the children of composed food f to portions, with
@@ -76,8 +79,8 @@ func Scale(f *Food, portions float64) (*Scaled, error) {
 	return out, nil
 }
 
-// Scaled loads food id and scales it to portions. Invalid portions fail
-// before the lookup.
+// Scaled loads food id and scales it to portions, with each line's diet
+// class. Invalid portions fail before the lookup.
 func (s *Service) Scaled(ctx context.Context, id int64, portions float64) (*Scaled, error) {
 	if err := validScalePortions(portions); err != nil {
 		return nil, err
@@ -86,7 +89,23 @@ func (s *Service) Scaled(ctx context.Context, id int64, portions float64) (*Scal
 	if err != nil {
 		return nil, err
 	}
-	return Scale(f, portions)
+	sc, err := Scale(f, portions)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]int64, len(sc.Ingredients))
+	for i, in := range sc.Ingredients {
+		ids[i] = in.ChildID
+	}
+	nodes, err := LoadTrees(ctx, s.repo, ids)
+	if err != nil {
+		return nil, err
+	}
+	SetDietClasses(nodes)
+	for i := range sc.Ingredients {
+		sc.Ingredients[i].DietClass = nodes[sc.Ingredients[i].ChildID].DietClass
+	}
+	return sc, nil
 }
 
 func validScalePortions(portions float64) error {

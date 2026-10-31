@@ -7,6 +7,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
@@ -327,6 +328,7 @@ func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string) *Draft
 		} else {
 			parsed = ParseLineDE(line)
 		}
+		parsed.DietClass = diet.Classify(parsed.Name)
 		d.Ingredients = append(d.Ingredients, parsed)
 	}
 	return d

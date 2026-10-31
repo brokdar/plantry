@@ -855,7 +855,8 @@
     "food": {
       "invalid_portions": "Die Portionen müssen größer als 0 und höchstens 100 sein.",
       "invalid_shop_section": "Unbekannter Ladenbereich.",
-      "shop_section_leaf_only": "Nur Zutaten haben einen Ladenbereich."
+      "shop_section_leaf_only": "Nur Zutaten haben einen Ladenbereich.",
+      "invalid_diet_class": "Unbekannte Ernährungsform."
     },
     "settings": {
       "unknown_key": "Unbekannter Einstellungsschlüssel.",
