@@ -225,7 +225,7 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 		countBuilder = countBuilder.Where("favorite = 1")
 	}
 	if q.MaxMinutes > 0 {
-		where := sq.Expr("(prep_minutes IS NOT NULL OR cook_minutes IS NOT NULL) AND COALESCE(prep_minutes, 0) + COALESCE(cook_minutes, 0) <= ?", q.MaxMinutes)
+		where := sq.Expr("COALESCE(prep_minutes, 0) + COALESCE(cook_minutes, 0) BETWEEN 1 AND ?", q.MaxMinutes)
 		builder = builder.Where(where)
 		countBuilder = countBuilder.Where(where)
 	}

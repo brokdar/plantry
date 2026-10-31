@@ -180,7 +180,8 @@ type ListQuery struct {
 	Tag          string
 	FavoriteOnly bool
 	// MaxMinutes keeps recipes whose prep + cook minutes are at most this;
-	// recipes without any time are excluded. 0 means no filter.
+	// recipes without any time, or with a total of 0 (unknown), are
+	// excluded. 0 means no filter.
 	MaxMinutes int
 	// NotEatenWeeks keeps recipes not eaten in the last 7×N days. 0 means
 	// no filter.
