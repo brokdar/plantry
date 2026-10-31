@@ -58,6 +58,8 @@ interface PlateSheetProps {
   plan: Plan
   /** Past windows: only feedback. */
   readOnly: boolean
+  /** A generation runs for this window: regenerating waits for it. */
+  running: boolean
   /** `plan.freezing_enabled`. */
   freezing: boolean
   slotName: (slotId: number) => string
@@ -81,6 +83,7 @@ export function PlateSheet({
   cell,
   plan,
   readOnly,
+  running,
   freezing,
   slotName,
   onPick,
@@ -203,6 +206,7 @@ export function PlateSheet({
         <ReviewActions
           cell={cell}
           plan={plan}
+          running={running}
           slotName={slotName}
           onClose={onClose}
         />
@@ -283,11 +287,13 @@ function WhyThis({ reason }: { reason: string }) {
 function ReviewActions({
   cell,
   plan,
+  running,
   slotName,
   onClose,
 }: {
   cell: BoardCell & { plate: Plate }
   plan: Plan
+  running: boolean
   slotName: (slotId: number) => string
   onClose: () => void
 }) {
@@ -357,6 +363,7 @@ function ReviewActions({
           type="button"
           variant="outline"
           className={button}
+          disabled={running}
           onClick={() => regen({ kind: "plate", plate_id: plate.id })}
         >
           <RefreshCw strokeWidth={1.5} aria-hidden />
@@ -368,6 +375,7 @@ function ReviewActions({
           type="button"
           variant="outline"
           className={button}
+          disabled={running}
           onClick={() =>
             regen({ kind: "side", component_id: cell.sideComponentId! })
           }
@@ -380,6 +388,7 @@ function ReviewActions({
         type="button"
         variant="outline"
         className={button}
+        disabled={running}
         onClick={() => regen({ kind: "day", date: plate.date })}
       >
         <CalendarSync strokeWidth={1.5} aria-hidden />

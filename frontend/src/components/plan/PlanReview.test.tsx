@@ -552,4 +552,63 @@ describe("generation progress (D35)", () => {
     await waitFor(() => expect(toastMock.error).toHaveBeenCalled())
     expect(screen.queryByTestId("generation-progress")).not.toBeInTheDocument()
   })
+
+  it("gives up on a run it can't read: toast, no bar, ?run dropped", async () => {
+    vi.mocked(getPlanRun).mockRejectedValue(new Error("404"))
+    renderWithRouter(<PlanPage start="2026-10-31" run={12} />)
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        "Planning didn't finish. Try again."
+      )
+    )
+    expect(screen.queryByTestId("generation-progress")).not.toBeInTheDocument()
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: "/plan",
+      search: { start: "2026-10-31" },
+      replace: true,
+    })
+    // Review is open again.
+    for (const b of screen.getAllByRole("button", {
+      name: "Accept and shop",
+    })) {
+      expect(b).toBeEnabled()
+    }
+  })
+
+  it("regenerating waits while a run goes: no R/S, no quick actions, sheet buttons disabled", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue({ ...sidedPlan, running_run_id: 12 })
+    vi.mocked(getPlanRun).mockResolvedValue(mockRun("running", "choosing"))
+    renderWithRouter(<PlanPage />)
+    await screen.findByRole("progressbar", { name: "Planning" })
+    expect(screen.queryByTestId("cell-quick-actions")).not.toBeInTheDocument()
+    ;(await cellButton(MONDAY_DINNER)).focus()
+    await user.keyboard("rs")
+    expect(regeneratePlan).not.toHaveBeenCalled()
+
+    await user.click(await cellButton(MONDAY_DINNER))
+    const sheet = await screen.findByRole("dialog", { name: "Chili" })
+    for (const name of ["Replace", "Different side", "Regenerate day"]) {
+      expect(within(sheet).getByRole("button", { name })).toBeDisabled()
+    }
+  })
+})
+
+describe("on the anchored board", () => {
+  it("R keeps the board on screen and the URL without start", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(<PlanPage />, "/plan")
+    ;(await cellButton(MONDAY_DINNER)).focus()
+    await user.keyboard("r")
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled())
+    const [{ to, search }] = navigateMock.mock.calls.at(-1) as [
+      { to: string; search: (prev: object) => object },
+    ]
+    expect(to).toBe("/plan")
+    expect(search({})).toEqual({ run: 13 })
+    expect(
+      screen.queryByRole("status", { name: "Loading the plan" })
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("grid")).toBeInTheDocument()
+  })
 })

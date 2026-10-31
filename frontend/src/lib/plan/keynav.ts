@@ -119,10 +119,14 @@ export function isCheatsheetShortcut(e: KeyboardEvent): boolean {
   return !isEditable(e.target)
 }
 
-/** `⌘/Ctrl+Enter` accepts the draft (UX §6), outside editable fields. */
+/** `⌘/Ctrl+Enter` accepts the draft (UX §6), outside editable fields and
+ *  dialogs (sheets included): there the keys belong to the overlay. */
 export function isAcceptShortcut(e: KeyboardEvent): boolean {
   if (e.key !== "Enter" || e.altKey || e.shiftKey) return false
   if (!e.metaKey && !e.ctrlKey) return false
+  if (e.target instanceof Element && e.target.closest('[role="dialog"]')) {
+    return false
+  }
   return !isEditable(e.target)
 }
 

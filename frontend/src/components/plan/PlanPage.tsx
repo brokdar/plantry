@@ -301,6 +301,7 @@ function PlanView({
             <GenerationProgress
               key={runId}
               run={runQuery.data}
+              failed={runQuery.isError}
               onFinished={runFinished}
             />
           )
@@ -323,8 +324,9 @@ function PlanView({
             label={t("plan.board.label", { range: rangeLabel })}
             onOpenCell={openCell}
             onMarkNoPlate={markCell}
-            onReplace={replace}
-            onDifferentSide={differentSide}
+            // While a run goes, R/S and the quick actions wait for it.
+            onReplace={running ? undefined : replace}
+            onDifferentSide={running ? undefined : differentSide}
           />
         </div>
       </BatchHighlightProvider>
@@ -358,6 +360,7 @@ function PlanView({
         plan={plan}
         board={board}
         state={sheet}
+        running={running}
         onChange={changeSheet}
         onClosed={returnFocus}
       />

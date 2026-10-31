@@ -257,6 +257,16 @@ describe("isAcceptShortcut", () => {
     Object.defineProperty(e, "target", { value: area })
     expect(isAcceptShortcut(e)).toBe(false)
   })
+
+  it("ignores ⌘/Ctrl+Enter inside a dialog or sheet", () => {
+    const dialog = document.createElement("div")
+    dialog.setAttribute("role", "dialog")
+    const button = document.createElement("button")
+    dialog.appendChild(button)
+    const e = new KeyboardEvent("keydown", { key: "Enter", metaKey: true })
+    Object.defineProperty(e, "target", { value: button })
+    expect(isAcceptShortcut(e)).toBe(false)
+  })
 })
 
 describe("cellShortcut", () => {

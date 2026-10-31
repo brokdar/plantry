@@ -16,6 +16,9 @@ const STAGES: RunStage[] = [
 interface GenerationProgressProps {
   /** The run the board follows; undefined until its first poll returns. */
   run: PlanRun | undefined
+  /** The run can't be read (e.g. 404): it is over as far as the board
+   *  knows. */
+  failed: boolean
   /** Called once the run has finished and its result was announced. */
   onFinished: () => void
 }
@@ -29,9 +32,19 @@ interface GenerationProgressProps {
  */
 export function GenerationProgress({
   run,
+  failed,
   onFinished,
 }: GenerationProgressProps) {
   const { t } = useTranslation()
+
+  const fail = useEffectEvent(() => {
+    toast.error(t("plan.run.failed"))
+    onFinished()
+  })
+
+  useEffect(() => {
+    if (failed) fail()
+  }, [failed])
 
   const finish = useEffectEvent((done: PlanRun) => {
     if (done.status === "error") {
@@ -69,7 +82,7 @@ export function GenerationProgress({
     if (run && run.status !== "running") finish(run)
   }, [run])
 
-  if (run && run.status !== "running") return null
+  if (failed || (run && run.status !== "running")) return null
 
   const stage = run?.stage ?? null
   const step = stage ? STAGES.indexOf(stage) + 1 : 0

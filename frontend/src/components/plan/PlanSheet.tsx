@@ -33,6 +33,8 @@ interface PlanSheetProps {
   plan: Plan
   board: Board
   state: SheetState | null
+  /** A generation runs for this window: regenerating waits for it. */
+  running: boolean
   onChange: (state: SheetState | null) => void
   /** After the sheet closed: return focus to the cell it was opened for. */
   onClosed: () => void
@@ -56,6 +58,7 @@ export function PlanSheet({
   plan,
   board,
   state,
+  running,
   onChange,
   onClosed,
 }: PlanSheetProps) {
@@ -138,6 +141,7 @@ export function PlanSheet({
               cell={cell as BoardCell & { plate: Plate }}
               plan={plan}
               readOnly={board.readOnly}
+              running={running}
               freezing={freezing.value === "true"}
               slotName={slotName}
               onPick={(p) => onChange({ key: state.key, picker: p })}

@@ -107,6 +107,7 @@ async function renderSheet(
       cell={cellOf(plan, key)}
       plan={plan}
       readOnly={readOnly}
+      running={false}
       freezing={false}
       slotName={(id) => ["", "Breakfast", "Lunch", "Dinner"][id]}
       onPick={onPick}
