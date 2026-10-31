@@ -75,6 +75,10 @@ var (
 	// Store sections (Phase 2 D18).
 	ErrInvalidShopSection  = errors.New("unknown store section")
 	ErrShopSectionLeafOnly = errors.New("store sections apply to leaf foods only")
+
+	// ErrInvalidDietClass is a diet class override outside the four classes
+	// (Phase 3 D28).
+	ErrInvalidDietClass = errors.New("unknown diet class")
 )
 
 // resourcePlaceholder in a message key is replaced by the caller's resource
@@ -91,6 +95,7 @@ var messageKeys = []struct {
 }{
 	{ErrInvalidShopSection, "error.food.invalid_shop_section"},
 	{ErrShopSectionLeafOnly, "error.food.shop_section_leaf_only"},
+	{ErrInvalidDietClass, "error.food.invalid_diet_class"},
 	{ErrInvalidPortions, "error.food.invalid_portions"},
 	{ErrNotFound, "error.not_found"},
 	{ErrDuplicateName, "error.{resource}.duplicate_name"},

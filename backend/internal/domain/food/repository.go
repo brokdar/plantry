@@ -1,6 +1,10 @@
 package food
 
-import "context"
+import (
+	"context"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+)
 
 // Repository is the port that adapters must implement for food persistence.
 // A single repository covers both leaf and composed foods; the kind lives on
@@ -40,6 +44,9 @@ type Repository interface {
 	// SetShopSection writes a leaf's store section override (nil clears it)
 	// and returns the food.
 	SetShopSection(ctx context.Context, id int64, section *ShopSection) (*Food, error)
+	// SetDietClass writes a food's diet class override (nil clears it) and
+	// returns the food.
+	SetDietClass(ctx context.Context, id int64, class *diet.Class) (*Food, error)
 }
 
 // ChildExistsChecker lets plate / template services verify a food_id refers

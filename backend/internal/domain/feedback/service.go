@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
@@ -29,9 +30,9 @@ func NewService(tx domain.Transactor, repo Repository, plates PlateReader, tags 
 	return &Service{tx: tx, repo: repo, plates: plates, tags: tags, profiles: profiles}
 }
 
-// RecordFeedback upserts feedback for a plate. Loved and disliked append the
-// tags of the plate's foods to the profile's likes or dislikes; the heuristic
-// is append-only and never retracted. Both writes share one transaction.
+// RecordFeedback upserts feedback for a plate. Loved and disliked move the
+// specific tags of the plate's foods into the profile's likes or dislikes
+// (profile.ApplyFeedback). Both writes share one transaction.
 func (s *Service) RecordFeedback(ctx context.Context, plateID int64, status Status, note *string) (*PlateFeedback, error) {
 	if !status.Valid() {
 		return nil, fmt.Errorf("%w: %q", domain.ErrInvalidFeedbackStatus, status)
@@ -76,8 +77,17 @@ func (s *Service) DeleteFeedback(ctx context.Context, plateID int64) error {
 	return s.repo.Delete(ctx, plateID)
 }
 
-// collectTags returns the deduped union of tags across every food on the
-// plate. Leaf foods don't have tags; composed foods do.
+// tagExplore marks a recipe the user has not tried yet (Phase 5 discovery).
+const tagExplore = "explore"
+
+// genericTag reports whether a tag says nothing about taste: a role name or
+// explore (spec §6.6). Such tags never reach the preferences.
+func genericTag(tag string) bool {
+	return tag == tagExplore || food.ValidRole(food.Role(tag))
+}
+
+// collectTags returns the deduped union of the specific tags across every
+// food on the plate. Leaf foods don't have tags; composed foods do.
 func (s *Service) collectTags(ctx context.Context, p *plate.Plate) ([]string, error) {
 	seen := make(map[string]struct{})
 	out := make([]string, 0)
@@ -87,7 +97,7 @@ func (s *Service) collectTags(ctx context.Context, p *plate.Plate) ([]string, er
 			return nil, err
 		}
 		for _, tag := range tags {
-			if _, ok := seen[tag]; ok {
+			if _, ok := seen[tag]; ok || genericTag(tag) {
 				continue
 			}
 			seen[tag] = struct{}{}

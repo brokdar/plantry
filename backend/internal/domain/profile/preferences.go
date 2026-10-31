@@ -1,5 +1,7 @@
 package profile
 
+import "slices"
+
 // PreferenceKeyLikes is the key under Profile.Preferences that stores component
 // tags the user has loved (string slice).
 const PreferenceKeyLikes = "likes"
@@ -9,17 +11,13 @@ const PreferenceKeyLikes = "likes"
 const PreferenceKeyDislikes = "dislikes"
 
 // ApplyFeedback returns a new preferences map that incorporates a plate
-// feedback event. The update is append-only: a tag that ends up in "likes"
-// because a plate was loved is never retracted when a later plate bearing the
-// same tag is disliked. Both entries accumulate. This keeps the heuristic
-// simple and makes each feedback event independently meaningful; fine-grained
-// preference tuning belongs to the agent's record_preference tool.
+// feedback event (spec §6.6): the tags join one list and leave the opposite
+// one, so a tag is never liked and disliked at once. Callers drop generic
+// tags first (feedback.Service).
 //
 // status semantics:
-//   - "loved"    → append tags to "likes"
-//   - "disliked" → append tags to "dislikes"
-//   - "cooked"   → no-op (cook tracking lives on the component row)
-//   - "skipped"  → no-op
+//   - "loved"    → append tags to "likes", remove them from "dislikes"
+//   - "disliked" → append tags to "dislikes", remove them from "likes"
 //   - anything else → no-op
 //
 // Empty or nil tag slices, empty-string tags, and unknown statuses all return
@@ -31,12 +29,12 @@ func ApplyFeedback(prefs map[string]any, status string, tags []string) map[strin
 		out[k] = v
 	}
 
-	var key string
+	var key, opposite string
 	switch status {
 	case "loved":
-		key = PreferenceKeyLikes
+		key, opposite = PreferenceKeyLikes, PreferenceKeyDislikes
 	case "disliked":
-		key = PreferenceKeyDislikes
+		key, opposite = PreferenceKeyDislikes, PreferenceKeyLikes
 	default:
 		return out
 	}
@@ -69,6 +67,15 @@ func ApplyFeedback(prefs map[string]any, status string, tags []string) map[strin
 		merged = append(merged, t)
 	}
 	out[key] = merged
+	if v, ok := out[opposite]; ok {
+		kept := make([]string, 0)
+		for _, t := range normalizeStringSlice(v) {
+			if !slices.Contains(clean, t) {
+				kept = append(kept, t)
+			}
+		}
+		out[opposite] = kept
+	}
 	return out
 }
 

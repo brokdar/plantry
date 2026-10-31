@@ -181,6 +181,18 @@ Eating history is derived, never stored (D16): `food.Service.Derive(ctx, today, 
 
 `GET /api/foods` filters: `max_minutes`, `not_eaten_weeks`, `created_within_days`, `today`, `sort=name|last_eaten|created` (`last_eaten` ignores favorites). Recipes carry `last_eaten` (`YYYY-MM-DD`), `times_cooked` and `per_portion` (batched `PerPortionDetailedMany`); leaves carry `used_in_count`. Plate feedback statuses are `loved`, `disliked`, `not_eaten`; others are `400 error.feedback.invalid_status`. `GET /api/foods/macros` serves the plate sheet's macro preview. `GET /api/foods/{id}/scaled?portions=` (required, 0 < p <= 100) returns the scaled ingredient list.
 
+## Diet class
+
+Package `domain/diet` (no domain imports): `Class` (`vegan` < `vegetarian` < `pescetarian` < `omnivore`, plus `unknown`), `Order`, `Valid`, `Max` (any unknown child, or none, gives unknown), `Compatible(class, dietType)` (class ≤ type; unknown never) and `Classify(name)`, a 3-stage data-driven en/de keyword classifier (markers like "vegan", phrases like "Kokosmilch", then the least restrictive animal keyword anywhere in the name, else a plant keyword → vegan, else unknown; umlauts and ß are folded).
+
+Migration 00035 adds `foods.diet_class`, an override only (NULL = derived, nothing backfilled; D28). `food.Food` carries `DietOverride` (stored) and the derived `DietClass`/`DietClassSource` (`auto` leaf name, `user` override, `derived` recipe max over its children). `food.Service.Derive` sets them (`DeriveDiet`: one `LoadTrees` for all recipes without an override); `food.SetDietClasses(nodes)` does it on an already loaded tree.
+
+- Every food JSON has `diet_class` and `diet_class_source`; scaled ingredients and import draft ingredients carry `diet_class`.
+- `GET /api/foods?diet=<class>` keeps foods with class ≤ it, unknown excluded. The class is not stored, so the service filters after the SQL query and pages afterwards.
+- `PUT /api/foods/{id}/diet-class {class | null}` sets or clears the override (both kinds); error `error.food.invalid_diet_class`.
+
+Plate feedback (spec §6.6): loved/disliked move the plate's recipe tags into `likes`/`dislikes` and out of the opposite list; role names and `explore` are skipped.
+
 ## Shopping list
 
 Package `domain/shopping`; `GET /api/shopping-list` returns sections in walk order. Rules:

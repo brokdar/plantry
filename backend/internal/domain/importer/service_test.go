@@ -14,6 +14,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
@@ -36,6 +37,23 @@ func TestService_Extract_PassesSourceKcalThrough(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, d.SourceKcalPerServing)
 	require.InDelta(t, 512.0, *d.SourceKcalPerServing, 0.001)
+}
+
+// D30: each draft ingredient carries the diet class of its name.
+func TestService_Extract_DraftIngredientsCarryDietClass(t *testing.T) {
+	rec := &importer.RawRecipe{
+		Name:             "Salat",
+		RecipeIngredient: []string{"200 g Kichererbsen", "100 g Feta", "2 Scheiben Speck", "1 Prise Xyz"},
+	}
+	svc := importer.NewService(nil, stubExtractor{rec: rec}, nil, nil, nil)
+
+	d, err := svc.Extract(context.Background(), importer.ExtractInput{HTML: "<html></html>"})
+	require.NoError(t, err)
+	got := make([]diet.Class, len(d.Ingredients))
+	for i, in := range d.Ingredients {
+		got[i] = in.DietClass
+	}
+	assert.Equal(t, []diet.Class{diet.Vegan, diet.Vegetarian, diet.Omnivore, diet.Unknown}, got)
 }
 
 const importModel = "fake-import"

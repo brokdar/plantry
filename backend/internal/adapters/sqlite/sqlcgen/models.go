@@ -164,6 +164,7 @@ type Food struct {
 	SourceUrl         sql.NullString
 	Description       sql.NullString
 	ShopSection       sql.NullString
+	DietClass         sql.NullString
 	KeepDays          sql.NullInt64
 	Freezable         sql.NullInt64
 }

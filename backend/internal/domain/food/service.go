@@ -151,6 +151,9 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+// maxListLimit caps a List page.
+const maxListLimit = 10000
+
 // List returns a page of foods matching the query. Derived fields are not
 // set; callers that need them call Derive.
 func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
@@ -160,11 +163,14 @@ func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
 	if q.Limit <= 0 {
 		q.Limit = 50
 	}
-	if q.Limit > 10000 {
-		q.Limit = 10000
+	if q.Limit > maxListLimit {
+		q.Limit = maxListLimit
 	}
 	if q.SortBy == "" {
 		q.SortBy = "name"
+	}
+	if q.Diet != "" {
+		return s.listByDiet(ctx, q)
 	}
 	return s.repo.List(ctx, q)
 }

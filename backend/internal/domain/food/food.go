@@ -5,7 +5,11 @@
 // pesto). Plates and templates reference a Food by ID regardless of kind.
 package food
 
-import "time"
+import (
+	"time"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+)
 
 // Kind discriminates between leaf foods (own direct nutrition) and composed
 // foods (nutrition aggregated from child foods).
@@ -106,6 +110,10 @@ type Food struct {
 	// classified from the name (shopping.Classify).
 	ShopSection *ShopSection
 
+	// DietOverride is the user's diet class (D28), for both kinds; nil means
+	// the class is derived.
+	DietOverride *diet.Class
+
 	// Shared.
 	SourceURL   *string // where the food was imported from
 	Description *string
@@ -117,6 +125,11 @@ type Food struct {
 	// number of recipes using a leaf.
 	History     History
 	UsedInCount int
+	// DietClass is the effective diet class and DietClassSource where it
+	// comes from; set by Service.Derive, Service.DeriveDiet or
+	// SetDietClasses.
+	DietClass       diet.Class
+	DietClassSource DietSource
 
 	// Composed children and associated data. Nil/empty for leaf.
 	Children     []FoodComponent
@@ -189,6 +202,9 @@ type ListQuery struct {
 	// CreatedWithinDays keeps foods created in the last N days. 0 means no
 	// filter.
 	CreatedWithinDays int
+	// Diet keeps foods whose effective diet class is at most this one
+	// (diet.Compatible); unknown foods are excluded. "" means no filter.
+	Diet diet.Class
 	// Today anchors the history fields, NotEatenWeeks, CreatedWithinDays and
 	// the last_eaten sort (D25).
 	Today    time.Time

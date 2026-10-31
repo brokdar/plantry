@@ -184,6 +184,13 @@ JOIN foods f ON f.id = fc.child_id
 WHERE fc.parent_id IN (sqlc.slice(parent_ids))
 ORDER BY fc.parent_id, fc.sort_order, fc.id;
 
+-- name: SetFoodDietClass :one
+UPDATE foods SET
+    diet_class = ?,
+    updated_at = datetime('now')
+WHERE id = ?
+RETURNING *;
+
 -- name: SetFoodShopSection :one
 UPDATE foods SET
     shop_section = ?,

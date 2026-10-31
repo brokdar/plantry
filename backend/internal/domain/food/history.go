@@ -26,8 +26,8 @@ type HistoryReader interface {
 	UsedInCounts(ctx context.Context, ids []int64) (map[int64]int, error)
 }
 
-// Derive sets the derived fields as of today: History on composed foods and
-// UsedInCount on leaves, with one query per kind.
+// Derive sets the derived fields as of today: History on composed foods,
+// UsedInCount on leaves (one query per kind) and the diet class (DeriveDiet).
 func (s *Service) Derive(ctx context.Context, today time.Time, foods ...*Food) error {
 	var composed, leaves []int64
 	for _, f := range foods {
@@ -58,5 +58,5 @@ func (s *Service) Derive(ctx context.Context, today time.Time, foods ...*Food) e
 			f.UsedInCount = used[f.ID]
 		}
 	}
-	return nil
+	return s.DeriveDiet(ctx, foods...)
 }

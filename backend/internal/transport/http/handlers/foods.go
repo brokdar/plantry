@@ -14,6 +14,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
@@ -183,6 +184,12 @@ type foodResponse struct {
 	CreatedAt   string  `json:"created_at"`
 	UpdatedAt   string  `json:"updated_at"`
 
+	// DietClass is the effective diet class (D28) and DietClassSource where
+	// it comes from: auto (leaf name), user (override) or derived (recipe).
+	// Set by food.Service.Derive.
+	DietClass       string `json:"diet_class"`
+	DietClassSource string `json:"diet_class_source"`
+
 	// Derived (§3.3), one of them per kind: leafDerived is set by
 	// toFoodResponse, composedDerived by FoodHandler.respond. Call
 	// food.Service.Derive first.
@@ -341,6 +348,9 @@ func toFoodResponse(f *food.Food) foodResponse {
 		Favorite:    f.Favorite,
 		CreatedAt:   f.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   f.UpdatedAt.Format(time.RFC3339),
+
+		DietClass:       string(f.DietClass),
+		DietClassSource: string(f.DietClassSource),
 	}
 
 	if f.Kind == food.KindLeaf {
@@ -669,6 +679,7 @@ func (h *FoodHandler) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	q.Diet = diet.Class(r.URL.Query().Get("diet"))
 	q.Search = r.URL.Query().Get("search")
 	q.Role = r.URL.Query().Get("role")
 	q.Tag = r.URL.Query().Get("tag")
@@ -849,6 +860,36 @@ func (h *FoodHandler) SetShopSection(w http.ResponseWriter, r *http.Request) {
 	h.writeFood(w, r, http.StatusOK, today, f)
 }
 
+type foodDietClassRequest struct {
+	Class *diet.Class `json:"class"`
+}
+
+// SetDietClass handles PUT /api/foods/{id}/diet-class {class | null}: a
+// food's diet class override; null reverts to the derived class.
+func (h *FoodHandler) SetDietClass(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	var req foodDietClassRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	f, err := h.svc.SetDietClass(r.Context(), id, req.Class)
+	if err != nil {
+		status, key := foodHTTPError(err)
+		writeError(w, status, key)
+		return
+	}
+	h.writeFood(w, r, http.StatusOK, today, f)
+}
+
 func (h *FoodHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
 	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
 	if !ok {
@@ -967,14 +1008,15 @@ func (h *FoodHandler) DeleteImage(w http.ResponseWriter, r *http.Request) {
 // ── Scaled ingredient list (composed foods) ───────────────────────────
 
 type scaledIngredientResponse struct {
-	ChildID int64           `json:"child_id"`
-	Name    string          `json:"name"`
-	Kind    string          `json:"kind"`
-	Amount  float64         `json:"amount"`
-	Unit    string          `json:"unit"`
-	Grams   float64         `json:"grams"`
-	Display units.Quantity  `json:"display"`
-	Buy     *units.Quantity `json:"buy"`
+	ChildID   int64           `json:"child_id"`
+	Name      string          `json:"name"`
+	Kind      string          `json:"kind"`
+	Amount    float64         `json:"amount"`
+	Unit      string          `json:"unit"`
+	Grams     float64         `json:"grams"`
+	Display   units.Quantity  `json:"display"`
+	Buy       *units.Quantity `json:"buy"`
+	DietClass string          `json:"diet_class"`
 }
 
 type scaledResponse struct {
@@ -1014,7 +1056,7 @@ func (h *FoodHandler) Scaled(w http.ResponseWriter, r *http.Request) {
 		resp.Ingredients[i] = scaledIngredientResponse{
 			ChildID: in.ChildID, Name: in.Name, Kind: string(in.Kind),
 			Amount: in.Amount, Unit: in.Unit, Grams: in.Grams,
-			Display: in.Display, Buy: in.Buy,
+			Display: in.Display, Buy: in.Buy, DietClass: string(in.DietClass),
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

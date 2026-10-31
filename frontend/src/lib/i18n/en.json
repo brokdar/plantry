@@ -828,7 +828,8 @@
     "food": {
       "invalid_portions": "Portions must be more than 0 and at most 100.",
       "invalid_shop_section": "Unknown store section.",
-      "shop_section_leaf_only": "Only ingredients have a store section."
+      "shop_section_leaf_only": "Only ingredients have a store section.",
+      "invalid_diet_class": "Unknown diet class."
     },
     "settings": {
       "unknown_key": "Unknown settings key.",

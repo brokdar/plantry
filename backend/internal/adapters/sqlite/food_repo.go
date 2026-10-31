@@ -12,6 +12,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite/sqlcgen"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
@@ -54,6 +55,7 @@ var foodCols = []string{
 	"notes", "image_path", "favorite",
 	"created_at", "updated_at",
 	"source_url", "description", "keep_days", "freezable", "shop_section",
+	"diet_class",
 }
 
 // FoodRepo implements food.Repository backed by SQLite.
@@ -557,6 +559,32 @@ func (r *FoodRepo) SetShopSection(ctx context.Context, id int64, section *food.S
 	return &f, nil
 }
 
+// SetDietClass writes a food's diet class override; nil clears it.
+func (r *FoodRepo) SetDietClass(ctx context.Context, id int64, class *diet.Class) (*food.Food, error) {
+	var ns sql.NullString
+	if class != nil {
+		ns = sql.NullString{String: string(*class), Valid: true}
+	}
+	row, err := r.queriesFor(ctx).SetFoodDietClass(ctx, sqlcgen.SetFoodDietClassParams{ID: id, DietClass: ns})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
+		}
+		return nil, err
+	}
+	var f food.Food
+	mapFoodToDomain(&row, &f)
+	if err := r.loadComposed(ctx, r.queriesFor(ctx), &f); err != nil {
+		return nil, err
+	}
+	if f.Kind == food.KindLeaf {
+		if f.Portions, err = r.ListPortions(ctx, f.ID); err != nil {
+			return nil, err
+		}
+	}
+	return &f, nil
+}
+
 // Exists reports whether a food with the given ID exists. Implements
 // food.ChildExistsChecker (used by plate + template services).
 func (r *FoodRepo) Exists(ctx context.Context, id int64) (bool, error) {
@@ -835,6 +863,11 @@ func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {
 		v := food.ShopSection(row.ShopSection.String)
 		f.ShopSection = &v
 	}
+	f.DietOverride = nil
+	if row.DietClass.Valid {
+		v := diet.Class(row.DietClass.String)
+		f.DietOverride = &v
+	}
 	f.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
 	f.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
 }
@@ -887,6 +920,7 @@ func scanFoodRow(rows *sql.Rows) (*sqlcgen.Food, error) {
 		&row.Notes, &row.ImagePath, &row.Favorite,
 		&row.CreatedAt, &row.UpdatedAt,
 		&row.SourceUrl, &row.Description, &row.KeepDays, &row.Freezable, &row.ShopSection,
+		&row.DietClass,
 	); err != nil {
 		return nil, err
 	}
