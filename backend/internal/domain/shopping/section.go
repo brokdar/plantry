@@ -44,6 +44,11 @@ var phrases = []struct {
 	section food.ShopSection
 }{
 	{"nussbutter", food.SectionDryGoods},
+	{"studentenfutter", food.SectionDryGoods},
+	{"kaffeebohnen", food.SectionDryGoods},
+	{"cornflakes", food.SectionDryGoods},
+	{"corn flakes", food.SectionDryGoods},
+	{"granatapfel", food.SectionProduce},
 	{"peanut butter", food.SectionDryGoods},
 	{"almond butter", food.SectionDryGoods},
 	{"kakao", food.SectionDryGoods},
@@ -72,6 +77,7 @@ var phrases = []struct {
 	{"grüne bohnen", food.SectionProduce},
 	{"brechbohnen", food.SectionProduce},
 	{"green beans", food.SectionProduce},
+	{"peppercorn", food.SectionSpicesOils},
 	{"bell pepper", food.SectionProduce},
 	{"red pepper", food.SectionProduce},
 	{"green pepper", food.SectionProduce},
@@ -80,6 +86,7 @@ var phrases = []struct {
 	{"crème fraîche", food.SectionDairyEggs},
 	{"creme fraiche", food.SectionDairyEggs},
 	{"leberkäse", food.SectionMeatFish},
+	{"fleischkäse", food.SectionMeatFish},
 	{"tomatensauce", food.SectionCansJars},
 	{"tomato sauce", food.SectionCansJars},
 	{"coconut cream", food.SectionCansJars},
@@ -111,7 +118,7 @@ var sections = []rule{
 		"marmelade", "konfitüre", "=jam", "salsa", //nolint:misspell // German "Marmelade"
 	}},
 	{food.SectionSpicesOils, []string{
-		"öl", "essig", "balsamico", "salz", "pfeffer", "pulver", "gewürz", "zimt",
+		"öl", "essig", "balsamico", "salz", "pfeffer", "pulver", "gewürz", "zimt", "zimtstange",
 		"kümmel", "kurkuma", "lorbeer", "nelken", "kardamom", "anis", "curry",
 		"oregano", "muskat", "muskatnuss", "vanille", "vanilleschote", "senf",
 		"brühe", "brühwürfel", "fond", "sojasauce", "worcester", "ketchup",
@@ -231,7 +238,7 @@ func matchEnd(word, kw string) int {
 		return len(word)
 	case prefix && strings.HasPrefix(word, stem):
 		return len(stem)
-	case utf8.RuneCountInString(stem) >= 5:
+	case !prefix && utf8.RuneCountInString(stem) >= 5:
 		if i := strings.LastIndex(word, stem); i >= 0 {
 			return i + len(stem)
 		}

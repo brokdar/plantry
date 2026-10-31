@@ -328,6 +328,17 @@ func TestClassify(t *testing.T) {
 		{"Rinderbrühe", spices},
 		{"Weißweinessig", spices},
 		{"Lachs (TK)", frozen},
+
+		// Re-check of #41.
+		{"Studentenfutter", dry},
+		{"Red peppercorns", spices},
+		{"Green peppercorns", spices},
+		{"Fleischkäse", meat},
+		{"Kaffeebohnen", dry},
+		{"Corn flakes", dry},
+		{"Cornflakes", dry},
+		{"Zimtstangen", spices},
+		{"Granatapfelkerne", produce},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
