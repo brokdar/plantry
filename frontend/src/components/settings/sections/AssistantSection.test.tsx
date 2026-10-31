@@ -195,4 +195,13 @@ describe("AssistantSection", () => {
       )
     })
   })
+
+  it("links to Insights and holds the Prices group", async () => {
+    renderSection()
+    expect(
+      await screen.findByRole("link", { name: "Open insights" })
+    ).toHaveAttribute("href", "/settings/assistant/insights")
+    expect(screen.getByRole("heading", { name: "Prices" })).toBeInTheDocument()
+    expect(screen.getByText("Choose a model to see its price.")).toBeVisible()
+  })
 })

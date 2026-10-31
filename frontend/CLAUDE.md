@@ -56,7 +56,8 @@ src/routes/
 │                      #   default for the anchored window
 └── settings/          # index.tsx: `/settings` (section list on phone, else redirects);
                        #   $section.tsx: `/settings/$section` (household, meals, cooking,
-                       #   assistant, system — `settings-sections.ts`)
+                       #   assistant, system — `settings-sections.ts`); assistant/insights.tsx:
+                       #   `/settings/assistant/insights?run=` (static, beats $section; D37)
 ```
 
 **Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/today`, Plan → `/plan`, Recipes → `/recipes` (active on `/recipes*`), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the Today header on phones; the compact Generate button sits in the `/plan` header on phones (there is no top bar). ⌘K opens the `CommandPalette`: routines (apply to a day, with Undo), Copy a previous week, Manage routines (→ Settings → Meals & week) and the go-to entries (`command/palette-entries.ts`). Any other path renders the root not-found page with a link to Today.
@@ -95,7 +96,9 @@ src/components/
 └── settings/          # SettingsShell, sections/ (one per section), controls.tsx (Stepper, Switch,
                        #   NumberField, OptionCards, SettingsGroup, SavedNote), HouseholdHelper,
                        #   AIProviderControls (shared with the setup wizard), SourceBadge;
-                       #   routines/ (RoutinesEditor in Meals & week: RoutineCard, RoutineSheet, RoutineRenameDialog)
+                       #   routines/ (RoutinesEditor in Meals & week: RoutineCard, RoutineSheet, RoutineRenameDialog);
+                       #   PricesEditor (Assistant → Prices, `ai.price_overrides`); insights/ (InsightsPage,
+                       #   RunsTable, RunDetailSheet, Sparkline — hand-written SVG, VersionTable)
 ```
 
 ### Data layer
