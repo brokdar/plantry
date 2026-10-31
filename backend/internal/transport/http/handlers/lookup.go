@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -153,6 +154,11 @@ func (h *LookupHandler) Resolve(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
+	if err := h.svc.Derive(r.Context(), time.Time{}, loaded); err != nil {
+		status, key := toHTTP(err)
+		writeError(w, status, key)
+		return
+	}
 	writeJSON(w, http.StatusCreated, toFoodResponse(loaded))
 }
 
@@ -214,6 +220,11 @@ func (h *LookupHandler) Refetch(w http.ResponseWriter, r *http.Request) {
 
 	applyCandidateNutrients(existing, &candidate)
 	if err := h.svc.Update(r.Context(), existing); err != nil {
+		status, key := toHTTP(err)
+		writeError(w, status, key)
+		return
+	}
+	if err := h.svc.Derive(r.Context(), time.Time{}, existing); err != nil {
 		status, key := toHTTP(err)
 		writeError(w, status, key)
 		return

@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
@@ -152,8 +151,12 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// List returns a page of foods matching the query.
+// List returns a page of foods matching the query. Derived fields are not
+// set; callers that need them call Derive.
 func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
+	if q.MaxMinutes < 0 || q.NotEatenWeeks < 0 || q.CreatedWithinDays < 0 {
+		return nil, fmt.Errorf("%w: list filters must not be negative", domain.ErrInvalidInput)
+	}
 	if q.Limit <= 0 {
 		q.Limit = 50
 	}
@@ -170,12 +173,6 @@ func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
 // and bias the kitchen agent's fill-empty picks.
 func (s *Service) SetFavorite(ctx context.Context, id int64, favorite bool) (*Food, error) {
 	return s.repo.SetFavorite(ctx, id, favorite)
-}
-
-// MarkCooked bumps cook_count and stamps last_cooked_at. Only meaningful for
-// composed foods but the repo accepts any food_id (unused on leaf is harmless).
-func (s *Service) MarkCooked(ctx context.Context, id int64, at time.Time) error {
-	return s.repo.MarkCooked(ctx, id, at)
 }
 
 // ── Portions ──────────────────────────────────────────────────────────
@@ -316,32 +313,6 @@ func (s *Service) ListVariants(ctx context.Context, id int64) ([]Food, error) {
 		return []Food{}, nil
 	}
 	return s.repo.Siblings(ctx, *f.VariantGroupID, id)
-}
-
-// ── Insights ──────────────────────────────────────────────────────────
-
-// Insights returns rotation signals (forgotten / most-cooked) for composed foods.
-func (s *Service) Insights(ctx context.Context, q InsightsQuery) (Insights, error) {
-	if q.ForgottenWeeks <= 0 {
-		q.ForgottenWeeks = 4
-	}
-	if q.ForgottenWeeks > 52 {
-		q.ForgottenWeeks = 52
-	}
-	if q.ForgottenLimit <= 0 {
-		q.ForgottenLimit = 10
-	}
-	if q.ForgottenLimit > 50 {
-		q.ForgottenLimit = 50
-	}
-	if q.MostCookedLimit <= 0 {
-		q.MostCookedLimit = 5
-	}
-	if q.MostCookedLimit > 50 {
-		q.MostCookedLimit = 50
-	}
-	cutoff := time.Now().UTC().AddDate(0, 0, -7*q.ForgottenWeeks)
-	return s.repo.Insights(ctx, cutoff, q.ForgottenLimit, q.MostCookedLimit)
 }
 
 // ── Validation ────────────────────────────────────────────────────────

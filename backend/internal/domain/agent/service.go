@@ -179,7 +179,8 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		}()
 	}
 
-	// Drive the loop.
+	// Drive the loop. Tools read today from ctx (D25).
+	ctx = withToday(ctx, s.today(req))
 	return Run(ctx, RunRequest{
 		ConversationID: conv.ID,
 		Model:          model,
@@ -291,11 +292,7 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest) (strin
 	if err != nil {
 		return "", err
 	}
-	today := req.Today
-	if today.IsZero() {
-		n := s.now()
-		today = time.Date(n.Year(), n.Month(), n.Day(), 0, 0, 0, 0, time.UTC)
-	}
+	today := s.today(req)
 	var prefs *PlanningPrefs
 	if s.settings != nil {
 		shoppingDayVal, _ := s.settings.Get(ctx, settings.KeyPlanShoppingDay)
@@ -306,6 +303,34 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest) (strin
 		}
 	}
 	return ComposePrompt(p, plates, cells, &DateRange{Today: today, From: req.From, To: req.To}, prefs), nil
+}
+
+// today is the request's date, or the server's local date when it has none.
+func (s *Service) today(req ChatRequest) time.Time {
+	if !req.Today.IsZero() {
+		return req.Today
+	}
+	return localDate(s.now())
+}
+
+// localDate is t's calendar date at midnight UTC.
+func localDate(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+type todayKey struct{}
+
+// withToday carries the user's date to the tools of a chat turn.
+func withToday(ctx context.Context, today time.Time) context.Context {
+	return context.WithValue(ctx, todayKey{}, today)
+}
+
+// todayFrom returns the date set by withToday, else the server's local date.
+func todayFrom(ctx context.Context) time.Time {
+	if t, ok := ctx.Value(todayKey{}).(time.Time); ok {
+		return t
+	}
+	return localDate(time.Now())
 }
 
 // weekdayName turns a plan.shopping_day value (0 = Monday … 6 = Sunday) into

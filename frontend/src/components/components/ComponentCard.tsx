@@ -25,37 +25,22 @@ export type ComponentCardLayout = "grid" | "list"
 type ComponentCardProps = {
   component: ComposedFood
   layout?: ComponentCardLayout
-  insightFlags?: { forgotten?: boolean; mostCooked?: boolean }
   onDelete: (id: number) => void
 }
 
 export function ComponentCard({
   component,
   layout = "grid",
-  insightFlags,
   onDelete,
 }: ComponentCardProps) {
   if (layout === "list") {
-    return (
-      <ComponentCardList
-        component={component}
-        insightFlags={insightFlags}
-        onDelete={onDelete}
-      />
-    )
+    return <ComponentCardList component={component} onDelete={onDelete} />
   }
-  return (
-    <ComponentCardGrid
-      component={component}
-      insightFlags={insightFlags}
-      onDelete={onDelete}
-    />
-  )
+  return <ComponentCardGrid component={component} onDelete={onDelete} />
 }
 
 function ComponentCardGrid({
   component,
-  insightFlags,
   onDelete,
 }: Omit<ComponentCardProps, "layout">) {
   const { t } = useTranslation()
@@ -117,27 +102,6 @@ function ComponentCardGrid({
               </span>
             )}
           </EditorialCard.Meta>
-          {(insightFlags?.forgotten || insightFlags?.mostCooked) && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {insightFlags.forgotten && (
-                <Badge
-                  variant="outline"
-                  className="text-xs"
-                  data-testid={`badge-forgotten-${id}`}
-                >
-                  {t("archive.forgotten")}
-                </Badge>
-              )}
-              {insightFlags.mostCooked && (
-                <Badge
-                  className="text-xs"
-                  data-testid={`badge-most-cooked-${id}`}
-                >
-                  {t("archive.most_cooked")}
-                </Badge>
-              )}
-            </div>
-          )}
         </EditorialCard.Body>
       </EditorialCard>
       <div className="absolute top-3 right-3 z-30 opacity-100 transition-opacity duration-200 focus-within:opacity-100 md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
@@ -180,7 +144,6 @@ function ComponentCardGrid({
 
 function ComponentCardList({
   component,
-  insightFlags,
   onDelete,
 }: Omit<ComponentCardProps, "layout">) {
   const { t } = useTranslation()
@@ -240,23 +203,6 @@ function ComponentCardList({
                 {tag}
               </Badge>
             ))}
-            {insightFlags?.forgotten && (
-              <Badge
-                variant="outline"
-                className="text-[10px]"
-                data-testid={`badge-forgotten-${id}`}
-              >
-                {t("archive.forgotten")}
-              </Badge>
-            )}
-            {insightFlags?.mostCooked && (
-              <Badge
-                className="text-[10px]"
-                data-testid={`badge-most-cooked-${id}`}
-              >
-                {t("archive.most_cooked")}
-              </Badge>
-            )}
           </div>
         </div>
       </Link>

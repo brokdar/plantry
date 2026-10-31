@@ -40,7 +40,6 @@ func setupFoodRouterWithStore(t *testing.T, store *imagestore.Store) http.Handle
 	r.Route("/api/foods", func(r chi.Router) {
 		r.Get("/", h.List)
 		r.Post("/", h.Create)
-		r.Get("/insights", h.Insights)
 		r.Route("/{id}", func(r chi.Router) {
 			r.Get("/", h.Get)
 			r.Get("/scaled", h.Scaled)

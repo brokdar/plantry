@@ -103,12 +103,16 @@ type Food struct {
 	Freezable *bool
 
 	// Shared.
-	SourceURL    *string // where the food was imported from
-	Description  *string
-	ImagePath    *string
-	Favorite     bool
-	LastCookedAt *time.Time
-	CookCount    int
+	SourceURL   *string // where the food was imported from
+	Description *string
+	ImagePath   *string
+	Favorite    bool
+
+	// Derived, never stored: set only by Service.Derive.
+	// History is the composed food's eating history (D16), UsedInCount the
+	// number of recipes using a leaf.
+	History     History
+	UsedInCount int
 
 	// Composed children and associated data. Nil/empty for leaf.
 	Children     []FoodComponent
@@ -171,29 +175,26 @@ type ListQuery struct {
 	Role         string
 	Tag          string
 	FavoriteOnly bool
-	Limit        int
-	Offset       int
-	SortBy       string
-	SortDesc     bool
+	// MaxMinutes keeps recipes whose prep + cook minutes are at most this;
+	// recipes without any time are excluded. 0 means no filter.
+	MaxMinutes int
+	// NotEatenWeeks keeps recipes not eaten in the last 7×N days. 0 means
+	// no filter.
+	NotEatenWeeks int
+	// CreatedWithinDays keeps foods created in the last N days. 0 means no
+	// filter.
+	CreatedWithinDays int
+	// Today anchors the history fields, NotEatenWeeks, CreatedWithinDays and
+	// the last_eaten sort (D25).
+	Today    time.Time
+	Limit    int
+	Offset   int
+	SortBy   string
+	SortDesc bool
 }
 
 // ListResult wraps a page of foods with the total count.
 type ListResult struct {
 	Items []Food
 	Total int
-}
-
-// InsightsQuery parameterises the rotation-insights lookup. Zero values are
-// replaced with defaults by Service.Insights.
-type InsightsQuery struct {
-	ForgottenWeeks  int
-	ForgottenLimit  int
-	MostCookedLimit int
-}
-
-// Insights bundles the two rotation signals used by the library badges and
-// archive view. Both slices contain composed foods only.
-type Insights struct {
-	Forgotten  []Food
-	MostCooked []Food
 }

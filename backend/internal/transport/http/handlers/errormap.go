@@ -42,7 +42,7 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 	case errors.Is(err, domain.ErrAIStreamInterrupted):
 		return http.StatusBadGateway, "error.ai.stream_interrupted"
 	case errors.Is(err, domain.ErrInvalidFeedbackStatus):
-		return http.StatusUnprocessableEntity, "error.plate.feedback_invalid_status"
+		return http.StatusBadRequest, "error.feedback.invalid_status"
 	case errors.Is(err, domain.ErrImportBodyTooLarge):
 		return http.StatusRequestEntityTooLarge, "error.import.body_too_large"
 	case errors.Is(err, domain.ErrImportNotHTML):

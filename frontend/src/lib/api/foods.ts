@@ -372,17 +372,6 @@ export function listVariants(id: number): Promise<VariantListResponse> {
   return apiFetch(`/foods/${id}/variants`)
 }
 
-// Kept for the old recipe library's Forgotten/Most cooked badges until B7
-// removes the endpoint.
-interface InsightsResponse {
-  forgotten: { id: number }[]
-  most_cooked: { id: number }[]
-}
-
-export function getInsights(): Promise<InsightsResponse> {
-  return apiFetch("/foods/insights")
-}
-
 // ── Scaling and store section ─────────────────────────────────────────
 
 export interface ScaledIngredient {

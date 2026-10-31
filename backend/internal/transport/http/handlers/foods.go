@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -174,14 +175,36 @@ type foodResponse struct {
 	Tags              []string                  `json:"tags,omitempty"`
 
 	// Shared
-	SourceURL    *string `json:"source_url,omitempty"`
-	Description  *string `json:"description,omitempty"`
-	ImagePath    *string `json:"image_path,omitempty"`
-	Favorite     bool    `json:"favorite"`
-	LastCookedAt *string `json:"last_cooked_at,omitempty"`
-	CookCount    int     `json:"cook_count"`
-	CreatedAt    string  `json:"created_at"`
-	UpdatedAt    string  `json:"updated_at"`
+	SourceURL   *string `json:"source_url,omitempty"`
+	Description *string `json:"description,omitempty"`
+	ImagePath   *string `json:"image_path,omitempty"`
+	Favorite    bool    `json:"favorite"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+
+	// Derived (§3.3), one of them per kind: leafDerived is set by
+	// toFoodResponse, composedDerived by FoodHandler.respond. Call
+	// food.Service.Derive first.
+	*composedDerived
+	*leafDerived
+}
+
+// composedDerived is a recipe's eating history (D16) and per-portion summary.
+type composedDerived struct {
+	LastEaten   *string            `json:"last_eaten"`
+	TimesCooked int                `json:"times_cooked"`
+	PerPortion  perPortionResponse `json:"per_portion"`
+}
+
+type perPortionResponse struct {
+	Kcal     float64 `json:"kcal"`
+	Protein  float64 `json:"protein"`
+	Complete bool    `json:"complete"`
+}
+
+// leafDerived is a leaf's recipe usage.
+type leafDerived struct {
+	UsedInCount int `json:"used_in_count"`
 }
 
 // foodCreateResponse is a food plus non-fatal problems hit while creating it
@@ -306,13 +329,8 @@ func toFoodResponse(f *food.Food) foodResponse {
 		Description: f.Description,
 		ImagePath:   f.ImagePath,
 		Favorite:    f.Favorite,
-		CookCount:   f.CookCount,
 		CreatedAt:   f.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   f.UpdatedAt.Format(time.RFC3339),
-	}
-	if f.LastCookedAt != nil {
-		s := f.LastCookedAt.Format(time.RFC3339)
-		resp.LastCookedAt = &s
 	}
 
 	if f.Kind == food.KindLeaf {
@@ -345,6 +363,7 @@ func toFoodResponse(f *food.Food) foodResponse {
 		resp.VitaminB12100g = f.VitaminB12100g
 		resp.VitaminB6100g = f.VitaminB6100g
 		resp.Folate100g = f.Folate100g
+		resp.leafDerived = &leafDerived{UsedInCount: f.UsedInCount}
 		if len(f.Portions) > 0 {
 			resp.Portions = make([]foodPortionResponse, len(f.Portions))
 			for i, p := range f.Portions {
@@ -392,9 +411,62 @@ func toFoodResponse(f *food.Food) foodResponse {
 
 func foodHTTPError(err error) (int, string) { return toHTTPWithResource(err, "food") }
 
+// respond maps foods to responses with their derived fields as of today:
+// history and per-portion summary for recipes, recipe usage for leaves.
+func (h *FoodHandler) respond(ctx context.Context, today time.Time, foods ...*food.Food) ([]foodResponse, error) {
+	if err := h.svc.Derive(ctx, today, foods...); err != nil {
+		return nil, err
+	}
+	var recipes []int64
+	for _, f := range foods {
+		if f.Kind == food.KindComposed {
+			recipes = append(recipes, f.ID)
+		}
+	}
+	perPortion, err := h.resolver.PerPortionDetailedMany(ctx, recipes)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]foodResponse, len(foods))
+	for i, f := range foods {
+		out[i] = toFoodResponse(f)
+		if f.Kind != food.KindComposed {
+			continue
+		}
+		d := perPortion[f.ID]
+		cd := &composedDerived{
+			TimesCooked: f.History.TimesCooked,
+			PerPortion:  perPortionResponse{Kcal: d.Macros.Kcal, Protein: d.Macros.Protein, Complete: d.Complete},
+		}
+		if f.History.LastEaten != nil {
+			s := dateString(*f.History.LastEaten)
+			cd.LastEaten = &s
+		}
+		out[i].composedDerived = cd
+	}
+	return out, nil
+}
+
+// writeFood writes one food with its derived fields as of today (D25).
+// Handlers parse today before any write, so a bad value never follows a
+// saved change.
+func (h *FoodHandler) writeFood(w http.ResponseWriter, r *http.Request, status int, today time.Time, f *food.Food) {
+	resp, err := h.respond(r.Context(), today, f)
+	if err != nil {
+		code, key := foodHTTPError(err)
+		writeError(w, code, key)
+		return
+	}
+	writeJSON(w, status, resp[0])
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────
 
 func (h *FoodHandler) Create(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	var req foodRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
@@ -429,7 +501,13 @@ func (h *FoodHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusCreated, foodCreateResponse{foodResponse: toFoodResponse(loaded), Warnings: warnings})
+	resp, err := h.respond(r.Context(), today, loaded)
+	if err != nil {
+		status, key := foodHTTPError(err)
+		writeError(w, status, key)
+		return
+	}
+	writeJSON(w, http.StatusCreated, foodCreateResponse{foodResponse: resp[0], Warnings: warnings})
 }
 
 // saveImageFromURL downloads imageURL into the image store and records the
@@ -456,6 +534,10 @@ func (h *FoodHandler) saveImageFromURL(r *http.Request, f *food.Food, imageURL s
 }
 
 func (h *FoodHandler) Get(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
@@ -467,10 +549,14 @@ func (h *FoodHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusOK, toFoodResponse(f))
+	h.writeFood(w, r, http.StatusOK, today, f)
 }
 
 func (h *FoodHandler) Update(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
@@ -503,10 +589,7 @@ func (h *FoodHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if f.Description == nil {
 		f.Description = existing.Description
 	}
-	// cook tracking preserved
 	f.Favorite = existing.Favorite
-	f.CookCount = existing.CookCount
-	f.LastCookedAt = existing.LastCookedAt
 	// variant group sticky
 	if f.Kind == food.KindComposed && f.VariantGroupID == nil {
 		f.VariantGroupID = existing.VariantGroupID
@@ -522,7 +605,7 @@ func (h *FoodHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusOK, toFoodResponse(loaded))
+	h.writeFood(w, r, http.StatusOK, today, loaded)
 }
 
 func (h *FoodHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -541,6 +624,27 @@ func (h *FoodHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *FoodHandler) List(w http.ResponseWriter, r *http.Request) {
 	var q food.ListQuery
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
+	q.Today = today
+	for param, dst := range map[string]*int{
+		"max_minutes":         &q.MaxMinutes,
+		"not_eaten_weeks":     &q.NotEatenWeeks,
+		"created_within_days": &q.CreatedWithinDays,
+	} {
+		v := r.URL.Query().Get(param)
+		if v == "" {
+			continue
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			writeError(w, http.StatusBadRequest, "error.invalid_query")
+			return
+		}
+		*dst = n
+	}
 	if k := r.URL.Query().Get("kind"); k != "" {
 		q.Kind = food.Kind(k)
 		if q.Kind != food.KindLeaf && q.Kind != food.KindComposed {
@@ -570,9 +674,15 @@ func (h *FoodHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	items := make([]foodResponse, len(result.Items))
+	foods := make([]*food.Food, len(result.Items))
 	for i := range result.Items {
-		items[i] = toFoodResponse(&result.Items[i])
+		foods[i] = &result.Items[i]
+	}
+	items, err := h.respond(r.Context(), today, foods...)
+	if err != nil {
+		status, key := foodHTTPError(err)
+		writeError(w, status, key)
+		return
 	}
 	writeJSON(w, http.StatusOK, foodListResponse{Items: items, Total: result.Total})
 }
@@ -669,6 +779,10 @@ type foodFavoriteRequest struct {
 }
 
 func (h *FoodHandler) SetFavorite(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
@@ -685,10 +799,14 @@ func (h *FoodHandler) SetFavorite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusOK, toFoodResponse(f))
+	h.writeFood(w, r, http.StatusOK, today, f)
 }
 
 func (h *FoodHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
@@ -700,7 +818,7 @@ func (h *FoodHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	writeJSON(w, http.StatusCreated, toFoodResponse(variant))
+	h.writeFood(w, r, http.StatusCreated, today, variant)
 }
 
 type foodVariantListResponse struct {
@@ -708,6 +826,10 @@ type foodVariantListResponse struct {
 }
 
 func (h *FoodHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
@@ -719,76 +841,17 @@ func (h *FoodHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	items := make([]foodResponse, len(siblings))
+	foods := make([]*food.Food, len(siblings))
 	for i := range siblings {
-		items[i] = toFoodResponse(&siblings[i])
+		foods[i] = &siblings[i]
 	}
-	writeJSON(w, http.StatusOK, foodVariantListResponse{Items: items})
-}
-
-// foodSummary is a slim shape for rotation-insight cards.
-type foodSummary struct {
-	ID           int64   `json:"id"`
-	Name         string  `json:"name"`
-	Role         *string `json:"role,omitempty"`
-	ImagePath    *string `json:"image_path,omitempty"`
-	CookCount    int     `json:"cook_count"`
-	LastCookedAt *string `json:"last_cooked_at,omitempty"`
-}
-
-type foodInsightsResponse struct {
-	Forgotten  []foodSummary `json:"forgotten"`
-	MostCooked []foodSummary `json:"most_cooked"`
-}
-
-func toFoodSummary(f *food.Food) foodSummary {
-	s := foodSummary{
-		ID: f.ID, Name: f.Name, ImagePath: f.ImagePath, CookCount: f.CookCount,
-	}
-	if f.Role != nil {
-		r := string(*f.Role)
-		s.Role = &r
-	}
-	if f.LastCookedAt != nil {
-		t := f.LastCookedAt.Format(time.RFC3339)
-		s.LastCookedAt = &t
-	}
-	return s
-}
-
-// Insights handles GET /api/foods/insights.
-func (h *FoodHandler) Insights(w http.ResponseWriter, r *http.Request) {
-	q := food.InsightsQuery{}
-	if v := r.URL.Query().Get("forgotten_weeks"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			q.ForgottenWeeks = n
-		}
-	}
-	if v := r.URL.Query().Get("forgotten_limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			q.ForgottenLimit = n
-		}
-	}
-	if v := r.URL.Query().Get("most_cooked_limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			q.MostCookedLimit = n
-		}
-	}
-	out, err := h.svc.Insights(r.Context(), q)
+	items, err := h.respond(r.Context(), today, foods...)
 	if err != nil {
 		status, key := foodHTTPError(err)
 		writeError(w, status, key)
 		return
 	}
-	forgotten := make([]foodSummary, len(out.Forgotten))
-	for i := range out.Forgotten {
-		forgotten[i] = toFoodSummary(&out.Forgotten[i])
-	}
-	mostCooked := make([]foodSummary, len(out.MostCooked))
-	for i := range out.MostCooked {
-		mostCooked[i] = toFoodSummary(&out.MostCooked[i])
-	}
-	writeJSON(w, http.StatusOK, foodInsightsResponse{Forgotten: forgotten, MostCooked: mostCooked})
+	writeJSON(w, http.StatusOK, foodVariantListResponse{Items: items})
 }
 
 // ── Image upload/delete ───────────────────────────────────────────────

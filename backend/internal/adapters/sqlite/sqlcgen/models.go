@@ -157,8 +157,6 @@ type Food struct {
 	Notes             sql.NullString
 	ImagePath         sql.NullString
 	Favorite          int64
-	LastCookedAt      sql.NullString
-	CookCount         int64
 	CreatedAt         string
 	UpdatedAt         string
 	SourceUrl         sql.NullString

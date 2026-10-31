@@ -42,10 +42,6 @@
     "back_to_calendar": "Zurück zum Kalender",
     "empty": "Keine Mahlzeiten geplant"
   },
-  "archive": {
-    "forgotten": "Vergessen",
-    "most_cooked": "Oft gekocht"
-  },
   "import": {
     "title": "Rezept importieren",
     "subtitle": "Füge den Link zu einem Rezept ein. Plantry liest Zutaten und Schritte für dich aus.",
@@ -1223,9 +1219,11 @@
       "in_use": "Diese Komponente wird in einem Teller verwendet und kann nicht gelöscht werden.",
       "invalid_role": "Ungültige Rolle."
     },
+    "feedback": {
+      "invalid_status": "Diese Bewertung gibt es nicht."
+    },
     "plate": {
       "slot_unknown": "Diese Mahlzeitzeit existiert nicht.",
-      "feedback_invalid_status": "Bewertung muss gekocht, ausgelassen, geliebt oder nicht gemocht sein.",
       "cell_unavailable": "Für diese Mahlzeit ist „Kein Essen“ eingetragen. Plane sie zuerst.",
       "cell_occupied": "Für diese Mahlzeit ist schon etwas geplant."
     },

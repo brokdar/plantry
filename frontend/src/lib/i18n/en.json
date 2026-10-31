@@ -42,10 +42,6 @@
     "back_to_calendar": "Back to calendar",
     "empty": "No meals planned"
   },
-  "archive": {
-    "forgotten": "Forgotten",
-    "most_cooked": "Most cooked"
-  },
   "import": {
     "title": "Import recipe",
     "subtitle": "Paste a recipe link. Plantry reads the ingredients and steps for you.",
@@ -1166,9 +1162,11 @@
       "in_use": "This component is used in a plate and cannot be deleted.",
       "invalid_role": "Invalid role."
     },
+    "feedback": {
+      "invalid_status": "That isn't a valid rating."
+    },
     "plate": {
       "slot_unknown": "That time slot doesn't exist.",
-      "feedback_invalid_status": "Feedback status must be cooked, skipped, loved, or disliked.",
       "cell_unavailable": "This meal is marked No plate. Plan it first.",
       "cell_occupied": "This meal already has a plate."
     },
