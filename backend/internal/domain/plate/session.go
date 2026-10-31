@@ -13,8 +13,12 @@ type CookSession struct {
 	Portions       float64
 	FrozenPortions float64
 	// CookedAt is set by "Done cooking"; nil while not cooked.
-	CookedAt  *time.Time
-	Note      *string
+	CookedAt *time.Time
+	Note     *string
+	// State, AIRunID and Reason as on Plate (D1).
+	State     State
+	AIRunID   *int64
+	Reason    *string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

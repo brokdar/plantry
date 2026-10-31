@@ -8,6 +8,7 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const deletePlateFeedback = `-- name: DeletePlateFeedback :execresult
@@ -47,6 +48,48 @@ type ListPlateFeedbackByDateRangeParams struct {
 
 func (q *Queries) ListPlateFeedbackByDateRange(ctx context.Context, arg ListPlateFeedbackByDateRangeParams) ([]PlateFeedback, error) {
 	rows, err := q.db.QueryContext(ctx, listPlateFeedbackByDateRange, arg.FromDate, arg.ToDate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PlateFeedback{}
+	for rows.Next() {
+		var i PlateFeedback
+		if err := rows.Scan(
+			&i.PlateID,
+			&i.Status,
+			&i.Note,
+			&i.RatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPlateFeedbackByPlateIDs = `-- name: ListPlateFeedbackByPlateIDs :many
+SELECT plate_id, status, note, rated_at FROM plate_feedback WHERE plate_id IN (/*SLICE:ids*/?)
+`
+
+func (q *Queries) ListPlateFeedbackByPlateIDs(ctx context.Context, ids []int64) ([]PlateFeedback, error) {
+	query := listPlateFeedbackByPlateIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}

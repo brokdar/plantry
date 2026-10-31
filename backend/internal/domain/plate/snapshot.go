@@ -18,11 +18,17 @@ type PlanSnapshot struct {
 // components). Apply then adds the components back to that plate if it still
 // sits on the same cell, and otherwise recreates the plate.
 type SnapshotPlate struct {
-	PlateID    *int64              `json:"plate_id,omitempty"`
-	Date       string              `json:"date"`
-	SlotID     int64               `json:"slot_id"`
-	Eaters     float64             `json:"eaters"`
-	Note       *string             `json:"note"`
+	PlateID *int64  `json:"plate_id,omitempty"`
+	Date    string  `json:"date"`
+	SlotID  int64   `json:"slot_id"`
+	Eaters  float64 `json:"eaters"`
+	Note    *string `json:"note"`
+	// State, AIRunID and Reason (D5): Apply with Restore writes them as given
+	// (an empty State follows D2); otherwise D2 sets state and run and only
+	// Reason is kept.
+	State      State               `json:"state,omitempty"`
+	AIRunID    *int64              `json:"ai_run_id,omitempty"`
+	Reason     *string             `json:"reason,omitempty"`
 	Feedback   *SnapshotFeedback   `json:"feedback,omitempty"`
 	Components []SnapshotComponent `json:"components"`
 }
@@ -65,6 +71,10 @@ type SnapshotSession struct {
 	FrozenPortions float64    `json:"frozen_portions"`
 	CookedAt       *time.Time `json:"cooked_at"`
 	Note           *string    `json:"note"`
+	// State, AIRunID and Reason as on SnapshotPlate (D5).
+	State   State   `json:"state,omitempty"`
+	AIRunID *int64  `json:"ai_run_id,omitempty"`
+	Reason  *string `json:"reason,omitempty"`
 }
 
 // ConflictMode is what Apply does with a snapshot plate whose cell is taken

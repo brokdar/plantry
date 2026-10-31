@@ -121,6 +121,7 @@ func TestEvents_DeleteHasNullAfter(t *testing.T) {
 
 func TestEvents_ActorAndRunFromContext(t *testing.T) {
 	e := newEnv(t)
+	e.exec(`INSERT INTO ai_runs (id, kind, started_at) VALUES (42, 'chat', '2026-11-01 10:00:00')`)
 	ctx := actor.With(e.ctx, actor.Agent, 42)
 	_, err := e.svc.Create(ctx, plate.PlateInput{Date: day(mon), SlotID: e.dinner, Components: []plate.PlateComponent{composed(e.chili, 1)}})
 	require.NoError(t, err)
@@ -198,6 +199,48 @@ func TestEvents_EveryMutatorWrites(t *testing.T) {
 			}}}, plate.ApplyOptions{OnConflict: plate.ConflictFail})
 			return err
 		}, []string{"plate:create"}},
+		{"Unlock", func(e *env) error {
+			_, err := e.svc.Unlock(e.ctx, plate.RowSet{PlateIDs: []int64{e.plateAt(mon, e.lunch).ID}})
+			return err
+		}, []string{"plate:unlock", "plate:unlock", "plate:unlock", "session:unlock"}},
+		{"Confirm after Unlock", func(e *env) error {
+			_, err := e.svc.Unlock(e.ctx, plate.RowSet{PlateIDs: []int64{e.plateAt(mon, e.lunch).ID}})
+			if err != nil {
+				return err
+			}
+			_, err = e.svc.Confirm(e.ctx, plate.RowSet{PlateIDs: []int64{e.plateAt(mon, e.lunch).ID}})
+			return err
+		}, []string{
+			"plate:unlock", "plate:unlock", "plate:unlock", "session:unlock",
+			"plate:confirm", "plate:confirm", "plate:confirm", "session:confirm",
+		}},
+		{"Accept and Unaccept after Unlock", func(e *env) error {
+			_, err := e.svc.Unlock(e.ctx, plate.RowSet{PlateIDs: []int64{e.plateAt(mon, e.lunch).ID}})
+			if err != nil {
+				return err
+			}
+			rows, err := e.svc.Accept(e.ctx, day(sun), day(mon))
+			if err != nil {
+				return err
+			}
+			_, err = e.svc.Unaccept(e.ctx, rows)
+			return err
+		}, []string{
+			"plate:unlock", "plate:unlock", "plate:unlock", "session:unlock",
+			"plate:accept", "plate:accept", "plate:accept", "session:accept",
+			"plate:unlock", "plate:unlock", "plate:unlock", "session:unlock",
+		}},
+		{"Discard after Unlock", func(e *env) error {
+			_, err := e.svc.Unlock(e.ctx, plate.RowSet{PlateIDs: []int64{e.plateAt(mon, e.lunch).ID}})
+			if err != nil {
+				return err
+			}
+			_, err = e.svc.Discard(e.ctx, day(sun), day(mon))
+			return err
+		}, []string{
+			"plate:unlock", "plate:unlock", "plate:unlock", "session:unlock",
+			"plate:discard", "plate:discard", "plate:discard", "session:discard",
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

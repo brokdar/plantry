@@ -4,23 +4,27 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/actor"
 )
 
 // Action is what a mutation did to a plate or session (D20).
 type Action string
 
-// Actions. Phase 3 adds its own.
+// Actions. Confirm and unlock change a batch closure's state (D3; unaccept
+// logs unlock too), accept confirms a window's drafts and discard deletes
+// them (D4).
 const (
 	ActionCreate  Action = "create"
 	ActionUpdate  Action = "update"
 	ActionDelete  Action = "delete"
 	ActionRestore Action = "restore"
+	ActionConfirm Action = "confirm"
+	ActionUnlock  Action = "unlock"
+	ActionAccept  Action = "accept"
+	ActionDiscard Action = "discard"
 )
 
 // Event is one audit-trail row (D20). A plate event has PlateID and the
@@ -62,6 +66,8 @@ type eventSession struct {
 // id names one plate or session for the life of the database.
 type journal struct {
 	created Action // the action of a created plate: create or restore
+	changed Action // the action of a changed row: update, or a state action
+	deleted Action // the action of a deleted row: delete or discard
 
 	plateIDs []int64
 	plates   map[int64]*Plate
@@ -75,7 +81,10 @@ type journal struct {
 }
 
 func newJournal() *journal {
-	return &journal{created: ActionCreate, plates: map[int64]*Plate{}, sessions: map[int64]*CookSession{}}
+	return &journal{
+		created: ActionCreate, changed: ActionUpdate, deleted: ActionDelete,
+		plates: map[int64]*Plate{}, sessions: map[int64]*CookSession{},
+	}
 }
 
 // touch records p's state before the mutation changes it. Later touches of
@@ -123,9 +132,11 @@ func (j *journal) editSession(sess CookSession) {
 }
 
 // commit writes one event per touched plate (create/restore, update or
-// delete by its state before and after), then one with plate_id NULL per
-// touched session that changed (create, update or delete) and for the
-// session of an explicit edit. It runs last in the mutation's unit of work.
+// delete by its state before and after, or the journal's own actions), then
+// one with plate_id NULL per touched session that changed (create, update or
+// delete) and for the session of an explicit edit. It reads every touched
+// row as it is after the mutation in one batch per table and runs last in
+// the mutation's unit of work.
 func (s *Service) commit(ctx context.Context, j *journal) error {
 	who := actor.From(ctx)
 	var runID *int64
@@ -139,17 +150,18 @@ func (s *Service) commit(ctx context.Context, j *journal) error {
 		id := j.editID
 		editID = &id
 	}
+	plates, err := s.plates.ListByIDs(ctx, j.plateIDs)
+	if err != nil {
+		return err
+	}
+	afterPlate := make(map[int64]*Plate, len(plates))
+	for i := range plates {
+		afterPlate[plates[i].ID] = &plates[i]
+	}
 	for _, id := range j.plateIDs {
-		before := j.plates[id]
-		after, err := s.plates.Get(ctx, id)
-		switch {
-		case errors.Is(err, domain.ErrNotFound):
-			after = nil
-		case err != nil:
-			return err
-		}
+		before, after := j.plates[id], afterPlate[id]
 		e := Event{PlateID: &id, CookSessionID: editID, Actor: who.Kind, AIRunID: runID, At: at}
-		e.Action = actionOf(before == nil, after == nil, j.created)
+		e.Action = j.action(before == nil, after == nil, j.created)
 		if e.Action == "" {
 			continue
 		}
@@ -168,17 +180,18 @@ func (s *Service) commit(ctx context.Context, j *journal) error {
 			return err
 		}
 	}
+	sessions, err := s.sessions.ListSessionsByIDs(ctx, j.sessionIDs)
+	if err != nil {
+		return err
+	}
+	afterSession := make(map[int64]*CookSession, len(sessions))
+	for i := range sessions {
+		afterSession[sessions[i].ID] = &sessions[i]
+	}
 	for _, id := range j.sessionIDs {
-		before := j.sessions[id]
-		after, err := s.sessions.GetSession(ctx, id)
-		switch {
-		case errors.Is(err, domain.ErrNotFound):
-			after = nil
-		case err != nil:
-			return err
-		}
+		before, after := j.sessions[id], afterSession[id]
 		e := Event{CookSessionID: &id, Actor: who.Kind, AIRunID: runID, At: at}
-		e.Action = actionOf(before == nil, after == nil, ActionCreate)
+		e.Action = j.action(before == nil, after == nil, ActionCreate)
 		if e.Action == "" {
 			continue
 		}
@@ -203,18 +216,18 @@ func (s *Service) commit(ctx context.Context, j *journal) error {
 	return nil
 }
 
-// actionOf is the action for a subject that did (not) exist before and
-// after a mutation; "" when it existed at neither point.
-func actionOf(noBefore, noAfter bool, created Action) Action {
+// action is the journal's action for a subject that did (not) exist before
+// and after a mutation; "" when it existed at neither point.
+func (j *journal) action(noBefore, noAfter bool, created Action) Action {
 	switch {
 	case noBefore && noAfter:
 		return ""
 	case noBefore:
 		return created
 	case noAfter:
-		return ActionDelete
+		return j.deleted
 	default:
-		return ActionUpdate
+		return j.changed
 	}
 }
 
@@ -227,6 +240,7 @@ func plateJSON(p *Plate) (json.RawMessage, error) {
 	id := p.ID
 	sp := SnapshotPlate{
 		PlateID: &id, Date: p.DateString(), SlotID: p.SlotID, Eaters: p.Eaters, Note: p.Note,
+		State: p.State, AIRunID: p.AIRunID, Reason: p.Reason,
 		Components: make([]SnapshotComponent, len(p.Components)),
 	}
 	if p.Feedback != nil {
@@ -250,6 +264,7 @@ func sessionJSON(sess *CookSession) (json.RawMessage, error) {
 	return marshalEvent(eventSession{ID: sess.ID, SnapshotSession: SnapshotSession{
 		FoodID: sess.FoodID, CookDate: sess.CookDate.Format(dateLayout), CookSlotID: sess.CookSlotID,
 		Portions: sess.Portions, FrozenPortions: sess.FrozenPortions, CookedAt: sess.CookedAt, Note: sess.Note,
+		State: sess.State, AIRunID: sess.AIRunID, Reason: sess.Reason,
 	}})
 }
 

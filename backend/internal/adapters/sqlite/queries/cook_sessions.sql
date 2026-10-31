@@ -1,6 +1,6 @@
 -- name: CreateCookSession :one
-INSERT INTO cook_sessions (food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO cook_sessions (food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, state, ai_run_id, reason)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetCookSession :one
@@ -53,3 +53,9 @@ WHERE pc.cook_session_id IN (
            WHERE p2.date BETWEEN sqlc.arg(from_date) AND sqlc.arg(to_date)
              AND pc2.cook_session_id IS NOT NULL))
 ORDER BY pc.cook_session_id, p.date, p.slot_id, pc.id;
+
+-- name: ListCookSessionsByIDs :many
+SELECT * FROM cook_sessions WHERE id IN (sqlc.slice(ids)) ORDER BY id;
+
+-- name: SetSessionsState :exec
+UPDATE cook_sessions SET state = sqlc.arg(state), updated_at = datetime('now') WHERE id IN (sqlc.slice(ids));

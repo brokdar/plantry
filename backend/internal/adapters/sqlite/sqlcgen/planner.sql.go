@@ -8,6 +8,7 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const countPlatesUsingTimeSlot = `-- name: CountPlatesUsingTimeSlot :one
@@ -22,16 +23,19 @@ func (q *Queries) CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (i
 }
 
 const createPlate = `-- name: CreatePlate :one
-INSERT INTO plates (slot_id, note, date, eaters, updated_at)
-VALUES (?, ?, ?, ?, datetime('now'))
-RETURNING id, slot_id, note, created_at, date, eaters, updated_at
+INSERT INTO plates (slot_id, note, date, eaters, state, ai_run_id, reason, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+RETURNING id, slot_id, note, created_at, date, eaters, updated_at, state, ai_run_id, reason
 `
 
 type CreatePlateParams struct {
-	SlotID int64
-	Note   sql.NullString
-	Date   string
-	Eaters float64
+	SlotID  int64
+	Note    sql.NullString
+	Date    string
+	Eaters  float64
+	State   string
+	AiRunID sql.NullInt64
+	Reason  sql.NullString
 }
 
 func (q *Queries) CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate, error) {
@@ -40,6 +44,9 @@ func (q *Queries) CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate
 		arg.Note,
 		arg.Date,
 		arg.Eaters,
+		arg.State,
+		arg.AiRunID,
+		arg.Reason,
 	)
 	var i Plate
 	err := row.Scan(
@@ -50,6 +57,9 @@ func (q *Queries) CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate
 		&i.Date,
 		&i.Eaters,
 		&i.UpdatedAt,
+		&i.State,
+		&i.AiRunID,
+		&i.Reason,
 	)
 	return i, err
 }
@@ -158,7 +168,7 @@ func (q *Queries) DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, err
 }
 
 const getPlate = `-- name: GetPlate :one
-SELECT id, slot_id, note, created_at, date, eaters, updated_at FROM plates WHERE id = ?
+SELECT id, slot_id, note, created_at, date, eaters, updated_at, state, ai_run_id, reason FROM plates WHERE id = ?
 `
 
 func (q *Queries) GetPlate(ctx context.Context, id int64) (Plate, error) {
@@ -172,6 +182,9 @@ func (q *Queries) GetPlate(ctx context.Context, id int64) (Plate, error) {
 		&i.Date,
 		&i.Eaters,
 		&i.UpdatedAt,
+		&i.State,
+		&i.AiRunID,
+		&i.Reason,
 	)
 	return i, err
 }
@@ -374,8 +387,70 @@ func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64)
 	return items, nil
 }
 
+const listPlateComponentsByPlateIDs = `-- name: ListPlateComponentsByPlateIDs :many
+SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, f.name AS food_name, f.kind AS food_kind, f.role AS food_role
+FROM plate_components pc
+JOIN foods f ON f.id = pc.food_id
+WHERE pc.plate_id IN (/*SLICE:ids*/?)
+ORDER BY pc.plate_id, pc.sort_order, pc.id
+`
+
+type ListPlateComponentsByPlateIDsRow struct {
+	PlateComponent PlateComponent
+	FoodName       string
+	FoodKind       string
+	FoodRole       sql.NullString
+}
+
+func (q *Queries) ListPlateComponentsByPlateIDs(ctx context.Context, ids []int64) ([]ListPlateComponentsByPlateIDsRow, error) {
+	query := listPlateComponentsByPlateIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPlateComponentsByPlateIDsRow{}
+	for rows.Next() {
+		var i ListPlateComponentsByPlateIDsRow
+		if err := rows.Scan(
+			&i.PlateComponent.ID,
+			&i.PlateComponent.PlateID,
+			&i.PlateComponent.FoodID,
+			&i.PlateComponent.Portions,
+			&i.PlateComponent.Amount,
+			&i.PlateComponent.Unit,
+			&i.PlateComponent.Grams,
+			&i.PlateComponent.GramsSource,
+			&i.PlateComponent.CookSessionID,
+			&i.PlateComponent.SortOrder,
+			&i.FoodName,
+			&i.FoodKind,
+			&i.FoodRole,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPlatesByDateRange = `-- name: ListPlatesByDateRange :many
-SELECT id, slot_id, note, created_at, date, eaters, updated_at FROM plates WHERE date BETWEEN ?1 AND ?2 ORDER BY date, slot_id, id
+SELECT id, slot_id, note, created_at, date, eaters, updated_at, state, ai_run_id, reason FROM plates WHERE date BETWEEN ?1 AND ?2 ORDER BY date, slot_id, id
 `
 
 type ListPlatesByDateRangeParams struct {
@@ -400,6 +475,57 @@ func (q *Queries) ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDat
 			&i.Date,
 			&i.Eaters,
 			&i.UpdatedAt,
+			&i.State,
+			&i.AiRunID,
+			&i.Reason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPlatesByIDs = `-- name: ListPlatesByIDs :many
+SELECT id, slot_id, note, created_at, date, eaters, updated_at, state, ai_run_id, reason FROM plates WHERE id IN (/*SLICE:ids*/?) ORDER BY date, slot_id, id
+`
+
+func (q *Queries) ListPlatesByIDs(ctx context.Context, ids []int64) ([]Plate, error) {
+	query := listPlatesByIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Plate{}
+	for rows.Next() {
+		var i Plate
+		if err := rows.Scan(
+			&i.ID,
+			&i.SlotID,
+			&i.Note,
+			&i.CreatedAt,
+			&i.Date,
+			&i.Eaters,
+			&i.UpdatedAt,
+			&i.State,
+			&i.AiRunID,
+			&i.Reason,
 		); err != nil {
 			return nil, err
 		}
@@ -447,6 +573,31 @@ func (q *Queries) ListTimeSlots(ctx context.Context) ([]TimeSlot, error) {
 	return items, nil
 }
 
+const setPlatesState = `-- name: SetPlatesState :exec
+UPDATE plates SET state = ?1, updated_at = datetime('now') WHERE id IN (/*SLICE:ids*/?)
+`
+
+type SetPlatesStateParams struct {
+	State string
+	Ids   []int64
+}
+
+func (q *Queries) SetPlatesState(ctx context.Context, arg SetPlatesStateParams) error {
+	query := setPlatesState
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.State)
+	if len(arg.Ids) > 0 {
+		for _, v := range arg.Ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(arg.Ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
 const touchPlate = `-- name: TouchPlate :exec
 UPDATE plates SET updated_at = datetime('now') WHERE id = ?
 `
@@ -464,7 +615,7 @@ UPDATE plates SET
     eaters     = ?,
     updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, slot_id, note, created_at, date, eaters, updated_at
+RETURNING id, slot_id, note, created_at, date, eaters, updated_at, state, ai_run_id, reason
 `
 
 type UpdatePlateParams struct {
@@ -492,6 +643,9 @@ func (q *Queries) UpdatePlate(ctx context.Context, arg UpdatePlateParams) (Plate
 		&i.Date,
 		&i.Eaters,
 		&i.UpdatedAt,
+		&i.State,
+		&i.AiRunID,
+		&i.Reason,
 	)
 	return i, err
 }

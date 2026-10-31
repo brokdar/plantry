@@ -24,6 +24,10 @@ type Repository interface {
 	// ListByDateRange returns the plates in [from, to] with components and
 	// feedback, ordered by date, slot_id, id.
 	ListByDateRange(ctx context.Context, from, to time.Time) ([]Plate, error)
+	// ListByIDs returns the plates of ids that exist, like ListByDateRange.
+	ListByIDs(ctx context.Context, ids []int64) ([]Plate, error)
+	// SetState writes the state of the plates of ids and bumps updated_at.
+	SetState(ctx context.Context, ids []int64, st State) error
 
 	CreateComponent(ctx context.Context, pc *PlateComponent) error
 	GetComponent(ctx context.Context, id int64) (*PlateComponent, error)
@@ -49,4 +53,33 @@ type SessionRepository interface {
 	// plate's cell and eaters (PlateID, ComponentID, FoodID, Cell, PerEater,
 	// Eaters). Order is not significant; OrderLinks sorts them.
 	ListLinks(ctx context.Context, sessionID int64) ([]Link, error)
+	// ListSessionsByIDs returns the sessions of ids that exist.
+	ListSessionsByIDs(ctx context.Context, ids []int64) ([]CookSession, error)
+	// ListInRange returns the sessions cooking in [from, to] or linked to a
+	// plate dated in it, with every link of each keyed by session id.
+	ListInRange(ctx context.Context, from, to time.Time) ([]CookSession, map[int64][]Link, error)
+	// SetSessionsState writes the state of the sessions of ids and bumps
+	// updated_at.
+	SetSessionsState(ctx context.Context, ids []int64, st State) error
+}
+
+// OutcomeEvent is what accept, discard or unaccept did to an AI run's rows
+// (D25).
+type OutcomeEvent string
+
+// Outcome events.
+const (
+	OutcomeAccepted  OutcomeEvent = "accepted"
+	OutcomeDiscarded OutcomeEvent = "discarded"
+	// OutcomeReset is an undone accept.
+	OutcomeReset OutcomeEvent = "reset"
+)
+
+// RunOutcomes records the outcome of the AI runs whose rows accept, discard
+// and unaccept change (D25): open → accepted on accept, → discarded on
+// discard, partially_accepted once a run sees both; reset (unaccept) undoes
+// an accept: accepted → open, partially_accepted → discarded. Record joins
+// the unit of work carried by ctx.
+type RunOutcomes interface {
+	Record(ctx context.Context, runID int64, ev OutcomeEvent) error
 }

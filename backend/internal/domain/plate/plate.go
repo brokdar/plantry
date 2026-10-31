@@ -10,14 +10,32 @@ type Plate struct {
 	SlotID int64
 	// Eaters is how many eater portions the plate serves (D10). Component
 	// quantities are per eater.
-	Eaters     float64
-	Note       *string
+	Eaters float64
+	Note   *string
+	// State is draft or confirmed (D1); AIRunID the AI run that wrote the
+	// plate and Reason the chooser's "Why this?", both nil when none.
+	State      State
+	AIRunID    *int64
+	Reason     *string
 	Components []PlateComponent
 	// Feedback is the plate's rating, nil when unrated.
 	Feedback  *Feedback
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+// State is a plate's or cook session's plan state (D1). Draft rows are
+// proposals; confirmed rows are decisions the generator keeps fixed.
+type State string
+
+// States.
+const (
+	StateDraft     State = "draft"
+	StateConfirmed State = "confirmed"
+)
+
+// Valid reports whether st is draft or confirmed.
+func (st State) Valid() bool { return st == StateDraft || st == StateConfirmed }
 
 // DateString returns the plate's date formatted as YYYY-MM-DD.
 func (p Plate) DateString() string { return p.Date.Format(dateLayout) }

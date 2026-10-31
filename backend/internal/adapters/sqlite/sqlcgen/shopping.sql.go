@@ -11,7 +11,7 @@ import (
 )
 
 const listCookSessionsByCookDate = `-- name: ListCookSessionsByCookDate :many
-SELECT id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at FROM cook_sessions
+SELECT id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at, state, ai_run_id, reason FROM cook_sessions
 WHERE cook_date BETWEEN ?1 AND ?2
 ORDER BY cook_date, cook_slot_id, id
 `
@@ -43,6 +43,9 @@ func (q *Queries) ListCookSessionsByCookDate(ctx context.Context, arg ListCookSe
 			&i.Note,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.State,
+			&i.AiRunID,
+			&i.Reason,
 		); err != nil {
 			return nil, err
 		}

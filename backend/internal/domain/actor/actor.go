@@ -1,5 +1,5 @@
 // Package actor carries who is making a change through a context (D20): the
-// user (HTTP) or the agent (a chat run).
+// user (HTTP), the agent (a chat run) or the plan generator (a generate run).
 package actor
 
 import (
@@ -10,10 +10,12 @@ import (
 // Kind is who made a change.
 type Kind string
 
-// Kinds. Phase 3 adds the generator.
+// Kinds. Rows the user creates are confirmed; rows the agent or the
+// generator creates are drafts tagged with their run (Phase 3 D2).
 const (
-	User  Kind = "user"
-	Agent Kind = "agent"
+	User      Kind = "user"
+	Agent     Kind = "agent"
+	Generator Kind = "generator"
 )
 
 // Actor is the change's author. RunID is the AI run that made it, 0 when

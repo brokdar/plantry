@@ -10,6 +10,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite/sqlcgen"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // maxStepResultBytes caps the stored size of a step's args_json and result_json.
@@ -27,7 +28,24 @@ func NewAIRunRepo(db *sql.DB) *AIRunRepo {
 	return &AIRunRepo{conn: conn{db: db}}
 }
 
-var _ airun.Store = (*AIRunRepo)(nil)
+var (
+	_ airun.Store       = (*AIRunRepo)(nil)
+	_ plate.RunOutcomes = (*AIRunRepo)(nil)
+)
+
+// Record moves the run's outcome by ev (D25; the transitions are in the
+// SetRunOutcome query) and stamps outcome_at.
+func (r *AIRunRepo) Record(ctx context.Context, runID int64, ev plate.OutcomeEvent) error {
+	switch ev {
+	case plate.OutcomeAccepted, plate.OutcomeDiscarded, plate.OutcomeReset:
+	default:
+		return fmt.Errorf("record run outcome: unknown event %q", ev)
+	}
+	if err := r.queriesFor(ctx).SetRunOutcome(ctx, sqlcgen.SetRunOutcomeParams{Event: string(ev), ID: runID}); err != nil {
+		return fmt.Errorf("record run %d outcome: %w", runID, err)
+	}
+	return nil
+}
 
 func (r *AIRunRepo) CreateRun(ctx context.Context, start airun.RunStart) (int64, error) {
 	id, err := r.queriesFor(ctx).CreateAIRun(ctx, sqlcgen.CreateAIRunParams{

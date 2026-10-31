@@ -85,6 +85,7 @@ type Querier interface {
 	// Sessions cooking in [from_date, to_date]: the recipe sources of a
 	// shopping list.
 	ListCookSessionsByCookDate(ctx context.Context, arg ListCookSessionsByCookDateParams) ([]CookSession, error)
+	ListCookSessionsByIDs(ctx context.Context, ids []int64) ([]CookSession, error)
 	// Sessions cooking in [from_date, to_date] or linked to a plate dated in it.
 	ListCookSessionsInRange(ctx context.Context, arg ListCookSessionsInRangeParams) ([]CookSession, error)
 	ListFoodComponents(ctx context.Context, parentID int64) ([]ListFoodComponentsRow, error)
@@ -98,9 +99,12 @@ type Querier interface {
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
+	ListPlateComponentsByPlateIDs(ctx context.Context, ids []int64) ([]ListPlateComponentsByPlateIDsRow, error)
 	ListPlateEvents(ctx context.Context) ([]PlateEvent, error)
 	ListPlateFeedbackByDateRange(ctx context.Context, arg ListPlateFeedbackByDateRangeParams) ([]PlateFeedback, error)
+	ListPlateFeedbackByPlateIDs(ctx context.Context, ids []int64) ([]PlateFeedback, error)
 	ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDateRangeParams) ([]Plate, error)
+	ListPlatesByIDs(ctx context.Context, ids []int64) ([]Plate, error)
 	ListPresetComponentsByPlate(ctx context.Context, presetPlateID int64) ([]PresetComponent, error)
 	ListPresetPlatesByPreset(ctx context.Context, presetID int64) ([]PresetPlate, error)
 	ListPresetTagsByPreset(ctx context.Context, presetID int64) ([]string, error)
@@ -114,6 +118,13 @@ type Querier interface {
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
 	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)
+	SetPlatesState(ctx context.Context, arg SetPlatesStateParams) error
+	// D25: a run's outcome after its rows were accepted, discarded or un-accepted
+	// (reset). open/NULL -> accepted or discarded; a run that sees both is
+	// partially_accepted; reset undoes an accept (accepted -> open,
+	// partially_accepted -> discarded).
+	SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error
+	SetSessionsState(ctx context.Context, arg SetSessionsStateParams) error
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	TouchPlate(ctx context.Context, id int64) error
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error

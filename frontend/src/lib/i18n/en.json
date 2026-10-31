@@ -783,7 +783,9 @@
       "generation_running": "A plan is already being made for this week. Wait for it to finish.",
       "scope_confirmed": "This plate is confirmed, so it stays as it is.",
       "confirmed_affected": "Some of these plates are confirmed and were already shopped for.",
-      "replan_past": "Re-planning starts today at the earliest."
+      "replan_past": "Re-planning starts today at the earliest.",
+      "nothing_to_accept": "This week has no draft plates.",
+      "state_mismatch": "Some of these plates changed in the meantime, so this can't be undone."
     },
     "slot": {
       "in_use": "This time slot is used by plates and cannot be deleted."

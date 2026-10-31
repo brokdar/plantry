@@ -8,12 +8,13 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const createCookSession = `-- name: CreateCookSession :one
-INSERT INTO cook_sessions (food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at
+INSERT INTO cook_sessions (food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, state, ai_run_id, reason)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at, state, ai_run_id, reason
 `
 
 type CreateCookSessionParams struct {
@@ -24,6 +25,9 @@ type CreateCookSessionParams struct {
 	FrozenPortions float64
 	CookedAt       sql.NullString
 	Note           sql.NullString
+	State          string
+	AiRunID        sql.NullInt64
+	Reason         sql.NullString
 }
 
 func (q *Queries) CreateCookSession(ctx context.Context, arg CreateCookSessionParams) (CookSession, error) {
@@ -35,6 +39,9 @@ func (q *Queries) CreateCookSession(ctx context.Context, arg CreateCookSessionPa
 		arg.FrozenPortions,
 		arg.CookedAt,
 		arg.Note,
+		arg.State,
+		arg.AiRunID,
+		arg.Reason,
 	)
 	var i CookSession
 	err := row.Scan(
@@ -48,6 +55,9 @@ func (q *Queries) CreateCookSession(ctx context.Context, arg CreateCookSessionPa
 		&i.Note,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.State,
+		&i.AiRunID,
+		&i.Reason,
 	)
 	return i, err
 }
@@ -61,7 +71,7 @@ func (q *Queries) DeleteCookSession(ctx context.Context, id int64) (sql.Result, 
 }
 
 const getCookSession = `-- name: GetCookSession :one
-SELECT id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at FROM cook_sessions WHERE id = ?
+SELECT id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at, state, ai_run_id, reason FROM cook_sessions WHERE id = ?
 `
 
 func (q *Queries) GetCookSession(ctx context.Context, id int64) (CookSession, error) {
@@ -78,6 +88,9 @@ func (q *Queries) GetCookSession(ctx context.Context, id int64) (CookSession, er
 		&i.Note,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.State,
+		&i.AiRunID,
+		&i.Reason,
 	)
 	return i, err
 }
@@ -195,8 +208,59 @@ func (q *Queries) ListCookSessionLinksInRange(ctx context.Context, arg ListCookS
 	return items, nil
 }
 
+const listCookSessionsByIDs = `-- name: ListCookSessionsByIDs :many
+SELECT id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at, state, ai_run_id, reason FROM cook_sessions WHERE id IN (/*SLICE:ids*/?) ORDER BY id
+`
+
+func (q *Queries) ListCookSessionsByIDs(ctx context.Context, ids []int64) ([]CookSession, error) {
+	query := listCookSessionsByIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CookSession{}
+	for rows.Next() {
+		var i CookSession
+		if err := rows.Scan(
+			&i.ID,
+			&i.FoodID,
+			&i.CookDate,
+			&i.CookSlotID,
+			&i.Portions,
+			&i.FrozenPortions,
+			&i.CookedAt,
+			&i.Note,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.State,
+			&i.AiRunID,
+			&i.Reason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCookSessionsInRange = `-- name: ListCookSessionsInRange :many
-SELECT id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at FROM cook_sessions
+SELECT id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at, state, ai_run_id, reason FROM cook_sessions
 WHERE cook_date BETWEEN ?1 AND ?2
    OR id IN (
        SELECT pc.cook_session_id FROM plate_components pc
@@ -232,6 +296,9 @@ func (q *Queries) ListCookSessionsInRange(ctx context.Context, arg ListCookSessi
 			&i.Note,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.State,
+			&i.AiRunID,
+			&i.Reason,
 		); err != nil {
 			return nil, err
 		}
@@ -246,6 +313,31 @@ func (q *Queries) ListCookSessionsInRange(ctx context.Context, arg ListCookSessi
 	return items, nil
 }
 
+const setSessionsState = `-- name: SetSessionsState :exec
+UPDATE cook_sessions SET state = ?1, updated_at = datetime('now') WHERE id IN (/*SLICE:ids*/?)
+`
+
+type SetSessionsStateParams struct {
+	State string
+	Ids   []int64
+}
+
+func (q *Queries) SetSessionsState(ctx context.Context, arg SetSessionsStateParams) error {
+	query := setSessionsState
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.State)
+	if len(arg.Ids) > 0 {
+		for _, v := range arg.Ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(arg.Ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
 const updateCookSession = `-- name: UpdateCookSession :one
 UPDATE cook_sessions SET
     cook_date       = ?,
@@ -256,7 +348,7 @@ UPDATE cook_sessions SET
     note            = ?,
     updated_at      = datetime('now')
 WHERE id = ?
-RETURNING id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at
+RETURNING id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, created_at, updated_at, state, ai_run_id, reason
 `
 
 type UpdateCookSessionParams struct {
@@ -291,6 +383,9 @@ func (q *Queries) UpdateCookSession(ctx context.Context, arg UpdateCookSessionPa
 		&i.Note,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.State,
+		&i.AiRunID,
+		&i.Reason,
 	)
 	return i, err
 }

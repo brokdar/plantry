@@ -116,6 +116,9 @@ type CookSession struct {
 	Note           sql.NullString
 	CreatedAt      string
 	UpdatedAt      string
+	State          string
+	AiRunID        sql.NullInt64
+	Reason         sql.NullString
 }
 
 type Food struct {
@@ -205,6 +208,9 @@ type Plate struct {
 	Date      string
 	Eaters    float64
 	UpdatedAt string
+	State     string
+	AiRunID   sql.NullInt64
+	Reason    sql.NullString
 }
 
 type PlateComponent struct {

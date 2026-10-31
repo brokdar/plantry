@@ -19,6 +19,8 @@ type cookSessionsService interface {
 	LeftoverCells(ctx context.Context, id int64, count int) ([]plate.CellKey, error)
 	AddLeftovers(ctx context.Context, id int64, cells []plate.CellKey) (*plate.SessionView, error)
 	DeleteSession(ctx context.Context, id int64) (plate.PlanSnapshot, error)
+	Confirm(ctx context.Context, seed plate.RowSet) (plate.RowSet, error)
+	Unlock(ctx context.Context, seed plate.RowSet) (plate.RowSet, error)
 }
 
 // CookSessionHandler exposes /api/cook-sessions.
@@ -56,6 +58,9 @@ type sessionResponse struct {
 	FrozenPortions float64                  `json:"frozen_portions"`
 	CookedAt       *string                  `json:"cooked_at"`
 	Note           *string                  `json:"note"`
+	State          string                   `json:"state"`
+	AIRunID        *int64                   `json:"ai_run_id"`
+	Reason         *string                  `json:"reason"`
 	KeepDays       int                      `json:"keep_days"`
 	UseBy          string                   `json:"use_by"`
 	Consumed       float64                  `json:"consumed"`
@@ -71,6 +76,7 @@ func toSessionResponse(v *plate.SessionView) sessionResponse {
 		ID: v.ID, FoodID: v.FoodID, FoodName: v.FoodName,
 		CookDate: v.CookDate.Format(time.DateOnly), CookSlotID: v.CookSlotID,
 		Portions: v.Portions, FrozenPortions: v.FrozenPortions, Note: v.Note,
+		State: string(v.State), AIRunID: v.AIRunID, Reason: v.Reason,
 		KeepDays: v.KeepDays, UseBy: v.UseBy.Format(time.DateOnly),
 		Consumed: v.Consumed, FrozenConsumed: v.FrozenConsumed, Surplus: v.Surplus,
 		Links: make([]sessionLinkResponse, len(v.Links)), Meals: v.Meals,
@@ -144,6 +150,22 @@ func (h *CookSessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toSessionResponse(v))
+}
+
+// Confirm handles POST /api/cook-sessions/{id}/confirm: it confirms the
+// session's batch closure and returns {plate_ids, session_ids}.
+func (h *CookSessionHandler) Confirm(w http.ResponseWriter, r *http.Request) {
+	if id, ok := parseIDParam(w, r, "id"); ok {
+		writeStateChange(w, r, plate.RowSet{SessionIDs: []int64{id}}, h.svc.Confirm)
+	}
+}
+
+// Unlock handles POST /api/cook-sessions/{id}/unlock: it returns the
+// session's batch closure to draft and returns {plate_ids, session_ids}.
+func (h *CookSessionHandler) Unlock(w http.ResponseWriter, r *http.Request) {
+	if id, ok := parseIDParam(w, r, "id"); ok {
+		writeStateChange(w, r, plate.RowSet{SessionIDs: []int64{id}}, h.svc.Unlock)
+	}
 }
 
 // Cooked handles POST /api/cook-sessions/{id}/cooked with {cooked: bool}.

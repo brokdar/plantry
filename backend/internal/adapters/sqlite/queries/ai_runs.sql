@@ -44,3 +44,21 @@ WHERE id IN (
     WHERE r.started_at < sqlc.arg(before)
     LIMIT 500
 );
+
+-- name: SetRunOutcome :exec
+-- D25: a run's outcome after its rows were accepted, discarded or un-accepted
+-- (reset). open/NULL -> accepted or discarded; a run that sees both is
+-- partially_accepted; reset undoes an accept (accepted -> open,
+-- partially_accepted -> discarded).
+UPDATE ai_runs SET
+    outcome = CASE
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'accepted' AND outcome IN ('discarded', 'partially_accepted') THEN 'partially_accepted'
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'accepted' THEN 'accepted'
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'discarded' AND outcome IN ('accepted', 'partially_accepted') THEN 'partially_accepted'
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'discarded' THEN 'discarded'
+        WHEN outcome = 'accepted' THEN 'open'
+        WHEN outcome = 'partially_accepted' THEN 'discarded'
+        ELSE outcome
+    END,
+    outcome_at = datetime('now')
+WHERE id = sqlc.arg(id);

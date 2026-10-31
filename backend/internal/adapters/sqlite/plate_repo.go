@@ -29,14 +29,17 @@ func (r *PlateRepo) Create(ctx context.Context, p *plate.Plate) error {
 	return r.inTx(ctx, func(ctx context.Context) error {
 		q := r.queriesFor(ctx)
 		row, err := q.CreatePlate(ctx, sqlcgen.CreatePlateParams{
-			SlotID: p.SlotID,
-			Note:   toNullString(p.Note),
-			Date:   p.Date.Format(dateLayout),
-			Eaters: p.Eaters,
+			SlotID:  p.SlotID,
+			Note:    toNullString(p.Note),
+			Date:    p.Date.Format(dateLayout),
+			Eaters:  p.Eaters,
+			State:   string(p.State),
+			AiRunID: toNullInt64(p.AIRunID),
+			Reason:  toNullString(p.Reason),
 		})
 		if err != nil {
 			if isForeignKeyViolation(err) {
-				return fmt.Errorf("%w: invalid slot reference", domain.ErrInvalidInput)
+				return fmt.Errorf("%w: invalid slot or ai run reference", domain.ErrInvalidInput)
 			}
 			if isUniqueViolation(err, "plates.date") {
 				return fmt.Errorf("%w: %s slot %d", domain.ErrCellOccupied, p.DateString(), p.SlotID)
@@ -159,35 +162,67 @@ func (r *PlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]
 	q := r.queriesFor(ctx)
 	fromS, toS := from.Format(dateLayout), to.Format(dateLayout)
 	plateRows, err := q.ListPlatesByDateRange(ctx, sqlcgen.ListPlatesByDateRangeParams{FromDate: fromS, ToDate: toS})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]plate.Plate, len(plateRows))
-	if len(plateRows) == 0 {
-		return out, nil
-	}
-	index := make(map[int64]int, len(plateRows))
-	for i := range plateRows {
-		if err := mapPlateToDomain(&plateRows[i], &out[i]); err != nil {
-			return nil, err
-		}
-		out[i].Components = []plate.PlateComponent{}
-		index[out[i].ID] = i
+	if err != nil || len(plateRows) == 0 {
+		return []plate.Plate{}, err
 	}
 	compRows, err := q.ListPlateComponentsByDateRange(ctx, sqlcgen.ListPlateComponentsByDateRangeParams{FromDate: fromS, ToDate: toS})
 	if err != nil {
 		return nil, err
 	}
+	comps := make([]plate.PlateComponent, len(compRows))
 	for i := range compRows {
-		var pc plate.PlateComponent
-		mapPlateComponentToDomain(&compRows[i].PlateComponent, &pc)
-		setComponentFood(&pc, compRows[i].FoodName, compRows[i].FoodKind, compRows[i].FoodRole)
-		p := &out[index[pc.PlateID]]
-		p.Components = append(p.Components, pc)
+		mapPlateComponentToDomain(&compRows[i].PlateComponent, &comps[i])
+		setComponentFood(&comps[i], compRows[i].FoodName, compRows[i].FoodKind, compRows[i].FoodRole)
 	}
 	fbRows, err := q.ListPlateFeedbackByDateRange(ctx, sqlcgen.ListPlateFeedbackByDateRangeParams{FromDate: fromS, ToDate: toS})
 	if err != nil {
 		return nil, err
+	}
+	return assemblePlates(plateRows, comps, fbRows)
+}
+
+// ListByIDs returns the plates of ids that exist, with components and
+// feedback, ordered by date, slot_id, id: three queries.
+func (r *PlateRepo) ListByIDs(ctx context.Context, ids []int64) ([]plate.Plate, error) {
+	if len(ids) == 0 {
+		return []plate.Plate{}, nil
+	}
+	q := r.queriesFor(ctx)
+	plateRows, err := q.ListPlatesByIDs(ctx, ids)
+	if err != nil || len(plateRows) == 0 {
+		return []plate.Plate{}, err
+	}
+	compRows, err := q.ListPlateComponentsByPlateIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	comps := make([]plate.PlateComponent, len(compRows))
+	for i := range compRows {
+		mapPlateComponentToDomain(&compRows[i].PlateComponent, &comps[i])
+		setComponentFood(&comps[i], compRows[i].FoodName, compRows[i].FoodKind, compRows[i].FoodRole)
+	}
+	fbRows, err := q.ListPlateFeedbackByPlateIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	return assemblePlates(plateRows, comps, fbRows)
+}
+
+// assemblePlates maps plate rows and attaches their components (in order)
+// and feedback.
+func assemblePlates(rows []sqlcgen.Plate, comps []plate.PlateComponent, fbRows []sqlcgen.PlateFeedback) ([]plate.Plate, error) {
+	out := make([]plate.Plate, len(rows))
+	index := make(map[int64]int, len(rows))
+	for i := range rows {
+		if err := mapPlateToDomain(&rows[i], &out[i]); err != nil {
+			return nil, err
+		}
+		out[i].Components = []plate.PlateComponent{}
+		index[out[i].ID] = i
+	}
+	for _, pc := range comps {
+		p := &out[index[pc.PlateID]]
+		p.Components = append(p.Components, pc)
 	}
 	for i := range fbRows {
 		fb, err := mapFeedbackToPlate(&fbRows[i])
@@ -197,6 +232,14 @@ func (r *PlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]
 		out[index[fbRows[i].PlateID]].Feedback = fb
 	}
 	return out, nil
+}
+
+// SetState writes the state of the plates of ids.
+func (r *PlateRepo) SetState(ctx context.Context, ids []int64, st plate.State) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.queriesFor(ctx).SetPlatesState(ctx, sqlcgen.SetPlatesStateParams{State: string(st), Ids: ids})
 }
 
 func (r *PlateRepo) CreateComponent(ctx context.Context, pc *plate.PlateComponent) error {
@@ -279,6 +322,9 @@ func mapPlateToDomain(row *sqlcgen.Plate, p *plate.Plate) error {
 	p.SlotID = row.SlotID
 	p.Note = fromNullString(row.Note)
 	p.Eaters = row.Eaters
+	p.State = plate.State(row.State)
+	p.AIRunID = fromNullInt64(row.AiRunID)
+	p.Reason = fromNullString(row.Reason)
 	var err error
 	if p.CreatedAt, err = time.Parse(timeLayout, row.CreatedAt); err != nil {
 		return fmt.Errorf("plate %d created_at: %w", row.ID, err)
