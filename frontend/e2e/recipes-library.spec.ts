@@ -5,6 +5,7 @@ import {
   API,
   apiRequest,
   cleanupFood,
+  cleanupSlot,
   expect,
   seedComposedWithStub,
   test,
@@ -17,29 +18,38 @@ function localToday() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-/** A past plate holding `foodId`, in the first active slot. Plates don't
- *  own their cell, so this adds to whatever is already there. */
-async function seedEatenOn(date: string, foodId: number): Promise<number> {
+/**
+ * An inactive slot of this test's own. Its plates count for history (B7
+ * derives it from every plate) but no board shows them, and no other
+ * spec's cleanup (Clear week, routines, slot cleanup) can reach them.
+ */
+async function seedHiddenSlot(tag: string): Promise<number> {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  const slots = (await (
-    await ctx.get("/api/settings/slots?active=true")
-  ).json()) as { items: { id: number }[] }
-  const res = await ctx.post("/api/plates", {
+  const res = await ctx.post("/api/settings/slots", {
     data: {
-      date,
-      slot_id: slots.items[0].id,
-      components: [{ food_id: foodId }],
+      name_key: `slot.lib-history-${tag}`,
+      icon: "Moon",
+      sort_order: 3_000_000,
+      active: false,
     },
   })
   expect(res.ok(), await res.text()).toBeTruthy()
-  const plate = (await res.json()) as { id: number }
+  const slot = (await res.json()) as { id: number }
   await ctx.dispose()
-  return plate.id
+  return slot.id
 }
 
-async function deletePlate(id: number) {
+/** A past plate holding `foodId` in `slotId`. */
+async function seedEatenOn(
+  slotId: number,
+  date: string,
+  foodId: number
+): Promise<void> {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/plates/${id}`)
+  const res = await ctx.post("/api/plates", {
+    data: { date, slot_id: slotId, components: [{ food_id: foodId }] },
+  })
+  expect(res.ok(), await res.text()).toBeTruthy()
   await ctx.dispose()
 }
 
@@ -98,10 +108,9 @@ test.describe("Recipe library", () => {
       seedComposedWithStub({ name: `Long ago ${tag}`, role: "main" }, tag),
     ])
     const [recent, never, longAgo] = seeded.map((s) => s.composed)
-    const plates = [
-      await seedEatenOn(addDays(today, -3), recent.id),
-      await seedEatenOn(addDays(today, -42), longAgo.id),
-    ]
+    const slot = await seedHiddenSlot(tag)
+    await seedEatenOn(slot, addDays(today, -3), recent.id)
+    await seedEatenOn(slot, addDays(today, -42), longAgo.id)
     try {
       await page.goto("/recipes")
       await searchFor(page, tag)
@@ -157,7 +166,7 @@ test.describe("Recipe library", () => {
         await expect(page).toHaveURL(/sort=last_eaten/)
       })
     } finally {
-      for (const p of plates) await deletePlate(p)
+      await cleanupSlot(slot)
       for (const s of seeded) {
         await cleanupFood(s.composed.id)
         await cleanupFood(s.stub.id)

@@ -120,6 +120,53 @@ describe("RecipeEditor", () => {
     )
   })
 
+  it("F9-AC2: keep days above 4 warns, and keep days and freezable save", async () => {
+    vi.mocked(updateFood).mockClear()
+    vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeEditor component={mockChickenCurry} />)
+
+    const keep = await screen.findByLabelText("Keeps (days)")
+    expect(keep).toHaveAttribute("placeholder", "Default (3 days)")
+    await user.type(keep, "4")
+    expect(screen.queryByTestId("recipe-keep-days-warning")).toBeNull()
+    await user.clear(keep)
+    await user.type(keep, "5")
+    expect(screen.getByTestId("recipe-keep-days-warning")).toHaveTextContent(
+      "Only go above 4"
+    )
+
+    await user.click(screen.getByLabelText("Freezable"))
+    await user.click(await screen.findByRole("option", { name: "No" }))
+    await user.click(screen.getByRole("button", { name: /save/i }))
+
+    await vi.waitFor(() => expect(updateFood).toHaveBeenCalled())
+    expect(vi.mocked(updateFood).mock.calls[0][1]).toEqual(
+      expect.objectContaining({ keep_days: 5, freezable: false })
+    )
+  })
+
+  it("an empty keep days field saves null (use the default)", async () => {
+    vi.mocked(updateFood).mockClear()
+    vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)
+    const user = userEvent.setup()
+    renderWithRouter(
+      <RecipeEditor
+        component={{ ...mockChickenCurry, keep_days: 2, freezable: true }}
+      />
+    )
+
+    const keep = await screen.findByLabelText("Keeps (days)")
+    expect(keep).toHaveValue(2)
+    await user.clear(keep)
+    await user.click(screen.getByRole("button", { name: /save/i }))
+
+    await vi.waitFor(() => expect(updateFood).toHaveBeenCalled())
+    expect(vi.mocked(updateFood).mock.calls[0][1]).toEqual(
+      expect.objectContaining({ keep_days: null, freezable: true })
+    )
+  })
+
   it("shows the completeness warning for incomplete saved nutrition", async () => {
     vi.mocked(getFoodNutrition).mockResolvedValueOnce({
       kcal: 0,

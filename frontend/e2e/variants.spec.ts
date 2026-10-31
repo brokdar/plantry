@@ -46,7 +46,7 @@ test.describe("Variant Components", () => {
     }
   })
 
-  test("create variant via UI button navigates to edit page", async ({
+  test("Create variant on the recipe detail opens the variant's editor", async ({
     page,
   }) => {
     const tag = uid()
@@ -57,15 +57,17 @@ test.describe("Variant Components", () => {
 
     let variantId: number | undefined
     try {
-      await page.goto(`/recipes/${parent.id}/edit`)
-      await expect(page.getByLabel(/^name/i)).toHaveValue(`Tofu Bowl ${tag}`)
+      await page.goto(`/recipes/${parent.id}`)
+      await expect(
+        page.getByRole("heading", { level: 1, name: `Tofu Bowl ${tag}` })
+      ).toBeVisible()
 
       const responsePromise = page.waitForResponse(
         (res) =>
           res.url().includes(`/api/foods/${parent.id}/variant`) &&
           res.request().method() === "POST"
       )
-      await page.getByTestId("component-create-variant").click()
+      await page.getByRole("button", { name: "Create variant" }).click()
       const response = await responsePromise
       expect(response.status()).toBe(201)
 
