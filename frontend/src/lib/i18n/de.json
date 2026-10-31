@@ -1577,5 +1577,33 @@
     "target_title": "Auf welchen Tag anwenden?",
     "slot_filter": "Nur diese Mahlzeiten",
     "hint": "Enter wendet an · Umschalt+Enter ersetzt Geplantes"
+  },
+  "cook": {
+    "cooking": "Kochen × {{portions}}",
+    "portions": "Portionen",
+    "close": "Kochmodus schließen",
+    "tabs": {
+      "ingredients": "Zutaten",
+      "steps": "Schritte"
+    },
+    "step_of": "Schritt {{step}} von {{total}}",
+    "step_role": "Schritt",
+    "previous": "Zurück",
+    "next": "Weiter",
+    "no_steps": "Dieses Rezept hat noch keine Schritte.",
+    "no_ingredients": "Dieses Rezept hat noch keine Zutaten.",
+    "buy_hint": "{{buy}}, davon {{use}}",
+    "freeze_one": "{{portions}} Portion einfrieren",
+    "freeze_other": "{{portions}} Portionen einfrieren",
+    "done": "Fertig gekocht",
+    "missing": "Dieses Vorkochen gibt es nicht mehr.",
+    "recipe_missing": "Dieses Rezept gibt es nicht mehr.",
+    "timer": {
+      "group": "Timer",
+      "start": "Timer für {{label}} starten",
+      "stop": "Timer für {{label}} stoppen",
+      "done": "Fertig",
+      "finished": "Timer für {{label}} abgelaufen"
+    }
   }
 }

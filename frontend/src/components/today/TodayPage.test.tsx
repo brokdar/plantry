@@ -136,6 +136,27 @@ describe("TodayPage", () => {
     expect(screen.queryByTestId("today-leftover-card")).toBeNull()
   })
 
+  // F6-AC4: once Done cooking marked the batch, "Cooked" replaces Start.
+  it("a cooked batch says Cooked instead of Start cooking", async () => {
+    const base = mockTodayByVerdict.cook
+    renderToday(
+      {
+        ...base,
+        cook: base.cook.map((c) => ({
+          ...c,
+          session: { ...c.session, cooked_at: "2026-11-01T18:30:00Z" },
+        })),
+      },
+      SUNDAY
+    )
+
+    const card = await screen.findByTestId("today-cook-card")
+    expect(within(card).getByTestId("today-cooked")).toHaveTextContent("Cooked")
+    expect(
+      within(card).queryByRole("link", { name: "Start cooking" })
+    ).toBeNull()
+  })
+
   // F5-AC3: the answer writes feedback, the question goes, Undo clears it.
   it("rates the last meal, hides the question and offers Undo", async () => {
     const user = userEvent.setup()

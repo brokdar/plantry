@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import { Check } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -12,7 +13,8 @@ import { cn } from "@/lib/utils"
 
 /**
  * A batch cooked today (UX §5.2): on the batch tint, the cook badge, the
- * recipe, what it covers, the time estimate and **Start cooking**.
+ * recipe, what it covers, the time estimate and **Start cooking**, or
+ * "Cooked" once Done cooking marked it.
  */
 export function CookCard({ card }: { card: TodayCookCard }) {
   const { t, i18n } = useTranslation()
@@ -52,18 +54,24 @@ export function CookCard({ card }: { card: TodayCookCard }) {
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        {/* Cook mode (`/cook/$sessionId`) arrives with F6; until then a
-            plain link, since a typed Link needs the route to exist. */}
-        <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
-          <a href={`/cook/${session.id}`} data-testid="today-start-cooking">
-            {t("today.cook.start")}
-          </a>
-        </Button>
-        {session.cooked_at && (
-          <span className="inline-flex items-center gap-1 text-small font-semibold text-success">
+        {session.cooked_at ? (
+          <span
+            className="inline-flex min-h-11 items-center gap-1 text-small font-semibold text-success md:pointer-fine:min-h-9"
+            data-testid="today-cooked"
+          >
             <Check className="size-4" strokeWidth={1.5} aria-hidden />
             {t("today.cook.cooked")}
           </span>
+        ) : (
+          <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
+            <Link
+              to="/cook/$sessionId"
+              params={{ sessionId: String(session.id) }}
+              data-testid="today-start-cooking"
+            >
+              {t("today.cook.start")}
+            </Link>
+          </Button>
         )}
       </div>
     </article>

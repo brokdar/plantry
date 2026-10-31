@@ -45,11 +45,13 @@ export function useLeftoverCells(id: number, count: number) {
   })
 }
 
-/** Portions, frozen portions and note (a full replace). */
+/** Portions, frozen portions and note (a full replace). Updates run one at
+ *  a time in call order (one mutation scope), so the last edit wins. */
 export function useUpdateSession() {
   const qc = useQueryClient()
   const { t } = useTranslation()
   return useMutation({
+    scope: { id: "session-update" },
     mutationFn: ({ id, input }: { id: number; input: UpdateSessionInput }) =>
       updateSession(id, input),
     onSuccess: (_data, { id }) => invalidateSession(qc, id),
