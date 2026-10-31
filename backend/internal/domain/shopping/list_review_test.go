@@ -39,7 +39,7 @@ func TestList_SameMetricBaseIsNotMixed(t *testing.T) {
 			{FoodID: flourID, Date: day("2026-11-02"), SlotID: 1, Eaters: 1, Amount: 1, Unit: "kg", Grams: 1000},
 		},
 	}
-	l, err := newSvc(src, foods).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
+	l, err := newSvc(src, foods).List(context.Background(), day("2026-10-31"), day("2026-11-06"), false)
 	require.NoError(t, err)
 
 	_, milk := findItem(t, l, milkID)
@@ -59,7 +59,7 @@ func TestList_UsedInFollowsCellOrder(t *testing.T) {
 	svc := shopping.NewService(shopping.Deps{Source: src, Foods: ac1Foods(), Slots: fakeSlots{
 		{ID: breakfast, SortOrder: 2}, {ID: lunch, SortOrder: 1},
 	}})
-	l, err := svc.List(context.Background(), day("2026-10-31"), day("2026-11-06"))
+	l, err := svc.List(context.Background(), day("2026-10-31"), day("2026-11-06"), false)
 	require.NoError(t, err)
 	_, apple := findItem(t, l, appleID)
 	require.Len(t, apple.UsedIn, 3)

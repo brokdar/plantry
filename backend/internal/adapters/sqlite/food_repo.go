@@ -34,7 +34,7 @@ const sortLastEaten = "last_eaten"
 // (queries/foods.sql), which fills the response fields.
 const lastEatenExpr = `(SELECT MAX(p.date) FROM plate_components pc
 	JOIN plates p ON p.id = pc.plate_id
-	WHERE pc.food_id = foods.id AND p.date <= ?
+	WHERE pc.food_id = foods.id AND p.date <= ? AND p.state = 'confirmed'
 	  AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
 	                  WHERE pf.plate_id = p.id AND pf.status = 'not_eaten'))`
 
@@ -460,6 +460,11 @@ func (r *FoodRepo) Siblings(ctx context.Context, variantGroupID int64, excludeID
 // CountComposedFoods returns the number of composed foods (recipes).
 func (r *FoodRepo) CountComposedFoods(ctx context.Context) (int64, error) {
 	return r.queriesFor(ctx).CountComposedFoods(ctx)
+}
+
+// ComposedFoodIDs returns the ids of every recipe.
+func (r *FoodRepo) ComposedFoodIDs(ctx context.Context) ([]int64, error) {
+	return r.queriesFor(ctx).ListComposedFoodIDs(ctx)
 }
 
 // History returns the derived eating history (D16) of the given foods as of

@@ -692,6 +692,12 @@ export const mockTodayByVerdict: Record<TodayVerdictKind, Today> = {
       food_name: "Chili",
     },
   },
+  draft_only: {
+    ...mockTodayBase,
+    date: "2026-11-05",
+    verdict: { kind: "draft_only" },
+    meals: mockTodayBase.meals.map((m) => ({ ...m, plate: null, link: null })),
+  },
   no_plates: {
     ...mockTodayBase,
     date: "2026-11-05",

@@ -12,7 +12,7 @@ import (
 // shoppingLister is the subset of shopping.Service the handler uses.
 type shoppingLister interface {
 	Range(ctx context.Context, r *shopping.Range, today time.Time) (shopping.Range, error)
-	List(ctx context.Context, from, to time.Time) (*shopping.List, error)
+	List(ctx context.Context, from, to time.Time, includeDrafts bool) (*shopping.List, error)
 }
 
 // ShoppingHandler serves GET /api/shopping-list.
@@ -56,20 +56,23 @@ type shoppingSectionResponse struct {
 }
 
 type shoppingListResponse struct {
-	Range    shoppingRangeResponse     `json:"range"`
-	Sections []shoppingSectionResponse `json:"sections"`
-	Count    int                       `json:"count"`
+	Range     shoppingRangeResponse     `json:"range"`
+	Sections  []shoppingSectionResponse `json:"sections"`
+	Count     int                       `json:"count"`
+	HasDrafts bool                      `json:"has_drafts"`
 }
 
-// List handles GET /api/shopping-list?from&to&today. from and to come
-// together or not at all; without them the range is the default of the
-// anchored window as of today (D25).
+// List handles GET /api/shopping-list?from&to&include_drafts&today. from and
+// to come together or not at all; without them the range is the default of
+// the anchored window as of today (D25). include_drafts (default false) adds
+// the draft rows (D26).
 func (h *ShoppingHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	today, ok := parseToday(w, q.Get("today"), h.now)
 	if !ok {
 		return
 	}
+	includeDrafts := q.Get("include_drafts") == "true"
 	var explicit *shopping.Range
 	if q.Get("from") != "" || q.Get("to") != "" {
 		from, to, ok := parseDateRange(w, r)
@@ -83,7 +86,7 @@ func (h *ShoppingHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "error.server")
 		return
 	}
-	list, err := h.svc.List(r.Context(), rng.From, rng.To)
+	list, err := h.svc.List(r.Context(), rng.From, rng.To, includeDrafts)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "error.server")
 		return
@@ -97,8 +100,9 @@ func toShoppingListResponse(rng shopping.Range, l *shopping.List) shoppingListRe
 			From: dateString(rng.From), To: dateString(rng.To),
 			WindowStart: dateString(rng.Window.Start), WindowEnd: dateString(rng.Window.End),
 		},
-		Sections: make([]shoppingSectionResponse, len(l.Sections)),
-		Count:    l.Count,
+		Sections:  make([]shoppingSectionResponse, len(l.Sections)),
+		Count:     l.Count,
+		HasDrafts: l.HasDrafts,
 	}
 	for i, sec := range l.Sections {
 		items := make([]shoppingItemResponse, len(sec.Items))

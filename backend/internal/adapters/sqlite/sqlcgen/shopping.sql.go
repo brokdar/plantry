@@ -61,7 +61,7 @@ func (q *Queries) ListCookSessionsByCookDate(ctx context.Context, arg ListCookSe
 }
 
 const listLeafPlateComponentsInRange = `-- name: ListLeafPlateComponentsInRange :many
-SELECT pc.food_id, pc.amount, pc.unit, pc.grams, p.date, p.slot_id, p.eaters
+SELECT pc.food_id, pc.amount, pc.unit, pc.grams, p.date, p.slot_id, p.eaters, p.state
 FROM plate_components pc
 JOIN plates p ON p.id = pc.plate_id
 WHERE p.date BETWEEN ?1 AND ?2
@@ -82,10 +82,11 @@ type ListLeafPlateComponentsInRangeRow struct {
 	Date   string
 	SlotID int64
 	Eaters float64
+	State  string
 }
 
 // Leaf components on plates dated in [from_date, to_date] with their plate's
-// cell and eaters: the ingredient sources of a shopping list.
+// cell, eaters and state: the ingredient sources of a shopping list.
 func (q *Queries) ListLeafPlateComponentsInRange(ctx context.Context, arg ListLeafPlateComponentsInRangeParams) ([]ListLeafPlateComponentsInRangeRow, error) {
 	rows, err := q.db.QueryContext(ctx, listLeafPlateComponentsInRange, arg.FromDate, arg.ToDate)
 	if err != nil {
@@ -103,6 +104,7 @@ func (q *Queries) ListLeafPlateComponentsInRange(ctx context.Context, arg ListLe
 			&i.Date,
 			&i.SlotID,
 			&i.Eaters,
+			&i.State,
 		); err != nil {
 			return nil, err
 		}

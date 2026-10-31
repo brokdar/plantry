@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
@@ -80,14 +81,25 @@ type planStatsResponse struct {
 	Warnings int `json:"warnings"`
 }
 
+type planDraftResponse struct {
+	Plates   int     `json:"plates"`
+	Sessions int     `json:"sessions"`
+	RunID    *int64  `json:"run_id"`
+	Notes    *string `json:"notes"`
+	Chooser  *string `json:"chooser"`
+}
+
 type planResponse struct {
-	Window   planWindowResponse   `json:"window"`
-	Slots    []planSlotResponse   `json:"slots"`
-	Cells    []planCellResponse   `json:"cells"`
-	Sessions []sessionResponse    `json:"sessions"`
-	Days     []planDayResponse    `json:"days"`
-	Targets  *planTargetsResponse `json:"targets"`
-	Stats    planStatsResponse    `json:"stats"`
+	Window       planWindowResponse   `json:"window"`
+	Slots        []planSlotResponse   `json:"slots"`
+	Cells        []planCellResponse   `json:"cells"`
+	Sessions     []sessionResponse    `json:"sessions"`
+	Days         []planDayResponse    `json:"days"`
+	Targets      *planTargetsResponse `json:"targets"`
+	Stats        planStatsResponse    `json:"stats"`
+	Issues       []planning.Issue     `json:"issues"`
+	Draft        *planDraftResponse   `json:"draft"`
+	RunningRunID *int64               `json:"running_run_id"`
 }
 
 // Get handles GET /api/plan?start&today. Without start it opens the anchored
@@ -122,11 +134,16 @@ func toPlanResponse(p *planview.Plan) planResponse {
 			IsCurrent: p.IsCurrent, PrevStart: dateString(p.Window.Prev()), NextStart: dateString(p.Window.Next()),
 			ShoppingDay: p.ShoppingDay,
 		},
-		Slots:    make([]planSlotResponse, len(p.Slots)),
-		Cells:    make([]planCellResponse, len(p.Cells)),
-		Sessions: make([]sessionResponse, len(p.Sessions)),
-		Days:     make([]planDayResponse, len(p.Days)),
-		Stats:    planStatsResponse{Plates: p.Stats.Plates, CookDays: p.Stats.CookDays, Warnings: p.Stats.Warnings},
+		Slots:        make([]planSlotResponse, len(p.Slots)),
+		Cells:        make([]planCellResponse, len(p.Cells)),
+		Sessions:     make([]sessionResponse, len(p.Sessions)),
+		Days:         make([]planDayResponse, len(p.Days)),
+		Stats:        planStatsResponse{Plates: p.Stats.Plates, CookDays: p.Stats.CookDays, Warnings: p.Stats.Warnings},
+		Issues:       p.Issues,
+		RunningRunID: p.RunningRunID,
+	}
+	if d := p.Draft; d != nil {
+		resp.Draft = &planDraftResponse{Plates: d.Plates, Sessions: d.Sessions, RunID: d.RunID, Notes: d.Notes, Chooser: d.Chooser}
 	}
 	for i, s := range p.Slots {
 		resp.Slots[i] = planSlotResponse{ID: s.ID, NameKey: s.NameKey, Icon: s.Icon, SortOrder: s.SortOrder}

@@ -134,6 +134,18 @@ func (q *Queries) FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.R
 	)
 }
 
+const getRunNote = `-- name: GetRunNote :one
+SELECT chooser FROM ai_runs WHERE id = ?
+`
+
+// What the plan's draft summary shows of a run (D26).
+func (q *Queries) GetRunNote(ctx context.Context, id int64) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, getRunNote, id)
+	var chooser sql.NullString
+	err := row.Scan(&chooser)
+	return chooser, err
+}
+
 const pruneAIRunSteps = `-- name: PruneAIRunSteps :execresult
 DELETE FROM ai_run_steps
 WHERE id IN (

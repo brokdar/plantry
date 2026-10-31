@@ -24,7 +24,7 @@ import (
 const maxDepth = 16
 
 // LeafUse is a leaf component on a plate: its per-eater quantity and the
-// plate's cell and eaters.
+// plate's cell, eaters and state.
 type LeafUse struct {
 	FoodID int64
 	Date   time.Time
@@ -33,21 +33,26 @@ type LeafUse struct {
 	Amount float64
 	Unit   string
 	Grams  float64
+	Draft  bool
 }
 
 // Source loads what a range buys for.
 type Source interface {
-	// SessionsCooking returns the sessions with cook_date in [from, to].
+	// SessionsCooking returns the sessions with cook_date in [from, to],
+	// draft and confirmed.
 	SessionsCooking(ctx context.Context, from, to time.Time) ([]plate.CookSession, error)
-	// LeafUses returns the leaf components on plates dated in [from, to].
+	// LeafUses returns the leaf components on plates dated in [from, to],
+	// draft and confirmed.
 	LeafUses(ctx context.Context, from, to time.Time) ([]LeafUse, error)
 }
 
 // List is a shopping list: the non-empty sections in walk order and the
-// number of items.
+// number of items. HasDrafts reports whether the range has draft sessions or
+// draft leaf plates, included or not.
 type List struct {
-	Sections []Section
-	Count    int
+	Sections  []Section
+	Count     int
+	HasDrafts bool
 }
 
 // Section is one store section's items, sorted by name.
@@ -149,12 +154,14 @@ func (a *acc) add(amount float64, unit string, grams float64) {
 	a.grams += grams
 }
 
-// List builds the list for [from, to]: every session cooking in the range,
-// scaled by portions / reference_portions through its recipe tree, and every
-// leaf component on a plate in the range, × eaters. Sessions cooking before
-// the range were bought for already, so their leftovers add nothing. The
-// food trees load level by level (food.LoadTrees), never per session.
-func (s *Service) List(ctx context.Context, from, to time.Time) (*List, error) {
+// List builds the list for [from, to]: every confirmed session cooking in
+// the range, scaled by portions / reference_portions through its recipe tree,
+// and every leaf component on a confirmed plate in the range, × eaters (spec
+// §7.7). includeDrafts adds the draft sessions and draft plates. Sessions
+// cooking before the range were bought for already, so their leftovers add
+// nothing. The food trees load level by level (food.LoadTrees), never per
+// session.
+func (s *Service) List(ctx context.Context, from, to time.Time, includeDrafts bool) (*List, error) {
 	sessions, err := s.d.Source.SessionsCooking(ctx, from, to)
 	if err != nil {
 		return nil, err
@@ -163,6 +170,16 @@ func (s *Service) List(ctx context.Context, from, to time.Time) (*List, error) {
 	if err != nil {
 		return nil, err
 	}
+	hasDrafts := false
+	sessions = slices.DeleteFunc(sessions, func(cs plate.CookSession) bool {
+		draft := cs.State == plate.StateDraft
+		hasDrafts = hasDrafts || draft
+		return draft && !includeDrafts
+	})
+	leaves = slices.DeleteFunc(leaves, func(lu LeafUse) bool {
+		hasDrafts = hasDrafts || lu.Draft
+		return lu.Draft && !includeDrafts
+	})
 	ids := make([]int64, 0, len(sessions)+len(leaves))
 	for _, cs := range sessions {
 		ids = append(ids, cs.FoodID)
@@ -219,7 +236,9 @@ func (s *Service) List(ctx context.Context, from, to time.Time) (*List, error) {
 	for _, sl := range slots {
 		order[sl.ID] = sl.SortOrder
 	}
-	return group(accs, order), nil
+	l := group(accs, order)
+	l.HasDrafts = hasDrafts
+	return l, nil
 }
 
 // expand walks composed food f at factor and emits each leaf line. A leaf
