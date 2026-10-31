@@ -1164,7 +1164,9 @@
       "plate_removed": "Essen entfernt",
       "batch_removed": "Vorkochen entfernt",
       "plan_cleared": "Plan geleert",
-      "marked_no_plate": "Als „Kein Essen“ markiert"
+      "marked_no_plate": "Als „Kein Essen“ markiert",
+      "restored": "Wiederhergestellt",
+      "conflict": "Rückgängig nicht möglich: Die Mahlzeit wurde inzwischen geändert."
     },
     "board": {
       "label": "Essensplan, {{range}}",
@@ -1587,7 +1589,8 @@
       "result_skipped_unavailable_one": "{{count}} Mahlzeit mit „Kein Essen“ ausgelassen.",
       "result_skipped_unavailable_other": "{{count}} Mahlzeiten mit „Kein Essen“ ausgelassen.",
       "result_skipped_no_slot_one": "{{count}} Essen ließ sich keiner Mahlzeit mehr zuordnen.",
-      "result_skipped_no_slot_other": "{{count}} Essen ließen sich keiner Mahlzeit mehr zuordnen."
+      "result_skipped_no_slot_other": "{{count}} Essen ließen sich keiner Mahlzeit mehr zuordnen.",
+      "undo_partial": "Rückgängig hat nur teilweise geklappt. Schau im Plan nach, ob noch Mahlzeiten übrig sind oder fehlen."
     }
   },
   "palette": {

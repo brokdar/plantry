@@ -22,6 +22,7 @@ import {
 } from "@/lib/api/presets"
 
 import { clearAvailabilityOverride } from "@/lib/api/availability"
+import { ApiError } from "@/lib/api/client"
 import { restorePlan } from "@/lib/api/plan"
 import { deletePlate } from "@/lib/api/plates"
 import { toast, toastError } from "@/lib/toast"
@@ -154,24 +155,49 @@ export function useCopyWeek() {
   })
 }
 
+/** Some step of an Undo failed; the others still ran. */
+class PartialUndoError extends Error {}
+
 /** Undoes an apply or copy week: deletes the created plates, restores what
- *  `overwrite` replaced and clears the No plate overrides copy week wrote. */
+ *  `overwrite` replaced and clears the No plate overrides copy week wrote.
+ *  Every step runs even when an earlier one fails, and a plate that is
+ *  already gone counts as deleted; any other failure ends in one
+ *  PartialUndoError, so Undo never half-applies silently. */
 export function useUndoApply() {
   const qc = useQueryClient()
   const { t } = useTranslation()
   return useMutation({
     mutationFn: async (result: ApplyResult) => {
-      for (const id of result.created_plate_ids) await deletePlate(id)
-      if (result.removed.plates.length > 0) await restorePlan(result.removed)
-      for (const c of result.created_overrides) {
-        await clearAvailabilityOverride(c.date, c.slot_id)
+      let failed = false
+      async function attempt(step: () => Promise<unknown>) {
+        try {
+          await step()
+        } catch (err) {
+          if (!(err instanceof ApiError && err.status === 404)) failed = true
+        }
       }
+      for (const id of result.created_plate_ids) {
+        await attempt(() => deletePlate(id))
+      }
+      if (result.removed.plates.length > 0) {
+        await attempt(() => restorePlan(result.removed))
+      }
+      for (const c of result.created_overrides) {
+        await attempt(() => clearAvailabilityOverride(c.date, c.slot_id))
+      }
+      if (failed) throw new PartialUndoError()
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
       void invalidatePlanViews(qc)
     },
-    onError: (err) => toastError(err, t),
+    onError: (err) => {
+      if (err instanceof PartialUndoError) {
+        toast.error(t("routines.apply.undo_partial"))
+        return
+      }
+      toastError(err, t)
+    },
   })
 }
 

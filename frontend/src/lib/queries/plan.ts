@@ -4,6 +4,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query"
+import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -11,6 +12,7 @@ import {
   getAvailabilityRange,
   setAvailabilityOverride,
 } from "@/lib/api/availability"
+import { ApiError } from "@/lib/api/client"
 import { clearPlan, getPlan, restorePlan, type PlanCell } from "@/lib/api/plan"
 import type { PlanSnapshot, RemovedResponse } from "@/lib/api/plates"
 import { toast, toastError } from "@/lib/toast"
@@ -87,15 +89,39 @@ export function useUndoToast() {
   }
 }
 
+/** Restore refuses a cell that was planned or marked No plate since. */
+const UNDO_CONFLICT_KEYS = new Set([
+  "error.plan.cell_occupied",
+  "error.plate.cell_unavailable",
+])
+
+/** A failed Undo names the conflict instead of the generic restore error. */
+function toastUndoError(err: unknown, t: TFunction) {
+  if (err instanceof ApiError && UNDO_CONFLICT_KEYS.has(err.messageKey)) {
+    toast.error(t("plan.undo.conflict"))
+    return
+  }
+  toastError(err, t)
+}
+
 /**
  * The single undo helper for removing mutations (D22). The returned function
  * takes the `{removed}` body, shows the undo toast named after what happened
- * and, on Undo, restores the snapshot. An empty snapshot offers nothing.
+ * and, on Undo, restores the snapshot and confirms it. An empty snapshot
+ * offers nothing.
  */
 export function useUndoableRemoval() {
+  const qc = useQueryClient()
   const { t } = useTranslation()
-  const restore = useRestorePlan()
   const offer = useUndoToast()
+  const restore = useMutation({
+    mutationFn: (snapshot: PlanSnapshot) => restorePlan(snapshot),
+    onSuccess: () => {
+      toast.success(t("plan.undo.restored"))
+      return invalidatePlanViews(qc)
+    },
+    onError: (err) => toastUndoError(err, t),
+  })
 
   return function offerUndo({ removed }: RemovedResponse, verb: RemovalVerb) {
     if (removed.plates.length === 0 && removed.sessions.length === 0) return
@@ -123,7 +149,9 @@ export function useClearWindow() {
  * "Mark as No plate" on a board cell (keyboard N): sets a `none` override,
  * removing the cell's plate, and offers Undo for UNDO_MS. Undo puts the
  * cell's previous override back (or clears it) and restores the plate with
- * its batch from the returned snapshot.
+ * its batch from the returned snapshot. The override goes first because a
+ * No plate cell refuses the plate; if the restore then fails, the cell is
+ * marked No plate again so Undo never half-applies.
  */
 export function useMarkNoPlate() {
   const qc = useQueryClient()
@@ -135,6 +163,7 @@ export function useMarkNoPlate() {
   }
 
   async function undo(cell: PlanCell, removed: PlanSnapshot | null) {
+    let reverted = false
     try {
       if (cell.source === "override") {
         await setAvailabilityOverride(cell.date, cell.slot_id, {
@@ -145,9 +174,19 @@ export function useMarkNoPlate() {
       } else {
         await clearAvailabilityOverride(cell.date, cell.slot_id)
       }
+      reverted = true
       if (removed) await restorePlan(removed)
+      toast.success(t("plan.undo.restored"))
     } catch (err) {
-      toastError(err, t)
+      if (reverted) {
+        await setAvailabilityOverride(cell.date, cell.slot_id, {
+          mode: "none",
+          note: cell.note,
+          // The toast below reports the failed Undo and the refresh shows
+          // the cell as it really is.
+        }).catch(() => {})
+      }
+      toastUndoError(err, t)
     } finally {
       refresh()
     }
@@ -200,7 +239,8 @@ export function usePlanMeal() {
         await clearAvailabilityOverride(cell.date, cell.slot_id)
         const { items } = await getAvailabilityRange(cell.date, cell.date)
         const resolved = items.find((c) => c.slot_id === cell.slot_id)
-        if (resolved?.mode !== "none") return
+        // A cell the range doesn't resolve gets the explicit override.
+        if (resolved && resolved.mode !== "none") return
       }
       await setAvailabilityOverride(cell.date, cell.slot_id, { mode: "plan" })
     },
