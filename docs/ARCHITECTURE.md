@@ -118,6 +118,8 @@ backend/
 │   │   ├── slot/, availability/      # time slots, cell modes
 │   │   ├── settings/, setup/         # settings registry, first-run status
 │   │   ├── actor/                    # user | agent, carried in ctx
+│   │   ├── agent/                    # chat agent, tool registry, prompt composition
+│   │   ├── airun/                    # metered LLM client and run log
 │   │   ├── llm/                      # LLM port interface + tool schema types
 │   │   ├── importer/                 # URL → draft recipe port + orchestration
 │   │   └── errors.go                 # domain sentinel errors
@@ -128,19 +130,23 @@ backend/
 │   │   ├── off/                      # Open Food Facts client
 │   │   ├── fdc/                      # USDA FDC client
 │   │   ├── imagestore/               # filesystem image storage + imaging (resize/crop/encode)
-│   │   └── jsonld/                   # schema.org Recipe parser
+│   │   ├── jsonld/                   # schema.org Recipe parser
+│   │   ├── crypto/                   # API-key encryption
+│   │   ├── fake/                     # in-memory fakes and the fake LLM
+│   │   ├── httpfetch/                # generic HTTP fetch
+│   │   └── llmresolver/              # picks the LLM provider at runtime
 │   ├── transport/
 │   │   └── http/
 │   │       ├── router.go             # chi route registrations
-│   │       ├── handlers/             # thin translation (one file per aggregate)
-│   │       ├── middleware/           # auth, logging, recovery, cors
-│   │       ├── sse/                  # server-sent events helper
-│   │       └── errormap.go           # domain error → HTTP status + message_key
+│   │       ├── handlers/             # thin translation (one file per aggregate); errormap.go maps domain errors → status + message_key
+│   │       ├── middleware/           # actor, ratelimit, security headers
+│   │       └── sse/                  # server-sent events helper
 │   ├── config/                       # env loading + validation
-│   ├── i18n/                         # generated error key constants from en.json
+│   ├── webui/                        # embeds the built React SPA (frontend dist)
 │   └── testhelper/                   # NewTestDB, HTTP fixtures, time freezer
-├── db/migrations/                    # goose .sql files
-└── static/                           # embedded SvelteKit build output
+└── db/
+    ├── migrations/                   # goose SQL + Go migrations
+    └── schema_patches/               # end-state schema for sqlc where a Go migration changes it
 ```
 
 ### Dependency rule
@@ -324,13 +330,12 @@ All endpoints are under `/api`. Responses are JSON (`Content-Type: application/j
 ### 6.1 Conventions
 
 - `GET /api/foods` and `GET /api/ai/conversations` accept `limit` and `offset`; foods also take the filters below.
-- `POST` creating a resource returns `201 Created` with the full resource.
+- A `POST` that creates a resource returns `201 Created` with the full resource.
 - `PUT` returns `200 OK` with the full resource.
 - `DELETE` returns `204 No Content`, except plate, session and plan deletes, which return the `PlanSnapshot` that restores them.
 - Path parameters: `{id}` for numeric IDs. Dates are `YYYY-MM-DD`.
 - Query parameters are lowercase snake_case. Read models take an optional `today` (default: the server's local date).
 - Timestamps are ISO-8601 UTC.
-- Write endpoints require a `Content-Type: application/json` header.
 
 ### 6.2 Endpoint catalogue
 
@@ -510,22 +515,17 @@ error.profile.invalid_macros
 ### 7.1 Tool schema (domain-defined)
 
 ```
-list_components(role?, tag?, search?, max_cook_minutes?, limit?)
-get_component(component_id)
-get_week(week_id)
-get_week_nutrition(week_id)
-get_profile()
-create_plate(week_id, day, slot_id)
-add_component_to_plate(plate_id, component_id, portions)
-swap_component(plate_component_id, new_component_id, portions?)
-update_plate_component(plate_component_id, portions)
-remove_plate_component(plate_component_id)
-delete_plate(plate_id)
-clear_week(week_id)                            -- bulk op for "replace_all" mode
-record_preference(key, value)                  -- AI writes to profile.preferences
+list_foods, get_food               -- read the food library
+list_slots, get_profile            -- read slots and the profile
+get_plates_range(from, to)         -- read plates in a date range
+create_plate, delete_plate
+add_food_to_plate, swap_food, update_plate_component, remove_plate_component
+list_presets, get_preset, create_preset_from_plates, update_preset, delete_preset
+apply_preset, copy_week
+record_preference(key, value)      -- AI writes to profile.preferences
 ```
 
-Each tool is defined once in `domain/llm/tools.go` with a JSON schema and a handler function of type `func(context.Context, json.RawMessage) (json.RawMessage, error)`. Handlers call domain services; they never touch SQL directly. This gives a single execution point for tests and for SSE event emission.
+Tools live in `domain/agent` (`tools.go`, `preset_tools.go`), each with a JSON schema and a handler `func(ctx, json.RawMessage) (json.RawMessage, ToolEffect, error)`. Plate and preset tools call `plate.Service` and the preset service, never SQL; there is no week id, only dates and cells. Anthropic rejects top-level `anyOf`/`oneOf`/`allOf` in tool schemas, so schemas avoid them (a test guards it). `ToolSet.Execute` sets the `agent` actor and the run's id on ctx, so the plate events record who changed what.
 
 ### 7.2 Tool loop
 
@@ -539,10 +539,10 @@ loop:
         emit tool_call event
         emit tool_result event
         append tool result to messages
-        if call caused plate change:
+        if call changed plates (ToolEffectPlateChanged):
             emit plate_changed event so frontend refreshes
     iterations++
-    if iterations > 20: emit error; break
+    if iterations > MaxIterations (20): emit error.ai.iterations_exceeded; break
 ```
 
 All emissions go through the SSE helper. The frontend listens and patches local state.
@@ -553,7 +553,7 @@ Built on every turn:
 
 1. Plantry role description (static).
 2. User profile JSON (targets, restrictions, preferences, custom system_prompt).
-3. Week context (current plates summary).
+3. Date-range context (the chat's `from`..`to` cells and plates).
 4. Tool usage rules.
 
 Capped at 4k tokens. Rebuild every turn (cheap; keeps context fresh).

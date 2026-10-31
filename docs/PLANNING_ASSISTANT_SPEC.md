@@ -246,7 +246,7 @@ ai_runs, ai_run_steps, plate_events, recipe_suggestions   -- see §8 and §9
 | `foods` (leaf) | + `diet_class` (vegan/vegetarian/pescetarian/omnivore/unknown) |
 | `foods` | − `cook_count`, − `last_cooked_at` (replaced by derived history, §3.7) |
 | `user_profile` | + `diet_type`, + `meat_days_per_week_max`, + `household_portions` |
-| `ai_conversations` | − legacy `week_id`, + `window_start` (date the chat is about) |
+| `ai_conversations` | − legacy `week_id` (dropped in 00032). The chat window is carried by `ai_runs.window_start`/`window_end` and the request's `from`/`to`; no `ai_conversations.window_start` column exists |
 
 The composed `diet_class` is computed on read, like nutrition, and cached alongside it.
 
