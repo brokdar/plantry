@@ -85,14 +85,27 @@ describe("read models", () => {
     expect(getPlan).toHaveBeenCalledWith(undefined)
   })
 
-  it("useToday(date) fetches that date", async () => {
+  it("useToday(date, today) fetches that date", async () => {
     vi.mocked(getToday).mockResolvedValue(mockTodayByVerdict.nothing_to_cook)
-    const { result } = renderHook(() => useToday("2026-11-02"), {
+    const { result } = renderHook(() => useToday("2026-11-02", "2026-11-01"), {
       wrapper: createHookWrapper(),
     })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(getToday).toHaveBeenCalledWith("2026-11-02")
+    expect(getToday).toHaveBeenCalledWith("2026-11-02", "2026-11-01")
     expect(result.current.data?.verdict.kind).toBe("nothing_to_cook")
+  })
+
+  it("useToday refetches the same date when the real today moves on", async () => {
+    vi.mocked(getToday).mockResolvedValue(mockTodayByVerdict.nothing_to_cook)
+    const { result, rerender } = renderHook(
+      ({ today }) => useToday("2026-11-02", today),
+      { wrapper: createHookWrapper(), initialProps: { today: "2026-11-01" } }
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    rerender({ today: "2026-11-02" })
+    await waitFor(() =>
+      expect(getToday).toHaveBeenLastCalledWith("2026-11-02", "2026-11-02")
+    )
   })
 })
 

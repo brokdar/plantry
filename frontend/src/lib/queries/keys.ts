@@ -39,7 +39,10 @@ export const planKeys = {
 
 export const todayKeys = {
   all: ["today"] as const,
-  date: (date: string) => [...todayKeys.all, date] as const,
+  /** `today` is the real date: the view (rate question, banners) moves
+   *  with it even for the same `date`. */
+  date: (date: string, today: string) =>
+    [...todayKeys.all, date, today] as const,
 }
 
 export const sessionKeys = {

@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { useState } from "react"
-
 import { TodayPage } from "@/components/today/TodayPage"
-import { todayISO } from "@/lib/dates"
+import { useTodayISO } from "@/lib/hooks/useTodayISO"
 import { redirectIfSetupIncomplete } from "@/lib/setup-redirect"
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -21,7 +19,6 @@ export const Route = createFileRoute("/today/")({
 
 function TodayRoute() {
   const { date } = Route.useSearch()
-  // Read once at mount so render stays pure.
-  const [today] = useState(todayISO)
+  const today = useTodayISO()
   return <TodayPage date={date ?? today} today={today} />
 }

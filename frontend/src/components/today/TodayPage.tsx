@@ -38,7 +38,7 @@ interface TodayPageProps {
  */
 export function TodayPage({ date, today }: TodayPageProps) {
   const { t } = useTranslation()
-  const query = useToday(date)
+  const query = useToday(date, today)
   if (query.isPending) {
     return (
       <Frame>
