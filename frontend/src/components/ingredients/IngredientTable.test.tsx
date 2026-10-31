@@ -129,9 +129,10 @@ describe("IngredientTable", () => {
     vi.mocked(setDietClass).mockResolvedValue(undefined as never)
     renderWithRouter(<IngredientTable />)
 
-    const select = await screen.findByRole("combobox", {
-      name: "Diet for Chicken breast",
-    })
+    const select = await screen.findByTestId(
+      `ingredient-diet-${mockChickenBreast.id}`
+    )
+    expect(select).toHaveAccessibleName("Diet for Chicken breast")
     expect(select).toHaveTextContent("With meatauto")
     await user.click(select)
     await user.click(await screen.findByRole("option", { name: "Pescetarian" }))
@@ -158,9 +159,10 @@ describe("IngredientTable", () => {
     vi.mocked(setDietClass).mockResolvedValue(undefined as never)
     renderWithRouter(<IngredientTable />)
 
-    const select = await screen.findByRole("combobox", {
-      name: "Diet for Chicken breast",
-    })
+    // Below sm the same select sits above the section.
+    const select = await screen.findByTestId(
+      `ingredient-diet-phone-${mockChickenBreast.id}`
+    )
     expect(select).toHaveTextContent(/^Vegan$/)
     await user.click(select)
     await user.click(await screen.findByRole("option", { name: "Automatic" }))

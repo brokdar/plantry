@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ComposedFood } from "@/lib/api/foods"
+import type { PlanWindow } from "@/lib/api/plan"
 import { formatDate } from "@/lib/plan/format"
 import { usePlan } from "@/lib/queries/plan"
 import { useCreatePlate } from "@/lib/queries/plates"
@@ -79,6 +80,13 @@ export function AddToPlanSheet({
   )
 }
 
+/** The window that pairs with the anchored one to make "the current and
+ *  the next": the previous one when the anchored window has not started
+ *  yet, else the next one. */
+function otherWindow(w: PlanWindow): string {
+  return w.today < w.start ? w.prev_start : w.next_start
+}
+
 /** Mounted only while the sheet is open, so the plan loads on demand. */
 function AddToPlanBody({
   recipe,
@@ -89,20 +97,21 @@ function AddToPlanBody({
 }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
-  const current = usePlan()
-  const nextStart = current.data?.window.next_start
-  // Until the current window is in, this shares its query.
-  const next = usePlan(nextStart)
+  // The anchored window is today's or, with a "next" anchor, the one after.
+  const anchored = usePlan()
+  const otherStart = anchored.data && otherWindow(anchored.data.window)
+  // Until the anchored window is in, this shares its query.
+  const other = usePlan(otherStart)
   const profile = useProfile()
   const createPlate = useCreatePlate()
   const [picked, setPicked] = useState<string | null>(null)
   const [eaters, setEaters] = useState<number | null>(null)
 
-  const loading = current.isPending || (!!nextStart && next.isPending)
-  const failed = current.isError || next.isError
+  const loading = anchored.isPending || (!!otherStart && other.isPending)
+  const failed = anchored.isError || other.isError
   const days =
-    current.data && next.data && nextStart
-      ? openCells([current.data, next.data])
+    anchored.data && other.data && otherStart
+      ? openCells([anchored.data, other.data])
       : []
   const cells = days.flatMap((d) => d.cells)
   const selected = cells.find((c) => c.key === picked) ?? cells[0]
@@ -158,8 +167,8 @@ function AddToPlanBody({
           variant="outline"
           className="min-h-11 md:pointer-fine:min-h-8"
           onClick={() => {
-            void current.refetch()
-            if (nextStart) void next.refetch()
+            void anchored.refetch()
+            if (otherStart) void other.refetch()
           }}
         >
           {t("common.retry")}

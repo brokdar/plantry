@@ -110,6 +110,21 @@ describe("AddToPlanSheet", () => {
     )
   })
 
+  it("with a next-week anchor, offers today's window and the anchored one", async () => {
+    vi.mocked(getPlan).mockImplementation(async (start) =>
+      start === "2026-10-31"
+        ? current
+        : { ...next, window: { ...next.window, today: "2026-10-31" } }
+    )
+    renderSheet()
+
+    expect(
+      await screen.findByTestId("add-to-plan-cell-2026-11-01|1")
+    ).toBeChecked()
+    expect(getPlan).toHaveBeenCalledWith("2026-10-31")
+    expect(screen.getAllByRole("radio")).toHaveLength(3)
+  })
+
   it("says so when both windows are full", async () => {
     vi.mocked(getPlan).mockResolvedValue({ ...current, cells: [] })
     renderSheet()
