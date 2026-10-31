@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 import {
   ArrowLeft,
+  CalendarPlus,
   CookingPot,
   ExternalLink,
   GitBranch,
@@ -28,6 +29,9 @@ import {
 import { lastEatenAgo, rememberedLibrarySearch } from "@/lib/recipes/library"
 import { cn } from "@/lib/utils"
 
+import { AddToPlanSheet } from "./AddToPlanSheet"
+import { FoodDietSelect } from "./DietClassSelect"
+import { DietUnknownWarning } from "./DietUnknownWarning"
 import { NutritionCompletenessWarning } from "./NutritionCompletenessWarning"
 
 type RecipeDetailProps = {
@@ -39,7 +43,8 @@ type RecipeDetailProps = {
 }
 
 /** Reading view of a recipe (UX §5.8, D6): photo, name, source, facts with
- *  a portion stepper, the scaled ingredients, the cook history, steps, My
+ *  a portion stepper and the diet class (with its override), Add to plan,
+ *  the scaled ingredients, the cook history, steps, My
  *  notes and the imported description. Changing portions never writes the
  *  recipe. */
 export function RecipeDetail({
@@ -59,6 +64,7 @@ export function RecipeDetail({
   )
   const scaled = useScaled(recipe.id, portions)
   const [backSearch] = useState(rememberedLibrarySearch)
+  const [addOpen, setAddOpen] = useState(false)
 
   function changePortions(next: number) {
     setPortions(next)
@@ -141,6 +147,20 @@ export function RecipeDetail({
             <span className="max-md:sr-only">
               {t("component.create_variant")}
             </span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setAddOpen(true)}
+            className="max-md:size-11"
+            data-testid="recipe-add-to-plan"
+          >
+            <CalendarPlus
+              data-icon="inline-start"
+              strokeWidth={1.5}
+              aria-hidden
+            />
+            <span className="max-md:sr-only">{t("add_to_plan.action")}</span>
           </Button>
           <Button asChild variant="outline" className="max-md:size-11">
             <Link
@@ -250,6 +270,17 @@ export function RecipeDetail({
                   })
                 : "–"}
             </Fact>
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-small text-ink-muted">{t("diet.label")}</dt>
+              <dd>
+                <FoodDietSelect
+                  food={recipe}
+                  label={t("diet.for", { name: recipe.name })}
+                  className="md:pointer-fine:min-h-9"
+                  testId="recipe-diet"
+                />
+              </dd>
+            </div>
             <Fact label={t("recipe_detail.keeps")}>
               {t("recipe_detail.days", { count: keepDays })}
             </Fact>
@@ -264,6 +295,13 @@ export function RecipeDetail({
           </p>
           {nutrition && !nutrition.complete && (
             <NutritionCompletenessWarning missing={nutrition.missing} />
+          )}
+          {recipe.diet_class === "unknown" && scaled.data && (
+            <DietUnknownWarning
+              unknown={scaled.data.ingredients.filter(
+                (i) => i.diet_class === "unknown"
+              )}
+            />
           )}
         </div>
       </header>
@@ -384,6 +422,11 @@ export function RecipeDetail({
           )}
         </div>
       </div>
+      <AddToPlanSheet
+        recipe={recipe}
+        open={addOpen}
+        onOpenChange={setAddOpen}
+      />
     </article>
   )
 }

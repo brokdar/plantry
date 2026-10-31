@@ -66,6 +66,7 @@ import {
   useUpdateFood,
   useDeleteFood,
   useFoodNutrition,
+  useSetDietClass,
   useVariants,
 } from "@/lib/queries/foods"
 import { fromIngredients, type IngredientInput } from "@/lib/domain/nutrition"
@@ -73,6 +74,7 @@ import { isCountUnit, normalizeUnit } from "@/lib/domain/units"
 import type { ComposedFood } from "@/lib/api/foods"
 import { ApiError } from "@/lib/api/client"
 
+import { DietClassSelect } from "./DietClassSelect"
 import { IngredientRow } from "./IngredientRow"
 import { NutritionCompletenessWarning } from "./NutritionCompletenessWarning"
 
@@ -104,6 +106,7 @@ export function RecipeEditor({
           cook_minutes: component.cook_minutes ?? null,
           keep_days: component.keep_days ?? null,
           freezable: component.freezable ?? null,
+          diet_class: dietOverride(component),
           notes: component.notes,
           source_url: component.source_url ?? "",
           description: component.description ?? null,
@@ -131,6 +134,7 @@ export function RecipeEditor({
           cook_minutes: null,
           keep_days: null,
           freezable: null,
+          diet_class: null,
           notes: null,
           source_url: "",
           description: null,
@@ -156,6 +160,7 @@ export function RecipeEditor({
   const updateMutation = useUpdateFood()
   const deleteMutation = useDeleteFood()
   const uploadMutation = useUploadImage()
+  const dietMutation = useSetDietClass()
   const { data: variantsData } = useVariants(component?.id ?? 0)
   const { data: savedNutrition } = useFoodNutrition(component?.id ?? 0)
 
@@ -233,8 +238,21 @@ export function RecipeEditor({
     try {
       if (isEdit && component) {
         await updateMutation.mutateAsync({ id: component.id, data: input })
+        if (values.diet_class !== dietOverride(component)) {
+          await dietMutation.mutateAsync({
+            id: component.id,
+            dietClass: values.diet_class,
+          })
+        }
       } else {
         const created = await createMutation.mutateAsync(input)
+        if (values.diet_class) {
+          // The recipe exists now: a failed override is toasted by the
+          // mutation and must not stop the save (a retry would duplicate it).
+          await dietMutation
+            .mutateAsync({ id: created.id, dietClass: values.diet_class })
+            .catch(() => undefined)
+        }
         if (stagedImage) {
           try {
             await uploadMutation.mutateAsync({
@@ -454,6 +472,29 @@ export function RecipeEditor({
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="diet_class"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("diet.label")}</FormLabel>
+                    <DietClassSelect
+                      value={field.value}
+                      effective={
+                        component?.diet_class_source === "user"
+                          ? undefined
+                          : component?.diet_class
+                      }
+                      onChange={field.onChange}
+                      label={t("diet.label")}
+                      className="w-full md:pointer-fine:min-h-9"
+                      testId="recipe-diet-class"
+                    />
+                    <FormDescription>{t("diet.editor_hint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -980,6 +1021,15 @@ function computePerPortionMacros(
     fiber: total.fiber / portions,
     sodium: total.sodium / portions,
   }
+}
+
+/** The recipe's own diet class, or null when it follows the ingredients. */
+function dietOverride(
+  food: ComposedFood
+): ComposedFoodFormValues["diet_class"] {
+  return food.diet_class_source === "user" && food.diet_class !== "unknown"
+    ? food.diet_class
+    : null
 }
 
 const FREEZABLE_OPTIONS = [

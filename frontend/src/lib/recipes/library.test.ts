@@ -69,6 +69,7 @@ describe("parseLibrarySearch", () => {
       parseLibrarySearch({
         q: "chili",
         role: "main",
+        diet: "vegetarian",
         quick: true,
         stale: "true",
         fav: true,
@@ -79,6 +80,7 @@ describe("parseLibrarySearch", () => {
     ).toEqual({
       q: "chili",
       role: "main",
+      diet: "vegetarian",
       quick: true,
       stale: true,
       fav: true,
@@ -93,6 +95,7 @@ describe("parseLibrarySearch", () => {
       parseLibrarySearch({
         q: "",
         role: "breakfast",
+        diet: "omnivore",
         quick: false,
         sort: "kcal",
         add: "discover",
@@ -100,6 +103,7 @@ describe("parseLibrarySearch", () => {
     ).toEqual({
       q: undefined,
       role: undefined,
+      diet: undefined,
       quick: undefined,
       stale: undefined,
       fav: undefined,
@@ -122,6 +126,7 @@ describe("libraryQuery", () => {
       libraryQuery({
         q: "soup",
         role: "side_veg",
+        diet: "vegan",
         quick: true,
         stale: true,
         fav: true,
@@ -132,6 +137,7 @@ describe("libraryQuery", () => {
       kind: "composed",
       search: "soup",
       role: "side_veg",
+      diet: "vegan",
       max_minutes: 30,
       not_eaten_weeks: 4,
       favorite: 1,
@@ -145,6 +151,7 @@ describe("libraryQuery", () => {
       kind: "composed",
       search: undefined,
       role: undefined,
+      diet: undefined,
       max_minutes: undefined,
       not_eaten_weeks: undefined,
       favorite: undefined,
@@ -158,6 +165,7 @@ describe("hasLibraryFilters", () => {
   it("ignores the sort and the import sheet", () => {
     expect(hasLibraryFilters({ sort: "created", add: "url" })).toBe(false)
     expect(hasLibraryFilters({ fav: true })).toBe(true)
+    expect(hasLibraryFilters({ diet: "pescetarian" })).toBe(true)
   })
 })
 

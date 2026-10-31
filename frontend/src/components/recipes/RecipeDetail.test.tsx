@@ -16,7 +16,10 @@ vi.mock("@/lib/api/foods", () => ({
   getScaled: vi.fn(),
   createVariant: vi.fn(),
   updateFood: vi.fn(),
+  setDietClass: vi.fn(),
 }))
+
+vi.mock("@/lib/api/plan", () => ({ getPlan: vi.fn() }))
 
 vi.mock("@/lib/api/settings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/settings")>()),
@@ -32,9 +35,12 @@ import {
   createVariant,
   getFoodNutrition,
   getScaled,
+  setDietClass,
   setFoodFavorite,
   updateFood,
 } from "@/lib/api/foods"
+import { getPlan } from "@/lib/api/plan"
+import { mockPlan } from "@/test/fixtures"
 import { listSettings } from "@/lib/api/settings"
 import { rememberLibrarySearch } from "@/lib/recipes/library"
 
@@ -362,5 +368,61 @@ describe("RecipeDetail", () => {
     expect(favorite).toHaveAttribute("aria-pressed", "false")
     await user.click(favorite)
     expect(setFoodFavorite).toHaveBeenCalledWith(3, true)
+  })
+
+  it("F6-AC1: shows the diet class in the facts and saves an override", async () => {
+    vi.mocked(setDietClass).mockResolvedValue(recipe)
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+
+    const diet = await screen.findByRole("combobox", {
+      name: "Diet for Chicken Curry",
+    })
+    expect(diet).toHaveTextContent("With meatauto")
+    expect(screen.queryByTestId("diet-unknown-warning")).toBeNull()
+    await user.click(diet)
+    await user.click(await screen.findByRole("option", { name: "Vegetarian" }))
+    await vi.waitFor(() =>
+      expect(setDietClass).toHaveBeenCalledWith(3, "vegetarian")
+    )
+  })
+
+  it("warns about an unknown diet and links the unknown ingredients", async () => {
+    vi.mocked(getScaled).mockImplementation(async (id, portions) => {
+      const scaled = await scaledFor(id, portions)
+      scaled.ingredients[1] = {
+        ...scaled.ingredients[1],
+        diet_class: "unknown",
+      }
+      return scaled
+    })
+    renderWithRouter(
+      <RecipeDetail
+        recipe={{
+          ...recipe,
+          diet_class: "unknown",
+          diet_class_source: "derived",
+        }}
+      />
+    )
+
+    const warning = await screen.findByTestId("diet-unknown-warning")
+    expect(warning).toHaveTextContent("Diet unknown")
+    expect(
+      within(warning).getByRole("link", { name: "Onion" })
+    ).toHaveAttribute("href", "/recipes/ingredients/2/edit")
+    expect(
+      within(warning).queryByRole("link", { name: "Kidney beans" })
+    ).toBeNull()
+  })
+
+  it("Add to plan opens the cell picker sheet", async () => {
+    vi.mocked(getPlan).mockResolvedValue(mockPlan)
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+
+    await user.click(await screen.findByRole("button", { name: "Add to plan" }))
+    expect(await screen.findByTestId("add-to-plan-sheet")).toBeInTheDocument()
+    expect(await screen.findAllByRole("radio")).not.toHaveLength(0)
   })
 })

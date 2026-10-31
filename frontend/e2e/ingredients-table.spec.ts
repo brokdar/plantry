@@ -41,6 +41,10 @@ test.describe("Ingredients table", () => {
       await searchFor(page, tag)
       const select = page.getByTestId(`ingredient-section-${leaf.id}`)
       await expect(select).toContainText("Konserven & Gläser")
+      // The diet class moves above the section on a phone.
+      await expect(
+        page.getByTestId(`ingredient-diet-phone-${leaf.id}`)
+      ).toBeVisible()
       // German labels are on screen.
       await expect(page.getByTestId("ingredients-table")).toContainText(
         "Abteilung"

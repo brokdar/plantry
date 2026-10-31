@@ -1,5 +1,7 @@
 import { z } from "zod/v4"
 
+import type { DietClass } from "@/lib/api/foods"
+
 export const FOOD_ROLES = [
   "main",
   "side_starch",
@@ -10,6 +12,15 @@ export const FOOD_ROLES = [
   "dessert",
   "standalone",
 ] as const
+
+/** The diet classes in order (D28); a recipe's class is the max of its
+ *  ingredients'. */
+export const DIET_CLASSES = [
+  "vegan",
+  "vegetarian",
+  "pescetarian",
+  "omnivore",
+] as const satisfies readonly DietClass[]
 
 // Optional nutrient: coerces "" → null so empty inputs serialize correctly.
 const optionalNutrient = z.preprocess(
@@ -93,6 +104,9 @@ export const composedFoodSchema = z.object({
     z.coerce.number().int().min(1).max(7).nullable()
   ),
   freezable: z.boolean().nullable().default(null),
+  // The diet class override (D28); null follows the ingredients. Saved
+  // through PUT /api/foods/{id}/diet-class, not the food payload.
+  diet_class: z.enum(DIET_CLASSES).nullable().default(null),
   notes: z.string().nullable().optional(),
   // "" → undefined so an empty field passes; the editor sends "" to clear.
   source_url: z.preprocess(

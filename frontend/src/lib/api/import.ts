@@ -1,5 +1,6 @@
 import type { LookupCandidate } from "./lookup"
 import { apiFetch } from "./client"
+import type { EffectiveDietClass } from "./foods"
 
 export interface DraftIngredient {
   raw_text: string
@@ -13,6 +14,8 @@ export interface DraftIngredient {
   /** Estimated grams per count unit (backend `units.CountGrams`); null for
    *  mass, volume and unparsed lines. */
   portion_grams: number | null
+  /** The line's diet class from its name, read-only on review (D30). */
+  diet_class: EffectiveDietClass
 }
 
 export interface Draft {

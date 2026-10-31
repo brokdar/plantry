@@ -18,9 +18,11 @@ import { todayISO } from "@/lib/dates"
 import { useFoods } from "@/lib/queries/foods"
 import { useSetupStatus } from "@/lib/queries/setup"
 import {
+  DIET_FILTERS,
   hasLibraryFilters,
   LIBRARY_SORTS,
   libraryQuery,
+  type DietFilter,
   type LibrarySearch,
   type LibrarySort,
 } from "@/lib/recipes/library"
@@ -28,6 +30,7 @@ import { FOOD_ROLES } from "@/lib/schemas/food"
 import { cn } from "@/lib/utils"
 
 import { AddRecipeMenu } from "./AddRecipeMenu"
+import { DietIcon } from "./DietIcon"
 import { ImportSheet } from "./ImportSheet"
 import { RecipeCard } from "./RecipeCard"
 import { RecipeOnboarding } from "./RecipeOnboarding"
@@ -36,6 +39,7 @@ import { RecipesHeader } from "./RecipesHeader"
 const PAGE_SIZE = 24
 const GRID = "grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 lg:grid-cols-4"
 const ALL_ROLES = "all"
+const ALL_DIETS = "all"
 
 type FlagFilter = "quick" | "stale" | "fav" | "new"
 const FLAG_FILTERS: { key: FlagFilter; label: string }[] = [
@@ -140,6 +144,31 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
               {FOOD_ROLES.map((role) => (
                 <SelectItem key={role} value={role}>
                   {t(`component.role_${role}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={search.diet ?? ALL_DIETS}
+            onValueChange={(v) =>
+              set({ diet: v === ALL_DIETS ? undefined : (v as DietFilter) })
+            }
+          >
+            <SelectTrigger
+              aria-label={t("diet.label")}
+              className={cn(
+                chipClass(!!search.diet),
+                "data-[size=default]:h-auto"
+              )}
+              data-testid="recipes-filter-diet"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              <SelectItem value={ALL_DIETS}>{t("diet.filter_all")}</SelectItem>
+              {DIET_FILTERS.map((d) => (
+                <SelectItem key={d} value={d}>
+                  <DietIcon dietClass={d} withLabel />
                 </SelectItem>
               ))}
             </SelectContent>
