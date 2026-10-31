@@ -206,6 +206,8 @@ test.describe("Plate sheet", () => {
       await seedPlate(s.days[0], s.slot, 2, [
         { food_id: s.bowl.id, portions: 1 },
       ])
+      // Feedback is asked only once the plate's day has come.
+      await page.clock.setFixedTime(new Date(`${s.days[0]}T12:00:00`))
       await page.goto(`/plan?start=${s.start}`)
       const sheet = await openCellSheet(page, s.days[0], s.slot)
 

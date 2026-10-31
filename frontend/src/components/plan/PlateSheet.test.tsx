@@ -27,6 +27,12 @@ vi.mock("@/lib/api/plates", () => ({
   updatePlateComponent: vi.fn(),
   deletePlateComponent: vi.fn(),
 }))
+// The fixtures are AC-1's 1–7 Nov; by default they lie in the past.
+const today = vi.hoisted(() => ({ iso: "2026-11-08" }))
+vi.mock("@/lib/dates", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/dates")>()),
+  todayISO: () => today.iso,
+}))
 vi.mock("@/lib/api/feedback", () => ({
   putFeedback: vi.fn(),
   deleteFeedback: vi.fn(),
@@ -114,6 +120,7 @@ async function renderSheet(
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  today.iso = "2026-11-08"
   await i18n.changeLanguage("en")
   vi.mocked(getFood).mockResolvedValue(apple)
   vi.mocked(listFoodMacros).mockResolvedValue({
@@ -295,6 +302,17 @@ describe("PlateSheet", () => {
     await userEvent.click(active)
     await waitFor(() => expect(deleteFeedback).toHaveBeenCalledWith(1))
     expect(putFeedback).not.toHaveBeenCalled()
+  })
+
+  it("asks How was it? only for a plate dated today or earlier", async () => {
+    today.iso = "2026-10-31"
+    const { unmount } = await renderSheet()
+    expect(screen.queryByTestId("feedback-loved")).toBeNull()
+    unmount()
+
+    today.iso = "2026-11-01"
+    await renderSheet()
+    expect(screen.getByTestId("feedback-loved")).toBeVisible()
   })
 
   it("offers Cook N more for a deficit", async () => {
