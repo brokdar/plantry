@@ -100,17 +100,10 @@ type Querier interface {
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
 	ListPlateEvents(ctx context.Context) ([]PlateEvent, error)
 	ListPlateFeedbackByDateRange(ctx context.Context, arg ListPlateFeedbackByDateRangeParams) ([]PlateFeedback, error)
-	ListPlatesByDate(ctx context.Context, date string) ([]Plate, error)
 	ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDateRangeParams) ([]Plate, error)
 	ListPresetComponentsByPlate(ctx context.Context, presetPlateID int64) ([]PresetComponent, error)
-	ListPresetComponentsByPreset(ctx context.Context, presetID int64) ([]PresetComponent, error)
-	ListPresetIDsBySlotID(ctx context.Context, slotID int64) ([]int64, error)
-	ListPresetIDsByTag(ctx context.Context, tag string) ([]int64, error)
 	ListPresetPlatesByPreset(ctx context.Context, presetID int64) ([]PresetPlate, error)
 	ListPresetTagsByPreset(ctx context.Context, presetID int64) ([]string, error)
-	ListPresetTagsByPresets(ctx context.Context, presetIds []int64) ([]PresetTag, error)
-	ListPresets(ctx context.Context) ([]Preset, error)
-	ListPresetsByLastUsed(ctx context.Context) ([]Preset, error)
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
@@ -118,11 +111,7 @@ type Querier interface {
 	// prompts and tool schemas stay. The repo repeats it until nothing is left,
 	// so no single statement holds the write lock for long.
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
-	RecentUnitForFood(ctx context.Context, foodID int64) (sql.NullString, error)
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
-	// Placeholder query so sqlc has something to generate in Phase 0. Real
-	// aggregate queries replace this starting in Phase 1 (ingredients).
-	SchemaVersion(ctx context.Context) (int64, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
 	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)

@@ -148,7 +148,7 @@ func (e *env) batch() (sunPlate *plate.Plate, sessionID int64) {
 
 func (e *env) plateAt(date string, slotID int64) *plate.Plate {
 	e.t.Helper()
-	plates, err := e.svc.Day(e.ctx, day(date))
+	plates, err := e.svc.Range(e.ctx, day(date), day(date))
 	require.NoError(e.t, err)
 	for i := range plates {
 		if plates[i].SlotID == slotID {
@@ -688,7 +688,7 @@ func TestClearRange_RemovesPlatesAndOrphanedSessions(t *testing.T) {
 	e.create(tue, e.lunch, nil, composed(e.curry, 1))
 	before := e.plan(sun, wed)
 
-	snap, err := e.svc.ClearRange(e.ctx, day(sun), day(sun))
+	snap, err := e.svc.ClearRange(e.ctx, day(sun), day(sun), 0)
 	require.NoError(t, err)
 	assert.Nil(t, e.plateAt(sun, e.dinner))
 	v := e.session(sid)
@@ -699,7 +699,7 @@ func TestClearRange_RemovesPlatesAndOrphanedSessions(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, before, e.plan(sun, wed))
 
-	snap, err = e.svc.ClearRange(e.ctx, day(sun), day(wed))
+	snap, err = e.svc.ClearRange(e.ctx, day(sun), day(wed), 0)
 	require.NoError(t, err)
 	assert.Equal(t, 0, e.count("plates"))
 	assert.Equal(t, 0, e.count("cook_sessions"))
@@ -709,15 +709,28 @@ func TestClearRange_RemovesPlatesAndOrphanedSessions(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, before, e.plan(sun, wed))
 
-	_, err = e.svc.ClearRange(e.ctx, day(wed), day(sun))
+	_, err = e.svc.ClearRange(e.ctx, day(wed), day(sun), 0)
 	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+}
+
+func TestClearRange_OneSlot(t *testing.T) {
+	e := newEnv(t)
+	e.batch() // Sun dinner + Mon lunch + Mon dinner
+
+	snap, err := e.svc.ClearRange(e.ctx, day(sun), day(mon), e.lunch)
+	require.NoError(t, err)
+	require.Len(t, snap.Plates, 1)
+	assert.Equal(t, e.lunch, snap.Plates[0].SlotID)
+	assert.Nil(t, e.plateAt(mon, e.lunch))
+	assert.NotNil(t, e.plateAt(sun, e.dinner))
+	assert.NotNil(t, e.plateAt(mon, e.dinner))
 }
 
 // B1-AC11
 func TestApply_FailOnOccupiedCellWritesNothing(t *testing.T) {
 	e := newEnv(t)
 	_, sid := e.batch()
-	snap, err := e.svc.ClearRange(e.ctx, day(sun), day(mon))
+	snap, err := e.svc.ClearRange(e.ctx, day(sun), day(mon), 0)
 	require.NoError(t, err)
 	require.Len(t, snap.Plates, 3)
 	e.create(mon, e.dinner, nil, grams(e.egg(), 50)) // the last cell gets taken

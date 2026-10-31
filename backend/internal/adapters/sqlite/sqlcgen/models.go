@@ -10,7 +10,6 @@ import (
 
 type AiConversation struct {
 	ID        int64
-	WeekID    sql.NullInt64
 	Title     sql.NullString
 	CreatedAt string
 	UpdatedAt string

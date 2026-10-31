@@ -36,7 +36,7 @@ func newComponentRouterWithDB(t *testing.T) (http.Handler, *sqlite.FoodRepo, *pl
 	r.Route("/api/plates", func(r chi.Router) {
 		r.Post("/{id}/components", h.AddComponent)
 		r.Put("/{id}/components/{pcId}", h.UpdateComponent)
-		r.Get("/", h.List)
+		r.Get("/{id}", h.Get)
 	})
 	return r, foodRepo, plateSvc, slotRepo
 }
@@ -162,7 +162,7 @@ func TestAddComponent_HTTP_Leaf_UnknownUnit_400(t *testing.T) {
 	assert.Equal(t, "error.plate.unit_requires_portion", resp["message_key"])
 }
 
-func TestList_HTTP_RoundTrips_BothShapes(t *testing.T) {
+func TestGet_HTTP_RoundTrips_BothShapes(t *testing.T) {
 	r, foodRepo, plateSvc, slotRepo := newComponentRouterWithDB(t)
 	_, leafID, composedID, plateID := seedComponentTestData(t, foodRepo, plateSvc, slotRepo)
 
@@ -171,16 +171,14 @@ func TestList_HTTP_RoundTrips_BothShapes(t *testing.T) {
 	require.Equal(t, http.StatusCreated,
 		postComponent(t, r, plateID, fmt.Sprintf(`{"food_id":%d,"amount":150,"unit":"g"}`, leafID)).Code)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/plates?from=2026-04-26&to=2026-04-26", nil)
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/plates/%d", plateID), nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	var body map[string]any
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	plates := body["plates"].([]any)
-	require.Len(t, plates, 1)
-	comps := plates[0].(map[string]any)["components"].([]any)
+	comps := body["components"].([]any)
 	require.Len(t, comps, 2)
 
 	// First component (composed): portions present, no amount.

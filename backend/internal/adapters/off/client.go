@@ -72,11 +72,6 @@ func New(opts ...Option) *Client {
 	return c
 }
 
-// WithHTTPClient sets the underlying HTTP client.
-func WithHTTPClient(hc *http.Client) Option {
-	return func(c *Client) { c.httpClient = hc }
-}
-
 // WithBaseURL overrides the default Open Food Facts base URL.
 func WithBaseURL(u string) Option {
 	return func(c *Client) { c.baseURL = u }

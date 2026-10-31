@@ -245,7 +245,7 @@ func TestApply_NoneCell_SkippedUnavailable(t *testing.T) {
 			assert.Empty(t, res.SkippedOccupied)
 			assert.Equal(t, []plate.CellKey{{Date: applyTarget, SlotID: e.slotID}}, res.SkippedUnavailable)
 
-			day, err := e.plateSvc.Day(e.ctx, applyTarget)
+			day, err := e.plateSvc.Range(e.ctx, applyTarget, applyTarget)
 			require.NoError(t, err)
 			assert.Empty(t, day)
 			got, err := e.presetSvc.Get(e.ctx, p.ID)
@@ -285,7 +285,7 @@ func TestApply_Overwrite_UndoRestoresThePlan(t *testing.T) {
 	require.Len(t, res.CreatedPlateIDs, 1)
 	require.Len(t, res.Removed.Plates, 1)
 	assert.Equal(t, sid, res.Removed.Plates[0].Components[0].Session.ID, "the batch survives, so it is recorded by id")
-	day, err := e.plateSvc.Day(e.ctx, applyTarget)
+	day, err := e.plateSvc.Range(e.ctx, applyTarget, applyTarget)
 	require.NoError(t, err)
 	require.Len(t, day, 1)
 	assert.Equal(t, res.CreatedPlateIDs[0], day[0].ID)
@@ -476,7 +476,7 @@ func TestCopyWeek_AvailabilityAndUndo(t *testing.T) {
 
 	assert.Equal(t, availability.ModePlan, e.cell(t, tgt.AddDate(0, 0, 1)).Mode, "undo removes the copied override")
 	assert.Equal(t, availability.ModeNone, e.cell(t, tgt.AddDate(0, 0, 2)).Mode, "undo keeps overrides it did not create")
-	day, err := e.plateSvc.Day(e.ctx, tgt)
+	day, err := e.plateSvc.Range(e.ctx, tgt, tgt)
 	require.NoError(t, err)
 	assert.Empty(t, day, "undo removes the copied plate")
 }
@@ -559,7 +559,7 @@ func TestCopyWeek_OverwriteConflict(t *testing.T) {
 	require.Len(t, res.Removed.Plates, 1)
 	assert.InDelta(t, 50.0, *res.Removed.Plates[0].Components[0].Amount, 1e-9)
 
-	day, err := e.plateSvc.Day(e.ctx, copyTarget)
+	day, err := e.plateSvc.Range(e.ctx, copyTarget, copyTarget)
 	require.NoError(t, err)
 	require.Len(t, day, 1)
 	assert.InDelta(t, 100.0, *day[0].Components[0].Amount, 1e-9, "target slot now holds the source plate's amount")

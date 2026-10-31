@@ -3,6 +3,7 @@ import {
   apiRequest,
   cleanupFood,
   cleanupSlot,
+  deletePlatesUsingSlot,
   expect,
   mockAnchorToday,
   seedLeafFood,
@@ -212,17 +213,7 @@ test.describe("Presets", () => {
       await expect(cell.getByText(`Rice ${tag}`)).toBeVisible()
     } finally {
       await cleanupPreset(preset.id)
-      const ctx = await apiRequest.newContext({ baseURL: API })
-      const platesRes = await ctx.get(`/api/plates?from=${today}&to=${today}`)
-      const body = (await platesRes.json()) as {
-        plates?: { id: number; slot_id: number }[]
-      }
-      for (const p of body.plates ?? []) {
-        if (p.slot_id === slot.id) {
-          await ctx.delete(`/api/plates/${p.id}`)
-        }
-      }
-      await ctx.dispose()
+      await deletePlatesUsingSlot(slot.id)
       await cleanupFood(pasta.id)
       await cleanupFood(rice.id)
       await cleanupSlot(slot.id)
@@ -276,20 +267,7 @@ test.describe("Presets", () => {
         ).toContainText(`Quinoa ${tag}`)
       }
     } finally {
-      // Clean up plates from both source and target windows.
-      const ctx = await apiRequest.newContext({ baseURL: API })
-      const platesRes = await ctx.get(
-        `/api/plates?from=${sourceStart}&to=${shiftYMD(win.start, 10)}`
-      )
-      const body = (await platesRes.json()) as {
-        plates?: { id: number; slot_id: number }[]
-      }
-      for (const p of body.plates ?? []) {
-        if (p.slot_id === slot.id) {
-          await ctx.delete(`/api/plates/${p.id}`)
-        }
-      }
-      await ctx.dispose()
+      await deletePlatesUsingSlot(slot.id)
       await cleanupFood(food.id)
       await cleanupSlot(slot.id)
     }

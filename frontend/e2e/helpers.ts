@@ -169,20 +169,16 @@ export async function seedSlot(
 }
 
 /** Deletes the slot's plates from a year back to two years ahead. The API
- *  lists at most 366 days at a time, so this pages through the range. */
+ *  clears at most 366 days at a time, so this pages through the range. */
 export async function deletePlatesUsingSlot(slotId: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
   const today = new Date().toISOString().slice(0, 10)
   for (let from = addDays(today, -360); from < addDays(today, 720); ) {
     const to = addDays(from, 359)
-    const platesRes = await ctx.get(`/api/plates?from=${from}&to=${to}`)
-    expect(platesRes.ok(), await platesRes.text()).toBeTruthy()
-    const body = (await platesRes.json()) as {
-      plates: { id: number; slot_id: number }[]
-    }
-    for (const p of body.plates) {
-      if (p.slot_id === slotId) await ctx.delete(`/api/plates/${p.id}`)
-    }
+    const res = await ctx.delete(
+      `/api/plan?from=${from}&to=${to}&slot_id=${slotId}`
+    )
+    expect(res.ok(), await res.text()).toBeTruthy()
     from = addDays(to, 1)
   }
   await ctx.dispose()

@@ -49,7 +49,7 @@ func (q *Queries) CountConversations(ctx context.Context) (int64, error) {
 const createConversation = `-- name: CreateConversation :one
 INSERT INTO ai_conversations (title)
 VALUES (?)
-RETURNING id, week_id, title, created_at, updated_at
+RETURNING id, title, created_at, updated_at
 `
 
 func (q *Queries) CreateConversation(ctx context.Context, title sql.NullString) (AiConversation, error) {
@@ -57,7 +57,6 @@ func (q *Queries) CreateConversation(ctx context.Context, title sql.NullString) 
 	var i AiConversation
 	err := row.Scan(
 		&i.ID,
-		&i.WeekID,
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -74,7 +73,7 @@ func (q *Queries) DeleteConversation(ctx context.Context, id int64) (sql.Result,
 }
 
 const getConversation = `-- name: GetConversation :one
-SELECT id, week_id, title, created_at, updated_at FROM ai_conversations WHERE id = ?
+SELECT id, title, created_at, updated_at FROM ai_conversations WHERE id = ?
 `
 
 func (q *Queries) GetConversation(ctx context.Context, id int64) (AiConversation, error) {
@@ -82,7 +81,6 @@ func (q *Queries) GetConversation(ctx context.Context, id int64) (AiConversation
 	var i AiConversation
 	err := row.Scan(
 		&i.ID,
-		&i.WeekID,
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -91,7 +89,7 @@ func (q *Queries) GetConversation(ctx context.Context, id int64) (AiConversation
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT id, week_id, title, created_at, updated_at FROM ai_conversations
+SELECT id, title, created_at, updated_at FROM ai_conversations
 ORDER BY updated_at DESC, id DESC
 LIMIT ? OFFSET ?
 `
@@ -112,7 +110,6 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 		var i AiConversation
 		if err := rows.Scan(
 			&i.ID,
-			&i.WeekID,
 			&i.Title,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -177,7 +174,7 @@ const updateConversationTitle = `-- name: UpdateConversationTitle :one
 UPDATE ai_conversations
 SET title = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, week_id, title, created_at, updated_at
+RETURNING id, title, created_at, updated_at
 `
 
 type UpdateConversationTitleParams struct {
@@ -190,7 +187,6 @@ func (q *Queries) UpdateConversationTitle(ctx context.Context, arg UpdateConvers
 	var i AiConversation
 	err := row.Scan(
 		&i.ID,
-		&i.WeekID,
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,

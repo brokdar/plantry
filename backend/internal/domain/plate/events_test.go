@@ -156,7 +156,7 @@ func TestEvents_EveryMutatorWrites(t *testing.T) {
 			return err
 		}, []string{"plate:delete", "session:update"}},
 		{"ClearRange", func(e *env) error {
-			_, err := e.svc.ClearRange(e.ctx, day(mon), day(mon))
+			_, err := e.svc.ClearRange(e.ctx, day(mon), day(mon), 0)
 			return err
 		}, []string{"plate:delete", "plate:delete", "session:update"}},
 		{"AddComponent of a leaf", func(e *env) error {

@@ -27,25 +27,9 @@ import (
 // stubPlateService implements the platesService interface used by PlateHandler.
 // Each method has a configurable func field; unset fields return zero values.
 type stubPlateService struct {
-	getRangeFn   func(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
-	createFn     func(ctx context.Context, in plate.PlateInput) (*plate.Plate, error)
-	getFn        func(ctx context.Context, id int64) (*plate.Plate, error)
-	updateFn     func(ctx context.Context, id int64, patch plate.PlatePatch) (*plate.Plate, error)
-	recentUnitFn func(foodID int64) (string, error)
-}
-
-func (s *stubPlateService) Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error) {
-	if s.getRangeFn != nil {
-		return s.getRangeFn(ctx, from, to)
-	}
-	return nil, nil
-}
-
-func (s *stubPlateService) Day(ctx context.Context, d time.Time) ([]plate.Plate, error) {
-	if s.getRangeFn != nil {
-		return s.getRangeFn(ctx, d, d)
-	}
-	return nil, nil
+	createFn func(ctx context.Context, in plate.PlateInput) (*plate.Plate, error)
+	getFn    func(ctx context.Context, id int64) (*plate.Plate, error)
+	updateFn func(ctx context.Context, id int64, patch plate.PlatePatch) (*plate.Plate, error)
 }
 
 func (s *stubPlateService) Create(ctx context.Context, in plate.PlateInput) (*plate.Plate, error) {
@@ -90,22 +74,13 @@ func (s *stubPlateService) RemoveComponent(_ context.Context, _ int64) (*plate.P
 	return &plate.Plate{}, nil
 }
 
-func (s *stubPlateService) RecentUnitForFood(_ context.Context, foodID int64) (string, error) {
-	if s.recentUnitFn != nil {
-		return s.recentUnitFn(foodID)
-	}
-	return "", nil
-}
-
 // ── router helper ─────────────────────────────────────────────────────────────
 
 func newPlateRouter(stub *stubPlateService) http.Handler {
 	h := handlers.NewPlateHandlerFromService(stub)
 	r := chi.NewRouter()
 	r.Route("/api/plates", func(r chi.Router) {
-		r.Get("/", h.List)
 		r.Post("/", h.Create)
-		r.Get("/by-date/{date}", h.Day)
 		r.Route("/{id}", func(r chi.Router) {
 			r.Get("/", h.Get)
 			r.Put("/", h.Update)
@@ -113,89 +88,6 @@ func newPlateRouter(stub *stubPlateService) http.Handler {
 		})
 	})
 	return r
-}
-
-// ── List tests ────────────────────────────────────────────────────────────────
-
-func TestPlatesHandler_List_200(t *testing.T) {
-	d, _ := time.Parse("2006-01-02", "2025-03-10")
-	stub := &stubPlateService{
-		getRangeFn: func(_ context.Context, from, to time.Time) ([]plate.Plate, error) {
-			return []plate.Plate{
-				{ID: 1, SlotID: 2, Date: d},
-			}, nil
-		},
-	}
-	r := newPlateRouter(stub)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/plates?from=2025-03-10&to=2025-03-16", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code)
-	var body map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	plates, ok := body["plates"].([]any)
-	require.True(t, ok)
-	assert.Len(t, plates, 1)
-	// Verify date field is present
-	first := plates[0].(map[string]any)
-	assert.Equal(t, "2025-03-10", first["date"])
-}
-
-func TestPlatesHandler_List_400_MissingFrom(t *testing.T) {
-	r := newPlateRouter(&stubPlateService{})
-	req := httptest.NewRequest(http.MethodGet, "/api/plates?to=2025-03-16", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestPlatesHandler_List_400_MalformedDate(t *testing.T) {
-	r := newPlateRouter(&stubPlateService{})
-	req := httptest.NewRequest(http.MethodGet, "/api/plates?from=not-a-date&to=2025-03-16", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestPlatesHandler_List_400_FromAfterTo(t *testing.T) {
-	r := newPlateRouter(&stubPlateService{})
-	req := httptest.NewRequest(http.MethodGet, "/api/plates?from=2025-03-17&to=2025-03-10", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-// ── Day tests ─────────────────────────────────────────────────────────────────
-
-func TestPlatesHandler_Day_200(t *testing.T) {
-	d, _ := time.Parse("2006-01-02", "2025-03-10")
-	stub := &stubPlateService{
-		getRangeFn: func(_ context.Context, from, to time.Time) ([]plate.Plate, error) {
-			return []plate.Plate{{ID: 7, SlotID: 1, Date: d}}, nil
-		},
-	}
-	r := newPlateRouter(stub)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/plates/by-date/2025-03-10", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code)
-	var body map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	plates, ok := body["plates"].([]any)
-	require.True(t, ok)
-	assert.Len(t, plates, 1)
-}
-
-func TestPlatesHandler_Day_400_BadDate(t *testing.T) {
-	r := newPlateRouter(&stubPlateService{})
-	req := httptest.NewRequest(http.MethodGet, "/api/plates/by-date/not-valid", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // ── Create tests ──────────────────────────────────────────────────────────────
