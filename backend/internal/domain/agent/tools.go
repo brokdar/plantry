@@ -524,12 +524,11 @@ func toolUpdatePlateComponent(svc Services) Tool {
       "properties":{
         "plate_component_id":{"type":"integer","minimum":1},` + quantitySchema + `
       },
-      "anyOf":[{"required":["portions"]},{"required":["amount","unit"]}],
       "additionalProperties":false
     }`)
 	return Tool{
 		Name:        "update_plate_component",
-		Description: "Change the quantity of an existing plate_component row without swapping the food. " + quantityHelp,
+		Description: "Change the quantity of an existing plate_component row without swapping the food; portions or amount + unit is required. " + quantityHelp,
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -538,6 +537,9 @@ func toolUpdatePlateComponent(svc Services) Tool {
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
+			if in.empty() {
+				return nil, ToolEffectNone, fmt.Errorf("%w: portions or amount + unit required", domain.ErrInvalidInput)
 			}
 			p, err := svc.Plates.UpdateComponentQuantity(ctx, in.PlateComponentID, in.component(0))
 			if err != nil {

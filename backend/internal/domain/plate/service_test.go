@@ -167,6 +167,20 @@ func TestCreate_ComposedGetsFreshSessionScaledByEaters(t *testing.T) {
 	assert.Equal(t, plate.KindFresh, v.Links[0].Kind)
 }
 
+func TestCookSession_ReturnsPlainSession(t *testing.T) {
+	e := newEnv(t)
+	p := e.create(sun, e.dinner, f64(2), composed(e.chili, 1))
+
+	got, err := e.svc.CookSession(e.ctx, sessionOf(p, 0))
+	require.NoError(t, err)
+	assert.Equal(t, sessionOf(p, 0), got.ID)
+	assert.Equal(t, e.chili, got.FoodID)
+	assert.InDelta(t, 2.0, got.Portions, 1e-9)
+
+	_, err = e.svc.CookSession(e.ctx, 999999)
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
 func TestCreate_EatersDefaultToHousehold(t *testing.T) {
 	e := newEnv(t)
 	e.exec(`UPDATE user_profile SET household_portions = 3.5 WHERE id = 1`)

@@ -32,7 +32,7 @@ type Service struct {
 type PlateService interface {
 	Get(ctx context.Context, plateID int64) (*plate.Plate, error)
 	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
-	Session(ctx context.Context, id int64) (*plate.SessionView, error)
+	CookSession(ctx context.Context, id int64) (*plate.CookSession, error)
 	Apply(ctx context.Context, snap plate.PlanSnapshot, opts plate.ApplyOptions) (*plate.ApplyResult, error)
 }
 

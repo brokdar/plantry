@@ -245,11 +245,11 @@ func (s *Service) sourceSessions(ctx context.Context, sources []plate.Plate) (ma
 			if _, ok := out[*c.CookSessionID]; ok {
 				continue
 			}
-			v, err := s.plateSvc.Session(ctx, *c.CookSessionID)
+			sess, err := s.plateSvc.CookSession(ctx, *c.CookSessionID)
 			if err != nil {
 				return nil, fmt.Errorf("load session %d: %w", *c.CookSessionID, err)
 			}
-			out[v.ID] = v.CookSession
+			out[sess.ID] = *sess
 		}
 	}
 	return out, nil

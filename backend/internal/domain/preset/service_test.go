@@ -131,7 +131,7 @@ func (s *stubPlateService) Range(context.Context, time.Time, time.Time) ([]plate
 	return nil, nil
 }
 
-func (s *stubPlateService) Session(context.Context, int64) (*plate.SessionView, error) {
+func (s *stubPlateService) CookSession(context.Context, int64) (*plate.CookSession, error) {
 	return nil, domain.ErrNotFound
 }
 

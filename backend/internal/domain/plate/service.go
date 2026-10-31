@@ -520,6 +520,12 @@ func (s *Service) finishComponentChange(ctx context.Context, t *tracker, plateID
 
 // ── Sessions ────────────────────────────────────────────────────────────
 
+// CookSession returns the plain session, without the view's links,
+// consumption and warnings.
+func (s *Service) CookSession(ctx context.Context, id int64) (*CookSession, error) {
+	return s.sessions.GetSession(ctx, id)
+}
+
 // Session returns a session with its links, consumption and warnings.
 func (s *Service) Session(ctx context.Context, id int64) (*SessionView, error) {
 	sess, err := s.sessions.GetSession(ctx, id)
