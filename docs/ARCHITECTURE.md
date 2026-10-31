@@ -105,17 +105,21 @@ backend/
 ├── cmd/plantry/main.go               # wiring: env, db, adapters, router, server
 ├── internal/
 │   ├── domain/                       # PURE. No imports from adapters or transport.
-│   │   ├── ingredient/               # aggregate, value objects, repo port, service
-│   │   ├── component/                # aggregate (formerly "recipe"), role, variant
-│   │   ├── plate/                    # plate + plate_component, role-aware swap
-│   │   ├── planner/                  # week, plate composition, copy-week policy
-│   │   ├── nutrition/                # PURE calculator (inputs → macros)
-│   │   ├── shopping/                 # PURE aggregator (plates → list)
-│   │   ├── feedback/                 # feedback events + profile update rules
+│   │   ├── food/                     # Food aggregate (leaf | composed), nutrition resolver, history
+│   │   ├── plate/                    # plates, components, cook sessions, snapshots, events
+│   │   ├── planview/                 # read models: plan and today
+│   │   ├── window/                   # plan window arithmetic
+│   │   ├── nutrition/                # Macros value type
+│   │   ├── shopping/                 # shopping list derivation + section classifier
+│   │   ├── units/                    # unit conversion and display rounding
+│   │   ├── feedback/                 # plate feedback
 │   │   ├── profile/                  # user profile aggregate + targets
-│   │   ├── template/                 # saved plate compositions
+│   │   ├── preset/                   # saved day / week compositions
+│   │   ├── slot/, availability/      # time slots, cell modes
+│   │   ├── settings/, setup/         # settings registry, first-run status
+│   │   ├── actor/                    # user | agent, carried in ctx
 │   │   ├── llm/                      # LLM port interface + tool schema types
-│   │   ├── importer/                 # URL → draft component port + orchestration
+│   │   ├── importer/                 # URL → draft recipe port + orchestration
 │   │   └── errors.go                 # domain sentinel errors
 │   ├── adapters/
 │   │   ├── sqlite/                   # sqlc-generated queries + repo adapters + migrations runner
@@ -153,7 +157,7 @@ A `go vet` or architecture-test run in CI enforces this: the domain must not gre
 We do not model aggregates with private fields and rich behavior on every entity. The pattern is:
 
 - **Aggregates** are plain structs with exported fields and zero methods (they're transport-friendly).
-- **Services** (one per package, e.g. `component.Service`, `planner.Service`) hold all business logic, take repos as dependencies, and are the only thing handlers call.
+- **Services** (one per package, e.g. `food.Service`, `plate.Service`) hold all business logic, take repos as dependencies, and are the only thing handlers call.
 - **Pure calculators** (e.g. `nutrition`, `shopping`) are plain functions. Stateless. No deps. Trivial to test.
 
 This avoids OOP ceremony while still forcing unit-testable logic.
@@ -162,234 +166,59 @@ This avoids OOP ceremony while still forcing unit-testable logic.
 
 ## 4. Data Model
 
+SQLite, one file. Numbered goose migrations in `backend/db/migrations/` (SQL, plus Go migrations for data moves and table rebuilds); `backend/db/schema_patches/` gives sqlc the end-state schema where a Go migration changes it. Timestamps are `TEXT` (`datetime('now')`); dates are `YYYY-MM-DD` text.
+
 ### 4.1 Entity-relationship summary
 
 ```
-ingredients 1─┬─n ingredient_portions
-              └─n component_ingredients ─n 1 components
-                                            │
-                                            ├─n component_instructions
-                                            ├─n component_tags
-                                            └─n variant_group (optional)
+variant_groups 1─n foods
+foods (kind = leaf | composed)
+  ├─n food_portions        (unit → grams)
+  ├─n food_components      (composed parent → child food, amount, unit, grams)
+  ├─n food_instructions
+  └─n food_tags
 
-weeks 1─n plates 1─n plate_components ─n 1 components
-                1─0..1 plate_feedback
+time_slots 1─n plates 1─n plate_components ─n 1 foods
+                  │                 └─0..1 cook_sessions (composed components only)
+                  └─0..1 plate_feedback
+cook_sessions n─1 foods, n─1 time_slots (cook cell)
 
-templates 1─n template_components ─n 1 components
+presets 1─n preset_plates 1─n preset_components ─n 1 foods
+presets 1─n preset_tags
 
-time_slots 1─n plates
+availability_defaults (weekday × slot), availability_overrides (date × slot) ─0..1 presets
+plate_events          (audit trail, no foreign keys)
 
 user_profile (singleton)
+app_settings (key-value)
 ai_conversations 1─n ai_messages
-settings (key-value, tech only)
+ai_runs 1─n ai_run_steps;  ai_runs ─0..1 ai_prompts;  ai_tool_schemas
 ```
 
-### 4.2 Full schema (DDL)
+### 4.2 Tables
 
-All tables use `INTEGER PRIMARY KEY` (SQLite rowid alias). Timestamps are `TEXT` in ISO-8601 UTC.
+The authoritative DDL is the migrations; this is the shape as of migration 00033.
 
-```sql
--- Ingredients --------------------------------------------------------------
+| Table | Purpose and key facts |
+|---|---|
+| `foods` | One table for both kinds. `kind = 'leaf'` has a `source` (`manual` / `off` / `fdc`), per-100 g macros and micros, and an optional `shop_section` (00031; leaves only: `produce`, `bakery`, `dairy_eggs`, `meat_fish`, `dry_goods`, `cans_jars`, `spices_oils`, `frozen`, `other`). `kind = 'composed'` (a recipe) has `reference_portions`, `role`, `prep_minutes`, `cook_minutes`, `keep_days` (1-7), `freezable`, `source_url`, `description`, `variant_group_id`. Both have `image_path`, `favorite`, `notes`. CHECKs enforce the kind-specific columns. |
+| `food_components` | A composed food's ingredients: `parent_id`, `child_id` (another food), `amount`, `unit`, `grams`, `sort_order`. |
+| `food_portions` | Per-food unit-to-grams table, `(food_id, unit)`. |
+| `food_instructions`, `food_tags`, `variant_groups` | Steps, tags, and groups of variant recipes. |
+| `time_slots` | `name_key`, `icon`, `sort_order`, `active`. Not seeded; the user defines them. |
+| `plates` | One plate per cell: `date`, `slot_id`, `eaters` (REAL, > 0), `note`. `(date, slot_id)` is unique; `AUTOINCREMENT` since 00030. |
+| `plate_components` | Either a composed component (`portions` per eater, `cook_session_id` required) or a leaf (`amount`, `unit`, `grams`, `grams_source`, no session). `sort_order` orders them. A CHECK enforces the two shapes. |
+| `cook_sessions` | "Food X is cooked at (`cook_date`, `cook_slot_id`) producing `portions`", with `frozen_portions` (<= portions), `cooked_at`, `note`. `AUTOINCREMENT`. Plate components eat from it. |
+| `plate_feedback` | `plate_id` primary key, `status` in `loved` / `disliked` / `not_eaten`, `note`. |
+| `plate_events` | Audit trail (D20): `plate_id`, `cook_session_id`, `date`, `slot_id`, `action`, `actor` (`user` / `agent`), `ai_run_id`, `before_json`, `after_json`, `at`. No foreign keys, so rows outlive what they describe. |
+| `presets`, `preset_plates`, `preset_components`, `preset_tags` | Saved day or week compositions by slot; `presets.id` is `AUTOINCREMENT` (00033). Components hold a quantity like plate components, without sessions. |
+| `availability_defaults`, `availability_overrides` | Cell mode `plan` / `routine` / `none`; routine needs a `preset_id`. Defaults are by weekday (0 = Monday) and slot, overrides by date and slot. |
+| `user_profile` | Singleton: macro targets, `dietary_restrictions` (JSON list), `preferences` (JSON), `system_prompt`, `locale`, `diet_type`, `meat_days_per_week_max`, `household_portions`. |
+| `app_settings` | Key-value with an `encrypted` flag for API keys. Registry in `domain/settings/specs.go`. |
+| `ai_conversations`, `ai_messages` | Chat history (conversations carry no week reference). |
+| `ai_runs`, `ai_run_steps`, `ai_prompts`, `ai_tool_schemas` | Metered LLM log; see `backend/CLAUDE.md`. |
 
-CREATE TABLE ingredients (
-    id              INTEGER PRIMARY KEY,
-    name            TEXT NOT NULL UNIQUE,
-    source          TEXT NOT NULL CHECK (source IN ('manual','off','fdc')),
-    barcode         TEXT,
-    off_id          TEXT,
-    fdc_id          TEXT,
-    image_path      TEXT,
-    -- Essential macros per 100 g. Non-null; default 0 for manually-entered ingredients.
-    kcal_100g       REAL NOT NULL DEFAULT 0,
-    protein_100g    REAL NOT NULL DEFAULT 0,
-    fat_100g        REAL NOT NULL DEFAULT 0,
-    carbs_100g      REAL NOT NULL DEFAULT 0,
-    fiber_100g      REAL NOT NULL DEFAULT 0,
-    sodium_100g     REAL NOT NULL DEFAULT 0,
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE INDEX ix_ingredients_barcode ON ingredients(barcode);
-CREATE INDEX ix_ingredients_fdc_id  ON ingredients(fdc_id);
-
-CREATE VIRTUAL TABLE ingredients_fts USING fts5(
-    name,
-    content='ingredients',
-    content_rowid='id',
-    tokenize='unicode61 remove_diacritics 2'
-);
-
--- (FTS triggers use goose StatementBegin/End blocks; see migration file.)
-
-CREATE TABLE ingredient_portions (
-    id              INTEGER PRIMARY KEY,
-    ingredient_id   INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
-    unit            TEXT NOT NULL,
-    grams_per_unit  REAL NOT NULL CHECK (grams_per_unit > 0),
-    UNIQUE (ingredient_id, unit)
-);
-
--- Components (formerly "recipes") -----------------------------------------
-
-CREATE TABLE variant_groups (
-    id          INTEGER PRIMARY KEY,
-    name        TEXT NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE components (
-    id                  INTEGER PRIMARY KEY,
-    name                TEXT NOT NULL,
-    role                TEXT NOT NULL CHECK (role IN (
-                            'main','side_starch','side_veg','side_protein',
-                            'sauce','drink','dessert','standalone'
-                        )),
-    variant_group_id    INTEGER REFERENCES variant_groups(id) ON DELETE SET NULL,
-    reference_portions  REAL NOT NULL DEFAULT 1 CHECK (reference_portions > 0),
-    prep_minutes        INTEGER,
-    cook_minutes        INTEGER,
-    image_path          TEXT,
-    notes               TEXT,
-    last_cooked_at      TEXT,
-    cook_count          INTEGER NOT NULL DEFAULT 0,
-    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE INDEX ix_components_role           ON components(role);
-CREATE INDEX ix_components_variant_group  ON components(variant_group_id);
-CREATE INDEX ix_components_last_cooked    ON components(last_cooked_at);
-
-CREATE VIRTUAL TABLE components_fts USING fts5(
-    name,
-    content='components',
-    content_rowid='id',
-    tokenize='unicode61 remove_diacritics 2'
-);
-
-CREATE TABLE component_ingredients (
-    id              INTEGER PRIMARY KEY,
-    component_id    INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE,
-    ingredient_id   INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE RESTRICT,
-    amount          REAL NOT NULL CHECK (amount > 0),
-    unit            TEXT NOT NULL,          -- "g" | "ml" | custom portion unit
-    grams           REAL NOT NULL CHECK (grams > 0),   -- resolved absolute grams
-    sort_order      INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX ix_component_ingredients_component ON component_ingredients(component_id);
-
-CREATE TABLE component_instructions (
-    id              INTEGER PRIMARY KEY,
-    component_id    INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE,
-    step_number     INTEGER NOT NULL,
-    text            TEXT NOT NULL
-);
-CREATE INDEX ix_component_instructions_component ON component_instructions(component_id);
-
-CREATE TABLE component_tags (
-    component_id    INTEGER NOT NULL REFERENCES components(id) ON DELETE CASCADE,
-    tag             TEXT NOT NULL,
-    PRIMARY KEY (component_id, tag)
-);
-
--- Planner ------------------------------------------------------------------
-
-CREATE TABLE weeks (
-    id          INTEGER PRIMARY KEY,
-    year        INTEGER NOT NULL,
-    week_number INTEGER NOT NULL CHECK (week_number BETWEEN 1 AND 53),
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE (year, week_number)
-);
-
-CREATE TABLE time_slots (
-    id          INTEGER PRIMARY KEY,
-    name_key    TEXT NOT NULL,          -- i18n key: "slot.breakfast"
-    icon        TEXT NOT NULL,          -- lucide icon name
-    sort_order  INTEGER NOT NULL DEFAULT 0,
-    active      INTEGER NOT NULL DEFAULT 1
-);
-
-CREATE TABLE plates (
-    id          INTEGER PRIMARY KEY,
-    week_id     INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
-    day         INTEGER NOT NULL CHECK (day BETWEEN 0 AND 6),   -- 0=Mon
-    slot_id     INTEGER NOT NULL REFERENCES time_slots(id) ON DELETE RESTRICT,
-    note        TEXT,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX ix_plates_week_day_slot ON plates(week_id, day, slot_id);
-
-CREATE TABLE plate_components (
-    id              INTEGER PRIMARY KEY,
-    plate_id        INTEGER NOT NULL REFERENCES plates(id) ON DELETE CASCADE,
-    component_id    INTEGER NOT NULL REFERENCES components(id) ON DELETE RESTRICT,
-    portions        REAL NOT NULL DEFAULT 1 CHECK (portions > 0),
-    sort_order      INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX ix_plate_components_plate ON plate_components(plate_id);
-
-CREATE TABLE plate_feedback (
-    plate_id    INTEGER PRIMARY KEY REFERENCES plates(id) ON DELETE CASCADE,
-    status      TEXT NOT NULL CHECK (status IN ('cooked','skipped','loved','disliked')),
-    note        TEXT,
-    rated_at    TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- Templates ----------------------------------------------------------------
-
-CREATE TABLE templates (
-    id          INTEGER PRIMARY KEY,
-    name        TEXT NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE template_components (
-    id              INTEGER PRIMARY KEY,
-    template_id     INTEGER NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
-    component_id    INTEGER NOT NULL REFERENCES components(id) ON DELETE RESTRICT,
-    portions        REAL NOT NULL DEFAULT 1 CHECK (portions > 0),
-    sort_order      INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX ix_template_components_template ON template_components(template_id);
-
--- Profile, AI, Settings ----------------------------------------------------
-
-CREATE TABLE user_profile (
-    id                      INTEGER PRIMARY KEY CHECK (id = 1),  -- singleton
-    kcal_target             REAL,
-    protein_pct             REAL,
-    fat_pct                 REAL,
-    carbs_pct               REAL,
-    dietary_restrictions    TEXT NOT NULL DEFAULT '[]',  -- JSON array of strings
-    preferences             TEXT NOT NULL DEFAULT '{}',  -- JSON object, AI-managed
-    system_prompt           TEXT,
-    locale                  TEXT NOT NULL DEFAULT 'en',
-    updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE ai_conversations (
-    id          INTEGER PRIMARY KEY,
-    week_id     INTEGER REFERENCES weeks(id) ON DELETE SET NULL,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE ai_messages (
-    id              INTEGER PRIMARY KEY,
-    conversation_id INTEGER NOT NULL REFERENCES ai_conversations(id) ON DELETE CASCADE,
-    role            TEXT NOT NULL CHECK (role IN ('system','user','assistant','tool')),
-    content         TEXT NOT NULL,   -- JSON: text, tool_calls, tool_results
-    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX ix_ai_messages_conversation ON ai_messages(conversation_id);
-
-CREATE TABLE settings (
-    key     TEXT PRIMARY KEY,
-    value   TEXT NOT NULL
-);
-```
+Derived data is not stored: a food's last-eaten date, times cooked and used-in count come from plates and cook sessions at read time (D16), and the shopping list and plan views are computed from plates and sessions.
 
 ### 4.3 Why two JSON columns
 
@@ -400,159 +229,44 @@ CREATE TABLE settings (
 
 Everything else is relational.
 
-### 4.4 What we dropped from the old schema
+### 4.4 Ids and table rebuilds
 
-- `recipe_ingredients_alternatives` — replaced by variant components.
-- `planning_entry_overrides` — replaced by plate-level component swaps.
-- 20 micronutrient columns — replaced by 6 essential macros.
-- `ingredients.off_barcode` vs `barcode` split — collapsed into `barcode` + `off_id`.
-- `time_slots.active` stays, but default slots are NOT seeded — users define their own on first open of Settings.
+`plates`, `cook_sessions` and `presets` use `AUTOINCREMENT` so an id never names two rows over time (a stale undo payload or routine then names nothing). A table rebuild runs as a Go no-transaction migration with foreign keys off on a pinned connection and a `foreign_key_check` before commit, so a drop never cascades into dependants (see `backend/CLAUDE.md`).
 
 ---
 
 ## 5. Domain Model (Go)
 
-One file per aggregate. Plain structs. Services hold logic.
+One package per aggregate under `backend/internal/domain/`. Plain structs; services hold the logic and take repository interfaces. `backend/CLAUDE.md` has the details.
 
-### 5.1 Example: Component package
+### 5.1 Packages
 
-```go
-// internal/domain/component/component.go
-package component
+| Package | Role |
+|---|---|
+| `food` | The Food aggregate (leaf or composed), recipe trees (`LoadTrees`), per-portion nutrition (`NutritionResolver`), derived history (`Derive`), shop sections |
+| `plate` | Plates, components, cook sessions and their batch rules; the single write path (`plate.Service`), snapshots (`PlanSnapshot`, `Apply`), audit events |
+| `planview` | Read models: `Plan` (`GET /api/plan`) and `Today` (`GET /api/today`); never writes |
+| `window` | Pure plan-window arithmetic: a window is 7 days starting on `plan.shopping_day` |
+| `shopping` | Shopping list from cook sessions and leaf components, sorted into store sections |
+| `availability`, `slot`, `preset` | Cell modes, time slots, saved compositions |
+| `nutrition` | The `Macros` value type |
+| `units` | Unit normalisation, count-to-grams, display rounding |
+| `settings`, `profile`, `setup` | Settings registry, user profile, first-run status |
+| `feedback` | Plate feedback |
+| `agent`, `llm`, `airun`, `importer` | AI chat agent and tools, LLM port, run log, recipe import |
+| `actor` | Who made a change (`user` / `agent`), carried in ctx |
 
-type Role string
+### 5.2 Core rules
 
-const (
-    RoleMain         Role = "main"
-    RoleSideStarch   Role = "side_starch"
-    RoleSideVeg      Role = "side_veg"
-    RoleSideProtein  Role = "side_protein"
-    RoleSauce        Role = "sauce"
-    RoleDrink        Role = "drink"
-    RoleDessert      Role = "dessert"
-    RoleStandalone   Role = "standalone"
-)
+**Unit of work (D21).** `domain.Transactor.InTx(ctx, fn)` runs `fn` in one transaction; every repository called with the ctx joins it, and a nested `InTx` joins the outer one. Multi-row mutations (plate and session changes, preset apply, availability `none` with plate removal) use it.
 
-type Component struct {
-    ID                int64
-    Name              string
-    Role              Role
-    VariantGroupID    *int64
-    ReferencePortions float64
-    PrepMinutes       *int
-    CookMinutes       *int
-    ImagePath         *string
-    Notes             *string
-    LastCookedAt      *time.Time
-    CookCount         int
-    Ingredients       []Ingredient
-    Instructions      []Instruction
-    Tags              []string
-    CreatedAt         time.Time
-    UpdatedAt         time.Time
-}
+**Plate aggregate.** A cell holds at most one plate. A plate has `eaters` and ordered components; a composed component eats `portions` per eater from a cook session, a leaf component has `amount` + `unit`. All writes go through `plate.Service`, which returns a `PlanSnapshot` for deletes (restored by `POST /api/plan/restore` or `Apply`) and writes plate events last, in the same unit of work.
 
-type Ingredient struct {
-    ID           int64
-    IngredientID int64
-    Amount       float64
-    Unit         string
-    Grams        float64   // resolved at save time
-    SortOrder    int
-}
+**Cook sessions and D11.** A session links to its components as fresh, leftover or frozen, in cell order. When a change alters what the links consume, a session that exactly covered them still does; a session with a surplus or deficit keeps its portions. Sessions left without links are deleted.
 
-type Instruction struct {
-    ID         int64
-    StepNumber int
-    Text       string
-}
-```
+**Nutrition.** One source: `food.NutritionResolver` computes per-portion macros (`PerPortion`, `PerPortionDetailed` with a completeness flag and the leaves lacking core macros, and the batched `PerPortionDetailedMany`) from the leaves' per-100 g values and `food_components`, recursively, divided by `reference_portions`. Plate and day totals in `planview` multiply those by portions and eaters. Every nutrition number in the API, the AI tools included, flows through it; `nutrition.Macros` is the shared value type.
 
-```go
-// internal/domain/component/repository.go
-package component
-
-type Repository interface {
-    Create(ctx context.Context, c *Component) error
-    Update(ctx context.Context, c *Component) error
-    Delete(ctx context.Context, id int64) error
-    Get(ctx context.Context, id int64) (*Component, error)
-    List(ctx context.Context, q ListQuery) ([]Component, int, error)
-    Siblings(ctx context.Context, variantGroupID int64) ([]Component, error)
-    MarkCooked(ctx context.Context, id int64, at time.Time) error
-}
-
-type ListQuery struct {
-    Search    string
-    Role      *Role
-    Tag       string
-    Limit     int
-    Offset    int
-    SortBy    string   // "name" | "kcal" | "created" | "last_cooked"
-    SortDesc  bool
-}
-```
-
-```go
-// internal/domain/component/service.go
-package component
-
-type Service struct {
-    repo        Repository
-    ingredients ingredient.Repository
-    nutrition   nutrition.Calculator
-}
-
-func (s *Service) Create(ctx context.Context, input CreateInput) (*Component, error) {
-    // 1. Validate role
-    // 2. Resolve each ingredient line to absolute grams via portions + unit
-    // 3. Persist transactionally
-    // 4. Return loaded component
-}
-```
-
-Ports (interfaces) live in the domain. Adapters implement them. Handlers call services.
-
-### 5.2 Nutrition calculator — the single source
-
-```go
-// internal/domain/nutrition/calculator.go
-package nutrition
-
-type Macros struct {
-    Kcal    float64
-    Protein float64
-    Fat     float64
-    Carbs   float64
-    Fiber   float64
-    Sodium  float64
-}
-
-type IngredientInput struct {
-    Per100g Macros
-    Grams   float64
-}
-
-func FromIngredients(inputs []IngredientInput) Macros { ... }
-
-type ComponentInput struct {
-    Ingredients       []IngredientInput
-    ReferencePortions float64
-}
-
-func PerPortion(in ComponentInput) Macros { ... }
-
-type PlateInput struct {
-    Components []struct {
-        ComponentMacros Macros   // per portion
-        Portions        float64
-    }
-}
-
-func PlateTotal(in PlateInput) Macros { ... }
-```
-
-Every nutrition number in the app — API response, shopping panel, AI tool output — flows through these three functions. No exceptions.
+**Rounding.** Amounts are stored and summed exact; `units.Display` rounds for reading and `units.Buy` rounds count units up for shopping.
 
 ### 5.3 LLM port
 
@@ -605,111 +319,112 @@ OpenAI and Anthropic adapters implement `Client`. Neither leaks into the domain.
 
 ## 6. REST API
 
-All endpoints are under `/api`. All responses are JSON with a `Content-Type: application/json` header. All error responses have shape `{"message_key": "error.xxx", "status": 4xx}`.
+All endpoints are under `/api`. Responses are JSON (`Content-Type: application/json`), except the SSE chat stream. Error responses have shape `{"message_key": "error.xxx", "status": 4xx}`. Routes are registered in `backend/internal/transport/http/router.go`.
 
 ### 6.1 Conventions
 
-- `GET` lists accept `?search=&limit=&offset=&sort=&order=asc|desc`.
-- `POST` returns `201 Created` with the full resource.
+- `GET /api/foods` and `GET /api/ai/conversations` accept `limit` and `offset`; foods also take the filters below.
+- `POST` creating a resource returns `201 Created` with the full resource.
 - `PUT` returns `200 OK` with the full resource.
-- `DELETE` returns `204 No Content`.
-- Path parameters: `{id}` for numeric IDs.
-- Query parameters are always lowercase snake_case.
-- ISO-8601 UTC for all timestamps.
-- All write endpoints require a `Content-Type: application/json` header.
+- `DELETE` returns `204 No Content`, except plate, session and plan deletes, which return the `PlanSnapshot` that restores them.
+- Path parameters: `{id}` for numeric IDs. Dates are `YYYY-MM-DD`.
+- Query parameters are lowercase snake_case. Read models take an optional `today` (default: the server's local date).
+- Timestamps are ISO-8601 UTC.
+- Write endpoints require a `Content-Type: application/json` header.
 
 ### 6.2 Endpoint catalogue
 
-#### Health
+#### Health and units
 
 ```
-GET    /api/health                                  → { status: "ok" }
+GET    /api/health
+GET    /api/units
 ```
 
-#### Ingredients
+#### Foods (leaves and recipes)
 
 ```
-GET    /api/ingredients                             list (search, sort, paginate)
-POST   /api/ingredients                             create
-GET    /api/ingredients/{id}                        detail + portions
-PUT    /api/ingredients/{id}                        update
-DELETE /api/ingredients/{id}                        delete (409 if referenced)
-
-POST   /api/ingredients/{id}/image                  multipart upload
-DELETE /api/ingredients/{id}/image                  remove image
-
-GET    /api/ingredients/lookup?barcode=…            proxy to OFF/FDC
-GET    /api/ingredients/lookup?q=…                  proxy to OFF/FDC
-POST   /api/ingredients/resolve                     body: {name} → best matches
-
-GET    /api/ingredients/{id}/portions               list portion units
-POST   /api/ingredients/{id}/portions               upsert unit → grams
-DELETE /api/ingredients/{id}/portions/{unit}        remove unit
+GET    /api/foods                                   ?search&kind&role&tag&favorite=1&sort=name|last_eaten|created&order
+                                                    &max_minutes&not_eaten_weeks&created_within_days&today&limit&offset
+POST   /api/foods                                   create (leaf or composed)
+GET    /api/foods/macros                            ?ids= batch per-portion macros
+GET    /api/foods/lookup                            leaf lookup (OFF / FDC / AI)
+POST   /api/foods/resolve                           pick a lookup candidate
+GET    /api/foods/{id}
+PUT    /api/foods/{id}
+DELETE /api/foods/{id}                              409 if in use
+GET    /api/foods/{id}/nutrition                    per-portion macros
+GET    /api/foods/{id}/scaled?portions=             scaled ingredient list (0 < portions <= 100)
+POST   /api/foods/{id}/favorite
+PUT    /api/foods/{id}/shop-section                 leaves only
+POST   /api/foods/{id}/variant                      create a variant recipe
+GET    /api/foods/{id}/variants
+GET    /api/foods/{id}/portions
+POST   /api/foods/{id}/portions                     upsert a unit → grams
+DELETE /api/foods/{id}/portions/{unit}
+POST   /api/foods/{id}/sync-portions
+POST   /api/foods/{id}/refetch                      re-run the leaf lookup
+POST   /api/foods/{id}/image                        upload
+DELETE /api/foods/{id}/image
+POST   /api/image/fetch-url                         fetch a remote image
 ```
 
-#### Components
+Recipes carry `last_eaten`, `times_cooked` and `per_portion`; leaves carry `used_in_count` (derived, D16).
+
+#### Plan, plates and cook sessions
 
 ```
-GET    /api/components                              list (search, role, tag, sort)
-POST   /api/components                              create
-GET    /api/components/{id}                         full detail (ingredients, steps, tags, variants)
-PUT    /api/components/{id}                         update
-DELETE /api/components/{id}                         delete (409 if used in plates)
+GET    /api/plan?start&today                        the 7-day window: cells, sessions, days, targets, stats
+DELETE /api/plan?from&to[&slot_id]                  clear plates; returns the restoring PlanSnapshot
+POST   /api/plan/restore                            write a PlanSnapshot, all or nothing (409 error.plan.cell_occupied)
+GET    /api/today?date&today                        verdict, cook, meals, reminders, rate, plan banner
 
-POST   /api/components/{id}/image                   multipart upload
-DELETE /api/components/{id}/image                   remove
+POST   /api/plates                                  create (date, slot, eaters, components)
+GET    /api/plates/{id}
+PUT    /api/plates/{id}                             date, slot, eaters, note
+DELETE /api/plates/{id}                             returns the restoring PlanSnapshot
+POST   /api/plates/{id}/components
+PUT    /api/plates/{id}/components/{pcId}           change quantity or swap food
+DELETE /api/plates/{id}/components/{pcId}
+PUT    /api/plates/{id}/feedback                    loved | disliked | not_eaten (+ note)
+DELETE /api/plates/{id}/feedback
 
-POST   /api/components/{id}/variant                 create new component in same variant group
-GET    /api/components/{id}/variants                list siblings in variant group
-
-GET    /api/components/{id}/nutrition               per-portion macros
+GET    /api/cook-sessions/{id}
+PUT    /api/cook-sessions/{id}                      portions, frozen portions, note
+DELETE /api/cook-sessions/{id}                      returns the restoring PlanSnapshot
+POST   /api/cook-sessions/{id}/cooked               mark (un)cooked
+GET    /api/cook-sessions/{id}/leftover-cells       ?count=
+POST   /api/cook-sessions/{id}/leftovers            add leftover plates
 ```
 
-#### Weeks and plates
+There is no list-plates endpoint: `GET /api/plates`, `/api/plates/by-date`, `/api/plates/macros`, `/api/nutrition` and `/api/foods/{id}/recent-unit` were removed (the plan view carries that data); `TestLegacyReadRoutesGone` pins it.
+
+#### Shopping
 
 ```
-GET    /api/weeks                                   paginated list (archive)
-GET    /api/weeks/current                           get-or-create current week
-GET    /api/weeks/by-date?year=&week=               get-or-create specific
-GET    /api/weeks/{id}                              week with all plates + components
-POST   /api/weeks/{id}/copy                         body: {target_year, target_week}
-
-POST   /api/weeks/{id}/plates                       body: {day, slot_id, components?: [...]}
-GET    /api/plates/{id}                             detail
-PUT    /api/plates/{id}                             update note, day/slot move
-DELETE /api/plates/{id}                             remove plate
-
-POST   /api/plates/{id}/components                  body: {component_id, portions}
-PUT    /api/plates/{id}/components/{pcId}           body: {portions?, component_id?} (swap or rescale)
-DELETE /api/plates/{id}/components/{pcId}           remove component from plate
-
-PUT    /api/plates/{id}/feedback                    body: {status, note?} — upsert (one feedback row per plate)
-DELETE /api/plates/{id}/feedback                    remove feedback row
+GET    /api/shopping-list                           ?from&to&today — sections in walk order; default range: the anchored window's
 ```
 
-#### Shopping and nutrition
+#### Presets
 
 ```
-GET    /api/weeks/{id}/shopping-list                aggregated list (grams per ingredient)
-GET    /api/weeks/{id}/nutrition                    day + week totals, delta vs targets
-```
-
-#### Templates
-
-```
-GET    /api/templates                               list
-POST   /api/templates                               create (optional from_plate_id)
-GET    /api/templates/{id}                          detail
-PUT    /api/templates/{id}                          update
-DELETE /api/templates/{id}                          delete
-POST   /api/templates/{id}/apply                    body: {plate_id} → fills plate
+GET    /api/presets
+GET    /api/presets/known-tags
+POST   /api/presets
+POST   /api/presets/copy-week                       copy a window's plates; returns created ids and what undoes it
+GET    /api/presets/{id}
+PUT    /api/presets/{id}
+PATCH  /api/presets/{id}
+DELETE /api/presets/{id}
+POST   /api/presets/{id}/duplicate
+POST   /api/presets/{id}/apply                      builds a snapshot and applies it (decide-all-then-write)
 ```
 
 #### Profile and settings
 
 ```
 GET    /api/profile                                 read singleton
-PUT    /api/profile                                 update (targets, restrictions, system_prompt, locale)
+PUT    /api/profile                                 update (targets, restrictions, system_prompt, locale, diet, household portions)
 
 GET    /api/settings/slots                          time slots
 POST   /api/settings/slots                          create
@@ -731,72 +446,62 @@ Keys live in the registry in `domain/settings/specs.go`; `backend/CLAUDE.md` lis
 GET    /api/availability?from=&to=                  resolved cells (plan / routine / none) and their source
 GET    /api/availability/defaults                   weekday × slot defaults
 PUT    /api/availability/defaults                   replace the defaults
-PUT    /api/availability/{date}/{slotId}            override one cell (none on a planted cell: 409 unless remove_plate)
+PUT    /api/availability/{date}/{slotId}            override one cell (none on a cell with a plate: 409 unless remove_plate)
 DELETE /api/availability/{date}/{slotId}            clear the override
 
 GET    /api/setup                                   {completed, recipe_count, recipe_target}
 POST   /api/setup/complete                          mark setup done
 ```
 
-A cell (date, slot) holds at most one plate, and none when it resolves to No plate.
-
 #### AI
 
 ```
 POST   /api/ai/chat                                 SSE stream (rate-limited, default 10 req/min per IP)
-                                                    body: {conversation_id?, week_id?, mode, message}
-                                                    events: conversation_ready, message_start,
-                                                            assistant_delta, tool_call_start,
-                                                            tool_call_delta, tool_exec_start,
-                                                            tool_exec_end, tool_result,
-                                                            plate_changed, done, error
-
-GET    /api/ai/conversations?week_id=               list (metadata only)
+                                                    body: {conversation_id?, message, today?, from, to}
+GET    /api/ai/conversations                        list (limit, offset)
 GET    /api/ai/conversations/{id}                   full history
 DELETE /api/ai/conversations/{id}                   delete
+GET    /api/ai/debug/system-prompt?from&to&today    only with PLANTRY_DEV_MODE
 ```
 
 #### Import
 
 ```
-POST   /api/import/extract                          body: {url} → draft component JSON
-POST   /api/import/resolve                          body: {draft} → resolved component ready to save
+POST   /api/import/extract                          body: {url} → draft recipe JSON
+POST   /api/import/resolve                          body: {draft} → resolved recipe ready to save
+GET    /api/import/lookup                           resolve one ingredient line
 ```
 
 #### Images (static)
 
 ```
-GET    /images/{type}/{id}.{ext}                    filesystem-backed, type ∈ {ingredients, components}
+GET    /images/*                                    filesystem-backed image store
 ```
 
 ### 6.3 Error key catalogue
 
-Error keys live in `frontend/src/lib/locales/{en,de}.json` under the `error.` namespace and are generated into Go constants (`internal/i18n/errors.go`) by a `go generate` step in CI. Sample:
+Error keys live in `frontend/src/lib/locales/{en,de}.json` under the `error.` namespace. Sample:
 
 ```
 error.invalid_body
 error.invalid_id
 error.not_found
 error.server
-error.ingredient.duplicate_name
-error.ingredient.in_use
-error.ingredient.lookup_failed
-error.component.invalid_role
-error.component.in_use
-error.plate.slot_unknown
-error.plate.component_role_missing
-error.plate.feedback_invalid_status
-error.template.empty
+error.food.invalid_shop_section
+error.food.shop_section_leaf_only
+error.plan.invalid_start
+error.plan.cell_occupied
+error.plate.cell_occupied
+error.plate.cell_unavailable
+error.availability.cell_has_plate
+error.feedback.invalid_status
 error.import.fetch_failed
-error.import.parse_failed
-error.import.ai_unavailable
+error.import.no_recipe
+error.import.llm_failed
 error.ai.provider_missing
-error.ai.tool_failed
-error.ai.stream_interrupted
+error.ai.rate_limit_exceeded
 error.profile.invalid_macros
 ```
-
-The generator ensures every key referenced in Go exists in both locale files. CI fails if a key is missing or orphaned.
 
 ---
 
@@ -1091,15 +796,14 @@ No string matching on error messages we own.
 
 ### 9.2 Transactions
 
-Every multi-row mutation wraps in a single `sqlite.Tx`:
+Every multi-row mutation runs in one transaction through the unit of work (`domain.Transactor.InTx`, implemented by `sqlite.TxRunner`):
 
-- Create component (component + ingredients + instructions + tags)
-- Update component (replace children)
-- Copy week (plates + plate_components)
-- Apply template to plate
+- Create or update a recipe (food + components + instructions + tags)
+- Every `plate.Service` mutation: plates, components, cook sessions and their events
+- Apply or copy a preset (`plate.Service.Apply`)
 - Delete cascade (FK handles the rest)
 
-Repositories expose both `Create` (auto-tx) and `CreateTx(tx, ...)` variants. Services compose multi-aggregate work through the `sqlite.TxRunner` helper.
+Repositories take no transaction argument: inside `InTx` the transaction travels in the ctx and every repository call joins it. A nested `InTx` joins the outer one (no savepoints).
 
 ### 9.3 Logging
 

@@ -18,7 +18,10 @@ go vet ./...                          # vet
 golangci-lint run                     # lint
 sqlc generate                         # regenerate from queries + schema
 go test -race ./...                   # race detector — run before feature complete
+scripts/check-sqlc-usage.sh           # every sqlc query needs a non-test caller
 ```
+
+`scripts/check-sqlc-usage.sh` fails when a `-- name: X` in `internal/adapters/sqlite/queries/*.sql` has no `.X(` in a non-test `.go` file outside `sqlcgen/`. It runs in CI and in the repo-root `scripts/gate.sh`; delete the query instead of keeping it unused.
 
 ## Required Skills
 
@@ -54,9 +57,12 @@ backend/
     │   └── crypto/                  # ID generation helpers
     ├── domain/                      # pure business logic — no I/O
     │   ├── food/                    # Food aggregate (ingredients + portions)
-    │   ├── plate/                   # Plate aggregate (meals)
+    │   ├── plate/                   # Plate aggregate: plates, components, cook sessions, events
+    │   ├── planview/                # read models for /api/plan and /api/today
+    │   ├── window/                  # plan window arithmetic (pure)
+    │   ├── actor/                   # who made a change (user / agent) in ctx
     │   ├── slot/                    # Slot aggregate (planner day slots)
-    │   ├── preset/                  # Preset aggregate (meal templates)
+    │   ├── preset/                  # Preset aggregate (saved day / week compositions)
     │   ├── nutrition/               # nutrition calculation
     │   ├── shopping/                # shopping list derivation
     │   ├── profile/                 # user profile
@@ -82,6 +88,8 @@ backend/
 **Aggregates** are plain exported structs. `*.Service` holds business logic and takes repo interfaces as constructor args — never concrete types.
 
 **sqlc workflow:** edit `queries/*.sql` → run `sqlc generate` → implement/update `*_repo.go` using generated functions. Never write raw SQL outside of query files.
+
+**Safe table rebuild.** Dropping a table with foreign keys on cascade-deletes its dependants (00014/00016 did on old installs). Rebuild tables (e.g. to add `AUTOINCREMENT`, as 00030 for `plates`/`cook_sessions` and 00033 for `presets`) in a Go migration registered with `goose.AddMigrationNoTxContext`: pin one connection with `db.Conn`, `PRAGMA foreign_keys = OFF` on it, copy in one transaction, run `PRAGMA foreign_key_check` before commit, restore `foreign_keys = ON` afterwards, and recreate triggers the drop removed. Give sqlc the end-state schema in `db/schema_patches/`.
 
 **Migrations** use goose. Numbered SQL files in `db/migrations/`. Go migration files (`.go`) handle complex data transformations. Migrations run automatically at startup (`goose.Up` in `main.go`) — no manual step needed.
 
@@ -141,6 +149,45 @@ Package `domain/planview` builds the read models; it never writes and takes its 
 - `GET /api/plan?start&today` — the window at `start` (must be a shopping day, else `400 error.plan.invalid_start`) or the anchored one: `window`, active `slots`, `cells` (date × active slot with availability and plate), `sessions` (cooking in the window or linked to a plate in it), `days` (per-eater macros with `complete`/`missing`), `targets` (null without a kcal target) and `stats`.
 - `GET /api/today?date&today` — `verdict` (`no_plan`, `no_plates`, `cook`/`quick_cook` for the main with most portions, ≤ 20 min is quick, else `nothing_to_cook`), `cook`, `meals`, `reminders` (`defrost`, `use_by`), `rate`, `plan_banner` and `setup`.
 - `today` defaults to the server's local date; `date` defaults to `today`.
+
+## Unit of work
+
+`domain.Transactor` (`domain/transactor.go`, D21) is the port; `sqlite.TxRunner` (`adapters/sqlite/tx.go`) implements it. `InTx(ctx, fn)` runs `fn` in one transaction whose `*sql.Tx` travels in `fn`'s ctx, and every repository called with that ctx joins it. A nested `InTx` joins the outer one: there are no savepoints, so a failed nested call leaves its partial writes in the outer transaction and the caller must return the error. Multi-write operations (plate mutations, availability `none` with `remove_plate`, preset apply) run inside one `InTx`.
+
+## Plate aggregate and write path
+
+`plate.Service` (`domain/plate/service.go`, built with `plate.NewService(plate.Deps{...})`) is the single write path for plates, plate components and cook sessions. Handlers, the agent tools and preset apply/copy all go through it.
+
+- A cell (date, slot) holds at most one plate. A plate has `eaters` (default: the profile's household portions) and ordered components; a component is a food with `portions` per eater, or for a leaf `amount` + `unit`.
+- A composed component is linked to a cook session. Without a given `CookSessionID` a new component gets a fresh session at the plate's own cell. Mutators: `Create`, `Update`, `Delete`, `ClearRange`, `AddComponent`, `UpdateComponentQuantity`, `SwapComponent`, `RemoveComponent`, `Apply`.
+- `Delete`, `ClearRange` and session deletion return a `PlanSnapshot` that restores them; `Apply(snapshot, ApplyOptions)` writes one (D22). `Apply` decides every plate's placement before it writes anything, so a conflict (an occupied cell without overwrite, a duplicate cell in the snapshot) fails the whole call. Snapshot refs are strings (`"s1"`), snapshot components carry `sort_order`, snapshot plates an optional `plate_id`. Preset apply and copy-week build snapshots and call `Apply`.
+- `DELETE /api/plan?from&to&slot_id` is slot-scoped (`ClearRange`).
+
+### Sessions and D11
+
+A `CookSession` (`domain/plate/session.go`) says "food X is cooked at (cook date, cook slot), producing `portions`", with `frozen_portions`, `cooked_at` and a note. Components link to it as `fresh` (own cell), `leftover` (later within keep days) or `frozen`; links are ordered in cell order (date, slot `sort_order`, slot id; D12). `plate.BuildView` / `SessionView` add links, consumption and warnings (`leftover_before_cook`, `past_keep_days`, `deficit`, `frozen_deficit`; D13).
+
+D11 (`plate.Sync`): when a change alters what a session's links consume, a session that exactly covered its links before still covers them exactly after; one with a surplus or deficit keeps its portions; frozen portions never exceed portions. The service tracks every session a mutation touches (`tracker`) and settles once at the end: a session without links is deleted, the others follow D11. Explicit edits (`SetSessionPortions`, `SetCooked`, `AddLeftovers`, `DeleteSession`) always win over D11. Freezing needs `plan.freezing_enabled` and a recipe not marked unfreezable (D14). `LeftoverCells` suggests the next cells for leftovers.
+
+## Units and rounding
+
+`domain/units` (`round.go`): `Display(amount, unit)` rounds an exact amount for reading (D26). Metric mass/volume work in g/ml, rounded to 1 below 100 and to 5 from 100; from 1000 they switch to kg/l only for clean multiples of 100 (1500 g becomes 1.5 kg, 1235 g stays). tbsp/tsp round to 0.5; everything else, counts included, stays exact. `ToBase` converts metric units to g/ml so sums add up. `Buy` rounds a count unit up to whole units. `CountGrams` is the only count-to-gram table. Amounts are stored and summed exact; round only for display.
+
+## Food history and list filters
+
+Eating history is derived, never stored (D16): `food.Service.Derive(ctx, today, foods...)` sets `LastEaten` and `TimesCooked` on composed foods and `UsedInCount` on leaves, with one query per kind (sqlc `FoodHistory`, `UsedInCount`). Plates marked `not_eaten` do not count.
+
+`GET /api/foods` filters: `max_minutes`, `not_eaten_weeks`, `created_within_days`, `today`, `sort=name|last_eaten|created` (`last_eaten` ignores favorites). Recipes carry `last_eaten` (`YYYY-MM-DD`), `times_cooked` and `per_portion` (batched `PerPortionDetailedMany`); leaves carry `used_in_count`. Plate feedback statuses are `loved`, `disliked`, `not_eaten`; others are `400 error.feedback.invalid_status`. `GET /api/foods/macros` serves the plate sheet's macro preview. `GET /api/foods/{id}/scaled?portions=` (required, 0 < p <= 100) returns the scaled ingredient list.
+
+## Shopping list
+
+Package `domain/shopping`; `GET /api/shopping-list` returns sections in walk order. Rules:
+
+- It buys the cook sessions' `portions` (not what plates consume) plus leaf components (amount × eaters), for the range's dates. The default range is `ShoppingDefault` of the anchored window; `from`/`to` override it inside the window containing `from`.
+- Amounts sum in metric base units (`units.ToBase`); `display` is in the contributions' unit when they share one, otherwise grams; `buy` is set for count units only.
+- `used_in` lists the sessions or leaves an item is bought for, in cell order.
+- Sections are the `food.ShopSections` enum (`domain/food/shop_section.go`). A food's `shop_section` column (migration 00031) overrides `shopping.Classify`, a 3-stage data-driven classifier (packaging, phrases, head noun). `PUT /api/foods/{id}/shop-section` sets it for leaves only; errors `error.food.invalid_shop_section`, `error.food.shop_section_leaf_only`.
+- `food.LoadTrees` loads recipe trees in one query per level.
 
 ## Plate audit trail
 
