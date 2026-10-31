@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
@@ -76,17 +77,24 @@ type Use struct {
 	SlotID    int64
 }
 
-// Service builds shopping lists.
-type Service struct {
-	src      Source
-	foods    food.TreeReader
-	settings plate.SettingsReader
+// Slots lists time slots (their sort order gives the cell order, D12).
+type Slots interface {
+	List(ctx context.Context, activeOnly bool) ([]slot.TimeSlot, error)
 }
 
-// NewService creates a shopping list service.
-func NewService(src Source, foods food.TreeReader, set plate.SettingsReader) *Service {
-	return &Service{src: src, foods: foods, settings: set}
+// Deps are the service's dependencies.
+type Deps struct {
+	Source   Source
+	Foods    food.TreeReader
+	Settings plate.SettingsReader
+	Slots    Slots
 }
+
+// Service builds shopping lists.
+type Service struct{ d Deps }
+
+// NewService creates a shopping list service.
+func NewService(d Deps) *Service { return &Service{d: d} }
 
 // Range is a shopping range and the plan window it belongs to.
 type Range struct {
@@ -98,14 +106,14 @@ type Range struct {
 // default, ShoppingDefault of the anchored window; otherwise r's dates in
 // the window containing r.From.
 func (s *Service) Range(ctx context.Context, r *Range, today time.Time) (Range, error) {
-	sd, err := plate.IntSetting(ctx, s.settings, settings.KeyPlanShoppingDay)
+	sd, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanShoppingDay)
 	if err != nil {
 		return Range{}, err
 	}
 	if r != nil {
 		return Range{From: r.From, To: r.To, Window: window.Containing(r.From, sd)}, nil
 	}
-	anchor, err := s.settings.Get(ctx, settings.KeyPlanAnchor)
+	anchor, err := s.d.Settings.Get(ctx, settings.KeyPlanAnchor)
 	if err != nil {
 		return Range{}, fmt.Errorf("read %s: %w", settings.KeyPlanAnchor, err)
 	}
@@ -126,8 +134,11 @@ type acc struct {
 	sessions map[int64]bool
 }
 
+// add sums a contribution. Metric mass and volume add up in their base unit
+// (g, ml), so 500 ml and 1 l share a unit; any other unit difference makes
+// the item mixed (shown in grams).
 func (a *acc) add(amount float64, unit string, grams float64) {
-	u := units.Normalize(unit)
+	amount, u := units.ToBase(amount, unit)
 	if !a.started {
 		a.started = true
 		a.unit = u
@@ -144,11 +155,11 @@ func (a *acc) add(amount float64, unit string, grams float64) {
 // the range were bought for already, so their leftovers add nothing. The
 // food trees load level by level (food.LoadTrees), never per session.
 func (s *Service) List(ctx context.Context, from, to time.Time) (*List, error) {
-	sessions, err := s.src.SessionsCooking(ctx, from, to)
+	sessions, err := s.d.Source.SessionsCooking(ctx, from, to)
 	if err != nil {
 		return nil, err
 	}
-	leaves, err := s.src.LeafUses(ctx, from, to)
+	leaves, err := s.d.Source.LeafUses(ctx, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +170,7 @@ func (s *Service) List(ctx context.Context, from, to time.Time) (*List, error) {
 	for _, lu := range leaves {
 		ids = append(ids, lu.FoodID)
 	}
-	nodes, err := food.LoadTrees(ctx, s.foods, ids)
+	nodes, err := food.LoadTrees(ctx, s.d.Foods, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +211,15 @@ func (s *Service) List(ctx context.Context, from, to time.Time) (*List, error) {
 		a.uses = append(a.uses, Use{FoodID: leaf.ID, FoodName: leaf.Name, Date: lu.Date, SlotID: lu.SlotID})
 	}
 
-	return group(accs), nil
+	slots, err := s.d.Slots.List(ctx, false)
+	if err != nil {
+		return nil, fmt.Errorf("list slots: %w", err)
+	}
+	order := make(plate.SlotOrder, len(slots))
+	for _, sl := range slots {
+		order[sl.ID] = sl.SortOrder
+	}
+	return group(accs, order), nil
 }
 
 // expand walks composed food f at factor and emits each leaf line. A leaf
@@ -234,8 +253,8 @@ func expand(nodes map[int64]*food.Food, f *food.Food, factor float64, depth int,
 }
 
 // group turns the accumulators into sections in walk order, items sorted by
-// name, uses by date and slot (sessions before leaf components).
-func group(accs map[int64]*acc) *List {
+// name, uses in cell order (D12; sessions before leaf components in a cell).
+func group(accs map[int64]*acc, order plate.SlotOrder) *List {
 	bySection := map[food.ShopSection][]Item{}
 	for _, a := range accs {
 		it := Item{FoodID: a.leaf.ID, Name: a.leaf.Name, TotalGrams: a.grams, UsedIn: a.uses}
@@ -247,7 +266,7 @@ func group(accs map[int64]*acc) *List {
 				it.Buy = &buy
 			}
 		}
-		slices.SortStableFunc(it.UsedIn, compareUses)
+		slices.SortStableFunc(it.UsedIn, func(a, b Use) int { return compareUses(a, b, order) })
 		sec := SectionOf(a.leaf)
 		bySection[sec] = append(bySection[sec], it)
 	}
@@ -269,11 +288,9 @@ func group(accs map[int64]*acc) *List {
 	return out
 }
 
-func compareUses(a, b Use) int {
-	if c := a.Date.Compare(b.Date); c != 0 {
-		return c
-	}
-	if c := cmp.Compare(a.SlotID, b.SlotID); c != 0 {
+func compareUses(a, b Use, order plate.SlotOrder) int {
+	ca := plate.CellKey{Date: a.Date, SlotID: a.SlotID}
+	if c := plate.Compare(ca, plate.CellKey{Date: b.Date, SlotID: b.SlotID}, order); c != 0 {
 		return c
 	}
 	// Sessions first.

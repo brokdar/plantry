@@ -37,7 +37,7 @@ func TestService_Range(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := shopping.NewService(nil, nil, tt.set)
+			svc := shopping.NewService(shopping.Deps{Settings: tt.set})
 			var r *shopping.Range
 			if tt.from != "" {
 				r = &shopping.Range{From: day(tt.from), To: day(tt.to)}

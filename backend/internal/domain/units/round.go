@@ -53,6 +53,17 @@ func Display(amount float64, unit string) Quantity {
 	return Quantity{Amount: amount, Unit: u}
 }
 
+// ToBase converts metric mass and volume to their base unit (g, ml) so
+// amounts in kg and g, or l and ml, add up. Any other unit is returned
+// normalized and unchanged.
+func ToBase(amount float64, unit string) (float64, string) {
+	u := Normalize(unit)
+	if m, ok := metricBase[u]; ok {
+		return amount * m.factor, m.base
+	}
+	return amount, u
+}
+
 // Buy is what to buy of a count unit: the amount rounded up to whole units.
 // ok is false for units that are not counts (mass and volume are bought as
 // displayed).

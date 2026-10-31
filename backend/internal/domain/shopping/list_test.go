@@ -120,7 +120,7 @@ func findItem(t *testing.T, l *shopping.List, foodID int64) (food.ShopSection, s
 
 func TestList_AC1_SessionScaledByPortions(t *testing.T) {
 	src := &fakeSource{sessions: []plate.CookSession{chiliSession(7, 6)}}
-	l, err := shopping.NewService(src, ac1Foods(), nil).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
+	l, err := newSvc(src, ac1Foods()).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
 	require.NoError(t, err)
 	assert.Equal(t, 2, l.Count)
 
@@ -147,7 +147,7 @@ func TestList_AC3_LeafComponentTimesEaters(t *testing.T) {
 	src := &fakeSource{leaves: []shopping.LeafUse{
 		{FoodID: appleID, Date: day("2026-11-02"), SlotID: 1, Eaters: 3.5, Amount: 1, Unit: "piece", Grams: 150},
 	}}
-	l, err := shopping.NewService(src, ac1Foods(), nil).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
+	l, err := newSvc(src, ac1Foods()).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
 	require.NoError(t, err)
 	_, apple := findItem(t, l, appleID)
 	assert.Equal(t, units.Quantity{Amount: 3.5, Unit: "piece"}, apple.Display)
@@ -164,7 +164,7 @@ func TestList_NestedComposedChildScaledByGramsShare(t *testing.T) {
 	foods.children[chiliID] = append(foods.children[chiliID],
 		food.FoodComponent{ChildID: sauceID, ChildKind: food.KindComposed, Amount: 310, Unit: "g", Grams: 310})
 	src := &fakeSource{sessions: []plate.CookSession{chiliSession(7, 4)}}
-	l, err := shopping.NewService(src, foods, nil).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
+	l, err := newSvc(src, foods).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
 	require.NoError(t, err)
 
 	_, tomato := findItem(t, l, tomatoID)
@@ -185,7 +185,7 @@ func TestList_MixedUnitsShowGrams(t *testing.T) {
 			{FoodID: onionID, Date: day("2026-11-03"), SlotID: 1, Eaters: 2, Amount: 50, Unit: "g", Grams: 50},
 		},
 	}
-	l, err := shopping.NewService(src, ac1Foods(), nil).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
+	l, err := newSvc(src, ac1Foods()).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
 	require.NoError(t, err)
 	_, onion := findItem(t, l, onionID)
 	assert.InDelta(t, 340, onion.TotalGrams, 1e-9)
@@ -205,7 +205,7 @@ func TestList_SectionsInWalkOrderItemsByName(t *testing.T) {
 		{FoodID: onionID, Date: day("2026-11-02"), SlotID: 1, Eaters: 1, Amount: 1, Unit: "piece", Grams: 120},
 		{FoodID: beansID, Date: day("2026-11-02"), SlotID: 1, Eaters: 1, Amount: 100, Unit: "g", Grams: 100},
 	}}
-	l, err := shopping.NewService(src, foods, nil).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
+	l, err := newSvc(src, foods).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
 	require.NoError(t, err)
 	require.Len(t, l.Sections, 3)
 	assert.Equal(t, food.SectionProduce, l.Sections[0].Section)
@@ -216,7 +216,7 @@ func TestList_SectionsInWalkOrderItemsByName(t *testing.T) {
 }
 
 func TestList_Empty(t *testing.T) {
-	l, err := shopping.NewService(&fakeSource{}, ac1Foods(), nil).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
+	l, err := newSvc(&fakeSource{}, ac1Foods()).List(context.Background(), day("2026-10-31"), day("2026-11-06"))
 	require.NoError(t, err)
 	assert.Empty(t, l.Sections)
 	assert.NotNil(t, l.Sections)

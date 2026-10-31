@@ -44,7 +44,9 @@ func newShopEnv(t *testing.T) *shopEnv {
 	db := testhelper.NewTestDB(t)
 	foods := sqlite.NewFoodRepo(db)
 	set := testsvc.Settings(db)
-	svc := shopping.NewService(sqlite.NewShoppingRepo(db), foods, set)
+	svc := shopping.NewService(shopping.Deps{
+		Source: sqlite.NewShoppingRepo(db), Foods: foods, Settings: set, Slots: sqlite.NewSlotRepo(db),
+	})
 	r := chi.NewRouter()
 	r.Get("/api/shopping-list", handlers.NewShoppingHandler(svc).List)
 
@@ -178,6 +180,27 @@ func TestShoppingList_AC1_BatchSession(t *testing.T) {
 	assert.Equal(t, sid, *beans.UsedIn[0].SessionID)
 
 	assert.Contains(t, raw, `"buy":null`, "buy is always present")
+}
+
+// The list buys for the session's portions, frozen and surplus included,
+// not for what the linked plates eat (AC-3, AC-4).
+func TestShoppingList_BuysSessionPortionsNotConsumption(t *testing.T) {
+	e := newShopEnv(t)
+	sid := e.chiliBatch(t) // 3 plates × 2 eaters consume 6
+	require.NoError(t, e.settings.Set(context.Background(), settings.KeyPlanFreezingEnabled, "true"))
+	_, err := e.plates.SetSessionPortions(context.Background(), sid, plate.SessionPortions{Portions: 8, FrozenPortions: 2})
+	require.NoError(t, err)
+
+	code, b, raw := e.get(t, "?from=2026-11-01&to=2026-11-07")
+	require.Equal(t, http.StatusOK, code, raw)
+	require.Len(t, b.Sections, 2)
+	onion := b.Sections[0].Items[0]
+	assert.InDelta(t, 4, onion.Display.Amount, 1e-9, "2 × 8/4")
+	require.NotNil(t, onion.Buy)
+	assert.Equal(t, 4.0, onion.Buy.Amount)
+	beans := b.Sections[1].Items[0]
+	assert.Equal(t, 800.0, beans.Display.Amount, "400 × 8/4")
+	assert.Equal(t, "g", beans.Display.Unit)
 }
 
 func TestShoppingList_AC2_LeftoversOfAnEarlierSessionAddNothing(t *testing.T) {

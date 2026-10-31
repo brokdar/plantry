@@ -118,7 +118,9 @@ func run() error {
 	foodRepo := sqlite.NewFoodRepo(conn)
 	foodSvc := food.NewService(foodRepo).WithPortionProvider(fdcProvider)
 	nutritionResolver := food.NewNutritionResolver(foodRepo)
-	shoppingSvc := shopping.NewService(sqlite.NewShoppingRepo(conn), foodRepo, settingsSvc)
+	shoppingSvc := shopping.NewService(shopping.Deps{
+		Source: sqlite.NewShoppingRepo(conn), Foods: foodRepo, Settings: settingsSvc, Slots: sqlite.NewSlotRepo(conn),
+	})
 
 	// Image store (optional).
 	var imgStore *imagestore.Store
