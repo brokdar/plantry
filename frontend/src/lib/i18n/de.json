@@ -1526,6 +1526,7 @@
     "freeze_other": "{{portions}} Portionen einfrieren",
     "done": "Fertig gekocht",
     "missing": "Dieses Vorkochen gibt es nicht mehr.",
+    "loading": "Rezept wird geladen",
     "recipe_missing": "Dieses Rezept gibt es nicht mehr.",
     "timer": {
       "group": "Timer",

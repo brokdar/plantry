@@ -1526,6 +1526,7 @@
     "freeze_other": "Freeze {{portions}} portions",
     "done": "Done cooking",
     "missing": "This batch no longer exists.",
+    "loading": "Loading the recipe",
     "recipe_missing": "This recipe no longer exists.",
     "timer": {
       "group": "Timers",
