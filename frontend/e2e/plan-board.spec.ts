@@ -203,7 +203,15 @@ test.describe("Plan board", () => {
   })
 
   test("the German toolbar fits a 375 px phone", async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem("i18nextLng", "de"))
+    // German for this page only: the shell applies the profile's locale.
+    await page.route("**/api/profile", async (route) => {
+      if (route.request().method() !== "GET") return route.fallback()
+      const res = await route.fetch()
+      await route.fulfill({
+        response: res,
+        json: { ...(await res.json()), locale: "de" },
+      })
+    })
     await page.setViewportSize({ width: 375, height: 800 })
     await page.goto("/plan")
 

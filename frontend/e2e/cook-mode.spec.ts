@@ -234,6 +234,10 @@ test.describe("Cook mode", () => {
       const card = page.getByTestId("today-cook-card")
       await expect(card.getByTestId("today-cooked")).toHaveText("Cooked")
       await expect(card.getByTestId("today-start-cooking")).toHaveCount(0)
+      // A cooked batch no longer heads the day.
+      await expect(page.getByTestId("today-verdict")).not.toContainText(
+        seed.name
+      )
     } finally {
       await seed.cleanup()
     }
