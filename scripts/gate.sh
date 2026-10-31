@@ -20,7 +20,7 @@ backend() {
     go test -race -p 4 ./... &&
     go vet ./... &&
     golangci-lint run &&
-    if [ -x scripts/check-sqlc-usage.sh ]; then scripts/check-sqlc-usage.sh; fi
+    if [ -f scripts/check-sqlc-usage.sh ]; then bash scripts/check-sqlc-usage.sh; fi
 }
 
 frontend() {
