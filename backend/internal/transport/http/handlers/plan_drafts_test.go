@@ -134,8 +134,12 @@ func TestFoodHistory_PastDraftsDoNotCount(t *testing.T) {
 	code, body := a.do(http.MethodPost, "/api/plates",
 		fmt.Sprintf(`{"date":"2026-10-28","slot_id":%d,"components":[{"food_id":%d}]}`, a.dinner, a.chili))
 	require.Equal(t, http.StatusCreated, code, body)
+	sid := int64(body["components"].([]any)[0].(map[string]any)["cook_session_id"].(float64))
 	code, body = a.do(http.MethodPost, fmt.Sprintf("/api/plates/%d/unlock", int64(body["id"].(float64))), "")
 	require.Equal(t, http.StatusOK, code, body)
+	code, sess := a.do(http.MethodGet, fmt.Sprintf("/api/cook-sessions/%d", sid), "")
+	require.Equal(t, http.StatusOK, code, sess)
+	require.Equal(t, "draft", sess["state"], "the draft session must not count as cooked")
 
 	chili := a.recipe("today=2026-10-30", a.chili)
 	assert.Equal(t, "2026-10-27", chili["last_eaten"])
