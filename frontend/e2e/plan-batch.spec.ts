@@ -17,10 +17,13 @@ import {
 } from "./helpers"
 
 // F4: batch flows in the plate sheet (UX §5.5, D29). Every test works on
-// its own two slots in its own future window. The slots sort last, and the
-// other slots' cells on the leftover day are No plate, so the server
-// suggests this test's "Mon lunch" and "Mon dinner". A slot another spec
-// adds meanwhile is plannable there too; `chooseOwnCells` unticks it.
+// its own two slots in its own future window. Just before a batch is made,
+// every other slot is No plate on the cook day and the leftover day, so the
+// server suggests this test's "Mon lunch" and "Mon dinner". A slot another
+// spec adds meanwhile is plannable there too; `chooseOwnCells` unticks it.
+// The tests run one after the other so they never suggest each other's
+// slots.
+test.describe.configure({ mode: "serial" })
 
 interface Setup {
   tag: string
@@ -29,6 +32,8 @@ interface Setup {
   lunch: number
   dinner: number
   chili: { id: number; name: string }
+  /** Marks every other active slot No plate on days 1 and 2. */
+  blockOthers: () => Promise<void>
   cleanup: () => Promise<void>
 }
 
@@ -43,19 +48,22 @@ async function setup(): Promise<Setup> {
     tag
   )
 
-  // Every other slot is No plate on day 2.
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  const slotsRes = await ctx.get("/api/settings/slots?active=true")
-  const { items } = (await slotsRes.json()) as { items: { id: number }[] }
-  const blocked = items
-    .map((s) => s.id)
-    .filter((id) => id !== lunch.id && id !== dinner.id)
-  for (const id of blocked) {
-    await ctx.put(`/api/availability/${days[2]}/${id}`, {
-      data: { mode: "none" },
-    })
+  const blocked = new Set<number>()
+  async function blockOthers() {
+    const ctx = await apiRequest.newContext({ baseURL: API })
+    const res = await ctx.get("/api/settings/slots?active=true")
+    const { items } = (await res.json()) as { items: { id: number }[] }
+    for (const { id } of items) {
+      if (id === lunch.id || id === dinner.id) continue
+      blocked.add(id)
+      for (const date of [days[1], days[2]]) {
+        await ctx.put(`/api/availability/${date}/${id}`, {
+          data: { mode: "none" },
+        })
+      }
+    }
+    await ctx.dispose()
   }
-  await ctx.dispose()
 
   return {
     tag,
@@ -64,10 +72,13 @@ async function setup(): Promise<Setup> {
     lunch: lunch.id,
     dinner: dinner.id,
     chili,
+    blockOthers,
     cleanup: async () => {
       const c = await apiRequest.newContext({ baseURL: API })
       for (const id of blocked) {
-        await c.delete(`/api/availability/${days[2]}/${id}`)
+        for (const date of [days[1], days[2]]) {
+          await c.delete(`/api/availability/${date}/${id}`)
+        }
       }
       for (const date of days) {
         for (const id of [lunch.id, dinner.id]) {
@@ -169,6 +180,7 @@ test.describe("Plan batches", () => {
       await setEaters(page, sheet, 2)
 
       // … cook it as a batch of 3 meals, keeping both suggested cells.
+      await s.blockOthers()
       await sheet.getByRole("button", { name: "Cook as a batch" }).click()
       await sheet.getByRole("button", { name: "Increase Meals" }).click()
       await chooseOwnCells(sheet, s.tag)

@@ -16,20 +16,13 @@ test("home page loads with sidebar brand and no console errors", async ({
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto("/")
 
-  // All routes (including planner) render the default sidebar with the brand link.
+  // All routes render the default sidebar with the brand link.
   await expect(page.getByTestId("sidenav")).toBeVisible()
   await expect(page.getByTestId("sidenav-brand")).toBeVisible()
 
-  // The home route renders the planner; before slots are configured the user
-  // sees the empty-state heading. After they're configured, the planner
-  // heading appears. Either signals a successful render.
-  await expect(
-    page
-      .getByRole("heading", {
-        name: /(weekly planner|set up your time slots first)/i,
-      })
-      .first()
-  ).toBeVisible()
+  // After setup, `/` opens the plan board.
+  await expect(page).toHaveURL(/\/plan$/)
+  await expect(page.getByRole("grid")).toBeVisible()
 
   expect(consoleErrors, `console errors: ${consoleErrors.join("\n")}`).toEqual(
     []
