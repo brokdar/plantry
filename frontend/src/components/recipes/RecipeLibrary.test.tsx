@@ -17,7 +17,8 @@ vi.mock("@/lib/api/setup", () => ({
   completeSetup: vi.fn(),
 }))
 
-vi.mock("@/lib/planner-window", () => ({
+vi.mock("@/lib/dates", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/dates")>()),
   todayISO: () => "2026-10-31",
 }))
 

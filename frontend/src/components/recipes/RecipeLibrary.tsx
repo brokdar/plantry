@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ComposedFood, FoodRole } from "@/lib/api/foods"
-import { todayISO } from "@/lib/planner-window"
+import { todayISO } from "@/lib/dates"
 import { useFoods } from "@/lib/queries/foods"
 import { useSetupStatus } from "@/lib/queries/setup"
 import {
