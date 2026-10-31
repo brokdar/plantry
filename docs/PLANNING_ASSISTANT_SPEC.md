@@ -185,7 +185,7 @@ All preferences live in the existing typed settings registry (`domain/settings/s
 | `discovery.daily_enabled` | bool | true (when AI is available) | Daily suggestion popup |
 | `discovery.cuisines` | string list | [] | Exploration targets, e.g. thai, persian |
 
-`plan.window_days` is removed (unused). The `plan.shopping_day` and `plan.week_starts_on` defaults are unchanged.
+`plan.window_days`, `plan.week_starts_on` and `fixed_weekday` are removed. A window is the 7 days starting on `plan.shopping_day`; `plan.anchor` (`today` / `next_shopping_day`) picks the default one.
 
 ### 4.3 Availability defaults
 
@@ -246,7 +246,7 @@ ai_runs, ai_run_steps, plate_events, recipe_suggestions   -- see §8 and §9
 | `foods` (leaf) | + `diet_class` (vegan/vegetarian/pescetarian/omnivore/unknown) |
 | `foods` | − `cook_count`, − `last_cooked_at` (replaced by derived history, §3.7) |
 | `user_profile` | + `diet_type`, + `meat_days_per_week_max`, + `household_portions` |
-| `ai_conversations` | − legacy `week_id`, + `window_start` (date the chat is about) |
+| `ai_conversations` | − legacy `week_id` (dropped in 00032). The chat window is carried by `ai_runs.window_start`/`window_end` and the request's `from`/`to`; no `ai_conversations.window_start` column exists |
 
 The composed `diet_class` is computed on read, like nutrition, and cached alongside it.
 
@@ -678,7 +678,7 @@ Changed endpoints:
 - `GET /api/plates*` returns `eaters`, `state`, and `cook_session_id` per component.
 - `GET /api/ai/runs*` returns the computed `cost_estimate_usd` (null if the model has no price).
 - `GET /api/shopping-list` gains `include_drafts` and is computed from sessions.
-- `GET /api/nutrition` reports per-eater intake and completeness.
+- `GET /api/plan` reports per-eater intake and completeness per day (`days`); `GET /api/nutrition` was removed.
 - Profile and settings endpoints carry the new fields.
 
 ---
