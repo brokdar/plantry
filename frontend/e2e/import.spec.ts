@@ -34,6 +34,25 @@ function chefkochHTML(tag: string): string {
 }
 
 test.describe("Recipe Import", () => {
+  test("at 375 px the sheet fills the screen and its controls are 44 px", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 800 })
+    await page.goto("/recipes?add=url")
+    const sheet = page.getByTestId("import-sheet")
+    await expect(sheet).toBeVisible()
+    await expect.poll(async () => (await sheet.boundingBox())?.width).toBe(375)
+
+    const targets = [
+      page.getByLabel("Recipe URL"),
+      page.getByRole("button", { name: "Extract recipe" }),
+      page.getByRole("button", { name: "Paste the page HTML instead" }),
+    ]
+    for (const target of targets) {
+      expect((await target.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+    }
+  })
+
   test("imports a chefkoch-shaped recipe from pasted HTML", async ({
     page,
   }) => {

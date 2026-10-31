@@ -176,10 +176,11 @@ export function ImportWizard() {
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   required
+                  className="h-11 md:pointer-fine:h-9"
                 />
                 <button
                   type="button"
-                  className="text-xs text-muted-foreground underline underline-offset-2"
+                  className="flex min-h-11 items-center text-xs text-muted-foreground underline underline-offset-2 md:pointer-fine:min-h-0"
                   onClick={() => {
                     setShowHtml(true)
                     setUrl("")
@@ -203,7 +204,7 @@ export function ImportWizard() {
                 />
                 <button
                   type="button"
-                  className="text-xs text-muted-foreground underline underline-offset-2"
+                  className="flex min-h-11 items-center text-xs text-muted-foreground underline underline-offset-2 md:pointer-fine:min-h-0"
                   onClick={() => {
                     setShowHtml(false)
                     setHtml("")
@@ -218,7 +219,11 @@ export function ImportWizard() {
               <p className="text-sm text-destructive">{t(submitError)}</p>
             )}
 
-            <Button type="submit" disabled={extract.isPending}>
+            <Button
+              type="submit"
+              disabled={extract.isPending}
+              className="h-11 md:pointer-fine:h-9"
+            >
               {extract.isPending
                 ? t("import.status.extracting")
                 : t("import.step1.submit")}

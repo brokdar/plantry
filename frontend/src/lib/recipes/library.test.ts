@@ -1,11 +1,67 @@
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   hasLibraryFilters,
   lastEatenAgo,
   libraryQuery,
   parseLibrarySearch,
+  rememberedLibrarySearch,
+  rememberLibrarySearch,
 } from "./library"
+
+describe("rememberLibrarySearch", () => {
+  beforeEach(() => sessionStorage.clear())
+
+  it("hands back the last search without the import sheet", () => {
+    rememberLibrarySearch({
+      q: "chili",
+      quick: true,
+      sort: "created",
+      add: "url",
+    })
+    expect(rememberedLibrarySearch()).toEqual(
+      parseLibrarySearch({ q: "chili", quick: true, sort: "created" })
+    )
+  })
+
+  it("is empty before the library was visited or after a bad write", () => {
+    expect(rememberedLibrarySearch()).toEqual(parseLibrarySearch({}))
+    sessionStorage.setItem("plantry:recipes:search", "not json")
+    expect(rememberedLibrarySearch()).toEqual(parseLibrarySearch({}))
+    sessionStorage.setItem("plantry:recipes:search", "null")
+    expect(rememberedLibrarySearch()).toEqual(parseLibrarySearch({}))
+  })
+
+  it("never hands back the import sheet, even from a stored add", () => {
+    sessionStorage.setItem(
+      "plantry:recipes:search",
+      JSON.stringify({ q: "chili", add: "url" })
+    )
+    expect(rememberedLibrarySearch()).toEqual(
+      parseLibrarySearch({ q: "chili" })
+    )
+  })
+
+  it("survives storage that throws on write and read", () => {
+    const set = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("quota", "QuotaExceededError")
+      })
+    const get = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new DOMException("denied", "SecurityError")
+      })
+    try {
+      expect(() => rememberLibrarySearch({ q: "chili" })).not.toThrow()
+      expect(rememberedLibrarySearch()).toEqual(parseLibrarySearch({}))
+    } finally {
+      set.mockRestore()
+      get.mockRestore()
+    }
+  })
+})
 
 describe("parseLibrarySearch", () => {
   it("keeps known values", () => {

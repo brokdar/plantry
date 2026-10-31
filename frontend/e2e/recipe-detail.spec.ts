@@ -215,3 +215,70 @@ test("F9-AC4: Cook now opens cook mode with the stepper's portions", async ({
     await cleanup()
   }
 })
+
+test("at 375 px Back has its own row and Cook now leads the actions; facts line up", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 800 })
+  const { chili, cleanup } = await seedChili(uid(), { prep_minutes: 20 })
+  try {
+    await page.goto(`/recipes/${chili.id}`)
+    const actions = page.getByTestId("recipe-actions")
+    const cook = page.getByTestId("recipe-cook-now")
+    await expect(cook).toBeVisible()
+
+    const [actionsBox, cookBox, backBox, favBox] = await Promise.all([
+      actions.boundingBox(),
+      cook.boundingBox(),
+      page.getByRole("link", { name: "Back to recipes" }).boundingBox(),
+      page.getByTestId("recipe-favorite").boundingBox(),
+    ])
+    // One row of actions under Back: Cook now first and widest.
+    expect(actionsBox!.y).toBeGreaterThanOrEqual(backBox!.y + backBox!.height)
+    expect(cookBox!.x).toBeLessThan(favBox!.x)
+    expect(Math.abs(cookBox!.y - favBox!.y)).toBeLessThan(2)
+    expect(cookBox!.width).toBeGreaterThan(actionsBox!.width / 2)
+
+    // The fact labels of the first row (Time, Portions, …) share one top.
+    const tops = await page
+      .getByTestId("recipe-facts")
+      .locator("dt")
+      .evaluateAll((els) =>
+        els.map((el) => Math.round(el.getBoundingClientRect().top))
+      )
+    const firstRow = tops.filter((top) => Math.abs(top - tops[0]) < 30)
+    expect(firstRow.length).toBeGreaterThan(1)
+    expect(new Set(firstRow).size).toBe(1)
+  } finally {
+    await cleanup()
+  }
+})
+
+test("the stepper keeps portions in the URL; Back returns to the library search", async ({
+  page,
+}) => {
+  const tag = uid()
+  const { chili, cleanup } = await seedChili(tag)
+  try {
+    await page.goto(`/recipes?q=${tag}`)
+    await page.getByTestId(`recipe-card-${chili.id}`).click()
+    await expect(page).toHaveURL(new RegExp(`/recipes/${chili.id}$`))
+
+    await page
+      .getByTestId("recipe-portions")
+      .getByRole("button", { name: "Increase Portions" })
+      .click()
+    await expect(page).toHaveURL(
+      new RegExp(`/recipes/${chili.id}\\?portions=5$`)
+    )
+    await page.reload()
+    await expect(page.getByTestId("recipe-ingredients-list")).toContainText(
+      "500 g"
+    )
+
+    await page.getByRole("link", { name: "Back to recipes" }).click()
+    await expect(page).toHaveURL(new RegExp(`/recipes\\?q=${tag}$`))
+  } finally {
+    await cleanup()
+  }
+})

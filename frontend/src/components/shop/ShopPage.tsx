@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
+import { ApiError } from "@/lib/api/client"
 import type { ShoppingList, ShoppingRange } from "@/lib/api/shopping"
 import { useLocalStorageState } from "@/lib/hooks/useLocalStorageState"
 import { useWakeLock } from "@/lib/hooks/useWakeLock"
@@ -62,17 +63,64 @@ export function ShopPage({ range, onRangeChange }: ShopPageProps) {
   }
   if (query.isError) {
     return (
-      <Frame>
-        <div role="alert" className="flex flex-col items-start gap-3">
-          <p className="text-body text-ink">{t("shop.error")}</p>
-          <Button variant="outline" onClick={() => void query.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
-      </Frame>
+      <ShopError
+        error={query.error}
+        range={range}
+        onRangeChange={onRangeChange}
+        onRetry={() => void query.refetch()}
+      />
     )
   }
   return <ShopLoaded list={query.data} onRangeChange={onRangeChange} />
+}
+
+/**
+ * The list failed. A refused range (4xx) names the problem and has no Retry,
+ * since retrying cannot help; the range picker stays, its presets anchored
+ * on the current window, so another range is one tap away.
+ */
+function ShopError({
+  error,
+  range,
+  onRangeChange,
+  onRetry,
+}: {
+  error: Error
+  range?: ShoppingRange
+  onRangeChange: (range: ShoppingRange) => void
+  onRetry: () => void
+}) {
+  const { t } = useTranslation()
+  const current = usePlan().data?.window
+  const refused =
+    error instanceof ApiError && error.status >= 400 && error.status < 500
+  const planWindow = current && { from: current.start, to: current.end }
+
+  return (
+    <Frame>
+      <div className="flex flex-col gap-6">
+        {planWindow && (
+          <header>
+            <RangePicker
+              range={range ?? planWindow}
+              window={planWindow}
+              onChange={onRangeChange}
+            />
+          </header>
+        )}
+        <div role="alert" className="flex flex-col items-start gap-3">
+          <p className="text-body text-ink">
+            {refused ? t(error.messageKey) : t("shop.error")}
+          </p>
+          {!refused && (
+            <Button variant="outline" onClick={onRetry}>
+              {t("common.retry")}
+            </Button>
+          )}
+        </div>
+      </div>
+    </Frame>
+  )
 }
 
 function ShopLoaded({
@@ -129,7 +177,7 @@ function ShopLoaded({
                 variant={inStore ? "default" : "outline"}
                 aria-pressed={inStore}
                 onClick={() => setInStore((v) => !v)}
-                className="h-11 gap-2 px-3 md:hidden"
+                className="h-11 gap-2 px-3 lg:hidden"
               >
                 <ShoppingCart strokeWidth={1.5} aria-hidden="true" />
                 {t("shop.in_store")}
@@ -137,7 +185,7 @@ function ShopLoaded({
               <Button
                 variant="outline"
                 onClick={() => void copy()}
-                className="hidden h-9 gap-2 px-3 lg:inline-flex"
+                className="hidden h-11 gap-2 px-3 md:inline-flex md:pointer-fine:h-9"
               >
                 <ClipboardCopy strokeWidth={1.5} aria-hidden="true" />
                 {t("shop.copy")}

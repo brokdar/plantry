@@ -36,6 +36,7 @@ import {
   updateFood,
 } from "@/lib/api/foods"
 import { listSettings } from "@/lib/api/settings"
+import { rememberLibrarySearch } from "@/lib/recipes/library"
 
 /** Beans 200 g per reference portion and one onion per two portions. */
 function scaledFor(_id: number, portions: number): Promise<ScaledRecipe> {
@@ -221,6 +222,28 @@ describe("RecipeDetail", () => {
     const list = await screen.findByTestId("recipe-ingredients-list")
     expect(await within(list).findByText("1½ pcs")).toBeInTheDocument()
     expect(within(list).getByText("buy 2 pcs")).toBeInTheDocument()
+  })
+
+  it("writes the stepper's portions back to the URL", async () => {
+    const user = userEvent.setup()
+    const onPortionsChange = vi.fn()
+    renderWithRouter(
+      <RecipeDetail recipe={recipe} onPortionsChange={onPortionsChange} />
+    )
+    await user.click(
+      within(await screen.findByTestId("recipe-portions")).getByRole("button", {
+        name: "Increase Portions",
+      })
+    )
+    expect(onPortionsChange).toHaveBeenCalledWith(3)
+  })
+
+  it("goes back to the library with its last search", async () => {
+    rememberLibrarySearch({ q: "curry", fav: true, add: "url" })
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+    expect(
+      await screen.findByRole("link", { name: "Back to recipes" })
+    ).toHaveAttribute("href", "/recipes?q=curry&fav=true")
   })
 
   it("F9-AC4: Cook now opens cook mode with the stepper's portions", async () => {

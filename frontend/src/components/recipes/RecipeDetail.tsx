@@ -25,7 +25,7 @@ import {
   useScaled,
   useSetFoodFavorite,
 } from "@/lib/queries/foods"
-import { lastEatenAgo } from "@/lib/recipes/library"
+import { lastEatenAgo, rememberedLibrarySearch } from "@/lib/recipes/library"
 import { cn } from "@/lib/utils"
 
 import { NutritionCompletenessWarning } from "./NutritionCompletenessWarning"
@@ -34,12 +34,19 @@ type RecipeDetailProps = {
   recipe: ComposedFood
   /** `?portions`; the stepper starts here, else at `reference_portions`. */
   portions?: number
+  /** The stepper changed; the route keeps it in `?portions`. */
+  onPortionsChange?: (portions: number) => void
 }
 
 /** Reading view of a recipe (UX §5.8, D6): photo, name, source, facts with
  *  a portion stepper, the scaled ingredients, the cook history, steps, My
- *  notes and the imported description. Changing portions never writes. */
-export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
+ *  notes and the imported description. Changing portions never writes the
+ *  recipe. */
+export function RecipeDetail({
+  recipe,
+  portions: initial,
+  onPortionsChange,
+}: RecipeDetailProps) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { data: nutrition } = useFoodNutrition(recipe.id)
@@ -51,6 +58,12 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
     initial ?? recipe.reference_portions ?? 1
   )
   const scaled = useScaled(recipe.id, portions)
+  const [backSearch] = useState(rememberedLibrarySearch)
+
+  function changePortions(next: number) {
+    setPortions(next)
+    onPortionsChange?.(next)
+  }
 
   const whole = new Intl.NumberFormat(i18n.language, {
     maximumFractionDigits: 0,
@@ -73,15 +86,20 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
 
   return (
     <article className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-6 text-ink md:px-8 md:py-10">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
         <Link
           to="/recipes"
+          search={backSearch}
           className="inline-flex items-center gap-1.5 rounded-md text-sm whitespace-nowrap text-ink-muted hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none max-md:min-h-11"
         >
           <ArrowLeft className="size-4" strokeWidth={1.5} aria-hidden />
           {t("recipe_detail.back")}
         </Link>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        {/* Below md one row: Cook now first and wide, the rest icon-only. */}
+        <div
+          className="flex w-full items-center gap-2 md:w-auto md:flex-wrap md:justify-end"
+          data-testid="recipe-actions"
+        >
           <Button
             type="button"
             variant="outline"
@@ -90,7 +108,7 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
             onClick={() =>
               setFavorite.mutate({ id: recipe.id, favorite: !recipe.favorite })
             }
-            className="max-md:min-h-11"
+            className="max-md:size-11"
             data-testid="recipe-favorite"
           >
             <Heart
@@ -99,7 +117,9 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
               className={cn(recipe.favorite && "fill-current text-accent")}
               aria-hidden
             />
-            {t("recipe_detail.favorite")}
+            <span className="max-md:sr-only">
+              {t("recipe_detail.favorite")}
+            </span>
           </Button>
           <Button
             type="button"
@@ -114,13 +134,15 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
                   }),
               })
             }
-            className="max-md:min-h-11"
+            className="max-md:size-11"
             data-testid="recipe-create-variant"
           >
             <GitBranch data-icon="inline-start" strokeWidth={1.5} aria-hidden />
-            {t("component.create_variant")}
+            <span className="max-md:sr-only">
+              {t("component.create_variant")}
+            </span>
           </Button>
-          <Button asChild variant="outline" className="max-md:min-h-11">
+          <Button asChild variant="outline" className="max-md:size-11">
             <Link
               to="/recipes/$id/edit"
               params={{ id: String(recipe.id) }}
@@ -131,10 +153,13 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
                 strokeWidth={1.5}
                 aria-hidden
               />
-              {t("common.edit")}
+              <span className="max-md:sr-only">{t("common.edit")}</span>
             </Link>
           </Button>
-          <Button asChild className="max-md:min-h-11">
+          <Button
+            asChild
+            className="max-md:order-first max-md:min-h-11 max-md:flex-1"
+          >
             <Link
               to="/recipes/$id/cook"
               params={{ id: String(recipe.id) }}
@@ -191,7 +216,7 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
             </a>
           )}
           <dl
-            className="flex flex-wrap items-end gap-x-8 gap-y-4 border-t border-line pt-4"
+            className="flex flex-wrap items-start gap-x-8 gap-y-4 border-t border-line pt-4"
             data-testid="recipe-facts"
           >
             {minutes > 0 && (
@@ -210,7 +235,7 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
                   min={1}
                   max={MAX_PORTIONS}
                   step={1}
-                  onChange={setPortions}
+                  onChange={changePortions}
                   testId="recipe-portions"
                 />
               </dd>
@@ -398,7 +423,10 @@ function Fact({
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-small text-ink-muted">{label}</dt>
-      <dd className="text-h3 font-semibold tabular-nums">{children}</dd>
+      {/* As tall as the portion stepper, so values line up with it. */}
+      <dd className="flex min-h-11 items-center text-h3 font-semibold tabular-nums md:pointer-fine:min-h-9">
+        {children}
+      </dd>
     </div>
   )
 }

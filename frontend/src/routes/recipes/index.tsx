@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router"
+import { useEffect } from "react"
 
 import { RecipeLibrary } from "@/components/recipes/RecipeLibrary"
-import { parseLibrarySearch, type LibrarySearch } from "@/lib/recipes/library"
+import {
+  parseLibrarySearch,
+  rememberLibrarySearch,
+  type LibrarySearch,
+} from "@/lib/recipes/library"
 
 export const Route = createFileRoute("/recipes/")({
   validateSearch: (search): LibrarySearch => parseLibrarySearch(search),
@@ -11,6 +16,7 @@ export const Route = createFileRoute("/recipes/")({
 function RecipesPage() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
+  useEffect(() => rememberLibrarySearch(search), [search])
   return (
     <RecipeLibrary
       search={search}

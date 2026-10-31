@@ -832,7 +832,11 @@
       "secret_key_missing": "No encryption key is loaded — cannot save encrypted values.",
       "unknown_provider": "Unknown AI provider."
     },
-    "go_today": "Go to Today"
+    "go_today": "Go to Today",
+    "invalid_from": "That start date isn't valid. Pick another range.",
+    "invalid_to": "That end date isn't valid. Pick another range.",
+    "invalid_date_range": "The range ends before it starts. Pick another range.",
+    "date_range_too_large": "That range is longer than a year. Pick a shorter one."
   },
   "nutrition": {
     "section_core": "Macros",
@@ -1419,7 +1423,8 @@
     "all_done_one": "All done. {{count}} item bought.",
     "all_done_other": "All done. {{count}} items bought.",
     "error": "The shopping list didn't load. Check that Plantry is running, then retry.",
-    "loading": "Loading the shopping list"
+    "loading": "Loading the shopping list",
+    "moved": "{{name}} moved to {{section}}"
   },
   "routines": {
     "new": "New routine",

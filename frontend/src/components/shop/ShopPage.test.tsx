@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { ApiError } from "@/lib/api/client"
 import type { ShoppingList } from "@/lib/api/shopping"
 import i18n from "@/lib/i18n"
 import { mockPlan, mockShoppingList } from "@/test/fixtures"
@@ -123,6 +124,65 @@ describe("ShopPage", () => {
     expect(setShopSection).toHaveBeenCalledWith(51, "frozen")
   })
 
+  it("says where a moved item went and Undo puts an automatic section back", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getFood).mockResolvedValue({
+      id: 51,
+      kind: "leaf",
+      shop_section: "produce",
+      shop_section_source: "auto",
+    } as never)
+    vi.mocked(setShopSection).mockResolvedValue({} as never)
+    renderShop()
+    await screen.findByText("Onion")
+
+    await user.click(screen.getByRole("button", { name: "Options for Onion" }))
+    await waitFor(() => expect(getFood).toHaveBeenCalledWith(51))
+    await user.click(screen.getByRole("menuitemradio", { name: "Frozen" }))
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        "Onion moved to Frozen",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Undo" }),
+        })
+      )
+    )
+    const [, options] = toastMock.mock.calls[0] as [
+      string,
+      { action: { onClick: () => void } },
+    ]
+    options.action.onClick()
+    await waitFor(() =>
+      expect(setShopSection).toHaveBeenLastCalledWith(51, null)
+    )
+  })
+
+  it("Undo puts a section the user chose back", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getFood).mockResolvedValue({
+      id: 51,
+      kind: "leaf",
+      shop_section: "produce",
+      shop_section_source: "user",
+    } as never)
+    vi.mocked(setShopSection).mockResolvedValue({} as never)
+    renderShop()
+    await screen.findByText("Onion")
+
+    await user.click(screen.getByRole("button", { name: "Options for Onion" }))
+    await screen.findByRole("menuitem", { name: "Reset to automatic" })
+    await user.click(screen.getByRole("menuitemradio", { name: "Frozen" }))
+    await waitFor(() => expect(toastMock).toHaveBeenCalled())
+    const [, options] = toastMock.mock.calls[0] as [
+      string,
+      { action: { onClick: () => void } },
+    ]
+    options.action.onClick()
+    await waitFor(() =>
+      expect(setShopSection).toHaveBeenLastCalledWith(51, "produce")
+    )
+  })
+
   it("offers Reset to automatic only for a section the user chose", async () => {
     const user = userEvent.setup()
     vi.mocked(getFood).mockResolvedValue({
@@ -195,6 +255,31 @@ describe("ShopPage", () => {
       from: "2026-11-02",
       to: "2026-11-06",
     })
+  })
+
+  it("caps a custom range at 366 days, as the API does", async () => {
+    const user = userEvent.setup()
+    renderShop()
+    await user.click(await screen.findByTestId("shop-range"))
+
+    const from = screen.getByLabelText("From")
+    const to = screen.getByLabelText("To")
+    expect(to).toHaveAttribute("max", "2027-11-01")
+    expect(from).toHaveAttribute("min", "2025-11-05")
+
+    await user.clear(to)
+    await user.type(to, "2027-11-02")
+    expect(screen.getByRole("button", { name: "Show list" })).toBeDisabled()
+    await user.clear(to)
+    await user.type(to, "2027-11-01")
+    expect(screen.getByRole("button", { name: "Show list" })).toBeEnabled()
+  })
+
+  it("keeps each date of the title on one line", async () => {
+    renderShop()
+    const heading = await screen.findByRole("heading", { level: 1 })
+    // No-break spaces inside each date; the line may break only at "to".
+    expect(heading.textContent).toBe("Sat, Oct 31 to Fri, Nov 6")
   })
 
   // F7-AC4
@@ -342,5 +427,33 @@ describe("ShopPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "The shopping list didn't load"
     )
+    expect(
+      screen.getByRole("button", { name: "Try again" })
+    ).toBeInTheDocument()
+  })
+
+  it("names a refused range and keeps the range picker to choose another", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getShoppingList).mockRejectedValue(
+      new ApiError(400, "error.date_range_too_large")
+    )
+    const onRangeChange = vi.fn()
+    renderWithRouter(
+      <ShopPage
+        range={{ from: "2026-01-01", to: "2027-06-30" }}
+        onRangeChange={onRangeChange}
+      />
+    )
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "That range is longer than a year. Pick a shorter one."
+    )
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull()
+
+    await user.click(await screen.findByTestId("shop-range"))
+    await user.click(screen.getByRole("button", { name: /This window/ }))
+    expect(onRangeChange).toHaveBeenCalledWith({
+      from: "2026-10-31",
+      to: "2026-11-06",
+    })
   })
 })

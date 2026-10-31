@@ -26,17 +26,19 @@ interface RangePickerProps {
   onChange: (range: ShoppingRange) => void
 }
 
-/** "Sat, 31 Oct to Fri, 6 Nov" in the active language. */
+/** The API refuses ranges where `to` is more than 366 days after `from`. */
+const MAX_RANGE_DAYS = 366
+
+/** "Sat, 31 Oct to Fri, 6 Nov" in the active language. Each date keeps
+ *  no-break spaces, so the title wraps only between the two dates. */
 function rangeText(range: ShoppingRange, f: Formatter): string {
   const options: Intl.DateTimeFormatOptions = {
     weekday: "short",
     day: "numeric",
     month: "short",
   }
-  return f.t("shop.range", {
-    from: formatDate(range.from, f, options),
-    to: formatDate(range.to, f, options),
-  })
+  const date = (ymd: string) => formatDate(ymd, f, options).replace(/\s/g, " ")
+  return f.t("shop.range", { from: date(range.from), to: date(range.to) })
 }
 
 /** "This window" and "Next window", anchored on the viewed window. */
@@ -131,7 +133,8 @@ export function RangePicker({ range, window, onChange }: RangePickerProps) {
   )
 }
 
-/** Two dates and "Show list"; `from` after `to` cannot be submitted. */
+/** Two dates and "Show list"; `from` after `to`, or `to` more than 366 days
+ *  after `from`, cannot be submitted. */
 function CustomRange({
   range,
   onSubmit,
@@ -142,7 +145,11 @@ function CustomRange({
   const { t } = useTranslation()
   const [from, setFrom] = useState(range.from)
   const [to, setTo] = useState(range.to)
-  const valid = from !== "" && to !== "" && from <= to
+  const valid =
+    from !== "" &&
+    to !== "" &&
+    from <= to &&
+    to <= shiftYMD(from, MAX_RANGE_DAYS)
 
   return (
     <form
@@ -160,6 +167,7 @@ function CustomRange({
             id="shop-range-from"
             type="date"
             value={from}
+            min={to ? shiftYMD(to, -MAX_RANGE_DAYS) : undefined}
             max={to || undefined}
             onChange={(e) => setFrom(e.target.value)}
             className="h-11 md:pointer-fine:h-9"
@@ -172,6 +180,7 @@ function CustomRange({
             type="date"
             value={to}
             min={from || undefined}
+            max={from ? shiftYMD(from, MAX_RANGE_DAYS) : undefined}
             onChange={(e) => setTo(e.target.value)}
             className="h-11 md:pointer-fine:h-9"
           />
