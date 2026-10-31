@@ -592,7 +592,7 @@ frontend/src/
 
 **Server state** lives in TanStack Query. No exceptions. Anything that came from the API or will be written to it (foods, plates, sessions, the plan and today read models, the shopping list, settings, profile, AI conversations) is a Query or Mutation. Cache keys are centralized in `lib/queries/keys.ts` so two hooks never drift apart.
 
-**Client state** is small. The only Zustand stores are the chat ones: `lib/stores/chat-ui.ts` (panel open state and the composer draft) and `lib/stores/chat-stream.ts` (the streaming AI message). Other UI state is local component state, URL search params (plan window, open cell, library filters) or `localStorage` (shopping ticks, wizard draft).
+**Client state** is small. The only Zustand stores are the chat ones: `lib/stores/chat-ui.ts` (panel open state and the composer draft) and `lib/stores/chat-stream.ts` (the streaming AI message). Other UI state is local component state, URL search params (plan window, open cell, library filters) or `localStorage` (shopping ticks, the recipe onboarding flag, the collapsed side nav).
 
 **Derived state** is computed inline with `useMemo` or via the query `select` option. View models such as `buildBoard(plan, i18n)` (`lib/plan/board.ts`) and the Today model (`lib/plan/today.ts`) are pure functions of the read models. No reactive libraries, no signals, no global event bus.
 
