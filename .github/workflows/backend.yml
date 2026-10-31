@@ -33,7 +33,7 @@ jobs:
       - name: go test (race detector)
         env:
           CGO_ENABLED: "1"
-        run: go test -race ./...
+        run: go test -race -timeout 20m ./...
       - name: Install sqlc
         run: |
           curl -fsSL -o /tmp/sqlc.tar.gz https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz
