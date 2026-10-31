@@ -140,6 +140,19 @@ describe("lib/plan/today", () => {
     ])
   })
 
+  it("keeps a confirmed plate in a window with drafts", () => {
+    const today: Today = {
+      ...mockTodayByVerdict.nothing_to_cook,
+      date: "2026-11-03",
+      cook: [],
+      meals: [],
+    }
+    const view = buildTodayPlan(today, mockDraftPlan, "2026-11-03", i18n)
+    const tofu = view.rows.find((r) => r.cell.plate?.id === 4)
+    expect(tofu?.cell.mainName).toBe("Tofu bowl")
+    expect(tofu?.slotName).toBe("Dinner")
+  })
+
   describe("use-by on the leftover card", () => {
     // Monday's lunch moved to Wednesday 11-04, the batch's use-by day.
     const today: Today = {

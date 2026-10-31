@@ -182,14 +182,6 @@ function ShopLoaded({
               window={planWindow}
               onChange={onRangeChange}
             />
-            <p
-              className="text-small text-ink-muted tabular-nums"
-              data-testid="shop-count"
-            >
-              {t("shop.items", { count: list.count })}
-              {list.count > 0 &&
-                ` · ${t("shop.ticked", { count: tickedCount })}`}
-            </p>
             {list.has_drafts && (
               <div className="flex items-center gap-1">
                 <Switch
@@ -205,6 +197,14 @@ function ShopLoaded({
                 </label>
               </div>
             )}
+            <p
+              className="text-small text-ink-muted tabular-nums"
+              data-testid="shop-count"
+            >
+              {t("shop.items", { count: list.count })}
+              {list.count > 0 &&
+                ` · ${t("shop.ticked", { count: tickedCount })}`}
+            </p>
           </div>
           {list.count > 0 && (
             <div className="flex items-center gap-2">
@@ -314,15 +314,17 @@ function useTicked(
     setRaw(JSON.stringify([...ids]))
   }
 
+  // Ticks off the list stay saved: an item only on drafts comes back when
+  // the draft toggle is on again.
   function toggle(foodId: number) {
-    const next = new Set(ticked)
+    const next = new Set(parseIds(raw))
     if (next.has(foodId)) next.delete(foodId)
     else next.add(foodId)
     write(next)
   }
 
   function clear() {
-    const before = [...ticked]
+    const before = parseIds(raw)
     write([])
     toast(t("shop.cleared"), {
       duration: UNDO_MS,

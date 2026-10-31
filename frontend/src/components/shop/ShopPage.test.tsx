@@ -1,6 +1,7 @@
-import { screen, waitFor, within } from "@testing-library/react"
+import { act, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { useState } from "react"
 
 import { ApiError } from "@/lib/api/client"
 import type { ShoppingList } from "@/lib/api/shopping"
@@ -472,6 +473,62 @@ describe("ShopPage", () => {
     expect(screen.getByTestId("shop-empty")).toBeInTheDocument()
     await user.click(toggle)
     expect(onIncludeDraftsChange).toHaveBeenCalledWith(false)
+  })
+
+  // The page owns the toggle as the route does: flipping it keeps the last
+  // list on screen while the new one loads, so the switch keeps focus.
+  function DraftsHarness() {
+    const [on, setOn] = useState(false)
+    return (
+      <ShopPage
+        includeDrafts={on}
+        onRangeChange={vi.fn()}
+        onIncludeDraftsChange={setOn}
+      />
+    )
+  }
+
+  it("keeps the list and the switch's focus while the draft list loads", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getShoppingList).mockImplementation((_range, drafts) =>
+      drafts
+        ? new Promise(() => {})
+        : Promise.resolve({ ...mockShoppingList, has_drafts: true })
+    )
+    renderWithRouter(<DraftsHarness />)
+    const toggle = await screen.findByRole("switch", {
+      name: "Include draft plates",
+    })
+    await user.click(toggle)
+    await waitFor(() =>
+      expect(getShoppingList).toHaveBeenCalledWith(undefined, true)
+    )
+    expect(screen.queryByTestId("shop-skeleton")).toBeNull()
+    const after = screen.getByRole("switch", { name: "Include draft plates" })
+    expect(after).toBe(toggle)
+    expect(after).toBeChecked()
+    expect(after).toHaveFocus()
+    expect(screen.getByText("Onion")).toBeInTheDocument()
+  })
+
+  // Ticks of items only on drafts survive while drafts are hidden.
+  it("keeps saved ticks of items not on the list when ticking and clearing", async () => {
+    const user = userEvent.setup()
+    localStorage.setItem(STORAGE_KEY, "[999]")
+    renderShop()
+    await user.click(await screen.findByRole("checkbox", { name: /Onion/ }))
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual([999, 51])
+    await user.click(screen.getByRole("checkbox", { name: /Onion/ }))
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual([999])
+
+    await user.click(screen.getByRole("checkbox", { name: /Onion/ }))
+    await user.click(screen.getByRole("button", { name: "Clear ticked" }))
+    expect(localStorage.getItem(STORAGE_KEY)).toBe("[]")
+    const undo = toastMock.mock.calls.at(-1)?.[1]?.action as {
+      onClick: () => void
+    }
+    act(() => undo.onClick())
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual([999, 51])
   })
 
   it("offers a retry when the list fails to load", async () => {
