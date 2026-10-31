@@ -14,6 +14,7 @@ import { Route as ShopIndexRouteImport } from './routes/shop/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as PresetsIndexRouteImport } from './routes/presets/index'
+import { Route as PlanIndexRouteImport } from './routes/plan/index'
 import { Route as IngredientsIndexRouteImport } from './routes/ingredients/index'
 import { Route as ImportIndexRouteImport } from './routes/import/index'
 import { Route as ComponentsIndexRouteImport } from './routes/components/index'
@@ -50,6 +51,11 @@ const SettingsIndexRoute = SettingsIndexRouteImport.update({
 const PresetsIndexRoute = PresetsIndexRouteImport.update({
   id: '/presets/',
   path: '/presets/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanIndexRoute = PlanIndexRouteImport.update({
+  id: '/plan/',
+  path: '/plan/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IngredientsIndexRoute = IngredientsIndexRouteImport.update({
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/components/': typeof ComponentsIndexRoute
   '/import/': typeof ImportIndexRoute
   '/ingredients/': typeof IngredientsIndexRoute
+  '/plan/': typeof PlanIndexRoute
   '/presets/': typeof PresetsIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/components': typeof ComponentsIndexRoute
   '/import': typeof ImportIndexRoute
   '/ingredients': typeof IngredientsIndexRoute
+  '/plan': typeof PlanIndexRoute
   '/presets': typeof PresetsIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/setup': typeof SetupIndexRoute
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/components/': typeof ComponentsIndexRoute
   '/import/': typeof ImportIndexRoute
   '/ingredients/': typeof IngredientsIndexRoute
+  '/plan/': typeof PlanIndexRoute
   '/presets/': typeof PresetsIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -183,6 +192,7 @@ export interface FileRouteTypes {
     | '/components/'
     | '/import/'
     | '/ingredients/'
+    | '/plan/'
     | '/presets/'
     | '/settings/'
     | '/setup/'
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/components'
     | '/import'
     | '/ingredients'
+    | '/plan'
     | '/presets'
     | '/settings'
     | '/setup'
@@ -221,6 +232,7 @@ export interface FileRouteTypes {
     | '/components/'
     | '/import/'
     | '/ingredients/'
+    | '/plan/'
     | '/presets/'
     | '/settings/'
     | '/setup/'
@@ -241,6 +253,7 @@ export interface RootRouteChildren {
   ComponentsIndexRoute: typeof ComponentsIndexRoute
   ImportIndexRoute: typeof ImportIndexRoute
   IngredientsIndexRoute: typeof IngredientsIndexRoute
+  PlanIndexRoute: typeof PlanIndexRoute
   PresetsIndexRoute: typeof PresetsIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
@@ -286,6 +299,13 @@ declare module '@tanstack/react-router' {
       path: '/presets'
       fullPath: '/presets/'
       preLoaderRoute: typeof PresetsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/plan/': {
+      id: '/plan/'
+      path: '/plan'
+      fullPath: '/plan/'
+      preLoaderRoute: typeof PlanIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ingredients/': {
@@ -385,6 +405,7 @@ const rootRouteChildren: RootRouteChildren = {
   ComponentsIndexRoute: ComponentsIndexRoute,
   ImportIndexRoute: ImportIndexRoute,
   IngredientsIndexRoute: IngredientsIndexRoute,
+  PlanIndexRoute: PlanIndexRoute,
   PresetsIndexRoute: PresetsIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,

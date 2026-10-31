@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import {
-  handleGridArrowKey,
-  isCheatsheetShortcut,
-  readCellPos,
-} from "./planner-keynav"
+import { handleGridArrowKey, isCheatsheetShortcut, readCellPos } from "./keynav"
 
 function makeGrid(rows: number, cols: number): HTMLDivElement {
   const root = document.createElement("div")
@@ -13,7 +9,7 @@ function makeGrid(rows: number, cols: number): HTMLDivElement {
       const cell = document.createElement("div")
       cell.setAttribute("data-cell-pos", `${r}-${c}`)
       const btn = document.createElement("button")
-      btn.setAttribute("data-testid", "slot-open-sheet")
+      btn.setAttribute("data-cell-focus", "")
       btn.textContent = `${r}-${c}`
       cell.appendChild(btn)
       root.appendChild(cell)
@@ -90,10 +86,23 @@ describe("handleGridArrowKey", () => {
     expect(e.preventDefault).toHaveBeenCalled()
   })
 
-  it("ArrowLeft wraps to last column", () => {
+  it("F3-AC4: ArrowRight at a row end wraps to the next row", () => {
     const root = makeGrid(3, 7)
     const start = root.querySelector(
-      '[data-cell-pos="0-0"] button'
+      '[data-cell-pos="0-6"] button'
+    ) as HTMLButtonElement
+    start.focus()
+    handleGridArrowKey(makeKeyEvent("ArrowRight", start, root) as never, {
+      rows: 3,
+      cols: 7,
+    })
+    expect(focusedPos()).toEqual({ row: 1, col: 0 })
+  })
+
+  it("F3-AC4: ArrowLeft at a row start wraps to the previous row", () => {
+    const root = makeGrid(3, 7)
+    const start = root.querySelector(
+      '[data-cell-pos="1-0"] button'
     ) as HTMLButtonElement
     start.focus()
     handleGridArrowKey(makeKeyEvent("ArrowLeft", start, root) as never, {
@@ -101,6 +110,25 @@ describe("handleGridArrowKey", () => {
       cols: 7,
     })
     expect(focusedPos()).toEqual({ row: 0, col: 6 })
+  })
+
+  it("F3-AC4: wraps from the last cell to the first and back", () => {
+    const root = makeGrid(3, 7)
+    const last = root.querySelector(
+      '[data-cell-pos="2-6"] button'
+    ) as HTMLButtonElement
+    last.focus()
+    handleGridArrowKey(makeKeyEvent("ArrowRight", last, root) as never, {
+      rows: 3,
+      cols: 7,
+    })
+    expect(focusedPos()).toEqual({ row: 0, col: 0 })
+    const first = document.activeElement as HTMLElement
+    handleGridArrowKey(makeKeyEvent("ArrowLeft", first, root) as never, {
+      rows: 3,
+      cols: 7,
+    })
+    expect(focusedPos()).toEqual({ row: 2, col: 6 })
   })
 
   it("ArrowDown wraps from last row", () => {

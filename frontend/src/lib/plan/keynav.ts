@@ -1,8 +1,9 @@
 /**
- * Grid keyboard navigation for the planner. Cells are tagged with
- * data-cell-pos="row-col" (row = slot index, col = day index 0-6). The grid
- * container delegates onKeyDown to {@link handleGridArrowKey}, which moves
- * focus to the right cell's primary interactive element.
+ * Grid keyboard navigation for the plan board. Cells are tagged with
+ * data-cell-pos="row-col" (row = slot index, col = day index 0-6) and hold
+ * one element marked `data-cell-focus`. The grid container delegates
+ * onKeyDown to {@link handleGridArrowKey}, which moves focus to that element
+ * of the target cell.
  *
  * The handler is intentionally pure-DOM: it doesn't need React state because
  * focus is the source of truth. Keeping it out of React state also avoids a
@@ -14,11 +15,8 @@ export interface GridKeyNavOptions {
   cols: number
 }
 
-const FOCUS_SELECTOR =
-  'button[data-testid="slot-open-sheet"], button[data-testid="slot-empty-add"], [data-slot-state="none"]'
-
 function focusableInCell(cell: Element): HTMLElement | null {
-  return cell.querySelector(FOCUS_SELECTOR) as HTMLElement | null
+  return cell.querySelector("[data-cell-focus]") as HTMLElement | null
 }
 
 function findCellByPos(
@@ -49,9 +47,10 @@ export function readCellPos(
 
 /**
  * Returns true if the event was handled (caller should not let it bubble).
- * Handles ArrowLeft/Right/Up/Down and Home/End. Wraps within the grid: e.g.
- * pressing ArrowRight on the last column moves to the first column of the
- * same row, matching common spreadsheet behavior. */
+ * Handles ArrowLeft/Right/Up/Down and Home/End. Left and right read the
+ * grid in order: past a row end they wrap to the next (or previous) row,
+ * and from the last cell to the first. Up and down wrap within the column.
+ */
 export function handleGridArrowKey(
   e: React.KeyboardEvent,
   opts: GridKeyNavOptions
@@ -63,9 +62,11 @@ export function handleGridArrowKey(
   let { row, col } = pos
   switch (e.key) {
     case "ArrowLeft":
+      if (col === 0) row = (row - 1 + rows) % rows
       col = (col - 1 + cols) % cols
       break
     case "ArrowRight":
+      if (col === cols - 1) row = (row + 1) % rows
       col = (col + 1) % cols
       break
     case "ArrowUp":
@@ -93,7 +94,7 @@ export function handleGridArrowKey(
 }
 
 /**
- * `?` (Shift+/) opens the cheatsheet from anywhere on the planner — except
+ * `?` (Shift+/) opens the cheatsheet from anywhere on the board — except
  * when an editable surface owns focus, where the keystroke means the literal
  * character. Returns true if the shortcut fired so the caller can preventDefault.
  */

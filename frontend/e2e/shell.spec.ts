@@ -19,7 +19,7 @@ async function expectFourDestinations(nav: Locator) {
   )
   await expect(nav.getByRole("link", { name: "Plan" })).toHaveAttribute(
     "href",
-    "/"
+    "/plan"
   )
   await expect(nav.getByRole("link", { name: "Recipes" })).toHaveAttribute(
     "href",
@@ -97,7 +97,7 @@ test.describe("AppShell", () => {
     await expect(page).toHaveURL(/\/shop$/)
 
     await sidebar.getByRole("link", { name: "Plan", exact: true }).click()
-    await expect(page).toHaveURL(/\/$/)
+    await expect(page).toHaveURL(/\/plan$/)
   })
 
   test("/shop renders the shopping list for the current window", async ({

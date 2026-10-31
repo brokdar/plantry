@@ -31,7 +31,7 @@ import {
   createPlate,
   deletePlate,
 } from "@/lib/api/plates"
-import { handleGridArrowKey } from "@/lib/planner-keynav"
+import { handleGridArrowKey } from "@/lib/plan/keynav"
 import { queryClient } from "@/lib/query-client"
 import { plateKeys } from "@/lib/queries/keys"
 import {

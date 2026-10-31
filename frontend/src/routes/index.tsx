@@ -56,7 +56,7 @@ import {
   deletePlate,
   listPlates,
 } from "@/lib/api/plates"
-import { isCheatsheetShortcut } from "@/lib/planner-keynav"
+import { isCheatsheetShortcut } from "@/lib/plan/keynav"
 import { usePlannerWindow } from "@/lib/hooks/usePlannerWindow"
 import { shiftYMD } from "@/lib/planner-window"
 import type { AvailabilityCell } from "@/lib/api/availability"
