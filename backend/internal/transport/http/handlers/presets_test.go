@@ -22,6 +22,7 @@ import (
 
 type stubPresetService struct {
 	createFn    func(ctx context.Context, in preset.CreateFromPlatesInput) (*preset.Preset, error)
+	composeFn   func(ctx context.Context, in preset.CreateInput) (*preset.Preset, error)
 	getFn       func(ctx context.Context, id int64) (*preset.Preset, error)
 	listFn      func(ctx context.Context, f preset.ListFilter) (*preset.ListResult, error)
 	updateFn    func(ctx context.Context, id int64, in preset.UpdateInput) (*preset.Preset, error)
@@ -38,6 +39,13 @@ func (s *stubPresetService) CreateFromPlates(ctx context.Context, in preset.Crea
 		return s.createFn(ctx, in)
 	}
 	return &preset.Preset{ID: 1, Name: in.Name, Tags: []string{}, Plates: []preset.Plate{}}, nil
+}
+
+func (s *stubPresetService) Create(ctx context.Context, in preset.CreateInput) (*preset.Preset, error) {
+	if s.composeFn != nil {
+		return s.composeFn(ctx, in)
+	}
+	return &preset.Preset{ID: 1, Name: in.Name, Tags: []string{}, Plates: in.Plates}, nil
 }
 
 func (s *stubPresetService) Get(ctx context.Context, id int64) (*preset.Preset, error) {
@@ -154,6 +162,43 @@ func TestPresetHandler_Create_Validates(t *testing.T) {
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 	assert.Equal(t, "Test", got["name"])
+}
+
+func TestPresetHandler_Create_FromPlates(t *testing.T) {
+	var got preset.CreateInput
+	svc := &stubPresetService{
+		composeFn: func(_ context.Context, in preset.CreateInput) (*preset.Preset, error) {
+			got = in
+			return &preset.Preset{ID: 4, Name: in.Name, Tags: []string{}, Plates: in.Plates}, nil
+		},
+		createFn: func(context.Context, preset.CreateFromPlatesInput) (*preset.Preset, error) {
+			t.Fatal("plate_ids path must not run")
+			return nil, nil
+		},
+	}
+	r := newPresetRouter(svc)
+	req := httptest.NewRequest(http.MethodPost, "/api/presets", strings.NewReader(
+		`{"name":"Oats","tags":["quick"],"plates":[{"slot_id":2,"components":[`+
+			`{"food_id":7,"portions":1.5},{"food_id":9,"amount":80,"unit":"g"}]}]}`))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	assert.Equal(t, "Oats", got.Name)
+	assert.Equal(t, []string{"quick"}, got.Tags)
+	require.Len(t, got.Plates, 1)
+	assert.Equal(t, int64(2), got.Plates[0].SlotID)
+	require.Len(t, got.Plates[0].Components, 2)
+	assert.InDelta(t, 1.5, *got.Plates[0].Components[0].Portions, 1e-9)
+	assert.Equal(t, "g", *got.Plates[0].Components[1].Unit)
+}
+
+func TestPresetHandler_Create_RejectsPlatesAndPlateIDs(t *testing.T) {
+	r := newPresetRouter(&stubPresetService{})
+	req := httptest.NewRequest(http.MethodPost, "/api/presets", strings.NewReader(
+		`{"name":"X","plate_ids":[1],"plates":[{"slot_id":2,"components":[{"food_id":7,"portions":1}]}]}`))
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestPresetHandler_Create_MalformedJSON(t *testing.T) {

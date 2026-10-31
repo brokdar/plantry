@@ -1,34 +1,34 @@
 import { useNavigate } from "@tanstack/react-router"
 import { Command } from "cmdk"
-import {
-  Bookmark,
-  CalendarRange,
-  LayoutList,
-  Package,
-  Search,
-} from "lucide-react"
-import type { LucideIcon } from "lucide-react"
-import { useMemo, useState } from "react"
+import { CalendarRange, LayoutList, Repeat, Search } from "lucide-react"
+import { useId, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import type { ApplyResult, Preset } from "@/lib/api/presets"
-import { useApplyPreset, usePresets, useUndoApply } from "@/lib/queries/presets"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import type { ApplyConflict, Preset } from "@/lib/api/presets"
+import {
+  useApplyPreset,
+  useApplyResultToasts,
+  usePresets,
+} from "@/lib/queries/presets"
 import { useTimeSlots } from "@/lib/queries/slots"
-import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
+import { slotLabel } from "@/lib/slot-label"
+import { cn } from "@/lib/utils"
 
-// Routes that left the nav (plan D1) stay reachable here.
-const GO_TO_ENTRIES: { to: string; labelKey: string; icon: LucideIcon }[] = [
-  { to: "/recipes/ingredients", labelKey: "nav.ingredients", icon: Package },
-]
+import { GO_TO_ENTRIES } from "./palette-entries"
+
+const itemClass =
+  "flex min-h-11 cursor-pointer items-center gap-2 rounded-cell px-2 text-body text-ink aria-selected:bg-panel-sunken md:min-h-9"
+const groupClass =
+  "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-caption [&_[cmdk-group-heading]]:text-ink-muted"
 
 interface CommandPaletteProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onOpenCopyWeek: () => void
-  /** Anchor date for the "today" default in the target picker. */
+  /** Default day for applying a routine. */
   defaultTargetDate: string
 }
 
@@ -40,40 +40,35 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [query, setQuery] = useState("")
-  const [targetForPreset, setTargetForPreset] = useState<Preset | null>(null)
-  // Kept at this always-mounted level so the mutation observer survives dialog
-  // close — TargetPicker unmounts on close, which would destroy the observer
-  // before the toast's Undo action fires.
-  const undoMutation = useUndoApply()
 
-  function handleUndo(result: ApplyResult) {
-    undoMutation.mutate(result)
+  function close() {
+    onOpenChange(false)
   }
 
-  // Reset query each time the palette opens via re-mount key.
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl p-0">
+      <DialogContent className="max-w-xl gap-0 bg-panel p-0 text-ink">
+        <DialogTitle className="sr-only">{t("palette.title")}</DialogTitle>
+        {/* Mounted per opening, so the search and the picked routine reset. */}
         {open && (
           <PaletteBody
-            key={`palette-${open ? "o" : "c"}`}
-            t={t}
-            navigate={(to: string) => {
-              onOpenChange(false)
-              navigate({ to: to as never })
+            defaultTargetDate={defaultTargetDate}
+            onNavigate={(to) => {
+              close()
+              void navigate({ to: to as never })
+            }}
+            onOpenLibrary={() => {
+              close()
+              void navigate({
+                to: "/settings/$section",
+                params: { section: "meals" },
+              })
             }}
             onOpenCopyWeek={() => {
-              onOpenChange(false)
+              close()
               onOpenCopyWeek()
             }}
-            defaultTargetDate={defaultTargetDate}
-            close={() => onOpenChange(false)}
-            query={query}
-            setQuery={setQuery}
-            targetForPreset={targetForPreset}
-            setTargetForPreset={setTargetForPreset}
-            onUndo={handleUndo}
+            onDone={close}
           />
         )}
       </DialogContent>
@@ -81,159 +76,166 @@ export function CommandPalette({
   )
 }
 
-interface PaletteBodyProps {
-  t: ReturnType<typeof useTranslation>["t"]
-  navigate: (to: string) => void
-  onOpenCopyWeek: () => void
-  defaultTargetDate: string
-  close: () => void
-  query: string
-  setQuery: (q: string) => void
-  targetForPreset: Preset | null
-  setTargetForPreset: (p: Preset | null) => void
-  onUndo: (result: ApplyResult) => void
-}
-
 function PaletteBody({
-  t,
-  navigate,
-  onOpenCopyWeek,
   defaultTargetDate,
-  close,
-  query,
-  setQuery,
-  targetForPreset,
-  setTargetForPreset,
-  onUndo,
-}: PaletteBodyProps) {
-  const presetsQuery = usePresets({
-    search: query || undefined,
-    sort: "recent",
-  })
+  onNavigate,
+  onOpenLibrary,
+  onOpenCopyWeek,
+  onDone,
+}: {
+  defaultTargetDate: string
+  onNavigate: (to: string) => void
+  onOpenLibrary: () => void
+  onOpenCopyWeek: () => void
+  onDone: () => void
+}) {
+  const { t } = useTranslation()
+  const [query, setQuery] = useState("")
+  const [routine, setRoutine] = useState<Preset | null>(null)
+  const presets = usePresets({ search: query || undefined, sort: "recent" })
 
-  if (targetForPreset) {
+  if (routine) {
     return (
       <TargetPicker
-        preset={targetForPreset}
+        routine={routine}
         defaultTargetDate={defaultTargetDate}
-        onCancel={() => setTargetForPreset(null)}
-        onDone={close}
-        onUndo={onUndo}
+        onCancel={() => setRoutine(null)}
+        onDone={onDone}
       />
     )
   }
 
-  const items = presetsQuery.data?.items ?? []
   return (
-    <Command label={t("preset.command.title")} loop>
-      <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
-        <Search className="size-4 text-muted-foreground" aria-hidden />
+    <Command label={t("palette.title")} loop>
+      <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+        <Search
+          className="size-4 text-ink-muted"
+          strokeWidth={1.5}
+          aria-hidden
+        />
         <Command.Input
           value={query}
           onValueChange={setQuery}
-          placeholder={t("preset.search_placeholder")}
-          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          placeholder={t("palette.search_placeholder")}
+          className="min-h-9 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
           autoFocus
         />
       </div>
       <Command.List className="max-h-[60vh] overflow-y-auto p-2">
-        <Command.Empty className="px-2 py-6 text-center text-sm text-muted-foreground">
-          {t("preset.no_results_title")}
+        <Command.Empty className="px-2 py-6 text-center text-small text-ink-muted">
+          {t("palette.no_results")}
         </Command.Empty>
 
-        <Command.Group heading={t("preset.command.section_presets")}>
-          {items.map((preset) => (
+        <Command.Group
+          heading={t("palette.section_routines")}
+          className={groupClass}
+        >
+          {(presets.data?.items ?? []).map((preset) => (
             <Command.Item
               key={preset.id}
-              value={`preset-${preset.id}-${preset.name}`}
-              onSelect={() => setTargetForPreset(preset)}
-              className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm aria-selected:bg-surface-container-low"
+              value={`routine-${preset.id}-${preset.name}`}
+              onSelect={() => setRoutine(preset)}
+              className={itemClass}
             >
-              <Bookmark className="size-3.5 text-muted-foreground" />
+              <Repeat
+                className="size-4 text-ink-muted"
+                strokeWidth={1.5}
+                aria-hidden
+              />
               <span className="flex-1 truncate">{preset.name}</span>
-              <span className="text-[10px] text-muted-foreground">
-                {t("preset.plates_count", { count: preset.plates.length })}
+              <span className="text-caption text-ink-muted tabular-nums">
+                {t("routines.meals_count", { count: preset.plates.length })}
               </span>
             </Command.Item>
           ))}
         </Command.Group>
 
-        <Command.Group heading={t("preset.command.section_actions")}>
+        <Command.Group
+          heading={t("palette.section_actions")}
+          className={groupClass}
+        >
           <Command.Item
             value="action-copy-week"
             onSelect={onOpenCopyWeek}
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm aria-selected:bg-surface-container-low"
+            className={itemClass}
           >
-            <CalendarRange className="size-3.5 text-muted-foreground" />
-            {t("preset.command.action_copy_week")}
+            <CalendarRange
+              className="size-4 text-ink-muted"
+              strokeWidth={1.5}
+              aria-hidden
+            />
+            {t("palette.copy_week")}
           </Command.Item>
           <Command.Item
             value="action-open-library"
-            onSelect={() => navigate("/presets")}
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm aria-selected:bg-surface-container-low"
+            onSelect={onOpenLibrary}
+            className={itemClass}
           >
-            <LayoutList className="size-3.5 text-muted-foreground" />
-            {t("preset.command.action_open_library")}
+            <LayoutList
+              className="size-4 text-ink-muted"
+              strokeWidth={1.5}
+              aria-hidden
+            />
+            {t("palette.open_library")}
           </Command.Item>
         </Command.Group>
 
-        <Command.Group heading={t("nav.go_to")}>
+        <Command.Group heading={t("nav.go_to")} className={groupClass}>
           {GO_TO_ENTRIES.map(({ to, labelKey, icon: Icon }) => (
             <Command.Item
               key={to}
               value={`go-to${to} ${t(labelKey)}`}
-              onSelect={() => navigate(to)}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm aria-selected:bg-surface-container-low"
+              onSelect={() => onNavigate(to)}
+              className={itemClass}
             >
               <Icon
-                className="size-3.5 text-muted-foreground"
+                className="size-4 text-ink-muted"
                 strokeWidth={1.5}
+                aria-hidden
               />
               {t(labelKey)}
             </Command.Item>
           ))}
         </Command.Group>
       </Command.List>
-      <p className="border-t border-border/40 px-3 py-2 text-[10px] text-muted-foreground">
-        {t("preset.command.submit_skip_hint")}
-      </p>
     </Command>
   )
 }
 
-interface TargetPickerProps {
-  preset: Preset
-  defaultTargetDate: string
-  onCancel: () => void
-  onDone: () => void
-  onUndo: (result: ApplyResult) => void
-}
-
+/** Apply a routine to a day: Enter keeps planned meals, Shift+Enter
+ *  replaces them. The result toast offers Undo. */
 function TargetPicker({
-  preset,
+  routine,
   defaultTargetDate,
   onCancel,
   onDone,
-  onUndo,
-}: TargetPickerProps) {
+}: {
+  routine: Preset
+  defaultTargetDate: string
+  onCancel: () => void
+  onDone: () => void
+}) {
   const { t } = useTranslation()
+  const dateId = useId()
   const [date, setDate] = useState(defaultTargetDate)
   const [slotsFilter, setSlotsFilter] = useState<Set<number>>(new Set())
-  const slotsQuery = useTimeSlots(true)
-  const applyMutation = useApplyPreset()
+  const slots = useTimeSlots(true)
+  const apply = useApplyPreset()
+  const showResult = useApplyResultToasts()
 
-  const presetSlotIDs = useMemo(
-    () => new Set(preset.plates.map((p) => p.slot_id)),
-    [preset.plates]
+  const routineSlotIds = useMemo(
+    () => new Set(routine.plates.map((p) => p.slot_id)),
+    [routine.plates]
   )
-  const activeSlots = (slotsQuery.data?.items ?? []).filter((s) =>
-    presetSlotIDs.has(s.id)
+  const routineSlots = (slots.data?.items ?? []).filter((s) =>
+    routineSlotIds.has(s.id)
   )
 
-  function submit(conflict: "skip" | "overwrite") {
-    applyMutation.mutate(
+  function submit(conflict: ApplyConflict) {
+    if (!date || apply.isPending) return
+    apply.mutate(
       {
-        presetId: preset.id,
+        presetId: routine.id,
         input: {
           target_date: date,
           on_conflict: conflict,
@@ -243,7 +245,7 @@ function TargetPicker({
       },
       {
         onSuccess: (result) => {
-          showPresetApplyToasts(result, t, onUndo)
+          showResult(result)
           onDone()
         },
       }
@@ -260,25 +262,26 @@ function TargetPicker({
   }
 
   return (
-    <div className="space-y-4 p-4" data-testid="palette-target-picker">
-      <header>
-        <p className="font-body text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-          {t("preset.command.target_picker_title")}
-        </p>
-        <h3 className="font-heading text-lg font-semibold tracking-tight">
-          {preset.name}
-        </h3>
+    <div
+      className="flex flex-col gap-4 p-4"
+      data-testid="palette-target-picker"
+    >
+      <header className="flex flex-col gap-0.5">
+        <p className="text-small text-ink-muted">{t("palette.target_title")}</p>
+        <h3 className="text-h3 text-ink">{routine.name}</h3>
       </header>
 
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-body text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
-          {t("preset.apply.target_date")}
-        </span>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={dateId} className="text-small text-ink-muted">
+          {t("routines.apply.target_date")}
+        </label>
         <Input
+          id={dateId}
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           autoFocus
+          className="pointer-coarse:h-11"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault()
@@ -286,15 +289,15 @@ function TargetPicker({
             }
           }}
         />
-      </label>
+      </div>
 
-      {activeSlots.length > 1 && (
-        <fieldset className="space-y-1.5">
-          <legend className="font-body text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
-            {t("preset.command.target_picker_slot_filter")}
+      {routineSlots.length > 1 && (
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1.5 text-small text-ink-muted">
+            {t("palette.slot_filter")}
           </legend>
           <div className="flex flex-wrap gap-1.5">
-            {activeSlots.map((slot) => {
+            {routineSlots.map((slot) => {
               const active = slotsFilter.has(slot.id)
               return (
                 <button
@@ -302,14 +305,14 @@ function TargetPicker({
                   type="button"
                   onClick={() => toggleSlot(slot.id)}
                   aria-pressed={active}
-                  className={
-                    "rounded-full border px-2.5 py-0.5 text-[11px] transition-colors " +
-                    (active
-                      ? "border-primary bg-primary/15 text-primary"
-                      : "border-border text-muted-foreground hover:border-primary/40")
-                  }
+                  className={cn(
+                    "min-h-11 rounded-cell border px-3 text-small transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent md:min-h-8",
+                    active
+                      ? "border-accent bg-accent text-on-accent"
+                      : "border-line text-ink hover:bg-panel-sunken"
+                  )}
                 >
-                  {t(slot.name_key, { defaultValue: slot.name_key })}
+                  {slotLabel(t, slot.name_key)}
                 </button>
               )
             })}
@@ -317,30 +320,26 @@ function TargetPicker({
         </fieldset>
       )}
 
-      <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-3 text-xs">
-        <span className="text-muted-foreground">
-          {t("preset.command.submit_skip_hint")}
-        </span>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+      <div className="flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-caption text-ink-muted">{t("palette.hint")}</span>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={onCancel}>
             {t("common.cancel")}
           </Button>
           <Button
             type="button"
             variant="outline"
-            size="sm"
             onClick={() => submit("overwrite")}
-            disabled={applyMutation.isPending}
+            disabled={apply.isPending || !date}
           >
-            {t("preset.apply.submit_overwrite")}
+            {t("routines.apply.submit_overwrite")}
           </Button>
           <Button
             type="button"
-            size="sm"
             onClick={() => submit("skip")}
-            disabled={applyMutation.isPending}
+            disabled={apply.isPending || !date}
           >
-            {t("preset.apply.submit")}
+            {t("routines.apply.submit")}
           </Button>
         </div>
       </div>

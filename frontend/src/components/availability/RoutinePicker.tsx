@@ -29,7 +29,7 @@ export interface RoutinePickerProps {
 /**
  * A popover that lists saved routines (presets). Picking one calls `onPick`;
  * Escape, an outside click or Cancel close it without a pick. With no
- * routines it links to `/presets` to create one.
+ * routines it links to Settings → Meals & week to create one.
  */
 export function RoutinePicker({
   open,
@@ -95,7 +95,8 @@ export function RoutinePicker({
               {t("availability.picker.empty_hint")}
             </p>
             <Link
-              to="/presets"
+              to="/settings/$section"
+              params={{ section: "meals" }}
               className="flex min-h-11 items-center self-start rounded-cell text-small font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent pointer-fine:min-h-8"
             >
               {t("availability.picker.create")}

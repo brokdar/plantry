@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   mockAvailabilityDefaults,
-  mockAvailabilityPresets,
+  mockRoutines,
   mockTimeSlots,
 } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
@@ -22,7 +22,13 @@ vi.mock("@/lib/api/slots", () => ({
   updateTimeSlot: vi.fn(),
   deleteTimeSlot: vi.fn(),
 }))
-vi.mock("@/lib/api/presets", () => ({ getPresets: vi.fn() }))
+vi.mock("@/lib/api/presets", () => ({
+  getPresets: vi.fn(),
+  getKnownTags: vi.fn().mockResolvedValue({ items: [] }),
+}))
+vi.mock("@/lib/api/foods", () => ({
+  listFoods: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+}))
 
 import {
   getAvailabilityDefaults,
@@ -44,12 +50,13 @@ describe("MealsSection", () => {
       items,
     }))
     vi.mocked(getPresets).mockResolvedValue({
-      items: mockAvailabilityPresets,
-      total: mockAvailabilityPresets.length,
-    } as unknown as Awaited<ReturnType<typeof getPresets>>)
+      items: mockRoutines,
+      total: mockRoutines.length,
+      known_tags: [],
+    })
   })
 
-  it("renders the slot editor, the usual week from the defaults and a Routines link", async () => {
+  it("renders the slot editor, the usual week from the defaults and the routines editor", async () => {
     renderWithRouter(<MealsSection />)
     expect(
       await screen.findByRole("grid", { name: "Your usual week" })
@@ -66,9 +73,10 @@ describe("MealsSection", () => {
       })
     ).toBeInTheDocument()
     expect(screen.getByLabelText(/translation key/i)).toBeInTheDocument()
+    expect(screen.getByTestId("routines-editor")).toBeInTheDocument()
     expect(
-      screen.getByRole("link", { name: /manage routines/i })
-    ).toHaveAttribute("href", "/presets")
+      screen.getByRole("button", { name: "New routine" })
+    ).toBeInTheDocument()
   })
 
   it("saves the whole grid through PUT /defaults when a cell changes", async () => {

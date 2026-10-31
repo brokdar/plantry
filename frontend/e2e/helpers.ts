@@ -370,3 +370,16 @@ export async function stageFood(
   await sheet.getByTestId("food-picker-search").fill(name)
   await sheet.getByTestId("food-picker-row").filter({ hasText: name }).click()
 }
+
+/** Opens the command palette with Ctrl/⌘+K, retrying until the root has
+ *  bound the hotkey after the first render. */
+export async function openPalette(page: Page): Promise<Locator> {
+  const palette = page.getByRole("dialog", { name: "Command palette" })
+  await expect(async () => {
+    if (!(await palette.isVisible())) {
+      await page.keyboard.press("ControlOrMeta+k")
+    }
+    await expect(palette).toBeVisible({ timeout: 1000 })
+  }).toPass()
+  return palette
+}

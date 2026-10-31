@@ -1,6 +1,13 @@
 import type { Page } from "@playwright/test"
 
-import { cleanupSlot, expect, seedSlot, test, uid } from "./helpers"
+import {
+  cleanupSlot,
+  expect,
+  openPalette,
+  seedSlot,
+  test,
+  uid,
+} from "./helpers"
 
 // D22: the shared e2e DB accumulates recipes, so pin the Generate gate open.
 async function stubRecipesReady(page: Page) {
@@ -28,6 +35,28 @@ test.describe("Keyboard shortcuts", () => {
     } else {
       await expect(html).toHaveClass(/(?:^| )dark(?: |$)/)
     }
+  })
+
+  // F10-AC3 (live part): the palette's go-to entries.
+  test("Ctrl+K opens the palette, which goes to every destination", async ({
+    page,
+  }) => {
+    await page.goto("/today")
+    const palette = await openPalette(page)
+    const goTo = palette.getByRole("group", { name: "Go to" })
+    await expect(goTo.getByRole("option")).toHaveText([
+      "Today",
+      "Plan",
+      "Recipes",
+      "Ingredients",
+      "Shop",
+      "Settings",
+    ])
+
+    await palette.getByRole("combobox").fill("Shop")
+    await page.keyboard.press("Enter")
+    await expect(page).toHaveURL(/\/shop/)
+    await expect(palette).toHaveCount(0)
   })
 
   test("Ctrl+Enter in chat composer submits the prefilled message", async ({

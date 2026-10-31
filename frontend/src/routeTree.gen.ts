@@ -15,7 +15,6 @@ import { Route as ShopIndexRouteImport } from './routes/shop/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as RecipesIndexRouteImport } from './routes/recipes/index'
-import { Route as PresetsIndexRouteImport } from './routes/presets/index'
 import { Route as PlanIndexRouteImport } from './routes/plan/index'
 import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 import { Route as RecipesNewRouteImport } from './routes/recipes/new'
@@ -53,11 +52,6 @@ const SettingsIndexRoute = SettingsIndexRouteImport.update({
 const RecipesIndexRoute = RecipesIndexRouteImport.update({
   id: '/recipes/',
   path: '/recipes/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PresetsIndexRoute = PresetsIndexRouteImport.update({
-  id: '/presets/',
-  path: '/presets/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlanIndexRoute = PlanIndexRouteImport.update({
@@ -107,7 +101,6 @@ export interface FileRoutesByFullPath {
   '/recipes/new': typeof RecipesNewRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/plan/': typeof PlanIndexRoute
-  '/presets/': typeof PresetsIndexRoute
   '/recipes/': typeof RecipesIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -124,7 +117,6 @@ export interface FileRoutesByTo {
   '/recipes/new': typeof RecipesNewRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/plan': typeof PlanIndexRoute
-  '/presets': typeof PresetsIndexRoute
   '/recipes': typeof RecipesIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/setup': typeof SetupIndexRoute
@@ -142,7 +134,6 @@ export interface FileRoutesById {
   '/recipes/new': typeof RecipesNewRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/plan/': typeof PlanIndexRoute
-  '/presets/': typeof PresetsIndexRoute
   '/recipes/': typeof RecipesIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -161,7 +152,6 @@ export interface FileRouteTypes {
     | '/recipes/new'
     | '/settings/$section'
     | '/plan/'
-    | '/presets/'
     | '/recipes/'
     | '/settings/'
     | '/setup/'
@@ -178,7 +168,6 @@ export interface FileRouteTypes {
     | '/recipes/new'
     | '/settings/$section'
     | '/plan'
-    | '/presets'
     | '/recipes'
     | '/settings'
     | '/setup'
@@ -195,7 +184,6 @@ export interface FileRouteTypes {
     | '/recipes/new'
     | '/settings/$section'
     | '/plan/'
-    | '/presets/'
     | '/recipes/'
     | '/settings/'
     | '/setup/'
@@ -213,7 +201,6 @@ export interface RootRouteChildren {
   RecipesNewRoute: typeof RecipesNewRoute
   SettingsSectionRoute: typeof SettingsSectionRoute
   PlanIndexRoute: typeof PlanIndexRoute
-  PresetsIndexRoute: typeof PresetsIndexRoute
   RecipesIndexRoute: typeof RecipesIndexRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
@@ -268,13 +255,6 @@ declare module '@tanstack/react-router' {
       path: '/recipes'
       fullPath: '/recipes/'
       preLoaderRoute: typeof RecipesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/presets/': {
-      id: '/presets/'
-      path: '/presets'
-      fullPath: '/presets/'
-      preLoaderRoute: typeof PresetsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/plan/': {
@@ -341,7 +321,6 @@ const rootRouteChildren: RootRouteChildren = {
   RecipesNewRoute: RecipesNewRoute,
   SettingsSectionRoute: SettingsSectionRoute,
   PlanIndexRoute: PlanIndexRoute,
-  PresetsIndexRoute: PresetsIndexRoute,
   RecipesIndexRoute: RecipesIndexRoute,
   SettingsIndexRoute: SettingsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
