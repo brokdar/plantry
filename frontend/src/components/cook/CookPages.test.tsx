@@ -128,6 +128,27 @@ describe("cook pages", () => {
       )
     })
 
+    it("Done cooking within the debounce writes the pending portions first", async () => {
+      renderWithRouter(<CookSessionPage sessionId={7} />)
+      await userEvent.click(
+        await screen.findByRole("button", { name: /increase portions/i })
+      )
+      await userEvent.click(screen.getByRole("button", { name: "Next" }))
+      await userEvent.click(screen.getByTestId("cook-done"))
+
+      await waitFor(() =>
+        expect(setSessionCooked).toHaveBeenCalledWith(7, true)
+      )
+      expect(updateSession).toHaveBeenCalledTimes(1)
+      expect(updateSession).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ portions: 7 })
+      )
+      expect(vi.mocked(updateSession).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(setSessionCooked).mock.invocationCallOrder[0]
+      )
+    })
+
     it("says so when the batch is gone", async () => {
       vi.mocked(getSession).mockRejectedValue(new Error("404"))
       renderWithRouter(<CookSessionPage sessionId={99} />)
