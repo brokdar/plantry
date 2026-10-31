@@ -147,7 +147,7 @@ Package `domain/window` (pure): a window is the 7 days starting on `plan.shoppin
 Package `domain/planview` builds the read models; it never writes and takes its dates as arguments. Plates load with one `ListByDateRange` call for the whole range and sessions with `CookSessionRepo.ListInRange` (two queries), never per plate.
 
 - `GET /api/plan?start&today` — the window at `start` (must be a shopping day, else `400 error.plan.invalid_start`) or the anchored one: `window`, active `slots`, `cells` (date × active slot with availability and plate), `sessions` (cooking in the window or linked to a plate in it), `days` (per-eater macros with `complete`/`missing`), `targets` (null without a kcal target) and `stats`.
-- `GET /api/today?date&today` — `verdict` (`no_plan`, `no_plates`, `cook`/`quick_cook` for the main with most portions, ≤ 20 min is quick, else `nothing_to_cook`), `cook`, `meals`, `reminders` (`defrost`, `use_by`), `rate`, `plan_banner` and `setup`.
+- `GET /api/today?date&today` — `verdict` (`no_plan`, `no_plates`, `cook`/`quick_cook` for the uncooked main with most portions, ≤ 20 min is quick, else `nothing_to_cook`), `cook`, `meals`, `reminders` (`defrost`, `use_by`), `rate`, `plan_banner` and `setup`.
 - `today` defaults to the server's local date; `date` defaults to `today`.
 
 ## Unit of work
