@@ -1005,7 +1005,7 @@ export const mockRunsPage: RunsPage = {
       correction_rate: null,
     },
   ],
-  next_cursor: "11",
+  next_cursor: 11,
 }
 
 /** GET /api/ai/insights: two weeks, one with an unpriced run. */

@@ -56,18 +56,21 @@ export interface RunStep {
   seq: number
   type: "llm_call" | "tool_call"
   name: string
-  args: unknown
-  result: unknown
+  /** Raw JSON text, cut at the server's limit when `args_truncated`. */
+  args: string | null
+  args_truncated: boolean
+  result: string | null
+  result_truncated: boolean
   is_error: boolean
   duration_ms: number
-  tokens: RunTokens | null
+  tokens: { input: number; output: number }
 }
 
 export interface RunDetail extends RunSummary {
   scope: unknown
   instruction: string | null
   notes: string | null
-  violations: Issue[]
+  violations: Issue[] | null
   error_key: string | null
   steps: RunStep[]
   prompt_text: string | null
@@ -75,14 +78,15 @@ export interface RunDetail extends RunSummary {
 
 export interface RunsPage {
   items: RunSummary[]
-  next_cursor: string | null
+  /** The id to pass as `cursor` for the next page; null on the last. */
+  next_cursor: number | null
 }
 
 export interface RunsParams {
   kind?: RunKind
   from?: string
   to?: string
-  cursor?: string
+  cursor?: number | null
   limit?: number
 }
 
@@ -90,7 +94,7 @@ export interface RunsParams {
 export function listRuns(params: RunsParams = {}): Promise<RunsPage> {
   const qs = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) qs.set(key, String(value))
+    if (value !== undefined && value !== null) qs.set(key, String(value))
   }
   const query = qs.toString()
   return apiFetch(query ? `/ai/runs?${query}` : "/ai/runs")

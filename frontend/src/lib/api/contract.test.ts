@@ -423,7 +423,7 @@ const cases: Case[] = [
   // Runs and insights (§3.5)
   {
     name: "listRuns (first page)",
-    call: () => listRuns(),
+    call: () => listRuns({ cursor: null }),
     method: "GET",
     path: "/ai/runs",
   },
@@ -434,7 +434,7 @@ const cases: Case[] = [
         kind: "generate",
         from: "2026-10-01",
         to: "2026-10-31",
-        cursor: "11",
+        cursor: 11,
         limit: 50,
       }),
     method: "GET",

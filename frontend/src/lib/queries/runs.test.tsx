@@ -21,16 +21,29 @@ const detail: RunDetail = {
   scope: { kind: "window" },
   instruction: null,
   notes: null,
-  violations: [],
+  violations: null,
   error_key: null,
-  steps: [],
+  steps: [
+    {
+      seq: 1,
+      type: "llm_call",
+      name: "fake",
+      args: '{"messages":',
+      args_truncated: true,
+      result: null,
+      result_truncated: false,
+      is_error: false,
+      duration_ms: 120,
+      tokens: { input: 1200, output: 300 },
+    },
+  ],
   prompt_text: null,
 }
 
 describe("run log and insights queries", () => {
   it("useRuns fetches one page with the given filters", async () => {
     vi.mocked(listRuns).mockResolvedValue(mockRunsPage)
-    const params = { kind: "generate" as const, cursor: "11" }
+    const params = { kind: "generate" as const, cursor: 11 }
     const { result } = renderHook(() => useRuns(params), {
       wrapper: createHookWrapper(),
     })

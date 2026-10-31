@@ -4,8 +4,9 @@ import { apiFetch } from "./client"
 export interface ModelPrice {
   in: number
   out: number
-  cache_read: number
-  cache_write: number
+  /** null when the model has no cache price. */
+  cache_read: number | null
+  cache_write: number | null
 }
 
 export interface PriceInfo {
