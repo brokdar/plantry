@@ -182,7 +182,9 @@ type foodResponse struct {
 	CreatedAt   string  `json:"created_at"`
 	UpdatedAt   string  `json:"updated_at"`
 
-	// Derived (§3.3); set by FoodHandler.respond, one of them per kind.
+	// Derived (§3.3), one of them per kind: leafDerived is set by
+	// toFoodResponse, composedDerived by FoodHandler.respond. Call
+	// food.Service.Derive first.
 	*composedDerived
 	*leafDerived
 }
@@ -361,6 +363,7 @@ func toFoodResponse(f *food.Food) foodResponse {
 		resp.VitaminB12100g = f.VitaminB12100g
 		resp.VitaminB6100g = f.VitaminB6100g
 		resp.Folate100g = f.Folate100g
+		resp.leafDerived = &leafDerived{UsedInCount: f.UsedInCount}
 		if len(f.Portions) > 0 {
 			resp.Portions = make([]foodPortionResponse, len(f.Portions))
 			for i, p := range f.Portions {
@@ -414,17 +417,23 @@ func (h *FoodHandler) respond(ctx context.Context, today time.Time, foods ...*fo
 	if err := h.svc.Derive(ctx, today, foods...); err != nil {
 		return nil, err
 	}
+	var recipes []int64
+	for _, f := range foods {
+		if f.Kind == food.KindComposed {
+			recipes = append(recipes, f.ID)
+		}
+	}
+	perPortion, err := h.resolver.PerPortionDetailedMany(ctx, recipes)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]foodResponse, len(foods))
 	for i, f := range foods {
 		out[i] = toFoodResponse(f)
 		if f.Kind != food.KindComposed {
-			out[i].leafDerived = &leafDerived{UsedInCount: f.UsedInCount}
 			continue
 		}
-		d, err := h.resolver.PerPortionDetailed(ctx, f.ID)
-		if err != nil {
-			return nil, err
-		}
+		d := perPortion[f.ID]
 		cd := &composedDerived{
 			TimesCooked: f.History.TimesCooked,
 			PerPortion:  perPortionResponse{Kcal: d.Macros.Kcal, Protein: d.Macros.Protein, Complete: d.Complete},
@@ -438,13 +447,10 @@ func (h *FoodHandler) respond(ctx context.Context, today time.Time, foods ...*fo
 	return out, nil
 }
 
-// writeFood writes one food with its derived fields as of the request's
-// today (D25).
-func (h *FoodHandler) writeFood(w http.ResponseWriter, r *http.Request, status int, f *food.Food) {
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
-	if !ok {
-		return
-	}
+// writeFood writes one food with its derived fields as of today (D25).
+// Handlers parse today before any write, so a bad value never follows a
+// saved change.
+func (h *FoodHandler) writeFood(w http.ResponseWriter, r *http.Request, status int, today time.Time, f *food.Food) {
 	resp, err := h.respond(r.Context(), today, f)
 	if err != nil {
 		code, key := foodHTTPError(err)
@@ -457,6 +463,10 @@ func (h *FoodHandler) writeFood(w http.ResponseWriter, r *http.Request, status i
 // ── Handlers ──────────────────────────────────────────────────────────
 
 func (h *FoodHandler) Create(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	var req foodRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
@@ -489,10 +499,6 @@ func (h *FoodHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		status, key := foodHTTPError(err)
 		writeError(w, status, key)
-		return
-	}
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
-	if !ok {
 		return
 	}
 	resp, err := h.respond(r.Context(), today, loaded)
@@ -528,6 +534,10 @@ func (h *FoodHandler) saveImageFromURL(r *http.Request, f *food.Food, imageURL s
 }
 
 func (h *FoodHandler) Get(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
@@ -539,10 +549,14 @@ func (h *FoodHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	h.writeFood(w, r, http.StatusOK, f)
+	h.writeFood(w, r, http.StatusOK, today, f)
 }
 
 func (h *FoodHandler) Update(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
@@ -591,7 +605,7 @@ func (h *FoodHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	h.writeFood(w, r, http.StatusOK, loaded)
+	h.writeFood(w, r, http.StatusOK, today, loaded)
 }
 
 func (h *FoodHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -765,6 +779,10 @@ type foodFavoriteRequest struct {
 }
 
 func (h *FoodHandler) SetFavorite(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
@@ -781,10 +799,14 @@ func (h *FoodHandler) SetFavorite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	h.writeFood(w, r, http.StatusOK, f)
+	h.writeFood(w, r, http.StatusOK, today, f)
 }
 
 func (h *FoodHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
@@ -796,7 +818,7 @@ func (h *FoodHandler) CreateVariant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, key)
 		return
 	}
-	h.writeFood(w, r, http.StatusCreated, variant)
+	h.writeFood(w, r, http.StatusCreated, today, variant)
 }
 
 type foodVariantListResponse struct {
@@ -804,6 +826,10 @@ type foodVariantListResponse struct {
 }
 
 func (h *FoodHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_id")
@@ -813,10 +839,6 @@ func (h *FoodHandler) ListVariants(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		status, key := foodHTTPError(err)
 		writeError(w, status, key)
-		return
-	}
-	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
-	if !ok {
 		return
 	}
 	foods := make([]*food.Food, len(siblings))

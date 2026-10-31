@@ -51,7 +51,7 @@ func (r *fakeRepo) LookupByIDs(_ context.Context, _ []int64) (map[int64]*food.Fo
 	return map[int64]*food.Food{}, nil
 }
 
-func (r *fakeRepo) ListChildren(_ context.Context, _ int64) ([]food.FoodComponent, error) {
+func (r *fakeRepo) ListChildrenByParents(_ context.Context, _ []int64) (map[int64][]food.FoodComponent, error) {
 	return nil, nil
 }
 
@@ -279,7 +279,7 @@ func TestService_List_RejectsNegativeFilters(t *testing.T) {
 	}
 }
 
-func TestService_List_DerivesHistoryAndUsedInCountPerKind(t *testing.T) {
+func TestService_Derive_HistoryAndUsedInCountPerKind(t *testing.T) {
 	eaten := time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC)
 	repo := &fakeRepo{
 		listItems: []food.Food{
@@ -290,9 +290,14 @@ func TestService_List_DerivesHistoryAndUsedInCountPerKind(t *testing.T) {
 		history: map[int64]food.History{1: {LastEaten: &eaten, TimesCooked: 1}},
 		usedIn:  map[int64]int{2: 4},
 	}
-	res, err := food.NewService(repo).List(context.Background(), food.ListQuery{})
+	svc := food.NewService(repo)
+	res, err := svc.List(context.Background(), food.ListQuery{})
 	require.NoError(t, err)
+	assert.Nil(t, repo.historyIDs, "List does not derive; callers call Derive once")
+	assert.Nil(t, repo.usedInIDs)
 
+	foods := []*food.Food{&res.Items[0], &res.Items[1], &res.Items[2]}
+	require.NoError(t, svc.Derive(context.Background(), time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC), foods...))
 	assert.Equal(t, []int64{1, 3}, repo.historyIDs, "one history query for the recipes")
 	assert.Equal(t, []int64{2}, repo.usedInIDs, "one usage query for the leaves")
 	assert.Equal(t, food.History{LastEaten: &eaten, TimesCooked: 1}, res.Items[0].History)

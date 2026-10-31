@@ -220,6 +220,13 @@ func toolListFoods(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
+			foods := make([]*food.Food, len(res.Items))
+			for i := range res.Items {
+				foods[i] = &res.Items[i]
+			}
+			if err := svc.Foods.Derive(ctx, todayFrom(ctx), foods...); err != nil {
+				return nil, ToolEffectNone, err
+			}
 			items := make([]map[string]any, 0, len(res.Items))
 			for i := range res.Items {
 				f := &res.Items[i]

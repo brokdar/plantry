@@ -295,7 +295,65 @@ func TestFeedback_StatusesAndSideEffects(t *testing.T) {
 func TestFoodRotationEndpoint_IsGone(t *testing.T) {
 	a := newHistoryAPI(t)
 	code, body := a.do(http.MethodGet, "/api/foods/insights", "")
-	assert.NotEqual(t, http.StatusOK, code)
-	assert.NotContains(t, body, "forgotten")
-	assert.NotContains(t, body, "most_cooked")
+	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Equal(t, "error.invalid_id", body["message_key"])
+}
+
+func TestFoodHistory_LovedAndDislikedPlatesCount(t *testing.T) {
+	a := newHistoryAPI(t)
+	plates := a.chiliBatch()
+	for date, status := range map[string]string{"2026-10-25": "loved", "2026-10-26": "disliked", "2026-10-27": "disliked"} {
+		code, body := a.feedback(plates[date], status)
+		require.Equal(t, http.StatusOK, code, body)
+	}
+	chili := a.recipe("today=2026-10-30", a.chili)
+	assert.Equal(t, "2026-10-27", chili["last_eaten"])
+	assert.EqualValues(t, 1, chili["times_cooked"])
+}
+
+func TestFoodHistory_TwoComponentsOfOneRecipeOnOnePlateCountOnce(t *testing.T) {
+	a := newHistoryAPI(t)
+	code, body := a.do(http.MethodPost, "/api/plates",
+		fmt.Sprintf(`{"date":"2026-10-25","slot_id":%d,"components":[{"food_id":%d}]}`, a.dinner, a.chili))
+	require.Equal(t, http.StatusCreated, code, body)
+	plateID := int64(body["id"].(float64))
+	sid := int64(body["components"].([]any)[0].(map[string]any)["cook_session_id"].(float64))
+	code, body = a.do(http.MethodPost, fmt.Sprintf("/api/plates/%d/components", plateID),
+		fmt.Sprintf(`{"food_id":%d,"portions":0.5,"cook_session_id":%d}`, a.chili, sid))
+	require.Equal(t, http.StatusCreated, code, body)
+	require.Len(t, body["components"], 2)
+
+	chili := a.recipe("today=2026-10-30", a.chili)
+	assert.Equal(t, "2026-10-25", chili["last_eaten"])
+	assert.EqualValues(t, 1, chili["times_cooked"])
+}
+
+// A bad today is rejected before anything is written.
+func TestFoodWrites_BadTodayIsRejectedBeforeWriting(t *testing.T) {
+	a := newHistoryAPI(t)
+	count := func() int {
+		var n int
+		require.NoError(t, a.db.QueryRow(`SELECT COUNT(*) FROM foods`).Scan(&n))
+		return n
+	}
+	before := count()
+
+	code, body := a.do(http.MethodPost, "/api/foods?today=x", `{"name":"Toast","kind":"leaf","source":"manual"}`)
+	assert.Equal(t, http.StatusBadRequest, code, body)
+	assert.Equal(t, before, count(), "no row created")
+
+	code, _ = a.do(http.MethodPost, fmt.Sprintf("/api/foods/%d/variant?today=x", a.chili), "")
+	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Equal(t, before, count(), "no variant created")
+
+	code, _ = a.do(http.MethodPut, fmt.Sprintf("/api/foods/%d?today=x", a.chili),
+		`{"name":"Renamed","kind":"composed","role":"main","reference_portions":4}`)
+	assert.Equal(t, http.StatusBadRequest, code)
+	code, _ = a.do(http.MethodPost, fmt.Sprintf("/api/foods/%d/favorite?today=x", a.chili), `{"favorite":true}`)
+	assert.Equal(t, http.StatusBadRequest, code)
+	var name string
+	var fav int
+	require.NoError(t, a.db.QueryRow(`SELECT name, favorite FROM foods WHERE id = ?`, a.chili).Scan(&name, &fav))
+	assert.Equal(t, "Chili", name, "not renamed")
+	assert.Zero(t, fav, "not favorited")
 }

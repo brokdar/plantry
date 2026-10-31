@@ -359,14 +359,14 @@ func (r *FoodRepo) LookupByIDs(ctx context.Context, ids []int64) (map[int64]*foo
 	return result, nil
 }
 
-func (r *FoodRepo) ListChildren(ctx context.Context, parentID int64) ([]food.FoodComponent, error) {
-	rows, err := r.queriesFor(ctx).ListFoodComponents(ctx, parentID)
+func (r *FoodRepo) ListChildrenByParents(ctx context.Context, parentIDs []int64) (map[int64][]food.FoodComponent, error) {
+	rows, err := r.queriesFor(ctx).ListChildrenByParents(ctx, parentIDs)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]food.FoodComponent, len(rows))
-	for i, row := range rows {
-		out[i] = food.FoodComponent{
+	out := make(map[int64][]food.FoodComponent, len(parentIDs))
+	for _, row := range rows {
+		out[row.ParentID] = append(out[row.ParentID], food.FoodComponent{
 			ID:        row.ID,
 			ParentID:  row.ParentID,
 			ChildID:   row.ChildID,
@@ -376,7 +376,7 @@ func (r *FoodRepo) ListChildren(ctx context.Context, parentID int64) ([]food.Foo
 			Unit:      row.Unit,
 			Grams:     row.Grams,
 			SortOrder: int(row.SortOrder),
-		}
+		})
 	}
 	return out, nil
 }

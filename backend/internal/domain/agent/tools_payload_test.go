@@ -75,8 +75,12 @@ func (r *memFoodRepo) LookupByIDs(ctx context.Context, ids []int64) (map[int64]*
 	return out, nil
 }
 
-func (r *memFoodRepo) ListChildren(_ context.Context, parentID int64) ([]food.FoodComponent, error) {
-	return r.children[parentID], nil
+func (r *memFoodRepo) ListChildrenByParents(_ context.Context, ids []int64) (map[int64][]food.FoodComponent, error) {
+	out := map[int64][]food.FoodComponent{}
+	for _, id := range ids {
+		out[id] = r.children[id]
+	}
+	return out, nil
 }
 
 func ptr[T any](v T) *T { return &v }

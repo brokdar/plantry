@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -46,6 +47,7 @@ func setupLookupRouter(t *testing.T, stub *stubFDC) (http.Handler, *food.Service
 	h := handlers.NewLookupHandler(resolver, svc, stub)
 	r := chi.NewRouter()
 	r.Post("/api/foods/{id}/refetch", h.Refetch)
+	r.Post("/api/foods/resolve", h.Resolve)
 	return r, svc
 }
 
@@ -115,4 +117,33 @@ func TestLookupHandler_Refetch_FDCUpstreamErrorIs502(t *testing.T) {
 	assert.Equal(t, http.StatusBadGateway, resp.Code)
 	assert.Contains(t, resp.Body.String(), "error.food.lookup_failed")
 	assert.Equal(t, []int{1234}, stub.byIDCalls)
+}
+
+// The lookup responses carry used_in_count like every other leaf response.
+func TestLookupHandler_LeafResponsesCarryUsedInCount(t *testing.T) {
+	kcal := 304.0
+	stub := &stubFDC{byID: food.Candidate{Name: "Honey", Source: food.SourceFDC, FdcID: 1234, Kcal100g: &kcal}}
+	r, svc := setupLookupRouter(t, stub)
+	id := createFDCLeaf(t, svc, "1234")
+	role := food.RoleMain
+	ref := 2.0
+	require.NoError(t, svc.Create(context.Background(), &food.Food{
+		Name: "Granola", Kind: food.KindComposed, Role: &role, ReferencePortions: &ref,
+		Children: []food.FoodComponent{{ChildID: id, Amount: 20, Unit: "g", Grams: 20}},
+	}))
+
+	resp := postRefetch(t, r, id)
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	var got map[string]any
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.EqualValues(t, 1, got["used_in_count"])
+
+	resp = httptest.NewRecorder()
+	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods/resolve",
+		strings.NewReader(`{"name":"Oats","source":"manual","kcal_100g":370}`)))
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+	got = map[string]any{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	assert.Contains(t, got, "used_in_count")
+	assert.EqualValues(t, 0, got["used_in_count"])
 }

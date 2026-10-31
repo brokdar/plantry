@@ -175,3 +175,11 @@ ON CONFLICT (food_id, unit) DO UPDATE SET grams = excluded.grams;
 
 -- name: DeleteFoodPortion :execresult
 DELETE FROM food_portions WHERE food_id = ? AND unit = ?;
+
+-- name: ListChildrenByParents :many
+SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order,
+       f.name AS child_name, f.kind AS child_kind
+FROM food_components fc
+JOIN foods f ON f.id = fc.child_id
+WHERE fc.parent_id IN (sqlc.slice(parent_ids))
+ORDER BY fc.parent_id, fc.sort_order, fc.id;

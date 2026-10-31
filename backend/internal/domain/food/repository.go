@@ -24,10 +24,10 @@ type Repository interface {
 	// recursive nutrition resolution and shopping aggregation.
 	LookupByIDs(ctx context.Context, ids []int64) (map[int64]*Food, error)
 
-	// ListChildren loads the child links of a composed food with the child's
-	// name + kind populated. Used by the recursive nutrition resolver + shopping
-	// walk so we don't need a full Get for each parent.
-	ListChildren(ctx context.Context, parentID int64) ([]FoodComponent, error)
+	// ListChildrenByParents loads the child links of several composed foods
+	// at once, keyed by parent, with the child's name + kind populated. Used
+	// by the nutrition resolver to load food trees level by level.
+	ListChildrenByParents(ctx context.Context, parentIDs []int64) (map[int64][]FoodComponent, error)
 
 	ListPortions(ctx context.Context, foodID int64) ([]Portion, error)
 	UpsertPortion(ctx context.Context, p *Portion) error

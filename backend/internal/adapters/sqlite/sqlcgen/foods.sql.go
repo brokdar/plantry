@@ -444,6 +444,70 @@ func (q *Queries) GetLeafFoodIDByName(ctx context.Context, name string) (int64, 
 	return id, err
 }
 
+const listChildrenByParents = `-- name: ListChildrenByParents :many
+SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order,
+       f.name AS child_name, f.kind AS child_kind
+FROM food_components fc
+JOIN foods f ON f.id = fc.child_id
+WHERE fc.parent_id IN (/*SLICE:parent_ids*/?)
+ORDER BY fc.parent_id, fc.sort_order, fc.id
+`
+
+type ListChildrenByParentsRow struct {
+	ID        int64
+	ParentID  int64
+	ChildID   int64
+	Amount    float64
+	Unit      string
+	Grams     float64
+	SortOrder int64
+	ChildName string
+	ChildKind string
+}
+
+func (q *Queries) ListChildrenByParents(ctx context.Context, parentIds []int64) ([]ListChildrenByParentsRow, error) {
+	query := listChildrenByParents
+	var queryParams []interface{}
+	if len(parentIds) > 0 {
+		for _, v := range parentIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:parent_ids*/?", strings.Repeat(",?", len(parentIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:parent_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChildrenByParentsRow{}
+	for rows.Next() {
+		var i ListChildrenByParentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentID,
+			&i.ChildID,
+			&i.Amount,
+			&i.Unit,
+			&i.Grams,
+			&i.SortOrder,
+			&i.ChildName,
+			&i.ChildKind,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFoodComponents = `-- name: ListFoodComponents :many
 SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order,
        f.name AS child_name, f.kind AS child_kind

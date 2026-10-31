@@ -108,7 +108,7 @@ type Food struct {
 	ImagePath   *string
 	Favorite    bool
 
-	// Derived, never stored: set only by Service.List and Service.Derive.
+	// Derived, never stored: set only by Service.Derive.
 	// History is the composed food's eating history (D16), UsedInCount the
 	// number of recipes using a leaf.
 	History     History

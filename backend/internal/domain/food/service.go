@@ -151,8 +151,8 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// List returns a page of foods matching the query, with their derived fields
-// as of q.Today.
+// List returns a page of foods matching the query. Derived fields are not
+// set; callers that need them call Derive.
 func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
 	if q.MaxMinutes < 0 || q.NotEatenWeeks < 0 || q.CreatedWithinDays < 0 {
 		return nil, fmt.Errorf("%w: list filters must not be negative", domain.ErrInvalidInput)
@@ -166,18 +166,7 @@ func (s *Service) List(ctx context.Context, q ListQuery) (*ListResult, error) {
 	if q.SortBy == "" {
 		q.SortBy = "name"
 	}
-	res, err := s.repo.List(ctx, q)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]*Food, len(res.Items))
-	for i := range res.Items {
-		items[i] = &res.Items[i]
-	}
-	if err := s.Derive(ctx, q.Today, items...); err != nil {
-		return nil, err
-	}
-	return res, nil
+	return s.repo.List(ctx, q)
 }
 
 // SetFavorite toggles the favorite flag. Favorites surface first in listings

@@ -76,6 +76,7 @@ type Querier interface {
 	ListActiveTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	ListAvailabilityDefaults(ctx context.Context) ([]ListAvailabilityDefaultsRow, error)
 	ListAvailabilityOverridesByRange(ctx context.Context, arg ListAvailabilityOverridesByRangeParams) ([]ListAvailabilityOverridesByRangeRow, error)
+	ListChildrenByParents(ctx context.Context, parentIds []int64) ([]ListChildrenByParentsRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
 	ListCookSessionLinks(ctx context.Context, cookSessionID sql.NullInt64) ([]ListCookSessionLinksRow, error)
 	// Every link of the sessions ListCookSessionsInRange returns.
