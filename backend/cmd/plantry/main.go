@@ -118,7 +118,7 @@ func run() error {
 	foodRepo := sqlite.NewFoodRepo(conn)
 	foodSvc := food.NewService(foodRepo).WithPortionProvider(fdcProvider)
 	nutritionResolver := food.NewNutritionResolver(foodRepo)
-	shoppingResolver := shopping.NewResolver(foodRepo)
+	shoppingSvc := shopping.NewService(sqlite.NewShoppingRepo(conn), foodRepo, settingsSvc)
 
 	// Image store (optional).
 	var imgStore *imagestore.Store
@@ -273,7 +273,7 @@ func run() error {
 		Feedback:       handlers.NewFeedbackHandler(feedbackSvc),
 		Import:         importHandler,
 		Settings:       settingsHandler,
-		ShoppingRange:  handlers.NewShoppingRangeHandler(plateSvc, shoppingResolver),
+		Shopping:       handlers.NewShoppingHandler(shoppingSvc),
 		NutritionRange: handlers.NewNutritionRangeHandler(plateSvc, nutritionResolver),
 		PlateMacros:    handlers.NewPlateMacrosHandler(plateSvc, nutritionResolver),
 		Availability:   handlers.NewAvailabilityHandler(availabilitySvc),

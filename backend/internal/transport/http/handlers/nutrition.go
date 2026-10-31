@@ -12,6 +12,11 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
+// plateRangeService is the subset of plate.Service the range handlers use.
+type plateRangeService interface {
+	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
+}
+
 // NutritionRangeHandler serves the date-range nutrition endpoint.
 type NutritionRangeHandler struct {
 	plates   plateRangeService

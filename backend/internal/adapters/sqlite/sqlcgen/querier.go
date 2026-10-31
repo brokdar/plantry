@@ -82,6 +82,9 @@ type Querier interface {
 	ListCookSessionLinks(ctx context.Context, cookSessionID sql.NullInt64) ([]ListCookSessionLinksRow, error)
 	// Every link of the sessions ListCookSessionsInRange returns.
 	ListCookSessionLinksInRange(ctx context.Context, arg ListCookSessionLinksInRangeParams) ([]ListCookSessionLinksInRangeRow, error)
+	// Sessions cooking in [from_date, to_date]: the recipe sources of a
+	// shopping list.
+	ListCookSessionsByCookDate(ctx context.Context, arg ListCookSessionsByCookDateParams) ([]CookSession, error)
 	// Sessions cooking in [from_date, to_date] or linked to a plate dated in it.
 	ListCookSessionsInRange(ctx context.Context, arg ListCookSessionsInRangeParams) ([]CookSession, error)
 	ListFoodComponents(ctx context.Context, parentID int64) ([]ListFoodComponentsRow, error)
@@ -89,6 +92,9 @@ type Querier interface {
 	ListFoodPortions(ctx context.Context, foodID int64) ([]FoodPortion, error)
 	ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, error)
 	ListKnownTags(ctx context.Context, limit int64) ([]ListKnownTagsRow, error)
+	// Leaf components on plates dated in [from_date, to_date] with their plate's
+	// cell and eaters: the ingredient sources of a shopping list.
+	ListLeafPlateComponentsInRange(ctx context.Context, arg ListLeafPlateComponentsInRangeParams) ([]ListLeafPlateComponentsInRangeRow, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
 	ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
@@ -118,6 +124,7 @@ type Querier interface {
 	// aggregate queries replace this starting in Phase 1 (ingredients).
 	SchemaVersion(ctx context.Context) (int64, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
+	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	TouchPlate(ctx context.Context, id int64) error
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error

@@ -1222,7 +1222,9 @@
       "invalid_resolution": "Invalid ingredient resolution."
     },
     "food": {
-      "invalid_portions": "Portions must be more than 0 and at most 100."
+      "invalid_portions": "Portions must be more than 0 and at most 100.",
+      "invalid_shop_section": "Unknown store section.",
+      "shop_section_leaf_only": "Only ingredients have a store section."
     },
     "settings": {
       "unknown_key": "Unknown settings key.",

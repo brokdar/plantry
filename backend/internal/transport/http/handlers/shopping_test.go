@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
@@ -22,217 +23,280 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
-// leafComponent builds a leaf-style plate.PlateComponent equivalent to the
-// pre-rework "Portions: n" shape: amount = n*100 g, grams = same, source =
-// "direct". Used by tests that don't care about the picky leaf vocabulary
-// and just want a component that contributes the same totals as before.
-func leafComponent(foodID int64, portions float64) plate.PlateComponent {
-	pc := leafGrams(portions * 100)
-	pc.FoodID = foodID
-	return pc
+// shopEnv is a shopping handler over a real DB, with the AC-1 recipe: Chili
+// for 4 with 400 g kidney beans and 2 piece onions (120 g each), and an
+// apple leaf with a 150 g piece.
+type shopEnv struct {
+	router   http.Handler
+	plates   *plate.Service
+	settings *settings.Service
+	foods    *sqlite.FoodRepo
+	slotID   int64
+	chili    *food.Food
+	beans    *food.Food
+	onion    *food.Food
+	apple    *food.Food
 }
 
-// composedComponent builds a composed-style plate.PlateComponent.
-func composedComponent(foodID int64, portions float64) plate.PlateComponent {
-	return plate.PlateComponent{FoodID: foodID, Portions: &portions}
-}
-
-// ── stub for plateRangeService ────────────────────────────────────────────────
-
-type stubShoppingRangeSvc struct {
-	fn func(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
-}
-
-func (s *stubShoppingRangeSvc) Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error) {
-	if s.fn != nil {
-		return s.fn(ctx, from, to)
-	}
-	return nil, nil
-}
-
-// ── router helpers ────────────────────────────────────────────────────────────
-
-// newValidationShoppingRouter builds a handler with a stub plate service and a
-// nil shopping resolver. Suitable only for validation tests where parseDateRange
-// returns before the resolver is ever called.
-func newValidationShoppingRouter() http.Handler {
-	svc := &stubShoppingRangeSvc{}
-	h := handlers.NewShoppingRangeHandlerFromService(svc, nil)
-	r := chi.NewRouter()
-	r.Get("/api/shopping-list", h.List)
-	return r
-}
-
-// newShoppingRouterWithDB wires real repos backed by testhelper.NewTestDB.
-// Returns the handler, food repo, plate repo, and slot repo so tests can seed data.
-func newShoppingRouterWithDB(t *testing.T) (http.Handler, *sqlite.FoodRepo, *plate.Service, *sqlite.SlotRepo) {
+func newShopEnv(t *testing.T) *shopEnv {
 	t.Helper()
+	ctx := context.Background()
 	db := testhelper.NewTestDB(t)
-	foodRepo := sqlite.NewFoodRepo(db)
-	slotRepo := sqlite.NewSlotRepo(db)
-	resolver := shopping.NewResolver(foodRepo)
-	plateSvc := testsvc.Plates(db)
-	h := handlers.NewShoppingRangeHandler(plateSvc, resolver)
+	foods := sqlite.NewFoodRepo(db)
+	set := testsvc.Settings(db)
+	svc := shopping.NewService(sqlite.NewShoppingRepo(db), foods, set)
 	r := chi.NewRouter()
-	r.Get("/api/shopping-list", h.List)
-	return r, foodRepo, plateSvc, slotRepo
-}
+	r.Get("/api/shopping-list", handlers.NewShoppingHandler(svc).List)
 
-// ── validation tests ──────────────────────────────────────────────────────────
+	s := &slot.TimeSlot{NameKey: "dinner", Icon: "moon", Active: true}
+	require.NoError(t, sqlite.NewSlotRepo(db).Create(ctx, s))
 
-func TestShoppingRange_400_MissingFrom(t *testing.T) {
-	r := newValidationShoppingRouter()
-	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?to=2026-04-30", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assertShoppingMessageKey(t, w, "error.invalid_from")
-}
-
-func TestShoppingRange_400_MissingTo(t *testing.T) {
-	r := newValidationShoppingRouter()
-	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?from=2026-04-26", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assertShoppingMessageKey(t, w, "error.invalid_to")
-}
-
-func TestShoppingRange_400_MalformedFrom(t *testing.T) {
-	r := newValidationShoppingRouter()
-	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?from=not-a-date&to=2026-04-30", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assertShoppingMessageKey(t, w, "error.invalid_from")
-}
-
-func TestShoppingRange_400_MalformedTo(t *testing.T) {
-	r := newValidationShoppingRouter()
-	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?from=2026-04-26&to=bad", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assertShoppingMessageKey(t, w, "error.invalid_to")
-}
-
-func TestShoppingRange_400_FromAfterTo(t *testing.T) {
-	r := newValidationShoppingRouter()
-	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?from=2026-05-01&to=2026-04-26", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assertShoppingMessageKey(t, w, "error.invalid_date_range")
-}
-
-func TestShoppingRange_400_SpanTooLarge(t *testing.T) {
-	r := newValidationShoppingRouter()
-	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?from=2024-01-01&to=2025-12-31", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assertShoppingMessageKey(t, w, "error.date_range_too_large")
-}
-
-// ── happy path tests (real DB) ────────────────────────────────────────────────
-
-func TestShoppingRange_200_EmptyRange(t *testing.T) {
-	r, _, _, _ := newShoppingRouterWithDB(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?from=2026-04-26&to=2026-04-26", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code)
-	var body map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	items, ok := body["items"].([]any)
-	require.True(t, ok)
-	assert.Empty(t, items)
-}
-
-func TestShoppingRange_200_HappyPath(t *testing.T) {
-	r, foodRepo, plateSvc, slotRepo := newShoppingRouterWithDB(t)
-	ctx := context.Background()
-
-	// Seed a slot (FK required by plates table).
-	s := &slot.TimeSlot{NameKey: "dinner", Icon: "🍽", SortOrder: 0, Active: true}
-	require.NoError(t, slotRepo.Create(ctx, s))
-
-	// Seed two leaf foods. Leaf foods require Source != nil per DB constraint.
 	src := food.SourceManual
-	f1 := &food.Food{Name: "Apple", Kind: food.KindLeaf, Source: &src}
-	f2 := &food.Food{Name: "Zebra Fruit", Kind: food.KindLeaf, Source: &src}
-	require.NoError(t, foodRepo.Create(ctx, f1))
-	require.NoError(t, foodRepo.Create(ctx, f2))
-
-	// Seed a plate.
-	d, _ := time.Parse("2006-01-02", "2026-04-26")
-	p := &plate.Plate{
-		Date:   d,
-		SlotID: s.ID,
-		Components: []plate.PlateComponent{
-			leafComponent(f1.ID, 1),
-			leafComponent(f2.ID, 2),
-		},
+	leaf := func(name string) *food.Food {
+		f := &food.Food{Name: name, Kind: food.KindLeaf, Source: &src}
+		require.NoError(t, foods.Create(ctx, f))
+		return f
 	}
-	seedPlate(t, plateSvc, p)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?from=2026-04-26&to=2026-04-26", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	var body map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	items, ok := body["items"].([]any)
-	require.True(t, ok)
-	assert.Len(t, items, 2)
+	e := &shopEnv{
+		router: r, plates: testsvc.Plates(db), settings: set, foods: foods, slotID: s.ID,
+		beans: leaf("Kidneybohnen (Dose)"), onion: leaf("Zwiebel"), apple: leaf("Apfel"),
+	}
+	require.NoError(t, foods.UpsertPortion(ctx, &food.Portion{FoodID: e.apple.ID, Unit: "piece", Grams: 150}))
+	ref := 4.0
+	e.chili = &food.Food{Name: "Chili", Kind: food.KindComposed, ReferencePortions: &ref, Children: []food.FoodComponent{
+		{ChildID: e.beans.ID, Amount: 400, Unit: "g", Grams: 400},
+		{ChildID: e.onion.ID, Amount: 2, Unit: "piece", Grams: 240, SortOrder: 1},
+	}}
+	require.NoError(t, foods.Create(ctx, e.chili))
+	return e
 }
 
-func TestShoppingRange_200_ItemsAlphabetical(t *testing.T) {
-	r, foodRepo, plateSvc, slotRepo := newShoppingRouterWithDB(t)
-	ctx := context.Background()
-
-	s := &slot.TimeSlot{NameKey: "lunch", Icon: "🥗", SortOrder: 0, Active: true}
-	require.NoError(t, slotRepo.Create(ctx, s))
-
-	// Seed foods in reverse alphabetical order to verify sorting.
-	src := food.SourceManual
-	zebra := &food.Food{Name: "Zebra Fruit", Kind: food.KindLeaf, Source: &src}
-	apple := &food.Food{Name: "Apple", Kind: food.KindLeaf, Source: &src}
-	require.NoError(t, foodRepo.Create(ctx, zebra))
-	require.NoError(t, foodRepo.Create(ctx, apple))
-
-	d, _ := time.Parse("2006-01-02", "2026-04-26")
-	p := &plate.Plate{
-		Date:   d,
-		SlotID: s.ID,
-		Components: []plate.PlateComponent{
-			leafComponent(zebra.ID, 1),
-			leafComponent(apple.ID, 1),
-		},
-	}
-	seedPlate(t, plateSvc, p)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/shopping-list?from=2026-04-26&to=2026-04-26", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	var body map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	items := body["items"].([]any)
-	require.Len(t, items, 2)
-	first := items[0].(map[string]any)["name"].(string)
-	second := items[1].(map[string]any)["name"].(string)
-	assert.Less(t, first, second, "items should be alphabetically ordered")
-}
-
-// ── helper ────────────────────────────────────────────────────────────────────
-
-func assertShoppingMessageKey(t *testing.T, w *httptest.ResponseRecorder, want string) {
+// chiliBatch cooks Chili on Sunday 2026-11-01 for 6 portions with leftovers
+// on Monday 2026-11-02 (AC-1) and returns the session id.
+func (e *shopEnv) chiliBatch(t *testing.T) int64 {
 	t.Helper()
-	var body map[string]any
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	assert.Equal(t, want, body["message_key"])
+	ctx := context.Background()
+	one, two := 1.0, 2.0
+	p, err := e.plates.Create(ctx, plate.PlateInput{
+		Date: day(t, "2026-11-01"), SlotID: e.slotID, Eaters: &two,
+		Components: []plate.PlateComponent{{FoodID: e.chili.ID, Portions: &one}},
+	})
+	require.NoError(t, err)
+	sid := *p.Components[0].CookSessionID
+	_, err = e.plates.AddLeftovers(ctx, sid, []plate.CellKey{
+		{Date: day(t, "2026-11-02"), SlotID: e.slotID},
+		{Date: day(t, "2026-11-03"), SlotID: e.slotID},
+	})
+	require.NoError(t, err)
+	_, err = e.plates.SetSessionPortions(ctx, sid, plate.SessionPortions{Portions: 6})
+	require.NoError(t, err)
+	return sid
+}
+
+func day(t *testing.T, s string) time.Time {
+	t.Helper()
+	d, err := time.Parse(time.DateOnly, s)
+	require.NoError(t, err)
+	return d
+}
+
+type shopBody struct {
+	Range struct {
+		From        string `json:"from"`
+		To          string `json:"to"`
+		WindowStart string `json:"window_start"`
+		WindowEnd   string `json:"window_end"`
+	} `json:"range"`
+	Sections []struct {
+		Section string `json:"section"`
+		Items   []struct {
+			FoodID     int64   `json:"food_id"`
+			Name       string  `json:"name"`
+			TotalGrams float64 `json:"total_grams"`
+			Display    struct {
+				Amount float64 `json:"amount"`
+				Unit   string  `json:"unit"`
+			} `json:"display"`
+			Buy *struct {
+				Amount float64 `json:"amount"`
+				Unit   string  `json:"unit"`
+			} `json:"buy"`
+			UsedIn []struct {
+				SessionID *int64 `json:"session_id"`
+				FoodID    int64  `json:"food_id"`
+				FoodName  string `json:"food_name"`
+				Date      string `json:"date"`
+				SlotID    int64  `json:"slot_id"`
+			} `json:"used_in"`
+		} `json:"items"`
+	} `json:"sections"`
+	Count int `json:"count"`
+}
+
+func (e *shopEnv) get(t *testing.T, query string) (int, shopBody, string) {
+	t.Helper()
+	w := httptest.NewRecorder()
+	e.router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/shopping-list"+query, nil))
+	var b shopBody
+	if w.Code == http.StatusOK {
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &b))
+	}
+	return w.Code, b, w.Body.String()
+}
+
+func TestShoppingList_AC1_BatchSession(t *testing.T) {
+	e := newShopEnv(t)
+	sid := e.chiliBatch(t)
+
+	code, b, raw := e.get(t, "?from=2026-11-01&to=2026-11-07")
+	require.Equal(t, http.StatusOK, code, raw)
+	assert.Equal(t, 2, b.Count)
+	require.Len(t, b.Sections, 2)
+
+	produce := b.Sections[0]
+	assert.Equal(t, "produce", produce.Section)
+	onion := produce.Items[0]
+	assert.Equal(t, e.onion.ID, onion.FoodID)
+	assert.InDelta(t, 3, onion.Display.Amount, 1e-9)
+	assert.Equal(t, "piece", onion.Display.Unit)
+	require.NotNil(t, onion.Buy)
+	assert.Equal(t, 3.0, onion.Buy.Amount)
+	require.Len(t, onion.UsedIn, 1)
+	assert.Equal(t, sid, *onion.UsedIn[0].SessionID)
+	assert.Equal(t, "Chili", onion.UsedIn[0].FoodName)
+	assert.Equal(t, "2026-11-01", onion.UsedIn[0].Date)
+	assert.Equal(t, e.slotID, onion.UsedIn[0].SlotID)
+
+	cans := b.Sections[1]
+	assert.Equal(t, "cans_jars", cans.Section)
+	beans := cans.Items[0]
+	assert.InDelta(t, 600, beans.TotalGrams, 1e-9)
+	assert.Equal(t, 600.0, beans.Display.Amount)
+	assert.Equal(t, "g", beans.Display.Unit)
+	assert.Nil(t, beans.Buy)
+	require.Len(t, beans.UsedIn, 1)
+	assert.Equal(t, sid, *beans.UsedIn[0].SessionID)
+
+	assert.Contains(t, raw, `"buy":null`, "buy is always present")
+}
+
+func TestShoppingList_AC2_LeftoversOfAnEarlierSessionAddNothing(t *testing.T) {
+	e := newShopEnv(t)
+	e.chiliBatch(t)
+
+	code, b, raw := e.get(t, "?from=2026-11-02&to=2026-11-07")
+	require.Equal(t, http.StatusOK, code, raw)
+	assert.Zero(t, b.Count)
+	assert.Empty(t, b.Sections)
+	assert.Contains(t, raw, `"sections":[]`)
+}
+
+func TestShoppingList_AC3_LeafComponentTimesEaters(t *testing.T) {
+	e := newShopEnv(t)
+	eaters, one, piece := 3.5, 1.0, "piece"
+	_, err := e.plates.Create(context.Background(), plate.PlateInput{
+		Date: day(t, "2026-11-04"), SlotID: e.slotID, Eaters: &eaters,
+		Components: []plate.PlateComponent{{FoodID: e.apple.ID, Amount: &one, Unit: &piece}},
+	})
+	require.NoError(t, err)
+
+	code, b, raw := e.get(t, "?from=2026-11-02&to=2026-11-08")
+	require.Equal(t, http.StatusOK, code, raw)
+	require.Len(t, b.Sections, 1)
+	apple := b.Sections[0].Items[0]
+	assert.InDelta(t, 3.5, apple.Display.Amount, 1e-9)
+	assert.Equal(t, "piece", apple.Display.Unit)
+	require.NotNil(t, apple.Buy)
+	assert.Equal(t, 4.0, apple.Buy.Amount)
+	assert.InDelta(t, 525, apple.TotalGrams, 1e-9)
+	require.Len(t, apple.UsedIn, 1)
+	assert.Nil(t, apple.UsedIn[0].SessionID)
+	assert.Equal(t, e.apple.ID, apple.UsedIn[0].FoodID)
+	assert.Equal(t, "2026-11-04", apple.UsedIn[0].Date)
+}
+
+func TestShoppingList_AC5_SectionOverrideMovesItem(t *testing.T) {
+	e := newShopEnv(t)
+	e.chiliBatch(t)
+	frozen := food.SectionFrozen
+	_, err := e.foods.SetShopSection(context.Background(), e.beans.ID, &frozen)
+	require.NoError(t, err)
+
+	_, b, _ := e.get(t, "?from=2026-11-01&to=2026-11-07")
+	require.Len(t, b.Sections, 2)
+	assert.Equal(t, "produce", b.Sections[0].Section)
+	assert.Equal(t, "frozen", b.Sections[1].Section)
+	assert.Equal(t, e.beans.ID, b.Sections[1].Items[0].FoodID)
+}
+
+func TestShoppingList_AC6_DefaultRange(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name                   string
+		anchor                 string
+		today                  string
+		from, to, wStart, wEnd string
+	}{
+		// plan.shopping_day defaults to Monday.
+		{"window containing today starts today", "today", "2026-11-04", "2026-11-04", "2026-11-08", "2026-11-02", "2026-11-08"},
+		{"next shopping day anchor", "next_shopping_day", "2026-11-04", "2026-11-09", "2026-11-15", "2026-11-09", "2026-11-15"},
+		{"on the shopping day", "today", "2026-11-02", "2026-11-02", "2026-11-08", "2026-11-02", "2026-11-08"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := newShopEnv(t)
+			require.NoError(t, e.settings.Set(ctx, settings.KeyPlanAnchor, tt.anchor))
+			code, b, raw := e.get(t, "?today="+tt.today)
+			require.Equal(t, http.StatusOK, code, raw)
+			assert.Equal(t, tt.from, b.Range.From)
+			assert.Equal(t, tt.to, b.Range.To)
+			assert.Equal(t, tt.wStart, b.Range.WindowStart)
+			assert.Equal(t, tt.wEnd, b.Range.WindowEnd)
+		})
+	}
+}
+
+func TestShoppingList_DefaultRangeExcludesPastDays(t *testing.T) {
+	e := newShopEnv(t)
+	e.chiliBatch(t) // cooks Sunday 2026-11-01, window Mon 26 Oct → Sun 1 Nov
+	require.NoError(t, e.settings.Set(context.Background(), settings.KeyPlanAnchor, "today"))
+
+	_, b, _ := e.get(t, "?today=2026-10-30")
+	assert.Equal(t, 2, b.Count, "Sunday is still ahead")
+	assert.Equal(t, "2026-10-30", b.Range.From)
+
+	_, b, _ = e.get(t, "?today=2026-11-02")
+	assert.Zero(t, b.Count, "the next window has only leftovers")
+}
+
+func TestShoppingList_ExplicitRangeEchoesContainingWindow(t *testing.T) {
+	e := newShopEnv(t)
+	code, b, raw := e.get(t, "?from=2026-11-04&to=2026-11-10&today=2026-10-01")
+	require.Equal(t, http.StatusOK, code, raw)
+	assert.Equal(t, "2026-11-04", b.Range.From)
+	assert.Equal(t, "2026-11-10", b.Range.To)
+	assert.Equal(t, "2026-11-02", b.Range.WindowStart)
+	assert.Equal(t, "2026-11-08", b.Range.WindowEnd)
+}
+
+func TestShoppingList_400(t *testing.T) {
+	e := newShopEnv(t)
+	tests := []struct {
+		name, query, key string
+	}{
+		{"from without to", "?from=2026-04-26", "error.invalid_to"},
+		{"to without from", "?to=2026-04-30", "error.invalid_from"},
+		{"malformed from", "?from=not-a-date&to=2026-04-30", "error.invalid_from"},
+		{"malformed to", "?from=2026-04-26&to=bad", "error.invalid_to"},
+		{"from after to", "?from=2026-05-01&to=2026-04-26", "error.invalid_date_range"},
+		{"span too large", "?from=2024-01-01&to=2025-12-31", "error.date_range_too_large"},
+		{"malformed today", "?today=yesterday", "error.invalid_body"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code, _, raw := e.get(t, tt.query)
+			assert.Equal(t, http.StatusBadRequest, code)
+			assert.Contains(t, raw, tt.key)
+		})
+	}
 }

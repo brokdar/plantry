@@ -53,7 +53,7 @@ var foodCols = []string{
 	"variant_group_id", "reference_portions", "prep_minutes", "cook_minutes",
 	"notes", "image_path", "favorite",
 	"created_at", "updated_at",
-	"source_url", "description", "keep_days", "freezable",
+	"source_url", "description", "keep_days", "freezable", "shop_section",
 }
 
 // FoodRepo implements food.Repository backed by SQLite.
@@ -534,6 +534,29 @@ func (r *FoodRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*f
 	return &f, nil
 }
 
+// SetShopSection writes a leaf's store section override; nil clears it.
+func (r *FoodRepo) SetShopSection(ctx context.Context, id int64, section *food.ShopSection) (*food.Food, error) {
+	var ns sql.NullString
+	if section != nil {
+		ns = sql.NullString{String: string(*section), Valid: true}
+	}
+	row, err := r.queriesFor(ctx).SetFoodShopSection(ctx, sqlcgen.SetFoodShopSectionParams{ID: id, ShopSection: ns})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
+		}
+		return nil, err
+	}
+	var f food.Food
+	mapFoodToDomain(&row, &f)
+	portions, err := r.ListPortions(ctx, f.ID)
+	if err != nil {
+		return nil, err
+	}
+	f.Portions = portions
+	return &f, nil
+}
+
 // Exists reports whether a food with the given ID exists. Implements
 // food.ChildExistsChecker (used by plate + template services).
 func (r *FoodRepo) Exists(ctx context.Context, id int64) (bool, error) {
@@ -807,6 +830,11 @@ func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {
 	} else {
 		f.Freezable = nil
 	}
+	f.ShopSection = nil
+	if row.ShopSection.Valid {
+		v := food.ShopSection(row.ShopSection.String)
+		f.ShopSection = &v
+	}
 	f.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
 	f.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
 }
@@ -858,7 +886,7 @@ func scanFoodRow(rows *sql.Rows) (*sqlcgen.Food, error) {
 		&row.VariantGroupID, &row.ReferencePortions, &row.PrepMinutes, &row.CookMinutes,
 		&row.Notes, &row.ImagePath, &row.Favorite,
 		&row.CreatedAt, &row.UpdatedAt,
-		&row.SourceUrl, &row.Description, &row.KeepDays, &row.Freezable,
+		&row.SourceUrl, &row.Description, &row.KeepDays, &row.Freezable, &row.ShopSection,
 	); err != nil {
 		return nil, err
 	}

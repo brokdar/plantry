@@ -119,7 +119,8 @@ func TestLookupHandler_Refetch_FDCUpstreamErrorIs502(t *testing.T) {
 	assert.Equal(t, []int{1234}, stub.byIDCalls)
 }
 
-// The lookup responses carry used_in_count like every other leaf response.
+// The lookup responses carry used_in_count and the store section like every
+// other leaf response.
 func TestLookupHandler_LeafResponsesCarryUsedInCount(t *testing.T) {
 	kcal := 304.0
 	stub := &stubFDC{byID: food.Candidate{Name: "Honey", Source: food.SourceFDC, FdcID: 1234, Kcal100g: &kcal}}
@@ -137,6 +138,8 @@ func TestLookupHandler_LeafResponsesCarryUsedInCount(t *testing.T) {
 	var got map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
 	assert.EqualValues(t, 1, got["used_in_count"])
+	assert.Equal(t, "dry_goods", got["shop_section"])
+	assert.Equal(t, "auto", got["shop_section_source"])
 
 	resp = httptest.NewRecorder()
 	r.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/foods/resolve",
@@ -146,4 +149,6 @@ func TestLookupHandler_LeafResponsesCarryUsedInCount(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
 	assert.Contains(t, got, "used_in_count")
 	assert.EqualValues(t, 0, got["used_in_count"])
+	assert.Equal(t, "dry_goods", got["shop_section"])
+	assert.Equal(t, "auto", got["shop_section_source"])
 }

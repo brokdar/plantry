@@ -5,7 +5,6 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 )
 
 type plateComponentResponse struct {
@@ -93,10 +92,6 @@ func toMacrosResponse(m nutrition.Macros) macrosResponse {
 		Kcal: m.Kcal, Protein: m.Protein, Fat: m.Fat,
 		Carbs: m.Carbs, Fiber: m.Fiber, Sodium: m.Sodium,
 	}
-}
-
-type shoppingListResponse struct {
-	Items []shopping.Item `json:"items"`
 }
 
 // removedResponse is the body of every removing mutation: what restores it.

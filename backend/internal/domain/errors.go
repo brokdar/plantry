@@ -63,4 +63,8 @@ var (
 	// ErrInvalidPlanStart: a plan window must start on the shopping day
 	// (Phase 2 D24).
 	ErrInvalidPlanStart = errors.New("plan window must start on the shopping day")
+
+	// Store sections (Phase 2 D18).
+	ErrInvalidShopSection  = errors.New("unknown store section")
+	ErrShopSectionLeafOnly = errors.New("store sections apply to leaf foods only")
 )

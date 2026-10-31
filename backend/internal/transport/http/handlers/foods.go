@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
@@ -202,10 +203,19 @@ type perPortionResponse struct {
 	Complete bool    `json:"complete"`
 }
 
-// leafDerived is a leaf's recipe usage.
+// leafDerived is a leaf's recipe usage and effective store section (D18):
+// the user's override (source "user") or the name classification ("auto").
 type leafDerived struct {
-	UsedInCount int `json:"used_in_count"`
+	UsedInCount       int    `json:"used_in_count"`
+	ShopSection       string `json:"shop_section"`
+	ShopSectionSource string `json:"shop_section_source"`
 }
+
+// Store section sources.
+const (
+	shopSectionAuto = "auto"
+	shopSectionUser = "user"
+)
 
 // foodCreateResponse is a food plus non-fatal problems hit while creating it
 // (e.g. "image_download_failed").
@@ -363,7 +373,14 @@ func toFoodResponse(f *food.Food) foodResponse {
 		resp.VitaminB12100g = f.VitaminB12100g
 		resp.VitaminB6100g = f.VitaminB6100g
 		resp.Folate100g = f.Folate100g
-		resp.leafDerived = &leafDerived{UsedInCount: f.UsedInCount}
+		resp.leafDerived = &leafDerived{
+			UsedInCount:       f.UsedInCount,
+			ShopSection:       string(shopping.SectionOf(f)),
+			ShopSectionSource: shopSectionAuto,
+		}
+		if f.ShopSection != nil {
+			resp.ShopSectionSource = shopSectionUser
+		}
 		if len(f.Portions) > 0 {
 			resp.Portions = make([]foodPortionResponse, len(f.Portions))
 			for i, p := range f.Portions {
@@ -794,6 +811,36 @@ func (h *FoodHandler) SetFavorite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f, err := h.svc.SetFavorite(r.Context(), id, req.Favorite)
+	if err != nil {
+		status, key := foodHTTPError(err)
+		writeError(w, status, key)
+		return
+	}
+	h.writeFood(w, r, http.StatusOK, today, f)
+}
+
+type foodShopSectionRequest struct {
+	Section *food.ShopSection `json:"section"`
+}
+
+// SetShopSection handles PUT /api/foods/{id}/shop-section {section | null}:
+// a leaf's store section override; null reverts to the classification.
+func (h *FoodHandler) SetShopSection(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	var req foodShopSectionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	f, err := h.svc.SetShopSection(r.Context(), id, req.Section)
 	if err != nil {
 		status, key := foodHTTPError(err)
 		writeError(w, status, key)
