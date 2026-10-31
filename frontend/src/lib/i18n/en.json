@@ -1058,16 +1058,6 @@
     },
     "go_today": "Go to Today"
   },
-  "shopping": {
-    "page_title": "Shopping list",
-    "title": "Shopping List",
-    "description": "Ingredients for this week",
-    "empty": "No ingredients — add meals to the planner first.",
-    "preset_rest_of_window": "Rest of this window",
-    "preset_this_window": "This window",
-    "preset_next_window": "Next window",
-    "range_label": "{{from}} — {{to}}"
-  },
   "nutrition": {
     "detail_title": "Nutrition for {{name}}",
     "section_core": "Macros",
@@ -1536,5 +1526,50 @@
       "open": "Open {{day}} in the plan",
       "empty": "Nothing planned"
     }
+  },
+  "shop": {
+    "range": "{{from}} to {{to}}",
+    "range_title": "Shopping range",
+    "this_window": "This window",
+    "next_window": "Next window",
+    "custom": "Custom range",
+    "from": "From",
+    "to": "To",
+    "show": "Show list",
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items",
+    "ticked_one": "{{count}} ticked",
+    "ticked_other": "{{count}} ticked",
+    "section": {
+      "produce": "Produce",
+      "bakery": "Bakery",
+      "dairy_eggs": "Dairy & eggs",
+      "meat_fish": "Meat & fish",
+      "dry_goods": "Dry goods",
+      "cans_jars": "Cans & jars",
+      "spices_oils": "Spices & oils",
+      "frozen": "Frozen",
+      "other": "Other"
+    },
+    "used_in": "Used in",
+    "used_in_toggle": "Where {{name}} is used",
+    "used_in_entry": "{{name}} · {{cell}}",
+    "row_menu": "Options for {{name}}",
+    "move_to": "Move to section",
+    "reset_section": "Reset to automatic",
+    "clear_ticked": "Clear ticked",
+    "cleared": "Ticks cleared",
+    "copy": "Copy as text",
+    "copied": "List copied",
+    "copy_failed": "The list wasn't copied. Allow clipboard access and try again.",
+    "copy_line": "- {{name}}, {{quantity}}",
+    "in_store": "In-store mode",
+    "in_store_exit": "Leave in-store mode",
+    "empty": "Plan this window to see what to buy",
+    "go_to_plan": "Go to plan",
+    "all_done_one": "All done. {{count}} item bought.",
+    "all_done_other": "All done. {{count}} items bought.",
+    "error": "The shopping list didn't load. Check that Plantry is running, then retry.",
+    "loading": "Loading the shopping list"
   }
 }

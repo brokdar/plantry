@@ -788,16 +788,6 @@
       "cancel": "Abbrechen"
     }
   },
-  "shopping": {
-    "page_title": "Einkaufsliste",
-    "title": "Einkaufsliste",
-    "description": "Zutaten für diese Woche",
-    "empty": "Keine Zutaten – füge zuerst Mahlzeiten zum Planer hinzu.",
-    "preset_rest_of_window": "Rest dieses Zeitraums",
-    "preset_this_window": "Dieser Zeitraum",
-    "preset_next_window": "Nächster Zeitraum",
-    "range_label": "{{from}} — {{to}}"
-  },
   "nutrition": {
     "detail_title": "Nährwerte für {{name}}",
     "section_core": "Makros",
@@ -1525,5 +1515,50 @@
       "open": "{{day}} im Plan öffnen",
       "empty": "Nichts geplant"
     }
+  },
+  "shop": {
+    "range": "{{from}} bis {{to}}",
+    "range_title": "Einkaufszeitraum",
+    "this_window": "Dieser Zeitraum",
+    "next_window": "Nächster Zeitraum",
+    "custom": "Eigener Zeitraum",
+    "from": "Von",
+    "to": "Bis",
+    "show": "Liste anzeigen",
+    "items_one": "{{count}} Artikel",
+    "items_other": "{{count}} Artikel",
+    "ticked_one": "{{count}} abgehakt",
+    "ticked_other": "{{count}} abgehakt",
+    "section": {
+      "produce": "Obst & Gemüse",
+      "bakery": "Backwaren",
+      "dairy_eggs": "Milchprodukte & Eier",
+      "meat_fish": "Fleisch & Fisch",
+      "dry_goods": "Trockenware",
+      "cans_jars": "Konserven & Gläser",
+      "spices_oils": "Gewürze & Öle",
+      "frozen": "Tiefkühl",
+      "other": "Sonstiges"
+    },
+    "used_in": "Gebraucht für",
+    "used_in_toggle": "Wofür {{name}} gebraucht wird",
+    "used_in_entry": "{{name}} · {{cell}}",
+    "row_menu": "Optionen für {{name}}",
+    "move_to": "In Abteilung verschieben",
+    "reset_section": "Automatisch zuordnen",
+    "clear_ticked": "Häkchen entfernen",
+    "cleared": "Häkchen entfernt",
+    "copy": "Als Text kopieren",
+    "copied": "Liste kopiert",
+    "copy_failed": "Die Liste wurde nicht kopiert. Erlaube den Zugriff auf die Zwischenablage und versuche es erneut.",
+    "copy_line": "- {{name}}, {{quantity}}",
+    "in_store": "Ladenmodus",
+    "in_store_exit": "Ladenmodus beenden",
+    "empty": "Plane diesen Zeitraum, um zu sehen, was du einkaufen musst",
+    "go_to_plan": "Zum Plan",
+    "all_done_one": "Alles erledigt. {{count}} Artikel gekauft.",
+    "all_done_other": "Alles erledigt. {{count}} Artikel gekauft.",
+    "error": "Die Einkaufsliste ließ sich nicht laden. Prüfe, ob Plantry läuft, und versuche es erneut.",
+    "loading": "Einkaufsliste wird geladen"
   }
 }

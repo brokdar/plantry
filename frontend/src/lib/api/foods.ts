@@ -1,4 +1,4 @@
-import { todayISO } from "@/lib/planner-window"
+import { todayISO } from "@/lib/dates"
 
 import { apiFetch } from "./client"
 import type { LookupCandidate } from "./lookup"

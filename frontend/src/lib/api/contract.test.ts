@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { mockRemovedBatch } from "@/test/fixtures"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn().mockResolvedValue({}) }))
-vi.mock("@/lib/planner-window", () => ({ todayISO: () => "2026-10-30" }))
+vi.mock("@/lib/dates", () => ({ todayISO: () => "2026-10-30" }))
 
 import { apiFetch } from "./client"
 import { deleteFeedback, putFeedback } from "./feedback"

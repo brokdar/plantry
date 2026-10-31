@@ -46,7 +46,8 @@ src/routes/
 ├── import/            # recipe import from URL (ImportWizard)
 ├── plan/              # `/plan?start&cell&day` — the plan board (components/plan, view model
 │                      #   lib/plan/board.ts); `day` focuses that day (Today's week strip)
-├── shop/              # shopping list for the current planner window, or `?from&to`
+├── shop/              # `/shop?from&to` — Shop (components/shop); without a range, the server's
+│                      #   default for the anchored window
 ├── presets/           # preset library + editor
 └── settings/          # index.tsx: `/settings` (section list on phone, else redirects; maps legacy
                        #   `?tab=`); $section.tsx: `/settings/$section` (household, meals, cooking,
@@ -63,7 +64,8 @@ src/components/
 ├── shell/             # AppShell, SideNav, MobileBottomNav, GeneratePlanButton, primary-nav.ts
 ├── today/             # TodayPage, Verdict (header + headline), CookCard/LeftoverCard, MealRow,
 │                      #   Reminders, RateQuestion, PlanBanner, WeekStrip
-├── planner/           # ShoppingPanel only (used by /shop until F7)
+├── shop/              # ShopPage, RangePicker, SectionList, ShoppingRow, CopyAsText (clipboard text);
+│                      #   ticks in localStorage `plantry:purchased:range:{from}:{to}`
 ├── plan/              # the board: PlanPage, Board (BoardGrid ≥768 px, DayList phone), PlateCell,
 │                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog; keynav in lib/plan/keynav.ts;
 │                      #   PlanSheet (one sheet per cell: PlateSheet, CellSheet or FoodPicker), BatchSection,
@@ -131,7 +133,7 @@ All user-visible strings go through `react-i18next`. Keys live in `src/lib/i18n/
 
 Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own unit tests:
 
-- `planner-window.ts` — old planner window maths (`computeAnchor`, `windowRange`, `shiftYMD`, `toYMD`) and `todayISO`; to be removed
+- `dates.ts` — `todayISO` (the client's date, sent as `today`, D25) and `shiftYMD`
 - `slot-label.ts` — slot display names
 - `preset-apply-toast.ts` — toast message logic after preset apply
 - `availability-grid.ts` — AvailabilityGrid columns and value ↔ availability defaults mapping

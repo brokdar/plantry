@@ -13,7 +13,7 @@ import type { ChatEvent, ChatRequest } from "../domain/chatEvents"
 import { chatStreamStore } from "../stores/chat-stream"
 import { useChatUI } from "../stores/chat-ui"
 
-import { todayISO } from "@/lib/planner-window"
+import { todayISO } from "@/lib/dates"
 import { toastError } from "@/lib/toast"
 
 import { aiKeys } from "./keys"

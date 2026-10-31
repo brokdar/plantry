@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { useState } from "react"
 
 import { TodayPage } from "@/components/today/TodayPage"
-import { todayISO } from "@/lib/planner-window"
+import { todayISO } from "@/lib/dates"
 import { redirectIfSetupIncomplete } from "@/lib/setup-redirect"
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
