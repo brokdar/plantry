@@ -160,6 +160,8 @@ function CookAsBatch({ session, slotName }: BatchSectionProps) {
    *  (and the unticked ones after it). Unticks before it are kept. */
   function changeMeals(next: number) {
     if (next > meals) {
+      // Fewer cells than asked for: the server has no more free cells.
+      if (suggested.data && cells.length < requested) return
       setRequested((r) => Math.min(MAX_LEFTOVER_CELLS, r + 1))
       return
     }

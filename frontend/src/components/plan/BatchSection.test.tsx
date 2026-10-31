@@ -189,6 +189,29 @@ describe("BatchSection on a fresh single meal", () => {
     )
   })
 
+  it("+ asks for no more cells once the server has run out", async () => {
+    vi.mocked(getLeftoverCells).mockImplementation(async (_id, count) => ({
+      cells: [
+        { date: "2026-11-02", slot_id: 2 },
+        { date: "2026-11-02", slot_id: 3 },
+      ].slice(0, count),
+    }))
+    await renderSection(single, 9)
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cook as a batch" })
+    )
+    const increase = screen.getByRole("button", { name: "Increase Meals" })
+    await userEvent.click(increase)
+    await waitFor(() => expect(getLeftoverCells).toHaveBeenCalledWith(7, 2))
+    // Asked for 3 cells, got 2: the server is out of free cells.
+    await userEvent.click(increase)
+    await waitFor(() => expect(getLeftoverCells).toHaveBeenCalledWith(7, 3))
+    await screen.findByRole("checkbox", { name: "Mon dinner" })
+    await userEvent.click(increase)
+    expect(getLeftoverCells).not.toHaveBeenCalledWith(7, 4)
+    expect(screen.getByRole("group", { name: "Meals" })).toHaveTextContent("3")
+  })
+
   it("starts again from 2 meals after Cancel", async () => {
     await renderSection(single, 9)
     await userEvent.click(
