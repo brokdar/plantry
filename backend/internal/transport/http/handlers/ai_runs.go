@@ -53,9 +53,9 @@ type runSummaryResponse struct {
 	StartedAt       string            `json:"started_at"`
 	FinishedAt      *string           `json:"finished_at"`
 	Status          string            `json:"status"`
-	Provider        string            `json:"provider"`
-	Model           string            `json:"model"`
-	PromptVersion   string            `json:"prompt_version"`
+	Provider        *string           `json:"provider"`
+	Model           *string           `json:"model"`
+	PromptVersion   *string           `json:"prompt_version"`
 	Chooser         *string           `json:"chooser"`
 	Tokens          runTokensResponse `json:"tokens"`
 	CostEstimateUSD *float64          `json:"cost_estimate_usd"`
@@ -314,9 +314,9 @@ func toRunSummaryResponse(s airun.RunSummary) runSummaryResponse {
 		Kind:          string(s.Kind),
 		StartedAt:     s.StartedAt.Format(time.RFC3339),
 		Status:        string(s.Status),
-		Provider:      s.Provider,
-		Model:         s.Model,
-		PromptVersion: s.PromptVersion,
+		Provider:      nilIfEmpty(s.Provider),
+		Model:         nilIfEmpty(s.Model),
+		PromptVersion: nilIfEmpty(s.PromptVersion),
 		Chooser:       nilIfEmpty(string(s.Chooser)),
 		Tokens: runTokensResponse{
 			Input: s.Tokens.Input, Output: s.Tokens.Output,

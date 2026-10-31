@@ -247,10 +247,12 @@ func idRange(rows []RunRow) (minID, maxID int64) {
 	return minID, maxID
 }
 
-// Weekly reports the runs started on the dates [from, to] in Monday-based
-// weeks (every week of the range, empty ones included) and grouped by kind,
+// Weekly reports the runs started in the Monday-based weeks covering the
+// dates [from, to] (every week, empty ones included) and grouped by kind,
 // prompt version and model.
 func (s *Insights) Weekly(ctx context.Context, from, to time.Time) (Report, error) {
+	// The first bucket covers its whole week, not just the days from on.
+	from = monday(from)
 	end := to.AddDate(0, 0, 1)
 	rows, err := s.store.ListRuns(ctx, RunQuery{From: &from, To: &end, Limit: -1})
 	if err != nil {

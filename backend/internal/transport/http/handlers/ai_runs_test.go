@@ -96,7 +96,9 @@ func TestAIRuns_ListPagesFiltersAndPrices(t *testing.T) {
 	g4 := a.run(airun.KindGenerate, "2026-10-04", "claude-sonnet-4-6", "anthropic", 0)
 
 	var page runsPage
-	require.Equal(t, http.StatusOK, a.get("/api/ai/runs?limit=3", &page).Code)
+	first := a.get("/api/ai/runs?limit=3", &page)
+	require.Equal(t, http.StatusOK, first.Code)
+	assert.Contains(t, first.Body.String(), `"provider":null,"model":null,"prompt_version":null`, "empty strings are null")
 	assert.Equal(t, []int64{g4, c3, g2}, page.ids())
 	require.NotNil(t, page.NextCursor)
 	assert.Equal(t, g2, *page.NextCursor)

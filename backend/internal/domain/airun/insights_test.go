@@ -116,7 +116,7 @@ func TestInsights_WeeklyBuckets(t *testing.T) {
 				Tokens: Tokens{Input: 1_000_000}, Outcome: "accepted", PromptVersion: "p1",
 				ScoreJSON: `{"coverage":1,"variety":{"distinct":6},"per_day":[1,2]}`, ViolationsJSON: `[{"rule":"H2"}]`,
 			},
-			{ID: 3, Kind: KindChat, StartedAt: at(10, 6), Model: "mystery", Provider: "fake", Tokens: Tokens{Input: 5}},
+			{ID: 3, Kind: KindChat, StartedAt: at(10, 5), Model: "mystery", Provider: "fake", Tokens: Tokens{Input: 5}}, // Monday before from
 			{ID: 2, Kind: KindChat, StartedAt: at(10, 6), Model: "mystery", Provider: "fake", Tokens: Tokens{Input: 5}},
 			{ID: 1, Kind: KindGenerate, StartedAt: at(10, 7), Chooser: ChooserHeuristic, Outcome: "partially_accepted"},
 		},
@@ -167,6 +167,7 @@ func TestInsights_WeeklyBuckets(t *testing.T) {
 
 	q := store.queries[0]
 	assert.Equal(t, -1, q.Limit)
+	assert.Equal(t, time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC), *q.From, "from snaps to its Monday")
 	assert.Equal(t, time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC), *q.To, "to is inclusive")
 }
 
