@@ -20,9 +20,12 @@ test("home page loads with sidebar brand and no console errors", async ({
   await expect(page.getByTestId("sidenav")).toBeVisible()
   await expect(page.getByTestId("sidenav-brand")).toBeVisible()
 
-  // After setup, `/` opens the plan board.
-  await expect(page).toHaveURL(/\/plan$/)
-  await expect(page.getByRole("grid")).toBeVisible()
+  // After setup, `/` opens Today with its verdict and the week strip.
+  await expect(page).toHaveURL(/\/today$/)
+  await expect(page.getByTestId("today-verdict")).toBeVisible()
+  await expect(
+    page.getByRole("navigation", { name: "This week" })
+  ).toBeVisible()
 
   expect(consoleErrors, `console errors: ${consoleErrors.join("\n")}`).toEqual(
     []

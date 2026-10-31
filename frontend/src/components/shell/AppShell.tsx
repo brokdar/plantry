@@ -7,7 +7,6 @@ import { useProfile } from "@/lib/queries/profile"
 
 import { MobileBottomNav } from "./MobileBottomNav"
 import { SideNav } from "./SideNav"
-import { TopBar } from "./TopBar"
 
 type AppShellProps = {
   children: React.ReactNode
@@ -59,7 +58,6 @@ export function AppShell({ children }: AppShellProps) {
       </a>
       <SideNav collapsed={collapsed} onToggle={handleToggle} />
       <div className="flex min-w-0 flex-1 flex-col pb-[var(--tab-bar-inset)] md:pb-0">
-        <TopBar />
         <main
           id="main"
           ref={mainRef}

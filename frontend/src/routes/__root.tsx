@@ -97,21 +97,21 @@ function CommandPaletteHost({
   )
 }
 
+/** Unknown paths, including the removed `/calendar`, `/day/$date` and
+ *  `/archive` (plan D2: no redirects). */
 function NotFoundPage() {
   const { t } = useTranslation()
   return (
-    <div className="mx-auto flex max-w-lg flex-col items-center gap-4 px-4 py-24 text-center">
-      <p className="font-heading text-7xl font-bold text-primary opacity-20">
-        404
-      </p>
-      <h1 className="font-heading text-2xl font-bold text-on-surface">
-        {t("error.page_not_found")}
-      </h1>
-      <p className="text-sm text-on-surface-variant">
+    <div
+      className="mx-auto flex max-w-lg flex-col items-start gap-3 px-4 py-16 md:px-8"
+      data-testid="not-found"
+    >
+      <h1 className="text-h1 text-ink">{t("error.page_not_found")}</h1>
+      <p className="text-body text-ink-muted">
         {t("error.page_not_found_body")}
       </p>
-      <Button asChild>
-        <Link to="/">{t("nav.planner")}</Link>
+      <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
+        <Link to="/today">{t("error.go_today")}</Link>
       </Button>
     </div>
   )
@@ -121,15 +121,23 @@ function ErrorPage() {
   const { t } = useTranslation()
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-4 text-center">
-      <h1 className="font-heading text-2xl font-bold text-on-surface">
-        {t("error.server")}
-      </h1>
-      <p className="text-sm text-on-surface-variant">
-        {t("error.page_error_body")}
-      </p>
-      <Button onClick={() => window.location.reload()}>
-        {t("error.reload")}
-      </Button>
+      <h1 className="text-h1 text-ink">{t("error.server")}</h1>
+      <p className="text-body text-ink-muted">{t("error.page_error_body")}</p>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button
+          className="h-11 px-4 md:pointer-fine:h-9"
+          onClick={() => window.location.reload()}
+        >
+          {t("error.reload")}
+        </Button>
+        <Button
+          asChild
+          variant="outline"
+          className="h-11 px-4 md:pointer-fine:h-9"
+        >
+          <Link to="/today">{t("error.go_today")}</Link>
+        </Button>
+      </div>
     </div>
   )
 }

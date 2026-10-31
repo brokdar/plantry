@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { useLocation } from "@tanstack/react-router"
 import {
   BookOpen,
@@ -7,8 +6,6 @@ import {
   ShoppingBasket,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-
-import { todayISO } from "@/lib/planner-window"
 
 export type PrimaryNavEntry = {
   id: "today" | "plan" | "recipes" | "shop"
@@ -22,19 +19,18 @@ const RECIPES_PATH = /^\/(components|ingredients|import)(\/|$)/
 
 /**
  * The four destinations (UX §2.1, plan D1), shared by the rail and the phone
- * tab bar. Today's date is read once at mount so render stays pure.
+ * tab bar.
  */
 export function usePrimaryNav(): PrimaryNavEntry[] {
-  const [today] = useState(todayISO)
   const pathname = useLocation({ select: (l) => l.pathname })
 
   return [
     {
       id: "today",
-      to: `/day/${today}`,
+      to: "/today",
       labelKey: "nav.today",
       icon: CookingPot,
-      active: pathname.startsWith("/day/"),
+      active: pathname === "/today" || pathname.startsWith("/today/"),
     },
     {
       id: "plan",

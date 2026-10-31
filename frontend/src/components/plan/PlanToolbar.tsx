@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
+import { GeneratePlanButton } from "@/components/shell/GeneratePlanButton"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -97,6 +98,10 @@ export function PlanToolbar({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Phone only: the rail carries Generate from 768 px up (D31). */}
+          <div className="md:hidden">
+            <GeneratePlanButton variant="compact" />
+          </div>
           <Button
             variant="outline"
             onClick={onAsk}

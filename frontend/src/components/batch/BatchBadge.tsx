@@ -10,6 +10,8 @@ import { useBatchHighlight } from "./batch-highlight"
 export type BatchBadgeProps = BatchBadgeContent & {
   sessionId: number
   colour: BatchColour
+  /** Appended after a middle dot, e.g. Today's "use by Wed". */
+  suffix?: string
   className?: string
 }
 
@@ -23,6 +25,7 @@ export type BatchBadgeProps = BatchBadgeContent & {
 export function BatchBadge({
   sessionId,
   colour,
+  suffix,
   className,
   ...content
 }: BatchBadgeProps) {
@@ -48,6 +51,7 @@ export function BatchBadge({
         <Snowflake className="size-3" strokeWidth={1.5} aria-hidden="true" />
       )}
       {batchBadgeText(content, i18n)}
+      {suffix && ` · ${suffix}`}
     </span>
   )
 }

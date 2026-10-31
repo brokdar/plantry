@@ -4,18 +4,12 @@ import { expect, mockAnchorToday, test } from "./helpers"
 
 const DESTINATIONS = ["Today", "Plan", "Recipes", "Shop"]
 
-function localToday() {
-  const d = new Date()
-  const pad = (n: number) => String(n).padStart(2, "0")
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
 async function expectFourDestinations(nav: Locator) {
   const links = nav.getByRole("link")
   await expect(links).toHaveText(DESTINATIONS)
   await expect(nav.getByRole("link", { name: "Today" })).toHaveAttribute(
     "href",
-    `/day/${localToday()}`
+    "/today"
   )
   await expect(nav.getByRole("link", { name: "Plan" })).toHaveAttribute(
     "href",
@@ -49,8 +43,10 @@ test.describe("AppShell", () => {
     ).toHaveAttribute("aria-current", "page")
     await expect(sidebar.getByTestId("generate-plan-default")).toBeVisible()
 
-    // The phone gear is hidden from 768 px up.
-    await expect(page.getByTestId("topbar-settings")).toBeHidden()
+    // The phone gear in the Today header is hidden from 768 px up.
+    await page.goto("/today")
+    await expect(page.getByTestId("today-verdict")).toBeVisible()
+    await expect(page.getByTestId("today-settings")).toBeHidden()
   })
 
   test("narrow rail (768 px) keeps labels and settings", async ({ page }) => {
@@ -85,7 +81,11 @@ test.describe("AppShell", () => {
     const sidebar = page.getByTestId("sidenav")
 
     await sidebar.getByRole("link", { name: "Today" }).click()
-    await expect(page).toHaveURL(new RegExp(`/day/${localToday()}`))
+    await expect(page).toHaveURL(/\/today$/)
+    await expect(sidebar.getByRole("link", { name: "Today" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    )
 
     // exact: the Generate gate's "Add N more recipes" link also matches.
     await sidebar.getByRole("link", { name: "Recipes", exact: true }).click()
@@ -116,7 +116,7 @@ test.describe("AppShell", () => {
     await page.unrouteAll({ behavior: "ignoreErrors" })
   })
 
-  test("calendar, presets and archive stay reachable via the command palette", async ({
+  test("the palette keeps Ingredients and Import; Calendar and Archive are gone", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
@@ -125,22 +125,35 @@ test.describe("AppShell", () => {
     await expect(
       sidebar.getByRole("navigation", { name: "Primary" }).getByRole("link")
     ).toHaveCount(4)
-    await expect(sidebar.getByRole("link", { name: "Calendar" })).toHaveCount(0)
-    await expect(page.getByTestId("catalog-secondary-actions")).toBeVisible()
 
     await page.keyboard.press("ControlOrMeta+k")
     const palette = page.getByRole("dialog")
-    for (const name of ["Calendar", "Archive", "Ingredients", "Import"]) {
+    for (const name of ["Ingredients", "Import"]) {
       await expect(
         palette.getByRole("option", { name, exact: true })
       ).toBeVisible()
     }
-    await expect(
-      palette.getByRole("option", { name: "Open Presets library" })
-    ).toBeVisible()
+    for (const name of ["Calendar", "Archive"]) {
+      await expect(
+        palette.getByRole("option", { name, exact: true })
+      ).toHaveCount(0)
+    }
+  })
 
-    await palette.getByRole("option", { name: "Calendar", exact: true }).click()
-    await expect(page).toHaveURL(/\/calendar/)
+  // F5-AC5 (D2): removed routes render the not-found page, no redirects.
+  test("/calendar, /day and /archive render the not-found page with a link to Today", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    for (const path of ["/calendar", "/day/2026-11-02", "/archive"]) {
+      await page.goto(path)
+      await expect(page.getByTestId("not-found")).toContainText(
+        "Page not found."
+      )
+      await expect(page).toHaveURL(new RegExp(`${path}$`))
+    }
+    await page.getByRole("link", { name: "Go to Today" }).click()
+    await expect(page).toHaveURL(/\/today$/)
   })
 
   test("pressing 'd' toggles the root theme class and persists", async ({
@@ -174,29 +187,33 @@ test.describe("AppShell", () => {
       .toBe(initial)
   })
 
-  test("phone shows the four tabs, a compact generate button and a settings gear", async ({
+  // F5-AC6 and D31: four tabs, the gear in the Today header, Generate in
+  // the /plan header, and no top bar.
+  test("phone shows four tabs, the gear in the Today header and Generate on Plan", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 375, height: 812 })
-    await page.goto("/ingredients")
+    await page.goto("/today")
 
     const bottomNav = page.getByTestId("mobile-bottom-nav")
     await expect(bottomNav).toBeVisible()
     await expectFourDestinations(bottomNav)
     await expect(
-      bottomNav.getByRole("link", { name: "Recipes" })
+      bottomNav.getByRole("link", { name: "Today" })
     ).toHaveAttribute("aria-current", "page")
-    // UX §2.1: exactly four tab items; Generate lives in the top bar.
     await expect(bottomNav.getByRole("link")).toHaveCount(4)
     await expect(bottomNav.getByRole("button")).toHaveCount(0)
-    await expect(
-      page.getByTestId("topbar").getByTestId("generate-plan-compact")
-    ).toBeVisible()
+    await expect(page.getByTestId("topbar")).toHaveCount(0)
 
     // Desktop sidebar must be hidden on mobile (rendered but not visible).
     await expect(page.getByTestId("sidenav")).toBeHidden()
 
-    const gear = page.getByTestId("topbar-settings")
+    await bottomNav.getByRole("link", { name: "Plan" }).click()
+    await expect(page).toHaveURL(/\/plan$/)
+    await expect(page.getByTestId("generate-plan-compact")).toBeVisible()
+
+    await bottomNav.getByRole("link", { name: "Today" }).click()
+    const gear = page.getByTestId("today-settings")
     await expect(gear).toBeVisible()
     await gear.click()
     await expect(page).toHaveURL(/\/settings/)

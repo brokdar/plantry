@@ -14,7 +14,7 @@ import { useChatUI } from "@/lib/stores/chat-ui"
 import { cn } from "@/lib/utils"
 
 /** `default`: labelled, in the wide rail. `rail`: icon, in the narrow rail.
- *  `compact`: icon, in the phone TopBar next to the Settings gear. */
+ *  `compact`: icon, in the phone header of `/plan` (D31). */
 export type GeneratePlanVariant = "default" | "rail" | "compact"
 
 type GeneratePlanButtonProps = {

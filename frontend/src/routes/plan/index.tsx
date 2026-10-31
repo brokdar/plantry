@@ -9,8 +9,11 @@ export const Route = createFileRoute("/plan/")({
   // `start` must be a window start (a shopping day); the server says so
   // with a 400 if it is not. Without it the anchored window opens.
   // `cell` (`date|slotId`) opens that cell's sheet, e.g. a batch's cook
-  // cell from a leftover in the next window.
-  validateSearch: (search): { start?: string; cell?: string } => ({
+  // cell from a leftover in the next window. `day` focuses that day's
+  // first cell (Today's week strip).
+  validateSearch: (
+    search
+  ): { start?: string; cell?: string; day?: string } => ({
     start:
       typeof search.start === "string" && DATE.test(search.start)
         ? search.start
@@ -19,11 +22,15 @@ export const Route = createFileRoute("/plan/")({
       typeof search.cell === "string" && CELL.test(search.cell)
         ? search.cell
         : undefined,
+    day:
+      typeof search.day === "string" && DATE.test(search.day)
+        ? search.day
+        : undefined,
   }),
   component: PlanRoute,
 })
 
 function PlanRoute() {
-  const { start, cell } = Route.useSearch()
-  return <PlanPage key={start ?? ""} start={start} cell={cell} />
+  const { start, cell, day } = Route.useSearch()
+  return <PlanPage key={start ?? ""} start={start} cell={cell} day={day} />
 }

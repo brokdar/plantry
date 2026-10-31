@@ -1,10 +1,5 @@
-import { renderHook, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import {
-  createHookWrapper,
-  invalidatedBy,
-  renderWithRouter,
-} from "@/test/render"
+import { invalidatedBy } from "@/test/render"
 import { mockPlate as makePlate, mockRemovedBatch } from "@/test/fixtures"
 
 vi.mock("@/lib/api/plates", async (importOriginal) => ({
@@ -13,7 +8,6 @@ vi.mock("@/lib/api/plates", async (importOriginal) => ({
   createPlate: vi.fn(),
   deletePlate: vi.fn(),
   deletePlateComponent: vi.fn(),
-  listPlates: vi.fn(),
   updatePlate: vi.fn(),
   updatePlateComponent: vi.fn(),
 }))
@@ -23,7 +17,6 @@ import {
   createPlate,
   deletePlate,
   deletePlateComponent,
-  listPlates,
   updatePlate,
   updatePlateComponent,
 } from "@/lib/api/plates"
@@ -38,7 +31,6 @@ import {
   useAddComponent,
   useCreatePlate,
   useDeletePlate,
-  usePlatesRange,
   useRemoveComponent,
   useUpdateComponent,
   useUpdatePlate,
@@ -115,40 +107,5 @@ describe("plate mutations (§3.1) invalidate the plan views", () => {
       })
     ).toEqual(PLAN_VIEWS)
     expect(deletePlateComponent).toHaveBeenCalledWith(2, 10)
-  })
-})
-
-describe("usePlatesRange", () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it("returns plates from the API for (from, to)", async () => {
-    const plate = makePlate({ id: 42, date: "2026-04-28" })
-    vi.mocked(listPlates).mockResolvedValueOnce({ plates: [plate] })
-
-    const { result } = renderHook(
-      () => usePlatesRange("2026-04-26", "2026-05-02"),
-      { wrapper: createHookWrapper() }
-    )
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(listPlates).toHaveBeenCalledWith("2026-04-26", "2026-05-02")
-    expect(result.current.data?.plates).toHaveLength(1)
-    expect(result.current.data?.plates[0].id).toBe(42)
-  })
-
-  it("renders plate data via renderWithRouter", async () => {
-    const plate = makePlate({ id: 99, date: "2026-04-27" })
-    vi.mocked(listPlates).mockResolvedValue({ plates: [plate] })
-
-    function TestComponent() {
-      const { data } = usePlatesRange("2026-04-26", "2026-05-02")
-      if (!data) return <div>loading</div>
-      return <div data-testid="count">{data.plates.length}</div>
-    }
-
-    renderWithRouter(<TestComponent />)
-
-    expect(await screen.findByTestId("count")).toHaveTextContent("1")
   })
 })

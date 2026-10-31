@@ -22,7 +22,7 @@ async function runBeforeLoad(): Promise<unknown> {
   }
 }
 
-describe("/ setup redirect (plan D2)", () => {
+describe("/ setup redirect (F5-AC5)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     queryClient.clear()
@@ -39,7 +39,7 @@ describe("/ setup redirect (plan D2)", () => {
     expect((thrown as { options: { to: string } }).options.to).toBe("/setup")
   })
 
-  it("opens the plan board once setup is completed", async () => {
+  it("opens Today once setup is completed", async () => {
     vi.mocked(getSetupStatus).mockResolvedValue({
       completed: true,
       recipe_count: 3,
@@ -47,12 +47,12 @@ describe("/ setup redirect (plan D2)", () => {
     })
     const thrown = await runBeforeLoad()
     expect(isRedirect(thrown)).toBe(true)
-    expect((thrown as { options: { to: string } }).options.to).toBe("/plan")
+    expect((thrown as { options: { to: string } }).options.to).toBe("/today")
   })
 
-  it("opens the plan board when the setup status fails to load", async () => {
+  it("opens Today when the setup status fails to load", async () => {
     vi.mocked(getSetupStatus).mockRejectedValue(new Error("offline"))
     const thrown = await runBeforeLoad()
-    expect((thrown as { options: { to: string } }).options.to).toBe("/plan")
+    expect((thrown as { options: { to: string } }).options.to).toBe("/today")
   })
 })

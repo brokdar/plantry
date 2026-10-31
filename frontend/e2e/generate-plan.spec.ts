@@ -50,7 +50,7 @@ test.describe("Generate plan CTA", () => {
 
     try {
       await page.setViewportSize({ width: 1440, height: 900 })
-      await page.goto("/archive")
+      await page.goto("/settings")
 
       await expect(page.getByTestId("sidenav")).toBeVisible()
       await page.getByTestId("generate-plan-default").click()
@@ -73,7 +73,6 @@ test.describe("Generate plan CTA", () => {
       await page.setViewportSize({ width: 390, height: 844 })
       await page.goto("/plan")
 
-      await expect(page.getByTestId("topbar")).toBeVisible()
       await page.getByTestId("generate-plan-compact").click()
 
       const composer = page.getByTestId("chat-composer-input")
