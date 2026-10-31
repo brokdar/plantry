@@ -285,7 +285,6 @@
       "rate_limit_effect_zero": "The assistant chat has no rate limit.",
       "rate_limit_effect_one": "The assistant answers at most {{count}} chat message per minute.",
       "rate_limit_effect_other": "The assistant answers at most {{count}} chat messages per minute.",
-      "insights_group": "Insights",
       "insights_effect": "Every assistant run with its cost, quality and how often you changed its plans.",
       "insights_open": "Open insights",
       "prices_group": "Prices",

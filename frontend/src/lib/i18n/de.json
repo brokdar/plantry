@@ -285,7 +285,6 @@
       "rate_limit_effect_zero": "Der Assistenten-Chat hat kein Limit.",
       "rate_limit_effect_one": "Der Assistent beantwortet höchstens {{count}} Chatnachricht pro Minute.",
       "rate_limit_effect_other": "Der Assistent beantwortet höchstens {{count}} Chatnachrichten pro Minute.",
-      "insights_group": "Auswertung",
       "insights_effect": "Jeder Lauf des Assistenten mit Kosten, Qualität und wie oft du seine Pläne geändert hast.",
       "insights_open": "Auswertung öffnen",
       "prices_group": "Preise",

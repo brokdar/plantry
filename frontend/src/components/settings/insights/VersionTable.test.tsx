@@ -10,7 +10,7 @@ describe("VersionTable", () => {
   it("shows score components and violations per prompt version", () => {
     render(
       <VersionTable
-        rows={[
+        groups={[
           {
             ...mockInsights.by_version[0],
             score_avg: {
@@ -46,8 +46,21 @@ describe("VersionTable", () => {
     ])
   })
 
-  it("says so when nothing was scored", () => {
-    render(<VersionTable rows={[]} />)
+  it("leaves out groups without scores, such as chat", () => {
+    render(
+      <VersionTable
+        groups={[
+          {
+            kind: "chat",
+            prompt_version: "v4",
+            model: "fake",
+            runs: 2,
+            score_avg: {},
+            violations: {},
+          },
+        ]}
+      />
+    )
     expect(screen.getByText("No scored plans yet.")).toBeInTheDocument()
   })
 })

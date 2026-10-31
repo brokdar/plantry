@@ -87,7 +87,7 @@ export function InsightsPage({
           <h2 id="insights-versions" className="text-h2 font-semibold text-ink">
             {t("settings_page.insights.versions_title")}
           </h2>
-          <VersionTable rows={insights.data.by_version} />
+          <VersionTable groups={insights.data.by_version} />
         </section>
       )}
 

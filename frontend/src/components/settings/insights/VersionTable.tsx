@@ -50,9 +50,15 @@ function componentText(
 }
 
 /** Score components and violations grouped by kind, prompt version and
- *  model. */
-export function VersionTable({ rows }: { rows: InsightsByVersion[] }) {
+ *  model, for the groups that have any. */
+export function VersionTable({ groups }: { groups: InsightsByVersion[] }) {
   const { t, i18n } = useTranslation()
+  // Chat turns carry no score or violations; only planning runs compare.
+  const rows = groups.filter(
+    (g) =>
+      Object.keys(g.score_avg).length > 0 ||
+      Object.keys(g.violations).length > 0
+  )
 
   if (rows.length === 0) {
     return (

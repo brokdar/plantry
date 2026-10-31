@@ -1,4 +1,4 @@
-const WIDTH = 160
+const WIDTH = 300
 const HEIGHT = 40
 const PAD = 5
 

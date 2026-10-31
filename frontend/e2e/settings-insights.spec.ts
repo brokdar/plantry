@@ -1,3 +1,5 @@
+import type { APIRequestContext, Page } from "@playwright/test"
+
 import { expect, test } from "./helpers"
 
 import { API, cleanupSlot, seedSlot, uid } from "./helpers"
@@ -8,21 +10,38 @@ import { API, cleanupSlot, seedSlot, uid } from "./helpers"
 test.describe.configure({ mode: "serial" })
 
 interface RunsPage {
-  items: { id: number; kind: string }[]
+  items: { id: number; status: string }[]
 }
 
-async function chatOnce(page: import("@playwright/test").Page) {
+async function latestChatRun(request: APIRequestContext) {
+  const res = await request.get(`${API}/api/ai/runs?kind=chat&limit=1`)
+  return ((await res.json()) as RunsPage).items[0]
+}
+
+/** One chat turn through the panel; returns its run id once the run has
+ *  finished (leaving the page earlier would cancel it). */
+async function chatOnce(
+  page: Page,
+  request: APIRequestContext
+): Promise<number> {
+  const before = (await latestChatRun(request))?.id ?? 0
   await page.goto("/plan")
   await page.getByRole("button", { name: "Ask assistant" }).click()
   await page.getByTestId("chat-composer-input").fill("plan my tuesday dinner")
-  const chat = page.waitForResponse(
-    (r) => r.url().includes("/api/ai/chat") && r.request().method() === "POST"
-  )
   await page.getByTestId("chat-composer-submit").click()
-  await chat
-  await expect(page.getByTestId("chat-message-assistant").first()).toBeVisible({
-    timeout: 10_000,
-  })
+  let runId = 0
+  await expect
+    .poll(
+      async () => {
+        const run = await latestChatRun(request)
+        if (!run || run.id <= before) return "none"
+        runId = run.id
+        return run.status
+      },
+      { timeout: 15_000 }
+    )
+    .toBe("ok")
+  return runId
 }
 
 test("a chat turn shows up in Insights with its steps and an unknown cost", async ({
@@ -31,11 +50,7 @@ test("a chat turn shows up in Insights with its steps and an unknown cost", asyn
 }) => {
   const slot = await seedSlot(`slot.insights-${uid()}`, "moon", 98)
   try {
-    await chatOnce(page)
-
-    const res = await request.get(`${API}/api/ai/runs?kind=chat&limit=1`)
-    const { items } = (await res.json()) as RunsPage
-    const runId = items[0].id
+    const runId = await chatOnce(page, request)
 
     // Settings → Assistant → Insights (the static route beats $section).
     await page.goto("/settings/assistant")
@@ -77,9 +92,7 @@ test("a chat turn shows up in Insights with its steps and an unknown cost", asyn
 test("a price override re-prices the runs table", async ({ page, request }) => {
   const slot = await seedSlot(`slot.insights-${uid()}`, "moon", 98)
   try {
-    await chatOnce(page)
-    const res = await request.get(`${API}/api/ai/runs?kind=chat&limit=1`)
-    const runId = ((await res.json()) as RunsPage).items[0].id
+    const runId = await chatOnce(page, request)
 
     await page.goto("/settings/assistant")
     await expect(page.getByTestId("current-price")).toContainText(

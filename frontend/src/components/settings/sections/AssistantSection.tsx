@@ -33,7 +33,7 @@ export function AssistantSection() {
         <RetentionRow />
       </SettingsGroup>
 
-      <SettingsGroup title={t("settings_page.assistant.insights_group")}>
+      <SettingsGroup>
         <SettingRow
           label={t("settings_page.insights.title")}
           description={t("settings_page.assistant.insights_effect")}
