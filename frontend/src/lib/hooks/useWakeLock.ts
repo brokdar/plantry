@@ -1,16 +1,16 @@
 import { useEffect } from "react"
 
 /**
- * Keeps the screen on while cook mode is open (UX §5.3): requests a screen
- * wake lock on mount, again when the page becomes visible (the browser
- * drops the lock when it is hidden), and releases it on unmount. A browser
- * without the API, or one that refuses, simply leaves the screen to its
- * own timeout.
+ * Keeps the screen on while `active` (cook mode, UX §5.3; Shop's in-store
+ * mode): requests a screen wake lock, again when the page becomes visible
+ * (the browser drops the lock when it is hidden), and releases it when
+ * `active` turns off or on unmount. A browser without the API, or one that
+ * refuses, simply leaves the screen to its own timeout.
  */
-export function useWakeLock() {
+export function useWakeLock(active = true) {
   useEffect(() => {
     const wakeLock = (navigator as Partial<Navigator>).wakeLock
-    if (!wakeLock) return
+    if (!active || !wakeLock) return
 
     let sentinel: WakeLockSentinel | null = null
     let mounted = true
@@ -43,5 +43,5 @@ export function useWakeLock() {
       document.removeEventListener("visibilitychange", onVisibility)
       sentinel?.release().catch(() => {})
     }
-  }, [])
+  }, [active])
 }

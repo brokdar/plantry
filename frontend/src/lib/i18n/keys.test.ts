@@ -26,9 +26,6 @@ const DYNAMIC_PREFIXES = [
   "error.",
   // slot names: the slot's `name_key` from the API (slot-label.ts)
   "slot.",
-  // unit labels: `units.${unit}` / `unit.${unit}` from API unit keys
-  "units.",
-  "unit.",
 ]
 
 const sources = import.meta.glob<string>(

@@ -12,7 +12,7 @@ import { formatAmount } from "@/lib/plan/format"
 import { ScaledIngredients } from "./ScaledIngredients"
 import { StepPager } from "./StepPager"
 import { TimerPill, type RunningTimer } from "./TimerPill"
-import { useWakeLock } from "./useWakeLock"
+import { useWakeLock } from "@/lib/hooks/useWakeLock"
 
 /** Batch and recipe portions: whole steps up to the scaling limit. */
 const MIN_PORTIONS = 1
