@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -151,6 +152,92 @@ func TestCookSessionRepo_ListInRange(t *testing.T) {
 	assert.Len(t, links[linkedIn.ID], 2)
 	assert.Empty(t, links[cooksInUnlinked.ID])
 	assert.Len(t, links, 2, "only links of the listed sessions")
+}
+
+// TestRepos_CorruptDatesFail: a date or timestamp column that does not parse
+// is an error naming the row, never a silent 0001-01-01.
+func TestRepos_CorruptDatesFail(t *testing.T) {
+	sun := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	one := 1.0
+	setup := func(t *testing.T) (*sql.DB, *plate.CookSession, *plate.Plate) {
+		t.Helper()
+		db := testhelper.NewTestDB(t)
+		ctx := context.Background()
+		slotID := seedSlot(t, db)
+		chili := seedComposed(t, db, "Chili")
+		s := &plate.CookSession{FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 2}
+		require.NoError(t, NewCookSessionRepo(db).CreateSession(ctx, s))
+		p := &plate.Plate{Date: sun, SlotID: slotID, Eaters: 1, Components: []plate.PlateComponent{{FoodID: chili, Portions: &one, CookSessionID: &s.ID}}}
+		require.NoError(t, NewPlateRepo(db).Create(ctx, p))
+		require.NoError(t, NewPlateRepo(db).RestoreFeedback(ctx, p.ID, plate.Feedback{Status: "loved", RatedAt: sun}))
+		return db, s, p
+	}
+	ctx := context.Background()
+	tests := []struct {
+		name   string
+		update string
+		read   func(db *sql.DB, s *plate.CookSession, p *plate.Plate) error
+		want   func(s *plate.CookSession, p *plate.Plate) string
+	}{
+		{
+			"plate date", `UPDATE plates SET date = 'garbage'`,
+			func(db *sql.DB, _ *plate.CookSession, p *plate.Plate) error {
+				_, err := NewPlateRepo(db).Get(ctx, p.ID)
+				return err
+			},
+			func(_ *plate.CookSession, p *plate.Plate) string { return fmt.Sprintf("plate %d", p.ID) },
+		},
+		{
+			"plate created_at in range", `UPDATE plates SET created_at = 'garbage'`,
+			func(db *sql.DB, _ *plate.CookSession, _ *plate.Plate) error {
+				_, err := NewPlateRepo(db).ListByDateRange(ctx, sun, sun)
+				return err
+			},
+			func(_ *plate.CookSession, p *plate.Plate) string { return fmt.Sprintf("plate %d", p.ID) },
+		},
+		{
+			"feedback rated_at", `UPDATE plate_feedback SET rated_at = 'garbage'`,
+			func(db *sql.DB, _ *plate.CookSession, p *plate.Plate) error {
+				_, err := NewPlateRepo(db).Get(ctx, p.ID)
+				return err
+			},
+			func(_ *plate.CookSession, p *plate.Plate) string { return fmt.Sprintf("plate %d feedback", p.ID) },
+		},
+		{
+			"session cook_date", `UPDATE cook_sessions SET cook_date = 'garbage'`,
+			func(db *sql.DB, s *plate.CookSession, _ *plate.Plate) error {
+				_, err := NewCookSessionRepo(db).GetSession(ctx, s.ID)
+				return err
+			},
+			func(s *plate.CookSession, _ *plate.Plate) string { return fmt.Sprintf("cook session %d", s.ID) },
+		},
+		{
+			"session cooked_at", `UPDATE cook_sessions SET cooked_at = 'garbage'`,
+			func(db *sql.DB, s *plate.CookSession, _ *plate.Plate) error {
+				_, err := NewCookSessionRepo(db).GetSession(ctx, s.ID)
+				return err
+			},
+			func(s *plate.CookSession, _ *plate.Plate) string { return fmt.Sprintf("cook session %d", s.ID) },
+		},
+		{
+			"link date", `UPDATE plates SET date = 'garbage'`,
+			func(db *sql.DB, s *plate.CookSession, _ *plate.Plate) error {
+				_, err := NewCookSessionRepo(db).ListLinks(ctx, s.ID)
+				return err
+			},
+			func(_ *plate.CookSession, p *plate.Plate) string { return fmt.Sprintf("plate %d", p.ID) },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, s, p := setup(t)
+			_, err := db.Exec(tt.update)
+			require.NoError(t, err)
+			err = tt.read(db, s, p)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want(s, p))
+		})
+	}
 }
 
 func TestPlateRepo_EatersSessionsFeedbackAndFoodFacts(t *testing.T) {

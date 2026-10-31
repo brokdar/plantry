@@ -31,7 +31,9 @@ func (r *ShoppingRepo) SessionsCooking(ctx context.Context, from, to time.Time) 
 	}
 	out := make([]plate.CookSession, len(rows))
 	for i := range rows {
-		mapCookSessionToDomain(&rows[i], &out[i])
+		if err := mapCookSessionToDomain(&rows[i], &out[i]); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }

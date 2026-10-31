@@ -38,8 +38,7 @@ func (r *CookSessionRepo) CreateSession(ctx context.Context, s *plate.CookSessio
 		}
 		return err
 	}
-	mapCookSessionToDomain(&row, s)
-	return nil
+	return mapCookSessionToDomain(&row, s)
 }
 
 func (r *CookSessionRepo) GetSession(ctx context.Context, id int64) (*plate.CookSession, error) {
@@ -51,7 +50,9 @@ func (r *CookSessionRepo) GetSession(ctx context.Context, id int64) (*plate.Cook
 		return nil, err
 	}
 	var s plate.CookSession
-	mapCookSessionToDomain(&row, &s)
+	if err := mapCookSessionToDomain(&row, &s); err != nil {
+		return nil, err
+	}
 	return &s, nil
 }
 
@@ -74,8 +75,7 @@ func (r *CookSessionRepo) UpdateSession(ctx context.Context, s *plate.CookSessio
 		}
 		return err
 	}
-	mapCookSessionToDomain(&row, s)
-	return nil
+	return mapCookSessionToDomain(&row, s)
 }
 
 func (r *CookSessionRepo) DeleteSession(ctx context.Context, id int64) error {
@@ -103,7 +103,9 @@ func (r *CookSessionRepo) ListLinks(ctx context.Context, sessionID int64) ([]pla
 	}
 	out := make([]plate.Link, len(rows))
 	for i, row := range rows {
-		out[i] = linkFromRow(row.PlateID, row.ComponentID, row.FoodID, row.Date, row.SlotID, row.Portions, row.Eaters)
+		if out[i], err = linkFromRow(row.PlateID, row.ComponentID, row.FoodID, row.Date, row.SlotID, row.Portions, row.Eaters); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }
@@ -120,7 +122,9 @@ func (r *CookSessionRepo) ListInRange(ctx context.Context, from, to time.Time) (
 	}
 	sessions := make([]plate.CookSession, len(rows))
 	for i := range rows {
-		mapCookSessionToDomain(&rows[i], &sessions[i])
+		if err := mapCookSessionToDomain(&rows[i], &sessions[i]); err != nil {
+			return nil, nil, err
+		}
 	}
 	linkRows, err := q.ListCookSessionLinksInRange(ctx, sqlcgen.ListCookSessionLinksInRangeParams{FromDate: fromS, ToDate: toS})
 	if err != nil {
@@ -129,14 +133,21 @@ func (r *CookSessionRepo) ListInRange(ctx context.Context, from, to time.Time) (
 	links := make(map[int64][]plate.Link, len(sessions))
 	for _, row := range linkRows {
 		sid := row.CookSessionID.Int64
-		links[sid] = append(links[sid], linkFromRow(row.PlateID, row.ComponentID, row.FoodID, row.Date, row.SlotID, row.Portions, row.Eaters))
+		l, err := linkFromRow(row.PlateID, row.ComponentID, row.FoodID, row.Date, row.SlotID, row.Portions, row.Eaters)
+		if err != nil {
+			return nil, nil, err
+		}
+		links[sid] = append(links[sid], l)
 	}
 	return sessions, links, nil
 }
 
 // linkFromRow maps the columns both link queries share to a plate.Link.
-func linkFromRow(plateID, componentID, foodID int64, date string, slotID int64, portions sql.NullFloat64, eaters float64) plate.Link {
-	d, _ := time.Parse(dateLayout, date) //nolint:errcheck // layout controlled by the service
+func linkFromRow(plateID, componentID, foodID int64, date string, slotID int64, portions sql.NullFloat64, eaters float64) (plate.Link, error) {
+	d, err := time.Parse(dateLayout, date)
+	if err != nil {
+		return plate.Link{}, fmt.Errorf("plate %d date: %w", plateID, err)
+	}
 	return plate.Link{
 		PlateID:     plateID,
 		ComponentID: componentID,
@@ -144,26 +155,36 @@ func linkFromRow(plateID, componentID, foodID int64, date string, slotID int64, 
 		Cell:        plate.CellKey{Date: d, SlotID: slotID},
 		PerEater:    portions.Float64,
 		Eaters:      eaters,
-	}
+	}, nil
 }
 
-func mapCookSessionToDomain(row *sqlcgen.CookSession, s *plate.CookSession) {
+func mapCookSessionToDomain(row *sqlcgen.CookSession, s *plate.CookSession) error {
 	s.ID = row.ID
 	s.FoodID = row.FoodID
-	s.CookDate, _ = time.Parse(dateLayout, row.CookDate)
+	var err error
+	if s.CookDate, err = time.Parse(dateLayout, row.CookDate); err != nil {
+		return fmt.Errorf("cook session %d cook_date: %w", row.ID, err)
+	}
 	s.CookSlotID = row.CookSlotID
 	s.Portions = row.Portions
 	s.FrozenPortions = row.FrozenPortions
 	s.CookedAt = nil
 	if row.CookedAt.Valid {
-		if t, err := time.Parse(timeLayout, row.CookedAt.String); err == nil {
-			t = t.UTC()
-			s.CookedAt = &t
+		t, err := time.Parse(timeLayout, row.CookedAt.String)
+		if err != nil {
+			return fmt.Errorf("cook session %d cooked_at: %w", row.ID, err)
 		}
+		t = t.UTC()
+		s.CookedAt = &t
 	}
 	s.Note = fromNullString(row.Note)
-	s.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
-	s.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
+	if s.CreatedAt, err = time.Parse(timeLayout, row.CreatedAt); err != nil {
+		return fmt.Errorf("cook session %d created_at: %w", row.ID, err)
+	}
+	if s.UpdatedAt, err = time.Parse(timeLayout, row.UpdatedAt); err != nil {
+		return fmt.Errorf("cook session %d updated_at: %w", row.ID, err)
+	}
+	return nil
 }
 
 func toNullTime(t *time.Time) sql.NullString {

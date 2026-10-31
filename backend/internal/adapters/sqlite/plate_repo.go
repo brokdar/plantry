@@ -43,7 +43,9 @@ func (r *PlateRepo) Create(ctx context.Context, p *plate.Plate) error {
 			}
 			return err
 		}
-		mapPlateToDomain(&row, p)
+		if err := mapPlateToDomain(&row, p); err != nil {
+			return err
+		}
 		for i := range p.Components {
 			pc := &p.Components[i]
 			pc.PlateID = p.ID
@@ -70,7 +72,9 @@ func (r *PlateRepo) Get(ctx context.Context, id int64) (*plate.Plate, error) {
 		return nil, err
 	}
 	var p plate.Plate
-	mapPlateToDomain(&row, &p)
+	if err := mapPlateToDomain(&row, &p); err != nil {
+		return nil, err
+	}
 	rows, err := q.ListPlateComponentsByPlate(ctx, p.ID)
 	if err != nil {
 		return nil, err
@@ -86,7 +90,9 @@ func (r *PlateRepo) Get(ctx context.Context, id int64) (*plate.Plate, error) {
 	case err != nil:
 		return nil, err
 	default:
-		p.Feedback = mapFeedbackToPlate(&fb)
+		if p.Feedback, err = mapFeedbackToPlate(&fb); err != nil {
+			return nil, err
+		}
 	}
 	return &p, nil
 }
@@ -108,8 +114,7 @@ func (r *PlateRepo) Update(ctx context.Context, p *plate.Plate) error {
 		}
 		return err
 	}
-	mapPlateToDomain(&row, p)
-	return nil
+	return mapPlateToDomain(&row, p)
 }
 
 // Touch bumps the plate's updated_at.
@@ -163,7 +168,9 @@ func (r *PlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]
 	}
 	index := make(map[int64]int, len(plateRows))
 	for i := range plateRows {
-		mapPlateToDomain(&plateRows[i], &out[i])
+		if err := mapPlateToDomain(&plateRows[i], &out[i]); err != nil {
+			return nil, err
+		}
 		out[i].Components = []plate.PlateComponent{}
 		index[out[i].ID] = i
 	}
@@ -183,7 +190,11 @@ func (r *PlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]
 		return nil, err
 	}
 	for i := range fbRows {
-		out[index[fbRows[i].PlateID]].Feedback = mapFeedbackToPlate(&fbRows[i])
+		fb, err := mapFeedbackToPlate(&fbRows[i])
+		if err != nil {
+			return nil, err
+		}
+		out[index[fbRows[i].PlateID]].Feedback = fb
 	}
 	return out, nil
 }
@@ -263,20 +274,34 @@ func (r *PlateRepo) RestoreFeedback(ctx context.Context, plateID int64, fb plate
 	})
 }
 
-func mapPlateToDomain(row *sqlcgen.Plate, p *plate.Plate) {
+func mapPlateToDomain(row *sqlcgen.Plate, p *plate.Plate) error {
 	p.ID = row.ID
 	p.SlotID = row.SlotID
 	p.Note = fromNullString(row.Note)
 	p.Eaters = row.Eaters
-	p.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
-	p.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
-	p.Date, _ = time.Parse(dateLayout, row.Date)
+	var err error
+	if p.CreatedAt, err = time.Parse(timeLayout, row.CreatedAt); err != nil {
+		return fmt.Errorf("plate %d created_at: %w", row.ID, err)
+	}
+	// updated_at defaults to '' (never touched): the zero time.
+	p.UpdatedAt = time.Time{}
+	if row.UpdatedAt != "" {
+		if p.UpdatedAt, err = time.Parse(timeLayout, row.UpdatedAt); err != nil {
+			return fmt.Errorf("plate %d updated_at: %w", row.ID, err)
+		}
+	}
+	if p.Date, err = time.Parse(dateLayout, row.Date); err != nil {
+		return fmt.Errorf("plate %d date: %w", row.ID, err)
+	}
+	return nil
 }
 
-func mapFeedbackToPlate(row *sqlcgen.PlateFeedback) *plate.Feedback {
-	fb := &plate.Feedback{Status: row.Status, Note: fromNullString(row.Note)}
-	fb.RatedAt, _ = time.Parse(timeLayout, row.RatedAt) //nolint:errcheck // layout controlled by migration
-	return fb
+func mapFeedbackToPlate(row *sqlcgen.PlateFeedback) (*plate.Feedback, error) {
+	at, err := time.Parse(timeLayout, row.RatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("plate %d feedback rated_at: %w", row.PlateID, err)
+	}
+	return &plate.Feedback{Status: row.Status, Note: fromNullString(row.Note), RatedAt: at}, nil
 }
 
 func mapPlateComponentToDomain(row *sqlcgen.PlateComponent, pc *plate.PlateComponent) {
