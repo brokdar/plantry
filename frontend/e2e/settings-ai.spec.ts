@@ -1,8 +1,6 @@
 import type { APIRequestContext } from "@playwright/test"
 
-import { apiRequest, expect, test as baseTest, uid } from "./helpers"
-
-const API = "http://localhost:8080"
+import { API, apiRequest, expect, test as baseTest, uid } from "./helpers"
 
 const EDITABLE_KEYS = [
   "ai.provider",

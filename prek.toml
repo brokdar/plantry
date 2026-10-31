@@ -19,6 +19,7 @@ hooks = [
   { id = "check-json", exclude = "tsconfig" },
 ]
 
+# Full test suites run in scripts/gate.sh (once per PR), not on every commit.
 # ── Local system hooks ────────────────────────────────────────────────────────
 [[repos]]
 repo = "local"
@@ -55,16 +56,6 @@ hooks = [
     pass_filenames = false,
   },
 
-  # go test — mandatory
-  {
-    id             = "go-test",
-    name           = "go test",
-    language       = "system",
-    entry          = "bash -c 'cd backend && go test ./...'",
-    files          = "^backend/.*\\.go$",
-    pass_filenames = false,
-  },
-
   # Prettier: auto-fixes TS/TSX/CSS; git blocks commit if files were reformatted
   {
     id             = "prettier",
@@ -85,13 +76,4 @@ hooks = [
     pass_filenames = false,
   },
 
-  # Vitest unit tests — mandatory
-  {
-    id             = "vitest",
-    name           = "vitest",
-    language       = "system",
-    entry          = "bash -c 'cd frontend && bun run test'",
-    files          = "^frontend/src/.*\\.(ts|tsx)$",
-    pass_filenames = false,
-  },
 ]

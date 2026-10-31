@@ -1,6 +1,18 @@
 import { defineConfig, devices } from "@playwright/test"
 
-const PORT = 5173
+// E2E_LANE (0–9) gives each parallel worktree its own backend port, Vite port,
+// DB and image dir, so several agents can run e2e at once. Lane 0 keeps the
+// historical defaults (8080 / 5173 / /tmp/plantry-e2e.db).
+const LANE = Number(process.env.E2E_LANE ?? 0)
+const API_PORT = 8080 + LANE
+const PORT = 5173 + LANE
+const DB_PATH = LANE ? `/tmp/plantry-e2e-${LANE}.db` : "/tmp/plantry-e2e.db"
+const IMAGE_PATH = LANE
+  ? `/tmp/plantry-e2e-images-${LANE}`
+  : "/tmp/plantry-e2e-images"
+// Read by e2e/helpers.ts and e2e/global-setup.ts (workers inherit the env).
+process.env.E2E_API_PORT = String(API_PORT)
+process.env.E2E_DB_PATH = DB_PATH
 
 // Specs that mutate process-global AI state (settings overrides, fake-script
 // turn cursor). These must never run concurrently with each other, otherwise
@@ -82,19 +94,16 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command:
-        "cd ../backend && PLANTRY_DB_PATH=/tmp/plantry-e2e.db PLANTRY_IMAGE_PATH=/tmp/plantry-e2e-images PLANTRY_LOG_LEVEL=error PLANTRY_DEV_MODE=1 PLANTRY_OFF_DISABLED=1 PLANTRY_SECRET_KEY=0123456789abcdef0123456789abcdef PLANTRY_AI_PROVIDER=fake PLANTRY_AI_MODEL=fake-e2e PLANTRY_AI_FAKE_SCRIPT=../frontend/e2e/fixtures/chat-scripts/plan-dinner.json go run ./cmd/plantry",
-      url: "http://localhost:8080/api/health",
+      command: `cd ../backend && PLANTRY_PORT=${API_PORT} PLANTRY_DB_PATH=${DB_PATH} PLANTRY_IMAGE_PATH=${IMAGE_PATH} PLANTRY_LOG_LEVEL=error PLANTRY_DEV_MODE=1 PLANTRY_OFF_DISABLED=1 PLANTRY_SECRET_KEY=0123456789abcdef0123456789abcdef PLANTRY_AI_PROVIDER=fake PLANTRY_AI_MODEL=fake-e2e PLANTRY_AI_FAKE_SCRIPT=../frontend/e2e/fixtures/chat-scripts/plan-dinner.json go run ./cmd/plantry`,
+      url: `http://localhost:${API_PORT}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,
     },
     {
-      command: "bun run dev",
+      command: `PLANTRY_API_TARGET=http://localhost:${API_PORT} bun run dev --port ${PORT} --strictPort`,
       url: `http://localhost:${PORT}`,
-      // Vite has no state; safe to reuse a running dev server. The backend
-      // (above) is always spawned fresh so e2e tests never silently bind to
-      // a developer's real DB or a stale process.
-      reuseExistingServer: !process.env.CI,
+      // Never reuse: a Vite on this port may belong to another worktree.
+      reuseExistingServer: false,
       timeout: 60_000,
     },
   ],
