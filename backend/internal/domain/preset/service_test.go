@@ -170,6 +170,53 @@ func TestNormalizeTag(t *testing.T) {
 	}
 }
 
+func TestCreate_FromComposition(t *testing.T) {
+	portions := 1.0
+	amount := 80.0
+	unit := "g"
+	foods := map[int64]*food.Food{
+		7: {ID: 7, Kind: food.KindComposed, Name: "Chili"},
+		9: {ID: 9, Kind: food.KindLeaf, Name: "Oats"},
+	}
+	svc, repo := makeService(foods, nil)
+	got, err := svc.Create(context.Background(), preset.CreateInput{
+		Name: "  Weekday breakfast ",
+		Tags: []string{"Quick"},
+		Plates: []preset.Plate{{SlotID: 2, Components: []preset.Component{
+			{FoodID: 7, Portions: &portions},
+			{FoodID: 9, Amount: &amount, Unit: &unit},
+		}}},
+	})
+	require.NoError(t, err)
+	require.Same(t, repo.created, got)
+	assert.Equal(t, "Weekday breakfast", got.Name)
+	assert.Equal(t, []string{"quick"}, got.Tags)
+	require.Len(t, got.Plates, 1)
+	assert.Equal(t, int64(2), got.Plates[0].SlotID)
+	require.Len(t, got.Plates[0].Components, 2)
+	require.NotNil(t, got.Plates[0].Components[1].Grams, "leaf grams resolved")
+}
+
+func TestCreate_Validates(t *testing.T) {
+	portions := 1.0
+	foods := map[int64]*food.Food{7: {ID: 7, Kind: food.KindComposed, Name: "Chili"}}
+	pp := preset.Plate{SlotID: 2, Components: []preset.Component{{FoodID: 7, Portions: &portions}}}
+	cases := map[string]preset.CreateInput{
+		"no name":      {Plates: []preset.Plate{pp}},
+		"no plates":    {Name: "X"},
+		"empty plate":  {Name: "X", Plates: []preset.Plate{{SlotID: 2}}},
+		"missing slot": {Name: "X", Plates: []preset.Plate{{Components: pp.Components}}},
+	}
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			svc, repo := makeService(foods, nil)
+			_, err := svc.Create(context.Background(), in)
+			require.ErrorIs(t, err, domain.ErrInvalidInput)
+			assert.Zero(t, repo.createCount)
+		})
+	}
+}
+
 func TestCreateFromPlates_RequiresName(t *testing.T) {
 	svc, _ := makeService(nil, nil)
 	_, err := svc.CreateFromPlates(context.Background(), preset.CreateFromPlatesInput{PlateIDs: []int64{1}})

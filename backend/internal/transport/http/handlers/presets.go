@@ -17,6 +17,7 @@ import (
 // presetService is the subset of preset.Service used by PresetHandler.
 type presetService interface {
 	CreateFromPlates(ctx context.Context, in preset.CreateFromPlatesInput) (*preset.Preset, error)
+	Create(ctx context.Context, in preset.CreateInput) (*preset.Preset, error)
 	Get(ctx context.Context, id int64) (*preset.Preset, error)
 	List(ctx context.Context, filter preset.ListFilter) (*preset.ListResult, error)
 	UpdateName(ctx context.Context, id int64, name string) (*preset.Preset, error)
@@ -238,23 +239,41 @@ func (h *PresetHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 type createPresetRequest struct {
-	Name     string   `json:"name"`
-	PlateIDs []int64  `json:"plate_ids"`
-	Tags     []string `json:"tags,omitempty"`
+	Name     string                   `json:"name"`
+	PlateIDs []int64                  `json:"plate_ids"`
+	Plates   []updatePresetPlateInput `json:"plates"`
+	Tags     []string                 `json:"tags,omitempty"`
 }
 
-// Create handles POST /api/presets. Body must include name + plate_ids[].
+// Create handles POST /api/presets. The body holds a name plus either
+// plate_ids[] (copy planner plates) or plates[] (compose from scratch).
 func (h *PresetHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createPresetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	p, err := h.svc.CreateFromPlates(r.Context(), preset.CreateFromPlatesInput{
-		Name:     req.Name,
-		PlateIDs: req.PlateIDs,
-		Tags:     req.Tags,
-	})
+	if len(req.PlateIDs) > 0 && len(req.Plates) > 0 {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	var (
+		p   *preset.Preset
+		err error
+	)
+	if len(req.Plates) > 0 {
+		p, err = h.svc.Create(r.Context(), preset.CreateInput{
+			Name:   req.Name,
+			Tags:   req.Tags,
+			Plates: toPresetPlates(req.Plates),
+		})
+	} else {
+		p, err = h.svc.CreateFromPlates(r.Context(), preset.CreateFromPlatesInput{
+			Name:     req.Name,
+			PlateIDs: req.PlateIDs,
+			Tags:     req.Tags,
+		})
+	}
 	if err != nil {
 		status, key := presetError(err)
 		writeError(w, status, key)
@@ -310,20 +329,7 @@ func (h *PresetHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	in := preset.UpdateInput{Name: req.Name, Tags: req.Tags}
 	if req.Plates != nil {
-		plates := make([]preset.Plate, len(*req.Plates))
-		for i, pp := range *req.Plates {
-			comps := make([]preset.Component, len(pp.Components))
-			for j, c := range pp.Components {
-				comps[j] = preset.Component{
-					FoodID:   c.FoodID,
-					Portions: c.Portions,
-					Amount:   c.Amount,
-					Unit:     c.Unit,
-					Note:     c.Note,
-				}
-			}
-			plates[i] = preset.Plate{SlotID: pp.SlotID, Components: comps}
-		}
+		plates := toPresetPlates(*req.Plates)
 		in.Plates = &plates
 	}
 	p, err := h.svc.Update(r.Context(), id, in)
@@ -333,6 +339,24 @@ func (h *PresetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, toPresetResponse(p))
+}
+
+func toPresetPlates(in []updatePresetPlateInput) []preset.Plate {
+	plates := make([]preset.Plate, len(in))
+	for i, pp := range in {
+		comps := make([]preset.Component, len(pp.Components))
+		for j, c := range pp.Components {
+			comps[j] = preset.Component{
+				FoodID:   c.FoodID,
+				Portions: c.Portions,
+				Amount:   c.Amount,
+				Unit:     c.Unit,
+				Note:     c.Note,
+			}
+		}
+		plates[i] = preset.Plate{SlotID: pp.SlotID, Components: comps}
+	}
+	return plates
 }
 
 type patchPresetRequest struct {

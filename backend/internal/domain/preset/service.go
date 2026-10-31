@@ -130,6 +130,26 @@ func (s *Service) CreateFromPlates(ctx context.Context, in CreateFromPlatesInput
 	return p, nil
 }
 
+// CreateInput is the input to Create: a routine composed directly (from
+// Settings) rather than copied from planner plates.
+type CreateInput struct {
+	Name   string
+	Tags   []string
+	Plates []Plate
+}
+
+// Create validates and stores a preset composed from scratch.
+func (s *Service) Create(ctx context.Context, in CreateInput) (*Preset, error) {
+	p := &Preset{Name: strings.TrimSpace(in.Name), Tags: normalizeTags(in.Tags), Plates: in.Plates}
+	if err := s.validate(ctx, p); err != nil {
+		return nil, err
+	}
+	if err := s.repo.Create(ctx, p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
 // Get returns a preset by id with plates, components, and tags loaded.
 func (s *Service) Get(ctx context.Context, id int64) (*Preset, error) {
 	return s.repo.Get(ctx, id)
