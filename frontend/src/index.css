@@ -52,19 +52,7 @@
   /* The one soft shadow — sheets and popovers only */
   --shadow-sheet: var(--shadow-soft);
 
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
+  /* shadcn theme names (used by components/ui), mapped below */
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -82,45 +70,6 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-
-  /* Legacy Material utilities — aliased onto the Cookbook tokens below (D2) */
-  --color-surface: var(--surface);
-  --color-surface-container-lowest: var(--surface-container-lowest);
-  --color-surface-container-low: var(--surface-container-low);
-  --color-surface-container: var(--surface-container);
-  --color-surface-container-high: var(--surface-container-high);
-  --color-surface-container-highest: var(--surface-container-highest);
-  --color-on-surface: var(--on-surface);
-  --color-on-surface-variant: var(--on-surface-variant);
-  --color-outline: var(--outline);
-  --color-outline-variant: var(--outline-variant);
-  --color-primary-container: var(--primary-container);
-  --color-primary-fixed: var(--primary-fixed);
-  --color-primary-fixed-dim: var(--primary-fixed-dim);
-  --color-on-primary: var(--on-primary);
-  --color-on-primary-fixed: var(--on-primary-fixed);
-  --color-secondary-container: var(--secondary-container);
-  --color-on-secondary-container: var(--on-secondary-container);
-  --color-tertiary: var(--tertiary);
-  --color-tertiary-fixed: var(--tertiary-fixed);
-  --color-tertiary-fixed-dim: var(--tertiary-fixed-dim);
-  --color-on-tertiary-fixed-variant: var(--on-tertiary-fixed-variant);
-
-  /* Macro tokens — unified protein/carbs/fat/fiber palette across the app */
-  --color-macro-protein: var(--macro-protein);
-  --color-macro-protein-soft: var(--macro-protein-soft);
-  --color-macro-carbs: var(--macro-carbs);
-  --color-macro-carbs-soft: var(--macro-carbs-soft);
-  --color-macro-fat: var(--macro-fat);
-  --color-macro-fat-soft: var(--macro-fat-soft);
-  --color-macro-fiber: var(--macro-fiber);
-  --color-macro-fiber-soft: var(--macro-fiber-soft);
-
-  /* AI accent — legacy, aliased onto the accent (D2) */
-  --color-ai-accent: var(--ai-accent);
-  --color-ai-accent-bg: var(--ai-accent-bg);
-  --color-ai-accent-fg: var(--ai-accent-fg);
-  --color-ai-accent-border: var(--ai-accent-border);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -171,25 +120,6 @@
      offset so the tab bar never overlays form content on <md screens. */
   --tab-bar-h: 4rem;
   --tab-bar-inset: calc(var(--tab-bar-h) + env(safe-area-inset-bottom));
-
-  /* Chart tokens — macros (protein/carbs/fat/fiber) */
-  --chart-1: oklch(0.62 0.12 25);
-  --chart-2: oklch(0.72 0.1 85);
-  --chart-3: oklch(0.66 0.11 55);
-  --chart-4: #4a654d;
-  --chart-5: #89a58a;
-
-  /* Macro palette — terracotta / wheat / sage / bark.
-     Semantic across every macro surface: IngredientCard, NutritionPanel,
-     NutritionDetail, planner bars, slot dots. Soft variant for chip bg. */
-  --macro-protein: #c87a5a;
-  --macro-protein-soft: #f5e3da;
-  --macro-carbs: #d4b066;
-  --macro-carbs-soft: #f6ecd3;
-  --macro-fat: #6f8a73;
-  --macro-fat-soft: #dbe3dc;
-  --macro-fiber: #a38b6a;
-  --macro-fiber-soft: #ece3d4;
 }
 
 .dark {
@@ -221,30 +151,13 @@
 
   --shadow-soft:
     0 2px 6px -2px rgb(0 0 0 / 0.3), 0 12px 32px -8px rgb(0 0 0 / 0.45);
-
-  --chart-1: oklch(0.7 0.14 25);
-  --chart-2: oklch(0.8 0.12 85);
-  --chart-3: oklch(0.74 0.13 55);
-  --chart-4: #b1ceb1;
-  --chart-5: #89a58a;
-
-  /* Macro palette — dark mode: lifted L, same hues, muted soft bg */
-  --macro-protein: #e09276;
-  --macro-protein-soft: #3a2721;
-  --macro-carbs: #e6c684;
-  --macro-carbs-soft: #38301d;
-  --macro-fat: #96b19b;
-  --macro-fat-soft: #24302a;
-  --macro-fiber: #bfa483;
-  --macro-fiber-soft: #322a20;
 }
 
 /*
-  Aliases (D2): shadcn and legacy Material names resolve to the Cookbook
-  tokens, so both themes follow automatically. Screens move to the new names
-  when they are rebuilt; do not add new usages of the names on the left.
+  shadcn theme names resolve to the Cookbook tokens, so the ui primitives
+  follow both themes. App code uses the Cookbook names.
 
-  | Legacy / shadcn                     | Cookbook token |
+  | shadcn                              | Cookbook token |
   |-------------------------------------|----------------|
   | --background                        | --ground       |
   | --foreground                        | --ink          |
@@ -259,39 +172,6 @@
   | --border, --input                   | --line         |
   | --ring                              | --accent       |
   | --destructive                       | --danger       |
-  | --sidebar                           | --panel-sunken |
-  | --sidebar-foreground                | --ink          |
-  | --sidebar-primary                   | --accent       |
-  | --sidebar-primary-foreground        | --on-accent    |
-  | --sidebar-accent                    | --panel        |
-  | --sidebar-accent-foreground         | --ink          |
-  | --sidebar-border                    | --line         |
-  | --sidebar-ring                      | --accent       |
-  | --surface                           | --ground       |
-  | --surface-container-lowest          | --panel        |
-  | --surface-container-low             | --panel-sunken |
-  | --surface-container                 | --panel-sunken |
-  | --surface-container-high            | --line         |
-  | --surface-container-highest         | --line         |
-  | --on-surface                        | --ink          |
-  | --on-surface-variant                | --ink-muted    |
-  | --outline                           | --ink-muted    |
-  | --outline-variant                   | --line         |
-  | --primary-container                 | --accent       |
-  | --primary-fixed                     | --panel-sunken |
-  | --primary-fixed-dim                 | --line         |
-  | --on-primary                        | --on-accent    |
-  | --on-primary-fixed                  | --ink          |
-  | --secondary-container               | --panel-sunken |
-  | --on-secondary-container            | --ink-muted    |
-  | --tertiary                          | --accent       |
-  | --tertiary-fixed                    | --panel-sunken |
-  | --tertiary-fixed-dim                | --line         |
-  | --on-tertiary-fixed-variant         | --accent       |
-  | --ai-accent, --ai-accent-fg         | --accent       |
-  | --ai-accent-border                  | --accent       |
-  | --ai-accent-bg                      | --panel-sunken |
-  | --shadow-editorial                  | --shadow-soft  |
 
   Note: --accent is both the Cookbook accent and shadcn's hover/focus fill
   (same variable name), so menu and select highlights render solid accent
@@ -319,44 +199,6 @@
   --border: var(--line);
   --input: var(--line);
   --ring: var(--accent);
-
-  --sidebar: var(--panel-sunken);
-  --sidebar-foreground: var(--ink);
-  --sidebar-primary: var(--accent);
-  --sidebar-primary-foreground: var(--on-accent);
-  --sidebar-accent: var(--panel);
-  --sidebar-accent-foreground: var(--ink);
-  --sidebar-border: var(--line);
-  --sidebar-ring: var(--accent);
-
-  --surface: var(--ground);
-  --surface-container-lowest: var(--panel);
-  --surface-container-low: var(--panel-sunken);
-  --surface-container: var(--panel-sunken);
-  --surface-container-high: var(--line);
-  --surface-container-highest: var(--line);
-  --on-surface: var(--ink);
-  --on-surface-variant: var(--ink-muted);
-  --outline: var(--ink-muted);
-  --outline-variant: var(--line);
-  --primary-container: var(--accent);
-  --primary-fixed: var(--panel-sunken);
-  --primary-fixed-dim: var(--line);
-  --on-primary: var(--on-accent);
-  --on-primary-fixed: var(--ink);
-  --secondary-container: var(--panel-sunken);
-  --on-secondary-container: var(--ink-muted);
-  --tertiary: var(--accent);
-  --tertiary-fixed: var(--panel-sunken);
-  --tertiary-fixed-dim: var(--line);
-  --on-tertiary-fixed-variant: var(--accent);
-
-  --ai-accent: var(--accent);
-  --ai-accent-bg: var(--panel-sunken);
-  --ai-accent-fg: var(--accent);
-  --ai-accent-border: var(--accent);
-
-  --shadow-editorial: var(--shadow-soft);
 }
 
 @layer base {
@@ -396,27 +238,7 @@
   }
 }
 
-@keyframes shimmer-sweep {
-  from {
-    transform: translateX(-150%) skewX(-12deg);
-  }
-  to {
-    transform: translateX(220%) skewX(-12deg);
-  }
-}
-
 @layer utilities {
-  .editorial-shadow {
-    box-shadow: var(--shadow-editorial);
-  }
-  /* Legacy name: the Cookbook has no gradients, so this is the solid accent. */
-  .gradient-primary {
-    background-color: var(--accent);
-  }
-  .glass-header {
-    background-color: color-mix(in oklab, var(--surface) 80%, transparent);
-    backdrop-filter: blur(12px);
-  }
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
@@ -426,27 +248,6 @@
   }
   .font-heading {
     font-family: var(--font-heading);
-  }
-  /* Shimmer sweep overlay for gradient CTA buttons */
-  .btn-shimmer {
-    position: relative;
-    overflow: hidden;
-  }
-  .btn-shimmer::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.22) 50%,
-      transparent 100%
-    );
-    transform: translateX(-150%) skewX(-12deg);
-    pointer-events: none;
-  }
-  .btn-shimmer:hover::after {
-    animation: shimmer-sweep 0.55s ease-out forwards;
   }
 }
 

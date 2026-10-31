@@ -4,10 +4,7 @@
     "generate_plan": "Plan generieren",
     "ingredients": "Zutaten",
     "recipes": "Rezepte",
-    "pantry": "Vorratskammer",
-    "components": "Komponenten",
     "settings": "Einstellungen",
-    "search_placeholder": "Katalog durchsuchen…",
     "collapse_sidebar": "Seitenleiste einklappen",
     "expand_sidebar": "Seitenleiste ausklappen",
     "today": "Heute",
@@ -27,11 +24,9 @@
       "html_label": "Seiten-HTML",
       "paste_html_toggle": "Stattdessen das Seiten-HTML einfügen",
       "url_toggle": "Zurück zur URL-Eingabe",
-      "submit": "Rezept extrahieren",
-      "url_or_html_required": "Bitte eine URL eingeben oder den Seiten-HTML einfügen."
+      "submit": "Rezept extrahieren"
     },
     "step2": {
-      "title": "Zutaten prüfen",
       "ingredient_col": "Zutaten",
       "amount": "Menge",
       "unit": "Einheit",
@@ -82,67 +77,18 @@
       "via_llm": "Mit KI extrahiert"
     }
   },
-  "picker": {
-    "filter": {
-      "favorites": "Favoriten",
-      "recents": "Zuletzt",
-      "mains": "Hauptgerichte",
-      "sides": "Beilagen",
-      "snacks": "Snacks",
-      "sauces": "Soßen",
-      "skip": "Als ausgelassen markieren"
-    },
-    "tag": {
-      "all": "Alle Tags"
-    },
-    "role": {
-      "all": "Beliebige Rolle"
-    },
-    "sort": {
-      "name": "Name",
-      "recent": "Zuletzt gekocht",
-      "kcal": "Kalorien"
-    },
-    "tray": {
-      "title": "Diese Mahlzeit",
-      "empty": "Tippe eine Mahlzeit an. Die erste wird zum Hauptgericht.",
-      "save": "Speichern",
-      "cancel": "Abbrechen",
-      "totals": "Summen"
-    }
-  },
   "plate": {
-    "edit_plate": "Teller bearbeiten",
-    "delete_confirm_title": "Teller löschen?",
-    "delete_confirm_body": "Alle Komponenten dieses Tellers werden entfernt.",
-    "note": "Notiz",
-    "empty_cell": "Mahlzeit hinzufügen",
-    "portions": "Portionen",
     "quantity": {
       "amount_label": "Menge",
       "unit_label": "Einheit",
       "confidence": {
         "portion": "exakt",
-        "default": "ca.",
         "fallback": "geschätzt"
-      },
-      "unknown_unit": "Unbekannte Einheit"
-    },
-    "filter_by_role": "Nach Rolle filtern"
+      }
+    }
   },
   "settings_page": {
-    "eyebrow": "Einstellungen",
-    "title": "Workspace-Einstellungen",
-    "subtitle": "Passe dein digitales Küchen-Sanktuarium an deinen kulinarischen Workflow an. Diese Einstellungen steuern, wie dein redaktioneller Ernährungsplan kuratiert und präsentiert wird.",
     "clear_override": "Überschreibung entfernen",
-    "tabs": {
-      "general": "Allgemein",
-      "plan": "Planung",
-      "ai": "KI",
-      "nutrition": "Ernährung",
-      "meal_slots": "Mahlzeiten-Slots",
-      "system": "System"
-    },
     "source": {
       "db": "Datenbank",
       "env": "Umgebungsvariable",
@@ -153,7 +99,6 @@
       "env_also_set": "Für diesen Schlüssel ist auch eine Umgebungsvariable gesetzt. Der Datenbank-Wert hat Vorrang."
     },
     "ai": {
-      "provider_section_title": "Assistenten-Konfiguration",
       "provider_label": "Anbieter",
       "provider_placeholder": "Anbieter auswählen…",
       "provider_none": "Deaktiviert",
@@ -163,7 +108,6 @@
       "api_key_stored": "Es ist bereits ein Schlüssel gespeichert ({{preview}}). Gib einen neuen Wert ein, um ihn zu ersetzen.",
       "api_key_placeholder": "sk-…",
       "api_key_placeholder_replace": "Gib einen neuen Schlüssel ein, um den gespeicherten zu ersetzen",
-      "api_key_saved": "API-Schlüssel gespeichert.",
       "test_connection": "Verbindung testen",
       "validated_saved_one": "Schlüssel gespeichert. {{count}} Modell verfügbar",
       "validated_saved_other": "Schlüssel gespeichert. {{count}} Modelle verfügbar",
@@ -171,11 +115,9 @@
       "validated_works_other": "Schlüssel funktioniert, {{count}} Modelle verfügbar",
       "model_label": "Modell",
       "model_placeholder": "Modell auswählen…",
-      "model_saved": "Modell gespeichert.",
       "click_test_to_load_models": "Führe „Verbindung testen“ aus, um verfügbare Modelle zu laden.",
       "advanced_title": "Erweitert",
       "rate_limit_label": "Chat-Ratenlimit",
-      "rate_limit_description": "Maximale /api/ai/chat-Anfragen pro Minute pro IP. 0 deaktiviert das Limit.",
       "fake_script_label": "Fake-Provider-Skript",
       "fake_script_description": "Nur für Anbieter „Fake“. Pfad zu einer JSONL-Datei mit vorbereiteten Antworten.",
       "wizard": {
@@ -188,7 +130,6 @@
       }
     },
     "fdc": {
-      "title": "USDA FoodData Central",
       "api_key_label": "FDC API-Schlüssel",
       "api_key_description": "Aktiviert die Live-Suche in FDC. Leer lassen, um sie zu deaktivieren.",
       "api_key_stored": "Es ist bereits ein Schlüssel gespeichert ({{preview}}). Gib einen neuen Wert ein, um ihn zu ersetzen.",
@@ -206,8 +147,7 @@
         "version": "Version",
         "build_commit": "Build-Commit"
       },
-      "env_tooltip": "Gesetzt via {{envVar}}. Neustart erforderlich.",
-      "restart_required": "Neustart erforderlich"
+      "env_tooltip": "Gesetzt via {{envVar}}. Neustart erforderlich."
     },
     "heading": "Einstellungen",
     "nav_label": "Bereiche der Einstellungen",
@@ -285,7 +225,6 @@
       "goal_effect": "Plantry zielt auf {{kcal}} kcal am Tag: {{protein}} % Eiweiß, {{fat}} % Fett, {{carbs}} % Kohlenhydrate.",
       "goal_effect_kcal_only": "Plantry zielt auf {{kcal}} kcal am Tag.",
       "goal_effect_none": "Kein Ziel gesetzt. Plantry gleicht die Mahlzeiten nicht nach Nährwerten ab.",
-      "macro_split_hint": "Eiweiß / Fett / Kohlenhydrate",
       "macro_sum_invalid": "Eiweiß, Fett und Kohlenhydrate ergeben zusammen mehr als 100 %."
     },
     "meals": {
@@ -367,28 +306,23 @@
     "days_unit_other": "Tage"
   },
   "settings": {
-    "plan_tab": "Planung",
     "plan_anchor": "Planungsansicht beginnt",
     "plan_anchor_today": "Heute",
     "plan_anchor_next_shopping_day": "Nächster Einkaufstag",
     "shopping_day": "Einkaufstag"
   },
   "display_preferences": {
-    "title": "Darstellung",
     "theme_label": "Design",
     "theme_description": "Wechsle zwischen der hellen Redaktions-Palette und einem gedämpften Abendmodus.",
     "theme_light": "Hell",
     "theme_dark": "Dunkel",
     "theme_system": "System",
     "language_label": "Sprache",
-    "language_description": "Gilt für die gesamte Oberfläche.",
     "language_english": "English",
     "language_german": "Deutsch"
   },
   "developer_preferences": {
-    "title": "Entwickler",
-    "debug_title": "Lookup-Pipeline-Trace",
-    "debug_description": "Blendet ein detailliertes Trace-Panel unter der Zutatensuche ein — KI-Übersetzung, Laufzeiten der Quellen, Pick-Best-Begründung. Lokal gespeichert, nicht mit dem Server synchronisiert."
+    "debug_title": "Lookup-Pipeline-Trace"
   },
   "slot": {
     "title": "Mahlzeiten",
@@ -415,7 +349,6 @@
   },
   "ingredient": {
     "create": "Neue Zutat",
-    "edit": "Zutat bearbeiten",
     "edit_eyebrow": "Editor",
     "edit_title": "Zutaten-Editor",
     "edit_subtitle": "Verfeinere das Wesen deiner kulinarischen Palette.",
@@ -430,7 +363,6 @@
     "fiber": "Ballaststoffe (g)",
     "sodium": "Natrium (mg)",
     "per_100g": "pro 100 g",
-    "macros": "Nährwerte pro 100 g",
     "search_placeholder": "Archiv durchsuchen…",
     "delete_confirm_title": "Zutat löschen?",
     "delete_confirm_body": "Diese Aktion kann nicht rückgängig gemacht werden.",
@@ -439,14 +371,11 @@
     "source_manual": "Manuell",
     "source_off": "Open Food Facts",
     "source_fdc": "USDA",
-    "section_identity": "Identität",
     "section_basic": "Basisangaben",
     "section_macros": "Nährwerte pro 100 g",
     "section_image_hint": "Füge ein Foto hinzu, damit die Zutat im Katalog auf einen Blick erkennbar ist.",
     "section_macros_hint": "Werte pro 100 g — Grundlage für die Live-Nährwertberechnung.",
-    "section_lookup_hint": "Durchsuche Open Food Facts und USDA, um Nährwerte automatisch zu übernehmen.",
     "refetch": "Nährwerte aktualisieren",
-    "refetch_failed": "Aktualisierung aus der externen Quelle fehlgeschlagen.",
     "sync_portions": "Portionen aus FDC synchronisieren",
     "sync_portions_done_one": "{{count}} Portion synchronisiert",
     "sync_portions_done_other": "{{count}} Portionen synchronisiert",
@@ -463,19 +392,11 @@
     }
   },
   "component": {
-    "create": "Neues Rezept",
-    "edit": "Rezept bearbeiten",
     "edit_eyebrow": "Editor",
     "edit_title": "Deine Kreation verfeinern",
     "edit_subtitle": "Justiere das Wesen deines Gerichts. Präzise Mengen sichern die redaktionelle Qualität deines Küchen-Sanktuariums.",
     "new_title": "Neues Rezept",
     "new_subtitle": "Jede Kreation beginnt mit einem ersten Entwurf. Skizziere jetzt die Grundlagen — verfeinere später.",
-    "new_path_chooser": {
-      "template_title": "Aus Vorlage starten",
-      "template_description": "Fertige Presets durchstöbern und nach deinem Geschmack anpassen."
-    },
-    "view": "Rezept-Details",
-    "browse_templates": "Vorlagen durchsuchen",
     "name": "Name",
     "name_placeholder": "z. B. Hähnchen-Curry",
     "role": "Rolle",
@@ -501,18 +422,13 @@
     "add_tag": "Tag hinzufügen",
     "tag_placeholder": "z. B. scharf, schnell",
     "nutrition": "Nährwerte pro Portion",
-    "search_placeholder": "Katalog durchsuchen…",
-    "no_results": "Keine Rezepte gefunden.",
     "delete_confirm_title": "Rezept löschen?",
     "delete_confirm_body": "Diese Aktion kann nicht rückgängig gemacht werden.",
     "amount": "Menge",
     "unit": "Einheit",
     "grams": "Gramm",
-    "step": "Schritt {{number}}",
     "instruction_placeholder": "Beschreibe diesen Schritt...",
     "select_ingredient": "Zutat auswählen",
-    "all_roles": "Alle Rollen",
-    "time": "{{prep}} + {{cook}} Min.",
     "create_variant": "Variante erstellen",
     "other_variants": "Andere Varianten",
     "section_identity": "Identität",
@@ -584,19 +500,13 @@
     "title": "Zutat finden",
     "search_placeholder": "Nach Name oder Barcode suchen...",
     "scan_barcode": "Barcode scannen",
-    "enter_barcode": "Barcode eingeben",
     "no_results": "Keine Treffer gefunden",
     "searching": "Suche...",
     "source_off": "Open Food Facts",
     "source_fdc": "USDA",
     "source_local": "Dein Katalog",
     "in_catalogue": "In deinem Katalog",
-    "create_manually": "Manuell erstellen",
-    "back_to_search": "Zurück zur Suche",
-    "select_match": "Treffer auswählen",
     "recommended": "Empfohlen",
-    "tab_search": "Suche",
-    "tab_manual": "Manuell",
     "scanner_hint": "Kamera auf Barcode richten",
     "scanner_requesting": "Kamerazugriff wird angefordert…",
     "scanner_error_permission": "Kamerazugriff verweigert",
@@ -618,7 +528,6 @@
     "unit": "Einheit",
     "grams": "Gramm",
     "add": "Portion hinzufügen",
-    "unit_placeholder": "z.B. Tasse, EL, Scheibe",
     "delete_unit": "{{unit}} entfernen"
   },
   "unit": {
@@ -659,30 +568,36 @@
       "name": "Deziliter"
     },
     "tbsp": {
-      "name": "Esslöffel"
+      "name": "Esslöffel",
+      "name_other": "Esslöffel"
     },
     "tsp": {
-      "name": "Teelöffel"
+      "name": "Teelöffel",
+      "name_other": "Teelöffel"
     },
     "cup": {
       "name": "Tasse",
       "name_other": "Tassen"
     },
     "floz": {
-      "name": "Fl. oz."
+      "name": "Fl. oz.",
+      "name_other": "Fl. oz."
     },
     "pt": {
-      "name": "Pint"
+      "name": "Pint",
+      "name_other": "Pints"
     },
     "qt": {
-      "name": "Quart"
+      "name": "Quart",
+      "name_other": "Quarts"
     },
     "gal": {
       "name": "Gallone",
       "name_other": "Gallonen"
     },
     "piece": {
-      "name": "Stück"
+      "name": "Stück",
+      "name_other": "Stück"
     },
     "clove": {
       "name": "Zehe",
@@ -693,7 +608,8 @@
       "name_other": "Scheiben"
     },
     "bunch": {
-      "name": "Bund"
+      "name": "Bund",
+      "name_other": "Bund"
     },
     "pinch": {
       "name": "Prise",
@@ -712,7 +628,8 @@
       "name_other": "Gläser"
     },
     "packet": {
-      "name": "Päckchen"
+      "name": "Päckchen",
+      "name_other": "Päckchen"
     },
     "serving": {
       "name": "Portion",
@@ -742,10 +659,12 @@
       "name_other": "Zweige"
     },
     "tub": {
-      "name": "Becher"
+      "name": "Becher",
+      "name_other": "Becher"
     },
     "handful": {
-      "name": "Handvoll"
+      "name": "Handvoll",
+      "name_other": "Handvoll"
     }
   },
   "image": {
@@ -753,7 +672,6 @@
     "upload": "Bild hochladen",
     "take_photo": "Foto aufnehmen",
     "remove": "Bild entfernen",
-    "uploading": "Wird hochgeladen...",
     "url_placeholder": "Bild-URL einfügen…",
     "fetch": "Laden",
     "paste_hint": "Oder ein Bild aus der Zwischenablage einfügen",
@@ -765,7 +683,6 @@
     }
   },
   "nutrition": {
-    "detail_title": "Nährwerte für {{name}}",
     "section_core": "Makros",
     "section_extended": "Erweiterte Makros",
     "section_minerals": "Mineralstoffe",
@@ -788,37 +705,19 @@
     "folate": "Folsäure"
   },
   "macro": {
-    "protein": "Eiweiß",
-    "carbs": "Kohlenhydrate",
-    "fat": "Fett",
-    "fiber": "Ballaststoffe",
     "protein_abbr": "E",
     "carbs_abbr": "K",
-    "fat_abbr": "F",
-    "fiber_abbr": "B",
-    "kcal": "kcal",
-    "distribution": "Makro-Aufteilung"
+    "fat_abbr": "F"
   },
   "profile": {
-    "title": "Profil & Ziele",
-    "description": "Lege deine Ernährungsziele und Vorlieben fest.",
-    "goal_preset": "Ziel-Vorlage",
-    "preset_cut": "Abnehmen",
-    "preset_maintain": "Halten",
-    "preset_bulk": "Aufbauen",
     "kcal_target": "Tägliches Kalorienziel (kcal)",
     "protein_pct": "Eiweiß %",
     "fat_pct": "Fett %",
     "carbs_pct": "Kohlenhydrate %",
     "macro_sum": "Summe: {{sum}}%",
-    "dietary_restrictions": "Ernährungseinschränkungen",
     "restriction_placeholder": "z. B. vegetarisch, glutenfrei",
     "system_prompt": "Benutzerdefinierte KI-Anweisungen",
-    "system_prompt_placeholder": "Beschreibe deine Vorlieben für die KI...",
     "locale": "Sprache",
-    "save": "Profil speichern",
-    "save_success": "Profil gespeichert",
-    "macros_label": "Makros",
     "kcal_target_placeholder": "z. B. 2000",
     "add_restriction": "Hinzufügen",
     "remove_restriction": "{{tag}} entfernen"
@@ -964,18 +863,11 @@
   },
   "common": {
     "save": "Speichern",
-    "saved": "Gespeichert.",
     "cancel": "Abbrechen",
     "delete": "Löschen",
-    "confirm": "Bestätigen",
     "edit": "Bearbeiten",
-    "done": "Fertig",
     "back": "Zurück",
     "loading": "Laden...",
-    "showing": "{{from}}–{{to}} von {{total}}",
-    "previous": "Zurück",
-    "next": "Weiter",
-    "actions": "Aktionen",
     "undo": "Rückgängig",
     "skip_to_content": "Zum Hauptinhalt springen",
     "close": "Schließen",
@@ -1503,7 +1395,7 @@
       "dry_goods": "Trockenware",
       "cans_jars": "Konserven & Gläser",
       "spices_oils": "Gewürze & Öle",
-      "frozen": "Tiefkühl",
+      "frozen": "Tiefkühlware",
       "other": "Sonstiges"
     },
     "used_in": "Gebraucht für",
@@ -1518,8 +1410,8 @@
     "copied": "Liste kopiert",
     "copy_failed": "Die Liste wurde nicht kopiert. Erlaube den Zugriff auf die Zwischenablage und versuche es erneut.",
     "copy_line": "- {{name}}, {{quantity}}",
-    "in_store": "Ladenmodus",
-    "in_store_exit": "Ladenmodus beenden",
+    "in_store": "Einkaufsmodus",
+    "in_store_exit": "Einkaufsmodus beenden",
     "empty": "Plane diesen Zeitraum, um zu sehen, was du einkaufen musst",
     "go_to_plan": "Zum Plan",
     "all_done_one": "Alles erledigt. {{count}} Artikel gekauft.",

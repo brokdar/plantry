@@ -4,10 +4,7 @@
     "generate_plan": "Generate plan",
     "ingredients": "Ingredients",
     "recipes": "Recipes",
-    "pantry": "Pantry",
-    "components": "Components",
     "settings": "Settings",
-    "search_placeholder": "Search the catalog…",
     "collapse_sidebar": "Collapse sidebar",
     "expand_sidebar": "Expand sidebar",
     "today": "Today",
@@ -27,11 +24,9 @@
       "html_label": "Page HTML",
       "paste_html_toggle": "Paste the page HTML instead",
       "url_toggle": "Back to URL input",
-      "submit": "Extract recipe",
-      "url_or_html_required": "Enter a URL or paste the page HTML."
+      "submit": "Extract recipe"
     },
     "step2": {
-      "title": "Review ingredients",
       "ingredient_col": "Ingredients",
       "amount": "Amount",
       "unit": "Unit",
@@ -82,67 +77,18 @@
       "via_llm": "Extracted with AI"
     }
   },
-  "picker": {
-    "filter": {
-      "favorites": "Favorites",
-      "recents": "Recent",
-      "mains": "Mains",
-      "sides": "Sides",
-      "snacks": "Snacks",
-      "sauces": "Sauces",
-      "skip": "Mark as skip"
-    },
-    "tag": {
-      "all": "All tags"
-    },
-    "role": {
-      "all": "Any role"
-    },
-    "sort": {
-      "name": "Name",
-      "recent": "Recently cooked",
-      "kcal": "Calories"
-    },
-    "tray": {
-      "title": "This plate",
-      "empty": "Click any meal to add it. The first added becomes the hero.",
-      "save": "Save plate",
-      "cancel": "Cancel",
-      "totals": "Totals"
-    }
-  },
   "plate": {
-    "edit_plate": "Edit plate",
-    "delete_confirm_title": "Delete this plate?",
-    "delete_confirm_body": "All components on this plate will be removed.",
-    "note": "Note",
-    "empty_cell": "Add a meal",
-    "portions": "Portions",
     "quantity": {
       "amount_label": "Amount",
       "unit_label": "Unit",
       "confidence": {
         "portion": "exact",
-        "default": "approx",
         "fallback": "estimate"
-      },
-      "unknown_unit": "Unknown unit"
-    },
-    "filter_by_role": "Filter by role"
+      }
+    }
   },
   "settings_page": {
-    "eyebrow": "Settings",
-    "title": "Workspace Preferences",
-    "subtitle": "Tailor your digital kitchen sanctuary to match your culinary workflow. These settings adjust how your editorial nourishment plan is curated and presented.",
     "clear_override": "Clear override",
-    "tabs": {
-      "general": "General",
-      "plan": "Planning",
-      "ai": "AI",
-      "nutrition": "Nutrition",
-      "meal_slots": "Meal Slots",
-      "system": "System"
-    },
     "source": {
       "db": "Database",
       "env": "Env var",
@@ -153,7 +99,6 @@
       "env_also_set": "An environment variable is also set for this key. The database value takes precedence."
     },
     "ai": {
-      "provider_section_title": "Assistant Configuration",
       "provider_label": "Provider",
       "provider_placeholder": "Select a provider…",
       "provider_none": "Disabled",
@@ -163,7 +108,6 @@
       "api_key_stored": "A key is already stored ({{preview}}). Enter a new value to replace it.",
       "api_key_placeholder": "sk-…",
       "api_key_placeholder_replace": "Enter a new key to replace the stored one",
-      "api_key_saved": "API key saved.",
       "test_connection": "Test connection",
       "validated_saved_one": "Key saved. {{count}} model available",
       "validated_saved_other": "Key saved. {{count}} models available",
@@ -171,11 +115,9 @@
       "validated_works_other": "Key works, {{count}} models available",
       "model_label": "Model",
       "model_placeholder": "Select a model…",
-      "model_saved": "Model saved.",
       "click_test_to_load_models": "Run Test connection to load available models.",
       "advanced_title": "Advanced",
       "rate_limit_label": "Chat rate limit",
-      "rate_limit_description": "Maximum /api/ai/chat requests per minute per IP. 0 disables limiting.",
       "fake_script_label": "Fake provider script",
       "fake_script_description": "Only used when provider = Fake. Path to a JSONL file of scripted replies.",
       "wizard": {
@@ -188,7 +130,6 @@
       }
     },
     "fdc": {
-      "title": "USDA FoodData Central",
       "api_key_label": "FDC API key",
       "api_key_description": "Enables live FDC ingredient search. Leave empty to disable.",
       "api_key_stored": "A key is already stored ({{preview}}). Enter a new value to replace it.",
@@ -206,8 +147,7 @@
         "version": "Version",
         "build_commit": "Build commit"
       },
-      "env_tooltip": "Set via {{envVar}}. Restart required to change.",
-      "restart_required": "Restart required"
+      "env_tooltip": "Set via {{envVar}}. Restart required to change."
     },
     "heading": "Settings",
     "nav_label": "Settings sections",
@@ -285,7 +225,6 @@
       "goal_effect": "Plantry aims for {{kcal}} kcal a day: {{protein}} % protein, {{fat}} % fat, {{carbs}} % carbs.",
       "goal_effect_kcal_only": "Plantry aims for {{kcal}} kcal a day.",
       "goal_effect_none": "No goal set. Plantry doesn't balance plates for nutrition.",
-      "macro_split_hint": "Protein / fat / carbs",
       "macro_sum_invalid": "Protein, fat and carbs add up to more than 100 %."
     },
     "meals": {
@@ -367,28 +306,23 @@
     "days_unit_other": "days"
   },
   "settings": {
-    "plan_tab": "Planning",
     "plan_anchor": "Plan view starts",
     "plan_anchor_today": "Today",
     "plan_anchor_next_shopping_day": "Next shopping day",
     "shopping_day": "Shopping day"
   },
   "display_preferences": {
-    "title": "Display Preferences",
     "theme_label": "Theme",
     "theme_description": "Choose between the editorial light palette and a dimmed evening mode.",
     "theme_light": "Light",
     "theme_dark": "Dark",
     "theme_system": "System",
     "language_label": "Language",
-    "language_description": "Applies to the entire interface.",
     "language_english": "English",
     "language_german": "Deutsch"
   },
   "developer_preferences": {
-    "title": "Developer",
-    "debug_title": "Lookup pipeline trace",
-    "debug_description": "Surfaces a detailed trace panel below the ingredient lookup — AI translation, source timings, pick-best reasoning. Stored locally, not synced to the server."
+    "debug_title": "Lookup pipeline trace"
   },
   "slot": {
     "title": "Meal Slots",
@@ -415,7 +349,6 @@
   },
   "ingredient": {
     "create": "New Ingredient",
-    "edit": "Edit Ingredient",
     "edit_eyebrow": "Editor",
     "edit_title": "Ingredient Editor",
     "edit_subtitle": "Refine the essence of your culinary palette.",
@@ -430,7 +363,6 @@
     "fiber": "Fiber (g)",
     "sodium": "Sodium (mg)",
     "per_100g": "per 100 g",
-    "macros": "Nutrition per 100 g",
     "search_placeholder": "Search the archive…",
     "delete_confirm_title": "Delete ingredient?",
     "delete_confirm_body": "This action cannot be undone.",
@@ -439,14 +371,11 @@
     "source_manual": "Manual",
     "source_off": "Open Food Facts",
     "source_fdc": "USDA",
-    "section_identity": "Identity",
     "section_basic": "Basic Information",
     "section_macros": "Nutrition per 100 g",
     "section_image_hint": "Add a photo so this ingredient is easy to spot in the catalog.",
     "section_macros_hint": "Values per 100 g — used for live nutrition calculations.",
-    "section_lookup_hint": "Search Open Food Facts and USDA to pre-fill nutrition.",
     "refetch": "Refresh nutrition",
-    "refetch_failed": "Could not refresh from the upstream source.",
     "sync_portions": "Sync portions from FDC",
     "sync_portions_done_one": "{{count}} portion synced",
     "sync_portions_done_other": "{{count}} portions synced",
@@ -463,19 +392,11 @@
     }
   },
   "component": {
-    "create": "New recipe",
-    "edit": "Edit Recipe",
     "edit_eyebrow": "Editor",
     "edit_title": "Refining Your Creation",
     "edit_subtitle": "Adjust the essence of your dish. Precise measurements ensure the editorial quality of your kitchen sanctuary.",
     "new_title": "New Recipe",
     "new_subtitle": "Every creation starts with a first draft. Sketch the essentials now — refine later.",
-    "new_path_chooser": {
-      "template_title": "Start from a template",
-      "template_description": "Browse ready-made presets and adapt them to your taste."
-    },
-    "view": "Recipe Details",
-    "browse_templates": "Browse Templates",
     "name": "Name",
     "name_placeholder": "e.g. Chicken curry",
     "role": "Role",
@@ -501,18 +422,13 @@
     "add_tag": "Add tag",
     "tag_placeholder": "e.g. spicy, quick",
     "nutrition": "Nutrition per serving",
-    "search_placeholder": "Search the catalog…",
-    "no_results": "No recipes found.",
     "delete_confirm_title": "Delete recipe?",
     "delete_confirm_body": "This action cannot be undone.",
     "amount": "Amount",
     "unit": "Unit",
     "grams": "Grams",
-    "step": "Step {{number}}",
     "instruction_placeholder": "Describe this step...",
     "select_ingredient": "Select ingredient",
-    "all_roles": "All roles",
-    "time": "{{prep}} + {{cook}} min",
     "create_variant": "Create variant",
     "other_variants": "Other variants",
     "section_identity": "Identity",
@@ -521,7 +437,6 @@
     "add_portion_for_unit": "+ Add portion for \"{{unit}}\"",
     "add_portion_title": "Set grams per {{unit}}",
     "add_portion_body": "Tell Plantry how much one {{unit}} of {{ingredient}} weighs in grams. The value is saved per ingredient so future recipes reuse it.",
-    "sync_portions_unused_marker": "",
     "error_unresolved_unit": "Unit \"{{unit}}\" can't be converted to grams. Enter grams manually or add a portion.",
     "grams_source": {
       "exact": "Exact",
@@ -585,19 +500,13 @@
     "title": "Find ingredient",
     "search_placeholder": "Search by name or barcode...",
     "scan_barcode": "Scan barcode",
-    "enter_barcode": "Enter barcode",
     "no_results": "No matches found",
     "searching": "Searching...",
     "source_off": "Open Food Facts",
     "source_fdc": "USDA",
     "source_local": "Your catalogue",
     "in_catalogue": "In your catalogue",
-    "create_manually": "Create manually",
-    "back_to_search": "Back to search",
-    "select_match": "Select a match",
     "recommended": "Recommended",
-    "tab_search": "Search",
-    "tab_manual": "Manual",
     "scanner_hint": "Point camera at a barcode",
     "scanner_requesting": "Requesting camera access…",
     "scanner_error_permission": "Camera access denied",
@@ -619,7 +528,6 @@
     "unit": "Unit",
     "grams": "Grams",
     "add": "Add portion",
-    "unit_placeholder": "e.g. cup, tbsp, slice",
     "delete_unit": "Delete {{unit}}"
   },
   "unit": {
@@ -764,7 +672,6 @@
     "upload": "Upload image",
     "take_photo": "Take photo",
     "remove": "Remove image",
-    "uploading": "Uploading...",
     "url_placeholder": "Paste an image URL…",
     "fetch": "Fetch",
     "paste_hint": "Or paste an image from the clipboard",
@@ -776,25 +683,14 @@
     }
   },
   "profile": {
-    "title": "Profile & Targets",
-    "description": "Set your nutrition goals and preferences.",
-    "goal_preset": "Goal preset",
-    "preset_cut": "Cut",
-    "preset_maintain": "Maintain",
-    "preset_bulk": "Bulk",
     "kcal_target": "Daily calorie target (kcal)",
     "protein_pct": "Protein %",
     "fat_pct": "Fat %",
     "carbs_pct": "Carbs %",
     "macro_sum": "Sum: {{sum}}%",
-    "dietary_restrictions": "Dietary restrictions",
     "restriction_placeholder": "e.g. vegetarian, gluten-free",
     "system_prompt": "Custom AI instructions",
-    "system_prompt_placeholder": "Describe your preferences for the AI...",
     "locale": "Language",
-    "save": "Save profile",
-    "save_success": "Profile saved",
-    "macros_label": "Macros",
     "kcal_target_placeholder": "e.g. 2000",
     "add_restriction": "Add",
     "remove_restriction": "Remove {{tag}}"
@@ -939,7 +835,6 @@
     "go_today": "Go to Today"
   },
   "nutrition": {
-    "detail_title": "Nutrition for {{name}}",
     "section_core": "Macros",
     "section_extended": "Extended macros",
     "section_minerals": "Minerals",
@@ -962,31 +857,17 @@
     "folate": "Folate"
   },
   "macro": {
-    "protein": "Protein",
-    "carbs": "Carbs",
-    "fat": "Fat",
-    "fiber": "Fiber",
     "protein_abbr": "P",
     "carbs_abbr": "C",
-    "fat_abbr": "F",
-    "fiber_abbr": "Fi",
-    "kcal": "kcal",
-    "distribution": "Macro split"
+    "fat_abbr": "F"
   },
   "common": {
     "save": "Save",
-    "saved": "Saved.",
     "cancel": "Cancel",
     "delete": "Delete",
-    "confirm": "Confirm",
     "edit": "Edit",
-    "done": "Done",
     "back": "Back",
     "loading": "Loading...",
-    "showing": "Showing {{from}}–{{to}} of {{total}}",
-    "previous": "Previous",
-    "next": "Next",
-    "actions": "Actions",
     "undo": "Undo",
     "skip_to_content": "Skip to main content",
     "close": "Close",

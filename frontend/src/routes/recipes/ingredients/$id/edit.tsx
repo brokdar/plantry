@@ -22,7 +22,7 @@ function EditIngredientPage() {
 
   if (Number.isNaN(numericId)) {
     return (
-      <p className="py-12 text-center text-on-surface-variant">
+      <p className="py-12 text-center text-ink-muted">
         {t("error.invalid_id")}
       </p>
     )
@@ -44,9 +44,7 @@ function EditIngredientPage() {
 
   if (!food) {
     return (
-      <p className="py-12 text-center text-on-surface-variant">
-        {t("error.not_found")}
-      </p>
+      <p className="py-12 text-center text-ink-muted">{t("error.not_found")}</p>
     )
   }
 
@@ -59,7 +57,7 @@ function EditIngredientPage() {
         breadcrumb={
           <Link
             to="/recipes/ingredients"
-            className="inline-flex items-center gap-1 hover:text-on-surface"
+            className="inline-flex items-center gap-1 hover:text-ink"
           >
             <ChevronLeft className="size-3" aria-hidden />
             {t("ingredient.breadcrumb_back")}

@@ -90,7 +90,7 @@ export function UnitSelect({
           if (items.length === 0) return null
           return (
             <SelectGroup key={group}>
-              <SelectLabel className="px-2.5 pt-2 pb-1 font-heading text-[10px] tracking-[0.18em] text-on-surface-variant/80 uppercase">
+              <SelectLabel className="px-2.5 pt-2 pb-1 font-heading text-[10px] tracking-[0.18em] text-ink-muted/80 uppercase">
                 {t(`unit.group.${group}`)}
               </SelectLabel>
               {items.map((opt) => (
@@ -129,14 +129,14 @@ function UnitItem({ option }: { option: UnitOption }) {
       </span>
       <SelectPrimitive.ItemText>
         <span className="flex items-baseline gap-2.5">
-          <span className="min-w-[2.25rem] shrink-0 font-mono text-[11px] tracking-tight text-on-surface tabular-nums">
+          <span className="min-w-[2.25rem] shrink-0 font-mono text-[11px] tracking-tight text-ink tabular-nums">
             {option.key}
           </span>
-          <span className="text-sm text-on-surface">{name}</span>
+          <span className="text-sm text-ink">{name}</span>
         </span>
       </SelectPrimitive.ItemText>
       {gramsHint && (
-        <span className="ml-auto shrink-0 font-mono text-[10px] tracking-tight text-on-surface-variant/80">
+        <span className="ml-auto shrink-0 font-mono text-[10px] tracking-tight text-ink-muted/80">
           {gramsHint}
         </span>
       )}
@@ -160,10 +160,10 @@ export function UnitLabel({
   const name = t(`unit.${key}.name`, { defaultValue: unit })
   return (
     <span className={cn("flex items-baseline gap-2.5", className)}>
-      <span className="min-w-[2.25rem] shrink-0 font-mono text-[11px] tracking-tight text-on-surface-variant tabular-nums">
+      <span className="min-w-[2.25rem] shrink-0 font-mono text-[11px] tracking-tight text-ink-muted tabular-nums">
         {key || unit}
       </span>
-      <span className="text-sm text-on-surface">{name}</span>
+      <span className="text-sm text-ink">{name}</span>
     </span>
   )
 }

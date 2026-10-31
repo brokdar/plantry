@@ -27,6 +27,28 @@ const TOKENS: Record<string, [string, string]> = {
   danger: ["#A23A2A", "#EE8B7B"],
 }
 
+// The shadcn theme names components/ui reads; index.css maps each onto a
+// Cookbook token. (`accent` is shared with the Cookbook.)
+const SHADCN = [
+  "background",
+  "foreground",
+  "card",
+  "card-foreground",
+  "popover",
+  "popover-foreground",
+  "primary",
+  "primary-foreground",
+  "secondary",
+  "secondary-foreground",
+  "muted",
+  "muted-foreground",
+  "accent-foreground",
+  "destructive",
+  "border",
+  "input",
+  "ring",
+]
+
 const THEMES = [
   { name: "light", selector: ":root", index: 0 },
   { name: "dark", selector: ".dark", index: 1 },
@@ -133,6 +155,46 @@ describe("design tokens (index.css)", () => {
     expect(match, "no :focus-visible rule").not.toBeNull()
     expect(match![1]).toMatch(/outline:\s*2px solid var\(--accent\);/)
     expect(match![1]).toMatch(/outline-offset:\s*2px;/)
+  })
+
+  // Z1-AC4: index.css defines the Cookbook tokens, the shadcn theme names
+  // that components/ui reads, and a few layout values, and nothing else. Any
+  // deleted alias (Material, macro and chart palettes, AI accent, sidebar,
+  // editorial shadow) coming back fails one of these allowlists.
+  describe("defines no legacy alias", () => {
+    const LAYOUT = ["shadow-soft", "radius", "tab-bar-h", "tab-bar-inset"]
+
+    it.each(THEMES)(
+      "$name block holds only Cookbook tokens",
+      ({ selector }) => {
+        const names = Object.keys(block(selector)).map((n) => n.slice(2))
+        const allowed = [...Object.keys(TOKENS), ...LAYOUT]
+        expect(names.filter((n) => !allowed.includes(n))).toEqual([])
+      }
+    )
+
+    it("maps only the shadcn theme names onto the tokens", () => {
+      const names = Object.keys(block(":root,\n.dark")).map((n) => n.slice(2))
+      expect(names.sort()).toEqual([...SHADCN].sort())
+    })
+
+    it("exposes only Cookbook and shadcn colours to Tailwind", () => {
+      const colours = Object.keys(block("@theme inline"))
+        .filter((n) => n.startsWith("--color-"))
+        .map((n) => n.slice("--color-".length))
+      const allowed = [...Object.keys(TOKENS), ...SHADCN]
+      expect(colours.filter((n) => !allowed.includes(n))).toEqual([])
+    })
+
+    it("keeps no Botanical utilities or keyframes", () => {
+      const utilities = /@layer utilities\s*\{([\s\S]*?)\n\}/.exec(css)
+      expect(utilities, "no utilities layer").not.toBeNull()
+      const classes = new Set(
+        [...utilities![1].matchAll(/\.([\w-]+)/g)].map((m) => m[1])
+      )
+      expect([...classes].sort()).toEqual(["font-heading", "hide-scrollbar"])
+      expect(css).not.toMatch(/@keyframes|gradient\(/)
+    })
   })
 
   it("no longer references Inter or Manrope", () => {

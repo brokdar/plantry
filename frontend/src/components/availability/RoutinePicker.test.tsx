@@ -1,6 +1,6 @@
-import { screen, within } from "@testing-library/react"
+import { cleanup, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { mockAvailabilityPresets } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
@@ -27,6 +27,14 @@ function renderPicker(
 }
 
 describe("RoutinePicker", () => {
+  // Radix FocusScope restores focus in a setTimeout(0) when the open popover
+  // unmounts. Unmount here and let that timer run before the test ends, so it
+  // never fires after the environment is torn down.
+  afterEach(async () => {
+    cleanup()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+
   it("lists presets and picks one", async () => {
     const user = userEvent.setup()
     const { onPick } = renderPicker({})

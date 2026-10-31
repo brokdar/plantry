@@ -54,9 +54,8 @@ describe("SourceBadge", () => {
   it("uses Cookbook tokens only", async () => {
     const { findByTestId } = renderBadge({ source: "env" })
     const el = await findByTestId("source-badge-env")
-    expect(el.className).not.toMatch(
-      /on-surface|tertiary|outline|text-primary|bg-primary/
-    )
+    expect(el.className).not.toMatch(/text-primary|bg-primary/)
+    expect(el.className).toMatch(/rounded-cell/)
   })
 
   it("uses a distinct test id per source so assertions stay precise", async () => {

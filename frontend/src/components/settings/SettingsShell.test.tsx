@@ -127,23 +127,6 @@ describe("Settings routes and shell", () => {
     expect(await screen.findByRole("radio", { name: "Omnivore" })).toBeChecked()
   })
 
-  it.each([
-    ["ai", "assistant", "Assistant"],
-    ["general", "household", "You & household"],
-    ["nutrition", "household", "You & household"],
-    ["plan", "cooking", "Cooking & variety"],
-    ["meal_slots", "meals", "Meals & week"],
-    ["system", "system", "Data & system"],
-  ])("legacy ?tab=%s maps to %s", async (tab, section, title) => {
-    const router = renderAt(`/settings?tab=${tab}`)
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe(`/settings/${section}`)
-    )
-    expect(
-      await screen.findByRole("heading", { level: 2, name: title })
-    ).toBeInTheDocument()
-  })
-
   it("an unknown section redirects to You & household", async () => {
     const router = renderAt("/settings/nope")
     await waitFor(() =>

@@ -139,11 +139,11 @@ function PortionsEditorView({
           {portions.map((p) => (
             <div
               key={p.unit}
-              className="flex items-center gap-3 rounded-lg border border-outline-variant/40 bg-surface-container/40 px-3 py-2"
+              className="flex items-center gap-3 rounded-lg border border-line/40 bg-panel-sunken/40 px-3 py-2"
             >
               <UnitLabel unit={p.unit} className="flex-1" />
-              <span className="font-mono text-xs text-on-surface-variant tabular-nums">
-                {p.grams} g
+              <span className="font-mono text-xs text-ink-muted tabular-nums">
+                {p.grams} {t("units.g")}
               </span>
               <Button
                 type="button"

@@ -18,8 +18,4 @@ export function toastError(
   toast.error(fallbackMessage ?? t("error.server"))
 }
 
-export function toastSuccess(messageKey: string, t: TFunction) {
-  toast.success(t(messageKey))
-}
-
 export { toast }

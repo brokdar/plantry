@@ -125,7 +125,7 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
     <div className="space-y-4">
       <div className="space-y-2">
         <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-on-surface-variant/60" />
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-muted/60" />
           <Input
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
@@ -148,7 +148,7 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
       </div>
 
       {isLoading && (
-        <div className="flex items-center justify-center gap-2 py-6 text-xs text-on-surface-variant">
+        <div className="flex items-center justify-center gap-2 py-6 text-xs text-ink-muted">
           <Loader2 className="size-4 animate-spin" aria-hidden />
           {t("lookup.searching")}
         </div>
@@ -161,7 +161,7 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
       )}
 
       {!isLoading && !isError && hasQuery && results.length === 0 && (
-        <p className="py-6 text-center text-xs text-on-surface-variant">
+        <p className="py-6 text-center text-xs text-ink-muted">
           {t("lookup.no_results")}
         </p>
       )}
@@ -170,16 +170,16 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
         <div className="space-y-3">
           {localMatches.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-[10px] font-semibold tracking-[0.18em] text-on-surface-variant/70 uppercase">
+              <p className="text-[10px] font-semibold tracking-[0.18em] text-ink-muted/70 uppercase">
                 {t("lookup.in_catalogue")}
               </p>
-              <ul className="space-y-0.5 rounded-xl bg-surface-container p-1">
+              <ul className="space-y-0.5 rounded-xl bg-panel-sunken p-1">
                 {localMatches.map((candidate) => (
                   <li key={`local-${candidate.existing_id}`}>
                     <Link
                       to="/recipes/ingredients/$id/edit"
                       params={{ id: String(candidate.existing_id) }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-on-surface transition-colors hover:bg-surface-container-high"
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs text-ink transition-colors hover:bg-line"
                     >
                       <BookOpen
                         className="size-3 shrink-0 opacity-70"
@@ -190,7 +190,7 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
                       </span>
                       {candidate.kcal_100g != null && (
                         <span className="shrink-0 font-mono text-[10px] tabular-nums opacity-60">
-                          {Math.round(candidate.kcal_100g)} kcal
+                          {Math.round(candidate.kcal_100g)} {t("units.kcal")}
                         </span>
                       )}
                       <ArrowUpRight
@@ -206,11 +206,11 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
 
           {(external.length > 1 || (external.length === 1 && !selected)) && (
             <div className="space-y-1.5">
-              <p className="text-[10px] font-semibold tracking-[0.18em] text-on-surface-variant/70 uppercase">
+              <p className="text-[10px] font-semibold tracking-[0.18em] text-ink-muted/70 uppercase">
                 {t("lookup.candidates", { count: external.length })}
               </p>
               <ul
-                className="max-h-44 space-y-0.5 overflow-y-auto rounded-xl bg-surface-container p-1"
+                className="max-h-44 space-y-0.5 overflow-y-auto rounded-xl bg-panel-sunken p-1"
                 role="listbox"
               >
                 {external.map(({ candidate, index }) => {
@@ -229,8 +229,8 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
                         className={cn(
                           "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
                           isSelected
-                            ? "bg-primary/10 text-on-surface"
-                            : "text-on-surface-variant hover:bg-surface-container-high"
+                            ? "bg-primary/10 text-ink"
+                            : "text-ink-muted hover:bg-line"
                         )}
                       >
                         <SourceIcon
@@ -241,14 +241,14 @@ export function LookupPanel({ onSelect }: LookupPanelProps) {
                           <span className="truncate">{candidate.name}</span>
                           {candidate.source_name &&
                             candidate.source_name !== candidate.name && (
-                              <span className="truncate text-[10px] text-on-surface-variant/70">
+                              <span className="truncate text-[10px] text-ink-muted/70">
                                 {candidate.source_name}
                               </span>
                             )}
                         </span>
                         {candidate.kcal_100g != null && (
                           <span className="shrink-0 font-mono text-[10px] tabular-nums opacity-60">
-                            {Math.round(candidate.kcal_100g)} kcal
+                            {Math.round(candidate.kcal_100g)} {t("units.kcal")}
                           </span>
                         )}
                         {isRecommended && (

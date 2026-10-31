@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/routes/**/*.tsx"],
+  "project": ["src/**/*.{ts,tsx,css}", "e2e/**/*.ts"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreBinaries": ["rg"],
+  "ignoreIssues": {
+    "src/components/ui/**": ["exports"]
+  }
+}

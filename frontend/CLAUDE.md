@@ -14,7 +14,8 @@ bun run format                        # prettier (ts/tsx)
 bun run test                          # vitest (unit, run once)
 bun run test:watch                    # vitest watch mode
 bun run e2e                           # playwright (spawns its own backend + frontend; E2E_LANE=N for a parallel lane)
-bun run check                         # lint + typecheck + unit tests
+bun run check                         # lint + typecheck + knip + legacy grep gate + unit tests
+bun run knip                          # unused files, exports, dependencies (knip.json)
 ```
 
 ## Required Skills
@@ -52,8 +53,8 @@ src/routes/
 │                      #   lib/plan/board.ts); `day` focuses that day (Today's week strip)
 ├── shop/              # `/shop?from&to` — Shop (components/shop); without a range, the server's
 │                      #   default for the anchored window
-└── settings/          # index.tsx: `/settings` (section list on phone, else redirects; maps legacy
-                       #   `?tab=`); $section.tsx: `/settings/$section` (household, meals, cooking,
+└── settings/          # index.tsx: `/settings` (section list on phone, else redirects);
+                       #   $section.tsx: `/settings/$section` (household, meals, cooking,
                        #   assistant, system — `settings-sections.ts`)
 ```
 
@@ -70,7 +71,7 @@ src/components/
 ├── shop/              # ShopPage, RangePicker, SectionList, ShoppingRow, CopyAsText (clipboard text);
 │                      #   ticks in localStorage `plantry:purchased:range:{from}:{to}`
 ├── cook/              # CookMode (header, tabs; side by side ≥768 px), ScaledIngredients, StepPager,
-│                      #   TimerPill, useWakeLock, useSessionPortions (debounced session write);
+│                      #   TimerPill, useSessionPortions (debounced session write);
 │                      #   CookPages (session and recipe containers); timer detection in lib/cook/timers.ts
 ├── plan/              # the board: PlanPage, Board (BoardGrid ≥768 px, DayList phone), PlateCell,
 │                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog, CopyFromWeekDialog; keynav in lib/plan/keynav.ts;
@@ -80,7 +81,7 @@ src/components/
 │                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
 ├── availability/      # AvailabilityGrid (weekday/date × slot modes), RoutinePicker
 ├── setup/             # SetupWizard and its steps; wizard-draft.ts, use-wizard-save.ts
-├── component/         # shared inputs: QuantityUnitInput (leaf amount + unit), ComponentPicker
+├── component/         # shared input widget: QuantityUnitInput (leaf amount + unit)
 ├── recipes/           # RecipeLibrary, RecipeCard, RecipesHeader (tabs), AddRecipeMenu, ImportSheet,
 │                      #   RecipeOnboarding, RecipeEditor, RecipeDetail, NutritionCompletenessWarning
 │                      #   (shared by editor, detail and import)
@@ -126,13 +127,13 @@ Use these names in new and rebuilt code:
 - Type: `text-caption`, `text-small`, `text-body`, `text-h3`, `text-h2`, `text-h1`. Body/UI font is Source Sans 3 (`font-sans`, the default); `font-heading` is Newsreader, for display only (page titles, recipe names, headlines) — never labels, buttons, inputs or data. `h1`–`h6` get Newsreader from the base layer. Numbers use `tabular-nums`. Sentence case, no all-caps labels.
 - Shape: `rounded-cell` (4 px), `rounded-sheet` (16 px), `rounded-tag` (batch badge); buttons keep shadcn's `--radius` (8 px). `shadow-sheet` is the only shadow, for sheets and popovers.
 
-**Legacy aliases (plan decision D2).** The shadcn variables (`--background`, `--primary`, `--muted`, `--border`, …) and the old Material utilities (`bg-surface*`, `text-on-surface*`, `border-outline*`, `*-ai-accent*`, `*-primary-container`, `*-tertiary*`) are remapped onto the Cookbook tokens; the mapping table is the comment above the alias block in `index.css`. Existing screens still use them and keep working in both themes. Don't add new usages; a screen moves to the new names when it is rebuilt.
+**shadcn names.** `components/ui` reads the shadcn theme variables (`--background`, `--primary`, `--muted`, `--border`, …); `index.css` maps each onto a Cookbook token (table in its comment). App code uses the Cookbook names. The Botanical Atelier aliases, macro and chart palettes and utilities are gone: `src/test/tokens.test.ts` allowlists every custom property `index.css` defines, and `scripts/check-legacy.sh` (in `bun run check`) fails on the Phase 2 legacy patterns in `src/` and `e2e/`. Nutrition reads as one line of text: `editorial/MacroLine` (kcal/P/F/C, `units.*` keys).
 
 **Gotcha:** shadcn's `--accent` is the same variable as the Cookbook accent (solid ink blue), so `bg-accent` (including shadcn menu/select highlights) needs `text-on-accent` / `text-accent-foreground` for text, never `text-ink`.
 
 ### i18n
 
-All user-visible strings go through `react-i18next`. Keys live in `src/lib/i18n/`. Use `useTranslation()` in components; never hardcode English strings.
+All user-visible strings go through `react-i18next`. Keys live in `src/lib/i18n/`. Use `useTranslation()` in components; never hardcode English strings (units too: `units.kcal`, `units.g`). `src/lib/i18n/keys.test.ts` fails when en/de key sets differ or a key is not referenced in `src/` (a string literal, a template-literal head such as `` `unit.${key}` ``, or a prefix in its small allowlist for keys that come from API data). `src/lib/hooks/useWakeLock` keeps the screen on (cook mode, in-store mode).
 
 ### Utility modules
 

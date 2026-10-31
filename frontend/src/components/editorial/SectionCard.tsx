@@ -21,10 +21,7 @@ export function SectionCard({
 }: SectionCardProps) {
   return (
     <section
-      className={cn(
-        "editorial-shadow rounded-2xl bg-surface-container-lowest p-6 md:p-8",
-        className
-      )}
+      className={cn("rounded-2xl bg-panel p-6 md:p-8", className)}
       data-testid={testId}
     >
       {(title || description || actions) && (
@@ -36,7 +33,7 @@ export function SectionCard({
               </h2>
             )}
             {description && (
-              <p className="text-sm text-on-surface-variant">{description}</p>
+              <p className="text-sm text-ink-muted">{description}</p>
             )}
           </div>
           {actions && (

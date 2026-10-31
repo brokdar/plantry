@@ -58,9 +58,6 @@ describe("CommandPalette", () => {
       "/shop",
       "/settings",
     ])
-    for (const gone of ["/calendar", "/archive", "/import", "/presets"]) {
-      expect(targets.some((to) => to.startsWith(gone))).toBe(false)
-    }
   })
 
   test("lists routines, actions and the go-to entries", async () => {

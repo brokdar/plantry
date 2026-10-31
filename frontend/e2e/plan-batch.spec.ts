@@ -69,13 +69,13 @@ async function setup(): Promise<Setup> {
     ],
   })
 
-  const blocked = new Set<number>()
-  async function block(ctx: APIRequestContext, id: number) {
-    if (blocked.has(id)) return
-    blocked.add(id)
-    await ctx.put(`/api/availability/${days[1]}/${id}`, {
-      data: { mode: "none" },
-    })
+  // Cells blocked for this test, as `${date}/${slotId}`.
+  const blocked = new Set<string>()
+  async function block(ctx: APIRequestContext, date: string, id: number) {
+    const cell = `${date}/${id}`
+    if (blocked.has(cell)) return
+    blocked.add(cell)
+    await ctx.put(`/api/availability/${cell}`, { data: { mode: "none" } })
   }
 
   async function blockOthers() {
@@ -83,7 +83,7 @@ async function setup(): Promise<Setup> {
     const res = await ctx.get("/api/settings/slots?active=true")
     const { items } = (await res.json()) as { items: { id: number }[] }
     for (const { id } of items) {
-      if (!own.has(id)) await block(ctx, id)
+      if (!own.has(id)) await block(ctx, days[1], id)
     }
     // A slot another spec adds meanwhile is plannable again: ask the server
     // what it would suggest and block until only this test's cells remain.
@@ -98,13 +98,13 @@ async function setup(): Promise<Setup> {
         `/api/cook-sessions/${session!.id}/leftover-cells?count=2`
       )
       const { cells } = (await cellsRes.json()) as {
-        cells: { slot_id: number }[]
+        cells: { date: string; slot_id: number }[]
       }
       const foreign = cells.filter(
         (c) => c.slot_id !== lunch.id && c.slot_id !== dinner.id
       )
       if (foreign.length === 0) break
-      for (const c of foreign) await block(ctx, c.slot_id)
+      for (const c of foreign) await block(ctx, c.date, c.slot_id)
     }
     await ctx.dispose()
   }
@@ -120,8 +120,8 @@ async function setup(): Promise<Setup> {
     blockOthers,
     cleanup: async () => {
       const c = await apiRequest.newContext({ baseURL: API })
-      for (const id of blocked) {
-        await c.delete(`/api/availability/${days[1]}/${id}`)
+      for (const cell of blocked) {
+        await c.delete(`/api/availability/${cell}`)
       }
       for (const date of days) {
         for (const id of own) {

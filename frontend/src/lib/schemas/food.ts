@@ -99,12 +99,5 @@ export const composedFoodSchema = z.object({
   tags: z.array(z.string().min(1)).default([]),
 })
 
-export const foodSchema = z.discriminatedUnion("kind", [
-  leafFoodSchema,
-  composedFoodSchema,
-])
-
 export type LeafFoodFormValues = z.infer<typeof leafFoodSchema>
 export type ComposedFoodFormValues = z.infer<typeof composedFoodSchema>
-export type ComposedChildFormValues = z.infer<typeof composedChildSchema>
-export type FoodFormValues = z.infer<typeof foodSchema>

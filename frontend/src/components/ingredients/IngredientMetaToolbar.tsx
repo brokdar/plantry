@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 const SOURCE_DOT: Record<string, string> = {
   fdc: "bg-accent",
   off: "bg-batch-2",
-  manual: "bg-on-surface-variant/50",
+  manual: "bg-ink-muted/50",
 }
 
 interface IngredientMetaToolbarProps {
@@ -62,7 +62,7 @@ export function IngredientMetaToolbar({
         <span
           className={cn(
             "inline-block size-1.5 rounded-full",
-            SOURCE_DOT[source] ?? "bg-on-surface-variant/50"
+            SOURCE_DOT[source] ?? "bg-ink-muted/50"
           )}
           aria-hidden
         />

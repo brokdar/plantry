@@ -296,6 +296,34 @@ describe("ShopPage", () => {
     expect(toggle).toHaveAttribute("aria-pressed", "false")
   })
 
+  it("keeps the screen on while in-store mode is on", async () => {
+    const release = vi.fn().mockResolvedValue(undefined)
+    const request = vi.fn().mockResolvedValue({ released: false, release })
+    Object.defineProperty(navigator, "wakeLock", {
+      value: { request },
+      configurable: true,
+    })
+    try {
+      const user = userEvent.setup()
+      renderShop()
+      const toggle = await screen.findByRole("button", {
+        name: "In-store mode",
+      })
+      expect(request).not.toHaveBeenCalled()
+
+      await user.click(toggle)
+      expect(request).toHaveBeenCalledWith("screen")
+      await waitFor(() => expect(release).not.toHaveBeenCalled())
+
+      await user.click(
+        screen.getByRole("button", { name: "Leave in-store mode" })
+      )
+      await waitFor(() => expect(release).toHaveBeenCalledTimes(1))
+    } finally {
+      delete (navigator as { wakeLock?: unknown }).wakeLock
+    }
+  })
+
   it("sends an empty range to the plan", async () => {
     renderShop({ ...mockShoppingList, sections: [], count: 0 })
     expect(

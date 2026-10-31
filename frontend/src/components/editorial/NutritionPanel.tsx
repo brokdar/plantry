@@ -1,11 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
-import {
-  MacroDistributionBar,
-  MacroKcalHero,
-  MacroTriad,
-} from "@/components/editorial/macros"
+import { MacroLine } from "@/components/editorial/MacroLine"
 import { SectionCard } from "@/components/editorial/SectionCard"
 import { cn } from "@/lib/utils"
 
@@ -81,7 +77,7 @@ export function NutritionPanel(props: NutritionPanelProps) {
           <div
             role="group"
             aria-label={t("component.nutrition_view_label")}
-            className="inline-flex items-center rounded-full bg-surface-container-highest p-0.5 text-xs"
+            className="inline-flex items-center rounded-full bg-line p-0.5 text-xs"
           >
             <ToggleButton
               active={view === "portion"}
@@ -101,37 +97,28 @@ export function NutritionPanel(props: NutritionPanelProps) {
         ) : undefined
       }
     >
-      <MacroKcalHero kcal={macros.kcal} size="lg" hint={heroHint} />
-
-      <MacroDistributionBar
-        thickness="lg"
-        values={{
-          protein: macros.protein,
-          carbs: macros.carbs,
-          fat: macros.fat,
-        }}
-      />
-
-      <MacroTriad
-        size="md"
-        values={{
-          protein: macros.protein,
-          carbs: macros.carbs,
-          fat: macros.fat,
-        }}
-      />
+      <div className="flex flex-col gap-1">
+        {heroHint && <p className="text-caption text-ink-muted">{heroHint}</p>}
+        <MacroLine
+          className="text-body"
+          kcal={macros.kcal}
+          protein={macros.protein}
+          fat={macros.fat}
+          carbs={macros.carbs}
+        />
+      </div>
 
       {showFiberSodium && (
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-on-surface-variant">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-ink-muted">
           <div className="flex items-center justify-between">
             <dt>{t("ingredient.fiber")}</dt>
-            <dd className="font-medium text-on-surface">
-              {macros.fiber.toFixed(1)} g
+            <dd className="font-medium text-ink">
+              {macros.fiber.toFixed(1)} {t("units.g")}
             </dd>
           </div>
           <div className="flex items-center justify-between">
             <dt>{t("ingredient.sodium")}</dt>
-            <dd className="font-medium text-on-surface">
+            <dd className="font-medium text-ink">
               {(macros.sodium * 1000).toFixed(0)} mg
             </dd>
           </div>
@@ -160,9 +147,7 @@ function ToggleButton({
       data-testid={testId}
       className={cn(
         "rounded-full px-3 py-1 transition-colors",
-        active
-          ? "bg-surface-container-lowest text-on-surface shadow-sm"
-          : "text-on-surface-variant hover:text-on-surface"
+        active ? "bg-panel text-ink" : "text-ink-muted hover:text-ink"
       )}
     >
       {children}

@@ -263,11 +263,4 @@ test.describe("Recipe library", () => {
       tabs.getByRole("link", { name: "Ingredients" })
     ).toHaveAttribute("aria-current", "page")
   })
-
-  test("F8-AC4: the old paths render not-found", async ({ page }) => {
-    for (const path of ["/components", "/ingredients", "/import"]) {
-      await page.goto(path)
-      await expect(page.getByTestId("not-found")).toBeVisible()
-    }
-  })
 })

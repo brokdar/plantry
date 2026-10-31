@@ -228,7 +228,7 @@ export function QuickCreateIngredientDialog({
                 )}
               />
             </div>
-            <p className="text-xs text-on-surface-variant">
+            <p className="text-xs text-ink-muted">
               {t("ingredient.quick_create.macros_hint")}
             </p>
             <DialogFooter>

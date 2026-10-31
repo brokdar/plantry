@@ -10,7 +10,6 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import type { Food } from "@/lib/api/foods"
 import { cn } from "@/lib/utils"
 
 export type FoodPlaceholderCategory =
@@ -59,17 +58,6 @@ const ICON_SIZE: Record<NonNullable<FoodPlaceholderProps["size"]>, string> = {
   lg: "h-16 w-16",
 }
 
-/**
- * categoryForFood picks the correct placeholder category from a food. Leaf
- * foods route to `"ingredient"` (the apple icon) instead of borrowing the
- * composed-food role taxonomy — a banana with no image used to render under
- * the "main course" salad icon, which is a small visual lie.
- */
-export function categoryForFood(food: Food): FoodPlaceholderCategory {
-  if (food.kind === "leaf") return "ingredient"
-  return food.role ?? "main"
-}
-
 export function FoodPlaceholder({
   category = "default",
   className,
@@ -90,14 +78,10 @@ export function FoodPlaceholder({
       aria-label={labelled ? ariaLabel : undefined}
       aria-hidden={labelled ? undefined : true}
       className={cn(
-        "pointer-events-none flex items-center justify-center overflow-hidden",
+        "pointer-events-none flex items-center justify-center overflow-hidden bg-panel-sunken",
         ROUNDED[rounded],
         className
       )}
-      style={{
-        backgroundImage:
-          "linear-gradient(135deg, var(--surface-container-lowest) 0%, var(--primary-fixed) 100%)",
-      }}
     >
       <Icon
         aria-hidden

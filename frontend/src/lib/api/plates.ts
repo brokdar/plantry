@@ -2,17 +2,6 @@ import { apiFetch } from "./client"
 import type { PlateFeedback } from "./feedback"
 import type { FoodKind, FoodRole } from "./foods"
 
-// Week is kept as an in-memory aggregate for plate-patch helpers used by
-// optimistic component mutations (swap, add, remove). It is not fetched from
-// the server; the week cache slots are populated by the mutation hooks only.
-export interface Week {
-  id: number
-  year: number
-  week_number: number
-  plates: Plate[]
-  created_at: string
-}
-
 export interface PlateComponent {
   id: number
   plate_id: number
@@ -128,14 +117,6 @@ export interface UpdatePlateComponentInput {
   amount?: number
   unit?: string
 }
-
-/**
- * PlateComponentQuantity is the quantity-only patch shape used by quantity
- * updates and optimistic patches. Discriminated by the keys present.
- */
-export type PlateComponentQuantity =
-  | { portions: number }
-  | { amount: number; unit: string }
 
 export function createPlate(input: CreatePlateInput): Promise<Plate> {
   return apiFetch("/plates", { method: "POST", body: JSON.stringify(input) })

@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router"
 import { ClipboardCopy, ShoppingCart } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import type { ShoppingList, ShoppingRange } from "@/lib/api/shopping"
 import { useLocalStorageState } from "@/lib/hooks/useLocalStorageState"
+import { useWakeLock } from "@/lib/hooks/useWakeLock"
 import { colourBatches } from "@/lib/plan/batch-colours"
 import { UNDO_MS, usePlan } from "@/lib/queries/plan"
 import { useShoppingList } from "@/lib/queries/shopping"
@@ -83,7 +84,7 @@ function ShopLoaded({
 }) {
   const { t, i18n } = useTranslation()
   const { range } = list
-  const window = { from: range.window_start, to: range.window_end }
+  const planWindow = { from: range.window_start, to: range.window_end }
   const [ticked, toggle, clearTicked] = useTicked(list)
   const [inStore, setInStore] = useState(false)
   useWakeLock(inStore)
@@ -110,7 +111,7 @@ function ShopLoaded({
           <div className="flex min-w-0 flex-col gap-1">
             <RangePicker
               range={{ from: range.from, to: range.to }}
-              window={window}
+              window={planWindow}
               onChange={onRangeChange}
             />
             <p
@@ -281,38 +282,6 @@ function useUsedIn(windowStart: string): UsedInContext {
     }
     return { batches, slotName: (id) => slots.get(id) ?? null }
   }, [plan, t])
-}
-
-/**
- * Keeps the screen on while `active` (in-store mode). The browser drops the
- * lock when the page is hidden, so it is taken again on return. Browsers
- * without the API, or that refuse it, just let the screen sleep.
- */
-function useWakeLock(active: boolean) {
-  useEffect(() => {
-    if (!active || !("wakeLock" in navigator)) return
-    let lock: WakeLockSentinel | null = null
-    let stopped = false
-    const acquire = () => {
-      if (document.visibilityState !== "visible") return
-      navigator.wakeLock
-        .request("screen")
-        .then((l) => {
-          if (stopped) void l.release()
-          else lock = l
-        })
-        // A refused lock (battery saver, no permission) is not an error
-        // the user can act on; the list works without it.
-        .catch(() => {})
-    }
-    acquire()
-    document.addEventListener("visibilitychange", acquire)
-    return () => {
-      stopped = true
-      document.removeEventListener("visibilitychange", acquire)
-      void lock?.release()
-    }
-  }, [active])
 }
 
 function Frame({ children }: { children: React.ReactNode }) {

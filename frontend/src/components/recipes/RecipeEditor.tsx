@@ -531,7 +531,7 @@ export function RecipeEditor({
                 />
               </div>
               {totalTime > 0 && (
-                <p className="text-xs tracking-wider text-on-surface-variant uppercase">
+                <p className="text-xs tracking-wider text-ink-muted uppercase">
                   {t("component.cooking_time_total", { minutes: totalTime })}
                 </p>
               )}
@@ -591,7 +591,7 @@ export function RecipeEditor({
                         key={tag}
                         type="button"
                         onClick={() => addTag(tag)}
-                        className="rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3 py-1 text-xs text-on-surface-variant transition-colors hover:border-primary/40 hover:bg-primary-fixed/30 hover:text-on-primary-fixed"
+                        className="rounded-full border border-line/40 bg-panel px-3 py-1 text-xs text-ink-muted transition-colors hover:border-primary/40 hover:bg-panel-sunken/30 hover:text-ink"
                         data-testid={`tag-suggestion-${tag}`}
                       >
                         + {tag}
@@ -629,7 +629,7 @@ export function RecipeEditor({
                       "rounded-xl border border-dashed px-6 py-10 text-center text-sm",
                       form.formState.errors.instructions
                         ? "border-destructive/50 bg-destructive/5 text-destructive"
-                        : "border-outline-variant/40 text-on-surface-variant"
+                        : "border-line/40 text-ink-muted"
                     )}
                   >
                     {form.formState.errors.instructions?.root?.message ??
@@ -641,7 +641,7 @@ export function RecipeEditor({
                 <ol className="space-y-3">
                   {instructionFields.map((field, index) => (
                     <li key={field.id} className="flex items-start gap-3">
-                      <span className="mt-2 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-container font-heading text-xs font-bold text-on-accent">
+                      <span className="mt-2 flex size-7 shrink-0 items-center justify-center rounded-full bg-accent font-heading text-xs font-bold text-on-accent">
                         {index + 1}
                       </span>
                       <FormField
@@ -709,7 +709,7 @@ export function RecipeEditor({
                       "rounded-xl border border-dashed px-6 py-10 text-center text-sm",
                       form.formState.errors.children
                         ? "border-destructive/50 bg-destructive/5 text-destructive"
-                        : "border-outline-variant/40 text-on-surface-variant"
+                        : "border-line/40 text-ink-muted"
                     )}
                   >
                     {form.formState.errors.children?.root?.message ??
@@ -772,7 +772,7 @@ export function RecipeEditor({
               <button
                 type="button"
                 onClick={() => setNotesOpen(true)}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-outline-variant/40 bg-surface-container-lowest/30 px-6 py-4 text-sm text-on-surface-variant transition-colors hover:border-primary/40 hover:text-on-surface"
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line/40 bg-panel/30 px-6 py-4 text-sm text-ink-muted transition-colors hover:border-primary/40 hover:text-ink"
                 data-testid="notes-toggle-add"
               >
                 <Plus className="size-4" aria-hidden />
@@ -810,7 +810,7 @@ export function RecipeEditor({
               />
             ) : (
               <SectionCard title={t("component.nutrition")}>
-                <p className="text-sm text-on-surface-variant">
+                <p className="text-sm text-ink-muted">
                   {t("component.nutrition_empty")}
                 </p>
               </SectionCard>
@@ -827,10 +827,10 @@ export function RecipeEditor({
                       key={variant.id}
                       to="/recipes/$id/edit"
                       params={{ id: String(variant.id) }}
-                      className="editorial-shadow group flex w-40 shrink-0 flex-col overflow-hidden rounded-xl bg-surface-container-lowest transition-all duration-200 hover:-translate-y-0.5"
+                      className="flex w-40 shrink-0 flex-col overflow-hidden rounded-xl border border-line bg-panel transition-colors hover:border-ink-muted"
                       data-testid={`variant-card-${variant.id}`}
                     >
-                      <div className="aspect-[4/3] overflow-hidden bg-surface-container-high">
+                      <div className="aspect-[4/3] overflow-hidden bg-line">
                         {variant.image_path ? (
                           <img
                             src={imageURL(
@@ -838,7 +838,7 @@ export function RecipeEditor({
                               variant.updated_at
                             )}
                             alt=""
-                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            className="h-full w-full object-cover"
                             loading="lazy"
                           />
                         ) : (
@@ -854,7 +854,7 @@ export function RecipeEditor({
                         )}
                       </div>
                       <div className="flex flex-1 flex-col gap-1 px-3 py-3">
-                        <p className="truncate text-sm font-medium text-on-surface">
+                        <p className="truncate text-sm font-medium text-ink">
                           {variant.name}
                         </p>
                         <Badge
