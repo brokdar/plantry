@@ -2,13 +2,11 @@
   "nav": {
     "brand": "Plantry",
     "generate_plan": "Generate plan",
-    "planner": "Weekly Planner",
     "ingredients": "Ingredients",
     "recipes": "Recipes",
     "pantry": "Pantry",
     "components": "Components",
     "import": "Import",
-    "calendar": "Calendar",
     "settings": "Settings",
     "search_placeholder": "Search the catalog…",
     "collapse_sidebar": "Collapse sidebar",
@@ -16,31 +14,11 @@
     "today": "Today",
     "plan": "Plan",
     "shop": "Shop",
-    "archive": "Archive",
     "primary": "Primary",
     "go_to": "Go to",
     "recipes_sections": "Recipe sections",
     "generate_locked_one": "Add {{count}} more recipe to start planning",
     "generate_locked_other": "Add {{count}} more recipes to start planning"
-  },
-  "calendar": {
-    "title": "Calendar",
-    "mode_month": "Month",
-    "mode_week": "Week",
-    "mode_agenda": "Agenda",
-    "search_placeholder": "Search dishes…",
-    "plan_this_week": "Plan this week",
-    "jump_to_date": "Jump to date",
-    "no_plates_in_range": "No meals in this range.",
-    "load_older": "Load older 60 days",
-    "overflow_more": "+{{count}} more"
-  },
-  "day": {
-    "title": "{{weekday}}, {{date}}",
-    "prev_day": "Previous day",
-    "next_day": "Next day",
-    "back_to_calendar": "Back to calendar",
-    "empty": "No meals planned"
   },
   "import": {
     "title": "Import recipe",
@@ -104,33 +82,6 @@
       "extracting": "Extracting…",
       "via_jsonld": "From structured data",
       "via_llm": "Extracted with AI"
-    }
-  },
-  "home": {
-    "title": "Welcome to Plantry",
-    "subtitle": "Your self-hosted meal planner."
-  },
-  "planner": {
-    "today": "Today",
-    "day_mon": "Mon",
-    "day_tue": "Tue",
-    "day_wed": "Wed",
-    "day_thu": "Thu",
-    "day_fri": "Fri",
-    "day_sat": "Sat",
-    "day_sun": "Sun",
-    "slot": {
-      "sides_label": "Sides: {{names}}",
-      "role": {
-        "main": "Main",
-        "side_starch": "Starch",
-        "side_veg": "Vegetable",
-        "side_protein": "Protein",
-        "sauce": "Sauce",
-        "drink": "Drink",
-        "dessert": "Dessert",
-        "standalone": "Standalone"
-      }
     }
   },
   "picker": {
@@ -1104,7 +1055,8 @@
       "invalid_api_key": "The API key was not accepted. Double-check it and try again.",
       "secret_key_missing": "No encryption key is loaded — cannot save encrypted values.",
       "unknown_provider": "Unknown AI provider."
-    }
+    },
+    "go_today": "Go to Today"
   },
   "shopping": {
     "page_title": "Shopping list",
@@ -1519,5 +1471,70 @@
     "amount_of": "{{value}} / {{target}} {{unit}}",
     "incomplete": "Incomplete",
     "missing": "No nutrition data for {{names}}."
+  },
+  "today": {
+    "verdict": {
+      "cook": "Cook {{name}} × {{portions}}",
+      "quick_cook": "Quick cook: {{name}}",
+      "nothing_to_cook": "Nothing to cook today",
+      "no_plates": "No plates planned today",
+      "no_plan": "No plan for today"
+    },
+    "prev_day": "Previous day",
+    "next_day": "Next day",
+    "back_to_today": "Back to today",
+    "loading": "Loading today",
+    "error": "Couldn't load this day. Check that Plantry is running, then try again.",
+    "use_by": "use by {{day}}",
+    "use_by_today": "use by today",
+    "cook": {
+      "start": "Start cooking",
+      "cooked": "Cooked",
+      "minutes": "About {{minutes}} min"
+    },
+    "leftover": {
+      "title": "{{name}}, leftover",
+      "reheat_one": "Reheat {{portions}} portion",
+      "reheat_other": "Reheat {{portions}} portions",
+      "kcal_each": "{{kcal}} kcal each"
+    },
+    "meals": "Meals",
+    "row": {
+      "nothing": "Nothing planned"
+    },
+    "reminder": {
+      "title": "Reminders",
+      "freezer": "Freezer",
+      "defrost": "Take {{name}} out of the freezer tonight",
+      "last_day": "Last day",
+      "use_by": "{{slot}} is the last of the {{name}}"
+    },
+    "rate": {
+      "question": "How was {{weekday}}'s {{name}}?",
+      "loved": "Loved it",
+      "disliked": "Not again",
+      "not_eaten": "Didn't eat it",
+      "saved": "Rating saved"
+    },
+    "banner": {
+      "title": "Plan next week",
+      "body": "Your next week starts {{date}}.",
+      "action": "Plan next week"
+    },
+    "no_plan": {
+      "body": "Plan this week and Today shows what to cook each day.",
+      "action": "Plan this week"
+    },
+    "setup": {
+      "title_one": "Add {{count}} more recipe to start planning",
+      "title_other": "Add {{count}} more recipes to start planning",
+      "body": "Plantry plans your weeks from your own recipes.",
+      "action": "Add recipes"
+    },
+    "week": {
+      "title": "This week",
+      "open": "Open {{day}} in the plan",
+      "empty": "Nothing planned"
+    }
   }
 }

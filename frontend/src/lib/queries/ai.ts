@@ -16,7 +16,7 @@ import { useChatUI } from "../stores/chat-ui"
 import { todayISO } from "@/lib/planner-window"
 import { toastError } from "@/lib/toast"
 
-import { aiKeys, plateKeys } from "./keys"
+import { aiKeys } from "./keys"
 import { invalidatePlanViews } from "./plan"
 
 export function useAISettings() {
@@ -59,7 +59,7 @@ export function useDeleteConversation() {
  * useChatStream owns the POST SSE reader lifetime. Calling .mutateAsync()
  * starts a fresh stream; the in-flight assistant turn is mirrored into the
  * chatStreamStore for low-overhead per-delta rendering. plate_changed
- * events invalidate the active date-range plate/shopping caches immediately.
+ * events invalidate the plan views (plan, Today, shopping) immediately.
  * Turn boundaries and final completion flush to the conversation query cache.
  */
 export interface ChatStreamParams {
@@ -95,7 +95,7 @@ export function useChatStream() {
 
       try {
         for await (const evt of postChatStream(req, ac.signal)) {
-          handleEvent(evt, qc, params.range)
+          handleEvent(evt, qc)
         }
       } finally {
         if (controllerRef.current === ac) controllerRef.current = null
@@ -116,11 +116,7 @@ export function useChatStream() {
   }
 }
 
-function handleEvent(
-  evt: ChatEvent,
-  qc: ReturnType<typeof useQueryClient>,
-  range?: { from: string; to: string }
-) {
+function handleEvent(evt: ChatEvent, qc: ReturnType<typeof useQueryClient>) {
   switch (evt.type) {
     case "conversation_ready":
       useChatUI.getState().setActiveConversation(evt.data.conversation_id)
@@ -150,17 +146,9 @@ function handleEvent(
     case "tool_result":
       // Nothing to render beyond status; keep summary compact.
       return
-    case "plate_changed": {
-      if (range) {
-        qc.invalidateQueries({
-          queryKey: plateKeys.range(range.from, range.to),
-        })
-      } else {
-        qc.invalidateQueries({ queryKey: plateKeys.all })
-      }
+    case "plate_changed":
       void invalidatePlanViews(qc)
       return
-    }
     case "done":
       return
     case "error":

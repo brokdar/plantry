@@ -54,7 +54,6 @@ export default defineConfig({
           if (/[\\/]@dnd-kit[\\/]/.test(id)) return "vendor-dnd"
           if (/[\\/](react-hook-form|@hookform|zod)[\\/]/.test(id))
             return "vendor-forms"
-          if (/[\\/]date-fns[\\/]/.test(id)) return "vendor-date-fns"
         },
       },
     },

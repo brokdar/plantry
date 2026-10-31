@@ -198,44 +198,6 @@ export function mockPlate(overrides: Partial<Plate> = {}): Plate {
   }
 }
 
-// Plates spanning two ISO weeks (2026-W16 and 2026-W17)
-// 2026-04-13 = Mon W16, 2026-04-14 = Tue W16, 2026-04-20 = Mon W17
-export const mockPlateW16a: Plate = {
-  id: 101,
-  slot_id: 1,
-  date: "2026-04-13",
-  eaters: 1,
-  note: null,
-  components: [mockPlateComponent({ id: 1, plate_id: 101, food_id: 1 })],
-  feedback: null,
-  created_at: "2026-04-13T10:00:00Z",
-  updated_at: "2026-04-13T10:00:00Z",
-}
-
-export const mockPlateW16b: Plate = {
-  id: 102,
-  slot_id: 1,
-  date: "2026-04-14",
-  eaters: 1,
-  note: null,
-  components: [mockPlateComponent({ id: 2, plate_id: 102, food_id: 2 })],
-  feedback: null,
-  created_at: "2026-04-14T10:00:00Z",
-  updated_at: "2026-04-14T10:00:00Z",
-}
-
-export const mockPlateW17: Plate = {
-  id: 103,
-  slot_id: 1,
-  date: "2026-04-20",
-  eaters: 1,
-  note: null,
-  components: [mockPlateComponent({ id: 3, plate_id: 103, food_id: 3 })],
-  feedback: null,
-  created_at: "2026-04-20T10:00:00Z",
-  updated_at: "2026-04-20T10:00:00Z",
-}
-
 // Availability: three active slots (1 breakfast, 2 lunch, 3 dinner).
 // Weekday 0 = Monday … 6 = Sunday.
 export const mockAvailabilityDefaults: AvailabilityDefault[] = [

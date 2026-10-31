@@ -379,6 +379,23 @@ describe("PlanPage", () => {
     ).toHaveTextContent("Monday lunch")
   })
 
+  it("focuses the first cell of the day given in ?day= (Today's week strip)", async () => {
+    renderWithRouter(<PlanPage start="2026-10-31" day="2026-11-02" />)
+    await screen.findByRole("grid")
+    await waitFor(() =>
+      expect(document.activeElement).toHaveAccessibleName(
+        "Monday breakfast, nothing planned"
+      )
+    )
+  })
+
+  it("carries the compact Generate button on phones only (D31)", async () => {
+    renderWithRouter(<PlanPage />)
+    await screen.findByRole("grid")
+    const generate = screen.getByTestId("generate-plan-compact")
+    expect(generate.parentElement).toHaveClass("md:hidden")
+  })
+
   it("Open batch to a cook cell before the window opens it in the previous window", async () => {
     const user = userEvent.setup()
     // The window starts on Monday; the batch cooked on Sunday is in the

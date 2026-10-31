@@ -17,6 +17,7 @@ import type { Session, SessionWarning } from "@/lib/api/sessions"
 import { colourBatches } from "@/lib/plan/batch-colours"
 import type { BoardCell } from "@/lib/plan/board"
 import { formatAmount, formatNumber } from "@/lib/plan/format"
+import { plateMacros } from "@/lib/plan/plate-macros"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFood, useFoodMacros } from "@/lib/queries/foods"
 import { useMarkNoPlate } from "@/lib/queries/plan"
@@ -414,18 +415,7 @@ function Macros({ components }: { components: PlateComponent[] }) {
   const ids = [...new Set(components.map((c) => c.food_id))]
   const macros = useFoodMacros(ids)
   if (!macros.data) return null
-  const byId = new Map(macros.data.foods.map((f) => [f.food_id, f.macros]))
-  const total = { kcal: 0, protein: 0, fat: 0, carbs: 0 }
-  for (const c of components) {
-    const m = byId.get(c.food_id)
-    if (!m) continue
-    const factor =
-      c.kind === "composed" ? (c.portions ?? 1) : (c.grams ?? 0) / 100
-    total.kcal += m.kcal * factor
-    total.protein += m.protein * factor
-    total.fat += m.fat * factor
-    total.carbs += m.carbs * factor
-  }
+  const total = plateMacros(components, macros.data.foods)
   const g = t("units.g")
   return (
     <section aria-labelledby="sheet-macros" className="flex flex-col gap-1">

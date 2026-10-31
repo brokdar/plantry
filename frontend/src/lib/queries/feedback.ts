@@ -1,13 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useTranslation } from "react-i18next"
 
-import type { PutFeedbackInput } from "@/lib/api/feedback"
+import type { PlateFeedbackStatus, PutFeedbackInput } from "@/lib/api/feedback"
 import { deleteFeedback, putFeedback } from "@/lib/api/feedback"
 
-import { toastError } from "@/lib/toast"
+import { toast, toastError } from "@/lib/toast"
 
 import { foodKeys } from "./keys"
-import { invalidatePlanViews } from "./plan"
+import { invalidatePlanViews, UNDO_MS } from "./plan"
 
 /** Feedback changes the plan views (Today's rate card) and, through
  *  `not_eaten`, the derived eating history of the food (D16). */
@@ -32,6 +32,40 @@ export function useRecordFeedback() {
     },
     onError: (err) => toastError(err, t),
   })
+}
+
+/** Today's rating question: records the answer, then offers Undo for
+ *  UNDO_MS, which clears the feedback again. `answered` is the plate whose
+ *  answer is pending or saved, so the question can hide at once. */
+export function useRatePlate() {
+  const { t } = useTranslation()
+  const record = useRecordFeedback()
+  const clear = useClearFeedback()
+
+  function rate(plateId: number, status: PlateFeedbackStatus) {
+    record.mutate(
+      { plateId, input: { status } },
+      {
+        onSuccess: () => {
+          toast(t("today.rate.saved"), {
+            duration: UNDO_MS,
+            action: {
+              label: t("common.undo"),
+              onClick: () => {
+                record.reset()
+                clear.mutate(plateId)
+              },
+            },
+          })
+        },
+      }
+    )
+  }
+
+  return {
+    rate,
+    answered: record.isError ? null : (record.variables?.plateId ?? null),
+  }
 }
 
 export function useClearFeedback() {

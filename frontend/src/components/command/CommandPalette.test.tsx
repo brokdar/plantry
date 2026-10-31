@@ -20,13 +20,7 @@ describe("CommandPalette", () => {
       />
     )
 
-    for (const name of [
-      "Calendar",
-      "Archive",
-      "Ingredients",
-      "Import",
-      "Open Presets library",
-    ]) {
+    for (const name of ["Ingredients", "Import", "Open Presets library"]) {
       expect(
         await screen.findByRole("option", { name: new RegExp(`^${name}$`) })
       ).toBeInTheDocument()

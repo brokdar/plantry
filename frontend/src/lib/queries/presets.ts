@@ -26,7 +26,7 @@ import { restorePlan } from "@/lib/api/plan"
 import { deletePlate } from "@/lib/api/plates"
 import { toastError } from "@/lib/toast"
 
-import { availabilityKeys, plateKeys, presetKeys } from "./keys"
+import { availabilityKeys, presetKeys } from "./keys"
 import { invalidatePlanViews } from "./plan"
 
 /** List presets with optional search / slot / tag filters and pagination. */
@@ -132,7 +132,6 @@ export function useApplyPreset() {
       input: ApplyPresetInput
     }) => applyPreset(presetId, input),
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: presetKeys.lists() })
       void invalidatePlanViews(qc)
     },
@@ -146,7 +145,6 @@ export function useCopyWeek() {
   return useMutation({
     mutationFn: (input: CopyWeekInput) => copyWeek(input),
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: plateKeys.all })
       void invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
@@ -167,7 +165,6 @@ export function useUndoApply() {
       }
     },
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
       void invalidatePlanViews(qc)
     },

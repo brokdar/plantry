@@ -2,13 +2,11 @@
   "nav": {
     "brand": "Plantry",
     "generate_plan": "Plan generieren",
-    "planner": "Wochenplan",
     "ingredients": "Zutaten",
     "recipes": "Rezepte",
     "pantry": "Vorratskammer",
     "components": "Komponenten",
     "import": "Import",
-    "calendar": "Kalender",
     "settings": "Einstellungen",
     "search_placeholder": "Katalog durchsuchen…",
     "collapse_sidebar": "Seitenleiste einklappen",
@@ -16,31 +14,11 @@
     "today": "Heute",
     "plan": "Plan",
     "shop": "Einkauf",
-    "archive": "Archiv",
     "primary": "Hauptnavigation",
     "go_to": "Gehe zu",
     "recipes_sections": "Rezeptbereiche",
     "generate_locked_one": "Noch {{count}} Rezept, dann kannst du planen",
     "generate_locked_other": "Noch {{count}} Rezepte, dann kannst du planen"
-  },
-  "calendar": {
-    "title": "Kalender",
-    "mode_month": "Monat",
-    "mode_week": "Woche",
-    "mode_agenda": "Agenda",
-    "search_placeholder": "Gerichte suchen…",
-    "plan_this_week": "Diese Woche planen",
-    "jump_to_date": "Zu Datum springen",
-    "no_plates_in_range": "Keine Mahlzeiten in diesem Zeitraum.",
-    "load_older": "Ältere 60 Tage laden",
-    "overflow_more": "+{{count}} mehr"
-  },
-  "day": {
-    "title": "{{weekday}}, {{date}}",
-    "prev_day": "Vorheriger Tag",
-    "next_day": "Nächster Tag",
-    "back_to_calendar": "Zurück zum Kalender",
-    "empty": "Keine Mahlzeiten geplant"
   },
   "import": {
     "title": "Rezept importieren",
@@ -104,33 +82,6 @@
       "extracting": "Extrahiere…",
       "via_jsonld": "Aus strukturierten Daten",
       "via_llm": "Mit KI extrahiert"
-    }
-  },
-  "home": {
-    "title": "Willkommen bei Plantry",
-    "subtitle": "Dein selbstgehosteter Essensplaner."
-  },
-  "planner": {
-    "today": "Heute",
-    "day_mon": "Mo",
-    "day_tue": "Di",
-    "day_wed": "Mi",
-    "day_thu": "Do",
-    "day_fri": "Fr",
-    "day_sat": "Sa",
-    "day_sun": "So",
-    "slot": {
-      "sides_label": "Beilagen: {{names}}",
-      "role": {
-        "main": "Hauptgericht",
-        "side_starch": "Beilage (Stärke)",
-        "side_veg": "Gemüse",
-        "side_protein": "Protein",
-        "sauce": "Soße",
-        "drink": "Getränk",
-        "dessert": "Dessert",
-        "standalone": "Einzeln"
-      }
     }
   },
   "picker": {
@@ -1138,7 +1089,8 @@
       "invalid_api_key": "Der API-Schlüssel wurde abgelehnt. Bitte überprüfe ihn.",
       "secret_key_missing": "Kein Verschlüsselungsschlüssel geladen — verschlüsselte Werte können nicht gespeichert werden.",
       "unknown_provider": "Unbekannter KI-Anbieter."
-    }
+    },
+    "go_today": "Zu Heute"
   },
   "common": {
     "save": "Speichern",
@@ -1508,5 +1460,70 @@
     "amount_of": "{{value}} / {{target}} {{unit}}",
     "incomplete": "Unvollständig",
     "missing": "Keine Nährwerte für {{names}}."
+  },
+  "today": {
+    "verdict": {
+      "cook": "Heute kochen: {{name}} × {{portions}}",
+      "quick_cook": "Heute schnell: {{name}}",
+      "nothing_to_cook": "Heute wird nicht gekocht",
+      "no_plates": "Heute ist kein Essen geplant",
+      "no_plan": "Für heute gibt es noch keinen Plan"
+    },
+    "prev_day": "Vorheriger Tag",
+    "next_day": "Nächster Tag",
+    "back_to_today": "Zurück zu heute",
+    "loading": "Heute wird geladen",
+    "error": "Dieser Tag ließ sich nicht laden. Prüfe, ob Plantry läuft, und versuche es erneut.",
+    "use_by": "bis {{day}} essen",
+    "use_by_today": "heute aufessen",
+    "cook": {
+      "start": "Kochen starten",
+      "cooked": "Gekocht",
+      "minutes": "Etwa {{minutes}} Min."
+    },
+    "leftover": {
+      "title": "{{name}}, Rest",
+      "reheat_one": "{{portions}} Portion aufwärmen",
+      "reheat_other": "{{portions}} Portionen aufwärmen",
+      "kcal_each": "je {{kcal}} kcal"
+    },
+    "meals": "Mahlzeiten",
+    "row": {
+      "nothing": "Nichts geplant"
+    },
+    "reminder": {
+      "title": "Erinnerungen",
+      "freezer": "Gefrierfach",
+      "defrost": "{{name}} heute Abend aus dem Gefrierfach nehmen",
+      "last_day": "Letzter Tag",
+      "use_by": "{{slot}}: der letzte Rest {{name}}"
+    },
+    "rate": {
+      "question": "Wie war {{name}} am {{weekday}}?",
+      "loved": "Lecker",
+      "disliked": "Nicht nochmal",
+      "not_eaten": "Nicht gegessen",
+      "saved": "Bewertung gespeichert"
+    },
+    "banner": {
+      "title": "Nächste Woche planen",
+      "body": "Deine nächste Woche beginnt am {{date}}.",
+      "action": "Nächste Woche planen"
+    },
+    "no_plan": {
+      "body": "Plane diese Woche, dann steht hier jeden Tag, was es gibt.",
+      "action": "Diese Woche planen"
+    },
+    "setup": {
+      "title_one": "Noch {{count}} Rezept, dann kann Plantry planen",
+      "title_other": "Noch {{count}} Rezepte, dann kann Plantry planen",
+      "body": "Plantry plant deine Wochen aus deinen eigenen Rezepten.",
+      "action": "Rezepte hinzufügen"
+    },
+    "week": {
+      "title": "Diese Woche",
+      "open": "{{day}} im Plan öffnen",
+      "empty": "Nichts geplant"
+    }
   }
 }

@@ -137,15 +137,6 @@ export type PlateComponentQuantity =
   | { portions: number }
   | { amount: number; unit: string }
 
-export function listPlates(
-  from: string,
-  to: string
-): Promise<{ plates: Plate[] }> {
-  return apiFetch(
-    `/plates?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-  )
-}
-
 export function createPlate(input: CreatePlateInput): Promise<Plate> {
   return apiFetch("/plates", { method: "POST", body: JSON.stringify(input) })
 }

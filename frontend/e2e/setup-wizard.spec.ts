@@ -105,9 +105,13 @@ test.describe("Setup wizard", () => {
       expect(status).toMatchObject({ completed: true, recipe_count: 0 })
     })
 
-    await test.step("/ opens the planner now", async () => {
+    await test.step("/ opens Today now", async () => {
       await page.goto("/")
-      await expect(page).not.toHaveURL(/\/setup/)
+      await expect(page).toHaveURL(/\/today\/?$/)
+      // Below the recipe target Today says how many recipes are missing.
+      await expect(page.getByTestId("today-setup-card")).toContainText(
+        "Add 10 more recipes to start planning"
+      )
     })
 
     // Plan D21: the planner specs seed plates on today's dates.

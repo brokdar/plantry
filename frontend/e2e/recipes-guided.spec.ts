@@ -113,14 +113,14 @@ test.describe("Guided Recipes state", () => {
     ).toHaveCount(0)
   })
 
-  test("phone: the compact top-bar button is gated too", async ({ page }) => {
+  test("phone: the compact plan-header button is gated too", async ({
+    page,
+  }) => {
     await stubRecipeCount(page, 3)
     await page.setViewportSize({ width: 375, height: 812 })
-    await page.goto("/components")
+    await page.goto("/plan")
 
-    const generate = page
-      .getByTestId("topbar")
-      .getByTestId("generate-plan-compact")
+    const generate = page.getByTestId("generate-plan-compact")
     await expect(generate).toHaveAttribute("aria-disabled", "true")
     // A tap (no hover on phones) shows the explanation.
     await generate.click({ force: true })

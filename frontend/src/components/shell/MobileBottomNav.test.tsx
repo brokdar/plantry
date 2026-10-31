@@ -23,7 +23,7 @@ describe("MobileBottomNav", () => {
       "Recipes",
       "Shop",
     ])
-    expect(tabs[0]).toHaveAttribute("href", "/day/2026-10-26")
+    expect(tabs[0]).toHaveAttribute("href", "/today")
   })
 
   test("has exactly four items and no generate FAB (UX §2.1)", async () => {
@@ -32,6 +32,16 @@ describe("MobileBottomNav", () => {
     expect(within(nav).getAllByRole("link")).toHaveLength(4)
     expect(within(nav).queryByRole("button")).toBeNull()
     expect(nav).toHaveClass("grid-cols-4")
+  })
+
+  // F5-AC6: the nav highlights Today on /today.
+  test("Today is active on /today", async () => {
+    renderWithRouter(<MobileBottomNav />, "/today")
+    const nav = await screen.findByTestId("mobile-bottom-nav")
+    expect(within(nav).getByRole("link", { name: "Today" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    )
   })
 
   test("Recipes is active on /ingredients", async () => {

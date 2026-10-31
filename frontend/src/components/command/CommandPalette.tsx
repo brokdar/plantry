@@ -1,9 +1,7 @@
 import { useNavigate } from "@tanstack/react-router"
 import { Command } from "cmdk"
 import {
-  Archive,
   Bookmark,
-  Calendar,
   CalendarRange,
   Download,
   LayoutList,
@@ -24,8 +22,6 @@ import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
 
 // Routes that left the nav (plan D1) stay reachable here.
 const GO_TO_ENTRIES: { to: string; labelKey: string; icon: LucideIcon }[] = [
-  { to: "/calendar", labelKey: "nav.calendar", icon: Calendar },
-  { to: "/archive", labelKey: "nav.archive", icon: Archive },
   { to: "/ingredients", labelKey: "nav.ingredients", icon: Package },
   { to: "/import", labelKey: "nav.import", icon: Download },
 ]

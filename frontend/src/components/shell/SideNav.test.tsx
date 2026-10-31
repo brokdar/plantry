@@ -43,7 +43,7 @@ describe("SideNav", () => {
         "Shop",
       ])
       expect(links.map((l) => l.getAttribute("href"))).toEqual([
-        "/day/2026-10-26",
+        "/today",
         "/plan",
         "/components",
         "/shop",
@@ -61,7 +61,8 @@ describe("SideNav", () => {
     ["/components/3", "Recipes"],
     ["/import", "Recipes"],
     ["/plan", "Plan"],
-    ["/day/2026-10-20", "Today"],
+    ["/today", "Today"],
+    ["/today?date=2026-10-20", "Today"],
     ["/shop", "Shop"],
   ])("marks the right destination active on %s", async (path, active) => {
     stubMatchMedia(true)

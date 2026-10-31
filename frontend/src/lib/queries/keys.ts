@@ -50,15 +50,6 @@ export const sessionKeys = {
     [...sessionKeys.detail(id), "leftover-cells", count] as const,
 }
 
-export const plateKeys = {
-  all: ["plates"] as const,
-  range: (from: string, to: string) =>
-    [...plateKeys.all, "range", from, to] as const,
-  rangeInfinite: (anchor: string) =>
-    [...plateKeys.all, "range-infinite", anchor] as const,
-  byDate: (date: string) => [...plateKeys.all, "by-date", date] as const,
-}
-
 export const availabilityKeys = {
   all: ["availability"] as const,
   defaults: () => [...availabilityKeys.all, "defaults"] as const,

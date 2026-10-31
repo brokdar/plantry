@@ -25,13 +25,15 @@ interface PlanPageProps {
   start?: string
   /** A cell to open its sheet for (`date|slotId`), from `?cell=`. */
   cell?: string
+  /** A day to focus (its first cell), from `?day=`. */
+  day?: string
 }
 
 /**
  * `/plan`: the plan board for one window (UX §5.5, D3). One query
  * (`GET /api/plan`) feeds the toolbar, the cook strip and the board.
  */
-export function PlanPage({ start, cell }: PlanPageProps) {
+export function PlanPage({ start, cell, day }: PlanPageProps) {
   const { t } = useTranslation()
   const plan = usePlan(start)
 
@@ -54,7 +56,14 @@ export function PlanPage({ start, cell }: PlanPageProps) {
       </PageFrame>
     )
   }
-  return <PlanView plan={plan.data} anchored={!start} initialCell={cell} />
+  return (
+    <PlanView
+      plan={plan.data}
+      anchored={!start}
+      initialCell={cell}
+      initialDay={day}
+    />
+  )
 }
 
 function PageFrame({ children }: { children: React.ReactNode }) {
@@ -74,10 +83,12 @@ function PlanView({
   plan,
   anchored,
   initialCell,
+  initialDay,
 }: {
   plan: Plan
   anchored: boolean
   initialCell?: string
+  initialDay?: string
 }) {
   const { t, i18n } = useTranslation()
   const board = useMemo(() => buildBoard(plan, i18n), [plan, i18n])
@@ -110,6 +121,16 @@ function PlanView({
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [])
+
+  // Today's week strip opens the board at a day: focus its first cell.
+  useEffect(() => {
+    if (!initialDay) return
+    const el = boardRef.current?.querySelector<HTMLElement>(
+      `[data-cell-key^="${initialDay}|"] [data-cell-focus]`
+    )
+    el?.scrollIntoView({ block: "nearest", inline: "nearest" })
+    el?.focus()
+  }, [initialDay])
 
   function focusCell(selector: string) {
     const el = boardRef.current?.querySelector<HTMLElement>(
