@@ -102,22 +102,24 @@ export function PlanToolbar({
           <div className="md:hidden">
             <GeneratePlanButton variant="compact" />
           </div>
+          {/* Below 640 px Ask and Shop are icons (their names stay for
+              screen readers), so the row fits a phone in German too. */}
           <Button
             variant="outline"
             onClick={onAsk}
-            className="h-11 gap-2 px-3 md:pointer-fine:h-9"
+            className="h-11 gap-2 px-3 max-sm:w-11 max-sm:px-0 md:pointer-fine:h-9"
           >
             <MessageSquare strokeWidth={1.5} aria-hidden="true" />
-            {t("plan.toolbar.ask")}
+            <span className="max-sm:sr-only">{t("plan.toolbar.ask")}</span>
           </Button>
           <Button
             asChild
             variant="outline"
-            className="h-11 gap-2 px-3 md:pointer-fine:h-9"
+            className="h-11 gap-2 px-3 max-sm:w-11 max-sm:px-0 md:pointer-fine:h-9"
           >
             <Link to="/shop" search={{ from: window.start, to: window.end }}>
               <ShoppingBasket strokeWidth={1.5} aria-hidden="true" />
-              {t("plan.toolbar.shop")}
+              <span className="max-sm:sr-only">{t("plan.toolbar.shop")}</span>
             </Link>
           </Button>
           <DropdownMenu>

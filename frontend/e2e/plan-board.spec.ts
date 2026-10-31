@@ -202,6 +202,36 @@ test.describe("Plan board", () => {
     }
   })
 
+  test("the German toolbar fits a 375 px phone", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("i18nextLng", "de"))
+    await page.setViewportSize({ width: 375, height: 800 })
+    await page.goto("/plan")
+
+    const more = page.getByRole("button", {
+      name: "Weitere Aktionen für den Plan",
+    })
+    await expect(more).toBeInViewport({ ratio: 1 })
+    await expect(
+      page.getByRole("button", { name: "Assistent fragen" })
+    ).toBeVisible()
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth
+      )
+    ).toBeLessThanOrEqual(0)
+  })
+
+  test("a tablet board shows part of the fifth day as a scroll hint", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 820, height: 1000 })
+    await page.goto("/plan")
+
+    const fifth = page.getByRole("columnheader").nth(5)
+    await expect(fifth).toBeInViewport()
+    await expect(fifth).not.toBeInViewport({ ratio: 1 })
+  })
+
   test("opens the anchored window; the arrows and This week move between windows", async ({
     page,
   }) => {
