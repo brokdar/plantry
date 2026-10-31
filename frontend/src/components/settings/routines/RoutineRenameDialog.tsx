@@ -26,7 +26,7 @@ const renameSchema = z.object({ name: presetNameSchema })
 
 type RenameValues = z.infer<typeof renameSchema>
 
-interface PresetRenameDialogProps {
+interface RoutineRenameDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultName: string
@@ -34,13 +34,13 @@ interface PresetRenameDialogProps {
   pending?: boolean
 }
 
-export function PresetRenameDialog({
+export function RoutineRenameDialog({
   open,
   onOpenChange,
   defaultName,
   onSubmit,
   pending,
-}: PresetRenameDialogProps) {
+}: RoutineRenameDialogProps) {
   const { t } = useTranslation()
   const form = useForm<RenameValues>({
     resolver: zodResolver(renameSchema),
@@ -50,23 +50,31 @@ export function PresetRenameDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="bg-panel text-ink">
         <DialogHeader>
-          <DialogTitle>{t("preset.rename")}</DialogTitle>
+          <DialogTitle className="text-h3">
+            {t("routines.rename_title")}
+          </DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit((v) => onSubmit(v.name.trim()))}
-            className="space-y-4"
+            className="flex flex-col gap-4"
           >
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t("preset.name")}</FormLabel>
+                  <FormLabel className="text-small text-ink-muted">
+                    {t("routines.name")}
+                  </FormLabel>
                   <FormControl>
-                    <Input autoFocus {...field} />
+                    <Input
+                      autoFocus
+                      className="pointer-coarse:h-11"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

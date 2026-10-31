@@ -8,7 +8,7 @@ import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { CommandPalette } from "@/components/command/CommandPalette"
-import { CopyFromWeekDialog } from "@/components/presets/CopyFromWeekDialog"
+import { CopyFromWeekDialog } from "@/components/plan/CopyFromWeekDialog"
 import { AppShell } from "@/components/shell/AppShell"
 import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/sonner"

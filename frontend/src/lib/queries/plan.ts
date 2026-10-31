@@ -60,34 +60,46 @@ const REMOVAL_MESSAGE_KEYS: Record<RemovalVerb, string> = {
 }
 
 /**
- * The single undo helper for removing mutations (D22). The returned function
- * takes the `{removed}` body, shows a 6 s toast named after what happened
- * and, on Undo, restores the snapshot. Undo works once and not after the
- * toast has closed. An empty snapshot offers nothing.
+ * The undo toast every undoable plan action shares (UX §6): the returned
+ * function shows `message` for UNDO_MS with an Undo action that runs `undo`
+ * once, and not after the toast has closed.
  */
-export function useUndoableRemoval() {
+export function useUndoToast() {
   const { t } = useTranslation()
-  const restore = useRestorePlan()
-
-  return function offerUndo({ removed }: RemovedResponse, verb: RemovalVerb) {
-    if (removed.plates.length === 0 && removed.sessions.length === 0) return
+  return function offer(message: string, undo: () => void) {
     let closed = false
     const close = () => {
       closed = true
     }
-    toast(t(REMOVAL_MESSAGE_KEYS[verb]), {
+    toast(message, {
       duration: UNDO_MS,
       action: {
         label: t("common.undo"),
         onClick: () => {
           if (closed) return
           closed = true
-          restore.mutate(removed)
+          undo()
         },
       },
       onDismiss: close,
       onAutoClose: close,
     })
+  }
+}
+
+/**
+ * The single undo helper for removing mutations (D22). The returned function
+ * takes the `{removed}` body, shows the undo toast named after what happened
+ * and, on Undo, restores the snapshot. An empty snapshot offers nothing.
+ */
+export function useUndoableRemoval() {
+  const { t } = useTranslation()
+  const restore = useRestorePlan()
+  const offer = useUndoToast()
+
+  return function offerUndo({ removed }: RemovedResponse, verb: RemovalVerb) {
+    if (removed.plates.length === 0 && removed.sessions.length === 0) return
+    offer(t(REMOVAL_MESSAGE_KEYS[verb]), () => restore.mutate(removed))
   }
 }
 

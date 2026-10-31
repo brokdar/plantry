@@ -3,6 +3,7 @@ import type { ComposedFood, LeafFood, ScaledRecipe } from "@/lib/api/foods"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
 import type { Plan, PlanCell } from "@/lib/api/plan"
 import type { Plate, PlateComponent, RemovedResponse } from "@/lib/api/plates"
+import type { Preset } from "@/lib/api/presets"
 import type { Session } from "@/lib/api/sessions"
 import type { ShoppingList } from "@/lib/api/shopping"
 import type { Today, TodayVerdictKind } from "@/lib/api/today"
@@ -232,6 +233,44 @@ export const mockAvailabilitySlots = [
 export const mockAvailabilityPresets = [
   { id: 7, name: "Overnight oats" },
   { id: 8, name: "Bread and soup" },
+]
+
+// The same two routines in full, as `GET /api/presets` lists them.
+export const mockRoutines: Preset[] = [
+  {
+    id: 7,
+    name: "Overnight oats",
+    tags: ["quick"],
+    plates: [
+      {
+        id: 71,
+        slot_id: 1,
+        sort_order: 0,
+        components: [
+          { id: 711, food_id: 41, amount: 80, unit: "g", sort_order: 0 },
+        ],
+      },
+    ],
+    created_at: "2026-10-01T08:00:00Z",
+    updated_at: "2026-10-01T08:00:00Z",
+    last_used_at: null,
+  },
+  {
+    id: 8,
+    name: "Bread and soup",
+    tags: [],
+    plates: [
+      {
+        id: 81,
+        slot_id: 3,
+        sort_order: 0,
+        components: [{ id: 811, food_id: 42, portions: 1, sort_order: 0 }],
+      },
+    ],
+    created_at: "2026-10-02T08:00:00Z",
+    updated_at: "2026-10-02T08:00:00Z",
+    last_used_at: null,
+  },
 ]
 
 // Profile with the Phase 1 defaults and no nutrition goal.

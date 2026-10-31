@@ -24,10 +24,10 @@ import {
 import { clearAvailabilityOverride } from "@/lib/api/availability"
 import { restorePlan } from "@/lib/api/plan"
 import { deletePlate } from "@/lib/api/plates"
-import { toastError } from "@/lib/toast"
+import { toast, toastError } from "@/lib/toast"
 
 import { availabilityKeys, presetKeys } from "./keys"
-import { invalidatePlanViews } from "./plan"
+import { invalidatePlanViews, useUndoToast } from "./plan"
 
 /** List presets with optional search / slot / tag filters and pagination. */
 export function usePresets(params: ListPresetsParams = {}) {
@@ -170,4 +170,39 @@ export function useUndoApply() {
     },
     onError: (err) => toastError(err, t),
   })
+}
+
+/**
+ * The one toast flow for an apply or copy week result (plate sheet, command
+ * palette, copy week dialog). It names what was added and replaced, offers
+ * Undo (`useUndoApply`) through the shared undo toast whenever plates were
+ * created, then warns about the cells it skipped.
+ */
+export function useApplyResultToasts() {
+  const { t } = useTranslation()
+  const offerUndo = useUndoToast()
+  const undo = useUndoApply()
+
+  return function show(result: ApplyResult) {
+    const replaced = result.removed.plates.length
+    const added = Math.max(0, result.created_plate_ids.length - replaced)
+    if (result.created_plate_ids.length > 0) {
+      const message = [
+        added > 0 && t("routines.apply.result_created", { count: added }),
+        replaced > 0 &&
+          t("routines.apply.result_replaced", { count: replaced }),
+      ]
+        .filter(Boolean)
+        .join(" ")
+      offerUndo(message, () => undo.mutate(result))
+    }
+    const skipped = [
+      ["result_skipped_occupied", result.skipped_occupied.length],
+      ["result_skipped_unavailable", result.skipped_unavailable.length],
+      ["result_skipped_no_slot", result.skipped_no_slot.length],
+    ] as const
+    for (const [key, count] of skipped) {
+      if (count > 0) toast.warning(t(`routines.apply.${key}`, { count }))
+    }
+  }
 }

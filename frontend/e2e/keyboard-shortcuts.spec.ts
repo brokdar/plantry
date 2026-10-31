@@ -30,6 +30,29 @@ test.describe("Keyboard shortcuts", () => {
     }
   })
 
+  // F10-AC3 (live part): the palette's go-to entries.
+  test("Ctrl+K opens the palette, which goes to every destination", async ({
+    page,
+  }) => {
+    await page.goto("/today")
+    await page.keyboard.press("ControlOrMeta+k")
+    const palette = page.getByRole("dialog", { name: "Command palette" })
+    const goTo = palette.getByRole("group", { name: "Go to" })
+    await expect(goTo.getByRole("option")).toHaveText([
+      "Today",
+      "Plan",
+      "Recipes",
+      "Ingredients",
+      "Shop",
+      "Settings",
+    ])
+
+    await palette.getByRole("combobox").fill("Shop")
+    await page.keyboard.press("Enter")
+    await expect(page).toHaveURL(/\/shop/)
+    await expect(palette).toHaveCount(0)
+  })
+
   test("Ctrl+Enter in chat composer submits the prefilled message", async ({
     page,
   }) => {

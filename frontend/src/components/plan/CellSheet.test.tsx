@@ -141,7 +141,11 @@ describe("CellSheet on an empty cell", () => {
       expect.objectContaining({ slot_ids: [1] })
     )
     await waitFor(() => expect(onClose).toHaveBeenCalled())
-    expect(toastMock.success).toHaveBeenCalled()
+    // The shared apply toast with Undo (F10).
+    expect(toastMock).toHaveBeenCalledWith(
+      "Added 1 plate.",
+      expect.objectContaining({ duration: 6000 })
+    )
   })
 
   it("marks the meal No plate", async () => {

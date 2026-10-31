@@ -57,11 +57,12 @@ export interface ListPresetsParams {
   offset?: number
 }
 
-export interface CreatePresetInput {
+/** A routine is created from planner plates (`plate_ids`, Save as routine)
+ *  or composed from scratch (`plates`, Settings → Meals). */
+export type CreatePresetInput = {
   name: string
-  plate_ids: number[]
   tags?: string[]
-}
+} & ({ plate_ids: number[] } | { plates: UpdatePresetPlateInput[] })
 
 /** Editor save payload. Any field may be omitted to mean "leave as-is". */
 export interface UpdatePresetInput {

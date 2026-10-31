@@ -1,5 +1,3 @@
-import { Link } from "@tanstack/react-router"
-import { ArrowUpRight } from "lucide-react"
 import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -7,6 +5,7 @@ import {
   AvailabilityGrid,
   type AvailabilityGridValue,
 } from "@/components/availability/AvailabilityGrid"
+import { RoutinesEditor } from "@/components/settings/routines/RoutinesEditor"
 import { TimeSlotsEditor } from "@/components/settings/TimeSlotsEditor"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -47,13 +46,7 @@ export function MealsSection() {
         description={t("settings_page.meals.routines_effect")}
       >
         <div className="pt-4">
-          <Link
-            to="/presets"
-            className="inline-flex min-h-11 items-center gap-1 text-body text-accent underline underline-offset-4 hover:no-underline md:min-h-9"
-          >
-            {t("settings_page.meals.routines_link")}
-            <ArrowUpRight className="size-4" strokeWidth={1.5} aria-hidden />
-          </Link>
+          <RoutinesEditor />
         </div>
       </SettingsGroup>
     </div>

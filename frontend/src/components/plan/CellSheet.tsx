@@ -8,14 +8,17 @@ import type { Plan, PlanCell } from "@/lib/api/plan"
 import type { Session } from "@/lib/api/sessions"
 import { colourBatches } from "@/lib/plan/batch-colours"
 import { weekdayShort } from "@/lib/plan/format"
-import { usePresets, useApplyPreset, useUndoApply } from "@/lib/queries/presets"
+import {
+  useApplyPreset,
+  useApplyResultToasts,
+  usePresets,
+} from "@/lib/queries/presets"
 import {
   useMarkNoPlate,
   usePlanMeal,
   useSetNoPlateNote,
 } from "@/lib/queries/plan"
 import { useCreatePlate } from "@/lib/queries/plates"
-import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
 
 import type { PickerTarget } from "./FoodPicker"
 
@@ -193,7 +196,7 @@ function Routines({ cell, onDone }: { cell: PlanCell; onDone: () => void }) {
     limit: 20,
   })
   const apply = useApplyPreset()
-  const undo = useUndoApply()
+  const showResult = useApplyResultToasts()
   const items = presets.data?.items ?? []
   return (
     <section aria-labelledby="cell-routines" className="flex flex-col gap-2">
@@ -227,7 +230,7 @@ function Routines({ cell, onDone }: { cell: PlanCell; onDone: () => void }) {
                   },
                   {
                     onSuccess: (result) => {
-                      showPresetApplyToasts(result, t, (r) => undo.mutate(r))
+                      showResult(result)
                       onDone()
                     },
                   }

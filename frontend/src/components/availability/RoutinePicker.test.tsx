@@ -73,6 +73,6 @@ describe("RoutinePicker", () => {
     expect(within(picker).getByText("No routines saved yet.")).toBeVisible()
     expect(
       within(picker).getByRole("link", { name: "Create a routine" })
-    ).toHaveAttribute("href", "/presets")
+    ).toHaveAttribute("href", "/settings/meals")
   })
 })
