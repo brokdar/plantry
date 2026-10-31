@@ -184,7 +184,6 @@ describe("CookingSection", () => {
       expect(
         screen.getAllByRole("radio").map((r) => r.getAttribute("value"))
       ).toEqual(["today", "next_shopping_day"])
-      expect(screen.queryByTestId("plan-anchor-radio-fixed_weekday")).toBeNull()
       expect(screen.queryByTestId("plan-week-starts-on-select")).toBeNull()
     })
   })

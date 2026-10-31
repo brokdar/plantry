@@ -1,4 +1,4 @@
-import { todayISO } from "@/lib/planner-window"
+import { todayISO } from "@/lib/dates"
 
 import type { AvailabilityMode, AvailabilitySource } from "./availability"
 import { apiFetch } from "./client"
