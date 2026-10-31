@@ -20,6 +20,12 @@ import (
 // Plan returns the plate and availability services over db, wired to each
 // other and to one unit of work.
 func Plan(db *sql.DB) (*plate.Service, *availability.Service) {
+	return PlanWithEvents(db, sqlite.NewPlateEventRepo(db))
+}
+
+// PlanWithEvents is Plan with the plate service writing its audit trail to
+// events.
+func PlanWithEvents(db *sql.DB, events plate.EventLog) (*plate.Service, *availability.Service) {
 	tx := sqlite.NewTxRunner(db)
 	avail := availability.NewService(sqlite.NewAvailabilityRepo(db), tx, sqlite.NewPresetRepo(db))
 	plates := plate.NewService(plate.Deps{
@@ -30,7 +36,7 @@ func Plan(db *sql.DB) (*plate.Service, *availability.Service) {
 		Cells:    avail,
 		Profile:  profile.NewService(sqlite.NewProfileRepo(db)),
 		Settings: Settings(db),
-		Events:   sqlite.NewPlateEventRepo(db),
+		Events:   events,
 		Tx:       tx,
 	})
 	avail.WithPlates(plates)

@@ -29,9 +29,14 @@ func TestPlateEventsHTTP_CreateIsUser(t *testing.T) {
 	plateID, sid := a.sunChili()
 
 	evs := a.events()
-	require.Len(t, evs, 1)
+	require.Len(t, evs, 2, "the plate and its fresh session")
+	for _, ev := range evs {
+		assert.Equal(t, plate.ActionCreate, ev.Action)
+		assert.Equal(t, actor.User, ev.Actor)
+	}
+	assert.Nil(t, evs[1].PlateID)
+	assert.Equal(t, sid, *evs[1].CookSessionID)
 	ev := evs[0]
-	assert.Equal(t, plate.ActionCreate, ev.Action)
 	assert.Equal(t, actor.User, ev.Actor)
 	assert.Nil(t, ev.AIRunID)
 	assert.Equal(t, plateID, *ev.PlateID)
@@ -55,10 +60,17 @@ func TestPlateEventsHTTP_RestoreIsRestore(t *testing.T) {
 	code, body = a.do(http.MethodPost, "/api/plan/restore", string(snapshot))
 	require.Equal(t, http.StatusOK, code, body)
 
+	// create plate + session, delete plate + session, restore plate +
+	// recreated session.
 	evs := a.events()
-	require.Len(t, evs, 3)
-	assert.Equal(t, plate.ActionDelete, evs[1].Action)
-	assert.Equal(t, plate.ActionRestore, evs[2].Action)
-	assert.Equal(t, actor.User, evs[2].Actor)
-	assert.Nil(t, evs[2].Before)
+	require.Len(t, evs, 6)
+	assert.Equal(t, plate.ActionDelete, evs[2].Action)
+	assert.Equal(t, plateID, *evs[2].PlateID)
+	restored := evs[4]
+	assert.Equal(t, plate.ActionRestore, restored.Action)
+	require.NotNil(t, restored.PlateID)
+	assert.Equal(t, actor.User, restored.Actor)
+	assert.Nil(t, restored.Before)
+	assert.Equal(t, plate.ActionCreate, evs[5].Action)
+	assert.Nil(t, evs[5].PlateID)
 }

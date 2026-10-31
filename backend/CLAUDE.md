@@ -144,7 +144,14 @@ Package `domain/planview` builds the read models; it never writes and takes its 
 
 ## Plate audit trail
 
-Migration `00030_plate_events.sql`, `domain/plate/events.go`, repo `adapters/sqlite/plate_event_repo.go` (D20). Every `plate.Service` mutation writes, in its own unit of work, one `plate_events` row per plate it touches: `create` / `restore` (`before_json` null), `update`, or `delete` (`after_json` null), with full plate snapshots in the `SnapshotPlate` shape (its own `plate_id`, sessions by id). Session edits (`SetSessionPortions`, `SetCooked`, `AddLeftovers`, `DeleteSession`) also write one row with `plate_id` NULL for the session (`{id, food_id, cook_date, …}`) and set `cook_session_id` on their plate rows. `Apply` logs `restore` when `ApplyOptions.Restore` is set (`POST /api/plan/restore`), else `create`. No FKs, so rows outlive what they describe; there is no read API yet.
+Go migration `00030_plate_events.go` (sqlc reads `schema_patches/00030_plate_events.sql`), `domain/plate/events.go`, repo `adapters/sqlite/plate_event_repo.go` (D20). 00030 also rebuilt `plates` and `cook_sessions` with `AUTOINCREMENT`, so an id never names two rows over time.
+
+Every `plate.Service` mutation writes its events last, in its own unit of work:
+- One row per plate it touches: `create` / `restore` (`before_json` null), `update`, or `delete` (`after_json` null), with full plate snapshots in the `SnapshotPlate` shape (its own `plate_id`, sessions by id). `Apply` logs `restore` when `ApplyOptions.Restore` is set (`POST /api/plan/restore`), else `create`.
+- One row with `plate_id` NULL per cook session whose row changed (`{id, food_id, cook_date, …}`): fresh and snapshot sessions (`create`), D11 resizes and D13 cook-cell moves (`update`), sessions left without links (`delete`). A tracked session D11 left unchanged writes nothing.
+- The explicit session edits (`SetSessionPortions`, `SetCooked`, `AddLeftovers`, `DeleteSession`) always write their session's row and set `cook_session_id` on their plate rows; `SetSessionPortions`/`SetCooked` also log every linked plate.
+
+No FKs, so rows outlive what they describe; there is no read API yet.
 
 The actor comes from `domain/actor` in ctx: the HTTP middleware `middleware.Actor` sets `user`, `agent.ToolSet.Execute` sets `agent` with the run's `ai_run_id`, and `actor.From` falls back to `user`.
 
