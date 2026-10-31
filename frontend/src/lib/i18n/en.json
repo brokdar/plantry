@@ -923,6 +923,8 @@
       "invalid_start": "That week can't open: a plan week starts on your shopping day.",
       "generation_running": "A plan is already being made for this week. Wait for it to finish.",
       "scope_confirmed": "This plate is confirmed, so it stays as it is.",
+      "invalid_scope": "That part of the plan can't be planned again.",
+      "not_enough_recipes": "Add at least 10 recipes before the plan is made for you.",
       "confirmed_affected": "Some of these plates are confirmed and were already shopped for.",
       "replan_past": "Re-planning starts today at the earliest.",
       "nothing_to_accept": "This week has no draft plates.",

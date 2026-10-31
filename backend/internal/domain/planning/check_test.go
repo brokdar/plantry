@@ -303,6 +303,37 @@ func TestMerge_KeepsConfirmedRowsTheTargetNames(t *testing.T) {
 	assert.Len(t, s.Plates, 2, "input state unchanged")
 }
 
+func TestMerge_DroppedSessionTakesItsComponentsAndPlateIDMerges(t *testing.T) {
+	s := baseState()
+	s.Sessions = []planning.Session{persistedSession(7, chili, sat, dinner, 1, false), persistedSession(8, rice, sat, dinner, 1, false)}
+	s.Plates = []planning.Plate{{
+		ID: 70, Date: day(sat), SlotID: dinner, Eaters: 1,
+		Components: []planning.Component{{FoodID: chili, Portions: f64(1), SessionID: 7}, {FoodID: rice, Portions: f64(1), SessionID: 8}},
+	}}
+	tgt := planning.Target{Cells: []plateCellKey{cell(sat, dinner)}, SessionIDs: []int64{8}}
+	p := planning.Proposal{
+		Sessions: []planning.ProposedSession{session("s1", curry, sat, dinner, 1)},
+		Plates:   []planning.ProposedPlate{{PlateID: 70, Date: day(sat), SlotID: dinner, Components: []planning.ProposedComponent{onKey(curry, "s1")}}},
+	}
+
+	m := planning.Merge(s, tgt, p)
+
+	require.Len(t, m.Plates, 1, "the proposal merges into plate 70")
+	assert.Equal(t, int64(70), m.Plates[0].ID)
+	require.Len(t, m.Plates[0].Components, 2)
+	assert.Equal(t, chili, m.Plates[0].Components[0].FoodID, "main kept")
+	assert.Equal(t, "s1", m.Plates[0].Components[1].SessionKey, "side replaced")
+	assert.Len(t, s.Plates[0].Components, 2, "input state unchanged")
+	assert.Empty(t, planning.Check(m, tgt))
+}
+
+func TestCheck_RoutinePlateMayHoldLeaves(t *testing.T) {
+	s := baseState()
+	setMode(&s, cell(mon, breakfast), availability.ModeRoutine)
+	s.Plates = []planning.Plate{{ID: -1000, Date: day(mon), SlotID: breakfast, Eaters: 1, Components: []planning.Component{{FoodID: egg, Grams: f64(60)}}}}
+	assert.Empty(t, planning.Check(s, targetCells(cell(mon, breakfast))))
+}
+
 // B5-AC1: H7
 func TestCheck_H7(t *testing.T) {
 	withConfirmed := func() planning.State {

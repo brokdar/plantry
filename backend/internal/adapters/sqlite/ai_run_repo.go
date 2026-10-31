@@ -11,6 +11,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite/sqlcgen"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
@@ -34,6 +35,7 @@ var (
 	_ airun.Store       = (*AIRunRepo)(nil)
 	_ plate.RunOutcomes = (*AIRunRepo)(nil)
 	_ planview.RunNotes = (*AIRunRepo)(nil)
+	_ planning.Runs     = (*AIRunRepo)(nil)
 )
 
 // RunNote returns the run's chooser and notes for the plan's draft summary.
@@ -46,6 +48,46 @@ func (r *AIRunRepo) RunNote(ctx context.Context, id int64) (planview.RunNote, er
 		return planview.RunNote{}, err
 	}
 	return planview.RunNote{Chooser: fromNullString(row.Chooser), Notes: fromNullString(row.Notes)}, nil
+}
+
+// FailInterruptedRuns ends every run still 'running' as error/error.server
+// and returns how many it ended. Call it at startup, before any run starts:
+// such a row was cut off by a stop or a crash.
+func (r *AIRunRepo) FailInterruptedRuns(ctx context.Context, at time.Time) (int64, error) {
+	return r.queriesFor(ctx).FailInterruptedAIRuns(ctx, sql.NullString{String: formatTime(at), Valid: true})
+}
+
+// PlanRun returns a generate or regenerate run; another kind or a missing
+// id is domain.ErrNotFound.
+func (r *AIRunRepo) PlanRun(ctx context.Context, id int64) (planning.RunRecord, error) {
+	row, err := r.queriesFor(ctx).GetPlanRun(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return planning.RunRecord{}, fmt.Errorf("%w: plan run %d", domain.ErrNotFound, id)
+	}
+	if err != nil {
+		return planning.RunRecord{}, err
+	}
+	rec := planning.RunRecord{
+		ID: row.ID, Kind: airun.Kind(row.Kind), Status: airun.Status(row.Status), Chooser: airun.Chooser(row.Chooser.String),
+		Notes: row.Notes.String, ErrorKey: row.ErrorKey.String, ScopeJSON: row.ScopeJson.String, ViolationsJSON: row.ViolationsJson.String, ScoreJSON: row.ScoreJson.String,
+	}
+	if rec.WindowStart, err = time.Parse(time.DateOnly, row.WindowStart.String); err != nil {
+		return planning.RunRecord{}, fmt.Errorf("plan run %d window_start: %w", id, err)
+	}
+	if rec.WindowEnd, err = time.Parse(time.DateOnly, row.WindowEnd.String); err != nil {
+		return planning.RunRecord{}, fmt.Errorf("plan run %d window_end: %w", id, err)
+	}
+	return rec, nil
+}
+
+// PlanRunCounts counts the plates and sessions a run wrote that still exist
+// and their distinct cook dates.
+func (r *AIRunRepo) PlanRunCounts(ctx context.Context, id int64) (planning.RunCounts, error) {
+	row, err := r.queriesFor(ctx).CountPlanRunRows(ctx, sql.NullInt64{Int64: id, Valid: true})
+	if err != nil {
+		return planning.RunCounts{}, err
+	}
+	return planning.RunCounts{Plates: int(row.Plates), Sessions: int(row.Sessions), CookDays: int(row.CookDays)}, nil
 }
 
 // Record moves the run's outcome by ev (D25; the transitions are in the

@@ -26,7 +26,8 @@ func TestToSnapshot(t *testing.T) {
 
 	snap := planning.ToSnapshot(p, s)
 
-	assert.Equal(t, []plate.SnapshotSession{{Ref: "s1", FoodID: chili, CookDate: sat, CookSlotID: dinner, Portions: 6, FrozenPortions: 2}}, snap.Sessions)
+	batch := "batch"
+	assert.Equal(t, []plate.SnapshotSession{{Ref: "s1", FoodID: chili, CookDate: sat, CookSlotID: dinner, Portions: 6, FrozenPortions: 2, Reason: &batch}}, snap.Sessions, "the reason is kept (D10)")
 	require.Len(t, snap.Plates, 2)
 	sp := snap.Plates[0]
 	assert.Equal(t, sat, sp.Date)
@@ -40,6 +41,23 @@ func TestToSnapshot(t *testing.T) {
 	assert.InDelta(t, 1.0, *sp.Components[1].Portions, 1e-9)
 	assert.InDelta(t, 4.0, snap.Plates[1].Eaters, 1e-9, "explicit eaters kept")
 	assert.Equal(t, &plate.SessionLink{ID: 42}, snap.Plates[1].Components[0].Session)
+	assert.Nil(t, snap.Plates[0].Reason, "no reason: nil")
+}
+
+func TestToSnapshot_PlateIDMergesAfterTheKeptComponents(t *testing.T) {
+	s := baseState()
+	s.Plates = []planning.Plate{persisted(70, sat, dinner, false, chili, 7)}
+	p := planning.Proposal{Plates: []planning.ProposedPlate{{PlateID: 70, Date: day(sat), SlotID: dinner, Reason: "side", Components: []planning.ProposedComponent{onKey(rice, "s1")}}}}
+
+	snap := planning.ToSnapshot(p, s)
+
+	require.Len(t, snap.Plates, 1)
+	sp := snap.Plates[0]
+	require.NotNil(t, sp.PlateID)
+	assert.Equal(t, int64(70), *sp.PlateID)
+	assert.Equal(t, 1, sp.Components[0].SortOrder, "after the plate's main")
+	require.NotNil(t, sp.Reason)
+	assert.Equal(t, "side", *sp.Reason)
 }
 
 // B5-AC3: a 1-session/3-plate proposal applies through plate.Service.Apply.

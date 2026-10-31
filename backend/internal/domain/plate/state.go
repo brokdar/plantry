@@ -2,6 +2,7 @@ package plate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -216,6 +217,126 @@ func (s *Service) Discard(ctx context.Context, from, to time.Time) (PlanSnapshot
 			return err
 		}
 		if err := s.recordOutcomes(ctx, OutcomeDiscarded, drafts, rows); err != nil {
+			return err
+		}
+		return s.commit(ctx, j)
+	})
+	if err != nil {
+		return PlanSnapshot{}, err
+	}
+	return snap, nil
+}
+
+// DraftClosure returns the window closure of [from, to] as Accept picks it
+// (D4) and the plates it holds; an empty set when there are no drafts. It
+// writes nothing. The generator replaces it (D6).
+func (s *Service) DraftClosure(ctx context.Context, from, to time.Time) (RowSet, []Plate, error) {
+	var out RowSet
+	var plates []Plate
+	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		c, rows, err := s.loadDrafts(ctx, dateOnly(from), dateOnly(to))
+		if errors.Is(err, domain.ErrNothingToAccept) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		out, plates = c, closurePlates(c, rows)
+		return nil
+	})
+	return out, plates, err
+}
+
+// PlateClosure returns the batch closure of a plate (D3) and the plates it
+// holds. It writes nothing.
+func (s *Service) PlateClosure(ctx context.Context, plateID int64) (RowSet, []Plate, error) {
+	var out RowSet
+	var plates []Plate
+	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		p, err := s.plates.Get(ctx, plateID)
+		if err != nil {
+			return err
+		}
+		seed := RowSet{PlateIDs: []int64{p.ID}}
+		lo, hi := rowsSpan([]Plate{*p}, nil)
+		c, rows, err := s.loadClosure(ctx, lo, hi, func([]Plate, []CookSession) RowSet { return seed })
+		if err != nil {
+			return err
+		}
+		out, plates = c, closurePlates(c, rows)
+		return nil
+	})
+	return out, plates, err
+}
+
+func closurePlates(c RowSet, rows closureRows) []Plate {
+	out := make([]Plate, 0, len(c.PlateIDs))
+	for _, id := range c.PlateIDs {
+		out = append(out, rows.plates[id])
+	}
+	return out
+}
+
+// RemoveDrafts deletes draft rows in one unit of work, the delete half of
+// the generator's replace (D10): every plate of rows.PlateIDs, and every
+// component eating from a session of rows.SessionIDs, so the session goes
+// too while a plate keeping other components stays. A row that is gone or
+// not a draft fails with ErrStateMismatch and nothing is removed. It returns
+// the snapshot that restores what it removed.
+func (s *Service) RemoveDrafts(ctx context.Context, rows RowSet) (PlanSnapshot, error) {
+	rows = uniqueRows(rows)
+	var snap PlanSnapshot
+	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		sessions, err := s.sessions.ListSessionsByIDs(ctx, rows.SessionIDs)
+		if err != nil {
+			return err
+		}
+		if len(sessions) != len(rows.SessionIDs) {
+			return fmt.Errorf("%w: a session is gone", domain.ErrStateMismatch)
+		}
+		dropSession := make(map[int64]bool, len(sessions))
+		for _, sess := range sessions {
+			if sess.State != StateDraft {
+				return fmt.Errorf("%w: session %d is confirmed", domain.ErrStateMismatch, sess.ID)
+			}
+			dropSession[sess.ID] = true
+		}
+		whole := make(map[int64]bool, len(rows.PlateIDs))
+		for _, id := range rows.PlateIDs {
+			whole[id] = true
+		}
+		linked, err := s.sessions.PlateIDsOfSessions(ctx, rows.SessionIDs)
+		if err != nil {
+			return err
+		}
+		ids := append(slices.Clone(rows.PlateIDs), linked...)
+		plates, err := s.plates.ListByIDs(ctx, uniqueIDs(ids))
+		if err != nil {
+			return err
+		}
+		found := 0
+		for _, p := range plates {
+			if !whole[p.ID] {
+				continue
+			}
+			found++
+			if p.State != StateDraft {
+				return fmt.Errorf("%w: plate %d is confirmed", domain.ErrStateMismatch, p.ID)
+			}
+		}
+		if found != len(rows.PlateIDs) {
+			return fmt.Errorf("%w: a plate is gone", domain.ErrStateMismatch)
+		}
+		order, err := s.slotOrder(ctx)
+		if err != nil {
+			return err
+		}
+		sortPlates(plates, order)
+		pick := func(pc PlateComponent) bool {
+			return whole[pc.PlateID] || pc.CookSessionID != nil && dropSession[*pc.CookSessionID]
+		}
+		j := newJournal()
+		if snap, err = s.remove(ctx, plates, pick, true, &refAlloc{}, nil, nil, j); err != nil {
 			return err
 		}
 		return s.commit(ctx, j)

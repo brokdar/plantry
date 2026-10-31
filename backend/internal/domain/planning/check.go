@@ -302,7 +302,8 @@ func (x *index) component(p Plate, c Component) []Issue {
 		return []Issue{issue("H7", CodeUnknownFood, SeverityViolation).onPlate(p).with("food_id", c.FoodID)}
 	}
 	var out []Issue
-	if p.Proposed() {
+	// A routine cell's plate copies its preset (D8), leaves included.
+	if p.Proposed() && !x.routine(p.Cell()) {
 		if f.Kind != food.KindComposed {
 			out = append(out, issue("H7", CodeNotComposed, SeverityViolation).onPlate(p).with("food_id", c.FoodID))
 		}

@@ -68,6 +68,27 @@ func (q *Queries) AIRunCorrections(ctx context.Context, arg AIRunCorrectionsPara
 	return items, nil
 }
 
+const countPlanRunRows = `-- name: CountPlanRunRows :one
+SELECT
+    (SELECT COUNT(*) FROM plates p WHERE p.ai_run_id = ?1) AS plates,
+    (SELECT COUNT(*) FROM cook_sessions s WHERE s.ai_run_id = ?1) AS sessions,
+    (SELECT COUNT(DISTINCT s.cook_date) FROM cook_sessions s WHERE s.ai_run_id = ?1) AS cook_days
+`
+
+type CountPlanRunRowsRow struct {
+	Plates   int64
+	Sessions int64
+	CookDays int64
+}
+
+// What a generation run wrote that still exists (B6).
+func (q *Queries) CountPlanRunRows(ctx context.Context, id sql.NullInt64) (CountPlanRunRowsRow, error) {
+	row := q.db.QueryRowContext(ctx, countPlanRunRows, id)
+	var i CountPlanRunRowsRow
+	err := row.Scan(&i.Plates, &i.Sessions, &i.CookDays)
+	return i, err
+}
+
 const createAIRun = `-- name: CreateAIRun :one
 INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction, conversation_id, request_id,
     chooser, scope_json)
@@ -145,6 +166,20 @@ func (q *Queries) CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams
 		arg.StopReason,
 	)
 	return err
+}
+
+const failInterruptedAIRuns = `-- name: FailInterruptedAIRuns :execrows
+UPDATE ai_runs SET status = 'error', error_key = 'error.server', finished_at = ?1
+WHERE status = 'running'
+`
+
+// At startup no run is running: a row still 'running' was cut off by a stop.
+func (q *Queries) FailInterruptedAIRuns(ctx context.Context, finishedAt sql.NullString) (int64, error) {
+	result, err := q.db.ExecContext(ctx, failInterruptedAIRuns, finishedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const finishAIRun = `-- name: FinishAIRun :execresult
@@ -268,6 +303,45 @@ func (q *Queries) GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailR
 		&i.Notes,
 		&i.ErrorKey,
 		&i.PromptText,
+	)
+	return i, err
+}
+
+const getPlanRun = `-- name: GetPlanRun :one
+SELECT id, kind, status, chooser, notes, error_key, scope_json, violations_json, score_json, window_start, window_end
+FROM ai_runs WHERE id = ? AND kind IN ('generate', 'regenerate')
+`
+
+type GetPlanRunRow struct {
+	ID             int64
+	Kind           string
+	Status         string
+	Chooser        sql.NullString
+	Notes          sql.NullString
+	ErrorKey       sql.NullString
+	ScopeJson      sql.NullString
+	ViolationsJson sql.NullString
+	ScoreJson      sql.NullString
+	WindowStart    sql.NullString
+	WindowEnd      sql.NullString
+}
+
+// A generation run as GET /api/plan/runs/{id} shows it (B6).
+func (q *Queries) GetPlanRun(ctx context.Context, id int64) (GetPlanRunRow, error) {
+	row := q.db.QueryRowContext(ctx, getPlanRun, id)
+	var i GetPlanRunRow
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.Status,
+		&i.Chooser,
+		&i.Notes,
+		&i.ErrorKey,
+		&i.ScopeJson,
+		&i.ViolationsJson,
+		&i.ScoreJson,
+		&i.WindowStart,
+		&i.WindowEnd,
 	)
 	return i, err
 }

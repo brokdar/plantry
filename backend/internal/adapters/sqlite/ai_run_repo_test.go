@@ -14,6 +14,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
@@ -286,6 +287,76 @@ func TestAIRunRepo_GenerationFieldsRoundTrip(t *testing.T) {
 		assert.False(t, v.Valid, "empty fields are stored as NULL")
 	}
 	assert.Zero(t, repairs)
+}
+
+// B6: GET /api/plan/runs/{id} reads a generation run and what it wrote.
+func TestAIRunRepo_PlanRun(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+	start, end := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC)
+	gen, err := repo.CreateRun(ctx, airun.RunStart{
+		Kind: airun.KindRegenerate, StartedAt: time.Now(), Chooser: airun.ChooserHeuristic, ScopeJSON: `{"kind":"day"}`,
+		WindowStart: &start, WindowEnd: &end,
+	})
+	require.NoError(t, err)
+	require.NoError(t, repo.FinishRun(ctx, airun.RunEnd{
+		ID: gen, Status: airun.StatusPartial, FinishedAt: time.Now(), ViolationsJSON: `[{"rule":"H2"}]`, ScoreJSON: `{}`, Notes: "n",
+	}))
+	slot, err := db.Exec(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.dinner', 'moon', 2, 1)`)
+	require.NoError(t, err)
+	slotID, err := slot.LastInsertId()
+	require.NoError(t, err)
+	food, err := db.Exec(`INSERT INTO foods (name, kind, role, reference_portions) VALUES ('Chili', 'composed', 'main', 4)`)
+	require.NoError(t, err)
+	foodID, err := food.LastInsertId()
+	require.NoError(t, err)
+	for _, d := range []string{"2026-11-07", "2026-11-07", "2026-11-08"} {
+		_, err := db.Exec(`INSERT INTO cook_sessions (food_id, cook_date, cook_slot_id, portions, state, ai_run_id) VALUES (?, ?, ?, 2, 'draft', ?)`, foodID, d, slotID, gen)
+		require.NoError(t, err)
+	}
+	_, err = db.Exec(`INSERT INTO plates (date, slot_id, eaters, state, ai_run_id) VALUES ('2026-11-07', ?, 1, 'draft', ?)`, slotID, gen)
+	require.NoError(t, err)
+
+	rec, err := repo.PlanRun(ctx, gen)
+	require.NoError(t, err)
+	assert.Equal(t, planning.RunRecord{
+		ID: gen, Kind: airun.KindRegenerate, Status: airun.StatusPartial, Chooser: airun.ChooserHeuristic, Notes: "n",
+		ScopeJSON: `{"kind":"day"}`, ViolationsJSON: `[{"rule":"H2"}]`, ScoreJSON: `{}`, WindowStart: start, WindowEnd: end,
+	}, rec)
+	counts, err := repo.PlanRunCounts(ctx, gen)
+	require.NoError(t, err)
+	assert.Equal(t, planning.RunCounts{Plates: 1, Sessions: 3, CookDays: 2}, counts)
+
+	chat, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: time.Now()})
+	require.NoError(t, err)
+	for _, id := range []int64{chat, 9999} {
+		_, err := repo.PlanRun(ctx, id)
+		assert.ErrorIs(t, err, domain.ErrNotFound, "chat runs and missing ids")
+	}
+}
+
+func TestAIRunRepo_FailInterruptedRuns(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+	running, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindGenerate, StartedAt: time.Now()})
+	require.NoError(t, err)
+	done, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: time.Now()})
+	require.NoError(t, err)
+	require.NoError(t, repo.FinishRun(ctx, airun.RunEnd{ID: done, Status: airun.StatusOK, FinishedAt: time.Now()}))
+
+	n, err := repo.FailInterruptedRuns(ctx, time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), n)
+
+	var status, key string
+	var finished sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT status, error_key, finished_at FROM ai_runs WHERE id = ?`, running).Scan(&status, &key, &finished))
+	assert.Equal(t, []string{"error", "error.server"}, []string{status, key})
+	assert.True(t, finished.Valid)
+	require.NoError(t, db.QueryRow(`SELECT status FROM ai_runs WHERE id = ?`, done).Scan(&status))
+	assert.Equal(t, "ok", status, "finished runs stay")
 }
 
 func TestAIRunRepo_RunIdentityRoundTrip(t *testing.T) {

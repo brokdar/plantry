@@ -313,6 +313,44 @@ func (q *Queries) ListCookSessionsInRange(ctx context.Context, arg ListCookSessi
 	return items, nil
 }
 
+const listPlateIDsBySessionIDs = `-- name: ListPlateIDsBySessionIDs :many
+SELECT DISTINCT plate_id FROM plate_components WHERE cook_session_id IN (/*SLICE:ids*/?) ORDER BY plate_id
+`
+
+// The plates with a component eating from one of the sessions.
+func (q *Queries) ListPlateIDsBySessionIDs(ctx context.Context, ids []sql.NullInt64) ([]int64, error) {
+	query := listPlateIDsBySessionIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var plate_id int64
+		if err := rows.Scan(&plate_id); err != nil {
+			return nil, err
+		}
+		items = append(items, plate_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setSessionsState = `-- name: SetSessionsState :exec
 UPDATE cook_sessions SET state = ?1, updated_at = datetime('now') WHERE id IN (/*SLICE:ids*/?)
 `

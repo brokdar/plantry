@@ -113,6 +113,19 @@ func (r *CookSessionRepo) ListLinks(ctx context.Context, sessionID int64) ([]pla
 	return out, nil
 }
 
+// PlateIDsOfSessions returns the plates with a component eating from one of
+// the sessions, ascending.
+func (r *CookSessionRepo) PlateIDsOfSessions(ctx context.Context, ids []int64) ([]int64, error) {
+	if len(ids) == 0 {
+		return []int64{}, nil
+	}
+	args := make([]sql.NullInt64, len(ids))
+	for i, id := range ids {
+		args[i] = sql.NullInt64{Int64: id, Valid: true}
+	}
+	return r.queriesFor(ctx).ListPlateIDsBySessionIDs(ctx, args)
+}
+
 // ListSessionsByIDs returns the sessions of ids that exist, ordered by id.
 func (r *CookSessionRepo) ListSessionsByIDs(ctx context.Context, ids []int64) ([]plate.CookSession, error) {
 	if len(ids) == 0 {
