@@ -210,6 +210,30 @@ func TestErrorMessageKey_CellErrors(t *testing.T) {
 	assert.Equal(t, "error.plate.cell_occupied", errorMessageKey(fmt.Errorf("x: %w", domain.ErrCellOccupied)))
 }
 
+func TestErrorMessageKey_UsesDomainKeys(t *testing.T) {
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{domain.ErrSessionBeforeCook, "error.session.before_cook"},
+		{domain.ErrSessionPastKeepDays, "error.session.past_keep_days"},
+		{domain.ErrSessionPastFreezerDays, "error.session.past_freezer_days"},
+		{domain.ErrSessionFoodMismatch, "error.session.food_mismatch"},
+		{domain.ErrSessionFreezingDisabled, "error.session.freezing_disabled"},
+		{domain.ErrSessionNotFreezable, "error.session.not_freezable"},
+		{domain.ErrSessionNotFound, "error.session.not_found"},
+		{domain.ErrInvalidPlanStart, "error.plan.invalid_start"},
+		{fmt.Errorf("%w: %w", domain.ErrInvalidInput, plate.ErrInvalidQuantityShape), "error.plate.invalid_quantity_shape"},
+		{ErrToolNotFound, "error.ai.tool_not_found"},
+		{errors.New("boom"), "error.server"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			assert.Equal(t, tt.want, errorMessageKey(fmt.Errorf("tool: %w", tt.err)))
+		})
+	}
+}
+
 func TestPlateTools_DescriptionsDropSkipped(t *testing.T) {
 	for _, tool := range defaultTools(Services{}) {
 		assert.NotContains(t, strings.ToLower(tool.Description), "skipped=", tool.Name)

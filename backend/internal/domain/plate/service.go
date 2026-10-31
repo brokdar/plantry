@@ -37,6 +37,29 @@ var (
 	ErrUnitRequiresPortion = errors.New("unit requires a per-food portion override")
 )
 
+// quantityKeys maps the quantity sentinels to their i18n message keys.
+var quantityKeys = []struct {
+	err error
+	key string
+}{
+	{ErrInvalidQuantityShape, "error.plate.invalid_quantity_shape"},
+	{ErrInvalidQuantityForComposed, "error.plate.invalid_quantity_for_composed"},
+	{ErrInvalidQuantityForLeaf, "error.plate.invalid_quantity_for_leaf"},
+	{ErrUnitRequiresPortion, "error.plate.unit_requires_portion"},
+}
+
+// MessageKey returns the i18n message key of the quantity sentinel err wraps.
+// Check it before domain.MessageKey: these sentinels travel with
+// domain.ErrInvalidInput.
+func MessageKey(err error) (string, bool) {
+	for _, q := range quantityKeys {
+		if errors.Is(err, q.err) {
+			return q.key, true
+		}
+	}
+	return "", false
+}
+
 // Limits.
 const (
 	// MaxEaters caps Plate.Eaters (it matches profile.MaxHouseholdPortions).
