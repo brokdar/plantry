@@ -1530,10 +1530,17 @@
     "recipe_missing": "Dieses Rezept gibt es nicht mehr.",
     "timer": {
       "group": "Timer",
-      "start": "Timer für {{label}} starten",
-      "stop": "Timer für {{label}} stoppen",
+      "start": "Timer starten: {{label}}",
+      "stop": "Timer stoppen: {{label}}",
       "done": "Fertig",
-      "finished": "Timer für {{label}} abgelaufen"
+      "finished": "Timer abgelaufen: {{label}}",
+      "label": "Schritt {{step}} · {{label}}"
+    },
+    "leave": {
+      "title": "Kochmodus verlassen?",
+      "body": "Laufende Timer werden dann beendet.",
+      "stay": "Weiterkochen",
+      "leave": "Verlassen"
     }
   }
 }

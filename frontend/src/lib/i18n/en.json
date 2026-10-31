@@ -1530,10 +1530,17 @@
     "recipe_missing": "This recipe no longer exists.",
     "timer": {
       "group": "Timers",
-      "start": "Start a {{label}} timer",
-      "stop": "Stop the {{label}} timer",
+      "start": "Start timer: {{label}}",
+      "stop": "Stop timer: {{label}}",
       "done": "Done",
-      "finished": "{{label}} timer done"
+      "finished": "Timer done: {{label}}",
+      "label": "Step {{step}} · {{label}}"
+    },
+    "leave": {
+      "title": "Leave cook mode?",
+      "body": "Your running timers will stop.",
+      "stay": "Keep cooking",
+      "leave": "Leave"
     }
   }
 }
