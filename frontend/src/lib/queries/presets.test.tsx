@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { ApiError } from "@/lib/api/client"
 import { createHookWrapper, invalidatedBy } from "@/test/render"
 
 vi.mock("@/lib/api/plates", () => ({ deletePlate: vi.fn() }))
@@ -8,7 +9,9 @@ vi.mock("@/lib/api/plan", () => ({ restorePlan: vi.fn() }))
 vi.mock("@/lib/api/availability", () => ({
   clearAvailabilityOverride: vi.fn(),
 }))
-const toastMock = vi.hoisted(() => Object.assign(vi.fn(), { warning: vi.fn() }))
+const toastMock = vi.hoisted(() =>
+  Object.assign(vi.fn(), { warning: vi.fn(), error: vi.fn() })
+)
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
 import { clearAvailabilityOverride } from "@/lib/api/availability"
@@ -100,6 +103,71 @@ describe("useUndoApply", () => {
     expect(deletePlate).toHaveBeenCalledWith(5)
     expect(restorePlan).not.toHaveBeenCalled()
   })
+
+  const replaced = {
+    plates: [
+      {
+        date: "2026-11-02",
+        slot_id: 1,
+        eaters: 2,
+        note: null,
+        components: [],
+      },
+    ],
+    sessions: [],
+  }
+
+  it("treats a plate that is already gone as deleted", async () => {
+    vi.mocked(deletePlate)
+      .mockRejectedValueOnce(new ApiError(404, "error.not_found"))
+      .mockResolvedValueOnce({ removed: empty })
+    vi.mocked(restorePlan).mockResolvedValue({ plate_ids: [9] })
+    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
+    await invalidatedBy(
+      () => useUndoApply(),
+      result({
+        created_plate_ids: [5, 6],
+        removed: replaced,
+        created_overrides: [{ date: "2026-11-03", slot_id: 1 }],
+      })
+    )
+    expect(deletePlate).toHaveBeenCalledTimes(2)
+    expect(restorePlan).toHaveBeenCalledWith(replaced)
+    expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-11-03", 1)
+    expect(toastMock.error).not.toHaveBeenCalled()
+  })
+
+  it("still restores and clears after a failed delete, then reports a partial undo", async () => {
+    vi.mocked(deletePlate)
+      .mockRejectedValueOnce(new ApiError(500, "error.server"))
+      .mockResolvedValueOnce({ removed: empty })
+    vi.mocked(restorePlan).mockResolvedValue({ plate_ids: [9] })
+    vi.mocked(clearAvailabilityOverride)
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce(undefined)
+    const { result: hook } = renderHook(() => useUndoApply(), {
+      wrapper: createHookWrapper(),
+    })
+    act(() =>
+      hook.current.mutate(
+        result({
+          created_plate_ids: [5, 6],
+          removed: replaced,
+          created_overrides: [
+            { date: "2026-11-03", slot_id: 1 },
+            { date: "2026-11-04", slot_id: 1 },
+          ],
+        })
+      )
+    )
+    await waitFor(() => expect(hook.current.isError).toBe(true))
+    expect(deletePlate).toHaveBeenCalledTimes(2)
+    expect(restorePlan).toHaveBeenCalledWith(replaced)
+    expect(clearAvailabilityOverride).toHaveBeenCalledTimes(2)
+    expect(toastMock.error).toHaveBeenCalledExactlyOnceWith(
+      "Undo only partly worked. Check the plan for meals that are still there or missing."
+    )
+  })
 })
 
 // F10-AC2: one toast flow for apply and copy week (plate sheet, palette,
@@ -165,6 +233,21 @@ describe("useApplyResultToasts", () => {
     expect(toastMock.mock.invocationCallOrder[0]).toBeLessThan(
       toastMock.warning.mock.invocationCallOrder[0]!
     )
+  })
+
+  it("an Undo that half fails says so instead of a generic error", async () => {
+    vi.mocked(deletePlate).mockRejectedValue(new Error("network"))
+    vi.mocked(restorePlan).mockResolvedValue({ plate_ids: [9] })
+    show(
+      result({
+        created_plate_ids: [5, 6],
+        removed: { plates: [replacedPlate], sessions: [] },
+      })
+    )
+    const [, opts] = toastMock.mock.calls[0]!
+    act(() => opts.action.onClick())
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledTimes(1))
+    expect(restorePlan).toHaveBeenCalled()
   })
 
   it("offers nothing when nothing was created", () => {

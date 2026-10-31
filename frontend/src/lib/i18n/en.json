@@ -1175,7 +1175,9 @@
       "plate_removed": "Plate removed",
       "batch_removed": "Batch removed",
       "plan_cleared": "Plan cleared",
-      "marked_no_plate": "Marked as No plate"
+      "marked_no_plate": "Marked as No plate",
+      "restored": "Restored",
+      "conflict": "Can't undo: that meal was changed in the meantime."
     },
     "board": {
       "label": "Meal plan, {{range}}",
@@ -1598,7 +1600,8 @@
       "result_skipped_unavailable_one": "Left out {{count}} No plate meal.",
       "result_skipped_unavailable_other": "Left out {{count}} No plate meals.",
       "result_skipped_no_slot_one": "{{count}} plate could not find its meal slot.",
-      "result_skipped_no_slot_other": "{{count}} plates could not find their meal slot."
+      "result_skipped_no_slot_other": "{{count}} plates could not find their meal slot.",
+      "undo_partial": "Undo only partly worked. Check the plan for meals that are still there or missing."
     }
   },
   "palette": {
