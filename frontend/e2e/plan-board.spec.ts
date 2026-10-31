@@ -317,6 +317,51 @@ test.describe("Plan board", () => {
     }
   })
 
+  test("dragging the cook plate moves the batch's cook cell and its strip day (D13)", async ({
+    page,
+  }) => {
+    const s = await seedAc1()
+    const weekday = (iso: string) =>
+      new Intl.DateTimeFormat("en", {
+        weekday: "short",
+        timeZone: "UTC",
+      }).format(new Date(`${iso}T00:00:00Z`))
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 })
+      await page.goto(`/plan?start=${s.window.start}`)
+      await expectAc1Badges(page, s)
+      const strip = page.getByRole("region", { name: "Cook days" })
+      const entry = (iso: string) =>
+        strip.getByRole("button", {
+          name: `${weekday(iso)} · ${s.chili} × ${s.portions}`,
+        })
+      await expect(entry(s.days[1])).toBeVisible()
+
+      // The cook plate, day 1 dinner → day 0 dinner.
+      const moved = page.waitForResponse(
+        (r) =>
+          /\/api\/plates\/\d+$/.test(r.url()) && r.request().method() === "PUT"
+      )
+      await drag(
+        page,
+        cell(page, s.days[1], s.dinner),
+        cell(page, s.days[0], s.dinner)
+      )
+      expect((await moved).ok()).toBeTruthy()
+
+      await expect(cell(page, s.days[0], s.dinner)).toContainText(
+        `Cook × ${s.portions}`
+      )
+      await expect(cell(page, s.days[1], s.dinner)).toContainText("Add")
+      await expect(cell(page, s.days[2], s.lunch)).toContainText("2/3")
+      await expect(cell(page, s.days[2], s.dinner)).toContainText("3/3")
+      await expect(entry(s.days[0])).toBeVisible()
+      await expect(entry(s.days[1])).toHaveCount(0)
+    } finally {
+      await s.cleanup()
+    }
+  })
+
   test("Clear this week removes every plate and Undo brings them back with the batch", async ({
     page,
   }) => {

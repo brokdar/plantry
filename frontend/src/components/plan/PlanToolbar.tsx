@@ -40,7 +40,7 @@ interface PlanToolbarProps {
 }
 
 const NAV_LINK =
-  "inline-flex min-h-11 items-center justify-center rounded-lg text-small text-ink transition-colors duration-150 ease-out hover:bg-panel-sunken md:min-h-9"
+  "inline-flex min-h-11 items-center justify-center rounded-lg text-small text-ink transition-colors duration-150 ease-out hover:bg-panel-sunken md:pointer-fine:min-h-9"
 
 /**
  * The board header (UX §5.5): the range and its stats, window navigation
@@ -78,7 +78,7 @@ export function PlanToolbar({
                 type="button"
                 onClick={onNextWarning}
                 data-testid="plan-warnings"
-                className="inline-flex min-h-11 items-center gap-1 rounded-lg px-1 font-semibold text-warning hover:underline md:min-h-6"
+                className="inline-flex min-h-11 items-center gap-1 rounded-lg px-1 font-semibold text-warning hover:underline md:pointer-fine:min-h-6"
               >
                 <TriangleAlert
                   className="size-4"
@@ -100,12 +100,16 @@ export function PlanToolbar({
           <Button
             variant="outline"
             onClick={onAsk}
-            className="h-11 gap-2 px-3 md:h-9"
+            className="h-11 gap-2 px-3 md:pointer-fine:h-9"
           >
             <MessageSquare strokeWidth={1.5} aria-hidden="true" />
             {t("plan.toolbar.ask")}
           </Button>
-          <Button asChild variant="outline" className="h-11 gap-2 px-3 md:h-9">
+          <Button
+            asChild
+            variant="outline"
+            className="h-11 gap-2 px-3 md:pointer-fine:h-9"
+          >
             <Link to="/shop" search={{ from: window.start, to: window.end }}>
               <ShoppingBasket strokeWidth={1.5} aria-hidden="true" />
               {t("plan.toolbar.shop")}
@@ -116,7 +120,7 @@ export function PlanToolbar({
               <Button
                 variant="ghost"
                 aria-label={t("plan.toolbar.more")}
-                className="size-11 md:size-9"
+                className="size-11 md:pointer-fine:size-9"
               >
                 <MoreHorizontal strokeWidth={1.5} aria-hidden="true" />
               </Button>
@@ -150,7 +154,7 @@ export function PlanToolbar({
           to="/plan"
           search={{ start: window.prev_start }}
           aria-label={t("plan.toolbar.prev")}
-          className={cn(NAV_LINK, "w-11 md:w-9")}
+          className={cn(NAV_LINK, "w-11 md:pointer-fine:w-9")}
         >
           <ChevronLeft
             className="size-5"
@@ -174,7 +178,7 @@ export function PlanToolbar({
           to="/plan"
           search={{ start: window.next_start }}
           aria-label={t("plan.toolbar.next")}
-          className={cn(NAV_LINK, "w-11 md:w-9")}
+          className={cn(NAV_LINK, "w-11 md:pointer-fine:w-9")}
         >
           <ChevronRight
             className="size-5"

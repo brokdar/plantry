@@ -144,17 +144,23 @@ export function useMarkNoPlate() {
       }),
     onSuccess: (res, cell) => {
       refresh()
-      let used = false
+      // Undo works once, and not after the toast has closed.
+      let closed = false
+      const close = () => {
+        closed = true
+      }
       toast(t("plan.undo.marked_no_plate"), {
         duration: UNDO_MS,
         action: {
           label: t("common.undo"),
           onClick: () => {
-            if (used) return
-            used = true
+            if (closed) return
+            closed = true
             void undo(cell, res.removed)
           },
         },
+        onDismiss: close,
+        onAutoClose: close,
       })
     },
     onError: (err) => toastError(err, t),

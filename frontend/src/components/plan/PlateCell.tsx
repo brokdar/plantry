@@ -90,7 +90,10 @@ export function PlateCell({
       data-cell-empty={cell.plate ? undefined : ""}
       data-highlighted={batch["data-highlighted"]}
       data-over={isOver && !isDragging ? "" : undefined}
-      className={cn("relative min-w-0 rounded-cell", BATCH_HIGHLIGHT_CLASS)}
+      className={cn(
+        "relative min-w-0 rounded-cell focus-within:z-20",
+        BATCH_HIGHLIGHT_CLASS
+      )}
     >
       <button
         type="button"
@@ -113,7 +116,7 @@ export function PlateCell({
         onClick={() => onOpen(cell)}
         className={cn(
           "flex w-full min-w-0 flex-col items-start gap-1 rounded-cell p-2 text-left transition-colors duration-150 ease-out",
-          grid ? "min-h-24" : "min-h-14",
+          grid ? "h-full min-h-24" : "min-h-14",
           surfaceClass(cell),
           !cell.plate &&
             cell.mode !== "none" &&

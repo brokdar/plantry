@@ -77,6 +77,12 @@ describe("PlateCell", () => {
     expect(screen.queryByText("Add")).not.toBeInTheDocument()
   })
 
+  it("fills its grid row and rises above the sticky meal column when focused", () => {
+    const button = renderCell(cell("2026-11-02|3"))
+    expect(button).toHaveClass("h-full")
+    expect(button.closest("[data-cell-key]")).toHaveClass("focus-within:z-20")
+  })
+
   it("marks a cell that needs attention", () => {
     const plan = {
       ...mockPlan,

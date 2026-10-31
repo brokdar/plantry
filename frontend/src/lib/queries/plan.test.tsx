@@ -10,6 +10,10 @@ vi.mock("@/lib/api/plan", () => ({
   clearPlan: vi.fn(),
   restorePlan: vi.fn(),
 }))
+vi.mock("@/lib/api/availability", () => ({
+  setAvailabilityOverride: vi.fn(),
+  clearAvailabilityOverride: vi.fn(),
+}))
 vi.mock("@/lib/api/today", () => ({ getToday: vi.fn() }))
 
 const toastMock = vi.hoisted(() =>
@@ -21,12 +25,17 @@ vi.mock("@/lib/toast", () => ({
   toastError: toastErrorMock,
 }))
 
+import {
+  clearAvailabilityOverride,
+  setAvailabilityOverride,
+} from "@/lib/api/availability"
 import { clearPlan, getPlan, restorePlan } from "@/lib/api/plan"
 import { getToday } from "@/lib/api/today"
 
 import { planKeys, shoppingKeys, todayKeys } from "./keys"
 import {
   useClearWindow,
+  useMarkNoPlate,
   usePlan,
   useRestorePlan,
   useUndoableRemoval,
@@ -164,4 +173,54 @@ describe("useUndoableRemoval", () => {
     )
     expect(toastMock).not.toHaveBeenCalled()
   })
+})
+
+describe("useMarkNoPlate", () => {
+  const cell = mockPlan.cells.find((c) => c.plate)!
+
+  async function mark() {
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({
+      cell: { ...cell, mode: "none" },
+      removed: mockRemovedBatch.removed,
+    })
+    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
+    const { result } = renderHook(() => useMarkNoPlate(), {
+      wrapper: createHookWrapper(),
+    })
+    await act(async () => {
+      await result.current.mutateAsync(cell)
+    })
+    return lastToast()
+  }
+
+  it("marks the cell, removing its plate, and Undo restores it once", async () => {
+    const { message, opts } = await mark()
+    expect(setAvailabilityOverride).toHaveBeenCalledWith(
+      cell.date,
+      cell.slot_id,
+      { mode: "none", note: null, remove_plate: true }
+    )
+    expect(message).toBe("Marked as No plate")
+    expect(opts.duration).toBe(6000)
+    act(() => {
+      opts.action.onClick()
+      opts.action.onClick()
+    })
+    await waitFor(() => expect(restorePlan).toHaveBeenCalledTimes(1))
+    expect(clearAvailabilityOverride).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(["onAutoClose", "onDismiss"] as const)(
+    "does nothing once the toast closed (%s)",
+    async (close) => {
+      const { opts } = await mark()
+      act(() => {
+        opts[close]()
+        opts.action.onClick()
+      })
+      await Promise.resolve()
+      expect(clearAvailabilityOverride).not.toHaveBeenCalled()
+      expect(restorePlan).not.toHaveBeenCalled()
+    }
+  )
 })

@@ -216,6 +216,32 @@ describe("PlanPage", () => {
     expect(document.activeElement).toHaveAccessibleName(/^Sunday dinner, Chili/)
   })
 
+  it("keeps 44 px toolbar targets except for a fine pointer from 768 px", async () => {
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      sessions: [{ ...mockSessionWithWarnings, id: 7 }],
+    })
+    renderWithRouter(<PlanPage />)
+    await screen.findByRole("grid")
+    const controls = [
+      screen.getByRole("button", { name: "Ask assistant" }),
+      screen.getByRole("link", { name: "Shop" }),
+      screen.getByRole("button", { name: "More plan actions" }),
+      screen.getByRole("link", { name: "Previous week" }),
+      screen.getByRole("link", { name: "This week" }),
+      screen.getByRole("link", { name: "Next week" }),
+      screen.getByTestId("plan-warnings"),
+    ]
+    for (const el of controls) {
+      const classes = el.className.split(/\s+/)
+      expect(classes.some((c) => /^(h|min-h|size)-11$/.test(c))).toBe(true)
+      // Any smaller size applies only to a fine pointer.
+      for (const c of classes.filter((c) => /^md:/.test(c))) {
+        expect(c).toMatch(/^md:pointer-fine:/)
+      }
+    }
+  })
+
   it("? opens the keyboard shortcuts", async () => {
     const user = userEvent.setup()
     renderWithRouter(<PlanPage />)
