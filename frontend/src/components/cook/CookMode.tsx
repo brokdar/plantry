@@ -41,7 +41,9 @@ export interface CookModeProps {
   freezePortions?: number
   /** The way out, e.g. a link back to Today or the recipe. */
   close: ReactNode
-  onDone: () => void
+  /** Finishes and leaves. A promise that rejects (Done cooking failed)
+   *  keeps cook mode, and the leave guard, in place. */
+  onDone: () => void | Promise<unknown>
   donePending?: boolean
 }
 
@@ -108,9 +110,14 @@ export function CookMode({
       type="button"
       className="h-14 w-full text-h3"
       disabled={donePending}
-      onClick={() => {
+      onClick={async () => {
         finishing.current = true
-        onDone()
+        try {
+          await onDone()
+        } catch {
+          // The mutation already reported it; stay and keep guarding.
+          finishing.current = false
+        }
       }}
       data-testid="cook-done"
     >

@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { act, screen } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 import { renderWithRouter } from "@/test/render"
@@ -31,10 +31,6 @@ describe("RecipeDetailPage", () => {
     })
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
   it("shows a not-found state for an unknown id without retrying", async () => {
     vi.mocked(getFood).mockRejectedValue(
       new ApiError(404, "error.food.not_found")
@@ -54,16 +50,12 @@ describe("RecipeDetailPage", () => {
   })
 
   it("shows a load error with a retry for other failures", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.mocked(getFood).mockRejectedValue(new ApiError(500, "error.server"))
-    const user = userEvent.setup({
-      advanceTimers: vi.advanceTimersByTime.bind(vi),
-    })
+    const user = userEvent.setup()
     renderWithRouter(<RecipeDetailPage id="3" />)
 
     // Retries of transient errors are the app client's default
     // (`retryTransient`, lib/query-client.test.ts); this client has none.
-    await act(() => vi.advanceTimersByTimeAsync(10_000))
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("Couldn't load this recipe")
     expect(getFood).toHaveBeenCalledTimes(1)

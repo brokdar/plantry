@@ -266,6 +266,32 @@ describe("CookMode", () => {
       expect(screen.getByTestId("cook-timer")).toBeVisible()
     })
 
+    it("still asks before leaving after a failed Done cooking", async () => {
+      renderCook({
+        onDone: vi.fn().mockRejectedValue(new Error("offline")),
+        close: (
+          <Link to="/today" data-testid="cook-close">
+            x
+          </Link>
+        ),
+      })
+      await screen.findByTestId("step-pager")
+      fireEvent.keyDown(window, { key: "ArrowRight" })
+      fireEvent.click(
+        screen.getByRole("button", { name: "Start timer: 5 min" })
+      )
+      for (let i = 0; i < 3; i++) {
+        fireEvent.keyDown(window, { key: "ArrowRight" })
+      }
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("cook-done"))
+      })
+      fireEvent.click(screen.getByTestId("cook-close"))
+      expect(
+        await screen.findByRole("dialog", { name: "Leave cook mode?" })
+      ).toBeVisible()
+    })
+
     it("leaves without asking when no timer runs", async () => {
       renderCook({
         close: (

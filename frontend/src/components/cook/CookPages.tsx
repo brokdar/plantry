@@ -110,12 +110,10 @@ export function CookSessionPage({ sessionId }: { sessionId: number }) {
         </CloseButton>
       }
       donePending={cooked.isPending}
-      onDone={() => {
+      onDone={async () => {
         flush()
-        cooked.mutate(
-          { id: s.id, cooked: true },
-          { onSuccess: () => void navigate({ to: "/today" }) }
-        )
+        await cooked.mutateAsync({ id: s.id, cooked: true })
+        await navigate({ to: "/today" })
       }}
     />
   )

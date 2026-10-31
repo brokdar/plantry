@@ -1260,7 +1260,7 @@
     },
     "verdict_day": {
       "cook": "Am {{weekday}} kochen: {{name}} × {{portions}}",
-      "quick_cook": "Am {{weekday}} schnell: {{name}}",
+      "quick_cook": "Am {{weekday}} schnell gekocht: {{name}}",
       "nothing_to_cook": "Am {{weekday}} wird nicht gekocht",
       "no_plates": "Für {{weekday}} ist kein Essen geplant",
       "no_plan": "Für {{weekday}} gibt es noch keinen Plan"

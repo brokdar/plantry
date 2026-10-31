@@ -51,10 +51,13 @@ describe("lib/plan/today", () => {
 
     // Another day than today names its weekday instead of saying "today".
     const otherDay: Record<TodayVerdictKind, { en: string; de: string }> = {
-      cook: { en: "Cook Chili × 6", de: "Am Sonntag kochen: Chili × 6" },
+      cook: {
+        en: "Cook Chili × 6 on Sunday",
+        de: "Am Sonntag kochen: Chili × 6",
+      },
       quick_cook: {
-        en: "Quick cook: Omelette",
-        de: "Am Sonntag schnell: Omelette",
+        en: "Quick cook on Sunday: Omelette",
+        de: "Am Sonntag schnell gekocht: Omelette",
       },
       nothing_to_cook: {
         en: "Nothing to cook on Sunday",

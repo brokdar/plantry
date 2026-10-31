@@ -154,7 +154,7 @@ test.describe("Today", () => {
       await page.getByRole("link", { name: "Previous day" }).click()
       await expect(page).toHaveURL(new RegExp(`date=${ac1.cookDay}$`))
       await expect(page.getByTestId("today-verdict")).toHaveText(
-        `Cook ${ac1.name} × ${ac1.portions}`
+        `Cook ${ac1.name} × ${ac1.portions} on ${weekdayLong(ac1.cookDay)}`
       )
       await expect(
         page
