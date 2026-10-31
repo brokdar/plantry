@@ -230,7 +230,7 @@ func TestAvailabilityHandler_PutOverride_CellHasPlate(t *testing.T) {
 	assert.NotContains(t, body, "removed_plate")
 	assert.Equal(t, map[string]any{
 		"plates": []any{map[string]any{
-			"date": "2026-10-26", "slot_id": float64(e.slotB), "eaters": float64(1), "note": "curry night", "components": []any{},
+			"date": "2026-10-26", "slot_id": float64(e.slotB), "eaters": float64(1), "note": "curry night", "state": "confirmed", "components": []any{},
 		}},
 		"sessions": []any{},
 	}, body["removed"])

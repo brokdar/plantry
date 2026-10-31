@@ -90,7 +90,7 @@ func TestChat_SystemPromptCarriesDatesAndPlates(t *testing.T) {
 	require.NoError(t, foodRepo.Create(ctx, pasta))
 	grams, unit, source := 100.0, "g", "direct"
 	pc := plate.PlateComponent{FoodID: pasta.ID, Amount: &grams, Unit: &unit, Grams: &grams, GramsSource: &source}
-	planned := &plate.Plate{Date: ymd(t, "2026-10-31"), SlotID: dinner.ID, Eaters: 1, Components: []plate.PlateComponent{pc}}
+	planned := &plate.Plate{Date: ymd(t, "2026-10-31"), SlotID: dinner.ID, Eaters: 1, State: plate.StateConfirmed, Components: []plate.PlateComponent{pc}}
 	require.NoError(t, plateRepo.Create(ctx, planned))
 	avail := availabilityService(db)
 	_, _, err := avail.SetOverride(ctx, availability.OverrideInput{
@@ -103,7 +103,7 @@ func TestChat_SystemPromptCarriesDatesAndPlates(t *testing.T) {
 	require.NoError(t, avail.SetDefaults(ctx, []availability.Default{
 		{Weekday: 0, SlotID: dinner.ID, Mode: availability.ModeRoutine, PresetID: &oats.ID},
 	}))
-	outside := &plate.Plate{Date: ymd(t, "2026-11-07"), SlotID: dinner.ID, Eaters: 1, Components: []plate.PlateComponent{pc}}
+	outside := &plate.Plate{Date: ymd(t, "2026-11-07"), SlotID: dinner.ID, Eaters: 1, State: plate.StateConfirmed, Components: []plate.PlateComponent{pc}}
 	require.NoError(t, plateRepo.Create(ctx, outside))
 
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}})
