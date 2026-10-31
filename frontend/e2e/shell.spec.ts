@@ -1,6 +1,6 @@
 import type { Locator } from "@playwright/test"
 
-import { expect, mockAnchorToday, test } from "./helpers"
+import { expect, mockAnchorToday, openPalette, test } from "./helpers"
 
 const DESTINATIONS = ["Today", "Plan", "Recipes", "Shop"]
 
@@ -116,6 +116,7 @@ test.describe("AppShell", () => {
     await page.unrouteAll({ behavior: "ignoreErrors" })
   })
 
+  // F10-AC3: the palette's go-to entries.
   test("the palette keeps Ingredients; Import, Calendar and Archive are gone", async ({
     page,
   }) => {
@@ -126,8 +127,7 @@ test.describe("AppShell", () => {
       sidebar.getByRole("navigation", { name: "Primary" }).getByRole("link")
     ).toHaveCount(4)
 
-    await page.keyboard.press("ControlOrMeta+k")
-    const palette = page.getByRole("dialog")
+    const palette = await openPalette(page)
     await expect(
       palette.getByRole("option", { name: "Ingredients", exact: true })
     ).toBeVisible()
