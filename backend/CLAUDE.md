@@ -152,7 +152,9 @@ Package `domain/planview` builds the read models; it never writes and takes its 
 
 ## Unit of work
 
-`domain.Transactor` (`domain/transactor.go`, D21) is the port; `sqlite.TxRunner` (`adapters/sqlite/tx.go`) implements it. `InTx(ctx, fn)` runs `fn` in one transaction whose `*sql.Tx` travels in `fn`'s ctx, and every repository called with that ctx joins it. A nested `InTx` joins the outer one: there are no savepoints, so a failed nested call leaves its partial writes in the outer transaction and the caller must return the error. Multi-write operations (plate mutations, availability `none` with `remove_plate`, preset apply) run inside one `InTx`.
+`domain.Transactor` (`domain/transactor.go`, D21) is the port; `sqlite.TxRunner` (`adapters/sqlite/tx.go`) implements it. `InTx(ctx, fn)` runs `fn` in one transaction whose `*sql.Tx` travels in `fn`'s ctx, and every repository called with that ctx joins it. A nested `InTx` joins the outer one: there are no savepoints, so a failed nested call leaves its partial writes in the outer transaction and the caller must return the error. Multi-write operations (plate mutations, availability `none` with `remove_plate`, preset apply) run inside one `InTx`, and so do the `/api/plan` and `/api/today` read models, so a concurrent write cannot tear them.
+
+Every domain sentinel's i18n message key lives in `domain.MessageKey` (`domain/errors.go`; the plate quantity sentinels in `plate.MessageKey`); the HTTP error map adds only the status, and the agent's tool errors use the same keys. A test fails when a sentinel in `errors.go` has no key or no status.
 
 ## Plate aggregate and write path
 
