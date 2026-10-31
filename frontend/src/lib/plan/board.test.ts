@@ -6,6 +6,7 @@ import {
   mockPlan,
   mockPlate,
   mockPlateComponent,
+  mockSession,
   mockSessionWithWarnings,
 } from "@/test/fixtures"
 
@@ -113,6 +114,21 @@ describe("buildBoard", () => {
     expect(cellAt(board, "2026-11-03", 1).ariaLabel).toBe(
       "Tuesday breakfast, nothing planned"
     )
+  })
+
+  it("says one portion in the singular", async () => {
+    const one = { ...mockPlan, sessions: [{ ...mockSession, portions: 1 }] }
+    expect(cellAt(buildBoard(one, i18n), "2026-11-01", 3).ariaLabel).toBe(
+      "Sunday dinner, Chili, cook here, 1 portion"
+    )
+    await i18n.changeLanguage("de")
+    try {
+      expect(cellAt(buildBoard(one, i18n), "2026-11-01", 3).ariaLabel).toBe(
+        "Sonntag Abendessen, Chili, hier kochen, 1 Portion"
+      )
+    } finally {
+      await i18n.changeLanguage("en")
+    }
   })
 
   it("F3-AC2: collapses an all-routine breakfast row", () => {

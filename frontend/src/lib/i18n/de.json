@@ -1081,7 +1081,8 @@
       "empty_plate": "leere Mahlzeit",
       "name": "{{weekday}} {{slot}}",
       "needs_attention": "bitte prüfen",
-      "speech_cook": "hier kochen, {{portions}} Portionen",
+      "speech_cook_one": "hier kochen, {{portions}} Portion",
+      "speech_cook_other": "hier kochen, {{portions}} Portionen",
       "speech_leftover": "Rest {{position}} von {{meals}}",
       "speech_frozen": "gefroren, {{position}} von {{meals}}",
       "subline_cook": "hier kochen",
@@ -1223,7 +1224,7 @@
     }
   },
   "batch": {
-    "cook": "Koche × {{portions}}",
+    "cook": "Kochen × {{portions}}",
     "strip": "{{weekday}} · {{name}} × {{portions}}",
     "linked": "{{position}}/{{meals}}",
     "frozen": "{{position}}/{{meals}} · gefroren",

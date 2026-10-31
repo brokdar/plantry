@@ -17,12 +17,12 @@ const cases: Array<{
   {
     props: { sessionId: 7, colour: 1, variant: "cook", portions: 6 },
     en: "Cook × 6",
-    de: "Koche × 6",
+    de: "Kochen × 6",
   },
   {
     props: { sessionId: 7, colour: 1, variant: "cook", portions: 3.5 },
     en: "Cook × 3½",
-    de: "Koche × 3½",
+    de: "Kochen × 3½",
   },
   {
     props: {
