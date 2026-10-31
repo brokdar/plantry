@@ -98,8 +98,8 @@ export const setupKeys = {
 export const shoppingKeys = {
   all: ["shopping"] as const,
   /** `range` undefined = the server default for the anchored window. */
-  list: (range?: ShoppingRange) =>
-    [...shoppingKeys.all, "list", range ?? {}] as const,
+  list: (range?: ShoppingRange, includeDrafts = false) =>
+    [...shoppingKeys.all, "list", range ?? {}, { includeDrafts }] as const,
 }
 
 export const importKeys = {

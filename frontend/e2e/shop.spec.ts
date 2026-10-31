@@ -24,6 +24,7 @@ interface Setup {
   start: string
   end: string
   cookDate: string
+  plateId: number
   chili: string
   beans: string
   onion: string
@@ -62,6 +63,7 @@ async function setup(): Promise<Setup> {
     },
   })
   expect(plate.ok(), await plate.text()).toBeTruthy()
+  const { id: plateId } = (await plate.json()) as { id: number }
   const plan = await ctx.get(`/api/plan?start=${start}`)
   const { sessions } = (await plan.json()) as {
     sessions: { id: number; food_id: number }[]
@@ -79,6 +81,7 @@ async function setup(): Promise<Setup> {
     start,
     end: days[6],
     cookDate,
+    plateId,
     chili: chili.name,
     beans: beans.name,
     onion: onion.name,
@@ -270,6 +273,54 @@ test.describe("Shop", () => {
     await expect(empty).toContainText("Plan this window to see what to buy")
     await empty.getByRole("link", { name: "Go to plan" }).click()
     await expect(page).toHaveURL(`/plan?start=${start}`)
+  })
+
+  // Phase 3 F5-AC2 (AC-6 bullet 2), F5-AC3: confirmed rows only; the toggle
+  // shows only while the range holds drafts and adds them, kept in the URL.
+  test("lists confirmed rows only; Include draft plates adds the drafts", async ({
+    page,
+  }) => {
+    const s = await setup()
+    try {
+      await openShop(page, s.start, s.end)
+      await expect(row(page, s.beans)).toBeVisible()
+      const toggle = page.getByRole("switch", { name: "Include draft plates" })
+      await expect(toggle).toHaveCount(0)
+
+      // B1: unlocking turns the plate and its batch back into a draft.
+      const ctx = await apiRequest.newContext({ baseURL: API })
+      const unlock = await ctx.post(`/api/plates/${s.plateId}/unlock`)
+      expect(unlock.ok(), await unlock.text()).toBeTruthy()
+      await ctx.dispose()
+
+      await openShop(page, s.start, s.end)
+      await expect(page.getByTestId("shop-empty")).toBeVisible()
+      await expect(row(page, s.beans)).toHaveCount(0)
+      await expect(toggle).not.toBeChecked()
+
+      const withDrafts = page.waitForResponse(
+        (r) => r.url().includes("include_drafts=true") && r.ok()
+      )
+      await toggle.click()
+      await withDrafts
+      await expect(page).toHaveURL(/[?&]drafts=1/)
+      await expect(toggle).toBeChecked()
+      await expect(row(page, s.beans).getByTestId("shop-quantity")).toHaveText(
+        "600 g"
+      )
+      await expect(row(page, s.onion)).toBeVisible()
+
+      // The URL keeps the choice.
+      await page.reload()
+      await expect(toggle).toBeChecked()
+      await expect(row(page, s.beans)).toBeVisible()
+
+      await toggle.click()
+      await expect(page).not.toHaveURL(/drafts=/)
+      await expect(page.getByTestId("shop-empty")).toBeVisible()
+    } finally {
+      await s.cleanup()
+    }
   })
 
   test("a tablet (820 px) gets both In-store mode and Copy as text", async ({

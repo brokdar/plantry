@@ -231,6 +231,43 @@ describe("TodayPage", () => {
     ).toHaveAttribute("href", "/plan?start=2026-11-14")
   })
 
+  // Phase 3 F5-AC1: a draft-only window says so and links to the plan.
+  it("draft only: the draft headline and Review plan", async () => {
+    const draft = mockTodayByVerdict.draft_only
+    renderToday(draft, draft.date)
+    expect(await screen.findByTestId("today-verdict")).toHaveTextContent(
+      "Your plan for this week is still a draft"
+    )
+    const card = screen.getByTestId("today-draft-only")
+    expect(card).toHaveTextContent(
+      "Accept it on the plan and Today shows what to cook each day."
+    )
+    expect(
+      within(card).getByRole("link", { name: "Review plan" })
+    ).toHaveAttribute("href", `/plan?start=${draft.window_start}`)
+    expect(screen.queryByTestId("today-no-plan")).toBeNull()
+  })
+
+  it("draft only in German", async () => {
+    await i18n.changeLanguage("de")
+    const draft = mockTodayByVerdict.draft_only
+    renderToday(draft, draft.date)
+    expect(await screen.findByTestId("today-verdict")).toHaveTextContent(
+      "Dein Plan für diese Woche ist noch ein Entwurf"
+    )
+    expect(
+      within(screen.getByTestId("today-draft-only")).getByRole("link", {
+        name: "Plan prüfen",
+      })
+    ).toBeInTheDocument()
+  })
+
+  it("no draft card on other verdicts", async () => {
+    renderToday(mockTodayByVerdict.no_plates)
+    await screen.findByTestId("today-verdict")
+    expect(screen.queryByTestId("today-draft-only")).toBeNull()
+  })
+
   it("the banner says when the next week starts today or tomorrow", async () => {
     const banner = async () =>
       (await screen.findByTestId("today-plan-banner")).textContent

@@ -5,10 +5,10 @@ import { getShoppingList, type ShoppingRange } from "@/lib/api/shopping"
 import { shoppingKeys } from "./keys"
 
 /** The shopping list for `range`, or the server default for the anchored
- *  window. */
-export function useShoppingList(range?: ShoppingRange) {
+ *  window; confirmed rows only unless `includeDrafts`. */
+export function useShoppingList(range?: ShoppingRange, includeDrafts = false) {
   return useQuery({
-    queryKey: shoppingKeys.list(range),
-    queryFn: () => getShoppingList(range),
+    queryKey: shoppingKeys.list(range, includeDrafts),
+    queryFn: () => getShoppingList(range, includeDrafts),
   })
 }

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import type { Today, TodayVerdictKind } from "@/lib/api/today"
 import i18n from "@/lib/i18n"
-import { mockPlan, mockTodayByVerdict } from "@/test/fixtures"
+import { mockDraftPlan, mockPlan, mockTodayByVerdict } from "@/test/fixtures"
 
 import { batchBadgeText } from "./format"
 import {
@@ -117,6 +117,27 @@ describe("lib/plan/today", () => {
     expect(view.rows.map((r) => r.slotName)).toEqual(["Breakfast", "Dinner"])
     const dinner = view.rows[1].cell
     expect(dinner.badge && batchBadgeText(dinner.badge, i18n)).toBe("3/3")
+  })
+
+  // Phase 3 F5 (D26): Today shows confirmed rows only, so a draft plate in
+  // the window's board is neither the leftover card nor a row's meal.
+  it("leaves draft plates out of the leftover card and the rows", () => {
+    const today: Today = {
+      ...mockTodayByVerdict.draft_only,
+      date: MONDAY,
+    }
+    const view = buildTodayPlan(today, mockDraftPlan, MONDAY, i18n)
+    expect(view.leftover).toBeNull()
+    expect(view.rows.map((r) => r.slotName)).toEqual([
+      "Breakfast",
+      "Lunch",
+      "Dinner",
+    ])
+    expect(view.rows.map((r) => [r.cell.plate, r.cell.badge])).toEqual([
+      [null, null],
+      [null, null],
+      [null, null],
+    ])
   })
 
   describe("use-by on the leftover card", () => {

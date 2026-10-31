@@ -166,6 +166,65 @@ test.describe("Today", () => {
     }
   })
 
+  // Phase 3 F5-AC2 (AC-6 bullet 1): a window holding only drafts.
+  test("a draft-only week says so and Review plan opens it", async ({
+    page,
+  }) => {
+    const tag = uid()
+    const { start, days } = await futureWindow()
+    const slot = await seedSlot(`slot.tdy-draft-${tag}`, "Moon", 1_000_000)
+    const beans = await seedLeafFood({ name: `Beans ${tag}` })
+    const chili = await seedComposedFood({
+      name: `Chili ${tag}`,
+      role: "main",
+      reference_portions: 4,
+      children: [
+        {
+          child_id: beans.id,
+          amount: 400,
+          unit: "g",
+          grams: 400,
+          sort_order: 0,
+        },
+      ],
+    })
+    try {
+      const ctx = await apiRequest.newContext({ baseURL: API })
+      const plate = await ctx.post("/api/plates", {
+        data: {
+          date: days[2],
+          slot_id: slot.id,
+          components: [{ food_id: chili.id, portions: 1 }],
+        },
+      })
+      expect(plate.ok(), await plate.text()).toBeTruthy()
+      const { id } = (await plate.json()) as { id: number }
+      // B1: unlocking turns the plate and its batch back into a draft.
+      const unlock = await ctx.post(`/api/plates/${id}/unlock`)
+      expect(unlock.ok(), await unlock.text()).toBeTruthy()
+      await ctx.dispose()
+
+      // That window's day is today, so the headline speaks of this week.
+      await page.clock.setFixedTime(new Date(`${days[2]}T12:00:00`))
+      await page.goto("/today")
+      await expect(page.getByTestId("today-verdict")).toHaveText(
+        "Your plan for this week is still a draft"
+      )
+      const card = page.getByTestId("today-draft-only")
+      // Today shows confirmed rows only: the draft is not on the day.
+      await expect(page.getByTestId("today-cook-card")).toHaveCount(0)
+      await expect(page.getByTestId(`today-meal-${slot.id}`)).toHaveText(
+        /Nothing planned/
+      )
+      await card.getByRole("link", { name: "Review plan" }).click()
+      await expect(page).toHaveURL(`/plan?start=${start}`)
+    } finally {
+      await cleanupSlot(slot.id)
+      await cleanupFood(chili.id)
+      await cleanupFood(beans.id)
+    }
+  })
+
   test("desktop: the week strip opens the plan at that day", async ({
     page,
   }) => {
