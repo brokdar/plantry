@@ -1588,5 +1588,33 @@
     "target_title": "Apply to which day?",
     "slot_filter": "Only these meals",
     "hint": "Enter applies · Shift+Enter replaces existing plates"
+  },
+  "cook": {
+    "cooking": "Cooking × {{portions}}",
+    "portions": "Portions",
+    "close": "Close cook mode",
+    "tabs": {
+      "ingredients": "Ingredients",
+      "steps": "Steps"
+    },
+    "step_of": "Step {{step}} of {{total}}",
+    "step_role": "step",
+    "previous": "Previous",
+    "next": "Next",
+    "no_steps": "This recipe has no steps yet.",
+    "no_ingredients": "This recipe has no ingredients yet.",
+    "buy_hint": "{{buy}}, using {{use}}",
+    "freeze_one": "Freeze {{portions}} portion",
+    "freeze_other": "Freeze {{portions}} portions",
+    "done": "Done cooking",
+    "missing": "This batch no longer exists.",
+    "recipe_missing": "This recipe no longer exists.",
+    "timer": {
+      "group": "Timers",
+      "start": "Start a {{label}} timer",
+      "stop": "Stop the {{label}} timer",
+      "done": "Done",
+      "finished": "{{label}} timer done"
+    }
   }
 }

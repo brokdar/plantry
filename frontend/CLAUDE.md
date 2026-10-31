@@ -32,7 +32,7 @@ Load these before writing or modifying the relevant code:
 
 ### Routing — TanStack Router (file-based)
 
-Routes live in `src/routes/`. The router plugin auto-generates `src/routeTree.gen.ts` — **never edit it manually**. All routes are wrapped by `__root.tsx`, which mounts `AppShell` (rail + phone tab bar), renders the not-found page, and hosts the `CommandPalette` and `CopyFromWeekDialog`. `/setup` renders without the shell.
+Routes live in `src/routes/`. The router plugin auto-generates `src/routeTree.gen.ts` — **never edit it manually**. All routes are wrapped by `__root.tsx`, which mounts `AppShell` (rail + phone tab bar), renders the not-found page, and hosts the `CommandPalette` and `CopyFromWeekDialog`. `/setup` and cook mode (`/cook/…`, `/recipes/$id/cook`) render without the shell.
 
 ```
 src/routes/
@@ -41,9 +41,11 @@ src/routes/
 │                      #   else to /today (`lib/setup-redirect.ts`, shared with /today)
 ├── today/             # `/today?date=` — Today (components/today, view model lib/plan/today.ts)
 ├── setup/             # `/setup` — first-run SetupWizard
+├── cook/              # `/cook/$sessionId` — cook mode for a planned batch (components/cook)
 ├── recipes/           # `/recipes?q&role&quick&stale&fav&new&sort&add` — the library (filters are search
 │                      #   params, `lib/recipes/library.ts`; `add=url` opens the import sheet); new.tsx,
-│                      #   $id/ (detail), $id/edit.tsx; ingredients/ — the Ingredients tab (table),
+│                      #   $id/ (detail), $id/edit.tsx, $id/cook.tsx (`?portions=`, cook mode without a
+│                      #   plan, D30); ingredients/ — the Ingredients tab (table),
 │                      #   ingredients/new.tsx, ingredients/$id/edit.tsx
 ├── plan/              # `/plan?start&cell&day` — the plan board (components/plan, view model
 │                      #   lib/plan/board.ts); `day` focuses that day (Today's week strip)
@@ -66,6 +68,9 @@ src/components/
 │                      #   Reminders, RateQuestion, PlanBanner, WeekStrip
 ├── shop/              # ShopPage, RangePicker, SectionList, ShoppingRow, CopyAsText (clipboard text);
 │                      #   ticks in localStorage `plantry:purchased:range:{from}:{to}`
+├── cook/              # CookMode (header, tabs; side by side ≥768 px), ScaledIngredients, StepPager,
+│                      #   TimerPill, useWakeLock, useSessionPortions (debounced session write);
+│                      #   CookPages (session and recipe containers); timer detection in lib/cook/timers.ts
 ├── plan/              # the board: PlanPage, Board (BoardGrid ≥768 px, DayList phone), PlateCell,
 │                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog, CopyFromWeekDialog; keynav in lib/plan/keynav.ts;
 │                      #   PlanSheet (one sheet per cell: PlateSheet, CellSheet or FoodPicker), BatchSection,

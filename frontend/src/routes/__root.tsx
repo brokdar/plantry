@@ -22,6 +22,10 @@ export const Route = createRootRoute({
   errorComponent: ErrorPage,
 })
 
+/** Routes rendered without the app shell: `/setup`, `/cook/$sessionId` and
+ *  `/recipes/$id/cook`. */
+const BARE_ROUTE = /^\/(setup|cook)(\/|$)|^\/recipes\/[^/]+\/cook\/?$/
+
 function RootComponent() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [copyWeekOpen, setCopyWeekOpen] = useState(false)
@@ -34,10 +38,11 @@ function RootComponent() {
 
   // The setup wizard is a centred single column without the app shell
   // (UX §5.1), so a new install isn't offered navigation it can't use yet.
-  const isSetup = useRouterState({
-    select: (s) => s.location.pathname.startsWith("/setup"),
+  // Cook mode is full screen (UX §5.3).
+  const isBare = useRouterState({
+    select: (s) => BARE_ROUTE.test(s.location.pathname),
   })
-  if (isSetup) {
+  if (isBare) {
     return (
       <>
         <Outlet />

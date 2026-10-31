@@ -18,10 +18,12 @@ import { Route as RecipesIndexRouteImport } from './routes/recipes/index'
 import { Route as PlanIndexRouteImport } from './routes/plan/index'
 import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 import { Route as RecipesNewRouteImport } from './routes/recipes/new'
+import { Route as CookSessionIdRouteImport } from './routes/cook/$sessionId'
 import { Route as RecipesIngredientsIndexRouteImport } from './routes/recipes/ingredients/index'
 import { Route as RecipesIdIndexRouteImport } from './routes/recipes/$id/index'
 import { Route as RecipesIngredientsNewRouteImport } from './routes/recipes/ingredients/new'
 import { Route as RecipesIdEditRouteImport } from './routes/recipes/$id/edit'
+import { Route as RecipesIdCookRouteImport } from './routes/recipes/$id/cook'
 import { Route as RecipesIngredientsIdEditRouteImport } from './routes/recipes/ingredients/$id/edit'
 
 const IndexRoute = IndexRouteImport.update({
@@ -69,6 +71,11 @@ const RecipesNewRoute = RecipesNewRouteImport.update({
   path: '/recipes/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CookSessionIdRoute = CookSessionIdRouteImport.update({
+  id: '/cook/$sessionId',
+  path: '/cook/$sessionId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RecipesIngredientsIndexRoute = RecipesIngredientsIndexRouteImport.update({
   id: '/recipes/ingredients/',
   path: '/recipes/ingredients/',
@@ -89,6 +96,11 @@ const RecipesIdEditRoute = RecipesIdEditRouteImport.update({
   path: '/recipes/$id/edit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RecipesIdCookRoute = RecipesIdCookRouteImport.update({
+  id: '/recipes/$id/cook',
+  path: '/recipes/$id/cook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RecipesIngredientsIdEditRoute =
   RecipesIngredientsIdEditRouteImport.update({
     id: '/recipes/ingredients/$id/edit',
@@ -98,6 +110,7 @@ const RecipesIngredientsIdEditRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cook/$sessionId': typeof CookSessionIdRoute
   '/recipes/new': typeof RecipesNewRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/plan/': typeof PlanIndexRoute
@@ -106,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/setup/': typeof SetupIndexRoute
   '/shop/': typeof ShopIndexRoute
   '/today/': typeof TodayIndexRoute
+  '/recipes/$id/cook': typeof RecipesIdCookRoute
   '/recipes/$id/edit': typeof RecipesIdEditRoute
   '/recipes/ingredients/new': typeof RecipesIngredientsNewRoute
   '/recipes/$id/': typeof RecipesIdIndexRoute
@@ -114,6 +128,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cook/$sessionId': typeof CookSessionIdRoute
   '/recipes/new': typeof RecipesNewRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/plan': typeof PlanIndexRoute
@@ -122,6 +137,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupIndexRoute
   '/shop': typeof ShopIndexRoute
   '/today': typeof TodayIndexRoute
+  '/recipes/$id/cook': typeof RecipesIdCookRoute
   '/recipes/$id/edit': typeof RecipesIdEditRoute
   '/recipes/ingredients/new': typeof RecipesIngredientsNewRoute
   '/recipes/$id': typeof RecipesIdIndexRoute
@@ -131,6 +147,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cook/$sessionId': typeof CookSessionIdRoute
   '/recipes/new': typeof RecipesNewRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/plan/': typeof PlanIndexRoute
@@ -139,6 +156,7 @@ export interface FileRoutesById {
   '/setup/': typeof SetupIndexRoute
   '/shop/': typeof ShopIndexRoute
   '/today/': typeof TodayIndexRoute
+  '/recipes/$id/cook': typeof RecipesIdCookRoute
   '/recipes/$id/edit': typeof RecipesIdEditRoute
   '/recipes/ingredients/new': typeof RecipesIngredientsNewRoute
   '/recipes/$id/': typeof RecipesIdIndexRoute
@@ -149,6 +167,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/cook/$sessionId'
     | '/recipes/new'
     | '/settings/$section'
     | '/plan/'
@@ -157,6 +176,7 @@ export interface FileRouteTypes {
     | '/setup/'
     | '/shop/'
     | '/today/'
+    | '/recipes/$id/cook'
     | '/recipes/$id/edit'
     | '/recipes/ingredients/new'
     | '/recipes/$id/'
@@ -165,6 +185,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/cook/$sessionId'
     | '/recipes/new'
     | '/settings/$section'
     | '/plan'
@@ -173,6 +194,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/shop'
     | '/today'
+    | '/recipes/$id/cook'
     | '/recipes/$id/edit'
     | '/recipes/ingredients/new'
     | '/recipes/$id'
@@ -181,6 +203,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/cook/$sessionId'
     | '/recipes/new'
     | '/settings/$section'
     | '/plan/'
@@ -189,6 +212,7 @@ export interface FileRouteTypes {
     | '/setup/'
     | '/shop/'
     | '/today/'
+    | '/recipes/$id/cook'
     | '/recipes/$id/edit'
     | '/recipes/ingredients/new'
     | '/recipes/$id/'
@@ -198,6 +222,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CookSessionIdRoute: typeof CookSessionIdRoute
   RecipesNewRoute: typeof RecipesNewRoute
   SettingsSectionRoute: typeof SettingsSectionRoute
   PlanIndexRoute: typeof PlanIndexRoute
@@ -206,6 +231,7 @@ export interface RootRouteChildren {
   SetupIndexRoute: typeof SetupIndexRoute
   ShopIndexRoute: typeof ShopIndexRoute
   TodayIndexRoute: typeof TodayIndexRoute
+  RecipesIdCookRoute: typeof RecipesIdCookRoute
   RecipesIdEditRoute: typeof RecipesIdEditRoute
   RecipesIngredientsNewRoute: typeof RecipesIngredientsNewRoute
   RecipesIdIndexRoute: typeof RecipesIdIndexRoute
@@ -278,6 +304,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecipesNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cook/$sessionId': {
+      id: '/cook/$sessionId'
+      path: '/cook/$sessionId'
+      fullPath: '/cook/$sessionId'
+      preLoaderRoute: typeof CookSessionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/recipes/ingredients/': {
       id: '/recipes/ingredients/'
       path: '/recipes/ingredients'
@@ -306,6 +339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecipesIdEditRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/recipes/$id/cook': {
+      id: '/recipes/$id/cook'
+      path: '/recipes/$id/cook'
+      fullPath: '/recipes/$id/cook'
+      preLoaderRoute: typeof RecipesIdCookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/recipes/ingredients/$id/edit': {
       id: '/recipes/ingredients/$id/edit'
       path: '/recipes/ingredients/$id/edit'
@@ -318,6 +358,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CookSessionIdRoute: CookSessionIdRoute,
   RecipesNewRoute: RecipesNewRoute,
   SettingsSectionRoute: SettingsSectionRoute,
   PlanIndexRoute: PlanIndexRoute,
@@ -326,6 +367,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupIndexRoute: SetupIndexRoute,
   ShopIndexRoute: ShopIndexRoute,
   TodayIndexRoute: TodayIndexRoute,
+  RecipesIdCookRoute: RecipesIdCookRoute,
   RecipesIdEditRoute: RecipesIdEditRoute,
   RecipesIngredientsNewRoute: RecipesIngredientsNewRoute,
   RecipesIdIndexRoute: RecipesIdIndexRoute,
