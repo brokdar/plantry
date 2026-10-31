@@ -116,6 +116,8 @@ export interface ApplyResult {
   removed: PlanSnapshot
   /** No plate overrides copy week wrote. */
   created_overrides: ApplyResultCell[]
+  /** No plate overrides copy week failed to copy. */
+  skipped_overrides: ApplyResultCell[]
 }
 
 export interface CopyWeekInput {

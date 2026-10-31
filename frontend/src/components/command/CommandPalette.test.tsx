@@ -94,6 +94,7 @@ describe("CommandPalette", () => {
       skipped_no_slot: [],
       removed: { plates: [], sessions: [] },
       created_overrides: [],
+      skipped_overrides: [],
     })
     const user = userEvent.setup()
     renderPalette()

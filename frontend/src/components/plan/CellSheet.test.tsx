@@ -56,6 +56,7 @@ const applied: ApplyResult = {
   skipped_no_slot: [],
   removed: { plates: [], sessions: [] },
   created_overrides: [],
+  skipped_overrides: [],
 }
 
 async function renderCell(c: PlanCell, plan: Plan = spare) {

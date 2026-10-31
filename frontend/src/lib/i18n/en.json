@@ -852,6 +852,7 @@
     "not_found": "Resource not found.",
     "invalid_id": "Invalid ID.",
     "invalid_body": "Invalid request data.",
+    "invalid_query": "Invalid request parameters.",
     "server": "Something went wrong.",
     "ingredient": {
       "duplicate_name": "An ingredient with this name already exists.",
@@ -1601,6 +1602,8 @@
       "result_skipped_unavailable_other": "Left out {{count}} No plate meals.",
       "result_skipped_no_slot_one": "{{count}} plate could not find its meal slot.",
       "result_skipped_no_slot_other": "{{count}} plates could not find their meal slot.",
+      "result_skipped_overrides_one": "Could not copy No plate to {{count}} meal.",
+      "result_skipped_overrides_other": "Could not copy No plate to {{count}} meals.",
       "undo_partial": "Undo only partly worked. Check the plan for meals that are still there or missing."
     }
   },
