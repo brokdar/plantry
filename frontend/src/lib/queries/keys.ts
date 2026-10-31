@@ -52,18 +52,11 @@ export const sessionKeys = {
 
 export const plateKeys = {
   all: ["plates"] as const,
-  detail: (id: number) => [...plateKeys.all, id] as const,
   range: (from: string, to: string) =>
     [...plateKeys.all, "range", from, to] as const,
   rangeInfinite: (anchor: string) =>
     [...plateKeys.all, "range-infinite", anchor] as const,
   byDate: (date: string) => [...plateKeys.all, "by-date", date] as const,
-  // Sits UNDER `range(from, to)` so that any invalidation of the same
-  // window's plate list also drops the macros for that window. TanStack
-  // Query treats the queryKey as a prefix list, so `range(...)` matches
-  // both `["plates", "range", from, to]` and the deeper macros key below.
-  macrosRange: (from: string, to: string) =>
-    [...plateKeys.range(from, to), "macros"] as const,
 }
 
 export const availabilityKeys = {

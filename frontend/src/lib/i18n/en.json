@@ -111,22 +111,7 @@
     "subtitle": "Your self-hosted meal planner."
   },
   "planner": {
-    "title": "Weekly Planner",
     "today": "Today",
-    "daily_avg": "Daily Average",
-    "fill_empty_cta": "Fill empty slots",
-    "more_actions": "More actions",
-    "ai_more_actions": "More AI actions",
-    "clear_day": "Clear day",
-    "day_cleared": "Day cleared",
-    "day_actions": "Day actions",
-    "day_actions_for": "{{day}} {{date}} — actions",
-    "clear_week": "Clear week",
-    "week_cleared": "Week cleared",
-    "generate_prompt": "Plan my week based on my goals and time slots.",
-    "empty_state_no_slots_title": "Set up your time slots first",
-    "empty_state_no_slots_body": "Define when you eat — breakfast, lunch, dinner, snacks — so you can plan meals into them.",
-    "empty_state_no_slots_cta": "Configure time slots",
     "day_mon": "Mon",
     "day_tue": "Tue",
     "day_wed": "Wed",
@@ -135,17 +120,7 @@
     "day_sat": "Sat",
     "day_sun": "Sun",
     "slot": {
-      "empty": {
-        "label": "Plan meal"
-      },
-      "overflow": "+{{count}} more",
       "sides_label": "Sides: {{names}}",
-      "ai_filled": "Filled by the kitchen agent",
-      "action": {
-        "favorite": "Favorite",
-        "love": "Loved",
-        "dislike": "Disliked"
-      },
       "role": {
         "main": "Main",
         "side_starch": "Starch",
@@ -156,171 +131,9 @@
         "dessert": "Dessert",
         "standalone": "Standalone"
       }
-    },
-    "revert": {
-      "title_one": "{{count}} slot filled by the kitchen agent",
-      "title_other": "{{count}} slots filled by the kitchen agent",
-      "body": "Snapshot saved. Revert to discard the plan, or dismiss to keep it.",
-      "revert": "Revert",
-      "dismiss": "Dismiss",
-      "reverted": "Reverted",
-      "error": "Could not revert"
-    },
-    "fill_empty": {
-      "prompt": "Fill the empty slots in my current week. For each meal you add, tell me briefly what you picked and why.",
-      "progress": "Filling empty slots…",
-      "done": "Empty slots filled",
-      "error": "Could not fill empty slots"
-    },
-    "ai_session_pill_one": "AI · {{count}}",
-    "ai_session_pill_other": "AI · {{count}}",
-    "ai_session_pill_aria_one": "Reopen AI fill banner ({{count}} plate)",
-    "ai_session_pill_aria_other": "Reopen AI fill banner ({{count}} plates)",
-    "dnd": {
-      "reject_no_plate": "This meal is marked No plate.",
-      "reject_occupied": "This meal already has a plate.",
-      "drag_handle_label": "Drag to move · ⌘ to copy",
-      "copy_hint": "⌘ to copy"
-    },
-    "availability": {
-      "no_plate": "No plate",
-      "mark": "Mark as No plate",
-      "mark_tooltip": "Mark as No plate · Right-click to add a note",
-      "mark_with_note_title": "No plate, with a note",
-      "plan_meal": "Plan this meal",
-      "add_note": "Add a note",
-      "edit_note": "Edit note",
-      "save_note": "Save",
-      "note_placeholder": "e.g. Dinner at Mum's",
-      "marked": "Marked as No plate.",
-      "mobile_short": "No plate"
-    },
-    "shortcuts": {
-      "title": "Keyboard shortcuts",
-      "menu_item": "Keyboard shortcuts",
-      "description": "Move focus and trigger actions across the planner grid.",
-      "nav_section": "Navigation",
-      "actions_section": "Actions",
-      "move_focus": "Move between cells",
-      "row_edge": "Jump to row start / end",
-      "open_or_add": "Open slot details or add a meal",
-      "no_plate": "Mark as No plate",
-      "delete": "Delete this plate",
-      "copy_drag": "Copy a plate while dragging",
-      "this_panel": "Open this panel"
-    },
-    "row_actions": {
-      "menu_label": "{{slot}} row actions",
-      "apply_template": "Apply slot template across week",
-      "copy_across": "Copy first day across week",
-      "clear_one": "Clear 1 plate in this row",
-      "clear_other": "Clear {{count}} plates in this row",
-      "cleared_one": "1 plate cleared",
-      "cleared_other": "{{count}} plates cleared",
-      "copy_no_source": "Nothing to copy in this row",
-      "copy_no_targets": "All days in this row are already filled",
-      "copied_one": "Copied to 1 day",
-      "copied_other": "Copied to {{count}} days",
-      "apply_dialog_title": "Apply a {{slot}} template",
-      "apply_dialog_body_one": "{{count}} day in this row will receive the template.",
-      "apply_dialog_body_other": "{{count}} days in this row will receive the template.",
-      "apply_skip_occupied_one": "{{count}} day already has a plate and will be skipped.",
-      "apply_skip_occupied_other": "{{count}} days already have plates and will be skipped.",
-      "apply_empty": "No slot templates yet — save a plate as a template first.",
-      "apply_submit_one": "Apply to 1 day",
-      "apply_submit_other": "Apply to {{count}} days",
-      "applied_one": "Applied to 1 day",
-      "applied_other": "Applied to {{count}} days"
-    },
-    "empty_week": {
-      "eyebrow": "Empty week",
-      "title": "Plan this week from scratch — or borrow from last.",
-      "body": "Pick a starting point, or just start filling in slots. You can dismiss this banner if you'd rather work cell by cell.",
-      "copy_last_week": "Copy last week",
-      "copying": "Copying…",
-      "copied_one": "Copied 1 plate from last week",
-      "copied_other": "Copied {{count}} plates from last week",
-      "copy_empty": "Last week was empty too — nothing to copy.",
-      "apply_template": "Apply template",
-      "ai_fill": "AI fill",
-      "start_fresh": "Just start fresh",
-      "dismiss": "Dismiss"
-    },
-    "range_label": "{{from}} – {{to}}",
-    "prev_window": "Previous 7",
-    "next_window": "Next 7",
-    "today_button": "Today",
-    "anchor_today": "From today",
-    "anchor_shopping_day": "From next {{weekday}}",
-    "mobile": {
-      "row_actions": "Row actions",
-      "swipe_hint": "Swipe left for actions, hold to move",
-      "drop_to_move": "Drop to move",
-      "moved_to": "Moved to {{day}}",
-      "move_failed": "Couldn't move plate",
-      "drag_handle_label": "Drag to move",
-      "save_short": "Save",
-      "delete_short": "Delete",
-      "move_to": "Move to day",
-      "move_to_picker_label": "Pick destination day",
-      "current_day": "Current"
-    }
-  },
-  "slot_sheet": {
-    "title": "Slot details",
-    "empty_description": "No slot selected.",
-    "open_label": "Open slot details",
-    "description_one": "1 component planned",
-    "description_other": "{{count}} components planned",
-    "components_label": "Components",
-    "empty_components": "No components yet"
-  },
-  "tray": {
-    "title": "Add to {{slot}}",
-    "title_empty": "Add to slot",
-    "subtitle": "Stage components, then add them all at once.",
-    "tabs_label": "Browse source",
-    "tab": {
-      "foods": "Foods",
-      "favorites": "Favorites",
-      "recent": "Recent"
-    },
-    "empty": {
-      "foods": "No matching foods.",
-      "favorites": "No favorites yet — heart a food to add it here.",
-      "recent": "No recent foods in this window."
-    },
-    "staged_label": "Staged components",
-    "staged_count_one": "1 staged",
-    "staged_count_other": "{{count}} staged",
-    "running_total": "Adding",
-    "empty_count": "Nothing staged",
-    "commit_one": "Add 1",
-    "commit_other": "Add {{count}}",
-    "committing": "Adding…",
-    "committed_one": "1 component added.",
-    "committed_other": "{{count}} components added.",
-    "partial_failure_one": "1 component couldn't be added — still staged.",
-    "partial_failure_other": "{{count}} components couldn't be added — still staged.",
-    "error_load_foods": "Couldn't load foods. Try again.",
-    "error_load_templates": "Couldn't load templates. Try again.",
-    "preview": {
-      "title": "This plate",
-      "aria_label": "Plate preview",
-      "empty": "Nothing yet",
-      "empty_hint": "Pick a food below to start composing.",
-      "summary_one": "Adding 1 · +{{kcal}} kcal",
-      "summary_other": "Adding {{count}} · +{{kcal}} kcal",
-      "summary_existing_one": "1 on plate",
-      "summary_existing_other": "{{count}} on plate",
-      "macro_bar_label": "Running macro distribution — {{kcal}} kcal",
-      "unknown_food": "Unknown food"
     }
   },
   "picker": {
-    "search": {
-      "placeholder": "Search components, tags, ingredients…"
-    },
     "filter": {
       "favorites": "Favorites",
       "recents": "Recent",
@@ -350,20 +163,13 @@
     }
   },
   "plate": {
-    "add_component": "Add component",
-    "swap_component": "Swap",
-    "remove_component": "Remove",
     "edit_plate": "Edit plate",
-    "delete_plate": "Delete plate",
-    "deleted": "Plate deleted",
     "delete_confirm_title": "Delete this plate?",
     "delete_confirm_body": "All components on this plate will be removed.",
     "note": "Note",
-    "note_placeholder": "Optional note about this meal...",
     "empty_cell": "Add a meal",
     "portions": "Portions",
     "quantity": {
-      "portions_label": "Portions",
       "amount_label": "Amount",
       "unit_label": "Unit",
       "confidence": {
@@ -373,17 +179,7 @@
       },
       "unknown_unit": "Unknown unit"
     },
-    "pick_component": "Pick a component",
-    "filter_by_role": "Filter by role",
-    "feedback": {
-      "label": "How did it go?",
-      "loved": "Loved",
-      "disliked": "Disliked",
-      "add_note": "Add note",
-      "note_placeholder": "Notes about this meal…",
-      "clear": "Clear feedback",
-      "save_note": "Save note"
-    }
+    "filter_by_role": "Filter by role"
   },
   "settings_page": {
     "eyebrow": "Settings",
@@ -670,7 +466,6 @@
     "row_detail": "{{key}}, order {{order}}"
   },
   "ingredient": {
-    "kind_label": "Ingredient",
     "title": "The Pantry Archive",
     "subtitle": "A curated database of your botanical essentials, meticulously tracked for artisanal nourishment.",
     "create": "New Ingredient",
@@ -910,40 +705,132 @@
       "custom": "Custom"
     },
     "exact_grams": "{{grams}} g",
-    "g": { "name": "gram" },
-    "kg": { "name": "kilogram" },
-    "mg": { "name": "milligram" },
-    "oz": { "name": "ounce" },
-    "lb": { "name": "pound" },
-    "ml": { "name": "milliliter" },
-    "l": { "name": "liter" },
-    "cl": { "name": "centiliter" },
-    "dl": { "name": "deciliter" },
-    "tbsp": { "name": "tablespoon", "name_other": "tablespoons" },
-    "tsp": { "name": "teaspoon", "name_other": "teaspoons" },
-    "cup": { "name": "cup", "name_other": "cups" },
-    "floz": { "name": "fluid ounce", "name_other": "fluid ounces" },
-    "pt": { "name": "pint", "name_other": "pints" },
-    "qt": { "name": "quart", "name_other": "quarts" },
-    "gal": { "name": "gallon", "name_other": "gallons" },
-    "piece": { "name": "piece", "name_other": "pieces" },
-    "clove": { "name": "clove", "name_other": "cloves" },
-    "slice": { "name": "slice", "name_other": "slices" },
-    "bunch": { "name": "bunch", "name_other": "bunches" },
-    "pinch": { "name": "pinch", "name_other": "pinches" },
-    "stick": { "name": "stick", "name_other": "sticks" },
-    "can": { "name": "can", "name_other": "cans" },
-    "jar": { "name": "jar", "name_other": "jars" },
-    "packet": { "name": "packet", "name_other": "packets" },
-    "serving": { "name": "serving", "name_other": "servings" },
-    "stalk": { "name": "stalk", "name_other": "stalks" },
-    "pod": { "name": "pod", "name_other": "pods" },
-    "head": { "name": "head", "name_other": "heads" },
-    "leaf": { "name": "leaf", "name_other": "leaves" },
-    "leaves": { "name": "leaves" },
-    "sprig": { "name": "sprig", "name_other": "sprigs" },
-    "tub": { "name": "tub", "name_other": "tubs" },
-    "handful": { "name": "handful", "name_other": "handfuls" }
+    "g": {
+      "name": "gram"
+    },
+    "kg": {
+      "name": "kilogram"
+    },
+    "mg": {
+      "name": "milligram"
+    },
+    "oz": {
+      "name": "ounce"
+    },
+    "lb": {
+      "name": "pound"
+    },
+    "ml": {
+      "name": "milliliter"
+    },
+    "l": {
+      "name": "liter"
+    },
+    "cl": {
+      "name": "centiliter"
+    },
+    "dl": {
+      "name": "deciliter"
+    },
+    "tbsp": {
+      "name": "tablespoon",
+      "name_other": "tablespoons"
+    },
+    "tsp": {
+      "name": "teaspoon",
+      "name_other": "teaspoons"
+    },
+    "cup": {
+      "name": "cup",
+      "name_other": "cups"
+    },
+    "floz": {
+      "name": "fluid ounce",
+      "name_other": "fluid ounces"
+    },
+    "pt": {
+      "name": "pint",
+      "name_other": "pints"
+    },
+    "qt": {
+      "name": "quart",
+      "name_other": "quarts"
+    },
+    "gal": {
+      "name": "gallon",
+      "name_other": "gallons"
+    },
+    "piece": {
+      "name": "piece",
+      "name_other": "pieces"
+    },
+    "clove": {
+      "name": "clove",
+      "name_other": "cloves"
+    },
+    "slice": {
+      "name": "slice",
+      "name_other": "slices"
+    },
+    "bunch": {
+      "name": "bunch",
+      "name_other": "bunches"
+    },
+    "pinch": {
+      "name": "pinch",
+      "name_other": "pinches"
+    },
+    "stick": {
+      "name": "stick",
+      "name_other": "sticks"
+    },
+    "can": {
+      "name": "can",
+      "name_other": "cans"
+    },
+    "jar": {
+      "name": "jar",
+      "name_other": "jars"
+    },
+    "packet": {
+      "name": "packet",
+      "name_other": "packets"
+    },
+    "serving": {
+      "name": "serving",
+      "name_other": "servings"
+    },
+    "stalk": {
+      "name": "stalk",
+      "name_other": "stalks"
+    },
+    "pod": {
+      "name": "pod",
+      "name_other": "pods"
+    },
+    "head": {
+      "name": "head",
+      "name_other": "heads"
+    },
+    "leaf": {
+      "name": "leaf",
+      "name_other": "leaves"
+    },
+    "leaves": {
+      "name": "leaves"
+    },
+    "sprig": {
+      "name": "sprig",
+      "name_other": "sprigs"
+    },
+    "tub": {
+      "name": "tub",
+      "name_other": "tubs"
+    },
+    "handful": {
+      "name": "handful",
+      "name_other": "handfuls"
+    }
   },
   "image": {
     "section_title": "Image",
@@ -990,21 +877,13 @@
     "title": "Presets",
     "subtitle": "Save plates you make often, tag them, and lay them down any day in one click.",
     "manage": "Manage presets",
-    "save_as": "Save as preset",
-    "save_plate_as": "Save plate as preset",
-    "save_selection_as": "Save selection as preset",
-    "save_body": "Bookmark this plate so you can lay down the same components again any day.",
-    "save_selection_body": "Bookmark these plates as a single preset — each plate stays bound to its slot.",
-    "create": "Save preset",
     "name": "Preset name",
-    "name_placeholder": "e.g. Sunday chicken bowl",
     "name_help": "Keep it short — this is how it reads in the picker and palette.",
     "name_required": "Give the preset a name.",
     "name_suggestion_single": "{{food}}",
     "name_suggestion_bundle": "Bundle of {{count}}",
     "tags_label": "Tags",
     "tags_placeholder": "Add tag…",
-    "tags_help": "Pick from suggested tags or type your own. Lowercased on save.",
     "plates_count_one": "{{count}} plate",
     "plates_count_other": "{{count}} plates",
     "components_count_one": "{{count}} component",
@@ -1058,12 +937,10 @@
       "undo": "Undo",
       "undo_done": "Apply undone."
     },
-    "created": "Preset \"{{name}}\" saved",
     "renamed": "Preset renamed",
     "duplicated": "Preset duplicated as \"{{name}}\"",
     "deleted": "Preset deleted",
     "copy_week": {
-      "open": "Copy from week…",
       "title": "Copy from a past week",
       "body": "Pick a past week. Its plates will be copied onto this week, day-for-day.",
       "source_label": "Source week",
@@ -1090,12 +967,6 @@
       "title": "Presets",
       "toggle": "Toggle preset drawer",
       "drag_hint": "Drag onto a slot, day, or week. Shift+drop to overwrite."
-    },
-    "empty_slot_picker": {
-      "title": "Fill {{slot}}",
-      "recents": "Recent",
-      "all_matching": "All matching",
-      "no_matches": "No presets cover this slot yet."
     }
   },
   "availability": {
@@ -1239,7 +1110,6 @@
     "page_title": "Shopping list",
     "title": "Shopping List",
     "description": "Ingredients for this week",
-    "button": "Shopping",
     "empty": "No ingredients — add meals to the planner first.",
     "preset_rest_of_window": "Rest of this window",
     "preset_this_window": "This window",
@@ -1247,13 +1117,6 @@
     "range_label": "{{from}} — {{to}}"
   },
   "nutrition": {
-    "title": "Week Nutrition",
-    "button": "Nutrition",
-    "empty": "No meals planned yet.",
-    "week_total": "Week total",
-    "no_target_title": "Set a daily target to see progress",
-    "no_target_body": "Add kcal and macro targets in Settings so daily bars can fill in.",
-    "no_target_cta": "Open Settings",
     "detail_title": "Nutrition for {{name}}",
     "section_core": "Macros",
     "section_extended": "Extended macros",
@@ -1286,12 +1149,7 @@
     "fat_abbr": "F",
     "fiber_abbr": "Fi",
     "kcal": "kcal",
-    "distribution": "Macro split",
-    "target": {
-      "on": "On target",
-      "near": "Near target",
-      "off": "Off target"
-    }
+    "distribution": "Macro split"
   },
   "common": {
     "save": "Save",
@@ -1312,14 +1170,11 @@
     "close": "Close",
     "yes": "Yes",
     "no": "No",
-    "collapse": "Collapse",
-    "remove": "Remove",
     "opens_new_tab": "(opens in a new tab)",
     "retry": "Try again"
   },
   "chat": {
     "title": "AI Assistant",
-    "button": "Assistant",
     "description": "Chatting with {{model}}",
     "disabled": "AI assistant is disabled.",
     "provider_missing": "No AI provider is configured. Set PLANTRY_AI_PROVIDER and restart.",
@@ -1327,13 +1182,7 @@
       "placeholder": "Ask me to plan a day, swap a meal, or explain a macro…",
       "aria_label": "Message to the AI",
       "send": "Send (Ctrl+Enter)",
-      "abort": "Stop",
-      "mode_label": "Mode",
-      "mode": {
-        "default": "Default",
-        "fill_empty": "Fill empty slots only",
-        "replace_all": "Replace the whole week"
-      }
+      "abort": "Stop"
     },
     "new_conversation": "New conversation",
     "tool": {
@@ -1554,6 +1403,94 @@
       "copy_drag": "Copy a plate while dragging",
       "this_panel": "Show these shortcuts",
       "drag": "Drag"
+    },
+    "generate_prompt": "Plan my week based on my goals and time slots.",
+    "dnd": {
+      "reject_no_plate": "This meal is marked No plate.",
+      "reject_occupied": "This meal already has a plate."
+    },
+    "stepper": {
+      "decrease": "Decrease {{label}}",
+      "increase": "Increase {{label}}"
+    },
+    "sheet": {
+      "components": "On the plate",
+      "add_food": "Add food",
+      "swap": "Swap {{name}}",
+      "remove": "Remove {{name}}",
+      "portions_per_eater": "Portions per eater",
+      "portions_per_eater_of": "Portions of {{name}} per eater",
+      "update_amount": "Update amount",
+      "eaters": "Eaters",
+      "macros": "For one eater",
+      "macro_line": "Protein {{protein}} · fat {{fat}} · carbs {{carbs}}",
+      "note": "Note",
+      "note_placeholder": "Anything to remember for this meal",
+      "feedback": "How was it?",
+      "mark_no_plate": "Mark as No plate",
+      "save_routine": "Save as routine",
+      "routine_name": "Routine name",
+      "routine_saved": "Saved as routine “{{name}}”",
+      "delete": "Delete plate"
+    },
+    "feedback": {
+      "loved": "Loved",
+      "disliked": "Not again",
+      "not_eaten": "Didn't eat it"
+    },
+    "warning": {
+      "deficit_one": "{{name}} is {{amount}} portion short.",
+      "deficit_other": "{{name}} is {{amount}} portions short.",
+      "frozen_deficit": "{{name}} has too few frozen portions for its frozen meals.",
+      "past_keep_days": "{{name}} is past its use-by date here.",
+      "leftover_before_cook": "{{name}} is eaten here before it is cooked.",
+      "cook_more": "Cook {{count}} more"
+    },
+    "batch": {
+      "cook_as_batch": "Cook as a batch",
+      "meals": "Meals",
+      "leftover_meals": "Leftover meals",
+      "no_cells": "No free meals before the use-by date.",
+      "create": "Create batch",
+      "portions": "Portions to cook",
+      "freeze": "Portions to freeze",
+      "use_by": "Use by {{date}}",
+      "remove": "Remove batch",
+      "remove_title": "Remove this batch?",
+      "remove_body_one": "This also removes its leftover on {{count}} other plate. You can undo it right after.",
+      "remove_body_other": "This also removes its leftovers on {{count}} other plates. You can undo it right after.",
+      "from": "From {{weekday}} · {{name}} ({{position}} of {{meals}})",
+      "open": "Open batch"
+    },
+    "cell_sheet": {
+      "add_food": "Add food",
+      "use_routine": "Use a routine",
+      "no_routines": "No routines for this meal yet. Save a plate as a routine to reuse it.",
+      "eat_leftover": "Eat a leftover",
+      "leftover_item": "{{name}} from {{weekday}}",
+      "plan_meal": "Plan this meal",
+      "note": "Reason",
+      "note_placeholder": "Eating out, at work, …",
+      "edit_note": "Save note"
+    },
+    "picker": {
+      "title_add": "Add food",
+      "title_swap": "Swap {{name}}",
+      "search": "Search recipes and ingredients",
+      "tab_recipes": "Recipes",
+      "tab_ingredients": "Ingredients",
+      "tab_favorites": "Favorites",
+      "tab_recent": "Recent",
+      "role_all": "All",
+      "results": "Foods",
+      "empty": "No foods match. Try another word or tab.",
+      "staged": "Chosen foods",
+      "unstage": "Remove {{name}}",
+      "commit_one": "Add {{count}} food",
+      "commit_other": "Add {{count}} foods",
+      "kcal_portion": "{{kcal}} kcal per portion",
+      "kcal_100g": "{{kcal}} kcal per 100 g",
+      "ingredient": "Ingredient"
     }
   },
   "batch": {

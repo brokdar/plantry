@@ -13,7 +13,7 @@ async function stubRecipesReady(page: Page) {
 
 // These tests verify the "Generate plan" CTA wiring end-to-end: clicking any
 // of the variants (default sidebar button, compact phone top-bar button)
-// should navigate to the planner and open the AI chat panel with a localized
+// should navigate to the plan board and open the AI chat panel with a localized
 // prefill in the composer. We deliberately avoid submitting the chat here —
 // the fake AI provider (plan-dinner.json) has a finite scripted turn set that
 // is shared with ai-chat.spec.ts. Chat streaming is covered there.
@@ -23,14 +23,14 @@ test.describe("Generate plan CTA", () => {
     await stubRecipesReady(page)
   })
 
-  test("default variant opens chat with prefilled composer from the planner", async ({
+  test("default variant opens chat with prefilled composer on the plan board", async ({
     page,
   }) => {
     const slot = await seedSlot(`slot.gen-planner-${uid()}`, "coffee", 10)
 
     try {
       await page.setViewportSize({ width: 1440, height: 900 })
-      await page.goto("/")
+      await page.goto("/plan")
 
       await expect(page.getByTestId("sidenav")).toBeVisible()
       await page.getByTestId("generate-plan-default").click()
@@ -71,7 +71,7 @@ test.describe("Generate plan CTA", () => {
 
     try {
       await page.setViewportSize({ width: 390, height: 844 })
-      await page.goto("/")
+      await page.goto("/plan")
 
       await expect(page.getByTestId("topbar")).toBeVisible()
       await page.getByTestId("generate-plan-compact").click()

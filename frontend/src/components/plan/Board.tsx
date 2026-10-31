@@ -8,7 +8,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
-import { useRef, useSyncExternalStore } from "react"
+import { useRef } from "react"
 import { useTranslation } from "react-i18next"
 
 import type { BoardCell } from "@/lib/plan/board"
@@ -19,22 +19,7 @@ import { toast } from "@/lib/toast"
 
 import { BoardGrid, type BoardLayoutProps } from "./BoardGrid"
 import { DayList } from "./DayList"
-
-const PHONE_QUERY = "(max-width: 767px)"
-
-function subscribe(onChange: () => void) {
-  if (typeof window.matchMedia !== "function") return () => {}
-  const mq = window.matchMedia(PHONE_QUERY)
-  mq.addEventListener("change", onChange)
-  return () => mq.removeEventListener("change", onChange)
-}
-
-function isPhone() {
-  return (
-    typeof window.matchMedia === "function" &&
-    window.matchMedia(PHONE_QUERY).matches
-  )
-}
+import { useIsPhone } from "./use-is-phone"
 
 function cellOf(data: unknown): BoardCell | undefined {
   return (data as { cell?: BoardCell } | undefined)?.cell
@@ -49,7 +34,7 @@ function cellOf(data: unknown): BoardCell | undefined {
  */
 export function Board(props: BoardLayoutProps) {
   const { t } = useTranslation()
-  const phone = useSyncExternalStore(subscribe, isPhone)
+  const phone = useIsPhone()
   const updatePlate = useUpdatePlate()
   const restore = useRestorePlan()
   const copy = useRef(false)
@@ -73,11 +58,11 @@ export function Board(props: BoardLayoutProps) {
     const to = cellOf(e.over?.data.current)
     if (!from?.plate || !to || to.key === from.key) return
     if (to.mode === "none") {
-      toast.error(t("planner.dnd.reject_no_plate"))
+      toast.error(t("plan.dnd.reject_no_plate"))
       return
     }
     if (to.plate) {
-      toast.error(t("planner.dnd.reject_occupied"))
+      toast.error(t("plan.dnd.reject_occupied"))
       return
     }
     if (copy.current) {

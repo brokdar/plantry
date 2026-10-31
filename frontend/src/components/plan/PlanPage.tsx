@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -15,23 +16,22 @@ import { useChatUI } from "@/lib/stores/chat-ui"
 import { Board } from "./Board"
 import { BoardSkeleton } from "./BoardSkeleton"
 import { EmptyWindow } from "./EmptyWindow"
+import { PlanSheet, type SheetState } from "./PlanSheet"
 import { PlanToolbar } from "./PlanToolbar"
 import { ShortcutsDialog } from "./ShortcutsDialog"
 
 interface PlanPageProps {
   /** The window start from the URL; undefined opens the anchored window. */
   start?: string
-  /** Opens a cell (the plate sheet, F4). */
-  onOpenCell?: (cell: BoardCell) => void
+  /** A cell to open its sheet for (`date|slotId`), from `?cell=`. */
+  cell?: string
 }
-
-const noop = () => {}
 
 /**
  * `/plan`: the plan board for one window (UX §5.5, D3). One query
  * (`GET /api/plan`) feeds the toolbar, the cook strip and the board.
  */
-export function PlanPage({ start, onOpenCell = noop }: PlanPageProps) {
+export function PlanPage({ start, cell }: PlanPageProps) {
   const { t } = useTranslation()
   const plan = usePlan(start)
 
@@ -54,7 +54,7 @@ export function PlanPage({ start, onOpenCell = noop }: PlanPageProps) {
       </PageFrame>
     )
   }
-  return <PlanView plan={plan.data} anchored={!start} onOpenCell={onOpenCell} />
+  return <PlanView plan={plan.data} anchored={!start} initialCell={cell} />
 }
 
 function PageFrame({ children }: { children: React.ReactNode }) {
@@ -73,11 +73,11 @@ function parseDate(iso: string) {
 function PlanView({
   plan,
   anchored,
-  onOpenCell,
+  initialCell,
 }: {
   plan: Plan
   anchored: boolean
-  onOpenCell: (cell: BoardCell) => void
+  initialCell?: string
 }) {
   const { t, i18n } = useTranslation()
   const board = useMemo(() => buildBoard(plan, i18n), [plan, i18n])
@@ -85,6 +85,12 @@ function PlanView({
   const [copyOpen, setCopyOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [warningIndex, setWarningIndex] = useState(0)
+  const [sheet, setSheet] = useState<SheetState | null>(
+    initialCell ? { key: initialCell } : null
+  )
+  // The cell the sheet was opened for: focus returns to it on close.
+  const sheetCell = useRef<string | null>(initialCell ?? null)
+  const navigate = useNavigate()
   const openChat = useChatUI((s) => s.setOpen)
   const clearWindow = useClearWindow()
   const markNoPlate = useMarkNoPlate()
@@ -119,6 +125,38 @@ function PlanView({
     const i = warningIndex % keys.length
     focusCell(`[data-cell-key="${keys[i]}"]`)
     setWarningIndex(i + 1)
+  }
+
+  /** Opens, switches or closes the sheet. A cell before this window (the
+   *  cook cell of a leftover's batch) opens in the previous window. */
+  function changeSheet(next: SheetState | null) {
+    if (next && next.key.split("|")[0] < win.start) {
+      void navigate({
+        to: "/plan",
+        search: { start: win.prev_start, cell: next.key },
+      })
+      return
+    }
+    if (next) sheetCell.current = next.key
+    else if (initialCell) {
+      // Drop `?cell=` so a reload does not reopen the sheet.
+      void navigate({
+        to: "/plan",
+        search: { start: anchored ? undefined : win.start },
+        replace: true,
+      })
+    }
+    setSheet(next)
+  }
+
+  function returnFocus() {
+    if (sheetCell.current) focusCell(`[data-cell-key="${sheetCell.current}"]`)
+  }
+
+  function openCell(cell: BoardCell) {
+    // A past window has nothing to do in a cell without a plate.
+    if (board.readOnly && !cell.plate) return
+    changeSheet({ key: cell.key })
   }
 
   function markCell(cell: BoardCell) {
@@ -158,7 +196,7 @@ function PlanView({
             board={board}
             targets={plan.targets}
             label={t("plan.board.label", { range: rangeLabel })}
-            onOpenCell={onOpenCell}
+            onOpenCell={openCell}
             onMarkNoPlate={markCell}
           />
         </div>
@@ -170,6 +208,13 @@ function PlanView({
         defaultSourceStart={win.prev_start}
       />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <PlanSheet
+        plan={plan}
+        board={board}
+        state={sheet}
+        onChange={changeSheet}
+        onClosed={returnFocus}
+      />
       <ChatPanel range={{ from: win.start, to: win.end }} />
     </PageFrame>
   )

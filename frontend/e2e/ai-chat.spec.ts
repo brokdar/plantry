@@ -15,14 +15,17 @@ test("chat panel streams assistant text and tool-call states", async ({
   const slot = await seedSlot(`slot.chat-${uid()}`, "moon", 99)
 
   try {
-    await page.goto("/")
+    await page.goto("/plan")
 
-    const openBtn = page.getByTestId("chat-open-button")
+    const openBtn = page.getByRole("button", { name: "Ask assistant" })
     await expect(openBtn).toBeVisible()
     await openBtn.click()
 
     const input = page.getByTestId("chat-composer-input")
     await expect(input).toBeVisible()
+    // F4-AC10: a plain conversation, without a mode select.
+    await expect(page.getByTestId("chat-composer-mode")).toHaveCount(0)
+    await expect(page.getByRole("combobox")).toHaveCount(0)
     await input.fill("plan my tuesday dinner")
 
     const chatResponse = page.waitForResponse(
@@ -57,8 +60,8 @@ test("chat composer submits on Ctrl+Enter", async ({ page }) => {
   const slot = await seedSlot(`slot.chat-${uid()}`, "moon", 99)
 
   try {
-    await page.goto("/")
-    await page.getByTestId("chat-open-button").click()
+    await page.goto("/plan")
+    await page.getByRole("button", { name: "Ask assistant" }).click()
 
     const input = page.getByTestId("chat-composer-input")
     await input.fill("hi")

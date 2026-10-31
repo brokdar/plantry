@@ -111,22 +111,7 @@
     "subtitle": "Dein selbstgehosteter Essensplaner."
   },
   "planner": {
-    "title": "Wochenplaner",
     "today": "Heute",
-    "daily_avg": "Tagesdurchschnitt",
-    "fill_empty_cta": "Leere Slots füllen",
-    "more_actions": "Weitere Aktionen",
-    "ai_more_actions": "Weitere KI-Aktionen",
-    "clear_day": "Tag leeren",
-    "day_cleared": "Tag geleert",
-    "day_actions": "Tagesaktionen",
-    "day_actions_for": "{{day}} {{date}} — Aktionen",
-    "clear_week": "Woche leeren",
-    "week_cleared": "Woche geleert",
-    "generate_prompt": "Plane meine Woche basierend auf meinen Zielen und Zeitfenstern.",
-    "empty_state_no_slots_title": "Lege zuerst deine Mahlzeitzeiten fest",
-    "empty_state_no_slots_body": "Definiere Frühstück, Mittag-, Abendessen, Snacks — damit du Mahlzeiten dort einplanen kannst.",
-    "empty_state_no_slots_cta": "Mahlzeitzeiten einrichten",
     "day_mon": "Mo",
     "day_tue": "Di",
     "day_wed": "Mi",
@@ -135,17 +120,7 @@
     "day_sat": "Sa",
     "day_sun": "So",
     "slot": {
-      "empty": {
-        "label": "Mahlzeit planen"
-      },
-      "overflow": "+{{count}} mehr",
       "sides_label": "Beilagen: {{names}}",
-      "ai_filled": "Vom Küchen-Agenten gefüllt",
-      "action": {
-        "favorite": "Favorit",
-        "love": "Geliebt",
-        "dislike": "Nicht gemocht"
-      },
       "role": {
         "main": "Hauptgericht",
         "side_starch": "Beilage (Stärke)",
@@ -156,171 +131,9 @@
         "dessert": "Dessert",
         "standalone": "Einzeln"
       }
-    },
-    "revert": {
-      "title_one": "{{count}} Slot vom Küchen-Agenten gefüllt",
-      "title_other": "{{count}} Slots vom Küchen-Agenten gefüllt",
-      "body": "Snapshot gespeichert. Rückgängig verwirft den Plan, Schließen behält ihn.",
-      "revert": "Rückgängig",
-      "dismiss": "Schließen",
-      "reverted": "Rückgängig gemacht",
-      "error": "Konnte nicht rückgängig gemacht werden"
-    },
-    "fill_empty": {
-      "prompt": "Fülle die leeren Slots meiner aktuellen Woche. Sag mir zu jedem hinzugefügten Gericht kurz, was du gewählt hast und warum.",
-      "progress": "Fülle leere Slots…",
-      "done": "Leere Slots gefüllt",
-      "error": "Füllen fehlgeschlagen"
-    },
-    "ai_session_pill_one": "KI · {{count}}",
-    "ai_session_pill_other": "KI · {{count}}",
-    "ai_session_pill_aria_one": "KI-Banner wieder öffnen ({{count}} Teller)",
-    "ai_session_pill_aria_other": "KI-Banner wieder öffnen ({{count}} Teller)",
-    "dnd": {
-      "reject_no_plate": "Für diese Mahlzeit ist „Kein Essen“ eingetragen.",
-      "reject_occupied": "Für diese Mahlzeit ist schon etwas geplant.",
-      "drag_handle_label": "Zum Verschieben ziehen · ⌘ zum Kopieren",
-      "copy_hint": "⌘ kopieren"
-    },
-    "availability": {
-      "no_plate": "Kein Essen",
-      "mark": "Auf „Kein Essen“ setzen",
-      "mark_tooltip": "Auf „Kein Essen“ setzen · Rechtsklick für eine Notiz",
-      "mark_with_note_title": "Kein Essen, mit Notiz",
-      "plan_meal": "Diese Mahlzeit planen",
-      "add_note": "Notiz hinzufügen",
-      "edit_note": "Notiz bearbeiten",
-      "save_note": "Speichern",
-      "note_placeholder": "z. B. Abendessen bei Mama",
-      "marked": "Auf „Kein Essen“ gesetzt.",
-      "mobile_short": "Kein Essen"
-    },
-    "shortcuts": {
-      "title": "Tastenkürzel",
-      "menu_item": "Tastenkürzel",
-      "description": "Fokus bewegen und Aktionen im Wochenraster auslösen.",
-      "nav_section": "Navigation",
-      "actions_section": "Aktionen",
-      "move_focus": "Zwischen Zellen wechseln",
-      "row_edge": "Zum Zeilenanfang/-ende springen",
-      "open_or_add": "Slot-Details öffnen oder Mahlzeit hinzufügen",
-      "no_plate": "Auf „Kein Essen“ setzen",
-      "delete": "Diesen Teller löschen",
-      "copy_drag": "Beim Ziehen einen Teller kopieren",
-      "this_panel": "Diese Übersicht öffnen"
-    },
-    "row_actions": {
-      "menu_label": "Aktionen für Zeile {{slot}}",
-      "apply_template": "Slot-Vorlage über die Woche anwenden",
-      "copy_across": "Ersten Tag über die Woche kopieren",
-      "clear_one": "1 Teller in dieser Zeile löschen",
-      "clear_other": "{{count}} Teller in dieser Zeile löschen",
-      "cleared_one": "1 Teller gelöscht",
-      "cleared_other": "{{count}} Teller gelöscht",
-      "copy_no_source": "Nichts zum Kopieren in dieser Zeile",
-      "copy_no_targets": "Alle Tage in dieser Zeile sind bereits gefüllt",
-      "copied_one": "Auf 1 Tag kopiert",
-      "copied_other": "Auf {{count}} Tage kopiert",
-      "apply_dialog_title": "{{slot}}-Vorlage anwenden",
-      "apply_dialog_body_one": "{{count}} Tag in dieser Zeile erhält die Vorlage.",
-      "apply_dialog_body_other": "{{count}} Tage in dieser Zeile erhalten die Vorlage.",
-      "apply_skip_occupied_one": "{{count}} Tag hat bereits einen Teller und wird übersprungen.",
-      "apply_skip_occupied_other": "{{count}} Tage haben bereits Teller und werden übersprungen.",
-      "apply_empty": "Noch keine Slot-Vorlagen — speichere zuerst einen Teller als Vorlage.",
-      "apply_submit_one": "Auf 1 Tag anwenden",
-      "apply_submit_other": "Auf {{count}} Tage anwenden",
-      "applied_one": "Auf 1 Tag angewendet",
-      "applied_other": "Auf {{count}} Tage angewendet"
-    },
-    "empty_week": {
-      "eyebrow": "Leere Woche",
-      "title": "Plane diese Woche neu — oder übernimm letzte.",
-      "body": "Wähle einen Startpunkt oder beginne einfach Slots zu füllen. Du kannst dieses Banner auch ausblenden, wenn du lieber Zelle für Zelle arbeitest.",
-      "copy_last_week": "Letzte Woche kopieren",
-      "copying": "Kopiere…",
-      "copied_one": "1 Teller von letzter Woche kopiert",
-      "copied_other": "{{count}} Teller von letzter Woche kopiert",
-      "copy_empty": "Letzte Woche war auch leer — nichts zu kopieren.",
-      "apply_template": "Vorlage anwenden",
-      "ai_fill": "KI-Füllen",
-      "start_fresh": "Einfach loslegen",
-      "dismiss": "Schließen"
-    },
-    "range_label": "{{from}} – {{to}}",
-    "prev_window": "Vorherige 7",
-    "next_window": "Nächste 7",
-    "today_button": "Heute",
-    "anchor_today": "Ab heute",
-    "anchor_shopping_day": "Ab nächstem {{weekday}}",
-    "mobile": {
-      "row_actions": "Zeilenaktionen",
-      "swipe_hint": "Wische nach links · halten zum Verschieben",
-      "drop_to_move": "Loslassen zum Verschieben",
-      "moved_to": "Verschoben auf {{day}}",
-      "move_failed": "Verschieben fehlgeschlagen",
-      "drag_handle_label": "Zum Verschieben ziehen",
-      "save_short": "Speichern",
-      "delete_short": "Löschen",
-      "move_to": "Auf Tag verschieben",
-      "move_to_picker_label": "Zieltag auswählen",
-      "current_day": "Aktuell"
-    }
-  },
-  "slot_sheet": {
-    "title": "Slot-Details",
-    "empty_description": "Kein Slot ausgewählt.",
-    "open_label": "Slot-Details öffnen",
-    "description_one": "1 Komponente geplant",
-    "description_other": "{{count}} Komponenten geplant",
-    "components_label": "Komponenten",
-    "empty_components": "Noch keine Komponenten"
-  },
-  "tray": {
-    "title": "Zu {{slot}} hinzufügen",
-    "title_empty": "Zum Slot hinzufügen",
-    "subtitle": "Komponenten vormerken und gemeinsam hinzufügen.",
-    "tabs_label": "Quelle wählen",
-    "tab": {
-      "foods": "Lebensmittel",
-      "favorites": "Favoriten",
-      "recent": "Zuletzt"
-    },
-    "empty": {
-      "foods": "Keine passenden Lebensmittel.",
-      "favorites": "Noch keine Favoriten — markiere ein Lebensmittel mit ❤︎.",
-      "recent": "Keine zuletzt verwendeten Lebensmittel in diesem Zeitraum."
-    },
-    "staged_label": "Vorgemerkte Komponenten",
-    "staged_count_one": "1 vorgemerkt",
-    "staged_count_other": "{{count}} vorgemerkt",
-    "running_total": "Hinzufügen",
-    "empty_count": "Nichts vorgemerkt",
-    "commit_one": "1 hinzufügen",
-    "commit_other": "{{count}} hinzufügen",
-    "committing": "Wird hinzugefügt…",
-    "committed_one": "1 Komponente hinzugefügt.",
-    "committed_other": "{{count}} Komponenten hinzugefügt.",
-    "partial_failure_one": "1 Komponente konnte nicht hinzugefügt werden — bleibt vorgemerkt.",
-    "partial_failure_other": "{{count}} Komponenten konnten nicht hinzugefügt werden — bleiben vorgemerkt.",
-    "error_load_foods": "Lebensmittel konnten nicht geladen werden. Erneut versuchen.",
-    "error_load_templates": "Vorlagen konnten nicht geladen werden. Erneut versuchen.",
-    "preview": {
-      "title": "Dieser Teller",
-      "aria_label": "Tellervorschau",
-      "empty": "Noch nichts",
-      "empty_hint": "Wähle unten ein Lebensmittel, um zu beginnen.",
-      "summary_one": "+1 · +{{kcal}} kcal",
-      "summary_other": "+{{count}} · +{{kcal}} kcal",
-      "summary_existing_one": "1 auf Teller",
-      "summary_existing_other": "{{count}} auf Teller",
-      "macro_bar_label": "Aktuelle Makroverteilung — {{kcal}} kcal",
-      "unknown_food": "Unbekanntes Lebensmittel"
     }
   },
   "picker": {
-    "search": {
-      "placeholder": "Komponenten, Tags, Zutaten suchen…"
-    },
     "filter": {
       "favorites": "Favoriten",
       "recents": "Zuletzt",
@@ -350,20 +163,13 @@
     }
   },
   "plate": {
-    "add_component": "Komponente hinzufügen",
-    "swap_component": "Tauschen",
-    "remove_component": "Entfernen",
     "edit_plate": "Teller bearbeiten",
-    "delete_plate": "Teller löschen",
-    "deleted": "Teller gelöscht",
     "delete_confirm_title": "Teller löschen?",
     "delete_confirm_body": "Alle Komponenten dieses Tellers werden entfernt.",
     "note": "Notiz",
-    "note_placeholder": "Optionale Notiz zu dieser Mahlzeit...",
     "empty_cell": "Mahlzeit hinzufügen",
     "portions": "Portionen",
     "quantity": {
-      "portions_label": "Portionen",
       "amount_label": "Menge",
       "unit_label": "Einheit",
       "confidence": {
@@ -373,17 +179,7 @@
       },
       "unknown_unit": "Unbekannte Einheit"
     },
-    "pick_component": "Komponente wählen",
-    "filter_by_role": "Nach Rolle filtern",
-    "feedback": {
-      "label": "Wie lief es?",
-      "loved": "Geliebt",
-      "disliked": "Nicht gemocht",
-      "add_note": "Notiz hinzufügen",
-      "note_placeholder": "Notizen zu dieser Mahlzeit…",
-      "clear": "Bewertung entfernen",
-      "save_note": "Notiz speichern"
-    }
+    "filter_by_role": "Nach Rolle filtern"
   },
   "settings_page": {
     "eyebrow": "Einstellungen",
@@ -670,7 +466,6 @@
     "row_detail": "{{key}}, Reihenfolge {{order}}"
   },
   "ingredient": {
-    "kind_label": "Lebensmittel",
     "title": "Das Vorrats-Archiv",
     "subtitle": "Eine kuratierte Datenbank deiner botanischen Grundzutaten, sorgfältig erfasst für handwerkliche Ernährung.",
     "create": "Neue Zutat",
@@ -909,40 +704,122 @@
       "custom": "Eigene"
     },
     "exact_grams": "{{grams}} g",
-    "g": { "name": "Gramm" },
-    "kg": { "name": "Kilogramm" },
-    "mg": { "name": "Milligramm" },
-    "oz": { "name": "Unze" },
-    "lb": { "name": "Pfund" },
-    "ml": { "name": "Milliliter" },
-    "l": { "name": "Liter" },
-    "cl": { "name": "Zentiliter" },
-    "dl": { "name": "Deziliter" },
-    "tbsp": { "name": "Esslöffel" },
-    "tsp": { "name": "Teelöffel" },
-    "cup": { "name": "Tasse", "name_other": "Tassen" },
-    "floz": { "name": "Fl. oz." },
-    "pt": { "name": "Pint" },
-    "qt": { "name": "Quart" },
-    "gal": { "name": "Gallone", "name_other": "Gallonen" },
-    "piece": { "name": "Stück" },
-    "clove": { "name": "Zehe", "name_other": "Zehen" },
-    "slice": { "name": "Scheibe", "name_other": "Scheiben" },
-    "bunch": { "name": "Bund" },
-    "pinch": { "name": "Prise", "name_other": "Prisen" },
-    "stick": { "name": "Stange", "name_other": "Stangen" },
-    "can": { "name": "Dose", "name_other": "Dosen" },
-    "jar": { "name": "Glas", "name_other": "Gläser" },
-    "packet": { "name": "Päckchen" },
-    "serving": { "name": "Portion", "name_other": "Portionen" },
-    "stalk": { "name": "Stiel", "name_other": "Stiele" },
-    "pod": { "name": "Schote", "name_other": "Schoten" },
-    "head": { "name": "Kopf", "name_other": "Köpfe" },
-    "leaf": { "name": "Blatt", "name_other": "Blätter" },
-    "leaves": { "name": "Blätter" },
-    "sprig": { "name": "Zweig", "name_other": "Zweige" },
-    "tub": { "name": "Becher" },
-    "handful": { "name": "Handvoll" }
+    "g": {
+      "name": "Gramm"
+    },
+    "kg": {
+      "name": "Kilogramm"
+    },
+    "mg": {
+      "name": "Milligramm"
+    },
+    "oz": {
+      "name": "Unze"
+    },
+    "lb": {
+      "name": "Pfund"
+    },
+    "ml": {
+      "name": "Milliliter"
+    },
+    "l": {
+      "name": "Liter"
+    },
+    "cl": {
+      "name": "Zentiliter"
+    },
+    "dl": {
+      "name": "Deziliter"
+    },
+    "tbsp": {
+      "name": "Esslöffel"
+    },
+    "tsp": {
+      "name": "Teelöffel"
+    },
+    "cup": {
+      "name": "Tasse",
+      "name_other": "Tassen"
+    },
+    "floz": {
+      "name": "Fl. oz."
+    },
+    "pt": {
+      "name": "Pint"
+    },
+    "qt": {
+      "name": "Quart"
+    },
+    "gal": {
+      "name": "Gallone",
+      "name_other": "Gallonen"
+    },
+    "piece": {
+      "name": "Stück"
+    },
+    "clove": {
+      "name": "Zehe",
+      "name_other": "Zehen"
+    },
+    "slice": {
+      "name": "Scheibe",
+      "name_other": "Scheiben"
+    },
+    "bunch": {
+      "name": "Bund"
+    },
+    "pinch": {
+      "name": "Prise",
+      "name_other": "Prisen"
+    },
+    "stick": {
+      "name": "Stange",
+      "name_other": "Stangen"
+    },
+    "can": {
+      "name": "Dose",
+      "name_other": "Dosen"
+    },
+    "jar": {
+      "name": "Glas",
+      "name_other": "Gläser"
+    },
+    "packet": {
+      "name": "Päckchen"
+    },
+    "serving": {
+      "name": "Portion",
+      "name_other": "Portionen"
+    },
+    "stalk": {
+      "name": "Stiel",
+      "name_other": "Stiele"
+    },
+    "pod": {
+      "name": "Schote",
+      "name_other": "Schoten"
+    },
+    "head": {
+      "name": "Kopf",
+      "name_other": "Köpfe"
+    },
+    "leaf": {
+      "name": "Blatt",
+      "name_other": "Blätter"
+    },
+    "leaves": {
+      "name": "Blätter"
+    },
+    "sprig": {
+      "name": "Zweig",
+      "name_other": "Zweige"
+    },
+    "tub": {
+      "name": "Becher"
+    },
+    "handful": {
+      "name": "Handvoll"
+    }
   },
   "image": {
     "section_title": "Bild",
@@ -964,7 +841,6 @@
     "page_title": "Einkaufsliste",
     "title": "Einkaufsliste",
     "description": "Zutaten für diese Woche",
-    "button": "Einkaufen",
     "empty": "Keine Zutaten – füge zuerst Mahlzeiten zum Planer hinzu.",
     "preset_rest_of_window": "Rest dieses Zeitraums",
     "preset_this_window": "Dieser Zeitraum",
@@ -972,13 +848,6 @@
     "range_label": "{{from}} — {{to}}"
   },
   "nutrition": {
-    "title": "Wochennährwerte",
-    "button": "Nährwerte",
-    "empty": "Noch keine Mahlzeiten geplant.",
-    "week_total": "Wochengesamt",
-    "no_target_title": "Setze ein Tagesziel, um Fortschritt zu sehen",
-    "no_target_body": "Lege Kalorien- und Makroziele in den Einstellungen fest, damit die Tagesbalken gefüllt werden.",
-    "no_target_cta": "Einstellungen öffnen",
     "detail_title": "Nährwerte für {{name}}",
     "section_core": "Makros",
     "section_extended": "Erweiterte Makros",
@@ -1011,12 +880,7 @@
     "fat_abbr": "F",
     "fiber_abbr": "B",
     "kcal": "kcal",
-    "distribution": "Makro-Aufteilung",
-    "target": {
-      "on": "Im Ziel",
-      "near": "Nahe am Ziel",
-      "off": "Außerhalb des Ziels"
-    }
+    "distribution": "Makro-Aufteilung"
   },
   "profile": {
     "title": "Profil & Ziele",
@@ -1047,21 +911,13 @@
     "title": "Presets",
     "subtitle": "Speichere Teller, die du oft kochst, tagge sie und leg sie mit einem Klick auf jeden Tag.",
     "manage": "Presets verwalten",
-    "save_as": "Als Preset speichern",
-    "save_plate_as": "Teller als Preset speichern",
-    "save_selection_as": "Auswahl als Preset speichern",
-    "save_body": "Merk dir diesen Teller, damit du die Komponenten an jedem anderen Tag wieder auflegen kannst.",
-    "save_selection_body": "Speichere diese Teller als ein Preset — jeder Teller bleibt seinem Slot zugeordnet.",
-    "create": "Preset speichern",
     "name": "Preset-Name",
-    "name_placeholder": "z. B. Sonntags-Hähnchenschüssel",
     "name_help": "Kurz halten — so erscheint es in Auswahl und Befehlspalette.",
     "name_required": "Gib dem Preset einen Namen.",
     "name_suggestion_single": "{{food}}",
     "name_suggestion_bundle": "{{count}}er-Bundle",
     "tags_label": "Tags",
     "tags_placeholder": "Tag hinzufügen…",
-    "tags_help": "Aus Vorschlägen wählen oder eigene tippen. Beim Speichern kleingeschrieben.",
     "plates_count_one": "{{count}} Teller",
     "plates_count_other": "{{count}} Teller",
     "components_count_one": "{{count}} Komponente",
@@ -1115,12 +971,10 @@
       "undo": "Rückgängig",
       "undo_done": "Anwendung rückgängig gemacht."
     },
-    "created": "Preset „{{name}}\" gespeichert",
     "renamed": "Preset umbenannt",
     "duplicated": "Preset als „{{name}}\" dupliziert",
     "deleted": "Preset gelöscht",
     "copy_week": {
-      "open": "Aus Woche kopieren…",
       "title": "Aus vergangener Woche kopieren",
       "body": "Wähle eine vergangene Woche. Ihre Teller werden Tag-für-Tag auf diese Woche kopiert.",
       "source_label": "Quellwoche",
@@ -1147,12 +1001,6 @@
       "title": "Presets",
       "toggle": "Preset-Schublade umschalten",
       "drag_hint": "Auf Slot, Tag oder Woche ziehen. Shift+Drop überschreibt."
-    },
-    "empty_slot_picker": {
-      "title": "{{slot}} füllen",
-      "recents": "Zuletzt",
-      "all_matching": "Alle passenden",
-      "no_matches": "Noch keine Presets für diesen Slot."
     }
   },
   "availability": {
@@ -1311,14 +1159,11 @@
     "close": "Schließen",
     "yes": "Ja",
     "no": "Nein",
-    "collapse": "Einklappen",
-    "remove": "Entfernen",
     "opens_new_tab": "(öffnet in neuem Tab)",
     "retry": "Erneut versuchen"
   },
   "chat": {
     "title": "KI-Assistent",
-    "button": "Assistent",
     "description": "Unterhaltung mit {{model}}",
     "disabled": "KI-Assistent ist deaktiviert.",
     "provider_missing": "Kein KI-Anbieter konfiguriert. Setze PLANTRY_AI_PROVIDER und starte neu.",
@@ -1326,13 +1171,7 @@
       "placeholder": "Bitte plane einen Tag, tausche eine Mahlzeit oder erkläre ein Makro…",
       "aria_label": "Nachricht an die KI",
       "send": "Senden (Strg+Enter)",
-      "abort": "Stopp",
-      "mode_label": "Modus",
-      "mode": {
-        "default": "Standard",
-        "fill_empty": "Nur leere Slots füllen",
-        "replace_all": "Ganze Woche ersetzen"
-      }
+      "abort": "Stopp"
     },
     "new_conversation": "Neue Unterhaltung",
     "tool": {
@@ -1553,6 +1392,94 @@
       "copy_drag": "Beim Ziehen eine Mahlzeit kopieren",
       "this_panel": "Diese Übersicht zeigen",
       "drag": "Ziehen"
+    },
+    "generate_prompt": "Plane meine Woche basierend auf meinen Zielen und Zeitfenstern.",
+    "dnd": {
+      "reject_no_plate": "Für diese Mahlzeit ist „Kein Essen“ eingetragen.",
+      "reject_occupied": "Für diese Mahlzeit ist schon etwas geplant."
+    },
+    "stepper": {
+      "decrease": "{{label}} verringern",
+      "increase": "{{label}} erhöhen"
+    },
+    "sheet": {
+      "components": "Auf dem Teller",
+      "add_food": "Essen hinzufügen",
+      "swap": "{{name}} tauschen",
+      "remove": "{{name}} entfernen",
+      "portions_per_eater": "Portionen pro Person",
+      "portions_per_eater_of": "Portionen {{name}} pro Person",
+      "update_amount": "Menge übernehmen",
+      "eaters": "Personen",
+      "macros": "Pro Person",
+      "macro_line": "Eiweiß {{protein}} · Fett {{fat}} · Kohlenhydrate {{carbs}}",
+      "note": "Notiz",
+      "note_placeholder": "Was du dir zu dieser Mahlzeit merken willst",
+      "feedback": "Wie war's?",
+      "mark_no_plate": "Als Kein Essen markieren",
+      "save_routine": "Als Routine speichern",
+      "routine_name": "Name der Routine",
+      "routine_saved": "Als Routine „{{name}}“ gespeichert",
+      "delete": "Mahlzeit löschen"
+    },
+    "feedback": {
+      "loved": "Lecker",
+      "disliked": "Nicht nochmal",
+      "not_eaten": "Nicht gegessen"
+    },
+    "warning": {
+      "deficit_one": "Bei {{name}} fehlt {{amount}} Portion.",
+      "deficit_other": "Bei {{name}} fehlen {{amount}} Portionen.",
+      "frozen_deficit": "Von {{name}} sind zu wenige Portionen für die gefrorenen Mahlzeiten eingefroren.",
+      "past_keep_days": "{{name}} ist hier schon über dem Haltbarkeitsdatum.",
+      "leftover_before_cook": "{{name}} wird hier gegessen, bevor es gekocht ist.",
+      "cook_more": "{{count}} mehr kochen"
+    },
+    "batch": {
+      "cook_as_batch": "Vorkochen",
+      "meals": "Mahlzeiten",
+      "leftover_meals": "Reste-Mahlzeiten",
+      "no_cells": "Bis zum Haltbarkeitsdatum ist keine Mahlzeit frei.",
+      "create": "Vorkochen anlegen",
+      "portions": "Portionen kochen",
+      "freeze": "Portionen einfrieren",
+      "use_by": "Haltbar bis {{date}}",
+      "remove": "Vorkochen entfernen",
+      "remove_title": "Vorkochen entfernen?",
+      "remove_body_one": "Damit verschwindet auch der Rest auf {{count}} anderen Mahlzeit. Du kannst es gleich danach rückgängig machen.",
+      "remove_body_other": "Damit verschwinden auch die Reste auf {{count}} anderen Mahlzeiten. Du kannst es gleich danach rückgängig machen.",
+      "from": "Von {{weekday}} · {{name}} ({{position}} von {{meals}})",
+      "open": "Vorkochen öffnen"
+    },
+    "cell_sheet": {
+      "add_food": "Essen hinzufügen",
+      "use_routine": "Routine verwenden",
+      "no_routines": "Für diese Mahlzeit gibt es noch keine Routine. Speichere eine Mahlzeit als Routine, um sie wiederzuverwenden.",
+      "eat_leftover": "Rest essen",
+      "leftover_item": "{{name}} von {{weekday}}",
+      "plan_meal": "Diese Mahlzeit planen",
+      "note": "Grund",
+      "note_placeholder": "Auswärts, bei der Arbeit, …",
+      "edit_note": "Notiz speichern"
+    },
+    "picker": {
+      "title_add": "Essen hinzufügen",
+      "title_swap": "{{name}} tauschen",
+      "search": "Rezepte und Zutaten suchen",
+      "tab_recipes": "Rezepte",
+      "tab_ingredients": "Zutaten",
+      "tab_favorites": "Favoriten",
+      "tab_recent": "Zuletzt",
+      "role_all": "Alle",
+      "results": "Lebensmittel",
+      "empty": "Nichts gefunden. Versuch ein anderes Wort oder einen anderen Reiter.",
+      "staged": "Ausgewählt",
+      "unstage": "{{name}} entfernen",
+      "commit_one": "{{count}} hinzufügen",
+      "commit_other": "{{count}} hinzufügen",
+      "kcal_portion": "{{kcal}} kcal pro Portion",
+      "kcal_100g": "{{kcal}} kcal pro 100 g",
+      "ingredient": "Zutat"
     }
   },
   "batch": {

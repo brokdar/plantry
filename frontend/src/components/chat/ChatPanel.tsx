@@ -1,5 +1,5 @@
 import { Plus, Sparkles } from "lucide-react"
-import { useEffect, useMemo } from "react"
+import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
@@ -15,7 +15,7 @@ import {
   chatStreamStore,
   useChatStream as useChatStreamStore,
 } from "@/lib/stores/chat-stream"
-import { type ChatMode, useChatUI } from "@/lib/stores/chat-ui"
+import { useChatUI } from "@/lib/stores/chat-ui"
 
 import { ChatComposer } from "./ChatComposer"
 import { ChatMessage, messageToText } from "./ChatMessage"
@@ -33,8 +33,6 @@ export function ChatPanel({ range }: ChatPanelProps) {
   const setOpen = useChatUI((s) => s.setOpen)
   const activeConversationId = useChatUI((s) => s.activeConversationId)
   const setActiveConversation = useChatUI((s) => s.setActiveConversation)
-  const autoSend = useChatUI((s) => s.autoSend)
-  const clearAutoSend = useChatUI((s) => s.clearAutoSend)
   const { data: conversation } = useConversation(activeConversationId)
   const chatStream = useChatStream()
   const stream = useChatStreamStore()
@@ -51,12 +49,11 @@ export function ChatPanel({ range }: ChatPanelProps) {
     [conversation]
   )
 
-  async function handleSubmit(text: string, mode: ChatMode) {
+  async function handleSubmit(text: string) {
     try {
       await chatStream.mutateAsync({
         conversationId: activeConversationId ?? undefined,
         range,
-        mode: mode || undefined,
         message: text,
       })
       // The `conversation_ready` event captured by useChatStream already
@@ -73,22 +70,6 @@ export function ChatPanel({ range }: ChatPanelProps) {
     setActiveConversation(null)
     chatStreamStore.reset()
   }
-
-  // Auto-submit a queued message (e.g. from the "Fill empty slots" action) so
-  // the assistant starts working the moment the panel opens. clearAutoSend()
-  // runs first so the guard short-circuits every later re-run — fire exactly
-  // once per request.
-  useEffect(() => {
-    if (!autoSend || !settings?.enabled || chatStream.isStreaming) return
-    clearAutoSend()
-    void handleSubmit(autoSend, "fill_empty")
-  }, [
-    autoSend,
-    settings?.enabled,
-    chatStream.isStreaming,
-    clearAutoSend,
-    handleSubmit,
-  ])
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

@@ -22,8 +22,10 @@ import { sessionKeys } from "./keys"
 import { invalidatePlanViews, useUndoableRemoval } from "./plan"
 
 function invalidateSession(qc: QueryClient, id: number) {
-  invalidatePlanViews(qc)
-  void qc.invalidateQueries({ queryKey: sessionKeys.detail(id) })
+  return Promise.all([
+    invalidatePlanViews(qc),
+    qc.invalidateQueries({ queryKey: sessionKeys.detail(id) }),
+  ])
 }
 
 export function useSession(id: number) {
@@ -85,7 +87,7 @@ export function useDeleteSession() {
   return useMutation({
     mutationFn: (id: number) => deleteSession(id),
     onSuccess: (res, id) => {
-      invalidateSession(qc, id)
+      void invalidateSession(qc, id)
       offerUndo(res, "batch_removed")
     },
     onError: (err) => toastError(err, t),

@@ -13,9 +13,9 @@ test.describe("AI chat — history + new conversation", () => {
     const slot = await seedSlot(`slot.chat-hist-${uid()}`, "Moon", 993)
 
     try {
-      await page.goto("/")
+      await page.goto("/plan")
 
-      await page.getByTestId("chat-open-button").click()
+      await page.getByRole("button", { name: "Ask assistant" }).click()
       await page.getByTestId("chat-composer-input").fill("hello")
 
       const resp = page.waitForResponse(
@@ -52,9 +52,9 @@ test.describe("AI chat — history + new conversation", () => {
     const slot = await seedSlot(`slot.chat-new-${uid()}`, "Moon", 992)
 
     try {
-      await page.goto("/")
+      await page.goto("/plan")
 
-      await page.getByTestId("chat-open-button").click()
+      await page.getByRole("button", { name: "Ask assistant" }).click()
       await page.getByTestId("chat-composer-input").fill("hi there")
 
       const resp = page.waitForResponse(

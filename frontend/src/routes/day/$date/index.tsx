@@ -4,10 +4,10 @@ import { useTranslation } from "react-i18next"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 
 import { Button } from "@/components/ui/button"
-import { ReadOnlyPlannerGrid } from "@/components/planner/ReadOnlyPlannerGrid"
+import { ReadOnlyPlannerGrid } from "@/components/calendar/ReadOnlyPlannerGrid"
 import { usePlatesByDate } from "@/lib/queries/plates"
 import { useTimeSlots } from "@/lib/queries/slots"
-import type { PlannerDay } from "@/components/planner/PlannerGrid"
+import type { PlannerDay } from "@/components/calendar/ReadOnlyPlannerGrid"
 
 export const Route = createFileRoute("/day/$date/")({
   component: DayPage,
@@ -59,10 +59,7 @@ function DayPage() {
     >
       {/* Back link */}
       <Button asChild variant="ghost" size="sm" className="-ml-2">
-        <Link
-          to="/calendar"
-          search={{ mode: "month", edit: false, search: "" }}
-        >
+        <Link to="/calendar" search={{ mode: "month", search: "" }}>
           <ArrowLeft className="mr-1.5 size-4" />
           {t("day.back_to_calendar")}
         </Link>

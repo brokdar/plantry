@@ -61,142 +61,6 @@ function shiftYMD(ymd: string, days: number): string {
 // ─────────────────────────────────────────────────────────────────────
 
 test.describe("Presets", () => {
-  test("creates a preset from a planner slot and sees it in the library", async ({
-    page,
-  }) => {
-    const tag = uid()
-    const slot = await seedSlot(`slot.dinner_${tag}`, "Moon", 950)
-    const food = await seedLeafFood({ name: `Chicken ${tag}` })
-    const today = todayYMD()
-    const plate = await seedPlateWithComponent(today, slot.id, {
-      food_id: food.id,
-      amount: 150,
-      unit: "g",
-    })
-    let presetId: number | undefined
-
-    try {
-      await mockAnchorToday(page)
-      await page.goto("/")
-
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
-      await expect(cell).toBeVisible()
-      await expect(cell.getByText(`Chicken ${tag}`)).toBeVisible()
-
-      // Open the cell's overflow menu and click "Save as preset".
-      await cell.hover()
-      await cell.getByRole("button", { name: /actions/i }).click()
-      await page.getByRole("menuitem", { name: /save as preset/i }).click()
-
-      const dialog = page.getByTestId("save-preset-dialog")
-      await expect(dialog).toBeVisible()
-
-      const presetName = `Preset ${tag}`
-      await dialog.getByLabel(/preset name/i).fill(presetName)
-
-      const tagInput = dialog.getByTestId("save-preset-tag-input")
-      await tagInput.fill("quick")
-      await tagInput.press("Enter")
-
-      const createResp = page.waitForResponse(
-        (r) =>
-          r.url().endsWith("/api/presets") && r.request().method() === "POST"
-      )
-      await dialog.getByRole("button", { name: /save preset/i }).click()
-      const response = await createResp
-      expect(response.status()).toBe(201)
-      presetId = ((await response.json()) as { id: number }).id
-
-      await page.goto("/presets")
-      const card = page.locator(`[data-testid="preset-card-${presetId}"]`)
-      await expect(card).toBeVisible()
-      await expect(card.getByText(presetName)).toBeVisible()
-      await expect(card.getByText("quick").first()).toBeVisible()
-    } finally {
-      if (presetId !== undefined) await cleanupPreset(presetId)
-      // Plate may already be deleted by the preset/food cascade; ignore errors.
-      const ctx = await apiRequest.newContext({ baseURL: API })
-      await ctx.delete(`/api/plates/${plate.id}`)
-      await ctx.dispose()
-      await cleanupFood(food.id)
-      await cleanupSlot(slot.id)
-    }
-  })
-
-  test("applies a preset to an empty slot and the planner updates", async ({
-    page,
-  }) => {
-    const tag = uid()
-    const slot = await seedSlot(`slot.dinner_${tag}`, "Moon", 951)
-    const food = await seedLeafFood({ name: `Rice ${tag}` })
-    const today = todayYMD()
-
-    // Seed a source plate, build a preset from it, then delete the plate so
-    // today's slot is empty in the planner.
-    const sourcePlate = await seedPlateWithComponent(today, slot.id, {
-      food_id: food.id,
-      amount: 100,
-      unit: "g",
-    })
-    const preset = await seedPresetFromPlate(
-      `Bowl ${tag}`,
-      [sourcePlate.id],
-      []
-    )
-    const ctx0 = await apiRequest.newContext({ baseURL: API })
-    await ctx0.delete(`/api/plates/${sourcePlate.id}`)
-    await ctx0.dispose()
-
-    try {
-      await mockAnchorToday(page)
-      await page.goto("/")
-
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
-      await expect(cell).toBeVisible()
-
-      // Hover to reveal the preset shortcut, then click it.
-      await cell.hover()
-      const presetTrigger = cell.getByTestId("slot-empty-preset-trigger")
-      await presetTrigger.click()
-
-      const picker = page.getByTestId("empty-slot-preset-picker")
-      await expect(picker).toBeVisible()
-      await expect(
-        picker.getByRole("button", { name: new RegExp(`Bowl ${tag}`) })
-      ).toBeVisible()
-
-      const applyResp = page.waitForResponse(
-        (r) =>
-          new RegExp(`/api/presets/${preset.id}/apply$`).test(r.url()) &&
-          r.request().method() === "POST"
-      )
-      await picker
-        .getByRole("button", { name: new RegExp(`Bowl ${tag}`) })
-        .click()
-      const resp = await applyResp
-      expect(resp.status()).toBe(200)
-
-      // Slot now occupied — food name visible.
-      await expect(cell.getByText(`Rice ${tag}`)).toBeVisible()
-    } finally {
-      await cleanupPreset(preset.id)
-      // The applied plate references food; delete plates first by listing.
-      const ctx = await apiRequest.newContext({ baseURL: API })
-      const platesRes = await ctx.get(`/api/plates?from=${today}&to=${today}`)
-      const body = (await platesRes.json()) as {
-        plates?: { id: number; slot_id: number }[]
-      }
-      for (const p of body.plates ?? []) {
-        if (p.slot_id === slot.id) {
-          await ctx.delete(`/api/plates/${p.id}`)
-        }
-      }
-      await ctx.dispose()
-      await cleanupFood(food.id)
-      await cleanupSlot(slot.id)
-    }
-  })
-
   test("deletes a preset from the library", async ({ page }) => {
     const tag = uid()
     const slot = await seedSlot(`slot.dinner_${tag}`, "Moon", 952)
@@ -214,6 +78,7 @@ test.describe("Presets", () => {
     const ctx0 = await apiRequest.newContext({ baseURL: API })
     await ctx0.delete(`/api/plates/${sourcePlate.id}`)
     await ctx0.dispose()
+    let deleted = false
 
     try {
       await page.goto("/presets")
@@ -242,14 +107,20 @@ test.describe("Presets", () => {
       await dialog.getByRole("button", { name: /^delete$/i }).click()
       const resp = await deleteResp
       expect(resp.status()).toBe(204)
+      deleted = true
       await listRefetch
 
+      // Preset ids are reused (no AUTOINCREMENT), so a parallel spec's new
+      // preset can take this card's id: check the unique name instead.
       await expect(
-        page.locator(`[data-testid="preset-card-${preset.id}"]`)
+        page
+          .getByTestId(/^preset-card-/)
+          .filter({ hasText: `Breakfast ${tag}` })
       ).toHaveCount(0)
     } finally {
-      // Idempotent cleanup in case the test failed before delete.
-      await cleanupPreset(preset.id)
+      // Only if the test failed before the delete: the id may already
+      // belong to another spec's preset.
+      if (!deleted) await cleanupPreset(preset.id)
       await cleanupFood(food.id)
       await cleanupSlot(slot.id)
     }
@@ -286,10 +157,10 @@ test.describe("Presets", () => {
 
     try {
       await mockAnchorToday(page)
-      await page.goto("/")
+      await page.goto("/plan")
 
       // Cell is occupied — verify Rice visible.
-      const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
+      const cell = page.locator(`[data-cell-key="${today}|${slot.id}"]`)
       await expect(cell).toBeVisible()
       await expect(cell.getByText(`Rice ${tag}`)).toBeVisible()
 
@@ -363,16 +234,18 @@ test.describe("Presets", () => {
     const slot = await seedSlot(`slot.dinner_${tag}`, "Moon", 954)
     const food = await seedLeafFood({ name: `Quinoa ${tag}` })
 
-    // The planner anchors today; the CopyFromWeekDialog passes `from`
-    // (anchor date) as `target_start`. Source defaults to `from - 7 days`.
-    // Seed plates on `from-7`, `from-6`, `from-5` so they land on the visible
-    // window when copied.
-    const today = todayYMD()
-    const sourceStart = shiftYMD(today, -7)
+    // The board copies into its window start; the dialog's source defaults
+    // to the previous window. Seed its first three days.
+    const ctx0 = await apiRequest.newContext({ baseURL: API })
+    const planRes = await ctx0.get("/api/plan")
+    const { window: win } = (await planRes.json()) as {
+      window: { start: string; prev_start: string }
+    }
+    await ctx0.dispose()
+    const sourceStart = win.prev_start
 
     for (let i = 0; i < 3; i++) {
-      const date = shiftYMD(sourceStart, i)
-      await seedPlateWithComponent(date, slot.id, {
+      await seedPlateWithComponent(shiftYMD(sourceStart, i), slot.id, {
         food_id: food.id,
         amount: 100,
         unit: "g",
@@ -380,15 +253,9 @@ test.describe("Presets", () => {
     }
 
     try {
-      await mockAnchorToday(page)
-      await page.goto("/")
-
-      // Use the planner overflow menu (independent of empty-week state, which
-      // other parallel tests may pollute by seeding plates on the current
-      // window). The dialog's source defaults to `today - 7d`, exactly where
-      // the seed lives.
-      await page.getByTestId("planner-overflow").click()
-      await page.getByTestId("copy-from-week-open").click()
+      await page.goto("/plan")
+      await page.getByRole("button", { name: "More plan actions" }).click()
+      await page.getByRole("menuitem", { name: "Copy a previous week" }).click()
 
       const dialog = page.getByTestId("copy-from-week-dialog")
       await expect(dialog).toBeVisible()
@@ -402,22 +269,17 @@ test.describe("Presets", () => {
       const resp = await copyResp
       expect(resp.status()).toBe(200)
 
-      // All three target dates (today, today+1, today+2) are now occupied.
-      const ctx = await apiRequest.newContext({ baseURL: API })
-      const platesRes = await ctx.get(
-        `/api/plates?from=${today}&to=${shiftYMD(today, 2)}`
-      )
-      const body = (await platesRes.json()) as {
-        plates?: { date: string; slot_id: number }[]
+      // The window's first three days are now occupied.
+      for (let i = 0; i < 3; i++) {
+        await expect(
+          page.locator(`[data-cell-key="${shiftYMD(win.start, i)}|${slot.id}"]`)
+        ).toContainText(`Quinoa ${tag}`)
       }
-      await ctx.dispose()
-      const matching = (body.plates ?? []).filter((p) => p.slot_id === slot.id)
-      expect(matching.length).toBe(3)
     } finally {
       // Clean up plates from both source and target windows.
       const ctx = await apiRequest.newContext({ baseURL: API })
       const platesRes = await ctx.get(
-        `/api/plates?from=${shiftYMD(sourceStart, -1)}&to=${shiftYMD(today, 10)}`
+        `/api/plates?from=${sourceStart}&to=${shiftYMD(win.start, 10)}`
       )
       const body = (await platesRes.json()) as {
         plates?: { id: number; slot_id: number }[]

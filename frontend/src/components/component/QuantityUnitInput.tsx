@@ -28,16 +28,15 @@ interface QuantityUnitInputProps {
   /** Fired whenever the user changes amount or unit. */
   onChange: (next: QuantityUnitValue) => void
   /**
-   * Compact mode hides the quick-amount chips and reduces vertical padding.
-   * Used in the slot sheet's component row, where the chips would compete
-   * with row actions.
+   * Compact mode hides the quick-amount chips. Used for staged foods in the
+   * food picker, where the chips would compete with the list.
    */
   compact?: boolean
   className?: string
 }
 
 /**
- * QuantityUnitInput is the *leaf* counterpart to `PortionStepper`. It edits
+ * QuantityUnitInput is the *leaf* counterpart to `QuantityStepper`. It edits
  * the user-facing pair `(amount, unit)` for a leaf food on a plate; grams are
  * resolved server-side at save time so the cell's kcal stays consistent with
  * the food's portion table.
@@ -122,10 +121,7 @@ export function QuantityUnitInput({
           onChange={(e) => handleAmountChange(e.target.value)}
           aria-label={t("plate.quantity.amount_label")}
           data-testid="quantity-unit-amount"
-          className={cn(
-            "h-8 w-20 shrink-0 border-outline-variant/50 bg-surface-container-lowest font-mono text-[12.5px] tabular-nums focus-visible:border-primary/60",
-            compact && "h-7 w-16 text-[11.5px]"
-          )}
+          className="h-11 w-20 shrink-0 border-line bg-panel text-body tabular-nums md:pointer-fine:h-9"
         />
         <div className="min-w-0 flex-1">
           <UnitSelect
@@ -134,18 +130,13 @@ export function QuantityUnitInput({
             portions={portions}
             placeholder={t("plate.quantity.unit_label")}
             testId="quantity-unit-unit"
-            className={cn(
-              "h-8 border-outline-variant/50 bg-surface-container-lowest text-[12.5px]",
-              compact && "h-7 text-[11.5px]"
-            )}
+            ariaLabel={t("plate.quantity.unit_label")}
+            className="h-11 border-line bg-panel text-body md:pointer-fine:h-9"
           />
         </div>
         {sourceLabelKey && resolved.grams > 0 && (
           <span
-            className={cn(
-              "shrink-0 self-center rounded-full border px-2 py-0.5 font-mono text-[10.5px] tabular-nums",
-              confidenceTone(resolved.source)
-            )}
+            className="shrink-0 self-center text-caption text-ink-muted tabular-nums"
             data-testid="quantity-unit-grams"
             data-source={resolved.source}
           >
@@ -172,10 +163,10 @@ export function QuantityUnitInput({
                 aria-pressed={active}
                 data-testid={`quantity-unit-chip-${c}`}
                 className={cn(
-                  "rounded-full border px-2 py-0.5 font-mono text-[10.5px] tabular-nums transition-colors",
+                  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border px-3 text-small tabular-nums transition-colors duration-150 ease-out focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel focus-visible:outline-none md:pointer-fine:min-h-8",
                   active
-                    ? "border-primary/60 bg-primary/12 text-primary"
-                    : "border-outline-variant/40 bg-surface-container-lowest text-on-surface-variant hover:border-primary/40"
+                    ? "border-accent bg-accent text-on-accent"
+                    : "border-line text-ink hover:bg-panel-sunken"
                 )}
               >
                 {c}
@@ -291,17 +282,5 @@ function confidenceLabelKey(source: GramsSource): string | null {
       return null
     default:
       return null
-  }
-}
-
-function confidenceTone(source: GramsSource): string {
-  switch (source) {
-    case "portion":
-      return "border-primary/40 bg-primary/10 text-primary"
-    case "default":
-    case "direct":
-      return "border-secondary/40 bg-secondary/10 text-secondary-foreground"
-    default:
-      return "border-outline-variant/50 bg-surface-container-low/60 text-on-surface-variant"
   }
 }

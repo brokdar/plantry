@@ -2,9 +2,11 @@ import {
   cleanupFood,
   cleanupSlot,
   expect,
-  pickAndCommitFood,
+  futureWindow,
+  openCellSheet,
   seedLeafFood,
   seedSlot,
+  stageFood,
   test,
   uid,
 } from "./helpers"
@@ -19,6 +21,7 @@ test("mutation error shows a destructive toast with i18n message", async ({
   const tag = uid()
   const slot = await seedSlot(`slot.toast-${tag}`, "Moon", 995)
   const food = await seedLeafFood({ name: `Toast food ${tag}` })
+  const { start, days } = await futureWindow()
 
   try {
     // Intercept plate creation to force a 500.
@@ -34,17 +37,11 @@ test("mutation error shows a destructive toast with i18n message", async ({
       }
     })
 
-    await page.goto("/")
-    const cell = page.locator(`[data-testid="cell-0-${slot.id}"]`)
-    await cell.getByRole("button", { name: /plan meal/i }).click()
-    const sheet = page.getByRole("dialog")
-    await expect(sheet).toBeVisible()
-    await sheet.locator("input").first().fill(`Toast food ${tag}`)
-    // Plate POST is intercepted to 500; the test asserts the toast surface,
-    // not the response object — skip the response wait.
-    await pickAndCommitFood(page, sheet, new RegExp(`Toast food ${tag}`), {
-      awaitResponse: false,
-    })
+    await page.goto(`/plan?start=${start}`)
+    const sheet = await openCellSheet(page, days[0], slot.id)
+    await sheet.getByRole("button", { name: "Add food" }).click()
+    await stageFood(sheet, `Toast food ${tag}`, "Ingredients")
+    await sheet.getByTestId("food-picker-commit").click()
 
     // Toast rendered by sonner — text taken from i18n.
     await expect(page.getByText("Something went wrong.")).toBeVisible()

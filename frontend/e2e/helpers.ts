@@ -4,7 +4,6 @@ import {
   test as baseTest,
   type Locator,
   type Page,
-  type Response,
 } from "@playwright/test"
 
 export const API = "http://localhost:8080"
@@ -77,6 +76,8 @@ export interface SeedComposedInput {
   name: string
   role: string
   reference_portions?: number
+  /** Days a cooked batch keeps (1–7); null uses the plan default. */
+  keep_days?: number
   children?: SeedComposedChild[]
   instructions?: { step_number: number; text: string }[]
   tags?: string[]
@@ -167,19 +168,22 @@ export async function seedSlot(
   return body
 }
 
+/** Deletes the slot's plates from a year back to two years ahead. The API
+ *  lists at most 366 days at a time, so this pages through the range. */
 export async function deletePlatesUsingSlot(slotId: number) {
   const ctx = await apiRequest.newContext({ baseURL: API })
-  const now = new Date()
-  const from = new Date(now.getFullYear() - 1, 0, 1).toISOString().slice(0, 10)
-  const to = new Date(now.getFullYear() + 1, 11, 31).toISOString().slice(0, 10)
-  const platesRes = await ctx.get(`/api/plates?from=${from}&to=${to}`)
-  const body = (await platesRes.json()) as {
-    plates?: { id: number; slot_id: number }[]
-  }
-  for (const p of body.plates ?? []) {
-    if (p.slot_id === slotId) {
-      await ctx.delete(`/api/plates/${p.id}`)
+  const today = new Date().toISOString().slice(0, 10)
+  for (let from = addDays(today, -360); from < addDays(today, 720); ) {
+    const to = addDays(from, 359)
+    const platesRes = await ctx.get(`/api/plates?from=${from}&to=${to}`)
+    expect(platesRes.ok(), await platesRes.text()).toBeTruthy()
+    const body = (await platesRes.json()) as {
+      plates: { id: number; slot_id: number }[]
     }
+    for (const p of body.plates) {
+      if (p.slot_id === slotId) await ctx.delete(`/api/plates/${p.id}`)
+    }
+    from = addDays(to, 1)
   }
   await ctx.dispose()
 }
@@ -309,42 +313,64 @@ export async function cleanupTemplate(id: number) {
   await ctx.dispose()
 }
 
-// ── Picker tray helpers ───────────────────────────────────────────────
-//
-// The redesigned picker stages foods then commits via a single "Add N"
-// button (`data-testid="tray-commit"`). The plate POST + component POSTs
-// fire on commit, not on result-row click. These helpers encapsulate
-// that two-step flow so tests don't drift when the tray UI evolves.
+// ── Plan board helpers ────────────────────────────────────────────────
+
+/** `iso` plus `n` calendar days (YYYY-MM-DD). */
+export function addDays(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
+}
+
+/** Tests started by this worker; rotates its windows. */
+let windowsUsed = 0
 
 /**
- * Stage a food result and commit the tray. Returns the response of the
- * first matching POST (plate or component) so callers can await mutation
- * settlement before asserting UI state. Pass a custom matcher via
- * `responseMatcher` if your test cares about a specific POST.
+ * A future window for the running test, 8–50 windows after the anchored one
+ * (inside the year cleanupSlot covers). Each parallel worker owns its own
+ * band of ten windows (`parallelIndex` × 11, a spare week between bands),
+ * and only one test runs per worker at a time, so concurrent tests never
+ * share a window: one test's Clear this week or No plate overrides cannot
+ * touch another's plates. Returns the start and the seven dates.
  */
-export async function pickAndCommitFood(
+export async function futureWindow(): Promise<{
+  start: string
+  days: string[]
+}> {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  const res = await ctx.get("/api/plan")
+  expect(res.ok()).toBeTruthy()
+  const { window } = (await res.json()) as { window: { start: string } }
+  await ctx.dispose()
+  const band = baseTest.info().parallelIndex
+  const weeksAhead = 8 + band * 11 + (windowsUsed++ % 10)
+  const start = addDays(window.start, 7 * weeksAhead)
+  return { start, days: Array.from({ length: 7 }, (_, i) => addDays(start, i)) }
+}
+
+/** The board cell at (date, slotId). */
+export function planCell(page: Page, date: string, slotId: number): Locator {
+  return page.locator(`[data-cell-key="${date}|${slotId}"]`)
+}
+
+/** Opens a board cell and returns its sheet. */
+export async function openCellSheet(
   page: Page,
+  date: string,
+  slotId: number
+): Promise<Locator> {
+  await planCell(page, date, slotId).getByTestId("plan-cell").click()
+  const sheet = page.getByTestId("plan-sheet")
+  await expect(sheet).toBeVisible()
+  return sheet
+}
+
+/** In the food picker: searches `name` on `tab` and stages the food. */
+export async function stageFood(
   sheet: Locator,
-  foodName: string | RegExp,
-  options: {
-    /** Override the default plate/component POST matcher. */
-    responseMatcher?: (response: Response) => boolean
-    /** Skip awaiting the response (e.g. when a 500 is forced and no response is expected). */
-    awaitResponse?: boolean
-  } = {}
-): Promise<Response | undefined> {
-  const matcher =
-    options.responseMatcher ??
-    ((r: Response) =>
-      r.url().includes("/plates") && r.request().method() === "POST")
-  const nameMatcher =
-    typeof foodName === "string" ? new RegExp(foodName) : foodName
-  await sheet.getByRole("button", { name: nameMatcher }).first().click()
-  if (options.awaitResponse === false) {
-    await sheet.getByTestId("tray-commit").click()
-    return undefined
-  }
-  const resp = page.waitForResponse(matcher)
-  await sheet.getByTestId("tray-commit").click()
-  return await resp
+  name: string,
+  tab: "Recipes" | "Ingredients" = "Recipes"
+) {
+  await sheet.getByRole("tab", { name: tab }).click()
+  await sheet.getByTestId("food-picker-search").fill(name)
+  await sheet.getByTestId("food-picker-row").filter({ hasText: name }).click()
 }

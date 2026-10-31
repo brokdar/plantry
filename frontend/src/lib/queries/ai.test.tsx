@@ -58,7 +58,6 @@ describe("useChatStream", () => {
       await act(async () => {
         await result.current.mutateAsync({
           message: "plan",
-          mode: "fill_empty",
           range: { from: "2026-10-31", to: "2026-11-06" },
         })
       })
@@ -67,7 +66,6 @@ describe("useChatStream", () => {
       const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
       expect(url).toBe("/api/ai/chat")
       expect(JSON.parse(init.body as string)).toEqual({
-        mode: "fill_empty",
         message: "plan",
         today: "2026-10-26",
         from: "2026-10-31",

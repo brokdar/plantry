@@ -119,8 +119,7 @@ export function useDuplicatePreset() {
   })
 }
 
-/** Apply a preset to a target date. Invalidates plates + nutrition so the
- * planner refetches after the mutation. */
+/** Apply a preset to a target date; refreshes the plan views. */
 export function useApplyPreset() {
   const qc = useQueryClient()
   const { t } = useTranslation()
@@ -134,8 +133,8 @@ export function useApplyPreset() {
     }) => applyPreset(presetId, input),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
-      void qc.invalidateQueries({ queryKey: ["nutrition"] })
       void qc.invalidateQueries({ queryKey: presetKeys.lists() })
+      void invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })
@@ -148,8 +147,7 @@ export function useCopyWeek() {
     mutationFn: (input: CopyWeekInput) => copyWeek(input),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
-      void qc.invalidateQueries({ queryKey: ["nutrition"] })
-      invalidatePlanViews(qc)
+      void invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })
@@ -171,8 +169,7 @@ export function useUndoApply() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
       void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
-      void qc.invalidateQueries({ queryKey: ["nutrition"] })
-      invalidatePlanViews(qc)
+      void invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })

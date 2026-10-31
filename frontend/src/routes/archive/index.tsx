@@ -4,7 +4,7 @@ export const Route = createFileRoute("/archive/")({
   beforeLoad: () => {
     throw redirect({
       to: "/calendar",
-      search: { mode: "agenda", edit: false, search: "" },
+      search: { mode: "agenda", search: "" },
     })
   },
 })

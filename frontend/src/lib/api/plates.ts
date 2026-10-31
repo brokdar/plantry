@@ -2,15 +2,6 @@ import { apiFetch } from "./client"
 import type { PlateFeedback } from "./feedback"
 import type { FoodKind, FoodRole } from "./foods"
 
-export interface MacrosResponse {
-  kcal: number
-  protein: number
-  fat: number
-  carbs: number
-  fiber: number
-  sodium: number
-}
-
 // Week is kept as an in-memory aggregate for plate-patch helpers used by
 // optimistic component mutations (swap, add, remove). It is not fetched from
 // the server; the week cache slots are populated by the mutation hooks only.
@@ -146,41 +137,6 @@ export type PlateComponentQuantity =
   | { portions: number }
   | { amount: number; unit: string }
 
-/**
- * componentMultiplier mirrors the backend `PlateComponent.Multiplier` rule:
- *   - composed → portions
- *   - leaf     → grams / 100
- *   - missing both → null (caller should render a placeholder)
- *
- * Use this anywhere the UI needs to scale per-portion (composed) or
- * per-100 g (leaf) macros for a plate component.
- */
-export function componentMultiplier(pc: PlateComponent): number | null {
-  if (pc.portions != null) return pc.portions
-  if (pc.grams != null) return pc.grams / 100
-  return null
-}
-
-/**
- * componentToAddInput projects an existing PlateComponent into the kind-aware
- * `ComponentInput` shape used when copying / templating / cloning a
- * plate. Composed components carry their integer portions; leaf components
- * carry the user-entered amount + unit (grams will be re-resolved
- * server-side at write time, mirroring the original create path).
- *
- * Falls back to `{ portions: 1 }` when neither shape is set — that should
- * never happen against a real backend response but keeps the helper total.
- */
-export function componentToAddInput(pc: PlateComponent): ComponentInput {
-  if (pc.portions != null) {
-    return { food_id: pc.food_id, portions: pc.portions }
-  }
-  if (pc.amount != null && pc.unit != null) {
-    return { food_id: pc.food_id, amount: pc.amount, unit: pc.unit }
-  }
-  return { food_id: pc.food_id, portions: 1 }
-}
-
 export function listPlates(
   from: string,
   to: string
@@ -234,20 +190,4 @@ export function deletePlateComponent(
   pcId: number
 ): Promise<Plate> {
   return apiFetch(`/plates/${plateId}/components/${pcId}`, { method: "DELETE" })
-}
-
-export interface PlateMacrosEntry {
-  plate_id: number
-  date: string
-  macros: MacrosResponse
-}
-
-/** GET /api/plates/macros?from=&to= — per-plate macro totals for a date range. */
-export function listPlateMacros(
-  from: string,
-  to: string
-): Promise<{ plates: PlateMacrosEntry[] }> {
-  return apiFetch(
-    `/plates/macros?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-  )
 }
