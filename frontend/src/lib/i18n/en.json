@@ -1098,7 +1098,8 @@
     "history_count_other": "Cooked {{count}} times",
     "history_never": "Not cooked yet",
     "buy": "buy {{quantity}}",
-    "cook_now": "Cook now"
+    "cook_now": "Cook now",
+    "ingredients_error": "The ingredients didn't load. Check that Plantry is running, then try again."
   },
   "nutrition_warning": {
     "title": "Nutrition is incomplete",

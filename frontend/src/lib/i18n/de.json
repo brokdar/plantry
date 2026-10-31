@@ -1087,7 +1087,8 @@
     "history_count_other": "{{count}}-mal gekocht",
     "history_never": "Noch nicht gekocht",
     "buy": "{{quantity}} kaufen",
-    "cook_now": "Jetzt kochen"
+    "cook_now": "Jetzt kochen",
+    "ingredients_error": "Die Zutaten wurden nicht geladen. Prüf, ob Plantry läuft, und versuch es noch einmal."
   },
   "nutrition_warning": {
     "title": "Nährwerte unvollständig",

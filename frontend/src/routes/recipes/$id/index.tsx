@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
 
 import { RecipeDetailPage } from "@/components/recipes/RecipeDetailPage"
-
-const MAX_PORTIONS = 100
+import { MAX_PORTIONS } from "@/lib/portions"
 
 export const Route = createFileRoute("/recipes/$id/")({
   // `portions` starts the stepper (e.g. coming back from cook mode); out of

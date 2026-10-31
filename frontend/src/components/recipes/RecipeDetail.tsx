@@ -13,9 +13,11 @@ import {
 import { QuantityStepper } from "@/components/plan/QuantityStepper"
 import { useSettingField } from "@/components/settings/setting-field"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { ComposedFood, ScaledIngredient } from "@/lib/api/foods"
 import { todayISO } from "@/lib/dates"
 import { imageURL } from "@/lib/image-url"
+import { MAX_PORTIONS } from "@/lib/portions"
 import { formatQuantity, type Formatter } from "@/lib/plan/format"
 import {
   useCreateVariant,
@@ -27,8 +29,6 @@ import { lastEatenAgo } from "@/lib/recipes/library"
 import { cn } from "@/lib/utils"
 
 import { NutritionCompletenessWarning } from "./NutritionCompletenessWarning"
-
-const MAX_PORTIONS = 100
 
 type RecipeDetailProps = {
   recipe: ComposedFood
@@ -258,6 +258,33 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
             <p className="text-sm text-ink-muted">
               {t("recipe_detail.no_ingredients")}
             </p>
+          ) : !scaled.data && scaled.isError ? (
+            <div
+              role="alert"
+              className="flex flex-col items-start gap-2 rounded-lg border border-line bg-panel p-4"
+              data-testid="recipe-ingredients-error"
+            >
+              <p className="text-body text-ink">
+                {t("recipe_detail.ingredients_error")}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="max-md:min-h-11"
+                onClick={() => void scaled.refetch()}
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          ) : !scaled.data ? (
+            <div
+              className="flex flex-col gap-2"
+              data-testid="recipe-ingredients-loading"
+            >
+              {(recipe.children ?? []).map((c) => (
+                <Skeleton key={c.id} className="h-6 w-full" />
+              ))}
+            </div>
           ) : (
             <ul
               className={cn(
@@ -267,7 +294,7 @@ export function RecipeDetail({ recipe, portions: initial }: RecipeDetailProps) {
               aria-busy={scaled.isFetching}
               data-testid="recipe-ingredients-list"
             >
-              {(scaled.data?.ingredients ?? []).map((ing) => (
+              {scaled.data.ingredients.map((ing) => (
                 <IngredientLine key={ing.child_id} ing={ing} f={i18n} />
               ))}
             </ul>

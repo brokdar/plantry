@@ -248,6 +248,35 @@ describe("RecipeDetail", () => {
     )
   })
 
+  it("says Cooked N times without a last-eaten date", async () => {
+    renderWithRouter(
+      <RecipeDetail recipe={{ ...recipe, times_cooked: 2, last_eaten: null }} />
+    )
+    expect(await screen.findByTestId("recipe-history")).toHaveTextContent(
+      /^Cooked 2 times$/
+    )
+  })
+
+  it("shows an error with Retry when scaling fails, and Retry recovers", async () => {
+    vi.mocked(getScaled).mockRejectedValueOnce(new Error("offline"))
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+
+    const error = await screen.findByTestId("recipe-ingredients-error")
+    expect(error).toHaveTextContent("The ingredients didn't load.")
+    await user.click(within(error).getByRole("button", { name: "Try again" }))
+    expect(await screen.findByText("400 g")).toBeInTheDocument()
+    expect(screen.queryByTestId("recipe-ingredients-error")).toBeNull()
+  })
+
+  it("shows a skeleton while the scaled list loads", async () => {
+    vi.mocked(getScaled).mockReturnValueOnce(new Promise(() => {}))
+    renderWithRouter(<RecipeDetail recipe={recipe} />)
+    expect(
+      await screen.findByTestId("recipe-ingredients-loading")
+    ).toBeInTheDocument()
+  })
+
   it("says Not cooked yet without history", async () => {
     renderWithRouter(<RecipeDetail recipe={recipe} />)
     expect(await screen.findByTestId("recipe-history")).toHaveTextContent(
