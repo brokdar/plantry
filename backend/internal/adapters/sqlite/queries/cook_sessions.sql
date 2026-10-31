@@ -57,5 +57,9 @@ ORDER BY pc.cook_session_id, p.date, p.slot_id, pc.id;
 -- name: ListCookSessionsByIDs :many
 SELECT * FROM cook_sessions WHERE id IN (sqlc.slice(ids)) ORDER BY id;
 
+-- name: ListPlateIDsBySessionIDs :many
+-- The plates with a component eating from one of the sessions.
+SELECT DISTINCT plate_id FROM plate_components WHERE cook_session_id IN (sqlc.slice(ids)) ORDER BY plate_id;
+
 -- name: SetSessionsState :exec
 UPDATE cook_sessions SET state = sqlc.arg(state), updated_at = datetime('now') WHERE id IN (sqlc.slice(ids));

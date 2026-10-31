@@ -50,6 +50,11 @@ WHERE id IN (
     LIMIT 500
 );
 
+-- name: FailInterruptedAIRuns :execrows
+-- At startup no run is running: a row still 'running' was cut off by a stop.
+UPDATE ai_runs SET status = 'error', error_key = 'error.server', finished_at = sqlc.arg(finished_at)
+WHERE status = 'running';
+
 -- name: GetPlanRun :one
 -- A generation run as GET /api/plan/runs/{id} shows it (B6).
 SELECT id, kind, status, chooser, notes, error_key, scope_json, violations_json, score_json, window_start, window_end

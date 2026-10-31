@@ -336,6 +336,29 @@ func TestAIRunRepo_PlanRun(t *testing.T) {
 	}
 }
 
+func TestAIRunRepo_FailInterruptedRuns(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+	running, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindGenerate, StartedAt: time.Now()})
+	require.NoError(t, err)
+	done, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: time.Now()})
+	require.NoError(t, err)
+	require.NoError(t, repo.FinishRun(ctx, airun.RunEnd{ID: done, Status: airun.StatusOK, FinishedAt: time.Now()}))
+
+	n, err := repo.FailInterruptedRuns(ctx, time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), n)
+
+	var status, key string
+	var finished sql.NullString
+	require.NoError(t, db.QueryRow(`SELECT status, error_key, finished_at FROM ai_runs WHERE id = ?`, running).Scan(&status, &key, &finished))
+	assert.Equal(t, []string{"error", "error.server"}, []string{status, key})
+	assert.True(t, finished.Valid)
+	require.NoError(t, db.QueryRow(`SELECT status FROM ai_runs WHERE id = ?`, done).Scan(&status))
+	assert.Equal(t, "ok", status, "finished runs stay")
+}
+
 func TestAIRunRepo_RunIdentityRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	db := testhelper.NewTestDB(t)

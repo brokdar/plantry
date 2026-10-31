@@ -430,7 +430,9 @@ func TestService_RegenerateScopes(t *testing.T) {
 		e.ok(e.generate(e.req()))
 		before := e.window()
 		var deleted []string
-		for _, k := range []string{key(sun, e.lunch), key(tue, e.lunch)} {
+		// Sunday's and Tuesday's cook plates: their batches stay, so refilling them cooks
+		// at the same occasion.
+		for _, k := range []string{key(sun, e.dinner), key(tue, e.dinner)} {
 			_, err := e.plates.Delete(e.ctx, before[k].ID)
 			require.NoError(t, err)
 			deleted = append(deleted, k)
@@ -439,7 +441,7 @@ func TestService_RegenerateScopes(t *testing.T) {
 
 		id := e.regenerate(planning.Scope{Kind: planning.ScopeEmptyCells})
 
-		assert.NotEqual(t, airun.StatusError, e.runs.end(id).Status)
+		e.ok(id)
 		after := e.window()
 		assert.Empty(t, regenerated(mid, after), "nothing else changes")
 		assert.Len(t, after, len(before))
@@ -625,6 +627,66 @@ func TestService_EatersByDateAndNewRecipe(t *testing.T) {
 	e = withHistory(t)
 	e.ok(e.generate(e.req()))
 	assert.Zero(t, newRecipes(e), "plan.explore_per_week 0: none")
+}
+
+// A regenerate keeps the guests of the plates it replaces (D16).
+func TestService_RegenerateKeepsGuests(t *testing.T) {
+	e := newSvcEnv(t)
+	req := e.req()
+	req.EatersByDate = map[string]float64{tue: 3}
+	e.ok(e.generate(req))
+	p := e.window()[key(tue, e.dinner)]
+	require.InDelta(t, 3.0, p.Eaters, 1e-9)
+
+	id := e.regenerate(planning.Scope{Kind: planning.ScopePlate, PlateID: p.ID})
+
+	e.ok(id)
+	got := e.window()[key(tue, e.dinner)]
+	assert.NotEqual(t, p.ID, got.ID, "replaced")
+	assert.InDelta(t, 3.0, got.Eaters, 1e-9, "the guests stay")
+}
+
+type panicChooser struct{}
+
+func (panicChooser) Choose(context.Context, planning.ChooseInput) (planning.Proposal, error) {
+	panic("chooser bug")
+}
+
+// waitChooser blocks until the run's context ends.
+type waitChooser struct{}
+
+func (waitChooser) Choose(ctx context.Context, _ planning.ChooseInput) (planning.Proposal, error) {
+	<-ctx.Done()
+	return planning.Proposal{}, ctx.Err()
+}
+
+// A panicking chooser and a run past its timeout end the run as an error
+// without rows and free the window.
+func TestService_PanicAndTimeoutEndTheRun(t *testing.T) {
+	for name, edit := range map[string]func(*planning.Deps){
+		"panic": func(d *planning.Deps) {
+			d.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: panicChooser{}}
+		},
+		"timeout": func(d *planning.Deps) {
+			d.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: waitChooser{}}
+			d.RunTimeout = time.Millisecond
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newSvcEnv(t)
+			edit(&e.deps)
+			e.svc = planning.NewService(e.deps)
+
+			id := e.generate(e.req())
+
+			end := e.runs.end(id)
+			assert.Equal(t, airun.StatusError, end.Status)
+			assert.Equal(t, "error.server", end.ErrorKey)
+			assert.Empty(t, e.window(), "no rows")
+			_, running := e.svc.Running(e.start)
+			assert.False(t, running, "the window is free")
+		})
+	}
 }
 
 // B6-AC7.

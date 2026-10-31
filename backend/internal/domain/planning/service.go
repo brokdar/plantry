@@ -114,14 +114,17 @@ func (s *Service) Generate(ctx context.Context, req Request) (int64, error) {
 }
 
 // Regenerate starts a day, plate, side or empty_cells generation and
-// returns its run id.
+// returns its run id. It keeps each day's eaters as the plates it replaces
+// (or, for empty cells, the day's other plates) have them, and asks for no
+// new recipe.
 func (s *Service) Regenerate(ctx context.Context, req Request) (int64, error) {
 	switch req.Scope.Kind {
 	case ScopeDay, ScopePlate, ScopeSide, ScopeEmptyCells:
 	default:
 		return 0, fmt.Errorf("%w: kind %q", domain.ErrInvalidScope, req.Scope.Kind)
 	}
-	req.EatersByDate, req.IncludeNewRecipe = nil, nil
+	noNew := false
+	req.EatersByDate, req.IncludeNewRecipe = nil, &noNew
 	return s.start(ctx, airun.KindRegenerate, req)
 }
 
@@ -187,7 +190,10 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request) (int6
 		return 0, err
 	}
 	j.kind, j.chooser, j.name = kind, chooser, name
-	j.eaters, j.includeNew, j.instruction = req.EatersByDate, includeNew, req.Instruction
+	if kind == airun.KindGenerate {
+		j.eaters = req.EatersByDate
+	}
+	j.includeNew, j.instruction = includeNew, req.Instruction
 	scopeJSON, err := json.Marshal(j.record())
 	if err != nil {
 		return 0, err
@@ -331,6 +337,15 @@ func (s *Service) resolve(ctx context.Context, w window.Window, today time.Time,
 				}
 			}
 		}
+		// A regenerate keeps each day's eaters (D16): the replaced plates'
+		// or, for empty cells, the day's other plates'.
+		if sc.Kind != ScopeWindow {
+			eatersFrom := closure
+			if sc.Kind == ScopeEmptyCells {
+				eatersFrom = plates
+			}
+			j.eaters = dayEaters(eatersFrom, j.target.Cells)
+		}
 		j.target.PlateIDs, j.target.SessionIDs = j.rows.PlateIDs, j.rows.SessionIDs
 		for _, c := range j.target.Cells {
 			if p, ok := occupied[idOf(c)]; ok && p.State == plate.StateConfirmed {
@@ -340,6 +355,23 @@ func (s *Service) resolve(ctx context.Context, w window.Window, today time.Time,
 		return nil
 	})
 	return j, err
+}
+
+// dayEaters maps each date of cells to the most eaters a plate of that date
+// has; nil without such plates.
+func dayEaters(plates []plate.Plate, cells []plate.CellKey) map[string]float64 {
+	var out map[string]float64
+	for _, p := range plates {
+		if !slices.ContainsFunc(cells, func(c plate.CellKey) bool { return c.Date.Equal(p.Date) }) {
+			continue
+		}
+		if out == nil {
+			out = map[string]float64{}
+		}
+		d := p.DateString()
+		out[d] = max(out[d], p.Eaters)
+	}
+	return out
 }
 
 // scopePlate loads a plate a scope names: it must be a draft dated in the
@@ -558,10 +590,6 @@ type Counts struct {
 	KeptConfirmed int
 }
 
-// errorInterrupted is the error key of a run the server stopped running
-// (a restart mid-run): its row still says running.
-const errorInterrupted = "error.server"
-
 // Run returns a generation run, or domain.ErrNotFound.
 func (s *Service) Run(ctx context.Context, id int64) (*RunView, error) {
 	rec, err := s.d.Runs.PlanRun(ctx, id)
@@ -577,11 +605,7 @@ func (s *Service) Run(ctx context.Context, id int64) (*RunView, error) {
 		Counts: Counts{RunCounts: counts}, Issues: []Issue{}, Window: window.Window{Start: rec.WindowStart, End: rec.WindowEnd},
 	}
 	if v.Status == airun.StatusRunning {
-		stage, ok := s.d.Progress.Stage(id)
-		if !ok {
-			v.Status, v.ErrorKey = airun.StatusError, errorInterrupted
-		}
-		v.Stage = stage
+		v.Stage, _ = s.d.Progress.Stage(id)
 	}
 	if rec.ScopeJSON != "" {
 		var sc scopeRecord

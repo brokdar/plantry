@@ -150,6 +150,12 @@ func run() error {
 	plateRepo := sqlite.NewPlateRepo(conn)
 	sessionRepo := sqlite.NewCookSessionRepo(conn)
 	aiRunRepo := sqlite.NewAIRunRepo(conn)
+	// No run survives a stop: end the rows a stop or a crash left running.
+	if n, err := aiRunRepo.FailInterruptedRuns(context.Background(), time.Now()); err != nil {
+		return fmt.Errorf("end interrupted ai runs: %w", err)
+	} else if n > 0 {
+		logger.Warn("ai.run.interrupted", "runs", n)
+	}
 	plateSvc := plate.NewService(plate.Deps{
 		Plates:   plateRepo,
 		Sessions: sessionRepo,

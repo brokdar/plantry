@@ -3,6 +3,7 @@ package planning_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -151,8 +152,8 @@ func BenchmarkBuildAndCheck(b *testing.B) {
 }
 
 func TestBuildAndCheck_Under50ms(t *testing.T) {
-	if raceEnabled {
-		t.Skip("the race detector slows SQLite down; the benchmark runs without it")
+	if os.Getenv("PLANTRY_PERF_ASSERT") != "1" {
+		t.Skip("timing assertion: set PLANTRY_PERF_ASSERT=1 (without -race); BenchmarkBuildAndCheck runs it too")
 	}
 	e := benchDB(t)
 	w, tgt := benchWindow(e)

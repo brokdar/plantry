@@ -53,6 +53,9 @@ type SessionRepository interface {
 	// plate's cell and eaters (PlateID, ComponentID, FoodID, Cell, PerEater,
 	// Eaters). Order is not significant; OrderLinks sorts them.
 	ListLinks(ctx context.Context, sessionID int64) ([]Link, error)
+	// PlateIDsOfSessions returns the plates with a component eating from one
+	// of the sessions.
+	PlateIDsOfSessions(ctx context.Context, ids []int64) ([]int64, error)
 	// ListSessionsByIDs returns the sessions of ids that exist.
 	ListSessionsByIDs(ctx context.Context, ids []int64) ([]CookSession, error)
 	// ListInRange returns the sessions cooking in [from, to] or linked to a

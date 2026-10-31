@@ -168,6 +168,20 @@ func (q *Queries) CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams
 	return err
 }
 
+const failInterruptedAIRuns = `-- name: FailInterruptedAIRuns :execrows
+UPDATE ai_runs SET status = 'error', error_key = 'error.server', finished_at = ?1
+WHERE status = 'running'
+`
+
+// At startup no run is running: a row still 'running' was cut off by a stop.
+func (q *Queries) FailInterruptedAIRuns(ctx context.Context, finishedAt sql.NullString) (int64, error) {
+	result, err := q.db.ExecContext(ctx, failInterruptedAIRuns, finishedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const finishAIRun = `-- name: FinishAIRun :execresult
 UPDATE ai_runs SET
     status             = ?,

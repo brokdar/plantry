@@ -18,10 +18,12 @@ import (
 // Heuristic is the deterministic chooser for planning without AI (spec
 // §6.7, D17): a greedy walk over the target's empty plan cells in cell
 // order. Each cell eats from an existing session with room left (fixed
-// sessions first, then the most recent proposed one); otherwise a new
-// session cooks there, sized to the recipe's reference portions over the
-// following cells within its keep days, plus a fresh side for a main. Ties
-// break by food id, so the same input gives the same plan.
+// sessions first, then the most recent proposed one). Otherwise a cell
+// before the day's last open cell grows the latest proposed session that may
+// feed it, so cooking happens at dinner; a cell nothing can feed (day one,
+// or batch cooking off) gets a new session, sized to the recipe's reference
+// portions over the following cells within its keep days, plus a fresh side
+// for a main. Ties break by food id, so the same input gives the same plan.
 type Heuristic struct{}
 
 // Choose implements Chooser. It fails with ErrNotEnoughRecipes when no
@@ -135,8 +137,13 @@ func (h *planner) plan() (Proposal, error) {
 			h.eat(sup, c, eaters, false)
 			continue
 		}
+		// Cook on the day's last open cell (dinner, spec §6.7 step 1): an
+		// earlier cell eats from the latest proposed session that may still
+		// feed it, which cooks more; so does any cell of a day that may not
+		// cook again. Only a cell nothing can feed cooks early.
 		limit := h.s.Settings.MaxCookOccasionsPerDay
-		if limit > 0 && len(h.occasions[dayOf(c.Date)]) >= limit && h.s.Settings.BatchCooking {
+		maxed := limit > 0 && len(h.occasions[dayOf(c.Date)]) >= limit
+		if h.s.Settings.BatchCooking && (maxed || !h.lastOpenOfDay(c)) {
 			if sup := h.growable(c); sup != nil {
 				h.eat(sup, c, eaters, true)
 				continue
@@ -147,6 +154,16 @@ func (h *planner) plan() (Proposal, error) {
 		}
 	}
 	return h.prop, nil
+}
+
+// lastOpenOfDay reports whether no open cell of c's date comes after c.
+func (h *planner) lastOpenOfDay(c plate.CellKey) bool {
+	for _, o := range h.open {
+		if dayOf(o.Date) == dayOf(c.Date) && !h.done[idOf(o)] && plate.Before(c, o, h.order) {
+			return false
+		}
+	}
+	return true
 }
 
 // eaters is the eater count of a date's plates (D16).

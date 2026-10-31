@@ -56,6 +56,8 @@ type Querier interface {
 	DeletePresetTagsByPreset(ctx context.Context, presetID int64) error
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
+	// At startup no run is running: a row still 'running' was cut off by a stop.
+	FailInterruptedAIRuns(ctx context.Context, finishedAt sql.NullString) (int64, error)
 	// prompt_hash resolves to NULL when the hash is not in ai_prompts, so a failed
 	// UpsertPrompt never makes this UPDATE fail and leave the run 'running'.
 	FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.Result, error)
@@ -124,6 +126,8 @@ type Querier interface {
 	ListPlateEvents(ctx context.Context) ([]PlateEvent, error)
 	ListPlateFeedbackByDateRange(ctx context.Context, arg ListPlateFeedbackByDateRangeParams) ([]PlateFeedback, error)
 	ListPlateFeedbackByPlateIDs(ctx context.Context, ids []int64) ([]PlateFeedback, error)
+	// The plates with a component eating from one of the sessions.
+	ListPlateIDsBySessionIDs(ctx context.Context, ids []sql.NullInt64) ([]int64, error)
 	ListPlatesByDateRange(ctx context.Context, arg ListPlatesByDateRangeParams) ([]Plate, error)
 	ListPlatesByIDs(ctx context.Context, ids []int64) ([]Plate, error)
 	ListPresetComponentsByPlate(ctx context.Context, presetPlateID int64) ([]PresetComponent, error)

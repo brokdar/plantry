@@ -302,19 +302,14 @@ func (s *Service) RemoveDrafts(ctx context.Context, rows RowSet) (PlanSnapshot, 
 			dropSession[sess.ID] = true
 		}
 		whole := make(map[int64]bool, len(rows.PlateIDs))
-		ids := slices.Clone(rows.PlateIDs)
 		for _, id := range rows.PlateIDs {
 			whole[id] = true
 		}
-		for _, sid := range rows.SessionIDs {
-			links, err := s.sessions.ListLinks(ctx, sid)
-			if err != nil {
-				return err
-			}
-			for _, l := range links {
-				ids = append(ids, l.PlateID)
-			}
+		linked, err := s.sessions.PlateIDsOfSessions(ctx, rows.SessionIDs)
+		if err != nil {
+			return err
 		}
+		ids := append(slices.Clone(rows.PlateIDs), linked...)
 		plates, err := s.plates.ListByIDs(ctx, uniqueIDs(ids))
 		if err != nil {
 			return err

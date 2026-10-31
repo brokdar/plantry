@@ -50,6 +50,13 @@ func (r *AIRunRepo) RunNote(ctx context.Context, id int64) (planview.RunNote, er
 	return planview.RunNote{Chooser: fromNullString(row.Chooser), Notes: fromNullString(row.Notes)}, nil
 }
 
+// FailInterruptedRuns ends every run still 'running' as error/error.server
+// and returns how many it ended. Call it at startup, before any run starts:
+// such a row was cut off by a stop or a crash.
+func (r *AIRunRepo) FailInterruptedRuns(ctx context.Context, at time.Time) (int64, error) {
+	return r.queriesFor(ctx).FailInterruptedAIRuns(ctx, sql.NullString{String: formatTime(at), Valid: true})
+}
+
 // PlanRun returns a generate or regenerate run; another kind or a missing
 // id is domain.ErrNotFound.
 func (r *AIRunRepo) PlanRun(ctx context.Context, id int64) (planning.RunRecord, error) {

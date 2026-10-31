@@ -124,6 +124,32 @@ func TestHeuristic_BatchCooker(t *testing.T) {
 	assert.Equal(t, p, again, "deterministic")
 }
 
+// Spec §6.7 step 1: after the first day, sessions cook at dinner; the
+// cells before it eat from the previous batch.
+func TestHeuristic_CooksAtDinnerAfterTheFirstDay(t *testing.T) {
+	s := batchCooker()
+	p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+	for _, ps := range p.Sessions {
+		if ps.CookDate.Equal(day(sat)) {
+			continue
+		}
+		assert.Equal(t, dinner, ps.CookSlotID, "%s cooks at dinner", ps.CookDate.Format("2006-01-02"))
+	}
+	m := planning.Merge(s, windowTarget(s), p)
+	assert.Empty(t, violations(planning.Check(m, windowTarget(s))))
+}
+
+func TestHeuristic_Deterministic(t *testing.T) {
+	in := func() planning.ChooseInput {
+		s := batchCooker()
+		return planning.ChooseInput{State: s, Target: windowTarget(s), EatersByDate: map[string]float64{sun: 2}, IncludeNewRecipe: true}
+	}
+	first := choose(t, in())
+	for range 5 {
+		assert.Equal(t, first, choose(t, in()), "same input, same proposal")
+	}
+}
+
 func TestHeuristic_MainsGetASideCookedAtTheSameOccasion(t *testing.T) {
 	s := batchCooker()
 	p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
