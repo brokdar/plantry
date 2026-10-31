@@ -59,4 +59,8 @@ var (
 	// ErrSessionNotFound is a session a component asks to link to that does
 	// not exist (409, unlike a missing session resource, which is 404).
 	ErrSessionNotFound = errors.New("linked cook session not found")
+
+	// ErrInvalidPlanStart: a plan window must start on the shopping day
+	// (Phase 2 D24).
+	ErrInvalidPlanStart = errors.New("plan window must start on the shopping day")
 )

@@ -73,6 +73,10 @@ type Querier interface {
 	ListAvailabilityOverridesByRange(ctx context.Context, arg ListAvailabilityOverridesByRangeParams) ([]ListAvailabilityOverridesByRangeRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
 	ListCookSessionLinks(ctx context.Context, cookSessionID sql.NullInt64) ([]ListCookSessionLinksRow, error)
+	// Every link of the sessions ListCookSessionsInRange returns.
+	ListCookSessionLinksInRange(ctx context.Context, arg ListCookSessionLinksInRangeParams) ([]ListCookSessionLinksInRangeRow, error)
+	// Sessions cooking in [from_date, to_date] or linked to a plate dated in it.
+	ListCookSessionsInRange(ctx context.Context, arg ListCookSessionsInRangeParams) ([]CookSession, error)
 	ListFoodComponents(ctx context.Context, parentID int64) ([]ListFoodComponentsRow, error)
 	ListFoodInstructions(ctx context.Context, foodID int64) ([]FoodInstruction, error)
 	ListFoodPortions(ctx context.Context, foodID int64) ([]FoodPortion, error)

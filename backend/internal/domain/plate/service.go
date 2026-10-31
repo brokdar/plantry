@@ -1277,25 +1277,36 @@ type env struct {
 
 func (s *Service) loadEnv(ctx context.Context) (env, error) {
 	var e env
-	keep, err := s.intSetting(ctx, settings.KeyPlanDefaultKeepDays)
+	set, err := ReadBatchSettings(ctx, s.settings)
 	if err != nil {
 		return e, err
 	}
-	freezerDays, err := s.intSetting(ctx, settings.KeyPlanFreezerKeepDays)
-	if err != nil {
-		return e, err
-	}
-	freezing, err := s.boolSetting(ctx, settings.KeyPlanFreezingEnabled)
-	if err != nil {
-		return e, err
-	}
-	e.set = BatchSettings{DefaultKeepDays: keep, FreezingEnabled: freezing, FreezerKeepDays: freezerDays}
+	e.set = set
 	e.order, err = s.slotOrder(ctx)
 	return e, err
 }
 
-func (s *Service) intSetting(ctx context.Context, key string) (int, error) {
-	v, err := s.settings.Get(ctx, key)
+// ReadBatchSettings reads the plan.* keep-days and freezer settings the batch
+// rules use.
+func ReadBatchSettings(ctx context.Context, r SettingsReader) (BatchSettings, error) {
+	keep, err := IntSetting(ctx, r, settings.KeyPlanDefaultKeepDays)
+	if err != nil {
+		return BatchSettings{}, err
+	}
+	freezerDays, err := IntSetting(ctx, r, settings.KeyPlanFreezerKeepDays)
+	if err != nil {
+		return BatchSettings{}, err
+	}
+	freezing, err := boolSetting(ctx, r, settings.KeyPlanFreezingEnabled)
+	if err != nil {
+		return BatchSettings{}, err
+	}
+	return BatchSettings{DefaultKeepDays: keep, FreezingEnabled: freezing, FreezerKeepDays: freezerDays}, nil
+}
+
+// IntSetting reads and parses an int setting.
+func IntSetting(ctx context.Context, r SettingsReader, key string) (int, error) {
+	v, err := r.Get(ctx, key)
 	if err != nil {
 		return 0, fmt.Errorf("read %s: %w", key, err)
 	}
@@ -1308,8 +1319,8 @@ func (s *Service) intSetting(ctx context.Context, key string) (int, error) {
 
 // boolSetting parses a bool setting the way the settings validator accepts
 // it (strconv.ParseBool).
-func (s *Service) boolSetting(ctx context.Context, key string) (bool, error) {
-	v, err := s.settings.Get(ctx, key)
+func boolSetting(ctx context.Context, r SettingsReader, key string) (bool, error) {
+	v, err := r.Get(ctx, key)
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", key, err)
 	}

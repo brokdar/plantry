@@ -20,8 +20,8 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
-// planAPI is the real router over a test DB with the plate, session and
-// plan-write handlers. Slots lunch (sort 1) and dinner (sort 2), Chili and
+// planAPI is the real router over a test DB with the plate, session,
+// plan-write and read-model handlers. Slots lunch (sort 1) and dinner (sort 2), Chili and
 // Curry (composed), household portions 2.
 type planAPI struct {
 	t             *testing.T
@@ -40,6 +40,8 @@ func newPlanAPI(t *testing.T) *planAPI {
 		Plates:       handlers.NewPlateHandler(plates),
 		CookSessions: handlers.NewCookSessionHandler(plates),
 		PlanWrite:    handlers.NewPlanWriteHandler(plates),
+		PlanRead:     handlers.NewPlanReadHandler(testsvc.PlanView(db)),
+		Today:        handlers.NewTodayHandler(testsvc.PlanView(db)),
 	})
 	a.lunch = a.insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.lunch', 'sun', 1, 1)`)
 	a.dinner = a.insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.dinner', 'moon', 2, 1)`)

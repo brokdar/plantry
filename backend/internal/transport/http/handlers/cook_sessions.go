@@ -81,15 +81,19 @@ func toSessionResponse(v *plate.SessionView) sessionResponse {
 		resp.CookedAt = &s
 	}
 	for i, l := range v.Links {
-		resp.Links[i] = sessionLinkResponse{
-			PlateID: l.PlateID, ComponentID: l.ComponentID, Date: l.Cell.Date.Format(time.DateOnly),
-			SlotID: l.Cell.SlotID, Portions: l.Portions, Kind: string(l.Kind), Position: l.Position,
-		}
+		resp.Links[i] = toSessionLinkResponse(l)
 	}
 	for i, w := range v.Warnings {
 		resp.Warnings[i] = sessionWarningResponse{Code: w.Code, PlateID: w.PlateID}
 	}
 	return resp
+}
+
+func toSessionLinkResponse(l plate.Link) sessionLinkResponse {
+	return sessionLinkResponse{
+		PlateID: l.PlateID, ComponentID: l.ComponentID, Date: l.Cell.Date.Format(time.DateOnly),
+		SlotID: l.Cell.SlotID, Portions: l.Portions, Kind: string(l.Kind), Position: l.Position,
+	}
 }
 
 type cellJSON struct {

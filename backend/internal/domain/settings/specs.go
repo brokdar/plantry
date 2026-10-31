@@ -43,15 +43,9 @@ var registry = []Spec{
 		AllowEmpty: true,
 	},
 	{
-		Key:     KeyPlanWeekStartsOn,
-		Kind:    KindEnum,
-		Enum:    []string{"monday", "sunday", "saturday"},
-		Default: "monday",
-	},
-	{
 		Key:     KeyPlanAnchor,
 		Kind:    KindEnum,
-		Enum:    []string{"today", "next_shopping_day", "fixed_weekday"},
+		Enum:    []string{"today", "next_shopping_day"},
 		Default: "next_shopping_day",
 	},
 	{

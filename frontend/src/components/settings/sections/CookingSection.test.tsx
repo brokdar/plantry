@@ -81,9 +81,6 @@ describe("CookingSection", () => {
     expect(
       screen.getByTestId("plan-anchor-radio-next_shopping_day")
     ).toBeChecked()
-    expect(screen.getByTestId("plan-week-starts-on-select")).toHaveTextContent(
-      /monday/i
-    )
     expect(screen.queryByTestId("keep-days-warning")).toBeNull()
   })
 
@@ -159,25 +156,7 @@ describe("CookingSection", () => {
     )
   })
 
-  describe("plan anchor and week (moved from the Plan tab)", () => {
-    it("renders the weekStartsOn select with 'sunday' when stored", async () => {
-      withValues({ "plan.week_starts_on": "sunday" })
-      renderSection()
-      expect(
-        await screen.findByTestId("plan-week-starts-on-select")
-      ).toHaveTextContent(/sunday/i)
-    })
-
-    it("saves week_starts_on when the select changes", async () => {
-      const user = userEvent.setup()
-      renderSection()
-      await user.click(await screen.findByTestId("plan-week-starts-on-select"))
-      await user.click(await screen.findByRole("option", { name: /sunday/i }))
-      await waitFor(() =>
-        expect(setSetting).toHaveBeenCalledWith("plan.week_starts_on", "sunday")
-      )
-    })
-
+  describe("plan anchor and shopping day", () => {
     it("saves plan.anchor when the anchor radio changes", async () => {
       const user = userEvent.setup()
       renderSection()
@@ -199,22 +178,14 @@ describe("CookingSection", () => {
       )
     })
 
-    it("hides the fixed-weekday picker unless the anchor is fixed_weekday", async () => {
+    it("offers exactly the two anchors", async () => {
       renderSection()
       await screen.findByTestId("plan-anchor-radio-today")
-      expect(screen.queryByTestId("plan-fixed-weekday-picker")).toBeNull()
-    })
-
-    it("shows the fixed-weekday picker right after picking fixed_weekday", async () => {
-      const user = userEvent.setup()
-      renderSection()
-      await user.click(
-        await screen.findByTestId("plan-anchor-radio-fixed_weekday")
-      )
       expect(
-        await screen.findByTestId("plan-fixed-weekday-picker")
-      ).toBeInTheDocument()
-      expect(setSetting).toHaveBeenCalledWith("plan.anchor", "fixed_weekday")
+        screen.getAllByRole("radio").map((r) => r.getAttribute("value"))
+      ).toEqual(["today", "next_shopping_day"])
+      expect(screen.queryByTestId("plan-anchor-radio-fixed_weekday")).toBeNull()
+      expect(screen.queryByTestId("plan-week-starts-on-select")).toBeNull()
     })
   })
 })

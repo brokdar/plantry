@@ -109,6 +109,50 @@ func TestCookSessionRepo_LinksAndRestrict(t *testing.T) {
 	assert.ErrorIs(t, sessions.CreateSession(ctx, bad), domain.ErrInvalidInput)
 }
 
+func TestCookSessionRepo_ListInRange(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	slotID := seedSlot(t, db)
+	chili := seedComposed(t, db, "Chili")
+	sessions := NewCookSessionRepo(db)
+	plates := NewPlateRepo(db)
+	day := func(s string) time.Time {
+		d, err := time.Parse(time.DateOnly, s)
+		require.NoError(t, err)
+		return d
+	}
+	one := 1.0
+	session := func(cook string, eaten ...string) *plate.CookSession {
+		s := &plate.CookSession{FoodID: chili, CookDate: day(cook), CookSlotID: slotID, Portions: float64(len(eaten) + 1)}
+		require.NoError(t, sessions.CreateSession(ctx, s))
+		for _, d := range eaten {
+			p := &plate.Plate{Date: day(d), SlotID: slotID, Eaters: 1, Components: []plate.PlateComponent{{FoodID: chili, Portions: &one, CookSessionID: &s.ID}}}
+			require.NoError(t, plates.Create(ctx, p))
+		}
+		return s
+	}
+	cooksIn := session("2026-11-01", "2026-11-01", "2026-11-05")
+	linkedIn := session("2026-10-25", "2026-10-26", "2026-11-02")
+	cooksInUnlinked := session("2026-11-04")
+	session("2026-11-20", "2026-11-20")
+	session("2026-10-20", "2026-10-21")
+
+	got, links, err := sessions.ListInRange(ctx, day("2026-11-01"), day("2026-11-04"))
+	require.NoError(t, err)
+	ids := make([]int64, len(got))
+	for i, s := range got {
+		ids[i] = s.ID
+	}
+	assert.Equal(t, []int64{linkedIn.ID, cooksIn.ID, cooksInUnlinked.ID}, ids, "cook date order")
+	require.Len(t, links[cooksIn.ID], 2, "links outside the range come along")
+	assert.Equal(t, day("2026-11-05"), links[cooksIn.ID][1].Cell.Date)
+	assert.InDelta(t, 1.0, links[cooksIn.ID][1].PerEater, 1e-9)
+	assert.InDelta(t, 1.0, links[cooksIn.ID][1].Eaters, 1e-9)
+	assert.Len(t, links[linkedIn.ID], 2)
+	assert.Empty(t, links[cooksInUnlinked.ID])
+	assert.Len(t, links, 2, "only links of the listed sessions")
+}
+
 func TestPlateRepo_EatersSessionsFeedbackAndFoodFacts(t *testing.T) {
 	db := testhelper.NewTestDB(t)
 	ctx := context.Background()

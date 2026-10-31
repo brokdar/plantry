@@ -588,11 +588,9 @@
       "explore_effect_other": "Plantry suggests {{count}} new recipes a week.",
       "shopping_effect": "You shop on {{day}}.",
       "anchor_effect": {
-        "today": "The plan view starts today.",
-        "next_shopping_day": "The plan view starts on your next shopping day.",
-        "fixed_weekday": "The plan view starts on {{day}}."
-      },
-      "week_starts_effect": "Calendars start the week on {{day}}."
+        "today": "The plan view opens on the week that includes today.",
+        "next_shopping_day": "The plan view starts on your next shopping day."
+      }
     },
     "assistant": {
       "connection_group": "Connection",
@@ -630,12 +628,9 @@
   },
   "settings": {
     "plan_tab": "Planning",
-    "week_starts_on": "Week starts on",
     "plan_anchor": "Plan view starts",
     "plan_anchor_today": "Today",
     "plan_anchor_next_shopping_day": "Next shopping day",
-    "plan_anchor_fixed_weekday": "Fixed weekday",
-    "fixed_weekday_start": "Start weekday",
     "shopping_day": "Shopping day"
   },
   "display_preferences": {
@@ -1187,7 +1182,8 @@
       "not_found": "That batch no longer exists."
     },
     "plan": {
-      "cell_occupied": "Couldn't restore: a meal is already planned there."
+      "cell_occupied": "Couldn't restore: a meal is already planned there.",
+      "invalid_start": "That week can't open: a plan week starts on your shopping day."
     },
     "slot": {
       "in_use": "This time slot is used by plates and cannot be deleted."

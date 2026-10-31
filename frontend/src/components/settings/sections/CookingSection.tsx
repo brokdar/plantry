@@ -17,9 +17,9 @@ import { useSettingField, type SettingField } from "../setting-field"
 import { SettingRow } from "../SettingRow"
 import { SectionSkeleton } from "./HouseholdSection"
 
-type AnchorValue = "today" | "next_shopping_day" | "fixed_weekday"
+type AnchorValue = "today" | "next_shopping_day"
 
-const ANCHORS: AnchorValue[] = ["today", "next_shopping_day", "fixed_weekday"]
+const ANCHORS: AnchorValue[] = ["today", "next_shopping_day"]
 
 /** Leftovers past this many days get the food-safety warning. */
 const SAFE_KEEP_DAYS = 4
@@ -29,12 +29,6 @@ function localWeekdayName(i: number, locale: string): string {
   return new Intl.DateTimeFormat(locale, { weekday: "long" }).format(
     new Date(2023, 0, 2 + i)
   )
-}
-
-const WEEK_START_INDEX: Record<string, number> = {
-  monday: 0,
-  sunday: 6,
-  saturday: 5,
 }
 
 export function CookingSection() {
@@ -55,23 +49,12 @@ function CookingFields() {
   const explore = useSettingField("plan.explore_per_week", "0")
   const shopping = useSettingField("plan.shopping_day", "0")
   const anchor = useSettingField("plan.anchor", "next_shopping_day")
-  const weekStart = useSettingField("plan.week_starts_on", "monday")
 
   // Locale-aware weekday names, 0=Monday…6=Sunday.
   const weekdayOptions = useMemo(
     () =>
       Array.from({ length: 7 }, (_, i) => ({
         value: String(i),
-        label: localWeekdayName(i, i18n.language),
-      })),
-    [i18n.language]
-  )
-
-  // week_starts_on uses string values ("monday"|"sunday"|"saturday").
-  const weekStartsOnOptions = useMemo(
-    () =>
-      Object.entries(WEEK_START_INDEX).map(([value, i]) => ({
-        value,
         label: localWeekdayName(i, i18n.language),
       })),
     [i18n.language]
@@ -256,45 +239,6 @@ function CookingFields() {
               </label>
             ))}
           </fieldset>
-
-          {planAnchor === "fixed_weekday" && (
-            <div
-              className="flex flex-col gap-1.5"
-              data-testid="plan-fixed-weekday-picker"
-            >
-              <span className="text-small text-ink-muted">
-                {t("settings.fixed_weekday_start")}
-              </span>
-              <WeekdaySelect
-                value={shopping.value}
-                onChange={shopping.save}
-                options={weekdayOptions}
-                testId="plan-fixed-weekday-select"
-                label={t("settings.fixed_weekday_start")}
-              />
-            </div>
-          )}
-        </SettingRow>
-
-        <SettingRow
-          label={t("settings.week_starts_on")}
-          description={t("settings_page.cooking.week_starts_effect", {
-            day: localWeekdayName(
-              WEEK_START_INDEX[weekStart.value] ?? 0,
-              i18n.language
-            ),
-          })}
-          item={weekStart.item}
-          onClearOverride={weekStart.clear}
-          saved={weekStart.saved}
-        >
-          <WeekdaySelect
-            value={weekStart.value}
-            onChange={weekStart.save}
-            options={weekStartsOnOptions}
-            testId="plan-week-starts-on-select"
-            label={t("settings.week_starts_on")}
-          />
         </SettingRow>
       </SettingsGroup>
     </div>

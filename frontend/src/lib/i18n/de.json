@@ -588,11 +588,9 @@
       "explore_effect_other": "Plantry schlägt {{count}} neue Rezepte pro Woche vor.",
       "shopping_effect": "Du kaufst am {{day}} ein.",
       "anchor_effect": {
-        "today": "Die Planungsansicht beginnt heute.",
-        "next_shopping_day": "Die Planungsansicht beginnt an deinem nächsten Einkaufstag.",
-        "fixed_weekday": "Die Planungsansicht beginnt am {{day}}."
-      },
-      "week_starts_effect": "Kalender beginnen die Woche am {{day}}."
+        "today": "Die Planungsansicht öffnet die Woche, in der heute liegt.",
+        "next_shopping_day": "Die Planungsansicht beginnt an deinem nächsten Einkaufstag."
+      }
     },
     "assistant": {
       "connection_group": "Verbindung",
@@ -630,12 +628,9 @@
   },
   "settings": {
     "plan_tab": "Planung",
-    "week_starts_on": "Woche beginnt am",
     "plan_anchor": "Planungsansicht beginnt",
     "plan_anchor_today": "Heute",
     "plan_anchor_next_shopping_day": "Nächster Einkaufstag",
-    "plan_anchor_fixed_weekday": "Fester Wochentag",
-    "fixed_weekday_start": "Starttag",
     "shopping_day": "Einkaufstag"
   },
   "display_preferences": {
@@ -1244,7 +1239,8 @@
       "not_found": "Dieses Vorkochen gibt es nicht mehr."
     },
     "plan": {
-      "cell_occupied": "Wiederherstellen nicht möglich: Dort ist schon etwas geplant."
+      "cell_occupied": "Wiederherstellen nicht möglich: Dort ist schon etwas geplant.",
+      "invalid_start": "Diese Woche lässt sich nicht öffnen: Eine Planwoche beginnt an deinem Einkaufstag."
     },
     "slot": {
       "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."

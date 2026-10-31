@@ -47,7 +47,7 @@ type PromptCell struct {
 // PlanningPrefs holds the user's plan settings that drive the system prompt.
 type PlanningPrefs struct {
 	ShoppingDay string // weekday name e.g. "Saturday"
-	AnchorMode  string // "today" | "next_shopping_day" | "fixed_weekday"
+	AnchorMode  string // "today" | "next_shopping_day"
 }
 
 // ComposePrompt builds the system prompt for a chat turn. p may be nil (no

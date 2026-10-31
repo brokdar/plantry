@@ -9,6 +9,8 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
@@ -37,6 +39,23 @@ func Plan(db *sql.DB) (*plate.Service, *availability.Service) {
 func Plates(db *sql.DB) *plate.Service {
 	p, _ := Plan(db)
 	return p
+}
+
+// PlanView returns the read-model service over db, wired like main.go.
+func PlanView(db *sql.DB) *planview.Service {
+	_, avail := Plan(db)
+	foods := sqlite.NewFoodRepo(db)
+	return planview.NewService(planview.Deps{
+		Plates:       sqlite.NewPlateRepo(db),
+		Sessions:     sqlite.NewCookSessionRepo(db),
+		Foods:        foods,
+		Nutrition:    food.NewNutritionResolver(foods),
+		Availability: avail,
+		Slots:        sqlite.NewSlotRepo(db),
+		Settings:     Settings(db),
+		Profile:      profile.NewService(sqlite.NewProfileRepo(db)),
+		Recipes:      foods,
+	})
 }
 
 // Settings returns a settings service over db without env overrides.
