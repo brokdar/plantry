@@ -102,6 +102,10 @@ type Food struct {
 	// Freezable is nil when unknown; false forbids freezer portions (D14).
 	Freezable *bool
 
+	// LEAF store section override (D18); nil means the section is
+	// classified from the name (shopping.Classify).
+	ShopSection *ShopSection
+
 	// Shared.
 	SourceURL   *string // where the food was imported from
 	Description *string

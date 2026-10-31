@@ -183,3 +183,10 @@ FROM food_components fc
 JOIN foods f ON f.id = fc.child_id
 WHERE fc.parent_id IN (sqlc.slice(parent_ids))
 ORDER BY fc.parent_id, fc.sort_order, fc.id;
+
+-- name: SetFoodShopSection :one
+UPDATE foods SET
+    shop_section = ?,
+    updated_at   = datetime('now')
+WHERE id = ?
+RETURNING *;

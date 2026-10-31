@@ -19,6 +19,10 @@ func toHTTPWithResource(err error, resource string) (int, string) {
 		return http.StatusBadRequest, "error.plate.invalid_quantity_for_leaf"
 	case errors.Is(err, plate.ErrUnitRequiresPortion):
 		return http.StatusBadRequest, "error.plate.unit_requires_portion"
+	case errors.Is(err, domain.ErrInvalidShopSection):
+		return http.StatusBadRequest, "error.food.invalid_shop_section"
+	case errors.Is(err, domain.ErrShopSectionLeafOnly):
+		return http.StatusBadRequest, "error.food.shop_section_leaf_only"
 	case errors.Is(err, domain.ErrInvalidPortions):
 		return http.StatusBadRequest, "error.food.invalid_portions"
 	case errors.Is(err, domain.ErrNotFound):

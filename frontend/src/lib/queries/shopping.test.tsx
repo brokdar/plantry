@@ -10,7 +10,7 @@ vi.mock("@/lib/api/shopping", () => ({ getShoppingList: vi.fn() }))
 import { getShoppingList } from "@/lib/api/shopping"
 
 import { shoppingKeys } from "./keys"
-import { useShoppingList } from "./shopping"
+import { flattenShoppingList, useShoppingList } from "./shopping"
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -37,5 +37,13 @@ describe("useShoppingList", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(getShoppingList).toHaveBeenCalledWith(range)
     expect(result.current.data?.count).toBe(2)
+  })
+})
+
+describe("flattenShoppingList", () => {
+  it("joins the sections into one list sorted by name", () => {
+    const { items } = flattenShoppingList(mockShoppingList)
+    expect(items.map((i) => i.name)).toEqual(["Kidney beans", "Onion"])
+    expect(items[0].total_grams).toBe(600)
   })
 })

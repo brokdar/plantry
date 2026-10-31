@@ -69,20 +69,3 @@ export function getShoppingList(range?: ShoppingRange): Promise<ShoppingList> {
   qs.set("today", todayISO())
   return apiFetch(`/shopping-list?${qs}`)
 }
-
-// Kept for the old planner's ShoppingPanel until F7 deletes it: the current
-// backend still answers GET /api/shopping-list with `{items}` until B6.
-export interface PlannerShoppingItem {
-  food_id: number
-  name: string
-  total_grams: number
-}
-
-export function getPlannerShoppingList(
-  from: string,
-  to: string
-): Promise<{ items: PlannerShoppingItem[] }> {
-  return apiFetch(
-    `/shopping-list?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-  )
-}

@@ -47,6 +47,17 @@ func Anchored(today time.Time, anchor string, shoppingDay int) Window {
 	return at(today.AddDate(0, 0, ahead))
 }
 
+// ShoppingDefault is the default shopping range of window w (spec §7.7):
+// max(w.Start, today) through w.End, so days already past are not bought
+// for.
+func ShoppingDefault(today time.Time, w Window) (from, to time.Time) {
+	from = w.Start
+	if today = dateOnly(today); today.After(from) {
+		from = today
+	}
+	return from, w.End
+}
+
 // IsStart reports whether date is a shopping day, i.e. a valid window start.
 func IsStart(date time.Time, shoppingDay int) bool { return weekday(date) == shoppingDay }
 

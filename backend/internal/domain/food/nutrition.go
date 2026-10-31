@@ -74,7 +74,7 @@ func (r *NutritionResolver) PerPortionDetailedMany(ctx context.Context, ids []in
 	if len(ids) == 0 {
 		return out, nil
 	}
-	nodes, err := r.loadTrees(ctx, ids)
+	nodes, err := LoadTrees(ctx, r.repo, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -99,13 +99,21 @@ func (r *NutritionResolver) PerPortionDetailedMany(ctx context.Context, ids []in
 	return out, nil
 }
 
-// loadTrees loads the given foods and everything below them, one tree level
-// per round trip. Composed foods get their Children set.
-func (r *NutritionResolver) loadTrees(ctx context.Context, ids []int64) (map[int64]*Food, error) {
+// TreeReader loads food headers and child links in batches.
+type TreeReader interface {
+	LookupByIDs(ctx context.Context, ids []int64) (map[int64]*Food, error)
+	ListChildrenByParents(ctx context.Context, parentIDs []int64) (map[int64][]FoodComponent, error)
+}
+
+// LoadTrees loads the given foods and everything below them, one tree level
+// per round trip (one LookupByIDs and one ListChildrenByParents per level).
+// Composed foods get their Children set; every food loads once even when
+// several trees share it.
+func LoadTrees(ctx context.Context, r TreeReader, ids []int64) (map[int64]*Food, error) {
 	nodes := map[int64]*Food{}
 	frontier := slices.Compact(slices.Sorted(slices.Values(ids)))
 	for len(frontier) > 0 {
-		foods, err := r.repo.LookupByIDs(ctx, frontier)
+		foods, err := r.LookupByIDs(ctx, frontier)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +132,7 @@ func (r *NutritionResolver) loadTrees(ctx context.Context, ids []int64) (map[int
 		if len(composed) == 0 {
 			break
 		}
-		children, err := r.repo.ListChildrenByParents(ctx, composed)
+		children, err := r.ListChildrenByParents(ctx, composed)
 		if err != nil {
 			return nil, err
 		}

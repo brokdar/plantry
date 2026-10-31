@@ -32,7 +32,7 @@ type Handlers struct {
 	Feedback       *handlers.FeedbackHandler
 	Import         *handlers.ImportHandler
 	Settings       *handlers.SettingsHandler
-	ShoppingRange  *handlers.ShoppingRangeHandler
+	Shopping       *handlers.ShoppingHandler
 	NutritionRange *handlers.NutritionRangeHandler
 	PlateMacros    *handlers.PlateMacrosHandler
 	Availability   *handlers.AvailabilityHandler
@@ -73,6 +73,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/nutrition", h.Foods.Nutrition)
 					r.Get("/scaled", h.Foods.Scaled)
 					r.Post("/favorite", h.Foods.SetFavorite)
+					r.Put("/shop-section", h.Foods.SetShopSection)
 					r.Post("/variant", h.Foods.CreateVariant)
 					r.Get("/variants", h.Foods.ListVariants)
 					r.Get("/portions", h.Foods.ListPortions)
@@ -218,8 +219,8 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			})
 		}
 
-		if h.ShoppingRange != nil {
-			api.Get("/shopping-list", h.ShoppingRange.List)
+		if h.Shopping != nil {
+			api.Get("/shopping-list", h.Shopping.List)
 		}
 
 		if h.NutritionRange != nil {

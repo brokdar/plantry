@@ -22,6 +22,8 @@ type fakeRepo struct {
 	usedIn        map[int64]int
 	historyIDs    []int64
 	usedInIDs     []int64
+	// shopSectionSet records a SetShopSection write.
+	shopSectionSet bool
 }
 
 func (r *fakeRepo) Create(_ context.Context, _ *food.Food) error { return nil }
@@ -80,6 +82,11 @@ func (r *fakeRepo) UsedInCounts(_ context.Context, ids []int64) (map[int64]int, 
 
 func (r *fakeRepo) SetFavorite(_ context.Context, _ int64, _ bool) (*food.Food, error) {
 	return &food.Food{}, nil
+}
+
+func (r *fakeRepo) SetShopSection(_ context.Context, id int64, section *food.ShopSection) (*food.Food, error) {
+	r.shopSectionSet = true
+	return &food.Food{ID: id, Kind: food.KindLeaf, ShopSection: section}, nil
 }
 
 func ptrF64(v float64) *float64      { return &v }
