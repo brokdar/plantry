@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -56,7 +57,7 @@ func intp(v int) *int        { return &v }
 
 func cell(date string, slot int64) plate.CellKey { return plate.CellKey{Date: day(date), SlotID: slot} }
 
-func recipe(id int64, name string, role food.Role, class string, kcal float64) planning.FoodFacts {
+func recipe(id int64, name string, role food.Role, class diet.Class, kcal float64) planning.FoodFacts {
 	return planning.FoodFacts{
 		ID: id, Name: name, Kind: food.KindComposed, Role: role, DietClass: class,
 		Macros: nutrition.Macros{Kcal: kcal, Protein: kcal / 20, Fat: kcal / 45, Carbs: kcal / 8}, NutritionComplete: true,

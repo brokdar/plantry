@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
@@ -13,7 +14,7 @@ import (
 // one dinner batch per day feeding the next day's lunch.
 func benchState() (planning.State, planning.Target, planning.Proposal) {
 	s := baseState()
-	classes := []string{"vegan", "vegetarian", "pescetarian", "omnivore"}
+	classes := diet.Order
 	for i := range 300 {
 		id := int64(1000 + i)
 		f := recipe(id, "Recipe", food.RoleMain, classes[i%4], 400+float64(i%7)*50)
