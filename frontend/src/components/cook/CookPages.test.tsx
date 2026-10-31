@@ -129,6 +129,13 @@ describe("cook pages", () => {
     })
 
     it("Done cooking within the debounce writes the pending portions first", async () => {
+      let settlePut!: () => void
+      vi.mocked(updateSession).mockImplementationOnce(
+        (_id, input) =>
+          new Promise((resolve) => {
+            settlePut = () => resolve({ ...mockSession, ...input })
+          })
+      )
       renderWithRouter(<CookSessionPage sessionId={7} />)
       await userEvent.click(
         await screen.findByRole("button", { name: /increase portions/i })
@@ -136,6 +143,10 @@ describe("cook pages", () => {
       await userEvent.click(screen.getByRole("button", { name: "Next" }))
       await userEvent.click(screen.getByTestId("cook-done"))
 
+      // POST /cooked waits for the PUT (one mutation scope).
+      await waitFor(() => expect(updateSession).toHaveBeenCalledTimes(1))
+      expect(setSessionCooked).not.toHaveBeenCalled()
+      settlePut()
       await waitFor(() =>
         expect(setSessionCooked).toHaveBeenCalledWith(7, true)
       )

@@ -14,7 +14,7 @@ export const PORTIONS_DEBOUNCE_MS = 400
  *
  * - **Last write wins:** session updates share one mutation scope, so they
  *   reach the server in order, and the shown value only falls back to the
- *   server's once the newest write has settled.
+ *   server's once the newest edit has been written and settled.
  * - **Leaving mid-debounce flushes:** an edit the user made is written even
  *   if they leave (or tap Done cooking) within the 400 ms. `flush` does it
  *   on demand.
@@ -37,7 +37,7 @@ export function useSessionPortions(session: Session | undefined) {
     const { session: s, mutate } = latest.current
     if (portions === null || !s) return
     queued.current = null
-    const mine = ++seq.current
+    const mine = seq.current
     mutate(
       {
         id: s.id,
@@ -62,6 +62,7 @@ export function useSessionPortions(session: Session | undefined) {
   useEffect(() => () => flushRef.current(), [])
 
   function change(portions: number) {
+    seq.current += 1
     setDraft(portions)
     queued.current = portions
     clearTimeout(timer.current)

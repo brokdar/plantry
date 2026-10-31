@@ -63,6 +63,8 @@ export function useSetSessionCooked() {
   const qc = useQueryClient()
   const { t } = useTranslation()
   return useMutation({
+    // After any pending portion write (Done cooking flushes it first).
+    scope: { id: "session-update" },
     mutationFn: ({ id, cooked }: { id: number; cooked: boolean }) =>
       setSessionCooked(id, cooked),
     onSuccess: (_data, { id }) => invalidateSession(qc, id),

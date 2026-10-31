@@ -30,6 +30,21 @@ describe("useWakeLock", () => {
     expect(release).toHaveBeenCalledTimes(1)
   })
 
+  it("asks once while a request is pending, then releases that lock", async () => {
+    const release = vi.fn().mockResolvedValue(undefined)
+    let grant!: (s: unknown) => void
+    const request = vi.fn(() => new Promise((resolve) => (grant = resolve)))
+    setWakeLock({ request })
+
+    const { unmount } = renderHook(() => useWakeLock())
+    document.dispatchEvent(new Event("visibilitychange"))
+    expect(request).toHaveBeenCalledTimes(1)
+
+    await act(async () => grant({ released: false, release }))
+    unmount()
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
   it("ignores a refusal", async () => {
     const request = vi.fn().mockRejectedValue(new DOMException("denied"))
     setWakeLock({ request })

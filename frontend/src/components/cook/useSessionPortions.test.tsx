@@ -86,6 +86,22 @@ describe("useSessionPortions", () => {
     expect(updateSession).not.toHaveBeenCalled()
   })
 
+  it("keeps a newer edit shown while it still waits to be written", async () => {
+    const first = deferred()
+    vi.mocked(updateSession).mockReturnValueOnce(first.promise)
+    const { result } = render()
+
+    act(() => result.current.change(7))
+    await act(() => vi.advanceTimersByTimeAsync(PORTIONS_DEBOUNCE_MS))
+    act(() => result.current.change(8))
+    // The write of 7 settles while 8 is still debouncing.
+    await act(async () => first.resolve({ ...session, portions: 7 }))
+    expect(result.current.portions).toBe(8)
+
+    await act(() => vi.advanceTimersByTimeAsync(PORTIONS_DEBOUNCE_MS))
+    expect(vi.mocked(updateSession).mock.calls[1][1].portions).toBe(8)
+  })
+
   it("sends writes in order and keeps the newest value shown", async () => {
     const first = deferred()
     const second = deferred()

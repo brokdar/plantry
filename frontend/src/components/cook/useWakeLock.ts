@@ -14,9 +14,11 @@ export function useWakeLock() {
 
     let sentinel: WakeLockSentinel | null = null
     let mounted = true
+    let pending = false
 
     function request() {
-      if (sentinel && !sentinel.released) return
+      if (pending || (sentinel && !sentinel.released)) return
+      pending = true
       wakeLock!
         .request("screen")
         .then((s) => {
@@ -25,6 +27,9 @@ export function useWakeLock() {
         })
         .catch(() => {
           // Refused (battery saver, hidden page): cooking goes on.
+        })
+        .finally(() => {
+          pending = false
         })
     }
     function onVisibility() {
