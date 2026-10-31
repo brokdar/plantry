@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { useAvailabilityDefaults } from "@/lib/queries/availability"
 import { useProfile } from "@/lib/queries/profile"
 import { useSettingItems } from "@/lib/queries/settings"
+import { useCompleteSetup } from "@/lib/queries/setup"
 import { useTimeSlots } from "@/lib/queries/slots"
 
 import { AssistantStep } from "./AssistantStep"
@@ -88,6 +89,7 @@ function WizardFlow({ initial }: { initial: WizardDraft }) {
   const [saving, setSaving] = useState(false)
   const [blocked, setBlocked] = useState<string | null>(null)
   const { saveStep, skipFrom } = useWizardSave()
+  const complete = useCompleteSetup()
   const headingRef = useRef<HTMLHeadingElement>(null)
   const finished = step === STEP_COUNT
 
@@ -127,16 +129,20 @@ function WizardFlow({ initial }: { initial: WizardDraft }) {
     }
   }
 
+  // Setup is complete once the last step is saved, so a reload of the
+  // finish screen lands on Today instead of restarting the wizard.
   const next = () =>
     run(async () => {
       const stored = await saveStep(step, draft)
       setDraft(stored)
+      if (step === STEP_COUNT - 1) await complete.mutateAsync()
       setStep((s) => s + 1)
     })
 
   const skip = () =>
     run(async () => {
       await skipFrom(step, draft)
+      await complete.mutateAsync()
       setStep(STEP_COUNT)
     })
 

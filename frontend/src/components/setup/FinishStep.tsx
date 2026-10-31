@@ -2,9 +2,8 @@ import { useNavigate } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
-import { useCompleteSetup } from "@/lib/queries/setup"
 
-/** "You're set up." Add recipes marks setup done, then opens Recipes. */
+/** "You're set up." Setup is already marked done; Add recipes opens Recipes. */
 export function FinishStep({
   headingRef,
 }: {
@@ -12,14 +11,6 @@ export function FinishStep({
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const complete = useCompleteSetup()
-
-  function addRecipes() {
-    complete.mutate(undefined, {
-      onSuccess: () =>
-        void navigate({ to: "/recipes", state: { focusMain: true } }),
-    })
-  }
 
   return (
     <div className="flex flex-col gap-6" data-testid="setup-finish">
@@ -31,8 +22,9 @@ export function FinishStep({
       </div>
       <Button
         type="button"
-        onClick={addRecipes}
-        disabled={complete.isPending}
+        onClick={() =>
+          void navigate({ to: "/recipes", state: { focusMain: true } })
+        }
         className="self-start pointer-coarse:h-11"
       >
         {t("setup.finish.add_recipes")}
