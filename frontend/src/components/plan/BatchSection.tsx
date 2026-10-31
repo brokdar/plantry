@@ -30,6 +30,8 @@ import { QuantityStepper } from "./QuantityStepper"
 
 const MIN_MEALS = 2
 const MAX_MEALS = 7
+/** The server's cap on suggested leftover cells (plate.MaxLeftoverCells). */
+const MAX_LEFTOVER_CELLS = 14
 
 interface BatchSectionProps {
   session: Session
@@ -123,10 +125,11 @@ function LeftoverInfo({
 function CookAsBatch({ session, slotName }: BatchSectionProps) {
   const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
-  const [meals, setMeals] = useState(MIN_MEALS)
+  // How many suggested cells to show, ticked or not.
+  const [requested, setRequested] = useState(MIN_MEALS - 1)
   // Unticked suggestions; everything the server suggests starts ticked.
   const [unticked, setUnticked] = useState<Set<string>>(new Set())
-  const suggested = useLeftoverCells(open ? session.id : 0, meals - 1)
+  const suggested = useLeftoverCells(open ? session.id : 0, requested)
   const addLeftovers = useAddLeftovers()
 
   if (!open) {
@@ -147,9 +150,29 @@ function CookAsBatch({ session, slotName }: BatchSectionProps) {
   const cells = suggested.data?.cells ?? []
   const chosen = cells.filter((c) => !unticked.has(cellKey(c)))
   const fresh = { date: session.cook_date, slot_id: session.cook_slot_id }
+  // Meals is always the cook meal plus the ticked cells (while the cells
+  // load, what they will be).
+  const meals = suggested.data
+    ? 1 + chosen.length
+    : 1 + requested - unticked.size
 
+  /** + shows the next suggested cell, ticked; − drops the last ticked cell
+   *  (and the unticked ones after it). Unticks before it are kept. */
   function changeMeals(next: number) {
-    setMeals(next)
+    if (next > meals) {
+      setRequested((r) => Math.min(MAX_LEFTOVER_CELLS, r + 1))
+      return
+    }
+    let last = cells.length - 1
+    while (last >= 0 && unticked.has(cellKey(cells[last]!))) last--
+    if (last < 1) return
+    const kept = new Set(cells.slice(0, last).map(cellKey))
+    setRequested(last)
+    setUnticked((prev) => new Set([...prev].filter((k) => kept.has(k))))
+  }
+
+  function reset() {
+    setRequested(MIN_MEALS - 1)
     setUnticked(new Set())
   }
 
@@ -213,7 +236,7 @@ function CookAsBatch({ session, slotName }: BatchSectionProps) {
           onClick={() => {
             // A new start next time: the default meals, every cell ticked.
             setOpen(false)
-            changeMeals(MIN_MEALS)
+            reset()
           }}
         >
           {t("common.cancel")}
