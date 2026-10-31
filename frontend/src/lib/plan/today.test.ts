@@ -32,6 +32,10 @@ describe("lib/plan/today", () => {
         en: "Nothing to cook today",
         de: "Heute wird nicht gekocht",
       },
+      draft_only: {
+        en: "Your plan for this week is still a draft",
+        de: "Dein Plan für diese Woche ist noch ein Entwurf",
+      },
       no_plates: {
         en: "No plates planned today",
         de: "Heute ist kein Essen geplant",
@@ -62,6 +66,10 @@ describe("lib/plan/today", () => {
       nothing_to_cook: {
         en: "Nothing to cook on Sunday",
         de: "Am Sonntag wird nicht gekocht",
+      },
+      draft_only: {
+        en: "The plan for Sunday is still a draft",
+        de: "Der Plan für Sonntag ist noch ein Entwurf",
       },
       no_plates: {
         en: "No plates planned for Sunday",
