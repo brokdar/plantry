@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 import { Loader2, Plus, Search } from "lucide-react"
 
+import { FoodDietSelect } from "@/components/recipes/DietClassSelect"
 import { RecipesHeader } from "@/components/recipes/RecipesHeader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,7 +22,7 @@ const PAGE_SIZE = 50
 const AUTO = "auto"
 
 /** The Ingredients tab of Recipes (UX §5.8): a dense table with name,
- *  kcal/100 g, the editable store section, how many recipes use it and the
+ *  kcal/100 g, the editable diet class and store section, how many recipes use it and the
  *  data source. */
 export function IngredientTable() {
   const { t } = useTranslation()
@@ -125,6 +126,9 @@ function IngredientRows({ search }: { search: string }) {
                 {t("recipes.ingredients.col_kcal")}
               </th>
               <th scope="col" className="px-3 py-2 font-semibold">
+                {t("diet.label")}
+              </th>
+              <th scope="col" className="px-3 py-2 font-semibold">
                 {t("recipes.ingredients.col_section")}
               </th>
               <th
@@ -159,6 +163,15 @@ function IngredientRows({ search }: { search: string }) {
                 </th>
                 <td className="px-3 py-1 text-right text-ink-muted tabular-nums">
                   {item.kcal_100g == null ? "–" : kcal.format(item.kcal_100g)}
+                </td>
+                <td className="px-3 py-1">
+                  <FoodDietSelect
+                    food={item}
+                    label={t("diet.for", { name: item.name })}
+                    compact
+                    className="w-full sm:min-w-36"
+                    testId={`ingredient-diet-${item.id}`}
+                  />
                 </td>
                 <td className="px-3 py-1">
                   <SectionSelect ingredient={item} />

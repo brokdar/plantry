@@ -1,6 +1,7 @@
 import { useEffect, useId } from "react"
 import { useTranslation } from "react-i18next"
 
+import { DietIcon } from "@/components/recipes/DietIcon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -143,6 +144,11 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
             )}
           </div>
           <div className="text-xs text-muted-foreground">{ing.raw_text}</div>
+          <DietIcon
+            dietClass={ing.diet_class}
+            withLabel
+            className="mt-1 text-caption text-ink-muted"
+          />
           {optionalSkipped ? (
             <Badge
               variant="outline"

@@ -8,9 +8,10 @@ import { mockChickenBreast, mockBrownRice } from "@/test/fixtures"
 vi.mock("@/lib/api/foods", () => ({
   listFoods: vi.fn(),
   setShopSection: vi.fn(),
+  setDietClass: vi.fn(),
 }))
 
-import { listFoods, setShopSection } from "@/lib/api/foods"
+import { listFoods, setDietClass, setShopSection } from "@/lib/api/foods"
 import { IngredientTable } from "./IngredientTable"
 
 beforeEach(() => {
@@ -116,6 +117,55 @@ describe("IngredientTable", () => {
     await user.click(await screen.findByRole("option", { name: "Automatic" }))
     await vi.waitFor(() =>
       expect(setShopSection).toHaveBeenCalledWith(mockChickenBreast.id, null)
+    )
+  })
+
+  test("F6-AC1: the diet column shows the class and saves an override", async () => {
+    const user = userEvent.setup()
+    vi.mocked(listFoods).mockResolvedValue({
+      items: [mockChickenBreast],
+      total: 1,
+    })
+    vi.mocked(setDietClass).mockResolvedValue(undefined as never)
+    renderWithRouter(<IngredientTable />)
+
+    const select = await screen.findByRole("combobox", {
+      name: "Diet for Chicken breast",
+    })
+    expect(select).toHaveTextContent("With meatauto")
+    await user.click(select)
+    await user.click(await screen.findByRole("option", { name: "Pescetarian" }))
+    await vi.waitFor(() =>
+      expect(setDietClass).toHaveBeenCalledWith(
+        mockChickenBreast.id,
+        "pescetarian"
+      )
+    )
+  })
+
+  test("an overridden diet class reverts with Automatic", async () => {
+    const user = userEvent.setup()
+    vi.mocked(listFoods).mockResolvedValue({
+      items: [
+        {
+          ...mockChickenBreast,
+          diet_class: "vegan",
+          diet_class_source: "user",
+        },
+      ],
+      total: 1,
+    })
+    vi.mocked(setDietClass).mockResolvedValue(undefined as never)
+    renderWithRouter(<IngredientTable />)
+
+    const select = await screen.findByRole("combobox", {
+      name: "Diet for Chicken breast",
+    })
+    expect(select).toHaveTextContent(/^Vegan$/)
+    await user.click(select)
+    await user.click(await screen.findByRole("option", { name: "Automatic" }))
+    await vi.waitFor(() =>
+      expect(setDietClass).toHaveBeenCalledWith(mockChickenBreast.id, null)
     )
   })
 

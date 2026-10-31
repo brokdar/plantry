@@ -60,6 +60,7 @@ const draft: Draft = {
       note: "",
       confidence: "parsed",
       portion_grams: null,
+      diet_class: "vegan",
     },
     {
       raw_text: "Salz und Pfeffer",
@@ -70,6 +71,7 @@ const draft: Draft = {
       note: "",
       confidence: "unparsed",
       portion_grams: null,
+      diet_class: "unknown",
     },
   ],
   tags: [],
@@ -264,6 +266,18 @@ describe("ImportWizard", () => {
     expect(screen.getByRole("button", { name: /save recipe/i })).toBeDisabled()
   })
 
+  it("shows each line's derived diet class, read-only (D30)", async () => {
+    mockLookup([])
+    await openReview()
+
+    const mehl = (await screen.findByText("200g Mehl")).parentElement!
+    expect(mehl).toHaveTextContent("Vegan")
+    expect(
+      screen.getByText("Salz und Pfeffer", { selector: "div.text-xs" })
+        .parentElement
+    ).toHaveTextContent("Unknown")
+  })
+
   it("auto-links an exact catalogue match", async () => {
     mockLookup([localMehl])
     await openReview()
@@ -386,6 +400,7 @@ describe("ImportWizard", () => {
             note: "zum Garnieren",
             confidence: "unparsed",
             portion_grams: null,
+            diet_class: "unknown",
           },
           // Unparsed but with an amount: still a parse error to review.
           {
@@ -397,6 +412,7 @@ describe("ImportWizard", () => {
             note: "",
             confidence: "unparsed",
             portion_grams: null,
+            diet_class: "unknown",
           },
         ],
       },
@@ -501,6 +517,7 @@ describe("ImportWizard", () => {
           note: "",
           confidence: "approximate",
           portion_grams: 120,
+          diet_class: "vegan",
         },
       ],
     }
