@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import type { ShoppingList, ShoppingRange } from "@/lib/api/shopping"
 import { useLocalStorageState } from "@/lib/hooks/useLocalStorageState"
 import { colourBatches } from "@/lib/plan/batch-colours"
-import { usePlan } from "@/lib/queries/plan"
+import { UNDO_MS, usePlan } from "@/lib/queries/plan"
 import { useShoppingList } from "@/lib/queries/shopping"
 import { slotLabel } from "@/lib/slot-label"
 import { toast } from "@/lib/toast"
@@ -241,6 +241,7 @@ function useTicked(
     const before = [...ticked]
     write([])
     toast(t("shop.cleared"), {
+      duration: UNDO_MS,
       action: { label: t("common.undo"), onClick: () => write(before) },
     })
   }

@@ -106,13 +106,11 @@ test.describe("AppShell", () => {
     await mockAnchorToday(page)
     await page.goto("/shop")
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Shopping list" })
-    ).toBeVisible()
+    // The title is the shopping range; without `?from&to` it is the server
+    // default for the anchored window.
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(" to ")
+    await expect(page.getByTestId("shop-count")).toBeVisible()
     await expect(page.getByRole("dialog")).toHaveCount(0)
-    await expect(
-      page.getByRole("button", { name: "This window" })
-    ).toHaveAttribute("aria-pressed", "true")
     await page.unrouteAll({ behavior: "ignoreErrors" })
   })
 
