@@ -34,18 +34,18 @@ func NewPlanWriteHandler(svc planWriteService) *PlanWriteHandler {
 func (h *PlanWriteHandler) Clear(w http.ResponseWriter, r *http.Request) {
 	from, err := time.Parse(time.DateOnly, r.URL.Query().Get("from"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		writeError(w, http.StatusBadRequest, "error.invalid_query")
 		return
 	}
 	to, err := time.Parse(time.DateOnly, r.URL.Query().Get("to"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		writeError(w, http.StatusBadRequest, "error.invalid_query")
 		return
 	}
 	var slotID int64
 	if v := r.URL.Query().Get("slot_id"); v != "" {
-		if slotID, err = strconv.ParseInt(v, 10, 64); err != nil {
-			writeError(w, http.StatusBadRequest, "error.invalid_body")
+		if slotID, err = strconv.ParseInt(v, 10, 64); err != nil || slotID <= 0 {
+			writeError(w, http.StatusBadRequest, "error.invalid_query")
 			return
 		}
 	}

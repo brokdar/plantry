@@ -9,6 +9,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // ErrIterationsExceeded is raised when the agent loop hits its maximum
@@ -238,25 +239,18 @@ func emitAndPersistError(ctx context.Context, out chan<- llm.Event, repo Reposit
 	return &keyedError{key: key, err: err}
 }
 
-// errorMessageKey returns a stable i18n key for domain-level error types.
-// Unknown errors map to error.server.
+// errorMessageKey returns a stable i18n key for domain-level error types,
+// from the same tables the HTTP error map uses. Unknown errors map to
+// error.server.
 func errorMessageKey(err error) string {
-	switch {
-	case errors.Is(err, domain.ErrNotFound):
-		return "error.not_found"
-	case errors.Is(err, domain.ErrInvalidInput):
-		return "error.invalid_body"
-	case errors.Is(err, domain.ErrSlotUnknown):
-		return "error.plate.slot_unknown"
-	case errors.Is(err, domain.ErrCellUnavailable):
-		return "error.plate.cell_unavailable"
-	case errors.Is(err, domain.ErrCellOccupied):
-		return "error.plate.cell_occupied"
-	case errors.Is(err, ErrToolNotFound):
+	if errors.Is(err, ErrToolNotFound) {
 		return "error.ai.tool_not_found"
-	default:
-		return "error.server"
 	}
+	if key, ok := plate.MessageKey(err); ok {
+		return key
+	}
+	key, _ := domain.MessageKey(err, "food")
+	return key
 }
 
 func mustMarshal(v any) json.RawMessage {

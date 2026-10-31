@@ -37,6 +37,29 @@ var (
 	ErrUnitRequiresPortion = errors.New("unit requires a per-food portion override")
 )
 
+// quantityKeys maps the quantity sentinels to their i18n message keys.
+var quantityKeys = []struct {
+	err error
+	key string
+}{
+	{ErrInvalidQuantityShape, "error.plate.invalid_quantity_shape"},
+	{ErrInvalidQuantityForComposed, "error.plate.invalid_quantity_for_composed"},
+	{ErrInvalidQuantityForLeaf, "error.plate.invalid_quantity_for_leaf"},
+	{ErrUnitRequiresPortion, "error.plate.unit_requires_portion"},
+}
+
+// MessageKey returns the i18n message key of the quantity sentinel err wraps.
+// Check it before domain.MessageKey: these sentinels travel with
+// domain.ErrInvalidInput.
+func MessageKey(err error) (string, bool) {
+	for _, q := range quantityKeys {
+		if errors.Is(err, q.err) {
+			return q.key, true
+		}
+	}
+	return "", false
+}
+
 // Limits.
 const (
 	// MaxEaters caps Plate.Eaters (it matches profile.MaxHouseholdPortions).
@@ -888,7 +911,7 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 	default:
 		return nil, fmt.Errorf("%w: on_conflict must be fail, skip or overwrite", domain.ErrInvalidInput)
 	}
-	sessByRef, err := validateSnapshot(snap)
+	sessByRef, cells, err := validateSnapshot(snap)
 	if err != nil {
 		return nil, err
 	}
@@ -898,7 +921,7 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 		if err != nil {
 			return err
 		}
-		steps, replace, err := s.placeSnapshot(ctx, snap, opts.OnConflict, res)
+		steps, replace, err := s.placeSnapshot(ctx, snap, cells, opts.OnConflict, res)
 		if err != nil {
 			return err
 		}
@@ -984,13 +1007,13 @@ type placement struct {
 
 // placeSnapshot decides, without writing, where each snapshot plate goes. It
 // records skipped cells in res and returns the plates to write, in snapshot
-// order, and the plates ConflictOverwrite replaces.
-func (s *Service) placeSnapshot(ctx context.Context, snap PlanSnapshot, mode ConflictMode, res *ApplyResult) ([]placement, []Plate, error) {
+// order, and the plates ConflictOverwrite replaces. cells are the snapshot
+// plates' cells as validateSnapshot parsed them.
+func (s *Service) placeSnapshot(ctx context.Context, snap PlanSnapshot, cells []CellKey, mode ConflictMode, res *ApplyResult) ([]placement, []Plate, error) {
 	var steps []placement
 	var replace []Plate
-	for _, sp := range snap.Plates {
-		date, _ := time.Parse(dateLayout, sp.Date) // validated
-		cell := CellKey{Date: date, SlotID: sp.SlotID}
+	for i, sp := range snap.Plates {
+		cell := cells[i]
 
 		if sp.PlateID != nil {
 			p, err := s.plates.Get(ctx, *sp.PlateID)
@@ -1038,7 +1061,7 @@ func (s *Service) placeSnapshot(ctx context.Context, snap PlanSnapshot, mode Con
 }
 
 // mergeInto adds a snapshot plate's components back to its surviving plate p.
-func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, sessByRef map[string]SnapshotSession, created map[string]int64, e env, t *tracker) error {
+func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, sessByRef map[string]validSession, created map[string]int64, e env, t *tracker) error {
 	comps, err := s.snapshotComponents(ctx, t.j, sp.Components, sessByRef, created)
 	if err != nil {
 		return err
@@ -1062,7 +1085,7 @@ func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, ses
 
 // snapshotComponents turns snapshot components into plate components,
 // creating each referenced snapshot session on first use.
-func (s *Service) snapshotComponents(ctx context.Context, j *journal, in []SnapshotComponent, sessByRef map[string]SnapshotSession, created map[string]int64) ([]PlateComponent, error) {
+func (s *Service) snapshotComponents(ctx context.Context, j *journal, in []SnapshotComponent, sessByRef map[string]validSession, created map[string]int64) ([]PlateComponent, error) {
 	out := make([]PlateComponent, len(in))
 	for i, c := range in {
 		pc := PlateComponent{
@@ -1078,9 +1101,8 @@ func (s *Service) snapshotComponents(ctx context.Context, j *journal, in []Snaps
 				id, ok := created[c.Session.Ref]
 				if !ok {
 					ss := sessByRef[c.Session.Ref]
-					cookDate, _ := time.Parse(dateLayout, ss.CookDate) // validated
 					sess := &CookSession{
-						FoodID: ss.FoodID, CookDate: cookDate, CookSlotID: ss.CookSlotID,
+						FoodID: ss.FoodID, CookDate: ss.cookDate, CookSlotID: ss.CookSlotID,
 						Portions: ss.Portions, FrozenPortions: ss.FrozenPortions,
 						CookedAt: ss.CookedAt, Note: ss.Note,
 					}
@@ -1099,54 +1121,64 @@ func (s *Service) snapshotComponents(ctx context.Context, j *journal, in []Snaps
 	return out, nil
 }
 
-// validateSnapshot checks a snapshot's shape before anything is written and
-// returns its sessions by ref.
-func validateSnapshot(snap PlanSnapshot) (map[string]SnapshotSession, error) {
-	byRef := make(map[string]SnapshotSession, len(snap.Sessions))
+// validSession is a snapshot session with its parsed cook date.
+type validSession struct {
+	SnapshotSession
+	cookDate time.Time
+}
+
+// validateSnapshot checks a snapshot's shape before anything is written. It
+// returns its sessions by ref and the plates' cells, index-aligned with
+// snap.Plates, with the dates it parsed.
+func validateSnapshot(snap PlanSnapshot) (map[string]validSession, []CellKey, error) {
+	byRef := make(map[string]validSession, len(snap.Sessions))
 	for i, ss := range snap.Sessions {
 		if ss.Ref == "" {
-			return nil, fmt.Errorf("%w: sessions[%d] ref required", domain.ErrInvalidInput, i)
+			return nil, nil, fmt.Errorf("%w: sessions[%d] ref required", domain.ErrInvalidInput, i)
 		}
 		if _, dup := byRef[ss.Ref]; dup {
-			return nil, fmt.Errorf("%w: duplicate session ref %q", domain.ErrInvalidInput, ss.Ref)
+			return nil, nil, fmt.Errorf("%w: duplicate session ref %q", domain.ErrInvalidInput, ss.Ref)
 		}
-		if _, err := time.Parse(dateLayout, ss.CookDate); err != nil {
-			return nil, fmt.Errorf("%w: sessions[%d] cook_date", domain.ErrInvalidInput, i)
+		cookDate, err := time.Parse(dateLayout, ss.CookDate)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: sessions[%d] cook_date", domain.ErrInvalidInput, i)
 		}
 		if !(ss.Portions > 0) || ss.FrozenPortions < 0 || ss.FrozenPortions > ss.Portions {
-			return nil, fmt.Errorf("%w: sessions[%d] portions", domain.ErrInvalidInput, i)
+			return nil, nil, fmt.Errorf("%w: sessions[%d] portions", domain.ErrInvalidInput, i)
 		}
-		byRef[ss.Ref] = ss
+		byRef[ss.Ref] = validSession{SnapshotSession: ss, cookDate: cookDate}
 	}
-	cells := make(map[CellKey]bool, len(snap.Plates))
+	cells := make([]CellKey, len(snap.Plates))
+	seen := make(map[CellKey]bool, len(snap.Plates))
 	for i, sp := range snap.Plates {
 		date, err := time.Parse(dateLayout, sp.Date)
 		if err != nil {
-			return nil, fmt.Errorf("%w: plates[%d] date", domain.ErrInvalidInput, i)
+			return nil, nil, fmt.Errorf("%w: plates[%d] date", domain.ErrInvalidInput, i)
 		}
 		c := CellKey{Date: date, SlotID: sp.SlotID}
-		if cells[c] {
-			return nil, fmt.Errorf("%w: plates[%d] duplicate cell %s slot %d", domain.ErrInvalidInput, i, sp.Date, sp.SlotID)
+		if seen[c] {
+			return nil, nil, fmt.Errorf("%w: plates[%d] duplicate cell %s slot %d", domain.ErrInvalidInput, i, sp.Date, sp.SlotID)
 		}
-		cells[c] = true
+		seen[c] = true
+		cells[i] = c
 		if sp.Eaters < 0 {
-			return nil, fmt.Errorf("%w: plates[%d] eaters", domain.ErrInvalidInput, i)
+			return nil, nil, fmt.Errorf("%w: plates[%d] eaters", domain.ErrInvalidInput, i)
 		}
 		for j, c := range sp.Components {
 			if c.Session == nil {
 				continue
 			}
 			if (c.Session.ID != 0) == (c.Session.Ref != "") {
-				return nil, fmt.Errorf("%w: plates[%d].components[%d] session needs exactly one of id or ref", domain.ErrInvalidInput, i, j)
+				return nil, nil, fmt.Errorf("%w: plates[%d].components[%d] session needs exactly one of id or ref", domain.ErrInvalidInput, i, j)
 			}
 			if c.Session.Ref != "" {
 				if _, ok := byRef[c.Session.Ref]; !ok {
-					return nil, fmt.Errorf("%w: plates[%d].components[%d] unknown session ref %q", domain.ErrInvalidInput, i, j, c.Session.Ref)
+					return nil, nil, fmt.Errorf("%w: plates[%d].components[%d] unknown session ref %q", domain.ErrInvalidInput, i, j, c.Session.Ref)
 				}
 			}
 		}
 	}
-	return byRef, nil
+	return byRef, cells, nil
 }
 
 // ── Removal ─────────────────────────────────────────────────────────────

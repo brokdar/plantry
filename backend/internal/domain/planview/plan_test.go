@@ -187,3 +187,20 @@ func TestPlan_SessionsFromEarlierWindowAndAvailability(t *testing.T) {
 	assert.Equal(t, availability.ModeNone, none.Mode)
 	assert.Equal(t, availability.SourceOverride, none.Source)
 }
+
+// TestReadModels_ReadInOneTx: each read model reads in one transaction, so a
+// concurrent write cannot produce a torn view.
+func TestReadModels_ReadInOneTx(t *testing.T) {
+	f := newFixture()
+	f.ac1()
+	start := date("2026-10-31")
+
+	_, err := f.service().Plan(ctx, &start, date("2026-11-04"))
+	require.NoError(t, err)
+	assert.Equal(t, 1, f.tx.calls, "Plan")
+
+	_, err = f.service().Today(ctx, date("2026-11-04"))
+	require.NoError(t, err)
+	assert.Equal(t, 2, f.tx.calls, "Today")
+	assert.Zero(t, f.readsOutsideTx)
+}

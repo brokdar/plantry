@@ -110,6 +110,16 @@ type Setup struct {
 
 // Today builds the Today read model for date.
 func (s *Service) Today(ctx context.Context, date time.Time) (*Today, error) {
+	var t *Today
+	err := s.d.Tx.InTx(ctx, func(ctx context.Context) error {
+		var err error
+		t, err = s.today(ctx, date)
+		return err
+	})
+	return t, err
+}
+
+func (s *Service) today(ctx context.Context, date time.Time) (*Today, error) {
 	e, err := s.loadEnv(ctx)
 	if err != nil {
 		return nil, err

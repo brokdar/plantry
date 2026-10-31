@@ -229,6 +229,7 @@ export function useApplyResultToasts() {
       ["result_skipped_occupied", result.skipped_occupied.length],
       ["result_skipped_unavailable", result.skipped_unavailable.length],
       ["result_skipped_no_slot", result.skipped_no_slot.length],
+      ["result_skipped_overrides", result.skipped_overrides.length],
     ] as const
     for (const [key, count] of skipped) {
       if (count > 0) toast.warning(t(`routines.apply.${key}`, { count }))

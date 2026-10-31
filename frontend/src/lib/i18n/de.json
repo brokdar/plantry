@@ -876,6 +876,7 @@
     "not_found": "Ressource nicht gefunden.",
     "invalid_id": "Ungültige ID.",
     "invalid_body": "Ungültige Anfragedaten.",
+    "invalid_query": "Ungültige Anfrageparameter.",
     "server": "Etwas ist schiefgelaufen.",
     "ingredient": {
       "duplicate_name": "Eine Zutat mit diesem Namen existiert bereits.",
@@ -1590,6 +1591,8 @@
       "result_skipped_unavailable_other": "{{count}} Mahlzeiten mit „Kein Essen“ ausgelassen.",
       "result_skipped_no_slot_one": "{{count}} Essen ließ sich keiner Mahlzeit mehr zuordnen.",
       "result_skipped_no_slot_other": "{{count}} Essen ließen sich keiner Mahlzeit mehr zuordnen.",
+      "result_skipped_overrides_one": "„Kein Essen“ ließ sich für {{count}} Mahlzeit nicht übernehmen.",
+      "result_skipped_overrides_other": "„Kein Essen“ ließ sich für {{count}} Mahlzeiten nicht übernehmen.",
       "undo_partial": "Rückgängig hat nur teilweise geklappt. Schau im Plan nach, ob noch Mahlzeiten übrig sind oder fehlen."
     }
   },

@@ -1,109 +1,68 @@
 package handlers
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
+// sentinelStatus is the HTTP status of each domain sentinel. The message keys
+// come from domain.MessageKey and plate.MessageKey (the single source the
+// agent shares).
+var sentinelStatus = map[error]int{
+	domain.ErrInvalidShopSection:        http.StatusBadRequest,
+	domain.ErrShopSectionLeafOnly:       http.StatusBadRequest,
+	domain.ErrInvalidPortions:           http.StatusBadRequest,
+	domain.ErrNotFound:                  http.StatusNotFound,
+	domain.ErrDuplicateName:             http.StatusConflict,
+	domain.ErrInUse:                     http.StatusConflict,
+	domain.ErrSlotUnknown:               http.StatusUnprocessableEntity,
+	domain.ErrInvalidDay:                http.StatusBadRequest,
+	domain.ErrInvalidInput:              http.StatusBadRequest,
+	domain.ErrLookupFailed:              http.StatusBadGateway,
+	domain.ErrInvalidMacros:             http.StatusBadRequest,
+	domain.ErrAIProviderMissing:         http.StatusServiceUnavailable,
+	domain.ErrAIStreamInterrupted:       http.StatusBadGateway,
+	domain.ErrInvalidFeedbackStatus:     http.StatusBadRequest,
+	domain.ErrImportBodyTooLarge:        http.StatusRequestEntityTooLarge,
+	domain.ErrImportNotHTML:             http.StatusUnsupportedMediaType,
+	domain.ErrImportNoRecipe:            http.StatusUnprocessableEntity,
+	domain.ErrImportFetchFailed:         http.StatusBadGateway,
+	domain.ErrImportLLMFailed:           http.StatusBadGateway,
+	domain.ErrImportInvalidResolution:   http.StatusUnprocessableEntity,
+	domain.ErrInvalidDietType:           http.StatusBadRequest,
+	domain.ErrInvalidMeatDays:           http.StatusBadRequest,
+	domain.ErrInvalidHouseholdPortions:  http.StatusBadRequest,
+	domain.ErrCellHasPlate:              http.StatusConflict,
+	domain.ErrPresetRequired:            http.StatusBadRequest,
+	domain.ErrPresetNotAllowed:          http.StatusBadRequest,
+	domain.ErrSlotInactive:              http.StatusBadRequest,
+	domain.ErrAvailabilitySlotUnknown:   http.StatusBadRequest,
+	domain.ErrAvailabilityPresetUnknown: http.StatusBadRequest,
+	domain.ErrCellUnavailable:           http.StatusConflict,
+	domain.ErrCellOccupied:              http.StatusConflict,
+	domain.ErrSessionBeforeCook:         http.StatusConflict,
+	domain.ErrSessionPastKeepDays:       http.StatusConflict,
+	domain.ErrSessionPastFreezerDays:    http.StatusConflict,
+	domain.ErrSessionFoodMismatch:       http.StatusConflict,
+	domain.ErrSessionFreezingDisabled:   http.StatusConflict,
+	domain.ErrSessionNotFreezable:       http.StatusConflict,
+	domain.ErrSessionNotFound:           http.StatusConflict,
+	domain.ErrInvalidPlanStart:          http.StatusBadRequest,
+}
+
 func toHTTPWithResource(err error, resource string) (int, string) {
-	switch {
-	// Plate quantity sentinels (more specific than ErrInvalidInput; check first).
-	case errors.Is(err, plate.ErrInvalidQuantityShape):
-		return http.StatusBadRequest, "error.plate.invalid_quantity_shape"
-	case errors.Is(err, plate.ErrInvalidQuantityForComposed):
-		return http.StatusBadRequest, "error.plate.invalid_quantity_for_composed"
-	case errors.Is(err, plate.ErrInvalidQuantityForLeaf):
-		return http.StatusBadRequest, "error.plate.invalid_quantity_for_leaf"
-	case errors.Is(err, plate.ErrUnitRequiresPortion):
-		return http.StatusBadRequest, "error.plate.unit_requires_portion"
-	case errors.Is(err, domain.ErrInvalidShopSection):
-		return http.StatusBadRequest, "error.food.invalid_shop_section"
-	case errors.Is(err, domain.ErrShopSectionLeafOnly):
-		return http.StatusBadRequest, "error.food.shop_section_leaf_only"
-	case errors.Is(err, domain.ErrInvalidPortions):
-		return http.StatusBadRequest, "error.food.invalid_portions"
-	case errors.Is(err, domain.ErrNotFound):
-		return http.StatusNotFound, "error.not_found"
-	case errors.Is(err, domain.ErrDuplicateName):
-		return http.StatusConflict, "error." + resource + ".duplicate_name"
-	case errors.Is(err, domain.ErrInUse):
-		return http.StatusConflict, "error." + resource + ".in_use"
-	case errors.Is(err, domain.ErrSlotUnknown):
-		return http.StatusUnprocessableEntity, "error.plate.slot_unknown"
-	case errors.Is(err, domain.ErrInvalidDay):
-		return http.StatusBadRequest, "error.invalid_body"
-	case errors.Is(err, domain.ErrInvalidInput):
-		return http.StatusBadRequest, "error.invalid_body"
-	case errors.Is(err, domain.ErrLookupFailed):
-		return http.StatusBadGateway, "error." + resource + ".lookup_failed"
-	case errors.Is(err, domain.ErrInvalidMacros):
-		return http.StatusBadRequest, "error.profile.invalid_macros"
-	case errors.Is(err, domain.ErrAIProviderMissing):
-		return http.StatusServiceUnavailable, "error.ai.provider_missing"
-	case errors.Is(err, domain.ErrAIStreamInterrupted):
-		return http.StatusBadGateway, "error.ai.stream_interrupted"
-	case errors.Is(err, domain.ErrInvalidFeedbackStatus):
-		return http.StatusBadRequest, "error.feedback.invalid_status"
-	case errors.Is(err, domain.ErrImportBodyTooLarge):
-		return http.StatusRequestEntityTooLarge, "error.import.body_too_large"
-	case errors.Is(err, domain.ErrImportNotHTML):
-		return http.StatusUnsupportedMediaType, "error.import.not_html"
-	case errors.Is(err, domain.ErrImportNoRecipe):
-		return http.StatusUnprocessableEntity, "error.import.no_recipe"
-	case errors.Is(err, domain.ErrImportFetchFailed):
-		return http.StatusBadGateway, "error.import.fetch_failed"
-	case errors.Is(err, domain.ErrImportLLMFailed):
-		return http.StatusBadGateway, "error.import.llm_failed"
-	case errors.Is(err, domain.ErrImportInvalidResolution):
-		return http.StatusUnprocessableEntity, "error.import.invalid_resolution"
-	// Profile planning preferences.
-	case errors.Is(err, domain.ErrInvalidDietType):
-		return http.StatusBadRequest, "error.profile.invalid_diet_type"
-	case errors.Is(err, domain.ErrInvalidMeatDays):
-		return http.StatusBadRequest, "error.profile.invalid_meat_days"
-	case errors.Is(err, domain.ErrInvalidHouseholdPortions):
-		return http.StatusBadRequest, "error.profile.invalid_household_portions"
-	// Availability.
-	case errors.Is(err, domain.ErrCellHasPlate):
-		return http.StatusConflict, "error.availability.cell_has_plate"
-	case errors.Is(err, domain.ErrPresetRequired):
-		return http.StatusBadRequest, "error.availability.preset_required"
-	case errors.Is(err, domain.ErrPresetNotAllowed):
-		return http.StatusBadRequest, "error.availability.preset_not_allowed"
-	case errors.Is(err, domain.ErrSlotInactive):
-		return http.StatusBadRequest, "error.availability.slot_inactive"
-	case errors.Is(err, domain.ErrAvailabilitySlotUnknown):
-		return http.StatusBadRequest, "error.availability.slot_unknown"
-	case errors.Is(err, domain.ErrAvailabilityPresetUnknown):
-		return http.StatusBadRequest, "error.availability.preset_unknown"
-	// Plate cells (D10).
-	case errors.Is(err, domain.ErrCellUnavailable):
-		return http.StatusConflict, "error.plate.cell_unavailable"
-	case errors.Is(err, domain.ErrCellOccupied):
-		return http.StatusConflict, "error.plate.cell_occupied"
-	// Cook sessions (Phase 2 D13, D14).
-	case errors.Is(err, domain.ErrSessionBeforeCook):
-		return http.StatusConflict, "error.session.before_cook"
-	case errors.Is(err, domain.ErrSessionPastKeepDays):
-		return http.StatusConflict, "error.session.past_keep_days"
-	case errors.Is(err, domain.ErrSessionPastFreezerDays):
-		return http.StatusConflict, "error.session.past_freezer_days"
-	case errors.Is(err, domain.ErrSessionFoodMismatch):
-		return http.StatusConflict, "error.session.food_mismatch"
-	case errors.Is(err, domain.ErrSessionFreezingDisabled):
-		return http.StatusConflict, "error.session.freezing_disabled"
-	case errors.Is(err, domain.ErrSessionNotFreezable):
-		return http.StatusConflict, "error.session.not_freezable"
-	case errors.Is(err, domain.ErrSessionNotFound):
-		return http.StatusConflict, "error.session.not_found"
-	case errors.Is(err, domain.ErrInvalidPlanStart):
-		return http.StatusBadRequest, "error.plan.invalid_start"
-	default:
+	// Plate quantity sentinels wrap ErrInvalidInput; check them first.
+	if key, ok := plate.MessageKey(err); ok {
+		return http.StatusBadRequest, key
+	}
+	key, sentinel := domain.MessageKey(err, resource)
+	status, ok := sentinelStatus[sentinel]
+	if !ok {
 		return http.StatusInternalServerError, "error.server"
 	}
+	return status, key
 }
 
 func toHTTP(err error) (int, string) {

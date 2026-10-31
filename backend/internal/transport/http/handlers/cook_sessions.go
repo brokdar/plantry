@@ -175,7 +175,7 @@ func (h *CookSessionHandler) LeftoverCells(w http.ResponseWriter, r *http.Reques
 	}
 	count, err := strconv.Atoi(r.URL.Query().Get("count"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		writeError(w, http.StatusBadRequest, "error.invalid_query")
 		return
 	}
 	cells, err := h.svc.LeftoverCells(r.Context(), id, count)

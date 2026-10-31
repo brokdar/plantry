@@ -34,6 +34,7 @@ function result(overrides: Partial<ApplyResult> = {}): ApplyResult {
     skipped_no_slot: [],
     removed: empty,
     created_overrides: [],
+    skipped_overrides: [],
     ...overrides,
   }
 }
@@ -223,12 +224,14 @@ describe("useApplyResultToasts", () => {
         skipped_occupied: [cell(2)],
         skipped_unavailable: [cell(3), cell(4)],
         skipped_no_slot: [cell(5)],
+        skipped_overrides: [cell(6), cell(7)],
       })
     )
     expect(toastMock.warning.mock.calls.map((c) => c[0])).toEqual([
       "Skipped 1 meal that already had a plate.",
       "Left out 2 No plate meals.",
       "1 plate could not find its meal slot.",
+      "Could not copy No plate to 2 meals.",
     ])
     expect(toastMock.mock.invocationCallOrder[0]).toBeLessThan(
       toastMock.warning.mock.invocationCallOrder[0]!

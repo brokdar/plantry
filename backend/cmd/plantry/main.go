@@ -171,6 +171,7 @@ func run() error {
 		Settings:     settingsSvc,
 		Profile:      profileSvc,
 		Recipes:      foodRepo,
+		Tx:           txRunner,
 	})
 
 	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).

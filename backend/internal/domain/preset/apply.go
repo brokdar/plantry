@@ -70,6 +70,9 @@ type ApplyResult struct {
 	Removed plate.PlanSnapshot
 	// CreatedOverrides are the "none" overrides copy week wrote.
 	CreatedOverrides []plate.CellKey
+	// SkippedOverrides are the "none" overrides copy week failed to copy
+	// (other than onto a plate, which counts as SkippedOccupied).
+	SkippedOverrides []plate.CellKey
 }
 
 func newApplyResult(out *plate.ApplyResult) *ApplyResult {
@@ -216,8 +219,8 @@ func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResu
 
 	// The plates are committed, so the result (and what undoes it) must reach
 	// the caller: copying an override is best-effort. A cell holding a plate
-	// is reported as occupied; other failures are logged and the cell is
-	// left as it was.
+	// is reported as occupied; other failures are logged, reported as
+	// skipped overrides and the cell is left as it was.
 	for _, c := range noPlate {
 		td := c.Date.AddDate(0, 0, shiftDays)
 		created, err := s.avail.SetNoneIfUnset(ctx, td, c.SlotID, c.Note)
@@ -227,6 +230,7 @@ func (s *Service) CopyWeek(ctx context.Context, req CopyWeekRequest) (*ApplyResu
 		case err != nil:
 			slog.WarnContext(ctx, "copy_week.override_copy_failed",
 				"date", td.Format(dateLayout), "slot_id", c.SlotID, "error", err)
+			res.SkippedOverrides = append(res.SkippedOverrides, plate.CellKey{Date: td, SlotID: c.SlotID})
 		case created:
 			res.CreatedOverrides = append(res.CreatedOverrides, plate.CellKey{Date: td, SlotID: c.SlotID})
 		}

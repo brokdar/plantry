@@ -30,6 +30,24 @@ type store struct {
 	plateCalls     [][2]time.Time
 	sessionCalls   int
 	nutritionCalls map[int64]int
+	// readsOutsideTx counts reads whose ctx carries no fakeTx transaction.
+	readsOutsideTx int
+}
+
+type txMarker struct{}
+
+// fakeTx is a domain.Transactor that marks fn's ctx and counts calls.
+type fakeTx struct{ calls int }
+
+func (t *fakeTx) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	t.calls++
+	return fn(context.WithValue(ctx, txMarker{}, true))
+}
+
+func (s *store) read(ctx context.Context) {
+	if ctx.Value(txMarker{}) == nil {
+		s.readsOutsideTx++
+	}
 }
 
 func newStore() *store {
@@ -44,7 +62,8 @@ func newStore() *store {
 
 func inRange(d, from, to time.Time) bool { return !d.Before(from) && !d.After(to) }
 
-func (s *store) ListByDateRange(_ context.Context, from, to time.Time) ([]plate.Plate, error) {
+func (s *store) ListByDateRange(ctx context.Context, from, to time.Time) ([]plate.Plate, error) {
+	s.read(ctx)
 	s.plateCalls = append(s.plateCalls, [2]time.Time{from, to})
 	out := []plate.Plate{}
 	for _, p := range s.plates {
@@ -55,7 +74,8 @@ func (s *store) ListByDateRange(_ context.Context, from, to time.Time) ([]plate.
 	return out, nil
 }
 
-func (s *store) ListInRange(_ context.Context, from, to time.Time) ([]plate.CookSession, map[int64][]plate.Link, error) {
+func (s *store) ListInRange(ctx context.Context, from, to time.Time) ([]plate.CookSession, map[int64][]plate.Link, error) {
+	s.read(ctx)
 	s.sessionCalls++
 	links := map[int64][]plate.Link{}
 	touched := map[int64]bool{}
@@ -83,7 +103,8 @@ func (s *store) ListInRange(_ context.Context, from, to time.Time) ([]plate.Cook
 	return out, links, nil
 }
 
-func (s *store) LookupByIDs(_ context.Context, ids []int64) (map[int64]*food.Food, error) {
+func (s *store) LookupByIDs(ctx context.Context, ids []int64) (map[int64]*food.Food, error) {
+	s.read(ctx)
 	out := map[int64]*food.Food{}
 	for _, id := range ids {
 		if f, ok := s.foods[id]; ok {
@@ -93,7 +114,8 @@ func (s *store) LookupByIDs(_ context.Context, ids []int64) (map[int64]*food.Foo
 	return out, nil
 }
 
-func (s *store) PerPortionDetailed(_ context.Context, foodID int64) (food.Detailed, error) {
+func (s *store) PerPortionDetailed(ctx context.Context, foodID int64) (food.Detailed, error) {
+	s.read(ctx)
 	s.nutritionCalls[foodID]++
 	d, ok := s.nutrition[foodID]
 	if !ok {
@@ -102,7 +124,8 @@ func (s *store) PerPortionDetailed(_ context.Context, foodID int64) (food.Detail
 	return d, nil
 }
 
-func (s *store) Resolve(_ context.Context, from, to time.Time) ([]availability.Cell, error) {
+func (s *store) Resolve(ctx context.Context, from, to time.Time) ([]availability.Cell, error) {
+	s.read(ctx)
 	out := []availability.Cell{}
 	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
 		for _, sl := range s.slots {
@@ -119,7 +142,8 @@ func (s *store) Resolve(_ context.Context, from, to time.Time) ([]availability.C
 	return out, nil
 }
 
-func (s *store) List(_ context.Context, activeOnly bool) ([]slot.TimeSlot, error) {
+func (s *store) List(ctx context.Context, activeOnly bool) ([]slot.TimeSlot, error) {
+	s.read(ctx)
 	out := []slot.TimeSlot{}
 	for _, sl := range s.slots {
 		if !activeOnly || sl.Active {
@@ -129,7 +153,10 @@ func (s *store) List(_ context.Context, activeOnly bool) ([]slot.TimeSlot, error
 	return out, nil
 }
 
-func (s *store) CountComposedFoods(context.Context) (int64, error) { return s.recipes, nil }
+func (s *store) CountComposedFoods(ctx context.Context) (int64, error) {
+	s.read(ctx)
+	return s.recipes, nil
+}
 
 type fakeSettings map[string]string
 
@@ -179,6 +206,7 @@ type fixture struct {
 	*store
 	settings fakeSettings
 	profile  *fakeProfile
+	tx       *fakeTx
 	nextID   int64
 }
 
@@ -213,6 +241,7 @@ func newFixture() *fixture {
 			settings.KeyPlanFreezerKeepDays: "90",
 		},
 		profile: &fakeProfile{p: profile.Profile{HouseholdPortions: 2}},
+		tx:      &fakeTx{},
 		nextID:  100,
 	}
 }
@@ -225,7 +254,7 @@ func (f *fixture) id() int64 {
 func (f *fixture) service() *Service {
 	return NewService(Deps{
 		Plates: f.store, Sessions: f.store, Foods: f.store, Nutrition: f.store,
-		Availability: f.store, Slots: f.store, Settings: f.settings, Profile: f.profile, Recipes: f.store,
+		Availability: f.store, Slots: f.store, Settings: f.settings, Profile: f.profile, Recipes: f.store, Tx: f.tx,
 	})
 }
 

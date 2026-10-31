@@ -534,6 +534,8 @@ func TestCopyWeek_OverrideCopyIsBestEffort(t *testing.T) {
 		"a plate that appeared in the cell is reported as occupied")
 	assert.Equal(t, []plate.CellKey{{Date: tgt.AddDate(0, 0, 3), SlotID: e.slotID}}, res.CreatedOverrides,
 		"only overrides that were written are reported")
+	assert.Equal(t, []plate.CellKey{{Date: tgt.AddDate(0, 0, 2), SlotID: e.slotID}}, res.SkippedOverrides,
+		"a failed override copy is reported, not only logged")
 	assert.Equal(t, availability.ModePlan, e.cell(t, tgt.AddDate(0, 0, 2)).Mode)
 }
 
@@ -546,6 +548,7 @@ func TestCopyWeek_EmptySourceWeek(t *testing.T) {
 	assert.Empty(t, res.SkippedNoSlot)
 	assert.Empty(t, res.Removed.Plates)
 	assert.Empty(t, res.CreatedOverrides)
+	assert.Empty(t, res.SkippedOverrides)
 }
 
 func TestCopyWeek_OverwriteConflict(t *testing.T) {
