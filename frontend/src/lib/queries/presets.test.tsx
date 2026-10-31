@@ -14,13 +14,7 @@ import { restorePlan } from "@/lib/api/plan"
 import { deletePlate } from "@/lib/api/plates"
 import type { ApplyResult } from "@/lib/api/presets"
 
-import {
-  availabilityKeys,
-  planKeys,
-  plateKeys,
-  shoppingKeys,
-  todayKeys,
-} from "./keys"
+import { availabilityKeys, planKeys, shoppingKeys, todayKeys } from "./keys"
 import { useUndoApply } from "./presets"
 
 beforeEach(() => vi.clearAllMocks())
@@ -88,7 +82,6 @@ describe("useUndoApply", () => {
     const restore = vi.mocked(restorePlan).mock.invocationCallOrder[0]!
     expect(lastDelete).toBeLessThan(restore)
     expect(keys).toEqual([
-      plateKeys.all,
       availabilityKeys.ranges(),
       planKeys.all,
       todayKeys.all,

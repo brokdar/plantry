@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { chatStreamStore } from "../stores/chat-stream"
 
 import { useChatStream } from "./ai"
-import { plateKeys } from "./keys"
+import { planKeys, todayKeys } from "./keys"
 
 function stringToReadable(s: string): ReadableStream<Uint8Array> {
   const enc = new TextEncoder()
@@ -109,7 +109,7 @@ describe("useChatStream", () => {
     expect(all.every((q) => !q.queryKey.includes("assistant_delta"))).toBe(true)
   })
 
-  it("invalidates plate range cache on plate_changed", async () => {
+  it("invalidates the plan views on plate_changed", async () => {
     const from = "2026-04-14"
     const to = "2026-04-20"
     const sse =
@@ -128,8 +128,6 @@ describe("useChatStream", () => {
         mutations: { retry: false },
       },
     })
-    qc.setQueryData(plateKeys.range(from, to), { plates: [] })
-
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
 
     const { result } = renderHook(() => useChatStream(), {
@@ -139,12 +137,9 @@ describe("useChatStream", () => {
       await result.current.mutateAsync({ message: "plan", range: { from, to } })
     })
 
-    const plateInvalidations = invalidateSpy.mock.calls.filter(
-      (c) =>
-        Array.isArray(c[0]?.queryKey) &&
-        (c[0]!.queryKey as readonly unknown[])[0] === "plates"
-    )
-    expect(plateInvalidations.length).toBeGreaterThanOrEqual(1)
+    const keys = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey)
+    expect(keys).toContainEqual(planKeys.all)
+    expect(keys).toContainEqual(todayKeys.all)
   })
 
   it("tool_call_* events accumulate args in the stream buffer", async () => {

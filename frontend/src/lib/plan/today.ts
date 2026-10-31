@@ -32,7 +32,7 @@ export interface TodayLeftoverCard {
   cell: BoardCell
   badge: CellBadge
   slotName: string
-  /** "use by Wed", or "use by today" on its last day. */
+  /** "use by Wed", or "use by today" on its last day when that is today. */
   useBy: string | null
   /** Portions to reheat: the link's portions (component × eaters). */
   portions: number
@@ -55,11 +55,23 @@ export interface TodayRateView {
   question: string
 }
 
-export interface TodayView {
+/** What `GET /api/today` alone gives: rendered before the plan loads. */
+export interface TodayHeaderView {
   /** "Monday, 2 November". */
   dateLine: string
   /** The headline: exactly one verdict. */
   headline: string
+  /** Null on a future day: its meals are not eaten yet. */
+  rate: TodayRateView | null
+  /** The next window's start while planning it is due, else null. */
+  planNext: string | null
+  /** Recipes still missing to reach the planning target; 0 when reached. */
+  recipesMissing: number
+  noPlan: boolean
+}
+
+/** The parts that need the window's plan: colours, badges and slot names. */
+export interface TodayPlanView {
   /** The window's board, for the week strip. */
   board: Board
   cook: TodayCookCard[]
@@ -67,12 +79,6 @@ export interface TodayView {
   /** One row per meal slot, without the meal the leftover card shows. */
   rows: TodayRow[]
   reminders: TodayReminderView[]
-  rate: TodayRateView | null
-  /** The next window's start while planning it is due, else null. */
-  planNext: string | null
-  /** Recipes still missing to reach the planning target; 0 when reached. */
-  recipesMissing: number
-  noPlan: boolean
 }
 
 /** The headline for a verdict (UX §5.2), e.g. "Cook Chili × 6". */
@@ -97,12 +103,53 @@ export function shiftDate(iso: string, n: number): string {
 }
 
 /**
- * Today's view model (UX §5.2): the day's verdict, cards, rows and
- * reminders from `GET /api/today`, joined with the window's board from
- * `GET /api/plan` for batch colours, badges and use-by dates. Pure: every
- * domain fact comes from the API.
+ * The header of Today (UX §5.2) from `GET /api/today` alone: date line,
+ * verdict, rating question, plan banner and setup state. `realToday` is the
+ * client's date: the rating question only asks about days already lived.
  */
-export function buildToday(today: Today, plan: Plan, f: Formatter): TodayView {
+export function buildTodayHeader(
+  today: Today,
+  realToday: string,
+  f: Formatter
+): TodayHeaderView {
+  return {
+    dateLine: formatDate(today.date, f, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    }),
+    headline: verdictText(today.verdict, f),
+    rate:
+      today.rate && today.date <= realToday
+        ? {
+            plateId: today.rate.plate_id,
+            question: f.t("today.rate.question", {
+              weekday: formatDate(today.rate.date, f, { weekday: "long" }),
+              name: today.rate.food_name,
+            }),
+          }
+        : null,
+    planNext: today.plan_banner.due ? today.plan_banner.next_start : null,
+    recipesMissing: Math.max(
+      0,
+      today.setup.recipe_target - today.setup.recipe_count
+    ),
+    noPlan: today.verdict.kind === "no_plan",
+  }
+}
+
+/**
+ * The plan-dependent parts of Today: `GET /api/today`'s cooking and
+ * reminders joined with the window's board from `GET /api/plan` for batch
+ * colours, badges, use-by dates and slot names. Pure: every domain fact
+ * comes from the API.
+ */
+export function buildTodayPlan(
+  today: Today,
+  plan: Plan,
+  realToday: string,
+  f: Formatter
+): TodayPlanView {
   const board = buildBoard(plan, f)
   const day = board.days.find((d) => d.date === today.date)
   const slotName = new Map(
@@ -143,7 +190,7 @@ export function buildToday(today: Today, plan: Plan, f: Formatter): TodayView {
         slotName: nameOf(cell.slotId),
         useBy:
           cell.badge.variant === "leftover" && session
-            ? session.use_by === today.date
+            ? session.use_by === realToday
               ? f.t("today.use_by_today")
               : f.t("today.use_by", {
                   day: formatDate(session.use_by, f, { weekday: "short" }),
@@ -184,32 +231,5 @@ export function buildToday(today: Today, plan: Plan, f: Formatter): TodayView {
     )
   }
 
-  return {
-    dateLine: formatDate(today.date, f, {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    }),
-    headline: verdictText(today.verdict, f),
-    board,
-    cook,
-    leftover,
-    rows,
-    reminders,
-    rate: today.rate
-      ? {
-          plateId: today.rate.plate_id,
-          question: f.t("today.rate.question", {
-            weekday: formatDate(today.rate.date, f, { weekday: "long" }),
-            name: today.rate.food_name,
-          }),
-        }
-      : null,
-    planNext: today.plan_banner.due ? today.plan_banner.next_start : null,
-    recipesMissing: Math.max(
-      0,
-      today.setup.recipe_target - today.setup.recipe_count
-    ),
-    noPlan: today.verdict.kind === "no_plan",
-  }
+  return { board, cook, leftover, rows, reminders }
 }

@@ -54,6 +54,37 @@ describe("TodayPage", () => {
     await i18n.changeLanguage("en")
   })
 
+  it("renders the verdict from /api/today while the plan still loads", async () => {
+    vi.mocked(getPlan).mockReturnValue(new Promise(() => {}))
+    renderToday(mockTodayByVerdict.nothing_to_cook)
+
+    expect(await screen.findByTestId("today-verdict")).toHaveTextContent(
+      "Nothing to cook today"
+    )
+    expect(screen.getByTestId("today-rate")).toBeInTheDocument()
+    expect(screen.getByTestId("today-plan-skeleton")).toBeInTheDocument()
+    expect(screen.queryByTestId("today-leftover-card")).toBeNull()
+  })
+
+  it("keeps a plan error inside the plan region", async () => {
+    vi.mocked(getPlan).mockRejectedValue(new Error("offline"))
+    renderToday(mockTodayByVerdict.nothing_to_cook)
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't load this day"
+    )
+    expect(screen.getByTestId("today-verdict")).toHaveTextContent(
+      "Nothing to cook today"
+    )
+    expect(screen.getByTestId("today-rate")).toBeInTheDocument()
+  })
+
+  it("asks no rating question on a future day", async () => {
+    renderToday(mockTodayByVerdict.nothing_to_cook, SUNDAY)
+    await screen.findByTestId("today-leftover-card")
+    expect(screen.queryByTestId("today-rate")).toBeNull()
+  })
+
   // F5-AC1 (AC-1 step 4).
   it("Monday: nothing to cook, the leftover card and Dinner 3/3", async () => {
     renderToday(mockTodayByVerdict.nothing_to_cook)
@@ -66,7 +97,7 @@ describe("TodayPage", () => {
     )
     expect(getPlan).toHaveBeenCalledWith("2026-10-31")
 
-    const card = screen.getByTestId("today-leftover-card")
+    const card = await screen.findByTestId("today-leftover-card")
     expect(
       within(card).getByRole("heading", { name: "Chili, leftover" })
     ).toBeInTheDocument()
@@ -93,7 +124,7 @@ describe("TodayPage", () => {
     expect(await screen.findByTestId("today-verdict")).toHaveTextContent(
       "Cook Chili × 6"
     )
-    const card = screen.getByTestId("today-cook-card")
+    const card = await screen.findByTestId("today-cook-card")
     expect(card.querySelector("[data-batch-badge]")).toHaveTextContent(
       "Cook × 6"
     )
@@ -234,7 +265,7 @@ describe("TodayPage", () => {
       "Heute kochen: Chili × 6"
     )
     expect(
-      screen.getByRole("link", { name: "Kochen starten" })
+      await screen.findByRole("link", { name: "Kochen starten" })
     ).toBeInTheDocument()
   })
 })

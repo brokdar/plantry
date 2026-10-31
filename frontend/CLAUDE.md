@@ -131,7 +131,7 @@ All user-visible strings go through `react-i18next`. Keys live in `src/lib/i18n/
 
 Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own unit tests:
 
-- `planner-window.ts` — old planner window maths (`computeAnchor`, `windowRange`, `shiftYMD`, `toYMD`) and `todayISO`; F7 deletes it
+- `planner-window.ts` — old planner window maths (`computeAnchor`, `windowRange`, `shiftYMD`, `toYMD`) and `todayISO`; to be removed
 - `slot-label.ts` — slot display names
 - `preset-apply-toast.ts` — toast message logic after preset apply
 - `availability-grid.ts` — AvailabilityGrid columns and value ↔ availability defaults mapping

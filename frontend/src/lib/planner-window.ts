@@ -41,7 +41,7 @@ export function computeAnchor(opts: {
   return nextOccurrence(today, jsFixed)
 }
 
-export function padTwo(n: number): string {
+function padTwo(n: number): string {
   return String(n).padStart(2, "0")
 }
 

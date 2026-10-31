@@ -5,7 +5,15 @@ import i18n from "@/lib/i18n"
 import { mockPlan, mockTodayByVerdict } from "@/test/fixtures"
 
 import { batchBadgeText } from "./format"
-import { buildToday, shiftDate, verdictText } from "./today"
+import {
+  buildTodayHeader,
+  buildTodayPlan,
+  shiftDate,
+  verdictText,
+} from "./today"
+
+const SUNDAY = "2026-11-01"
+const MONDAY = "2026-11-02"
 
 describe("lib/plan/today", () => {
   afterEach(async () => {
@@ -18,7 +26,7 @@ describe("lib/plan/today", () => {
       cook: { en: "Cook Chili × 6", de: "Heute kochen: Chili × 6" },
       quick_cook: {
         en: "Quick cook: Omelette",
-        de: "Schnell gekocht: Omelette",
+        de: "Heute schnell: Omelette",
       },
       nothing_to_cook: {
         en: "Nothing to cook today",
@@ -44,11 +52,14 @@ describe("lib/plan/today", () => {
 
   // F5-AC1 (AC-1 step 4): Monday is a leftover day.
   it("Monday: the leftover card 2/3 · use by Wed, then Dinner 3/3", () => {
-    const view = buildToday(mockTodayByVerdict.nothing_to_cook, mockPlan, i18n)
-    expect(view.headline).toBe("Nothing to cook today")
-    expect(view.dateLine).toBe("Monday, November 2")
-    expect(view.cook).toEqual([])
+    const today = mockTodayByVerdict.nothing_to_cook
+    const header = buildTodayHeader(today, MONDAY, i18n)
+    expect(header.headline).toBe("Nothing to cook today")
+    expect(header.dateLine).toBe("Monday, November 2")
+    expect(header.rate?.question).toBe("How was Sunday's Chili?")
 
+    const view = buildTodayPlan(today, mockPlan, MONDAY, i18n)
+    expect(view.cook).toEqual([])
     const card = view.leftover
     expect(card).not.toBeNull()
     expect(card?.slotName).toBe("Lunch")
@@ -60,10 +71,10 @@ describe("lib/plan/today", () => {
     expect(view.rows.map((r) => r.slotName)).toEqual(["Breakfast", "Dinner"])
     const dinner = view.rows[1].cell
     expect(dinner.badge && batchBadgeText(dinner.badge, i18n)).toBe("3/3")
-    expect(view.rate?.question).toBe("How was Sunday's Chili?")
   })
 
-  it("a leftover on its use-by day says use by today", () => {
+  describe("use-by on the leftover card", () => {
+    // Monday's lunch moved to Wednesday 11-04, the batch's use-by day.
     const today: Today = {
       ...mockTodayByVerdict.nothing_to_cook,
       date: "2026-11-04",
@@ -79,13 +90,27 @@ describe("lib/plan/today", () => {
             : c
       ),
     }
-    expect(buildToday(today, plan, i18n).leftover?.useBy).toBe("use by today")
+
+    it("says use by today on its last day when that is the real today", () => {
+      expect(
+        buildTodayPlan(today, plan, "2026-11-04", i18n).leftover?.useBy
+      ).toBe("use by today")
+    })
+
+    it("names the weekday when that day is shown from another day", () => {
+      expect(
+        buildTodayPlan(today, plan, "2026-11-01", i18n).leftover?.useBy
+      ).toBe("use by Wed")
+    })
   })
 
   // F5-AC1 (AC-1 step 5): Sunday is the cook day.
   it("Sunday: Cook Chili × 6 with a cook card and every slot as a row", () => {
-    const view = buildToday(mockTodayByVerdict.cook, mockPlan, i18n)
-    expect(view.headline).toBe("Cook Chili × 6")
+    const today = mockTodayByVerdict.cook
+    expect(buildTodayHeader(today, SUNDAY, i18n).headline).toBe(
+      "Cook Chili × 6"
+    )
+    const view = buildTodayPlan(today, mockPlan, SUNDAY, i18n)
     expect(view.leftover).toBeNull()
     expect(view.cook).toHaveLength(1)
     expect(view.cook[0]).toMatchObject({
@@ -110,7 +135,7 @@ describe("lib/plan/today", () => {
       ...mockTodayByVerdict.nothing_to_cook,
       reminders: [reminder, { ...reminder, slot_id: 3 }],
     }
-    expect(buildToday(today, mockPlan, i18n).reminders).toEqual([
+    expect(buildTodayPlan(today, mockPlan, MONDAY, i18n).reminders).toEqual([
       {
         key: "defrost|7",
         kind: "defrost",
@@ -133,25 +158,34 @@ describe("lib/plan/today", () => {
         },
       ],
     }
-    expect(buildToday(today, mockPlan, i18n).reminders[0]).toMatchObject({
+    expect(
+      buildTodayPlan(today, mockPlan, MONDAY, i18n).reminders[0]
+    ).toMatchObject({
       label: "Last day",
       text: "Dinner is the last of the Chili",
     })
   })
 
+  it("asks the rating question only on or before the real today", () => {
+    const today = mockTodayByVerdict.nothing_to_cook
+    expect(buildTodayHeader(today, MONDAY, i18n).rate).not.toBeNull()
+    expect(buildTodayHeader(today, "2026-11-05", i18n).rate).not.toBeNull()
+    expect(buildTodayHeader(today, SUNDAY, i18n).rate).toBeNull()
+  })
+
   it("shows the plan banner only when due, and the recipes still missing", () => {
-    const due = buildToday(mockTodayByVerdict.no_plan, mockPlan, i18n)
+    const due = buildTodayHeader(mockTodayByVerdict.no_plan, MONDAY, i18n)
     expect(due.planNext).toBe("2026-11-14")
     expect(due.noPlan).toBe(true)
-    const notDue = buildToday(mockTodayByVerdict.no_plates, mockPlan, i18n)
+    const notDue = buildTodayHeader(mockTodayByVerdict.no_plates, MONDAY, i18n)
     expect(notDue.planNext).toBeNull()
     expect(notDue.recipesMissing).toBe(0)
-    const short = buildToday(
+    const short = buildTodayHeader(
       {
         ...mockTodayByVerdict.no_plates,
         setup: { recipe_count: 7, recipe_target: 10 },
       },
-      mockPlan,
+      MONDAY,
       i18n
     )
     expect(short.recipesMissing).toBe(3)

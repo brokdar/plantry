@@ -353,7 +353,7 @@ The legacy utilities `gradient-primary`, `editorial-shadow`, `glass-header` and 
 
 - **Don't** use Newsreader for buttons, inputs, labels, nav or data.
 - **Don't** use batch colours for state, category or decoration.
-- **Don't** add gradients, glass or blur, shimmer sweeps, hover lifts, or sage-tinted shadows. These are Botanical Atelier leftovers still found in unrebuilt screens: recipe, ingredient and preset cards, `EditorialCard`, and the planner's `SlotCell`, `SlotSheet` and `SlotHero`.
+- **Don't** add gradients, glass or blur, shimmer sweeps, hover lifts, or sage-tinted shadows. These are Botanical Atelier leftovers still found in unrebuilt screens: recipe, ingredient and preset cards, and `EditorialCard`.
 - **Don't** add shadows to cells or list cards, or a second shadow style.
 - **Don't** use all-caps or letter-spaced labels.
 - **Don't** use emoji in the UI.

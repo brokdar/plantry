@@ -1464,7 +1464,7 @@
   "today": {
     "verdict": {
       "cook": "Heute kochen: {{name}} × {{portions}}",
-      "quick_cook": "Schnell gekocht: {{name}}",
+      "quick_cook": "Heute schnell: {{name}}",
       "nothing_to_cook": "Heute wird nicht gekocht",
       "no_plates": "Heute ist kein Essen geplant",
       "no_plan": "Für heute gibt es noch keinen Plan"
