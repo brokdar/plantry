@@ -1,7 +1,11 @@
 import type { AvailabilityMode } from "@/lib/api/availability"
-import type { Plan, PlanCell, PlanDay } from "@/lib/api/plan"
-import type { PlanSnapshot, Plate, PlateComponent } from "@/lib/api/plates"
-import type { SessionWarningCode } from "@/lib/api/sessions"
+import type { Issue, Plan, PlanCell, PlanDay } from "@/lib/api/plan"
+import type {
+  PlanSnapshot,
+  PlanState,
+  Plate,
+  PlateComponent,
+} from "@/lib/api/plates"
 import {
   colourBatches,
   type BatchColour,
@@ -25,6 +29,17 @@ export type CellBadge = BatchBadgeContent & {
 /** The muted line under a cell's name (UX §5.5). */
 export type CellSubline = "cook" | "leftover" | "routine"
 
+/**
+ * Something wrong with a cell: a batch warning of one of its sessions
+ * (`issue` null, always a violation) or a checker issue (D22). Violations
+ * need attention; warnings show in the sheet only.
+ */
+export interface CellWarning {
+  code: string
+  severity: Issue["severity"]
+  issue: Issue | null
+}
+
 export interface BoardCell {
   /** `date|slotId`, unique within the window. */
   key: string
@@ -32,6 +47,9 @@ export interface BoardCell {
   slotId: number
   mode: AvailabilityMode
   plate: Plate | null
+  /** The plate's state: draft (dashed) or confirmed (padlock); null without
+   *  a plate. */
+  state: PlanState | null
   badge: CellBadge | null
   /** The main food's name; null without a plate. */
   mainName: string | null
@@ -42,7 +60,12 @@ export interface BoardCell {
   presetName: string | null
   /** No-plate cells: the reason, if given. */
   note: string | null
-  warnings: SessionWarningCode[]
+  warnings: CellWarning[]
+  /** A violation is among the warnings: corner mark and attention count. */
+  attention: boolean
+  /** The component "Different side" replaces: the first side, else the
+   *  first other component; null on a plate without one. */
+  sideComponentId: number | null
   /** Sessions the plate eats from (for the linked highlight). */
   sessionIds: number[]
   /** Sessions cooked in this cell (the cook strip scrolls to them). */
@@ -84,8 +107,17 @@ export interface Board {
   warningCells: string[]
   /** Past windows: no edits, feedback only. */
   readOnly: boolean
+  /** "3 plates, 1 cook day", or "Draft · 3 plates · 1 cook day" while the
+   *  window holds drafts. */
+  summary: string
+  /** The window's drafts with the run's notes; null without drafts. */
+  draft: DraftSummary | null
   /** No plate anywhere in the window. */
   empty: boolean
+}
+
+export interface DraftSummary {
+  notes: string | null
 }
 
 const cellKey = (date: string, slotId: number) => `${date}|${slotId}`
@@ -123,17 +155,23 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
 
   // Warnings per plate; a session-wide one (plate_id null) sits on the cook
   // cell.
-  const warningsByPlate = new Map<number, SessionWarningCode[]>()
-  const warningsByCookCell = new Map<string, SessionWarningCode[]>()
+  const warningsByPlate = new Map<number, CellWarning[]>()
+  const warningsByCookCell = new Map<string, CellWarning[]>()
   for (const s of plan.sessions) {
     for (const w of s.warnings) {
+      const warning: CellWarning = {
+        code: w.code,
+        severity: "violation",
+        issue: null,
+      }
       if (w.plate_id !== null) {
-        push(warningsByPlate, w.plate_id, w.code)
+        push(warningsByPlate, w.plate_id, warning)
       } else {
-        push(warningsByCookCell, cellKey(s.cook_date, s.cook_slot_id), w.code)
+        push(warningsByCookCell, cellKey(s.cook_date, s.cook_slot_id), warning)
       }
     }
   }
+  const issuesByCell = placeIssues(plan, cells)
 
   const listFormat = new Intl.ListFormat(f.language, { type: "conjunction" })
 
@@ -144,7 +182,10 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
     const plate = raw?.plate ?? null
     const components = plate ? sortedComponents(plate) : []
     const main = mainComponent(components)
-    const sides = components.filter((c) => c !== main).map((c) => c.food_name)
+    const others = components.filter((c) => c !== main)
+    const sides = others.map((c) => c.food_name)
+    const side =
+      others.find((c) => c.role?.startsWith("side_")) ?? others[0] ?? null
 
     const sessionIds = [
       ...new Set(
@@ -192,6 +233,13 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
     const warnings = [
       ...(plate ? (warningsByPlate.get(plate.id) ?? []) : []),
       ...(plate ? (warningsByCookCell.get(key) ?? []) : []),
+      ...(issuesByCell.get(key) ?? []).map(
+        (issue): CellWarning => ({
+          code: issue.code,
+          severity: issue.severity,
+          issue,
+        })
+      ),
     ]
 
     const cell: BoardCell = {
@@ -200,6 +248,7 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
       slotId,
       mode,
       plate,
+      state: plate?.state ?? null,
       badge,
       mainName: main?.food_name ?? null,
       sideText:
@@ -210,6 +259,8 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
       presetName: raw?.preset_name ?? null,
       note: raw?.note ?? null,
       warnings,
+      attention: warnings.some((w) => w.severity === "violation"),
+      sideComponentId: side?.id ?? null,
       sessionIds,
       cookOf,
       ariaLabel: "",
@@ -242,7 +293,7 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
   })
 
   const warningCells = days.flatMap((d) =>
-    d.cells.filter((c) => c.warnings.length > 0).map((c) => c.key)
+    d.cells.filter((c) => c.attention).map((c) => c.key)
   )
 
   return {
@@ -255,8 +306,95 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
     ),
     warningCells,
     readOnly: plan.window.end < plan.window.today,
+    summary: boardSummary(plan, f),
+    draft: plan.draft ? { notes: plan.draft.notes } : null,
     empty: !plan.cells.some((c) => c.plate),
   }
+}
+
+function boardSummary(plan: Plan, f: Formatter): string {
+  const plates = f.t("plan.toolbar.plates", { count: plan.stats.plates })
+  const cookDays = f.t("plan.toolbar.cook_days", {
+    count: plan.stats.cook_days,
+  })
+  return plan.draft
+    ? f.t("plan.toolbar.draft_summary", { plates, cook_days: cookDays })
+    : `${plates}, ${cookDays}`
+}
+
+/**
+ * Issues by cell key. An issue names its cell (`date` + `slot_id`); a
+ * day-wide one (only `date`, e.g. too many cook occasions) sits on the
+ * day's cook cells, else on its first plate, else on its first cell.
+ */
+function placeIssues(
+  plan: Plan,
+  cells: Map<string, PlanCell>
+): Map<string, Issue[]> {
+  const out = new Map<string, Issue[]>()
+  for (const issue of plan.issues) {
+    if (!issue.date) continue
+    if (issue.slot_id != null) {
+      push(out, cellKey(issue.date, issue.slot_id), issue)
+      continue
+    }
+    const day = plan.cells.filter((c) => c.date === issue.date)
+    const cooks = day.filter((c) =>
+      plan.sessions.some(
+        (s) =>
+          s.cook_date === c.date &&
+          s.cook_slot_id === c.slot_id &&
+          c.plate !== null
+      )
+    )
+    const targets =
+      cooks.length > 0 ? cooks : [day.find((c) => c.plate) ?? day[0]]
+    for (const c of targets) {
+      if (c && cells.has(cellKey(c.date, c.slot_id))) {
+        push(out, cellKey(c.date, c.slot_id), issue)
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * The other cells of a plate's batch closure (D3): every plate reachable
+ * through the window's session links, in date and slot order. Confirm and
+ * Unlock act on all of them; the Unlock dialog names them (D34).
+ */
+export function closureCells(
+  plan: Plan,
+  plateId: number
+): { date: string; slotId: number }[] {
+  const plates = new Set([plateId])
+  const queue = [plateId]
+  while (queue.length > 0) {
+    const id = queue.pop()!
+    for (const s of plan.sessions) {
+      if (!s.links.some((l) => l.plate_id === id)) continue
+      for (const l of s.links) {
+        if (plates.has(l.plate_id)) continue
+        plates.add(l.plate_id)
+        queue.push(l.plate_id)
+      }
+    }
+  }
+  plates.delete(plateId)
+  const out = new Map<number, { date: string; slotId: number }>()
+  for (const s of plan.sessions) {
+    for (const l of s.links) {
+      if (plates.has(l.plate_id)) {
+        out.set(l.plate_id, { date: l.date, slotId: l.slot_id })
+      }
+    }
+  }
+  const rank = new Map(plan.slots.map((s) => [s.id, s.sort_order]))
+  return [...out.values()].sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      (rank.get(a.slotId) ?? 0) - (rank.get(b.slotId) ?? 0)
+  )
 }
 
 /** "Breakfast: Oats every day" when every cell is a routine without a
@@ -288,6 +426,7 @@ function cellAriaLabel(cell: BoardCell, slot: string, f: Formatter): string {
     if (cell.sideText) parts.push(cell.sideText)
     if (cell.badge) parts.push(badgeSpeech(cell.badge, f))
     else if (!cell.mainName) parts.push(f.t("plan.cell.empty_plate"))
+    if (cell.state) parts.push(f.t(`plan.cell.state_${cell.state}`))
   } else if (cell.mode === "none") {
     parts.push(f.t("plan.cell.no_plate"))
     if (cell.note) parts.push(cell.note)
@@ -297,7 +436,7 @@ function cellAriaLabel(cell: BoardCell, slot: string, f: Formatter): string {
   } else {
     parts.push(f.t("plan.cell.nothing_planned"))
   }
-  if (cell.warnings.length > 0) parts.push(f.t("plan.cell.needs_attention"))
+  if (cell.attention) parts.push(f.t("plan.cell.needs_attention"))
   return parts.join(", ")
 }
 

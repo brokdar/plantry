@@ -4,7 +4,11 @@ import { useTranslation } from "react-i18next"
 import { DayMeter } from "@/components/batch/DayMeter"
 import type { PlanTargets } from "@/lib/api/plan"
 import type { Board, BoardCell } from "@/lib/plan/board"
-import { handleGridArrowKey, readCellPos } from "@/lib/plan/keynav"
+import {
+  cellShortcut,
+  handleGridArrowKey,
+  readCellPos,
+} from "@/lib/plan/keynav"
 import { cn } from "@/lib/utils"
 
 import { PlateCell } from "./PlateCell"
@@ -17,6 +21,10 @@ export interface BoardLayoutProps {
   onOpenCell: (cell: BoardCell) => void
   /** Keyboard N on a cell. */
   onMarkNoPlate: (cell: BoardCell) => void
+  /** Replace a draft plate: keyboard R and the hover quick action (D33). */
+  onReplace?: (cell: BoardCell) => void
+  /** Different side on a draft plate: keyboard S and the quick action. */
+  onDifferentSide?: (cell: BoardCell) => void
 }
 
 /**
@@ -25,7 +33,7 @@ export interface BoardLayoutProps {
  * all seven days fit; between 768 and 1023 px four days show and the rest
  * swipe in, snapping per day, with the day headers and the meal column
  * sticky. Arrow keys move between cells (one tab stop), Enter opens, N marks
- * No plate.
+ * No plate, R replaces a draft plate and S changes its side.
  */
 export function BoardGrid({
   board,
@@ -33,6 +41,8 @@ export function BoardGrid({
   label,
   onOpenCell,
   onMarkNoPlate,
+  onReplace,
+  onDifferentSide,
 }: BoardLayoutProps) {
   const { t } = useTranslation()
   const rows = board.rows.filter((r) => !r.collapsed)
@@ -45,13 +55,27 @@ export function BoardGrid({
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (handleGridArrowKey(e, { rows: rows.length, cols: board.days.length }))
       return
-    if (e.key !== "n" && e.key !== "N") return
-    if (e.metaKey || e.ctrlKey || e.altKey || board.readOnly) return
+    const action = cellShortcut(e)
+    if (!action || board.readOnly) return
     const pos = readCellPos(e.target)
     const cell = pos ? rows[pos.row]?.cells[pos.col] : undefined
-    if (!cell || cell.mode === "none") return
-    e.preventDefault()
-    onMarkNoPlate(cell)
+    if (!cell) return
+    const draft = cell.state === "draft"
+    if (action === "no_plate" && cell.mode !== "none") {
+      e.preventDefault()
+      onMarkNoPlate(cell)
+    } else if (action === "replace" && draft && onReplace) {
+      e.preventDefault()
+      onReplace(cell)
+    } else if (
+      action === "side" &&
+      draft &&
+      cell.sideComponentId !== null &&
+      onDifferentSide
+    ) {
+      e.preventDefault()
+      onDifferentSide(cell)
+    }
   }
 
   return (
@@ -132,6 +156,8 @@ export function BoardGrid({
                   readOnly={board.readOnly}
                   dnd
                   onOpen={onOpenCell}
+                  onReplace={onReplace}
+                  onDifferentSide={onDifferentSide}
                   pos={`${rows.indexOf(row)}-${ci}`}
                   tabStop={cell.key === tabKey}
                   onFocusCell={setFocusKey}

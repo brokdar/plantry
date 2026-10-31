@@ -93,6 +93,21 @@ export function handleGridArrowKey(
   return true
 }
 
+/** True when typing in `target` means the literal character. */
+function isEditable(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  const tag = target.tagName
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true
+  if (target instanceof HTMLElement) {
+    if (target.isContentEditable) return true
+    // jsdom doesn't always wire isContentEditable from the attribute, so
+    // fall back to the attribute itself for tests and old browsers.
+    const attr = target.getAttribute("contenteditable")
+    if (attr === "" || attr === "true") return true
+  }
+  return false
+}
+
 /**
  * `?` (Shift+/) opens the cheatsheet from anywhere on the board — except
  * when an editable surface owns focus, where the keystroke means the literal
@@ -101,16 +116,34 @@ export function handleGridArrowKey(
 export function isCheatsheetShortcut(e: KeyboardEvent): boolean {
   if (e.key !== "?") return false
   if (e.metaKey || e.ctrlKey || e.altKey) return false
-  const target = e.target as Element | null
-  if (!target) return true
-  const tag = target.tagName
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return false
-  if (target instanceof HTMLElement) {
-    if (target.isContentEditable) return false
-    // jsdom doesn't always wire isContentEditable from the attribute, so
-    // fall back to the attribute itself for tests and old browsers.
-    const attr = target.getAttribute("contenteditable")
-    if (attr === "" || attr === "true") return false
+  return !isEditable(e.target)
+}
+
+/** `⌘/Ctrl+Enter` accepts the draft (UX §6), outside editable fields and
+ *  dialogs (sheets included): there the keys belong to the overlay. */
+export function isAcceptShortcut(e: KeyboardEvent): boolean {
+  if (e.key !== "Enter" || e.altKey || e.shiftKey) return false
+  if (!e.metaKey && !e.ctrlKey) return false
+  if (e.target instanceof Element && e.target.closest('[role="dialog"]')) {
+    return false
   }
-  return true
+  return !isEditable(e.target)
+}
+
+/** What a letter key does on a focused board cell (UX §6). */
+export type CellShortcut = "no_plate" | "replace" | "side"
+
+const CELL_KEYS: Record<string, CellShortcut> = {
+  n: "no_plate",
+  r: "replace",
+  s: "side",
+}
+
+/** N marks No plate, R replaces, S changes the side; null for any other
+ *  key, and for these with a modifier (⌘R reloads the page). */
+export function cellShortcut(
+  e: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey">
+): CellShortcut | null {
+  if (e.metaKey || e.ctrlKey || e.altKey) return null
+  return CELL_KEYS[e.key.toLowerCase()] ?? null
 }

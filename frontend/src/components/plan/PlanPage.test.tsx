@@ -173,7 +173,7 @@ describe("PlanPage", () => {
     renderWithRouter(<PlanPage />)
     ;(
       await screen.findByRole("button", {
-        name: "Monday lunch, Chili, leftover 2 of 3",
+        name: "Monday lunch, Chili, leftover 2 of 3, confirmed",
       })
     ).focus()
     await user.keyboard("n")
@@ -228,10 +228,27 @@ describe("PlanPage", () => {
     const count = await screen.findByRole("button", {
       name: "2 plates need attention",
     })
+    // One press focuses the next cell, the second opens its sheet (F2).
     await user.click(count)
     expect(document.activeElement).toHaveAccessibleName(/^Sunday dinner, Chili/)
     await user.click(count)
+    expect(await screen.findByTestId("plan-sheet")).toHaveTextContent(
+      "Sunday dinner"
+    )
+    await user.keyboard("{Escape}")
+    await waitFor(() =>
+      expect(screen.queryByTestId("plan-sheet")).not.toBeInTheDocument()
+    )
+    await user.click(count)
     expect(document.activeElement).toHaveAccessibleName(/^Monday lunch, Chili/)
+    await user.click(count)
+    expect(await screen.findByTestId("plan-sheet")).toHaveTextContent(
+      "Monday lunch"
+    )
+    await user.keyboard("{Escape}")
+    await waitFor(() =>
+      expect(screen.queryByTestId("plan-sheet")).not.toBeInTheDocument()
+    )
     await user.click(count)
     expect(document.activeElement).toHaveAccessibleName(/^Sunday dinner, Chili/)
   })
@@ -291,7 +308,7 @@ describe("PlanPage", () => {
     renderWithRouter(<PlanPage />)
     await user.click(
       await screen.findByRole("button", {
-        name: "Monday dinner, Chili, leftover 3 of 3",
+        name: "Monday dinner, Chili, leftover 3 of 3, confirmed",
       })
     )
     const sheet = await screen.findByRole("dialog", { name: "Chili" })
@@ -347,7 +364,7 @@ describe("PlanPage", () => {
     const user = userEvent.setup()
     renderWithRouter(<PlanPage />)
     const cell = await screen.findByRole("button", {
-      name: "Monday dinner, Chili, leftover 3 of 3",
+      name: "Monday dinner, Chili, leftover 3 of 3, confirmed",
     })
     cell.focus()
     await user.keyboard("{Enter}")
@@ -431,7 +448,7 @@ describe("PlanPage", () => {
     renderWithRouter(<PlanPage start="2026-11-02" />)
     await user.click(
       await screen.findByRole("button", {
-        name: "Monday lunch, Chili, leftover 2 of 3",
+        name: "Monday lunch, Chili, leftover 2 of 3, confirmed",
       })
     )
     const sheet = await screen.findByRole("dialog", { name: "Chili" })

@@ -18,6 +18,9 @@ const ROWS: Row[] = [
   { keys: ["Home", "End"], labelKey: "plan.shortcuts.edges" },
   { keys: ["Enter"], labelKey: "plan.shortcuts.open" },
   { keys: ["N"], labelKey: "plan.shortcuts.no_plate" },
+  { keys: ["R"], labelKey: "plan.shortcuts.replace" },
+  { keys: ["S"], labelKey: "plan.shortcuts.different_side" },
+  { keys: ["Ctrl / ⌘", "Enter"], labelKey: "plan.shortcuts.accept" },
   { keys: ["Ctrl / ⌘", "drag"], labelKey: "plan.shortcuts.copy_drag" },
   { keys: ["?"], labelKey: "plan.shortcuts.this_panel" },
 ]

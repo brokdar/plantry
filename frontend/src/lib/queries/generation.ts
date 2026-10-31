@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useNavigate } from "@tanstack/react-router"
+import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -20,17 +20,34 @@ export const RUN_POLL_MS = 500
 
 const isRunning = (run: PlanRun | undefined) => run?.status === "running"
 
+const BOARD_PATH = /^\/plan\/?$/
+
+/**
+ * Opens the run's window on the board with `?run=`. Already on the board,
+ * only `run` is added: the board keeps its URL (an anchored board stays
+ * without `start`), so it isn't re-keyed back to its skeleton.
+ */
+function useOpenRun() {
+  const navigate = useNavigate()
+  const onBoard = useRouterState({
+    select: (s) => BOARD_PATH.test(s.location.pathname),
+  })
+  return (start: string, run: number) =>
+    onBoard
+      ? navigate({ to: "/plan", search: (prev) => ({ ...prev, run }) })
+      : navigate({ to: "/plan", search: { start, run } })
+}
+
 /**
  * Starts a generation and opens its window on the board with `?run=`, so
  * the board shows the progress and a reload re-attaches (D35).
  */
 export function useGenerate() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const openRun = useOpenRun()
   return useMutation({
     mutationFn: (input: GenerateInput) => generatePlan(input),
-    onSuccess: ({ run_id }, { start }) =>
-      navigate({ to: "/plan", search: { start, run: run_id } }),
+    onSuccess: ({ run_id }, { start }) => openRun(start, run_id),
     onError: (err) => toastError(err, t),
   })
 }
@@ -38,11 +55,10 @@ export function useGenerate() {
 /** Regenerates a scope (D6) and attaches the board to the run. */
 export function useRegenerate() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const openRun = useOpenRun()
   return useMutation({
     mutationFn: (input: RegenerateInput) => regeneratePlan(input),
-    onSuccess: ({ run_id }, { start }) =>
-      navigate({ to: "/plan", search: { start, run: run_id } }),
+    onSuccess: ({ run_id }, { start }) => openRun(start, run_id),
     onError: (err) => toastError(err, t),
   })
 }

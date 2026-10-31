@@ -1238,7 +1238,9 @@
       "speech_frozen": "gefroren, {{position}} von {{meals}}",
       "subline_cook": "hier kochen",
       "subline_leftover": "Rest",
-      "subline_routine": "Routine"
+      "subline_routine": "Routine",
+      "state_draft": "Entwurf",
+      "state_confirmed": "bestätigt"
     },
     "row": {
       "collapsed": "{{slot}}: jeden Tag {{routine}}"
@@ -1260,7 +1262,8 @@
       "clear": "Diese Woche leeren",
       "shortcuts": "Tastenkürzel",
       "read_only": "Diese Woche ist vorbei. Bewerten kannst du ihre Mahlzeiten trotzdem.",
-      "weeks": "Wochen"
+      "weeks": "Wochen",
+      "draft_summary": "Entwurf · {{plates}} · {{cook_days}}"
     },
     "empty": {
       "title": "Für diese Woche ist noch nichts geplant",
@@ -1277,7 +1280,10 @@
       "no_plate": "Auf „Kein Essen“ setzen",
       "copy_drag": "Beim Ziehen eine Mahlzeit kopieren",
       "this_panel": "Diese Übersicht zeigen",
-      "drag": "Ziehen"
+      "drag": "Ziehen",
+      "replace": "Mahlzeit ersetzen",
+      "different_side": "Andere Beilage wählen",
+      "accept": "Übernehmen und einkaufen"
     },
     "generate_prompt": "Plane meine Woche basierend auf meinen Zielen und Zeitfenstern.",
     "dnd": {
@@ -1374,7 +1380,66 @@
       "submit": "Woche kopieren"
     },
     "accepted_one": "Plan übernommen. {{count}} Essen bestätigt.",
-    "accepted_other": "Plan übernommen. {{count}} Essen bestätigt."
+    "accepted_other": "Plan übernommen. {{count}} Essen bestätigt.",
+    "review": {
+      "confirm": "Bestätigen",
+      "unlock": "Entsperren",
+      "replace": "Ersetzen",
+      "different_side": "Andere Beilage",
+      "regenerate_day": "Tag neu planen",
+      "regenerate_week": "Woche neu planen",
+      "accept_and_shop": "Übernehmen und einkaufen",
+      "discard": "Entwurf verwerfen",
+      "why": "Warum das?",
+      "draft_note": "Entwurf. Bestätigte Mahlzeiten bleiben beim Neuplanen erhalten.",
+      "confirmed_note": "Bestätigt. Die Zutaten sind vielleicht schon gekauft."
+    },
+    "state": {
+      "confirmed_one": "Essen bestätigt.",
+      "confirmed_other": "{{count}} Essen bestätigt.",
+      "unlocked_one": "Essen entsperrt.",
+      "unlocked_other": "{{count}} Essen entsperrt."
+    },
+    "unlock": {
+      "title": "Dieses Essen entsperren?",
+      "body": "Die Zutaten sind vielleicht schon gekauft. Entsperrt ist es wieder ein Entwurf und kann ersetzt werden.",
+      "also": "Damit werden auch entsperrt: {{cells}}."
+    },
+    "discard": {
+      "title": "Entwurf verwerfen?",
+      "body_one": "Das löscht {{count}} Essen aus dem Entwurf. Bestätigte Mahlzeiten bleiben.",
+      "body_other": "Das löscht {{count}} Essen aus dem Entwurf. Bestätigte Mahlzeiten bleiben."
+    },
+    "progress": {
+      "label": "Plan wird erstellt",
+      "resolving": "Woche wird gelesen",
+      "choosing": "Rezepte werden ausgewählt",
+      "checking": "Vorkochen und Haltbarkeit werden geprüft",
+      "repairing": "Gefundene Probleme werden behoben",
+      "saving": "Entwurf wird gespeichert"
+    },
+    "run": {
+      "planned": "{{plates}} und {{cook_days}} geplant.",
+      "regenerated": "Plan neu erstellt.",
+      "regenerated_kept_one": "Plan neu erstellt. {{count}} bestätigtes Essen bleibt.",
+      "regenerated_kept_other": "Plan neu erstellt. {{count}} bestätigte Essen bleiben.",
+      "failed": "Die Planung ist nicht fertig geworden. Versuch es noch einmal."
+    },
+    "issue": {
+      "missing_plate": "Für diese Mahlzeit fehlt noch ein Essen.",
+      "plate_in_none_cell": "Hier steht „Kein Essen“, trotzdem ist etwas geplant.",
+      "too_many_cook_occasions": "{{count}}-mal kochen an diesem Tag, vorgesehen ist höchstens {{max}}-mal.",
+      "diet_incompatible": "Dieses Rezept passt nicht zu deiner Ernährung.",
+      "meat_days_exceeded": "Fleisch an {{days}} Tagen, vorgesehen sind höchstens {{max}}.",
+      "diet_unknown": "Für dieses Rezept ist die Ernährungsform unbekannt.",
+      "variety_repeat": "Das gab es zuletzt am {{last_eaten}}.",
+      "variety_relaxed": "Das gab es zuletzt am {{last_eaten}}. Es gibt nicht genug andere Rezepte, um es zu vermeiden.",
+      "leftover_before_cook": "Wird gegessen, bevor vorgekocht ist.",
+      "past_keep_days": "Wird gegessen, wenn das Vorgekochte nicht mehr haltbar ist.",
+      "deficit": "Es sind zu wenige Portionen vorgekocht.",
+      "frozen_deficit": "Es sind zu wenige Portionen eingefroren.",
+      "other": "Verstößt gegen eine Planungsregel ({{rule}})."
+    }
   },
   "batch": {
     "cook": "Kochen × {{portions}}",

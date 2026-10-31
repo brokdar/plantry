@@ -1,9 +1,14 @@
 import { cleanup, render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import i18n from "@/lib/i18n"
 import { buildBoard, type BoardCell } from "@/lib/plan/board"
-import { mockPlan, mockSessionWithWarnings } from "@/test/fixtures"
+import {
+  mockDraftPlan,
+  mockPlan,
+  mockSessionWithWarnings,
+} from "@/test/fixtures"
 
 import { PlateCell } from "./PlateCell"
 
@@ -81,6 +86,74 @@ describe("PlateCell", () => {
     const button = renderCell(cell("2026-11-02|3"))
     expect(button).toHaveClass("h-full")
     expect(button.closest("[data-cell-key]")).toHaveClass("focus-within:z-20")
+  })
+
+  it("draws a draft with a dashed border and no padlock", () => {
+    const button = renderCell(cell("2026-11-02|3", mockDraftPlan))
+    expect(button.className).toMatch(/border-dashed/)
+    expect(button.className).not.toMatch(/inset-ring-line/)
+    expect(screen.queryByTestId("cell-padlock")).not.toBeInTheDocument()
+    cleanup()
+    // A draft cook cell keeps its tint with a dashed ink outline.
+    const cook = renderCell(cell("2026-11-01|3", mockDraftPlan))
+    expect(cook.className).toMatch(/bg-batch-1-tint/)
+    expect(cook.className).toMatch(/border-dashed border-ink/)
+    expect(cook.className).not.toMatch(/inset-ring-ink/)
+  })
+
+  it("draws a confirmed plate solid with a padlock", () => {
+    const button = renderCell(cell("2026-11-03|3", mockDraftPlan))
+    expect(button.className).not.toMatch(/border-dashed/)
+    expect(screen.getByTestId("cell-padlock")).toBeInTheDocument()
+  })
+
+  it("offers Replace and Different side on a draft plate only", async () => {
+    const onReplace = vi.fn()
+    const onDifferentSide = vi.fn()
+    const sided = {
+      ...cell("2026-11-02|3", mockDraftPlan),
+      sideComponentId: 77,
+    }
+    const props = { layout: "grid", dnd: false, onOpen: vi.fn() } as const
+    render(
+      <PlateCell
+        {...props}
+        cell={sided}
+        readOnly={false}
+        onReplace={onReplace}
+        onDifferentSide={onDifferentSide}
+      />
+    )
+    await userEvent.click(screen.getByRole("button", { name: "Replace" }))
+    await userEvent.click(
+      screen.getByRole("button", { name: "Different side" })
+    )
+    expect(onReplace).toHaveBeenCalledWith(sided)
+    expect(onDifferentSide).toHaveBeenCalledWith(sided)
+    cleanup()
+
+    // Confirmed, or a past window: none.
+    render(
+      <PlateCell
+        {...props}
+        cell={cell("2026-11-03|3", mockDraftPlan)}
+        readOnly={false}
+        onReplace={onReplace}
+        onDifferentSide={onDifferentSide}
+      />
+    )
+    expect(screen.queryByTestId("cell-quick-actions")).not.toBeInTheDocument()
+    cleanup()
+    render(
+      <PlateCell
+        {...props}
+        cell={sided}
+        readOnly
+        onReplace={onReplace}
+        onDifferentSide={onDifferentSide}
+      />
+    )
+    expect(screen.queryByTestId("cell-quick-actions")).not.toBeInTheDocument()
   })
 
   it("marks a cell that needs attention", () => {

@@ -38,6 +38,8 @@ export const Route = createFileRoute("/plan/")({
 })
 
 function PlanRoute() {
-  const { start, cell, day } = Route.useSearch()
-  return <PlanPage key={start ?? ""} start={start} cell={cell} day={day} />
+  const { start, cell, day, run } = Route.useSearch()
+  return (
+    <PlanPage key={start ?? ""} start={start} cell={cell} day={day} run={run} />
+  )
 }

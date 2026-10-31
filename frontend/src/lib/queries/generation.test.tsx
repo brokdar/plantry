@@ -12,7 +12,16 @@ vi.mock("@/lib/api/generation", () => ({
 }))
 
 const navigateMock = vi.hoisted(() => vi.fn())
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigateMock }))
+// The page the hook runs on: elsewhere by default, the board in some tests.
+const location = vi.hoisted(() => ({ pathname: "/today" }))
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => navigateMock,
+  useRouterState: ({
+    select,
+  }: {
+    select: (s: { location: { pathname: string } }) => unknown
+  }) => select({ location }),
+}))
 
 const toastErrorMock = vi.hoisted(() => vi.fn())
 vi.mock("@/lib/toast", () => ({
@@ -26,7 +35,10 @@ import { generatePlan, getPlanRun, regeneratePlan } from "@/lib/api/generation"
 import { RUN_POLL_MS, useGenerate, useRegenerate, useRun } from "./generation"
 import { planKeys, shoppingKeys, todayKeys } from "./keys"
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  location.pathname = "/today"
+})
 
 describe("useGenerate / useRegenerate", () => {
   it("useGenerate returns the run id and opens /plan?start&run", async () => {
@@ -66,6 +78,40 @@ describe("useGenerate / useRegenerate", () => {
       search: { start: "2026-10-31", run: 13 },
     })
   })
+
+  it.each(["/plan", "/plan/"])(
+    "on the board (%s) only adds run: an anchored board keeps no start",
+    async (pathname) => {
+      location.pathname = pathname
+      vi.mocked(regeneratePlan).mockResolvedValue({ run_id: 13 })
+      vi.mocked(generatePlan).mockResolvedValue({ run_id: 14 })
+      for (const hook of [useRegenerate, useGenerate]) {
+        const { result } = renderHook(() => hook(), {
+          wrapper: createHookWrapper(),
+        })
+        await act(async () => {
+          await result.current.mutateAsync({
+            scope: { kind: "day", date: "2026-11-01" },
+            start: "2026-10-31",
+          })
+        })
+      }
+      const searches = navigateMock.mock.calls.map((call) => {
+        const opts = call[0] as {
+          to: string
+          search: (prev: object) => object
+        }
+        expect(opts.to).toBe("/plan")
+        return opts.search
+      })
+      expect(searches.map((s) => s({}))).toEqual([{ run: 13 }, { run: 14 }])
+      expect(searches[0]({ start: "2026-11-07", cell: "x" })).toEqual({
+        start: "2026-11-07",
+        cell: "x",
+        run: 13,
+      })
+    }
+  )
 
   it("a refused start toasts the error and stays put", async () => {
     vi.mocked(generatePlan).mockRejectedValue(
