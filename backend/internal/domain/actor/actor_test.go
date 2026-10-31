@@ -1,7 +1,9 @@
 package actor_test
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,6 +13,22 @@ import (
 
 func TestFrom_DefaultsToUser(t *testing.T) {
 	assert.Equal(t, actor.Actor{Kind: actor.User}, actor.From(context.Background()))
+}
+
+// TestFrom_FallbackIsLogged: a ctx without an actor (a write path that forgot
+// actor.With) is visible at debug level, not silent.
+func TestFrom_FallbackIsLogged(t *testing.T) {
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	actor.From(actor.With(context.Background(), actor.Agent, 1))
+	assert.Empty(t, logs.String(), "an explicit actor logs nothing")
+
+	actor.From(context.Background())
+	assert.Contains(t, logs.String(), "level=DEBUG")
+	assert.Contains(t, logs.String(), "actor.fallback_user")
 }
 
 func TestWith_RoundTrips(t *testing.T) {

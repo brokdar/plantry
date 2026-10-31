@@ -2,7 +2,10 @@
 // user (HTTP) or the agent (a chat run).
 package actor
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 // Kind is who made a change.
 type Kind string
@@ -27,10 +30,12 @@ func With(ctx context.Context, kind Kind, runID int64) context.Context {
 	return context.WithValue(ctx, ctxKey{}, Actor{Kind: kind, RunID: runID})
 }
 
-// From returns the actor set by With, or the user when ctx carries none.
+// From returns the actor set by With, or the user when ctx carries none. The
+// fallback is logged at debug level so a write path missing With shows up.
 func From(ctx context.Context) Actor {
 	if a, ok := ctx.Value(ctxKey{}).(Actor); ok {
 		return a
 	}
+	slog.DebugContext(ctx, "actor.fallback_user")
 	return Actor{Kind: User}
 }
