@@ -49,13 +49,12 @@ src/routes/
 │                      #   lib/plan/board.ts); `day` focuses that day (Today's week strip)
 ├── shop/              # `/shop?from&to` — Shop (components/shop); without a range, the server's
 │                      #   default for the anchored window
-├── presets/           # preset library + editor
 └── settings/          # index.tsx: `/settings` (section list on phone, else redirects; maps legacy
                        #   `?tab=`); $section.tsx: `/settings/$section` (household, meals, cooking,
                        #   assistant, system — `settings-sections.ts`)
 ```
 
-**Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/today`, Plan → `/plan`, Recipes → `/recipes` (active on `/recipes*`), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the Today header on phones; the compact Generate button sits in the `/plan` header on phones (there is no top bar). Presets is not in the nav; it is reachable via ⌘K (`CommandPalette`). Unknown paths (including the removed `/calendar`, `/day/…`, `/archive`, `/components`, `/ingredients`, `/import`) render the root not-found page with a link to Today.
+**Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/today`, Plan → `/plan`, Recipes → `/recipes` (active on `/recipes*`), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the Today header on phones; the compact Generate button sits in the `/plan` header on phones (there is no top bar). ⌘K opens the `CommandPalette`: routines (apply to a day, with Undo), Copy a previous week, Manage routines (→ Settings → Meals & week) and the go-to entries (`command/palette-entries.ts`). Unknown paths (including the removed `/calendar`, `/day/…`, `/archive`, `/components`, `/ingredients`, `/import`, `/presets`) render the root not-found page with a link to Today.
 
 ### Components
 
@@ -68,14 +67,13 @@ src/components/
 ├── shop/              # ShopPage, RangePicker, SectionList, ShoppingRow, CopyAsText (clipboard text);
 │                      #   ticks in localStorage `plantry:purchased:range:{from}:{to}`
 ├── plan/              # the board: PlanPage, Board (BoardGrid ≥768 px, DayList phone), PlateCell,
-│                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog; keynav in lib/plan/keynav.ts;
+│                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog, CopyFromWeekDialog; keynav in lib/plan/keynav.ts;
 │                      #   PlanSheet (one sheet per cell: PlateSheet, CellSheet or FoodPicker), BatchSection,
 │                      #   QuantityStepper
 ├── batch/             # BatchBadge, BatchHighlightProvider (hooks in batch-highlight.ts), CookStrip,
 │                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
 ├── availability/      # AvailabilityGrid (weekday/date × slot modes), RoutinePicker
 ├── setup/             # SetupWizard and its steps; wizard-draft.ts, use-wizard-save.ts
-├── presets/           # preset library, editor, CopyFromWeekDialog
 ├── component/         # shared input widget: QuantityUnitInput (leaf amount + unit)
 ├── recipes/           # RecipeLibrary, RecipeCard, RecipesHeader (tabs), AddRecipeMenu, ImportSheet,
 │                      #   RecipeOnboarding, RecipeEditor, RecipeDetail, NutritionCompletenessWarning
@@ -88,7 +86,8 @@ src/components/
 ├── images/            # image crop/upload UI
 └── settings/          # SettingsShell, sections/ (one per section), controls.tsx (Stepper, Switch,
                        #   NumberField, OptionCards, SettingsGroup, SavedNote), HouseholdHelper,
-                       #   AIProviderControls (shared with the setup wizard), SourceBadge
+                       #   AIProviderControls (shared with the setup wizard), SourceBadge;
+                       #   routines/ (RoutinesEditor in Meals & week: RoutineCard, RoutineSheet, RoutineRenameDialog)
 ```
 
 ### Data layer
@@ -137,7 +136,6 @@ Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own u
 
 - `dates.ts` — `todayISO` (the client's date, sent as `today`, D25) and `shiftYMD`
 - `slot-label.ts` — slot display names
-- `preset-apply-toast.ts` — toast message logic after preset apply
 - `availability-grid.ts` — AvailabilityGrid columns and value ↔ availability defaults mapping
 - `nutrition-presets.ts` — cut / maintain / bulk nutrition target presets (frontend only)
 

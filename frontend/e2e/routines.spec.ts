@@ -8,6 +8,7 @@ import {
   cleanupSlot,
   expect,
   futureWindow,
+  openPalette,
   planCell,
   seedLeafFood,
   seedPlateWithComponent,
@@ -191,8 +192,7 @@ test.describe("Routines", () => {
       const lunch = planCell(page, day, other.id)
       await expect(dinner).toContainText(rice.name)
 
-      await page.keyboard.press("ControlOrMeta+k")
-      const palette = page.getByRole("dialog", { name: "Command palette" })
+      const palette = await openPalette(page)
       await palette.getByRole("combobox").fill(name)
       await palette.getByRole("option", { name: new RegExp(name) }).click()
       const target = palette.getByLabel("Day")
@@ -232,8 +232,8 @@ test.describe("Routines", () => {
     try {
       await seedRoutine(`Muesli ${tag}`, slot.id, food.id)
       await page.goto("/today")
-      await page.keyboard.press("ControlOrMeta+k")
-      await page.getByRole("option", { name: "Manage routines" }).click()
+      const palette = await openPalette(page)
+      await palette.getByRole("option", { name: "Manage routines" }).click()
       await expect(page).toHaveURL(/\/settings\/meals$/)
       await expect(
         page.getByTestId("routine-card").filter({ hasText: `Muesli ${tag}` })

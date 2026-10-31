@@ -1,6 +1,13 @@
 import type { Page } from "@playwright/test"
 
-import { cleanupSlot, expect, seedSlot, test, uid } from "./helpers"
+import {
+  cleanupSlot,
+  expect,
+  openPalette,
+  seedSlot,
+  test,
+  uid,
+} from "./helpers"
 
 // D22: the shared e2e DB accumulates recipes, so pin the Generate gate open.
 async function stubRecipesReady(page: Page) {
@@ -35,8 +42,7 @@ test.describe("Keyboard shortcuts", () => {
     page,
   }) => {
     await page.goto("/today")
-    await page.keyboard.press("ControlOrMeta+k")
-    const palette = page.getByRole("dialog", { name: "Command palette" })
+    const palette = await openPalette(page)
     const goTo = palette.getByRole("group", { name: "Go to" })
     await expect(goTo.getByRole("option")).toHaveText([
       "Today",
