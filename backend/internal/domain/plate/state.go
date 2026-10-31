@@ -342,6 +342,23 @@ func (s *Service) setState(ctx context.Context, j *journal, c RowSet, rows closu
 	return changed, nil
 }
 
+// joinLink applies D3 to plate id, in state st, that now eats from linked
+// (nil: no existing session). When their states differ, confirmed wins: the
+// plate is confirmed if it was a draft, and settle unifies the merged
+// closure. It returns the plate's state.
+func (s *Service) joinLink(ctx context.Context, t *tracker, id int64, st State, linked *CookSession) (State, error) {
+	if linked == nil || linked.State == st {
+		return st, nil
+	}
+	if st != StateConfirmed {
+		if err := s.plates.SetState(ctx, []int64{id}, StateConfirmed); err != nil {
+			return st, err
+		}
+	}
+	t.unify = append(t.unify, id)
+	return StateConfirmed, nil
+}
+
 // unify gives the batch closure of every plate in t.unify that plate's state
 // (D3), recording the rows it changes in t.j. A plate already reached by an
 // earlier closure is skipped.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strconv"
@@ -208,9 +209,10 @@ func (s *Service) Create(ctx context.Context, in PlateInput) (*Plate, error) {
 // createPlate writes one plate with components whose SortOrder is set. strict
 // enforces the D13 cell rules on linked sessions (Apply restores state as it
 // was and only checks the food). The plate gets o's state, run and reason;
-// with adopt it takes the state of the existing sessions it links to instead
-// (D3: confirmed when any of them is), and a closure that then mixes states
-// is unified at settle. Its fresh sessions take its state.
+// with adopt it takes the state of the existing sessions it links to instead.
+// Where states meet (linked sessions of both states, or a restored plate's
+// own state against its sessions'), confirmed wins (D3) and the merged
+// closure is unified at settle. Its fresh sessions take its state.
 func (s *Service) createPlate(ctx context.Context, in PlateInput, e env, t *tracker, strict bool, o origin, adopt bool) (int64, error) {
 	if in.Date.IsZero() {
 		return 0, fmt.Errorf("%w: date required", domain.ErrInvalidInput)
@@ -248,9 +250,15 @@ func (s *Service) createPlate(ctx context.Context, in PlateInput, e env, t *trac
 			linkedStates[sess.State] = true
 		}
 	}
-	if adopt && len(linkedStates) > 0 {
+	// The states that meet in the plate's closure: its linked sessions', and
+	// the plate's own when it keeps a given one (restore).
+	met := maps.Clone(linkedStates)
+	if !adopt && len(met) > 0 {
+		met[o.state] = true
+	}
+	if adopt && len(met) > 0 || len(met) > 1 {
 		o.state = StateDraft
-		if linkedStates[StateConfirmed] {
+		if met[StateConfirmed] {
 			o.state = StateConfirmed
 		}
 	}
@@ -268,7 +276,7 @@ func (s *Service) createPlate(ctx context.Context, in PlateInput, e env, t *trac
 	if err := s.plates.Create(ctx, p); err != nil {
 		return 0, err
 	}
-	if adopt && len(linkedStates) > 1 {
+	if len(met) > 1 {
 		t.unify = append(t.unify, p.ID)
 	}
 	return p.ID, nil
@@ -457,13 +465,8 @@ func (s *Service) AddComponent(ctx context.Context, plateID int64, pc PlateCompo
 		if err != nil {
 			return err
 		}
-		if linked != nil && linked.State != p.State {
-			// D3: the plate adopts the state of the session it now eats
-			// from, and so does the rest of its closure (at settle).
-			if err := s.plates.SetState(ctx, []int64{p.ID}, linked.State); err != nil {
-				return err
-			}
-			t.unify = append(t.unify, p.ID)
+		if _, err := s.joinLink(ctx, t, p.ID, p.State, linked); err != nil {
+			return err
 		}
 		pc.PlateID = plateID
 		pc.SortOrder = nextSortOrder(p.Components)
@@ -1109,18 +1112,24 @@ func (s *Service) placeSnapshot(ctx context.Context, snap PlanSnapshot, cells []
 }
 
 // mergeInto adds a snapshot plate's components back to its surviving plate p.
+// A link that joins p to a session of the other state follows D3 (joinLink).
 func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, sessByRef map[string]validSession, created map[string]int64, e env, t *tracker, restore bool) error {
 	comps, err := s.snapshotComponents(ctx, t.j, sp.Components, sessByRef, created, restore)
 	if err != nil {
 		return err
 	}
+	st := p.State
 	for i := range comps {
 		pc := &comps[i]
 		f, err := s.normaliseComponent(ctx, pc)
 		if err != nil {
 			return err
 		}
-		if _, err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, false, freshOrigin(ctx, p.State)); err != nil {
+		linked, err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, false, freshOrigin(ctx, st))
+		if err != nil {
+			return err
+		}
+		if st, err = s.joinLink(ctx, t, p.ID, st, linked); err != nil {
 			return err
 		}
 		pc.PlateID = p.ID

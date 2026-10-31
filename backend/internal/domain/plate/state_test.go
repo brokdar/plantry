@@ -306,7 +306,142 @@ func TestCreate_LinkingMixedBatchesConfirmsTheClosure(t *testing.T) {
 	assert.Equal(t, plate.StateDraft, e.plateAt(tue, e.dinner).State, "the unrelated draft stays")
 }
 
+// Confirmed wins in both directions: a confirmed plate (whose batch also
+// feeds another confirmed plate) that links a draft session confirms the
+// draft batch instead of unlocking its own.
+func TestAddComponent_ConfirmedPlateLinkingDraftSessionConfirmsIt(t *testing.T) {
+	e := newEnv(t)
+	_, chiliSid := e.batch() // the user's: Sun dinner, Mon lunch, Mon dinner
+	gen := e.run(actor.Generator, 7)
+	draft, err := e.svc.Create(gen, plate.PlateInput{Date: day(sun), SlotID: e.lunch, Components: []plate.PlateComponent{composed(e.curry, 1)}})
+	require.NoError(t, err)
+	currySid := sessionOf(draft, 0)
+	monLunch := e.plateAt(mon, e.lunch)
+	n := len(e.events())
+
+	got, err := e.svc.AddComponent(e.ctx, monLunch.ID, linked(e.curry, 1, currySid))
+	require.NoError(t, err)
+	assert.Equal(t, plate.StateConfirmed, got.State)
+	e.allIn(plate.StateConfirmed)
+	assert.Equal(t, plate.StateConfirmed, e.cookSession(chiliSid).State)
+
+	evs := e.eventsSince(n)
+	assert.Contains(t, kinds(evs), "session:update", "the curry batch's state change is logged")
+	var draftUpdated bool
+	for _, ev := range evs {
+		if ev.PlateID != nil && *ev.PlateID == draft.ID {
+			draftUpdated = true
+			assert.Equal(t, plate.ActionUpdate, ev.Action)
+			assert.Equal(t, plate.StateConfirmed, decodePlate(t, ev.After).State)
+		}
+	}
+	assert.True(t, draftUpdated, "the draft Sun lunch plate gets an update event")
+}
+
+// Undo of a delete restores a draft leftover onto a batch that was accepted
+// meanwhile: it comes back confirmed, so the closure stays uniform.
+func TestRestore_DraftLeftoverOnAcceptedBatchIsConfirmed(t *testing.T) {
+	e := newEnv(t)
+	_, sid, _ := e.draftBatch()
+	snap, err := e.svc.Delete(e.ctx, e.plateAt(mon, e.dinner).ID)
+	require.NoError(t, err)
+	require.Equal(t, plate.StateDraft, snap.Plates[0].State)
+	_, err = e.svc.Accept(e.ctx, day(sun), day(sat))
+	require.NoError(t, err)
+
+	res, err := e.svc.Apply(e.ctx, snap, plate.ApplyOptions{OnConflict: plate.ConflictFail, Restore: true})
+	require.NoError(t, err)
+	assert.Equal(t, plate.StateConfirmed, e.plate(res.PlateIDs[0]).State)
+	assert.Equal(t, plate.StateConfirmed, e.cookSession(sid).State)
+	e.allIn(plate.StateConfirmed)
+}
+
+// The same on a surviving plate (mergeInto): a session delete that kept a
+// plate restores the batch as drafts, but the plate was confirmed meanwhile,
+// so the restored batch is confirmed.
+func TestRestore_MergeIntoConfirmedPlateConfirmsTheBatch(t *testing.T) {
+	e := newEnv(t)
+	gen := e.run(actor.Generator, 7)
+	sunPlate, err := e.svc.Create(gen, plate.PlateInput{Date: day(sun), SlotID: e.dinner, Components: []plate.PlateComponent{composed(e.chili, 1)}})
+	require.NoError(t, err)
+	sid := sessionOf(sunPlate, 0)
+	mixed, err := e.svc.Create(gen, plate.PlateInput{Date: day(mon), SlotID: e.dinner, Components: []plate.PlateComponent{
+		linked(e.chili, 1, sid), grams(e.rice, 100),
+	}})
+	require.NoError(t, err)
+
+	snap, err := e.svc.DeleteSession(e.ctx, sid)
+	require.NoError(t, err)
+	require.Equal(t, plate.StateDraft, e.plate(mixed.ID).State, "the plate kept its rice")
+	_, err = e.svc.Confirm(e.ctx, plate.RowSet{PlateIDs: []int64{mixed.ID}})
+	require.NoError(t, err)
+
+	_, err = e.svc.Apply(e.ctx, snap, plate.ApplyOptions{OnConflict: plate.ConflictFail, Restore: true})
+	require.NoError(t, err)
+	got := e.plate(mixed.ID)
+	require.Len(t, got.Components, 2)
+	assert.Equal(t, plate.StateConfirmed, got.State)
+	e.allIn(plate.StateConfirmed)
+}
+
+// Discard → restore stays all drafts (the uniformity rule is a no-op).
+func TestRestore_DiscardRoundTripStaysDraft(t *testing.T) {
+	e := newEnv(t)
+	e.draftBatch()
+	snap, err := e.svc.Discard(e.ctx, day(sun), day(sat))
+	require.NoError(t, err)
+	_, err = e.svc.Apply(e.ctx, snap, plate.ApplyOptions{OnConflict: plate.ConflictFail, Restore: true})
+	require.NoError(t, err)
+	e.allIn(plate.StateDraft)
+}
+
 // ── B1-AC5: Accept, Unaccept, Discard and restore (D4, D5) ──────────────
+
+// A draft leftover dated after to that eats from a batch cooked in the
+// window is part of the window closure for every window action.
+func TestWindowActions_IncludeLeftoversAfterTo(t *testing.T) {
+	setup := func(t *testing.T) (*env, plate.RowSet) {
+		e := newEnv(t)
+		gen := e.run(actor.Generator, 7)
+		cook, err := e.svc.Create(gen, plate.PlateInput{Date: day(nextSun), SlotID: e.dinner, Components: []plate.PlateComponent{composed(e.chili, 1)}})
+		require.NoError(t, err)
+		sid := sessionOf(cook, 0)
+		_, err = e.svc.AddLeftovers(gen, sid, []plate.CellKey{cell(nextMon, lunch)})
+		require.NoError(t, err)
+		after := e.plateAt(nextMon, e.lunch)
+		return e, plate.RowSet{PlateIDs: []int64{cook.ID, after.ID}, SessionIDs: []int64{sid}}
+	}
+	from, to := day(mon), day(nextSun)
+
+	t.Run("accept and unaccept", func(t *testing.T) {
+		e, rows := setup(t)
+		got, err := e.svc.Accept(e.ctx, from, to)
+		require.NoError(t, err)
+		assert.Equal(t, rows, got)
+		e.allIn(plate.StateConfirmed)
+		back, err := e.svc.Unaccept(e.ctx, got)
+		require.NoError(t, err)
+		assert.Equal(t, rows, back)
+		e.allIn(plate.StateDraft)
+	})
+	t.Run("discard and restore", func(t *testing.T) {
+		e, _ := setup(t)
+		snap, err := e.svc.Discard(e.ctx, from, to)
+		require.NoError(t, err)
+		assert.Zero(t, e.count("plates"))
+		assert.Zero(t, e.count("cook_sessions"))
+		require.Len(t, snap.Plates, 2)
+		assert.Equal(t, nextMon, snap.Plates[1].Date)
+		_, err = e.svc.Apply(e.ctx, snap, plate.ApplyOptions{OnConflict: plate.ConflictFail, Restore: true})
+		require.NoError(t, err)
+		after := e.plateAt(nextMon, e.lunch)
+		require.NotNil(t, after)
+		assert.Equal(t, plate.StateDraft, after.State)
+		assert.Equal(t, int64(7), *after.AIRunID)
+		assert.Equal(t, e.plateAt(nextSun, e.dinner).Components[0].CookSessionID, after.Components[0].CookSessionID)
+		e.allIn(plate.StateDraft)
+	})
+}
 
 // draftWeek has the generator (run 7) plan, through Apply with reasons:
 // Chili cooked Sun dinner (the day before the window Mon–Sun) eaten Sun
