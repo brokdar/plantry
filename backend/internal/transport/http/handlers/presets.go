@@ -429,6 +429,8 @@ type applyResponse struct {
 	SkippedNoSlot      []applyCellItem    `json:"skipped_no_slot"`
 	Removed            plate.PlanSnapshot `json:"removed"`
 	CreatedOverrides   []applyCellItem    `json:"created_overrides"`
+	// SkippedOverrides are copy week's "none" overrides that failed to copy.
+	SkippedOverrides []applyCellItem `json:"skipped_overrides"`
 }
 
 func toApplyCells(cells []plate.CellKey) []applyCellItem {
@@ -454,6 +456,7 @@ func toApplyResponse(r *preset.ApplyResult) applyResponse {
 		SkippedNoSlot:      toApplyCells(r.SkippedNoSlot),
 		Removed:            removed,
 		CreatedOverrides:   toApplyCells(r.CreatedOverrides),
+		SkippedOverrides:   toApplyCells(r.SkippedOverrides),
 	}
 }
 

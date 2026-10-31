@@ -378,10 +378,10 @@ func presetDetail(p *preset.Preset) map[string]any {
 }
 
 func applyResultSummary(r *preset.ApplyResult) map[string]any {
-	replaced := make([]plate.CellKey, len(r.Removed.Plates))
+	// Snapshot plate dates are already YYYY-MM-DD strings; pass them through.
+	replaced := make([]map[string]any, len(r.Removed.Plates))
 	for i, p := range r.Removed.Plates {
-		d, _ := time.Parse("2006-01-02", p.Date)
-		replaced[i] = plate.CellKey{Date: d, SlotID: p.SlotID}
+		replaced[i] = map[string]any{"date": p.Date, "slot_id": p.SlotID}
 	}
 	createdIDs := r.CreatedPlateIDs
 	if createdIDs == nil {
@@ -389,11 +389,12 @@ func applyResultSummary(r *preset.ApplyResult) map[string]any {
 	}
 	return map[string]any{
 		"created_plate_ids":   createdIDs,
-		"replaced":            cellList(replaced),
+		"replaced":            replaced,
 		"skipped_occupied":    cellList(r.SkippedOccupied),
 		"skipped_unavailable": cellList(r.SkippedUnavailable),
 		"skipped_no_slot":     cellList(r.SkippedNoSlot),
 		"created_overrides":   cellList(r.CreatedOverrides),
+		"skipped_overrides":   cellList(r.SkippedOverrides),
 		"effect":              "plate_changed",
 	}
 }

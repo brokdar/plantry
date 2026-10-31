@@ -301,7 +301,7 @@ func TestPresetHandler_Apply_HappyPath(t *testing.T) {
 		"created_plate_ids": [7],
 		"skipped_occupied": [], "skipped_unavailable": [], "skipped_no_slot": [],
 		"removed": {"plates": [], "sessions": []},
-		"created_overrides": []
+		"created_overrides": [], "skipped_overrides": []
 	}`, w.Body.String())
 }
 
@@ -315,6 +315,7 @@ func TestPresetHandler_CopyWeek_AvailabilityJSON(t *testing.T) {
 				CreatedPlateIDs:    []int64{9},
 				SkippedUnavailable: []plate.CellKey{{Date: target, SlotID: 2}},
 				CreatedOverrides:   []plate.CellKey{{Date: target.AddDate(0, 0, 1), SlotID: 3}},
+				SkippedOverrides:   []plate.CellKey{{Date: target.AddDate(0, 0, 2), SlotID: 3}},
 				Removed: plate.PlanSnapshot{
 					Plates: []plate.SnapshotPlate{{Date: "2026-05-19", SlotID: 1, Eaters: 2, Note: &note, Components: []plate.SnapshotComponent{
 						{FoodID: 4, Portions: &one, Session: &plate.SessionLink{Ref: "s1"}},
@@ -342,7 +343,8 @@ func TestPresetHandler_CopyWeek_AvailabilityJSON(t *testing.T) {
 			"sessions": [{"ref": "s1", "food_id": 4, "cook_date": "2026-05-19", "cook_slot_id": 1,
 				"portions": 2, "frozen_portions": 0, "cooked_at": null, "note": null}]
 		},
-		"created_overrides": [{"date": "2026-05-20", "slot_id": 3}]
+		"created_overrides": [{"date": "2026-05-20", "slot_id": 3}],
+		"skipped_overrides": [{"date": "2026-05-21", "slot_id": 3}]
 	}`, w.Body.String())
 }
 

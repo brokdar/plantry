@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/actor"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 )
 
@@ -171,4 +173,22 @@ func TestPresetTools_RunAsAgent(t *testing.T) {
 	_, _, err = ts.Execute(ctx, "copy_week", json.RawMessage(`{"source_start":"2026-05-11","target_start":"2026-05-18"}`))
 	require.NoError(t, err)
 	assert.Equal(t, []actor.Actor{{Kind: actor.Agent}, {Kind: actor.Agent}}, got)
+}
+
+func TestApplyResultSummary_ReplacedAndSkippedOverrides(t *testing.T) {
+	r := &preset.ApplyResult{
+		Removed: plate.PlanSnapshot{Plates: []plate.SnapshotPlate{
+			{Date: "2026-05-18", SlotID: 3},
+			// Not a date: kept as is, never turned into 0001-01-01.
+			{Date: "bogus", SlotID: 2},
+		}},
+		SkippedOverrides: []plate.CellKey{{Date: time.Date(2026, 5, 19, 0, 0, 0, 0, time.UTC), SlotID: 1}},
+	}
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(mustJSON(applyResultSummary(r)), &got))
+	assert.Equal(t, []any{
+		map[string]any{"date": "2026-05-18", "slot_id": float64(3)},
+		map[string]any{"date": "bogus", "slot_id": float64(2)},
+	}, got["replaced"])
+	assert.Equal(t, []any{map[string]any{"date": "2026-05-19", "slot_id": float64(1)}}, got["skipped_overrides"])
 }
