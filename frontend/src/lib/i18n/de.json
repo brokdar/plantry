@@ -950,6 +950,8 @@
       "invalid_start": "Diese Woche lässt sich nicht öffnen: Eine Planwoche beginnt an deinem Einkaufstag.",
       "generation_running": "Für diese Woche wird schon ein Plan erstellt. Warte, bis er fertig ist.",
       "scope_confirmed": "Dieses Essen ist bestätigt und bleibt, wie es ist.",
+      "invalid_scope": "Dieser Teil des Plans lässt sich nicht neu planen.",
+      "not_enough_recipes": "Lege mindestens 10 Rezepte an, damit der Plan für dich erstellt werden kann.",
       "confirmed_affected": "Einige dieser Essen sind bestätigt und schon eingekauft.",
       "replan_past": "Neu planen geht frühestens ab heute.",
       "nothing_to_accept": "In dieser Woche gibt es keine Entwürfe.",

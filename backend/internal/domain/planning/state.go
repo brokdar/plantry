@@ -135,6 +135,8 @@ type Settings struct {
 	plate.BatchSettings
 	MaxCookOccasionsPerDay int
 	VarietyWeeks           int
+	// BatchCooking false keeps every session to its own cell.
+	BatchCooking bool
 }
 
 // Profile is the part of the user profile the rules read.
@@ -146,6 +148,8 @@ type Profile struct {
 	DietType           profile.DietType
 	MeatDaysPerWeekMax *int
 	HouseholdPortions  float64
+	// Locale is the language of the chooser's reasons and notes.
+	Locale string
 }
 
 // HistoryPlate is a past confirmed plate: its cell and its foods.

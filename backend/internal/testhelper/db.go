@@ -63,7 +63,7 @@ func migratedTemplate() ([]byte, error) {
 // NewTestDB returns a fresh SQLite database with all migrations applied. The
 // migrations run once per test process; each call gets its own copy of the
 // migrated file. The connection is closed automatically when the test ends.
-func NewTestDB(t *testing.T) *sql.DB {
+func NewTestDB(t testing.TB) *sql.DB {
 	t.Helper()
 
 	tmpl, err := migratedTemplate()

@@ -168,6 +168,9 @@ DELETE FROM food_tags WHERE food_id = ?;
 -- name: ListFoodTags :many
 SELECT food_id, tag FROM food_tags WHERE food_id = ? ORDER BY tag;
 
+-- name: ListFoodTagsByFoodIDs :many
+SELECT food_id, tag FROM food_tags WHERE food_id IN (sqlc.slice(ids)) ORDER BY food_id, tag;
+
 -- name: ListFoodPortions :many
 SELECT food_id, unit, grams
 FROM food_portions

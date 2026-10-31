@@ -53,6 +53,10 @@ var sentinelStatus = map[error]int{
 	domain.ErrInvalidPlanStart:          http.StatusBadRequest,
 	domain.ErrNothingToAccept:           http.StatusBadRequest,
 	domain.ErrStateMismatch:             http.StatusConflict,
+	domain.ErrGenerationRunning:         http.StatusConflict,
+	domain.ErrScopeConfirmed:            http.StatusConflict,
+	domain.ErrInvalidScope:              http.StatusBadRequest,
+	domain.ErrNotEnoughRecipes:          http.StatusBadRequest,
 }
 
 func toHTTPWithResource(err error, resource string) (int, string) {

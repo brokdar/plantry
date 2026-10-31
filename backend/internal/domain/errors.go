@@ -72,6 +72,14 @@ var (
 	ErrNothingToAccept = errors.New("no draft rows in the window")
 	ErrStateMismatch   = errors.New("rows are not confirmed")
 
+	// Generation (Phase 3 B6, D6, D9): one run per window, a scope that names
+	// a confirmed row or nothing valid, and a library below the onboarding
+	// target.
+	ErrGenerationRunning = errors.New("a generation runs for this window")
+	ErrScopeConfirmed    = errors.New("the scope names a confirmed row")
+	ErrInvalidScope      = errors.New("invalid generation scope")
+	ErrNotEnoughRecipes  = errors.New("not enough recipes to plan")
+
 	// Store sections (Phase 2 D18).
 	ErrInvalidShopSection  = errors.New("unknown store section")
 	ErrShopSectionLeafOnly = errors.New("store sections apply to leaf foods only")
@@ -135,6 +143,10 @@ var messageKeys = []struct {
 	{ErrInvalidPlanStart, "error.plan.invalid_start"},
 	{ErrNothingToAccept, "error.plan.nothing_to_accept"},
 	{ErrStateMismatch, "error.plan.state_mismatch"},
+	{ErrGenerationRunning, "error.plan.generation_running"},
+	{ErrScopeConfirmed, "error.plan.scope_confirmed"},
+	{ErrInvalidScope, "error.plan.invalid_scope"},
+	{ErrNotEnoughRecipes, "error.plan.not_enough_recipes"},
 }
 
 // MessageKey returns the i18n message key of the first sentinel err wraps,

@@ -1,8 +1,16 @@
 package planning_test
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -49,7 +57,7 @@ func benchState() (planning.State, planning.Target, planning.Proposal) {
 }
 
 // B5-AC4: the check part of BuildAndCheck stays under 10 ms/op.
-func BenchmarkBuildAndCheck(b *testing.B) {
+func BenchmarkCheck(b *testing.B) {
 	s, t, p := benchState()
 	b.ResetTimer()
 	for range b.N {
@@ -70,5 +78,94 @@ func TestBuildAndCheck_Under10ms(t *testing.T) {
 	})
 	if per := time.Duration(res.NsPerOp()); per >= 10*time.Millisecond {
 		t.Fatalf("check part takes %s/op, want < 10ms", per)
+	}
+}
+
+// benchDB is the AC-11 database: the batch cooker fixture grown to 300
+// recipes of 5 ingredients each, 4 weeks of confirmed history (3 plates a
+// day) and a generated 21-plate window.
+func benchDB(tb testing.TB) *svcEnv {
+	tb.Helper()
+	e := newSvcEnv(tb)
+	var leaves []int64
+	for i := range 60 {
+		leaves = append(leaves, e.insert(`INSERT INTO foods (name, kind, source, kcal_100g, protein_100g, fat_100g, carbs_100g) VALUES (?, 'leaf', 'manual', 100, 5, 5, 10)`, fmt.Sprintf("Leaf %d", i)))
+	}
+	for i := range 285 {
+		id := e.insert(`INSERT INTO foods (name, kind, role, reference_portions) VALUES (?, 'composed', 'main', 4)`, fmt.Sprintf("Bench %03d", i))
+		for j := range 5 {
+			e.exec(`INSERT INTO food_components (parent_id, child_id, amount, unit, grams, sort_order) VALUES (?, ?, 100, 'g', 100, ?)`, id, leaves[(i+j*7)%len(leaves)], j)
+		}
+		e.mains = append(e.mains, id)
+	}
+	taken := map[string]bool{"2026-10-25": true, "2026-10-28": true, "2026-11-01": true}
+	for d := range 28 {
+		date := day(sat).AddDate(0, 0, -d-1).Format(time.DateOnly)
+		for k, slot := range []int64{e.breakfast, e.lunch, e.dinner} {
+			if slot == e.dinner && taken[date] {
+				continue
+			}
+			e.userPlate(date, slot, e.mains[10+(d*3+k)%280])
+		}
+	}
+	end := e.runs.end(e.generate(e.req()))
+	require.NotEqual(tb, airun.StatusError, end.Status)
+	return e
+}
+
+// buildAndCheck reads the window's state the way a generation does and
+// checks it.
+func buildAndCheck(tb testing.TB, e *svcEnv, w window.Window, t planning.Target) {
+	err := e.deps.Tx.InTx(e.ctx, func(ctx context.Context) error {
+		st, err := e.deps.Builder.Build(ctx, w, day(svcToday), w.Start, w.End)
+		if err != nil {
+			return err
+		}
+		planning.Check(st, t)
+		return nil
+	})
+	if err != nil {
+		tb.Fatal(err)
+	}
+}
+
+func benchWindow(e *svcEnv) (window.Window, planning.Target) {
+	w := window.Window{Start: day(sat), End: day(fri)}
+	var t planning.Target
+	for _, d := range w.Days() {
+		for _, slot := range []int64{e.breakfast, e.lunch, e.dinner} {
+			t.Cells = append(t.Cells, plate.CellKey{Date: d, SlotID: slot})
+		}
+	}
+	return w, t
+}
+
+// B6-AC8 (AC-11): the context build over SQLite plus the check.
+func BenchmarkBuildAndCheck(b *testing.B) {
+	e := benchDB(b)
+	w, t := benchWindow(e)
+	b.ResetTimer()
+	for range b.N {
+		buildAndCheck(b, e, w, t)
+	}
+}
+
+func TestBuildAndCheck_Under50ms(t *testing.T) {
+	if raceEnabled {
+		t.Skip("the race detector slows SQLite down; the benchmark runs without it")
+	}
+	e := benchDB(t)
+	w, tgt := benchWindow(e)
+	var n int
+	require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM foods WHERE kind = 'composed'`).Scan(&n))
+	require.Equal(t, 300, n)
+	require.Len(t, e.window(), 21)
+	res := testing.Benchmark(func(b *testing.B) {
+		for range b.N {
+			buildAndCheck(b, e, w, tgt)
+		}
+	})
+	if per := time.Duration(res.NsPerOp()); per >= 50*time.Millisecond {
+		t.Fatalf("build and check take %s/op, want < 50ms", per)
 	}
 }

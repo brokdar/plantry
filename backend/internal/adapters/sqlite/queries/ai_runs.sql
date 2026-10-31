@@ -50,6 +50,18 @@ WHERE id IN (
     LIMIT 500
 );
 
+-- name: GetPlanRun :one
+-- A generation run as GET /api/plan/runs/{id} shows it (B6).
+SELECT id, kind, status, chooser, notes, error_key, scope_json, violations_json, score_json, window_start, window_end
+FROM ai_runs WHERE id = ? AND kind IN ('generate', 'regenerate');
+
+-- name: CountPlanRunRows :one
+-- What a generation run wrote that still exists (B6).
+SELECT
+    (SELECT COUNT(*) FROM plates p WHERE p.ai_run_id = sqlc.arg(id)) AS plates,
+    (SELECT COUNT(*) FROM cook_sessions s WHERE s.ai_run_id = sqlc.arg(id)) AS sessions,
+    (SELECT COUNT(DISTINCT s.cook_date) FROM cook_sessions s WHERE s.ai_run_id = sqlc.arg(id)) AS cook_days;
+
 -- name: GetRunNote :one
 -- What the plan's draft summary shows of a run (D26).
 SELECT chooser, notes FROM ai_runs WHERE id = ?;

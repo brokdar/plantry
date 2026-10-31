@@ -37,6 +37,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
@@ -163,21 +164,6 @@ func run() error {
 	})
 	availabilitySvc.WithPlates(plateSvc)
 
-	planViewSvc := planview.NewService(planview.Deps{
-		Plates:       plateRepo,
-		Sessions:     sessionRepo,
-		Foods:        foodRepo,
-		Nutrition:    nutritionResolver,
-		Availability: availabilitySvc,
-		Slots:        slotRepo,
-		Settings:     settingsSvc,
-		Profile:      profileSvc,
-		Recipes:      foodRepo,
-		Runs:         aiRunRepo,
-		Diets:        foodSvc,
-		Tx:           txRunner,
-	})
-
 	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).
 		WithSlots(slotSvc).
 		WithAvailability(availabilitySvc)
@@ -199,6 +185,39 @@ func run() error {
 		})
 	runRecorder.Prune(context.Background()) // in the background
 	defer runRecorder.Wait()                // runs before conn.Close
+
+	// Plan generation (Phase 3 B6): runs in the background, so shutdown
+	// waits for the running ones (before the recorder and the database).
+	planningSvc := planning.NewService(planning.Deps{
+		Builder: planning.NewBuilder(planning.BuilderDeps{
+			Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
+			Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
+			Settings: settingsSvc, Profile: profileSvc,
+		}),
+		Plates: plateSvc, PlateRows: plateRepo, Cells: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
+		RunLog: planning.RecorderLog{Recorder: runRecorder}, Runs: aiRunRepo, Tx: txRunner,
+		Progress: planning.NewProgress(),
+		Choosers: map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: planning.Heuristic{}},
+		Logger:   logger,
+	})
+	defer planningSvc.Wait()
+
+	planViewSvc := planview.NewService(planview.Deps{
+		Plates:       plateRepo,
+		Sessions:     sessionRepo,
+		Foods:        foodRepo,
+		Nutrition:    nutritionResolver,
+		Availability: availabilitySvc,
+		Slots:        slotRepo,
+		Settings:     settingsSvc,
+		Profile:      profileSvc,
+		Recipes:      foodRepo,
+		Runs:         aiRunRepo,
+		Diets:        foodSvc,
+		Progress:     planningSvc,
+		Tx:           txRunner,
+	})
+
 	newLLMClient := func(provider, apiKey, fakeScript string) (llm.Client, error) {
 		switch provider {
 		case "anthropic":
@@ -286,6 +305,7 @@ func run() error {
 		CookSessions:  handlers.NewCookSessionHandler(plateSvc),
 		PlanWrite:     handlers.NewPlanWriteHandler(plateSvc),
 		PlanRead:      handlers.NewPlanReadHandler(planViewSvc),
+		PlanGenerate:  handlers.NewPlanGenerateHandler(planningSvc),
 		Today:         handlers.NewTodayHandler(planViewSvc),
 		Profile:       handlers.NewProfileHandler(profileSvc),
 		Presets:       handlers.NewPresetHandler(presetSvc),

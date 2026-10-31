@@ -24,6 +24,7 @@ type Handlers struct {
 	CookSessions  *handlers.CookSessionHandler
 	PlanWrite     *handlers.PlanWriteHandler
 	PlanRead      *handlers.PlanReadHandler
+	PlanGenerate  *handlers.PlanGenerateHandler
 	Today         *handlers.TodayHandler
 	Profile       *handlers.ProfileHandler
 	Presets       *handlers.PresetHandler
@@ -133,7 +134,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 			})
 		}
 
-		if h.PlanWrite != nil || h.PlanRead != nil {
+		if h.PlanWrite != nil || h.PlanRead != nil || h.PlanGenerate != nil {
 			api.Route("/plan", func(r chi.Router) {
 				if h.PlanRead != nil {
 					r.Get("/", h.PlanRead.Get)
@@ -144,6 +145,11 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Post("/accept", h.PlanWrite.Accept)
 					r.Post("/unaccept", h.PlanWrite.Unaccept)
 					r.Post("/discard", h.PlanWrite.Discard)
+				}
+				if h.PlanGenerate != nil {
+					r.Post("/generate", h.PlanGenerate.Generate)
+					r.Post("/regenerate", h.PlanGenerate.Regenerate)
+					r.Get("/runs/{id}", h.PlanGenerate.Run)
 				}
 			})
 		}

@@ -685,6 +685,43 @@ func (q *Queries) ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, er
 	return items, nil
 }
 
+const listFoodTagsByFoodIDs = `-- name: ListFoodTagsByFoodIDs :many
+SELECT food_id, tag FROM food_tags WHERE food_id IN (/*SLICE:ids*/?) ORDER BY food_id, tag
+`
+
+func (q *Queries) ListFoodTagsByFoodIDs(ctx context.Context, ids []int64) ([]FoodTag, error) {
+	query := listFoodTagsByFoodIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FoodTag{}
+	for rows.Next() {
+		var i FoodTag
+		if err := rows.Scan(&i.FoodID, &i.Tag); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSiblingFoods = `-- name: ListSiblingFoods :many
 SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, created_at, updated_at, source_url, description, shop_section, diet_class, keep_days, freezable FROM foods
 WHERE kind = 'composed' AND variant_group_id = ? AND id != ?

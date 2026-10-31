@@ -280,18 +280,28 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 		return nil, err
 	}
 
-	// Attach tags for composed foods so list consumers can render tag chips.
+	// Attach tags for composed foods so list consumers can render tag chips,
+	// with one query for the page.
+	var composed []int64
 	for i := range items {
-		if items[i].Kind != food.KindComposed {
-			continue
+		if items[i].Kind == food.KindComposed {
+			items[i].Tags = []string{}
+			composed = append(composed, items[i].ID)
 		}
-		tagRows, err := r.queriesFor(ctx).ListFoodTags(ctx, items[i].ID)
+	}
+	if len(composed) > 0 {
+		tagRows, err := r.queriesFor(ctx).ListFoodTagsByFoodIDs(ctx, composed)
 		if err != nil {
 			return nil, err
 		}
-		items[i].Tags = make([]string, len(tagRows))
-		for j, tr := range tagRows {
-			items[i].Tags[j] = tr.Tag
+		tags := make(map[int64][]string, len(composed))
+		for _, tr := range tagRows {
+			tags[tr.FoodID] = append(tags[tr.FoodID], tr.Tag)
+		}
+		for i := range items {
+			if t, ok := tags[items[i].ID]; ok {
+				items[i].Tags = t
+			}
 		}
 	}
 

@@ -8,9 +8,11 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -79,4 +81,24 @@ func Feedback(db *sql.DB) *feedback.Service {
 // Settings returns a settings service over db without env overrides.
 func Settings(db *sql.DB) *settings.Service {
 	return settings.NewService(sqlite.NewAppSettingsRepo(db), settings.NewEnvSnapshot(nil), crypto.NilCipher{})
+}
+
+// PlanningDeps returns the generation service's dependencies over db, wired
+// like main.go with the heuristic chooser. The caller adds RunLog, Runs and,
+// for synchronous runs, Go.
+func PlanningDeps(db *sql.DB) planning.Deps {
+	plates, avail := Plan(db)
+	foods := sqlite.NewFoodRepo(db)
+	set := Settings(db)
+	return planning.Deps{
+		Builder: planning.NewBuilder(planning.BuilderDeps{
+			Foods: food.NewService(foods), FoodRows: foods, Nutrition: food.NewNutritionResolver(foods),
+			Cells: avail, Plates: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db),
+			Presets: sqlite.NewPresetRepo(db), Slots: sqlite.NewSlotRepo(db), Settings: set,
+			Profile: profile.NewService(sqlite.NewProfileRepo(db)),
+		}),
+		Plates: plates, PlateRows: sqlite.NewPlateRepo(db), Cells: avail, FoodRows: foods, Settings: set,
+		Tx: sqlite.NewTxRunner(db), Progress: planning.NewProgress(),
+		Choosers: map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: planning.Heuristic{}},
+	}
 }

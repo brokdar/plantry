@@ -18,6 +18,8 @@ type Querier interface {
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
+	// What a generation run wrote that still exists (B6).
+	CountPlanRunRows(ctx context.Context, id sql.NullInt64) (CountPlanRunRowsRow, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 	CountPresetsUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error)
@@ -71,6 +73,8 @@ type Querier interface {
 	GetFood(ctx context.Context, id int64) (Food, error)
 	GetFoodKind(ctx context.Context, id int64) (string, error)
 	GetLeafFoodIDByName(ctx context.Context, name string) (int64, error)
+	// A generation run as GET /api/plan/runs/{id} shows it (B6).
+	GetPlanRun(ctx context.Context, id int64) (GetPlanRunRow, error)
 	GetPlate(ctx context.Context, id int64) (Plate, error)
 	GetPlateComponent(ctx context.Context, id int64) (PlateComponent, error)
 	GetPlateFeedback(ctx context.Context, plateID int64) (PlateFeedback, error)
@@ -108,6 +112,7 @@ type Querier interface {
 	ListFoodInstructions(ctx context.Context, foodID int64) ([]FoodInstruction, error)
 	ListFoodPortions(ctx context.Context, foodID int64) ([]FoodPortion, error)
 	ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, error)
+	ListFoodTagsByFoodIDs(ctx context.Context, ids []int64) ([]FoodTag, error)
 	ListKnownTags(ctx context.Context, limit int64) ([]ListKnownTagsRow, error)
 	// Leaf components on plates dated in [from_date, to_date] with their plate's
 	// cell, eaters and state: the ingredient sources of a shopping list.
