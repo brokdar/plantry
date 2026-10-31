@@ -151,6 +151,35 @@ func (q *Queries) PruneAIRunSteps(ctx context.Context, before string) (sql.Resul
 	return q.db.ExecContext(ctx, pruneAIRunSteps, before)
 }
 
+const setRunOutcome = `-- name: SetRunOutcome :exec
+UPDATE ai_runs SET
+    outcome = CASE
+        WHEN CAST(?1 AS TEXT) = 'accepted' AND outcome IN ('discarded', 'partially_accepted') THEN 'partially_accepted'
+        WHEN CAST(?1 AS TEXT) = 'accepted' THEN 'accepted'
+        WHEN CAST(?1 AS TEXT) = 'discarded' AND outcome IN ('accepted', 'partially_accepted') THEN 'partially_accepted'
+        WHEN CAST(?1 AS TEXT) = 'discarded' THEN 'discarded'
+        WHEN outcome = 'accepted' THEN 'open'
+        WHEN outcome = 'partially_accepted' THEN 'discarded'
+        ELSE outcome
+    END,
+    outcome_at = datetime('now')
+WHERE id = ?2
+`
+
+type SetRunOutcomeParams struct {
+	Event string
+	ID    int64
+}
+
+// D25: a run's outcome after its rows were accepted, discarded or un-accepted
+// (reset). open/NULL -> accepted or discarded; a run that sees both is
+// partially_accepted; reset undoes an accept (accepted -> open,
+// partially_accepted -> discarded).
+func (q *Queries) SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error {
+	_, err := q.db.ExecContext(ctx, setRunOutcome, arg.Event, arg.ID)
+	return err
+}
+
 const upsertAIPrompt = `-- name: UpsertAIPrompt :exec
 INSERT INTO ai_prompts (hash, text) VALUES (?, ?)
 ON CONFLICT(hash) DO NOTHING

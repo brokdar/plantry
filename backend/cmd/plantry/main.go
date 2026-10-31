@@ -148,6 +148,7 @@ func run() error {
 
 	plateRepo := sqlite.NewPlateRepo(conn)
 	sessionRepo := sqlite.NewCookSessionRepo(conn)
+	aiRunRepo := sqlite.NewAIRunRepo(conn)
 	plateSvc := plate.NewService(plate.Deps{
 		Plates:   plateRepo,
 		Sessions: sessionRepo,
@@ -157,6 +158,7 @@ func run() error {
 		Profile:  profileSvc,
 		Settings: settingsSvc,
 		Events:   sqlite.NewPlateEventRepo(conn),
+		Outcomes: aiRunRepo,
 		Tx:       txRunner,
 	})
 	availabilitySvc.WithPlates(plateSvc)
@@ -185,7 +187,7 @@ func run() error {
 	// Every client is metered so each LLM call lands in the AI run log.
 	// Steps of runs older than ai.run_retention_days are pruned now and after
 	// a finished run, at most once per hour.
-	runRecorder := airun.NewRecorder(sqlite.NewAIRunRepo(conn), logger, time.Now).
+	runRecorder := airun.NewRecorder(aiRunRepo, logger, time.Now).
 		WithRetention(func(ctx context.Context) (int, error) {
 			v, err := settingsSvc.Get(ctx, settingsdom.KeyAIRunRetentionDays)
 			if err != nil {

@@ -47,6 +47,8 @@ func TestToHTTP_KeysFromDomain(t *testing.T) {
 		{fmt.Errorf("%w: %w", domain.ErrInvalidInput, plate.ErrUnitRequiresPortion), "plate", http.StatusBadRequest, "error.plate.unit_requires_portion"},
 		{domain.ErrInUse, "slot", http.StatusConflict, "error.slot.in_use"},
 		{domain.ErrInvalidPlanStart, "food", http.StatusBadRequest, "error.plan.invalid_start"},
+		{domain.ErrNothingToAccept, "plate", http.StatusBadRequest, "error.plan.nothing_to_accept"},
+		{domain.ErrStateMismatch, "plate", http.StatusConflict, "error.plan.state_mismatch"},
 		{errors.New("boom"), "food", http.StatusInternalServerError, "error.server"},
 	}
 	for _, tt := range tests {

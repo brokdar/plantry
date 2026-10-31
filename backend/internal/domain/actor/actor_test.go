@@ -40,6 +40,7 @@ func TestWith_RoundTrips(t *testing.T) {
 		{"user", actor.User, 0},
 		{"agent with run", actor.Agent, 42},
 		{"agent without run", actor.Agent, 0},
+		{"generator with run", actor.Generator, 7},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

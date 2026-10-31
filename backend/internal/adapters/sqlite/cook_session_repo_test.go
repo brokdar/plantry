@@ -32,7 +32,7 @@ func TestCookSessionRepo_RoundTrip(t *testing.T) {
 	repo := NewCookSessionRepo(db)
 	sun := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
-	s := &plate.CookSession{FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 6}
+	s := &plate.CookSession{State: plate.StateConfirmed, FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 6}
 	require.NoError(t, repo.CreateSession(ctx, s))
 	require.NotZero(t, s.ID)
 	assert.False(t, s.CreatedAt.IsZero())
@@ -70,7 +70,7 @@ func TestCookSessionRepo_RoundTrip(t *testing.T) {
 	_, err = repo.GetSession(ctx, s.ID)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 	assert.ErrorIs(t, repo.DeleteSession(ctx, s.ID), domain.ErrNotFound)
-	missing := &plate.CookSession{ID: 999, FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 1}
+	missing := &plate.CookSession{State: plate.StateConfirmed, ID: 999, FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 1}
 	assert.ErrorIs(t, repo.UpdateSession(ctx, missing), domain.ErrNotFound)
 }
 
@@ -83,11 +83,11 @@ func TestCookSessionRepo_LinksAndRestrict(t *testing.T) {
 	plates := NewPlateRepo(db)
 	sun := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
-	s := &plate.CookSession{FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 5}
+	s := &plate.CookSession{State: plate.StateConfirmed, FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 5}
 	require.NoError(t, sessions.CreateSession(ctx, s))
 	one, half := 1.0, 1.5
-	p1 := &plate.Plate{Date: sun, SlotID: slotID, Eaters: 2, Components: []plate.PlateComponent{{FoodID: chili, Portions: &one, CookSessionID: &s.ID}}}
-	p2 := &plate.Plate{Date: sun.AddDate(0, 0, 1), SlotID: slotID, Eaters: 2, Components: []plate.PlateComponent{{FoodID: chili, Portions: &half, CookSessionID: &s.ID}}}
+	p1 := &plate.Plate{State: plate.StateConfirmed, Date: sun, SlotID: slotID, Eaters: 2, Components: []plate.PlateComponent{{FoodID: chili, Portions: &one, CookSessionID: &s.ID}}}
+	p2 := &plate.Plate{State: plate.StateConfirmed, Date: sun.AddDate(0, 0, 1), SlotID: slotID, Eaters: 2, Components: []plate.PlateComponent{{FoodID: chili, Portions: &half, CookSessionID: &s.ID}}}
 	require.NoError(t, plates.Create(ctx, p1))
 	require.NoError(t, plates.Create(ctx, p2))
 
@@ -106,7 +106,7 @@ func TestCookSessionRepo_LinksAndRestrict(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, empty)
 
-	bad := &plate.CookSession{FoodID: 999, CookDate: sun, CookSlotID: slotID, Portions: 1}
+	bad := &plate.CookSession{State: plate.StateConfirmed, FoodID: 999, CookDate: sun, CookSlotID: slotID, Portions: 1}
 	assert.ErrorIs(t, sessions.CreateSession(ctx, bad), domain.ErrInvalidInput)
 }
 
@@ -124,10 +124,10 @@ func TestCookSessionRepo_ListInRange(t *testing.T) {
 	}
 	one := 1.0
 	session := func(cook string, eaten ...string) *plate.CookSession {
-		s := &plate.CookSession{FoodID: chili, CookDate: day(cook), CookSlotID: slotID, Portions: float64(len(eaten) + 1)}
+		s := &plate.CookSession{State: plate.StateConfirmed, FoodID: chili, CookDate: day(cook), CookSlotID: slotID, Portions: float64(len(eaten) + 1)}
 		require.NoError(t, sessions.CreateSession(ctx, s))
 		for _, d := range eaten {
-			p := &plate.Plate{Date: day(d), SlotID: slotID, Eaters: 1, Components: []plate.PlateComponent{{FoodID: chili, Portions: &one, CookSessionID: &s.ID}}}
+			p := &plate.Plate{State: plate.StateConfirmed, Date: day(d), SlotID: slotID, Eaters: 1, Components: []plate.PlateComponent{{FoodID: chili, Portions: &one, CookSessionID: &s.ID}}}
 			require.NoError(t, plates.Create(ctx, p))
 		}
 		return s
@@ -165,9 +165,9 @@ func TestRepos_CorruptDatesFail(t *testing.T) {
 		ctx := context.Background()
 		slotID := seedSlot(t, db)
 		chili := seedComposed(t, db, "Chili")
-		s := &plate.CookSession{FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 2}
+		s := &plate.CookSession{State: plate.StateConfirmed, FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 2}
 		require.NoError(t, NewCookSessionRepo(db).CreateSession(ctx, s))
-		p := &plate.Plate{Date: sun, SlotID: slotID, Eaters: 1, Components: []plate.PlateComponent{{FoodID: chili, Portions: &one, CookSessionID: &s.ID}}}
+		p := &plate.Plate{State: plate.StateConfirmed, Date: sun, SlotID: slotID, Eaters: 1, Components: []plate.PlateComponent{{FoodID: chili, Portions: &one, CookSessionID: &s.ID}}}
 		require.NoError(t, NewPlateRepo(db).Create(ctx, p))
 		require.NoError(t, NewPlateRepo(db).RestoreFeedback(ctx, p.ID, plate.Feedback{Status: "loved", RatedAt: sun}))
 		return db, s, p
@@ -249,11 +249,11 @@ func TestPlateRepo_EatersSessionsFeedbackAndFoodFacts(t *testing.T) {
 	repo := NewPlateRepo(db)
 	sun := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
-	s := &plate.CookSession{FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 3.5}
+	s := &plate.CookSession{State: plate.StateConfirmed, FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 3.5}
 	require.NoError(t, sessions.CreateSession(ctx, s))
 	portions := 1.0
 	note := "late"
-	p := &plate.Plate{Date: sun, SlotID: slotID, Eaters: 3.5, Note: &note, Components: []plate.PlateComponent{
+	p := &plate.Plate{State: plate.StateConfirmed, Date: sun, SlotID: slotID, Eaters: 3.5, Note: &note, Components: []plate.PlateComponent{
 		{FoodID: chili, Portions: &portions, CookSessionID: &s.ID},
 	}}
 	require.NoError(t, repo.Create(ctx, p))
@@ -297,7 +297,7 @@ func TestPlateRepo_EatersSessionsFeedbackAndFoodFacts(t *testing.T) {
 	assert.InDelta(t, 2.0, got.Eaters, 1e-9)
 
 	// The component's session can be changed (swap) and cleared for a leaf.
-	other := &plate.CookSession{FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 2}
+	other := &plate.CookSession{State: plate.StateConfirmed, FoodID: chili, CookDate: sun, CookSlotID: slotID, Portions: 2}
 	require.NoError(t, sessions.CreateSession(ctx, other))
 	c := got.Components[0]
 	c.CookSessionID = &other.ID

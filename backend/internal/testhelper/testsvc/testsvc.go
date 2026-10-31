@@ -37,6 +37,7 @@ func PlanWithEvents(db *sql.DB, events plate.EventLog) (*plate.Service, *availab
 		Profile:  profile.NewService(sqlite.NewProfileRepo(db)),
 		Settings: Settings(db),
 		Events:   events,
+		Outcomes: sqlite.NewAIRunRepo(db),
 		Tx:       tx,
 	})
 	avail.WithPlates(plates)

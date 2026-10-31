@@ -67,6 +67,11 @@ var (
 	// (Phase 2 D24).
 	ErrInvalidPlanStart = errors.New("plan window must start on the shopping day")
 
+	// Plan state (Phase 3 D4): accept or discard of a window without drafts,
+	// and unaccept of rows that are not (or no longer) confirmed.
+	ErrNothingToAccept = errors.New("no draft rows in the window")
+	ErrStateMismatch   = errors.New("rows are not confirmed")
+
 	// Store sections (Phase 2 D18).
 	ErrInvalidShopSection  = errors.New("unknown store section")
 	ErrShopSectionLeafOnly = errors.New("store sections apply to leaf foods only")
@@ -123,6 +128,8 @@ var messageKeys = []struct {
 	{ErrSessionNotFreezable, "error.session.not_freezable"},
 	{ErrSessionNotFound, "error.session.not_found"},
 	{ErrInvalidPlanStart, "error.plan.invalid_start"},
+	{ErrNothingToAccept, "error.plan.nothing_to_accept"},
+	{ErrStateMismatch, "error.plan.state_mismatch"},
 }
 
 // MessageKey returns the i18n message key of the first sentinel err wraps,

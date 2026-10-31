@@ -810,7 +810,9 @@
       "generation_running": "Für diese Woche wird schon ein Plan erstellt. Warte, bis er fertig ist.",
       "scope_confirmed": "Dieses Essen ist bestätigt und bleibt, wie es ist.",
       "confirmed_affected": "Einige dieser Essen sind bestätigt und schon eingekauft.",
-      "replan_past": "Neu planen geht frühestens ab heute."
+      "replan_past": "Neu planen geht frühestens ab heute.",
+      "nothing_to_accept": "In dieser Woche gibt es keine Entwürfe.",
+      "state_mismatch": "Einige dieser Essen haben sich inzwischen geändert, deshalb lässt sich das nicht rückgängig machen."
     },
     "slot": {
       "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."

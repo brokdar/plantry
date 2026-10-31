@@ -21,3 +21,6 @@ VALUES (?, ?, ?, ?);
 SELECT pf.* FROM plate_feedback pf
 JOIN plates p ON p.id = pf.plate_id
 WHERE p.date BETWEEN sqlc.arg(from_date) AND sqlc.arg(to_date);
+
+-- name: ListPlateFeedbackByPlateIDs :many
+SELECT * FROM plate_feedback WHERE plate_id IN (sqlc.slice(ids));

@@ -111,7 +111,8 @@ type SettingsReader interface {
 }
 
 // Deps are the service's dependencies. Cells is optional: without it every
-// cell counts as "plan". Now defaults to time.Now.
+// cell counts as "plan". Now defaults to time.Now. Outcomes records the AI
+// runs' outcomes on accept, discard and unaccept (D25).
 type Deps struct {
 	Plates   Repository
 	Sessions SessionRepository
@@ -121,6 +122,7 @@ type Deps struct {
 	Profile  ProfileReader
 	Settings SettingsReader
 	Events   EventLog
+	Outcomes RunOutcomes
 	Tx       domain.Transactor
 	Now      func() time.Time
 }
@@ -136,6 +138,7 @@ type Service struct {
 	profile  ProfileReader
 	settings SettingsReader
 	events   EventLog
+	outcomes RunOutcomes
 	tx       domain.Transactor
 	now      func() time.Time
 }
@@ -148,7 +151,8 @@ func NewService(d Deps) *Service {
 	}
 	return &Service{
 		plates: d.Plates, sessions: d.Sessions, slots: d.Slots, foods: d.Foods,
-		cells: d.Cells, profile: d.Profile, settings: d.Settings, events: d.Events, tx: d.Tx, now: now,
+		cells: d.Cells, profile: d.Profile, settings: d.Settings, events: d.Events, outcomes: d.Outcomes,
+		tx: d.Tx, now: now,
 	}
 }
 
@@ -181,7 +185,7 @@ func (s *Service) Create(ctx context.Context, in PlateInput) (*Plate, error) {
 		}
 		j := newJournal()
 		t := newTracker(j)
-		id, err := s.createPlate(ctx, in, e, t, true)
+		id, err := s.createPlate(ctx, in, e, t, true, newOrigin(ctx), true)
 		if err != nil {
 			return err
 		}
@@ -203,8 +207,11 @@ func (s *Service) Create(ctx context.Context, in PlateInput) (*Plate, error) {
 
 // createPlate writes one plate with components whose SortOrder is set. strict
 // enforces the D13 cell rules on linked sessions (Apply restores state as it
-// was and only checks the food).
-func (s *Service) createPlate(ctx context.Context, in PlateInput, e env, t *tracker, strict bool) (int64, error) {
+// was and only checks the food). The plate gets o's state, run and reason;
+// with adopt it takes the state of the existing sessions it links to instead
+// (D3: confirmed when any of them is), and a closure that then mixes states
+// is unified at settle. Its fresh sessions take its state.
+func (s *Service) createPlate(ctx context.Context, in PlateInput, e env, t *tracker, strict bool, o origin, adopt bool) (int64, error) {
 	if in.Date.IsZero() {
 		return 0, fmt.Errorf("%w: date required", domain.ErrInvalidInput)
 	}
@@ -221,18 +228,48 @@ func (s *Service) createPlate(ctx context.Context, in PlateInput, e env, t *trac
 	}
 	p.Components = make([]PlateComponent, len(in.Components))
 	copy(p.Components, in.Components)
+	foods := make([]*food.Food, len(p.Components))
+	linkedStates := map[State]bool{}
 	for i := range p.Components {
 		pc := &p.Components[i]
 		f, err := s.normaliseComponent(ctx, pc)
 		if err != nil {
 			return 0, fmt.Errorf("component[%d]: %w", i, err)
 		}
-		if err := s.attach(ctx, t, pc, f, p.Cell(), eaters, e, strict); err != nil {
+		foods[i] = f
+		if pc.CookSessionID == nil {
+			continue
+		}
+		sess, err := s.attach(ctx, t, pc, f, p.Cell(), eaters, e, strict, origin{})
+		if err != nil {
+			return 0, fmt.Errorf("component[%d]: %w", i, err)
+		}
+		if sess != nil {
+			linkedStates[sess.State] = true
+		}
+	}
+	if adopt && len(linkedStates) > 0 {
+		o.state = StateDraft
+		if linkedStates[StateConfirmed] {
+			o.state = StateConfirmed
+		}
+	}
+	fresh := freshOrigin(ctx, o.state)
+	for i := range p.Components {
+		pc := &p.Components[i]
+		if pc.CookSessionID != nil {
+			continue
+		}
+		if _, err := s.attach(ctx, t, pc, foods[i], p.Cell(), eaters, e, strict, fresh); err != nil {
 			return 0, fmt.Errorf("component[%d]: %w", i, err)
 		}
 	}
+	p.State, p.AIRunID, p.Reason = o.state, o.runID, o.reason
 	if err := s.plates.Create(ctx, p); err != nil {
 		return 0, err
+	}
+	if adopt && len(linkedStates) > 1 {
+		t.unify = append(t.unify, p.ID)
 	}
 	return p.ID, nil
 }
@@ -416,8 +453,17 @@ func (s *Service) AddComponent(ctx context.Context, plateID int64, pc PlateCompo
 		if err != nil {
 			return err
 		}
-		if err := s.attach(ctx, t, &pc, f, p.Cell(), p.Eaters, e, true); err != nil {
+		linked, err := s.attach(ctx, t, &pc, f, p.Cell(), p.Eaters, e, true, freshOrigin(ctx, p.State))
+		if err != nil {
 			return err
+		}
+		if linked != nil && linked.State != p.State {
+			// D3: the plate adopts the state of the session it now eats
+			// from, and so does the rest of its closure (at settle).
+			if err := s.plates.SetState(ctx, []int64{p.ID}, linked.State); err != nil {
+				return err
+			}
+			t.unify = append(t.unify, p.ID)
 		}
 		pc.PlateID = plateID
 		pc.SortOrder = nextSortOrder(p.Components)
@@ -508,7 +554,7 @@ func (s *Service) SwapComponent(ctx context.Context, componentID, newFoodID int6
 		if err != nil {
 			return err
 		}
-		if err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, true); err != nil {
+		if _, err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, true, freshOrigin(ctx, p.State)); err != nil {
 			return err
 		}
 		if err := s.plates.UpdateComponent(ctx, pc); err != nil {
@@ -792,7 +838,7 @@ func (s *Service) AddLeftovers(ctx context.Context, id int64, cells []CellKey) (
 				Date: c.Date, SlotID: c.SlotID,
 				Components: []PlateComponent{{FoodID: sess.FoodID, Portions: &portions, CookSessionID: &sid}},
 			}
-			pid, err := s.createPlate(ctx, in, e, t, true)
+			pid, err := s.createPlate(ctx, in, e, t, true, newOrigin(ctx), true)
 			if err != nil {
 				return fmt.Errorf("leftover %s slot %d: %w", c.Date.Format(dateLayout), c.SlotID, err)
 			}
@@ -960,13 +1006,13 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 		for _, st := range steps {
 			if st.merge != nil {
 				j.touch(*st.merge)
-				if err := s.mergeInto(ctx, st.merge, st.sp, sessByRef, created, e, t); err != nil {
+				if err := s.mergeInto(ctx, st.merge, st.sp, sessByRef, created, e, t, opts.Restore); err != nil {
 					return err
 				}
 				res.PlateIDs = append(res.PlateIDs, st.merge.ID)
 				continue
 			}
-			comps, err := s.snapshotComponents(ctx, j, st.sp.Components, sessByRef, created)
+			comps, err := s.snapshotComponents(ctx, j, st.sp.Components, sessByRef, created, opts.Restore)
 			if err != nil {
 				return err
 			}
@@ -974,7 +1020,9 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 			if st.sp.Eaters > 0 {
 				eaters = &st.sp.Eaters
 			}
-			id, err := s.createPlate(ctx, PlateInput{Date: st.cell.Date, SlotID: st.cell.SlotID, Eaters: eaters, Note: st.sp.Note, Components: comps}, e, t, false)
+			in := PlateInput{Date: st.cell.Date, SlotID: st.cell.SlotID, Eaters: eaters, Note: st.sp.Note, Components: comps}
+			o := snapshotOrigin(ctx, st.sp.State, st.sp.AIRunID, st.sp.Reason, opts.Restore)
+			id, err := s.createPlate(ctx, in, e, t, false, o, !opts.Restore)
 			if err != nil {
 				return err
 			}
@@ -1061,8 +1109,8 @@ func (s *Service) placeSnapshot(ctx context.Context, snap PlanSnapshot, cells []
 }
 
 // mergeInto adds a snapshot plate's components back to its surviving plate p.
-func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, sessByRef map[string]validSession, created map[string]int64, e env, t *tracker) error {
-	comps, err := s.snapshotComponents(ctx, t.j, sp.Components, sessByRef, created)
+func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, sessByRef map[string]validSession, created map[string]int64, e env, t *tracker, restore bool) error {
+	comps, err := s.snapshotComponents(ctx, t.j, sp.Components, sessByRef, created, restore)
 	if err != nil {
 		return err
 	}
@@ -1072,7 +1120,7 @@ func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, ses
 		if err != nil {
 			return err
 		}
-		if err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, false); err != nil {
+		if _, err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, false, freshOrigin(ctx, p.State)); err != nil {
 			return err
 		}
 		pc.PlateID = p.ID
@@ -1084,8 +1132,9 @@ func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, ses
 }
 
 // snapshotComponents turns snapshot components into plate components,
-// creating each referenced snapshot session on first use.
-func (s *Service) snapshotComponents(ctx context.Context, j *journal, in []SnapshotComponent, sessByRef map[string]validSession, created map[string]int64) ([]PlateComponent, error) {
+// creating each referenced snapshot session on first use (state, run and
+// reason per snapshotOrigin).
+func (s *Service) snapshotComponents(ctx context.Context, j *journal, in []SnapshotComponent, sessByRef map[string]validSession, created map[string]int64, restore bool) ([]PlateComponent, error) {
 	out := make([]PlateComponent, len(in))
 	for i, c := range in {
 		pc := PlateComponent{
@@ -1101,10 +1150,12 @@ func (s *Service) snapshotComponents(ctx context.Context, j *journal, in []Snaps
 				id, ok := created[c.Session.Ref]
 				if !ok {
 					ss := sessByRef[c.Session.Ref]
+					o := snapshotOrigin(ctx, ss.State, ss.AIRunID, ss.Reason, restore)
 					sess := &CookSession{
 						FoodID: ss.FoodID, CookDate: ss.cookDate, CookSlotID: ss.CookSlotID,
 						Portions: ss.Portions, FrozenPortions: ss.FrozenPortions,
 						CookedAt: ss.CookedAt, Note: ss.Note,
+						State: o.state, AIRunID: o.runID, Reason: o.reason,
 					}
 					if err := s.sessions.CreateSession(ctx, sess); err != nil {
 						return nil, err
@@ -1146,6 +1197,9 @@ func validateSnapshot(snap PlanSnapshot) (map[string]validSession, []CellKey, er
 		if !(ss.Portions > 0) || ss.FrozenPortions < 0 || ss.FrozenPortions > ss.Portions {
 			return nil, nil, fmt.Errorf("%w: sessions[%d] portions", domain.ErrInvalidInput, i)
 		}
+		if ss.State != "" && !ss.State.Valid() {
+			return nil, nil, fmt.Errorf("%w: sessions[%d] state", domain.ErrInvalidInput, i)
+		}
 		byRef[ss.Ref] = validSession{SnapshotSession: ss, cookDate: cookDate}
 	}
 	cells := make([]CellKey, len(snap.Plates))
@@ -1163,6 +1217,9 @@ func validateSnapshot(snap PlanSnapshot) (map[string]validSession, []CellKey, er
 		cells[i] = c
 		if sp.Eaters < 0 {
 			return nil, nil, fmt.Errorf("%w: plates[%d] eaters", domain.ErrInvalidInput, i)
+		}
+		if sp.State != "" && !sp.State.Valid() {
+			return nil, nil, fmt.Errorf("%w: plates[%d] state", domain.ErrInvalidInput, i)
 		}
 		for j, c := range sp.Components {
 			if c.Session == nil {
@@ -1254,6 +1311,7 @@ func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateCom
 		snap.Sessions = append(snap.Sessions, SnapshotSession{
 			Ref: ref, FoodID: sess.FoodID, CookDate: sess.CookDate.Format(dateLayout), CookSlotID: sess.CookSlotID,
 			Portions: sess.Portions, FrozenPortions: sess.FrozenPortions, CookedAt: sess.CookedAt, Note: sess.Note,
+			State: sess.State, AIRunID: sess.AIRunID, Reason: sess.Reason,
 		})
 	}
 
@@ -1281,7 +1339,10 @@ func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateCom
 		if comps == nil {
 			comps = []SnapshotComponent{}
 		}
-		entry := SnapshotPlate{Date: p.DateString(), SlotID: p.SlotID, Eaters: p.Eaters, Note: p.Note, Components: comps}
+		entry := SnapshotPlate{
+			Date: p.DateString(), SlotID: p.SlotID, Eaters: p.Eaters, Note: p.Note,
+			State: p.State, AIRunID: p.AIRunID, Reason: p.Reason, Components: comps,
+		}
 		if p.Feedback != nil {
 			entry.Feedback = &SnapshotFeedback{Status: p.Feedback.Status, Note: p.Feedback.Note, RatedAt: p.Feedback.RatedAt}
 		}
@@ -1328,10 +1389,12 @@ func emptySnapshot() PlanSnapshot {
 
 // tracker records the consumption of existing sessions before a mutation so
 // settle can apply D11 after it. j is the mutation's journal: the session
-// writes of settle, attach and Apply record into it.
+// writes of settle, attach and Apply record into it. unify lists the plates
+// whose batch closure settle makes take the plate's state (D3).
 type tracker struct {
 	before map[int64]float64
 	ids    []int64
+	unify  []int64
 	j      *journal
 }
 
@@ -1359,7 +1422,7 @@ func (s *Service) track(ctx context.Context, t *tracker, id int64) error {
 }
 
 // settle applies D11 to every tracked session: one without links is deleted;
-// the others get Sync'd portions.
+// the others get Sync'd portions. Then it unifies the closures of t.unify.
 func (s *Service) settle(ctx context.Context, t *tracker) error {
 	for _, id := range t.ids {
 		links, err := s.sessions.ListLinks(ctx, id)
@@ -1389,7 +1452,7 @@ func (s *Service) settle(ctx context.Context, t *tracker) error {
 			return err
 		}
 	}
-	return nil
+	return s.unify(ctx, t)
 }
 
 func totalPortions(links []Link) float64 {
@@ -1572,37 +1635,40 @@ func validateRange(from, to time.Time) error {
 }
 
 // attach gives a composed component its session: a fresh one at cell when it
-// names none (portions = per-eater portions × eaters), else the named one
-// after checking it (food always; the D13 cell rules when strict). The named
-// session is tracked for D11.
-func (s *Service) attach(ctx context.Context, t *tracker, pc *PlateComponent, f *food.Food, cell CellKey, eaters float64, e env, strict bool) error {
+// names none (portions = per-eater portions × eaters, state and run from
+// fresh), else the named one after checking it (food always; the D13 cell
+// rules when strict), which it returns. The named session is tracked for D11.
+func (s *Service) attach(ctx context.Context, t *tracker, pc *PlateComponent, f *food.Food, cell CellKey, eaters float64, e env, strict bool, fresh origin) (*CookSession, error) {
 	if f.Kind != food.KindComposed {
-		return nil
+		return nil, nil
 	}
 	if pc.CookSessionID == nil {
-		sess := &CookSession{FoodID: f.ID, CookDate: cell.Date, CookSlotID: cell.SlotID, Portions: *pc.Portions * eaters}
+		sess := &CookSession{
+			FoodID: f.ID, CookDate: cell.Date, CookSlotID: cell.SlotID, Portions: *pc.Portions * eaters,
+			State: fresh.state, AIRunID: fresh.runID,
+		}
 		if err := s.sessions.CreateSession(ctx, sess); err != nil {
-			return err
+			return nil, err
 		}
 		t.j.createSession(sess.ID)
 		pc.CookSessionID = &sess.ID
-		return nil
+		return nil, nil
 	}
 	sess, err := s.sessions.GetSession(ctx, *pc.CookSessionID)
 	if errors.Is(err, domain.ErrNotFound) {
-		return fmt.Errorf("%w: session %d", domain.ErrSessionNotFound, *pc.CookSessionID)
+		return nil, fmt.Errorf("%w: session %d", domain.ErrSessionNotFound, *pc.CookSessionID)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if strict {
 		if err := CheckLink(cell, f.ID, *sess, e.set.KeepDays(f.KeepDays), e.set, e.order); err != nil {
-			return err
+			return nil, err
 		}
 	} else if f.ID != sess.FoodID {
-		return fmt.Errorf("%w: food %d, session %d cooks food %d", domain.ErrSessionFoodMismatch, f.ID, sess.ID, sess.FoodID)
+		return nil, fmt.Errorf("%w: food %d, session %d cooks food %d", domain.ErrSessionFoodMismatch, f.ID, sess.ID, sess.FoodID)
 	}
-	return s.track(ctx, t, sess.ID)
+	return sess, s.track(ctx, t, sess.ID)
 }
 
 // normaliseComponent validates the quantity shape against the food's kind and

@@ -23,6 +23,8 @@ type platesService interface {
 	SwapComponent(ctx context.Context, componentID, newFoodID int64, quantity *plate.PlateComponent) (*plate.Plate, error)
 	UpdateComponentQuantity(ctx context.Context, componentID int64, q plate.PlateComponent) (*plate.Plate, error)
 	RemoveComponent(ctx context.Context, componentID int64) (*plate.Plate, error)
+	Confirm(ctx context.Context, seed plate.RowSet) (plate.RowSet, error)
+	Unlock(ctx context.Context, seed plate.RowSet) (plate.RowSet, error)
 }
 
 // PlateHandler exposes plate + plate_component mutation endpoints.
@@ -97,6 +99,22 @@ func (h *PlateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, toPlateResponse(p))
+}
+
+// Confirm handles POST /api/plates/{id}/confirm: it confirms the plate's
+// batch closure and returns {plate_ids, session_ids}.
+func (h *PlateHandler) Confirm(w http.ResponseWriter, r *http.Request) {
+	if id, ok := parseIDParam(w, r, "id"); ok {
+		writeStateChange(w, r, plate.RowSet{PlateIDs: []int64{id}}, h.svc.Confirm)
+	}
+}
+
+// Unlock handles POST /api/plates/{id}/unlock: it returns the plate's batch
+// closure to draft and returns {plate_ids, session_ids}.
+func (h *PlateHandler) Unlock(w http.ResponseWriter, r *http.Request) {
+	if id, ok := parseIDParam(w, r, "id"); ok {
+		writeStateChange(w, r, plate.RowSet{PlateIDs: []int64{id}}, h.svc.Unlock)
+	}
 }
 
 // Get handles GET /api/plates/{id}.

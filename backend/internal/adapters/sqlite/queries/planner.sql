@@ -25,8 +25,8 @@ SELECT * FROM time_slots ORDER BY sort_order, id;
 SELECT * FROM time_slots WHERE active = 1 ORDER BY sort_order, id;
 
 -- name: CreatePlate :one
-INSERT INTO plates (slot_id, note, date, eaters, updated_at)
-VALUES (?, ?, ?, ?, datetime('now'))
+INSERT INTO plates (slot_id, note, date, eaters, state, ai_run_id, reason, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
 RETURNING *;
 
 -- name: GetPlate :one
@@ -96,3 +96,16 @@ SELECT COUNT(*) FROM plates WHERE slot_id = ?;
 
 -- name: ListPlatesByDateRange :many
 SELECT * FROM plates WHERE date BETWEEN sqlc.arg(from_date) AND sqlc.arg(to_date) ORDER BY date, slot_id, id;
+
+-- name: ListPlatesByIDs :many
+SELECT * FROM plates WHERE id IN (sqlc.slice(ids)) ORDER BY date, slot_id, id;
+
+-- name: ListPlateComponentsByPlateIDs :many
+SELECT sqlc.embed(pc), f.name AS food_name, f.kind AS food_kind, f.role AS food_role
+FROM plate_components pc
+JOIN foods f ON f.id = pc.food_id
+WHERE pc.plate_id IN (sqlc.slice(ids))
+ORDER BY pc.plate_id, pc.sort_order, pc.id;
+
+-- name: SetPlatesState :exec
+UPDATE plates SET state = sqlc.arg(state), updated_at = datetime('now') WHERE id IN (sqlc.slice(ids));

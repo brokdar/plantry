@@ -74,6 +74,14 @@ func (s *stubPlateService) RemoveComponent(_ context.Context, _ int64) (*plate.P
 	return &plate.Plate{}, nil
 }
 
+func (s *stubPlateService) Confirm(_ context.Context, seed plate.RowSet) (plate.RowSet, error) {
+	return seed, nil
+}
+
+func (s *stubPlateService) Unlock(_ context.Context, seed plate.RowSet) (plate.RowSet, error) {
+	return seed, nil
+}
+
 // ── router helper ─────────────────────────────────────────────────────────────
 
 func newPlateRouter(stub *stubPlateService) http.Handler {

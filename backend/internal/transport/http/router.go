@@ -108,6 +108,8 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Post("/components", h.Plates.AddComponent)
 					r.Put("/components/{pcId}", h.Plates.UpdateComponent)
 					r.Delete("/components/{pcId}", h.Plates.DeleteComponent)
+					r.Post("/confirm", h.Plates.Confirm)
+					r.Post("/unlock", h.Plates.Unlock)
 					if h.Feedback != nil {
 						r.Put("/feedback", h.Feedback.Put)
 						r.Delete("/feedback", h.Feedback.Delete)
@@ -124,6 +126,8 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Post("/cooked", h.CookSessions.Cooked)
 				r.Get("/leftover-cells", h.CookSessions.LeftoverCells)
 				r.Post("/leftovers", h.CookSessions.Leftovers)
+				r.Post("/confirm", h.CookSessions.Confirm)
+				r.Post("/unlock", h.CookSessions.Unlock)
 			})
 		}
 
@@ -135,6 +139,9 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				if h.PlanWrite != nil {
 					r.Delete("/", h.PlanWrite.Clear)
 					r.Post("/restore", h.PlanWrite.Restore)
+					r.Post("/accept", h.PlanWrite.Accept)
+					r.Post("/unaccept", h.PlanWrite.Unaccept)
+					r.Post("/discard", h.PlanWrite.Discard)
 				}
 			})
 		}

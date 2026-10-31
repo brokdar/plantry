@@ -31,10 +31,13 @@ func (r *CookSessionRepo) CreateSession(ctx context.Context, s *plate.CookSessio
 		FrozenPortions: s.FrozenPortions,
 		CookedAt:       toNullTime(s.CookedAt),
 		Note:           toNullString(s.Note),
+		State:          string(s.State),
+		AiRunID:        toNullInt64(s.AIRunID),
+		Reason:         toNullString(s.Reason),
 	})
 	if err != nil {
 		if isForeignKeyViolation(err) {
-			return fmt.Errorf("%w: invalid food or slot reference", domain.ErrInvalidInput)
+			return fmt.Errorf("%w: invalid food, slot or ai run reference", domain.ErrInvalidInput)
 		}
 		return err
 	}
@@ -110,6 +113,32 @@ func (r *CookSessionRepo) ListLinks(ctx context.Context, sessionID int64) ([]pla
 	return out, nil
 }
 
+// ListSessionsByIDs returns the sessions of ids that exist, ordered by id.
+func (r *CookSessionRepo) ListSessionsByIDs(ctx context.Context, ids []int64) ([]plate.CookSession, error) {
+	if len(ids) == 0 {
+		return []plate.CookSession{}, nil
+	}
+	rows, err := r.queriesFor(ctx).ListCookSessionsByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]plate.CookSession, len(rows))
+	for i := range rows {
+		if err := mapCookSessionToDomain(&rows[i], &out[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// SetSessionsState writes the state of the sessions of ids.
+func (r *CookSessionRepo) SetSessionsState(ctx context.Context, ids []int64, st plate.State) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.queriesFor(ctx).SetSessionsState(ctx, sqlcgen.SetSessionsStateParams{State: string(st), Ids: ids})
+}
+
 // ListInRange returns the sessions cooking in [from, to] or linked to a plate
 // dated in it, with every link of each keyed by session id: two queries for
 // the whole range.
@@ -178,6 +207,9 @@ func mapCookSessionToDomain(row *sqlcgen.CookSession, s *plate.CookSession) erro
 		s.CookedAt = &t
 	}
 	s.Note = fromNullString(row.Note)
+	s.State = plate.State(row.State)
+	s.AIRunID = fromNullInt64(row.AiRunID)
+	s.Reason = fromNullString(row.Reason)
 	if s.CreatedAt, err = time.Parse(timeLayout, row.CreatedAt); err != nil {
 		return fmt.Errorf("cook session %d created_at: %w", row.ID, err)
 	}
