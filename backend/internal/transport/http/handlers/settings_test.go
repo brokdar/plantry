@@ -308,3 +308,38 @@ func TestSet_RejectsInvalidValue(t *testing.T) {
 	assert.Equal(t, 400, w.Code)
 	assert.Contains(t, w.Body.String(), "error.settings.invalid_value")
 }
+
+func TestSet_PriceOverrides(t *testing.T) {
+	r, _ := newSettingsRouter(t)
+	put := func(value string) *httptest.ResponseRecorder {
+		body, err := json.Marshal(map[string]string{"value": value})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai.price_overrides", strings.NewReader(string(body)))
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w
+	}
+	for name, value := range map[string]string{
+		"array":          `[]`,
+		"string":         `"cheap"`,
+		"number":         `5`,
+		"not json":       `{`,
+		"entry a number": `{"m":1}`,
+		"negative in":    `{"m":{"in":-1,"out":2}}`,
+		"negative cache": `{"m":{"in":1,"out":2,"cache_write":-3}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := put(value)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Contains(t, w.Body.String(), "error.settings.invalid_value")
+		})
+	}
+
+	w := put(`{"my-model":{"in":1,"out":2,"cache_read":0.1}}`)
+	assert.Equal(t, http.StatusNoContent, w.Code)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	lw := httptest.NewRecorder()
+	r.ServeHTTP(lw, req)
+	assert.Contains(t, lw.Body.String(), `"key":"ai.price_overrides","value":"{\"my-model\"`)
+}

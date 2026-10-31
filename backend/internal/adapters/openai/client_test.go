@@ -3,6 +3,7 @@ package openai_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -129,6 +130,42 @@ func TestStream_RateLimitError(t *testing.T) {
 	require.True(t, ok, "expected *openai.APIError, got %T", err)
 	assert.Equal(t, http.StatusTooManyRequests, apiErr.Status)
 	assert.Equal(t, "rate_limit_error", apiErr.ErrorType)
+}
+
+func TestStream_ToolChoice(t *testing.T) {
+	tools := []llm.Tool{{Name: "submit_plan", Description: "submit", Schema: json.RawMessage(`{"type":"object"}`)}}
+	tests := []struct {
+		name   string
+		choice *llm.ToolChoice
+		want   bool
+	}{
+		{"set", &llm.ToolChoice{Name: "submit_plan"}, true},
+		{"unset", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var raw []byte
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var err error
+				raw, err = io.ReadAll(r.Body)
+				require.NoError(t, err)
+				w.Header().Set("Content-Type", "text/event-stream")
+				b, _ := os.ReadFile("testdata/stream_text.sse")
+				_, _ = w.Write(b)
+			}))
+			defer ts.Close()
+			c := openai.New("k", openai.WithBaseURL(ts.URL), openai.WithHTTPClient(ts.Client()))
+			out := make(chan llm.Event, 16)
+			_, err := c.Stream(context.Background(), llm.Request{Model: "gpt-5", Tools: tools, ToolChoice: tt.choice}, out)
+			require.NoError(t, err)
+			_ = drainEvents(out)
+			if tt.want {
+				assert.Contains(t, string(raw), `"tool_choice":{"type":"function","function":{"name":"submit_plan"}}`)
+			} else {
+				assert.NotContains(t, string(raw), `"tool_choice"`)
+			}
+		})
+	}
 }
 
 func TestStream_RequestEncoding(t *testing.T) {

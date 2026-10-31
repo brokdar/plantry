@@ -218,13 +218,14 @@ const minCutBytes = 64
 // (Messages[MessageOffset:]), its parameters, and the hashes of its system
 // prompt (ai_prompts) and tools (ai_tool_schemas), null when absent.
 type requestBody struct {
-	MessageOffset int           `json:"message_offset"`
-	Messages      []llm.Message `json:"messages"`
-	Temperature   float64       `json:"temperature"`
-	MaxTokens     int           `json:"max_tokens"`
-	SystemHash    *string       `json:"system_hash"`
-	ToolsHash     *string       `json:"tools_hash"`
-	Truncated     bool          `json:"truncated"`
+	MessageOffset int             `json:"message_offset"`
+	Messages      []llm.Message   `json:"messages"`
+	ToolChoice    *llm.ToolChoice `json:"tool_choice,omitempty"`
+	Temperature   float64         `json:"temperature"`
+	MaxTokens     int             `json:"max_tokens"`
+	SystemHash    *string         `json:"system_hash"`
+	ToolsHash     *string         `json:"tools_hash"`
+	Truncated     bool            `json:"truncated"`
 }
 
 // responseBody is the stored response_json: the reply's content blocks.
@@ -246,6 +247,7 @@ func encodeRequest(req llm.Request, offset int, systemHash, toolsHash string) (s
 	body := requestBody{
 		MessageOffset: offset,
 		Messages:      delta,
+		ToolChoice:    req.ToolChoice,
 		Temperature:   req.Temperature,
 		MaxTokens:     req.MaxTokens,
 		SystemHash:    nilIfEmpty(systemHash),

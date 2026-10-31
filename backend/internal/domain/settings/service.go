@@ -237,7 +237,11 @@ func validate(spec Spec, raw string) error {
 		}
 		return fmt.Errorf("%w: %s must be one of %v", ErrInvalidKind, spec.Key, spec.Enum)
 	case KindString:
-		// no further validation
+		if spec.Validate != nil {
+			if err := spec.Validate(raw); err != nil {
+				return fmt.Errorf("%w: %s: %v", ErrInvalidKind, spec.Key, err)
+			}
+		}
 	}
 	return nil
 }

@@ -704,13 +704,14 @@ func TestMeter_ConcurrentStreamsAndFinishes(t *testing.T) {
 
 // requestBody mirrors the request_json shape of an llm_call step.
 type requestBody struct {
-	MessageOffset int           `json:"message_offset"`
-	Messages      []llm.Message `json:"messages"`
-	Temperature   float64       `json:"temperature"`
-	MaxTokens     int           `json:"max_tokens"`
-	SystemHash    *string       `json:"system_hash"`
-	ToolsHash     *string       `json:"tools_hash"`
-	Truncated     bool          `json:"truncated"`
+	MessageOffset int             `json:"message_offset"`
+	Messages      []llm.Message   `json:"messages"`
+	ToolChoice    *llm.ToolChoice `json:"tool_choice"`
+	Temperature   float64         `json:"temperature"`
+	MaxTokens     int             `json:"max_tokens"`
+	SystemHash    *string         `json:"system_hash"`
+	ToolsHash     *string         `json:"tools_hash"`
+	Truncated     bool            `json:"truncated"`
 }
 
 // responseBody mirrors the response_json shape of an llm_call step.
@@ -792,6 +793,29 @@ func TestMeter_RecordsRequestDeltas(t *testing.T) {
 	}
 	if got := decodeRequest(t, steps[1]).Messages[0].Role; got != llm.RoleAssistant {
 		t.Errorf("second delta starts with %q; want the assistant reply", got)
+	}
+}
+
+func TestMeter_RecordsToolChoice(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	inner := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{textTurn("a", fake.ScriptedUsage{}), textTurn("b", fake.ScriptedUsage{})}})
+	client := rec.Meter(inner, "anthropic")
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindGenerate})
+	msgs := []llm.Message{textMsg(llm.RoleUser, "u1")}
+	for _, choice := range []*llm.ToolChoice{{Name: "submit_plan"}, nil} {
+		if _, err := drainStream(ctx, client, llm.Request{Model: "m", Messages: msgs, ToolChoice: choice}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	steps := stepsBySeq(store)
+	if got := decodeRequest(t, steps[0]).ToolChoice; got == nil || got.Name != "submit_plan" {
+		t.Errorf("step 1 tool_choice = %+v; want submit_plan", got)
+	}
+	if got := decodeRequest(t, steps[1]).ToolChoice; got != nil {
+		t.Errorf("step 2 tool_choice = %+v; want none", got)
 	}
 }
 

@@ -66,6 +66,7 @@ func reconstruct(t *testing.T, db *sql.DB, runID int64) []replayStep {
 		req := llm.Request{
 			Model:       model,
 			Messages:    history,
+			ToolChoice:  body.ToolChoice,
 			Temperature: body.Temperature,
 			MaxTokens:   body.MaxTokens,
 		}

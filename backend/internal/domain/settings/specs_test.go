@@ -127,11 +127,24 @@ func TestSettingsSpec_Phase1Bools(t *testing.T) {
 	}
 }
 
+func TestSettingsSpec_PriceOverrides(t *testing.T) {
+	svc := newSpecTestService(t)
+	ctx := context.Background()
+
+	v, err := svc.Get(ctx, settings.KeyAIPriceOverrides)
+	require.NoError(t, err)
+	assert.Equal(t, "{}", v.Raw)
+
+	assert.ErrorIs(t, svc.Set(ctx, settings.KeyAIPriceOverrides, `[]`), settings.ErrInvalidKind)
+	assert.ErrorIs(t, svc.Set(ctx, settings.KeyAIPriceOverrides, `{"m":{"in":-1,"out":1}}`), settings.ErrInvalidKind)
+	require.NoError(t, svc.Set(ctx, settings.KeyAIPriceOverrides, `{"m":{"in":1,"out":2}}`))
+}
+
 func TestSettingsSpec_RemovedAndDeferredKeysUnknown(t *testing.T) {
 	svc := newSpecTestService(t)
 	ctx := context.Background()
 
-	for _, key := range []string{"plan.window_days", "ai.price_overrides", "discovery.cuisines"} {
+	for _, key := range []string{"plan.window_days", "discovery.cuisines"} {
 		_, err := svc.Get(ctx, key)
 		assert.ErrorIsf(t, err, settings.ErrUnknownKey, "Get(%q)", key)
 		assert.ErrorIsf(t, svc.Set(ctx, key, "7"), settings.ErrUnknownKey, "Set(%q)", key)

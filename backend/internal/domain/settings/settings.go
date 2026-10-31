@@ -49,6 +49,8 @@ type Spec struct {
 	HasRange bool
 	Min      int
 	Max      int
+	// Validate, when set, checks a KindString value's shape.
+	Validate func(raw string) error
 }
 
 // Value is a resolved setting result.
@@ -107,4 +109,5 @@ const (
 	KeyPlanExplorePerWeek         = "plan.explore_per_week"
 	KeyDiscoveryDailyEnabled      = "discovery.daily_enabled"
 	KeyAIRunRetentionDays         = "ai.run_retention_days"
+	KeyAIPriceOverrides           = "ai.price_overrides"
 )

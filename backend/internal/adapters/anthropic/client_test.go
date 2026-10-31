@@ -3,6 +3,7 @@ package anthropic_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -252,6 +253,54 @@ func TestStream_DefaultsMaxTokensWhenZero(t *testing.T) {
 	require.NoError(t, err)
 	_ = drainEvents(out)
 	assert.Equal(t, anthropic.DefaultMaxTokens, body.MaxTokens)
+}
+
+func TestStream_ToolChoiceAndTemperature(t *testing.T) {
+	tools := []llm.Tool{{Name: "submit_plan", Description: "submit", Schema: json.RawMessage(`{"type":"object"}`)}}
+	tests := []struct {
+		name    string
+		req     llm.Request
+		present []string
+		absent  []string
+	}{
+		{
+			name: "set",
+			req: llm.Request{
+				Model: "claude-sonnet-5-5", Tools: tools, Temperature: 0.4,
+				ToolChoice: &llm.ToolChoice{Name: "submit_plan"},
+			},
+			present: []string{`"tool_choice":{"type":"tool","name":"submit_plan"}`, `"temperature":0.4`},
+		},
+		{
+			name:   "unset",
+			req:    llm.Request{Model: "claude-sonnet-5-5", Tools: tools},
+			absent: []string{`"tool_choice"`, `"temperature"`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var raw []byte
+			ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				var err error
+				raw, err = io.ReadAll(r.Body)
+				require.NoError(t, err)
+				w.Header().Set("Content-Type", "text/event-stream")
+				b, _ := os.ReadFile("testdata/stream_text.sse")
+				_, _ = w.Write(b)
+			})
+			c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+			out := make(chan llm.Event, 16)
+			_, err := c.Stream(context.Background(), tt.req, out)
+			require.NoError(t, err)
+			_ = drainEvents(out)
+			for _, s := range tt.present {
+				assert.Contains(t, string(raw), s)
+			}
+			for _, s := range tt.absent {
+				assert.NotContains(t, string(raw), s)
+			}
+		})
+	}
 }
 
 type reqBodyPeek struct {

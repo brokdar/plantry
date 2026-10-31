@@ -116,7 +116,9 @@ type reqBody struct {
 	Model    string        `json:"model"`
 	Messages []messageBody `json:"messages"`
 	Tools    []toolBody    `json:"tools,omitempty"`
-	Stream   bool          `json:"stream,omitempty"`
+	// ToolChoice forces one function: {"type":"function","function":{"name":...}}.
+	ToolChoice *toolChoiceBody `json:"tool_choice,omitempty"`
+	Stream     bool            `json:"stream,omitempty"`
 	// StreamOptions asks for the usage-only final chunk; without it a
 	// streamed response carries no token counts.
 	StreamOptions *streamOptions `json:"stream_options,omitempty"`
@@ -125,6 +127,15 @@ type reqBody struct {
 	// model, including the older gpt-4o family, so we send only the new key.
 	MaxCompletionTokens int      `json:"max_completion_tokens,omitempty"`
 	Temperature         *float64 `json:"temperature,omitempty"`
+}
+
+type toolChoiceBody struct {
+	Type     string             `json:"type"`
+	Function toolChoiceFunction `json:"function"`
+}
+
+type toolChoiceFunction struct {
+	Name string `json:"name"`
 }
 
 type streamOptions struct {
@@ -196,6 +207,9 @@ func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
 			}
 		}
 		body.Tools = tools
+	}
+	if req.ToolChoice != nil {
+		body.ToolChoice = &toolChoiceBody{Type: "function", Function: toolChoiceFunction{Name: req.ToolChoice.Name}}
 	}
 	return json.Marshal(body)
 }
