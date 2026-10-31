@@ -68,6 +68,8 @@ export interface TodayHeaderView {
   /** Recipes still missing to reach the planning target; 0 when reached. */
   recipesMissing: number
   noPlan: boolean
+  /** The window holds drafts but no confirmed plate on this day. */
+  draftOnly: boolean
 }
 
 /** The parts that need the window's plan: colours, badges and slot names. */
@@ -150,6 +152,7 @@ export function buildTodayHeader(
       today.setup.recipe_target - today.setup.recipe_count
     ),
     noPlan: today.verdict.kind === "no_plan",
+    draftOnly: today.verdict.kind === "draft_only",
   }
 }
 
@@ -188,7 +191,22 @@ export function buildTodayPlan(
     minutes: minutes || null,
   }))
 
-  const cells = day?.cells ?? []
+  // Today reads confirmed rows only (D26): a draft plate leaves its cell
+  // as if unplanned.
+  const cells = (day?.cells ?? []).map((c) =>
+    c.plate?.state === "draft"
+      ? {
+          ...c,
+          plate: null,
+          badge: null,
+          mainName: null,
+          sideText: null,
+          subline: null,
+          sessionIds: [],
+          cookOf: [],
+        }
+      : c
+  )
   let leftover: TodayLeftoverCard | null = null
   if (cook.length === 0) {
     const cell = cells.find(

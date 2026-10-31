@@ -3,6 +3,7 @@ import { ClipboardCopy, ShoppingCart } from "lucide-react"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { Switch } from "@/components/settings/controls"
 import { Button } from "@/components/ui/button"
 import { ApiError } from "@/lib/api/client"
 import type { ShoppingList, ShoppingRange } from "@/lib/api/shopping"
@@ -24,7 +25,10 @@ interface ShopPageProps {
   /** The range from the URL; without it the server's default for the
    *  anchored window. */
   range?: ShoppingRange
+  /** Draft plates count too (`?drafts=1`); off by default (D26). */
+  includeDrafts: boolean
   onRangeChange: (range: ShoppingRange) => void
+  onIncludeDraftsChange: (includeDrafts: boolean) => void
 }
 
 /**
@@ -32,9 +36,14 @@ interface ShopPageProps {
  * store. `GET /api/shopping-list` renders the list; `GET /api/plan` for the
  * range's window adds batch colours and slot names to the "used in" rows.
  */
-export function ShopPage({ range, onRangeChange }: ShopPageProps) {
+export function ShopPage({
+  range,
+  includeDrafts,
+  onRangeChange,
+  onIncludeDraftsChange,
+}: ShopPageProps) {
   const { t } = useTranslation()
-  const query = useShoppingList(range)
+  const query = useShoppingList(range, includeDrafts)
 
   if (query.isPending) {
     return (
@@ -71,7 +80,14 @@ export function ShopPage({ range, onRangeChange }: ShopPageProps) {
       />
     )
   }
-  return <ShopLoaded list={query.data} onRangeChange={onRangeChange} />
+  return (
+    <ShopLoaded
+      list={query.data}
+      includeDrafts={includeDrafts}
+      onRangeChange={onRangeChange}
+      onIncludeDraftsChange={onIncludeDraftsChange}
+    />
+  )
 }
 
 /**
@@ -125,10 +141,14 @@ function ShopError({
 
 function ShopLoaded({
   list,
+  includeDrafts,
   onRangeChange,
+  onIncludeDraftsChange,
 }: {
   list: ShoppingList
+  includeDrafts: boolean
   onRangeChange: (range: ShoppingRange) => void
+  onIncludeDraftsChange: (includeDrafts: boolean) => void
 }) {
   const { t, i18n } = useTranslation()
   const { range } = list
@@ -162,6 +182,21 @@ function ShopLoaded({
               window={planWindow}
               onChange={onRangeChange}
             />
+            {list.has_drafts && (
+              <div className="flex items-center gap-1">
+                <Switch
+                  id="shop-include-drafts"
+                  checked={includeDrafts}
+                  onChange={onIncludeDraftsChange}
+                />
+                <label
+                  htmlFor="shop-include-drafts"
+                  className="cursor-pointer text-small text-ink"
+                >
+                  {t("shop.include_drafts")}
+                </label>
+              </div>
+            )}
             <p
               className="text-small text-ink-muted tabular-nums"
               data-testid="shop-count"
@@ -279,15 +314,17 @@ function useTicked(
     setRaw(JSON.stringify([...ids]))
   }
 
+  // Ticks off the list stay saved: an item only on drafts comes back when
+  // the draft toggle is on again.
   function toggle(foodId: number) {
-    const next = new Set(ticked)
+    const next = new Set(parseIds(raw))
     if (next.has(foodId)) next.delete(foodId)
     else next.add(foodId)
     write(next)
   }
 
   function clear() {
-    const before = [...ticked]
+    const before = parseIds(raw)
     write([])
     toast(t("shop.cleared"), {
       duration: UNDO_MS,

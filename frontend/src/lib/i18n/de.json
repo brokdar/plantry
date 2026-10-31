@@ -1465,6 +1465,10 @@
       "body": "Plane diese Woche, dann steht hier jeden Tag, was es gibt.",
       "action": "Diese Woche planen"
     },
+    "draft_only": {
+      "body": "Übernimm ihn im Plan, dann steht hier jeden Tag, was es gibt.",
+      "action": "Plan prüfen"
+    },
     "setup": {
       "title_one": "Noch {{count}} Rezept, dann kann Plantry planen",
       "title_other": "Noch {{count}} Rezepte, dann kann Plantry planen",
@@ -1550,6 +1554,7 @@
     "from": "Von",
     "to": "Bis",
     "show": "Liste anzeigen",
+    "include_drafts": "Essen aus dem Entwurf einbeziehen",
     "items_one": "{{count}} Artikel",
     "items_other": "{{count}} Artikel",
     "ticked_one": "{{count}} abgehakt",

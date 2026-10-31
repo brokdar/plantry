@@ -94,6 +94,9 @@ function TodayLoaded({ data, today }: { data: Today; today: string }) {
               headline={header.headline}
             />
             {header.noPlan && <NoPlanCard windowStart={data.window_start} />}
+            {header.draftOnly && (
+              <DraftOnlyCard windowStart={data.window_start} />
+            )}
             {!busyDay && <RecipesCard missing={header.recipesMissing} />}
             {view ? (
               <DayPlan view={view} />
@@ -170,6 +173,25 @@ function NoPlanCard({ windowStart }: { windowStart: string }) {
       <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
         <Link to="/plan" search={{ start: windowStart }}>
           {t("today.no_plan.action")}
+        </Link>
+      </Button>
+    </section>
+  )
+}
+
+/** On a window that holds only drafts, "Review plan": Today reads confirmed
+ *  plates only, so the draft has to be accepted on the plan first. */
+function DraftOnlyCard({ windowStart }: { windowStart: string }) {
+  const { t } = useTranslation()
+  return (
+    <section
+      className="flex flex-col items-start gap-3 rounded-lg border border-line bg-panel p-4"
+      data-testid="today-draft-only"
+    >
+      <p className="text-body text-ink">{t("today.draft_only.body")}</p>
+      <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
+        <Link to="/plan" search={{ start: windowStart }}>
+          {t("today.draft_only.action")}
         </Link>
       </Button>
     </section>

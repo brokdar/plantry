@@ -1465,6 +1465,10 @@
       "body": "Plan this week and Today shows what to cook each day.",
       "action": "Plan this week"
     },
+    "draft_only": {
+      "body": "Accept it on the plan and Today shows what to cook each day.",
+      "action": "Review plan"
+    },
     "setup": {
       "title_one": "Add {{count}} more recipe to start planning",
       "title_other": "Add {{count}} more recipes to start planning",
@@ -1550,6 +1554,7 @@
     "from": "From",
     "to": "To",
     "show": "Show list",
+    "include_drafts": "Include draft plates",
     "items_one": "{{count}} item",
     "items_other": "{{count}} items",
     "ticked_one": "{{count}} ticked",

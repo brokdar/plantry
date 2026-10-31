@@ -1,6 +1,7 @@
-import { screen, waitFor, within } from "@testing-library/react"
+import { act, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { useState } from "react"
 
 import { ApiError } from "@/lib/api/client"
 import type { ShoppingList } from "@/lib/api/shopping"
@@ -36,11 +37,19 @@ const STORAGE_KEY = "plantry:purchased:range:2026-10-31:2026-11-06"
 
 function renderShop(
   list: ShoppingList = mockShoppingList,
-  onRangeChange = vi.fn()
+  onRangeChange = vi.fn(),
+  includeDrafts = false
 ) {
   vi.mocked(getShoppingList).mockResolvedValue(list)
-  renderWithRouter(<ShopPage onRangeChange={onRangeChange} />)
-  return { onRangeChange }
+  const onIncludeDraftsChange = vi.fn()
+  renderWithRouter(
+    <ShopPage
+      includeDrafts={includeDrafts}
+      onRangeChange={onRangeChange}
+      onIncludeDraftsChange={onIncludeDraftsChange}
+    />
+  )
+  return { onRangeChange, onIncludeDraftsChange }
 }
 
 function row(name: string) {
@@ -421,9 +430,116 @@ describe("ShopPage", () => {
     expect(screen.getByTestId("shop-count")).toHaveTextContent("0 items")
   })
 
+  // Phase 3 F5-AC3: no drafts in the range, no toggle.
+  it("hides the draft toggle when the range has no drafts", async () => {
+    renderShop()
+    await screen.findByText("Onion")
+    expect(getShoppingList).toHaveBeenCalledWith(undefined, false)
+    expect(
+      screen.queryByRole("switch", { name: "Include draft plates" })
+    ).toBeNull()
+  })
+
+  // Phase 3 F5: with drafts in the range the toggle shows and reports the
+  // change.
+  it("shows the draft toggle when the range has drafts and switches it on", async () => {
+    const user = userEvent.setup()
+    const { onIncludeDraftsChange } = renderShop({
+      ...mockShoppingList,
+      has_drafts: true,
+    })
+    const toggle = await screen.findByRole("switch", {
+      name: "Include draft plates",
+    })
+    expect(toggle).not.toBeChecked()
+    await user.click(toggle)
+    expect(onIncludeDraftsChange).toHaveBeenCalledWith(true)
+  })
+
+  // Phase 3 F5: a range with only drafts lists nothing confirmed, yet the
+  // toggle stays reachable above the empty state.
+  it("asks for drafts while on and keeps the toggle on an empty list", async () => {
+    const user = userEvent.setup()
+    const { onIncludeDraftsChange } = renderShop(
+      { ...mockShoppingList, sections: [], count: 0, has_drafts: true },
+      vi.fn(),
+      true
+    )
+    const toggle = await screen.findByRole("switch", {
+      name: "Include draft plates",
+    })
+    expect(toggle).toBeChecked()
+    expect(getShoppingList).toHaveBeenCalledWith(undefined, true)
+    expect(screen.getByTestId("shop-empty")).toBeInTheDocument()
+    await user.click(toggle)
+    expect(onIncludeDraftsChange).toHaveBeenCalledWith(false)
+  })
+
+  // The page owns the toggle as the route does: flipping it keeps the last
+  // list on screen while the new one loads, so the switch keeps focus.
+  function DraftsHarness() {
+    const [on, setOn] = useState(false)
+    return (
+      <ShopPage
+        includeDrafts={on}
+        onRangeChange={vi.fn()}
+        onIncludeDraftsChange={setOn}
+      />
+    )
+  }
+
+  it("keeps the list and the switch's focus while the draft list loads", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getShoppingList).mockImplementation((_range, drafts) =>
+      drafts
+        ? new Promise(() => {})
+        : Promise.resolve({ ...mockShoppingList, has_drafts: true })
+    )
+    renderWithRouter(<DraftsHarness />)
+    const toggle = await screen.findByRole("switch", {
+      name: "Include draft plates",
+    })
+    await user.click(toggle)
+    await waitFor(() =>
+      expect(getShoppingList).toHaveBeenCalledWith(undefined, true)
+    )
+    expect(screen.queryByTestId("shop-skeleton")).toBeNull()
+    const after = screen.getByRole("switch", { name: "Include draft plates" })
+    expect(after).toBe(toggle)
+    expect(after).toBeChecked()
+    expect(after).toHaveFocus()
+    expect(screen.getByText("Onion")).toBeInTheDocument()
+  })
+
+  // Ticks of items only on drafts survive while drafts are hidden.
+  it("keeps saved ticks of items not on the list when ticking and clearing", async () => {
+    const user = userEvent.setup()
+    localStorage.setItem(STORAGE_KEY, "[999]")
+    renderShop()
+    await user.click(await screen.findByRole("checkbox", { name: /Onion/ }))
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual([999, 51])
+    await user.click(screen.getByRole("checkbox", { name: /Onion/ }))
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual([999])
+
+    await user.click(screen.getByRole("checkbox", { name: /Onion/ }))
+    await user.click(screen.getByRole("button", { name: "Clear ticked" }))
+    expect(localStorage.getItem(STORAGE_KEY)).toBe("[]")
+    const undo = toastMock.mock.calls.at(-1)?.[1]?.action as {
+      onClick: () => void
+    }
+    act(() => undo.onClick())
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual([999, 51])
+  })
+
   it("offers a retry when the list fails to load", async () => {
     vi.mocked(getShoppingList).mockRejectedValue(new Error("down"))
-    renderWithRouter(<ShopPage onRangeChange={vi.fn()} />)
+    renderWithRouter(
+      <ShopPage
+        includeDrafts={false}
+        onRangeChange={vi.fn()}
+        onIncludeDraftsChange={vi.fn()}
+      />
+    )
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "The shopping list didn't load"
     )
@@ -441,7 +557,9 @@ describe("ShopPage", () => {
     renderWithRouter(
       <ShopPage
         range={{ from: "2026-01-01", to: "2027-06-30" }}
+        includeDrafts={false}
         onRangeChange={onRangeChange}
+        onIncludeDraftsChange={vi.fn()}
       />
     )
     expect(await screen.findByRole("alert")).toHaveTextContent(
