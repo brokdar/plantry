@@ -31,6 +31,9 @@ type checkInput struct {
 // cells and keeps the rules the board shows (D21): H1, H2, H5 and H8. H3/H4
 // already appear as session warnings; H6/H7 cannot occur in persisted data.
 // H5 needs diet classes, so it is left out while no diet source is wired.
+// An empty plan cell (missing_plate) needs attention only while the window
+// is a draft, and only from today on: a hand-planned or accepted window may
+// leave cells empty, and past cells are history.
 func (s *Service) issues(ctx context.Context, in checkInput) ([]planning.Issue, error) {
 	st, err := s.checkState(ctx, in)
 	if err != nil {
@@ -40,10 +43,22 @@ func (s *Service) issues(ctx context.Context, in checkInput) ([]planning.Issue, 
 	for i, c := range st.Cells {
 		t.Cells[i] = c.Key()
 	}
+	drafts := false
+	for _, p := range st.Plates {
+		drafts = drafts || !p.Confirmed
+	}
+	for _, ss := range st.Sessions {
+		drafts = drafts || !ss.Confirmed
+	}
+	today := in.today.Format(time.DateOnly)
 	out := []planning.Issue{}
 	for _, is := range planning.Check(st, t) {
 		switch is.Rule {
-		case "H1", "H2", "H8":
+		case "H1":
+			if is.Code == planning.CodeMissingPlate && (!drafts || is.Date < today) {
+				continue
+			}
+		case "H2", "H8":
 		case "H5":
 			if s.d.Diets == nil {
 				continue

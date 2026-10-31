@@ -93,7 +93,22 @@ func TestPlanHTTP_Issues(t *testing.T) {
 		"rule": "H2", "code": "too_many_cook_occasions", "severity": "violation", "date": "2026-11-01",
 		"params": map[string]any{"count": float64(2), "max": float64(1)},
 	}, h2[0])
-	assert.Equal(t, 21-2, missing, "every other plan cell misses its plate")
+	assert.Zero(t, missing, "empty cells of a window without drafts need no attention")
+
+	// As a draft, the window's empty cells from today on miss their plates.
+	_, err := a.db.Exec(`UPDATE plates SET state = 'draft'`)
+	require.NoError(t, err)
+	_, err = a.db.Exec(`UPDATE cook_sessions SET state = 'draft'`)
+	require.NoError(t, err)
+	code, body = a.do(http.MethodGet, "/api/plan?start=2026-10-31&today=2026-11-05", "")
+	require.Equal(t, http.StatusOK, code, body)
+	var dates []string
+	for _, it := range body["issues"].([]any) {
+		if is := it.(map[string]any); is["code"] == "missing_plate" {
+			dates = append(dates, is["date"].(string))
+		}
+	}
+	assert.Equal(t, []string{"2026-11-05", "2026-11-05", "2026-11-05", "2026-11-06", "2026-11-06", "2026-11-06"}, dates)
 }
 
 // B2-AC3

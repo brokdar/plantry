@@ -159,13 +159,25 @@ func TestPlan_Issues(t *testing.T) {
 		assert.Equal(t, &pid, p.Issues[0].PlateID)
 	})
 
-	t.Run("an empty plan cell misses its plate", func(t *testing.T) {
+	t.Run("empty plan cells without drafts need no attention", func(t *testing.T) {
 		f := newFixture()
-		f.fill(cellID(date("2026-11-05"), dinner))
+		f.ac1()
 		p, err := f.service().Plan(ctx, &ac1Start, date("2026-10-30"))
 		require.NoError(t, err)
-		require.Equal(t, [][2]string{{"H1", planning.CodeMissingPlate}}, rulesAndCodes(p.Issues))
-		assert.Equal(t, "2026-11-05", p.Issues[0].Date)
+		assert.Empty(t, p.Issues, "a hand-planned window may leave cells empty")
+	})
+
+	t.Run("a draft window misses plates from today on only", func(t *testing.T) {
+		f := newFixture()
+		sid := f.draftSession(chiliID, "2026-11-01", dinner, 2, 7)
+		f.draft(f.composed("2026-11-01", dinner, chiliID, sid), 7)
+		f.runs[7] = RunNote{}
+		f.fill(cellID(date("2026-11-02"), lunch), cellID(date("2026-11-04"), lunch), cellID(date("2026-11-05"), dinner))
+		p, err := f.service().Plan(ctx, &ac1Start, date("2026-11-04"))
+		require.NoError(t, err)
+		require.Equal(t, [][2]string{{"H1", planning.CodeMissingPlate}, {"H1", planning.CodeMissingPlate}}, rulesAndCodes(p.Issues))
+		assert.Equal(t, []string{"2026-11-04", "2026-11-05"}, []string{p.Issues[0].Date, p.Issues[1].Date},
+			"Mon lunch is past; today counts")
 	})
 
 	t.Run("chili on a vegetarian profile", func(t *testing.T) {
