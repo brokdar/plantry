@@ -103,7 +103,7 @@ export function useSetAvailabilityOverride() {
       setAvailabilityOverride(date, slotId, input),
     onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
-      if (data.removed_plate) {
+      if (data.removed) {
         void qc.invalidateQueries({ queryKey: plateKeys.all })
       }
     },

@@ -14,12 +14,11 @@ type Querier interface {
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
-	CountConversationsByWeek(ctx context.Context, weekID sql.NullInt64) (int64, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 	CountPresetsUsingFood(ctx context.Context, foodID int64) (int64, error)
 	CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error)
 	CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error
-	CreateConversation(ctx context.Context, arg CreateConversationParams) (AiConversation, error)
+	CreateConversation(ctx context.Context, title sql.NullString) (AiConversation, error)
 	CreateCookSession(ctx context.Context, arg CreateCookSessionParams) (CookSession, error)
 	CreateFood(ctx context.Context, arg CreateFoodParams) (Food, error)
 	CreateFoodComponent(ctx context.Context, arg CreateFoodComponentParams) error
@@ -73,7 +72,6 @@ type Querier interface {
 	ListAvailabilityDefaults(ctx context.Context) ([]ListAvailabilityDefaultsRow, error)
 	ListAvailabilityOverridesByRange(ctx context.Context, arg ListAvailabilityOverridesByRangeParams) ([]ListAvailabilityOverridesByRangeRow, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
-	ListConversationsByWeek(ctx context.Context, arg ListConversationsByWeekParams) ([]AiConversation, error)
 	ListCookSessionLinks(ctx context.Context, cookSessionID sql.NullInt64) ([]ListCookSessionLinksRow, error)
 	ListFoodComponents(ctx context.Context, parentID int64) ([]ListFoodComponentsRow, error)
 	ListFoodInstructions(ctx context.Context, foodID int64) ([]FoodInstruction, error)

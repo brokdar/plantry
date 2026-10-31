@@ -1,4 +1,5 @@
 import { apiFetch } from "./client"
+import type { PlanSnapshot } from "./plates"
 
 export type ApplyConflict = "skip" | "overwrite"
 export type PresetSort = "name" | "recent"
@@ -95,54 +96,25 @@ export interface ApplyPresetInput {
   slot_ids_filter?: number[]
 }
 
-export interface ApplyResultPlate {
-  id: number
+/** A (date, slot) cell of an apply or copy-week result. */
+export interface ApplyResultCell {
   date: string
   slot_id: number
 }
 
-export interface ApplyResultReplaced {
-  new_plate: ApplyResultPlate
-  old_plate: ApplyResultPlate
-}
-
-export interface ApplyResultSkip {
-  date?: string
-  slot_id: number
-}
-
-export interface ApplySnapshotComponent {
-  food_id: number
-  portions?: number | null
-  amount?: number | null
-  unit?: string | null
-  grams?: number | null
-  grams_source?: string | null
-  sort_order: number
-}
-
-export interface ApplySnapshotPlate {
-  date: string
-  slot_id: number
-  note?: string | null
-  components: ApplySnapshotComponent[]
-}
-
-export interface ApplySnapshot {
-  created_plate_ids: number[]
-  /** No plate overrides copy week wrote; undo clears them (D12). */
-  created_overrides: ApplyResultSkip[]
-  replaced_plates: ApplySnapshotPlate[]
-}
-
+/** The result of an apply or copy week. Undo is the client's: delete
+ *  `created_plate_ids`, restore `removed` (POST /api/plan/restore) and clear
+ *  each `created_overrides` cell's availability override. */
 export interface ApplyResult {
-  created: ApplyResultPlate[]
-  replaced: ApplyResultReplaced[]
-  skipped_occupied: ApplyResultSkip[]
-  skipped_no_slot: ApplyResultSkip[]
+  created_plate_ids: number[]
+  skipped_occupied: ApplyResultCell[]
   /** Target cells that resolve to No plate (D12). */
-  skipped_unavailable: ApplyResultSkip[]
-  snapshot: ApplySnapshot
+  skipped_unavailable: ApplyResultCell[]
+  skipped_no_slot: ApplyResultCell[]
+  /** What `overwrite` replaced. */
+  removed: PlanSnapshot
+  /** No plate overrides copy week wrote. */
+  created_overrides: ApplyResultCell[]
 }
 
 export interface CopyWeekInput {
@@ -222,12 +194,5 @@ export function copyWeek(input: CopyWeekInput): Promise<ApplyResult> {
   return apiFetch(`/presets/copy-week`, {
     method: "POST",
     body: JSON.stringify(input),
-  })
-}
-
-export function undoApply(snapshot: ApplySnapshot): Promise<void> {
-  return apiFetch(`/presets/undo-apply`, {
-    method: "POST",
-    body: JSON.stringify({ snapshot }),
   })
 }

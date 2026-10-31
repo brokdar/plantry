@@ -31,8 +31,8 @@ func (r *memRepo) AppendMessage(_ context.Context, m *Message) error {
 	return nil
 }
 
-func (r *memRepo) CreateConversation(_ context.Context, weekID *int64, title *string) (*Conversation, error) {
-	return &Conversation{ID: 1, WeekID: weekID, Title: title}, nil
+func (r *memRepo) CreateConversation(_ context.Context, title *string) (*Conversation, error) {
+	return &Conversation{ID: 1, Title: title}, nil
 }
 
 func (r *memRepo) GetConversation(_ context.Context, id int64) (*Conversation, error) {

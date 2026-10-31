@@ -71,8 +71,6 @@ func (h *AIHandler) DebugSystemPrompt(w http.ResponseWriter, r *http.Request) {
 
 type chatRequestBody struct {
 	ConversationID *int64 `json:"conversation_id,omitempty"`
-	WeekID         *int64 `json:"week_id,omitempty"`
-	Mode           string `json:"mode,omitempty"`
 	Message        string `json:"message"`
 	Today          string `json:"today,omitempty"` // YYYY-MM-DD; server clock when empty
 	From           string `json:"from"`            // YYYY-MM-DD, required
@@ -143,8 +141,6 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		defer close(events)
 		chatErr <- h.svc.Chat(ctx, agent.ChatRequest{
 			ConversationID: body.ConversationID,
-			WeekID:         body.WeekID,
-			Mode:           body.Mode,
 			UserText:       body.Message,
 			Today:          dates.today,
 			From:           dates.from,
@@ -197,7 +193,6 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 
 type conversationResponse struct {
 	ID        int64             `json:"id"`
-	WeekID    *int64            `json:"week_id,omitempty"`
 	Title     *string           `json:"title,omitempty"`
 	Messages  []messageResponse `json:"messages,omitempty"`
 	CreatedAt string            `json:"created_at"`
@@ -218,7 +213,7 @@ type conversationListResponse struct {
 
 func toConversationSummary(c *agent.Conversation) conversationResponse {
 	return conversationResponse{
-		ID: c.ID, WeekID: c.WeekID, Title: c.Title,
+		ID: c.ID, Title: c.Title,
 		CreatedAt: c.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt: c.UpdatedAt.UTC().Format(time.RFC3339),
 	}
@@ -243,14 +238,6 @@ func (h *AIHandler) ListConversations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := agent.ListQuery{}
-	if v := r.URL.Query().Get("week_id"); v != "" {
-		id, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "error.invalid_id")
-			return
-		}
-		q.WeekID = &id
-	}
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			q.Limit = n

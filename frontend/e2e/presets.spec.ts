@@ -326,15 +326,16 @@ test.describe("Presets", () => {
       // Slot now shows Pasta (the preset content), not Rice.
       await expect(cell.getByText(`Pasta ${tag}`)).toBeVisible()
 
-      // Undo button on the toast triggers POST /api/presets/undo-apply.
+      // Undo deletes the created plate, then restores the replaced one
+      // through POST /api/plan/restore.
       const undoResp = page.waitForResponse(
         (r) =>
-          /\/api\/presets\/undo-apply$/.test(r.url()) &&
+          /\/api\/plan\/restore$/.test(r.url()) &&
           r.request().method() === "POST"
       )
       await undoButton.click()
       const undone = await undoResp
-      expect(undone.status()).toBe(204)
+      expect(undone.status()).toBe(200)
 
       // After undo, Rice is restored.
       await expect(cell.getByText(`Rice ${tag}`)).toBeVisible()

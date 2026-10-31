@@ -1,6 +1,6 @@
 -- name: CreateConversation :one
-INSERT INTO ai_conversations (week_id, title)
-VALUES (?, ?)
+INSERT INTO ai_conversations (title)
+VALUES (?)
 RETURNING *;
 
 -- name: GetConversation :one
@@ -23,17 +23,8 @@ SELECT * FROM ai_conversations
 ORDER BY updated_at DESC, id DESC
 LIMIT ? OFFSET ?;
 
--- name: ListConversationsByWeek :many
-SELECT * FROM ai_conversations
-WHERE week_id = ?
-ORDER BY updated_at DESC, id DESC
-LIMIT ? OFFSET ?;
-
 -- name: CountConversations :one
 SELECT COUNT(*) FROM ai_conversations;
-
--- name: CountConversationsByWeek :one
-SELECT COUNT(*) FROM ai_conversations WHERE week_id = ?;
 
 -- name: AppendMessage :one
 INSERT INTO ai_messages (conversation_id, role, content)

@@ -11,10 +11,9 @@ import {
   getPreset,
   getPresets,
   patchPreset,
-  undoApply,
   updatePreset,
   type ApplyPresetInput,
-  type ApplySnapshot,
+  type ApplyResult,
   type CopyWeekInput,
   type CreatePresetInput,
   type ListPresetsParams,
@@ -22,9 +21,13 @@ import {
   type UpdatePresetInput,
 } from "@/lib/api/presets"
 
+import { clearAvailabilityOverride } from "@/lib/api/availability"
+import { restorePlan } from "@/lib/api/plan"
+import { deletePlate } from "@/lib/api/plates"
 import { toastError } from "@/lib/toast"
 
-import { plateKeys, presetKeys } from "./keys"
+import { availabilityKeys, plateKeys, presetKeys } from "./keys"
+import { invalidatePlanViews } from "./plan"
 
 /** List presets with optional search / slot / tag filters and pagination. */
 export function usePresets(params: ListPresetsParams = {}) {
@@ -151,14 +154,24 @@ export function useCopyWeek() {
   })
 }
 
+/** Undoes an apply or copy week: deletes the created plates, restores what
+ *  `overwrite` replaced and clears the No plate overrides copy week wrote. */
 export function useUndoApply() {
   const qc = useQueryClient()
   const { t } = useTranslation()
   return useMutation({
-    mutationFn: (snapshot: ApplySnapshot) => undoApply(snapshot),
+    mutationFn: async (result: ApplyResult) => {
+      for (const id of result.created_plate_ids) await deletePlate(id)
+      if (result.removed.plates.length > 0) await restorePlan(result.removed)
+      for (const c of result.created_overrides) {
+        await clearAvailabilityOverride(c.date, c.slot_id)
+      }
+    },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: plateKeys.all })
+      void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
       void qc.invalidateQueries({ queryKey: ["nutrition"] })
+      invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })

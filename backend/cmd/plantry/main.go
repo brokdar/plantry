@@ -158,7 +158,6 @@ func run() error {
 
 	presetSvc := preset.NewService(presetRepo, foodRepo, plateSvc, txRunner, foodRepo, foodRepo).
 		WithSlots(slotSvc).
-		WithPlateRange(plateSvc).
 		WithAvailability(availabilitySvc)
 
 	feedbackSvc := feedback.NewService(txRunner, sqlite.NewFeedbackRepo(conn), plateRepo, foodRepo, profileRepo)

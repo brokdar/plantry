@@ -131,12 +131,12 @@ func (s *stubPlateService) Range(context.Context, time.Time, time.Time) ([]plate
 	return nil, nil
 }
 
-func (s *stubPlateService) Create(context.Context, plate.PlateInput) (*plate.Plate, error) {
-	return nil, errors.New("stub: no plate writes")
+func (s *stubPlateService) CookSession(context.Context, int64) (*plate.CookSession, error) {
+	return nil, domain.ErrNotFound
 }
 
-func (s *stubPlateService) Delete(context.Context, int64) (plate.PlanSnapshot, error) {
-	return plate.PlanSnapshot{}, errors.New("stub: no plate writes")
+func (s *stubPlateService) Apply(context.Context, plate.PlanSnapshot, plate.ApplyOptions) (*plate.ApplyResult, error) {
+	return nil, errors.New("stub: no plate writes")
 }
 
 // stubTxRunner skips the unit of work: these tests only check validation.

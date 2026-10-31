@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import type { ApplySnapshot } from "@/lib/api/presets"
+import type { ApplyResult } from "@/lib/api/presets"
 import { useCopyWeek, useUndoApply } from "@/lib/queries/presets"
 import { showPresetApplyToasts } from "@/lib/preset-apply-toast"
 
@@ -37,8 +37,8 @@ export function CopyFromWeekDialog({
   // before the toast's Undo action fires.
   const undoMutation = useUndoApply()
 
-  function handleUndo(snapshot: ApplySnapshot) {
-    undoMutation.mutate(snapshot)
+  function handleUndo(result: ApplyResult) {
+    undoMutation.mutate(result)
   }
 
   return (
@@ -64,7 +64,7 @@ interface DialogBodyProps {
   defaultSourceStart: string
   targetStart: string
   onClose: () => void
-  onUndo: (snapshot: ApplySnapshot) => void
+  onUndo: (result: ApplyResult) => void
 }
 
 function DialogBody({

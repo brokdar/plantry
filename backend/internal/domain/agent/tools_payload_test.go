@@ -187,6 +187,18 @@ func TestPlateTools_DescriptionsDropSkipped(t *testing.T) {
 	assert.Contains(t, toolsByName()["get_plates_range"].Description, "availability")
 }
 
+// The Anthropic Messages API rejects an input_schema with a top-level
+// anyOf, oneOf or allOf, and every registered tool is sent on every turn.
+func TestTools_SchemasHaveNoTopLevelCombinators(t *testing.T) {
+	for _, tool := range defaultTools(Services{Presets: &stubPresetSvc{}}) {
+		var schema map[string]any
+		require.NoError(t, json.Unmarshal(tool.Schema, &schema), tool.Name)
+		for _, key := range []string{"anyOf", "oneOf", "allOf"} {
+			assert.NotContains(t, schema, key, "%s: top-level %s", tool.Name, key)
+		}
+	}
+}
+
 func TestTool_ListFoods_CancelledContextAborts(t *testing.T) {
 	ts := newPayloadToolSet(t)
 	ctx, cancel := context.WithCancel(context.Background())

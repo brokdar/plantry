@@ -36,12 +36,12 @@ type PromptPlate struct {
 // PromptCell is a window cell whose availability is not "plan": "none" (no
 // plate wanted) or "routine" (filled from a preset).
 type PromptCell struct {
-	Date       time.Time
-	SlotID     int64
-	Slot       string // slot name key
-	Mode       string // "none" | "routine"
-	PresetName string // routine only
-	Note       string // none only; may be empty
+	Date         time.Time
+	SlotID       int64
+	Slot         string // slot name key
+	Availability string // "none" | "routine"
+	PresetName   string // routine only
+	Note         string // none only; may be empty
 }
 
 // PlanningPrefs holds the user's plan settings that drive the system prompt.
@@ -53,17 +53,12 @@ type PlanningPrefs struct {
 // ComposePrompt builds the system prompt for a chat turn. p may be nil (no
 // profile yet); plates may be nil (no plate context); cells may be nil (every
 // cell is "plan"); dateRange may be nil (no date context).
-// prefs may be nil (omits planning preference lines). modeHint may be empty
-// (no mode section).
-func ComposePrompt(p *profile.Profile, plates []PromptPlate, cells []PromptCell, dateRange *DateRange, prefs *PlanningPrefs, modeHint string) string {
+// prefs may be nil (omits planning preference lines).
+func ComposePrompt(p *profile.Profile, plates []PromptPlate, cells []PromptCell, dateRange *DateRange, prefs *PlanningPrefs) string {
 	var b strings.Builder
 
-	// The mode hint and tool rules always survive; anything over budget is
-	// cut before them.
+	// The tool rules always survive; anything over budget is cut before them.
 	tail := toolRules
-	if modeHint != "" {
-		tail = "\nMode hint: " + modeHint + "\n" + toolRules
-	}
 
 	b.WriteString(rolePrefix)
 	if p != nil {
@@ -88,7 +83,7 @@ const rolePrefix = `You are Plantry, an assistant for a self-hosted meal planner
 
 You help the user plan meals by composing plates (meals) out of foods onto a date-based grid. You use tools to read the library, read plates by date range, and mutate plates. You never invent ids — always look them up first with list_foods / list_slots / get_plates_range.
 
-Plates live on calendar dates (YYYY-MM-DD). A plate belongs to exactly one (date, slot) cell, and a cell holds at most one plate. A cell marked "no plate" must stay empty; a "routine" cell is covered by its preset, so leave it alone unless the user asks. A plate has one or more foods with a portion multiplier each. Always reason in calendar dates — never in day indexes.
+Plates live on calendar dates (YYYY-MM-DD). A plate belongs to exactly one (date, slot) cell, and a cell holds at most one plate. A cell marked "no plate" must stay empty; a "routine" cell is covered by its preset, so leave it alone unless the user asks. A plate serves eaters people (by default the household's portions) and has one or more foods. Quantities are portions per eater: a recipe (composed food) takes portions per eater, usually 1 (0.5 or 1.5 are fine); an ingredient (leaf food) takes an amount and a unit per eater, such as 150 g or 1 piece. Each recipe on a plate is cooked in a cook session (cook_session_id). Always reason in calendar dates — never in day indexes.
 
 When the user asks you to plan something, proceed like this:
 1. Read the relevant date range with get_plates_range, and slot list with list_slots.
@@ -114,7 +109,7 @@ Presets:
 - Prefer existing tags returned in known_tags over coining near-duplicates ("quick" vs "quickly").
 - For "apply my standard week" / "lay out my usual routine", use copy_week from a representative past week. If the user hasn't named one, ask which week to use.
 - If a preset has multiple plates and the user's request is slot-specific (e.g. "just lunch"), pass slot_ids_filter to apply only the relevant plate.
-- Apply tool results enumerate created / replaced / skipped_occupied / skipped_unavailable / skipped_no_slot. Surface non-empty skip lists to the user when relevant — silent skips are confusing.
+- Apply tool results enumerate created_plate_ids / replaced / skipped_occupied / skipped_unavailable / skipped_no_slot. Surface non-empty skip lists to the user when relevant — silent skips are confusing.
 `
 
 const truncationNote = "\n[prompt truncated]\n"
@@ -258,7 +253,7 @@ func cellLine(c PromptCell) string {
 		slot = " " + c.Slot
 	}
 	var what string
-	switch c.Mode {
+	switch c.Availability {
 	case "routine":
 		what = "routine (preset: " + c.PresetName + ")"
 	default:

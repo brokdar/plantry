@@ -1,24 +1,24 @@
 import type { TFunction } from "i18next"
 
-import type { ApplyResult, ApplySnapshot } from "@/lib/api/presets"
+import type { ApplyResult } from "@/lib/api/presets"
 import { toast } from "@/lib/toast"
 
 /**
  * Render the toast sequence for a preset apply / copy-week result.
  *
- * - Success line summarises Created / Replaced.
+ * - Success line summarises Created / Replaced (the plates `removed` holds).
  * - Warning lines surface SkippedOccupied / SkippedUnavailable (No-plate
  *   cells, D12) / SkippedNoSlot when non-empty.
- * - When the result includes Replaced plates, the success toast carries an
- *   Undo action that calls `onUndo` with the server-side snapshot.
+ * - When plates were replaced, the success toast carries an Undo action that
+ *   calls `onUndo` with the result.
  */
 export function showPresetApplyToasts(
   result: ApplyResult,
   t: TFunction,
-  onUndo: (snapshot: ApplySnapshot) => void
+  onUndo: (result: ApplyResult) => void
 ) {
-  const created = result.created.length
-  const replaced = result.replaced.length
+  const replaced = result.removed.plates.length
+  const created = Math.max(0, result.created_plate_ids.length - replaced)
 
   if (created + replaced > 0) {
     const messages: string[] = []
@@ -34,7 +34,7 @@ export function showPresetApplyToasts(
       toast.success(message, {
         action: {
           label: t("preset.apply.undo"),
-          onClick: () => onUndo(result.snapshot),
+          onClick: () => onUndo(result),
         },
       })
     } else {

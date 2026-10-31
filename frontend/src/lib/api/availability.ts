@@ -1,5 +1,5 @@
 import { apiFetch } from "./client"
-import type { Plate } from "./plates"
+import type { PlanSnapshot } from "./plates"
 
 /** What a slot expects: a planned plate, a routine (preset), or no plate. */
 export type AvailabilityMode = "plan" | "routine" | "none"
@@ -44,8 +44,8 @@ export interface SetAvailabilityOverrideInput {
 
 export interface SetAvailabilityOverrideResponse {
   cell: AvailabilityCell
-  /** The plate deleted by `remove_plate`, loaded before the delete. */
-  removed_plate?: Plate
+  /** What restores the plate `remove_plate` deleted (`POST /api/plan/restore`); null when none was. */
+  removed: PlanSnapshot | null
 }
 
 export function getAvailabilityDefaults(): Promise<AvailabilityDefaultsResponse> {

@@ -149,7 +149,8 @@ test.describe("Planner — No plate + favorite", () => {
       // Undo → the override is cleared and the plate comes back.
       const recreated = page.waitForResponse(
         (r) =>
-          r.url().endsWith("/api/plates") && r.request().method() === "POST"
+          r.url().endsWith("/api/plan/restore") &&
+          r.request().method() === "POST"
       )
       await page.getByRole("button", { name: "Undo", exact: true }).click()
       await recreated

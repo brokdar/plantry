@@ -22,7 +22,6 @@ const MaxIterations = 20
 // RunRequest is the input to Run.
 type RunRequest struct {
 	ConversationID int64
-	WeekID         *int64
 	Model          string
 	SystemPrompt   string
 	// History is the conversation so far in canonical form (user + prior
@@ -111,10 +110,6 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		// Execute each tool call.
 		resultBlocks := make([]llm.ContentBlock, 0, len(toolUses))
 		plateChanged := false
-		weekID := int64(0)
-		if req.WeekID != nil {
-			weekID = *req.WeekID
-		}
 		for _, call := range toolUses {
 			send(ctx, out, llm.Event{Type: llm.EventToolExecStart, Payload: llm.ToolExecStartPayload{
 				ID: call.ToolUseID, Name: call.ToolUseName,
@@ -167,9 +162,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		}
 
 		if plateChanged {
-			send(ctx, out, llm.Event{Type: llm.EventPlateChanged, Payload: llm.PlateChangedPayload{
-				WeekID: weekID,
-			}})
+			send(ctx, out, llm.Event{Type: llm.EventPlateChanged, Payload: llm.PlateChangedPayload{}})
 		}
 
 		// Persist and append the tool message carrying all result blocks.

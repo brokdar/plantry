@@ -6,11 +6,7 @@ import {
   invalidatedBy,
   renderWithRouter,
 } from "@/test/render"
-import {
-  mockPlate as makePlate,
-  mockPlateComponent,
-  mockRemovedBatch,
-} from "@/test/fixtures"
+import { mockPlate as makePlate, mockRemovedBatch } from "@/test/fixtures"
 
 vi.mock("@/lib/api/plates", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/plates")>()),
@@ -49,6 +45,8 @@ const toastMock = vi.hoisted(() =>
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
 import type { AvailabilityCell } from "@/lib/api/availability"
+import { restorePlan } from "@/lib/api/plan"
+import type { PlanSnapshot } from "@/lib/api/plates"
 import {
   clearAvailabilityOverride,
   getAvailabilityRange,
@@ -509,26 +507,20 @@ describe("useNoPlateActions", () => {
     return qc
   }
 
-  const removed = makePlate({
-    id: 55,
-    date: "2026-10-27",
-    slot_id: 3,
-    note: "leftovers",
-    components: [
-      mockPlateComponent({
-        id: 2,
-        plate_id: 55,
-        food_id: 9,
-        kind: "leaf",
-        portions: undefined,
-        cook_session_id: undefined,
-        amount: 80,
-        unit: "g",
-        sort_order: 1,
-      }),
-      mockPlateComponent({ id: 1, plate_id: 55, food_id: 4, portions: 2 }),
+  const removed: PlanSnapshot = {
+    plates: [
+      {
+        date: "2026-10-27",
+        slot_id: 3,
+        eaters: 2,
+        note: "leftovers",
+        components: [
+          { food_id: 4, portions: 2, sort_order: 0, session: { id: 7 } },
+        ],
+      },
     ],
-  })
+    sessions: [],
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -547,7 +539,7 @@ describe("useNoPlateActions", () => {
   it("markNoPlate puts a none override with remove_plate and offers a 6 s undo", async () => {
     vi.mocked(setAvailabilityOverride).mockResolvedValueOnce({
       cell: cell({ mode: "none", source: "override" }),
-      removed_plate: removed,
+      removed,
     })
     const { result } = renderHook(() => useNoPlateActions(from, to), {
       wrapper: createHookWrapper(clientWith(cell())),
@@ -566,14 +558,13 @@ describe("useNoPlateActions", () => {
     undoAction()
   })
 
-  it("undo clears a default-sourced cell, then recreates the plate with its components in order", async () => {
+  it("undo clears a default-sourced cell, then restores the removed snapshot", async () => {
     vi.mocked(setAvailabilityOverride).mockResolvedValueOnce({
       cell: cell({ mode: "none", source: "override" }),
-      removed_plate: removed,
+      removed,
     })
     vi.mocked(clearAvailabilityOverride).mockResolvedValueOnce(undefined)
-    vi.mocked(createPlate).mockResolvedValueOnce(makePlate({ id: 77 }))
-    vi.mocked(addPlateComponent).mockResolvedValue(makePlate())
+    vi.mocked(restorePlan).mockResolvedValueOnce({ plate_ids: [77] })
     const { result } = renderHook(() => useNoPlateActions(from, to), {
       wrapper: createHookWrapper(clientWith(cell())),
     })
@@ -585,21 +576,13 @@ describe("useNoPlateActions", () => {
       undoAction()()
     })
 
-    await waitFor(() => expect(addPlateComponent).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(restorePlan).toHaveBeenCalledWith(removed))
     expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-10-27", 3)
-    expect(createPlate).toHaveBeenCalledWith({
-      date: "2026-10-27",
-      slot_id: 3,
-      note: "leftovers",
-    })
     const clearOrder = vi.mocked(clearAvailabilityOverride).mock
       .invocationCallOrder[0]!
-    const createOrder = vi.mocked(createPlate).mock.invocationCallOrder[0]!
-    expect(clearOrder).toBeLessThan(createOrder)
-    expect(vi.mocked(addPlateComponent).mock.calls).toEqual([
-      [77, { food_id: 4, portions: 2 }],
-      [77, { food_id: 9, amount: 80, unit: "g" }],
-    ])
+    const restoreOrder = vi.mocked(restorePlan).mock.invocationCallOrder[0]!
+    expect(clearOrder).toBeLessThan(restoreOrder)
+    expect(createPlate).not.toHaveBeenCalled()
   })
 
   it("undo re-puts a previous override's mode, preset and note", async () => {
@@ -610,8 +593,8 @@ describe("useNoPlateActions", () => {
       preset_name: "Oats",
     })
     vi.mocked(setAvailabilityOverride)
-      .mockResolvedValueOnce({ cell: cell({ mode: "none" }) })
-      .mockResolvedValueOnce({ cell: previous })
+      .mockResolvedValueOnce({ cell: cell({ mode: "none" }), removed: null })
+      .mockResolvedValueOnce({ cell: previous, removed: null })
     const { result } = renderHook(() => useNoPlateActions(from, to), {
       wrapper: createHookWrapper(clientWith(previous)),
     })
@@ -630,7 +613,7 @@ describe("useNoPlateActions", () => {
       )
     )
     expect(clearAvailabilityOverride).not.toHaveBeenCalled()
-    expect(createPlate).not.toHaveBeenCalled()
+    expect(restorePlan).not.toHaveBeenCalled()
   })
 
   it("planMeal over a plan default only clears the override", async () => {
@@ -662,7 +645,10 @@ describe("useNoPlateActions", () => {
     vi.mocked(getAvailabilityRange).mockResolvedValue({
       items: [cell({ mode: "none", source: "default" })],
     })
-    vi.mocked(setAvailabilityOverride).mockResolvedValue({ cell: cell() })
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({
+      cell: cell(),
+      removed: null,
+    })
     const { result } = renderHook(() => useNoPlateActions(from, to), {
       wrapper: createHookWrapper(
         clientWith(cell({ mode: "none", source: "override" }))
@@ -683,7 +669,10 @@ describe("useNoPlateActions", () => {
   })
 
   it("planMeal over a none default cell puts plan directly", async () => {
-    vi.mocked(setAvailabilityOverride).mockResolvedValue({ cell: cell() })
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({
+      cell: cell(),
+      removed: null,
+    })
     const { result } = renderHook(() => useNoPlateActions(from, to), {
       wrapper: createHookWrapper(
         clientWith(cell({ mode: "none", source: "default" }))
@@ -700,7 +689,10 @@ describe("useNoPlateActions", () => {
   })
 
   it("editNote keeps the cell none and writes the note", async () => {
-    vi.mocked(setAvailabilityOverride).mockResolvedValue({ cell: cell() })
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({
+      cell: cell(),
+      removed: null,
+    })
     const { result } = renderHook(() => useNoPlateActions(from, to), {
       wrapper: createHookWrapper(clientWith(cell({ mode: "none" }))),
     })

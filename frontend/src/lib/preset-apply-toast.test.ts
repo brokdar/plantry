@@ -1,13 +1,8 @@
 import type { TFunction } from "i18next"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 
-import type {
-  ApplyResult,
-  ApplyResultPlate,
-  ApplyResultReplaced,
-  ApplyResultSkip,
-  ApplySnapshot,
-} from "@/lib/api/presets"
+import type { ApplyResult, ApplyResultCell } from "@/lib/api/presets"
+import type { SnapshotPlate } from "@/lib/api/plates"
 
 vi.mock("@/lib/toast", () => ({
   toast: {
@@ -34,32 +29,26 @@ const t = ((key: string, opts?: { count?: number }) =>
     ? `${key}:${opts.count}`
     : key) as unknown as TFunction
 
-function plate(id: number): ApplyResultPlate {
-  return { id, date: "2026-05-20", slot_id: 1 }
-}
-
-function replaced(id: number): ApplyResultReplaced {
-  return { new_plate: plate(id), old_plate: plate(id + 1000) }
-}
-
-function skip(slotID: number): ApplyResultSkip {
+function skip(slotID: number): ApplyResultCell {
   return { date: "2026-05-20", slot_id: slotID }
 }
 
-const emptySnapshot: ApplySnapshot = {
-  created_plate_ids: [],
-  created_overrides: [],
-  replaced_plates: [],
+const replacedPlate: SnapshotPlate = {
+  date: "2026-05-20",
+  slot_id: 1,
+  eaters: 2,
+  note: null,
+  components: [],
 }
 
 function result(overrides: Partial<ApplyResult> = {}): ApplyResult {
   return {
-    created: [],
-    replaced: [],
+    created_plate_ids: [],
     skipped_occupied: [],
     skipped_no_slot: [],
     skipped_unavailable: [],
-    snapshot: emptySnapshot,
+    removed: { plates: [], sessions: [] },
+    created_overrides: [],
     ...overrides,
   }
 }
@@ -73,7 +62,7 @@ describe("showPresetApplyToasts", () => {
 
   test("created_only: success without undo action", () => {
     const onUndo = vi.fn()
-    showPresetApplyToasts(result({ created: [plate(1)] }), t, onUndo)
+    showPresetApplyToasts(result({ created_plate_ids: [1] }), t, onUndo)
 
     expect(mockedToast.success).toHaveBeenCalledTimes(1)
     const [, options] = mockedToast.success.mock.calls[0]
@@ -83,25 +72,13 @@ describe("showPresetApplyToasts", () => {
     expect(onUndo).not.toHaveBeenCalled()
   })
 
-  test("replaced_carries_undo: action invokes onUndo with snapshot", () => {
+  test("replaced_carries_undo: action invokes onUndo with the result", () => {
     const onUndo = vi.fn()
-    const snapshot: ApplySnapshot = {
+    const applied = result({
       created_plate_ids: [42],
-      created_overrides: [],
-      replaced_plates: [
-        {
-          date: "2026-05-20",
-          slot_id: 1,
-          note: null,
-          components: [],
-        },
-      ],
-    }
-    showPresetApplyToasts(
-      result({ replaced: [replaced(1)], snapshot }),
-      t,
-      onUndo
-    )
+      removed: { plates: [replacedPlate], sessions: [] },
+    })
+    showPresetApplyToasts(applied, t, onUndo)
 
     expect(mockedToast.success).toHaveBeenCalledTimes(1)
     const [, options] = mockedToast.success.mock.calls[0]
@@ -111,7 +88,10 @@ describe("showPresetApplyToasts", () => {
 
     options.action.onClick()
     expect(onUndo).toHaveBeenCalledTimes(1)
-    expect(onUndo).toHaveBeenCalledWith(snapshot)
+    expect(onUndo).toHaveBeenCalledWith(applied)
+    expect(mockedToast.success.mock.calls[0][0]).toBe(
+      "preset.apply.result_replaced:1"
+    )
   })
 
   test("all_skipped_occupied: warning only, no success", () => {
@@ -125,7 +105,7 @@ describe("showPresetApplyToasts", () => {
   test("mixed_created_and_skipped: success then warning, order matters", () => {
     const onUndo = vi.fn()
     showPresetApplyToasts(
-      result({ created: [plate(1)], skipped_occupied: [skip(2)] }),
+      result({ created_plate_ids: [1], skipped_occupied: [skip(2)] }),
       t,
       onUndo
     )
@@ -140,7 +120,10 @@ describe("showPresetApplyToasts", () => {
 
   test("skipped_unavailable: reports No-plate cells after the success", () => {
     showPresetApplyToasts(
-      result({ created: [plate(1)], skipped_unavailable: [skip(2), skip(3)] }),
+      result({
+        created_plate_ids: [1],
+        skipped_unavailable: [skip(2), skip(3)],
+      }),
       t,
       vi.fn()
     )
