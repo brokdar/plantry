@@ -271,4 +271,36 @@ test.describe("Shop", () => {
     await empty.getByRole("link", { name: "Go to plan" }).click()
     await expect(page).toHaveURL(`/plan?start=${start}`)
   })
+
+  test("a tablet (820 px) gets both In-store mode and Copy as text", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 820, height: 1180 })
+    const s = await setup()
+    try {
+      await openShop(page, s.start, s.end)
+      await expect(
+        page.getByRole("button", { name: "In-store mode" })
+      ).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Copy as text" })
+      ).toBeVisible()
+    } finally {
+      await s.cleanup()
+    }
+  })
+
+  test("a range over 366 days is named and the picker offers another", async ({
+    page,
+  }) => {
+    await page.goto("/shop?from=2026-01-01&to=2027-06-30")
+    await expect(page.getByRole("alert")).toContainText(
+      "That range is longer than a year",
+      // Until 4xx stops retrying (query-client), the error takes ~7 s.
+      { timeout: 15_000 }
+    )
+    await page.getByTestId("shop-range").click()
+    await page.getByRole("button", { name: /This window/ }).click()
+    await expect(page.getByTestId("shop-count")).toBeVisible()
+  })
 })

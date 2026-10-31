@@ -58,6 +58,26 @@ export function parseLibrarySearch(
   }
 }
 
+const SEARCH_KEY = "plantry:recipes:search"
+
+/** Keeps the library's last search for the tab's session, so "Back to
+ *  recipes" returns to the same view. The import sheet is not kept. */
+export function rememberLibrarySearch(s: LibrarySearch): void {
+  sessionStorage.setItem(SEARCH_KEY, JSON.stringify({ ...s, add: undefined }))
+}
+
+/** The search `rememberLibrarySearch` kept, or none. */
+export function rememberedLibrarySearch(): LibrarySearch {
+  try {
+    const raw: unknown = JSON.parse(sessionStorage.getItem(SEARCH_KEY) ?? "{}")
+    return parseLibrarySearch(
+      raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
+    )
+  } catch {
+    return parseLibrarySearch({})
+  }
+}
+
 /** True when any filter (not the sort) narrows the list. */
 export function hasLibraryFilters(s: LibrarySearch): boolean {
   return !!(s.q || s.role || s.quick || s.stale || s.fav || s.new)

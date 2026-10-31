@@ -27,7 +27,7 @@ export function ImportSheet({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="flex w-full flex-col gap-0 bg-panel p-0 text-ink shadow-sheet sm:max-w-2xl data-[side=right]:sm:max-w-2xl"
+        className="flex w-full flex-col gap-0 bg-panel p-0 text-ink shadow-sheet data-[side=right]:w-full sm:max-w-2xl data-[side=right]:sm:max-w-2xl"
         data-testid="import-sheet"
       >
         <SheetClose asChild>

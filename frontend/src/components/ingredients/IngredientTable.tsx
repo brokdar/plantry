@@ -216,13 +216,15 @@ function SectionSelect({ ingredient }: { ingredient: LeafFood }) {
         aria-label={t("recipes.ingredients.section_for", {
           name: ingredient.name,
         })}
-        className="min-h-11 w-full min-w-40 rounded-cell border-line bg-transparent text-body data-[size=default]:h-auto md:pointer-fine:min-h-8"
+        className="min-h-11 w-full rounded-cell border-line bg-transparent text-body data-[size=default]:h-auto max-sm:whitespace-normal sm:min-w-40 md:pointer-fine:min-h-8"
         data-testid={`ingredient-section-${ingredient.id}`}
       >
-        <span className="truncate">
+        <span className="text-left sm:truncate">
           {t(`shop.section.${ingredient.shop_section}`)}
+          {/* Below sm the label may wrap and the hint is read out but not
+              shown, so the select fits a phone without scrolling the table. */}
           {auto && (
-            <span className="ml-1.5 text-caption text-ink-muted">
+            <span className="ml-1.5 text-caption text-ink-muted max-sm:sr-only">
               {t("recipes.ingredients.section_auto_hint")}
             </span>
           )}

@@ -19,5 +19,14 @@ export const Route = createFileRoute("/recipes/$id/")({
 function RecipeDetailRoute() {
   const { id } = Route.useParams()
   const { portions } = Route.useSearch()
-  return <RecipeDetailPage id={id} portions={portions} />
+  const navigate = Route.useNavigate()
+  return (
+    <RecipeDetailPage
+      id={id}
+      portions={portions}
+      onPortionsChange={(next) =>
+        void navigate({ search: { portions: next }, replace: true })
+      }
+    />
+  )
 }

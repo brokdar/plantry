@@ -13,9 +13,11 @@ import { RecipeDetail } from "./RecipeDetail"
 export function RecipeDetailPage({
   id,
   portions,
+  onPortionsChange,
 }: {
   id: string
   portions?: number
+  onPortionsChange?: (portions: number) => void
 }) {
   const { t } = useTranslation()
   const numericId = Number(id)
@@ -53,7 +55,14 @@ export function RecipeDetailPage({
     return <RecipeUnavailable reason="not_found" />
   }
 
-  return <RecipeDetail key={food.id} recipe={food} portions={portions} />
+  return (
+    <RecipeDetail
+      key={food.id}
+      recipe={food}
+      portions={portions}
+      onPortionsChange={onPortionsChange}
+    />
+  )
 }
 
 function RecipeUnavailable({

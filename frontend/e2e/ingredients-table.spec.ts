@@ -24,6 +24,38 @@ async function searchFor(page: Page, text: string) {
 }
 
 test.describe("Ingredients table", () => {
+  test("at 375 px in German the section select fits without scrolling the table", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 800 })
+    await page.route("**/api/profile", async (route) => {
+      if (route.request().method() !== "GET") return route.continue()
+      const response = await route.fetch()
+      const body = (await response.json()) as Record<string, unknown>
+      await route.fulfill({ response, json: { ...body, locale: "de" } })
+    })
+    const tag = uid()
+    const leaf = await seedLeafFood({ name: `Kokosmilch ${tag}` })
+    try {
+      await page.goto("/recipes/ingredients")
+      await searchFor(page, tag)
+      const select = page.getByTestId(`ingredient-section-${leaf.id}`)
+      await expect(select).toContainText("Konserven & Gläser")
+      // German labels are on screen.
+      await expect(page.getByTestId("ingredients-table")).toContainText(
+        "Abteilung"
+      )
+
+      const scroller = page.getByTestId("ingredients-table").locator("..")
+      const overflow = await scroller.evaluate(
+        (el) => el.scrollWidth - el.clientWidth
+      )
+      expect(overflow).toBeLessThanOrEqual(0)
+    } finally {
+      await cleanupFood(leaf.id)
+    }
+  })
+
   test("rows show name, kcal/100 g, section, used in and source", async ({
     page,
   }) => {

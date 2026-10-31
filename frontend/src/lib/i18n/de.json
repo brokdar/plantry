@@ -859,7 +859,11 @@
       "secret_key_missing": "Kein Verschlüsselungsschlüssel geladen — verschlüsselte Werte können nicht gespeichert werden.",
       "unknown_provider": "Unbekannter KI-Anbieter."
     },
-    "go_today": "Zu Heute"
+    "go_today": "Zu Heute",
+    "invalid_from": "Das Startdatum ist ungültig. Wähle einen anderen Zeitraum.",
+    "invalid_to": "Das Enddatum ist ungültig. Wähle einen anderen Zeitraum.",
+    "invalid_date_range": "Der Zeitraum endet, bevor er beginnt. Wähle einen anderen Zeitraum.",
+    "date_range_too_large": "Der Zeitraum ist länger als ein Jahr. Wähle einen kürzeren."
   },
   "common": {
     "save": "Speichern",
@@ -1419,7 +1423,8 @@
     "all_done_one": "Alles erledigt. {{count}} Artikel gekauft.",
     "all_done_other": "Alles erledigt. {{count}} Artikel gekauft.",
     "error": "Die Einkaufsliste ließ sich nicht laden. Prüfe, ob Plantry läuft, und versuche es erneut.",
-    "loading": "Einkaufsliste wird geladen"
+    "loading": "Einkaufsliste wird geladen",
+    "moved": "{{name}} nach „{{section}}“ verschoben"
   },
   "routines": {
     "new": "Neue Routine",

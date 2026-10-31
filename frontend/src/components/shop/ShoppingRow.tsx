@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query"
 import { ChevronDown, MoreHorizontal } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -14,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import type { Food } from "@/lib/api/foods"
 import {
   SHOP_SECTIONS,
   type ShopSection,
@@ -22,6 +24,8 @@ import {
 import type { BatchColour } from "@/lib/plan/batch-colours"
 import { formatDate, weekdayShort } from "@/lib/plan/format"
 import { useFood, useSetShopSection } from "@/lib/queries/foods"
+import { foodKeys } from "@/lib/queries/keys"
+import { useUndoToast } from "@/lib/queries/plan"
 import { cn } from "@/lib/utils"
 
 import { quantityText } from "./CopyAsText"
@@ -186,7 +190,9 @@ export function ShoppingRow({
 }
 
 /** "Move to section…": the nine sections in walk order, and "Reset to
- *  automatic" when the user has moved this item before. */
+ *  automatic" when the user has moved this item before. A move says where
+ *  the item went, with Undo back to the old section (automatic again when
+ *  it was automatic). */
 function RowMenu({
   item,
   section,
@@ -195,7 +201,30 @@ function RowMenu({
   section: ShopSection
 }) {
   const { t } = useTranslation()
+  const qc = useQueryClient()
   const move = useSetShopSection()
+  const offerUndo = useUndoToast()
+
+  function moveTo(next: ShopSection) {
+    const id = item.food_id
+    // ResetSection loaded the food while the menu was open.
+    const food = qc.getQueryData<Food>(foodKeys.detail(id))
+    const wasAuto = food?.kind === "leaf" && food.shop_section_source === "auto"
+    const back = wasAuto ? null : section
+    move.mutate(
+      { id, section: next },
+      {
+        onSuccess: () =>
+          offerUndo(
+            t("shop.moved", {
+              name: item.name,
+              section: t(`shop.section.${next}`),
+            }),
+            () => move.mutate({ id, section: back })
+          ),
+      }
+    )
+  }
 
   return (
     <DropdownMenu>
@@ -213,9 +242,7 @@ function RowMenu({
         <DropdownMenuRadioGroup
           value={section}
           onValueChange={(next) => {
-            if (next !== section) {
-              move.mutate({ id: item.food_id, section: next as ShopSection })
-            }
+            if (next !== section) moveTo(next as ShopSection)
           }}
         >
           {SHOP_SECTIONS.map((s) => (

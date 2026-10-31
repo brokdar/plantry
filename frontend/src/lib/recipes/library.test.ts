@@ -1,11 +1,37 @@
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 
 import {
   hasLibraryFilters,
   lastEatenAgo,
   libraryQuery,
   parseLibrarySearch,
+  rememberedLibrarySearch,
+  rememberLibrarySearch,
 } from "./library"
+
+describe("rememberLibrarySearch", () => {
+  beforeEach(() => sessionStorage.clear())
+
+  it("hands back the last search without the import sheet", () => {
+    rememberLibrarySearch({
+      q: "chili",
+      quick: true,
+      sort: "created",
+      add: "url",
+    })
+    expect(rememberedLibrarySearch()).toEqual(
+      parseLibrarySearch({ q: "chili", quick: true, sort: "created" })
+    )
+  })
+
+  it("is empty before the library was visited or after a bad write", () => {
+    expect(rememberedLibrarySearch()).toEqual(parseLibrarySearch({}))
+    sessionStorage.setItem("plantry:recipes:search", "not json")
+    expect(rememberedLibrarySearch()).toEqual(parseLibrarySearch({}))
+    sessionStorage.setItem("plantry:recipes:search", "null")
+    expect(rememberedLibrarySearch()).toEqual(parseLibrarySearch({}))
+  })
+})
 
 describe("parseLibrarySearch", () => {
   it("keeps known values", () => {
