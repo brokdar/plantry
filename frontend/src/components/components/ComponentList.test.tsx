@@ -7,7 +7,6 @@ import { mockChickenCurry, mockTofuBowl } from "@/test/fixtures"
 vi.mock("@/lib/api/foods", () => ({
   listFoods: vi.fn(),
   deleteFood: vi.fn(),
-  getInsights: vi.fn(),
 }))
 
 vi.mock("@/lib/api/setup", () => ({
@@ -15,10 +14,8 @@ vi.mock("@/lib/api/setup", () => ({
   completeSetup: vi.fn(),
 }))
 
-import { listFoods, getInsights } from "@/lib/api/foods"
+import { listFoods } from "@/lib/api/foods"
 import { getSetupStatus } from "@/lib/api/setup"
-
-const noInsights = { forgotten: [], most_cooked: [] }
 
 function setupWith(recipe_count: number) {
   vi.mocked(getSetupStatus).mockResolvedValue({
@@ -39,7 +36,6 @@ describe("ComponentList", () => {
       items: [mockChickenCurry, mockTofuBowl],
       total: 2,
     })
-    vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
 
@@ -56,7 +52,6 @@ describe("ComponentList", () => {
 
   it("links to Ingredients and Import from the header", async () => {
     vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
-    vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
 
@@ -74,7 +69,6 @@ describe("ComponentList", () => {
   it("an empty library shows the onboarding cards in place of the empty grid", async () => {
     setupWith(0)
     vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
-    vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
 
@@ -95,7 +89,6 @@ describe("ComponentList", () => {
       items: [mockChickenCurry, mockTofuBowl],
       total: 2,
     })
-    vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
 
@@ -115,7 +108,6 @@ describe("ComponentList", () => {
       items: [mockChickenCurry],
       total: 1,
     })
-    vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
 
@@ -129,7 +121,6 @@ describe("ComponentList", () => {
 
   it("the header create button is the default primary button", async () => {
     vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
-    vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
 
@@ -144,7 +135,6 @@ describe("ComponentList", () => {
       items: [mockChickenCurry],
       total: 1,
     })
-    vi.mocked(getInsights).mockResolvedValue(noInsights)
 
     renderWithRouter(<ComponentList />)
 
@@ -153,25 +143,5 @@ describe("ComponentList", () => {
     )
     expect(card).toHaveTextContent("spicy")
     expect(card).toHaveTextContent("thai")
-  })
-
-  it("renders Forgotten and Most cooked badges from insights", async () => {
-    vi.mocked(listFoods).mockResolvedValue({
-      items: [mockChickenCurry, mockTofuBowl],
-      total: 2,
-    })
-    vi.mocked(getInsights).mockResolvedValue({
-      forgotten: [{ id: mockChickenCurry.id }],
-      most_cooked: [{ id: mockTofuBowl.id }],
-    })
-
-    renderWithRouter(<ComponentList />)
-
-    expect(
-      await screen.findByTestId(`badge-forgotten-${mockChickenCurry.id}`)
-    ).toBeInTheDocument()
-    expect(
-      screen.getByTestId(`badge-most-cooked-${mockTofuBowl.id}`)
-    ).toBeInTheDocument()
   })
 })

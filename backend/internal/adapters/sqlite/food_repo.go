@@ -16,13 +16,26 @@ import (
 )
 
 var allowedFoodSortColumns = map[string]string{
-	"name":           "name",
-	"created_at":     "created_at",
-	"updated_at":     "updated_at",
-	"role":           "role",
-	"last_cooked_at": "last_cooked_at",
-	"kcal_100g":      "kcal_100g",
+	"name":       "name",
+	"created":    "created_at",
+	"created_at": "created_at",
+	"updated_at": "updated_at",
+	"role":       "role",
+	"kcal_100g":  "kcal_100g",
 }
+
+// sortLastEaten orders by the derived last_eaten date (D16): never eaten
+// first (NULL sorts first ascending), then the oldest.
+const sortLastEaten = "last_eaten"
+
+// lastEatenExpr is the derived last_eaten date of the outer foods row as of
+// the bound date, NULL when never eaten. It mirrors the FoodHistory query
+// (queries/foods.sql), which fills the response fields.
+const lastEatenExpr = `(SELECT MAX(p.date) FROM plate_components pc
+	JOIN plates p ON p.id = pc.plate_id
+	WHERE pc.food_id = foods.id AND p.date <= ?
+	  AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
+	                  WHERE pf.plate_id = p.id AND pf.status = 'not_eaten'))`
 
 // foodCols enumerates every column of `foods` in CREATE TABLE order.
 // Using an explicit list instead of SELECT * makes the scan resilient to
@@ -38,7 +51,7 @@ var foodCols = []string{
 	"vitamin_a_100g", "vitamin_c_100g", "vitamin_d_100g",
 	"vitamin_b12_100g", "vitamin_b6_100g", "folate_100g",
 	"variant_group_id", "reference_portions", "prep_minutes", "cook_minutes",
-	"notes", "image_path", "favorite", "last_cooked_at", "cook_count",
+	"notes", "image_path", "favorite",
 	"created_at", "updated_at",
 	"source_url", "description", "keep_days", "freezable",
 }
@@ -156,20 +169,26 @@ func (r *FoodRepo) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult, error) {
-	col, ok := allowedFoodSortColumns[q.SortBy]
-	if !ok {
-		col = "name"
-	}
 	dir := "ASC"
 	if q.SortDesc {
 		dir = "DESC"
 	}
-	orderClause := col + " " + dir
+	today := q.Today.Format(time.DateOnly)
 
 	builder := sq.Select(foodCols...).From("foods").
-		OrderBy("favorite DESC", orderClause).
 		Limit(uint64(q.Limit)).
 		Offset(uint64(q.Offset))
+	if q.SortBy == sortLastEaten {
+		// Favorites do not float here: the point is to find what was
+		// forgotten.
+		builder = builder.OrderByClause(lastEatenExpr+" "+dir, today).OrderBy("name ASC")
+	} else {
+		col, ok := allowedFoodSortColumns[q.SortBy]
+		if !ok {
+			col = "name"
+		}
+		builder = builder.OrderBy("favorite DESC", col+" "+dir)
+	}
 	countBuilder := sq.Select("COUNT(*)").From("foods")
 
 	if q.Kind != "" {
@@ -204,6 +223,23 @@ func (r *FoodRepo) List(ctx context.Context, q food.ListQuery) (*food.ListResult
 	if q.FavoriteOnly {
 		builder = builder.Where("favorite = 1")
 		countBuilder = countBuilder.Where("favorite = 1")
+	}
+	if q.MaxMinutes > 0 {
+		where := sq.Expr("(prep_minutes IS NOT NULL OR cook_minutes IS NOT NULL) AND COALESCE(prep_minutes, 0) + COALESCE(cook_minutes, 0) <= ?", q.MaxMinutes)
+		builder = builder.Where(where)
+		countBuilder = countBuilder.Where(where)
+	}
+	if q.NotEatenWeeks > 0 {
+		cutoff := q.Today.AddDate(0, 0, -7*q.NotEatenWeeks).Format(time.DateOnly)
+		where := sq.Expr("COALESCE("+lastEatenExpr+", '') <= ?", today, cutoff)
+		builder = builder.Where(where)
+		countBuilder = countBuilder.Where(where)
+	}
+	if q.CreatedWithinDays > 0 {
+		cutoff := q.Today.AddDate(0, 0, -q.CreatedWithinDays).Format(time.DateOnly)
+		where := sq.Expr("date(created_at) >= ?", cutoff)
+		builder = builder.Where(where)
+		countBuilder = countBuilder.Where(where)
 	}
 
 	countSQL, countArgs, err := countBuilder.PlaceholderFormat(sq.Question).ToSql()
@@ -417,41 +453,62 @@ func (r *FoodRepo) Siblings(ctx context.Context, variantGroupID int64, excludeID
 	return items, nil
 }
 
-// ── Cook tracking / insights ──────────────────────────────────────────
-
-func (r *FoodRepo) MarkCooked(ctx context.Context, id int64, at time.Time) error {
-	return r.queriesFor(ctx).MarkFoodCooked(ctx, sqlcgen.MarkFoodCookedParams{
-		LastCookedAt: sql.NullString{String: at.UTC().Format(timeLayout), Valid: true},
-		ID:           id,
-	})
-}
+// ── Derived read data ─────────────────────────────────────────────────
 
 // CountComposedFoods returns the number of composed foods (recipes).
 func (r *FoodRepo) CountComposedFoods(ctx context.Context) (int64, error) {
 	return r.queriesFor(ctx).CountComposedFoods(ctx)
 }
 
-func (r *FoodRepo) Insights(ctx context.Context, cutoff time.Time, forgottenLimit, mostCookedLimit int) (food.Insights, error) {
-	forgottenRows, err := r.queriesFor(ctx).ListForgottenFoods(ctx, sqlcgen.ListForgottenFoodsParams{
-		LastCookedAt: sql.NullString{String: cutoff.UTC().Format(timeLayout), Valid: true},
-		Limit:        int64(forgottenLimit),
+// History returns the derived eating history (D16) of the given foods as of
+// today, in one query.
+func (r *FoodRepo) History(ctx context.Context, ids []int64, today time.Time) (map[int64]food.History, error) {
+	rows, err := r.queriesFor(ctx).FoodHistory(ctx, sqlcgen.FoodHistoryParams{
+		Today: today.Format(time.DateOnly),
+		Ids:   ids,
 	})
 	if err != nil {
-		return food.Insights{}, err
+		return nil, err
 	}
-	mostCookedRows, err := r.queriesFor(ctx).ListMostCookedFoods(ctx, int64(mostCookedLimit))
+	out := make(map[int64]food.History, len(rows))
+	for _, row := range rows {
+		h := food.History{TimesCooked: int(row.TimesCooked)}
+		if row.LastEaten != "" {
+			d, err := time.Parse(time.DateOnly, row.LastEaten)
+			if err != nil {
+				return nil, fmt.Errorf("food %d last_eaten %q: %w", row.FoodID, row.LastEaten, err)
+			}
+			h.LastEaten = &d
+		}
+		out[row.FoodID] = h
+	}
+	return out, nil
+}
+
+// ListTags returns the food's tags.
+func (r *FoodRepo) ListTags(ctx context.Context, foodID int64) ([]string, error) {
+	rows, err := r.queriesFor(ctx).ListFoodTags(ctx, foodID)
 	if err != nil {
-		return food.Insights{}, err
+		return nil, err
 	}
-	forgotten := make([]food.Food, len(forgottenRows))
-	for i := range forgottenRows {
-		mapFoodToDomain(&forgottenRows[i], &forgotten[i])
+	out := make([]string, len(rows))
+	for i, row := range rows {
+		out[i] = row.Tag
 	}
-	mostCooked := make([]food.Food, len(mostCookedRows))
-	for i := range mostCookedRows {
-		mapFoodToDomain(&mostCookedRows[i], &mostCooked[i])
+	return out, nil
+}
+
+// UsedInCounts returns how many recipes use each given leaf, in one query.
+func (r *FoodRepo) UsedInCounts(ctx context.Context, ids []int64) (map[int64]int, error) {
+	rows, err := r.queriesFor(ctx).UsedInCount(ctx, ids)
+	if err != nil {
+		return nil, err
 	}
-	return food.Insights{Forgotten: forgotten, MostCooked: mostCooked}, nil
+	out := make(map[int64]int, len(rows))
+	for _, row := range rows {
+		out[row.ChildID] = int(row.UsedIn)
+	}
+	return out, nil
 }
 
 func (r *FoodRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*food.Food, error) {
@@ -743,7 +800,6 @@ func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {
 	f.Description = fromNullString(row.Description)
 	f.ImagePath = fromNullString(row.ImagePath)
 	f.Favorite = row.Favorite != 0
-	f.CookCount = int(row.CookCount)
 	f.KeepDays = fromNullInt64ToIntPtr(row.KeepDays)
 	if row.Freezable.Valid {
 		v := row.Freezable.Int64 == 1
@@ -753,10 +809,6 @@ func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {
 	}
 	f.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
 	f.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
-	if row.LastCookedAt.Valid {
-		t, _ := time.Parse(timeLayout, row.LastCookedAt.String)
-		f.LastCookedAt = &t
-	}
 }
 
 func roleToNullString(r *food.Role) sql.NullString {
@@ -804,7 +856,7 @@ func scanFoodRow(rows *sql.Rows) (*sqlcgen.Food, error) {
 		&row.VitaminA100g, &row.VitaminC100g, &row.VitaminD100g,
 		&row.VitaminB12100g, &row.VitaminB6100g, &row.Folate100g,
 		&row.VariantGroupID, &row.ReferencePortions, &row.PrepMinutes, &row.CookMinutes,
-		&row.Notes, &row.ImagePath, &row.Favorite, &row.LastCookedAt, &row.CookCount,
+		&row.Notes, &row.ImagePath, &row.Favorite,
 		&row.CreatedAt, &row.UpdatedAt,
 		&row.SourceUrl, &row.Description, &row.KeepDays, &row.Freezable,
 	); err != nil {

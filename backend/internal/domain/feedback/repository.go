@@ -2,9 +2,7 @@ package feedback
 
 import (
 	"context"
-	"time"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
@@ -15,10 +13,9 @@ type Repository interface {
 	Delete(ctx context.Context, plateID int64) error
 }
 
-// FoodStore loads a food (with its tags) and records that it was cooked.
-type FoodStore interface {
-	Get(ctx context.Context, id int64) (*food.Food, error)
-	MarkCooked(ctx context.Context, id int64, at time.Time) error
+// TagReader reads a food's tags.
+type TagReader interface {
+	ListTags(ctx context.Context, foodID int64) ([]string, error)
 }
 
 // ProfileStore reads and writes the user profile.

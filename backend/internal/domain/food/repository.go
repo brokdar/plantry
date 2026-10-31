@@ -1,14 +1,12 @@
 package food
 
-import (
-	"context"
-	"time"
-)
+import "context"
 
 // Repository is the port that adapters must implement for food persistence.
 // A single repository covers both leaf and composed foods; the kind lives on
 // the aggregate.
 type Repository interface {
+	HistoryReader
 	Create(ctx context.Context, f *Food) error
 	Get(ctx context.Context, id int64) (*Food, error)
 	// LeafIDByName returns the ID of the leaf food with exactly this name, or
@@ -38,8 +36,6 @@ type Repository interface {
 	CreateVariantGroup(ctx context.Context, name string) (int64, error)
 	Siblings(ctx context.Context, variantGroupID int64, excludeID int64) ([]Food, error)
 
-	MarkCooked(ctx context.Context, id int64, at time.Time) error
-	Insights(ctx context.Context, cutoff time.Time, forgottenLimit, mostCookedLimit int) (Insights, error)
 	SetFavorite(ctx context.Context, id int64, favorite bool) (*Food, error)
 }
 

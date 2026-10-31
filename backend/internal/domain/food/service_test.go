@@ -17,6 +17,11 @@ import (
 type fakeRepo struct {
 	getFood       *food.Food // returned by Get; defaults to a leaf food when nil
 	lastListQuery food.ListQuery
+	listItems     []food.Food
+	history       map[int64]food.History
+	usedIn        map[int64]int
+	historyIDs    []int64
+	usedInIDs     []int64
 }
 
 func (r *fakeRepo) Create(_ context.Context, _ *food.Food) error { return nil }
@@ -35,7 +40,7 @@ func (r *fakeRepo) Update(_ context.Context, _ *food.Food) error { return nil }
 func (r *fakeRepo) Delete(_ context.Context, _ int64) error      { return nil }
 func (r *fakeRepo) List(_ context.Context, q food.ListQuery) (*food.ListResult, error) {
 	r.lastListQuery = q
-	return &food.ListResult{}, nil
+	return &food.ListResult{Items: r.listItems, Total: len(r.listItems)}, nil
 }
 
 func (r *fakeRepo) Reachable(_ context.Context, _ int64) (map[int64]struct{}, error) {
@@ -62,9 +67,15 @@ func (r *fakeRepo) CreateVariantGroup(_ context.Context, _ string) (int64, error
 func (r *fakeRepo) Siblings(_ context.Context, _ int64, _ int64) ([]food.Food, error) {
 	return nil, nil
 }
-func (r *fakeRepo) MarkCooked(_ context.Context, _ int64, _ time.Time) error { return nil }
-func (r *fakeRepo) Insights(_ context.Context, _ time.Time, _, _ int) (food.Insights, error) {
-	return food.Insights{}, nil
+
+func (r *fakeRepo) History(_ context.Context, ids []int64, _ time.Time) (map[int64]food.History, error) {
+	r.historyIDs = ids
+	return r.history, nil
+}
+
+func (r *fakeRepo) UsedInCounts(_ context.Context, ids []int64) (map[int64]int, error) {
+	r.usedInIDs = ids
+	return r.usedIn, nil
 }
 
 func (r *fakeRepo) SetFavorite(_ context.Context, _ int64, _ bool) (*food.Food, error) {
@@ -253,4 +264,38 @@ func TestService_List_ClampLimit(t *testing.T) {
 	_, err := svc.List(context.Background(), food.ListQuery{Limit: 99999})
 	require.NoError(t, err)
 	assert.Equal(t, 10000, repo.lastListQuery.Limit)
+}
+
+func TestService_List_RejectsNegativeFilters(t *testing.T) {
+	for name, q := range map[string]food.ListQuery{
+		"max_minutes":         {MaxMinutes: -1},
+		"not_eaten_weeks":     {NotEatenWeeks: -1},
+		"created_within_days": {CreatedWithinDays: -1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := food.NewService(&fakeRepo{}).List(context.Background(), q)
+			assert.ErrorIs(t, err, domain.ErrInvalidInput)
+		})
+	}
+}
+
+func TestService_List_DerivesHistoryAndUsedInCountPerKind(t *testing.T) {
+	eaten := time.Date(2026, 10, 27, 0, 0, 0, 0, time.UTC)
+	repo := &fakeRepo{
+		listItems: []food.Food{
+			{ID: 1, Kind: food.KindComposed},
+			{ID: 2, Kind: food.KindLeaf},
+			{ID: 3, Kind: food.KindComposed},
+		},
+		history: map[int64]food.History{1: {LastEaten: &eaten, TimesCooked: 1}},
+		usedIn:  map[int64]int{2: 4},
+	}
+	res, err := food.NewService(repo).List(context.Background(), food.ListQuery{})
+	require.NoError(t, err)
+
+	assert.Equal(t, []int64{1, 3}, repo.historyIDs, "one history query for the recipes")
+	assert.Equal(t, []int64{2}, repo.usedInIDs, "one usage query for the leaves")
+	assert.Equal(t, food.History{LastEaten: &eaten, TimesCooked: 1}, res.Items[0].History)
+	assert.Equal(t, 4, res.Items[1].UsedInCount)
+	assert.Equal(t, food.History{}, res.Items[2].History, "never eaten")
 }

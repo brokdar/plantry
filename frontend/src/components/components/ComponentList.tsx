@@ -36,7 +36,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ComposedFood, FoodRole } from "@/lib/api/foods"
-import { useFoods, useDeleteFood, useInsights } from "@/lib/queries/foods"
+import { useFoods, useDeleteFood } from "@/lib/queries/foods"
 import { useSetupStatus } from "@/lib/queries/setup"
 import { useLocalStorageState } from "@/lib/hooks/useLocalStorageState"
 import { FOOD_ROLES } from "@/lib/schemas/food"
@@ -86,15 +86,6 @@ export function ComponentList() {
   const hasFilters = !!deferredSearch || !!roleFilter || !!tagFilter
 
   const deleteMutation = useDeleteFood()
-  const { data: insights } = useInsights()
-  const forgottenIds = useMemo(
-    () => new Set(insights?.forgotten.map((c) => c.id) ?? []),
-    [insights]
-  )
-  const mostCookedIds = useMemo(
-    () => new Set(insights?.most_cooked.map((c) => c.id) ?? []),
-    [insights]
-  )
 
   function handleDelete() {
     if (deleteId === null) return
@@ -280,10 +271,6 @@ export function ComponentList() {
                 key={item.id}
                 component={item}
                 layout={layout}
-                insightFlags={{
-                  forgotten: forgottenIds.has(item.id),
-                  mostCooked: mostCookedIds.has(item.id),
-                }}
                 onDelete={setDeleteId}
               />
             ))}

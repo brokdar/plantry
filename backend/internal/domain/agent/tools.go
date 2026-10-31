@@ -183,14 +183,14 @@ func toolListFoods(svc Services) Tool {
         "tag":{"type":"string"},
         "limit":{"type":"integer","minimum":1,"maximum":200},
         "offset":{"type":"integer","minimum":0},
-        "sort_by":{"type":"string","enum":["name","created_at","last_cooked_at"]},
+        "sort_by":{"type":"string","enum":["name","created_at","last_eaten"]},
         "sort_desc":{"type":"boolean"}
       },
       "additionalProperties":false
     }`)
 	return Tool{
 		Name:        "list_foods",
-		Description: "List foods in the library. A food is either a LEAF (single edible item with direct nutrition — apple, rice, chicken) or COMPOSED (built from child foods — curry, schnitzel). Filter by kind, role, tag, or search substring. Use this to find a food by name before referencing it by id. Each item carries favorite, cook_count, last_cooked_at (YYYY-MM-DD or null), per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
+		Description: "List foods in the library. A food is either a LEAF (single edible item with direct nutrition — apple, rice, chicken) or COMPOSED (built from child foods — curry, schnitzel). Filter by kind, role, tag, or search substring. Use this to find a food by name before referencing it by id. Each item carries favorite; composed foods also carry last_eaten (YYYY-MM-DD of the latest eaten plate up to today, or null), times_cooked (cook sessions up to today), keep_days (days leftovers keep, null = the plan default) and freezable (null = unknown). sort_by last_eaten lists never-eaten recipes first, then the longest uneaten. Each item also carries per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -207,6 +207,7 @@ func toolListFoods(svc Services) Tool {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
 			res, err := svc.Foods.List(ctx, food.ListQuery{
+				Today:    todayFrom(ctx),
 				Kind:     food.Kind(in.Kind),
 				Search:   in.Search,
 				Role:     in.Role,
@@ -247,7 +248,7 @@ func toolGetFood(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "get_food",
-		Description: "Fetch a food by id. Composed foods include children (child food + grams), instructions, and tags; leaf foods include direct nutrition and portion overrides. Also returns favorite, cook_count, last_cooked_at (YYYY-MM-DD or null), per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
+		Description: "Fetch a food by id. Composed foods include children (child food + grams), instructions, and tags; leaf foods include direct nutrition and portion overrides. Also returns favorite; composed foods also return last_eaten (YYYY-MM-DD or null), times_cooked, keep_days and freezable. Also returns per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -258,6 +259,9 @@ func toolGetFood(svc Services) Tool {
 			}
 			f, err := svc.Foods.Get(ctx, in.FoodID)
 			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			if err := svc.Foods.Derive(ctx, todayFrom(ctx), f); err != nil {
 				return nil, ToolEffectNone, err
 			}
 			out := foodDetail(f)
@@ -661,7 +665,7 @@ func foodSummary(f *food.Food) map[string]any {
 	if f.ReferencePortions != nil {
 		ref = *f.ReferencePortions
 	}
-	return map[string]any{
+	out := map[string]any{
 		"id":                 f.ID,
 		"name":               f.Name,
 		"kind":               string(f.Kind),
@@ -669,9 +673,9 @@ func foodSummary(f *food.Food) map[string]any {
 		"reference_portions": ref,
 		"tags":               f.Tags,
 		"favorite":           f.Favorite,
-		"cook_count":         f.CookCount,
-		"last_cooked_at":     lastCookedDate(f),
 	}
+	addHistory(out, f)
+	return out
 }
 
 func foodDetail(f *food.Food) map[string]any {
@@ -691,14 +695,13 @@ func foodDetail(f *food.Food) map[string]any {
 		instrs[i] = map[string]any{"step_number": inst.StepNumber, "text": inst.Text}
 	}
 	out := map[string]any{
-		"id":             f.ID,
-		"name":           f.Name,
-		"kind":           string(f.Kind),
-		"tags":           f.Tags,
-		"favorite":       f.Favorite,
-		"cook_count":     f.CookCount,
-		"last_cooked_at": lastCookedDate(f),
+		"id":       f.ID,
+		"name":     f.Name,
+		"kind":     string(f.Kind),
+		"tags":     f.Tags,
+		"favorite": f.Favorite,
 	}
+	addHistory(out, f)
 	if f.Role != nil {
 		out["role"] = string(*f.Role)
 	}
@@ -731,12 +734,34 @@ func foodDetail(f *food.Food) map[string]any {
 	return out
 }
 
-// lastCookedDate renders LastCookedAt as YYYY-MM-DD, or nil when never cooked.
-func lastCookedDate(f *food.Food) any {
-	if f.LastCookedAt == nil {
+// addHistory writes a composed food's last_eaten (YYYY-MM-DD or nil),
+// times_cooked, keep_days and freezable (each nil when unset) into out.
+func addHistory(out map[string]any, f *food.Food) {
+	if f.Kind != food.KindComposed {
+		return
+	}
+	var lastEaten any
+	if f.History.LastEaten != nil {
+		lastEaten = f.History.LastEaten.Format(time.DateOnly)
+	}
+	out["last_eaten"] = lastEaten
+	out["times_cooked"] = f.History.TimesCooked
+	out["keep_days"] = intOrNil(f.KeepDays)
+	out["freezable"] = boolOrNil(f.Freezable)
+}
+
+func intOrNil(p *int) any {
+	if p == nil {
 		return nil
 	}
-	return f.LastCookedAt.UTC().Format("2006-01-02")
+	return *p
+}
+
+func boolOrNil(p *bool) any {
+	if p == nil {
+		return nil
+	}
+	return *p
 }
 
 // addPerPortion writes per_portion, basis, nutrition_complete and (when

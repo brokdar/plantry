@@ -10,7 +10,7 @@ import {
   uid,
 } from "./helpers"
 
-test.describe("Archive + rotation insights", () => {
+test.describe("Archive", () => {
   test("past week's plate appears in agenda view after redirect from /archive", async ({
     page,
   }) => {
@@ -74,50 +74,5 @@ test.describe("Archive + rotation insights", () => {
   test("/archive redirects to /calendar?mode=agenda", async ({ page }) => {
     await page.goto("/archive")
     await expect(page).toHaveURL(/\/calendar.*mode=agenda/)
-  })
-
-  test("component library surfaces Forgotten badge for never-cooked components", async ({
-    page,
-  }) => {
-    const tag = uid()
-    const ing = await seedLeafFood({ name: `Ing ${tag}`, kcal_100g: 100 })
-    const comp = await seedComposedFood({
-      name: `Forgotten Dish ${tag}`,
-      role: "main",
-      children: [
-        {
-          child_id: ing.id,
-          amount: 100,
-          unit: "g",
-          grams: 100,
-          sort_order: 0,
-        },
-      ],
-    })
-
-    try {
-      // The insights endpoint caps its forgotten list at 10 entries by
-      // default. When repeat runs / parallel workers have created many
-      // never-cooked components, our seeded component can fall outside that
-      // window. Intercept the request and pass forgotten_limit=50 so the
-      // UI renders the badge deterministically.
-      await page.route("**/api/foods/insights*", async (route) => {
-        const url = new URL(route.request().url())
-        if (!url.searchParams.has("forgotten_limit")) {
-          url.searchParams.set("forgotten_limit", "50")
-        }
-        await route.continue({ url: url.toString() })
-      })
-
-      await page.goto("/components")
-
-      // Filter by searching for our unique component.
-      await page.getByPlaceholder(/search the catalog/i).fill(`Dish ${tag}`)
-
-      await expect(page.getByTestId(`badge-forgotten-${comp.id}`)).toBeVisible()
-    } finally {
-      await cleanupFood(comp.id)
-      await cleanupFood(ing.id)
-    }
   })
 })

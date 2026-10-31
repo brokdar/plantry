@@ -24,6 +24,18 @@ type memFoodRepo struct {
 	food.Repository
 	foods    map[int64]*food.Food
 	children map[int64][]food.FoodComponent
+	history  map[int64]food.History
+	// historyToday records the date History was last asked for.
+	historyToday time.Time
+}
+
+func (r *memFoodRepo) History(_ context.Context, _ []int64, today time.Time) (map[int64]food.History, error) {
+	r.historyToday = today
+	return r.history, nil
+}
+
+func (r *memFoodRepo) UsedInCounts(_ context.Context, _ []int64) (map[int64]int, error) {
+	return nil, nil
 }
 
 func (r *memFoodRepo) Get(_ context.Context, id int64) (*food.Food, error) {
@@ -72,10 +84,9 @@ func ptr[T any](v T) *T { return &v }
 // newPayloadToolSet seeds: rice (complete leaf), mystery sauce (leaf without
 // nutrition), curry (favorite composed food of both, 2 portions) and a food
 // whose nutrition lookup fails.
-func newPayloadToolSet(t *testing.T) *ToolSet {
+func newPayloadToolSet(t *testing.T) (*ToolSet, *memFoodRepo) {
 	t.Helper()
-	// 01:30 on the 21st at UTC+2 is 23:30 on the 20th UTC; the UTC date wins.
-	cooked := time.Date(2026, 10, 21, 1, 30, 0, 0, time.FixedZone("UTC+2", 2*60*60))
+	eaten := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
 	repo := &memFoodRepo{
 		foods: map[int64]*food.Food{
 			1: {
@@ -85,10 +96,11 @@ func newPayloadToolSet(t *testing.T) *ToolSet {
 			2: {ID: 2, Name: "Mystery sauce", Kind: food.KindLeaf},
 			3: {
 				ID: 3, Name: "Curry", Kind: food.KindComposed, ReferencePortions: ptr(2.0),
-				Favorite: true, CookCount: 3, LastCookedAt: &cooked,
+				Favorite: true, KeepDays: ptr(3), Freezable: ptr(true),
 			},
 			4: {ID: 4, Name: "Broken", Kind: food.KindLeaf},
 		},
+		history: map[int64]food.History{3: {LastEaten: &eaten, TimesCooked: 3}},
 		children: map[int64][]food.FoodComponent{
 			3: {
 				{ParentID: 3, ChildID: 1, ChildName: "Rice", ChildKind: food.KindLeaf, Amount: 200, Unit: "g", Grams: 200},
@@ -101,12 +113,15 @@ func newPayloadToolSet(t *testing.T) *ToolSet {
 		NutritionResolver: food.NewNutritionResolver(repo),
 	})
 	require.NoError(t, err)
-	return ts
+	return ts, repo
 }
+
+// payloadToday is the user's date the payload tests run the tools under.
+var payloadToday = time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)
 
 func execJSON(t *testing.T, ts *ToolSet, name, input string) map[string]any {
 	t.Helper()
-	out, _, err := ts.Execute(context.Background(), name, json.RawMessage(input))
+	out, _, err := ts.Execute(withToday(context.Background(), payloadToday), name, json.RawMessage(input))
 	require.NoError(t, err)
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(out, &m))
@@ -116,8 +131,10 @@ func execJSON(t *testing.T, ts *ToolSet, name, input string) map[string]any {
 func assertCurryPayload(t *testing.T, m map[string]any) {
 	t.Helper()
 	assert.Equal(t, true, m["favorite"])
-	assert.Equal(t, float64(3), m["cook_count"])
-	assert.Equal(t, "2026-10-20", m["last_cooked_at"])
+	assert.Equal(t, float64(3), m["times_cooked"])
+	assert.Equal(t, "2026-10-20", m["last_eaten"])
+	assert.Equal(t, float64(3), m["keep_days"])
+	assert.Equal(t, true, m["freezable"])
 	assert.Equal(t, "per_portion", m["basis"])
 	assert.Equal(t, false, m["nutrition_complete"])
 	assert.Equal(t, []any{"Mystery sauce"}, m["missing_nutrition"])
@@ -127,13 +144,23 @@ func assertCurryPayload(t *testing.T, m map[string]any) {
 	}, m["per_portion"])
 }
 
-func TestTool_GetFood_PayloadIncludesFavoriteCookDataAndMacros(t *testing.T) {
-	ts := newPayloadToolSet(t)
+func TestTool_GetFood_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
+	ts, repo := newPayloadToolSet(t)
 	assertCurryPayload(t, execJSON(t, ts, "get_food", `{"food_id":3}`))
+	assert.Equal(t, payloadToday, repo.historyToday, "history is as of the user's today")
 }
 
-func TestTool_ListFoods_PayloadIncludesFavoriteCookDataAndMacros(t *testing.T) {
-	ts := newPayloadToolSet(t)
+func TestTool_GetFood_NeverEatenRecipeHasNullHistory(t *testing.T) {
+	ts, repo := newPayloadToolSet(t)
+	repo.history = nil
+	m := execJSON(t, ts, "get_food", `{"food_id":3}`)
+	assert.Contains(t, m, "last_eaten")
+	assert.Nil(t, m["last_eaten"])
+	assert.Equal(t, float64(0), m["times_cooked"])
+}
+
+func TestTool_ListFoods_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
+	ts, repo := newPayloadToolSet(t)
 	m := execJSON(t, ts, "list_foods", `{}`)
 	items, ok := m["items"].([]any)
 	require.True(t, ok)
@@ -148,9 +175,9 @@ func TestTool_ListFoods_PayloadIncludesFavoriteCookDataAndMacros(t *testing.T) {
 
 	rice := byName["Rice"]
 	assert.Equal(t, false, rice["favorite"])
-	assert.Equal(t, float64(0), rice["cook_count"])
-	assert.Contains(t, rice, "last_cooked_at")
-	assert.Nil(t, rice["last_cooked_at"])
+	assert.NotContains(t, rice, "last_eaten", "history is for recipes only")
+	assert.NotContains(t, rice, "times_cooked")
+	assert.Equal(t, payloadToday, repo.historyToday)
 	assert.Equal(t, "per_100g", rice["basis"])
 	assert.Equal(t, true, rice["nutrition_complete"])
 	assert.NotContains(t, rice, "missing_nutrition")
@@ -200,7 +227,7 @@ func TestTools_SchemasHaveNoTopLevelCombinators(t *testing.T) {
 }
 
 func TestTool_ListFoods_CancelledContextAborts(t *testing.T) {
-	ts := newPayloadToolSet(t)
+	ts, _ := newPayloadToolSet(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, _, err := ts.Execute(ctx, "list_foods", json.RawMessage(`{}`))

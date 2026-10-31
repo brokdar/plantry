@@ -43,6 +43,6 @@ func TestMigration00009_UpDownUp(t *testing.T) {
 	require.Equal(t, 0, exists, "plate_feedback should be dropped on down")
 
 	require.NoError(t, goose.Up(conn, "migrations"))
-	_, err = conn.Exec(`INSERT INTO plate_feedback (plate_id, status) VALUES (1, 'cooked')`)
+	_, err = conn.Exec(`INSERT INTO plate_feedback (plate_id, status) VALUES (1, 'disliked')`)
 	require.NoError(t, err)
 }

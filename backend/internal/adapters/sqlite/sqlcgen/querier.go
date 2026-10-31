@@ -52,6 +52,11 @@ type Querier interface {
 	// prompt_hash resolves to NULL when the hash is not in ai_prompts, so a failed
 	// UpsertPrompt never makes this UPDATE fail and leave the run 'running'.
 	FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.Result, error)
+	// Derived eating history (D16) relative to today. last_eaten is the latest
+	// plate dated on or before today that holds the food and is not marked
+	// not_eaten (empty when none); times_cooked counts the food's sessions cooked
+	// on or before today with at least one linked plate not marked not_eaten.
+	FoodHistory(ctx context.Context, arg FoodHistoryParams) ([]FoodHistoryRow, error)
 	GetAvailabilityDefault(ctx context.Context, arg GetAvailabilityDefaultParams) (GetAvailabilityDefaultRow, error)
 	GetAvailabilityOverride(ctx context.Context, arg GetAvailabilityOverrideParams) (GetAvailabilityOverrideRow, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
@@ -81,10 +86,8 @@ type Querier interface {
 	ListFoodInstructions(ctx context.Context, foodID int64) ([]FoodInstruction, error)
 	ListFoodPortions(ctx context.Context, foodID int64) ([]FoodPortion, error)
 	ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, error)
-	ListForgottenFoods(ctx context.Context, arg ListForgottenFoodsParams) ([]Food, error)
 	ListKnownTags(ctx context.Context, limit int64) ([]ListKnownTagsRow, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
-	ListMostCookedFoods(ctx context.Context, limit int64) ([]Food, error)
 	ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
 	ListPlateFeedbackByDateRange(ctx context.Context, arg ListPlateFeedbackByDateRangeParams) ([]PlateFeedback, error)
@@ -102,7 +105,6 @@ type Querier interface {
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
-	MarkFoodCooked(ctx context.Context, arg MarkFoodCookedParams) error
 	// Deletes up to 500 steps of runs started before the cutoff; the runs,
 	// prompts and tool schemas stay. The repo repeats it until nothing is left,
 	// so no single statement holds the write lock for long.
@@ -131,6 +133,8 @@ type Querier interface {
 	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
 	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)
 	UpsertSetting(ctx context.Context, arg UpsertSettingParams) error
+	// The number of recipes using each leaf directly.
+	UsedInCount(ctx context.Context, ids []int64) ([]UsedInCountRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

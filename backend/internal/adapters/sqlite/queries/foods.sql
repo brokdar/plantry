@@ -82,27 +82,43 @@ UPDATE foods SET
 WHERE id = ?
 RETURNING *;
 
--- name: MarkFoodCooked :exec
-UPDATE foods
-SET last_cooked_at = ?,
-    cook_count     = cook_count + 1,
-    updated_at     = datetime('now')
-WHERE id = ?;
-
--- name: ListForgottenFoods :many
-SELECT * FROM foods
-WHERE kind = 'composed' AND (last_cooked_at IS NULL OR last_cooked_at < ?)
-ORDER BY (last_cooked_at IS NOT NULL), last_cooked_at ASC, name ASC
-LIMIT ?;
-
 -- name: CountComposedFoods :one
 SELECT COUNT(*) FROM foods WHERE kind = 'composed';
 
--- name: ListMostCookedFoods :many
-SELECT * FROM foods
-WHERE kind = 'composed' AND cook_count > 0
-ORDER BY cook_count DESC, last_cooked_at DESC, name ASC
-LIMIT ?;
+-- name: FoodHistory :many
+-- Derived eating history (D16) relative to today. last_eaten is the latest
+-- plate dated on or before today that holds the food and is not marked
+-- not_eaten (empty when none); times_cooked counts the food's sessions cooked
+-- on or before today with at least one linked plate not marked not_eaten.
+SELECT f.id AS food_id,
+       CAST(COALESCE((
+           SELECT MAX(p.date)
+           FROM plate_components pc
+           JOIN plates p ON p.id = pc.plate_id
+           WHERE pc.food_id = f.id
+             AND p.date <= sqlc.arg(today)
+             AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
+                             WHERE pf.plate_id = p.id AND pf.status = 'not_eaten')
+       ), '') AS TEXT) AS last_eaten,
+       (
+           SELECT COUNT(*)
+           FROM cook_sessions cs
+           WHERE cs.food_id = f.id
+             AND cs.cook_date <= sqlc.arg(today)
+             AND EXISTS (SELECT 1 FROM plate_components pc
+                         WHERE pc.cook_session_id = cs.id
+                           AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
+                                           WHERE pf.plate_id = pc.plate_id AND pf.status = 'not_eaten'))
+       ) AS times_cooked
+FROM foods f
+WHERE f.id IN (sqlc.slice(ids));
+
+-- name: UsedInCount :many
+-- The number of recipes using each leaf directly.
+SELECT child_id, COUNT(DISTINCT parent_id) AS used_in
+FROM food_components
+WHERE child_id IN (sqlc.slice(ids))
+GROUP BY child_id;
 
 -- name: CreateVariantGroup :one
 INSERT INTO variant_groups (name) VALUES (?) RETURNING *;

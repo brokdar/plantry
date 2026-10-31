@@ -7,7 +7,6 @@ import {
   deletePortion,
   getFood,
   getFoodNutrition,
-  getInsights,
   getScaled,
   listFoodMacros,
   listFoods,
@@ -152,14 +151,6 @@ export function useVariants(id: number) {
     queryKey: foodKeys.variants(id),
     queryFn: () => listVariants(id),
     enabled: id > 0,
-  })
-}
-
-/** Old recipe library only; the endpoint goes in B7. */
-export function useInsights() {
-  return useQuery({
-    queryKey: foodKeys.insights(),
-    queryFn: getInsights,
   })
 }
 

@@ -8,6 +8,7 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const countComposedFoods = `-- name: CountComposedFoods :one
@@ -39,7 +40,7 @@ INSERT INTO foods (
     ?, ?, ?, ?, ?,
     ?, ?, ?, ?, ?
 )
-RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable
+RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, created_at, updated_at, source_url, description, keep_days, freezable
 `
 
 type CreateFoodParams struct {
@@ -167,8 +168,6 @@ func (q *Queries) CreateFood(ctx context.Context, arg CreateFoodParams) (Food, e
 		&i.Notes,
 		&i.ImagePath,
 		&i.Favorite,
-		&i.LastCookedAt,
-		&i.CookCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SourceUrl,
@@ -294,8 +293,82 @@ func (q *Queries) DeleteFoodTags(ctx context.Context, foodID int64) error {
 	return err
 }
 
+const foodHistory = `-- name: FoodHistory :many
+SELECT f.id AS food_id,
+       CAST(COALESCE((
+           SELECT MAX(p.date)
+           FROM plate_components pc
+           JOIN plates p ON p.id = pc.plate_id
+           WHERE pc.food_id = f.id
+             AND p.date <= ?1
+             AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
+                             WHERE pf.plate_id = p.id AND pf.status = 'not_eaten')
+       ), '') AS TEXT) AS last_eaten,
+       (
+           SELECT COUNT(*)
+           FROM cook_sessions cs
+           WHERE cs.food_id = f.id
+             AND cs.cook_date <= ?1
+             AND EXISTS (SELECT 1 FROM plate_components pc
+                         WHERE pc.cook_session_id = cs.id
+                           AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
+                                           WHERE pf.plate_id = pc.plate_id AND pf.status = 'not_eaten'))
+       ) AS times_cooked
+FROM foods f
+WHERE f.id IN (/*SLICE:ids*/?)
+`
+
+type FoodHistoryParams struct {
+	Today string
+	Ids   []int64
+}
+
+type FoodHistoryRow struct {
+	FoodID      int64
+	LastEaten   string
+	TimesCooked int64
+}
+
+// Derived eating history (D16) relative to today. last_eaten is the latest
+// plate dated on or before today that holds the food and is not marked
+// not_eaten (empty when none); times_cooked counts the food's sessions cooked
+// on or before today with at least one linked plate not marked not_eaten.
+func (q *Queries) FoodHistory(ctx context.Context, arg FoodHistoryParams) ([]FoodHistoryRow, error) {
+	query := foodHistory
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.Today)
+	if len(arg.Ids) > 0 {
+		for _, v := range arg.Ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(arg.Ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FoodHistoryRow{}
+	for rows.Next() {
+		var i FoodHistoryRow
+		if err := rows.Scan(&i.FoodID, &i.LastEaten, &i.TimesCooked); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFood = `-- name: GetFood :one
-SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable FROM foods WHERE id = ?
+SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, created_at, updated_at, source_url, description, keep_days, freezable FROM foods WHERE id = ?
 `
 
 func (q *Queries) GetFood(ctx context.Context, id int64) (Food, error) {
@@ -339,8 +412,6 @@ func (q *Queries) GetFood(ctx context.Context, id int64) (Food, error) {
 		&i.Notes,
 		&i.ImagePath,
 		&i.Favorite,
-		&i.LastCookedAt,
-		&i.CookCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SourceUrl,
@@ -516,165 +587,8 @@ func (q *Queries) ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, er
 	return items, nil
 }
 
-const listForgottenFoods = `-- name: ListForgottenFoods :many
-SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable FROM foods
-WHERE kind = 'composed' AND (last_cooked_at IS NULL OR last_cooked_at < ?)
-ORDER BY (last_cooked_at IS NOT NULL), last_cooked_at ASC, name ASC
-LIMIT ?
-`
-
-type ListForgottenFoodsParams struct {
-	LastCookedAt sql.NullString
-	Limit        int64
-}
-
-func (q *Queries) ListForgottenFoods(ctx context.Context, arg ListForgottenFoodsParams) ([]Food, error) {
-	rows, err := q.db.QueryContext(ctx, listForgottenFoods, arg.LastCookedAt, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Food{}
-	for rows.Next() {
-		var i Food
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Kind,
-			&i.Role,
-			&i.Source,
-			&i.Barcode,
-			&i.OffID,
-			&i.FdcID,
-			&i.Kcal100g,
-			&i.Protein100g,
-			&i.Fat100g,
-			&i.Carbs100g,
-			&i.Fiber100g,
-			&i.Sodium100g,
-			&i.SaturatedFat100g,
-			&i.TransFat100g,
-			&i.Cholesterol100g,
-			&i.Sugar100g,
-			&i.Potassium100g,
-			&i.Calcium100g,
-			&i.Iron100g,
-			&i.Magnesium100g,
-			&i.Phosphorus100g,
-			&i.Zinc100g,
-			&i.VitaminA100g,
-			&i.VitaminC100g,
-			&i.VitaminD100g,
-			&i.VitaminB12100g,
-			&i.VitaminB6100g,
-			&i.Folate100g,
-			&i.VariantGroupID,
-			&i.ReferencePortions,
-			&i.PrepMinutes,
-			&i.CookMinutes,
-			&i.Notes,
-			&i.ImagePath,
-			&i.Favorite,
-			&i.LastCookedAt,
-			&i.CookCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SourceUrl,
-			&i.Description,
-			&i.KeepDays,
-			&i.Freezable,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMostCookedFoods = `-- name: ListMostCookedFoods :many
-SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable FROM foods
-WHERE kind = 'composed' AND cook_count > 0
-ORDER BY cook_count DESC, last_cooked_at DESC, name ASC
-LIMIT ?
-`
-
-func (q *Queries) ListMostCookedFoods(ctx context.Context, limit int64) ([]Food, error) {
-	rows, err := q.db.QueryContext(ctx, listMostCookedFoods, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Food{}
-	for rows.Next() {
-		var i Food
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Kind,
-			&i.Role,
-			&i.Source,
-			&i.Barcode,
-			&i.OffID,
-			&i.FdcID,
-			&i.Kcal100g,
-			&i.Protein100g,
-			&i.Fat100g,
-			&i.Carbs100g,
-			&i.Fiber100g,
-			&i.Sodium100g,
-			&i.SaturatedFat100g,
-			&i.TransFat100g,
-			&i.Cholesterol100g,
-			&i.Sugar100g,
-			&i.Potassium100g,
-			&i.Calcium100g,
-			&i.Iron100g,
-			&i.Magnesium100g,
-			&i.Phosphorus100g,
-			&i.Zinc100g,
-			&i.VitaminA100g,
-			&i.VitaminC100g,
-			&i.VitaminD100g,
-			&i.VitaminB12100g,
-			&i.VitaminB6100g,
-			&i.Folate100g,
-			&i.VariantGroupID,
-			&i.ReferencePortions,
-			&i.PrepMinutes,
-			&i.CookMinutes,
-			&i.Notes,
-			&i.ImagePath,
-			&i.Favorite,
-			&i.LastCookedAt,
-			&i.CookCount,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.SourceUrl,
-			&i.Description,
-			&i.KeepDays,
-			&i.Freezable,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSiblingFoods = `-- name: ListSiblingFoods :many
-SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable FROM foods
+SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, created_at, updated_at, source_url, description, keep_days, freezable FROM foods
 WHERE kind = 'composed' AND variant_group_id = ? AND id != ?
 ORDER BY name
 `
@@ -731,8 +645,6 @@ func (q *Queries) ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsPara
 			&i.Notes,
 			&i.ImagePath,
 			&i.Favorite,
-			&i.LastCookedAt,
-			&i.CookCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.SourceUrl,
@@ -753,30 +665,12 @@ func (q *Queries) ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsPara
 	return items, nil
 }
 
-const markFoodCooked = `-- name: MarkFoodCooked :exec
-UPDATE foods
-SET last_cooked_at = ?,
-    cook_count     = cook_count + 1,
-    updated_at     = datetime('now')
-WHERE id = ?
-`
-
-type MarkFoodCookedParams struct {
-	LastCookedAt sql.NullString
-	ID           int64
-}
-
-func (q *Queries) MarkFoodCooked(ctx context.Context, arg MarkFoodCookedParams) error {
-	_, err := q.db.ExecContext(ctx, markFoodCooked, arg.LastCookedAt, arg.ID)
-	return err
-}
-
 const setFoodFavorite = `-- name: SetFoodFavorite :one
 UPDATE foods SET
     favorite   = ?,
     updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable
+RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, created_at, updated_at, source_url, description, keep_days, freezable
 `
 
 type SetFoodFavoriteParams struct {
@@ -825,8 +719,6 @@ func (q *Queries) SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams
 		&i.Notes,
 		&i.ImagePath,
 		&i.Favorite,
-		&i.LastCookedAt,
-		&i.CookCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SourceUrl,
@@ -880,7 +772,7 @@ UPDATE foods SET
     freezable          = ?,
     updated_at         = datetime('now')
 WHERE id = ?
-RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, last_cooked_at, cook_count, created_at, updated_at, source_url, description, keep_days, freezable
+RETURNING id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, created_at, updated_at, source_url, description, keep_days, freezable
 `
 
 type UpdateFoodParams struct {
@@ -1008,8 +900,6 @@ func (q *Queries) UpdateFood(ctx context.Context, arg UpdateFoodParams) (Food, e
 		&i.Notes,
 		&i.ImagePath,
 		&i.Favorite,
-		&i.LastCookedAt,
-		&i.CookCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.SourceUrl,
@@ -1035,4 +925,50 @@ type UpsertFoodPortionParams struct {
 func (q *Queries) UpsertFoodPortion(ctx context.Context, arg UpsertFoodPortionParams) error {
 	_, err := q.db.ExecContext(ctx, upsertFoodPortion, arg.FoodID, arg.Unit, arg.Grams)
 	return err
+}
+
+const usedInCount = `-- name: UsedInCount :many
+SELECT child_id, COUNT(DISTINCT parent_id) AS used_in
+FROM food_components
+WHERE child_id IN (/*SLICE:ids*/?)
+GROUP BY child_id
+`
+
+type UsedInCountRow struct {
+	ChildID int64
+	UsedIn  int64
+}
+
+// The number of recipes using each leaf directly.
+func (q *Queries) UsedInCount(ctx context.Context, ids []int64) ([]UsedInCountRow, error) {
+	query := usedInCount
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UsedInCountRow{}
+	for rows.Next() {
+		var i UsedInCountRow
+		if err := rows.Scan(&i.ChildID, &i.UsedIn); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

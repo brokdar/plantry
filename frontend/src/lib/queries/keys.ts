@@ -12,7 +12,6 @@ export const foodKeys = {
   // Under detail(id): a food update also drops its scaled lists.
   scaled: (id: number, portions: number) =>
     [...foodKeys.detail(id), "scaled", portions] as const,
-  insights: () => [...foodKeys.all, "insights"] as const,
   // Batch per-food macros, keyed by a stable comma-joined id list. Mirrors
   // foodKeys.all so cache invalidations on a food update also drop the
   // batched macros entries that referenced it.

@@ -2,30 +2,24 @@ package feedback
 
 import "time"
 
-// Status is how the user rated a plate after it appeared on their week.
+// Status is how the user rated a plate after it appeared on their plan (D17).
 type Status string
 
 const (
-	StatusCooked   Status = "cooked"
-	StatusSkipped  Status = "skipped"
 	StatusLoved    Status = "loved"
 	StatusDisliked Status = "disliked"
+	// StatusNotEaten ("Didn't eat it") removes the plate from the food's
+	// derived eating history (D16).
+	StatusNotEaten Status = "not_eaten"
 )
 
 // Valid reports whether s is one of the allowed feedback statuses.
 func (s Status) Valid() bool {
 	switch s {
-	case StatusCooked, StatusSkipped, StatusLoved, StatusDisliked:
+	case StatusLoved, StatusDisliked, StatusNotEaten:
 		return true
 	}
 	return false
-}
-
-// IncrementsCookCount reports whether transitioning into this status should
-// increment the cook_count / last_cooked_at of the components on the plate.
-// Only "cooked" and "loved" imply the user actually prepared the meal.
-func (s Status) IncrementsCookCount() bool {
-	return s == StatusCooked || s == StatusLoved
 }
 
 // TouchesPreferences reports whether transitioning into this status should run

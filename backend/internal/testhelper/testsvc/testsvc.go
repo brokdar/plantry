@@ -9,6 +9,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planview"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -56,6 +57,12 @@ func PlanView(db *sql.DB) *planview.Service {
 		Profile:      profile.NewService(sqlite.NewProfileRepo(db)),
 		Recipes:      foods,
 	})
+}
+
+// Feedback returns the plate-feedback service over db, wired like main.go.
+func Feedback(db *sql.DB) *feedback.Service {
+	return feedback.NewService(sqlite.NewTxRunner(db), sqlite.NewFeedbackRepo(db),
+		sqlite.NewPlateRepo(db), sqlite.NewFoodRepo(db), sqlite.NewProfileRepo(db))
 }
 
 // Settings returns a settings service over db without env overrides.
