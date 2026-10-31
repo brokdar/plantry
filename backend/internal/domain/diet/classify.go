@@ -17,17 +17,22 @@ import (
 //     keywords of five or more letters, contains it ("fleisch" in
 //     "Rinderhackfleisch")
 //
-// Classify runs three stages, the first that decides wins:
+// Classify runs three stages:
 //
-//  1. markers: a word starting with "vegan" or "vegetari"/"veggie" names the
-//     class outright ("Vegane Wurst").
-//  2. phrases: names a keyword gets wrong ("Kokosmilch", "Butternut"),
-//     matched anywhere in the folded name.
+//  1. phrases: names a keyword gets wrong ("Kokosmilch", "Butternut"). Each
+//     match adds its class and is cut out of the name, so it only
+//     neutralises its own words: "Hähnchen in Kokosmilch" still has
+//     "Hähnchen". A phrase matches anywhere in the folded name; "=phrase"
+//     only as whole words, "phrase-" only at the start of a word.
+//  2. markers: a remaining word starting with "vegan" or "vegetari"/"veggie"
+//     names the class of the rest ("Vegane Wurst").
 //  3. keywords: unlike the store section, the class is not the head noun's
-//     but the least restrictive animal keyword anywhere in the name, since
-//     any animal part decides it ("Rinderbrühe", "Fischsauce"). Without an
-//     animal keyword, a plant keyword makes the food vegan; with neither it
-//     is Unknown.
+//     but the least restrictive animal keyword anywhere in the rest, since
+//     any animal part decides it ("Rinderbrühe", "Fischsauce").
+//
+// The result is the max (diet.Max) of everything found. With nothing found,
+// a plant keyword makes the food vegan; with no plant keyword either it is
+// Unknown.
 
 // rule lists one class's keywords.
 type rule struct {
@@ -40,7 +45,7 @@ var markers = []rule{
 	{Vegetarian, []string{"vegetari-", "veggie-"}},
 }
 
-// phrases are checked in order.
+// phrases are checked in order; see Classify for the syntax.
 var phrases = []struct {
 	phrase string
 	class  Class
@@ -57,7 +62,9 @@ var phrases = []struct {
 	{"hafersahne", Vegan},
 	{"sojasahne", Vegan},
 	{"kokossahne", Vegan},
-	{"nussbutter", Vegan},
+	{"erdnussbutter", Vegan},
+	{"mandelbutter", Vegan},
+	{"cashewbutter", Vegan},
 	{"kakaobutter", Vegan},
 	{"coconut milk", Vegan},
 	{"almond milk", Vegan},
@@ -71,7 +78,7 @@ var phrases = []struct {
 	{"almond butter", Vegan},
 	{"cocoa butter", Vegan},
 	{"cream of tartar", Vegan},
-	{"zartbitter", Vegan},
+	{"zartbitterschokolade", Vegan},
 	{"dark chocolate", Vegan},
 	// Plants named after animals or dairy.
 	{"butternut", Vegan},
@@ -82,8 +89,13 @@ var phrases = []struct {
 	{"honigmelone", Vegan},
 	{"honeydew", Vegan},
 	// Animal names that are not meat.
-	{"hühnerei", Vegetarian},
+	{"=hühnerei", Vegetarian},
+	{"=hühnereier", Vegetarian},
+	{"hühnereiweiß-", Vegetarian},
+	{"hühnereigelb-", Vegetarian},
 	{"butterschmalz", Vegetarian},
+	// Seafood named like meat.
+	{"crabmeat", Pescetarian},
 }
 
 // animal holds the keywords of the non-vegan classes; the least restrictive
@@ -181,25 +193,38 @@ func init() {
 	}
 	plant = foldKeywords(plant)
 	for i := range phrases {
-		phrases[i].phrase = fold.Replace(phrases[i].phrase)
+		phrases[i].phrase = phraseNeedle(fold.Replace(phrases[i].phrase))
 	}
+}
+
+// phraseNeedle turns a phrase into the text to find in the space-padded,
+// space-joined words of a name.
+func phraseNeedle(phrase string) string {
+	if whole, ok := strings.CutPrefix(phrase, "="); ok {
+		return " " + whole + " "
+	}
+	if start, ok := strings.CutSuffix(phrase, "-"); ok {
+		return " " + start
+	}
+	return phrase
 }
 
 // Classify derives a diet class from a food name, or Unknown.
 func Classify(name string) Class {
-	ws := words(name)
+	rest := " " + strings.Join(words(name), " ") + " "
+	var found []Class
+	for _, p := range phrases {
+		if strings.Contains(rest, p.phrase) {
+			found = append(found, p.class)
+			rest = strings.ReplaceAll(rest, p.phrase, " ")
+		}
+	}
+	ws := strings.Fields(rest)
 	for _, m := range markers {
 		if anyMatch(ws, m.keywords) {
-			return m.class
+			return Max(append(found, m.class)...)
 		}
 	}
-	joined := strings.Join(ws, " ")
-	for _, p := range phrases {
-		if strings.Contains(joined, p.phrase) {
-			return p.class
-		}
-	}
-	var found []Class
 	for _, r := range animal {
 		if anyMatch(ws, r.keywords) {
 			found = append(found, r.class)

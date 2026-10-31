@@ -3,6 +3,7 @@ package food
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
@@ -67,9 +68,11 @@ func dietOf(nodes map[int64]*Food, id int64, memo map[int64]diet.Class) diet.Cla
 	return c
 }
 
-// DeriveDiet sets the effective diet class on foods. The recipes without an
-// override load their trees once, together (LoadTrees).
+// DeriveDiet sets the effective diet class on foods whose class is not set
+// yet (a List with the diet filter already derived it). The recipes without
+// an override load their trees once, together (LoadTrees).
 func (s *Service) DeriveDiet(ctx context.Context, foods ...*Food) error {
+	foods = slices.DeleteFunc(slices.Clone(foods), func(f *Food) bool { return f.DietClass != "" })
 	var recipes []int64
 	for _, f := range foods {
 		if _, _, ok := ownDiet(f); !ok {

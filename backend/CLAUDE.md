@@ -183,7 +183,7 @@ Eating history is derived, never stored (D16): `food.Service.Derive(ctx, today, 
 
 ## Diet class
 
-Package `domain/diet` (no domain imports): `Class` (`vegan` < `vegetarian` < `pescetarian` < `omnivore`, plus `unknown`), `Order`, `Valid`, `Max` (any unknown child, or none, gives unknown), `Compatible(class, dietType)` (class ≤ type; unknown never) and `Classify(name)`, a 3-stage data-driven en/de keyword classifier (markers like "vegan", phrases like "Kokosmilch", then the least restrictive animal keyword anywhere in the name, else a plant keyword → vegan, else unknown; umlauts and ß are folded).
+Package `domain/diet` (no domain imports): `Class` (`vegan` < `vegetarian` < `pescetarian` < `omnivore`, plus `unknown`), `Order`, `Valid`, `Max` (any unknown child, or none, gives unknown), `Compatible(class, dietType)` (class ≤ type; unknown never) and `Classify(name)`, a 3-stage data-driven en/de keyword classifier: phrases like "Kokosmilch" add their class and are cut out of the name, then markers like "vegan" or the animal keywords run on the rest, and the result is the max of everything found (else a plant keyword → vegan, else unknown); umlauts and ß are folded.
 
 Migration 00035 adds `foods.diet_class`, an override only (NULL = derived, nothing backfilled; D28). `food.Food` carries `DietOverride` (stored) and the derived `DietClass`/`DietClassSource` (`auto` leaf name, `user` override, `derived` recipe max over its children). `food.Service.Derive` sets them (`DeriveDiet`: one `LoadTrees` for all recipes without an override); `food.SetDietClasses(nodes)` does it on an already loaded tree.
 

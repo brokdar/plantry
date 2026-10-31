@@ -253,6 +253,19 @@ var classifyCases = []struct {
 	{"Veggie burger", vgt},
 	{"Gehackte Tomaten", vgn},
 	{"Cream of tartar", vgn},
+	{"Nussbutter", vgt},
+	{"Mandelbutter", vgn},
+	{"Cashewbutter", vgn},
+	{"Hühnerei", vgt},
+	{"Hühnereiweiß", vgt},
+	{"Hühnereintopf", omn},
+	{"Crabmeat", psc},
+	// A phrase only neutralises its own words.
+	{"Hähnchen in Kokosmilch", omn},
+	{"Thai-Curry mit Kokosmilch und Garnelen", psc},
+	{"Butternut-Kürbis mit Speck", omn},
+	{"Fleischtomaten mit Hackfleisch", omn},
+	{"Kokosmilch mit Honig", vgt},
 
 	// German plants.
 	{"Zwiebel", vgn},
