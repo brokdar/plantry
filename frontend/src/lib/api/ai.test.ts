@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { postChatStream } from "./ai"
 import { ApiError } from "./client"
 
-const dates = { today: "2026-10-26", from: "2026-10-26", to: "2026-11-01" }
+const dates = { today: "2026-10-26", start: "2026-10-26" }
 
 function stringToReadable(s: string): ReadableStream<Uint8Array> {
   const enc = new TextEncoder()
