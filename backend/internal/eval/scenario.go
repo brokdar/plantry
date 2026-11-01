@@ -208,6 +208,14 @@ type Expect struct {
 	// UnchangedBefore: the plates dated before it and the sessions cooking
 	// before it are unchanged by the measured step.
 	UnchangedBefore *Date `json:"unchanged_before"`
+	// Leftovers cells hold a plate eating a batch that already existed
+	// before the measured step.
+	Leftovers []CellSpec `json:"leftovers"`
+	// NoNewCook dates get no cook session the measured step created.
+	NoNewCook []Date `json:"no_new_cook"`
+	// AllowMissingPlate: the run may end partial with only missing_plate
+	// (H1) violations, for a scenario with nothing left to fill a cell.
+	AllowMissingPlate bool `json:"allow_missing_plate"`
 	// MinPlates is the fewest plates the measured run must write.
 	MinPlates int `json:"min_plates"`
 	// MinRepeats is the fewest H8 repeats the measured run's score must

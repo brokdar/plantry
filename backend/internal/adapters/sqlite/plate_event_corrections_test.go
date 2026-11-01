@@ -49,6 +49,7 @@ func TestPlateEventRepo_UserReplacements(t *testing.T) {
 	got, err := repo.UserReplacements(ctx, time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC))
 	require.NoError(t, err)
 	require.Len(t, got, 4)
+	assert.True(t, got[0].Date.Before(got[3].Date), "oldest first")
 	assert.Equal(t, []int64{fish}, got[1].Removed)
 	assert.Equal(t, []int64{pasta}, got[1].Added)
 

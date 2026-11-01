@@ -91,7 +91,7 @@ FROM plate_events
 WHERE actor = 'user' AND action = 'update' AND plate_id IS NOT NULL
   AND date >= ? AND date < ?
   AND before_json IS NOT NULL AND after_json IS NOT NULL
-ORDER BY id
+ORDER BY id DESC
 LIMIT 500
 `
 
@@ -107,6 +107,8 @@ type ListUserPlateUpdatesRow struct {
 	AfterJson  sql.NullString
 }
 
+// Scans plate_events without a date/actor index: fine for a single-user audit
+// table. Newest first so the cap drops the oldest rows.
 func (q *Queries) ListUserPlateUpdates(ctx context.Context, arg ListUserPlateUpdatesParams) ([]ListUserPlateUpdatesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listUserPlateUpdates, arg.Date, arg.Date_2)
 	if err != nil {

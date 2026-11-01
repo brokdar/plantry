@@ -2,13 +2,14 @@ Report 0123456789ab llm/p1-b/fake
 scenario                   runs  ok  violations  coverage  macro_daily_pct  distinct  repeats  waste  tokens_in  cost_usd  latency_ms
 away_thu_fri               1     1   0           1         -                0         0        0      0          -         0
 confirmed_cook_empty_cell  1     1   0           1         41.591           1         0        0      1612       -         0
+confirmed_cook_no_surplus  1     1   1           0.5       70.795           1         0        0      4707       -         0
 family_daily               1     1   0           1         45.891           9         0        0      1629       -         0
 many_none_cells            1     1   0           1         -                2         0        0      1440       -         0
 replan_one_day             1     1   0           1         15.492           1         0        0      1697       -         0
 single_batch_cooker        1     1   0           1         25.97            4         0        0      1585       -         0
 small_library_h8           1     1   0           1         -                9         12       0      1155       -         0
 vegetarian_variety         1     1   0           1         38.966           7         0        0      1286       -         0
-Wrote 8 records to b.jsonl
+Wrote 9 records to b.jsonl
 
 Compare 0123456789ab llm/p1-a/fake -> 0123456789ab llm/p1-b/fake
 
@@ -50,6 +51,27 @@ confirmed_cook_empty_cell
   unknown_data_share  0         0        0
   input_tokens        1612      1612     0
   output_tokens       44        44       0
+  latency_ms          0         0        0
+
+confirmed_cook_no_surplus
+  component           previous  current  delta
+  ok_runs             1         1        0
+  hard_violations     1         1        0
+  repair_attempts     2         2        0
+  plates              0         0        0
+  coverage            0.5       0.5      0
+  macro_daily_pct     70.795    70.795   0
+  macro_weekly_pct    70.795    70.795   0
+  cook_occasions      1         1        0
+  days_with_prepared  0         0        0
+  variety_distinct    1         1        0
+  variety_repeats     0         0        0
+  new_recipes         1         1        0
+  preference_fit      0         0        0
+  waste_portions      0         0        0
+  unknown_data_share  0         0        0
+  input_tokens        4707      4707     0
+  output_tokens       30        30       0
   latency_ms          0         0        0
 
 family_daily

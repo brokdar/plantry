@@ -150,6 +150,8 @@ type Querier interface {
 	// none. The variety rule H8 counts them (D21). The eaten set is one
 	// uncorrelated scan of the date range (ix_plates_date).
 	ListUneatenRecipes(ctx context.Context, arg ListUneatenRecipesParams) ([]ListUneatenRecipesRow, error)
+	// Scans plate_events without a date/actor index: fine for a single-user audit
+	// table. Newest first so the cap drops the oldest rows.
 	ListUserPlateUpdates(ctx context.Context, arg ListUserPlateUpdatesParams) ([]ListUserPlateUpdatesRow, error)
 	// Deletes up to 500 steps of runs started before the cutoff; the runs,
 	// prompts and tool schemas stay. The repo repeats it until nothing is left,

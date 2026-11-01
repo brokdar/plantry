@@ -13,12 +13,13 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
-// The 7 scenarios of spec §8.4.
+// The scenarios of spec §8.4 plus the confirmed-cook repros.
 var specScenarios = []string{
-	"away_thu_fri", "confirmed_cook_empty_cell", "family_daily", "many_none_cells", "replan_one_day",
+	"away_thu_fri", "confirmed_cook_empty_cell", "confirmed_cook_no_surplus", "family_daily", "many_none_cells", "replan_one_day",
 	"single_batch_cooker", "small_library_h8", "vegetarian_variety",
 }
 
@@ -60,6 +61,16 @@ func TestHeuristicHasNoHardViolations(t *testing.T) {
 	require.Len(t, recs, len(specScenarios))
 	for _, r := range recs {
 		t.Run(r.Scenario, func(t *testing.T) {
+			if r.Scenario == "confirmed_cook_no_surplus" {
+				// Nothing is left over, so the dinner stays empty: the one
+				// allowed missing_plate (H1), and no second cook (H2).
+				assert.Equal(t, string(airun.StatusPartial), r.Status)
+				require.Len(t, r.Violations, 1)
+				assert.Equal(t, planning.CodeMissingPlate, r.Violations[0].Code)
+				assert.Empty(t, r.Failed())
+				assert.Contains(t, names(r.Expectations), ExpectNoNewCook)
+				return
+			}
 			assert.Equal(t, string(airun.StatusOK), r.Status, r.ErrorKey)
 			assert.Empty(t, r.Violations)
 			assert.Empty(t, r.Failed())
@@ -111,8 +122,14 @@ func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 	for _, r := range recs {
 		t.Run(r.Scenario, func(t *testing.T) {
 			assert.Empty(t, r.Failed())
-			assert.Equal(t, string(airun.StatusOK), r.Status, r.ErrorKey)
-			assert.Equal(t, 0, r.RepairAttempts)
+			if r.Scenario == "confirmed_cook_no_surplus" {
+				// The fake model cannot fill the cell: it ends partial
+				// after its repairs, with only the allowed missing_plate.
+				assert.Equal(t, string(airun.StatusPartial), r.Status)
+			} else {
+				assert.Equal(t, string(airun.StatusOK), r.Status, r.ErrorKey)
+				assert.Equal(t, 0, r.RepairAttempts)
+			}
 			assert.Equal(t, "fake", r.Model)
 			assert.Equal(t, "p2", r.PromptVersion)
 			// A run that fills cells asks the model; one with nothing to

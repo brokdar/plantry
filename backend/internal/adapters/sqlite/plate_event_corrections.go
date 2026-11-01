@@ -15,7 +15,7 @@ import (
 var _ planning.Corrections = (*PlateEventRepo)(nil)
 
 // UserReplacements are the user's edits of plates dated in [from, to) that
-// swapped recipes (planning.Corrections), oldest first and at most 500.
+// swapped recipes (planning.Corrections), oldest first, from the newest 500 events.
 func (r *PlateEventRepo) UserReplacements(ctx context.Context, from, to time.Time) ([]planning.Replacement, error) {
 	rows, err := r.queriesFor(ctx).ListUserPlateUpdates(ctx, sqlcgen.ListUserPlateUpdatesParams{
 		Date: from.Format(dateLayout), Date_2: to.Format(dateLayout),
@@ -39,6 +39,7 @@ func (r *PlateEventRepo) UserReplacements(ctx context.Context, from, to time.Tim
 		}
 		out = append(out, planning.Replacement{Date: date, SlotID: row.SlotID, Removed: removed, Added: added})
 	}
+	slices.Reverse(out) // the query is newest first
 	return out, nil
 }
 

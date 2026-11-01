@@ -21,5 +21,9 @@
   "steps": [
     {"action": "generate"}
   ],
-  "expect": {"kept_confirmed": true, "min_plates": 1}
+  "expect": {
+    "kept_confirmed": true, "min_plates": 1,
+    "leftovers": [{"date": "2026-11-11", "slot": "dinner"}],
+    "no_new_cook": ["2026-11-11"]
+  }
 }
