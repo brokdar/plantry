@@ -257,6 +257,10 @@ func toolApplyPreset(svc Services) Tool {
 			if err := guardDate(ctx, date); err != nil {
 				return nil, ToolEffectNone, err
 			}
+			p, err := svc.Presets.Get(ctx, in.PresetID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
 			result, err := svc.Presets.Apply(ctx, in.PresetID, preset.ApplyRequest{
 				TargetDate:    date,
 				OnConflict:    preset.ConflictMode(in.OnConflict),
@@ -265,7 +269,8 @@ func toolApplyPreset(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(applyResultSummary(result)), ToolEffectPlateChanged, nil
+			noteChange(ctx, "apply_preset", map[string]any{"name": p.Name, "date": in.TargetDate})
+			return mustJSON(applyResultSummary(result)), ToolEffectNone, nil
 		},
 	}
 }
@@ -351,7 +356,6 @@ func applyResultSummary(r *preset.ApplyResult) map[string]any {
 		"skipped_no_slot":     cellList(r.SkippedNoSlot),
 		"created_overrides":   cellList(r.CreatedOverrides),
 		"skipped_overrides":   cellList(r.SkippedOverrides),
-		"effect":              "plate_changed",
 	}
 }
 

@@ -63,3 +63,19 @@ SELECT DISTINCT plate_id FROM plate_components WHERE cook_session_id IN (sqlc.sl
 
 -- name: SetSessionsState :exec
 UPDATE cook_sessions SET state = sqlc.arg(state), updated_at = datetime('now') WHERE id IN (sqlc.slice(ids));
+
+-- name: UpsertCookSession :exec
+INSERT INTO cook_sessions (id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, state, ai_run_id, reason)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (id) DO UPDATE SET
+    food_id         = excluded.food_id,
+    cook_date       = excluded.cook_date,
+    cook_slot_id    = excluded.cook_slot_id,
+    portions        = excluded.portions,
+    frozen_portions = excluded.frozen_portions,
+    cooked_at       = excluded.cooked_at,
+    note            = excluded.note,
+    state           = excluded.state,
+    ai_run_id       = excluded.ai_run_id,
+    reason          = excluded.reason,
+    updated_at      = datetime('now');

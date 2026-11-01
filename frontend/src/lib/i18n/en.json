@@ -976,6 +976,8 @@
       "past_date": "The assistant doesn't change days that are already past.",
       "preference_reserved": "Likes and dislikes come from your plate ratings, so the assistant can't set them.",
       "unlock_needs_user": "The assistant needs your yes in a new message before it unlocks a confirmed plate.",
+      "change_stale": "This change was edited afterwards, so it can no longer be undone.",
+      "change_undone": "This change was already undone.",
       "iterations_exceeded": "The AI ran too many tool steps — try a simpler request.",
       "rate_limit_exceeded": "You're sending too many AI requests. Please wait a minute.",
       "invalid_date": "A chat date is not a valid YYYY-MM-DD date."

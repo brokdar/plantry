@@ -573,6 +573,36 @@ func (q *Queries) ListTimeSlots(ctx context.Context) ([]TimeSlot, error) {
 	return items, nil
 }
 
+const reinsertPlate = `-- name: ReinsertPlate :exec
+INSERT INTO plates (id, slot_id, note, date, eaters, state, ai_run_id, reason, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+`
+
+type ReinsertPlateParams struct {
+	ID      int64
+	SlotID  int64
+	Note    sql.NullString
+	Date    string
+	Eaters  float64
+	State   string
+	AiRunID sql.NullInt64
+	Reason  sql.NullString
+}
+
+func (q *Queries) ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error {
+	_, err := q.db.ExecContext(ctx, reinsertPlate,
+		arg.ID,
+		arg.SlotID,
+		arg.Note,
+		arg.Date,
+		arg.Eaters,
+		arg.State,
+		arg.AiRunID,
+		arg.Reason,
+	)
+	return err
+}
+
 const setPlatesState = `-- name: SetPlatesState :exec
 UPDATE plates SET state = ?1, updated_at = datetime('now') WHERE id IN (/*SLICE:ids*/?)
 `

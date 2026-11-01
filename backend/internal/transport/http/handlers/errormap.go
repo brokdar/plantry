@@ -30,6 +30,8 @@ var sentinelStatus = map[error]int{
 	domain.ErrAIPastDate:                http.StatusBadRequest,
 	domain.ErrAIPreferenceReserved:      http.StatusBadRequest,
 	domain.ErrAIUnlockNeedsUser:         http.StatusConflict,
+	domain.ErrAIChangeStale:             http.StatusConflict,
+	domain.ErrAIChangeUndone:            http.StatusConflict,
 	domain.ErrInvalidFeedbackStatus:     http.StatusBadRequest,
 	domain.ErrImportBodyTooLarge:        http.StatusRequestEntityTooLarge,
 	domain.ErrImportNotHTML:             http.StatusUnsupportedMediaType,

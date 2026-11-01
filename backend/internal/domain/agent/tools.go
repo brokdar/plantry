@@ -25,15 +25,14 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 )
 
-// ToolEffect classifies side-effects of a tool invocation. The agent loop uses
-// this to decide when to emit plate_changed events to the SSE stream.
+// ToolEffect classifies what a tool's output means to the agent loop besides
+// feeding the model. Plan writes are not an effect: a writing tool notes its
+// change (noteChange) and Execute records it (D13).
 type ToolEffect int
 
 const (
-	// ToolEffectNone is a read-only tool (no cache invalidation needed).
+	// ToolEffectNone: the output only goes back to the model.
 	ToolEffectNone ToolEffect = iota
-	// ToolEffectPlateChanged means the call mutated the plan (week/plate/plate_component).
-	ToolEffectPlateChanged
 	// ToolEffectUnlockRequest means the call previewed an unlock: its output
 	// holds the llm.UnlockRequestPayload rows the loop streams (D6).
 	ToolEffectUnlockRequest
@@ -60,6 +59,7 @@ type ToolSet struct {
 	tools   []Tool
 	byName  map[string]*Tool
 	schemas map[string]*gojsonschema.Schema
+	changes ChangeStore // nil: changes are not recorded
 }
 
 // Services aggregates the domain services the default tool set depends on.
@@ -81,6 +81,8 @@ type Services struct {
 	Planner Planner
 	// Cells may be nil: set_availability is then not registered.
 	Cells CellWriter
+	// Changes may be nil: plan writes are then not recorded as changes.
+	Changes ChangeStore
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -88,6 +90,7 @@ func NewToolSet(svc Services) (*ToolSet, error) {
 	ts := &ToolSet{
 		byName:  map[string]*Tool{},
 		schemas: map[string]*gojsonschema.Schema{},
+		changes: svc.Changes,
 	}
 	for _, t := range defaultTools(svc) {
 		if err := ts.register(t); err != nil {
@@ -124,17 +127,25 @@ func (s *ToolSet) Describe() []llm.Tool {
 // handler. Schema violations surface as domain.ErrInvalidInput so the model
 // sees a structured tool_result and can retry with corrected arguments.
 // Each call is recorded as a tool_call step of the AI run in ctx, if any, and
-// its plan changes are made as the agent of that run (D20).
-func (s *ToolSet) Execute(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
+// its plan changes are made as the agent of that run (D20). A successful
+// plan-writing call of a run is recorded as a change (D13), which Execute
+// returns; nil for any other call.
+func (s *ToolSet) Execute(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, ToolEffect, *Change, error) {
 	start := time.Now()
-	ctx = actor.With(ctx, actor.Agent, airun.FromContext(ctx).ID())
+	run := airun.FromContext(ctx)
+	ctx = actor.With(ctx, actor.Agent, run.ID())
+	ctx, note := withChangeNote(ctx)
+	mark := s.watermark(ctx, run.ID())
 	output, effect, err := s.execute(ctx, name, input)
 	result := output
 	if err != nil {
 		result = mustMarshal(map[string]string{"error": err.Error()})
 	}
-	airun.FromContext(ctx).ToolStep(ctx, name, input, result, err != nil, time.Since(start))
-	return output, effect, err
+	seq := run.ToolStep(ctx, name, input, result, err != nil, time.Since(start))
+	if err != nil || !note.set || mark < 0 {
+		return output, effect, nil, err
+	}
+	return output, effect, s.recordChange(ctx, run.ID(), seq, name, note, mark), nil
 }
 
 func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
@@ -495,7 +506,12 @@ func toolCreatePlate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(plateSummary(p)), ToolEffectPlateChanged, nil
+			slotKey, err := slotName(ctx, svc, in.SlotID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			noteChange(ctx, "create_plate", map[string]any{"date": in.Date, "slot": slotKey})
+			return mustJSON(plateSummary(p)), ToolEffectNone, nil
 		},
 	}
 }
@@ -530,7 +546,9 @@ func toolAddFoodToPlate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(plateComponentMap(lastComponent(p))), ToolEffectPlateChanged, nil
+			added := lastComponent(p)
+			noteChange(ctx, "add_food", map[string]any{"name": added.FoodName, "date": p.DateString()})
+			return mustJSON(plateComponentMap(added)), ToolEffectNone, nil
 		},
 	}
 }
@@ -558,7 +576,8 @@ func toolSwapFood(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			if err := guardComponentDate(ctx, svc, in.PlateComponentID); err != nil {
+			_, old, err := componentOnPlate(ctx, svc, in.PlateComponentID)
+			if err != nil {
 				return nil, ToolEffectNone, err
 			}
 			var quantity *plate.PlateComponent
@@ -574,7 +593,8 @@ func toolSwapFood(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(plateComponentMap(pc)), ToolEffectPlateChanged, nil
+			noteChange(ctx, "swap_food", map[string]any{"from": old.FoodName, "name": pc.FoodName, "date": p.DateString()})
+			return mustJSON(plateComponentMap(pc)), ToolEffectNone, nil
 		},
 	}
 }
@@ -614,7 +634,8 @@ func toolUpdatePlateComponent(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(plateComponentMap(pc)), ToolEffectPlateChanged, nil
+			noteChange(ctx, "update_component", map[string]any{"name": pc.FoodName, "date": p.DateString()})
+			return mustJSON(plateComponentMap(pc)), ToolEffectNone, nil
 		},
 	}
 }
@@ -637,13 +658,15 @@ func toolRemovePlateComponent(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			if err := guardComponentDate(ctx, svc, in.PlateComponentID); err != nil {
+			p, pc, err := componentOnPlate(ctx, svc, in.PlateComponentID)
+			if err != nil {
 				return nil, ToolEffectNone, err
 			}
 			if _, err := svc.Plates.RemoveComponent(ctx, in.PlateComponentID); err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(map[string]any{"removed": true}), ToolEffectPlateChanged, nil
+			noteChange(ctx, "remove_component", map[string]any{"name": pc.FoodName, "date": p.DateString()})
+			return mustJSON(map[string]any{"removed": true}), ToolEffectNone, nil
 		},
 	}
 }
@@ -666,13 +689,22 @@ func toolDeletePlate(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			if err := guardPlateDate(ctx, svc, in.PlateID); err != nil {
+			p, err := svc.Plates.Get(ctx, in.PlateID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			if err := guardDate(ctx, p.Date); err != nil {
+				return nil, ToolEffectNone, err
+			}
+			slotKey, err := slotName(ctx, svc, p.SlotID)
+			if err != nil {
 				return nil, ToolEffectNone, err
 			}
 			if _, err := svc.Plates.Delete(ctx, in.PlateID); err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(map[string]any{"deleted": true}), ToolEffectPlateChanged, nil
+			noteChange(ctx, "delete_plate", map[string]any{"name": plateNames(p), "date": p.DateString(), "slot": slotKey})
+			return mustJSON(map[string]any{"deleted": true}), ToolEffectNone, nil
 		},
 	}
 }
@@ -755,6 +787,34 @@ func guardPlateDate(ctx context.Context, svc Services, id int64) error {
 		return err
 	}
 	return guardDate(ctx, p.Date)
+}
+
+// componentOnPlate returns the component id with its plate (food names
+// filled) after guardDate on the plate's date.
+func componentOnPlate(ctx context.Context, svc Services, id int64) (*plate.Plate, *plate.PlateComponent, error) {
+	c, err := svc.Plates.GetComponent(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	p, err := svc.Plates.Get(ctx, c.PlateID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := guardDate(ctx, p.Date); err != nil {
+		return nil, nil, err
+	}
+	pc, err := componentByID(p, id)
+	return p, pc, err
+}
+
+// slotName is the slot's i18n name key, the slot's display name in a change
+// line.
+func slotName(ctx context.Context, svc Services, id int64) (string, error) {
+	t, err := svc.Slots.Get(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return t.NameKey, nil
 }
 
 // guardComponentDate is guardDate on the date of the component's plate.

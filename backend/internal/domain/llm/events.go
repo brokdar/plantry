@@ -34,9 +34,9 @@ const (
 	// Agent-loop-side: the tool result payload, ready to feed back to the model.
 	EventToolResult EventType = "tool_result"
 
-	// Agent-loop-side: a tool just mutated the plan; the frontend should invalidate
-	// week-scoped query caches (week, shopping-list, nutrition).
-	EventPlateChanged EventType = "plate_changed"
+	// Agent-loop-side: a tool call changed the plan; the change line (with
+	// its Undo) and the cue to reload the plan views (Phase 4 D13, D16).
+	EventChange EventType = "change"
 
 	// Agent-loop-side: an unlock tool call previewed confirmed rows; the
 	// user's yes in a later message lets the agent unlock them (D6).
@@ -114,9 +114,20 @@ type ToolResultPayload struct {
 	IsError bool            `json:"is_error"`
 }
 
-// PlateChangedPayload accompanies EventPlateChanged; the event alone tells
-// the client to reload the plan.
-type PlateChangedPayload struct{}
+// ChangePayload accompanies EventChange: one plan-writing tool call. The
+// client renders assistant.change.<text_key> with params (display names and
+// dates) and offers Undo when undoable.
+type ChangePayload struct {
+	ID         int64          `json:"id"`
+	RunID      int64          `json:"run_id"`
+	Tool       string         `json:"tool"`
+	TextKey    string         `json:"text_key"`
+	Params     map[string]any `json:"params"`
+	Dates      []string       `json:"dates"`
+	PlateIDs   []int64        `json:"plate_ids"`
+	SessionIDs []int64        `json:"session_ids"`
+	Undoable   bool           `json:"undoable"`
+}
 
 // UnlockRequestPayload accompanies EventUnlockRequest: the rows the unlock
 // would return to draft.

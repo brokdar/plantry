@@ -109,3 +109,7 @@ ORDER BY pc.plate_id, pc.sort_order, pc.id;
 
 -- name: SetPlatesState :exec
 UPDATE plates SET state = sqlc.arg(state), updated_at = datetime('now') WHERE id IN (sqlc.slice(ids));
+
+-- name: ReinsertPlate :exec
+INSERT INTO plates (id, slot_id, note, date, eaters, state, ai_run_id, reason, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'));

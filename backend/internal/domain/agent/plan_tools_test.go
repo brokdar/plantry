@@ -49,7 +49,7 @@ func TestToolGetPlan_MatchesPlanReadModel(t *testing.T) {
 
 	exec := func(name, input string) json.RawMessage {
 		t.Helper()
-		out, _, err := ts.Execute(ctx, name, json.RawMessage(input))
+		out, _, _, err := ts.Execute(ctx, name, json.RawMessage(input))
 		require.NoError(t, err)
 		return out
 	}
@@ -170,7 +170,7 @@ func TestToolGetPlan_NeedsAWindow(t *testing.T) {
 	ts, err := agent.NewToolSet(agent.Services{PlanView: testsvc.PlanView(db)})
 	require.NoError(t, err)
 
-	_, _, err = ts.Execute(context.Background(), "get_plan", json.RawMessage(`{}`))
+	_, _, _, err = ts.Execute(context.Background(), "get_plan", json.RawMessage(`{}`))
 
 	assert.ErrorIs(t, err, domain.ErrInvalidInput)
 }

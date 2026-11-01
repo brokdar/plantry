@@ -280,10 +280,11 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 	run.rec.pruneThrottled(ctx)
 }
 
-// ToolStep records one tool call. It is the hook used by agent tools.
-func (run *Run) ToolStep(ctx context.Context, name string, args, result json.RawMessage, isErr bool, dur time.Duration) {
+// ToolStep records one tool call and returns its seq (0 for a nil run). It
+// is the hook used by agent tools.
+func (run *Run) ToolStep(ctx context.Context, name string, args, result json.RawMessage, isErr bool, dur time.Duration) int {
 	if run == nil {
-		return
+		return 0
 	}
 	run.mu.Lock()
 	run.seq++
@@ -299,6 +300,7 @@ func (run *Run) ToolStep(ctx context.Context, name string, args, result json.Raw
 		IsError:    isErr,
 		DurationMs: dur.Milliseconds(),
 	})
+	return seq
 }
 
 // addStep writes step for this run, ignoring ctx cancellation. It reports

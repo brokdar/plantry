@@ -70,7 +70,7 @@ func newPlateToolEnv(t *testing.T) *plateToolEnv {
 
 func (e *plateToolEnv) exec(t *testing.T, name, input string) (map[string]any, error) {
 	t.Helper()
-	out, _, err := e.ts.Execute(e.ctx, name, json.RawMessage(input))
+	out, _, _, err := e.ts.Execute(e.ctx, name, json.RawMessage(input))
 	if err != nil {
 		return nil, err
 	}

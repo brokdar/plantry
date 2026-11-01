@@ -39,7 +39,7 @@ type RunRequest struct {
 // Run drives a tool-calling agent loop to completion on the given request and
 // streams canonical llm.Events to out. Events include MessageStart,
 // AssistantDelta, ToolCallStart, ToolCallDelta (relayed from the adapter) plus
-// ToolExecStart/ToolExecEnd/ToolResult/PlateChanged/Done/Error (emitted by
+// ToolExecStart/ToolExecEnd/ToolResult/Change/UnlockRequest/Done/Error (emitted by
 // the loop itself). The caller owns the out channel and must drain it.
 //
 // The loop persists one assistant message per turn (with any tool_use blocks)
@@ -110,13 +110,12 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 
 		// Execute each tool call.
 		resultBlocks := make([]llm.ContentBlock, 0, len(toolUses))
-		plateChanged := false
 		for _, call := range toolUses {
 			send(ctx, out, llm.Event{Type: llm.EventToolExecStart, Payload: llm.ToolExecStartPayload{
 				ID: call.ToolUseID, Name: call.ToolUseName,
 			}})
 			start := time.Now()
-			output, effect, err := tools.Execute(ctx, call.ToolUseName, call.ToolUseInput)
+			output, effect, change, err := tools.Execute(ctx, call.ToolUseName, call.ToolUseInput)
 			dur := time.Since(start).Milliseconds()
 
 			if err != nil {
@@ -157,9 +156,10 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				ID: call.ToolUseID, Name: call.ToolUseName,
 				Output: output,
 			}})
+			if change != nil {
+				send(ctx, out, llm.Event{Type: llm.EventChange, Payload: change.Payload()})
+			}
 			switch effect {
-			case ToolEffectPlateChanged:
-				plateChanged = true
 			case ToolEffectUnlockRequest:
 				var unlock llm.UnlockRequestPayload
 				if err := json.Unmarshal(output, &unlock); err != nil {
@@ -168,10 +168,6 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				send(ctx, out, llm.Event{Type: llm.EventUnlockRequest, Payload: unlock})
 			case ToolEffectNone:
 			}
-		}
-
-		if plateChanged {
-			send(ctx, out, llm.Event{Type: llm.EventPlateChanged, Payload: llm.PlateChangedPayload{}})
 		}
 
 		// Persist and append the tool message carrying all result blocks.

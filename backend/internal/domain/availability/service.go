@@ -248,6 +248,24 @@ func (s *Service) SetNoneIfUnset(ctx context.Context, date time.Time, slotID int
 	return true, nil
 }
 
+// Override returns the cell's stored override, nil when it has none.
+func (s *Service) Override(ctx context.Context, date time.Time, slotID int64) (*Override, error) {
+	return s.repo.GetOverride(ctx, dateOnly(date), slotID)
+}
+
+// RestoreOverride puts back an override Override returned earlier: o is
+// written as it is, nil clears the cell's override. It skips SetOverride's
+// checks because it restores a state that was valid (the undo of an agent
+// change, Phase 4 D13); the caller restores the cell's plate itself.
+func (s *Service) RestoreOverride(ctx context.Context, date time.Time, slotID int64, o *Override) error {
+	if o == nil {
+		return s.repo.DeleteOverride(ctx, dateOnly(date), slotID)
+	}
+	return s.repo.UpsertOverride(ctx, Override{
+		Date: dateOnly(date), SlotID: slotID, Mode: o.Mode, PresetID: o.PresetID, Note: o.Note,
+	})
+}
+
 // ClearOverride removes the override of one cell. It is idempotent.
 func (s *Service) ClearOverride(ctx context.Context, date time.Time, slotID int64) error {
 	return s.repo.DeleteOverride(ctx, dateOnly(date), slotID)

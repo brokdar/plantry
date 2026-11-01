@@ -196,6 +196,8 @@ type Planner interface {
 type CellWriter interface {
 	SetOverride(ctx context.Context, in availability.OverrideInput) (availability.Cell, *plate.PlanSnapshot, error)
 	ClearOverride(ctx context.Context, date time.Time, slotID int64) error
+	// Override returns the cell's stored override, nil when none.
+	Override(ctx context.Context, date time.Time, slotID int64) (*availability.Override, error)
 }
 
 // rowSeedSchema is the plate_id / session_id pair of confirm and unlock;
@@ -297,7 +299,10 @@ func toolSetSessionPortions(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(planSession(*v)), ToolEffectPlateChanged, nil
+			noteChange(ctx, "set_session_portions", map[string]any{
+				"name": v.FoodName, "portions": v.Portions, "frozen": v.FrozenPortions, "date": v.CookDate.Format(time.DateOnly),
+			})
+			return mustJSON(planSession(*v)), ToolEffectNone, nil
 		},
 	}
 }
@@ -331,7 +336,8 @@ func toolSetPlateEaters(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(plateSummary(p)), ToolEffectPlateChanged, nil
+			noteChange(ctx, "set_plate_eaters", map[string]any{"name": plateNames(p), "date": p.DateString(), "eaters": p.Eaters})
+			return mustJSON(plateSummary(p)), ToolEffectNone, nil
 		},
 	}
 }
@@ -375,12 +381,21 @@ func toolSetAvailability(svc Services) Tool {
 			if err := guardDate(ctx, d); err != nil {
 				return nil, ToolEffectNone, err
 			}
+			before, err := svc.Cells.Override(ctx, d, in.SlotID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			slotKey, err := slotName(ctx, svc, in.SlotID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
 			out := map[string]any{"date": in.Date, "slot_id": in.SlotID, "mode": in.CellMode, "removed_plate": false}
 			if in.CellMode == availabilityDefault {
 				if err := svc.Cells.ClearOverride(ctx, d, in.SlotID); err != nil {
 					return nil, ToolEffectNone, err
 				}
-				return mustJSON(out), ToolEffectPlateChanged, nil
+				noteAvailability(ctx, d, in.SlotID, before, in.CellMode, slotKey)
+				return mustJSON(out), ToolEffectNone, nil
 			}
 			mode := availability.Mode(in.CellMode)
 			_, removed, err := svc.Cells.SetOverride(ctx, availability.OverrideInput{
@@ -391,9 +406,21 @@ func toolSetAvailability(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			out["removed_plate"] = removed != nil
-			return mustJSON(out), ToolEffectPlateChanged, nil
+			noteAvailability(ctx, d, in.SlotID, before, in.CellMode, slotKey)
+			return mustJSON(out), ToolEffectNone, nil
 		},
 	}
+}
+
+// noteAvailability notes a set_availability change: none, or plan for the
+// modes that let the cell hold a plate again (plan, routine, default).
+func noteAvailability(ctx context.Context, d time.Time, slotID int64, before *availability.Override, mode, slotKey string) {
+	key := "set_availability_plan"
+	if mode == string(availability.ModeNone) {
+		key = "set_availability_none"
+	}
+	noteCell(ctx, d, slotID, before)
+	noteChange(ctx, key, map[string]any{"date": d.Format(time.DateOnly), "slot": slotKey, "mode": mode})
 }
 
 func toolConfirm(svc Services) Tool {
@@ -427,7 +454,8 @@ func toolConfirm(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(rowsOutput(rows)), ToolEffectPlateChanged, nil
+			noteChange(ctx, "confirm", map[string]any{"count": len(rows.PlateIDs)})
+			return mustJSON(rowsOutput(rows)), ToolEffectNone, nil
 		},
 	}
 }
@@ -491,7 +519,8 @@ func toolUnlock(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			turn.unlocks.drop(turn, closure)
-			return mustJSON(rowsOutput(rows)), ToolEffectPlateChanged, nil
+			noteChange(ctx, "unlock", map[string]any{"count": len(rows.PlateIDs)})
+			return mustJSON(rowsOutput(rows)), ToolEffectNone, nil
 		},
 	}
 }
@@ -553,6 +582,10 @@ func toolRegenerate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
+			params, err := regenerateParams(ctx, svc, sc)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
 			req := planning.Request{Start: w.Start, Today: todayFrom(ctx), Scope: sc, Instruction: in.Instruction}
 			var id int64
 			if sc.Kind == planning.ScopeWindow {
@@ -563,6 +596,7 @@ func toolRegenerate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
+			noteRun(ctx, id)
 			v, err := svc.Planner.Await(ctx, id)
 			if err != nil {
 				return nil, ToolEffectNone, err
@@ -578,8 +612,33 @@ func toolRegenerate(svc Services) Tool {
 			if out.Changed, err = changedPlates(ctx, svc, w.Start, w.End, id); err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(out), ToolEffectPlateChanged, nil
+			params["count"] = len(out.Changed)
+			noteChange(ctx, "regenerate_"+string(sc.Kind), params)
+			return mustJSON(out), ToolEffectNone, nil
 		},
+	}
+}
+
+// regenerateParams are a regenerate change's display params before the run:
+// the day, or the plate's or side's food names with their date.
+func regenerateParams(ctx context.Context, svc Services, sc planning.Scope) (map[string]any, error) {
+	switch sc.Kind {
+	case planning.ScopeDay:
+		return map[string]any{"date": sc.Date.Format(time.DateOnly)}, nil
+	case planning.ScopePlate:
+		p, err := svc.Plates.Get(ctx, sc.PlateID)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"name": plateNames(p), "date": p.DateString()}, nil
+	case planning.ScopeSide:
+		p, pc, err := componentOnPlate(ctx, svc, sc.ComponentID)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"name": pc.FoodName, "date": p.DateString()}, nil
+	default:
+		return map[string]any{}, nil
 	}
 }
 

@@ -44,6 +44,28 @@ func (r *CookSessionRepo) CreateSession(ctx context.Context, s *plate.CookSessio
 	return mapCookSessionToDomain(&row, s)
 }
 
+// UpsertSession writes s with its own id as it is: inserts it when the row
+// is gone, else overwrites every column (undo, Phase 4 D13).
+func (r *CookSessionRepo) UpsertSession(ctx context.Context, s plate.CookSession) error {
+	err := r.queriesFor(ctx).UpsertCookSession(ctx, sqlcgen.UpsertCookSessionParams{
+		ID:             s.ID,
+		FoodID:         s.FoodID,
+		CookDate:       s.CookDate.Format(dateLayout),
+		CookSlotID:     s.CookSlotID,
+		Portions:       s.Portions,
+		FrozenPortions: s.FrozenPortions,
+		CookedAt:       toNullTime(s.CookedAt),
+		Note:           toNullString(s.Note),
+		State:          string(s.State),
+		AiRunID:        toNullInt64(s.AIRunID),
+		Reason:         toNullString(s.Reason),
+	})
+	if err != nil && isForeignKeyViolation(err) {
+		return fmt.Errorf("%w: invalid food, slot or ai run reference", domain.ErrInvalidInput)
+	}
+	return err
+}
+
 func (r *CookSessionRepo) GetSession(ctx context.Context, id int64) (*plate.CookSession, error) {
 	row, err := r.queriesFor(ctx).GetCookSession(ctx, id)
 	if err != nil {

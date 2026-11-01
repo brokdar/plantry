@@ -5,9 +5,11 @@ package testsvc
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
@@ -44,6 +46,12 @@ func PlanWithEvents(db *sql.DB, events plate.EventLog) (*plate.Service, *availab
 	})
 	avail.WithPlates(plates)
 	return plates, avail
+}
+
+// Changes returns the agent's change undo service over plates and avail
+// (Plan's), wired like main.go.
+func Changes(db *sql.DB, plates *plate.Service, avail *availability.Service) *agent.Changes {
+	return agent.NewChanges(sqlite.NewAIChangeRepo(db), plates, avail, sqlite.NewTxRunner(db), time.Now)
 }
 
 // Plates returns the plate service of Plan.
