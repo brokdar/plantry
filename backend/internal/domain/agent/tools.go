@@ -908,23 +908,21 @@ func plateSummary(p *plate.Plate) map[string]any {
 // linkedSessionList renders the cook sessions the plates' components eat
 // from, ascending by id.
 func linkedSessionList(ctx context.Context, svc Services, plates []plate.Plate) ([]map[string]any, error) {
-	seen := map[int64]bool{}
 	var ids []int64
 	for _, p := range plates {
 		for _, c := range p.Components {
-			if c.CookSessionID != nil && !seen[*c.CookSessionID] {
-				seen[*c.CookSessionID] = true
+			if c.CookSessionID != nil {
 				ids = append(ids, *c.CookSessionID)
 			}
 		}
 	}
 	slices.Sort(ids)
-	out := make([]map[string]any, 0, len(ids))
-	for _, id := range ids {
-		sess, err := svc.Plates.CookSession(ctx, id)
-		if err != nil {
-			return nil, err
-		}
+	sessions, err := svc.Plates.CookSessions(ctx, slices.Compact(ids))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(sessions))
+	for _, sess := range sessions {
 		out = append(out, map[string]any{
 			"id": sess.ID, "food_id": sess.FoodID, "cook_date": sess.CookDate.Format(time.DateOnly),
 			"cook_slot_id": sess.CookSlotID, "portions": sess.Portions, "frozen_portions": sess.FrozenPortions,

@@ -762,6 +762,11 @@ func (s *Service) CookSession(ctx context.Context, id int64) (*CookSession, erro
 	return s.sessions.GetSession(ctx, id)
 }
 
+// CookSessions returns the plain sessions of ids that exist, in one query.
+func (s *Service) CookSessions(ctx context.Context, ids []int64) ([]CookSession, error) {
+	return s.sessions.ListSessionsByIDs(ctx, ids)
+}
+
 // Session returns a session with its links, consumption and warnings.
 func (s *Service) Session(ctx context.Context, id int64) (*SessionView, error) {
 	sess, err := s.sessions.GetSession(ctx, id)

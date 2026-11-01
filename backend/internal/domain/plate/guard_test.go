@@ -19,7 +19,8 @@ import (
 // confirmed plate or session fails with ErrRowConfirmed and writes nothing.
 
 // guarded is a confirmed Chili batch (Sun dinner, leftovers Mon lunch and
-// dinner) plus a Rice plate at Tue dinner whose state the case picks.
+// dinner) plus a confirmed Rice plate at Tue dinner. The Mon lunch leftover
+// is forced to draft: a draft plate linked to a confirmed session.
 type guarded struct {
 	sun   *plate.Plate
 	sid   int64
@@ -31,7 +32,9 @@ func (e *env) guarded() guarded {
 	e.t.Helper()
 	sun, sid := e.batch()
 	other := e.create(tue, e.dinner, nil, grams(e.rice, 100))
-	return guarded{sun: sun, sid: sid, monL: e.plateAt(mon, e.lunch), other: other}
+	monL := e.plateAt(mon, e.lunch)
+	e.exec(`UPDATE plates SET state = 'draft' WHERE id = ?`, monL.ID)
+	return guarded{sun: sun, sid: sid, monL: monL, other: other}
 }
 
 // dump is every plate, component, session and event row, to show a refused
@@ -127,7 +130,6 @@ func TestGuard_AgentCannotWriteConfirmedRows(t *testing.T) {
 			return err
 		}},
 		{"draft plate linked to a confirmed session", func(e *env, ctx context.Context, g guarded) error {
-			e.exec(`UPDATE plates SET state = 'draft' WHERE id = ?`, g.monL.ID)
 			_, err := e.svc.Update(ctx, g.monL.ID, plate.PlatePatch{Eaters: f64(3)})
 			return err
 		}},
@@ -137,10 +139,6 @@ func TestGuard_AgentCannotWriteConfirmedRows(t *testing.T) {
 			e := newEnv(t)
 			g := e.guarded()
 			agent := e.run(actor.Agent, 8)
-			// The draft case flips its plate inside write; take the dump after.
-			if tc.name == "draft plate linked to a confirmed session" {
-				e.exec(`UPDATE plates SET state = 'draft' WHERE id = ?`, g.monL.ID)
-			}
 			before := e.dump()
 			err := tc.write(e, agent, g)
 			require.ErrorIs(t, err, domain.ErrRowConfirmed)

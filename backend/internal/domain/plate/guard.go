@@ -26,28 +26,26 @@ func (s *Service) guardPlates(ctx context.Context, plates ...Plate) error {
 		return nil
 	}
 	var rows []string
-	seen := map[int64]bool{}
+	var ids []int64
 	for _, p := range plates {
 		if p.State == StateConfirmed {
 			rows = append(rows, describePlate(p))
 		}
-		for _, sid := range linkedSessions(p.Components) {
-			if seen[sid] {
-				continue
-			}
-			seen[sid] = true
-			sess, err := s.sessions.GetSession(ctx, sid)
-			if err != nil {
-				return err
-			}
-			if sess.State == StateConfirmed {
-				row, err := s.describeSession(ctx, *sess)
-				if err != nil {
-					return err
-				}
-				rows = append(rows, row)
-			}
+		ids = append(ids, linkedSessions(p.Components)...)
+	}
+	sessions, err := s.sessions.ListSessionsByIDs(ctx, uniqueIDs(ids))
+	if err != nil {
+		return err
+	}
+	for _, sess := range sessions {
+		if sess.State != StateConfirmed {
+			continue
 		}
+		row, err := s.describeSession(ctx, sess)
+		if err != nil {
+			return err
+		}
+		rows = append(rows, row)
 	}
 	return rowsConfirmed(rows)
 }
