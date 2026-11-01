@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { shiftYMD, todayISO } from "./dates"
+import { shiftYMD, todayISO, windowStartOf } from "./dates"
 
 describe("todayISO", () => {
   afterEach(() => vi.useRealTimers())
@@ -22,5 +22,19 @@ describe("shiftYMD", () => {
     ["2028-02-28", 1, "2028-02-29"],
   ])("%s shifted by %i days is %s", (from, days, want) => {
     expect(shiftYMD(from, days)).toBe(want)
+  })
+})
+
+describe("windowStartOf", () => {
+  it.each([
+    // Sunday 1 Nov with Monday shopping: the window began on 26 Oct.
+    ["2026-11-01", 0, "2026-10-26"],
+    ["2026-11-02", 0, "2026-11-02"],
+    // Saturday shopping (5): Sat 31 Oct to Fri 6 Nov.
+    ["2026-11-06", 5, "2026-10-31"],
+    ["2026-10-31", 5, "2026-10-31"],
+    ["2026-11-07", 5, "2026-11-07"],
+  ])("%s with shopping day %i starts on %s", (day, shopping, want) => {
+    expect(windowStartOf(day, shopping)).toBe(want)
   })
 })

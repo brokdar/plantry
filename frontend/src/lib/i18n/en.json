@@ -424,7 +424,8 @@
         "delete_preset": "Deleted a routine",
         "apply_preset": "Applied a routine",
         "copy_week": "Copied a previous week",
-        "record_preference": "Noted a preference"
+        "record_preference": "Noted a preference",
+        "submit_plan": "Handed in the plan"
       },
       "raw_json": "Raw JSON",
       "raw_args": "Arguments",
@@ -432,7 +433,7 @@
       "truncated": "Cut short; the full text is too long to keep.",
       "prompt_text": "Prompt sent to the assistant",
       "versions_title": "By prompt version",
-      "versions_empty": "No scored plans yet.",
+      "versions_empty": "No generated plans yet.",
       "violations_none": "None",
       "score": {
         "coverage": "Coverage",
@@ -443,7 +444,19 @@
         "unknown_data": "Incomplete data"
       },
       "prices_note": "Prices as of {{date}}. Costs are estimates; change prices under Assistant → Prices.",
-      "tokens_breakdown": "{{input}} in · {{output}} out · {{cache_read}} cache read · {{cache_write}} cache write"
+      "tokens_breakdown": "{{input}} in · {{output}} out · {{cache_read}} cache read · {{cache_write}} cache write",
+      "rule": {
+        "H1": "Meals match who's home",
+        "H2": "Cooking per day",
+        "H3": "Enough portions",
+        "H4": "Leftover timing",
+        "H5": "Diet",
+        "H6": "Confirmed plates kept",
+        "H7": "Valid plan",
+        "H8": "Variety"
+      },
+      "violation": "{{rule}} × {{count}}",
+      "scroll_hint": "Scroll sideways for more columns"
     }
   },
   "settings": {
@@ -1534,7 +1547,8 @@
     "to_freeze": "{{count}} to freeze",
     "cell": "{{weekday}} {{slot, lowercase}}",
     "covers": "Covers {{cells}}",
-    "cook_days": "Cook days"
+    "cook_days": "Cook days",
+    "draft": "Draft"
   },
   "day_meter": {
     "name": "Energy",
@@ -1741,7 +1755,13 @@
     "all_done_other": "All done. {{count}} items bought.",
     "error": "The shopping list didn't load. Check that Plantry is running, then retry.",
     "loading": "Loading the shopping list",
-    "moved": "{{name}} moved to {{section}}"
+    "moved": "{{name}} moved to {{section}}",
+    "draft_empty": {
+      "title": "Your plan here is still a draft",
+      "body": "The list shows accepted plates only. Include the draft plates to see what they need, or review and accept the plan.",
+      "include": "Include draft plates",
+      "review": "Review plan"
+    }
   },
   "routines": {
     "new": "New routine",
@@ -1883,13 +1903,16 @@
     "action": "Add to plan",
     "title": "Add to plan",
     "description": "{{name}} goes on the meal you pick, cooked fresh.",
-    "meals": "Free meals",
+    "meals": "Free and draft meals",
     "cell": "{{day}}, {{meal}}",
     "add": "Add",
     "added": "{{name}} planned for {{day}}, {{meal}}.",
     "open_plan": "Open plan",
     "empty_title": "No free meals",
-    "empty_body": "This week and next are planned. Open the plan to make room.",
-    "load_error": "The plan didn't load. Check that Plantry is running, then try again."
+    "empty_body": "This week and next are planned and confirmed. Open the plan to make room.",
+    "load_error": "The plan didn't load. Check that Plantry is running, then try again.",
+    "replaces": "Replaces the draft {{name}}",
+    "replaces_unnamed": "Replaces a draft",
+    "cell_replaces": "{{day}}, {{meal}}. {{replaces}}"
   }
 }

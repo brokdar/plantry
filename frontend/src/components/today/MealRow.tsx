@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next"
 
 import { BatchBadge } from "@/components/batch/BatchBadge"
+import { DraftTag } from "@/components/batch/DraftTag"
 import type { TodayRow } from "@/lib/plan/today"
 
 /** One meal slot of the day (UX §5.2): the slot in Newsreader italic, then
@@ -20,7 +21,7 @@ export function MealRow({ row }: { row: TodayRow }) {
   )
 }
 
-function MealContent({ row: { cell } }: { row: TodayRow }) {
+function MealContent({ row: { cell, draft } }: { row: TodayRow }) {
   const { t } = useTranslation()
   if (cell.plate) {
     return (
@@ -32,6 +33,7 @@ function MealContent({ row: { cell } }: { row: TodayRow }) {
           <span className="text-small text-ink-muted">{cell.sideText}</span>
         )}
         {cell.badge && <BatchBadge {...cell.badge} />}
+        {draft && <DraftTag />}
       </span>
     )
   }

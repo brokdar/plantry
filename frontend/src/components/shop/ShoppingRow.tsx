@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { BatchBadge } from "@/components/batch/BatchBadge"
+import { DraftTag } from "@/components/batch/DraftTag"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -72,6 +73,9 @@ export function ShoppingRow({
   const [open, setOpen] = useState(false)
   const checkboxId = `shop-item-${item.food_id}`
   const usesId = `shop-uses-${item.food_id}`
+  // Only on the list because of draft plates ("Include draft plates").
+  const fromDrafts =
+    item.used_in.length > 0 && item.used_in.every((u) => u.draft)
 
   return (
     <li
@@ -107,6 +111,12 @@ export function ShoppingRow({
             )}
           >
             {item.name}
+            {fromDrafts && (
+              <>
+                {" "}
+                <DraftTag />
+              </>
+            )}
           </span>
           <span
             className={cn(
@@ -179,6 +189,7 @@ export function ShoppingRow({
                       colour={batch.colour}
                     />
                   )}
+                  {use.draft && !fromDrafts && <DraftTag />}
                 </li>
               )
             })}

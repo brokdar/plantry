@@ -39,6 +39,7 @@ type shoppingUseResponse struct {
 	FoodName  string `json:"food_name"`
 	Date      string `json:"date"`
 	SlotID    int64  `json:"slot_id"`
+	Draft     bool   `json:"draft"`
 }
 
 type shoppingItemResponse struct {
@@ -111,7 +112,7 @@ func toShoppingListResponse(rng shopping.Range, l *shopping.List) shoppingListRe
 			for k, u := range it.UsedIn {
 				uses[k] = shoppingUseResponse{
 					SessionID: u.SessionID, FoodID: u.FoodID, FoodName: u.FoodName,
-					Date: dateString(u.Date), SlotID: u.SlotID,
+					Date: dateString(u.Date), SlotID: u.SlotID, Draft: u.Draft,
 				}
 			}
 			items[j] = shoppingItemResponse{

@@ -10,6 +10,7 @@ import { formatNumber } from "@/lib/plan/format"
 import { useRuns } from "@/lib/queries/runs"
 
 import { formatCost, formatDateTime, modelText, scoreText } from "./format"
+import { ScrollTable } from "./ScrollTable"
 
 /** The run log, 50 runs a page, newest first. A row opens its detail. */
 export function RunsTable({ onOpen }: { onOpen: (id: number) => void }) {
@@ -57,7 +58,7 @@ export function RunsTable({ onOpen }: { onOpen: (id: number) => void }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto rounded-cell border border-line bg-panel">
+      <ScrollTable>
         <table className="w-full min-w-[56rem] text-left text-small text-ink">
           <caption className="sr-only">
             {t("settings_page.insights.runs_title")}
@@ -81,7 +82,7 @@ export function RunsTable({ onOpen }: { onOpen: (id: number) => void }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollTable>
       {(cursors.length > 1 || next_cursor !== null) && (
         <nav
           aria-label={t("settings_page.insights.pages_label")}

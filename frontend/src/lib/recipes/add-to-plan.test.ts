@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { mockPlan, mockPlate } from "@/test/fixtures"
+import { mockPlan, mockPlate, mockPlateComponent } from "@/test/fixtures"
 
 import { openCells } from "./add-to-plan"
 
@@ -33,5 +33,31 @@ describe("openCells", () => {
       "2026-11-04|3",
     ])
     expect(days[0].cells[0].windowStart).toBe("2026-10-31")
+  })
+
+  it("offers a cell holding a draft plate, naming the draft it replaces", () => {
+    const plan = {
+      ...mockPlan,
+      window: { ...mockPlan.window, today: "2026-11-04" },
+      cells: mockPlan.cells.map((c) =>
+        c.date === "2026-11-04" && c.slot_id === 1
+          ? {
+              ...c,
+              plate: mockPlate({
+                id: 9,
+                state: "draft",
+                components: [mockPlateComponent({ food_name: "Dal" })],
+              }),
+            }
+          : c.date === "2026-11-04" && c.slot_id === 2
+            ? { ...c, plate: mockPlate() }
+            : c
+      ),
+    }
+    const [day] = openCells([plan])
+    expect(day.cells.map((c) => [c.key, c.replaces])).toEqual([
+      ["2026-11-04|1", { plateId: 9, name: "Dal" }],
+      ["2026-11-04|3", null],
+    ])
   })
 })

@@ -1,4 +1,6 @@
 import {
+  API,
+  apiRequest,
   cleanupFood,
   cleanupSlot,
   expect,
@@ -76,6 +78,87 @@ test.describe("Add to plan (AC-10)", () => {
       await cleanupSlot(slot.id)
       await cleanupFood(composed.id)
       await cleanupFood(stub.id)
+    }
+  })
+
+  // DoD should-fix 2: after a generate every cell holds a draft. A draft
+  // cell is offered, marked as replacing the draft, and Add swaps it.
+  test("replaces a draft plate in the picked cell", async ({ page }) => {
+    const tag = uid()
+    const { composed, stub } = await seedComposedWithStub(
+      { name: `Add over draft ${tag}`, role: "main" },
+      tag
+    )
+    const old = await seedComposedWithStub(
+      { name: `Draft dish ${tag}`, role: "main" },
+      `${tag}-old`
+    )
+    const slot = await seedSlot(`slot.atpd-${tag}`, "Sun", 994)
+    const now = new Date()
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-")
+    const ctx = await apiRequest.newContext({ baseURL: API })
+    try {
+      const seeded = await ctx.post("/api/plates", {
+        data: {
+          date: today,
+          slot_id: slot.id,
+          components: [{ food_id: old.composed.id, portions: 1 }],
+        },
+      })
+      expect(seeded.ok(), await seeded.text()).toBeTruthy()
+      const { id: draftId } = (await seeded.json()) as { id: number }
+      // B1: unlocking turns the plate back into a draft, as a generate would.
+      const unlock = await ctx.post(`/api/plates/${draftId}/unlock`)
+      expect(unlock.ok(), await unlock.text()).toBeTruthy()
+
+      await page.goto(`/recipes/${composed.id}`)
+      await page.getByTestId("recipe-add-to-plan").click()
+      const sheet = page.getByTestId("add-to-plan-sheet")
+      const radio = sheet.getByTestId(`add-to-plan-cell-${today}|${slot.id}`)
+      await expect(radio).toHaveAccessibleName(
+        new RegExp(`Replaces the draft ${old.composed.name}$`)
+      )
+      await radio.locator("xpath=..").click()
+      await expect(radio).toBeChecked()
+
+      const deleted = page.waitForResponse(
+        (r) =>
+          r.url().endsWith(`/api/plates/${draftId}`) &&
+          r.request().method() === "DELETE"
+      )
+      const created = page.waitForResponse(
+        (r) =>
+          r.url().endsWith("/api/plates") && r.request().method() === "POST"
+      )
+      await sheet.getByTestId("add-to-plan-submit").click()
+      expect((await deleted).ok()).toBeTruthy()
+      const res = await created
+      expect(res.status()).toBe(201)
+      const plate = (await res.json()) as {
+        date: string
+        slot_id: number
+        state: string
+        components: { food_id: number }[]
+      }
+      expect(plate).toMatchObject({
+        date: today,
+        slot_id: slot.id,
+        state: "confirmed",
+      })
+      expect(plate.components.map((c) => c.food_id)).toEqual([composed.id])
+      await expect(sheet).toHaveCount(0)
+      expect((await ctx.get(`/api/plates/${draftId}`)).status()).toBe(404)
+    } finally {
+      await ctx.dispose()
+      await cleanupSlot(slot.id)
+      await cleanupFood(composed.id)
+      await cleanupFood(stub.id)
+      await cleanupFood(old.composed.id)
+      await cleanupFood(old.stub.id)
     }
   })
 })

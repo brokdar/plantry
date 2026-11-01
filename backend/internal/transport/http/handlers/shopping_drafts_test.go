@@ -81,4 +81,23 @@ func TestShoppingList_Drafts(t *testing.T) {
 		require.Equal(t, http.StatusOK, code, raw)
 		assert.False(t, b.HasDrafts)
 	})
+
+	// DoD: each use says whether it comes from a draft, so Shop can mark it.
+	t.Run("uses carry draft", func(t *testing.T) {
+		code, b, raw := e.get(t, "?from=2026-11-01&to=2026-11-07&include_drafts=true")
+		require.Equal(t, http.StatusOK, code, raw)
+		got := map[string]bool{}
+		for _, s := range b.Sections {
+			for _, it := range s.Items {
+				for _, u := range it.UsedIn {
+					key := u.FoodName
+					if u.SessionID != nil && *u.SessionID == draft {
+						key = "draft chili"
+					}
+					got[key] = u.Draft
+				}
+			}
+		}
+		assert.Equal(t, map[string]bool{e.chili.Name: false, "draft chili": true, e.apple.Name: true}, got, raw)
+	})
 }

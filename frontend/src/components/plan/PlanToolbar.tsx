@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { PlanStats, PlanWindow } from "@/lib/api/plan"
+import { windowStartOf } from "@/lib/dates"
 import type { DraftSummary } from "@/lib/plan/board"
 import { cn } from "@/lib/utils"
 
@@ -35,8 +36,6 @@ interface PlanToolbarProps {
   summary: string
   /** "31 Oct – 6 Nov". */
   rangeLabel: string
-  /** The board shows the anchored window (no `start` in the URL). */
-  anchored: boolean
   readOnly: boolean
   /** Cells that need attention; the count steps through them. */
   warningCount: number
@@ -76,7 +75,6 @@ export function PlanToolbar({
   stats,
   summary,
   rangeLabel,
-  anchored,
   readOnly,
   warningCount,
   onNextWarning,
@@ -240,12 +238,14 @@ export function PlanToolbar({
         </Link>
         <Link
           to="/plan"
-          search={{}}
-          aria-current={anchored ? "page" : undefined}
+          // The window holding today, as on Today, whatever the anchor.
+          search={{ start: windowStartOf(window.today, window.shopping_day) }}
+          aria-current={window.is_current ? "page" : undefined}
           className={cn(
             NAV_LINK,
             "rounded-full border border-line px-3",
-            anchored && "border-accent bg-accent/10 font-semibold text-accent"
+            window.is_current &&
+              "border-accent bg-accent/10 font-semibold text-accent"
           )}
         >
           {t("plan.toolbar.this_week")}

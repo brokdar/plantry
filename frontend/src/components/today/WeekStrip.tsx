@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 
 import { BatchBadge } from "@/components/batch/BatchBadge"
+import { DraftTag } from "@/components/batch/DraftTag"
 import type { Board } from "@/lib/plan/board"
 import { cn } from "@/lib/utils"
 
@@ -67,6 +68,7 @@ export function WeekStrip({ board, windowStart, date }: WeekStripProps) {
                         <span className="truncate text-small text-ink">
                           {cell.mainName ?? t("plan.cell.empty_plate")}
                         </span>
+                        {cell.state === "draft" && <DraftTag />}
                       </span>
                     ))
                   )}

@@ -211,11 +211,13 @@ test.describe("Today", () => {
         "Your plan for this week is still a draft"
       )
       const card = page.getByTestId("today-draft-only")
-      // Today shows confirmed rows only: the draft is not on the day.
+      // The cook card is confirmed only (D26); the row shows the draft,
+      // marked, as the week strip does (DoD should-fix 1).
       await expect(page.getByTestId("today-cook-card")).toHaveCount(0)
-      await expect(page.getByTestId(`today-meal-${slot.id}`)).toHaveText(
-        /Nothing planned/
-      )
+      const row = page.getByTestId(`today-meal-${slot.id}`)
+      await expect(row).toContainText(chili.name)
+      await expect(row.getByTestId("draft-tag")).toHaveText("Draft")
+      await expect(row).not.toContainText("Nothing planned")
       await card.getByRole("link", { name: "Review plan" }).click()
       await expect(page).toHaveURL(`/plan?start=${start}`)
     } finally {

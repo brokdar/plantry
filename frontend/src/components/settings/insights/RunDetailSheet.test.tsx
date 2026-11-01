@@ -53,6 +53,17 @@ describe("RunDetailSheet", () => {
     ).toBeInTheDocument()
   })
 
+  // DoD nit: the planning chooser's forced tool reads in plain language.
+  it("names the submit_plan step", async () => {
+    vi.mocked(getRun).mockResolvedValue({
+      ...mockRunDetail,
+      steps: [{ ...mockRunDetail.steps[1], name: "submit_plan" }],
+    })
+    renderWithRouter(<RunDetailSheet runId={11} onClose={vi.fn()} />)
+
+    expect(await screen.findByText("Handed in the plan")).toBeInTheDocument()
+  })
+
   it("stays closed without a run", () => {
     renderWithRouter(<RunDetailSheet runId={undefined} onClose={vi.fn()} />)
     expect(screen.queryByTestId("run-detail-sheet")).toBeNull()

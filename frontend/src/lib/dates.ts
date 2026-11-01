@@ -19,3 +19,12 @@ export function shiftYMD(ymd: string, days: number): string {
   const [y, m, d] = ymd.split("-").map(Number)
   return toYMD(new Date(y, m - 1, d + days))
 }
+
+/** The start of the plan window holding `ymd`: the latest shopping day
+ *  (0 = Monday … 6 = Sunday) on or before it, like the server's
+ *  `window.Containing`. */
+export function windowStartOf(ymd: string, shoppingDay: number): string {
+  const [y, m, d] = ymd.split("-").map(Number)
+  const weekday = (new Date(y, m - 1, d).getDay() + 6) % 7
+  return shiftYMD(ymd, -((weekday - shoppingDay + 7) % 7))
+}

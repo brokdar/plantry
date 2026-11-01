@@ -129,6 +129,7 @@ type shopBody struct {
 				FoodName  string `json:"food_name"`
 				Date      string `json:"date"`
 				SlotID    int64  `json:"slot_id"`
+				Draft     bool   `json:"draft"`
 			} `json:"used_in"`
 		} `json:"items"`
 	} `json:"sections"`

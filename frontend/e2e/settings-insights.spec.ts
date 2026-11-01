@@ -89,6 +89,25 @@ test("a chat turn shows up in Insights with its steps and an unknown cost", asyn
   }
 })
 
+// DoD walk nit: at 375 the runs table shows only its first columns, so a
+// hint says it scrolls sideways (the chat run above is in the table).
+test("at 375 px the runs table says it scrolls sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto("/settings/assistant/insights")
+  const table = page.getByRole("table", { name: "Runs" })
+  await expect(table).toBeVisible()
+  // ScrollTable: the hint sits above the scroll box that holds the table.
+  const box = table.locator("xpath=../..")
+  await expect(box.getByTestId("scroll-hint")).toHaveText(
+    "Scroll sideways for more columns"
+  )
+  // Scrolled to its end, the table hides nothing and the hint goes.
+  await table.locator("xpath=..").evaluate((el) => {
+    el.scrollLeft = el.scrollWidth
+  })
+  await expect(box.getByTestId("scroll-hint")).toHaveCount(0)
+})
+
 test("a price override re-prices the runs table", async ({ page, request }) => {
   const slot = await seedSlot(`slot.insights-${uid()}`, "moon", 98)
   try {

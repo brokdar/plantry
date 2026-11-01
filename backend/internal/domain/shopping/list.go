@@ -80,6 +80,8 @@ type Use struct {
 	FoodName  string
 	Date      time.Time
 	SlotID    int64
+	// Draft is set when the session or the leaf's plate is a draft.
+	Draft bool
 }
 
 // Slots lists time slots (their sort order gives the cell order, D12).
@@ -208,7 +210,7 @@ func (s *Service) List(ctx context.Context, from, to time.Time, includeDrafts bo
 		if recipe.ReferencePortions != nil && *recipe.ReferencePortions > 0 {
 			ref = *recipe.ReferencePortions
 		}
-		use := Use{SessionID: &cs.ID, FoodID: recipe.ID, FoodName: recipe.Name, Date: cs.CookDate, SlotID: cs.CookSlotID}
+		use := Use{SessionID: &cs.ID, FoodID: recipe.ID, FoodName: recipe.Name, Date: cs.CookDate, SlotID: cs.CookSlotID, Draft: cs.State == plate.StateDraft}
 		err := expand(nodes, recipe, cs.Portions/ref, 0, func(leaf *food.Food, amount float64, unit string, grams float64) {
 			a := get(leaf)
 			a.add(amount, unit, grams)
@@ -225,7 +227,7 @@ func (s *Service) List(ctx context.Context, from, to time.Time, includeDrafts bo
 		leaf := nodes[lu.FoodID]
 		a := get(leaf)
 		a.add(lu.Amount*lu.Eaters, lu.Unit, lu.Grams*lu.Eaters)
-		a.uses = append(a.uses, Use{FoodID: leaf.ID, FoodName: leaf.Name, Date: lu.Date, SlotID: lu.SlotID})
+		a.uses = append(a.uses, Use{FoodID: leaf.ID, FoodName: leaf.Name, Date: lu.Date, SlotID: lu.SlotID, Draft: lu.Draft})
 	}
 
 	slots, err := s.d.Slots.List(ctx, false)

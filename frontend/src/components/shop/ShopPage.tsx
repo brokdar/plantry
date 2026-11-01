@@ -229,7 +229,36 @@ function ShopLoaded({
           )}
         </header>
 
-        {list.count === 0 ? (
+        {list.count === 0 && list.has_drafts && !includeDrafts ? (
+          <div
+            className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-line bg-panel p-6"
+            data-testid="shop-draft-empty"
+          >
+            <p className="font-heading text-h3 text-ink">
+              {t("shop.draft_empty.title")}
+            </p>
+            <p className="text-body text-ink-muted">
+              {t("shop.draft_empty.body")}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => onIncludeDraftsChange(true)}
+                className="h-11 md:pointer-fine:h-9"
+              >
+                {t("shop.draft_empty.include")}
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="h-11 md:pointer-fine:h-9"
+              >
+                <Link to="/plan" search={{ start: range.window_start }}>
+                  {t("shop.draft_empty.review")}
+                </Link>
+              </Button>
+            </div>
+          </div>
+        ) : list.count === 0 ? (
           <div
             className="flex flex-col items-start gap-3 rounded-lg border border-line bg-panel p-6"
             data-testid="shop-empty"

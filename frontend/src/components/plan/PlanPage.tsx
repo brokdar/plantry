@@ -308,7 +308,6 @@ function PlanView({
         stats={plan.stats}
         summary={board.summary}
         rangeLabel={rangeLabel}
-        anchored={anchored}
         readOnly={board.readOnly}
         warningCount={board.warningCells.length}
         onNextWarning={nextWarning}
