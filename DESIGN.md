@@ -281,6 +281,14 @@ A serif h1 name. Meta values use h3-size tabular sans over small muted labels. T
 
 *Specified, not built:* `SuggestionCard`. See UX spec §4 and §9.
 
+### Assistant panel (implemented: `components/assistant/*`)
+
+- **Panel.** On `/plan` the assistant is a 380px aside beside the board from 768px and a bottom sheet below, opened with `?assistant=1` or the `A` shortcut. It has a title, a one-line description, header actions (history, new conversation, close), a message list, suggestion chips for an empty conversation, a one-line status (what it is doing, in plain words, never tool names) and the composer. Never stack it over another overlay.
+- **Change line.** Every plan write is one `rounded-cell border-line bg-panel` row: a success `Check`, the sentence (`text-small text-ink`) and an outline small **Undo** button with an `Undo2` icon. An undone change is struck through and muted with "Undone"; when later edits make a revert unsafe the button is replaced by a muted caption. No toast: the line stays in the transcript.
+- **Unlock card.** An unlock request is a panel card with a `LockOpen` heading, the confirmed rows as a list and a muted line asking for the user's yes in the composer. The assistant does not unlock until the user answers.
+- **Cell pulse.** A board cell the assistant just changed flashes a 2px accent outline once (`cell-pulse`, 200ms ease-out, `data-pulse`). It is feedback on top of the change line, not the only signal; under `prefers-reduced-motion` the animation is off.
+- A polite live region announces each change line and unlock request to screen readers.
+
 ### Availability grid (implemented: `AvailabilityGrid`)
 
 A weekday (or date) × slot table of cell modes, used in Settings → Meals and the setup wizard. It holds no server state; the parent owns the value.

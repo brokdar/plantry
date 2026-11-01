@@ -449,6 +449,15 @@ The chat remains for adjustments ("no fish this week", "swap Tuesday's side for 
 - **Removed tools:** `copy_week` (the generator replaces it); `record_preference` is restricted to keys other than likes/dislikes, enforced in code.
 - Mutations from chat on a draft window keep rows in the `draft` state, with the chat's `ai_run_id`.
 
+**Amendments (Phase 4, implemented):**
+
+- **Chat window (D1).** The chat body is `{conversation_id?, message, today?, start}`: the window is the shopping-day-anchored week starting at `start`, validated by the server (`400 invalid_start`). The old `from`/`to` pair is gone.
+- **Drafts only (D5-D7).** The agent never changes a confirmed plate or cook session: such writes fail in the plate domain with `error.plan.row_confirmed` (naming the rows), and writes before today with `error.ai.past_date`.
+- **Unlock is two-phase (D6).** The first `unlock` call only previews the affected confirmed rows (the assistant shows an unlock card). The agent may unlock them only after the user's yes in a later turn of the same conversation; the preview expires after 30 minutes and is single use.
+- **Regenerate waits (D8).** `regenerate` runs the generation service and returns when the run finished, so the assistant reports the real outcome (violations, partial) in its change line.
+- **Edits and outcome attribution (D11-D12).** A chat run that edited generated drafts follows their accept, discard, unaccept and restore, and so does a chat run for the runs it started through `regenerate`. Insights show an Edits column (distinct plates and sessions an agent run wrote).
+- **Changes and undo (D13).** Every plan-writing tool call is recorded as a change (`ai_changes`), shown as a line with its own Undo (`POST /api/ai/changes/{id}/undo`). Undo is refused when the rows changed since (`change_stale`) or it was undone already (`change_undone`).
+
 ### 7.7 Shopping list
 
 - The source is confirmed sessions (scaled by `portions / reference_portions`), leaf components (× eaters), and routine plates in the window. A toggle includes drafts.
