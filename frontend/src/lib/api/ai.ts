@@ -2,7 +2,6 @@ import { EventSourceParserStream } from "eventsource-parser/stream"
 
 import { apiFetch, ApiError } from "./client"
 import type {
-  AISettings,
   ChatEvent,
   ChatEventType,
   ChatRequest,
@@ -90,8 +89,4 @@ export function undoChange(id: number) {
 
 export function deleteConversation(id: number) {
   return apiFetch<void>(`/ai/conversations/${id}`, { method: "DELETE" })
-}
-
-export function getAISettings() {
-  return apiFetch<AISettings>("/settings/ai")
 }

@@ -19,6 +19,12 @@ import { useTranslation } from "react-i18next"
 import { GeneratePlanButton } from "@/components/shell/GeneratePlanButton"
 import { Button } from "@/components/ui/button"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -40,7 +46,11 @@ interface PlanToolbarProps {
   /** Cells that need attention; the count steps through them. */
   warningCount: number
   onNextWarning: () => void
-  onAsk: () => void
+  /** The assistant panel is open (`?assistant=1`); the week links keep it. */
+  assistantOpen: boolean
+  /** An AI provider is configured; without one the button is disabled. */
+  assistantEnabled: boolean
+  onToggleAssistant: () => void
   onCopyWeek: () => void
   onClear: () => void
   onShortcuts: () => void
@@ -78,7 +88,9 @@ export function PlanToolbar({
   readOnly,
   warningCount,
   onNextWarning,
-  onAsk,
+  assistantOpen,
+  assistantEnabled,
+  onToggleAssistant,
   onCopyWeek,
   onClear,
   onShortcuts,
@@ -93,6 +105,7 @@ export function PlanToolbar({
 }: PlanToolbarProps) {
   const { t } = useTranslation()
   const review = draft !== null && !readOnly
+  const keep = assistantOpen ? (1 as const) : undefined
 
   return (
     <header className="flex flex-col gap-3">
@@ -146,14 +159,30 @@ export function PlanToolbar({
           </div>
           {/* Below 640 px Ask and Shop are icons (their names stay for
               screen readers), so the row fits a phone in German too. */}
-          <Button
-            variant="outline"
-            onClick={onAsk}
-            className="h-11 gap-2 px-3 max-sm:w-11 max-sm:px-0 md:pointer-fine:h-9"
-          >
-            <MessageSquare strokeWidth={1.5} aria-hidden="true" />
-            <span className="max-sm:sr-only">{t("plan.toolbar.ask")}</span>
-          </Button>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={assistantEnabled ? onToggleAssistant : undefined}
+                  aria-disabled={!assistantEnabled || undefined}
+                  aria-pressed={assistantEnabled ? assistantOpen : undefined}
+                  data-assistant-toggle=""
+                  className="h-11 gap-2 px-3 aria-disabled:opacity-50 max-sm:w-11 max-sm:px-0 md:pointer-fine:h-9"
+                >
+                  <MessageSquare strokeWidth={1.5} aria-hidden="true" />
+                  <span className="max-sm:sr-only">
+                    {t("plan.toolbar.ask")}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              {!assistantEnabled && (
+                <TooltipContent>
+                  {t("assistant.disabled_reason")}
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
           <Button
             asChild
             variant="outline"
@@ -233,7 +262,7 @@ export function PlanToolbar({
       >
         <Link
           to="/plan"
-          search={{ start: window.prev_start }}
+          search={{ start: window.prev_start, assistant: keep }}
           aria-label={t("plan.toolbar.prev")}
           className={cn(NAV_LINK, "w-11 md:pointer-fine:w-9")}
         >
@@ -246,7 +275,10 @@ export function PlanToolbar({
         <Link
           to="/plan"
           // The window holding today, as on Today, whatever the anchor.
-          search={{ start: windowStartOf(window.today, window.shopping_day) }}
+          search={{
+            start: windowStartOf(window.today, window.shopping_day),
+            assistant: keep,
+          }}
           aria-current={window.is_current ? "page" : undefined}
           className={cn(
             NAV_LINK,
@@ -259,7 +291,7 @@ export function PlanToolbar({
         </Link>
         <Link
           to="/plan"
-          search={{ start: window.next_start }}
+          search={{ start: window.next_start, assistant: keep }}
           aria-label={t("plan.toolbar.next")}
           className={cn(NAV_LINK, "w-11 md:pointer-fine:w-9")}
         >

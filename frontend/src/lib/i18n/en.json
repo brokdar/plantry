@@ -1051,18 +1051,30 @@
     "opens_new_tab": "(opens in a new tab)",
     "retry": "Try again"
   },
-  "chat": {
-    "title": "AI Assistant",
-    "description": "Chatting with {{model}}",
-    "disabled": "AI assistant is disabled.",
-    "provider_missing": "No AI provider is configured. Set PLANTRY_AI_PROVIDER and restart.",
+  "assistant": {
+    "title": "Assistant",
+    "description": "Plans and changes meals with you. Edits stay drafts until you accept.",
+    "disabled_reason": "Set up an AI provider in Settings to use the assistant.",
+    "provider_missing": "No AI provider is configured. Choose one in Settings.",
+    "close": "Close assistant",
     "composer": {
-      "placeholder": "Ask me to plan a day, swap a meal, or explain a macro…",
-      "aria_label": "Message to the AI",
+      "placeholder": "Ask me to plan a day, swap a meal or change a portion…",
+      "aria_label": "Message to the assistant",
       "send": "Send (Ctrl+Enter)",
       "abort": "Stop"
     },
     "new_conversation": "New conversation",
+    "status": {
+      "thinking": "Thinking…",
+      "tool": "Using {{name}}…"
+    },
+    "chips": {
+      "label": "Suggestions",
+      "lighter": "Lighter dinners",
+      "no_fish": "No fish this week",
+      "freeze": "Make the {{name}} {{portions}} portions, freeze 2",
+      "side": "Different side on {{weekday}}"
+    },
     "tool": {
       "args": "arguments",
       "status": {
@@ -1301,6 +1313,7 @@
       "open": "Open the meal",
       "no_plate": "Mark as No plate",
       "copy_drag": "Copy a plate while dragging",
+      "assistant": "Open or close the assistant",
       "this_panel": "Show these shortcuts",
       "drag": "Drag",
       "replace": "Replace the meal",

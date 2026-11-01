@@ -14,7 +14,13 @@ export const Route = createFileRoute("/plan/")({
   // follows (D35), set by useGenerate/useRegenerate.
   validateSearch: (
     search
-  ): { start?: string; cell?: string; day?: string; run?: number } => ({
+  ): {
+    start?: string
+    cell?: string
+    day?: string
+    run?: number
+    assistant?: 1
+  } => ({
     start:
       typeof search.start === "string" && DATE.test(search.start)
         ? search.start
@@ -33,13 +39,23 @@ export const Route = createFileRoute("/plan/")({
       search.run > 0
         ? search.run
         : undefined,
+    // `assistant=1` keeps the assistant panel open across reloads (D15).
+    assistant:
+      search.assistant === 1 || search.assistant === "1" ? 1 : undefined,
   }),
   component: PlanRoute,
 })
 
 function PlanRoute() {
-  const { start, cell, day, run } = Route.useSearch()
+  const { start, cell, day, run, assistant } = Route.useSearch()
   return (
-    <PlanPage key={start ?? ""} start={start} cell={cell} day={day} run={run} />
+    <PlanPage
+      key={start ?? ""}
+      start={start}
+      cell={cell}
+      day={day}
+      run={run}
+      assistant={assistant === 1}
+    />
   )
 }

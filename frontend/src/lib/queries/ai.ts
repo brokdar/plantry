@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next"
 
 import {
   deleteConversation,
-  getAISettings,
   getConversation,
   listConversations,
   postChatStream,
@@ -19,14 +18,6 @@ import { toastError } from "@/lib/toast"
 
 import { aiKeys } from "./keys"
 import { invalidatePlanViews } from "./plan"
-
-export function useAISettings() {
-  return useQuery({
-    queryKey: aiKeys.settings(),
-    queryFn: getAISettings,
-    staleTime: 60_000,
-  })
-}
 
 export function useConversations() {
   return useQuery({

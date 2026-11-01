@@ -57,7 +57,7 @@ test.describe("Guided Recipes state", () => {
     // Playwright treats aria-disabled as not enabled, hence force.
     await generate.click({ force: true })
     await expect(page).toHaveURL(/\/recipes$/)
-    await expect(page.getByTestId("chat-composer-input")).toHaveCount(0)
+    await expect(page.getByTestId("assistant-composer-input")).toHaveCount(0)
   })
 
   test("the import card opens the import sheet", async ({ page }) => {

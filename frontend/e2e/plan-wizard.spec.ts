@@ -292,7 +292,7 @@ test.describe("plan wizard", () => {
         name: "Who's home?",
       })
     ).toBeVisible()
-    await expect(page.getByTestId("chat-composer-input")).toHaveCount(0)
+    await expect(page.getByTestId("assistant-composer-input")).toHaveCount(0)
 
     // Escape closes it onto the board of the same window.
     await page.keyboard.press("Escape")

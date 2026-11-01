@@ -1051,18 +1051,30 @@
     "opens_new_tab": "(öffnet in neuem Tab)",
     "retry": "Erneut versuchen"
   },
-  "chat": {
-    "title": "KI-Assistent",
-    "description": "Unterhaltung mit {{model}}",
-    "disabled": "KI-Assistent ist deaktiviert.",
-    "provider_missing": "Kein KI-Anbieter konfiguriert. Setze PLANTRY_AI_PROVIDER und starte neu.",
+  "assistant": {
+    "title": "Assistent",
+    "description": "Plant und ändert Mahlzeiten mit dir. Änderungen bleiben Entwürfe, bis du sie übernimmst.",
+    "disabled_reason": "Richte in den Einstellungen einen KI-Anbieter ein, um den Assistenten zu nutzen.",
+    "provider_missing": "Kein KI-Anbieter eingerichtet. Wähle in den Einstellungen einen aus.",
+    "close": "Assistent schließen",
     "composer": {
-      "placeholder": "Bitte plane einen Tag, tausche eine Mahlzeit oder erkläre ein Makro…",
-      "aria_label": "Nachricht an die KI",
+      "placeholder": "Bitte mich, einen Tag zu planen, eine Mahlzeit zu tauschen oder eine Portion zu ändern…",
+      "aria_label": "Nachricht an den Assistenten",
       "send": "Senden (Strg+Enter)",
       "abort": "Stopp"
     },
     "new_conversation": "Neue Unterhaltung",
+    "status": {
+      "thinking": "Denkt nach…",
+      "tool": "Nutzt {{name}}…"
+    },
+    "chips": {
+      "label": "Vorschläge",
+      "lighter": "Leichtere Abendessen",
+      "no_fish": "Diese Woche kein Fisch",
+      "freeze": "{{name}} auf {{portions}} Portionen erhöhen, 2 einfrieren",
+      "side": "Andere Beilage am {{weekday}}"
+    },
     "tool": {
       "args": "Argumente",
       "status": {
@@ -1301,6 +1313,7 @@
       "open": "Mahlzeit öffnen",
       "no_plate": "Auf „Kein Essen“ setzen",
       "copy_drag": "Beim Ziehen eine Mahlzeit kopieren",
+      "assistant": "Assistent öffnen oder schließen",
       "this_panel": "Diese Übersicht zeigen",
       "drag": "Ziehen",
       "replace": "Mahlzeit ersetzen",

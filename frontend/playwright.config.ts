@@ -18,8 +18,7 @@ process.env.E2E_DB_PATH = DB_PATH
 // turn cursor). These must never run concurrently with each other, otherwise
 // one spec's provider/model override corrupts another spec's chat stream.
 const AI_SERIAL_SPECS = [
-  "ai-chat.spec.ts",
-  "ai-chat-advanced.spec.ts",
+  "assistant-panel.spec.ts",
   "settings-ai.spec.ts",
   "keyboard-shortcuts.spec.ts",
   "settings-insights.spec.ts",

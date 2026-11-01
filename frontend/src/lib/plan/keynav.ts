@@ -130,6 +130,18 @@ export function isAcceptShortcut(e: KeyboardEvent): boolean {
   return !isEditable(e.target)
 }
 
+/** `A` toggles the assistant, outside editable fields and dialogs (sheets
+ *  included, so the phone sheet keeps its keys). */
+export function isAssistantShortcut(e: KeyboardEvent): boolean {
+  if (e.key.toLowerCase() !== "a" || e.metaKey || e.ctrlKey || e.altKey) {
+    return false
+  }
+  if (e.target instanceof Element && e.target.closest('[role="dialog"]')) {
+    return false
+  }
+  return !isEditable(e.target)
+}
+
 /** What a letter key does on a focused board cell (UX §6). */
 export type CellShortcut = "no_plate" | "replace" | "side"
 
