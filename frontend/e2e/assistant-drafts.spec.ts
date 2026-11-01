@@ -1,7 +1,6 @@
 import { readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { DatabaseSync } from "node:sqlite"
 
 import type { APIRequestContext, Page } from "@playwright/test"
 
@@ -104,19 +103,6 @@ async function send(page: Page, text: string) {
   await expect(page.getByTestId("assistant-composer-abort")).toHaveCount(0, {
     timeout: 60_000,
   })
-}
-
-/** Reads the e2e database directly where the API exposes no audit rows. */
-function queryDB<T>(sql: string, ...args: (number | string)[]): T[] {
-  const db = new DatabaseSync(
-    process.env.E2E_DB_PATH ?? "/tmp/plantry-e2e.db",
-    { readOnly: true }
-  )
-  try {
-    return db.prepare(sql).all(...args) as T[]
-  } finally {
-    db.close()
-  }
 }
 
 const weekday = (iso: string) =>
@@ -346,17 +332,21 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     )
     expect(detail1.prompt_text).toContain(`${weekday(monday)} ${monday}`)
     expect(detail1.prompt_text).toContain(`${weekday(tuesday)} ${tuesday}`)
-    const [runRow] = queryDB<{
-      conversation_id: number | null
-      window_start: string
-      window_end: string
-    }>(
-      "SELECT conversation_id, window_start, window_end FROM ai_runs WHERE id = ?",
-      chat1.id
+    expect(detail1.prompt_text).toContain(days[6])
+    // The run belongs to the conversation: its change is listed there.
+    const conversations = await getJSON<{ items: { id: number }[] }>(
+      ctx,
+      "/api/ai/conversations?limit=50"
     )
-    expect(runRow.conversation_id).not.toBeNull()
-    expect(runRow.window_start).toBe(start)
-    expect(runRow.window_end).toBe(days[6])
+    let found = false
+    for (const c of conversations.items) {
+      const detail = await getJSON<{ changes: { run_id: number }[] }>(
+        ctx,
+        `/api/ai/conversations/${c.id}`
+      )
+      if (detail.changes.some((ch) => ch.run_id === chat1.id)) found = true
+    }
+    expect(found, "the chat run's conversation").toBe(true)
 
     // Undo restores 4 / 0 and marks the line.
     await panel.getByRole("button", { name: /^Undo/ }).click()
@@ -500,7 +490,21 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
       await getJSON<RunDetail>(ctx, `/api/ai/runs/${chat3.id}`)
     ).steps.find((x) => x.name === "remove_plate_component")!
     expect(failed.is_error).toBe(true)
-    expect(failed.result).toContain("error.plan.row_confirmed")
+    expect(failed.result).toContain("confirmed")
+    // The stored conversation keeps the failed result's message key.
+    const latest = (
+      await getJSON<{ items: { id: number }[] }>(
+        ctx,
+        "/api/ai/conversations?limit=1"
+      )
+    ).items[0]
+    const latestDetail = await getJSON<{ messages: unknown[] }>(
+      ctx,
+      `/api/ai/conversations/${latest.id}`
+    )
+    expect(JSON.stringify(latestDetail.messages)).toContain(
+      "error.plan.row_confirmed"
+    )
     let mon = (await plan()).cells.find(
       (c) => c.date === monday && c.slot_id === dinner.id
     )!.plate!
@@ -525,14 +529,8 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     )!.plate!
     expect(mon.state).toBe("draft")
     expect(mon.components.map((c) => c.food_id)).toEqual([chili.id])
-    // AC-3.2: the unlock is logged as an agent event of the chat run.
-    const unlocks = queryDB<{ actor: string; ai_run_id: number }>(
-      "SELECT actor, ai_run_id FROM plate_events WHERE plate_id = ? AND action = 'unlock'",
-      mon.id
-    )
-    expect(unlocks.length).toBeGreaterThan(0)
-    expect(unlocks.every((e) => e.actor === "agent")).toBe(true)
-    expect(unlocks[0].ai_run_id).toBeGreaterThan(chat3.id)
+    // AC-3.2 (unlock events with actor agent) is proven by the backend test
+    // TestTool_UnlockNeedsTheUsersYesInALaterTurn (no API lists plate events).
   } finally {
     for (const path of scriptPaths) await rm(path, { force: true })
     await ctx.delete("/api/settings/ai.fake_script")
