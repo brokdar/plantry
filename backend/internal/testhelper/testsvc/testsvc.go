@@ -97,7 +97,7 @@ func PlanningDeps(db *sql.DB) planning.Deps {
 			Presets: sqlite.NewPresetRepo(db), Slots: sqlite.NewSlotRepo(db), Settings: set,
 			Profile: profile.NewService(sqlite.NewProfileRepo(db)),
 		}),
-		Plates: plates, PlateRows: sqlite.NewPlateRepo(db), Cells: avail, Overrides: avail, FoodRows: foods, Settings: set,
+		Plates: plates, PlateRows: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db), Cells: avail, Overrides: avail, FoodRows: foods, Settings: set,
 		Tx: sqlite.NewTxRunner(db), Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: planning.Heuristic{}},
 	}

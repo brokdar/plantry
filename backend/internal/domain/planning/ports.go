@@ -107,7 +107,7 @@ type PlateService interface {
 	DraftClosure(ctx context.Context, from, to time.Time) (plate.RowSet, []plate.Plate, error)
 	PlateClosure(ctx context.Context, plateID int64) (plate.RowSet, []plate.Plate, error)
 	RemoveDrafts(ctx context.Context, rows plate.RowSet) (plate.PlanSnapshot, error)
-	RemovePlates(ctx context.Context, ids []int64, keep map[int64]plate.SessionPortions) (plate.PlanSnapshot, error)
+	RemovePlates(ctx context.Context, r plate.Removal) (plate.PlanSnapshot, error)
 	Apply(ctx context.Context, snap plate.PlanSnapshot, opts plate.ApplyOptions) (*plate.ApplyResult, error)
 }
 

@@ -223,7 +223,7 @@ func run() error {
 			Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 			Settings: settingsSvc, Profile: profileSvc,
 		}),
-		Plates: plateSvc, PlateRows: plateRepo, Cells: availabilitySvc, Overrides: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
+		Plates: plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: availabilitySvc, Overrides: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
 		RunLog: planning.RecorderLog{Recorder: runRecorder}, Runs: aiRunRepo, Tx: txRunner,
 		Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{

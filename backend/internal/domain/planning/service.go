@@ -83,6 +83,7 @@ type Deps struct {
 	Plates     PlateService
 	PlateRows  PlateRows
 	Cells      Cells
+	Sessions   SessionRows
 	FoodRows   FoodRows
 	Settings   SettingsReader
 	RunLog     RunLog

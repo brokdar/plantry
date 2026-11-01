@@ -213,6 +213,24 @@ export interface ReplanPreview {
      *  shrink it; otherwise its spare stays unassigned. */
     mutable: boolean
   }[]
+  /** Plates outside the No-plate cells that lose a dropped batch (its cook
+   *  plate goes and it cannot move); confirmed ones are also in
+   *  `confirmed_affected`. */
+  dropped?: {
+    session_id: number
+    food_name: string
+    plate_id: number
+    date: string
+    slot_id: number
+    confirmed: boolean
+  }[]
+  /** Batches whose cook plate goes: they cook at this cell instead. */
+  moved?: {
+    session_id: number
+    food_name: string
+    cook_date: string
+    cook_slot_id: number
+  }[]
 }
 
 export interface ReplanInput {
@@ -231,6 +249,9 @@ export interface ReplanInput {
 export interface ReplanResponse extends RemovedResponse {
   /** The generation started for the remaining cells, if `regenerate`. */
   run_id: number | null
+  /** Message key of why the requested run did not start (the removal
+   *  stands); absent when it started or none was asked for. */
+  regenerate_error?: string
 }
 
 /** GET /api/plan/replan/preview?from&to&none=date:slot…&today: `noneCells`

@@ -430,15 +430,24 @@ func (s *Service) ClearRange(ctx context.Context, from, to time.Time, slotID int
 	return snap, nil
 }
 
-// RemovePlates deletes the plates of ids in one unit of work and returns
-// what restores them (the mid-week re-plan, spec §3.5). Each session in keep
-// ends with exactly its portions and frozen portions and survives even
-// without links, so a cooked batch is never deleted; the other sessions
-// follow D11. An uncooked session that loses the plate on its cook cell but
-// keeps other links cooks at the earliest of them instead. A missing plate is
-// ErrNotFound and nothing is removed.
-func (s *Service) RemovePlates(ctx context.Context, ids []int64, keep map[int64]SessionPortions) (PlanSnapshot, error) {
-	ids = uniqueIDs(ids)
+// Removal is the mid-week re-plan's delete (spec §3.5): the plates of
+// PlateIDs go whole; every component eating from a session of Drop goes too,
+// wherever its plate is, and a plate left without components goes with it.
+// Each session in Keep ends with exactly its portions and frozen portions
+// and survives even without links; each session in Move cooks at its cell.
+type Removal struct {
+	PlateIDs []int64
+	Drop     []int64
+	Keep     map[int64]SessionPortions
+	Move     map[int64]CellKey
+}
+
+// RemovePlates applies r in one unit of work and returns what restores it.
+// Sessions outside Keep follow D11, so a dropped session (all its links gone)
+// is deleted and a cooked batch, kept, never is. A missing plate or dropped
+// session is ErrNotFound and nothing is removed.
+func (s *Service) RemovePlates(ctx context.Context, r Removal) (PlanSnapshot, error) {
+	ids := uniqueIDs(r.PlateIDs)
 	var snap PlanSnapshot
 	err := s.tx.InTx(ctx, func(ctx context.Context) error {
 		plates, err := s.plates.ListByIDs(ctx, ids)
@@ -448,25 +457,54 @@ func (s *Service) RemovePlates(ctx context.Context, ids []int64, keep map[int64]
 		if len(plates) != len(ids) {
 			return fmt.Errorf("%w: a plate is gone", domain.ErrNotFound)
 		}
+		whole := make(map[int64]bool, len(ids))
+		for _, id := range ids {
+			whole[id] = true
+		}
+		dropped := map[int64]bool{}
+		var more []int64
+		for _, sid := range uniqueIDs(r.Drop) {
+			if _, err := s.sessions.GetSession(ctx, sid); err != nil {
+				return err
+			}
+			links, err := s.sessions.ListLinks(ctx, sid)
+			if err != nil {
+				return err
+			}
+			for _, l := range links {
+				dropped[l.ComponentID] = true
+				if !whole[l.PlateID] && !slices.Contains(more, l.PlateID) {
+					more = append(more, l.PlateID)
+				}
+			}
+		}
+		if len(more) > 0 {
+			extra, err := s.plates.ListByIDs(ctx, more)
+			if err != nil {
+				return err
+			}
+			plates = append(plates, extra...)
+		}
 		order, err := s.slotOrder(ctx)
 		if err != nil {
 			return err
 		}
 		sortPlates(plates, order)
-		pinned := make(map[int64]bool, len(keep))
-		for id := range keep {
+		pinned := make(map[int64]bool, len(r.Keep))
+		for id := range r.Keep {
 			pinned[id] = true
 		}
+		pick := func(c PlateComponent) bool { return whole[c.PlateID] || dropped[c.ID] }
 		j := newJournal()
 		t := newTracker(j)
-		if snap, err = s.remove(ctx, plates, allComponents, false, &refAlloc{}, t, pinned, j); err != nil {
+		if snap, err = s.remove(ctx, plates, pick, true, &refAlloc{}, t, pinned, j); err != nil {
 			return err
 		}
 		t.ids = slices.DeleteFunc(t.ids, func(id int64) bool { return pinned[id] })
 		if err := s.settle(ctx, t); err != nil {
 			return err
 		}
-		for id, p := range keep {
+		for id, p := range r.Keep {
 			sess, err := s.sessions.GetSession(ctx, id)
 			if err != nil {
 				return err
@@ -480,8 +518,20 @@ func (s *Service) RemovePlates(ctx context.Context, ids []int64, keep map[int64]
 				return err
 			}
 		}
-		if err := s.moveOrphanedCooks(ctx, plates, slices.Sorted(maps.Keys(t.before)), order, j); err != nil {
-			return err
+		for _, id := range slices.Sorted(maps.Keys(r.Move)) {
+			sess, err := s.sessions.GetSession(ctx, id)
+			if err != nil {
+				return err
+			}
+			c := r.Move[id]
+			if sess.CookCell().Equal(c) {
+				continue
+			}
+			j.touchSession(*sess)
+			sess.CookDate, sess.CookSlotID = c.Date, c.SlotID
+			if err := s.sessions.UpdateSession(ctx, sess); err != nil {
+				return err
+			}
 		}
 		return s.commit(ctx, j)
 	})
@@ -489,40 +539,6 @@ func (s *Service) RemovePlates(ctx context.Context, ids []int64, keep map[int64]
 		return PlanSnapshot{}, err
 	}
 	return snap, nil
-}
-
-// moveOrphanedCooks moves each surviving, uncooked session of ids whose
-// cook cell held one of the removed plates and holds no link now to its
-// earliest remaining link: that plate eats it fresh, and the batch no longer
-// cooks on a cell nobody eats at.
-func (s *Service) moveOrphanedCooks(ctx context.Context, removed []Plate, ids []int64, order SlotOrder, j *journal) error {
-	for _, id := range ids {
-		sess, err := s.sessions.GetSession(ctx, id)
-		if errors.Is(err, domain.ErrNotFound) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		cook := sess.CookCell()
-		if sess.CookedAt != nil || !slices.ContainsFunc(removed, func(p Plate) bool { return p.Cell().Equal(cook) }) {
-			continue
-		}
-		links, err := s.sessions.ListLinks(ctx, id)
-		if err != nil {
-			return err
-		}
-		if len(links) == 0 || slices.ContainsFunc(links, func(l Link) bool { return l.Cell.Equal(cook) }) {
-			continue
-		}
-		first := slices.MinFunc(links, func(a, b Link) int { return Compare(a.Cell, b.Cell, order) }).Cell
-		j.touchSession(*sess)
-		sess.CookDate, sess.CookSlotID = first.Date, first.SlotID
-		if err := s.sessions.UpdateSession(ctx, sess); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // Range returns all plates in [from, to] inclusive. from must be ≤ to; span

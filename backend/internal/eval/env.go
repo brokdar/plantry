@@ -88,7 +88,7 @@ func newEnv(conn *sql.DB, cfg Config) *env {
 			Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 			Settings: settingsSvc, Profile: profileSvc,
 		}),
-		Plates: plateSvc, PlateRows: plateRepo, Cells: avail, Overrides: avail, FoodRows: foodRepo, Settings: settingsSvc,
+		Plates: plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: avail, Overrides: avail, FoodRows: foodRepo, Settings: settingsSvc,
 		RunLog: e.runs, Runs: runRepo, Tx: tx, Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{
 			airun.ChooserHeuristic: planning.Heuristic{},
