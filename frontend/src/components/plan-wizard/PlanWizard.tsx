@@ -248,6 +248,7 @@ function WizardFlow({
               asDefault={asDefault}
               onAsDefaultChange={setAsDefault}
               rangeLabel={rangeLabel}
+              surface={phone ? "ground" : "panel"}
               disabled={busy}
             />
           )}
@@ -352,7 +353,7 @@ function Frame({
 }: {
   phone: boolean
   title: string
-  headingRef?: React.Ref<HTMLHeadingElement>
+  headingRef?: React.RefObject<HTMLHeadingElement | null>
   indicator?: React.ReactNode
   onClose: () => void
   children: React.ReactNode
@@ -395,6 +396,12 @@ function Frame({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         aria-describedby={undefined}
+        // Start at the title, not on the first day's menu.
+        onOpenAutoFocus={(e) => {
+          if (!headingRef) return
+          e.preventDefault()
+          headingRef.current?.focus()
+        }}
         data-testid="plan-wizard"
         className="flex max-h-[min(90svh,56rem)] flex-col gap-6 overflow-y-auto rounded-sheet bg-panel p-6 text-ink shadow-sheet sm:max-w-[46rem]"
       >

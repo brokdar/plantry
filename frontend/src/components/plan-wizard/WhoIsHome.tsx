@@ -29,6 +29,8 @@ interface WhoIsHomeProps {
   asDefault: boolean
   onAsDefaultChange: (next: boolean) => void
   rangeLabel: string
+  /** What the grid sits on: the dialog panel, or the page on phones. */
+  surface: "ground" | "panel"
   disabled?: boolean
 }
 
@@ -50,6 +52,7 @@ export function WhoIsHome({
   asDefault,
   onAsDefaultChange,
   rangeLabel,
+  surface,
   disabled,
 }: WhoIsHomeProps) {
   const { t, i18n } = useTranslation()
@@ -63,7 +66,7 @@ export function WhoIsHome({
     key: date,
     label: formatDate(date, i18n, { weekday: "short" }),
     fullLabel: longDay(date),
-    sublabel: formatDate(date, i18n, { day: "numeric", month: "short" }),
+    sublabel: formatDate(date, i18n, { day: "numeric" }),
   }))
 
   function setDay(date: string, mode: "plan" | "none") {
@@ -94,7 +97,7 @@ export function WhoIsHome({
         slots={slots}
         value={value}
         presets={presets}
-        surface="panel"
+        surface={surface}
         disabled={disabled}
         onChange={(date, slotId, cell) =>
           onChange({ ...value, [`${date}:${slotId}`]: cell })
@@ -136,7 +139,12 @@ export function WhoIsHome({
                 key={date}
                 className="flex flex-wrap items-center justify-between gap-2 py-2"
               >
-                <span className="text-body text-ink">{longDay(date)}</span>
+                <span className="flex flex-col">
+                  <span className="text-body text-ink">{longDay(date)}</span>
+                  <span className="text-small text-ink-muted">
+                    {t("plan.sheet.eaters")}
+                  </span>
+                </span>
                 <span className="flex items-center gap-1">
                   <QuantityStepper
                     label={t("plan.wizard.who.eaters", { day: longDay(date) })}
