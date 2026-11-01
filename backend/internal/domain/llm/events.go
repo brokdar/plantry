@@ -127,6 +127,10 @@ type ChangePayload struct {
 	PlateIDs   []int64        `json:"plate_ids"`
 	SessionIDs []int64        `json:"session_ids"`
 	Undoable   bool           `json:"undoable"`
+	// Recorded is false when the change was made but could not be saved: it
+	// has no id and cannot be undone (the tool result carries
+	// warning "change_not_recorded").
+	Recorded bool `json:"recorded"`
 }
 
 // UnlockRequestPayload accompanies EventUnlockRequest: the rows the unlock

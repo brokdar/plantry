@@ -154,17 +154,6 @@ FROM (
 ) g
 GROUP BY g.run_id;
 
--- name: AIRunEdits :many
--- D12 per run with ids in [min_id, max_id]: the rows an agent run edited. A
--- session edit counts once as its session (its linked plates' events carry
--- cook_session_id and are skipped); every other plate counts as itself.
-SELECT CAST(ai_run_id AS INTEGER) AS run_id,
-       COUNT(DISTINCT CASE WHEN plate_id IS NULL THEN 's' || cook_session_id
-                           WHEN cook_session_id IS NULL THEN 'p' || plate_id END) AS edits
-FROM plate_events
-WHERE actor = 'agent' AND ai_run_id >= sqlc.arg(min_id) AND ai_run_id <= sqlc.arg(max_id)
-GROUP BY ai_run_id;
-
 -- name: AgentRunsOfRows :many
 -- D11: the agent runs that wrote to the given plates or sessions since the
 -- row's last accept/confirm. A live accept/confirm (no later unlock) is not a
@@ -182,12 +171,4 @@ WHERE e.actor = 'agent' AND e.ai_run_id IS NOT NULL
         WHERE c.id > b.id AND c.action IN ('accept', 'confirm', 'unlock')
           AND ((c.plate_id IS NOT NULL AND c.plate_id = e.plate_id) OR (c.cook_session_id IS NOT NULL AND c.cook_session_id = e.cook_session_id))))
   ), 0)
-ORDER BY run_id;
-
--- name: ChatRunsOfRun :many
--- The chat runs whose plan-writing calls (ai_changes) wrote under run_id: a
--- chat run's regenerate call writes under the generator's own run, so the
--- chat run follows that run's outcome. run_ids_json is a JSON array of ids.
-SELECT DISTINCT CAST(run_id AS INTEGER) AS run_id FROM ai_changes
-WHERE instr(',' || replace(replace(replace(run_ids_json, '[', ''), ']', ''), ' ', '') || ',', ',' || CAST(sqlc.arg(run_id) AS TEXT) || ',') > 0
 ORDER BY run_id;

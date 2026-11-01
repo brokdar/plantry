@@ -122,10 +122,10 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				// Tool errors are fed back to the model as tool_result with is_error.
 				// This gives the model a chance to correct its arguments or try a
 				// different approach instead of failing the whole turn.
-				errorPayload := mustMarshal(map[string]string{
+				errorPayload := withChange(mustMarshal(map[string]string{
 					"error":       err.Error(),
 					"message_key": errorMessageKey(err),
-				})
+				}), change)
 				resultBlocks = append(resultBlocks, llm.ContentBlock{
 					Type:              llm.ContentTypeToolResult,
 					ToolResultID:      call.ToolUseID,
@@ -140,6 +140,11 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 					ID: call.ToolUseID, Name: call.ToolUseName,
 					Output: errorPayload, IsError: true,
 				}})
+				if change != nil {
+					// A failed call that still changed the plan (a regenerate
+					// whose wait ended) shows its line.
+					send(ctx, out, llm.Event{Type: llm.EventChange, Payload: change.Payload()})
+				}
 				continue
 			}
 
