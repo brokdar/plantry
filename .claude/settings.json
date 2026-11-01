@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-lockfiles.py\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-lockfiles.js\""
           }
         ]
       },
@@ -35,11 +35,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/backend-lint-format.py\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/backend-lint-format.js\""
           },
           {
             "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/frontend-lint-format.py\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/frontend-lint-format.js\""
           }
         ]
       },
@@ -90,37 +90,6 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-console-log.js\""
-          }
-        ]
-      },
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-end.js\""
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.js\""
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-compact.js\""
           }
         ]
       }
