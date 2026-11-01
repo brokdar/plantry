@@ -68,8 +68,8 @@ const NAV_LINK =
  * the generation progress, and the actions: Ask assistant, Shop, Accept and
  * shop (with drafts) and an overflow menu with Regenerate week and Discard
  * draft (with drafts), Re-plan from today (the current window), Copy a
- * previous week, Clear this week and the
- * keyboard shortcuts. Past windows lose the editing actions.
+ * previous week, Clear this week and the keyboard shortcuts. Past windows
+ * lose the editing actions.
  */
 export function PlanToolbar({
   window,
