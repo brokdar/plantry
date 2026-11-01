@@ -1,6 +1,7 @@
 package planning_test
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -126,7 +127,7 @@ func TestReplan_Preview(t *testing.T) {
 	}, pv.ConfirmedAffected, "the draft Fri dinner is not listed")
 	assert.Equal(t, []planning.Spare{
 		{SessionID: e.chiliBatch, FoodName: "Main 05", Portions: 2, Freezable: true},
-		{SessionID: e.monBatch, FoodName: "Main 06", Portions: 1, Freezable: true},
+		{SessionID: e.monBatch, FoodName: "Main 06", Portions: 1, Freezable: false}, // cooked: nothing to freeze
 	}, pv.Spare, "Fri dinner's batch loses every link and goes")
 	assert.False(t, e.plateGone(e.thuLunch), "a preview writes nothing")
 }
@@ -314,4 +315,66 @@ func TestReplan_GenerationRunning(t *testing.T) {
 	close(b.release)
 	e.svc.Wait()
 	assert.False(t, e.plateGone(e.thuLunch))
+}
+
+// hookedFoods runs onCount on the at-th CountComposedFoods call: the
+// re-plan's second one is the run start after the commit.
+type hookedFoods struct {
+	planning.FoodRows
+	n, at   int
+	onCount func() error
+}
+
+func (h *hookedFoods) CountComposedFoods(ctx context.Context) (int64, error) {
+	h.n++
+	if h.n == h.at {
+		if err := h.onCount(); err != nil {
+			return 0, err
+		}
+	}
+	return h.FoodRows.CountComposedFoods(ctx)
+}
+
+// The re-plan holds the window from before its commit until its run has
+// started: a generate in between is 409.
+func TestReplan_HoldsTheWindowUntilTheRunStarts(t *testing.T) {
+	e := newReplanEnv(t, false)
+	var raced error
+	h := &hookedFoods{FoodRows: e.deps.FoodRows, at: 2}
+	h.onCount = func() error {
+		req := e.req()
+		req.Today = day(replanDay)
+		_, raced = e.svc.Generate(e.ctx, req)
+		return nil
+	}
+	e.deps.FoodRows = h
+	e.svc = planning.NewService(e.deps)
+
+	res, err := e.replan(true, planning.SpareKeep, true)
+
+	require.NoError(t, err)
+	require.ErrorIs(t, raced, domain.ErrGenerationRunning)
+	require.NotNil(t, res.RunID)
+	e.ok(*res.RunID)
+}
+
+// A run that fails to start after the commit leaves the removal, no run id
+// and a free window.
+func TestReplan_RunThatDoesNotStartKeepsTheRemoval(t *testing.T) {
+	e := newReplanEnv(t, false)
+	e.deps.FoodRows = &hookedFoods{FoodRows: e.deps.FoodRows, at: 2, onCount: func() error { return errors.New("db gone") }}
+	e.svc = planning.NewService(e.deps)
+
+	res, err := e.replan(true, planning.SpareKeep, true)
+
+	require.NoError(t, err)
+	assert.Nil(t, res.RunID)
+	assert.Len(t, res.Removed.Plates, 4)
+	assert.True(t, e.plateGone(e.thuLunch))
+	_, running := e.svc.Running(e.start)
+	assert.False(t, running)
+	req := e.req()
+	req.Today = day(replanDay)
+	_, err = e.svc.Generate(e.ctx, req)
+	assert.NoError(t, err, "the window is free again")
 }

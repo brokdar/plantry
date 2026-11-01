@@ -55,7 +55,8 @@ type AffectedPlate struct {
 }
 
 // Spare is a batch that would cook more than is still eaten: Portions spare.
-// Freezable: freezing is on and the recipe not marked unfreezable.
+// Freezable: the batch is not cooked and cooks on or after From, freezing is
+// on and the recipe not marked unfreezable.
 type Spare struct {
 	SessionID int64
 	FoodName  string
@@ -169,20 +170,25 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 		}
 		return nil
 	})
-	s.d.Progress.release(w.Start)
-	if err != nil {
-		return nil, err
-	}
-	if req.Regenerate {
-		id, err := s.Regenerate(ctx, Request{
-			Start: w.Start, Today: req.Today, Instruction: req.Instruction,
-			Scope: Scope{Kind: ScopeEmptyCells, From: req.From, To: req.To},
-		})
+	if err != nil || !req.Regenerate {
+		s.d.Progress.release(w.Start)
 		if err != nil {
-			return nil, fmt.Errorf("re-plan done, regenerate failed: %w", err)
+			return nil, err
 		}
-		res.RunID = &id
+		return res, nil
 	}
+	// The run starts on the reservation the re-plan holds, so no other
+	// generation slips in between; the removal is committed either way, so a
+	// run that fails to start is logged and leaves run_id nil.
+	id, err := s.regenerate(ctx, Request{
+		Start: w.Start, Today: req.Today, Instruction: req.Instruction,
+		Scope: Scope{Kind: ScopeEmptyCells, From: req.From, To: req.To},
+	}, true)
+	if err != nil {
+		s.d.Logger.WarnContext(ctx, "plan.replan regenerate did not start", "window", w.Start.Format(time.DateOnly), "error", err)
+		return res, nil
+	}
+	res.RunID = &id
 	return res, nil
 }
 
@@ -333,7 +339,8 @@ func (s *Service) scanSpare(ctx context.Context, sc *replanScan, removed []plate
 			continue
 		}
 		f := foods[v.FoodID]
-		freezable := set.FreezingEnabled && (f == nil || f.Freezable == nil || *f.Freezable)
+		// Only a batch the re-plan may change can freeze its spare.
+		freezable := mutable(v, from) && set.FreezingEnabled && (f == nil || f.Freezable == nil || *f.Freezable)
 		sc.spare[v.ID] = spareBatch{
 			sess: v.CookSession, after: after, freezable: freezable,
 			mutable: mutable(v, from),

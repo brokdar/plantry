@@ -113,7 +113,7 @@ func (s *Service) Wait() { s.wg.Wait() }
 // replaces them all) and returns its run id.
 func (s *Service) Generate(ctx context.Context, req Request) (int64, error) {
 	req.Scope = Scope{Kind: ScopeWindow}
-	return s.start(ctx, airun.KindGenerate, req)
+	return s.start(ctx, airun.KindGenerate, req, false)
 }
 
 // Regenerate starts a day, plate, side or empty_cells generation and
@@ -121,6 +121,13 @@ func (s *Service) Generate(ctx context.Context, req Request) (int64, error) {
 // (or, for empty cells, the day's other plates) have them, and asks for no
 // new recipe.
 func (s *Service) Regenerate(ctx context.Context, req Request) (int64, error) {
+	return s.regenerate(ctx, req, false)
+}
+
+// regenerate is Regenerate; held says the caller already reserved the
+// window (the re-plan), and the reservation is released only when no run
+// starts.
+func (s *Service) regenerate(ctx context.Context, req Request, held bool) (int64, error) {
 	switch req.Scope.Kind {
 	case ScopeDay, ScopePlate, ScopeSide, ScopeEmptyCells:
 	default:
@@ -128,7 +135,7 @@ func (s *Service) Regenerate(ctx context.Context, req Request) (int64, error) {
 	}
 	noNew := false
 	req.EatersByDate, req.IncludeNewRecipe = nil, &noNew
-	return s.start(ctx, airun.KindRegenerate, req)
+	return s.start(ctx, airun.KindRegenerate, req, held)
 }
 
 // job is a started generation's input.
@@ -150,7 +157,15 @@ type job struct {
 	kept        int
 }
 
-func (s *Service) start(ctx context.Context, kind airun.Kind, req Request) (int64, error) {
+func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held bool) (int64, error) {
+	started := false
+	if held {
+		defer func() {
+			if !started {
+				s.d.Progress.release(dateOnly(req.Start))
+			}
+		}()
+	}
 	sd, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanShoppingDay)
 	if err != nil {
 		return 0, err
@@ -179,15 +194,16 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request) (int6
 		return 0, err
 	}
 
-	if err := s.d.Progress.reserve(w.Start); err != nil {
-		return 0, err
-	}
-	started := false
-	defer func() {
-		if !started {
-			s.d.Progress.release(w.Start)
+	if !held {
+		if err := s.d.Progress.reserve(w.Start); err != nil {
+			return 0, err
 		}
-	}()
+		defer func() {
+			if !started {
+				s.d.Progress.release(w.Start)
+			}
+		}()
+	}
 	j, err := s.resolve(ctx, w, dateOnly(req.Today), req.Scope)
 	if err != nil {
 		return 0, err
