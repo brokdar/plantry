@@ -9,6 +9,7 @@ import { StepIndicator } from "@/components/setup/StepIndicator"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { AvailabilityDefault } from "@/lib/api/availability"
 import type { GenerateInput } from "@/lib/api/generation"
 import type { Plan } from "@/lib/api/plan"
 import {
@@ -142,6 +143,11 @@ function WizardFlow({
     asDefault: boolean
   } | null>(null)
   const [value, setValue] = useState(initial)
+  // The defaults as they were before "Make this my new default" wrote
+  // them; put back if the user then unticks it and writes overrides.
+  const [replacedDefaults, setReplacedDefaults] = useState<
+    AvailabilityDefault[] | null
+  >(null)
   // Changes that would remove confirmed plates wait for the dialog.
   const [confirming, setConfirming] = useState<WindowCellChange[] | null>(null)
   const [guests, setGuests] = useState<Record<string, number>>({})
@@ -205,10 +211,16 @@ function WizardFlow({
   }
 
   function write(changes: WindowCellChange[]) {
+    const revertDefaults =
+      !asDefault && replacedDefaults ? replacedDefaults : undefined
     apply.mutate(
-      { changes, asDefault, slotIds: slots.map((s) => s.id) },
+      { changes, asDefault, slotIds: slots.map((s) => s.id), revertDefaults },
       {
-        onSuccess: () => {
+        onSuccess: ({ previousDefaults }) => {
+          if (revertDefaults) setReplacedDefaults(null)
+          else if (previousDefaults && !replacedDefaults) {
+            setReplacedDefaults(previousDefaults)
+          }
           setSaved({ value, asDefault })
           setConfirming(null)
           setStep(1)

@@ -20,7 +20,7 @@ import {
 import { toast, toastError } from "@/lib/toast"
 
 import { availabilityKeys } from "./keys"
-import { invalidatePlanViews, useUndoToast } from "./plan"
+import { invalidatePlanViews, toastUndoError, useUndoToast } from "./plan"
 
 /** The full weekday × active-slot defaults grid. */
 export function useAvailabilityDefaults() {
@@ -102,6 +102,15 @@ interface ApplyWindowAvailabilityInput {
   asDefault: boolean
   /** The active slots, for the full defaults grid. */
   slotIds: number[]
+  /** Defaults an earlier pass replaced, put back first (the user switched
+   *  from defaults back to overrides). */
+  revertDefaults?: AvailabilityDefault[]
+}
+
+interface ApplyWindowAvailabilityResult {
+  removed: RemovedCell[]
+  /** The defaults before this pass wrote them; null for overrides. */
+  previousDefaults: AvailabilityDefault[] | null
 }
 
 /** A plate a No plate override removed, with the cell as it was. */
@@ -118,7 +127,11 @@ function weekdayOf(date: string) {
 
 const cellKey = (date: string, slotId: number) => `${date}:${slotId}`
 
-async function writeDefaults(changes: WindowCellChange[], slotIds: number[]) {
+/** Writes the changes into the defaults; returns the defaults before. */
+async function writeDefaults(
+  changes: WindowCellChange[],
+  slotIds: number[]
+): Promise<AvailabilityDefault[]> {
   const { items } = await getAvailabilityDefaults()
   const patch = Object.fromEntries(
     changes.map((c) => [
@@ -140,6 +153,25 @@ async function writeDefaults(changes: WindowCellChange[], slotIds: number[]) {
       await clearAvailabilityOverride(c.date, c.slotId)
     }
   }
+  return items
+}
+
+/** Plates linked through a cook session restore only together: each
+ *  snapshot names the session, which removing the next plate deletes. */
+function sharesBatch(removed: RemovedCell[]) {
+  const seen = new Set<number>()
+  for (const { cell } of removed) {
+    const ids = new Set(
+      (cell.plate?.components ?? []).flatMap((c) =>
+        c.cook_session_id === undefined ? [] : [c.cook_session_id]
+      )
+    )
+    for (const id of ids) {
+      if (seen.has(id)) return true
+      seen.add(id)
+    }
+  }
+  return false
 }
 
 /**
@@ -207,6 +239,10 @@ export function useApplyWindowAvailability() {
     return invalidatePlanViews(qc)
   }
 
+  /** Per cell: its previous availability back, then its plate. The
+   *  availability goes first because a No plate cell refuses the plate; a
+   *  failed restore marks that cell No plate again, so it never ends up
+   *  half undone. */
   async function undo(removed: RemovedCell[]) {
     try {
       for (const { cell, snapshot } of removed) {
@@ -219,11 +255,19 @@ export function useApplyWindowAvailability() {
         } else {
           await clearAvailabilityOverride(cell.date, cell.slot_id)
         }
-        await restorePlan(snapshot)
+        try {
+          await restorePlan(snapshot)
+        } catch (err) {
+          await setAvailabilityOverride(cell.date, cell.slot_id, {
+            mode: "none",
+            note: cell.note,
+          }).catch(() => {})
+          throw err
+        }
       }
       toast.success(t("plan.undo.restored"))
     } catch (err) {
-      toastError(err, t)
+      toastUndoError(err, t)
     } finally {
       void refresh()
     }
@@ -234,17 +278,27 @@ export function useApplyWindowAvailability() {
       changes,
       asDefault,
       slotIds,
-    }: ApplyWindowAvailabilityInput): Promise<RemovedCell[]> => {
-      if (!asDefault) return writeOverrides(changes)
-      await writeDefaults(changes, slotIds)
-      return []
-    },
-    onSuccess: (removed) => {
-      if (removed.length > 0) {
-        offer(t("plan.wizard.removed", { count: removed.length }), () => {
-          void undo(removed)
-        })
+      revertDefaults,
+    }: ApplyWindowAvailabilityInput): Promise<ApplyWindowAvailabilityResult> => {
+      if (revertDefaults) await setAvailabilityDefaults(revertDefaults)
+      if (!asDefault) {
+        return {
+          removed: await writeOverrides(changes),
+          previousDefaults: null,
+        }
       }
+      return {
+        removed: [],
+        previousDefaults: await writeDefaults(changes, slotIds),
+      }
+    },
+    onSuccess: ({ removed }) => {
+      if (removed.length === 0) return
+      const message = t("plan.wizard.removed", { count: removed.length })
+      // Separate snapshots of one batch can't be restored one by one; a
+      // batch Undo would need one multi-cell removal on the server.
+      if (sharesBatch(removed)) toast(message)
+      else offer(message, () => void undo(removed))
     },
     onSettled: refresh,
     onError: (err) => toastError(err, t),

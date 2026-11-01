@@ -1486,7 +1486,8 @@
         "title_other": "{{count}} bestätigte Mahlzeiten entfernen?",
         "body": "Die Zutaten sind vielleicht schon gekauft. „Kein Essen“ entfernt diese Mahlzeiten:",
         "item": "{{day}} {{slot}}: {{food}}",
-        "keep": "Behalten",
+        "keep_one": "Behalten",
+        "keep_other": "Behalten",
         "confirm": "Entfernen"
       },
       "removed_one": "{{count}} Mahlzeit entfernt",

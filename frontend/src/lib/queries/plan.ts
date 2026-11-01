@@ -121,7 +121,7 @@ const UNDO_CONFLICT_KEYS = new Set([
 ])
 
 /** A failed Undo names the conflict instead of the generic restore error. */
-function toastUndoError(err: unknown, t: TFunction) {
+export function toastUndoError(err: unknown, t: TFunction) {
   if (err instanceof ApiError && UNDO_CONFLICT_KEYS.has(err.messageKey)) {
     toast.error(t("plan.undo.conflict"))
     return

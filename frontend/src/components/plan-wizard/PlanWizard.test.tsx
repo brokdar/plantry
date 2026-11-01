@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import { ApiError } from "@/lib/api/client"
 import type { Plan } from "@/lib/api/plan"
 import {
   mockAvailabilityDefaults,
@@ -145,7 +146,7 @@ describe("PlanWizard", () => {
     expect(dialog).toHaveTextContent("Sunday dinner: Chili")
 
     // Keep them: nothing is written, the wizard stays on step 1.
-    await user.click(within(dialog).getByRole("button", { name: "Keep them" }))
+    await user.click(within(dialog).getByRole("button", { name: "Keep it" }))
     expect(screen.queryByTestId("wizard-confirm-removal")).toBeNull()
     expect(setAvailabilityOverride).not.toHaveBeenCalled()
 
@@ -176,6 +177,84 @@ describe("PlanWizard", () => {
       expect(restorePlan).toHaveBeenCalledWith(mockRemovedBatch.removed)
     )
     expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-11-01", 3)
+  })
+
+  it("a failed Undo marks the cell No plate again and names the conflict", async () => {
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({
+      cell: {} as never,
+      removed: mockRemovedBatch.removed,
+    })
+    vi.mocked(restorePlan).mockRejectedValue(
+      new ApiError(409, "error.plan.cell_occupied")
+    )
+    const user = await openWizard()
+    await user.click(cell(/^Sunday, November 1 dinner/))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    await user.click(
+      within(await screen.findByTestId("wizard-confirm-removal")).getByRole(
+        "button",
+        { name: "Remove" }
+      )
+    )
+    await screen.findByRole("heading", { name: "Anything special this week?" })
+    const { action } = toastMock.mock.calls[0]![1] as {
+      action: { onClick: () => void }
+    }
+    vi.mocked(setAvailabilityOverride).mockClear()
+    action.onClick()
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        "Can't undo: that meal was changed in the meantime."
+      )
+    )
+    expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-11-01", 3, {
+      mode: "none",
+      note: null,
+    })
+  })
+
+  it("plates of one batch are removed without Undo", async () => {
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({
+      cell: {} as never,
+      removed: mockRemovedBatch.removed,
+    })
+    const user = await openWizard()
+    // Sunday's Chili batch feeds Monday lunch: one cook session.
+    await user.click(cell(/^Sunday, November 1 dinner/))
+    await user.click(cell(/^Monday, November 2 lunch/))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    const dialog = await screen.findByTestId("wizard-confirm-removal")
+    expect(dialog).toHaveTextContent("Remove 2 confirmed plates?")
+    await user.click(within(dialog).getByRole("button", { name: "Remove" }))
+    await screen.findByRole("heading", { name: "Anything special this week?" })
+    expect(toastMock).toHaveBeenCalledWith("2 plates removed")
+  })
+
+  it("unticking Make this my new default puts the replaced defaults back", async () => {
+    const user = await openWizard()
+    await user.click(cell(/^Thursday, November 5 dinner/))
+    await user.click(
+      screen.getByRole("checkbox", { name: "Make this my new default" })
+    )
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    await screen.findByRole("heading", { name: "Anything special this week?" })
+    expect(setAvailabilityDefaults).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await user.click(
+      await screen.findByRole("checkbox", { name: "Make this my new default" })
+    )
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    await screen.findByRole("heading", { name: "Anything special this week?" })
+    expect(setAvailabilityDefaults).toHaveBeenCalledTimes(2)
+    expect(setAvailabilityDefaults).toHaveBeenLastCalledWith(
+      mockAvailabilityDefaults
+    )
+    expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-11-05", 3, {
+      mode: "none",
+      preset_id: null,
+      remove_plate: false,
+    })
   })
 
   it("a draft plate is removed without asking", async () => {

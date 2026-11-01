@@ -1486,7 +1486,8 @@
         "title_other": "Remove {{count}} confirmed plates?",
         "body": "Their ingredients may already be bought. Marking these meals No plate removes them:",
         "item": "{{day}} {{slot, lowercase}}: {{food}}",
-        "keep": "Keep them",
+        "keep_one": "Keep it",
+        "keep_other": "Keep them",
         "confirm": "Remove"
       },
       "removed_one": "{{count}} plate removed",

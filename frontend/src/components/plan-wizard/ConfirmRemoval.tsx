@@ -58,7 +58,7 @@ export function ConfirmRemoval({
             className="h-11 md:pointer-fine:h-9"
             onClick={onCancel}
           >
-            {t("plan.wizard.remove.keep")}
+            {t("plan.wizard.remove.keep", { count: plates.length })}
           </Button>
           <Button
             type="button"
