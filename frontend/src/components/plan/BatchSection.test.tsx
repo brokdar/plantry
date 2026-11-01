@@ -246,7 +246,7 @@ describe("BatchSection on the cook cell of a batch", () => {
     // While the edit is in flight the text follows the stepper live.
     vi.mocked(updateSession).mockReturnValue(new Promise(() => {}))
     await userEvent.click(
-      screen.getByRole("button", { name: "Increase Portions to cook" })
+      screen.getByRole("button", { name: "Increase Portions of Chili to cook" })
     )
     expect(screen.getByTestId("batch-coverage")).toHaveTextContent("3 spare")
     await waitFor(() =>
@@ -261,14 +261,16 @@ describe("BatchSection on the cook cell of a batch", () => {
   it("shows the freeze stepper only with freezing on", async () => {
     await renderSection(mockSession, 9)
     expect(
-      screen.queryByRole("group", { name: "Portions to freeze" })
+      screen.queryByRole("group", { name: "Portions of Chili to freeze" })
     ).not.toBeInTheDocument()
   })
 
   it("freezes portions when freezing is on", async () => {
     await renderSection({ ...mockSession, portions: 8 }, 9, { freezing: true })
     await userEvent.click(
-      screen.getByRole("button", { name: "Increase Portions to freeze" })
+      screen.getByRole("button", {
+        name: "Increase Portions of Chili to freeze",
+      })
     )
     await waitFor(() =>
       expect(updateSession).toHaveBeenCalledWith(7, {
@@ -281,7 +283,9 @@ describe("BatchSection on the cook cell of a batch", () => {
 
   it("asks before Remove batch, then closes the sheet and offers Undo", async () => {
     const { onClose } = await renderSection(mockSession, 9)
-    await userEvent.click(screen.getByRole("button", { name: "Remove batch" }))
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove the Chili batch" })
+    )
     const dialog = await screen.findByRole("dialog", {
       name: "Remove this batch?",
     })

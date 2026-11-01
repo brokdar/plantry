@@ -209,7 +209,9 @@ test.describe("plan wizard", () => {
           r.url().includes("/api/plan/generate") &&
           r.request().method() === "POST"
       )
-      await wizard.getByRole("button", { name: "Skip" }).click()
+      await wizard
+        .getByRole("button", { name: "Generate without a note" })
+        .click()
       const response = await generated
       expect(response.request().postDataJSON()).toMatchObject({
         chooser: "heuristic",
@@ -317,6 +319,23 @@ test.describe("plan wizard", () => {
     ).toBeVisible()
     await expect(page.getByRole("dialog")).toHaveCount(0)
     await expect(page.getByTestId("plan-summary")).toHaveCount(0)
+
+    // Scrolled sideways, no cell shows through either side of the sticky
+    // meal column (the scroll box's padding and the border spacing).
+    const grid = wizard.getByRole("grid")
+    await grid.locator("..").evaluate((el) => (el.scrollLeft = 120))
+    const header = grid.getByRole("rowheader").first()
+    const box = (await header.boundingBox())!
+    const y = box.y + box.height / 2
+    for (const x of [box.x - 2, box.x + box.width + 2]) {
+      const hit = await page.evaluate(
+        ([px, py]) =>
+          document.elementFromPoint(px, py)?.closest("[role=rowheader]") !==
+          null,
+        [x, y]
+      )
+      expect(hit, `x=${x}`).toBe(true)
+    }
   })
 })
 
@@ -342,13 +361,16 @@ test("F3-AC3: an assistant failure offers Plan without the assistant", async ({
     await page.goto(`/plan/new?start=${start}`)
     const wizard = page.getByTestId("plan-wizard")
     await wizard.getByRole("button", { name: "Next" }).click()
-    await wizard.getByRole("button", { name: "Skip" }).click()
+    await wizard
+      .getByRole("button", { name: "Generate without a note" })
+      .click()
 
-    await expect(
-      wizard.getByText(
-        "The assistant didn't respond. Try again, or plan without the assistant."
-      )
-    ).toBeVisible({ timeout: 30_000 })
+    // A neutral headline; the run's error says what went wrong.
+    const failed = wizard.getByTestId("wizard-failed").getByRole("alert")
+    await expect(failed).toContainText("Planning didn't work.", {
+      timeout: 30_000,
+    })
+    await expect(failed).not.toContainText("didn't respond")
 
     const generated = page.waitForResponse(
       (r) =>

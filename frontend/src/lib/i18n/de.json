@@ -968,7 +968,9 @@
       "confirmed_affected": "Einige dieser Essen sind bestätigt und schon eingekauft.",
       "replan_past": "Neu planen geht frühestens ab heute.",
       "nothing_to_accept": "In dieser Woche gibt es keine Entwürfe.",
-      "state_mismatch": "Einige dieser Essen haben sich inzwischen geändert, deshalb lässt sich das nicht rückgängig machen."
+      "state_mismatch": "Einige dieser Essen haben sich inzwischen geändert, deshalb lässt sich das nicht rückgängig machen.",
+      "changed_during_run": "Der Plan hat sich währenddessen geändert, deshalb wurde nichts übernommen. Bitte versuch es noch einmal.",
+      "timeout": "Der Plan hat zu lange gedauert. Bitte versuch es noch einmal."
     },
     "slot": {
       "in_use": "Diese Mahlzeitzeit wird von Tellern verwendet und kann nicht gelöscht werden."
@@ -1350,8 +1352,11 @@
       "create": "Vorkochen anlegen",
       "portions": "Portionen kochen",
       "freeze": "Portionen einfrieren",
+      "portions_named": "Portionen {{name}} kochen",
+      "freeze_named": "Portionen {{name}} einfrieren",
       "use_by": "Haltbar bis {{date}}",
       "remove": "Vorkochen entfernen",
+      "remove_named": "Vorkochen von {{name}} entfernen",
       "remove_title": "Vorkochen entfernen?",
       "remove_body_one": "Damit verschwindet auch der Rest auf {{count}} anderen Mahlzeit. Du kannst es gleich danach rückgängig machen.",
       "remove_body_other": "Damit verschwinden auch die Reste auf {{count}} anderen Mahlzeiten. Du kannst es gleich danach rückgängig machen.",
@@ -1432,6 +1437,9 @@
       "intro": "Wähle die Mahlzeiten, die ausfallen. Der Rest des Plans bleibt.",
       "cells_legend": "Welche Mahlzeiten fallen aus?",
       "whole_day": "Ganzer Tag",
+      "whole_day_name": "{{day}}, ganzer Tag",
+      "preview_error": "Die Vorschau konnte nicht geladen werden.",
+      "regenerate_failed": "Neu geplant, aber der Rest der Woche ließ sich nicht planen. Fülle die leeren Mahlzeiten über „Plan generieren“.",
       "now_none_one": "{{cells}} ist jetzt „Kein Essen“.",
       "now_none_other": "{{cells}} sind jetzt „Kein Essen“.",
       "spare_one": "Von {{name}} bleibt {{amount}} Portion übrig.",
@@ -1440,6 +1448,8 @@
       "cook_less_other": "{{name}}: {{amount}} Portionen weniger kochen.",
       "unassigned_one": "{{amount}} Portion {{name}} ohne Mahlzeit.",
       "unassigned_other": "{{amount}} Portionen {{name}} ohne Mahlzeit.",
+      "dropped": "{{name}} ({{cell}}) verliert den Vorrat.",
+      "moved": "{{name}} wird jetzt {{day}} gekocht.",
       "spare_legend": "Übrige Portionen",
       "spare_freeze_one": "{{amount}} Portion einfrieren",
       "spare_freeze_other": "{{amount}} Portionen einfrieren",
@@ -1490,10 +1500,19 @@
       "title": "Woche planen",
       "next": "Weiter",
       "back": "Zurück",
-      "skip": "Überspringen",
+      "skip": "Ohne Notiz generieren",
+      "discard": {
+        "title": "Änderungen verwerfen?",
+        "body": "Die Mahlzeiten und Gäste, die du für diese Woche eingestellt hast, sind noch nicht gespeichert.",
+        "keep": "Weiter bearbeiten",
+        "confirm": "Verwerfen"
+      },
       "who": {
         "title": "Wer ist zu Hause?",
         "body": "Markiere die Mahlzeiten, die du nicht brauchst. Alles andere wird geplant.",
+        "replaces_draft_one": "Für diese Woche gibt es einen Entwurf mit {{count}} Mahlzeit. Generieren ersetzt ihn, bestätigte Mahlzeiten bleiben.",
+        "replaces_draft_other": "Für diese Woche gibt es einen Entwurf mit {{count}} Mahlzeiten. Generieren ersetzt ihn, bestätigte Mahlzeiten bleiben.",
+        "past": "Vorbei",
         "grid_label": "Wer ist zu Hause, {{range}}",
         "away": "Den ganzen Tag weg",
         "guests": "Gäste",
@@ -1506,12 +1525,12 @@
       },
       "special": {
         "title": "Gibt es diese Woche etwas Besonderes?",
-        "body": "Ein paar Worte für den Assistenten oder überspring den Schritt.",
+        "body": "Ein paar Worte für den Assistenten – oder ohne Notiz generieren.",
         "instruction": "Notiz für diese Woche",
         "placeholder": "z. B. Gäste am Freitag, etwas Leichtes",
         "new_recipe": "Ein neues Rezept einplanen",
         "new_recipe_hint": "Plant ein Rezept ein, das du noch nie gekocht hast.",
-        "body_heuristic": "Ohne Assistenten wird die Notiz nur mit dem Plan gespeichert, nicht gelesen. Überspring den Schritt, um die Woche aus deinen Rezepten und Einstellungen zu planen."
+        "body_heuristic": "Ohne Assistenten wird die Notiz nur mit dem Plan gespeichert, nicht gelesen. Die Woche wird aus deinen Rezepten und Einstellungen geplant."
       },
       "generating": {
         "title": "Deine Woche wird geplant",
@@ -1520,7 +1539,8 @@
         "pending": "wartet"
       },
       "failed": {
-        "llm": "Der Assistent hat nicht geantwortet. Versuch es noch einmal oder plane ohne Assistenten.",
+        "title": "Die Planung hat nicht geklappt.",
+        "llm": "Versuch es noch einmal oder plane ohne Assistenten.",
         "heuristic": "Der Plan ließ sich nicht erstellen. Versuch es noch einmal.",
         "without_assistant": "Ohne Assistenten planen"
       },
@@ -1535,7 +1555,9 @@
         "confirm": "Entfernen"
       },
       "removed_one": "{{count}} Mahlzeit entfernt",
-      "removed_other": "{{count}} Mahlzeiten entfernt"
+      "removed_other": "{{count}} Mahlzeiten entfernt",
+      "removed_no_undo_one": "{{count}} Mahlzeit entfernt. Sie gehört zu einem Vorkochen, deshalb lässt sich das nicht rückgängig machen.",
+      "removed_no_undo_other": "{{count}} Mahlzeiten entfernt. Sie gehören zu einem Vorkochen, deshalb lässt sich das nicht rückgängig machen."
     }
   },
   "batch": {

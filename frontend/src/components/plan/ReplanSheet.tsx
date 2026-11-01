@@ -155,9 +155,14 @@ function ReplanBody({
   const freezable = (data?.spare ?? []).filter((s) => s.freezable)
   const freezePortions = freezable.reduce((n, s) => n + s.portions, 0)
   const confirmed = data?.confirmed_affected ?? []
+  // Confirmed ones are already listed as bought; the rest just lose the batch.
+  const dropped = (data?.dropped ?? []).filter((d) => !d.confirmed)
+  const moved = data?.moved ?? []
   const assistant = Boolean(settings.data?.["ai.provider"]?.value)
   // A preview for an older choice may miss confirmed plates of the new one.
   const settled = !!data && !preview.isPlaceholderData
+  // A failed preview keeps the actions waiting (it may miss confirmed
+  // plates) and offers Retry instead.
   const busy = replan.isPending || !settled
 
   function submit(unlock: boolean) {
@@ -174,13 +179,23 @@ function ReplanBody({
         ...(assistant ? {} : { chooser: "heuristic" as const }),
       },
       {
-        onSuccess: ({ removed }) => {
+        onSuccess: ({ removed, run_id, regenerate_error }) => {
           const count = removed.plates.length
-          toast.success(
-            count > 0
-              ? t("plan.replan.done_removed", { count })
-              : t("plan.replan.done")
-          )
+          if (regenerate && run_id === null) {
+            // The removal committed but the run for the rest didn't start:
+            // say so, or the week is left with empty meals and no sign why.
+            toast.warning(t("plan.replan.regenerate_failed"), {
+              description: regenerate_error
+                ? t(regenerate_error, { defaultValue: t("error.server") })
+                : undefined,
+            })
+          } else {
+            toast.success(
+              count > 0
+                ? t("plan.replan.done_removed", { count })
+                : t("plan.replan.done")
+            )
+          }
           onClose()
         },
       }
@@ -216,7 +231,10 @@ function ReplanBody({
         </SheetDescription>
       </SheetHeader>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pb-4">
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pb-4"
+        data-testid="replan-scroll"
+      >
         <fieldset className="flex flex-col gap-3">
           <legend className="mb-1 text-small font-semibold text-ink">
             {t("plan.replan.cells_legend")}
@@ -278,6 +296,9 @@ function ReplanBody({
                         type="checkbox"
                         checked={whole}
                         onChange={() => toggleDay(cells)}
+                        aria-label={t("plan.replan.whole_day_name", {
+                          day: weekday(date),
+                        })}
                         className="sr-only"
                       />
                       {t("plan.replan.whole_day")}
@@ -289,7 +310,29 @@ function ReplanBody({
           })}
         </fieldset>
 
-        {(changed.length > 0 || (data?.spare.length ?? 0) > 0) && (
+        {preview.isError && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4 text-body text-ink"
+            data-testid="replan-preview-error"
+          >
+            <p>{t("plan.replan.preview_error")}</p>
+            <Button
+              type="button"
+              variant="outline"
+              className={action}
+              disabled={preview.isFetching}
+              onClick={() => void preview.refetch()}
+            >
+              {t("common.retry")}
+            </Button>
+          </div>
+        )}
+
+        {(changed.length > 0 ||
+          (data?.spare.length ?? 0) > 0 ||
+          dropped.length > 0 ||
+          moved.length > 0) && (
           <section
             className="flex flex-col gap-1 border-t border-line pt-4 text-body text-ink"
             data-testid="replan-changes"
@@ -320,6 +363,22 @@ function ReplanBody({
                     name: s.food_name,
                   }
                 )}
+              </p>
+            ))}
+            {dropped.map((d) => (
+              <p key={`d${d.plate_id}`}>
+                {t("plan.replan.dropped", {
+                  name: d.food_name,
+                  cell: cellName(d),
+                })}
+              </p>
+            ))}
+            {moved.map((m) => (
+              <p key={`m${m.session_id}`}>
+                {t("plan.replan.moved", {
+                  name: m.food_name,
+                  day: `${weekday(m.cook_date)}, ${slotName(m.cook_slot_id)}`,
+                })}
               </p>
             ))}
           </section>
@@ -377,28 +436,30 @@ function ReplanBody({
             </span>
           </span>
         </label>
-
-        {confirmed.length > 0 && (
-          <section
-            className="flex flex-col gap-1 rounded-cell border border-warning/40 bg-panel-sunken p-3"
-            data-testid="replan-bought"
-          >
-            <h3 className="font-sans text-small font-semibold text-ink">
-              {t("plan.replan.bought_title")}
-            </h3>
-            <ul className="flex flex-col gap-0.5 text-small text-ink">
-              {confirmed.map((p) => (
-                <li key={p.plate_id}>
-                  {t("plan.replan.bought_item", {
-                    cell: cellName(p),
-                    name: p.food_name,
-                  })}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
       </div>
+
+      {/* Outside the scroll box: what was already bought is read before
+          Keep them / Change them, however long the day list is. */}
+      {confirmed.length > 0 && (
+        <section
+          className="mx-4 mb-3 flex flex-col gap-1 rounded-cell border border-warning/40 bg-panel-sunken p-3"
+          data-testid="replan-bought"
+        >
+          <h3 className="font-sans text-small font-semibold text-ink">
+            {t("plan.replan.bought_title")}
+          </h3>
+          <ul className="flex max-h-32 flex-col gap-0.5 overflow-y-auto text-small text-ink">
+            {confirmed.map((p) => (
+              <li key={p.plate_id}>
+                {t("plan.replan.bought_item", {
+                  cell: cellName(p),
+                  name: p.food_name,
+                })}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <SheetFooter className="flex-row justify-end gap-2 border-t border-line px-4 py-3">
         {confirmed.length > 0 ? (

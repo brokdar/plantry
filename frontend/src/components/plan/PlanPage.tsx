@@ -331,6 +331,7 @@ function PlanView({
               key={runId}
               run={runQuery.data}
               failed={runQuery.isError}
+              attention={board.warningCells.length}
               onFinished={runFinished}
             />
           )

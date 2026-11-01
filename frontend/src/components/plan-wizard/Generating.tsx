@@ -52,18 +52,20 @@ export function Generating({
 
   if (run.isError || data?.status === "error") {
     const assistant = data?.chooser === "llm"
-    const detail = data?.error_key
-      ? t(data.error_key, { defaultValue: "" })
-      : ""
+    // A neutral headline; the error says what went wrong, else the advice
+    // for the chooser stands in.
+    const detail =
+      (data?.error_key ? t(data.error_key, { defaultValue: "" }) : "") ||
+      (assistant
+        ? t("plan.wizard.failed.llm")
+        : t("plan.wizard.failed.heuristic"))
     return (
       <div className="flex flex-col gap-4" data-testid="wizard-failed">
         <div role="alert" className="flex flex-col gap-1">
-          <p className="text-body text-ink">
-            {assistant
-              ? t("plan.wizard.failed.llm")
-              : t("plan.wizard.failed.heuristic")}
+          <p className="text-body font-semibold text-ink">
+            {t("plan.wizard.failed.title")}
           </p>
-          {detail && <p className="text-small text-ink-muted">{detail}</p>}
+          <p className="text-small text-ink-muted">{detail}</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button

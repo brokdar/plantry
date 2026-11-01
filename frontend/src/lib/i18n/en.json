@@ -941,7 +941,9 @@
       "confirmed_affected": "Some of these plates are confirmed and were already shopped for.",
       "replan_past": "Re-planning starts today at the earliest.",
       "nothing_to_accept": "This week has no draft plates.",
-      "state_mismatch": "Some of these plates changed in the meantime, so this can't be undone."
+      "state_mismatch": "Some of these plates changed in the meantime, so this can't be undone.",
+      "changed_during_run": "That plan changed while it was being made, so nothing was applied. Please try again.",
+      "timeout": "Making the plan took too long. Please try again."
     },
     "slot": {
       "in_use": "This time slot is used by plates and cannot be deleted."
@@ -1350,8 +1352,11 @@
       "create": "Create batch",
       "portions": "Portions to cook",
       "freeze": "Portions to freeze",
+      "portions_named": "Portions of {{name}} to cook",
+      "freeze_named": "Portions of {{name}} to freeze",
       "use_by": "Use by {{date}}",
       "remove": "Remove batch",
+      "remove_named": "Remove the {{name}} batch",
       "remove_title": "Remove this batch?",
       "remove_body_one": "This also removes its leftover on {{count}} other plate. You can undo it right after.",
       "remove_body_other": "This also removes its leftovers on {{count}} other plates. You can undo it right after.",
@@ -1432,6 +1437,9 @@
       "intro": "Pick the meals that are off. The rest of the plan stays.",
       "cells_legend": "Which meals are off?",
       "whole_day": "Whole day",
+      "whole_day_name": "{{day}}, whole day",
+      "preview_error": "The preview couldn't be loaded.",
+      "regenerate_failed": "Re-planned, but the rest of the week couldn't be planned. Use Generate plan to fill the empty meals.",
       "now_none_one": "{{cells}} is now No plate.",
       "now_none_other": "{{cells}} are now No plate.",
       "spare_one": "{{name}} has {{amount}} spare portion.",
@@ -1440,6 +1448,8 @@
       "cook_less_other": "{{name}}: cook {{amount}} portions less.",
       "unassigned_one": "{{amount}} portion of {{name}} unassigned.",
       "unassigned_other": "{{amount}} portions of {{name}} unassigned.",
+      "dropped": "{{name}} on {{cell}} loses its batch.",
+      "moved": "{{name}} now cooks on {{day}}.",
       "spare_legend": "Spare portions",
       "spare_freeze_one": "Freeze {{amount}} portion",
       "spare_freeze_other": "Freeze {{amount}} portions",
@@ -1490,10 +1500,19 @@
       "title": "Plan the week",
       "next": "Next",
       "back": "Back",
-      "skip": "Skip",
+      "skip": "Generate without a note",
+      "discard": {
+        "title": "Discard your changes?",
+        "body": "The meals and guests you set for this week aren't saved yet.",
+        "keep": "Keep editing",
+        "confirm": "Discard"
+      },
       "who": {
         "title": "Who's home?",
         "body": "Mark the meals you don't need. Everything else gets planned.",
+        "replaces_draft_one": "This week has a draft of {{count}} plate. Generating replaces it; confirmed plates stay.",
+        "replaces_draft_other": "This week has a draft of {{count}} plates. Generating replaces it; confirmed plates stay.",
+        "past": "Past",
         "grid_label": "Who's home, {{range}}",
         "away": "Away all day",
         "guests": "Guests",
@@ -1506,12 +1525,12 @@
       },
       "special": {
         "title": "Anything special this week?",
-        "body": "A few words for the assistant, or skip.",
+        "body": "A few words for the assistant, or generate without a note.",
         "instruction": "Note for this week",
         "placeholder": "e.g. guests on Friday, something light",
         "new_recipe": "Include a new recipe",
         "new_recipe_hint": "Plans one recipe you haven't cooked yet.",
-        "body_heuristic": "Without an assistant, the note is saved with the plan but not read. Skip to plan the week from your recipes and settings."
+        "body_heuristic": "Without an assistant, the note is saved with the plan but not read. The week is planned from your recipes and settings."
       },
       "generating": {
         "title": "Planning your week",
@@ -1520,7 +1539,8 @@
         "pending": "waiting"
       },
       "failed": {
-        "llm": "The assistant didn't respond. Try again, or plan without the assistant.",
+        "title": "Planning didn't work.",
+        "llm": "Try again, or plan without the assistant.",
         "heuristic": "The plan couldn't be made. Try again.",
         "without_assistant": "Plan without the assistant"
       },
@@ -1535,7 +1555,9 @@
         "confirm": "Remove"
       },
       "removed_one": "{{count}} plate removed",
-      "removed_other": "{{count}} plates removed"
+      "removed_other": "{{count}} plates removed",
+      "removed_no_undo_one": "{{count}} plate removed. It shares a batch, so this can't be undone.",
+      "removed_no_undo_other": "{{count}} plates removed. They share a batch, so this can't be undone."
     }
   },
   "batch": {

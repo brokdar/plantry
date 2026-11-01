@@ -119,6 +119,28 @@ interface RemovedCell {
   snapshot: PlanSnapshot
 }
 
+/**
+ * A window write that failed part-way. It carries what the earlier writes
+ * already did: the plates removed (for Undo) and the defaults replaced
+ * (to revert), which the failure must not lose.
+ */
+export class PartialApplyError extends Error {
+  readonly error: unknown
+  readonly removed: RemovedCell[]
+  readonly previousDefaults: AvailabilityDefault[] | null
+
+  constructor(
+    error: unknown,
+    removed: RemovedCell[],
+    previousDefaults: AvailabilityDefault[] | null
+  ) {
+    super("availability write failed part-way")
+    this.error = error
+    this.removed = removed
+    this.previousDefaults = previousDefaults
+  }
+}
+
 /** 0 = Monday … 6 = Sunday, as the defaults count weekdays. */
 function weekdayOf(date: string) {
   const [y, m, d] = date.split("-").map(Number)
@@ -148,10 +170,14 @@ async function writeDefaults(
     )
   )
   // A date override would hide the new default on that date.
-  for (const c of changes) {
-    if (c.cell.source === "override") {
-      await clearAvailabilityOverride(c.date, c.slotId)
+  try {
+    for (const c of changes) {
+      if (c.cell.source === "override") {
+        await clearAvailabilityOverride(c.date, c.slotId)
+      }
     }
+  } catch (err) {
+    throw new PartialApplyError(err, [], items)
   }
   return items
 }
@@ -203,21 +229,26 @@ async function writeOverrides(
   }
 
   const removed: RemovedCell[] = []
-  for (const c of changes) {
-    const now = resolved.get(cellKey(c.date, c.slotId))
-    if (
-      now &&
-      now.mode === c.mode &&
-      (c.mode !== "routine" || now.preset_id === c.presetId)
-    ) {
-      continue
+  try {
+    for (const c of changes) {
+      const now = resolved.get(cellKey(c.date, c.slotId))
+      if (
+        now &&
+        now.mode === c.mode &&
+        (c.mode !== "routine" || now.preset_id === c.presetId)
+      ) {
+        continue
+      }
+      const res = await setAvailabilityOverride(c.date, c.slotId, {
+        mode: c.mode,
+        preset_id: c.mode === "routine" ? c.presetId : null,
+        remove_plate: removes(c),
+      })
+      if (res.removed) removed.push({ cell: c.cell, snapshot: res.removed })
     }
-    const res = await setAvailabilityOverride(c.date, c.slotId, {
-      mode: c.mode,
-      preset_id: c.mode === "routine" ? c.presetId : null,
-      remove_plate: removes(c),
-    })
-    if (res.removed) removed.push({ cell: c.cell, snapshot: res.removed })
+  } catch (err) {
+    // The plates removed so far keep their Undo.
+    throw new PartialApplyError(err, removed, null)
   }
   return removed
 }
@@ -273,6 +304,19 @@ export function useApplyWindowAvailability() {
     }
   }
 
+  function offerRemoved(removed: RemovedCell[]) {
+    if (removed.length === 0) return
+    const count = removed.length
+    // Separate snapshots of one batch can't be restored one by one; a
+    // batch Undo would need one multi-cell removal on the server. The
+    // toast says so rather than leave the user looking for Undo.
+    if (sharesBatch(removed)) {
+      toast(t("plan.wizard.removed_no_undo", { count }))
+    } else {
+      offer(t("plan.wizard.removed", { count }), () => void undo(removed))
+    }
+  }
+
   return useMutation({
     mutationFn: async ({
       changes,
@@ -292,15 +336,15 @@ export function useApplyWindowAvailability() {
         previousDefaults: await writeDefaults(changes, slotIds),
       }
     },
-    onSuccess: ({ removed }) => {
-      if (removed.length === 0) return
-      const message = t("plan.wizard.removed", { count: removed.length })
-      // Separate snapshots of one batch can't be restored one by one; a
-      // batch Undo would need one multi-cell removal on the server.
-      if (sharesBatch(removed)) toast(message)
-      else offer(message, () => void undo(removed))
-    },
+    onSuccess: ({ removed }) => offerRemoved(removed),
     onSettled: refresh,
-    onError: (err) => toastError(err, t),
+    onError: (err) => {
+      if (err instanceof PartialApplyError) {
+        toastError(err.error, t)
+        offerRemoved(err.removed)
+        return
+      }
+      toastError(err, t)
+    },
   })
 }

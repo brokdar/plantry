@@ -19,6 +19,10 @@ interface GenerationProgressProps {
   /** The run can't be read (e.g. 404): it is over as far as the board
    *  knows. */
   failed: boolean
+  /** The board's cells that need attention, as the toolbar counts them.
+   *  `useRun` refetches the plan before it reports the run finished, so
+   *  this is the finished run's board. */
+  attention: number
   /** Called once the run has finished and its result was announced. */
   onFinished: () => void
 }
@@ -33,6 +37,7 @@ interface GenerationProgressProps {
 export function GenerationProgress({
   run,
   failed,
+  attention,
   onFinished,
 }: GenerationProgressProps) {
   const { t } = useTranslation()
@@ -67,9 +72,8 @@ export function GenerationProgress({
                 }),
               }),
       ]
-      const attention = done.issues.filter(
-        (i) => i.severity === "violation"
-      ).length
+      // The board's count, not the run's issues: those include window-wide
+      // rules and the run's own checks, so the numbers would disagree.
       if (attention > 0) {
         parts.push(`${t("plan.toolbar.warnings", { count: attention })}.`)
       }

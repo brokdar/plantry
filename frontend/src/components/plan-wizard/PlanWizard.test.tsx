@@ -6,6 +6,7 @@ import { ApiError } from "@/lib/api/client"
 import type { Plan } from "@/lib/api/plan"
 import {
   mockAvailabilityDefaults,
+  mockDraftPlan,
   mockPlan,
   mockRemovedBatch,
   mockProfile,
@@ -67,6 +68,8 @@ import { getPlan, restorePlan } from "@/lib/api/plan"
 import { getPresets } from "@/lib/api/presets"
 import { getProfile } from "@/lib/api/profile"
 import { listSettings } from "@/lib/api/settings"
+import i18n from "@/lib/i18n"
+import { toastError } from "@/lib/toast"
 
 import { PlanWizard } from "./PlanWizard"
 
@@ -227,7 +230,9 @@ describe("PlanWizard", () => {
     expect(dialog).toHaveTextContent("Remove 2 confirmed plates?")
     await user.click(within(dialog).getByRole("button", { name: "Remove" }))
     await screen.findByRole("heading", { name: "Anything special this week?" })
-    expect(toastMock).toHaveBeenCalledWith("2 plates removed")
+    expect(toastMock).toHaveBeenCalledWith(
+      "2 plates removed. They share a batch, so this can't be undone."
+    )
   })
 
   it("unticking Make this my new default puts the replaced defaults back", async () => {
@@ -402,7 +407,7 @@ describe("PlanWizard", () => {
     })
   })
 
-  it("Skip generates without the note; the toggle follows plan.explore_per_week", async () => {
+  it("Generate without a note leaves the note out; the toggle follows plan.explore_per_week", async () => {
     vi.mocked(listSettings).mockResolvedValue(
       mockSettingsList([{ key: "plan.explore_per_week", value: "1" }])
     )
@@ -415,7 +420,9 @@ describe("PlanWizard", () => {
     expect(
       screen.getByRole("switch", { name: "Include a new recipe" })
     ).toBeChecked()
-    await user.click(screen.getByRole("button", { name: "Skip" }))
+    await user.click(
+      screen.getByRole("button", { name: "Generate without a note" })
+    )
     await screen.findByRole("heading", { name: "Planning your week" })
     expect(generatePlan).toHaveBeenCalledWith({
       start: START,
@@ -429,7 +436,9 @@ describe("PlanWizard", () => {
   async function toGenerating() {
     const user = await openWizard()
     await user.click(screen.getByRole("button", { name: "Next" }))
-    await user.click(await screen.findByRole("button", { name: "Skip" }))
+    await user.click(
+      await screen.findByRole("button", { name: "Generate without a note" })
+    )
     await screen.findByRole("heading", { name: "Planning your week" })
     return user
   }
@@ -472,13 +481,14 @@ describe("PlanWizard", () => {
     vi.mocked(getPlanRun).mockResolvedValue({
       ...mockRun("error"),
       chooser: "llm",
+      error_key: "error.ai.invalid_plan",
     })
     const user = await toGenerating()
-    expect(
-      await screen.findByText(
-        "The assistant didn't respond. Try again, or plan without the assistant."
-      )
-    ).toBeInTheDocument()
+    // A neutral headline over the run's own error, not "didn't respond".
+    const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("Planning didn't work.")
+    expect(alert).toHaveTextContent(i18n.t("error.ai.invalid_plan"))
+    expect(alert).not.toHaveTextContent("didn't respond")
 
     vi.mocked(generatePlan).mockResolvedValue({ run_id: 13 })
     vi.mocked(getPlanRun).mockResolvedValue({ ...mockRun("ok"), id: 13 })
@@ -502,11 +512,15 @@ describe("PlanWizard", () => {
   })
 
   it("a heuristic failure offers only Try again, which repeats the request", async () => {
-    vi.mocked(getPlanRun).mockResolvedValue(mockRun("error"))
+    vi.mocked(getPlanRun).mockResolvedValue({
+      ...mockRun("error"),
+      error_key: null,
+    })
     const user = await toGenerating()
-    expect(
-      await screen.findByText("The plan couldn't be made. Try again.")
-    ).toBeInTheDocument()
+    // Without an error key the chooser's advice stands in.
+    const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("Planning didn't work.")
+    expect(alert).toHaveTextContent("The plan couldn't be made. Try again.")
     expect(
       screen.queryByRole("button", { name: "Plan without the assistant" })
     ).toBeNull()
@@ -524,5 +538,120 @@ describe("PlanWizard", () => {
       to: "/plan",
       search: { start: START, run: undefined },
     })
+  })
+
+  it("Escape with unsaved edits asks first; Keep editing stays, Discard closes", async () => {
+    const user = await openWizard()
+    await user.click(cell(/^Thursday, November 5 dinner/))
+    await user.keyboard("{Escape}")
+    const dialog = await screen.findByTestId("wizard-discard")
+    expect(dialog).toHaveTextContent("Discard your changes?")
+    expect(navigateMock).not.toHaveBeenCalled()
+
+    await user.click(
+      within(dialog).getByRole("button", { name: "Keep editing" })
+    )
+    expect(screen.queryByTestId("wizard-discard")).toBeNull()
+    expect(cell(/^Thursday, November 5 dinner, No plate$/)).toBeInTheDocument()
+
+    await user.keyboard("{Escape}")
+    await user.click(
+      within(await screen.findByTestId("wizard-discard")).getByRole("button", {
+        name: "Discard",
+      })
+    )
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: "/plan",
+      search: { start: START, run: undefined },
+    })
+    expect(setAvailabilityOverride).not.toHaveBeenCalled()
+  })
+
+  it("warns that generating replaces the window's draft", async () => {
+    vi.mocked(getPlan).mockResolvedValue(mockDraftPlan)
+    await openWizard()
+    expect(screen.getByTestId("wizard-replaces-draft")).toHaveTextContent(
+      "This week has a draft of 3 plates. Generating replaces it; confirmed plates stay."
+    )
+  })
+
+  it("has no draft warning without drafts", async () => {
+    await openWizard()
+    expect(screen.queryByTestId("wizard-replaces-draft")).toBeNull()
+  })
+
+  it("days before today are shown as past and can't be changed", async () => {
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      window: { ...mockPlan.window, today: "2026-11-02" },
+    })
+    await openWizard()
+    expect(cell(/^Saturday, October 31 dinner/)).toBeDisabled()
+    expect(cell(/^Sunday, November 1 lunch/)).toBeDisabled()
+    expect(
+      screen.getByRole("button", { name: /^Sunday.* actions$/ })
+    ).toBeDisabled()
+    expect(cell(/^Monday, November 2 dinner/)).toBeEnabled()
+    expect(screen.getAllByTestId("grid-column-note")).toHaveLength(2)
+    expect(screen.getAllByTestId("grid-column-note")[0]).toHaveTextContent(
+      "Past"
+    )
+    // The grid's tab stop is on the first day that can change.
+    expect(cell(/^Monday, November 2 breakfast/)).toHaveAttribute(
+      "tabindex",
+      "0"
+    )
+  })
+
+  it("Guests moves focus to the new stepper and marks the day", async () => {
+    const user = await openWizard()
+    await user.click(screen.getByRole("button", { name: /^Friday.* actions$/ }))
+    await user.click(screen.getByRole("menuitem", { name: "Guests" }))
+    const stepper = screen.getByTestId("wizard-guests-2026-11-06")
+    await waitFor(() =>
+      expect(stepper).toContainElement(document.activeElement as HTMLElement)
+    )
+    expect(screen.getByTestId("grid-column-note")).toHaveTextContent("Guests")
+  })
+
+  it("a write failing part-way keeps Undo for the plates already removed", async () => {
+    vi.mocked(setAvailabilityOverride)
+      .mockResolvedValueOnce({
+        cell: {} as never,
+        removed: mockRemovedBatch.removed,
+      })
+      .mockRejectedValueOnce(new ApiError(503, "error.network"))
+    const user = await openWizard()
+    // Sunday dinner's confirmed Chili is removed, then Thursday fails.
+    await user.click(cell(/^Sunday, November 1 dinner/))
+    await user.click(cell(/^Thursday, November 5 dinner/))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    await user.click(
+      within(await screen.findByTestId("wizard-confirm-removal")).getByRole(
+        "button",
+        { name: "Remove" }
+      )
+    )
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        "1 plate removed",
+        expect.objectContaining({ action: expect.anything() })
+      )
+    )
+    expect(toastError).toHaveBeenCalledWith(
+      new ApiError(503, "error.network"),
+      expect.anything()
+    )
+    // Still on step 1; Undo restores the removed plate.
+    expect(
+      screen.getByRole("heading", { name: "Who's home?" })
+    ).toBeInTheDocument()
+    const { action } = toastMock.mock.calls[0]![1] as {
+      action: { onClick: () => void }
+    }
+    action.onClick()
+    await waitFor(() =>
+      expect(restorePlan).toHaveBeenCalledWith(mockRemovedBatch.removed)
+    )
   })
 })

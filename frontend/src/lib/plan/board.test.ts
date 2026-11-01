@@ -320,8 +320,11 @@ describe("buildBoard: drafts and issues (F2)", () => {
   })
 
   it("summarises the draft with the run's notes", () => {
+    // stats count all 4 plates and 2 cook days; the confirmed Tofu bowl
+    // and its cook day are not part of the draft.
+    expect(mockDraftPlan.stats).toMatchObject({ plates: 4, cook_days: 2 })
     const board = buildBoard(mockDraftPlan, i18n)
-    expect(board.summary).toBe("Draft · 4 plates · 2 cook days")
+    expect(board.summary).toBe("Draft · 3 plates · 1 cook day")
     expect(board.draft).toEqual({
       notes: "Cooks once on Sunday and eats leftovers on Monday.",
     })

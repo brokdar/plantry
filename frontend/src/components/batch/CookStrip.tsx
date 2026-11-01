@@ -37,7 +37,7 @@ function stripBadges(session: Session, weekday: string): BatchBadgeContent[] {
  * The cook strip above the board (UX §4, §5.5): one badge per batch in cook
  * order ("Sun · Chili × 6"), followed by dashed "2 spare" / "2 to freeze"
  * badges. Tapping a batch scrolls to its cook cell and highlights it. On
- * phone the row scrolls sideways.
+ * phone the row scrolls sideways; from 768 px it wraps.
  */
 export function CookStrip({ batches }: { batches: readonly ColouredBatch[] }) {
   const { t, i18n } = useTranslation()
@@ -47,8 +47,10 @@ export function CookStrip({ batches }: { batches: readonly ColouredBatch[] }) {
 
   return (
     <section aria-label={t("batch.cook_days")}>
-      {/* p-1 keeps the 2px + 2px focus ring inside the scroll box. */}
-      <ul className="flex gap-1 overflow-x-auto overscroll-x-contain p-1">
+      {/* p-1 keeps the 2px + 2px focus ring inside the scroll box. From
+          768 px the row wraps: there is room, and a clipped strip hides
+          its later cook days with no cue. */}
+      <ul className="flex gap-1 overflow-x-auto overscroll-x-contain p-1 md:flex-wrap md:overflow-x-visible">
         {batches.map(({ session, colour }) => {
           const badges = stripBadges(
             session,

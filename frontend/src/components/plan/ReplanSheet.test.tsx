@@ -21,7 +21,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
   useNavigate: () => navigateMock,
 }))
 const toastMock = vi.hoisted(() =>
-  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() })
+  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() })
 )
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
@@ -124,7 +124,7 @@ describe("ReplanSheet", () => {
     const s = await sheet()
     await userEvent.click(
       within(within(s).getAllByTestId("replan-day")[1]).getByLabelText(
-        "Whole day"
+        "Monday, whole day"
       )
     )
     await waitFor(() =>
@@ -209,6 +209,48 @@ describe("ReplanSheet", () => {
     const input = vi.mocked(replan).mock.calls[0][0]
     expect(input.spare).toBe("keep")
     expect(input).not.toHaveProperty("chooser")
+  })
+
+  it("lists plates that lose their batch and batches that move their cook day", async () => {
+    vi.mocked(getReplanPreview).mockResolvedValue({
+      none_cells: [{ date: "2026-11-02", slot_id: 3 }],
+      confirmed_affected: [],
+      spare: [],
+      dropped: [
+        {
+          session_id: 1,
+          food_name: "Chili",
+          plate_id: 7,
+          date: "2026-11-04",
+          slot_id: 3,
+          confirmed: false,
+        },
+        {
+          session_id: 1,
+          food_name: "Chili",
+          plate_id: 8,
+          date: "2026-11-05",
+          slot_id: 3,
+          confirmed: true,
+        },
+      ],
+      moved: [
+        {
+          session_id: 2,
+          food_name: "Lasagne",
+          cook_date: "2026-11-03",
+          cook_slot_id: 2,
+        },
+      ],
+    })
+    renderSheet({ initialCells: [{ date: "2026-11-02", slot_id: 3 }] })
+    const s = await sheet()
+    const changes = await within(s).findByTestId("replan-changes")
+    expect(changes).toHaveTextContent("Chili on Wednesday")
+    expect(changes).toHaveTextContent("loses its batch.")
+    // A confirmed one is already named under the bought plates.
+    expect(changes).not.toHaveTextContent("Thursday")
+    expect(changes).toHaveTextContent("Lasagne now cooks on Tuesday")
   })
 
   it("a batch that can still change but can't freeze cooks less", async () => {
@@ -301,5 +343,60 @@ describe("ReplanSheet", () => {
       within(s).getByRole("heading", { name: "Re-plan from Tuesday" })
     ).toBeInTheDocument()
     expect(within(s).getAllByTestId("replan-day")).toHaveLength(4)
+  })
+
+  it("names each Whole day checkbox by its day", async () => {
+    renderSheet()
+    const s = await sheet()
+    expect(within(s).getByLabelText("Sunday, whole day")).toBeInTheDocument()
+    expect(within(s).getByLabelText("Monday, whole day")).toBeInTheDocument()
+    expect(
+      within(s).queryAllByRole("checkbox", { name: "Whole day" })
+    ).toHaveLength(0)
+  })
+
+  it("keeps the bought plates outside the scrolling list, next to Keep and Change", async () => {
+    previewMonday()
+    renderSheet({ initialCells: [{ date: "2026-11-02", slot_id: 3 }] })
+    const s = await sheet()
+    const bought = await within(s).findByTestId("replan-bought")
+    expect(within(s).getByTestId("replan-scroll")).not.toContainElement(bought)
+  })
+
+  it("a failed preview says so and Retry asks again", async () => {
+    vi.mocked(getReplanPreview).mockRejectedValueOnce(new Error("offline"))
+    renderSheet()
+    const s = await sheet()
+    const alert = await within(s).findByTestId("replan-preview-error")
+    expect(alert).toHaveTextContent("The preview couldn't be loaded.")
+    expect(within(s).getByRole("button", { name: "Re-plan" })).toBeDisabled()
+    await userEvent.click(
+      within(alert).getByRole("button", { name: "Try again" })
+    )
+    await waitFor(() =>
+      expect(within(s).queryByTestId("replan-preview-error")).toBeNull()
+    )
+    expect(getReplanPreview).toHaveBeenCalledTimes(2)
+  })
+
+  it("a re-plan whose new run didn't start warns instead of reporting success", async () => {
+    vi.mocked(replan).mockResolvedValue({
+      ...mockRemovedBatch,
+      run_id: null,
+      regenerate_error: "error.ai.provider_error",
+    })
+    renderSheet()
+    const s = await sheet()
+    await userEvent.click(
+      within(s).getByLabelText("Re-plan the rest of the week")
+    )
+    await clickWhenEnabled(s, "Re-plan")
+    await waitFor(() => expect(toastMock.warning).toHaveBeenCalledTimes(1))
+    expect(toastMock.warning).toHaveBeenCalledWith(
+      "Re-planned, but the rest of the week couldn't be planned. Use Generate plan to fill the empty meals.",
+      { description: expect.any(String) }
+    )
+    expect(toastMock.success).not.toHaveBeenCalled()
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 })
