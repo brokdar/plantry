@@ -59,13 +59,15 @@ type AffectedPlate struct {
 }
 
 // Spare is a batch that would cook more than is still eaten: Portions spare.
-// Freezable: the batch is not cooked and cooks on or after From, freezing is
-// on and the recipe not marked unfreezable.
+// Mutable: the batch is not cooked and cooks on or after From, so the
+// re-plan may freeze or shrink it. Freezable: mutable, freezing is on and
+// the recipe not marked unfreezable.
 type Spare struct {
 	SessionID int64
 	FoodName  string
 	Portions  float64
 	Freezable bool
+	Mutable   bool
 }
 
 // ReplanPreview is what a re-plan would change: the No-plate cells that hold
@@ -344,12 +346,13 @@ func (s *Service) scanSpare(ctx context.Context, sc *replanScan, removed []plate
 		}
 		f := foods[v.FoodID]
 		// Only a batch the re-plan may change can freeze its spare.
-		freezable := mutable(v, from) && set.FreezingEnabled && (f == nil || f.Freezable == nil || *f.Freezable)
+		mut := mutable(v, from)
+		freezable := mut && set.FreezingEnabled && (f == nil || f.Freezable == nil || *f.Freezable)
 		sc.spare[v.ID] = spareBatch{
 			sess: v.CookSession, after: after, freezable: freezable,
-			mutable: mutable(v, from),
+			mutable: mut,
 		}
-		sc.preview.Spare = append(sc.preview.Spare, Spare{SessionID: v.ID, FoodName: v.FoodName, Portions: spare, Freezable: freezable})
+		sc.preview.Spare = append(sc.preview.Spare, Spare{SessionID: v.ID, FoodName: v.FoodName, Portions: spare, Freezable: freezable, Mutable: mut})
 	}
 	return nil
 }

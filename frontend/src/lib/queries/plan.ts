@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -392,7 +393,8 @@ export function useDiscard() {
 // ── Mid-week re-plan (§3.2) ───────────────────────────────────────────
 
 /** What re-planning [from, to] would touch. `enabled` false while the
- *  sheet is closed. */
+ *  sheet is closed; a changed cell choice keeps the last preview shown
+ *  until the new one arrives. */
 export function useReplanPreview(
   from: string,
   to: string,
@@ -403,10 +405,11 @@ export function useReplanPreview(
     queryKey: planKeys.replanPreview(from, to, noneCells),
     queryFn: () => getReplanPreview(from, to, noneCells),
     enabled,
+    placeholderData: keepPreviousData,
   })
 }
 
-/** Re-plan: removes what the changed cells free up and, with
+/** Re-plan: marks the cells No plate, removes what they free up and, with
  *  `regenerate`, attaches the board to the started run (`?run=`). */
 export function useReplan() {
   const qc = useQueryClient()
@@ -415,6 +418,8 @@ export function useReplan() {
   return useMutation({
     mutationFn: (input: ReplanInput) => replan(input),
     onSuccess: async ({ run_id }) => {
+      // The No-plate cells are availability overrides.
+      void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
       await invalidatePlanViews(qc)
       if (run_id !== null) {
         await navigate({

@@ -376,6 +376,10 @@ test.describe("Plan batches", () => {
         })
         expect(put.ok(), await put.text()).toBeTruthy()
       }
+      // A draft batch: Mark as No plate on a confirmed plate opens the
+      // re-plan sheet instead (Phase 3 F4, plan-replan.spec.ts).
+      const unlock = await ctx.post(`/api/plates/${links[1].plate_id}/unlock`)
+      expect(unlock.ok(), await unlock.text()).toBeTruthy()
       await ctx.dispose()
 
       await page.setViewportSize({ width: 1440, height: 900 })

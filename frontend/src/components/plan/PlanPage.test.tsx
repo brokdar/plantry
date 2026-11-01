@@ -163,8 +163,15 @@ describe("PlanPage", () => {
     expect(mockRemovedBatch.removed.sessions).toHaveLength(1)
   })
 
-  it("N marks the focused cell No plate, and Undo brings the plate back", async () => {
+  it("N marks a focused draft cell No plate, and Undo brings the plate back", async () => {
     const user = userEvent.setup()
+    // A confirmed plate goes through the re-plan sheet instead (F4).
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      cells: mockPlan.cells.map((c) =>
+        c.plate ? { ...c, plate: { ...c.plate, state: "draft" } } : c
+      ),
+    })
     vi.mocked(setAvailabilityOverride).mockResolvedValue({
       cell: { ...mockPlan.cells[0], mode: "none" },
       removed: mockRemovedBatch.removed,
@@ -173,7 +180,7 @@ describe("PlanPage", () => {
     renderWithRouter(<PlanPage />)
     ;(
       await screen.findByRole("button", {
-        name: "Monday lunch, Chili, leftover 2 of 3, confirmed",
+        name: "Monday lunch, Chili, leftover 2 of 3, draft",
       })
     ).focus()
     await user.keyboard("n")

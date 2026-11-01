@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import {
+  CalendarClock,
   CalendarRange,
   Check,
   ChevronLeft,
@@ -52,6 +53,8 @@ interface PlanToolbarProps {
   onAcceptAndShop: () => void
   onRegenerateWeek: () => void
   onDiscard: () => void
+  /** Re-plan from today; only given for the current window. */
+  onReplan?: () => void
   /** The progress bar of a running generation (D35). */
   progress?: React.ReactNode
 }
@@ -64,8 +67,9 @@ const NAV_LINK =
  * drafts), the run's notes, window navigation (previous, "This week", next),
  * the generation progress, and the actions: Ask assistant, Shop, Accept and
  * shop (with drafts) and an overflow menu with Regenerate week and Discard
- * draft (with drafts), Copy a previous week, Clear this week and the
- * keyboard shortcuts. Past windows lose the editing actions.
+ * draft (with drafts), Re-plan from today (the current window), Copy a
+ * previous week, Clear this week and the keyboard shortcuts. Past windows
+ * lose the editing actions.
  */
 export function PlanToolbar({
   window,
@@ -86,6 +90,7 @@ export function PlanToolbar({
   onAcceptAndShop,
   onRegenerateWeek,
   onDiscard,
+  onReplan,
   progress,
 }: PlanToolbarProps) {
   const { t } = useTranslation()
@@ -190,6 +195,12 @@ export function PlanToolbar({
                     {t("plan.review.discard")}
                   </DropdownMenuItem>
                 </>
+              )}
+              {onReplan && (
+                <DropdownMenuItem disabled={running} onSelect={onReplan}>
+                  <CalendarClock strokeWidth={1.5} aria-hidden="true" />
+                  {t("plan.replan.open")}
+                </DropdownMenuItem>
               )}
               <DropdownMenuItem disabled={readOnly} onSelect={onCopyWeek}>
                 <CalendarRange strokeWidth={1.5} aria-hidden="true" />

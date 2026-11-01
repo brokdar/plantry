@@ -546,7 +546,10 @@ describe("re-plan", () => {
 
   it("useReplan with a started run attaches the board to it", async () => {
     vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: 14 })
-    expect(await invalidatedBy(() => useReplan(), input)).toEqual(PLAN_VIEWS)
+    expect(await invalidatedBy(() => useReplan(), input)).toEqual([
+      availabilityKeys.ranges(),
+      ...PLAN_VIEWS,
+    ])
     expect(replan).toHaveBeenCalledWith(input)
     expect(navigateMock).toHaveBeenCalledTimes(1)
     const { to, search } = navigateMock.mock.calls[0][0]

@@ -394,7 +394,7 @@ const cases: Case[] = [
         regenerate: true,
       }),
     method: "POST",
-    path: "/plan/replan",
+    path: "/plan/replan?today=2026-10-30",
     body: {
       from: "2026-11-04",
       to: "2026-11-06",

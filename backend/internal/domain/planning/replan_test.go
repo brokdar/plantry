@@ -128,7 +128,7 @@ func TestReplan_Preview(t *testing.T) {
 		{PlateID: e.friLunch, Date: day(fri), SlotID: e.lunch, FoodName: "Main 05"},
 	}, pv.ConfirmedAffected, "the draft Fri dinner is not listed")
 	assert.Equal(t, []planning.Spare{
-		{SessionID: e.chiliBatch, FoodName: "Main 05", Portions: 2, Freezable: true},
+		{SessionID: e.chiliBatch, FoodName: "Main 05", Portions: 2, Freezable: true, Mutable: true},
 		{SessionID: e.monBatch, FoodName: "Main 06", Portions: 1, Freezable: false}, // cooked: nothing to freeze
 	}, pv.Spare, "Fri dinner's batch loses every link and goes")
 	assert.False(t, e.plateGone(e.thuLunch), "a preview writes nothing")
@@ -149,7 +149,7 @@ func TestReplan_PreviewReadsExistingNoneCells(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []plate.CellKey{ck(thu, e.lunch)}, pv.NoneCells)
-	assert.Equal(t, []planning.Spare{{SessionID: e.chiliBatch, FoodName: "Main 05", Portions: 1}}, pv.Spare, "not freezable with freezing off")
+	assert.Equal(t, []planning.Spare{{SessionID: e.chiliBatch, FoodName: "Main 05", Portions: 1, Mutable: true}}, pv.Spare, "not freezable with freezing off, but it may shrink")
 }
 
 // B8-AC1: without unlock the confirmed plates block the re-plan (409 with

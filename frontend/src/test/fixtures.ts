@@ -973,7 +973,15 @@ export const mockReplanPreview: ReplanPreview = {
       food_name: "Tofu bowl",
     },
   ],
-  spare: [{ session_id: 7, food_name: "Chili", portions: 2, freezable: true }],
+  spare: [
+    {
+      session_id: 7,
+      food_name: "Chili",
+      portions: 2,
+      freezable: true,
+      mutable: true,
+    },
+  ],
 }
 
 /** GET /api/ai/runs: one accepted heuristic generation and one unpriced

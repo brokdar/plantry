@@ -22,6 +22,8 @@ vi.mock("@/lib/api/plan", async (importOriginal) => ({
   acceptPlan: vi.fn(),
   unacceptPlan: vi.fn(),
   discardPlan: vi.fn(),
+  getReplanPreview: vi.fn(),
+  replan: vi.fn(),
 }))
 vi.mock("@/lib/api/plates", () => ({
   confirmPlate: vi.fn(),
@@ -64,6 +66,7 @@ import {
   acceptPlan,
   discardPlan,
   getPlan,
+  getReplanPreview,
   restorePlan,
   unacceptPlan,
 } from "@/lib/api/plan"
@@ -610,5 +613,93 @@ describe("on the anchored board", () => {
       screen.queryByRole("status", { name: "Loading the plan" })
     ).not.toBeInTheDocument()
     expect(screen.getByRole("grid")).toBeInTheDocument()
+  })
+})
+
+describe("re-plan (F4)", () => {
+  const menuEntry = () =>
+    screen.queryByRole("menuitem", { name: "Re-plan from today" })
+
+  async function openMenu(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(
+      await screen.findByRole("button", { name: "More plan actions" })
+    )
+    await screen.findByRole("menuitem", { name: "Copy a previous week" })
+  }
+
+  beforeEach(() => {
+    vi.mocked(getReplanPreview).mockResolvedValue({
+      none_cells: [],
+      confirmed_affected: [],
+      spare: [],
+    })
+  })
+
+  it("the current window's overflow opens the re-plan sheet from today", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue(confirmedPlan)
+    renderWithRouter(<PlanPage />)
+    await openMenu(user)
+    await user.click(menuEntry()!)
+    const sheet = await screen.findByTestId("replan-sheet")
+    expect(
+      within(sheet).getByRole("heading", { name: "Re-plan from today" })
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(getReplanPreview).toHaveBeenCalledWith(WINDOW.from, WINDOW.to, [])
+    )
+  })
+
+  it.each([
+    ["past", "2026-11-09"],
+    ["future", "2026-10-20"],
+  ])("F4-AC2: a %s window has no Re-plan from today", async (_, today) => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue({
+      ...confirmedPlan,
+      window: { ...confirmedPlan.window, today, is_current: false },
+    })
+    renderWithRouter(<PlanPage />)
+    await openMenu(user)
+    expect(menuEntry()).toBeNull()
+  })
+
+  it("Mark as No plate on a confirmed plate opens the re-plan with its cell", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue(confirmedPlan)
+    renderWithRouter(<PlanPage />)
+    await user.click(await cellButton(MONDAY_DINNER))
+    await user.click(
+      await within(await screen.findByTestId("plan-sheet")).findByRole(
+        "button",
+        { name: "Mark as No plate" }
+      )
+    )
+    const sheet = await screen.findByTestId("replan-sheet")
+    expect(within(sheet).getByLabelText("Monday dinner")).toBeChecked()
+    await waitFor(() =>
+      expect(getReplanPreview).toHaveBeenCalledWith(WINDOW.from, WINDOW.to, [
+        { date: "2026-11-02", slot_id: 3 },
+      ])
+    )
+    // The plate sheet that opened it is gone: focus goes back to the cell.
+    await user.click(within(sheet).getByRole("button", { name: "Cancel" }))
+    await waitFor(() =>
+      expect(document.activeElement).toHaveAccessibleName(MONDAY_DINNER)
+    )
+  })
+
+  it("N on a confirmed cell opens the re-plan too; closing returns focus to the cell", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue(confirmedPlan)
+    renderWithRouter(<PlanPage />)
+    ;(await cellButton(MONDAY_DINNER)).focus()
+    await user.keyboard("n")
+    const sheet = await screen.findByTestId("replan-sheet")
+    expect(within(sheet).getByLabelText("Monday dinner")).toBeChecked()
+    await user.click(within(sheet).getByRole("button", { name: "Cancel" }))
+    await waitFor(() =>
+      expect(document.activeElement).toHaveAccessibleName(MONDAY_DINNER)
+    )
   })
 })

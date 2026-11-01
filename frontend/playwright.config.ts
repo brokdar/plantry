@@ -31,6 +31,7 @@ const AI_SERIAL_SPECS = [
 const GLOBAL_SETTINGS_SPECS = [
   "plan-anchor-settings.spec.ts",
   "plan-generate-heuristic.spec.ts",
+  "plan-replan.spec.ts",
   "plan-review-llm.spec.ts",
   "plan-wizard.spec.ts",
   "profile.spec.ts",

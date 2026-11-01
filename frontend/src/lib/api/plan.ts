@@ -209,6 +209,9 @@ export interface ReplanPreview {
     food_name: string
     portions: number
     freezable: boolean
+    /** Not cooked and cooking from `from` on: the re-plan may freeze or
+     *  shrink it; otherwise its spare stays unassigned. */
+    mutable: boolean
   }[]
 }
 
@@ -243,10 +246,10 @@ export function getReplanPreview(
   return apiFetch(`/plan/replan/preview?${qs}`)
 }
 
-/** POST /api/plan/replan: 409 `error.plan.confirmed_affected` when confirmed
- *  plates are affected and `unlock_confirmed` is false. */
+/** POST /api/plan/replan?today: 409 `error.plan.confirmed_affected` when
+ *  confirmed plates are affected and `unlock_confirmed` is false. */
 export function replan(input: ReplanInput): Promise<ReplanResponse> {
-  return apiFetch("/plan/replan", {
+  return apiFetch(`/plan/replan?today=${todayISO()}`, {
     method: "POST",
     body: JSON.stringify(input),
   })

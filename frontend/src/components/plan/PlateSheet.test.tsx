@@ -102,6 +102,7 @@ async function renderSheet(
   const onPick = vi.fn()
   const onOpenCell = vi.fn()
   const onClose = vi.fn()
+  const onMarkNoPlate = vi.fn()
   const view = renderWithRouter(
     <PlateSheet
       cell={cellOf(plan, key)}
@@ -112,11 +113,12 @@ async function renderSheet(
       slotName={(id) => ["", "Breakfast", "Lunch", "Dinner"][id]}
       onPick={onPick}
       onOpenCell={onOpenCell}
+      onMarkNoPlate={onMarkNoPlate}
       onClose={onClose}
     />
   )
   await screen.findAllByTestId("sheet-component")
-  return { onPick, onOpenCell, onClose, unmount: view.unmount }
+  return { onPick, onOpenCell, onClose, onMarkNoPlate, unmount: view.unmount }
 }
 
 beforeEach(async () => {
@@ -354,19 +356,15 @@ describe("PlateSheet", () => {
     ).toBeInTheDocument()
   })
 
-  it("marks the cell No plate, removing the plate", async () => {
-    const { onClose } = await renderSheet()
+  it("Mark as No plate closes the sheet and hands the cell to the board", async () => {
+    const { onClose, onMarkNoPlate } = await renderSheet()
     await userEvent.click(
       screen.getByRole("button", { name: "Mark as No plate" })
     )
-    await waitFor(() =>
-      expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-11-01", 3, {
-        mode: "none",
-        note: null,
-        remove_plate: true,
-      })
-    )
     expect(onClose).toHaveBeenCalled()
+    expect(onMarkNoPlate).toHaveBeenCalledWith(
+      expect.objectContaining({ key: SUNDAY })
+    )
   })
 
   it("deletes the plate and offers Undo", async () => {

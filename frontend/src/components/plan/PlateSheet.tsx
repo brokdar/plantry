@@ -34,7 +34,7 @@ import { plateMacros } from "@/lib/plan/plate-macros"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFood, useFoodMacros } from "@/lib/queries/foods"
 import { useRegenerate } from "@/lib/queries/generation"
-import { useConfirm, useMarkNoPlate, useUnlock } from "@/lib/queries/plan"
+import { useConfirm, useUnlock } from "@/lib/queries/plan"
 import {
   useDeletePlate,
   useRemoveComponent,
@@ -65,6 +65,8 @@ interface PlateSheetProps {
   slotName: (slotId: number) => string
   onPick: (target: PickerTarget) => void
   onOpenCell: (key: string) => void
+  /** Mark as No plate (a confirmed plate goes through the re-plan). */
+  onMarkNoPlate: (cell: BoardCell) => void
   onClose: () => void
 }
 
@@ -88,6 +90,7 @@ export function PlateSheet({
   slotName,
   onPick,
   onOpenCell,
+  onMarkNoPlate,
   onClose,
 }: PlateSheetProps) {
   const { t } = useTranslation()
@@ -213,7 +216,12 @@ export function PlateSheet({
       )}
 
       {!readOnly && (
-        <PlateActions plate={plate} cell={cell} plan={plan} onClose={onClose} />
+        <PlateActions
+          plate={plate}
+          cell={cell}
+          onMarkNoPlate={onMarkNoPlate}
+          onClose={onClose}
+        />
       )}
     </div>
   )
@@ -763,23 +771,19 @@ function FeedbackButtons({ plate }: { plate: Plate }) {
 function PlateActions({
   plate,
   cell,
-  plan,
+  onMarkNoPlate,
   onClose,
 }: {
   plate: Plate
   cell: BoardCell
-  plan: Plan
+  onMarkNoPlate: (cell: BoardCell) => void
   onClose: () => void
 }) {
   const { t } = useTranslation()
-  const markNoPlate = useMarkNoPlate()
   const deletePlate = useDeletePlate()
   const createPreset = useCreatePreset()
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState(cell.mainName ?? "")
-  const raw = plan.cells.find(
-    (c) => c.date === cell.date && c.slot_id === cell.slotId
-  )
 
   function saveRoutine(e: React.FormEvent) {
     e.preventDefault()
@@ -840,19 +844,17 @@ function PlateActions({
           {t("plan.sheet.save_routine")}
         </Button>
       )}
-      {raw && (
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11 justify-start md:pointer-fine:h-9"
-          onClick={() => {
-            markNoPlate.mutate(raw)
-            onClose()
-          }}
-        >
-          {t("plan.sheet.mark_no_plate")}
-        </Button>
-      )}
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 justify-start md:pointer-fine:h-9"
+        onClick={() => {
+          onClose()
+          onMarkNoPlate(cell)
+        }}
+      >
+        {t("plan.sheet.mark_no_plate")}
+      </Button>
       <Button
         type="button"
         variant="outline"
