@@ -341,3 +341,29 @@ func TestChange_ChatStreamsChangeEvent(t *testing.T) {
 	assert.Contains(t, c.PlateIDs, p.ID)
 	assert.True(t, c.Undoable)
 }
+
+// A user edit of a touched plate between the change's first and last event
+// is neither in the change nor after it; undo must still refuse.
+func TestChange_UndoStaleWhenUserEditedMidChange(t *testing.T) {
+	e := newPlanToolEnv(t)
+	ctx, _ := e.chat()
+	target, idx := e.sidePlate()
+	old := target.Components[idx]
+
+	ch := e.change(ctx, "regenerate", fmt.Sprintf(`{"kind":"side","component_id":%d}`, old.ID))
+	require.NotNil(t, ch.LastEventID)
+	four := 4.0
+	_, err := e.plates.Update(context.Background(), target.ID, plate.PlatePatch{Eaters: &four})
+	require.NoError(t, err)
+	// Make the user's event fall inside the change's id range.
+	_, err = e.db.Exec(`UPDATE ai_changes SET last_event_id = (SELECT MAX(id) FROM plate_events) WHERE id = ?`, ch.ID)
+	require.NoError(t, err)
+
+	n := e.eventCount()
+	_, err = e.changes.Undo(context.Background(), ch.ID)
+	require.ErrorIs(t, err, domain.ErrAIChangeStale)
+	assert.Equal(t, n, e.eventCount(), "nothing written")
+	got, err := e.plates.Get(context.Background(), target.ID)
+	require.NoError(t, err)
+	assert.InDelta(t, 4.0, got.Eaters, 1e-9)
+}

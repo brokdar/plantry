@@ -236,8 +236,8 @@ func (c *Changes) List(ctx context.Context, conversationID int64) ([]Change, err
 // work: its plates and sessions go back to their state before it
 // (plate.Service.Revert) and a set_availability cell gets its override back.
 // It fails with domain.ErrAIChangeUndone when the change was undone and
-// domain.ErrAIChangeStale, writing nothing, when one of its rows has a later
-// event. It returns the rows it wrote.
+// domain.ErrAIChangeStale, writing nothing, when one of its rows has an event
+// the change did not make. It returns the rows it wrote.
 func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 	var rows plate.RowSet
 	err := c.tx.InTx(ctx, func(ctx context.Context) error {
@@ -254,11 +254,14 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 				return err
 			}
 			plateIDs, sessionIDs := eventRows(events)
-			later, err := c.store.LaterEvents(ctx, *ch.LastEventID, plateIDs, sessionIDs)
+			// Every event on these rows since the change began must be one of
+			// the change's own: a user edit between its first and last event
+			// has no run id and would otherwise be overwritten.
+			all, err := c.store.LaterEvents(ctx, *ch.FirstEventID-1, plateIDs, sessionIDs)
 			if err != nil {
 				return err
 			}
-			if later > 0 {
+			if all != int64(len(events)) {
 				return fmt.Errorf("%w: change %d", domain.ErrAIChangeStale, id)
 			}
 			if rows, err = c.plates.Revert(ctx, events); err != nil {

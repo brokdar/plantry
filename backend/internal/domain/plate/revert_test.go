@@ -118,3 +118,49 @@ func TestRevert_CreatedSessionStillEatenFromIsStale(t *testing.T) {
 	assert.Equal(t, 2, e.count("plates"), "nothing written")
 	assert.Len(t, e.events(), before)
 }
+
+func TestRevert_DeletedPlateRestoresLeafComponent(t *testing.T) {
+	e := newEnv(t)
+	gen := e.run(actor.Generator, 7)
+	p, err := e.svc.Create(gen, plate.PlateInput{Date: day(sun), SlotID: e.dinner, Components: []plate.PlateComponent{grams(e.rice, 80)}})
+	require.NoError(t, err)
+	agent := e.run(actor.Agent, 8)
+	n := len(e.events())
+	_, err = e.svc.Delete(agent, p.ID)
+	require.NoError(t, err)
+	change := e.eventsSince(n)
+
+	_, err = e.svc.Revert(e.ctx, change)
+	require.NoError(t, err)
+
+	back := e.plate(p.ID)
+	require.Len(t, back.Components, 1)
+	c := back.Components[0]
+	assert.Equal(t, e.rice, c.FoodID)
+	require.NotNil(t, c.Grams)
+	assert.InDelta(t, 80, *c.Grams, 1e-9, "grams restored")
+	// grams_source is not part of the snapshot's guarantees: a restored leaf
+	// may come back with a NULL grams_source, which is accepted.
+}
+
+func TestRevert_DeletedPlateRestoresFeedback(t *testing.T) {
+	e := newEnv(t)
+	gen := e.run(actor.Generator, 7)
+	p, err := e.svc.Create(gen, plate.PlateInput{Date: day(sun), SlotID: e.dinner, Components: []plate.PlateComponent{composed(e.chili, 1)}})
+	require.NoError(t, err)
+	e.exec(`INSERT INTO plate_feedback (plate_id, status, note, rated_at) VALUES (?, 'loved', 'great', '2026-11-02 08:00:00')`, p.ID)
+	agent := e.run(actor.Agent, 8)
+	n := len(e.events())
+	_, err = e.svc.Delete(agent, p.ID)
+	require.NoError(t, err)
+	change := e.eventsSince(n)
+
+	_, err = e.svc.Revert(e.ctx, change)
+	require.NoError(t, err)
+
+	back := e.plate(p.ID)
+	require.NotNil(t, back.Feedback)
+	assert.Equal(t, "loved", back.Feedback.Status)
+	require.NotNil(t, back.Feedback.Note)
+	assert.Equal(t, "great", *back.Feedback.Note)
+}
