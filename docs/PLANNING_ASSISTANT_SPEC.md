@@ -668,7 +668,7 @@ POST   /api/plan/replan                   { from, to, none_cells, unlock_confirm
                                            error.plan.confirmed_affected and the client re-sends with
                                            unlock_confirmed: true after the user agrees; a `from` before today is
                                            400 error.plan.replan_past. A re-plan has no Undo: its removal and the new
-                                           run cannot be undone; the regenerated drafts can still be discarded.))
+                                           run cannot be undone; the regenerated drafts can still be discarded.)
 
 GET    /api/today?date=                   → sessions to cook (scaled), plates, reminders
 
