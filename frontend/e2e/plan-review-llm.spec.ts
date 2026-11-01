@@ -72,6 +72,7 @@ async function fillScript(
     turns: { events: { delay_ms?: number }[] }[]
   }
   script.turns[0].events[0].delay_ms = 3000
+  script.turns[1].events[0].delay_ms = 2000
   return JSON.stringify(script)
 }
 
@@ -150,6 +151,7 @@ test.describe("generated week on the LLM", () => {
         await ctx.get(`/api/plan/runs/${run_id}`)
       ).json()) as { status: string; repair_attempts: number }
       expect(run.status).toBe("ok")
+      expect(run.repair_attempts).toBe(1)
 
       // The notes line carries the run's notes (from the repaired turn).
       await expect(page.getByTestId("plan-notes")).toHaveText(NOTES)
