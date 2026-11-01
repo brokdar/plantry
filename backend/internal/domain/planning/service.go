@@ -167,7 +167,7 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request) (int6
 	if n < setup.RecipeTarget {
 		return 0, fmt.Errorf("%w: %d recipes", domain.ErrNotEnoughRecipes, n)
 	}
-	name, chooser, err := s.chooser(req.Chooser)
+	name, chooser, err := s.chooser(ctx, req.Chooser)
 	if err != nil {
 		return 0, err
 	}
@@ -220,12 +220,12 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request) (int6
 	return run.ID(), nil
 }
 
-// chooser resolves the requested chooser (D11): the LLM when one is wired
-// and nothing else is asked for, else the heuristic.
-func (s *Service) chooser(name airun.Chooser) (airun.Chooser, Chooser, error) {
+// chooser resolves the requested chooser (D11): the LLM when one is wired,
+// its provider resolves and nothing else is asked for, else the heuristic.
+func (s *Service) chooser(ctx context.Context, name airun.Chooser) (airun.Chooser, Chooser, error) {
 	if name == "" {
 		name = airun.ChooserHeuristic
-		if _, ok := s.d.Choosers[airun.ChooserLLM]; ok {
+		if c, ok := s.d.Choosers[airun.ChooserLLM]; ok && ready(ctx, c) == nil {
 			name = airun.ChooserLLM
 		}
 	}
@@ -238,7 +238,19 @@ func (s *Service) chooser(name airun.Chooser) (airun.Chooser, Chooser, error) {
 	if !ok {
 		return "", nil, fmt.Errorf("%w: no %s chooser", domain.ErrAIProviderMissing, name)
 	}
+	if err := ready(ctx, c); err != nil {
+		return "", nil, err
+	}
 	return name, c, nil
+}
+
+// ready reports whether a chooser can run now: one with a Ready method (the
+// LLM's provider must resolve) says so, any other always can.
+func ready(ctx context.Context, c Chooser) error {
+	if r, ok := c.(interface{ Ready(context.Context) error }); ok {
+		return r.Ready(ctx)
+	}
+	return nil
 }
 
 func (s *Service) includeNew(ctx context.Context, asked *bool) (bool, error) {
@@ -519,6 +531,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	prop, err := j.chooser.Choose(ctx, ChooseInput{
 		State: base, Target: j.target, EatersByDate: j.eaters, IncludeNewRecipe: j.includeNew,
 		Avoid: j.avoid, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
+		Stage: func(st Stage) { s.d.Progress.setStage(runID, st) },
 	})
 	if err != nil {
 		return fail("choosing", err)
@@ -552,7 +565,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 			violations = append(violations, is)
 		}
 	}
-	end := RunEnd{Status: airun.StatusOK, Notes: prop.Notes}
+	end := RunEnd{Status: airun.StatusOK, Notes: prop.Notes, RepairAttempts: prop.RepairAttempts}
 	if len(violations) > 0 {
 		end.Status = airun.StatusPartial
 	}

@@ -39,6 +39,9 @@ type ChooseInput struct {
 	Instruction string
 	// Locale is the profile's locale for the chooser's reasons and notes.
 	Locale string
+	// Stage reports a chooser's progress (the LLM's repair turns); nil
+	// ignores it.
+	Stage func(Stage)
 }
 
 // SideSwap is the side a side scope replaces: its session's occasion and

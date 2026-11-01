@@ -229,7 +229,7 @@ Migrations `00021_ai_runs.sql` and `00026_ai_trace.sql`, package `domain/airun`,
 - **`ai_runs`** — one row per user-visible AI action.
   - `kind`: `chat`, `lookup` (food-lookup translate and pick-best), `import_fallback`; `generate`, `regenerate`, `discovery`, `classify` are reserved for later phases. `untracked` marks a metered call made without a started run — a call site that forgot `Recorder.Start`.
   - `status`: `running` until finished, then `ok` / `error` / `iterations_exceeded` / `cancelled` / `partial`. `error_key` holds the message key on failure.
-  - `provider`, `model`, `prompt_version` (the `PromptVersion` const of the agent, `food` or `importer` package — bump it on every prompt change), `prompt_hash` → `ai_prompts`.
+  - `provider`, `model`, `prompt_version` (the `PromptVersion` const of the agent, `food`, `importer` or `planning` package — bump it on every prompt change; heuristic generations record `planning.HeuristicVersion`), `prompt_hash` → `ai_prompts`.
   - Token totals summed over all calls: `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`; `iterations`.
   - `window_start`/`window_end`/`instruction` are set for chat. Generation runs set `chooser` (`llm`/`heuristic`) and `scope_json` through `Start`, and `repair_attempts`, `violations_json`, `score_json` and `notes` (00036) through `Run.FinishWith(…, Result)`; chat runs leave them NULL. `judge_json` is unused (D20).
   - `conversation_id` (chat runs; no FK, indexed) and `request_id` (chi `middleware.GetReqID` of the HTTP request that started the run; NULL outside a request).
@@ -249,6 +249,7 @@ Migrations `00021_ai_runs.sql` and `00026_ai_trace.sql`, package `domain/airun`,
   - `GET /api/ai/prices?model=` (default: the configured model) — `{model, price|null, source: builtin|override|none, as_of}`.
   - Correction rate (D24, sqlc `AIRunCorrections`): plates a run's `generator` `create` events made, and how many of them got a `user` `update`/`delete` event before the plate's first `accept`/`confirm` event.
 - **Tool choice.** `llm.Request.ToolChoice` forces a tool: Anthropic sends `tool_choice: {type: tool, name}`, OpenAI `{type: function, function: {name}}`; both send `temperature` only when it is > 0. The metered client stores it as `tool_choice` in `request_json`. The fake client's script already replays scripted `tool_use` turns.
+- **LLM chooser** (`planning/llmchooser.go`, prompt `planning/prompt.go`, D11–D14): one forced `submit_plan` call per attempt (temperature 0.4, max_tokens 16000) under the run's ctx, so each call is a step; a proposal with violations or an unreadable reply goes back as a tool result, at most twice (`repair_attempts`, stage `repairing`). Violations left after that are persisted (`partial`); a provider failure ends the run `error.ai.provider_error`, no readable reply at all `error.ai.invalid_plan`. A request without `chooser` uses the LLM only when a provider resolves. The prompt keeps within 40 k estimated tokens (chars / 4) by leaving out candidates. E2E fixtures: `frontend/e2e/fixtures/chat-scripts/generate-week.json` (a template; placeholders in its `_comment`) and `generate-week-error.json`.
 
 Query it with the `sqlite3` CLI if installed, otherwise Python's stdlib `sqlite3` module (the path is `PLANTRY_DB_PATH`):
 

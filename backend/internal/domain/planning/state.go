@@ -26,6 +26,8 @@ type State struct {
 	Cells []Cell
 	// SlotOrder maps slot ids to their sort_order (D12).
 	SlotOrder plate.SlotOrder
+	// SlotNames maps slot ids to their name key (the LLM prompt's labels).
+	SlotNames map[int64]string
 	// Plates are the plates in and around the window: the window's own plus
 	// the ones eating from sessions the window's plates eat from. A plate
 	// with a negative ID is proposed (see Merge).
@@ -150,6 +152,10 @@ type Profile struct {
 	HouseholdPortions  float64
 	// Locale is the language of the chooser's reasons and notes.
 	Locale string
+	// Restrictions and Notes (the user's notes to the assistant) are free
+	// text only the LLM chooser reads.
+	Restrictions []string
+	Notes        string
 }
 
 // HistoryPlate is a past confirmed plate: its cell and its foods.

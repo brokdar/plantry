@@ -978,6 +978,8 @@
     "ai": {
       "provider_missing": "Kein AI-Anbieter auf dem Server konfiguriert.",
       "stream_interrupted": "Der AI-Stream wurde unterbrochen. Bitte versuche es erneut.",
+      "provider_error": "Der Assistent war nicht erreichbar, deshalb wurde nichts geplant. Versuch es noch einmal oder plane ohne den Assistenten.",
+      "invalid_plan": "Der Plan des Assistenten war nicht lesbar, deshalb wurde nichts geplant. Versuch es noch einmal oder plane ohne den Assistenten.",
       "tool_not_found": "Die AI hat versucht, ein unbekanntes Tool zu verwenden.",
       "iterations_exceeded": "Die AI hat zu viele Schritte gemacht — bitte formuliere die Anfrage einfacher.",
       "rate_limit_exceeded": "Zu viele AI-Anfragen. Bitte warte eine Minute.",

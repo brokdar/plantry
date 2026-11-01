@@ -25,6 +25,8 @@ var sentinelStatus = map[error]int{
 	domain.ErrInvalidMacros:             http.StatusBadRequest,
 	domain.ErrAIProviderMissing:         http.StatusServiceUnavailable,
 	domain.ErrAIStreamInterrupted:       http.StatusBadGateway,
+	domain.ErrAIProviderFailed:          http.StatusBadGateway,
+	domain.ErrAIInvalidPlan:             http.StatusBadGateway,
 	domain.ErrInvalidFeedbackStatus:     http.StatusBadRequest,
 	domain.ErrImportBodyTooLarge:        http.StatusRequestEntityTooLarge,
 	domain.ErrImportNotHTML:             http.StatusUnsupportedMediaType,

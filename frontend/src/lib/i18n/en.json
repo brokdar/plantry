@@ -951,6 +951,8 @@
     "ai": {
       "provider_missing": "AI provider is not configured on the server.",
       "stream_interrupted": "The AI stream was interrupted. Please try again.",
+      "provider_error": "The assistant couldn't be reached, so nothing was planned. Try again or plan without the assistant.",
+      "invalid_plan": "The assistant's plan couldn't be read, so nothing was planned. Try again or plan without the assistant.",
       "tool_not_found": "The AI tried to use an unknown tool.",
       "iterations_exceeded": "The AI ran too many tool steps — try a simpler request.",
       "rate_limit_exceeded": "You're sending too many AI requests. Please wait a minute.",

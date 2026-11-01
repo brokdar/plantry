@@ -1,0 +1,6 @@
+{
+  "_comment": [
+    "A fake provider that fails every call (an empty script): an LLM generation run ends with status error and error.ai.provider_error and writes no rows. For the \"Plan without the assistant\" e2e case: PUT /api/settings/ai.fake_script with this file's path (relative to backend/)."
+  ],
+  "turns": []
+}
