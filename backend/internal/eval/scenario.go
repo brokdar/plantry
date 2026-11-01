@@ -158,6 +158,9 @@ type CellSpec struct {
 type PlateSpec struct {
 	CellSpec
 	Recipe string `json:"recipe"`
+	// BatchPortions sets the portions its cook session produces (default:
+	// what the plate eats), leaving a surplus for leftovers.
+	BatchPortions float64 `json:"batch_portions"`
 }
 
 // Step actions.

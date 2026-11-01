@@ -43,6 +43,8 @@ type BuilderDeps struct {
 	Slots     Slots
 	Settings  SettingsReader
 	Profile   ProfileReader
+	// Corrections reads the user's recipe swaps (one bounded query).
+	Corrections Corrections
 }
 
 // Builder reads the State of a window.
@@ -141,6 +143,9 @@ func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to ti
 		for _, c := range p.Components {
 			referenced[c.FoodID] = true
 		}
+	}
+	if s.Corrections, err = b.d.Corrections.UserReplacements(ctx, w.Start.AddDate(0, 0, -historyDays), w.Start); err != nil {
+		return State{}, fmt.Errorf("read corrections: %w", err)
 	}
 	s.Sessions = make([]Session, len(sessions))
 	for i, ss := range sessions {

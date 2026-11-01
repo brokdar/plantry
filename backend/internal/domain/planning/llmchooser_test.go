@@ -410,7 +410,7 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, p.RepairAttempts)
 	assert.Equal(t, []planning.Stage{planning.StageRepairing, planning.StageRepairing}, stages)
-	assert.Equal(t, "p1", c.PromptVersion())
+	assert.Equal(t, "p2", c.PromptVersion())
 
 	require.NoError(t, c.Ready(context.Background()))
 	assert.ErrorIs(t, planning.NewLLMChooser(llm.StaticResolver(nil, "")).Ready(context.Background()), domain.ErrAIProviderMissing)

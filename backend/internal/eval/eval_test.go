@@ -18,7 +18,7 @@ import (
 
 // The 7 scenarios of spec §8.4.
 var specScenarios = []string{
-	"away_thu_fri", "family_daily", "many_none_cells", "replan_one_day",
+	"away_thu_fri", "confirmed_cook_empty_cell", "family_daily", "many_none_cells", "replan_one_day",
 	"single_batch_cooker", "small_library_h8", "vegetarian_variety",
 }
 
@@ -114,7 +114,7 @@ func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 			assert.Equal(t, string(airun.StatusOK), r.Status, r.ErrorKey)
 			assert.Equal(t, 0, r.RepairAttempts)
 			assert.Equal(t, "fake", r.Model)
-			assert.Equal(t, "p1", r.PromptVersion)
+			assert.Equal(t, "p2", r.PromptVersion)
 			// A run that fills cells asks the model; one with nothing to
 			// fill (away_thu_fri) may not.
 			if r.Plates > 0 {

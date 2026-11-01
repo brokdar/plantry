@@ -84,3 +84,53 @@ func (q *Queries) ListPlateEvents(ctx context.Context) ([]PlateEvent, error) {
 	}
 	return items, nil
 }
+
+const listUserPlateUpdates = `-- name: ListUserPlateUpdates :many
+SELECT date, slot_id, before_json, after_json
+FROM plate_events
+WHERE actor = 'user' AND action = 'update' AND plate_id IS NOT NULL
+  AND date >= ? AND date < ?
+  AND before_json IS NOT NULL AND after_json IS NOT NULL
+ORDER BY id
+LIMIT 500
+`
+
+type ListUserPlateUpdatesParams struct {
+	Date   string
+	Date_2 string
+}
+
+type ListUserPlateUpdatesRow struct {
+	Date       string
+	SlotID     int64
+	BeforeJson sql.NullString
+	AfterJson  sql.NullString
+}
+
+func (q *Queries) ListUserPlateUpdates(ctx context.Context, arg ListUserPlateUpdatesParams) ([]ListUserPlateUpdatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUserPlateUpdates, arg.Date, arg.Date_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUserPlateUpdatesRow{}
+	for rows.Next() {
+		var i ListUserPlateUpdatesRow
+		if err := rows.Scan(
+			&i.Date,
+			&i.SlotID,
+			&i.BeforeJson,
+			&i.AfterJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

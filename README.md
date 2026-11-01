@@ -129,7 +129,7 @@ bun run e2e             # Playwright tests (starts its own backend and dev serve
 
 ### Plan generation eval
 
-The offline suite runs plan generation against 7 scenarios and a 30-recipe library on in-process databases. It needs no network by default.
+The offline suite runs plan generation against 8 scenarios and a 30-recipe library on in-process databases. It needs no network by default.
 
 ```bash
 cd backend
