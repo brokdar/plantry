@@ -4,7 +4,7 @@
 -- A Preset is a named, tagged, calendar-agnostic bundle of one or more plates,
 -- each bound to a slot (FK to time_slots). Plates carry kind-aware components
 -- mirroring the planner's plate_components shape from day one (no legacy
--- float-portions intermediary). See feature.md §4.
+-- float-portions intermediary). See the Presets spec §4 (feature.md, removed; in git history of #12).
 --
 -- The old templates table is left in place for now; cutover migration 00020
 -- drops it in a later phase. This migration is purely additive.

@@ -90,7 +90,7 @@ export interface PatchPresetInput {
   remove_tags?: string[]
 }
 
-/** Apply pipeline IO — see backend feature.md §6.5. */
+/** Apply pipeline IO — see the Presets spec §6.5 (feature.md, in git history of #12). */
 export interface ApplyPresetInput {
   target_date: string // YYYY-MM-DD
   on_conflict?: ApplyConflict
