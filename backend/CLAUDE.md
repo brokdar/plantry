@@ -37,6 +37,7 @@ Data flow: `transport → domain ← adapters`
 ```
 backend/
 ├── cmd/plantry/main.go              # entrypoint — wires everything together
+├── cmd/plantry-eval/                # offline eval command (see Plan generation)
 ├── db/
 │   ├── migrations/                  # goose SQL migrations (+ Go migration files)
 │   └── schema_patches/              # additive schema additions outside numbered migrations
@@ -59,6 +60,8 @@ backend/
     │   ├── food/                    # Food aggregate (ingredients + portions)
     │   ├── plate/                   # Plate aggregate: plates, components, cook sessions, events
     │   ├── planview/                # read models for /api/plan and /api/today
+    │   ├── planning/                # plan generation: checker, choosers, runner, re-plan
+    │   ├── diet/                    # diet classes (pure)
     │   ├── window/                  # plan window arithmetic (pure)
     │   ├── actor/                   # who made a change (user / agent) in ctx
     │   ├── slot/                    # Slot aggregate (planner day slots)
@@ -75,6 +78,7 @@ backend/
     │   ├── importer/                # recipe import orchestration
     │   ├── feedback/                # plate feedback
     │   └── units/                   # unit conversion
+    ├── eval/                        # offline eval suite behind cmd/plantry-eval (scenarios, library)
     ├── transport/http/
     │   ├── router.go                # chi route registrations
     │   ├── handlers/                # thin HTTP translation, one file per aggregate
@@ -193,6 +197,46 @@ Migration 00035 adds `foods.diet_class`, an override only (NULL = derived, nothi
 - `PUT /api/foods/{id}/diet-class {class | null}` sets or clears the override (both kinds); error `error.food.invalid_diet_class`.
 
 Plate feedback (spec §6.6): loved/disliked move the plate's recipe tags into `likes`/`dislikes` and out of the opposite list; role names and `explore` are skipped.
+
+## Plan generation
+
+Package `domain/planning` turns "plan my week" into a checked draft: context assembled in Go, one proposal from a chooser (LLM or heuristic), the checker, a bounded repair loop, then drafts persisted. The HTTP handlers (`handlers/plan_generate.go`) are its only caller; the chat agent does not use it.
+
+- **Checker.** `planning.Check(State, Target) []Issue` applies the hard rules H1–H8 to a pure `State`; `Merge(State, Target, Proposal)` lays a proposal over the fixed context (proposed plates get negative ids, sessions keep their key); `ComputeScore` and `ToSnapshot` complete the pipeline. Issue codes beyond the spec's: H1 `extra_plate`, `missing_plate`; H6 `confirmed_in_target`, `session_outside_target`; H7 `unknown_food`, `unknown_session`, `not_composed`, `session_food_mismatch`, `duplicate_session_key`, `invalid_portions`, `plate_without_components`, `plate_outside_target`, `plate_on_confirmed_cell`. H8 (variety) judges only the **proposed** (unconfirmed) cooks of a run: confirmed rows and routine cells are never subject to it, and it relaxes to the `variety_relaxed` warning when fewer eligible mains exist than cooks. `GET /api/plan` runs the same `Check` and filters to H1, H2, H5 and H8.
+- **Scopes (D6).** `window` (generate), `day`, `plate`, `side` and `empty_cells`; `Scope.From`/`To` bound `empty_cells` (the re-plan). Everything outside the scope and everything confirmed is fixed context. Use the name `empty_cells`: the frontend legacy gate bans `fill_empty`/`replace_all`.
+- **Endpoints.** `POST /api/plan/generate {start, chooser?, instruction?, eaters_by_date?, include_new_recipe?}` and `POST /api/plan/regenerate {scope, start, chooser?, instruction?}` return `202 {run_id}` (`?today=` is the client's date). `GET /api/plan/runs/{id}` returns status, `stage`, counts, issues, score and window; the client polls it, there is no SSE (D9). Regenerate keeps each day's eaters (guests) and never asks for a new recipe. Fewer than `setup.RecipeTarget` composed recipes is `error.plan.not_enough_recipes`; a second run on a window is `error.plan.generation_running`. `POST /api/plan/accept` and `/discard` `{from, to}` act on the window's draft closure (accept returns `{plate_ids, session_ids}`, the body of `POST /api/plan/unaccept`; discard returns `{removed}`, which `POST /api/plan/restore` brings back as drafts); `POST /api/plates/{id}/confirm|unlock` and `/api/cook-sessions/{id}/confirm|unlock` move one row's closure. Confirmed wins wherever a link joins different states.
+- **Runner.** A generation is asynchronous: `start` validates, picks the chooser, reserves the window in `planning.Progress` (the in-memory registry; one run per window), creates the `ai_runs` row and runs in a goroutine on a **detached ctx** with a 3 minute timeout (`runTimeout`). A panic ends the run as an error instead of the process. Stages (D35): `resolving`, `choosing`, `checking`, `repairing`, `saving`. `Progress.Running(start)` feeds `running_run_id` on `GET /api/plan`, which is how a reloaded board re-attaches. `Service.Wait` lets shutdown wait for running runs; `Deps.Go` lets tests run synchronously. At startup `FailInterruptedRuns` ends `running` rows left by a crash as errors (logs `ai.run.interrupted`). A run with no open `plan` cell skips the chooser (routines are still applied; it ends `ok`, cost null).
+- **Chooser selection.** `Deps.Choosers` maps `airun.ChooserLLM` / `ChooserHeuristic`. A request **without `chooser`** uses the LLM only when a provider resolves (the chooser's `Ready`), else the heuristic. Explicit `llm` without a provider is `503 error.ai.provider_missing`; a provider that cannot be built is `502 error.ai.provider_error`; a reply that never yields a readable plan ends the run `error.ai.invalid_plan`. The e2e backend always has the fake provider, so heuristic e2e requests must pin `chooser: heuristic`.
+- **Heuristic** (`heuristic.go`, run-log version `h1` = `planning.HeuristicVersion`): deterministic, no AI. The first day cooks at its earliest cell; later days cook at dinner and the earlier cells eat leftovers (sessions grow within keep days). Bump the version when it changes what it picks.
+- **LLM chooser** (`llmchooser.go`, `prompt.go`): see AI run log. Prompt version `p1`; bump `PromptVersion` on every prompt change. The repair loop lives inside the chooser (at most 2 repairs, stage `repairing`).
+- **Persisting.** Generated plates and sessions are written through `plate.Service` as `draft` with `actor.Generator` and the run's `ai_run_id`. A generator plate linked to a confirmed session is created confirmed, so never delete it in cleanup; count it as kept. `plate.Service.RemoveDrafts`, `DraftClosure` and `PlateClosure` support regenerate.
+
+### Mid-week re-plan
+
+`GET /api/plan/replan/preview?from&to[&none=date:slot…][&today]` returns `{none_cells, confirmed_affected, spare}`: the No-plate cells that hold plates, the confirmed plates a re-plan would remove, and the batches that would cook more than is still eaten (`spare[]` with `portions`, `freezable`, `mutable`; a batch is mutable only when it is not cooked and cooks on or after `from`, and only a mutable one can be frozen or reduced).
+
+`POST /api/plan/replan {from, to, none_cells, unlock_confirmed, spare: freeze|keep, regenerate, chooser?, instruction?}` returns `{removed, run_id}`. **`none_cells` is part of the contract**: the re-plan writes the No-plate overrides itself in the same transaction, because the availability API refuses `none` on an occupied cell. Confirmed plates need `unlock_confirmed`, else `409 error.plan.confirmed_affected` lists them; `from` before `?today=` is `400 error.plan.replan_past`. Days before `from` and cooked portions are never touched. The server's only sources of "today" are `?today=` and its clock. The window is reserved from before the removal until the run starts, so no other generation slips in between; if the run fails to start after the commit, the error is logged and `run_id` is null. `removed` alone cannot undo a re-plan (the overrides and the new run are not in it), so a re-plan has **no Undo**.
+
+`plate.Service.RemovePlates(ctx, ids, keep)` is the removal primitive: one unit of work; each session in `keep` ends with exactly its (frozen) portions and survives without links, so a cooked batch is never deleted; other sessions follow D11. An uncooked session that loses the plate on its cook cell but keeps other links **moves its cook to the earliest remaining plate** in the same transaction (a session update event; this can add an H2 on the new day, accepted). A missing plate is `ErrNotFound` and nothing is removed.
+
+### Diet classes
+
+See Diet class. Planning uses `domain/diet` (`Classify`, `Compatible`, `Max`) through `food.Service.DeriveDiet`; H5 compares each food's class with `profile.diet_type`, and an unknown class is a warning, not a violation.
+
+### Offline eval
+
+`internal/eval` and `cmd/plantry-eval` run plan generation offline (spec §8.4): an embedded 30-recipe library (`library.json`) and seven scenarios (`internal/eval/scenarios/*.json`), each run on a fresh in-process database copied from a migrated template, through services wired like `main.go`. A scenario's expectations: `min_plates`, `no_plate`, `kept_confirmed`, `unchanged_before`, `frozen_spare`, `min_repeats`.
+
+```bash
+go run ./cmd/plantry-eval                                   # all scenarios, heuristic chooser, 3 runs each
+go run ./cmd/plantry-eval -scenarios family_daily,away_thu_fri -runs 5
+go run ./cmd/plantry-eval -chooser llm -prompt-version p1   # scripted LLM mode, no network
+PLANTRY_EVAL_LIVE=1 PLANTRY_AI_PROVIDER=anthropic PLANTRY_AI_API_KEY=... \
+  go run ./cmd/plantry-eval -chooser llm -model <model>     # live: real provider, costs money
+go run ./cmd/plantry-eval -compare earlier.jsonl            # per-component diff against an earlier report
+```
+
+Flags: `-scenarios` (comma-separated, default all), `-chooser` (`heuristic` or `llm`), `-runs` (default 3), `-model`, `-prompt-version`, `-out` (JSONL, default `plantry-eval.jsonl`, gitignored), `-compare`. Scripted LLM mode feeds the heuristic's proposal through the real `LLMChooser` and its `prompt_dates` check. Live mode needs `PLANTRY_EVAL_LIVE=1`, `PLANTRY_AI_PROVIDER` (`anthropic` or `openai`), `PLANTRY_AI_API_KEY` and a model (`-model` or `PLANTRY_AI_MODEL`). The command prints a summary, writes one JSONL record per run and exits non-zero when a run failed an expectation (the report is still written). `cmd/plantry-eval/testdata/compare.golden` is rewritten with `UPDATE_GOLDEN=1 go test ./cmd/plantry-eval/...`. Re-run the suite after changing the heuristic, the checker or a prompt, and `-compare` against the previous report.
 
 ## Shopping list
 

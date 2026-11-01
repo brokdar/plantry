@@ -108,6 +108,8 @@ backend/
 │   │   ├── food/                     # Food aggregate (leaf | composed), nutrition resolver, history
 │   │   ├── plate/                    # plates, components, cook sessions, snapshots, events
 │   │   ├── planview/                 # read models: plan and today
+│   │   ├── planning/                 # plan generation: checker, choosers, runner, re-plan
+│   │   ├── diet/                     # diet classes
 │   │   ├── window/                   # plan window arithmetic
 │   │   ├── nutrition/                # Macros value type
 │   │   ├── shopping/                 # shopping list derivation + section classifier
@@ -141,6 +143,7 @@ backend/
 │   │       ├── handlers/             # thin translation (one file per aggregate); errormap.go maps domain errors → status + message_key
 │   │       ├── middleware/           # actor, ratelimit, security headers
 │   │       └── sse/                  # server-sent events helper
+│   ├── eval/                         # offline eval suite (scenarios, library) behind cmd/plantry-eval
 │   ├── config/                       # env loading + validation
 │   ├── webui/                        # embeds the built React SPA (frontend dist)
 │   └── testhelper/                   # NewTestDB, HTTP fixtures, time freezer
@@ -251,6 +254,8 @@ One package per aggregate under `backend/internal/domain/`. Plain structs; servi
 |---|---|
 | `food` | The Food aggregate (leaf or composed), recipe trees (`LoadTrees`), per-portion nutrition (`NutritionResolver`), derived history (`Derive`), shop sections |
 | `plate` | Plates, components, cook sessions and their batch rules; the single write path (`plate.Service`), snapshots (`PlanSnapshot`, `Apply`), audit events |
+| `planning` | Plan generation: the hard-rule checker (`Check`), score, the heuristic and LLM choosers, the async runner and the mid-week re-plan (§5.3) |
+| `diet` | Diet classes (`vegan` < `vegetarian` < `pescetarian` < `omnivore`, `unknown`): ordering, compatibility, name classifier |
 | `planview` | Read models: `Plan` (`GET /api/plan`) and `Today` (`GET /api/today`); never writes |
 | `window` | Pure plan-window arithmetic: a window is 7 days starting on `plan.shopping_day` |
 | `shopping` | Shopping list from cook sessions and leaf components, sorted into store sections |
@@ -274,7 +279,23 @@ One package per aggregate under `backend/internal/domain/`. Plain structs; servi
 
 **Rounding.** Amounts are stored and summed exact; `units.Display` rounds for reading and `units.Buy` rounds count units up for shopping.
 
-### 5.3 LLM port
+### 5.3 Plan generation and run lifecycle
+
+`planning.Service` turns a request into drafts in one pipeline: resolve the window, cells and fixed context (confirmed rows, history, diet, settings) in Go; one **proposal** from a `Chooser`; `Check` against the hard rules H1–H8; a bounded repair loop for the LLM; persist as `draft` plates and sessions through `plate.Service`; score. The checker is pure, so the heuristic and the LLM are held to the same rules, and a proposal is never trusted before `Check`.
+
+Choosers: the **heuristic** (deterministic, no AI, prompt version `h1`) and the **LLM chooser** (one forced `submit_plan` tool call per attempt, at most two repairs, prompt version `p1`). A request without `chooser` takes the LLM only when a provider resolves, else the heuristic.
+
+Run lifecycle:
+
+1. `POST /api/plan/generate` (or `regenerate`) validates, reserves the window in the in-memory `Progress` registry (one running generation per window) and inserts an `ai_runs` row (`running`). It answers `202 {run_id}` at once.
+2. A goroutine on a detached ctx (3 minute timeout; a panic becomes an error) walks the stages `resolving`, `choosing`, `checking`, `repairing`, `saving`; each LLM call is a step in `ai_run_steps`.
+3. It writes the drafts and finishes the run `ok`, `partial` (violations left after the repairs) or `error` (with an `error_key`), then releases the window. At startup, rows still `running` from a crashed process are ended as errors.
+4. The client polls `GET /api/plan/runs/{id}` every 500 ms (there is no SSE for runs) and reloads the plan views once when the run is final. A reloaded page re-attaches through `running_run_id` on `GET /api/plan`.
+5. The user reviews the drafts on the board and confirms single batches, accepts the window (confirms all drafts) or discards it. The run's `outcome` (`accepted`, `partially_accepted`, `discarded`) is written by those actions in the same transaction; accept and discard have Undo.
+
+The **mid-week re-plan** reuses the pieces: it marks cells No plate, removes the plates they held with `plate.Service.RemovePlates` (cooked batches keep their portions, spare portions of uncooked batches freeze or shrink, an orphaned cook moves to the earliest remaining plate), then starts an `empty_cells` generation limited to the range on the window reservation it already holds. It has no Undo. Tests: the checker and choosers with fixtures, the runner with a synchronous `Go`, and the offline `cmd/plantry-eval` suite (scenarios on an embedded recipe library) for quality over several runs.
+
+### 5.4 LLM port
 
 ```go
 // internal/domain/llm/client.go
@@ -403,6 +424,16 @@ POST   /api/cook-sessions/{id}/leftovers            add leftover plates
 ```
 
 There is no list-plates endpoint: `GET /api/plates`, `/api/plates/by-date`, `/api/plates/macros`, `/api/nutrition` and `/api/foods/{id}/recent-unit` were removed (the plan view carries that data); `TestLegacyReadRoutesGone` pins it.
+
+```
+POST   /api/plan/generate                           start a generation of a window → 202 {run_id}
+POST   /api/plan/regenerate                         scope day | plate | side | empty_cells → 202 {run_id}
+GET    /api/plan/runs/{id}                          status, stage, counts, issues, score (polled)
+POST   /api/plan/accept | /unaccept | /discard      confirm drafts, return rows to draft, delete drafts
+POST   /api/plates/{id}/confirm | /unlock           also /api/cook-sessions/{id}/confirm | /unlock
+GET    /api/plan/replan/preview?from&to[&none=…]    what a re-plan would touch
+POST   /api/plan/replan                             remove, settle batches, optionally regenerate → {removed, run_id}
+```
 
 #### Shopping
 
@@ -629,7 +660,8 @@ File-based routes with typed params (`$id`) and validated search params:
 | --------------------------------------------------- | ------------------------------------------------------------------- |
 | `/`                                                 | Redirects to `/setup` until setup is completed, else to `/today`    |
 | `/today`                                            | Today: verdict, cook or leftover card, meals, reminders, week strip |
-| `/plan`                                             | The plan board; `?start`, `?cell=date\|slot`, `?day`                |
+| `/plan`                                             | The plan board; `?start`, `?cell=date\|slot`, `?day`, `?run` (the generation it follows) |
+| `/plan/new`                                         | The plan wizard (dialog from 768 px, page on phones); `?start`      |
 | `/shop`                                             | Shopping list by store section; `?from&to`                          |
 | `/recipes`                                          | Recipe library; filters are search params; `?add=url` opens import  |
 | `/recipes/new`, `/recipes/$id`, `/recipes/$id/edit` | Create, detail (scaling, cook history) and edit                     |
