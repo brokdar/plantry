@@ -74,6 +74,7 @@ export function RunsTable({ onOpen }: { onOpen: (id: number) => void }) {
               <Th>{t("settings_page.insights.col.status")}</Th>
               <Th>{t("settings_page.insights.col.score")}</Th>
               <Th>{t("settings_page.insights.col.outcome")}</Th>
+              <Th numeric>{t("settings_page.insights.col.edits")}</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -187,6 +188,9 @@ function RunRow({
       <td className="px-3 py-2 tabular-nums">{scoreText(run, i18n)}</td>
       <td className="px-3 py-2">
         {run.outcome ? t(`settings_page.insights.outcome.${run.outcome}`) : "–"}
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums" data-testid="run-edits">
+        {run.edits === null ? "–" : formatNumber(run.edits, i18n)}
       </td>
     </tr>
   )

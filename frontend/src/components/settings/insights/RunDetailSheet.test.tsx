@@ -64,6 +64,30 @@ describe("RunDetailSheet", () => {
     expect(await screen.findByText("Handed in the plan")).toBeInTheDocument()
   })
 
+  it("links a regenerate step to its run", async () => {
+    vi.mocked(getRun).mockResolvedValue({
+      ...mockRunDetail,
+      steps: [
+        {
+          ...mockRunDetail.steps[1],
+          name: "regenerate",
+          result: '{"run_id":42,"status":"ok"}',
+          result_truncated: false,
+        },
+      ],
+    })
+    renderWithRouter(<RunDetailSheet runId={11} onClose={vi.fn()} />)
+
+    const link = await screen.findByTestId("step-run-link")
+    expect(link).toHaveAttribute("href", "/settings/assistant/insights?run=42")
+  })
+
+  it("has no run link on other steps", async () => {
+    renderWithRouter(<RunDetailSheet runId={11} onClose={vi.fn()} />)
+    await screen.findAllByTestId("run-step")
+    expect(screen.queryByTestId("step-run-link")).toBeNull()
+  })
+
   it("stays closed without a run", () => {
     renderWithRouter(<RunDetailSheet runId={undefined} onClose={vi.fn()} />)
     expect(screen.queryByTestId("run-detail-sheet")).toBeNull()

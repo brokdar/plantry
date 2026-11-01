@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import { X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -220,8 +221,21 @@ function stepText(step: RunStep, f: Formatter): string {
   })
 }
 
+/** The run a `regenerate` tool step started: its result is JSON with a
+ *  `run_id`. Null for other steps, a failed call or cut-off JSON. */
+function regenerateRunId(step: RunStep): number | null {
+  if (step.name !== "regenerate" || step.is_error || !step.result) return null
+  try {
+    const id = (JSON.parse(step.result) as { run_id?: unknown }).run_id
+    return typeof id === "number" && Number.isInteger(id) && id > 0 ? id : null
+  } catch {
+    return null
+  }
+}
+
 function Step({ step }: { step: RunStep }) {
   const { t, i18n } = useTranslation()
+  const linkedRun = regenerateRunId(step)
   return (
     <li className="flex flex-col gap-1 py-2.5" data-testid="run-step">
       <div className="flex items-baseline justify-between gap-3">
@@ -235,6 +249,16 @@ function Step({ step }: { step: RunStep }) {
           })}
         </span>
       </div>
+      {linkedRun !== null && (
+        <Link
+          to="/settings/assistant/insights"
+          search={{ run: linkedRun }}
+          className="w-fit text-small text-accent underline-offset-2 hover:underline"
+          data-testid="step-run-link"
+        >
+          {t("settings_page.insights.open_run")} #{linkedRun}
+        </Link>
+      )}
       {(step.args !== null || step.result !== null) && (
         <details className="text-small">
           <summary className="cursor-pointer text-ink-muted">

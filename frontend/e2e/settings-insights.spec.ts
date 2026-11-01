@@ -1,8 +1,19 @@
+import { rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+
 import type { APIRequestContext, Page } from "@playwright/test"
 
 import { expect, test } from "./helpers"
 
-import { API, cleanupSlot, seedSlot, uid } from "./helpers"
+import {
+  API,
+  cleanupSlot,
+  futureWindow,
+  seedSlot,
+  setSetting,
+  uid,
+} from "./helpers"
 
 // AC-8 (F7-AC1, F7-AC3). Runs in ai-serial: it drives the fake provider
 // (model fake-e2e, which has no built-in price) and writes the global
@@ -44,12 +55,62 @@ async function chatOnce(
   return runId
 }
 
+/** A chat script that adds one draft plate (create_plate), then ends. */
+function createPlateScript(date: string, slotId: number): string {
+  const text = "Done, it is planned."
+  const usage = { input_tokens: 1000, output_tokens: 30 }
+  const input = { date, slot_id: slotId }
+  return JSON.stringify({
+    turns: [
+      {
+        events: [
+          { type: "message_start", payload: { model: "fake-e2e" } },
+          {
+            type: "tool_call_start",
+            payload: { id: "tu_1", name: "create_plate" },
+          },
+          {
+            type: "tool_call_delta",
+            payload: { id: "tu_1", args_json: JSON.stringify(input) },
+          },
+        ],
+        stop_reason: "tool_use",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              tool_use_id: "tu_1",
+              tool_name: "create_plate",
+              tool_input: input,
+            },
+          ],
+        },
+        usage,
+      },
+      {
+        events: [
+          { type: "message_start", payload: { model: "fake-e2e" } },
+          { type: "assistant_delta", payload: { text } },
+        ],
+        stop_reason: "end_turn",
+        message: { content: [{ type: "text", text }] },
+        usage,
+      },
+    ],
+  })
+}
+
 test("a chat turn shows up in Insights with its steps and an unknown cost", async ({
   page,
   request,
 }) => {
   const slot = await seedSlot(`slot.insights-${uid()}`, "moon", 98)
+  const scriptPath = join(tmpdir(), `plantry-insights-${uid()}.json`)
   try {
+    // AC-4.2: the chat run adds a plate, so its row counts one edit.
+    const { days } = await futureWindow()
+    await writeFile(scriptPath, createPlateScript(days[0], slot.id))
+    await setSetting("ai.fake_script", scriptPath)
     const runId = await chatOnce(page, request)
 
     // Settings → Assistant → Insights (the static route beats $section).
@@ -64,6 +125,7 @@ test("a chat turn shows up in Insights with its steps and an unknown cost", asyn
     await expect(row).toContainText("fake-e2e")
     await expect(row).toContainText("cost unknown")
     await expect(row).toContainText("Done")
+    await expect(row.getByTestId("run-edits")).toHaveText("1")
 
     await expect(page.getByTestId("spark-cost")).toContainText(
       /Excludes \d+ runs? without a price/
@@ -80,11 +142,13 @@ test("a chat turn shows up in Insights with its steps and an unknown cost", asyn
     ).toBeVisible()
     const tool = sheet
       .getByTestId("run-step")
-      .filter({ hasText: "Checked your meal slots" })
+      .filter({ hasText: "Added a plate" })
     await expect(tool).toBeVisible()
     await tool.getByText("Raw JSON").click()
     await expect(tool.getByText("Arguments")).toBeVisible()
   } finally {
+    await request.delete(`${API}/api/settings/ai.fake_script`)
+    await rm(scriptPath, { force: true })
     await cleanupSlot(slot.id)
   }
 })

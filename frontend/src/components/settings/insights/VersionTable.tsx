@@ -50,14 +50,13 @@ function componentText(
   return share ? formatPercent(value, f) : formatNumber(value, f, 1)
 }
 
-/** Score components and violations grouped by kind, prompt version and
- *  model, for the planning runs (generate and regenerate). A version whose
- *  runs all failed has no score, but it stays: it is the one to notice. */
+/** Score components, edits and violations grouped by kind, prompt version
+ *  and model, for every kind of run. A version whose runs all failed, or a
+ *  kind without a score (chat), has empty cells but stays: it is the one to
+ *  notice. */
 export function VersionTable({ groups }: { groups: InsightsByVersion[] }) {
   const { t, i18n } = useTranslation()
-  const rows = groups.filter(
-    (g) => g.kind === "generate" || g.kind === "regenerate"
-  )
+  const rows = groups
 
   if (rows.length === 0) {
     return (
@@ -87,6 +86,9 @@ export function VersionTable({ groups }: { groups: InsightsByVersion[] }) {
             <th scope="col" className="px-3 py-2 text-right font-normal">
               {t("settings_page.insights.col.runs")}
             </th>
+            <th scope="col" className="px-3 py-2 text-right font-normal">
+              {t("settings_page.insights.col.edits")}
+            </th>
             {COMPONENTS.map((c) => (
               <th
                 key={c.path}
@@ -115,6 +117,9 @@ export function VersionTable({ groups }: { groups: InsightsByVersion[] }) {
                 <td className="px-3 py-2">{row.model || "–"}</td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {formatNumber(row.runs, i18n)}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {row.edits === null ? "–" : formatNumber(row.edits, i18n)}
                 </td>
                 {COMPONENTS.map((c) => (
                   <td
