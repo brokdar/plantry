@@ -109,7 +109,7 @@ async function setup(): Promise<Setup> {
     await ctx.dispose()
   }
 
-  return {
+  const s: Setup = {
     tag,
     start,
     days,
@@ -134,16 +134,34 @@ async function setup(): Promise<Setup> {
       await cleanupFood(beans.id)
     },
   }
+  cleanups.push(s.cleanup)
+  return s
 }
 
+// Cleanups run in afterEach: a timed-out body never reaches its `finally`,
+// and leaked slots and plates would land in a later test's reused window.
+const cleanups: (() => Promise<void>)[] = []
+test.afterEach(async () => {
+  for (const cleanup of cleanups.splice(0)) await cleanup()
+})
+
 const strip = (page: Page) => page.getByRole("region", { name: "Cook days" })
+
+/** Closes the plate sheet and waits until it is gone, so the next cell
+ *  click opens a fresh sheet. */
+async function closeSheet(page: Page) {
+  await page.keyboard.press("Escape")
+  await expect(page.getByTestId("plan-sheet")).toHaveCount(0)
+}
 
 /** Waits for the next session or plate write and the plan refetch. */
 async function write(page: Page, action: () => Promise<void>) {
   const done = page.waitForResponse(
     (r) =>
       /\/api\/(cook-sessions|plates)/.test(r.url()) &&
-      r.request().method() !== "GET"
+      r.request().method() !== "GET",
+    // Fail at the missing write, not at the test timeout.
+    { timeout: 10_000 }
   )
   await action()
   expect((await done).ok()).toBeTruthy()
@@ -220,187 +238,179 @@ test.describe("Plan batches", () => {
   }) => {
     test.slow()
     const s = await setup()
-    try {
-      await page.setViewportSize({ width: 1440, height: 900 })
-      await page.goto(`/plan?start=${s.start}`)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(`/plan?start=${s.start}`)
 
-      // F4-AC1: add Chili to "Sunday" dinner …
-      let sheet = await openCellSheet(page, s.days[1], s.cook)
-      await sheet.getByRole("button", { name: "Add food" }).click()
-      await stageFood(sheet, s.chili.name)
-      await write(page, () => sheet.getByTestId("food-picker-commit").click())
-      await expect(
-        sheet.getByRole("heading", { name: s.chili.name })
-      ).toBeVisible()
+    // F4-AC1: add Chili to "Sunday" dinner …
+    let sheet = await openCellSheet(page, s.days[1], s.cook)
+    await sheet.getByRole("button", { name: "Add food" }).click()
+    await stageFood(sheet, s.chili.name)
+    await write(page, () => sheet.getByTestId("food-picker-commit").click())
+    await expect(
+      sheet.getByRole("heading", { name: s.chili.name })
+    ).toBeVisible()
+    await setEaters(page, sheet, 2)
+
+    // … cook it as a batch of 3 meals, keeping both suggested cells.
+    sheet = await openBatchForm(page, s)
+    await write(page, () =>
+      sheet.getByRole("button", { name: "Create batch" }).click()
+    )
+    await closeSheet(page)
+    for (const slot of [s.lunch, s.dinner]) {
+      sheet = await openCellSheet(page, s.days[2], slot)
       await setEaters(page, sheet, 2)
-
-      // … cook it as a batch of 3 meals, keeping both suggested cells.
-      sheet = await openBatchForm(page, s)
-      await write(page, () =>
-        sheet.getByRole("button", { name: "Create batch" }).click()
-      )
-      await page.keyboard.press("Escape")
-      for (const slot of [s.lunch, s.dinner]) {
-        sheet = await openCellSheet(page, s.days[2], slot)
-        await setEaters(page, sheet, 2)
-        await page.keyboard.press("Escape")
-      }
-      await expectBatch(page, s, "Cook × 6", ["2/3", "3/3"])
-      await page.reload()
-      await expectBatch(page, s, "Cook × 6", ["2/3", "3/3"])
-
-      // AC-1 step 3: Monday's meter is for one eater: two Chili portions
-      // (lunch and dinner) at 100 kcal each, not four.
-      const monday = new Intl.DateTimeFormat("en-US", {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-      }).format(new Date(`${s.days[2]}T12:00:00`))
-      await page.getByRole("button", { name: `Nutrition, ${monday}` }).click()
-      const nutrition = page.getByRole("dialog", { name: monday })
-      await expect(nutrition).toContainText("Per person")
-      await expect(nutrition.getByRole("definition").first()).toHaveText(
-        /^200\b/
-      )
-      await page.keyboard.press("Escape")
-
-      // F4-AC2: an exact batch follows the eaters (D11).
-      sheet = await openCellSheet(page, s.days[1], s.cook)
-      await setEaters(page, sheet, 3)
-      await expect(planCell(page, s.days[1], s.cook)).toContainText("Cook × 7")
-      await setEaters(page, sheet, 2)
-      await expect(planCell(page, s.days[1], s.cook)).toContainText("Cook × 6")
-
-      // F4-AC3: 8 portions leave 2 spare.
-      const portions = sheet.getByRole("group", { name: "Portions to cook" })
-      for (const n of ["7", "8"]) {
-        await write(page, () =>
-          sheet
-            .getByRole("button", { name: "Increase Portions to cook" })
-            .click()
-        )
-        await expect(portions.locator("output")).toHaveText(n)
-      }
-      await page.keyboard.press("Escape")
-      await expect(strip(page)).toContainText("2 spare")
-
-      // F4-AC5: past use-by (day 6), the batch is not on offer …
-      sheet = await openCellSheet(page, s.days[6], s.lunch)
-      await expect(
-        sheet.getByRole("button", { name: "Add food" })
-      ).toBeVisible()
-      await expect(sheet.getByTestId("cell-leftover")).toHaveCount(0)
-      await page.keyboard.press("Escape")
-
-      // … within it (day 3 lunch) it is, and eating it uses the spare.
-      sheet = await openCellSheet(page, s.days[3], s.lunch)
-      const leftover = sheet.getByTestId("cell-leftover")
-      await expect(leftover).toContainText(s.chili.name)
-      await write(page, () => leftover.click())
-      await expect(planCell(page, s.days[3], s.lunch)).toContainText("4/4")
-      sheet = await openCellSheet(page, s.days[3], s.lunch)
-      await setEaters(page, sheet, 2)
-      await page.keyboard.press("Escape")
-      await expect(strip(page)).not.toContainText("spare")
-
-      // F4-AC4: Remove batch asks first, removes the leftovers, and Undo
-      // brings all of them back with their links.
-      sheet = await openCellSheet(page, s.days[1], s.cook)
-      await sheet.getByRole("button", { name: "Remove batch" }).click()
-      const confirm = page.getByRole("dialog", { name: "Remove this batch?" })
-      await expect(confirm).toContainText("3 other plates")
-      const removed = page.waitForResponse(
-        (r) =>
-          /\/api\/cook-sessions\/\d+$/.test(r.url()) &&
-          r.request().method() === "DELETE"
-      )
-      await confirm.getByRole("button", { name: "Remove batch" }).click()
-      expect((await removed).ok()).toBeTruthy()
-      await expect(page.getByTestId("plan-sheet")).toHaveCount(0)
-      for (const [day, slot] of [
-        [2, s.lunch],
-        [2, s.dinner],
-        [3, s.lunch],
-      ] as const) {
-        await expect(planCell(page, s.days[day], slot)).toContainText("Add")
-      }
-
-      const restored = page.waitForResponse(
-        (r) => r.url().endsWith("/api/plan/restore") && r.ok()
-      )
-      await page.getByRole("button", { name: "Undo", exact: true }).click()
-      await restored
-      await expectBatch(page, s, "Cook × 8", ["2/4", "3/4"])
-      await expect(planCell(page, s.days[3], s.lunch)).toContainText("4/4")
-    } finally {
-      await s.cleanup()
+      await closeSheet(page)
     }
+    await expectBatch(page, s, "Cook × 6", ["2/3", "3/3"])
+    await page.reload()
+    await expectBatch(page, s, "Cook × 6", ["2/3", "3/3"])
+
+    // AC-1 step 3: Monday's meter is for one eater: two Chili portions
+    // (lunch and dinner) at 100 kcal each, not four.
+    const monday = new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    }).format(new Date(`${s.days[2]}T12:00:00`))
+    await page.getByRole("button", { name: `Nutrition, ${monday}` }).click()
+    const nutrition = page.getByRole("dialog", { name: monday })
+    await expect(nutrition).toContainText("Per person")
+    await expect(nutrition.getByRole("definition").first()).toHaveText(/^200\b/)
+    await page.keyboard.press("Escape")
+    await expect(nutrition).toHaveCount(0)
+
+    // F4-AC2: an exact batch follows the eaters (D11).
+    sheet = await openCellSheet(page, s.days[1], s.cook)
+    await setEaters(page, sheet, 3)
+    await expect(planCell(page, s.days[1], s.cook)).toContainText("Cook × 7")
+    await setEaters(page, sheet, 2)
+    await expect(planCell(page, s.days[1], s.cook)).toContainText("Cook × 6")
+
+    // F4-AC3: 8 portions leave 2 spare.
+    const portions = sheet.getByRole("group", { name: "Portions to cook" })
+    for (const n of ["7", "8"]) {
+      await write(page, () =>
+        sheet.getByRole("button", { name: "Increase Portions to cook" }).click()
+      )
+      await expect(portions.locator("output")).toHaveText(n)
+    }
+    await closeSheet(page)
+    await expect(strip(page)).toContainText("2 spare")
+
+    // The window may be reused and hold another test's batch: only this
+    // test's Chili counts.
+    const chiliLeftover = (sheet: Locator) =>
+      sheet.getByTestId("cell-leftover").filter({ hasText: s.chili.name })
+
+    // F4-AC5: past use-by (day 6), the batch is not on offer …
+    sheet = await openCellSheet(page, s.days[6], s.lunch)
+    await expect(sheet.getByRole("button", { name: "Add food" })).toBeVisible()
+    await expect(chiliLeftover(sheet)).toHaveCount(0)
+    await closeSheet(page)
+
+    // … within it (day 3 lunch) it is, and eating it uses the spare.
+    sheet = await openCellSheet(page, s.days[3], s.lunch)
+    const leftover = chiliLeftover(sheet)
+    await expect(leftover).toBeVisible()
+    await write(page, () => leftover.click())
+    await expect(planCell(page, s.days[3], s.lunch)).toContainText("4/4")
+    sheet = await openCellSheet(page, s.days[3], s.lunch)
+    await setEaters(page, sheet, 2)
+    await closeSheet(page)
+    await expect(strip(page)).not.toContainText("spare")
+
+    // F4-AC4: Remove batch asks first, removes the leftovers, and Undo
+    // brings all of them back with their links.
+    sheet = await openCellSheet(page, s.days[1], s.cook)
+    await sheet.getByRole("button", { name: "Remove batch" }).click()
+    const confirm = page.getByRole("dialog", { name: "Remove this batch?" })
+    await expect(confirm).toContainText("3 other plates")
+    const removed = page.waitForResponse(
+      (r) =>
+        /\/api\/cook-sessions\/\d+$/.test(r.url()) &&
+        r.request().method() === "DELETE"
+    )
+    await confirm.getByRole("button", { name: "Remove batch" }).click()
+    expect((await removed).ok()).toBeTruthy()
+    await expect(page.getByTestId("plan-sheet")).toHaveCount(0)
+    for (const [day, slot] of [
+      [2, s.lunch],
+      [2, s.dinner],
+      [3, s.lunch],
+    ] as const) {
+      await expect(planCell(page, s.days[day], slot)).toContainText("Add")
+    }
+
+    const restored = page.waitForResponse(
+      (r) => r.url().endsWith("/api/plan/restore") && r.ok()
+    )
+    await page.getByRole("button", { name: "Undo", exact: true }).click()
+    await restored
+    await expectBatch(page, s, "Cook × 8", ["2/4", "3/4"])
+    await expect(planCell(page, s.days[3], s.lunch)).toContainText("4/4")
   })
 
   test("Mark as No plate on a leftover, then Undo, keeps its batch link", async ({
     page,
   }) => {
     const s = await setup()
-    try {
-      // The AC-1 batch through the API.
-      const ctx = await apiRequest.newContext({ baseURL: API })
-      const plateRes = await ctx.post("/api/plates", {
-        data: {
-          date: s.days[1],
-          slot_id: s.cook,
-          eaters: 2,
-          components: [{ food_id: s.chili.id, portions: 1 }],
-        },
-      })
-      expect(plateRes.ok(), await plateRes.text()).toBeTruthy()
-      const plate = (await plateRes.json()) as {
-        components: { cook_session_id: number }[]
-      }
-      const res = await ctx.post(
-        `/api/cook-sessions/${plate.components[0].cook_session_id}/leftovers`,
-        {
-          data: {
-            cells: [
-              { date: s.days[2], slot_id: s.lunch },
-              { date: s.days[2], slot_id: s.dinner },
-            ],
-          },
-        }
-      )
-      expect(res.ok(), await res.text()).toBeTruthy()
-      // Leftover plates get the household's eaters; AC-1 eats for two.
-      const { links } = (await res.json()) as { links: { plate_id: number }[] }
-      for (const { plate_id } of links.slice(1)) {
-        const put = await ctx.put(`/api/plates/${plate_id}`, {
-          data: { eaters: 2 },
-        })
-        expect(put.ok(), await put.text()).toBeTruthy()
-      }
-      // A draft batch: Mark as No plate on a confirmed plate opens the
-      // re-plan sheet instead (Phase 3 F4, plan-replan.spec.ts).
-      const unlock = await ctx.post(`/api/plates/${links[1].plate_id}/unlock`)
-      expect(unlock.ok(), await unlock.text()).toBeTruthy()
-      await ctx.dispose()
-
-      await page.setViewportSize({ width: 1440, height: 900 })
-      await page.goto(`/plan?start=${s.start}`)
-      await expectBatch(page, s, "Cook × 6", ["2/3", "3/3"])
-
-      // F4-AC6
-      const sheet = await openCellSheet(page, s.days[2], s.lunch)
-      await expect(sheet).toContainText("(2 of 3)")
-      await sheet.getByRole("button", { name: "Mark as No plate" }).click()
-      await expect(planCell(page, s.days[2], s.lunch)).toContainText("No plate")
-      await expect(planCell(page, s.days[1], s.cook)).toContainText("Cook × 4")
-
-      const restored = page.waitForResponse(
-        (r) => r.url().endsWith("/api/plan/restore") && r.ok()
-      )
-      await page.getByRole("button", { name: "Undo", exact: true }).click()
-      await restored
-      await expectBatch(page, s, "Cook × 6", ["2/3", "3/3"])
-    } finally {
-      await s.cleanup()
+    // The AC-1 batch through the API.
+    const ctx = await apiRequest.newContext({ baseURL: API })
+    const plateRes = await ctx.post("/api/plates", {
+      data: {
+        date: s.days[1],
+        slot_id: s.cook,
+        eaters: 2,
+        components: [{ food_id: s.chili.id, portions: 1 }],
+      },
+    })
+    expect(plateRes.ok(), await plateRes.text()).toBeTruthy()
+    const plate = (await plateRes.json()) as {
+      components: { cook_session_id: number }[]
     }
+    const res = await ctx.post(
+      `/api/cook-sessions/${plate.components[0].cook_session_id}/leftovers`,
+      {
+        data: {
+          cells: [
+            { date: s.days[2], slot_id: s.lunch },
+            { date: s.days[2], slot_id: s.dinner },
+          ],
+        },
+      }
+    )
+    expect(res.ok(), await res.text()).toBeTruthy()
+    // Leftover plates get the household's eaters; AC-1 eats for two.
+    const { links } = (await res.json()) as { links: { plate_id: number }[] }
+    for (const { plate_id } of links.slice(1)) {
+      const put = await ctx.put(`/api/plates/${plate_id}`, {
+        data: { eaters: 2 },
+      })
+      expect(put.ok(), await put.text()).toBeTruthy()
+    }
+    // A draft batch: Mark as No plate on a confirmed plate opens the
+    // re-plan sheet instead (Phase 3 F4, plan-replan.spec.ts).
+    const unlock = await ctx.post(`/api/plates/${links[1].plate_id}/unlock`)
+    expect(unlock.ok(), await unlock.text()).toBeTruthy()
+    await ctx.dispose()
+
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(`/plan?start=${s.start}`)
+    await expectBatch(page, s, "Cook × 6", ["2/3", "3/3"])
+
+    // F4-AC6
+    const sheet = await openCellSheet(page, s.days[2], s.lunch)
+    await expect(sheet).toContainText("(2 of 3)")
+    await sheet.getByRole("button", { name: "Mark as No plate" }).click()
+    await expect(planCell(page, s.days[2], s.lunch)).toContainText("No plate")
+    await expect(planCell(page, s.days[1], s.cook)).toContainText("Cook × 4")
+
+    const restored = page.waitForResponse(
+      (r) => r.url().endsWith("/api/plan/restore") && r.ok()
+    )
+    await page.getByRole("button", { name: "Undo", exact: true }).click()
+    await restored
+    await expectBatch(page, s, "Cook × 6", ["2/3", "3/3"])
   })
 })
