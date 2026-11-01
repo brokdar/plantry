@@ -9,6 +9,7 @@ import type { Change, ConversationChange } from "@/lib/domain/assistantEvents"
 import {
   useAssistantStream,
   useConversation,
+  useConversations,
   useUndoChange,
 } from "@/lib/queries/ai"
 import {
@@ -24,11 +25,15 @@ import { PanelShell } from "./PanelShell"
 import { StatusLine } from "./StatusLine"
 import { SuggestionChips } from "./SuggestionChips"
 import { UnlockCard } from "./UnlockCard"
+import { useStickToBottom } from "./use-stick-to-bottom"
 
 interface AssistantPanelProps {
   open: boolean
   /** Below 768 px the panel is a bottom sheet. */
   phone: boolean
+  /** From 1280 px the panel sits beside the board; between 768 and 1279 px
+   *  it floats over it. Default true. */
+  docked?: boolean
   /** An AI provider is configured. */
   enabled: boolean
   /** The settings are still loading: the provider is not known yet. */
@@ -45,6 +50,7 @@ interface AssistantPanelProps {
 export function AssistantPanel({
   open,
   phone,
+  docked = true,
   enabled,
   loading,
   plan,
@@ -57,6 +63,26 @@ export function AssistantPanel({
   const { data: conversation } = useConversation(activeConversationId)
   const undo = useUndoChange()
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const transcriptRef = useRef<HTMLDivElement>(null)
+
+  // A reload with the panel open (`?assistant=1`) picks the conversation up
+  // where it was: the most recently updated one. Done once; opening the
+  // panel later, or "New conversation", starts empty.
+  // The list is only read while the panel is open and no conversation is
+  // active yet.
+  const { data: conversations } = useConversations(
+    open && activeConversationId === null
+  )
+  const restored = useRef(!open)
+  useEffect(() => {
+    if (restored.current || !conversations) return
+    restored.current = true
+    if (assistantStream.get().conversationId !== null) return
+    const latest = [...conversations.items].sort((a, b) =>
+      b.updated_at.localeCompare(a.updated_at)
+    )[0]
+    if (latest) assistantStream.setConversation(latest.id)
+  }, [conversations])
 
   // The aside has no focus trap to move focus in: put it in the composer.
   useEffect(() => {
@@ -82,12 +108,53 @@ export function AssistantPanel({
     const held = new Set((conversation?.changes ?? []).map((c) => c.id))
     return stream.changes.filter((c) => !held.has(c.id))
   }, [conversation, stream.changes])
+  // Failed calls of the turn in flight, until the conversation holds them.
+  const liveFailures = useMemo(() => {
+    const held = new Set(
+      transcript.turns.flatMap((t) => t.failures.map((f) => f.id))
+    )
+    return stream.failures.filter((f) => !held.has(f.id))
+  }, [transcript, stream.failures])
+  // The unlock the assistant is waiting on: the one streamed this turn, else
+  // the stored preview nobody has answered yet (after a reload).
+  const unlockRequest =
+    stream.unlockRequest ??
+    (chatStream.isStreaming ? null : transcript.pendingUnlock)
   const empty =
     transcript.turns.length === 0 &&
     transcript.rest.length === 0 &&
     liveChanges.length === 0 &&
+    liveFailures.length === 0 &&
     !showStreamText &&
     !chatStream.isStreaming
+
+  // Follow new content (lines, the unlock card, the reply) while the user
+  // is at the bottom; scrolling up pauses it.
+  const followKey = useMemo(
+    () => [
+      transcript,
+      liveChanges,
+      liveFailures,
+      unlockRequest,
+      stream.text,
+      stream.status,
+      chatStream.isStreaming,
+    ],
+    [
+      transcript,
+      liveChanges,
+      liveFailures,
+      unlockRequest,
+      stream.text,
+      stream.status,
+      chatStream.isStreaming,
+    ]
+  )
+  const onTranscriptScroll = useStickToBottom(
+    transcriptRef,
+    followKey,
+    `${activeConversationId}|${open}`
+  )
 
   function lineState(c: Change) {
     return (
@@ -109,6 +176,7 @@ export function AssistantPanel({
   }
 
   function handleNewConversation() {
+    restored.current = true
     if (chatStream.isStreaming) chatStream.abort()
     assistantStream.setConversation(null)
     assistantStream.reset()
@@ -122,6 +190,7 @@ export function AssistantPanel({
   return (
     <PanelShell
       phone={phone}
+      docked={docked}
       open={open}
       onClose={onClose}
       actions={
@@ -145,7 +214,9 @@ export function AssistantPanel({
       }
     >
       <div
-        className="flex-1 space-y-3 overflow-y-auto px-4 py-3"
+        ref={transcriptRef}
+        onScroll={onTranscriptScroll}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3"
         data-testid="assistant-transcript"
       >
         {!enabled && !loading && (
@@ -156,14 +227,15 @@ export function AssistantPanel({
         <MessageList
           transcript={transcript}
           liveChanges={liveChanges}
+          liveFailures={liveFailures}
           streamText={showStreamText ? stream.text : ""}
           streaming={chatStream.isStreaming}
           lineState={lineState}
           onUndo={(id) => undo.mutate(id)}
         />
-        {stream.unlockRequest && (
+        {unlockRequest && (
           <UnlockCard
-            request={stream.unlockRequest}
+            request={unlockRequest}
             slots={plan.slots}
             disabled={chatStream.isStreaming}
             onConfirm={(text) => void handleSubmit(text)}

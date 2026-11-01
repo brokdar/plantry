@@ -22,7 +22,9 @@ export const test = baseTest.extend({
 export { expect, apiRequest }
 
 export function uid() {
-  return crypto.randomUUID().slice(0, 8)
+  // Always contains a letter: an all-digit tag comes back quoted in a URL
+  // `q` param, which breaks specs that match the URL.
+  return `u${crypto.randomUUID().slice(0, 7)}`
 }
 
 /**

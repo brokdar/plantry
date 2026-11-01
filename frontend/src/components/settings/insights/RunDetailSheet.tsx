@@ -253,7 +253,7 @@ function Step({ step }: { step: RunStep }) {
         <Link
           to="/settings/assistant/insights"
           search={{ run: linkedRun }}
-          className="w-fit text-small text-accent underline-offset-2 hover:underline"
+          className="inline-flex min-h-11 w-fit items-center text-small text-accent underline-offset-2 hover:underline md:pointer-fine:min-h-6"
           data-testid="step-run-link"
         >
           {t("settings_page.insights.open_run")} #{linkedRun}

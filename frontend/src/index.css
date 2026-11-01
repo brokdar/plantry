@@ -15,6 +15,7 @@
   --color-ground: var(--ground);
   --color-panel: var(--panel);
   --color-panel-sunken: var(--panel-sunken);
+  --color-panel-raised: var(--panel-raised);
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
   --color-line: var(--line);
@@ -88,6 +89,7 @@
   --ground: #fbfbfa;
   --panel: #ffffff;
   --panel-sunken: #f3f4f6;
+  --panel-raised: #ffffff;
   --ink: #1c2233;
   --ink-muted: #5a6175;
   --line: #e3e5ea;
@@ -126,6 +128,7 @@
   --ground: #161821;
   --panel: #1d2030;
   --panel-sunken: #12141c;
+  --panel-raised: #252a3f;
   --ink: #e6e8f0;
   --ink-muted: #a3a8bb;
   --line: #2e3245;

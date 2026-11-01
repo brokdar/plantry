@@ -5,6 +5,7 @@ const TOKENS: Record<string, [string, string]> = {
   ground: ["#FBFBFA", "#161821"],
   panel: ["#FFFFFF", "#1D2030"],
   "panel-sunken": ["#F3F4F6", "#12141C"],
+  "panel-raised": ["#FFFFFF", "#252A3F"],
   ink: ["#1C2233", "#E6E8F0"],
   "ink-muted": ["#5A6175", "#A3A8BB"],
   line: ["#E3E5EA", "#2E3245"],

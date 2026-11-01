@@ -526,6 +526,7 @@ describe("assistant shapes (Phase 4 F1-AC1)", () => {
         "id",
         "params",
         "plate_ids",
+        "recorded",
         "run_id",
         "session_ids",
         "text_key",

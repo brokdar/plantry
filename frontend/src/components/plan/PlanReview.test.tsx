@@ -134,6 +134,7 @@ beforeEach(async () => {
   await i18n.changeLanguage("en")
   vi.mocked(getPlan).mockResolvedValue(mockDraftPlan)
   vi.mocked(regeneratePlan).mockResolvedValue({ run_id: 13 })
+  vi.mocked(getPlanRun).mockResolvedValue(mockRun("ok"))
 })
 
 describe("review toolbar", () => {
@@ -142,7 +143,7 @@ describe("review toolbar", () => {
     expect(await screen.findByTestId("plan-summary")).toHaveTextContent(
       "Draft · 3 plates · 1 cook day"
     )
-    expect(screen.getByTestId("plan-notes")).toHaveTextContent(
+    expect(await screen.findByTestId("plan-notes")).toHaveTextContent(
       "Cooks once on Sunday and eats leftovers on Monday."
     )
     expect(
@@ -151,6 +152,25 @@ describe("review toolbar", () => {
     expect(screen.getByTestId("draft-bar")).toHaveTextContent(
       "Draft · 3 plates · 1 cook day"
     )
+  })
+
+  it("does not show a regenerate run's request text as notes", async () => {
+    vi.mocked(getPlanRun).mockResolvedValue({
+      ...mockRun("ok"),
+      kind: "regenerate",
+      notes: "A different side for Tuesday dinner.",
+    })
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockDraftPlan,
+      draft: {
+        ...mockDraftPlan.draft!,
+        notes: "A different side for Tuesday dinner.",
+      },
+    })
+    renderWithRouter(<PlanPage />)
+    await screen.findByTestId("plan-summary")
+    await waitFor(() => expect(getPlanRun).toHaveBeenCalled())
+    expect(screen.queryByTestId("plan-notes")).not.toBeInTheDocument()
   })
 
   it("a draft without issues says 0 plates need attention", async () => {

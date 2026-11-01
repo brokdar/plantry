@@ -56,10 +56,10 @@ export function UnlockCard({
       <p className="text-ink-muted">{t("assistant.unlock.body")}</p>
       <Button
         type="button"
-        size="sm"
         disabled={disabled}
         onClick={() => onConfirm(confirm)}
         data-testid="assistant-unlock-confirm"
+        className="h-11 px-4 md:pointer-fine:h-9"
       >
         {confirm}
       </Button>

@@ -203,7 +203,7 @@ test("a price override re-prices the runs table", async ({ page, request }) => {
     const row = page.getByTestId(`run-row-${runId}`)
     await expect(row).toBeVisible()
     await expect(row).not.toContainText("cost unknown")
-    await expect(row.getByRole("cell").nth(5)).toHaveText(/^\$\d/)
+    await expect(row.getByRole("cell").nth(6)).toHaveText(/^\$\d/)
   } finally {
     await request.delete(`${API}/api/settings/ai.price_overrides`)
     await cleanupSlot(slot.id)

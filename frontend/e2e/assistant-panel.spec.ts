@@ -189,3 +189,42 @@ test("streams text without tool names, keeps history and starts new conversation
     await cleanupSlot(slot.id)
   }
 })
+test("from 768 to 1279 px it floats over the board, which keeps its width", async ({
+  page,
+}) => {
+  for (const width of [1180, 820]) {
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto("/plan")
+    const grid = page.getByRole("grid")
+    await expect(grid).toBeVisible()
+    const before = (await grid.boundingBox())!.width
+
+    await page.getByRole("button", { name: "Ask assistant" }).click()
+    const panel = page.getByRole("complementary", { name: "Assistant" })
+    await expect(panel).toBeVisible()
+    await expect(page.getByRole("dialog")).toHaveCount(0)
+    const box = (await panel.boundingBox())!
+    expect(box.width).toBe(380)
+    expect(box.x + box.width).toBe(width)
+    expect((await grid.boundingBox())!.width).toBe(before)
+
+    // Escape closes it and focus returns to the toggle.
+    await page.getByTestId("assistant-composer-input").focus()
+    await page.keyboard.press("Escape")
+    await expect(panel).toHaveCount(0)
+    await expect(
+      page.getByRole("button", { name: "Ask assistant" })
+    ).toBeFocused()
+  }
+})
+
+test("on a phone the sheet is tall even when empty", async ({ page }) => {
+  await page.setViewportSize(PHONE)
+  await page.goto("/plan")
+  await page.getByRole("button", { name: "Ask assistant" }).click()
+  const panel = page.getByRole("dialog", { name: "Assistant" })
+  await expect(panel).toBeVisible()
+  await expect
+    .poll(async () => (await panel.boundingBox())!.height)
+    .toBeGreaterThan(PHONE.height * 0.9)
+})

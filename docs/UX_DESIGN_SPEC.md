@@ -110,6 +110,7 @@ Neutrals have a slight blue bias towards the ink accent, so they read as chosen 
 | `--ground` | `#FBFBFA` | `#161821` | Page background |
 | `--panel` | `#FFFFFF` | `#1D2030` | Cells, sheets, cards with a role |
 | `--panel-sunken` | `#F3F4F6` | `#12141C` | Rail, toolbars, second neutral layer |
+| `--panel-raised` | `#FFFFFF` | `#252A3F` | Assistant panel surface |
 | `--ink` | `#1C2233` | `#E6E8F0` | Primary text |
 | `--ink-muted` | `#5A6175` | `#A3A8BB` | Secondary text, labels |
 | `--line` | `#E3E5EA` | `#2E3245` | Borders, dividers |
@@ -319,7 +320,7 @@ Three short steps. It opens as a full page on phone and as a centred panel over 
 
 ### 5.6 Assistant panel
 
-- Desktop/tablet: a **non-modal** right side panel (380 px) that pushes the board narrower rather than covering it, so changes are visible as they land. Phone: a full-height bottom sheet with a grab handle.
+- From 1280 px a **non-modal** docked right panel (380 px) that pushes the board narrower, so changes are visible as they land. From 768 to 1279 px a non-modal overlay side sheet (380 px) over the board, which keeps its full width (no dialog role; Escape closes it and returns focus). Below 768 px a bottom sheet at 92 dvh with a grab handle.
 - **Top:** "Changes go into your draft. Confirmed plates are kept unless you agree."
 - **Suggestion chips** relevant to the window, such as "No fish this week", "Make the chili 6 portions, freeze 2", "Lighter dinners".
 - **Tool activity** is shown as human sentences ("Replaced Tuesday's side with roast potatoes") with an *Undo* per change, not as raw tool names or JSON. The raw detail moves to Assistant insights.

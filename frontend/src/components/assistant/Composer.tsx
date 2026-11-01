@@ -35,15 +35,16 @@ export function Composer({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault()
-      send()
-    }
+    // Enter sends, Shift+Enter adds a line, Ctrl/Cmd+Enter sends too. Enter
+    // that confirms an IME composition is not a send.
+    if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return
+    e.preventDefault()
+    send()
   }
 
   return (
     <form
-      className="flex flex-col gap-2 border-t bg-background p-3"
+      className="flex flex-col gap-2 border-t border-line bg-panel-raised p-3"
       onSubmit={(e) => {
         e.preventDefault()
         send()

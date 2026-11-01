@@ -1063,7 +1063,7 @@
     "composer": {
       "placeholder": "Ask me to plan a day, swap a meal or change a portion…",
       "aria_label": "Message to the assistant",
-      "send": "Send (Ctrl+Enter)",
+      "send": "Send (Enter)",
       "abort": "Stop"
     },
     "new_conversation": "New conversation",
@@ -1085,7 +1085,8 @@
       "open": "Open history",
       "empty": "No conversations yet.",
       "delete": "Delete conversation",
-      "select": "Open conversation"
+      "select": "Open conversation",
+      "untitled": "Conversation"
     },
     "change": {
       "fallback": "Your plan changed",
@@ -1118,7 +1119,10 @@
     "undo": "Undo",
     "undoing": "Undoing…",
     "undone": "Undone",
-    "stale": "Changed since",
+    "stale": "Changed since, so undo is not possible.",
+    "nothing_to_undo": "Nothing to undo.",
+    "not_recorded": "Couldn't be saved, undo not possible.",
+    "failed": "That did not work. Nothing was changed.",
     "unlock": {
       "title": "These plates are confirmed",
       "body": "The assistant needs your yes before it changes them.",

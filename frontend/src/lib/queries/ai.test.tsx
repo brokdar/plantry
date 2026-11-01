@@ -7,7 +7,7 @@ import { ApiError } from "../api/client"
 import { assistantStream } from "../stores/assistant-stream"
 
 import { useAssistantStream, useUndoChange } from "./ai"
-import { planKeys, todayKeys } from "./keys"
+import { aiKeys, planKeys, todayKeys } from "./keys"
 
 import { mockChange } from "@/test/fixtures"
 
@@ -150,6 +150,31 @@ describe("useAssistantStream", () => {
     ])
   })
 
+  it("keeps every unrecorded change (id 0) as its own line", async () => {
+    const lost = mockChange({ id: 0, recorded: false, undoable: false })
+    const sse =
+      `event: change\ndata: ${JSON.stringify(lost)}\n\n` +
+      `event: change\ndata: ${JSON.stringify({ ...lost, tool: "unlock" })}\n\n` +
+      `event: done\ndata: {"stop_reason":"end_turn","iteration_count":1}\n\n`
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(mockResponse(stringToReadable(sse)))
+    )
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    })
+    const { result } = renderHook(() => useAssistantStream(), {
+      wrapper: wrapper(qc),
+    })
+    await act(async () => {
+      await result.current.mutateAsync({ message: "plan", start: testStart })
+    })
+    expect(assistantStream.get().changes.map((c) => c.tool)).toEqual([
+      lost.tool,
+      "unlock",
+    ])
+  })
+
   it("tool_exec_start sets the status line, tool_exec_end clears it", async () => {
     const sse =
       `event: tool_call_start\ndata: {"id":"tu_1","name":"get_plan"}\n\n` +
@@ -181,6 +206,25 @@ describe("useAssistantStream", () => {
     unsub()
     expect(statuses).toContain("get_plan")
     expect(assistantStream.get().status).toBeNull()
+  })
+
+  it("invalidates the conversation when the turn fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")))
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    const { result } = renderHook(() => useAssistantStream(), {
+      wrapper: wrapper(qc),
+    })
+    await act(async () => {
+      await expect(
+        result.current.mutateAsync({ message: "x", start: testStart })
+      ).rejects.toThrow()
+    })
+    expect(invalidateSpy.mock.calls.map((c) => c[0]?.queryKey)).toContainEqual(
+      aiKeys.all
+    )
   })
 
   it("abort() cancels an in-flight stream", async () => {
@@ -280,6 +324,19 @@ describe("useUndoChange", () => {
       await hook.result.current.mutateAsync(5)
     })
     expect(assistantStream.get().lineStates[5]).toBe("undone")
+  })
+
+  it("409 change_not_undoable maps to the line state nothing_to_undo", async () => {
+    const { hook, invalidateSpy } = run(
+      json(409, { message_key: "error.ai.change_not_undoable", status: 409 })
+    )
+    await act(async () => {
+      await hook.result.current.mutateAsync(5)
+    })
+    expect(assistantStream.get().lineStates[5]).toBe("nothing_to_undo")
+    expect(
+      invalidateSpy.mock.calls.map((c) => c[0]?.queryKey)
+    ).not.toContainEqual(planKeys.all)
   })
 
   it("other errors clear the line state and reject", async () => {

@@ -1128,6 +1128,7 @@ export function mockChange(overrides: Partial<Change> = {}): Change {
     plate_ids: [12],
     session_ids: [4],
     undoable: true,
+    recorded: true,
     ...overrides,
   }
 }

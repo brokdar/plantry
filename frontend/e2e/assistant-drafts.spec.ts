@@ -279,6 +279,27 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
         .first()
     await expect(chiliBadge(4)).toBeVisible()
 
+    // Layout (DoD blocker): below 1280 px the panel floats over the board
+    // instead of squeezing it, so the cells keep their width. (The overlay
+    // does cover the review action while it is open; toBeVisible cannot see
+    // that, so it is not asserted.) Back to 1440 px for the rest.
+    const monCell = planCell(page, monday, dinner.id)
+    for (const [width, minCell] of [
+      [1180, 95],
+      [820, 55],
+    ] as const) {
+      await page.setViewportSize({ width, height: 900 })
+      await expect(panel).toBeVisible()
+      await expect(page.getByRole("dialog")).toHaveCount(0)
+      const box = (await panel.boundingBox())!
+      expect(box.width).toBe(380)
+      expect(box.x + box.width).toBe(width)
+      expect((await monCell.boundingBox())!.width).toBeGreaterThan(minCell)
+    }
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await expect(panel).toBeVisible()
+    expect((await panel.boundingBox())!.width).toBe(380)
+
     const beansBefore = await beans()
     expect(beansBefore).toBe(400)
     const issuesBefore = (await plan()).issues.length
@@ -462,6 +483,10 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     // ── AC-3: confirmed rows are protected ────────────────────────────────
     await page.goto(`/plan?start=${start}&assistant=1`)
     const panel3 = page.getByRole("complementary", { name: "Assistant" })
+    // The reload reopens the latest conversation with its change lines;
+    // AC-3 starts a conversation of its own.
+    await expect(panel3.getByTestId("assistant-change").first()).toBeVisible()
+    await panel3.getByTestId("assistant-new-conversation").click()
     // Undoing the Chili change put the plate back as new component rows.
     const monNow = (await plan()).cells.find(
       (c) => c.date === monday && c.slot_id === dinner.id
@@ -477,6 +502,8 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     await expect(card).toContainText("Monday dinner")
     await expect(card).toContainText(chili.name)
     await expect(card).toContainText(rice.name)
+    // The card is the thing to act on: it is scrolled into view.
+    await expect(card).toBeInViewport()
     await expect(
       panel3.getByTestId("assistant-message-assistant").last()
     ).toContainText("say yes")
@@ -511,7 +538,17 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     expect(mon.state).toBe("confirmed")
     expect(mon.components).toHaveLength(2)
 
-    await card.getByRole("button", { name: "Yes, unlock" }).click()
+    // A reload keeps the question: the card is rebuilt from the stored
+    // preview and the conversation is the one that was open.
+    await page.reload()
+    const card2 = panel3.getByTestId("assistant-unlock-card")
+    await expect(card2).toBeVisible()
+    await expect(card2).toContainText(chili.name)
+    await expect(card2).toBeInViewport()
+    const yes = card2.getByRole("button", { name: "Yes, unlock" })
+    expect((await yes.boundingBox())!.height).toBeGreaterThanOrEqual(36)
+
+    await yes.click()
     await expect(
       panel3.getByTestId("assistant-message-user").last()
     ).toHaveText("Yes, unlock")
@@ -524,6 +561,8 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
         .filter({ hasText: `${weekday(monday)}: ${rice.name} removed` })
     ).toHaveCount(1)
     await expect(panel3.getByTestId("assistant-unlock-card")).toHaveCount(0)
+    // The transcript followed the new lines to the bottom.
+    await expect(panel3.getByTestId("assistant-change").last()).toBeInViewport()
     mon = (await plan()).cells.find(
       (c) => c.date === monday && c.slot_id === dinner.id
     )!.plate!

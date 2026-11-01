@@ -5,11 +5,16 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 import { renderWithRouter } from "@/test/render"
 
 vi.mock("@/lib/queries/ai", () => ({
+  useConversationTitles: vi.fn(() => new Map()),
   useConversations: vi.fn(),
   useDeleteConversation: vi.fn(),
 }))
 
-import { useConversations, useDeleteConversation } from "@/lib/queries/ai"
+import {
+  useConversations,
+  useConversationTitles,
+  useDeleteConversation,
+} from "@/lib/queries/ai"
 import { assistantStream } from "@/lib/stores/assistant-stream"
 
 import { ConversationHistory } from "./ConversationHistory"
@@ -41,6 +46,32 @@ describe("ConversationHistory", () => {
       await screen.findByRole("button", { name: /Open history/ })
     )
     expect(await screen.findByText("No conversations yet.")).toBeInTheDocument()
+  })
+
+  test("shows the first message as a short title with the time", async () => {
+    stubConversations([{ id: 7, created_at: "2024-01-01T12:00:00Z" }])
+    vi.mocked(useConversationTitles).mockReturnValue(
+      new Map([[7, "Make the chili 6 portions"]])
+    )
+    renderWithRouter(<ConversationHistory />)
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Open history/ })
+    )
+    const row = await screen.findByTestId("assistant-history-item-7")
+    expect(row).toHaveTextContent("Make the chili 6 portions")
+    expect(row).toHaveTextContent("Jan 1")
+  })
+
+  test("reads the conversation titles only while the popover is open", async () => {
+    stubConversations([{ id: 7, created_at: "2024-01-01T12:00:00Z" }])
+    renderWithRouter(<ConversationHistory />)
+    const lastEnabled = () =>
+      vi.mocked(useConversationTitles).mock.calls.at(-1)?.[1]
+    await screen.findByRole("button", { name: /Open history/ })
+    expect(lastEnabled()).toBe(false)
+    await userEvent.click(screen.getByRole("button", { name: /Open history/ }))
+    await screen.findByTestId("assistant-history-item-7")
+    expect(lastEnabled()).toBe(true)
   })
 
   test("selecting a conversation sets it active", async () => {
