@@ -6,7 +6,8 @@ import { shiftYMD } from "@/lib/dates"
 import { formatDate } from "@/lib/plan/format"
 
 /** "Plan next week" (UX §5.2): shown from the day before the next window
- *  starts until it has a plate (`plan_banner.due`). */
+ *  starts until it has a plate (`plan_banner.due`); opens the plan wizard
+ *  for that window. */
 export function PlanBanner({
   nextStart,
   today,
@@ -44,7 +45,7 @@ export function PlanBanner({
         <p className="text-small text-ink-muted">{body}</p>
       </div>
       <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
-        <Link to="/plan" search={{ start: nextStart }}>
+        <Link to="/plan/new" search={{ start: nextStart }}>
           {t("today.banner.action")}
         </Link>
       </Button>

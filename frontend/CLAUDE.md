@@ -52,7 +52,10 @@ src/routes/
 │                      #   ingredients/new.tsx, ingredients/$id/edit.tsx
 ├── plan/              # `/plan?start&cell&day&run` — the plan board (components/plan, view model
 │                      #   lib/plan/board.ts); `day` focuses that day (Today's week strip); `run`
-│                      #   is the generation the board follows (progress bar, D35)
+│                      #   is the generation the board follows (progress bar, D35); new.tsx:
+│                      #   `/plan/new?start` — the plan wizard (components/plan-wizard), a dialog over
+│                      #   the board from 768 px, a full page on phones; redirects to /recipes below
+│                      #   the recipe target
 ├── shop/              # `/shop?from&to&drafts` — Shop (components/shop); without a range, the server's
 │                      #   default for the anchored window; `drafts=1` includes draft plates
 └── settings/          # index.tsx: `/settings` (section list on phone, else redirects);
@@ -83,6 +86,9 @@ src/components/
 │                      #   GenerationProgress
 ├── batch/             # BatchBadge, BatchHighlightProvider (hooks in batch-highlight.ts), CookStrip,
 │                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
+├── plan-wizard/       # PlanWizard (`/plan/new`): WhoIsHome (window grid, day menu Away all day /
+│                      #   Guests, "Make this my new default"), AnythingSpecial, Generating (run
+│                      #   stages, failure + Plan without the assistant); GeneratePlanButton opens it
 ├── availability/      # AvailabilityGrid (weekday/date × slot modes), RoutinePicker
 ├── setup/             # SetupWizard and its steps; wizard-draft.ts, use-wizard-save.ts
 ├── component/         # shared input widget: QuantityUnitInput (leaf amount + unit)
@@ -184,7 +190,7 @@ Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own u
 - Plan board specs work in `futureWindow()` (`e2e/helpers.ts`): each parallel worker owns its own band of future windows, so one test's Clear this week or No plate overrides never touch another's plates.
 - Settings are global: `setSetting` (`PUT /api/settings/{key}`) changes them for every running spec, so parallel specs override values page-scoped with `mockSettingValues` and restore anything they write.
 - The shared DB accumulates recipes, so a spec that needs the library below or at the 10-recipe target stubs `GET /api/setup` with `page.route` (see `recipes-guided.spec.ts`), never relies on the real count.
-- Specs that mutate global AI state (`ai-chat.spec.ts`, `generate-plan.spec.ts`, etc.) run under the `ai-serial` project with `workers: 1`. Never add AI-touching assertions to a parallel spec — it will cause flaky failures.
+- Specs that mutate global AI state (`ai-chat.spec.ts`, `plan-wizard-llm.spec.ts`, etc.) run under the `ai-serial` project with `workers: 1`. Never add AI-touching assertions to a parallel spec — it will cause flaky failures.
 - Stable = `--repeat-each=10 --workers=4` with zero failures.
 
 ## Gotchas

@@ -1,5 +1,5 @@
 import { useId, useState } from "react"
-import { Link, useLocation, useNavigate } from "@tanstack/react-router"
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router"
 import { Sparkles } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -10,7 +10,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useSetupStatus } from "@/lib/queries/setup"
-import { useChatUI } from "@/lib/stores/chat-ui"
 import { cn } from "@/lib/utils"
 
 /** `default`: labelled, in the wide rail. `rail`: icon, in the narrow rail.
@@ -63,8 +62,13 @@ export function GeneratePlanButton({
 }: GeneratePlanButtonProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const pathname = useLocation({ select: (l) => l.pathname })
-  const openWith = useChatUI((s) => s.openWith)
+  // On the board, the wizard plans the window it shows.
+  const boardStart = useRouterState({
+    select: (s) =>
+      /^\/plan\/?$/.test(s.location.pathname)
+        ? (s.location.search as { start?: string }).start
+        : undefined,
+  })
   const { data: setup } = useSetupStatus()
   const [tipOpen, setTipOpen] = useState(false)
   const reasonId = useId()
@@ -79,16 +83,15 @@ export function GeneratePlanButton({
   const locked = !setup || short
   const reason = t("nav.generate_locked", { count: missing })
 
-  async function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
+  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
     if (locked) {
       // Keeps Radix from closing the tooltip on click, so a tap shows it.
       e.preventDefault()
       setTipOpen(true)
       return
     }
-    // On the board already: keep its window, the chat works on it.
-    if (pathname !== "/plan") await navigate({ to: "/plan" })
-    openWith(t("plan.generate_prompt"))
+    // The plan wizard (D32); the chat stays behind Ask assistant.
+    void navigate({ to: "/plan/new", search: { start: boardStart } })
   }
 
   const button = (

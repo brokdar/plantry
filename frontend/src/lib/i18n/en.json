@@ -1270,8 +1270,9 @@
     "empty": {
       "title": "Nothing planned for this week yet",
       "body": "Add meals one at a time, copy a week that worked, or let the assistant draft one.",
-      "by_hand": "Plan by hand",
-      "copy": "Copy a previous week"
+      "by_hand": "or plan by hand",
+      "copy": "Copy a previous week",
+      "plan_week": "Plan this week"
     },
     "shortcuts": {
       "title": "Keyboard shortcuts",
@@ -1287,7 +1288,6 @@
       "different_side": "Choose a different side",
       "accept": "Accept and shop"
     },
-    "generate_prompt": "Plan my week based on my goals and time slots.",
     "dnd": {
       "reject_no_plate": "This meal is marked No plate.",
       "reject_occupied": "This meal already has a plate."
@@ -1441,6 +1441,45 @@
       "deficit": "The batch is short of portions.",
       "frozen_deficit": "Not enough frozen portions.",
       "other": "Breaks a planning rule ({{rule}})."
+    },
+    "wizard": {
+      "title": "Plan the week",
+      "next": "Next",
+      "back": "Back",
+      "skip": "Skip",
+      "who": {
+        "title": "Who's home?",
+        "body": "Mark the meals you don't need. Everything else gets planned.",
+        "grid_label": "Who's home, {{range}}",
+        "away": "Away all day",
+        "guests": "Guests",
+        "guests_title": "Guests",
+        "eaters": "Eaters on {{day}}",
+        "remove_guests": "No guests on {{day}}",
+        "make_default": "Make this my new default",
+        "make_default_hint": "Saves these meals as your usual week, not only this one.",
+        "no_slots": "Turn on at least one meal in Settings to plan a week."
+      },
+      "special": {
+        "title": "Anything special this week?",
+        "body": "A few words for the assistant, or skip.",
+        "instruction": "Note for this week",
+        "placeholder": "e.g. guests on Friday, something light",
+        "new_recipe": "Include a new recipe",
+        "new_recipe_hint": "Plans one recipe you haven't cooked yet."
+      },
+      "generating": {
+        "title": "Planning your week",
+        "done": "done",
+        "current": "in progress",
+        "pending": "waiting"
+      },
+      "failed": {
+        "llm": "The assistant didn't respond. Try again, or plan without the assistant.",
+        "heuristic": "The plan couldn't be made. Try again.",
+        "without_assistant": "Plan without the assistant"
+      },
+      "error": "The week couldn't be loaded."
     }
   },
   "batch": {

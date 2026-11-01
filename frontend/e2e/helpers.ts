@@ -118,6 +118,48 @@ export async function cleanupFood(id: number) {
 }
 
 /**
+ * A library the generator can plan a week from: `count` mains (4 portions,
+ * keep 3 days, full nutrition) made of one leaf. Remove the plates that use
+ * them before `cleanup`.
+ */
+export async function seedRecipeLibrary(tag: string, count = 10) {
+  const leaf = await seedLeafFood({
+    name: `Beans ${tag}`,
+    kcal_100g: 120,
+    protein_100g: 8,
+    fat_100g: 2,
+    carbs_100g: 18,
+  })
+  const mains: { id: number; name: string }[] = []
+  for (let i = 1; i <= count; i++) {
+    mains.push(
+      await seedComposedFood({
+        name: `Main ${i} ${tag}`,
+        role: "main",
+        reference_portions: 4,
+        keep_days: 3,
+        children: [
+          {
+            child_id: leaf.id,
+            amount: 600,
+            unit: "g",
+            grams: 600,
+            sort_order: 0,
+          },
+        ],
+      })
+    )
+  }
+  return {
+    mains,
+    cleanup: async () => {
+      for (const m of mains) await cleanupFood(m.id)
+      await cleanupFood(leaf.id)
+    },
+  }
+}
+
+/**
  * Seeds a composed food that satisfies the "at least one child" invariant by
  * creating a throwaway leaf stub automatically. Returns both the composed food
  * and the stub so callers can clean up both.
