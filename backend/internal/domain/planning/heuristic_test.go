@@ -332,4 +332,48 @@ func TestHeuristic_NoRecipe(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrNotEnoughRecipes)
 }
 
+// H2: a day whose cap is already used by a confirmed cook gets no new cook;
+// the cell stays empty (a missing_plate issue) unless a batch can feed it.
+func TestHeuristic_ConfirmedCookFillsTheDaysCap(t *testing.T) {
+	tests := []struct {
+		name        string
+		spare       float64 // portions left on the confirmed batch
+		wantFed     bool
+		wantMissing bool
+	}{
+		{name: "nothing spare leaves the cell empty", spare: 0, wantMissing: true},
+		{name: "a spare portion feeds the cell", spare: 1, wantFed: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := batchCooker()
+			s.Settings.MaxCookOccasionsPerDay = 1
+			// A confirmed Chili cooked Wed lunch, eaten there.
+			s.Foods[chili] = recipe(chili, "Chili", food.RoleMain, "omnivore", 600)
+			s.Sessions = []planning.Session{persistedSession(7, chili, wed, lunch, 1+tc.spare, true)}
+			s.Plates = append(s.Plates, persisted(70, wed, lunch, true, chili, 7))
+			target := targetCells(cell(wed, dinner))
+
+			p := choose(t, planning.ChooseInput{State: s, Target: target})
+
+			for _, ps := range p.Sessions {
+				assert.NotEqual(t, day(wed), ps.CookDate, "no new cook on a day at its cap")
+			}
+			if tc.wantFed {
+				require.Len(t, p.Plates, 1)
+				assert.Equal(t, int64(7), p.Plates[0].Components[0].SessionID)
+			} else {
+				assert.Empty(t, p.Plates)
+			}
+			issues := check(s, target, p)
+			assert.Empty(t, only(issues, "H2"))
+			if tc.wantMissing {
+				assert.Equal(t, []string{planning.CodeMissingPlate}, codes(issues, "H1"))
+			} else {
+				assert.Empty(t, only(issues, "H1"))
+			}
+		})
+	}
+}
+
 var _ = plate.CellKey{}

@@ -149,6 +149,12 @@ func (h *planner) plan() (Proposal, error) {
 				continue
 			}
 		}
+		if maxed && !h.occasions[dayOf(c.Date)][idOf(c)] {
+			// The day's cap is used by other cells' cooks (confirmed ones
+			// included) and no batch can feed c: leave it empty; the checker
+			// reports it (H1). A cell that already is an occasion may cook.
+			continue
+		}
 		if err := h.cook(c); err != nil {
 			return Proposal{}, err
 		}
