@@ -216,7 +216,7 @@ export interface ReplanPreview {
   /** Plates outside the No-plate cells that lose a dropped batch (its cook
    *  plate goes and it cannot move); confirmed ones are also in
    *  `confirmed_affected`. */
-  dropped?: {
+  dropped: {
     session_id: number
     food_name: string
     plate_id: number
@@ -225,7 +225,7 @@ export interface ReplanPreview {
     confirmed: boolean
   }[]
   /** Batches whose cook plate goes: they cook at this cell instead. */
-  moved?: {
+  moved: {
     session_id: number
     food_name: string
     cook_date: string

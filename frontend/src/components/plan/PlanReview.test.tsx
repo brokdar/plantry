@@ -138,7 +138,7 @@ describe("review toolbar", () => {
   it("shows the draft summary, the run's notes and Accept and shop", async () => {
     renderWithRouter(<PlanPage />)
     expect(await screen.findByTestId("plan-summary")).toHaveTextContent(
-      "Draft · 4 plates · 2 cook days"
+      "Draft · 3 plates · 1 cook day"
     )
     expect(screen.getByTestId("plan-notes")).toHaveTextContent(
       "Cooks once on Sunday and eats leftovers on Monday."
@@ -147,7 +147,15 @@ describe("review toolbar", () => {
       screen.getAllByRole("button", { name: "Accept and shop" })
     ).toHaveLength(2) // toolbar (≥768 px) and the phone DraftBar
     expect(screen.getByTestId("draft-bar")).toHaveTextContent(
-      "Draft · 4 plates · 2 cook days"
+      "Draft · 3 plates · 1 cook day"
+    )
+  })
+
+  it("a draft without issues says 0 plates need attention", async () => {
+    vi.mocked(getPlan).mockResolvedValue({ ...mockDraftPlan, issues: [] })
+    renderWithRouter(<PlanPage />)
+    expect(await screen.findByTestId("plan-warnings")).toHaveTextContent(
+      "0 plates need attention"
     )
   })
 
@@ -157,6 +165,7 @@ describe("review toolbar", () => {
     expect(await screen.findByTestId("plan-summary")).toHaveTextContent(
       "3 plates, 1 cook day"
     )
+    expect(screen.queryByTestId("plan-warnings")).toBeNull()
     expect(
       screen.queryByRole("button", { name: "Accept and shop" })
     ).not.toBeInTheDocument()
@@ -523,7 +532,7 @@ describe("generation progress (D35)", () => {
     await waitFor(
       () =>
         expect(toastMock).toHaveBeenCalledWith(
-          "Plan regenerated. 1 confirmed plate kept."
+          "Plan regenerated. 1 confirmed plate kept. 1 plate needs attention."
         ),
       { timeout: 2000 }
     )
@@ -533,6 +542,32 @@ describe("generation progress (D35)", () => {
       search: { start: "2026-10-31" },
       replace: true,
     })
+  })
+
+  it("the finished run's toast counts the plates needing attention as the toolbar does", async () => {
+    const run = mockRun("ok")
+    vi.mocked(getPlanRun).mockResolvedValue({
+      ...run,
+      counts: { ...run.counts, kept_confirmed: 0 },
+      // A window-wide H5 besides the board's H2: two run issues, one cell.
+      issues: [
+        ...mockDraftPlan.issues,
+        {
+          rule: "H5",
+          code: "meat_days_exceeded",
+          severity: "violation",
+          params: { days: 4, max: 3 },
+        },
+      ],
+    })
+    renderWithRouter(<PlanPage start="2026-10-31" run={12} />)
+    const count = await screen.findByTestId("plan-warnings")
+    expect(count).toHaveTextContent("1 plate needs attention")
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        "Planned 3 plates, 1 cook day. 1 plate needs attention."
+      )
+    )
   })
 
   it("re-attaches to the window's running generation without ?run", async () => {
@@ -632,6 +667,8 @@ describe("re-plan (F4)", () => {
       none_cells: [],
       confirmed_affected: [],
       spare: [],
+      dropped: [],
+      moved: [],
     })
   })
 

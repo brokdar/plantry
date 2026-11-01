@@ -43,13 +43,15 @@ import { availabilityKeys, planKeys, shoppingKeys, todayKeys } from "./keys"
 /** Every plan mutation refreshes the read models and the shopping list.
  *  Returned from `onSuccess`, the mutation stays pending until the active
  *  views have refetched, so a control showing a pending value never flashes
- *  back to the old one. */
+ *  back to the old one. It never rejects: the change is already saved, so
+ *  a failed refetch must not turn the mutation into an error (each view
+ *  shows its own load error). */
 export function invalidatePlanViews(qc: QueryClient): Promise<unknown> {
   return Promise.all([
     qc.invalidateQueries({ queryKey: planKeys.all }),
     qc.invalidateQueries({ queryKey: todayKeys.all }),
     qc.invalidateQueries({ queryKey: shoppingKeys.all }),
-  ])
+  ]).catch(() => undefined)
 }
 
 /** The board's read model. Without `start` the server opens the anchored

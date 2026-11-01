@@ -143,6 +143,13 @@ describe("CookStrip", () => {
     )
   })
 
+  it("scrolls sideways on phones and wraps from 768 px, so no batch is cut off", () => {
+    render(<CookStrip batches={colourBatches([mockSession], mockPlan.slots)} />)
+    const list = screen.getByRole("list")
+    expect(list).toHaveClass("overflow-x-auto", "md:flex-wrap")
+    expect(list).toHaveClass("md:overflow-x-visible")
+  })
+
   it("renders nothing without batches", () => {
     const { container } = render(<CookStrip batches={[]} />)
     expect(container).toBeEmptyDOMElement()

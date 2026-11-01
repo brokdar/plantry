@@ -7,12 +7,20 @@ import type { AvailabilityGridValue } from "@/components/availability/Availabili
 import { useIsPhone } from "@/components/plan/use-is-phone"
 import { StepIndicator } from "@/components/setup/StepIndicator"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AvailabilityDefault } from "@/lib/api/availability"
 import type { GenerateInput } from "@/lib/api/generation"
 import type { Plan } from "@/lib/api/plan"
 import {
+  PartialApplyError,
   useApplyWindowAvailability,
   type WindowCellChange,
 } from "@/lib/queries/availability"
@@ -156,10 +164,13 @@ function WizardFlow({
   const [includeNew, setIncludeNew] = useState(includeNewDefault)
   const [runId, setRunId] = useState<number>()
   const [request, setRequest] = useState<GenerateInput | null>(null)
+  const [askDiscard, setAskDiscard] = useState(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
 
   const { window: win } = plan
   const dates = Array.from(new Set(plan.cells.map((c) => c.date))).sort()
+  // Generate skips days before today, so they can't be edited either.
+  const pastDates = dates.filter((d) => d < win.today)
   const slots = [...plan.slots]
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((s) => ({ id: s.id, label: slotLabel(t, s.name_key) }))
@@ -225,8 +236,39 @@ function WizardFlow({
           setConfirming(null)
           setStep(1)
         },
+        onError: (err) => {
+          setConfirming(null)
+          // Defaults written before a later write failed: still revertible.
+          if (
+            err instanceof PartialApplyError &&
+            err.previousDefaults &&
+            !replacedDefaults
+          ) {
+            setReplacedDefaults(err.previousDefaults)
+          }
+        },
       }
     )
+  }
+
+  /** Step-1 edits, guests and the note are only sent by Next/Generate. */
+  function hasUnsavedEdits() {
+    if (step === 2) return false
+    const base = saved?.value ?? initial
+    const changed = plan.cells.some((c) => {
+      const key = `${c.date}:${c.slot_id}`
+      const now = value[key] ?? { mode: "plan" }
+      const was = base[key] ?? { mode: "plan" }
+      return now.mode !== was.mode || now.presetId !== was.presetId
+    })
+    return (
+      changed || Object.keys(guests).length > 0 || instruction.trim() !== ""
+    )
+  }
+
+  function requestClose() {
+    if (hasUnsavedEdits()) setAskDiscard(true)
+    else onClose(runId)
   }
 
   /** "Thursday dinner: Chili sin carne" for each confirmed plate a change
@@ -274,13 +316,23 @@ function WizardFlow({
       title={t(TITLES[step])}
       headingRef={headingRef}
       indicator={<StepIndicator step={step + 1} total={STEP_COUNT} />}
-      onClose={() => onClose(runId)}
+      onClose={requestClose}
     >
       {step === 0 && (
         <>
           <p className="text-body text-ink-muted">
             {t("plan.wizard.who.body")}
           </p>
+          {plan.draft && plan.draft.plates > 0 && (
+            <p
+              className="rounded-cell border border-warning/40 bg-panel-sunken p-3 text-small text-ink"
+              data-testid="wizard-replaces-draft"
+            >
+              {t("plan.wizard.who.replaces_draft", {
+                count: plan.draft.plates,
+              })}
+            </p>
+          )}
           {slots.length === 0 ? (
             <p className="text-body text-ink">
               {t("plan.wizard.who.no_slots")}
@@ -288,6 +340,7 @@ function WizardFlow({
           ) : (
             <WhoIsHome
               dates={dates}
+              pastDates={pastDates}
               slots={slots}
               presets={presets}
               value={value}
@@ -384,7 +437,56 @@ function WizardFlow({
         onCancel={() => setConfirming(null)}
         onConfirm={() => confirming && write(confirming)}
       />
+      <DiscardEdits
+        open={askDiscard}
+        onKeep={() => setAskDiscard(false)}
+        onDiscard={() => {
+          setAskDiscard(false)
+          onClose(runId)
+        }}
+      />
     </Frame>
+  )
+}
+
+/** Closing (Escape, ×) with unsaved step edits asks first. */
+function DiscardEdits({
+  open,
+  onKeep,
+  onDiscard,
+}: {
+  open: boolean
+  onKeep: () => void
+  onDiscard: () => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onKeep()}>
+      <DialogContent showCloseButton={false} data-testid="wizard-discard">
+        <DialogHeader>
+          <DialogTitle>{t("plan.wizard.discard.title")}</DialogTitle>
+          <DialogDescription>{t("plan.wizard.discard.body")}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 md:pointer-fine:h-9"
+            onClick={onKeep}
+          >
+            {t("plan.wizard.discard.keep")}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="h-11 md:pointer-fine:h-9"
+            onClick={onDiscard}
+          >
+            {t("plan.wizard.discard.confirm")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

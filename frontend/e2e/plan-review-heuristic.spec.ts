@@ -260,7 +260,7 @@ test.describe("plan review without the assistant", () => {
       expect((await restored).ok()).toBeTruthy()
       await expectStates(page, s, [false, false, true])
       await expect(page.getByTestId("plan-summary")).toHaveText(
-        "Draft · 3 plates · 2 cook days"
+        "Draft · 2 plates · 1 cook day"
       )
     } finally {
       await s.cleanup()

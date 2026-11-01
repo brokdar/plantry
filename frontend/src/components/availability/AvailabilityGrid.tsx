@@ -21,6 +21,10 @@ export interface AvailabilityGridColumn {
   /** Full name for headers and cell names read by assistive tech ("Monday"). */
   fullLabel?: string
   sublabel?: string
+  /** A short marker under the header ("Guests", "Past"); read with it. */
+  note?: string
+  /** The column's cells and menu can't be changed (past days). */
+  disabled?: boolean
 }
 
 export interface AvailabilityGridSlot {
@@ -63,6 +67,9 @@ export interface AvailabilityColumnAction {
   id: string
   label: string
   onSelect: () => void
+  /** Runs once the menu has closed, in place of focusing its trigger
+   *  again: the action puts focus on what it made (the guests stepper). */
+  focusAfter?: () => void
 }
 
 const PLAN: AvailabilityCellValue = { mode: "plan" }
@@ -90,14 +97,30 @@ export function AvailabilityGrid({
   surface = "ground",
 }: AvailabilityGridProps) {
   const { t } = useTranslation()
-  const [active, setActive] = useState({ row: 0, col: 0 })
+  // The grid's tab stop starts on the first column that can change.
+  const [active, setActive] = useState(() => ({
+    row: 0,
+    col: Math.max(
+      0,
+      columns.findIndex((c) => !c.disabled)
+    ),
+  }))
   const [pickerFor, setPickerFor] = useState<string | null>(null)
   const cellRefs = useRef(new Map<string, HTMLButtonElement>())
+  const focusAfter = useRef<(() => void) | null>(null)
 
   const presetNames = new Map(presets.map((p) => [p.id, p.name]))
   const activeRow = Math.min(active.row, slots.length - 1)
   const activeCol = Math.min(active.col, columns.length - 1)
-  const stickyBg = surface === "panel" ? "bg-panel" : "bg-ground"
+  // The sticky slot column also paints over the gaps either side of it
+  // (the scroll box's padding and the border spacing), so cells scrolled
+  // under it never show through.
+  const stickyBg = cn(
+    "before:absolute before:inset-y-0 before:-right-1 before:-left-1 before:-z-10",
+    surface === "panel"
+      ? "bg-panel before:bg-panel"
+      : "bg-ground before:bg-ground"
+  )
 
   function stateText(cell: AvailabilityCellValue) {
     if (cell.mode === "none") return t("availability.mode.none")
@@ -109,6 +132,8 @@ export function AvailabilityGrid({
   }
 
   function focusCell(row: number, col: number) {
+    // A disabled column can't take focus; the tab stop stays put.
+    if (columns[col].disabled) return
     setActive({ row, col })
     cellRefs.current.get(cellKey(columns[col].key, slots[row].id))?.focus()
   }
@@ -193,15 +218,26 @@ export function AvailabilityGrid({
                       <span className="sr-only">{col.fullLabel}</span>
                     ) : null}
                     {col.sublabel ? (
-                      <span className="truncate text-caption text-ink-muted tabular-nums">
+                      <span
+                        aria-hidden={col.fullLabel ? true : undefined}
+                        className="truncate text-caption text-ink-muted tabular-nums"
+                      >
                         {col.sublabel}
+                      </span>
+                    ) : null}
+                    {col.note ? (
+                      <span
+                        className="truncate text-caption font-semibold text-accent"
+                        data-testid="grid-column-note"
+                      >
+                        {col.note}
                       </span>
                     ) : null}
                   </span>
                   {onBulkChange || columnActions ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger
-                        disabled={disabled}
+                        disabled={disabled || col.disabled}
                         aria-label={t("availability.column_actions", {
                           column: col.fullLabel ?? col.label,
                         })}
@@ -213,7 +249,16 @@ export function AvailabilityGrid({
                           className="size-4"
                         />
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent
+                        align="end"
+                        onCloseAutoFocus={(e) => {
+                          const focus = focusAfter.current
+                          if (!focus) return
+                          focusAfter.current = null
+                          e.preventDefault()
+                          focus()
+                        }}
+                      >
                         <DropdownMenuGroup>
                           {onBulkChange ? (
                             <>
@@ -232,7 +277,10 @@ export function AvailabilityGrid({
                           {columnActions?.(col.key).map((action) => (
                             <DropdownMenuItem
                               key={action.id}
-                              onSelect={action.onSelect}
+                              onSelect={() => {
+                                focusAfter.current = action.focusAfter ?? null
+                                action.onSelect()
+                              }}
                             >
                               {action.label}
                             </DropdownMenuItem>
@@ -298,7 +346,7 @@ export function AvailabilityGrid({
                         tabIndex={
                           row === activeRow && colIndex === activeCol ? 0 : -1
                         }
-                        disabled={disabled}
+                        disabled={disabled || col.disabled}
                         aria-label={t("availability.cell_name", {
                           column: col.fullLabel ?? col.label,
                           slot: slot.label,

@@ -984,6 +984,8 @@ export const mockReplanPreview: ReplanPreview = {
       mutable: true,
     },
   ],
+  dropped: [],
+  moved: [],
 }
 
 /** GET /api/ai/runs: one accepted heuristic generation and one unpriced

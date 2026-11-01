@@ -116,6 +116,13 @@ export function PlanToolbar({
                 {t("plan.toolbar.warnings", { count: warningCount })}
               </button>
             )}
+            {/* Reviewing a draft, "0 plates need attention" is the answer
+                the review looks for (AC-1 step 4). */}
+            {warningCount === 0 && review && (
+              <span data-testid="plan-warnings">
+                {t("plan.toolbar.warnings", { count: 0 })}
+              </span>
+            )}
           </p>
           {readOnly && (
             <p className="text-small text-ink-muted">

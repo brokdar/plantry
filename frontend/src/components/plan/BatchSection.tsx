@@ -303,8 +303,10 @@ function BatchControls({
     <SectionFrame>
       <div className="flex items-center justify-between gap-3">
         <span className="text-small text-ink">{t("plan.batch.portions")}</span>
+        {/* Named after the food: a plate with a main and a side shows two
+            batch blocks. */}
         <QuantityStepper
-          label={t("plan.batch.portions")}
+          label={t("plan.batch.portions_named", { name: session.food_name })}
           value={portions}
           min={1}
           max={100}
@@ -317,7 +319,7 @@ function BatchControls({
         <div className="flex items-center justify-between gap-3">
           <span className="text-small text-ink">{t("plan.batch.freeze")}</span>
           <QuantityStepper
-            label={t("plan.batch.freeze")}
+            label={t("plan.batch.freeze_named", { name: session.food_name })}
             value={frozen}
             min={0}
             max={portions}
@@ -344,6 +346,7 @@ function BatchControls({
         type="button"
         variant="outline"
         className="h-11 self-start text-danger md:pointer-fine:h-9"
+        aria-label={t("plan.batch.remove_named", { name: session.food_name })}
         onClick={() => setConfirm(true)}
       >
         {t("plan.batch.remove")}

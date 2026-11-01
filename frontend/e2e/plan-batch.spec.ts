@@ -288,10 +288,16 @@ test.describe("Plan batches", () => {
     await expect(planCell(page, s.days[1], s.cook)).toContainText("Cook × 6")
 
     // F4-AC3: 8 portions leave 2 spare.
-    const portions = sheet.getByRole("group", { name: "Portions to cook" })
+    const portions = sheet.getByRole("group", {
+      name: `Portions of ${s.chili.name} to cook`,
+    })
     for (const n of ["7", "8"]) {
       await write(page, () =>
-        sheet.getByRole("button", { name: "Increase Portions to cook" }).click()
+        sheet
+          .getByRole("button", {
+            name: `Increase Portions of ${s.chili.name} to cook`,
+          })
+          .click()
       )
       await expect(portions.locator("output")).toHaveText(n)
     }
@@ -323,7 +329,9 @@ test.describe("Plan batches", () => {
     // F4-AC4: Remove batch asks first, removes the leftovers, and Undo
     // brings all of them back with their links.
     sheet = await openCellSheet(page, s.days[1], s.cook)
-    await sheet.getByRole("button", { name: "Remove batch" }).click()
+    await sheet
+      .getByRole("button", { name: `Remove the ${s.chili.name} batch` })
+      .click()
     const confirm = page.getByRole("dialog", { name: "Remove this batch?" })
     await expect(confirm).toContainText("3 other plates")
     const removed = page.waitForResponse(
