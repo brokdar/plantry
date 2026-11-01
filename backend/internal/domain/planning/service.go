@@ -783,6 +783,19 @@ func (s *Service) Run(ctx context.Context, id int64) (*RunView, error) {
 	return v, nil
 }
 
+// Await blocks until run id finished, then returns it as Run does. It
+// returns ctx's error when ctx ends first; the run goes on (D8).
+func (s *Service) Await(ctx context.Context, id int64) (*RunView, error) {
+	if done, ok := s.d.Progress.doneCh(id); ok {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return s.Run(ctx, id)
+}
+
 // Running implements planview's Progress port.
 func (s *Service) Running(start time.Time) (int64, bool) { return s.d.Progress.Running(start) }
 

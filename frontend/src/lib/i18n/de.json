@@ -999,6 +999,7 @@
       "tool_not_found": "Die AI hat versucht, ein unbekanntes Tool zu verwenden.",
       "past_date": "Vergangene Tage ändert der Assistent nicht.",
       "preference_reserved": "Vorlieben und Abneigungen kommen aus deinen Bewertungen, deshalb kann der Assistent sie nicht setzen.",
+      "unlock_needs_user": "Bevor der Assistent ein bestätigtes Essen entsperrt, braucht er dein Ja in einer neuen Nachricht.",
       "iterations_exceeded": "Die AI hat zu viele Schritte gemacht — bitte formuliere die Anfrage einfacher.",
       "rate_limit_exceeded": "Zu viele AI-Anfragen. Bitte warte eine Minute.",
       "invalid_date": "Ein Chat-Datum ist kein gültiges Datum im Format JJJJ-MM-TT."

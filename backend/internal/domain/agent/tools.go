@@ -34,6 +34,9 @@ const (
 	ToolEffectNone ToolEffect = iota
 	// ToolEffectPlateChanged means the call mutated the plan (week/plate/plate_component).
 	ToolEffectPlateChanged
+	// ToolEffectUnlockRequest means the call previewed an unlock: its output
+	// holds the llm.UnlockRequestPayload rows the loop streams (D6).
+	ToolEffectUnlockRequest
 )
 
 // ToolHandler executes a single tool against its raw JSON input and returns
@@ -74,6 +77,10 @@ type Services struct {
 	Settings plate.SettingsReader
 	// PlanView may be nil: get_plan is then not registered.
 	PlanView PlanReader
+	// Planner may be nil: regenerate is then not registered.
+	Planner Planner
+	// Cells may be nil: set_availability is then not registered.
+	Cells CellWriter
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -173,6 +180,10 @@ func defaultTools(svc Services) []Tool {
 		toolUpdatePlateComponent(svc),
 		toolRemovePlateComponent(svc),
 		toolDeletePlate(svc),
+		toolSetPlateEaters(svc),
+		toolSetSessionPortions(svc),
+		toolConfirm(svc),
+		toolUnlock(svc),
 		toolRecordPreference(svc),
 	}
 	if svc.Presets != nil {
@@ -180,6 +191,12 @@ func defaultTools(svc Services) []Tool {
 	}
 	if svc.PlanView != nil {
 		tools = append(tools, toolGetPlan(svc))
+	}
+	if svc.Cells != nil {
+		tools = append(tools, toolSetAvailability(svc))
+	}
+	if svc.Planner != nil {
+		tools = append(tools, toolRegenerate(svc))
 	}
 	return tools
 }

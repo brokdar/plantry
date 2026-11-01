@@ -38,6 +38,10 @@ const (
 	// week-scoped query caches (week, shopping-list, nutrition).
 	EventPlateChanged EventType = "plate_changed"
 
+	// Agent-loop-side: an unlock tool call previewed confirmed rows; the
+	// user's yes in a later message lets the agent unlock them (D6).
+	EventUnlockRequest EventType = "unlock_request"
+
 	// Terminal success event.
 	EventDone EventType = "done"
 
@@ -113,6 +117,19 @@ type ToolResultPayload struct {
 // PlateChangedPayload accompanies EventPlateChanged; the event alone tells
 // the client to reload the plan.
 type PlateChangedPayload struct{}
+
+// UnlockRequestPayload accompanies EventUnlockRequest: the rows the unlock
+// would return to draft.
+type UnlockRequestPayload struct {
+	Rows []UnlockRow `json:"rows"`
+}
+
+// UnlockRow is one cell of an unlock request and the food names on it.
+type UnlockRow struct {
+	Date   string   `json:"date"`
+	SlotID int64    `json:"slot_id"`
+	Names  []string `json:"names"`
+}
 
 // DonePayload accompanies EventDone.
 type DonePayload struct {

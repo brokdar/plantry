@@ -157,8 +157,16 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				ID: call.ToolUseID, Name: call.ToolUseName,
 				Output: output,
 			}})
-			if effect == ToolEffectPlateChanged {
+			switch effect {
+			case ToolEffectPlateChanged:
 				plateChanged = true
+			case ToolEffectUnlockRequest:
+				var unlock llm.UnlockRequestPayload
+				if err := json.Unmarshal(output, &unlock); err != nil {
+					return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", fmt.Errorf("unlock request: %w", err))
+				}
+				send(ctx, out, llm.Event{Type: llm.EventUnlockRequest, Payload: unlock})
+			case ToolEffectNone:
 			}
 		}
 

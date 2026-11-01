@@ -272,6 +272,8 @@ func run() error {
 		Availability:      availabilitySvc,
 		Settings:          settingsSvc,
 		PlanView:          planViewSvc,
+		Planner:           planningSvc,
+		Cells:             availabilitySvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)

@@ -546,6 +546,52 @@ func TestService_OneRunPerWindowAndDetachedFromTheRequest(t *testing.T) {
 	assert.Equal(t, day(sat), v.Window.Start)
 }
 
+// B4-AC2: Await blocks until the run finished and returns its view; a
+// cancelled ctx returns at once without leaking and leaves the run going.
+func TestService_Await(t *testing.T) {
+	e := newSvcEnv(t)
+	b := blockingChooser{entered: make(chan struct{}), release: make(chan struct{})}
+	e.deps.Go = nil
+	e.deps.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: b}
+	e.svc = planning.NewService(e.deps)
+
+	id, err := e.svc.Generate(e.ctx, e.req())
+	require.NoError(t, err)
+	<-b.entered
+
+	ctx, cancel := context.WithCancel(e.ctx)
+	cancel()
+	_, err = e.svc.Await(ctx, id)
+	require.ErrorIs(t, err, context.Canceled)
+	_, running := e.svc.Running(e.start)
+	assert.True(t, running, "the run goes on")
+
+	views := make(chan *planning.RunView, 1)
+	errs := make(chan error, 1)
+	go func() {
+		v, err := e.svc.Await(e.ctx, id)
+		errs <- err
+		views <- v
+	}()
+	close(b.release)
+	select {
+	case err := <-errs:
+		require.NoError(t, err)
+	case <-time.After(30 * time.Second):
+		t.Fatal("Await did not return after the run finished")
+	}
+	v := <-views
+	assert.Equal(t, airun.StatusOK, v.Status, "the row is final when Await returns")
+	assert.Positive(t, v.Counts.Plates)
+	e.svc.Wait()
+
+	v, err = e.svc.Await(e.ctx, id)
+	require.NoError(t, err, "a finished run returns at once")
+	assert.Equal(t, airun.StatusOK, v.Status)
+	_, err = e.svc.Await(e.ctx, 9999)
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
 // failingApply writes the snapshot, then fails: the unit of work must roll
 // everything back.
 type failingApply struct{ planning.PlateService }
