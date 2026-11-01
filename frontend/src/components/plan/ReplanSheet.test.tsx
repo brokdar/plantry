@@ -55,12 +55,16 @@ const preview: ReplanPreview = {
       mutable: true,
     },
   ],
+  dropped: [],
+  moved: [],
 }
 
 const EMPTY: ReplanPreview = {
   none_cells: [],
   confirmed_affected: [],
   spare: [],
+  dropped: [],
+  moved: [],
 }
 
 function renderSheet(
@@ -266,6 +270,8 @@ describe("ReplanSheet", () => {
           mutable: true,
         },
       ],
+      dropped: [],
+      moved: [],
     })
     renderSheet({ initialCells: [{ date: "2026-11-02", slot_id: 3 }] })
     const s = await sheet()
@@ -288,6 +294,8 @@ describe("ReplanSheet", () => {
           mutable: false,
         },
       ],
+      dropped: [],
+      moved: [],
     })
     renderSheet({ initialCells: [{ date: "2026-11-02", slot_id: 3 }] })
     const s = await sheet()

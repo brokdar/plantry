@@ -667,6 +667,8 @@ describe("re-plan (F4)", () => {
       none_cells: [],
       confirmed_affected: [],
       spare: [],
+      dropped: [],
+      moved: [],
     })
   })
 
