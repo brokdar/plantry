@@ -2,9 +2,11 @@ import { screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+import type { Plan } from "@/lib/api/plan"
 import {
   mockAvailabilityDefaults,
   mockPlan,
+  mockRemovedBatch,
   mockProfile,
   mockRun,
   mockSettingsList,
@@ -20,7 +22,13 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 vi.mock("@/lib/api/plan", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/plan")>()),
   getPlan: vi.fn(),
+  restorePlan: vi.fn(),
 }))
+// The Undo toast: its action is clicked by hand.
+const toastMock = vi.hoisted(() =>
+  Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() })
+)
+vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 vi.mock("@/lib/api/settings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/settings")>()),
   listSettings: vi.fn(),
@@ -47,12 +55,14 @@ vi.mock("@/lib/api/generation", () => ({
 }))
 
 import {
+  clearAvailabilityOverride,
   getAvailabilityDefaults,
+  getAvailabilityRange,
   setAvailabilityDefaults,
   setAvailabilityOverride,
 } from "@/lib/api/availability"
 import { generatePlan, getPlanRun } from "@/lib/api/generation"
-import { getPlan } from "@/lib/api/plan"
+import { getPlan, restorePlan } from "@/lib/api/plan"
 import { getPresets } from "@/lib/api/presets"
 import { getProfile } from "@/lib/api/profile"
 import { listSettings } from "@/lib/api/settings"
@@ -121,17 +131,119 @@ describe("PlanWizard", () => {
     expect(setAvailabilityDefaults).not.toHaveBeenCalled()
   })
 
-  it("a No plate cell that holds a plate removes the plate", async () => {
+  it("No plate on a confirmed plate asks first, then removes it with Undo", async () => {
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({
+      cell: {} as never,
+      removed: mockRemovedBatch.removed,
+    })
     const user = await openWizard()
-    // Sunday dinner cooks the Chili in mockPlan.
+    // Sunday dinner cooks the confirmed Chili in mockPlan.
     await user.click(cell(/^Sunday, November 1 dinner/))
     await user.click(screen.getByRole("button", { name: "Next" }))
+    const dialog = await screen.findByTestId("wizard-confirm-removal")
+    expect(dialog).toHaveTextContent("Remove a confirmed plate?")
+    expect(dialog).toHaveTextContent("Sunday dinner: Chili")
+
+    // Keep them: nothing is written, the wizard stays on step 1.
+    await user.click(within(dialog).getByRole("button", { name: "Keep them" }))
+    expect(screen.queryByTestId("wizard-confirm-removal")).toBeNull()
+    expect(setAvailabilityOverride).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    await user.click(
+      within(await screen.findByTestId("wizard-confirm-removal")).getByRole(
+        "button",
+        { name: "Remove" }
+      )
+    )
     await screen.findByRole("heading", { name: "Anything special this week?" })
     expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-11-01", 3, {
       mode: "none",
       preset_id: null,
       remove_plate: true,
     })
+
+    // Undo gives the cell back to its default and restores the plate.
+    expect(toastMock).toHaveBeenCalledWith(
+      "1 plate removed",
+      expect.objectContaining({ action: expect.anything() })
+    )
+    const { action } = toastMock.mock.calls[0]![1] as {
+      action: { onClick: () => void }
+    }
+    action.onClick()
+    await waitFor(() =>
+      expect(restorePlan).toHaveBeenCalledWith(mockRemovedBatch.removed)
+    )
+    expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-11-01", 3)
+  })
+
+  it("a draft plate is removed without asking", async () => {
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      cells: mockPlan.cells.map((c) =>
+        c.plate ? { ...c, plate: { ...c.plate, state: "draft" } } : c
+      ),
+    } as Plan)
+    const user = await openWizard()
+    await user.click(cell(/^Sunday, November 1 dinner/))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    await screen.findByRole("heading", { name: "Anything special this week?" })
+    expect(screen.queryByTestId("wizard-confirm-removal")).toBeNull()
+    expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-11-01", 3, {
+      mode: "none",
+      preset_id: null,
+      remove_plate: true,
+    })
+  })
+
+  it("back to Plan on an override clears it when the default plans the meal", async () => {
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      cells: mockPlan.cells.map((c) =>
+        c.date === "2026-11-05" && c.slot_id === 3
+          ? { ...c, mode: "none", source: "override" }
+          : c
+      ),
+    } as Plan)
+    vi.mocked(getAvailabilityRange).mockResolvedValue({
+      items: [
+        {
+          date: "2026-11-05",
+          slot_id: 3,
+          mode: "plan",
+          source: "default",
+          preset_id: null,
+          preset_name: null,
+          note: null,
+        },
+      ],
+    })
+    const user = await openWizard()
+    await user.click(cell(/^Thursday, November 5 dinner, No plate$/))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    await screen.findByRole("heading", { name: "Anything special this week?" })
+    expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-11-05", 3)
+    expect(setAvailabilityOverride).not.toHaveBeenCalled()
+  })
+
+  it("Back, then Make this my new default, writes the same changes as defaults", async () => {
+    const user = await openWizard()
+    await user.click(cell(/^Thursday, November 5 dinner/))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    await screen.findByRole("heading", { name: "Anything special this week?" })
+    expect(setAvailabilityOverride).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await user.click(
+      await screen.findByRole("checkbox", { name: "Make this my new default" })
+    )
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    await screen.findByRole("heading", { name: "Anything special this week?" })
+    expect(setAvailabilityDefaults).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(setAvailabilityDefaults).mock.calls[0]![0]).toContainEqual(
+      { weekday: 3, slot_id: 3, mode: "none", preset_id: null }
+    )
   })
 
   it("F3-AC2: Make this my new default writes the defaults, not overrides", async () => {
@@ -172,11 +284,13 @@ describe("PlanWizard", () => {
 
   it("the day menu marks a day away and adds guests; Generate sends the note, guests and the new-recipe toggle", async () => {
     const user = await openWizard()
-    await user.click(screen.getByRole("button", { name: /^Monday.* actions$/ }))
+    await user.click(
+      screen.getByRole("button", { name: /^Tuesday.* actions$/ })
+    )
     await user.click(screen.getByRole("menuitem", { name: "Away all day" }))
     for (const slot of ["breakfast", "lunch", "dinner"]) {
       expect(
-        cell(new RegExp(`^Monday, November 2 ${slot}, No plate$`))
+        cell(new RegExp(`^Tuesday, November 3 ${slot}, No plate$`))
       ).toBeInTheDocument()
     }
 

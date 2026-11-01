@@ -1466,7 +1466,8 @@
         "instruction": "Note for this week",
         "placeholder": "e.g. guests on Friday, something light",
         "new_recipe": "Include a new recipe",
-        "new_recipe_hint": "Plans one recipe you haven't cooked yet."
+        "new_recipe_hint": "Plans one recipe you haven't cooked yet.",
+        "body_heuristic": "Without an assistant, the note is saved with the plan but not read. Skip to plan the week from your recipes and settings."
       },
       "generating": {
         "title": "Planning your week",
@@ -1479,7 +1480,17 @@
         "heuristic": "The plan couldn't be made. Try again.",
         "without_assistant": "Plan without the assistant"
       },
-      "error": "The week couldn't be loaded."
+      "error": "The week couldn't be loaded.",
+      "remove": {
+        "title_one": "Remove a confirmed plate?",
+        "title_other": "Remove {{count}} confirmed plates?",
+        "body": "Their ingredients may already be bought. Marking these meals No plate removes them:",
+        "item": "{{day}} {{slot, lowercase}}: {{food}}",
+        "keep": "Keep them",
+        "confirm": "Remove"
+      },
+      "removed_one": "{{count}} plate removed",
+      "removed_other": "{{count}} plates removed"
     }
   },
   "batch": {

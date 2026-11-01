@@ -1462,11 +1462,12 @@
       },
       "special": {
         "title": "Gibt es diese Woche etwas Besonderes?",
-        "body": "Ein paar Worte für den Assistenten, oder überspring den Schritt.",
+        "body": "Ein paar Worte für den Assistenten oder überspring den Schritt.",
         "instruction": "Notiz für diese Woche",
         "placeholder": "z. B. Gäste am Freitag, etwas Leichtes",
         "new_recipe": "Ein neues Rezept einplanen",
-        "new_recipe_hint": "Plant ein Rezept ein, das du noch nie gekocht hast."
+        "new_recipe_hint": "Plant ein Rezept ein, das du noch nie gekocht hast.",
+        "body_heuristic": "Ohne Assistenten wird die Notiz nur mit dem Plan gespeichert, nicht gelesen. Überspring den Schritt, um die Woche aus deinen Rezepten und Einstellungen zu planen."
       },
       "generating": {
         "title": "Deine Woche wird geplant",
@@ -1479,7 +1480,17 @@
         "heuristic": "Der Plan ließ sich nicht erstellen. Versuch es noch einmal.",
         "without_assistant": "Ohne Assistenten planen"
       },
-      "error": "Die Woche konnte nicht geladen werden."
+      "error": "Die Woche konnte nicht geladen werden.",
+      "remove": {
+        "title_one": "Bestätigte Mahlzeit entfernen?",
+        "title_other": "{{count}} bestätigte Mahlzeiten entfernen?",
+        "body": "Die Zutaten sind vielleicht schon gekauft. „Kein Essen“ entfernt diese Mahlzeiten:",
+        "item": "{{day}} {{slot}}: {{food}}",
+        "keep": "Behalten",
+        "confirm": "Entfernen"
+      },
+      "removed_one": "{{count}} Mahlzeit entfernt",
+      "removed_other": "{{count}} Mahlzeiten entfernt"
     }
   },
   "batch": {

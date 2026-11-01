@@ -20,9 +20,11 @@ import { usePlan } from "@/lib/queries/plan"
 import { usePresets } from "@/lib/queries/presets"
 import { useProfile } from "@/lib/queries/profile"
 import { useSettingItems } from "@/lib/queries/settings"
+import { formatDate } from "@/lib/plan/format"
 import { slotLabel } from "@/lib/slot-label"
 
 import { AnythingSpecial } from "./AnythingSpecial"
+import { ConfirmRemoval } from "./ConfirmRemoval"
 import { Generating } from "./Generating"
 import { WhoIsHome } from "./WhoIsHome"
 
@@ -132,9 +134,16 @@ function WizardFlow({
   const apply = useApplyWindowAvailability()
   const generate = useGenerate({ openBoard: false })
   const [step, setStep] = useState(0)
-  // What the cells hold on the server: Next writes only the difference.
-  const [saved, setSaved] = useState(() => cellsToValue(plan))
-  const [value, setValue] = useState(saved)
+  // The cells as the wizard opened, and as Next last wrote them (and
+  // where to: overrides or defaults). Next writes only the difference.
+  const [initial] = useState(() => cellsToValue(plan))
+  const [saved, setSaved] = useState<{
+    value: AvailabilityGridValue
+    asDefault: boolean
+  } | null>(null)
+  const [value, setValue] = useState(initial)
+  // Changes that would remove confirmed plates wait for the dialog.
+  const [confirming, setConfirming] = useState<WindowCellChange[] | null>(null)
   const [guests, setGuests] = useState<Record<string, number>>({})
   const [asDefault, setAsDefault] = useState(false)
   const [instruction, setInstruction] = useState("")
@@ -164,10 +173,13 @@ function WizardFlow({
   }, [step])
 
   function next() {
+    // Written to the other target (overrides vs defaults) before: compare
+    // with the cells as they were, so every change lands on this target.
+    const base = saved && saved.asDefault === asDefault ? saved.value : initial
     const changes: WindowCellChange[] = plan.cells.flatMap((c) => {
       const key = `${c.date}:${c.slot_id}`
       const now = value[key] ?? { mode: "plan" }
-      const was = saved[key] ?? { mode: "plan" }
+      const was = base[key] ?? { mode: "plan" }
       if (now.mode === was.mode && now.presetId === was.presetId) return []
       return [
         {
@@ -175,8 +187,7 @@ function WizardFlow({
           slotId: c.slot_id,
           mode: now.mode,
           presetId: now.presetId ?? null,
-          source: c.source,
-          hasPlate: c.plate !== null,
+          cell: c,
         },
       ]
     })
@@ -184,14 +195,41 @@ function WizardFlow({
       setStep(1)
       return
     }
+    // Overrides remove a No plate cell's plate; a confirmed one may be
+    // bought already, so that asks first (D34). Drafts go without asking.
+    if (!asDefault && confirmedRemovals(changes).length > 0) {
+      setConfirming(changes)
+      return
+    }
+    write(changes)
+  }
+
+  function write(changes: WindowCellChange[]) {
     apply.mutate(
       { changes, asDefault, slotIds: slots.map((s) => s.id) },
       {
         onSuccess: () => {
-          setSaved(value)
+          setSaved({ value, asDefault })
+          setConfirming(null)
           setStep(1)
         },
       }
+    )
+  }
+
+  /** "Thursday dinner: Chili sin carne" for each confirmed plate a change
+   *  removes. */
+  function confirmedRemovals(changes: WindowCellChange[]) {
+    return changes.flatMap(({ mode, cell }) =>
+      mode === "none" && cell.plate?.state === "confirmed"
+        ? [
+            t("plan.wizard.remove.item", {
+              day: formatDate(cell.date, i18n, { weekday: "long" }),
+              slot: slots.find((s) => s.id === cell.slot_id)?.label ?? "",
+              food: cell.plate.components.map((p) => p.food_name).join(", "),
+            }),
+          ]
+        : []
     )
   }
 
@@ -268,7 +306,10 @@ function WizardFlow({
       {step === 1 && (
         <>
           <p className="text-body text-ink-muted">
-            {t("plan.wizard.special.body")}
+            {/* The heuristic doesn't read the note (D11). */}
+            {assistant
+              ? t("plan.wizard.special.body")
+              : t("plan.wizard.special.body_heuristic")}
           </p>
           <AnythingSpecial
             instruction={instruction}
@@ -325,6 +366,12 @@ function WizardFlow({
           onWithoutAssistant={() => start({ ...request, chooser: "heuristic" })}
         />
       )}
+      <ConfirmRemoval
+        plates={confirming ? confirmedRemovals(confirming) : []}
+        pending={apply.isPending}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => confirming && write(confirming)}
+      />
     </Frame>
   )
 }

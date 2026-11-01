@@ -88,7 +88,8 @@ src/components/
 │                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
 ├── plan-wizard/       # PlanWizard (`/plan/new`): WhoIsHome (window grid, day menu Away all day /
 │                      #   Guests, "Make this my new default"), AnythingSpecial, Generating (run
-│                      #   stages, failure + Plan without the assistant); GeneratePlanButton opens it
+│                      #   stages, failure + Plan without the assistant), ConfirmRemoval (No plate on
+│                      #   confirmed plates asks first); GeneratePlanButton opens it
 ├── availability/      # AvailabilityGrid (weekday/date × slot modes), RoutinePicker
 ├── setup/             # SetupWizard and its steps; wizard-draft.ts, use-wizard-save.ts
 ├── component/         # shared input widget: QuantityUnitInput (leaf amount + unit)
@@ -186,11 +187,11 @@ Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own u
 - Unique data: append `crypto.randomUUID().slice(0,8)` to names.
 - After form submit: `waitForResponse` on the specific API call. Never `waitForURL`, never `waitForTimeout`.
 - For elements absent from DOM (server-filtered): use `toHaveCount(0)`, never `not.toBeVisible()` (causes timeouts).
-- Projects: `setup` runs `setup-wizard.spec.ts` first on the fresh DB (completes the wizard, sets `plan.anchor = today`); `chromium` and `ai-serial` depend on it. `global-settings` (specs that write the profile or plan settings through the UI, such as `plan-anchor-settings.spec.ts`) runs last and alone, after both. Never run with `--no-deps`.
+- Projects: `setup` runs `setup-wizard.spec.ts` first on the fresh DB (completes the wizard, sets `plan.anchor = today`); `chromium` and `ai-serial` depend on it. `global-settings` (specs that write the profile or plan settings through the UI, such as `plan-anchor-settings.spec.ts`, and specs that run a real generation, which plans every active slot of its window from the shared recipes, such as `plan-wizard.spec.ts`) runs last and alone, after both. Never run with `--no-deps`.
 - Plan board specs work in `futureWindow()` (`e2e/helpers.ts`): each parallel worker owns its own band of future windows, so one test's Clear this week or No plate overrides never touch another's plates.
 - Settings are global: `setSetting` (`PUT /api/settings/{key}`) changes them for every running spec, so parallel specs override values page-scoped with `mockSettingValues` and restore anything they write.
 - The shared DB accumulates recipes, so a spec that needs the library below or at the 10-recipe target stubs `GET /api/setup` with `page.route` (see `recipes-guided.spec.ts`), never relies on the real count.
-- Specs that mutate global AI state (`ai-chat.spec.ts`, `plan-wizard-llm.spec.ts`, etc.) run under the `ai-serial` project with `workers: 1`. Never add AI-touching assertions to a parallel spec — it will cause flaky failures.
+- Specs that mutate global AI state (`ai-chat.spec.ts`, `settings-insights.spec.ts`, etc.) run under the `ai-serial` project with `workers: 1`. Never add AI-touching assertions to a parallel spec — it will cause flaky failures.
 - Stable = `--repeat-each=10 --workers=4` with zero failures.
 
 ## Gotchas

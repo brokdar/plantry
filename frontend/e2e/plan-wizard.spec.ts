@@ -10,14 +10,15 @@ import {
   planCell,
   seedLeafFood,
   seedRecipeLibrary,
+  setSetting,
   test,
   uid,
 } from "./helpers"
 
-// Phase 3 F3: the plan wizard on a heuristic backend (no assistant through
-// `mockSettingValues`). Runs in global-settings, alone: generation plans
-// every active slot of a window, and the test writes the availability
-// defaults (restored afterwards).
+// Phase 3 F3: the plan wizard. Runs in global-settings, alone: a real
+// generation plans every active slot of its window and uses the shared
+// recipes, one test writes the availability defaults and one swaps the
+// global ai.fake_script (both restored afterwards).
 
 interface Default {
   weekday: number
@@ -209,10 +210,11 @@ test.describe("plan wizard", () => {
           r.request().method() === "POST"
       )
       await wizard.getByRole("button", { name: "Skip" }).click()
-      const body = (await (await generated).request().postDataJSON()) as {
-        chooser?: string
-      }
-      expect(body.chooser).toBe("heuristic")
+      const response = await generated
+      expect(response.request().postDataJSON()).toMatchObject({
+        chooser: "heuristic",
+      })
+      const { run_id: runId } = (await response.json()) as { run_id: number }
       await expect(wizard.getByTestId("wizard-generating")).toBeVisible()
       await expect(
         wizard.getByTestId("wizard-generating").getByRole("listitem")
@@ -250,6 +252,14 @@ test.describe("plan wizard", () => {
           }
         }
       }
+
+      // The run shows in Insights as a scored heuristic Generate run.
+      await page.goto("/settings/assistant/insights")
+      const row = page.getByTestId(`run-row-${runId}`)
+      await expect(row).toContainText("Generate")
+      await expect(row).toContainText("Without the assistant")
+      await expect(row).toContainText("Done")
+      await expect(row).toContainText(/\d+\s?% covered · \d+ violations?/)
     } finally {
       await ctx.delete(`/api/plan?from=${start}&to=${end}`)
       await ctx.put("/api/availability/defaults", {
@@ -308,4 +318,67 @@ test.describe("plan wizard", () => {
     await expect(page.getByRole("dialog")).toHaveCount(0)
     await expect(page.getByTestId("plan-summary")).toHaveCount(0)
   })
+})
+
+// F3-AC3: the assistant fails (B7's empty fake script fails every call)
+// and "Plan without the assistant" plans heuristically (D11: no automatic
+// fallback).
+const ERROR_SCRIPT =
+  "../frontend/e2e/fixtures/chat-scripts/generate-week-error.json"
+
+test("F3-AC3: an assistant failure offers Plan without the assistant", async ({
+  page,
+  request,
+}) => {
+  test.slow()
+  const library = await seedRecipeLibrary(uid())
+  const plan = await request.get(`${API}/api/plan`)
+  const { window } = (await plan.json()) as { window: { start: string } }
+  const start = addDays(window.start, 7 * 65)
+  await setSetting("ai.fake_script", ERROR_SCRIPT)
+  try {
+    await stubRecipesReady(page)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(`/plan/new?start=${start}`)
+    const wizard = page.getByTestId("plan-wizard")
+    await wizard.getByRole("button", { name: "Next" }).click()
+    await wizard.getByRole("button", { name: "Skip" }).click()
+
+    await expect(
+      wizard.getByText(
+        "The assistant didn't respond. Try again, or plan without the assistant."
+      )
+    ).toBeVisible({ timeout: 30_000 })
+
+    const generated = page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/plan/generate") &&
+        r.request().method() === "POST"
+    )
+    await wizard
+      .getByRole("button", { name: "Plan without the assistant" })
+      .click()
+    const res = await generated
+    expect(res.request().postDataJSON()).toMatchObject({
+      start,
+      chooser: "heuristic",
+    })
+    const { run_id: runId } = (await res.json()) as { run_id: number }
+
+    await expect(page.getByTestId("plan-wizard")).toHaveCount(0, {
+      timeout: 30_000,
+    })
+    await expect(page.getByTestId("plan-summary")).toHaveText(/^Draft · /)
+    const run = await request.get(`${API}/api/plan/runs/${runId}`)
+    expect(await run.json()).toMatchObject({
+      chooser: "heuristic",
+      status: "ok",
+    })
+  } finally {
+    await request.delete(`${API}/api/settings/ai.fake_script`)
+    await request.delete(
+      `${API}/api/plan?from=${start}&to=${addDays(start, 6)}`
+    )
+    await library.cleanup()
+  }
 })

@@ -2,14 +2,7 @@ import type { APIRequestContext, Page } from "@playwright/test"
 
 import { expect, test } from "./helpers"
 
-import {
-  addDays,
-  API,
-  cleanupSlot,
-  seedRecipeLibrary,
-  seedSlot,
-  uid,
-} from "./helpers"
+import { API, cleanupSlot, seedSlot, uid } from "./helpers"
 
 // AC-8 (F7-AC1, F7-AC3). Runs in ai-serial: it drives the fake provider
 // (model fake-e2e, which has no built-in price) and writes the global
@@ -129,44 +122,5 @@ test("a price override re-prices the runs table", async ({ page, request }) => {
   } finally {
     await request.delete(`${API}/api/settings/ai.price_overrides`)
     await cleanupSlot(slot.id)
-  }
-})
-
-test("a heuristic generation shows up as a scored Generate run", async ({
-  page,
-  request,
-}) => {
-  const library = await seedRecipeLibrary(uid())
-  const plan = await request.get(`${API}/api/plan`)
-  const { window } = (await plan.json()) as { window: { start: string } }
-  // Far beyond the windows the parallel specs use (futureWindow: ≤ 50).
-  const start = addDays(window.start, 7 * 70)
-  try {
-    const res = await request.post(`${API}/api/plan/generate`, {
-      data: { start, chooser: "heuristic" },
-    })
-    expect(res.status(), await res.text()).toBe(202)
-    const { run_id: runId } = (await res.json()) as { run_id: number }
-    await expect
-      .poll(
-        async () => {
-          const run = await request.get(`${API}/api/plan/runs/${runId}`)
-          return ((await run.json()) as { status: string }).status
-        },
-        { timeout: 15_000 }
-      )
-      .toBe("ok")
-
-    await page.goto("/settings/assistant/insights")
-    const row = page.getByTestId(`run-row-${runId}`)
-    await expect(row).toContainText("Generate")
-    await expect(row).toContainText("Without the assistant")
-    await expect(row).toContainText("Done")
-    await expect(row).toContainText(/\d+\s?% covered · \d+ violations?/)
-  } finally {
-    await request.delete(
-      `${API}/api/plan?from=${start}&to=${addDays(start, 6)}`
-    )
-    await library.cleanup()
   }
 })

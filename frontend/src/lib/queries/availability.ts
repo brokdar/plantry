@@ -4,20 +4,23 @@ import { useTranslation } from "react-i18next"
 import {
   clearAvailabilityOverride,
   getAvailabilityDefaults,
+  getAvailabilityRange,
   setAvailabilityDefaults,
   setAvailabilityOverride,
+  type AvailabilityCell,
   type AvailabilityDefault,
   type AvailabilityMode,
-  type AvailabilitySource,
 } from "@/lib/api/availability"
+import { restorePlan, type PlanCell } from "@/lib/api/plan"
+import type { PlanSnapshot } from "@/lib/api/plates"
 import {
   defaultsToGridValue,
   gridValueToDefaults,
 } from "@/lib/availability-grid"
-import { toastError } from "@/lib/toast"
+import { toast, toastError } from "@/lib/toast"
 
 import { availabilityKeys } from "./keys"
-import { invalidatePlanViews } from "./plan"
+import { invalidatePlanViews, useUndoToast } from "./plan"
 
 /** The full weekday × active-slot defaults grid. */
 export function useAvailabilityDefaults() {
@@ -88,10 +91,8 @@ export interface WindowCellChange {
   slotId: number
   mode: AvailabilityMode
   presetId: number | null
-  /** Where the cell's current mode comes from. */
-  source: AvailabilitySource
-  /** The cell holds a plate, which a No plate override must remove. */
-  hasPlate: boolean
+  /** The cell as the server resolves it now (source, override, plate). */
+  cell: PlanCell
 }
 
 interface ApplyWindowAvailabilityInput {
@@ -103,62 +104,149 @@ interface ApplyWindowAvailabilityInput {
   slotIds: number[]
 }
 
+/** A plate a No plate override removed, with the cell as it was. */
+interface RemovedCell {
+  cell: PlanCell
+  snapshot: PlanSnapshot
+}
+
 /** 0 = Monday … 6 = Sunday, as the defaults count weekdays. */
 function weekdayOf(date: string) {
   const [y, m, d] = date.split("-").map(Number)
   return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7
 }
 
+const cellKey = (date: string, slotId: number) => `${date}:${slotId}`
+
+async function writeDefaults(changes: WindowCellChange[], slotIds: number[]) {
+  const { items } = await getAvailabilityDefaults()
+  const patch = Object.fromEntries(
+    changes.map((c) => [
+      `${weekdayOf(c.date)}:${c.slotId}`,
+      c.mode === "routine" && c.presetId !== null
+        ? { mode: c.mode, presetId: c.presetId }
+        : { mode: c.mode },
+    ])
+  )
+  await setAvailabilityDefaults(
+    gridValueToDefaults(
+      { ...defaultsToGridValue(items), ...patch },
+      slotIds.map((id) => ({ id }))
+    )
+  )
+  // A date override would hide the new default on that date.
+  for (const c of changes) {
+    if (c.cell.source === "override") {
+      await clearAvailabilityOverride(c.date, c.slotId)
+    }
+  }
+}
+
+/**
+ * Date overrides for the changed cells. A cell that had an override is
+ * first given back to its weekday default (as "Plan this meal" does) and
+ * pinned again only when the default differs. A No plate cell that holds
+ * a plate is always written with `remove_plate`; the removed plates are
+ * returned for Undo.
+ */
+async function writeOverrides(
+  changes: WindowCellChange[]
+): Promise<RemovedCell[]> {
+  const removes = (c: WindowCellChange) =>
+    c.mode === "none" && c.cell.plate !== null
+  const cleared = changes.filter(
+    (c) => c.cell.source === "override" && !removes(c)
+  )
+  for (const c of cleared) await clearAvailabilityOverride(c.date, c.slotId)
+  const resolved = new Map<string, AvailabilityCell>()
+  if (cleared.length > 0) {
+    const dates = cleared.map((c) => c.date).sort()
+    const { items } = await getAvailabilityRange(
+      dates[0],
+      dates[dates.length - 1]
+    )
+    for (const item of items) {
+      resolved.set(cellKey(item.date, item.slot_id), item)
+    }
+  }
+
+  const removed: RemovedCell[] = []
+  for (const c of changes) {
+    const now = resolved.get(cellKey(c.date, c.slotId))
+    if (
+      now &&
+      now.mode === c.mode &&
+      (c.mode !== "routine" || now.preset_id === c.presetId)
+    ) {
+      continue
+    }
+    const res = await setAvailabilityOverride(c.date, c.slotId, {
+      mode: c.mode,
+      preset_id: c.mode === "routine" ? c.presetId : null,
+      remove_plate: removes(c),
+    })
+    if (res.removed) removed.push({ cell: c.cell, snapshot: res.removed })
+  }
+  return removed
+}
+
 /**
  * Plan wizard step 1 (D31): writes the changed cells as date overrides, or
- * with `asDefault` as the weekday defaults (an override on a changed date
- * is cleared then, so the new default shows on it). Writes run one after
- * another; the plan views refetch afterwards either way.
+ * with `asDefault` as the weekday defaults (plates stay then). Writes run
+ * one after another; the plan views refetch afterwards either way. Plates a
+ * No plate override removed get one Undo toast: it puts each cell's
+ * previous availability back and restores its plate.
  */
 export function useApplyWindowAvailability() {
   const qc = useQueryClient()
   const { t } = useTranslation()
+  const offer = useUndoToast()
+
+  function refresh() {
+    void qc.invalidateQueries({ queryKey: availabilityKeys.all })
+    return invalidatePlanViews(qc)
+  }
+
+  async function undo(removed: RemovedCell[]) {
+    try {
+      for (const { cell, snapshot } of removed) {
+        if (cell.source === "override") {
+          await setAvailabilityOverride(cell.date, cell.slot_id, {
+            mode: cell.mode,
+            preset_id: cell.preset_id,
+            note: cell.note,
+          })
+        } else {
+          await clearAvailabilityOverride(cell.date, cell.slot_id)
+        }
+        await restorePlan(snapshot)
+      }
+      toast.success(t("plan.undo.restored"))
+    } catch (err) {
+      toastError(err, t)
+    } finally {
+      void refresh()
+    }
+  }
+
   return useMutation({
     mutationFn: async ({
       changes,
       asDefault,
       slotIds,
-    }: ApplyWindowAvailabilityInput) => {
-      if (asDefault) {
-        const { items } = await getAvailabilityDefaults()
-        const patch = Object.fromEntries(
-          changes.map((c) => [
-            `${weekdayOf(c.date)}:${c.slotId}`,
-            c.mode === "routine" && c.presetId !== null
-              ? { mode: c.mode, presetId: c.presetId }
-              : { mode: c.mode },
-          ])
-        )
-        await setAvailabilityDefaults(
-          gridValueToDefaults(
-            { ...defaultsToGridValue(items), ...patch },
-            slotIds.map((id) => ({ id }))
-          )
-        )
-        for (const c of changes) {
-          if (c.source === "override") {
-            await clearAvailabilityOverride(c.date, c.slotId)
-          }
-        }
-        return
-      }
-      for (const c of changes) {
-        await setAvailabilityOverride(c.date, c.slotId, {
-          mode: c.mode,
-          preset_id: c.mode === "routine" ? c.presetId : null,
-          remove_plate: c.mode === "none" && c.hasPlate,
+    }: ApplyWindowAvailabilityInput): Promise<RemovedCell[]> => {
+      if (!asDefault) return writeOverrides(changes)
+      await writeDefaults(changes, slotIds)
+      return []
+    },
+    onSuccess: (removed) => {
+      if (removed.length > 0) {
+        offer(t("plan.wizard.removed", { count: removed.length }), () => {
+          void undo(removed)
         })
       }
     },
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: availabilityKeys.all })
-      return invalidatePlanViews(qc)
-    },
+    onSettled: refresh,
     onError: (err) => toastError(err, t),
   })
 }
