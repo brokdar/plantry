@@ -257,7 +257,11 @@ func (e *env) measure(ctx context.Context, runID int64, rec *Record) error {
 		return err
 	}
 	rec.Tokens = Tokens{Input: row.Tokens.Input, Output: row.Tokens.Output, CacheRead: row.Tokens.CacheRead, CacheWrite: row.Tokens.CacheWrite}
-	rec.CostUSD = airun.Cost(row.Model, row.Provider, row.Tokens, nil)
+	// A run without LLM calls has no model to price: its cost stays
+	// unknown, as for an unpriced model, not 0.
+	if row.Tokens != (airun.Tokens{}) {
+		rec.CostUSD = airun.Cost(row.Model, row.Provider, row.Tokens, nil)
+	}
 	ok = end.Status == airun.StatusOK && len(rec.Violations) == 0
 	detail := ""
 	if !ok {
