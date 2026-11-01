@@ -66,7 +66,7 @@ func TestHeuristicHasNoHardViolations(t *testing.T) {
 			assert.Contains(t, names(r.Expectations), ExpectNoViolations)
 			require.NotNil(t, r.Score)
 			assert.Empty(t, r.Score.HardViolations)
-			assert.Equal(t, "h1", r.PromptVersion)
+			assert.Equal(t, "h2", r.PromptVersion)
 			assert.Equal(t, Tokens{}, r.Tokens, "the heuristic calls no model")
 			if r.Scenario == "small_library_h8" {
 				assert.Contains(t, names(r.Expectations), ExpectMinRepeats, "H8 relaxation is pinned")
