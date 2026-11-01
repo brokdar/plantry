@@ -36,6 +36,7 @@ describe("VersionTable", () => {
       "v1",
       "heuristic",
       "2",
+      "–",
       "100%",
       "3.5",
       "3.3",
@@ -55,6 +56,8 @@ describe("VersionTable", () => {
             prompt_version: "p1",
             model: "fake",
             runs: 1,
+            tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+            edits: null,
             score_avg: {},
             violations: {},
           },
@@ -74,21 +77,32 @@ describe("VersionTable", () => {
     expect(screen.getByText("H9 × 1")).toBeInTheDocument()
   })
 
-  it("leaves out runs that are not planning, such as chat", () => {
+  it("shows a chat group without a score, with its edits", () => {
     render(
       <VersionTable
         groups={[
           {
             kind: "chat",
-            prompt_version: "v4",
+            prompt_version: "v5",
             model: "fake",
             runs: 2,
+            tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+            edits: 7,
             score_avg: {},
             violations: {},
           },
         ]}
       />
     )
-    expect(screen.getByText("No generated plans yet.")).toBeInTheDocument()
+    const [, row] = screen.getAllByRole("row")
+    const cells = within(row)
+      .getAllByRole("cell")
+      .map((c) => c.textContent)
+    expect(cells.slice(0, 5)).toEqual(["Chat", "v5", "fake", "2", "7"])
+  })
+
+  it("says so when there are no runs at all", () => {
+    render(<VersionTable groups={[]} />)
+    expect(screen.getByText("No assistant runs yet.")).toBeInTheDocument()
   })
 })

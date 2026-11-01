@@ -360,6 +360,7 @@
         "score": "Quality",
         "outcome": "Outcome",
         "runs": "Runs",
+        "edits": "Edits",
         "violations": "Violations",
         "week": "Week"
       },
@@ -425,15 +426,17 @@
         "apply_preset": "Applied a routine",
         "copy_week": "Copied a previous week",
         "record_preference": "Noted a preference",
+        "regenerate": "Re-planned part of the week",
         "submit_plan": "Handed in the plan"
       },
+      "open_run": "Open the run",
       "raw_json": "Raw JSON",
       "raw_args": "Arguments",
       "raw_result": "Result",
       "truncated": "Cut short; the full text is too long to keep.",
       "prompt_text": "Prompt sent to the assistant",
       "versions_title": "By prompt version",
-      "versions_empty": "No generated plans yet.",
+      "versions_empty": "No assistant runs yet.",
       "violations_none": "None",
       "score": {
         "coverage": "Coverage",

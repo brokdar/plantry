@@ -50,6 +50,8 @@ export interface RunSummary {
   score: Score | null
   outcome: RunOutcome | null
   correction_rate: number | null
+  /** Plan changes made by the agent in this run; null for non-chat runs. */
+  edits: number | null
 }
 
 export interface RunStep {

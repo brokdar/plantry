@@ -38,6 +38,7 @@ describe("RunsTable", () => {
       "Done",
       "100% covered · 0 violations",
       "Accepted",
+      "–",
     ])
   })
 
@@ -48,6 +49,15 @@ describe("RunsTable", () => {
     expect(within(row).getByText("cost unknown")).toBeInTheDocument()
     expect(within(row).getByText("1,500")).toBeInTheDocument()
     expect(within(row).getByText("fake")).toBeInTheDocument()
+  })
+
+  it("shows a chat run's edits, a dash when null", async () => {
+    renderWithRouter(<RunsTable onOpen={vi.fn()} />)
+
+    const chat = await screen.findByTestId("run-row-11")
+    expect(within(chat).getByTestId("run-edits")).toHaveTextContent("3")
+    const gen = screen.getByTestId(`run-row-${mockRunsPage.items[0].id}`)
+    expect(within(gen).getByTestId("run-edits")).toHaveTextContent("–")
   })
 
   it("counts cached tokens and breaks them down on hover", async () => {

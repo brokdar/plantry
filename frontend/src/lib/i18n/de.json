@@ -360,6 +360,7 @@
         "score": "Qualität",
         "outcome": "Ergebnis",
         "runs": "Läufe",
+        "edits": "Änderungen",
         "violations": "Verstöße",
         "week": "Woche"
       },
@@ -425,15 +426,17 @@
         "apply_preset": "Eine Routine angewendet",
         "copy_week": "Eine frühere Woche kopiert",
         "record_preference": "Eine Vorliebe notiert",
+        "regenerate": "Einen Teil der Woche neu geplant",
         "submit_plan": "Den Plan abgegeben"
       },
+      "open_run": "Lauf öffnen",
       "raw_json": "Rohdaten (JSON)",
       "raw_args": "Argumente",
       "raw_result": "Ergebnis",
       "truncated": "Gekürzt; der vollständige Text ist zu lang zum Speichern.",
       "prompt_text": "An den Assistenten gesendeter Prompt",
       "versions_title": "Nach Prompt-Version",
-      "versions_empty": "Noch keine erstellten Pläne.",
+      "versions_empty": "Noch keine Assistenten-Läufe.",
       "violations_none": "Keine",
       "score": {
         "coverage": "Abdeckung",

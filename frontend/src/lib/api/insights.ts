@@ -1,5 +1,5 @@
 import { apiFetch } from "./client"
-import type { RunKind } from "./runs"
+import type { RunKind, RunTokens } from "./runs"
 
 export interface InsightsWeek {
   start: string
@@ -18,6 +18,9 @@ export interface InsightsByVersion {
   prompt_version: string
   model: string
   runs: number
+  tokens: RunTokens
+  /** Agent plan changes in the group; null when the kind has none. */
+  edits: number | null
   /** Average of each numeric score component (D23). */
   score_avg: Record<string, number>
   /** Hard violations per rule ("H1" → n). */
