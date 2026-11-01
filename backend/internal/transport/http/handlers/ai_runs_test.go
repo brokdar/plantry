@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 
 type runsAPI struct {
 	t         *testing.T
+	db        *sql.DB
 	repo      *sqlite.AIRunRepo
 	router    chi.Router
 	overrides map[string]airun.Price
@@ -29,7 +31,8 @@ type runsAPI struct {
 
 func newRunsAPI(t *testing.T) *runsAPI {
 	t.Helper()
-	a := &runsAPI{t: t, repo: sqlite.NewAIRunRepo(testhelper.NewTestDB(t))}
+	db := testhelper.NewTestDB(t)
+	a := &runsAPI{t: t, db: db, repo: sqlite.NewAIRunRepo(db)}
 	svc := airun.NewInsights(a.repo, func(context.Context) (map[string]airun.Price, error) { return a.overrides, nil })
 	h := handlers.NewAIRunsHandler(svc, func(context.Context) (string, error) { return "claude-sonnet-5-5", nil })
 	r := chi.NewRouter()
@@ -295,6 +298,53 @@ func TestAIRuns_InsightsWeeks(t *testing.T) {
 	}
 	require.Equal(t, http.StatusOK, a.get("/api/ai/insights", &def).Code)
 	assert.GreaterOrEqual(t, len(def.Weeks), 12)
+}
+
+// B6-AC4: the by-version chat group carries runs, edits and tokens; B6-AC2: a
+// run's edits are null without events.
+func TestAIRuns_InsightsChatGroupEdits(t *testing.T) {
+	a := newRunsAPI(t)
+	edited := a.run(airun.KindChat, "2026-10-06", "fake", "fake", 7)
+	quiet := a.run(airun.KindChat, "2026-10-07", "fake", "fake", 5)
+	// One session edit (its linked plate's event carries cook_session_id) and one plate.
+	for _, ev := range []struct{ plate, session any }{{nil, 3}, {10, 3}, {11, nil}} {
+		_, err := a.db.Exec(`INSERT INTO plate_events (plate_id, cook_session_id, date, slot_id, action, actor, ai_run_id)
+			VALUES (?, ?, '2026-10-10', 1, 'update', 'agent', ?)`, ev.plate, ev.session, edited)
+		require.NoError(t, err)
+	}
+
+	var rep struct {
+		ByVersion []struct {
+			Kind   string `json:"kind"`
+			Runs   int    `json:"runs"`
+			Edits  *int   `json:"edits"`
+			Tokens struct {
+				Input int64 `json:"input"`
+			} `json:"tokens"`
+		} `json:"by_version"`
+	}
+	rec := a.get("/api/ai/insights?from=2026-10-05&to=2026-10-11", &rep)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.Len(t, rep.ByVersion, 1)
+	g := rep.ByVersion[0]
+	assert.Equal(t, "chat", g.Kind)
+	assert.Equal(t, 2, g.Runs)
+	require.NotNil(t, g.Edits)
+	assert.Equal(t, 2, *g.Edits)
+	assert.Equal(t, int64(12), g.Tokens.Input)
+
+	var page struct {
+		Items []struct {
+			ID    int64 `json:"id"`
+			Edits *int  `json:"edits"`
+		} `json:"items"`
+	}
+	require.Equal(t, http.StatusOK, a.get("/api/ai/runs", &page).Code)
+	require.Len(t, page.Items, 2)
+	assert.Equal(t, quiet, page.Items[0].ID)
+	assert.Nil(t, page.Items[0].Edits)
+	require.NotNil(t, page.Items[1].Edits)
+	assert.Equal(t, 2, *page.Items[1].Edits)
 }
 
 // score_avg leaves out per-date score entries (cook_occasions.per_day).

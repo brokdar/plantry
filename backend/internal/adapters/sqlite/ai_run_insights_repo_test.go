@@ -45,9 +45,11 @@ func TestAIRunRepo_CorrectionsD24(t *testing.T) {
 		plateEvent(t, db, p, "create", "generator", &run)
 	}
 	plateEvent(t, db, 2, "update", "user", nil)
-	// The agent's edits and the generator's own updates are not corrections.
+	// Another run's agent edit is a correction (B6-AC3); the generator's own
+	// updates and its own run's agent edits are not.
 	plateEvent(t, db, 3, "update", "agent", &untouched)
 	plateEvent(t, db, 4, "update", "generator", &run)
+	plateEvent(t, db, 4, "update", "agent", &run)
 	for p := int64(1); p <= 4; p++ {
 		plateEvent(t, db, p, "accept", "user", &run)
 	}
@@ -66,11 +68,11 @@ func TestAIRunRepo_CorrectionsD24(t *testing.T) {
 	got, err := repo.Corrections(ctx, run, untouched)
 	require.NoError(t, err)
 	assert.Equal(t, map[int64]airun.Correction{
-		run:   {Generated: 4, Corrected: 1},
+		run:   {Generated: 4, Corrected: 2},
 		other: {Generated: 2, Corrected: 1},
 	}, got)
 	require.NotNil(t, got[run].Rate())
-	assert.InDelta(t, 0.25, *got[run].Rate(), 1e-9)
+	assert.InDelta(t, 0.5, *got[run].Rate(), 1e-9)
 
 	only, err := repo.Corrections(ctx, other, other)
 	require.NoError(t, err)

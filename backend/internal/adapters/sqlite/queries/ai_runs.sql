@@ -130,14 +130,16 @@ WHERE run_id = ?
 ORDER BY seq;
 
 -- name: AIRunCorrections :many
--- D24 per run with ids in [min_id, max_id]: the plates the generator created
--- for the run, and how many of them got a user update or delete before the
--- plate's first accept or confirm event.
+-- D24/D12 per run with ids in [min_id, max_id]: the plates the run created
+-- (a generator or agent create event), and how many of them got a correction
+-- before the plate's first accept or confirm event: a user update or delete,
+-- or an agent update or delete made by another run.
 SELECT CAST(g.run_id AS INTEGER) AS run_id,
        COUNT(*) AS generated_plates,
        CAST(SUM(EXISTS (
            SELECT 1 FROM plate_events u
-           WHERE u.plate_id = g.plate_id AND u.actor = 'user' AND u.action IN ('update', 'delete')
+           WHERE u.plate_id = g.plate_id AND u.action IN ('update', 'delete')
+             AND (u.actor = 'user' OR (u.actor = 'agent' AND u.ai_run_id IS NOT g.run_id))
              AND u.id > g.created_id
              AND u.id < COALESCE((SELECT MIN(a.id) FROM plate_events a
                                   WHERE a.plate_id = g.plate_id AND a.id > g.created_id
@@ -146,8 +148,26 @@ SELECT CAST(g.run_id AS INTEGER) AS run_id,
 FROM (
     SELECT e.ai_run_id AS run_id, e.plate_id, MIN(e.id) AS created_id
     FROM plate_events e
-    WHERE e.actor = 'generator' AND e.action = 'create' AND e.plate_id IS NOT NULL
+    WHERE e.actor IN ('generator', 'agent') AND e.action = 'create' AND e.plate_id IS NOT NULL
       AND e.ai_run_id >= sqlc.arg(min_id) AND e.ai_run_id <= sqlc.arg(max_id)
     GROUP BY e.ai_run_id, e.plate_id
 ) g
 GROUP BY g.run_id;
+
+-- name: AIRunEdits :many
+-- D12 per run with ids in [min_id, max_id]: the rows an agent run edited. A
+-- session edit counts once as its session (its linked plates' events carry
+-- cook_session_id and are skipped); every other plate counts as itself.
+SELECT CAST(ai_run_id AS INTEGER) AS run_id,
+       COUNT(DISTINCT CASE WHEN plate_id IS NULL THEN 's' || cook_session_id
+                           WHEN cook_session_id IS NULL THEN 'p' || plate_id END) AS edits
+FROM plate_events
+WHERE actor = 'agent' AND ai_run_id >= sqlc.arg(min_id) AND ai_run_id <= sqlc.arg(max_id)
+GROUP BY ai_run_id;
+
+-- name: AgentRunsOfRows :many
+-- D11: the agent runs that wrote to the given plates or sessions.
+SELECT DISTINCT CAST(ai_run_id AS INTEGER) AS run_id FROM plate_events
+WHERE actor = 'agent' AND ai_run_id IS NOT NULL
+  AND (plate_id IN (sqlc.slice(plate_ids)) OR cook_session_id IN (sqlc.slice(session_ids)))
+ORDER BY run_id;

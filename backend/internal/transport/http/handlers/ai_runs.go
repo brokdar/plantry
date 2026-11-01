@@ -62,6 +62,7 @@ type runSummaryResponse struct {
 	Score           json.RawMessage   `json:"score"`
 	Outcome         *string           `json:"outcome"`
 	CorrectionRate  *float64          `json:"correction_rate"`
+	Edits           *int              `json:"edits"`
 }
 
 type runsPageResponse struct {
@@ -116,6 +117,8 @@ type insightsVersionResponse struct {
 	PromptVersion string             `json:"prompt_version"`
 	Model         string             `json:"model"`
 	Runs          int                `json:"runs"`
+	Tokens        runTokensResponse  `json:"tokens"`
+	Edits         *int               `json:"edits"`
 	ScoreAvg      map[string]float64 `json:"score_avg"`
 	Violations    map[string]int     `json:"violations"`
 }
@@ -282,7 +285,8 @@ func (h *AIRunsHandler) Insights(w http.ResponseWriter, r *http.Request) {
 	for i, g := range rep.ByVersion {
 		resp.ByVersion[i] = insightsVersionResponse{
 			Kind: string(g.Kind), PromptVersion: g.PromptVersion, Model: g.Model, Runs: g.Runs,
-			ScoreAvg: g.ScoreAvg, Violations: g.Violations,
+			Tokens: runTokensResponse{Input: g.Tokens.Input, Output: g.Tokens.Output, CacheRead: g.Tokens.CacheRead, CacheWrite: g.Tokens.CacheWrite},
+			Edits:  g.Edits, ScoreAvg: g.ScoreAvg, Violations: g.Violations,
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -326,6 +330,7 @@ func toRunSummaryResponse(s airun.RunSummary) runSummaryResponse {
 		Score:           rawJSONOrNull(s.ScoreJSON),
 		Outcome:         nilIfEmpty(s.Outcome),
 		CorrectionRate:  s.CorrectionRate,
+		Edits:           s.Edits,
 	}
 	if s.FinishedAt != nil {
 		f := s.FinishedAt.Format(time.RFC3339)

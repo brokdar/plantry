@@ -10,11 +10,18 @@ import (
 )
 
 type Querier interface {
-	// D24 per run with ids in [min_id, max_id]: the plates the generator created
-	// for the run, and how many of them got a user update or delete before the
-	// plate's first accept or confirm event.
+	// D24/D12 per run with ids in [min_id, max_id]: the plates the run created
+	// (a generator or agent create event), and how many of them got a correction
+	// before the plate's first accept or confirm event: a user update or delete,
+	// or an agent update or delete made by another run.
 	AIRunCorrections(ctx context.Context, arg AIRunCorrectionsParams) ([]AIRunCorrectionsRow, error)
+	// D12 per run with ids in [min_id, max_id]: the rows an agent run edited. A
+	// session edit counts once as its session (its linked plates' events carry
+	// cook_session_id and are skipped); every other plate counts as itself.
+	AIRunEdits(ctx context.Context, arg AIRunEditsParams) ([]AIRunEditsRow, error)
 	AddPresetTag(ctx context.Context, arg AddPresetTagParams) error
+	// D11: the agent runs that wrote to the given plates or sessions.
+	AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error)
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)

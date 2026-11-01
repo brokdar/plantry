@@ -104,6 +104,29 @@ func (r *AIRunRepo) Record(ctx context.Context, runID int64, ev plate.OutcomeEve
 	return nil
 }
 
+// AgentRuns returns the agent runs that wrote events for the rows' plates or
+// sessions, ascending (D11).
+func (r *AIRunRepo) AgentRuns(ctx context.Context, rows plate.RowSet) ([]int64, error) {
+	if rows.Empty() {
+		return nil, nil
+	}
+	ids, err := r.queriesFor(ctx).AgentRunsOfRows(ctx, sqlcgen.AgentRunsOfRowsParams{
+		PlateIds: nullIDs(rows.PlateIDs), SessionIds: nullIDs(rows.SessionIDs),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("agent runs of rows: %w", err)
+	}
+	return ids, nil
+}
+
+func nullIDs(ids []int64) []sql.NullInt64 {
+	out := make([]sql.NullInt64, len(ids))
+	for i, id := range ids {
+		out[i] = sql.NullInt64{Int64: id, Valid: true}
+	}
+	return out
+}
+
 func (r *AIRunRepo) CreateRun(ctx context.Context, start airun.RunStart) (int64, error) {
 	id, err := r.queriesFor(ctx).CreateAIRun(ctx, sqlcgen.CreateAIRunParams{
 		Kind:           string(start.Kind),

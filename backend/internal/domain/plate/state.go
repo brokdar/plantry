@@ -510,7 +510,9 @@ func (s *Service) unify(ctx context.Context, t *tracker) error {
 }
 
 // recordOutcomes records ev once for every distinct AI run of the rows of c
-// (D25), in run order.
+// (D25), in run order: the runs that wrote them and the agent runs that
+// edited them (D11), so a chat that only edited a generated draft is accepted
+// or discarded with it.
 func (s *Service) recordOutcomes(ctx context.Context, ev OutcomeEvent, c RowSet, rows closureRows) error {
 	seen := map[int64]bool{}
 	for _, id := range c.PlateIDs {
@@ -522,6 +524,13 @@ func (s *Service) recordOutcomes(ctx context.Context, ev OutcomeEvent, c RowSet,
 		if run := rows.sessions[id].AIRunID; run != nil {
 			seen[*run] = true
 		}
+	}
+	edited, err := s.outcomes.AgentRuns(ctx, c)
+	if err != nil {
+		return err
+	}
+	for _, run := range edited {
+		seen[run] = true
 	}
 	for _, run := range sortedKeys(seen) {
 		if err := s.outcomes.Record(ctx, run, ev); err != nil {

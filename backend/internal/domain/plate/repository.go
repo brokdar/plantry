@@ -89,4 +89,7 @@ const (
 // work carried by ctx.
 type RunOutcomes interface {
 	Record(ctx context.Context, runID int64, ev OutcomeEvent) error
+	// AgentRuns returns the ids, ascending, of the agent runs that wrote an
+	// audit event to one of the plates or sessions of rows (D11).
+	AgentRuns(ctx context.Context, rows RowSet) ([]int64, error)
 }

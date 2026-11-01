@@ -14,6 +14,7 @@ import (
 type memInsights struct {
 	rows    []RunRow // newest first
 	corr    map[int64]Correction
+	edits   map[int64]int
 	corrErr error
 	queries []RunQuery
 }
@@ -52,6 +53,16 @@ func (m *memInsights) Corrections(_ context.Context, minID, maxID int64) (map[in
 	return out, m.corrErr
 }
 
+func (m *memInsights) Edits(_ context.Context, minID, maxID int64) (map[int64]int, error) {
+	out := map[int64]int{}
+	for id, n := range m.edits {
+		if id >= minID && id <= maxID {
+			out[id] = n
+		}
+	}
+	return out, nil
+}
+
 func noOverrides(context.Context) (map[string]Price, error) { return nil, nil }
 
 func at(month time.Month, day int) time.Time {
@@ -65,7 +76,8 @@ func TestInsights_RunsPagesByCursor(t *testing.T) {
 			{ID: 4, Kind: KindGenerate, StartedAt: at(10, 4), Model: "mystery", Provider: "fake", Tokens: Tokens{Input: 10}},
 			{ID: 3, Kind: KindGenerate, StartedAt: at(10, 3), Chooser: ChooserHeuristic},
 		},
-		corr: map[int64]Correction{4: {Generated: 4, Corrected: 1}},
+		corr:  map[int64]Correction{4: {Generated: 4, Corrected: 1}},
+		edits: map[int64]int{5: 2},
 	}
 	svc := NewInsights(store, noOverrides)
 
@@ -77,6 +89,9 @@ func TestInsights_RunsPagesByCursor(t *testing.T) {
 	require.NotNil(t, first.Items[0].CostUSD)
 	assert.InDelta(t, 3.0, *first.Items[0].CostUSD, 1e-9)
 	assert.Nil(t, first.Items[0].CorrectionRate)
+	require.NotNil(t, first.Items[0].Edits)
+	assert.Equal(t, 2, *first.Items[0].Edits)
+	assert.Nil(t, first.Items[1].Edits, "B6-AC2: a run without events has no edits")
 	assert.Nil(t, first.Items[1].CostUSD, "unpriced model")
 	require.NotNil(t, first.Items[1].CorrectionRate)
 	assert.InDelta(t, 0.25, *first.Items[1].CorrectionRate, 1e-9)
@@ -121,7 +136,8 @@ func TestInsights_WeeklyBuckets(t *testing.T) {
 			{ID: 2, Kind: KindChat, StartedAt: at(10, 6), Model: "mystery", Provider: "fake", Tokens: Tokens{Input: 5}},
 			{ID: 1, Kind: KindGenerate, StartedAt: at(10, 7), Chooser: ChooserHeuristic, Outcome: "partially_accepted"},
 		},
-		corr: map[int64]Correction{1: {Generated: 4, Corrected: 1}, 4: {Generated: 2, Corrected: 1}, 5: {Generated: 2}},
+		corr:  map[int64]Correction{1: {Generated: 4, Corrected: 1}, 4: {Generated: 2, Corrected: 1}, 5: {Generated: 2}},
+		edits: map[int64]int{3: 1, 2: 2},
 	}
 	svc := NewInsights(store, noOverrides)
 
@@ -159,9 +175,13 @@ func TestInsights_WeeklyBuckets(t *testing.T) {
 	assert.Equal(t, KindChat, rep.ByVersion[0].Kind)
 	assert.Equal(t, 2, rep.ByVersion[0].Runs)
 	assert.Empty(t, rep.ByVersion[0].ScoreAvg)
+	assert.Equal(t, Tokens{Input: 10}, rep.ByVersion[0].Tokens, "B6-AC4: a chat group carries tokens")
+	require.NotNil(t, rep.ByVersion[0].Edits, "B6-AC4: and edits")
+	assert.Equal(t, 3, *rep.ByVersion[0].Edits)
 	gen := rep.ByVersion[2]
 	assert.Equal(t, VersionGroup{
 		Kind: KindGenerate, PromptVersion: "p1", Model: "claude-sonnet-4-6", Runs: 2,
+		Tokens:     Tokens{Input: 2_000_000},
 		ScoreAvg:   map[string]float64{"coverage": 0.75, "variety.distinct": 5, "cook_occasions.days_with_prepared": 3},
 		Violations: map[string]int{"H2": 2, "H8": 1},
 	}, gen)
