@@ -270,7 +270,7 @@ func parseDate(s, field string) (time.Time, error) {
 }
 
 func violationsOf(issues []Issue) []Issue {
-	var out []Issue
+	out := []Issue{}
 	for _, is := range issues {
 		if is.Severity == SeverityViolation {
 			out = append(out, is)

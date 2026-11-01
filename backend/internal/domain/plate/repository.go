@@ -66,8 +66,8 @@ type SessionRepository interface {
 	SetSessionsState(ctx context.Context, ids []int64, st State) error
 }
 
-// OutcomeEvent is what accept, discard or unaccept did to an AI run's rows
-// (D25).
+// OutcomeEvent is what accept, discard, unaccept or a restore did to an AI
+// run's rows (D25).
 type OutcomeEvent string
 
 // Outcome events.
@@ -76,13 +76,17 @@ const (
 	OutcomeDiscarded OutcomeEvent = "discarded"
 	// OutcomeReset is an undone accept.
 	OutcomeReset OutcomeEvent = "reset"
+	// OutcomeRestored is drafts brought back, such as an undone discard.
+	OutcomeRestored OutcomeEvent = "restored"
 )
 
-// RunOutcomes records the outcome of the AI runs whose rows accept, discard
-// and unaccept change (D25): open → accepted on accept, → discarded on
-// discard, partially_accepted once a run sees both; reset (unaccept) undoes
-// an accept: accepted → open, partially_accepted → discarded. Record joins
-// the unit of work carried by ctx.
+// RunOutcomes records the outcome of the AI runs whose rows accept, discard,
+// unaccept and restore change (D25): open → accepted on accept, → discarded
+// on discard, partially_accepted once a run sees both; reset (unaccept)
+// undoes an accept: accepted → open, partially_accepted → discarded;
+// restored (drafts back, e.g. the Undo of a discard) undoes a discard:
+// discarded → open, partially_accepted → accepted. Record joins the unit of
+// work carried by ctx.
 type RunOutcomes interface {
 	Record(ctx context.Context, runID int64, ev OutcomeEvent) error
 }

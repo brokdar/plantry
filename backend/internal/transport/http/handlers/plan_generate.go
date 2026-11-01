@@ -204,10 +204,31 @@ type replanSpare struct {
 	Mutable   bool    `json:"mutable"`
 }
 
+// replanDropped is a plate outside the No-plate cells that loses the
+// component of a batch the re-plan drops.
+type replanDropped struct {
+	SessionID int64  `json:"session_id"`
+	FoodName  string `json:"food_name"`
+	PlateID   int64  `json:"plate_id"`
+	Date      string `json:"date"`
+	SlotID    int64  `json:"slot_id"`
+	Confirmed bool   `json:"confirmed"`
+}
+
+// replanMoved is a batch that cooks at another cell after the re-plan.
+type replanMoved struct {
+	SessionID  int64  `json:"session_id"`
+	FoodName   string `json:"food_name"`
+	CookDate   string `json:"cook_date"`
+	CookSlotID int64  `json:"cook_slot_id"`
+}
+
 type replanPreviewResponse struct {
 	NoneCells         []replanCell     `json:"none_cells"`
 	ConfirmedAffected []replanAffected `json:"confirmed_affected"`
 	Spare             []replanSpare    `json:"spare"`
+	Dropped           []replanDropped  `json:"dropped"`
+	Moved             []replanMoved    `json:"moved"`
 }
 
 type replanRequest struct {
@@ -221,9 +242,12 @@ type replanRequest struct {
 	Instruction     string       `json:"instruction"`
 }
 
+// replanResponse carries regenerate_error (a message key) when regenerate
+// was asked for but its run did not start; the removal stands.
 type replanResponse struct {
-	Removed plate.PlanSnapshot `json:"removed"`
-	RunID   *int64             `json:"run_id"`
+	Removed         plate.PlanSnapshot `json:"removed"`
+	RunID           *int64             `json:"run_id"`
+	RegenerateError string             `json:"regenerate_error,omitempty"`
 }
 
 type confirmedAffectedResponse struct {
@@ -256,7 +280,17 @@ func (h *PlanGenerateHandler) ReplanPreview(w http.ResponseWriter, r *http.Reque
 	}
 	out := replanPreviewResponse{
 		NoneCells: make([]replanCell, 0, len(pv.NoneCells)), ConfirmedAffected: affectedJSON(pv.ConfirmedAffected),
-		Spare: make([]replanSpare, 0, len(pv.Spare)),
+		Spare:   make([]replanSpare, 0, len(pv.Spare)),
+		Dropped: make([]replanDropped, 0, len(pv.Dropped)),
+		Moved:   make([]replanMoved, 0, len(pv.Moved)),
+	}
+	for _, d := range pv.Dropped {
+		out.Dropped = append(out.Dropped, replanDropped{
+			SessionID: d.SessionID, FoodName: d.FoodName, PlateID: d.PlateID, Date: dateString(d.Date), SlotID: d.SlotID, Confirmed: d.Confirmed,
+		})
+	}
+	for _, m := range pv.Moved {
+		out.Moved = append(out.Moved, replanMoved{SessionID: m.SessionID, FoodName: m.FoodName, CookDate: dateString(m.Cook.Date), CookSlotID: m.Cook.SlotID})
 	}
 	for _, c := range pv.NoneCells {
 		out.NoneCells = append(out.NoneCells, replanCell{Date: dateString(c.Date), SlotID: c.SlotID})
@@ -293,7 +327,7 @@ func (h *PlanGenerateHandler) Replan(w http.ResponseWriter, r *http.Request) {
 		writePlanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, replanResponse{Removed: res.Removed, RunID: res.RunID})
+	writeJSON(w, http.StatusOK, replanResponse{Removed: res.Removed, RunID: res.RunID, RegenerateError: res.RegenerateError})
 }
 
 func (h *PlanGenerateHandler) replanQuery(w http.ResponseWriter, r *http.Request, from, to string, cells []replanCell) (planning.ReplanQuery, bool) {

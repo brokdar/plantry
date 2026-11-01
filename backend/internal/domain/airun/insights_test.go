@@ -114,7 +114,8 @@ func TestInsights_WeeklyBuckets(t *testing.T) {
 			{
 				ID: 4, Kind: KindGenerate, StartedAt: at(10, 12), Model: "claude-sonnet-4-6", Provider: "anthropic",
 				Tokens: Tokens{Input: 1_000_000}, Outcome: "accepted", PromptVersion: "p1",
-				ScoreJSON: `{"coverage":1,"variety":{"distinct":6},"per_day":[1,2]}`, ViolationsJSON: `[{"rule":"H2"}]`,
+				ScoreJSON:      `{"coverage":1,"variety":{"distinct":6},"per_day":[1,2],"cook_occasions":{"per_day":{"2026-10-12":1,"2026-10-13":2},"days_with_prepared":3}}`,
+				ViolationsJSON: `[{"rule":"H2"}]`,
 			},
 			{ID: 3, Kind: KindChat, StartedAt: at(10, 5), Model: "mystery", Provider: "fake", Tokens: Tokens{Input: 5}}, // Monday before from
 			{ID: 2, Kind: KindChat, StartedAt: at(10, 6), Model: "mystery", Provider: "fake", Tokens: Tokens{Input: 5}},
@@ -161,7 +162,7 @@ func TestInsights_WeeklyBuckets(t *testing.T) {
 	gen := rep.ByVersion[2]
 	assert.Equal(t, VersionGroup{
 		Kind: KindGenerate, PromptVersion: "p1", Model: "claude-sonnet-4-6", Runs: 2,
-		ScoreAvg:   map[string]float64{"coverage": 0.75, "variety.distinct": 5},
+		ScoreAvg:   map[string]float64{"coverage": 0.75, "variety.distinct": 5, "cook_occasions.days_with_prepared": 3},
 		Violations: map[string]int{"H2": 2, "H8": 1},
 	}, gen)
 

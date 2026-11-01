@@ -21,6 +21,7 @@ func TestAIRunRepo_RecordOutcome(t *testing.T) {
 		acc   = plate.OutcomeAccepted
 		dis   = plate.OutcomeDiscarded
 		reset = plate.OutcomeReset
+		rest  = plate.OutcomeRestored
 	)
 	tests := []struct {
 		name   string
@@ -40,6 +41,11 @@ func TestAIRunRepo_RecordOutcome(t *testing.T) {
 		{"reset of a fresh run", []plate.OutcomeEvent{reset}, ""},
 		{"open then accept", []plate.OutcomeEvent{acc, reset, acc}, "accepted"},
 		{"open then discard", []plate.OutcomeEvent{acc, reset, dis}, "discarded"},
+		{"discard then restore", []plate.OutcomeEvent{dis, rest}, "open"},
+		{"restore of a partial keeps the accept", []plate.OutcomeEvent{acc, dis, rest}, "accepted"},
+		{"restore of an accepted run", []plate.OutcomeEvent{acc, rest}, "accepted"},
+		{"restore of a fresh run", []plate.OutcomeEvent{rest}, ""},
+		{"restore then accept", []plate.OutcomeEvent{dis, rest, acc}, "accepted"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

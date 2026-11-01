@@ -59,6 +59,7 @@ var sentinelStatus = map[error]int{
 	domain.ErrScopeConfirmed:            http.StatusConflict,
 	domain.ErrInvalidScope:              http.StatusBadRequest,
 	domain.ErrNotEnoughRecipes:          http.StatusBadRequest,
+	domain.ErrPlanChanged:               http.StatusConflict,
 	domain.ErrConfirmedAffected:         http.StatusConflict,
 	domain.ErrReplanPast:                http.StatusBadRequest,
 }

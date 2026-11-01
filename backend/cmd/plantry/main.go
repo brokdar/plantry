@@ -212,17 +212,18 @@ func run() error {
 	}
 	llmResolver := llmresolver.New(settingsSvc, llmFactory)
 
-	// Plan generation (Phase 3 B6, B7): runs in the background, so shutdown
-	// waits for the running ones (before the recorder and the database).
-	// Without a chooser in the request it uses the LLM when a provider is
-	// configured, else the heuristic (D11).
+	// Plan generation (Phase 3 B6, B7): runs in the background. Shutdown
+	// cancels the running ones and waits a bounded time for them to finish
+	// their run rows (before the recorder and the database). Without a
+	// chooser in the request it uses the LLM when a provider is configured,
+	// else the heuristic (D11).
 	planningSvc := planning.NewService(planning.Deps{
 		Builder: planning.NewBuilder(planning.BuilderDeps{
 			Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
 			Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
 			Settings: settingsSvc, Profile: profileSvc,
 		}),
-		Plates: plateSvc, PlateRows: plateRepo, Cells: availabilitySvc, Overrides: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
+		Plates: plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: availabilitySvc, Overrides: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
 		RunLog: planning.RecorderLog{Recorder: runRecorder}, Runs: aiRunRepo, Tx: txRunner,
 		Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{
@@ -231,7 +232,13 @@ func run() error {
 		},
 		Logger: logger,
 	})
-	defer planningSvc.Wait()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), planningShutdownWait)
+		defer cancel()
+		if err := planningSvc.Shutdown(ctx); err != nil {
+			logger.Warn("plan.shutdown runs still running", "error", err)
+		}
+	}()
 
 	planViewSvc := planview.NewService(planview.Deps{
 		Plates:       plateRepo,
@@ -368,6 +375,11 @@ func run() error {
 		return srv.Shutdown(shutdownCtx)
 	}
 }
+
+// planningShutdownWait bounds how long shutdown waits for cancelled plan
+// generations to record their end; a run still going after it is failed at
+// the next start (FailInterruptedRuns).
+const planningShutdownWait = 5 * time.Second
 
 // strconvOrEmpty renders a non-negative int as its decimal form, returning
 // "" for zero. Used when building the env snapshot so that an unset env-var

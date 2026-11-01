@@ -61,21 +61,14 @@ func NewBuilder(d BuilderDeps) *Builder { return &Builder{d: d} }
 func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to time.Time) (State, error) {
 	s := State{Window: w, Today: today}
 	var err error
-	if s.Settings, err = b.settings(ctx); err != nil {
+	if s.Settings, err = ReadSettings(ctx, b.d.Settings); err != nil {
 		return State{}, err
 	}
 	prof, err := b.d.Profile.Get(ctx)
 	if err != nil {
 		return State{}, fmt.Errorf("read profile: %w", err)
 	}
-	s.Profile = Profile{
-		KcalTarget: prof.KcalTarget, ProteinPct: prof.ProteinPct, FatPct: prof.FatPct, CarbsPct: prof.CarbsPct,
-		DietType: prof.DietType, MeatDaysPerWeekMax: prof.MeatDaysPerWeekMax, HouseholdPortions: prof.HouseholdPortions,
-		Locale: prof.Locale, Restrictions: prof.DietaryRestrictions,
-	}
-	if prof.SystemPrompt != nil {
-		s.Profile.Notes = *prof.SystemPrompt
-	}
+	s.Profile = StateProfile(prof)
 	slots, err := b.d.Slots.List(ctx, false)
 	if err != nil {
 		return State{}, fmt.Errorf("list slots: %w", err)
@@ -115,7 +108,7 @@ func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to ti
 	}
 	s.Cells = make([]Cell, len(cells))
 	for i, c := range cells {
-		s.Cells[i] = Cell{Date: c.Date, SlotID: c.SlotID, Mode: c.Mode, PresetID: c.PresetID}
+		s.Cells[i] = StateCell(c)
 	}
 
 	lo, hi := from.AddDate(0, 0, -lookback), to.AddDate(0, 0, lookback)
@@ -144,14 +137,14 @@ func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to ti
 		if p.Date.Before(lo) {
 			continue
 		}
-		s.Plates = append(s.Plates, statePlate(p))
+		s.Plates = append(s.Plates, StatePlate(p))
 		for _, c := range p.Components {
 			referenced[c.FoodID] = true
 		}
 	}
 	s.Sessions = make([]Session, len(sessions))
 	for i, ss := range sessions {
-		s.Sessions[i] = Session{CookSession: ss, Confirmed: ss.State == plate.StateConfirmed}
+		s.Sessions[i] = StateSession(ss)
 		referenced[ss.FoodID] = true
 	}
 	s.Foods = map[int64]FoodFacts{}
@@ -203,14 +196,8 @@ func (b *Builder) addFoods(ctx context.Context, s *State, foods map[int64]*food.
 
 // facts maps a food to what the planner reads about it.
 func facts(f *food.Food, d food.Detailed, timesEaten int, likes, dislikes map[string]bool) FoodFacts {
-	ff := FoodFacts{
-		ID: f.ID, Name: f.Name, Kind: f.Kind, Macros: d.Macros, NutritionComplete: d.Complete,
-		KeepDays: f.KeepDays, Freezable: f.Freezable != nil && *f.Freezable, Favorite: f.Favorite,
-		LastEaten: f.History.LastEaten, TimesEaten8Weeks: timesEaten, ReferencePortions: 1, DietClass: f.DietClass,
-	}
-	if f.Role != nil {
-		ff.Role = *f.Role
-	}
+	ff := BaseFacts(f)
+	ff.Macros, ff.NutritionComplete, ff.TimesEaten8Weeks = d.Macros, d.Complete, timesEaten
 	if f.ReferencePortions != nil && *f.ReferencePortions > 0 {
 		ff.ReferencePortions = *f.ReferencePortions
 	}
@@ -248,7 +235,50 @@ func stringSet(v any) map[string]bool {
 	return out
 }
 
-func statePlate(p plate.Plate) Plate {
+// The row mappers below turn loaded rows into the planner's types. The
+// context builder and the plan read model (planview) both use them, so the
+// board's issues and the generator's check see the same state.
+
+// BaseFacts are a food's facts from its header row and derived fields: id,
+// name, kind, role, diet class, keep days, freezable, favorite and
+// f.History.LastEaten. Macros, the 8-week count and the like score need
+// further reads (the context builder's facts).
+func BaseFacts(f *food.Food) FoodFacts {
+	ff := FoodFacts{
+		ID: f.ID, Name: f.Name, Kind: f.Kind, KeepDays: f.KeepDays, Freezable: f.Freezable != nil && *f.Freezable,
+		Favorite: f.Favorite, LastEaten: f.History.LastEaten, ReferencePortions: 1, DietClass: f.DietClass,
+	}
+	if f.Role != nil {
+		ff.Role = *f.Role
+	}
+	return ff
+}
+
+// StateProfile maps the user profile.
+func StateProfile(p *profile.Profile) Profile {
+	out := Profile{
+		KcalTarget: p.KcalTarget, ProteinPct: p.ProteinPct, FatPct: p.FatPct, CarbsPct: p.CarbsPct,
+		DietType: p.DietType, MeatDaysPerWeekMax: p.MeatDaysPerWeekMax, HouseholdPortions: p.HouseholdPortions,
+		Locale: p.Locale, Restrictions: p.DietaryRestrictions,
+	}
+	if p.SystemPrompt != nil {
+		out.Notes = *p.SystemPrompt
+	}
+	return out
+}
+
+// StateCell maps a resolved availability cell.
+func StateCell(c availability.Cell) Cell {
+	return Cell{Date: c.Date, SlotID: c.SlotID, Mode: c.Mode, PresetID: c.PresetID}
+}
+
+// StateSession maps a persisted cook session.
+func StateSession(cs plate.CookSession) Session {
+	return Session{CookSession: cs, Confirmed: cs.State == plate.StateConfirmed}
+}
+
+// StatePlate maps a persisted plate.
+func StatePlate(p plate.Plate) Plate {
 	out := Plate{
 		ID: p.ID, Date: p.Date, SlotID: p.SlotID, Eaters: p.Eaters, Confirmed: p.State == plate.StateConfirmed,
 		Components: make([]Component, len(p.Components)),
@@ -276,21 +306,21 @@ func distinctFoods(p plate.Plate) []int64 {
 	return out
 }
 
-// settings reads the plan settings the rules and the heuristic use.
-func (b *Builder) settings(ctx context.Context) (Settings, error) {
-	batch, err := plate.ReadBatchSettings(ctx, b.d.Settings)
+// ReadSettings reads the plan settings the rules and the heuristic use.
+func ReadSettings(ctx context.Context, r SettingsReader) (Settings, error) {
+	batch, err := plate.ReadBatchSettings(ctx, r)
 	if err != nil {
 		return Settings{}, err
 	}
-	maxCook, err := plate.IntSetting(ctx, b.d.Settings, settings.KeyPlanMaxCookOccasionsPerDay)
+	maxCook, err := plate.IntSetting(ctx, r, settings.KeyPlanMaxCookOccasionsPerDay)
 	if err != nil {
 		return Settings{}, err
 	}
-	variety, err := plate.IntSetting(ctx, b.d.Settings, settings.KeyPlanVarietyWeeks)
+	variety, err := plate.IntSetting(ctx, r, settings.KeyPlanVarietyWeeks)
 	if err != nil {
 		return Settings{}, err
 	}
-	v, err := b.d.Settings.Get(ctx, settings.KeyPlanBatchCooking)
+	v, err := r.Get(ctx, settings.KeyPlanBatchCooking)
 	if err != nil {
 		return Settings{}, fmt.Errorf("read %s: %w", settings.KeyPlanBatchCooking, err)
 	}

@@ -3,6 +3,7 @@ package planning
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -70,19 +71,45 @@ type Spare struct {
 	Mutable   bool
 }
 
+// DroppedPlate is a plate outside the No-plate cells that loses a component
+// because the re-plan drops the batch it eats from (FoodName is the batch's).
+type DroppedPlate struct {
+	SessionID int64
+	FoodName  string
+	PlateID   int64
+	Date      time.Time
+	SlotID    int64
+	Confirmed bool
+}
+
+// MovedBatch is an uncooked batch whose cook plate goes: it cooks at its
+// earliest remaining plate instead.
+type MovedBatch struct {
+	SessionID int64
+	FoodName  string
+	Cook      plate.CellKey
+}
+
 // ReplanPreview is what a re-plan would change: the No-plate cells that hold
-// plates, the confirmed plates among them and the batches left with spare.
+// plates, every confirmed plate that goes or loses a component, the batches
+// left with spare, the plates that lose a dropped batch and the batches
+// whose cook moves.
 type ReplanPreview struct {
 	NoneCells         []plate.CellKey
 	ConfirmedAffected []AffectedPlate
 	Spare             []Spare
+	Dropped           []DroppedPlate
+	Moved             []MovedBatch
 }
 
 // ReplanResult is a re-plan's outcome: the snapshot that restores the
 // removed plates and the run it started (nil without Regenerate).
+// RegenerateError is the message key of why a requested run did not start
+// after the removal committed; empty otherwise.
 type ReplanResult struct {
-	Removed plate.PlanSnapshot
-	RunID   *int64
+	Removed         plate.PlanSnapshot
+	RunID           *int64
+	RegenerateError string
 }
 
 // ConfirmedAffectedError is ErrConfirmedAffected with the confirmed plates
@@ -97,15 +124,25 @@ func (e *ConfirmedAffectedError) Error() string {
 
 func (e *ConfirmedAffectedError) Unwrap() error { return domain.ErrConfirmedAffected }
 
-// replanScan is a re-plan worked out against the current plan.
+// replanScan is a re-plan worked out against the current plan. The preview
+// and the re-plan both read it, so they always agree.
 type replanScan struct {
 	preview ReplanPreview
 	plates  []int64
 	// spare holds every batch with spare (and every cooked or earlier batch
 	// that loses all its links), keyed by session.
 	spare map[int64]spareBatch
+	// drop are the batches removed with every plate component eating them;
+	// move the batches cooking at another cell.
+	drop []int64
+	move map[int64]plate.CellKey
 	// write are the requested cells not already No plate.
 	write []plate.CellKey
+}
+
+// removal is what RemovePlates does for the scan.
+func (sc *replanScan) removal(mode SpareMode) plate.Removal {
+	return plate.Removal{PlateIDs: sc.plates, Drop: sc.drop, Keep: sc.keep(mode), Move: sc.move}
 }
 
 // spareBatch is a batch losing links: its row, what stays eaten and whether
@@ -156,6 +193,14 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 	if err := s.d.Progress.reserve(w.Start); err != nil {
 		return nil, err
 	}
+	// The reservation is released here unless the run takes it over, also
+	// when something below panics.
+	handedOver := false
+	defer func() {
+		if !handedOver {
+			s.d.Progress.release(w.Start)
+		}
+	}()
 	res := &ReplanResult{}
 	err = s.d.Tx.InTx(ctx, func(ctx context.Context) error {
 		sc, err := s.scanReplan(ctx, req.ReplanQuery)
@@ -165,7 +210,7 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 		if len(sc.preview.ConfirmedAffected) > 0 && !req.UnlockConfirmed {
 			return &ConfirmedAffectedError{Plates: sc.preview.ConfirmedAffected}
 		}
-		res.Removed, err = s.d.Plates.RemovePlates(ctx, sc.plates, sc.keep(req.Spare))
+		res.Removed, err = s.d.Plates.RemovePlates(ctx, sc.removal(req.Spare))
 		if err != nil {
 			return err
 		}
@@ -176,22 +221,24 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 		}
 		return nil
 	})
-	if err != nil || !req.Regenerate {
-		s.d.Progress.release(w.Start)
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
+	}
+	if !req.Regenerate {
 		return res, nil
 	}
-	// The run starts on the reservation the re-plan holds, so no other
-	// generation slips in between; the removal is committed either way, so a
-	// run that fails to start is logged and leaves run_id nil.
+	// The run starts on the reservation the re-plan holds (regenerate frees
+	// it when no run starts), so no other generation slips in between. The
+	// removal is committed either way, so a run that fails to start leaves
+	// run_id nil and says why in RegenerateError.
+	handedOver = true
 	id, err := s.regenerate(ctx, Request{
 		Start: w.Start, Today: req.Today, Chooser: req.Chooser, Instruction: req.Instruction,
 		Scope: Scope{Kind: ScopeEmptyCells, From: req.From, To: req.To},
 	}, true)
 	if err != nil {
 		s.d.Logger.WarnContext(ctx, "plan.replan regenerate did not start", "window", w.Start.Format(time.DateOnly), "error", err)
+		res.RegenerateError, _ = domain.MessageKey(err, "plan")
 		return res, nil
 	}
 	res.RunID = &id
@@ -242,7 +289,7 @@ func (s *Service) scanReplan(ctx context.Context, q ReplanQuery) (*replanScan, e
 	if err != nil {
 		return nil, err
 	}
-	sc := &replanScan{spare: map[int64]spareBatch{}}
+	sc := &replanScan{spare: map[int64]spareBatch{}, move: map[int64]plate.CellKey{}}
 	if to.Before(from) || !window.Containing(from, sd).Contains(to) {
 		return nil, fmt.Errorf("%w: from and to must lie in one window, from first", domain.ErrInvalidInput)
 	}
@@ -262,7 +309,10 @@ func (s *Service) scanReplan(ctx context.Context, q ReplanQuery) (*replanScan, e
 	for _, p := range plates {
 		occupied[idOf(p.Cell())] = p
 	}
-	sc.preview = ReplanPreview{NoneCells: []plate.CellKey{}, ConfirmedAffected: []AffectedPlate{}, Spare: []Spare{}}
+	sc.preview = ReplanPreview{
+		NoneCells: []plate.CellKey{}, ConfirmedAffected: []AffectedPlate{}, Spare: []Spare{},
+		Dropped: []DroppedPlate{}, Moved: []MovedBatch{},
+	}
 	var removed []plate.Plate
 	for _, c := range cells {
 		k := plate.CellKey{Date: c.Date, SlotID: c.SlotID}
@@ -292,12 +342,17 @@ func (s *Service) scanReplan(ctx context.Context, q ReplanQuery) (*replanScan, e
 	if len(asked) > 0 {
 		return nil, fmt.Errorf("%w: a No-plate cell is outside [from, to] or its slot inactive", domain.ErrInvalidInput)
 	}
-	return sc, s.scanSpare(ctx, sc, removed, from)
+	return sc, s.scanBatches(ctx, sc, removed, from, to, cells)
 }
 
-// scanSpare finds the batches the removed plates ate from that keep links
-// and would cook more than those links eat.
-func (s *Service) scanSpare(ctx context.Context, sc *replanScan, removed []plate.Plate, from time.Time) error {
+// scanBatches settles the batches the removed plates ate from. An uncooked
+// batch that loses its cook plate but keeps plates moves its cook to the
+// earliest of them only when they all lie in [from, to], none eats from the
+// freezer and that day has a free cooking occasion
+// (plan.max_cook_occasions_per_day, D21 H2); otherwise the batch is dropped
+// with every component eating it, in or outside the range. The batches that
+// keep links and would cook more than those links eat have spare.
+func (s *Service) scanBatches(ctx context.Context, sc *replanScan, removed []plate.Plate, from, to time.Time, cells []availability.Cell) error {
 	gone := map[int64]float64{}
 	links := map[int64]int{}
 	var order []int64
@@ -321,17 +376,48 @@ func (s *Service) scanSpare(ctx context.Context, sc *replanScan, removed []plate
 	if err != nil {
 		return err
 	}
-	var views []*plate.SessionView
-	var foodIDs []int64
+	gonePlate := make(map[int64]bool, len(removed))
+	goneCell := make(map[cellID]bool, len(removed))
+	for _, p := range removed {
+		gonePlate[p.ID] = true
+		goneCell[idOf(p.Cell())] = true
+	}
+	var views, orphans []*plate.SessionView
+	leaving := map[int64]bool{} // batches that stop cooking where they cook
 	for _, id := range order {
 		v, err := s.d.Plates.Session(ctx, id)
 		if err != nil {
 			return err
 		}
 		if len(v.Links) == links[id] && mutable(v, from) {
+			leaving[id] = true
 			continue // nothing left to eat it and not cooked yet: D11 removes it
 		}
+		if v.CookedAt == nil && goneCell[idOf(v.CookCell())] && !slices.ContainsFunc(v.Links, func(l plate.Link) bool {
+			return !gonePlate[l.PlateID] && l.Cell.Equal(v.CookCell())
+		}) {
+			leaving[id] = true
+			orphans = append(orphans, v)
+			continue
+		}
 		views = append(views, v)
+	}
+	if len(orphans) > 0 {
+		occ, err := s.cookOccasions(ctx, from, to, cells, leaving)
+		if err != nil {
+			return err
+		}
+		for _, v := range orphans {
+			if err := s.settleOrphan(ctx, sc, v, gonePlate, from, to, occ); err != nil {
+				return err
+			}
+			if _, moved := sc.move[v.ID]; moved {
+				views = append(views, v)
+			}
+		}
+	}
+	foodIDs := make([]int64, 0, len(views))
+	for _, v := range views {
 		foodIDs = append(foodIDs, v.FoodID)
 	}
 	foods, err := s.d.FoodRows.LookupByIDs(ctx, foodIDs)
@@ -353,6 +439,89 @@ func (s *Service) scanSpare(ctx context.Context, sc *replanScan, removed []plate
 			mutable: mut,
 		}
 		sc.preview.Spare = append(sc.preview.Spare, Spare{SessionID: v.ID, FoodName: v.FoodName, Portions: spare, Freezable: freezable, Mutable: mut})
+	}
+	return nil
+}
+
+// occasions are the cooking occasions per date: the distinct non-routine
+// cook cells (H2).
+type occasions map[string]map[cellID]bool
+
+func (o occasions) add(c plate.CellKey) {
+	d := c.Date.Format(time.DateOnly)
+	if o[d] == nil {
+		o[d] = map[cellID]bool{}
+	}
+	o[d][idOf(c)] = true
+}
+
+// free reports whether a batch can cook at c without exceeding max
+// occasions that day: c already is one, or the day has room.
+func (o occasions) free(c plate.CellKey, max int) bool {
+	day := o[c.Date.Format(time.DateOnly)]
+	return day[idOf(c)] || max <= 0 || len(day) < max
+}
+
+// cookOccasions counts the occasions of [from, to] the batches keep: every
+// session cooking there except those that stop cooking where they cook.
+func (s *Service) cookOccasions(ctx context.Context, from, to time.Time, cells []availability.Cell, leaving map[int64]bool) (occasions, error) {
+	sessions, _, err := s.d.Sessions.ListInRange(ctx, from, to)
+	if err != nil {
+		return nil, err
+	}
+	routine := map[cellID]bool{}
+	for _, c := range cells {
+		if c.Mode == availability.ModeRoutine {
+			routine[idOf(plate.CellKey{Date: c.Date, SlotID: c.SlotID})] = true
+		}
+	}
+	occ := occasions{}
+	for _, cs := range sessions {
+		c := cs.CookCell()
+		if leaving[cs.ID] || c.Date.Before(from) || c.Date.After(to) || routine[idOf(c)] {
+			continue
+		}
+		occ.add(c)
+	}
+	return occ, nil
+}
+
+// settleOrphan moves or drops an uncooked batch that loses its cook plate
+// (see scanBatches) and records it in the preview.
+func (s *Service) settleOrphan(ctx context.Context, sc *replanScan, v *plate.SessionView, gonePlate map[int64]bool, from, to time.Time, occ occasions) error {
+	var rest []plate.Link
+	for _, l := range v.Links {
+		if !gonePlate[l.PlateID] {
+			rest = append(rest, l)
+		}
+	}
+	first := rest[0].Cell // links are in cell order (D12)
+	movable := !slices.ContainsFunc(rest, func(l plate.Link) bool {
+		return l.Kind == plate.KindFrozen || l.Cell.Date.Before(from) || l.Cell.Date.After(to)
+	})
+	maxCook, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanMaxCookOccasionsPerDay)
+	if err != nil {
+		return err
+	}
+	if movable && occ.free(first, maxCook) {
+		occ.add(first)
+		sc.move[v.ID] = first
+		sc.preview.Moved = append(sc.preview.Moved, MovedBatch{SessionID: v.ID, FoodName: v.FoodName, Cook: first})
+		return nil
+	}
+	sc.drop = append(sc.drop, v.ID)
+	for _, l := range rest {
+		p, err := s.d.Plates.Get(ctx, l.PlateID)
+		if err != nil {
+			return err
+		}
+		confirmed := p.State == plate.StateConfirmed
+		sc.preview.Dropped = append(sc.preview.Dropped, DroppedPlate{
+			SessionID: v.ID, FoodName: v.FoodName, PlateID: p.ID, Date: p.Date, SlotID: p.SlotID, Confirmed: confirmed,
+		})
+		if confirmed && !slices.ContainsFunc(sc.preview.ConfirmedAffected, func(a AffectedPlate) bool { return a.PlateID == p.ID }) {
+			sc.preview.ConfirmedAffected = append(sc.preview.ConfirmedAffected, AffectedPlate{PlateID: p.ID, Date: p.Date, SlotID: p.SlotID, FoodName: v.FoodName})
+		}
 	}
 	return nil
 }

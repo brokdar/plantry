@@ -29,6 +29,8 @@ func TestPlanReplanHTTP(t *testing.T) {
 	assert.Equal(t, []any{map[string]any{"date": "2026-11-12", "slot_id": float64(lunch)}}, pv["none_cells"])
 	assert.Equal(t, []any{map[string]any{"plate_id": pid, "date": "2026-11-12", "slot_id": float64(lunch), "food_name": "Main 1"}}, pv["confirmed_affected"])
 	assert.Equal(t, []any{}, pv["spare"])
+	assert.Equal(t, []any{}, pv["dropped"])
+	assert.Equal(t, []any{}, pv["moved"])
 
 	req := fmt.Sprintf(`{"from":"2026-11-11","to":"2026-11-13","none_cells":[{"date":"2026-11-12","slot_id":%d}],"spare":"freeze","regenerate":true,"chooser":"heuristic"`, lunch)
 	code, body = a.do(http.MethodPost, "/api/plan/replan"+replanToday, req+`,"unlock_confirmed":false}`)
@@ -42,6 +44,7 @@ func TestPlanReplanHTTP(t *testing.T) {
 	removed := body["removed"].(map[string]any)
 	assert.Len(t, removed["plates"], 1)
 	require.IsType(t, float64(0), body["run_id"])
+	assert.NotContains(t, body, "regenerate_error", "the run started")
 	a.drain()
 	_, run := a.do(http.MethodGet, fmt.Sprintf("/api/plan/runs/%.0f", body["run_id"]), "")
 	assert.Equal(t, "regenerate", run["kind"])
@@ -82,6 +85,39 @@ func TestPlanReplanHTTP_PreviewSpare(t *testing.T) {
 	assert.Positive(t, s["portions"])
 	assert.Equal(t, false, s["freezable"], "freezing is off")
 	assert.Equal(t, true, s["mutable"])
+}
+
+// A batch whose cook plate goes moves to its next plate when that day has a
+// free cooking occasion, and is dropped (its plates listed) when it has not.
+func TestPlanReplanHTTP_PreviewMovedAndDropped(t *testing.T) {
+	a := newGenAPI(t)
+	var lunch, dinner, main1, main2 int64
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM time_slots WHERE name_key = 'slot.lunch'`).Scan(&lunch))
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM time_slots WHERE name_key = 'slot.dinner'`).Scan(&dinner))
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM foods WHERE name = 'Main 1'`).Scan(&main1))
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM foods WHERE name = 'Main 2'`).Scan(&main2))
+	code, body := a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2026-11-11","slot_id":%d,"components":[{"food_id":%d,"portions":1}]}`, lunch, main1))
+	require.Equal(t, http.StatusCreated, code, body)
+	sid := body["components"].([]any)[0].(map[string]any)["cook_session_id"]
+	code, body = a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2026-11-12","slot_id":%d,"components":[{"food_id":%d,"cook_session_id":%v}]}`, lunch, main1, sid))
+	require.Equal(t, http.StatusCreated, code, body)
+	thuLunch := body["id"]
+	preview := fmt.Sprintf("/api/plan/replan/preview?from=2026-11-11&to=2026-11-13&none=2026-11-11:%d&today=2026-11-11", lunch)
+
+	code, pv := a.do(http.MethodGet, preview, "")
+	require.Equal(t, http.StatusOK, code, pv)
+	assert.Equal(t, []any{map[string]any{"session_id": sid, "food_name": "Main 1", "cook_date": "2026-11-12", "cook_slot_id": float64(lunch)}}, pv["moved"])
+	assert.Equal(t, []any{}, pv["dropped"])
+
+	code, body = a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2026-11-12","slot_id":%d,"components":[{"food_id":%d,"portions":1}]}`, dinner, main2))
+	require.Equal(t, http.StatusCreated, code, body)
+	code, pv = a.do(http.MethodGet, preview, "")
+	require.Equal(t, http.StatusOK, code, pv)
+	assert.Equal(t, []any{}, pv["moved"])
+	assert.Equal(t, []any{map[string]any{
+		"session_id": sid, "food_name": "Main 1", "plate_id": thuLunch, "date": "2026-11-12", "slot_id": float64(lunch), "confirmed": true,
+	}}, pv["dropped"])
+	assert.Len(t, pv["confirmed_affected"], 2, "the Wednesday cook plate and the dropped Thursday plate")
 }
 
 func TestPlanReplanHTTP_Errors(t *testing.T) {

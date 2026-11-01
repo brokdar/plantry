@@ -85,8 +85,24 @@ RETURNING *;
 -- name: CountComposedFoods :one
 SELECT COUNT(*) FROM foods WHERE kind = 'composed';
 
--- name: ListComposedFoodIDs :many
-SELECT id FROM foods WHERE kind = 'composed' ORDER BY id;
+-- name: ListUneatenRecipes :many
+-- Recipes no confirmed plate dated in [since, today] holds, plates marked
+-- not_eaten aside: FoodHistory's last_eaten is before since, or there is
+-- none. The variety rule H8 counts them (D21). The eaten set is one
+-- uncorrelated scan of the date range (ix_plates_date).
+SELECT f.id, f.role
+FROM foods f
+WHERE f.kind = 'composed'
+  AND f.id NOT IN (
+      SELECT pc.food_id
+      FROM plates p
+      JOIN plate_components pc ON pc.plate_id = p.id
+      WHERE p.date >= sqlc.arg(since)
+        AND p.date <= sqlc.arg(today)
+        AND p.state = 'confirmed'
+        AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
+                        WHERE pf.plate_id = p.id AND pf.status = 'not_eaten'))
+ORDER BY f.id;
 
 -- name: FoodHistory :many
 -- Derived eating history (D16) relative to today, over confirmed rows only

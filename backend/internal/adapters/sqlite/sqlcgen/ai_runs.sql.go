@@ -538,6 +538,9 @@ UPDATE ai_runs SET
         WHEN CAST(?1 AS TEXT) = 'accepted' THEN 'accepted'
         WHEN CAST(?1 AS TEXT) = 'discarded' AND outcome IN ('accepted', 'partially_accepted') THEN 'partially_accepted'
         WHEN CAST(?1 AS TEXT) = 'discarded' THEN 'discarded'
+        WHEN CAST(?1 AS TEXT) = 'restored' AND outcome = 'discarded' THEN 'open'
+        WHEN CAST(?1 AS TEXT) = 'restored' AND outcome = 'partially_accepted' THEN 'accepted'
+        WHEN CAST(?1 AS TEXT) = 'restored' THEN outcome
         WHEN outcome = 'accepted' THEN 'open'
         WHEN outcome = 'partially_accepted' THEN 'discarded'
         ELSE outcome
@@ -551,10 +554,11 @@ type SetRunOutcomeParams struct {
 	ID    int64
 }
 
-// D25: a run's outcome after its rows were accepted, discarded or un-accepted
-// (reset). open/NULL -> accepted or discarded; a run that sees both is
-// partially_accepted; reset undoes an accept (accepted -> open,
-// partially_accepted -> discarded).
+// D25: a run's outcome after its rows were accepted, discarded, un-accepted
+// (reset) or restored as drafts. open/NULL -> accepted or discarded; a run
+// that sees both is partially_accepted; reset undoes an accept (accepted ->
+// open, partially_accepted -> discarded); restored undoes a discard
+// (discarded -> open, partially_accepted -> accepted).
 func (q *Queries) SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error {
 	_, err := q.db.ExecContext(ctx, setRunOutcome, arg.Event, arg.ID)
 	return err

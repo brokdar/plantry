@@ -247,10 +247,24 @@ func (s *Service) sessionViews(ctx context.Context, from, to time.Time, e env) (
 }
 
 // days sums per-eater macros for each date: per-portion macros × portions for
-// composed components, per-100 g macros × grams / 100 for leaves. Each food is
-// resolved once.
+// composed components, per-100 g macros × grams / 100 for leaves. The foods
+// resolve in one batch.
 func (s *Service) days(ctx context.Context, dates []time.Time, plates []plate.Plate) ([]Day, error) {
+	var ids []int64
+	for _, p := range plates {
+		for _, pc := range p.Components {
+			if !slices.Contains(ids, pc.FoodID) {
+				ids = append(ids, pc.FoodID)
+			}
+		}
+	}
 	resolved := map[int64]food.Detailed{}
+	if len(ids) > 0 {
+		var err error
+		if resolved, err = s.d.Nutrition.PerPortionDetailedMany(ctx, ids); err != nil {
+			return nil, fmt.Errorf("resolve plate foods: %w", err)
+		}
+	}
 	byDate := map[string]*Day{}
 	missing := map[string]map[string]bool{}
 	out := make([]Day, len(dates))
@@ -266,14 +280,7 @@ func (s *Service) days(ctx context.Context, dates []time.Time, plates []plate.Pl
 			continue
 		}
 		for _, pc := range p.Components {
-			det, ok := resolved[pc.FoodID]
-			if !ok {
-				var err error
-				if det, err = s.d.Nutrition.PerPortionDetailed(ctx, pc.FoodID); err != nil {
-					return nil, fmt.Errorf("resolve food %d: %w", pc.FoodID, err)
-				}
-				resolved[pc.FoodID] = det
-			}
+			det := resolved[pc.FoodID]
 			day.Macros = addScaled(day.Macros, det.Macros, pc.Multiplier())
 			for _, m := range det.Missing {
 				missing[p.DateString()][m.Name] = true

@@ -29,7 +29,8 @@ type store struct {
 	recipes   int64
 	runs      map[int64]RunNote
 
-	recipeListCalls int
+	recipeListCalls  int
+	nutritionBatches int
 
 	plateCalls     [][2]time.Time
 	sessionCalls   int
@@ -119,14 +120,19 @@ func (s *store) LookupByIDs(ctx context.Context, ids []int64) (map[int64]*food.F
 	return out, nil
 }
 
-func (s *store) PerPortionDetailed(ctx context.Context, foodID int64) (food.Detailed, error) {
+func (s *store) PerPortionDetailedMany(ctx context.Context, ids []int64) (map[int64]food.Detailed, error) {
 	s.read(ctx)
-	s.nutritionCalls[foodID]++
-	d, ok := s.nutrition[foodID]
-	if !ok {
-		return food.Detailed{}, fmt.Errorf("%w: food %d", domain.ErrNotFound, foodID)
+	s.nutritionBatches++
+	out := make(map[int64]food.Detailed, len(ids))
+	for _, id := range ids {
+		s.nutritionCalls[id]++
+		d, ok := s.nutrition[id]
+		if !ok {
+			return nil, fmt.Errorf("%w: food %d", domain.ErrNotFound, id)
+		}
+		out[id] = d
 	}
-	return d, nil
+	return out, nil
 }
 
 func (s *store) Resolve(ctx context.Context, from, to time.Time) ([]availability.Cell, error) {
@@ -163,13 +169,24 @@ func (s *store) CountComposedFoods(ctx context.Context) (int64, error) {
 	return s.recipes, nil
 }
 
-func (s *store) ComposedFoodIDs(ctx context.Context) ([]int64, error) {
+// UneatenRecipes lists the recipes without a confirmed plate in [since,
+// today], as the ListUneatenRecipes query does.
+func (s *store) UneatenRecipes(ctx context.Context, since, today time.Time) ([]food.RecipeRole, error) {
 	s.read(ctx)
 	s.recipeListCalls++
-	out := []int64{}
+	eaten := map[int64]bool{}
+	for _, p := range s.plates {
+		if p.State != plate.StateConfirmed || p.Date.Before(since) || p.Date.After(today) {
+			continue
+		}
+		for _, pc := range p.Components {
+			eaten[pc.FoodID] = true
+		}
+	}
+	out := []food.RecipeRole{}
 	for id, f := range s.foods {
-		if f.Kind == food.KindComposed {
-			out = append(out, id)
+		if f.Kind == food.KindComposed && !eaten[id] {
+			out = append(out, food.RecipeRole{ID: id, Role: f.Role})
 		}
 	}
 	return out, nil
@@ -320,6 +337,7 @@ func newFixture() *fixture {
 			settings.KeyPlanFreezerKeepDays:        "90",
 			settings.KeyPlanMaxCookOccasionsPerDay: "1",
 			settings.KeyPlanVarietyWeeks:           "3",
+			settings.KeyPlanBatchCooking:           "true",
 		},
 		profile: &fakeProfile{p: profile.Profile{HouseholdPortions: 2}},
 		tx:      &fakeTx{},

@@ -297,6 +297,29 @@ func TestAIRuns_InsightsWeeks(t *testing.T) {
 	assert.GreaterOrEqual(t, len(def.Weeks), 12)
 }
 
+// score_avg leaves out per-date score entries (cook_occasions.per_day).
+func TestAIRuns_InsightsScoreAvgSkipsDates(t *testing.T) {
+	a := newRunsAPI(t)
+	ctx := context.Background()
+	started := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	id, err := a.repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindGenerate, StartedAt: started})
+	require.NoError(t, err)
+	require.NoError(t, a.repo.FinishRun(ctx, airun.RunEnd{
+		ID: id, Status: airun.StatusOK, FinishedAt: started.Add(time.Second),
+		ScoreJSON: `{"coverage":1,"cook_occasions":{"per_day":{"2026-10-10":1,"2026-10-11":0},"days_with_prepared":2}}`,
+	}))
+
+	var rep struct {
+		ByVersion []struct {
+			ScoreAvg map[string]float64 `json:"score_avg"`
+		} `json:"by_version"`
+	}
+	rec := a.get("/api/ai/insights?from=2026-10-05&to=2026-10-11", &rep)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.Len(t, rep.ByVersion, 1)
+	assert.Equal(t, map[string]float64{"coverage": 1, "cook_occasions.days_with_prepared": 2}, rep.ByVersion[0].ScoreAvg)
+}
+
 func TestAIRuns_Prices(t *testing.T) {
 	a := newRunsAPI(t)
 	var p struct {

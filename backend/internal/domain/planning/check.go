@@ -7,6 +7,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
 // Severity tells whether an issue breaks a hard rule or only warns.
@@ -364,7 +365,7 @@ func (x *index) h8() []Issue {
 		return nil
 	}
 	code, sev := CodeVarietyRepeat, SeverityViolation
-	if x.eligibleRecipes(span) < needed {
+	if x.eligibleRecipes(weeks) < needed {
 		code, sev = CodeVarietyRelaxed, SeverityWarning
 	}
 	var out []Issue
@@ -407,10 +408,25 @@ func (x *index) earlierCook(i int, since time.Time) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// VarietySince is the first day whose eating makes a recipe ineligible for
+// H8's count in the window starting on start: variety_weeks before it.
+func VarietySince(start time.Time, varietyWeeks int) time.Time {
+	return start.AddDate(0, 0, -7*varietyWeeks)
+}
+
+// DietRestricts reports whether diet type t can rule a recipe out of H8's
+// eligible count. Without a type, or for omnivores, every class fits, so the
+// count needs no diet classes.
+func DietRestricts(t profile.DietType) bool {
+	c := diet.Class(t)
+	return c != "" && c != diet.Omnivore
+}
+
 // eligibleRecipes counts the recipes H8 could pick for the window: mains
-// that fit the diet and were not eaten within span days before its start.
-func (x *index) eligibleRecipes(span int) int {
-	since := x.s.Window.Start.AddDate(0, 0, -span)
+// that fit the diet and were not eaten within the variety weeks before its
+// start.
+func (x *index) eligibleRecipes(weeks int) int {
+	since := VarietySince(x.s.Window.Start, weeks)
 	t := diet.Class(x.s.Profile.DietType)
 	n := 0
 	for _, f := range x.s.Foods {
@@ -418,7 +434,7 @@ func (x *index) eligibleRecipes(span int) int {
 			continue
 		}
 		// An unknown class is only a warning (H5), so it stays eligible.
-		if t != "" && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t) {
+		if DietRestricts(x.s.Profile.DietType) && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t) {
 			continue
 		}
 		if f.LastEaten == nil || f.LastEaten.Before(since) {

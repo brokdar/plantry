@@ -16,6 +16,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
 // benchState is a synthetic window: 300 recipes (eaten at staggered dates
@@ -168,5 +169,25 @@ func TestBuildAndCheck_Under50ms(t *testing.T) {
 	})
 	if per := time.Duration(res.NsPerOp()); per >= 50*time.Millisecond {
 		t.Fatalf("build and check take %s/op, want < 50ms", per)
+	}
+}
+
+// BenchmarkPlanView is GET /api/plan's read model over the AC-11 database
+// while its window holds drafts. A vegetarian profile also derives the
+// uneaten recipes' diet classes (H8).
+func BenchmarkPlanView(b *testing.B) {
+	e := benchDB(b)
+	view := testsvc.PlanView(e.db)
+	start := day(sat)
+	for _, dietType := range []string{"omnivore", "vegetarian"} {
+		b.Run(dietType, func(b *testing.B) {
+			e.exec(`UPDATE user_profile SET diet_type = ? WHERE id = 1`, dietType)
+			b.ResetTimer()
+			for range b.N {
+				if _, err := view.Plan(e.ctx, &start, day(svcToday)); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }

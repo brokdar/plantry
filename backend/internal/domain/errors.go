@@ -84,6 +84,9 @@ var (
 	ErrScopeConfirmed    = errors.New("the scope names a confirmed row")
 	ErrInvalidScope      = errors.New("invalid generation scope")
 	ErrNotEnoughRecipes  = errors.New("not enough recipes to plan")
+	// ErrPlanChanged is a run whose save found the plan changed while it
+	// chose (a replaced draft confirmed or gone, a target cell taken).
+	ErrPlanChanged = errors.New("the plan changed while it was generated")
 
 	// Mid-week re-plan (Phase 3 B8): confirmed plates in the No-plate cells
 	// need unlock_confirmed, and a re-plan starts today at the earliest.
@@ -111,6 +114,8 @@ var messageKeys = []struct {
 	err error
 	key string
 }{
+	// It wraps the plate error that found the change.
+	{ErrPlanChanged, "error.plan.changed_during_run"},
 	{ErrInvalidShopSection, "error.food.invalid_shop_section"},
 	{ErrShopSectionLeafOnly, "error.food.shop_section_leaf_only"},
 	{ErrInvalidDietClass, "error.food.invalid_diet_class"},

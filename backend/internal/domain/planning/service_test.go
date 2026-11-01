@@ -569,7 +569,7 @@ func TestService_FailingApplyLeavesNoRows(t *testing.T) {
 
 	end := e.runs.end(id)
 	assert.Equal(t, airun.StatusError, end.Status)
-	assert.Equal(t, "error.plate.cell_occupied", end.ErrorKey)
+	assert.Equal(t, "error.plan.changed_during_run", end.ErrorKey, "a taken cell means the plan changed")
 	assert.Equal(t, before, e.window(), "the drafts it was to replace are back")
 	var n int
 	require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM plates WHERE ai_run_id = ?`, id).Scan(&n))
@@ -665,25 +665,28 @@ func (waitChooser) Choose(ctx context.Context, _ planning.ChooseInput) (planning
 // A panicking chooser and a run past its timeout end the run as an error
 // without rows and free the window.
 func TestService_PanicAndTimeoutEndTheRun(t *testing.T) {
-	for name, edit := range map[string]func(*planning.Deps){
-		"panic": func(d *planning.Deps) {
+	for name, tc := range map[string]struct {
+		edit func(*planning.Deps)
+		key  string
+	}{
+		"panic": {func(d *planning.Deps) {
 			d.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: panicChooser{}}
-		},
-		"timeout": func(d *planning.Deps) {
+		}, "error.server"},
+		"timeout": {func(d *planning.Deps) {
 			d.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: waitChooser{}}
 			d.RunTimeout = time.Millisecond
-		},
+		}, "error.plan.timeout"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newSvcEnv(t)
-			edit(&e.deps)
+			tc.edit(&e.deps)
 			e.svc = planning.NewService(e.deps)
 
 			id := e.generate(e.req())
 
 			end := e.runs.end(id)
 			assert.Equal(t, airun.StatusError, end.Status)
-			assert.Equal(t, "error.server", end.ErrorKey)
+			assert.Equal(t, tc.key, end.ErrorKey)
 			assert.Empty(t, e.window(), "no rows")
 			_, running := e.svc.Running(e.start)
 			assert.False(t, running, "the window is free")

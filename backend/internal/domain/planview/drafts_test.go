@@ -222,6 +222,21 @@ func TestPlan_Issues(t *testing.T) {
 		assert.Equal(t, "2026-10-25", p.Issues[0].Params["last_eaten"])
 	})
 
+	t.Run("a repeat relaxes when no unrepeated main fits the diet", func(t *testing.T) {
+		f := newFixture()
+		f.profile.p.DietType = profile.DietVegan
+		eaten := f.session(chiliID, "2026-10-25", dinner, 2)
+		f.composed("2026-10-25", dinner, chiliID, eaten)
+		sid := f.draftSession(chiliID, "2026-11-01", dinner, 2, 7)
+		f.draft(f.composed("2026-11-01", dinner, chiliID, sid), 7)
+		f.runs[7] = RunNote{}
+		f.fill()
+		p, err := f.service().Plan(ctx, &ac1Start, date("2026-10-30"))
+		require.NoError(t, err)
+		assert.ElementsMatch(t, [][2]string{{"H5", planning.CodeDietIncompatible}, {"H8", planning.CodeVarietyRelaxed}}, rulesAndCodes(p.Issues),
+			"the unrepeated omelette is vegetarian, so it was no vegan pick")
+	})
+
 	t.Run("a past draft does not count as eaten", func(t *testing.T) {
 		f := newFixture()
 		old := f.draftSession(chiliID, "2026-10-25", dinner, 2, 5)

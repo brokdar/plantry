@@ -515,33 +515,6 @@ func (q *Queries) ListChildrenByParents(ctx context.Context, parentIds []int64) 
 	return items, nil
 }
 
-const listComposedFoodIDs = `-- name: ListComposedFoodIDs :many
-SELECT id FROM foods WHERE kind = 'composed' ORDER BY id
-`
-
-func (q *Queries) ListComposedFoodIDs(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listComposedFoodIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listFoodComponents = `-- name: ListFoodComponents :many
 SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order,
        f.name AS child_name, f.kind AS child_kind
@@ -789,6 +762,59 @@ func (q *Queries) ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsPara
 			&i.KeepDays,
 			&i.Freezable,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUneatenRecipes = `-- name: ListUneatenRecipes :many
+SELECT f.id, f.role
+FROM foods f
+WHERE f.kind = 'composed'
+  AND f.id NOT IN (
+      SELECT pc.food_id
+      FROM plates p
+      JOIN plate_components pc ON pc.plate_id = p.id
+      WHERE p.date >= ?1
+        AND p.date <= ?2
+        AND p.state = 'confirmed'
+        AND NOT EXISTS (SELECT 1 FROM plate_feedback pf
+                        WHERE pf.plate_id = p.id AND pf.status = 'not_eaten'))
+ORDER BY f.id
+`
+
+type ListUneatenRecipesParams struct {
+	Since string
+	Today string
+}
+
+type ListUneatenRecipesRow struct {
+	ID   int64
+	Role sql.NullString
+}
+
+// Recipes no confirmed plate dated in [since, today] holds, plates marked
+// not_eaten aside: FoodHistory's last_eaten is before since, or there is
+// none. The variety rule H8 counts them (D21). The eaten set is one
+// uncorrelated scan of the date range (ix_plates_date).
+func (q *Queries) ListUneatenRecipes(ctx context.Context, arg ListUneatenRecipesParams) ([]ListUneatenRecipesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUneatenRecipes, arg.Since, arg.Today)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUneatenRecipesRow{}
+	for rows.Next() {
+		var i ListUneatenRecipesRow
+		if err := rows.Scan(&i.ID, &i.Role); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

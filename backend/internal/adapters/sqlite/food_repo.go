@@ -472,9 +472,24 @@ func (r *FoodRepo) CountComposedFoods(ctx context.Context) (int64, error) {
 	return r.queriesFor(ctx).CountComposedFoods(ctx)
 }
 
-// ComposedFoodIDs returns the ids of every recipe.
-func (r *FoodRepo) ComposedFoodIDs(ctx context.Context) ([]int64, error) {
-	return r.queriesFor(ctx).ListComposedFoodIDs(ctx)
+// UneatenRecipes returns the recipes not eaten in [since, today] (as
+// History counts eating), by id.
+func (r *FoodRepo) UneatenRecipes(ctx context.Context, since, today time.Time) ([]food.RecipeRole, error) {
+	rows, err := r.queriesFor(ctx).ListUneatenRecipes(ctx, sqlcgen.ListUneatenRecipesParams{
+		Since: since.Format(time.DateOnly), Today: today.Format(time.DateOnly),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]food.RecipeRole, len(rows))
+	for i, row := range rows {
+		out[i] = food.RecipeRole{ID: row.ID}
+		if row.Role.Valid {
+			role := food.Role(row.Role.String)
+			out[i].Role = &role
+		}
+	}
+	return out, nil
 }
 
 // History returns the derived eating history (D16) of the given foods as of
