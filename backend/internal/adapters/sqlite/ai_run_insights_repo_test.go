@@ -13,6 +13,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
@@ -163,4 +164,35 @@ func TestAIRunRepo_GetRunWithStepsAndPrompt(t *testing.T) {
 
 	_, err = repo.GetRun(ctx, id+100)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+// D11: agent events count only since the row's last accept/confirm, so an
+// accepted chat run does not move again on a later unaccept or discard.
+func TestAIRunRepo_AgentRunsSinceLastAccept(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+	start := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	a := createRun(t, repo, airun.KindChat, start)
+	b := createRun(t, repo, airun.KindChat, start)
+	rows := plate.RowSet{PlateIDs: []int64{7}}
+
+	plateEvent(t, db, 7, "update", "agent", &a)
+	got, err := repo.AgentRuns(ctx, rows)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{a}, got)
+
+	plateEvent(t, db, 7, "accept", "user", nil)
+	got, err = repo.AgentRuns(ctx, rows)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{a}, got, "a live accept: Unaccept still reaches A")
+	plateEvent(t, db, 7, "unlock", "user", nil)
+	got, err = repo.AgentRuns(ctx, rows)
+	require.NoError(t, err)
+	assert.Empty(t, got, "A is accepted and no agent edited since")
+
+	plateEvent(t, db, 7, "update", "agent", &b)
+	got, err = repo.AgentRuns(ctx, rows)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{b}, got, "only B moves on the discard")
 }

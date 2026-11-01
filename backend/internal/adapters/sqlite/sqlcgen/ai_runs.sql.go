@@ -117,9 +117,18 @@ func (q *Queries) AIRunEdits(ctx context.Context, arg AIRunEditsParams) ([]AIRun
 }
 
 const agentRunsOfRows = `-- name: AgentRunsOfRows :many
-SELECT DISTINCT CAST(ai_run_id AS INTEGER) AS run_id FROM plate_events
-WHERE actor = 'agent' AND ai_run_id IS NOT NULL
-  AND (plate_id IN (/*SLICE:plate_ids*/?) OR cook_session_id IN (/*SLICE:session_ids*/?))
+SELECT DISTINCT CAST(e.ai_run_id AS INTEGER) AS run_id FROM plate_events e
+WHERE e.actor = 'agent' AND e.ai_run_id IS NOT NULL
+  AND (e.plate_id IN (/*SLICE:plate_ids*/?) OR e.cook_session_id IN (/*SLICE:session_ids*/?))
+  AND e.id > COALESCE((
+    SELECT MAX(b.id) FROM plate_events b
+    WHERE b.action IN ('accept', 'confirm', 'unlock')
+      AND ((b.plate_id IS NOT NULL AND b.plate_id = e.plate_id) OR (b.cook_session_id IS NOT NULL AND b.cook_session_id = e.cook_session_id))
+      AND NOT (b.action IN ('accept', 'confirm') AND NOT EXISTS (
+        SELECT 1 FROM plate_events c
+        WHERE c.id > b.id AND c.action IN ('accept', 'confirm', 'unlock')
+          AND ((c.plate_id IS NOT NULL AND c.plate_id = e.plate_id) OR (c.cook_session_id IS NOT NULL AND c.cook_session_id = e.cook_session_id))))
+  ), 0)
 ORDER BY run_id
 `
 
@@ -128,7 +137,10 @@ type AgentRunsOfRowsParams struct {
 	SessionIds []sql.NullInt64
 }
 
-// D11: the agent runs that wrote to the given plates or sessions.
+// D11: the agent runs that wrote to the given plates or sessions since the
+// row's last accept/confirm. A live accept/confirm (no later unlock) is not a
+// boundary yet, so Unaccept still reaches the runs it accepted; once undone,
+// the unlock is the boundary.
 func (q *Queries) AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error) {
 	query := agentRunsOfRows
 	var queryParams []interface{}

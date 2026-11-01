@@ -166,8 +166,20 @@ WHERE actor = 'agent' AND ai_run_id >= sqlc.arg(min_id) AND ai_run_id <= sqlc.ar
 GROUP BY ai_run_id;
 
 -- name: AgentRunsOfRows :many
--- D11: the agent runs that wrote to the given plates or sessions.
-SELECT DISTINCT CAST(ai_run_id AS INTEGER) AS run_id FROM plate_events
-WHERE actor = 'agent' AND ai_run_id IS NOT NULL
-  AND (plate_id IN (sqlc.slice(plate_ids)) OR cook_session_id IN (sqlc.slice(session_ids)))
+-- D11: the agent runs that wrote to the given plates or sessions since the
+-- row's last accept/confirm. A live accept/confirm (no later unlock) is not a
+-- boundary yet, so Unaccept still reaches the runs it accepted; once undone,
+-- the unlock is the boundary.
+SELECT DISTINCT CAST(e.ai_run_id AS INTEGER) AS run_id FROM plate_events e
+WHERE e.actor = 'agent' AND e.ai_run_id IS NOT NULL
+  AND (e.plate_id IN (sqlc.slice(plate_ids)) OR e.cook_session_id IN (sqlc.slice(session_ids)))
+  AND e.id > COALESCE((
+    SELECT MAX(b.id) FROM plate_events b
+    WHERE b.action IN ('accept', 'confirm', 'unlock')
+      AND ((b.plate_id IS NOT NULL AND b.plate_id = e.plate_id) OR (b.cook_session_id IS NOT NULL AND b.cook_session_id = e.cook_session_id))
+      AND NOT (b.action IN ('accept', 'confirm') AND NOT EXISTS (
+        SELECT 1 FROM plate_events c
+        WHERE c.id > b.id AND c.action IN ('accept', 'confirm', 'unlock')
+          AND ((c.plate_id IS NOT NULL AND c.plate_id = e.plate_id) OR (c.cook_session_id IS NOT NULL AND c.cook_session_id = e.cook_session_id))))
+  ), 0)
 ORDER BY run_id;

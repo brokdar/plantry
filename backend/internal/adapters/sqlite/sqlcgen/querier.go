@@ -20,7 +20,10 @@ type Querier interface {
 	// cook_session_id and are skipped); every other plate counts as itself.
 	AIRunEdits(ctx context.Context, arg AIRunEditsParams) ([]AIRunEditsRow, error)
 	AddPresetTag(ctx context.Context, arg AddPresetTagParams) error
-	// D11: the agent runs that wrote to the given plates or sessions.
+	// D11: the agent runs that wrote to the given plates or sessions since the
+	// row's last accept/confirm. A live accept/confirm (no later unlock) is not a
+	// boundary yet, so Unaccept still reaches the runs it accepted; once undone,
+	// the unlock is the boundary.
 	AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error)
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
