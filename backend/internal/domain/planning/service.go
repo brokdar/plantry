@@ -40,12 +40,14 @@ const (
 )
 
 // Scope names a regenerate's target: Date for day, PlateID for plate,
-// ComponentID for side.
+// ComponentID for side. From and To, when set, bound empty_cells to the
+// cells dated in [From, To] (the mid-week re-plan, B8).
 type Scope struct {
 	Kind        ScopeKind
 	Date        time.Time
 	PlateID     int64
 	ComponentID int64
+	From, To    time.Time
 }
 
 // Request starts a generation of the window that starts on Start.
@@ -73,6 +75,7 @@ type Deps struct {
 	Settings   SettingsReader
 	RunLog     RunLog
 	Runs       Runs
+	Overrides  Overrides
 	Tx         domain.Transactor
 	Progress   *Progress
 	Choosers   map[airun.Chooser]Chooser
@@ -110,7 +113,7 @@ func (s *Service) Wait() { s.wg.Wait() }
 // replaces them all) and returns its run id.
 func (s *Service) Generate(ctx context.Context, req Request) (int64, error) {
 	req.Scope = Scope{Kind: ScopeWindow}
-	return s.start(ctx, airun.KindGenerate, req)
+	return s.start(ctx, airun.KindGenerate, req, false)
 }
 
 // Regenerate starts a day, plate, side or empty_cells generation and
@@ -118,6 +121,13 @@ func (s *Service) Generate(ctx context.Context, req Request) (int64, error) {
 // (or, for empty cells, the day's other plates) have them, and asks for no
 // new recipe.
 func (s *Service) Regenerate(ctx context.Context, req Request) (int64, error) {
+	return s.regenerate(ctx, req, false)
+}
+
+// regenerate is Regenerate; held says the caller already reserved the
+// window (the re-plan), and the reservation is released only when no run
+// starts.
+func (s *Service) regenerate(ctx context.Context, req Request, held bool) (int64, error) {
 	switch req.Scope.Kind {
 	case ScopeDay, ScopePlate, ScopeSide, ScopeEmptyCells:
 	default:
@@ -125,7 +135,7 @@ func (s *Service) Regenerate(ctx context.Context, req Request) (int64, error) {
 	}
 	noNew := false
 	req.EatersByDate, req.IncludeNewRecipe = nil, &noNew
-	return s.start(ctx, airun.KindRegenerate, req)
+	return s.start(ctx, airun.KindRegenerate, req, held)
 }
 
 // job is a started generation's input.
@@ -147,7 +157,15 @@ type job struct {
 	kept        int
 }
 
-func (s *Service) start(ctx context.Context, kind airun.Kind, req Request) (int64, error) {
+func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held bool) (int64, error) {
+	started := false
+	if held {
+		defer func() {
+			if !started {
+				s.d.Progress.release(dateOnly(req.Start))
+			}
+		}()
+	}
 	sd, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanShoppingDay)
 	if err != nil {
 		return 0, err
@@ -176,15 +194,16 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request) (int6
 		return 0, err
 	}
 
-	if err := s.d.Progress.reserve(w.Start); err != nil {
-		return 0, err
-	}
-	started := false
-	defer func() {
-		if !started {
-			s.d.Progress.release(w.Start)
+	if !held {
+		if err := s.d.Progress.reserve(w.Start); err != nil {
+			return 0, err
 		}
-	}()
+		defer func() {
+			if !started {
+				s.d.Progress.release(w.Start)
+			}
+		}()
+	}
 	j, err := s.resolve(ctx, w, dateOnly(req.Today), req.Scope)
 	if err != nil {
 		return 0, err
@@ -319,7 +338,8 @@ func (s *Service) resolve(ctx context.Context, w window.Window, today time.Time,
 		case ScopeEmptyCells:
 			cellsOf = func(c availability.Cell) bool {
 				_, taken := occupied[idOf(plate.CellKey{Date: c.Date, SlotID: c.SlotID})]
-				return !taken && c.Mode != availability.ModeNone
+				inRange := (sc.From.IsZero() || !c.Date.Before(dateOnly(sc.From))) && (sc.To.IsZero() || !c.Date.After(dateOnly(sc.To)))
+				return !taken && inRange && c.Mode != availability.ModeNone
 			}
 		default:
 			return fmt.Errorf("%w: kind %q", domain.ErrInvalidScope, sc.Kind)
@@ -454,6 +474,8 @@ type scopeRecord struct {
 	Date             string             `json:"date,omitempty"`
 	PlateID          int64              `json:"plate_id,omitempty"`
 	ComponentID      int64              `json:"component_id,omitempty"`
+	From             string             `json:"from,omitempty"`
+	To               string             `json:"to,omitempty"`
 	PlateIDs         []int64            `json:"plate_ids"`
 	SessionIDs       []int64            `json:"session_ids"`
 	KeptConfirmed    int                `json:"kept_confirmed"`
@@ -469,6 +491,12 @@ func (j job) record() scopeRecord {
 	}
 	if j.scope.Kind == ScopeDay {
 		r.Date = j.scope.Date.Format(time.DateOnly)
+	}
+	if !j.scope.From.IsZero() {
+		r.From = j.scope.From.Format(time.DateOnly)
+	}
+	if !j.scope.To.IsZero() {
+		r.To = j.scope.To.Format(time.DateOnly)
 	}
 	return r
 }

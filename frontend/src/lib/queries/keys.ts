@@ -1,3 +1,4 @@
+import type { ReplanCell } from "@/lib/api/plan"
 import type { ShoppingRange } from "@/lib/api/shopping"
 
 export const foodKeys = {
@@ -36,8 +37,8 @@ export const planKeys = {
   /** `start` undefined = the anchored window. */
   window: (start?: string) => [...planKeys.all, "window", start ?? ""] as const,
   /** Under all: every plan mutation refreshes an open re-plan preview. */
-  replanPreview: (from: string, to: string) =>
-    [...planKeys.all, "replan-preview", from, to] as const,
+  replanPreview: (from: string, to: string, noneCells: ReplanCell[] = []) =>
+    [...planKeys.all, "replan-preview", from, to, noneCells] as const,
 }
 
 export const todayKeys = {

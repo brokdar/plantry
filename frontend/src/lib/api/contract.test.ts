@@ -373,11 +373,22 @@ const cases: Case[] = [
     path: "/plan/replan/preview?from=2026-11-04&to=2026-11-06&today=2026-10-30",
   },
   {
+    name: "getReplanPreview (asked No-plate cells)",
+    call: () =>
+      getReplanPreview("2026-11-04", "2026-11-06", [
+        { date: "2026-11-05", slot_id: 3 },
+        { date: "2026-11-06", slot_id: 3 },
+      ]),
+    method: "GET",
+    path: "/plan/replan/preview?from=2026-11-04&to=2026-11-06&none=2026-11-05%3A3&none=2026-11-06%3A3&today=2026-10-30",
+  },
+  {
     name: "replan",
     call: () =>
       replan({
         from: "2026-11-04",
         to: "2026-11-06",
+        none_cells: [{ date: "2026-11-05", slot_id: 3 }],
         unlock_confirmed: true,
         spare: "freeze",
         regenerate: true,
@@ -387,6 +398,7 @@ const cases: Case[] = [
     body: {
       from: "2026-11-04",
       to: "2026-11-06",
+      none_cells: [{ date: "2026-11-05", slot_id: 3 }],
       unlock_confirmed: true,
       spare: "freeze",
       regenerate: true,
