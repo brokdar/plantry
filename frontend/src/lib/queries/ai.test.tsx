@@ -68,8 +68,7 @@ describe("useChatStream", () => {
       expect(JSON.parse(init.body as string)).toEqual({
         message: "plan",
         today: "2026-10-26",
-        from: "2026-10-31",
-        to: "2026-11-06",
+        start: "2026-10-31",
       })
     } finally {
       vi.useRealTimers()

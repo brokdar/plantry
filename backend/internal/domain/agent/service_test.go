@@ -19,6 +19,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -35,16 +36,9 @@ func ymd(t *testing.T, s string) time.Time {
 	return d
 }
 
-// windowSources reads the prompt's planning window from db.
-func windowSources(db *sql.DB) agent.WindowSources {
-	slotRepo := sqlite.NewSlotRepo(db)
-	foodRepo := sqlite.NewFoodRepo(db)
-	return agent.WindowSources{
-		Plates:       testsvc.Plates(db),
-		Slots:        slot.NewService(slotRepo),
-		Foods:        foodRepo,
-		Availability: availabilityService(db),
-	}
+// planContext reads the prompt's plan window from db.
+func planContext(db *sql.DB) agent.PlanContext {
+	return agent.PlanContext{Build: testsvc.PlanningDeps(db).Builder.Build, Summary: planning.RenderPlanSummary}
 }
 
 func availabilityService(db *sql.DB) *availability.Service {
@@ -56,7 +50,7 @@ func availabilityService(db *sql.DB) *availability.Service {
 // and clock.
 func newPromptService(t *testing.T, db *sql.DB, client llm.Client, now func() time.Time) *agent.Service {
 	t.Helper()
-	return newPromptServiceWith(t, db, client, now, nil)
+	return newPromptServiceWith(t, db, client, now, testsvc.Settings(db))
 }
 
 func newPromptServiceWith(t *testing.T, db *sql.DB, client llm.Client, now func() time.Time, settingsSvc agent.SettingsReader) *agent.Service {
@@ -64,7 +58,7 @@ func newPromptServiceWith(t *testing.T, db *sql.DB, client llm.Client, now func(
 	tools, err := agent.NewToolSet(agent.Services{Foods: food.NewService(sqlite.NewFoodRepo(db))})
 	require.NoError(t, err)
 	return agent.NewService(sqlite.NewAIRepo(db), llm.StaticResolver(client, chatModel), tools,
-		profile.NewService(sqlite.NewProfileRepo(db)), settingsSvc, windowSources(db), now)
+		profile.NewService(sqlite.NewProfileRepo(db)), settingsSvc, planContext(db), now)
 }
 
 // stubSettings answers every key from a map; missing keys are empty.
@@ -76,13 +70,16 @@ func (s stubSettings) Get(_ context.Context, key string) (settings.Value, error)
 
 func strPtr(s string) *string { return &s }
 
-func TestChat_SystemPromptCarriesDatesAndPlates(t *testing.T) {
+// B3-AC1: the recorded system prompt carries today, the 7 window dates, the
+// shopping day, every cell with its plate, the issues and no candidate rows.
+func TestChat_SystemPromptCarriesWindowAndPlan(t *testing.T) {
 	ctx := context.Background()
 	db := testhelper.NewTestDB(t)
 	slotRepo := sqlite.NewSlotRepo(db)
 	foodRepo := sqlite.NewFoodRepo(db)
 	plateRepo := sqlite.NewPlateRepo(db)
 
+	require.NoError(t, testsvc.Settings(db).Set(ctx, settings.KeyPlanShoppingDay, "5"))
 	dinner := &slot.TimeSlot{NameKey: "slot.dinner", Icon: "🍽", Active: true}
 	require.NoError(t, slotRepo.Create(ctx, dinner))
 	src := food.SourceManual
@@ -112,8 +109,7 @@ func TestChat_SystemPromptCarriesDatesAndPlates(t *testing.T) {
 	_, err = chatReq(ctx, svc, agent.ChatRequest{
 		UserText: "plan dinners",
 		Today:    ymd(t, "2026-10-26"),
-		From:     ymd(t, "2026-10-31"),
-		To:       ymd(t, "2026-11-06"),
+		Start:    ymd(t, "2026-10-31"),
 	}, nil)
 	require.NoError(t, err)
 
@@ -121,8 +117,8 @@ func TestChat_SystemPromptCarriesDatesAndPlates(t *testing.T) {
 	require.NotEmpty(t, reqs)
 	system := reqs[0].System
 	for _, want := range []string{
-		"Today is Monday, 2026-10-26.",
-		"Planning window: Saturday 2026-10-31 to Friday 2026-11-06 (7 days).",
+		"Today is Monday 2026-10-26.",
+		"The plan week runs from Saturday 2026-10-31 to Friday 2026-11-06; the shopping day is Saturday.",
 		"- Saturday 2026-10-31\n",
 		"- Sunday 2026-11-01\n",
 		"- Monday 2026-11-02\n",
@@ -130,29 +126,16 @@ func TestChat_SystemPromptCarriesDatesAndPlates(t *testing.T) {
 		"- Wednesday 2026-11-04\n",
 		"- Thursday 2026-11-05\n",
 		"- Friday 2026-11-06\n",
-		fmt.Sprintf("- 2026-10-31 slot.dinner (plate_id=%d, slot_id=%d): Pasta\n", planned.ID, dinner.ID),
-		"No-plate and routine cells:\n",
-		fmt.Sprintf("- Sunday 2026-11-01 slot.dinner (slot_id=%d): no plate (dinner out)\n", dinner.ID),
-		fmt.Sprintf("- Monday 2026-11-02 slot.dinner (slot_id=%d): routine (preset: Oatmeal)\n", dinner.ID),
+		fmt.Sprintf("plate_id %d, confirmed, 1 eaters: Pasta (component_id ", planned.ID),
+		fmt.Sprintf("Sunday 2026-11-01 | %d dinner | none | no plate, leave empty", dinner.ID),
+		fmt.Sprintf("Monday 2026-11-02 | %d dinner | routine | empty", dinner.ID),
+		"Issues:",
 	} {
 		assert.Contains(t, system, want)
 	}
+	assert.NotContains(t, system, "Candidate recipes")
 	assert.NotContains(t, system, "2026-11-07", "plates outside the window must not be listed")
-	assert.NotContains(t, system, "): skipped")
-	assert.NotContains(t, system, "skipped=true")
-}
-
-func TestChat_ShoppingDayPrintsWeekdayName(t *testing.T) {
-	db := testhelper.NewTestDB(t)
-	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}})
-	svc := newPromptServiceWith(t, db, client, time.Now, stubSettings{settings.KeyPlanShoppingDay: "5"})
-
-	got, err := svc.DebugSystemPrompt(context.Background(), agent.ChatRequest{
-		Today: ymd(t, "2026-10-26"), From: ymd(t, "2026-10-26"), To: ymd(t, "2026-10-27"),
-	})
-	require.NoError(t, err)
-	assert.Contains(t, got, "Shopping day: Saturday\n")
-	assert.NotContains(t, got, "Shopping day: 5")
+	assert.LessOrEqual(t, len(system), 24_000)
 }
 
 // cellToolSet seeds a dinner slot, a "none" override on 2026-11-02 and a
@@ -219,9 +202,9 @@ func TestTool_CreatePlateIntoNoneCell_ReturnsKeyedToolError(t *testing.T) {
 		endTurn(fake.ScriptedUsage{}),
 	}})
 	svc := agent.NewService(sqlite.NewAIRepo(db), llm.StaticResolver(client, chatModel), ts,
-		profile.NewService(sqlite.NewProfileRepo(db)), nil, windowSources(db), time.Now)
+		profile.NewService(sqlite.NewProfileRepo(db)), testsvc.Settings(db), planContext(db), time.Now)
 	evts, err := chatReq(context.Background(), svc, agent.ChatRequest{
-		UserText: "plan monday dinner", From: ymd(t, "2026-11-02"), To: ymd(t, "2026-11-02"),
+		UserText: "plan monday dinner", Start: ymd(t, "2026-11-02"),
 	}, nil)
 	require.NoError(t, err)
 
@@ -247,23 +230,23 @@ func TestChat_TodayDefaultsToServerClock(t *testing.T) {
 		return time.Date(2026, 10, 27, 23, 30, 0, 0, time.Local)
 	})
 
-	_, err := chatReq(context.Background(), svc, agent.ChatRequest{
-		UserText: "hi", From: ymd(t, "2026-10-26"), To: ymd(t, "2026-10-28"),
-	}, nil)
+	_, err := chatReq(context.Background(), svc, agent.ChatRequest{UserText: "hi", Start: ymd(t, "2026-10-26")}, nil)
 	require.NoError(t, err)
 
-	system := client.Requests()[0].System
-	assert.Contains(t, system, "Today is Tuesday, 2026-10-27.")
-	assert.Contains(t, system, "- Tuesday 2026-10-27 (today)\n")
+	assert.Contains(t, client.Requests()[0].System, "Today is Tuesday 2026-10-27.")
 }
 
-func TestChat_RequiresWindow(t *testing.T) {
+// B3-AC2 (service half): a start that is no shopping day, or none, fails
+// before the model is called.
+func TestChat_RequiresShoppingDayStart(t *testing.T) {
 	db := testhelper.NewTestDB(t)
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}})
 	svc := newPromptService(t, db, client, time.Now)
 
 	_, err := chatReq(context.Background(), svc, agent.ChatRequest{UserText: "hi"}, nil)
-	require.Error(t, err)
+	require.ErrorIs(t, err, domain.ErrInvalidInput)
+	_, err = chatReq(context.Background(), svc, agent.ChatRequest{UserText: "hi", Start: ymd(t, "2026-10-27")}, nil)
+	require.ErrorIs(t, err, domain.ErrInvalidPlanStart)
 	assert.Empty(t, client.Requests())
 }
 
@@ -272,9 +255,9 @@ func TestDebugSystemPrompt_SamePathAsChat(t *testing.T) {
 	svc := newPromptService(t, db, fake.NewFromScript(&fake.Script{}), time.Now)
 
 	got, err := svc.DebugSystemPrompt(context.Background(), agent.ChatRequest{
-		Today: ymd(t, "2026-10-26"), From: ymd(t, "2026-10-31"), To: ymd(t, "2026-11-01"),
+		Today: ymd(t, "2026-10-26"), Start: ymd(t, "2026-10-26"),
 	})
 	require.NoError(t, err)
-	assert.Contains(t, got, "Today is Monday, 2026-10-26.")
+	assert.Contains(t, got, "Today is Monday 2026-10-26.")
 	assert.Contains(t, got, "- Sunday 2026-11-01\n")
 }

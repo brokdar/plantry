@@ -77,6 +77,8 @@ func (p Plate) Proposed() bool { return p.ID < 0 }
 // SessionKey (a proposed one); with neither it gets a fresh session of its
 // own when applied. A leaf component has Grams.
 type Component struct {
+	// ID is the persisted component's id; 0 for a proposed one.
+	ID         int64
 	FoodID     int64
 	Portions   *float64
 	Grams      *float64

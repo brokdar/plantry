@@ -72,6 +72,41 @@ func Check(s State, t Target) []Issue {
 	return out
 }
 
+// BoardIssues checks the window of s as persisted with Check over all its
+// cells and keeps the rules the board shows (D21): H1, H2, H5 and H8. H3/H4
+// already appear as session warnings; H6/H7 cannot occur in persisted data.
+// An empty plan cell (missing_plate) needs attention only while the window
+// is a draft, and only from today on: a hand-planned or accepted window may
+// leave cells empty, and past cells are history.
+func BoardIssues(s State) []Issue {
+	t := Target{Cells: make([]plate.CellKey, len(s.Cells))}
+	for i, c := range s.Cells {
+		t.Cells[i] = c.Key()
+	}
+	drafts := false
+	for _, p := range s.Plates {
+		drafts = drafts || !p.Confirmed
+	}
+	for _, ss := range s.Sessions {
+		drafts = drafts || !ss.Confirmed
+	}
+	today := s.Today.Format(time.DateOnly)
+	out := []Issue{}
+	for _, is := range Check(s, t) {
+		switch is.Rule {
+		case "H1":
+			if is.Code == CodeMissingPlate && (!drafts || is.Date < today) {
+				continue
+			}
+		case "H2", "H5", "H8":
+		default:
+			continue
+		}
+		out = append(out, is)
+	}
+	return out
+}
+
 func issue(rule, code string, sev Severity) Issue {
 	return Issue{Rule: rule, Code: code, Severity: sev, Params: map[string]any{}}
 }

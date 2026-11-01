@@ -53,13 +53,13 @@ func (h *AIHandler) DebugSystemPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
-	dates, key := parseChatDates(q.Get("today"), q.Get("from"), q.Get("to"))
+	dates, key := parseChatDates(q.Get("today"), q.Get("start"))
 	if key != "" {
 		writeError(w, http.StatusBadRequest, key)
 		return
 	}
 	prompt, err := h.svc.DebugSystemPrompt(r.Context(), agent.ChatRequest{
-		Today: dates.today, From: dates.from, To: dates.to,
+		Today: dates.today, Start: dates.start,
 	})
 	if err != nil {
 		status, key := toHTTPWithResource(err, "ai")
@@ -73,39 +73,27 @@ type chatRequestBody struct {
 	ConversationID *int64 `json:"conversation_id,omitempty"`
 	Message        string `json:"message"`
 	Today          string `json:"today,omitempty"` // YYYY-MM-DD; server clock when empty
-	From           string `json:"from"`            // YYYY-MM-DD, required
-	To             string `json:"to"`              // YYYY-MM-DD, required
+	Start          string `json:"start"`           // YYYY-MM-DD window start (a shopping day), required
 }
 
-// maxChatWindowDays caps the planning window a chat turn may cover.
-const maxChatWindowDays = 31
+type chatDates struct{ today, start time.Time }
 
-type chatDates struct{ today, from, to time.Time }
-
-// parseChatDates validates the chat planning window. today is optional (zero
-// when empty); from and to are required. On failure it returns the i18n key.
-func parseChatDates(todayStr, fromStr, toStr string) (chatDates, string) {
+// parseChatDates parses the chat's dates. today is optional (zero when
+// empty); start is required. On failure it returns the i18n key. Whether
+// start is a shopping day is the service's check.
+func parseChatDates(todayStr, startStr string) (chatDates, string) {
 	var d chatDates
-	if fromStr == "" || toStr == "" {
-		return d, "error.ai.window_missing"
+	if startStr == "" {
+		return d, "error.invalid_body"
 	}
 	var err error
-	if d.from, err = time.Parse("2006-01-02", fromStr); err != nil {
-		return d, "error.ai.invalid_date"
-	}
-	if d.to, err = time.Parse("2006-01-02", toStr); err != nil {
+	if d.start, err = time.Parse(time.DateOnly, startStr); err != nil {
 		return d, "error.ai.invalid_date"
 	}
 	if todayStr != "" {
-		if d.today, err = time.Parse("2006-01-02", todayStr); err != nil {
+		if d.today, err = time.Parse(time.DateOnly, todayStr); err != nil {
 			return d, "error.ai.invalid_date"
 		}
-	}
-	if d.to.Before(d.from) {
-		return d, "error.ai.window_inverted"
-	}
-	if d.to.Sub(d.from) >= maxChatWindowDays*24*time.Hour {
-		return d, "error.ai.window_too_long"
 	}
 	return d, ""
 }
@@ -126,9 +114,15 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	dates, key := parseChatDates(body.Today, body.From, body.To)
+	dates, key := parseChatDates(body.Today, body.Start)
 	if key != "" {
 		writeError(w, http.StatusBadRequest, key)
+		return
+	}
+	// Reject a start that is no shopping day before the stream opens.
+	if err := h.svc.CheckStart(r.Context(), dates.start); err != nil {
+		status, key := toHTTPWithResource(err, "ai")
+		writeError(w, status, key)
 		return
 	}
 
@@ -143,8 +137,7 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 			ConversationID: body.ConversationID,
 			UserText:       body.Message,
 			Today:          dates.today,
-			From:           dates.from,
-			To:             dates.to,
+			Start:          dates.start,
 		}, events)
 	}()
 

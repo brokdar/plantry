@@ -145,6 +145,141 @@ func RenderPrompt(in ChooseInput) string {
 	return b.String()
 }
 
+// RenderPlanSummary renders the plan window of s for the chat's system prompt
+// (spec §7.6): today, the window's dates and shopping day, the settings, every
+// cell with its plate (ids, state, eaters, components), each session's
+// portions, frozen portions and consumption, and issues. It lists no candidate
+// recipes: the chat reads the library with tools.
+func RenderPlanSummary(s State, issues []Issue) string {
+	var b strings.Builder
+	writeDates(&b, s)
+	writeSettings(&b, ChooseInput{State: s})
+	x := newIndex(s, Target{})
+	writeSummaryCells(&b, x)
+	writeSummarySessions(&b, x)
+	writeIssues(&b, issues)
+	return b.String()
+}
+
+func writeSummaryCells(b *strings.Builder, x *index) {
+	s := x.s
+	b.WriteString("\nCells (date | slot_id | mode | content):\n")
+	for _, c := range s.Cells {
+		var parts []string
+		for _, pi := range x.byCell[idOf(c.Key())] {
+			parts = append(parts, summaryPlate(s, s.Plates[pi]))
+		}
+		content := strings.Join(parts, "; ")
+		if content == "" {
+			content = "empty"
+			if c.Mode == availability.ModeNone {
+				content = "no plate, leave empty"
+			}
+		}
+		fmt.Fprintf(b, "%s | %d %s | %s | %s\n", weekdayDate(c.Date), c.SlotID, slotName(s, c.SlotID), c.Mode, content)
+	}
+}
+
+func summaryPlate(s State, p Plate) string {
+	state := "draft"
+	if p.Confirmed {
+		state = "confirmed"
+	}
+	parts := make([]string, len(p.Components))
+	for i, c := range p.Components {
+		var qty string
+		switch {
+		case c.Portions != nil:
+			qty = num(*c.Portions) + " portions/eater"
+		case c.Grams != nil:
+			qty = num(*c.Grams) + " g/eater"
+		}
+		parts[i] = fmt.Sprintf("%s (component_id %d, food_id %d, %s", foodName(s, c.FoodID), c.ID, c.FoodID, qty)
+		if c.SessionID != 0 {
+			parts[i] += fmt.Sprintf(", session_id %d", c.SessionID)
+		}
+		parts[i] += ")"
+	}
+	return fmt.Sprintf("plate_id %d, %s, %s eaters: %s", p.ID, state, num(p.Eaters), strings.Join(parts, " + "))
+}
+
+// writeSummarySessions lists the sessions that cook in the window or feed a
+// plate in it, with what their links consume.
+func writeSummarySessions(b *strings.Builder, x *index) {
+	s := x.s
+	linked := map[int64]bool{}
+	for _, p := range s.Plates {
+		if !s.Window.Contains(p.Date) {
+			continue
+		}
+		for _, c := range p.Components {
+			if c.SessionID != 0 {
+				linked[c.SessionID] = true
+			}
+		}
+	}
+	var lines []string
+	for _, ss := range s.Sessions {
+		if ss.Proposed() || (!s.Window.Contains(ss.CookDate) && !linked[ss.ID]) {
+			continue
+		}
+		use := x.usage(ss)
+		state := "draft"
+		if ss.Confirmed {
+			state = "confirmed"
+		}
+		cooked := "not cooked"
+		if ss.CookedAt != nil {
+			cooked = "cooked"
+		}
+		keep := x.keepDays(ss.FoodID)
+		lines = append(lines, fmt.Sprintf("session_id %d | food_id %d %s | cook %s slot_id %d | %s, %s | portions %s, frozen %s | eaten %s, of which frozen %s | keeps until %s",
+			ss.ID, ss.FoodID, foodName(s, ss.FoodID), ss.CookDate.Format(time.DateOnly), ss.CookSlotID, state, cooked,
+			num(ss.Portions), num(ss.FrozenPortions), num(use.Total), num(use.Frozen),
+			ss.CookDate.AddDate(0, 0, keep).Format(time.DateOnly)))
+	}
+	if len(lines) == 0 {
+		return
+	}
+	b.WriteString("\nCook sessions:\n")
+	for _, l := range lines {
+		b.WriteString(l)
+		b.WriteByte('\n')
+	}
+}
+
+func writeIssues(b *strings.Builder, issues []Issue) {
+	if len(issues) == 0 {
+		b.WriteString("\nIssues: none.\n")
+		return
+	}
+	b.WriteString("\nIssues:\n")
+	for _, is := range issues {
+		fmt.Fprintf(b, "- %s %s (%s)", is.Rule, is.Code, is.Severity)
+		if is.Date != "" {
+			fmt.Fprintf(b, " %s", is.Date)
+		}
+		if is.SlotID != nil {
+			fmt.Fprintf(b, " slot_id %d", *is.SlotID)
+		}
+		if is.PlateID != nil {
+			fmt.Fprintf(b, " plate_id %d", *is.PlateID)
+		}
+		if is.SessionID != nil {
+			fmt.Fprintf(b, " session_id %d", *is.SessionID)
+		}
+		keys := make([]string, 0, len(is.Params))
+		for k := range is.Params {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+		for _, k := range keys {
+			fmt.Fprintf(b, " %s=%v", k, is.Params[k])
+		}
+		b.WriteByte('\n')
+	}
+}
+
 func writeRules(b *strings.Builder, s State) {
 	b.WriteString(`You plan the meals of one week for a self-hosted meal planner. Fill every cell marked "fill" with exactly one plate, then call submit_plan once with the complete plan.
 

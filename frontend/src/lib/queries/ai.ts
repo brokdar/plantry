@@ -89,8 +89,7 @@ export function useChatStream() {
         conversation_id: params.conversationId,
         message: params.message,
         today: todayISO(),
-        from: params.range.from,
-        to: params.range.to,
+        start: params.range.from,
       }
 
       try {
