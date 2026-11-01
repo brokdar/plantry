@@ -3,6 +3,7 @@ package planning_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -360,17 +361,20 @@ func TestReplan_HoldsTheWindowUntilTheRunStarts(t *testing.T) {
 	e.ok(*res.RunID)
 }
 
-// A run that fails to start after the commit leaves the removal, no run id
-// and a free window.
+// A run that fails to start after the commit leaves the removal, no run id,
+// the reason as a message key and a free window.
 func TestReplan_RunThatDoesNotStartKeepsTheRemoval(t *testing.T) {
 	e := newReplanEnv(t, false)
-	e.deps.FoodRows = &hookedFoods{FoodRows: e.deps.FoodRows, at: 2, onCount: func() error { return errors.New("db gone") }}
+	e.deps.FoodRows = &hookedFoods{FoodRows: e.deps.FoodRows, at: 2, onCount: func() error {
+		return fmt.Errorf("recount: %w", domain.ErrNotEnoughRecipes)
+	}}
 	e.svc = planning.NewService(e.deps)
 
 	res, err := e.replan(true, planning.SpareKeep, true)
 
 	require.NoError(t, err)
 	assert.Nil(t, res.RunID)
+	assert.Equal(t, "error.plan.not_enough_recipes", res.RegenerateError)
 	assert.Len(t, res.Removed.Plates, 4)
 	assert.True(t, e.plateGone(e.thuLunch))
 	_, running := e.svc.Running(e.start)
@@ -378,6 +382,40 @@ func TestReplan_RunThatDoesNotStartKeepsTheRemoval(t *testing.T) {
 	req := e.req()
 	req.Today = day(replanDay)
 	_, err = e.svc.Generate(e.ctx, req)
+	assert.NoError(t, err, "the window is free again")
+}
+
+// A re-plan that started no run reports no regenerate error.
+func TestReplan_NoRegenerateError(t *testing.T) {
+	e := newReplanEnv(t, false)
+	res, err := e.replan(true, planning.SpareKeep, false)
+	require.NoError(t, err)
+	assert.Empty(t, res.RegenerateError)
+	res, err = e.replan(true, planning.SpareKeep, true)
+	require.NoError(t, err)
+	require.NotNil(t, res.RunID)
+	assert.Empty(t, res.RegenerateError)
+}
+
+// panicOverrides panics while the re-plan writes its No-plate cells.
+type panicOverrides struct{ planning.Overrides }
+
+func (panicOverrides) SetOverride(context.Context, availability.OverrideInput) (availability.Cell, *plate.PlanSnapshot, error) {
+	panic("override bug")
+}
+
+// A panic inside the re-plan's unit of work frees the window it reserved.
+func TestReplan_PanicFreesTheWindow(t *testing.T) {
+	e := newReplanEnv(t, false)
+	e.deps.Overrides = panicOverrides{e.deps.Overrides}
+	e.svc = planning.NewService(e.deps)
+
+	assert.Panics(t, func() { _, _ = e.replan(true, planning.SpareKeep, false) })
+
+	assert.False(t, e.plateGone(e.thuLunch), "the unit of work rolled back")
+	req := e.req()
+	req.Today = day(replanDay)
+	_, err := e.svc.Generate(e.ctx, req)
 	assert.NoError(t, err, "the window is free again")
 }
 

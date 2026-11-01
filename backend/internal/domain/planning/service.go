@@ -3,8 +3,10 @@ package planning
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"time"
@@ -24,8 +26,18 @@ import (
 // it when the heuristic changes what it picks.
 const HeuristicVersion = "h1"
 
-// runTimeout bounds one generation (D9).
-const runTimeout = 3 * time.Minute
+// runTimeout bounds one generation (D9). Saving has its own budget, so a
+// proposal ready late in the run is still written.
+const (
+	runTimeout  = 3 * time.Minute
+	saveTimeout = 30 * time.Second
+)
+
+// keyTimeout is the error key of a run that ran out of time.
+const keyTimeout = "error.plan.timeout"
+
+// errShuttingDown refuses a generation once Shutdown began.
+var errShuttingDown = errors.New("plan generation is shutting down")
 
 // ScopeKind is what a generation may replace (D6).
 type ScopeKind string
@@ -86,10 +98,15 @@ type Deps struct {
 
 // Service runs generations (spec §6.1): it validates a request and starts
 // the run synchronously, then resolves, chooses, checks and persists in the
-// background (D9). One code path for every chooser.
+// background (D9). One code path for every chooser. Runs outlive their
+// request but not the service: Shutdown cancels them.
 type Service struct {
-	d  Deps
-	wg sync.WaitGroup
+	d      Deps
+	wg     sync.WaitGroup
+	mu     sync.Mutex
+	closed bool
+	base   context.Context
+	cancel context.CancelFunc
 }
 
 // NewService returns a generation service.
@@ -103,11 +120,44 @@ func NewService(d Deps) *Service {
 	if d.RunTimeout == 0 {
 		d.RunTimeout = runTimeout
 	}
-	return &Service{d: d}
+	base, cancel := context.WithCancel(context.Background())
+	return &Service{d: d, base: base, cancel: cancel}
 }
 
-// Wait blocks until every started generation finished (shutdown).
+// Wait blocks until every started generation finished.
 func (s *Service) Wait() { s.wg.Wait() }
+
+// Shutdown refuses new generations, cancels the running ones and waits until
+// they finished their runs or ctx ends. A cancelled run ends as an error
+// (error.server, like a run a restart interrupted).
+func (s *Service) Shutdown(ctx context.Context) error {
+	s.mu.Lock()
+	s.closed = true
+	s.mu.Unlock()
+	s.cancel()
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// track counts a generation about to start, unless Shutdown began.
+func (s *Service) track() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return false
+	}
+	s.wg.Add(1)
+	return true
+}
 
 // Generate starts a window generation (D7: on a window with drafts it
 // replaces them all) and returns its run id.
@@ -166,6 +216,14 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 			}
 		}()
 	}
+	if !s.track() {
+		return 0, errShuttingDown
+	}
+	defer func() {
+		if !started {
+			s.wg.Done()
+		}
+	}()
 	sd, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanShoppingDay)
 	if err != nil {
 		return 0, err
@@ -230,22 +288,35 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 	}
 	s.d.Progress.begin(w.Start, run.ID())
 	started = true
-	bg := context.WithoutCancel(runCtx)
-	s.wg.Add(1)
+	// The run keeps the request's values but not its cancellation (it
+	// outlives the client), and ends when the service shuts down.
+	bg, stop := context.WithCancel(context.WithoutCancel(runCtx))
+	unhook := context.AfterFunc(s.base, stop)
 	s.d.Go(func() {
 		defer s.wg.Done()
+		defer unhook()
+		defer stop()
 		s.execute(bg, run, j)
 	})
 	return run.ID(), nil
 }
 
-// chooser resolves the requested chooser (D11): the LLM when one is wired,
-// its provider resolves and nothing else is asked for, else the heuristic.
+// chooser resolves the requested chooser (D11). Without a name it is the
+// LLM when one is wired and its provider resolves, and the heuristic when no
+// provider is configured. A configured provider that fails to resolve is an
+// error, never a silent fallback: the user asks for the heuristic instead.
 func (s *Service) chooser(ctx context.Context, name airun.Chooser) (airun.Chooser, Chooser, error) {
 	if name == "" {
 		name = airun.ChooserHeuristic
-		if c, ok := s.d.Choosers[airun.ChooserLLM]; ok && ready(ctx, c) == nil {
-			name = airun.ChooserLLM
+		if c, ok := s.d.Choosers[airun.ChooserLLM]; ok {
+			switch err := ready(ctx, c); {
+			case err == nil:
+				name = airun.ChooserLLM
+			case errors.Is(err, domain.ErrAIProviderMissing):
+			default:
+				s.d.Logger.WarnContext(ctx, "plan.chooser provider not ready", "error", err)
+				return "", nil, err
+			}
 		}
 	}
 	switch name {
@@ -509,21 +580,25 @@ func nonNil(ids []int64) []int64 {
 }
 
 // execute runs a started generation to its end and finishes its run. A
-// panic ends the run as an error instead of the process.
+// panic ends the run as an error instead of the process. The window stays
+// reserved until the run row is finished, and is freed even if that fails.
 func (s *Service) execute(ctx context.Context, run Run, j job) {
-	ctx, cancel := context.WithTimeout(ctx, s.d.RunTimeout)
+	defer s.d.Progress.finish(run.ID())
+	tctx, cancel := context.WithTimeout(ctx, s.d.RunTimeout)
 	defer cancel()
 	end := func() (end RunEnd) {
 		defer func() {
 			if r := recover(); r != nil {
-				s.d.Logger.ErrorContext(ctx, "plan.generate panic", "run_id", run.ID(), "panic", r)
+				s.d.Logger.ErrorContext(ctx, "plan.generate panic", "run_id", run.ID(), "panic", r, "stack", string(debug.Stack()))
 				end = RunEnd{Status: airun.StatusError, ErrorKey: "error.server"}
 			}
 		}()
-		return s.generate(ctx, run.ID(), j)
+		return s.generate(tctx, run.ID(), j)
 	}()
+	if end.Status == airun.StatusError && s.base.Err() != nil {
+		end.ErrorKey = "error.server" // interrupted by Shutdown
+	}
 	run.Finish(ctx, end)
-	s.d.Progress.finish(run.ID())
 }
 
 // generate is the pipeline of spec §6.1 after the run started: resolve
@@ -532,6 +607,9 @@ func (s *Service) execute(ctx context.Context, run Run, j job) {
 func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	fail := func(stage string, err error) RunEnd {
 		key, _ := domain.MessageKey(err, "plan")
+		if errors.Is(err, context.DeadlineExceeded) {
+			key = keyTimeout
+		}
 		s.d.Logger.WarnContext(ctx, "plan.generate failed", "run_id", runID, "stage", stage, "error", err)
 		return RunEnd{Status: airun.StatusError, ErrorKey: key}
 	}
@@ -577,7 +655,11 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	s.d.Progress.setStage(runID, StageSaving)
 	snap := ToSnapshot(prop, base)
 	snap.Plates = append(routine, snap.Plates...)
-	gen := actor.With(ctx, actor.Generator, runID)
+	// Saving has its own budget: a proposal ready at the run's deadline is
+	// still written.
+	saveCtx, cancelSave := context.WithTimeout(context.WithoutCancel(ctx), saveTimeout)
+	defer cancelSave()
+	gen := actor.With(saveCtx, actor.Generator, runID)
 	err = s.d.Tx.InTx(gen, func(ctx context.Context) error {
 		if !j.rows.Empty() {
 			if _, err := s.d.Plates.RemoveDrafts(ctx, j.rows); err != nil {
@@ -588,16 +670,11 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		return err
 	})
 	if err != nil {
-		return fail("saving", err)
+		return fail("saving", changedDuringRun(err))
 	}
 
 	score := ComputeScore(merged, j.target, issues)
-	violations := []Issue{}
-	for _, is := range issues {
-		if is.Severity == SeverityViolation {
-			violations = append(violations, is)
-		}
-	}
+	violations := violationsOf(issues)
 	end := RunEnd{Status: airun.StatusOK, Notes: prop.Notes, RepairAttempts: prop.RepairAttempts}
 	if len(violations) > 0 {
 		end.Status = airun.StatusPartial
@@ -612,6 +689,19 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	}
 	end.ViolationsJSON, end.ScoreJSON = string(vj), string(sj)
 	return end
+}
+
+// changedDuringRun marks a save that failed because the plan changed while
+// the run chose (D10): a replaced draft was confirmed or removed, a target
+// cell got a plate or went No plate, or a session the proposal eats from is
+// gone. The unit of work rolled back, so the user can simply run it again.
+func changedDuringRun(err error) error {
+	for _, e := range []error{domain.ErrStateMismatch, domain.ErrCellOccupied, domain.ErrCellUnavailable, domain.ErrSessionNotFound} {
+		if errors.Is(err, e) {
+			return fmt.Errorf("%w: %w", domain.ErrPlanChanged, err)
+		}
+	}
+	return err
 }
 
 // hasOpenCell reports whether a target cell is a plan cell without a plate
@@ -663,7 +753,13 @@ func (s *Service) Run(ctx context.Context, id int64) (*RunView, error) {
 		Counts: Counts{RunCounts: counts}, Issues: []Issue{}, Window: window.Window{Start: rec.WindowStart, End: rec.WindowEnd},
 	}
 	if v.Status == airun.StatusRunning {
-		v.Stage, _ = s.d.Progress.Stage(id)
+		st, ok := s.d.Progress.Stage(id)
+		if !ok {
+			// The registry holds every run this process runs: a running row
+			// it lacks lost its finish write (or a restart interrupted it).
+			v.Status, v.ErrorKey = airun.StatusError, "error.server"
+		}
+		v.Stage = st
 	}
 	if rec.ScopeJSON != "" {
 		var sc scopeRecord

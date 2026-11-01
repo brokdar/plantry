@@ -221,9 +221,12 @@ type replanRequest struct {
 	Instruction     string       `json:"instruction"`
 }
 
+// replanResponse carries regenerate_error (a message key) when regenerate
+// was asked for but its run did not start; the removal stands.
 type replanResponse struct {
-	Removed plate.PlanSnapshot `json:"removed"`
-	RunID   *int64             `json:"run_id"`
+	Removed         plate.PlanSnapshot `json:"removed"`
+	RunID           *int64             `json:"run_id"`
+	RegenerateError string             `json:"regenerate_error,omitempty"`
 }
 
 type confirmedAffectedResponse struct {
@@ -293,7 +296,7 @@ func (h *PlanGenerateHandler) Replan(w http.ResponseWriter, r *http.Request) {
 		writePlanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, replanResponse{Removed: res.Removed, RunID: res.RunID})
+	writeJSON(w, http.StatusOK, replanResponse{Removed: res.Removed, RunID: res.RunID, RegenerateError: res.RegenerateError})
 }
 
 func (h *PlanGenerateHandler) replanQuery(w http.ResponseWriter, r *http.Request, from, to string, cells []replanCell) (planning.ReplanQuery, bool) {

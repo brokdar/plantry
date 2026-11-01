@@ -80,9 +80,12 @@ type ReplanPreview struct {
 
 // ReplanResult is a re-plan's outcome: the snapshot that restores the
 // removed plates and the run it started (nil without Regenerate).
+// RegenerateError is the message key of why a requested run did not start
+// after the removal committed; empty otherwise.
 type ReplanResult struct {
-	Removed plate.PlanSnapshot
-	RunID   *int64
+	Removed         plate.PlanSnapshot
+	RunID           *int64
+	RegenerateError string
 }
 
 // ConfirmedAffectedError is ErrConfirmedAffected with the confirmed plates
@@ -156,6 +159,14 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 	if err := s.d.Progress.reserve(w.Start); err != nil {
 		return nil, err
 	}
+	// The reservation is released here unless the run takes it over, also
+	// when something below panics.
+	handedOver := false
+	defer func() {
+		if !handedOver {
+			s.d.Progress.release(w.Start)
+		}
+	}()
 	res := &ReplanResult{}
 	err = s.d.Tx.InTx(ctx, func(ctx context.Context) error {
 		sc, err := s.scanReplan(ctx, req.ReplanQuery)
@@ -176,22 +187,24 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 		}
 		return nil
 	})
-	if err != nil || !req.Regenerate {
-		s.d.Progress.release(w.Start)
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
+	}
+	if !req.Regenerate {
 		return res, nil
 	}
-	// The run starts on the reservation the re-plan holds, so no other
-	// generation slips in between; the removal is committed either way, so a
-	// run that fails to start is logged and leaves run_id nil.
+	// The run starts on the reservation the re-plan holds (regenerate frees
+	// it when no run starts), so no other generation slips in between. The
+	// removal is committed either way, so a run that fails to start leaves
+	// run_id nil and says why in RegenerateError.
+	handedOver = true
 	id, err := s.regenerate(ctx, Request{
 		Start: w.Start, Today: req.Today, Chooser: req.Chooser, Instruction: req.Instruction,
 		Scope: Scope{Kind: ScopeEmptyCells, From: req.From, To: req.To},
 	}, true)
 	if err != nil {
 		s.d.Logger.WarnContext(ctx, "plan.replan regenerate did not start", "window", w.Start.Format(time.DateOnly), "error", err)
+		res.RegenerateError, _ = domain.MessageKey(err, "plan")
 		return res, nil
 	}
 	res.RunID = &id
