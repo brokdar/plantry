@@ -209,6 +209,9 @@ export interface ReplanPreview {
     food_name: string
     portions: number
     freezable: boolean
+    /** Not cooked and cooking from `from` on: the re-plan may freeze or
+     *  shrink it; otherwise its spare stays unassigned. */
+    mutable: boolean
   }[]
 }
 

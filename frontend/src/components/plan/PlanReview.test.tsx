@@ -682,9 +682,14 @@ describe("re-plan (F4)", () => {
         { date: "2026-11-02", slot_id: 3 },
       ])
     )
+    // The plate sheet that opened it is gone: focus goes back to the cell.
+    await user.click(within(sheet).getByRole("button", { name: "Cancel" }))
+    await waitFor(() =>
+      expect(document.activeElement).toHaveAccessibleName(MONDAY_DINNER)
+    )
   })
 
-  it("N on a confirmed cell opens the re-plan too", async () => {
+  it("N on a confirmed cell opens the re-plan too; closing returns focus to the cell", async () => {
     const user = userEvent.setup()
     vi.mocked(getPlan).mockResolvedValue(confirmedPlan)
     renderWithRouter(<PlanPage />)
@@ -692,5 +697,9 @@ describe("re-plan (F4)", () => {
     await user.keyboard("n")
     const sheet = await screen.findByTestId("replan-sheet")
     expect(within(sheet).getByLabelText("Monday dinner")).toBeChecked()
+    await user.click(within(sheet).getByRole("button", { name: "Cancel" }))
+    await waitFor(() =>
+      expect(document.activeElement).toHaveAccessibleName(MONDAY_DINNER)
+    )
   })
 })

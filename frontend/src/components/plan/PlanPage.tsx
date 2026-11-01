@@ -113,10 +113,12 @@ function PlanView({
   const [copyOpen, setCopyOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [discardOpen, setDiscardOpen] = useState(false)
-  // The re-plan sheet and the cells it opened with (UX §5.10).
+  // The re-plan sheet, the cells it opened with (UX §5.10) and the board
+  // cell it was opened from, which gets focus back when it closes.
   const [replan, setReplan] = useState<{
     open: boolean
     cells: ReplanCell[]
+    origin?: string
   }>({ open: false, cells: [] })
   const replanOpen = useRef(false)
   // Needs attention: the next cell to step to, and the cell the last press
@@ -280,9 +282,9 @@ function PlanView({
     changeSheet({ key: cell.key })
   }
 
-  function openReplan(cells: ReplanCell[]) {
+  function openReplan(cells: ReplanCell[], origin?: string) {
     replanOpen.current = true
-    setReplan({ open: true, cells })
+    setReplan({ open: true, cells, origin })
   }
 
   /** Mark as No plate: a confirmed plate from today on goes through the
@@ -290,7 +292,7 @@ function PlanView({
    *  marked at once with Undo. */
   function markCell(cell: BoardCell) {
     if (cell.state === "confirmed" && from !== null && cell.date >= from) {
-      openReplan([{ date: cell.date, slot_id: cell.slotId }])
+      openReplan([{ date: cell.date, slot_id: cell.slotId }], cell.key)
       return
     }
     const raw = plan.cells.find(
@@ -404,6 +406,11 @@ function PlanView({
           plan={plan}
           from={from}
           initialCells={replan.cells}
+          onCloseAutoFocus={(e) => {
+            if (!replan.origin) return
+            e.preventDefault()
+            focusCell(`[data-cell-key="${replan.origin}"]`)
+          }}
         />
       )}
       <ChatPanel range={{ from: win.start, to: win.end }} />

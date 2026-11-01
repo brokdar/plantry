@@ -1423,6 +1423,8 @@
       "now_none_other": "{{cells}} sind jetzt „Kein Essen“.",
       "spare_one": "Von {{name}} bleibt {{amount}} Portion übrig.",
       "spare_other": "Von {{name}} bleiben {{amount}} Portionen übrig.",
+      "cook_less_one": "{{name}}: {{amount}} Portion weniger kochen.",
+      "cook_less_other": "{{name}}: {{amount}} Portionen weniger kochen.",
       "unassigned_one": "{{amount}} Portion {{name}} ohne Mahlzeit.",
       "unassigned_other": "{{amount}} Portionen {{name}} ohne Mahlzeit.",
       "spare_legend": "Übrige Portionen",

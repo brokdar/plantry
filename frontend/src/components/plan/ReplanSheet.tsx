@@ -30,6 +30,8 @@ interface ReplanSheetProps {
   from: string
   /** Cells already asked for (Mark as No plate on a confirmed plate). */
   initialCells: ReplanCell[]
+  /** After the sheet closed; opened from a cell, focus goes back to it. */
+  onCloseAutoFocus?: (event: Event) => void
 }
 
 /**
@@ -48,6 +50,7 @@ export function ReplanSheet({
   plan,
   from,
   initialCells,
+  onCloseAutoFocus,
 }: ReplanSheetProps) {
   const phone = useIsPhone()
   return (
@@ -62,6 +65,7 @@ export function ReplanSheet({
         )}
         data-testid="replan-sheet"
         showCloseButton={false}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <ReplanBody
           plan={plan}
@@ -81,7 +85,9 @@ function ReplanBody({
   from,
   initialCells,
   onClose,
-}: Omit<ReplanSheetProps, "open" | "onOpenChange"> & { onClose: () => void }) {
+}: Omit<ReplanSheetProps, "open" | "onOpenChange" | "onCloseAutoFocus"> & {
+  onClose: () => void
+}) {
   const { t, i18n } = useTranslation()
   const settings = useSettingItems()
   const replan = useReplan()
@@ -151,8 +157,7 @@ function ReplanBody({
   const confirmed = data?.confirmed_affected ?? []
   const assistant = Boolean(settings.data?.["ai.provider"]?.value)
   // A preview for an older choice may miss confirmed plates of the new one.
-  const settled =
-    selected.length === 0 || (!!data && !preview.isPlaceholderData)
+  const settled = !!data && !preview.isPlaceholderData
   const busy = replan.isPending || !settled
 
   function submit(unlock: boolean) {
@@ -301,7 +306,14 @@ function ReplanBody({
             {data?.spare.map((s) => (
               <p key={s.session_id}>
                 {t(
-                  s.freezable ? "plan.replan.spare" : "plan.replan.unassigned",
+                  // Freezable: the choice below. Else a batch that can still
+                  // change cooks less; a cooked or earlier one keeps its
+                  // portions, unassigned.
+                  s.freezable
+                    ? "plan.replan.spare"
+                    : s.mutable
+                      ? "plan.replan.cook_less"
+                      : "plan.replan.unassigned",
                   {
                     count: s.portions,
                     amount: formatAmount(s.portions, i18n),

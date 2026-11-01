@@ -97,12 +97,21 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
   let library: Awaited<ReturnType<typeof seedRecipeLibrary>> | undefined
   let slotIds: number[] = []
 
+  // plan.freezing_enabled as it was, to put back afterwards.
+  const settings = (await (await ctx.get("/api/settings")).json()) as {
+    items: { key: string; value: string; source: string }[]
+  }
+  const freezingBefore = settings.items.find(
+    (i) => i.key === "plan.freezing_enabled"
+  )
   try {
     const freezing = await ctx.put("/api/settings/plan.freezing_enabled", {
       data: { value: "true" },
     })
     expect(freezing.ok(), await freezing.text()).toBeTruthy()
-    const slot = await seedSlot(`slot.rpl-${tag}`, "Moon", 99_982)
+    // The day's first slot, so today's other meals can eat the Chili cooked
+    // here.
+    const slot = await seedSlot(`slot.rpl-${tag}`, "Moon", -1)
     slotId = slot.id
     // The generator needs the 10-recipe target (D22) even on a fresh DB.
     library = await seedRecipeLibrary(tag)
@@ -146,8 +155,24 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
       expect(res.ok(), await res.text()).toBeTruthy()
       leftovers.push(((await res.json()) as { id: number }).id)
     }
-    const before = await session(ctx, sessionId)
+    // Today's other meals eat the Chili too: today keeps its one cook
+    // occasion and has no empty cell, so filling the week needs no second
+    // cook today (H2).
     let cells = await windowPlates(ctx, start, today)
+    for (const c of cells) {
+      if (c.date !== today || c.slot_id === slot.id || c.mode === "none")
+        continue
+      const res = await ctx.post("/api/plates", {
+        data: {
+          date: today,
+          slot_id: c.slot_id,
+          components: [{ food_id: chili.id, cook_session_id: sessionId }],
+        },
+      })
+      expect(res.ok(), await res.text()).toBeTruthy()
+    }
+    const before = await session(ctx, sessionId)
+    cells = await windowPlates(ctx, start, today)
     slotIds = [...new Set(cells.map((c) => c.slot_id))]
     const chiliPlates = cells.filter((c) =>
       leftovers.includes(c.plate?.id ?? 0)
@@ -227,15 +252,11 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
         { timeout: 30_000 }
       )
       .not.toBe("running")
-    // Known heuristic gap (reported for a backend follow-up): an
-    // empty_cells run cooks again on a day that already has a confirmed
-    // cook occasion (today's Chili), so the run ends `partial` with one H2
-    // violation for today. The drafts are written either way.
     const run = (await (await ctx.get(`/api/plan/runs/${runId}`)).json()) as {
       status: string
       counts: { plates: number }
     }
-    expect(["ok", "partial"]).toContain(run.status)
+    expect(run.status, JSON.stringify(run)).toBe("ok")
     expect(run.counts.plates).toBeGreaterThan(0)
     // The result is a draft overlay on the board.
     await expect(page.getByTestId("plan-summary")).toHaveText(/^Draft · /)
@@ -271,7 +292,12 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
       ),
       ...(slotId !== undefined ? [() => cleanupSlot(slotId!)] : []),
       ...(library ? [() => library!.cleanup()] : []),
-      () => ctx.delete("/api/settings/plan.freezing_enabled"),
+      () =>
+        freezingBefore?.source === "db"
+          ? ctx.put("/api/settings/plan.freezing_enabled", {
+              data: { value: freezingBefore.value },
+            })
+          : ctx.delete("/api/settings/plan.freezing_enabled"),
     ]
     for (const step of steps) {
       await step().catch((err: unknown) =>

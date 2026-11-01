@@ -59,6 +59,31 @@ func TestPlanReplanHTTP(t *testing.T) {
 	assert.Equal(t, map[string]any{"plates": []any{}, "sessions": []any{}}, body["removed"])
 }
 
+// A batch cooked today that loses Thursday's leftover lists its spare with
+// freezable and mutable (it can still shrink).
+func TestPlanReplanHTTP_PreviewSpare(t *testing.T) {
+	a := newGenAPI(t)
+	var lunch, food int64
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM time_slots WHERE name_key = 'slot.lunch'`).Scan(&lunch))
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM foods WHERE name = 'Main 1'`).Scan(&food))
+	code, body := a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2026-11-11","slot_id":%d,"components":[{"food_id":%d,"portions":1}]}`, lunch, food))
+	require.Equal(t, http.StatusCreated, code, body)
+	sid := body["components"].([]any)[0].(map[string]any)["cook_session_id"]
+	code, body = a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2026-11-12","slot_id":%d,"components":[{"food_id":%d,"cook_session_id":%v}]}`, lunch, food, sid))
+	require.Equal(t, http.StatusCreated, code, body)
+
+	code, pv := a.do(http.MethodGet, fmt.Sprintf("/api/plan/replan/preview?from=2026-11-11&to=2026-11-13&none=2026-11-12:%d&today=2026-11-11", lunch), "")
+	require.Equal(t, http.StatusOK, code, pv)
+	spare := pv["spare"].([]any)
+	require.Len(t, spare, 1, pv)
+	s := spare[0].(map[string]any)
+	assert.Equal(t, sid, s["session_id"])
+	assert.Equal(t, "Main 1", s["food_name"])
+	assert.Positive(t, s["portions"])
+	assert.Equal(t, false, s["freezable"], "freezing is off")
+	assert.Equal(t, true, s["mutable"])
+}
+
 func TestPlanReplanHTTP_Errors(t *testing.T) {
 	a := newGenAPI(t)
 	tests := []struct {

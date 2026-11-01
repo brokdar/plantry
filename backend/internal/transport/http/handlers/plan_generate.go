@@ -201,6 +201,7 @@ type replanSpare struct {
 	FoodName  string  `json:"food_name"`
 	Portions  float64 `json:"portions"`
 	Freezable bool    `json:"freezable"`
+	Mutable   bool    `json:"mutable"`
 }
 
 type replanPreviewResponse struct {
@@ -261,7 +262,7 @@ func (h *PlanGenerateHandler) ReplanPreview(w http.ResponseWriter, r *http.Reque
 		out.NoneCells = append(out.NoneCells, replanCell{Date: dateString(c.Date), SlotID: c.SlotID})
 	}
 	for _, sp := range pv.Spare {
-		out.Spare = append(out.Spare, replanSpare{SessionID: sp.SessionID, FoodName: sp.FoodName, Portions: sp.Portions, Freezable: sp.Freezable})
+		out.Spare = append(out.Spare, replanSpare{SessionID: sp.SessionID, FoodName: sp.FoodName, Portions: sp.Portions, Freezable: sp.Freezable, Mutable: sp.Mutable})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

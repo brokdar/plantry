@@ -46,7 +46,15 @@ const preview: ReplanPreview = {
     { plate_id: 2, date: "2026-11-02", slot_id: 2, food_name: "Chili" },
     { plate_id: 3, date: "2026-11-02", slot_id: 3, food_name: "Chili" },
   ],
-  spare: [{ session_id: 1, food_name: "Chili", portions: 2, freezable: true }],
+  spare: [
+    {
+      session_id: 1,
+      food_name: "Chili",
+      portions: 2,
+      freezable: true,
+      mutable: true,
+    },
+  ],
 }
 
 const EMPTY: ReplanPreview = {
@@ -203,12 +211,40 @@ describe("ReplanSheet", () => {
     expect(input).not.toHaveProperty("chooser")
   })
 
-  it("a batch that can't freeze reports its unassigned portions and offers no choice", async () => {
+  it("a batch that can still change but can't freeze cooks less", async () => {
     vi.mocked(getReplanPreview).mockResolvedValue({
       none_cells: [{ date: "2026-11-02", slot_id: 3 }],
       confirmed_affected: [],
       spare: [
-        { session_id: 1, food_name: "Chili", portions: 1, freezable: false },
+        {
+          session_id: 1,
+          food_name: "Chili",
+          portions: 2,
+          freezable: false,
+          mutable: true,
+        },
+      ],
+    })
+    renderSheet({ initialCells: [{ date: "2026-11-02", slot_id: 3 }] })
+    const s = await sheet()
+    expect(await within(s).findByTestId("replan-changes")).toHaveTextContent(
+      "Chili: cook 2 portions less."
+    )
+    expect(within(s).queryByText("Spare portions")).toBeNull()
+  })
+
+  it("a cooked batch reports its unassigned portions and offers no choice", async () => {
+    vi.mocked(getReplanPreview).mockResolvedValue({
+      none_cells: [{ date: "2026-11-02", slot_id: 3 }],
+      confirmed_affected: [],
+      spare: [
+        {
+          session_id: 1,
+          food_name: "Chili",
+          portions: 1,
+          freezable: false,
+          mutable: false,
+        },
       ],
     })
     renderSheet({ initialCells: [{ date: "2026-11-02", slot_id: 3 }] })
@@ -253,7 +289,9 @@ describe("ReplanSheet", () => {
     await userEvent.click(
       within(s).getByLabelText("Re-plan the rest of the week")
     )
-    expect(within(s).getByRole("button", { name: "Re-plan" })).toBeEnabled()
+    await waitFor(() =>
+      expect(within(s).getByRole("button", { name: "Re-plan" })).toBeEnabled()
+    )
   })
 
   it("titles a later start by its day", async () => {
