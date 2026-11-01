@@ -68,8 +68,36 @@ func TestHeuristicHasNoHardViolations(t *testing.T) {
 			assert.Empty(t, r.Score.HardViolations)
 			assert.Equal(t, "h1", r.PromptVersion)
 			assert.Equal(t, Tokens{}, r.Tokens, "the heuristic calls no model")
+			if r.Scenario == "small_library_h8" {
+				assert.Contains(t, names(r.Expectations), ExpectMinRepeats, "H8 relaxation is pinned")
+				assert.GreaterOrEqual(t, r.Score.Variety.Repeats, 7)
+			}
 		})
 	}
+}
+
+func TestFrozenSpare(t *testing.T) {
+	from := Date{day("2026-11-10")}
+	st := Step{Action: ActionReplan, From: &from}
+	before := rows{sessions: map[int64]sessionRow{
+		1: {CookDate: "2026-11-10", Portions: 6},
+		2: {CookDate: "2026-11-09", Portions: 6},
+		3: {CookDate: "2026-11-11", Portions: 6, Cooked: true},
+	}}
+	frozenAt := func(id int64) rows {
+		after := rows{sessions: map[int64]sessionRow{}}
+		for k, s := range before.sessions {
+			if k == id {
+				s.FrozenPortions = 1
+			}
+			after.sessions[k] = s
+		}
+		return after
+	}
+	assert.True(t, frozenSpare(st, before, frozenAt(1)).OK)
+	assert.False(t, frozenSpare(st, before, frozenAt(2)).OK, "cooks before from")
+	assert.False(t, frozenSpare(st, before, frozenAt(3)).OK, "already cooked")
+	assert.False(t, frozenSpare(st, before, before).OK)
 }
 
 // B9-AC2: with the fake client scripted per scenario, the LLM chooser's
@@ -83,13 +111,17 @@ func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 	for _, r := range recs {
 		t.Run(r.Scenario, func(t *testing.T) {
 			assert.Empty(t, r.Failed())
-			assert.Contains(t, names(r.Expectations), ExpectPromptDates)
 			assert.Equal(t, string(airun.StatusOK), r.Status, r.ErrorKey)
 			assert.Equal(t, 0, r.RepairAttempts)
 			assert.Equal(t, "fake", r.Model)
 			assert.Equal(t, "p1", r.PromptVersion)
-			assert.Positive(t, r.Tokens.Input, "the metered fake client reports tokens")
-			assert.Nil(t, r.CostUSD, "the fake model has no price")
+			// A run that fills cells asks the model; one with nothing to
+			// fill (away_thu_fri) may not.
+			if r.Plates > 0 {
+				assert.Contains(t, names(r.Expectations), ExpectPromptDates)
+				assert.Positive(t, r.Tokens.Input, "the metered fake client reports tokens")
+				assert.Nil(t, r.CostUSD, "the fake model has no price")
+			}
 		})
 	}
 }
@@ -134,7 +166,7 @@ func TestReplanScenarios(t *testing.T) {
 
 	away := recs[0]
 	assert.Empty(t, away.Failed())
-	assert.Subset(t, names(away.Expectations), []string{ExpectKeptConfirmed, ExpectUnchangedBefore, ExpectNoPlate})
+	assert.Subset(t, names(away.Expectations), []string{ExpectKeptConfirmed, ExpectUnchangedBefore, ExpectNoPlate, ExpectFrozenSpare})
 
 	oneDay := recs[1]
 	assert.Empty(t, oneDay.Failed())

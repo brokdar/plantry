@@ -23,5 +23,5 @@
     {"date": "2026-11-04", "slot": "dinner", "recipe": "Tofu-Gemüse-Pfanne"}
   ],
   "steps": [{"action": "generate"}],
-  "expect": {"min_plates": 14}
+  "expect": {"min_plates": 14, "min_repeats": 7}
 }

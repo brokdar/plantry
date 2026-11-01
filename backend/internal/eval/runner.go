@@ -74,6 +74,8 @@ const (
 	ExpectNoPlate         = "no_plate"
 	ExpectUnchangedBefore = "unchanged_before"
 	ExpectMinPlates       = "min_plates"
+	ExpectMinRepeats      = "min_repeats"
+	ExpectFrozenSpare     = "frozen_spare"
 )
 
 // Run runs every scenario cfg.Runs times, each on a fresh database, and
@@ -146,9 +148,7 @@ func runOnce(ctx context.Context, cfg Config, d *dbs, lib Library, sc Scenario, 
 		if before, err = e.rows(ctx); err != nil {
 			return Record{}, err
 		}
-		if e.scripted != nil {
-			e.scripted.takeRequests()
-		}
+		e.takeRequests()
 		t0 := cfg.Now()
 		runID, err := e.step(ctx, sc, st, cfg.Chooser)
 		rec.LatencyMS = cfg.Now().Sub(t0).Milliseconds()
@@ -161,8 +161,10 @@ func runOnce(ctx context.Context, cfg Config, d *dbs, lib Library, sc Scenario, 
 		if err := e.measure(ctx, runID, &rec); err != nil {
 			return Record{}, err
 		}
-		if e.scripted != nil && cfg.Chooser == airun.ChooserLLM {
-			rec.Expectations = append(rec.Expectations, promptDates(e.scripted.takeRequests(), stepToday(sc, st), e))
+		// A run with nothing to choose sends no request, and has no prompt
+		// to check.
+		if reqs := e.takeRequests(); len(reqs) > 0 && cfg.Chooser == airun.ChooserLLM {
+			rec.Expectations = append(rec.Expectations, promptDates(reqs, stepToday(sc, st), e))
 		}
 	}
 	after, err := e.rows(ctx)
@@ -263,6 +265,15 @@ func (e *env) measure(ctx context.Context, runID int64, rec *Record) error {
 	}
 	rec.Expectations = append(rec.Expectations, Expectation{Name: ExpectNoViolations, OK: ok, Detail: strings.TrimSpace(detail)})
 	return nil
+}
+
+// takeRequests returns the scripted client's requests since the last call;
+// none in live mode.
+func (e *env) takeRequests() []llm.Request {
+	if e.scripted == nil {
+		return nil
+	}
+	return e.scripted.takeRequests()
 }
 
 // promptDates checks the "nil dates" regression on the recorded requests:
@@ -384,6 +395,20 @@ func (e *env) expect(sc Scenario, st Step, before, after rows, rec Record) []Exp
 		}
 		out = append(out, ex)
 	}
+	if x.MinRepeats > 0 {
+		repeats := 0
+		if rec.Score != nil {
+			repeats = rec.Score.Variety.Repeats
+		}
+		ex := Expectation{Name: ExpectMinRepeats, OK: repeats >= x.MinRepeats}
+		if !ex.OK {
+			ex.Detail = fmt.Sprintf("%d repeats, want ≥ %d", repeats, x.MinRepeats)
+		}
+		out = append(out, ex)
+	}
+	if x.FrozenSpare {
+		out = append(out, frozenSpare(st, before, after))
+	}
 	if x.MinPlates > 0 {
 		ex := Expectation{Name: ExpectMinPlates, OK: rec.Plates >= x.MinPlates}
 		if !ex.OK {
@@ -392,6 +417,26 @@ func (e *env) expect(sc Scenario, st Step, before, after rows, rec Record) []Exp
 		out = append(out, ex)
 	}
 	return out
+}
+
+// frozenSpare checks that an uncooked batch cooking on or after the
+// re-plan's From froze more portions than it had before.
+func frozenSpare(st Step, before, after rows) Expectation {
+	x := Expectation{Name: ExpectFrozenSpare}
+	if st.From == nil {
+		x.Detail = "the step has no from"
+		return x
+	}
+	from := st.From.Format(time.DateOnly)
+	for id, s := range before.sessions {
+		a, ok := after.sessions[id]
+		if ok && !a.Cooked && a.CookDate >= from && a.FrozenPortions > s.FrozenPortions {
+			x.OK = true
+			return x
+		}
+	}
+	x.Detail = "no batch from " + from + " on froze spare portions"
+	return x
 }
 
 func cellKey(date string, slotID int64) string { return fmt.Sprintf("%s/%d", date, slotID) }

@@ -1,6 +1,6 @@
 {
   "name": "away_thu_fri",
-  "description": "Mid-week on an accepted window: on Wednesday the batch cooker learns he is away Thursday and Friday, unlocks those plates, freezes the spare portions and re-plans the rest of the week.",
+  "description": "Mid-week on an accepted window: on Tuesday the batch cooker learns he is away Thursday and Friday, unlocks those plates, freezes the spare portions and re-plans the rest of the week.",
   "today": "2026-11-06",
   "start": "2026-11-07",
   "settings": {
@@ -18,7 +18,7 @@
   "steps": [
     {"action": "generate"},
     {"action": "accept"},
-    {"action": "replan", "today": "2026-11-11", "from": "2026-11-11", "to": "2026-11-13",
+    {"action": "replan", "today": "2026-11-10", "from": "2026-11-10", "to": "2026-11-13",
      "none": [
        {"date": "2026-11-12", "slot": "breakfast"}, {"date": "2026-11-12", "slot": "lunch"}, {"date": "2026-11-12", "slot": "dinner"},
        {"date": "2026-11-13", "slot": "breakfast"}, {"date": "2026-11-13", "slot": "lunch"}, {"date": "2026-11-13", "slot": "dinner"}
@@ -27,7 +27,8 @@
   ],
   "expect": {
     "kept_confirmed": true,
-    "unchanged_before": "2026-11-11",
+    "unchanged_before": "2026-11-10",
+    "frozen_spare": true,
     "no_plate": [
       {"date": "2026-11-12", "slot": "breakfast"}, {"date": "2026-11-12", "slot": "lunch"}, {"date": "2026-11-12", "slot": "dinner"},
       {"date": "2026-11-13", "slot": "breakfast"}, {"date": "2026-11-13", "slot": "lunch"}, {"date": "2026-11-13", "slot": "dinner"}

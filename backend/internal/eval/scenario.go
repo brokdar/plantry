@@ -207,6 +207,12 @@ type Expect struct {
 	UnchangedBefore *Date `json:"unchanged_before"`
 	// MinPlates is the fewest plates the measured run must write.
 	MinPlates int `json:"min_plates"`
+	// MinRepeats is the fewest H8 repeats the measured run's score must
+	// count (variety relaxed for lack of recipes).
+	MinRepeats int `json:"min_repeats"`
+	// FrozenSpare: the measured re-plan froze spare portions of an
+	// uncooked batch cooking on or after its From.
+	FrozenSpare bool `json:"frozen_spare"`
 }
 
 // LoadLibrary reads the built-in library.
