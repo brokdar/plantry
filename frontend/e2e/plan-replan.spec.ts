@@ -4,13 +4,11 @@ import {
   API,
   addDays,
   apiRequest,
-  cleanupFood,
   cleanupSlot,
   expect,
   mockSettingValues,
   planCell,
-  seedComposedFood,
-  seedLeafFood,
+  seedRecipeLibrary,
   seedSlot,
   test,
   uid,
@@ -95,7 +93,8 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i))
   const today = days[3]
   const end = days[6]
-  const seeded: { slot?: number; foods: number[] } = { foods: [] }
+  let slotId: number | undefined
+  let library: Awaited<ReturnType<typeof seedRecipeLibrary>> | undefined
   let slotIds: number[] = []
 
   try {
@@ -104,43 +103,10 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
     })
     expect(freezing.ok(), await freezing.text()).toBeTruthy()
     const slot = await seedSlot(`slot.rpl-${tag}`, "Moon", 99_982)
-    seeded.slot = slot.id
-    const beans = await seedLeafFood({
-      name: `Beans ${tag}`,
-      kcal_100g: 120,
-      protein_100g: 8,
-      fat_100g: 1,
-      carbs_100g: 20,
-    })
-    seeded.foods.push(beans.id)
+    slotId = slot.id
     // The generator needs the 10-recipe target (D22) even on a fresh DB.
-    const recipes: Record<string, number> = {}
-    for (const [dish, role] of [
-      ...["Chili", "Curry", "Dal", "Ragout", "Hash", "Pilaf"].map(
-        (n) => [n, "main"] as const
-      ),
-      ...["Rice", "Bread"].map((n) => [n, "side_starch"] as const),
-      ...["Greens", "Slaw"].map((n) => [n, "side_veg"] as const),
-    ]) {
-      const f = await seedComposedFood({
-        name: `${dish} ${tag}`,
-        role,
-        reference_portions: 4,
-        keep_days: 3,
-        children: [
-          {
-            child_id: beans.id,
-            amount: 300,
-            unit: "g",
-            grams: 300,
-            sort_order: 0,
-          },
-        ],
-      })
-      recipes[dish] = f.id
-      // Recipes before their ingredient: a used ingredient can't be deleted.
-      seeded.foods.unshift(f.id)
-    }
+    library = await seedRecipeLibrary(tag)
+    const [chili, curry] = library.mains
 
     const clear = await ctx.delete(`/api/plan?from=${start}&to=${end}`)
     expect(clear.ok(), await clear.text()).toBeTruthy()
@@ -150,7 +116,7 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
       data: {
         date: days[1],
         slot_id: slot.id,
-        components: [{ food_id: recipes.Curry }],
+        components: [{ food_id: curry.id }],
       },
     })
     expect(past.ok(), await past.text()).toBeTruthy()
@@ -159,7 +125,7 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
       data: {
         date: today,
         slot_id: slot.id,
-        components: [{ food_id: recipes.Chili }],
+        components: [{ food_id: chili.id }],
       },
     })
     expect(cook.ok(), await cook.text()).toBeTruthy()
@@ -174,7 +140,7 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
         data: {
           date: d,
           slot_id: slot.id,
-          components: [{ food_id: recipes.Chili, cook_session_id: sessionId }],
+          components: [{ food_id: chili.id, cook_session_id: sessionId }],
         },
       })
       expect(res.ok(), await res.text()).toBeTruthy()
@@ -207,14 +173,14 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
       `${weekday(days[4])} and ${weekday(days[5])} are now No plate.`
     )
     await expect(sheet.getByTestId("replan-changes")).toContainText(
-      `Chili ${tag} has`
+      `${chili.name} has`
     )
     const bought = sheet.getByTestId("replan-bought")
     await expect(bought).toContainText("These were already bought for")
     // The slot "slot.rpl-<tag>" reads "Rpl <Tag>", lowercased in a cell name.
     for (const d of [days[4], days[5]]) {
       await expect(bought).toContainText(
-        `${weekday(d)} rpl ${tag} · Chili ${tag}`
+        `${weekday(d)} rpl ${tag} · ${chili.name}`
       )
     }
     let replanned = false
@@ -303,8 +269,8 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
       ...[days[4], days[5]].flatMap((d) =>
         slotIds.map((s) => () => ctx.delete(`/api/availability/${d}/${s}`))
       ),
-      ...(seeded.slot !== undefined ? [() => cleanupSlot(seeded.slot!)] : []),
-      ...seeded.foods.map((id) => () => cleanupFood(id)),
+      ...(slotId !== undefined ? [() => cleanupSlot(slotId!)] : []),
+      ...(library ? [() => library!.cleanup()] : []),
       () => ctx.delete("/api/settings/plan.freezing_enabled"),
     ]
     for (const step of steps) {
