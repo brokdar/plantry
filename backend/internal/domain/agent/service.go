@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -52,6 +53,9 @@ type Service struct {
 	plan     PlanContext
 	now      func() time.Time
 	recorder *airun.Recorder // may be nil: chat turns are then not recorded
+	// turns numbers the Chat calls; unlocks holds the unlock previews (D6).
+	turns   atomic.Uint64
+	unlocks *pendingUnlocks
 }
 
 // NewService constructs the agent service. The resolver is consulted at the
@@ -71,6 +75,7 @@ func NewService(
 		repo: repo, resolver: resolver, tools: tools,
 		profile: profileSvc, settings: settingsSvc,
 		plan: plan, now: now,
+		unlocks: newPendingUnlocks(now),
 	}
 }
 
@@ -163,8 +168,10 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		}()
 	}
 
-	// Drive the loop. Tools read today from ctx (D25).
+	// Drive the loop. Tools read today (D25), the window and the turn from
+	// ctx.
 	ctx = withWindow(withToday(ctx, s.today(req)), w)
+	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks})
 	return Run(ctx, RunRequest{
 		ConversationID: conv.ID,
 		Model:          model,

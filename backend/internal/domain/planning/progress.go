@@ -34,6 +34,8 @@ type Progress struct {
 type progressEntry struct {
 	window string
 	stage  Stage
+	// done is closed when the run finished (Await).
+	done chan struct{}
 }
 
 // NewProgress returns an empty registry.
@@ -69,7 +71,7 @@ func (p *Progress) begin(start time.Time, runID int64) {
 	defer p.mu.Unlock()
 	k := windowKey(start)
 	p.windows[k] = runID
-	p.runs[runID] = &progressEntry{window: k, stage: StageResolving}
+	p.runs[runID] = &progressEntry{window: k, stage: StageResolving, done: make(chan struct{})}
 }
 
 func (p *Progress) setStage(runID int64, st Stage) {
@@ -80,14 +82,31 @@ func (p *Progress) setStage(runID int64, st Stage) {
 	}
 }
 
-// finish drops the run and frees its window.
+// finish drops the run, frees its window and wakes its waiters.
 func (p *Progress) finish(runID int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if e, ok := p.runs[runID]; ok && p.windows[e.window] == runID {
+	e, ok := p.runs[runID]
+	if !ok {
+		return
+	}
+	if p.windows[e.window] == runID {
 		delete(p.windows, e.window)
 	}
 	delete(p.runs, runID)
+	close(e.done)
+}
+
+// doneCh returns the channel closed when a running run finished; ok is false
+// for any other run.
+func (p *Progress) doneCh(runID int64) (<-chan struct{}, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	e, ok := p.runs[runID]
+	if !ok {
+		return nil, false
+	}
+	return e.done, true
 }
 
 // Stage returns a running run's stage; ok is false for any other run.

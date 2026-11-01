@@ -47,6 +47,27 @@ func TestProgress_Lifecycle(t *testing.T) {
 	p.finish(99)
 }
 
+// B4-AC2: finish closes the run's done channel, which Await waits on.
+func TestProgress_DoneClosesOnFinish(t *testing.T) {
+	p := NewProgress()
+	w := time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+	require.NoError(t, p.reserve(w))
+	p.begin(w, 3)
+	done, ok := p.doneCh(3)
+	require.True(t, ok)
+	select {
+	case <-done:
+		t.Fatal("done before finish")
+	default:
+	}
+	p.finish(3)
+	_, open := <-done
+	assert.False(t, open, "finish closes done")
+	_, ok = p.doneCh(3)
+	assert.False(t, ok, "a finished run has no done channel")
+	p.finish(3) // a second finish is a no-op
+}
+
 // Concurrent starts on one window: a start only wins a free window, and the
 // registry ends empty and consistent under -race.
 func TestProgress_Concurrent(t *testing.T) {

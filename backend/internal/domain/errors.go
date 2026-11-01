@@ -31,6 +31,9 @@ var (
 	// agent never records likes/dislikes, which plate feedback owns (D9).
 	ErrAIPastDate           = errors.New("the assistant cannot change days before today")
 	ErrAIPreferenceReserved = errors.New("preference key is reserved")
+	// ErrAIUnlockNeedsUser: the agent confirmed an unlock without a preview
+	// the user answered in a later message (Phase 4 D6).
+	ErrAIUnlockNeedsUser = errors.New("unlock needs the user's yes in a later message")
 
 	// Plate feedback errors.
 	ErrInvalidFeedbackStatus = errors.New("invalid feedback status")
@@ -142,6 +145,7 @@ var messageKeys = []struct {
 	{ErrAIInvalidPlan, "error.ai.invalid_plan"},
 	{ErrAIPastDate, "error.ai.past_date"},
 	{ErrAIPreferenceReserved, "error.ai.preference_reserved"},
+	{ErrAIUnlockNeedsUser, "error.ai.unlock_needs_user"},
 	{ErrInvalidFeedbackStatus, "error.feedback.invalid_status"},
 	{ErrImportBodyTooLarge, "error.import.body_too_large"},
 	{ErrImportNotHTML, "error.import.not_html"},

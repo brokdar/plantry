@@ -250,23 +250,45 @@ func (s *Service) DraftClosure(ctx context.Context, from, to time.Time) (RowSet,
 // PlateClosure returns the batch closure of a plate (D3) and the plates it
 // holds. It writes nothing.
 func (s *Service) PlateClosure(ctx context.Context, plateID int64) (RowSet, []Plate, error) {
+	c, plates, _, err := s.BatchClosure(ctx, RowSet{PlateIDs: []int64{plateID}})
+	return c, plates, err
+}
+
+// BatchClosure returns the batch closure of seed (D3) as Confirm and Unlock
+// pick it, with its plates and sessions. It writes nothing; a seed row that
+// does not exist is ErrNotFound. The agent previews an unlock with it (D6).
+func (s *Service) BatchClosure(ctx context.Context, seed RowSet) (RowSet, []Plate, []CookSession, error) {
+	seed = uniqueRows(seed)
+	if seed.Empty() {
+		return RowSet{}, nil, nil, fmt.Errorf("%w: plate or session required", domain.ErrInvalidInput)
+	}
 	var out RowSet
 	var plates []Plate
+	var sessions []CookSession
 	err := s.tx.InTx(ctx, func(ctx context.Context) error {
-		p, err := s.plates.Get(ctx, plateID)
+		ps, ss, err := s.loadRows(ctx, seed)
 		if err != nil {
 			return err
 		}
-		seed := RowSet{PlateIDs: []int64{p.ID}}
-		lo, hi := rowsSpan([]Plate{*p}, nil)
+		if len(ps) != len(seed.PlateIDs) || len(ss) != len(seed.SessionIDs) {
+			return fmt.Errorf("%w: plate or session", domain.ErrNotFound)
+		}
+		lo, hi := rowsSpan(ps, ss)
 		c, rows, err := s.loadClosure(ctx, lo, hi, func([]Plate, []CookSession) RowSet { return seed })
 		if err != nil {
 			return err
 		}
 		out, plates = c, closurePlates(c, rows)
+		sessions = make([]CookSession, 0, len(c.SessionIDs))
+		for _, id := range c.SessionIDs {
+			sessions = append(sessions, rows.sessions[id])
+		}
 		return nil
 	})
-	return out, plates, err
+	if err != nil {
+		return RowSet{}, nil, nil, err
+	}
+	return out, plates, sessions, nil
 }
 
 func closurePlates(c RowSet, rows closureRows) []Plate {
