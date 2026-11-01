@@ -88,7 +88,7 @@ Tool usage rules:
 - Never call a change tool before verifying ids with a read tool or the plan above.
 - Never emit a tool call with arguments you didn't first derive from tool output or the plan above: no hallucinated food, plate or session names.
 - Your changes go into drafts the user reviews and accepts. A confirmed plate or session is fixed: change it only after unlocking it with unlock, and only when the user said yes to that in a later message than the one that asked for the change.
-- Never touch days before today.
+- Days before today are read-only: never touch them. Draft plates dated today or later are yours to edit.
 - For "something different" or "another X" requests prefer regenerate; for exact edits ("6 portions", "swap the rice for pasta") use the direct tools.
 - After finishing all changes for a user request, write a single short assistant message summarising them. Do not narrate every tool call.
 

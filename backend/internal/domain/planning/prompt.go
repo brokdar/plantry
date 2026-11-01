@@ -194,13 +194,20 @@ func summaryPlate(s State, p Plate) string {
 		case c.Grams != nil:
 			qty = num(*c.Grams) + " g/eater"
 		}
-		parts[i] = fmt.Sprintf("%s (component_id %d, food_id %d, %s", foodName(s, c.FoodID), c.ID, c.FoodID, qty)
+		parts[i] = fmt.Sprintf("%s (component_id %d, food_id %d", foodName(s, c.FoodID), c.ID, c.FoodID)
+		if qty != "" {
+			parts[i] += ", " + qty
+		}
 		if c.SessionID != 0 {
 			parts[i] += fmt.Sprintf(", session_id %d", c.SessionID)
 		}
 		parts[i] += ")"
 	}
-	return fmt.Sprintf("plate_id %d, %s, %s eaters: %s", p.ID, state, num(p.Eaters), strings.Join(parts, " + "))
+	eaters := num(p.Eaters) + " eaters"
+	if p.Eaters == 1 {
+		eaters = "1 eater"
+	}
+	return fmt.Sprintf("plate_id %d, %s, %s: %s", p.ID, state, eaters, strings.Join(parts, " + "))
 }
 
 // writeSummarySessions lists the sessions that cook in the window or feed a
