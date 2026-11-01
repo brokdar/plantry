@@ -29,7 +29,7 @@ func TestPrompt_CarriesSummaryBetweenProfileAndRules(t *testing.T) {
 }
 
 // D3: drafts, unlock, past days, regenerate vs direct tools, one summary; no
-// copy_week.
+// week-copy paragraph.
 func TestPrompt_ToolRules(t *testing.T) {
 	prompt := ComposePrompt(nil, "", time.Time{})
 	for _, want := range []string{"drafts", "unlock", "later message", "before today", "regenerate", "single short assistant message", "get_plan"} {
@@ -37,8 +37,8 @@ func TestPrompt_ToolRules(t *testing.T) {
 			t.Errorf("prompt must mention %q", want)
 		}
 	}
-	if strings.Contains(prompt, "copy_week") {
-		t.Error("the copy_week paragraph is gone")
+	if strings.Contains(prompt, "copy"+"_week") {
+		t.Error("the week-copy paragraph is gone")
 	}
 }
 

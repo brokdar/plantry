@@ -27,6 +27,8 @@ describe("check-legacy.sh (D27)", () => {
     'createFileRoute("/settings/assistant/insights")',
     'const label = t("nav.generate_plan")',
     't("plan.review.regenerate_week")',
+    'import { AssistantPanel } from "@/components/assistant/AssistantPanel"',
+    't("plan.copy_week.title")',
   ])("allows %s", (line) => {
     expect(flagged(line)).toBe(false)
   })
@@ -44,6 +46,12 @@ describe("check-legacy.sh (D27)", () => {
     banned("plate.locked", "_by"),
     banned('"is_', 'locked": true'),
     banned("const is", "Locked = true"),
+    // Phase 4 Z1 (§0.2 item 5): the modal chat sheet and its events.
+    banned("import { Chat", 'Panel } from "@/ui"'),
+    banned("<Tool", "CallBlock />"),
+    banned('data-testid="chat-tool', '-call"'),
+    banned("use", "ChatUI()"),
+    banned("plate", "_changed"),
   ])("rejects %s", (line) => {
     expect(flagged(line)).toBe(true)
   })

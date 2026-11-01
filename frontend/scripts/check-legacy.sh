@@ -18,6 +18,7 @@ patterns=(
   'PortionStepper|seedTemplate|/api/templates'
   'plan\.generate_prompt|openWith\(t\("plan\.generate'
   'locked_by|is_locked|isLocked'
+  'components/chat|ChatPanel|ToolCallBlock|chat-tool-call|useChatUI|chat-ui|chat-stream|chatEvents|plate_changed'
 )
 
 status=0
