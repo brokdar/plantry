@@ -131,7 +131,10 @@ type WeekBucket struct {
 
 // VersionGroup aggregates runs by kind, prompt version and model. ScoreAvg
 // averages every numeric leaf of score_json (nested keys joined with "."),
-// over the runs that have it; Violations counts violations by rule.
+// over the runs that have it, except per-date entries (a key that is a
+// YYYY-MM-DD date, such as cook_occasions.per_day): each run plans other
+// dates, so their average means nothing. Violations counts violations by
+// rule.
 type VersionGroup struct {
 	Kind          Kind
 	PromptVersion string
@@ -382,7 +385,7 @@ func versionGroups(rows []RunRow) []VersionGroup {
 }
 
 // numericLeaves calls fn for every number in v, keyed by its dotted path.
-// Arrays are skipped.
+// Arrays and date-keyed entries are skipped.
 func numericLeaves(path string, v any, fn func(string, float64)) {
 	switch x := v.(type) {
 	case float64:
@@ -391,6 +394,9 @@ func numericLeaves(path string, v any, fn func(string, float64)) {
 		}
 	case map[string]any:
 		for k, child := range x {
+			if _, err := time.Parse(time.DateOnly, k); err == nil {
+				continue
+			}
 			p := k
 			if path != "" {
 				p = path + "." + k
