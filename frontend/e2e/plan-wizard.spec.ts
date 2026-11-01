@@ -236,7 +236,9 @@ test.describe("plan wizard", () => {
       await expect(page.getByTestId("plan-summary")).toHaveText(
         /^Draft · \d+ plates · \d+ cook days?$/
       )
-      await expect(page.getByTestId("plan-warnings")).toHaveCount(0)
+      await expect(page.getByTestId("plan-warnings")).toHaveText(
+        "0 plates need attention"
+      )
       for (const date of days) {
         for (const slotId of [breakfast, lunch, dinner]) {
           const cell = planCell(page, date, slotId)
