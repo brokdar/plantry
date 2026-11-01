@@ -352,7 +352,7 @@ describe("PlanPage", () => {
       )
     )
     expect(
-      screen.getByRole("button", { name: "Increase Portions to cook" })
+      screen.getByRole("button", { name: "Increase Portions of Chili to cook" })
     ).toBeInTheDocument()
   })
 

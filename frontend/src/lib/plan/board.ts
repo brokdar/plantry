@@ -107,8 +107,8 @@ export interface Board {
   warningCells: string[]
   /** Past windows: no edits, feedback only. */
   readOnly: boolean
-  /** "3 plates, 1 cook day", or "Draft · 3 plates · 1 cook day" while the
-   *  window holds drafts. */
+  /** "3 plates, 1 cook day", or "Draft · 3 plates · 1 cook day" (draft
+   *  plates and draft cook days only) while the window holds drafts. */
   summary: string
   /** The window's drafts with the run's notes; null without drafts. */
   draft: DraftSummary | null
@@ -315,13 +315,29 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
 }
 
 function boardSummary(plan: Plan, f: Formatter): string {
+  if (plan.draft) {
+    // The draft alone: confirmed plates in the window (kept, or eating a
+    // confirmed batch) are not part of what Accept or Discard acts on.
+    const cookDays = new Set(
+      plan.sessions
+        .filter(
+          (s) =>
+            s.state === "draft" &&
+            s.cook_date >= plan.window.start &&
+            s.cook_date <= plan.window.end
+        )
+        .map((s) => s.cook_date)
+    ).size
+    return f.t("plan.toolbar.draft_summary", {
+      plates: f.t("plan.toolbar.plates", { count: plan.draft.plates }),
+      cook_days: f.t("plan.toolbar.cook_days", { count: cookDays }),
+    })
+  }
   const plates = f.t("plan.toolbar.plates", { count: plan.stats.plates })
   const cookDays = f.t("plan.toolbar.cook_days", {
     count: plan.stats.cook_days,
   })
-  return plan.draft
-    ? f.t("plan.toolbar.draft_summary", { plates, cook_days: cookDays })
-    : `${plates}, ${cookDays}`
+  return `${plates}, ${cookDays}`
 }
 
 /**

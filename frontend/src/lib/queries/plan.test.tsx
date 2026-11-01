@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query"
 import { act, renderHook, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -564,5 +565,25 @@ describe("re-plan", () => {
     vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: null })
     await invalidatedBy(() => useReplan(), { ...input, regenerate: false })
     expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it("a failed refresh after the saved re-plan is no mutation error; the board still opens the run", async () => {
+    vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: 14 })
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    vi.spyOn(qc, "invalidateQueries").mockRejectedValue(new Error("offline"))
+    const { result } = renderHook(() => useReplan(), {
+      wrapper: createHookWrapper(qc),
+    })
+    await act(async () => {
+      await result.current.mutateAsync(input)
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(navigateMock).toHaveBeenCalledTimes(1)
   })
 })

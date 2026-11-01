@@ -2,6 +2,7 @@ import { useRouterState } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { useIsPhone } from "@/components/plan/use-is-phone"
 import { Toaster } from "@/components/ui/sonner"
 import { useProfile } from "@/lib/queries/profile"
 
@@ -25,6 +26,19 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     if (focusMain) mainRef.current?.focus()
   }, [focusMain])
+
+  // Toasts sit bottom-right, clear of page headings and header actions. On
+  // phones they float above the tab bar, and on /plan also above the
+  // sticky DraftBar (Accept and shop).
+  const phone = useIsPhone()
+  const onPlan = useRouterState({
+    select: (s) => s.location.pathname === "/plan",
+  })
+  const phoneOffset = {
+    bottom: `calc(var(--tab-bar-inset) + ${onPlan ? "5.25rem" : "0.75rem"})`,
+    left: "1rem",
+    right: "1rem",
+  }
 
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem("sidenav-collapsed") === "true"
@@ -68,7 +82,11 @@ export function AppShell({ children }: AppShellProps) {
         </main>
       </div>
       <MobileBottomNav />
-      <Toaster />
+      <Toaster
+        position="bottom-right"
+        offset={phone ? phoneOffset : "1.5rem"}
+        mobileOffset={phoneOffset}
+      />
     </div>
   )
 }

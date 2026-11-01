@@ -1,5 +1,5 @@
 import { X } from "lucide-react"
-import { useId } from "react"
+import { useId, useRef } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -16,6 +16,8 @@ import { formatDate } from "@/lib/plan/format"
 interface WhoIsHomeProps {
   /** The window's dates, in order. */
   dates: string[]
+  /** Dates before today: shown, not editable (generate skips them). */
+  pastDates: string[]
   slots: AvailabilityGridSlot[]
   presets: RoutinePreset[]
   /** Keyed `"<date>:<slotId>"`. */
@@ -42,6 +44,7 @@ interface WhoIsHomeProps {
  */
 export function WhoIsHome({
   dates,
+  pastDates,
   slots,
   presets,
   value,
@@ -62,12 +65,30 @@ export function WhoIsHome({
   const longDay = (date: string) =>
     formatDate(date, i18n, { weekday: "long", day: "numeric", month: "long" })
 
-  const columns: AvailabilityGridColumn[] = dates.map((date) => ({
-    key: date,
-    label: formatDate(date, i18n, { weekday: "short" }),
-    fullLabel: longDay(date),
-    sublabel: formatDate(date, i18n, { day: "numeric" }),
-  }))
+  // The day menu's Guests puts focus on that day's stepper once it closed.
+  const guestsRefs = useRef(new Map<string, HTMLLIElement>())
+  function focusGuests(date: string) {
+    guestsRefs.current
+      .get(date)
+      ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
+      ?.focus()
+  }
+
+  const columns: AvailabilityGridColumn[] = dates.map((date) => {
+    const past = pastDates.includes(date)
+    return {
+      key: date,
+      label: formatDate(date, i18n, { weekday: "short" }),
+      fullLabel: longDay(date),
+      sublabel: formatDate(date, i18n, { day: "numeric" }),
+      note: past
+        ? t("plan.wizard.who.past")
+        : date in guests
+          ? t("plan.wizard.who.guests")
+          : undefined,
+      disabled: past,
+    }
+  })
 
   function setDay(date: string, mode: "plan" | "none") {
     onChange({
@@ -117,6 +138,7 @@ export function WhoIsHome({
             id: "guests",
             label: t("plan.wizard.who.guests"),
             onSelect: () => addGuests(date),
+            focusAfter: () => focusGuests(date),
           },
         ]}
       />
@@ -137,6 +159,10 @@ export function WhoIsHome({
             {guestDays.map((date) => (
               <li
                 key={date}
+                ref={(el) => {
+                  if (el) guestsRefs.current.set(date, el)
+                  else guestsRefs.current.delete(date)
+                }}
                 className="flex flex-wrap items-center justify-between gap-2 py-2"
               >
                 <span className="flex flex-col">
