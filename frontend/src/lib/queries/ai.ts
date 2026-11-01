@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { useCallback, useRef } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -10,6 +15,7 @@ import {
   undoChange,
 } from "../api/ai"
 import { ApiError } from "../api/client"
+import { firstUserText, toolFailed } from "../assistant/transcript"
 import type { ChatEvent, ChatRequest } from "../domain/assistantEvents"
 import { assistantStream } from "../stores/assistant-stream"
 
@@ -33,6 +39,24 @@ export function useConversation(id: number | null) {
     queryFn: () => getConversation(id!),
     enabled: id != null,
   })
+}
+
+/** A short title per conversation: its first user message, truncated. The
+ *  list endpoint carries no title, so each detail is read (and cached). */
+export function useConversationTitles(ids: number[]): Map<number, string> {
+  const results = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: aiKeys.conversation(id),
+      queryFn: () => getConversation(id),
+      staleTime: 60_000,
+    })),
+  })
+  const titles = new Map<number, string>()
+  results.forEach((r, i) => {
+    const text = r.data ? firstUserText(r.data.messages) : ""
+    if (text) titles.set(ids[i], text)
+  })
+  return titles
 }
 
 export function useDeleteConversation() {
@@ -165,6 +189,9 @@ function handleEvent(evt: ChatEvent, qc: ReturnType<typeof useQueryClient>) {
       assistantStream.setStatus(null)
       return
     case "tool_result":
+      if (toolFailed(evt.data.is_error, evt.data.output)) {
+        assistantStream.addFailure({ id: evt.data.id, tool: evt.data.name })
+      }
       return
     case "change":
       assistantStream.addChange(evt.data)

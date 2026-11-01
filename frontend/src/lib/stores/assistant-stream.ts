@@ -6,6 +6,7 @@
 
 import { useSyncExternalStore } from "react"
 
+import type { ToolFailure } from "../assistant/transcript"
 import type { Change, UnlockRequestPayload } from "../domain/assistantEvents"
 
 /** State of one change line: `undoing` while the request runs, `undone` once
@@ -17,6 +18,8 @@ export interface AssistantStreamState {
   /** Name of the tool currently executing, or null. */
   status: string | null
   changes: Change[]
+  /** Tool calls of the turn in flight that failed. */
+  failures: ToolFailure[]
   unlockRequest: UnlockRequestPayload | null
   lineStates: Record<number, ChangeLineState>
   conversationId: number | null
@@ -27,6 +30,7 @@ const initial: AssistantStreamState = {
   text: "",
   status: null,
   changes: [],
+  failures: [],
   unlockRequest: null,
   lineStates: {},
   conversationId: null,
@@ -56,6 +60,7 @@ export const assistantStream = {
       text: "",
       status: null,
       changes: [],
+      failures: [],
       unlockRequest: null,
     })
   },
@@ -73,6 +78,10 @@ export const assistantStream = {
   addChange(change: Change) {
     if (state.changes.some((c) => c.id === change.id)) return
     set({ changes: [...state.changes, change] })
+  },
+  addFailure(failure: ToolFailure) {
+    if (state.failures.some((f) => f.id === failure.id)) return
+    set({ failures: [...state.failures, failure] })
   },
   setUnlockRequest(req: UnlockRequestPayload | null) {
     set({ unlockRequest: req })

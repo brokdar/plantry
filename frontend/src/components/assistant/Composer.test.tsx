@@ -33,6 +33,18 @@ describe("Composer", () => {
     expect(onSubmit).toHaveBeenCalledWith("hello")
   })
 
+  it("sends on Enter and keeps Shift+Enter as a new line", async () => {
+    const onSubmit = vi.fn()
+    const user = userEvent.setup()
+    render(<Composer streaming={false} onSubmit={onSubmit} onAbort={vi.fn()} />)
+    const input = screen.getByTestId("assistant-composer-input")
+    await user.type(input, "line one{Shift>}{Enter}{/Shift}line two")
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(input).toHaveValue("line one\nline two")
+    await user.keyboard("{Enter}")
+    expect(onSubmit).toHaveBeenCalledWith("line one\nline two")
+  })
+
   it("has no mode select", () => {
     render(<Composer streaming={false} onSubmit={vi.fn()} onAbort={vi.fn()} />)
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument()

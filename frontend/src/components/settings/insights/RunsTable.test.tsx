@@ -31,6 +31,7 @@ describe("RunsTable", () => {
     expect(cells).toEqual([
       expect.stringMatching(/Oct 30, 2026/),
       "Generate",
+      "–",
       "Without the assistant",
       "v1",
       "0",
@@ -38,7 +39,6 @@ describe("RunsTable", () => {
       "Done",
       "100% covered · 0 violations",
       "Accepted",
-      "–",
     ])
   })
 

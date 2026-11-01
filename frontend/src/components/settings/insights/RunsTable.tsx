@@ -67,6 +67,7 @@ export function RunsTable({ onOpen }: { onOpen: (id: number) => void }) {
             <tr>
               <Th>{t("settings_page.insights.col.date")}</Th>
               <Th>{t("settings_page.insights.col.kind")}</Th>
+              <Th numeric>{t("settings_page.insights.col.edits")}</Th>
               <Th>{t("settings_page.insights.col.model")}</Th>
               <Th>{t("settings_page.insights.col.prompt_version")}</Th>
               <Th numeric>{t("settings_page.insights.col.tokens")}</Th>
@@ -74,7 +75,6 @@ export function RunsTable({ onOpen }: { onOpen: (id: number) => void }) {
               <Th>{t("settings_page.insights.col.status")}</Th>
               <Th>{t("settings_page.insights.col.score")}</Th>
               <Th>{t("settings_page.insights.col.outcome")}</Th>
-              <Th numeric>{t("settings_page.insights.col.edits")}</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -160,6 +160,9 @@ function RunRow({
       <td className="px-3 py-2">
         {t(`settings_page.insights.kind.${run.kind}`)}
       </td>
+      <td className="px-3 py-2 text-right tabular-nums" data-testid="run-edits">
+        {run.edits === null ? "–" : formatNumber(run.edits, i18n)}
+      </td>
       <td className="px-3 py-2">{modelText(run, i18n)}</td>
       <td className="px-3 py-2">{run.prompt_version ?? "–"}</td>
       <td
@@ -188,9 +191,6 @@ function RunRow({
       <td className="px-3 py-2 tabular-nums">{scoreText(run, i18n)}</td>
       <td className="px-3 py-2">
         {run.outcome ? t(`settings_page.insights.outcome.${run.outcome}`) : "–"}
-      </td>
-      <td className="px-3 py-2 text-right tabular-nums" data-testid="run-edits">
-        {run.edits === null ? "–" : formatNumber(run.edits, i18n)}
       </td>
     </tr>
   )

@@ -1063,7 +1063,7 @@
     "composer": {
       "placeholder": "Bitte mich, einen Tag zu planen, eine Mahlzeit zu tauschen oder eine Portion zu ändern…",
       "aria_label": "Nachricht an den Assistenten",
-      "send": "Senden (Strg+Enter)",
+      "send": "Senden (Enter)",
       "abort": "Stopp"
     },
     "new_conversation": "Neue Unterhaltung",
@@ -1085,7 +1085,8 @@
       "open": "Verlauf öffnen",
       "empty": "Noch keine Unterhaltungen.",
       "delete": "Unterhaltung löschen",
-      "select": "Unterhaltung öffnen"
+      "select": "Unterhaltung öffnen",
+      "untitled": "Unterhaltung"
     },
     "change": {
       "fallback": "Dein Plan hat sich geändert",
@@ -1118,7 +1119,8 @@
     "undo": "Rückgängig",
     "undoing": "Macht rückgängig…",
     "undone": "Rückgängig gemacht",
-    "stale": "Inzwischen geändert",
+    "stale": "Inzwischen geändert, Rückgängig ist nicht möglich.",
+    "failed": "Das hat nicht geklappt. Es wurde nichts geändert.",
     "unlock": {
       "title": "Diese Teller sind bestätigt",
       "body": "Der Assistent braucht dein Ja, bevor er sie ändert.",

@@ -9,7 +9,11 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { useConversations, useDeleteConversation } from "@/lib/queries/ai"
+import {
+  useConversations,
+  useConversationTitles,
+  useDeleteConversation,
+} from "@/lib/queries/ai"
 import {
   assistantStream,
   useAssistantStreamState,
@@ -24,8 +28,11 @@ export function ConversationHistory() {
   const setActive = assistantStream.setConversation
 
   const items = data?.items ?? []
+  const titles = useConversationTitles(items.slice(0, 20).map((c) => c.id))
 
   function handleSelect(id: number) {
+    // Another conversation's unlock card, lines and failures do not carry over.
+    if (id !== activeId) assistantStream.reset()
     setActive(id)
     setOpen(false)
   }
@@ -73,10 +80,11 @@ export function ConversationHistory() {
           <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
             {items.map((c) => {
               const active = c.id === activeId
+              const time = formatter.format(new Date(c.created_at))
               const label =
                 c.title && c.title.trim().length > 0
                   ? c.title
-                  : formatter.format(new Date(c.created_at))
+                  : (titles.get(c.id) ?? t("assistant.history.untitled"))
               return (
                 <li
                   key={c.id}
@@ -87,11 +95,14 @@ export function ConversationHistory() {
                     type="button"
                     variant={active ? "secondary" : "ghost"}
                     size="sm"
-                    className="flex-1 justify-start truncate"
-                    aria-label={t("assistant.history.select")}
+                    className="h-auto min-h-11 flex-1 flex-col items-start gap-0 py-1.5 text-left md:pointer-fine:min-h-9"
+                    aria-label={`${t("assistant.history.select")}: ${label}, ${time}`}
                     onClick={() => handleSelect(c.id)}
                   >
-                    {label}
+                    <span className="w-full truncate">{label}</span>
+                    <span className="text-caption font-normal text-ink-muted">
+                      {time}
+                    </span>
                   </Button>
                   <Button
                     type="button"

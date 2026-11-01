@@ -36,7 +36,7 @@ import { PlanSheet, type SheetState } from "./PlanSheet"
 import { PlanToolbar } from "./PlanToolbar"
 import { ReplanSheet } from "./ReplanSheet"
 import { ShortcutsDialog } from "./ShortcutsDialog"
-import { useIsPhone } from "./use-is-phone"
+import { useIsPhone, useIsWide } from "./use-is-phone"
 
 interface PlanPageProps {
   /** The window start from the URL; undefined opens the anchored window. */
@@ -156,6 +156,7 @@ function PlanView({
   const sheetCell = useRef<string | null>(initialCell ?? null)
   const navigate = useNavigate()
   const phone = useIsPhone()
+  const wide = useIsWide()
   const settings = useSettingItems()
   // Until the settings load the provider is unknown, not missing: the toggle
   // and `A` work and the panel waits instead of flashing "no provider".
@@ -199,6 +200,14 @@ function PlanView({
     runQuery.data?.status !== "ok" &&
     runQuery.data?.status !== "error" &&
     runQuery.data?.status !== "partial"
+  // The draft run's notes are shown for a generation only: a regenerate's
+  // "notes" are the request text ("A different side for Tuesday dinner.").
+  const draftRun = useRun(plan.draft?.run_id ?? undefined)
+  const toolbarDraft = board.draft
+    ? {
+        notes: draftRun.data?.kind === "generate" ? board.draft.notes : null,
+      }
+    : null
   const canReview = board.draft !== null && !board.readOnly
   // The first day a re-plan may touch; null for a past window.
   const from = replanFrom(win)
@@ -375,7 +384,7 @@ function PlanView({
           onCopyWeek={() => setCopyOpen(true)}
           onClear={() => clearWindow.mutate({ from: win.start, to: win.end })}
           onShortcuts={() => setShortcutsOpen(true)}
-          draft={board.draft}
+          draft={toolbarDraft}
           running={running}
           accepting={accept.isPending}
           onAcceptAndShop={acceptAndShop}
@@ -477,6 +486,7 @@ function PlanView({
       <AssistantPanel
         open={assistantShown}
         phone={phone}
+        docked={wide}
         enabled={assistantEnabled && providerKnown}
         loading={!providerKnown}
         plan={plan}

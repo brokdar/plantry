@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest"
 import "@/lib/i18n"
 
 vi.mock("@/lib/queries/ai", () => ({
+  useConversationTitles: vi.fn(() => new Map()),
   useAssistantStream: vi.fn(),
   useConversation: vi.fn(),
   useConversations: vi.fn(),
@@ -41,6 +42,9 @@ function stubQueries(opts: {
     toolUse?: { id: string; name: string }
   }[]
   changes?: ConversationChange[]
+  /** Stored messages as the API returns them, instead of `messages`. */
+  raw?: unknown[]
+  conversations?: { id: number; created_at: string; updated_at: string }[]
 }) {
   const undo = vi.fn()
   vi.mocked(useUndoChange).mockReturnValue({
@@ -54,29 +58,31 @@ function stubQueries(opts: {
     isError: opts.isError ?? false,
   } as unknown as ReturnType<typeof useAssistantStream>)
   vi.mocked(useConversation).mockReturnValue({
-    data: opts.messages && {
-      messages: opts.messages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: [
-          { type: "text", text: m.text },
-          ...(m.toolUse
-            ? [
-                {
-                  type: "tool_use",
-                  tool_use_id: m.toolUse.id,
-                  tool_use_name: m.toolUse.name,
-                },
-              ]
-            : []),
-        ],
-        created_at: "2025-06-10T12:00:00Z",
-      })),
+    data: (opts.raw || opts.messages) && {
+      messages:
+        opts.raw ??
+        opts.messages!.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: [
+            { type: "text", text: m.text },
+            ...(m.toolUse
+              ? [
+                  {
+                    type: "tool_use",
+                    tool_use_id: m.toolUse.id,
+                    tool_use_name: m.toolUse.name,
+                  },
+                ]
+              : []),
+          ],
+          created_at: "2025-06-10T12:00:00Z",
+        })),
       changes: opts.changes ?? [],
     },
   } as unknown as ReturnType<typeof useConversation>)
   vi.mocked(useConversations).mockReturnValue({
-    data: { items: [], total: 0 },
+    data: { items: opts.conversations ?? [], total: 0 },
   } as unknown as ReturnType<typeof useConversations>)
   vi.mocked(useDeleteConversation).mockReturnValue({
     mutate: vi.fn(),
@@ -169,6 +175,97 @@ describe("AssistantPanel suggestion chips", () => {
   })
 })
 
+describe("AssistantPanel after a reload", () => {
+  const preview = [
+    {
+      id: 2,
+      role: "assistant",
+      content: [
+        { type: "text", text: "Please say yes." },
+        { type: "tool_use", tool_use_id: "p", tool_use_name: "unlock" },
+      ],
+      created_at: "2025-06-10T12:00:00Z",
+    },
+    {
+      id: 3,
+      role: "tool",
+      content: [
+        {
+          type: "tool_result",
+          tool_result_id: "p",
+          tool_result_content: JSON.stringify({
+            status: "needs_user_confirmation",
+            rows: [{ date: "2026-10-31", slot_id: 3, names: ["Chili"] }],
+          }),
+        },
+      ],
+      created_at: "2025-06-10T12:00:00Z",
+    },
+  ]
+
+  test("reopens the most recent conversation when it opens with the panel", () => {
+    stubQueries({
+      raw: preview,
+      conversations: [
+        {
+          id: 4,
+          created_at: "2025-06-09T10:00:00Z",
+          updated_at: "2025-06-09T10:00:00Z",
+        },
+        {
+          id: 9,
+          created_at: "2025-06-10T10:00:00Z",
+          updated_at: "2025-06-10T10:00:00Z",
+        },
+      ],
+    })
+    renderPanel()
+    expect(assistantStream.get().conversationId).toBe(9)
+  })
+
+  test("does not pick a conversation when the panel is opened later", () => {
+    stubQueries({
+      conversations: [
+        {
+          id: 4,
+          created_at: "2025-06-09T10:00:00Z",
+          updated_at: "2025-06-09T10:00:00Z",
+        },
+      ],
+    })
+    renderPanel({ open: false })
+    expect(assistantStream.get().conversationId).toBeNull()
+  })
+
+  test("a stored unlock preview nobody answered shows the card", () => {
+    stubQueries({ raw: preview })
+    act(() => assistantStream.setConversation(1))
+    renderPanel()
+    expect(screen.getByTestId("assistant-unlock-card")).toHaveTextContent(
+      "Chili"
+    )
+  })
+
+  test("the card is gone once the user answered", () => {
+    stubQueries({
+      raw: [
+        ...preview,
+        {
+          id: 4,
+          role: "user",
+          content: [{ type: "text", text: "Yes, unlock" }],
+          created_at: "2025-06-10T12:01:00Z",
+        },
+      ],
+    })
+    act(() => assistantStream.setConversation(1))
+    renderPanel()
+    expect(
+      screen.queryByTestId("assistant-unlock-card")
+    ).not.toBeInTheDocument()
+  })
+})
+
 describe("AssistantPanel composer", () => {
   test("sends the typed message for the window, without a mode", async () => {
     const { mutateAsync } = stubQueries({})
@@ -249,6 +346,44 @@ describe("AssistantPanel changes (F3-AC4)", () => {
       },
     ],
   }
+
+  test("a failed tool call shows one failure line, not a change", () => {
+    stubQueries({
+      raw: [
+        {
+          id: 2,
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              tool_use_id: "r1",
+              tool_use_name: "regenerate",
+            },
+          ],
+          created_at: "2025-06-10T12:00:00Z",
+        },
+        {
+          id: 3,
+          role: "tool",
+          content: [
+            {
+              type: "tool_result",
+              tool_result_id: "r1",
+              tool_result_is_error: true,
+            },
+          ],
+          created_at: "2025-06-10T12:00:00Z",
+        },
+      ],
+    })
+    act(() => assistantStream.setConversation(1))
+    renderPanel()
+    expect(screen.getAllByTestId("assistant-failure")).toHaveLength(1)
+    expect(screen.getByTestId("assistant-failure")).toHaveTextContent(
+      "Nothing was changed"
+    )
+    expect(screen.queryByTestId("assistant-change")).not.toBeInTheDocument()
+  })
 
   test("a stale undo shows 'Changed since' and no button", () => {
     stubQueries({ ...oneChange, changes: [live()] })

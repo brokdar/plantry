@@ -39,7 +39,10 @@ export function ChangeLine({ change, state, onUndo }: ChangeLineProps) {
         </span>
       )}
       {state === "stale" && (
-        <span className="shrink-0 text-caption text-ink-muted">
+        <span
+          data-testid="assistant-change-stale"
+          className="max-w-[45%] text-right text-caption text-ink"
+        >
           {t("assistant.stale")}
         </span>
       )}

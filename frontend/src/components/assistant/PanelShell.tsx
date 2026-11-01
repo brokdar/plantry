@@ -2,6 +2,7 @@ import { Sparkles, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
   Sheet,
   SheetContent,
@@ -13,6 +14,9 @@ import {
 interface PanelShellProps {
   /** Below 768 px: a modal bottom sheet; otherwise a plain `aside`. */
   phone: boolean
+  /** From 1280 px the `aside` sits beside the board; below that it floats
+   *  over it. */
+  docked: boolean
   open: boolean
   onClose: () => void
   /** Header controls: history, new conversation. */
@@ -21,12 +25,14 @@ interface PanelShellProps {
 }
 
 /**
- * The two shells of the assistant (D15). From 768 px an `aside` beside the
- * board: no dialog, no focus trap, no scroll lock; Escape closes it while
- * focus is inside. On phones a bottom sheet with a grab handle.
+ * The shells of the assistant (D15). From 1280 px an `aside` beside the
+ * board; from 768 px a non-modal `aside` floating over it (the board keeps
+ * its width): no dialog, no focus trap, no scroll lock; Escape closes it
+ * while focus is inside. On phones a bottom sheet with a grab handle.
  */
 export function PanelShell({
   phone,
+  docked,
   open,
   onClose,
   actions,
@@ -40,7 +46,7 @@ export function PanelShell({
         <SheetContent
           side="bottom"
           showCloseButton={false}
-          className="h-[92dvh] gap-0 rounded-t-sheet bg-panel p-0 text-ink shadow-sheet"
+          className="gap-0 rounded-t-sheet bg-panel-raised p-0 text-ink shadow-sheet data-[side=bottom]:h-[92dvh]"
           data-testid="assistant-panel"
         >
           <div
@@ -78,7 +84,12 @@ export function PanelShell({
           onClose()
         }
       }}
-      className="sticky top-0 flex h-svh w-[380px] shrink-0 flex-col self-start border-l border-line bg-panel text-ink"
+      className={cn(
+        "flex h-svh w-[380px] flex-col border-l border-line bg-panel-raised text-ink",
+        docked
+          ? "sticky top-0 shrink-0 self-start"
+          : "fixed inset-y-0 right-0 z-40 max-w-full shadow-sheet"
+      )}
     >
       <header className="flex flex-col gap-2 px-4 pt-4 pb-3">
         <div className="flex items-center justify-between gap-2">

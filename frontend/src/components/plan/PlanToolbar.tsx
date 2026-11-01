@@ -142,6 +142,15 @@ export function PlanToolbar({
               {t("plan.toolbar.read_only")}
             </p>
           )}
+          {/* Touch has no hover: the reason shows as text. */}
+          {!assistantEnabled && (
+            <p
+              data-testid="assistant-disabled-reason"
+              className="max-w-prose text-small text-ink-muted pointer-fine:hidden"
+            >
+              {t("assistant.disabled_reason")}
+            </p>
+          )}
           {draft?.notes && (
             <p
               data-testid="plan-notes"

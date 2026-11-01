@@ -5,6 +5,7 @@ colors:
   ground: "#fbfbfa"
   panel: "#ffffff"
   panel-sunken: "#f3f4f6"
+  panel-raised: "#ffffff"
   ink: "#1c2233"
   ink-muted: "#5a6175"
   line: "#e3e5ea"
@@ -28,6 +29,7 @@ colors:
   ground-dark: "#161821"
   panel-dark: "#1d2030"
   panel-sunken-dark: "#12141c"
+  panel-raised-dark: "#252a3f"
   ink-dark: "#e6e8f0"
   ink-muted-dark: "#a3a8bb"
   line-dark: "#2e3245"
@@ -157,6 +159,7 @@ Two neutral layers and an ink pair, one accent, six batch colours with tints, an
 - **Paper Ground** (`ground`): the page background.
 - **Panel** (`panel`): cells, sheets, and cards that have a role (callouts, the mobile tab bar).
 - **Sunken Panel** (`panel-sunken`): the second neutral layer, used for the side rail, toolbars, and the recipe notes block.
+- **Raised Panel** (`panel-raised`): the assistant panel surface. Equal to `panel` in light; a step lighter than `panel` in dark so the panel separates from the board.
 - **Ink** (`ink`): primary text.
 - **Muted Ink** (`ink-muted`): secondary text, labels, quantities, inactive nav items.
 - **Hairline** (`line`): borders and dividers. It carries separation in lists in place of shadows.
@@ -278,6 +281,8 @@ A serif h1 name. Meta values use h3-size tabular sans over small muted labels. T
 - **PlateSheet** (`components/plan/PlateSheet`, hosted by `PlanSheet`): the editor for one cell, a side sheet from 768px and a bottom sheet on phones. It lists the plate's components (swap and remove buttons 44px on touch, 32px with a fine pointer), a `QuantityStepper` per component, the batch section, and warnings as `rounded-cell` blocks with a warning border and an action.
 - **ShoppingRow** (`components/shop/ShoppingRow`): a 44px checkbox with the name and the quantity in shopping units; ticked rows are struck through and muted, and the section list moves them to the bottom. An expandable "used in" list shows batch badges, and a row menu moves the item to another store section. The in-store mode enlarges the row to 56px with h3 type.
 - **StepPager** (`components/cook/StepPager`): one recipe step per screen in 22px Newsreader (max 68ch), with detected durations as accent-outlined timer buttons (44px). Previous and Next are 56px targets; the arrow keys and a horizontal swipe turn the page, and the last step swaps Next for Finish. It carries `aria-roledescription` and a "Step n of m" label.
+
+- **Assistant panel** (`components/assistant`): `panel-raised` surface, `rounded-cell` change lines with an Undo (44px on touch). Three layouts: from 1280px a docked 380px `aside` that pushes the board narrower; from 768 to 1279px a non-modal overlay side sheet (380px, fixed to the right edge, `shadow-sheet`) over the board, which keeps its full width; below 768px a bottom sheet at 92dvh with a grab handle. The two wider layouts have no dialog role and no focus trap; Escape closes them and returns focus to the Ask assistant button. The transcript follows new content while the reader is at the bottom and stays put once they scroll up.
 
 *Specified, not built:* `SuggestionCard`. See UX spec §4 and §9.
 
