@@ -83,7 +83,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		if err != nil {
 			return Proposal{}, fmt.Errorf("%w: %w", domain.ErrAIProviderFailed, err)
 		}
-		toolID, input, perr := submitted(resp)
+		input, perr := submitted(resp)
 		var prop Proposal
 		if perr == nil {
 			prop, perr = parseProposal(input, in)
@@ -109,7 +109,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		if len(resp.Message.Content) > 0 {
 			req.Messages = append(req.Messages, resp.Message)
 		}
-		req.Messages = append(req.Messages, repairMessage(toolID, feedback))
+		req.Messages = append(req.Messages, repairMessage(resp.Message, feedback))
 	}
 }
 
@@ -137,26 +137,33 @@ func textMessage(text string) llm.Message {
 	return llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: text}}}
 }
 
-// repairMessage answers the reply's submit_plan call with the feedback as
-// an error result, or as text when the reply made no call.
-func repairMessage(toolID, feedback string) llm.Message {
-	if toolID == "" {
-		return textMessage(feedback)
-	}
+// repairMessage answers every tool call of the reply with the feedback as
+// an error result (providers want a result per call), or sends it as text
+// when the reply made no call.
+func repairMessage(reply llm.Message, feedback string) llm.Message {
 	content, _ := json.Marshal(feedback) // a string always marshals
-	return llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{
-		Type: llm.ContentTypeToolResult, ToolResultID: toolID, ToolResultContent: content, ToolResultIsError: true,
-	}}}
-}
-
-// submitted returns the reply's submit_plan call.
-func submitted(resp *llm.Response) (string, json.RawMessage, error) {
-	for _, b := range resp.Message.Content {
-		if b.Type == llm.ContentTypeToolUse && b.ToolUseName == submitPlanName {
-			return b.ToolUseID, b.ToolUseInput, nil
+	var results []llm.ContentBlock
+	for _, b := range reply.Content {
+		if b.Type == llm.ContentTypeToolUse {
+			results = append(results, llm.ContentBlock{
+				Type: llm.ContentTypeToolResult, ToolResultID: b.ToolUseID, ToolResultContent: content, ToolResultIsError: true,
+			})
 		}
 	}
-	return "", nil, fmt.Errorf("the reply has no submit_plan call (stop reason %s)", resp.StopReason)
+	if len(results) == 0 {
+		return textMessage(feedback)
+	}
+	return llm.Message{Role: llm.RoleUser, Content: results}
+}
+
+// submitted returns the input of the reply's submit_plan call.
+func submitted(resp *llm.Response) (json.RawMessage, error) {
+	for _, b := range resp.Message.Content {
+		if b.Type == llm.ContentTypeToolUse && b.ToolUseName == submitPlanName {
+			return b.ToolUseInput, nil
+		}
+	}
+	return nil, fmt.Errorf("the reply has no submit_plan call (stop reason %s)", resp.StopReason)
 }
 
 // submitPlan is submit_plan's input (submitPlanSchema).
