@@ -494,7 +494,7 @@ POST   /api/setup/complete                          mark setup done
 ```
 POST   /api/ai/chat                                 SSE stream (rate-limited, default 10 req/min per IP)
                                                     body: {conversation_id?, message, today?, start}
-                                                    (start = window start, a shopping day; 400 invalid_start / invalid_body)
+                                                    (start = window start, a shopping day; 400 error.plan.invalid_start; missing start 400 error.invalid_body; bad date 400 error.ai.invalid_date)
 POST   /api/ai/changes/{id}/undo                    put one agent change back → {plate_ids, session_ids}
                                                     (409 error.ai.change_undone / error.ai.change_stale)
 GET    /api/ai/conversations                        list (limit, offset)
@@ -585,7 +585,7 @@ loop:
     if iterations > MaxIterations (20): emit error.ai.iterations_exceeded; break
 ```
 
-SSE event types (`llm/events.go`): the model stream (`text_delta`, `tool_call_*`), loop-side `tool_exec_start`, `tool_exec_end`, `tool_result`, `change`, `unlock_request`, and the terminal `done` / `error`. All emissions go through the SSE helper; the frontend listens and patches local state. `regenerate` waits for its run (`planning.Service.Await`, D8), so its change line reports the outcome.
+SSE event types (`llm/events.go`): `conversation_ready`, `message_start`, the model stream (`assistant_delta`, `tool_call_start` / `tool_call_delta`), loop-side `tool_exec_start`, `tool_exec_end`, `tool_result`, `change`, `unlock_request`, and the terminal `done` / `error`. All emissions go through the SSE helper; the frontend listens and patches local state. `regenerate` waits for its run (`planning.Service.Await`, D8), so its change line reports the outcome.
 
 ### 7.3 System prompt composition
 

@@ -451,7 +451,7 @@ The chat remains for adjustments ("no fish this week", "swap Tuesday's side for 
 
 **Amendments (Phase 4, implemented):**
 
-- **Chat window (D1).** The chat body is `{conversation_id?, message, today?, start}`: the window is the shopping-day-anchored week starting at `start`, validated by the server (`400 invalid_start`). The old `from`/`to` pair is gone.
+- **Chat window (D1).** The chat body is `{conversation_id?, message, today?, start}`: the window is the shopping-day-anchored week starting at `start`, validated by the server (`400 error.plan.invalid_start`). The old `from`/`to` pair is gone.
 - **Drafts only (D5-D7).** The agent never changes a confirmed plate or cook session: such writes fail in the plate domain with `error.plan.row_confirmed` (naming the rows), and writes before today with `error.ai.past_date`.
 - **Unlock is two-phase (D6).** The first `unlock` call only previews the affected confirmed rows (the assistant shows an unlock card). The agent may unlock them only after the user's yes in a later turn of the same conversation; the preview expires after 30 minutes and is single use.
 - **Regenerate waits (D8).** `regenerate` runs the generation service and returns when the run finished, so the assistant reports the real outcome (violations, partial) in its change line.
