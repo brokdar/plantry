@@ -623,7 +623,7 @@ frontend/src/
 
 **Server state** lives in TanStack Query. No exceptions. Anything that came from the API or will be written to it (foods, plates, sessions, the plan and today read models, the shopping list, settings, profile, AI conversations) is a Query or Mutation. Cache keys are centralized in `lib/queries/keys.ts` so two hooks never drift apart.
 
-**Client state** is small. The only Zustand stores are the chat ones: `lib/stores/chat-ui.ts` (panel open state and the composer draft) and `lib/stores/chat-stream.ts` (the streaming AI message). Other UI state is local component state, URL search params (plan window, open cell, library filters) or `localStorage` (shopping ticks, the recipe onboarding flag, the collapsed side nav).
+**Client state** is small. The only Zustand store is the assistant one: `lib/stores/assistant-stream.ts` (the streaming AI message, applied changes and the pending unlock request). Other UI state is local component state, URL search params (plan window, open cell, library filters) or `localStorage` (shopping ticks, the recipe onboarding flag, the collapsed side nav).
 
 **Derived state** is computed inline with `useMemo` or via the query `select` option. View models such as `buildBoard(plan, i18n)` (`lib/plan/board.ts`) and the Today model (`lib/plan/today.ts`) are pure functions of the read models. No reactive libraries, no signals, no global event bus.
 
@@ -646,7 +646,7 @@ A new `useState` holding anything fetched from the API is wrong, and so is a new
 - `useUndoToast()` returns `offer(message, undo)`, the one toast every undoable action shares: it shows the message for 6 s with an Undo action that runs `undo` once.
 - `useUndoableRemoval()` returns `offerUndo(res, verb)` for `{removed}` responses (`plate_removed`, `batch_removed`, `plan_cleared`); Undo calls `useRestorePlan`. An empty snapshot offers nothing.
 
-**AI streaming.** `useChatStream` (`lib/queries/ai.ts`) owns the SSE reader and feeds the chat stores; on a `plate_changed` event it calls `invalidatePlanViews`.
+**AI streaming.** `useAssistantStream` (`lib/queries/ai.ts`) owns the SSE reader and feeds the assistant-stream store; on a `change` event it calls `invalidatePlanViews`.
 
 ### 8.4 Nutrition math on the frontend
 

@@ -140,9 +140,9 @@ describe("useAssistantStream", () => {
     })
 
     const keys = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey)
-    expect(
-      keys.filter((k) => k === planKeys.all || k?.[0] === planKeys.all[0])
-    ).toHaveLength(1)
+    expect(keys.filter((k) => k?.[0] === planKeys.all[0])).toEqual([
+      planKeys.all,
+    ])
     expect(keys).toContainEqual(todayKeys.all)
     expect(assistantStream.get().changes).toEqual([change])
     expect(assistantStream.get().unlockRequest?.rows[0].names).toEqual([

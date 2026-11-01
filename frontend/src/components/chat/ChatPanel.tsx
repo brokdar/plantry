@@ -40,7 +40,7 @@ export function ChatPanel({ open, onOpenChange, start }: ChatPanelProps) {
   const activeConversationId = stream.conversationId
   const { data: conversation } = useConversation(activeConversationId)
 
-  // Once a stream completes, useChatStream has refetched the conversation, so
+  // Once a stream completes, useAssistantStream has refetched the conversation, so
   // the final reply is already in persistedTurns. Keep the buffered text only
   // while streaming, or after a failed/aborted stream that may not have been
   // persisted.
@@ -59,8 +59,8 @@ export function ChatPanel({ open, onOpenChange, start }: ChatPanelProps) {
         start,
         message: text,
       })
-      // The `conversation_ready` event captured by useChatStream already
-      // stored the server-assigned id in the chat-ui store, so subsequent
+      // The `conversation_ready` event captured by useAssistantStream already
+      // stored the server-assigned id in the assistant-stream store, so subsequent
       // submits will reuse this conversation.
     } catch {
       // Errors surfaced as `error` events are already reflected in the
