@@ -129,6 +129,16 @@ test.describe("generated week on the heuristic", () => {
 
       // Heuristic-only: the board sees no assistant.
       await mockSettingValues(page, { "ai.provider": "" })
+      // The e2e backend has the fake provider, so pin the sheet's regenerate
+      // calls to the heuristic once an LLM chooser exists (B7).
+      await page.route("**/api/plan/regenerate", (r) =>
+        r.continue({
+          postData: JSON.stringify({
+            ...r.request().postDataJSON(),
+            chooser: "heuristic",
+          }),
+        })
+      )
       await page.setViewportSize({ width: 1440, height: 900 })
       await page.goto(`/plan?start=${start}`)
       await expect(page.getByTestId("plan-summary")).toHaveText(/^Draft · /)
@@ -150,7 +160,9 @@ test.describe("generated week on the heuristic", () => {
 
       // Different side, on a plate that has one.
       let plates = await slotPlates(start, slot.id)
-      const withSide = plates.find((p) => p.components.length > 1)
+      const withSide = plates.find(
+        (p) => p.date !== target.date && p.components.length > 1
+      )
       expect(withSide, "a generated plate with a side").toBeTruthy()
       const sideIds = withSide!.components.map((c) => c.id)
       sheet = await openCellSheet(page, withSide!.date, slot.id)
@@ -189,9 +201,9 @@ test.describe("generated week on the heuristic", () => {
       const unaccepted = waitForPost(page, "/api/plan/unaccept")
       await page.getByRole("button", { name: "Undo" }).click()
       expect((await unaccepted).ok()).toBeTruthy()
-      expect(
-        (await slotPlates(start, slot.id)).every((p) => p.state === "draft")
-      ).toBe(true)
+      plates = await slotPlates(start, slot.id)
+      expect(plates.length).toBeGreaterThan(0)
+      expect(plates.every((p) => p.state === "draft")).toBe(true)
       await page.goto(`/plan?start=${start}`)
       for (const p of plates) {
         await expect(padlock(planCell(page, p.date, slot.id))).toHaveCount(0)
@@ -201,6 +213,8 @@ test.describe("generated week on the heuristic", () => {
       await page.getByRole("button", { name: "Accept and shop" }).click()
       await expect(page).toHaveURL(/\/shop\?/)
       await page.goto(`/plan?start=${start}`)
+      plates = await slotPlates(start, slot.id)
+      expect(plates.every((p) => p.state === "confirmed")).toBe(true)
       for (const p of plates) {
         await expect(padlock(planCell(page, p.date, slot.id))).toHaveCount(1)
       }
