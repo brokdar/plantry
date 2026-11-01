@@ -1,0 +1,24 @@
+{
+  "name": "replan_one_day",
+  "description": "The batch cooker re-plans Tuesday of a generated draft week whose Monday and Wednesday dinners he planned and confirmed himself.",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
+    "plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "false"
+  },
+  "profile": {"diet_type": "omnivore", "household_portions": 1, "kcal_target": 2200},
+  "slots": ["breakfast", "lunch", "dinner"],
+  "presets": [{"name": "Oats", "slot": "breakfast", "recipe": "Overnight Oats"}],
+  "availability": {"defaults": [{"weekdays": [0, 1, 2, 3, 4], "slot": "breakfast", "mode": "routine", "preset": "Oats"}]},
+  "plates": [
+    {"date": "2026-10-28", "slot": "dinner", "recipe": "Hähnchen-Curry"},
+    {"date": "2026-11-09", "slot": "dinner", "recipe": "Spaghetti Bolognese"},
+    {"date": "2026-11-11", "slot": "dinner", "recipe": "Pilzrisotto"}
+  ],
+  "steps": [
+    {"action": "generate"},
+    {"action": "regenerate_day", "date": "2026-11-10"}
+  ],
+  "expect": {"kept_confirmed": true, "min_plates": 2}
+}

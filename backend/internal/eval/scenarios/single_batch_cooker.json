@@ -1,0 +1,21 @@
+{
+  "name": "single_batch_cooker",
+  "description": "The batch cooker of plan §0.1: one person, Saturday shopping, oats on weekday mornings, one cooking occasion a day, leftovers for 3 days, 3 mains eaten in the last two weeks.",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
+    "plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "false"
+  },
+  "profile": {"diet_type": "omnivore", "household_portions": 1, "kcal_target": 2200, "protein_pct": 30, "fat_pct": 30, "carbs_pct": 40},
+  "slots": ["breakfast", "lunch", "dinner"],
+  "presets": [{"name": "Oats", "slot": "breakfast", "recipe": "Overnight Oats"}],
+  "availability": {"defaults": [{"weekdays": [0, 1, 2, 3, 4], "slot": "breakfast", "mode": "routine", "preset": "Oats"}]},
+  "plates": [
+    {"date": "2026-10-25", "slot": "dinner", "recipe": "Chili con Carne"},
+    {"date": "2026-10-28", "slot": "dinner", "recipe": "Hähnchen-Curry"},
+    {"date": "2026-11-01", "slot": "dinner", "recipe": "Linsen-Dal"}
+  ],
+  "steps": [{"action": "generate"}],
+  "expect": {"min_plates": 21}
+}

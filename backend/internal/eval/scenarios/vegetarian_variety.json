@@ -1,0 +1,20 @@
+{
+  "name": "vegetarian_variety",
+  "description": "A vegetarian couple with a 3-week variety window: only vegetarian and vegan recipes, four of them eaten in the last three weeks.",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
+    "plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "false"
+  },
+  "profile": {"diet_type": "vegetarian", "household_portions": 2, "kcal_target": 1900, "notes": "We like spicy food."},
+  "slots": ["lunch", "dinner"],
+  "plates": [
+    {"date": "2026-10-20", "slot": "dinner", "recipe": "Shakshuka"},
+    {"date": "2026-10-24", "slot": "dinner", "recipe": "Pilzrisotto"},
+    {"date": "2026-10-28", "slot": "dinner", "recipe": "Linsen-Dal"},
+    {"date": "2026-11-02", "slot": "dinner", "recipe": "Gemüselasagne"}
+  ],
+  "steps": [{"action": "generate"}],
+  "expect": {"min_plates": 14}
+}

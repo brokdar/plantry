@@ -1,0 +1,28 @@
+{
+  "name": "many_none_cells",
+  "description": "A busy week: no lunches, and dinner only on Saturday, Sunday, Wednesday and Friday.",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
+    "plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "false"
+  },
+  "profile": {"diet_type": "omnivore", "household_portions": 2},
+  "slots": ["lunch", "dinner"],
+  "availability": {
+    "defaults": [{"weekdays": [0, 1, 2, 3, 4, 5, 6], "slot": "lunch", "mode": "none"}],
+    "overrides": [
+      {"date": "2026-11-09", "slot": "dinner", "mode": "none"},
+      {"date": "2026-11-10", "slot": "dinner", "mode": "none"},
+      {"date": "2026-11-12", "slot": "dinner", "mode": "none"}
+    ]
+  },
+  "steps": [{"action": "generate"}],
+  "expect": {
+    "min_plates": 4,
+    "no_plate": [
+      {"date": "2026-11-07", "slot": "lunch"}, {"date": "2026-11-09", "slot": "dinner"},
+      {"date": "2026-11-10", "slot": "dinner"}, {"date": "2026-11-12", "slot": "dinner"}
+    ]
+  }
+}
