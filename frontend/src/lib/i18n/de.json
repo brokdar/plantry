@@ -1001,10 +1001,7 @@
       "preference_reserved": "Vorlieben und Abneigungen kommen aus deinen Bewertungen, deshalb kann der Assistent sie nicht setzen.",
       "iterations_exceeded": "Die AI hat zu viele Schritte gemacht — bitte formuliere die Anfrage einfacher.",
       "rate_limit_exceeded": "Zu viele AI-Anfragen. Bitte warte eine Minute.",
-      "window_missing": "Der Chat-Anfrage fehlen die Daten des Planungszeitraums.",
-      "invalid_date": "Ein Chat-Datum ist kein gültiges Datum im Format JJJJ-MM-TT.",
-      "window_inverted": "Der Planungszeitraum endet vor seinem Beginn.",
-      "window_too_long": "Der Planungszeitraum darf höchstens 31 Tage umfassen."
+      "invalid_date": "Ein Chat-Datum ist kein gültiges Datum im Format JJJJ-MM-TT."
     },
     "import": {
       "fetch_failed": "Die Rezeptseite konnte nicht geladen werden. Füge stattdessen den Quelltext ein.",

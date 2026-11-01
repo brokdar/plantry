@@ -72,6 +72,8 @@ type Services struct {
 	// Settings resolves plan.default_keep_days for the foods' effective
 	// keep_days.
 	Settings plate.SettingsReader
+	// PlanView may be nil: get_plan is then not registered.
+	PlanView PlanReader
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -175,6 +177,9 @@ func defaultTools(svc Services) []Tool {
 	}
 	if svc.Presets != nil {
 		tools = append(tools, presetTools(svc)...)
+	}
+	if svc.PlanView != nil {
+		tools = append(tools, toolGetPlan(svc))
 	}
 	return tools
 }

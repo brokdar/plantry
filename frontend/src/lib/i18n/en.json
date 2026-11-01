@@ -974,10 +974,7 @@
       "preference_reserved": "Likes and dislikes come from your plate ratings, so the assistant can't set them.",
       "iterations_exceeded": "The AI ran too many tool steps — try a simpler request.",
       "rate_limit_exceeded": "You're sending too many AI requests. Please wait a minute.",
-      "window_missing": "The chat request is missing the planning window dates.",
-      "invalid_date": "A chat date is not a valid YYYY-MM-DD date.",
-      "window_inverted": "The planning window ends before it starts.",
-      "window_too_long": "The planning window can cover at most 31 days."
+      "invalid_date": "A chat date is not a valid YYYY-MM-DD date."
     },
     "import": {
       "fetch_failed": "Could not load the recipe page. Try pasting the page source instead.",

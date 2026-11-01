@@ -284,7 +284,7 @@ func StatePlate(p plate.Plate) Plate {
 		Components: make([]Component, len(p.Components)),
 	}
 	for i, c := range p.Components {
-		out.Components[i] = Component{FoodID: c.FoodID, Portions: c.Portions, Grams: c.Grams}
+		out.Components[i] = Component{ID: c.ID, FoodID: c.FoodID, Portions: c.Portions, Grams: c.Grams}
 		if c.CookSessionID != nil {
 			out.Components[i].SessionID = *c.CookSessionID
 		}

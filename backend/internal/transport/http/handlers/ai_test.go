@@ -21,9 +21,9 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
@@ -34,14 +34,16 @@ import (
 func newAIHandler(t *testing.T) (*handlers.AIHandler, *fake.Client) {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
-	return newAIHandlerWithPlates(t, db, testsvc.Plates(db))
+	return newAIHandlerWithPlan(t, db, agent.PlanContext{
+		Build:   testsvc.PlanningDeps(db).Builder.Build,
+		Summary: planning.RenderPlanSummary,
+	})
 }
 
-// newAIHandlerWithPlates is newAIHandler with the prompt's plate reader
-// swapped out.
-func newAIHandlerWithPlates(t *testing.T, db *sql.DB, plates agent.PlateRanger) (*handlers.AIHandler, *fake.Client) {
+// newAIHandlerWithPlan is newAIHandler with the prompt's plan context swapped
+// out.
+func newAIHandlerWithPlan(t *testing.T, db *sql.DB, plan agent.PlanContext) (*handlers.AIHandler, *fake.Client) {
 	t.Helper()
-	slotRepo := sqlite.NewSlotRepo(db)
 	foodRepo := sqlite.NewFoodRepo(db)
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{{
 		StopReason: "end_turn",
@@ -51,12 +53,7 @@ func newAIHandlerWithPlates(t *testing.T, db *sql.DB, plates agent.PlateRanger) 
 	tools, err := agent.NewToolSet(agent.Services{Foods: food.NewService(foodRepo)})
 	require.NoError(t, err)
 	svc := agent.NewService(sqlite.NewAIRepo(db), resolver, tools,
-		profile.NewService(sqlite.NewProfileRepo(db)), nil,
-		agent.WindowSources{
-			Plates: plates,
-			Slots:  slot.NewService(slotRepo),
-			Foods:  foodRepo,
-		},
+		profile.NewService(sqlite.NewProfileRepo(db)), testsvc.Settings(db), plan,
 		func() time.Time { return time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC) })
 	return handlers.NewAIHandler(svc, resolver), client
 }
@@ -70,24 +67,23 @@ func messageKey(t *testing.T, w *httptest.ResponseRecorder) string {
 }
 
 // dateCases are the date validation cases shared by chat and the debug
-// prompt endpoint. Fields hold today/from/to; an empty value is omitted.
+// prompt endpoint. An empty value is omitted. The default shopping day is
+// Monday, so 2026-10-31 (a Saturday) is no window start.
 var dateCases = []struct {
-	name            string
-	today, from, to string
-	wantKey         string
+	name         string
+	today, start string
+	wantKey      string
 }{
-	{"missing from", "", "", "2026-11-06", "error.ai.window_missing"},
-	{"missing to", "", "2026-10-31", "", "error.ai.window_missing"},
-	{"malformed from", "", "31.10.2026", "2026-11-06", "error.ai.invalid_date"},
-	{"malformed to", "", "2026-10-31", "2026-11-31", "error.ai.invalid_date"},
-	{"malformed today", "yesterday", "2026-10-31", "2026-11-06", "error.ai.invalid_date"},
-	{"to before from", "", "2026-11-06", "2026-10-31", "error.ai.window_inverted"},
-	{"span over 31 days", "", "2026-10-01", "2026-11-01", "error.ai.window_too_long"},
+	// B3-AC2
+	{"missing start", "", "", "error.invalid_body"},
+	{"malformed start", "", "31.10.2026", "error.ai.invalid_date"},
+	{"malformed today", "yesterday", "2026-11-02", "error.ai.invalid_date"},
+	{"start is no shopping day", "", "2026-10-31", "error.plan.invalid_start"},
 }
 
-func chatBody(today, from, to string) string {
+func chatBody(today, start string) string {
 	body := map[string]string{"message": "plan my week"}
-	for k, v := range map[string]string{"today": today, "from": from, "to": to} {
+	for k, v := range map[string]string{"today": today, "start": start} {
 		if v != "" {
 			body[k] = v
 		}
@@ -100,7 +96,7 @@ func TestAIChat_RejectsBadDates(t *testing.T) {
 	for _, tt := range dateCases {
 		t.Run(tt.name, func(t *testing.T) {
 			h, client := newAIHandler(t)
-			req := httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody(tt.today, tt.from, tt.to)))
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody(tt.today, tt.start)))
 			w := httptest.NewRecorder()
 
 			h.Chat(w, req)
@@ -114,29 +110,16 @@ func TestAIChat_RejectsBadDates(t *testing.T) {
 
 func TestAIChat_PassesDatesThrough(t *testing.T) {
 	tests := []struct {
-		name, today, from, to string
-		wantToday, wantWindow string
+		name, today, start string
+		wantToday          string
 	}{
-		{
-			"client today", "2026-10-30", "2026-10-31", "2026-11-06",
-			"Today is Friday, 2026-10-30.",
-			"Planning window: Saturday 2026-10-31 to Friday 2026-11-06 (7 days).",
-		},
-		{
-			"today falls back to server clock", "", "2026-10-31", "2026-11-06",
-			"Today is Monday, 2026-10-26.",
-			"Planning window: Saturday 2026-10-31 to Friday 2026-11-06 (7 days).",
-		},
-		{
-			"exactly 31 days inclusive", "2026-10-26", "2026-10-01", "2026-10-31",
-			"Today is Monday, 2026-10-26.",
-			"Planning window: Thursday 2026-10-01 to Saturday 2026-10-31 (31 days).",
-		},
+		{"client today", "2026-10-30", "2026-11-02", "Today is Friday 2026-10-30."},
+		{"today falls back to server clock", "", "2026-11-02", "Today is Monday 2026-10-26."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h, client := newAIHandler(t)
-			req := httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody(tt.today, tt.from, tt.to)))
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody(tt.today, tt.start)))
 			w := httptest.NewRecorder()
 
 			h.Chat(w, req)
@@ -146,32 +129,15 @@ func TestAIChat_PassesDatesThrough(t *testing.T) {
 			reqs := client.Requests()
 			require.NotEmpty(t, reqs)
 			assert.Contains(t, reqs[0].System, tt.wantToday)
-			assert.Contains(t, reqs[0].System, tt.wantWindow)
+			assert.Contains(t, reqs[0].System, "The plan week runs from Monday 2026-11-02 to Sunday 2026-11-08")
 		})
 	}
-}
-
-// B2-AC6: the old chat modes and week ids are unknown fields now: the turn
-// runs as a plain chat and the prompt carries no mode hint.
-func TestAIChat_IgnoresLegacyFields(t *testing.T) {
-	h, client := newAIHandler(t)
-	body := `{"message":"plan my week","from":"2026-10-31","to":"2026-11-06","mode":"fill_empty","week_id":17}`
-	w := httptest.NewRecorder()
-
-	h.Chat(w, httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(body)))
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "event: done")
-	reqs := client.Requests()
-	require.NotEmpty(t, reqs)
-	assert.NotContains(t, reqs[0].System, "Mode hint")
-	assert.NotContains(t, reqs[0].System, "fill the empty slots")
 }
 
 func TestAIConversations_ListIgnoresLegacyFilter(t *testing.T) {
 	h, _ := newAIHandler(t)
 	w := httptest.NewRecorder()
-	h.Chat(w, httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody("", "2026-10-31", "2026-11-06"))))
+	h.Chat(w, httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody("", "2026-11-02"))))
 	require.Equal(t, http.StatusOK, w.Code)
 
 	w = httptest.NewRecorder()
@@ -187,10 +153,13 @@ func TestAIConversations_ListIgnoresLegacyFilter(t *testing.T) {
 	assert.NotContains(t, list.Items[0], "week_id")
 }
 
-type failingPlates struct{ err error }
-
-func (f failingPlates) Range(context.Context, time.Time, time.Time) ([]plate.Plate, error) {
-	return nil, f.err
+func failingPlan(err error) agent.PlanContext {
+	return agent.PlanContext{
+		Build: func(context.Context, window.Window, time.Time, time.Time, time.Time) (planning.State, error) {
+			return planning.State{}, err
+		},
+		Summary: planning.RenderPlanSummary,
+	}
 }
 
 func TestAIDebugSystemPrompt_MapsServiceErrors(t *testing.T) {
@@ -205,10 +174,10 @@ func TestAIDebugSystemPrompt_MapsServiceErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h, _ := newAIHandlerWithPlates(t, testhelper.NewTestDB(t), failingPlates{tt.err})
+			h, _ := newAIHandlerWithPlan(t, testhelper.NewTestDB(t), failingPlan(tt.err))
 			w := httptest.NewRecorder()
 
-			h.DebugSystemPrompt(w, httptest.NewRequest(http.MethodGet, debugURL("", "2026-10-31", "2026-11-01"), nil))
+			h.DebugSystemPrompt(w, httptest.NewRequest(http.MethodGet, debugURL("", "2026-11-02"), nil))
 
 			assert.Equal(t, tt.wantStatus, w.Code)
 			assert.Equal(t, tt.wantKey, messageKey(t, w))
@@ -216,9 +185,9 @@ func TestAIDebugSystemPrompt_MapsServiceErrors(t *testing.T) {
 	}
 }
 
-func debugURL(today, from, to string) string {
+func debugURL(today, start string) string {
 	q := []string{}
-	for k, v := range map[string]string{"today": today, "from": from, "to": to} {
+	for k, v := range map[string]string{"today": today, "start": start} {
 		if v != "" {
 			q = append(q, k+"="+v)
 		}
@@ -232,7 +201,7 @@ func TestAIDebugSystemPrompt_RejectsBadDates(t *testing.T) {
 			h, _ := newAIHandler(t)
 			w := httptest.NewRecorder()
 
-			h.DebugSystemPrompt(w, httptest.NewRequest(http.MethodGet, debugURL(tt.today, tt.from, tt.to), nil))
+			h.DebugSystemPrompt(w, httptest.NewRequest(http.MethodGet, debugURL(tt.today, tt.start), nil))
 
 			assert.Equal(t, http.StatusBadRequest, w.Code)
 			assert.Equal(t, tt.wantKey, messageKey(t, w))
@@ -244,13 +213,13 @@ func TestAIDebugSystemPrompt_UsesDates(t *testing.T) {
 	h, _ := newAIHandler(t)
 	w := httptest.NewRecorder()
 
-	h.DebugSystemPrompt(w, httptest.NewRequest(http.MethodGet, debugURL("2026-10-26", "2026-10-31", "2026-11-01"), nil))
+	h.DebugSystemPrompt(w, httptest.NewRequest(http.MethodGet, debugURL("2026-10-26", "2026-11-02"), nil))
 
 	require.Equal(t, http.StatusOK, w.Code)
 	var body struct {
 		SystemPrompt string `json:"system_prompt"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	assert.Contains(t, body.SystemPrompt, "Today is Monday, 2026-10-26.")
-	assert.Contains(t, body.SystemPrompt, "- Sunday 2026-11-01\n")
+	assert.Contains(t, body.SystemPrompt, "Today is Monday 2026-10-26.")
+	assert.Contains(t, body.SystemPrompt, "- Sunday 2026-11-08\n")
 }

@@ -45,23 +45,21 @@ func newChatService(t *testing.T, script *fake.Script) (*agent.Service, *sql.DB)
 		llm.StaticResolver(client, chatModel),
 		tools,
 		profile.NewService(sqlite.NewProfileRepo(db)),
-		nil,
-		windowSources(db),
+		testsvc.Settings(db),
+		planContext(db),
 		time.Now,
 	).WithRecorder(rec)
 	return svc, db
 }
 
-// chatWindowStart / chatWindowEnd are the planning window chat() sends.
-var (
-	chatWindowStart = time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
-	chatWindowEnd   = time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
-)
+// chatWindowStart is the planning window chat() sends (a Monday, the default
+// shopping day).
+var chatWindowStart = time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
 
 // chat runs one Chat turn over the default window, draining events. onEvent
 // (optional) sees each event as it arrives.
 func chat(ctx context.Context, svc *agent.Service, text string, onEvent func(llm.Event)) ([]llm.Event, error) {
-	return chatReq(ctx, svc, agent.ChatRequest{UserText: text, From: chatWindowStart, To: chatWindowEnd}, onEvent)
+	return chatReq(ctx, svc, agent.ChatRequest{UserText: text, Start: chatWindowStart}, onEvent)
 }
 
 // chatReq runs one Chat turn for req, draining events.
@@ -167,8 +165,8 @@ func TestChat_RecordsChatRun(t *testing.T) {
 	assert.Equal(t, agent.PromptVersion, run.PromptVersion)
 	assert.Equal(t, "ok", run.Status)
 	assert.Equal(t, "plan my dinners", run.Instruction.String)
-	assert.Equal(t, "2026-10-31", run.WindowStart.String)
-	assert.Equal(t, "2026-11-06", run.WindowEnd.String)
+	assert.Equal(t, "2026-11-02", run.WindowStart.String)
+	assert.Equal(t, "2026-11-08", run.WindowEnd.String)
 	assert.False(t, run.ErrorKey.Valid)
 	assert.True(t, run.FinishedAt.Valid)
 	assert.Equal(t, 2, run.Iterations)
@@ -257,7 +255,7 @@ func TestChat_NoRecorderRecordsNothing(t *testing.T) {
 	require.NoError(t, err)
 	svc := agent.NewService(sqlite.NewAIRepo(db),
 		llm.StaticResolver(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}}), chatModel),
-		tools, profile.NewService(sqlite.NewProfileRepo(db)), nil, windowSources(db), time.Now)
+		tools, profile.NewService(sqlite.NewProfileRepo(db)), testsvc.Settings(db), planContext(db), time.Now)
 
 	_, err = chat(context.Background(), svc, "hi", nil)
 	require.NoError(t, err)
@@ -273,7 +271,7 @@ func TestChat_ProviderMissingRecordsNothing(t *testing.T) {
 	tools, err := agent.NewToolSet(agent.Services{Foods: food.NewService(sqlite.NewFoodRepo(db))})
 	require.NoError(t, err)
 	svc := agent.NewService(sqlite.NewAIRepo(db), llm.StaticResolver(nil, ""), tools,
-		profile.NewService(sqlite.NewProfileRepo(db)), nil, windowSources(db), time.Now).WithRecorder(rec)
+		profile.NewService(sqlite.NewProfileRepo(db)), testsvc.Settings(db), planContext(db), time.Now).WithRecorder(rec)
 
 	_, err = chat(context.Background(), svc, "hi", nil)
 	require.Error(t, err)
@@ -298,7 +296,7 @@ func TestChat_RunStoresConversationID(t *testing.T) {
 
 	// A follow-up turn in the same conversation is a second run with the same id.
 	_, err = chatReq(context.Background(), svc, agent.ChatRequest{
-		ConversationID: &convID, UserText: "second", From: chatWindowStart, To: chatWindowEnd,
+		ConversationID: &convID, UserText: "second", Start: chatWindowStart,
 	}, nil)
 	require.NoError(t, err)
 

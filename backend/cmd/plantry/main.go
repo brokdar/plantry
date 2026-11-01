@@ -217,13 +217,14 @@ func run() error {
 	// their run rows (before the recorder and the database). Without a
 	// chooser in the request it uses the LLM when a provider is configured,
 	// else the heuristic (D11).
+	planBuilder := planning.NewBuilder(planning.BuilderDeps{
+		Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
+		Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
+		Settings: settingsSvc, Profile: profileSvc,
+	})
 	planningSvc := planning.NewService(planning.Deps{
-		Builder: planning.NewBuilder(planning.BuilderDeps{
-			Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
-			Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
-			Settings: settingsSvc, Profile: profileSvc,
-		}),
-		Plates: plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: availabilitySvc, Overrides: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
+		Builder: planBuilder,
+		Plates:  plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: availabilitySvc, Overrides: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
 		RunLog: planning.RecorderLog{Recorder: runRecorder}, Runs: aiRunRepo, Tx: txRunner,
 		Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{
@@ -270,12 +271,13 @@ func run() error {
 		Presets:           presetSvc,
 		Availability:      availabilitySvc,
 		Settings:          settingsSvc,
+		PlanView:          planViewSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
 	}
 	agentSvc := agent.NewService(aiRepo, llmResolver, tools, profileSvc, settingsSvc,
-		agent.WindowSources{Plates: plateSvc, Slots: slotSvc, Foods: foodRepo, Availability: availabilitySvc}, time.Now).WithRecorder(runRecorder)
+		agent.PlanContext{Build: planBuilder.Build, Summary: planning.RenderPlanSummary}, time.Now).WithRecorder(runRecorder)
 	aiHandler := handlers.NewAIHandler(agentSvc, llmResolver)
 
 	// Run log read side: runs, insights and prices. Costs are computed on

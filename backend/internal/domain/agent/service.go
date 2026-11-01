@@ -5,42 +5,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v4"
+const PromptVersion = "v5"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
 	Get(ctx context.Context, key string) (settings.Value, error)
-}
-
-// PlateRanger loads the plates in an inclusive date range.
-type PlateRanger interface {
-	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
-}
-
-// SlotLister lists the time slots.
-type SlotLister interface {
-	List(ctx context.Context, activeOnly bool) ([]slot.TimeSlot, error)
-}
-
-// FoodLookup loads food headers by id.
-type FoodLookup interface {
-	LookupByIDs(ctx context.Context, ids []int64) (map[int64]*food.Food, error)
 }
 
 // AvailabilityResolver resolves the availability of every cell in an
@@ -49,13 +33,12 @@ type AvailabilityResolver interface {
 	Resolve(ctx context.Context, from, to time.Time) ([]availability.Cell, error)
 }
 
-// WindowSources read the planning window shown in the system prompt.
-// Availability may be nil: every cell is then "plan".
-type WindowSources struct {
-	Plates       PlateRanger
-	Slots        SlotLister
-	Foods        FoodLookup
-	Availability AvailabilityResolver
+// PlanContext reads the plan window the system prompt shows (D2): Build
+// loads the planning state of a window (planning.Builder.Build) and Summary
+// renders it with the window's issues (planning.RenderPlanSummary).
+type PlanContext struct {
+	Build   func(ctx context.Context, w window.Window, today, from, to time.Time) (planning.State, error)
+	Summary func(planning.State, []planning.Issue) string
 }
 
 // Service is the facade over conversation persistence + the agent loop. The
@@ -66,7 +49,7 @@ type Service struct {
 	tools    *ToolSet
 	profile  *profile.Service
 	settings SettingsReader
-	window   WindowSources
+	plan     PlanContext
 	now      func() time.Time
 	recorder *airun.Recorder // may be nil: chat turns are then not recorded
 }
@@ -81,13 +64,13 @@ func NewService(
 	tools *ToolSet,
 	profileSvc *profile.Service,
 	settingsSvc SettingsReader,
-	window WindowSources,
+	plan PlanContext,
 	now func() time.Time,
 ) *Service {
 	return &Service{
 		repo: repo, resolver: resolver, tools: tools,
 		profile: profileSvc, settings: settingsSvc,
-		window: window, now: now,
+		plan: plan, now: now,
 	}
 }
 
@@ -103,9 +86,9 @@ type ChatRequest struct {
 	UserText       string
 	// Today is the user's current date; zero falls back to the server clock.
 	Today time.Time
-	// From and To bound the planning window (inclusive, required).
-	From time.Time
-	To   time.Time
+	// Start is the planning window's first day (required); it must be a
+	// shopping day (D1).
+	Start time.Time
 }
 
 // Chat drives a single turn-taking interaction with the model, starting with
@@ -115,7 +98,8 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	if req.UserText == "" {
 		return fmt.Errorf("%w: user_text required", domain.ErrInvalidInput)
 	}
-	if err := checkWindow(req); err != nil {
+	w, err := s.window(ctx, req)
+	if err != nil {
 		return err
 	}
 
@@ -157,7 +141,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	history = append(history, llm.Message{Role: llm.RoleUser, Content: userBlocks})
 
 	// Compose system prompt.
-	prompt, err := s.buildSystemPrompt(ctx, req)
+	prompt, err := s.buildSystemPrompt(ctx, req, w)
 	if err != nil {
 		return err
 	}
@@ -168,8 +152,8 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		ctx, run = s.recorder.Start(ctx, airun.Start{
 			Kind:           airun.KindChat,
 			PromptVersion:  PromptVersion,
-			WindowStart:    &req.From,
-			WindowEnd:      &req.To,
+			WindowStart:    &w.Start,
+			WindowEnd:      &w.End,
 			Instruction:    &req.UserText,
 			ConversationID: &conv.ID,
 		})
@@ -180,7 +164,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	}
 
 	// Drive the loop. Tools read today from ctx (D25).
-	ctx = withToday(ctx, s.today(req))
+	ctx = withWindow(withToday(ctx, s.today(req)), w)
 	return Run(ctx, RunRequest{
 		ConversationID: conv.ID,
 		Model:          model,
@@ -267,42 +251,40 @@ func (s *Service) loadHistory(ctx context.Context, convID int64) ([]llm.Message,
 	return out, nil
 }
 
-// checkWindow rejects a request without a planning window.
-func checkWindow(req ChatRequest) error {
-	if req.From.IsZero() || req.To.IsZero() || req.To.Before(req.From) {
-		return fmt.Errorf("%w: from and to required, to not before from", domain.ErrInvalidInput)
+// window derives the planning window from the request's start (D1): it must
+// be a shopping day, else domain.ErrInvalidPlanStart.
+func (s *Service) window(ctx context.Context, req ChatRequest) (window.Window, error) {
+	if req.Start.IsZero() {
+		return window.Window{}, fmt.Errorf("%w: start required", domain.ErrInvalidInput)
 	}
-	return nil
+	sd, err := plate.IntSetting(ctx, s.settings, settings.KeyPlanShoppingDay)
+	if err != nil {
+		return window.Window{}, err
+	}
+	if !window.IsStart(req.Start, sd) {
+		return window.Window{}, fmt.Errorf("%w: %s", domain.ErrInvalidPlanStart, req.Start.Format(time.DateOnly))
+	}
+	return window.Containing(req.Start, sd), nil
 }
 
-func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest) (string, error) {
+// CheckStart reports whether start is a valid chat window start, so a handler
+// can reject a request before it opens a stream.
+func (s *Service) CheckStart(ctx context.Context, start time.Time) error {
+	_, err := s.window(ctx, ChatRequest{Start: start})
+	return err
+}
+
+func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w window.Window) (string, error) {
 	p, err := s.profile.Get(ctx)
 	if err != nil {
 		return "", err
 	}
-	slotNames, err := s.slotNames(ctx)
-	if err != nil {
-		return "", err
-	}
-	plates, err := s.windowPlates(ctx, req.From, req.To, slotNames)
-	if err != nil {
-		return "", err
-	}
-	cells, err := s.windowCells(ctx, req.From, req.To, slotNames)
-	if err != nil {
-		return "", err
-	}
 	today := s.today(req)
-	var prefs *PlanningPrefs
-	if s.settings != nil {
-		shoppingDayVal, _ := s.settings.Get(ctx, settings.KeyPlanShoppingDay)
-		anchorModeVal, _ := s.settings.Get(ctx, settings.KeyPlanAnchor)
-		prefs = &PlanningPrefs{
-			ShoppingDay: weekdayName(shoppingDayVal.Raw),
-			AnchorMode:  anchorModeVal.Raw,
-		}
+	st, err := s.plan.Build(ctx, w, today, w.Start, w.End)
+	if err != nil {
+		return "", err
 	}
-	return ComposePrompt(p, plates, cells, &DateRange{Today: today, From: req.From, To: req.To}, prefs), nil
+	return ComposePrompt(p, s.plan.Summary(st, planning.BoardIssues(st)), today), nil
 }
 
 // today is the request's date, or the server's local date when it has none.
@@ -320,6 +302,19 @@ func localDate(t time.Time) time.Time {
 
 type todayKey struct{}
 
+type windowKey struct{}
+
+// withWindow carries the chat turn's planning window to the tools.
+func withWindow(ctx context.Context, w window.Window) context.Context {
+	return context.WithValue(ctx, windowKey{}, w)
+}
+
+// windowFrom returns the window set by withWindow.
+func windowFrom(ctx context.Context) (window.Window, bool) {
+	w, ok := ctx.Value(windowKey{}).(window.Window)
+	return w, ok
+}
+
 // withToday carries the user's date to the tools of a chat turn.
 func withToday(ctx context.Context, today time.Time) context.Context {
 	return context.WithValue(ctx, todayKey{}, today)
@@ -333,97 +328,14 @@ func todayFrom(ctx context.Context) time.Time {
 	return localDate(time.Now())
 }
 
-// weekdayName turns a plan.shopping_day value (0 = Monday … 6 = Sunday) into
-// its English weekday name. Any other value is returned unchanged.
-func weekdayName(raw string) string {
-	n, err := strconv.Atoi(raw)
-	if err != nil || n < 0 || n > 6 {
-		return raw
-	}
-	return time.Weekday((n + 1) % 7).String()
-}
-
-// slotNames maps every slot id to its name key.
-func (s *Service) slotNames(ctx context.Context) (map[int64]string, error) {
-	slots, err := s.window.Slots.List(ctx, false)
-	if err != nil {
-		return nil, err
-	}
-	names := make(map[int64]string, len(slots))
-	for _, sl := range slots {
-		names[sl.ID] = sl.NameKey
-	}
-	return names, nil
-}
-
-// windowPlates loads the plates in [from, to] with their slot and food names.
-func (s *Service) windowPlates(ctx context.Context, from, to time.Time, slotNames map[int64]string) ([]PromptPlate, error) {
-	plates, err := s.window.Plates.Range(ctx, from, to)
-	if err != nil {
-		return nil, err
-	}
-	if len(plates) == 0 {
-		return nil, nil
-	}
-	var foodIDs []int64
-	for _, p := range plates {
-		for _, c := range p.Components {
-			foodIDs = append(foodIDs, c.FoodID)
-		}
-	}
-	foods, err := s.window.Foods.LookupByIDs(ctx, foodIDs)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]PromptPlate, len(plates))
-	for i, p := range plates {
-		names := make([]string, 0, len(p.Components))
-		for _, c := range p.Components {
-			if f, ok := foods[c.FoodID]; ok {
-				names = append(names, f.Name)
-			}
-		}
-		out[i] = PromptPlate{
-			ID: p.ID, Date: p.Date, SlotID: p.SlotID, Slot: slotNames[p.SlotID],
-			Foods: names,
-		}
-	}
-	return out, nil
-}
-
-// windowCells loads the "none" and "routine" cells in [from, to].
-func (s *Service) windowCells(ctx context.Context, from, to time.Time, slotNames map[int64]string) ([]PromptCell, error) {
-	if s.window.Availability == nil {
-		return nil, nil
-	}
-	cells, err := s.window.Availability.Resolve(ctx, from, to)
-	if err != nil {
-		return nil, err
-	}
-	var out []PromptCell
-	for _, c := range cells {
-		if c.Mode == availability.ModePlan {
-			continue
-		}
-		pc := PromptCell{Date: c.Date, SlotID: c.SlotID, Slot: slotNames[c.SlotID], Availability: string(c.Mode)}
-		if c.PresetName != nil {
-			pc.PresetName = *c.PresetName
-		}
-		if c.Note != nil {
-			pc.Note = *c.Note
-		}
-		out = append(out, pc)
-	}
-	return out, nil
-}
-
 // DebugSystemPrompt composes and returns the system prompt that would be sent
 // to the LLM for a chat turn with req's dates. It goes through the
 // same path as Chat, so end-to-end tests can assert on what the agent
 // actually sees. Never call this from the Chat path.
 func (s *Service) DebugSystemPrompt(ctx context.Context, req ChatRequest) (string, error) {
-	if err := checkWindow(req); err != nil {
+	w, err := s.window(ctx, req)
+	if err != nil {
 		return "", err
 	}
-	return s.buildSystemPrompt(ctx, req)
+	return s.buildSystemPrompt(ctx, req, w)
 }

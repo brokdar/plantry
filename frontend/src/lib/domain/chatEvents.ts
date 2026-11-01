@@ -83,9 +83,8 @@ export interface ChatRequest {
   message: string
   /** The browser's date (YYYY-MM-DD). */
   today: string
-  /** Planning window bounds (YYYY-MM-DD, inclusive). */
-  from: string
-  to: string
+  /** The planning window's start (YYYY-MM-DD, a shopping day). */
+  start: string
 }
 
 export interface ConversationSummary {

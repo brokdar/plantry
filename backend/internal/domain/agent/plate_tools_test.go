@@ -194,9 +194,9 @@ func TestTool_GetProfile_HasHouseholdPortions(t *testing.T) {
 }
 
 func TestPrompt_SaysPortionsPerEater(t *testing.T) {
-	prompt := agent.ComposePrompt(nil, nil, nil, nil, nil)
+	prompt := agent.ComposePrompt(nil, "", time.Time{})
 	assert.Contains(t, prompt, "portions per eater")
-	assert.Equal(t, "v4", agent.PromptVersion)
+	assert.Equal(t, "v5", agent.PromptVersion)
 }
 
 // B2-AC6: the chat modes and week ids are gone from the agent package.
