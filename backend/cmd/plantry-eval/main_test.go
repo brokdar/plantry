@@ -73,7 +73,7 @@ func TestHeuristicRun(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "eval.jsonl")
 	stdout, err := runCLI(t, "-chooser", "heuristic", "-runs", "1", "-scenarios", "single_batch_cooker,away_thu_fri", "-out", out)
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "Report 0123456789ab heuristic/h1/")
+	assert.Contains(t, stdout, "Report 0123456789ab heuristic/h2/")
 	assert.Contains(t, stdout, "single_batch_cooker")
 	assert.Contains(t, stdout, "away_thu_fri")
 	assert.NotContains(t, stdout, "FAIL")

@@ -340,9 +340,11 @@ func TestHeuristic_ConfirmedCookFillsTheDaysCap(t *testing.T) {
 		spare       float64 // portions left on the confirmed batch
 		wantFed     bool
 		wantMissing bool
+		cookCell    bool // target is the confirmed session's own cook cell, left without a plate
 	}{
 		{name: "nothing spare leaves the cell empty", spare: 0, wantMissing: true},
 		{name: "a spare portion feeds the cell", spare: 1, wantFed: true},
+		{name: "the confirmed cook's own empty cell still cooks", spare: 1, cookCell: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -351,11 +353,20 @@ func TestHeuristic_ConfirmedCookFillsTheDaysCap(t *testing.T) {
 			// A confirmed Chili cooked Wed lunch, eaten there.
 			s.Foods[chili] = recipe(chili, "Chili", food.RoleMain, "omnivore", 600)
 			s.Sessions = []planning.Session{persistedSession(7, chili, wed, lunch, 1+tc.spare, true)}
-			s.Plates = append(s.Plates, persisted(70, wed, lunch, true, chili, 7))
 			target := targetCells(cell(wed, dinner))
+			if tc.cookCell {
+				target = targetCells(cell(wed, lunch))
+			} else {
+				s.Plates = append(s.Plates, persisted(70, wed, lunch, true, chili, 7))
+			}
 
 			p := choose(t, planning.ChooseInput{State: s, Target: target})
 
+			if tc.cookCell {
+				require.Len(t, p.Plates, 1)
+				assert.Empty(t, only(check(s, target, p), "H2"))
+				return
+			}
 			for _, ps := range p.Sessions {
 				assert.NotEqual(t, day(wed), ps.CookDate, "no new cook on a day at its cap")
 			}
