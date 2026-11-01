@@ -25,6 +25,8 @@ describe("check-legacy.sh (D27)", () => {
     "export function RunInsights() {}",
     'const key = insightKeys.summary({ bucket: "week" })',
     'createFileRoute("/settings/assistant/insights")',
+    'const label = t("nav.generate_plan")',
+    't("plan.review.regenerate_week")',
   ])("allows %s", (line) => {
     expect(flagged(line)).toBe(false)
   })
@@ -35,6 +37,13 @@ describe("check-legacy.sh (D27)", () => {
     banned('scope: "fill', '_empty"'),
     banned('scope: "replace', '_all"'),
     banned("Most", "Cooked"),
+    // Phase 3 Z1 (§0.2 item 5): the chat-prefill generate path and the
+    // pre-state lock fields.
+    banned('t("plan.generate', '_prompt")'),
+    banned('openWith(t("plan.', 'generate_plan"))'),
+    banned("plate.locked", "_by"),
+    banned('"is_', 'locked": true'),
+    banned("const is", "Locked = true"),
   ])("rejects %s", (line) => {
     expect(flagged(line)).toBe(true)
   })

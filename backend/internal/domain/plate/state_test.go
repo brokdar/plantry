@@ -75,10 +75,6 @@ func (e *env) states() map[string]plate.State {
 	return out
 }
 
-func itoa(id int64) string {
-	return string(rune('0'+id/100%10)) + string(rune('0'+id/10%10)) + string(rune('0'+id%10))
-}
-
 // allIn asserts every plate and session is in st.
 func (e *env) allIn(st plate.State) {
 	e.t.Helper()

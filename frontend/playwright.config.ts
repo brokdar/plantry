@@ -97,8 +97,11 @@ export default defineConfig({
     },
   ],
   webServer: [
+    // The AI rate limit (10 a minute by default) is lifted: the ai-serial
+    // specs chat back to back, and at --repeat-each the default turned
+    // chats away mid-run.
     {
-      command: `cd ../backend && PLANTRY_PORT=${API_PORT} PLANTRY_DB_PATH=${DB_PATH} PLANTRY_IMAGE_PATH=${IMAGE_PATH} PLANTRY_LOG_LEVEL=error PLANTRY_DEV_MODE=1 PLANTRY_OFF_DISABLED=1 PLANTRY_SECRET_KEY=0123456789abcdef0123456789abcdef PLANTRY_AI_PROVIDER=fake PLANTRY_AI_MODEL=fake-e2e PLANTRY_AI_FAKE_SCRIPT=../frontend/e2e/fixtures/chat-scripts/plan-dinner.json go run ./cmd/plantry`,
+      command: `cd ../backend && PLANTRY_PORT=${API_PORT} PLANTRY_DB_PATH=${DB_PATH} PLANTRY_IMAGE_PATH=${IMAGE_PATH} PLANTRY_LOG_LEVEL=error PLANTRY_DEV_MODE=1 PLANTRY_OFF_DISABLED=1 PLANTRY_SECRET_KEY=0123456789abcdef0123456789abcdef PLANTRY_AI_PROVIDER=fake PLANTRY_AI_MODEL=fake-e2e PLANTRY_AI_RATE_LIMIT_PER_MIN=1000 PLANTRY_AI_FAKE_SCRIPT=../frontend/e2e/fixtures/chat-scripts/plan-dinner.json go run ./cmd/plantry`,
       url: `http://localhost:${API_PORT}/api/health`,
       reuseExistingServer: false,
       timeout: 60_000,

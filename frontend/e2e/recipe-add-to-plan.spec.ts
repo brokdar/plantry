@@ -1,18 +1,12 @@
 import {
-  API,
-  apiRequest,
   cleanupFood,
+  cleanupSlot,
   expect,
   seedComposedWithStub,
+  seedSlot,
   test,
   uid,
 } from "./helpers"
-
-async function deletePlate(id: number) {
-  const ctx = await apiRequest.newContext({ baseURL: API })
-  await ctx.delete(`/api/plates/${id}`)
-  await ctx.dispose()
-}
 
 test.describe("Add to plan (AC-10)", () => {
   test("picks the first free plan cell, creates a confirmed plate and offers Open plan", async ({
@@ -23,7 +17,10 @@ test.describe("Add to plan (AC-10)", () => {
       { name: `Add to plan ${tag}`, role: "main" },
       tag
     )
-    let plateId: number | null = null
+    // Parallel specs fill current-window cells and create and delete their
+    // own slots, so the first free cell can be taken, or its slot gone, by
+    // the time we submit. The plate goes into a slot only this test uses.
+    const slot = await seedSlot(`slot.atp-${tag}`, "Sun", 993)
     try {
       await page.goto(`/recipes/${composed.id}`)
       await page.getByTestId("recipe-add-to-plan").click()
@@ -32,10 +29,14 @@ test.describe("Add to plan (AC-10)", () => {
 
       // The current and the next window are both on offer, and the first
       // radio (date and meal order) is preselected.
-      const radios = sheet.getByRole("radio")
-      await expect(radios.first()).toBeChecked()
-      const key = await sheet.getByRole("radio", { checked: true }).inputValue()
-      const [date, slot] = key.split("|")
+      await expect(sheet.getByRole("radio").first()).toBeChecked()
+
+      const own = sheet.locator(`[data-testid$="|${slot.id}"]`).first()
+      const key = await own.inputValue()
+      const [date] = key.split("|")
+      // The radio is visually hidden; its label is the target.
+      await own.locator("xpath=..").click()
+      await expect(own).toBeChecked()
 
       const created = page.waitForResponse(
         (r) =>
@@ -51,10 +52,9 @@ test.describe("Add to plan (AC-10)", () => {
         state: string
         components: { food_id: number; cook_session_id?: number }[]
       }
-      plateId = plate.id
       expect(plate).toMatchObject({
         date,
-        slot_id: Number(slot),
+        slot_id: slot.id,
         state: "confirmed",
       })
       expect(plate.components).toHaveLength(1)
@@ -68,11 +68,12 @@ test.describe("Add to plan (AC-10)", () => {
       })
       await toast.getByRole("button", { name: "Open plan" }).click()
       await expect(page).toHaveURL(new RegExp(`/plan\\?.*day=${date}`))
-      await expect(
-        page.locator(`[data-cell-key="${date}|${slot}"]`)
-      ).toContainText(composed.name)
+      await expect(page.locator(`[data-cell-key="${key}"]`)).toContainText(
+        composed.name
+      )
     } finally {
-      if (plateId !== null) await deletePlate(plateId)
+      // Also deletes the slot's plates.
+      await cleanupSlot(slot.id)
       await cleanupFood(composed.id)
       await cleanupFood(stub.id)
     }
