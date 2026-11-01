@@ -110,7 +110,7 @@ func Merge(s State, t Target, p Proposal) State {
 		comps := make([]Component, len(pp.Components))
 		for j, pc := range pp.Components {
 			portions := pc.Portions
-			comps[j] = Component{FoodID: pc.FoodID, Portions: &portions, SessionKey: pc.SessionKey, SessionID: pc.SessionID}
+			comps[j] = Component{FoodID: pc.FoodID, Portions: &portions, SessionKey: pc.SessionKey, SessionID: pc.SessionID, Proposed: true}
 		}
 		if at, ok := kept[pp.PlateID]; ok && pp.PlateID != 0 {
 			host := &out.Plates[at]

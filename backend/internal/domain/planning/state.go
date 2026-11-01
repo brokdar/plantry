@@ -82,6 +82,8 @@ type Component struct {
 	Grams      *float64
 	SessionID  int64
 	SessionKey string
+	// Proposed marks a component Merge added from a proposal.
+	Proposed bool
 }
 
 // Multiplier is the per-eater factor on the food's macros: portions for a

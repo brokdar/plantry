@@ -49,8 +49,10 @@ type cookEvent struct {
 	foodID    int64
 	cell      plate.CellKey
 	confirmed bool
-	session   int
-	plate     int
+	// proposed marks a cook a proposal added (see Merge).
+	proposed bool
+	session  int
+	plate    int
 }
 
 // index is a State with the lookups the rules and the score share, built
@@ -70,6 +72,9 @@ type index struct {
 	links   map[sessionRef][]plate.Link
 	// cooks are the state's cook events (see cookEvent), sessions first.
 	cooks []cookEvent
+	// merged reports whether the state holds proposed rows: a run's result
+	// rather than persisted data.
+	merged bool
 	// occasions holds each day's cooking occasions (H2): the distinct cook
 	// cells of sessions and of fresh components without a session, routine
 	// cells excluded.
@@ -110,19 +115,21 @@ func newIndex(s State, t Target) *index {
 		}
 		x.byRef[r] = i
 		x.addOccasion(ss.CookCell())
-		x.cooks = append(x.cooks, cookEvent{foodID: ss.FoodID, cell: ss.CookCell(), confirmed: ss.Confirmed, session: i, plate: -1})
+		x.cooks = append(x.cooks, cookEvent{foodID: ss.FoodID, cell: ss.CookCell(), confirmed: ss.Confirmed, proposed: ss.Proposed(), session: i, plate: -1})
+		x.merged = x.merged || ss.Proposed()
 	}
 	for i, p := range s.Plates {
 		cid := idOf(p.Cell())
 		x.byCell[cid] = append(x.byCell[cid], i)
 		x.byPlate[p.ID] = i
 		for _, c := range p.Components {
+			x.merged = x.merged || c.Proposed
 			r, linked := refOf(c)
 			if !linked {
 				if c.Portions != nil {
 					x.addOccasion(p.Cell())
 					if !p.Confirmed {
-						x.cooks = append(x.cooks, cookEvent{foodID: c.FoodID, cell: p.Cell(), session: -1, plate: i})
+						x.cooks = append(x.cooks, cookEvent{foodID: c.FoodID, cell: p.Cell(), proposed: c.Proposed, session: -1, plate: i})
 					}
 				}
 				continue

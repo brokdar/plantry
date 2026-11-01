@@ -507,6 +507,66 @@ func TestCheck_H8RelaxedIsAWarning(t *testing.T) {
 	assert.Equal(t, "s1", got[0].Params["session_key"])
 }
 
+// A side swap keeps its plate's main: H8 judges only what the run chose, so
+// the kept main is not flagged, while the board (persisted data) still is.
+func TestCheck_H8JudgesOnlyWhatARunChose(t *testing.T) {
+	const side = int64(300)
+	s := baseState()
+	last := day(sat).AddDate(0, 0, -7)
+	f := s.Foods[chili]
+	f.LastEaten = &last
+	s.Foods[chili] = f
+	manyMains(&s, 5)
+	s.Foods[side] = recipe(side, "Salad", food.RoleSideVeg, "vegan", 100)
+	s.Sessions = []planning.Session{
+		persistedSession(1, chili, sun, dinner, 1, false),
+		persistedSession(2, rice, sun, dinner, 1, false),
+	}
+	s.Plates = []planning.Plate{persisted(1, sun, dinner, false, chili, 1)}
+	s.Plates[0].Components = append(s.Plates[0].Components, planning.Component{FoodID: rice, Portions: f64(1), SessionID: 2})
+
+	swap := targetCells(cell(sun, dinner))
+	swap.SessionIDs = []int64{2}
+	got := only(check(s, swap, planning.Proposal{
+		Sessions: []planning.ProposedSession{session("s1", side, sun, dinner, 1)},
+		Plates:   []planning.ProposedPlate{{PlateID: 1, Date: day(sun), SlotID: dinner, Components: []planning.ProposedComponent{onKey(side, "s1")}}},
+	}), "H8")
+	assert.Empty(t, got, "the kept main is not the run's choice")
+
+	board := only(planning.Check(s, windowTarget(s)), "H8")
+	require.Len(t, board, 1)
+	assert.Equal(t, planning.CodeVarietyRepeat, board[0].Code)
+}
+
+// A single-plate run relaxes H8 the way the window does: the window's
+// unconfirmed cooks, not the target's, are weighed against the library, and
+// the board agrees on the saved result.
+func TestCheck_H8RelaxesOnTheWindow(t *testing.T) {
+	s := baseState()
+	last := day(sat).AddDate(0, 0, -7)
+	for id, f := range s.Foods {
+		f.LastEaten = &last
+		s.Foods[id] = f
+	}
+	manyMains(&s, 1) // one eligible recipe
+	freshPlate := func(id int64, date string, foodID int64) planning.Plate {
+		return planning.Plate{ID: id, Date: day(date), SlotID: dinner, Eaters: 1, Components: []planning.Component{{FoodID: foodID, Portions: f64(1)}}}
+	}
+	s.Plates = []planning.Plate{freshPlate(1, sat, 100)}
+
+	got := only(check(s, targetCells(cell(sun, dinner)), planning.Proposal{
+		Plates: []planning.ProposedPlate{pplate(sun, dinner, fresh(chili))},
+	}), "H8")
+	require.Len(t, got, 1)
+	assert.Equal(t, planning.CodeVarietyRelaxed, got[0].Code)
+	assert.Equal(t, planning.SeverityWarning, got[0].Severity)
+
+	s.Plates = append(s.Plates, freshPlate(2, sun, chili))
+	board := only(planning.Check(s, windowTarget(s)), "H8")
+	require.Len(t, board, 1)
+	assert.Equal(t, planning.CodeVarietyRelaxed, board[0].Code, "the board agrees")
+}
+
 func TestIssue_JSONShape(t *testing.T) {
 	s := baseState()
 	got := only(check(s, targetCells(cell(sat, lunch), cell(sat, dinner)), planning.Proposal{

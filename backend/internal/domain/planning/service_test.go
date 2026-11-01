@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -805,4 +807,23 @@ func (f *fakeRuns) PlanRunCounts(ctx context.Context, id int64) (planning.RunCou
 		(SELECT COUNT(*) FROM cook_sessions WHERE ai_run_id = ?),
 		(SELECT COUNT(DISTINCT cook_date) FROM cook_sessions WHERE ai_run_id = ?)`, id, id, id).Scan(&c.Plates, &c.Sessions, &c.CookDays)
 	return c, err
+}
+
+// In a thin library (6 mains, 3 eaten recently) the week relaxes H8. A side
+// swap or a plate regenerate judges only what it chose, with the week's
+// relaxation, so the kept main never fails the run.
+func TestService_ThinLibraryRegenerateEndsOK(t *testing.T) {
+	e := newSvcEnv(t)
+	e.exec(`DELETE FROM foods WHERE name IN ('Main 07', 'Main 08', 'Main 09', 'Main 10')`)
+	e.ok(e.generate(e.req()))
+	keys := slices.Sorted(maps.Keys(e.window()))
+	swaps := 0
+	for _, k := range keys {
+		if p := e.window()[k]; len(p.Components) == 2 {
+			e.ok(e.regenerate(planning.Scope{Kind: planning.ScopeSide, ComponentID: p.Components[1].ID}))
+			swaps++
+		}
+	}
+	require.NotZero(t, swaps)
+	e.ok(e.regenerate(planning.Scope{Kind: planning.ScopePlate, PlateID: e.window()[key(tue, e.dinner)].ID}))
 }

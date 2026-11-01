@@ -332,10 +332,14 @@ func (x *index) component(p Plate, c Component) []Issue {
 	return out
 }
 
-// h8: no unconfirmed cook in the target (a session, or a composed
-// component cooked fresh without one) cooks a main eaten, or cooked earlier,
-// within variety_weeks. Routine cells repeat by design and are skipped. When fewer eligible recipes exist than such cooks,
-// repeats are warnings (variety_relaxed).
+// h8: no cook the check judges cooks a main eaten, or cooked earlier, within
+// variety_weeks. A run's result (a merged state) is judged on its proposed
+// cooks in the target only: what it kept, such as the main of a side swap, is
+// not its choice. Persisted data (the board) is judged on every unconfirmed
+// cook in the target. Routine cells repeat by design and are skipped. When
+// fewer eligible recipes exist than the window's unconfirmed cooks, repeats
+// are warnings (variety_relaxed): the window decides, not the target, so a
+// single-plate run relaxes the way the board does for the same plan.
 func (x *index) h8() []Issue {
 	weeks := x.s.Settings.VarietyWeeks
 	if weeks <= 0 {
@@ -343,18 +347,24 @@ func (x *index) h8() []Issue {
 	}
 	span := 7 * weeks
 	var subject []int
+	needed := 0
 	for i, ev := range x.cooks {
 		f, ok := x.food(ev.foodID)
-		if ev.confirmed || !ok || !f.Composed() || !varietyRole(f.Role) || !x.inTarget(ev.cell) || x.routine(ev.cell) {
+		if ev.confirmed || !ok || !f.Composed() || !varietyRole(f.Role) || x.routine(ev.cell) {
 			continue
 		}
-		subject = append(subject, i)
+		if x.s.Window.Contains(ev.cell.Date) {
+			needed++
+		}
+		if x.inTarget(ev.cell) && (ev.proposed || !x.merged) {
+			subject = append(subject, i)
+		}
 	}
 	if len(subject) == 0 {
 		return nil
 	}
 	code, sev := CodeVarietyRepeat, SeverityViolation
-	if x.eligibleRecipes(span) < len(subject) {
+	if x.eligibleRecipes(span) < needed {
 		code, sev = CodeVarietyRelaxed, SeverityWarning
 	}
 	var out []Issue
