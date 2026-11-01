@@ -24,7 +24,15 @@ type Script struct {
 }
 
 // Turn is a single assistant turn in the script.
+//
+// MatchUser and ForTool split the script into sequences, each with its own
+// cursor. A turn with neither belongs to the default sequence (the old
+// rules). MatchUser turns replay only when the conversation's latest user
+// text contains the value (case-insensitive); ForTool turns replay only for a
+// request whose ToolChoice names that tool, without touching the chat cursor.
 type Turn struct {
+	MatchUser  string          `json:"match_user,omitempty"`
+	ForTool    string          `json:"for_tool,omitempty"`
 	Events     []ScriptedEvent `json:"events"`
 	StopReason string          `json:"stop_reason"` // "end_turn" | "tool_use" | ...
 	// Message is the assembled final assistant message for this turn. Its
@@ -73,7 +81,8 @@ type ScriptedUsage struct {
 type Client struct {
 	path   string
 	script *Script
-	call   int
+	// cursors holds one position per sequence (see sequence).
+	cursors map[string]int
 	// requests records every request received, in call order.
 	requests []llm.Request
 	mu       sync.Mutex
@@ -151,26 +160,35 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 		c.mu.Unlock()
 		return nil, fmt.Errorf("fake: empty script")
 	}
+	key, turns := c.sequence(req)
+	if len(turns) == 0 {
+		c.mu.Unlock()
+		return nil, fmt.Errorf("fake: no scripted turns for %q", key)
+	}
+	if c.cursors == nil {
+		c.cursors = map[string]int{}
+	}
 	// A request whose last message is a plain user message starts a new
-	// user turn, so it begins at turn 0 regardless of any abandoned session.
+	// user turn, so it begins at turn 0 of its sequence regardless of any
+	// abandoned session.
 	if startsNewTurn(req) {
-		c.call = 0
+		c.cursors[key] = 0
 	}
-	idx := c.call
-	if idx >= len(c.script.Turns) {
-		idx = len(c.script.Turns) - 1
+	idx := c.cursors[key]
+	if idx >= len(turns) {
+		idx = len(turns) - 1
 	}
-	turn := c.script.Turns[idx]
+	turn := turns[idx]
 	// Advance to the next turn for subsequent calls.
-	if c.call < len(c.script.Turns) {
-		c.call++
+	if c.cursors[key] < len(turns) {
+		c.cursors[key]++
 	}
-	// If we just returned the last scripted turn and it is a terminal turn
-	// (end_turn / empty stop_reason), reset so the next chat session starts
-	// fresh. Non-terminal (tool_use) turns keep advancing inside one session.
+	// A terminal turn (end_turn / empty stop_reason) resets the sequence so the
+	// next chat session starts fresh. tool_use turns keep advancing.
 	if turn.StopReason == "" || turn.StopReason == "end_turn" {
-		c.call = 0
+		c.cursors[key] = 0
 	}
+	call := c.cursors[key]
 	c.mu.Unlock()
 
 	for _, e := range turn.Events {
@@ -183,7 +201,7 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 		}
 		payload, err := decodePayload(e.Type, e.Payload)
 		if err != nil {
-			return nil, fmt.Errorf("fake: event %d %s: %w", c.call, e.Type, err)
+			return nil, fmt.Errorf("fake: event %d %s: %w", call, e.Type, err)
 		}
 		select {
 		case <-ctx.Done():
@@ -199,6 +217,56 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 			CacheReadTokens: turn.Usage.CacheReadTokens, CacheWriteTokens: turn.Usage.CacheWriteTokens,
 		},
 	}, nil
+}
+
+// sequence picks the turns a request replays and the cursor key for them: the
+// for_tool turns when the request forces that tool, else the first match_user
+// sequence whose value the latest user text contains, else the default turns.
+func (c *Client) sequence(req llm.Request) (string, []Turn) {
+	pick := func(key string, ok func(Turn) bool) (string, []Turn) {
+		var turns []Turn
+		for _, t := range c.script.Turns {
+			if ok(t) {
+				turns = append(turns, t)
+			}
+		}
+		return key, turns
+	}
+	if req.ToolChoice != nil && req.ToolChoice.Name != "" {
+		name := req.ToolChoice.Name
+		if k, turns := pick("tool:"+name, func(t Turn) bool { return t.ForTool == name }); len(turns) > 0 {
+			return k, turns
+		}
+	}
+	text := strings.ToLower(latestUserText(req))
+	for _, t := range c.script.Turns {
+		if t.ForTool == "" && t.MatchUser != "" && strings.Contains(text, strings.ToLower(t.MatchUser)) {
+			m := t.MatchUser
+			return pick("user:"+m, func(t Turn) bool { return t.ForTool == "" && t.MatchUser == m })
+		}
+	}
+	return pick("", func(t Turn) bool { return t.ForTool == "" && t.MatchUser == "" })
+}
+
+// latestUserText is the text of the conversation's last user message that
+// carries text (tool_result carriers have none).
+func latestUserText(req llm.Request) string {
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		m := req.Messages[i]
+		if m.Role != llm.RoleUser {
+			continue
+		}
+		var sb strings.Builder
+		for _, b := range m.Content {
+			if b.Type == llm.ContentTypeText {
+				sb.WriteString(b.Text)
+			}
+		}
+		if sb.Len() > 0 {
+			return sb.String()
+		}
+	}
+	return ""
 }
 
 // startsNewTurn reports whether a chat request (one that carries tools) ends in
