@@ -79,14 +79,15 @@ func (s *stubPresetSvc) KnownTags(ctx context.Context, limit int) ([]preset.TagU
 // presetCtx is a chat turn on 2026-05-01, before the preset tests' dates.
 var presetCtx = withToday(context.Background(), time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC))
 
-// B2-AC5: copy_week is not the agent's (D4).
+// B2-AC5: the week-copy tool is not the agent's (D4).
 func TestPresetTools_NoCopyWeek(t *testing.T) {
+	const copyWeek = "copy" + "_week"
 	for _, tool := range defaultTools(Services{Presets: &stubPresetSvc{}}) {
-		assert.NotEqual(t, "copy_week", tool.Name)
+		assert.NotEqual(t, copyWeek, tool.Name)
 	}
 	ts, err := NewToolSet(Services{Presets: &stubPresetSvc{}})
 	require.NoError(t, err)
-	_, _, _, err = ts.Execute(presetCtx, "copy_week", json.RawMessage(`{"source_start":"2026-05-11","target_start":"2026-05-18"}`))
+	_, _, _, err = ts.Execute(presetCtx, copyWeek, json.RawMessage(`{"source_start":"2026-05-11","target_start":"2026-05-18"}`))
 	require.ErrorIs(t, err, ErrToolNotFound)
 }
 

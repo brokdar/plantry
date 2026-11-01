@@ -61,13 +61,6 @@ func newPromptServiceWith(t *testing.T, db *sql.DB, client llm.Client, now func(
 		profile.NewService(sqlite.NewProfileRepo(db)), settingsSvc, planContext(db), now)
 }
 
-// stubSettings answers every key from a map; missing keys are empty.
-type stubSettings map[string]string
-
-func (s stubSettings) Get(_ context.Context, key string) (settings.Value, error) {
-	return settings.Value{Key: key, Raw: s[key]}, nil
-}
-
 func strPtr(s string) *string { return &s }
 
 // B3-AC1: the recorded system prompt carries today, the 7 window dates, the
