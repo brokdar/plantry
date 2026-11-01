@@ -1,0 +1,24 @@
+{
+  "name": "family_daily",
+  "description": "A family of 4 cooking fresh every day: no batch cooking, up to 2 occasions a day, yoghurt every morning, lunch away on weekdays.",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5", "plan.batch_cooking": "false", "plan.default_keep_days": "2",
+    "plan.max_cook_occasions_per_day": "2", "plan.variety_weeks": "2", "plan.freezing_enabled": "false"
+  },
+  "profile": {"diet_type": "omnivore", "household_portions": 4, "kcal_target": 2000, "protein_pct": 25, "fat_pct": 30, "carbs_pct": 45},
+  "slots": ["breakfast", "lunch", "dinner"],
+  "presets": [{"name": "Yoghurt", "slot": "breakfast", "recipe": "Joghurt mit Beeren"}],
+  "availability": {"defaults": [
+    {"weekdays": [0, 1, 2, 3, 4, 5, 6], "slot": "breakfast", "mode": "routine", "preset": "Yoghurt"},
+    {"weekdays": [0, 1, 2, 3, 4], "slot": "lunch", "mode": "none"}
+  ]},
+  "plates": [
+    {"date": "2026-10-30", "slot": "dinner", "recipe": "Spaghetti Bolognese"},
+    {"date": "2026-11-02", "slot": "dinner", "recipe": "Shakshuka"},
+    {"date": "2026-11-04", "slot": "dinner", "recipe": "Hähnchen-Fajitas"}
+  ],
+  "steps": [{"action": "generate"}],
+  "expect": {"min_plates": 16}
+}

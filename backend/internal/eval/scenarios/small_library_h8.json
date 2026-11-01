@@ -1,0 +1,27 @@
+{
+  "name": "small_library_h8",
+  "description": "A 10-recipe library whose 7 mains were all eaten in the last two weeks, cooking fresh twice a day: variety must relax (H8, least recently eaten first).",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5", "plan.batch_cooking": "false", "plan.default_keep_days": "2",
+    "plan.max_cook_occasions_per_day": "2", "plan.variety_weeks": "3", "plan.freezing_enabled": "false"
+  },
+  "profile": {"diet_type": "omnivore", "household_portions": 1},
+  "slots": ["lunch", "dinner"],
+  "recipes": [
+    "Chili con Carne", "Spaghetti Bolognese", "Hähnchen-Curry", "Lachs mit Brokkoli", "Shakshuka",
+    "Linsen-Dal", "Tofu-Gemüse-Pfanne", "Basmatireis", "Gedünsteter Brokkoli", "Overnight Oats"
+  ],
+  "plates": [
+    {"date": "2026-10-24", "slot": "dinner", "recipe": "Chili con Carne"},
+    {"date": "2026-10-25", "slot": "dinner", "recipe": "Spaghetti Bolognese"},
+    {"date": "2026-10-27", "slot": "dinner", "recipe": "Hähnchen-Curry"},
+    {"date": "2026-10-29", "slot": "dinner", "recipe": "Lachs mit Brokkoli"},
+    {"date": "2026-10-31", "slot": "dinner", "recipe": "Shakshuka"},
+    {"date": "2026-11-02", "slot": "dinner", "recipe": "Linsen-Dal"},
+    {"date": "2026-11-04", "slot": "dinner", "recipe": "Tofu-Gemüse-Pfanne"}
+  ],
+  "steps": [{"action": "generate"}],
+  "expect": {"min_plates": 14}
+}
