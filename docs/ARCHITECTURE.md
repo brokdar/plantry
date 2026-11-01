@@ -493,11 +493,14 @@ POST   /api/setup/complete                          mark setup done
 
 ```
 POST   /api/ai/chat                                 SSE stream (rate-limited, default 10 req/min per IP)
-                                                    body: {conversation_id?, message, today?, from, to}
+                                                    body: {conversation_id?, message, today?, start}
+                                                    (start = window start, a shopping day; 400 error.plan.invalid_start; missing start 400 error.invalid_body; bad date 400 error.ai.invalid_date)
+POST   /api/ai/changes/{id}/undo                    put one agent change back → {plate_ids, session_ids}
+                                                    (409 error.ai.change_undone / error.ai.change_stale)
 GET    /api/ai/conversations                        list (limit, offset)
 GET    /api/ai/conversations/{id}                   full history
 DELETE /api/ai/conversations/{id}                   delete
-GET    /api/ai/debug/system-prompt?from&to&today    only with PLANTRY_DEV_MODE
+GET    /api/ai/debug/system-prompt?start&today      only with PLANTRY_DEV_MODE
 ```
 
 #### Import
@@ -546,17 +549,22 @@ error.profile.invalid_macros
 ### 7.1 Tool schema (domain-defined)
 
 ```
-list_foods, get_food               -- read the food library
-list_slots, get_profile            -- read slots and the profile
-get_plates_range(from, to)         -- read plates in a date range
-create_plate, delete_plate
-add_food_to_plate, swap_food, update_plate_component, remove_plate_component
-list_presets, get_preset, create_preset_from_plates, update_preset, delete_preset
-apply_preset, copy_week
-record_preference(key, value)      -- AI writes to profile.preferences
+read:    list_foods, get_food, list_slots, get_profile, get_plates_range(from, to),
+         get_plan                          -- cells, sessions, plates, issues in one call
+         list_presets, get_preset
+plates:  create_plate, delete_plate, add_food_to_plate, swap_food,
+         update_plate_component, remove_plate_component
+presets: create_preset_from_plates, update_preset, delete_preset, apply_preset
+plan:    set_session_portions, set_plate_eaters, set_availability,
+         confirm, unlock, regenerate
+profile: record_preference(key, value)     -- never likes/dislikes (enforced in code)
 ```
 
-Tools live in `domain/agent` (`tools.go`, `preset_tools.go`), each with a JSON schema and a handler `func(ctx, json.RawMessage) (json.RawMessage, ToolEffect, error)`. Plate and preset tools call `plate.Service` and the preset service, never SQL; there is no week id, only dates and cells. Anthropic rejects top-level `anyOf`/`oneOf`/`allOf` in tool schemas, so schemas avoid them (a test guards it). `ToolSet.Execute` sets the `agent` actor and the run's id on ctx, so the plate events record who changed what.
+Tools live in `domain/agent` (`tools.go`, `preset_tools.go`, `plan_tools.go`), each with a JSON schema and a handler. Plate and preset tools call `plate.Service` and the preset service, never SQL; there is no week id, only dates and cells. Anthropic rejects top-level `anyOf`/`oneOf`/`allOf` in tool schemas, so schemas avoid them (a test guards it) and "one of these ids" is validated in the handler. `ToolSet.Execute` sets the `agent` actor and the run's id on ctx, so the plate events record who changed what. `copy_week` is gone; `regenerate` calls the generation service.
+
+**Draft guard (D5-D7).** The agent changes drafts only. Under the `agent` actor, `plate.Service` fails any write that would change or delete a confirmed plate or cook session (or a draft linked to a confirmed session) with `error.plan.row_confirmed` before it writes anything; the error names the rows so the model can tell the user. Writes before today fail with `error.ai.past_date` (`guardDate`/`guardPlateDate`). `confirm` and `unlock` are not guarded: `unlock` is the gate, and it is **two-phase**. The first call only previews the closure of confirmed rows (`plate.Service.BatchClosure`, read-only) and answers `409 error.ai.unlock_needs_user`; the loop emits an `unlock_request` event. Only a later user turn (same conversation, same closure, within 30 minutes, single use) lets a repeated call unlock; the pending previews live in memory, so a restart makes the model preview again.
+
+**Changes and undo (D13).** `ToolSet.Execute` returns a `Change` for every plan-writing call and stores it in `ai_changes`: the line text key and params, the chat run (plus a regenerate run the call waited for), the dates, plate and session ids, and the first and last plate-event ids. `POST /api/ai/changes/{id}/undo` puts the rows back (as `user`) unless any foreign event touched them since (`change_stale`) or it was undone already (`change_undone`).
 
 ### 7.2 Tool loop
 
@@ -567,25 +575,26 @@ loop:
         emit assistant final; break
     for call in response.Message.ToolCalls:
         result = tools[call.Name](call.Input)
-        emit tool_call event
-        emit tool_result event
+        emit tool_call, tool_result events
         append tool result to messages
         if the call wrote the plan (a change, recorded in ai_changes):
             emit change event (line + Undo; the frontend refreshes the plan)
+        if the call was an unlock preview:
+            emit unlock_request event (rows to confirm)
     iterations++
     if iterations > MaxIterations (20): emit error.ai.iterations_exceeded; break
 ```
 
-All emissions go through the SSE helper. The frontend listens and patches local state.
+SSE event types (`llm/events.go`): `conversation_ready`, `message_start`, the model stream (`assistant_delta`, `tool_call_start` / `tool_call_delta`), loop-side `tool_exec_start`, `tool_exec_end`, `tool_result`, `change`, `unlock_request`, and the terminal `done` / `error`. All emissions go through the SSE helper; the frontend listens and patches local state. `regenerate` waits for its run (`planning.Service.Await`, D8), so its change line reports the outcome.
 
 ### 7.3 System prompt composition
 
-Built on every turn:
+Built on every turn (prompt `v5`):
 
 1. Plantry role description (static).
 2. User profile JSON (targets, restrictions, preferences, custom system_prompt).
-3. Date-range context (the chat's `from`..`to` cells and plates).
-4. Tool usage rules.
+3. Today and the window (`start`), with a compact plan summary (`planning.RenderPlanSummary`) and the board issues (`planning.BoardIssues`, shared with the board and `get_plan`).
+4. Tool usage rules, including unlock and regenerate.
 
 Capped at 4k tokens. Rebuild every turn (cheap; keeps context fresh).
 
