@@ -145,10 +145,11 @@ type Querier interface {
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
 	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)
 	SetPlatesState(ctx context.Context, arg SetPlatesStateParams) error
-	// D25: a run's outcome after its rows were accepted, discarded or un-accepted
-	// (reset). open/NULL -> accepted or discarded; a run that sees both is
-	// partially_accepted; reset undoes an accept (accepted -> open,
-	// partially_accepted -> discarded).
+	// D25: a run's outcome after its rows were accepted, discarded, un-accepted
+	// (reset) or restored as drafts. open/NULL -> accepted or discarded; a run
+	// that sees both is partially_accepted; reset undoes an accept (accepted ->
+	// open, partially_accepted -> discarded); restored undoes a discard
+	// (discarded -> open, partially_accepted -> accepted).
 	SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error
 	SetSessionsState(ctx context.Context, arg SetSessionsStateParams) error
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)

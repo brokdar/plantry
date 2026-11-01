@@ -113,7 +113,7 @@ type SettingsReader interface {
 
 // Deps are the service's dependencies. Cells is optional: without it every
 // cell counts as "plan". Now defaults to time.Now. Outcomes records the AI
-// runs' outcomes on accept, discard and unaccept (D25).
+// runs' outcomes on accept, discard, unaccept and restore (D25).
 type Deps struct {
 	Plates   Repository
 	Sessions SessionRepository
@@ -1135,12 +1135,40 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 		if err := s.settle(ctx, t); err != nil {
 			return err
 		}
+		if opts.Restore {
+			if err := s.recordRestored(ctx, snap); err != nil {
+				return err
+			}
+		}
 		return s.commit(ctx, j)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return res, nil
+}
+
+// recordRestored marks the runs of the drafts a restore brings back (D25):
+// the Undo of a discard reopens its run.
+func (s *Service) recordRestored(ctx context.Context, snap PlanSnapshot) error {
+	seen := map[int64]bool{}
+	note := func(st State, run *int64) {
+		if st == StateDraft && run != nil {
+			seen[*run] = true
+		}
+	}
+	for _, sp := range snap.Plates {
+		note(sp.State, sp.AIRunID)
+	}
+	for _, ss := range snap.Sessions {
+		note(ss.State, ss.AIRunID)
+	}
+	for _, run := range sortedKeys(seen) {
+		if err := s.outcomes.Record(ctx, run, OutcomeRestored); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // placement is where Apply writes one snapshot plate: into the surviving

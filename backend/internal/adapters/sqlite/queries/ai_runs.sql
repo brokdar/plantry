@@ -72,16 +72,20 @@ SELECT
 SELECT chooser, notes FROM ai_runs WHERE id = ?;
 
 -- name: SetRunOutcome :exec
--- D25: a run's outcome after its rows were accepted, discarded or un-accepted
--- (reset). open/NULL -> accepted or discarded; a run that sees both is
--- partially_accepted; reset undoes an accept (accepted -> open,
--- partially_accepted -> discarded).
+-- D25: a run's outcome after its rows were accepted, discarded, un-accepted
+-- (reset) or restored as drafts. open/NULL -> accepted or discarded; a run
+-- that sees both is partially_accepted; reset undoes an accept (accepted ->
+-- open, partially_accepted -> discarded); restored undoes a discard
+-- (discarded -> open, partially_accepted -> accepted).
 UPDATE ai_runs SET
     outcome = CASE
         WHEN CAST(sqlc.arg(event) AS TEXT) = 'accepted' AND outcome IN ('discarded', 'partially_accepted') THEN 'partially_accepted'
         WHEN CAST(sqlc.arg(event) AS TEXT) = 'accepted' THEN 'accepted'
         WHEN CAST(sqlc.arg(event) AS TEXT) = 'discarded' AND outcome IN ('accepted', 'partially_accepted') THEN 'partially_accepted'
         WHEN CAST(sqlc.arg(event) AS TEXT) = 'discarded' THEN 'discarded'
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'restored' AND outcome = 'discarded' THEN 'open'
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'restored' AND outcome = 'partially_accepted' THEN 'accepted'
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'restored' THEN outcome
         WHEN outcome = 'accepted' THEN 'open'
         WHEN outcome = 'partially_accepted' THEN 'discarded'
         ELSE outcome

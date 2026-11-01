@@ -94,7 +94,7 @@ func (r *AIRunRepo) PlanRunCounts(ctx context.Context, id int64) (planning.RunCo
 // SetRunOutcome query) and stamps outcome_at.
 func (r *AIRunRepo) Record(ctx context.Context, runID int64, ev plate.OutcomeEvent) error {
 	switch ev {
-	case plate.OutcomeAccepted, plate.OutcomeDiscarded, plate.OutcomeReset:
+	case plate.OutcomeAccepted, plate.OutcomeDiscarded, plate.OutcomeReset, plate.OutcomeRestored:
 	default:
 		return fmt.Errorf("record run outcome: unknown event %q", ev)
 	}
