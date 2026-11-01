@@ -394,25 +394,38 @@ func orphanEnv(t *testing.T) (*replanEnv, *plate.Plate, planning.ReplanQuery) {
 
 // A batch that loses its cook plate but keeps a later plate cooks there
 // instead of on the No-plate day: Fri lunch now eats it fresh, and the batch
-// shrinks to it (or, freezing off, cannot freeze its spare).
+// shrinks to it or, freezing on, keeps its spare frozen.
 func TestReplan_MovesAnOrphanedCookToItsFirstPlate(t *testing.T) {
-	for _, spare := range []planning.SpareMode{planning.SpareKeep, planning.SpareFreeze} {
-		t.Run(string(spare), func(t *testing.T) {
+	cases := []struct {
+		name           string
+		freezing       bool
+		spare          planning.SpareMode
+		portions, froz float64
+	}{
+		{"keep", false, planning.SpareKeep, 1, 0},
+		{"freeze, freezing off", false, planning.SpareFreeze, 1, 0},
+		{"freeze, freezing on", true, planning.SpareFreeze, 2, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			e, cook, q := orphanEnv(t)
+			if tc.freezing {
+				require.NoError(t, testsvc.Settings(e.db).Set(e.ctx, "plan.freezing_enabled", "true"))
+			}
 			sid := *cook.Components[0].CookSessionID
 
 			pv, err := e.svc.PreviewReplan(e.ctx, q)
 			require.NoError(t, err)
-			assert.Equal(t, []planning.Spare{{SessionID: sid, FoodName: "Main 05", Portions: 1}}, pv.Spare)
+			assert.Equal(t, []planning.Spare{{SessionID: sid, FoodName: "Main 05", Portions: 1, Freezable: tc.freezing}}, pv.Spare)
 
-			_, err = e.svc.Replan(e.ctx, planning.ReplanRequest{ReplanQuery: q, UnlockConfirmed: true, Spare: spare})
+			_, err = e.svc.Replan(e.ctx, planning.ReplanRequest{ReplanQuery: q, UnlockConfirmed: true, Spare: tc.spare})
 
 			require.NoError(t, err)
 			assert.True(t, e.plateGone(cook.ID))
 			v := e.session(sid)
 			assert.True(t, ck(fri, e.lunch).Equal(v.CookCell()), "cooks where it is still eaten, not on the No-plate day: %v", v.CookCell())
-			assert.InDelta(t, 1, v.Portions, 1e-9)
-			assert.Zero(t, v.FrozenPortions)
+			assert.InDelta(t, tc.portions, v.Portions, 1e-9)
+			assert.InDelta(t, tc.froz, v.FrozenPortions, 1e-9, "the frozen spare survives the move")
 			require.Len(t, v.Links, 1)
 			assert.Equal(t, plate.KindFresh, v.Links[0].Kind)
 			assert.Empty(t, v.Warnings)

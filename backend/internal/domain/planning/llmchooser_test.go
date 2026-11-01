@@ -586,17 +586,17 @@ func TestGenerateWeekFixture(t *testing.T) {
 // ends ok, with only the routine plates when the target has routine cells.
 func TestLLMChooser_NothingToPlanCallsNoLLM(t *testing.T) {
 	for name, tc := range map[string]struct {
-		none   []int64
-		plates int
+		noBreakfast bool
+		plates      int
 	}{
 		"routine cells only": {plates: 1},
-		"no cells":           {none: []int64{0}, plates: 0},
+		"no cells":           {noBreakfast: true, plates: 0},
 	} {
 		t.Run(name, func(t *testing.T) {
 			e := newLLMEnv(t)
 			e.none(fri, e.lunch)
 			e.none(fri, e.dinner)
-			if tc.none != nil {
+			if tc.noBreakfast {
 				e.none(fri, e.breakfast)
 			}
 
