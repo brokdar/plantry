@@ -124,7 +124,9 @@ const cellKey = (date: string, slotId: number) => `${date}|${slotId}`
 
 /** The component that names the plate: the main, else the first composed,
  *  else the first one. */
-function mainComponent(components: PlateComponent[]): PlateComponent | null {
+export function mainComponent(
+  components: PlateComponent[]
+): PlateComponent | null {
   return (
     components.find((c) => c.role === "main") ??
     components.find((c) => c.kind === "composed") ??

@@ -119,24 +119,21 @@ describe("lib/plan/today", () => {
     expect(dinner.badge && batchBadgeText(dinner.badge, i18n)).toBe("3/3")
   })
 
-  // Phase 3 F5 (D26): Today shows confirmed rows only, so a draft plate in
-  // the window's board is neither the leftover card nor a row's meal.
-  it("leaves draft plates out of the leftover card and the rows", () => {
+  // D26 + DoD: the leftover card is confirmed only, but a draft plate stays
+  // in its row, marked as a draft, so the rows agree with the week strip.
+  it("keeps draft plates in the rows, marked, and out of the leftover card", () => {
     const today: Today = {
       ...mockTodayByVerdict.draft_only,
       date: MONDAY,
     }
     const view = buildTodayPlan(today, mockDraftPlan, MONDAY, i18n)
     expect(view.leftover).toBeNull()
-    expect(view.rows.map((r) => r.slotName)).toEqual([
-      "Breakfast",
-      "Lunch",
-      "Dinner",
-    ])
-    expect(view.rows.map((r) => [r.cell.plate, r.cell.badge])).toEqual([
-      [null, null],
-      [null, null],
-      [null, null],
+    expect(
+      view.rows.map((r) => [r.slotName, r.cell.mainName, r.draft])
+    ).toEqual([
+      ["Breakfast", null, false],
+      ["Lunch", "Chili", true],
+      ["Dinner", "Chili", true],
     ])
   })
 

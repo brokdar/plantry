@@ -131,12 +131,34 @@ describe("PlanPage", () => {
       "/plan?start=2026-11-07"
     )
     const thisWeek = screen.getByRole("link", { name: "This week" })
-    expect(thisWeek).toHaveAttribute("href", "/plan")
+    expect(thisWeek).toHaveAttribute("href", "/plan?start=2026-10-31")
     expect(thisWeek).toHaveAttribute("aria-current", "page")
     expect(screen.getByRole("link", { name: "Shop" })).toHaveAttribute(
       "href",
       "/shop?from=2026-10-31&to=2026-11-06"
     )
+  })
+
+  // DoD nit: with a "next shopping day" anchor the board opens on the
+  // upcoming window, but This week is the window holding today, as on Today.
+  it("This week is the window holding today, not the upcoming anchored one", async () => {
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      window: {
+        ...mockPlan.window,
+        start: "2026-11-07",
+        end: "2026-11-13",
+        today: "2026-11-01",
+        is_current: false,
+        prev_start: "2026-10-31",
+        next_start: "2026-11-14",
+      },
+    })
+    renderWithRouter(<PlanPage />)
+    await screen.findByRole("grid")
+    const thisWeek = screen.getByRole("link", { name: "This week" })
+    expect(thisWeek).toHaveAttribute("href", "/plan?start=2026-10-31")
+    expect(thisWeek).not.toHaveAttribute("aria-current")
   })
 
   it("F3-AC6: Clear this week removes the window and Undo restores it with its batches", async () => {

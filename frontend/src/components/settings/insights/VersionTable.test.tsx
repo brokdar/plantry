@@ -42,11 +42,39 @@ describe("VersionTable", () => {
       "6",
       "0",
       "–",
-      "H2 × 1, H6 × 2",
+      "Cooking per day × 1, Confirmed plates kept × 2",
     ])
   })
 
-  it("leaves out groups without scores, such as chat", () => {
+  it("keeps a planning version whose runs all failed", () => {
+    render(
+      <VersionTable
+        groups={[
+          {
+            kind: "generate",
+            prompt_version: "p1",
+            model: "fake",
+            runs: 1,
+            score_avg: {},
+            violations: {},
+          },
+        ]}
+      />
+    )
+    const [, row] = screen.getAllByRole("row")
+    expect(within(row).getAllByRole("cell")[1]).toHaveTextContent("p1")
+  })
+
+  it("names an unknown rule by its id", () => {
+    render(
+      <VersionTable
+        groups={[{ ...mockInsights.by_version[0], violations: { H9: 1 } }]}
+      />
+    )
+    expect(screen.getByText("H9 × 1")).toBeInTheDocument()
+  })
+
+  it("leaves out runs that are not planning, such as chat", () => {
     render(
       <VersionTable
         groups={[
@@ -61,6 +89,6 @@ describe("VersionTable", () => {
         ]}
       />
     )
-    expect(screen.getByText("No scored plans yet.")).toBeInTheDocument()
+    expect(screen.getByText("No generated plans yet.")).toBeInTheDocument()
   })
 })

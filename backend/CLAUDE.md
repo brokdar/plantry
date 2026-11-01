@@ -245,7 +245,7 @@ Package `domain/shopping`; `GET /api/shopping-list` returns sections in walk ord
 - Confirmed rows only; `include_drafts=true` adds draft sessions and draft leaf plates, and `has_drafts` reports whether the range has any either way.
 - It buys the cook sessions' `portions` (not what plates consume) plus leaf components (amount × eaters), for the range's dates. The default range is `ShoppingDefault` of the anchored window; `from`/`to` override it inside the window containing `from`.
 - Amounts sum in metric base units (`units.ToBase`); `display` is in the contributions' unit when they share one, otherwise grams; `buy` is set for count units only.
-- `used_in` lists the sessions or leaves an item is bought for, in cell order.
+- `used_in` lists the sessions or leaves an item is bought for, in cell order; `draft` marks a use from a draft session or draft plate (only with `include_drafts`).
 - Sections are the `food.ShopSections` enum (`domain/food/shop_section.go`). A food's `shop_section` column (migration 00031) overrides `shopping.Classify`, a 3-stage data-driven classifier (packaging, phrases, head noun). `PUT /api/foods/{id}/shop-section` sets it for leaves only; errors `error.food.invalid_shop_section`, `error.food.shop_section_leaf_only`.
 - `food.LoadTrees` loads recipe trees in one query per level.
 

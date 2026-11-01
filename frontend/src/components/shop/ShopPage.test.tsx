@@ -475,6 +475,70 @@ describe("ShopPage", () => {
     expect(onIncludeDraftsChange).toHaveBeenCalledWith(false)
   })
 
+  // DoD should-fix 3: a range holding only drafts is planned, so the empty
+  // state says it is a draft and points to the toggle or the plan.
+  it("explains a drafts-only range and offers the toggle or Review plan", async () => {
+    const user = userEvent.setup()
+    const { onIncludeDraftsChange } = renderShop({
+      ...mockShoppingList,
+      sections: [],
+      count: 0,
+      has_drafts: true,
+    })
+    const card = await screen.findByTestId("shop-draft-empty")
+    expect(card).toHaveTextContent("Your plan here is still a draft")
+    expect(screen.queryByTestId("shop-empty")).toBeNull()
+    expect(
+      within(card).getByRole("link", { name: "Review plan" })
+    ).toHaveAttribute("href", "/plan?start=2026-10-31")
+    await user.click(
+      within(card).getByRole("button", { name: "Include draft plates" })
+    )
+    expect(onIncludeDraftsChange).toHaveBeenCalledWith(true)
+  })
+
+  // DoD nit: with drafts included, items there only for drafts say so, and
+  // a draft use is marked in the used-in list of a mixed item.
+  it("marks items and uses that come from drafts", async () => {
+    const user = userEvent.setup()
+    const [produce, cans] = mockShoppingList.sections
+    const confirmedUse = cans.items[0].used_in[0]
+    const draftUse = {
+      ...confirmedUse,
+      session_id: 8,
+      date: "2026-11-03",
+      draft: true,
+    }
+    renderShop(
+      {
+        ...mockShoppingList,
+        has_drafts: true,
+        sections: [
+          {
+            ...produce,
+            items: [{ ...produce.items[0], used_in: [draftUse] }],
+          },
+          {
+            ...cans,
+            items: [{ ...cans.items[0], used_in: [confirmedUse, draftUse] }],
+          },
+        ],
+      },
+      vi.fn(),
+      true
+    )
+    await screen.findByText("Onion")
+    expect(within(row("Onion")).getByTestId("draft-tag")).toBeInTheDocument()
+    const beans = row("Kidney beans")
+    expect(within(beans).queryByTestId("draft-tag")).toBeNull()
+    await user.click(
+      within(beans).getByRole("button", { name: /Where Kidney beans is used/ })
+    )
+    const uses = within(beans).getAllByTestId("shop-used-in")
+    expect(within(uses[0]).queryByTestId("draft-tag")).toBeNull()
+    expect(within(uses[1]).getByTestId("draft-tag")).toBeInTheDocument()
+  })
+
   // The page owns the toggle as the route does: flipping it keeps the last
   // list on screen while the new one loads, so the switch keeps focus.
   function DraftsHarness() {

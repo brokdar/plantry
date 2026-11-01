@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { Today } from "@/lib/api/today"
 import i18n from "@/lib/i18n"
-import { mockPlan, mockTodayByVerdict } from "@/test/fixtures"
+import { mockDraftPlan, mockPlan, mockTodayByVerdict } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
 vi.mock("@/lib/api/today", () => ({ getToday: vi.fn() }))
@@ -214,6 +214,7 @@ describe("TodayPage", () => {
     expect(screen.queryByTestId("today-rate")).toBeNull()
   })
 
+  // DoD nit: Plan this week opens the wizard, like the Plan next week banner.
   it("no plan: Plan this week and the Plan next week banner", async () => {
     renderToday(mockTodayByVerdict.no_plan, "2026-11-09")
     expect(await screen.findByTestId("today-verdict")).toHaveTextContent(
@@ -223,7 +224,7 @@ describe("TodayPage", () => {
       within(screen.getByTestId("today-no-plan")).getByRole("link", {
         name: "Plan this week",
       })
-    ).toHaveAttribute("href", "/plan?start=2026-11-07")
+    ).toHaveAttribute("href", "/plan/new?start=2026-11-07")
     expect(
       within(screen.getByTestId("today-plan-banner")).getByRole("link", {
         name: "Plan next week",
@@ -246,6 +247,27 @@ describe("TodayPage", () => {
       within(card).getByRole("link", { name: "Review plan" })
     ).toHaveAttribute("href", `/plan?start=${draft.window_start}`)
     expect(screen.queryByTestId("today-no-plan")).toBeNull()
+  })
+
+  // DoD should-fix 1: the rows and the week strip agree on a draft-only
+  // day, and both mark the draft plates.
+  it("draft only: rows and week strip show the draft plates as drafts", async () => {
+    vi.mocked(getPlan).mockResolvedValue(mockDraftPlan)
+    renderToday({ ...mockTodayByVerdict.draft_only, date: MONDAY }, MONDAY)
+    const lunch = await screen.findByTestId("today-meal-2")
+    expect(lunch).toHaveTextContent("Chili")
+    expect(within(lunch).getByTestId("draft-tag")).toHaveTextContent("Draft")
+    expect(
+      within(screen.getByTestId("today-meal-3")).getByTestId("draft-tag")
+    ).toBeInTheDocument()
+    expect(lunch).not.toHaveTextContent("Nothing planned")
+    expect(screen.queryByTestId("today-leftover-card")).toBeNull()
+    const monday = screen.getByTestId(`week-strip-${MONDAY}`)
+    expect(within(monday).getAllByTestId("draft-tag")).toHaveLength(2)
+    // The confirmed Tofu bowl on Tuesday carries no draft tag.
+    const tuesday = screen.getByTestId("week-strip-2026-11-03")
+    expect(tuesday).toHaveTextContent("Tofu bowl")
+    expect(within(tuesday).queryByTestId("draft-tag")).toBeNull()
   })
 
   it("draft only in German", async () => {
@@ -297,7 +319,8 @@ describe("TodayPage", () => {
     expect(
       within(card).getByRole("link", { name: "Add recipes" })
     ).toHaveAttribute("href", "/recipes")
-    // Planning by hand needs no 10 recipes: the way to the board stays.
+    // The wizard is locked below the target (D32), but planning by hand
+    // needs no 10 recipes: the way to the board stays.
     expect(
       within(screen.getByTestId("today-no-plan")).getByRole("link", {
         name: "Plan this week",

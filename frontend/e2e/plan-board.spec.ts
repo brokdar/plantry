@@ -269,8 +269,9 @@ test.describe("Plan board", () => {
     await page.getByRole("link", { name: "Previous week" }).click()
     await expect(page).toHaveURL(`/plan?start=${anchored.next_start}`)
 
+    // This week is the window holding today (the e2e anchor is today).
     await page.getByRole("link", { name: "This week", exact: true }).click()
-    await expect(page).toHaveURL(/\/plan$/)
+    await expect(page).toHaveURL(`/plan?start=${anchored.start}`)
     await expect(heading).toHaveText(anchoredTitle ?? "")
 
     await page.getByRole("link", { name: "Previous week" }).click()

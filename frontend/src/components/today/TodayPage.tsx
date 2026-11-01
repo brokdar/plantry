@@ -93,7 +93,12 @@ function TodayLoaded({ data, today }: { data: Today; today: string }) {
               dateLine={header.dateLine}
               headline={header.headline}
             />
-            {header.noPlan && <NoPlanCard windowStart={data.window_start} />}
+            {header.noPlan && (
+              <NoPlanCard
+                windowStart={data.window_start}
+                wizard={header.recipesMissing === 0}
+              />
+            )}
             {header.draftOnly && (
               <DraftOnlyCard windowStart={data.window_start} />
             )}
@@ -161,8 +166,16 @@ function RecipesCard({ missing }: { missing: number }) {
   )
 }
 
-/** On an unplanned window, "Plan this week". */
-function NoPlanCard({ windowStart }: { windowStart: string }) {
+/** On an unplanned window, "Plan this week": opens the plan wizard, or
+ *  the board below the recipe target, where the wizard is locked (D32) but
+ *  planning by hand works. */
+function NoPlanCard({
+  windowStart,
+  wizard,
+}: {
+  windowStart: string
+  wizard: boolean
+}) {
   const { t } = useTranslation()
   return (
     <section
@@ -171,7 +184,10 @@ function NoPlanCard({ windowStart }: { windowStart: string }) {
     >
       <p className="text-body text-ink">{t("today.no_plan.body")}</p>
       <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
-        <Link to="/plan" search={{ start: windowStart }}>
+        <Link
+          to={wizard ? "/plan/new" : "/plan"}
+          search={{ start: windowStart }}
+        >
           {t("today.no_plan.action")}
         </Link>
       </Button>

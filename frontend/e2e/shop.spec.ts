@@ -293,8 +293,12 @@ test.describe("Shop", () => {
       expect(unlock.ok(), await unlock.text()).toBeTruthy()
       await ctx.dispose()
 
+      // DoD should-fix 3: the empty state says the plan is a draft.
       await openShop(page, s.start, s.end)
-      await expect(page.getByTestId("shop-empty")).toBeVisible()
+      await expect(page.getByTestId("shop-draft-empty")).toContainText(
+        "Your plan here is still a draft"
+      )
+      await expect(page.getByTestId("shop-empty")).toHaveCount(0)
       await expect(row(page, s.beans)).toHaveCount(0)
       await expect(toggle).not.toBeChecked()
 
@@ -309,6 +313,10 @@ test.describe("Shop", () => {
         "600 g"
       )
       await expect(row(page, s.onion)).toBeVisible()
+      // Items there only for the draft say so.
+      await expect(row(page, s.beans).getByTestId("draft-tag")).toHaveText(
+        "Draft"
+      )
 
       // The URL keeps the choice.
       await page.reload()
@@ -317,7 +325,7 @@ test.describe("Shop", () => {
 
       await toggle.click()
       await expect(page).not.toHaveURL(/drafts=/)
-      await expect(page.getByTestId("shop-empty")).toBeVisible()
+      await expect(page.getByTestId("shop-draft-empty")).toBeVisible()
     } finally {
       await s.cleanup()
     }

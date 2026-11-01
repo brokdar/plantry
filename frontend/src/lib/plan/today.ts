@@ -41,6 +41,8 @@ export interface TodayLeftoverCard {
 export interface TodayRow {
   cell: BoardCell
   slotName: string
+  /** The cell's plate is a draft: shown, but marked (not yet accepted). */
+  draft: boolean
 }
 
 export interface TodayReminderView {
@@ -191,26 +193,15 @@ export function buildTodayPlan(
     minutes: minutes || null,
   }))
 
-  // Today reads confirmed rows only (D26): a draft plate leaves its cell
-  // as if unplanned.
-  const cells = (day?.cells ?? []).map((c) =>
-    c.plate?.state === "draft"
-      ? {
-          ...c,
-          plate: null,
-          badge: null,
-          mainName: null,
-          sideText: null,
-          subline: null,
-          sessionIds: [],
-          cookOf: [],
-        }
-      : c
-  )
+  // Cook and leftover cards are confirmed only (D26); a draft plate stays
+  // in its row, marked as a draft, so the rows agree with the week strip.
+  const cells = day?.cells ?? []
   let leftover: TodayLeftoverCard | null = null
   if (cook.length === 0) {
     const cell = cells.find(
-      (c) => c.badge?.variant === "leftover" || c.badge?.variant === "frozen"
+      (c) =>
+        c.state !== "draft" &&
+        (c.badge?.variant === "leftover" || c.badge?.variant === "frozen")
     )
     if (cell?.badge) {
       const session = sessions.get(cell.badge.sessionId)
@@ -237,7 +228,11 @@ export function buildTodayPlan(
 
   const rows = cells
     .filter((c) => c !== leftover?.cell)
-    .map((cell) => ({ cell, slotName: nameOf(cell.slotId) }))
+    .map((cell) => ({
+      cell,
+      slotName: nameOf(cell.slotId),
+      draft: cell.state === "draft",
+    }))
 
   const seen = new Set<string>()
   const reminders: TodayReminderView[] = []

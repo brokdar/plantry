@@ -30,6 +30,8 @@ export interface ShoppingUsedIn {
   food_name: string
   date: string
   slot_id: number
+  /** From a draft session or draft plate (only with `include_drafts`). */
+  draft: boolean
 }
 
 export interface ShoppingListItem {

@@ -13,6 +13,7 @@ import {
   type UpdatePlateComponentInput,
   type UpdatePlateInput,
 } from "@/lib/api/plates"
+import { restorePlan } from "@/lib/api/plan"
 import { toastError } from "@/lib/toast"
 
 import { invalidatePlanViews, useUndoableRemoval } from "./plan"
@@ -27,6 +28,36 @@ export function useCreatePlate() {
     mutationFn: (input: CreatePlateInput) => createPlate(input),
     onSuccess: () => invalidatePlanViews(qc),
     onError: (err) => toastError(err, t),
+  })
+}
+
+/** Add to plan over a draft plate: deletes the draft, then creates the new
+ *  plate in its cell. If the create fails, the draft is restored, so the
+ *  cell is never left empty by a failed replace. */
+export function useReplaceDraftPlate() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: async ({
+      draftId,
+      input,
+    }: {
+      draftId: number
+      input: CreatePlateInput
+    }) => {
+      const { removed } = await deletePlate(draftId)
+      try {
+        return await createPlate(input)
+      } catch (err) {
+        await restorePlan(removed)
+        throw err
+      }
+    },
+    onSuccess: () => invalidatePlanViews(qc),
+    onError: (err) => {
+      void invalidatePlanViews(qc)
+      toastError(err, t)
+    },
   })
 }
 

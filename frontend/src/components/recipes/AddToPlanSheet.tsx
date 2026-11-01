@@ -20,7 +20,7 @@ import type { ComposedFood } from "@/lib/api/foods"
 import type { PlanWindow } from "@/lib/api/plan"
 import { formatDate } from "@/lib/plan/format"
 import { usePlan } from "@/lib/queries/plan"
-import { useCreatePlate } from "@/lib/queries/plates"
+import { useCreatePlate, useReplaceDraftPlate } from "@/lib/queries/plates"
 import { useProfile } from "@/lib/queries/profile"
 import { openCells, type OpenCell } from "@/lib/recipes/add-to-plan"
 import { slotLabel } from "@/lib/slot-label"
@@ -34,8 +34,10 @@ type AddToPlanSheetProps = {
 }
 
 /** Add to plan from recipe detail (D36, UX §5.8): the free `plan` cells of
- *  the current and next window, the first one preselected, and an eaters
- *  stepper. Add creates a plate with the recipe, cooked fresh. */
+ *  the current and next window, and those holding only a draft plate
+ *  (marked as replacing it), the first free one preselected, and an eaters
+ *  stepper. Add creates a plate with the recipe, cooked fresh, deleting the
+ *  cell's draft first. */
 export function AddToPlanSheet({
   recipe,
   open,
@@ -104,6 +106,7 @@ function AddToPlanBody({
   const other = usePlan(otherStart)
   const profile = useProfile()
   const createPlate = useCreatePlate()
+  const replaceDraft = useReplaceDraftPlate()
   const [picked, setPicked] = useState<string | null>(null)
   const [eaters, setEaters] = useState<number | null>(null)
 
@@ -114,46 +117,59 @@ function AddToPlanBody({
       ? openCells([anchored.data, other.data])
       : []
   const cells = days.flatMap((d) => d.cells)
-  const selected = cells.find((c) => c.key === picked) ?? cells[0]
+  const selected =
+    cells.find((c) => c.key === picked) ??
+    cells.find((c) => !c.replaces) ??
+    cells[0]
   const shownEaters = eaters ?? profile.data?.household_portions ?? 1
 
   const meal = (cell: OpenCell) => slotLabel(t, cell.slot.name_key)
   const day = (date: string) =>
     formatDate(date, i18n, { weekday: "long", day: "numeric", month: "long" })
 
+  const replacesText = (cell: OpenCell) =>
+    cell.replaces &&
+    (cell.replaces.name
+      ? t("add_to_plan.replaces", { name: cell.replaces.name })
+      : t("add_to_plan.replaces_unnamed"))
+
   function add() {
     if (!selected) return
-    createPlate.mutate(
-      {
-        date: selected.date,
-        slot_id: selected.slot.id,
-        // Until the profile is in, the server's household default applies.
-        eaters: eaters ?? profile.data?.household_portions,
-        components: [{ food_id: recipe.id, portions: 1 }],
+    const input = {
+      date: selected.date,
+      slot_id: selected.slot.id,
+      // Until the profile is in, the server's household default applies.
+      eaters: eaters ?? profile.data?.household_portions,
+      components: [{ food_id: recipe.id, portions: 1 }],
+    }
+    const options = {
+      onSuccess: () => {
+        onDone()
+        toast.success(
+          t("add_to_plan.added", {
+            name: recipe.name,
+            day: day(selected.date),
+            meal: meal(selected),
+          }),
+          {
+            action: {
+              label: t("add_to_plan.open_plan"),
+              onClick: () =>
+                void navigate({
+                  to: "/plan",
+                  search: { start: selected.windowStart, day: selected.date },
+                }),
+            },
+          }
+        )
       },
-      {
-        onSuccess: () => {
-          onDone()
-          toast.success(
-            t("add_to_plan.added", {
-              name: recipe.name,
-              day: day(selected.date),
-              meal: meal(selected),
-            }),
-            {
-              action: {
-                label: t("add_to_plan.open_plan"),
-                onClick: () =>
-                  void navigate({
-                    to: "/plan",
-                    search: { start: selected.windowStart, day: selected.date },
-                  }),
-              },
-            }
-          )
-        },
-      }
-    )
+    }
+    if (selected.replaces)
+      replaceDraft.mutate(
+        { draftId: selected.replaces.plateId, input },
+        options
+      )
+    else createPlate.mutate(input, options)
   }
 
   if (failed) {
@@ -221,14 +237,16 @@ function AddToPlanBody({
             <div className="flex flex-wrap gap-2">
               {d.cells.map((cell) => {
                 const checked = cell.key === selected?.key
+                const replaces = replacesText(cell)
                 return (
                   <label
                     key={cell.key}
                     className={cn(
-                      "inline-flex min-h-11 cursor-pointer items-center rounded-lg border px-3 text-small transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent md:pointer-fine:min-h-8",
+                      "inline-flex min-h-11 cursor-pointer flex-col items-start justify-center rounded-lg border px-3 py-1 text-small transition-colors duration-150 ease-out has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent md:pointer-fine:min-h-8",
                       checked
                         ? "border-accent bg-accent font-semibold text-on-accent"
-                        : "border-line bg-panel text-ink hover:border-ink-muted"
+                        : "border-line bg-panel text-ink hover:border-ink-muted",
+                      replaces && !checked && "border-dashed"
                     )}
                   >
                     <input
@@ -237,14 +255,32 @@ function AddToPlanBody({
                       value={cell.key}
                       checked={checked}
                       onChange={() => setPicked(cell.key)}
-                      aria-label={t("add_to_plan.cell", {
-                        day: day(cell.date),
-                        meal: meal(cell),
-                      })}
+                      aria-label={
+                        replaces
+                          ? t("add_to_plan.cell_replaces", {
+                              day: day(cell.date),
+                              meal: meal(cell),
+                              replaces,
+                            })
+                          : t("add_to_plan.cell", {
+                              day: day(cell.date),
+                              meal: meal(cell),
+                            })
+                      }
                       className="sr-only"
                       data-testid={`add-to-plan-cell-${cell.key}`}
                     />
-                    {meal(cell)}
+                    <span>{meal(cell)}</span>
+                    {replaces && (
+                      <span
+                        className={cn(
+                          "text-caption font-normal",
+                          checked ? "text-on-accent" : "text-ink-muted"
+                        )}
+                      >
+                        {replaces}
+                      </span>
+                    )}
                   </label>
                 )
               })}
@@ -270,7 +306,7 @@ function AddToPlanBody({
         <Button
           type="button"
           className="min-h-11 md:pointer-fine:min-h-9"
-          disabled={createPlate.isPending}
+          disabled={createPlate.isPending || replaceDraft.isPending}
           onClick={add}
           data-testid="add-to-plan-submit"
         >

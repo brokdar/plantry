@@ -4,14 +4,23 @@ import userEvent from "@testing-library/user-event"
 
 import type { Plan, PlanCell } from "@/lib/api/plan"
 import { renderWithRouter } from "@/test/render"
-import { mockChili, mockPlan, mockPlate, mockProfile } from "@/test/fixtures"
+import {
+  mockChili,
+  mockPlan,
+  mockPlate,
+  mockPlateComponent,
+  mockProfile,
+} from "@/test/fixtures"
 
-vi.mock("@/lib/api/plan", () => ({ getPlan: vi.fn() }))
-vi.mock("@/lib/api/plates", () => ({ createPlate: vi.fn() }))
+vi.mock("@/lib/api/plan", () => ({ getPlan: vi.fn(), restorePlan: vi.fn() }))
+vi.mock("@/lib/api/plates", () => ({
+  createPlate: vi.fn(),
+  deletePlate: vi.fn(),
+}))
 vi.mock("@/lib/api/profile", () => ({ getProfile: vi.fn() }))
 
-import { getPlan } from "@/lib/api/plan"
-import { createPlate } from "@/lib/api/plates"
+import { getPlan, restorePlan } from "@/lib/api/plan"
+import { createPlate, deletePlate } from "@/lib/api/plates"
 import { getProfile } from "@/lib/api/profile"
 
 import { AddToPlanSheet } from "./AddToPlanSheet"
@@ -142,5 +151,79 @@ describe("AddToPlanSheet", () => {
     expect(await screen.findByTestId("add-to-plan-empty")).toHaveTextContent(
       "No free meals"
     )
+  })
+
+  // DoD should-fix 2: after a generate every cell holds a draft. Those cells
+  // are offered too, marked as replacing the draft; Add deletes it first.
+  describe("over draft plates", () => {
+    const draft = mockPlate({
+      id: 77,
+      date: "2026-11-01",
+      slot_id: 3,
+      state: "draft",
+      components: [
+        mockPlateComponent({ id: 5, plate_id: 77, food_name: "Lentil soup" }),
+      ],
+    })
+    const drafted: Plan = {
+      ...current,
+      cells: [
+        cell("2026-10-31", 3, { plate: mockPlate() }),
+        cell("2026-11-01", 3, { plate: draft }),
+      ],
+    }
+    const removed = { plates: [], sessions: [] }
+
+    beforeEach(() => {
+      vi.mocked(getPlan).mockImplementation(async (start) =>
+        start === "2026-11-07" ? { ...next, cells: [] } : drafted
+      )
+      vi.mocked(deletePlate).mockResolvedValue({ removed })
+    })
+
+    it("offers a draft cell, labelled as replacing the draft", async () => {
+      renderSheet()
+      const radio = await screen.findByTestId("add-to-plan-cell-2026-11-01|3")
+      expect(radio).toBeChecked()
+      expect(radio).toHaveAccessibleName(
+        "Sunday, November 1, Dinner. Replaces the draft Lentil soup"
+      )
+      expect(screen.getAllByRole("radio")).toHaveLength(1)
+      expect(screen.queryByTestId("add-to-plan-empty")).toBeNull()
+    })
+
+    it("Add deletes the draft, then creates the plate", async () => {
+      const user = userEvent.setup()
+      renderSheet()
+      await user.click(await screen.findByTestId("add-to-plan-submit"))
+      await vi.waitFor(() => expect(createPlate).toHaveBeenCalled())
+      expect(deletePlate).toHaveBeenCalledWith(77)
+      expect(vi.mocked(deletePlate).mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(createPlate).mock.invocationCallOrder[0]
+      )
+      expect(vi.mocked(createPlate).mock.calls[0][0]).toMatchObject({
+        date: "2026-11-01",
+        slot_id: 3,
+      })
+      expect(restorePlan).not.toHaveBeenCalled()
+    })
+
+    it("restores the draft when the create fails", async () => {
+      vi.mocked(createPlate).mockRejectedValue(new Error("offline"))
+      const user = userEvent.setup()
+      renderSheet()
+      await user.click(await screen.findByTestId("add-to-plan-submit"))
+      await vi.waitFor(() => expect(restorePlan).toHaveBeenCalledWith(removed))
+    })
+
+    it("prefers a free cell over a draft one", async () => {
+      vi.mocked(getPlan).mockImplementation(async (start) =>
+        start === "2026-11-07" ? next : drafted
+      )
+      renderSheet()
+      expect(
+        await screen.findByTestId("add-to-plan-cell-2026-11-07|2")
+      ).toBeChecked()
+    })
   })
 })

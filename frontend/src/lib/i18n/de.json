@@ -424,7 +424,8 @@
         "delete_preset": "Eine Routine gelöscht",
         "apply_preset": "Eine Routine angewendet",
         "copy_week": "Eine frühere Woche kopiert",
-        "record_preference": "Eine Vorliebe notiert"
+        "record_preference": "Eine Vorliebe notiert",
+        "submit_plan": "Den Plan abgegeben"
       },
       "raw_json": "Rohdaten (JSON)",
       "raw_args": "Argumente",
@@ -432,7 +433,7 @@
       "truncated": "Gekürzt; der vollständige Text ist zu lang zum Speichern.",
       "prompt_text": "An den Assistenten gesendeter Prompt",
       "versions_title": "Nach Prompt-Version",
-      "versions_empty": "Noch keine bewerteten Pläne.",
+      "versions_empty": "Noch keine erstellten Pläne.",
       "violations_none": "Keine",
       "score": {
         "coverage": "Abdeckung",
@@ -443,7 +444,19 @@
         "unknown_data": "Unvollständige Angaben"
       },
       "prices_note": "Preise mit Stand {{date}}. Die Kosten sind Schätzungen; Preise änderst du unter Assistent → Preise.",
-      "tokens_breakdown": "{{input}} Eingabe · {{output}} Ausgabe · {{cache_read}} Cache gelesen · {{cache_write}} Cache geschrieben"
+      "tokens_breakdown": "{{input}} Eingabe · {{output}} Ausgabe · {{cache_read}} Cache gelesen · {{cache_write}} Cache geschrieben",
+      "rule": {
+        "H1": "Mahlzeiten passen zur Anwesenheit",
+        "H2": "Kochen pro Tag",
+        "H3": "Genug Portionen",
+        "H4": "Reste rechtzeitig essen",
+        "H5": "Ernährung",
+        "H6": "Bestätigtes bleibt",
+        "H7": "Gültiger Plan",
+        "H8": "Abwechslung"
+      },
+      "violation": "{{rule}} × {{count}}",
+      "scroll_hint": "Seitlich scrollen für weitere Spalten"
     }
   },
   "settings": {
@@ -1534,7 +1547,8 @@
     "to_freeze": "{{count}} zum Einfrieren",
     "cell": "{{weekday}} {{slot}}",
     "covers": "Reicht für {{cells}}",
-    "cook_days": "Kochtage"
+    "cook_days": "Kochtage",
+    "draft": "Entwurf"
   },
   "day_meter": {
     "name": "Energie",
@@ -1741,7 +1755,13 @@
     "all_done_other": "Alles erledigt. {{count}} Artikel gekauft.",
     "error": "Die Einkaufsliste ließ sich nicht laden. Prüfe, ob Plantry läuft, und versuche es erneut.",
     "loading": "Einkaufsliste wird geladen",
-    "moved": "{{name}} nach „{{section}}“ verschoben"
+    "moved": "{{name}} nach „{{section}}“ verschoben",
+    "draft_empty": {
+      "title": "Dein Plan ist hier noch ein Entwurf",
+      "body": "Die Liste zeigt nur bestätigte Mahlzeiten. Nimm die Entwürfe dazu, um zu sehen, was sie brauchen, oder prüfe den Plan und übernimm ihn.",
+      "include": "Essen aus dem Entwurf einbeziehen",
+      "review": "Plan prüfen"
+    }
   },
   "routines": {
     "new": "Neue Routine",
@@ -1883,13 +1903,16 @@
     "action": "Zum Plan hinzufügen",
     "title": "Zum Plan hinzufügen",
     "description": "{{name}} kommt frisch gekocht auf die Mahlzeit, die du wählst.",
-    "meals": "Freie Mahlzeiten",
+    "meals": "Freie Mahlzeiten und Entwürfe",
     "cell": "{{day}}, {{meal}}",
     "add": "Hinzufügen",
     "added": "{{name}} für {{day}}, {{meal}} eingeplant.",
     "open_plan": "Plan öffnen",
     "empty_title": "Keine freien Mahlzeiten",
-    "empty_body": "Diese und nächste Woche sind schon verplant. Öffne den Plan, um Platz zu schaffen.",
-    "load_error": "Der Plan konnte nicht geladen werden. Prüfe, ob Plantry läuft, und versuche es erneut."
+    "empty_body": "Diese und nächste Woche sind schon verplant und bestätigt. Öffne den Plan, um Platz zu schaffen.",
+    "load_error": "Der Plan konnte nicht geladen werden. Prüfe, ob Plantry läuft, und versuche es erneut.",
+    "replaces": "Ersetzt den Entwurf {{name}}",
+    "replaces_unnamed": "Ersetzt einen Entwurf",
+    "cell_replaces": "{{day}}, {{meal}}. {{replaces}}"
   }
 }

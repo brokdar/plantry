@@ -4,6 +4,7 @@ import type { InsightsByVersion } from "@/lib/api/insights"
 import { formatNumber, type Formatter } from "@/lib/plan/format"
 
 import { formatPercent } from "./format"
+import { ScrollTable } from "./ScrollTable"
 
 /** The score components shown per version (D23), in order. Shares read as
  *  percentages, the rest as numbers. */
@@ -50,14 +51,12 @@ function componentText(
 }
 
 /** Score components and violations grouped by kind, prompt version and
- *  model, for the groups that have any. */
+ *  model, for the planning runs (generate and regenerate). A version whose
+ *  runs all failed has no score, but it stays: it is the one to notice. */
 export function VersionTable({ groups }: { groups: InsightsByVersion[] }) {
   const { t, i18n } = useTranslation()
-  // Chat turns carry no score or violations; only planning runs compare.
   const rows = groups.filter(
-    (g) =>
-      Object.keys(g.score_avg).length > 0 ||
-      Object.keys(g.violations).length > 0
+    (g) => g.kind === "generate" || g.kind === "regenerate"
   )
 
   if (rows.length === 0) {
@@ -69,7 +68,7 @@ export function VersionTable({ groups }: { groups: InsightsByVersion[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-cell border border-line bg-panel">
+    <ScrollTable>
       <table className="w-full min-w-[56rem] text-left text-small text-ink">
         <caption className="sr-only">
           {t("settings_page.insights.versions_title")}
@@ -129,8 +128,13 @@ export function VersionTable({ groups }: { groups: InsightsByVersion[] }) {
                   {violations.length === 0
                     ? t("settings_page.insights.violations_none")
                     : violations
-                        .map(
-                          ([rule, n]) => `${rule} × ${formatNumber(n, i18n)}`
+                        .map(([rule, n]) =>
+                          t("settings_page.insights.violation", {
+                            rule: t(`settings_page.insights.rule.${rule}`, {
+                              defaultValue: rule,
+                            }),
+                            count: formatNumber(n, i18n),
+                          })
                         )
                         .join(", ")}
                 </td>
@@ -139,6 +143,6 @@ export function VersionTable({ groups }: { groups: InsightsByVersion[] }) {
           })}
         </tbody>
       </table>
-    </div>
+    </ScrollTable>
   )
 }
