@@ -416,7 +416,7 @@ func TestReplan_MovesAnOrphanedCookToItsFirstPlate(t *testing.T) {
 
 			pv, err := e.svc.PreviewReplan(e.ctx, q)
 			require.NoError(t, err)
-			assert.Equal(t, []planning.Spare{{SessionID: sid, FoodName: "Main 05", Portions: 1, Freezable: tc.freezing}}, pv.Spare)
+			assert.Equal(t, []planning.Spare{{SessionID: sid, FoodName: "Main 05", Portions: 1, Freezable: tc.freezing, Mutable: true}}, pv.Spare)
 
 			_, err = e.svc.Replan(e.ctx, planning.ReplanRequest{ReplanQuery: q, UnlockConfirmed: true, Spare: tc.spare})
 
