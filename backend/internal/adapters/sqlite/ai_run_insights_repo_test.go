@@ -13,6 +13,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 )
 
@@ -45,9 +46,11 @@ func TestAIRunRepo_CorrectionsD24(t *testing.T) {
 		plateEvent(t, db, p, "create", "generator", &run)
 	}
 	plateEvent(t, db, 2, "update", "user", nil)
-	// The agent's edits and the generator's own updates are not corrections.
+	// Another run's agent edit is a correction (B6-AC3); the generator's own
+	// updates and its own run's agent edits are not.
 	plateEvent(t, db, 3, "update", "agent", &untouched)
 	plateEvent(t, db, 4, "update", "generator", &run)
+	plateEvent(t, db, 4, "update", "agent", &run)
 	for p := int64(1); p <= 4; p++ {
 		plateEvent(t, db, p, "accept", "user", &run)
 	}
@@ -66,11 +69,11 @@ func TestAIRunRepo_CorrectionsD24(t *testing.T) {
 	got, err := repo.Corrections(ctx, run, untouched)
 	require.NoError(t, err)
 	assert.Equal(t, map[int64]airun.Correction{
-		run:   {Generated: 4, Corrected: 1},
+		run:   {Generated: 4, Corrected: 2},
 		other: {Generated: 2, Corrected: 1},
 	}, got)
 	require.NotNil(t, got[run].Rate())
-	assert.InDelta(t, 0.25, *got[run].Rate(), 1e-9)
+	assert.InDelta(t, 0.5, *got[run].Rate(), 1e-9)
 
 	only, err := repo.Corrections(ctx, other, other)
 	require.NoError(t, err)
@@ -161,4 +164,35 @@ func TestAIRunRepo_GetRunWithStepsAndPrompt(t *testing.T) {
 
 	_, err = repo.GetRun(ctx, id+100)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+// D11: agent events count only since the row's last accept/confirm, so an
+// accepted chat run does not move again on a later unaccept or discard.
+func TestAIRunRepo_AgentRunsSinceLastAccept(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+	start := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	a := createRun(t, repo, airun.KindChat, start)
+	b := createRun(t, repo, airun.KindChat, start)
+	rows := plate.RowSet{PlateIDs: []int64{7}}
+
+	plateEvent(t, db, 7, "update", "agent", &a)
+	got, err := repo.AgentRuns(ctx, rows)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{a}, got)
+
+	plateEvent(t, db, 7, "accept", "user", nil)
+	got, err = repo.AgentRuns(ctx, rows)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{a}, got, "a live accept: Unaccept still reaches A")
+	plateEvent(t, db, 7, "unlock", "user", nil)
+	got, err = repo.AgentRuns(ctx, rows)
+	require.NoError(t, err)
+	assert.Empty(t, got, "A is accepted and no agent edited since")
+
+	plateEvent(t, db, 7, "update", "agent", &b)
+	got, err = repo.AgentRuns(ctx, rows)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{b}, got, "only B moves on the discard")
 }

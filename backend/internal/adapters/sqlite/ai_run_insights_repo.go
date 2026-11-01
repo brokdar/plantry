@@ -110,6 +110,23 @@ func (r *AIRunRepo) Corrections(ctx context.Context, minID, maxID int64) (map[in
 	return out, nil
 }
 
+// Edits counts the rows each agent run edited for the runs with ids in
+// [minID, maxID] (one query); runs without agent events are absent.
+func (r *AIRunRepo) Edits(ctx context.Context, minID, maxID int64) (map[int64]int, error) {
+	rows, err := r.queriesFor(ctx).AIRunEdits(ctx, sqlcgen.AIRunEditsParams{
+		MinID: sql.NullInt64{Int64: minID, Valid: true},
+		MaxID: sql.NullInt64{Int64: maxID, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ai run edits: %w", err)
+	}
+	out := make(map[int64]int, len(rows))
+	for _, row := range rows {
+		out[row.RunID] = int(row.Edits)
+	}
+	return out, nil
+}
+
 func runRow(row sqlcgen.GetAIRunDetailRow) (airun.RunRow, error) {
 	started, err := time.Parse(timeLayout, row.StartedAt)
 	if err != nil {

@@ -88,14 +88,19 @@ type InsightsStore interface {
 	// Corrections returns D24 counts for the runs with ids in [minID, maxID]
 	// that generated plates.
 	Corrections(ctx context.Context, minID, maxID int64) (map[int64]Correction, error)
+	// Edits returns how many rows each agent run edited, for the runs with
+	// ids in [minID, maxID] that have agent events.
+	Edits(ctx context.Context, minID, maxID int64) (map[int64]int, error)
 }
 
 // RunSummary is a run with its estimated cost (nil when unpriced) and
-// correction rate (nil when it generated no plates).
+// correction rate (nil when it generated no plates). Edits is the number of
+// plates and sessions an agent run changed, nil for a run without events.
 type RunSummary struct {
 	RunRow
 	CostUSD        *float64
 	CorrectionRate *float64
+	Edits          *int
 }
 
 // RunDetail is a run's summary, detail fields and steps.
@@ -134,12 +139,15 @@ type WeekBucket struct {
 // over the runs that have it, except per-date entries (a key that is a
 // YYYY-MM-DD date, such as cook_occasions.per_day): each run plans other
 // dates, so their average means nothing. Violations counts violations by
-// rule.
+// rule. Tokens sums the runs' tokens; Edits sums the edits of a chat group
+// and is nil for the other kinds.
 type VersionGroup struct {
 	Kind          Kind
 	PromptVersion string
 	Model         string
 	Runs          int
+	Tokens        Tokens
+	Edits         *int
 	ScoreAvg      map[string]float64
 	Violations    map[string]int
 }
@@ -232,11 +240,18 @@ func (s *Insights) summarize(ctx context.Context, rows []RunRow) ([]RunSummary, 
 	if err != nil {
 		return nil, nil, fmt.Errorf("corrections: %w", err)
 	}
+	edits, err := s.store.Edits(ctx, minID, maxID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("edits: %w", err)
+	}
 	for i, r := range rows {
 		out[i] = RunSummary{
 			RunRow:         r,
 			CostUSD:        Cost(r.Model, r.Provider, r.Tokens, overrides),
 			CorrectionRate: corr[r.ID].Rate(),
+		}
+		if n, ok := edits[r.ID]; ok {
+			out[i].Edits = &n
 		}
 	}
 	return out, corr, nil
@@ -267,7 +282,7 @@ func (s *Insights) Weekly(ctx context.Context, from, to time.Time) (Report, erro
 	}
 	return Report{
 		Weeks:      weekBuckets(from, to, sums, corr),
-		ByVersion:  versionGroups(rows),
+		ByVersion:  versionGroups(sums),
 		PricesAsOf: PricesAsOf,
 	}, nil
 }
@@ -317,7 +332,7 @@ func weekBuckets(from, to time.Time, sums []RunSummary, corr map[int64]Correctio
 	return weeks
 }
 
-func versionGroups(rows []RunRow) []VersionGroup {
+func versionGroups(runs []RunSummary) []VersionGroup {
 	type key struct {
 		kind           Kind
 		version, model string
@@ -329,7 +344,7 @@ func versionGroups(rows []RunRow) []VersionGroup {
 	}
 	groups := map[key]*acc{}
 	var order []key
-	for _, r := range rows {
+	for _, r := range runs {
 		k := key{r.Kind, r.PromptVersion, r.Model}
 		a, ok := groups[k]
 		if !ok {
@@ -341,6 +356,18 @@ func versionGroups(rows []RunRow) []VersionGroup {
 			order = append(order, k)
 		}
 		a.g.Runs++
+		a.g.Tokens.Input += r.Tokens.Input
+		a.g.Tokens.Output += r.Tokens.Output
+		a.g.Tokens.CacheRead += r.Tokens.CacheRead
+		a.g.Tokens.CacheWrite += r.Tokens.CacheWrite
+		if r.Kind == KindChat {
+			if a.g.Edits == nil {
+				a.g.Edits = new(int)
+			}
+			if r.Edits != nil {
+				*a.g.Edits += *r.Edits
+			}
+		}
 		if r.ScoreJSON != "" {
 			var score any
 			if json.Unmarshal([]byte(r.ScoreJSON), &score) == nil {
