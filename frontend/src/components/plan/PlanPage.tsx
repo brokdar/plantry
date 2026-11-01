@@ -310,6 +310,7 @@ function PlanView({
       <BatchHighlightProvider>
         {board.empty && !board.readOnly && !running && (
           <EmptyWindow
+            start={win.start}
             onPlanByHand={() =>
               focusCell('[data-cell-mode="plan"][data-cell-empty]')
             }

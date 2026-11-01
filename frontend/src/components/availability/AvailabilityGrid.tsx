@@ -51,9 +51,18 @@ export interface AvailabilityGridProps {
   /** When given, each column header gets a menu with "No plate all day" /
    *  "Plan all day"; it receives one patch covering every slot of the column. */
   onBulkChange?: (patch: AvailabilityGridValue) => void
+  /** More items for each column header's menu (the plan wizard's "Away all
+   *  day" and "Guests"); shown after the bulk items. */
+  columnActions?: (colKey: string) => AvailabilityColumnAction[]
   disabled?: boolean
   /** Background the grid sits on, so the sticky slot column matches it. */
   surface?: "ground" | "panel"
+}
+
+export interface AvailabilityColumnAction {
+  id: string
+  label: string
+  onSelect: () => void
 }
 
 const PLAN: AvailabilityCellValue = { mode: "plan" }
@@ -76,6 +85,7 @@ export function AvailabilityGrid({
   presets,
   onChange,
   onBulkChange,
+  columnActions,
   disabled = false,
   surface = "ground",
 }: AvailabilityGridProps) {
@@ -188,7 +198,7 @@ export function AvailabilityGrid({
                       </span>
                     ) : null}
                   </span>
-                  {onBulkChange ? (
+                  {onBulkChange || columnActions ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger
                         disabled={disabled}
@@ -205,16 +215,28 @@ export function AvailabilityGrid({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuGroup>
-                          <DropdownMenuItem
-                            onSelect={() => bulk(col.key, "none")}
-                          >
-                            {t("availability.bulk_none")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => bulk(col.key, "plan")}
-                          >
-                            {t("availability.bulk_plan")}
-                          </DropdownMenuItem>
+                          {onBulkChange ? (
+                            <>
+                              <DropdownMenuItem
+                                onSelect={() => bulk(col.key, "none")}
+                              >
+                                {t("availability.bulk_none")}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onSelect={() => bulk(col.key, "plan")}
+                              >
+                                {t("availability.bulk_plan")}
+                              </DropdownMenuItem>
+                            </>
+                          ) : null}
+                          {columnActions?.(col.key).map((action) => (
+                            <DropdownMenuItem
+                              key={action.id}
+                              onSelect={action.onSelect}
+                            >
+                              {action.label}
+                            </DropdownMenuItem>
+                          ))}
                         </DropdownMenuGroup>
                       </DropdownMenuContent>
                     </DropdownMenu>

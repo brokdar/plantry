@@ -193,12 +193,15 @@ describe("PlanPage", () => {
     expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-11-02", 2)
   })
 
-  it("teaches an empty window; Plan by hand focuses the first open cell", async () => {
+  it("teaches an empty window; Plan this week opens the wizard, or plan by hand focuses the first open cell", async () => {
     const user = userEvent.setup()
     vi.mocked(getPlan).mockResolvedValue(emptyPlan)
     renderWithRouter(<PlanPage />)
+    expect(
+      await screen.findByRole("link", { name: "Plan this week" })
+    ).toHaveAttribute("href", `/plan/new?start=${emptyPlan.window.start}`)
     await user.click(
-      await screen.findByRole("button", { name: "Plan by hand" })
+      await screen.findByRole("button", { name: "or plan by hand" })
     )
     expect(document.activeElement).toHaveAccessibleName(
       "Saturday breakfast, nothing planned"
@@ -206,7 +209,6 @@ describe("PlanPage", () => {
     expect(
       screen.getByRole("button", { name: "Copy a previous week" })
     ).toBeInTheDocument()
-    expect(screen.getByTestId("generate-plan-default")).toBeInTheDocument()
   })
 
   it("Ask assistant opens the chat", async () => {

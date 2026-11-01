@@ -22,7 +22,6 @@ const AI_SERIAL_SPECS = [
   "ai-chat-advanced.spec.ts",
   "settings-ai.spec.ts",
   "keyboard-shortcuts.spec.ts",
-  "generate-plan.spec.ts",
   "settings-insights.spec.ts",
 ]
 
@@ -33,6 +32,7 @@ const GLOBAL_SETTINGS_SPECS = [
   "plan-anchor-settings.spec.ts",
   "plan-generate-heuristic.spec.ts",
   "plan-review-llm.spec.ts",
+  "plan-wizard.spec.ts",
   "profile.spec.ts",
   "settings-preferences.spec.ts",
   "today-freezer.spec.ts",

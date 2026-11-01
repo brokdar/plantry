@@ -1270,8 +1270,9 @@
     "empty": {
       "title": "Für diese Woche ist noch nichts geplant",
       "body": "Plane Mahlzeit für Mahlzeit, übernimm eine Woche, die gut lief, oder lass den Assistenten einen Entwurf machen.",
-      "by_hand": "Selbst planen",
-      "copy": "Frühere Woche kopieren"
+      "by_hand": "oder selbst planen",
+      "copy": "Frühere Woche kopieren",
+      "plan_week": "Diese Woche planen"
     },
     "shortcuts": {
       "title": "Tastenkürzel",
@@ -1287,7 +1288,6 @@
       "different_side": "Andere Beilage wählen",
       "accept": "Übernehmen und einkaufen"
     },
-    "generate_prompt": "Plane meine Woche basierend auf meinen Zielen und Zeitfenstern.",
     "dnd": {
       "reject_no_plate": "Für diese Mahlzeit ist „Kein Essen“ eingetragen.",
       "reject_occupied": "Für diese Mahlzeit ist schon etwas geplant."
@@ -1441,6 +1441,57 @@
       "deficit": "Es sind zu wenige Portionen vorgekocht.",
       "frozen_deficit": "Es sind zu wenige Portionen eingefroren.",
       "other": "Verstößt gegen eine Planungsregel ({{rule}})."
+    },
+    "wizard": {
+      "title": "Woche planen",
+      "next": "Weiter",
+      "back": "Zurück",
+      "skip": "Überspringen",
+      "who": {
+        "title": "Wer ist zu Hause?",
+        "body": "Markiere die Mahlzeiten, die du nicht brauchst. Alles andere wird geplant.",
+        "grid_label": "Wer ist zu Hause, {{range}}",
+        "away": "Den ganzen Tag weg",
+        "guests": "Gäste",
+        "guests_title": "Gäste",
+        "eaters": "Personen am {{day}}",
+        "remove_guests": "Keine Gäste am {{day}}",
+        "make_default": "Als meine neue Standardwoche speichern",
+        "make_default_hint": "Gilt dann für jede Woche, nicht nur für diese.",
+        "no_slots": "Schalte in den Einstellungen mindestens eine Mahlzeit ein, um eine Woche zu planen."
+      },
+      "special": {
+        "title": "Gibt es diese Woche etwas Besonderes?",
+        "body": "Ein paar Worte für den Assistenten oder überspring den Schritt.",
+        "instruction": "Notiz für diese Woche",
+        "placeholder": "z. B. Gäste am Freitag, etwas Leichtes",
+        "new_recipe": "Ein neues Rezept einplanen",
+        "new_recipe_hint": "Plant ein Rezept ein, das du noch nie gekocht hast.",
+        "body_heuristic": "Ohne Assistenten wird die Notiz nur mit dem Plan gespeichert, nicht gelesen. Überspring den Schritt, um die Woche aus deinen Rezepten und Einstellungen zu planen."
+      },
+      "generating": {
+        "title": "Deine Woche wird geplant",
+        "done": "erledigt",
+        "current": "läuft",
+        "pending": "wartet"
+      },
+      "failed": {
+        "llm": "Der Assistent hat nicht geantwortet. Versuch es noch einmal oder plane ohne Assistenten.",
+        "heuristic": "Der Plan ließ sich nicht erstellen. Versuch es noch einmal.",
+        "without_assistant": "Ohne Assistenten planen"
+      },
+      "error": "Die Woche konnte nicht geladen werden.",
+      "remove": {
+        "title_one": "Bestätigte Mahlzeit entfernen?",
+        "title_other": "{{count}} bestätigte Mahlzeiten entfernen?",
+        "body": "Die Zutaten sind vielleicht schon gekauft. „Kein Essen“ entfernt diese Mahlzeiten:",
+        "item": "{{day}} {{slot}}: {{food}}",
+        "keep_one": "Behalten",
+        "keep_other": "Behalten",
+        "confirm": "Entfernen"
+      },
+      "removed_one": "{{count}} Mahlzeit entfernt",
+      "removed_other": "{{count}} Mahlzeiten entfernt"
     }
   },
   "batch": {

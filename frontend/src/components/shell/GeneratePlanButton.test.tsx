@@ -6,6 +6,12 @@ import { renderWithRouter } from "@/test/render"
 import { useChatUI } from "@/lib/stores/chat-ui"
 import { GeneratePlanButton } from "./GeneratePlanButton"
 
+const navigateMock = vi.hoisted(() => vi.fn())
+vi.mock("@tanstack/react-router", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
+  useNavigate: () => navigateMock,
+}))
+
 vi.mock("@/lib/api/setup", () => ({
   getSetupStatus: vi.fn(),
   completeSetup: vi.fn(),
@@ -24,12 +30,12 @@ function setupWith(recipe_count: number) {
 describe("GeneratePlanButton", () => {
   beforeEach(() => {
     vi.mocked(getSetupStatus).mockReset()
+    navigateMock.mockReset()
+    useChatUI.setState({ open: false, draftMessage: "" })
   })
 
   test("below the target it is aria-disabled, explains the gap and links to recipes", async () => {
     setupWith(4)
-    const openWith = vi.fn()
-    useChatUI.setState({ openWith })
     const user = userEvent.setup()
     renderWithRouter(<GeneratePlanButton />)
 
@@ -46,7 +52,7 @@ describe("GeneratePlanButton", () => {
     )
 
     await user.click(button)
-    expect(openWith).not.toHaveBeenCalled()
+    expect(navigateMock).not.toHaveBeenCalled()
     expect(await screen.findByRole("tooltip")).toHaveTextContent(
       "Add 6 more recipes to start planning"
     )
@@ -62,10 +68,8 @@ describe("GeneratePlanButton", () => {
     ).toBeInTheDocument()
   })
 
-  test("at the target it is enabled and opens the chat with the generate prompt", async () => {
+  test("F3-AC4: at the target it opens the plan wizard, never the chat", async () => {
     setupWith(10)
-    const openWith = vi.fn()
-    useChatUI.setState({ openWith })
     const user = userEvent.setup()
     renderWithRouter(<GeneratePlanButton />)
 
@@ -77,17 +81,30 @@ describe("GeneratePlanButton", () => {
     expect(button).toHaveClass("bg-accent", "text-on-accent", "text-body")
 
     await user.click(button)
-    await vi.waitFor(() =>
-      expect(openWith).toHaveBeenCalledWith(
-        expect.stringMatching(/plan my week/i)
-      )
-    )
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: "/plan/new",
+      search: { start: undefined },
+    })
+    expect(useChatUI.getState().open).toBe(false)
+    expect(useChatUI.getState().draftMessage).toBe("")
+  })
+
+  test("on the board it plans the window the board shows", async () => {
+    setupWith(10)
+    const user = userEvent.setup()
+    renderWithRouter(<GeneratePlanButton />, "/plan?start=2026-11-07")
+
+    const button = await screen.findByTestId("generate-plan-default")
+    await vi.waitFor(() => expect(button).not.toHaveAttribute("aria-disabled"))
+    await user.click(button)
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: "/plan/new",
+      search: { start: "2026-11-07" },
+    })
   })
 
   test("until the status loads it is locked, without a count or link", async () => {
     vi.mocked(getSetupStatus).mockReturnValue(new Promise(() => {}))
-    const openWith = vi.fn()
-    useChatUI.setState({ openWith })
     const user = userEvent.setup()
     renderWithRouter(<GeneratePlanButton />)
 
@@ -97,7 +114,7 @@ describe("GeneratePlanButton", () => {
     expect(screen.queryByRole("link")).toBeNull()
 
     await user.click(button)
-    expect(openWith).not.toHaveBeenCalled()
+    expect(navigateMock).not.toHaveBeenCalled()
     expect(screen.queryByRole("tooltip")).toBeNull()
   })
 

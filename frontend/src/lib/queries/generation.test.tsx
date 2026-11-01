@@ -113,6 +113,19 @@ describe("useGenerate / useRegenerate", () => {
     }
   )
 
+  it("useGenerate({ openBoard: false }) returns the run id and stays put", async () => {
+    vi.mocked(generatePlan).mockResolvedValue({ run_id: 14 })
+    const { result } = renderHook(() => useGenerate({ openBoard: false }), {
+      wrapper: createHookWrapper(),
+    })
+    let res: unknown
+    await act(async () => {
+      res = await result.current.mutateAsync({ start: "2026-10-31" })
+    })
+    expect(res).toEqual({ run_id: 14 })
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
   it("a refused start toasts the error and stays put", async () => {
     vi.mocked(generatePlan).mockRejectedValue(
       new ApiError(409, "error.plan.generation_running")

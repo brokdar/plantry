@@ -228,7 +228,7 @@ describe("TodayPage", () => {
       within(screen.getByTestId("today-plan-banner")).getByRole("link", {
         name: "Plan next week",
       })
-    ).toHaveAttribute("href", "/plan?start=2026-11-14")
+    ).toHaveAttribute("href", "/plan/new?start=2026-11-14")
   })
 
   // Phase 3 F5-AC1: a draft-only window says so and links to the plan.

@@ -1,5 +1,3 @@
-import type { Page } from "@playwright/test"
-
 import {
   cleanupSlot,
   expect,
@@ -8,15 +6,6 @@ import {
   test,
   uid,
 } from "./helpers"
-
-// D22: the shared e2e DB accumulates recipes, so pin the Generate gate open.
-async function stubRecipesReady(page: Page) {
-  await page.route("**/api/setup", (route) =>
-    route.fulfill({
-      json: { completed: true, recipe_count: 10, recipe_target: 10 },
-    })
-  )
-}
 
 test.describe("Keyboard shortcuts", () => {
   test("pressing 'd' toggles the theme", async ({ page }) => {
@@ -59,25 +48,21 @@ test.describe("Keyboard shortcuts", () => {
     await expect(palette).toHaveCount(0)
   })
 
-  test("Ctrl+Enter in chat composer submits the prefilled message", async ({
-    page,
-  }) => {
-    // Serial-safe: we don't seed a conversation — we open chat via the
-    // Generate plan button and rely on the existing fake-AI script
+  test("Ctrl+Enter in chat composer submits the message", async ({ page }) => {
+    // Serial-safe: we don't seed a conversation — we open chat from the
+    // board's Ask assistant and rely on the existing fake-AI script
     // having turns available. If chat turns are exhausted in shared state,
     // the fake provider short-circuits but the composer still clears on
     // submit, which is what we assert.
     const slot = await seedSlot(`slot.kb-${uid()}`, "Moon", 994)
     try {
-      await stubRecipesReady(page)
       await page.setViewportSize({ width: 1440, height: 900 })
-      await page.goto("/")
-      // All routes render the default sidebar, so the default variant opens chat.
-      await page.getByTestId("generate-plan-default").click()
+      await page.goto("/plan")
+      await page.getByRole("button", { name: "Ask assistant" }).click()
 
       const composer = page.getByTestId("chat-composer-input")
       await expect(composer).toBeVisible()
-      await expect(composer).toHaveValue(/plan my week/i)
+      await composer.fill("Plan my week")
 
       // Ctrl+Enter submits and clears the composer.
       const resp = page.waitForResponse(

@@ -40,14 +40,19 @@ function useOpenRun() {
 
 /**
  * Starts a generation and opens its window on the board with `?run=`, so
- * the board shows the progress and a reload re-attaches (D35).
+ * the board shows the progress and a reload re-attaches (D35). With
+ * `openBoard: false` it stays put: the plan wizard shows the progress
+ * itself and opens the board when the run is done.
  */
-export function useGenerate() {
+export function useGenerate({
+  openBoard = true,
+}: { openBoard?: boolean } = {}) {
   const { t } = useTranslation()
   const openRun = useOpenRun()
   return useMutation({
     mutationFn: (input: GenerateInput) => generatePlan(input),
-    onSuccess: ({ run_id }, { start }) => openRun(start, run_id),
+    onSuccess: ({ run_id }, { start }) =>
+      openBoard ? openRun(start, run_id) : undefined,
     onError: (err) => toastError(err, t),
   })
 }
