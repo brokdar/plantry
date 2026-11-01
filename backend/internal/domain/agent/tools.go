@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 )
 
@@ -67,6 +69,9 @@ type Services struct {
 	Presets           PresetService
 	// Availability may be nil: get_plates_range then lists no cells.
 	Availability AvailabilityResolver
+	// Settings resolves plan.default_keep_days for the foods' effective
+	// keep_days.
+	Settings plate.SettingsReader
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -193,7 +198,7 @@ func toolListFoods(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "list_foods",
-		Description: "List foods in the library. A food is either a LEAF (single edible item with direct nutrition — apple, rice, chicken) or COMPOSED (built from child foods — curry, schnitzel). Filter by kind, role, tag, or search substring. Use this to find a food by name before referencing it by id. Each item carries favorite; composed foods also carry last_eaten (YYYY-MM-DD of the latest eaten plate up to today, or null), times_cooked (cook sessions up to today), keep_days (days leftovers keep, null = the plan default) and freezable (null = unknown). sort_by last_eaten lists never-eaten recipes first, then the longest uneaten. Each item also carries per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
+		Description: "List foods in the library. A food is either a LEAF (single edible item with direct nutrition — apple, rice, chicken) or COMPOSED (built from child foods — curry, schnitzel). Filter by kind, role, tag, or search substring. Use this to find a food by name before referencing it by id. Each item carries favorite and diet_class (vegan, vegetarian, pescetarian, omnivore or unknown); composed foods also carry last_eaten (YYYY-MM-DD of the latest eaten plate up to today, or null), times_cooked (cook sessions up to today), keep_days (days leftovers keep, the plan default when the recipe sets none) and freezable (null = unknown). sort_by last_eaten lists never-eaten recipes first, then the longest uneaten. Each item also carries per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -230,10 +235,14 @@ func toolListFoods(svc Services) Tool {
 			if err := svc.Foods.Derive(ctx, todayFrom(ctx), foods...); err != nil {
 				return nil, ToolEffectNone, err
 			}
+			keep, err := defaultKeepDays(ctx, svc)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
 			items := make([]map[string]any, 0, len(res.Items))
 			for i := range res.Items {
 				f := &res.Items[i]
-				item := foodSummary(f)
+				item := foodSummary(f, keep)
 				// A failed macro lookup for one food must not sink the whole
 				// page: that item simply goes without per_portion data.
 				if err := addPerPortion(ctx, svc, item, f); err != nil {
@@ -258,7 +267,7 @@ func toolGetFood(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "get_food",
-		Description: "Fetch a food by id. Composed foods include children (child food + grams), instructions, and tags; leaf foods include direct nutrition and portion overrides. Also returns favorite; composed foods also return last_eaten (YYYY-MM-DD or null), times_cooked, keep_days and freezable. Also returns per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
+		Description: "Fetch a food by id. Composed foods include children (child food + grams), instructions, and tags; leaf foods include direct nutrition and portion overrides. Also returns favorite and diet_class; composed foods also return last_eaten (YYYY-MM-DD or null), times_cooked, keep_days (the plan default when the recipe sets none) and freezable. Also returns per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -274,7 +283,11 @@ func toolGetFood(svc Services) Tool {
 			if err := svc.Foods.Derive(ctx, todayFrom(ctx), f); err != nil {
 				return nil, ToolEffectNone, err
 			}
-			out := foodDetail(f)
+			keep, err := defaultKeepDays(ctx, svc)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			out := foodDetail(f, keep)
 			if err := addPerPortion(ctx, svc, out, f); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("get_food nutrition: %w", err)
 			}
@@ -328,7 +341,7 @@ func toolGetPlatesRange(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "get_plates_range",
-		Description: "Get all plates for a date range (from and to inclusive, format YYYY-MM-DD). Use this instead of get_week to read plates by calendar date. The availability array lists every cell in the range that is not plan: mode none (No plate: the user eats elsewhere, never create a plate there) or routine (covered by preset_name).",
+		Description: "Get all plates for a date range (from and to inclusive, format YYYY-MM-DD). Use this instead of get_week to read plates by calendar date. Each plate carries state (draft or confirmed: you may change drafts only), ai_run_id and reason. The sessions array lists the cook sessions the plates eat from (id, food_id, cook_date, cook_slot_id, portions, frozen_portions, state). The availability array lists every cell in the range that is not plan: mode none (No plate: the user eats elsewhere, never create a plate there) or routine (covered by preset_name).",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -354,6 +367,10 @@ func toolGetPlatesRange(svc Services) Tool {
 			for i := range plates {
 				items = append(items, plateSummary(&plates[i]))
 			}
+			sessions, err := linkedSessionList(ctx, svc, plates)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
 			cells := []map[string]any{}
 			if svc.Availability != nil {
 				resolved, err := svc.Availability.Resolve(ctx, from, to)
@@ -371,7 +388,7 @@ func toolGetPlatesRange(svc Services) Tool {
 					cells = append(cells, cell)
 				}
 			}
-			return mustJSON(map[string]any{"plates": items, "availability": cells}), ToolEffectNone, nil
+			return mustJSON(map[string]any{"plates": items, "sessions": sessions, "availability": cells}), ToolEffectNone, nil
 		},
 	}
 }
@@ -449,6 +466,9 @@ func toolCreatePlate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: date: %v", domain.ErrInvalidInput, err)
 			}
+			if err := guardDate(ctx, d); err != nil {
+				return nil, ToolEffectNone, err
+			}
 			p, err := svc.Plates.Create(ctx, plate.PlateInput{Date: d, SlotID: in.SlotID, Eaters: in.Eaters, Note: in.Note})
 			if err != nil {
 				return nil, ToolEffectNone, err
@@ -481,6 +501,9 @@ func toolAddFoodToPlate(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
+			if err := guardPlateDate(ctx, svc, in.PlateID); err != nil {
+				return nil, ToolEffectNone, err
+			}
 			p, err := svc.Plates.AddComponent(ctx, in.PlateID, in.component(in.FoodID))
 			if err != nil {
 				return nil, ToolEffectNone, err
@@ -512,6 +535,9 @@ func toolSwapFood(svc Services) Tool {
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
+			if err := guardComponentDate(ctx, svc, in.PlateComponentID); err != nil {
+				return nil, ToolEffectNone, err
 			}
 			var quantity *plate.PlateComponent
 			if !in.empty() {
@@ -555,6 +581,9 @@ func toolUpdatePlateComponent(svc Services) Tool {
 			if in.empty() {
 				return nil, ToolEffectNone, fmt.Errorf("%w: portions or amount + unit required", domain.ErrInvalidInput)
 			}
+			if err := guardComponentDate(ctx, svc, in.PlateComponentID); err != nil {
+				return nil, ToolEffectNone, err
+			}
 			p, err := svc.Plates.UpdateComponentQuantity(ctx, in.PlateComponentID, in.component(0))
 			if err != nil {
 				return nil, ToolEffectNone, err
@@ -586,6 +615,9 @@ func toolRemovePlateComponent(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
+			if err := guardComponentDate(ctx, svc, in.PlateComponentID); err != nil {
+				return nil, ToolEffectNone, err
+			}
 			if _, err := svc.Plates.RemoveComponent(ctx, in.PlateComponentID); err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -612,6 +644,9 @@ func toolDeletePlate(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
+			if err := guardPlateDate(ctx, svc, in.PlateID); err != nil {
+				return nil, ToolEffectNone, err
+			}
 			if _, err := svc.Plates.Delete(ctx, in.PlateID); err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -632,7 +667,7 @@ func toolRecordPreference(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "record_preference",
-		Description: "Persist a single preference key/value into the user's profile (e.g. 'likes_spicy'=true, 'prefers_quick_meals'=true). Overwrites existing key. DO NOT use the keys 'likes' or 'dislikes' — those arrays are managed automatically by plate-feedback ratings; writing them here clobbers the accumulated tag history.",
+		Description: "Persist a single preference key/value into the user's profile (e.g. 'likes_spicy'=true, 'prefers_quick_meals'=true). Overwrites existing key.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -641,6 +676,9 @@ func toolRecordPreference(svc Services) Tool {
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
+			if reservedPreference(in.Key) {
+				return nil, ToolEffectNone, fmt.Errorf("%w: %s is kept by plate feedback", domain.ErrAIPreferenceReserved, in.Key)
 			}
 			p, err := svc.Profile.Get(ctx)
 			if err != nil {
@@ -662,11 +700,51 @@ func toolRecordPreference(svc Services) Tool {
 	}
 }
 
+// reservedPreference reports whether key is likes or dislikes (or below
+// them), which plate feedback owns (D9).
+func reservedPreference(key string) bool {
+	for _, r := range []string{"likes", "dislikes"} {
+		if key == r || strings.HasPrefix(key, r+".") {
+			return true
+		}
+	}
+	return false
+}
+
 // ---------------------------------------------------------------------------
 // helpers shared by handlers
 // ---------------------------------------------------------------------------
 
-func foodSummary(f *food.Food) map[string]any {
+// guardDate fails with domain.ErrAIPastDate when d is before the chat's
+// today: past days are read-only for the agent (D7). Every plan-writing
+// tool checks the dates it writes.
+func guardDate(ctx context.Context, d time.Time) error {
+	today := todayFrom(ctx)
+	if d.Before(today) {
+		return fmt.Errorf("%w: %s is before today (%s)", domain.ErrAIPastDate, d.Format(time.DateOnly), today.Format(time.DateOnly))
+	}
+	return nil
+}
+
+// guardPlateDate is guardDate on the date of plate id.
+func guardPlateDate(ctx context.Context, svc Services, id int64) error {
+	p, err := svc.Plates.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	return guardDate(ctx, p.Date)
+}
+
+// guardComponentDate is guardDate on the date of the component's plate.
+func guardComponentDate(ctx context.Context, svc Services, id int64) error {
+	pc, err := svc.Plates.GetComponent(ctx, id)
+	if err != nil {
+		return err
+	}
+	return guardPlateDate(ctx, svc, pc.PlateID)
+}
+
+func foodSummary(f *food.Food, defaultKeep int) map[string]any {
 	role := ""
 	if f.Role != nil {
 		role = string(*f.Role)
@@ -683,12 +761,13 @@ func foodSummary(f *food.Food) map[string]any {
 		"reference_portions": ref,
 		"tags":               f.Tags,
 		"favorite":           f.Favorite,
+		"diet_class":         string(f.DietClass),
 	}
-	addHistory(out, f)
+	addHistory(out, f, defaultKeep)
 	return out
 }
 
-func foodDetail(f *food.Food) map[string]any {
+func foodDetail(f *food.Food, defaultKeep int) map[string]any {
 	children := make([]map[string]any, len(f.Children))
 	for i, ch := range f.Children {
 		children[i] = map[string]any{
@@ -705,13 +784,14 @@ func foodDetail(f *food.Food) map[string]any {
 		instrs[i] = map[string]any{"step_number": inst.StepNumber, "text": inst.Text}
 	}
 	out := map[string]any{
-		"id":       f.ID,
-		"name":     f.Name,
-		"kind":     string(f.Kind),
-		"tags":     f.Tags,
-		"favorite": f.Favorite,
+		"id":         f.ID,
+		"name":       f.Name,
+		"kind":       string(f.Kind),
+		"tags":       f.Tags,
+		"favorite":   f.Favorite,
+		"diet_class": string(f.DietClass),
 	}
-	addHistory(out, f)
+	addHistory(out, f, defaultKeep)
 	if f.Role != nil {
 		out["role"] = string(*f.Role)
 	}
@@ -745,8 +825,9 @@ func foodDetail(f *food.Food) map[string]any {
 }
 
 // addHistory writes a composed food's last_eaten (YYYY-MM-DD or nil),
-// times_cooked, keep_days and freezable (each nil when unset) into out.
-func addHistory(out map[string]any, f *food.Food) {
+// times_cooked, effective keep_days (defaultKeep when the recipe sets none)
+// and freezable (nil when unset) into out.
+func addHistory(out map[string]any, f *food.Food, defaultKeep int) {
 	if f.Kind != food.KindComposed {
 		return
 	}
@@ -756,15 +837,13 @@ func addHistory(out map[string]any, f *food.Food) {
 	}
 	out["last_eaten"] = lastEaten
 	out["times_cooked"] = f.History.TimesCooked
-	out["keep_days"] = intOrNil(f.KeepDays)
+	out["keep_days"] = plate.BatchSettings{DefaultKeepDays: defaultKeep}.KeepDays(f.KeepDays)
 	out["freezable"] = boolOrNil(f.Freezable)
 }
 
-func intOrNil(p *int) any {
-	if p == nil {
-		return nil
-	}
-	return *p
+// defaultKeepDays reads plan.default_keep_days.
+func defaultKeepDays(ctx context.Context, svc Services) (int, error) {
+	return plate.IntSetting(ctx, svc.Settings, settings.KeyPlanDefaultKeepDays)
 }
 
 func boolOrNil(p *bool) any {
@@ -821,8 +900,38 @@ func plateSummary(p *plate.Plate) map[string]any {
 	}
 	return map[string]any{
 		"id": p.ID, "date": p.DateString(), "slot_id": p.SlotID, "eaters": p.Eaters,
-		"note": p.Note, "components": comps,
+		"note": p.Note, "state": string(p.State), "ai_run_id": p.AIRunID, "reason": p.Reason,
+		"components": comps,
 	}
+}
+
+// linkedSessionList renders the cook sessions the plates' components eat
+// from, ascending by id.
+func linkedSessionList(ctx context.Context, svc Services, plates []plate.Plate) ([]map[string]any, error) {
+	seen := map[int64]bool{}
+	var ids []int64
+	for _, p := range plates {
+		for _, c := range p.Components {
+			if c.CookSessionID != nil && !seen[*c.CookSessionID] {
+				seen[*c.CookSessionID] = true
+				ids = append(ids, *c.CookSessionID)
+			}
+		}
+	}
+	slices.Sort(ids)
+	out := make([]map[string]any, 0, len(ids))
+	for _, id := range ids {
+		sess, err := svc.Plates.CookSession(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{
+			"id": sess.ID, "food_id": sess.FoodID, "cook_date": sess.CookDate.Format(time.DateOnly),
+			"cook_slot_id": sess.CookSlotID, "portions": sess.Portions, "frozen_portions": sess.FrozenPortions,
+			"state": string(sess.State),
+		})
+	}
+	return out, nil
 }
 
 // plateComponentMap renders a component. Quantities are per eater.

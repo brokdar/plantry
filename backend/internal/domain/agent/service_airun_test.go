@@ -19,6 +19,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
+	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
 
 const chatModel = "fake-model"
@@ -35,6 +36,7 @@ func newChatService(t *testing.T, script *fake.Script) (*agent.Service, *sql.DB)
 	tools, err := agent.NewToolSet(agent.Services{
 		Foods:             food.NewService(foodRepo),
 		NutritionResolver: food.NewNutritionResolver(foodRepo),
+		Settings:          testsvc.Settings(db),
 	})
 	require.NoError(t, err)
 

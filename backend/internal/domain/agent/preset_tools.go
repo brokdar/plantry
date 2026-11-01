@@ -11,9 +11,9 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 )
 
-// presetTools returns the seven preset-related agent tools defined in
-// the Presets spec §6.8 (feature.md, in git history of #12). They replace the legacy apply_template tool with a
-// proper list/get/create/update/delete/apply/copy_week surface.
+// presetTools returns the preset tools: list, get, create from plates,
+// update, delete and apply (Presets spec §6.8). Copying a week is the
+// user's (HTTP) action, not the agent's (Phase 4 D4).
 func presetTools(svc Services) []Tool {
 	return []Tool{
 		toolListPresets(svc),
@@ -22,7 +22,6 @@ func presetTools(svc Services) []Tool {
 		toolUpdatePreset(svc),
 		toolDeletePreset(svc),
 		toolApplyPreset(svc),
-		toolCopyWeek(svc),
 	}
 }
 
@@ -35,7 +34,6 @@ type PresetService interface {
 	Patch(ctx context.Context, id int64, in preset.PatchInput) (*preset.Preset, error)
 	Delete(ctx context.Context, id int64) error
 	Apply(ctx context.Context, id int64, req preset.ApplyRequest) (*preset.ApplyResult, error)
-	CopyWeek(ctx context.Context, req preset.CopyWeekRequest) (*preset.ApplyResult, error)
 	KnownTags(ctx context.Context, limit int) ([]preset.TagUsage, error)
 }
 
@@ -256,55 +254,13 @@ func toolApplyPreset(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: target_date: %v", domain.ErrInvalidInput, err)
 			}
+			if err := guardDate(ctx, date); err != nil {
+				return nil, ToolEffectNone, err
+			}
 			result, err := svc.Presets.Apply(ctx, in.PresetID, preset.ApplyRequest{
 				TargetDate:    date,
 				OnConflict:    preset.ConflictMode(in.OnConflict),
 				SlotIDsFilter: in.SlotIDsFilter,
-			})
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			return mustJSON(applyResultSummary(result)), ToolEffectPlateChanged, nil
-		},
-	}
-}
-
-func toolCopyWeek(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["source_start","target_start"],
-      "properties":{
-        "source_start":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
-        "target_start":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
-        "on_conflict":{"type":"string","enum":["skip","overwrite"]}
-      },
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "copy_week",
-		Description: "Copy every plate in [source_start, source_start+6 days] onto the corresponding day of [target_start, target_start+6 days]. Use this for 'apply my usual routine' style requests by copying a representative past week. A batch cooked in the source week stays one batch (one cook session with its leftovers) in the copy. Default on_conflict is 'skip'.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				SourceStart string `json:"source_start"`
-				TargetStart string `json:"target_start"`
-				OnConflict  string `json:"on_conflict"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			src, err := time.Parse("2006-01-02", in.SourceStart)
-			if err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: source_start: %v", domain.ErrInvalidInput, err)
-			}
-			tgt, err := time.Parse("2006-01-02", in.TargetStart)
-			if err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: target_start: %v", domain.ErrInvalidInput, err)
-			}
-			result, err := svc.Presets.CopyWeek(ctx, preset.CopyWeekRequest{
-				SourceStart: src,
-				TargetStart: tgt,
-				OnConflict:  preset.ConflictMode(in.OnConflict),
 			})
 			if err != nil {
 				return nil, ToolEffectNone, err

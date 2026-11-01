@@ -26,6 +26,11 @@ var (
 	// submit_plan call (D11).
 	ErrAIProviderFailed = errors.New("ai provider error")
 	ErrAIInvalidPlan    = errors.New("ai plan unreadable")
+	// ErrAIPastDate: the agent never writes a plate, session or cell dated
+	// before the chat's today (Phase 4 D7). ErrAIPreferenceReserved: the
+	// agent never records likes/dislikes, which plate feedback owns (D9).
+	ErrAIPastDate           = errors.New("the assistant cannot change days before today")
+	ErrAIPreferenceReserved = errors.New("preference key is reserved")
 
 	// Plate feedback errors.
 	ErrInvalidFeedbackStatus = errors.New("invalid feedback status")
@@ -76,6 +81,9 @@ var (
 	// and unaccept of rows that are not (or no longer) confirmed.
 	ErrNothingToAccept = errors.New("no draft rows in the window")
 	ErrStateMismatch   = errors.New("rows are not confirmed")
+	// ErrRowConfirmed: the agent wrote to a confirmed plate or session, or
+	// to a draft linked to one (Phase 4 D5). It changes drafts only.
+	ErrRowConfirmed = errors.New("row is confirmed")
 
 	// Generation (Phase 3 B6, D6, D9): one run per window, a scope that names
 	// a confirmed row or nothing valid, and a library below the onboarding
@@ -132,6 +140,8 @@ var messageKeys = []struct {
 	{ErrAIStreamInterrupted, "error.ai.stream_interrupted"},
 	{ErrAIProviderFailed, "error.ai.provider_error"},
 	{ErrAIInvalidPlan, "error.ai.invalid_plan"},
+	{ErrAIPastDate, "error.ai.past_date"},
+	{ErrAIPreferenceReserved, "error.ai.preference_reserved"},
 	{ErrInvalidFeedbackStatus, "error.feedback.invalid_status"},
 	{ErrImportBodyTooLarge, "error.import.body_too_large"},
 	{ErrImportNotHTML, "error.import.not_html"},
@@ -160,6 +170,7 @@ var messageKeys = []struct {
 	{ErrInvalidPlanStart, "error.plan.invalid_start"},
 	{ErrNothingToAccept, "error.plan.nothing_to_accept"},
 	{ErrStateMismatch, "error.plan.state_mismatch"},
+	{ErrRowConfirmed, "error.plan.row_confirmed"},
 	{ErrGenerationRunning, "error.plan.generation_running"},
 	{ErrScopeConfirmed, "error.plan.scope_confirmed"},
 	{ErrInvalidScope, "error.plan.invalid_scope"},

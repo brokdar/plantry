@@ -692,9 +692,10 @@ func TestEdits_KeepState(t *testing.T) {
 				_, err := e.svc.Confirm(e.ctx, plate.RowSet{PlateIDs: []int64{p.ID}})
 				require.NoError(t, err)
 			}
-			// The other actor edits: the user a draft, the agent a confirmed plate.
+			// The other actor edits: the agent a draft, the user a confirmed
+			// plate (the agent may not, Phase 4 D5).
 			ctx := e.ctx
-			if st == plate.StateConfirmed {
+			if st == plate.StateDraft {
 				ctx = e.run(actor.Agent, 8)
 			}
 			_, err = e.svc.Update(ctx, p.ID, plate.PlatePatch{Eaters: f64(3)})

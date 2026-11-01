@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,7 @@ type plateToolEnv struct {
 
 func newPlateToolEnv(t *testing.T) *plateToolEnv {
 	t.Helper()
-	ctx := context.Background()
+	ctx := agent.WithToday(context.Background(), toolToday)
 	db := testhelper.NewTestDB(t)
 	insert := func(q string) int64 {
 		res, err := db.ExecContext(ctx, q)
@@ -233,4 +234,108 @@ func TestAgentPackage_HasNoChatModeSymbols(t *testing.T) {
 		assert.NotContains(t, string(src), "modeHint", path)
 		assert.NotContains(t, string(src), "toolQuantity", path)
 	}
+}
+
+// toolToday is the chat's today in the plate tool tests.
+var toolToday = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+
+// B2-AC3 (D7): the agent never writes a day before today.
+func TestTool_PastDateGuard(t *testing.T) {
+	e := newPlateToolEnv(t)
+	_, err := e.exec(t, "create_plate", fmt.Sprintf(`{"date":"2026-10-31","slot_id":%d}`, e.slotID))
+	require.ErrorIs(t, err, domain.ErrAIPastDate)
+	assert.Equal(t, "error.ai.past_date", errorKey(err))
+	e.mustExec(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-01","slot_id":%d}`, e.slotID))
+
+	// A past plate the user made: every plate write refuses it.
+	past, err := e.plates.Create(e.ctx, plate.PlateInput{
+		Date: toolToday.AddDate(0, 0, -1), SlotID: e.slotID,
+		Components: []plate.PlateComponent{{FoodID: e.chili, Portions: ptrF(1)}},
+	})
+	require.NoError(t, err)
+	comp := past.Components[0].ID
+	for name, input := range map[string]string{
+		"add_food_to_plate":      fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":100,"unit":"g"}`, past.ID, e.rice),
+		"swap_food":              fmt.Sprintf(`{"plate_component_id":%d,"new_food_id":%d,"amount":100,"unit":"g"}`, comp, e.rice),
+		"update_plate_component": fmt.Sprintf(`{"plate_component_id":%d,"portions":2}`, comp),
+		"remove_plate_component": fmt.Sprintf(`{"plate_component_id":%d}`, comp),
+		"delete_plate":           fmt.Sprintf(`{"plate_id":%d}`, past.ID),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := e.exec(t, name, input)
+			require.ErrorIs(t, err, domain.ErrAIPastDate)
+		})
+	}
+	got, err := e.plates.Get(e.ctx, past.ID)
+	require.NoError(t, err)
+	assert.Len(t, got.Components, 1, "nothing changed")
+	assert.InDelta(t, 1.0, *got.Components[0].Portions, 1e-9)
+}
+
+// B2-AC1 through the tools: a confirmed plate (the user's) is refused.
+func TestTool_ConfirmedPlateIsRefused(t *testing.T) {
+	e := newPlateToolEnv(t)
+	p, err := e.plates.Create(e.ctx, plate.PlateInput{Date: toolToday, SlotID: e.slotID})
+	require.NoError(t, err)
+	_, err = e.exec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":100,"unit":"g"}`, p.ID, e.rice))
+	require.ErrorIs(t, err, domain.ErrRowConfirmed)
+	assert.Equal(t, "error.plan.row_confirmed", errorKey(err))
+	_, err = e.exec(t, "delete_plate", fmt.Sprintf(`{"plate_id":%d}`, p.ID))
+	require.ErrorIs(t, err, domain.ErrRowConfirmed)
+}
+
+// B2-AC4 (D9): likes and dislikes belong to plate feedback.
+func TestTool_RecordPreference_ReservedKeys(t *testing.T) {
+	e := newPlateToolEnv(t)
+	for _, key := range []string{"likes", "dislikes", "likes.extra", "dislikes.x"} {
+		t.Run(key, func(t *testing.T) {
+			_, err := e.exec(t, "record_preference", fmt.Sprintf(`{"key":%q,"value":["spicy"]}`, key))
+			require.ErrorIs(t, err, domain.ErrAIPreferenceReserved)
+			assert.Equal(t, "error.ai.preference_reserved", errorKey(err))
+		})
+	}
+	got := e.mustExec(t, "record_preference", `{"key":"prefers_quick_meals","value":true}`)
+	assert.Equal(t, true, got["recorded"])
+	prof := e.mustExec(t, "get_profile", `{}`)
+	prefs := prof["preferences"].(map[string]any)
+	assert.Equal(t, true, prefs["prefers_quick_meals"])
+	assert.NotContains(t, prefs, "likes")
+	assert.NotContains(t, prefs, "likes.extra")
+}
+
+// B2-AC6 (D10): plates carry state, run and reason; their sessions are listed.
+func TestTool_GetPlatesRange_StateAndSessions(t *testing.T) {
+	e := newPlateToolEnv(t)
+	draft := e.newPlate(t)
+	e.mustExec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d}`, draft, e.chili))
+	_, err := e.plates.Create(e.ctx, plate.PlateInput{Date: toolToday.AddDate(0, 0, 2), SlotID: e.slotID})
+	require.NoError(t, err)
+
+	got := e.mustExec(t, "get_plates_range", `{"from":"2026-11-02","to":"2026-11-03"}`)
+	plates := got["plates"].([]any)
+	require.Len(t, plates, 2)
+	first, second := plates[0].(map[string]any), plates[1].(map[string]any)
+	assert.Equal(t, "draft", first["state"])
+	assert.Contains(t, first, "ai_run_id")
+	assert.Contains(t, first, "reason")
+	assert.Equal(t, "confirmed", second["state"])
+
+	sid := first["components"].([]any)[0].(map[string]any)["cook_session_id"]
+	sessions := got["sessions"].([]any)
+	require.Len(t, sessions, 1)
+	s := sessions[0].(map[string]any)
+	assert.Equal(t, sid, s["id"])
+	assert.Equal(t, float64(e.chili), s["food_id"])
+	assert.Equal(t, "2026-11-02", s["cook_date"])
+	assert.Equal(t, float64(e.slotID), s["cook_slot_id"])
+	assert.Equal(t, 2.0, s["portions"])
+	assert.Equal(t, 0.0, s["frozen_portions"])
+	assert.Equal(t, "draft", s["state"])
+}
+
+func ptrF(v float64) *float64 { return &v }
+
+func errorKey(err error) string {
+	key, _ := domain.MessageKey(err, "plate")
+	return key
 }
