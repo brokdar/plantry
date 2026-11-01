@@ -21,6 +21,11 @@ var (
 	// AI / agent errors.
 	ErrAIProviderMissing   = errors.New("ai provider not configured")
 	ErrAIStreamInterrupted = errors.New("ai stream interrupted")
+	// ErrAIProviderFailed: the provider call failed (network, API error,
+	// timeout). ErrAIInvalidPlan: no reply of a generation held a readable
+	// submit_plan call (D11).
+	ErrAIProviderFailed = errors.New("ai provider error")
+	ErrAIInvalidPlan    = errors.New("ai plan unreadable")
 
 	// Plate feedback errors.
 	ErrInvalidFeedbackStatus = errors.New("invalid feedback status")
@@ -115,6 +120,8 @@ var messageKeys = []struct {
 	{ErrInvalidMacros, "error.profile.invalid_macros"},
 	{ErrAIProviderMissing, "error.ai.provider_missing"},
 	{ErrAIStreamInterrupted, "error.ai.stream_interrupted"},
+	{ErrAIProviderFailed, "error.ai.provider_error"},
+	{ErrAIInvalidPlan, "error.ai.invalid_plan"},
 	{ErrInvalidFeedbackStatus, "error.feedback.invalid_status"},
 	{ErrImportBodyTooLarge, "error.import.body_too_large"},
 	{ErrImportNotHTML, "error.import.not_html"},

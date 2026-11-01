@@ -71,15 +71,20 @@ func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to ti
 	s.Profile = Profile{
 		KcalTarget: prof.KcalTarget, ProteinPct: prof.ProteinPct, FatPct: prof.FatPct, CarbsPct: prof.CarbsPct,
 		DietType: prof.DietType, MeatDaysPerWeekMax: prof.MeatDaysPerWeekMax, HouseholdPortions: prof.HouseholdPortions,
-		Locale: prof.Locale,
+		Locale: prof.Locale, Restrictions: prof.DietaryRestrictions,
+	}
+	if prof.SystemPrompt != nil {
+		s.Profile.Notes = *prof.SystemPrompt
 	}
 	slots, err := b.d.Slots.List(ctx, false)
 	if err != nil {
 		return State{}, fmt.Errorf("list slots: %w", err)
 	}
 	s.SlotOrder = make(plate.SlotOrder, len(slots))
+	s.SlotNames = make(map[int64]string, len(slots))
 	for _, sl := range slots {
 		s.SlotOrder[sl.ID] = sl.SortOrder
+		s.SlotNames[sl.ID] = sl.NameKey
 	}
 
 	recipes, err := b.d.Foods.List(ctx, food.ListQuery{Kind: food.KindComposed, Limit: maxFoods, Today: today})

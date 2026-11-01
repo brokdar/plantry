@@ -16,6 +16,8 @@ type Proposal struct {
 	Plates   []ProposedPlate
 	// Notes is the chooser's short summary for the user.
 	Notes string
+	// RepairAttempts is how many repair turns the chooser took (LLM, D12).
+	RepairAttempts int
 }
 
 // ProposedSession is a session the proposal cooks.

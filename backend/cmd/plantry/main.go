@@ -192,38 +192,6 @@ func run() error {
 	runRecorder.Prune(context.Background()) // in the background
 	defer runRecorder.Wait()                // runs before conn.Close
 
-	// Plan generation (Phase 3 B6): runs in the background, so shutdown
-	// waits for the running ones (before the recorder and the database).
-	planningSvc := planning.NewService(planning.Deps{
-		Builder: planning.NewBuilder(planning.BuilderDeps{
-			Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
-			Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
-			Settings: settingsSvc, Profile: profileSvc,
-		}),
-		Plates: plateSvc, PlateRows: plateRepo, Cells: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
-		RunLog: planning.RecorderLog{Recorder: runRecorder}, Runs: aiRunRepo, Tx: txRunner,
-		Progress: planning.NewProgress(),
-		Choosers: map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: planning.Heuristic{}},
-		Logger:   logger,
-	})
-	defer planningSvc.Wait()
-
-	planViewSvc := planview.NewService(planview.Deps{
-		Plates:       plateRepo,
-		Sessions:     sessionRepo,
-		Foods:        foodRepo,
-		Nutrition:    nutritionResolver,
-		Availability: availabilitySvc,
-		Slots:        slotRepo,
-		Settings:     settingsSvc,
-		Profile:      profileSvc,
-		Recipes:      foodRepo,
-		Runs:         aiRunRepo,
-		Diets:        foodSvc,
-		Progress:     planningSvc,
-		Tx:           txRunner,
-	})
-
 	newLLMClient := func(provider, apiKey, fakeScript string) (llm.Client, error) {
 		switch provider {
 		case "anthropic":
@@ -243,6 +211,43 @@ func run() error {
 		return runRecorder.Meter(client, provider), nil
 	}
 	llmResolver := llmresolver.New(settingsSvc, llmFactory)
+
+	// Plan generation (Phase 3 B6, B7): runs in the background, so shutdown
+	// waits for the running ones (before the recorder and the database).
+	// Without a chooser in the request it uses the LLM when a provider is
+	// configured, else the heuristic (D11).
+	planningSvc := planning.NewService(planning.Deps{
+		Builder: planning.NewBuilder(planning.BuilderDeps{
+			Foods: foodSvc, FoodRows: foodRepo, Nutrition: nutritionResolver, Cells: availabilitySvc,
+			Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
+			Settings: settingsSvc, Profile: profileSvc,
+		}),
+		Plates: plateSvc, PlateRows: plateRepo, Cells: availabilitySvc, FoodRows: foodRepo, Settings: settingsSvc,
+		RunLog: planning.RecorderLog{Recorder: runRecorder}, Runs: aiRunRepo, Tx: txRunner,
+		Progress: planning.NewProgress(),
+		Choosers: map[airun.Chooser]planning.Chooser{
+			airun.ChooserHeuristic: planning.Heuristic{},
+			airun.ChooserLLM:       planning.NewLLMChooser(llmResolver),
+		},
+		Logger: logger,
+	})
+	defer planningSvc.Wait()
+
+	planViewSvc := planview.NewService(planview.Deps{
+		Plates:       plateRepo,
+		Sessions:     sessionRepo,
+		Foods:        foodRepo,
+		Nutrition:    nutritionResolver,
+		Availability: availabilitySvc,
+		Slots:        slotRepo,
+		Settings:     settingsSvc,
+		Profile:      profileSvc,
+		Recipes:      foodRepo,
+		Runs:         aiRunRepo,
+		Diets:        foodSvc,
+		Progress:     planningSvc,
+		Tx:           txRunner,
+	})
 
 	// Food resolver depends on llmResolver for optional AI translation
 	// and pick-best ranking; nil llmResolver disables those features.

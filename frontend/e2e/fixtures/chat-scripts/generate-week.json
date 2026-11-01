@@ -1,0 +1,756 @@
+{
+  "_comment": [
+    "Fake submit_plan turns for generation e2e (Phase 3 B7). A template: replace the placeholders, write the result to a file and point the backend at it (PUT /api/settings/ai.fake_script).",
+    "Placeholders: \"{{recipe_1}}\" ... \"{{recipe_8}}\" (8 recipe ids not eaten within the variety weeks) and \"{{breakfast}}\", \"{{lunch}}\", \"{{dinner}}\" (slot ids) are replaced together with their quotes, so they become numbers; {{d0}} ... {{d6}} (the window's dates, YYYY-MM-DD) are replaced inside the date strings.",
+    "Assumes all 21 cells of the window are plan cells, at most 1 cooking occasion per day and keep days >= 1. Every plate has 1 eater.",
+    "Turn 1 violates H2 (two cooking occasions on {{d1}}); turn 2 is valid. A generate run takes one repair and ends ok with repair_attempts = 1; later calls repeat turn 2.",
+    "generate-week-error.json is the failing variant."
+  ],
+  "turns": [
+    {
+      "events": [
+        {
+          "delay_ms": 50,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_plan_1",
+            "tool_name": "submit_plan",
+            "tool_input": {
+              "sessions": [
+                {
+                  "key": "s1",
+                  "food_id": "{{recipe_1}}",
+                  "cook_date": "{{d0}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s2",
+                  "food_id": "{{recipe_2}}",
+                  "cook_date": "{{d1}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 1,
+                  "frozen_portions": 0,
+                  "reason": "A quick breakfast"
+                },
+                {
+                  "key": "s8",
+                  "food_id": "{{recipe_8}}",
+                  "cook_date": "{{d1}}",
+                  "cook_slot_id": "{{lunch}}",
+                  "portions": 2,
+                  "frozen_portions": 0,
+                  "reason": "Fresh for lunch and dinner"
+                },
+                {
+                  "key": "s3",
+                  "food_id": "{{recipe_3}}",
+                  "cook_date": "{{d2}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s4",
+                  "food_id": "{{recipe_4}}",
+                  "cook_date": "{{d3}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s5",
+                  "food_id": "{{recipe_5}}",
+                  "cook_date": "{{d4}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s6",
+                  "food_id": "{{recipe_6}}",
+                  "cook_date": "{{d5}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s7",
+                  "food_id": "{{recipe_7}}",
+                  "cook_date": "{{d6}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                }
+              ],
+              "plates": [
+                {
+                  "date": "{{d0}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_1}}",
+                      "portions": 1,
+                      "session_key": "s1"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d0}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_1}}",
+                      "portions": 1,
+                      "session_key": "s1"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d0}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_1}}",
+                      "portions": 1,
+                      "session_key": "s1"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d1}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_2}}",
+                      "portions": 1,
+                      "session_key": "s2"
+                    }
+                  ],
+                  "reason": "Cooked this morning"
+                },
+                {
+                  "date": "{{d1}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_8}}",
+                      "portions": 1,
+                      "session_key": "s8"
+                    }
+                  ],
+                  "reason": "From the lunch batch"
+                },
+                {
+                  "date": "{{d1}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_8}}",
+                      "portions": 1,
+                      "session_key": "s8"
+                    }
+                  ],
+                  "reason": "From the lunch batch"
+                },
+                {
+                  "date": "{{d2}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_3}}",
+                      "portions": 1,
+                      "session_key": "s3"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d2}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_3}}",
+                      "portions": 1,
+                      "session_key": "s3"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d2}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_3}}",
+                      "portions": 1,
+                      "session_key": "s3"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d3}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_4}}",
+                      "portions": 1,
+                      "session_key": "s4"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d3}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_4}}",
+                      "portions": 1,
+                      "session_key": "s4"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d3}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_4}}",
+                      "portions": 1,
+                      "session_key": "s4"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d4}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_5}}",
+                      "portions": 1,
+                      "session_key": "s5"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d4}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_5}}",
+                      "portions": 1,
+                      "session_key": "s5"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d4}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_5}}",
+                      "portions": 1,
+                      "session_key": "s5"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d5}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_6}}",
+                      "portions": 1,
+                      "session_key": "s6"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d5}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_6}}",
+                      "portions": 1,
+                      "session_key": "s6"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d5}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_6}}",
+                      "portions": 1,
+                      "session_key": "s6"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d6}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_7}}",
+                      "portions": 1,
+                      "session_key": "s7"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d6}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_7}}",
+                      "portions": 1,
+                      "session_key": "s7"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d6}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_7}}",
+                      "portions": 1,
+                      "session_key": "s7"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                }
+              ],
+              "notes": "Two cooking sessions on the second day."
+            }
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 6000,
+        "output_tokens": 1500
+      }
+    },
+    {
+      "events": [
+        {
+          "delay_ms": 50,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_plan_2",
+            "tool_name": "submit_plan",
+            "tool_input": {
+              "sessions": [
+                {
+                  "key": "s1",
+                  "food_id": "{{recipe_1}}",
+                  "cook_date": "{{d0}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s2",
+                  "food_id": "{{recipe_2}}",
+                  "cook_date": "{{d1}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s3",
+                  "food_id": "{{recipe_3}}",
+                  "cook_date": "{{d2}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s4",
+                  "food_id": "{{recipe_4}}",
+                  "cook_date": "{{d3}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s5",
+                  "food_id": "{{recipe_5}}",
+                  "cook_date": "{{d4}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s6",
+                  "food_id": "{{recipe_6}}",
+                  "cook_date": "{{d5}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                },
+                {
+                  "key": "s7",
+                  "food_id": "{{recipe_7}}",
+                  "cook_date": "{{d6}}",
+                  "cook_slot_id": "{{breakfast}}",
+                  "portions": 3,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                }
+              ],
+              "plates": [
+                {
+                  "date": "{{d0}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_1}}",
+                      "portions": 1,
+                      "session_key": "s1"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d0}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_1}}",
+                      "portions": 1,
+                      "session_key": "s1"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d0}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_1}}",
+                      "portions": 1,
+                      "session_key": "s1"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d1}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_2}}",
+                      "portions": 1,
+                      "session_key": "s2"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d1}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_2}}",
+                      "portions": 1,
+                      "session_key": "s2"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d1}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_2}}",
+                      "portions": 1,
+                      "session_key": "s2"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d2}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_3}}",
+                      "portions": 1,
+                      "session_key": "s3"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d2}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_3}}",
+                      "portions": 1,
+                      "session_key": "s3"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d2}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_3}}",
+                      "portions": 1,
+                      "session_key": "s3"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d3}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_4}}",
+                      "portions": 1,
+                      "session_key": "s4"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d3}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_4}}",
+                      "portions": 1,
+                      "session_key": "s4"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d3}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_4}}",
+                      "portions": 1,
+                      "session_key": "s4"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d4}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_5}}",
+                      "portions": 1,
+                      "session_key": "s5"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d4}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_5}}",
+                      "portions": 1,
+                      "session_key": "s5"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d4}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_5}}",
+                      "portions": 1,
+                      "session_key": "s5"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d5}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_6}}",
+                      "portions": 1,
+                      "session_key": "s6"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d5}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_6}}",
+                      "portions": 1,
+                      "session_key": "s6"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d5}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_6}}",
+                      "portions": 1,
+                      "session_key": "s6"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d6}}",
+                  "slot_id": "{{breakfast}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_7}}",
+                      "portions": 1,
+                      "session_key": "s7"
+                    }
+                  ],
+                  "reason": "Cooked fresh for the day"
+                },
+                {
+                  "date": "{{d6}}",
+                  "slot_id": "{{lunch}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_7}}",
+                      "portions": 1,
+                      "session_key": "s7"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                },
+                {
+                  "date": "{{d6}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{recipe_7}}",
+                      "portions": 1,
+                      "session_key": "s7"
+                    }
+                  ],
+                  "reason": "Leftovers from breakfast"
+                }
+              ],
+              "notes": "One batch a day, cooked in the morning and eaten all day."
+            }
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 6000,
+        "output_tokens": 1500
+      }
+    }
+  ]
+}
