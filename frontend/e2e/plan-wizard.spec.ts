@@ -214,7 +214,14 @@ test.describe("plan wizard", () => {
       }
       expect(body.chooser).toBe("heuristic")
       await expect(wizard.getByTestId("wizard-generating")).toBeVisible()
-      await expect(wizard.getByText("Reading your week")).toBeVisible()
+      await expect(
+        wizard.getByTestId("wizard-generating").getByRole("listitem")
+      ).toHaveText([
+        /^Reading your week/,
+        /^Choosing recipes/,
+        /^Checking batches and keep days/,
+        /^Saving draft/,
+      ])
 
       // 4. The board: every plan cell holds a dashed draft plate, Mon–Fri
       // breakfast is the Oats routine, the two away cells stay No plate.

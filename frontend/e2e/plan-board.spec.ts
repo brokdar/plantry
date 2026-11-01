@@ -250,10 +250,9 @@ test.describe("Plan board", () => {
     const heading = page.getByRole("heading", { level: 1 })
     await expect(page.getByRole("grid")).toBeVisible()
     const anchoredTitle = await heading.textContent()
-    await expect(page.getByRole("link", { name: "This week" })).toHaveAttribute(
-      "aria-current",
-      "page"
-    )
+    await expect(
+      page.getByRole("link", { name: "This week", exact: true })
+    ).toHaveAttribute("aria-current", "page")
     // The first column is the window's first day (the shopping day).
     const firstDay = Number(anchored.start.slice(8))
     await expect(page.getByRole("columnheader").nth(1)).toContainText(
@@ -270,7 +269,7 @@ test.describe("Plan board", () => {
     await page.getByRole("link", { name: "Previous week" }).click()
     await expect(page).toHaveURL(`/plan?start=${anchored.next_start}`)
 
-    await page.getByRole("link", { name: "This week" }).click()
+    await page.getByRole("link", { name: "This week", exact: true }).click()
     await expect(page).toHaveURL(/\/plan$/)
     await expect(heading).toHaveText(anchoredTitle ?? "")
 
