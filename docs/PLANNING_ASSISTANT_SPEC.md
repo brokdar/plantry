@@ -651,11 +651,11 @@ GET    /api/cook-sessions?from&to         POST, PUT /{id}, DELETE /{id}
 PUT    /api/cook-sessions/{id}/portions   { portions, frozen_portions }
 POST   /api/cook-sessions/{id}/freezer-removal { portions }
 
-POST   /api/plan/generate                 { from, to, scope?, instruction?, chooser? } → { run_id }
+POST   /api/plan/generate                 { start, chooser?, instruction?, eaters_by_date?, include_new_recipe? } → { run_id }
 GET    /api/plan/runs/{id}                → status, progress, notes, violations, score
 GET    /api/plan/runs/{id}/events         (not built: the client polls GET /api/plan/runs/{id} every 500 ms; the
                                            run is re-attachable through `running_run_id` on GET /api/plan, D9)
-POST   /api/plan/regenerate               { scope: { plate_id | date | component_id }, instruction? } → { run_id }
+POST   /api/plan/regenerate               { scope: { kind, date | plate_id | component_id }, start, chooser?, instruction? } → { run_id }
 POST   /api/plan/accept                   { from, to }
 POST   /api/plan/discard                  { from, to }
 POST   /api/plates/{id}/confirm           POST /api/plates/{id}/unlock
@@ -668,7 +668,7 @@ POST   /api/plan/replan                   { from, to, none_cells, unlock_confirm
                                            error.plan.confirmed_affected and the client re-sends with
                                            unlock_confirmed: true after the user agrees; a `from` before today is
                                            400 error.plan.replan_past. A re-plan has no Undo: its removal and the new
-                                           run are one step the user can review and discard instead.)
+                                           run cannot be undone; the regenerated drafts can still be discarded.))
 
 GET    /api/today?date=                   → sessions to cook (scaled), plates, reminders
 
