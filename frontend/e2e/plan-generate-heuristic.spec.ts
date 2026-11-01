@@ -205,6 +205,7 @@ test.describe("generated week on the heuristic", () => {
         await expect(padlock(planCell(page, p.date, slot.id))).toHaveCount(1)
       }
     } finally {
+      await page.unrouteAll({ behavior: "ignoreErrors" })
       // Generate filled every slot of the window, not just ours.
       await clearWindow(start, days[6])
       await cleanupSlot(slot.id)
