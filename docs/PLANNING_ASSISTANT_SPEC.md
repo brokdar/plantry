@@ -141,6 +141,7 @@ Every food gets a **diet class**, ordered from most to least restrictive: `vegan
 
 - **Leaves:** classified at creation (OFF/FDC category mapping first, LLM classification if available, otherwise `unknown`). The user can override it.
 - **Composed foods:** derived as the max of their children. An override is allowed, e.g. when a child is unknown.
+- **Storage (as built):** only the user's override is stored (`foods.diet_class`, migration 00035; NULL = derived, nothing backfilled). Leaf and composed classes are derived on read in `domain/diet` and reported with `diet_class_source` (`auto`, `user` or `derived`). This replaces the stored leaf class and `diet_class_override` column described in §5.
 - **Matching the profile:** `profile.diet_type` is one of the four classes. A food is compatible when its class ≤ the user's type. `unknown` is a checker warning, not a violation.
 - **Meat rule:** the optional structured rule `profile.meat_days_per_week_max` counts days that contain any `omnivore`-class food.
 
@@ -242,13 +243,13 @@ ai_runs, ai_run_steps, plate_events, recipe_suggestions   -- see §8 and §9
 | `plates` | + `eaters REAL NOT NULL DEFAULT 1`, + `state` (existing rows become `confirmed`), + `ai_run_id NULL`, + `updated_at`. **Drop `skipped`** (§11 covers migrating existing rows). + **UNIQUE (date, slot_id)**, after merging duplicates. |
 | `plate_components` | `portions` INTEGER → REAL > 0 (composed). + `cook_session_id NULL → cook_sessions ON DELETE SET NULL`. The leaf amount/unit/grams shape is unchanged. |
 | `preset_plate_components` | `portions` INTEGER → REAL, so it mirrors `plate_components` |
-| `foods` (composed) | + `source_url`, + `description` (imported blurb, separate from the personal `notes`), + `keep_days INT NULL`, + `freezable INT NULL` (null = unknown), + `diet_class_override NULL` |
-| `foods` (leaf) | + `diet_class` (vegan/vegetarian/pescetarian/omnivore/unknown) |
+| `foods` (composed) | + `source_url`, + `description` (imported blurb, separate from the personal `notes`), + `keep_days INT NULL`, + `freezable INT NULL` (null = unknown) |
+| `foods` (all) | + `diet_class NULL`: the user override only (migration 00035, D28). The class itself is derived on read (§3.6) |
 | `foods` | − `cook_count`, − `last_cooked_at` (replaced by derived history, §3.7) |
 | `user_profile` | + `diet_type`, + `meat_days_per_week_max`, + `household_portions` |
 | `ai_conversations` | − legacy `week_id` (dropped in 00032). The chat window is carried by `ai_runs.window_start`/`window_end` and the request's `from`/`to`; no `ai_conversations.window_start` column exists |
 
-The composed `diet_class` is computed on read, like nutrition, and cached alongside it.
+Every `diet_class` is computed on read, like nutrition; only the override is stored.
 
 ---
 
@@ -270,7 +271,7 @@ Generate(window, scope, instruction?)
 
 This lives in a new domain package `backend/internal/domain/planning` with the ports `Chooser` (LLM / heuristic) and `Checker`, and an application service that is shared by HTTP handlers and agent tools.
 
-**Scopes:** whole window, one day, one plate, one component ("different side"), and "fill empty cells only". Everything outside the scope, plus everything confirmed, is passed to the chooser as fixed context.
+**Scopes:** whole window, one day, one plate, one component ("different side"), and "empty cells only" (scope kind `empty_cells`; the mid-week re-plan uses it with a `from`/`to` range). Everything outside the scope, plus everything confirmed, is passed to the chooser as fixed context.
 
 ### 6.2 Context (what the chooser sees)
 
@@ -337,7 +338,7 @@ Violations that remain after repair don't abort the generation. They are persist
 | waste | surplus portions not frozen and not consumed |
 | unknown_data | share of foods with unknown diet class or incomplete nutrition |
 
-Free-text notes ("meat once a day") cannot be checked deterministically. An optional LLM-judge pass rates the plan against the notes (0–5 with reasons). It is stored separately, flagged as a judgement, and off by default.
+Free-text notes ("meat once a day") cannot be checked deterministically. An optional LLM-judge pass was specified here (0–5 with reasons, stored separately, off by default). **It was not built** (D20): `ai_runs.judge_json` stays unused and no judge is planned; free-text notes reach the LLM chooser as prompt context only.
 
 ### 6.6 Learning from the user
 
@@ -400,7 +401,7 @@ The guided state is shown while fewer than **10** composed foods exist:
 The planner shows a "Plan next week" banner from the day before the shopping day until the window is planned. The Today page shows the same banner.
 
 1. **Availability:** the next window's grid, resolved from defaults. Tap cells to cycle plan → none → routine (preset picker). There are bulk actions per day ("away all day"). Changes become overrides for those dates. A checkbox "Save as my new default" writes them to the defaults instead.
-2. **Anything special?** An optional free-text instruction ("guests Friday, 4 people", "something light this week"), an eaters override per day, and an "include a new recipe" toggle (prefilled from `plan.explore_per_week`).
+2. **Anything special?** An optional free-text instruction ("guests Friday, 4 people", "something light this week"), an eaters override per day, and an "include a new recipe" toggle (prefilled from `plan.explore_per_week`). Until Phase 5 (discovery) a "new" recipe means one that was **never eaten** (no `last_eaten`), not one tagged `explore`.
 3. **Generate:** a progress view (resolving cells → asking the assistant → checking → saving). If AI is unavailable, the heuristic runs instead.
 4. **Review:** the existing planner grid in draft mode.
    - Draft plates are visually distinct, and leftover plates show "from Sun · Chili (day 2 of 4)".
@@ -652,15 +653,22 @@ POST   /api/cook-sessions/{id}/freezer-removal { portions }
 
 POST   /api/plan/generate                 { from, to, scope?, instruction?, chooser? } → { run_id }
 GET    /api/plan/runs/{id}                → status, progress, notes, violations, score
-GET    /api/plan/runs/{id}/events         SSE progress (re-attachable)
+GET    /api/plan/runs/{id}/events         (not built: the client polls GET /api/plan/runs/{id} every 500 ms; the
+                                           run is re-attachable through `running_run_id` on GET /api/plan, D9)
 POST   /api/plan/regenerate               { scope: { plate_id | date | component_id }, instruction? } → { run_id }
 POST   /api/plan/accept                   { from, to }
 POST   /api/plan/discard                  { from, to }
 POST   /api/plates/{id}/confirm           POST /api/plates/{id}/unlock
 POST   /api/cook-sessions/{id}/confirm    POST /api/cook-sessions/{id}/unlock   (cascade to linked plates)
-POST   /api/plan/replan                   { from: today, to, instruction? } → { run_id, confirmed_affected: [...] }
-                                          (when confirmed_affected is non-empty, the client re-sends with
-                                           unlock_confirmed: true after the user agrees)
+GET    /api/plan/replan/preview           ?from&to[&none=date:slot…] → { none_cells, confirmed_affected, spare }
+POST   /api/plan/replan                   { from, to, none_cells, unlock_confirmed?, spare: freeze|keep, regenerate,
+                                            chooser?, instruction? } → { removed, run_id }
+                                          (as built: replan writes the No-plate overrides itself, so the body carries
+                                           `none_cells`; with confirmed plates affected it answers 409
+                                           error.plan.confirmed_affected and the client re-sends with
+                                           unlock_confirmed: true after the user agrees; a `from` before today is
+                                           400 error.plan.replan_past. A re-plan has no Undo: its removal and the new
+                                           run are one step the user can review and discard instead.)
 
 GET    /api/today?date=                   → sessions to cook (scaled), plates, reminders
 

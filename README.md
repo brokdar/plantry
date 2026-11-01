@@ -127,6 +127,21 @@ bun run check           # lint + typecheck + unit tests
 bun run e2e             # Playwright tests (starts its own backend and dev server)
 ```
 
+### Plan generation eval
+
+The offline suite runs plan generation against 7 scenarios and a 30-recipe library on in-process databases. It needs no network by default.
+
+```bash
+cd backend
+go run ./cmd/plantry-eval                                  # heuristic chooser, 3 runs per scenario
+go run ./cmd/plantry-eval -chooser llm                     # scripted LLM mode (fake client)
+go run ./cmd/plantry-eval -compare earlier.jsonl           # diff against an earlier report
+PLANTRY_EVAL_LIVE=1 PLANTRY_AI_PROVIDER=anthropic PLANTRY_AI_API_KEY=... \
+  go run ./cmd/plantry-eval -chooser llm -model <model>    # real provider, costs money
+```
+
+It writes `plantry-eval.jsonl` (gitignored), prints a summary and exits non-zero when a run failed an expectation. Flags and scenarios: `backend/CLAUDE.md`.
+
 ### Docker
 
 ```bash
