@@ -417,6 +417,58 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	assert.ErrorIs(t, planning.NewLLMChooser(brokenResolver{}).Ready(context.Background()), domain.ErrAIProviderFailed)
 }
 
+// A repaired reply with two tool calls gets a tool result for each.
+func TestLLMChooser_AnswersEveryToolCall(t *testing.T) {
+	s := baseState()
+	empty := json.RawMessage(`{"sessions": [], "plates": [], "notes": ""}`)
+	twice := fake.Turn{StopReason: "tool_use", Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
+		{Type: "tool_use", ToolUseID: "tu_a", ToolName: "submit_plan", ToolInput: empty},
+		{Type: "tool_use", ToolUseID: "tu_b", ToolName: "submit_plan", ToolInput: empty},
+	}}}
+	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{twice}})
+	_, err := planning.NewLLMChooser(llm.StaticResolver(client, "m")).Choose(context.Background(), planning.ChooseInput{State: s, Target: windowTarget(s)})
+	require.NoError(t, err)
+
+	reqs := client.Requests()
+	require.Len(t, reqs, 3)
+	last := reqs[1].Messages[len(reqs[1].Messages)-1]
+	require.Len(t, last.Content, 2)
+	for i, id := range []string{"tu_a", "tu_b"} {
+		assert.Equal(t, llm.ContentTypeToolResult, last.Content[i].Type)
+		assert.Equal(t, id, last.Content[i].ToolResultID)
+		assert.True(t, last.Content[i].ToolResultIsError)
+	}
+}
+
+// Names never break a pipe-separated row, and a side swap over the budget
+// keeps the sides.
+func TestRenderPrompt_NamesAndSideBudget(t *testing.T) {
+	s := baseState()
+	f := s.Foods[chili]
+	f.Name = "Chili | extra\nhot"
+	s.Foods[chili] = f
+	s.History = []planning.HistoryPlate{{Date: day("2026-11-01"), SlotID: dinner, FoodIDs: []int64{chili}}}
+	prompt := planning.RenderPrompt(planning.ChooseInput{State: s, Target: windowTarget(s)})
+	assert.NotContains(t, prompt, "Chili |")
+	assert.Contains(t, prompt, "2026-11-01 | slot 2 | Chili / extra hot\n")
+
+	s, tgt, _ := benchState()
+	eaten := day("2026-11-01")
+	for i := range 3000 {
+		id := int64(5000 + i)
+		m := recipe(id, strings.Repeat("Long recipe name ", 4), food.RoleMain, "vegan", 500)
+		s.Foods[id] = m
+	}
+	side := recipe(9999, "Late side", food.RoleSideVeg, "vegan", 100)
+	side.LastEaten = &eaten
+	s.Foods[side.ID] = side
+	sw := &planning.SideSwap{FoodID: rice, CookDate: day(sat), CookSlotID: dinner, Portions: 2}
+	prompt = planning.RenderPrompt(planning.ChooseInput{State: s, Target: tgt, Side: sw})
+	assert.Contains(t, prompt, "more recipes left out for length.")
+	candidateLine(t, prompt, side.ID)
+	candidateLine(t, prompt, rice)
+}
+
 type brokenResolver struct{}
 
 func (brokenResolver) Current(context.Context) (llm.Client, string, error) {

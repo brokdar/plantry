@@ -118,7 +118,7 @@ func RenderPrompt(in ChooseInput) string {
 	const header = "\nCandidate recipes (id|name|role|diet|kcal|protein_g|fat_g|carbs_g|nutrition_complete|minutes|reference_portions|keep_days|freezable|last_eaten|eaten_8_weeks|favorite|like_score), per portion:\n"
 	room := PromptTokenBudget*4 - utf8.RuneCountInString(head.String()) - utf8.RuneCountInString(tail.String()) - len(header) - 80
 	keep := make([]bool, len(cands))
-	for _, i := range keepOrder(cands) {
+	for _, i := range keepOrder(cands, in.Side != nil) {
 		n := utf8.RuneCountInString(rows[i]) + 1
 		if n > room {
 			continue
@@ -359,15 +359,22 @@ func candidates(in ChooseInput) []FoodFacts {
 	return out
 }
 
-// keepOrder ranks candidates for the token budget: favorites first, then
-// never eaten, then the longest ago eaten; ties by id.
-func keepOrder(cands []FoodFacts) []int {
+// keepOrder ranks candidates for the token budget: sides first for a side
+// swap, then favorites, then never eaten, then the longest ago eaten; ties
+// by id.
+func keepOrder(cands []FoodFacts, sidesFirst bool) []int {
 	idx := make([]int, len(cands))
 	for i := range idx {
 		idx[i] = i
 	}
 	slices.SortStableFunc(idx, func(i, j int) int {
 		a, b := cands[i], cands[j]
+		if as, bs := sideRole(a.Role), sideRole(b.Role); sidesFirst && as != bs {
+			if as {
+				return -1
+			}
+			return 1
+		}
 		if a.Favorite != b.Favorite {
 			if a.Favorite {
 				return -1
@@ -452,9 +459,10 @@ func language(locale string) string {
 	return "English"
 }
 
+// foodName is a food's name, safe inside a pipe-separated row.
 func foodName(s State, id int64) string {
 	if f, ok := s.Foods[id]; ok {
-		return f.Name
+		return cell(f.Name)
 	}
 	return fmt.Sprintf("food %d", id)
 }

@@ -3,7 +3,8 @@
     "Fake submit_plan turns for generation e2e (Phase 3 B7). A template: replace the placeholders, write the result to a file and point the backend at it (PUT /api/settings/ai.fake_script).",
     "Placeholders: \"{{recipe_1}}\" ... \"{{recipe_8}}\" (8 recipe ids not eaten within the variety weeks) and \"{{breakfast}}\", \"{{lunch}}\", \"{{dinner}}\" (slot ids) are replaced together with their quotes, so they become numbers; {{d0}} ... {{d6}} (the window's dates, YYYY-MM-DD) are replaced inside the date strings.",
     "Assumes all 21 cells of the window are plan cells, at most 1 cooking occasion per day and keep days >= 1. Every plate has 1 eater.",
-    "Turn 1 violates H2 (two cooking occasions on {{d1}}); turn 2 is valid. A generate run takes one repair and ends ok with repair_attempts = 1; later calls repeat turn 2.",
+    "Turn 1 violates H2 (two cooking occasions on {{d1}}); turn 2 is valid. Every generation replays turn 1 then turn 2: its first request ends in a plain user message, which resets the fake script to turn 1, and its repair request continues with turn 2. So each run takes one repair and ends ok with repair_attempts = 1.",
+    "Write the filled script to a unique path per spec and run: the backend caches the fake client by script path, so rewriting a path it already loaded is not picked up.",
     "generate-week-error.json is the failing variant."
   ],
   "turns": [
