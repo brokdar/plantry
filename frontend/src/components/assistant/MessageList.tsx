@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 import { ChangeLine } from "./ChangeLine"
 
 interface MessageProps {
-  role: "user" | "assistant" | "tool" | "error"
+  role: "user" | "assistant" | "error"
   text: string
 }
 
@@ -25,8 +25,7 @@ function Message({ role, text }: MessageProps) {
           "max-w-[85%] rounded-lg px-3 py-2 text-sm",
           isUser && "bg-primary text-primary-foreground",
           role === "assistant" && "bg-muted",
-          role === "error" && "bg-destructive/15 text-destructive",
-          role === "tool" && "bg-muted text-xs text-muted-foreground"
+          role === "error" && "bg-destructive/15 text-destructive"
         )}
       >
         {isUser ? (

@@ -1055,7 +1055,7 @@
   },
   "assistant": {
     "title": "Assistant",
-    "description": "Plans and changes meals with you. Edits stay drafts until you accept.",
+    "description": "Changes go into your draft. Confirmed plates are kept unless you agree.",
     "disabled_reason": "Set up an AI provider in Settings to use the assistant.",
     "provider_missing": "No AI provider is configured. Choose one in Settings.",
     "close": "Close assistant",
@@ -1104,7 +1104,7 @@
       "regenerate_window": "Week planned again",
       "regenerate_day": "{{day}} planned again",
       "regenerate_plate": "{{day}}: new plate instead of {{name}}",
-      "regenerate_side": "{{day}}: new side instead of {{name}}",
+      "regenerate_side": "{{day}} {{slot}}: new side {{name}}",
       "regenerate_empty_cells": "Empty meals filled",
       "create_plate": "{{day}} {{slot}}: new plate",
       "add_food": "{{day}}: {{name}} added",

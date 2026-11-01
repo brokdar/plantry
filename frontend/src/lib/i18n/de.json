@@ -1055,7 +1055,7 @@
   },
   "assistant": {
     "title": "Assistent",
-    "description": "Plant und ändert Mahlzeiten mit dir. Änderungen bleiben Entwürfe, bis du sie übernimmst.",
+    "description": "Änderungen landen in deinem Entwurf. Bestätigte Teller bleiben, außer du stimmst zu.",
     "disabled_reason": "Richte in den Einstellungen einen KI-Anbieter ein, um den Assistenten zu nutzen.",
     "provider_missing": "Kein KI-Anbieter eingerichtet. Wähle in den Einstellungen einen aus.",
     "close": "Assistent schließen",
@@ -1104,7 +1104,7 @@
       "regenerate_window": "Woche neu geplant",
       "regenerate_day": "{{day}} neu geplant",
       "regenerate_plate": "{{day}}: neuer Teller statt {{name}}",
-      "regenerate_side": "{{day}}: neue Beilage statt {{name}}",
+      "regenerate_side": "{{day}} {{slot}}: neue Beilage {{name}}",
       "regenerate_empty_cells": "Leere Mahlzeiten gefüllt",
       "create_plate": "{{day}} {{slot}}: neuer Teller",
       "add_food": "{{day}}: {{name}} hinzugefügt",

@@ -93,4 +93,35 @@ describe("buildTranscript", () => {
     ])
     expect(rest).toEqual([])
   })
+
+  it("gives a regenerate change to the run that finished, not the failed one", () => {
+    const { turns, rest } = buildTranscript(
+      [
+        msg(2, "assistant", [
+          { type: "tool_use", tool_use_id: "r1", tool_use_name: "regenerate" },
+        ]),
+        msg(3, "tool", [
+          {
+            type: "tool_result",
+            tool_result_id: "r1",
+            tool_result_content: JSON.stringify({ status: "failed" }),
+          },
+        ]),
+        msg(4, "assistant", [
+          { type: "text", text: "That failed, trying again." },
+          { type: "tool_use", tool_use_id: "r2", tool_use_name: "regenerate" },
+        ]),
+        msg(5, "tool", [
+          {
+            type: "tool_result",
+            tool_result_id: "r2",
+            tool_result_content: { status: "ok" },
+          },
+        ]),
+      ],
+      [change(9, "regenerate")]
+    )
+    expect(turns.map((t) => [t.message.id, t.changes.length])).toEqual([[4, 1]])
+    expect(rest).toEqual([])
+  })
 })

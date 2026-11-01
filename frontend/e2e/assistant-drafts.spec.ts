@@ -1,6 +1,7 @@
 import { readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { DatabaseSync } from "node:sqlite"
 
 import type { APIRequestContext, Page } from "@playwright/test"
 
@@ -103,6 +104,19 @@ async function send(page: Page, text: string) {
   await expect(page.getByTestId("assistant-composer-abort")).toHaveCount(0, {
     timeout: 60_000,
   })
+}
+
+/** Reads the e2e database directly where the API exposes no audit rows. */
+function queryDB<T>(sql: string, ...args: (number | string)[]): T[] {
+  const db = new DatabaseSync(
+    process.env.E2E_DB_PATH ?? "/tmp/plantry-e2e.db",
+    { readOnly: true }
+  )
+  try {
+    return db.prepare(sql).all(...args) as T[]
+  } finally {
+    db.close()
+  }
 }
 
 const weekday = (iso: string) =>
@@ -266,7 +280,18 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     const panel = page.getByRole("complementary", { name: "Assistant" })
     await expect(panel).toBeVisible()
     await expect(page.getByRole("dialog")).toHaveCount(0)
+    expect((await panel.boundingBox())!.width).toBe(380)
+    await expect(panel).toContainText(
+      "Changes go into your draft. Confirmed plates are kept unless you agree."
+    )
     await expect(panel.getByRole("button", { name: /freeze 2/ })).toBeVisible()
+    // AC-1.3: the Chili's cook badge reads 4 now, 6 after the turn.
+    const chiliBadge = (portions: number) =>
+      page
+        .locator("[data-batch-badge]")
+        .filter({ hasText: `× ${portions}` })
+        .first()
+    await expect(chiliBadge(4)).toBeVisible()
 
     const beansBefore = await beans()
     expect(beansBefore).toBe(400)
@@ -291,6 +316,7 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
       panel.getByTestId("assistant-message-assistant").last()
     ).toContainText("6 portions")
 
+    await expect(chiliBadge(6)).toBeVisible() // no reload
     const changed = await session()
     expect(changed).toMatchObject({
       portions: 6,
@@ -313,6 +339,24 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     )
     expect(detail1.prompt_text).toContain(start)
     expect(detail1.prompt_text).toContain(chili.name)
+    // AC-1.6: today's date, the window's dates with weekdays, the stored
+    // conversation and window.
+    expect(detail1.prompt_text).toMatch(
+      /Today is [A-Z][a-z]+ \d{4}-\d{2}-\d{2}\./
+    )
+    expect(detail1.prompt_text).toContain(`${weekday(monday)} ${monday}`)
+    expect(detail1.prompt_text).toContain(`${weekday(tuesday)} ${tuesday}`)
+    const [runRow] = queryDB<{
+      conversation_id: number | null
+      window_start: string
+      window_end: string
+    }>(
+      "SELECT conversation_id, window_start, window_end FROM ai_runs WHERE id = ?",
+      chat1.id
+    )
+    expect(runRow.conversation_id).not.toBeNull()
+    expect(runRow.window_start).toBe(start)
+    expect(runRow.window_end).toBe(days[6])
 
     // Undo restores 4 / 0 and marks the line.
     await panel.getByRole("button", { name: /^Undo/ }).click()
@@ -333,9 +377,11 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     await send(page, "different side on Tuesday")
     const sideLine = panel
       .getByTestId("assistant-change")
-      .filter({ hasText: `${weekday(tuesday)}: new side` })
+      .filter({ hasText: `${weekday(tuesday)} dinner: new side` })
     await expect(sideLine).toHaveCount(1)
-    await expect(sideLine).toContainText(bulgur.name)
+    await expect(sideLine).toHaveText(
+      new RegExp(`${weekday(tuesday)} dinner: new side ${roast.name}`)
+    )
 
     const after = await plan()
     const tue = (p: PlanView) =>
@@ -405,10 +451,11 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
 
     const chatRuns = await runsAfter(runMark, "chat")
     expect(chatRuns).toHaveLength(4)
-    // The final chili request and the regenerate run are accepted. The side
-    // request's chat run is not asserted: it wrote no row itself (the
-    // regenerate run did), and outcomes follow agent-actor events (D11).
+    // Both chat runs that stayed in the plan and the regenerate run are
+    // accepted: the side request's chat run only started the regenerate run
+    // (which wrote under the generator), and follows its outcome.
     const finalChili = chatRuns[1]
+    const finalSide = chatRuns[3]
     const finalRegen = (await runsAfter(regenMark, "regenerate"))[0]
     await expect
       .poll(async () => {
@@ -416,10 +463,11 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
         const re = await runsAfter(regenMark, "regenerate")
         return [
           runs.find((r) => r.id === finalChili.id)?.outcome,
+          runs.find((r) => r.id === finalSide.id)?.outcome,
           re.find((r) => r.id === finalRegen.id)?.outcome,
         ]
       })
-      .toEqual(["accepted", "accepted"])
+      .toEqual(["accepted", "accepted", "accepted"])
 
     // ── AC-3: confirmed rows are protected ────────────────────────────────
     await page.goto(`/plan?start=${start}&assistant=1`)
@@ -438,6 +486,10 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     await expect(card).toBeVisible()
     await expect(card).toContainText("Monday dinner")
     await expect(card).toContainText(chili.name)
+    await expect(card).toContainText(rice.name)
+    await expect(
+      panel3.getByTestId("assistant-message-assistant").last()
+    ).toContainText("say yes")
     await expect(panel3.getByTestId("assistant-change")).toHaveCount(0)
     await expect(panel3).not.toContainText(
       /remove_plate_component|unlock\b.*\{/
@@ -448,7 +500,7 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
       await getJSON<RunDetail>(ctx, `/api/ai/runs/${chat3.id}`)
     ).steps.find((x) => x.name === "remove_plate_component")!
     expect(failed.is_error).toBe(true)
-    expect(failed.result).toContain("confirmed")
+    expect(failed.result).toContain("error.plan.row_confirmed")
     let mon = (await plan()).cells.find(
       (c) => c.date === monday && c.slot_id === dinner.id
     )!.plate!
@@ -473,6 +525,14 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     )!.plate!
     expect(mon.state).toBe("draft")
     expect(mon.components.map((c) => c.food_id)).toEqual([chili.id])
+    // AC-3.2: the unlock is logged as an agent event of the chat run.
+    const unlocks = queryDB<{ actor: string; ai_run_id: number }>(
+      "SELECT actor, ai_run_id FROM plate_events WHERE plate_id = ? AND action = 'unlock'",
+      mon.id
+    )
+    expect(unlocks.length).toBeGreaterThan(0)
+    expect(unlocks.every((e) => e.actor === "agent")).toBe(true)
+    expect(unlocks[0].ai_run_id).toBeGreaterThan(chat3.id)
   } finally {
     for (const path of scriptPaths) await rm(path, { force: true })
     await ctx.delete("/api/settings/ai.fake_script")
@@ -488,4 +548,23 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     await cleanupFood(kidney.id)
     await cleanupFood(plain.id)
   }
+})
+
+// Phase 4 AC-5: the cell pulse is decoration and is off under reduced motion.
+test("AC-5: the change pulse is off under reduced motion", async ({ page }) => {
+  await page.goto("/plan")
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
+  const pulseName = () =>
+    page.evaluate(() => {
+      const el = document.createElement("div")
+      el.setAttribute("data-pulse", "")
+      document.body.append(el)
+      const name = getComputedStyle(el).animationName
+      el.remove()
+      return name
+    })
+  await page.emulateMedia({ reducedMotion: "no-preference" })
+  expect(await pulseName()).toBe("cell-pulse")
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  expect(await pulseName()).toBe("none")
 })

@@ -57,10 +57,15 @@ describe("change text", () => {
         i18next,
         mockChange({
           text_key: "regenerate_side",
-          params: { date: "2026-11-03", name: "Rice", count: 1 },
+          params: {
+            date: "2026-11-03",
+            slot: "slot.dinner",
+            name: "Roast potatoes",
+            count: 1,
+          },
         })
       )
-    ).toBe("Tuesday: new side instead of Rice")
+    ).toBe("Tuesday dinner: new side Roast potatoes")
   })
 
   it("falls back to a plain line for an unknown key", () => {

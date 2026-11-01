@@ -582,7 +582,7 @@ func toolRegenerate(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			params, err := regenerateParams(ctx, svc, sc)
+			params, before, err := regenerateParams(ctx, svc, sc)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -613,6 +613,11 @@ func toolRegenerate(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			params["count"] = len(out.Changed)
+			if sc.Kind == planning.ScopeSide {
+				if name, ok := newSideName(before, out.Changed); ok {
+					params["name"] = name
+				}
+			}
 			noteChange(ctx, "regenerate_"+string(sc.Kind), params)
 			return mustJSON(out), ToolEffectNone, nil
 		},
@@ -620,26 +625,55 @@ func toolRegenerate(svc Services) Tool {
 }
 
 // regenerateParams are a regenerate change's display params before the run:
-// the day, or the plate's or side's food names with their date.
-func regenerateParams(ctx context.Context, svc Services, sc planning.Scope) (map[string]any, error) {
+// the day, or the plate's or side's food names with their date (a side also
+// its slot), and the plate as it was (side only) so the new side can be told
+// from the old one.
+func regenerateParams(ctx context.Context, svc Services, sc planning.Scope) (map[string]any, *plate.Plate, error) {
 	switch sc.Kind {
 	case planning.ScopeDay:
-		return map[string]any{"date": sc.Date.Format(time.DateOnly)}, nil
+		return map[string]any{"date": sc.Date.Format(time.DateOnly)}, nil, nil
 	case planning.ScopePlate:
 		p, err := svc.Plates.Get(ctx, sc.PlateID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return map[string]any{"name": plateNames(p), "date": p.DateString()}, nil
+		return map[string]any{"name": plateNames(p), "date": p.DateString()}, nil, nil
 	case planning.ScopeSide:
 		p, pc, err := componentOnPlate(ctx, svc, sc.ComponentID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return map[string]any{"name": pc.FoodName, "date": p.DateString()}, nil
+		slotKey, err := slotName(ctx, svc, p.SlotID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return map[string]any{"name": pc.FoodName, "date": p.DateString(), "slot": slotKey}, p, nil
 	default:
-		return map[string]any{}, nil
+		return map[string]any{}, nil, nil
 	}
+}
+
+// newSideName is the name of the food the regenerated plate now has that the
+// plate before the run did not (a side swap keeps the plate, D6).
+func newSideName(before *plate.Plate, changed []changedPlateOut) (string, bool) {
+	if before == nil {
+		return "", false
+	}
+	had := map[int64]bool{}
+	for _, c := range before.Components {
+		had[c.FoodID] = true
+	}
+	for _, ch := range changed {
+		if ch.Plate == nil || ch.Plate.ID != before.ID {
+			continue
+		}
+		for _, c := range ch.Plate.Components {
+			if !had[c.FoodID] {
+				return c.Name, true
+			}
+		}
+	}
+	return "", false
 }
 
 // regenerateScope checks the id kind needs (D8) and the past-date guard on

@@ -49,14 +49,14 @@ export const assistantStream = {
     listeners.add(l)
     return () => listeners.delete(l)
   },
-  /** Start of a new run: clears the turn, keeps conversation and draft. */
+  /** Start of a new run: clears the turn, keeps conversation, draft and the
+   *  change lines' states (a stale line must not offer Undo again). */
   reset() {
     set({
       text: "",
       status: null,
       changes: [],
       unlockRequest: null,
-      lineStates: {},
     })
   },
   /** Clears the in-flight text only (each message_start) so earlier
