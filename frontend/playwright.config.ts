@@ -31,6 +31,7 @@ const AI_SERIAL_SPECS = [
 // alone, after the other projects.
 const GLOBAL_SETTINGS_SPECS = [
   "plan-anchor-settings.spec.ts",
+  "plan-generate-heuristic.spec.ts",
   "profile.spec.ts",
   "settings-preferences.spec.ts",
   "today-freezer.spec.ts",
