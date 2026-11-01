@@ -106,32 +106,44 @@ export function buildTranscript(
   changes: ConversationChange[]
 ): Transcript {
   // Per call: the change its result names, whether it failed, and whether
-  // it can have made a change the result does not name.
+  // it can have made a change the result does not name. A call is keyed by
+  // its position, not its id: a result belongs to the latest call with that
+  // id before it, so ids reused across turns stay apart.
+  const keyOf = new Map<Block, string>()
+  const latest = new Map<string, string>()
   const changeOf = new Map<string, number>()
   const noChange = new Set<string>()
   const failed = new Set<string>()
   let pendingUnlock: UnlockRequestPayload | null = null
+  let n = 0
   for (const m of messages) {
     if (m.role === "user") pendingUnlock = null
     for (const b of blocksOf(m)) {
+      if (b.type === "tool_use") {
+        const key = `call-${n++}`
+        keyOf.set(b, key)
+        latest.set(b.tool_use_id ?? "", key)
+        continue
+      }
       if (b.type !== "tool_result" || !b.tool_result_id) continue
+      const key = latest.get(b.tool_result_id) ?? `result-${n++}`
       const result = parsedResult(b.tool_result_content) as
         | (Record<string, unknown> & ToolResultChange)
         | null
       const changeId = result?.change_id
-      if (typeof changeId === "number") changeOf.set(b.tool_result_id, changeId)
+      if (typeof changeId === "number") changeOf.set(key, changeId)
       const preview = previewRows(b)
       if (preview) {
-        noChange.add(b.tool_result_id)
+        noChange.add(key)
         pendingUnlock = preview
         continue
       }
       if (toolFailed(!!b.tool_result_is_error, b.tool_result_content)) {
-        failed.add(b.tool_result_id)
-        noChange.add(b.tool_result_id)
+        failed.add(key)
+        noChange.add(key)
       }
       // A change that was made but not saved has no change to show.
-      if (result?.warning === NOT_RECORDED) noChange.add(b.tool_result_id)
+      if (result?.warning === NOT_RECORDED) noChange.add(key)
     }
   }
   const byId = new Map(changes.map((c) => [c.id, c]))
@@ -154,17 +166,20 @@ export function buildTranscript(
     if (m.role === "assistant") {
       for (const b of blocks) {
         if (b.type !== "tool_use") continue
-        const id = b.tool_use_id ?? ""
-        if (failed.has(id)) {
-          failures.push({ id, tool: b.tool_use_name ?? "" })
+        const key = keyOf.get(b) ?? ""
+        if (failed.has(key)) {
+          failures.push({
+            id: b.tool_use_id ?? "",
+            tool: b.tool_use_name ?? "",
+          })
         }
-        const named = byId.get(changeOf.get(id) ?? -1)
+        const named = byId.get(changeOf.get(key) ?? -1)
         if (named) {
           own.push(named)
           placed.add(named.id)
           continue
         }
-        if (noChange.has(id) || changeOf.has(id)) continue
+        if (noChange.has(key) || changeOf.has(key)) continue
         const at = queue.findIndex((c) => sameTool(c.tool, b.tool_use_name))
         if (at >= 0) own.push(...queue.splice(at, 1))
       }

@@ -249,6 +249,25 @@ describe("buildTranscript", () => {
       expect(rest).toEqual([])
     })
 
+    it("keeps calls apart when a tool call id is reused in a later turn", () => {
+      const { turns, rest } = buildTranscript(
+        [
+          msg(2, "assistant", [call("tu_1", "set_session_portions")]),
+          msg(3, "tool", [result("tu_1", { change_id: 5 })]),
+          msg(4, "assistant", [call("tu_1", "set_session_portions")]),
+          msg(5, "tool", [result("tu_1", { change_id: 6 })]),
+        ],
+        [change(5, "set_session_portions"), change(6, "set_session_portions")]
+      )
+      expect(
+        turns.map((t) => [t.message.id, t.changes.map((c) => c.id)])
+      ).toEqual([
+        [2, [5]],
+        [4, [6]],
+      ])
+      expect(rest).toEqual([])
+    })
+
     it("keeps a change whose call is missing for the end", () => {
       const { rest } = buildTranscript(
         [msg(3, "tool", [result("gone", { change_id: 3 })])],
