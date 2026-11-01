@@ -132,7 +132,7 @@ test("on a phone it is a bottom sheet that a plate sheet replaces", async ({
   await expect(page.getByTestId("assistant-panel")).toHaveCount(0)
 })
 
-test("streams text and tool-call states, keeps history and starts new conversations", async ({
+test("streams text without tool names, keeps history and starts new conversations", async ({
   page,
   request,
 }) => {
@@ -161,12 +161,13 @@ test("streams text and tool-call states, keeps history and starts new conversati
     await chatResponse
     await expect(input).toHaveValue("")
 
-    await expect(page.getByTestId("assistant-tool-call").first()).toBeVisible({
-      timeout: 5_000,
-    })
     await expect(
       page.getByTestId("assistant-message-assistant").first()
     ).toBeVisible({ timeout: 10_000 })
+    // The tool the script calls is never named in the panel (D16).
+    await expect(page.getByTestId("assistant-panel")).not.toContainText(
+      "list_slots"
+    )
     await convRefetch
     // Chips are for an empty conversation only.
     await expect(page.getByTestId("assistant-chips")).toHaveCount(0)

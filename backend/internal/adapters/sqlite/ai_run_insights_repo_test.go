@@ -3,6 +3,7 @@ package sqlite_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -195,4 +196,37 @@ func TestAIRunRepo_AgentRunsSinceLastAccept(t *testing.T) {
 	got, err = repo.AgentRuns(ctx, rows)
 	require.NoError(t, err)
 	assert.Equal(t, []int64{b}, got, "only B moves on the discard")
+}
+
+// AC-4.1: a chat run whose only write is a regenerate (under the generator's
+// own run) follows that run: ChatRuns finds it through ai_changes.
+func TestAIRunRepo_ChatRunsFollowRegenerateRun(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+	start := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	chat := createRun(t, repo, airun.KindChat, start)
+	regen := createRun(t, repo, airun.KindRegenerate, start)
+	other := createRun(t, repo, airun.KindChat, start)
+	regen12 := regen + 100 // an id that merely contains regen's digits
+	for _, c := range []struct {
+		run int64
+		ids string
+	}{{chat, fmt.Sprintf("[%d,%d]", chat, regen)}, {other, fmt.Sprintf("[%d,%d]", other, regen12)}} {
+		_, err := db.Exec(`INSERT INTO ai_changes (run_id, step_seq, tool, text_key, params_json, run_ids_json, dates_json, plate_ids_json, session_ids_json)
+			VALUES (?, 1, 'regenerate_plan', 'k', '{}', ?, '[]', '[]', '[]')`, c.run, c.ids)
+		require.NoError(t, err)
+	}
+
+	got, err := repo.ChatRuns(ctx, []int64{regen})
+	require.NoError(t, err)
+	assert.Equal(t, []int64{chat}, got)
+
+	got, err = repo.ChatRuns(ctx, []int64{regen, regen12})
+	require.NoError(t, err)
+	assert.Equal(t, []int64{chat, other}, got)
+
+	got, err = repo.ChatRuns(ctx, []int64{chat + 1000})
+	require.NoError(t, err)
+	assert.Empty(t, got)
 }

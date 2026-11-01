@@ -1055,7 +1055,7 @@
   },
   "assistant": {
     "title": "Assistent",
-    "description": "Plant und ändert Mahlzeiten mit dir. Änderungen bleiben Entwürfe, bis du sie übernimmst.",
+    "description": "Änderungen landen in deinem Entwurf. Bestätigte Teller bleiben, außer du stimmst zu.",
     "disabled_reason": "Richte in den Einstellungen einen KI-Anbieter ein, um den Assistenten zu nutzen.",
     "provider_missing": "Kein KI-Anbieter eingerichtet. Wähle in den Einstellungen einen aus.",
     "close": "Assistent schließen",
@@ -1068,7 +1068,9 @@
     "new_conversation": "Neue Unterhaltung",
     "status": {
       "thinking": "Denkt nach…",
-      "tool": "Nutzt {{name}}…"
+      "reading": "Liest deinen Plan…",
+      "updating": "Ändert deinen Plan…",
+      "regenerating": "Wählt neu aus…"
     },
     "chips": {
       "label": "Vorschläge",
@@ -1077,21 +1079,50 @@
       "freeze": "{{name}} auf {{portions}} Portionen erhöhen, 2 einfrieren",
       "side": "Andere Beilage am {{weekday}}"
     },
-    "tool": {
-      "args": "Argumente",
-      "status": {
-        "pending": "wartet",
-        "running": "läuft…",
-        "ok": "erledigt",
-        "error": "fehlgeschlagen"
-      }
-    },
     "history": {
       "title": "Frühere Unterhaltungen",
       "open": "Verlauf öffnen",
       "empty": "Noch keine Unterhaltungen.",
       "delete": "Unterhaltung löschen",
       "select": "Unterhaltung öffnen"
+    },
+    "change": {
+      "fallback": "Dein Plan hat sich geändert",
+      "apply_preset": "{{day}}: Routine {{name}} angewendet",
+      "set_session_portions_one": "{{name}}: {{count}} Portion",
+      "set_session_portions_other": "{{name}}: {{count}} Portionen",
+      "set_session_portions_frozen_one": "{{name}}: {{count}} Portion, {{frozen}} eingefroren",
+      "set_session_portions_frozen_other": "{{name}}: {{count}} Portionen, {{frozen}} eingefroren",
+      "set_plate_eaters_one": "{{day}}, {{name}}: für {{count}} Person",
+      "set_plate_eaters_other": "{{day}}, {{name}}: für {{count}} Personen",
+      "set_availability_none": "{{day}} {{slot}}: kein Teller",
+      "set_availability_plan": "{{day}} {{slot}}: Teller möglich",
+      "confirm_one": "{{count}} Teller bestätigt",
+      "confirm_other": "{{count}} Teller bestätigt",
+      "unlock_one": "{{count}} Teller entsperrt",
+      "unlock_other": "{{count}} Teller entsperrt",
+      "regenerate_window": "Woche neu geplant",
+      "regenerate_day": "{{day}} neu geplant",
+      "regenerate_plate": "{{day}}: neuer Teller statt {{name}}",
+      "regenerate_side": "{{day}} {{slot}}: neue Beilage {{name}}",
+      "regenerate_empty_cells": "Leere Mahlzeiten gefüllt",
+      "create_plate": "{{day}} {{slot}}: neuer Teller",
+      "add_food": "{{day}}: {{name}} hinzugefügt",
+      "swap_food": "{{day}}: {{from}} gegen {{name}} getauscht",
+      "update_component": "{{day}}: {{name}} geändert",
+      "remove_component": "{{day}}: {{name}} entfernt",
+      "delete_plate": "{{day}} {{slot}}: {{name}} entfernt"
+    },
+    "live_label": "Änderungen am Plan",
+    "undo": "Rückgängig",
+    "undoing": "Macht rückgängig…",
+    "undone": "Rückgängig gemacht",
+    "stale": "Inzwischen geändert",
+    "unlock": {
+      "title": "Diese Teller sind bestätigt",
+      "body": "Der Assistent braucht dein Ja, bevor er sie ändert.",
+      "row": "{{day}} {{slot}} ({{names}})",
+      "confirm": "Ja, entsperren"
     }
   },
   "validation": {

@@ -1,14 +1,15 @@
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
-import type { ConversationMessage } from "@/lib/domain/assistantEvents"
-import type { ToolCallState } from "@/lib/stores/assistant-stream"
+import type { Transcript } from "@/lib/assistant/transcript"
+import type { Change } from "@/lib/domain/assistantEvents"
+import type { ChangeLineState } from "@/lib/stores/assistant-stream"
 import { cn } from "@/lib/utils"
 
-import { ToolCallBlock } from "./ToolCallBlock"
+import { ChangeLine } from "./ChangeLine"
 
 interface MessageProps {
-  role: "user" | "assistant" | "tool" | "error"
+  role: "user" | "assistant" | "error"
   text: string
 }
 
@@ -24,8 +25,7 @@ function Message({ role, text }: MessageProps) {
           "max-w-[85%] rounded-lg px-3 py-2 text-sm",
           isUser && "bg-primary text-primary-foreground",
           role === "assistant" && "bg-muted",
-          role === "error" && "bg-destructive/15 text-destructive",
-          role === "tool" && "bg-muted text-xs text-muted-foreground"
+          role === "error" && "bg-destructive/15 text-destructive"
         )}
       >
         {isUser ? (
@@ -46,64 +46,58 @@ function Message({ role, text }: MessageProps) {
   )
 }
 
-// Extract a plain-text representation from persisted ConversationMessage
-// content (an array of provider-neutral content blocks). Tool results are
-// rendered as a compact one-liner.
-function messageToText(m: ConversationMessage): string {
-  const blocks = (Array.isArray(m.content) ? m.content : []) as Array<{
-    type?: string
-    text?: string
-    tool_use_name?: string
-    tool_result_id?: string
-  }>
-  return blocks
-    .map((b) => {
-      if (b.type === "text") return b.text ?? ""
-      if (b.type === "tool_use") return `(called ${b.tool_use_name})`
-      if (b.type === "tool_result") return `(result for ${b.tool_result_id})`
-      return ""
-    })
-    .filter(Boolean)
-    .join("\n\n")
-}
-
 interface MessageListProps {
-  /** Persisted turns of the open conversation (tool turns excluded). */
-  turns: ConversationMessage[]
+  transcript: Transcript
+  /** Changes applied by the turn in flight that the conversation does not
+   *  hold yet. */
+  liveChanges: Change[]
   /** The reply being streamed, shown until it is persisted. */
   streamText: string
-  toolCalls: ToolCallState[]
   streaming: boolean
+  lineState: (change: Change) => ChangeLineState | null
+  onUndo: (id: number) => void
 }
 
-/** The transcript: persisted turns, then the in-flight reply and its tools. */
+/** The transcript: persisted turns with their change lines, then the
+ *  in-flight changes and reply. */
 export function MessageList({
-  turns,
+  transcript,
+  liveChanges,
   streamText,
-  toolCalls,
   streaming,
+  lineState,
+  onUndo,
 }: MessageListProps) {
+  const lines = (changes: Change[]) =>
+    changes.map((c) => (
+      <ChangeLine key={c.id} change={c} state={lineState(c)} onUndo={onUndo} />
+    ))
   return (
     <>
-      {turns.map((m) => (
-        <Message
-          key={m.id}
-          role={
-            m.role === "assistant"
-              ? "assistant"
-              : m.role === "user"
-                ? "user"
-                : "error"
-          }
-          text={messageToText(m)}
-        />
+      {transcript.turns.map(({ message: m, text, changes }) => (
+        <div key={m.id} className="space-y-2">
+          {text !== "" && (
+            <Message
+              role={
+                m.role === "assistant"
+                  ? "assistant"
+                  : m.role === "user"
+                    ? "user"
+                    : "error"
+              }
+              text={text}
+            />
+          )}
+          {lines(changes)}
+        </div>
       ))}
-      {(streaming || streamText !== "" || toolCalls.length > 0) && (
-        <div data-testid="assistant-streaming">
+      {transcript.rest.length > 0 && (
+        <div className="space-y-2">{lines(transcript.rest)}</div>
+      )}
+      {(streaming || streamText !== "" || liveChanges.length > 0) && (
+        <div data-testid="assistant-streaming" className="space-y-2">
+          {lines(liveChanges)}
           {streamText !== "" && <Message role="assistant" text={streamText} />}
-          {toolCalls.map((tc) => (
-            <ToolCallBlock key={tc.id} tool={tc} />
-          ))}
         </div>
       )}
     </>

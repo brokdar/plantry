@@ -1,0 +1,641 @@
+{
+  "_comment": [
+    "Chat script for assistant-drafts.spec.ts (Phase 4 F3). A template: fill the placeholders, write the result to a unique path and PUT it as ai.fake_script.",
+    "Placeholders \"{{chili_session}}\", \"{{tue_side_component}}\", \"{{mon_plate}}\", \"{{mon_side_component}}\", \"{{roast}}\", \"{{dinner}}\", \"{{tue_plate}}\" are replaced with their quotes, so they become numbers; {{tue}} is replaced inside the date strings.",
+    "Sequences by the user text (first match in script order): \"chili\" (AC-1), \"remove the side\" (AC-3 step 1: the confirmed row fails, the unlock preview follows), \"yes\" (AC-3 step 2: unlock confirmed, then the removal), \"side\" (AC-2: regenerate, whose generator request replays the for_tool submit_plan turn)."
+  ],
+  "turns": [
+    {
+      "match_user": "chili",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Let me look at your plan. "
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_start",
+          "payload": {
+            "id": "tu_c1",
+            "name": "get_plan"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_delta",
+          "payload": {
+            "id": "tu_c1",
+            "args_json": "{}"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Let me look at your plan. "
+          },
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_c1",
+            "tool_name": "get_plan",
+            "tool_input": {}
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "chili",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Changing the batch. "
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_start",
+          "payload": {
+            "id": "tu_c2",
+            "name": "set_session_portions"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_delta",
+          "payload": {
+            "id": "tu_c2",
+            "args_json": "{\"session_id\": \"{{chili_session}}\", \"portions\": 6, \"frozen_portions\": 2}"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Changing the batch. "
+          },
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_c2",
+            "tool_name": "set_session_portions",
+            "tool_input": {
+              "session_id": "{{chili_session}}",
+              "portions": 6,
+              "frozen_portions": 2
+            }
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "chili",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Done: the Chili now makes 6 portions and 2 of them go into the freezer."
+          }
+        }
+      ],
+      "stop_reason": "end_turn",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done: the Chili now makes 6 portions and 2 of them go into the freezer."
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "remove the side",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Removing the side. "
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_start",
+          "payload": {
+            "id": "tu_r1",
+            "name": "remove_plate_component"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_delta",
+          "payload": {
+            "id": "tu_r1",
+            "args_json": "{\"plate_component_id\": \"{{mon_side_component}}\"}"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Removing the side. "
+          },
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_r1",
+            "tool_name": "remove_plate_component",
+            "tool_input": {
+              "plate_component_id": "{{mon_side_component}}"
+            }
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "remove the side",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "That plate is confirmed. "
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_start",
+          "payload": {
+            "id": "tu_r2",
+            "name": "unlock"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_delta",
+          "payload": {
+            "id": "tu_r2",
+            "args_json": "{\"plate_id\": \"{{mon_plate}}\"}"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "That plate is confirmed. "
+          },
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_r2",
+            "tool_name": "unlock",
+            "tool_input": {
+              "plate_id": "{{mon_plate}}"
+            }
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "remove the side",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Monday dinner is confirmed. Shall I unlock it so I can remove the side? Please say yes."
+          }
+        }
+      ],
+      "stop_reason": "end_turn",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Monday dinner is confirmed. Shall I unlock it so I can remove the side? Please say yes."
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "yes",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Unlocking. "
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_start",
+          "payload": {
+            "id": "tu_y1",
+            "name": "unlock"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_delta",
+          "payload": {
+            "id": "tu_y1",
+            "args_json": "{\"plate_id\": \"{{mon_plate}}\", \"user_confirmed\": true}"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Unlocking. "
+          },
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_y1",
+            "tool_name": "unlock",
+            "tool_input": {
+              "plate_id": "{{mon_plate}}",
+              "user_confirmed": true
+            }
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "yes",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Removing the side. "
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_start",
+          "payload": {
+            "id": "tu_y2",
+            "name": "remove_plate_component"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_delta",
+          "payload": {
+            "id": "tu_y2",
+            "args_json": "{\"plate_component_id\": \"{{mon_side_component}}\"}"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Removing the side. "
+          },
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_y2",
+            "tool_name": "remove_plate_component",
+            "tool_input": {
+              "plate_component_id": "{{mon_side_component}}"
+            }
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "yes",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Done: Monday dinner is unlocked and the side is gone. It stays a draft until you accept again."
+          }
+        }
+      ],
+      "stop_reason": "end_turn",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done: Monday dinner is unlocked and the side is gone. It stays a draft until you accept again."
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "side",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Let me look at your plan. "
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_start",
+          "payload": {
+            "id": "tu_s1",
+            "name": "get_plan"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_delta",
+          "payload": {
+            "id": "tu_s1",
+            "args_json": "{}"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Let me look at your plan. "
+          },
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_s1",
+            "tool_name": "get_plan",
+            "tool_input": {}
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "side",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Choosing another side. "
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_start",
+          "payload": {
+            "id": "tu_s2",
+            "name": "regenerate"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "tool_call_delta",
+          "payload": {
+            "id": "tu_s2",
+            "args_json": "{\"kind\": \"side\", \"component_id\": \"{{tue_side_component}}\"}"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Choosing another side. "
+          },
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_s2",
+            "tool_name": "regenerate",
+            "tool_input": {
+              "kind": "side",
+              "component_id": "{{tue_side_component}}"
+            }
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "match_user": "side",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        },
+        {
+          "delay_ms": 20,
+          "type": "assistant_delta",
+          "payload": {
+            "text": "Done: Tuesday dinner has a new side."
+          }
+        }
+      ],
+      "stop_reason": "end_turn",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Done: Tuesday dinner has a new side."
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    },
+    {
+      "for_tool": "submit_plan",
+      "events": [
+        {
+          "delay_ms": 20,
+          "type": "message_start",
+          "payload": {
+            "model": "fake-e2e"
+          }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_side_plan",
+            "tool_name": "submit_plan",
+            "tool_input": {
+              "sessions": [
+                {
+                  "key": "s1",
+                  "food_id": "{{roast}}",
+                  "cook_date": "{{tue}}",
+                  "cook_slot_id": "{{dinner}}",
+                  "portions": 1,
+                  "frozen_portions": 0,
+                  "reason": "Not eaten for a while"
+                }
+              ],
+              "plates": [
+                {
+                  "plate_id": "{{tue_plate}}",
+                  "date": "{{tue}}",
+                  "slot_id": "{{dinner}}",
+                  "eaters": 1,
+                  "components": [
+                    {
+                      "food_id": "{{roast}}",
+                      "portions": 1,
+                      "session_key": "s1"
+                    }
+                  ],
+                  "reason": "A different side"
+                }
+              ],
+              "notes": "A different side for Tuesday dinner."
+            }
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 900,
+        "output_tokens": 60
+      }
+    }
+  ]
+}

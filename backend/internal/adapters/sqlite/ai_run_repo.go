@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"strconv"
 	"time"
 	"unicode/utf8"
 
@@ -117,6 +120,22 @@ func (r *AIRunRepo) AgentRuns(ctx context.Context, rows plate.RowSet) ([]int64, 
 		return nil, fmt.Errorf("agent runs of rows: %w", err)
 	}
 	return ids, nil
+}
+
+// ChatRuns returns the chat runs that made a change under one of runIDs,
+// ascending.
+func (r *AIRunRepo) ChatRuns(ctx context.Context, runIDs []int64) ([]int64, error) {
+	seen := map[int64]bool{}
+	for _, id := range runIDs {
+		chats, err := r.queriesFor(ctx).ChatRunsOfRun(ctx, strconv.FormatInt(id, 10))
+		if err != nil {
+			return nil, fmt.Errorf("chat runs of run %d: %w", id, err)
+		}
+		for _, c := range chats {
+			seen[c] = true
+		}
+	}
+	return slices.Sorted(maps.Keys(seen)), nil
 }
 
 func nullIDs(ids []int64) []sql.NullInt64 {

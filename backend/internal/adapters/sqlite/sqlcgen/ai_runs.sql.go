@@ -182,6 +182,38 @@ func (q *Queries) AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams
 	return items, nil
 }
 
+const chatRunsOfRun = `-- name: ChatRunsOfRun :many
+SELECT DISTINCT CAST(run_id AS INTEGER) AS run_id FROM ai_changes
+WHERE instr(',' || replace(replace(replace(run_ids_json, '[', ''), ']', ''), ' ', '') || ',', ',' || CAST(?1 AS TEXT) || ',') > 0
+ORDER BY run_id
+`
+
+// The chat runs whose plan-writing calls (ai_changes) wrote under run_id: a
+// chat run's regenerate call writes under the generator's own run, so the
+// chat run follows that run's outcome. run_ids_json is a JSON array of ids.
+func (q *Queries) ChatRunsOfRun(ctx context.Context, runID string) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, chatRunsOfRun, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var run_id int64
+		if err := rows.Scan(&run_id); err != nil {
+			return nil, err
+		}
+		items = append(items, run_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countPlanRunRows = `-- name: CountPlanRunRows :one
 SELECT
     (SELECT COUNT(*) FROM plates p WHERE p.ai_run_id = ?1) AS plates,

@@ -183,3 +183,11 @@ WHERE e.actor = 'agent' AND e.ai_run_id IS NOT NULL
           AND ((c.plate_id IS NOT NULL AND c.plate_id = e.plate_id) OR (c.cook_session_id IS NOT NULL AND c.cook_session_id = e.cook_session_id))))
   ), 0)
 ORDER BY run_id;
+
+-- name: ChatRunsOfRun :many
+-- The chat runs whose plan-writing calls (ai_changes) wrote under run_id: a
+-- chat run's regenerate call writes under the generator's own run, so the
+-- chat run follows that run's outcome. run_ids_json is a JSON array of ids.
+SELECT DISTINCT CAST(run_id AS INTEGER) AS run_id FROM ai_changes
+WHERE instr(',' || replace(replace(replace(run_ids_json, '[', ''), ']', ''), ' ', '') || ',', ',' || CAST(sqlc.arg(run_id) AS TEXT) || ',') > 0
+ORDER BY run_id;

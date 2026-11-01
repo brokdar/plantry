@@ -99,4 +99,8 @@ type RunOutcomes interface {
 	// AgentRuns returns the ids, ascending, of the agent runs that wrote an
 	// audit event to one of the plates or sessions of rows (D11).
 	AgentRuns(ctx context.Context, rows RowSet) ([]int64, error)
+	// ChatRuns returns the ids, ascending, of the chat runs that made a
+	// change under one of runIDs (a regenerate call writes under the
+	// generator's own run), so they follow those runs' outcomes.
+	ChatRuns(ctx context.Context, runIDs []int64) ([]int64, error)
 }

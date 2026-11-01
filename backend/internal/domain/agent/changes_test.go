@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -109,7 +110,18 @@ func TestChange_RegenerateSideUndo(t *testing.T) {
 
 	ch := e.change(ctx, "regenerate", fmt.Sprintf(`{"kind":"side","component_id":%d}`, old.ID))
 	assert.Equal(t, "regenerate_side", ch.TextKey)
-	assert.Equal(t, old.FoodName, ch.Params["name"])
+	after, err := e.plates.Get(context.Background(), target.ID)
+	require.NoError(t, err)
+	newSide := ""
+	for _, c := range after.Components {
+		if !slices.ContainsFunc(target.Components, func(o plate.PlateComponent) bool { return o.FoodID == c.FoodID }) {
+			newSide = c.FoodName
+		}
+	}
+	require.NotEmpty(t, newSide, "the regenerate swaps in a different side")
+	assert.Equal(t, newSide, ch.Params["name"], "AC-2.2: the line names the new side")
+	assert.Equal(t, target.DateString(), ch.Params["date"])
+	assert.NotEmpty(t, ch.Params["slot"])
 	require.Len(t, ch.RunIDs, 2, "the chat run and the regenerate run")
 	evs, err := sqlite.NewAIChangeRepo(e.db).RunEvents(context.Background(), *ch.FirstEventID-1, *ch.LastEventID, ch.RunIDs[1:])
 	require.NoError(t, err)

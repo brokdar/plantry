@@ -26,6 +26,10 @@ type Querier interface {
 	// the unlock is the boundary.
 	AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error)
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
+	// The chat runs whose plan-writing calls (ai_changes) wrote under run_id: a
+	// chat run's regenerate call writes under the generator's own run, so the
+	// chat run follows that run's outcome. run_ids_json is a JSON array of ids.
+	ChatRunsOfRun(ctx context.Context, runID string) ([]int64, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
 	// What a generation run wrote that still exists (B6).

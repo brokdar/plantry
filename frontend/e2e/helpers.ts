@@ -78,6 +78,8 @@ export interface SeedComposedInput {
   reference_portions?: number
   /** Days a cooked batch keeps (1–7); null uses the plan default. */
   keep_days?: number
+  /** Can be frozen (needs `plan.freezing_enabled` to count). */
+  freezable?: boolean
   children?: SeedComposedChild[]
   instructions?: { step_number: number; text: string }[]
   tags?: string[]

@@ -4,8 +4,10 @@ import { useTranslation } from "react-i18next"
 
 import { BatchBadge } from "@/components/batch/BatchBadge"
 import { useBatchCell } from "@/components/batch/batch-highlight"
+import { cellInChange } from "@/lib/assistant/pulse"
 import type { BoardCell } from "@/lib/plan/board"
 import { BATCH_CLASSES, BATCH_HIGHLIGHT_CLASS } from "@/lib/plan/batch-colours"
+import { useLastChange } from "@/lib/stores/assistant-stream"
 import { cn } from "@/lib/utils"
 
 export type PlateCellLayout = "grid" | "list"
@@ -68,6 +70,8 @@ export function PlateCell({
   onFocusCell,
 }: PlateCellProps) {
   const batch = useBatchCell(cell.sessionIds, cell.cookOf)
+  // The cell the assistant's last change touched pulses once (D17).
+  const pulse = cellInChange(cell, useLastChange())
   const editable = dnd && !readOnly
   const { setNodeRef: setDropNode, isOver } = useDroppable({
     id: `cell:${cell.key}`,
@@ -106,6 +110,7 @@ export function PlateCell({
       data-cell-empty={cell.plate ? undefined : ""}
       data-highlighted={batch["data-highlighted"]}
       data-over={isOver && !isDragging ? "" : undefined}
+      data-pulse={pulse ? "" : undefined}
       className={cn(
         "group/cell relative min-w-0 rounded-cell focus-within:z-20",
         BATCH_HIGHLIGHT_CLASS
