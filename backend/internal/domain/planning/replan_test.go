@@ -254,7 +254,7 @@ func TestReplan_Validation(t *testing.T) {
 	q.From = day(tue)
 	_, err := e.svc.PreviewReplan(e.ctx, q)
 	require.ErrorIs(t, err, domain.ErrReplanPast)
-	_, err = e.svc.Replan(e.ctx, planning.ReplanRequest{ReplanQuery: q, UnlockConfirmed: true, Spare: planning.SpareKeep})
+	_, err = e.svc.Replan(e.ctx, planning.ReplanRequest{ReplanQuery: q, Spare: planning.SpareKeep})
 	require.ErrorIs(t, err, domain.ErrReplanPast)
 
 	for name, q := range map[string]planning.ReplanQuery{
