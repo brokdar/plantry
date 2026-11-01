@@ -12,7 +12,7 @@ import (
 )
 
 // presetTools returns the seven preset-related agent tools defined in
-// feature.md §6.8. They replace the legacy apply_template tool with a
+// the Presets spec §6.8 (feature.md, in git history of #12). They replace the legacy apply_template tool with a
 // proper list/get/create/update/delete/apply/copy_week surface.
 func presetTools(svc Services) []Tool {
 	return []Tool{
