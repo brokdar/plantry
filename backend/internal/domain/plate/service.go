@@ -434,7 +434,9 @@ func (s *Service) ClearRange(ctx context.Context, from, to time.Time, slotID int
 // what restores them (the mid-week re-plan, spec §3.5). Each session in keep
 // ends with exactly its portions and frozen portions and survives even
 // without links, so a cooked batch is never deleted; the other sessions
-// follow D11. A missing plate is ErrNotFound and nothing is removed.
+// follow D11. An uncooked session that loses the plate on its cook cell but
+// keeps other links cooks at the earliest of them instead. A missing plate is
+// ErrNotFound and nothing is removed.
 func (s *Service) RemovePlates(ctx context.Context, ids []int64, keep map[int64]SessionPortions) (PlanSnapshot, error) {
 	ids = uniqueIDs(ids)
 	var snap PlanSnapshot
@@ -478,12 +480,49 @@ func (s *Service) RemovePlates(ctx context.Context, ids []int64, keep map[int64]
 				return err
 			}
 		}
+		if err := s.moveOrphanedCooks(ctx, plates, slices.Sorted(maps.Keys(t.before)), order, j); err != nil {
+			return err
+		}
 		return s.commit(ctx, j)
 	})
 	if err != nil {
 		return PlanSnapshot{}, err
 	}
 	return snap, nil
+}
+
+// moveOrphanedCooks moves each surviving, uncooked session of ids whose
+// cook cell held one of the removed plates and holds no link now to its
+// earliest remaining link: that plate eats it fresh, and the batch no longer
+// cooks on a cell nobody eats at.
+func (s *Service) moveOrphanedCooks(ctx context.Context, removed []Plate, ids []int64, order SlotOrder, j *journal) error {
+	for _, id := range ids {
+		sess, err := s.sessions.GetSession(ctx, id)
+		if errors.Is(err, domain.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		cook := sess.CookCell()
+		if sess.CookedAt != nil || !slices.ContainsFunc(removed, func(p Plate) bool { return p.Cell().Equal(cook) }) {
+			continue
+		}
+		links, err := s.sessions.ListLinks(ctx, id)
+		if err != nil {
+			return err
+		}
+		if len(links) == 0 || slices.ContainsFunc(links, func(l Link) bool { return l.Cell.Equal(cook) }) {
+			continue
+		}
+		first := slices.MinFunc(links, func(a, b Link) int { return Compare(a.Cell, b.Cell, order) }).Cell
+		j.touchSession(*sess)
+		sess.CookDate, sess.CookSlotID = first.Date, first.SlotID
+		if err := s.sessions.UpdateSession(ctx, sess); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Range returns all plates in [from, to] inclusive. from must be ≤ to; span

@@ -555,14 +555,19 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		return fail("resolving", err)
 	}
 
-	s.d.Progress.setStage(runID, StageChoosing)
-	prop, err := j.chooser.Choose(ctx, ChooseInput{
-		State: base, Target: j.target, EatersByDate: j.eaters, IncludeNewRecipe: j.includeNew,
-		Avoid: j.avoid, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
-		Stage: func(st Stage) { s.d.Progress.setStage(runID, st) },
-	})
-	if err != nil {
-		return fail("choosing", err)
+	// Without an empty plan cell (a side swap aside) there is nothing to
+	// choose, so no chooser runs: an LLM call would plan nothing at a cost.
+	var prop Proposal
+	if j.side != nil || hasOpenCell(base, j.target) {
+		s.d.Progress.setStage(runID, StageChoosing)
+		prop, err = j.chooser.Choose(ctx, ChooseInput{
+			State: base, Target: j.target, EatersByDate: j.eaters, IncludeNewRecipe: j.includeNew,
+			Avoid: j.avoid, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
+			Stage: func(st Stage) { s.d.Progress.setStage(runID, st) },
+		})
+		if err != nil {
+			return fail("choosing", err)
+		}
 	}
 
 	s.d.Progress.setStage(runID, StageChecking)
@@ -607,6 +612,18 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	}
 	end.ViolationsJSON, end.ScoreJSON = string(vj), string(sj)
 	return end
+}
+
+// hasOpenCell reports whether a target cell is a plan cell without a plate
+// in st: what a chooser fills.
+func hasOpenCell(st State, t Target) bool {
+	x := newIndex(st, t)
+	for _, c := range st.Cells {
+		if c.Mode == availability.ModePlan && x.inTarget(c.Key()) && len(x.byCell[idOf(c.Key())]) == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // RunView is a generation run as GET /api/plan/runs/{id} shows it: the run
