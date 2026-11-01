@@ -27,6 +27,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-wait-loops.js\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
