@@ -140,6 +140,11 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 					ID: call.ToolUseID, Name: call.ToolUseName,
 					Output: errorPayload, IsError: true,
 				}})
+				if change != nil {
+					// A failed call that still changed the plan (a regenerate
+					// whose wait ended) shows its line.
+					send(ctx, out, llm.Event{Type: llm.EventChange, Payload: change.Payload()})
+				}
 				continue
 			}
 

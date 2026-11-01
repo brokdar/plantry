@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
@@ -394,7 +395,9 @@ func toolSetAvailability(svc Services) Tool {
 				if err := svc.Cells.ClearOverride(ctx, d, in.SlotID); err != nil {
 					return nil, ToolEffectNone, err
 				}
-				noteAvailability(ctx, d, in.SlotID, before, in.CellMode, slotKey)
+				if err := noteAvailability(ctx, svc, d, in.SlotID, before, in.CellMode, slotKey); err != nil {
+					return nil, ToolEffectNone, err
+				}
 				return mustJSON(out), ToolEffectNone, nil
 			}
 			mode := availability.Mode(in.CellMode)
@@ -406,22 +409,34 @@ func toolSetAvailability(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			out["removed_plate"] = removed != nil
-			noteAvailability(ctx, d, in.SlotID, before, in.CellMode, slotKey)
+			if err := noteAvailability(ctx, svc, d, in.SlotID, before, in.CellMode, slotKey); err != nil {
+				return nil, ToolEffectNone, err
+			}
 			return mustJSON(out), ToolEffectNone, nil
 		},
 	}
 }
 
 // noteAvailability notes a set_availability change: none, or plan for the
-// modes that let the cell hold a plate again (plan, routine, default).
-func noteAvailability(ctx context.Context, d time.Time, slotID int64, before *availability.Override, mode, slotKey string) {
+// modes that let the cell hold a plate again (plan, routine, default). It
+// reads the override the write left, so undo can tell a newer manual edit.
+func noteAvailability(ctx context.Context, svc Services, d time.Time, slotID int64, before *availability.Override, mode, slotKey string) error {
+	after, err := svc.Cells.Override(ctx, d, slotID)
+	if err != nil {
+		return err
+	}
 	key := "set_availability_plan"
 	if mode == string(availability.ModeNone) {
 		key = "set_availability_none"
 	}
-	noteCell(ctx, d, slotID, before)
+	noteCell(ctx, d, slotID, before, after)
 	noteChange(ctx, key, map[string]any{"date": d.Format(time.DateOnly), "slot": slotKey, "mode": mode})
+	return nil
 }
+
+// regenerateDetachedWait bounds the wait for a run whose caller went away:
+// the generator's own run timeout (3 minutes) plus its save budget.
+const regenerateDetachedWait = 4 * time.Minute
 
 func toolConfirm(svc Services) Tool {
 	schema := json.RawMessage(`{
@@ -599,6 +614,15 @@ func toolRegenerate(svc Services) Tool {
 			noteRun(ctx, id)
 			v, err := svc.Planner.Await(ctx, id)
 			if err != nil {
+				// The caller is gone but the run goes on and rewrites the plan.
+				// Note the change and wait for the run on a ctx that outlives the
+				// caller, so Execute records it (undoable) once the run finished.
+				noteChange(ctx, "regenerate_"+string(sc.Kind), params)
+				wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), regenerateDetachedWait)
+				defer cancel()
+				if _, werr := svc.Planner.Await(wctx, id); werr != nil {
+					slog.ErrorContext(ctx, "ai.change.regenerate wait failed", "run_id", id, "error", werr)
+				}
 				return nil, ToolEffectNone, err
 			}
 			out := regenerateOut{
@@ -610,6 +634,8 @@ func toolRegenerate(svc Services) Tool {
 				return mustJSON(out), ToolEffectNone, nil
 			}
 			if out.Changed, err = changedPlates(ctx, svc, w.Start, w.End, id); err != nil {
+				// The run already rewrote the plan: it is still a change.
+				noteChange(ctx, "regenerate_"+string(sc.Kind), params)
 				return nil, ToolEffectNone, err
 			}
 			params["count"] = len(out.Changed)

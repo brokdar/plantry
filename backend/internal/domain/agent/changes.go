@@ -40,25 +40,34 @@ type Change struct {
 	CellBefore *CellBefore
 	CreatedAt  time.Time
 	UndoneAt   *time.Time
+	// Unrecorded marks a change that was made but could not be saved: it has
+	// no ID, is not undoable and is never stored.
+	Unrecorded bool
 }
 
 // Undoable reports whether the change wrote anything undo can put back.
-func (c Change) Undoable() bool { return c.FirstEventID != nil || c.CellBefore != nil }
+func (c Change) Undoable() bool {
+	return !c.Unrecorded && (c.FirstEventID != nil || c.CellBefore != nil)
+}
 
 // Payload is the change as the chat stream and the conversation carry it.
 func (c Change) Payload() llm.ChangePayload {
 	return llm.ChangePayload{
 		ID: c.ID, RunID: c.RunID, Tool: c.Tool, TextKey: c.TextKey, Params: c.Params,
 		Dates: c.Dates, PlateIDs: c.PlateIDs, SessionIDs: c.SessionIDs, Undoable: c.Undoable(),
+		Recorded: !c.Unrecorded,
 	}
 }
 
 // CellBefore is a cell's availability override before set_availability;
-// Override nil means the cell had none.
+// Override nil means the cell had none. After is the override the call left
+// (nil: none), which undo compares with the current one to see a newer
+// manual edit.
 type CellBefore struct {
 	Date     string        `json:"date"`
 	SlotID   int64         `json:"slot_id"`
 	Override *CellOverride `json:"override"`
+	After    *CellOverride `json:"after"`
 }
 
 // CellOverride is a stored availability override.
@@ -127,13 +136,35 @@ func noteRun(ctx context.Context, runID int64) {
 	n.runIDs = append(n.runIDs, runID)
 }
 
-// noteCell records the cell's override before set_availability writes it.
-func noteCell(ctx context.Context, date time.Time, slotID int64, o *availability.Override) {
-	cb := &CellBefore{Date: date.Format(time.DateOnly), SlotID: slotID}
-	if o != nil {
-		cb.Override = &CellOverride{CellMode: string(o.Mode), PresetID: o.PresetID, Note: o.Note}
+// noteCell records the cell's override before set_availability writes it and
+// the one it left.
+func noteCell(ctx context.Context, date time.Time, slotID int64, before, after *availability.Override) {
+	noteFrom(ctx).cell = &CellBefore{
+		Date: date.Format(time.DateOnly), SlotID: slotID,
+		Override: cellOverride(before), After: cellOverride(after),
 	}
-	noteFrom(ctx).cell = cb
+}
+
+func cellOverride(o *availability.Override) *CellOverride {
+	if o == nil {
+		return nil
+	}
+	return &CellOverride{CellMode: string(o.Mode), PresetID: o.PresetID, Note: o.Note}
+}
+
+// sameOverride reports whether two overrides say the same (nil: none).
+func sameOverride(a, b *CellOverride) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.CellMode == b.CellMode && equalPtr(a.PresetID, b.PresetID) && equalPtr(a.Note, b.Note)
+}
+
+func equalPtr[T comparable](a, b *T) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 // watermark is the last plate event id before a call, or -1 when changes
@@ -150,15 +181,28 @@ func (s *ToolSet) watermark(ctx context.Context, runID int64) int64 {
 	return id
 }
 
+// unrecordedChange is the change line of a call whose change could not be
+// saved: no id, nothing to undo. The call's writes stand.
+func unrecordedChange(runID int64, seq int, tool string, n *changeNote) *Change {
+	c := &Change{
+		RunID: runID, StepSeq: seq, Tool: tool, TextKey: n.textKey, Params: n.params, Unrecorded: true,
+		RunIDs: append([]int64{runID}, n.runIDs...), Dates: []string{}, PlateIDs: []int64{}, SessionIDs: []int64{},
+	}
+	if c.Params == nil {
+		c.Params = map[string]any{}
+	}
+	return c
+}
+
 // recordChange stores the change a tool call noted: the plate events its
-// runs wrote after mark, and what it shows. A failure is logged and yields
-// no change: the call's writes stand either way.
+// runs wrote after mark, and what it shows. A failure is logged at error
+// level and yields an unrecorded change: the call's writes stand either way.
 func (s *ToolSet) recordChange(ctx context.Context, runID int64, seq int, tool string, n *changeNote, mark int64) *Change {
 	runIDs := append([]int64{runID}, n.runIDs...)
 	events, err := s.changes.RunEvents(ctx, mark, math.MaxInt64, runIDs)
 	if err != nil {
-		slog.WarnContext(ctx, "ai.change.events failed", "run_id", runID, "tool", tool, "error", err)
-		return nil
+		slog.ErrorContext(ctx, "ai.change.events failed", "run_id", runID, "tool", tool, "error", err)
+		return unrecordedChange(runID, seq, tool, n)
 	}
 	c := &Change{
 		RunID: runID, StepSeq: seq, Tool: tool, TextKey: n.textKey, Params: n.params,
@@ -183,8 +227,8 @@ func (s *ToolSet) recordChange(ctx context.Context, runID int64, seq int, tool s
 		c.FirstEventID, c.LastEventID = &first, &last
 	}
 	if err := s.changes.CreateChange(ctx, c); err != nil {
-		slog.WarnContext(ctx, "ai.change.create failed", "run_id", runID, "tool", tool, "error", err)
-		return nil
+		slog.ErrorContext(ctx, "ai.change.create failed", "run_id", runID, "tool", tool, "error", err)
+		return unrecordedChange(runID, seq, tool, n)
 	}
 	return c
 }
@@ -210,6 +254,8 @@ func eventRows(events []plate.Event) (plateIDs, sessionIDs []int64) {
 // CellRestorer puts a cell's availability override back
 // (availability.Service).
 type CellRestorer interface {
+	// Override returns the cell's stored override, nil when none.
+	Override(ctx context.Context, date time.Time, slotID int64) (*availability.Override, error)
 	RestoreOverride(ctx context.Context, date time.Time, slotID int64, o *availability.Override) error
 }
 
@@ -237,7 +283,9 @@ func (c *Changes) List(ctx context.Context, conversationID int64) ([]Change, err
 // (plate.Service.Revert) and a set_availability cell gets its override back.
 // It fails with domain.ErrAIChangeUndone when the change was undone and
 // domain.ErrAIChangeStale, writing nothing, when one of its rows has an event
-// the change did not make. It returns the rows it wrote.
+// the change did not make or its cell's override is no longer the one it
+// wrote. A change that wrote nothing (not Undoable) is
+// domain.ErrInvalidInput and stays as it is. It returns the rows it wrote.
 func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 	var rows plate.RowSet
 	err := c.tx.InTx(ctx, func(ctx context.Context) error {
@@ -247,6 +295,14 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 		}
 		if ch.UndoneAt != nil {
 			return fmt.Errorf("%w: change %d", domain.ErrAIChangeUndone, id)
+		}
+		if !ch.Undoable() {
+			return fmt.Errorf("%w: change %d wrote nothing to undo", domain.ErrInvalidInput, id)
+		}
+		if cb := ch.CellBefore; cb != nil {
+			if err := c.checkCell(ctx, id, *cb); err != nil {
+				return err
+			}
 		}
 		if ch.FirstEventID != nil {
 			events, err := c.store.RunEvents(ctx, *ch.FirstEventID-1, *ch.LastEventID, ch.RunIDs)
@@ -292,6 +348,23 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 		rows.SessionIDs = []int64{}
 	}
 	return rows, nil
+}
+
+// checkCell fails with domain.ErrAIChangeStale when the cell's override is
+// not the one the change left (a newer manual edit).
+func (c *Changes) checkCell(ctx context.Context, id int64, cb CellBefore) error {
+	d, err := time.Parse(time.DateOnly, cb.Date)
+	if err != nil {
+		return fmt.Errorf("change cell date: %w", err)
+	}
+	cur, err := c.cells.Override(ctx, d, cb.SlotID)
+	if err != nil {
+		return err
+	}
+	if !sameOverride(cellOverride(cur), cb.After) {
+		return fmt.Errorf("%w: change %d: the cell was edited since", domain.ErrAIChangeStale, id)
+	}
+	return nil
 }
 
 func (c *Changes) restoreCell(ctx context.Context, cb CellBefore) error {

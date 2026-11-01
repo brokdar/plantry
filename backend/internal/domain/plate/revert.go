@@ -17,8 +17,8 @@ import (
 // written back from its before snapshot with its own id, state, run and
 // reason. Nothing is re-derived: D11 does not run, because the snapshots
 // already hold the sizes that belonged together. Revert writes its own
-// events (update, delete, or restore for a row it brings back) as the actor
-// in ctx and returns the plates and sessions it wrote.
+// events, all with action undo so they are not read as user corrections, as
+// the actor in ctx and returns the plates and sessions it wrote.
 //
 // The caller checks that no row was written after events (an undo that is
 // not stale). A session the events created that still has links outside
@@ -28,7 +28,7 @@ func (s *Service) Revert(ctx context.Context, events []Event) (RowSet, error) {
 	var out RowSet
 	err := s.tx.InTx(ctx, func(ctx context.Context) error {
 		j := newJournal()
-		j.created = ActionRestore
+		j.created, j.sessionCreated, j.changed, j.deleted = ActionUndo, ActionUndo, ActionUndo, ActionUndo
 		current, err := s.plates.ListByIDs(ctx, plateIDs)
 		if err != nil {
 			return err

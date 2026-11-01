@@ -67,11 +67,17 @@ func TestAIChanges_ConversationAndUndo(t *testing.T) {
 	assert.Contains(t, first, "undone_at")
 	assert.Equal(t, "2026-11-01T10:05:00Z", conv.Changes[1]["undone_at"])
 
-	// Undo: the shape, then the second undo, an unknown and a bad id.
+	// Undo: a change with nothing to revert is refused; the shape of a cell
+	// change (still as it left the cell), then the second undo, an unknown
+	// and a bad id.
 	w = do(http.MethodPost, "/api/ai/changes/1/undo")
+	assert.Equal(t, http.StatusBadRequest, w.Code, "nothing to undo")
+	mustExecDB(`INSERT INTO ai_changes (id, run_id, step_seq, tool, text_key, params_json, run_ids_json, dates_json, plate_ids_json, session_ids_json, availability_before_json)
+		VALUES (3, 9, 4, 'set_availability', 'set_availability_plan', '{}', '[9]', '[]', '[]', '[]', '{"date":"2026-11-07","slot_id":1,"override":null,"after":null}')`)
+	w = do(http.MethodPost, "/api/ai/changes/3/undo")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.JSONEq(t, `{"plate_ids":[],"session_ids":[]}`, w.Body.String())
-	w = do(http.MethodPost, "/api/ai/changes/1/undo")
+	w = do(http.MethodPost, "/api/ai/changes/3/undo")
 	assert.Equal(t, http.StatusConflict, w.Code)
 	assert.Equal(t, "error.ai.change_undone", messageKey(t, w))
 	w = do(http.MethodPost, "/api/ai/changes/77/undo")
@@ -81,5 +87,6 @@ func TestAIChanges_ConversationAndUndo(t *testing.T) {
 
 	w = do(http.MethodGet, "/api/ai/conversations/5")
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &conv))
-	assert.NotNil(t, conv.Changes[0]["undone_at"])
+	assert.Nil(t, conv.Changes[0]["undone_at"], "the refused undo marks nothing")
+	assert.NotNil(t, conv.Changes[2]["undone_at"])
 }

@@ -142,10 +142,42 @@ func (s *ToolSet) Execute(ctx context.Context, name string, input json.RawMessag
 		result = mustMarshal(map[string]string{"error": err.Error()})
 	}
 	seq := run.ToolStep(ctx, name, input, result, err != nil, time.Since(start))
-	if err != nil || !note.set || mark < 0 {
+	if !note.set {
 		return output, effect, nil, err
 	}
-	return output, effect, s.recordChange(ctx, run.ID(), seq, name, note, mark), nil
+	if mark < 0 {
+		if s.changes != nil && run.ID() != 0 {
+			// The watermark failed (logged there): the write has no change.
+			change := unrecordedChange(run.ID(), seq, name, note)
+			return withNotRecorded(output, err), effect, change, err
+		}
+		return output, effect, nil, err
+	}
+	// A call that failed after writing (regenerate whose caller went away)
+	// notes its change anyway. Record on a ctx that outlives the caller.
+	change := s.recordChange(context.WithoutCancel(ctx), run.ID(), seq, name, note, mark)
+	if change.Unrecorded {
+		output = withNotRecorded(output, err)
+	}
+	return output, effect, change, err
+}
+
+// notRecordedWarning is the key tool results carry when the call's change
+// could not be saved.
+const notRecordedWarning = "change_not_recorded"
+
+// withNotRecorded adds {"warning": "change_not_recorded"} to a successful
+// call's JSON object result.
+func withNotRecorded(output json.RawMessage, err error) json.RawMessage {
+	if err != nil {
+		return output
+	}
+	var m map[string]json.RawMessage
+	if json.Unmarshal(output, &m) != nil || m == nil {
+		return output
+	}
+	m["warning"] = mustMarshal(notRecordedWarning)
+	return mustMarshal(m)
 }
 
 func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, ToolEffect, error) {

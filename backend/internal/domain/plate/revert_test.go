@@ -84,7 +84,7 @@ func TestRevert_DeletedPlateComesBackWithItsStateAndRun(t *testing.T) {
 	assert.Equal(t, sid, *back.Components[0].CookSessionID)
 	assert.InDelta(t, 4, e.session(sid).Portions, 1e-9)
 	assert.Equal(t, sunPlate.ID, e.plateAt(sun, e.dinner).ID)
-	assert.Contains(t, kinds(e.eventsSince(n)), "plate:restore")
+	assert.Contains(t, kinds(e.eventsSince(n)), "plate:undo")
 }
 
 func TestRevert_CreatedPlateAndSessionGo(t *testing.T) {
@@ -100,7 +100,7 @@ func TestRevert_CreatedPlateAndSessionGo(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, e.count("plates"))
 	assert.Equal(t, 0, e.count("cook_sessions"))
-	assert.ElementsMatch(t, []string{"plate:delete", "session:delete"}, kinds(e.eventsSince(n)))
+	assert.ElementsMatch(t, []string{"plate:undo", "session:undo"}, kinds(e.eventsSince(n)))
 }
 
 func TestRevert_CreatedSessionStillEatenFromIsStale(t *testing.T) {

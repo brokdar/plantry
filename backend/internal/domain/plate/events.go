@@ -15,8 +15,10 @@ type Action string
 
 // Actions. Confirm and unlock change a batch closure's state (D3; unaccept
 // logs unlock too), accept confirms a window's drafts and discard deletes
-// them (D4).
+// them (D4). Undo is every write of Revert, the undo of an agent change: it
+// is not a user correction, so corrections and edit counts skip it.
 const (
+	ActionUndo    Action = "undo"
 	ActionCreate  Action = "create"
 	ActionUpdate  Action = "update"
 	ActionDelete  Action = "delete"
@@ -68,6 +70,8 @@ type journal struct {
 	created Action // the action of a created plate: create or restore
 	changed Action // the action of a changed row: update, or a state action
 	deleted Action // the action of a deleted row: delete or discard
+	// sessionCreated is the action of a created session: create, or undo.
+	sessionCreated Action
 
 	plateIDs []int64
 	plates   map[int64]*Plate
@@ -82,7 +86,7 @@ type journal struct {
 
 func newJournal() *journal {
 	return &journal{
-		created: ActionCreate, changed: ActionUpdate, deleted: ActionDelete,
+		created: ActionCreate, sessionCreated: ActionCreate, changed: ActionUpdate, deleted: ActionDelete,
 		plates: map[int64]*Plate{}, sessions: map[int64]*CookSession{},
 	}
 }
@@ -191,7 +195,7 @@ func (s *Service) commit(ctx context.Context, j *journal) error {
 	for _, id := range j.sessionIDs {
 		before, after := j.sessions[id], afterSession[id]
 		e := Event{CookSessionID: &id, Actor: who.Kind, AIRunID: runID, At: at}
-		e.Action = j.action(before == nil, after == nil, ActionCreate)
+		e.Action = j.action(before == nil, after == nil, j.sessionCreated)
 		if e.Action == "" {
 			continue
 		}

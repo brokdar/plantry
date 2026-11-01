@@ -5,9 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"maps"
-	"slices"
-	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -122,20 +120,40 @@ func (r *AIRunRepo) AgentRuns(ctx context.Context, rows plate.RowSet) ([]int64, 
 	return ids, nil
 }
 
-// ChatRuns returns the chat runs that made a change under one of runIDs,
-// ascending.
+// chatRunsSQL is hand-written because sqlc cannot resolve json_each's value
+// column. run_ids_json is a JSON array of ids, matched exactly as integers.
+const chatRunsSQL = `SELECT DISTINCT CAST(c.run_id AS INTEGER) FROM ai_changes c, json_each(c.run_ids_json) j
+WHERE j.value IN (%s) ORDER BY 1`
+
+// ChatRuns returns the chat runs that made a change under one of runIDs (a
+// chat run's regenerate call writes under the generator's own run),
+// ascending, in one query.
 func (r *AIRunRepo) ChatRuns(ctx context.Context, runIDs []int64) ([]int64, error) {
-	seen := map[int64]bool{}
-	for _, id := range runIDs {
-		chats, err := r.queriesFor(ctx).ChatRunsOfRun(ctx, strconv.FormatInt(id, 10))
-		if err != nil {
-			return nil, fmt.Errorf("chat runs of run %d: %w", id, err)
-		}
-		for _, c := range chats {
-			seen[c] = true
-		}
+	if len(runIDs) == 0 {
+		return nil, nil
 	}
-	return slices.Sorted(maps.Keys(seen)), nil
+	args := make([]any, len(runIDs))
+	for i, id := range runIDs {
+		args[i] = id
+	}
+	marks := strings.TrimSuffix(strings.Repeat("?,", len(runIDs)), ",")
+	rows, err := r.dbtx(ctx).QueryContext(ctx, fmt.Sprintf(chatRunsSQL, marks), args...)
+	if err != nil {
+		return nil, fmt.Errorf("chat runs of runs: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan chat run: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("chat runs of runs: %w", err)
+	}
+	return ids, nil
 }
 
 func nullIDs(ids []int64) []sql.NullInt64 {

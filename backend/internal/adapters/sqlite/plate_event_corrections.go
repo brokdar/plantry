@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
@@ -31,6 +32,7 @@ func (r *PlateEventRepo) UserReplacements(ctx context.Context, from, to time.Tim
 		}
 		var before, after plate.SnapshotPlate
 		if json.Unmarshal(rawJSON(row.BeforeJson), &before) != nil || json.Unmarshal(rawJSON(row.AfterJson), &after) != nil {
+			slog.DebugContext(ctx, "plate event snapshot unreadable", "date", row.Date, "slot_id", row.SlotID)
 			continue
 		}
 		removed, added := foodDiff(before, after)

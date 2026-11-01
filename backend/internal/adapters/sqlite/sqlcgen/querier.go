@@ -15,10 +15,6 @@ type Querier interface {
 	// before the plate's first accept or confirm event: a user update or delete,
 	// or an agent update or delete made by another run.
 	AIRunCorrections(ctx context.Context, arg AIRunCorrectionsParams) ([]AIRunCorrectionsRow, error)
-	// D12 per run with ids in [min_id, max_id]: the rows an agent run edited. A
-	// session edit counts once as its session (its linked plates' events carry
-	// cook_session_id and are skipped); every other plate counts as itself.
-	AIRunEdits(ctx context.Context, arg AIRunEditsParams) ([]AIRunEditsRow, error)
 	AddPresetTag(ctx context.Context, arg AddPresetTagParams) error
 	// D11: the agent runs that wrote to the given plates or sessions since the
 	// row's last accept/confirm. A live accept/confirm (no later unlock) is not a
@@ -26,10 +22,6 @@ type Querier interface {
 	// the unlock is the boundary.
 	AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error)
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
-	// The chat runs whose plan-writing calls (ai_changes) wrote under run_id: a
-	// chat run's regenerate call writes under the generator's own run, so the
-	// chat run follows that run's outcome. run_ids_json is a JSON array of ids.
-	ChatRunsOfRun(ctx context.Context, runID string) ([]int64, error)
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
 	// What a generation run wrote that still exists (B6).

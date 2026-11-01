@@ -71,51 +71,6 @@ func (q *Queries) AIRunCorrections(ctx context.Context, arg AIRunCorrectionsPara
 	return items, nil
 }
 
-const aIRunEdits = `-- name: AIRunEdits :many
-SELECT CAST(ai_run_id AS INTEGER) AS run_id,
-       COUNT(DISTINCT CASE WHEN plate_id IS NULL THEN 's' || cook_session_id
-                           WHEN cook_session_id IS NULL THEN 'p' || plate_id END) AS edits
-FROM plate_events
-WHERE actor = 'agent' AND ai_run_id >= ?1 AND ai_run_id <= ?2
-GROUP BY ai_run_id
-`
-
-type AIRunEditsParams struct {
-	MinID sql.NullInt64
-	MaxID sql.NullInt64
-}
-
-type AIRunEditsRow struct {
-	RunID int64
-	Edits int64
-}
-
-// D12 per run with ids in [min_id, max_id]: the rows an agent run edited. A
-// session edit counts once as its session (its linked plates' events carry
-// cook_session_id and are skipped); every other plate counts as itself.
-func (q *Queries) AIRunEdits(ctx context.Context, arg AIRunEditsParams) ([]AIRunEditsRow, error) {
-	rows, err := q.db.QueryContext(ctx, aIRunEdits, arg.MinID, arg.MaxID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AIRunEditsRow{}
-	for rows.Next() {
-		var i AIRunEditsRow
-		if err := rows.Scan(&i.RunID, &i.Edits); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const agentRunsOfRows = `-- name: AgentRunsOfRows :many
 SELECT DISTINCT CAST(e.ai_run_id AS INTEGER) AS run_id FROM plate_events e
 WHERE e.actor = 'agent' AND e.ai_run_id IS NOT NULL
@@ -161,38 +116,6 @@ func (q *Queries) AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams
 		query = strings.Replace(query, "/*SLICE:session_ids*/?", "NULL", 1)
 	}
 	rows, err := q.db.QueryContext(ctx, query, queryParams...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var run_id int64
-		if err := rows.Scan(&run_id); err != nil {
-			return nil, err
-		}
-		items = append(items, run_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const chatRunsOfRun = `-- name: ChatRunsOfRun :many
-SELECT DISTINCT CAST(run_id AS INTEGER) AS run_id FROM ai_changes
-WHERE instr(',' || replace(replace(replace(run_ids_json, '[', ''), ']', ''), ' ', '') || ',', ',' || CAST(?1 AS TEXT) || ',') > 0
-ORDER BY run_id
-`
-
-// The chat runs whose plan-writing calls (ai_changes) wrote under run_id: a
-// chat run's regenerate call writes under the generator's own run, so the
-// chat run follows that run's outcome. run_ids_json is a JSON array of ids.
-func (q *Queries) ChatRunsOfRun(ctx context.Context, runID string) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, chatRunsOfRun, runID)
 	if err != nil {
 		return nil, err
 	}

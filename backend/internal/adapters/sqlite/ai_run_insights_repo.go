@@ -110,19 +110,49 @@ func (r *AIRunRepo) Corrections(ctx context.Context, minID, maxID int64) (map[in
 	return out, nil
 }
 
+// editsSQL is hand-written because sqlc cannot resolve json_each's value
+// column. D12: the rows an agent run edited. A session edit counts once as
+// its session (its linked plates' events carry cook_session_id and are
+// skipped); every other plate counts as itself. A chat run also owns the
+// events of the runs its changes link to (ai_changes.run_ids_json, e.g. the
+// regenerate run it waited for; the generator wrote those) within the
+// change's event range. Args: min, max, min, max.
+const editsSQL = `SELECT run_id, COUNT(DISTINCT k) FROM (
+    SELECT ai_run_id AS run_id,
+           CASE WHEN plate_id IS NULL THEN 's' || cook_session_id
+                WHEN cook_session_id IS NULL THEN 'p' || plate_id END AS k
+    FROM plate_events
+    WHERE actor = 'agent' AND ai_run_id >= ? AND ai_run_id <= ?
+  UNION ALL
+    SELECT c.run_id,
+           CASE WHEN e.plate_id IS NULL THEN 's' || e.cook_session_id
+                WHEN e.cook_session_id IS NULL THEN 'p' || e.plate_id END
+    FROM ai_changes c
+    JOIN json_each(c.run_ids_json) j ON j.value <> c.run_id
+    JOIN plate_events e ON e.ai_run_id = j.value
+         AND e.id >= c.first_event_id AND e.id <= c.last_event_id
+    WHERE c.run_id >= ? AND c.run_id <= ? AND e.actor IN ('generator', 'agent')
+) GROUP BY run_id`
+
 // Edits counts the rows each agent run edited for the runs with ids in
 // [minID, maxID] (one query); runs without agent events are absent.
 func (r *AIRunRepo) Edits(ctx context.Context, minID, maxID int64) (map[int64]int, error) {
-	rows, err := r.queriesFor(ctx).AIRunEdits(ctx, sqlcgen.AIRunEditsParams{
-		MinID: sql.NullInt64{Int64: minID, Valid: true},
-		MaxID: sql.NullInt64{Int64: maxID, Valid: true},
-	})
+	rows, err := r.dbtx(ctx).QueryContext(ctx, editsSQL, minID, maxID, minID, maxID)
 	if err != nil {
 		return nil, fmt.Errorf("ai run edits: %w", err)
 	}
-	out := make(map[int64]int, len(rows))
-	for _, row := range rows {
-		out[row.RunID] = int(row.Edits)
+	defer func() { _ = rows.Close() }()
+	out := map[int64]int{}
+	for rows.Next() {
+		var id int64
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, fmt.Errorf("scan ai run edits: %w", err)
+		}
+		out[id] = n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("ai run edits: %w", err)
 	}
 	return out, nil
 }

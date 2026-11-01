@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -37,7 +38,10 @@ func newPendingUnlocks(now func() time.Time) *pendingUnlocks {
 }
 
 func keyOf(conversationID int64, rows plate.RowSet) unlockKey {
-	return unlockKey{conversationID: conversationID, rows: fmt.Sprint(rows.PlateIDs, rows.SessionIDs)}
+	plates, sessions := slices.Clone(rows.PlateIDs), slices.Clone(rows.SessionIDs)
+	slices.Sort(plates)
+	slices.Sort(sessions)
+	return unlockKey{conversationID: conversationID, rows: fmt.Sprint(plates, sessions)}
 }
 
 // issue records that turn t previewed rows in its conversation.
