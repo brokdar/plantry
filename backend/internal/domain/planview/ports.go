@@ -37,10 +37,10 @@ type FoodReader interface {
 	History(ctx context.Context, ids []int64, today time.Time) (map[int64]food.History, error)
 }
 
-// Nutrition resolves a food's macros: per portion for a composed food, per
-// 100 g for a leaf. *food.NutritionResolver satisfies it.
+// Nutrition resolves foods' macros: per portion for a composed food, per
+// 100 g for a leaf, in one batch. *food.NutritionResolver satisfies it.
 type Nutrition interface {
-	PerPortionDetailed(ctx context.Context, foodID int64) (food.Detailed, error)
+	PerPortionDetailedMany(ctx context.Context, ids []int64) (map[int64]food.Detailed, error)
 }
 
 // Availability resolves cell modes for every date × active slot.
@@ -63,11 +63,11 @@ type Profile interface {
 	Get(ctx context.Context) (*profile.Profile, error)
 }
 
-// Recipes counts composed foods (setup progress) and lists their ids (the
-// recipes the variety rule H8 could pick instead).
+// Recipes counts composed foods (setup progress) and lists the recipes not
+// eaten in [since, today] (those the variety rule H8 could pick instead).
 type Recipes interface {
 	CountComposedFoods(ctx context.Context) (int64, error)
-	ComposedFoodIDs(ctx context.Context) ([]int64, error)
+	UneatenRecipes(ctx context.Context, since, today time.Time) ([]food.RecipeRole, error)
 }
 
 // Diets sets foods' effective diet classes (D28). *food.Service satisfies

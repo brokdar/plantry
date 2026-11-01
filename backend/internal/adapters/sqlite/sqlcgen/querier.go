@@ -99,7 +99,6 @@ type Querier interface {
 	ListAvailabilityDefaults(ctx context.Context) ([]ListAvailabilityDefaultsRow, error)
 	ListAvailabilityOverridesByRange(ctx context.Context, arg ListAvailabilityOverridesByRangeParams) ([]ListAvailabilityOverridesByRangeRow, error)
 	ListChildrenByParents(ctx context.Context, parentIds []int64) ([]ListChildrenByParentsRow, error)
-	ListComposedFoodIDs(ctx context.Context) ([]int64, error)
 	ListConversations(ctx context.Context, arg ListConversationsParams) ([]AiConversation, error)
 	ListCookSessionLinks(ctx context.Context, cookSessionID sql.NullInt64) ([]ListCookSessionLinksRow, error)
 	// Every link of the sessions ListCookSessionsInRange returns.
@@ -136,6 +135,11 @@ type Querier interface {
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
+	// Recipes no confirmed plate dated in [since, today] holds, plates marked
+	// not_eaten aside: FoodHistory's last_eaten is before since, or there is
+	// none. The variety rule H8 counts them (D21). The eaten set is one
+	// uncorrelated scan of the date range (ix_plates_date).
+	ListUneatenRecipes(ctx context.Context, arg ListUneatenRecipesParams) ([]ListUneatenRecipesRow, error)
 	// Deletes up to 500 steps of runs started before the cutoff; the runs,
 	// prompts and tool schemas stay. The repo repeats it until nothing is left,
 	// so no single statement holds the write lock for long.

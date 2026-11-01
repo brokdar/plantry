@@ -3,6 +3,8 @@ package planview
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
@@ -10,7 +12,6 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -66,15 +67,13 @@ func (s *Service) issues(ctx context.Context, in checkInput) ([]planning.Issue, 
 	return out, nil
 }
 
-// checkState builds the planning state of the window from the loaded rows.
-// Foods load in one lookup; when the window holds drafts every recipe is
-// loaded too, so H8 knows how many unrepeated recipes there were to pick.
+// checkState builds the planning state of the window from the loaded rows
+// with the row mappers the context builder uses. The foods the rows name
+// load in one lookup. While the window holds drafts H8 also needs the
+// recipes it could have picked instead: only the uneaten ones load (one
+// query), and their diet classes only when the diet type can rule one out.
 func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State, error) {
-	maxCook, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanMaxCookOccasionsPerDay)
-	if err != nil {
-		return planning.State{}, err
-	}
-	variety, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanVarietyWeeks)
+	set, err := planning.ReadSettings(ctx, s.d.Settings)
 	if err != nil {
 		return planning.State{}, err
 	}
@@ -83,15 +82,11 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 		Cells:    make([]planning.Cell, len(in.cells)),
 		Plates:   make([]planning.Plate, len(in.plates)),
 		Sessions: make([]planning.Session, len(in.sessions)),
-		Settings: planning.Settings{BatchSettings: in.env.batch, MaxCookOccasionsPerDay: maxCook, VarietyWeeks: variety},
-		Profile: planning.Profile{
-			KcalTarget: in.profile.KcalTarget, ProteinPct: in.profile.ProteinPct, FatPct: in.profile.FatPct,
-			CarbsPct: in.profile.CarbsPct, DietType: in.profile.DietType,
-			MeatDaysPerWeekMax: in.profile.MeatDaysPerWeekMax, HouseholdPortions: in.profile.HouseholdPortions,
-		},
+		Settings: set,
+		Profile:  planning.StateProfile(in.profile),
 	}
 	for i, c := range in.cells {
-		st.Cells[i] = planning.Cell{Date: c.Date, SlotID: c.SlotID, Mode: c.Mode, PresetID: c.PresetID}
+		st.Cells[i] = planning.StateCell(c)
 	}
 
 	foods := make(map[int64]*food.Food, len(in.foods))
@@ -108,32 +103,14 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 	drafts := false
 	for i, p := range in.plates {
 		drafts = drafts || p.State == plate.StateDraft
-		pp := planning.Plate{
-			ID: p.ID, Date: p.Date, SlotID: p.SlotID, Eaters: p.Eaters, Confirmed: p.State != plate.StateDraft,
-			Components: make([]planning.Component, len(p.Components)),
-		}
-		for j, pc := range p.Components {
+		for _, pc := range p.Components {
 			need(pc.FoodID)
-			c := planning.Component{FoodID: pc.FoodID, Portions: pc.Portions, Grams: pc.Grams}
-			if pc.CookSessionID != nil {
-				c.SessionID = *pc.CookSessionID
-			}
-			pp.Components[j] = c
 		}
-		st.Plates[i] = pp
+		st.Plates[i] = planning.StatePlate(p)
 	}
 	for i, v := range in.sessions {
 		drafts = drafts || v.State == plate.StateDraft
-		st.Sessions[i] = planning.Session{CookSession: v.CookSession, Confirmed: v.State != plate.StateDraft}
-	}
-	if drafts {
-		ids, err := s.d.Recipes.ComposedFoodIDs(ctx)
-		if err != nil {
-			return planning.State{}, fmt.Errorf("list recipes: %w", err)
-		}
-		for _, id := range ids {
-			need(id)
-		}
+		st.Sessions[i] = planning.StateSession(v.CookSession)
 	}
 	if len(missing) > 0 {
 		found, err := s.d.Foods.LookupByIDs(ctx, missing)
@@ -169,18 +146,57 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 	}
 	st.Foods = make(map[int64]planning.FoodFacts, len(ids))
 	for _, id := range ids {
-		f := foods[id]
-		ff := planning.FoodFacts{
-			ID: id, Name: f.Name, Kind: f.Kind, DietClass: f.DietClass,
-			KeepDays: f.KeepDays, Favorite: f.Favorite,
-			LastEaten: hist[id].LastEaten,
-		}
-		if f.Role != nil {
-			ff.Role = *f.Role
-		}
+		ff := planning.BaseFacts(foods[id])
+		ff.LastEaten = hist[id].LastEaten
 		st.Foods[id] = ff
 	}
+	if drafts && set.VarietyWeeks > 0 {
+		if err := s.addUneatenRecipes(ctx, &st); err != nil {
+			return planning.State{}, err
+		}
+	}
 	return st, nil
+}
+
+// addUneatenRecipes adds the recipes H8 counts as unrepeated that the rows
+// do not name. Only that count reads them: they carry kind, role and, when
+// the diet type can rule one out, the diet class; no history (none was
+// eaten since the variety bound).
+func (s *Service) addUneatenRecipes(ctx context.Context, st *planning.State) error {
+	since := planning.VarietySince(st.Window.Start, st.Settings.VarietyWeeks)
+	rows, err := s.d.Recipes.UneatenRecipes(ctx, since, st.Today)
+	if err != nil {
+		return fmt.Errorf("list uneaten recipes: %w", err)
+	}
+	var ids []int64
+	for _, r := range rows {
+		if _, known := st.Foods[r.ID]; known {
+			continue
+		}
+		ff := planning.FoodFacts{ID: r.ID, Kind: food.KindComposed, ReferencePortions: 1}
+		if r.Role != nil {
+			ff.Role = *r.Role
+		}
+		st.Foods[r.ID] = ff
+		ids = append(ids, r.ID)
+	}
+	if len(ids) == 0 || !planning.DietRestricts(st.Profile.DietType) {
+		return nil
+	}
+	found, err := s.d.Foods.LookupByIDs(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("lookup uneaten recipes: %w", err)
+	}
+	loaded := slices.Collect(maps.Values(found))
+	if err := s.d.Diets.DeriveDiet(ctx, loaded...); err != nil {
+		return fmt.Errorf("diet classes: %w", err)
+	}
+	for _, f := range loaded {
+		ff := st.Foods[f.ID]
+		ff.DietClass = f.DietClass
+		st.Foods[f.ID] = ff
+	}
+	return nil
 }
 
 // draft summarises the draft plates of the window and the draft sessions it

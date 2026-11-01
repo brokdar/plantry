@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// RecipeRole is a recipe's id and role.
+type RecipeRole struct {
+	ID   int64
+	Role *Role
+}
+
 // History is a composed food's eating history relative to a date (D16). It
 // is derived from plates and cook sessions, never stored.
 type History struct {

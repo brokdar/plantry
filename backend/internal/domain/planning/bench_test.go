@@ -173,15 +173,21 @@ func TestBuildAndCheck_Under50ms(t *testing.T) {
 }
 
 // BenchmarkPlanView is GET /api/plan's read model over the AC-11 database
-// while its window holds drafts.
+// while its window holds drafts. A vegetarian profile also derives the
+// uneaten recipes' diet classes (H8).
 func BenchmarkPlanView(b *testing.B) {
 	e := benchDB(b)
 	view := testsvc.PlanView(e.db)
 	start := day(sat)
-	b.ResetTimer()
-	for range b.N {
-		if _, err := view.Plan(e.ctx, &start, day(svcToday)); err != nil {
-			b.Fatal(err)
-		}
+	for _, dietType := range []string{"omnivore", "vegetarian"} {
+		b.Run(dietType, func(b *testing.B) {
+			e.exec(`UPDATE user_profile SET diet_type = ? WHERE id = 1`, dietType)
+			b.ResetTimer()
+			for range b.N {
+				if _, err := view.Plan(e.ctx, &start, day(svcToday)); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }
