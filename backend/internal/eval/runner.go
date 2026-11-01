@@ -73,6 +73,8 @@ const (
 	ExpectKeptConfirmed   = "kept_confirmed"
 	ExpectNoPlate         = "no_plate"
 	ExpectUnchangedBefore = "unchanged_before"
+	ExpectLeftovers       = "leftovers"
+	ExpectNoNewCook       = "no_new_cook"
 	ExpectMinPlates       = "min_plates"
 	ExpectMinRepeats      = "min_repeats"
 	ExpectFrozenSpare     = "frozen_spare"
@@ -158,7 +160,7 @@ func runOnce(ctx context.Context, cfg Config, d *dbs, lib Library, sc Scenario, 
 			rec.Expectations = append(rec.Expectations, Expectation{Name: ExpectNoViolations, Detail: err.Error()})
 			return rec, nil
 		}
-		if err := e.measure(ctx, runID, &rec); err != nil {
+		if err := e.measure(ctx, runID, &rec, sc.Expect.AllowMissingPlate); err != nil {
 			return Record{}, err
 		}
 		// A run with nothing to choose sends no request, and has no prompt
@@ -230,7 +232,7 @@ func (e *env) step(ctx context.Context, sc Scenario, st Step, chooser airun.Choo
 
 // measure fills a record from the measured run: how it ended, its score,
 // violations, plates, tokens and cost.
-func (e *env) measure(ctx context.Context, runID int64, rec *Record) error {
+func (e *env) measure(ctx context.Context, runID int64, rec *Record, allowMissingPlate bool) error {
 	end, ok := e.runs.ends[runID]
 	if !ok {
 		return fmt.Errorf("run %d did not finish", runID)
@@ -263,6 +265,9 @@ func (e *env) measure(ctx context.Context, runID int64, rec *Record) error {
 		rec.CostUSD = airun.Cost(row.Model, row.Provider, row.Tokens, nil)
 	}
 	ok = end.Status == airun.StatusOK && len(rec.Violations) == 0
+	if allowMissingPlate && !ok && end.Status == airun.StatusPartial {
+		ok = !slices.ContainsFunc(rec.Violations, func(is planning.Issue) bool { return is.Code != planning.CodeMissingPlate })
+	}
 	detail := ""
 	if !ok {
 		detail = fmt.Sprintf("status %s %s, %d violations", end.Status, end.ErrorKey, len(rec.Violations))
@@ -394,6 +399,41 @@ func (e *env) expect(sc Scenario, st Step, before, after rows, rec Record) []Exp
 			for _, p := range after.plates {
 				if p.Date == c.Date.Format(time.DateOnly) && p.SlotID == id {
 					ex.OK, ex.Detail = false, fmt.Sprintf("%s %s holds a plate", p.Date, c.Slot)
+				}
+			}
+		}
+		out = append(out, ex)
+	}
+	if len(x.Leftovers) > 0 {
+		ex := Expectation{Name: ExpectLeftovers, OK: true}
+		for _, c := range x.Leftovers {
+			id, _ := e.slot(c.Slot)
+			date := c.Date.Format(time.DateOnly)
+			found := false
+			for _, p := range after.plates {
+				if p.Date != date || p.SlotID != id {
+					continue
+				}
+				for _, comp := range p.Components {
+					if comp.SessionID == nil {
+						continue
+					}
+					_, old := before.sessions[*comp.SessionID]
+					found = found || old
+				}
+			}
+			if !found {
+				ex.OK, ex.Detail = false, fmt.Sprintf("%s %s eats no earlier batch", date, c.Slot)
+			}
+		}
+		out = append(out, ex)
+	}
+	if len(x.NoNewCook) > 0 {
+		ex := Expectation{Name: ExpectNoNewCook, OK: true}
+		for _, d := range x.NoNewCook {
+			for id, s := range after.sessions {
+				if _, old := before.sessions[id]; !old && s.CookDate == d.Format(time.DateOnly) {
+					ex.OK, ex.Detail = false, fmt.Sprintf("a batch is cooked on %s", s.CookDate)
 				}
 			}
 		}

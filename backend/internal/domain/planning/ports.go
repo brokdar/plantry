@@ -92,6 +92,20 @@ type PlateRows interface {
 	ListByDateRange(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
 }
 
+// Replacement is a plate the user changed from some recipes to others.
+type Replacement struct {
+	Date    time.Time
+	SlotID  int64
+	Removed []int64
+	Added   []int64
+}
+
+// Corrections reads the user's recipe swaps on plates dated in [from, to)
+// from the audit trail (bounded, oldest first).
+type Corrections interface {
+	UserReplacements(ctx context.Context, from, to time.Time) ([]Replacement, error)
+}
+
 // SessionRows reads persisted cook sessions (the session repository).
 type SessionRows interface {
 	ListInRange(ctx context.Context, from, to time.Time) ([]plate.CookSession, map[int64][]plate.Link, error)

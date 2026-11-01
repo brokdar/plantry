@@ -153,7 +153,7 @@ Package `domain/planning` turns "plan my week" into a checked draft: context ass
 - **Runner.** A generation is asynchronous: `start` validates, picks the chooser, reserves the window in `planning.Progress` (the in-memory registry; one run per window), creates the `ai_runs` row and runs in a goroutine on a **detached ctx** with a 3 minute timeout (`runTimeout`). A panic ends the run as an error instead of the process. Stages (D35): `resolving`, `choosing`, `checking`, `repairing`, `saving`. `Progress.Running(start)` feeds `running_run_id` on `GET /api/plan`, which is how a reloaded board re-attaches. `Service.Wait` lets shutdown wait for running runs; `Service.Await(ctx, id)` blocks until one run finished (a per-run done channel in `Progress`, closed after the row is finished) and returns ctx's error when ctx ends first; `Deps.Go` lets tests run synchronously. At startup `FailInterruptedRuns` ends `running` rows left by a crash as errors (logs `ai.run.interrupted`). A run with no open `plan` cell skips the chooser (routines are still applied; it ends `ok`, cost null).
 - **Chooser selection.** `Deps.Choosers` maps `airun.ChooserLLM` / `ChooserHeuristic`. A request **without `chooser`** uses the LLM only when a provider resolves (the chooser's `Ready`), else the heuristic. Explicit `llm` without a provider is `503 error.ai.provider_missing`; a provider that cannot be built is `502 error.ai.provider_error`; a reply that never yields a readable plan ends the run `error.ai.invalid_plan`. The e2e backend always has the fake provider, so heuristic e2e requests must pin `chooser: heuristic`.
 - **Heuristic** (`heuristic.go`, run-log version `h2` = `planning.HeuristicVersion`): deterministic, no AI. The first day cooks at its earliest cell; later days cook at dinner and the earlier cells eat leftovers (sessions grow within keep days). Bump the version when it changes what it picks.
-- **LLM chooser** (`llmchooser.go`, `prompt.go`): see AI run log. Prompt version `p1`; bump `PromptVersion` on every prompt change. The repair loop lives inside the chooser (at most 2 repairs, stage `repairing`).
+- **LLM chooser** (`llmchooser.go`, `prompt.go`): see AI run log. Prompt version `p2` (adds the user's recipe swaps of the last 4 weeks, read from `plate_events` by `Corrections`, D21); bump `PromptVersion` on every prompt change. The repair loop lives inside the chooser (at most 2 repairs, stage `repairing`).
 - **Persisting.** Generated plates and sessions are written through `plate.Service` as `draft` with `actor.Generator` and the run's `ai_run_id`. A generator plate linked to a confirmed session is created confirmed, so never delete it in cleanup; count it as kept. `plate.Service.RemoveDrafts`, `DraftClosure` and `PlateClosure` support regenerate.
 
 ### Mid-week re-plan
@@ -170,12 +170,12 @@ See Diet class. Planning uses `domain/diet` (`Classify`, `Compatible`, `Max`) th
 
 ### Offline eval
 
-`internal/eval` and `cmd/plantry-eval` run plan generation offline (spec §8.4): an embedded 30-recipe library (`library.json`) and seven scenarios (`internal/eval/scenarios/*.json`), each run on a fresh in-process database copied from a migrated template, through services wired like `main.go`. A scenario's expectations: `min_plates`, `no_plate`, `kept_confirmed`, `unchanged_before`, `frozen_spare`, `min_repeats`.
+`internal/eval` and `cmd/plantry-eval` run plan generation offline (spec §8.4): an embedded 30-recipe library (`library.json`) and eight scenarios (`internal/eval/scenarios/*.json`), each run on a fresh in-process database copied from a migrated template, through services wired like `main.go`. A scenario's expectations: `min_plates`, `no_plate`, `kept_confirmed`, `unchanged_before`, `frozen_spare`, `min_repeats`.
 
 ```bash
 go run ./cmd/plantry-eval                                   # all scenarios, heuristic chooser, 3 runs each
 go run ./cmd/plantry-eval -scenarios family_daily,away_thu_fri -runs 5
-go run ./cmd/plantry-eval -chooser llm -prompt-version p1   # scripted LLM mode, no network
+go run ./cmd/plantry-eval -chooser llm -prompt-version p2   # scripted LLM mode, no network
 PLANTRY_EVAL_LIVE=1 PLANTRY_AI_PROVIDER=anthropic PLANTRY_AI_API_KEY=... \
   go run ./cmd/plantry-eval -chooser llm -model <model>     # live: real provider, costs money
 go run ./cmd/plantry-eval -compare earlier.jsonl            # per-component diff against an earlier report

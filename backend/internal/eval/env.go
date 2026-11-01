@@ -86,7 +86,7 @@ func newEnv(conn *sql.DB, cfg Config) *env {
 		Builder: planning.NewBuilder(planning.BuilderDeps{
 			Foods: foodSvc, FoodRows: foodRepo, Nutrition: food.NewNutritionResolver(foodRepo), Cells: avail,
 			Plates: plateRepo, Sessions: sessionRepo, Presets: presetRepo, Slots: slotRepo,
-			Settings: settingsSvc, Profile: profileSvc,
+			Settings: settingsSvc, Profile: profileSvc, Corrections: sqlite.NewPlateEventRepo(conn),
 		}),
 		Plates: plateSvc, PlateRows: plateRepo, Sessions: sessionRepo, Cells: avail, Overrides: avail, FoodRows: foodRepo, Settings: settingsSvc,
 		RunLog: e.runs, Runs: runRepo, Tx: tx, Progress: planning.NewProgress(),
@@ -193,11 +193,17 @@ func (e *env) seed(ctx context.Context, sc Scenario, lib Library) error {
 			return err
 		}
 		one := 1.0
-		if _, err := e.plates.Create(ctx, plate.PlateInput{
+		p, err := e.plates.Create(ctx, plate.PlateInput{
 			Date: c.Date, SlotID: c.SlotID,
 			Components: []plate.PlateComponent{{FoodID: fid, Portions: &one}},
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("plate %s %s: %w", ps.Date.Format(time.DateOnly), ps.Slot, err)
+		}
+		if ps.BatchPortions > 0 && p.Components[0].CookSessionID != nil {
+			if _, err := e.plates.SetSessionPortions(ctx, *p.Components[0].CookSessionID, plate.SessionPortions{Portions: ps.BatchPortions}); err != nil {
+				return fmt.Errorf("plate %s %s batch: %w", ps.Date.Format(time.DateOnly), ps.Slot, err)
+			}
 		}
 	}
 	return nil

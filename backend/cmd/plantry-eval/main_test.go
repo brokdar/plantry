@@ -48,7 +48,7 @@ func TestCompareGolden(t *testing.T) {
 		recs, err := eval.ReadJSONL(f)
 		require.NoError(t, f.Close())
 		require.NoError(t, err)
-		require.Len(t, recs, 7)
+		require.Len(t, recs, 9)
 		for _, r := range recs {
 			assert.Equal(t, label, r.PromptVersion)
 			assert.Equal(t, "0123456789ab", r.GitSHA)

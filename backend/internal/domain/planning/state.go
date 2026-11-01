@@ -42,6 +42,9 @@ type State struct {
 	Profile  Profile
 	// History holds the confirmed plates of the 4 weeks before the window.
 	History []HistoryPlate
+	// Corrections are the user's recipe swaps of the 4 weeks before the
+	// window (D21): what the generator proposed and the user replaced.
+	Corrections []Replacement
 }
 
 // Cell is one resolved (date, slot) cell of the window.

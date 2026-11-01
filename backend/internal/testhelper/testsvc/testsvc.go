@@ -95,7 +95,7 @@ func PlanningDeps(db *sql.DB) planning.Deps {
 			Foods: food.NewService(foods), FoodRows: foods, Nutrition: food.NewNutritionResolver(foods),
 			Cells: avail, Plates: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db),
 			Presets: sqlite.NewPresetRepo(db), Slots: sqlite.NewSlotRepo(db), Settings: set,
-			Profile: profile.NewService(sqlite.NewProfileRepo(db)),
+			Profile: profile.NewService(sqlite.NewProfileRepo(db)), Corrections: sqlite.NewPlateEventRepo(db),
 		}),
 		Plates: plates, PlateRows: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db), Cells: avail, Overrides: avail, FoodRows: foods, Settings: set,
 		Tx: sqlite.NewTxRunner(db), Progress: planning.NewProgress(),

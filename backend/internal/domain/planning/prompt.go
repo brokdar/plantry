@@ -16,7 +16,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p1"
+const PromptVersion = "p2"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -108,6 +108,7 @@ func RenderPrompt(in ChooseInput) string {
 	writeCells(&head, x)
 	writeSessions(&head, x)
 	writeHistory(&tail, s)
+	writeCorrections(&tail, s)
 	writeTask(&tail, in)
 
 	cands := candidates(in)
@@ -570,6 +571,48 @@ func writeHistory(b *strings.Builder, s State) {
 			names[i] = foodName(s, id)
 		}
 		fmt.Fprintf(b, "%s | %s | %s\n", p.Date.Format(time.DateOnly), slotName(s, p.SlotID), strings.Join(names, " + "))
+	}
+}
+
+// maxCorrectionLines bounds the corrections section.
+const maxCorrectionLines = 20
+
+// writeCorrections lists the recipes the user swapped out of plates in the
+// last 4 weeks (the newest first), so the plan does not propose them again.
+func writeCorrections(b *strings.Builder, s State) {
+	var lines []string
+	for _, c := range slices.Backward(s.Corrections) {
+		if len(lines) == maxCorrectionLines {
+			break
+		}
+		var removed, added []string
+		for _, id := range c.Removed {
+			if _, ok := s.Foods[id]; ok {
+				removed = append(removed, foodName(s, id))
+			}
+		}
+		for _, id := range c.Added {
+			if _, ok := s.Foods[id]; ok {
+				added = append(added, foodName(s, id))
+			}
+		}
+		if len(removed) == 0 {
+			continue
+		}
+		to := "something else"
+		if len(added) > 0 {
+			to = strings.Join(added, " + ")
+		}
+		lines = append(lines, fmt.Sprintf("%s -> %s (%s %s, %s)", strings.Join(removed, " + "), to,
+			c.Date.Weekday().String()[:3], slotName(s, c.SlotID), c.Date.Format(time.DateOnly)))
+	}
+	if len(lines) == 0 {
+		return
+	}
+	b.WriteString("\nThe user replaced these planned recipes in the last 4 weeks (planned -> chosen instead); do not propose the planned ones for the same kind of meal again:\n")
+	for _, l := range lines {
+		b.WriteString(l)
+		b.WriteByte('\n')
 	}
 }
 

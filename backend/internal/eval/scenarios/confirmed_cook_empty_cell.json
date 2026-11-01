@@ -1,0 +1,29 @@
+{
+  "name": "confirmed_cook_empty_cell",
+  "description": "The ac5-rewalk S-1 repro: the only open cell is Wednesday dinner, while Wednesday lunch holds a confirmed cook. The plan must not cook a second batch that day (H2): the dinner eats leftovers or stays empty.",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
+    "plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "false"
+  },
+  "profile": {"diet_type": "omnivore", "household_portions": 1, "kcal_target": 2200},
+  "slots": ["breakfast", "lunch", "dinner"],
+  "availability": {"defaults": [
+    {"weekdays": [0, 1, 3, 4, 5, 6], "slot": "breakfast", "mode": "none"},
+    {"weekdays": [0, 1, 3, 4, 5, 6], "slot": "lunch", "mode": "none"},
+    {"weekdays": [0, 1, 3, 4, 5, 6], "slot": "dinner", "mode": "none"},
+    {"weekdays": [2], "slot": "breakfast", "mode": "none"}
+  ]},
+  "plates": [
+    {"date": "2026-11-11", "slot": "lunch", "recipe": "Spaghetti Bolognese", "batch_portions": 2}
+  ],
+  "steps": [
+    {"action": "generate"}
+  ],
+  "expect": {
+    "kept_confirmed": true, "min_plates": 1,
+    "leftovers": [{"date": "2026-11-11", "slot": "dinner"}],
+    "no_new_cook": ["2026-11-11"]
+  }
+}
