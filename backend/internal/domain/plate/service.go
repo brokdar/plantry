@@ -430,6 +430,62 @@ func (s *Service) ClearRange(ctx context.Context, from, to time.Time, slotID int
 	return snap, nil
 }
 
+// RemovePlates deletes the plates of ids in one unit of work and returns
+// what restores them (the mid-week re-plan, spec §3.5). Each session in keep
+// ends with exactly its portions and frozen portions and survives even
+// without links, so a cooked batch is never deleted; the other sessions
+// follow D11. A missing plate is ErrNotFound and nothing is removed.
+func (s *Service) RemovePlates(ctx context.Context, ids []int64, keep map[int64]SessionPortions) (PlanSnapshot, error) {
+	ids = uniqueIDs(ids)
+	var snap PlanSnapshot
+	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		plates, err := s.plates.ListByIDs(ctx, ids)
+		if err != nil {
+			return err
+		}
+		if len(plates) != len(ids) {
+			return fmt.Errorf("%w: a plate is gone", domain.ErrNotFound)
+		}
+		order, err := s.slotOrder(ctx)
+		if err != nil {
+			return err
+		}
+		sortPlates(plates, order)
+		pinned := make(map[int64]bool, len(keep))
+		for id := range keep {
+			pinned[id] = true
+		}
+		j := newJournal()
+		t := newTracker(j)
+		if snap, err = s.remove(ctx, plates, allComponents, false, &refAlloc{}, t, pinned, j); err != nil {
+			return err
+		}
+		t.ids = slices.DeleteFunc(t.ids, func(id int64) bool { return pinned[id] })
+		if err := s.settle(ctx, t); err != nil {
+			return err
+		}
+		for id, p := range keep {
+			sess, err := s.sessions.GetSession(ctx, id)
+			if err != nil {
+				return err
+			}
+			if sess.Portions == p.Portions && sess.FrozenPortions == p.FrozenPortions {
+				continue
+			}
+			j.touchSession(*sess)
+			sess.Portions, sess.FrozenPortions = p.Portions, p.FrozenPortions
+			if err := s.sessions.UpdateSession(ctx, sess); err != nil {
+				return err
+			}
+		}
+		return s.commit(ctx, j)
+	})
+	if err != nil {
+		return PlanSnapshot{}, err
+	}
+	return snap, nil
+}
+
 // Range returns all plates in [from, to] inclusive. from must be ≤ to; span
 // must be ≤ 366 days.
 func (s *Service) Range(ctx context.Context, from, to time.Time) ([]Plate, error) {

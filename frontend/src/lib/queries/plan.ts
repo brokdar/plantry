@@ -24,6 +24,7 @@ import {
   restorePlan,
   unacceptPlan,
   type PlanCell,
+  type ReplanCell,
   type ReplanInput,
 } from "@/lib/api/plan"
 import {
@@ -392,10 +393,15 @@ export function useDiscard() {
 
 /** What re-planning [from, to] would touch. `enabled` false while the
  *  sheet is closed. */
-export function useReplanPreview(from: string, to: string, enabled = true) {
+export function useReplanPreview(
+  from: string,
+  to: string,
+  noneCells: ReplanCell[] = [],
+  enabled = true
+) {
   return useQuery({
-    queryKey: planKeys.replanPreview(from, to),
-    queryFn: () => getReplanPreview(from, to),
+    queryKey: planKeys.replanPreview(from, to, noneCells),
+    queryFn: () => getReplanPreview(from, to, noneCells),
     enabled,
   })
 }

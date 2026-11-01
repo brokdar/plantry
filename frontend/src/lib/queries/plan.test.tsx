@@ -522,18 +522,23 @@ describe("re-plan", () => {
     regenerate: true,
   }
 
-  it("useReplanPreview fetches the range", async () => {
+  it("useReplanPreview fetches the range with the asked No-plate cells", async () => {
     vi.mocked(getReplanPreview).mockResolvedValue(mockReplanPreview)
+    const cells = [{ date: "2026-11-05", slot_id: 3 }]
     const { result } = renderHook(
-      () => useReplanPreview("2026-11-04", "2026-11-06"),
+      () => useReplanPreview("2026-11-04", "2026-11-06", cells),
       { wrapper: createHookWrapper() }
     )
     await waitFor(() => expect(result.current.data).toEqual(mockReplanPreview))
-    expect(getReplanPreview).toHaveBeenCalledWith("2026-11-04", "2026-11-06")
+    expect(getReplanPreview).toHaveBeenCalledWith(
+      "2026-11-04",
+      "2026-11-06",
+      cells
+    )
   })
 
   it("useReplanPreview waits while disabled", () => {
-    renderHook(() => useReplanPreview("2026-11-04", "2026-11-06", false), {
+    renderHook(() => useReplanPreview("2026-11-04", "2026-11-06", [], false), {
       wrapper: createHookWrapper(),
     })
     expect(getReplanPreview).not.toHaveBeenCalled()

@@ -85,6 +85,11 @@ var (
 	ErrInvalidScope      = errors.New("invalid generation scope")
 	ErrNotEnoughRecipes  = errors.New("not enough recipes to plan")
 
+	// Mid-week re-plan (Phase 3 B8): confirmed plates in the No-plate cells
+	// need unlock_confirmed, and a re-plan starts today at the earliest.
+	ErrConfirmedAffected = errors.New("the re-plan removes confirmed plates")
+	ErrReplanPast        = errors.New("a re-plan cannot start in the past")
+
 	// Store sections (Phase 2 D18).
 	ErrInvalidShopSection  = errors.New("unknown store section")
 	ErrShopSectionLeafOnly = errors.New("store sections apply to leaf foods only")
@@ -154,6 +159,8 @@ var messageKeys = []struct {
 	{ErrScopeConfirmed, "error.plan.scope_confirmed"},
 	{ErrInvalidScope, "error.plan.invalid_scope"},
 	{ErrNotEnoughRecipes, "error.plan.not_enough_recipes"},
+	{ErrConfirmedAffected, "error.plan.confirmed_affected"},
+	{ErrReplanPast, "error.plan.replan_past"},
 }
 
 // MessageKey returns the i18n message key of the first sentinel err wraps,

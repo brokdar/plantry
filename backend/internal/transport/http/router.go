@@ -150,6 +150,8 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Post("/generate", h.PlanGenerate.Generate)
 					r.Post("/regenerate", h.PlanGenerate.Regenerate)
 					r.Get("/runs/{id}", h.PlanGenerate.Run)
+					r.Get("/replan/preview", h.PlanGenerate.ReplanPreview)
+					r.Post("/replan", h.PlanGenerate.Replan)
 				}
 			})
 		}

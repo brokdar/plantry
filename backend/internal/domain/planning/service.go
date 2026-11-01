@@ -40,12 +40,14 @@ const (
 )
 
 // Scope names a regenerate's target: Date for day, PlateID for plate,
-// ComponentID for side.
+// ComponentID for side. From and To, when set, bound empty_cells to the
+// cells dated in [From, To] (the mid-week re-plan, B8).
 type Scope struct {
 	Kind        ScopeKind
 	Date        time.Time
 	PlateID     int64
 	ComponentID int64
+	From, To    time.Time
 }
 
 // Request starts a generation of the window that starts on Start.
@@ -73,6 +75,7 @@ type Deps struct {
 	Settings   SettingsReader
 	RunLog     RunLog
 	Runs       Runs
+	Overrides  Overrides
 	Tx         domain.Transactor
 	Progress   *Progress
 	Choosers   map[airun.Chooser]Chooser
@@ -319,7 +322,8 @@ func (s *Service) resolve(ctx context.Context, w window.Window, today time.Time,
 		case ScopeEmptyCells:
 			cellsOf = func(c availability.Cell) bool {
 				_, taken := occupied[idOf(plate.CellKey{Date: c.Date, SlotID: c.SlotID})]
-				return !taken && c.Mode != availability.ModeNone
+				inRange := (sc.From.IsZero() || !c.Date.Before(dateOnly(sc.From))) && (sc.To.IsZero() || !c.Date.After(dateOnly(sc.To)))
+				return !taken && inRange && c.Mode != availability.ModeNone
 			}
 		default:
 			return fmt.Errorf("%w: kind %q", domain.ErrInvalidScope, sc.Kind)
@@ -454,6 +458,8 @@ type scopeRecord struct {
 	Date             string             `json:"date,omitempty"`
 	PlateID          int64              `json:"plate_id,omitempty"`
 	ComponentID      int64              `json:"component_id,omitempty"`
+	From             string             `json:"from,omitempty"`
+	To               string             `json:"to,omitempty"`
 	PlateIDs         []int64            `json:"plate_ids"`
 	SessionIDs       []int64            `json:"session_ids"`
 	KeptConfirmed    int                `json:"kept_confirmed"`
@@ -469,6 +475,12 @@ func (j job) record() scopeRecord {
 	}
 	if j.scope.Kind == ScopeDay {
 		r.Date = j.scope.Date.Format(time.DateOnly)
+	}
+	if !j.scope.From.IsZero() {
+		r.From = j.scope.From.Format(time.DateOnly)
+	}
+	if !j.scope.To.IsZero() {
+		r.To = j.scope.To.Format(time.DateOnly)
 	}
 	return r
 }

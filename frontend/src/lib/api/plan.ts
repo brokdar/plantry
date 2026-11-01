@@ -189,8 +189,15 @@ export function discardPlan(
 
 // ── Mid-week re-plan (§3.2) ───────────────────────────────────────────
 
+/** A (date, slot) cell of the re-plan. */
+export interface ReplanCell {
+  date: string
+  slot_id: number
+}
+
 export interface ReplanPreview {
-  none_cells: { date: string; slot_id: number }[]
+  /** The No-plate cells (already, or asked for) that hold plates. */
+  none_cells: ReplanCell[]
   confirmed_affected: {
     plate_id: number
     date: string
@@ -208,6 +215,8 @@ export interface ReplanPreview {
 export interface ReplanInput {
   from: string
   to: string
+  /** Cells to mark No plate in the same step (their plates go too). */
+  none_cells?: ReplanCell[]
   unlock_confirmed: boolean
   spare: "freeze" | "keep"
   regenerate: boolean
@@ -219,12 +228,16 @@ export interface ReplanResponse extends RemovedResponse {
   run_id: number | null
 }
 
-/** GET /api/plan/replan/preview?from&to&today. */
+/** GET /api/plan/replan/preview?from&to&none=date:slot…&today: `noneCells`
+ *  are previewed as No plate on top of the cells that already are. */
 export function getReplanPreview(
   from: string,
-  to: string
+  to: string,
+  noneCells: ReplanCell[] = []
 ): Promise<ReplanPreview> {
-  const qs = new URLSearchParams({ from, to, today: todayISO() })
+  const qs = new URLSearchParams({ from, to })
+  for (const c of noneCells) qs.append("none", `${c.date}:${c.slot_id}`)
+  qs.set("today", todayISO())
   return apiFetch(`/plan/replan/preview?${qs}`)
 }
 

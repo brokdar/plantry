@@ -107,7 +107,14 @@ type PlateService interface {
 	DraftClosure(ctx context.Context, from, to time.Time) (plate.RowSet, []plate.Plate, error)
 	PlateClosure(ctx context.Context, plateID int64) (plate.RowSet, []plate.Plate, error)
 	RemoveDrafts(ctx context.Context, rows plate.RowSet) (plate.PlanSnapshot, error)
+	RemovePlates(ctx context.Context, ids []int64, keep map[int64]plate.SessionPortions) (plate.PlanSnapshot, error)
 	Apply(ctx context.Context, snap plate.PlanSnapshot, opts plate.ApplyOptions) (*plate.ApplyResult, error)
+}
+
+// Overrides writes cell availability overrides: the re-plan marks the
+// cells it is asked to as No plate.
+type Overrides interface {
+	SetOverride(ctx context.Context, in availability.OverrideInput) (availability.Cell, *plate.PlanSnapshot, error)
 }
 
 // Presets reads the presets bound to routine cells.
