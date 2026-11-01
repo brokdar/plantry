@@ -285,7 +285,7 @@ func (c *Changes) List(ctx context.Context, conversationID int64) ([]Change, err
 // domain.ErrAIChangeStale, writing nothing, when one of its rows has an event
 // the change did not make or its cell's override is no longer the one it
 // wrote. A change that wrote nothing (not Undoable) is
-// domain.ErrInvalidInput and stays as it is. It returns the rows it wrote.
+// domain.ErrAIChangeNotUndoable and stays as it is. It returns the rows it wrote.
 func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 	var rows plate.RowSet
 	err := c.tx.InTx(ctx, func(ctx context.Context) error {
@@ -297,7 +297,7 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 			return fmt.Errorf("%w: change %d", domain.ErrAIChangeUndone, id)
 		}
 		if !ch.Undoable() {
-			return fmt.Errorf("%w: change %d wrote nothing to undo", domain.ErrInvalidInput, id)
+			return fmt.Errorf("%w: change %d wrote nothing to undo", domain.ErrAIChangeNotUndoable, id)
 		}
 		if cb := ch.CellBefore; cb != nil {
 			if err := c.checkCell(ctx, id, *cb); err != nil {

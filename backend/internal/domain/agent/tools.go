@@ -127,9 +127,13 @@ func (s *ToolSet) Describe() []llm.Tool {
 // handler. Schema violations surface as domain.ErrInvalidInput so the model
 // sees a structured tool_result and can retry with corrected arguments.
 // Each call is recorded as a tool_call step of the AI run in ctx, if any, and
-// its plan changes are made as the agent of that run (D20). A successful
-// plan-writing call of a run is recorded as a change (D13), which Execute
-// returns; nil for any other call.
+// its plan changes are made as the agent of that run (D20). A plan-writing
+// call of a run is recorded as a change (D13), which Execute returns; nil for
+// any other call. A failed call can record one too (a regenerate whose caller
+// went away while its run rewrote the plan), returned together with the
+// error. A successful call's result object carries "change_id" (recorded) or
+// "warning": "change_not_recorded"; the loop adds the same to a failed
+// call's result through withChange.
 func (s *ToolSet) Execute(ctx context.Context, name string, input json.RawMessage) (json.RawMessage, ToolEffect, *Change, error) {
 	start := time.Now()
 	run := airun.FromContext(ctx)
@@ -149,34 +153,37 @@ func (s *ToolSet) Execute(ctx context.Context, name string, input json.RawMessag
 		if s.changes != nil && run.ID() != 0 {
 			// The watermark failed (logged there): the write has no change.
 			change := unrecordedChange(run.ID(), seq, name, note)
-			return withNotRecorded(output, err), effect, change, err
+			return withChange(output, change), effect, change, err
 		}
 		return output, effect, nil, err
 	}
 	// A call that failed after writing (regenerate whose caller went away)
 	// notes its change anyway. Record on a ctx that outlives the caller.
 	change := s.recordChange(context.WithoutCancel(ctx), run.ID(), seq, name, note, mark)
-	if change.Unrecorded {
-		output = withNotRecorded(output, err)
-	}
-	return output, effect, change, err
+	return withChange(output, change), effect, change, err
 }
 
 // notRecordedWarning is the key tool results carry when the call's change
 // could not be saved.
 const notRecordedWarning = "change_not_recorded"
 
-// withNotRecorded adds {"warning": "change_not_recorded"} to a successful
-// call's JSON object result.
-func withNotRecorded(output json.RawMessage, err error) json.RawMessage {
-	if err != nil {
+// withChange adds the call's change to a JSON object result: "change_id" when
+// it was recorded, {"warning": "change_not_recorded"} when it was made but
+// not saved. The frontend matches persisted changes to tool results by
+// change_id. Anything else (no change, no object) is returned as it was.
+func withChange(output json.RawMessage, c *Change) json.RawMessage {
+	if c == nil {
 		return output
 	}
 	var m map[string]json.RawMessage
 	if json.Unmarshal(output, &m) != nil || m == nil {
 		return output
 	}
-	m["warning"] = mustMarshal(notRecordedWarning)
+	if c.Unrecorded {
+		m["warning"] = mustMarshal(notRecordedWarning)
+	} else {
+		m["change_id"] = mustMarshal(c.ID)
+	}
 	return mustMarshal(m)
 }
 

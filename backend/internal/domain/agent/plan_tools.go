@@ -614,14 +614,17 @@ func toolRegenerate(svc Services) Tool {
 			noteRun(ctx, id)
 			v, err := svc.Planner.Await(ctx, id)
 			if err != nil {
-				// The caller is gone but the run goes on and rewrites the plan.
-				// Note the change and wait for the run on a ctx that outlives the
-				// caller, so Execute records it (undoable) once the run finished.
-				noteChange(ctx, "regenerate_"+string(sc.Kind), params)
-				wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), regenerateDetachedWait)
-				defer cancel()
-				if _, werr := svc.Planner.Await(wctx, id); werr != nil {
-					slog.ErrorContext(ctx, "ai.change.regenerate wait failed", "run_id", id, "error", werr)
+				if ctx.Err() != nil {
+					// The caller is gone but the run goes on and rewrites the
+					// plan. Note the change and wait for the run on a ctx that
+					// outlives the caller, so Execute records it (undoable) once
+					// the run finished. A failed or unknown run changed nothing.
+					noteChange(ctx, "regenerate_"+string(sc.Kind), params)
+					wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), regenerateDetachedWait)
+					defer cancel()
+					if _, werr := svc.Planner.Await(wctx, id); werr != nil {
+						slog.ErrorContext(ctx, "ai.change.regenerate wait failed", "run_id", id, "error", werr)
+					}
 				}
 				return nil, ToolEffectNone, err
 			}

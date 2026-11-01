@@ -138,7 +138,7 @@ func TestChange_UndoNothingToRevert(t *testing.T) {
 	require.False(t, empty.Undoable())
 
 	_, err := e.changes.Undo(context.Background(), empty.ID)
-	require.ErrorIs(t, err, domain.ErrInvalidInput)
+	require.ErrorIs(t, err, domain.ErrAIChangeNotUndoable)
 	var undone *string
 	require.NoError(t, e.db.QueryRow(`SELECT undone_at FROM ai_changes WHERE id = ?`, empty.ID).Scan(&undone))
 	assert.Nil(t, undone, "not marked undone")

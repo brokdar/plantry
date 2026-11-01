@@ -39,6 +39,8 @@ var (
 	// change was undone already (Phase 4 D13).
 	ErrAIChangeStale  = errors.New("the change was edited afterwards")
 	ErrAIChangeUndone = errors.New("the change was undone already")
+	// ErrAIChangeNotUndoable: the change wrote nothing undo can put back.
+	ErrAIChangeNotUndoable = errors.New("the change has nothing to undo")
 
 	// Plate feedback errors.
 	ErrInvalidFeedbackStatus = errors.New("invalid feedback status")
@@ -153,6 +155,7 @@ var messageKeys = []struct {
 	{ErrAIUnlockNeedsUser, "error.ai.unlock_needs_user"},
 	{ErrAIChangeStale, "error.ai.change_stale"},
 	{ErrAIChangeUndone, "error.ai.change_undone"},
+	{ErrAIChangeNotUndoable, "error.ai.change_not_undoable"},
 	{ErrInvalidFeedbackStatus, "error.feedback.invalid_status"},
 	{ErrImportBodyTooLarge, "error.import.body_too_large"},
 	{ErrImportNotHTML, "error.import.not_html"},

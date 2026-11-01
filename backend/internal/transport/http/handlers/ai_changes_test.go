@@ -71,7 +71,8 @@ func TestAIChanges_ConversationAndUndo(t *testing.T) {
 	// change (still as it left the cell), then the second undo, an unknown
 	// and a bad id.
 	w = do(http.MethodPost, "/api/ai/changes/1/undo")
-	assert.Equal(t, http.StatusBadRequest, w.Code, "nothing to undo")
+	assert.Equal(t, http.StatusConflict, w.Code, "nothing to undo")
+	assert.Equal(t, "error.ai.change_not_undoable", messageKey(t, w))
 	mustExecDB(`INSERT INTO ai_changes (id, run_id, step_seq, tool, text_key, params_json, run_ids_json, dates_json, plate_ids_json, session_ids_json, availability_before_json)
 		VALUES (3, 9, 4, 'set_availability', 'set_availability_plan', '{}', '[9]', '[]', '[]', '[]', '{"date":"2026-11-07","slot_id":1,"override":null,"after":null}')`)
 	w = do(http.MethodPost, "/api/ai/changes/3/undo")
