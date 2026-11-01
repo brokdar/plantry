@@ -400,6 +400,40 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     ).not.toBeInTheDocument()
   })
 
+  test("a change that could not be saved says so and has no Undo", () => {
+    stubQueries({ ...oneChange })
+    act(() => {
+      assistantStream.setConversation(1)
+      assistantStream.addChange(
+        mockChange({ id: 0, recorded: false, undoable: false })
+      )
+    })
+    renderPanel()
+    const line = screen.getByTestId("assistant-change")
+    expect(line).toHaveTextContent("Chili: 6 portions")
+    expect(screen.getByTestId("assistant-change-unrecorded")).toHaveTextContent(
+      "Couldn't be saved, undo not possible"
+    )
+    expect(
+      screen.queryByTestId("assistant-change-undo")
+    ).not.toBeInTheDocument()
+  })
+
+  test("a change with nothing to undo ends in 'Nothing to undo'", () => {
+    stubQueries({ ...oneChange, changes: [live()] })
+    act(() => {
+      assistantStream.setConversation(1)
+      assistantStream.setLineState(5, "nothing_to_undo")
+    })
+    renderPanel()
+    expect(screen.getByTestId("assistant-change-nothing")).toHaveTextContent(
+      "Nothing to undo"
+    )
+    expect(
+      screen.queryByTestId("assistant-change-undo")
+    ).not.toBeInTheDocument()
+  })
+
   test("a change line has Undo that undoes that change", async () => {
     const { undo } = stubQueries({ ...oneChange, changes: [live()] })
     const user = userEvent.setup()

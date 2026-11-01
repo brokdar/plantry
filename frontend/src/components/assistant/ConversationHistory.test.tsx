@@ -62,6 +62,18 @@ describe("ConversationHistory", () => {
     expect(row).toHaveTextContent("Jan 1")
   })
 
+  test("reads the conversation titles only while the popover is open", async () => {
+    stubConversations([{ id: 7, created_at: "2024-01-01T12:00:00Z" }])
+    renderWithRouter(<ConversationHistory />)
+    const lastEnabled = () =>
+      vi.mocked(useConversationTitles).mock.calls.at(-1)?.[1]
+    await screen.findByRole("button", { name: /Open history/ })
+    expect(lastEnabled()).toBe(false)
+    await userEvent.click(screen.getByRole("button", { name: /Open history/ }))
+    await screen.findByTestId("assistant-history-item-7")
+    expect(lastEnabled()).toBe(true)
+  })
+
   test("selecting a conversation sets it active", async () => {
     stubConversations([
       { id: 7, title: "planning Tuesday", created_at: "2024-01-01T12:00:00Z" },

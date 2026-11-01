@@ -46,6 +46,22 @@ export function ChangeLine({ change, state, onUndo }: ChangeLineProps) {
           {t("assistant.stale")}
         </span>
       )}
+      {state === "nothing_to_undo" && (
+        <span
+          data-testid="assistant-change-nothing"
+          className="max-w-[45%] text-right text-caption text-ink-muted"
+        >
+          {t("assistant.nothing_to_undo")}
+        </span>
+      )}
+      {!change.recorded && (
+        <span
+          data-testid="assistant-change-unrecorded"
+          className="max-w-[45%] text-right text-caption text-ink"
+        >
+          {t("assistant.not_recorded")}
+        </span>
+      )}
       {(state === null || state === "undoing") && change.undoable && (
         <Button
           type="button"

@@ -1120,6 +1120,8 @@
     "undoing": "Macht rückgängig…",
     "undone": "Rückgängig gemacht",
     "stale": "Inzwischen geändert, Rückgängig ist nicht möglich.",
+    "nothing_to_undo": "Nichts rückgängig zu machen.",
+    "not_recorded": "Konnte nicht gespeichert werden, Rückgängig ist nicht möglich.",
     "failed": "Das hat nicht geklappt. Es wurde nichts geändert.",
     "unlock": {
       "title": "Diese Teller sind bestätigt",

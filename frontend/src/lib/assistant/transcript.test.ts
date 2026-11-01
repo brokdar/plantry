@@ -181,6 +181,95 @@ describe("buildTranscript", () => {
     expect(turns[0].failures).toEqual([{ id: "r1", tool: "regenerate" }])
   })
 
+  describe("change_id", () => {
+    const call = (id: string, tool: string) => ({
+      type: "tool_use",
+      tool_use_id: id,
+      tool_use_name: tool,
+    })
+    const result = (id: string, content: unknown, isError = false) => ({
+      type: "tool_result",
+      tool_result_id: id,
+      tool_result_is_error: isError,
+      tool_result_content: content,
+    })
+
+    it("gives a change to the call whose result names it, whatever the tool", () => {
+      const { turns, rest } = buildTranscript(
+        [
+          msg(2, "assistant", [call("a", "set_availability")]),
+          msg(3, "tool", [result("a", { change_id: 9 })]),
+          msg(4, "assistant", [call("b", "set_availability")]),
+          msg(5, "tool", [result("b", { change_id: 8 })]),
+        ],
+        [change(8, "set_availability"), change(9, "set_availability")]
+      )
+      expect(
+        turns.map((t) => [t.message.id, t.changes.map((c) => c.id)])
+      ).toEqual([
+        [2, [9]],
+        [4, [8]],
+      ])
+      expect(rest).toEqual([])
+    })
+
+    it("reads change_id from JSON text too", () => {
+      const { turns } = buildTranscript(
+        [
+          msg(2, "assistant", [call("a", "x")]),
+          msg(3, "tool", [result("a", JSON.stringify({ change_id: 4 }))]),
+        ],
+        [change(4, "unrelated_tool")]
+      )
+      expect(turns[0].changes.map((c) => c.id)).toEqual([4])
+    })
+
+    it("shows the change of a failed call next to its failure line", () => {
+      const { turns, rest } = buildTranscript(
+        [
+          msg(2, "assistant", [call("r", "regenerate")]),
+          msg(3, "tool", [result("r", { change_id: 7 }, true)]),
+        ],
+        [change(7, "regenerate_side")]
+      )
+      expect(turns[0].failures).toEqual([{ id: "r", tool: "regenerate" }])
+      expect(turns[0].changes.map((c) => c.id)).toEqual([7])
+      expect(rest).toEqual([])
+    })
+
+    it("does not let name matching take a change another call names", () => {
+      const { turns, rest } = buildTranscript(
+        [
+          msg(2, "assistant", [call("old", "unlock"), call("new", "unlock")]),
+          msg(3, "tool", [result("new", { change_id: 3 })]),
+        ],
+        [change(3, "unlock")]
+      )
+      expect(turns[0].changes.map((c) => c.id)).toEqual([3])
+      expect(rest).toEqual([])
+    })
+
+    it("keeps a change whose call is missing for the end", () => {
+      const { rest } = buildTranscript(
+        [msg(3, "tool", [result("gone", { change_id: 3 })])],
+        [change(3, "unlock")]
+      )
+      expect(rest.map((c) => c.id)).toEqual([3])
+    })
+
+    it("a call whose change was not recorded takes no other change", () => {
+      const { turns, rest } = buildTranscript(
+        [
+          msg(2, "assistant", [call("a", "unlock")]),
+          msg(3, "tool", [result("a", { warning: "change_not_recorded" })]),
+        ],
+        [change(9, "unlock")]
+      )
+      expect(turns).toEqual([])
+      expect(rest.map((c) => c.id)).toEqual([9])
+    })
+  })
+
   describe("pendingUnlock", () => {
     const preview = [
       msg(2, "assistant", [

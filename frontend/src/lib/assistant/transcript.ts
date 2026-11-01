@@ -1,6 +1,7 @@
 import type {
   ConversationChange,
   ConversationMessage,
+  ToolResultChange,
   UnlockRequestPayload,
 } from "@/lib/domain/assistantEvents"
 
@@ -59,6 +60,7 @@ function parsedResult(content: unknown): Record<string, unknown> | null {
 }
 
 const PREVIEW = "needs_user_confirmation"
+const NOT_RECORDED = "change_not_recorded"
 
 /** Whether a tool result is a failure: an error, or a run (regenerate) that
  *  ended in neither ok nor partial. An unlock preview is neither. */
@@ -74,7 +76,8 @@ export function toolFailed(isError: boolean, content: unknown): boolean {
 }
 
 /** A change's tool is its call's name, or the call's name plus the kind it
- *  acted on (`regenerate` makes `regenerate_side`). */
+ *  acted on (`regenerate` makes `regenerate_side`). Only the fallback for
+ *  results that carry no `change_id`. */
 function sameTool(change: string, call: string | undefined): boolean {
   return (
     call !== undefined && (change === call || change.startsWith(call + "_"))
@@ -92,16 +95,19 @@ function previewRows(b: Block): UnlockRequestPayload | null {
 
 /**
  * The persisted conversation as the panel shows it: text turns, each
- * followed by the change lines its tool calls made. A change carries its
- * tool name but not its position, so changes (ascending id) are matched to
- * the successful tool calls in order by tool name.
+ * followed by the change lines its tool calls made. A tool result names the
+ * change its call made (`change_id`), success or error alike; that is how
+ * a change finds its call. Results without a `change_id` (stored before
+ * the backend wrote it) fall back to matching the remaining changes
+ * (ascending id) to the calls in order by tool name.
  */
 export function buildTranscript(
   messages: ConversationMessage[],
   changes: ConversationChange[]
 ): Transcript {
-  // Calls that made no change: failed ones, an unlock's preview and a
-  // regenerate that did not finish ok or partial.
+  // Per call: the change its result names, whether it failed, and whether
+  // it can have made a change the result does not name.
+  const changeOf = new Map<string, number>()
   const noChange = new Set<string>()
   const failed = new Set<string>()
   let pendingUnlock: UnlockRequestPayload | null = null
@@ -109,17 +115,31 @@ export function buildTranscript(
     if (m.role === "user") pendingUnlock = null
     for (const b of blocksOf(m)) {
       if (b.type !== "tool_result" || !b.tool_result_id) continue
+      const result = parsedResult(b.tool_result_content) as
+        | (Record<string, unknown> & ToolResultChange)
+        | null
+      const changeId = result?.change_id
+      if (typeof changeId === "number") changeOf.set(b.tool_result_id, changeId)
       const preview = previewRows(b)
       if (preview) {
         noChange.add(b.tool_result_id)
         pendingUnlock = preview
-      } else if (toolFailed(!!b.tool_result_is_error, b.tool_result_content)) {
-        noChange.add(b.tool_result_id)
-        failed.add(b.tool_result_id)
+        continue
       }
+      if (toolFailed(!!b.tool_result_is_error, b.tool_result_content)) {
+        failed.add(b.tool_result_id)
+        noChange.add(b.tool_result_id)
+      }
+      // A change that was made but not saved has no change to show.
+      if (result?.warning === NOT_RECORDED) noChange.add(b.tool_result_id)
     }
   }
-  const queue = [...changes].sort((a, b) => a.id - b.id)
+  const byId = new Map(changes.map((c) => [c.id, c]))
+  const claimed = new Set(changeOf.values())
+  const queue = [...changes]
+    .filter((c) => !claimed.has(c.id))
+    .sort((a, b) => a.id - b.id)
+  const placed = new Set<number>()
   const turns: TranscriptTurn[] = []
   for (const m of messages) {
     if (m.role === "tool") continue
@@ -137,9 +157,14 @@ export function buildTranscript(
         const id = b.tool_use_id ?? ""
         if (failed.has(id)) {
           failures.push({ id, tool: b.tool_use_name ?? "" })
+        }
+        const named = byId.get(changeOf.get(id) ?? -1)
+        if (named) {
+          own.push(named)
+          placed.add(named.id)
           continue
         }
-        if (noChange.has(id)) continue
+        if (noChange.has(id) || changeOf.has(id)) continue
         const at = queue.findIndex((c) => sameTool(c.tool, b.tool_use_name))
         if (at >= 0) own.push(...queue.splice(at, 1))
       }
@@ -147,6 +172,11 @@ export function buildTranscript(
     if (text === "" && own.length === 0 && failures.length === 0) continue
     turns.push({ message: m, text, changes: own, failures })
   }
+  // Named by a result whose call is not in the conversation: shown last.
+  for (const c of changes) {
+    if (claimed.has(c.id) && !placed.has(c.id)) queue.push(c)
+  }
+  queue.sort((a, b) => a.id - b.id)
   return { turns, rest: queue, pendingUnlock }
 }
 

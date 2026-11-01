@@ -28,7 +28,10 @@ export function ConversationHistory() {
   const setActive = assistantStream.setConversation
 
   const items = data?.items ?? []
-  const titles = useConversationTitles(items.slice(0, 20).map((c) => c.id))
+  const titles = useConversationTitles(
+    items.slice(0, 20).map((c) => c.id),
+    open
+  )
 
   function handleSelect(id: number) {
     // Another conversation's unlock card, lines and failures do not carry over.

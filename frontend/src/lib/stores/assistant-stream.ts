@@ -10,8 +10,9 @@ import type { ToolFailure } from "../assistant/transcript"
 import type { Change, UnlockRequestPayload } from "../domain/assistantEvents"
 
 /** State of one change line: `undoing` while the request runs, `undone` once
- *  reverted, `stale` when later edits make the revert unsafe. */
-export type ChangeLineState = "undoing" | "undone" | "stale"
+ *  reverted, `stale` when later edits make the revert unsafe, `nothing_to_undo`
+ *  when the change altered nothing. */
+export type ChangeLineState = "undoing" | "undone" | "stale" | "nothing_to_undo"
 
 export interface AssistantStreamState {
   text: string
@@ -76,7 +77,8 @@ export const assistantStream = {
     set({ status })
   },
   addChange(change: Change) {
-    if (state.changes.some((c) => c.id === change.id)) return
+    // Unrecorded changes all have id 0: each one is its own line.
+    if (change.recorded && state.changes.some((c) => c.id === change.id)) return
     set({ changes: [...state.changes, change] })
   },
   addFailure(failure: ToolFailure) {

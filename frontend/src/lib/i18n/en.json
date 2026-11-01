@@ -1120,6 +1120,8 @@
     "undoing": "Undoing…",
     "undone": "Undone",
     "stale": "Changed since, so undo is not possible.",
+    "nothing_to_undo": "Nothing to undo.",
+    "not_recorded": "Couldn't be saved, undo not possible.",
     "failed": "That did not work. Nothing was changed.",
     "unlock": {
       "title": "These plates are confirmed",

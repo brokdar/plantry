@@ -68,7 +68,11 @@ export function AssistantPanel({
   // A reload with the panel open (`?assistant=1`) picks the conversation up
   // where it was: the most recently updated one. Done once; opening the
   // panel later, or "New conversation", starts empty.
-  const { data: conversations } = useConversations()
+  // The list is only read while the panel is open and no conversation is
+  // active yet.
+  const { data: conversations } = useConversations(
+    open && activeConversationId === null
+  )
   const restored = useRef(!open)
   useEffect(() => {
     if (restored.current || !conversations) return

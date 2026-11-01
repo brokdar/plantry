@@ -46,8 +46,17 @@ export interface ToolExecEndPayload {
 export interface ToolResultPayload {
   id: string
   name: string
+  /** A JSON object result carries `change_id` (see ToolResultChange) when the
+   *  call made a recorded change, success or error alike. */
   output: unknown
   is_error: boolean
+}
+/** What a tool result's JSON object adds when the call made a change. */
+export interface ToolResultChange {
+  /** The id of the recorded change the call made. */
+  change_id?: number
+  /** `change_not_recorded`: the change was made but could not be saved. */
+  warning?: string
 }
 /** One applied agent write: a display line plus what undo needs (Phase 4 §3.1).
  *  `params` carry display names and dates, never ids only. */
@@ -61,6 +70,8 @@ export interface Change {
   plate_ids: number[]
   session_ids: number[]
   undoable: boolean
+  /** false: the change was made but not saved (`id` 0, not undoable). */
+  recorded: boolean
 }
 export type ChangePayload = Change
 export interface UnlockRequestRow {

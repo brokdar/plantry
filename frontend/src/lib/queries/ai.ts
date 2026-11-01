@@ -25,11 +25,12 @@ import { toastError } from "@/lib/toast"
 import { aiKeys } from "./keys"
 import { invalidatePlanViews } from "./plan"
 
-export function useConversations() {
+export function useConversations(enabled = true) {
   return useQuery({
     queryKey: aiKeys.conversations(),
     queryFn: () => listConversations(),
     staleTime: 15_000,
+    enabled,
   })
 }
 
@@ -42,13 +43,18 @@ export function useConversation(id: number | null) {
 }
 
 /** A short title per conversation: its first user message, truncated. The
- *  list endpoint carries no title, so each detail is read (and cached). */
-export function useConversationTitles(ids: number[]): Map<number, string> {
+ *  list endpoint carries no title, so each detail is read (and cached) while
+ *  `enabled`; otherwise only what is cached shows. */
+export function useConversationTitles(
+  ids: number[],
+  enabled: boolean
+): Map<number, string> {
   const results = useQueries({
     queries: ids.map((id) => ({
       queryKey: aiKeys.conversation(id),
       queryFn: () => getConversation(id),
       staleTime: 60_000,
+      enabled,
     })),
   })
   const titles = new Map<number, string>()
@@ -117,11 +123,12 @@ export function useAssistantStream() {
         assistantStream.setStatus(null)
         if (controllerRef.current === ac) controllerRef.current = null
       }
-
       // The buffer is not reset here: the last turn's tool calls and change
       // lines stay visible until the next run starts.
-      await qc.invalidateQueries({ queryKey: aiKeys.all })
     },
+    // Also after an error or abort: the turn may have been stored, and a
+    // conversation left stale would bring back an answered unlock preview.
+    onSettled: () => qc.invalidateQueries({ queryKey: aiKeys.all }),
   })
 
   return {
@@ -132,7 +139,8 @@ export function useAssistantStream() {
 }
 
 /** Reverts one change. Maps the line state: 409 `change_stale` -> `stale`,
- *  409 `change_undone` -> `undone`; other errors toast. */
+ *  409 `change_undone` -> `undone`, 409 `change_not_undoable` ->
+ *  `nothing_to_undo`; other errors toast. */
 export function useUndoChange() {
   const qc = useQueryClient()
   const { t } = useTranslation()
@@ -145,6 +153,10 @@ export function useUndoChange() {
         if (err instanceof ApiError && err.status === 409) {
           if (err.messageKey === "error.ai.change_stale") {
             assistantStream.setLineState(id, "stale")
+            return null
+          }
+          if (err.messageKey === "error.ai.change_not_undoable") {
+            assistantStream.setLineState(id, "nothing_to_undo")
             return null
           }
           if (err.messageKey === "error.ai.change_undone") {

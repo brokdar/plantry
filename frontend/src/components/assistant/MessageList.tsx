@@ -91,8 +91,13 @@ export function MessageList({
   const failures = (list: ToolFailure[]) =>
     list.map((f) => <FailureLine key={f.id} />)
   const lines = (changes: Change[]) =>
-    changes.map((c) => (
-      <ChangeLine key={c.id} change={c} state={lineState(c)} onUndo={onUndo} />
+    changes.map((c, i) => (
+      <ChangeLine
+        key={c.recorded ? c.id : `unrecorded-${i}`}
+        change={c}
+        state={lineState(c)}
+        onUndo={onUndo}
+      />
     ))
   return (
     <>

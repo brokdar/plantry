@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -31,6 +31,26 @@ describe("Composer", () => {
     await user.type(input, "hello")
     await user.keyboard("{Control>}{Enter}{/Control}")
     expect(onSubmit).toHaveBeenCalledWith("hello")
+  })
+
+  it("submits on cmd+enter", async () => {
+    const onSubmit = vi.fn()
+    const user = userEvent.setup()
+    render(<Composer streaming={false} onSubmit={onSubmit} onAbort={vi.fn()} />)
+    await user.type(screen.getByTestId("assistant-composer-input"), "hello")
+    await user.keyboard("{Meta>}{Enter}{/Meta}")
+    expect(onSubmit).toHaveBeenCalledWith("hello")
+  })
+
+  it("does not send on the Enter that confirms an IME composition", () => {
+    const onSubmit = vi.fn()
+    render(<Composer streaming={false} onSubmit={onSubmit} onAbort={vi.fn()} />)
+    const input = screen.getByTestId("assistant-composer-input")
+    fireEvent.change(input, { target: { value: "こんにちは" } })
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true })
+    expect(onSubmit).not.toHaveBeenCalled()
+    fireEvent.keyDown(input, { key: "Enter", isComposing: false })
+    expect(onSubmit).toHaveBeenCalledWith("こんにちは")
   })
 
   it("sends on Enter and keeps Shift+Enter as a new line", async () => {
