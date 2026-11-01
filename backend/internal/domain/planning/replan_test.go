@@ -254,7 +254,7 @@ func TestReplan_Validation(t *testing.T) {
 	q.From = day(tue)
 	_, err := e.svc.PreviewReplan(e.ctx, q)
 	require.ErrorIs(t, err, domain.ErrReplanPast)
-	_, err = e.svc.Replan(e.ctx, planning.ReplanRequest{ReplanQuery: q, Spare: planning.SpareKeep})
+	_, err = e.svc.Replan(e.ctx, planning.ReplanRequest{ReplanQuery: q, UnlockConfirmed: true, Spare: planning.SpareKeep})
 	require.ErrorIs(t, err, domain.ErrReplanPast)
 
 	for name, q := range map[string]planning.ReplanQuery{
@@ -379,4 +379,56 @@ func TestReplan_RunThatDoesNotStartKeepsTheRemoval(t *testing.T) {
 	req.Today = day(replanDay)
 	_, err = e.svc.Generate(e.ctx, req)
 	assert.NoError(t, err, "the window is free again")
+}
+
+// orphanEnv is a batch cooked Thu lunch and eaten again Fri lunch; the
+// re-plan from Wed marks Thu lunch No plate.
+func orphanEnv(t *testing.T) (*replanEnv, *plate.Plate, planning.ReplanQuery) {
+	t.Helper()
+	e := &replanEnv{svcEnv: newSvcEnv(t)}
+	cook := e.userPlate(thu, e.lunch, e.mains[4])
+	_, err := e.plates.AddLeftovers(e.ctx, *cook.Components[0].CookSessionID, []plate.CellKey{ck(fri, e.lunch)})
+	require.NoError(t, err)
+	return e, cook, planning.ReplanQuery{From: day(wed), To: day(fri), Today: day(wed), NoneCells: []plate.CellKey{ck(thu, e.lunch)}}
+}
+
+// A batch that loses its cook plate but keeps a later plate cooks there
+// instead of on the No-plate day: Fri lunch now eats it fresh, and the batch
+// shrinks to it (or, freezing off, cannot freeze its spare).
+func TestReplan_MovesAnOrphanedCookToItsFirstPlate(t *testing.T) {
+	for _, spare := range []planning.SpareMode{planning.SpareKeep, planning.SpareFreeze} {
+		t.Run(string(spare), func(t *testing.T) {
+			e, cook, q := orphanEnv(t)
+			sid := *cook.Components[0].CookSessionID
+
+			pv, err := e.svc.PreviewReplan(e.ctx, q)
+			require.NoError(t, err)
+			assert.Equal(t, []planning.Spare{{SessionID: sid, FoodName: "Main 05", Portions: 1}}, pv.Spare)
+
+			_, err = e.svc.Replan(e.ctx, planning.ReplanRequest{ReplanQuery: q, UnlockConfirmed: true, Spare: spare})
+
+			require.NoError(t, err)
+			assert.True(t, e.plateGone(cook.ID))
+			v := e.session(sid)
+			assert.True(t, ck(fri, e.lunch).Equal(v.CookCell()), "cooks where it is still eaten, not on the No-plate day: %v", v.CookCell())
+			assert.InDelta(t, 1, v.Portions, 1e-9)
+			assert.Zero(t, v.FrozenPortions)
+			require.Len(t, v.Links, 1)
+			assert.Equal(t, plate.KindFresh, v.Links[0].Kind)
+			assert.Empty(t, v.Warnings)
+		})
+	}
+}
+
+// A cooked batch keeps its cook cell even when its cook plate goes.
+func TestReplan_KeepsACookedBatchsCookCell(t *testing.T) {
+	e, cook, q := orphanEnv(t)
+	sid := *cook.Components[0].CookSessionID
+	_, err := e.plates.SetCooked(e.ctx, sid, true)
+	require.NoError(t, err)
+
+	_, err = e.svc.Replan(e.ctx, planning.ReplanRequest{ReplanQuery: q, UnlockConfirmed: true, Spare: planning.SpareKeep})
+
+	require.NoError(t, err)
+	assert.True(t, ck(thu, e.lunch).Equal(e.session(sid).CookCell()))
 }

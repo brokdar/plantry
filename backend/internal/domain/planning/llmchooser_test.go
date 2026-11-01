@@ -581,3 +581,35 @@ func TestGenerateWeekFixture(t *testing.T) {
 	e2 := newLLMEnv(t)
 	assert.Equal(t, "error.ai.provider_error", e2.run(e2.gen(failing.Turns...)).ErrorKey)
 }
+
+// A regenerate with no empty plan cell to fill makes no LLM call: the run
+// ends ok, with only the routine plates when the target has routine cells.
+func TestLLMChooser_NothingToPlanCallsNoLLM(t *testing.T) {
+	for name, tc := range map[string]struct {
+		none   []int64
+		plates int
+	}{
+		"routine cells only": {plates: 1},
+		"no cells":           {none: []int64{0}, plates: 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := newLLMEnv(t)
+			e.none(fri, e.lunch)
+			e.none(fri, e.dinner)
+			if tc.none != nil {
+				e.none(fri, e.breakfast)
+			}
+
+			id := e.regenerate(planning.Scope{Kind: planning.ScopeEmptyCells, From: day(fri), To: day(fri)})
+
+			r := e.run(id)
+			assert.Equal(t, "ok", r.Status, r.ErrorKey)
+			assert.Equal(t, "llm", r.Chooser)
+			assert.Zero(t, r.LLMSteps)
+			assert.Empty(t, e.client.Requests())
+			plates, sessions := e.rows(id)
+			assert.Equal(t, tc.plates, plates)
+			assert.Equal(t, tc.plates, sessions)
+		})
+	}
+}
