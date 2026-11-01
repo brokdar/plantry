@@ -10,12 +10,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { useAISettings, useChatStream, useConversation } from "@/lib/queries/ai"
 import {
-  chatStreamStore,
-  useChatStream as useChatStreamStore,
-} from "@/lib/stores/chat-stream"
-import { useChatUI } from "@/lib/stores/chat-ui"
+  useAISettings,
+  useAssistantStream,
+  useConversation,
+} from "@/lib/queries/ai"
+import {
+  assistantStream,
+  useAssistantStreamState,
+} from "@/lib/stores/assistant-stream"
 
 import { ChatComposer } from "./ChatComposer"
 import { ChatMessage, messageToText } from "./ChatMessage"
@@ -23,21 +26,21 @@ import { ConversationHistory } from "./ConversationHistory"
 import { ToolCallBlock } from "./ToolCallBlock"
 
 interface ChatPanelProps {
-  range: { from: string; to: string }
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** Start of the window the board shows. */
+  start: string
 }
 
-export function ChatPanel({ range }: ChatPanelProps) {
+export function ChatPanel({ open, onOpenChange, start }: ChatPanelProps) {
   const { t } = useTranslation()
   const { data: settings } = useAISettings()
-  const open = useChatUI((s) => s.open)
-  const setOpen = useChatUI((s) => s.setOpen)
-  const activeConversationId = useChatUI((s) => s.activeConversationId)
-  const setActiveConversation = useChatUI((s) => s.setActiveConversation)
+  const chatStream = useAssistantStream()
+  const stream = useAssistantStreamState()
+  const activeConversationId = stream.conversationId
   const { data: conversation } = useConversation(activeConversationId)
-  const chatStream = useChatStream()
-  const stream = useChatStreamStore()
 
-  // Once a stream completes, useChatStream has refetched the conversation, so
+  // Once a stream completes, useAssistantStream has refetched the conversation, so
   // the final reply is already in persistedTurns. Keep the buffered text only
   // while streaming, or after a failed/aborted stream that may not have been
   // persisted.
@@ -53,11 +56,11 @@ export function ChatPanel({ range }: ChatPanelProps) {
     try {
       await chatStream.mutateAsync({
         conversationId: activeConversationId ?? undefined,
-        range,
+        start,
         message: text,
       })
-      // The `conversation_ready` event captured by useChatStream already
-      // stored the server-assigned id in the chat-ui store, so subsequent
+      // The `conversation_ready` event captured by useAssistantStream already
+      // stored the server-assigned id in the assistant-stream store, so subsequent
       // submits will reuse this conversation.
     } catch {
       // Errors surfaced as `error` events are already reflected in the
@@ -67,12 +70,12 @@ export function ChatPanel({ range }: ChatPanelProps) {
 
   function handleNewConversation() {
     if (chatStream.isStreaming) chatStream.abort()
-    setActiveConversation(null)
-    chatStreamStore.reset()
+    assistantStream.setConversation(null)
+    assistantStream.reset()
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col sm:max-w-md">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">

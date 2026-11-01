@@ -3,12 +3,13 @@
 // (D25).
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { mockRemovedBatch } from "@/test/fixtures"
+import { mockConversationWithChanges, mockRemovedBatch } from "@/test/fixtures"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn().mockResolvedValue({}) }))
 vi.mock("@/lib/dates", () => ({ todayISO: () => "2026-10-30" }))
 
 import { apiFetch } from "./client"
+import { getConversation, postChatStream, undoChange } from "./ai"
 import { deleteFeedback, putFeedback } from "./feedback"
 import {
   getFood,
@@ -464,6 +465,19 @@ const cases: Case[] = [
     method: "GET",
     path: "/ai/insights?from=2026-10-01&to=2026-10-31&bucket=week",
   },
+  // Assistant (Phase 4 §3.1)
+  {
+    name: "getConversation (with changes)",
+    call: () => getConversation(7),
+    method: "GET",
+    path: "/ai/conversations/7",
+  },
+  {
+    name: "undoChange",
+    call: () => undoChange(5),
+    method: "POST",
+    path: "/ai/changes/5/undo",
+  },
   {
     name: "getPrice",
     call: () => getPrice("claude-sonnet-4-5"),
@@ -471,6 +485,57 @@ const cases: Case[] = [
     path: "/ai/prices?model=claude-sonnet-4-5",
   },
 ]
+
+describe("assistant shapes (Phase 4 F1-AC1)", () => {
+  it("the chat body carries start and no from/to", async () => {
+    const sse =
+      'event: done\ndata: {"stop_reason":"end_turn","iteration_count":1}\n\n'
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(sse, { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+    const types: string[] = []
+    for await (const e of postChatStream(
+      {
+        conversation_id: 7,
+        message: "hi",
+        today: "2026-10-30",
+        start: "2026-11-03",
+      },
+      new AbortController().signal
+    ))
+      types.push(e.type)
+    vi.unstubAllGlobals()
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe("/api/ai/chat")
+    expect(JSON.parse(init.body as string)).toEqual({
+      conversation_id: 7,
+      message: "hi",
+      today: "2026-10-30",
+      start: "2026-11-03",
+    })
+    expect(types).toEqual(["done"])
+  })
+
+  it("a conversation carries its changes with undone_at", () => {
+    const c = mockConversationWithChanges()
+    expect(c.changes.map((x) => x.undone_at === null)).toEqual([true, false])
+    expect(Object.keys(c.changes[0]).sort()).toEqual(
+      [
+        "dates",
+        "id",
+        "params",
+        "plate_ids",
+        "run_id",
+        "session_ids",
+        "text_key",
+        "tool",
+        "undoable",
+        "undone_at",
+      ].sort()
+    )
+  })
+})
 
 describe("API contract (§3)", () => {
   beforeEach(() => vi.mocked(apiFetch).mockClear())

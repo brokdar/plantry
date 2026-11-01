@@ -1,3 +1,4 @@
+import type { Change, ConversationDetail } from "@/lib/domain/assistantEvents"
 import type { AvailabilityDefault } from "@/lib/api/availability"
 import type { ComposedFood, LeafFood, ScaledRecipe } from "@/lib/api/foods"
 import type { PlanRun, PlanRunStatus, RunStage } from "@/lib/api/generation"
@@ -1109,4 +1110,49 @@ export const mockPriceInfo: PriceInfo = {
   price: { in: 3, out: 15, cache_read: 0.3, cache_write: 3.75 },
   source: "builtin",
   as_of: "2026-10-31",
+}
+
+/** One applied agent write (SSE `change` payload, Phase 4 §3.1). */
+export function mockChange(overrides: Partial<Change> = {}): Change {
+  return {
+    id: 5,
+    run_id: 31,
+    tool: "set_session_portions",
+    text_key: "set_session_portions",
+    params: { name: "Chili", portions: 6 },
+    dates: ["2026-11-03"],
+    plate_ids: [12],
+    session_ids: [4],
+    undoable: true,
+    ...overrides,
+  }
+}
+
+/** GET /api/ai/conversations/7 with one live and one undone change. */
+export function mockConversationWithChanges(): ConversationDetail {
+  return {
+    id: 7,
+    title: "Plan the week",
+    created_at: "2026-11-01T09:00:00Z",
+    updated_at: "2026-11-01T09:05:00Z",
+    messages: [
+      {
+        id: 1,
+        role: "user",
+        content: [{ type: "text", text: "Cook chili on Tuesday" }],
+        created_at: "2026-11-01T09:00:00Z",
+      },
+    ],
+    changes: [
+      { ...mockChange(), undone_at: null },
+      {
+        ...mockChange({
+          id: 6,
+          tool: "set_availability",
+          text_key: "set_availability_none",
+        }),
+        undone_at: "2026-11-01T09:04:00Z",
+      },
+    ],
+  }
 }

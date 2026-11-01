@@ -1,7 +1,7 @@
 import { Check, Loader2, Wrench, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import type { ToolCallState } from "@/lib/stores/chat-stream"
+import type { ToolCallState } from "@/lib/stores/assistant-stream"
 import { cn } from "@/lib/utils"
 
 interface ToolCallBlockProps {

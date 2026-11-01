@@ -10,7 +10,7 @@ vi.mock("@/lib/queries/ai", () => ({
 }))
 
 import { useConversations, useDeleteConversation } from "@/lib/queries/ai"
-import { useChatUI } from "@/lib/stores/chat-ui"
+import { assistantStream } from "@/lib/stores/assistant-stream"
 
 import { ConversationHistory } from "./ConversationHistory"
 
@@ -29,7 +29,7 @@ function stubConversations(
 
 beforeEach(() => {
   vi.clearAllMocks()
-  useChatUI.setState({ activeConversationId: null })
+  assistantStream.clear()
 })
 
 describe("ConversationHistory", () => {
@@ -55,7 +55,7 @@ describe("ConversationHistory", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: /Open conversation/ })
     )
-    expect(useChatUI.getState().activeConversationId).toBe(7)
+    expect(assistantStream.get().conversationId).toBe(7)
   })
 
   test("delete button triggers mutation", async () => {

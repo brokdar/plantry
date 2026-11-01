@@ -8,7 +8,8 @@ import type {
   ChatRequest,
   ConversationDetail,
   ConversationSummary,
-} from "../domain/chatEvents"
+  UndoChangeResult,
+} from "../domain/assistantEvents"
 
 const BASE = "/api"
 
@@ -79,6 +80,12 @@ export function listConversations() {
 
 export function getConversation(id: number) {
   return apiFetch<ConversationDetail>(`/ai/conversations/${id}`)
+}
+
+export function undoChange(id: number) {
+  return apiFetch<UndoChangeResult>(`/ai/changes/${id}/undo`, {
+    method: "POST",
+  })
 }
 
 export function deleteConversation(id: number) {

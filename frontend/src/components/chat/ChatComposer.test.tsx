@@ -3,16 +3,14 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import "@/lib/i18n"
-import { useChatUI } from "@/lib/stores/chat-ui"
+import { assistantStream } from "@/lib/stores/assistant-stream"
 
 import { ChatComposer } from "./ChatComposer"
 
 describe("ChatComposer", () => {
   beforeEach(() => {
     act(() => {
-      useChatUI.getState().setDraft("")
-      useChatUI.getState().setOpen(false)
-      useChatUI.getState().setStreaming(false)
+      assistantStream.clear()
     })
   })
 

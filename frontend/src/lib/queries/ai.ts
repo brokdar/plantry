@@ -8,10 +8,11 @@ import {
   getConversation,
   listConversations,
   postChatStream,
+  undoChange,
 } from "../api/ai"
-import type { ChatEvent, ChatRequest } from "../domain/chatEvents"
-import { chatStreamStore } from "../stores/chat-stream"
-import { useChatUI } from "../stores/chat-ui"
+import { ApiError } from "../api/client"
+import type { ChatEvent, ChatRequest } from "../domain/assistantEvents"
+import { assistantStream } from "../stores/assistant-stream"
 
 import { todayISO } from "@/lib/dates"
 import { toastError } from "@/lib/toast"
@@ -56,19 +57,20 @@ export function useDeleteConversation() {
 }
 
 /**
- * useChatStream owns the POST SSE reader lifetime. Calling .mutateAsync()
- * starts a fresh stream; the in-flight assistant turn is mirrored into the
- * chatStreamStore for low-overhead per-delta rendering. plate_changed
- * events invalidate the plan views (plan, Today, shopping) immediately.
- * Turn boundaries and final completion flush to the conversation query cache.
+ * useAssistantStream owns the POST SSE reader lifetime. Calling .mutateAsync()
+ * starts a fresh stream; the in-flight turn is mirrored into the
+ * assistantStream store for low-overhead per-delta rendering. A `change`
+ * event is appended to the store and invalidates the plan views (plan, Today,
+ * shopping) once. The conversation query refetches when the stream ends.
  */
-export interface ChatStreamParams {
+export interface AssistantStreamParams {
   conversationId?: number
-  range: { from: string; to: string }
+  /** Start of the window the board shows. */
+  start: string
   message: string
 }
 
-export function useChatStream() {
+export function useAssistantStream() {
   const qc = useQueryClient()
   const controllerRef = useRef<AbortController | null>(null)
 
@@ -78,18 +80,18 @@ export function useChatStream() {
   }, [])
 
   const mutation = useMutation({
-    mutationFn: async (params: ChatStreamParams) => {
+    mutationFn: async (params: AssistantStreamParams) => {
       controllerRef.current?.abort()
       const ac = new AbortController()
       controllerRef.current = ac
 
-      chatStreamStore.reset()
+      assistantStream.reset()
 
       const req: ChatRequest = {
         conversation_id: params.conversationId,
         message: params.message,
         today: todayISO(),
-        start: params.range.from,
+        start: params.start,
       }
 
       try {
@@ -97,13 +99,12 @@ export function useChatStream() {
           handleEvent(evt, qc)
         }
       } finally {
+        assistantStream.setStatus(null)
         if (controllerRef.current === ac) controllerRef.current = null
       }
 
-      // Do NOT reset the stream buffer here — keep the last turn's tool
-      // cards + text visible in the panel after done so the user (and tests)
-      // can see what happened. The buffer is reset at the start of the next
-      // mutation. Refetch conversations so the UI shows the fresh transcript.
+      // The buffer is not reset here: the last turn's tool calls and change
+      // lines stay visible until the next run starts.
       await qc.invalidateQueries({ queryKey: aiKeys.all })
     },
   })
@@ -115,42 +116,82 @@ export function useChatStream() {
   }
 }
 
+/** Reverts one change. Maps the line state: 409 `change_stale` -> `stale`,
+ *  409 `change_undone` -> `undone`; other errors toast. */
+export function useUndoChange() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: async (id: number) => {
+      assistantStream.setLineState(id, "undoing")
+      try {
+        return await undoChange(id)
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          if (err.messageKey === "error.ai.change_stale") {
+            assistantStream.setLineState(id, "stale")
+            return null
+          }
+          if (err.messageKey === "error.ai.change_undone") {
+            assistantStream.setLineState(id, "undone")
+            return null
+          }
+        }
+        assistantStream.setLineState(id, null)
+        throw err
+      }
+    },
+    onSuccess: async (res, id) => {
+      if (!res) return
+      assistantStream.setLineState(id, "undone")
+      await Promise.all([
+        invalidatePlanViews(qc),
+        qc.invalidateQueries({ queryKey: aiKeys.all }),
+      ])
+    },
+    onError: (err) => toastError(err, t),
+  })
+}
+
 function handleEvent(evt: ChatEvent, qc: ReturnType<typeof useQueryClient>) {
   switch (evt.type) {
     case "conversation_ready":
-      useChatUI.getState().setActiveConversation(evt.data.conversation_id)
+      assistantStream.setConversation(evt.data.conversation_id)
       return
     case "message_start":
-      // Clear only the in-flight text so tool cards from earlier agent
-      // iterations in this chat session remain visible.
-      chatStreamStore.resetText()
+      assistantStream.resetText()
       return
     case "assistant_delta":
-      chatStreamStore.appendText(evt.data.text)
+      assistantStream.appendText(evt.data.text)
       return
     case "tool_call_start":
-      chatStreamStore.startToolCall(evt.data.id, evt.data.name)
+      assistantStream.startToolCall(evt.data.id, evt.data.name)
       return
     case "tool_call_delta":
-      chatStreamStore.appendToolArgs(evt.data.id, evt.data.args_json)
+      assistantStream.appendToolArgs(evt.data.id, evt.data.args_json)
       return
     case "tool_exec_start":
-      chatStreamStore.setToolStatus(evt.data.id, "running")
+      assistantStream.setToolStatus(evt.data.id, "running")
+      assistantStream.setStatus(evt.data.name)
       return
     case "tool_exec_end":
-      chatStreamStore.setToolStatus(evt.data.id, evt.data.status, {
+      assistantStream.setToolStatus(evt.data.id, evt.data.status, {
         durationMs: evt.data.duration_ms,
       })
+      assistantStream.setStatus(null)
       return
     case "tool_result":
-      // Nothing to render beyond status; keep summary compact.
       return
-    case "plate_changed":
+    case "change":
+      assistantStream.addChange(evt.data)
       void invalidatePlanViews(qc)
       return
-    case "done":
+    case "unlock_request":
+      assistantStream.setUnlockRequest(evt.data)
       return
+    case "done":
     case "error":
+      assistantStream.setStatus(null)
       return
   }
 }

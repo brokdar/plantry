@@ -3,7 +3,7 @@ import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 import { renderWithRouter } from "@/test/render"
-import { useChatUI } from "@/lib/stores/chat-ui"
+import { assistantStream } from "@/lib/stores/assistant-stream"
 import { GeneratePlanButton } from "./GeneratePlanButton"
 
 const navigateMock = vi.hoisted(() => vi.fn())
@@ -31,7 +31,7 @@ describe("GeneratePlanButton", () => {
   beforeEach(() => {
     vi.mocked(getSetupStatus).mockReset()
     navigateMock.mockReset()
-    useChatUI.setState({ open: false, draftMessage: "" })
+    assistantStream.clear()
   })
 
   test("below the target it is aria-disabled, explains the gap and links to recipes", async () => {
@@ -85,8 +85,7 @@ describe("GeneratePlanButton", () => {
       to: "/plan/new",
       search: { start: undefined },
     })
-    expect(useChatUI.getState().open).toBe(false)
-    expect(useChatUI.getState().draftMessage).toBe("")
+    expect(assistantStream.get().draft).toBe("")
   })
 
   test("on the board it plans the window the board shows", async () => {

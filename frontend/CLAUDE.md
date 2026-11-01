@@ -70,13 +70,12 @@ src/routes/
 - **Undo.** Removals return `{removed}`; `useUndoableRemoval().offerUndo(res, verb)` shows the shared 6 s undo toast (`useUndoToast().offer(message, undo)` is the lower-level form) and Undo calls `POST /api/plan/restore` via `useRestorePlan`. Don't build per-screen undo toasts.
 - **Review actions (drafts and confirmed).** Generated plates are drafts until confirmed (`lib/queries/plan.ts`). `useConfirm` / `useUnlock` act on a plate's or session's whole batch closure (Confirm offers Undo = unlock and closes the sheet; Unlock asks first through `UnlockDialog`, D34). `useAccept` confirms every draft of the window and its Undo calls `unaccept` with exactly the rows the accept returned; `useDiscard` deletes the window's drafts and its Undo is `restore` (the `{removed}` snapshot). Nothing accepted offers no Undo. `toastUndoError` turns a failed undo into a toast.
 - **Where Undo does not exist.** A mid-week re-plan has **no Undo**: its removal, the No-plate overrides it writes and the new run cannot be reversed from `removed` alone. The plan wizard's No plate on an occupied cell offers one Undo (availability back, then `restorePlan`), but none when the removed plates share a cook session. Marking No plate on a confirmed plate from the re-plan start on opens the `ReplanSheet` (or `N`) instead of removing directly; drafts and earlier days keep the direct removal with Undo.
-- **Generation runs.** `lib/queries/generation.ts`: `useGenerate({openBoard})` and `useRegenerate` start a run (202 `{run_id}`) and put `?run=<id>` on `/plan` (already on the board only `run` is added, so an anchored board keeps its URL; the wizard passes `openBoard: false` and follows the run itself). **`useRun(id)` polls** `GET /api/plan/runs/{id}` every 500 ms (`RUN_POLL_MS`) while `status` is `running`, stops on a final status and invalidates the plan views once when it first sees the run finished. There is no SSE (D9). `GenerationProgress` renders the stage; a reloaded board re-attaches through `running_run_id` on `GET /api/plan`. Chat streaming (`chatEvents`) is the only SSE left.
+- **Generation runs.** `lib/queries/generation.ts`: `useGenerate({openBoard})` and `useRegenerate` start a run (202 `{run_id}`) and put `?run=<id>` on `/plan` (already on the board only `run` is added, so an anchored board keeps its URL; the wizard passes `openBoard: false` and follows the run itself). **`useRun(id)` polls** `GET /api/plan/runs/{id}` every 500 ms (`RUN_POLL_MS`) while `status` is `running`, stops on a final status and invalidates the plan views once when it first sees the run finished. There is no SSE (D9). `GenerationProgress` renders the stage; a reloaded board re-attaches through `running_run_id` on `GET /api/plan`. Assistant streaming (`assistantEvents`) is the only SSE left.
 - **Plan wizard** (`/plan/new?start`, `components/plan-wizard`). Step 1 is the who-is-home grid (Away all day / Plan all day / Guests per day menu, which becomes `eaters_by_date`); "Make this my new default" writes the availability defaults and unticking reverts them. Step 2 is the optional instruction and "include a new recipe". It sends `chooser: heuristic` when settings show no AI provider. Below the recipe target it redirects to `/recipes` with a toast. `useApplyWindowAvailability` applies the grid; confirmed plates in cells set to No plate go through `ConfirmRemoval` first.
 
-**Client-only state — Zustand stores.** Only the chat ones; everything else is local state, URL search params or `localStorage`.
+**Client-only state — an external store.** Only the assistant one (no Zustand); everything else is local state, URL search params or `localStorage`.
 
-- `src/lib/stores/chat-ui.ts` — chat panel open/closed state and the composer draft.
-- `src/lib/stores/chat-stream.ts` — streaming AI message state.
+- `src/lib/stores/assistant-stream.ts` — the assistant: streaming turn, status line, changes, unlock request, per-line undo state, conversation id and composer draft (open state lives in the URL).
 
 ### Forms
 
@@ -110,7 +109,7 @@ All user-visible strings go through `react-i18next`. Keys live in `src/lib/i18n/
 
 - `domain/nutrition.ts` — calorie/macro calculation from food portions
 - `domain/units.ts` — unit conversion (g ↔ oz, ml ↔ fl oz, etc.)
-- `domain/chatEvents.ts` — SSE event parsing for the AI chat stream
+- `domain/assistantEvents.ts` — SSE event types for the assistant stream
 
 Loose `*.ts` files in `src/lib/` are planner-specific utilities with their own unit tests:
 

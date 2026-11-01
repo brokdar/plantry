@@ -10,15 +10,18 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useConversations, useDeleteConversation } from "@/lib/queries/ai"
-import { useChatUI } from "@/lib/stores/chat-ui"
+import {
+  assistantStream,
+  useAssistantStreamState,
+} from "@/lib/stores/assistant-stream"
 
 export function ConversationHistory() {
   const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
   const { data } = useConversations()
   const deleteMutation = useDeleteConversation()
-  const activeId = useChatUI((s) => s.activeConversationId)
-  const setActive = useChatUI((s) => s.setActiveConversation)
+  const activeId = useAssistantStreamState().conversationId
+  const setActive = assistantStream.setConversation
 
   const items = data?.items ?? []
 
