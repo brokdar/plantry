@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 )
 
 // memFoodRepo is a minimal in-memory food.Repository covering the methods the
@@ -85,6 +86,16 @@ func (r *memFoodRepo) ListChildrenByParents(_ context.Context, ids []int64) (map
 
 func ptr[T any](v T) *T { return &v }
 
+// keepDaysSetting serves plan.default_keep_days = raw.
+type keepDaysSetting string
+
+func (k keepDaysSetting) Get(_ context.Context, key string) (settings.Value, error) {
+	if key != settings.KeyPlanDefaultKeepDays {
+		return settings.Value{}, fmt.Errorf("unexpected setting %s", key)
+	}
+	return settings.Value{Key: key, Raw: string(k)}, nil
+}
+
 // newPayloadToolSet seeds: rice (complete leaf), mystery sauce (leaf without
 // nutrition), curry (favorite composed food of both, 2 portions) and a food
 // whose nutrition lookup fails.
@@ -115,6 +126,7 @@ func newPayloadToolSet(t *testing.T) (*ToolSet, *memFoodRepo) {
 	ts, err := NewToolSet(Services{
 		Foods:             food.NewService(repo),
 		NutritionResolver: food.NewNutritionResolver(repo),
+		Settings:          keepDaysSetting("4"),
 	})
 	require.NoError(t, err)
 	return ts, repo
@@ -135,6 +147,7 @@ func execJSON(t *testing.T, ts *ToolSet, name, input string) map[string]any {
 func assertCurryPayload(t *testing.T, m map[string]any) {
 	t.Helper()
 	assert.Equal(t, true, m["favorite"])
+	assert.Equal(t, "unknown", m["diet_class"], "the mystery sauce makes the recipe unknown")
 	assert.Equal(t, float64(3), m["times_cooked"])
 	assert.Equal(t, "2026-10-20", m["last_eaten"])
 	assert.Equal(t, float64(3), m["keep_days"])
@@ -152,6 +165,21 @@ func TestTool_GetFood_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
 	ts, repo := newPayloadToolSet(t)
 	assertCurryPayload(t, execJSON(t, ts, "get_food", `{"food_id":3}`))
 	assert.Equal(t, payloadToday, repo.historyToday, "history is as of the user's today")
+}
+
+// B2-AC6 (D10): keep_days is the effective value, the plan default when the
+// recipe sets none.
+func TestTool_Foods_KeepDaysIsEffective(t *testing.T) {
+	ts, repo := newPayloadToolSet(t)
+	repo.foods[3].KeepDays = nil
+	assert.Equal(t, float64(4), execJSON(t, ts, "get_food", `{"food_id":3}`)["keep_days"])
+	items := execJSON(t, ts, "list_foods", `{}`)["items"].([]any)
+	for _, it := range items {
+		f := it.(map[string]any)
+		if f["name"] == "Curry" {
+			assert.Equal(t, float64(4), f["keep_days"])
+		}
+	}
 }
 
 func TestTool_GetFood_NeverEatenRecipeHasNullHistory(t *testing.T) {
@@ -179,6 +207,7 @@ func TestTool_ListFoods_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
 
 	rice := byName["Rice"]
 	assert.Equal(t, false, rice["favorite"])
+	assert.Contains(t, rice, "diet_class")
 	assert.NotContains(t, rice, "last_eaten", "history is for recipes only")
 	assert.NotContains(t, rice, "times_cooked")
 	assert.Equal(t, payloadToday, repo.historyToday)

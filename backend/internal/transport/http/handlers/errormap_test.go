@@ -49,6 +49,9 @@ func TestToHTTP_KeysFromDomain(t *testing.T) {
 		{domain.ErrInvalidPlanStart, "food", http.StatusBadRequest, "error.plan.invalid_start"},
 		{domain.ErrNothingToAccept, "plate", http.StatusBadRequest, "error.plan.nothing_to_accept"},
 		{domain.ErrStateMismatch, "plate", http.StatusConflict, "error.plan.state_mismatch"},
+		{domain.ErrRowConfirmed, "plate", http.StatusConflict, "error.plan.row_confirmed"},
+		{domain.ErrAIPastDate, "plate", http.StatusBadRequest, "error.ai.past_date"},
+		{domain.ErrAIPreferenceReserved, "profile", http.StatusBadRequest, "error.ai.preference_reserved"},
 		{errors.New("boom"), "food", http.StatusInternalServerError, "error.server"},
 	}
 	for _, tt := range tests {

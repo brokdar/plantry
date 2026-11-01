@@ -269,6 +269,7 @@ func run() error {
 		Slots:             slotSvc,
 		Presets:           presetSvc,
 		Availability:      availabilitySvc,
+		Settings:          settingsSvc,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)

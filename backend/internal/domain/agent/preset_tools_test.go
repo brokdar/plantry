@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/actor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
@@ -23,7 +24,6 @@ type stubPresetSvc struct {
 	patchFn     func(ctx context.Context, id int64, in preset.PatchInput) (*preset.Preset, error)
 	deleteFn    func(ctx context.Context, id int64) error
 	applyFn     func(ctx context.Context, id int64, req preset.ApplyRequest) (*preset.ApplyResult, error)
-	copyWeekFn  func(ctx context.Context, req preset.CopyWeekRequest) (*preset.ApplyResult, error)
 	knownTagsFn func(ctx context.Context, limit int) ([]preset.TagUsage, error)
 }
 
@@ -69,18 +69,41 @@ func (s *stubPresetSvc) Apply(ctx context.Context, id int64, req preset.ApplyReq
 	return &preset.ApplyResult{}, nil
 }
 
-func (s *stubPresetSvc) CopyWeek(ctx context.Context, req preset.CopyWeekRequest) (*preset.ApplyResult, error) {
-	if s.copyWeekFn != nil {
-		return s.copyWeekFn(ctx, req)
-	}
-	return &preset.ApplyResult{}, nil
-}
-
 func (s *stubPresetSvc) KnownTags(ctx context.Context, limit int) ([]preset.TagUsage, error) {
 	if s.knownTagsFn != nil {
 		return s.knownTagsFn(ctx, limit)
 	}
 	return nil, nil
+}
+
+// presetCtx is a chat turn on 2026-05-01, before the preset tests' dates.
+var presetCtx = withToday(context.Background(), time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC))
+
+// B2-AC5: copy_week is not the agent's (D4).
+func TestPresetTools_NoCopyWeek(t *testing.T) {
+	for _, tool := range defaultTools(Services{Presets: &stubPresetSvc{}}) {
+		assert.NotEqual(t, "copy_week", tool.Name)
+	}
+	ts, err := NewToolSet(Services{Presets: &stubPresetSvc{}})
+	require.NoError(t, err)
+	_, _, err = ts.Execute(presetCtx, "copy_week", json.RawMessage(`{"source_start":"2026-05-11","target_start":"2026-05-18"}`))
+	require.ErrorIs(t, err, ErrToolNotFound)
+}
+
+// B2 D7: apply_preset never lands on a day before today.
+func TestApplyPreset_PastDate(t *testing.T) {
+	called := false
+	ts, err := NewToolSet(Services{Presets: &stubPresetSvc{applyFn: func(context.Context, int64, preset.ApplyRequest) (*preset.ApplyResult, error) {
+		called = true
+		return &preset.ApplyResult{}, nil
+	}}})
+	require.NoError(t, err)
+	_, _, err = ts.Execute(presetCtx, "apply_preset", json.RawMessage(`{"preset_id":1,"target_date":"2026-04-30"}`))
+	require.ErrorIs(t, err, domain.ErrAIPastDate)
+	assert.Equal(t, "error.ai.past_date", errorMessageKey(err))
+	assert.False(t, called, "nothing is applied")
+	_, _, err = ts.Execute(presetCtx, "apply_preset", json.RawMessage(`{"preset_id":1,"target_date":"2026-05-01"}`))
+	require.NoError(t, err, "today works")
 }
 
 func TestPresetTools_RegisteredWhenServicePresent(t *testing.T) {
@@ -94,7 +117,6 @@ func TestPresetTools_RegisteredWhenServicePresent(t *testing.T) {
 		"update_preset",
 		"delete_preset",
 		"apply_preset",
-		"copy_week",
 	}
 	for _, name := range names {
 		_, ok := ts.byName[name]
@@ -106,7 +128,7 @@ func TestPresetTools_NotRegisteredWithoutService(t *testing.T) {
 	ts, err := NewToolSet(Services{})
 	require.NoError(t, err)
 
-	for _, name := range []string{"list_presets", "apply_preset", "copy_week"} {
+	for _, name := range []string{"list_presets", "apply_preset"} {
 		_, ok := ts.byName[name]
 		assert.False(t, ok, "tool %s should NOT be registered without a preset service", name)
 	}
@@ -122,7 +144,7 @@ func TestApplyPreset_SchemaValidatesTargetDate(t *testing.T) {
 	require.Error(t, err)
 
 	// Good date passes.
-	out, eff, err := ts.Execute(context.Background(), "apply_preset",
+	out, eff, err := ts.Execute(presetCtx, "apply_preset",
 		json.RawMessage(`{"preset_id":1,"target_date":"2026-05-20"}`))
 	require.NoError(t, err)
 	assert.Equal(t, ToolEffectPlateChanged, eff)
@@ -143,15 +165,15 @@ func TestApplyPreset_OverwriteFlag(t *testing.T) {
 	ts, err := NewToolSet(Services{Presets: svc})
 	require.NoError(t, err)
 
-	_, _, err = ts.Execute(context.Background(), "apply_preset",
+	_, _, err = ts.Execute(presetCtx, "apply_preset",
 		json.RawMessage(`{"preset_id":1,"target_date":"2026-05-20","on_conflict":"overwrite","slot_ids_filter":[2,3]}`))
 	require.NoError(t, err)
 	assert.Equal(t, preset.ConflictOverwrite, captured.OnConflict)
 	assert.Equal(t, []int64{2, 3}, captured.SlotIDsFilter)
 }
 
-// Preset apply and copy week write plates through the plate service, so they
-// run as the agent too (D20), over the user actor of the HTTP request.
+// Preset apply writes plates through the plate service, so it runs as the
+// agent too (D20), over the user actor of the HTTP request.
 func TestPresetTools_RunAsAgent(t *testing.T) {
 	var got []actor.Actor
 	svc := &stubPresetSvc{
@@ -159,20 +181,14 @@ func TestPresetTools_RunAsAgent(t *testing.T) {
 			got = append(got, actor.From(ctx))
 			return &preset.ApplyResult{}, nil
 		},
-		copyWeekFn: func(ctx context.Context, _ preset.CopyWeekRequest) (*preset.ApplyResult, error) {
-			got = append(got, actor.From(ctx))
-			return &preset.ApplyResult{}, nil
-		},
 	}
 	ts, err := NewToolSet(Services{Presets: svc})
 	require.NoError(t, err)
-	ctx := actor.With(context.Background(), actor.User, 0)
+	ctx := actor.With(presetCtx, actor.User, 0)
 
 	_, _, err = ts.Execute(ctx, "apply_preset", json.RawMessage(`{"preset_id":1,"target_date":"2026-05-20"}`))
 	require.NoError(t, err)
-	_, _, err = ts.Execute(ctx, "copy_week", json.RawMessage(`{"source_start":"2026-05-11","target_start":"2026-05-18"}`))
-	require.NoError(t, err)
-	assert.Equal(t, []actor.Actor{{Kind: actor.Agent}, {Kind: actor.Agent}}, got)
+	assert.Equal(t, []actor.Actor{{Kind: actor.Agent}}, got)
 }
 
 func TestApplyResultSummary_ReplacedAndSkippedOverrides(t *testing.T) {

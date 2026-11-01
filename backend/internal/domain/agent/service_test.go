@@ -186,7 +186,7 @@ func cellToolSet(t *testing.T) (*agent.ToolSet, *sql.DB, int64, int64) {
 
 func TestTool_GetPlatesRange_IncludesAvailability(t *testing.T) {
 	ts, _, dinnerID, _ := cellToolSet(t)
-	ctx := context.Background()
+	ctx := agent.WithToday(context.Background(), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
 	_, _, err := ts.Execute(ctx, "create_plate", json.RawMessage(`{"date":"2026-11-04","slot_id":`+strconv.FormatInt(dinnerID, 10)+`}`))
 	require.NoError(t, err)
 
@@ -209,7 +209,7 @@ func TestTool_CreatePlateIntoNoneCell_ReturnsKeyedToolError(t *testing.T) {
 	ts, db, dinnerID, _ := cellToolSet(t)
 	input := json.RawMessage(`{"date":"2026-11-02","slot_id":` + strconv.FormatInt(dinnerID, 10) + `}`)
 
-	_, _, err := ts.Execute(context.Background(), "create_plate", input)
+	_, _, err := ts.Execute(agent.WithToday(context.Background(), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)), "create_plate", input)
 	require.ErrorIs(t, err, domain.ErrCellUnavailable)
 
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{
