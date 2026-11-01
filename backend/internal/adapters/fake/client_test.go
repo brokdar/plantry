@@ -64,6 +64,64 @@ func TestClient_ScriptedForcedToolCalls(t *testing.T) {
 	assert.InDelta(t, 0.4, reqs[0].Temperature, 1e-9)
 }
 
+func textTurn(matchUser, forTool, text string) Turn {
+	return Turn{
+		MatchUser: matchUser, ForTool: forTool, StopReason: "end_turn",
+		Message: ScriptedMessage{Content: []ScriptedBlock{{Type: "text", Text: text}}},
+	}
+}
+
+func userReq(text string, tools []llm.Tool, choice *llm.ToolChoice) llm.Request {
+	return llm.Request{
+		Messages:   []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: text}}}},
+		Tools:      tools,
+		ToolChoice: choice,
+	}
+}
+
+func replyText(r *llm.Response) string { return r.Message.Content[0].Text }
+
+// B1-AC1: match_user sequences replay in either order within one conversation.
+func TestClient_MatchUserSequences(t *testing.T) {
+	s := &Script{Turns: []Turn{
+		textTurn("make the chili", "", "chili"),
+		textTurn("different side", "", "side"),
+		textTurn("", "", "default"),
+	}}
+	tools := []llm.Tool{{Name: "x", Schema: json.RawMessage(`{}`)}}
+	prompts := map[string]string{"chili": "Please Make the chili spicier", "side": "I want a different side"}
+	for _, order := range [][]string{{"chili", "side"}, {"side", "chili"}} {
+		c := NewFromScript(s)
+		for _, want := range order {
+			assert.Equal(t, want, replyText(stream(t, c, userReq(prompts[want], tools, nil))))
+		}
+		assert.Equal(t, "default", replyText(stream(t, c, userReq("hello", tools, nil))))
+	}
+}
+
+// B1-AC2: a forced-tool request gets the for_tool turn and leaves the chat cursor alone.
+func TestClient_ForToolKeepsChatCursor(t *testing.T) {
+	toolTurn := Turn{StopReason: "tool_use", Message: ScriptedMessage{Content: []ScriptedBlock{
+		{Type: "tool_use", ToolUseID: "tu_1", ToolName: "get_plan", ToolInput: json.RawMessage(`{}`)},
+	}}}
+	s := &Script{Turns: []Turn{toolTurn, textTurn("", "", "chat done"), textTurn("", "submit_plan", "forced")}}
+	c := NewFromScript(s)
+	tools := []llm.Tool{{Name: "get_plan", Schema: json.RawMessage(`{}`)}}
+
+	user := userReq("go", tools, nil)
+	first := stream(t, c, user)
+	assert.Equal(t, llm.StopReasonToolUse, first.StopReason)
+
+	forced := stream(t, c, userReq("plan", tools, &llm.ToolChoice{Name: "submit_plan"}))
+	assert.Equal(t, "forced", replyText(forced))
+
+	result := llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{
+		Type: llm.ContentTypeToolResult, ToolResultID: "tu_1", ToolResultContent: json.RawMessage(`"ok"`),
+	}}}
+	second := stream(t, c, llm.Request{Messages: append(user.Messages, first.Message, result), Tools: tools})
+	assert.Equal(t, "chat done", replyText(second))
+}
+
 func TestClient_RecordsRequests(t *testing.T) {
 	t.Parallel()
 
