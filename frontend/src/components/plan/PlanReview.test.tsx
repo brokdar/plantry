@@ -55,7 +55,9 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
   useNavigate: () => navigateMock,
 }))
-vi.mock("@/components/chat/ChatPanel", () => ({ ChatPanel: () => null }))
+vi.mock("@/components/assistant/AssistantPanel", () => ({
+  AssistantPanel: () => null,
+}))
 const toastMock = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() })
 )

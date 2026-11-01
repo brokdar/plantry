@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import "@/lib/i18n"
 import { assistantStream } from "@/lib/stores/assistant-stream"
 
-import { ChatComposer } from "./ChatComposer"
+import { Composer } from "./Composer"
 
-describe("ChatComposer", () => {
+describe("Composer", () => {
   beforeEach(() => {
     act(() => {
       assistantStream.clear()
@@ -17,41 +17,35 @@ describe("ChatComposer", () => {
   it("submits on click when there's text", async () => {
     const onSubmit = vi.fn()
     const user = userEvent.setup()
-    render(
-      <ChatComposer streaming={false} onSubmit={onSubmit} onAbort={vi.fn()} />
-    )
-    await user.type(screen.getByTestId("chat-composer-input"), "hello")
-    await user.click(screen.getByTestId("chat-composer-submit"))
+    render(<Composer streaming={false} onSubmit={onSubmit} onAbort={vi.fn()} />)
+    await user.type(screen.getByTestId("assistant-composer-input"), "hello")
+    await user.click(screen.getByTestId("assistant-composer-submit"))
     expect(onSubmit).toHaveBeenCalledWith("hello")
   })
 
   it("submits on ctrl+enter", async () => {
     const onSubmit = vi.fn()
     const user = userEvent.setup()
-    render(
-      <ChatComposer streaming={false} onSubmit={onSubmit} onAbort={vi.fn()} />
-    )
-    const input = screen.getByTestId("chat-composer-input")
+    render(<Composer streaming={false} onSubmit={onSubmit} onAbort={vi.fn()} />)
+    const input = screen.getByTestId("assistant-composer-input")
     await user.type(input, "hello")
     await user.keyboard("{Control>}{Enter}{/Control}")
     expect(onSubmit).toHaveBeenCalledWith("hello")
   })
 
   it("has no mode select", () => {
-    render(
-      <ChatComposer streaming={false} onSubmit={vi.fn()} onAbort={vi.fn()} />
-    )
+    render(<Composer streaming={false} onSubmit={vi.fn()} onAbort={vi.fn()} />)
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument()
-    expect(screen.queryByTestId("chat-composer-mode")).not.toBeInTheDocument()
+    expect(
+      screen.queryByTestId("assistant-composer-mode")
+    ).not.toBeInTheDocument()
   })
 
   it("does not submit empty text", async () => {
     const onSubmit = vi.fn()
     const user = userEvent.setup()
-    render(
-      <ChatComposer streaming={false} onSubmit={onSubmit} onAbort={vi.fn()} />
-    )
-    const submit = screen.getByTestId("chat-composer-submit")
+    render(<Composer streaming={false} onSubmit={onSubmit} onAbort={vi.fn()} />)
+    const submit = screen.getByTestId("assistant-composer-submit")
     expect(submit).toBeDisabled()
     await user.click(submit)
     expect(onSubmit).not.toHaveBeenCalled()
@@ -60,22 +54,20 @@ describe("ChatComposer", () => {
   it("shows abort button while streaming and calls onAbort", async () => {
     const onAbort = vi.fn()
     const user = userEvent.setup()
-    render(
-      <ChatComposer streaming={true} onSubmit={vi.fn()} onAbort={onAbort} />
-    )
-    await user.click(screen.getByTestId("chat-composer-abort"))
+    render(<Composer streaming={true} onSubmit={vi.fn()} onAbort={onAbort} />)
+    await user.click(screen.getByTestId("assistant-composer-abort"))
     expect(onAbort).toHaveBeenCalled()
   })
 
   it("is disabled when prop disabled=true", () => {
     render(
-      <ChatComposer
+      <Composer
         streaming={false}
         onSubmit={vi.fn()}
         onAbort={vi.fn()}
         disabled
       />
     )
-    expect(screen.getByTestId("chat-composer-input")).toBeDisabled()
+    expect(screen.getByTestId("assistant-composer-input")).toBeDisabled()
   })
 })

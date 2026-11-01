@@ -2,18 +2,21 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
 import type { ConversationMessage } from "@/lib/domain/assistantEvents"
+import type { ToolCallState } from "@/lib/stores/assistant-stream"
 import { cn } from "@/lib/utils"
 
-interface ChatMessageProps {
+import { ToolCallBlock } from "./ToolCallBlock"
+
+interface MessageProps {
   role: "user" | "assistant" | "tool" | "error"
   text: string
 }
 
-export function ChatMessage({ role, text }: ChatMessageProps) {
+function Message({ role, text }: MessageProps) {
   const isUser = role === "user"
   return (
     <div
-      data-testid={`chat-message-${role}`}
+      data-testid={`assistant-message-${role}`}
       className={cn("flex", isUser ? "justify-end" : "justify-start")}
     >
       <div
@@ -46,7 +49,7 @@ export function ChatMessage({ role, text }: ChatMessageProps) {
 // Extract a plain-text representation from persisted ConversationMessage
 // content (an array of provider-neutral content blocks). Tool results are
 // rendered as a compact one-liner.
-export function messageToText(m: ConversationMessage): string {
+function messageToText(m: ConversationMessage): string {
   const blocks = (Array.isArray(m.content) ? m.content : []) as Array<{
     type?: string
     text?: string
@@ -62,4 +65,47 @@ export function messageToText(m: ConversationMessage): string {
     })
     .filter(Boolean)
     .join("\n\n")
+}
+
+interface MessageListProps {
+  /** Persisted turns of the open conversation (tool turns excluded). */
+  turns: ConversationMessage[]
+  /** The reply being streamed, shown until it is persisted. */
+  streamText: string
+  toolCalls: ToolCallState[]
+  streaming: boolean
+}
+
+/** The transcript: persisted turns, then the in-flight reply and its tools. */
+export function MessageList({
+  turns,
+  streamText,
+  toolCalls,
+  streaming,
+}: MessageListProps) {
+  return (
+    <>
+      {turns.map((m) => (
+        <Message
+          key={m.id}
+          role={
+            m.role === "assistant"
+              ? "assistant"
+              : m.role === "user"
+                ? "user"
+                : "error"
+          }
+          text={messageToText(m)}
+        />
+      ))}
+      {(streaming || streamText !== "" || toolCalls.length > 0) && (
+        <div data-testid="assistant-streaming">
+          {streamText !== "" && <Message role="assistant" text={streamText} />}
+          {toolCalls.map((tc) => (
+            <ToolCallBlock key={tc.id} tool={tc} />
+          ))}
+        </div>
+      )}
+    </>
+  )
 }

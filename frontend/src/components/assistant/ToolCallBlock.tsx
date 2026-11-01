@@ -10,13 +10,13 @@ interface ToolCallBlockProps {
 
 export function ToolCallBlock({ tool }: ToolCallBlockProps) {
   const { t } = useTranslation()
-  const statusLabel = t(`chat.tool.status.${tool.status}`, {
+  const statusLabel = t(`assistant.tool.status.${tool.status}`, {
     defaultValue: tool.status,
   })
 
   return (
     <div
-      data-testid="chat-tool-call"
+      data-testid="assistant-tool-call"
       data-state={tool.status}
       className={cn(
         "mt-2 flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm",
@@ -46,7 +46,7 @@ export function ToolCallBlock({ tool }: ToolCallBlockProps) {
         {tool.argsJson && (
           <details className="mt-1">
             <summary className="cursor-pointer text-xs text-muted-foreground">
-              {t("chat.tool.args")}
+              {t("assistant.tool.args")}
             </summary>
             <pre className="mt-1 overflow-x-auto rounded bg-muted p-2 text-xs">
               {tool.argsJson}

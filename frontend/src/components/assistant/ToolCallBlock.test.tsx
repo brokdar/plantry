@@ -32,7 +32,7 @@ describe("ToolCallBlock", () => {
       />
     )
     expect(
-      screen.getByTestId("chat-tool-call").getAttribute("data-state")
+      screen.getByTestId("assistant-tool-call").getAttribute("data-state")
     ).toBe("running")
 
     rerender(
@@ -47,7 +47,7 @@ describe("ToolCallBlock", () => {
       />
     )
     expect(
-      screen.getByTestId("chat-tool-call").getAttribute("data-state")
+      screen.getByTestId("assistant-tool-call").getAttribute("data-state")
     ).toBe("ok")
     expect(screen.getByText(/15 ms/)).toBeInTheDocument()
   })

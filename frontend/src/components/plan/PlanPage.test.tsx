@@ -47,10 +47,22 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
   useNavigate: () => navigateMock,
 }))
-// The chat panel has its own tests; here only its opening matters.
-vi.mock("@/components/chat/ChatPanel", () => ({
-  ChatPanel: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="chat-panel" /> : null,
+// The assistant panel has its own tests; here only its opening matters.
+vi.mock("@/components/assistant/AssistantPanel", () => ({
+  AssistantPanel: ({
+    open,
+    enabled,
+    onClose,
+  }: {
+    open: boolean
+    enabled: boolean
+    onClose: () => void
+  }) =>
+    open ? (
+      <aside data-testid="assistant-panel" data-enabled={String(enabled)}>
+        <button onClick={onClose}>close panel</button>
+      </aside>
+    ) : null,
 }))
 
 const toastMock = vi.hoisted(() =>
@@ -63,6 +75,7 @@ import {
   setAvailabilityOverride,
 } from "@/lib/api/availability"
 import { clearPlan, getPlan, restorePlan } from "@/lib/api/plan"
+import { listSettings } from "@/lib/api/settings"
 
 import { PlanPage } from "./PlanPage"
 
@@ -241,13 +254,106 @@ describe("PlanPage", () => {
     ).toBeInTheDocument()
   })
 
-  it("Ask assistant opens the chat", async () => {
-    const user = userEvent.setup()
-    renderWithRouter(<PlanPage />)
-    await user.click(
-      await screen.findByRole("button", { name: "Ask assistant" })
-    )
-    expect(await screen.findByTestId("chat-panel")).toBeInTheDocument()
+  describe("assistant", () => {
+    const withProvider = (value: string) =>
+      vi.mocked(listSettings).mockResolvedValue({
+        items: [{ key: "ai.provider", value }],
+        cipher_available: true,
+      } as Awaited<ReturnType<typeof listSettings>>)
+
+    /** The search the last navigation would produce from `?start=x`. */
+    function navigatedSearch() {
+      const { search } = navigateMock.mock.calls.at(-1)![0] as {
+        search: (prev: object) => object
+      }
+      return search({ start: "x" })
+    }
+
+    it("Ask assistant puts ?assistant=1 on the URL", async () => {
+      withProvider("fake")
+      const user = userEvent.setup()
+      renderWithRouter(<PlanPage />)
+      const ask = await screen.findByRole("button", { name: "Ask assistant" })
+      await waitFor(() => expect(ask).not.toHaveAttribute("aria-disabled"))
+      await user.click(ask)
+      expect(navigatedSearch()).toEqual({ start: "x", assistant: 1 })
+    })
+
+    it("shows the panel from ?assistant=1 and Ask assistant closes it", async () => {
+      withProvider("fake")
+      const user = userEvent.setup()
+      renderWithRouter(<PlanPage assistant />)
+      expect(await screen.findByTestId("assistant-panel")).toBeInTheDocument()
+      const ask = screen.getByRole("button", { name: "Ask assistant" })
+      await waitFor(() => expect(ask).toHaveAttribute("aria-pressed", "true"))
+      await user.click(ask)
+      expect(navigatedSearch()).toEqual({ start: "x", assistant: undefined })
+    })
+
+    it("a plate sheet replaces the panel on a phone", async () => {
+      withProvider("fake")
+      const matchMedia = vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes("max-width: 767px"),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+      vi.stubGlobal("matchMedia", matchMedia)
+      try {
+        const user = userEvent.setup()
+        renderWithRouter(<PlanPage assistant />)
+        expect(await screen.findByTestId("assistant-panel")).toBeInTheDocument()
+        await user.click((await screen.findAllByTestId("plan-cell"))[0])
+        await waitFor(() =>
+          expect(screen.queryByTestId("assistant-panel")).toBeNull()
+        )
+        expect(await screen.findByTestId("plan-sheet")).toBeInTheDocument()
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    })
+
+    it("A toggles it, except in inputs and dialogs", async () => {
+      withProvider("fake")
+      const user = userEvent.setup()
+      renderWithRouter(<PlanPage />)
+      const ask = await screen.findByRole("button", { name: "Ask assistant" })
+      await waitFor(() => expect(ask).not.toHaveAttribute("aria-disabled"))
+
+      await user.keyboard("a")
+      expect(navigatedSearch()).toEqual({ start: "x", assistant: 1 })
+
+      navigateMock.mockClear()
+      const input = document.createElement("input")
+      document.body.append(input)
+      input.focus()
+      await user.keyboard("a")
+      input.remove()
+      const dialog = document.createElement("div")
+      dialog.setAttribute("role", "dialog")
+      const inner = document.createElement("button")
+      dialog.append(inner)
+      document.body.append(dialog)
+      inner.focus()
+      await user.keyboard("a")
+      dialog.remove()
+      expect(navigateMock).not.toHaveBeenCalled()
+    })
+
+    it("without a provider the button is disabled with a tooltip and A is inert", async () => {
+      withProvider("")
+      const user = userEvent.setup()
+      renderWithRouter(<PlanPage />)
+      const ask = await screen.findByRole("button", { name: "Ask assistant" })
+      expect(ask).toHaveAttribute("aria-disabled", "true")
+      await user.hover(ask)
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(
+        /AI provider/
+      )
+      await user.click(ask)
+      await user.keyboard("a")
+      expect(navigateMock).not.toHaveBeenCalled()
+    })
   })
 
   it("the warning count steps through the cells that need attention", async () => {

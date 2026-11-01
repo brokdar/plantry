@@ -136,9 +136,3 @@ export interface UndoChangeResult {
   plate_ids: number[]
   session_ids: number[]
 }
-
-export interface AISettings {
-  enabled: boolean
-  provider?: string
-  model?: string
-}

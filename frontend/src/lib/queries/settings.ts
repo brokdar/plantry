@@ -18,7 +18,7 @@ import {
 import { PRICE_OVERRIDES_KEY } from "@/lib/api/prices"
 import { toastError } from "@/lib/toast"
 
-import { aiKeys, insightKeys, runKeys, settingsKeys } from "./keys"
+import { insightKeys, runKeys, settingsKeys } from "./keys"
 
 /** The settings list indexed by key. */
 export function useSettingItems() {
@@ -69,7 +69,6 @@ export function useSetSetting() {
     },
     onSuccess: (_, { key }) => {
       qc.invalidateQueries({ queryKey: settingsKeys.all })
-      qc.invalidateQueries({ queryKey: aiKeys.settings() })
       invalidatePrices(qc, key)
     },
     onError: (err) => {
@@ -86,7 +85,6 @@ export function useClearSetting() {
     mutationFn: (key: string) => clearSetting(key),
     onSuccess: (_, key) => {
       qc.invalidateQueries({ queryKey: settingsKeys.all })
-      qc.invalidateQueries({ queryKey: aiKeys.settings() })
       invalidatePrices(qc, key)
     },
     onError: (err) => toastError(err, t),

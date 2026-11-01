@@ -4,12 +4,16 @@ import { useTranslation } from "react-i18next"
 
 import { BatchHighlightProvider } from "@/components/batch/BatchHighlightProvider"
 import { CookStrip } from "@/components/batch/CookStrip"
-import { ChatPanel } from "@/components/chat/ChatPanel"
+import { AssistantPanel } from "@/components/assistant/AssistantPanel"
 import { CopyFromWeekDialog } from "@/components/plan/CopyFromWeekDialog"
 import { Button } from "@/components/ui/button"
 import type { Plan, ReplanCell } from "@/lib/api/plan"
 import { buildBoard, type BoardCell } from "@/lib/plan/board"
-import { isAcceptShortcut, isCheatsheetShortcut } from "@/lib/plan/keynav"
+import {
+  isAcceptShortcut,
+  isAssistantShortcut,
+  isCheatsheetShortcut,
+} from "@/lib/plan/keynav"
 import { replanFrom } from "@/lib/plan/replan"
 import { useGenerate, useRegenerate, useRun } from "@/lib/queries/generation"
 import {
@@ -19,6 +23,8 @@ import {
   useMarkNoPlate,
   usePlan,
 } from "@/lib/queries/plan"
+import { useSettingItems } from "@/lib/queries/settings"
+import { cn } from "@/lib/utils"
 
 import { Board } from "./Board"
 import { BoardSkeleton } from "./BoardSkeleton"
@@ -30,6 +36,7 @@ import { PlanSheet, type SheetState } from "./PlanSheet"
 import { PlanToolbar } from "./PlanToolbar"
 import { ReplanSheet } from "./ReplanSheet"
 import { ShortcutsDialog } from "./ShortcutsDialog"
+import { useIsPhone } from "./use-is-phone"
 
 interface PlanPageProps {
   /** The window start from the URL; undefined opens the anchored window. */
@@ -40,13 +47,15 @@ interface PlanPageProps {
   day?: string
   /** The generation the board follows (D35), from `?run=`. */
   run?: number
+  /** The assistant panel is open, from `?assistant=1` (D15). */
+  assistant?: boolean
 }
 
 /**
  * `/plan`: the plan board for one window (UX §5.5, D3). One query
  * (`GET /api/plan`) feeds the toolbar, the cook strip and the board.
  */
-export function PlanPage({ start, cell, day, run }: PlanPageProps) {
+export function PlanPage({ start, cell, day, run, assistant }: PlanPageProps) {
   const { t } = useTranslation()
   const plan = usePlan(start)
 
@@ -76,13 +85,25 @@ export function PlanPage({ start, cell, day, run }: PlanPageProps) {
       initialCell={cell}
       initialDay={day}
       run={run}
+      assistant={assistant === true}
     />
   )
 }
 
-function PageFrame({ children }: { children: React.ReactNode }) {
+function PageFrame({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
   return (
-    <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-4 px-4 py-6 md:px-8 md:py-8">
+    <div
+      className={cn(
+        "mx-auto flex w-full max-w-[96rem] flex-col gap-4 px-4 py-6 md:px-8 md:py-8",
+        className
+      )}
+    >
       {children}
     </div>
   )
@@ -99,12 +120,14 @@ function PlanView({
   initialCell,
   initialDay,
   run,
+  assistant,
 }: {
   plan: Plan
   anchored: boolean
   initialCell?: string
   initialDay?: string
   run?: number
+  assistant: boolean
 }) {
   const { t, i18n } = useTranslation()
   const board = useMemo(() => buildBoard(plan, i18n), [plan, i18n])
@@ -132,7 +155,12 @@ function PlanView({
   // The cell the sheet was opened for: focus returns to it on close.
   const sheetCell = useRef<string | null>(initialCell ?? null)
   const navigate = useNavigate()
-  const [chatOpen, setChatOpen] = useState(false)
+  const phone = useIsPhone()
+  const settings = useSettingItems()
+  const assistantEnabled = Boolean(settings.data?.["ai.provider"]?.value)
+  // One overlay at a time on a phone: a plate sheet hides the panel.
+  const assistantShown = assistant && !(phone && sheet !== null)
+  const assistantKeep = assistantShown ? (1 as const) : undefined
   const clearWindow = useClearWindow()
   const markNoPlate = useMarkNoPlate()
   const accept = useAccept()
@@ -140,6 +168,22 @@ function PlanView({
   const generate = useGenerate()
   const regenerate = useRegenerate()
   const { window: win } = plan
+  const windowSearch = anchored ? undefined : win.start
+
+  /** Opens or closes the assistant (`?assistant=1`), keeping the rest of
+   *  the URL. Closing from inside the panel returns focus to the toggle. */
+  function setAssistant(open: boolean) {
+    void navigate({
+      to: "/plan",
+      search: (prev) => ({ ...prev, assistant: open ? 1 : undefined }),
+      replace: true,
+    })
+    if (!open) {
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLElement>("[data-assistant-toggle]")?.focus()
+      )
+    }
+  }
 
   // The generation the board follows: the one in the URL, else one the
   // server says is running for this window (a reload re-attaches, D35).
@@ -172,6 +216,10 @@ function PlanView({
     if (isCheatsheetShortcut(e)) {
       e.preventDefault()
       setShortcutsOpen(true)
+    } else if (isAssistantShortcut(e)) {
+      if (!assistantEnabled) return
+      e.preventDefault()
+      setAssistant(!assistantShown)
     } else if (isAcceptShortcut(e) && canReview) {
       e.preventDefault()
       acceptAndShop()
@@ -208,7 +256,7 @@ function PlanView({
     if (run === undefined) return
     void navigate({
       to: "/plan",
-      search: { start: anchored ? undefined : win.start },
+      search: { start: windowSearch, assistant: assistantKeep },
       replace: true,
     })
   }
@@ -253,7 +301,11 @@ function PlanView({
     if (next && next.key.split("|")[0] < win.start) {
       void navigate({
         to: "/plan",
-        search: { start: win.prev_start, cell: next.key },
+        search: {
+          start: win.prev_start,
+          cell: next.key,
+          assistant: phone ? undefined : assistantKeep,
+        },
       })
       return
     }
@@ -262,10 +314,12 @@ function PlanView({
       // Drop `?cell=` so a reload does not reopen the sheet.
       void navigate({
         to: "/plan",
-        search: { start: anchored ? undefined : win.start },
+        search: { start: windowSearch, assistant: assistantKeep },
         replace: true,
       })
     }
+    // One overlay at a time on a phone: the plate sheet replaces the panel.
+    if (next && phone && assistant) setAssistant(false)
     setSheet(next)
   }
 
@@ -301,118 +355,128 @@ function PlanView({
   }
 
   return (
-    <PageFrame>
-      <PlanToolbar
-        window={win}
-        stats={plan.stats}
-        summary={board.summary}
-        rangeLabel={rangeLabel}
-        readOnly={board.readOnly}
-        warningCount={board.warningCells.length}
-        onNextWarning={nextWarning}
-        onAsk={() => setChatOpen(true)}
-        onCopyWeek={() => setCopyOpen(true)}
-        onClear={() => clearWindow.mutate({ from: win.start, to: win.end })}
-        onShortcuts={() => setShortcutsOpen(true)}
-        draft={board.draft}
-        running={running}
-        accepting={accept.isPending}
-        onAcceptAndShop={acceptAndShop}
-        onRegenerateWeek={() => generate.mutate({ start: win.start })}
-        onDiscard={() => setDiscardOpen(true)}
-        // Re-plan from today: only the current window (D33).
-        onReplan={
-          win.is_current && !board.readOnly ? () => openReplan([]) : undefined
-        }
-        progress={
-          runId !== undefined && (
-            <GenerationProgress
-              key={runId}
-              run={runQuery.data}
-              failed={runQuery.isError}
-              attention={board.warningCells.length}
-              onFinished={runFinished}
+    <div className="flex w-full">
+      <PageFrame className="min-w-0 flex-1">
+        <PlanToolbar
+          window={win}
+          stats={plan.stats}
+          summary={board.summary}
+          rangeLabel={rangeLabel}
+          readOnly={board.readOnly}
+          warningCount={board.warningCells.length}
+          onNextWarning={nextWarning}
+          assistantOpen={assistantShown}
+          assistantEnabled={assistantEnabled}
+          onToggleAssistant={() => setAssistant(!assistantShown)}
+          onCopyWeek={() => setCopyOpen(true)}
+          onClear={() => clearWindow.mutate({ from: win.start, to: win.end })}
+          onShortcuts={() => setShortcutsOpen(true)}
+          draft={board.draft}
+          running={running}
+          accepting={accept.isPending}
+          onAcceptAndShop={acceptAndShop}
+          onRegenerateWeek={() => generate.mutate({ start: win.start })}
+          onDiscard={() => setDiscardOpen(true)}
+          // Re-plan from today: only the current window (D33).
+          onReplan={
+            win.is_current && !board.readOnly ? () => openReplan([]) : undefined
+          }
+          progress={
+            runId !== undefined && (
+              <GenerationProgress
+                key={runId}
+                run={runQuery.data}
+                failed={runQuery.isError}
+                attention={board.warningCells.length}
+                onFinished={runFinished}
+              />
+            )
+          }
+        />
+        <BatchHighlightProvider>
+          {board.empty && !board.readOnly && !running && (
+            <EmptyWindow
+              start={win.start}
+              onPlanByHand={() =>
+                focusCell('[data-cell-mode="plan"][data-cell-empty]')
+              }
+              onCopyWeek={() => setCopyOpen(true)}
             />
-          )
-        }
-      />
-      <BatchHighlightProvider>
-        {board.empty && !board.readOnly && !running && (
-          <EmptyWindow
-            start={win.start}
-            onPlanByHand={() =>
-              focusCell('[data-cell-mode="plan"][data-cell-empty]')
-            }
-            onCopyWeek={() => setCopyOpen(true)}
+          )}
+          <CookStrip batches={board.cookStrip} />
+          <div ref={boardRef}>
+            <Board
+              board={board}
+              targets={plan.targets}
+              label={t("plan.board.label", { range: rangeLabel })}
+              onOpenCell={openCell}
+              onMarkNoPlate={markCell}
+              // While a run goes, R/S and the quick actions wait for it.
+              onReplace={running ? undefined : replace}
+              onDifferentSide={running ? undefined : differentSide}
+            />
+          </div>
+        </BatchHighlightProvider>
+        {canReview && (
+          <DraftBar
+            summary={board.summary}
+            disabled={running || accept.isPending}
+            onAccept={acceptAndShop}
           />
         )}
-        <CookStrip batches={board.cookStrip} />
-        <div ref={boardRef}>
-          <Board
-            board={board}
-            targets={plan.targets}
-            label={t("plan.board.label", { range: rangeLabel })}
-            onOpenCell={openCell}
-            onMarkNoPlate={markCell}
-            // While a run goes, R/S and the quick actions wait for it.
-            onReplace={running ? undefined : replace}
-            onDifferentSide={running ? undefined : differentSide}
-          />
-        </div>
-      </BatchHighlightProvider>
-      {canReview && (
-        <DraftBar
-          summary={board.summary}
-          disabled={running || accept.isPending}
-          onAccept={acceptAndShop}
+        <DiscardDialog
+          open={discardOpen}
+          onOpenChange={setDiscardOpen}
+          plates={plan.draft?.plates ?? 0}
+          pending={discard.isPending}
+          onDiscard={() =>
+            discard.mutate(
+              { from: win.start, to: win.end },
+              { onSuccess: () => setDiscardOpen(false) }
+            )
+          }
         />
-      )}
-      <DiscardDialog
-        open={discardOpen}
-        onOpenChange={setDiscardOpen}
-        plates={plan.draft?.plates ?? 0}
-        pending={discard.isPending}
-        onDiscard={() =>
-          discard.mutate(
-            { from: win.start, to: win.end },
-            { onSuccess: () => setDiscardOpen(false) }
-          )
-        }
-      />
-      <CopyFromWeekDialog
-        open={copyOpen}
-        onOpenChange={setCopyOpen}
-        targetStart={win.start}
-        defaultSourceStart={win.prev_start}
-      />
-      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-      <PlanSheet
-        plan={plan}
-        board={board}
-        state={sheet}
-        running={running}
-        onChange={changeSheet}
-        onClosed={returnFocus}
-        onMarkNoPlate={markCell}
-      />
-      {from !== null && (
-        <ReplanSheet
-          open={replan.open}
-          onOpenChange={(open) => {
-            replanOpen.current = open
-            setReplan((r) => ({ ...r, open }))
-          }}
+        <CopyFromWeekDialog
+          open={copyOpen}
+          onOpenChange={setCopyOpen}
+          targetStart={win.start}
+          defaultSourceStart={win.prev_start}
+        />
+        <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        <PlanSheet
           plan={plan}
-          from={from}
-          initialCells={replan.cells}
-          onCloseAutoFocus={(e) => {
-            if (!replan.origin) return
-            e.preventDefault()
-            focusCell(`[data-cell-key="${replan.origin}"]`)
-          }}
+          board={board}
+          state={sheet}
+          running={running}
+          onChange={changeSheet}
+          onClosed={returnFocus}
+          onMarkNoPlate={markCell}
         />
-      )}
-      <ChatPanel open={chatOpen} onOpenChange={setChatOpen} start={win.start} />
-    </PageFrame>
+        {from !== null && (
+          <ReplanSheet
+            open={replan.open}
+            onOpenChange={(open) => {
+              replanOpen.current = open
+              setReplan((r) => ({ ...r, open }))
+            }}
+            plan={plan}
+            from={from}
+            initialCells={replan.cells}
+            onCloseAutoFocus={(e) => {
+              if (!replan.origin) return
+              e.preventDefault()
+              focusCell(`[data-cell-key="${replan.origin}"]`)
+            }}
+          />
+        )}
+      </PageFrame>
+      <AssistantPanel
+        open={assistantShown}
+        phone={phone}
+        enabled={assistantEnabled}
+        plan={plan}
+        onClose={() => setAssistant(false)}
+      />
+    </div>
   )
 }

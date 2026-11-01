@@ -82,7 +82,7 @@ describe("ConversationHistory", () => {
     )
     // Label falls back to a formatted date — assert the item is rendered.
     expect(
-      await screen.findByTestId("chat-history-item-11")
+      await screen.findByTestId("assistant-history-item-11")
     ).toBeInTheDocument()
   })
 })

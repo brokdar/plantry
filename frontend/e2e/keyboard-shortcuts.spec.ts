@@ -48,10 +48,12 @@ test.describe("Keyboard shortcuts", () => {
     await expect(palette).toHaveCount(0)
   })
 
-  test("Ctrl+Enter in chat composer submits the message", async ({ page }) => {
-    // Serial-safe: we don't seed a conversation — we open chat from the
+  test("Ctrl+Enter in the assistant composer submits the message", async ({
+    page,
+  }) => {
+    // Serial-safe: we don't seed a conversation — we open the assistant from the
     // board's Ask assistant and rely on the existing fake-AI script
-    // having turns available. If chat turns are exhausted in shared state,
+    // having turns available. If assistant turns are exhausted in shared state,
     // the fake provider short-circuits but the composer still clears on
     // submit, which is what we assert.
     const slot = await seedSlot(`slot.kb-${uid()}`, "Moon", 994)
@@ -60,7 +62,7 @@ test.describe("Keyboard shortcuts", () => {
       await page.goto("/plan")
       await page.getByRole("button", { name: "Ask assistant" }).click()
 
-      const composer = page.getByTestId("chat-composer-input")
+      const composer = page.getByTestId("assistant-composer-input")
       await expect(composer).toBeVisible()
       await composer.fill("Plan my week")
 

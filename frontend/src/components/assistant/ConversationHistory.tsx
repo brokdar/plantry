@@ -52,10 +52,10 @@ export function ConversationHistory() {
           type="button"
           variant="outline"
           size="sm"
-          data-testid="chat-history-trigger"
+          data-testid="assistant-history-trigger"
         >
           <History className="mr-1.5 h-4 w-4" />
-          {t("chat.history.open")}
+          {t("assistant.history.open")}
           {items.length > 0 && (
             <span className="ml-1.5 rounded-full bg-muted px-1.5 text-xs">
               {items.length}
@@ -64,9 +64,11 @@ export function ConversationHistory() {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80">
-        <PopoverTitle>{t("chat.history.title")}</PopoverTitle>
+        <PopoverTitle>{t("assistant.history.title")}</PopoverTitle>
         {items.length === 0 ? (
-          <p className="text-muted-foreground">{t("chat.history.empty")}</p>
+          <p className="text-muted-foreground">
+            {t("assistant.history.empty")}
+          </p>
         ) : (
           <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
             {items.map((c) => {
@@ -79,14 +81,14 @@ export function ConversationHistory() {
                 <li
                   key={c.id}
                   className="flex items-center gap-1"
-                  data-testid={`chat-history-item-${c.id}`}
+                  data-testid={`assistant-history-item-${c.id}`}
                 >
                   <Button
                     type="button"
                     variant={active ? "secondary" : "ghost"}
                     size="sm"
                     className="flex-1 justify-start truncate"
-                    aria-label={t("chat.history.select")}
+                    aria-label={t("assistant.history.select")}
                     onClick={() => handleSelect(c.id)}
                   >
                     {label}
@@ -96,7 +98,7 @@ export function ConversationHistory() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 shrink-0 text-muted-foreground"
-                    aria-label={t("chat.history.delete")}
+                    aria-label={t("assistant.history.delete")}
                     onClick={() => handleDelete(c.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />

@@ -22,6 +22,7 @@ const ROWS: Row[] = [
   { keys: ["S"], labelKey: "plan.shortcuts.different_side" },
   { keys: ["Ctrl / ⌘", "Enter"], labelKey: "plan.shortcuts.accept" },
   { keys: ["Ctrl / ⌘", "drag"], labelKey: "plan.shortcuts.copy_drag" },
+  { keys: ["A"], labelKey: "plan.shortcuts.assistant" },
   { keys: ["?"], labelKey: "plan.shortcuts.this_panel" },
 ]
 

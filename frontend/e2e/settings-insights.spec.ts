@@ -38,8 +38,10 @@ async function chatOnce(
   const before = (await latestChatRun(request))?.id ?? 0
   await page.goto("/plan")
   await page.getByRole("button", { name: "Ask assistant" }).click()
-  await page.getByTestId("chat-composer-input").fill("plan my tuesday dinner")
-  await page.getByTestId("chat-composer-submit").click()
+  await page
+    .getByTestId("assistant-composer-input")
+    .fill("plan my tuesday dinner")
+  await page.getByTestId("assistant-composer-submit").click()
   let runId = 0
   await expect
     .poll(

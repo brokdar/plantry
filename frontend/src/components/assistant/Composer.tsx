@@ -1,5 +1,4 @@
 import { Send, StopCircle } from "lucide-react"
-import { useRef } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
@@ -8,23 +7,25 @@ import {
   useAssistantStreamState,
 } from "@/lib/stores/assistant-stream"
 
-interface ChatComposerProps {
+interface ComposerProps {
   streaming: boolean
   onSubmit: (text: string) => void
   onAbort: () => void
   disabled?: boolean
+  /** Lets the panel focus the field (a chip fills it, opening focuses it). */
+  inputRef?: React.Ref<HTMLTextAreaElement>
 }
 
-export function ChatComposer({
+export function Composer({
   streaming,
   onSubmit,
   onAbort,
   disabled,
-}: ChatComposerProps) {
+  inputRef,
+}: ComposerProps) {
   const { t } = useTranslation()
   const draft = useAssistantStreamState().draft
   const setDraft = assistantStream.setDraft
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   function send() {
     const trimmed = draft.trim()
@@ -50,15 +51,15 @@ export function ChatComposer({
     >
       <div className="flex items-end gap-2">
         <textarea
-          ref={textareaRef}
+          ref={inputRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
           rows={2}
           disabled={disabled}
-          placeholder={t("chat.composer.placeholder")}
-          aria-label={t("chat.composer.aria_label")}
-          data-testid="chat-composer-input"
+          placeholder={t("assistant.composer.placeholder")}
+          aria-label={t("assistant.composer.aria_label")}
+          data-testid="assistant-composer-input"
           className="max-h-40 min-h-[2.5rem] flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
         />
         {streaming ? (
@@ -67,8 +68,8 @@ export function ChatComposer({
             variant="outline"
             size="icon"
             onClick={onAbort}
-            aria-label={t("chat.composer.abort")}
-            data-testid="chat-composer-abort"
+            aria-label={t("assistant.composer.abort")}
+            data-testid="assistant-composer-abort"
           >
             <StopCircle className="h-4 w-4" />
           </Button>
@@ -77,8 +78,8 @@ export function ChatComposer({
             type="submit"
             size="icon"
             disabled={disabled || draft.trim() === ""}
-            aria-label={t("chat.composer.send")}
-            data-testid="chat-composer-submit"
+            aria-label={t("assistant.composer.send")}
+            data-testid="assistant-composer-submit"
           >
             <Send className="h-4 w-4" />
           </Button>
