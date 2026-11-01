@@ -16,6 +16,8 @@ patterns=(
   'surface-container|on-surface|outline-variant|primary-container|on-primary|secondary-container|tertiary'
   'gradient-primary|editorial-shadow|glass-header|btn-shimmer|ai-accent|macro-|chart-'
   'PortionStepper|seedTemplate|/api/templates'
+  'plan\.generate_prompt|openWith\(t\("plan\.generate'
+  'locked_by|is_locked|isLocked'
 )
 
 status=0
