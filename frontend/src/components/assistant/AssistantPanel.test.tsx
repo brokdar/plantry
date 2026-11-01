@@ -9,6 +9,7 @@ vi.mock("@/lib/queries/ai", () => ({
   useConversation: vi.fn(),
   useConversations: vi.fn(),
   useDeleteConversation: vi.fn(),
+  useUndoChange: vi.fn(),
 }))
 vi.mock("@/lib/queries/settings", () => ({
   useSettingItems: () => ({ data: {} }),
@@ -22,17 +23,29 @@ import {
   useConversation,
   useConversations,
   useDeleteConversation,
+  useUndoChange,
 } from "@/lib/queries/ai"
 import { assistantStream } from "@/lib/stores/assistant-stream"
-import { mockPlan } from "@/test/fixtures"
+import type { ConversationChange } from "@/lib/domain/assistantEvents"
+import { mockChange, mockPlan } from "@/test/fixtures"
 
 import { AssistantPanel } from "./AssistantPanel"
 
 function stubQueries(opts: {
   isStreaming?: boolean
   isError?: boolean
-  messages?: { id: number; role: "user" | "assistant"; text: string }[]
+  messages?: {
+    id: number
+    role: "user" | "assistant"
+    text: string
+    toolUse?: { id: string; name: string }
+  }[]
+  changes?: ConversationChange[]
 }) {
+  const undo = vi.fn()
+  vi.mocked(useUndoChange).mockReturnValue({
+    mutate: undo,
+  } as unknown as ReturnType<typeof useUndoChange>)
   const mutateAsync = vi.fn().mockResolvedValue(undefined)
   vi.mocked(useAssistantStream).mockReturnValue({
     mutateAsync,
@@ -45,9 +58,21 @@ function stubQueries(opts: {
       messages: opts.messages.map((m) => ({
         id: m.id,
         role: m.role,
-        content: [{ type: "text", text: m.text }],
+        content: [
+          { type: "text", text: m.text },
+          ...(m.toolUse
+            ? [
+                {
+                  type: "tool_use",
+                  tool_use_id: m.toolUse.id,
+                  tool_use_name: m.toolUse.name,
+                },
+              ]
+            : []),
+        ],
         created_at: "2025-06-10T12:00:00Z",
       })),
+      changes: opts.changes ?? [],
     },
   } as unknown as ReturnType<typeof useConversation>)
   vi.mocked(useConversations).mockReturnValue({
@@ -56,7 +81,7 @@ function stubQueries(opts: {
   vi.mocked(useDeleteConversation).mockReturnValue({
     mutate: vi.fn(),
   } as unknown as ReturnType<typeof useDeleteConversation>)
-  return { mutateAsync }
+  return { mutateAsync, undo }
 }
 
 function renderPanel(
@@ -194,7 +219,10 @@ describe("AssistantPanel transcript", () => {
     act(() => assistantStream.setStatus("get_plan"))
     renderPanel()
     expect(await screen.findByText("Dinner is planned.")).toBeInTheDocument()
-    expect(screen.getByRole("status")).toHaveTextContent("Using get_plan")
+    expect(screen.getByTestId("assistant-status")).toHaveTextContent(
+      "Reading your plan…"
+    )
+    expect(screen.queryByText(/get_plan/)).not.toBeInTheDocument()
   })
 
   test("keeps the streamed text when the stream failed", async () => {
@@ -205,5 +233,102 @@ describe("AssistantPanel transcript", () => {
     openConversation()
     renderPanel()
     expect(await screen.findByText("Dinner is planned.")).toBeInTheDocument()
+  })
+})
+
+describe("AssistantPanel changes (F3-AC4)", () => {
+  const live = () => ({ ...mockChange(), undone_at: null })
+  const oneChange = {
+    messages: [
+      { id: 1, role: "user" as const, text: "chili 6" },
+      {
+        id: 2,
+        role: "assistant" as const,
+        text: "Done.",
+        toolUse: { id: "tu_1", name: "set_session_portions" },
+      },
+    ],
+  }
+
+  test("a stale undo shows 'Changed since' and no button", () => {
+    stubQueries({ ...oneChange, changes: [live()] })
+    act(() => {
+      assistantStream.setConversation(1)
+      assistantStream.setLineState(5, "stale")
+    })
+    renderPanel()
+    const line = screen.getByTestId("assistant-change")
+    expect(line).toHaveTextContent("Chili: 6 portions")
+    expect(line).toHaveTextContent("Changed since")
+    expect(
+      screen.queryByTestId("assistant-change-undo")
+    ).not.toBeInTheDocument()
+  })
+
+  test("a change line has Undo that undoes that change", async () => {
+    const { undo } = stubQueries({ ...oneChange, changes: [live()] })
+    const user = userEvent.setup()
+    act(() => assistantStream.setConversation(1))
+    renderPanel()
+    await user.click(screen.getByTestId("assistant-change-undo"))
+    expect(undo).toHaveBeenCalledWith(5)
+  })
+
+  test("a persisted undone change shows 'Undone' without a button", () => {
+    stubQueries({
+      ...oneChange,
+      changes: [{ ...mockChange(), undone_at: "2026-11-01T09:04:00Z" }],
+    })
+    act(() => assistantStream.setConversation(1))
+    renderPanel()
+    expect(screen.getByTestId("assistant-change")).toHaveTextContent("Undone")
+    expect(
+      screen.queryByTestId("assistant-change-undo")
+    ).not.toBeInTheDocument()
+  })
+
+  test("the live region reads the change sentence", () => {
+    stubQueries({})
+    act(() => {
+      assistantStream.addChange(
+        mockChange({ params: { name: "Chili", portions: 6, frozen: 2 } })
+      )
+    })
+    renderPanel()
+    expect(screen.getByTestId("assistant-live")).toHaveTextContent(
+      "Chili: 6 portions, 2 frozen"
+    )
+    expect(screen.getByTestId("assistant-change-text")).toHaveTextContent(
+      "Chili: 6 portions, 2 frozen"
+    )
+  })
+
+  test("no element shows a raw tool name", () => {
+    stubQueries({ ...oneChange, changes: [live()] })
+    act(() => {
+      assistantStream.setConversation(1)
+      assistantStream.setStatus("set_session_portions")
+    })
+    renderPanel({})
+    expect(screen.queryByText(/set_session_portions/)).not.toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/set_session_portions/)
+  })
+
+  test("an unlock request shows the card and Yes, unlock sends that text", async () => {
+    const { mutateAsync } = stubQueries({})
+    const user = userEvent.setup()
+    act(() => {
+      assistantStream.setUnlockRequest({
+        rows: [{ date: "2026-11-02", slot_id: 3, names: ["Chili", "Rice"] }],
+      })
+    })
+    renderPanel()
+    expect(screen.getByTestId("assistant-unlock-card")).toHaveTextContent(
+      "Monday dinner (Chili, Rice)"
+    )
+    await user.click(screen.getByRole("button", { name: "Yes, unlock" }))
+    expect(mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Yes, unlock" })
+    )
   })
 })

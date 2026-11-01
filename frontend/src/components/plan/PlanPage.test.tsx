@@ -345,7 +345,8 @@ describe("PlanPage", () => {
       const user = userEvent.setup()
       renderWithRouter(<PlanPage />)
       const ask = await screen.findByRole("button", { name: "Ask assistant" })
-      expect(ask).toHaveAttribute("aria-disabled", "true")
+      // The provider is unknown until the settings load, then missing.
+      await waitFor(() => expect(ask).toHaveAttribute("aria-disabled", "true"))
       await user.hover(ask)
       expect(await screen.findByRole("tooltip")).toHaveTextContent(
         /AI provider/

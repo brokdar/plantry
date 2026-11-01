@@ -157,7 +157,11 @@ function PlanView({
   const navigate = useNavigate()
   const phone = useIsPhone()
   const settings = useSettingItems()
-  const assistantEnabled = Boolean(settings.data?.["ai.provider"]?.value)
+  // Until the settings load the provider is unknown, not missing: the toggle
+  // and `A` work and the panel waits instead of flashing "no provider".
+  const providerKnown = settings.data !== undefined
+  const assistantEnabled =
+    !providerKnown || Boolean(settings.data?.["ai.provider"]?.value)
   // One overlay at a time on a phone: a plate sheet hides the panel.
   const assistantShown = assistant && !(phone && sheet !== null)
   const assistantKeep = assistantShown ? (1 as const) : undefined
@@ -473,7 +477,8 @@ function PlanView({
       <AssistantPanel
         open={assistantShown}
         phone={phone}
-        enabled={assistantEnabled}
+        enabled={assistantEnabled && providerKnown}
+        loading={!providerKnown}
         plan={plan}
         onClose={() => setAssistant(false)}
       />

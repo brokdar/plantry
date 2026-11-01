@@ -156,19 +156,12 @@ function handleEvent(evt: ChatEvent, qc: ReturnType<typeof useQueryClient>) {
       assistantStream.appendText(evt.data.text)
       return
     case "tool_call_start":
-      assistantStream.startToolCall(evt.data.id, evt.data.name)
-      return
     case "tool_call_delta":
-      assistantStream.appendToolArgs(evt.data.id, evt.data.args_json)
       return
     case "tool_exec_start":
-      assistantStream.setToolStatus(evt.data.id, "running")
       assistantStream.setStatus(evt.data.name)
       return
     case "tool_exec_end":
-      assistantStream.setToolStatus(evt.data.id, evt.data.status, {
-        durationMs: evt.data.duration_ms,
-      })
       assistantStream.setStatus(null)
       return
     case "tool_result":

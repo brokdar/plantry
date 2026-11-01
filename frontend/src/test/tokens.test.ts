@@ -193,7 +193,10 @@ describe("design tokens (index.css)", () => {
         [...utilities![1].matchAll(/\.([\w-]+)/g)].map((m) => m[1])
       )
       expect([...classes].sort()).toEqual(["font-heading", "hide-scrollbar"])
-      expect(css).not.toMatch(/@keyframes|gradient\(/)
+      // The assistant's change pulse (Phase 4 D17) is the one keyframe.
+      expect(css.replace("@keyframes cell-pulse", "")).not.toMatch(
+        /@keyframes|gradient\(/
+      )
     })
   })
 

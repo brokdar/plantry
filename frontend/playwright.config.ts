@@ -28,6 +28,7 @@ const AI_SERIAL_SPECS = [
 // global: the anchor moves every window other specs open, so they run last,
 // alone, after the other projects.
 const GLOBAL_SETTINGS_SPECS = [
+  "assistant-drafts.spec.ts",
   "plan-anchor-settings.spec.ts",
   "plan-generate-heuristic.spec.ts",
   "plan-replan.spec.ts",

@@ -150,52 +150,28 @@ describe("useAssistantStream", () => {
     ])
   })
 
-  it("tool_call_* events accumulate args in the stream buffer", async () => {
+  it("tool_exec_start sets the status line, tool_exec_end clears it", async () => {
     const sse =
-      `event: tool_call_start\ndata: {"id":"tu_1","name":"create_plate"}\n\n` +
-      `event: tool_call_delta\ndata: {"id":"tu_1","args_json":"{\\"day\\":"}\n\n` +
-      `event: tool_call_delta\ndata: {"id":"tu_1","args_json":"1}"}\n\n` +
-      `event: tool_exec_start\ndata: {"id":"tu_1","name":"create_plate"}\n\n`
-
-    // Custom stream that signals args accumulated before done — done never fires
-    // so we check state during stream.
+      `event: tool_call_start\ndata: {"id":"tu_1","name":"get_plan"}\n\n` +
+      `event: tool_exec_start\ndata: {"id":"tu_1","name":"get_plan"}\n\n`
     const enc = new TextEncoder()
-    const chunks = sse
-      .split("\n\n")
-      .filter((c) => c.length)
-      .map((c) => c + "\n\n")
-
     const readable = new ReadableStream<Uint8Array>({
       start(controller) {
-        chunks.forEach((c) => controller.enqueue(enc.encode(c)))
-        // Don't emit done so the stream just ends (reader gets done=true).
+        controller.enqueue(enc.encode(sse))
         controller.close()
       },
     })
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockResponse(readable)))
-
     const qc = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
         mutations: { retry: false },
       },
     })
-
-    // Capture every snapshot so we can inspect the pre-final-reset state.
-    const snapshots: Array<{
-      toolCalls: Array<{ id: string; argsJson: string; status: string }>
-    }> = []
-    const unsub = assistantStream.subscribe(() => {
-      const s = assistantStream.get()
-      snapshots.push({
-        toolCalls: s.toolCalls.map((tc) => ({
-          id: tc.id,
-          argsJson: tc.argsJson,
-          status: tc.status,
-        })),
-      })
-    })
-
+    const statuses: Array<string | null> = []
+    const unsub = assistantStream.subscribe(() =>
+      statuses.push(assistantStream.get().status)
+    )
     const { result } = renderHook(() => useAssistantStream(), {
       wrapper: wrapper(qc),
     })
@@ -203,19 +179,8 @@ describe("useAssistantStream", () => {
       await result.current.mutateAsync({ message: "x", start: testStart })
     })
     unsub()
-
-    // Find a snapshot where the tool call is fully accumulated + running.
-    const match = snapshots.find(
-      (s) =>
-        s.toolCalls.length === 1 &&
-        s.toolCalls[0].argsJson === '{"day":1}' &&
-        s.toolCalls[0].status === "running"
-    )
-    expect(
-      match,
-      "expected a snapshot with full args + running status"
-    ).toBeDefined()
-    expect(match?.toolCalls[0].id).toBe("tu_1")
+    expect(statuses).toContain("get_plan")
+    expect(assistantStream.get().status).toBeNull()
   })
 
   it("abort() cancels an in-flight stream", async () => {

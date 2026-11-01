@@ -4,7 +4,13 @@ import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import type { Plan } from "@/lib/api/plan"
-import { useAssistantStream, useConversation } from "@/lib/queries/ai"
+import { buildTranscript } from "@/lib/assistant/transcript"
+import type { Change, ConversationChange } from "@/lib/domain/assistantEvents"
+import {
+  useAssistantStream,
+  useConversation,
+  useUndoChange,
+} from "@/lib/queries/ai"
 import {
   assistantStream,
   useAssistantStreamState,
@@ -12,10 +18,12 @@ import {
 
 import { Composer } from "./Composer"
 import { ConversationHistory } from "./ConversationHistory"
+import { LiveRegion } from "./LiveRegion"
 import { MessageList } from "./MessageList"
 import { PanelShell } from "./PanelShell"
 import { StatusLine } from "./StatusLine"
 import { SuggestionChips } from "./SuggestionChips"
+import { UnlockCard } from "./UnlockCard"
 
 interface AssistantPanelProps {
   open: boolean
@@ -23,6 +31,8 @@ interface AssistantPanelProps {
   phone: boolean
   /** An AI provider is configured. */
   enabled: boolean
+  /** The settings are still loading: the provider is not known yet. */
+  loading?: boolean
   plan: Plan
   onClose: () => void
 }
@@ -36,6 +46,7 @@ export function AssistantPanel({
   open,
   phone,
   enabled,
+  loading,
   plan,
   onClose,
 }: AssistantPanelProps) {
@@ -44,6 +55,7 @@ export function AssistantPanel({
   const stream = useAssistantStreamState()
   const activeConversationId = stream.conversationId
   const { data: conversation } = useConversation(activeConversationId)
+  const undo = useUndoChange()
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // The aside has no focus trap to move focus in: put it in the composer.
@@ -57,15 +69,32 @@ export function AssistantPanel({
   const showStreamText =
     stream.text !== "" && (chatStream.isStreaming || chatStream.isError)
 
-  const turns = useMemo(
-    () => (conversation?.messages ?? []).filter((m) => m.role !== "tool"),
+  const transcript = useMemo(
+    () =>
+      buildTranscript(
+        conversation?.messages ?? [],
+        conversation?.changes ?? []
+      ),
     [conversation]
   )
+  // Changes of the turn in flight until the refetched conversation holds them.
+  const liveChanges = useMemo(() => {
+    const held = new Set((conversation?.changes ?? []).map((c) => c.id))
+    return stream.changes.filter((c) => !held.has(c.id))
+  }, [conversation, stream.changes])
   const empty =
-    turns.length === 0 &&
+    transcript.turns.length === 0 &&
+    transcript.rest.length === 0 &&
+    liveChanges.length === 0 &&
     !showStreamText &&
-    stream.toolCalls.length === 0 &&
     !chatStream.isStreaming
+
+  function lineState(c: Change) {
+    return (
+      stream.lineStates[c.id] ??
+      ((c as ConversationChange).undone_at ? ("undone" as const) : null)
+    )
+  }
 
   async function handleSubmit(text: string) {
     try {
@@ -119,19 +148,30 @@ export function AssistantPanel({
         className="flex-1 space-y-3 overflow-y-auto px-4 py-3"
         data-testid="assistant-transcript"
       >
-        {!enabled && (
+        {!enabled && !loading && (
           <p className="text-small text-ink-muted">
             {t("assistant.provider_missing")}
           </p>
         )}
         <MessageList
-          turns={turns}
+          transcript={transcript}
+          liveChanges={liveChanges}
           streamText={showStreamText ? stream.text : ""}
-          toolCalls={stream.toolCalls}
           streaming={chatStream.isStreaming}
+          lineState={lineState}
+          onUndo={(id) => undo.mutate(id)}
         />
+        {stream.unlockRequest && (
+          <UnlockCard
+            request={stream.unlockRequest}
+            slots={plan.slots}
+            disabled={chatStream.isStreaming}
+            onConfirm={(text) => void handleSubmit(text)}
+          />
+        )}
         {enabled && empty && <SuggestionChips plan={plan} onPick={pick} />}
       </div>
+      <LiveRegion change={stream.changes.at(-1) ?? null} />
       <StatusLine streaming={chatStream.isStreaming} status={stream.status} />
       <Composer
         streaming={chatStream.isStreaming}

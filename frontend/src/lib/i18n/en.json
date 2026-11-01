@@ -1068,7 +1068,9 @@
     "new_conversation": "New conversation",
     "status": {
       "thinking": "Thinking…",
-      "tool": "Using {{name}}…"
+      "reading": "Reading your plan…",
+      "updating": "Updating your plan…",
+      "regenerating": "Choosing again…"
     },
     "chips": {
       "label": "Suggestions",
@@ -1077,21 +1079,50 @@
       "freeze": "Make the {{name}} {{portions}} portions, freeze 2",
       "side": "Different side on {{weekday}}"
     },
-    "tool": {
-      "args": "arguments",
-      "status": {
-        "pending": "queued",
-        "running": "running…",
-        "ok": "done",
-        "error": "failed"
-      }
-    },
     "history": {
       "title": "Past conversations",
       "open": "Open history",
       "empty": "No conversations yet.",
       "delete": "Delete conversation",
       "select": "Open conversation"
+    },
+    "change": {
+      "fallback": "Your plan changed",
+      "apply_preset": "{{day}}: routine {{name}} applied",
+      "set_session_portions_one": "{{name}}: {{count}} portion",
+      "set_session_portions_other": "{{name}}: {{count}} portions",
+      "set_session_portions_frozen_one": "{{name}}: {{count}} portion, {{frozen}} frozen",
+      "set_session_portions_frozen_other": "{{name}}: {{count}} portions, {{frozen}} frozen",
+      "set_plate_eaters_one": "{{day}}, {{name}}: for {{count}} person",
+      "set_plate_eaters_other": "{{day}}, {{name}}: for {{count}} people",
+      "set_availability_none": "{{day}} {{slot}}: no plate",
+      "set_availability_plan": "{{day}} {{slot}}: open for a plate",
+      "confirm_one": "{{count}} plate confirmed",
+      "confirm_other": "{{count}} plates confirmed",
+      "unlock_one": "{{count}} plate unlocked",
+      "unlock_other": "{{count}} plates unlocked",
+      "regenerate_window": "Week planned again",
+      "regenerate_day": "{{day}} planned again",
+      "regenerate_plate": "{{day}}: new plate instead of {{name}}",
+      "regenerate_side": "{{day}}: new side instead of {{name}}",
+      "regenerate_empty_cells": "Empty meals filled",
+      "create_plate": "{{day}} {{slot}}: new plate",
+      "add_food": "{{day}}: {{name}} added",
+      "swap_food": "{{day}}: {{from}} swapped for {{name}}",
+      "update_component": "{{day}}: {{name}} changed",
+      "remove_component": "{{day}}: {{name}} removed",
+      "delete_plate": "{{day}} {{slot}}: {{name}} removed"
+    },
+    "live_label": "Plan changes",
+    "undo": "Undo",
+    "undoing": "Undoing…",
+    "undone": "Undone",
+    "stale": "Changed since",
+    "unlock": {
+      "title": "These plates are confirmed",
+      "body": "The assistant needs your yes before it changes them.",
+      "row": "{{day}} {{slot}} ({{names}})",
+      "confirm": "Yes, unlock"
     }
   },
   "validation": {

@@ -275,4 +275,26 @@
     animation-duration: 1s !important;
     animation-iteration-count: infinite !important;
   }
+
+  /* The assistant's change pulse is decoration: off, not shortened. */
+  [data-pulse] {
+    animation: none !important;
+  }
+}
+
+/* UX §5.6, D17: a board cell the assistant just changed flashes an accent
+   outline once (200 ms). */
+@keyframes cell-pulse {
+  from {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  to {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+}
+
+[data-pulse] {
+  animation: cell-pulse 200ms ease-out 1;
 }
