@@ -83,7 +83,9 @@ src/components/
 │                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog, CopyFromWeekDialog; keynav in lib/plan/keynav.ts;
 │                      #   PlanSheet (one sheet per cell: PlateSheet, CellSheet or FoodPicker), BatchSection,
 │                      #   QuantityStepper; review (D33–D35): UnlockDialog, DiscardDialog, DraftBar (phone),
-│                      #   GenerationProgress
+│                      #   GenerationProgress; ReplanSheet (mid-week re-plan, UX §5.10: overflow
+│                      #   "Re-plan from today" on the current window, and Mark as No plate on a
+│                      #   confirmed plate from today on)
 ├── batch/             # BatchBadge, BatchHighlightProvider (hooks in batch-highlight.ts), CookStrip,
 │                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
 ├── plan-wizard/       # PlanWizard (`/plan/new`): WhoIsHome (window grid, day menu Away all day /

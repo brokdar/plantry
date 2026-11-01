@@ -38,6 +38,8 @@ interface PlanSheetProps {
   onChange: (state: SheetState | null) => void
   /** After the sheet closed: return focus to the cell it was opened for. */
   onClosed: () => void
+  /** Mark as No plate on a plate (a confirmed one opens the re-plan). */
+  onMarkNoPlate: (cell: BoardCell) => void
 }
 
 function findCell(board: Board, key: string): BoardCell | undefined {
@@ -61,6 +63,7 @@ export function PlanSheet({
   running,
   onChange,
   onClosed,
+  onMarkNoPlate,
 }: PlanSheetProps) {
   const { t, i18n } = useTranslation()
   const phone = useIsPhone()
@@ -146,6 +149,7 @@ export function PlanSheet({
               slotName={slotName}
               onPick={(p) => onChange({ key: state.key, picker: p })}
               onOpenCell={(key) => onChange({ key })}
+              onMarkNoPlate={onMarkNoPlate}
               onClose={close}
             />
           ) : (

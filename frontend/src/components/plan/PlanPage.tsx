@@ -7,9 +7,10 @@ import { CookStrip } from "@/components/batch/CookStrip"
 import { ChatPanel } from "@/components/chat/ChatPanel"
 import { CopyFromWeekDialog } from "@/components/plan/CopyFromWeekDialog"
 import { Button } from "@/components/ui/button"
-import type { Plan } from "@/lib/api/plan"
+import type { Plan, ReplanCell } from "@/lib/api/plan"
 import { buildBoard, type BoardCell } from "@/lib/plan/board"
 import { isAcceptShortcut, isCheatsheetShortcut } from "@/lib/plan/keynav"
+import { replanFrom } from "@/lib/plan/replan"
 import { useGenerate, useRegenerate, useRun } from "@/lib/queries/generation"
 import {
   useAccept,
@@ -28,6 +29,7 @@ import { EmptyWindow } from "./EmptyWindow"
 import { GenerationProgress } from "./GenerationProgress"
 import { PlanSheet, type SheetState } from "./PlanSheet"
 import { PlanToolbar } from "./PlanToolbar"
+import { ReplanSheet } from "./ReplanSheet"
 import { ShortcutsDialog } from "./ShortcutsDialog"
 
 interface PlanPageProps {
@@ -111,6 +113,12 @@ function PlanView({
   const [copyOpen, setCopyOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [discardOpen, setDiscardOpen] = useState(false)
+  // The re-plan sheet and the cells it opened with (UX §5.10).
+  const [replan, setReplan] = useState<{
+    open: boolean
+    cells: ReplanCell[]
+  }>({ open: false, cells: [] })
+  const replanOpen = useRef(false)
   // Needs attention: the next cell to step to, and the cell the last press
   // focused (the next press opens its sheet).
   const [attention, setAttention] = useState<{
@@ -143,6 +151,8 @@ function PlanView({
     runQuery.data?.status !== "error" &&
     runQuery.data?.status !== "partial"
   const canReview = board.draft !== null && !board.readOnly
+  // The first day a re-plan may touch; null for a past window.
+  const from = replanFrom(win)
 
   const rangeLabel = new Intl.DateTimeFormat(i18n.language, {
     day: "numeric",
@@ -259,6 +269,8 @@ function PlanView({
   }
 
   function returnFocus() {
+    // Mark as No plate moved on to the re-plan sheet: focus stays there.
+    if (replanOpen.current) return
     if (sheetCell.current) focusCell(`[data-cell-key="${sheetCell.current}"]`)
   }
 
@@ -268,7 +280,19 @@ function PlanView({
     changeSheet({ key: cell.key })
   }
 
+  function openReplan(cells: ReplanCell[]) {
+    replanOpen.current = true
+    setReplan({ open: true, cells })
+  }
+
+  /** Mark as No plate: a confirmed plate from today on goes through the
+   *  re-plan sheet (its ingredients may be bought, D34); anything else is
+   *  marked at once with Undo. */
   function markCell(cell: BoardCell) {
+    if (cell.state === "confirmed" && from !== null && cell.date >= from) {
+      openReplan([{ date: cell.date, slot_id: cell.slotId }])
+      return
+    }
     const raw = plan.cells.find(
       (c) => c.date === cell.date && c.slot_id === cell.slotId
     )
@@ -296,6 +320,10 @@ function PlanView({
         onAcceptAndShop={acceptAndShop}
         onRegenerateWeek={() => generate.mutate({ start: win.start })}
         onDiscard={() => setDiscardOpen(true)}
+        // Re-plan from today: only the current window (D33).
+        onReplan={
+          win.is_current && !board.readOnly ? () => openReplan([]) : undefined
+        }
         progress={
           runId !== undefined && (
             <GenerationProgress
@@ -364,7 +392,20 @@ function PlanView({
         running={running}
         onChange={changeSheet}
         onClosed={returnFocus}
+        onMarkNoPlate={markCell}
       />
+      {from !== null && (
+        <ReplanSheet
+          open={replan.open}
+          onOpenChange={(open) => {
+            replanOpen.current = open
+            setReplan((r) => ({ ...r, open }))
+          }}
+          plan={plan}
+          from={from}
+          initialCells={replan.cells}
+        />
+      )}
       <ChatPanel range={{ from: win.start, to: win.end }} />
     </PageFrame>
   )
