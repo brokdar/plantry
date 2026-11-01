@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
@@ -36,12 +37,15 @@ type ReplanQuery struct {
 }
 
 // ReplanRequest is a re-plan: confirmed plates go only with
-// UnlockConfirmed; Regenerate starts an empty_cells run over [From, To].
+// UnlockConfirmed; Regenerate starts an empty_cells run over [From, To]
+// with Chooser (empty: the LLM when a provider resolves, else the
+// heuristic, as for Regenerate; D11).
 type ReplanRequest struct {
 	ReplanQuery
 	UnlockConfirmed bool
 	Spare           SpareMode
 	Regenerate      bool
+	Chooser         airun.Chooser
 	Instruction     string
 }
 
@@ -137,7 +141,7 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 		return nil, fmt.Errorf("%w: spare %q", domain.ErrInvalidInput, req.Spare)
 	}
 	if req.Regenerate {
-		if err := s.startable(ctx); err != nil {
+		if err := s.startable(ctx, req.Chooser); err != nil {
 			return nil, err
 		}
 	}
@@ -181,7 +185,7 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 	// generation slips in between; the removal is committed either way, so a
 	// run that fails to start is logged and leaves run_id nil.
 	id, err := s.regenerate(ctx, Request{
-		Start: w.Start, Today: req.Today, Instruction: req.Instruction,
+		Start: w.Start, Today: req.Today, Chooser: req.Chooser, Instruction: req.Instruction,
 		Scope: Scope{Kind: ScopeEmptyCells, From: req.From, To: req.To},
 	}, true)
 	if err != nil {
@@ -194,7 +198,7 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 
 // startable checks up front what would stop Regenerate from starting, so a
 // re-plan does not commit and then fail to fill the week.
-func (s *Service) startable(ctx context.Context) error {
+func (s *Service) startable(ctx context.Context, chooser airun.Chooser) error {
 	n, err := s.d.FoodRows.CountComposedFoods(ctx)
 	if err != nil {
 		return fmt.Errorf("count recipes: %w", err)
@@ -202,7 +206,7 @@ func (s *Service) startable(ctx context.Context) error {
 	if n < setup.RecipeTarget {
 		return fmt.Errorf("%w: %d recipes", domain.ErrNotEnoughRecipes, n)
 	}
-	_, _, err = s.chooser(ctx, "")
+	_, _, err = s.chooser(ctx, chooser)
 	return err
 }
 

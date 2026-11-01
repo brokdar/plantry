@@ -88,7 +88,9 @@ func (e *replanEnv) query() planning.ReplanQuery {
 }
 
 func (e *replanEnv) replan(unlock bool, spare planning.SpareMode, regenerate bool) (*planning.ReplanResult, error) {
-	return e.svc.Replan(e.ctx, planning.ReplanRequest{ReplanQuery: e.query(), UnlockConfirmed: unlock, Spare: spare, Regenerate: regenerate})
+	return e.svc.Replan(e.ctx, planning.ReplanRequest{
+		ReplanQuery: e.query(), UnlockConfirmed: unlock, Spare: spare, Regenerate: regenerate, Chooser: airun.ChooserHeuristic,
+	})
 }
 
 func (e *replanEnv) session(id int64) *plate.SessionView {

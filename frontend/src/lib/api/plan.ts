@@ -220,6 +220,8 @@ export interface ReplanInput {
   unlock_confirmed: boolean
   spare: "freeze" | "keep"
   regenerate: boolean
+  /** Who fills the rest (D11); omitted: the LLM when one is configured. */
+  chooser?: Chooser
   instruction?: string
 }
 

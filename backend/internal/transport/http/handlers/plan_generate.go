@@ -216,6 +216,7 @@ type replanRequest struct {
 	UnlockConfirmed bool         `json:"unlock_confirmed"`
 	Spare           string       `json:"spare"`
 	Regenerate      bool         `json:"regenerate"`
+	Chooser         string       `json:"chooser"`
 	Instruction     string       `json:"instruction"`
 }
 
@@ -279,7 +280,7 @@ func (h *PlanGenerateHandler) Replan(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.svc.Replan(r.Context(), planning.ReplanRequest{
 		ReplanQuery: q, UnlockConfirmed: body.UnlockConfirmed, Spare: planning.SpareMode(body.Spare),
-		Regenerate: body.Regenerate, Instruction: body.Instruction,
+		Regenerate: body.Regenerate, Chooser: airun.Chooser(body.Chooser), Instruction: body.Instruction,
 	})
 	var ce *planning.ConfirmedAffectedError
 	if errors.As(err, &ce) {

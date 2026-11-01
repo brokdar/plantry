@@ -30,7 +30,7 @@ func TestPlanReplanHTTP(t *testing.T) {
 	assert.Equal(t, []any{map[string]any{"plate_id": pid, "date": "2026-11-12", "slot_id": float64(lunch), "food_name": "Main 1"}}, pv["confirmed_affected"])
 	assert.Equal(t, []any{}, pv["spare"])
 
-	req := fmt.Sprintf(`{"from":"2026-11-11","to":"2026-11-13","none_cells":[{"date":"2026-11-12","slot_id":%d}],"spare":"freeze","regenerate":true`, lunch)
+	req := fmt.Sprintf(`{"from":"2026-11-11","to":"2026-11-13","none_cells":[{"date":"2026-11-12","slot_id":%d}],"spare":"freeze","regenerate":true,"chooser":"heuristic"`, lunch)
 	code, body = a.do(http.MethodPost, "/api/plan/replan"+replanToday, req+`,"unlock_confirmed":false}`)
 	require.Equal(t, http.StatusConflict, code, body)
 	assert.Equal(t, "error.plan.confirmed_affected", body["message_key"])
@@ -46,6 +46,7 @@ func TestPlanReplanHTTP(t *testing.T) {
 	_, run := a.do(http.MethodGet, fmt.Sprintf("/api/plan/runs/%.0f", body["run_id"]), "")
 	assert.Equal(t, "regenerate", run["kind"])
 	assert.Equal(t, "ok", run["status"], run)
+	assert.Equal(t, "heuristic", run["chooser"])
 	var n int
 	require.NoError(t, a.db.QueryRow(`SELECT COUNT(*) FROM plates WHERE date < '2026-11-11'`).Scan(&n))
 	assert.Zero(t, n, "nothing before from")
@@ -72,6 +73,7 @@ func TestPlanReplanHTTP_Errors(t *testing.T) {
 		{"preview range over two windows", http.MethodGet, "/api/plan/replan/preview?from=2026-11-11&to=2026-11-14&today=2026-11-11", "", http.StatusBadRequest, "error.invalid_body"},
 		{"malformed body", http.MethodPost, "/api/plan/replan", `{`, http.StatusBadRequest, "error.invalid_body"},
 		{"bad none cell date", http.MethodPost, "/api/plan/replan" + replanToday, `{"from":"2026-11-11","to":"2026-11-13","spare":"keep","none_cells":[{"date":"x","slot_id":1}]}`, http.StatusBadRequest, "error.invalid_body"},
+		{"llm chooser without a provider", http.MethodPost, "/api/plan/replan" + replanToday, `{"from":"2026-11-11","to":"2026-11-13","spare":"keep","regenerate":true,"chooser":"llm"}`, http.StatusServiceUnavailable, "error.ai.provider_missing"},
 		{"unknown spare mode", http.MethodPost, "/api/plan/replan" + replanToday, `{"from":"2026-11-11","to":"2026-11-13","spare":"toss"}`, http.StatusBadRequest, "error.invalid_body"},
 	}
 	for _, tt := range tests {
