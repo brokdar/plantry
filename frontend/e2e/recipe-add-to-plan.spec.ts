@@ -34,7 +34,8 @@ test.describe("Add to plan (AC-10)", () => {
       const own = sheet.locator(`[data-testid$="|${slot.id}"]`).first()
       const key = await own.inputValue()
       const [date] = key.split("|")
-      await sheet.locator("label", { has: own }).click()
+      // The radio is visually hidden; its label is the target.
+      await own.locator("xpath=..").click()
       await expect(own).toBeChecked()
 
       const created = page.waitForResponse(

@@ -88,11 +88,22 @@ test.describe("generated week on the heuristic", () => {
       carbs_100g: 20,
     })
     const foods = [base.id]
-    // Generate needs the 10-recipe target (D22) even on a fresh DB.
+    // Generate needs the 10-recipe target (D22) even on a fresh DB. A main
+    // for each day (one cook a day) keeps H8 strict (D21): with fewer, a
+    // repeat is only a warning while the whole week is chosen, but a
+    // violation once Different side re-checks a single plate, and the run
+    // ends partial. Other specs' leftover recipes must not be what decides.
     const recipes = [
-      ...["Chili", "Curry", "Dal", "Ragout", "Hash", "Pilaf"].map(
-        (n) => [n, "main"] as const
-      ),
+      ...[
+        "Chili",
+        "Curry",
+        "Dal",
+        "Ragout",
+        "Hash",
+        "Pilaf",
+        "Stew",
+        "Gratin",
+      ].map((n) => [n, "main"] as const),
       ...["Rice", "Bread"].map((n) => [n, "side_starch"] as const),
       ...["Greens", "Slaw"].map((n) => [n, "side_veg"] as const),
     ]
