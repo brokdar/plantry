@@ -48,7 +48,10 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
   useNavigate: () => navigateMock,
 }))
 // The chat panel has its own tests; here only its opening matters.
-vi.mock("@/components/chat/ChatPanel", () => ({ ChatPanel: () => null }))
+vi.mock("@/components/chat/ChatPanel", () => ({
+  ChatPanel: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="chat-panel" /> : null,
+}))
 
 const toastMock = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() })
@@ -60,7 +63,6 @@ import {
   setAvailabilityOverride,
 } from "@/lib/api/availability"
 import { clearPlan, getPlan, restorePlan } from "@/lib/api/plan"
-import { useChatUI } from "@/lib/stores/chat-ui"
 
 import { PlanPage } from "./PlanPage"
 
@@ -85,7 +87,6 @@ beforeEach(async () => {
   await i18n.changeLanguage("en")
   vi.mocked(getPlan).mockResolvedValue(mockPlan)
   vi.mocked(restorePlan).mockResolvedValue({ plate_ids: [1, 2, 3] })
-  useChatUI.setState({ open: false })
 })
 
 describe("PlanPage", () => {
@@ -246,7 +247,7 @@ describe("PlanPage", () => {
     await user.click(
       await screen.findByRole("button", { name: "Ask assistant" })
     )
-    expect(useChatUI.getState().open).toBe(true)
+    expect(await screen.findByTestId("chat-panel")).toBeInTheDocument()
   })
 
   it("the warning count steps through the cells that need attention", async () => {

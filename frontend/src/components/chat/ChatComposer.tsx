@@ -3,7 +3,10 @@ import { useRef } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
-import { useChatUI } from "@/lib/stores/chat-ui"
+import {
+  assistantStream,
+  useAssistantStreamState,
+} from "@/lib/stores/assistant-stream"
 
 interface ChatComposerProps {
   streaming: boolean
@@ -19,8 +22,8 @@ export function ChatComposer({
   disabled,
 }: ChatComposerProps) {
   const { t } = useTranslation()
-  const draft = useChatUI((s) => s.draftMessage)
-  const setDraft = useChatUI((s) => s.setDraft)
+  const draft = useAssistantStreamState().draft
+  const setDraft = assistantStream.setDraft
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   function send() {

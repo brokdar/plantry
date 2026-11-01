@@ -19,7 +19,6 @@ import {
   useMarkNoPlate,
   usePlan,
 } from "@/lib/queries/plan"
-import { useChatUI } from "@/lib/stores/chat-ui"
 
 import { Board } from "./Board"
 import { BoardSkeleton } from "./BoardSkeleton"
@@ -133,7 +132,7 @@ function PlanView({
   // The cell the sheet was opened for: focus returns to it on close.
   const sheetCell = useRef<string | null>(initialCell ?? null)
   const navigate = useNavigate()
-  const openChat = useChatUI((s) => s.setOpen)
+  const [chatOpen, setChatOpen] = useState(false)
   const clearWindow = useClearWindow()
   const markNoPlate = useMarkNoPlate()
   const accept = useAccept()
@@ -311,7 +310,7 @@ function PlanView({
         readOnly={board.readOnly}
         warningCount={board.warningCells.length}
         onNextWarning={nextWarning}
-        onAsk={() => openChat(true)}
+        onAsk={() => setChatOpen(true)}
         onCopyWeek={() => setCopyOpen(true)}
         onClear={() => clearWindow.mutate({ from: win.start, to: win.end })}
         onShortcuts={() => setShortcutsOpen(true)}
@@ -413,7 +412,7 @@ function PlanView({
           }}
         />
       )}
-      <ChatPanel range={{ from: win.start, to: win.end }} />
+      <ChatPanel open={chatOpen} onOpenChange={setChatOpen} start={win.start} />
     </PageFrame>
   )
 }

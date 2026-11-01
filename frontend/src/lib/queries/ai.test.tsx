@@ -3,10 +3,13 @@ import { act, renderHook, waitFor } from "@testing-library/react"
 import React from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { chatStreamStore } from "../stores/chat-stream"
+import { ApiError } from "../api/client"
+import { assistantStream } from "../stores/assistant-stream"
 
-import { useChatStream } from "./ai"
+import { useAssistantStream, useUndoChange } from "./ai"
 import { planKeys, todayKeys } from "./keys"
+
+import { mockChange } from "@/test/fixtures"
 
 function stringToReadable(s: string): ReadableStream<Uint8Array> {
   const enc = new TextEncoder()
@@ -25,7 +28,7 @@ function mockResponse(body: ReadableStream<Uint8Array>): Response {
   })
 }
 
-const testRange = { from: "2026-04-14", to: "2026-04-20" }
+const testStart = "2026-04-14"
 
 function wrapper(qc: QueryClient) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
@@ -33,13 +36,13 @@ function wrapper(qc: QueryClient) {
   }
 }
 
-describe("useChatStream", () => {
+describe("useAssistantStream", () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    chatStreamStore.reset()
+    assistantStream.clear()
   })
 
-  it("posts today, from and to with the message", async () => {
+  it("posts today and the window start with the message", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date(2026, 9, 26, 23, 30))
     try {
@@ -52,13 +55,13 @@ describe("useChatStream", () => {
       const qc = new QueryClient({
         defaultOptions: { mutations: { retry: false } },
       })
-      const { result } = renderHook(() => useChatStream(), {
+      const { result } = renderHook(() => useAssistantStream(), {
         wrapper: wrapper(qc),
       })
       await act(async () => {
         await result.current.mutateAsync({
           message: "plan",
-          range: { from: "2026-10-31", to: "2026-11-06" },
+          start: "2026-10-31",
         })
       })
 
@@ -75,7 +78,7 @@ describe("useChatStream", () => {
     }
   })
 
-  it("routes deltas into chatStreamStore, not query cache", async () => {
+  it("routes deltas into assistantStream, not query cache", async () => {
     const sse =
       `event: message_start\ndata: {"model":"test"}\n\n` +
       `event: assistant_delta\ndata: {"text":"hi "}\n\n` +
@@ -93,27 +96,27 @@ describe("useChatStream", () => {
         mutations: { retry: false },
       },
     })
-    const { result } = renderHook(() => useChatStream(), {
+    const { result } = renderHook(() => useAssistantStream(), {
       wrapper: wrapper(qc),
     })
 
     await act(async () => {
-      await result.current.mutateAsync({ message: "hi", range: testRange })
+      await result.current.mutateAsync({ message: "hi", start: testStart })
     })
 
     // Buffer preserved after done so the UI can keep showing the last turn.
-    expect(chatStreamStore.get().text).toBe("hi there")
+    expect(assistantStream.get().text).toBe("hi there")
     // No assistant_delta entries ever written to query cache.
     const all = qc.getQueryCache().findAll()
     expect(all.every((q) => !q.queryKey.includes("assistant_delta"))).toBe(true)
   })
 
-  it("invalidates the plan views on plate_changed", async () => {
-    const from = "2026-04-14"
-    const to = "2026-04-20"
+  it("F1-AC2: a change event invalidates the plan views once and appends the change", async () => {
+    const change = mockChange()
     const sse =
-      `event: tool_exec_end\ndata: {"id":"tu_1","name":"create_plate","status":"ok","duration_ms":5}\n\n` +
-      `event: plate_changed\ndata: {}\n\n` +
+      `event: tool_exec_end\ndata: {"id":"tu_1","name":"set_session_portions","status":"ok","duration_ms":5}\n\n` +
+      `event: change\ndata: ${JSON.stringify(change)}\n\n` +
+      `event: unlock_request\ndata: {"rows":[{"date":"2026-04-15","slot_id":3,"names":["Chili"]}]}\n\n` +
       `event: done\ndata: {"stop_reason":"end_turn","iteration_count":1}\n\n`
 
     vi.stubGlobal(
@@ -129,16 +132,22 @@ describe("useChatStream", () => {
     })
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
 
-    const { result } = renderHook(() => useChatStream(), {
+    const { result } = renderHook(() => useAssistantStream(), {
       wrapper: wrapper(qc),
     })
     await act(async () => {
-      await result.current.mutateAsync({ message: "plan", range: { from, to } })
+      await result.current.mutateAsync({ message: "plan", start: testStart })
     })
 
     const keys = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey)
-    expect(keys).toContainEqual(planKeys.all)
+    expect(
+      keys.filter((k) => k === planKeys.all || k?.[0] === planKeys.all[0])
+    ).toHaveLength(1)
     expect(keys).toContainEqual(todayKeys.all)
+    expect(assistantStream.get().changes).toEqual([change])
+    expect(assistantStream.get().unlockRequest?.rows[0].names).toEqual([
+      "Chili",
+    ])
   })
 
   it("tool_call_* events accumulate args in the stream buffer", async () => {
@@ -176,8 +185,8 @@ describe("useChatStream", () => {
     const snapshots: Array<{
       toolCalls: Array<{ id: string; argsJson: string; status: string }>
     }> = []
-    const unsub = chatStreamStore.subscribe(() => {
-      const s = chatStreamStore.get()
+    const unsub = assistantStream.subscribe(() => {
+      const s = assistantStream.get()
       snapshots.push({
         toolCalls: s.toolCalls.map((tc) => ({
           id: tc.id,
@@ -187,11 +196,11 @@ describe("useChatStream", () => {
       })
     })
 
-    const { result } = renderHook(() => useChatStream(), {
+    const { result } = renderHook(() => useAssistantStream(), {
       wrapper: wrapper(qc),
     })
     await act(async () => {
-      await result.current.mutateAsync({ message: "x", range: testRange })
+      await result.current.mutateAsync({ message: "x", start: testStart })
     })
     unsub()
 
@@ -233,7 +242,7 @@ describe("useChatStream", () => {
         mutations: { retry: false },
       },
     })
-    const { result } = renderHook(() => useChatStream(), {
+    const { result } = renderHook(() => useAssistantStream(), {
       wrapper: wrapper(qc),
     })
 
@@ -241,7 +250,7 @@ describe("useChatStream", () => {
     act(() => {
       mutationPromise = result.current.mutateAsync({
         message: "x",
-        range: testRange,
+        start: testStart,
       })
     })
     await waitFor(() => expect(result.current.isStreaming).toBe(true))
@@ -251,5 +260,72 @@ describe("useChatStream", () => {
     })
 
     await expect(mutationPromise).rejects.toBeDefined()
+  })
+})
+
+describe("useUndoChange", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    assistantStream.clear()
+  })
+
+  function run(res: Response) {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(res))
+    const qc = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries")
+    const hook = renderHook(() => useUndoChange(), { wrapper: wrapper(qc) })
+    return { hook, invalidateSpy }
+  }
+
+  const json = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), { status })
+
+  it("undone: marks the line and invalidates the plan views", async () => {
+    const { hook, invalidateSpy } = run(
+      json(200, { plate_ids: [12], session_ids: [4] })
+    )
+    await act(async () => {
+      await hook.result.current.mutateAsync(5)
+    })
+    expect(assistantStream.get().lineStates[5]).toBe("undone")
+    const keys = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey)
+    expect(keys).toContainEqual(planKeys.all)
+  })
+
+  it("F1-AC3: 409 change_stale maps to the line state stale", async () => {
+    const { hook, invalidateSpy } = run(
+      json(409, { message_key: "error.ai.change_stale", status: 409 })
+    )
+    await act(async () => {
+      await hook.result.current.mutateAsync(5)
+    })
+    expect(assistantStream.get().lineStates[5]).toBe("stale")
+    expect(
+      invalidateSpy.mock.calls.map((c) => c[0]?.queryKey)
+    ).not.toContainEqual(planKeys.all)
+  })
+
+  it("409 change_undone maps to the line state undone", async () => {
+    const { hook } = run(
+      json(409, { message_key: "error.ai.change_undone", status: 409 })
+    )
+    await act(async () => {
+      await hook.result.current.mutateAsync(5)
+    })
+    expect(assistantStream.get().lineStates[5]).toBe("undone")
+  })
+
+  it("other errors clear the line state and reject", async () => {
+    const { hook } = run(
+      json(404, { message_key: "error.not_found", status: 404 })
+    )
+    await act(async () => {
+      await expect(hook.result.current.mutateAsync(5)).rejects.toBeInstanceOf(
+        ApiError
+      )
+    })
+    expect(assistantStream.get().lineStates[5]).toBeUndefined()
   })
 })

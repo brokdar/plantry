@@ -1,7 +1,7 @@
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
-import type { ConversationMessage } from "@/lib/domain/chatEvents"
+import type { ConversationMessage } from "@/lib/domain/assistantEvents"
 import { cn } from "@/lib/utils"
 
 interface ChatMessageProps {

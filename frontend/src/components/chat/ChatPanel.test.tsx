@@ -5,7 +5,7 @@ import "@/lib/i18n"
 
 vi.mock("@/lib/queries/ai", () => ({
   useAISettings: vi.fn(),
-  useChatStream: vi.fn(),
+  useAssistantStream: vi.fn(),
   useConversation: vi.fn(),
   useConversations: vi.fn(),
   useDeleteConversation: vi.fn(),
@@ -13,13 +13,12 @@ vi.mock("@/lib/queries/ai", () => ({
 
 import {
   useAISettings,
-  useChatStream,
+  useAssistantStream,
   useConversation,
   useConversations,
   useDeleteConversation,
 } from "@/lib/queries/ai"
-import { chatStreamStore } from "@/lib/stores/chat-stream"
-import { useChatUI } from "@/lib/stores/chat-ui"
+import { assistantStream } from "@/lib/stores/assistant-stream"
 
 import { ChatPanel } from "./ChatPanel"
 
@@ -33,12 +32,12 @@ function stubQueries(opts: {
   vi.mocked(useAISettings).mockReturnValue({
     data: { enabled: opts.enabled, model: "test-model" },
   } as unknown as ReturnType<typeof useAISettings>)
-  vi.mocked(useChatStream).mockReturnValue({
+  vi.mocked(useAssistantStream).mockReturnValue({
     mutateAsync,
     abort: vi.fn(),
     isStreaming: opts.isStreaming ?? false,
     isError: opts.isError ?? false,
-  } as unknown as ReturnType<typeof useChatStream>)
+  } as unknown as ReturnType<typeof useAssistantStream>)
   vi.mocked(useConversation).mockReturnValue({
     data: opts.messages && {
       messages: opts.messages.map((m) => ({
@@ -58,16 +57,12 @@ function stubQueries(opts: {
   return { mutateAsync }
 }
 
-const range = { from: "2025-06-09", to: "2025-06-15" }
+const start = "2025-06-09"
 
 beforeEach(() => {
   vi.clearAllMocks()
   act(() => {
-    chatStreamStore.reset()
-    useChatUI.setState({
-      open: false,
-      activeConversationId: null,
-    })
+    assistantStream.clear()
   })
 })
 
@@ -75,10 +70,10 @@ describe("ChatPanel composer", () => {
   test("sends the typed message for the window, without a mode", async () => {
     const { mutateAsync } = stubQueries({ enabled: true })
     act(() => {
-      useChatUI.setState({ open: true, draftMessage: "plan my dinner" })
+      assistantStream.setDraft("plan my dinner")
     })
 
-    render(<ChatPanel range={range} />)
+    render(<ChatPanel open onOpenChange={vi.fn()} start={start} />)
 
     expect(screen.queryByTestId("chat-composer-mode")).not.toBeInTheDocument()
     act(() => {
@@ -87,7 +82,7 @@ describe("ChatPanel composer", () => {
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith({
         conversationId: undefined,
-        range,
+        start,
         message: "plan my dinner",
       })
     })
@@ -97,8 +92,8 @@ describe("ChatPanel composer", () => {
 describe("ChatPanel transcript", () => {
   function openPanel() {
     act(() => {
-      useChatUI.setState({ open: true, activeConversationId: 1 })
-      chatStreamStore.appendText("Dinner is planned.")
+      assistantStream.setConversation(1)
+      assistantStream.appendText("Dinner is planned.")
     })
   }
 
@@ -112,7 +107,7 @@ describe("ChatPanel transcript", () => {
     })
     openPanel()
 
-    render(<ChatPanel range={range} />)
+    render(<ChatPanel open onOpenChange={vi.fn()} start={start} />)
 
     expect(await screen.findByText("Dinner is planned.")).toBeInTheDocument()
     expect(screen.getAllByText("Dinner is planned.")).toHaveLength(1)
@@ -126,7 +121,7 @@ describe("ChatPanel transcript", () => {
     })
     openPanel()
 
-    render(<ChatPanel range={range} />)
+    render(<ChatPanel open onOpenChange={vi.fn()} start={start} />)
 
     expect(await screen.findByText("Dinner is planned.")).toBeInTheDocument()
   })
@@ -139,7 +134,7 @@ describe("ChatPanel transcript", () => {
     })
     openPanel()
 
-    render(<ChatPanel range={range} />)
+    render(<ChatPanel open onOpenChange={vi.fn()} start={start} />)
 
     expect(await screen.findByText("Dinner is planned.")).toBeInTheDocument()
   })
