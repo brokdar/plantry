@@ -5,18 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-bun install                           # install deps
 bun run dev                           # dev server (port 5173, proxies /api → :8080)
-bun run build                         # production build → dist/
-bun run typecheck                     # tsc --noEmit
-bun run lint                          # eslint
-bun run format                        # prettier (ts/tsx)
-bun run test                          # vitest (unit, run once)
-bun run test:watch                    # vitest watch mode
-bun run e2e                           # playwright (spawns its own backend + frontend; E2E_LANE=N for a parallel lane)
 bun run check                         # lint + typecheck + knip + legacy grep gate + unit tests
-bun run knip                          # unused files, exports, dependencies (knip.json)
 bun run check:legacy                  # scripts/check-legacy.sh: grep gate for removed Phase 2 patterns
+bun run e2e                           # playwright (spawns its own backend + frontend; E2E_LANE=N for a parallel lane)
 ```
 
 ## Required Skills
@@ -65,52 +57,6 @@ src/routes/
 ```
 
 **Navigation** (`components/shell/primary-nav.ts`): four destinations — Today → `/today`, Plan → `/plan`, Recipes → `/recipes` (active on `/recipes*`), Shop → `/shop`. Settings sits at the bottom of the rail (≥768 px) and as a gear in the Today header on phones; the compact Generate button sits in the `/plan` header on phones (there is no top bar). ⌘K opens the `CommandPalette`: routines (apply to a day, with Undo), Copy a previous week, Manage routines (→ Settings → Meals & week) and the go-to entries (`command/palette-entries.ts`). Any other path renders the root not-found page with a link to Today.
-
-### Components
-
-```
-src/components/
-├── ui/                # shadcn primitives (never hand-edit generated files)
-├── shell/             # AppShell, SideNav, MobileBottomNav, GeneratePlanButton, primary-nav.ts
-├── today/             # TodayPage, Verdict (header + headline), CookCard/LeftoverCard, MealRow,
-│                      #   Reminders, RateQuestion, PlanBanner, WeekStrip
-├── shop/              # ShopPage, RangePicker, SectionList, ShoppingRow, CopyAsText (clipboard text);
-│                      #   ticks in localStorage `plantry:purchased:range:{from}:{to}`
-├── cook/              # CookMode (header, tabs; side by side ≥768 px), ScaledIngredients, StepPager,
-│                      #   TimerPill, useSessionPortions (debounced session write);
-│                      #   CookPages (session and recipe containers); timer detection in lib/cook/timers.ts
-├── plan/              # the board: PlanPage, Board (BoardGrid ≥768 px, DayList phone), PlateCell,
-│                      #   PlanToolbar, EmptyWindow, BoardSkeleton, ShortcutsDialog, CopyFromWeekDialog; keynav in lib/plan/keynav.ts;
-│                      #   PlanSheet (one sheet per cell: PlateSheet, CellSheet or FoodPicker), BatchSection,
-│                      #   QuantityStepper; review (D33–D35): UnlockDialog, DiscardDialog, DraftBar (phone),
-│                      #   GenerationProgress; ReplanSheet (mid-week re-plan, UX §5.10: overflow
-│                      #   "Re-plan from today" on the current window, and Mark as No plate on a
-│                      #   confirmed plate from today on)
-├── batch/             # BatchBadge, BatchHighlightProvider (hooks in batch-highlight.ts), CookStrip,
-│                      #   DayMeter, NutritionPopover; pure helpers in lib/plan/ (batch-colours, format)
-├── plan-wizard/       # PlanWizard (`/plan/new`): WhoIsHome (window grid, day menu Away all day /
-│                      #   Guests, "Make this my new default"), AnythingSpecial, Generating (run
-│                      #   stages, failure + Plan without the assistant), ConfirmRemoval (No plate on
-│                      #   confirmed plates asks first); GeneratePlanButton opens it
-├── availability/      # AvailabilityGrid (weekday/date × slot modes), RoutinePicker
-├── setup/             # SetupWizard and its steps; wizard-draft.ts, use-wizard-save.ts
-├── component/         # shared input widget: QuantityUnitInput (leaf amount + unit)
-├── recipes/           # RecipeLibrary, RecipeCard, RecipesHeader (tabs), AddRecipeMenu, ImportSheet,
-│                      #   RecipeOnboarding, RecipeEditor, RecipeDetail, NutritionCompletenessWarning
-│                      #   (shared by editor, detail and import)
-├── import/            # ImportWizard (hosted by ImportSheet), IngredientResolveRow, ImportNutritionSummary
-├── ingredients/       # ingredient CRUD + lookup: IngredientEditor, IngredientTable, LookupPanel
-├── editorial/         # design system editorial primitives
-├── chat/              # AI chat panel
-├── command/           # CommandPalette (cmdk)
-├── images/            # image crop/upload UI
-└── settings/          # SettingsShell, sections/ (one per section), controls.tsx (Stepper, Switch,
-                       #   NumberField, OptionCards, SettingsGroup, SavedNote), HouseholdHelper,
-                       #   AIProviderControls (shared with the setup wizard), SourceBadge;
-                       #   routines/ (RoutinesEditor in Meals & week: RoutineCard, RoutineSheet, RoutineRenameDialog);
-                       #   PricesEditor (Assistant → Prices, `ai.price_overrides`); insights/ (InsightsPage,
-                       #   RunsTable, RunDetailSheet, Sparkline — hand-written SVG, VersionTable)
-```
 
 ### Data layer
 

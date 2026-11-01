@@ -34,61 +34,6 @@ Load these before writing or modifying backend code:
 
 Data flow: `transport → domain ← adapters`
 
-```
-backend/
-├── cmd/plantry/main.go              # entrypoint — wires everything together
-├── cmd/plantry-eval/                # offline eval command (see Plan generation)
-├── db/
-│   ├── migrations/                  # goose SQL migrations (+ Go migration files)
-│   └── schema_patches/              # additive schema additions outside numbered migrations
-└── internal/
-    ├── adapters/
-    │   ├── sqlite/                  # sqlc repo implementations
-    │   │   ├── queries/             # *.sql files with sqlc annotations
-    │   │   └── sqlcgen/             # generated — never edit by hand
-    │   ├── anthropic/               # Anthropic SDK — preset generation, AI features
-    │   ├── openai/                  # OpenAI — food lookup
-    │   ├── fdc/                     # FoodData Central API
-    │   ├── off/                     # Open Food Facts API
-    │   ├── imagestore/              # image storage
-    │   ├── httpfetch/               # generic HTTP fetch adapter
-    │   ├── llmresolver/             # selects LLM provider at runtime
-    │   ├── jsonld/                  # JSON-LD parsing (recipe import)
-    │   ├── fake/                    # in-memory fakes for unit tests
-    │   └── crypto/                  # ID generation helpers
-    ├── domain/                      # pure business logic — no I/O
-    │   ├── food/                    # Food aggregate (ingredients + portions)
-    │   ├── plate/                   # Plate aggregate: plates, components, cook sessions, events
-    │   ├── planview/                # read models for /api/plan and /api/today
-    │   ├── planning/                # plan generation: checker, choosers, runner, re-plan
-    │   ├── diet/                    # diet classes (pure)
-    │   ├── window/                  # plan window arithmetic (pure)
-    │   ├── actor/                   # who made a change (user / agent) in ctx
-    │   ├── slot/                    # Slot aggregate (planner day slots)
-    │   ├── preset/                  # Preset aggregate (saved day / week compositions)
-    │   ├── nutrition/               # nutrition calculation
-    │   ├── shopping/                # shopping list derivation
-    │   ├── profile/                 # user profile
-    │   ├── settings/                # app settings
-    │   ├── availability/            # cell availability (plan / routine / no plate)
-    │   ├── setup/                   # first-run setup status
-    │   ├── agent/                   # AI agent aggregate
-    │   ├── airun/                   # AI run log (metered LLM client)
-    │   ├── llm/                     # LLM service interface
-    │   ├── importer/                # recipe import orchestration
-    │   ├── feedback/                # plate feedback
-    │   └── units/                   # unit conversion
-    ├── eval/                        # offline eval suite behind cmd/plantry-eval (scenarios, library)
-    ├── transport/http/
-    │   ├── router.go                # chi route registrations
-    │   ├── handlers/                # thin HTTP translation, one file per aggregate
-    │   ├── middleware/              # request middleware
-    │   └── sse/                     # server-sent events (AI streaming)
-    ├── config/                      # env var loading
-    ├── testhelper/                  # NewTestDB, HTTP test fixtures
-    └── webui/                       # embeds frontend dist/
-```
-
 **Aggregates** are plain exported structs. `*.Service` holds business logic and takes repo interfaces as constructor args — never concrete types.
 
 **sqlc workflow:** edit `queries/*.sql` → run `sqlc generate` → implement/update `*_repo.go` using generated functions. Never write raw SQL outside of query files.
@@ -311,16 +256,6 @@ sqlite3 /data/plantry.db "SELECT seq, type, name, is_error, duration_ms, input_t
 # what call 1 of run 42 sent and got back
 sqlite3 /data/plantry.db "SELECT request_json, response_json FROM ai_run_steps WHERE run_id = 42 AND type = 'llm_call' ORDER BY seq LIMIT 1"
 ```
-
-## Key Dependencies
-
-| Package | Purpose |
-|---|---|
-| `go-chi/chi/v5` | HTTP router |
-| `modernc.org/sqlite` | CGO-free SQLite driver |
-| `pressly/goose/v3` | DB migrations |
-| `Masterminds/squirrel` | SQL query builder (dynamic queries) |
-| `xeipuuv/gojsonschema` | JSON Schema validation (AI responses) |
 
 ## Coding Rules
 

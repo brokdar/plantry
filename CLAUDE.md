@@ -11,27 +11,7 @@ Self-hosted weekly meal planner. Single Go binary embeds React SPA, serves from 
 
 ## Commands
 
-### Backend (`cd backend`)
-
-```bash
-go build ./...                        # compile
-go test ./...                         # all tests
-go test -run TestName ./path/...      # single test
-go vet ./...                          # vet
-golangci-lint run                     # lint
-sqlc generate                         # regenerate from queries + migrations
-go test -race ./...                   # race detector — run before feature complete
-```
-
-### Frontend (`cd frontend`)
-
-```bash
-bun run dev     # dev server (port 5173, proxies /api → :8080)
-bun run check   # lint + typecheck + unit tests
-bun run e2e     # playwright (auto-spawns backend + frontend via webServer config)
-```
-
-See [`frontend/CLAUDE.md`](frontend/CLAUDE.md) for full frontend commands, architecture, and testing rules.
+Backend and frontend commands live in [`backend/CLAUDE.md`](backend/CLAUDE.md) and [`frontend/CLAUDE.md`](frontend/CLAUDE.md).
 
 ### Docker
 
