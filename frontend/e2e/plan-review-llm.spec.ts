@@ -149,9 +149,13 @@ test.describe("generated week on the LLM", () => {
       await expect(progress).toBeHidden({ timeout: 20_000 })
       const run = (await (
         await ctx.get(`/api/plan/runs/${run_id}`)
-      ).json()) as { status: string; repair_attempts: number }
+      ).json()) as { status: string }
       expect(run.status).toBe("ok")
-      expect(run.repair_attempts).toBe(1)
+      // One repair: no API exposes repair_attempts, so count the LLM calls.
+      const detail = (await (
+        await ctx.get(`/api/ai/runs/${run_id}`)
+      ).json()) as { steps: { type: string }[] }
+      expect(detail.steps.filter((s) => s.type === "llm_call")).toHaveLength(2)
 
       // The notes line carries the run's notes (from the repaired turn).
       await expect(page.getByTestId("plan-notes")).toHaveText(NOTES)
