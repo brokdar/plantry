@@ -137,7 +137,7 @@ var payloadToday = time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)
 
 func execJSON(t *testing.T, ts *ToolSet, name, input string) map[string]any {
 	t.Helper()
-	out, _, err := ts.Execute(withToday(context.Background(), payloadToday), name, json.RawMessage(input))
+	out, _, _, err := ts.Execute(withToday(context.Background(), payloadToday), name, json.RawMessage(input))
 	require.NoError(t, err)
 	var m map[string]any
 	require.NoError(t, json.Unmarshal(out, &m))
@@ -287,6 +287,6 @@ func TestTool_ListFoods_CancelledContextAborts(t *testing.T) {
 	ts, _ := newPayloadToolSet(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, _, err := ts.Execute(ctx, "list_foods", json.RawMessage(`{}`))
+	_, _, _, err := ts.Execute(ctx, "list_foods", json.RawMessage(`{}`))
 	require.ErrorIs(t, err, context.Canceled)
 }

@@ -570,8 +570,8 @@ loop:
         emit tool_call event
         emit tool_result event
         append tool result to messages
-        if call changed plates (ToolEffectPlateChanged):
-            emit plate_changed event so frontend refreshes
+        if the call wrote the plan (a change, recorded in ai_changes):
+            emit change event (line + Undo; the frontend refreshes the plan)
     iterations++
     if iterations > MaxIterations (20): emit error.ai.iterations_exceeded; break
 ```

@@ -92,7 +92,7 @@ Requires `PLANTRY_AI_API_KEY`. Playwright uses a scripted fake; this validates t
 
 Steps:
 1. Planner → open chat panel → "fill my empty week with three quick-weekday dinners under 40 minutes".
-2. Watch SSE events: streamed text, tool-call cards, `plate_changed` events, plates updating live.
+2. Watch SSE events: streamed text, tool-call cards, `change` events, plates updating live.
 3. Verify at least one `create_plate` + `add_component_to_plate` tool call landed.
 4. Verify no runaway loop (cap at 20 iterations per ARCH §7.2).
 5. Verify the agent respects `cook_minutes ≤ 40` on chosen components (if any exist).

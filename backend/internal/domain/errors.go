@@ -34,6 +34,11 @@ var (
 	// ErrAIUnlockNeedsUser: the agent confirmed an unlock without a preview
 	// the user answered in a later message (Phase 4 D6).
 	ErrAIUnlockNeedsUser = errors.New("unlock needs the user's yes in a later message")
+	// ErrAIChangeStale: a row of an agent change was written again after it,
+	// so undoing the change would lose that write. ErrAIChangeUndone: the
+	// change was undone already (Phase 4 D13).
+	ErrAIChangeStale  = errors.New("the change was edited afterwards")
+	ErrAIChangeUndone = errors.New("the change was undone already")
 
 	// Plate feedback errors.
 	ErrInvalidFeedbackStatus = errors.New("invalid feedback status")
@@ -146,6 +151,8 @@ var messageKeys = []struct {
 	{ErrAIPastDate, "error.ai.past_date"},
 	{ErrAIPreferenceReserved, "error.ai.preference_reserved"},
 	{ErrAIUnlockNeedsUser, "error.ai.unlock_needs_user"},
+	{ErrAIChangeStale, "error.ai.change_stale"},
+	{ErrAIChangeUndone, "error.ai.change_undone"},
 	{ErrInvalidFeedbackStatus, "error.feedback.invalid_status"},
 	{ErrImportBodyTooLarge, "error.import.body_too_large"},
 	{ErrImportNotHTML, "error.import.not_html"},

@@ -86,7 +86,7 @@ func TestPresetTools_NoCopyWeek(t *testing.T) {
 	}
 	ts, err := NewToolSet(Services{Presets: &stubPresetSvc{}})
 	require.NoError(t, err)
-	_, _, err = ts.Execute(presetCtx, "copy_week", json.RawMessage(`{"source_start":"2026-05-11","target_start":"2026-05-18"}`))
+	_, _, _, err = ts.Execute(presetCtx, "copy_week", json.RawMessage(`{"source_start":"2026-05-11","target_start":"2026-05-18"}`))
 	require.ErrorIs(t, err, ErrToolNotFound)
 }
 
@@ -98,11 +98,11 @@ func TestApplyPreset_PastDate(t *testing.T) {
 		return &preset.ApplyResult{}, nil
 	}}})
 	require.NoError(t, err)
-	_, _, err = ts.Execute(presetCtx, "apply_preset", json.RawMessage(`{"preset_id":1,"target_date":"2026-04-30"}`))
+	_, _, _, err = ts.Execute(presetCtx, "apply_preset", json.RawMessage(`{"preset_id":1,"target_date":"2026-04-30"}`))
 	require.ErrorIs(t, err, domain.ErrAIPastDate)
 	assert.Equal(t, "error.ai.past_date", errorMessageKey(err))
 	assert.False(t, called, "nothing is applied")
-	_, _, err = ts.Execute(presetCtx, "apply_preset", json.RawMessage(`{"preset_id":1,"target_date":"2026-05-01"}`))
+	_, _, _, err = ts.Execute(presetCtx, "apply_preset", json.RawMessage(`{"preset_id":1,"target_date":"2026-05-01"}`))
 	require.NoError(t, err, "today works")
 }
 
@@ -139,19 +139,19 @@ func TestApplyPreset_SchemaValidatesTargetDate(t *testing.T) {
 	require.NoError(t, err)
 
 	// Bad date pattern should fail schema validation.
-	_, _, err = ts.Execute(context.Background(), "apply_preset",
+	_, _, _, err = ts.Execute(context.Background(), "apply_preset",
 		json.RawMessage(`{"preset_id":1,"target_date":"nope"}`))
 	require.Error(t, err)
 
 	// Good date passes.
-	out, eff, err := ts.Execute(presetCtx, "apply_preset",
+	out, eff, _, err := ts.Execute(presetCtx, "apply_preset",
 		json.RawMessage(`{"preset_id":1,"target_date":"2026-05-20"}`))
 	require.NoError(t, err)
-	assert.Equal(t, ToolEffectPlateChanged, eff)
+	assert.Equal(t, ToolEffectNone, eff, "a plan write is a change, not an effect (D13)")
 
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal(out, &parsed))
-	assert.Equal(t, "plate_changed", parsed["effect"])
+	assert.NotContains(t, parsed, "effect")
 }
 
 func TestApplyPreset_OverwriteFlag(t *testing.T) {
@@ -165,7 +165,7 @@ func TestApplyPreset_OverwriteFlag(t *testing.T) {
 	ts, err := NewToolSet(Services{Presets: svc})
 	require.NoError(t, err)
 
-	_, _, err = ts.Execute(presetCtx, "apply_preset",
+	_, _, _, err = ts.Execute(presetCtx, "apply_preset",
 		json.RawMessage(`{"preset_id":1,"target_date":"2026-05-20","on_conflict":"overwrite","slot_ids_filter":[2,3]}`))
 	require.NoError(t, err)
 	assert.Equal(t, preset.ConflictOverwrite, captured.OnConflict)
@@ -186,7 +186,7 @@ func TestPresetTools_RunAsAgent(t *testing.T) {
 	require.NoError(t, err)
 	ctx := actor.With(presetCtx, actor.User, 0)
 
-	_, _, err = ts.Execute(ctx, "apply_preset", json.RawMessage(`{"preset_id":1,"target_date":"2026-05-20"}`))
+	_, _, _, err = ts.Execute(ctx, "apply_preset", json.RawMessage(`{"preset_id":1,"target_date":"2026-05-20"}`))
 	require.NoError(t, err)
 	assert.Equal(t, []actor.Actor{{Kind: actor.Agent}}, got)
 }

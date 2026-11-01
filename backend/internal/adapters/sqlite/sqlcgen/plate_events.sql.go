@@ -8,7 +8,46 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
+
+const countPlateEventsAfter = `-- name: CountPlateEventsAfter :one
+SELECT COUNT(*) FROM plate_events
+WHERE id > ?1
+  AND (plate_id IN (/*SLICE:plate_ids*/?) OR cook_session_id IN (/*SLICE:session_ids*/?))
+`
+
+type CountPlateEventsAfterParams struct {
+	AfterID    int64
+	PlateIds   []sql.NullInt64
+	SessionIds []sql.NullInt64
+}
+
+func (q *Queries) CountPlateEventsAfter(ctx context.Context, arg CountPlateEventsAfterParams) (int64, error) {
+	query := countPlateEventsAfter
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.AfterID)
+	if len(arg.PlateIds) > 0 {
+		for _, v := range arg.PlateIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:plate_ids*/?", strings.Repeat(",?", len(arg.PlateIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:plate_ids*/?", "NULL", 1)
+	}
+	if len(arg.SessionIds) > 0 {
+		for _, v := range arg.SessionIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:session_ids*/?", strings.Repeat(",?", len(arg.SessionIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:session_ids*/?", "NULL", 1)
+	}
+	row := q.db.QueryRowContext(ctx, query, queryParams...)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const createPlateEvent = `-- name: CreatePlateEvent :exec
 INSERT INTO plate_events (plate_id, cook_session_id, date, slot_id, action, actor, ai_run_id, before_json, after_json, at)
@@ -44,6 +83,17 @@ func (q *Queries) CreatePlateEvent(ctx context.Context, arg CreatePlateEventPara
 	return err
 }
 
+const lastPlateEventID = `-- name: LastPlateEventID :one
+SELECT CAST(COALESCE(MAX(id), 0) AS INTEGER) FROM plate_events
+`
+
+func (q *Queries) LastPlateEventID(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, lastPlateEventID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const listPlateEvents = `-- name: ListPlateEvents :many
 SELECT id, plate_id, cook_session_id, date, slot_id, action, actor, ai_run_id, before_json, after_json, at
 FROM plate_events
@@ -52,6 +102,66 @@ ORDER BY id
 
 func (q *Queries) ListPlateEvents(ctx context.Context) ([]PlateEvent, error) {
 	rows, err := q.db.QueryContext(ctx, listPlateEvents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PlateEvent{}
+	for rows.Next() {
+		var i PlateEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.PlateID,
+			&i.CookSessionID,
+			&i.Date,
+			&i.SlotID,
+			&i.Action,
+			&i.Actor,
+			&i.AiRunID,
+			&i.BeforeJson,
+			&i.AfterJson,
+			&i.At,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPlateEventsOfRuns = `-- name: ListPlateEventsOfRuns :many
+SELECT id, plate_id, cook_session_id, date, slot_id, action, actor, ai_run_id, before_json, after_json, at
+FROM plate_events
+WHERE id > ?1 AND id <= ?2 AND ai_run_id IN (/*SLICE:run_ids*/?)
+ORDER BY id
+`
+
+type ListPlateEventsOfRunsParams struct {
+	AfterID   int64
+	ThroughID int64
+	RunIds    []sql.NullInt64
+}
+
+func (q *Queries) ListPlateEventsOfRuns(ctx context.Context, arg ListPlateEventsOfRunsParams) ([]PlateEvent, error) {
+	query := listPlateEventsOfRuns
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.AfterID)
+	queryParams = append(queryParams, arg.ThroughID)
+	if len(arg.RunIds) > 0 {
+		for _, v := range arg.RunIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:run_ids*/?", strings.Repeat(",?", len(arg.RunIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:run_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}

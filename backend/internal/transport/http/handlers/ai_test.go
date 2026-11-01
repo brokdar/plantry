@@ -55,7 +55,8 @@ func newAIHandlerWithPlan(t *testing.T, db *sql.DB, plan agent.PlanContext) (*ha
 	svc := agent.NewService(sqlite.NewAIRepo(db), resolver, tools,
 		profile.NewService(sqlite.NewProfileRepo(db)), testsvc.Settings(db), plan,
 		func() time.Time { return time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC) })
-	return handlers.NewAIHandler(svc, resolver), client
+	plates, avail := testsvc.Plan(db)
+	return handlers.NewAIHandler(svc, testsvc.Changes(db, plates, avail), resolver), client
 }
 
 func messageKey(t *testing.T, w *httptest.ResponseRecorder) string {

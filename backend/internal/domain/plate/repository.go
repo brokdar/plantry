@@ -35,6 +35,10 @@ type Repository interface {
 	UpdateComponent(ctx context.Context, pc *PlateComponent) error
 	DeleteComponent(ctx context.Context, id int64) error
 
+	// Reinsert inserts p with its own id p.ID, and its components, as an
+	// undo brings a plate back (Phase 4 D13).
+	Reinsert(ctx context.Context, p *Plate) error
+
 	// RestoreFeedback writes a plate's feedback row as it was, rated_at
 	// included.
 	RestoreFeedback(ctx context.Context, plateID int64, fb Feedback) error
@@ -61,6 +65,9 @@ type SessionRepository interface {
 	// ListInRange returns the sessions cooking in [from, to] or linked to a
 	// plate dated in it, with every link of each keyed by session id.
 	ListInRange(ctx context.Context, from, to time.Time) ([]CookSession, map[int64][]Link, error)
+	// UpsertSession writes s with its own id exactly as given, inserting it
+	// when the row is gone (Phase 4 D13).
+	UpsertSession(ctx context.Context, s CookSession) error
 	// SetSessionsState writes the state of the sessions of ids and bumps
 	// updated_at.
 	SetSessionsState(ctx context.Context, ids []int64, st State) error

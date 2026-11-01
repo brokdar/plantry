@@ -51,6 +51,10 @@ func (r *PlateEventRepo) List(ctx context.Context) ([]plate.Event, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list plate events: %w", err)
 	}
+	return mapPlateEvents(rows)
+}
+
+func mapPlateEvents(rows []sqlcgen.PlateEvent) ([]plate.Event, error) {
 	out := make([]plate.Event, len(rows))
 	for i, row := range rows {
 		date, err := time.Parse(dateLayout, row.Date)

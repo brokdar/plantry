@@ -8,6 +8,24 @@ import (
 	"database/sql"
 )
 
+type AiChange struct {
+	ID                     int64
+	RunID                  int64
+	StepSeq                int64
+	Tool                   string
+	TextKey                string
+	ParamsJson             string
+	RunIdsJson             string
+	DatesJson              string
+	PlateIdsJson           string
+	SessionIdsJson         string
+	FirstEventID           sql.NullInt64
+	LastEventID            sql.NullInt64
+	AvailabilityBeforeJson sql.NullString
+	CreatedAt              string
+	UndoneAt               sql.NullString
+}
+
 type AiConversation struct {
 	ID        int64
 	Title     sql.NullString

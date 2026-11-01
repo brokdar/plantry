@@ -52,6 +52,8 @@ type planToolEnv struct {
 	avail   *availability.Service
 	ts      *agent.ToolSet
 	sides   []int64
+	rec     *airun.Recorder
+	changes *agent.Changes
 }
 
 func newPlanToolEnv(t *testing.T) *planToolEnv {
@@ -86,8 +88,8 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 	}
 
 	e.deps = testsvc.PlanningDeps(db)
-	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
-	e.deps.RunLog, e.deps.Runs = planning.RecorderLog{Recorder: rec}, sqlite.NewAIRunRepo(db)
+	e.rec = airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
+	e.deps.RunLog, e.deps.Runs = planning.RecorderLog{Recorder: e.rec}, sqlite.NewAIRunRepo(db)
 	e.deps.Go = func(f func()) { f() }
 	e.planner = planning.NewService(e.deps)
 	e.plates, e.avail = testsvc.Plan(db)
@@ -98,8 +100,10 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 		Plates: e.plates, Profile: profile.NewService(sqlite.NewProfileRepo(db)),
 		Slots: slot.NewService(sqlite.NewSlotRepo(db)), Settings: set,
 		PlanView: testsvc.PlanView(db), Planner: e.planner, Cells: e.avail,
+		Changes: sqlite.NewAIChangeRepo(db),
 	})
 	require.NoError(t, err)
+	e.changes = testsvc.Changes(db, e.plates, e.avail)
 	e.ctx = agent.WithWindow(agent.WithToday(ctx, planToday), window.Window{Start: planStart, End: planStart.AddDate(0, 0, 6)})
 
 	id, err := e.planner.Generate(ctx, planning.Request{Start: planStart, Today: planToday, Chooser: airun.ChooserHeuristic})
@@ -127,7 +131,7 @@ func (e *planToolEnv) sql(q string, args ...any) {
 
 func (e *planToolEnv) exec(name, input string) (map[string]any, error) {
 	e.t.Helper()
-	out, _, err := e.ts.Execute(e.ctx, name, json.RawMessage(input))
+	out, _, _, err := e.ts.Execute(e.ctx, name, json.RawMessage(input))
 	if err != nil {
 		return nil, err
 	}

@@ -30,8 +30,10 @@ type Querier interface {
 	CountConversations(ctx context.Context) (int64, error)
 	// What a generation run wrote that still exists (B6).
 	CountPlanRunRows(ctx context.Context, id sql.NullInt64) (CountPlanRunRowsRow, error)
+	CountPlateEventsAfter(ctx context.Context, arg CountPlateEventsAfterParams) (int64, error)
 	CountPlatesUsingTimeSlot(ctx context.Context, slotID int64) (int64, error)
 	CountPresetsUsingFood(ctx context.Context, foodID int64) (int64, error)
+	CreateAIChange(ctx context.Context, arg CreateAIChangeParams) (AiChange, error)
 	CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error)
 	CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error
 	CreateConversation(ctx context.Context, title sql.NullString) (AiConversation, error)
@@ -77,6 +79,7 @@ type Querier interface {
 	// times_cooked counts the food's confirmed sessions cooked on or before today
 	// with at least one linked plate not marked not_eaten.
 	FoodHistory(ctx context.Context, arg FoodHistoryParams) ([]FoodHistoryRow, error)
+	GetAIChange(ctx context.Context, id int64) (AiChange, error)
 	GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailRow, error)
 	GetAvailabilityDefault(ctx context.Context, arg GetAvailabilityDefaultParams) (GetAvailabilityDefaultRow, error)
 	GetAvailabilityOverride(ctx context.Context, arg GetAvailabilityOverrideParams) (GetAvailabilityOverrideRow, error)
@@ -98,6 +101,8 @@ type Querier interface {
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
+	LastPlateEventID(ctx context.Context) (int64, error)
+	ListAIChangesByConversation(ctx context.Context, conversationID sql.NullInt64) ([]AiChange, error)
 	// A run's steps in seq order. args and result are cut to 8192 characters
 	// (an llm_call shows its request_json and response_json there); the *_cut
 	// flags say a value was longer.
@@ -133,6 +138,7 @@ type Querier interface {
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
 	ListPlateComponentsByPlateIDs(ctx context.Context, ids []int64) ([]ListPlateComponentsByPlateIDsRow, error)
 	ListPlateEvents(ctx context.Context) ([]PlateEvent, error)
+	ListPlateEventsOfRuns(ctx context.Context, arg ListPlateEventsOfRunsParams) ([]PlateEvent, error)
 	ListPlateFeedbackByDateRange(ctx context.Context, arg ListPlateFeedbackByDateRangeParams) ([]PlateFeedback, error)
 	ListPlateFeedbackByPlateIDs(ctx context.Context, ids []int64) ([]PlateFeedback, error)
 	// The plates with a component eating from one of the sessions.
@@ -153,10 +159,12 @@ type Querier interface {
 	// Scans plate_events without a date/actor index: fine for a single-user audit
 	// table. Newest first so the cap drops the oldest rows.
 	ListUserPlateUpdates(ctx context.Context, arg ListUserPlateUpdatesParams) ([]ListUserPlateUpdatesRow, error)
+	MarkAIChangeUndone(ctx context.Context, arg MarkAIChangeUndoneParams) (sql.Result, error)
 	// Deletes up to 500 steps of runs started before the cutoff; the runs,
 	// prompts and tool schemas stay. The repo repeats it until nothing is left,
 	// so no single statement holds the write lock for long.
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
+	ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
 	SetFoodDietClass(ctx context.Context, arg SetFoodDietClassParams) (Food, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
@@ -183,6 +191,7 @@ type Querier interface {
 	UpsertAIPrompt(ctx context.Context, arg UpsertAIPromptParams) error
 	UpsertAIToolSchema(ctx context.Context, arg UpsertAIToolSchemaParams) error
 	UpsertAvailabilityOverride(ctx context.Context, arg UpsertAvailabilityOverrideParams) error
+	UpsertCookSession(ctx context.Context, arg UpsertCookSessionParams) error
 	UpsertFoodPortion(ctx context.Context, arg UpsertFoodPortionParams) error
 	UpsertPlateFeedback(ctx context.Context, arg UpsertPlateFeedbackParams) (PlateFeedback, error)
 	UpsertProfile(ctx context.Context, arg UpsertProfileParams) (UserProfile, error)

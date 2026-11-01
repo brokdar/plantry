@@ -427,3 +427,51 @@ func (q *Queries) UpdateCookSession(ctx context.Context, arg UpdateCookSessionPa
 	)
 	return i, err
 }
+
+const upsertCookSession = `-- name: UpsertCookSession :exec
+INSERT INTO cook_sessions (id, food_id, cook_date, cook_slot_id, portions, frozen_portions, cooked_at, note, state, ai_run_id, reason)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (id) DO UPDATE SET
+    food_id         = excluded.food_id,
+    cook_date       = excluded.cook_date,
+    cook_slot_id    = excluded.cook_slot_id,
+    portions        = excluded.portions,
+    frozen_portions = excluded.frozen_portions,
+    cooked_at       = excluded.cooked_at,
+    note            = excluded.note,
+    state           = excluded.state,
+    ai_run_id       = excluded.ai_run_id,
+    reason          = excluded.reason,
+    updated_at      = datetime('now')
+`
+
+type UpsertCookSessionParams struct {
+	ID             int64
+	FoodID         int64
+	CookDate       string
+	CookSlotID     int64
+	Portions       float64
+	FrozenPortions float64
+	CookedAt       sql.NullString
+	Note           sql.NullString
+	State          string
+	AiRunID        sql.NullInt64
+	Reason         sql.NullString
+}
+
+func (q *Queries) UpsertCookSession(ctx context.Context, arg UpsertCookSessionParams) error {
+	_, err := q.db.ExecContext(ctx, upsertCookSession,
+		arg.ID,
+		arg.FoodID,
+		arg.CookDate,
+		arg.CookSlotID,
+		arg.Portions,
+		arg.FrozenPortions,
+		arg.CookedAt,
+		arg.Note,
+		arg.State,
+		arg.AiRunID,
+		arg.Reason,
+	)
+	return err
+}

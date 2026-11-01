@@ -23,14 +23,16 @@ import (
 // at startup.
 type AIHandler struct {
 	svc       *agent.Service
+	changes   *agent.Changes
 	resolver  llm.Resolver
 	heartbeat time.Duration
 }
 
 // NewAIHandler constructs an AIHandler. The resolver must be non-nil; it
-// determines at request time whether a provider is configured.
-func NewAIHandler(svc *agent.Service, resolver llm.Resolver) *AIHandler {
-	return &AIHandler{svc: svc, resolver: resolver, heartbeat: 15 * time.Second}
+// determines at request time whether a provider is configured. changes lists
+// and undoes the agent's changes (D13).
+func NewAIHandler(svc *agent.Service, changes *agent.Changes, resolver llm.Resolver) *AIHandler {
+	return &AIHandler{svc: svc, changes: changes, resolver: resolver, heartbeat: 15 * time.Second}
 }
 
 // Enabled reports whether the AI backend currently has a provider configured.
@@ -192,6 +194,18 @@ type conversationResponse struct {
 	UpdatedAt string            `json:"updated_at"`
 }
 
+// conversationDetailResponse is a conversation with its messages and its
+// changes (D13), each with undone_at.
+type conversationDetailResponse struct {
+	conversationResponse
+	Changes []changeResponse `json:"changes"`
+}
+
+type changeResponse struct {
+	llm.ChangePayload
+	UndoneAt *string `json:"undone_at"`
+}
+
 type messageResponse struct {
 	ID        int64           `json:"id"`
 	Role      string          `json:"role"`
@@ -212,13 +226,20 @@ func toConversationSummary(c *agent.Conversation) conversationResponse {
 	}
 }
 
-func toConversationDetail(c *agent.Conversation) conversationResponse {
-	out := toConversationSummary(c)
+func toConversationDetail(c *agent.Conversation, changes []agent.Change) conversationDetailResponse {
+	out := conversationDetailResponse{conversationResponse: toConversationSummary(c), Changes: make([]changeResponse, len(changes))}
 	out.Messages = make([]messageResponse, len(c.Messages))
 	for i, m := range c.Messages {
 		out.Messages[i] = messageResponse{
 			ID: m.ID, Role: string(m.Role), Content: m.Content,
 			CreatedAt: m.CreatedAt.UTC().Format(time.RFC3339),
+		}
+	}
+	for i, ch := range changes {
+		out.Changes[i] = changeResponse{ChangePayload: ch.Payload()}
+		if ch.UndoneAt != nil {
+			at := ch.UndoneAt.UTC().Format(time.RFC3339)
+			out.Changes[i].UndoneAt = &at
 		}
 	}
 	return out
@@ -274,7 +295,36 @@ func (h *AIHandler) GetConversation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "error.server")
 		return
 	}
-	writeJSON(w, http.StatusOK, toConversationDetail(conv))
+	changes, err := h.changes.List(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "error.server")
+		return
+	}
+	writeJSON(w, http.StatusOK, toConversationDetail(conv, changes))
+}
+
+type undoChangeResponse struct {
+	PlateIDs   []int64 `json:"plate_ids"`
+	SessionIDs []int64 `json:"session_ids"`
+}
+
+// UndoChange handles POST /api/ai/changes/{id}/undo (D13): 200 with the rows
+// written back; 409 error.ai.change_stale when a row of the change was
+// written afterwards, error.ai.change_undone when undone already; 404 for an
+// unknown id. It needs no provider.
+func (h *AIHandler) UndoChange(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	rows, err := h.changes.Undo(r.Context(), id)
+	if err != nil {
+		status, key := toHTTPWithResource(err, "ai")
+		writeError(w, status, key)
+		return
+	}
+	writeJSON(w, http.StatusOK, undoChangeResponse{PlateIDs: rows.PlateIDs, SessionIDs: rows.SessionIDs})
 }
 
 // DeleteConversation handles DELETE /api/ai/conversations/{id}.

@@ -65,6 +65,40 @@ func (r *PlateRepo) Create(ctx context.Context, p *plate.Plate) error {
 	})
 }
 
+// Reinsert inserts p with its own id (a plate an undo brings back, Phase 4
+// D13) and its components.
+func (r *PlateRepo) Reinsert(ctx context.Context, p *plate.Plate) error {
+	return r.inTx(ctx, func(ctx context.Context) error {
+		q := r.queriesFor(ctx)
+		err := q.ReinsertPlate(ctx, sqlcgen.ReinsertPlateParams{
+			ID:      p.ID,
+			SlotID:  p.SlotID,
+			Note:    toNullString(p.Note),
+			Date:    p.Date.Format(dateLayout),
+			Eaters:  p.Eaters,
+			State:   string(p.State),
+			AiRunID: toNullInt64(p.AIRunID),
+			Reason:  toNullString(p.Reason),
+		})
+		if err != nil {
+			if isUniqueViolation(err, "plates.date") {
+				return fmt.Errorf("%w: %s slot %d", domain.ErrCellOccupied, p.DateString(), p.SlotID)
+			}
+			return err
+		}
+		for i := range p.Components {
+			pc := &p.Components[i]
+			pc.PlateID = p.ID
+			pcRow, err := q.CreatePlateComponent(ctx, plateComponentParams(pc))
+			if err != nil {
+				return err
+			}
+			mapPlateComponentToDomain(&pcRow, pc)
+		}
+		return nil
+	})
+}
+
 func (r *PlateRepo) Get(ctx context.Context, id int64) (*plate.Plate, error) {
 	q := r.queriesFor(ctx)
 	row, err := q.GetPlate(ctx, id)
