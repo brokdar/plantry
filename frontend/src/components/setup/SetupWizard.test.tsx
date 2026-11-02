@@ -207,6 +207,12 @@ describe("SetupWizard", () => {
     ).toBeInTheDocument()
     expect(screen.getByLabelText("Daily suggestion")).toBeChecked()
     expect(screen.getByLabelText("Notes to your assistant")).toHaveValue("")
+    // Provider "Disabled": nothing reads the notes or runs the daily search.
+    expect(screen.getByLabelText("Daily suggestion")).toBeDisabled()
+    expect(screen.getByLabelText("Notes to your assistant")).toBeDisabled()
+    expect(
+      screen.getAllByTestId("setup-assistant-needs-provider")
+    ).toHaveLength(2)
     await u.click(screen.getByTestId("setup-next"))
 
     await screen.findByTestId("setup-finish")
@@ -598,5 +604,7 @@ describe("SetupWizard", () => {
 
     expect(screen.getByTestId("ai-wizard-step-1")).toBeInTheDocument()
     expect(screen.queryByTestId("setup-assistant-later")).toBeNull()
+    expect(screen.getByLabelText("Notes to your assistant")).toBeEnabled()
+    expect(screen.getByLabelText("Daily suggestion")).toBeEnabled()
   })
 })

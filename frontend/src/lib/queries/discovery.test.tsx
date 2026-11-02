@@ -15,6 +15,12 @@ vi.mock("@/lib/api/discovery", () => ({
   rejectSuggestion: vi.fn(),
 }))
 
+vi.mock("sonner", () => ({
+  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
+}))
+
+import { toast } from "sonner"
+
 import {
   acceptSuggestion,
   anotherSuggestion,
@@ -210,6 +216,31 @@ describe("accept and reject invalidate (F1-AC3)", () => {
         insightKeys.all,
       ])
     )
+  })
+
+  it("a failed accept says the recipe is saved and Retry sends accept again", async () => {
+    vi.mocked(acceptSuggestion)
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce(
+        mockSuggestion({ status: "accepted", food_id: 42 })
+      )
+    const { result } = renderHook(() => useAcceptSuggestion(), {
+      wrapper: createHookWrapper(),
+    })
+    await act(async () => {
+      await result.current.mutateAsync({ id: 5, foodId: 42 }).catch(() => {})
+    })
+    const [message, opts] = vi.mocked(toast.error).mock.calls[0] as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ]
+    expect(message).toBe(
+      "Recipe saved, but the idea couldn't be marked as added."
+    )
+    expect(opts.action.label).toBe("Try again")
+    act(() => opts.action.onClick())
+    await waitFor(() => expect(acceptSuggestion).toHaveBeenCalledTimes(2))
+    expect(acceptSuggestion).toHaveBeenLastCalledWith(5, 42)
   })
 
   it("reject: suggestions, foods and insights", async () => {

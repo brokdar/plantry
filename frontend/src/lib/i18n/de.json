@@ -1298,6 +1298,7 @@
       "title": "Assistent (optional)",
       "why": "Der Assistent schlägt Mahlzeiten vor und kann deine Woche für dich füllen.",
       "later": "Das kannst du später nachholen. Planen klappt auch ohne.",
+      "needs_provider": "Wähle oben einen Anbieter, um das zu nutzen.",
       "api_key_description": "Dein Schlüssel vom Anbieter. Plantry speichert ihn verschlüsselt."
     },
     "finish": {
@@ -1368,6 +1369,7 @@
     "empty": {
       "title": "Für diese Woche ist noch nichts geplant",
       "body": "Plane Mahlzeit für Mahlzeit, übernimm eine Woche, die gut lief, oder lass den Assistenten einen Entwurf machen.",
+      "body_no_assistant": "Plane Mahlzeit für Mahlzeit, übernimm eine Woche, die gut lief, oder lass dir einen Entwurf vorschlagen.",
       "by_hand": "oder selbst planen",
       "copy": "Frühere Woche kopieren",
       "plan_week": "Diese Woche planen"
@@ -1721,7 +1723,9 @@
       "failed": "Die Suche hat nicht geklappt. Versuch es noch einmal."
     },
     "review": {
-      "gone": "Diese Idee ist nicht mehr verfügbar."
+      "gone": "Diese Idee ist nicht mehr verfügbar.",
+      "failed": "Diese Idee konnte nicht geöffnet werden. Versuch es noch einmal.",
+      "accept_failed": "Rezept gespeichert, aber die Idee konnte nicht als hinzugefügt markiert werden."
     }
   },
   "today": {

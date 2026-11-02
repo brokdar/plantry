@@ -414,6 +414,7 @@ function PlanView({
                 focusCell('[data-cell-mode="plan"][data-cell-empty]')
               }
               onCopyWeek={() => setCopyOpen(true)}
+              assistantEnabled={assistantEnabled}
             />
           )}
           <CookStrip batches={board.cookStrip} />

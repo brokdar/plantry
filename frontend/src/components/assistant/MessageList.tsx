@@ -118,7 +118,8 @@ export function MessageList({
               />
             )}
             {lines(changes)}
-            {changes.length > 0 &&
+            {/* One change already says "Undone" on its own line. */}
+            {changes.length > 1 &&
               changes.every((c) => lineState(c) === "undone") && (
                 <p
                   data-testid="assistant-turn-undone"

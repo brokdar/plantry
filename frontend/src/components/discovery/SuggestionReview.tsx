@@ -31,12 +31,13 @@ export function SuggestionReview({
   const suggestion = list.data?.items.find((s) => s.id === id)
   const gone =
     id !== undefined && list.isSuccess && !list.isFetching && !suggestion
+  const failed = id !== undefined && list.isError
 
   useEffect(() => {
-    if (!gone) return
-    toast.error(t("discovery.review.gone"))
+    if (!gone && !failed) return
+    toast.error(t(gone ? "discovery.review.gone" : "discovery.review.failed"))
     onClose()
-  }, [gone, onClose, t])
+  }, [gone, failed, onClose, t])
 
   if (!suggestion) return null
   return (

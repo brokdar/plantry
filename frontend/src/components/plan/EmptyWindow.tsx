@@ -10,6 +10,8 @@ interface EmptyWindowProps {
   /** Focuses the first open cell of the board. */
   onPlanByHand: () => void
   onCopyWeek: () => void
+  /** Without an AI provider the body must not offer the assistant. */
+  assistantEnabled: boolean
 }
 
 /**
@@ -22,6 +24,7 @@ export function EmptyWindow({
   start,
   onPlanByHand,
   onCopyWeek,
+  assistantEnabled,
 }: EmptyWindowProps) {
   const { t } = useTranslation()
   return (
@@ -34,7 +37,13 @@ export function EmptyWindow({
         <h2 id="plan-empty-title" className="text-h3 font-semibold text-ink">
           {t("plan.empty.title")}
         </h2>
-        <p className="text-body text-ink-muted">{t("plan.empty.body")}</p>
+        <p className="text-body text-ink-muted">
+          {t(
+            assistantEnabled
+              ? "plan.empty.body"
+              : "plan.empty.body_no_assistant"
+          )}
+        </p>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <Button asChild className="h-11 gap-2 px-4">

@@ -172,13 +172,18 @@ export function PlanToolbar({
               {t("plan.toolbar.read_only")}
             </p>
           )}
-          {/* Touch has no hover: the reason shows as text. */}
+          {/* The reason is a link to Settings → Assistant (a tooltip cannot
+              hold one); the tooltip repeats it as plain text. */}
           {!assistantEnabled && (
-            <p
-              data-testid="assistant-disabled-reason"
-              className="max-w-prose text-small text-ink-muted pointer-fine:hidden"
-            >
-              {t("assistant.disabled_reason")}
+            <p className="max-w-prose text-small text-ink-muted">
+              <Link
+                to="/settings/$section"
+                params={{ section: "assistant" }}
+                data-testid="assistant-disabled-reason"
+                className="underline underline-offset-2 hover:text-ink"
+              >
+                {t("assistant.disabled_reason")}
+              </Link>
             </p>
           )}
           {draft?.notes && (

@@ -70,11 +70,13 @@ export function Switch({
   label,
   id,
   testId,
+  disabled,
 }: {
   checked: boolean
   onChange: (next: boolean) => void
   /** Accessible name when no visible label points at `id`. */
   label?: string
+  disabled?: boolean
   id?: string
   testId?: string
 }) {
@@ -86,13 +88,14 @@ export function Switch({
         role="switch"
         aria-label={label}
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
         data-testid={testId}
-        className="peer absolute inset-0 z-10 cursor-pointer appearance-none rounded-full"
+        className="peer absolute inset-0 z-10 cursor-pointer appearance-none rounded-full disabled:cursor-not-allowed"
       />
       <span
         aria-hidden
-        className="h-6 w-11 rounded-full border border-line bg-panel-sunken transition-colors duration-150 ease-out peer-checked:border-accent peer-checked:bg-accent"
+        className="h-6 w-11 rounded-full border border-line bg-panel-sunken transition-colors duration-150 ease-out peer-checked:border-accent peer-checked:bg-accent peer-disabled:opacity-50"
       />
       <span
         aria-hidden

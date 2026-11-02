@@ -208,7 +208,26 @@ function Results({ search }: { search: Search }) {
   const done = status === "ok" || status === "partial"
   const list = useSuggestions({ run_id: search.runId }, done)
 
-  if (run.isError || status === "error") {
+  // A failed request (not a failed run) can simply be asked again.
+  if (run.isError || list.isError) {
+    return (
+      <div role="alert" className="mt-6 flex flex-col items-start gap-3">
+        <p className="text-body text-danger">
+          {t("discovery.discover.failed")}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void (run.isError ? run.refetch() : list.refetch())}
+          className="h-11 px-4 md:pointer-fine:h-9"
+          data-testid="discover-retry"
+        >
+          {t("common.retry")}
+        </Button>
+      </div>
+    )
+  }
+  if (status === "error") {
     return (
       <p role="alert" className="mt-6 text-body text-danger">
         {t(run.data?.error_key ?? "discovery.discover.failed")}

@@ -150,4 +150,18 @@ describe("DiscoverSheet", () => {
     expect(await screen.findByRole("alert")).toBeVisible()
     expect(listSuggestions).not.toHaveBeenCalled()
   })
+
+  it("a failed ideas query shows the error with Retry, not 'running' forever", async () => {
+    vi.mocked(listSuggestions)
+      .mockRejectedValueOnce(new Error("down"))
+      .mockResolvedValue({ items: ideas })
+    const user = await renderSheet()
+    await user.click(screen.getByRole("button", { name: "Find recipes" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The search didn't work"
+    )
+    expect(screen.queryByText(/looking for recipes/i)).toBeNull()
+    await user.click(screen.getByTestId("discover-retry"))
+    expect(await screen.findByTestId("discover-results")).toBeVisible()
+  })
 })

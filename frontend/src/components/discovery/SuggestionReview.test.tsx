@@ -195,6 +195,15 @@ describe("SuggestionReview", () => {
     expect(createFood).not.toHaveBeenCalled()
   })
 
+  it("a failed suggestions query toasts and closes instead of rendering nothing", async () => {
+    vi.mocked(listSuggestions).mockRejectedValue(new Error("down"))
+    await renderReview()
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(toast.error).toHaveBeenCalledWith(
+      "Couldn't open this idea. Try again."
+    )
+  })
+
   it("closes with a note when the idea is no longer pending", async () => {
     vi.mocked(listSuggestions).mockResolvedValue({ items: [] })
     await renderReview()
