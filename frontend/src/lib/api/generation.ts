@@ -54,7 +54,11 @@ export interface Score {
     per_day: Record<string, number>
     days_with_prepared: number
   }
-  variety: { distinct: number; repeats: number; new_recipes: number }
+  variety: {
+    distinct: number
+    repeats: number
+    explore: { target: number; placed: number }
+  }
   preference_fit: number
   waste_portions: number
   unknown_data_share: number

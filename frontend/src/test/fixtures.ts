@@ -936,7 +936,7 @@ const mockScore: NonNullable<PlanRun["score"]> = {
   hard_violations: {},
   macro_deviation: { daily_pct: 8.5, weekly_pct: 3.2 },
   cook_occasions: { per_day: { "2026-11-01": 1 }, days_with_prepared: 3 },
-  variety: { distinct: 1, repeats: 0, new_recipes: 0 },
+  variety: { distinct: 1, repeats: 0, explore: { target: 0, placed: 0 } },
   preference_fit: 0.8,
   waste_portions: 0,
   unknown_data_share: 0,

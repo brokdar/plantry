@@ -608,7 +608,7 @@ var texts = map[string]map[textKey]string{
 		textLongest:          "Am längsten nicht gegessen",
 		textLeftovers:        "Reste von %s",
 		textDifferentSide:    "Eine andere Beilage",
-		textExploreShortfall: "Entdecker-Quote: %d von %d Entdecker-Rezepten verfügbar, aufgefüllt mit %d noch nie gegessenen",
+		textExploreShortfall: "Entdecker-Quote: %d von %d Entdecker-Rezepten verfügbar, aufgefüllt mit %d bisher nie gegessenen Rezepten",
 	},
 }
 
