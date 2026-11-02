@@ -1015,8 +1015,6 @@ export const mockRunsPage: RunsPage = {
       outcome: "accepted",
       correction_rate: 0.25,
       edits: null,
-      suggestions: null,
-      accepted: null,
     },
     {
       id: 11,
