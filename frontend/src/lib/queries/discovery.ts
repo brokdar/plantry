@@ -28,6 +28,8 @@ import { discoveryKeys, foodKeys, insightKeys } from "./keys"
 /** How often a running discovery run is polled. */
 export const DISCOVERY_POLL_MS = 1000
 
+const NONE: DailyResult = { kind: "none" }
+
 const isRunning = (run: DiscoveryRun | undefined) => run?.status === "running"
 
 /** A run's progress; polls every second while `running`. `id` undefined =
@@ -37,8 +39,12 @@ export function useDiscoveryRun(id: number | undefined) {
     queryKey: discoveryKeys.run(id ?? 0),
     queryFn: () => getDiscoveryRun(id!),
     enabled: id !== undefined,
+    // A failed poll (e.g. 404) stops polling: the old "running" data would
+    // otherwise keep it going forever.
     refetchInterval: (query) =>
-      isRunning(query.state.data) ? DISCOVERY_POLL_MS : false,
+      query.state.status !== "error" && isRunning(query.state.data)
+        ? DISCOVERY_POLL_MS
+        : false,
     staleTime: (query) =>
       query.state.data && !isRunning(query.state.data) ? Infinity : 0,
   })
@@ -64,6 +70,8 @@ export function useDailySuggestion(date: string, enabled: boolean) {
   useEffect(() => {
     if (runId !== undefined && runDone) void refetch()
   }, [runId, runDone, refetch])
+  // A run that can't be read is silent: nothing to show (UX §5.9).
+  if (run.isError) return { ...daily, data: NONE }
   return daily
 }
 
