@@ -455,14 +455,17 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     expect(undo).toHaveBeenCalledWith(5)
   })
 
-  test("a persisted undone change shows 'Undone' without a button", () => {
+  test("a persisted undone change is marked undone without a button", () => {
     stubQueries({
       ...oneChange,
       changes: [{ ...mockChange(), undone_at: "2026-11-01T09:04:00Z" }],
     })
     act(() => assistantStream.setConversation(1))
     renderPanel()
-    expect(screen.getByTestId("assistant-change")).toHaveTextContent("Undone")
+    expect(screen.getByTestId("assistant-change")).toHaveAttribute(
+      "data-state",
+      "undone"
+    )
     expect(
       screen.queryByTestId("assistant-change-undo")
     ).not.toBeInTheDocument()
@@ -483,7 +486,7 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     ).not.toBeInTheDocument()
   })
 
-  test("Z1-AC4: a single undone change says Undone once, on its line", () => {
+  test("Z1-AC4: a single undone change is captioned Undone once, not on its line", () => {
     stubQueries({
       ...oneChange,
       changes: [{ ...mockChange(), undone_at: "2026-11-01T09:04:00Z" }],
@@ -491,9 +494,7 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     act(() => assistantStream.setConversation(1))
     renderPanel()
     expect(screen.getAllByText("Undone")).toHaveLength(1)
-    expect(
-      screen.queryByTestId("assistant-turn-undone")
-    ).not.toBeInTheDocument()
+    expect(screen.getByTestId("assistant-turn-undone")).toBeInTheDocument()
   })
 
   test("Z1-AC4: the turn is captioned Undone once all its changes are undone", () => {

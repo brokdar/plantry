@@ -15,11 +15,18 @@ vi.mock("@/lib/api/discovery", () => ({
   rejectSuggestion: vi.fn(),
 }))
 
+vi.mock("@/lib/api/foods", async (orig) => ({
+  ...(await orig<typeof import("@/lib/api/foods")>()),
+  createFood: vi.fn(),
+}))
+
 vi.mock("sonner", () => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }))
 
 import { toast } from "sonner"
+
+import { createFood } from "@/lib/api/foods"
 
 import {
   acceptSuggestion,
@@ -241,6 +248,7 @@ describe("accept and reject invalidate (F1-AC3)", () => {
     act(() => opts.action.onClick())
     await waitFor(() => expect(acceptSuggestion).toHaveBeenCalledTimes(2))
     expect(acceptSuggestion).toHaveBeenLastCalledWith(5, 42)
+    expect(createFood).not.toHaveBeenCalled()
   })
 
   it("reject: suggestions, foods and insights", async () => {

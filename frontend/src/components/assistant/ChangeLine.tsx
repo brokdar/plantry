@@ -11,11 +11,18 @@ interface ChangeLineProps {
   /** null while the change can still be undone. */
   state: ChangeLineState | null
   onUndo: (id: number) => void
+  /** Persisted turns caption "Undone" once per turn instead of per line. */
+  hideUndoneLabel?: boolean
 }
 
 /** One applied agent write as a sentence with its Undo (D16). The button
  *  stays until the change is undone or later edits make a revert unsafe. */
-export function ChangeLine({ change, state, onUndo }: ChangeLineProps) {
+export function ChangeLine({
+  change,
+  state,
+  onUndo,
+  hideUndoneLabel,
+}: ChangeLineProps) {
   const { t, i18n } = useTranslation()
   const sentence = changeSentence(t, i18n, change)
   const blocked =
@@ -36,7 +43,7 @@ export function ChangeLine({ change, state, onUndo }: ChangeLineProps) {
           {sentence}
         </span>
       </span>
-      {state === "undone" && (
+      {state === "undone" && !hideUndoneLabel && (
         <span className="shrink-0 text-caption text-ink-muted">
           {t("assistant.undone")}
         </span>

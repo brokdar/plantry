@@ -379,7 +379,7 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
 
     // Undo restores 4 / 0 and marks the line.
     await panel.getByRole("button", { name: /^Undo/ }).click()
-    await expect(line).toContainText("Undone")
+    await expect(line).toHaveAttribute("data-state", "undone")
     await expect(panel.getByTestId("assistant-change-undo")).toHaveCount(0)
     expect(await session()).toMatchObject({ portions: 4, frozen_portions: 0 })
 
@@ -441,7 +441,7 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
 
     // Undo brings the old side back; the new request swaps it again.
     await sideLine.getByRole("button", { name: /^Undo/ }).click()
-    await expect(sideLine).toContainText("Undone")
+    await expect(sideLine).toHaveAttribute("data-state", "undone")
     expect(tue(await plan()).components.map((c) => c.food_id)).toEqual([
       stew.id,
       bulgur.id,
