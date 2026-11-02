@@ -18,6 +18,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/jsonld"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
@@ -126,4 +127,65 @@ func TestStore_ImageGuardSkipsImage(t *testing.T) {
 	got, err := repo.Get(context.Background(), sug.ID)
 	require.NoError(t, err)
 	assert.Nil(t, got.ImagePath)
+}
+
+// B4-AC6: the store-level decisions B5 uses move the run's outcome (D11);
+// a reject removes the image (D16).
+func TestStore_AcceptRejectMoveOutcome(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewRecipeSuggestionRepo(db)
+	dir := t.TempDir()
+	images, err := imagestore.New(dir, nil)
+	require.NoError(t, err)
+	store := &discovery.Store{Repo: repo, Images: images}
+	srv := imageServer(t)
+	ctx := context.Background()
+
+	res, err := db.Exec(`INSERT INTO ai_runs (kind, started_at, status) VALUES ('discovery', datetime('now'), 'ok')`)
+	require.NoError(t, err)
+	runID, _ := res.LastInsertId()
+	outcome := func() string {
+		var o *string
+		require.NoError(t, db.QueryRow(`SELECT outcome FROM ai_runs WHERE id = ?`, runID).Scan(&o))
+		if o == nil {
+			return "NULL"
+		}
+		return *o
+	}
+	save := func(url string) *discovery.Suggestion {
+		s, err := store.Save(ctx, discovery.NewSuggestion{
+			Mode: discovery.ModeDaily, RunID: &runID,
+			Draft: &importer.Draft{SourceURL: url, ImageURL: srv.URL + "/ok.png"},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, s.ImagePath)
+		return s
+	}
+	a, b := save("https://x.test/a"), save("https://x.test/b")
+	assert.Equal(t, "NULL", outcome())
+
+	taste := discovery.ReasonTaste
+	got, err := store.Reject(ctx, a.ID, &taste)
+	require.NoError(t, err)
+	assert.Equal(t, discovery.StatusRejected, got.Status)
+	assert.Nil(t, got.ImagePath)
+	assert.NoFileExists(t, filepath.Join(dir, *a.ImagePath))
+	assert.Equal(t, "open", outcome())
+
+	res, err = db.Exec(`INSERT INTO foods (name, kind, role, reference_portions) VALUES ('Saved', 'composed', 'main', 2)`)
+	require.NoError(t, err)
+	foodID, _ := res.LastInsertId()
+	got, err = store.Accept(ctx, b.ID, foodID)
+	require.NoError(t, err)
+	assert.Equal(t, discovery.StatusAccepted, got.Status)
+	assert.FileExists(t, filepath.Join(dir, *b.ImagePath), "accept keeps the image for the copy")
+	assert.Equal(t, "accepted", outcome())
+
+	_, err = store.Reject(ctx, b.ID, nil)
+	assert.ErrorIs(t, err, domain.ErrDiscoveryDecided)
+
+	rej, err := store.Rejected(ctx, 20)
+	require.NoError(t, err)
+	require.Len(t, rej, 1)
+	assert.Equal(t, a.ID, rej[0].ID)
 }

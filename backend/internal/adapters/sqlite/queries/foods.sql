@@ -229,3 +229,18 @@ SELECT DISTINCT fc.child_id
 FROM food_components fc
 JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed'
 WHERE fc.child_id IN (sqlc.slice(ids));
+
+-- name: ListRecipeNames :many
+-- The newest recipe names, for the discovery prompt (D8).
+SELECT name FROM foods WHERE kind = 'composed' ORDER BY id DESC LIMIT ?;
+
+-- name: ListLeafNamesByRecipeUse :many
+-- Leaf names used in recipes, most used first (discovery known mode, D8).
+SELECT f.name
+FROM foods f
+JOIN food_components fc ON fc.child_id = f.id
+JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed'
+WHERE f.kind = 'leaf'
+GROUP BY f.id, f.name
+ORDER BY COUNT(DISTINCT fc.parent_id) DESC, f.name
+LIMIT ?;

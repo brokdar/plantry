@@ -1037,7 +1037,12 @@
     "invalid_from": "Das Startdatum ist ungültig. Wähle einen anderen Zeitraum.",
     "invalid_to": "Das Enddatum ist ungültig. Wähle einen anderen Zeitraum.",
     "invalid_date_range": "Der Zeitraum endet, bevor er beginnt. Wähle einen anderen Zeitraum.",
-    "date_range_too_large": "Der Zeitraum ist länger als ein Jahr. Wähle einen kürzeren."
+    "date_range_too_large": "Der Zeitraum ist länger als ein Jahr. Wähle einen kürzeren.",
+    "discovery": {
+      "running": "Es läuft bereits eine Rezeptsuche. Versuch es gleich noch einmal.",
+      "decided": "Über diesen Vorschlag wurde schon entschieden.",
+      "invalid_output": "Die Recherche des Assistenten war nicht lesbar. Versuch es noch einmal."
+    }
   },
   "common": {
     "save": "Speichern",

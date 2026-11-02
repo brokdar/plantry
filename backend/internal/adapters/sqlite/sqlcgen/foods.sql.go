@@ -736,6 +736,69 @@ func (q *Queries) ListFoodTagsByFoodIDs(ctx context.Context, ids []int64) ([]Foo
 	return items, nil
 }
 
+const listLeafNamesByRecipeUse = `-- name: ListLeafNamesByRecipeUse :many
+SELECT f.name
+FROM foods f
+JOIN food_components fc ON fc.child_id = f.id
+JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed'
+WHERE f.kind = 'leaf'
+GROUP BY f.id, f.name
+ORDER BY COUNT(DISTINCT fc.parent_id) DESC, f.name
+LIMIT ?
+`
+
+// Leaf names used in recipes, most used first (discovery known mode, D8).
+func (q *Queries) ListLeafNamesByRecipeUse(ctx context.Context, limit int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listLeafNamesByRecipeUse, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecipeNames = `-- name: ListRecipeNames :many
+SELECT name FROM foods WHERE kind = 'composed' ORDER BY id DESC LIMIT ?
+`
+
+// The newest recipe names, for the discovery prompt (D8).
+func (q *Queries) ListRecipeNames(ctx context.Context, limit int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listRecipeNames, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSiblingFoods = `-- name: ListSiblingFoods :many
 SELECT id, name, kind, role, source, barcode, off_id, fdc_id, kcal_100g, protein_100g, fat_100g, carbs_100g, fiber_100g, sodium_100g, saturated_fat_100g, trans_fat_100g, cholesterol_100g, sugar_100g, potassium_100g, calcium_100g, iron_100g, magnesium_100g, phosphorus_100g, zinc_100g, vitamin_a_100g, vitamin_c_100g, vitamin_d_100g, vitamin_b12_100g, vitamin_b6_100g, folate_100g, variant_group_id, reference_portions, prep_minutes, cook_minutes, notes, image_path, favorite, created_at, updated_at, source_url, description, shop_section, diet_class, keep_days, freezable FROM foods
 WHERE kind = 'composed' AND variant_group_id = ? AND id != ?

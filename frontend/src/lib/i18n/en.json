@@ -1010,7 +1010,12 @@
     "invalid_from": "That start date isn't valid. Pick another range.",
     "invalid_to": "That end date isn't valid. Pick another range.",
     "invalid_date_range": "The range ends before it starts. Pick another range.",
-    "date_range_too_large": "That range is longer than a year. Pick a shorter one."
+    "date_range_too_large": "That range is longer than a year. Pick a shorter one.",
+    "discovery": {
+      "running": "A discovery is already running. Try again in a moment.",
+      "decided": "This suggestion was already decided.",
+      "invalid_output": "The assistant's research could not be read. Try again."
+    }
   },
   "nutrition": {
     "section_core": "Macros",

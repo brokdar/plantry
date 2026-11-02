@@ -106,6 +106,13 @@ var (
 	// chose (a replaced draft confirmed or gone, a target cell taken).
 	ErrPlanChanged = errors.New("the plan changed while it was generated")
 
+	// Discovery (Phase 5 D7, D11): one discovery run at a time, a decision
+	// on a suggestion that is decided already, and research output that
+	// stayed unreadable after the repair call.
+	ErrDiscoveryRunning       = errors.New("a discovery run is running")
+	ErrDiscoveryDecided       = errors.New("the suggestion is decided already")
+	ErrDiscoveryInvalidOutput = errors.New("the research output is not valid JSON")
+
 	// Mid-week re-plan (Phase 3 B8): confirmed plates in the No-plate cells
 	// need unlock_confirmed, and a re-plan starts today at the earliest.
 	ErrConfirmedAffected = errors.New("the re-plan removes confirmed plates")
@@ -189,6 +196,9 @@ var messageKeys = []struct {
 	{ErrScopeConfirmed, "error.plan.scope_confirmed"},
 	{ErrInvalidScope, "error.plan.invalid_scope"},
 	{ErrNotEnoughRecipes, "error.plan.not_enough_recipes"},
+	{ErrDiscoveryRunning, "error.discovery.running"},
+	{ErrDiscoveryDecided, "error.discovery.decided"},
+	{ErrDiscoveryInvalidOutput, "error.discovery.invalid_output"},
 	{ErrConfirmedAffected, "error.plan.confirmed_affected"},
 	{ErrReplanPast, "error.plan.replan_past"},
 }
