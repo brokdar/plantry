@@ -47,6 +47,9 @@ const GLOBAL_SETTINGS_SPECS = [
 ]
 
 const SETUP_SPEC = "setup-wizard.spec.ts"
+// Z5 §17.1: needs the install still fresh (no recipes), so it runs right
+// after `setup` and before everything else, and removes what it makes.
+const FRESH_SPEC = "fresh-install.spec.ts"
 
 export default defineConfig({
   globalSetup: "./e2e/global-setup.ts",
@@ -75,20 +78,29 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
     {
+      name: "fresh-install",
+      testMatch: `**/${FRESH_SPEC}`,
+      dependencies: ["setup"],
+      fullyParallel: false,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
       name: "chromium",
       testIgnore: [
         ...AI_SERIAL_SPECS,
         ...GLOBAL_SETTINGS_SPECS,
         SETUP_SPEC,
+        FRESH_SPEC,
       ].map((s) => `**/${s}`),
-      dependencies: ["setup"],
+      dependencies: ["fresh-install"],
       use: { ...devices["Desktop Chrome"] },
     },
     {
       name: "ai-serial",
       testMatch: AI_SERIAL_SPECS.map((s) => `**/${s}`),
       testIgnore: `**/${SETUP_SPEC}`,
-      dependencies: ["setup"],
+      dependencies: ["fresh-install"],
       fullyParallel: false,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },

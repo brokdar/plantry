@@ -229,6 +229,10 @@ type Expect struct {
 	// FrozenSpare: the measured re-plan froze spare portions of an
 	// uncooked batch cooking on or after its From.
 	FrozenSpare bool `json:"frozen_spare"`
+	// BatchMeals: a cook session the measured run created feeds at least
+	// this many plates (the batch cooker's one-cook-feeds-several-meals
+	// promise: the dinner it is cooked for plus the leftovers).
+	BatchMeals int `json:"batch_meals"`
 }
 
 // LoadLibrary reads the built-in library.

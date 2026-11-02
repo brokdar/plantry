@@ -79,6 +79,12 @@ func TestHeuristicHasNoHardViolations(t *testing.T) {
 			assert.Empty(t, r.Score.HardViolations)
 			assert.Equal(t, "h3", r.PromptVersion)
 			assert.Equal(t, Tokens{}, r.Tokens, "the heuristic calls no model")
+			if r.Scenario == "single_batch_cooker" {
+				// Z5 §17.2: no hard violation covers one cook a day (H2), no
+				// repeat in 3 weeks (H8) and no empty cell (H1).
+				assert.Contains(t, names(r.Expectations), ExpectBatchMeals)
+				assert.Contains(t, names(r.Expectations), ExpectMinPlates)
+			}
 			if r.Scenario == "small_library_h8" {
 				assert.Contains(t, names(r.Expectations), ExpectMinRepeats, "H8 relaxation is pinned")
 				assert.GreaterOrEqual(t, r.Score.Variety.Repeats, 7)

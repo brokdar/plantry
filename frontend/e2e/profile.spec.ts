@@ -1,4 +1,16 @@
-import { API, apiRequest, expect, test } from "./helpers"
+import {
+  API,
+  apiRequest,
+  cleanupFood,
+  cleanupSlot,
+  expect,
+  futureWindow,
+  seedLeafFood,
+  seedPlateWithComponent,
+  seedSlot,
+  test,
+  uid,
+} from "./helpers"
 
 async function resetProfile() {
   const ctx = await apiRequest.newContext({ baseURL: API })
@@ -121,5 +133,65 @@ test.describe("Profile settings (You & household)", () => {
     await page.getByRole("button", { name: /remove peanuts/i }).click()
     await removed
     await expect(page.getByText("peanuts", { exact: true })).toHaveCount(0)
+  })
+  // Z5 §17.5: a household of 3.5 buys 3.5 times the amounts, while the
+  // daily kcal stay what one person eats.
+  test("household_portions 3.5 scales the shopping amounts, not the daily kcal", async () => {
+    const tag = uid()
+    const ctx = await apiRequest.newContext({ baseURL: API })
+    const before = (await (await ctx.get("/api/profile")).json()) as {
+      household_portions: number
+    }
+    const { start, days } = await futureWindow()
+    const slot = await seedSlot(`slot.hh-${tag}`, "Moon", 99985)
+    const rice = await seedLeafFood({
+      name: `Rice ${tag}`,
+      kcal_100g: 100,
+      protein_100g: 2,
+      fat_100g: 1,
+      carbs_100g: 20,
+    })
+    try {
+      const put = await ctx.put("/api/profile", {
+        data: { household_portions: 3.5 },
+      })
+      expect(put.ok(), await put.text()).toBeTruthy()
+
+      // The plate takes the household's eaters.
+      await seedPlateWithComponent(days[1], slot.id, {
+        food_id: rice.id,
+        amount: 100,
+        unit: "g",
+      })
+
+      const list = await ctx.get(
+        `/api/shopping-list?from=${start}&to=${days[6]}`
+      )
+      expect(list.ok(), await list.text()).toBeTruthy()
+      const { sections } = (await list.json()) as {
+        sections: { items: { food_id: number; total_grams: number }[] }[]
+      }
+      const item = sections
+        .flatMap((s) => s.items)
+        .find((i) => i.food_id === rice.id)
+      expect(item?.total_grams).toBeCloseTo(350, 5)
+
+      const plan = await ctx.get(`/api/plan?start=${start}`)
+      const { days: planDays } = (await plan.json()) as {
+        days: { date: string; macros: { kcal: number } }[]
+      }
+      expect(planDays.find((d) => d.date === days[1])?.macros.kcal).toBeCloseTo(
+        100,
+        5
+      )
+    } finally {
+      await ctx.put("/api/profile", {
+        data: { household_portions: before.household_portions },
+      })
+      await ctx.delete(`/api/plan?from=${days[1]}&to=${days[1]}`)
+      await ctx.dispose()
+      await cleanupSlot(slot.id)
+      await cleanupFood(rice.id)
+    }
   })
 })

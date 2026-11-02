@@ -68,6 +68,23 @@ func TestPlan_AC1Window(t *testing.T) {
 	assert.Equal(t, availability.ModePlan, p.Cells[0].Mode)
 }
 
+// Z5 §17.5: a day's kcal are per eater, so a household of 3.5 leaves them as
+// they are (the shopping list is what scales, see the shopping tests).
+func TestPlan_DailyKcalIgnoreTheEaters(t *testing.T) {
+	f := newFixture()
+	f.ac1()
+	for i := range f.plates {
+		f.plates[i].Eaters = 3.5
+	}
+	start := date("2026-10-31")
+
+	p, err := f.service().Plan(ctx, &start, date("2026-11-04"))
+	require.NoError(t, err)
+
+	assert.InDelta(t, 2*chiliKcal, p.Days[2].Macros.Kcal, 1e-9)
+	assert.InDelta(t, chiliKcal, p.Days[1].Macros.Kcal, 1e-9)
+}
+
 func TestPlan_NotCurrent(t *testing.T) {
 	f := newFixture()
 	start := date("2026-11-07")
