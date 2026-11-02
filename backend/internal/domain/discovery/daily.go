@@ -78,17 +78,13 @@ func (s *Service) next(ctx context.Context, day time.Time, after int64) (Daily, 
 	if err != nil || failed {
 		return Daily{}, err
 	}
-	if after != 0 {
-		// The run's first suggestion takes the day.
-		if err := s.d.Store.Repo.ClearShown(ctx, key); err != nil {
-			return Daily{}, err
-		}
-	}
 	cuisines, err := s.d.Prefs.DiscoveryCuisines(ctx)
 	if err != nil {
 		return Daily{}, fmt.Errorf("discovery cuisines: %w", err)
 	}
-	id, err := s.Run(ctx, Request{Mode: ModeDaily, Cuisine: DailyCuisine(cuisines, day), Day: key})
+	// After Another (after != 0) the run's first suggestion takes the day;
+	// the shown one keeps it until then (see firstShownOn).
+	id, err := s.Run(ctx, Request{Mode: ModeDaily, Cuisine: DailyCuisine(cuisines, day), Day: key, replaceShown: after != 0})
 	switch {
 	case errors.Is(err, domain.ErrDiscoveryRunning):
 		// Another run took the slot meanwhile.
@@ -142,8 +138,9 @@ func (s *Service) Accept(ctx context.Context, id, foodID int64) (*Suggestion, er
 		s.d.Logger.WarnContext(ctx, "discovery.accept image copy failed", "suggestion_id", id, "food_id", foodID, "error", err)
 		return sug, nil
 	}
-	f.ImagePath = &path
-	if err := s.d.Foods.Update(ctx, f); err != nil {
+	// Only the image is written, so an edit saved meanwhile is kept; an
+	// image set meanwhile wins (it is at the same path).
+	if _, err := s.d.Foods.SetImageIfNone(ctx, foodID, path); err != nil {
 		s.d.Logger.WarnContext(ctx, "discovery.accept image path update failed", "food_id", foodID, "error", err)
 		if rmErr := s.d.Store.Images.Delete(foodImageCategory, foodID); rmErr != nil {
 			s.d.Logger.WarnContext(ctx, "discovery.accept image cleanup failed", "food_id", foodID, "error", rmErr)

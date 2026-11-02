@@ -38,6 +38,9 @@ type Request struct {
 	Cuisine string
 	Focus   string
 	Day     string
+	// replaceShown (Another): the first suggestion takes Day from the one
+	// shown, which keeps it until the run has a suggestion to store.
+	replaceShown bool
 }
 
 // ProfileReader reads the household profile (profile.Service).
@@ -67,11 +70,13 @@ type Preferences interface {
 	DiscoveryCuisines(ctx context.Context) ([]string, error)
 }
 
-// Foods reads and updates saved foods (food.Service): accept copies the
-// suggestion's image to the food.
+// Foods reads saved foods and sets a food's image (FoodRepo): accept copies
+// the suggestion's image to the food.
 type Foods interface {
 	Get(ctx context.Context, id int64) (*food.Food, error)
-	Update(ctx context.Context, f *food.Food) error
+	// SetImageIfNone sets only the image of a food without one and reports
+	// whether it did.
+	SetImageIfNone(ctx context.Context, id int64, path string) (bool, error)
 }
 
 // Deps wires a Service.
@@ -255,10 +260,17 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 }
 
 // firstShownOn is the shown_on of a daily run's first suggestion: its day,
-// unless a suggestion is shown that day already (D12).
+// unless a suggestion is shown that day already (D12). A run started by
+// Another takes the day from the shown suggestion.
 func (s *Service) firstShownOn(ctx context.Context, req Request) (*string, error) {
 	if req.Day == "" {
 		return nil, nil
+	}
+	if req.replaceShown {
+		if err := s.d.Store.Repo.ClearShown(ctx, req.Day); err != nil {
+			return nil, err
+		}
+		return &req.Day, nil
 	}
 	cur, err := s.d.Store.Repo.ShownOn(ctx, req.Day)
 	if err != nil || cur != nil {

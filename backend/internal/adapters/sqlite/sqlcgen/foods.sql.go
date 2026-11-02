@@ -1064,6 +1064,25 @@ func (q *Queries) SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams
 	return i, err
 }
 
+const setFoodImageIfNone = `-- name: SetFoodImageIfNone :execrows
+UPDATE foods SET image_path = ?, updated_at = datetime('now')
+WHERE id = ? AND image_path IS NULL
+`
+
+type SetFoodImageIfNoneParams struct {
+	ImagePath sql.NullString
+	ID        int64
+}
+
+// Sets only the image, and only on a food without one (discovery accept).
+func (q *Queries) SetFoodImageIfNone(ctx context.Context, arg SetFoodImageIfNoneParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setFoodImageIfNone, arg.ImagePath, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setFoodShopSection = `-- name: SetFoodShopSection :one
 UPDATE foods SET
     shop_section = ?,

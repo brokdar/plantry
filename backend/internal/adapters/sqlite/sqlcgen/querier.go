@@ -193,6 +193,8 @@ type Querier interface {
 	SetDiscoveryRunOutcome(ctx context.Context, id int64) error
 	SetFoodDietClass(ctx context.Context, arg SetFoodDietClassParams) (Food, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
+	// Sets only the image, and only on a food without one (discovery accept).
+	SetFoodImageIfNone(ctx context.Context, arg SetFoodImageIfNoneParams) (int64, error)
 	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)
 	SetPlatesState(ctx context.Context, arg SetPlatesStateParams) error
 	SetRecipeSuggestionImage(ctx context.Context, arg SetRecipeSuggestionImageParams) error

@@ -418,3 +418,71 @@ func TestService_DayTakenMeanwhileKeepsSuggestions(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Nil(t, got[0].ShownOn)
 }
+
+// DoD S7: Another changes nothing before the steps that can fail: a failing
+// settings read or a run that stores nothing keeps today's card.
+func TestDaily_AnotherKeepsCardWhenItFails(t *testing.T) {
+	site := recipeSite(t, "r1")
+	client := &batchClient{site: site, batches: [][]string{{"r1"}}}
+	h := newHarness(t, client, site)
+	h.daily(t, dayD)
+	h.svc.Wait()
+	s1 := h.daily(t, dayD).Suggestion
+	require.NotNil(t, s1)
+
+	h.prefs.cuisinesErr = errors.New("settings unreadable")
+	_, err := h.svc.Another(context.Background(), dayD)
+	require.Error(t, err)
+	require.NotNil(t, h.get(t, s1.ID).ShownOn, "kept after a settings error")
+
+	h.prefs.cuisinesErr = nil
+	started := h.another(t, dayD)
+	require.NotZero(t, started.RunID)
+	h.svc.Wait() // the run finds nothing
+	got := h.daily(t, dayD).Suggestion
+	require.NotNil(t, got, "today's card survives a run without results")
+	assert.Equal(t, s1.ID, got.ID)
+}
+
+// hookDecide runs before() ahead of every Decide.
+type hookDecide struct {
+	discovery.Repository
+	before func()
+}
+
+func (h *hookDecide) Decide(ctx context.Context, id int64, d discovery.Decision) (*discovery.Suggestion, error) {
+	if h.before != nil {
+		h.before()
+	}
+	return h.Repository.Decide(ctx, id, d)
+}
+
+// DoD S5: accept sets only the image; an edit saved while it runs survives.
+func TestService_AcceptKeepsConcurrentEdit(t *testing.T) {
+	site := recipeSite(t, "r1")
+	client := &batchClient{site: site, batches: [][]string{{"r1"}}}
+	hd := &hookDecide{}
+	h := newHarnessRepo(t, client, site, func(r *sqlite.RecipeSuggestionRepo) discovery.Repository {
+		hd.Repository = r
+		return hd
+	})
+	runID := h.runAndWait(t, discovery.Request{Mode: discovery.ModeExplore, Cuisine: "thai"})
+	sugs := h.suggestions(t, runID)
+	require.Len(t, sugs, 1)
+	h.withImage(t, sugs[0].ID)
+	f := h.newRecipe(t, nil)
+	ctx := context.Background()
+	hd.before = func() {
+		edited, err := h.foods.Get(ctx, f.ID)
+		require.NoError(t, err)
+		edited.Name = "Renamed meanwhile"
+		require.NoError(t, h.foods.Update(ctx, edited))
+	}
+
+	_, err := h.svc.Accept(ctx, sugs[0].ID, f.ID)
+	require.NoError(t, err)
+	saved, err := h.foods.Get(ctx, f.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Renamed meanwhile", saved.Name)
+	require.NotNil(t, saved.ImagePath, "image set")
+}

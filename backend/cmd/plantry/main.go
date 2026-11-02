@@ -336,7 +336,7 @@ func run() error {
 	discoverySvc := discovery.NewService(discovery.Deps{
 		LLM:       llmResolver,
 		Prefs:     settingsSvc,
-		Foods:     foodSvc,
+		Foods:     foodRepo,
 		Recorder:  runRecorder,
 		Profile:   profileSvc,
 		Catalogue: foodRepo,

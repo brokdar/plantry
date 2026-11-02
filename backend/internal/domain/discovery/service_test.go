@@ -74,12 +74,15 @@ func (s staticProfile) Get(context.Context) (*profile.Profile, error) { return s
 
 // fakePrefs is the discovery settings.
 type fakePrefs struct {
-	disabled bool
-	cuisines []string
+	disabled    bool
+	cuisines    []string
+	cuisinesErr error
 }
 
 func (p *fakePrefs) DiscoveryDailyEnabled(context.Context) (bool, error) { return !p.disabled, nil }
-func (p *fakePrefs) DiscoveryCuisines(context.Context) ([]string, error) { return p.cuisines, nil }
+func (p *fakePrefs) DiscoveryCuisines(context.Context) ([]string, error) {
+	return p.cuisines, p.cuisinesErr
+}
 
 type harness struct {
 	db     *sql.DB
