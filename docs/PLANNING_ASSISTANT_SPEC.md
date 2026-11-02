@@ -827,6 +827,7 @@ What changed against this spec while building Phase 5 (discovery and finalizatio
 - **§9.4 web search.** The basic `web_search_20250305` tool, capability detection per model with a 24 h cache, a fallback without search on a 400, `pause_turn` continuations by the caller (at most three) and opaque server blocks replayed verbatim (D1–D3). A suggestion is `grounded` when its run used web search (D4). Other providers run in knowledge mode.
 - **§8.1 cost.** `PerSearch` price per search (Anthropic 0.01, OpenAI 0), `web_search_requests` on runs and steps, an `ai.price_overrides` entry may set `per_search` (D10).
 - **URL guard (new).** Model-supplied URLs must be public `http(s)` hosts, redirect hops included; `PLANTRY_DEV_MODE` allows loopback for the e2e fixture site (D9, D20).
+- **§8.2 run log.** LLM diet classification (`classify` run kind) is not implemented: diet class comes from the deterministic classifier (Phase 3 decision). `classify` stays only as an allowed value in the `ai_runs.kind` CHECK.
 - **§9.3 accept.** There is no server-side recipe creation: accept is the normal import review, prefilled, then `POST /api/foods`, then the accept call (D18). Outcomes of discovery runs follow the suggestions (D11).
 - **§4.2 settings.** `discovery.cuisines` (at most 10 lowercase names) joins `discovery.daily_enabled` (D19).
 - **§6 explore quota.** `ExploreQuota` replaces the "new = never eaten" stand-in: the generator places up to N recipes tagged `explore` and scores it; not a hard rule (D17).

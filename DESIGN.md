@@ -120,8 +120,6 @@ components:
 
 Source of truth: `frontend/src/index.css`, checked against [`docs/UX_DESIGN_SPEC.md`](docs/UX_DESIGN_SPEC.md) §3 by `frontend/src/test/tokens.test.ts` (values and WCAG contrast). If this file and `index.css` disagree, `index.css` wins and this file is stale.
 
-**Status key:** *Implemented* means it is in `index.css` or a shipped component today. *Specified* means the UX spec defines it but it is not built yet.
-
 ## Overview
 
 **Creative North Star: "Cookbook with batch badges"**
@@ -202,7 +200,7 @@ The scale is fixed rem with a ratio of about 1.2. Utilities: `text-h1`, `text-h2
 - **Body** (Source Sans 3 400): the default `body` size. Prose (recipe steps, notes) is capped at 68ch.
 - **Small / label** and **Caption** (Source Sans 3): metadata labels, nav labels, helper text.
 - **Numbers** (Source Sans 3 with `tabular-nums`): macros, quantities, counts, step numbers. Recipe detail shows meta values at h3 size in the sans, not the serif.
-- *Specified, not tokenised:* the Today headline is 26px on phone. Newsreader italic is reserved for board row labels and notes (Phase 2).
+- The Today headline uses the `headline` token (23px); there is no separate phone size. Newsreader italic is reserved for board row labels and notes (Phase 2).
 
 **The Serif-For-Names Rule.** Newsreader is for display only: titles, recipe names, the Today headline, board row labels. Never use it for buttons, inputs, labels, nav, or data.
 

@@ -60,7 +60,7 @@ src/routes/
 
 ### Data layer
 
-**Server state — TanStack Query only.** Never mirror server data in Zustand.
+**Server state — TanStack Query only.** Never mirror server data in a client store.
 
 - `src/lib/api/` — one file per resource, all calls go through `apiFetch` in `lib/api/client.ts`. `ApiError` carries `status` + `messageKey` for i18n error display.
 - `src/lib/queries/` — TanStack Query hooks + `keys.ts` (centralized key factories). Key hierarchies are intentional: invalidating a parent key also drops all child keys (e.g. invalidating `sessionKeys.detail(id)` also drops `sessionKeys.leftoverCells(id, count)`). **Each `useMutation` hook owns its own `invalidateQueries` (onSuccess) and `toastError` (onError) — call sites just call `mutate()` with no cache or error knowledge.**
