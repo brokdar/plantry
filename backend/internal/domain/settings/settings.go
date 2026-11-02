@@ -4,7 +4,13 @@
 // are encrypted at rest via adapters/crypto.
 package settings
 
-import "errors"
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"unicode/utf8"
+)
 
 // Source describes where the effective value for a setting comes from.
 type Source string
@@ -108,6 +114,31 @@ const (
 	KeyPlanVarietyWeeks           = "plan.variety_weeks"
 	KeyPlanExplorePerWeek         = "plan.explore_per_week"
 	KeyDiscoveryDailyEnabled      = "discovery.daily_enabled"
+	KeyDiscoveryCuisines          = "discovery.cuisines"
 	KeyAIRunRetentionDays         = "ai.run_retention_days"
 	KeyAIPriceOverrides           = "ai.price_overrides"
 )
+
+// maxCuisines and maxCuisineLen bound discovery.cuisines (D19).
+const (
+	maxCuisines   = 10
+	maxCuisineLen = 40
+)
+
+// ParseCuisines parses discovery.cuisines: a JSON array of at most 10
+// non-empty, lowercase, trimmed names.
+func ParseCuisines(raw string) ([]string, error) {
+	var names []string
+	if err := json.Unmarshal([]byte(raw), &names); err != nil || names == nil {
+		return nil, fmt.Errorf("%w: %s must be a JSON array of names", ErrInvalidKind, KeyDiscoveryCuisines)
+	}
+	if len(names) > maxCuisines {
+		return nil, fmt.Errorf("%w: %s holds at most %d names", ErrInvalidKind, KeyDiscoveryCuisines, maxCuisines)
+	}
+	for _, n := range names {
+		if n == "" || n != strings.ToLower(strings.TrimSpace(n)) || utf8.RuneCountInString(n) > maxCuisineLen {
+			return nil, fmt.Errorf("%w: %s name %q must be lowercase, trimmed and 1-%d characters", ErrInvalidKind, KeyDiscoveryCuisines, n, maxCuisineLen)
+		}
+	}
+	return names, nil
+}

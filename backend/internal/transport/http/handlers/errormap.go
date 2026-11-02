@@ -67,6 +67,8 @@ var sentinelStatus = map[error]int{
 	domain.ErrDiscoveryRunning:          http.StatusConflict,
 	domain.ErrDiscoveryDecided:          http.StatusConflict,
 	domain.ErrDiscoveryInvalidOutput:    http.StatusBadGateway,
+	domain.ErrDiscoveryInvalidMode:      http.StatusBadRequest,
+	domain.ErrDiscoveryCuisineRequired:  http.StatusBadRequest,
 	domain.ErrScopeConfirmed:            http.StatusConflict,
 	domain.ErrInvalidScope:              http.StatusBadRequest,
 	domain.ErrNotEnoughRecipes:          http.StatusBadRequest,

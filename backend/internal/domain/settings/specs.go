@@ -119,6 +119,17 @@ var registry = []Spec{
 		Default: "true",
 	},
 	{
+		// JSON array of ≤ 10 lowercase cuisine names the daily discovery
+		// rotates through (Phase 5 D19).
+		Key:     KeyDiscoveryCuisines,
+		Kind:    KindString,
+		Default: "[]",
+		Validate: func(raw string) error {
+			_, err := ParseCuisines(raw)
+			return err
+		},
+	},
+	{
 		Key:      KeyAIRunRetentionDays,
 		Kind:     KindInt,
 		Default:  "180",

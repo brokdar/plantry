@@ -72,15 +72,33 @@ type staticProfile struct{ p *profile.Profile }
 
 func (s staticProfile) Get(context.Context) (*profile.Profile, error) { return s.p, nil }
 
+// fakePrefs is the discovery settings.
+type fakePrefs struct {
+	disabled bool
+	cuisines []string
+}
+
+func (p *fakePrefs) DiscoveryDailyEnabled(context.Context) (bool, error) { return !p.disabled, nil }
+func (p *fakePrefs) DiscoveryCuisines(context.Context) ([]string, error) { return p.cuisines, nil }
+
 type harness struct {
 	db     *sql.DB
 	svc    *discovery.Service
 	repo   *sqlite.RecipeSuggestionRepo
+	foods  *sqlite.FoodRepo
+	prefs  *fakePrefs
 	images string
 	site   *httptest.Server
 }
 
 func newHarness(t *testing.T, client llm.Client, site *httptest.Server) *harness {
+	t.Helper()
+	return newHarnessRepo(t, client, site, func(r *sqlite.RecipeSuggestionRepo) discovery.Repository { return r })
+}
+
+// newHarnessRepo is newHarness with the service's store reading through
+// wrap(repo).
+func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap func(*sqlite.RecipeSuggestionRepo) discovery.Repository) *harness {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -94,8 +112,11 @@ func newHarness(t *testing.T, client llm.Client, site *httptest.Server) *harness
 	if client != nil {
 		resolver = llm.StaticResolver(rec.Meter(client, "fake"), "fake-model")
 	}
+	prefs := &fakePrefs{}
 	svc := discovery.NewService(discovery.Deps{
 		LLM:       resolver,
+		Prefs:     prefs,
+		Foods:     foods,
 		Recorder:  rec,
 		Profile:   staticProfile{promptProfile()},
 		Catalogue: foods,
@@ -105,11 +126,11 @@ func newHarness(t *testing.T, client llm.Client, site *httptest.Server) *harness
 			Guard:     func(u string) error { return httpfetch.PublicURL(u, localOnly, true) },
 		},
 		Annotator: &discovery.Annotator{Matcher: food.NewResolver(foods, nil, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)},
-		Store:     &discovery.Store{Repo: repo, Images: images},
+		Store:     &discovery.Store{Repo: wrap(repo), Images: images},
 		Logger:    logger,
 	})
 	t.Cleanup(func() { _ = svc.Shutdown(context.Background()) })
-	return &harness{db: db, svc: svc, repo: repo, images: dir, site: site}
+	return &harness{db: db, svc: svc, repo: repo, foods: foods, prefs: prefs, images: dir, site: site}
 }
 
 // fakeClient loads a script; {{SITE}} becomes the site's URL.
@@ -356,7 +377,9 @@ func TestService_RunValidates(t *testing.T) {
 	site := recipeSite(t)
 	h := newHarness(t, fakeClient(t, site, knowledgeScript), site)
 	_, err := h.svc.Run(context.Background(), discovery.Request{Mode: "weekly"})
-	assert.ErrorIs(t, err, domain.ErrInvalidInput)
+	assert.ErrorIs(t, err, domain.ErrDiscoveryInvalidMode)
+	_, err = h.svc.Run(context.Background(), discovery.Request{Mode: discovery.ModeExplore, Cuisine: "  "})
+	assert.ErrorIs(t, err, domain.ErrDiscoveryCuisineRequired)
 
 	none := newHarness(t, nil, site)
 	_, err = none.svc.Run(context.Background(), discovery.Request{Mode: discovery.ModeDaily})

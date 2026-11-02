@@ -13,6 +13,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
@@ -28,11 +29,14 @@ const (
 
 // Request starts a discovery run (D7). Cuisine is the daily cuisine (see
 // DailyCuisine; empty = one the user has not cooked) or the explore
-// cuisine; Focus is the known-mode ingredient.
+// cuisine; Focus is the known-mode ingredient. Day (YYYY-MM-DD, daily runs)
+// is the day the run is for: its first suggestion is shown that day when
+// none is (D12), and a failed run silences that day.
 type Request struct {
 	Mode    Mode
 	Cuisine string
 	Focus   string
+	Day     string
 }
 
 // ProfileReader reads the household profile (profile.Service).
@@ -56,9 +60,24 @@ type DraftAnnotator interface {
 	Annotate(ctx context.Context, d *importer.Draft) (*Annotations, error)
 }
 
+// Preferences are the discovery settings.
+type Preferences interface {
+	DiscoveryDailyEnabled(ctx context.Context) (bool, error)
+	DiscoveryCuisines(ctx context.Context) ([]string, error)
+}
+
+// Foods reads and updates saved foods (food.Service): accept copies the
+// suggestion's image to the food.
+type Foods interface {
+	Get(ctx context.Context, id int64) (*food.Food, error)
+	Update(ctx context.Context, f *food.Food) error
+}
+
 // Deps wires a Service.
 type Deps struct {
 	LLM       llm.Resolver
+	Prefs     Preferences
+	Foods     Foods
 	Recorder  *airun.Recorder
 	Profile   ProfileReader
 	Catalogue Catalogue
@@ -94,15 +113,21 @@ func NewService(d Deps) *Service {
 }
 
 // Run validates req, starts the run in the background and returns its
-// ai_runs id. It fails with domain.ErrInvalidInput for an unknown mode,
+// ai_runs id. It fails with domain.ErrDiscoveryInvalidMode for an unknown
+// mode, domain.ErrDiscoveryCuisineRequired for an explore run without one,
 // domain.ErrAIProviderMissing/ErrAIProviderFailed when no client resolves,
 // and domain.ErrDiscoveryRunning while another run is running. The run
 // outlives ctx.
 func (s *Service) Run(ctx context.Context, req Request) (int64, error) {
+	req.Cuisine, req.Focus = strings.TrimSpace(req.Cuisine), strings.TrimSpace(req.Focus)
 	switch req.Mode {
-	case ModeDaily, ModeExplore, ModeKnown:
+	case ModeDaily, ModeKnown:
+	case ModeExplore:
+		if req.Cuisine == "" {
+			return 0, domain.ErrDiscoveryCuisineRequired
+		}
 	default:
-		return 0, fmt.Errorf("%w: discovery mode %q", domain.ErrInvalidInput, req.Mode)
+		return 0, fmt.Errorf("%w: %q", domain.ErrDiscoveryInvalidMode, req.Mode)
 	}
 	client, model, err := s.d.LLM.Current(ctx)
 	switch {
@@ -118,7 +143,8 @@ func (s *Service) Run(ctx context.Context, req Request) (int64, error) {
 		Mode    Mode   `json:"mode"`
 		Cuisine string `json:"cuisine,omitempty"`
 		Focus   string `json:"focus,omitempty"`
-	}{req.Mode, req.Cuisine, req.Focus})
+		Day     string `json:"day,omitempty"`
+	}{req.Mode, req.Cuisine, req.Focus, req.Day})
 	if err != nil {
 		s.runner.release()
 		return 0, err
@@ -127,7 +153,7 @@ func (s *Service) Run(ctx context.Context, req Request) (int64, error) {
 		Kind: airun.KindDiscovery, PromptVersion: PromptVersion,
 		Instruction: query(req), ScopeJSON: string(scope),
 	})
-	s.runner.start(runCtx, s.d.Timeout, func(ctx context.Context) {
+	s.runner.start(runCtx, run.ID(), s.d.Timeout, func(ctx context.Context) {
 		s.execute(ctx, run, client, model, req)
 	})
 	return run.ID(), nil
@@ -200,15 +226,40 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 		}
 		anns[i].Why, anns[i].Cuisine = v.Candidate.Why, v.Candidate.Cuisine
 	}
+	shownOn, err := s.firstShownOn(ctx, req)
+	if err != nil {
+		return "", res, err
+	}
 	for i, v := range verified {
-		if _, err := s.d.Store.Save(ctx, NewSuggestion{
+		in := NewSuggestion{
 			Mode: req.Mode, Query: query(req), Draft: v.Draft, Annotations: *anns[i],
-			Grounded: found.Searches > 0, RunID: &runID,
-		}); err != nil {
+			Grounded: found.Searches > 0, RunID: &runID, ShownOn: shownOn,
+		}
+		_, err := s.d.Store.Save(ctx, in)
+		if errors.Is(err, ErrDayTaken) {
+			// A concurrent request took the day meanwhile: keep the paid result.
+			in.ShownOn = nil
+			_, err = s.d.Store.Save(ctx, in)
+		}
+		if err != nil {
 			return "", res, err
 		}
+		shownOn = nil
 	}
 	return airun.StatusOK, res, nil
+}
+
+// firstShownOn is the shown_on of a daily run's first suggestion: its day,
+// unless a suggestion is shown that day already (D12).
+func (s *Service) firstShownOn(ctx context.Context, req Request) (*string, error) {
+	if req.Day == "" {
+		return nil, nil
+	}
+	cur, err := s.d.Store.Repo.ShownOn(ctx, req.Day)
+	if err != nil || cur != nil {
+		return nil, err
+	}
+	return &req.Day, nil
 }
 
 func (s *Service) promptInput(ctx context.Context, req Request) (PromptInput, error) {

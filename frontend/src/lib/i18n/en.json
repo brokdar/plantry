@@ -1025,7 +1025,9 @@
     "discovery": {
       "running": "A discovery is already running. Try again in a moment.",
       "decided": "This suggestion was already decided.",
-      "invalid_output": "The assistant's research could not be read. Try again."
+      "invalid_output": "The assistant's research could not be read. Try again.",
+      "invalid_mode": "That kind of discovery isn't available. Pick another one.",
+      "cuisine_required": "Name a cuisine to explore."
     }
   },
   "nutrition": {
