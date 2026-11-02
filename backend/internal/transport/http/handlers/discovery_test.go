@@ -34,7 +34,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 )
 
-// Phase 5 B5 (§3.1): the discovery endpoints over SQLite, a recipe site on
+// B5 (§3.1): the discovery endpoints over SQLite, a recipe site on
 // httptest and a scripted research client.
 
 // discoverySite serves a JSON-LD recipe page per name, /broken without one.

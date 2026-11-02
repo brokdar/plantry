@@ -51,7 +51,7 @@ export function AIProviderControls({
 }
 
 /** The inline result of a successful key check (plan D17). Anthropic keys
- *  aren't really checked until Phase 5, so that copy only says it's saved. */
+ *  aren't really checked (the model list is static), so that copy only says it's saved. */
 function validatedKey(provider: string): string {
   return provider === "anthropic"
     ? "settings_page.ai.validated_saved"

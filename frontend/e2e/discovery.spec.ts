@@ -9,7 +9,7 @@ import {
 } from "./discovery-fixture"
 import { API, expect, mockSettingValues, setSetting, test } from "./helpers"
 
-// Phase 5 F4: the acceptance walk of recipe discovery (AC-1, AC-2, AC-3)
+// F4: the acceptance walk of recipe discovery (AC-1, AC-2, AC-3)
 // against the real backend with the fake research client and the fixture
 // recipe site. It writes global settings and the fake cursor, so it runs in
 // `ai-serial`. The tests share state and run in order: the daily idea first,

@@ -1,4 +1,4 @@
-// The e2e recipe site for discovery (Phase 5 D20): the pages and images the
+// The e2e recipe site for discovery (D20): the pages and images the
 // fake research client points at. Started by playwright.config.ts as a
 // third webServer on 9100 + E2E_LANE. broken.html is deliberately absent
 // (a 404). {{SITE}} in a page becomes the request's host.

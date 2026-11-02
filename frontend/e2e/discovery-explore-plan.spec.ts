@@ -13,7 +13,7 @@ import {
   uid,
 } from "./helpers"
 
-// Phase 5 F4 / AC-4.1: a heuristic generation includes the explore recipe
+// F4 / AC-4.1: a heuristic generation includes the explore recipe
 // exactly once when `plan.explore_per_week = 1`. The recipe is seeded with
 // the `explore` tag a saved suggestion gets (discovery.spec.ts walks the
 // accepting); this spec is about what the generator does with it. It writes

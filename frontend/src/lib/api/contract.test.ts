@@ -492,7 +492,7 @@ const cases: Case[] = [
     method: "POST",
     path: "/ai/changes/5/undo",
   },
-  // Discovery (Phase 5 §3.1)
+  // Discovery (§3.1)
   {
     name: "discover (explore)",
     call: () =>
@@ -631,7 +631,7 @@ describe("API contract (§3)", () => {
   })
 })
 
-describe("discovery shapes (Phase 5 F1-AC1)", () => {
+describe("discovery shapes (F1-AC1)", () => {
   beforeEach(() => vi.mocked(apiFetch).mockReset())
 
   it("a suggestion carries every §3.1 field", () => {

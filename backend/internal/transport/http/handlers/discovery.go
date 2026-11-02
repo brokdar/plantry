@@ -27,7 +27,7 @@ type discoveryService interface {
 	Reject(ctx context.Context, id int64, reason *discovery.Reason) (*discovery.Suggestion, error)
 }
 
-// DiscoveryHandler serves /api/discovery (Phase 5 §3.1).
+// DiscoveryHandler serves /api/discovery (§3.1).
 type DiscoveryHandler struct {
 	svc discoveryService
 	now func() time.Time
