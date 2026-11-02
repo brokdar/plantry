@@ -126,6 +126,7 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	run.outputTokens += int64(usage.OutputTokens)
 	run.cacheReadTokens += int64(usage.CacheReadTokens)
 	run.cacheWriteTokens += int64(usage.CacheWriteTokens)
+	run.webSearches += int64(usage.WebSearchRequests)
 	if run.provider == "" {
 		run.provider = provider
 		run.model = req.Model
@@ -181,13 +182,14 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	}
 
 	step := Step{
-		Seq:          seq,
-		Type:         StepLLMCall,
-		Name:         req.Model,
-		IsError:      callErr != nil,
-		DurationMs:   dur.Milliseconds(),
-		InputTokens:  int64(usage.InputTokens),
-		OutputTokens: int64(usage.OutputTokens),
+		Seq:               seq,
+		Type:              StepLLMCall,
+		Name:              req.Model,
+		IsError:           callErr != nil,
+		DurationMs:        dur.Milliseconds(),
+		InputTokens:       int64(usage.InputTokens),
+		OutputTokens:      int64(usage.OutputTokens),
+		WebSearchRequests: int64(usage.WebSearchRequests),
 	}
 	var err error
 	if step.RequestJSON, err = encodeRequest(req, offset, systemHash, toolsHash); err != nil {
@@ -246,12 +248,11 @@ type requestBody struct {
 }
 
 // responseBody is the stored response_json: the reply's content blocks and
-// the web searches the call ran (until ai_run_steps has a column for them).
+// stop reason.
 type responseBody struct {
-	Content           []llm.ContentBlock `json:"content"`
-	StopReason        llm.StopReason     `json:"stop_reason"`
-	WebSearchRequests int                `json:"web_search_requests,omitempty"`
-	Truncated         bool               `json:"truncated,omitempty"`
+	Content    []llm.ContentBlock `json:"content"`
+	StopReason llm.StopReason     `json:"stop_reason"`
+	Truncated  bool               `json:"truncated,omitempty"`
 }
 
 func encodeRequest(req llm.Request, offset int, systemHash, toolsHash string) (string, error) {
@@ -282,7 +283,7 @@ func encodeResponse(resp *llm.Response) (string, error) {
 	for i := range content {
 		blocks[i] = &content[i]
 	}
-	body := responseBody{Content: content, StopReason: resp.StopReason, WebSearchRequests: resp.Usage.WebSearchRequests}
+	body := responseBody{Content: content, StopReason: resp.StopReason}
 	return encodeCapped(&body, blocks, &body.Truncated)
 }
 

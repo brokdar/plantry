@@ -1,0 +1,29 @@
+{
+  "name": "explore_quota",
+  "description": "plan.explore_per_week = 1 with one explore-tagged, never-eaten main in a library where the other mains were eaten recently: the generator places the explore recipe exactly once.",
+  "today": "2026-11-06",
+  "start": "2026-11-07",
+  "settings": {
+    "plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
+    "plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "false",
+    "plan.explore_per_week": "1"
+  },
+  "profile": {"diet_type": "omnivore", "household_portions": 1},
+  "slots": ["dinner"],
+  "recipes": [
+    "Chili con Carne", "Spaghetti Bolognese", "Hähnchen-Curry", "Lachs mit Brokkoli", "Shakshuka",
+    "Linsen-Dal", "Tofu-Gemüse-Pfanne", "Quinoa-Bowl", "Basmatireis", "Gedünsteter Brokkoli"
+  ],
+  "tags": {"Quinoa-Bowl": ["explore"]},
+  "plates": [
+    {"date": "2026-10-24", "slot": "dinner", "recipe": "Chili con Carne"},
+    {"date": "2026-10-25", "slot": "dinner", "recipe": "Spaghetti Bolognese"},
+    {"date": "2026-10-27", "slot": "dinner", "recipe": "Hähnchen-Curry"},
+    {"date": "2026-10-29", "slot": "dinner", "recipe": "Lachs mit Brokkoli"},
+    {"date": "2026-10-31", "slot": "dinner", "recipe": "Shakshuka"},
+    {"date": "2026-11-02", "slot": "dinner", "recipe": "Linsen-Dal"},
+    {"date": "2026-11-04", "slot": "dinner", "recipe": "Tofu-Gemüse-Pfanne"}
+  ],
+  "steps": [{"action": "generate"}],
+  "expect": {"explore_placed": 1}
+}

@@ -21,6 +21,13 @@ import (
 // error.
 type Script struct {
 	Turns []Turn `json:"turns"`
+	// Capabilities is what the client reports through llm.Capabilities.
+	Capabilities ScriptedCapabilities `json:"capabilities"`
+}
+
+// ScriptedCapabilities is the script-level capability switch (D21).
+type ScriptedCapabilities struct {
+	WebSearch bool `json:"web_search"`
 }
 
 // Turn is a single assistant turn in the script.
@@ -39,6 +46,11 @@ type Turn struct {
 	// content blocks are what the loop will see; events are for UI only.
 	Message ScriptedMessage `json:"message"`
 	Usage   ScriptedUsage   `json:"usage"`
+	// SearchResults and WebSearchRequests simulate a server-side web search:
+	// the pages it returned and the searches billed (also in Usage). A
+	// stop_reason of "pause_turn" simulates a paused long server-tool turn.
+	SearchResults     []llm.SearchResult `json:"search_results,omitempty"`
+	WebSearchRequests int                `json:"web_search_requests,omitempty"`
 }
 
 // ScriptedEvent is one canonical Event to emit, with optional pre-delay.
@@ -120,6 +132,13 @@ func (c *Client) reload() error {
 	}
 	c.script = &s
 	return nil
+}
+
+// WebSearch implements llm.Capabilities from the script's capabilities.
+func (c *Client) WebSearch(context.Context, string) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.script != nil && c.script.Capabilities.WebSearch, nil
 }
 
 // Complete implements llm.Client.Complete. It delegates to Stream, which
@@ -215,7 +234,9 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 		Usage: llm.Usage{
 			InputTokens: turn.Usage.InputTokens, OutputTokens: turn.Usage.OutputTokens,
 			CacheReadTokens: turn.Usage.CacheReadTokens, CacheWriteTokens: turn.Usage.CacheWriteTokens,
+			WebSearchRequests: turn.WebSearchRequests,
 		},
+		SearchResults: turn.SearchResults,
 	}, nil
 }
 
@@ -349,6 +370,8 @@ func mapStopReason(s string) llm.StopReason {
 		return llm.StopReasonMaxTokens
 	case "refusal":
 		return llm.StopReasonRefusal
+	case "pause_turn":
+		return llm.StopReasonPauseTurn
 	default:
 		return llm.StopReasonEndTurn
 	}

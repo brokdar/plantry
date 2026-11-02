@@ -77,6 +77,7 @@ const (
 	ExpectNoNewCook       = "no_new_cook"
 	ExpectMinPlates       = "min_plates"
 	ExpectMinRepeats      = "min_repeats"
+	ExpectExplorePlaced   = "explore_placed"
 	ExpectFrozenSpare     = "frozen_spare"
 )
 
@@ -447,6 +448,17 @@ func (e *env) expect(sc Scenario, st Step, before, after rows, rec Record) []Exp
 		ex := Expectation{Name: ExpectMinRepeats, OK: repeats >= x.MinRepeats}
 		if !ex.OK {
 			ex.Detail = fmt.Sprintf("%d repeats, want ≥ %d", repeats, x.MinRepeats)
+		}
+		out = append(out, ex)
+	}
+	if x.ExplorePlaced > 0 {
+		placed := 0
+		if rec.Score != nil {
+			placed = rec.Score.Variety.Explore.Placed
+		}
+		ex := Expectation{Name: ExpectExplorePlaced, OK: placed == x.ExplorePlaced}
+		if !ex.OK {
+			ex.Detail = fmt.Sprintf("%d explore recipes placed, want %d", placed, x.ExplorePlaced)
 		}
 		out = append(out, ex)
 	}

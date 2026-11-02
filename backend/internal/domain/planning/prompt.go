@@ -16,7 +16,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p2"
+const PromptVersion = "p3"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -116,7 +116,7 @@ func RenderPrompt(in ChooseInput) string {
 	for i, f := range cands {
 		rows[i] = candidateRow(f)
 	}
-	const header = "\nCandidate recipes (id|name|role|diet|kcal|protein_g|fat_g|carbs_g|nutrition_complete|minutes|reference_portions|keep_days|freezable|last_eaten|eaten_8_weeks|favorite|like_score), per portion:\n"
+	const header = "\nCandidate recipes (id|name|role|diet|kcal|protein_g|fat_g|carbs_g|nutrition_complete|minutes|reference_portions|keep_days|freezable|last_eaten|eaten_8_weeks|favorite|like_score|explore), per portion:\n"
 	room := PromptTokenBudget*4 - utf8.RuneCountInString(head.String()) - utf8.RuneCountInString(tail.String()) - len(header) - 80
 	keep := make([]bool, len(cands))
 	for _, i := range keepOrder(cands, in.Side != nil) {
@@ -503,8 +503,8 @@ func candidates(in ChooseInput) []FoodFacts {
 }
 
 // keepOrder ranks candidates for the token budget: sides first for a side
-// swap, then favorites, then never eaten, then the longest ago eaten; ties
-// by id.
+// swap, then explore recipes, favorites, never eaten ones, then the longest
+// ago eaten; ties by id.
 func keepOrder(cands []FoodFacts, sidesFirst bool) []int {
 	idx := make([]int, len(cands))
 	for i := range idx {
@@ -514,6 +514,12 @@ func keepOrder(cands []FoodFacts, sidesFirst bool) []int {
 		a, b := cands[i], cands[j]
 		if as, bs := sideRole(a.Role), sideRole(b.Role); sidesFirst && as != bs {
 			if as {
+				return -1
+			}
+			return 1
+		}
+		if ae, be := a.Explore(), b.Explore(); ae != be {
+			if ae {
 				return -1
 			}
 			return 1
@@ -550,10 +556,10 @@ func candidateRow(f FoodFacts) string {
 	if role == "" {
 		role = "-"
 	}
-	return fmt.Sprintf("%d|%s|%s|%s|%.0f|%.0f|%.0f|%.0f|%s|%d|%s|%s|%s|%s|%d|%s|%s",
+	return fmt.Sprintf("%d|%s|%s|%s|%.0f|%.0f|%.0f|%.0f|%s|%d|%s|%s|%s|%s|%d|%s|%s|%s",
 		f.ID, cell(f.Name), role, f.DietClass, f.Macros.Kcal, f.Macros.Protein, f.Macros.Fat, f.Macros.Carbs,
 		yesNo(f.NutritionComplete), f.Minutes, num(f.ReferencePortions), keep, yesNo(f.Freezable), last,
-		f.TimesEaten8Weeks, yesNo(f.Favorite), num(f.LikeScore))
+		f.TimesEaten8Weeks, yesNo(f.Favorite), num(f.LikeScore), yesNo(f.Explore()))
 }
 
 func writeHistory(b *strings.Builder, s State) {
@@ -628,8 +634,8 @@ func writeTask(b *strings.Builder, in ChooseInput) {
 	} else {
 		b.WriteString("- Plan every fill cell. Prefer cooking in batches that later cells eat as leftovers, eat the fixed sessions' free portions first, and pair a main with a side where it suits.\n")
 	}
-	if in.IncludeNewRecipe {
-		b.WriteString("- Include exactly one recipe that was never eaten (last_eaten -).\n")
+	if in.ExploreQuota > 0 {
+		fmt.Fprintf(b, "- Include %d recipes marked explore (explore column yes).\n", in.ExploreQuota)
 	}
 	if i := strings.TrimSpace(in.Instruction); i != "" {
 		fmt.Fprintf(b, "- The user's request for this plan: %s\n", oneLine(i))

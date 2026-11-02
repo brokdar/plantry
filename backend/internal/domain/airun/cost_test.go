@@ -124,6 +124,8 @@ func TestParsePriceOverrides(t *testing.T) {
 			want: map[string]Price{"m": {In: 1, Out: 2, CacheRead: ptr(0.1), CacheWrite: ptr(1.25)}},
 		},
 		{name: "cache prices optional", raw: `{"m":{"in":1,"out":2}}`, want: map[string]Price{"m": {In: 1, Out: 2}}},
+		{name: "per_search", raw: `{"m":{"in":1,"out":2,"per_search":0.02}}`, want: map[string]Price{"m": {In: 1, Out: 2, PerSearch: 0.02}}},
+		{name: "negative per_search", raw: `{"m":{"in":1,"out":2,"per_search":-1}}`, wantErr: true},
 		{name: "zero prices allowed", raw: `{"m":{"in":0,"out":0}}`, want: map[string]Price{"m": {}}},
 		{name: "array", raw: `[]`, wantErr: true},
 		{name: "string", raw: `"x"`, wantErr: true},
@@ -147,4 +149,29 @@ func TestParsePriceOverrides(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// B2-AC2: searches cost PerSearch each on top of the tokens; only the
+// built-in Anthropic prices charge for them.
+func TestCost_WebSearches(t *testing.T) {
+	tokens := Tokens{Input: 1_000_000, WebSearchRequests: 3}
+	got := Cost("claude-opus-5-5", "anthropic", tokens, nil)
+	require.NotNil(t, got)
+	assert.InDelta(t, 4+3*0.01, *got, 1e-9)
+
+	oai, _ := LookupPrice("gpt-5", nil)
+	assert.Zero(t, oai.PerSearch)
+	got = Cost("gpt-5", "openai", tokens, nil)
+	require.NotNil(t, got)
+	assert.InDelta(t, 1.25, *got, 1e-9)
+
+	// A run of searches alone is not free.
+	got = Cost("claude-opus-5-5", "anthropic", Tokens{WebSearchRequests: 2}, nil)
+	require.NotNil(t, got)
+	assert.InDelta(t, 0.02, *got, 1e-9)
+
+	// B2-AC3: an override sets its own per-search price.
+	got = Cost("claude-opus-5-5", "anthropic", tokens, map[string]Price{"claude-opus-5-5": {In: 1, Out: 1, PerSearch: 0.5}})
+	require.NotNil(t, got)
+	assert.InDelta(t, 1+1.5, *got, 1e-9)
 }

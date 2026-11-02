@@ -16,6 +16,8 @@ type Price struct {
 	Out        float64  `json:"out"`
 	CacheRead  *float64 `json:"cache_read"`
 	CacheWrite *float64 `json:"cache_write"`
+	// PerSearch is the USD price of one server-side web search.
+	PerSearch float64 `json:"per_search"`
 }
 
 // Tokens are a run's summed token counts. For OpenAI, Input includes the
@@ -25,6 +27,8 @@ type Tokens struct {
 	Output     int64
 	CacheRead  int64
 	CacheWrite int64
+	// WebSearchRequests counts the billed server-side web searches.
+	WebSearchRequests int64
 }
 
 // PriceSource says where a model's price came from.
@@ -48,8 +52,11 @@ type priceEntry struct {
 	Price  Price
 }
 
+// anthropicPerSearch is Anthropic's web search price: $10 per 1,000 searches.
+const anthropicPerSearch = 0.01
+
 func p4(in, out, cacheRead, cacheWrite float64) Price {
-	return Price{In: in, Out: out, CacheRead: &cacheRead, CacheWrite: &cacheWrite}
+	return Price{In: in, Out: out, CacheRead: &cacheRead, CacheWrite: &cacheWrite, PerSearch: anthropicPerSearch}
 }
 
 // pOAI is an OpenAI price; cached < 0 means the page lists no cached price.
@@ -173,6 +180,7 @@ func Cost(model, provider string, t Tokens, overrides map[string]Price) *float64
 	}
 	usd := (float64(input)*p.In + float64(t.Output)*p.Out +
 		float64(t.CacheRead)*cacheRead + float64(t.CacheWrite)*cacheWrite) / 1e6
+	usd += float64(t.WebSearchRequests) * p.PerSearch
 	return &usd
 }
 
@@ -182,10 +190,12 @@ type overrideEntry struct {
 	Out        *float64 `json:"out"`
 	CacheRead  *float64 `json:"cache_read"`
 	CacheWrite *float64 `json:"cache_write"`
+	PerSearch  *float64 `json:"per_search"`
 }
 
 // ParsePriceOverrides parses ai.price_overrides: a JSON object mapping a model
-// id to {in, out, cache_read?, cache_write?} in USD per 1M tokens. Prices must
+// id to {in, out, cache_read?, cache_write?} in USD per 1M tokens, plus per_search?
+// (USD per web search; built-in Anthropic prices carry 0.01, others 0). Prices must
 // be non-negative. An empty string is an empty map.
 func ParsePriceOverrides(raw string) (map[string]Price, error) {
 	out := map[string]Price{}
@@ -211,12 +221,16 @@ func ParsePriceOverrides(raw string) (map[string]Price, error) {
 		if e.In == nil || e.Out == nil {
 			return nil, fmt.Errorf("%w: %s needs in and out", ErrInvalidPrices, model)
 		}
-		for _, v := range []*float64{e.In, e.Out, e.CacheRead, e.CacheWrite} {
+		for _, v := range []*float64{e.In, e.Out, e.CacheRead, e.CacheWrite, e.PerSearch} {
 			if v != nil && *v < 0 {
 				return nil, fmt.Errorf("%w: %s has a negative price", ErrInvalidPrices, model)
 			}
 		}
-		out[model] = Price{In: *e.In, Out: *e.Out, CacheRead: e.CacheRead, CacheWrite: e.CacheWrite}
+		price := Price{In: *e.In, Out: *e.Out, CacheRead: e.CacheRead, CacheWrite: e.CacheWrite}
+		if e.PerSearch != nil {
+			price.PerSearch = *e.PerSearch
+		}
+		out[model] = price
 	}
 	return out, nil
 }

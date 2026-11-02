@@ -202,3 +202,43 @@ func TestClient_AbandonedSessionDoesNotLeakIntoNewSession(t *testing.T) {
 	resp = stream(t, c, llm.Request{Tools: tools, Messages: []llm.Message{user, resp.Message, result}})
 	assert.Equal(t, llm.StopReasonEndTurn, resp.StopReason)
 }
+
+// B2-AC1: a scripted search turn surfaces results, the billed count and the
+// pause_turn stop reason through Stream; the capability comes from the script.
+func TestClient_SearchAndPauseTurn(t *testing.T) {
+	t.Parallel()
+
+	var s Script
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"capabilities":{"web_search":true},
+		"turns":[
+		{"stop_reason":"pause_turn","web_search_requests":2,
+		 "search_results":[{"url":"https://a.test/x","title":"A"}],
+		 "message":{"content":[{"type":"text","text":"searching"}]},
+		 "usage":{"input_tokens":5,"output_tokens":6}},
+		{"stop_reason":"end_turn","message":{"content":[{"type":"text","text":"done"}]}}
+	]}`), &s))
+	c := NewFromScript(&s)
+
+	ok, err := c.WebSearch(context.Background(), "any")
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	paused := stream(t, c, llm.Request{})
+	assert.Equal(t, llm.StopReasonPauseTurn, paused.StopReason)
+	assert.Equal(t, 2, paused.Usage.WebSearchRequests)
+	assert.Equal(t, []llm.SearchResult{{URL: "https://a.test/x", Title: "A"}}, paused.SearchResults)
+
+	// The paused turn does not reset the sequence: the continuation is next.
+	last := stream(t, c, llm.Request{})
+	assert.Equal(t, llm.StopReasonEndTurn, last.StopReason)
+	assert.Zero(t, last.Usage.WebSearchRequests)
+	assert.Empty(t, last.SearchResults)
+}
+
+func TestClient_WebSearchCapabilityDefaultsOff(t *testing.T) {
+	t.Parallel()
+	ok, err := NewFromScript(endTurnScript(ScriptedUsage{})).WebSearch(context.Background(), "m")
+	require.NoError(t, err)
+	assert.False(t, ok)
+}

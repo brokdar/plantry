@@ -199,6 +199,9 @@ func (b *Builder) addFoods(ctx context.Context, s *State, foods map[int64]*food.
 	return nil
 }
 
+// ExploreTag is the tag discovery puts on a recipe the user has not tried.
+const ExploreTag = "explore"
+
 // facts maps a food to what the planner reads about it.
 func facts(f *food.Food, d food.Detailed, timesEaten int, likes, dislikes map[string]bool) FoodFacts {
 	ff := BaseFacts(f)
@@ -213,6 +216,9 @@ func facts(f *food.Food, d food.Detailed, timesEaten int, likes, dislikes map[st
 		ff.Minutes += *f.CookMinutes
 	}
 	for _, t := range f.Tags {
+		if t == ExploreTag {
+			ff.ExploreTag = true
+		}
 		if likes[t] {
 			ff.LikeScore++
 		}
