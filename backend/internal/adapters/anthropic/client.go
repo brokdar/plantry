@@ -165,10 +165,10 @@ type reqBody struct {
 	Metadata    *requestMetadata `json:"metadata,omitempty"`
 }
 
-// toolChoiceBody forces one tool: {"type":"tool","name":...}.
+// toolChoiceBody is {"type":"tool","name":...} (forced) or {"type":"auto"}.
 type toolChoiceBody struct {
 	Type string `json:"type"`
-	Name string `json:"name"`
+	Name string `json:"name,omitempty"`
 }
 
 type requestMetadata struct {
@@ -238,16 +238,26 @@ func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
 		MaxTokens: maxTok,
 		Stream:    stream,
 	}
-	if req.Temperature > 0 {
+	rules := rulesFor(req.Model)
+	if req.Temperature > 0 && rules.Sampling {
 		tmp := req.Temperature
 		body.Temperature = &tmp
 	}
+	system := req.System
 	if req.ToolChoice != nil {
-		body.ToolChoice = &toolChoiceBody{Type: "tool", Name: req.ToolChoice.Name}
+		if rules.ForcedTool {
+			body.ToolChoice = &toolChoiceBody{Type: "tool", Name: req.ToolChoice.Name}
+		} else {
+			body.ToolChoice = &toolChoiceBody{Type: "auto"}
+			if system != "" {
+				system += "\n\n"
+			}
+			system += "Answer by calling `" + req.ToolChoice.Name + "`."
+		}
 	}
-	if req.System != "" {
+	if system != "" {
 		body.System = []systemBlock{{
-			Type: "text", Text: req.System,
+			Type: "text", Text: system,
 			// Cache the (large) system prompt aggressively. Anthropic skips this
 			// automatically for prompts under the minimum, so it's safe to set.
 			CacheControl: &cacheCtrl{Type: "ephemeral", TTL: "5m"},

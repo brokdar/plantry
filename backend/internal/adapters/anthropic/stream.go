@@ -126,6 +126,12 @@ func isServerBlock(kind string) bool {
 	return kind == "server_tool_use" || (kind != "tool_result" && strings.HasSuffix(kind, "_tool_result"))
 }
 
+// isThinkingBlock reports whether a block type is extended thinking, which
+// must be replayed verbatim (signature included) or the API may reject it.
+func isThinkingBlock(kind string) bool {
+	return kind == "thinking" || kind == "redacted_thinking"
+}
+
 type blockAccum struct {
 	kind      string // "text" | "tool_use" | server block type | other
 	text      strings.Builder
@@ -134,11 +140,13 @@ type blockAccum struct {
 	name      string
 	args      strings.Builder
 	input     json.RawMessage
-	raw       json.RawMessage // server blocks: the block JSON, compacted
+	raw       json.RawMessage // server and thinking blocks: the block JSON, compacted
+	thinking  strings.Builder // thinking text from thinking_delta
+	signature strings.Builder // thinking signature from signature_delta
 }
 
 func (b *blockAccum) finalize() llm.ContentBlock {
-	if isServerBlock(b.kind) {
+	if isServerBlock(b.kind) || isThinkingBlock(b.kind) {
 		return llm.ContentBlock{Type: llm.ContentTypeServer, Raw: b.raw}
 	}
 	switch b.kind {
@@ -207,7 +215,7 @@ func handleSSEEvent(
 			return fmt.Errorf("anthropic: content_block_start decode: %w", err)
 		}
 		blk := &blockAccum{kind: payload.ContentBlock.Type}
-		if isServerBlock(blk.kind) {
+		if isServerBlock(blk.kind) || isThinkingBlock(blk.kind) {
 			var raw struct {
 				ContentBlock json.RawMessage `json:"content_block"`
 			}
@@ -245,6 +253,8 @@ func handleSSEEvent(
 			Delta struct {
 				Type        string `json:"type"`
 				Text        string `json:"text"`
+				Thinking    string `json:"thinking"`
+				Signature   string `json:"signature"`
 				PartialJSON string `json:"partial_json"`
 				Citation    struct {
 					URL string `json:"url"`
@@ -264,6 +274,10 @@ func handleSSEEvent(
 			return send(ctx, out, llm.Event{Type: llm.EventAssistantDelta, Payload: llm.AssistantDeltaPayload{
 				Text: payload.Delta.Text,
 			}})
+		case "thinking_delta":
+			blk.thinking.WriteString(payload.Delta.Thinking)
+		case "signature_delta":
+			blk.signature.WriteString(payload.Delta.Signature)
 		case "citations_delta":
 			if u := payload.Delta.Citation.URL; u != "" && !slices.Contains(blk.citations, u) {
 				blk.citations = append(blk.citations, u)
@@ -289,6 +303,9 @@ func handleSSEEvent(
 		blk := st.blocks[payload.Index]
 		if blk != nil && blk.kind == "server_tool_use" && blk.args.Len() > 0 {
 			return blk.setServerInput()
+		}
+		if blk != nil && blk.kind == "thinking" {
+			return blk.setThinking()
 		}
 		if blk != nil && blk.kind == "tool_use" {
 			// Prefer the accumulated input_json_delta payload when present;
@@ -399,6 +416,31 @@ func (b *blockAccum) setServerInput() error {
 	raw, err := json.Marshal(fields)
 	if err != nil {
 		return fmt.Errorf("anthropic: server_tool_use encode: %w", err)
+	}
+	b.raw = raw
+	return nil
+}
+
+// setThinking writes the streamed thinking text and signature into the raw
+// block JSON (the start event carries empty placeholders).
+func (b *blockAccum) setThinking() error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(b.raw, &fields); err != nil {
+		return fmt.Errorf("anthropic: thinking decode: %w", err)
+	}
+	for k, v := range map[string]string{"thinking": b.thinking.String(), "signature": b.signature.String()} {
+		if v == "" {
+			continue
+		}
+		enc, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("anthropic: thinking encode: %w", err)
+		}
+		fields[k] = enc
+	}
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		return fmt.Errorf("anthropic: thinking encode: %w", err)
 	}
 	b.raw = raw
 	return nil

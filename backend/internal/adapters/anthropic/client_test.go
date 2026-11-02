@@ -255,8 +255,21 @@ func TestStream_DefaultsMaxTokensWhenZero(t *testing.T) {
 	assert.Equal(t, anthropic.DefaultMaxTokens, body.MaxTokens)
 }
 
-func TestStream_ToolChoiceAndTemperature(t *testing.T) {
+// B8-AC1/AC2: the request rules follow the model table.
+func TestStream_ModelRequestRules(t *testing.T) {
 	tools := []llm.Tool{{Name: "submit_plan", Description: "submit", Schema: json.RawMessage(`{"type":"object"}`)}}
+	forced := func(model string) llm.Request {
+		return llm.Request{
+			Model: model, System: "be brief", Tools: tools, Temperature: 0.4,
+			ToolChoice: &llm.ToolChoice{Name: "submit_plan"},
+		}
+	}
+	const (
+		forcedJSON  = `"tool_choice":{"type":"tool","name":"submit_plan"}`
+		autoJSON    = `"tool_choice":{"type":"auto"}`
+		systemLine  = "be brief\\n\\nAnswer by calling `submit_plan`."
+		temperature = `"temperature":0.4`
+	)
 	tests := []struct {
 		name    string
 		req     llm.Request
@@ -264,18 +277,49 @@ func TestStream_ToolChoiceAndTemperature(t *testing.T) {
 		absent  []string
 	}{
 		{
-			name: "set",
-			req: llm.Request{
-				Model: "claude-sonnet-5-5", Tools: tools, Temperature: 0.4,
-				ToolChoice: &llm.ToolChoice{Name: "submit_plan"},
-			},
-			present: []string{`"tool_choice":{"type":"tool","name":"submit_plan"}`, `"temperature":0.4`},
+			"opus 5.5 gets auto, the system line and no temperature", forced("claude-opus-5-5"),
+			[]string{autoJSON, systemLine},
+			[]string{forcedJSON, temperature},
 		},
 		{
-			name:   "unset",
-			req:    llm.Request{Model: "claude-sonnet-5-5", Tools: tools},
-			absent: []string{`"tool_choice"`, `"temperature"`},
+			"a dated opus 5.5 id follows the same entry", forced("claude-opus-5-5-20261001"),
+			[]string{autoJSON, systemLine},
+			[]string{forcedJSON, temperature},
 		},
+		{
+			"haiku 4.5 keeps both", forced("claude-haiku-4-5"),
+			[]string{forcedJSON, temperature},
+			[]string{autoJSON, "Answer by calling"},
+		},
+		{
+			"sonnet 4.6 keeps both", forced("claude-sonnet-4-6"),
+			[]string{forcedJSON, temperature},
+			[]string{autoJSON},
+		},
+		{
+			"sonnet 5 forces but drops temperature", forced("claude-sonnet-5"),
+			[]string{forcedJSON},
+			[]string{autoJSON, temperature},
+		},
+		{
+			"opus 4.7 forces but drops temperature", forced("claude-opus-4-7"),
+			[]string{forcedJSON},
+			[]string{temperature},
+		},
+		{
+			"an unknown opus 6 follows the newest rules", forced("claude-opus-6"),
+			[]string{autoJSON, systemLine},
+			[]string{forcedJSON, temperature},
+		},
+		{
+			"no tool choice stays unset",
+			llm.Request{Model: "claude-haiku-4-5", Tools: tools},
+			nil,
+			[]string{`"tool_choice"`, `"temperature"`, "Answer by calling"},
+		},
+		{"auto without a system prompt still names the tool", llm.Request{
+			Model: "claude-opus-5-5", Tools: tools, ToolChoice: &llm.ToolChoice{Name: "submit_plan"},
+		}, []string{autoJSON, `"text":"Answer by calling `}, []string{forcedJSON}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -301,6 +345,34 @@ func TestStream_ToolChoiceAndTemperature(t *testing.T) {
 			}
 		})
 	}
+}
+
+// B8: thinking blocks (signature included) replay verbatim.
+func TestStream_ThinkingBlocksReplayVerbatim(t *testing.T) {
+	c, bodies := captureServer(t, "testdata/stream_thinking.sse")
+	req := llm.Request{
+		Model:    "claude-opus-5-5",
+		Messages: []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "plan"}}}},
+	}
+	resp, _ := stream(t, c, req)
+	require.Len(t, resp.Message.Content, 3)
+	assert.JSONEq(t, `{"type":"thinking","thinking":"Let me plan.","signature":"EqQBCgIYAhIM"}`, string(resp.Message.Content[0].Raw))
+	assert.JSONEq(t, `{"type":"redacted_thinking","data":"EmwKAhgB"}`, string(resp.Message.Content[1].Raw))
+	assert.Equal(t, "Hello", resp.Message.Content[2].Text)
+
+	req.Messages = append(req.Messages, resp.Message)
+	stream(t, c, req)
+	var body struct {
+		Messages []struct {
+			Content []json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	require.NoError(t, json.Unmarshal(bodies()[1], &body))
+	last := body.Messages[1].Content
+	require.Len(t, last, 3)
+	assert.JSONEq(t, `{"type":"thinking","thinking":"Let me plan.","signature":"EqQBCgIYAhIM"}`, string(last[0]))
+	assert.JSONEq(t, `{"type":"redacted_thinking","data":"EmwKAhgB"}`, string(last[1]))
+	assert.JSONEq(t, `{"type":"text","text":"Hello"}`, string(last[2]))
 }
 
 type reqBodyPeek struct {

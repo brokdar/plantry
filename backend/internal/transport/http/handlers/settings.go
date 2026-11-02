@@ -175,9 +175,9 @@ func (h *SettingsHandler) Models(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnauthorized, "error.settings.invalid_api_key")
 			return
 		}
-		out := make([]modelItem, 0, len(anthropic.KnownModels()))
-		for _, m := range anthropic.KnownModels() {
-			out = append(out, modelItem{ID: m.ID, DisplayName: m.DisplayName})
+		out := make([]modelItem, 0, len(anthropic.Models()))
+		for _, m := range anthropic.Models() {
+			out = append(out, modelItem{ID: m.Prefix, DisplayName: m.DisplayName})
 		}
 		writeJSON(w, http.StatusOK, modelsResponse{Models: out, Validated: true})
 	case "fake":
