@@ -410,7 +410,7 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, p.RepairAttempts)
 	assert.Equal(t, []planning.Stage{planning.StageRepairing, planning.StageRepairing}, stages)
-	assert.Equal(t, "p2", c.PromptVersion())
+	assert.Equal(t, "p3", c.PromptVersion())
 
 	require.NoError(t, c.Ready(context.Background()))
 	assert.ErrorIs(t, planning.NewLLMChooser(llm.StaticResolver(nil, "")).Ready(context.Background()), domain.ErrAIProviderMissing)
@@ -524,11 +524,13 @@ func TestRenderPrompt_TokenBudget(t *testing.T) {
 func TestRenderPrompt_TaskOptions(t *testing.T) {
 	s := baseState()
 	prompt := planning.RenderPrompt(planning.ChooseInput{
-		State: s, Target: windowTarget(s), Locale: "de", IncludeNewRecipe: true,
+		State: s, Target: windowTarget(s), Locale: "de", ExploreQuota: 2,
 		Instruction: "Gäste am Sonntag", EatersByDate: map[string]float64{sun: 4}, Avoid: []int64{curry},
 	})
 	assert.Contains(t, prompt, "Write notes and every reason in German.")
-	assert.Contains(t, prompt, "never eaten")
+	assert.Contains(t, prompt, "- Include 2 recipes marked explore (explore column yes).\n")
+	assert.NotContains(t, prompt, "never eaten")
+	assert.Contains(t, prompt, "like_score|explore), per portion")
 	assert.Contains(t, prompt, "The user's request for this plan: Gäste am Sonntag")
 	assert.Contains(t, prompt, "- plates on 2026-11-08 serve 4 eaters\n")
 	assert.NotContains(t, prompt, fmt.Sprintf("\n%d|Curry|", curry), "replaced recipes are no candidates")

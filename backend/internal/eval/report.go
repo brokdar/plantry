@@ -117,7 +117,7 @@ var components = []component{
 	{"days_with_prepared", score(func(s planning.Score) *float64 { return f(float64(s.CookOccasions.DaysWithPrepared)) })},
 	{"variety_distinct", score(func(s planning.Score) *float64 { return f(float64(s.Variety.Distinct)) })},
 	{"variety_repeats", score(func(s planning.Score) *float64 { return f(float64(s.Variety.Repeats)) })},
-	{"new_recipes", score(func(s planning.Score) *float64 { return f(float64(s.Variety.NewRecipes)) })},
+	{"explore_placed", score(func(s planning.Score) *float64 { return f(float64(s.Variety.Explore.Placed)) })},
 	{"preference_fit", score(func(s planning.Score) *float64 { return &s.PreferenceFit })},
 	{"waste_portions", score(func(s planning.Score) *float64 { return &s.WastePortions })},
 	{"unknown_data_share", score(func(s planning.Score) *float64 { return &s.UnknownDataShare })},

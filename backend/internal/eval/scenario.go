@@ -97,9 +97,11 @@ type Scenario struct {
 	// Slots are the active slots in day order, by short name.
 	Slots []string `json:"slots"`
 	// Recipes limits the library to these recipe names; empty uses all.
-	Recipes      []string         `json:"recipes"`
-	Presets      []PresetSpec     `json:"presets"`
-	Availability AvailabilitySpec `json:"availability"`
+	Recipes []string `json:"recipes"`
+	// Tags are added to the named recipes' library tags (e.g. explore).
+	Tags         map[string][]string `json:"tags"`
+	Presets      []PresetSpec        `json:"presets"`
+	Availability AvailabilitySpec    `json:"availability"`
 	// Plates are the user's confirmed plates: history before the window,
 	// and fixed rows inside it.
 	Plates []PlateSpec `json:"plates"`
@@ -221,6 +223,9 @@ type Expect struct {
 	// MinRepeats is the fewest H8 repeats the measured run's score must
 	// count (variety relaxed for lack of recipes).
 	MinRepeats int `json:"min_repeats"`
+	// ExplorePlaced is how many explore recipes the measured run's score
+	// must count (the scenario's quota is then met exactly).
+	ExplorePlaced int `json:"explore_placed"`
 	// FrozenSpare: the measured re-plan froze spare portions of an
 	// uncooked batch cooking on or after its From.
 	FrozenSpare bool `json:"frozen_spare"`

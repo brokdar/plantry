@@ -13,7 +13,7 @@ import (
 
 func score(s planning.State, t planning.Target, p planning.Proposal) planning.Score {
 	m := planning.Merge(s, t, p)
-	return planning.ComputeScore(m, t, planning.Check(m, t))
+	return planning.ComputeScore(m, t, planning.Check(m, t), 0)
 }
 
 // B5-AC2
@@ -72,7 +72,7 @@ func TestScore_HardViolations(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			s := baseState()
-			assert.Equal(t, tc.want, planning.ComputeScore(s, windowTarget(s), tc.issues).HardViolations)
+			assert.Equal(t, tc.want, planning.ComputeScore(s, windowTarget(s), tc.issues, 0).HardViolations)
 		})
 	}
 }
@@ -160,6 +160,9 @@ func TestScore_Variety(t *testing.T) {
 	f := s.Foods[chili]
 	f.LastEaten = &last
 	s.Foods[chili] = f
+	c := s.Foods[curry]
+	c.ExploreTag = true // curry is explore; the never-eaten soup is not
+	s.Foods[curry] = c
 	manyMains(&s, 5)
 
 	tests := []struct {
@@ -169,11 +172,11 @@ func TestScore_Variety(t *testing.T) {
 	}{
 		{"new mains, side ignored", planning.Proposal{Plates: []planning.ProposedPlate{
 			pplate(sat, dinner, fresh(curry), fresh(rice)), pplate(sun, dinner, fresh(soup)),
-		}}, planning.Variety{Distinct: 2, NewRecipes: 2}},
+		}}, planning.Variety{Distinct: 2, Explore: planning.ExploreMeet{Placed: 1}}},
 		{"a recent main is a repeat", planning.Proposal{
 			Sessions: []planning.ProposedSession{session("s1", chili, sat, dinner, 1), session("s2", curry, sun, dinner, 1)},
 			Plates:   []planning.ProposedPlate{pplate(sat, dinner, onKey(chili, "s1")), pplate(sun, dinner, onKey(curry, "s2"))},
-		}, planning.Variety{Distinct: 2, Repeats: 1, NewRecipes: 1}},
+		}, planning.Variety{Distinct: 2, Repeats: 1, Explore: planning.ExploreMeet{Placed: 1}}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

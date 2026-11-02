@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
@@ -150,7 +151,7 @@ func (e *env) seed(ctx context.Context, sc Scenario, lib Library) error {
 		}
 		e.slotIDs[name] = s.ID
 	}
-	if err := e.seedLibrary(ctx, lib, sc.Recipes); err != nil {
+	if err := e.seedLibrary(ctx, lib, sc.Recipes, sc.Tags); err != nil {
 		return err
 	}
 	e.presetIDs = map[string]int64{}
@@ -231,7 +232,7 @@ func (e *env) seedProfile(ctx context.Context, ps ProfileSpec) error {
 	return nil
 }
 
-func (e *env) seedLibrary(ctx context.Context, lib Library, only []string) error {
+func (e *env) seedLibrary(ctx context.Context, lib Library, only []string, extraTags map[string][]string) error {
 	e.foodIDs = map[string]int64{}
 	leaves := map[string]int64{}
 	for _, in := range lib.Ingredients {
@@ -256,7 +257,7 @@ func (e *env) seedLibrary(ctx context.Context, lib Library, only []string) error
 		role := food.Role(r.Role)
 		f := &food.Food{
 			Kind: food.KindComposed, Name: r.Name, Role: &role, ReferencePortions: ptr(r.Portions),
-			KeepDays: r.KeepDays, Freezable: r.Freezable, Favorite: r.Favorite, Tags: r.Tags,
+			KeepDays: r.KeepDays, Freezable: r.Freezable, Favorite: r.Favorite, Tags: append(slices.Clone(r.Tags), extraTags[r.Name]...),
 		}
 		for i, ing := range r.Ingredients {
 			id, ok := leaves[ing.Name]

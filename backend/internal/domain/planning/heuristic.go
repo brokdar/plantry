@@ -71,7 +71,9 @@ type planner struct {
 	seen      map[int64][]time.Time
 	used      map[int64]int
 	avoid     map[int64]bool
-	newPlaced bool
+	// explorePlaced and fillPlaced count the explore recipes and the
+	// never-eaten fillers the proposal cooks toward the quota (D17).
+	explorePlaced, fillPlaced int
 }
 
 func newPlanner(in ChooseInput) *planner {
@@ -159,7 +161,18 @@ func (h *planner) plan() (Proposal, error) {
 			return Proposal{}, err
 		}
 	}
+	h.prop.Notes = h.exploreNote()
 	return h.prop, nil
+}
+
+// exploreNote names a shortfall of the explore quota: fewer explore recipes
+// than asked, filled with never-eaten ones where possible; empty when met.
+func (h *planner) exploreNote() string {
+	q := h.in.ExploreQuota
+	if q <= 0 || h.explorePlaced >= q {
+		return ""
+	}
+	return fmt.Sprintf(h.text(textExploreShortfall), h.explorePlaced, q, h.fillPlaced)
 }
 
 // lastOpenOfDay reports whether no open cell of c's date comes after c.
@@ -321,8 +334,11 @@ func (h *planner) cook(c plate.CellKey) error {
 	}
 	h.supplies = append(h.supplies, sup)
 	h.used[main]++
-	if f.LastEaten == nil {
-		h.newPlaced = true
+	switch {
+	case f.Explore():
+		h.explorePlaced++
+	case f.LastEaten == nil && h.in.ExploreQuota > h.explorePlaced+h.fillPlaced:
+		h.fillPlaced++
 	}
 	h.addOccasion(c)
 	for _, cc := range cover {
@@ -393,10 +409,11 @@ type candidate struct {
 }
 
 // pickMain ranks the recipes that may be cooked as a meal on c (spec §6.7
-// step 2, D15, D17): not yet in the proposal, not eaten within variety
-// weeks (H8), not replaced, a never-eaten recipe first when the request asks for one
-// (else last), known diet class, least recently eaten, favorite, liked,
-// closest to the meal's kcal share, food id. Diet-incompatible recipes never
+// step 2, D17): not yet in the proposal, not eaten within variety weeks
+// (H8), not replaced, an explore recipe (newest first) while the explore
+// quota is open, then never-eaten ones to fill a shortfall; never-eaten
+// recipes last otherwise; known diet class, least recently eaten, favorite,
+// liked, closest to the meal's kcal share, food id. Diet-incompatible recipes never
 // qualify; one that adds a meat day past the limit only when nothing else
 // does.
 func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
@@ -408,9 +425,18 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 			continue
 		}
 		isNew := f.LastEaten == nil
-		newKey := b2f(isNew)
-		if h.in.IncludeNewRecipe && !h.newPlaced {
-			newKey = b2f(!isNew)
+		newKey, exploreOrder := b2f(isNew), 0.0
+		if h.in.ExploreQuota > h.explorePlaced+h.fillPlaced {
+			// Explore recipes first, newest food id (latest accept) first,
+			// then never-eaten fillers, then the rest.
+			switch {
+			case f.Explore():
+				newKey, exploreOrder = 0, -float64(f.ID)
+			case isNew:
+				newKey = 1
+			default:
+				newKey = 2
+			}
 		}
 		last := 0.0
 		if f.LastEaten != nil {
@@ -422,7 +448,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		}
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
 			b2f(h.overMeat(f, c)), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]),
-			newKey, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, fit,
+			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, fit,
 		}})
 	}
 	return best(cands)
@@ -564,22 +590,25 @@ const (
 	textLongest
 	textLeftovers
 	textDifferentSide
+	textExploreShortfall
 )
 
 var texts = map[string]map[textKey]string{
 	"en": {
-		textNew:           "New: never eaten yet",
-		textFavorite:      "A favorite you haven't had in a while",
-		textLongest:       "Not eaten for the longest time",
-		textLeftovers:     "Leftovers from %s",
-		textDifferentSide: "A different side",
+		textNew:              "New: never eaten yet",
+		textFavorite:         "A favorite you haven't had in a while",
+		textLongest:          "Not eaten for the longest time",
+		textLeftovers:        "Leftovers from %s",
+		textDifferentSide:    "A different side",
+		textExploreShortfall: "Explore quota: %d of %d explore recipes available, filled with %d never-eaten",
 	},
 	"de": {
-		textNew:           "Neu: noch nie gegessen",
-		textFavorite:      "Ein Lieblingsgericht, das es länger nicht gab",
-		textLongest:       "Am längsten nicht gegessen",
-		textLeftovers:     "Reste von %s",
-		textDifferentSide: "Eine andere Beilage",
+		textNew:              "Neu: noch nie gegessen",
+		textFavorite:         "Ein Lieblingsgericht, das es länger nicht gab",
+		textLongest:          "Am längsten nicht gegessen",
+		textLeftovers:        "Reste von %s",
+		textDifferentSide:    "Eine andere Beilage",
+		textExploreShortfall: "Entdecker-Quote: %d von %d Entdecker-Rezepten verfügbar, aufgefüllt mit %d noch nie gegessenen",
 	},
 }
 

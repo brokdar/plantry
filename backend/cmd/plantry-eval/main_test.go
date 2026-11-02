@@ -48,7 +48,7 @@ func TestCompareGolden(t *testing.T) {
 		recs, err := eval.ReadJSONL(f)
 		require.NoError(t, f.Close())
 		require.NoError(t, err)
-		require.Len(t, recs, 9)
+		require.Len(t, recs, 10)
 		for _, r := range recs {
 			assert.Equal(t, label, r.PromptVersion)
 			assert.Equal(t, "0123456789ab", r.GitSHA)
@@ -73,7 +73,7 @@ func TestHeuristicRun(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "eval.jsonl")
 	stdout, err := runCLI(t, "-chooser", "heuristic", "-runs", "1", "-scenarios", "single_batch_cooker,away_thu_fri", "-out", out)
 	require.NoError(t, err)
-	assert.Contains(t, stdout, "Report 0123456789ab heuristic/h2/")
+	assert.Contains(t, stdout, "Report 0123456789ab heuristic/h3/")
 	assert.Contains(t, stdout, "single_batch_cooker")
 	assert.Contains(t, stdout, "away_thu_fri")
 	assert.NotContains(t, stdout, "FAIL")

@@ -225,3 +225,23 @@ func TestPlanGenerateHTTP_NotEnoughRecipes(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, code)
 	assert.Equal(t, "error.plan.not_enough_recipes", body["message_key"])
 }
+
+// B6-AC3: include_new_recipe on is quota max(setting, 1), off is 0, absent
+// follows the setting.
+func TestPlanGenerateHTTP_IncludeNewRecipeMapsToQuota(t *testing.T) {
+	a := newGenAPI(t)
+	scope := func(body string) string {
+		code, resp := a.do(http.MethodPost, "/api/plan/generate"+genToday, body)
+		require.Equal(t, http.StatusAccepted, code, resp)
+		a.drain()
+		var s string
+		require.NoError(t, a.db.QueryRow(`SELECT scope_json FROM ai_runs WHERE id = ?`, int64(resp["run_id"].(float64))).Scan(&s))
+		return s
+	}
+	assert.Contains(t, scope(`{"start":"2026-11-07","include_new_recipe":true}`), `"explore_quota":1`, "on with setting 0")
+	assert.NotContains(t, scope(`{"start":"2026-11-07","include_new_recipe":false}`), "explore_quota", "off")
+	require.NoError(t, testsvc.Settings(a.db).Set(context.Background(), "plan.explore_per_week", "2"))
+	assert.Contains(t, scope(`{"start":"2026-11-07","include_new_recipe":true}`), `"explore_quota":2`, "on with setting 2")
+	assert.NotContains(t, scope(`{"start":"2026-11-07","include_new_recipe":false}`), "explore_quota", "off beats the setting")
+	assert.Contains(t, scope(`{"start":"2026-11-07"}`), `"explore_quota":2`, "absent follows the setting")
+}
