@@ -59,7 +59,7 @@ var chatWindowStart = time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
 // chat runs one Chat turn over the default window, draining events. onEvent
 // (optional) sees each event as it arrives.
 func chat(ctx context.Context, svc *agent.Service, text string, onEvent func(llm.Event)) ([]llm.Event, error) {
-	return chatReq(ctx, svc, agent.ChatRequest{UserText: text, Start: chatWindowStart}, onEvent)
+	return chatReq(ctx, svc, agent.ChatRequest{UserText: text, Today: chatWindowStart, Start: chatWindowStart}, onEvent)
 }
 
 // chatReq runs one Chat turn for req, draining events.
@@ -296,7 +296,7 @@ func TestChat_RunStoresConversationID(t *testing.T) {
 
 	// A follow-up turn in the same conversation is a second run with the same id.
 	_, err = chatReq(context.Background(), svc, agent.ChatRequest{
-		ConversationID: &convID, UserText: "second", Start: chatWindowStart,
+		ConversationID: &convID, UserText: "second", Today: chatWindowStart, Start: chatWindowStart,
 	}, nil)
 	require.NoError(t, err)
 

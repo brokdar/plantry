@@ -977,6 +977,7 @@
       "preference_reserved": "Likes and dislikes come from your plate ratings, so the assistant can't set them.",
       "unlock_needs_user": "The assistant needs your yes in a new message before it unlocks a confirmed plate.",
       "change_stale": "This change was edited afterwards, so it can no longer be undone.",
+      "change_confirmed": "This change's rows are confirmed now, so it can no longer be undone.",
       "change_undone": "This change was already undone.",
       "change_not_undoable": "This change did not alter anything, so there is nothing to undo.",
       "iterations_exceeded": "The AI ran too many tool steps — try a simpler request.",
@@ -1063,7 +1064,8 @@
     "title": "Assistant",
     "description": "Changes go into your draft. Confirmed plates are kept unless you agree.",
     "disabled_reason": "Set up an AI provider in Settings to use the assistant.",
-    "provider_missing": "No AI provider is configured. Choose one in Settings.",
+    "provider_missing": "No AI provider is configured.",
+    "provider_missing_link": "Choose one in Settings → Assistant",
     "close": "Close assistant",
     "composer": {
       "placeholder": "Ask me to plan a day, swap a meal or change a portion…",
@@ -1094,6 +1096,7 @@
       "untitled": "Conversation"
     },
     "change": {
+      "blocked_confirmed": "Accepted, undo is no longer possible",
       "fallback": "Your plan changed",
       "apply_preset": "{{day}}: routine {{name}} applied",
       "set_session_portions_one": "{{name}}: {{count}} portion",

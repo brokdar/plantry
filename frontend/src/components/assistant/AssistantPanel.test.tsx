@@ -29,6 +29,7 @@ import {
 import { assistantStream } from "@/lib/stores/assistant-stream"
 import type { ConversationChange } from "@/lib/domain/assistantEvents"
 import { mockChange, mockPlan } from "@/test/fixtures"
+import { renderWithRouter } from "@/test/render"
 
 import { AssistantPanel } from "./AssistantPanel"
 
@@ -146,10 +147,21 @@ describe("AssistantPanel shell", () => {
     expect(screen.queryByTestId("assistant-panel")).not.toBeInTheDocument()
   })
 
-  test("without a provider it says so and the composer is disabled", () => {
+  test("without a provider it says so, links to Settings and disables the composer", async () => {
     stubQueries({})
-    renderPanel({ enabled: false })
-    expect(screen.getByText(/No AI provider/)).toBeInTheDocument()
+    renderWithRouter(
+      <AssistantPanel
+        open
+        phone={false}
+        enabled={false}
+        plan={mockPlan}
+        onClose={vi.fn()}
+      />
+    )
+    expect(await screen.findByText(/No AI provider/)).toBeInTheDocument()
+    expect(
+      screen.getByRole("link", { name: "Choose one in Settings → Assistant" })
+    ).toHaveAttribute("href", "/settings/assistant")
     expect(screen.getByTestId("assistant-composer-input")).toBeDisabled()
     expect(screen.queryByTestId("assistant-chips")).not.toBeInTheDocument()
   })
@@ -453,6 +465,43 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     expect(screen.getByTestId("assistant-change")).toHaveTextContent("Undone")
     expect(
       screen.queryByTestId("assistant-change-undo")
+    ).not.toBeInTheDocument()
+  })
+
+  test("Z1-AC3: a change whose rows are confirmed says so and has no Undo", () => {
+    stubQueries({
+      ...oneChange,
+      changes: [{ ...live(), undo_blocked: "confirmed" }],
+    })
+    act(() => assistantStream.setConversation(1))
+    renderPanel()
+    expect(screen.getByTestId("assistant-change-blocked")).toHaveTextContent(
+      "Accepted, undo is no longer possible"
+    )
+    expect(
+      screen.queryByTestId("assistant-change-undo")
+    ).not.toBeInTheDocument()
+  })
+
+  test("Z1-AC4: the turn is captioned Undone once all its changes are undone", () => {
+    const undone = "2026-11-01T09:04:00Z"
+    stubQueries({
+      ...oneChange,
+      changes: [{ ...mockChange(), undone_at: undone }],
+    })
+    act(() => assistantStream.setConversation(1))
+    renderPanel()
+    expect(screen.getByTestId("assistant-turn-undone")).toHaveTextContent(
+      "Undone"
+    )
+  })
+
+  test("Z1-AC4: no caption while a change of the turn is still live", () => {
+    stubQueries({ ...oneChange, changes: [live()] })
+    act(() => assistantStream.setConversation(1))
+    renderPanel()
+    expect(
+      screen.queryByTestId("assistant-turn-undone")
     ).not.toBeInTheDocument()
   })
 

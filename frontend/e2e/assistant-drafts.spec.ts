@@ -280,9 +280,9 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     await expect(chiliBadge(4)).toBeVisible()
 
     // Layout (DoD blocker): below 1280 px the panel floats over the board
-    // instead of squeezing it, so the cells keep their width. (The overlay
-    // does cover the review action while it is open; toBeVisible cannot see
-    // that, so it is not asserted.) Back to 1440 px for the rest.
+    // instead of squeezing it, so the cells keep their width, and starts
+    // below the toolbar so Accept and shop stays reachable. Back to 1440 px
+    // for the rest.
     const monCell = planCell(page, monday, dinner.id)
     for (const [width, minCell] of [
       [1180, 95],
@@ -295,6 +295,14 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
       expect(box.width).toBe(380)
       expect(box.x + box.width).toBe(width)
       expect((await monCell.boundingBox())!.width).toBeGreaterThan(minCell)
+      // Z1-AC5: the panel starts below the toolbar, so Accept and shop is
+      // visible and clickable (a trial click checks nothing covers it).
+      const accept = page.getByRole("button", { name: "Accept and shop" })
+      await expect(accept).toBeVisible()
+      await accept.click({ trial: true })
+      expect(box.y).toBeGreaterThan(
+        (await accept.boundingBox())!.y + (await accept.boundingBox())!.height
+      )
     }
     await page.setViewportSize({ width: 1440, height: 900 })
     await expect(panel).toBeVisible()
@@ -486,6 +494,19 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     // The reload reopens the latest conversation with its change lines;
     // AC-3 starts a conversation of its own.
     await expect(panel3.getByTestId("assistant-change").first()).toBeVisible()
+    // Z1-AC3: the accepted rows can no longer be undone: every line that was
+    // not undone says so, and no Undo button is left.
+    const applied = panel3.locator(
+      '[data-testid="assistant-change"][data-state="applied"]'
+    )
+    expect(await applied.count()).toBeGreaterThan(0)
+    await expect(applied.getByTestId("assistant-change-blocked")).toHaveCount(
+      await applied.count()
+    )
+    await expect(applied.first()).toContainText(
+      "Accepted, undo is no longer possible"
+    )
+    await expect(panel3.getByRole("button", { name: /^Undo/ })).toHaveCount(0)
     await panel3.getByTestId("assistant-new-conversation").click()
     // Undoing the Chili change put the plate back as new component rows.
     const monNow = (await plan()).cells.find(
