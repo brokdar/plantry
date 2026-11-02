@@ -21,6 +21,9 @@ export interface InsightsByVersion {
   tokens: RunTokens
   /** Agent plan changes in the group; null when the kind has none. */
   edits: number | null
+  /** Discovery suggestions stored and accepted in the group; null for other kinds. */
+  suggestions: number | null
+  accepted: number | null
   /** Average of each numeric score component (D23). */
   score_avg: Record<string, number>
   /** Hard violations per rule ("H1" → n). */

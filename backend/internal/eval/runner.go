@@ -259,7 +259,7 @@ func (e *env) measure(ctx context.Context, runID int64, rec *Record, allowMissin
 	if err != nil {
 		return err
 	}
-	rec.Tokens = Tokens{Input: row.Tokens.Input, Output: row.Tokens.Output, CacheRead: row.Tokens.CacheRead, CacheWrite: row.Tokens.CacheWrite}
+	rec.Tokens = Tokens{Input: row.Tokens.Input, Output: row.Tokens.Output, CacheRead: row.Tokens.CacheRead, CacheWrite: row.Tokens.CacheWrite, WebSearchRequests: row.Tokens.WebSearchRequests}
 	// A run without LLM calls has no model to price: its cost stays
 	// unknown, as for an unpriced model, not 0.
 	if row.Tokens != (airun.Tokens{}) {

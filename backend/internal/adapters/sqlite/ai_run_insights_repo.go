@@ -204,3 +204,20 @@ func optTime(t *time.Time) sql.NullString {
 func hasTruncatedMarker(s string) bool {
 	return len(s) >= len(truncatedMarker) && s[len(s)-len(truncatedMarker):] == truncatedMarker
 }
+
+// DiscoverySuggestions counts the suggestions of the runs with ids in
+// [minID, maxID] and those accepted (one query); runs without are absent.
+func (r *AIRunRepo) DiscoverySuggestions(ctx context.Context, minID, maxID int64) (map[int64]airun.SuggestionCount, error) {
+	rows, err := r.queriesFor(ctx).DiscoverySuggestionCounts(ctx, sqlcgen.DiscoverySuggestionCountsParams{
+		MinID: sql.NullInt64{Int64: minID, Valid: true},
+		MaxID: sql.NullInt64{Int64: maxID, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("discovery suggestion counts: %w", err)
+	}
+	out := make(map[int64]airun.SuggestionCount, len(rows))
+	for _, row := range rows {
+		out[row.RunID] = airun.SuggestionCount{Suggestions: int(row.Suggestions), Accepted: int(row.Accepted)}
+	}
+	return out, nil
+}
