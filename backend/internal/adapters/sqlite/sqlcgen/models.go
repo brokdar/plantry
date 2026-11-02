@@ -304,6 +304,24 @@ type PresetsFt struct {
 	Name string
 }
 
+type RecipeSuggestion struct {
+	ID              int64
+	Mode            string
+	Query           sql.NullString
+	SourceUrl       string
+	DraftJson       string
+	AnnotationsJson string
+	ImagePath       sql.NullString
+	Grounded        int64
+	Status          string
+	Reason          sql.NullString
+	AiRunID         sql.NullInt64
+	FoodID          sql.NullInt64
+	ShownOn         sql.NullString
+	CreatedAt       string
+	DecidedAt       sql.NullString
+}
+
 type TimeSlot struct {
 	ID        int64
 	NameKey   string

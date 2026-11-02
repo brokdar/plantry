@@ -3,6 +3,7 @@ package food
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
 
 // maxResolveDepth guards against pathological recursion. Real food trees are
@@ -97,6 +99,78 @@ func (r *NutritionResolver) PerPortionDetailedMany(ctx context.Context, ids []in
 		out[id] = d
 	}
 	return out, nil
+}
+
+// DraftLine is one ingredient line of an unsaved recipe: a leaf food, or
+// FoodID 0 for a line without a match (named in Missing, contributing 0).
+type DraftLine struct {
+	FoodID int64
+	Name   string
+	Amount float64
+	Unit   string
+	// PortionGrams is the grams per count unit when the unit has no portion
+	// on the leaf (importer.DraftIngredient.PortionGrams); nil uses
+	// units.CountGrams.
+	PortionGrams *float64
+}
+
+// PerPortionOfDraft computes the per-portion macros of a recipe that is not
+// saved yet (D15), over the same walk as PerPortionDetailed. A line without
+// a food, with an unusable amount or unit, or whose grams cannot be
+// resolved is reported in Missing under its Name (ID 0) next to the leaves
+// lacking core macros; it contributes nothing. portions <= 0 counts as 1.
+func (r *NutritionResolver) PerPortionOfDraft(ctx context.Context, lines []DraftLine, portions float64) (Detailed, error) {
+	if portions <= 0 {
+		portions = 1
+	}
+	var ids []int64
+	for _, l := range lines {
+		if l.FoodID != 0 {
+			ids = append(ids, l.FoodID)
+		}
+	}
+	nodes, err := LoadTrees(ctx, r.repo, ids)
+	if err != nil {
+		return Detailed{}, err
+	}
+	w := &walk{nodes: nodes, memo: map[int64]subtree{}}
+	var total nutrition.Macros
+	missing := map[int64]string{}
+	var unmatched []MissingLeaf
+	for _, l := range lines {
+		if l.FoodID == 0 || l.Amount <= 0 {
+			unmatched = append(unmatched, MissingLeaf{Name: l.Name})
+			continue
+		}
+		// A count unit without a portion on the leaf weighs what review
+		// would seed it with (Finalize's ensurePortion).
+		manual := float64(0)
+		if unit := units.Normalize(l.Unit); units.IsCount(unit) {
+			perUnit := units.CountGrams[unit]
+			if l.PortionGrams != nil && *l.PortionGrams > 0 {
+				perUnit = *l.PortionGrams
+			}
+			manual = l.Amount * perUnit
+		}
+		grams, _, err := ResolveGrams(ctx, r.repo, l.FoodID, l.Amount, l.Unit, manual)
+		if err != nil {
+			if errors.Is(err, domain.ErrInvalidInput) {
+				unmatched = append(unmatched, MissingLeaf{Name: l.Name})
+				continue
+			}
+			return Detailed{}, err
+		}
+		sub, err := w.per100g(l.FoodID, 0)
+		if err != nil {
+			return Detailed{}, err
+		}
+		total = add(total, scale(sub.per100g, grams/100))
+		maps.Copy(missing, sub.missing)
+	}
+	d := Detailed{Macros: scale(total, 1/portions), Missing: sortedMissing(missing)}
+	d.Missing = append(d.Missing, unmatched...)
+	d.Complete = len(d.Missing) == 0
+	return d, nil
 }
 
 // TreeReader loads food headers and child links in batches.

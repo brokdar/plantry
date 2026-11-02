@@ -65,6 +65,15 @@ func (s *Service) WithRecorder(rec *airun.Recorder) *Service {
 type ExtractInput struct {
 	URL  string
 	HTML string
+	Options
+}
+
+// Options tune one Extract call.
+type Options struct {
+	// NoLLMFallback skips the LLM when the page has no JSON-LD recipe: the
+	// call then fails with domain.ErrImportNoRecipe at no AI cost (discovery
+	// verification, Phase 5 D9).
+	NoLLMFallback bool
 }
 
 // Extract loads a page (or uses the supplied HTML), extracts the recipe, and
@@ -93,6 +102,9 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 		return s.recipeToDraft(rec, sourceURL, "jsonld"), nil
 	}
 
+	if in.NoLLMFallback {
+		return nil, domain.ErrImportNoRecipe
+	}
 	if s.llmResolver == nil {
 		if errors.Is(err, ErrNoRecipe) {
 			return nil, domain.ErrImportNoRecipe

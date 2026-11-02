@@ -176,3 +176,21 @@ func TestService_Extract_LLMFallbackFailureStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestService_Extract_NoLLMFallback(t *testing.T) {
+	svc, db := newRecordedImport(t, textTurn(`{"name":"Soup","servings":2,"ingredient_lines":["1 l Water"]}`, "end_turn", 5, 1))
+
+	_, err := svc.Extract(context.Background(), importer.ExtractInput{HTML: "<html>soup</html>", Options: importer.Options{NoLLMFallback: true}})
+	require.ErrorIs(t, err, domain.ErrImportNoRecipe)
+
+	var n int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM ai_runs`).Scan(&n))
+	assert.Zero(t, n, "no LLM call, so no run")
+
+	// A JSON-LD recipe is unaffected by the option.
+	rec := &importer.RawRecipe{Name: "Spaghetti", RecipeIngredient: []string{"200 g Spaghetti"}}
+	plain := importer.NewService(nil, stubExtractor{rec: rec}, nil, nil, nil)
+	d, err := plain.Extract(context.Background(), importer.ExtractInput{HTML: "<html></html>", Options: importer.Options{NoLLMFallback: true}})
+	require.NoError(t, err)
+	assert.Equal(t, "jsonld", d.ExtractMethod)
+}

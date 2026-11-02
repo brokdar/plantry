@@ -458,3 +458,25 @@ func TestResolver_Query_NoLLMCallStartsNoRun(t *testing.T) {
 		})
 	}
 }
+
+func TestResolver_LocalMatch(t *testing.T) {
+	repo := &leafRepo{leaves: []food.Food{leaf(1, "Möhrensaft"), leaf(2, "Möhre"), leaf(3, "Gelbe Möhre")}}
+	fdc := &stubProvider{}
+	r := food.NewResolver(repo, nil, fdc, nil)
+
+	c, err := r.LocalMatch(context.Background(), "möhre", "de")
+	require.NoError(t, err)
+	require.NotNil(t, c)
+	assert.Equal(t, "Möhre", c.Name, "exact before prefix and contains")
+	require.NotNil(t, c.ExistingID)
+	assert.EqualValues(t, 2, *c.ExistingID)
+
+	c, err = r.LocalMatch(context.Background(), "rosenwasser", "de")
+	require.NoError(t, err)
+	assert.Nil(t, c)
+	assert.Empty(t, fdc.queries, "never asks a provider")
+
+	repo.err = errors.New("db down")
+	_, err = r.LocalMatch(context.Background(), "möhre", "de")
+	assert.Error(t, err)
+}

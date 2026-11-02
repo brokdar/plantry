@@ -222,3 +222,10 @@ UPDATE foods SET
     updated_at   = datetime('now')
 WHERE id = ?
 RETURNING *;
+
+-- name: LeafIDsUsedInRecipes :many
+-- Which of the given leaves at least one composed food uses.
+SELECT DISTINCT fc.child_id
+FROM food_components fc
+JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed'
+WHERE fc.child_id IN (sqlc.slice(ids));

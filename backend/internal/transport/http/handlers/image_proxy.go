@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"time"
+
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/httpfetch"
 )
 
 const proxyMaxBytes = 10 << 20 // 10 MB
@@ -77,29 +79,15 @@ func (h *ImageProxyHandler) Fetch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ImageProxyHandler) validateURL(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil {
+	err := httpfetch.PublicURL(raw, h.resolve, false)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, httpfetch.ErrInvalidURL):
 		return errInvalidURL
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return errInvalidURL
-	}
-	host := u.Hostname()
-	if host == "" {
-		return errInvalidURL
-	}
-
-	ips, err := h.resolve(host)
-	if err != nil || len(ips) == 0 {
+	default:
 		return errBlockedURL
 	}
-	for _, ip := range ips {
-		if ip.IsPrivate() || ip.IsLoopback() || ip.IsUnspecified() ||
-			ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			return errBlockedURL
-		}
-	}
-	return nil
 }
 
 type proxyErr string

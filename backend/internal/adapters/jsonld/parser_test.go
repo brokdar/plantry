@@ -232,3 +232,27 @@ func loadFixture(t *testing.T, name string) string {
 	require.NoError(t, err)
 	return string(b)
 }
+
+func TestExtractRecipe_OGImageFallback(t *testing.T) {
+	page := func(meta, image string) string {
+		return `<html><head>` + meta + `<script type="application/ld+json">{"@type":"Recipe","name":"X",` + image +
+			`"recipeIngredient":["1 Ei"]}</script></head></html>`
+	}
+	tests := []struct {
+		name string
+		html string
+		want []string
+	}{
+		{"og:image when JSON-LD has none", page(`<meta property="og:image" content="https://x.test/a.jpg">`, ""), []string{"https://x.test/a.jpg"}},
+		{"content before property, single quotes, entities", page(`<meta content='https://x.test/a.jpg?w=1&amp;h=2' property='og:image'>`, ""), []string{"https://x.test/a.jpg?w=1&h=2"}},
+		{"JSON-LD image wins", page(`<meta property="og:image" content="https://x.test/og.jpg">`, `"image":"https://x.test/ld.jpg",`), []string{"https://x.test/ld.jpg"}},
+		{"neither", page(`<meta property="og:title" content="t">`, ""), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec, err := jsonld.ExtractRecipe(tt.html)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, rec.Image)
+		})
+	}
+}

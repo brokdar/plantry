@@ -95,6 +95,36 @@ func (s *Store) Delete(category string, id int64) error {
 	return err
 }
 
+// Copy duplicates the stored image of (fromCategory, fromID) to
+// (toCategory, toID) without downloading or re-encoding it, and returns the
+// new relative path. A missing source is an error wrapping os.ErrNotExist.
+func (s *Store) Copy(fromCategory string, fromID int64, toCategory string, toID int64) (string, error) {
+	src, err := os.Open(filepath.Join(s.basePath, fromCategory, fmt.Sprintf("%d.jpg", fromID)))
+	if err != nil {
+		return "", fmt.Errorf("copy image: %w", err)
+	}
+	defer func() { _ = src.Close() }()
+
+	dir := filepath.Join(s.basePath, toCategory)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create category dir: %w", err)
+	}
+	filename := fmt.Sprintf("%d.jpg", toID)
+	dst, err := os.Create(filepath.Join(dir, filename))
+	if err != nil {
+		return "", fmt.Errorf("copy image: %w", err)
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		_ = os.Remove(dst.Name())
+		return "", fmt.Errorf("copy image: %w", err)
+	}
+	if err := dst.Close(); err != nil {
+		return "", fmt.Errorf("copy image: %w", err)
+	}
+	return filepath.Join(toCategory, filename), nil
+}
+
 // BasePath returns the base directory for serving static images.
 func (s *Store) BasePath() string {
 	return s.basePath
