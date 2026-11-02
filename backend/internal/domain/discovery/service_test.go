@@ -494,3 +494,20 @@ func TestService_DeletesStalePending(t *testing.T) {
 	_, err = h.repo.Get(ctx, kept)
 	assert.NoError(t, err)
 }
+
+// A failing stale cleanup is logged; the run still succeeds.
+func TestService_StaleCleanupErrorDoesNotFailRun(t *testing.T) {
+	site := recipeSite(t, "fesenjan", "pasta")
+	h := newHarness(t, fakeClient(t, site, knowledgeScript), site)
+	ctx := context.Background()
+	s := &discovery.Suggestion{Mode: discovery.ModeDaily, SourceURL: "https://x.test/stale", Draft: importer.Draft{SourceURL: "https://x.test/stale"}}
+	require.NoError(t, h.repo.Create(ctx, s))
+	_, err := h.db.Exec(`UPDATE recipe_suggestions SET created_at = datetime('now', '-31 days')`)
+	require.NoError(t, err)
+	_, err = h.db.Exec(`CREATE TRIGGER no_delete BEFORE DELETE ON recipe_suggestions BEGIN SELECT RAISE(ABORT, 'boom'); END`)
+	require.NoError(t, err)
+
+	id := h.runAndWait(t, discovery.Request{Mode: discovery.ModeDaily})
+
+	assert.NotEqual(t, "error", h.run(t, id).Status)
+}

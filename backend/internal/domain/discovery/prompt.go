@@ -21,6 +21,7 @@ const (
 	rejectedInPrompt = 20
 	recipesInPrompt  = 300
 	leavesInPrompt   = 300
+	maxNameRunes     = 80
 )
 
 // PromptInput is the research context (D8).
@@ -52,8 +53,21 @@ func RenderPrompt(in PromptInput) string {
 		case len(in.Rejected) > 0:
 			in.Rejected = in.Rejected[:len(in.Rejected)-1]
 		default:
-			// Only the user's own notes can still be this long.
-			return string([]rune(s)[:promptBudget])
+			// Only the user's own notes can still be this long; trim them
+			// so the rules and output format stay intact.
+			if in.Profile == nil || in.Profile.SystemPrompt == nil {
+				return s
+			}
+			notes := []rune(strings.TrimSpace(*in.Profile.SystemPrompt))
+			if over >= len(notes) {
+				notes = nil
+			} else {
+				notes = notes[:len(notes)-over]
+			}
+			cp := *in.Profile
+			n := string(notes)
+			cp.SystemPrompt = &n
+			in.Profile = &cp
 		}
 	}
 }
@@ -93,7 +107,7 @@ func renderPrompt(in PromptInput) string {
 	if len(in.Rejected) > 0 {
 		b.WriteString("\nRecently rejected suggestions (avoid similar ones):\n")
 		for _, s := range in.Rejected {
-			fmt.Fprintf(&b, "- %s (%s)\n", s.Draft.Name, reasonText(s.Reason))
+			fmt.Fprintf(&b, "- %s (%s)\n", oneLine(s.Draft.Name, maxNameRunes), reasonText(s.Reason))
 		}
 	}
 	if in.Request.Mode == ModeKnown && len(in.LeafNames) > 0 {
@@ -164,6 +178,16 @@ func DailyCuisine(cuisines []string, day time.Time) string {
 	d := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC)
 	n := d.Unix() / 86400
 	return cuisines[int(n%int64(len(cuisines)))]
+}
+
+// oneLine collapses whitespace (newlines included) and caps scraped text at
+// max runes, so it cannot add lines to the prompt.
+func oneLine(s string, max int) string {
+	r := []rune(strings.Join(strings.Fields(s), " "))
+	if len(r) > max {
+		r = r[:max]
+	}
+	return string(r)
 }
 
 func writeList(b *strings.Builder, names []string) {

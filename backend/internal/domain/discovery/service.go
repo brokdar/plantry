@@ -167,7 +167,8 @@ func (s *Service) execute(ctx context.Context, run *airun.Run, client llm.Client
 func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, model string, req Request) (airun.Status, airun.Result, error) {
 	var res airun.Result
 	if n, err := s.d.Store.DeleteStale(ctx, s.d.Now().Add(-staleAfter)); err != nil {
-		return "", res, err
+		// Cleanup is housekeeping; it must not fail the run.
+		s.d.Logger.WarnContext(ctx, "discovery.stale_cleanup failed", "run_id", runID, "error", err)
 	} else if n > 0 {
 		s.d.Logger.InfoContext(ctx, "discovery.stale_deleted", "count", n)
 	}
