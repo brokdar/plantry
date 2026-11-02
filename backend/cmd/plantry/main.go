@@ -61,7 +61,7 @@ var commit = ""
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "backup" {
-		if err := runBackup(os.Args[2:], os.Stdout); err != nil {
+		if err := runBackup(os.Args[2:], os.Stdout, os.Stderr); err != nil {
 			fmt.Fprintln(os.Stderr, "fatal:", err)
 			os.Exit(1)
 		}

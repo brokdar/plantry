@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"database/sql"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -60,7 +61,7 @@ func TestBackupDuringWrites(t *testing.T) {
 	dst := filepath.Join(outDir, "backup.db")
 	var out bytes.Buffer
 	t.Setenv("PLANTRY_DB_PATH", src)
-	require.NoError(t, runBackup([]string{"-out", dst}, &out))
+	require.NoError(t, runBackup([]string{"-out", dst}, &out, io.Discard))
 	close(stop)
 	wg.Wait()
 	assert.Contains(t, out.String(), dst)
@@ -89,12 +90,12 @@ func TestBackupRefusesExistingAndMissingOut(t *testing.T) {
 	require.NoError(t, conn.Close())
 	t.Setenv("PLANTRY_DB_PATH", src)
 
-	require.Error(t, runBackup(nil, &bytes.Buffer{}))
+	require.Error(t, runBackup(nil, &bytes.Buffer{}, io.Discard))
 	existing := filepath.Join(dir, "x.db")
 	require.NoError(t, os.WriteFile(existing, []byte("x"), 0o600))
-	require.Error(t, runBackup([]string{"-out", existing}, &bytes.Buffer{}))
+	require.Error(t, runBackup([]string{"-out", existing}, &bytes.Buffer{}, io.Discard))
 	// An env-supplied key has no file: the backup still succeeds.
-	require.NoError(t, runBackup([]string{"-out", filepath.Join(t.TempDir(), "b.db")}, &bytes.Buffer{}))
+	require.NoError(t, runBackup([]string{"-out", filepath.Join(t.TempDir(), "b.db")}, &bytes.Buffer{}, io.Discard))
 }
 
 func TestBackupDBFileModeAndCleanupOnKeyFailure(t *testing.T) {
@@ -107,7 +108,7 @@ func TestBackupDBFileModeAndCleanupOnKeyFailure(t *testing.T) {
 	outDir := filepath.Join(t.TempDir(), "out")
 	require.NoError(t, os.MkdirAll(outDir, 0o755))
 	dst := filepath.Join(outDir, "b.db")
-	require.NoError(t, backupDB(src, dst))
+	require.NoError(t, backupDB(src, dst, io.Discard))
 	st, err := os.Stat(dst)
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o600), st.Mode().Perm())
@@ -115,7 +116,62 @@ func TestBackupDBFileModeAndCleanupOnKeyFailure(t *testing.T) {
 	// A secret.key that cannot be read removes the written backup DB.
 	require.NoError(t, os.Mkdir(filepath.Join(dir, secretKeyFile), 0o755))
 	dst2 := filepath.Join(outDir, "c.db")
-	require.Error(t, backupDB(src, dst2))
+	require.Error(t, backupDB(src, dst2, io.Discard))
 	_, err = os.Stat(dst2)
 	assert.True(t, os.IsNotExist(err))
+}
+
+func emptyDB(t *testing.T, dir string) string {
+	t.Helper()
+	src := filepath.Join(dir, "plantry.db")
+	conn, err := openDB(src)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	return src
+}
+
+// DoD S6: an existing, different secret.key in the target directory is
+// never overwritten (older backups there need it); an identical one is fine.
+func TestBackupKeepsExistingDifferentKey(t *testing.T) {
+	src := emptyDB(t, t.TempDir())
+	require.NoError(t, os.WriteFile(filepath.Join(filepath.Dir(src), secretKeyFile), []byte("new-key"), 0o600))
+	outDir := t.TempDir()
+	dstKey := filepath.Join(outDir, secretKeyFile)
+	require.NoError(t, os.WriteFile(dstKey, []byte("old-key"), 0o600))
+
+	dst := filepath.Join(outDir, "b.db")
+	err := backupDB(src, dst, io.Discard)
+	require.ErrorContains(t, err, "secret.key")
+	key, rerr := os.ReadFile(dstKey)
+	require.NoError(t, rerr)
+	assert.Equal(t, "old-key", string(key), "the existing key is kept")
+	assert.NoFileExists(t, dst, "no half backup")
+
+	require.NoError(t, os.WriteFile(dstKey, []byte("new-key"), 0o600))
+	require.NoError(t, backupDB(src, dst, io.Discard), "an identical key is fine")
+	entries, err := os.ReadDir(outDir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 2, "no temp file left: %v", entries)
+}
+
+func TestBackupWritesKeyAtomically(t *testing.T) {
+	src := emptyDB(t, t.TempDir())
+	require.NoError(t, os.WriteFile(filepath.Join(filepath.Dir(src), secretKeyFile), []byte("k"), 0o600))
+	outDir := t.TempDir()
+	require.NoError(t, backupDB(src, filepath.Join(outDir, "b.db"), io.Discard))
+	st, err := os.Stat(filepath.Join(outDir, secretKeyFile))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), st.Mode().Perm())
+	entries, err := os.ReadDir(outDir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 2)
+}
+
+// DoD sfh-9: without a secret.key file the backup succeeds with a warning.
+func TestBackupWarnsWithoutKeyFile(t *testing.T) {
+	t.Setenv("PLANTRY_DB_PATH", emptyDB(t, t.TempDir()))
+	var stdout, stderr bytes.Buffer
+	require.NoError(t, runBackup([]string{"-out", filepath.Join(t.TempDir(), "b.db")}, &stdout, &stderr))
+	assert.Contains(t, stderr.String(), "warning")
+	assert.Contains(t, stderr.String(), "PLANTRY_SECRET_KEY")
 }
