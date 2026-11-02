@@ -224,6 +224,17 @@ func TestSystem_ReturnsInfo(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"cipher_available":true`)
 }
 
+func TestSystem_ReturnsInjectedBuildCommit(t *testing.T) {
+	svc := settings.NewService(newMemRepo(), settings.NewEnvSnapshot(nil), crypto.NilCipher{})
+	h := handlers.NewSettingsHandler(svc, handlers.SystemInfo{Version: "1.2.3", BuildCommit: "abc1234"}, nil)
+	w := httptest.NewRecorder()
+	h.System(w, httptest.NewRequest(http.MethodGet, "/api/settings/system", nil))
+	require.Equal(t, 200, w.Code)
+	var got handlers.SystemInfo
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, "abc1234", got.BuildCommit)
+}
+
 // newSettingsRouterNilCipher wires the handler without PLANTRY_SECRET_KEY
 // so that writes to encrypted keys return 503 with the banner message key.
 func newSettingsRouterNilCipher(t *testing.T) *chi.Mux {
