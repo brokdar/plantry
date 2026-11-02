@@ -1015,6 +1015,8 @@ export const mockRunsPage: RunsPage = {
       outcome: "accepted",
       correction_rate: 0.25,
       edits: null,
+      suggestions: null,
+      accepted: null,
     },
     {
       id: 11,
@@ -1070,6 +1072,8 @@ export const mockInsights: Insights = {
       runs: 2,
       tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
       edits: null,
+      suggestions: null,
+      accepted: null,
       score_avg: { coverage: 1, preference_fit: 0.8, waste_portions: 0 },
       violations: { H2: 1 },
     },

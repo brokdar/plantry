@@ -121,12 +121,23 @@ type insightsVersionResponse struct {
 	Runs          int                `json:"runs"`
 	Tokens        runTokensResponse  `json:"tokens"`
 	Edits         *int               `json:"edits"`
+	Suggestions   *int               `json:"suggestions"`
+	Accepted      *int               `json:"accepted"`
 	ScoreAvg      map[string]float64 `json:"score_avg"`
 	Violations    map[string]int     `json:"violations"`
 }
 
+type insightsDiscoveryResponse struct {
+	Runs                  int      `json:"runs"`
+	Suggestions           int      `json:"suggestions"`
+	Accepted              int      `json:"accepted"`
+	AcceptanceRate        *float64 `json:"acceptance_rate"`
+	CostPerAcceptedRecipe *float64 `json:"cost_per_accepted_recipe"`
+}
+
 type insightsResponse struct {
 	Weeks      []insightsWeekResponse    `json:"weeks"`
+	Discovery  insightsDiscoveryResponse `json:"discovery"`
 	ByVersion  []insightsVersionResponse `json:"by_version"`
 	PricesAsOf string                    `json:"prices_as_of"`
 }
@@ -272,6 +283,10 @@ func (h *AIRunsHandler) Insights(w http.ResponseWriter, r *http.Request) {
 		Weeks:      make([]insightsWeekResponse, len(rep.Weeks)),
 		ByVersion:  make([]insightsVersionResponse, len(rep.ByVersion)),
 		PricesAsOf: rep.PricesAsOf,
+		Discovery: insightsDiscoveryResponse{
+			Runs: rep.Discovery.Runs, Suggestions: rep.Discovery.Suggestions, Accepted: rep.Discovery.Accepted,
+			AcceptanceRate: rep.Discovery.AcceptanceRate, CostPerAcceptedRecipe: rep.Discovery.CostPerAcceptedRecipe,
+		},
 	}
 	for i, wk := range rep.Weeks {
 		resp.Weeks[i] = insightsWeekResponse{
@@ -289,7 +304,7 @@ func (h *AIRunsHandler) Insights(w http.ResponseWriter, r *http.Request) {
 		resp.ByVersion[i] = insightsVersionResponse{
 			Kind: string(g.Kind), PromptVersion: g.PromptVersion, Model: g.Model, Runs: g.Runs,
 			Tokens: runTokensResponse{Input: g.Tokens.Input, Output: g.Tokens.Output, CacheRead: g.Tokens.CacheRead, CacheWrite: g.Tokens.CacheWrite},
-			Edits:  g.Edits, ScoreAvg: g.ScoreAvg, Violations: g.Violations,
+			Edits:  g.Edits, Suggestions: g.Suggestions, Accepted: g.Accepted, ScoreAvg: g.ScoreAvg, Violations: g.Violations,
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

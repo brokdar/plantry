@@ -65,6 +65,9 @@ type Querier interface {
 	DeletePresetTagsByPreset(ctx context.Context, presetID int64) error
 	DeleteSetting(ctx context.Context, key string) error
 	DeleteTimeSlot(ctx context.Context, id int64) (sql.Result, error)
+	// B7: per discovery run with an id in [min_id, max_id], the suggestions it
+	// stored and how many of them the user accepted.
+	DiscoverySuggestionCounts(ctx context.Context, arg DiscoverySuggestionCountsParams) ([]DiscoverySuggestionCountsRow, error)
 	// At startup no run is running: a row still 'running' was cut off by a stop.
 	FailInterruptedAIRuns(ctx context.Context, finishedAt sql.NullString) (int64, error)
 	// prompt_hash resolves to NULL when the hash is not in ai_prompts, so a failed

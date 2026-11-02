@@ -439,3 +439,73 @@ func TestAIRuns_WebSearchFields(t *testing.T) {
 	a.get("/api/ai/prices?model=gpt-5", &p)
 	assert.Zero(t, p.Price["per_search"])
 }
+
+// B7-AC1..3 through the real store: two discovery runs (3 suggestions, 1
+// accepted), a plan run, and a changed weekly cost per accepted plan only by
+// plan runs.
+func TestAIRuns_InsightsDiscovery(t *testing.T) {
+	a := newRunsAPI(t)
+	plan := a.run(airun.KindGenerate, "2026-10-06", "claude-sonnet-4-6", "anthropic", 1_000_000)
+	_, err := a.db.Exec(`UPDATE ai_runs SET outcome = 'accepted' WHERE id = ?`, plan)
+	require.NoError(t, err)
+	d1 := a.run(airun.KindDiscovery, "2026-10-07", "claude-sonnet-4-6", "anthropic", 1_000_000)
+	d2 := a.run(airun.KindDiscovery, "2026-10-08", "claude-sonnet-4-6", "anthropic", 1_000_000)
+	_, err = a.db.Exec(`UPDATE ai_runs SET prompt_version = 'd1', web_search_requests = 10 WHERE id IN (?, ?)`, d1, d2)
+	require.NoError(t, err)
+	for i, row := range []struct {
+		run    int64
+		status string
+	}{{d1, "accepted"}, {d1, "rejected"}, {d2, "pending"}} {
+		_, err = a.db.Exec(`INSERT INTO recipe_suggestions (mode, source_url, draft_json, annotations_json, grounded, status, ai_run_id)
+			VALUES ('explore', ?, '{}', '{}', 1, ?, ?)`, fmt.Sprintf("https://example.test/%d", i), row.status, row.run)
+		require.NoError(t, err)
+	}
+
+	var rep struct {
+		Weeks []struct {
+			Runs            int      `json:"runs"`
+			CostPerAccepted *float64 `json:"cost_per_accepted"`
+		} `json:"weeks"`
+		Discovery struct {
+			Runs                  int      `json:"runs"`
+			Suggestions           int      `json:"suggestions"`
+			Accepted              int      `json:"accepted"`
+			AcceptanceRate        *float64 `json:"acceptance_rate"`
+			CostPerAcceptedRecipe *float64 `json:"cost_per_accepted_recipe"`
+		} `json:"discovery"`
+		ByVersion []struct {
+			Kind          string `json:"kind"`
+			PromptVersion string `json:"prompt_version"`
+			Runs          int    `json:"runs"`
+			Suggestions   *int   `json:"suggestions"`
+			Accepted      *int   `json:"accepted"`
+		} `json:"by_version"`
+	}
+	rec := a.get("/api/ai/insights?from=2026-10-05&to=2026-10-11", &rep)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	assert.Equal(t, 2, rep.Discovery.Runs)
+	assert.Equal(t, 3, rep.Discovery.Suggestions)
+	assert.Equal(t, 1, rep.Discovery.Accepted)
+	require.NotNil(t, rep.Discovery.AcceptanceRate)
+	assert.InDelta(t, 1.0/3, *rep.Discovery.AcceptanceRate, 1e-9)
+	require.NotNil(t, rep.Discovery.CostPerAcceptedRecipe)
+	assert.InDelta(t, 6.2, *rep.Discovery.CostPerAcceptedRecipe, 1e-9, "2 x (3 + 10 searches x 0.01)")
+
+	require.Len(t, rep.Weeks, 1)
+	assert.Equal(t, 1, rep.Weeks[0].Runs)
+	require.NotNil(t, rep.Weeks[0].CostPerAccepted)
+	assert.InDelta(t, 3.0, *rep.Weeks[0].CostPerAccepted, 1e-9, "B7-AC2: unchanged by discovery")
+
+	found := false
+	for _, g := range rep.ByVersion {
+		if g.Kind == "discovery" && g.PromptVersion == "d1" {
+			found = true
+			assert.Equal(t, 2, g.Runs)
+			require.NotNil(t, g.Suggestions)
+			assert.Equal(t, 3, *g.Suggestions)
+			assert.Equal(t, 1, *g.Accepted)
+		}
+	}
+	assert.True(t, found, "B7-AC3: discovery d1 group")
+}

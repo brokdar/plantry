@@ -195,7 +195,7 @@ type overrideEntry struct {
 
 // ParsePriceOverrides parses ai.price_overrides: a JSON object mapping a model
 // id to {in, out, cache_read?, cache_write?} in USD per 1M tokens, plus per_search?
-// (USD per web search; built-in Anthropic prices carry 0.01, others 0). Prices must
+// (USD per web search; omitted keeps the built-in price: 0.01 for Anthropic models, else 0; an explicit 0 is 0). Prices must
 // be non-negative. An empty string is an empty map.
 func ParsePriceOverrides(raw string) (map[string]Price, error) {
 	out := map[string]Price{}
@@ -227,8 +227,11 @@ func ParsePriceOverrides(raw string) (map[string]Price, error) {
 			}
 		}
 		price := Price{In: *e.In, Out: *e.Out, CacheRead: e.CacheRead, CacheWrite: e.CacheWrite}
+		// An omitted per_search keeps the built-in (family) search price.
 		if e.PerSearch != nil {
 			price.PerSearch = *e.PerSearch
+		} else if b, src := LookupPrice(model, nil); src == PriceBuiltin {
+			price.PerSearch = b.PerSearch
 		}
 		out[model] = price
 	}
