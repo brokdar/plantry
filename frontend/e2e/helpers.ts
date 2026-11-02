@@ -9,12 +9,21 @@ import {
 export const API = `http://localhost:${process.env.E2E_API_PORT ?? 8080}`
 
 /**
- * Extended `test` that auto-installs the dialog guard on every page.
+ * Extended `test` that auto-installs the dialog guard and a silent daily
+ * suggestion on every page.
  * Import as: `import { test, expect } from "./helpers"`.
  */
 export const test = baseTest.extend({
   page: async ({ page }, runTest) => {
     failOnDialog(page)
+    // The daily idea opens a sheet over Today; specs that are not about it
+    // see "nothing today" (204). A spec for the sheet registers its own
+    // route, which takes precedence. Specs that need the real backend call
+    // page.unroute("**/api/discovery/daily*") with this same pattern;
+    // /daily/another is not matched.
+    await page.route("**/api/discovery/daily*", (route) =>
+      route.fulfill({ status: 204 })
+    )
     await runTest(page)
   },
 })

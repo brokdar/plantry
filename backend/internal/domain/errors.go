@@ -41,6 +41,9 @@ var (
 	ErrAIChangeUndone = errors.New("the change was undone already")
 	// ErrAIChangeNotUndoable: the change wrote nothing undo can put back.
 	ErrAIChangeNotUndoable = errors.New("the change has nothing to undo")
+	// ErrAIChangeConfirmed: a plate or session of the change is confirmed
+	// now, so undo would rewrite a decision (Z1).
+	ErrAIChangeConfirmed = errors.New("the change's rows are confirmed")
 
 	// Plate feedback errors.
 	ErrInvalidFeedbackStatus = errors.New("invalid feedback status")
@@ -106,6 +109,13 @@ var (
 	// chose (a replaced draft confirmed or gone, a target cell taken).
 	ErrPlanChanged = errors.New("the plan changed while it was generated")
 
+	// Discovery (Phase 5 D7, D11): one discovery run at a time, a decision
+	// on a suggestion that is decided already, and research output that
+	// stayed unreadable after the repair call.
+	ErrDiscoveryRunning       = errors.New("a discovery run is running")
+	ErrDiscoveryDecided       = errors.New("the suggestion is decided already")
+	ErrDiscoveryInvalidOutput = errors.New("the research output is not valid JSON")
+
 	// Mid-week re-plan (Phase 3 B8): confirmed plates in the No-plate cells
 	// need unlock_confirmed, and a re-plan starts today at the earliest.
 	ErrConfirmedAffected = errors.New("the re-plan removes confirmed plates")
@@ -156,6 +166,7 @@ var messageKeys = []struct {
 	{ErrAIChangeStale, "error.ai.change_stale"},
 	{ErrAIChangeUndone, "error.ai.change_undone"},
 	{ErrAIChangeNotUndoable, "error.ai.change_not_undoable"},
+	{ErrAIChangeConfirmed, "error.ai.change_confirmed"},
 	{ErrInvalidFeedbackStatus, "error.feedback.invalid_status"},
 	{ErrImportBodyTooLarge, "error.import.body_too_large"},
 	{ErrImportNotHTML, "error.import.not_html"},
@@ -189,6 +200,9 @@ var messageKeys = []struct {
 	{ErrScopeConfirmed, "error.plan.scope_confirmed"},
 	{ErrInvalidScope, "error.plan.invalid_scope"},
 	{ErrNotEnoughRecipes, "error.plan.not_enough_recipes"},
+	{ErrDiscoveryRunning, "error.discovery.running"},
+	{ErrDiscoveryDecided, "error.discovery.decided"},
+	{ErrDiscoveryInvalidOutput, "error.discovery.invalid_output"},
 	{ErrConfirmedAffected, "error.plan.confirmed_affected"},
 	{ErrReplanPast, "error.plan.replan_past"},
 }

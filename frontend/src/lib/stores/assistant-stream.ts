@@ -10,9 +10,15 @@ import type { ToolFailure } from "../assistant/transcript"
 import type { Change, UnlockRequestPayload } from "../domain/assistantEvents"
 
 /** State of one change line: `undoing` while the request runs, `undone` once
- *  reverted, `stale` when later edits make the revert unsafe, `nothing_to_undo`
- *  when the change altered nothing. */
-export type ChangeLineState = "undoing" | "undone" | "stale" | "nothing_to_undo"
+ *  reverted, `stale` when later edits make the revert unsafe, `confirmed` when
+ *  its rows were accepted since, `nothing_to_undo` when the change altered
+ *  nothing. */
+export type ChangeLineState =
+  | "undoing"
+  | "undone"
+  | "stale"
+  | "confirmed"
+  | "nothing_to_undo"
 
 export interface AssistantStreamState {
   text: string

@@ -39,9 +39,12 @@ type URLIndex interface {
 	SourceURLKnown(ctx context.Context, url string) (bool, error)
 }
 
-// Candidate is a page the research agent proposes.
+// Candidate is a page the research agent proposes (D5).
 type Candidate struct {
-	URL string
+	URL     string `json:"url"`
+	Title   string `json:"title"`
+	Cuisine string `json:"cuisine"`
+	Why     string `json:"why"`
 }
 
 // Verified is a candidate whose page held a recipe.

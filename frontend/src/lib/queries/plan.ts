@@ -38,7 +38,13 @@ import {
 import { confirmSession, unlockSession } from "@/lib/api/sessions"
 import { toast, toastError } from "@/lib/toast"
 
-import { availabilityKeys, planKeys, shoppingKeys, todayKeys } from "./keys"
+import {
+  aiKeys,
+  availabilityKeys,
+  planKeys,
+  shoppingKeys,
+  todayKeys,
+} from "./keys"
 
 /** Every plan mutation refreshes the read models and the shopping list.
  *  Returned from `onSuccess`, the mutation stays pending until the active
@@ -52,6 +58,15 @@ export function invalidatePlanViews(qc: QueryClient): Promise<unknown> {
     qc.invalidateQueries({ queryKey: todayKeys.all }),
     qc.invalidateQueries({ queryKey: shoppingKeys.all }),
   ]).catch(() => undefined)
+}
+
+/** The plan views plus the assistant's conversations: accepting or
+ *  unaccepting rows changes which of their change lines can be undone. */
+function invalidateWithAssistant(qc: QueryClient): Promise<unknown> {
+  return Promise.all([
+    invalidatePlanViews(qc),
+    qc.invalidateQueries({ queryKey: aiKeys.all }).catch(() => undefined),
+  ])
 }
 
 /** The board's read model. Without `start` the server opens the anchored
@@ -345,7 +360,7 @@ export function useUnaccept() {
     mutationFn: (rows: StateChange) => unacceptPlan(rows),
     onSuccess: () => {
       toast.success(t("plan.undo.restored"))
-      return invalidatePlanViews(qc)
+      return invalidateWithAssistant(qc)
     },
     onError: (err) => toastUndoError(err, t),
   })
@@ -370,7 +385,7 @@ export function useAccept() {
           unaccept.mutate(rows)
         )
       }
-      return invalidatePlanViews(qc)
+      return invalidateWithAssistant(qc)
     },
     onError: (err) => toastError(err, t),
   })

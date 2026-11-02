@@ -560,6 +560,17 @@ func (r *FoodRepo) LeafIDsUsedInRecipes(ctx context.Context, ids []int64) (map[i
 	return out, nil
 }
 
+// RecipeNames returns up to limit recipe names, newest first.
+func (r *FoodRepo) RecipeNames(ctx context.Context, limit int) ([]string, error) {
+	return r.queriesFor(ctx).ListRecipeNames(ctx, int64(limit))
+}
+
+// LeafNamesByRecipeUse returns up to limit names of leaves used in
+// recipes, most used first.
+func (r *FoodRepo) LeafNamesByRecipeUse(ctx context.Context, limit int) ([]string, error) {
+	return r.queriesFor(ctx).ListLeafNamesByRecipeUse(ctx, int64(limit))
+}
+
 func (r *FoodRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*food.Food, error) {
 	fav := int64(0)
 	if favorite {

@@ -139,6 +139,7 @@ export function useAssistantStream() {
 }
 
 /** Reverts one change. Maps the line state: 409 `change_stale` -> `stale`,
+ *  `change_confirmed` -> `confirmed`,
  *  409 `change_undone` -> `undone`, 409 `change_not_undoable` ->
  *  `nothing_to_undo`; other errors toast. */
 export function useUndoChange() {
@@ -155,12 +156,20 @@ export function useUndoChange() {
             assistantStream.setLineState(id, "stale")
             return null
           }
+          if (err.messageKey === "error.ai.change_confirmed") {
+            assistantStream.setLineState(id, "confirmed")
+            void qc.invalidateQueries({ queryKey: aiKeys.all })
+            return null
+          }
           if (err.messageKey === "error.ai.change_not_undoable") {
             assistantStream.setLineState(id, "nothing_to_undo")
             return null
           }
           if (err.messageKey === "error.ai.change_undone") {
+            // Undone elsewhere: the plan and the conversation moved on.
             assistantStream.setLineState(id, "undone")
+            void invalidatePlanViews(qc)
+            void qc.invalidateQueries({ queryKey: aiKeys.all })
             return null
           }
         }

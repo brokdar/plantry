@@ -47,6 +47,8 @@ type Querier interface {
 	CreateRecipeSuggestion(ctx context.Context, arg CreateRecipeSuggestionParams) (RecipeSuggestion, error)
 	CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) (TimeSlot, error)
 	CreateVariantGroup(ctx context.Context, name string) (VariantGroup, error)
+	// Accept or reject a pending suggestion; no row when it is decided already.
+	DecideRecipeSuggestion(ctx context.Context, arg DecideRecipeSuggestionParams) (RecipeSuggestion, error)
 	DeleteActiveSlotAvailabilityDefaults(ctx context.Context) error
 	DeleteAvailabilityOverride(ctx context.Context, arg DeleteAvailabilityOverrideParams) error
 	DeleteConversation(ctx context.Context, id int64) (sql.Result, error)
@@ -56,6 +58,9 @@ type Querier interface {
 	DeleteFoodInstructions(ctx context.Context, foodID int64) error
 	DeleteFoodPortion(ctx context.Context, arg DeleteFoodPortionParams) (sql.Result, error)
 	DeleteFoodTags(ctx context.Context, foodID int64) error
+	// D12: pending suggestions created before the cutoff go; their ids let the
+	// caller delete the images.
+	DeletePendingSuggestionsBefore(ctx context.Context, before string) ([]int64, error)
 	DeletePlate(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateComponent(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateFeedback(ctx context.Context, plateID int64) (sql.Result, error)
@@ -130,6 +135,8 @@ type Querier interface {
 	ListFoodTags(ctx context.Context, foodID int64) ([]FoodTag, error)
 	ListFoodTagsByFoodIDs(ctx context.Context, ids []int64) ([]FoodTag, error)
 	ListKnownTags(ctx context.Context, limit int64) ([]ListKnownTagsRow, error)
+	// Leaf names used in recipes, most used first (discovery known mode, D8).
+	ListLeafNamesByRecipeUse(ctx context.Context, limit int64) ([]string, error)
 	// Leaf components on plates dated in [from_date, to_date] with their plate's
 	// cell, eaters and state: the ingredient sources of a shopping list.
 	ListLeafPlateComponentsInRange(ctx context.Context, arg ListLeafPlateComponentsInRangeParams) ([]ListLeafPlateComponentsInRangeRow, error)
@@ -148,6 +155,11 @@ type Querier interface {
 	ListPresetComponentsByPlate(ctx context.Context, presetPlateID int64) ([]PresetComponent, error)
 	ListPresetPlatesByPreset(ctx context.Context, presetID int64) ([]PresetPlate, error)
 	ListPresetTagsByPreset(ctx context.Context, presetID int64) ([]string, error)
+	// The newest recipe names, for the discovery prompt (D8).
+	ListRecipeNames(ctx context.Context, limit int64) ([]string, error)
+	// Suggestions, optionally of one status and run, last decided (else newest)
+	// first.
+	ListRecipeSuggestions(ctx context.Context, arg ListRecipeSuggestionsParams) ([]RecipeSuggestion, error)
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
@@ -166,6 +178,9 @@ type Querier interface {
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
 	ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
+	// D11: any suggestion accepted -> accepted; all rejected -> discarded; else
+	// open. A run without suggestions keeps NULL.
+	SetDiscoveryRunOutcome(ctx context.Context, id int64) error
 	SetFoodDietClass(ctx context.Context, arg SetFoodDietClassParams) (Food, error)
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
 	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)

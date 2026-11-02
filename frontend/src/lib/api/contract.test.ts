@@ -606,6 +606,7 @@ describe("assistant shapes (Phase 4 F1-AC1)", () => {
         "session_ids",
         "text_key",
         "tool",
+        "undo_blocked",
         "undoable",
         "undone_at",
       ].sort()

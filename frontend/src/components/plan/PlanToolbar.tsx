@@ -14,6 +14,7 @@ import {
   Trash2,
   TriangleAlert,
 } from "lucide-react"
+import { useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
 
 import { GeneratePlanButton } from "@/components/shell/GeneratePlanButton"
@@ -71,6 +72,33 @@ interface PlanToolbarProps {
 const NAV_LINK =
   "inline-flex min-h-11 items-center justify-center rounded-lg text-small text-ink transition-colors duration-150 ease-out hover:bg-panel-sunken md:pointer-fine:min-h-9"
 
+/** Publishes the toolbar's bottom edge (viewport px) as `--plan-toolbar-bottom`
+ *  so the floating assistant panel (768-1279 px) starts below it and leaves
+ *  Accept and shop reachable (Phase 5 D24). */
+function usePublishToolbarBottom(ref: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const root = document.documentElement
+    const update = () =>
+      root.style.setProperty(
+        "--plan-toolbar-bottom",
+        `${Math.max(0, Math.round(el.getBoundingClientRect().bottom))}px`
+      )
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    window.addEventListener("resize", update)
+    window.addEventListener("scroll", update, { capture: true, passive: true })
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("resize", update)
+      window.removeEventListener("scroll", update, { capture: true })
+      root.style.removeProperty("--plan-toolbar-bottom")
+    }
+  }, [ref])
+}
+
 /**
  * The board header (UX §5.5): the range and its stats ("Draft · …" with
  * drafts), the run's notes, window navigation (previous, "This week", next),
@@ -105,10 +133,12 @@ export function PlanToolbar({
 }: PlanToolbarProps) {
   const { t } = useTranslation()
   const review = draft !== null && !readOnly
+  const headerRef = useRef<HTMLElement>(null)
+  usePublishToolbarBottom(headerRef)
   const keep = assistantOpen ? (1 as const) : undefined
 
   return (
-    <header className="flex flex-col gap-3">
+    <header ref={headerRef} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="flex min-w-0 flex-col gap-1">
           <h1 className="text-h1 text-ink">{rangeLabel}</h1>

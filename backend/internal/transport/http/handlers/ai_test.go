@@ -76,10 +76,12 @@ var dateCases = []struct {
 	wantKey      string
 }{
 	// B3-AC2
-	{"missing start", "", "", "error.invalid_body"},
-	{"malformed start", "", "31.10.2026", "error.ai.invalid_date"},
+	{"missing start", "2026-10-30", "", "error.invalid_body"},
+	{"malformed start", "2026-10-30", "31.10.2026", "error.ai.invalid_date"},
 	{"malformed today", "yesterday", "2026-11-02", "error.ai.invalid_date"},
-	{"start is no shopping day", "", "2026-10-31", "error.plan.invalid_start"},
+	{"start is no shopping day", "2026-10-30", "2026-10-31", "error.plan.invalid_start"},
+	// Z1-AC6
+	{"missing today", "", "2026-11-02", "error.invalid_body"},
 }
 
 func chatBody(today, start string) string {
@@ -115,7 +117,6 @@ func TestAIChat_PassesDatesThrough(t *testing.T) {
 		wantToday          string
 	}{
 		{"client today", "2026-10-30", "2026-11-02", "Today is Friday 2026-10-30."},
-		{"today falls back to server clock", "", "2026-11-02", "Today is Monday 2026-10-26."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -138,7 +139,7 @@ func TestAIChat_PassesDatesThrough(t *testing.T) {
 func TestAIConversations_ListIgnoresLegacyFilter(t *testing.T) {
 	h, _ := newAIHandler(t)
 	w := httptest.NewRecorder()
-	h.Chat(w, httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody("", "2026-11-02"))))
+	h.Chat(w, httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(chatBody("2026-10-30", "2026-11-02"))))
 	require.Equal(t, http.StatusOK, w.Code)
 
 	w = httptest.NewRecorder()
@@ -178,7 +179,7 @@ func TestAIDebugSystemPrompt_MapsServiceErrors(t *testing.T) {
 			h, _ := newAIHandlerWithPlan(t, testhelper.NewTestDB(t), failingPlan(tt.err))
 			w := httptest.NewRecorder()
 
-			h.DebugSystemPrompt(w, httptest.NewRequest(http.MethodGet, debugURL("", "2026-11-02"), nil))
+			h.DebugSystemPrompt(w, httptest.NewRequest(http.MethodGet, debugURL("2026-10-30", "2026-11-02"), nil))
 
 			assert.Equal(t, tt.wantStatus, w.Code)
 			assert.Equal(t, tt.wantKey, messageKey(t, w))
