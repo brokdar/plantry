@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
@@ -24,12 +25,7 @@ func parseStream(ctx context.Context, body io.Reader, out chan<- llm.Event) (*ll
 		dataBuf   bytes.Buffer
 	)
 
-	// Per-stream accumulators.
-	blocks := map[int]*blockAccum{}
-	blockOrder := []int{}
-	var stopReason llm.StopReason
-	var usage llm.Usage
-	var model string
+	st := &streamState{blocks: map[int]*blockAccum{}}
 
 	flushEvent := func() error {
 		defer func() {
@@ -40,7 +36,7 @@ func parseStream(ctx context.Context, body io.Reader, out chan<- llm.Event) (*ll
 			return nil
 		}
 		data := bytes.TrimRight(dataBuf.Bytes(), "\n")
-		return handleSSEEvent(ctx, eventName, data, out, blocks, &blockOrder, &stopReason, &usage, &model)
+		return handleSSEEvent(ctx, eventName, data, out, st)
 	}
 
 	for scanner.Scan() {
@@ -79,31 +75,72 @@ func parseStream(ctx context.Context, body io.Reader, out chan<- llm.Event) (*ll
 	}
 
 	// Assemble the Response.
-	content := make([]llm.ContentBlock, 0, len(blockOrder))
-	for _, idx := range blockOrder {
-		b, ok := blocks[idx]
+	content := make([]llm.ContentBlock, 0, len(st.order))
+	for _, idx := range st.order {
+		b, ok := st.blocks[idx]
 		if !ok {
 			continue
 		}
 		content = append(content, b.finalize())
 	}
 	return &llm.Response{
-		Message:    llm.Message{Role: llm.RoleAssistant, Content: content},
-		StopReason: stopReason,
-		Usage:      usage,
+		Message:       llm.Message{Role: llm.RoleAssistant, Content: content},
+		StopReason:    st.stopReason,
+		Usage:         st.usage,
+		SearchResults: st.results,
 	}, nil
 }
 
+// streamState accumulates one streamed assistant turn.
+type streamState struct {
+	blocks     map[int]*blockAccum
+	order      []int
+	stopReason llm.StopReason
+	usage      llm.Usage
+	model      string
+	results    []llm.SearchResult
+}
+
+// addResults appends the pages of a web_search_tool_result block, skipping
+// URLs already seen. An error result (content is an object) adds nothing.
+func (st *streamState) addResults(content json.RawMessage) {
+	var pages []struct {
+		URL   string `json:"url"`
+		Title string `json:"title"`
+	}
+	if json.Unmarshal(content, &pages) != nil {
+		return
+	}
+	for _, p := range pages {
+		if p.URL == "" || slices.ContainsFunc(st.results, func(r llm.SearchResult) bool { return r.URL == p.URL }) {
+			continue
+		}
+		st.results = append(st.results, llm.SearchResult{URL: p.URL, Title: p.Title})
+	}
+}
+
+// isServerBlock reports whether a block type is a server tool block
+// (server_tool_use, web_search_tool_result, ...) that must be replayed
+// verbatim.
+func isServerBlock(kind string) bool {
+	return kind == "server_tool_use" || (kind != "tool_result" && strings.HasSuffix(kind, "_tool_result"))
+}
+
 type blockAccum struct {
-	kind  string // "text" | "tool_use" | "thinking"
-	text  strings.Builder
-	id    string
-	name  string
-	args  strings.Builder
-	input json.RawMessage
+	kind      string // "text" | "tool_use" | server block type | other
+	text      strings.Builder
+	citations []string
+	id        string
+	name      string
+	args      strings.Builder
+	input     json.RawMessage
+	raw       json.RawMessage // server blocks: the block JSON, compacted
 }
 
 func (b *blockAccum) finalize() llm.ContentBlock {
+	if isServerBlock(b.kind) {
+		return llm.ContentBlock{Type: llm.ContentTypeServer, Raw: b.raw}
+	}
 	switch b.kind {
 	case "tool_use":
 		raw := b.input
@@ -118,7 +155,7 @@ func (b *blockAccum) finalize() llm.ContentBlock {
 			Type: llm.ContentTypeToolUse, ToolUseID: b.id, ToolUseName: b.name, ToolUseInput: raw,
 		}
 	default:
-		return llm.ContentBlock{Type: llm.ContentTypeText, Text: b.text.String()}
+		return llm.ContentBlock{Type: llm.ContentTypeText, Text: b.text.String(), Citations: b.citations}
 	}
 }
 
@@ -127,11 +164,7 @@ func handleSSEEvent(
 	name string,
 	data []byte,
 	out chan<- llm.Event,
-	blocks map[int]*blockAccum,
-	order *[]int,
-	stopReason *llm.StopReason,
-	usage *llm.Usage,
-	model *string,
+	st *streamState,
 ) error {
 	switch name {
 	case "message_start":
@@ -139,38 +172,54 @@ func handleSSEEvent(
 			Message struct {
 				Model string `json:"model"`
 				Usage struct {
-					InputTokens              int `json:"input_tokens"`
-					OutputTokens             int `json:"output_tokens"`
-					CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
-					CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+					InputTokens              int           `json:"input_tokens"`
+					OutputTokens             int           `json:"output_tokens"`
+					CacheCreationInputTokens int           `json:"cache_creation_input_tokens"`
+					CacheReadInputTokens     int           `json:"cache_read_input_tokens"`
+					ServerToolUse            serverToolUse `json:"server_tool_use"`
 				} `json:"usage"`
 			} `json:"message"`
 		}
 		if err := json.Unmarshal(data, &payload); err != nil {
 			return fmt.Errorf("anthropic: message_start decode: %w", err)
 		}
-		*model = payload.Message.Model
-		usage.InputTokens = payload.Message.Usage.InputTokens
-		usage.OutputTokens = payload.Message.Usage.OutputTokens
-		usage.CacheReadTokens = payload.Message.Usage.CacheReadInputTokens
-		usage.CacheWriteTokens = payload.Message.Usage.CacheCreationInputTokens
-		return send(ctx, out, llm.Event{Type: llm.EventMessageStart, Payload: llm.MessageStartPayload{Model: *model}})
+		st.model = payload.Message.Model
+		st.usage.InputTokens = payload.Message.Usage.InputTokens
+		st.usage.OutputTokens = payload.Message.Usage.OutputTokens
+		st.usage.CacheReadTokens = payload.Message.Usage.CacheReadInputTokens
+		st.usage.CacheWriteTokens = payload.Message.Usage.CacheCreationInputTokens
+		st.usage.WebSearchRequests = payload.Message.Usage.ServerToolUse.WebSearchRequests
+		return send(ctx, out, llm.Event{Type: llm.EventMessageStart, Payload: llm.MessageStartPayload{Model: st.model}})
 
 	case "content_block_start":
 		var payload struct {
 			Index        int `json:"index"`
 			ContentBlock struct {
-				Type  string          `json:"type"`
-				Text  string          `json:"text"`
-				ID    string          `json:"id"`
-				Name  string          `json:"name"`
-				Input json.RawMessage `json:"input"`
+				Type    string          `json:"type"`
+				Text    string          `json:"text"`
+				ID      string          `json:"id"`
+				Name    string          `json:"name"`
+				Input   json.RawMessage `json:"input"`
+				Content json.RawMessage `json:"content"`
 			} `json:"content_block"`
 		}
 		if err := json.Unmarshal(data, &payload); err != nil {
 			return fmt.Errorf("anthropic: content_block_start decode: %w", err)
 		}
 		blk := &blockAccum{kind: payload.ContentBlock.Type}
+		if isServerBlock(blk.kind) {
+			var raw struct {
+				ContentBlock json.RawMessage `json:"content_block"`
+			}
+			var buf bytes.Buffer
+			if err := json.Unmarshal(data, &raw); err != nil || json.Compact(&buf, raw.ContentBlock) != nil {
+				return fmt.Errorf("anthropic: %s block decode", blk.kind)
+			}
+			blk.raw = buf.Bytes()
+			if blk.kind == "web_search_tool_result" {
+				st.addResults(payload.ContentBlock.Content)
+			}
+		}
 		switch payload.ContentBlock.Type {
 		case "text":
 			blk.text.WriteString(payload.ContentBlock.Text)
@@ -186,8 +235,8 @@ func handleSSEEvent(
 				return err
 			}
 		}
-		blocks[payload.Index] = blk
-		*order = append(*order, payload.Index)
+		st.blocks[payload.Index] = blk
+		st.order = append(st.order, payload.Index)
 		return nil
 
 	case "content_block_delta":
@@ -197,12 +246,15 @@ func handleSSEEvent(
 				Type        string `json:"type"`
 				Text        string `json:"text"`
 				PartialJSON string `json:"partial_json"`
+				Citation    struct {
+					URL string `json:"url"`
+				} `json:"citation"`
 			} `json:"delta"`
 		}
 		if err := json.Unmarshal(data, &payload); err != nil {
 			return fmt.Errorf("anthropic: content_block_delta decode: %w", err)
 		}
-		blk := blocks[payload.Index]
+		blk := st.blocks[payload.Index]
 		if blk == nil {
 			return nil
 		}
@@ -212,8 +264,17 @@ func handleSSEEvent(
 			return send(ctx, out, llm.Event{Type: llm.EventAssistantDelta, Payload: llm.AssistantDeltaPayload{
 				Text: payload.Delta.Text,
 			}})
+		case "citations_delta":
+			if u := payload.Delta.Citation.URL; u != "" && !slices.Contains(blk.citations, u) {
+				blk.citations = append(blk.citations, u)
+			}
 		case "input_json_delta":
 			blk.args.WriteString(payload.Delta.PartialJSON)
+			// Only client tool calls are surfaced; server tool input stays in
+			// the block and other block types have no tool ID.
+			if blk.kind != "tool_use" {
+				return nil
+			}
 			return send(ctx, out, llm.Event{Type: llm.EventToolCallDelta, Payload: llm.ToolCallDeltaPayload{
 				ID: blk.id, ArgsJSON: payload.Delta.PartialJSON,
 			}})
@@ -225,7 +286,10 @@ func handleSSEEvent(
 			Index int `json:"index"`
 		}
 		_ = json.Unmarshal(data, &payload)
-		blk := blocks[payload.Index]
+		blk := st.blocks[payload.Index]
+		if blk != nil && blk.kind == "server_tool_use" && blk.args.Len() > 0 {
+			return blk.setServerInput()
+		}
 		if blk != nil && blk.kind == "tool_use" {
 			// Prefer the accumulated input_json_delta payload when present;
 			// the content_block_start's initial "input" is an empty placeholder
@@ -249,27 +313,31 @@ func handleSSEEvent(
 				StopReason string `json:"stop_reason"`
 			} `json:"delta"`
 			Usage struct {
-				OutputTokens             int `json:"output_tokens"`
-				InputTokens              int `json:"input_tokens"`
-				CacheReadInputTokens     int `json:"cache_read_input_tokens"`
-				CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+				OutputTokens             int           `json:"output_tokens"`
+				InputTokens              int           `json:"input_tokens"`
+				CacheReadInputTokens     int           `json:"cache_read_input_tokens"`
+				CacheCreationInputTokens int           `json:"cache_creation_input_tokens"`
+				ServerToolUse            serverToolUse `json:"server_tool_use"`
 			} `json:"usage"`
 		}
 		if err := json.Unmarshal(data, &payload); err != nil {
 			return fmt.Errorf("anthropic: message_delta decode: %w", err)
 		}
-		*stopReason = mapStopReason(payload.Delta.StopReason)
+		st.stopReason = mapStopReason(payload.Delta.StopReason)
 		if payload.Usage.OutputTokens > 0 {
-			usage.OutputTokens = payload.Usage.OutputTokens
+			st.usage.OutputTokens = payload.Usage.OutputTokens
 		}
 		if payload.Usage.InputTokens > 0 {
-			usage.InputTokens = payload.Usage.InputTokens
+			st.usage.InputTokens = payload.Usage.InputTokens
 		}
 		if payload.Usage.CacheReadInputTokens > 0 {
-			usage.CacheReadTokens = payload.Usage.CacheReadInputTokens
+			st.usage.CacheReadTokens = payload.Usage.CacheReadInputTokens
 		}
 		if payload.Usage.CacheCreationInputTokens > 0 {
-			usage.CacheWriteTokens = payload.Usage.CacheCreationInputTokens
+			st.usage.CacheWriteTokens = payload.Usage.CacheCreationInputTokens
+		}
+		if n := payload.Usage.ServerToolUse.WebSearchRequests; n > 0 {
+			st.usage.WebSearchRequests = n
 		}
 		return nil
 
@@ -304,9 +372,36 @@ func mapStopReason(s string) llm.StopReason {
 		return llm.StopReasonMaxTokens
 	case "refusal":
 		return llm.StopReasonRefusal
+	case "pause_turn":
+		return llm.StopReasonPauseTurn
 	default:
 		return llm.StopReason(s)
 	}
+}
+
+// serverToolUse is the usage.server_tool_use object (cumulative counts).
+type serverToolUse struct {
+	WebSearchRequests int `json:"web_search_requests"`
+}
+
+// setServerInput writes the streamed input of a server_tool_use block into
+// its raw JSON (the start event carries an empty placeholder).
+func (b *blockAccum) setServerInput() error {
+	args := strings.TrimSpace(b.args.String())
+	if !json.Valid([]byte(args)) {
+		return fmt.Errorf("anthropic: server_tool_use %s: invalid input", b.id)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(b.raw, &fields); err != nil {
+		return fmt.Errorf("anthropic: server_tool_use decode: %w", err)
+	}
+	fields["input"] = json.RawMessage(args)
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		return fmt.Errorf("anthropic: server_tool_use encode: %w", err)
+	}
+	b.raw = raw
+	return nil
 }
 
 func send(ctx context.Context, out chan<- llm.Event, evt llm.Event) error {

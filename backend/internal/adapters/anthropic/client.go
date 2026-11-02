@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
@@ -21,11 +23,15 @@ const (
 	DefaultMaxTokens = 4096
 )
 
-// Client implements llm.Client.
+// Client implements llm.Client and llm.Capabilities.
 type Client struct {
 	apiKey     string
 	baseURL    string
 	httpClient *http.Client
+
+	now  func() time.Time
+	mu   sync.Mutex
+	caps map[string]capability // web search support per model
 }
 
 // Option configures the client.
@@ -47,6 +53,8 @@ func New(apiKey string, opts ...Option) *Client {
 		apiKey:     apiKey,
 		baseURL:    defaultBaseURL,
 		httpClient: http.DefaultClient,
+		now:        time.Now,
+		caps:       map[string]capability{},
 	}
 	for _, o := range opts {
 		o(c)
@@ -84,17 +92,24 @@ func (c *Client) Complete(ctx context.Context, req llm.Request) (string, error) 
 func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Event) (*llm.Response, error) {
 	defer close(out)
 
-	body, err := encodeRequest(req, true)
+	resp, err := c.post(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	httpReq, err := c.buildRequest(ctx, body)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("anthropic: request: %w", err)
+	if resp.StatusCode == http.StatusBadRequest && req.WebSearch != nil {
+		// Web search can be turned off for the organisation (D3): run the
+		// same turn without it and stop offering it for a while. Other 400s
+		// are the caller's to see.
+		apiErr := decodeAPIError(resp)
+		_ = resp.Body.Close()
+		if !rejectsWebSearch(apiErr) {
+			return nil, apiErr
+		}
+		c.setWebSearch(req.Model, false)
+		req.WebSearch = nil
+		if resp, err = c.post(ctx, req); err != nil {
+			return nil, err
+		}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -105,13 +120,30 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 	return parseStream(ctx, resp.Body, out)
 }
 
-func (c *Client) buildRequest(ctx context.Context, body []byte) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/messages", bytes.NewReader(body))
+// post sends req as a streaming Messages request.
+func (c *Client) post(ctx context.Context, req llm.Request) (*http.Response, error) {
+	body, err := encodeRequest(req, true)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := c.buildRequest(ctx, http.MethodPost, "/v1/messages", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("anthropic: request: %w", err)
+	}
+	return resp, nil
+}
+
+func (c *Client) buildRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
 		return nil, fmt.Errorf("anthropic: build request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("x-api-key", c.apiKey)
 	req.Header.Set("anthropic-version", apiVersion)
 	return req, nil
@@ -127,7 +159,7 @@ type reqBody struct {
 	Temperature *float64         `json:"temperature,omitempty"`
 	System      []systemBlock    `json:"system,omitempty"`
 	Messages    []messageBody    `json:"messages"`
-	Tools       []toolBody       `json:"tools,omitempty"`
+	Tools       []any            `json:"tools,omitempty"`
 	ToolChoice  *toolChoiceBody  `json:"tool_choice,omitempty"`
 	Stream      bool             `json:"stream,omitempty"`
 	Metadata    *requestMetadata `json:"metadata,omitempty"`
@@ -168,6 +200,17 @@ type contentBlock struct {
 	ToolUseID string          `json:"tool_use_id,omitempty"`
 	Content   json.RawMessage `json:"content,omitempty"`
 	IsError   bool            `json:"is_error,omitempty"`
+
+	raw json.RawMessage // a server block, sent verbatim
+}
+
+// MarshalJSON sends a server block's raw JSON unchanged.
+func (b contentBlock) MarshalJSON() ([]byte, error) {
+	if b.raw != nil {
+		return b.raw, nil
+	}
+	type plain contentBlock
+	return json.Marshal(plain(b))
 }
 
 type toolBody struct {
@@ -175,6 +218,14 @@ type toolBody struct {
 	Description  string          `json:"description"`
 	InputSchema  json.RawMessage `json:"input_schema"`
 	CacheControl *cacheCtrl      `json:"cache_control,omitempty"`
+}
+
+// webSearchTool is the server-side web search tool (D1: the basic version,
+// no domain filters or location).
+type webSearchTool struct {
+	Type    string `json:"type"`
+	Name    string `json:"name"`
+	MaxUses int    `json:"max_uses,omitempty"`
 }
 
 func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
@@ -203,16 +254,22 @@ func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
 		}}
 	}
 	if len(req.Tools) > 0 {
-		tools := make([]toolBody, len(req.Tools))
 		for i, t := range req.Tools {
-			tools[i] = toolBody{
+			tool := toolBody{
 				Name: t.Name, Description: t.Description, InputSchema: t.Schema,
 			}
+			if i == len(req.Tools)-1 {
+				// Cache the tail of the tool list so the full tool block counts
+				// as part of the cached prefix on subsequent turns.
+				tool.CacheControl = &cacheCtrl{Type: "ephemeral", TTL: "5m"}
+			}
+			body.Tools = append(body.Tools, tool)
 		}
-		// Cache the tail of the tool list so the full tool block counts as part
-		// of the cached prefix on subsequent turns.
-		tools[len(tools)-1].CacheControl = &cacheCtrl{Type: "ephemeral", TTL: "5m"}
-		body.Tools = tools
+	}
+	if req.WebSearch != nil {
+		body.Tools = append(body.Tools, webSearchTool{
+			Type: "web_search_20250305", Name: "web_search", MaxUses: req.WebSearch.MaxUses,
+		})
 	}
 	body.Messages = make([]messageBody, len(req.Messages))
 	for i, m := range req.Messages {
@@ -240,6 +297,8 @@ func encodeContent(blocks []llm.ContentBlock) []contentBlock {
 			rest = append(rest, contentBlock{
 				Type: "tool_use", ID: b.ToolUseID, Name: b.ToolUseName, Input: input,
 			})
+		case llm.ContentTypeServer:
+			rest = append(rest, contentBlock{raw: b.Raw})
 		case llm.ContentTypeToolResult:
 			content := b.ToolResultContent
 			if len(content) == 0 {
@@ -283,7 +342,13 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("anthropic: %d %s: %s", e.Status, e.ErrorType, e.Message)
 }
 
-func decodeAPIError(resp *http.Response) error {
+// rejectsWebSearch reports whether a 400 refused the web search tool itself.
+func rejectsWebSearch(e *APIError) bool {
+	msg := strings.ToLower(e.Message)
+	return strings.Contains(msg, "web search") || strings.Contains(msg, "web_search")
+}
+
+func decodeAPIError(resp *http.Response) *APIError {
 	raw, _ := io.ReadAll(resp.Body)
 	e := &APIError{Status: resp.StatusCode, RawBody: string(raw), RequestID: resp.Header.Get("request-id")}
 	var body apiErrorBody

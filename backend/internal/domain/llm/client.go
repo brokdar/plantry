@@ -25,6 +25,10 @@ const (
 	ContentTypeText       ContentType = "text"
 	ContentTypeToolUse    ContentType = "tool_use"
 	ContentTypeToolResult ContentType = "tool_result"
+	// ContentTypeServer is an opaque provider block (Anthropic server tool use
+	// and its result, e.g. web search). Raw holds it verbatim so it can be
+	// replayed unchanged on the next request.
+	ContentTypeServer ContentType = "server"
 )
 
 // ContentBlock is a provider-neutral content item inside a Message.
@@ -32,8 +36,10 @@ const (
 type ContentBlock struct {
 	Type ContentType `json:"type"`
 
-	// Text block payload.
-	Text string `json:"text,omitempty"`
+	// Text block payload. Citations lists the URLs the text cites (web
+	// search); they are not sent back to the provider.
+	Text      string   `json:"text,omitempty"`
+	Citations []string `json:"citations,omitempty"`
 
 	// ToolUse block payload (assistant emitting a tool call).
 	ToolUseID    string          `json:"tool_use_id,omitempty"`
@@ -44,6 +50,9 @@ type ContentBlock struct {
 	ToolResultID      string          `json:"tool_result_id,omitempty"`
 	ToolResultContent json.RawMessage `json:"tool_result_content,omitempty"`
 	ToolResultIsError bool            `json:"tool_result_is_error,omitempty"`
+
+	// Server block payload: the provider's block JSON, kept verbatim.
+	Raw json.RawMessage `json:"raw,omitempty"`
 }
 
 // Message is a single turn in a conversation.
@@ -64,25 +73,34 @@ type ToolChoice struct {
 	Name string `json:"name"`
 }
 
+// WebSearch enables the provider's server-side web search for a request.
+// MaxUses caps the searches the provider may run in one turn.
+type WebSearch struct {
+	MaxUses int `json:"max_uses"`
+}
+
 // Request is the provider-neutral prompt sent to a Client. A zero
 // Temperature leaves the provider default; a nil ToolChoice lets the model
-// decide whether to call a tool.
+// decide whether to call a tool; a nil WebSearch sends no search tool.
 type Request struct {
 	Model       string
 	System      string
 	Messages    []Message
 	Tools       []Tool
 	ToolChoice  *ToolChoice
+	WebSearch   *WebSearch
 	Temperature float64
 	MaxTokens   int
 }
 
 // Usage reports token accounting for a single provider call.
+// WebSearchRequests counts the server-side searches the provider billed.
 type Usage struct {
-	InputTokens      int
-	OutputTokens     int
-	CacheReadTokens  int
-	CacheWriteTokens int
+	InputTokens       int
+	OutputTokens      int
+	CacheReadTokens   int
+	CacheWriteTokens  int
+	WebSearchRequests int
 }
 
 // StopReason identifies why the assistant turn ended.
@@ -94,13 +112,26 @@ const (
 	StopReasonMaxTokens StopReason = "max_tokens"
 	StopReasonRefusal   StopReason = "refusal"
 	StopReasonError     StopReason = "error"
+	// StopReasonPauseTurn: the provider paused a long server-tool turn. The
+	// caller resends the conversation plus the returned assistant blocks,
+	// without adding a user message, to let it continue.
+	StopReasonPauseTurn StopReason = "pause_turn"
 )
 
+// SearchResult is one page a server-side web search returned.
+type SearchResult struct {
+	URL   string `json:"url"`
+	Title string `json:"title"`
+}
+
 // Response is the final (non-streamed) shape of an assistant turn.
+// SearchResults lists the pages the turn's web searches returned, in order
+// and without duplicates.
 type Response struct {
-	Message    Message
-	StopReason StopReason
-	Usage      Usage
+	Message       Message
+	StopReason    StopReason
+	Usage         Usage
+	SearchResults []SearchResult
 }
 
 // Client is the port an LLM provider adapter must implement.
@@ -118,4 +149,15 @@ type Response struct {
 type Client interface {
 	Stream(ctx context.Context, req Request, out chan<- Event) (*Response, error)
 	Complete(ctx context.Context, req Request) (string, error)
+}
+
+// Capabilities is an optional port a Client may implement to report what the
+// configured provider supports. Callers type-assert for it; a Client without
+// it supports none of the capabilities.
+//
+// WebSearch reports whether model can use server-side web search. It
+// returns false when the provider says no or cannot be asked; err is
+// non-nil only when the check itself failed.
+type Capabilities interface {
+	WebSearch(ctx context.Context, model string) (bool, error)
 }
