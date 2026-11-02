@@ -11,6 +11,7 @@ package jsonld
 
 import (
 	"encoding/json"
+	"html"
 	"regexp"
 	"strconv"
 	"strings"
@@ -58,10 +59,40 @@ func ExtractRecipe(htmlBody string) (*importer.RawRecipe, error) {
 		}
 
 		if node := findRecipeNode(value); node != nil {
-			return decodeRecipe(node), nil
+			r := decodeRecipe(node)
+			if len(r.Image) == 0 {
+				if img := ogImage(htmlBody); img != "" {
+					r.Image = []string{img}
+				}
+			}
+			return r, nil
 		}
 	}
 	return nil, importer.ErrNoRecipe
+}
+
+var (
+	metaTagRE     = regexp.MustCompile(`(?is)<meta\b[^>]*>`)
+	ogImagePropRE = regexp.MustCompile(`(?is)\b(?:property|name)\s*=\s*["']og:image["']`)
+	metaContentRE = regexp.MustCompile(`(?is)\bcontent\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+)
+
+// ogImage returns the page's og:image URL, the image fallback for a Recipe
+// node without one (D16), or "".
+func ogImage(htmlBody string) string {
+	for _, tag := range metaTagRE.FindAllString(htmlBody, -1) {
+		if !ogImagePropRE.MatchString(tag) {
+			continue
+		}
+		m := metaContentRE.FindStringSubmatch(tag)
+		if m == nil {
+			continue
+		}
+		if v := strings.TrimSpace(html.UnescapeString(m[1] + m[2])); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // findRecipeNode recursively searches v for the first map with @type matching "Recipe".

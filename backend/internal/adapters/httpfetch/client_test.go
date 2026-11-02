@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/httpfetch"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 )
 
 func TestFetch_Success(t *testing.T) {
@@ -134,4 +136,34 @@ func TestFetch_FollowsRedirect_ReturnsFinalURL(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, body, "final")
 	require.Equal(t, finalServer.URL, final)
+}
+
+func TestFetch_RedirectGuardBlocksHop(t *testing.T) {
+	hit := false
+	spy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hit = true
+		w.Header().Set("Content-Type", "text/html")
+	}))
+	t.Cleanup(spy.Close)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, spy.URL, http.StatusFound)
+	}))
+	t.Cleanup(ts.Close)
+
+	guard := func(u string) error {
+		if strings.HasPrefix(u, spy.URL) {
+			return errors.New("blocked")
+		}
+		return nil
+	}
+	c := httpfetch.New()
+	_, _, err := c.Fetch(importer.WithURLGuard(context.Background(), guard), ts.URL)
+	require.ErrorIs(t, err, importer.ErrURLBlocked)
+	require.ErrorIs(t, err, domain.ErrImportFetchFailed)
+	require.False(t, hit)
+
+	// Without a guard the redirect is followed.
+	_, _, err = c.Fetch(context.Background(), ts.URL)
+	require.NoError(t, err)
+	require.True(t, hit)
 }
