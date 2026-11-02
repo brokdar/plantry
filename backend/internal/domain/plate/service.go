@@ -836,12 +836,14 @@ func (s *Service) SetSessionPortions(ctx context.Context, id int64, in SessionPo
 			if !e.set.FreezingEnabled {
 				return fmt.Errorf("%w: session %d", domain.ErrSessionFreezingDisabled, id)
 			}
-			f, err := s.foods.Get(ctx, sess.FoodID)
-			if err != nil {
-				return err
-			}
-			if f.Freezable == nil || !*f.Freezable {
-				return fmt.Errorf("%w: food %d", domain.ErrSessionNotFreezable, f.ID)
+			if in.FrozenPortions > sess.FrozenPortions {
+				f, err := s.foods.Get(ctx, sess.FoodID)
+				if err != nil {
+					return err
+				}
+				if f.Freezable == nil || !*f.Freezable {
+					return fmt.Errorf("%w: food %d", domain.ErrSessionNotFreezable, f.ID)
+				}
 			}
 		}
 		j, err := s.sessionJournal(ctx, *sess)

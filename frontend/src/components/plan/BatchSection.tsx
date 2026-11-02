@@ -328,6 +328,14 @@ function BatchControls({
           >
             {t("plan.batch.freeze_hint")}
           </Link>
+          {session.frozen_portions > 0 && (
+            <span data-testid="batch-frozen-existing">
+              {" "}
+              {t("plan.batch.frozen_existing", {
+                count: session.frozen_portions,
+              })}
+            </span>
+          )}
         </p>
       )}
       {freezing && session.freezable === true && (

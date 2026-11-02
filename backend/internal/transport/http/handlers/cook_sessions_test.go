@@ -163,11 +163,14 @@ func TestCookSessionsHTTP_Freezable(t *testing.T) {
 	assert.True(t, present, "freezable is always in the payload")
 	assert.Nil(t, val, "unknown freezable is null")
 
-	for flag, want := range map[string]bool{"1": true, "0": false} {
-		_, err := a.db.Exec(`UPDATE foods SET freezable = `+flag+` WHERE id = ?`, a.chili)
+	for _, c := range []struct {
+		flag string
+		want bool
+	}{{"1", true}, {"0", false}} {
+		_, err := a.db.Exec(`UPDATE foods SET freezable = `+c.flag+` WHERE id = ?`, a.chili)
 		require.NoError(t, err)
 		_, body = a.do(http.MethodGet, path, "")
-		assert.Equal(t, want, body["freezable"])
+		assert.Equal(t, c.want, body["freezable"])
 	}
 
 	code, plan := a.do(http.MethodGet, "/api/plan?start=2026-10-26&today=2026-11-01", "")
