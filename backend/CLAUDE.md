@@ -19,7 +19,11 @@ golangci-lint run                     # lint
 sqlc generate                         # regenerate from queries + schema
 go test -race ./...                   # race detector — run before feature complete
 scripts/check-sqlc-usage.sh           # every sqlc query needs a non-test caller
+go tool deadcode -test ./...          # unreachable functions (pinned x/tools); the gate ignores sqlcgen/
+go run ./cmd/plantry backup -out F    # consistent copy of the database + secret.key (see Backup)
 ```
+
+`go tool deadcode -test ./...` must report nothing outside `internal/adapters/sqlite/sqlcgen/`; `scripts/gate.sh` and `backend.yml` run it, with the tool version pinned in `go.mod`. Remove the dead function instead of keeping it. The gate also cross-builds `GOOS=linux GOARCH=arm64` and `GOARCH=arm GOARM=7` (`CGO_ENABLED=0`), so a CGO or arch-specific dependency fails there.
 
 `scripts/check-sqlc-usage.sh` fails when a `-- name: X` in `internal/adapters/sqlite/queries/*.sql` has no `.X(` in a non-test `.go` file outside `sqlcgen/`. It runs in CI and in the repo-root `scripts/gate.sh`; delete the query instead of keeping it unused.
 
@@ -74,7 +78,8 @@ Key-value rows in `app_settings`. The registry in `domain/settings/specs.go` lis
 | `plan.anchor` | `next_shopping_day` | `today` / `next_shopping_day` (00028 retired `fixed_weekday` and `plan.week_starts_on`) |
 | `plan.shopping_day` | `0` | 0 = Monday … 6 = Sunday |
 | `setup.completed` | `false` | Set by `POST /api/setup/complete` |
-| `plan.max_cook_occasions_per_day`, `plan.batch_cooking`, `plan.default_keep_days`, `plan.freezing_enabled`, `plan.freezer_keep_days`, `plan.variety_weeks`, `plan.explore_per_week`, `discovery.daily_enabled` | see `specs.go` | Stored and edited in Settings; read by later phases |
+| `plan.max_cook_occasions_per_day`, `plan.batch_cooking`, `plan.default_keep_days`, `plan.freezing_enabled`, `plan.freezer_keep_days`, `plan.variety_weeks`, `plan.explore_per_week`, `discovery.daily_enabled` | see `specs.go` | Stored and edited in Settings; the planner reads the `plan.*` keys, discovery reads `discovery.*` |
+| `discovery.cuisines` | `[]` | JSON array of at most 10 lowercase cuisine names (each ≤ 40 chars) the daily idea rotates through |
 | `ai.run_retention_days` | `180` | 7–3650; see AI run log |
 | `ai.price_overrides` | `{}` | JSON map model id → `{in, out, cache_read?, cache_write?}` USD per 1M tokens, validated by `airun.ParsePriceOverrides` (`Spec.Validate`); see AI run log |
 
@@ -220,6 +225,23 @@ Package `domain/agent` (`ToolSet`, loop, prompt `v5`). The chat body is `{conver
 - **Undo (`POST /api/ai/changes/{id}/undo`).** Runs as `user` (the draft guard would block `agent`), returns `{plate_ids, session_ids}`; `409 error.ai.change_undone` when already undone, `error.ai.change_confirmed` when a plate or session of the change is confirmed now (checked first; `confirm` changes are exempt; the conversation read model and `change` events carry `undo_blocked: "confirmed"|null`), `error.ai.change_stale` when any foreign event touched the rows after `first_event_id`. Known limits: `grams_source` is not restored; an availability undo overwrites a later manual change of that cell.
 - **Run attribution (D11-D12).** Chat runs follow the outcome of drafts they edited (`AgentRunsOfRows`, bounded by the last undone accept/confirm or unlock) and of runs they started (`ChatRunsOfRun` through `ai_changes.run_ids_json`); the run list/detail `edits` field is described in AI run log. `plate_changed` no longer exists.
 - **Fake provider turns.** Besides plain turns (the default sequence), a script turn may carry `match_user` (case-insensitive substring of the latest user text; first match in script order) and `for_tool` (used when `ToolChoice` names that tool). Each form has its own cursor; a turn with both counts as `for_tool`. E2E uses it to script chat and generation in one file (`frontend/e2e/fixtures/chat-scripts/`).
+- **Fake search turns.** A turn may also carry `search_results` (`[{url,title}]`), `web_search_requests` (the billed count, recorded on the step) and `stop_reason: "pause_turn"` (the call returns the paused turn and advances the cursor, so the next call is the continuation). The script-level `capabilities.web_search` (default false) is what `llm.Capabilities.WebSearch` answers. Server blocks replayed as `{type: "server", raw}` are accepted. The fake records requests so tests can assert the research prompt and the replayed blocks. `chat-scripts/discovery.json` is the template for discovery runs (see Discovery).
+
+## Discovery
+
+Package `domain/discovery`; migration `00039_recipe_suggestions.sql` (`recipe_suggestions`), `00040` adds `web_search_requests`. Design and flow: `docs/ARCHITECTURE.md` §5.5. Files: `research.go` (the model call, `pause_turn` continuations, one repair), `verify.go` (`Verifier`: per-URL `importer.Service.Extract` with `Options{NoLLMFallback}`, 3 concurrent, 20 s), `annotate.go` (`food.Resolver.LocalMatch`, known/new, computed macros), `store.go` (`Store`: accept, reject, list, `DeleteStale`; the outcome of the run is written in the same transaction), `service.go` (`Run`), `runner.go` (async, single slot, 3 min), `daily.go` (`Daily`, `Another`, `DailyCuisine`), `prompt.go` (`PromptVersion = "d1"`; bump on every prompt change).
+
+- **Never calls an LLM from verify/annotate/store.** Only `research` does. FDC and Open Food Facts are never called in a run.
+- **URL guard.** `adapters/httpfetch.PublicURL(raw, resolve, allowLoopback)` for every model-supplied URL (and the image proxy); redirect hops are re-checked through `importer.WithURLGuard` and discarded as `blocked_url`. `PLANTRY_DEV_MODE` sets `allowLoopback` (the e2e fixture site). Do not add a fetch fake to the production binary; Go tests use `httptest.Server` and the importer's `Fetcher` port.
+- **Errors.** `error.discovery.running` (409), `decided` (409, suggestion already accepted or rejected), `invalid_output` (502), `invalid_mode` and `cuisine_required` (400).
+- **Endpoints** (`handlers/discovery.go`, only when a provider is wired): `POST /api/discovery` (202 `{run_id}`), `GET /api/discovery/runs/{id}`, `GET /api/discovery/daily?date=` (200 / 202 / 204), `POST /api/discovery/daily/another`, `GET /api/discovery/suggestions`, `POST .../{id}/accept {food_id}`, `POST .../{id}/reject {reason?}`. A suggestion carries the draft, per-ingredient `candidate` (leaf name) and `known`, `grounded`, computed `per_portion` and `nutrition_complete`.
+- **Web search.** `Service.webSearch` asks the client's `llm.Capabilities`; without support the run is ungrounded. The Anthropic search fee is `airun.Price.PerSearch` (0.01); `Tokens.WebSearchRequests` feeds `Cost()`. `ai_runs` weekly buckets in Insights exclude discovery runs; the Insights `discovery` block and by-version `suggestions`/`accepted` report them.
+- **Model table.** `adapters/anthropic/models.go`: `Models()` is `{Prefix, DisplayName, Sampling, ForcedTool}`, longest prefix wins, unknown ids take the first (newest) entry. Fable 5.1, Opus 5.5 and Sonnet 5.5 refuse a forced `tool_choice` (it becomes `auto` plus a system line); `temperature` is sent only for the 4.x entries with `Sampling`. Thinking and redacted-thinking blocks are replayed verbatim.
+- **Fixture site (e2e).** `frontend/e2e/fixtures/discovery-site/` is a Bun server on port `9100 + E2E_LANE`; scripts use `{{SITE}}` and `{{RUN}}`. See `frontend/CLAUDE.md`.
+
+## Backup
+
+`plantry backup -out <file>` (`cmd/plantry/backup.go`) opens the configured database, runs `VACUUM INTO` a pre-created 0600 file (safe under WAL while the server runs), copies `secret.key` beside it, refuses an existing target and removes the partial file on failure. `cmd/plantry` also carries `version`/`commit` (ldflags) shown by `GET /api/health` and in Settings → Data & system. The restore steps are in the root `README.md`; `adapters/sqlite/testdata/phase2.db` (with its README) is the committed Phase 2 fixture the migrate test upgrades.
 
 ## Setup
 
@@ -230,7 +252,7 @@ Package `domain/setup`. `GET /api/setup` returns `{completed, recipe_count, reci
 Migrations `00021_ai_runs.sql` and `00026_ai_trace.sql`, package `domain/airun`, repo `adapters/sqlite/ai_run_repo.go`. Every LLM call goes through the metered client (`Recorder.Meter`, wrapped around each client in the `llmFactory` closure in `main.go`), so nothing reaches a provider unrecorded.
 
 - **`ai_runs`** — one row per user-visible AI action.
-  - `kind`: `chat`, `lookup` (food-lookup translate and pick-best), `import_fallback`; `generate`, `regenerate`, `discovery`, `classify` are reserved for later phases. `untracked` marks a metered call made without a started run — a call site that forgot `Recorder.Start`.
+  - `kind`: `chat`, `lookup` (food-lookup translate and pick-best), `import_fallback`; `generate`, `regenerate` (plan generation), `discovery` (one per research run; `scope_json {mode, cuisine?, focus?, day?}`). LLM diet classification is not implemented (the classifier is deterministic, a Phase 3 decision); `classify` remains only as an allowed value in the `ai_runs.kind` CHECK. `untracked` marks a metered call made without a started run — a call site that forgot `Recorder.Start`.
   - `status`: `running` until finished, then `ok` / `error` / `iterations_exceeded` / `cancelled` / `partial`. `error_key` holds the message key on failure.
   - `provider`, `model`, `prompt_version` (the `PromptVersion` const of the agent, `food`, `importer` or `planning` package — bump it on every prompt change; heuristic generations record `planning.HeuristicVersion`), `prompt_hash` → `ai_prompts`.
   - Token totals summed over all calls: `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`; `iterations`.

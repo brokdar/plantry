@@ -10,7 +10,7 @@ This document is the technical contract for the Plantry redesign. It defines the
 
 1. **Testable in pure units.** Every business rule must be exercisable with a Go test that touches no database, no HTTP, no LLM. This forces a clean domain layer.
 2. **Replaceable infrastructure.** SQLite, OpenAI, Anthropic, filesystem image storage, OFF, and FDC must all be hidden behind ports. Swapping any one of them must not touch the domain.
-3. **Single binary, no CGO.** The production artefact is one pure-Go binary with the SvelteKit static build embedded. Must cross-compile to ARMv7 and ARM64 for Raspberry Pi.
+3. **Single binary, no CGO.** The production artefact is one pure-Go binary with the React SPA's static build embedded. Must cross-compile to 32-bit ARM (arm/v7) and arm64 for Raspberry Pi; the gate builds both.
 4. **Deterministic migrations.** Schema changes go through goose, run on startup, and never touch user data in handlers.
 5. **One source of truth for nutrition math.** Exactly one implementation. Used by handlers, AI tools, shopping list, and frontend (via API, not reimplementation).
 6. **Vertical tests.** Every feature has a unit test in the domain, an adapter test at the boundary, and an e2e test through the browser.
@@ -57,7 +57,7 @@ This document is the technical contract for the Plantry redesign. It defines the
 | Icons            | Lucide React                             | Tree-shakeable, consistent                             |
 | Routing          | TanStack Router                          | Fully type-safe params, file-based, SPA-native         |
 | Server state     | TanStack Query                           | Caching, mutations, targeted invalidation              |
-| Client state     | Zustand                                  | ~1 KB, only for ephemeral UI state                     |
+| Client state     | One external store (no library)          | Only the assistant stream; the rest is URL params, local state, `localStorage` |
 | Forms            | `react-hook-form` + `zod`                | Uncontrolled, fast, schema-validated                   |
 | Drag-and-drop    | `dnd-kit`                                | Accessible, composable, the React standard            |
 | Barcode scanning | `barcode-detector`                       | `BarcodeDetector` API with a cross-browser fallback    |
@@ -69,7 +69,7 @@ This document is the technical contract for the Plantry redesign. It defines the
 
 ### Colors
 
-The "Cookbook" palette (paper-white ground, ink-blue accent, six batch colours) with Newsreader headings and Source Sans 3 for UI. Tokens and values: `docs/UX_DESIGN_SPEC.md` §3. Implementation: `frontend/src/index.css`, where the older shadcn and Material token names are aliased onto the new ones.
+The "Cookbook" palette (paper-white ground, ink-blue accent, six batch colours) with Newsreader headings and Source Sans 3 for UI. Tokens and values: `docs/UX_DESIGN_SPEC.md` §3. Implementation: `frontend/src/index.css`, where the shadcn theme variables are mapped onto the Cookbook tokens.
 
 ### Deployment
 
@@ -77,7 +77,9 @@ Single Docker image (multi-stage build):
 
 1. **Stage A (Bun):** installs frontend deps, builds static SPA.
 2. **Stage B (Go):** copies Stage A output (`dist/`) into `backend/internal/webui/files/`, compiles backend with `//go:embed` of that directory, outputs single binary.
-3. **Stage C (Alpine):** copies binary only. Final image ~30 MB. Volume `/data` holds the SQLite file and `images/` directory.
+3. **Stage C (Alpine):** copies binary only. Final image ~30 MB. Volume `/data` holds the SQLite file, `secret.key` and the `images/` directory.
+
+The Go stage runs on the build platform and cross-compiles with `GOOS`/`GOARCH`/`GOARM` taken from `TARGETOS`/`TARGETARCH`/`TARGETVARIANT` (`CGO_ENABLED=0`), so the release image covers `linux/amd64`, `linux/arm64` and `linux/arm/v7` without emulation. `-ldflags -X main.version=…` sets the version shown in Settings → Data & system and returned by `GET /api/health`. `scripts/gate.sh` also builds `GOARCH=arm64` and `GOARCH=arm GOARM=7` binaries on every run.
 
 Environment variables:
 
@@ -265,6 +267,7 @@ One package per aggregate under `backend/internal/domain/`. Plain structs; servi
 | `settings`, `profile`, `setup` | Settings registry, user profile, first-run status |
 | `feedback` | Plate feedback |
 | `agent`, `llm`, `airun`, `importer` | AI chat agent and tools, LLM port, run log, recipe import |
+| `discovery` | Recipe discovery: research, verify, annotate, store, the daily pool (§5.5) |
 | `actor` | Who made a change (`user` / `agent`), carried in ctx |
 
 ### 5.2 Core rules
@@ -340,7 +343,32 @@ type Request struct {
 }
 ```
 
-OpenAI and Anthropic adapters implement `Client`. Neither leaks into the domain. Agent orchestration (the tool-calling loop) lives in `domain/planner/agent.go` and is provider-agnostic.
+OpenAI and Anthropic adapters implement `Client`. Neither leaks into the domain. Agent orchestration (the tool-calling loop) lives in `domain/agent` and is provider-agnostic.
+
+**Web search and pause_turn.** `Request.WebSearch` (`llm.WebSearch{MaxUses}`) asks the provider for its server-side search tool; `Response.WebSearchRequests` counts the searches billed. A `nil` value sends no search tool. A server-tool turn the provider interrupts ends with `StopReasonPauseTurn`; the caller replays the assistant content (server blocks, thinking blocks verbatim) and continues. A client may implement the optional `llm.Capabilities` port (`WebSearch(ctx, model) (bool, error)`) to say whether the configured model can search; a client without it supports nothing. The Anthropic client sends the `web_search_20250305` server tool, asks `GET /v1/models/{model}` for the capability (cached 24 h; a missing field or failed call means unsupported) and, when a search request gets a 400 that mentions web search, repeats the turn without the tool and caches "unavailable". OpenAI has no search tool here, so discovery runs ungrounded there.
+
+**Anthropic model table.** `adapters/anthropic/models.go` is a hand-maintained table `{Prefix, DisplayName, Sampling, ForcedTool}` (the API has no public model list): the longest matching prefix gives the request rules, ids that match nothing take the newest family's rules, and the settings UI lists the table in order. `Sampling` is false for models that reject `temperature` (only the 4.x families accept it). `ForcedTool` is false for always-thinking models (Fable 5.1, Opus 5.5, Sonnet 5.5) that refuse a forced `tool_choice`: the request becomes `auto` plus a system line telling the model to call the tool. Operators may type any model id.
+
+**Cost.** `airun.Price` is USD per million tokens (input, output, cache read, cache write) plus `PerSearch` (USD per web search; Anthropic families 0.01, OpenAI 0). The built-in table carries a date (`airun.PricesAsOf`) shown in Insights; `ai.price_overrides` replaces entries, including an optional `per_search`. `ai_runs` and `ai_run_steps` store `web_search_requests`.
+
+### 5.5 Discovery
+
+`discovery.Service.Run(ctx, Request{Mode, Cuisine, Focus, Day})` finds recipes the user does not have yet. It is asynchronous like generation (detached ctx, 3 minute timeout, one run at a time: 409 `error.discovery.running`) and writes one `ai_runs` row with `kind = discovery`. Modes: `daily` (one cuisine from `discovery.cuisines`, rotated by day number, else a cuisine the user has not cooked), `explore` (a given cuisine) and `known` (built from the ingredients the user's recipes already use, plus an optional focus ingredient).
+
+Pipeline:
+
+1. **Research.** One call (`d1` prompt: diet and restrictions, the last rejected suggestions with reasons, the names of the user's recipes, UI language, "prefer pages with schema.org Recipe") with web search on when the model can search (`MaxUses` 5). At most three `pause_turn` continuations and one repair call when the reply holds no readable candidate JSON. The model returns up to six `{url, title, cuisine, why}`. It never supplies a nutrient value.
+2. **Verify.** Each URL goes through `importer.Service.Extract` (three at a time, 20 s each) with `NoLLMFallback`, so a page without structured data is discarded, not paid for. Discards are counted in the run's notes (`blocked_url`, `duplicate`, `no_recipe`, `not_html`, `fetch_failed`, `timeout`). A final URL that is already a saved recipe's `source_url` or an earlier suggestion is a duplicate.
+3. **Annotate.** `food.Resolver.LocalMatch` maps each ingredient line to a local leaf; a line is *known* when its leaf is used by at least one recipe, else *new*. Per-portion macros are computed from the matched leaves (`PerPortionOfDraft`); `nutrition_complete` is false when a line has no match. FDC and Open Food Facts are never called.
+4. **Store.** Up to three suggestions per run go to `recipe_suggestions` (`pending`), their photo saved under `suggestions/<id>`. `grounded` is true when the run used at least one web search. Pending suggestions older than 30 days are deleted at the start of the next run (no scheduler).
+
+**URL guard.** URLs that come from the model are untrusted. `httpfetch.PublicURL` accepts only `http(s)` URLs whose host resolves to public addresses only (loopback, private, link-local and unspecified are blocked), and the importer re-checks every redirect hop (a blocked hop is discarded as `blocked_url`). `PLANTRY_DEV_MODE=1` lifts the loopback block so the e2e fixture site works; there is no fetch fake in the production binary. The image proxy uses the same check.
+
+**Daily pool.** "Daily" means the first `/today` open of the day, not a job. `Daily(day)` returns the suggestion assigned to that day (`shown_on`); else assigns the oldest pending one; else starts a daily run. Once the day's suggestion is accepted or rejected, the endpoint answers 204 for the rest of the day, and a failed run silences the day. "Show another" assigns the next pending suggestion (the current one stays pending) or starts a run; on a 202 or 204 it changes nothing. One research call therefore serves about three days.
+
+**Accepting.** There is no server-side recipe creation. The client opens the normal import review pre-filled from the suggestion (draft, matched leaf ids from the annotations, tags plus `explore`), saves through `POST /api/import/resolve` and `POST /api/foods`, then calls accept with the new `food_id`, which copies the photo to the recipe and records the outcome. Reject stores a reason (`too_long`, `ingredients`, `taste`, or none) and deletes the photo. A run's `outcome` follows its suggestions: any accepted → `accepted`; all rejected → `discarded`; otherwise open. Insights reports suggestions, acceptance rate and cost per accepted recipe.
+
+**Explore quota in plans.** `planning.Request.ExploreQuota` (default `plan.explore_per_week`; the wizard toggle `include_new_recipe` maps to `max(setting, 1)` or 0) makes the heuristic place up to N recipes tagged `explore` that were never eaten, newest accept first, and the LLM prompt gets an explore column. It is scored (`score.variety.explore {target, placed}`), not a hard rule.
 
 ---
 
@@ -506,6 +534,13 @@ GET    /api/ai/debug/system-prompt?start&today      only with PLANTRY_DEV_MODE
 #### Import
 
 ```
+POST   /api/discovery                                 body: {mode: daily|explore|known, cuisine?, focus?} → 202 {run_id}; 409 running
+GET    /api/discovery/runs/{id}                      status, suggestion_ids, discarded counts, error_key
+GET    /api/discovery/daily?date=                    200 {suggestion} | 202 {run_id} | 204 (silent)
+POST   /api/discovery/daily/another                  body: {date}; same answers as daily
+GET    /api/discovery/suggestions                    ?status=pending|accepted|rejected&run_id=
+POST   /api/discovery/suggestions/{id}/accept        body: {food_id}
+POST   /api/discovery/suggestions/{id}/reject        body: {reason?}
 POST   /api/import/extract                          body: {url} → draft recipe JSON
 POST   /api/import/resolve                          body: {draft} → resolved recipe ready to save
 GET    /api/import/lookup                           resolve one ingredient line
@@ -537,6 +572,8 @@ error.feedback.invalid_status
 error.import.fetch_failed
 error.import.no_recipe
 error.import.llm_failed
+error.discovery.running
+error.discovery.invalid_output
 error.ai.provider_missing
 error.ai.rate_limit_exceeded
 error.profile.invalid_macros
@@ -612,12 +649,12 @@ frontend/src/
 ├── router.ts         # createRouter from the generated routeTree.gen.ts
 ├── index.css         # Cookbook design tokens (see DESIGN.md)
 ├── routes/           # TanStack Router file-based routes (validate search params, mount a page)
-├── components/       # by feature: shell, today, plan, batch, shop, cook, recipes, ingredients, import,
-│                     #   availability, setup, settings, chat, command, images, editorial, ui (shadcn)
+├── components/       # by feature: shell, today, plan, batch, shop, cook, recipes, ingredients, import, discovery,
+│                     #   availability, setup, settings, assistant, command, images, editorial, ui (shadcn)
 ├── lib/
 │   ├── api/          # one typed fetch module per resource; all calls go through apiFetch (client.ts)
 │   ├── queries/      # TanStack Query hooks and the key factories (keys.ts)
-│   ├── stores/       # Zustand stores (chat only)
+│   ├── stores/       # the assistant stream store (no store library)
 │   ├── plan/         # view models and pure helpers: board, today, keynav, batch-colours, format
 │   ├── recipes/      # library URL params <-> list params
 │   ├── cook/         # timer detection in step text
@@ -632,11 +669,11 @@ frontend/src/
 
 **Server state** lives in TanStack Query. No exceptions. Anything that came from the API or will be written to it (foods, plates, sessions, the plan and today read models, the shopping list, settings, profile, AI conversations) is a Query or Mutation. Cache keys are centralized in `lib/queries/keys.ts` so two hooks never drift apart.
 
-**Client state** is small. The only Zustand store is the assistant one: `lib/stores/assistant-stream.ts` (the streaming AI message, applied changes and the pending unlock request). Other UI state is local component state, URL search params (plan window, open cell, library filters) or `localStorage` (shopping ticks, the recipe onboarding flag, the collapsed side nav).
+**Client state** is small. The only external store is the assistant one (no store library): `lib/stores/assistant-stream.ts` (the streaming AI message, applied changes and the pending unlock request). Other UI state is local component state, URL search params (plan window, open cell, library filters) or `localStorage` (shopping ticks, the recipe onboarding flag, the collapsed side nav).
 
 **Derived state** is computed inline with `useMemo` or via the query `select` option. View models such as `buildBoard(plan, i18n)` (`lib/plan/board.ts`) and the Today model (`lib/plan/today.ts`) are pure functions of the read models. No reactive libraries, no signals, no global event bus.
 
-A new `useState` holding anything fetched from the API is wrong, and so is a new Zustand store that mirrors server data.
+A new `useState` holding anything fetched from the API is wrong, and so is a new external store that mirrors server data.
 
 ### 8.3 TanStack Query patterns
 
@@ -796,7 +833,7 @@ Rule: no feature ships without at least one domain test, one adapter test (if it
 - Single Docker container, single SQLite file, single images directory.
 - Users deploy with `docker-compose up`; persistent volume mounted at `/data`.
 - Upgrades: pull new image, restart — goose runs pending migrations on startup.
-- Backup: stop container → copy `/data` → start container. Or use SQLite `.backup` command via a mounted cron job.
+- Backup: `plantry backup -out <file>` (also `docker compose exec plantry plantry backup …`) takes a consistent snapshot with `VACUUM INTO` while the server runs, writes it mode 0600, refuses an existing target, removes a half-written file on failure and copies `secret.key` beside it (without that key the stored API keys cannot be decrypted). Restore: stop, put the file at `DB_PATH` and the key at `secret.key`, delete the old `-wal` and `-shm`, start; pending migrations run on start, so a backup from an older version restores into a newer one. A Phase 2 database is a committed fixture of the migrate test.
 - No blue-green, no rollback tooling; SQLite backup is the recovery story.
 - Minimum hardware: Raspberry Pi 3 B+ (1 GB RAM). Target memory footprint under 128 MB resident.
 
@@ -808,7 +845,7 @@ Rule: no feature ships without at least one domain test, one adapter test (if it
 - CQRS (same).
 - GraphQL (REST is sufficient and cheaper to test).
 - WebSockets (SSE is enough for one-directional streaming).
-- Multi-user / roles / RBAC (one household, one password).
+- Multi-user / roles / RBAC (one household, no login).
 - Offline-first sync / CRDTs (one client, one server, LAN-local).
 - Feature flags (ship features directly via phases).
 - Pantry tracking (deliberate omission; without physical sync, it's noise).

@@ -1,5 +1,7 @@
 # Spec: Plantry UX and Visual Design
 
+> **Status:** Implemented (Phases 0–5, 2026-11). Kept as the design record; amendments inline.
+
 This document defines **how Plantry looks and works for the user**: which screens exist, how each workflow is laid out on desktop, iPad and phone, the visual system, the interaction patterns, and the voice. It is the UX companion to [PLANNING_ASSISTANT_SPEC.md](PLANNING_ASSISTANT_SPEC.md), which defines the behaviour and data model. Where they overlap, the planning spec owns *what happens* and this document owns *how it is presented*.
 
 - Built from a design interview with the product owner on 2026-10-25. It follows Impeccable's `shape` and Operate-mode guidance and Anthropic's frontend-design guidance (both in `.claude/skills/`).
@@ -514,3 +516,15 @@ Every setting shows its effect in one line ("Plantry plans at most 1 cooking ses
 1. **Store section order:** fixed for now, using the walk order in §5.7. It becomes reorderable in Settings only if requested. (Decided 2026-10-26; the original question stated no default.)
 2. **Week start column:** the board starts on the shopping day (Saturday for this user), matching the planning window. There is no Monday-first board with a highlighted window.
 3. **Photos for manual recipes:** uploading from the phone camera roll is allowed in the recipe editor, using the existing image crop UI.
+
+---
+
+## 12. Phase 5 amendments (2026-11)
+
+- **§5.9 daily idea and failure.** Built as `DailySuggestionSheet` (right-hand sheet, bottom sheet on phones) over the real today only, at most once per day; silent on 204, while loading and when the run failed. Buttons read **Add to my recipes** and **Not for me** (three reason chips plus "No reason"), **Show another**.
+- **`SuggestionCard`.** Photo or a typographic placeholder (name in Newsreader on `panel-sunken`), diet icon and facts, computed macros or "Nutrition incomplete", the *why*, ingredients with the word "New" in accent semibold and a one-time legend, a source link, and a "Search-grounded" pill when the run searched the web.
+- **§5.8 `DiscoverSheet`.** Reached from the Recipes Add menu (`?add=discover`) and the third onboarding card; chips Daily idea, Explore a cuisine, Use what I know.
+- **§5.11 Settings → Assistant.** Cuisine chips for the daily idea; model list from the Anthropic rules table; Insights shows the price table date and a discovery block.
+- **Guided library.** Three cards (Import, Discover, Create); Discover only appears when an AI provider is set.
+- **Plan board.** Between 768 and 1279 px the assistant overlay starts below the plan toolbar so **Accept and shop** stays reachable.
+- **Batch section.** The frozen-portions stepper appears only for recipes explicitly marked freezable; otherwise a hint explains why.
