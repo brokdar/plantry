@@ -29,7 +29,7 @@ var models = []Model{
 	{Prefix: "claude-sonnet-5-5", DisplayName: "Claude Sonnet 5.5"},
 	{Prefix: "claude-sonnet-5", DisplayName: "Claude Sonnet 5", ForcedTool: true},
 	{Prefix: "claude-sonnet-4-6", DisplayName: "Claude Sonnet 4.6", Sampling: true, ForcedTool: true},
-	{Prefix: "claude-haiku-5-5", DisplayName: "Claude Haiku 5.5"},
+	{Prefix: "claude-haiku-5-5", DisplayName: "Claude Haiku 5.5", ForcedTool: true},
 	{Prefix: "claude-haiku-4-5", DisplayName: "Claude Haiku 4.5", Sampling: true, ForcedTool: true},
 }
 
