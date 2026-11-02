@@ -297,6 +297,11 @@ func TestStream_ModelRequestRules(t *testing.T) {
 			[]string{autoJSON},
 		},
 		{
+			"sonnet 5 forces but drops temperature", forced("claude-sonnet-5"),
+			[]string{forcedJSON},
+			[]string{autoJSON, temperature},
+		},
+		{
 			"opus 4.7 forces but drops temperature", forced("claude-opus-4-7"),
 			[]string{forcedJSON},
 			[]string{temperature},
