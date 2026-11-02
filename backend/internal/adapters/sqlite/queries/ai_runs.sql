@@ -18,6 +18,7 @@ UPDATE ai_runs SET
     output_tokens      = ?,
     cache_read_tokens  = ?,
     cache_write_tokens = ?,
+    web_search_requests = ?,
     error_key          = ?,
     repair_attempts    = ?,
     violations_json    = ?,
@@ -27,8 +28,8 @@ WHERE id = ?;
 
 -- name: CreateAIRunStep :exec
 INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens,
-    request_json, response_json, stop_reason)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    request_json, response_json, stop_reason, web_search_requests)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpsertAIPrompt :exec
 INSERT INTO ai_prompts (hash, text) VALUES (?, ?)
@@ -97,7 +98,7 @@ WHERE id = sqlc.arg(id);
 -- Runs newest first (by id), optionally filtered by kind, a started_at range
 -- [from_ts, to_ts) and a cursor (ids below before_id). lim -1 lists all.
 SELECT id, kind, started_at, finished_at, status, provider, model, prompt_version, chooser,
-       input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+       input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, web_search_requests,
        score_json, violations_json, outcome
 FROM ai_runs
 WHERE (CAST(sqlc.narg(kind) AS TEXT) IS NULL OR kind = sqlc.narg(kind))
@@ -109,7 +110,7 @@ LIMIT sqlc.arg(lim);
 
 -- name: GetAIRunDetail :one
 SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model, r.prompt_version, r.chooser,
-       r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens,
+       r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens, r.web_search_requests,
        r.score_json, r.violations_json, r.outcome,
        r.scope_json, r.instruction, r.notes, r.error_key, p.text AS prompt_text
 FROM ai_runs r
@@ -120,7 +121,7 @@ WHERE r.id = ?;
 -- A run's steps in seq order. args and result are cut to 8192 characters
 -- (an llm_call shows its request_json and response_json there); the *_cut
 -- flags say a value was longer.
-SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens,
+SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens, web_search_requests,
        CAST(COALESCE(substr(COALESCE(args_json, request_json), 1, 8192), '') AS TEXT) AS args,
        COALESCE(length(COALESCE(args_json, request_json)), 0) > 8192 AS args_cut,
        CAST(COALESCE(substr(COALESCE(result_json, response_json), 1, 8192), '') AS TEXT) AS result,

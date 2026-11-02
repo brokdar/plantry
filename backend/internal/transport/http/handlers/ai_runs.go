@@ -48,21 +48,22 @@ type runTokensResponse struct {
 }
 
 type runSummaryResponse struct {
-	ID              int64             `json:"id"`
-	Kind            string            `json:"kind"`
-	StartedAt       string            `json:"started_at"`
-	FinishedAt      *string           `json:"finished_at"`
-	Status          string            `json:"status"`
-	Provider        *string           `json:"provider"`
-	Model           *string           `json:"model"`
-	PromptVersion   *string           `json:"prompt_version"`
-	Chooser         *string           `json:"chooser"`
-	Tokens          runTokensResponse `json:"tokens"`
-	CostEstimateUSD *float64          `json:"cost_estimate_usd"`
-	Score           json.RawMessage   `json:"score"`
-	Outcome         *string           `json:"outcome"`
-	CorrectionRate  *float64          `json:"correction_rate"`
-	Edits           *int              `json:"edits"`
+	ID                int64             `json:"id"`
+	Kind              string            `json:"kind"`
+	StartedAt         string            `json:"started_at"`
+	FinishedAt        *string           `json:"finished_at"`
+	Status            string            `json:"status"`
+	Provider          *string           `json:"provider"`
+	Model             *string           `json:"model"`
+	PromptVersion     *string           `json:"prompt_version"`
+	Chooser           *string           `json:"chooser"`
+	Tokens            runTokensResponse `json:"tokens"`
+	CostEstimateUSD   *float64          `json:"cost_estimate_usd"`
+	Score             json.RawMessage   `json:"score"`
+	Outcome           *string           `json:"outcome"`
+	CorrectionRate    *float64          `json:"correction_rate"`
+	Edits             *int              `json:"edits"`
+	WebSearchRequests int64             `json:"web_search_requests"`
 }
 
 type runsPageResponse struct {
@@ -78,16 +79,17 @@ type stepTokensResponse struct {
 // runStepResponse carries args and result as text: stored payloads are cut
 // to 8192 characters, so they are not always valid JSON.
 type runStepResponse struct {
-	Seq             int                `json:"seq"`
-	Type            string             `json:"type"`
-	Name            string             `json:"name"`
-	Args            *string            `json:"args"`
-	ArgsTruncated   bool               `json:"args_truncated"`
-	Result          *string            `json:"result"`
-	ResultTruncated bool               `json:"result_truncated"`
-	IsError         bool               `json:"is_error"`
-	DurationMs      int64              `json:"duration_ms"`
-	Tokens          stepTokensResponse `json:"tokens"`
+	Seq               int                `json:"seq"`
+	Type              string             `json:"type"`
+	Name              string             `json:"name"`
+	Args              *string            `json:"args"`
+	ArgsTruncated     bool               `json:"args_truncated"`
+	Result            *string            `json:"result"`
+	ResultTruncated   bool               `json:"result_truncated"`
+	IsError           bool               `json:"is_error"`
+	DurationMs        int64              `json:"duration_ms"`
+	Tokens            stepTokensResponse `json:"tokens"`
+	WebSearchRequests int64              `json:"web_search_requests"`
 }
 
 type runDetailResponse struct {
@@ -212,16 +214,17 @@ func (h *AIRunsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	for i, s := range d.Steps {
 		resp.Steps[i] = runStepResponse{
-			Seq:             s.Seq,
-			Type:            string(s.Type),
-			Name:            s.Name,
-			Args:            nilIfEmpty(s.Args),
-			ArgsTruncated:   s.ArgsTruncated,
-			Result:          nilIfEmpty(s.Result),
-			ResultTruncated: s.ResultTruncated,
-			IsError:         s.IsError,
-			DurationMs:      s.DurationMs,
-			Tokens:          stepTokensResponse{Input: s.InputTokens, Output: s.OutputTokens},
+			Seq:               s.Seq,
+			Type:              string(s.Type),
+			Name:              s.Name,
+			Args:              nilIfEmpty(s.Args),
+			ArgsTruncated:     s.ArgsTruncated,
+			Result:            nilIfEmpty(s.Result),
+			ResultTruncated:   s.ResultTruncated,
+			IsError:           s.IsError,
+			DurationMs:        s.DurationMs,
+			Tokens:            stepTokensResponse{Input: s.InputTokens, Output: s.OutputTokens},
+			WebSearchRequests: s.WebSearchRequests,
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -326,11 +329,12 @@ func toRunSummaryResponse(s airun.RunSummary) runSummaryResponse {
 			Input: s.Tokens.Input, Output: s.Tokens.Output,
 			CacheRead: s.Tokens.CacheRead, CacheWrite: s.Tokens.CacheWrite,
 		},
-		CostEstimateUSD: s.CostUSD,
-		Score:           rawJSONOrNull(s.ScoreJSON),
-		Outcome:         nilIfEmpty(s.Outcome),
-		CorrectionRate:  s.CorrectionRate,
-		Edits:           s.Edits,
+		CostEstimateUSD:   s.CostUSD,
+		Score:             rawJSONOrNull(s.ScoreJSON),
+		Outcome:           nilIfEmpty(s.Outcome),
+		CorrectionRate:    s.CorrectionRate,
+		Edits:             s.Edits,
+		WebSearchRequests: s.Tokens.WebSearchRequests,
 	}
 	if s.FinishedAt != nil {
 		f := s.FinishedAt.Format(time.RFC3339)

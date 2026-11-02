@@ -36,7 +36,8 @@ func (r *AIRunRepo) ListRuns(ctx context.Context, q airun.RunQuery) ([]airun.Run
 			Provider: row.Provider, Model: row.Model, PromptVersion: row.PromptVersion, Chooser: row.Chooser,
 			InputTokens: row.InputTokens, OutputTokens: row.OutputTokens,
 			CacheReadTokens: row.CacheReadTokens, CacheWriteTokens: row.CacheWriteTokens,
-			ScoreJson: row.ScoreJson, ViolationsJson: row.ViolationsJson, Outcome: row.Outcome,
+			WebSearchRequests: row.WebSearchRequests,
+			ScoreJson:         row.ScoreJson, ViolationsJson: row.ViolationsJson, Outcome: row.Outcome,
 		})
 		if err != nil {
 			return nil, err
@@ -78,17 +79,18 @@ func (r *AIRunRepo) ListSteps(ctx context.Context, runID int64) ([]airun.StepVie
 	out := make([]airun.StepView, len(rows))
 	for i, row := range rows {
 		out[i] = airun.StepView{
-			Seq:             int(row.Seq),
-			Type:            airun.StepType(row.Type),
-			Name:            row.Name,
-			Args:            row.Args,
-			ArgsTruncated:   row.ArgsCut || hasTruncatedMarker(row.Args),
-			Result:          row.Result,
-			ResultTruncated: row.ResultCut || hasTruncatedMarker(row.Result),
-			IsError:         row.IsError != 0,
-			DurationMs:      row.DurationMs,
-			InputTokens:     row.InputTokens,
-			OutputTokens:    row.OutputTokens,
+			Seq:               int(row.Seq),
+			Type:              airun.StepType(row.Type),
+			Name:              row.Name,
+			Args:              row.Args,
+			ArgsTruncated:     row.ArgsCut || hasTruncatedMarker(row.Args),
+			Result:            row.Result,
+			ResultTruncated:   row.ResultCut || hasTruncatedMarker(row.Result),
+			IsError:           row.IsError != 0,
+			DurationMs:        row.DurationMs,
+			InputTokens:       row.InputTokens,
+			OutputTokens:      row.OutputTokens,
+			WebSearchRequests: row.WebSearchRequests,
 		}
 	}
 	return out, nil
@@ -174,6 +176,7 @@ func runRow(row sqlcgen.GetAIRunDetailRow) (airun.RunRow, error) {
 		Tokens: airun.Tokens{
 			Input: row.InputTokens, Output: row.OutputTokens,
 			CacheRead: row.CacheReadTokens, CacheWrite: row.CacheWriteTokens,
+			WebSearchRequests: row.WebSearchRequests,
 		},
 		ScoreJSON:      row.ScoreJson.String,
 		ViolationsJSON: row.ViolationsJson.String,

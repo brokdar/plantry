@@ -47,52 +47,54 @@ type AiPrompt struct {
 }
 
 type AiRun struct {
-	ID               int64
-	Kind             string
-	StartedAt        string
-	FinishedAt       sql.NullString
-	Status           string
-	Provider         string
-	Model            string
-	PromptVersion    string
-	PromptHash       sql.NullString
-	WindowStart      sql.NullString
-	WindowEnd        sql.NullString
-	ScopeJson        sql.NullString
-	Instruction      sql.NullString
-	Chooser          sql.NullString
-	Iterations       int64
-	InputTokens      int64
-	OutputTokens     int64
-	CacheReadTokens  int64
-	CacheWriteTokens int64
-	RepairAttempts   int64
-	ViolationsJson   sql.NullString
-	ScoreJson        sql.NullString
-	JudgeJson        sql.NullString
-	Outcome          sql.NullString
-	OutcomeAt        sql.NullString
-	ErrorKey         sql.NullString
-	ConversationID   sql.NullInt64
-	RequestID        sql.NullString
-	Notes            sql.NullString
+	ID                int64
+	Kind              string
+	StartedAt         string
+	FinishedAt        sql.NullString
+	Status            string
+	Provider          string
+	Model             string
+	PromptVersion     string
+	PromptHash        sql.NullString
+	WindowStart       sql.NullString
+	WindowEnd         sql.NullString
+	ScopeJson         sql.NullString
+	Instruction       sql.NullString
+	Chooser           sql.NullString
+	Iterations        int64
+	InputTokens       int64
+	OutputTokens      int64
+	CacheReadTokens   int64
+	CacheWriteTokens  int64
+	RepairAttempts    int64
+	ViolationsJson    sql.NullString
+	ScoreJson         sql.NullString
+	JudgeJson         sql.NullString
+	Outcome           sql.NullString
+	OutcomeAt         sql.NullString
+	ErrorKey          sql.NullString
+	ConversationID    sql.NullInt64
+	RequestID         sql.NullString
+	Notes             sql.NullString
+	WebSearchRequests int64
 }
 
 type AiRunStep struct {
-	ID           int64
-	RunID        int64
-	Seq          int64
-	Type         string
-	Name         string
-	ArgsJson     sql.NullString
-	ResultJson   sql.NullString
-	IsError      int64
-	DurationMs   int64
-	InputTokens  int64
-	OutputTokens int64
-	RequestJson  sql.NullString
-	ResponseJson sql.NullString
-	StopReason   sql.NullString
+	ID                int64
+	RunID             int64
+	Seq               int64
+	Type              string
+	Name              string
+	ArgsJson          sql.NullString
+	ResultJson        sql.NullString
+	IsError           int64
+	DurationMs        int64
+	InputTokens       int64
+	OutputTokens      int64
+	RequestJson       sql.NullString
+	ResponseJson      sql.NullString
+	StopReason        sql.NullString
+	WebSearchRequests int64
 }
 
 type AiToolSchema struct {
