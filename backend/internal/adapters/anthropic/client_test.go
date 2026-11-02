@@ -1,6 +1,7 @@
 package anthropic_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -377,4 +378,21 @@ func TestStream_ThinkingBlocksReplayVerbatim(t *testing.T) {
 
 type reqBodyPeek struct {
 	MaxTokens int `json:"max_tokens"`
+}
+
+// DoD S8: a stream cut before message_stop is an error, not a reply.
+func TestStream_TruncatedStreamIsError(t *testing.T) {
+	full, err := os.ReadFile("testdata/stream_text.sse")
+	require.NoError(t, err)
+	i := bytes.Index(full, []byte("event: content_block_stop"))
+	require.Positive(t, i)
+	cut := full[:i]
+	ts := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write(cut)
+	})
+	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+	resp, err := c.Stream(context.Background(), llm.Request{Model: "m"}, make(chan llm.Event, 64))
+	require.ErrorIs(t, err, anthropic.ErrStreamIncomplete)
+	assert.Nil(t, resp)
 }

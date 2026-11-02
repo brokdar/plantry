@@ -3,14 +3,20 @@ package anthropic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"time"
 )
 
-// capabilityTTL is how long a model's web search answer is trusted (D3).
-const capabilityTTL = 24 * time.Hour
+// capabilityTTL is how long a model's web search answer is trusted (D3);
+// transientTTL how long a failed check counts as unsupported before it is
+// retried.
+const (
+	capabilityTTL = 24 * time.Hour
+	transientTTL  = 5 * time.Minute
+)
 
 type capability struct {
 	webSearch bool
@@ -19,9 +25,10 @@ type capability struct {
 
 // WebSearch implements llm.Capabilities. It reads
 // capabilities.server_tools.web_search.supported from GET /v1/models/{model}
-// once per model per 24 h. A missing field or a failed call counts as
-// unsupported and is cached too; err reports the failed call only on the
-// call that made it.
+// once per model per 24 h. A missing field, or a 400/404 for the model,
+// counts as unsupported for 24 h too; any other failure (network, 5xx, 429,
+// 401, an undecodable body) counts as unsupported for 5 min only. err reports
+// the failed call only on the call that made it.
 func (c *Client) WebSearch(ctx context.Context, model string) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock() // held across the call so a model is fetched once
@@ -32,8 +39,20 @@ func (c *Client) WebSearch(ctx context.Context, model string) (bool, error) {
 	if ctx.Err() != nil {
 		return false, err // the caller's cancellation says nothing about the model
 	}
-	c.caps[model] = capability{webSearch: supported, until: c.now().Add(capabilityTTL)}
+	ttl := capabilityTTL
+	if err != nil && !definitive(err) {
+		ttl = transientTTL
+	}
+	c.caps[model] = capability{webSearch: supported, until: c.now().Add(ttl)}
 	return supported, err
+}
+
+// definitive reports whether a failed Models API call answers for the model
+// itself (it is unknown or rejected) rather than failing transiently.
+func definitive(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) &&
+		(apiErr.Status == http.StatusBadRequest || apiErr.Status == http.StatusNotFound)
 }
 
 // setWebSearch caches a known answer for model, e.g. after the API rejected
