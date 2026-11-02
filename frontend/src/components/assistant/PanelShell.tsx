@@ -27,8 +27,9 @@ interface PanelShellProps {
 /**
  * The shells of the assistant (D15). From 1280 px an `aside` beside the
  * board; from 768 px a non-modal `aside` floating over it, below the plan
- * toolbar so Accept and shop stays reachable (the board keeps its width): no dialog, no focus trap, no scroll lock; Escape closes it
- * while focus is inside. On phones a bottom sheet with a grab handle.
+ * toolbar so Accept and shop stays reachable (the board keeps its width): no
+ * dialog, no focus trap, no scroll lock; Escape closes it while focus is
+ * inside. On phones a bottom sheet with a grab handle.
  */
 export function PanelShell({
   phone,

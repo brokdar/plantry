@@ -456,7 +456,7 @@ The chat remains for adjustments ("no fish this week", "swap Tuesday's side for 
 - **Unlock is two-phase (D6).** The first `unlock` call only previews the affected confirmed rows (the assistant shows an unlock card). The agent may unlock them only after the user's yes in a later turn of the same conversation; the preview expires after 30 minutes and is single use.
 - **Regenerate waits (D8).** `regenerate` runs the generation service and returns when the run finished, so the assistant reports the real outcome (violations, partial) in its change line.
 - **Edits and outcome attribution (D11-D12).** A chat run that edited generated drafts follows their accept, discard, unaccept and restore, and so does a chat run for the runs it started through `regenerate`. Insights show an Edits column (distinct plates and sessions an agent run wrote).
-- **Changes and undo (D13).** Every plan-writing tool call is recorded as a change (`ai_changes`), shown as a line with its own Undo (`POST /api/ai/changes/{id}/undo`). Undo is refused when the rows changed since (`change_stale`) or it was undone already (`change_undone`).
+- **Changes and undo (D13).** Every plan-writing tool call is recorded as a change (`ai_changes`), shown as a line with its own Undo (`POST /api/ai/changes/{id}/undo`). Undo is refused when the rows changed since (`change_stale`) or it was undone already (`change_undone`), or a row of it is confirmed now (409 `error.ai.change_confirmed`; the read side carries `undo_blocked: "confirmed"`).
 
 ### 7.7 Shopping list
 

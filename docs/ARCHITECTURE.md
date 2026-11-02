@@ -496,7 +496,7 @@ POST   /api/ai/chat                                 SSE stream (rate-limited, de
                                                     body: {conversation_id?, message, today?, start}
                                                     (start = window start, a shopping day; 400 error.plan.invalid_start; missing start 400 error.invalid_body; bad date 400 error.ai.invalid_date)
 POST   /api/ai/changes/{id}/undo                    put one agent change back → {plate_ids, session_ids}
-                                                    (409 error.ai.change_undone / error.ai.change_stale)
+                                                    (409 error.ai.change_undone / error.ai.change_stale / error.ai.change_confirmed)
 GET    /api/ai/conversations                        list (limit, offset)
 GET    /api/ai/conversations/{id}                   full history
 DELETE /api/ai/conversations/{id}                   delete
@@ -564,7 +564,7 @@ Tools live in `domain/agent` (`tools.go`, `preset_tools.go`, `plan_tools.go`), e
 
 **Draft guard (D5-D7).** The agent changes drafts only. Under the `agent` actor, `plate.Service` fails any write that would change or delete a confirmed plate or cook session (or a draft linked to a confirmed session) with `error.plan.row_confirmed` before it writes anything; the error names the rows so the model can tell the user. Writes before today fail with `error.ai.past_date` (`guardDate`/`guardPlateDate`). `confirm` and `unlock` are not guarded: `unlock` is the gate, and it is **two-phase**. The first call only previews the closure of confirmed rows (`plate.Service.BatchClosure`, read-only) and answers `409 error.ai.unlock_needs_user`; the loop emits an `unlock_request` event. Only a later user turn (same conversation, same closure, within 30 minutes, single use) lets a repeated call unlock; the pending previews live in memory, so a restart makes the model preview again.
 
-**Changes and undo (D13).** `ToolSet.Execute` returns a `Change` for every plan-writing call and stores it in `ai_changes`: the line text key and params, the chat run (plus a regenerate run the call waited for), the dates, plate and session ids, and the first and last plate-event ids. `POST /api/ai/changes/{id}/undo` puts the rows back (as `user`) unless any foreign event touched them since (`change_stale`) or it was undone already (`change_undone`).
+**Changes and undo (D13).** `ToolSet.Execute` returns a `Change` for every plan-writing call and stores it in `ai_changes`: the line text key and params, the chat run (plus a regenerate run the call waited for), the dates, plate and session ids, and the first and last plate-event ids. `POST /api/ai/changes/{id}/undo` puts the rows back (as `user`) unless any foreign event touched them since (`change_stale`) or it was undone already (`change_undone`), or when a plate or session of it is confirmed now (409 `error.ai.change_confirmed`; the read side carries `undo_blocked: "confirmed"`, a `confirm` change is exempt).
 
 ### 7.2 Tool loop
 

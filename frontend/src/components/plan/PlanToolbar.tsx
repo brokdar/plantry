@@ -72,15 +72,6 @@ interface PlanToolbarProps {
 const NAV_LINK =
   "inline-flex min-h-11 items-center justify-center rounded-lg text-small text-ink transition-colors duration-150 ease-out hover:bg-panel-sunken md:pointer-fine:min-h-9"
 
-/**
- * The board header (UX §5.5): the range and its stats ("Draft · …" with
- * drafts), the run's notes, window navigation (previous, "This week", next),
- * the generation progress, and the actions: Ask assistant, Shop, Accept and
- * shop (with drafts) and an overflow menu with Regenerate week and Discard
- * draft (with drafts), Re-plan from today (the current window), Copy a
- * previous week, Clear this week and the keyboard shortcuts. Past windows
- * lose the editing actions.
- */
 /** Publishes the toolbar's bottom edge (viewport px) as `--plan-toolbar-bottom`
  *  so the floating assistant panel (768-1279 px) starts below it and leaves
  *  Accept and shop reachable (Phase 5 D24). */
@@ -108,6 +99,15 @@ function usePublishToolbarBottom(ref: React.RefObject<HTMLElement | null>) {
   }, [ref])
 }
 
+/**
+ * The board header (UX §5.5): the range and its stats ("Draft · …" with
+ * drafts), the run's notes, window navigation (previous, "This week", next),
+ * the generation progress, and the actions: Ask assistant, Shop, Accept and
+ * shop (with drafts) and an overflow menu with Regenerate week and Discard
+ * draft (with drafts), Re-plan from today (the current window), Copy a
+ * previous week, Clear this week and the keyboard shortcuts. Past windows
+ * lose the editing actions.
+ */
 export function PlanToolbar({
   window,
   stats,

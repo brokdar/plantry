@@ -80,8 +80,9 @@ type chatRequestBody struct {
 
 type chatDates struct{ today, start time.Time }
 
-// parseChatDates parses the chat's dates. today and start are both required. On failure it returns the
-// i18n key. Whether start is a shopping day is the service's check.
+// parseChatDates parses the chat's dates. today and start are both required.
+// On failure it returns the i18n key. Whether start is a shopping day is the
+// service's check.
 func parseChatDates(todayStr, startStr string) (chatDates, string) {
 	var d chatDates
 	if startStr == "" || todayStr == "" {

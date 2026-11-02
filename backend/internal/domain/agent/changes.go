@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -288,20 +287,63 @@ func (c *Changes) List(ctx context.Context, conversationID int64) ([]Change, err
 	if err != nil {
 		return nil, err
 	}
+	var open []*Change
 	for i := range list {
-		if list[i].UndoneAt != nil || !list[i].Undoable() {
-			continue
+		if list[i].UndoneAt == nil && list[i].Undoable() && list[i].Tool != "confirm" {
+			open = append(open, &list[i])
 		}
-		blocked, err := c.confirmed(ctx, &list[i])
-		if err != nil {
-			return nil, err
-		}
-		if blocked {
+	}
+	rows, err := c.confirmedRows(ctx, open)
+	if err != nil {
+		return nil, err
+	}
+	for _, ch := range open {
+		if rows.hit(ch) {
 			reason := UndoBlockedConfirmed
-			list[i].UndoBlocked = &reason
+			ch.UndoBlocked = &reason
 		}
 	}
 	return list, nil
+}
+
+// confirmedSet holds the ids of the plates and sessions that are confirmed.
+type confirmedSet struct {
+	plates, sessions map[int64]bool
+}
+
+func (s confirmedSet) hit(ch *Change) bool {
+	return slices.ContainsFunc(ch.PlateIDs, func(id int64) bool { return s.plates[id] }) ||
+		slices.ContainsFunc(ch.SessionIDs, func(id int64) bool { return s.sessions[id] })
+}
+
+// confirmedRows loads the plates and sessions of changes in two queries and
+// returns those confirmed now.
+func (c *Changes) confirmedRows(ctx context.Context, changes []*Change) (confirmedSet, error) {
+	set := confirmedSet{plates: map[int64]bool{}, sessions: map[int64]bool{}}
+	var plateIDs, sessionIDs []int64
+	for _, ch := range changes {
+		plateIDs = append(plateIDs, ch.PlateIDs...)
+		sessionIDs = append(sessionIDs, ch.SessionIDs...)
+	}
+	if len(plateIDs) > 0 {
+		plates, err := c.plates.PlatesByIDs(ctx, slices.Compact(slices.Sorted(slices.Values(plateIDs))))
+		if err != nil {
+			return set, err
+		}
+		for _, p := range plates {
+			set.plates[p.ID] = p.State == plate.StateConfirmed
+		}
+	}
+	if len(sessionIDs) > 0 {
+		sessions, err := c.plates.CookSessions(ctx, slices.Compact(slices.Sorted(slices.Values(sessionIDs))))
+		if err != nil {
+			return set, err
+		}
+		for _, sess := range sessions {
+			set.sessions[sess.ID] = sess.State == plate.StateConfirmed
+		}
+	}
+	return set, nil
 }
 
 // confirmed reports whether a plate or session of the change is confirmed
@@ -311,39 +353,20 @@ func (c *Changes) confirmed(ctx context.Context, ch *Change) (bool, error) {
 	if ch.Tool == "confirm" {
 		return false, nil
 	}
-	for _, id := range ch.PlateIDs {
-		p, err := c.plates.Get(ctx, id)
-		if errors.Is(err, domain.ErrNotFound) {
-			continue
-		}
-		if err != nil {
-			return false, err
-		}
-		if p.State == plate.StateConfirmed {
-			return true, nil
-		}
-	}
-	sessions, err := c.plates.CookSessions(ctx, ch.SessionIDs)
-	if err != nil {
-		return false, err
-	}
-	for _, sess := range sessions {
-		if sess.State == plate.StateConfirmed {
-			return true, nil
-		}
-	}
-	return false, nil
+	rows, err := c.confirmedRows(ctx, []*Change{ch})
+	return rows.hit(ch), err
 }
 
 // Undo reverts one change as the actor in ctx (the user), in one unit of
 // work: its plates and sessions go back to their state before it
 // (plate.Service.Revert) and a set_availability cell gets its override back.
 // It fails with domain.ErrAIChangeUndone when the change was undone and
-// domain.ErrAIChangeConfirmed when one of its plates or sessions is confirmed
-// now and domain.ErrAIChangeStale, writing nothing, when one of its rows has an event
-// the change did not make or its cell's override is no longer the one it
-// wrote. A change that wrote nothing (not Undoable) is
-// domain.ErrAIChangeNotUndoable and stays as it is. It returns the rows it wrote.
+// domain.ErrAIChangeConfirmed when one of its plates or sessions is
+// confirmed now and domain.ErrAIChangeStale, writing nothing, when one of its
+// rows has an event the change did not make or its cell's override is no
+// longer the one it wrote. A change that wrote nothing (not Undoable) is
+// domain.ErrAIChangeNotUndoable and stays as it is. It returns the rows it
+// wrote.
 func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 	var rows plate.RowSet
 	err := c.tx.InTx(ctx, func(ctx context.Context) error {

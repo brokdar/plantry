@@ -287,6 +287,11 @@ func (s *Service) Get(ctx context.Context, id int64) (*Plate, error) {
 	return s.plates.Get(ctx, id)
 }
 
+// PlatesByIDs returns the plates of ids that exist, in one query.
+func (s *Service) PlatesByIDs(ctx context.Context, ids []int64) ([]Plate, error) {
+	return s.plates.ListByIDs(ctx, ids)
+}
+
 // PlatePatch changes a plate. Nil fields are kept; SetNote writes Note (nil
 // clears it).
 type PlatePatch struct {
