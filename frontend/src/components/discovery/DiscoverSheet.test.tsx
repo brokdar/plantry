@@ -56,6 +56,20 @@ beforeEach(async () => {
 })
 
 describe("DiscoverSheet", () => {
+  it("caps the cuisine and focus inputs at the backend's 80 characters", async () => {
+    const user = await renderSheet()
+    await user.click(screen.getByRole("button", { name: "Explore a cuisine" }))
+    expect(screen.getByTestId("discover-cuisine")).toHaveAttribute(
+      "maxlength",
+      "80"
+    )
+    await user.click(screen.getByRole("button", { name: /Use what I know/ }))
+    expect(screen.getByTestId("discover-focus")).toHaveAttribute(
+      "maxlength",
+      "80"
+    )
+  })
+
   it("runs a cuisine search, shows progress, then at most 3 cards", async () => {
     vi.mocked(getDiscoveryRun)
       .mockResolvedValueOnce(mockDiscoveryRun("running"))

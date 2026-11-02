@@ -190,7 +190,7 @@ function Field({
         id={id}
         value={value}
         placeholder={placeholder}
-        maxLength={60}
+        maxLength={80}
         onChange={(e) => onChange(e.target.value)}
         className="h-11 md:pointer-fine:h-9"
         data-testid={testId}
