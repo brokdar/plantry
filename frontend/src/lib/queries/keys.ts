@@ -129,3 +129,14 @@ export const insightKeys = {
 export const unitKeys = {
   list: () => ["units"] as const,
 }
+
+// Discovery (daily idea, runs, suggestion lists). Accept/reject invalidate
+// `all`, foodKeys.lists() and insightKeys.all.
+export const discoveryKeys = {
+  all: ["discovery"] as const,
+  daily: (date: string) => [...discoveryKeys.all, "daily", date] as const,
+  run: (id: number) => [...discoveryKeys.all, "run", id] as const,
+  suggestions: () => [...discoveryKeys.all, "suggestions"] as const,
+  suggestionList: (params: object) =>
+    [...discoveryKeys.suggestions(), params] as const,
+}

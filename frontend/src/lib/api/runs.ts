@@ -47,6 +47,8 @@ export interface RunSummary {
   tokens: RunTokens
   /** null = the model has no price ("cost unknown"). */
   cost_estimate_usd: number | null
+  /** Web searches the run's model calls made (priced per search). */
+  web_search_requests: number
   score: Score | null
   outcome: RunOutcome | null
   correction_rate: number | null
@@ -66,6 +68,7 @@ export interface RunStep {
   is_error: boolean
   duration_ms: number
   tokens: { input: number; output: number }
+  web_search_requests: number
 }
 
 export interface RunDetail extends RunSummary {

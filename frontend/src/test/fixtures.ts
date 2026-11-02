@@ -2,6 +2,11 @@ import type { Change, ConversationDetail } from "@/lib/domain/assistantEvents"
 import type { AvailabilityDefault } from "@/lib/api/availability"
 import type { ComposedFood, LeafFood, ScaledRecipe } from "@/lib/api/foods"
 import type { PlanRun, PlanRunStatus, RunStage } from "@/lib/api/generation"
+import type {
+  DiscoveryRun,
+  DiscoveryRunStatus,
+  Suggestion,
+} from "@/lib/api/discovery"
 import type { Insights } from "@/lib/api/insights"
 import type { LookupCandidate, LookupResponse } from "@/lib/api/lookup"
 import type { Plan, PlanCell, ReplanPreview } from "@/lib/api/plan"
@@ -1005,6 +1010,7 @@ export const mockRunsPage: RunsPage = {
       chooser: "heuristic",
       tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
       cost_estimate_usd: 0,
+      web_search_requests: 0,
       score: mockScore,
       outcome: "accepted",
       correction_rate: 0.25,
@@ -1022,6 +1028,7 @@ export const mockRunsPage: RunsPage = {
       chooser: null,
       tokens: { input: 1200, output: 300, cache_read: 0, cache_write: 0 },
       cost_estimate_usd: null,
+      web_search_requests: 0,
       score: null,
       outcome: null,
       correction_rate: null,
@@ -1067,6 +1074,13 @@ export const mockInsights: Insights = {
       violations: { H2: 1 },
     },
   ],
+  discovery: {
+    runs: 2,
+    suggestions: 3,
+    accepted: 1,
+    acceptance_rate: 0.5,
+    cost_per_accepted_recipe: 0.06,
+  },
   prices_as_of: "2026-10-01",
 }
 
@@ -1091,6 +1105,7 @@ export const mockRunDetail: RunDetail = {
       is_error: false,
       duration_ms: 420,
       tokens: { input: 1200, output: 300 },
+      web_search_requests: 0,
     },
     {
       seq: 2,
@@ -1103,6 +1118,7 @@ export const mockRunDetail: RunDetail = {
       is_error: false,
       duration_ms: 3,
       tokens: { input: 0, output: 0 },
+      web_search_requests: 0,
     },
   ],
   prompt_text: "You are Plantry's assistant.",
@@ -1159,5 +1175,88 @@ export function mockConversationWithChanges(): ConversationDetail {
         undone_at: "2026-11-01T09:04:00Z",
       },
     ],
+  }
+}
+
+/** GET /api/discovery/daily: a pending, search-grounded Persian stew with
+ *  one known and one new ingredient. */
+export function mockSuggestion(
+  overrides: Partial<Suggestion> = {}
+): Suggestion {
+  return {
+    id: 5,
+    mode: "daily",
+    query: null,
+    source_url: "http://127.0.0.1:9100/fesenjan.html",
+    image_url: null,
+    grounded: true,
+    status: "pending",
+    reason: null,
+    run_id: 21,
+    food_id: null,
+    shown_on: "2026-11-02",
+    created_at: "2026-11-02T08:00:00Z",
+    name: "Fesenjan",
+    cuisine: "Persian",
+    total_minutes: 90,
+    reference_portions: 4,
+    diet_class: "omnivore",
+    per_portion: { kcal: 520, protein: 28, fat: 30, carbs: 32 },
+    nutrition_complete: false,
+    missing: ["pomegranate molasses"],
+    why: "Slow-cooked chicken in walnut and pomegranate sauce.",
+    known_share: 0.5,
+    ingredients: [
+      {
+        raw_text: "500 g chicken thighs",
+        name: "chicken thighs",
+        amount: 500,
+        unit: "g",
+        food_id: 12,
+        known: true,
+      },
+      {
+        raw_text: "3 tbsp pomegranate molasses",
+        name: "pomegranate molasses",
+        amount: 3,
+        unit: "tbsp",
+        food_id: null,
+        known: false,
+      },
+    ],
+    draft: {
+      name: "Fesenjan",
+      description: "",
+      source_url: "http://127.0.0.1:9100/fesenjan.html",
+      image_url: "",
+      prep_minutes: 20,
+      cook_minutes: 70,
+      total_minutes: 90,
+      reference_portions: 4,
+      instructions: ["Toast the walnuts.", "Simmer everything."],
+      ingredients: [],
+      tags: [],
+      language: "en",
+      extract_method: "jsonld",
+      warnings: [],
+      source_kcal_per_serving: null,
+    },
+    ...overrides,
+  }
+}
+
+/** GET /api/discovery/runs/21. A finished run lists its suggestion ids. */
+export function mockDiscoveryRun(
+  status: DiscoveryRunStatus = "ok",
+  overrides: Partial<DiscoveryRun> = {}
+): DiscoveryRun {
+  const done = status !== "running"
+  return {
+    run_id: 21,
+    status,
+    suggestion_ids: done && status !== "error" ? [5] : [],
+    discarded: done ? 1 : 0,
+    error_key: status === "error" ? "error.ai.provider_missing" : null,
+    ...overrides,
   }
 }

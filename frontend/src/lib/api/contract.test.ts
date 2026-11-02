@@ -3,13 +3,27 @@
 // (D25).
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { mockConversationWithChanges, mockRemovedBatch } from "@/test/fixtures"
+import {
+  mockConversationWithChanges,
+  mockDiscoveryRun,
+  mockRemovedBatch,
+  mockSuggestion,
+} from "@/test/fixtures"
 
 vi.mock("./client", () => ({ apiFetch: vi.fn().mockResolvedValue({}) }))
 vi.mock("@/lib/dates", () => ({ todayISO: () => "2026-10-30" }))
 
 import { apiFetch } from "./client"
 import { getConversation, postChatStream, undoChange } from "./ai"
+import {
+  acceptSuggestion,
+  anotherSuggestion,
+  discover,
+  getDailySuggestion,
+  getDiscoveryRun,
+  listSuggestions,
+  rejectSuggestion,
+} from "./discovery"
 import { deleteFeedback, putFeedback } from "./feedback"
 import {
   getFood,
@@ -478,6 +492,67 @@ const cases: Case[] = [
     method: "POST",
     path: "/ai/changes/5/undo",
   },
+  // Discovery (Phase 5 §3.1)
+  {
+    name: "discover (explore)",
+    call: () =>
+      discover({ mode: "explore", cuisine: "Thai", today: "2026-10-30" }),
+    method: "POST",
+    path: "/discovery",
+    body: { mode: "explore", cuisine: "Thai", today: "2026-10-30" },
+  },
+  {
+    name: "getDiscoveryRun",
+    call: () => getDiscoveryRun(21),
+    method: "GET",
+    path: "/discovery/runs/21",
+  },
+  {
+    name: "getDailySuggestion",
+    call: () => getDailySuggestion("2026-11-02"),
+    method: "GET",
+    path: "/discovery/daily?date=2026-11-02",
+  },
+  {
+    name: "anotherSuggestion",
+    call: () => anotherSuggestion("2026-11-02"),
+    method: "POST",
+    path: "/discovery/daily/another",
+    body: { date: "2026-11-02" },
+  },
+  {
+    name: "listSuggestions (no filter)",
+    call: () => listSuggestions(),
+    method: "GET",
+    path: "/discovery/suggestions",
+  },
+  {
+    name: "listSuggestions (filtered)",
+    call: () => listSuggestions({ status: "pending", run_id: 21 }),
+    method: "GET",
+    path: "/discovery/suggestions?status=pending&run_id=21",
+  },
+  {
+    name: "acceptSuggestion",
+    call: () => acceptSuggestion(5, 42),
+    method: "POST",
+    path: "/discovery/suggestions/5/accept",
+    body: { food_id: 42 },
+  },
+  {
+    name: "rejectSuggestion (with reason)",
+    call: () => rejectSuggestion(5, "too_long"),
+    method: "POST",
+    path: "/discovery/suggestions/5/reject",
+    body: { reason: "too_long" },
+  },
+  {
+    name: "rejectSuggestion (no reason)",
+    call: () => rejectSuggestion(5),
+    method: "POST",
+    path: "/discovery/suggestions/5/reject",
+    body: {},
+  },
   {
     name: "getPrice",
     call: () => getPrice("claude-sonnet-4-5"),
@@ -552,5 +627,82 @@ describe("API contract (§3)", () => {
     } else {
       expect(JSON.parse(init!.body as string)).toEqual(c.body)
     }
+  })
+})
+
+describe("discovery shapes (Phase 5 F1-AC1)", () => {
+  beforeEach(() => vi.mocked(apiFetch).mockReset())
+
+  it("a suggestion carries every §3.1 field", () => {
+    expect(Object.keys(mockSuggestion()).sort()).toEqual(
+      [
+        "cuisine",
+        "created_at",
+        "diet_class",
+        "draft",
+        "food_id",
+        "grounded",
+        "id",
+        "image_url",
+        "ingredients",
+        "known_share",
+        "missing",
+        "mode",
+        "name",
+        "nutrition_complete",
+        "per_portion",
+        "query",
+        "reason",
+        "reference_portions",
+        "run_id",
+        "shown_on",
+        "source_url",
+        "status",
+        "total_minutes",
+        "why",
+      ].sort()
+    )
+    expect(Object.keys(mockSuggestion().ingredients[0]).sort()).toEqual(
+      ["amount", "food_id", "known", "name", "raw_text", "unit"].sort()
+    )
+    expect(Object.keys(mockSuggestion().per_portion).sort()).toEqual([
+      "carbs",
+      "fat",
+      "kcal",
+      "protein",
+    ])
+  })
+
+  it("a run carries run_id, status, suggestion_ids, discarded, error_key", () => {
+    expect(Object.keys(mockDiscoveryRun()).sort()).toEqual([
+      "discarded",
+      "error_key",
+      "run_id",
+      "status",
+      "suggestion_ids",
+    ])
+  })
+
+  it("the daily endpoints read 200, 202 and 204", async () => {
+    const suggestion = mockSuggestion()
+    vi.mocked(apiFetch).mockResolvedValueOnce({ suggestion })
+    expect(await getDailySuggestion("2026-11-02")).toEqual({
+      kind: "suggestion",
+      suggestion,
+    })
+    vi.mocked(apiFetch).mockResolvedValueOnce({ run_id: 21 })
+    expect(await anotherSuggestion("2026-11-02")).toEqual({
+      kind: "running",
+      runId: 21,
+    })
+    vi.mocked(apiFetch).mockResolvedValueOnce(undefined)
+    expect(await getDailySuggestion("2026-11-02")).toEqual({ kind: "none" })
+  })
+
+  it("accept and reject return the unwrapped suggestion", async () => {
+    const suggestion = mockSuggestion({ status: "accepted", food_id: 42 })
+    vi.mocked(apiFetch).mockResolvedValue({ suggestion })
+    expect(await acceptSuggestion(5, 42)).toEqual(suggestion)
+    expect(await rejectSuggestion(5)).toEqual(suggestion)
   })
 })

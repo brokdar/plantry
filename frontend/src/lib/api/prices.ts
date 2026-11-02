@@ -7,6 +7,8 @@ export interface ModelPrice {
   /** null when the model has no cache price. */
   cache_read: number | null
   cache_write: number | null
+  /** USD per web search; 0 or absent when the model can't search. */
+  per_search?: number
 }
 
 export interface PriceInfo {
