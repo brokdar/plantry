@@ -33,6 +33,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/feedback"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
@@ -303,6 +304,35 @@ func run() error {
 	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver, foodSvc).WithRecorder(runRecorder)
 	importHandler := handlers.NewImportHandler(importSvc)
 
+	// Discovery (Phase 5 D7): research → verify → annotate → store, one run
+	// at a time in the background. LLM-supplied URLs and the images their
+	// pages name pass the public-URL guard (dev mode allows loopback for the
+	// e2e fixture site). Shutdown waits for the running run (before the
+	// recorder and the database), cancelling it when the wait runs out.
+	suggestionRepo := sqlite.NewRecipeSuggestionRepo(conn)
+	discoveryGuard := func(u string) error { return httpfetch.PublicURL(u, nil, cfg.DevMode) }
+	suggestionStore := &discovery.Store{Repo: suggestionRepo, ImageGuard: discoveryGuard}
+	if imgStore != nil {
+		suggestionStore.Images = imgStore
+	}
+	discoverySvc := discovery.NewService(discovery.Deps{
+		LLM:       llmResolver,
+		Recorder:  runRecorder,
+		Profile:   profileSvc,
+		Catalogue: foodRepo,
+		Verifier:  &discovery.Verifier{Extractor: importSvc, Index: suggestionRepo, Guard: discoveryGuard},
+		Annotator: &discovery.Annotator{Matcher: resolver, Used: foodRepo, Nutrition: nutritionResolver},
+		Store:     suggestionStore,
+		Logger:    logger,
+	})
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), discoveryShutdownWait)
+		defer cancel()
+		if err := discoverySvc.Shutdown(ctx); err != nil {
+			logger.Warn("discovery.shutdown run cancelled", "error", err)
+		}
+	}()
+
 	// Rate limiter for /api/ai/chat. Initial limit comes from effective
 	// settings; the SettingsHandler reconfigures it when the user changes
 	// ai.rate_limit_per_min from the UI.
@@ -387,6 +417,10 @@ func run() error {
 // generations to record their end; a run still going after it is failed at
 // the next start (FailInterruptedRuns).
 const planningShutdownWait = 5 * time.Second
+
+// discoveryShutdownWait bounds how long shutdown waits for a running
+// discovery run before cancelling it.
+const discoveryShutdownWait = 10 * time.Second
 
 // strconvOrEmpty renders a non-negative int as its decimal form, returning
 // "" for zero. Used when building the env snapshot so that an unset env-var

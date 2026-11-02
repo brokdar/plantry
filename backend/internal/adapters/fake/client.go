@@ -73,6 +73,8 @@ type ScriptedBlock struct {
 	ToolUseID string          `json:"tool_use_id,omitempty"`
 	ToolName  string          `json:"tool_name,omitempty"`
 	ToolInput json.RawMessage `json:"tool_input,omitempty"`
+	// Raw is a "server" block's provider JSON (D2), replayed verbatim.
+	Raw json.RawMessage `json:"raw,omitempty"`
 }
 
 // ScriptedUsage matches llm.Usage.
@@ -355,6 +357,8 @@ func assembleMessage(m ScriptedMessage) llm.Message {
 				Type: llm.ContentTypeToolUse, ToolUseID: b.ToolUseID,
 				ToolUseName: b.ToolName, ToolUseInput: input,
 			}
+		case "server":
+			content[i] = llm.ContentBlock{Type: llm.ContentTypeServer, Raw: b.Raw}
 		default:
 			content[i] = llm.ContentBlock{Type: llm.ContentTypeText, Text: b.Text}
 		}

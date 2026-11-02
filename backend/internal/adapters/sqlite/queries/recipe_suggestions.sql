@@ -17,3 +17,43 @@ SELECT CAST((
     EXISTS (SELECT 1 FROM foods f WHERE f.source_url = CAST(sqlc.arg(url) AS TEXT))
     OR EXISTS (SELECT 1 FROM recipe_suggestions s WHERE s.source_url = CAST(sqlc.arg(url) AS TEXT))
 ) AS INTEGER) AS known;
+
+-- name: DecideRecipeSuggestion :one
+-- Accept or reject a pending suggestion; no row when it is decided already.
+UPDATE recipe_suggestions SET
+    status = sqlc.arg(status), reason = sqlc.narg(reason), food_id = sqlc.narg(food_id),
+    decided_at = datetime('now')
+WHERE id = sqlc.arg(id) AND status = 'pending'
+RETURNING *;
+
+-- name: SetDiscoveryRunOutcome :exec
+-- D11: any suggestion accepted -> accepted; all rejected -> discarded; else
+-- open. A run without suggestions keeps NULL.
+UPDATE ai_runs SET
+    outcome = (
+        SELECT CASE
+            WHEN COUNT(*) = 0 THEN NULL
+            WHEN SUM(s.status = 'accepted') > 0 THEN 'accepted'
+            WHEN SUM(s.status = 'rejected') = COUNT(*) THEN 'discarded'
+            ELSE 'open'
+        END
+        FROM recipe_suggestions s WHERE s.ai_run_id = CAST(sqlc.arg(id) AS INTEGER)
+    ),
+    outcome_at = datetime('now')
+WHERE id = sqlc.arg(id) AND kind = 'discovery';
+
+-- name: ListRecipeSuggestions :many
+-- Suggestions, optionally of one status and run, last decided (else newest)
+-- first.
+SELECT * FROM recipe_suggestions
+WHERE (CAST(sqlc.narg(status) AS TEXT) IS NULL OR status = CAST(sqlc.narg(status) AS TEXT))
+  AND (CAST(sqlc.narg(run_id) AS INTEGER) IS NULL OR ai_run_id = CAST(sqlc.narg(run_id) AS INTEGER))
+ORDER BY COALESCE(decided_at, created_at) DESC, id DESC
+LIMIT sqlc.arg(lim);
+
+-- name: DeletePendingSuggestionsBefore :many
+-- D12: pending suggestions created before the cutoff go; their ids let the
+-- caller delete the images.
+DELETE FROM recipe_suggestions
+WHERE status = 'pending' AND created_at < sqlc.arg(before)
+RETURNING id;

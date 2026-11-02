@@ -242,3 +242,20 @@ func TestClient_WebSearchCapabilityDefaultsOff(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ok)
 }
+
+// A scripted server block (web search call or result) reaches the caller as
+// an opaque llm server block with its raw JSON, so a pause_turn
+// continuation can replay it (D2).
+func TestClient_ServerBlocks(t *testing.T) {
+	t.Parallel()
+	var s Script
+	require.NoError(t, json.Unmarshal([]byte(`{"turns":[{"stop_reason":"pause_turn","message":{"content":[
+		{"type":"server","raw":{"type":"server_tool_use","id":"srv_1","name":"web_search","input":{"query":"fesenjan"}}},
+		{"type":"text","text":"x"}]}}]}`), &s))
+
+	resp := stream(t, NewFromScript(&s), llm.Request{})
+	require.Len(t, resp.Message.Content, 2)
+	b := resp.Message.Content[0]
+	assert.Equal(t, llm.ContentTypeServer, b.Type)
+	assert.JSONEq(t, `{"type":"server_tool_use","id":"srv_1","name":"web_search","input":{"query":"fesenjan"}}`, string(b.Raw))
+}
