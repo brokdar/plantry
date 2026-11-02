@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next"
 
 import type { Suggestion } from "@/lib/api/discovery"
 
+import { DietIcon } from "@/components/recipes/DietIcon"
 import { NewLegend } from "./NewLegend"
 
 /** A discovery idea: photo, facts, why, ingredients and the source. */
@@ -32,7 +33,10 @@ export function SuggestionCard({ suggestion: s }: { suggestion: Suggestion }) {
             </span>
           )}
         </div>
-        <p className="text-small text-ink-muted">{facts.join(" · ")}</p>
+        <p className="flex items-start gap-1.5 text-small text-ink-muted">
+          <DietIcon dietClass={s.diet_class} className="mt-0.5" />
+          <span>{facts.join(" · ")}</span>
+        </p>
         {s.nutrition_complete ? (
           <p className="text-small text-ink-muted">
             {t("discovery.card.macros", {

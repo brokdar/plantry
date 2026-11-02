@@ -119,7 +119,7 @@ func NewService(d Deps) *Service {
 // and domain.ErrDiscoveryRunning while another run is running. The run
 // outlives ctx.
 func (s *Service) Run(ctx context.Context, req Request) (int64, error) {
-	req.Cuisine, req.Focus = strings.TrimSpace(req.Cuisine), strings.TrimSpace(req.Focus)
+	req.Cuisine, req.Focus = strings.ToLower(strings.TrimSpace(req.Cuisine)), strings.TrimSpace(req.Focus)
 	switch req.Mode {
 	case ModeDaily, ModeKnown:
 	case ModeExplore:

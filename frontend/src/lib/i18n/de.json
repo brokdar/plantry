@@ -346,7 +346,7 @@
       "cost_per_accepted": "Kosten pro übernommenem Plan",
       "discovery": {
         "title": "Rezeptentdeckung",
-        "runs": "Suchläufe",
+        "runs": "Entdeckungsläufe",
         "suggestions": "Gezeigte Ideen",
         "accepted": "In Rezepte übernommen",
         "acceptance_rate": "Übernahmequote",
@@ -1675,7 +1675,7 @@
   "discovery": {
     "card": {
       "new": "neu",
-      "legend": "„neu“ markiert Zutaten, die noch nicht in deinen Lebensmitteln sind.",
+      "legend": "„neu“ = noch in keinem deiner Rezepte",
       "grounded": "Per Websuche gefunden",
       "nutrition_incomplete": "Nährwerte unvollständig",
       "nutrition_missing": "Keine Daten für {{names}}",

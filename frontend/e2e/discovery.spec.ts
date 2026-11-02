@@ -150,7 +150,11 @@ test("AC-1.1-1.3: the first visit of the day opens the daily idea, and the run i
   await expect(
     items.filter({ hasText: "Chicken thighs" }).getByTestId("suggestion-new")
   ).toHaveCount(0)
-  await expect(card.getByText(/“new” marks ingredients/)).toBeVisible()
+  await expect(card.getByTestId("discovery-legend")).toHaveText(
+    "“new” = not in any of your recipes yet"
+  )
+  // Chicken thighs, rice and the other known leaves make this omnivore.
+  await expect(card.getByRole("img", { name: /^Diet:/ })).toBeVisible()
   await expect(
     card.getByRole("link", { name: /View the original recipe/ })
   ).toHaveAttribute("href", `${SITE}/fesenjan.html?r=${script.run}`)
@@ -168,7 +172,7 @@ test("AC-1.1-1.3: the first visit of the day opens the daily idea, and the run i
     web_search_requests: 2,
     scope: { mode: "daily" },
   })
-  expect(runs[0].notes).toMatch(/^2 of 4 verified; discarded: /)
+  expect(runs[0].notes).toMatch(/^2 of 4 verified; discarded: \w+ 1, \w+ 1$/)
   // 2 x (1,200 + 300) tokens at 1 USD per million, plus 2 searches at 0.50.
   expect(runs[0].cost_estimate_usd).toBeCloseTo(1.003, 3)
   const pending = await suggestions(request, "pending")
@@ -289,7 +293,7 @@ test("AC-3.1, AC-3.3: Explore a cuisine shows three cards; Not for me rejects wi
   await expect(cards).toHaveCount(3, { timeout: 15_000 })
   let runs = await discoveryRuns(request)
   expect(runs).toHaveLength(before + 1)
-  expect(runs[0].scope).toMatchObject({ mode: "explore", cuisine: "Thai" })
+  expect(runs[0].scope).toMatchObject({ mode: "explore", cuisine: "thai" })
 
   await cards.first().getByRole("button", { name: "Not for me" }).click()
   await cards.first().getByRole("button", { name: "Takes too long" }).click()
@@ -441,6 +445,20 @@ test("AC-2: Add to my recipes opens a prefilled review; saving adds the recipe a
   const block = page.getByTestId("insights-discovery")
   await expect(block).toBeVisible()
   await expect(block.getByTestId("discovery-accepted")).toContainText("1")
-  await expect(block.getByTestId("discovery-rate")).not.toContainText("–")
-  await expect(block.getByTestId("discovery-cost")).toContainText(/^.*\$\d/)
+  const runs = await discoveryRuns(request)
+  const shown = [
+    ...(await suggestions(request, "pending")),
+    ...(await suggestions(request, "accepted")),
+    ...(await suggestions(request, "rejected")),
+  ]
+  const accepted = shown.filter((s) => s.status === "accepted").length
+  await expect(block.getByTestId("discovery-rate")).toContainText(
+    `${Math.round((accepted / shown.length) * 100)}%`
+  )
+  // All discovery cost, searches included, over the accepted recipes.
+  const cost = runs.reduce((sum, r) => sum + (r.cost_estimate_usd ?? 0), 0)
+  expect(cost).toBeGreaterThan(1)
+  await expect(block.getByTestId("discovery-cost")).toContainText(
+    `$${(cost / accepted).toFixed(2)}`
+  )
 })
