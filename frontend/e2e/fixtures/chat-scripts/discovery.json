@@ -1,0 +1,92 @@
+{
+  "capabilities": {
+    "web_search": true
+  },
+  "turns": [
+    {
+      "match_user": "persian",
+      "stop_reason": "pause_turn",
+      "web_search_requests": 1,
+      "search_results": [
+        {
+          "url": "{{SITE}}/fesenjan.html?r={{RUN}}",
+          "title": "Fesenjan"
+        }
+      ],
+      "message": {
+        "content": [
+          {
+            "type": "server",
+            "raw": {
+              "type": "server_tool_use",
+              "id": "srv_1",
+              "name": "web_search",
+              "input": {
+                "query": "persian chicken stew recipe"
+              }
+            }
+          },
+          {
+            "type": "text",
+            "text": "Searching for Persian recipes."
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 1200,
+        "output_tokens": 300
+      }
+    },
+    {
+      "match_user": "persian",
+      "stop_reason": "end_turn",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Here are my picks.\n{\"candidates\": [{\"url\": \"{{SITE}}/fesenjan.html?r={{RUN}}\", \"title\": \"Fesenjan\", \"cuisine\": \"Persian\", \"why\": \"Uses 6 ingredients you already know. New cuisine for you: Persian.\"}, {\"url\": \"{{SITE}}/pasta.html?r={{RUN}}\", \"title\": \"Buttered onion spaghetti\", \"cuisine\": \"Italian\", \"why\": \"Every ingredient is already in your recipes.\"}, {\"url\": \"{{SITE}}/broken.html?r={{RUN}}\", \"title\": \"Missing page\", \"cuisine\": \"Persian\", \"why\": \"Page is gone.\"}, {\"url\": \"http://recipes.unresolvable.invalid/stew\", \"title\": \"Unreachable\", \"cuisine\": \"Persian\", \"why\": \"Host does not resolve.\"}]}"
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 1200,
+        "output_tokens": 300
+      },
+      "web_search_requests": 1
+    },
+    {
+      "match_user": "thai",
+      "stop_reason": "end_turn",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Thai ideas.\n{\"candidates\": [{\"url\": \"{{SITE}}/fesenjan.html?thai={{RUN}}\", \"title\": \"Thai walnut chicken\", \"cuisine\": \"Thai\", \"why\": \"Rich and nutty.\"}, {\"url\": \"{{SITE}}/pasta.html?thai={{RUN}}\", \"title\": \"Thai butter noodles\", \"cuisine\": \"Thai\", \"why\": \"A quick noodle dish.\"}, {\"url\": \"{{SITE}}/pasta.html?thai2={{RUN}}\", \"title\": \"Thai onion noodles\", \"cuisine\": \"Thai\", \"why\": \"Sweet onions.\"}]}"
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 1200,
+        "output_tokens": 300
+      },
+      "web_search_requests": 1
+    },
+    {
+      "match_user": "chickpeas",
+      "stop_reason": "end_turn",
+      "message": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Pantry ideas.\n{\"candidates\": [{\"url\": \"{{SITE}}/fesenjan.html?known={{RUN}}\", \"title\": \"Chickpea stew\", \"cuisine\": \"Persian\", \"why\": \"Mostly new ingredients.\"}, {\"url\": \"{{SITE}}/pasta.html?known={{RUN}}\", \"title\": \"Chickpea pasta\", \"cuisine\": \"Italian\", \"why\": \"Everything is in your recipes.\"}]}"
+          }
+        ]
+      },
+      "usage": {
+        "input_tokens": 1200,
+        "output_tokens": 300
+      },
+      "web_search_requests": 1
+    }
+  ]
+}

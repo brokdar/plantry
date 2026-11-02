@@ -71,6 +71,27 @@ describe("InsightsPage", () => {
     )
   })
 
+  it("F4-AC5: shows the discovery block, and hides it without runs", async () => {
+    const { unmount } = renderWithRouter(
+      <InsightsPage runId={undefined} onRunChange={vi.fn()} />
+    )
+    const block = await screen.findByTestId("insights-discovery")
+    expect(screen.getByTestId("discovery-suggestions")).toHaveTextContent("3")
+    expect(screen.getByTestId("discovery-accepted")).toHaveTextContent("1")
+    expect(screen.getByTestId("discovery-rate")).toHaveTextContent("50%")
+    expect(screen.getByTestId("discovery-cost")).toHaveTextContent("$0.06")
+    expect(block).toHaveTextContent("Recipe discovery")
+    unmount()
+
+    vi.mocked(getInsights).mockResolvedValue({
+      ...mockInsights,
+      discovery: { ...mockInsights.discovery, runs: 0 },
+    })
+    renderWithRouter(<InsightsPage runId={undefined} onRunChange={vi.fn()} />)
+    await screen.findByRole("table", { name: "By prompt version" })
+    expect(screen.queryByTestId("insights-discovery")).toBeNull()
+  })
+
   it("opens a run's detail from the table", async () => {
     const onRunChange = vi.fn()
     renderWithRouter(

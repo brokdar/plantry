@@ -4,6 +4,10 @@ import { join } from "node:path"
 
 import type { APIRequestContext, Page } from "@playwright/test"
 
+import {
+  clearPendingSuggestions,
+  useDiscoveryScript,
+} from "./discovery-fixture"
 import { expect, test } from "./helpers"
 
 import {
@@ -152,6 +156,52 @@ test("a chat turn shows up in Insights with its steps and an unknown cost", asyn
     await request.delete(`${API}/api/settings/ai.fake_script`)
     await rm(scriptPath, { force: true })
     await cleanupSlot(slot.id)
+  }
+})
+
+// F4-AC5: a discovery run is a row of its own kind, its detail counts the web
+// searches, and the discovery block and by-version table list it.
+test("a discovery run shows up in Insights with its searches", async ({
+  page,
+  request,
+}) => {
+  const script = await useDiscoveryScript()
+  try {
+    const started = await request.post(`${API}/api/discovery`, {
+      data: { mode: "explore", cuisine: "persian" },
+    })
+    expect(started.status(), await started.text()).toBe(202)
+    const { run_id } = (await started.json()) as { run_id: number }
+    await expect
+      .poll(
+        async () =>
+          (
+            (await (
+              await request.get(`${API}/api/discovery/runs/${run_id}`)
+            ).json()) as { status: string }
+          ).status,
+        { timeout: 15_000 }
+      )
+      .not.toBe("running")
+
+    await page.goto("/settings/assistant/insights")
+    const row = page.getByTestId(`run-row-${run_id}`)
+    await expect(row).toContainText("Discovery")
+    await expect(row).toContainText("Done")
+    await expect(page.getByTestId("insights-discovery")).toBeVisible()
+    await expect(
+      page
+        .getByRole("table", { name: "By prompt version" })
+        .getByRole("row")
+        .filter({ hasText: "Discovery" })
+        .filter({ hasText: "d1" })
+    ).toHaveCount(1)
+
+    await row.getByRole("button").click()
+    await expect(page.getByTestId("run-detail-searches")).toContainText("2")
+  } finally {
+    await clearPendingSuggestions()
+    await script.remove()
   }
 })
 

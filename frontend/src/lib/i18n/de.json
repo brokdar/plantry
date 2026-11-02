@@ -337,6 +337,15 @@
       "correction_rate": "Korrekturquote",
       "acceptance_rate": "Übernahmequote",
       "cost_per_accepted": "Kosten pro übernommenem Plan",
+      "discovery": {
+        "title": "Rezeptentdeckung",
+        "runs": "Suchläufe",
+        "suggestions": "Gezeigte Ideen",
+        "accepted": "In Rezepte übernommen",
+        "acceptance_rate": "Übernahmequote",
+        "cost_per_accepted": "Kosten pro übernommenem Rezept (inkl. Websuchen)"
+      },
+      "web_searches": "Websuchen",
       "no_data": "Keine Daten",
       "week_of": "Woche ab {{date}}",
       "weeks_table": "Als Tabelle zeigen",
