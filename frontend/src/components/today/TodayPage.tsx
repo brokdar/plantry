@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 
 import { BatchHighlightProvider } from "@/components/batch/BatchHighlightProvider"
+import { DailySuggestionSheet } from "@/components/discovery/DailySuggestionSheet"
 import { Button } from "@/components/ui/button"
 import type { Today } from "@/lib/api/today"
 import {
@@ -136,6 +137,7 @@ function TodayLoaded({ data, today }: { data: Today; today: string }) {
           </aside>
         </div>
       </BatchHighlightProvider>
+      {data.date === today && <DailySuggestionSheet date={today} />}
     </Frame>
   )
 }

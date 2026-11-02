@@ -71,6 +71,26 @@ describe("useDailySuggestion (F1-AC2)", () => {
     expect(getDiscoveryRun).not.toHaveBeenCalled()
   })
 
+  it("a run that cannot be read stops polling and reads as none (F2)", async () => {
+    vi.mocked(getDailySuggestion).mockResolvedValue({
+      kind: "running",
+      runId: 21,
+    })
+    vi.mocked(getDiscoveryRun)
+      .mockResolvedValueOnce(mockDiscoveryRun("running"))
+      .mockRejectedValue(new Error("404"))
+    const { result } = renderHook(() => useDailySuggestion(DATE, true), {
+      wrapper: createHookWrapper(),
+    })
+    await waitFor(() => expect(result.current.data?.kind).toBe("running"))
+    await waitFor(() => expect(result.current.data).toEqual({ kind: "none" }), {
+      timeout: 4000,
+    })
+    const calls = vi.mocked(getDiscoveryRun).mock.calls.length
+    await new Promise((r) => setTimeout(r, DISCOVERY_POLL_MS * 2.5))
+    expect(vi.mocked(getDiscoveryRun).mock.calls.length).toBe(calls)
+  }, 15000)
+
   it("is idle when disabled", () => {
     renderHook(() => useDailySuggestion(DATE, false), {
       wrapper: createHookWrapper(),

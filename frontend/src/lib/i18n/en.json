@@ -1648,6 +1648,37 @@
     "incomplete": "Incomplete",
     "missing": "No nutrition data for {{names}}."
   },
+  "discovery": {
+    "card": {
+      "new": "new",
+      "legend": "“new” marks ingredients that aren’t in your foods yet.",
+      "grounded": "Search-grounded",
+      "nutrition_incomplete": "Nutrition incomplete",
+      "nutrition_missing": "No data for {{names}}",
+      "minutes": "{{count}} min",
+      "portions_one": "{{count}} portion",
+      "portions_other": "{{count}} portions",
+      "macros": "{{kcal}} kcal · {{protein}} g protein per portion",
+      "ingredients": "Ingredients",
+      "source": "View the original recipe",
+      "photo_alt": "Photo of {{name}}"
+    },
+    "sheet": {
+      "title": "An idea for today",
+      "add": "Add to my recipes",
+      "not_for_me": "Not for me",
+      "another": "Show another",
+      "finding_another": "Looking for another idea…",
+      "close": "Close"
+    },
+    "reject": {
+      "prompt": "What put you off?",
+      "too_long": "Takes too long",
+      "ingredients": "Ingredients",
+      "taste": "Not my taste",
+      "none": "No reason"
+    }
+  },
   "today": {
     "verdict": {
       "cook": "Cook {{name}} × {{portions}}",
