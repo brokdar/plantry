@@ -1,4 +1,5 @@
 import { screen, waitFor } from "@testing-library/react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -35,6 +36,7 @@ import {
 } from "@/lib/api/discovery"
 import { createFood, getFoodNutrition, listPortions } from "@/lib/api/foods"
 import { lookupImportLine, resolveImport } from "@/lib/api/import"
+import { discoveryKeys } from "@/lib/queries/keys"
 import { toast } from "sonner"
 
 import { SuggestionReview } from "./SuggestionReview"
@@ -70,6 +72,7 @@ function suggestion(sumacId: number | null) {
         amount: 5,
         unit: "g",
         food_id: sumacId,
+        candidate: sumacId ? "Sumac" : null,
         known: false,
       },
     ],
@@ -148,6 +151,28 @@ describe("SuggestionReview", () => {
     expect("image_url" in payload ? payload.image_url : undefined).toBe(
       undefined
     )
+  })
+
+  it("shows the matched leaf's name when it differs from the draft line", async () => {
+    await renderReview()
+    expect(await screen.findByText("Chicken thigh")).toBeVisible()
+  })
+
+  it("stays open while a stale cached list refetches to include the id", async () => {
+    const qc = new QueryClient()
+    qc.setQueryData(discoveryKeys.suggestionList({ status: "pending" }), {
+      items: [],
+    })
+    renderWithRouter(
+      <QueryClientProvider client={qc}>
+        <SuggestionReview id={5} onClose={onClose} />
+      </QueryClientProvider>
+    )
+    expect(
+      await screen.findByRole("heading", { name: /review recipe/i })
+    ).toBeVisible()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   it("keeps Save disabled while an ingredient has no match", async () => {

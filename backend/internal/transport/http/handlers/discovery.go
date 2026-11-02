@@ -70,7 +70,9 @@ type suggestionIngredientResponse struct {
 	Amount  *float64 `json:"amount"`
 	Unit    *string  `json:"unit"`
 	FoodID  *int64   `json:"food_id"`
-	Known   bool     `json:"known"`
+	// Candidate is the matched leaf's name; null when unmatched.
+	Candidate *string `json:"candidate"`
+	Known     bool    `json:"known"`
 }
 
 type suggestionResponse struct {
@@ -141,6 +143,7 @@ func toSuggestionResponse(s *discovery.Suggestion) suggestionResponse {
 		}
 		if i < len(ann.Lines) {
 			line.FoodID, line.Known = ann.Lines[i].FoodID, ann.Lines[i].Known
+			line.Candidate = optString(ann.Lines[i].Candidate)
 		}
 		out.Ingredients[i] = line
 		classes[i] = ing.DietClass

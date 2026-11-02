@@ -36,9 +36,9 @@ type RecipeOnboardingProps = {
 
 /**
  * Guided Recipes state (UX §5.8): a progress row and the ways to add recipes
- * (import, discover when available, create),
- * shown while the library is below the planning target. Renders nothing once
- * the target is reached, and fires the one-time milestone toast then.
+ * (import, discover when available, create), shown while the library is below
+ * the planning target. Renders nothing once the target is reached, and fires
+ * the one-time milestone toast then.
  */
 export function RecipeOnboarding({
   count,

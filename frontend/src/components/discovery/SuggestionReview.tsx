@@ -29,7 +29,8 @@ export function SuggestionReview({
   const list = useSuggestions({ status: "pending" }, id !== undefined)
   const accept = useAcceptSuggestion()
   const suggestion = list.data?.items.find((s) => s.id === id)
-  const gone = id !== undefined && list.isSuccess && !suggestion
+  const gone =
+    id !== undefined && list.isSuccess && !list.isFetching && !suggestion
 
   useEffect(() => {
     if (!gone) return
@@ -65,7 +66,7 @@ function suggestionRows(s: Suggestion) {
           ...row,
           resolution: "existing" as const,
           foodId: line.food_id,
-          foodName: line.name,
+          foodName: line.candidate ?? line.name,
         }
       : row
   })

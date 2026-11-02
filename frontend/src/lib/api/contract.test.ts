@@ -664,7 +664,15 @@ describe("discovery shapes (Phase 5 F1-AC1)", () => {
       ].sort()
     )
     expect(Object.keys(mockSuggestion().ingredients[0]).sort()).toEqual(
-      ["amount", "food_id", "known", "name", "raw_text", "unit"].sort()
+      [
+        "amount",
+        "candidate",
+        "food_id",
+        "known",
+        "name",
+        "raw_text",
+        "unit",
+      ].sort()
     )
     expect(Object.keys(mockSuggestion().per_portion).sort()).toEqual([
       "carbs",
