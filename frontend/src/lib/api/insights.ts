@@ -27,8 +27,20 @@ export interface InsightsByVersion {
   violations: Record<string, number>
 }
 
+/** Discovery runs in the range; `acceptance_rate` and the cost per accepted
+ *  recipe (searches included) are null until something was suggested or
+ *  accepted. */
+export interface InsightsDiscovery {
+  runs: number
+  suggestions: number
+  accepted: number
+  acceptance_rate: number | null
+  cost_per_accepted_recipe: number | null
+}
+
 export interface Insights {
   weeks: InsightsWeek[]
+  discovery: InsightsDiscovery
   by_version: InsightsByVersion[]
   prices_as_of: string
 }

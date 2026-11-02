@@ -35,6 +35,7 @@ const detail: RunDetail = {
       is_error: false,
       duration_ms: 120,
       tokens: { input: 1200, output: 300 },
+      web_search_requests: 0,
     },
   ],
   prompt_text: null,
