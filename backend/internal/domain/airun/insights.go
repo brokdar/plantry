@@ -40,17 +40,18 @@ type RunDetailRow struct {
 // characters (Truncated says so); for an llm_call they hold the stored
 // request and response. Empty means none.
 type StepView struct {
-	Seq             int
-	Type            StepType
-	Name            string
-	Args            string
-	ArgsTruncated   bool
-	Result          string
-	ResultTruncated bool
-	IsError         bool
-	DurationMs      int64
-	InputTokens     int64
-	OutputTokens    int64
+	Seq               int
+	Type              StepType
+	Name              string
+	Args              string
+	ArgsTruncated     bool
+	Result            string
+	ResultTruncated   bool
+	IsError           bool
+	DurationMs        int64
+	InputTokens       int64
+	OutputTokens      int64
+	WebSearchRequests int64
 }
 
 // Correction counts a run's generated plates and those the user changed
@@ -360,6 +361,7 @@ func versionGroups(runs []RunSummary) []VersionGroup {
 		a.g.Tokens.Output += r.Tokens.Output
 		a.g.Tokens.CacheRead += r.Tokens.CacheRead
 		a.g.Tokens.CacheWrite += r.Tokens.CacheWrite
+		a.g.Tokens.WebSearchRequests += r.Tokens.WebSearchRequests
 		if r.Kind == KindChat {
 			if a.g.Edits == nil {
 				a.g.Edits = new(int)

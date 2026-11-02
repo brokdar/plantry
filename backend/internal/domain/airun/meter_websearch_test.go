@@ -79,11 +79,11 @@ func TestMeter_RecordsWebSearchRequests(t *testing.T) {
 	steps := stepsBySeq(store)
 	require.Len(t, steps, 1)
 	var resp struct {
-		Content           []llm.ContentBlock `json:"content"`
-		WebSearchRequests int                `json:"web_search_requests"`
+		Content []llm.ContentBlock `json:"content"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(steps[0].ResponseJSON), &resp))
-	assert.Equal(t, 2, resp.WebSearchRequests)
+	assert.EqualValues(t, 2, steps[0].WebSearchRequests)
+	assert.NotContains(t, steps[0].ResponseJSON, "web_search_requests")
 	require.Len(t, resp.Content, 2)
 	assert.JSONEq(t, string(server), string(resp.Content[0].Raw))
 
@@ -130,4 +130,29 @@ func TestMeter_LargeServerBlockTruncated(t *testing.T) {
 	require.Len(t, steps, 1)
 	assert.LessOrEqual(t, len(steps[0].ResponseJSON), 256<<10)
 	assert.True(t, decodeResponse(t, steps[0]).Truncated)
+}
+
+// B2-AC2: two llm_calls with 1 and 2 searches store 3 on the run and 1 / 2 on
+// their steps.
+func TestMeter_SumsWebSearchesPerRun(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorder(t, store)
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindDiscovery})
+	for _, n := range []int{1, 2} {
+		inner := &searchClient{resp: &llm.Response{
+			Message:    llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "ok"}}},
+			StopReason: llm.StopReasonEndTurn,
+			Usage:      llm.Usage{InputTokens: 10, WebSearchRequests: n},
+		}}
+		_, err := drainStream(ctx, rec.Meter(inner, "anthropic"), llm.Request{Model: "claude-opus-5-5", Messages: []llm.Message{textMsg(llm.RoleUser, "x")}})
+		require.NoError(t, err)
+	}
+	run.Finish(ctx, airun.StatusOK, "")
+
+	require.Len(t, store.finishes, 1)
+	assert.EqualValues(t, 3, store.finishes[0].WebSearchRequests)
+	steps := stepsBySeq(store)
+	require.Len(t, steps, 2)
+	assert.EqualValues(t, 1, steps[0].WebSearchRequests)
+	assert.EqualValues(t, 2, steps[1].WebSearchRequests)
 }

@@ -90,11 +90,13 @@ type RunEnd struct {
 	OutputTokens     int64
 	CacheReadTokens  int64
 	CacheWriteTokens int64
-	ErrorKey         string
-	RepairAttempts   int
-	ViolationsJSON   string
-	ScoreJSON        string
-	Notes            string
+	// WebSearchRequests sums the searches of the run's llm_calls.
+	WebSearchRequests int64
+	ErrorKey          string
+	RepairAttempts    int
+	ViolationsJSON    string
+	ScoreJSON         string
+	Notes             string
 }
 
 // Step is one LLM call or tool call within a run. Empty string fields are
@@ -115,6 +117,8 @@ type Step struct {
 	RequestJSON  string
 	ResponseJSON string
 	StopReason   string
+	// WebSearchRequests is the searches this llm_call was billed for.
+	WebSearchRequests int64
 }
 
 // Store persists runs, steps and system prompts. Implementations are safe for

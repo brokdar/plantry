@@ -392,3 +392,50 @@ func TestAIRuns_Prices(t *testing.T) {
 	assert.Equal(t, "none", p.Source)
 	assert.Contains(t, rec.Body.String(), `"price":null`)
 }
+
+// B2-AC4: run summaries, run steps and prices carry the web-search fields.
+func TestAIRuns_WebSearchFields(t *testing.T) {
+	a := newRunsAPI(t)
+	ctx := context.Background()
+	started := time.Date(2026, 10, 30, 8, 0, 0, 0, time.UTC)
+	id, err := a.repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindDiscovery, StartedAt: started})
+	require.NoError(t, err)
+	require.NoError(t, a.repo.AddStep(ctx, airun.Step{RunID: id, Seq: 1, Type: airun.StepLLMCall, Name: "claude-opus-5-5", WebSearchRequests: 3}))
+	require.NoError(t, a.repo.AddStep(ctx, airun.Step{RunID: id, Seq: 2, Type: airun.StepToolCall, Name: "t"}))
+	require.NoError(t, a.repo.FinishRun(ctx, airun.RunEnd{
+		ID: id, Status: airun.StatusOK, FinishedAt: started.Add(time.Second),
+		Provider: "anthropic", Model: "claude-opus-5-5", InputTokens: 1_000_000, WebSearchRequests: 3,
+	}))
+
+	var d struct {
+		WebSearchRequests int      `json:"web_search_requests"`
+		Cost              *float64 `json:"cost_estimate_usd"`
+		Steps             []struct {
+			WebSearchRequests int `json:"web_search_requests"`
+		} `json:"steps"`
+	}
+	a.get(fmt.Sprintf("/api/ai/runs/%d", id), &d)
+	assert.Equal(t, 3, d.WebSearchRequests)
+	require.NotNil(t, d.Cost)
+	assert.InDelta(t, 4.03, *d.Cost, 1e-9)
+	require.Len(t, d.Steps, 2)
+	assert.Equal(t, 3, d.Steps[0].WebSearchRequests)
+	assert.Zero(t, d.Steps[1].WebSearchRequests)
+
+	var list struct {
+		Items []struct {
+			WebSearchRequests int `json:"web_search_requests"`
+		} `json:"items"`
+	}
+	a.get("/api/ai/runs", &list)
+	require.Len(t, list.Items, 1)
+	assert.Equal(t, 3, list.Items[0].WebSearchRequests)
+
+	var p struct {
+		Price map[string]any `json:"price"`
+	}
+	a.get("/api/ai/prices?model=claude-opus-5-5", &p)
+	assert.InDelta(t, 0.01, p.Price["per_search"], 1e-9)
+	a.get("/api/ai/prices?model=gpt-5", &p)
+	assert.Zero(t, p.Price["per_search"])
+}

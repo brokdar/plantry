@@ -41,7 +41,7 @@ func TestAIRunRepo_RoundTrip(t *testing.T) {
 	require.NoError(t, repo.UpsertPrompt(ctx, "abc123", "system prompt"))
 	require.NoError(t, repo.AddStep(ctx, airun.Step{
 		RunID: id, Seq: 1, Type: airun.StepLLMCall, Name: "claude-x",
-		DurationMs: 1200, InputTokens: 100, OutputTokens: 50,
+		DurationMs: 1200, InputTokens: 100, OutputTokens: 50, WebSearchRequests: 4,
 	}))
 	require.NoError(t, repo.AddStep(ctx, airun.Step{
 		RunID: id, Seq: 2, Type: airun.StepToolCall, Name: "search_foods",
@@ -56,8 +56,13 @@ func TestAIRunRepo_RoundTrip(t *testing.T) {
 	require.NoError(t, repo.FinishRun(ctx, airun.RunEnd{
 		ID: id, Status: airun.StatusOK, FinishedAt: finished,
 		Provider: "anthropic", Model: "claude-x", PromptHash: "abc123",
-		Iterations: 1, InputTokens: 100, OutputTokens: 50, CacheReadTokens: 7, CacheWriteTokens: 3,
+		Iterations: 1, InputTokens: 100, OutputTokens: 50, CacheReadTokens: 7, CacheWriteTokens: 3, WebSearchRequests: 4,
 	}))
+	var runSearches, stepSearches int64
+	require.NoError(t, db.QueryRow(`SELECT web_search_requests FROM ai_runs WHERE id = ?`, id).Scan(&runSearches))
+	require.NoError(t, db.QueryRow(`SELECT web_search_requests FROM ai_run_steps WHERE run_id = ? AND seq = 1`, id).Scan(&stepSearches))
+	assert.EqualValues(t, 4, runSearches)
+	assert.EqualValues(t, 4, stepSearches)
 
 	var (
 		kind, startedAt, provider, model, promptVersion string

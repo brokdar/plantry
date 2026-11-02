@@ -166,6 +166,7 @@ type Run struct {
 	outputTokens     int64
 	cacheReadTokens  int64
 	cacheWriteTokens int64
+	webSearches      int64
 	provider         string
 	model            string
 	promptHash       string
@@ -239,22 +240,23 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 	}
 	run.finished = true
 	end := RunEnd{
-		ID:               run.id,
-		Status:           status,
-		FinishedAt:       run.rec.now(),
-		Provider:         run.provider,
-		Model:            run.model,
-		PromptHash:       run.promptHash,
-		Iterations:       run.iterations,
-		InputTokens:      run.inputTokens,
-		OutputTokens:     run.outputTokens,
-		CacheReadTokens:  run.cacheReadTokens,
-		CacheWriteTokens: run.cacheWriteTokens,
-		ErrorKey:         errKey,
-		RepairAttempts:   res.RepairAttempts,
-		ViolationsJSON:   res.ViolationsJSON,
-		ScoreJSON:        res.ScoreJSON,
-		Notes:            res.Notes,
+		ID:                run.id,
+		Status:            status,
+		FinishedAt:        run.rec.now(),
+		Provider:          run.provider,
+		Model:             run.model,
+		PromptHash:        run.promptHash,
+		Iterations:        run.iterations,
+		InputTokens:       run.inputTokens,
+		OutputTokens:      run.outputTokens,
+		CacheReadTokens:   run.cacheReadTokens,
+		CacheWriteTokens:  run.cacheWriteTokens,
+		WebSearchRequests: run.webSearches,
+		ErrorKey:          errKey,
+		RepairAttempts:    res.RepairAttempts,
+		ViolationsJSON:    res.ViolationsJSON,
+		ScoreJSON:         res.ScoreJSON,
+		Notes:             res.Notes,
 	}
 	run.mu.Unlock()
 
@@ -274,6 +276,7 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 		"output_tokens", end.OutputTokens,
 		"cache_read_tokens", end.CacheReadTokens,
 		"cache_write_tokens", end.CacheWriteTokens,
+		"web_search_requests", end.WebSearchRequests,
 		"status", status,
 		"duration_ms", end.FinishedAt.Sub(run.startedAt).Milliseconds(),
 	)
