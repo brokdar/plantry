@@ -78,6 +78,8 @@ type Foods interface {
 	// SetImageIfNone sets only the image of a food without one and reports
 	// whether it did.
 	SetImageIfNone(ctx context.Context, id int64, path string) (bool, error)
+	// ClearImageIf undoes SetImageIfNone while the image is still path.
+	ClearImageIf(ctx context.Context, id int64, path string) error
 }
 
 // Deps wires a Service.

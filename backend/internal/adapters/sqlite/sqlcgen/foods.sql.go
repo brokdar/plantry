@@ -11,6 +11,25 @@ import (
 	"strings"
 )
 
+const clearFoodImage = `-- name: ClearFoodImage :execrows
+UPDATE foods SET image_path = NULL, updated_at = datetime('now')
+WHERE id = ? AND image_path = ?
+`
+
+type ClearFoodImageParams struct {
+	ID        int64
+	ImagePath sql.NullString
+}
+
+// Undoes SetFoodImageIfNone: clears the image only while it is still path.
+func (q *Queries) ClearFoodImage(ctx context.Context, arg ClearFoodImageParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, clearFoodImage, arg.ID, arg.ImagePath)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const countComposedFoods = `-- name: CountComposedFoods :one
 SELECT COUNT(*) FROM foods WHERE kind = 'composed'
 `

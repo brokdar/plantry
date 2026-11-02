@@ -182,7 +182,7 @@ func (s *Store) saveImage(ctx context.Context, sug *Suggestion) string {
 	}
 	if s.ImageGuard != nil {
 		if err := s.ImageGuard(url); err != nil {
-			slog.Warn("discovery.image.blocked", "suggestion_id", sug.ID, "url", url, "error", err)
+			slog.Warn("discovery.image.blocked", "suggestion_id", sug.ID, "host", host(url), "error", err)
 			return ""
 		}
 		// The download re-checks redirect hops and the dialled address.
@@ -190,7 +190,7 @@ func (s *Store) saveImage(ctx context.Context, sug *Suggestion) string {
 	}
 	path, err := s.Images.SaveFromURL(ctx, url, ImageCategory, sug.ID)
 	if err != nil {
-		slog.Warn("discovery.image.failed", "suggestion_id", sug.ID, "url", url, "error", err)
+		slog.Warn("discovery.image.failed", "suggestion_id", sug.ID, "host", host(url), "error", logCause(err))
 		return ""
 	}
 	return path

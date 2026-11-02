@@ -486,3 +486,60 @@ func TestService_AcceptKeepsConcurrentEdit(t *testing.T) {
 	assert.Equal(t, "Renamed meanwhile", saved.Name)
 	require.NotNil(t, saved.ImagePath, "image set")
 }
+
+// A food that got an image between the read and the accept keeps its file.
+func TestService_AcceptNeverOverwritesFoodImage(t *testing.T) {
+	site := recipeSite(t, "r1")
+	client := &batchClient{site: site, batches: [][]string{{"r1"}}}
+	hd := &hookDecide{}
+	h := newHarnessRepo(t, client, site, func(r *sqlite.RecipeSuggestionRepo) discovery.Repository {
+		hd.Repository = r
+		return hd
+	})
+	runID := h.runAndWait(t, discovery.Request{Mode: discovery.ModeExplore, Cuisine: "thai"})
+	sugs := h.suggestions(t, runID)
+	require.Len(t, sugs, 1)
+	h.withImage(t, sugs[0].ID)
+	f := h.newRecipe(t, nil)
+	ctx := context.Background()
+	own := filepath.Join("foods", fmt.Sprintf("%d.jpg", f.ID))
+	hd.before = func() {
+		require.NoError(t, os.MkdirAll(filepath.Join(h.images, "foods"), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(h.images, own), []byte("users own"), 0o644))
+		set, err := h.foods.SetImageIfNone(ctx, f.ID, own)
+		require.NoError(t, err)
+		require.True(t, set)
+	}
+
+	_, err := h.svc.Accept(ctx, sugs[0].ID, f.ID)
+	require.NoError(t, err)
+	data, err := os.ReadFile(filepath.Join(h.images, own))
+	require.NoError(t, err)
+	assert.Equal(t, "users own", string(data), "file untouched")
+	saved, err := h.foods.Get(ctx, f.ID)
+	require.NoError(t, err)
+	require.NotNil(t, saved.ImagePath)
+	assert.Equal(t, own, *saved.ImagePath)
+}
+
+// A failed copy leaves the food without an image path again.
+func TestService_AcceptCopyFailureClearsImagePath(t *testing.T) {
+	site := recipeSite(t, "r1")
+	client := &batchClient{site: site, batches: [][]string{{"r1"}}}
+	h := newHarness(t, client, site)
+	runID := h.runAndWait(t, discovery.Request{Mode: discovery.ModeExplore, Cuisine: "thai"})
+	sugs := h.suggestions(t, runID)
+	require.Len(t, sugs, 1)
+	// The row names an image whose file is missing.
+	missing := filepath.Join(discovery.ImageCategory, fmt.Sprintf("%d.jpg", sugs[0].ID))
+	require.NoError(t, h.repo.SetImagePath(context.Background(), sugs[0].ID, &missing))
+	f := h.newRecipe(t, nil)
+	ctx := context.Background()
+
+	got, err := h.svc.Accept(ctx, sugs[0].ID, f.ID)
+	require.NoError(t, err)
+	assert.Equal(t, discovery.StatusAccepted, got.Status)
+	saved, err := h.foods.Get(ctx, f.ID)
+	require.NoError(t, err)
+	assert.Nil(t, saved.ImagePath)
+}

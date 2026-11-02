@@ -39,11 +39,11 @@ type Extractor interface {
 	Extract(ctx context.Context, in importer.ExtractInput) (*importer.Draft, error)
 }
 
-// URLIndex says whether a URL belongs to a saved recipe or an earlier
-// suggestion, compared normalized (NormalizeURL). Implemented by the
+// URLIndex lists the URLs of saved recipes and earlier suggestions, as
+// stored; Verify compares them normalized (NormalizeURL). Implemented by the
 // suggestion repository.
 type URLIndex interface {
-	SourceURLKnown(ctx context.Context, url string) (bool, error)
+	SourceURLs(ctx context.Context) ([]string, error)
 }
 
 // Candidate is a page the research agent proposes (D5).
@@ -94,7 +94,15 @@ func (v *Verifier) Verify(ctx context.Context, candidates []Candidate) ([]Verifi
 		draft   *importer.Draft
 	}
 	slots := make([]slot, len(candidates))
-	seen := map[string]bool{}
+	stored, err := v.Index.SourceURLs(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	// seen starts as the known URLs and grows with the batch's own.
+	seen := make(map[string]bool, len(stored)+len(candidates))
+	for _, u := range stored {
+		seen[NormalizeURL(u)] = true
+	}
 
 	// Pass 1 (sequential): guard and dedupe on the URL as given.
 	var pending []int
@@ -106,11 +114,7 @@ func (v *Verifier) Verify(ctx context.Context, candidates []Candidate) ([]Verifi
 			slots[i].discard = reason
 			continue
 		}
-		dup, err := v.duplicate(ctx, c.URL, seen)
-		if err != nil {
-			return nil, nil, err
-		}
-		if dup {
+		if duplicate(c.URL, seen) {
 			slots[i].discard = ReasonDuplicate
 			continue
 		}
@@ -169,11 +173,7 @@ func (v *Verifier) Verify(ctx context.Context, candidates []Candidate) ([]Verifi
 	for i, c := range candidates {
 		s := slots[i]
 		if s.draft != nil && s.draft.SourceURL != c.URL {
-			dup, err := v.duplicate(ctx, s.draft.SourceURL, seen)
-			if err != nil {
-				return nil, nil, err
-			}
-			if dup {
+			if duplicate(s.draft.SourceURL, seen) {
 				s.draft, s.discard = nil, ReasonDuplicate
 			}
 		}
@@ -198,10 +198,20 @@ func (v *Verifier) logger() *slog.Logger {
 // query is not logged). Unclassified errors carry the error at Warn.
 func (v *Verifier) logDiscard(ctx context.Context, rawURL, reason string, err error) {
 	if reason == ReasonError {
-		v.logger().WarnContext(ctx, "discovery.verify discarded", "host", host(rawURL), "reason", reason, "error", err)
+		v.logger().WarnContext(ctx, "discovery.verify discarded", "host", host(rawURL), "reason", reason, "error", logCause(err))
 		return
 	}
 	v.logger().InfoContext(ctx, "discovery.verify discarded", "host", host(rawURL), "reason", reason)
+}
+
+// logCause strips the *url.Error wrapper of a failed request: it carries the
+// full URL, query included, and only its cause is loggable.
+func logCause(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return ue.Err
+	}
+	return err
 }
 
 func host(rawURL string) string {
@@ -222,19 +232,13 @@ func (v *Verifier) vet(rawURL string) string {
 	return ""
 }
 
-// duplicate reports whether u is known, or already seen in this batch
+// duplicate reports whether u is known or already seen in this batch
 // (compared normalized, see NormalizeURL), and marks it seen.
-func (v *Verifier) duplicate(ctx context.Context, u string, seen map[string]bool) (bool, error) {
+func duplicate(u string, seen map[string]bool) bool {
 	key := NormalizeURL(u)
-	if seen[key] {
-		return true, nil
-	}
-	known, err := v.Index.SourceURLKnown(ctx, u)
-	if err != nil {
-		return false, err
-	}
+	dup := seen[key]
 	seen[key] = true
-	return known, nil
+	return dup
 }
 
 func discardReason(err error) string {

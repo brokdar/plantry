@@ -137,6 +137,14 @@ func (r *FoodRepo) SetImageIfNone(ctx context.Context, id int64, path string) (b
 	return n > 0, nil
 }
 
+// ClearImageIf clears the image path of food id, only while it is still path.
+func (r *FoodRepo) ClearImageIf(ctx context.Context, id int64, path string) error {
+	if _, err := r.queriesFor(ctx).ClearFoodImage(ctx, sqlcgen.ClearFoodImageParams{ID: id, ImagePath: toNullString(&path)}); err != nil {
+		return fmt.Errorf("clear food image: %w", err)
+	}
+	return nil
+}
+
 func (r *FoodRepo) updateWith(ctx context.Context, qtx *sqlcgen.Queries, f *food.Food) error {
 	row, err := qtx.UpdateFood(ctx, foodUpdateParams(f))
 	if err != nil {

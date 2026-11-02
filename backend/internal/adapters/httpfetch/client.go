@@ -99,7 +99,7 @@ func New(opts ...Option) *Client {
 		c.hc.CheckRedirect = checkRedirect(c.maxRedirects)
 	}
 	if c.dialGuard != nil {
-		c.guarded = guardedClient(c.dialGuard.resolve, c.dialGuard.allowLoopback, defaultTimeout, c.maxRedirects)
+		c.guarded = guardedClient(c.dialGuard.resolve, c.dialGuard.allowLoopback, c.hc.Timeout, c.maxRedirects)
 	}
 	return c
 }

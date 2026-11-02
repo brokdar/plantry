@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -122,7 +123,8 @@ func (s *Service) dailyAvailable(ctx context.Context) (bool, error) {
 
 // Accept marks the suggestion accepted as the saved food foodID (D11) and,
 // when the food has no image, copies the suggestion's image to it (D16).
-// An unknown food is domain.ErrNotFound; a failed copy is logged only.
+// An unknown food is domain.ErrNotFound; a failed copy is logged only (the
+// food's image path is cleared again).
 func (s *Service) Accept(ctx context.Context, id, foodID int64) (*Suggestion, error) {
 	f, err := s.d.Foods.Get(ctx, foodID)
 	if err != nil {
@@ -135,17 +137,21 @@ func (s *Service) Accept(ctx context.Context, id, foodID int64) (*Suggestion, er
 	if sug.ImagePath == nil || f.ImagePath != nil || s.d.Store.Images == nil {
 		return sug, nil
 	}
-	path, err := s.d.Store.Images.Copy(ImageCategory, sug.ID, foodImageCategory, foodID)
+	// Claim the food's image path first, so a food that got an image since
+	// the read keeps its file: only the claimant writes foods/<id>.jpg.
+	want := filepath.Join(foodImageCategory, fmt.Sprintf("%d.jpg", foodID))
+	claimed, err := s.d.Foods.SetImageIfNone(ctx, foodID, want)
 	if err != nil {
-		s.d.Logger.WarnContext(ctx, "discovery.accept image copy failed", "suggestion_id", id, "food_id", foodID, "error", err)
+		s.d.Logger.WarnContext(ctx, "discovery.accept image path update failed", "food_id", foodID, "error", err)
 		return sug, nil
 	}
-	// Only the image is written, so an edit saved meanwhile is kept; an
-	// image set meanwhile wins (it is at the same path).
-	if _, err := s.d.Foods.SetImageIfNone(ctx, foodID, path); err != nil {
-		s.d.Logger.WarnContext(ctx, "discovery.accept image path update failed", "food_id", foodID, "error", err)
-		if rmErr := s.d.Store.Images.Delete(foodImageCategory, foodID); rmErr != nil {
-			s.d.Logger.WarnContext(ctx, "discovery.accept image cleanup failed", "food_id", foodID, "error", rmErr)
+	if !claimed {
+		return sug, nil
+	}
+	if _, err := s.d.Store.Images.Copy(ImageCategory, sug.ID, foodImageCategory, foodID); err != nil {
+		s.d.Logger.WarnContext(ctx, "discovery.accept image copy failed", "suggestion_id", id, "food_id", foodID, "error", err)
+		if clrErr := s.d.Foods.ClearImageIf(ctx, foodID, want); clrErr != nil {
+			s.d.Logger.WarnContext(ctx, "discovery.accept image path clear failed", "food_id", foodID, "error", clrErr)
 		}
 	}
 	return sug, nil

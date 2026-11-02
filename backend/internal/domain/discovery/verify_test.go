@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -41,7 +43,26 @@ func (s *spyFetcher) Fetch(ctx context.Context, url string) (string, string, err
 // urlSet is a discovery.URLIndex over a fixed set.
 type urlSet map[string]bool
 
-func (u urlSet) SourceURLKnown(_ context.Context, url string) (bool, error) { return u[url], nil }
+func (u urlSet) SourceURLs(context.Context) ([]string, error) {
+	out := make([]string, 0, len(u))
+	for k, v := range u {
+		if v {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
+// countingIndex counts the index reads.
+type countingIndex struct {
+	urlSet
+	calls int
+}
+
+func (c *countingIndex) SourceURLs(ctx context.Context) ([]string, error) {
+	c.calls++
+	return c.urlSet.SourceURLs(ctx)
+}
 
 func site(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -253,4 +274,46 @@ func TestVerify_NormalizedDuplicates(t *testing.T) {
 	require.Len(t, kept, 1)
 	assert.Equal(t, discovery.ReasonDuplicate, urlsOf(discarded)[srv.URL+"/fesenjan/?utm_source=llm"])
 	assert.Len(t, spy.urls, 1)
+}
+
+// The URL index is read once per Verify, not once per candidate.
+func TestVerify_ReadsIndexOnce(t *testing.T) {
+	srv := site(t)
+	idx := &countingIndex{urlSet: urlSet{srv.URL + "/blog": true}}
+	v, _ := newVerifier(true, nil)
+	v.Index = idx
+
+	_, discarded, err := v.Verify(context.Background(), []discovery.Candidate{
+		{URL: srv.URL + "/fesenjan"}, {URL: srv.URL + "/moved"}, {URL: srv.URL + "/blog/"}, {URL: srv.URL + "/gone"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, idx.calls)
+	assert.Equal(t, discovery.ReasonDuplicate, urlsOf(discarded)[srv.URL+"/blog/"], "known URLs compare normalized")
+}
+
+type failingExtractor struct{ err error }
+
+func (f failingExtractor) Extract(context.Context, importer.ExtractInput) (*importer.Draft, error) {
+	return nil, f.err
+}
+
+// An unclassified failure logs the host and the cause, never the URL's query.
+func TestVerify_LogsNoQuery(t *testing.T) {
+	var buf bytes.Buffer
+	raw := "https://recipes.test/r?token=secret&x=1"
+	cause := errors.New("tls: handshake failure")
+	v := &discovery.Verifier{
+		Extractor: failingExtractor{err: fmt.Errorf("fetch: %w", &neturl.Error{Op: "Get", URL: raw, Err: cause})},
+		Index:     urlSet{},
+		Logger:    slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+	}
+	_, discarded, err := v.Verify(context.Background(), []discovery.Candidate{{URL: raw}})
+	require.NoError(t, err)
+	require.Len(t, discarded, 1)
+	assert.Equal(t, discovery.ReasonError, discarded[0].Reason)
+	out := buf.String()
+	assert.Contains(t, out, "recipes.test")
+	assert.Contains(t, out, "handshake failure")
+	assert.NotContains(t, out, "?")
+	assert.NotContains(t, out, "secret")
 }

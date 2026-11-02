@@ -58,3 +58,15 @@ func TestPublicURL(t *testing.T) {
 		})
 	}
 }
+
+// IPv6 ranges that tunnel or embed an IPv4 address (NAT64, 6to4, Teredo) and
+// documentation addresses are not public.
+func TestPublicURL_BlocksTunnelledAndDocumentationRanges(t *testing.T) {
+	for _, ip := range []string{
+		"64:ff9b::7f00:1", "64:ff9b::a00:1", "64:ff9b:1::1",
+		"2002:c0a8:101::1", "2001:0:4136:e378:8000:63bf:3fff:fdd2", "2001:db8::1",
+	} {
+		assert.ErrorIs(t, httpfetch.PublicURL("http://h.test/", resolveTo(ip), false), httpfetch.ErrBlockedURL, ip)
+	}
+	assert.NoError(t, httpfetch.PublicURL("http://h.test/", resolveTo("2606:4700:4700::1111"), false), "a public IPv6 address")
+}

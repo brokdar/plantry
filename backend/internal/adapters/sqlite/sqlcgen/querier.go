@@ -22,6 +22,8 @@ type Querier interface {
 	// the unlock is the boundary.
 	AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error)
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
+	// Undoes SetFoodImageIfNone: clears the image only while it is still path.
+	ClearFoodImage(ctx context.Context, arg ClearFoodImageParams) (int64, error)
 	ClearShownOn(ctx context.Context, shownOn sql.NullString) error
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
