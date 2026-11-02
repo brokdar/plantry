@@ -261,6 +261,8 @@ func TestDiscoveryAPI_SuggestionShape(t *testing.T) {
 	assert.Equal(t, float64(200), first["amount"])
 	assert.Equal(t, "g", first["unit"])
 	assert.Nil(t, first["food_id"])
+	assert.Contains(t, first, "candidate")
+	assert.Nil(t, first["candidate"])
 	assert.Equal(t, false, first["known"])
 	assert.Equal(t, "r1", sug["draft"].(map[string]any)["name"])
 	_, err := time.Parse(time.RFC3339, sug["created_at"].(string))

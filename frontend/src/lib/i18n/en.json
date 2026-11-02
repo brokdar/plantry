@@ -75,7 +75,8 @@
       "extracting": "Extracting…",
       "via_jsonld": "From structured data",
       "via_llm": "Extracted with AI"
-    }
+    },
+    "prefilled_subtitle": "Plantry matched the ingredients it knows. Check the rest, then save the recipe."
   },
   "plate": {
     "quantity": {
@@ -307,7 +308,13 @@
       "prices_new_row": "the new model",
       "prices_incomplete": "Needs a model id and input and output prices of 0 or more before it saves.",
       "prices_duplicate": "Another row already prices this model. Only one price per model id saves.",
-      "prices_error": "Couldn't load the price for this model."
+      "prices_error": "Couldn't load the price for this model.",
+      "cuisines_label": "Cuisines to discover",
+      "cuisines_effect": "Daily ideas take turns through these cuisines. Without any, Plantry picks one you haven't cooked yet.",
+      "cuisines_placeholder": "For example: persian",
+      "cuisines_add": "Add",
+      "cuisines_remove": "Remove {{name}}",
+      "cuisines_full": "Up to {{count}} cuisines."
     },
     "system_section": {
       "appearance_group": "Language and theme",
@@ -649,7 +656,10 @@
       "create_title": "Create manually",
       "create_body": "Type in a recipe you know by heart, one ingredient at a time. For your own take on a saved recipe, open it and create a variant.",
       "create_action": "Create a recipe",
-      "milestone": "{{count}} recipes. You're ready to plan your first week."
+      "milestone": "{{count}} recipes. You're ready to plan your first week.",
+      "discover_title": "Discover recipes",
+      "discover_body": "Your assistant looks for recipes that fit your diet and the ingredients you already cook with. You check every idea before it joins your cookbook.",
+      "discover_action": "Find ideas"
     },
     "storage": "Storage",
     "keep_days": "Keeps (days)",
@@ -1691,6 +1701,25 @@
       "ingredients": "Ingredients",
       "taste": "Not my taste",
       "none": "No reason"
+    },
+    "discover": {
+      "title": "Discover recipes",
+      "description": "Choose how to search. Plantry checks every recipe page before it shows you an idea.",
+      "mode_label": "How to search",
+      "mode_daily": "Daily idea",
+      "mode_explore": "Explore a cuisine",
+      "mode_known": "Use what I know",
+      "cuisine_label": "Cuisine",
+      "cuisine_placeholder": "For example: Thai",
+      "focus_label": "Focus ingredient (optional)",
+      "focus_placeholder": "For example: chickpeas",
+      "start": "Find recipes",
+      "running": "Looking for recipes. This can take a minute.",
+      "empty": "No recipe passed the checks this time. Try again or change the search.",
+      "failed": "The search didn't work. Try again."
+    },
+    "review": {
+      "gone": "This idea is no longer available."
     }
   },
   "today": {
@@ -1781,7 +1810,8 @@
     "add": {
       "label": "Add recipe",
       "import": "Import from a link",
-      "create": "Create manually"
+      "create": "Create manually",
+      "discover": "Discover recipes"
     },
     "library": {
       "search": "Search recipes",

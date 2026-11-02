@@ -16,7 +16,7 @@ func TestHealth(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	rec := httptest.NewRecorder()
 
-	handlers.Health(rec, req)
+	handlers.Health("v1.2.3")(rec, req)
 
 	res := rec.Result()
 	t.Cleanup(func() { _ = res.Body.Close() })
@@ -27,4 +27,5 @@ func TestHealth(t *testing.T) {
 	var body map[string]string
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
 	assert.Equal(t, "ok", body["status"])
+	assert.Equal(t, "v1.2.3", body["version"])
 }

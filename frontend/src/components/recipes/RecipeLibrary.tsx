@@ -3,6 +3,8 @@ import { Link } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 import { Loader2, Search } from "lucide-react"
 
+import { DiscoverSheet } from "@/components/discovery/DiscoverSheet"
+import { SuggestionReview } from "@/components/discovery/SuggestionReview"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -15,7 +17,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import type { ComposedFood, FoodRole } from "@/lib/api/foods"
 import { todayISO } from "@/lib/dates"
+import { discoveryAvailable } from "@/lib/discovery/available"
 import { useFoods } from "@/lib/queries/foods"
+import { useSettingItems } from "@/lib/queries/settings"
 import { useSetupStatus } from "@/lib/queries/setup"
 import {
   DIET_FILTERS,
@@ -57,8 +61,8 @@ type RecipeLibraryProps = {
 }
 
 /** The recipe library (UX §5.8, D6): filter chips, search and sort over
- *  `GET /api/foods`, the guided state below the recipe target, and the
- *  import sheet. */
+ *  `GET /api/foods`, the guided state below the recipe target, the import
+ *  sheet and, with an AI provider, the Discover sheet. */
 export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
   const { t } = useTranslation()
   const [today] = useState(todayISO)
@@ -66,6 +70,7 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
   const query = libraryQuery({ ...search, q: deferredQ })
   const filtered = hasLibraryFilters(search)
   const setup = useSetupStatus()
+  const discover = discoveryAvailable(useSettingItems().data)
   const guided =
     setup.data !== undefined &&
     setup.data.recipe_count < setup.data.recipe_target
@@ -75,12 +80,16 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 md:px-8 md:py-10">
-      <RecipesHeader tab="recipes" action={<AddRecipeMenu />} />
+      <RecipesHeader
+        tab="recipes"
+        action={<AddRecipeMenu discover={discover} />}
+      />
 
       {setup.data && (
         <RecipeOnboarding
           count={setup.data.recipe_count}
           target={setup.data.recipe_target}
+          discover={discover}
         />
       )}
 
@@ -209,6 +218,18 @@ export function RecipeLibrary({ search, onSearchChange }: RecipeLibraryProps) {
       <ImportSheet
         open={search.add === "url"}
         onClose={() => set({ add: undefined })}
+      />
+      <DiscoverSheet
+        open={
+          discover &&
+          search.add === "discover" &&
+          search.suggestion === undefined
+        }
+        onClose={() => set({ add: undefined })}
+      />
+      <SuggestionReview
+        id={search.add === "discover" ? search.suggestion : undefined}
+        onClose={() => set({ add: undefined, suggestion: undefined })}
       />
     </div>
   )

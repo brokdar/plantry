@@ -1,7 +1,10 @@
 import { X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
-import { ImportWizard } from "@/components/import/ImportWizard"
+import {
+  ImportWizard,
+  type ImportWizardProps,
+} from "@/components/import/ImportWizard"
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
@@ -13,14 +16,17 @@ import {
 } from "@/components/ui/sheet"
 
 /** The import as a full-height sheet over the library (`/recipes?add=url`,
- *  UX §2.2). Saving navigates to the new recipe; closing drops `add`. */
+ *  UX §2.2), or the prefilled review of a discovery suggestion
+ *  (`initialDraft`, D18). Saving navigates to the new recipe; closing drops
+ *  `add` and saves nothing. */
 export function ImportSheet({
   open,
   onClose,
+  ...wizard
 }: {
   open: boolean
   onClose: () => void
-}) {
+} & ImportWizardProps) {
   const { t } = useTranslation()
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
@@ -46,11 +52,13 @@ export function ImportSheet({
             {t("import.title")}
           </SheetTitle>
           <SheetDescription className="text-small text-ink-muted">
-            {t("import.subtitle")}
+            {wizard.initialDraft
+              ? t("import.prefilled_subtitle")
+              : t("import.subtitle")}
           </SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
-          <ImportWizard />
+          <ImportWizard {...wizard} />
         </div>
       </SheetContent>
     </Sheet>

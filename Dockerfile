@@ -1,23 +1,29 @@
 # syntax=docker/dockerfile:1.7
 
-# Stage A — build the SPA with Bun.
-FROM oven/bun:1-alpine AS web
+# Stage A — build the SPA with Bun, on the build platform (the output is
+# platform-independent).
+FROM --platform=$BUILDPLATFORM oven/bun:1-alpine AS web
 WORKDIR /web
 COPY frontend/package.json frontend/bun.lock ./
 RUN bun install --frozen-lockfile
 COPY frontend/ ./
 RUN bun run build
 
-# Stage B — compile the Go backend with the embedded SPA.
-FROM golang:1.25-alpine AS server
+# Stage B — compile the Go backend with the embedded SPA. Runs on the build
+# platform and cross-compiles natively for the target (no CGO, no QEMU).
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS server
+ARG TARGETOS TARGETARCH TARGETVARIANT
+ARG VERSION=dev
+ARG COMMIT=
 WORKDIR /src
 RUN apk add --no-cache git
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
 COPY --from=web /web/dist/ ./internal/webui/files/
-ENV CGO_ENABLED=0 GOOS=linux
-RUN go build -trimpath -ldflags="-s -w" -o /out/plantry ./cmd/plantry
+ENV CGO_ENABLED=0
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} \
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o /out/plantry ./cmd/plantry
 
 # Stage C — minimal runtime.
 FROM alpine:3.20

@@ -38,6 +38,7 @@ import {
 import { createFood, getFoodNutrition, listPortions } from "@/lib/api/foods"
 import { toast } from "sonner"
 
+import { draftRows } from "./draft-rows"
 import { ImportWizard } from "./ImportWizard"
 
 const draft: Draft = {
@@ -491,6 +492,80 @@ describe("ImportWizard", () => {
       draft.description
     )
     await waitFor(() => expect(toast.warning).toHaveBeenCalledTimes(1))
+  })
+
+  describe("prefilled (discovery, D18)", () => {
+    const prefilled = { ...draft, image_url: "", tags: ["herbst"] }
+
+    function renderPrefilled(
+      overrides: Partial<React.ComponentProps<typeof ImportWizard>> = {}
+    ) {
+      const onSaved = vi.fn()
+      const rows = draftRows(prefilled).map((row, i) =>
+        i === 0 ? { ...row, foodId: 7, foodName: "Mehl" } : row
+      )
+      renderWithRouter(
+        <ImportWizard
+          initialDraft={prefilled}
+          initialRows={rows}
+          extraTags={["explore"]}
+          onSaved={onSaved}
+          {...overrides}
+        />
+      )
+      return { onSaved, user: userEvent.setup() }
+    }
+
+    beforeEach(() => {
+      mockLookup([])
+      vi.mocked(resolveImport).mockResolvedValue({ food: finalized })
+      vi.mocked(createFood).mockResolvedValue({
+        ...finalized,
+        id: 77,
+      } as unknown as ComposedFood)
+    })
+
+    it("opens at the review with the rows preselected and Save enabled", async () => {
+      renderPrefilled()
+      expect(
+        await screen.findByRole("heading", { name: /review recipe/i })
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText("Recipe name")).toHaveValue("Zwiebelkuchen")
+      expect(screen.getByText("Mehl", { selector: "span" })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /save recipe/i })).toBeEnabled()
+      // Nothing to go back to: there was no link step.
+      expect(screen.queryByRole("button", { name: "Back" })).toBeNull()
+      expect(extractRecipe).not.toHaveBeenCalled()
+    })
+
+    it("keeps Save disabled while a row is unmatched", async () => {
+      renderPrefilled({ initialRows: draftRows(prefilled) })
+      expect(
+        await screen.findByRole("button", { name: /save recipe/i })
+      ).toBeDisabled()
+      expect(screen.getByText("1 ingredient needs a choice")).toBeVisible()
+    })
+
+    it("sends the explore tag and source URL, no image, then reports the food id", async () => {
+      const { onSaved, user } = renderPrefilled()
+      await user.click(
+        await screen.findByRole("button", { name: /save recipe/i })
+      )
+
+      await waitFor(() => expect(onSaved).toHaveBeenCalledWith(77))
+      expect(vi.mocked(resolveImport).mock.calls[0][0]).toMatchObject({
+        tags: ["herbst", "explore"],
+        children: [
+          { resolution: "existing", food_id: 7 },
+          { resolution: "skip" },
+        ],
+      })
+      const payload = vi.mocked(createFood).mock.calls[0][0]
+      expect(payload).toMatchObject({ source_url: prefilled.source_url })
+      expect("image_url" in payload ? payload.image_url : undefined).toBe(
+        undefined
+      )
+    })
   })
 
   describe("count units", () => {

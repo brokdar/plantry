@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, X } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -30,6 +30,7 @@ export function AssistantSection() {
       <SettingsGroup>
         <NotesRow />
         <DailySuggestionRow />
+        <CuisinesRow />
         <RetentionRow />
       </SettingsGroup>
 
@@ -120,6 +121,112 @@ function DailySuggestionRow() {
         checked={on}
         onChange={(next) => field.save(String(next))}
       />
+    </SettingRow>
+  )
+}
+
+/** At most this many cuisines (D19, the backend validates the same). */
+const MAX_CUISINES = 10
+
+function parseCuisines(value: string): string[] {
+  try {
+    const list: unknown = JSON.parse(value)
+    return Array.isArray(list)
+      ? list.filter((c): c is string => typeof c === "string")
+      : []
+  } catch {
+    return []
+  }
+}
+
+/** `discovery.cuisines` as chips (D19): lowercase names the daily idea
+ *  rotates through, saved as a JSON array on every add and remove. */
+function CuisinesRow() {
+  const { t } = useTranslation()
+  const field = useSettingField("discovery.cuisines", "[]")
+  const cuisines = parseCuisines(field.value)
+  const [draft, setDraft] = useState("")
+  const full = cuisines.length >= MAX_CUISINES
+
+  function add() {
+    const name = draft.trim().toLowerCase()
+    setDraft("")
+    if (!name || full || cuisines.includes(name)) return
+    field.save(JSON.stringify([...cuisines, name]))
+  }
+
+  return (
+    <SettingRow
+      label={t("settings_page.assistant.cuisines_label")}
+      description={t("settings_page.assistant.cuisines_effect")}
+      item={field.item}
+      onClearOverride={field.clear}
+      saved={field.saved}
+      htmlFor="setting-cuisines"
+    >
+      <div className="flex flex-col gap-3">
+        {cuisines.length > 0 && (
+          <ul className="flex flex-wrap gap-2" data-testid="cuisine-chips">
+            {cuisines.map((name) => (
+              <li
+                key={name}
+                className="inline-flex items-center gap-1 rounded-full border border-line bg-panel py-1 pr-1 pl-3 text-small text-ink"
+              >
+                {name}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="size-8 rounded-full md:pointer-fine:size-6"
+                  aria-label={t("settings_page.assistant.cuisines_remove", {
+                    name,
+                  })}
+                  onClick={() =>
+                    field.save(
+                      JSON.stringify(cuisines.filter((c) => c !== name))
+                    )
+                  }
+                >
+                  <X strokeWidth={1.5} aria-hidden />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex gap-2">
+          <Input
+            id="setting-cuisines"
+            value={draft}
+            maxLength={40}
+            disabled={full}
+            placeholder={t("settings_page.assistant.cuisines_placeholder")}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                add()
+              }
+            }}
+            className="max-w-xs pointer-coarse:h-11"
+            data-testid="cuisine-input"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={full}
+            onClick={add}
+            className="pointer-coarse:h-11"
+          >
+            {t("settings_page.assistant.cuisines_add")}
+          </Button>
+        </div>
+        {full && (
+          <p className="text-small text-ink-muted">
+            {t("settings_page.assistant.cuisines_full", {
+              count: MAX_CUISINES,
+            })}
+          </p>
+        )}
+      </div>
     </SettingRow>
   )
 }

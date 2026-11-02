@@ -15,7 +15,9 @@ describe("RecipeOnboarding", () => {
   })
 
   test("below the target it shows the progress row and both option cards", async () => {
-    renderWithRouter(<RecipeOnboarding count={4} target={10} />)
+    renderWithRouter(
+      <RecipeOnboarding count={4} target={10} discover={false} />
+    )
 
     expect(
       await screen.findByText(
@@ -44,11 +46,36 @@ describe("RecipeOnboarding", () => {
     ).toHaveAttribute("href", "/recipes/new")
   })
 
+  test("with discovery available it adds the Discover card", async () => {
+    renderWithRouter(<RecipeOnboarding count={4} target={10} discover />)
+
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Discover recipes" })
+    ).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Find ideas" })).toHaveAttribute(
+      "href",
+      "/recipes?add=discover"
+    )
+    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(3)
+  })
+
+  test("without discovery there is no Discover card", async () => {
+    renderWithRouter(
+      <RecipeOnboarding count={4} target={10} discover={false} />
+    )
+
+    await screen.findByRole("heading", { name: "Import from a link" })
+    expect(
+      screen.queryByRole("heading", { name: "Discover recipes" })
+    ).toBeNull()
+    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(2)
+  })
+
   test("at the target it renders no cards", async () => {
     renderWithRouter(
       <>
         <p>page</p>
-        <RecipeOnboarding count={10} target={10} />
+        <RecipeOnboarding count={10} target={10} discover={false} />
       </>
     )
     await screen.findByText("page")
@@ -59,7 +86,9 @@ describe("RecipeOnboarding", () => {
   })
 
   test("showing the guide sets the flag", async () => {
-    renderWithRouter(<RecipeOnboarding count={3} target={10} />)
+    renderWithRouter(
+      <RecipeOnboarding count={3} target={10} discover={false} />
+    )
     await screen.findByRole("progressbar")
     expect(localStorage.getItem(RECIPE_GUIDE_KEY)).toBe("shown")
   })
@@ -67,21 +96,23 @@ describe("RecipeOnboarding", () => {
   test("the milestone toast fires once across re-renders when the flag is set", async () => {
     localStorage.setItem(RECIPE_GUIDE_KEY, "shown")
     const { rerender } = renderWithRouter(
-      <RecipeOnboarding count={10} target={10} />
+      <RecipeOnboarding count={10} target={10} discover={false} />
     )
     await vi.waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
     expect(toast.success).toHaveBeenCalledWith(
       "10 recipes. You're ready to plan your first week."
     )
 
-    rerender(<RecipeOnboarding count={11} target={10} />)
-    rerender(<RecipeOnboarding count={10} target={10} />)
+    rerender(<RecipeOnboarding count={11} target={10} discover={false} />)
+    rerender(<RecipeOnboarding count={10} target={10} discover={false} />)
     expect(toast.success).toHaveBeenCalledTimes(1)
     expect(localStorage.getItem(RECIPE_GUIDE_KEY)).toBe("done")
   })
 
   test("no toast for a library that never showed the guide", async () => {
-    renderWithRouter(<RecipeOnboarding count={50} target={10} />)
+    renderWithRouter(
+      <RecipeOnboarding count={50} target={10} discover={false} />
+    )
     await new Promise((r) => setTimeout(r, 0))
     expect(toast.success).not.toHaveBeenCalled()
   })
@@ -93,7 +124,9 @@ describe("RecipeOnboarding", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("blocked")
     })
-    renderWithRouter(<RecipeOnboarding count={4} target={10} />)
+    renderWithRouter(
+      <RecipeOnboarding count={4} target={10} discover={false} />
+    )
     expect(await screen.findByRole("progressbar")).toBeInTheDocument()
   })
 })
