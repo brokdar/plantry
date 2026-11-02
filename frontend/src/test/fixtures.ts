@@ -440,6 +440,7 @@ export const mockSession: Session = {
   id: 7,
   food_id: 42,
   food_name: "Chili",
+  freezable: true,
   cook_date: "2026-11-01",
   cook_slot_id: 3,
   portions: 6,

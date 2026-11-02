@@ -32,6 +32,8 @@ export interface Session {
   id: number
   food_id: number
   food_name: string
+  /** The recipe's flag; null = unknown. Frozen portions need true. */
+  freezable: boolean | null
   cook_date: string
   cook_slot_id: number
   portions: number

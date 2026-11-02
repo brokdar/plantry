@@ -1438,6 +1438,7 @@
       "freeze": "Portionen einfrieren",
       "portions_named": "Portionen {{name}} kochen",
       "freeze_named": "Portionen {{name}} einfrieren",
+      "freeze_hint": "Markiere das Rezept als einfrierbar, um Portionen einzufrieren.",
       "use_by": "Haltbar bis {{date}}",
       "remove": "Vorkochen entfernen",
       "remove_named": "Vorkochen von {{name}} entfernen",

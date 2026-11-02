@@ -795,6 +795,7 @@ func (s *Service) view(ctx context.Context, sess *CookSession, e env) (*SessionV
 		return nil, err
 	}
 	v := BuildView(*sess, f.Name, e.set.KeepDays(f.KeepDays), links, e.set, e.order)
+	v.Freezable = f.Freezable
 	return &v, nil
 }
 

@@ -1438,6 +1438,7 @@
       "freeze": "Portions to freeze",
       "portions_named": "Portions of {{name}} to cook",
       "freeze_named": "Portions of {{name}} to freeze",
+      "freeze_hint": "Mark this recipe as freezable to freeze portions.",
       "use_by": "Use by {{date}}",
       "remove": "Remove batch",
       "remove_named": "Remove the {{name}} batch",
