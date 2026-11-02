@@ -455,14 +455,17 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     expect(undo).toHaveBeenCalledWith(5)
   })
 
-  test("a persisted undone change shows 'Undone' without a button", () => {
+  test("a persisted undone change is marked undone without a button", () => {
     stubQueries({
       ...oneChange,
       changes: [{ ...mockChange(), undone_at: "2026-11-01T09:04:00Z" }],
     })
     act(() => assistantStream.setConversation(1))
     renderPanel()
-    expect(screen.getByTestId("assistant-change")).toHaveTextContent("Undone")
+    expect(screen.getByTestId("assistant-change")).toHaveAttribute(
+      "data-state",
+      "undone"
+    )
     expect(
       screen.queryByTestId("assistant-change-undo")
     ).not.toBeInTheDocument()
@@ -483,11 +486,37 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     ).not.toBeInTheDocument()
   })
 
-  test("Z1-AC4: the turn is captioned Undone once all its changes are undone", () => {
-    const undone = "2026-11-01T09:04:00Z"
+  test("Z1-AC4: a single undone change is captioned Undone once, not on its line", () => {
     stubQueries({
       ...oneChange,
-      changes: [{ ...mockChange(), undone_at: undone }],
+      changes: [{ ...mockChange(), undone_at: "2026-11-01T09:04:00Z" }],
+    })
+    act(() => assistantStream.setConversation(1))
+    renderPanel()
+    expect(screen.getAllByText("Undone")).toHaveLength(1)
+    expect(screen.getByTestId("assistant-turn-undone")).toBeInTheDocument()
+  })
+
+  test("Z1-AC4: the turn is captioned Undone once all its changes are undone", () => {
+    const undone = "2026-11-01T09:04:00Z"
+    const call = (id: string) => ({
+      type: "tool_use",
+      tool_use_id: id,
+      tool_use_name: "set_session_portions",
+    })
+    stubQueries({
+      raw: [
+        {
+          id: 2,
+          role: "assistant",
+          content: [{ type: "text", text: "Done." }, call("a"), call("b")],
+          created_at: "2025-06-10T12:00:00Z",
+        },
+      ],
+      changes: [
+        { ...mockChange(), undone_at: undone },
+        { ...mockChange({ id: 6 }), undone_at: undone },
+      ],
     })
     act(() => assistantStream.setConversation(1))
     renderPanel()

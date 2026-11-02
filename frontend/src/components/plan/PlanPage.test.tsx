@@ -254,6 +254,35 @@ describe("PlanPage", () => {
     ).toBeInTheDocument()
   })
 
+  it("the empty window offers the assistant only when a provider is set", async () => {
+    vi.mocked(getPlan).mockResolvedValue(emptyPlan)
+    vi.mocked(listSettings).mockResolvedValue({
+      items: [{ key: "ai.provider", value: "fake" }],
+      cipher_available: true,
+    } as Awaited<ReturnType<typeof listSettings>>)
+    const { unmount } = renderWithRouter(<PlanPage />)
+    expect(await screen.findByText(/let the assistant draft one/)).toBeVisible()
+    unmount()
+    vi.mocked(listSettings).mockResolvedValue({
+      items: [],
+      cipher_available: true,
+    } as Awaited<ReturnType<typeof listSettings>>)
+    renderWithRouter(<PlanPage />)
+    expect(await screen.findByText(/let the planner draft one/)).toBeVisible()
+    expect(screen.queryByText(/let the assistant draft one/)).toBeNull()
+  })
+
+  it("the no-provider hint links to Settings → Assistant", async () => {
+    vi.mocked(listSettings).mockResolvedValue({
+      items: [],
+      cipher_available: true,
+    } as Awaited<ReturnType<typeof listSettings>>)
+    renderWithRouter(<PlanPage />)
+    expect(
+      await screen.findByTestId("assistant-disabled-reason")
+    ).toHaveAttribute("href", "/settings/assistant")
+  })
+
   describe("assistant", () => {
     const withProvider = (value: string) =>
       vi.mocked(listSettings).mockResolvedValue({

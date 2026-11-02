@@ -1298,6 +1298,7 @@
       "title": "Assistant (optional)",
       "why": "The assistant suggests plates and can fill your week for you.",
       "later": "You can add this later. Planning works without it.",
+      "needs_provider": "Choose a provider above to use this.",
       "api_key_description": "Your key from the provider. Plantry stores it encrypted."
     },
     "finish": {
@@ -1368,6 +1369,7 @@
     "empty": {
       "title": "Nothing planned for this week yet",
       "body": "Add meals one at a time, copy a week that worked, or let the assistant draft one.",
+      "body_no_assistant": "Add meals one at a time, copy a week that worked, or let the planner draft one.",
       "by_hand": "or plan by hand",
       "copy": "Copy a previous week",
       "plan_week": "Plan this week"
@@ -1721,7 +1723,9 @@
       "failed": "The search didn't work. Try again."
     },
     "review": {
-      "gone": "This idea is no longer available."
+      "gone": "This idea is no longer available.",
+      "failed": "Couldn't open this idea. Try again.",
+      "accept_failed": "Recipe saved, but the idea couldn't be marked as added."
     }
   },
   "today": {

@@ -21,7 +21,7 @@ import {
   type RejectReason,
   type SuggestionsParams,
 } from "@/lib/api/discovery"
-import { toastError } from "@/lib/toast"
+import { toast, toastError } from "@/lib/toast"
 
 import { discoveryKeys, foodKeys, insightKeys } from "./keys"
 
@@ -119,12 +119,20 @@ function invalidateDecided(qc: QueryClient) {
 export function useAcceptSuggestion() {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  return useMutation({
+  const accept = useMutation({
     mutationFn: ({ id, foodId }: { id: number; foodId: number }) =>
       acceptSuggestion(id, foodId),
     onSuccess: () => invalidateDecided(qc),
-    onError: (err) => toastError(err, t),
+    // The food is saved already: say so, and let the user send accept again.
+    onError: (_err, vars) =>
+      toast.error(t("discovery.review.accept_failed"), {
+        action: {
+          label: t("common.retry"),
+          onClick: () => accept.mutate(vars),
+        },
+      }),
   })
+  return accept
 }
 
 export function useRejectSuggestion() {

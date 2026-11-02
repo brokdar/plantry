@@ -91,13 +91,14 @@ export function MessageList({
   const { t } = useTranslation()
   const failures = (list: ToolFailure[]) =>
     list.map((f) => <FailureLine key={f.id} />)
-  const lines = (changes: Change[]) =>
+  const lines = (changes: Change[], hideUndoneLabel = false) =>
     changes.map((c, i) => (
       <ChangeLine
         key={c.recorded ? c.id : `unrecorded-${i}`}
         change={c}
         state={lineState(c)}
         onUndo={onUndo}
+        hideUndoneLabel={hideUndoneLabel}
       />
     ))
   return (
@@ -117,7 +118,7 @@ export function MessageList({
                 text={text}
               />
             )}
-            {lines(changes)}
+            {lines(changes, true)}
             {changes.length > 0 &&
               changes.every((c) => lineState(c) === "undone") && (
                 <p

@@ -104,6 +104,10 @@ test("without a provider the button is disabled with a tooltip and A does nothin
   await expect(ask).toHaveAttribute("aria-disabled", "true")
   await ask.hover()
   await expect(page.getByRole("tooltip").first()).toContainText("AI provider")
+  await expect(page.getByTestId("assistant-disabled-reason")).toHaveAttribute(
+    "href",
+    "/settings/assistant"
+  )
   await page.getByRole("heading", { level: 1 }).click()
   await page.keyboard.press("a")
   await expect(page.getByTestId("assistant-panel")).toHaveCount(0)

@@ -20,6 +20,8 @@ export function AssistantStep({
   const { t } = useTranslation()
   const { data: items } = useSettingItems()
   const key = items?.["ai.api_key"]
+  // "Disabled" is no provider value: notes and daily need one to act on.
+  const noProvider = !items?.["ai.provider"]?.value
   const hasKey = key?.source === "db" || key?.source === "env"
   const set = (patch: Partial<AssistantDraft>) =>
     onChange({ ...value, ...patch })
@@ -43,10 +45,12 @@ export function AssistantStep({
         description={t("settings_page.assistant.notes_effect")}
         htmlFor="setup-assistant-notes"
       >
+        {noProvider && <NeedsProvider />}
         <Textarea
           id="setup-assistant-notes"
           rows={4}
           placeholder={t("settings_page.assistant.notes_placeholder")}
+          disabled={noProvider}
           value={value.notes}
           onChange={(e) => set({ notes: e.target.value })}
         />
@@ -61,12 +65,26 @@ export function AssistantStep({
         )}
         htmlFor="setup-daily-suggestion"
       >
+        {noProvider && <NeedsProvider />}
         <Switch
           id="setup-daily-suggestion"
           checked={value.daily}
+          disabled={noProvider}
           onChange={(daily) => set({ daily })}
         />
       </SetupField>
     </div>
+  )
+}
+
+function NeedsProvider() {
+  const { t } = useTranslation()
+  return (
+    <p
+      className="text-small text-ink-muted"
+      data-testid="setup-assistant-needs-provider"
+    >
+      {t("setup.assistant.needs_provider")}
+    </p>
   )
 }
