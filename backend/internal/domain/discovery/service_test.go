@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -612,4 +613,58 @@ func TestService_RunLowercasesCuisine(t *testing.T) {
 	h := newHarness(t, fakeClient(t, site, knowledgeScript), site)
 	id := h.runAndWait(t, discovery.Request{Mode: discovery.ModeExplore, Cuisine: "  Thai "})
 	assert.Contains(t, h.run(t, id).ScopeJSON, `"cuisine":"thai"`)
+}
+
+// pausingClient answers pause_turn with a dangling server_tool_use until the
+// continuations run out, then the repair call with candidates.
+type pausingClient struct {
+	mu    sync.Mutex
+	reqs  []llm.Request
+	reply string
+}
+
+func (p *pausingClient) Stream(_ context.Context, r llm.Request, out chan<- llm.Event) (*llm.Response, error) {
+	defer close(out)
+	p.mu.Lock()
+	p.reqs = append(p.reqs, r)
+	n := len(p.reqs)
+	p.mu.Unlock()
+	if n <= 4 {
+		return &llm.Response{StopReason: llm.StopReasonPauseTurn, Message: llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{
+			{Type: llm.ContentTypeText, Text: "Searching."},
+			{Type: llm.ContentTypeServer, Raw: json.RawMessage(fmt.Sprintf(`{"type":"server_tool_use","id":"s%d","name":"web_search","input":{"query":"x"}}`, n))},
+		}}}, nil
+	}
+	return &llm.Response{StopReason: llm.StopReasonEndTurn, Message: llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{
+		{Type: llm.ContentTypeText, Text: p.reply},
+	}}}, nil
+}
+
+func (p *pausingClient) Complete(context.Context, llm.Request) (string, error) {
+	return "", errors.New("unused")
+}
+
+// DoD N3: the repair request carries no unresolved server_tool_use.
+func TestService_RepairDropsDanglingServerBlocks(t *testing.T) {
+	site := recipeSite(t, "fesenjan")
+	client := &pausingClient{reply: `{"candidates": [{"url": "` + site.URL + `/fesenjan"}]}`}
+	h := newHarness(t, client, site)
+
+	id := h.runAndWait(t, discovery.Request{Mode: discovery.ModeDaily})
+
+	require.Len(t, client.reqs, 5, "1 call, 3 continuations, 1 repair")
+	repair := client.reqs[4].Messages
+	for _, m := range repair {
+		for _, b := range m.Content {
+			if b.Type == llm.ContentTypeServer {
+				assert.NotContains(t, string(b.Raw), `"s4"`, "the last dangling server_tool_use is dropped")
+			}
+		}
+	}
+	last := repair[len(repair)-1]
+	assert.Equal(t, llm.RoleUser, last.Role)
+	prev := repair[len(repair)-2]
+	assert.Equal(t, llm.RoleAssistant, prev.Role)
+	assert.Equal(t, "Searching.", prev.Content[0].Text)
+	assert.Equal(t, "ok", h.run(t, id).Status)
 }
