@@ -1,0 +1,62 @@
+event: message_start
+data: {"type":"message_start","message":{"id":"msg_ws1","type":"message","role":"assistant","model":"claude-opus-5-5","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":512,"output_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Searching for recipes."}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"server_tool_use","id":"srvtoolu_01A","name":"web_search","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"query\":"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\"thai curry recipe\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: content_block_start
+data: {"type":"content_block_start","index":2,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_01A","content":[{"type":"web_search_result","url":"https://example.com/green-curry","title":"Green Curry","encrypted_content":"EqgfCioIARgBIiQ3YTAw+/=","page_age":"April 30, 2025"},{"type":"web_search_result","url":"https://example.org/red-curry","title":"Red Curry","encrypted_content":"Eo8BCioIAhgBIiQyYjQ0","page_age":null}]}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":2}
+
+event: content_block_start
+data: {"type":"content_block_start","index":3,"content_block":{"type":"server_tool_use","id":"srvtoolu_01B","name":"web_search","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"{\"query\":\"massaman curry\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":3}
+
+event: content_block_start
+data: {"type":"content_block_start","index":4,"content_block":{"type":"web_search_tool_result","tool_use_id":"srvtoolu_01B","content":[{"type":"web_search_result","url":"https://example.net/massaman","title":"Massaman Curry","encrypted_content":"Ep4CCioIAxgB","page_age":"May 2, 2025"},{"type":"web_search_result","url":"https://example.com/green-curry","title":"Green Curry","encrypted_content":"EqgfCioIARgBIiQ3YTAw+/=","page_age":"April 30, 2025"}]}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":4}
+
+event: content_block_start
+data: {"type":"content_block_start","index":5,"content_block":{"type":"text","text":"","citations":[]}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":5,"delta":{"type":"citations_delta","citation":{"type":"web_search_result_location","url":"https://example.com/green-curry","title":"Green Curry","encrypted_index":"Eo8BCioIAhgB","cited_text":"A fragrant green curry."}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":5,"delta":{"type":"text_delta","text":"{\"candidates\":[]}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":5}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":210,"server_tool_use":{"web_search_requests":2}}}
+
+event: message_stop
+data: {"type":"message_stop"}
