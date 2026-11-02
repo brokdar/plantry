@@ -64,7 +64,10 @@ export function DailySuggestionSheet({ date }: { date: string }) {
 
   function onReject(reason: RejectReason | undefined) {
     if (!suggestion) return
-    reject.mutate({ id: suggestion.id, reason }, { onSuccess: close })
+    // Close first: the dismissal disables the daily query before the
+    // reject invalidates it, so no refetch can start a paid run.
+    close()
+    reject.mutate({ id: suggestion.id, reason })
   }
 
   return (
@@ -113,12 +116,13 @@ export function DailySuggestionSheet({ date }: { date: string }) {
               <div className="flex flex-wrap gap-2">
                 <Button
                   className="h-11 px-4 md:pointer-fine:h-9"
-                  onClick={() =>
+                  onClick={() => {
+                    close()
                     void navigate({
                       to: "/recipes",
                       search: { add: "discover", suggestion: suggestion.id },
                     })
-                  }
+                  }}
                 >
                   {t("discovery.sheet.add")}
                 </Button>

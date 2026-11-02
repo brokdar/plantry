@@ -18,7 +18,9 @@ export const test = baseTest.extend({
     failOnDialog(page)
     // The daily idea opens a sheet over Today; specs that are not about it
     // see "nothing today" (204). A spec for the sheet registers its own
-    // route, which takes precedence.
+    // route, which takes precedence. Specs that need the real backend call
+    // page.unroute("**/api/discovery/daily*") with this same pattern;
+    // /daily/another is not matched.
     await page.route("**/api/discovery/daily*", (route) =>
       route.fulfill({ status: 204 })
     )

@@ -134,6 +134,8 @@ describe("DailySuggestionSheet", () => {
       expect(rejectSuggestion).toHaveBeenCalledWith(5, "too_long")
     )
     await waitFor(() => expect(localStorage.getItem(DISMISSED_KEY)).toBe(DATE))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(getDailySuggestion).toHaveBeenCalledTimes(1)
   })
 
   it("Add to my recipes opens the prefilled review", async () => {
@@ -147,6 +149,7 @@ describe("DailySuggestionSheet", () => {
       to: "/recipes",
       search: { add: "discover", suggestion: 5 },
     })
+    expect(localStorage.getItem(DISMISSED_KEY)).toBe(DATE)
   })
 
   it("Show another swaps in the new idea", async () => {
