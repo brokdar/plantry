@@ -172,6 +172,9 @@ type Querier interface {
 	ListRecipeSuggestions(ctx context.Context, arg ListRecipeSuggestionsParams) ([]RecipeSuggestion, error)
 	ListSettings(ctx context.Context) ([]AppSetting, error)
 	ListSiblingFoods(ctx context.Context, arg ListSiblingFoodsParams) ([]Food, error)
+	// Every food's and suggestion's (any status) source_url, for the
+	// normalized duplicate check.
+	ListSourceURLs(ctx context.Context) ([]string, error)
 	ListTimeSlots(ctx context.Context) ([]TimeSlot, error)
 	// Recipes no confirmed plate dated in [since, today] holds, plates marked
 	// not_eaten aside: FoodHistory's last_eaten is before since, or there is
@@ -208,8 +211,6 @@ type Querier interface {
 	// D12: assigns the day to the oldest pending, never-shown suggestion after
 	// the given id.
 	ShowNextPending(ctx context.Context, arg ShowNextPendingParams) (RecipeSuggestion, error)
-	// Whether a food or an earlier suggestion (any status) already has this URL.
-	SourceURLKnown(ctx context.Context, url string) (int64, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	TouchPlate(ctx context.Context, id int64) error
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error

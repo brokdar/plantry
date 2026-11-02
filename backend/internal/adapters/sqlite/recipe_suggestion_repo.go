@@ -76,10 +76,21 @@ func (r *RecipeSuggestionRepo) SetImagePath(ctx context.Context, id int64, path 
 	})
 }
 
-// SourceURLKnown reports whether a food or any suggestion has this URL.
+// SourceURLKnown reports whether a food or any suggestion has this URL,
+// both compared normalized (discovery.NormalizeURL); stored URLs stay as
+// fetched. A single-user catalogue keeps the scan small.
 func (r *RecipeSuggestionRepo) SourceURLKnown(ctx context.Context, url string) (bool, error) {
-	n, err := r.queriesFor(ctx).SourceURLKnown(ctx, url)
-	return n != 0, err
+	urls, err := r.queriesFor(ctx).ListSourceURLs(ctx)
+	if err != nil {
+		return false, err
+	}
+	want := discovery.NormalizeURL(url)
+	for _, u := range urls {
+		if discovery.NormalizeURL(u) == want {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func mapRecipeSuggestion(row sqlcgen.RecipeSuggestion) (*discovery.Suggestion, error) {

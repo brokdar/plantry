@@ -40,7 +40,8 @@ type Extractor interface {
 }
 
 // URLIndex says whether a URL belongs to a saved recipe or an earlier
-// suggestion. Implemented by the suggestion repository.
+// suggestion, compared normalized (NormalizeURL). Implemented by the
+// suggestion repository.
 type URLIndex interface {
 	SourceURLKnown(ctx context.Context, url string) (bool, error)
 }
@@ -221,17 +222,18 @@ func (v *Verifier) vet(rawURL string) string {
 	return ""
 }
 
-// duplicate reports whether u is known, or already seen in this batch, and
-// marks it seen.
+// duplicate reports whether u is known, or already seen in this batch
+// (compared normalized, see NormalizeURL), and marks it seen.
 func (v *Verifier) duplicate(ctx context.Context, u string, seen map[string]bool) (bool, error) {
-	if seen[u] {
+	key := NormalizeURL(u)
+	if seen[key] {
 		return true, nil
 	}
 	known, err := v.Index.SourceURLKnown(ctx, u)
 	if err != nil {
 		return false, err
 	}
-	seen[u] = true
+	seen[key] = true
 	return known, nil
 }
 

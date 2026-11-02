@@ -226,3 +226,31 @@ func TestVerify_PanicDiscardsCandidate(t *testing.T) {
 	assert.Contains(t, out, "reason="+discovery.ReasonFetch)
 	assert.NotContains(t, out, "token=secret", "the URL query is never logged")
 }
+
+func TestNormalizeURL(t *testing.T) {
+	tests := map[string]string{
+		"https://x.test/r/fesenjan":                             "https://x.test/r/fesenjan",
+		"HTTPS://X.Test/r/fesenjan/":                            "https://x.test/r/fesenjan",
+		"https://x.test/r/fesenjan?utm_source=a&utm_medium=b":   "https://x.test/r/fesenjan",
+		"https://x.test/r/fesenjan?id=3&gclid=z&UTM_Term=q#top": "https://x.test/r/fesenjan?id=3",
+		"https://x.test/":                                       "https://x.test",
+		"https://x.test/R/Case":                                 "https://x.test/R/Case",
+	}
+	for in, want := range tests {
+		assert.Equal(t, want, discovery.NormalizeURL(in), in)
+	}
+}
+
+// Walkthrough: a utm-tagged or trailing-slash variant of a known or earlier
+// candidate URL is a duplicate.
+func TestVerify_NormalizedDuplicates(t *testing.T) {
+	srv := site(t)
+	v, spy := newVerifier(true, nil)
+	kept, discarded, err := v.Verify(context.Background(), []discovery.Candidate{
+		{URL: srv.URL + "/fesenjan"}, {URL: srv.URL + "/fesenjan/?utm_source=llm"},
+	})
+	require.NoError(t, err)
+	require.Len(t, kept, 1)
+	assert.Equal(t, discovery.ReasonDuplicate, urlsOf(discarded)[srv.URL+"/fesenjan/?utm_source=llm"])
+	assert.Len(t, spy.urls, 1)
+}

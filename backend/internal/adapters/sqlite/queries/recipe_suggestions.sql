@@ -11,12 +11,12 @@ SELECT * FROM recipe_suggestions WHERE id = ?;
 -- name: SetRecipeSuggestionImage :exec
 UPDATE recipe_suggestions SET image_path = ? WHERE id = ?;
 
--- name: SourceURLKnown :one
--- Whether a food or an earlier suggestion (any status) already has this URL.
-SELECT CAST((
-    EXISTS (SELECT 1 FROM foods f WHERE f.source_url = CAST(sqlc.arg(url) AS TEXT))
-    OR EXISTS (SELECT 1 FROM recipe_suggestions s WHERE s.source_url = CAST(sqlc.arg(url) AS TEXT))
-) AS INTEGER) AS known;
+-- name: ListSourceURLs :many
+-- Every food's and suggestion's (any status) source_url, for the
+-- normalized duplicate check.
+SELECT CAST(source_url AS TEXT) AS source_url FROM foods WHERE source_url IS NOT NULL
+UNION
+SELECT source_url FROM recipe_suggestions;
 
 -- name: DiscoverySuggestionCounts :many
 -- B7: per discovery run with an id in [min_id, max_id], the suggestions it

@@ -82,6 +82,25 @@ func TestRecipeSuggestionRepo_SourceURLKnown(t *testing.T) {
 
 	known, _ = repo.SourceURLKnown(ctx, "https://x.test/c")
 	assert.False(t, known)
+
+	// Walkthrough: tracking params, a trailing slash, the fragment and the
+	// host's case do not make a saved page new.
+	for _, variant := range []string{
+		"https://x.test/b?utm_source=newsletter&utm_medium=email",
+		"https://x.test/b/",
+		"HTTPS://X.Test/b#comments",
+		"https://x.test/b?fbclid=abc",
+	} {
+		known, err = repo.SourceURLKnown(ctx, variant)
+		require.NoError(t, err)
+		assert.True(t, known, variant)
+	}
+	saved := "https://x.test/d/?utm_campaign=x"
+	require.NoError(t, foods.Create(ctx, &food.Food{Name: "Stew", Kind: food.KindComposed, ReferencePortions: &portions, SourceURL: &saved}))
+	known, _ = repo.SourceURLKnown(ctx, "https://x.test/d")
+	assert.True(t, known, "the stored URL is normalized for the comparison too")
+	known, _ = repo.SourceURLKnown(ctx, "https://x.test/b?page=2")
+	assert.False(t, known, "other query params count")
 }
 
 func TestFoodRepo_LeafIDsUsedInRecipes(t *testing.T) {
