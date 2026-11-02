@@ -13,12 +13,17 @@ const IMAGE_PATH = LANE
 // Read by e2e/helpers.ts and e2e/global-setup.ts (workers inherit the env).
 process.env.E2E_API_PORT = String(API_PORT)
 process.env.E2E_DB_PATH = DB_PATH
+// The discovery fixture site (Phase 5 D20): serves the recipe pages the fake
+// research client points at. Read by e2e/discovery-fixture.ts.
+const SITE_PORT = 9100 + LANE
+process.env.E2E_SITE_PORT = String(SITE_PORT)
 
 // Specs that mutate process-global AI state (settings overrides, fake-script
 // turn cursor). These must never run concurrently with each other, otherwise
 // one spec's provider/model override corrupts another spec's chat stream.
 const AI_SERIAL_SPECS = [
   "assistant-panel.spec.ts",
+  "discovery.spec.ts",
   "settings-ai.spec.ts",
   "keyboard-shortcuts.spec.ts",
   "settings-insights.spec.ts",
@@ -29,6 +34,7 @@ const AI_SERIAL_SPECS = [
 // alone, after the other projects.
 const GLOBAL_SETTINGS_SPECS = [
   "assistant-drafts.spec.ts",
+  "discovery-explore-plan.spec.ts",
   "plan-anchor-settings.spec.ts",
   "plan-generate-heuristic.spec.ts",
   "plan-replan.spec.ts",
@@ -112,6 +118,12 @@ export default defineConfig({
       // Never reuse: a Vite on this port may belong to another worktree.
       reuseExistingServer: false,
       timeout: 60_000,
+    },
+    {
+      command: `E2E_SITE_PORT=${SITE_PORT} bun e2e/fixtures/discovery-site/serve.ts`,
+      url: `http://localhost:${SITE_PORT}/pasta.html`,
+      reuseExistingServer: false,
+      timeout: 30_000,
     },
   ],
 })

@@ -75,8 +75,10 @@ describe("DiscoverSheet", () => {
     expect(
       await screen.findByText("Looking for recipes. This can take a minute.")
     ).toBeVisible()
-    await waitFor(() =>
-      expect(screen.getAllByTestId("suggestion-card")).toHaveLength(3)
+    // The run is polled every second, so allow more than one poll.
+    await waitFor(
+      () => expect(screen.getAllByTestId("suggestion-card")).toHaveLength(3),
+      { timeout: 3000 }
     )
     expect(listSuggestions).toHaveBeenCalledWith({ run_id: 21 })
     // Other modes keep the run's order.

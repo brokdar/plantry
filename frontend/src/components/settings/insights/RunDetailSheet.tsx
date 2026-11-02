@@ -108,6 +108,15 @@ function Detail({ run }: { run: RunDetail }) {
       t("settings_page.insights.col.cost"),
       formatCost(run.cost_estimate_usd, i18n),
     ],
+    ...(run.web_search_requests > 0
+      ? [
+          [
+            t("settings_page.insights.web_searches"),
+            formatNumber(run.web_search_requests, i18n),
+            "run-detail-searches",
+          ] as [string, string, string],
+        ]
+      : []),
     [
       t("settings_page.insights.col.status"),
       t(`settings_page.insights.status.${run.status}`),

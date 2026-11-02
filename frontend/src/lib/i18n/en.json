@@ -344,6 +344,15 @@
       "correction_rate": "Correction rate",
       "acceptance_rate": "Acceptance rate",
       "cost_per_accepted": "Cost per accepted plan",
+      "discovery": {
+        "title": "Recipe discovery",
+        "runs": "Discovery runs",
+        "suggestions": "Ideas shown",
+        "accepted": "Added to recipes",
+        "acceptance_rate": "Acceptance rate",
+        "cost_per_accepted": "Cost per added recipe (searches included)"
+      },
+      "web_searches": "Web searches",
       "no_data": "No data",
       "week_of": "Week of {{date}}",
       "weeks_table": "Show as table",
@@ -1666,7 +1675,7 @@
   "discovery": {
     "card": {
       "new": "new",
-      "legend": "“new” marks ingredients that aren’t in your foods yet.",
+      "legend": "“new” = not in any of your recipes yet",
       "grounded": "Search-grounded",
       "nutrition_incomplete": "Nutrition incomplete",
       "nutrition_missing": "No data for {{names}}",

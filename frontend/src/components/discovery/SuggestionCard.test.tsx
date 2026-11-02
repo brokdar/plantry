@@ -20,6 +20,18 @@ describe("SuggestionCard (F2-AC1)", () => {
     expect(screen.getByTestId("discovery-legend")).toBeInTheDocument()
   })
 
+  it("shows the diet class as an icon", () => {
+    render(
+      <SuggestionCard
+        suggestion={{ ...mockSuggestion(), diet_class: "vegan" }}
+      />
+    )
+    expect(screen.getByRole("img", { name: /^Diet:/ })).toHaveAttribute(
+      "data-diet",
+      "vegan"
+    )
+  })
+
   it("has no legend when every ingredient is known", () => {
     const s = mockSuggestion()
     render(
@@ -83,6 +95,9 @@ describe("SuggestionCard (F2-AC1)", () => {
       />
     )
     expect(screen.queryByTestId("suggestion-placeholder")).toBeNull()
-    expect(screen.getByRole("img")).toHaveAttribute("src", "http://x/y.jpg")
+    expect(screen.getByRole("img", { name: /Photo of/ })).toHaveAttribute(
+      "src",
+      "http://x/y.jpg"
+    )
   })
 })

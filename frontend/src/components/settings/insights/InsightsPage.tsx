@@ -9,6 +9,7 @@ import { formatDate, formatNumber, type Formatter } from "@/lib/plan/format"
 import { useRunInsights } from "@/lib/queries/runs"
 
 import { acceptanceRate, formatPercent, formatUSD } from "./format"
+import { DiscoveryBlock } from "./DiscoveryBlock"
 import { RunDetailSheet } from "./RunDetailSheet"
 import { RunsTable } from "./RunsTable"
 import { Sparkline, type SparkPoint } from "./Sparkline"
@@ -71,6 +72,10 @@ export function InsightsPage({
           </div>
         )}
       </section>
+
+      {insights.data && insights.data.discovery.runs > 0 && (
+        <DiscoveryBlock discovery={insights.data.discovery} />
+      )}
 
       <section aria-labelledby="insights-runs" className="flex flex-col gap-3">
         <h2 id="insights-runs" className="text-h2 font-semibold text-ink">

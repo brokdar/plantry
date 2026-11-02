@@ -46,6 +46,25 @@ describe("RunDetailSheet", () => {
     )
   })
 
+  it("F4-AC5: shows a run's web searches only when it made some", async () => {
+    vi.mocked(getRun).mockResolvedValue({
+      ...mockRunDetail,
+      web_search_requests: 2,
+    })
+    const { unmount } = renderWithRouter(
+      <RunDetailSheet runId={11} onClose={vi.fn()} />
+    )
+    expect(await screen.findByTestId("run-detail-searches")).toHaveTextContent(
+      "Web searches2"
+    )
+    unmount()
+
+    vi.mocked(getRun).mockResolvedValue(mockRunDetail)
+    renderWithRouter(<RunDetailSheet runId={11} onClose={vi.fn()} />)
+    await screen.findByTestId("run-detail-edits")
+    expect(screen.queryByTestId("run-detail-searches")).toBeNull()
+  })
+
   it("keeps the raw JSON behind a disclosure", async () => {
     renderWithRouter(<RunDetailSheet runId={11} onClose={vi.fn()} />)
 

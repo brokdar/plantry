@@ -534,3 +534,10 @@ func TestService_StaleCleanupErrorDoesNotFailRun(t *testing.T) {
 
 	assert.NotEqual(t, "error", h.run(t, id).Status)
 }
+
+func TestService_RunLowercasesCuisine(t *testing.T) {
+	site := recipeSite(t)
+	h := newHarness(t, fakeClient(t, site, knowledgeScript), site)
+	id := h.runAndWait(t, discovery.Request{Mode: discovery.ModeExplore, Cuisine: "  Thai "})
+	assert.Contains(t, h.run(t, id).ScopeJSON, `"cuisine":"thai"`)
+}

@@ -344,6 +344,15 @@
       "correction_rate": "Korrekturquote",
       "acceptance_rate": "Übernahmequote",
       "cost_per_accepted": "Kosten pro übernommenem Plan",
+      "discovery": {
+        "title": "Rezeptentdeckung",
+        "runs": "Entdeckungsläufe",
+        "suggestions": "Gezeigte Ideen",
+        "accepted": "In Rezepte übernommen",
+        "acceptance_rate": "Übernahmequote",
+        "cost_per_accepted": "Kosten pro übernommenem Rezept (inkl. Websuchen)"
+      },
+      "web_searches": "Websuchen",
       "no_data": "Keine Daten",
       "week_of": "Woche ab {{date}}",
       "weeks_table": "Als Tabelle zeigen",
@@ -1666,7 +1675,7 @@
   "discovery": {
     "card": {
       "new": "neu",
-      "legend": "„neu“ markiert Zutaten, die noch nicht in deinen Lebensmitteln sind.",
+      "legend": "„neu“ = noch in keinem deiner Rezepte",
       "grounded": "Per Websuche gefunden",
       "nutrition_incomplete": "Nährwerte unvollständig",
       "nutrition_missing": "Keine Daten für {{names}}",
