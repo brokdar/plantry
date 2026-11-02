@@ -96,6 +96,19 @@ AI features are entirely optional. Plantry is fully usable without an API key.
 
 API keys entered in Settings are stored encrypted in the database. On first start Plantry generates a random key (64 hex chars) and saves it as `secret.key` next to the database, mode 0600. Keep that file with the database: without it, stored API keys cannot be decrypted. Setting `PLANTRY_SECRET_KEY` overrides the file, and no file is written.
 
+### Backup and restore
+
+Copying `/data` while Plantry runs is not safe (the database is in WAL mode). Use the `backup` command instead; it takes a consistent snapshot while the server keeps running and copies `secret.key` beside it:
+
+```bash
+docker compose exec plantry plantry backup -out /data/backup/plantry-$(date +%F).db
+docker compose cp plantry:/data/backup ./backup     # take it off the volume
+```
+
+(Create the target directory first, e.g. `docker compose exec plantry mkdir -p /data/backup`.) The target file must not exist yet.
+
+To restore: stop Plantry, put the backup file at `/data/plantry.db` and its `secret.key` at `/data/secret.key` (remove any `plantry.db-wal` and `plantry.db-shm` next to the old database), then start Plantry. Pending migrations run on start, so a backup from an older version restores into a newer one.
+
 ---
 
 ## Development
@@ -175,7 +188,7 @@ plantry/
 
 **Database:** Single SQLite file, WAL mode, managed by goose migrations. `sqlc` generates compile-time type-safe query code. After any schema or query change, run `sqlc generate`.
 
-**Deployment:** Multi-stage Docker build — Bun builds the SPA → Go embeds the `dist/` output → Alpine runtime image (~30 MB). No CGO; cross-compiles to ARMv7 and ARM64 for Raspberry Pi.
+**Deployment:** Multi-stage Docker build — Bun builds the SPA → Go embeds the `dist/` output → Alpine runtime image (~30 MB). No CGO; the release image is built for `linux/amd64`, `linux/arm64` and `linux/arm/v7` (Raspberry Pi), cross-compiled natively. The version shown in Settings → Data & system comes from the `VERSION` build arg.
 
 ### Testing strategy
 

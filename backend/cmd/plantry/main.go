@@ -53,7 +53,17 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/webui"
 )
 
+// version is set at build time: -ldflags "-X main.version=<git describe>".
+var version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		if err := runBackup(os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "fatal:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "fatal:", err)
 		os.Exit(1)
@@ -348,6 +358,7 @@ func run() error {
 		LogLevel:  cfg.LogLevel.String(),
 		ImagePath: cfg.ImagePath,
 		DevMode:   cfg.DevMode,
+		Version:   version,
 	}, aiRateLimiter)
 
 	h := transport.Handlers{
@@ -374,6 +385,7 @@ func run() error {
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc),
 		Setup:         handlers.NewSetupHandler(setup.NewService(settingsSvc, foodRepo)),
 		DevMode:       cfg.DevMode,
+		Version:       version,
 	}
 	handler := transport.NewRouter(logger, static, h)
 

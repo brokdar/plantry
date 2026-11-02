@@ -37,7 +37,8 @@ type Handlers struct {
 	Shopping      *handlers.ShoppingHandler
 	Availability  *handlers.AvailabilityHandler
 	Setup         *handlers.SetupHandler
-	DevMode       bool // gates dev-only debug endpoints
+	Version       string // build version shown by /api/health
+	DevMode       bool   // gates dev-only debug endpoints
 }
 
 func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http.Handler {
@@ -52,7 +53,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 
 	r.Route("/api", func(api chi.Router) {
 		api.Use(plantrymw.MaxBodySize(10 << 20)) // 10 MB cap; accommodates image uploads
-		api.Get("/health", handlers.Health)
+		api.Get("/health", handlers.Health(h.Version))
 		api.Get("/units", handlers.Units)
 
 		if h.Foods != nil {

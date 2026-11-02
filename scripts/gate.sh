@@ -20,6 +20,8 @@ backend() {
     go test -race -p 4 ./... &&
     go vet ./... &&
     golangci-lint run &&
+    GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null ./cmd/plantry &&
+    GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o /dev/null ./cmd/plantry &&
     if [ -f scripts/check-sqlc-usage.sh ]; then bash scripts/check-sqlc-usage.sh; fi
 }
 
