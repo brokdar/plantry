@@ -1,10 +1,11 @@
 import { useEffect, useId } from "react"
 import { Link } from "@tanstack/react-router"
-import { Download, PencilLine, type LucideIcon } from "lucide-react"
+import { Compass, Download, PencilLine, type LucideIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { toast } from "@/lib/toast"
+import { cn } from "@/lib/utils"
 
 /** Plan decision D18. "shown" once the guided state rendered; "done" once the
  *  milestone toast fired, so it never fires twice. */
@@ -29,14 +30,21 @@ function writeFlag(value: string) {
 type RecipeOnboardingProps = {
   count: number
   target: number
+  /** Discovery is available (an AI provider is set): adds the third card. */
+  discover: boolean
 }
 
 /**
- * Guided Recipes state (UX §5.8): a progress row and two ways to add recipes,
+ * Guided Recipes state (UX §5.8): a progress row and the ways to add recipes
+ * (import, discover when available, create),
  * shown while the library is below the planning target. Renders nothing once
  * the target is reached, and fires the one-time milestone toast then.
  */
-export function RecipeOnboarding({ count, target }: RecipeOnboardingProps) {
+export function RecipeOnboarding({
+  count,
+  target,
+  discover,
+}: RecipeOnboardingProps) {
   const { t } = useTranslation()
   const progressId = useId()
   const guided = count < target
@@ -86,7 +94,12 @@ export function RecipeOnboarding({ count, target }: RecipeOnboardingProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-4 sm:grid-cols-2",
+          discover && "lg:grid-cols-3"
+        )}
+      >
         <OptionCard
           icon={Download}
           title={t("component.guide.import_title")}
@@ -103,6 +116,24 @@ export function RecipeOnboarding({ count, target }: RecipeOnboardingProps) {
             </Button>
           }
         />
+        {discover && (
+          <OptionCard
+            icon={Compass}
+            title={t("component.guide.discover_title")}
+            body={t("component.guide.discover_body")}
+            action={
+              <Button asChild variant="outline" className="h-11 px-4">
+                <Link
+                  to="/recipes"
+                  search={{ add: "discover" }}
+                  data-testid="onboarding-discover"
+                >
+                  {t("component.guide.discover_action")}
+                </Link>
+              </Button>
+            }
+          />
+        )}
         <OptionCard
           icon={PencilLine}
           title={t("component.guide.create_title")}

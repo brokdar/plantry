@@ -17,13 +17,30 @@ vi.mock("@/lib/api/setup", () => ({
   completeSetup: vi.fn(),
 }))
 
+vi.mock("@/lib/api/settings", () => ({ listSettings: vi.fn() }))
+
+vi.mock("@/lib/api/discovery", () => ({
+  listSuggestions: vi.fn(),
+  discover: vi.fn(),
+}))
+
 vi.mock("@/lib/dates", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/dates")>()),
   todayISO: () => "2026-10-31",
 }))
 
+import { listSuggestions } from "@/lib/api/discovery"
 import { listFoods } from "@/lib/api/foods"
+import { listSettings } from "@/lib/api/settings"
 import { getSetupStatus } from "@/lib/api/setup"
+import { mockSettingsList, mockSuggestion } from "@/test/fixtures"
+
+/** `ai.provider` decides whether discovery is offered. */
+function providerSet(provider: string) {
+  vi.mocked(listSettings).mockResolvedValue(
+    mockSettingsList([{ key: "ai.provider", value: provider }])
+  )
+}
 
 function setupWith(recipe_count: number) {
   vi.mocked(getSetupStatus).mockResolvedValue({
@@ -46,6 +63,7 @@ describe("RecipeLibrary", () => {
     vi.clearAllMocks()
     localStorage.clear()
     setupWith(10)
+    providerSet("")
   })
 
   it("shows time, kcal per portion and last eaten on each card", async () => {
@@ -214,6 +232,51 @@ describe("RecipeLibrary", () => {
     expect(
       within(menu).getByRole("menuitem", { name: "Create manually" })
     ).toHaveAttribute("href", "/recipes/new")
+    // No provider: no discovery (spec §9.4 "hidden").
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Discover recipes" })
+    ).toBeNull()
+  })
+
+  it("with a provider the Add menu offers Discover recipes", async () => {
+    providerSet("anthropic")
+    vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
+    const user = userEvent.setup()
+
+    renderLibrary()
+    await user.click(await screen.findByRole("button", { name: "Add recipe" }))
+    expect(
+      await screen.findByRole("menuitem", { name: "Discover recipes" })
+    ).toHaveAttribute("href", "/recipes?add=discover")
+  })
+
+  it("opens the Discover sheet for add=discover and closing drops it", async () => {
+    providerSet("anthropic")
+    vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
+    const user = userEvent.setup()
+
+    const onSearchChange = renderLibrary({ add: "discover", fav: true })
+    const sheet = await screen.findByRole("dialog", {
+      name: "Discover recipes",
+    })
+    await user.click(within(sheet).getByRole("button", { name: "Close" }))
+    expect(onSearchChange).toHaveBeenLastCalledWith(
+      { add: undefined, fav: true },
+      undefined
+    )
+  })
+
+  it("opens the prefilled review for add=discover&suggestion=<id>", async () => {
+    providerSet("anthropic")
+    vi.mocked(listFoods).mockResolvedValue({ items: [], total: 0 })
+    vi.mocked(listSuggestions).mockResolvedValue({ items: [mockSuggestion()] })
+
+    renderLibrary({ add: "discover", suggestion: 5 })
+    const sheet = await screen.findByRole("dialog", { name: "Import recipe" })
+    expect(within(sheet).getByLabelText("Recipe name")).toHaveValue("Fesenjan")
+    expect(
+      screen.queryByRole("dialog", { name: "Discover recipes" })
+    ).toBeNull()
   })
 
   it("has Recipes and Ingredients tabs", async () => {

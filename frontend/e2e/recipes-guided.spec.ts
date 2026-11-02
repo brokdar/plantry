@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test"
 
-import { expect, test } from "./helpers"
+import { expect, mockSettingValues, test } from "./helpers"
 
 // D22: the shared e2e DB accumulates recipes, so the guided state and the
 // Generate gate are driven by a stubbed GET /api/setup, never the real count.
@@ -13,7 +13,7 @@ async function stubRecipeCount(page: Page, recipe_count: number) {
 }
 
 test.describe("Guided Recipes state", () => {
-  test("below 10 recipes: progress, both cards and a gated Generate button", async ({
+  test("below 10 recipes: progress, the cards and a gated Generate button", async ({
     page,
   }) => {
     await stubRecipeCount(page, 3)
@@ -58,6 +58,50 @@ test.describe("Guided Recipes state", () => {
     await generate.click({ force: true })
     await expect(page).toHaveURL(/\/recipes$/)
     await expect(page.getByTestId("assistant-composer-input")).toHaveCount(0)
+  })
+
+  test("F3-AC3: with a provider a third card opens the Discover sheet", async ({
+    page,
+  }) => {
+    await stubRecipeCount(page, 3)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto("/recipes")
+
+    const guide = page.getByTestId("recipe-onboarding")
+    await expect(guide.getByRole("heading", { level: 2 })).toHaveText([
+      "Import from a link",
+      "Discover recipes",
+      "Create manually",
+    ])
+    await guide.getByTestId("onboarding-discover").click()
+    await expect(page).toHaveURL(/\/recipes\?add=discover$/)
+    const sheet = page.getByRole("dialog", { name: "Discover recipes" })
+    await expect(
+      sheet.getByRole("group", { name: "How to search" }).getByRole("button")
+    ).toHaveText(["Daily idea", "Explore a cuisine", "Use what I know"])
+  })
+
+  test("F3-AC3: without a provider two cards and no Discover in the Add menu", async ({
+    page,
+  }) => {
+    await mockSettingValues(page, { "ai.provider": "" })
+    await stubRecipeCount(page, 3)
+    const settingsLoaded = page.waitForResponse("**/api/settings")
+    await page.goto("/recipes")
+    await settingsLoaded
+
+    const guide = page.getByTestId("recipe-onboarding")
+    await expect(guide.getByRole("heading", { level: 2 })).toHaveText([
+      "Import from a link",
+      "Create manually",
+    ])
+    await page.getByTestId("add-recipe").click()
+    await expect(
+      page.getByRole("menuitem", { name: "Create manually" })
+    ).toBeVisible()
+    await expect(
+      page.getByRole("menuitem", { name: "Discover recipes" })
+    ).toHaveCount(0)
   })
 
   test("the import card opens the import sheet", async ({ page }) => {

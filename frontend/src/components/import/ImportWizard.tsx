@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import type { Draft, Resolution } from "@/lib/api/import"
+import type { Draft } from "@/lib/api/import"
 import { useExtractRecipe, useResolveImport } from "@/lib/queries/import"
 import type { FoodRole } from "@/lib/api/foods"
 import { useCreateFood } from "@/lib/queries/foods"
@@ -24,24 +24,48 @@ import { FOOD_ROLES } from "@/lib/schemas/food"
 import { ApiError } from "@/lib/api/client"
 import { toast } from "@/lib/toast"
 
+import { draftRows } from "./draft-rows"
 import { IngredientResolveRow, type RowState } from "./IngredientResolveRow"
 import { ImportNutritionSummary } from "./ImportNutritionSummary"
 
-export function ImportWizard() {
+export interface ImportWizardProps {
+  /** Opens straight at the review with this draft (D18: a discovery
+   *  suggestion); there is no link step to go back to. */
+  initialDraft?: Draft
+  /** The review's rows for `initialDraft`, e.g. preselected matches.
+   *  Defaults to `draftRows(initialDraft)`. */
+  initialRows?: RowState[]
+  /** Tags added to the draft's own on save. */
+  extraTags?: string[]
+  /** Called with the new recipe's id after it is saved, before the recipe
+   *  opens. */
+  onSaved?: (foodId: number) => void
+}
+
+export function ImportWizard({
+  initialDraft,
+  initialRows,
+  extraTags = [],
+  onSaved,
+}: ImportWizardProps = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const [step, setStep] = useState<1 | 2>(1)
-  const [draft, setDraft] = useState<Draft | null>(null)
+  const [step, setStep] = useState<1 | 2>(initialDraft ? 2 : 1)
+  const [draft, setDraft] = useState<Draft | null>(initialDraft ?? null)
   const [url, setUrl] = useState("")
   const [html, setHtml] = useState("")
   const [showHtml, setShowHtml] = useState(false)
-  const [rows, setRows] = useState<RowState[]>([])
-  const [recipeName, setRecipeName] = useState("")
+  const [rows, setRows] = useState<RowState[]>(
+    () => initialRows ?? (initialDraft ? draftRows(initialDraft) : [])
+  )
+  const [recipeName, setRecipeName] = useState(initialDraft?.name ?? "")
   const [role, setRole] = useState<(typeof FOOD_ROLES)[number]>("main")
   // Kept as the raw input string so the field can be cleared while typing;
   // validated (≥ 1) on save.
-  const [portionsInput, setPortionsInput] = useState("1")
+  const [portionsInput, setPortionsInput] = useState(
+    String(initialDraft?.reference_portions || 1)
+  )
   const [portionsError, setPortionsError] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const referencePortions = Number(portionsInput)
@@ -64,19 +88,7 @@ export function ImportWizard() {
       setRecipeName(d.name)
       setPortionsInput(String(d.reference_portions || 1))
       setPortionsError(false)
-      setRows(
-        d.ingredients.map((ing) => ({
-          resolution:
-            ing.confidence === "unparsed" ? "skip" : ("existing" as Resolution),
-          foodId: null,
-          foodName: null,
-          amount: ing.amount,
-          unit: ing.unit || "g",
-          countUnit: ing.portion_grams !== null ? ing.unit : null,
-          portionGrams: ing.portion_grams,
-          portionEdited: false,
-        }))
-      )
+      setRows(draftRows(d))
       setStep(2)
     } catch (err) {
       if (err instanceof ApiError) setSubmitError(err.messageKey)
@@ -98,7 +110,7 @@ export function ImportWizard() {
         prep_minutes: draft.prep_minutes,
         cook_minutes: draft.cook_minutes,
         notes: null,
-        tags: draft.tags,
+        tags: [...new Set([...draft.tags, ...extraTags])],
         instructions: draft.instructions.map((text, i) => ({
           step_number: i + 1,
           text,
@@ -133,6 +145,7 @@ export function ImportWizard() {
       if (created.warnings?.includes("image_download_failed")) {
         toast.warning(t("import.review.image_download_failed"))
       }
+      onSaved?.(created.id)
       navigate({
         to: "/recipes/$id",
         params: { id: String(created.id) },
@@ -340,10 +353,12 @@ export function ImportWizard() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button variant="outline" onClick={() => setStep(1)}>
-              {t("common.back")}
-            </Button>
-            <div className="flex flex-wrap items-center justify-end gap-3">
+            {!initialDraft && (
+              <Button variant="outline" onClick={() => setStep(1)}>
+                {t("common.back")}
+              </Button>
+            )}
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
               {blocked && (
                 <p
                   id="import-save-hint"

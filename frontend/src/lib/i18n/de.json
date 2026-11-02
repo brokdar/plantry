@@ -75,7 +75,8 @@
       "extracting": "Extrahiere…",
       "via_jsonld": "Aus strukturierten Daten",
       "via_llm": "Mit KI extrahiert"
-    }
+    },
+    "prefilled_subtitle": "Plantry hat die bekannten Zutaten schon zugeordnet. Prüf den Rest und speichere dann das Rezept."
   },
   "plate": {
     "quantity": {
@@ -307,7 +308,13 @@
       "prices_new_row": "das neue Modell",
       "prices_incomplete": "Wird gespeichert, sobald Modell-ID sowie Eingabe- und Ausgabepreis (0 oder mehr) eingetragen sind.",
       "prices_duplicate": "Für dieses Modell gibt es schon eine Zeile. Pro Modell-ID wird nur ein Preis gespeichert.",
-      "prices_error": "Der Preis für dieses Modell konnte nicht geladen werden."
+      "prices_error": "Der Preis für dieses Modell konnte nicht geladen werden.",
+      "cuisines_label": "Küchen zum Entdecken",
+      "cuisines_effect": "Die Idee des Tages wechselt reihum durch diese Küchen. Ohne Auswahl nimmt Plantry eine, die du noch nicht gekocht hast.",
+      "cuisines_placeholder": "Zum Beispiel: persisch",
+      "cuisines_add": "Hinzufügen",
+      "cuisines_remove": "{{name}} entfernen",
+      "cuisines_full": "Höchstens {{count}} Küchen."
     },
     "system_section": {
       "appearance_group": "Sprache und Design",
@@ -640,7 +647,10 @@
       "create_title": "Selbst anlegen",
       "create_body": "Trag ein Rezept ein, das du auswendig kennst, Zutat für Zutat. Für deine eigene Version eines gespeicherten Rezepts öffnest du es und legst eine Variante an.",
       "create_action": "Rezept anlegen",
-      "milestone": "{{count}} Rezepte. Du kannst deine erste Woche planen."
+      "milestone": "{{count}} Rezepte. Du kannst deine erste Woche planen.",
+      "discover_title": "Rezepte entdecken",
+      "discover_body": "Dein Assistent sucht Rezepte, die zu deiner Ernährung und zu den Zutaten passen, mit denen du schon kochst. Du prüfst jede Idee, bevor sie in dein Kochbuch kommt.",
+      "discover_action": "Ideen finden"
     },
     "storage": "Aufbewahrung",
     "keep_days": "Hält sich (Tage)",
@@ -1680,6 +1690,25 @@
       "ingredients": "Zutaten",
       "taste": "Nicht mein Geschmack",
       "none": "Kein Grund"
+    },
+    "discover": {
+      "title": "Rezepte entdecken",
+      "description": "Wähl, wie gesucht wird. Plantry prüft jede Rezeptseite, bevor es dir eine Idee zeigt.",
+      "mode_label": "Art der Suche",
+      "mode_daily": "Idee des Tages",
+      "mode_explore": "Eine Küche erkunden",
+      "mode_known": "Mit dem, was ich kenne",
+      "cuisine_label": "Küche",
+      "cuisine_placeholder": "Zum Beispiel: thailändisch",
+      "focus_label": "Hauptzutat (optional)",
+      "focus_placeholder": "Zum Beispiel: Kichererbsen",
+      "start": "Rezepte suchen",
+      "running": "Suche nach Rezepten. Das kann eine Minute dauern.",
+      "empty": "Diesmal hat kein Rezept die Prüfung bestanden. Versuch es noch einmal oder ändere die Suche.",
+      "failed": "Die Suche hat nicht geklappt. Versuch es noch einmal."
+    },
+    "review": {
+      "gone": "Diese Idee ist nicht mehr verfügbar."
     }
   },
   "today": {
@@ -1770,7 +1799,8 @@
     "add": {
       "label": "Rezept hinzufügen",
       "import": "Aus einem Link importieren",
-      "create": "Selbst anlegen"
+      "create": "Selbst anlegen",
+      "discover": "Rezepte entdecken"
     },
     "library": {
       "search": "Rezepte suchen",
