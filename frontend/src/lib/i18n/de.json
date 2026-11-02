@@ -1058,7 +1058,8 @@
     "title": "Assistent",
     "description": "Änderungen landen in deinem Entwurf. Bestätigte Teller bleiben, außer du stimmst zu.",
     "disabled_reason": "Richte in den Einstellungen einen KI-Anbieter ein, um den Assistenten zu nutzen.",
-    "provider_missing": "Kein KI-Anbieter eingerichtet. Wähle in den Einstellungen einen aus.",
+    "provider_missing": "Kein KI-Anbieter eingerichtet.",
+    "provider_missing_link": "In den Einstellungen unter Assistent auswählen",
     "close": "Assistent schließen",
     "composer": {
       "placeholder": "Bitte mich, einen Tag zu planen, eine Mahlzeit zu tauschen oder eine Portion zu ändern…",
@@ -1089,6 +1090,7 @@
       "untitled": "Unterhaltung"
     },
     "change": {
+      "blocked_confirmed": "Übernommen, Rückgängig ist nicht mehr möglich",
       "fallback": "Dein Plan hat sich geändert",
       "apply_preset": "{{day}}: Routine {{name}} angewendet",
       "set_session_portions_one": "{{name}}: {{count}} Portion",

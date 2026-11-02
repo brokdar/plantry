@@ -41,6 +41,9 @@ var (
 	ErrAIChangeUndone = errors.New("the change was undone already")
 	// ErrAIChangeNotUndoable: the change wrote nothing undo can put back.
 	ErrAIChangeNotUndoable = errors.New("the change has nothing to undo")
+	// ErrAIChangeConfirmed: a plate or session of the change is confirmed
+	// now, so undo would rewrite a decision (Z1).
+	ErrAIChangeConfirmed = errors.New("the change's rows are confirmed")
 
 	// Plate feedback errors.
 	ErrInvalidFeedbackStatus = errors.New("invalid feedback status")
@@ -156,6 +159,7 @@ var messageKeys = []struct {
 	{ErrAIChangeStale, "error.ai.change_stale"},
 	{ErrAIChangeUndone, "error.ai.change_undone"},
 	{ErrAIChangeNotUndoable, "error.ai.change_not_undoable"},
+	{ErrAIChangeConfirmed, "error.ai.change_confirmed"},
 	{ErrInvalidFeedbackStatus, "error.feedback.invalid_status"},
 	{ErrImportBodyTooLarge, "error.import.body_too_large"},
 	{ErrImportNotHTML, "error.import.not_html"},

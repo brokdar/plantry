@@ -94,7 +94,7 @@ export function RunDetailSheet({
 
 function Detail({ run }: { run: RunDetail }) {
   const { t, i18n } = useTranslation()
-  const facts: [string, string][] = [
+  const facts: [label: string, value: string, testId?: string][] = [
     [t("settings_page.insights.col.model"), modelText(run, i18n)],
     [t("settings_page.insights.col.prompt_version"), run.prompt_version ?? "–"],
     [
@@ -123,6 +123,11 @@ function Detail({ run }: { run: RunDetail }) {
         ? "–"
         : formatPercent(run.correction_rate, i18n),
     ],
+    [
+      t("settings_page.insights.col.edits"),
+      run.edits === null ? "–" : formatNumber(run.edits, i18n),
+      "run-detail-edits",
+    ],
   ]
 
   return (
@@ -137,8 +142,8 @@ function Detail({ run }: { run: RunDetail }) {
       </SheetHeader>
       <div className="flex flex-col gap-6 overflow-y-auto px-5 pb-6">
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-small">
-          {facts.map(([label, value]) => (
-            <div key={label} className="contents">
+          {facts.map(([label, value, testId]) => (
+            <div key={label} data-testid={testId} className="contents">
               <dt className="text-ink-muted">{label}</dt>
               <dd className="text-ink tabular-nums">{value}</dd>
             </div>

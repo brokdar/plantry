@@ -74,28 +74,25 @@ func (h *AIHandler) DebugSystemPrompt(w http.ResponseWriter, r *http.Request) {
 type chatRequestBody struct {
 	ConversationID *int64 `json:"conversation_id,omitempty"`
 	Message        string `json:"message"`
-	Today          string `json:"today,omitempty"` // YYYY-MM-DD; server clock when empty
-	Start          string `json:"start"`           // YYYY-MM-DD window start (a shopping day), required
+	Today          string `json:"today"` // YYYY-MM-DD the user's date, required (D25)
+	Start          string `json:"start"` // YYYY-MM-DD window start (a shopping day), required
 }
 
 type chatDates struct{ today, start time.Time }
 
-// parseChatDates parses the chat's dates. today is optional (zero when
-// empty); start is required. On failure it returns the i18n key. Whether
-// start is a shopping day is the service's check.
+// parseChatDates parses the chat's dates. today and start are both required. On failure it returns the
+// i18n key. Whether start is a shopping day is the service's check.
 func parseChatDates(todayStr, startStr string) (chatDates, string) {
 	var d chatDates
-	if startStr == "" {
+	if startStr == "" || todayStr == "" {
 		return d, "error.invalid_body"
 	}
 	var err error
 	if d.start, err = time.Parse(time.DateOnly, startStr); err != nil {
 		return d, "error.ai.invalid_date"
 	}
-	if todayStr != "" {
-		if d.today, err = time.Parse(time.DateOnly, todayStr); err != nil {
-			return d, "error.ai.invalid_date"
-		}
+	if d.today, err = time.Parse(time.DateOnly, todayStr); err != nil {
+		return d, "error.ai.invalid_date"
 	}
 	return d, ""
 }

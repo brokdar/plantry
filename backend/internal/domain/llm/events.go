@@ -127,6 +127,10 @@ type ChangePayload struct {
 	PlateIDs   []int64        `json:"plate_ids"`
 	SessionIDs []int64        `json:"session_ids"`
 	Undoable   bool           `json:"undoable"`
+	// UndoBlocked is "confirmed" when a plate or session of the change is
+	// confirmed now (undo would be refused with error.ai.change_confirmed),
+	// else null.
+	UndoBlocked *string `json:"undo_blocked"`
 	// Recorded is false when the change was made but could not be saved: it
 	// has no id and cannot be undone (the tool result carries
 	// warning "change_not_recorded").

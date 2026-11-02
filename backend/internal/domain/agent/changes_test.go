@@ -379,3 +379,33 @@ func TestChange_UndoStaleWhenUserEditedMidChange(t *testing.T) {
 	require.NoError(t, err)
 	assert.InDelta(t, 4.0, got.Eaters, 1e-9)
 }
+
+// Z1-AC1, Z1-AC2: a change whose plate is confirmed since is not undoable: 409
+// change_confirmed, nothing written, and the list flags it undo_blocked. A
+// confirm change itself stays undoable (TestChange_UndoConfirm).
+func TestChange_UndoBlockedWhenConfirmed(t *testing.T) {
+	e := newPlanToolEnv(t)
+	ctx, conv := e.chat()
+	p, _ := e.mainSession()
+	ch := e.change(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
+
+	list, err := e.changes.List(context.Background(), conv)
+	require.NoError(t, err)
+	assert.Nil(t, list[0].UndoBlocked, "a draft change is not blocked")
+
+	_, err = e.plates.Confirm(context.Background(), plate.RowSet{PlateIDs: []int64{p.ID}})
+	require.NoError(t, err)
+
+	list, err = e.changes.List(context.Background(), conv)
+	require.NoError(t, err)
+	require.NotNil(t, list[0].UndoBlocked)
+	assert.Equal(t, "confirmed", *list[0].UndoBlocked)
+	assert.Equal(t, list[0].UndoBlocked, list[0].Payload().UndoBlocked)
+
+	n := e.eventCount()
+	_, err = e.changes.Undo(context.Background(), ch.ID)
+	require.ErrorIs(t, err, domain.ErrAIChangeConfirmed)
+	key, _ := domain.MessageKey(err, "ai")
+	assert.Equal(t, "error.ai.change_confirmed", key)
+	assert.Equal(t, n, e.eventCount(), "nothing written")
+}

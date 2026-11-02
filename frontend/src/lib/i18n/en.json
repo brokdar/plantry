@@ -1058,7 +1058,8 @@
     "title": "Assistant",
     "description": "Changes go into your draft. Confirmed plates are kept unless you agree.",
     "disabled_reason": "Set up an AI provider in Settings to use the assistant.",
-    "provider_missing": "No AI provider is configured. Choose one in Settings.",
+    "provider_missing": "No AI provider is configured.",
+    "provider_missing_link": "Choose one in Settings → Assistant",
     "close": "Close assistant",
     "composer": {
       "placeholder": "Ask me to plan a day, swap a meal or change a portion…",
@@ -1089,6 +1090,7 @@
       "untitled": "Conversation"
     },
     "change": {
+      "blocked_confirmed": "Accepted, undo is no longer possible",
       "fallback": "Your plan changed",
       "apply_preset": "{{day}}: routine {{name}} applied",
       "set_session_portions_one": "{{name}}: {{count}} portion",

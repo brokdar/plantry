@@ -70,6 +70,9 @@ export interface Change {
   plate_ids: number[]
   session_ids: number[]
   undoable: boolean
+  /** `confirmed`: a plate or session of the change is confirmed now, so
+   *  undo is refused; null otherwise. */
+  undo_blocked: "confirmed" | null
   /** false: the change was made but not saved (`id` 0, not undoable). */
   recorded: boolean
 }

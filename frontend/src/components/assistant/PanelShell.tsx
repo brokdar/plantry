@@ -26,8 +26,8 @@ interface PanelShellProps {
 
 /**
  * The shells of the assistant (D15). From 1280 px an `aside` beside the
- * board; from 768 px a non-modal `aside` floating over it (the board keeps
- * its width): no dialog, no focus trap, no scroll lock; Escape closes it
+ * board; from 768 px a non-modal `aside` floating over it, below the plan
+ * toolbar so Accept and shop stays reachable (the board keeps its width): no dialog, no focus trap, no scroll lock; Escape closes it
  * while focus is inside. On phones a bottom sheet with a grab handle.
  */
 export function PanelShell({
@@ -85,10 +85,10 @@ export function PanelShell({
         }
       }}
       className={cn(
-        "flex h-svh w-[380px] flex-col border-l border-line bg-panel-raised text-ink",
+        "flex w-[380px] flex-col border-l border-line bg-panel-raised text-ink",
         docked
-          ? "sticky top-0 shrink-0 self-start"
-          : "fixed inset-y-0 right-0 z-40 max-w-full shadow-sheet"
+          ? "sticky top-0 h-svh shrink-0 self-start"
+          : "fixed top-[var(--plan-toolbar-bottom,0px)] right-0 bottom-0 z-40 max-w-full shadow-sheet"
       )}
     >
       <header className="flex flex-col gap-2 px-4 pt-4 pb-3">

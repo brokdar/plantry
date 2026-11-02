@@ -89,7 +89,7 @@ func (s *Service) WithRecorder(rec *airun.Recorder) *Service {
 type ChatRequest struct {
 	ConversationID *int64
 	UserText       string
-	// Today is the user's current date; zero falls back to the server clock.
+	// Today is the user's current date (required, D25).
 	Today time.Time
 	// Start is the planning window's first day (required); it must be a
 	// shopping day (D1).
@@ -102,6 +102,9 @@ type ChatRequest struct {
 func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Event) (err error) {
 	if req.UserText == "" {
 		return fmt.Errorf("%w: user_text required", domain.ErrInvalidInput)
+	}
+	if req.Today.IsZero() {
+		return fmt.Errorf("%w: today required", domain.ErrInvalidInput)
 	}
 	w, err := s.window(ctx, req)
 	if err != nil {
@@ -170,7 +173,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 
 	// Drive the loop. Tools read today (D25), the window and the turn from
 	// ctx.
-	ctx = withWindow(withToday(ctx, s.today(req)), w)
+	ctx = withWindow(withToday(ctx, req.Today), w)
 	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks})
 	return Run(ctx, RunRequest{
 		ConversationID: conv.ID,
@@ -286,25 +289,12 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w wind
 	if err != nil {
 		return "", err
 	}
-	today := s.today(req)
+	today := req.Today
 	st, err := s.plan.Build(ctx, w, today, w.Start, w.End)
 	if err != nil {
 		return "", err
 	}
 	return ComposePrompt(p, s.plan.Summary(st, planning.BoardIssues(st)), today), nil
-}
-
-// today is the request's date, or the server's local date when it has none.
-func (s *Service) today(req ChatRequest) time.Time {
-	if !req.Today.IsZero() {
-		return req.Today
-	}
-	return localDate(s.now())
-}
-
-// localDate is t's calendar date at midnight UTC.
-func localDate(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 type todayKey struct{}
@@ -327,12 +317,11 @@ func withToday(ctx context.Context, today time.Time) context.Context {
 	return context.WithValue(ctx, todayKey{}, today)
 }
 
-// todayFrom returns the date set by withToday, else the server's local date.
+// todayFrom returns the date set by withToday; the zero time when a chat
+// turn did not set one (Chat rejects such a request).
 func todayFrom(ctx context.Context) time.Time {
-	if t, ok := ctx.Value(todayKey{}).(time.Time); ok {
-		return t
-	}
-	return localDate(time.Now())
+	t, _ := ctx.Value(todayKey{}).(time.Time)
+	return t
 }
 
 // DebugSystemPrompt composes and returns the system prompt that would be sent
@@ -340,6 +329,9 @@ func todayFrom(ctx context.Context) time.Time {
 // same path as Chat, so end-to-end tests can assert on what the agent
 // actually sees. Never call this from the Chat path.
 func (s *Service) DebugSystemPrompt(ctx context.Context, req ChatRequest) (string, error) {
+	if req.Today.IsZero() {
+		return "", fmt.Errorf("%w: today required", domain.ErrInvalidInput)
+	}
 	w, err := s.window(ctx, req)
 	if err != nil {
 		return "", err

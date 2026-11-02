@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import { Plus } from "lucide-react"
 import { useEffect, useMemo, useRef } from "react"
 import { useTranslation } from "react-i18next"
@@ -221,7 +222,14 @@ export function AssistantPanel({
       >
         {!enabled && !loading && (
           <p className="text-small text-ink-muted">
-            {t("assistant.provider_missing")}
+            {t("assistant.provider_missing")}{" "}
+            <Link
+              to="/settings/$section"
+              params={{ section: "assistant" }}
+              className="font-semibold text-accent underline-offset-4 hover:underline"
+            >
+              {t("assistant.provider_missing_link")}
+            </Link>
           </p>
         )}
         <MessageList

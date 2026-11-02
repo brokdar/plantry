@@ -88,6 +88,7 @@ export function MessageList({
   lineState,
   onUndo,
 }: MessageListProps) {
+  const { t } = useTranslation()
   const failures = (list: ToolFailure[]) =>
     list.map((f) => <FailureLine key={f.id} />)
   const lines = (changes: Change[]) =>
@@ -117,6 +118,15 @@ export function MessageList({
               />
             )}
             {lines(changes)}
+            {changes.length > 0 &&
+              changes.every((c) => lineState(c) === "undone") && (
+                <p
+                  data-testid="assistant-turn-undone"
+                  className="px-1 text-caption text-ink-muted"
+                >
+                  {t("assistant.undone")}
+                </p>
+              )}
             {failures(fails)}
           </div>
         )
