@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Plantry
 
-Self-hosted weekly meal planner. Single Go binary embeds React SPA, serves from one SQLite file. Must cross-compile to ARM (no CGO).
+Self-hosted weekly meal planner. Single Go binary embeds React SPA, serves from one SQLite file. Must cross-compile to ARM (no CGO); the release image is `linux/amd64`, `linux/arm64` and `linux/arm/v7`. `plantry backup -out <file>` is the supported backup (see `README.md`).
 
 - **Backend detail:** see [`backend/CLAUDE.md`](backend/CLAUDE.md)
 - **Deployment context:** single-user, LAN-only — no auth required or expected.
@@ -25,7 +25,7 @@ docker compose up --build             # build + run (port 8080)
 E2E_LANE=N scripts/gate.sh [specs]    # backend + frontend checks in parallel, then e2e
 ```
 
-Runs `go test -race`, `go vet`, `golangci-lint`, `check-sqlc-usage.sh`, then `bun run check`, `bun run build`, then the full e2e suite or only the named specs. Skip parts with `GATE_SKIP_BACKEND=1`, `GATE_SKIP_FRONTEND=1`, `GATE_SKIP_E2E=1`. `E2E_LANE` (1-9) gives each worktree its own backend/Vite ports and DB so several can run e2e at once (see `frontend/playwright.config.ts`); never use lane 0 (port 8080/5173) from a worktree. Prefix every e2e run with it: `E2E_LANE=N bun run e2e -- <specs>`.
+Runs `go test -race`, `go vet`, `golangci-lint`, the `GOARCH=arm64` and `GOARCH=arm GOARM=7` cross builds (`CGO_ENABLED=0`; a dependency that needs CGO fails here), `check-sqlc-usage.sh`, `go tool deadcode -test ./...` (nothing outside `sqlcgen/`), then `bun run check`, `bun run build`, then the full e2e suite or only the named specs. Skip parts with `GATE_SKIP_BACKEND=1`, `GATE_SKIP_FRONTEND=1`, `GATE_SKIP_E2E=1`. `E2E_LANE` (1-9) gives each worktree its own backend/Vite ports and DB so several can run e2e at once (see `frontend/playwright.config.ts`); never use lane 0 (port 8080/5173) from a worktree. Prefix every e2e run with it: `E2E_LANE=N bun run e2e -- <specs>`.
 
 ## Required Skills
 

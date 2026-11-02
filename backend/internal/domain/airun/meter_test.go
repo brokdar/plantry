@@ -299,7 +299,7 @@ func TestMeter_CompleteReturnsInnerTextAndRecordsUsage(t *testing.T) {
 
 	store := newMemStore()
 	rec, _ := newRecorder(t, store)
-	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindClassify})
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
 	got, err := rec.Meter(fake.NewFromScript(turns()), "openai").Complete(ctx, req)
 	if err != nil {
 		t.Fatal(err)

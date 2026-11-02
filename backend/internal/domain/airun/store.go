@@ -15,7 +15,6 @@ const (
 	KindRegenerate     Kind = "regenerate"
 	KindChat           Kind = "chat"
 	KindDiscovery      Kind = "discovery"
-	KindClassify       Kind = "classify"
 	KindImportFallback Kind = "import_fallback"
 	KindLookup         Kind = "lookup"
 	// KindUntracked marks a metered call made without a started run.
@@ -25,7 +24,7 @@ const (
 // Valid reports whether k is a known kind.
 func (k Kind) Valid() bool {
 	switch k {
-	case KindGenerate, KindRegenerate, KindChat, KindDiscovery, KindClassify, KindImportFallback, KindLookup, KindUntracked:
+	case KindGenerate, KindRegenerate, KindChat, KindDiscovery, KindImportFallback, KindLookup, KindUntracked:
 		return true
 	}
 	return false
