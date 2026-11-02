@@ -1217,6 +1217,7 @@ export function mockSuggestion(
         amount: 500,
         unit: "g",
         food_id: 12,
+        candidate: "Chicken thigh",
         known: true,
       },
       {
@@ -1225,6 +1226,7 @@ export function mockSuggestion(
         amount: 3,
         unit: "tbsp",
         food_id: null,
+        candidate: null,
         known: false,
       },
     ],

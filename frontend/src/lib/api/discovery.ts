@@ -13,6 +13,8 @@ export interface SuggestionIngredient {
   amount: number | null
   unit: string | null
   food_id: number | null
+  /** The matched leaf's name; null when unmatched. */
+  candidate: string | null
   /** True when the ingredient matches a food the user already has. */
   known: boolean
 }

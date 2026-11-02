@@ -128,6 +128,47 @@ describe("AssistantSection", () => {
     )
   })
 
+  it("adds and removes cuisine chips as discovery.cuisines", async () => {
+    serveSettings([{ key: "discovery.cuisines", value: '["persian"]' }])
+    const user = userEvent.setup()
+    renderSection()
+
+    const input = await screen.findByLabelText("Cuisines to discover")
+    expect(screen.getByText("persian")).toBeVisible()
+    await user.type(input, "  Thai {Enter}")
+    await waitFor(() =>
+      expect(setSetting).toHaveBeenLastCalledWith(
+        "discovery.cuisines",
+        '["persian","thai"]'
+      )
+    )
+    expect(input).toHaveValue("")
+    // A duplicate is not added again.
+    await user.type(input, "PERSIAN")
+    await user.click(screen.getByRole("button", { name: "Add" }))
+    expect(setSetting).toHaveBeenCalledTimes(1)
+
+    await user.click(
+      await screen.findByRole("button", { name: "Remove persian" })
+    )
+    await waitFor(() =>
+      expect(setSetting).toHaveBeenLastCalledWith(
+        "discovery.cuisines",
+        '["thai"]'
+      )
+    )
+  })
+
+  it("stops adding cuisines at 10", async () => {
+    const ten = Array.from({ length: 10 }, (_, i) => `c${i}`)
+    serveSettings([{ key: "discovery.cuisines", value: JSON.stringify(ten) }])
+    renderSection()
+
+    expect(await screen.findByText("Up to 10 cuisines.")).toBeVisible()
+    expect(screen.getByLabelText("Cuisines to discover")).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Add" })).toBeDisabled()
+  })
+
   it("saves the run retention on blur", async () => {
     const user = userEvent.setup()
     renderSection()
