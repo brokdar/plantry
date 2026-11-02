@@ -114,7 +114,8 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
     const slot = await seedSlot(`slot.rpl-${tag}`, "Moon", -1)
     slotId = slot.id
     // The generator needs the 10-recipe target (D22) even on a fresh DB.
-    library = await seedRecipeLibrary(tag)
+    // Unknown freezable is not offered as freezable, so mark them freezable.
+    library = await seedRecipeLibrary(tag, 10, true)
     const [chili, curry] = library.mains
 
     const clear = await ctx.delete(`/api/plan?from=${start}&to=${end}`)

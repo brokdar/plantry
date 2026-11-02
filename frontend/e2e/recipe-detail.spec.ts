@@ -226,6 +226,8 @@ test("at 375 px Back has its own row and Cook now leads the actions; facts line 
     const actions = page.getByTestId("recipe-actions")
     const cook = page.getByTestId("recipe-cook-now")
     await expect(cook).toBeVisible()
+    // Measure after webfonts load: a late font swap reflows the action row.
+    await page.evaluate(() => document.fonts.ready)
 
     const [actionsBox, cookBox, backBox, favBox] = await Promise.all([
       actions.boundingBox(),
