@@ -95,7 +95,7 @@ func TestCost(t *testing.T) {
 	}
 }
 
-func TestBuiltinPricesCoverTheKnownModels(t *testing.T) {
+func TestBuiltinPricesCoverTheModelTable(t *testing.T) {
 	for _, id := range []string{
 		"claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1",
 		"claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5",

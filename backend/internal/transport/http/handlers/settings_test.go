@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/anthropic"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
@@ -196,6 +197,21 @@ func TestModels_AnthropicRequiresKey(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
+
+	// B8-AC3: the list is the model table, newest family first.
+	var body struct {
+		Models []struct {
+			ID          string `json:"id"`
+			DisplayName string `json:"display_name"`
+		} `json:"models"`
+	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
+	require.Len(t, body.Models, len(anthropic.Models()))
+	for i, m := range anthropic.Models() {
+		assert.Equal(t, m.Prefix, body.Models[i].ID)
+		assert.Equal(t, m.DisplayName, body.Models[i].DisplayName)
+	}
+	assert.Equal(t, "claude-fable-5-1", body.Models[0].ID)
 }
 
 func TestSystem_ReturnsInfo(t *testing.T) {

@@ -340,6 +340,29 @@ func TestLLMChooser_RepairsAnUnknownFood(t *testing.T) {
 	assert.Contains(t, toolResult(t, reqs[1]), "food_id=999999")
 }
 
+// B8-AC4: a reply without the submit_plan call (what an auto tool choice can
+// produce) is repaired by the existing loop. The fake keeps replaying a
+// text-only turn, so the reply carries prose and a call to another tool.
+func TestLLMChooser_RepairsAReplyWithoutTheToolCall(t *testing.T) {
+	e := newLLMEnv(t)
+	prose := fake.Turn{
+		StopReason: "tool_use",
+		Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
+			{Type: "text", Text: "Here is my plan in words."},
+			{Type: "tool_use", ToolUseID: "tu_1", ToolName: "web_lookup", ToolInput: json.RawMessage(`{}`)},
+		}},
+		Usage: fake.ScriptedUsage{InputTokens: 1000, OutputTokens: 200},
+	}
+	id := e.gen(prose, submit(t, "tu_2", e.validPlan()))
+
+	r := e.run(id)
+	assert.Equal(t, "ok", r.Status, "violations %s", r.Violations)
+	assert.Equal(t, 1, r.RepairAttempts)
+	reqs := e.client.Requests()
+	require.Len(t, reqs, 2)
+	assert.Contains(t, toolResult(t, reqs[1]), "no submit_plan call")
+}
+
 // B7-AC5: a provider error ends the run in error and writes nothing.
 func TestLLMChooser_ProviderError(t *testing.T) {
 	e := newLLMEnv(t)
