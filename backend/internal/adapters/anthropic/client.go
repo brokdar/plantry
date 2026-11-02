@@ -98,8 +98,13 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 	}
 	if resp.StatusCode == http.StatusBadRequest && req.WebSearch != nil {
 		// Web search can be turned off for the organisation (D3): run the
-		// same turn without it and stop offering it for a while.
+		// same turn without it and stop offering it for a while. Other 400s
+		// are the caller's to see.
+		apiErr := decodeAPIError(resp)
 		_ = resp.Body.Close()
+		if !rejectsWebSearch(apiErr) {
+			return nil, apiErr
+		}
 		c.setWebSearch(req.Model, false)
 		req.WebSearch = nil
 		if resp, err = c.post(ctx, req); err != nil {
@@ -337,7 +342,13 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("anthropic: %d %s: %s", e.Status, e.ErrorType, e.Message)
 }
 
-func decodeAPIError(resp *http.Response) error {
+// rejectsWebSearch reports whether a 400 refused the web search tool itself.
+func rejectsWebSearch(e *APIError) bool {
+	msg := strings.ToLower(e.Message)
+	return strings.Contains(msg, "web search") || strings.Contains(msg, "web_search")
+}
+
+func decodeAPIError(resp *http.Response) *APIError {
 	raw, _ := io.ReadAll(resp.Body)
 	e := &APIError{Status: resp.StatusCode, RawBody: string(raw), RequestID: resp.Header.Get("request-id")}
 	var body apiErrorBody

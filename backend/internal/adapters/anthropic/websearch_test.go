@@ -414,18 +414,29 @@ func TestStream_WebSearchRejectedFallsBack(t *testing.T) {
 	assert.Equal(t, int32(1), modelCalls.Load())
 }
 
-// A 400 on a request without search is returned as is, not retried.
-func TestStream_BadRequestWithoutSearchNotRetried(t *testing.T) {
-	var calls atomic.Int32
-	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = io.WriteString(w, `{"type":"error","error":{"type":"invalid_request_error","message":"bad"}}`)
-	})
-	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
-	out := make(chan llm.Event, 8)
-	_, err := c.Stream(context.Background(), llm.Request{Model: "claude-opus-5-5"}, out)
-	require.Error(t, err)
-	assert.Equal(t, int32(1), calls.Load())
+// A 400 that is not about web search is returned as is, not retried, and
+// leaves the capability alone.
+func TestStream_OtherBadRequestNotRetried(t *testing.T) {
+	for _, search := range []*llm.WebSearch{nil, {MaxUses: 5}} {
+		var calls atomic.Int32
+		ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/v1/models/") {
+				_, _ = io.WriteString(w, `{"capabilities":{"server_tools":{"web_search":{"supported":true}}}}`)
+				return
+			}
+			calls.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"type":"error","error":{"type":"invalid_request_error","message":"messages: bad"}}`)
+		})
+		c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+		out := make(chan llm.Event, 8)
+		_, err := c.Stream(context.Background(), llm.Request{Model: "claude-opus-5-5", WebSearch: search}, out)
+		var apiErr *anthropic.APIError
+		require.ErrorAs(t, err, &apiErr)
+		assert.Equal(t, http.StatusBadRequest, apiErr.Status)
+		assert.Equal(t, int32(1), calls.Load())
+		ok, _ := c.WebSearch(context.Background(), "claude-opus-5-5")
+		assert.True(t, ok)
+	}
 }
