@@ -52,6 +52,7 @@ type sessionResponse struct {
 	ID             int64                    `json:"id"`
 	FoodID         int64                    `json:"food_id"`
 	FoodName       string                   `json:"food_name"`
+	Freezable      *bool                    `json:"freezable"`
 	CookDate       string                   `json:"cook_date"`
 	CookSlotID     int64                    `json:"cook_slot_id"`
 	Portions       float64                  `json:"portions"`
@@ -73,7 +74,7 @@ type sessionResponse struct {
 
 func toSessionResponse(v *plate.SessionView) sessionResponse {
 	resp := sessionResponse{
-		ID: v.ID, FoodID: v.FoodID, FoodName: v.FoodName,
+		ID: v.ID, FoodID: v.FoodID, FoodName: v.FoodName, Freezable: v.Freezable,
 		CookDate: v.CookDate.Format(time.DateOnly), CookSlotID: v.CookSlotID,
 		Portions: v.Portions, FrozenPortions: v.FrozenPortions, Note: v.Note,
 		State: string(v.State), AIRunID: v.AIRunID, Reason: v.Reason,

@@ -950,7 +950,7 @@
       "past_freezer_days": "That's longer than frozen portions keep.",
       "food_mismatch": "This batch is a different dish.",
       "freezing_disabled": "Freezing is turned off in Settings.",
-      "not_freezable": "This recipe doesn't freeze well.",
+      "not_freezable": "Mark this recipe as freezable before freezing portions.",
       "not_found": "That batch no longer exists."
     },
     "plan": {
@@ -1438,6 +1438,8 @@
       "freeze": "Portions to freeze",
       "portions_named": "Portions of {{name}} to cook",
       "freeze_named": "Portions of {{name}} to freeze",
+      "freeze_hint": "Mark this recipe as freezable to freeze portions.",
+      "frozen_existing": "Already frozen: {{count}}",
       "use_by": "Use by {{date}}",
       "remove": "Remove batch",
       "remove_named": "Remove the {{name}} batch",

@@ -874,6 +874,18 @@ func TestSetSessionPortions_FreezerRules(t *testing.T) {
 	require.NoError(t, err, "explicitly freezable allows freezing")
 	assert.InDelta(t, 2.0, v.FrozenPortions, 1e-9)
 	assert.InDelta(t, 4.0, v.Surplus, 1e-9)
+
+	// Existing frozen portions stay editable once the recipe is no longer freezable.
+	e.exec(`UPDATE foods SET freezable = NULL WHERE id = ?`, e.chili)
+	_, err = e.svc.SetSessionPortions(e.ctx, sid, plate.SessionPortions{Portions: 7, FrozenPortions: 2})
+	require.NoError(t, err, "same frozen count is allowed")
+	_, err = e.svc.SetSessionPortions(e.ctx, sid, plate.SessionPortions{Portions: 7, FrozenPortions: 3})
+	assert.ErrorIs(t, err, domain.ErrSessionNotFreezable, "increase is rejected")
+	_, err = e.svc.SetSessionPortions(e.ctx, sid, plate.SessionPortions{Portions: 7, FrozenPortions: 1})
+	require.NoError(t, err, "lowering is allowed")
+	e.exec(`UPDATE foods SET freezable = 1 WHERE id = ?`, e.chili)
+	_, err = e.svc.SetSessionPortions(e.ctx, sid, plate.SessionPortions{Portions: 7, FrozenPortions: 3})
+	require.NoError(t, err, "increase allowed when freezable")
 }
 
 func TestSetSessionPortions_Validation(t *testing.T) {

@@ -977,7 +977,7 @@
       "past_freezer_days": "So lange halten eingefrorene Portionen nicht.",
       "food_mismatch": "Hier wird ein anderes Gericht vorgekocht.",
       "freezing_disabled": "Einfrieren ist in den Einstellungen ausgeschaltet.",
-      "not_freezable": "Dieses Rezept lässt sich nicht gut einfrieren.",
+      "not_freezable": "Markiere das Rezept als einfrierbar, bevor du Portionen einfrierst.",
       "not_found": "Dieses Vorkochen gibt es nicht mehr."
     },
     "plan": {
@@ -1438,6 +1438,8 @@
       "freeze": "Portionen einfrieren",
       "portions_named": "Portionen {{name}} kochen",
       "freeze_named": "Portionen {{name}} einfrieren",
+      "freeze_hint": "Markiere das Rezept als einfrierbar, um Portionen einzufrieren.",
+      "frozen_existing": "Bereits eingefroren: {{count}}",
       "use_by": "Haltbar bis {{date}}",
       "remove": "Vorkochen entfernen",
       "remove_named": "Vorkochen von {{name}} entfernen",

@@ -61,7 +61,9 @@ type Warning struct {
 // its warnings: the shape the session endpoints and read models return.
 type SessionView struct {
 	CookSession
-	FoodName       string
+	FoodName string
+	// Freezable is the recipe's flag: nil = unknown. Frozen portions need true.
+	Freezable      *bool
 	KeepDays       int
 	UseBy          time.Time
 	Consumed       float64

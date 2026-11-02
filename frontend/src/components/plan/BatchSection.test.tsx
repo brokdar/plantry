@@ -265,6 +265,27 @@ describe("BatchSection on the cook cell of a batch", () => {
     ).not.toBeInTheDocument()
   })
 
+  it.each([null, false])(
+    "shows a hint instead of the stepper when freezable is %s",
+    async (freezable) => {
+      await renderSection({ ...mockSession, freezable }, 9, { freezing: true })
+      expect(screen.getByTestId("batch-freeze-hint")).toHaveTextContent(
+        "Mark this recipe as freezable to freeze portions."
+      )
+      expect(
+        screen.queryByRole("group", { name: "Portions of Chili to freeze" })
+      ).not.toBeInTheDocument()
+    }
+  )
+
+  it("shows the stepper, no hint, for a freezable recipe", async () => {
+    await renderSection(mockSession, 9, { freezing: true })
+    expect(
+      screen.getByRole("group", { name: "Portions of Chili to freeze" })
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId("batch-freeze-hint")).not.toBeInTheDocument()
+  })
+
   it("freezes portions when freezing is on", async () => {
     await renderSection({ ...mockSession, portions: 8 }, 9, { freezing: true })
     await userEvent.click(
