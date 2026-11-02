@@ -839,7 +839,7 @@ func (s *Service) SetSessionPortions(ctx context.Context, id int64, in SessionPo
 			if err != nil {
 				return err
 			}
-			if f.Freezable != nil && !*f.Freezable {
+			if f.Freezable == nil || !*f.Freezable {
 				return fmt.Errorf("%w: food %d", domain.ErrSessionNotFreezable, f.ID)
 			}
 		}

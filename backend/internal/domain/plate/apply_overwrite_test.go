@@ -73,6 +73,7 @@ func TestSetSessionPortions_FreezingEnabledParsesBool(t *testing.T) {
 	e := newEnv(t)
 	sid := sessionOf(e.create(sun, e.dinner, nil, composed(e.chili, 1)), 0)
 	e.set(settings.KeyPlanFreezingEnabled, "1")
+	e.exec(`UPDATE foods SET freezable = 1 WHERE id = ?`, e.chili)
 	v, err := e.svc.SetSessionPortions(e.ctx, sid, plate.SessionPortions{Portions: 4, FrozenPortions: 2})
 	require.NoError(t, err)
 	assert.InDelta(t, 2.0, v.FrozenPortions, 1e-9)

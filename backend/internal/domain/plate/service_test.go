@@ -648,6 +648,7 @@ func (e *env) componentCount(foodID int64) int {
 func TestDelete_ThenApplyRecreatesAnEqualPlan(t *testing.T) {
 	e := newEnv(t)
 	e.set(settings.KeyPlanFreezingEnabled, "true")
+	e.exec(`UPDATE foods SET freezable = 1 WHERE id = ?`, e.chili)
 	note := "birthday"
 	p, err := e.svc.Create(e.ctx, plate.PlateInput{
 		Date: day(sun), SlotID: e.dinner, Eaters: f64(3.5), Note: &note,
@@ -865,8 +866,12 @@ func TestSetSessionPortions_FreezerRules(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrSessionNotFreezable)
 
 	e.exec(`UPDATE foods SET freezable = NULL WHERE id = ?`, e.chili)
+	_, err = e.svc.SetSessionPortions(e.ctx, sid, plate.SessionPortions{Portions: 6, FrozenPortions: 2})
+	assert.ErrorIs(t, err, domain.ErrSessionNotFreezable, "unknown freezable does not allow freezing")
+
+	e.exec(`UPDATE foods SET freezable = 1 WHERE id = ?`, e.chili)
 	v, err := e.svc.SetSessionPortions(e.ctx, sid, plate.SessionPortions{Portions: 6, FrozenPortions: 2})
-	require.NoError(t, err, "unknown freezable allows freezing")
+	require.NoError(t, err, "explicitly freezable allows freezing")
 	assert.InDelta(t, 2.0, v.FrozenPortions, 1e-9)
 	assert.InDelta(t, 4.0, v.Surplus, 1e-9)
 }

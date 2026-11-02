@@ -72,7 +72,9 @@ test.describe("Routines", () => {
         await editor.getByRole("button", { name: "New routine" }).click()
         const sheet = page.getByTestId("routine-sheet")
         await sheet.getByLabel("Name").fill(name)
-        await sheet.getByLabel("Meal", { exact: true }).selectOption(String(slot.id))
+        await sheet
+          .getByLabel("Meal", { exact: true })
+          .selectOption(String(slot.id))
         await sheet.getByRole("button", { name: "Add food" }).click()
         await sheet.getByLabel("Search foods").fill(oats.name)
         await sheet.getByRole("button", { name: oats.name }).click()
