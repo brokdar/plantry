@@ -17,5 +17,5 @@
     {"date": "2026-11-01", "slot": "dinner", "recipe": "Linsen-Dal"}
   ],
   "steps": [{"action": "generate"}],
-  "expect": {"min_plates": 21}
+  "expect": {"min_plates": 21, "batch_meals": 3}
 }

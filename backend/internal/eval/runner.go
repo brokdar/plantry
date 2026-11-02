@@ -79,6 +79,7 @@ const (
 	ExpectMinRepeats      = "min_repeats"
 	ExpectExplorePlaced   = "explore_placed"
 	ExpectFrozenSpare     = "frozen_spare"
+	ExpectBatchMeals      = "batch_meals"
 )
 
 // Run runs every scenario cfg.Runs times, each on a fresh database, and
@@ -465,6 +466,9 @@ func (e *env) expect(sc Scenario, st Step, before, after rows, rec Record) []Exp
 	if x.FrozenSpare {
 		out = append(out, frozenSpare(st, before, after))
 	}
+	if x.BatchMeals > 0 {
+		out = append(out, e.batchMeals(x.BatchMeals, before, after))
+	}
 	if x.MinPlates > 0 {
 		ex := Expectation{Name: ExpectMinPlates, OK: rec.Plates >= x.MinPlates}
 		if !ex.OK {
@@ -473,6 +477,31 @@ func (e *env) expect(sc Scenario, st Step, before, after rows, rec Record) []Exp
 		out = append(out, ex)
 	}
 	return out
+}
+
+// batchMeals checks that one cook session the step created feeds at least
+// want plates.
+func (e *env) batchMeals(want int, before, after rows) Expectation {
+	fed := map[int64]int{}
+	for _, p := range after.plates {
+		for _, c := range p.Components {
+			if c.SessionID == nil {
+				continue
+			}
+			if _, old := before.sessions[*c.SessionID]; !old {
+				fed[*c.SessionID]++
+			}
+		}
+	}
+	most := 0
+	for _, n := range fed {
+		most = max(most, n)
+	}
+	ex := Expectation{Name: ExpectBatchMeals, OK: most >= want}
+	if !ex.OK {
+		ex.Detail = fmt.Sprintf("the widest new batch feeds %d meals, want ≥ %d", most, want)
+	}
+	return ex
 }
 
 // frozenSpare checks that an uncooked batch cooking on or after the
