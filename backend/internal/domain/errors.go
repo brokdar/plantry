@@ -110,11 +110,14 @@ var (
 	ErrPlanChanged = errors.New("the plan changed while it was generated")
 
 	// Discovery (Phase 5 D7, D11): one discovery run at a time, a decision
-	// on a suggestion that is decided already, and research output that
-	// stayed unreadable after the repair call.
-	ErrDiscoveryRunning       = errors.New("a discovery run is running")
-	ErrDiscoveryDecided       = errors.New("the suggestion is decided already")
-	ErrDiscoveryInvalidOutput = errors.New("the research output is not valid JSON")
+	// on a suggestion that is decided already, research output that stayed
+	// unreadable after the repair call, an unknown mode and an explore run
+	// without a cuisine.
+	ErrDiscoveryRunning         = errors.New("a discovery run is running")
+	ErrDiscoveryDecided         = errors.New("the suggestion is decided already")
+	ErrDiscoveryInvalidOutput   = errors.New("the research output is not valid JSON")
+	ErrDiscoveryInvalidMode     = errors.New("unknown discovery mode")
+	ErrDiscoveryCuisineRequired = errors.New("an explore discovery needs a cuisine")
 
 	// Mid-week re-plan (Phase 3 B8): confirmed plates in the No-plate cells
 	// need unlock_confirmed, and a re-plan starts today at the earliest.
@@ -203,6 +206,8 @@ var messageKeys = []struct {
 	{ErrDiscoveryRunning, "error.discovery.running"},
 	{ErrDiscoveryDecided, "error.discovery.decided"},
 	{ErrDiscoveryInvalidOutput, "error.discovery.invalid_output"},
+	{ErrDiscoveryInvalidMode, "error.discovery.invalid_mode"},
+	{ErrDiscoveryCuisineRequired, "error.discovery.cuisine_required"},
 	{ErrConfirmedAffected, "error.plan.confirmed_affected"},
 	{ErrReplanPast, "error.plan.replan_past"},
 }

@@ -18,10 +18,12 @@ var errShuttingDown = errors.New("discovery: shutting down")
 type runner struct {
 	mu      sync.Mutex
 	running bool
-	closed  bool
-	wg      sync.WaitGroup
-	base    context.Context
-	cancel  context.CancelFunc
+	// id is the running run's ai_runs id, 0 until start.
+	id     int64
+	closed bool
+	wg     sync.WaitGroup
+	base   context.Context
+	cancel context.CancelFunc
 }
 
 func newRunner() *runner {
@@ -47,15 +49,18 @@ func (r *runner) acquire() error {
 // release frees the slot taken by acquire when no run started.
 func (r *runner) release() {
 	r.mu.Lock()
-	r.running = false
+	r.running, r.id = false, 0
 	r.mu.Unlock()
 	r.wg.Done()
 }
 
-// start runs f in the background under a ctx detached from ctx's
-// cancellation, bounded by timeout and cancelled by a shutdown whose wait
-// ran out. The slot is freed when f returns.
-func (r *runner) start(ctx context.Context, timeout time.Duration, f func(context.Context)) {
+// start runs f, the run id, in the background under a ctx detached from
+// ctx's cancellation, bounded by timeout and cancelled by a shutdown whose
+// wait ran out. The slot is freed when f returns.
+func (r *runner) start(ctx context.Context, id int64, timeout time.Duration, f func(context.Context)) {
+	r.mu.Lock()
+	r.id = id
+	r.mu.Unlock()
 	bg, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	unhook := context.AfterFunc(r.base, cancel)
 	go func() {
@@ -64,6 +69,14 @@ func (r *runner) start(ctx context.Context, timeout time.Duration, f func(contex
 		defer cancel()
 		f(bg)
 	}()
+}
+
+// current returns the running run's id; false when none runs (or its row
+// is not written yet).
+func (r *runner) current() (int64, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.id, r.running && r.id != 0
 }
 
 // wait blocks until no run is running.

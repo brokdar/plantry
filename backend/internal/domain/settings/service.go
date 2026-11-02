@@ -245,3 +245,21 @@ func validate(spec Spec, raw string) error {
 	}
 	return nil
 }
+
+// DiscoveryDailyEnabled reports whether the daily recipe suggestion is on.
+func (s *Service) DiscoveryDailyEnabled(ctx context.Context) (bool, error) {
+	raw, err := s.effectiveRaw(ctx, KeyDiscoveryDailyEnabled)
+	if err != nil {
+		return false, err
+	}
+	return strconv.ParseBool(raw)
+}
+
+// DiscoveryCuisines returns the cuisines the daily discovery rotates through.
+func (s *Service) DiscoveryCuisines(ctx context.Context) ([]string, error) {
+	raw, err := s.effectiveRaw(ctx, KeyDiscoveryCuisines)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCuisines(raw)
+}

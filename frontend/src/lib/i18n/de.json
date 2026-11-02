@@ -1042,7 +1042,9 @@
     "discovery": {
       "running": "Es läuft bereits eine Rezeptsuche. Versuch es gleich noch einmal.",
       "decided": "Über diesen Vorschlag wurde schon entschieden.",
-      "invalid_output": "Die Recherche des Assistenten war nicht lesbar. Versuch es noch einmal."
+      "invalid_output": "Die Recherche des Assistenten war nicht lesbar. Versuch es noch einmal.",
+      "invalid_mode": "Diese Art der Rezeptsuche gibt es nicht. Wähl eine andere.",
+      "cuisine_required": "Nenn eine Küche, die du entdecken möchtest."
     }
   },
   "common": {

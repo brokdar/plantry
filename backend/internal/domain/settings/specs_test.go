@@ -140,13 +140,53 @@ func TestSettingsSpec_PriceOverrides(t *testing.T) {
 	require.NoError(t, svc.Set(ctx, settings.KeyAIPriceOverrides, `{"m":{"in":1,"out":2}}`))
 }
 
-func TestSettingsSpec_RemovedAndDeferredKeysUnknown(t *testing.T) {
+func TestSettingsSpec_RemovedKeysUnknown(t *testing.T) {
 	svc := newSpecTestService(t)
 	ctx := context.Background()
 
-	for _, key := range []string{"plan.window_days", "discovery.cuisines"} {
+	for _, key := range []string{"plan.window_days"} {
 		_, err := svc.Get(ctx, key)
 		assert.ErrorIsf(t, err, settings.ErrUnknownKey, "Get(%q)", key)
 		assert.ErrorIsf(t, svc.Set(ctx, key, "7"), settings.ErrUnknownKey, "Set(%q)", key)
 	}
+}
+
+// B5-AC6: discovery.cuisines holds a JSON array of ≤ 10 lowercase names.
+func TestSettingsSpec_DiscoveryCuisines(t *testing.T) {
+	svc := newSpecTestService(t)
+	ctx := context.Background()
+
+	v, err := svc.Get(ctx, settings.KeyDiscoveryCuisines)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", v.Raw)
+	got, err := svc.DiscoveryCuisines(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+
+	require.NoError(t, svc.Set(ctx, settings.KeyDiscoveryCuisines, `["persian","thai"]`))
+	got, err = svc.DiscoveryCuisines(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"persian", "thai"}, got)
+
+	invalid := []string{
+		`["a","b","c","d","e","f","g","h","i","j","k"]`, // 11 entries
+		`"persian"`, `{"a":1}`, `persian`, `[1]`, `[""]`, `["Thai"]`, `[" thai"]`,
+	}
+	for _, raw := range invalid {
+		assert.ErrorIsf(t, svc.Set(ctx, settings.KeyDiscoveryCuisines, raw), settings.ErrInvalidKind, "Set(%s)", raw)
+	}
+	require.NoError(t, svc.Set(ctx, settings.KeyDiscoveryCuisines, `["a","b","c","d","e","f","g","h","i","j"]`), "10 entries")
+}
+
+func TestSettingsSpec_DiscoveryDailyEnabled(t *testing.T) {
+	svc := newSpecTestService(t)
+	ctx := context.Background()
+
+	on, err := svc.DiscoveryDailyEnabled(ctx)
+	require.NoError(t, err)
+	assert.True(t, on, "default")
+	require.NoError(t, svc.Set(ctx, settings.KeyDiscoveryDailyEnabled, "false"))
+	on, err = svc.DiscoveryDailyEnabled(ctx)
+	require.NoError(t, err)
+	assert.False(t, on)
 }

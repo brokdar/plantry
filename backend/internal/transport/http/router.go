@@ -33,6 +33,7 @@ type Handlers struct {
 	AIRateLimiter *plantrymw.RateLimiter
 	Feedback      *handlers.FeedbackHandler
 	Import        *handlers.ImportHandler
+	Discovery     *handlers.DiscoveryHandler
 	Settings      *handlers.SettingsHandler
 	Shopping      *handlers.ShoppingHandler
 	Availability  *handlers.AvailabilityHandler
@@ -232,6 +233,18 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Post("/extract", h.Import.Extract)
 				r.Post("/resolve", h.Import.Resolve)
 				r.Get("/lookup", h.Import.LookupLine)
+			})
+		}
+
+		if h.Discovery != nil {
+			api.Route("/discovery", func(r chi.Router) {
+				r.Post("/", h.Discovery.Start)
+				r.Get("/runs/{id}", h.Discovery.Run)
+				r.Get("/daily", h.Discovery.Daily)
+				r.Post("/daily/another", h.Discovery.Another)
+				r.Get("/suggestions", h.Discovery.List)
+				r.Post("/suggestions/{id}/accept", h.Discovery.Accept)
+				r.Post("/suggestions/{id}/reject", h.Discovery.Reject)
 			})
 		}
 
