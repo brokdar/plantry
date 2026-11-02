@@ -15,6 +15,7 @@ type memInsights struct {
 	rows    []RunRow // newest first
 	corr    map[int64]Correction
 	edits   map[int64]int
+	sugg    map[int64]SuggestionCount
 	corrErr error
 	queries []RunQuery
 }
@@ -58,6 +59,16 @@ func (m *memInsights) Edits(_ context.Context, minID, maxID int64) (map[int64]in
 	for id, n := range m.edits {
 		if id >= minID && id <= maxID {
 			out[id] = n
+		}
+	}
+	return out, nil
+}
+
+func (m *memInsights) DiscoverySuggestions(_ context.Context, minID, maxID int64) (map[int64]SuggestionCount, error) {
+	out := map[int64]SuggestionCount{}
+	for id, c := range m.sugg {
+		if id >= minID && id <= maxID {
+			out[id] = c
 		}
 	}
 	return out, nil
@@ -207,4 +218,62 @@ func TestInsights_Price(t *testing.T) {
 		assert.Equal(t, tt.src != PriceNone, info.Price != nil, tt.model)
 		assert.Equal(t, PricesAsOf, info.AsOf)
 	}
+}
+
+// B7-AC1..3: discovery has its own block and version group; the weekly cost
+// per accepted plan ignores discovery runs.
+func TestInsights_Discovery(t *testing.T) {
+	sonnet := func(id int64, kind Kind, day int, outcome string, searches int64) RunRow {
+		return RunRow{
+			ID: id, Kind: kind, StartedAt: at(10, day), Model: "claude-sonnet-4-6", Provider: "anthropic",
+			PromptVersion: "d1", Outcome: outcome, Tokens: Tokens{Input: 1_000_000, WebSearchRequests: searches},
+		}
+	}
+	rows := []RunRow{
+		sonnet(3, KindDiscovery, 13, "", 5), // 3 + 0.05
+		sonnet(2, KindDiscovery, 7, "", 0),  // 3
+		sonnet(1, KindGenerate, 6, "accepted", 0),
+	}
+	rows[2].PromptVersion = "p1"
+	store := &memInsights{rows: rows, sugg: map[int64]SuggestionCount{3: {Suggestions: 2, Accepted: 1}, 2: {Suggestions: 1}}}
+	rep, err := NewInsights(store, noOverrides).Weekly(context.Background(), time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+
+	d := rep.Discovery
+	assert.Equal(t, 2, d.Runs)
+	assert.Equal(t, 3, d.Suggestions)
+	assert.Equal(t, 1, d.Accepted)
+	require.NotNil(t, d.AcceptanceRate)
+	assert.InDelta(t, 1.0/3, *d.AcceptanceRate, 1e-9)
+	require.NotNil(t, d.CostPerAcceptedRecipe)
+	assert.InDelta(t, 6.05, *d.CostPerAcceptedRecipe, 1e-9, "all discovery cost incl. searches")
+
+	assert.Equal(t, 1, rep.Weeks[0].Runs, "discovery runs are not weekly plan runs")
+	assert.InDelta(t, 3.0, rep.Weeks[0].CostUSD, 1e-9)
+	assert.InDelta(t, 3.0, *rep.Weeks[0].CostPerAccepted, 1e-9)
+	assert.Zero(t, rep.Weeks[1].Runs)
+
+	var g *VersionGroup
+	for i := range rep.ByVersion {
+		if rep.ByVersion[i].Kind == KindDiscovery && rep.ByVersion[i].PromptVersion == "d1" {
+			g = &rep.ByVersion[i]
+		}
+	}
+	require.NotNil(t, g)
+	assert.Equal(t, 2, g.Runs)
+	assert.Equal(t, 3, *g.Suggestions)
+	assert.Equal(t, 1, *g.Accepted)
+	for _, v := range rep.ByVersion {
+		if v.Kind != KindDiscovery {
+			assert.Nil(t, v.Suggestions)
+		}
+	}
+}
+
+func TestInsights_DiscoveryEmpty(t *testing.T) {
+	rep, err := NewInsights(&memInsights{}, noOverrides).Weekly(context.Background(), at(10, 5), at(10, 12))
+	require.NoError(t, err)
+	assert.Zero(t, rep.Discovery.Runs)
+	assert.Nil(t, rep.Discovery.AcceptanceRate)
+	assert.Nil(t, rep.Discovery.CostPerAcceptedRecipe)
 }

@@ -162,6 +162,51 @@ func (q *Queries) DeletePendingSuggestionsBefore(ctx context.Context, before str
 	return items, nil
 }
 
+const discoverySuggestionCounts = `-- name: DiscoverySuggestionCounts :many
+SELECT CAST(ai_run_id AS INTEGER) AS run_id,
+       COUNT(*) AS suggestions,
+       CAST(COALESCE(SUM(status = 'accepted'), 0) AS INTEGER) AS accepted
+FROM recipe_suggestions
+WHERE ai_run_id >= ?1 AND ai_run_id <= ?2
+GROUP BY ai_run_id
+`
+
+type DiscoverySuggestionCountsParams struct {
+	MinID sql.NullInt64
+	MaxID sql.NullInt64
+}
+
+type DiscoverySuggestionCountsRow struct {
+	RunID       int64
+	Suggestions int64
+	Accepted    int64
+}
+
+// B7: per discovery run with an id in [min_id, max_id], the suggestions it
+// stored and how many of them the user accepted.
+func (q *Queries) DiscoverySuggestionCounts(ctx context.Context, arg DiscoverySuggestionCountsParams) ([]DiscoverySuggestionCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, discoverySuggestionCounts, arg.MinID, arg.MaxID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DiscoverySuggestionCountsRow{}
+	for rows.Next() {
+		var i DiscoverySuggestionCountsRow
+		if err := rows.Scan(&i.RunID, &i.Suggestions, &i.Accepted); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getDiscoveryRun = `-- name: GetDiscoveryRun :one
 SELECT id, status, error_key, notes FROM ai_runs WHERE id = ? AND kind = 'discovery'
 `

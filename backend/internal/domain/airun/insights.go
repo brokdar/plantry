@@ -92,6 +92,16 @@ type InsightsStore interface {
 	// Edits returns how many rows each agent run edited, for the runs with
 	// ids in [minID, maxID] that have agent events.
 	Edits(ctx context.Context, minID, maxID int64) (map[int64]int, error)
+	// DiscoverySuggestions returns the suggestions each run with an id in
+	// [minID, maxID] stored and how many were accepted.
+	DiscoverySuggestions(ctx context.Context, minID, maxID int64) (map[int64]SuggestionCount, error)
+}
+
+// SuggestionCount is a discovery run's stored suggestions and the accepted
+// ones.
+type SuggestionCount struct {
+	Suggestions int
+	Accepted    int
 }
 
 // RunSummary is a run with its estimated cost (nil when unpriced) and
@@ -149,13 +159,29 @@ type VersionGroup struct {
 	Runs          int
 	Tokens        Tokens
 	Edits         *int
-	ScoreAvg      map[string]float64
-	Violations    map[string]int
+	// Suggestions and Accepted count a discovery group's suggestions; nil for
+	// the other kinds.
+	Suggestions *int
+	Accepted    *int
+	ScoreAvg    map[string]float64
+	Violations  map[string]int
+}
+
+// Discovery aggregates the discovery runs of the range. AcceptanceRate is nil
+// without suggestions; CostPerAcceptedRecipe (all discovery cost, searches
+// included, over the accepted suggestions) is nil without accepted ones.
+type Discovery struct {
+	Runs                  int
+	Suggestions           int
+	Accepted              int
+	AcceptanceRate        *float64
+	CostPerAcceptedRecipe *float64
 }
 
 // Report is the insights over a date range.
 type Report struct {
 	Weeks      []WeekBucket
+	Discovery  Discovery
 	ByVersion  []VersionGroup
 	PricesAsOf string
 }
@@ -281,9 +307,25 @@ func (s *Insights) Weekly(ctx context.Context, from, to time.Time) (Report, erro
 	if err != nil {
 		return Report{}, err
 	}
+	var disc []RunSummary
+	var discRows []RunRow
+	for _, r := range sums {
+		if r.Kind == KindDiscovery {
+			disc = append(disc, r)
+			discRows = append(discRows, r.RunRow)
+		}
+	}
+	var counts map[int64]SuggestionCount
+	if len(disc) > 0 {
+		minID, maxID := idRange(discRows)
+		if counts, err = s.store.DiscoverySuggestions(ctx, minID, maxID); err != nil {
+			return Report{}, fmt.Errorf("discovery suggestions: %w", err)
+		}
+	}
 	return Report{
 		Weeks:      weekBuckets(from, to, sums, corr),
-		ByVersion:  versionGroups(sums),
+		Discovery:  discoveryTotals(disc, counts),
+		ByVersion:  versionGroups(sums, counts),
 		PricesAsOf: PricesAsOf,
 	}, nil
 }
@@ -303,8 +345,8 @@ func weekBuckets(from, to time.Time, sums []RunSummary, corr map[int64]Correctio
 	generated := make([]Correction, len(weeks))
 	for _, r := range sums {
 		i, ok := index[monday(r.StartedAt)]
-		if !ok {
-			continue
+		if !ok || r.Kind == KindDiscovery {
+			continue // discovery has its own block (B7)
 		}
 		b := &weeks[i]
 		b.Runs++
@@ -333,7 +375,29 @@ func weekBuckets(from, to time.Time, sums []RunSummary, corr map[int64]Correctio
 	return weeks
 }
 
-func versionGroups(runs []RunSummary) []VersionGroup {
+// discoveryTotals sums the discovery runs' suggestions and cost.
+func discoveryTotals(runs []RunSummary, counts map[int64]SuggestionCount) Discovery {
+	d := Discovery{Runs: len(runs)}
+	var cost float64
+	for _, r := range runs {
+		d.Suggestions += counts[r.ID].Suggestions
+		d.Accepted += counts[r.ID].Accepted
+		if r.CostUSD != nil {
+			cost += *r.CostUSD
+		}
+	}
+	if d.Suggestions > 0 {
+		v := float64(d.Accepted) / float64(d.Suggestions)
+		d.AcceptanceRate = &v
+	}
+	if d.Accepted > 0 {
+		v := cost / float64(d.Accepted)
+		d.CostPerAcceptedRecipe = &v
+	}
+	return d
+}
+
+func versionGroups(runs []RunSummary, counts map[int64]SuggestionCount) []VersionGroup {
 	type key struct {
 		kind           Kind
 		version, model string
@@ -362,6 +426,13 @@ func versionGroups(runs []RunSummary) []VersionGroup {
 		a.g.Tokens.CacheRead += r.Tokens.CacheRead
 		a.g.Tokens.CacheWrite += r.Tokens.CacheWrite
 		a.g.Tokens.WebSearchRequests += r.Tokens.WebSearchRequests
+		if r.Kind == KindDiscovery {
+			if a.g.Suggestions == nil {
+				a.g.Suggestions, a.g.Accepted = new(int), new(int)
+			}
+			*a.g.Suggestions += counts[r.ID].Suggestions
+			*a.g.Accepted += counts[r.ID].Accepted
+		}
 		if r.Kind == KindChat {
 			if a.g.Edits == nil {
 				a.g.Edits = new(int)

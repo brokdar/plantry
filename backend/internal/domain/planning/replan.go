@@ -22,7 +22,7 @@ import (
 // SpareMode is what a re-plan does with an uncooked batch's spare portions.
 type SpareMode string
 
-// Spare modes: freeze them (when freezing is on and the recipe freezable),
+// Spare modes: freeze them (when freezing is on and the recipe marked freezable),
 // or keep the batch to what is still eaten.
 const (
 	SpareFreeze SpareMode = "freeze"
@@ -62,7 +62,7 @@ type AffectedPlate struct {
 // Spare is a batch that would cook more than is still eaten: Portions spare.
 // Mutable: the batch is not cooked and cooks on or after From, so the
 // re-plan may freeze or shrink it. Freezable: mutable, freezing is on and
-// the recipe not marked unfreezable.
+// the recipe marked freezable (unknown is not offered).
 type Spare struct {
 	SessionID int64
 	FoodName  string
@@ -433,7 +433,7 @@ func (s *Service) scanBatches(ctx context.Context, sc *replanScan, removed []pla
 		f := foods[v.FoodID]
 		// Only a batch the re-plan may change can freeze its spare.
 		mut := mutable(v, from)
-		freezable := mut && set.FreezingEnabled && (f == nil || f.Freezable == nil || *f.Freezable)
+		freezable := mut && set.FreezingEnabled && (f != nil && f.Freezable != nil && *f.Freezable)
 		sc.spare[v.ID] = spareBatch{
 			sess: v.CookSession, after: after, freezable: freezable,
 			mutable: mut,

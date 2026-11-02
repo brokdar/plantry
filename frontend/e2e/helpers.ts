@@ -135,7 +135,11 @@ export async function cleanupFood(id: number) {
  * keep 3 days, full nutrition) made of one leaf. Remove the plates that use
  * them before `cleanup`.
  */
-export async function seedRecipeLibrary(tag: string, count = 10) {
+export async function seedRecipeLibrary(
+  tag: string,
+  count = 10,
+  freezable?: boolean
+) {
   const leaf = await seedLeafFood({
     name: `Beans ${tag}`,
     kcal_100g: 120,
@@ -151,6 +155,7 @@ export async function seedRecipeLibrary(tag: string, count = 10) {
         role: "main",
         reference_portions: 4,
         keep_days: 3,
+        freezable,
         children: [
           {
             child_id: leaf.id,

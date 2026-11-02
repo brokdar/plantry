@@ -37,10 +37,11 @@ type Record struct {
 
 // Tokens are a run's summed token counts.
 type Tokens struct {
-	Input      int64 `json:"input"`
-	Output     int64 `json:"output"`
-	CacheRead  int64 `json:"cache_read"`
-	CacheWrite int64 `json:"cache_write"`
+	Input             int64 `json:"input"`
+	Output            int64 `json:"output"`
+	CacheRead         int64 `json:"cache_read"`
+	CacheWrite        int64 `json:"cache_write"`
+	WebSearchRequests int64 `json:"web_search_requests"`
 }
 
 // Expectation is one check of a run; Detail says why it failed.

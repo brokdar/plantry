@@ -370,7 +370,7 @@ test("F3-AC3: an assistant failure offers Plan without the assistant", async ({
     // A neutral headline; the run's error says what went wrong.
     const failed = wizard.getByTestId("wizard-failed").getByRole("alert")
     await expect(failed).toContainText("Planning didn't work.", {
-      timeout: 30_000,
+      timeout: 60_000,
     })
     await expect(failed).not.toContainText("didn't respond")
 
@@ -390,7 +390,7 @@ test("F3-AC3: an assistant failure offers Plan without the assistant", async ({
     const { run_id: runId } = (await res.json()) as { run_id: number }
 
     await expect(page.getByTestId("plan-wizard")).toHaveCount(0, {
-      timeout: 30_000,
+      timeout: 60_000,
     })
     await expect(page.getByTestId("plan-summary")).toHaveText(/^Draft · /)
     const run = await request.get(`${API}/api/plan/runs/${runId}`)

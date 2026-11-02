@@ -50,6 +50,9 @@ func newReplanEnv(t *testing.T, freezing bool) *replanEnv {
 	if freezing {
 		require.NoError(t, testsvc.Settings(e.db).Set(e.ctx, "plan.freezing_enabled", "true"))
 	}
+	// Freezable is unknown (NULL) by default and unknown is not offered as
+	// freezable, so the env marks every recipe freezable.
+	e.exec(`UPDATE foods SET freezable = 1 WHERE kind = 'composed'`)
 	batch := func(foodID int64, cook string, leftovers ...plate.CellKey) (int64, []int64) {
 		p := e.userPlate(cook, e.dinner, foodID)
 		sid := *p.Components[0].CookSessionID
@@ -187,19 +190,24 @@ func TestReplan_RemovesAndSettlesBatches(t *testing.T) {
 		name           string
 		freezing       bool
 		unfreezable    bool
+		unknown        bool
 		spare          planning.SpareMode
 		portions, froz float64
 	}{
-		{"freeze, freezable", true, false, planning.SpareFreeze, 3, 2},
-		{"freeze, freezing off", false, false, planning.SpareFreeze, 1, 0},
-		{"freeze, not freezable", true, true, planning.SpareFreeze, 1, 0},
-		{"keep", true, false, planning.SpareKeep, 1, 0},
+		{"freeze, freezable", true, false, false, planning.SpareFreeze, 3, 2},
+		{"freeze, freezing off", false, false, false, planning.SpareFreeze, 1, 0},
+		{"freeze, not freezable", true, true, false, planning.SpareFreeze, 1, 0},
+		{"freeze, freezable unknown", true, false, true, planning.SpareFreeze, 1, 0}, // Z2-AC1
+		{"keep", true, false, false, planning.SpareKeep, 1, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newReplanEnv(t, tc.freezing)
 			if tc.unfreezable {
 				e.exec(`UPDATE foods SET freezable = ? WHERE id = ?`, no, e.mains[4])
+			}
+			if tc.unknown {
+				e.exec(`UPDATE foods SET freezable = NULL WHERE id = ?`, e.mains[4])
 			}
 			past := e.beforeFrom()
 			mon := e.session(e.monBatch)
@@ -424,6 +432,7 @@ func TestReplan_PanicFreesTheWindow(t *testing.T) {
 func orphanEnv(t *testing.T) (*replanEnv, *plate.Plate, planning.ReplanQuery) {
 	t.Helper()
 	e := &replanEnv{svcEnv: newSvcEnv(t)}
+	e.exec(`UPDATE foods SET freezable = 1 WHERE kind = 'composed'`)
 	cook := e.userPlate(thu, e.lunch, e.mains[4])
 	_, err := e.plates.AddLeftovers(e.ctx, *cook.Components[0].CookSessionID, []plate.CellKey{ck(fri, e.lunch)})
 	require.NoError(t, err)
