@@ -406,20 +406,19 @@ test("AC-2: Add to my recipes opens a prefilled review; saving adds the recipe a
   expect(res.ok(), await res.text()).toBeTruthy()
   const { id: foodId } = (await res.json()) as { id: number }
 
-  // The recipe: source, explore tag, the suggestion's image, and the card's
-  // numbers (both come from the same leaves).
-  const food = (await (
-    await request.get(`${API}/api/foods/${foodId}`)
-  ).json()) as {
-    name: string
-    source_url: string
-    tags: string[]
-    image_path: string | null
-  }
+  // The recipe: source, explore tag, and the card's numbers (both come from
+  // the same leaves).
+  const getFood = async () =>
+    (await (await request.get(`${API}/api/foods/${foodId}`)).json()) as {
+      name: string
+      source_url: string
+      tags: string[]
+      image_path: string | null
+    }
+  const food = await getFood()
   expect(food.name).toBe("Fesenjan")
   expect(food.source_url).toBe(idea.source_url)
   expect(food.tags).toContain("explore")
-  expect(food.image_path).toBeTruthy()
   const macros = (await (
     await request.get(`${API}/api/foods/${foodId}/nutrition`)
   ).json()) as { kcal: number; protein: number; fat: number; carbs: number }
@@ -435,6 +434,9 @@ test("AC-2: Add to my recipes opens a prefilled review; saving adds the recipe a
           ?.food_id
     )
     .toBe(foodId)
+  // Accept, a separate request sent after the food's save, copies the
+  // suggestion's image to the food.
+  expect((await getFood()).image_path).toBeTruthy()
   const run = (await (
     await request.get(`${API}/api/ai/runs/${idea.run_id}`)
   ).json()) as Run
