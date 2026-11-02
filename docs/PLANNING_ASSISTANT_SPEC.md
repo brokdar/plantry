@@ -1,5 +1,7 @@
 # Spec: Planning Assistant
 
+> **Status:** Implemented (Phases 0–5, 2026-11). Kept as the design record; amendments inline.
+
 Turn Plantry from a manual plan editor with a bolted-on chat into an assistant that plans the week for the user. The user states availability and preferences; the app produces a checked, reviewable draft built around batch cooking; the user adjusts and accepts; the shopping list and a daily "cook today" view follow.
 
 This document is the source of truth for **what** changes, starting from the codebase as of commit `f66e939`. It describes target behaviour, data-model changes, API surface, removals, measurement, and a phased delivery plan in which the app stays usable after every phase. Implementation details (exact SQL, component structure) are left to the per-phase plans.
@@ -814,3 +816,20 @@ Remaining unverified: food-safety keep times are based on secondary sources (USD
 | Correction rate | User-modified generated plates / generated plates |
 | Diet class | vegan < vegetarian < pescetarian < omnivore |
 | New ingredient | A leaf food not used in any of the user's recipes yet |
+
+---
+
+## 19. Phase 5 amendments (2026-11)
+
+What changed against this spec while building Phase 5 (discovery and finalization). The numbers refer to the Phase 5 decisions; `ARCHITECTURE.md` §5.4–5.5 has the mechanics.
+
+- **§9.2/§9.4 pipeline.** Research output is JSON text, not a forced tool (D5); every candidate URL goes through the import pipeline with the LLM fallback off (D9); annotation is local only, no FDC or OFF calls (D14); macros on the card are computed from matched leaves, never from the page (D15). A run stores at most three suggestions, kept in a pool with a daily assignment (`shown_on`) instead of one run per popup (D12); stale pending ones are deleted after 30 days.
+- **§9.4 web search.** The basic `web_search_20250305` tool, capability detection per model with a 24 h cache, a fallback without search on a 400, `pause_turn` continuations by the caller (at most three) and opaque server blocks replayed verbatim (D1–D3). A suggestion is `grounded` when its run used web search (D4). Other providers run in knowledge mode.
+- **§8.1 cost.** `PerSearch` price per search (Anthropic 0.01, OpenAI 0), `web_search_requests` on runs and steps, an `ai.price_overrides` entry may set `per_search` (D10).
+- **URL guard (new).** Model-supplied URLs must be public `http(s)` hosts, redirect hops included; `PLANTRY_DEV_MODE` allows loopback for the e2e fixture site (D9, D20).
+- **§9.3 accept.** There is no server-side recipe creation: accept is the normal import review, prefilled, then `POST /api/foods`, then the accept call (D18). Outcomes of discovery runs follow the suggestions (D11).
+- **§4.2 settings.** `discovery.cuisines` (at most 10 lowercase names) joins `discovery.daily_enabled` (D19).
+- **§6 explore quota.** `ExploreQuota` replaces the "new = never eaten" stand-in: the generator places up to N recipes tagged `explore` and scores it; not a hard rule (D17).
+- **§7 model table.** The Anthropic model list is a rules table (display name, sampling, forced tool) instead of `KnownModels` (D6).
+- **Finalization.** Undo of an assistant change is refused once a changed row is confirmed (`error.ai.change_confirmed`, D23); the assistant overlay sits below the plan toolbar between 768 and 1279 px (D24); chat requests must carry `today`; freezing is offered only for recipes explicitly marked freezable, and the backend rejects raising frozen portions otherwise.
+- **§13 ARM.** The release image is `linux/amd64`, `linux/arm64` and `linux/arm/v7`, cross-compiled natively; the gate builds arm64 and arm v7 on every run (D26). `plantry backup -out` is the backup path (D28).

@@ -18,43 +18,41 @@ Swapping rice for naan is one click. Adding a side salad is one click. Tofu curr
 
 ## Features
 
-**Weekly planning**
-- 7-day × N-slot grid (desktop) or day scroll (mobile)
-- Compose plates from your component library, swap sides in one click
-- Saved templates for common compositions
-- Copy a previous week's plan
+**Plan the week**
+- A plan board of 7 days × your time slots (a day scroll on phones), shown for the window that starts on your shopping day
+- Say who is home: away, plan or guests per day and slot ("No plate" cells), or save a routine (a fixed composition) and apply it to a day
+- **Generate** drafts for the whole window, the empty cells or a mid-week re-plan. A deterministic heuristic works without any AI; with a provider key an LLM chooses, and every proposal passes the same hard-rule checker (diet, repeats, cook days, batch rules)
+- Review the drafts, confirm single batches or **Accept and shop**; the checked plan feeds Today and the shopping list
+- Batch cooking: cook once, eat the leftovers on later days, optionally freeze portions (only for recipes marked freezable)
 
-**AI-assisted planning**
-- Persistent chat panel per week with streaming responses
-- The agent reads your library, profile, and nutrition targets — and actually edits your plan via tool calls
-- Bring your own OpenAI or Anthropic key; AI degrades gracefully when no key is configured
+**Assistant**
+- A panel on the plan board where you ask for changes in plain words; every edit is a change line with Undo
+- It only edits drafts. Confirmed plates stay put until you say yes to an unlock request
+- Bring your own OpenAI or Anthropic key. Everything else works without one
 
-**Nutrition tracking**
-- Kcal + protein + fat + carbs per component, plate, day, and week
-- Daily bars against targets; week summary
-- Goal presets (cut / maintain / bulk) or custom macro split
+**Today and Cook**
+- Today shows what to cook and eat, with the day's macros against your targets, a freezer shelf and a quick way to rate a meal
+- Cook mode: one step per screen, detected timers, the screen stays on
 
-**Component library**
-- Create components with roles: `main`, `side_starch`, `side_veg`, `side_protein`, `sauce`, `drink`, `dessert`, `standalone`
-- Variant groups link siblings (tofu curry ↔ chicken curry ↔ chickpea curry)
-- Tags, images, prep/cook times, instructions
+**Recipes and ingredients**
+- Recipes are foods composed of ingredients; variants link siblings (tofu curry, chicken curry)
+- Nutrition is computed from the ingredients (kcal, protein, fat, carbs), per portion, plate and day
+- Ingredients: barcode scan and Open Food Facts, name search in USDA FoodData Central, manual entry
+- Import from a URL (JSON-LD first, an LLM only as a fallback), with the ingredient review before anything is saved
 
-**Ingredient catalog**
-- Barcode scan → auto-fetch from Open Food Facts
-- Name search → USDA FoodData Central lookup
-- Manual override always available
+**Discover new recipes**
+- With an AI provider set, Plantry researches recipes you do not have yet. A daily idea appears over Today, and Recipes has a Discover sheet (a cuisine to explore, or recipes that reuse what you already buy)
+- The app fetches every suggested page itself and keeps only real recipes; nutrition is computed from your ingredient catalogue, and ingredients you have never used are marked new
+- "Add" opens the normal import review, pre-filled; "Not for me" teaches the next run
+- Anthropic models search the web (billed per search, shown in Insights); other providers suggest from the model's knowledge and the pages are still verified
 
-**Recipe import**
-- Paste a URL → Plantry extracts name, portions, ingredients, instructions, and image
-- Tries JSON-LD first (zero AI cost), falls back to LLM for unstructured pages
+**Shopping**
+- Aggregated from the confirmed plan, grouped by store section, summed in base units and rounded up to buyable amounts
+- An in-store mode with big rows and the screen kept on
 
-**Shopping list**
-- Aggregates all ingredients across the week's plates
-- Groups by ingredient, sums in base units (g / ml)
-
-**Feedback loop**
-- Mark each plate after cooking: cooked, skipped, loved, disliked
-- AI reads your preferences before every generation
+**Settings and insights**
+- Household, meals and week, cooking, assistant and system sections; English and German
+- Insights lists every AI run with its prompt version, tokens, cost and outcome
 
 ---
 
@@ -155,6 +153,15 @@ PLANTRY_EVAL_LIVE=1 PLANTRY_AI_PROVIDER=anthropic PLANTRY_AI_API_KEY=... \
 
 It writes `plantry-eval.jsonl` (gitignored), prints a summary and exits non-zero when a run failed an expectation. Flags and scenarios: `backend/CLAUDE.md`.
 
+### Merge gate
+
+```bash
+scripts/gate.sh             # go test -race, vet, golangci-lint, ARM cross builds, sqlc and deadcode checks,
+                            # bun run check + build, then the full Playwright suite
+```
+
+`E2E_LANE=N` gives a worktree its own ports and database; `GATE_SKIP_BACKEND`, `GATE_SKIP_FRONTEND` and `GATE_SKIP_E2E` skip a part. The e2e suite never calls a real AI provider or the web: it runs the `fake` provider and a local fixture site for discovery (`frontend/e2e/fixtures/discovery-site`).
+
 ### Docker
 
 ```bash
@@ -185,6 +192,8 @@ plantry/
 **Backend:** hexagonal-lite — domain (pure Go, no DB/HTTP), adapters (infrastructure), transport (HTTP translation). Aggregates are plain exported structs; services hold all business logic.
 
 **Frontend:** TanStack Router with file-based auto code-splitting; TanStack Query for server state; Tailwind v4 with CSS-variable design tokens.
+
+**AI:** behind one `llm.Client` port (OpenAI, Anthropic, and a scripted fake for tests). Every call is metered into the run log. Plan generation, the assistant and discovery share it; see `docs/ARCHITECTURE.md` §7.
 
 **Database:** Single SQLite file, WAL mode, managed by goose migrations. `sqlc` generates compile-time type-safe query code. After any schema or query change, run `sqlc generate`.
 
