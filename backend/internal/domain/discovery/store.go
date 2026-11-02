@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -77,6 +78,27 @@ type Repository interface {
 	// DeletePendingBefore deletes the pending suggestions created before
 	// the cutoff and returns their ids.
 	DeletePendingBefore(ctx context.Context, before time.Time) ([]int64, error)
+	// ShownOn returns the suggestion assigned to day (YYYY-MM-DD), or nil.
+	ShownOn(ctx context.Context, day string) (*Suggestion, error)
+	// ShowNext clears day from the suggestion holding it and assigns it to
+	// the oldest pending, never-shown suggestion with an id above after; nil
+	// when there is none, leaving day as it was (D12).
+	ShowNext(ctx context.Context, day string, after int64) (*Suggestion, error)
+	// ClearShown clears day from the suggestion holding it.
+	ClearShown(ctx context.Context, day string) error
+	// DailyRunFailed reports whether a discovery run for day ended without
+	// storing a suggestion.
+	DailyRunFailed(ctx context.Context, day string) (bool, error)
+	// Run returns a discovery run's row or domain.ErrNotFound.
+	Run(ctx context.Context, id int64) (RunRow, error)
+}
+
+// RunRow is the part of a discovery run's ai_runs row the API reports.
+type RunRow struct {
+	ID       int64
+	Status   string
+	ErrorKey *string
+	Notes    string
 }
 
 // Decision is an accept (FoodID set) or a reject (Reason optional).
@@ -97,6 +119,7 @@ type ListFilter struct {
 type Images interface {
 	SaveFromURL(ctx context.Context, url, category string, id int64) (string, error)
 	Delete(category string, id int64) error
+	Copy(fromCategory string, fromID int64, toCategory string, toID int64) (string, error)
 }
 
 // Store saves verified, annotated suggestions and records the user's
@@ -121,6 +144,9 @@ type NewSuggestion struct {
 	RunID       *int64
 	ShownOn     *string
 }
+
+// ErrDayTaken: another suggestion is shown on the day Save was given.
+var ErrDayTaken = errors.New("discovery: day already has a suggestion")
 
 // Save stores the suggestion as pending, then downloads its image to
 // suggestions/<id>.jpg (D16). The draft's SourceURL is the row's source_url.
@@ -163,7 +189,7 @@ func (s *Store) saveImage(ctx context.Context, sug *Suggestion) string {
 }
 
 // Accept marks the suggestion accepted as the saved food foodID and moves
-// its run's outcome (D11). The image copy to the food is the caller's (B5).
+// its run's outcome (D11). The image copy to the food is Service.Accept's.
 func (s *Store) Accept(ctx context.Context, id, foodID int64) (*Suggestion, error) {
 	return s.Repo.Decide(ctx, id, Decision{Status: StatusAccepted, FoodID: &foodID})
 }
@@ -176,6 +202,9 @@ func (s *Store) Reject(ctx context.Context, id int64, reason *Reason) (*Suggesti
 		return nil, err
 	}
 	s.deleteImage(sug.ID)
+	if err := s.Repo.SetImagePath(ctx, sug.ID, nil); err != nil {
+		return nil, fmt.Errorf("clear rejected suggestion image path: %w", err)
+	}
 	sug.ImagePath = nil
 	return sug, nil
 }

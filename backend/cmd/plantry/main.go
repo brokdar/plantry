@@ -317,6 +317,8 @@ func run() error {
 	}
 	discoverySvc := discovery.NewService(discovery.Deps{
 		LLM:       llmResolver,
+		Prefs:     settingsSvc,
+		Foods:     foodSvc,
 		Recorder:  runRecorder,
 		Profile:   profileSvc,
 		Catalogue: foodRepo,
@@ -369,6 +371,7 @@ func run() error {
 		AIRateLimiter: aiRateLimiter,
 		Feedback:      handlers.NewFeedbackHandler(feedbackSvc),
 		Import:        importHandler,
+		Discovery:     handlers.NewDiscoveryHandler(discoverySvc),
 		Settings:      settingsHandler,
 		Shopping:      handlers.NewShoppingHandler(shoppingSvc),
 		Availability:  handlers.NewAvailabilityHandler(availabilitySvc),

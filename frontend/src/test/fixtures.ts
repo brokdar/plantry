@@ -334,6 +334,7 @@ export const mockSettingDefaults: Record<string, string> = {
   "plan.variety_weeks": "3",
   "plan.explore_per_week": "0",
   "discovery.daily_enabled": "true",
+  "discovery.cuisines": "[]",
   "ai.run_retention_days": "180",
   "ai.price_overrides": "{}",
 }

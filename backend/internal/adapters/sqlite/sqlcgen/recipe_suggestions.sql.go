@@ -10,6 +10,15 @@ import (
 	"database/sql"
 )
 
+const clearShownOn = `-- name: ClearShownOn :exec
+UPDATE recipe_suggestions SET shown_on = NULL WHERE shown_on = ?
+`
+
+func (q *Queries) ClearShownOn(ctx context.Context, shownOn sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, clearShownOn, shownOn)
+	return err
+}
+
 const createRecipeSuggestion = `-- name: CreateRecipeSuggestion :one
 INSERT INTO recipe_suggestions (
     mode, query, source_url, draft_json, annotations_json, grounded, ai_run_id, shown_on
@@ -59,6 +68,23 @@ func (q *Queries) CreateRecipeSuggestion(ctx context.Context, arg CreateRecipeSu
 		&i.DecidedAt,
 	)
 	return i, err
+}
+
+const dailyRunFailed = `-- name: DailyRunFailed :one
+SELECT CAST(EXISTS (
+    SELECT 1 FROM ai_runs
+    WHERE kind = 'discovery' AND status NOT IN ('running', 'ok')
+      AND json_extract(scope_json, '$.day') = CAST(?1 AS TEXT)
+) AS INTEGER) AS failed
+`
+
+// D12: whether a daily discovery run for the day ended without storing a
+// suggestion (error, partial, cancelled).
+func (q *Queries) DailyRunFailed(ctx context.Context, day string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, dailyRunFailed, day)
+	var failed int64
+	err := row.Scan(&failed)
+	return failed, err
 }
 
 const decideRecipeSuggestion = `-- name: DecideRecipeSuggestion :one
@@ -181,12 +207,63 @@ func (q *Queries) DiscoverySuggestionCounts(ctx context.Context, arg DiscoverySu
 	return items, nil
 }
 
+const getDiscoveryRun = `-- name: GetDiscoveryRun :one
+SELECT id, status, error_key, notes FROM ai_runs WHERE id = ? AND kind = 'discovery'
+`
+
+type GetDiscoveryRunRow struct {
+	ID       int64
+	Status   string
+	ErrorKey sql.NullString
+	Notes    sql.NullString
+}
+
+func (q *Queries) GetDiscoveryRun(ctx context.Context, id int64) (GetDiscoveryRunRow, error) {
+	row := q.db.QueryRowContext(ctx, getDiscoveryRun, id)
+	var i GetDiscoveryRunRow
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.ErrorKey,
+		&i.Notes,
+	)
+	return i, err
+}
+
 const getRecipeSuggestion = `-- name: GetRecipeSuggestion :one
 SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at FROM recipe_suggestions WHERE id = ?
 `
 
 func (q *Queries) GetRecipeSuggestion(ctx context.Context, id int64) (RecipeSuggestion, error) {
 	row := q.db.QueryRowContext(ctx, getRecipeSuggestion, id)
+	var i RecipeSuggestion
+	err := row.Scan(
+		&i.ID,
+		&i.Mode,
+		&i.Query,
+		&i.SourceUrl,
+		&i.DraftJson,
+		&i.AnnotationsJson,
+		&i.ImagePath,
+		&i.Grounded,
+		&i.Status,
+		&i.Reason,
+		&i.AiRunID,
+		&i.FoodID,
+		&i.ShownOn,
+		&i.CreatedAt,
+		&i.DecidedAt,
+	)
+	return i, err
+}
+
+const getShownSuggestion = `-- name: GetShownSuggestion :one
+SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at FROM recipe_suggestions WHERE shown_on = ?
+`
+
+// D12: the suggestion assigned to a day.
+func (q *Queries) GetShownSuggestion(ctx context.Context, shownOn sql.NullString) (RecipeSuggestion, error) {
+	row := q.db.QueryRowContext(ctx, getShownSuggestion, shownOn)
 	var i RecipeSuggestion
 	err := row.Scan(
 		&i.ID,
@@ -297,6 +374,46 @@ type SetRecipeSuggestionImageParams struct {
 func (q *Queries) SetRecipeSuggestionImage(ctx context.Context, arg SetRecipeSuggestionImageParams) error {
 	_, err := q.db.ExecContext(ctx, setRecipeSuggestionImage, arg.ImagePath, arg.ID)
 	return err
+}
+
+const showNextPending = `-- name: ShowNextPending :one
+UPDATE recipe_suggestions SET shown_on = ?1
+WHERE id = (
+    SELECT s.id FROM recipe_suggestions s
+    WHERE s.status = 'pending' AND s.shown_on IS NULL AND s.id > ?2
+    ORDER BY s.id LIMIT 1
+)
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at
+`
+
+type ShowNextPendingParams struct {
+	Day   sql.NullString
+	After int64
+}
+
+// D12: assigns the day to the oldest pending, never-shown suggestion after
+// the given id.
+func (q *Queries) ShowNextPending(ctx context.Context, arg ShowNextPendingParams) (RecipeSuggestion, error) {
+	row := q.db.QueryRowContext(ctx, showNextPending, arg.Day, arg.After)
+	var i RecipeSuggestion
+	err := row.Scan(
+		&i.ID,
+		&i.Mode,
+		&i.Query,
+		&i.SourceUrl,
+		&i.DraftJson,
+		&i.AnnotationsJson,
+		&i.ImagePath,
+		&i.Grounded,
+		&i.Status,
+		&i.Reason,
+		&i.AiRunID,
+		&i.FoodID,
+		&i.ShownOn,
+		&i.CreatedAt,
+		&i.DecidedAt,
+	)
+	return i, err
 }
 
 const sourceURLKnown = `-- name: SourceURLKnown :one

@@ -45,6 +45,9 @@ func (r *RecipeSuggestionRepo) Create(ctx context.Context, s *discovery.Suggesti
 		DraftJson: string(draft), AnnotationsJson: string(ann), Grounded: grounded,
 		AiRunID: toNullInt64(s.RunID), ShownOn: toNullString(s.ShownOn),
 	})
+	if isUniqueViolation(err, "recipe_suggestions.shown_on") {
+		return fmt.Errorf("create recipe suggestion: %w", discovery.ErrDayTaken)
+	}
 	if err != nil {
 		return fmt.Errorf("create recipe suggestion: %w", err)
 	}
@@ -172,4 +175,75 @@ func (r *RecipeSuggestionRepo) List(ctx context.Context, f discovery.ListFilter)
 // cutoff and returns their ids.
 func (r *RecipeSuggestionRepo) DeletePendingBefore(ctx context.Context, before time.Time) ([]int64, error) {
 	return r.queriesFor(ctx).DeletePendingSuggestionsBefore(ctx, before.UTC().Format(timeLayout))
+}
+
+// ShownOn returns the suggestion assigned to day, or nil.
+func (r *RecipeSuggestionRepo) ShownOn(ctx context.Context, day string) (*discovery.Suggestion, error) {
+	row, err := r.queriesFor(ctx).GetShownSuggestion(ctx, toNullString(&day))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("suggestion shown on %s: %w", day, err)
+	}
+	return mapRecipeSuggestion(row)
+}
+
+var errNoNextSuggestion = errors.New("no next suggestion")
+
+// ShowNext clears day from the suggestion holding it and assigns day to the
+// oldest pending, never-shown suggestion with an id above after, in one
+// transaction. It returns that suggestion, or nil when there is none (the
+// day stays as it was).
+func (r *RecipeSuggestionRepo) ShowNext(ctx context.Context, day string, after int64) (*discovery.Suggestion, error) {
+	var out *discovery.Suggestion
+	err := r.inTx(ctx, func(ctx context.Context) error {
+		q := r.queriesFor(ctx)
+		if err := q.ClearShownOn(ctx, toNullString(&day)); err != nil {
+			return fmt.Errorf("clear shown on %s: %w", day, err)
+		}
+		row, err := q.ShowNextPending(ctx, sqlcgen.ShowNextPendingParams{Day: toNullString(&day), After: after})
+		if errors.Is(err, sql.ErrNoRows) {
+			return errNoNextSuggestion // rolls the clear back
+		}
+		if err != nil {
+			return fmt.Errorf("show next suggestion on %s: %w", day, err)
+		}
+		out, err = mapRecipeSuggestion(row)
+		return err
+	})
+	if errors.Is(err, errNoNextSuggestion) {
+		return nil, nil
+	}
+	return out, err
+}
+
+// ClearShown clears day from the suggestion holding it.
+func (r *RecipeSuggestionRepo) ClearShown(ctx context.Context, day string) error {
+	if err := r.queriesFor(ctx).ClearShownOn(ctx, toNullString(&day)); err != nil {
+		return fmt.Errorf("clear shown on %s: %w", day, err)
+	}
+	return nil
+}
+
+// DailyRunFailed reports whether a discovery run for day ended without
+// storing a suggestion.
+func (r *RecipeSuggestionRepo) DailyRunFailed(ctx context.Context, day string) (bool, error) {
+	n, err := r.queriesFor(ctx).DailyRunFailed(ctx, day)
+	return n != 0, err
+}
+
+// Run returns a discovery run's status, error key and notes, or
+// domain.ErrNotFound.
+func (r *RecipeSuggestionRepo) Run(ctx context.Context, id int64) (discovery.RunRow, error) {
+	row, err := r.queriesFor(ctx).GetDiscoveryRun(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return discovery.RunRow{}, fmt.Errorf("%w: discovery run %d", domain.ErrNotFound, id)
+	}
+	if err != nil {
+		return discovery.RunRow{}, err
+	}
+	return discovery.RunRow{
+		ID: row.ID, Status: row.Status, ErrorKey: fromNullString(row.ErrorKey), Notes: row.Notes.String,
+	}, nil
 }

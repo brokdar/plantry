@@ -22,6 +22,7 @@ type Querier interface {
 	// the unlock is the boundary.
 	AgentRunsOfRows(ctx context.Context, arg AgentRunsOfRowsParams) ([]int64, error)
 	AppendMessage(ctx context.Context, arg AppendMessageParams) (AiMessage, error)
+	ClearShownOn(ctx context.Context, shownOn sql.NullString) error
 	CountComposedFoods(ctx context.Context) (int64, error)
 	CountConversations(ctx context.Context) (int64, error)
 	// What a generation run wrote that still exists (B6).
@@ -47,6 +48,9 @@ type Querier interface {
 	CreateRecipeSuggestion(ctx context.Context, arg CreateRecipeSuggestionParams) (RecipeSuggestion, error)
 	CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) (TimeSlot, error)
 	CreateVariantGroup(ctx context.Context, name string) (VariantGroup, error)
+	// D12: whether a daily discovery run for the day ended without storing a
+	// suggestion (error, partial, cancelled).
+	DailyRunFailed(ctx context.Context, day string) (int64, error)
 	// Accept or reject a pending suggestion; no row when it is decided already.
 	DecideRecipeSuggestion(ctx context.Context, arg DecideRecipeSuggestionParams) (RecipeSuggestion, error)
 	DeleteActiveSlotAvailabilityDefaults(ctx context.Context) error
@@ -90,6 +94,7 @@ type Querier interface {
 	GetAvailabilityOverride(ctx context.Context, arg GetAvailabilityOverrideParams) (GetAvailabilityOverrideRow, error)
 	GetConversation(ctx context.Context, id int64) (AiConversation, error)
 	GetCookSession(ctx context.Context, id int64) (CookSession, error)
+	GetDiscoveryRun(ctx context.Context, id int64) (GetDiscoveryRunRow, error)
 	GetFood(ctx context.Context, id int64) (Food, error)
 	GetFoodKind(ctx context.Context, id int64) (string, error)
 	GetLeafFoodIDByName(ctx context.Context, name string) (int64, error)
@@ -105,6 +110,8 @@ type Querier interface {
 	// What the plan's draft summary shows of a run (D26).
 	GetRunNote(ctx context.Context, id int64) (GetRunNoteRow, error)
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
+	// D12: the suggestion assigned to a day.
+	GetShownSuggestion(ctx context.Context, shownOn sql.NullString) (RecipeSuggestion, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
 	LastPlateEventID(ctx context.Context) (int64, error)
@@ -196,6 +203,9 @@ type Querier interface {
 	// (discarded -> open, partially_accepted -> accepted).
 	SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error
 	SetSessionsState(ctx context.Context, arg SetSessionsStateParams) error
+	// D12: assigns the day to the oldest pending, never-shown suggestion after
+	// the given id.
+	ShowNextPending(ctx context.Context, arg ShowNextPendingParams) (RecipeSuggestion, error)
 	// Whether a food or an earlier suggestion (any status) already has this URL.
 	SourceURLKnown(ctx context.Context, url string) (int64, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)

@@ -67,3 +67,33 @@ LIMIT sqlc.arg(lim);
 DELETE FROM recipe_suggestions
 WHERE status = 'pending' AND created_at < sqlc.arg(before)
 RETURNING id;
+
+-- name: GetShownSuggestion :one
+-- D12: the suggestion assigned to a day.
+SELECT * FROM recipe_suggestions WHERE shown_on = ?;
+
+-- name: ClearShownOn :exec
+UPDATE recipe_suggestions SET shown_on = NULL WHERE shown_on = ?;
+
+-- name: ShowNextPending :one
+-- D12: assigns the day to the oldest pending, never-shown suggestion after
+-- the given id.
+UPDATE recipe_suggestions SET shown_on = sqlc.arg(day)
+WHERE id = (
+    SELECT s.id FROM recipe_suggestions s
+    WHERE s.status = 'pending' AND s.shown_on IS NULL AND s.id > sqlc.arg(after)
+    ORDER BY s.id LIMIT 1
+)
+RETURNING *;
+
+-- name: DailyRunFailed :one
+-- D12: whether a daily discovery run for the day ended without storing a
+-- suggestion (error, partial, cancelled).
+SELECT CAST(EXISTS (
+    SELECT 1 FROM ai_runs
+    WHERE kind = 'discovery' AND status NOT IN ('running', 'ok')
+      AND json_extract(scope_json, '$.day') = CAST(sqlc.arg(day) AS TEXT)
+) AS INTEGER) AS failed;
+
+-- name: GetDiscoveryRun :one
+SELECT id, status, error_key, notes FROM ai_runs WHERE id = ? AND kind = 'discovery';
