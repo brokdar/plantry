@@ -2,8 +2,10 @@ package discovery_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -158,4 +160,31 @@ func TestVerify_ContextCancelled(t *testing.T) {
 	cancel()
 	_, _, err := v.Verify(ctx, []discovery.Candidate{{URL: srv.URL + "/fesenjan"}})
 	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestVerify_RedirectToBlockedHostDiscarded(t *testing.T) {
+	hit := false
+	spy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hit = true
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(recipePage))
+	}))
+	t.Cleanup(spy.Close)
+	pub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, spy.URL, http.StatusFound)
+	}))
+	t.Cleanup(pub.Close)
+
+	v, _ := newVerifier(true, urlSet{})
+	v.Guard = func(u string) error {
+		if strings.HasPrefix(u, spy.URL) {
+			return errors.New("private host")
+		}
+		return nil
+	}
+	kept, discarded, err := v.Verify(context.Background(), []discovery.Candidate{{URL: pub.URL}})
+	require.NoError(t, err)
+	require.Empty(t, kept)
+	assert.Equal(t, discovery.ReasonBlockedURL, urlsOf(discarded)[pub.URL])
+	assert.False(t, hit)
 }

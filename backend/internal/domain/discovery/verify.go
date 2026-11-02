@@ -123,6 +123,9 @@ func (v *Verifier) Verify(ctx context.Context, candidates []Candidate) ([]Verifi
 			defer func() { <-sem }()
 			cctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
+			if v.Guard != nil {
+				cctx = importer.WithURLGuard(cctx, v.Guard)
+			}
 			d, err := v.Extractor.Extract(cctx, importer.ExtractInput{
 				URL: candidates[i].URL, Options: importer.Options{NoLLMFallback: true},
 			})
@@ -193,6 +196,8 @@ func discardReason(err error) string {
 		return ReasonNoRecipe
 	case errors.Is(err, domain.ErrImportNotHTML):
 		return ReasonNotHTML
+	case errors.Is(err, importer.ErrURLBlocked):
+		return ReasonBlockedURL
 	case errors.Is(err, domain.ErrImportFetchFailed), errors.Is(err, domain.ErrImportBodyTooLarge):
 		return ReasonFetch
 	default:
