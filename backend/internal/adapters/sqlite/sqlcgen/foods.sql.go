@@ -451,6 +451,47 @@ func (q *Queries) GetLeafFoodIDByName(ctx context.Context, name string) (int64, 
 	return id, err
 }
 
+const leafIDsUsedInRecipes = `-- name: LeafIDsUsedInRecipes :many
+SELECT DISTINCT fc.child_id
+FROM food_components fc
+JOIN foods p ON p.id = fc.parent_id AND p.kind = 'composed'
+WHERE fc.child_id IN (/*SLICE:ids*/?)
+`
+
+// Which of the given leaves at least one composed food uses.
+func (q *Queries) LeafIDsUsedInRecipes(ctx context.Context, ids []int64) ([]int64, error) {
+	query := leafIDsUsedInRecipes
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var child_id int64
+		if err := rows.Scan(&child_id); err != nil {
+			return nil, err
+		}
+		items = append(items, child_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listChildrenByParents = `-- name: ListChildrenByParents :many
 SELECT fc.id, fc.parent_id, fc.child_id, fc.amount, fc.unit, fc.grams, fc.sort_order,
        f.name AS child_name, f.kind AS child_kind

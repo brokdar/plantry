@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 )
 
 // Default settings chosen to be polite but resilient to cheap bot checks.
@@ -83,6 +84,11 @@ func New(opts ...Option) *Client {
 			if len(via) >= c.maxRedirects {
 				return ErrTooManyRedirects
 			}
+			if guard := importer.URLGuardFrom(req.Context()); guard != nil {
+				if err := guard(req.URL.String()); err != nil {
+					return fmt.Errorf("%w: %w", importer.ErrURLBlocked, err)
+				}
+			}
 			return nil
 		}
 	}
@@ -107,7 +113,7 @@ func (c *Client) Fetch(ctx context.Context, url string) (string, string, error) 
 		if errors.Is(err, ErrTooManyRedirects) {
 			return "", "", ErrTooManyRedirects
 		}
-		return "", "", fmt.Errorf("%w: %v", domain.ErrImportFetchFailed, err)
+		return "", "", fmt.Errorf("%w: %w", domain.ErrImportFetchFailed, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

@@ -247,3 +247,25 @@ func TestCategorySubdirectory(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
 }
+
+func TestCopy(t *testing.T) {
+	srv := serveImage(t, createTestImage(t, 50, 50))
+	store, err := imagestore.New(t.TempDir(), srv.Client())
+	require.NoError(t, err)
+	_, err = store.SaveFromURL(context.Background(), srv.URL+"/i.png", "suggestions", 7)
+	require.NoError(t, err)
+
+	rel, err := store.Copy("suggestions", 7, "foods", 42)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join("foods", "42.jpg"), rel)
+
+	want, err := os.ReadFile(filepath.Join(store.BasePath(), "suggestions", "7.jpg"))
+	require.NoError(t, err)
+	got, err := os.ReadFile(filepath.Join(store.BasePath(), rel))
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	_, err = store.Copy("suggestions", 99, "foods", 43)
+	assert.ErrorIs(t, err, os.ErrNotExist)
+	assert.NoFileExists(t, filepath.Join(store.BasePath(), "foods", "43.jpg"))
+}

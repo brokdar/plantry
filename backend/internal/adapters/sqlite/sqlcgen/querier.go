@@ -44,6 +44,7 @@ type Querier interface {
 	CreatePreset(ctx context.Context, name string) (Preset, error)
 	CreatePresetComponent(ctx context.Context, arg CreatePresetComponentParams) (PresetComponent, error)
 	CreatePresetPlate(ctx context.Context, arg CreatePresetPlateParams) (PresetPlate, error)
+	CreateRecipeSuggestion(ctx context.Context, arg CreateRecipeSuggestionParams) (RecipeSuggestion, error)
 	CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) (TimeSlot, error)
 	CreateVariantGroup(ctx context.Context, name string) (VariantGroup, error)
 	DeleteActiveSlotAvailabilityDefaults(ctx context.Context) error
@@ -92,12 +93,15 @@ type Querier interface {
 	GetPlateIDByCell(ctx context.Context, arg GetPlateIDByCellParams) (int64, error)
 	GetPreset(ctx context.Context, id int64) (Preset, error)
 	GetProfile(ctx context.Context) (UserProfile, error)
+	GetRecipeSuggestion(ctx context.Context, id int64) (RecipeSuggestion, error)
 	// What the plan's draft summary shows of a run (D26).
 	GetRunNote(ctx context.Context, id int64) (GetRunNoteRow, error)
 	GetSetting(ctx context.Context, key string) (AppSetting, error)
 	GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error)
 	InsertAvailabilityDefault(ctx context.Context, arg InsertAvailabilityDefaultParams) error
 	LastPlateEventID(ctx context.Context) (int64, error)
+	// Which of the given leaves at least one composed food uses.
+	LeafIDsUsedInRecipes(ctx context.Context, ids []int64) ([]int64, error)
 	ListAIChangesByConversation(ctx context.Context, conversationID sql.NullInt64) ([]AiChange, error)
 	// A run's steps in seq order. args and result are cut to 8192 characters
 	// (an llm_call shows its request_json and response_json there); the *_cut
@@ -166,6 +170,7 @@ type Querier interface {
 	SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams) (Food, error)
 	SetFoodShopSection(ctx context.Context, arg SetFoodShopSectionParams) (Food, error)
 	SetPlatesState(ctx context.Context, arg SetPlatesStateParams) error
+	SetRecipeSuggestionImage(ctx context.Context, arg SetRecipeSuggestionImageParams) error
 	// D25: a run's outcome after its rows were accepted, discarded, un-accepted
 	// (reset) or restored as drafts. open/NULL -> accepted or discarded; a run
 	// that sees both is partially_accepted; reset undoes an accept (accepted ->
@@ -173,6 +178,8 @@ type Querier interface {
 	// (discarded -> open, partially_accepted -> accepted).
 	SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error
 	SetSessionsState(ctx context.Context, arg SetSessionsStateParams) error
+	// Whether a food or an earlier suggestion (any status) already has this URL.
+	SourceURLKnown(ctx context.Context, url string) (int64, error)
 	TouchConversation(ctx context.Context, id int64) (sql.Result, error)
 	TouchPlate(ctx context.Context, id int64) error
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error

@@ -15,9 +15,25 @@ import (
 )
 
 // Meter wraps inner so every call is recorded as an llm_call step of the run
-// in ctx. A call made without a run gets its own untracked run.
+// in ctx. A call made without a run gets its own untracked run. When inner
+// implements llm.Capabilities, so does the returned client.
 func (r *Recorder) Meter(inner llm.Client, provider string) llm.Client {
-	return &meteredClient{rec: r, inner: inner, provider: provider}
+	m := &meteredClient{rec: r, inner: inner, provider: provider}
+	if caps, ok := inner.(llm.Capabilities); ok {
+		return &meteredCapsClient{meteredClient: m, caps: caps}
+	}
+	return m
+}
+
+// meteredCapsClient is a meteredClient whose inner client reports
+// capabilities; the capability checks are not recorded.
+type meteredCapsClient struct {
+	*meteredClient
+	caps llm.Capabilities
+}
+
+func (m *meteredCapsClient) WebSearch(ctx context.Context, model string) (bool, error) {
+	return m.caps.WebSearch(ctx, model)
 }
 
 type meteredClient struct {
@@ -221,6 +237,7 @@ type requestBody struct {
 	MessageOffset int             `json:"message_offset"`
 	Messages      []llm.Message   `json:"messages"`
 	ToolChoice    *llm.ToolChoice `json:"tool_choice,omitempty"`
+	WebSearch     *llm.WebSearch  `json:"web_search,omitempty"`
 	Temperature   float64         `json:"temperature"`
 	MaxTokens     int             `json:"max_tokens"`
 	SystemHash    *string         `json:"system_hash"`
@@ -228,11 +245,13 @@ type requestBody struct {
 	Truncated     bool            `json:"truncated"`
 }
 
-// responseBody is the stored response_json: the reply's content blocks.
+// responseBody is the stored response_json: the reply's content blocks and
+// the web searches the call ran (until ai_run_steps has a column for them).
 type responseBody struct {
-	Content    []llm.ContentBlock `json:"content"`
-	StopReason llm.StopReason     `json:"stop_reason"`
-	Truncated  bool               `json:"truncated,omitempty"`
+	Content           []llm.ContentBlock `json:"content"`
+	StopReason        llm.StopReason     `json:"stop_reason"`
+	WebSearchRequests int                `json:"web_search_requests,omitempty"`
+	Truncated         bool               `json:"truncated,omitempty"`
 }
 
 func encodeRequest(req llm.Request, offset int, systemHash, toolsHash string) (string, error) {
@@ -248,6 +267,7 @@ func encodeRequest(req llm.Request, offset int, systemHash, toolsHash string) (s
 		MessageOffset: offset,
 		Messages:      delta,
 		ToolChoice:    req.ToolChoice,
+		WebSearch:     req.WebSearch,
 		Temperature:   req.Temperature,
 		MaxTokens:     req.MaxTokens,
 		SystemHash:    nilIfEmpty(systemHash),
@@ -262,7 +282,7 @@ func encodeResponse(resp *llm.Response) (string, error) {
 	for i := range content {
 		blocks[i] = &content[i]
 	}
-	body := responseBody{Content: content, StopReason: resp.StopReason}
+	body := responseBody{Content: content, StopReason: resp.StopReason, WebSearchRequests: resp.Usage.WebSearchRequests}
 	return encodeCapped(&body, blocks, &body.Truncated)
 }
 
@@ -291,7 +311,7 @@ func encodeCapped(body any, blocks []*llm.ContentBlock, truncated *bool) (string
 	return string(data), nil
 }
 
-// shrinkLargest cuts the largest text, tool input or tool result among blocks
+// shrinkLargest cuts the largest text, tool input, tool result or server block among blocks
 // by at least excess bytes. A cut JSON payload is replaced by a JSON string
 // holding its shortened text. It reports false when no payload is long
 // enough to cut.
@@ -303,7 +323,7 @@ func shrinkLargest(blocks []*llm.ContentBlock, excess int) bool {
 		if len(b.Text) > size {
 			text, raw, size = &b.Text, nil, len(b.Text)
 		}
-		for _, r := range []*json.RawMessage{&b.ToolUseInput, &b.ToolResultContent} {
+		for _, r := range []*json.RawMessage{&b.ToolUseInput, &b.ToolResultContent, &b.Raw} {
 			if len(*r) > size {
 				text, raw, size = nil, r, len(*r)
 			}

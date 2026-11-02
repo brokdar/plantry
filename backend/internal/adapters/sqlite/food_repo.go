@@ -543,6 +543,23 @@ func (r *FoodRepo) UsedInCounts(ctx context.Context, ids []int64) (map[int64]int
 	return out, nil
 }
 
+// LeafIDsUsedInRecipes returns which of the given leaves at least one
+// composed food uses, in one query.
+func (r *FoodRepo) LeafIDsUsedInRecipes(ctx context.Context, ids []int64) (map[int64]bool, error) {
+	if len(ids) == 0 {
+		return map[int64]bool{}, nil
+	}
+	rows, err := r.queriesFor(ctx).LeafIDsUsedInRecipes(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]bool, len(rows))
+	for _, id := range rows {
+		out[id] = true
+	}
+	return out, nil
+}
+
 func (r *FoodRepo) SetFavorite(ctx context.Context, id int64, favorite bool) (*food.Food, error) {
 	fav := int64(0)
 	if favorite {
