@@ -354,6 +354,20 @@ func TestWebSearchCapability(t *testing.T) {
 		_, _ = c.WebSearch(context.Background(), "claude-opus-5-5")
 		assert.Equal(t, int32(3), calls.Load(), "re-checked after 24 h")
 	})
+
+	t.Run("cancelled context is not cached", func(t *testing.T) {
+		c, calls := modelsServer(t, 200, `{"capabilities":{"server_tools":{"web_search":{"supported":true}}}}`)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		ok, err := c.WebSearch(ctx, "claude-opus-5-5")
+		assert.False(t, ok)
+		assert.Error(t, err)
+
+		ok, err = c.WebSearch(context.Background(), "claude-opus-5-5")
+		require.NoError(t, err)
+		assert.True(t, ok)
+		assert.Equal(t, int32(1), calls.Load(), "live call reaches the Models endpoint")
+	})
 }
 
 // B1-AC4 / D3: a 400 on a search request re-runs the turn without search and

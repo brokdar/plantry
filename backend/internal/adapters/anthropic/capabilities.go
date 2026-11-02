@@ -29,6 +29,9 @@ func (c *Client) WebSearch(ctx context.Context, model string) (bool, error) {
 		return cp.webSearch, nil
 	}
 	supported, err := c.fetchWebSearch(ctx, model)
+	if ctx.Err() != nil {
+		return false, err // the caller's cancellation says nothing about the model
+	}
 	c.caps[model] = capability{webSearch: supported, until: c.now().Add(capabilityTTL)}
 	return supported, err
 }
