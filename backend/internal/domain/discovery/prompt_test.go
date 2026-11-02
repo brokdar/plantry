@@ -118,3 +118,20 @@ func TestDailyCuisine_RotatesByDay(t *testing.T) {
 	assert.Len(t, seen, 3, "three days visit every cuisine")
 	assert.Empty(t, discovery.DailyCuisine(nil, day))
 }
+
+// DoD B1: an oversized focus with notes present still terminates.
+func TestRenderPrompt_OversizedFocusTerminates(t *testing.T) {
+	done := make(chan string, 1)
+	go func() {
+		done <- discovery.RenderPrompt(discovery.PromptInput{
+			Request: discovery.Request{Mode: discovery.ModeKnown, Focus: strings.Repeat("f", 12000)},
+			Profile: promptProfile(),
+		})
+	}()
+	select {
+	case got := <-done:
+		assert.Contains(t, got, `{"candidates"`)
+	case <-time.After(2 * time.Second):
+		t.Fatal("RenderPrompt did not return")
+	}
+}

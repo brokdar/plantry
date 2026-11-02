@@ -1,8 +1,10 @@
 package discovery_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -187,4 +189,40 @@ func TestVerify_RedirectToBlockedHostDiscarded(t *testing.T) {
 	require.Empty(t, kept)
 	assert.Equal(t, discovery.ReasonBlockedURL, urlsOf(discarded)[pub.URL])
 	assert.False(t, hit)
+}
+
+// panicExtractor panics for one URL and delegates the rest.
+type panicExtractor struct {
+	inner discovery.Extractor
+	bad   string
+}
+
+func (p panicExtractor) Extract(ctx context.Context, in importer.ExtractInput) (*importer.Draft, error) {
+	if in.URL == p.bad {
+		panic("parser bug")
+	}
+	return p.inner.Extract(ctx, in)
+}
+
+// DoD S1: a panicking extraction discards that candidate, logs the stack
+// and leaves the others intact; every discard is logged with host + reason.
+func TestVerify_PanicDiscardsCandidate(t *testing.T) {
+	srv := site(t)
+	var logs bytes.Buffer
+	v, _ := newVerifier(true, nil)
+	v.Extractor = panicExtractor{inner: v.Extractor, bad: srv.URL + "/blog"}
+	v.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+
+	kept, discarded, err := v.Verify(context.Background(), []discovery.Candidate{
+		{URL: srv.URL + "/fesenjan"}, {URL: srv.URL + "/blog"}, {URL: srv.URL + "/gone?token=secret"},
+	})
+	require.NoError(t, err)
+	require.Len(t, kept, 1)
+	assert.Equal(t, discovery.ReasonPanic, urlsOf(discarded)[srv.URL+"/blog"])
+	out := logs.String()
+	assert.Contains(t, out, "level=ERROR")
+	assert.Contains(t, out, "parser bug")
+	assert.Contains(t, out, "stack=")
+	assert.Contains(t, out, "reason="+discovery.ReasonFetch)
+	assert.NotContains(t, out, "token=secret", "the URL query is never logged")
 }

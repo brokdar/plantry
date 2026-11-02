@@ -15,6 +15,8 @@ import (
 
 	"github.com/disintegration/imaging"
 	_ "golang.org/x/image/webp"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 )
 
 const (
@@ -29,6 +31,8 @@ const (
 type Store struct {
 	basePath   string
 	httpClient *http.Client
+	// guarded serves downloads whose ctx carries a URL guard.
+	guarded *http.Client
 }
 
 // New creates a Store. Creates basePath directory if it doesn't exist.
@@ -42,20 +46,36 @@ func New(basePath string, httpClient *http.Client) (*Store, error) {
 	return &Store{basePath: basePath, httpClient: httpClient}, nil
 }
 
+// SetGuardedClient sets the client used for downloads whose ctx carries a
+// URL guard (importer.WithURLGuard), typically httpfetch.GuardedClient: it
+// re-checks every redirect hop and the dialled address.
+func (s *Store) SetGuardedClient(hc *http.Client) { s.guarded = hc }
+
 // SaveFromURL downloads an image from url, resizes it, and saves as JPEG.
 // Returns the relative path (e.g., "ingredients/42.jpg"). Bodies larger than
 // maxDownloadBytes are rejected.
 //
-// There is deliberately no SSRF guard (private/loopback addresses are
-// allowed): Plantry is a single-user, LAN-only app, httpfetch makes the same
-// choice, and the response is only ever decoded as an image, never echoed.
+// A URL the user typed has no SSRF guard (private/loopback addresses are
+// allowed: Plantry is a single-user, LAN-only app). A URL from an untrusted
+// party (a discovered page's image) comes with a guard in ctx: the URL is
+// vetted and the download goes through the guarded client.
 func (s *Store) SaveFromURL(ctx context.Context, url, category string, id int64) (string, error) {
+	hc := s.httpClient
+	if guard := importer.URLGuardFrom(ctx); guard != nil {
+		if err := guard(url); err != nil {
+			return "", fmt.Errorf("download image: %w: %w", importer.ErrURLBlocked, err)
+		}
+		if s.guarded == nil {
+			return "", fmt.Errorf("download image: %w: no guarded client", importer.ErrURLBlocked)
+		}
+		hc = s.guarded
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("download image: %w", err)
 	}

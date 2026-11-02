@@ -380,6 +380,10 @@ func TestService_RunValidates(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrDiscoveryInvalidMode)
 	_, err = h.svc.Run(context.Background(), discovery.Request{Mode: discovery.ModeExplore, Cuisine: "  "})
 	assert.ErrorIs(t, err, domain.ErrDiscoveryCuisineRequired)
+	_, err = h.svc.Run(context.Background(), discovery.Request{Mode: discovery.ModeKnown, Focus: strings.Repeat("f", 12000)})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput, "focus over 80 runes")
+	_, err = h.svc.Run(context.Background(), discovery.Request{Mode: discovery.ModeExplore, Cuisine: strings.Repeat("ä", 81)})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput, "cuisine over 80 runes")
 
 	none := newHarness(t, nil, site)
 	_, err = none.svc.Run(context.Background(), discovery.Request{Mode: discovery.ModeDaily})

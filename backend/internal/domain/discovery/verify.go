@@ -5,6 +5,9 @@ package discovery
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"net/url"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -21,6 +24,7 @@ const (
 	ReasonFetch      = "fetch_failed"
 	ReasonTimeout    = "timeout"
 	ReasonError      = "error"
+	ReasonPanic      = "panic"
 )
 
 const (
@@ -70,6 +74,8 @@ type Verifier struct {
 	// Concurrency (default 3) and Timeout per URL (default 20 s).
 	Concurrency int
 	Timeout     time.Duration
+	// Logger (default slog.Default) gets one line per discarded candidate.
+	Logger *slog.Logger
 }
 
 // Verify extracts every candidate (JSON-LD only, no LLM fallback) and returns
@@ -81,6 +87,7 @@ type Verifier struct {
 func (v *Verifier) Verify(ctx context.Context, candidates []Candidate) ([]Verified, []Discarded, error) {
 	type slot struct {
 		discard string
+		err     error
 		draft   *importer.Draft
 	}
 	slots := make([]slot, len(candidates))
@@ -124,6 +131,15 @@ func (v *Verifier) Verify(ctx context.Context, candidates []Candidate) ([]Verifi
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
+			defer func() {
+				// Extraction parses untrusted pages: a parser panic discards
+				// this candidate instead of killing the process.
+				if p := recover(); p != nil {
+					slots[i].draft, slots[i].discard = nil, ReasonPanic
+					v.logger().ErrorContext(ctx, "discovery.verify panic",
+						"host", host(candidates[i].URL), "panic", p, "stack", string(debug.Stack()))
+				}
+			}()
 			cctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 			if v.Guard != nil {
@@ -133,7 +149,7 @@ func (v *Verifier) Verify(ctx context.Context, candidates []Candidate) ([]Verifi
 				URL: candidates[i].URL, Options: importer.Options{NoLLMFallback: true},
 			})
 			if err != nil {
-				slots[i].discard = discardReason(err)
+				slots[i].discard, slots[i].err = discardReason(err), err
 				return
 			}
 			slots[i].draft = d
@@ -160,11 +176,37 @@ func (v *Verifier) Verify(ctx context.Context, candidates []Candidate) ([]Verifi
 		}
 		if s.draft == nil {
 			discarded = append(discarded, Discarded{URL: c.URL, Reason: s.discard})
+			v.logDiscard(ctx, c.URL, s.discard, s.err)
 			continue
 		}
 		kept = append(kept, Verified{Candidate: c, Draft: s.draft})
 	}
 	return kept, discarded, nil
+}
+
+func (v *Verifier) logger() *slog.Logger {
+	if v.Logger == nil {
+		return slog.Default()
+	}
+	return v.Logger
+}
+
+// logDiscard logs a discarded candidate by host only (an LLM-chosen URL's
+// query is not logged). Unclassified errors carry the error at Warn.
+func (v *Verifier) logDiscard(ctx context.Context, rawURL, reason string, err error) {
+	if reason == ReasonError {
+		v.logger().WarnContext(ctx, "discovery.verify discarded", "host", host(rawURL), "reason", reason, "error", err)
+		return
+	}
+	v.logger().InfoContext(ctx, "discovery.verify discarded", "host", host(rawURL), "reason", reason)
+}
+
+func host(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return u.Host
 }
 
 func (v *Verifier) vet(rawURL string) string {
@@ -177,17 +219,17 @@ func (v *Verifier) vet(rawURL string) string {
 	return ""
 }
 
-// duplicate reports whether url is known, or already seen in this batch, and
+// duplicate reports whether u is known, or already seen in this batch, and
 // marks it seen.
-func (v *Verifier) duplicate(ctx context.Context, url string, seen map[string]bool) (bool, error) {
-	if seen[url] {
+func (v *Verifier) duplicate(ctx context.Context, u string, seen map[string]bool) (bool, error) {
+	if seen[u] {
 		return true, nil
 	}
-	known, err := v.Index.SourceURLKnown(ctx, url)
+	known, err := v.Index.SourceURLKnown(ctx, u)
 	if err != nil {
 		return false, err
 	}
-	seen[url] = true
+	seen[u] = true
 	return known, nil
 }
 

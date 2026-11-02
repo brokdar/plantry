@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
@@ -115,11 +116,15 @@ func NewService(d Deps) *Service {
 // Run validates req, starts the run in the background and returns its
 // ai_runs id. It fails with domain.ErrDiscoveryInvalidMode for an unknown
 // mode, domain.ErrDiscoveryCuisineRequired for an explore run without one,
+// domain.ErrInvalidInput for a cuisine or focus over 80 runes,
 // domain.ErrAIProviderMissing/ErrAIProviderFailed when no client resolves,
 // and domain.ErrDiscoveryRunning while another run is running. The run
 // outlives ctx.
 func (s *Service) Run(ctx context.Context, req Request) (int64, error) {
 	req.Cuisine, req.Focus = strings.ToLower(strings.TrimSpace(req.Cuisine)), strings.TrimSpace(req.Focus)
+	if utf8.RuneCountInString(req.Cuisine) > maxNameRunes || utf8.RuneCountInString(req.Focus) > maxNameRunes {
+		return 0, fmt.Errorf("%w: cuisine and focus are limited to %d characters", domain.ErrInvalidInput, maxNameRunes)
+	}
 	switch req.Mode {
 	case ModeDaily, ModeKnown:
 	case ModeExplore:

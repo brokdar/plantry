@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -166,4 +167,46 @@ func TestFetch_RedirectGuardBlocksHop(t *testing.T) {
 	_, _, err = c.Fetch(context.Background(), ts.URL)
 	require.NoError(t, err)
 	require.True(t, hit)
+}
+
+// DoD S2: a guarded fetch checks the address it actually dials. The pre-check
+// sees a public address; the dial-time lookup gets loopback (DNS rebinding)
+// and the connection is refused.
+func TestFetch_DialGuardBlocksRebinding(t *testing.T) {
+	hit := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hit = true
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte("<html></html>"))
+	}))
+	t.Cleanup(ts.Close)
+	_, port, _ := net.SplitHostPort(strings.TrimPrefix(ts.URL, "http://"))
+	raw := "http://rebind.test:" + port + "/"
+
+	preCheck := func(string) ([]net.IP, error) { return []net.IP{net.ParseIP("93.184.216.34")}, nil }
+	atDial := func(string) ([]net.IP, error) { return []net.IP{net.ParseIP("127.0.0.1")}, nil }
+	guard := func(u string) error { return httpfetch.PublicURL(u, preCheck, false) }
+
+	c := httpfetch.New(httpfetch.WithDialGuard(atDial, false))
+	_, _, err := c.Fetch(importer.WithURLGuard(context.Background(), guard), raw)
+	require.ErrorIs(t, err, httpfetch.ErrBlockedURL)
+	require.False(t, hit, "the private address is never connected to")
+
+	// Dev mode allows loopback at dial time too.
+	dev := httpfetch.New(httpfetch.WithDialGuard(atDial, true))
+	_, _, err = dev.Fetch(importer.WithURLGuard(context.Background(), guard), raw)
+	require.NoError(t, err)
+	require.True(t, hit)
+}
+
+// A fetch without a guard in ctx (a user-pasted import URL) dials normally.
+func TestFetch_DialGuardOnlyForGuardedFetches(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte("<html></html>"))
+	}))
+	t.Cleanup(ts.Close)
+	c := httpfetch.New(httpfetch.WithDialGuard(nil, false))
+	_, _, err := c.Fetch(context.Background(), ts.URL)
+	require.NoError(t, err)
 }

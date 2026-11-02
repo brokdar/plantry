@@ -150,8 +150,8 @@ var ErrDayTaken = errors.New("discovery: day already has a suggestion")
 
 // Save stores the suggestion as pending, then downloads its image to
 // suggestions/<id>.jpg (D16). The draft's SourceURL is the row's source_url.
-// An image that is missing or fails to download leaves image_path NULL; the
-// row stays stored.
+// An image that is missing, fails to download or whose path cannot be
+// recorded leaves image_path NULL; the row stays stored.
 func (s *Store) Save(ctx context.Context, in NewSuggestion) (*Suggestion, error) {
 	sug := &Suggestion{
 		Mode: in.Mode, Query: in.Query, SourceURL: in.Draft.SourceURL, Draft: *in.Draft,
@@ -162,7 +162,13 @@ func (s *Store) Save(ctx context.Context, in NewSuggestion) (*Suggestion, error)
 	}
 	if path := s.saveImage(ctx, sug); path != "" {
 		if err := s.Repo.SetImagePath(ctx, sug.ID, &path); err != nil {
-			return nil, fmt.Errorf("save suggestion image path: %w", err)
+			// The row is stored: keep it without an image rather than fail
+			// a run whose suggestion is already visible.
+			slog.WarnContext(ctx, "discovery.image.path_failed", "suggestion_id", sug.ID, "error", err)
+			if err := s.Images.Delete(ImageCategory, sug.ID); err != nil {
+				slog.WarnContext(ctx, "discovery.image.delete_failed", "suggestion_id", sug.ID, "error", err)
+			}
+			return sug, nil
 		}
 		sug.ImagePath = &path
 	}
@@ -179,6 +185,8 @@ func (s *Store) saveImage(ctx context.Context, sug *Suggestion) string {
 			slog.Warn("discovery.image.blocked", "suggestion_id", sug.ID, "url", url, "error", err)
 			return ""
 		}
+		// The download re-checks redirect hops and the dialled address.
+		ctx = importer.WithURLGuard(ctx, s.ImageGuard)
 	}
 	path, err := s.Images.SaveFromURL(ctx, url, ImageCategory, sug.ID)
 	if err != nil {
@@ -195,7 +203,8 @@ func (s *Store) Accept(ctx context.Context, id, foodID int64) (*Suggestion, erro
 }
 
 // Reject marks the suggestion rejected, moves its run's outcome (D11) and
-// removes its image (D16). A failed image removal is logged, not returned.
+// removes its image (D16). Once the decision is recorded it is the result:
+// a failed image removal or path reset is logged, not returned.
 func (s *Store) Reject(ctx context.Context, id int64, reason *Reason) (*Suggestion, error) {
 	sug, err := s.Repo.Decide(ctx, id, Decision{Status: StatusRejected, Reason: reason})
 	if err != nil {
@@ -203,7 +212,7 @@ func (s *Store) Reject(ctx context.Context, id int64, reason *Reason) (*Suggesti
 	}
 	s.deleteImage(sug.ID)
 	if err := s.Repo.SetImagePath(ctx, sug.ID, nil); err != nil {
-		return nil, fmt.Errorf("clear rejected suggestion image path: %w", err)
+		slog.WarnContext(ctx, "discovery.image.clear_failed", "suggestion_id", sug.ID, "error", err)
 	}
 	sug.ImagePath = nil
 	return sug, nil
