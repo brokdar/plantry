@@ -16,7 +16,8 @@ export type LibrarySort = (typeof LIBRARY_SORTS)[number]
 
 /** The library's filters, kept in the `/recipes` search params so a filtered
  *  view is shareable and survives a reload (F8). `add=url` opens the import
- *  sheet. */
+ *  sheet; `add=discover&suggestion=<id>` opens the prefilled review of a
+ *  discovery suggestion. */
 export interface LibrarySearch {
   q?: string
   role?: FoodRole
@@ -30,7 +31,8 @@ export interface LibrarySearch {
   /** Added in the last 30 days. */
   new?: true
   sort?: LibrarySort
-  add?: "url"
+  add?: "url" | "discover"
+  suggestion?: number
 }
 
 export const QUICK_MINUTES = 30
@@ -67,7 +69,11 @@ export function parseLibrarySearch(
     fav: flag(raw.fav),
     new: flag(raw.new),
     sort: oneOf(LIBRARY_SORTS, raw.sort),
-    add: raw.add === "url" ? "url" : undefined,
+    add: oneOf(["url", "discover"] as const, raw.add),
+    suggestion:
+      typeof raw.suggestion === "number" && Number.isInteger(raw.suggestion)
+        ? raw.suggestion
+        : undefined,
   }
 }
 
@@ -78,7 +84,10 @@ const SEARCH_KEY = "plantry:recipes:search"
  *  disabled storage only loses the memory. */
 export function rememberLibrarySearch(s: LibrarySearch): void {
   try {
-    sessionStorage.setItem(SEARCH_KEY, JSON.stringify({ ...s, add: undefined }))
+    sessionStorage.setItem(
+      SEARCH_KEY,
+      JSON.stringify({ ...s, add: undefined, suggestion: undefined })
+    )
   } catch {
     // Back falls back to the unfiltered library.
   }
@@ -92,7 +101,7 @@ export function rememberedLibrarySearch(): LibrarySearch {
     const search = parseLibrarySearch(
       raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
     )
-    return { ...search, add: undefined }
+    return { ...search, add: undefined, suggestion: undefined }
   } catch {
     return parseLibrarySearch({})
   }

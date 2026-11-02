@@ -1004,6 +1004,7 @@
       "preference_reserved": "Vorlieben und Abneigungen kommen aus deinen Bewertungen, deshalb kann der Assistent sie nicht setzen.",
       "unlock_needs_user": "Bevor der Assistent ein bestätigtes Essen entsperrt, braucht er dein Ja in einer neuen Nachricht.",
       "change_stale": "Diese Änderung wurde danach noch bearbeitet und lässt sich nicht mehr rückgängig machen.",
+      "change_confirmed": "Die Einträge dieser Änderung sind inzwischen bestätigt, daher lässt sie sich nicht mehr rückgängig machen.",
       "change_undone": "Diese Änderung wurde schon rückgängig gemacht.",
       "change_not_undoable": "Diese Änderung hat nichts verändert, es gibt nichts rückgängig zu machen.",
       "iterations_exceeded": "Die AI hat zu viele Schritte gemacht — bitte formuliere die Anfrage einfacher.",
@@ -1037,7 +1038,12 @@
     "invalid_from": "Das Startdatum ist ungültig. Wähle einen anderen Zeitraum.",
     "invalid_to": "Das Enddatum ist ungültig. Wähle einen anderen Zeitraum.",
     "invalid_date_range": "Der Zeitraum endet, bevor er beginnt. Wähle einen anderen Zeitraum.",
-    "date_range_too_large": "Der Zeitraum ist länger als ein Jahr. Wähle einen kürzeren."
+    "date_range_too_large": "Der Zeitraum ist länger als ein Jahr. Wähle einen kürzeren.",
+    "discovery": {
+      "running": "Es läuft bereits eine Rezeptsuche. Versuch es gleich noch einmal.",
+      "decided": "Über diesen Vorschlag wurde schon entschieden.",
+      "invalid_output": "Die Recherche des Assistenten war nicht lesbar. Versuch es noch einmal."
+    }
   },
   "common": {
     "save": "Speichern",
@@ -1058,7 +1064,8 @@
     "title": "Assistent",
     "description": "Änderungen landen in deinem Entwurf. Bestätigte Teller bleiben, außer du stimmst zu.",
     "disabled_reason": "Richte in den Einstellungen einen KI-Anbieter ein, um den Assistenten zu nutzen.",
-    "provider_missing": "Kein KI-Anbieter eingerichtet. Wähle in den Einstellungen einen aus.",
+    "provider_missing": "Kein KI-Anbieter eingerichtet.",
+    "provider_missing_link": "In den Einstellungen unter Assistent auswählen",
     "close": "Assistent schließen",
     "composer": {
       "placeholder": "Bitte mich, einen Tag zu planen, eine Mahlzeit zu tauschen oder eine Portion zu ändern…",
@@ -1089,6 +1096,7 @@
       "untitled": "Unterhaltung"
     },
     "change": {
+      "blocked_confirmed": "Übernommen, Rückgängig ist nicht mehr möglich",
       "fallback": "Dein Plan hat sich geändert",
       "apply_preset": "{{day}}: Routine {{name}} angewendet",
       "set_session_portions_one": "{{name}}: {{count}} Portion",
@@ -1642,6 +1650,37 @@
     "amount_of": "{{value}} / {{target}} {{unit}}",
     "incomplete": "Unvollständig",
     "missing": "Keine Nährwerte für {{names}}."
+  },
+  "discovery": {
+    "card": {
+      "new": "neu",
+      "legend": "„neu“ markiert Zutaten, die noch nicht in deinen Lebensmitteln sind.",
+      "grounded": "Per Websuche gefunden",
+      "nutrition_incomplete": "Nährwerte unvollständig",
+      "nutrition_missing": "Keine Daten für {{names}}",
+      "minutes": "{{count}} Min.",
+      "portions_one": "{{count}} Portion",
+      "portions_other": "{{count}} Portionen",
+      "macros": "{{kcal}} kcal · {{protein}} g Eiweiß pro Portion",
+      "ingredients": "Zutaten",
+      "source": "Originalrezept ansehen",
+      "photo_alt": "Foto von {{name}}"
+    },
+    "sheet": {
+      "title": "Eine Idee für heute",
+      "add": "Zu meinen Rezepten",
+      "not_for_me": "Nichts für mich",
+      "another": "Eine andere zeigen",
+      "finding_another": "Ich suche eine andere Idee …",
+      "close": "Schließen"
+    },
+    "reject": {
+      "prompt": "Was hat dich gestört?",
+      "too_long": "Dauert zu lange",
+      "ingredients": "Zutaten",
+      "taste": "Nicht mein Geschmack",
+      "none": "Kein Grund"
+    }
   },
   "today": {
     "verdict": {

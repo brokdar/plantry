@@ -15,6 +15,10 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
+// UndoBlockedConfirmed is the undo_blocked reason of a change whose rows are
+// confirmed now.
+const UndoBlockedConfirmed = "confirmed"
+
 // Change is one plan-writing tool call (Phase 4 D13): the line the assistant
 // shows and the unit of undo. Its plate events are those of RunIDs (the chat
 // run, plus a regenerate run the call waited for) with ids in
@@ -43,6 +47,9 @@ type Change struct {
 	// Unrecorded marks a change that was made but could not be saved: it has
 	// no ID, is not undoable and is never stored.
 	Unrecorded bool
+	// UndoBlocked is set by Changes.List: UndoBlockedConfirmed when a row of
+	// the change is confirmed now, else nil.
+	UndoBlocked *string
 }
 
 // Undoable reports whether the change wrote anything undo can put back.
@@ -54,7 +61,7 @@ func (c Change) Undoable() bool {
 func (c Change) Payload() llm.ChangePayload {
 	return llm.ChangePayload{
 		ID: c.ID, RunID: c.RunID, Tool: c.Tool, TextKey: c.TextKey, Params: c.Params,
-		Dates: c.Dates, PlateIDs: c.PlateIDs, SessionIDs: c.SessionIDs, Undoable: c.Undoable(),
+		Dates: c.Dates, PlateIDs: c.PlateIDs, SessionIDs: c.SessionIDs, Undoable: c.Undoable(), UndoBlocked: c.UndoBlocked,
 		Recorded: !c.Unrecorded,
 	}
 }
@@ -274,18 +281,92 @@ func NewChanges(store ChangeStore, plates *plate.Service, cells CellRestorer, tx
 }
 
 // List returns the changes of a conversation, ascending by id.
+// A change whose rows are confirmed now carries UndoBlocked.
 func (c *Changes) List(ctx context.Context, conversationID int64) ([]Change, error) {
-	return c.store.ConversationChanges(ctx, conversationID)
+	list, err := c.store.ConversationChanges(ctx, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	var open []*Change
+	for i := range list {
+		if list[i].UndoneAt == nil && list[i].Undoable() && list[i].Tool != "confirm" {
+			open = append(open, &list[i])
+		}
+	}
+	rows, err := c.confirmedRows(ctx, open)
+	if err != nil {
+		return nil, err
+	}
+	for _, ch := range open {
+		if rows.hit(ch) {
+			reason := UndoBlockedConfirmed
+			ch.UndoBlocked = &reason
+		}
+	}
+	return list, nil
+}
+
+// confirmedSet holds the ids of the plates and sessions that are confirmed.
+type confirmedSet struct {
+	plates, sessions map[int64]bool
+}
+
+func (s confirmedSet) hit(ch *Change) bool {
+	return slices.ContainsFunc(ch.PlateIDs, func(id int64) bool { return s.plates[id] }) ||
+		slices.ContainsFunc(ch.SessionIDs, func(id int64) bool { return s.sessions[id] })
+}
+
+// confirmedRows loads the plates and sessions of changes in two queries and
+// returns those confirmed now.
+func (c *Changes) confirmedRows(ctx context.Context, changes []*Change) (confirmedSet, error) {
+	set := confirmedSet{plates: map[int64]bool{}, sessions: map[int64]bool{}}
+	var plateIDs, sessionIDs []int64
+	for _, ch := range changes {
+		plateIDs = append(plateIDs, ch.PlateIDs...)
+		sessionIDs = append(sessionIDs, ch.SessionIDs...)
+	}
+	if len(plateIDs) > 0 {
+		plates, err := c.plates.PlatesByIDs(ctx, slices.Compact(slices.Sorted(slices.Values(plateIDs))))
+		if err != nil {
+			return set, err
+		}
+		for _, p := range plates {
+			set.plates[p.ID] = p.State == plate.StateConfirmed
+		}
+	}
+	if len(sessionIDs) > 0 {
+		sessions, err := c.plates.CookSessions(ctx, slices.Compact(slices.Sorted(slices.Values(sessionIDs))))
+		if err != nil {
+			return set, err
+		}
+		for _, sess := range sessions {
+			set.sessions[sess.ID] = sess.State == plate.StateConfirmed
+		}
+	}
+	return set, nil
+}
+
+// confirmed reports whether a plate or session of the change is confirmed
+// now. A confirm change is exempt: undoing it is what takes the rows back to
+// draft.
+func (c *Changes) confirmed(ctx context.Context, ch *Change) (bool, error) {
+	if ch.Tool == "confirm" {
+		return false, nil
+	}
+	rows, err := c.confirmedRows(ctx, []*Change{ch})
+	return rows.hit(ch), err
 }
 
 // Undo reverts one change as the actor in ctx (the user), in one unit of
 // work: its plates and sessions go back to their state before it
 // (plate.Service.Revert) and a set_availability cell gets its override back.
 // It fails with domain.ErrAIChangeUndone when the change was undone and
-// domain.ErrAIChangeStale, writing nothing, when one of its rows has an event
-// the change did not make or its cell's override is no longer the one it
-// wrote. A change that wrote nothing (not Undoable) is
-// domain.ErrAIChangeNotUndoable and stays as it is. It returns the rows it wrote.
+// domain.ErrAIChangeConfirmed when one of its plates or sessions is
+// confirmed now and domain.ErrAIChangeStale, writing nothing, when one of its
+// rows has an event the change did not make or its cell's override is no
+// longer the one it wrote. A change that wrote nothing (not Undoable) is
+// domain.ErrAIChangeNotUndoable and stays as it is. It returns the rows it
+// wrote.
 func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 	var rows plate.RowSet
 	err := c.tx.InTx(ctx, func(ctx context.Context) error {
@@ -298,6 +379,13 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 		}
 		if !ch.Undoable() {
 			return fmt.Errorf("%w: change %d wrote nothing to undo", domain.ErrAIChangeNotUndoable, id)
+		}
+		blocked, err := c.confirmed(ctx, ch)
+		if err != nil {
+			return err
+		}
+		if blocked {
+			return fmt.Errorf("%w: change %d", domain.ErrAIChangeConfirmed, id)
 		}
 		if cb := ch.CellBefore; cb != nil {
 			if err := c.checkCell(ctx, id, *cb); err != nil {

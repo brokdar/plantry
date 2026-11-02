@@ -98,7 +98,8 @@ describe("parseLibrarySearch", () => {
         diet: "omnivore",
         quick: false,
         sort: "kcal",
-        add: "discover",
+        add: "bogus",
+        suggestion: "5",
       })
     ).toEqual({
       q: undefined,
@@ -110,6 +111,16 @@ describe("parseLibrarySearch", () => {
       new: undefined,
       sort: undefined,
       add: undefined,
+      suggestion: undefined,
+    })
+  })
+
+  it("keeps add=discover with a numeric suggestion id", () => {
+    expect(
+      parseLibrarySearch({ add: "discover", suggestion: 5 })
+    ).toMatchObject({
+      add: "discover",
+      suggestion: 5,
     })
   })
 })

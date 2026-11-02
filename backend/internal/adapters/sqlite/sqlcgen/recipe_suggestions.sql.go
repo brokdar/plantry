@@ -61,6 +61,81 @@ func (q *Queries) CreateRecipeSuggestion(ctx context.Context, arg CreateRecipeSu
 	return i, err
 }
 
+const decideRecipeSuggestion = `-- name: DecideRecipeSuggestion :one
+UPDATE recipe_suggestions SET
+    status = ?1, reason = ?2, food_id = ?3,
+    decided_at = datetime('now')
+WHERE id = ?4 AND status = 'pending'
+RETURNING id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at
+`
+
+type DecideRecipeSuggestionParams struct {
+	Status string
+	Reason sql.NullString
+	FoodID sql.NullInt64
+	ID     int64
+}
+
+// Accept or reject a pending suggestion; no row when it is decided already.
+func (q *Queries) DecideRecipeSuggestion(ctx context.Context, arg DecideRecipeSuggestionParams) (RecipeSuggestion, error) {
+	row := q.db.QueryRowContext(ctx, decideRecipeSuggestion,
+		arg.Status,
+		arg.Reason,
+		arg.FoodID,
+		arg.ID,
+	)
+	var i RecipeSuggestion
+	err := row.Scan(
+		&i.ID,
+		&i.Mode,
+		&i.Query,
+		&i.SourceUrl,
+		&i.DraftJson,
+		&i.AnnotationsJson,
+		&i.ImagePath,
+		&i.Grounded,
+		&i.Status,
+		&i.Reason,
+		&i.AiRunID,
+		&i.FoodID,
+		&i.ShownOn,
+		&i.CreatedAt,
+		&i.DecidedAt,
+	)
+	return i, err
+}
+
+const deletePendingSuggestionsBefore = `-- name: DeletePendingSuggestionsBefore :many
+DELETE FROM recipe_suggestions
+WHERE status = 'pending' AND created_at < ?1
+RETURNING id
+`
+
+// D12: pending suggestions created before the cutoff go; their ids let the
+// caller delete the images.
+func (q *Queries) DeletePendingSuggestionsBefore(ctx context.Context, before string) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, deletePendingSuggestionsBefore, before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const discoverySuggestionCounts = `-- name: DiscoverySuggestionCounts :many
 SELECT CAST(ai_run_id AS INTEGER) AS run_id,
        COUNT(*) AS suggestions,
@@ -131,6 +206,83 @@ func (q *Queries) GetRecipeSuggestion(ctx context.Context, id int64) (RecipeSugg
 		&i.DecidedAt,
 	)
 	return i, err
+}
+
+const listRecipeSuggestions = `-- name: ListRecipeSuggestions :many
+SELECT id, mode, "query", source_url, draft_json, annotations_json, image_path, grounded, status, reason, ai_run_id, food_id, shown_on, created_at, decided_at FROM recipe_suggestions
+WHERE (CAST(?1 AS TEXT) IS NULL OR status = CAST(?1 AS TEXT))
+  AND (CAST(?2 AS INTEGER) IS NULL OR ai_run_id = CAST(?2 AS INTEGER))
+ORDER BY COALESCE(decided_at, created_at) DESC, id DESC
+LIMIT ?3
+`
+
+type ListRecipeSuggestionsParams struct {
+	Status sql.NullString
+	RunID  sql.NullInt64
+	Lim    int64
+}
+
+// Suggestions, optionally of one status and run, last decided (else newest)
+// first.
+func (q *Queries) ListRecipeSuggestions(ctx context.Context, arg ListRecipeSuggestionsParams) ([]RecipeSuggestion, error) {
+	rows, err := q.db.QueryContext(ctx, listRecipeSuggestions, arg.Status, arg.RunID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RecipeSuggestion{}
+	for rows.Next() {
+		var i RecipeSuggestion
+		if err := rows.Scan(
+			&i.ID,
+			&i.Mode,
+			&i.Query,
+			&i.SourceUrl,
+			&i.DraftJson,
+			&i.AnnotationsJson,
+			&i.ImagePath,
+			&i.Grounded,
+			&i.Status,
+			&i.Reason,
+			&i.AiRunID,
+			&i.FoodID,
+			&i.ShownOn,
+			&i.CreatedAt,
+			&i.DecidedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setDiscoveryRunOutcome = `-- name: SetDiscoveryRunOutcome :exec
+UPDATE ai_runs SET
+    outcome = (
+        SELECT CASE
+            WHEN COUNT(*) = 0 THEN NULL
+            WHEN SUM(s.status = 'accepted') > 0 THEN 'accepted'
+            WHEN SUM(s.status = 'rejected') = COUNT(*) THEN 'discarded'
+            ELSE 'open'
+        END
+        FROM recipe_suggestions s WHERE s.ai_run_id = CAST(?1 AS INTEGER)
+    ),
+    outcome_at = datetime('now')
+WHERE id = ?1 AND kind = 'discovery'
+`
+
+// D11: any suggestion accepted -> accepted; all rejected -> discarded; else
+// open. A run without suggestions keeps NULL.
+func (q *Queries) SetDiscoveryRunOutcome(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, setDiscoveryRunOutcome, id)
+	return err
 }
 
 const setRecipeSuggestionImage = `-- name: SetRecipeSuggestionImage :exec

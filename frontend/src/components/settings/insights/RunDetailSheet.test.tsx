@@ -29,6 +29,23 @@ describe("RunDetailSheet", () => {
     expect(screen.getByText("cost unknown")).toBeInTheDocument()
   })
 
+  it("Z1: shows the run's edits, a dash when null", async () => {
+    vi.mocked(getRun).mockResolvedValue({ ...mockRunDetail, edits: 3 })
+    const { unmount } = renderWithRouter(
+      <RunDetailSheet runId={11} onClose={vi.fn()} />
+    )
+    expect(await screen.findByTestId("run-detail-edits")).toHaveTextContent(
+      "Edits3"
+    )
+    unmount()
+
+    vi.mocked(getRun).mockResolvedValue({ ...mockRunDetail, edits: null })
+    renderWithRouter(<RunDetailSheet runId={11} onClose={vi.fn()} />)
+    expect(await screen.findByTestId("run-detail-edits")).toHaveTextContent(
+      "Edits–"
+    )
+  })
+
   it("keeps the raw JSON behind a disclosure", async () => {
     renderWithRouter(<RunDetailSheet runId={11} onClose={vi.fn()} />)
 

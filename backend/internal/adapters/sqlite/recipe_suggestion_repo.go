@@ -109,3 +109,67 @@ func mapRecipeSuggestion(row sqlcgen.RecipeSuggestion) (*discovery.Suggestion, e
 	}
 	return s, nil
 }
+
+// Decide moves a pending suggestion to d.Status and recomputes its run's
+// outcome (D11) in one transaction.
+func (r *RecipeSuggestionRepo) Decide(ctx context.Context, id int64, d discovery.Decision) (*discovery.Suggestion, error) {
+	var out *discovery.Suggestion
+	err := r.inTx(ctx, func(ctx context.Context) error {
+		q := r.queriesFor(ctx)
+		var reason *string
+		if d.Reason != nil {
+			s := string(*d.Reason)
+			reason = &s
+		}
+		row, err := q.DecideRecipeSuggestion(ctx, sqlcgen.DecideRecipeSuggestionParams{
+			Status: string(d.Status), Reason: toNullString(reason), FoodID: toNullInt64(d.FoodID), ID: id,
+		})
+		if errors.Is(err, sql.ErrNoRows) {
+			if _, gerr := r.Get(ctx, id); gerr != nil {
+				return gerr
+			}
+			return fmt.Errorf("%w: recipe suggestion %d", domain.ErrDiscoveryDecided, id)
+		}
+		if err != nil {
+			return fmt.Errorf("decide recipe suggestion %d: %w", id, err)
+		}
+		if row.AiRunID.Valid {
+			if err := q.SetDiscoveryRunOutcome(ctx, row.AiRunID.Int64); err != nil {
+				return fmt.Errorf("discovery run %d outcome: %w", row.AiRunID.Int64, err)
+			}
+		}
+		out, err = mapRecipeSuggestion(row)
+		return err
+	})
+	return out, err
+}
+
+// List returns suggestions, last decided (else newest) first.
+func (r *RecipeSuggestionRepo) List(ctx context.Context, f discovery.ListFilter) ([]discovery.Suggestion, error) {
+	var status *string
+	if f.Status != nil {
+		s := string(*f.Status)
+		status = &s
+	}
+	rows, err := r.queriesFor(ctx).ListRecipeSuggestions(ctx, sqlcgen.ListRecipeSuggestionsParams{
+		Status: toNullString(status), RunID: toNullInt64(f.RunID), Lim: int64(f.Limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list recipe suggestions: %w", err)
+	}
+	out := make([]discovery.Suggestion, 0, len(rows))
+	for _, row := range rows {
+		s, err := mapRecipeSuggestion(row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *s)
+	}
+	return out, nil
+}
+
+// DeletePendingBefore deletes the pending suggestions created before the
+// cutoff and returns their ids.
+func (r *RecipeSuggestionRepo) DeletePendingBefore(ctx context.Context, before time.Time) ([]int64, error) {
+	return r.queriesFor(ctx).DeletePendingSuggestionsBefore(ctx, before.UTC().Format(timeLayout))
+}

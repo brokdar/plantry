@@ -66,7 +66,13 @@ import { confirmPlate, unlockPlate } from "@/lib/api/plates"
 import { confirmSession, unlockSession } from "@/lib/api/sessions"
 import { getToday } from "@/lib/api/today"
 
-import { availabilityKeys, planKeys, shoppingKeys, todayKeys } from "./keys"
+import {
+  aiKeys,
+  availabilityKeys,
+  planKeys,
+  shoppingKeys,
+  todayKeys,
+} from "./keys"
 import {
   UNDO_MS,
   useAccept,
@@ -87,6 +93,8 @@ import {
 import { useToday } from "./today"
 
 const PLAN_VIEWS = [planKeys.all, todayKeys.all, shoppingKeys.all]
+// Accept and unaccept also refresh the assistant: change lines flip to blocked.
+const WITH_ASSISTANT = [...PLAN_VIEWS, aiKeys.all]
 
 interface UndoToastOptions {
   duration: number
@@ -468,7 +476,7 @@ describe("useAccept", () => {
   it("accepts the window and offers Undo", async () => {
     const { keys, message, opts } = await accept()
     expect(acceptPlan).toHaveBeenCalledWith(WINDOW.from, WINDOW.to)
-    expect(keys).toEqual(PLAN_VIEWS)
+    expect(keys).toEqual(WITH_ASSISTANT)
     expect(message).toBe("Plan accepted. 3 plates confirmed.")
     expect(opts.duration).toBe(6000)
   })
@@ -495,7 +503,7 @@ describe("useAccept", () => {
   it("useUnaccept on its own invalidates the plan views", async () => {
     vi.mocked(unacceptPlan).mockResolvedValue(ACCEPTED)
     expect(await invalidatedBy(() => useUnaccept(), ACCEPTED)).toEqual(
-      PLAN_VIEWS
+      WITH_ASSISTANT
     )
   })
 })

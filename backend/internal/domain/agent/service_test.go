@@ -197,7 +197,7 @@ func TestTool_CreatePlateIntoNoneCell_ReturnsKeyedToolError(t *testing.T) {
 	svc := agent.NewService(sqlite.NewAIRepo(db), llm.StaticResolver(client, chatModel), ts,
 		profile.NewService(sqlite.NewProfileRepo(db)), testsvc.Settings(db), planContext(db), time.Now)
 	evts, err := chatReq(context.Background(), svc, agent.ChatRequest{
-		UserText: "plan monday dinner", Start: ymd(t, "2026-11-02"),
+		UserText: "plan monday dinner", Today: ymd(t, "2026-11-01"), Start: ymd(t, "2026-11-02"),
 	}, nil)
 	require.NoError(t, err)
 
@@ -216,17 +216,14 @@ func TestTool_CreatePlateIntoNoneCell_ReturnsKeyedToolError(t *testing.T) {
 	assert.True(t, found, "a tool result event must be emitted")
 }
 
-func TestChat_TodayDefaultsToServerClock(t *testing.T) {
+func TestChat_RequiresToday(t *testing.T) {
 	db := testhelper.NewTestDB(t)
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}})
-	svc := newPromptService(t, db, client, func() time.Time {
-		return time.Date(2026, 10, 27, 23, 30, 0, 0, time.Local)
-	})
+	svc := newPromptService(t, db, client, time.Now)
 
 	_, err := chatReq(context.Background(), svc, agent.ChatRequest{UserText: "hi", Start: ymd(t, "2026-10-26")}, nil)
-	require.NoError(t, err)
-
-	assert.Contains(t, client.Requests()[0].System, "Today is Tuesday 2026-10-27.")
+	require.ErrorIs(t, err, domain.ErrInvalidInput)
+	assert.Empty(t, client.Requests())
 }
 
 // B3-AC2 (service half): a start that is no shopping day, or none, fails
@@ -236,9 +233,9 @@ func TestChat_RequiresShoppingDayStart(t *testing.T) {
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{})}})
 	svc := newPromptService(t, db, client, time.Now)
 
-	_, err := chatReq(context.Background(), svc, agent.ChatRequest{UserText: "hi"}, nil)
+	_, err := chatReq(context.Background(), svc, agent.ChatRequest{UserText: "hi", Today: ymd(t, "2026-10-26")}, nil)
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
-	_, err = chatReq(context.Background(), svc, agent.ChatRequest{UserText: "hi", Start: ymd(t, "2026-10-27")}, nil)
+	_, err = chatReq(context.Background(), svc, agent.ChatRequest{UserText: "hi", Today: ymd(t, "2026-10-26"), Start: ymd(t, "2026-10-27")}, nil)
 	require.ErrorIs(t, err, domain.ErrInvalidPlanStart)
 	assert.Empty(t, client.Requests())
 }

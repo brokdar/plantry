@@ -18,6 +18,9 @@ interface ChangeLineProps {
 export function ChangeLine({ change, state, onUndo }: ChangeLineProps) {
   const { t, i18n } = useTranslation()
   const sentence = changeSentence(t, i18n, change)
+  const blocked =
+    state === "confirmed" ||
+    (state === null && change.undo_blocked === "confirmed")
   return (
     <div
       data-testid="assistant-change"
@@ -36,6 +39,14 @@ export function ChangeLine({ change, state, onUndo }: ChangeLineProps) {
       {state === "undone" && (
         <span className="shrink-0 text-caption text-ink-muted">
           {t("assistant.undone")}
+        </span>
+      )}
+      {blocked && (
+        <span
+          data-testid="assistant-change-blocked"
+          className="max-w-[45%] text-right text-caption text-ink-muted"
+        >
+          {t("assistant.change.blocked_confirmed")}
         </span>
       )}
       {state === "stale" && (
@@ -62,20 +73,22 @@ export function ChangeLine({ change, state, onUndo }: ChangeLineProps) {
           {t("assistant.not_recorded")}
         </span>
       )}
-      {(state === null || state === "undoing") && change.undoable && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={state === "undoing"}
-          onClick={() => onUndo(change.id)}
-          data-testid="assistant-change-undo"
-          aria-label={`${t("assistant.undo")}: ${sentence}`}
-        >
-          <Undo2 className="mr-1.5 size-3.5" aria-hidden="true" />
-          {state === "undoing" ? t("assistant.undoing") : t("assistant.undo")}
-        </Button>
-      )}
+      {!blocked &&
+        (state === null || state === "undoing") &&
+        change.undoable && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={state === "undoing"}
+            onClick={() => onUndo(change.id)}
+            data-testid="assistant-change-undo"
+            aria-label={`${t("assistant.undo")}: ${sentence}`}
+          >
+            <Undo2 className="mr-1.5 size-3.5" aria-hidden="true" />
+            {state === "undoing" ? t("assistant.undoing") : t("assistant.undo")}
+          </Button>
+        )}
     </div>
   )
 }
