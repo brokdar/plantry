@@ -22,7 +22,15 @@ backend() {
     golangci-lint run &&
     GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null ./cmd/plantry &&
     GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o /dev/null ./cmd/plantry &&
-    if [ -f scripts/check-sqlc-usage.sh ]; then bash scripts/check-sqlc-usage.sh; fi
+    if [ -f scripts/check-sqlc-usage.sh ]; then bash scripts/check-sqlc-usage.sh; fi &&
+    deadcode
+}
+
+# Unreachable functions outside the generated sqlc code (Phase 5 §0.2 item 3).
+deadcode() {
+  local out
+  out="$(go tool deadcode -test ./... | grep -v '/sqlcgen/' || true)"
+  if [ -n "$out" ]; then echo "$out"; return 1; fi
 }
 
 frontend() {

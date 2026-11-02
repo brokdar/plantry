@@ -74,7 +74,7 @@ const NAV_LINK =
 
 /** Publishes the toolbar's bottom edge (viewport px) as `--plan-toolbar-bottom`
  *  so the floating assistant panel (768-1279 px) starts below it and leaves
- *  Accept and shop reachable (Phase 5 D24). */
+ *  Accept and shop reachable (D24). */
 function usePublishToolbarBottom(ref: React.RefObject<HTMLElement | null>) {
   useEffect(() => {
     const el = ref.current

@@ -72,7 +72,7 @@ type ExtractInput struct {
 type Options struct {
 	// NoLLMFallback skips the LLM when the page has no JSON-LD recipe: the
 	// call then fails with domain.ErrImportNoRecipe at no AI cost (discovery
-	// verification, Phase 5 D9).
+	// verification, D9).
 	NoLLMFallback bool
 }
 

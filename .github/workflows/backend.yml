@@ -45,3 +45,7 @@ jobs:
           git diff --exit-code internal/adapters/sqlite/sqlcgen/
       - name: Every sqlc query has a caller
         run: ./scripts/check-sqlc-usage.sh
+      - name: No dead code
+        run: |
+          out="$(go tool deadcode -test ./... | grep -v '/sqlcgen/' || true)"
+          if [ -n "$out" ]; then echo "$out"; exit 1; fi

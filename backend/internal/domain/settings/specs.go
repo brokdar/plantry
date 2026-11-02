@@ -120,7 +120,7 @@ var registry = []Spec{
 	},
 	{
 		// JSON array of ≤ 10 lowercase cuisine names the daily discovery
-		// rotates through (Phase 5 D19).
+		// rotates through (D19).
 		Key:     KeyDiscoveryCuisines,
 		Kind:    KindString,
 		Default: "[]",

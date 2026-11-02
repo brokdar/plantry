@@ -77,7 +77,7 @@ func (s *Service) DeleteFeedback(ctx context.Context, plateID int64) error {
 	return s.repo.Delete(ctx, plateID)
 }
 
-// tagExplore marks a recipe the user has not tried yet (Phase 5 discovery).
+// tagExplore marks a recipe discovery added that the user has not tried yet.
 const tagExplore = "explore"
 
 // genericTag reports whether a tag says nothing about taste: a role name or

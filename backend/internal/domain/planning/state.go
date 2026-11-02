@@ -134,7 +134,7 @@ type FoodFacts struct {
 	TimesEaten8Weeks int
 	// LikeScore is liked minus disliked tag hits (D19).
 	LikeScore float64
-	// ExploreTag is set for a recipe tagged explore (Phase 5 discovery).
+	// ExploreTag is set for a recipe tagged explore by discovery.
 	ExploreTag bool
 }
 

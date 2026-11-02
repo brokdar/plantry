@@ -317,7 +317,7 @@ func run() error {
 	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver, foodSvc).WithRecorder(runRecorder)
 	importHandler := handlers.NewImportHandler(importSvc)
 
-	// Discovery (Phase 5 D7): research → verify → annotate → store, one run
+	// Discovery (D7): research → verify → annotate → store, one run
 	// at a time in the background. LLM-supplied URLs and the images their
 	// pages name pass the public-URL guard (dev mode allows loopback for the
 	// e2e fixture site). Shutdown waits for the running run (before the

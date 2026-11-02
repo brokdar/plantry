@@ -72,7 +72,9 @@ test.describe("Routines", () => {
         await editor.getByRole("button", { name: "New routine" }).click()
         const sheet = page.getByTestId("routine-sheet")
         await sheet.getByLabel("Name").fill(name)
-        await sheet.getByLabel("Meal").selectOption(String(slot.id))
+        await sheet
+          .getByLabel("Meal", { exact: true })
+          .selectOption(String(slot.id))
         await sheet.getByRole("button", { name: "Add food" }).click()
         await sheet.getByLabel("Search foods").fill(oats.name)
         await sheet.getByRole("button", { name: oats.name }).click()
@@ -120,6 +122,11 @@ test.describe("Routines", () => {
           .click()
         await page.getByRole("menuitem", { name: "Duplicate" }).click()
         await expect(card(`${name} renamed (copy)`)).toHaveCount(1)
+        // The stacked toasts (created, renamed, duplicated) sit top-right,
+        // over the next card's menu: let them expire before opening it.
+        await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, {
+          timeout: 10_000,
+        })
       })
 
       await test.step("delete", async () => {

@@ -109,7 +109,7 @@ var (
 	// chose (a replaced draft confirmed or gone, a target cell taken).
 	ErrPlanChanged = errors.New("the plan changed while it was generated")
 
-	// Discovery (Phase 5 D7, D11): one discovery run at a time, a decision
+	// Discovery (D7, D11): one discovery run at a time, a decision
 	// on a suggestion that is decided already, research output that stayed
 	// unreadable after the repair call, an unknown mode and an explore run
 	// without a cuisine.

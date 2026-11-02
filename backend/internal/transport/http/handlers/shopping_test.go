@@ -64,8 +64,8 @@ func newShopEnv(t *testing.T) *shopEnv {
 		beans: leaf("Kidneybohnen (Dose)"), onion: leaf("Zwiebel"), apple: leaf("Apfel"),
 	}
 	require.NoError(t, foods.UpsertPortion(ctx, &food.Portion{FoodID: e.apple.ID, Unit: "piece", Grams: 150}))
-	ref := 4.0
-	e.chili = &food.Food{Name: "Chili", Kind: food.KindComposed, ReferencePortions: &ref, Children: []food.FoodComponent{
+	ref, yes := 4.0, true
+	e.chili = &food.Food{Name: "Chili", Kind: food.KindComposed, ReferencePortions: &ref, Freezable: &yes, Children: []food.FoodComponent{
 		{ChildID: e.beans.ID, Amount: 400, Unit: "g", Grams: 400},
 		{ChildID: e.onion.ID, Amount: 2, Unit: "piece", Grams: 240, SortOrder: 1},
 	}}

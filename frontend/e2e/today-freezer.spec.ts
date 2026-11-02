@@ -41,6 +41,7 @@ test("the day before a frozen meal reminds to take it out of the freezer", async
       reference_portions: 4,
       // Cooked on day 0, use by day 1: day 5 eats frozen portions.
       keep_days: 1,
+      freezable: true,
       children: [
         {
           child_id: beans.id,

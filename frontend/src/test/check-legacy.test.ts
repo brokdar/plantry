@@ -29,6 +29,7 @@ describe("check-legacy.sh (D27)", () => {
     't("plan.review.regenerate_week")',
     'import { AssistantPanel } from "@/components/assistant/AssistantPanel"',
     't("plan.copy_week.title")',
+    "// Discovery (D7): research, verify, annotate, store",
   ])("allows %s", (line) => {
     expect(flagged(line)).toBe(false)
   })
@@ -52,6 +53,10 @@ describe("check-legacy.sh (D27)", () => {
     banned('data-testid="chat-tool', '-call"'),
     banned("use", "ChatUI()"),
     banned("plate", "_changed"),
+    // Z3 (§0.2 item 5): no phase notes left in the code.
+    banned("// Discover is Phase", " 5"),
+    banned("// see Phase", " 5 D7"),
+    banned("// a", " later", " phase"),
   ])("rejects %s", (line) => {
     expect(flagged(line)).toBe(true)
   })

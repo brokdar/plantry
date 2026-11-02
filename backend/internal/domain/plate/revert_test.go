@@ -30,6 +30,7 @@ func (e *env) draftBatchOf(runID int64) (*plate.Plate, int64) {
 func TestRevert_SessionPortionsComeBackAsUserEvents(t *testing.T) {
 	e := newEnv(t)
 	e.set("plan.freezing_enabled", "true")
+	e.exec(`UPDATE foods SET freezable = 1 WHERE id = ?`, e.chili)
 	sunPlate, sid := e.draftBatchOf(7)
 	agent := e.run(actor.Agent, 8)
 	n := len(e.events())

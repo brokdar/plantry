@@ -1,5 +1,5 @@
 // Package discovery verifies, annotates and stores recipe suggestions found
-// by the research agent (Phase 5). It never calls an LLM itself.
+// by the research agent. It never calls an LLM itself.
 package discovery
 
 import (

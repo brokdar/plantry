@@ -12,7 +12,7 @@ import {
   uid,
 } from "./helpers"
 
-// Shared by the Phase 5 discovery specs: the "Explorer" fixture (a few
+// Shared by the discovery specs: the "Explorer" fixture (a few
 // recipes and two catalogue leaves no recipe uses), the fake research script
 // with its {{SITE}} filled, and the recipe site started by playwright.config.
 
