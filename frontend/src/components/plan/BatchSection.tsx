@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "@tanstack/react-router"
 import { useTranslation } from "react-i18next"
 
 import { BatchBadge } from "@/components/batch/BatchBadge"
@@ -315,7 +316,29 @@ function BatchControls({
           testId="batch-portions"
         />
       </div>
-      {freezing && (
+      {freezing && session.freezable !== true && (
+        <p
+          className="text-small text-ink-muted"
+          data-testid="batch-freeze-hint"
+        >
+          <Link
+            to="/recipes/$id/edit"
+            params={{ id: String(session.food_id) }}
+            className="underline underline-offset-2"
+          >
+            {t("plan.batch.freeze_hint")}
+          </Link>
+          {session.frozen_portions > 0 && (
+            <span data-testid="batch-frozen-existing">
+              {" "}
+              {t("plan.batch.frozen_existing", {
+                count: session.frozen_portions,
+              })}
+            </span>
+          )}
+        </p>
+      )}
+      {freezing && session.freezable === true && (
         <div className="flex items-center justify-between gap-3">
           <span className="text-small text-ink">{t("plan.batch.freeze")}</span>
           <QuantityStepper

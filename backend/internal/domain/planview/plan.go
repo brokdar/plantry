@@ -235,7 +235,9 @@ func (s *Service) sessionViews(ctx context.Context, from, to time.Time, e env) (
 		if !ok {
 			return nil, nil, fmt.Errorf("%w: food %d of session %d", domain.ErrNotFound, cs.FoodID, cs.ID)
 		}
-		out = append(out, plate.BuildView(cs, f.Name, e.batch.KeepDays(f.KeepDays), links[cs.ID], e.batch, e.order))
+		v := plate.BuildView(cs, f.Name, e.batch.KeepDays(f.KeepDays), links[cs.ID], e.batch, e.order)
+		v.Freezable = f.Freezable
+		out = append(out, v)
 	}
 	slices.SortStableFunc(out, func(a, b plate.SessionView) int {
 		if c := plate.Compare(a.CookCell(), b.CookCell(), e.order); c != 0 {
