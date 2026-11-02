@@ -96,3 +96,26 @@ func TestBackupRefusesExistingAndMissingOut(t *testing.T) {
 	// An env-supplied key has no file: the backup still succeeds.
 	require.NoError(t, runBackup([]string{"-out", filepath.Join(t.TempDir(), "b.db")}, &bytes.Buffer{}))
 }
+
+func TestBackupDBFileModeAndCleanupOnKeyFailure(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "plantry.db")
+	conn, err := openDB(src)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+
+	outDir := filepath.Join(t.TempDir(), "out")
+	require.NoError(t, os.MkdirAll(outDir, 0o755))
+	dst := filepath.Join(outDir, "b.db")
+	require.NoError(t, backupDB(src, dst))
+	st, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), st.Mode().Perm())
+
+	// A secret.key that cannot be read removes the written backup DB.
+	require.NoError(t, os.Mkdir(filepath.Join(dir, secretKeyFile), 0o755))
+	dst2 := filepath.Join(outDir, "c.db")
+	require.Error(t, backupDB(src, dst2))
+	_, err = os.Stat(dst2)
+	assert.True(t, os.IsNotExist(err))
+}

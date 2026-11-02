@@ -45,7 +45,9 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64,linux/arm/v7
-          build-args: VERSION=${{ steps.meta.outputs.version }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

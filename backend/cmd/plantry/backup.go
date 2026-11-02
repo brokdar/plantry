@@ -53,10 +53,25 @@ func backupDB(src, dst string) error {
 		return fmt.Errorf("backup: open %s: %w", src, err)
 	}
 	defer func() { _ = conn.Close() }()
-	if err := vacuumInto(conn, dst); err != nil {
+	// Pre-create the file 0600: it holds the encrypted API keys. VACUUM INTO
+	// accepts an empty existing file.
+	f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
 		return fmt.Errorf("backup: %w", err)
 	}
-	return copySecretKey(filepath.Join(filepath.Dir(src), secretKeyFile), filepath.Join(filepath.Dir(dst), secretKeyFile))
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("backup: %w", err)
+	}
+	if err := vacuumInto(conn, dst); err != nil {
+		_ = os.Remove(dst)
+		return fmt.Errorf("backup: %w", err)
+	}
+	if err := copySecretKey(filepath.Join(filepath.Dir(src), secretKeyFile), filepath.Join(filepath.Dir(dst), secretKeyFile)); err != nil {
+		// Don't leave a half backup behind: a rerun would be refused.
+		_ = os.Remove(dst)
+		return err
+	}
+	return nil
 }
 
 func vacuumInto(conn *sql.DB, dst string) error {

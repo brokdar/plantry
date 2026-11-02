@@ -14,6 +14,7 @@ RUN bun run build
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS server
 ARG TARGETOS TARGETARCH TARGETVARIANT
 ARG VERSION=dev
+ARG COMMIT=
 WORKDIR /src
 RUN apk add --no-cache git
 COPY backend/go.mod backend/go.sum ./
@@ -22,7 +23,7 @@ COPY backend/ ./
 COPY --from=web /web/dist/ ./internal/webui/files/
 ENV CGO_ENABLED=0
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} \
-    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/plantry ./cmd/plantry
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o /out/plantry ./cmd/plantry
 
 # Stage C — minimal runtime.
 FROM alpine:3.20

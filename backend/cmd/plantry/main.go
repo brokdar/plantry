@@ -56,6 +56,9 @@ import (
 // version is set at build time: -ldflags "-X main.version=<git describe>".
 var version = "dev"
 
+// commit is set at build time: -ldflags "-X main.commit=<short sha>".
+var commit = ""
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "backup" {
 		if err := runBackup(os.Args[2:], os.Stdout); err != nil {
@@ -353,12 +356,13 @@ func run() error {
 	aiRateLimiter := plantrymw.NewRateLimiter(initialRate)
 
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc, handlers.SystemInfo{
-		Port:      cfg.Port,
-		DBPath:    cfg.DBPath,
-		LogLevel:  cfg.LogLevel.String(),
-		ImagePath: cfg.ImagePath,
-		DevMode:   cfg.DevMode,
-		Version:   version,
+		Port:        cfg.Port,
+		DBPath:      cfg.DBPath,
+		LogLevel:    cfg.LogLevel.String(),
+		ImagePath:   cfg.ImagePath,
+		DevMode:     cfg.DevMode,
+		Version:     version,
+		BuildCommit: commit,
 	}, aiRateLimiter)
 
 	h := transport.Handlers{
