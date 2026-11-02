@@ -209,3 +209,42 @@ func TestService_SavesAProposalReadyAtTheDeadline(t *testing.T) {
 	e.ok(e.generate(e.req()))
 	assert.NotEmpty(t, e.window())
 }
+
+// finishAfterRead is a Runs store whose PlanRun returns the row as it was
+// while the run still ran, then lets the run finish: the poll that reads the
+// row just before the run ends.
+type finishAfterRead struct {
+	*fakeRuns
+	release chan struct{}
+	svc     func() *planning.Service
+	id      int64
+}
+
+func (f finishAfterRead) PlanRun(ctx context.Context, id int64) (planning.RunRecord, error) {
+	rec, err := f.fakeRuns.PlanRun(ctx, id)
+	if err == nil && rec.Status == airun.StatusRunning {
+		close(f.release)
+		f.svc().Wait()
+	}
+	return rec, err
+}
+
+// A poll that reads the still-running row and then finds the run gone from
+// the registry (it finished in between) is not an error: the run did not
+// lose its finish write.
+func TestService_RunFinishingDuringAPollIsNotAnError(t *testing.T) {
+	e := newSvcEnv(t)
+	b := blockingChooser{entered: make(chan struct{}), release: make(chan struct{})}
+	e.deps.Go = nil
+	e.deps.Choosers = map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: b}
+	e.deps.Runs = finishAfterRead{fakeRuns: e.runs, release: b.release, svc: func() *planning.Service { return e.svc }}
+	e.svc = planning.NewService(e.deps)
+	id := e.generate(e.req())
+	<-b.entered
+
+	v, err := e.svc.Run(e.ctx, id)
+
+	require.NoError(t, err)
+	assert.NotEqual(t, airun.StatusError, v.Status)
+	assert.Empty(t, v.ErrorKey)
+}

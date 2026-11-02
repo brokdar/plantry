@@ -752,6 +752,10 @@ type Counts struct {
 
 // Run returns a generation run, or domain.ErrNotFound.
 func (s *Service) Run(ctx context.Context, id int64) (*RunView, error) {
+	// The registry first: a run writes its row before it leaves the registry,
+	// so a row read afterwards that still says running with the run absent
+	// here has lost its finish write, never one that is finishing.
+	st, registered := s.d.Progress.Stage(id)
 	rec, err := s.d.Runs.PlanRun(ctx, id)
 	if err != nil {
 		return nil, err
@@ -765,8 +769,7 @@ func (s *Service) Run(ctx context.Context, id int64) (*RunView, error) {
 		Counts: Counts{RunCounts: counts}, Issues: []Issue{}, Window: window.Window{Start: rec.WindowStart, End: rec.WindowEnd},
 	}
 	if v.Status == airun.StatusRunning {
-		st, ok := s.d.Progress.Stage(id)
-		if !ok {
+		if !registered {
 			// The registry holds every run this process runs: a running row
 			// it lacks lost its finish write (or a restart interrupted it).
 			v.Status, v.ErrorKey = airun.StatusError, "error.server"
