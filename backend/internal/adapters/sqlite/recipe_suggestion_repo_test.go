@@ -60,28 +60,24 @@ func TestRecipeSuggestionRepo_RoundTrip(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 }
 
-func TestRecipeSuggestionRepo_SourceURLKnown(t *testing.T) {
+func TestRecipeSuggestionRepo_SourceURLs(t *testing.T) {
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewRecipeSuggestionRepo(db)
 	foods := sqlite.NewFoodRepo(db)
 	ctx := context.Background()
 
-	known, err := repo.SourceURLKnown(ctx, "https://x.test/a")
+	urls, err := repo.SourceURLs(ctx)
 	require.NoError(t, err)
-	assert.False(t, known)
+	assert.Empty(t, urls)
 
 	require.NoError(t, repo.Create(ctx, &discovery.Suggestion{Mode: discovery.ModeDaily, SourceURL: "https://x.test/a"}))
-	known, _ = repo.SourceURLKnown(ctx, "https://x.test/a")
-	assert.True(t, known, "an earlier suggestion")
-
 	portions := 2.0
-	url := "https://x.test/b"
-	require.NoError(t, foods.Create(ctx, &food.Food{Name: "Soup", Kind: food.KindComposed, ReferencePortions: &portions, SourceURL: &url}))
-	known, _ = repo.SourceURLKnown(ctx, url)
-	assert.True(t, known, "a saved food")
+	saved := "https://x.test/d/?utm_campaign=x"
+	require.NoError(t, foods.Create(ctx, &food.Food{Name: "Stew", Kind: food.KindComposed, ReferencePortions: &portions, SourceURL: &saved}))
 
-	known, _ = repo.SourceURLKnown(ctx, "https://x.test/c")
-	assert.False(t, known)
+	urls, err = repo.SourceURLs(ctx)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"https://x.test/a", saved}, urls, "suggestions and foods, as stored")
 }
 
 func TestFoodRepo_LeafIDsUsedInRecipes(t *testing.T) {

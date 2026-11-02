@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -106,6 +107,13 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 			return nil, apiErr
 		}
 		c.setWebSearch(req.Model, false)
+		slog.WarnContext(ctx, "anthropic.web_search.rejected",
+			"model", req.Model, "request_id", apiErr.RequestID, "message", apiErr.Message)
+		if replaysServerBlocks(req.Messages) {
+			// A continuation's history holds search blocks; without the
+			// tool the API would reject it again, less clearly.
+			return nil, apiErr
+		}
 		req.WebSearch = nil
 		if resp, err = c.post(ctx, req); err != nil {
 			return nil, err
@@ -118,6 +126,19 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 	}
 
 	return parseStream(ctx, resp.Body, out)
+}
+
+// replaysServerBlocks reports whether msgs carry server tool blocks (a
+// pause_turn continuation).
+func replaysServerBlocks(msgs []llm.Message) bool {
+	for _, m := range msgs {
+		for _, b := range m.Content {
+			if b.Type == llm.ContentTypeServer {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // post sends req as a streaming Messages request.

@@ -61,7 +61,7 @@ var commit = ""
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "backup" {
-		if err := runBackup(os.Args[2:], os.Stdout); err != nil {
+		if err := runBackup(os.Args[2:], os.Stdout, os.Stderr); err != nil {
 			fmt.Fprintln(os.Stderr, "fatal:", err)
 			os.Exit(1)
 		}
@@ -144,6 +144,9 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("image store: %w", err)
 		}
+		// Downloads on behalf of a fetched page (discovery) dial public
+		// addresses only; dev mode allows loopback for the e2e fixture site.
+		imgStore.SetGuardedClient(httpfetch.GuardedClient(nil, cfg.DevMode))
 		foodSvc.WithImageStore(imgStore)
 		foodSvc.WithImageSaver(imgStore)
 	}
@@ -313,7 +316,9 @@ func run() error {
 	})
 
 	// Recipe importer (Phase 11).
-	importFetcher := httpfetch.New()
+	// Guarded fetches (discovery's LLM-supplied URLs) are re-checked at dial
+	// time; user-pasted import URLs stay unguarded.
+	importFetcher := httpfetch.New(httpfetch.WithDialGuard(nil, cfg.DevMode))
 	importSvc := importer.NewService(importFetcher, jsonld.Extractor{}, llmResolver, resolver, foodSvc).WithRecorder(runRecorder)
 	importHandler := handlers.NewImportHandler(importSvc)
 
@@ -331,7 +336,7 @@ func run() error {
 	discoverySvc := discovery.NewService(discovery.Deps{
 		LLM:       llmResolver,
 		Prefs:     settingsSvc,
-		Foods:     foodSvc,
+		Foods:     foodRepo,
 		Recorder:  runRecorder,
 		Profile:   profileSvc,
 		Catalogue: foodRepo,

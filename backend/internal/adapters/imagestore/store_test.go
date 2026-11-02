@@ -3,18 +3,22 @@ package imagestore_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"image"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/httpfetch"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 )
 
 func createTestImage(t *testing.T, width, height int) []byte {
@@ -268,4 +272,43 @@ func TestCopy(t *testing.T) {
 	_, err = store.Copy("suggestions", 99, "foods", 43)
 	assert.ErrorIs(t, err, os.ErrNotExist)
 	assert.NoFileExists(t, filepath.Join(store.BasePath(), "foods", "43.jpg"))
+}
+
+// DoD S2: a guarded download (guard in ctx) re-checks every redirect hop
+// and the dialled address.
+func TestSaveFromURL_GuardedRedirectToPrivateBlocked(t *testing.T) {
+	hit := false
+	private := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hit = true
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write(createTestImage(t, 10, 10))
+	}))
+	t.Cleanup(private.Close)
+	pub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, private.URL+"/meta-data", http.StatusFound)
+	}))
+	t.Cleanup(pub.Close)
+
+	store, err := imagestore.New(t.TempDir(), nil)
+	require.NoError(t, err)
+	store.SetGuardedClient(httpfetch.GuardedClient(nil, true))
+	guard := func(u string) error {
+		if strings.HasPrefix(u, private.URL) {
+			return errors.New("private host")
+		}
+		return nil
+	}
+	_, err = store.SaveFromURL(importer.WithURLGuard(context.Background(), guard), pub.URL+"/og.png", "suggestions", 1)
+	require.ErrorIs(t, err, importer.ErrURLBlocked)
+	assert.False(t, hit)
+}
+
+func TestSaveFromURL_GuardedDialBlocksLoopback(t *testing.T) {
+	srv := serveImage(t, createTestImage(t, 10, 10))
+	store, err := imagestore.New(t.TempDir(), nil)
+	require.NoError(t, err)
+	store.SetGuardedClient(httpfetch.GuardedClient(nil, false))
+	allow := func(string) error { return nil }
+	_, err = store.SaveFromURL(importer.WithURLGuard(context.Background(), allow), srv.URL+"/x.png", "suggestions", 1)
+	require.ErrorIs(t, err, httpfetch.ErrBlockedURL)
 }

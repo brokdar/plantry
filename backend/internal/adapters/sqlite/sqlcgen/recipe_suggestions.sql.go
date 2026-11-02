@@ -340,6 +340,37 @@ func (q *Queries) ListRecipeSuggestions(ctx context.Context, arg ListRecipeSugge
 	return items, nil
 }
 
+const listSourceURLs = `-- name: ListSourceURLs :many
+SELECT CAST(source_url AS TEXT) AS source_url FROM foods WHERE source_url IS NOT NULL
+UNION
+SELECT source_url FROM recipe_suggestions
+`
+
+// Every food's and suggestion's (any status) source_url, for the
+// normalized duplicate check.
+func (q *Queries) ListSourceURLs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listSourceURLs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var source_url string
+		if err := rows.Scan(&source_url); err != nil {
+			return nil, err
+		}
+		items = append(items, source_url)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setDiscoveryRunOutcome = `-- name: SetDiscoveryRunOutcome :exec
 UPDATE ai_runs SET
     outcome = (
@@ -414,19 +445,4 @@ func (q *Queries) ShowNextPending(ctx context.Context, arg ShowNextPendingParams
 		&i.DecidedAt,
 	)
 	return i, err
-}
-
-const sourceURLKnown = `-- name: SourceURLKnown :one
-SELECT CAST((
-    EXISTS (SELECT 1 FROM foods f WHERE f.source_url = CAST(?1 AS TEXT))
-    OR EXISTS (SELECT 1 FROM recipe_suggestions s WHERE s.source_url = CAST(?1 AS TEXT))
-) AS INTEGER) AS known
-`
-
-// Whether a food or an earlier suggestion (any status) already has this URL.
-func (q *Queries) SourceURLKnown(ctx context.Context, url string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, sourceURLKnown, url)
-	var known int64
-	err := row.Scan(&known)
-	return known, err
 }

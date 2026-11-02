@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
@@ -37,6 +39,9 @@ type Request struct {
 	Cuisine string
 	Focus   string
 	Day     string
+	// replaceShown (Another): the first suggestion takes Day from the one
+	// shown, which keeps it until the run has a suggestion to store.
+	replaceShown bool
 }
 
 // ProfileReader reads the household profile (profile.Service).
@@ -66,11 +71,15 @@ type Preferences interface {
 	DiscoveryCuisines(ctx context.Context) ([]string, error)
 }
 
-// Foods reads and updates saved foods (food.Service): accept copies the
-// suggestion's image to the food.
+// Foods reads saved foods and sets a food's image (FoodRepo): accept copies
+// the suggestion's image to the food.
 type Foods interface {
 	Get(ctx context.Context, id int64) (*food.Food, error)
-	Update(ctx context.Context, f *food.Food) error
+	// SetImageIfNone sets only the image of a food without one and reports
+	// whether it did.
+	SetImageIfNone(ctx context.Context, id int64, path string) (bool, error)
+	// ClearImageIf undoes SetImageIfNone while the image is still path.
+	ClearImageIf(ctx context.Context, id int64, path string) error
 }
 
 // Deps wires a Service.
@@ -115,11 +124,15 @@ func NewService(d Deps) *Service {
 // Run validates req, starts the run in the background and returns its
 // ai_runs id. It fails with domain.ErrDiscoveryInvalidMode for an unknown
 // mode, domain.ErrDiscoveryCuisineRequired for an explore run without one,
+// domain.ErrInvalidInput for a cuisine or focus over 80 runes,
 // domain.ErrAIProviderMissing/ErrAIProviderFailed when no client resolves,
 // and domain.ErrDiscoveryRunning while another run is running. The run
 // outlives ctx.
 func (s *Service) Run(ctx context.Context, req Request) (int64, error) {
 	req.Cuisine, req.Focus = strings.ToLower(strings.TrimSpace(req.Cuisine)), strings.TrimSpace(req.Focus)
+	if utf8.RuneCountInString(req.Cuisine) > maxNameRunes || utf8.RuneCountInString(req.Focus) > maxNameRunes {
+		return 0, fmt.Errorf("%w: cuisine and focus are limited to %d characters", domain.ErrInvalidInput, maxNameRunes)
+	}
 	switch req.Mode {
 	case ModeDaily, ModeKnown:
 	case ModeExplore:
@@ -171,7 +184,7 @@ func (s *Service) execute(ctx context.Context, run *airun.Run, client llm.Client
 	status, errKey, res := airun.StatusError, "error.server", airun.Result{}
 	defer func() {
 		if p := recover(); p != nil {
-			s.d.Logger.ErrorContext(ctx, "discovery.run panic", "run_id", run.ID(), "panic", p)
+			s.d.Logger.ErrorContext(ctx, "discovery.run panic", "run_id", run.ID(), "panic", p, "stack", string(debug.Stack()))
 			status, errKey = airun.StatusError, "error.server"
 		}
 		run.FinishWith(ctx, status, errKey, res)
@@ -202,7 +215,7 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 	if err != nil {
 		return "", res, err
 	}
-	found, err := research(ctx, client, model, s.webSearch(ctx, client, model), RenderPrompt(in), req)
+	found, err := research(ctx, s.d.Logger, client, model, s.webSearch(ctx, client, model), RenderPrompt(in), req)
 	if found.Repaired {
 		res.RepairAttempts = 1
 	}
@@ -213,18 +226,30 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 	if err != nil {
 		return "", res, err
 	}
+	verified = verified[:min(len(verified), maxStored)]
+	// A candidate that cannot be annotated (e.g. a transient DB error) is
+	// discarded; the others keep the paid run.
+	var kept []Verified
+	var anns []*Annotations
+	for _, v := range verified {
+		a, err := s.d.Annotator.Annotate(ctx, v.Draft)
+		if err != nil {
+			if ctx.Err() != nil {
+				return "", res, ctx.Err()
+			}
+			s.d.Logger.WarnContext(ctx, "discovery.annotate failed", "run_id", runID, "host", host(v.Candidate.URL), "error", err)
+			discarded = append(discarded, Discarded{URL: v.Candidate.URL, Reason: ReasonAnnotate})
+			continue
+		}
+		a.Why, a.Cuisine = v.Candidate.Why, v.Candidate.Cuisine
+		kept, anns = append(kept, v), append(anns, a)
+	}
+	verified = kept
 	res.Notes = notes(len(verified), len(found.Candidates), discarded)
 	if len(verified) == 0 {
+		s.d.Logger.WarnContext(ctx, "discovery.run no_results", "run_id", runID,
+			"candidates", len(found.Candidates), "notes", res.Notes)
 		return airun.StatusPartial, res, nil
-	}
-
-	verified = verified[:min(len(verified), maxStored)]
-	anns := make([]*Annotations, len(verified))
-	for i, v := range verified {
-		if anns[i], err = s.d.Annotator.Annotate(ctx, v.Draft); err != nil {
-			return "", res, err
-		}
-		anns[i].Why, anns[i].Cuisine = v.Candidate.Why, v.Candidate.Cuisine
 	}
 	shownOn, err := s.firstShownOn(ctx, req)
 	if err != nil {
@@ -250,10 +275,17 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 }
 
 // firstShownOn is the shown_on of a daily run's first suggestion: its day,
-// unless a suggestion is shown that day already (D12).
+// unless a suggestion is shown that day already (D12). A run started by
+// Another takes the day from the shown suggestion.
 func (s *Service) firstShownOn(ctx context.Context, req Request) (*string, error) {
 	if req.Day == "" {
 		return nil, nil
+	}
+	if req.replaceShown {
+		if err := s.d.Store.Repo.ClearShown(ctx, req.Day); err != nil {
+			return nil, err
+		}
+		return &req.Day, nil
 	}
 	cur, err := s.d.Store.Repo.ShownOn(ctx, req.Day)
 	if err != nil || cur != nil {

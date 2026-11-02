@@ -24,6 +24,16 @@ SELECT * FROM foods WHERE id = ?;
 -- name: GetLeafFoodIDByName :one
 SELECT id FROM foods WHERE kind = 'leaf' AND name = ?;
 
+-- name: SetFoodImageIfNone :execrows
+-- Sets only the image, and only on a food without one (discovery accept).
+UPDATE foods SET image_path = ?, updated_at = datetime('now')
+WHERE id = ? AND image_path IS NULL;
+
+-- name: ClearFoodImage :execrows
+-- Undoes SetFoodImageIfNone: clears the image only while it is still path.
+UPDATE foods SET image_path = NULL, updated_at = datetime('now')
+WHERE id = ? AND image_path = ?;
+
 -- name: GetFoodKind :one
 SELECT kind FROM foods WHERE id = ?;
 

@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/httpfetch"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/imagestore"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/jsonld"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
@@ -191,4 +193,67 @@ func TestStore_AcceptRejectMoveOutcome(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rej, 1)
 	assert.Equal(t, a.ID, rej[0].ID)
+}
+
+// DoD S2: a page's image that redirects to a blocked host is not fetched.
+func TestStore_ImageRedirectToBlockedHostSkipped(t *testing.T) {
+	store, repo, dir := newStore(t)
+	images, err := imagestore.New(dir, nil)
+	require.NoError(t, err)
+	images.SetGuardedClient(httpfetch.GuardedClient(nil, true))
+	store.Images = images
+	hit := false
+	data := pngBytes(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/og.png", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/internal/meta.png", http.StatusFound)
+	})
+	mux.HandleFunc("/internal/meta.png", func(w http.ResponseWriter, _ *http.Request) {
+		hit = true
+		_, _ = w.Write(data)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	store.ImageGuard = func(u string) error {
+		if strings.Contains(u, "/internal/") {
+			return errors.New("private")
+		}
+		return nil
+	}
+
+	sug, err := store.Save(context.Background(), discovery.NewSuggestion{
+		Mode: discovery.ModeDaily, Draft: &importer.Draft{SourceURL: "https://x.test/r", ImageURL: srv.URL + "/og.png"},
+	})
+	require.NoError(t, err)
+	assert.Nil(t, sug.ImagePath)
+	assert.False(t, hit, "the redirect target is never requested")
+	got, err := repo.Get(context.Background(), sug.ID)
+	require.NoError(t, err)
+	assert.Nil(t, got.ImagePath)
+}
+
+// failingImagePath fails every SetImagePath.
+type failingImagePath struct{ discovery.Repository }
+
+func (failingImagePath) SetImagePath(context.Context, int64, *string) error {
+	return errors.New("disk I/O error")
+}
+
+// DoD sfh-7/8: a failing SetImagePath after the row or decision is committed
+// is logged, not returned; Save removes the orphaned file.
+func TestStore_SetImagePathFailureKeepsResult(t *testing.T) {
+	store, repo, dir := newStore(t)
+	store.Repo = failingImagePath{repo}
+	srv := imageServer(t)
+
+	sug, err := store.Save(context.Background(), discovery.NewSuggestion{
+		Mode: discovery.ModeDaily, Draft: &importer.Draft{SourceURL: "https://x.test/p", ImageURL: srv.URL + "/ok.png"},
+	})
+	require.NoError(t, err)
+	assert.Nil(t, sug.ImagePath)
+	assert.NoFileExists(t, filepath.Join(dir, "suggestions", fmt.Sprintf("%d.jpg", sug.ID)))
+
+	rej, err := store.Reject(context.Background(), sug.ID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, discovery.StatusRejected, rej.Status)
 }

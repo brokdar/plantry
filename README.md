@@ -103,7 +103,7 @@ docker compose exec plantry plantry backup -out /data/backup/plantry-$(date +%F)
 docker compose cp plantry:/data/backup ./backup     # take it off the volume
 ```
 
-(Create the target directory first, e.g. `docker compose exec plantry mkdir -p /data/backup`.) The target file must not exist yet.
+(Create the target directory first, e.g. `docker compose exec plantry mkdir -p /data/backup`.) The target file must not exist yet. A `secret.key` already in the target directory is kept if it is the same key; a different one is refused (older backups there need it). Without a `secret.key` file (key from `PLANTRY_SECRET_KEY`) the backup still succeeds with a warning: keep that key separately.
 
 To restore: stop Plantry, put the backup file at `/data/plantry.db` and its `secret.key` at `/data/secret.key` (remove any `plantry.db-wal` and `plantry.db-shm` next to the old database), then start Plantry. Pending migrations run on start, so a backup from an older version restores into a newer one.
 

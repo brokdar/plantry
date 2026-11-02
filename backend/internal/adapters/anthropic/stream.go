@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -16,6 +17,10 @@ import (
 // parseStream reads the Anthropic SSE event sequence from body, relays
 // canonical llm.Events on out, and returns the assembled Response.
 // body is drained but not closed here — the caller owns it.
+// ErrStreamIncomplete: the stream ended without message_stop (the connection
+// dropped mid-reply); the partial reply is not returned.
+var ErrStreamIncomplete = errors.New("anthropic: stream ended before message_stop")
+
 func parseStream(ctx context.Context, body io.Reader, out chan<- llm.Event) (*llm.Response, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
@@ -73,6 +78,9 @@ func parseStream(ctx context.Context, body io.Reader, out chan<- llm.Event) (*ll
 	if err := flushEvent(); err != nil {
 		return nil, err
 	}
+	if !st.stopped {
+		return nil, ErrStreamIncomplete
+	}
 
 	// Assemble the Response.
 	content := make([]llm.ContentBlock, 0, len(st.order))
@@ -96,6 +104,7 @@ type streamState struct {
 	blocks     map[int]*blockAccum
 	order      []int
 	stopReason llm.StopReason
+	stopped    bool // message_stop seen
 	usage      llm.Usage
 	model      string
 	results    []llm.SearchResult
@@ -359,6 +368,7 @@ func handleSSEEvent(
 		return nil
 
 	case "message_stop":
+		st.stopped = true
 		return nil
 
 	case "ping":

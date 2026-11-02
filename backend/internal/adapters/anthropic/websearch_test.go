@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -256,6 +257,9 @@ func TestStream_UnknownBlockTypes(t *testing.T) {
 		`event: message_delta`,
 		`data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}`,
 		``,
+		`event: message_stop`,
+		`data: {"type":"message_stop"}`,
+		``,
 	}, "\n")
 	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -453,4 +457,107 @@ func TestStream_OtherBadRequestNotRetried(t *testing.T) {
 		ok, _ := c.WebSearch(context.Background(), "claude-opus-5-5")
 		assert.True(t, ok)
 	}
+}
+
+// DoD S3: definitive answers are cached for 24 h, transient failures for
+// 5 min only.
+func TestWebSearchCapability_TransientFailuresCachedBriefly(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    int
+		body      string
+		transient bool
+	}{
+		{"server error", 500, `{"type":"error","error":{"type":"api_error","message":"boom"}}`, true},
+		{"overloaded", 529, `{"type":"error","error":{"type":"overloaded_error","message":"busy"}}`, true},
+		{"rate limited", 429, `{"type":"error","error":{"type":"rate_limit_error","message":"slow"}}`, true},
+		{"unauthorized", 401, `{"type":"error","error":{"type":"authentication_error","message":"key"}}`, true},
+		{"bad json", 200, `{`, true},
+		{"not found", 404, `{"type":"error","error":{"type":"not_found_error","message":"model"}}`, false},
+		{"bad request", 400, `{"type":"error","error":{"type":"invalid_request_error","message":"model"}}`, false},
+		{"missing field", 200, `{"capabilities":null}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, calls := modelsServer(t, tt.status, tt.body)
+			now := time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC)
+			anthropic.SetNow(c, func() time.Time { return now })
+			_, _ = c.WebSearch(context.Background(), "claude-opus-5-5")
+			now = now.Add(4 * time.Minute)
+			_, _ = c.WebSearch(context.Background(), "claude-opus-5-5")
+			assert.Equal(t, int32(1), calls.Load(), "cached within 5 min")
+			now = now.Add(2 * time.Minute)
+			_, _ = c.WebSearch(context.Background(), "claude-opus-5-5")
+			if tt.transient {
+				assert.Equal(t, int32(2), calls.Load(), "re-checked after 5 min")
+			} else {
+				assert.Equal(t, int32(1), calls.Load(), "definitive answer kept for 24 h")
+			}
+		})
+	}
+
+	t.Run("network error", func(t *testing.T) {
+		ts := newTestServer(t, func(http.ResponseWriter, *http.Request) {})
+		c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+		ts.Close()
+		now := time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC)
+		anthropic.SetNow(c, func() time.Time { return now })
+		_, err := c.WebSearch(context.Background(), "claude-opus-5-5")
+		require.Error(t, err)
+		assert.Equal(t, 5*time.Minute, anthropic.CapabilityTTLLeft(c, "claude-opus-5-5"))
+	})
+}
+
+// DoD S3: a 400 rejecting web search on a continuation that replays server
+// blocks is returned, not retried without the tool; the fallback is logged.
+func TestStream_WebSearchRejectedOnContinuationNotRetried(t *testing.T) {
+	disabled, err := os.ReadFile("testdata/error_web_search_disabled.json")
+	require.NoError(t, err)
+	var calls atomic.Int32
+	ts := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write(disabled)
+	})
+	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+	req := llm.Request{
+		Model: "claude-opus-5-5",
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "hi"}}},
+			{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Type: llm.ContentTypeServer, Raw: []byte(`{"type":"server_tool_use","id":"s1","name":"web_search","input":{"query":"x"}}`)}}},
+		},
+		WebSearch: &llm.WebSearch{MaxUses: 5},
+	}
+	_, err = c.Stream(context.Background(), req, make(chan llm.Event, 8))
+	var apiErr *anthropic.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusBadRequest, apiErr.Status)
+	assert.Equal(t, int32(1), calls.Load(), "no retry without search")
+}
+
+func TestStream_WebSearchRejectedLogsWarn(t *testing.T) {
+	disabled, err := os.ReadFile("testdata/error_web_search_disabled.json")
+	require.NoError(t, err)
+	sse, err := os.ReadFile("testdata/stream_text.sse")
+	require.NoError(t, err)
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		if strings.Contains(string(b), "web_search_20250305") {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write(disabled)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write(sse)
+	})
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+	_, _ = stream(t, c, llm.Request{Model: "claude-opus-5-5", WebSearch: &llm.WebSearch{MaxUses: 5}})
+	assert.Contains(t, logs.String(), "level=WARN")
+	assert.Contains(t, logs.String(), "anthropic.web_search.rejected")
+	assert.Contains(t, logs.String(), "model=claude-opus-5-5")
 }

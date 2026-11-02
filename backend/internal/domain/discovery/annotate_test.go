@@ -2,6 +2,7 @@ package discovery_test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -158,4 +159,28 @@ func TestAnnotate_EmptyDraft(t *testing.T) {
 	assert.Empty(t, got.Lines)
 	assert.Zero(t, got.KnownShare)
 	assert.True(t, got.NutritionComplete)
+}
+
+// countingLeaves counts the leaf listings the resolver makes.
+type countingLeaves struct {
+	food.Repository
+	leafLists atomic.Int32
+}
+
+func (c *countingLeaves) List(ctx context.Context, q food.ListQuery) (*food.ListResult, error) {
+	if q.Kind == food.KindLeaf && q.Offset == 0 {
+		c.leafLists.Add(1)
+	}
+	return c.Repository.List(ctx, q)
+}
+
+// DoD S4: the leaf catalogue is listed once per draft, not per ingredient.
+func TestAnnotate_ListsCatalogueOnce(t *testing.T) {
+	e, draft := fesenjan(t)
+	counting := &countingLeaves{Repository: e.repo}
+	e.annotator.Matcher = food.NewResolver(counting, nil, nil, nil)
+
+	_, err := e.annotator.Annotate(context.Background(), draft)
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), counting.leafLists.Load())
 }

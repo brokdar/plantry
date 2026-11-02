@@ -59,6 +59,11 @@ func RenderPrompt(in PromptInput) string {
 				return s
 			}
 			notes := []rune(strings.TrimSpace(*in.Profile.SystemPrompt))
+			if len(notes) == 0 {
+				// Nothing left to trim: return the over-long prompt rather
+				// than loop (Run caps the request's own text).
+				return s
+			}
 			if over >= len(notes) {
 				notes = nil
 			} else {

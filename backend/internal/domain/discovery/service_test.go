@@ -1,10 +1,12 @@
 package discovery_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -13,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -74,12 +77,15 @@ func (s staticProfile) Get(context.Context) (*profile.Profile, error) { return s
 
 // fakePrefs is the discovery settings.
 type fakePrefs struct {
-	disabled bool
-	cuisines []string
+	disabled    bool
+	cuisines    []string
+	cuisinesErr error
 }
 
 func (p *fakePrefs) DiscoveryDailyEnabled(context.Context) (bool, error) { return !p.disabled, nil }
-func (p *fakePrefs) DiscoveryCuisines(context.Context) ([]string, error) { return p.cuisines, nil }
+func (p *fakePrefs) DiscoveryCuisines(context.Context) ([]string, error) {
+	return p.cuisines, p.cuisinesErr
+}
 
 type harness struct {
 	db     *sql.DB
@@ -89,6 +95,28 @@ type harness struct {
 	prefs  *fakePrefs
 	images string
 	site   *httptest.Server
+	// annotator is the service's (mutable for fault injection); logs its
+	// log output (read after the run).
+	annotator *discovery.Annotator
+	logs      *syncBuffer
+}
+
+// syncBuffer is a goroutine-safe log sink.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 func newHarness(t *testing.T, client llm.Client, site *httptest.Server) *harness {
@@ -101,7 +129,8 @@ func newHarness(t *testing.T, client llm.Client, site *httptest.Server) *harness
 func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap func(*sqlite.RecipeSuggestionRepo) discovery.Repository) *harness {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logs := &syncBuffer{}
+	logger := slog.New(slog.NewTextHandler(logs, nil))
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), logger, time.Now)
 	repo := sqlite.NewRecipeSuggestionRepo(db)
 	foods := sqlite.NewFoodRepo(db)
@@ -113,6 +142,7 @@ func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap
 		resolver = llm.StaticResolver(rec.Meter(client, "fake"), "fake-model")
 	}
 	prefs := &fakePrefs{}
+	annotator := &discovery.Annotator{Matcher: food.NewResolver(foods, nil, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)}
 	svc := discovery.NewService(discovery.Deps{
 		LLM:       resolver,
 		Prefs:     prefs,
@@ -124,13 +154,14 @@ func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap
 			Extractor: importer.NewService(httpfetch.New(), jsonld.Extractor{}, nil, nil, nil),
 			Index:     repo,
 			Guard:     func(u string) error { return httpfetch.PublicURL(u, localOnly, true) },
+			Logger:    logger,
 		},
-		Annotator: &discovery.Annotator{Matcher: food.NewResolver(foods, nil, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)},
+		Annotator: annotator,
 		Store:     &discovery.Store{Repo: wrap(repo), Images: images},
 		Logger:    logger,
 	})
 	t.Cleanup(func() { _ = svc.Shutdown(context.Background()) })
-	return &harness{db: db, svc: svc, repo: repo, foods: foods, prefs: prefs, images: dir, site: site}
+	return &harness{db: db, svc: svc, repo: repo, foods: foods, prefs: prefs, images: dir, site: site, annotator: annotator, logs: logs}
 }
 
 // fakeClient loads a script; {{SITE}} becomes the site's URL.
@@ -339,6 +370,8 @@ func TestService_RepairsInvalidOutputOnce(t *testing.T) {
 	assert.Equal(t, "ok", r.Status)
 	assert.Equal(t, 1, r.RepairAttempts)
 	assert.Len(t, h.suggestions(t, id), 2)
+	assert.Contains(t, h.logs.String(), "discovery.research repair", "the first parse error is logged")
+	assert.Contains(t, h.logs.String(), "Here are some ideas")
 }
 
 // B4-AC4: invalid twice → error, nothing stored.
@@ -371,6 +404,42 @@ func TestService_AllDiscardedIsPartial(t *testing.T) {
 	assert.Equal(t, "partial", r.Status)
 	assert.Contains(t, r.Notes, "0 of 2 verified")
 	assert.Empty(t, h.suggestions(t, id))
+	assert.Contains(t, h.logs.String(), `level=WARN msg="discovery.run no_results"`)
+	assert.Contains(t, h.logs.String(), "discovery.verify discarded")
+}
+
+// failFirstNutrition fails the first draft it computes.
+type failFirstNutrition struct {
+	discovery.DraftNutrition
+	mu     sync.Mutex
+	called bool
+}
+
+func (f *failFirstNutrition) PerPortionOfDraft(ctx context.Context, lines []food.DraftLine, portions float64) (food.Detailed, error) {
+	f.mu.Lock()
+	first := !f.called
+	f.called = true
+	f.mu.Unlock()
+	if first {
+		return food.Detailed{}, errors.New("database is locked")
+	}
+	return f.DraftNutrition.PerPortionOfDraft(ctx, lines, portions)
+}
+
+// DoD sfh-4: a candidate that cannot be annotated is discarded; the run
+// keeps the others.
+func TestService_AnnotateFailureDiscardsCandidate(t *testing.T) {
+	site := recipeSite(t, "fesenjan", "pasta")
+	h := newHarness(t, fakeClient(t, site, knowledgeScript), site)
+	h.annotator.Nutrition = &failFirstNutrition{DraftNutrition: h.annotator.Nutrition}
+
+	id := h.runAndWait(t, discovery.Request{Mode: discovery.ModeDaily})
+
+	r := h.run(t, id)
+	assert.Equal(t, "ok", r.Status)
+	assert.Len(t, h.suggestions(t, id), 1)
+	assert.Contains(t, r.Notes, "annotate 1")
+	assert.Contains(t, h.logs.String(), "discovery.annotate failed")
 }
 
 func TestService_RunValidates(t *testing.T) {
@@ -380,6 +449,10 @@ func TestService_RunValidates(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrDiscoveryInvalidMode)
 	_, err = h.svc.Run(context.Background(), discovery.Request{Mode: discovery.ModeExplore, Cuisine: "  "})
 	assert.ErrorIs(t, err, domain.ErrDiscoveryCuisineRequired)
+	_, err = h.svc.Run(context.Background(), discovery.Request{Mode: discovery.ModeKnown, Focus: strings.Repeat("f", 12000)})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput, "focus over 80 runes")
+	_, err = h.svc.Run(context.Background(), discovery.Request{Mode: discovery.ModeExplore, Cuisine: strings.Repeat("ä", 81)})
+	assert.ErrorIs(t, err, domain.ErrInvalidInput, "cuisine over 80 runes")
 
 	none := newHarness(t, nil, site)
 	_, err = none.svc.Run(context.Background(), discovery.Request{Mode: discovery.ModeDaily})
@@ -540,4 +613,58 @@ func TestService_RunLowercasesCuisine(t *testing.T) {
 	h := newHarness(t, fakeClient(t, site, knowledgeScript), site)
 	id := h.runAndWait(t, discovery.Request{Mode: discovery.ModeExplore, Cuisine: "  Thai "})
 	assert.Contains(t, h.run(t, id).ScopeJSON, `"cuisine":"thai"`)
+}
+
+// pausingClient answers pause_turn with a dangling server_tool_use until the
+// continuations run out, then the repair call with candidates.
+type pausingClient struct {
+	mu    sync.Mutex
+	reqs  []llm.Request
+	reply string
+}
+
+func (p *pausingClient) Stream(_ context.Context, r llm.Request, out chan<- llm.Event) (*llm.Response, error) {
+	defer close(out)
+	p.mu.Lock()
+	p.reqs = append(p.reqs, r)
+	n := len(p.reqs)
+	p.mu.Unlock()
+	if n <= 4 {
+		return &llm.Response{StopReason: llm.StopReasonPauseTurn, Message: llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{
+			{Type: llm.ContentTypeText, Text: "Searching."},
+			{Type: llm.ContentTypeServer, Raw: json.RawMessage(fmt.Sprintf(`{"type":"server_tool_use","id":"s%d","name":"web_search","input":{"query":"x"}}`, n))},
+		}}}, nil
+	}
+	return &llm.Response{StopReason: llm.StopReasonEndTurn, Message: llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{
+		{Type: llm.ContentTypeText, Text: p.reply},
+	}}}, nil
+}
+
+func (p *pausingClient) Complete(context.Context, llm.Request) (string, error) {
+	return "", errors.New("unused")
+}
+
+// DoD N3: the repair request carries no unresolved server_tool_use.
+func TestService_RepairDropsDanglingServerBlocks(t *testing.T) {
+	site := recipeSite(t, "fesenjan")
+	client := &pausingClient{reply: `{"candidates": [{"url": "` + site.URL + `/fesenjan"}]}`}
+	h := newHarness(t, client, site)
+
+	id := h.runAndWait(t, discovery.Request{Mode: discovery.ModeDaily})
+
+	require.Len(t, client.reqs, 5, "1 call, 3 continuations, 1 repair")
+	repair := client.reqs[4].Messages
+	for _, m := range repair {
+		for _, b := range m.Content {
+			if b.Type == llm.ContentTypeServer {
+				assert.NotContains(t, string(b.Raw), `"s4"`, "the last dangling server_tool_use is dropped")
+			}
+		}
+	}
+	last := repair[len(repair)-1]
+	assert.Equal(t, llm.RoleUser, last.Role)
+	prev := repair[len(repair)-2]
+	assert.Equal(t, llm.RoleAssistant, prev.Role)
+	assert.Equal(t, "Searching.", prev.Content[0].Text)
+	assert.Equal(t, "ok", h.run(t, id).Status)
 }

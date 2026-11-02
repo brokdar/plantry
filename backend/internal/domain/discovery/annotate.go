@@ -42,9 +42,10 @@ type Annotations struct {
 	Cuisine string `json:"cuisine,omitempty"`
 }
 
-// LeafMatcher is food.Resolver's local step.
+// LeafMatcher is food.Resolver's local step: LocalMatcher lists the
+// catalogue once and matches names against that snapshot.
 type LeafMatcher interface {
-	LocalMatch(ctx context.Context, name, lang string) (*food.Candidate, error)
+	LocalMatcher(ctx context.Context) (func(name string) *food.Candidate, error)
 }
 
 // UsedLeaves says which leaves a composed food uses (FoodRepo).
@@ -70,16 +71,17 @@ func (a *Annotator) Annotate(ctx context.Context, d *importer.Draft) (*Annotatio
 	out := &Annotations{Lines: make([]Line, len(d.Ingredients)), Missing: []string{}}
 	lines := make([]food.DraftLine, len(d.Ingredients))
 	var matched []int64
+	match, err := a.Matcher.LocalMatcher(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("local leaves: %w", err)
+	}
 	for i, ing := range d.Ingredients {
 		name := lineName(ing)
 		lines[i] = food.DraftLine{Name: name, Amount: ing.Amount, Unit: ing.Unit, PortionGrams: ing.PortionGrams}
 		if ing.Name == "" {
 			continue
 		}
-		c, err := a.Matcher.LocalMatch(ctx, ing.Name, d.Language)
-		if err != nil {
-			return nil, fmt.Errorf("match %q: %w", ing.Name, err)
-		}
+		c := match(ing.Name)
 		if c == nil || c.ExistingID == nil {
 			continue
 		}

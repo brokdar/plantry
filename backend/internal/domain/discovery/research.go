@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -31,7 +33,7 @@ type findings struct {
 // no readable candidates JSON (D5). An unreadable repair fails with
 // domain.ErrDiscoveryInvalidOutput, a provider error with
 // domain.ErrAIProviderFailed.
-func research(ctx context.Context, client llm.Client, model string, search bool, system string, req Request) (findings, error) {
+func research(ctx context.Context, logger *slog.Logger, client llm.Client, model string, search bool, system string, req Request) (findings, error) {
 	r := llm.Request{
 		Model:     model,
 		System:    system,
@@ -46,10 +48,13 @@ func research(ctx context.Context, client llm.Client, model string, search bool,
 	if err != nil {
 		return f, err
 	}
-	cands, perr := parseCandidates(textOf(resp.Message))
+	reply := textOf(resp.Message)
+	cands, perr := parseCandidates(reply)
 	if perr != nil {
+		logger.WarnContext(ctx, "discovery.research repair", "error", perr,
+			"stop_reason", resp.StopReason, "reply", truncateRunes(reply, maxLoggedReply))
 		f.Repaired = true
-		r.Messages = append(r.Messages, userText(repairMessage))
+		r.Messages = append(dropDanglingServerUse(r.Messages), userText(repairMessage))
 		if resp, err = converse(ctx, client, &r, &f.Searches); err != nil {
 			return f, err
 		}
@@ -130,6 +135,66 @@ func parseCandidates(text string) ([]Candidate, error) {
 		}
 	}
 	return cands, nil
+}
+
+// dropDanglingServerUse removes the server_tool_use blocks the last
+// assistant message ends with that have no result (a turn still paused when
+// the continuations ran out); a request replaying them is invalid. A message
+// left empty is dropped.
+func dropDanglingServerUse(msgs []llm.Message) []llm.Message {
+	n := len(msgs)
+	if n == 0 || msgs[n-1].Role != llm.RoleAssistant {
+		return msgs
+	}
+	content := msgs[n-1].Content
+	resolved := map[string]bool{}
+	for _, b := range content {
+		if b.Type == llm.ContentTypeServer {
+			if id := serverBlock(b).ToolUseID; id != "" {
+				resolved[id] = true
+			}
+		}
+	}
+	end := len(content)
+	for end > 0 && content[end-1].Type == llm.ContentTypeServer {
+		sb := serverBlock(content[end-1])
+		if sb.Type != "server_tool_use" || resolved[sb.ID] {
+			break
+		}
+		end--
+	}
+	if end == len(content) {
+		return msgs
+	}
+	out := slices.Clone(msgs[:n-1])
+	if end == 0 {
+		return out
+	}
+	last := msgs[n-1]
+	last.Content = content[:end]
+	return append(out, last)
+}
+
+type serverBlockHead struct {
+	Type      string `json:"type"`
+	ID        string `json:"id"`
+	ToolUseID string `json:"tool_use_id"`
+}
+
+func serverBlock(b llm.ContentBlock) serverBlockHead {
+	var h serverBlockHead
+	_ = json.Unmarshal(b.Raw, &h) // an unreadable block reads as unknown and is kept
+	return h
+}
+
+// maxLoggedReply bounds the reply text a repair log line carries.
+const maxLoggedReply = 500
+
+func truncateRunes(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
 }
 
 func textOf(m llm.Message) string {

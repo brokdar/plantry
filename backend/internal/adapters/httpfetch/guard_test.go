@@ -36,6 +36,14 @@ func TestPublicURL(t *testing.T) {
 		{"link local", "http://x/r", resolveTo("169.254.1.1"), false, httpfetch.ErrBlockedURL},
 		{"one private among public", "http://x/r", resolveTo("93.184.216.34", "10.0.0.1"), false, httpfetch.ErrBlockedURL},
 		{"unresolvable", "http://x/r", func(string) ([]net.IP, error) { return nil, errors.New("nxdomain") }, false, httpfetch.ErrBlockedURL},
+		{"cgnat", "http://x/r", resolveTo("100.64.1.2"), false, httpfetch.ErrBlockedURL},
+		{"this network", "http://x/r", resolveTo("0.1.2.3"), false, httpfetch.ErrBlockedURL},
+		{"benchmarking", "http://x/r", resolveTo("198.18.0.1"), false, httpfetch.ErrBlockedURL},
+		{"ietf protocol", "http://x/r", resolveTo("192.0.0.8"), false, httpfetch.ErrBlockedURL},
+		{"multicast", "http://x/r", resolveTo("224.0.0.1"), false, httpfetch.ErrBlockedURL},
+		{"reserved", "http://x/r", resolveTo("240.0.0.1"), false, httpfetch.ErrBlockedURL},
+		{"mapped private v6", "http://x/r", resolveTo("::ffff:10.0.0.1"), false, httpfetch.ErrBlockedURL},
+		{"ula v6", "http://x/r", resolveTo("fd00::1"), false, httpfetch.ErrBlockedURL},
 		{"bad scheme", "ftp://example.com/r", resolveTo("93.184.216.34"), false, httpfetch.ErrInvalidURL},
 		{"no host", "http:///r", resolveTo("93.184.216.34"), false, httpfetch.ErrInvalidURL},
 	}
@@ -49,4 +57,16 @@ func TestPublicURL(t *testing.T) {
 			assert.ErrorIs(t, err, tt.want)
 		})
 	}
+}
+
+// IPv6 ranges that tunnel or embed an IPv4 address (NAT64, 6to4, Teredo) and
+// documentation addresses are not public.
+func TestPublicURL_BlocksTunnelledAndDocumentationRanges(t *testing.T) {
+	for _, ip := range []string{
+		"64:ff9b::7f00:1", "64:ff9b::a00:1", "64:ff9b:1::1",
+		"2002:c0a8:101::1", "2001:0:4136:e378:8000:63bf:3fff:fdd2", "2001:db8::1",
+	} {
+		assert.ErrorIs(t, httpfetch.PublicURL("http://h.test/", resolveTo(ip), false), httpfetch.ErrBlockedURL, ip)
+	}
+	assert.NoError(t, httpfetch.PublicURL("http://h.test/", resolveTo("2606:4700:4700::1111"), false), "a public IPv6 address")
 }

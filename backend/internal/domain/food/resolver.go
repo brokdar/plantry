@@ -95,15 +95,27 @@ func (r *Resolver) Lookup(ctx context.Context, barcode, query, lang string, limi
 // nil when none does. It never calls a provider or the LLM. lang is accepted
 // for symmetry with Lookup; local matching is language independent.
 func (r *Resolver) LocalMatch(ctx context.Context, name, _ string) (*Candidate, error) {
+	match, err := r.LocalMatcher(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return match(name), nil
+}
+
+// LocalMatcher lists the local leaves once and returns LocalMatch over that
+// snapshot, for matching many names (a recipe's ingredients) in one pass.
+func (r *Resolver) LocalMatcher(ctx context.Context) (func(name string) *Candidate, error) {
 	leaves, err := r.listLeaves(ctx)
 	if err != nil {
 		return nil, err
 	}
-	cs, _ := localCandidates(leaves, normalizeName(name))
-	if len(cs) == 0 {
-		return nil, nil
-	}
-	return &cs[0], nil
+	return func(name string) *Candidate {
+		cs, _ := localCandidates(leaves, normalizeName(name))
+		if len(cs) == 0 {
+			return nil
+		}
+		return &cs[0]
+	}, nil
 }
 
 func (r *Resolver) lookupBarcode(ctx context.Context, barcode string, _ int) ([]Candidate, int, error) {

@@ -1,10 +1,14 @@
 package discovery_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -39,7 +43,26 @@ func (s *spyFetcher) Fetch(ctx context.Context, url string) (string, string, err
 // urlSet is a discovery.URLIndex over a fixed set.
 type urlSet map[string]bool
 
-func (u urlSet) SourceURLKnown(_ context.Context, url string) (bool, error) { return u[url], nil }
+func (u urlSet) SourceURLs(context.Context) ([]string, error) {
+	out := make([]string, 0, len(u))
+	for k, v := range u {
+		if v {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
+// countingIndex counts the index reads.
+type countingIndex struct {
+	urlSet
+	calls int
+}
+
+func (c *countingIndex) SourceURLs(ctx context.Context) ([]string, error) {
+	c.calls++
+	return c.urlSet.SourceURLs(ctx)
+}
 
 func site(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -187,4 +210,110 @@ func TestVerify_RedirectToBlockedHostDiscarded(t *testing.T) {
 	require.Empty(t, kept)
 	assert.Equal(t, discovery.ReasonBlockedURL, urlsOf(discarded)[pub.URL])
 	assert.False(t, hit)
+}
+
+// panicExtractor panics for one URL and delegates the rest.
+type panicExtractor struct {
+	inner discovery.Extractor
+	bad   string
+}
+
+func (p panicExtractor) Extract(ctx context.Context, in importer.ExtractInput) (*importer.Draft, error) {
+	if in.URL == p.bad {
+		panic("parser bug")
+	}
+	return p.inner.Extract(ctx, in)
+}
+
+// DoD S1: a panicking extraction discards that candidate, logs the stack
+// and leaves the others intact; every discard is logged with host + reason.
+func TestVerify_PanicDiscardsCandidate(t *testing.T) {
+	srv := site(t)
+	var logs bytes.Buffer
+	v, _ := newVerifier(true, nil)
+	v.Extractor = panicExtractor{inner: v.Extractor, bad: srv.URL + "/blog"}
+	v.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+
+	kept, discarded, err := v.Verify(context.Background(), []discovery.Candidate{
+		{URL: srv.URL + "/fesenjan"}, {URL: srv.URL + "/blog"}, {URL: srv.URL + "/gone?token=secret"},
+	})
+	require.NoError(t, err)
+	require.Len(t, kept, 1)
+	assert.Equal(t, discovery.ReasonPanic, urlsOf(discarded)[srv.URL+"/blog"])
+	out := logs.String()
+	assert.Contains(t, out, "level=ERROR")
+	assert.Contains(t, out, "parser bug")
+	assert.Contains(t, out, "stack=")
+	assert.Contains(t, out, "reason="+discovery.ReasonFetch)
+	assert.NotContains(t, out, "token=secret", "the URL query is never logged")
+}
+
+func TestNormalizeURL(t *testing.T) {
+	tests := map[string]string{
+		"https://x.test/r/fesenjan":                             "https://x.test/r/fesenjan",
+		"HTTPS://X.Test/r/fesenjan/":                            "https://x.test/r/fesenjan",
+		"https://x.test/r/fesenjan?utm_source=a&utm_medium=b":   "https://x.test/r/fesenjan",
+		"https://x.test/r/fesenjan?id=3&gclid=z&UTM_Term=q#top": "https://x.test/r/fesenjan?id=3",
+		"https://x.test/":                                       "https://x.test",
+		"https://x.test/R/Case":                                 "https://x.test/R/Case",
+	}
+	for in, want := range tests {
+		assert.Equal(t, want, discovery.NormalizeURL(in), in)
+	}
+}
+
+// Walkthrough: a utm-tagged or trailing-slash variant of a known or earlier
+// candidate URL is a duplicate.
+func TestVerify_NormalizedDuplicates(t *testing.T) {
+	srv := site(t)
+	v, spy := newVerifier(true, nil)
+	kept, discarded, err := v.Verify(context.Background(), []discovery.Candidate{
+		{URL: srv.URL + "/fesenjan"}, {URL: srv.URL + "/fesenjan/?utm_source=llm"},
+	})
+	require.NoError(t, err)
+	require.Len(t, kept, 1)
+	assert.Equal(t, discovery.ReasonDuplicate, urlsOf(discarded)[srv.URL+"/fesenjan/?utm_source=llm"])
+	assert.Len(t, spy.urls, 1)
+}
+
+// The URL index is read once per Verify, not once per candidate.
+func TestVerify_ReadsIndexOnce(t *testing.T) {
+	srv := site(t)
+	idx := &countingIndex{urlSet: urlSet{srv.URL + "/blog": true}}
+	v, _ := newVerifier(true, nil)
+	v.Index = idx
+
+	_, discarded, err := v.Verify(context.Background(), []discovery.Candidate{
+		{URL: srv.URL + "/fesenjan"}, {URL: srv.URL + "/moved"}, {URL: srv.URL + "/blog/"}, {URL: srv.URL + "/gone"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, idx.calls)
+	assert.Equal(t, discovery.ReasonDuplicate, urlsOf(discarded)[srv.URL+"/blog/"], "known URLs compare normalized")
+}
+
+type failingExtractor struct{ err error }
+
+func (f failingExtractor) Extract(context.Context, importer.ExtractInput) (*importer.Draft, error) {
+	return nil, f.err
+}
+
+// An unclassified failure logs the host and the cause, never the URL's query.
+func TestVerify_LogsNoQuery(t *testing.T) {
+	var buf bytes.Buffer
+	raw := "https://recipes.test/r?token=secret&x=1"
+	cause := errors.New("tls: handshake failure")
+	v := &discovery.Verifier{
+		Extractor: failingExtractor{err: fmt.Errorf("fetch: %w", &neturl.Error{Op: "Get", URL: raw, Err: cause})},
+		Index:     urlSet{},
+		Logger:    slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+	}
+	_, discarded, err := v.Verify(context.Background(), []discovery.Candidate{{URL: raw}})
+	require.NoError(t, err)
+	require.Len(t, discarded, 1)
+	assert.Equal(t, discovery.ReasonError, discarded[0].Reason)
+	out := buf.String()
+	assert.Contains(t, out, "recipes.test")
+	assert.Contains(t, out, "handshake failure")
+	assert.NotContains(t, out, "?")
+	assert.NotContains(t, out, "secret")
 }

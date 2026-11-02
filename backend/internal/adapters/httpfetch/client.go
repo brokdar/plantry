@@ -51,6 +51,14 @@ type Client struct {
 	accept       string
 	maxBytes     int64
 	maxRedirects int
+	// guarded serves fetches whose ctx carries a URL guard (WithDialGuard).
+	guarded   *http.Client
+	dialGuard *dialGuard
+}
+
+type dialGuard struct {
+	resolve       Resolver
+	allowLoopback bool
 }
 
 // Option configures a Client.
@@ -61,6 +69,14 @@ func WithMaxBytes(n int64) Option { return func(c *Client) { c.maxBytes = n } }
 
 // WithMaxRedirects caps the number of HTTP redirects followed.
 func WithMaxRedirects(n int) Option { return func(c *Client) { c.maxRedirects = n } }
+
+// WithDialGuard makes fetches whose ctx carries a URL guard
+// (importer.WithURLGuard) dial public addresses only (allowLoopback: dev
+// mode), closing the gap between the guard's lookup and the dial. A nil
+// resolve uses the default resolver. Unguarded fetches are unaffected.
+func WithDialGuard(resolve Resolver, allowLoopback bool) Option {
+	return func(c *Client) { c.dialGuard = &dialGuard{resolve, allowLoopback} }
+}
 
 // New creates a Client with sensible defaults.
 func New(opts ...Option) *Client {
@@ -80,17 +96,10 @@ func New(opts ...Option) *Client {
 	// Always install the redirect cap; tests may override the http.Client entirely
 	// via WithHTTPClient, in which case we leave their choice alone.
 	if c.hc.CheckRedirect == nil {
-		c.hc.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			if len(via) >= c.maxRedirects {
-				return ErrTooManyRedirects
-			}
-			if guard := importer.URLGuardFrom(req.Context()); guard != nil {
-				if err := guard(req.URL.String()); err != nil {
-					return fmt.Errorf("%w: %w", importer.ErrURLBlocked, err)
-				}
-			}
-			return nil
-		}
+		c.hc.CheckRedirect = checkRedirect(c.maxRedirects)
+	}
+	if c.dialGuard != nil {
+		c.guarded = guardedClient(c.dialGuard.resolve, c.dialGuard.allowLoopback, c.hc.Timeout, c.maxRedirects)
 	}
 	return c
 }
@@ -107,11 +116,18 @@ func (c *Client) Fetch(ctx context.Context, url string) (string, string, error) 
 	req.Header.Set("Accept", c.accept)
 	req.Header.Set("Accept-Language", c.acceptLang)
 
-	resp, err := c.hc.Do(req)
+	hc := c.hc
+	if c.guarded != nil && importer.URLGuardFrom(ctx) != nil {
+		hc = c.guarded
+	}
+	resp, err := hc.Do(req)
 	if err != nil {
 		// Surface the redirect-cap error as ErrTooManyRedirects for callers.
 		if errors.Is(err, ErrTooManyRedirects) {
 			return "", "", ErrTooManyRedirects
+		}
+		if errors.Is(err, ErrBlockedURL) {
+			return "", "", fmt.Errorf("%w: %w", importer.ErrURLBlocked, err)
 		}
 		return "", "", fmt.Errorf("%w: %w", domain.ErrImportFetchFailed, err)
 	}

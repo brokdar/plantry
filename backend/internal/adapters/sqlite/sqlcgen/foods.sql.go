@@ -11,6 +11,25 @@ import (
 	"strings"
 )
 
+const clearFoodImage = `-- name: ClearFoodImage :execrows
+UPDATE foods SET image_path = NULL, updated_at = datetime('now')
+WHERE id = ? AND image_path = ?
+`
+
+type ClearFoodImageParams struct {
+	ID        int64
+	ImagePath sql.NullString
+}
+
+// Undoes SetFoodImageIfNone: clears the image only while it is still path.
+func (q *Queries) ClearFoodImage(ctx context.Context, arg ClearFoodImageParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, clearFoodImage, arg.ID, arg.ImagePath)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const countComposedFoods = `-- name: CountComposedFoods :one
 SELECT COUNT(*) FROM foods WHERE kind = 'composed'
 `
@@ -1062,6 +1081,25 @@ func (q *Queries) SetFoodFavorite(ctx context.Context, arg SetFoodFavoriteParams
 		&i.Freezable,
 	)
 	return i, err
+}
+
+const setFoodImageIfNone = `-- name: SetFoodImageIfNone :execrows
+UPDATE foods SET image_path = ?, updated_at = datetime('now')
+WHERE id = ? AND image_path IS NULL
+`
+
+type SetFoodImageIfNoneParams struct {
+	ImagePath sql.NullString
+	ID        int64
+}
+
+// Sets only the image, and only on a food without one (discovery accept).
+func (q *Queries) SetFoodImageIfNone(ctx context.Context, arg SetFoodImageIfNoneParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setFoodImageIfNone, arg.ImagePath, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setFoodShopSection = `-- name: SetFoodShopSection :one
