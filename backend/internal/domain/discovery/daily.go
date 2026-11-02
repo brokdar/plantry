@@ -33,6 +33,10 @@ func (s *Service) Daily(ctx context.Context, day time.Time) (Daily, error) {
 		return Daily{}, err
 	}
 	if cur != nil {
+		if cur.Status != StatusPending {
+			// The user acted on today's suggestion: silent for the day.
+			return Daily{}, nil
+		}
 		return Daily{Suggestion: cur}, nil
 	}
 	return s.next(ctx, day, 0)
@@ -51,6 +55,9 @@ func (s *Service) Another(ctx context.Context, day time.Time) (Daily, error) {
 	}
 	var after int64
 	if cur != nil {
+		if cur.Status != StatusPending {
+			return Daily{}, nil
+		}
 		after = cur.ID
 	}
 	return s.next(ctx, day, after)
@@ -70,6 +77,12 @@ func (s *Service) next(ctx context.Context, day time.Time, after int64) (Daily, 
 	failed, err := s.d.Store.Repo.DailyRunFailed(ctx, key)
 	if err != nil || failed {
 		return Daily{}, err
+	}
+	if after != 0 {
+		// The run's first suggestion takes the day.
+		if err := s.d.Store.Repo.ClearShown(ctx, key); err != nil {
+			return Daily{}, err
+		}
 	}
 	cuisines, err := s.d.Prefs.DiscoveryCuisines(ctx)
 	if err != nil {

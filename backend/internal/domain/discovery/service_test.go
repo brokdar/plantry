@@ -93,6 +93,13 @@ type harness struct {
 
 func newHarness(t *testing.T, client llm.Client, site *httptest.Server) *harness {
 	t.Helper()
+	return newHarnessRepo(t, client, site, func(r *sqlite.RecipeSuggestionRepo) discovery.Repository { return r })
+}
+
+// newHarnessRepo is newHarness with the service's store reading through
+// wrap(repo).
+func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap func(*sqlite.RecipeSuggestionRepo) discovery.Repository) *harness {
+	t.Helper()
 	db := testhelper.NewTestDB(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), logger, time.Now)
@@ -119,7 +126,7 @@ func newHarness(t *testing.T, client llm.Client, site *httptest.Server) *harness
 			Guard:     func(u string) error { return httpfetch.PublicURL(u, localOnly, true) },
 		},
 		Annotator: &discovery.Annotator{Matcher: food.NewResolver(foods, nil, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)},
-		Store:     &discovery.Store{Repo: repo, Images: images},
+		Store:     &discovery.Store{Repo: wrap(repo), Images: images},
 		Logger:    logger,
 	})
 	t.Cleanup(func() { _ = svc.Shutdown(context.Background()) })

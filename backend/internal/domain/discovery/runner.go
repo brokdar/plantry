@@ -19,7 +19,9 @@ type runner struct {
 	mu      sync.Mutex
 	running bool
 	// id is the running run's ai_runs id, 0 until start.
-	id     int64
+	id int64
+	// ready is closed once id is set or the slot is released.
+	ready  chan struct{}
 	closed bool
 	wg     sync.WaitGroup
 	base   context.Context
@@ -42,6 +44,7 @@ func (r *runner) acquire() error {
 		return domain.ErrDiscoveryRunning
 	}
 	r.running = true
+	r.ready = make(chan struct{})
 	r.wg.Add(1)
 	return nil
 }
@@ -50,6 +53,7 @@ func (r *runner) acquire() error {
 func (r *runner) release() {
 	r.mu.Lock()
 	r.running, r.id = false, 0
+	r.signalReady()
 	r.mu.Unlock()
 	r.wg.Done()
 }
@@ -60,6 +64,7 @@ func (r *runner) release() {
 func (r *runner) start(ctx context.Context, id int64, timeout time.Duration, f func(context.Context)) {
 	r.mu.Lock()
 	r.id = id
+	r.signalReady()
 	r.mu.Unlock()
 	bg, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	unhook := context.AfterFunc(r.base, cancel)
@@ -71,10 +76,27 @@ func (r *runner) start(ctx context.Context, id int64, timeout time.Duration, f f
 	}()
 }
 
-// current returns the running run's id; false when none runs (or its row
-// is not written yet).
+// signalReady closes ready once; r.mu is held.
+func (r *runner) signalReady() {
+	select {
+	case <-r.ready:
+	default:
+		if r.ready != nil {
+			close(r.ready)
+		}
+	}
+}
+
+// current returns the running run's id; false when none runs. A run that
+// holds the slot but has no id yet is waited for (its row is being written).
 func (r *runner) current() (int64, bool) {
 	r.mu.Lock()
+	if r.running && r.id == 0 {
+		ready := r.ready
+		r.mu.Unlock()
+		<-ready
+		r.mu.Lock()
+	}
 	defer r.mu.Unlock()
 	return r.id, r.running && r.id != 0
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/discovery"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -302,4 +303,118 @@ func TestService_RunState(t *testing.T) {
 
 	_, err = h.svc.RunState(context.Background(), runID+100)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+// A decided suggestion keeps the day: daily and another stay silent and
+// start no run.
+func TestDaily_DecidedSuggestionSilencesTheDay(t *testing.T) {
+	for _, decide := range []string{"reject", "accept"} {
+		t.Run(decide, func(t *testing.T) {
+			site := recipeSite(t, "r1", "r2")
+			client := &batchClient{site: site, batches: [][]string{{"r1", "r2"}}}
+			h := newHarness(t, client, site)
+			h.daily(t, dayD)
+			h.svc.Wait()
+			s1 := h.daily(t, dayD).Suggestion
+			require.NotNil(t, s1)
+
+			if decide == "reject" {
+				_, err := h.svc.Reject(context.Background(), s1.ID, nil)
+				require.NoError(t, err)
+			} else {
+				_, err := h.svc.Accept(context.Background(), s1.ID, h.newRecipe(t, nil).ID)
+				require.NoError(t, err)
+			}
+			assert.Equal(t, discovery.Daily{}, h.daily(t, dayD))
+			assert.Equal(t, discovery.Daily{}, h.another(t, dayD))
+			assert.Equal(t, 1, client.Calls(), "no new run")
+			require.NotNil(t, h.get(t, s1.ID).ShownOn, "shown_on kept")
+			require.NotNil(t, h.daily(t, dayD1).Suggestion, "the next day shows the next pending one")
+		})
+	}
+}
+
+// Another with a failed run today and no further pending leaves the
+// current suggestion shown.
+func TestDaily_AnotherFailedRunKeepsCurrent(t *testing.T) {
+	site := recipeSite(t, "r1")
+	client := &batchClient{site: site, batches: [][]string{{"r1"}}}
+	h := newHarness(t, client, site)
+	h.daily(t, dayD)
+	h.svc.Wait()
+	s1 := h.daily(t, dayD).Suggestion
+	require.NotNil(t, s1)
+	_, err := h.db.Exec(`INSERT INTO ai_runs (kind, started_at, status, scope_json) VALUES ('discovery', datetime('now'), 'error', ?)`,
+		`{"mode":"daily","day":"2026-11-02"}`)
+	require.NoError(t, err)
+
+	assert.Equal(t, discovery.Daily{}, h.another(t, dayD))
+	require.NotNil(t, h.get(t, s1.ID).ShownOn, "shown_on intact")
+	got := h.daily(t, dayD)
+	require.NotNil(t, got.Suggestion)
+	assert.Equal(t, s1.ID, got.Suggestion.ID)
+}
+
+// Concurrent daily requests while a run is being set up all get its id.
+func TestDaily_ConcurrentRequestsGetTheRunID(t *testing.T) {
+	site := recipeSite(t, "fesenjan")
+	client := newBlocking(site)
+	h := newHarness(t, client, site)
+
+	const n = 8
+	ids := make([]int64, n)
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			d, err := h.svc.Daily(context.Background(), dayD)
+			assert.NoError(t, err)
+			ids[i] = d.RunID
+		}()
+	}
+	wg.Wait()
+	for _, id := range ids {
+		assert.NotZero(t, id)
+		assert.Equal(t, ids[0], id)
+	}
+	close(client.release)
+	h.svc.Wait()
+}
+
+// staleShownOn reports no suggestion shown on the first lookup, as a
+// concurrent request would leave it.
+type staleShownOn struct {
+	discovery.Repository
+	once sync.Once
+}
+
+func (s *staleShownOn) ShownOn(ctx context.Context, day string) (*discovery.Suggestion, error) {
+	stale := false
+	s.once.Do(func() { stale = true })
+	if stale {
+		return nil, nil
+	}
+	return s.Repository.ShownOn(ctx, day)
+}
+
+// A run whose day was taken meanwhile still stores its suggestions.
+func TestService_DayTakenMeanwhileKeepsSuggestions(t *testing.T) {
+	site := recipeSite(t, "r1", "r2")
+	client := &batchClient{site: site, batches: [][]string{{"r1"}, {"r2"}}}
+	h := newHarnessRepo(t, client, site, func(r *sqlite.RecipeSuggestionRepo) discovery.Repository {
+		return &staleShownOn{Repository: r}
+	})
+	// Explore runs look up no day, so the stale lookup is the daily run's.
+	first := h.runAndWait(t, discovery.Request{Mode: discovery.ModeExplore, Cuisine: "thai"})
+	taken, err := h.repo.ShowNext(context.Background(), "2026-11-02", 0)
+	require.NoError(t, err)
+	require.NotNil(t, taken)
+	require.Len(t, h.suggestions(t, first), 1)
+
+	id := h.runAndWait(t, discovery.Request{Mode: discovery.ModeDaily, Cuisine: "thai", Day: "2026-11-02"})
+	assert.Equal(t, "ok", h.run(t, id).Status, h.run(t, id).ErrorKey)
+	got := h.suggestions(t, id)
+	require.Len(t, got, 1)
+	assert.Nil(t, got[0].ShownOn)
 }

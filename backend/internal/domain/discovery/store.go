@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -81,8 +82,10 @@ type Repository interface {
 	ShownOn(ctx context.Context, day string) (*Suggestion, error)
 	// ShowNext clears day from the suggestion holding it and assigns it to
 	// the oldest pending, never-shown suggestion with an id above after; nil
-	// when there is none (D12).
+	// when there is none, leaving day as it was (D12).
 	ShowNext(ctx context.Context, day string, after int64) (*Suggestion, error)
+	// ClearShown clears day from the suggestion holding it.
+	ClearShown(ctx context.Context, day string) error
 	// DailyRunFailed reports whether a discovery run for day ended without
 	// storing a suggestion.
 	DailyRunFailed(ctx context.Context, day string) (bool, error)
@@ -142,6 +145,9 @@ type NewSuggestion struct {
 	ShownOn     *string
 }
 
+// ErrDayTaken: another suggestion is shown on the day Save was given.
+var ErrDayTaken = errors.New("discovery: day already has a suggestion")
+
 // Save stores the suggestion as pending, then downloads its image to
 // suggestions/<id>.jpg (D16). The draft's SourceURL is the row's source_url.
 // An image that is missing or fails to download leaves image_path NULL; the
@@ -196,6 +202,9 @@ func (s *Store) Reject(ctx context.Context, id int64, reason *Reason) (*Suggesti
 		return nil, err
 	}
 	s.deleteImage(sug.ID)
+	if err := s.Repo.SetImagePath(ctx, sug.ID, nil); err != nil {
+		return nil, fmt.Errorf("clear rejected suggestion image path: %w", err)
+	}
 	sug.ImagePath = nil
 	return sug, nil
 }

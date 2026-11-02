@@ -170,6 +170,9 @@ func TestStore_AcceptRejectMoveOutcome(t *testing.T) {
 	assert.Equal(t, discovery.StatusRejected, got.Status)
 	assert.Nil(t, got.ImagePath)
 	assert.NoFileExists(t, filepath.Join(dir, *a.ImagePath))
+	stored, err := repo.Get(ctx, a.ID)
+	require.NoError(t, err)
+	assert.Nil(t, stored.ImagePath, "image_path cleared in the DB")
 	assert.Equal(t, "open", outcome())
 
 	res, err = db.Exec(`INSERT INTO foods (name, kind, role, reference_portions) VALUES ('Saved', 'composed', 'main', 2)`)

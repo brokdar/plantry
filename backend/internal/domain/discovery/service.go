@@ -231,10 +231,17 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 		return "", res, err
 	}
 	for i, v := range verified {
-		if _, err := s.d.Store.Save(ctx, NewSuggestion{
+		in := NewSuggestion{
 			Mode: req.Mode, Query: query(req), Draft: v.Draft, Annotations: *anns[i],
 			Grounded: found.Searches > 0, RunID: &runID, ShownOn: shownOn,
-		}); err != nil {
+		}
+		_, err := s.d.Store.Save(ctx, in)
+		if errors.Is(err, ErrDayTaken) {
+			// A concurrent request took the day meanwhile: keep the paid result.
+			in.ShownOn = nil
+			_, err = s.d.Store.Save(ctx, in)
+		}
+		if err != nil {
 			return "", res, err
 		}
 		shownOn = nil
