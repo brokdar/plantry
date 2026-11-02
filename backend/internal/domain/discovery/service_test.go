@@ -1,6 +1,7 @@
 package discovery_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -92,6 +94,28 @@ type harness struct {
 	prefs  *fakePrefs
 	images string
 	site   *httptest.Server
+	// annotator is the service's (mutable for fault injection); logs its
+	// log output (read after the run).
+	annotator *discovery.Annotator
+	logs      *syncBuffer
+}
+
+// syncBuffer is a goroutine-safe log sink.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 func newHarness(t *testing.T, client llm.Client, site *httptest.Server) *harness {
@@ -104,7 +128,8 @@ func newHarness(t *testing.T, client llm.Client, site *httptest.Server) *harness
 func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap func(*sqlite.RecipeSuggestionRepo) discovery.Repository) *harness {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logs := &syncBuffer{}
+	logger := slog.New(slog.NewTextHandler(logs, nil))
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), logger, time.Now)
 	repo := sqlite.NewRecipeSuggestionRepo(db)
 	foods := sqlite.NewFoodRepo(db)
@@ -116,6 +141,7 @@ func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap
 		resolver = llm.StaticResolver(rec.Meter(client, "fake"), "fake-model")
 	}
 	prefs := &fakePrefs{}
+	annotator := &discovery.Annotator{Matcher: food.NewResolver(foods, nil, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)}
 	svc := discovery.NewService(discovery.Deps{
 		LLM:       resolver,
 		Prefs:     prefs,
@@ -127,13 +153,14 @@ func newHarnessRepo(t *testing.T, client llm.Client, site *httptest.Server, wrap
 			Extractor: importer.NewService(httpfetch.New(), jsonld.Extractor{}, nil, nil, nil),
 			Index:     repo,
 			Guard:     func(u string) error { return httpfetch.PublicURL(u, localOnly, true) },
+			Logger:    logger,
 		},
-		Annotator: &discovery.Annotator{Matcher: food.NewResolver(foods, nil, nil, nil), Used: foods, Nutrition: food.NewNutritionResolver(foods)},
+		Annotator: annotator,
 		Store:     &discovery.Store{Repo: wrap(repo), Images: images},
 		Logger:    logger,
 	})
 	t.Cleanup(func() { _ = svc.Shutdown(context.Background()) })
-	return &harness{db: db, svc: svc, repo: repo, foods: foods, prefs: prefs, images: dir, site: site}
+	return &harness{db: db, svc: svc, repo: repo, foods: foods, prefs: prefs, images: dir, site: site, annotator: annotator, logs: logs}
 }
 
 // fakeClient loads a script; {{SITE}} becomes the site's URL.
@@ -342,6 +369,8 @@ func TestService_RepairsInvalidOutputOnce(t *testing.T) {
 	assert.Equal(t, "ok", r.Status)
 	assert.Equal(t, 1, r.RepairAttempts)
 	assert.Len(t, h.suggestions(t, id), 2)
+	assert.Contains(t, h.logs.String(), "discovery.research repair", "the first parse error is logged")
+	assert.Contains(t, h.logs.String(), "Here are some ideas")
 }
 
 // B4-AC4: invalid twice → error, nothing stored.
@@ -374,6 +403,42 @@ func TestService_AllDiscardedIsPartial(t *testing.T) {
 	assert.Equal(t, "partial", r.Status)
 	assert.Contains(t, r.Notes, "0 of 2 verified")
 	assert.Empty(t, h.suggestions(t, id))
+	assert.Contains(t, h.logs.String(), `level=WARN msg="discovery.run no_results"`)
+	assert.Contains(t, h.logs.String(), "discovery.verify discarded")
+}
+
+// failFirstNutrition fails the first draft it computes.
+type failFirstNutrition struct {
+	discovery.DraftNutrition
+	mu     sync.Mutex
+	called bool
+}
+
+func (f *failFirstNutrition) PerPortionOfDraft(ctx context.Context, lines []food.DraftLine, portions float64) (food.Detailed, error) {
+	f.mu.Lock()
+	first := !f.called
+	f.called = true
+	f.mu.Unlock()
+	if first {
+		return food.Detailed{}, errors.New("database is locked")
+	}
+	return f.DraftNutrition.PerPortionOfDraft(ctx, lines, portions)
+}
+
+// DoD sfh-4: a candidate that cannot be annotated is discarded; the run
+// keeps the others.
+func TestService_AnnotateFailureDiscardsCandidate(t *testing.T) {
+	site := recipeSite(t, "fesenjan", "pasta")
+	h := newHarness(t, fakeClient(t, site, knowledgeScript), site)
+	h.annotator.Nutrition = &failFirstNutrition{DraftNutrition: h.annotator.Nutrition}
+
+	id := h.runAndWait(t, discovery.Request{Mode: discovery.ModeDaily})
+
+	r := h.run(t, id)
+	assert.Equal(t, "ok", r.Status)
+	assert.Len(t, h.suggestions(t, id), 1)
+	assert.Contains(t, r.Notes, "annotate 1")
+	assert.Contains(t, h.logs.String(), "discovery.annotate failed")
 }
 
 func TestService_RunValidates(t *testing.T) {

@@ -25,6 +25,8 @@ const (
 	ReasonTimeout    = "timeout"
 	ReasonError      = "error"
 	ReasonPanic      = "panic"
+	// ReasonAnnotate is the pipeline's: the candidate could not be annotated.
+	ReasonAnnotate = "annotate"
 )
 
 const (

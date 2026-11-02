@@ -91,6 +91,8 @@ func (s *Service) next(ctx context.Context, day time.Time, after int64) (Daily, 
 		id, _ = s.runner.current()
 		return Daily{RunID: id}, nil
 	case errors.Is(err, domain.ErrAIProviderMissing), errors.Is(err, domain.ErrAIProviderFailed):
+		// Silent for the user, but not for the operator.
+		s.d.Logger.WarnContext(ctx, "discovery.daily run not started", "error", err)
 		return Daily{}, nil
 	case err != nil:
 		return Daily{}, err

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -172,8 +173,13 @@ func writeDaily(w http.ResponseWriter, d discovery.Daily) {
 	}
 }
 
-func writeDiscoveryError(w http.ResponseWriter, err error) {
+// writeDiscoveryError answers err; a 5xx is logged (the daily popup hides
+// errors from the user).
+func writeDiscoveryError(w http.ResponseWriter, r *http.Request, err error) {
 	status, key := toHTTPWithResource(err, "discovery")
+	if status >= http.StatusInternalServerError {
+		slog.ErrorContext(r.Context(), "discovery request failed", "method", r.Method, "path", r.URL.Path, "error", err)
+	}
 	writeError(w, status, key)
 }
 
@@ -190,7 +196,7 @@ func (h *DiscoveryHandler) Start(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := h.svc.Discover(r.Context(), discovery.Request{Mode: req.Mode, Cuisine: req.Cuisine, Focus: req.Focus}, today)
 	if err != nil {
-		writeDiscoveryError(w, err)
+		writeDiscoveryError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, runIDResponse{RunID: id})
@@ -204,7 +210,7 @@ func (h *DiscoveryHandler) Run(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := h.svc.RunState(r.Context(), id)
 	if err != nil {
-		writeDiscoveryError(w, err)
+		writeDiscoveryError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, discoveryRunResponse{
@@ -230,7 +236,7 @@ func (h *DiscoveryHandler) Daily(w http.ResponseWriter, r *http.Request) {
 	}
 	d, err := h.svc.Daily(r.Context(), day)
 	if err != nil {
-		writeDiscoveryError(w, err)
+		writeDiscoveryError(w, r, err)
 		return
 	}
 	writeDaily(w, d)
@@ -251,7 +257,7 @@ func (h *DiscoveryHandler) Another(w http.ResponseWriter, r *http.Request) {
 	}
 	d, err := h.svc.Another(r.Context(), day)
 	if err != nil {
-		writeDiscoveryError(w, err)
+		writeDiscoveryError(w, r, err)
 		return
 	}
 	writeDaily(w, d)
@@ -280,7 +286,7 @@ func (h *DiscoveryHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	sugs, err := h.svc.Suggestions(r.Context(), status, runID)
 	if err != nil {
-		writeDiscoveryError(w, err)
+		writeDiscoveryError(w, r, err)
 		return
 	}
 	out := suggestionsResponse{Items: make([]suggestionResponse, len(sugs))}
@@ -305,7 +311,7 @@ func (h *DiscoveryHandler) Accept(w http.ResponseWriter, r *http.Request) {
 	}
 	sug, err := h.svc.Accept(r.Context(), id, req.FoodID)
 	if err != nil {
-		writeDiscoveryError(w, err)
+		writeDiscoveryError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, suggestionEnvelope{Suggestion: toSuggestionResponse(sug)})
@@ -335,7 +341,7 @@ func (h *DiscoveryHandler) Reject(w http.ResponseWriter, r *http.Request) {
 	}
 	sug, err := h.svc.Reject(r.Context(), id, req.Reason)
 	if err != nil {
-		writeDiscoveryError(w, err)
+		writeDiscoveryError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, suggestionEnvelope{Suggestion: toSuggestionResponse(sug)})

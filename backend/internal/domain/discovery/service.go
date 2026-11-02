@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"time"
@@ -181,7 +182,7 @@ func (s *Service) execute(ctx context.Context, run *airun.Run, client llm.Client
 	status, errKey, res := airun.StatusError, "error.server", airun.Result{}
 	defer func() {
 		if p := recover(); p != nil {
-			s.d.Logger.ErrorContext(ctx, "discovery.run panic", "run_id", run.ID(), "panic", p)
+			s.d.Logger.ErrorContext(ctx, "discovery.run panic", "run_id", run.ID(), "panic", p, "stack", string(debug.Stack()))
 			status, errKey = airun.StatusError, "error.server"
 		}
 		run.FinishWith(ctx, status, errKey, res)
@@ -212,7 +213,7 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 	if err != nil {
 		return "", res, err
 	}
-	found, err := research(ctx, client, model, s.webSearch(ctx, client, model), RenderPrompt(in), req)
+	found, err := research(ctx, s.d.Logger, client, model, s.webSearch(ctx, client, model), RenderPrompt(in), req)
 	if found.Repaired {
 		res.RepairAttempts = 1
 	}
@@ -223,18 +224,30 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 	if err != nil {
 		return "", res, err
 	}
+	verified = verified[:min(len(verified), maxStored)]
+	// A candidate that cannot be annotated (e.g. a transient DB error) is
+	// discarded; the others keep the paid run.
+	var kept []Verified
+	var anns []*Annotations
+	for _, v := range verified {
+		a, err := s.d.Annotator.Annotate(ctx, v.Draft)
+		if err != nil {
+			if ctx.Err() != nil {
+				return "", res, ctx.Err()
+			}
+			s.d.Logger.WarnContext(ctx, "discovery.annotate failed", "run_id", runID, "host", host(v.Candidate.URL), "error", err)
+			discarded = append(discarded, Discarded{URL: v.Candidate.URL, Reason: ReasonAnnotate})
+			continue
+		}
+		a.Why, a.Cuisine = v.Candidate.Why, v.Candidate.Cuisine
+		kept, anns = append(kept, v), append(anns, a)
+	}
+	verified = kept
 	res.Notes = notes(len(verified), len(found.Candidates), discarded)
 	if len(verified) == 0 {
+		s.d.Logger.WarnContext(ctx, "discovery.run no_results", "run_id", runID,
+			"candidates", len(found.Candidates), "notes", res.Notes)
 		return airun.StatusPartial, res, nil
-	}
-
-	verified = verified[:min(len(verified), maxStored)]
-	anns := make([]*Annotations, len(verified))
-	for i, v := range verified {
-		if anns[i], err = s.d.Annotator.Annotate(ctx, v.Draft); err != nil {
-			return "", res, err
-		}
-		anns[i].Why, anns[i].Cuisine = v.Candidate.Why, v.Candidate.Cuisine
 	}
 	shownOn, err := s.firstShownOn(ctx, req)
 	if err != nil {
