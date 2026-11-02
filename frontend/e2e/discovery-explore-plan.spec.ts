@@ -94,12 +94,18 @@ test("F4-AC4: with one explore recipe a week and quota 1, the generated window h
       .toBe("ok")
 
     const plan = (await (await ctx.get(`/api/plan?start=${start}`)).json()) as {
-      cells: { plate: { components: { food_id: number }[] } | null }[]
+      cells: {
+        plate: {
+          components: { food_id: number; cook_session_id: number | null }[]
+        } | null
+      }[]
     }
     const placed = plan.cells
       .flatMap((c) => c.plate?.components ?? [])
       .filter((c) => c.food_id === fesenjan)
-    expect(placed).toHaveLength(1)
+    // A cook batch spreads over several plates: it is one cooking.
+    expect(placed.length).toBeGreaterThan(0)
+    expect(new Set(placed.map((c) => c.cook_session_id)).size).toBe(1)
 
     const run = (await (
       await ctx.get(`/api/plan/runs/${run_id}`)

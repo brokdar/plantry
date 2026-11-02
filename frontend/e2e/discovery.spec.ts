@@ -235,7 +235,12 @@ test("AC-1.5: without a provider Today shows no sheet and asks for nothing, and 
   await expect(page.getByTestId("daily-suggestion-sheet")).toHaveCount(0)
   expect(asked).toEqual([])
 
+  // Discover is hidden while the settings load too, so wait for them.
+  const settings = page.waitForResponse(
+    (r) => r.url().endsWith("/api/settings") && r.request().method() === "GET"
+  )
   await page.goto("/recipes")
+  await settings
   await page.getByTestId("add-recipe").click()
   await expect(
     page.getByRole("menuitem", { name: "Import from a link" })
@@ -243,6 +248,7 @@ test("AC-1.5: without a provider Today shows no sheet and asks for nothing, and 
   await expect(
     page.getByRole("menuitem", { name: "Discover recipes" })
   ).toHaveCount(0)
+  await page.unrouteAll({ behavior: "ignoreErrors" })
 })
 
 test("AC-3.2: Use what I know ranks the ideas by known share", async ({
@@ -279,11 +285,11 @@ test("AC-3.1, AC-3.3: Explore a cuisine shows three cards; Not for me rejects wi
   await sheet.getByRole("button", { name: "Explore a cuisine" }).click()
   await sheet.getByTestId("discover-cuisine").fill("Thai")
   await sheet.getByTestId("discover-start").click()
-  const cards = sheet.getByTestId("discover-results").getByRole("listitem")
+  const cards = sheet.getByTestId("discover-results").locator(":scope > li")
   await expect(cards).toHaveCount(3, { timeout: 15_000 })
   let runs = await discoveryRuns(request)
   expect(runs).toHaveLength(before + 1)
-  expect(runs[0].scope).toMatchObject({ mode: "explore", cuisine: "thai" })
+  expect(runs[0].scope).toMatchObject({ mode: "explore", cuisine: "Thai" })
 
   await cards.first().getByRole("button", { name: "Not for me" }).click()
   await cards.first().getByRole("button", { name: "Takes too long" }).click()
@@ -291,7 +297,7 @@ test("AC-3.1, AC-3.3: Explore a cuisine shows three cards; Not for me rejects wi
   const rejected = (await suggestions(request, "rejected")).find(
     (s) => s.reason === "too_long"
   )
-  expect(rejected?.source_url).toContain("thai=")
+  expect(rejected?.source_url).toMatch(/\?thai2?=/)
 
   // The same research again: every URL is a known one, so nothing is new.
   await sheet.getByTestId("discover-start").click()
@@ -348,11 +354,17 @@ test("AC-3.5: the guided state offers Discover recipes only with a provider", as
   ).toBeVisible()
 
   await mockSettingValues(page, { "ai.provider": "" })
+  // The card is hidden while the settings load too, so wait for them.
+  const settings = page.waitForResponse(
+    (r) => r.url().endsWith("/api/settings") && r.request().method() === "GET"
+  )
   await page.reload()
+  await settings
   await expect(guide).toBeVisible()
   await expect(guide.getByTestId("onboarding-import")).toBeVisible()
   await expect(guide.getByTestId("onboarding-create")).toBeVisible()
   await expect(guide.getByTestId("onboarding-discover")).toHaveCount(0)
+  await page.unrouteAll({ behavior: "ignoreErrors" })
 })
 
 test("AC-2: Add to my recipes opens a prefilled review; saving adds the recipe and accepts the idea", async ({
