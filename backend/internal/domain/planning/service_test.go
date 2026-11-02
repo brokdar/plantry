@@ -667,9 +667,9 @@ func TestService_EatersByDateAndNewRecipe(t *testing.T) {
 		return e
 	}
 	e = withHistory(t)
-	yes := true
 	req = e.req()
-	req.IncludeNewRecipe = &yes
+	one := 1
+	req.ExploreQuota = &one
 	e.ok(e.generate(req))
 	assert.Equal(t, 1, newRecipes(e), "exactly one never-eaten recipe")
 	e = withHistory(t)
@@ -875,4 +875,40 @@ func TestService_ThinLibraryRegenerateEndsOK(t *testing.T) {
 	}
 	require.NotZero(t, swaps)
 	e.ok(e.regenerate(planning.Scope{Kind: planning.ScopePlate, PlateID: e.window()[key(tue, e.dinner)].ID}))
+}
+
+// B6-AC3: the quota follows plan.explore_per_week, the wizard toggle maps to
+// max(setting, 1) or 0, and a regenerate (the replan's path) forces 0.
+func TestService_ExploreQuota(t *testing.T) {
+	e := newSvcEnv(t)
+	set := testsvc.Settings(e.db)
+	quota := func(on bool) int {
+		q, err := e.svc.WizardQuota(e.ctx, on)
+		require.NoError(t, err)
+		return q
+	}
+	assert.Equal(t, 1, quota(true), "toggle on with setting 0")
+	assert.Zero(t, quota(false))
+	require.NoError(t, set.Set(e.ctx, "plan.explore_per_week", "2"))
+	assert.Equal(t, 2, quota(true), "toggle on follows a larger setting")
+	assert.Zero(t, quota(false), "toggle off with setting 2")
+
+	id := e.generate(e.req())
+	end := e.ok(id)
+	assert.EqualValues(t, 2, e.scope(id)["explore_quota"], "nil follows the setting")
+	var sc planning.Score
+	require.NoError(t, json.Unmarshal([]byte(end.ScoreJSON), &sc))
+	assert.Equal(t, 2, sc.Variety.Explore.Target)
+
+	zero := 0
+	req := e.req()
+	req.ExploreQuota = &zero
+	id = e.generate(req)
+	e.ok(id)
+	assert.NotContains(t, e.scope(id), "explore_quota", "an explicit 0 beats the setting")
+
+	d := e.window()[key(sat, e.dinner)]
+	id = e.regenerate(planning.Scope{Kind: planning.ScopePlate, PlateID: d.ID})
+	e.ok(id)
+	assert.NotContains(t, e.scope(id), "explore_quota", "regenerate forces quota 0")
 }

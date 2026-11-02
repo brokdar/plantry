@@ -24,7 +24,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h2"
+const HeuristicVersion = "h3"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -72,8 +72,9 @@ type Request struct {
 	// EatersByDate (YYYY-MM-DD → eaters, dates in the window) is generate's
 	// guests option (D16).
 	EatersByDate map[string]float64
-	// IncludeNewRecipe nil follows plan.explore_per_week > 0 (D15).
-	IncludeNewRecipe *bool
+	// ExploreQuota is the number of explore recipes to include; nil follows
+	// plan.explore_per_week (D17).
+	ExploreQuota *int
 }
 
 // Deps are the generation service's dependencies. Go runs a generation; nil
@@ -184,28 +185,28 @@ func (s *Service) regenerate(ctx context.Context, req Request, held bool) (int64
 	default:
 		return 0, fmt.Errorf("%w: kind %q", domain.ErrInvalidScope, req.Scope.Kind)
 	}
-	noNew := false
-	req.EatersByDate, req.IncludeNewRecipe = nil, &noNew
+	none := 0
+	req.EatersByDate, req.ExploreQuota = nil, &none
 	return s.start(ctx, airun.KindRegenerate, req, held)
 }
 
 // job is a started generation's input.
 type job struct {
-	kind        airun.Kind
-	w           window.Window
-	today       time.Time
-	chooser     Chooser
-	name        airun.Chooser
-	scope       Scope
-	target      Target
-	rows        plate.RowSet
-	side        *SideSwap
-	avoid       []int64
-	from, to    time.Time
-	eaters      map[string]float64
-	includeNew  bool
-	instruction string
-	kept        int
+	kind         airun.Kind
+	w            window.Window
+	today        time.Time
+	chooser      Chooser
+	name         airun.Chooser
+	scope        Scope
+	target       Target
+	rows         plate.RowSet
+	side         *SideSwap
+	avoid        []int64
+	from, to     time.Time
+	eaters       map[string]float64
+	exploreQuota int
+	instruction  string
+	kept         int
 }
 
 func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held bool) (int64, error) {
@@ -248,7 +249,7 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 	if err != nil {
 		return 0, err
 	}
-	includeNew, err := s.includeNew(ctx, req.IncludeNewRecipe)
+	quota, err := s.exploreQuota(ctx, req.ExploreQuota)
 	if err != nil {
 		return 0, err
 	}
@@ -271,7 +272,7 @@ func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held 
 	if kind == airun.KindGenerate {
 		j.eaters = req.EatersByDate
 	}
-	j.includeNew, j.instruction = includeNew, req.Instruction
+	j.exploreQuota, j.instruction = quota, req.Instruction
 	scopeJSON, err := json.Marshal(j.record())
 	if err != nil {
 		return 0, err
@@ -344,12 +345,22 @@ func ready(ctx context.Context, c Chooser) error {
 	return nil
 }
 
-func (s *Service) includeNew(ctx context.Context, asked *bool) (bool, error) {
+// exploreQuota is the asked quota, else plan.explore_per_week (D17).
+func (s *Service) exploreQuota(ctx context.Context, asked *int) (int, error) {
 	if asked != nil {
 		return *asked, nil
 	}
+	return plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanExplorePerWeek)
+}
+
+// WizardQuota maps the plan wizard's "include a new recipe" toggle to a
+// quota: on is the setting, at least 1; off is 0 (D17).
+func (s *Service) WizardQuota(ctx context.Context, on bool) (int, error) {
+	if !on {
+		return 0, nil
+	}
 	n, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanExplorePerWeek)
-	return n > 0, err
+	return max(n, 1), err
 }
 
 func validateEaters(m map[string]float64, w window.Window) error {
@@ -542,24 +553,24 @@ func (s *Service) resolveSide(ctx context.Context, w window.Window, today time.T
 // scopeRecord is a run's scope_json: the request's scope, its closure
 // expansion and the confirmed plates on its cells (D6).
 type scopeRecord struct {
-	Kind             ScopeKind          `json:"kind"`
-	Date             string             `json:"date,omitempty"`
-	PlateID          int64              `json:"plate_id,omitempty"`
-	ComponentID      int64              `json:"component_id,omitempty"`
-	From             string             `json:"from,omitempty"`
-	To               string             `json:"to,omitempty"`
-	PlateIDs         []int64            `json:"plate_ids"`
-	SessionIDs       []int64            `json:"session_ids"`
-	KeptConfirmed    int                `json:"kept_confirmed"`
-	EatersByDate     map[string]float64 `json:"eaters_by_date,omitempty"`
-	IncludeNewRecipe bool               `json:"include_new_recipe,omitempty"`
+	Kind          ScopeKind          `json:"kind"`
+	Date          string             `json:"date,omitempty"`
+	PlateID       int64              `json:"plate_id,omitempty"`
+	ComponentID   int64              `json:"component_id,omitempty"`
+	From          string             `json:"from,omitempty"`
+	To            string             `json:"to,omitempty"`
+	PlateIDs      []int64            `json:"plate_ids"`
+	SessionIDs    []int64            `json:"session_ids"`
+	KeptConfirmed int                `json:"kept_confirmed"`
+	EatersByDate  map[string]float64 `json:"eaters_by_date,omitempty"`
+	ExploreQuota  int                `json:"explore_quota,omitempty"`
 }
 
 func (j job) record() scopeRecord {
 	r := scopeRecord{
 		Kind: j.scope.Kind, PlateID: j.scope.PlateID, ComponentID: j.scope.ComponentID,
 		PlateIDs: nonNil(j.rows.PlateIDs), SessionIDs: nonNil(j.rows.SessionIDs), KeptConfirmed: j.kept,
-		EatersByDate: j.eaters, IncludeNewRecipe: j.includeNew,
+		EatersByDate: j.eaters, ExploreQuota: j.exploreQuota,
 	}
 	if j.scope.Kind == ScopeDay {
 		r.Date = j.scope.Date.Format(time.DateOnly)
@@ -640,7 +651,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	if j.side != nil || hasOpenCell(base, j.target) {
 		s.d.Progress.setStage(runID, StageChoosing)
 		prop, err = j.chooser.Choose(ctx, ChooseInput{
-			State: base, Target: j.target, EatersByDate: j.eaters, IncludeNewRecipe: j.includeNew,
+			State: base, Target: j.target, EatersByDate: j.eaters, ExploreQuota: j.exploreQuota,
 			Avoid: j.avoid, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
 			Stage: func(st Stage) { s.d.Progress.setStage(runID, st) },
 		})
@@ -674,7 +685,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		return fail("saving", changedDuringRun(err))
 	}
 
-	score := ComputeScore(merged, j.target, issues)
+	score := ComputeScore(merged, j.target, issues, j.exploreQuota)
 	violations := violationsOf(issues)
 	end := RunEnd{Status: airun.StatusOK, Notes: prop.Notes, RepairAttempts: prop.RepairAttempts}
 	if len(violations) > 0 {

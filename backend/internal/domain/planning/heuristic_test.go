@@ -103,7 +103,7 @@ func TestHeuristic_BatchCooker(t *testing.T) {
 	m := planning.Merge(s, tgt, p)
 	issues := planning.Check(m, tgt)
 	assert.Empty(t, violations(issues))
-	sc := planning.ComputeScore(m, tgt, issues)
+	sc := planning.ComputeScore(m, tgt, issues, 0)
 	assert.InDelta(t, 1.0, sc.Coverage, 1e-9)
 	for d, n := range sc.CookOccasions.PerDay {
 		assert.LessOrEqual(t, n, 1, d)
@@ -142,7 +142,7 @@ func TestHeuristic_CooksAtDinnerAfterTheFirstDay(t *testing.T) {
 func TestHeuristic_Deterministic(t *testing.T) {
 	in := func() planning.ChooseInput {
 		s := batchCooker()
-		return planning.ChooseInput{State: s, Target: windowTarget(s), EatersByDate: map[string]float64{sun: 2}, IncludeNewRecipe: true}
+		return planning.ChooseInput{State: s, Target: windowTarget(s), EatersByDate: map[string]float64{sun: 2}, ExploreQuota: 1}
 	}
 	first := choose(t, in())
 	for range 5 {
@@ -251,8 +251,9 @@ func TestHeuristic_Diet(t *testing.T) {
 	assert.Empty(t, codes(planning.Check(m, windowTarget(s)), "H5"), "at most 2 meat days")
 }
 
-// B6-AC6 (pure part).
-func TestHeuristic_IncludeNewRecipePlacesExactlyOne(t *testing.T) {
+// exploreState is the batch cooker with mains 104-108 eaten long ago, so the
+// other mains (and the explore-tagged ones) were never eaten.
+func exploreState(explore ...int64) planning.State {
 	s := batchCooker()
 	for i, id := range []int64{104, 105, 106, 107, 108} {
 		f := s.Foods[id]
@@ -260,17 +261,65 @@ func TestHeuristic_IncludeNewRecipePlacesExactlyOne(t *testing.T) {
 		f.LastEaten = &eaten
 		s.Foods[id] = f
 	}
-	isNew := func(p planning.Proposal) int {
-		n := 0
-		for _, ps := range p.Sessions {
-			if f := s.Foods[ps.FoodID]; f.Role == food.RoleMain && f.LastEaten == nil {
-				n++
+	for _, id := range explore {
+		f := s.Foods[id]
+		f.ExploreTag = true
+		s.Foods[id] = f
+	}
+	return s
+}
+
+func cookedMains(s planning.State, p planning.Proposal) (explore, never int) {
+	for _, ps := range p.Sessions {
+		if f := s.Foods[ps.FoodID]; f.Role == food.RoleMain {
+			if f.Explore() {
+				explore++
+			} else if f.LastEaten == nil {
+				never++
 			}
 		}
-		return n
 	}
-	assert.Equal(t, 1, isNew(choose(t, planning.ChooseInput{State: s, Target: windowTarget(s), IncludeNewRecipe: true})))
-	assert.Zero(t, isNew(choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})))
+	return explore, never
+}
+
+func exploreScore(s planning.State, p planning.Proposal, quota int) planning.Score {
+	tgt := windowTarget(s)
+	m := planning.Merge(s, tgt, p)
+	return planning.ComputeScore(m, tgt, planning.Check(m, tgt), quota)
+}
+
+// B6-AC1
+func TestHeuristic_ExploreQuotaPlacesExploreOnce(t *testing.T) {
+	s := exploreState(109)
+	in := planning.ChooseInput{State: s, Target: windowTarget(s), ExploreQuota: 1}
+	p := choose(t, in)
+	explore, never := cookedMains(s, p)
+	assert.Equal(t, 1, explore)
+	assert.Zero(t, never, "no filler when the quota is met")
+	assert.Empty(t, p.Notes)
+	assert.Equal(t, planning.ExploreMeet{Target: 1, Placed: 1}, exploreScore(s, p, 1).Variety.Explore)
+	for range 3 {
+		assert.Equal(t, p, choose(t, in), "deterministic")
+	}
+}
+
+// B6-AC2
+func TestHeuristic_ExploreQuotaShortfallFillsWithNeverEaten(t *testing.T) {
+	s := exploreState(109)
+	p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s), ExploreQuota: 2})
+	explore, never := cookedMains(s, p)
+	assert.Equal(t, 1, explore)
+	assert.Equal(t, 1, never)
+	assert.Contains(t, p.Notes, "1 of 2")
+	assert.Equal(t, planning.ExploreMeet{Target: 2, Placed: 1}, exploreScore(s, p, 2).Variety.Explore)
+
+	de := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s), ExploreQuota: 2, Locale: "de"})
+	assert.Contains(t, de.Notes, "Entdecker-Quote")
+
+	p = choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+	explore, never = cookedMains(s, p)
+	assert.Zero(t, explore+never, "quota 0 forces nothing")
+	assert.Empty(t, p.Notes)
 }
 
 // B6-AC6 (pure part).

@@ -47,17 +47,23 @@ type CookOccasions struct {
 }
 
 // Variety counts the distinct mains cooked in the target outside routine
-// cells, the H8 repeats
-// among them and the never-eaten ones (D15).
+// cells, the H8 repeats among them and the explore quota (D17).
 type Variety struct {
-	Distinct   int `json:"distinct"`
-	Repeats    int `json:"repeats"`
-	NewRecipes int `json:"new_recipes"`
+	Distinct int         `json:"distinct"`
+	Repeats  int         `json:"repeats"`
+	Explore  ExploreMeet `json:"explore"`
+}
+
+// ExploreMeet is the "explore quota met" component: the quota asked for and
+// the explore recipes the target cooks.
+type ExploreMeet struct {
+	Target int `json:"target"`
+	Placed int `json:"placed"`
 }
 
 // ComputeScore scores the target of s (usually after Merge) given the
 // issues Check returned for it.
-func ComputeScore(s State, t Target, issues []Issue) Score {
+func ComputeScore(s State, t Target, issues []Issue, exploreQuota int) Score {
 	x := newIndex(s, t)
 	sc := Score{
 		Coverage:       x.coverage(),
@@ -65,6 +71,7 @@ func ComputeScore(s State, t Target, issues []Issue) Score {
 		MacroDeviation: x.macroDeviation(),
 		CookOccasions:  x.cookOccasions(),
 	}
+	sc.Variety.Explore.Target = exploreQuota
 	for _, is := range issues {
 		if is.Severity == SeverityViolation {
 			sc.HardViolations[is.Rule]++
@@ -82,8 +89,8 @@ func ComputeScore(s State, t Target, issues []Issue) Score {
 		sc.PreferenceFit += f.LikeScore
 		if varietyRole(f.Role) && !c.routine && !mains[f.ID] {
 			mains[f.ID] = true
-			if f.LastEaten == nil {
-				sc.Variety.NewRecipes++
+			if f.Explore() {
+				sc.Variety.Explore.Placed++
 			}
 		}
 		sc.WastePortions += c.waste

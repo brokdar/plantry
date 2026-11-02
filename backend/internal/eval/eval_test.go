@@ -19,7 +19,7 @@ import (
 
 // The scenarios of spec §8.4 plus the confirmed-cook repros.
 var specScenarios = []string{
-	"away_thu_fri", "confirmed_cook_empty_cell", "confirmed_cook_no_surplus", "family_daily", "many_none_cells", "replan_one_day",
+	"away_thu_fri", "confirmed_cook_empty_cell", "confirmed_cook_no_surplus", "explore_quota", "family_daily", "many_none_cells", "replan_one_day",
 	"single_batch_cooker", "small_library_h8", "vegetarian_variety",
 }
 
@@ -77,7 +77,7 @@ func TestHeuristicHasNoHardViolations(t *testing.T) {
 			assert.Contains(t, names(r.Expectations), ExpectNoViolations)
 			require.NotNil(t, r.Score)
 			assert.Empty(t, r.Score.HardViolations)
-			assert.Equal(t, "h2", r.PromptVersion)
+			assert.Equal(t, "h3", r.PromptVersion)
 			assert.Equal(t, Tokens{}, r.Tokens, "the heuristic calls no model")
 			if r.Scenario == "small_library_h8" {
 				assert.Contains(t, names(r.Expectations), ExpectMinRepeats, "H8 relaxation is pinned")
@@ -131,7 +131,7 @@ func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 				assert.Equal(t, 0, r.RepairAttempts)
 			}
 			assert.Equal(t, "fake", r.Model)
-			assert.Equal(t, "p2", r.PromptVersion)
+			assert.Equal(t, "p3", r.PromptVersion)
 			// A run that fills cells asks the model; one with nothing to
 			// fill (away_thu_fri) may not.
 			if r.Plates > 0 {

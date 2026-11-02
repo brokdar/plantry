@@ -21,6 +21,7 @@ type planGenerateService interface {
 	Run(ctx context.Context, id int64) (*planning.RunView, error)
 	PreviewReplan(ctx context.Context, q planning.ReplanQuery) (*planning.ReplanPreview, error)
 	Replan(ctx context.Context, req planning.ReplanRequest) (*planning.ReplanResult, error)
+	WizardQuota(ctx context.Context, on bool) (int, error)
 }
 
 // PlanGenerateHandler starts generations and reports their runs (spec §3.2,
@@ -73,7 +74,15 @@ func (h *PlanGenerateHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	req.EatersByDate, req.IncludeNewRecipe = body.EatersByDate, body.IncludeNewRecipe
+	req.EatersByDate = body.EatersByDate
+	if body.IncludeNewRecipe != nil {
+		q, err := h.svc.WizardQuota(r.Context(), *body.IncludeNewRecipe)
+		if err != nil {
+			writePlanError(w, err)
+			return
+		}
+		req.ExploreQuota = &q
+	}
 	h.started(w, r, h.svc.Generate, req)
 }
 

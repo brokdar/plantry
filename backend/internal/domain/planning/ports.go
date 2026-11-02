@@ -29,8 +29,9 @@ type ChooseInput struct {
 	// EatersByDate (YYYY-MM-DD → eaters) overrides the household portions
 	// of a day's plates (D16).
 	EatersByDate map[string]float64
-	// IncludeNewRecipe asks for one never-eaten recipe (D15).
-	IncludeNewRecipe bool
+	// ExploreQuota is how many explore recipes the plan should include
+	// (D17); 0 forces none.
+	ExploreQuota int
 	// Avoid are the recipes of the rows the target replaces: a regenerate
 	// should not bring them back.
 	Avoid []int64

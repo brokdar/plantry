@@ -134,7 +134,13 @@ type FoodFacts struct {
 	TimesEaten8Weeks int
 	// LikeScore is liked minus disliked tag hits (D19).
 	LikeScore float64
+	// ExploreTag is set for a recipe tagged explore (Phase 5 discovery).
+	ExploreTag bool
 }
+
+// Explore reports whether the food is an explore candidate: tagged explore
+// and never eaten (D17).
+func (f FoodFacts) Explore() bool { return f.ExploreTag && f.LastEaten == nil }
 
 // Composed reports whether the food is a recipe.
 func (f FoodFacts) Composed() bool { return f.Kind == food.KindComposed }
