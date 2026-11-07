@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useRef } from "react"
 import { useTranslation } from "react-i18next"
 
 import type { PlateFeedbackStatus, PutFeedbackInput } from "@/lib/api/feedback"
@@ -41,11 +42,19 @@ export function useRatePlate() {
   const { t } = useTranslation()
   const record = useRecordFeedback()
   const clear = useClearFeedback()
+  // The plate already sent: mutation state updates a tick late, so a double
+  // click would otherwise send the answer twice.
+  const sent = useRef<number | null>(null)
 
   function rate(plateId: number, status: PlateFeedbackStatus) {
+    if (sent.current === plateId) return
+    sent.current = plateId
     record.mutate(
       { plateId, input: { status } },
       {
+        onError: () => {
+          sent.current = null
+        },
         onSuccess: () => {
           toast(t("today.rate.saved"), {
             duration: UNDO_MS,
@@ -53,6 +62,7 @@ export function useRatePlate() {
               label: t("common.undo"),
               onClick: () => {
                 record.reset()
+                sent.current = null
                 clear.mutate(plateId)
               },
             },

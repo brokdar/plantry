@@ -64,10 +64,28 @@ export function TodayPage({ date, today }: TodayPageProps) {
       </Frame>
     )
   }
-  return <TodayLoaded data={query.data} today={today} />
+  return (
+    <TodayLoaded
+      data={query.data}
+      date={date}
+      today={today}
+      stale={query.isPlaceholderData}
+    />
+  )
 }
 
-function TodayLoaded({ data, today }: { data: Today; today: string }) {
+function TodayLoaded({
+  data,
+  date,
+  today,
+  stale,
+}: {
+  data: Today
+  /** The day asked for; `data` is still the previous day while `stale`. */
+  date: string
+  today: string
+  stale: boolean
+}) {
   const { i18n } = useTranslation()
   const header = useMemo(
     () => buildTodayHeader(data, today, i18n),
@@ -86,10 +104,16 @@ function TodayLoaded({ data, today }: { data: Today; today: string }) {
   return (
     <Frame>
       <BatchHighlightProvider>
-        <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_17rem] lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12">
+        <div
+          aria-busy={stale}
+          className={cn(
+            "grid gap-8 transition-opacity duration-150 ease-out md:grid-cols-[minmax(0,1fr)_17rem] lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-12",
+            stale && "opacity-60"
+          )}
+        >
           <div className="flex min-w-0 flex-col gap-6">
             <Verdict
-              date={data.date}
+              date={date}
               today={today}
               dateLine={header.dateLine}
               headline={header.headline}
@@ -185,7 +209,12 @@ function NoPlanCard({
       data-testid="today-no-plan"
     >
       <p className="text-body text-ink">{t("today.no_plan.body")}</p>
-      <Button asChild className="h-11 px-4 md:pointer-fine:h-9">
+      {/* Below the recipe target "Add recipes" is the one primary action. */}
+      <Button
+        asChild
+        variant={wizard ? "default" : "outline"}
+        className="h-11 px-4 md:pointer-fine:h-9"
+      >
         <Link
           to={wizard ? "/plan/new" : "/plan"}
           search={{ start: windowStart }}

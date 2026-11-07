@@ -7,6 +7,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Not `inline`, so the utilities read the variable and the phone override
+   below reaches every `text-body` / `text-small`. */
+@theme {
+  --text-small: 0.8125rem;
+  --text-body: 0.9375rem;
+}
+
+/* Phones: body 16 px (the iOS input-zoom floor, Material's body size) and
+   small 14 px. Caption stays 12 px. */
+@media (max-width: 47.99rem) {
+  :root {
+    --text-small: 0.875rem;
+    --text-body: 1rem;
+  }
+}
+
 @theme inline {
   --font-sans: "Source Sans 3 Variable", system-ui, sans-serif;
   --font-heading: "Newsreader Variable", Georgia, serif;
@@ -37,10 +53,9 @@
   --color-warning: var(--warning);
   --color-danger: var(--danger);
 
-  /* Type scale — UX_DESIGN_SPEC §3.2 (fixed rem, ratio ~1.2) */
+  /* Type scale — UX_DESIGN_SPEC §3.2 (fixed rem, ratio ~1.2). Small and body
+     are in the plain @theme block above so phones can override them. */
   --text-caption: 0.75rem;
-  --text-small: 0.8125rem;
-  --text-body: 0.9375rem;
   --text-h3: 1.1875rem;
   --text-h2: 1.4375rem;
   --text-h1: 1.75rem;

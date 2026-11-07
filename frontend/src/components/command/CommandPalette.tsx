@@ -1,11 +1,16 @@
 import { useNavigate } from "@tanstack/react-router"
 import { Command } from "cmdk"
 import { CalendarRange, LayoutList, Repeat, Search } from "lucide-react"
-import { useId, useMemo, useState } from "react"
+import { useId, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import type { ApplyConflict, Preset } from "@/lib/api/presets"
 import {
@@ -40,32 +45,57 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  // The palette opens from a shortcut, so Radix has no trigger to give focus
+  // back to: remember what held it and return it on close.
+  const returnTo = useRef<Element | null>(null)
 
   function close() {
     onOpenChange(false)
   }
 
+  // Leaving for another page or dialog: focus belongs there, not back here.
+  function closeAndLeave() {
+    returnTo.current = null
+    close()
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl gap-0 bg-panel p-0 text-ink">
+      <DialogContent
+        className="max-w-xl gap-0 bg-panel p-0 text-ink"
+        onOpenAutoFocus={() => {
+          returnTo.current = document.activeElement
+        }}
+        onCloseAutoFocus={(e) => {
+          const target = returnTo.current
+          if (target instanceof HTMLElement && target.isConnected) {
+            e.preventDefault()
+            target.focus()
+          }
+          returnTo.current = null
+        }}
+      >
         <DialogTitle className="sr-only">{t("palette.title")}</DialogTitle>
+        <DialogDescription className="sr-only">
+          {t("palette.description")}
+        </DialogDescription>
         {/* Mounted per opening, so the search and the picked routine reset. */}
         {open && (
           <PaletteBody
             defaultTargetDate={defaultTargetDate}
             onNavigate={(to) => {
-              close()
+              closeAndLeave()
               void navigate({ to: to as never })
             }}
             onOpenLibrary={() => {
-              close()
+              closeAndLeave()
               void navigate({
                 to: "/settings/$section",
                 params: { section: "meals" },
               })
             }}
             onOpenCopyWeek={() => {
-              close()
+              closeAndLeave()
               onOpenCopyWeek()
             }}
             onDone={close}
@@ -93,6 +123,7 @@ function PaletteBody({
   const [query, setQuery] = useState("")
   const [routine, setRoutine] = useState<Preset | null>(null)
   const presets = usePresets({ search: query || undefined, sort: "recent" })
+  const routines = presets.data?.items ?? []
 
   if (routine) {
     return (
@@ -118,7 +149,6 @@ function PaletteBody({
           onValueChange={setQuery}
           placeholder={t("palette.search_placeholder")}
           className="min-h-9 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
-          autoFocus
         />
       </div>
       <Command.List className="max-h-[60vh] overflow-y-auto p-2">
@@ -126,29 +156,31 @@ function PaletteBody({
           {t("palette.no_results")}
         </Command.Empty>
 
-        <Command.Group
-          heading={t("palette.section_routines")}
-          className={groupClass}
-        >
-          {(presets.data?.items ?? []).map((preset) => (
-            <Command.Item
-              key={preset.id}
-              value={`routine-${preset.id}-${preset.name}`}
-              onSelect={() => setRoutine(preset)}
-              className={itemClass}
-            >
-              <Repeat
-                className="size-4 text-ink-muted"
-                strokeWidth={1.5}
-                aria-hidden
-              />
-              <span className="flex-1 truncate">{preset.name}</span>
-              <span className="text-caption text-ink-muted tabular-nums">
-                {t("routines.meals_count", { count: preset.plates.length })}
-              </span>
-            </Command.Item>
-          ))}
-        </Command.Group>
+        {routines.length > 0 && (
+          <Command.Group
+            heading={t("palette.section_routines")}
+            className={groupClass}
+          >
+            {routines.map((preset) => (
+              <Command.Item
+                key={preset.id}
+                value={`routine-${preset.id}-${preset.name}`}
+                onSelect={() => setRoutine(preset)}
+                className={itemClass}
+              >
+                <Repeat
+                  className="size-4 text-ink-muted"
+                  strokeWidth={1.5}
+                  aria-hidden
+                />
+                <span className="flex-1 truncate">{preset.name}</span>
+                <span className="text-caption text-ink-muted tabular-nums">
+                  {t("routines.meals_count", { count: preset.plates.length })}
+                </span>
+              </Command.Item>
+            ))}
+          </Command.Group>
+        )}
 
         <Command.Group
           heading={t("palette.section_actions")}

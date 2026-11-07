@@ -151,7 +151,7 @@ All text and badge pairs meet WCAG AA (≥4.5:1 for text, ≥3:1 for large text 
 
 Both are self-hosted via `@fontsource-variable` (no Google Fonts call from a LAN app). Manrope and Inter are removed.
 
-**Scale:** fixed rem, ratio about 1.2. Body 15 px (0.9375 rem), small 13 px, caption 12 px, h3 19 px, h2 23 px, h1 28 px (Newsreader 600), and the Today headline 26 px on phone. Line length for prose (recipe notes, instructions) is capped at 68ch. Labels use sentence case; there are no all-caps labels.
+**Scale:** fixed rem, ratio about 1.2. Body 15 px (0.9375 rem) and small 13 px from 768 px, 16 px and 14 px on phones (the iOS input-zoom floor and Material's body size), caption 12 px, h3 19 px, h2 23 px, h1 28 px (Newsreader 600), and the Today headline at the h2 size (23 px) on phone. Line length for prose (recipe notes, instructions) is capped at 68ch. Labels use sentence case; there are no all-caps labels.
 
 ### 3.3 Shape, spacing, elevation
 

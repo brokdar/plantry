@@ -19,13 +19,20 @@ export async function apiFetch<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: {
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...init?.headers,
+      },
+    })
+  } catch (err) {
+    // An abort is the caller's own doing; anything else is the network.
+    if (err instanceof DOMException && err.name === "AbortError") throw err
+    throw new ApiError(0, "error.network")
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({
       message_key: "error.server",

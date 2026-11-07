@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router"
+import { useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router"
 import { X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -72,8 +72,18 @@ export function PlanWizard({ start }: { start?: string }) {
   const profile = useProfile()
   const presets = usePresets(PRESET_PARAMS)
 
-  /** Back to the board; with a run it follows the generation (D35). */
+  const router = useRouter()
+  const canGoBack = useCanGoBack()
+
+  /** Cancelling returns to where the wizard was opened (APG dialog pattern:
+   *  focus goes back to the invoker); a fresh tab or a deep link has no such
+   *  place, so it lands on the board. With a run it follows the generation
+   *  on the board (D35). */
   function close(run?: number) {
+    if (run === undefined && canGoBack) {
+      router.history.back()
+      return
+    }
     void navigate({
       to: "/plan",
       search: { start: plan.data?.window.start ?? start, run },

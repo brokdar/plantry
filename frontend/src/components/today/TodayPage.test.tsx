@@ -363,6 +363,40 @@ describe("TodayPage", () => {
     )
   })
 
+  it("sends a double-clicked answer once and keeps focus on the page", async () => {
+    const user = userEvent.setup()
+    vi.mocked(putFeedback).mockResolvedValue({
+      plate_id: 1,
+      status: "loved",
+      rated_at: "2026-11-02T10:00:00Z",
+    })
+    vi.mocked(getToday).mockResolvedValue(mockTodayByVerdict.nothing_to_cook)
+    // As in the app, the page sits inside AppShell's <main id="main">.
+    renderWithRouter(
+      <main id="main">
+        <TodayPage
+          date={mockTodayByVerdict.nothing_to_cook.date}
+          today={MONDAY}
+        />
+      </main>
+    )
+
+    const question = await screen.findByTestId("today-rate")
+    await user.dblClick(
+      within(question).getByRole("button", { name: "Loved it" })
+    )
+    expect(putFeedback).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole("heading", { level: 1 })).toHaveFocus()
+  })
+
+  it("marks the selected day in the week strip by more than colour", async () => {
+    renderToday(mockTodayByVerdict.nothing_to_cook)
+    const strip = await screen.findByRole("navigation", { name: "This week" })
+    const [monday, , selected] = within(strip).getAllByRole("link")
+    expect(selected).toHaveClass("ring-1", "ring-accent")
+    expect(monday).not.toHaveClass("ring-accent")
+  })
+
   it("the week strip links each day to the plan at that day", async () => {
     renderToday(mockTodayByVerdict.nothing_to_cook)
     const strip = await screen.findByRole("navigation", { name: "This week" })

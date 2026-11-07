@@ -18,5 +18,8 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       retry: retryTransient,
     },
+    // Offline, a save fails at once (error.network toast) instead of pausing
+    // unseen until the connection returns: nothing is queued (online-only).
+    mutations: { networkMode: "always" },
   },
 })

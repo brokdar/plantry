@@ -16,10 +16,19 @@ import {
 import { renderWithRouter } from "@/test/render"
 
 const navigateMock = vi.hoisted(() => vi.fn())
-vi.mock("@tanstack/react-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@tanstack/react-router")>()),
-  useNavigate: () => navigateMock,
-}))
+const historyMock = vi.hoisted(() => ({ canGoBack: false, back: vi.fn() }))
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-router")>()
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+    useCanGoBack: () => historyMock.canGoBack,
+    useRouter: () => ({
+      ...actual.useRouter(),
+      history: { back: historyMock.back },
+    }),
+  }
+})
 
 vi.mock("@/lib/api/plan", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/plan")>()),
@@ -538,6 +547,18 @@ describe("PlanWizard", () => {
       to: "/plan",
       search: { start: START, run: undefined },
     })
+  })
+
+  it("closing returns to where the wizard was opened when the app has history", async () => {
+    historyMock.canGoBack = true
+    try {
+      const user = await openWizard()
+      await user.keyboard("{Escape}")
+      expect(historyMock.back).toHaveBeenCalledOnce()
+      expect(navigateMock).not.toHaveBeenCalled()
+    } finally {
+      historyMock.canGoBack = false
+    }
   })
 
   it("Escape with unsaved edits asks first; Keep editing stays, Discard closes", async () => {

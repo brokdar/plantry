@@ -53,5 +53,7 @@ describe("/today setup guard (F5-AC5)", () => {
     ) => { date?: string }
     expect(validate({ date: "2026-11-02" })).toEqual({ date: "2026-11-02" })
     expect(validate({ date: "monday" })).toEqual({ date: undefined })
+    // Well-formed but not a day on the calendar.
+    expect(validate({ date: "2026-02-30" })).toEqual({ date: undefined })
   })
 })

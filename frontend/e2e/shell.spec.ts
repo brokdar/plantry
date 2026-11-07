@@ -116,6 +116,41 @@ test.describe("AppShell", () => {
     await page.unrouteAll({ behavior: "ignoreErrors" })
   })
 
+  test("each section sets the page title and moves focus into the page", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto("/today")
+    await expect(page).toHaveTitle("Today · Plantry")
+
+    await page
+      .getByTestId("sidenav")
+      .getByRole("link", { name: "Shop" })
+      .click()
+    await expect(page).toHaveTitle("Shop · Plantry")
+    // Not left on the rail link that was clicked.
+    await expect
+      .poll(() =>
+        page.evaluate(() => !!document.activeElement?.closest("#main"))
+      )
+      .toBe(true)
+  })
+
+  test("Escape in the palette returns focus to where it was", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto("/today")
+    const next = page.getByRole("link", { name: "Next day" })
+    await next.focus()
+
+    const palette = await openPalette(page)
+    await expect(palette.getByRole("combobox")).toBeFocused()
+    await page.keyboard.press("Escape")
+    await expect(palette).toHaveCount(0)
+    await expect(next).toBeFocused()
+  })
+
   // F10-AC3: the palette's go-to entries.
   test("the palette keeps Ingredients; Import, Calendar and Archive are gone", async ({
     page,
@@ -225,5 +260,20 @@ test.describe("AppShell", () => {
     await expect(gear).toBeVisible()
     await gear.click()
     await expect(page).toHaveURL(/\/settings/)
+  })
+
+  test("going offline shows a banner; reconnecting clears it", async ({
+    page,
+    context,
+  }) => {
+    await page.goto("/today")
+    const banner = page.getByTestId("offline-banner")
+    await expect(banner).toBeEmpty()
+
+    await context.setOffline(true)
+    await expect(banner).toContainText("You're offline")
+
+    await context.setOffline(false)
+    await expect(banner).toBeEmpty()
   })
 })
