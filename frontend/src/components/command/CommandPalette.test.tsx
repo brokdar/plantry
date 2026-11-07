@@ -60,6 +60,17 @@ describe("CommandPalette", () => {
     ])
   })
 
+  test("shows no Routines group while there are no routines", async () => {
+    vi.mocked(getPresets).mockResolvedValue({
+      items: [],
+      total: 0,
+      known_tags: [],
+    })
+    renderPalette()
+    expect(await screen.findByText("Copy a previous week…")).toBeInTheDocument()
+    expect(screen.queryByText("Routines")).toBeNull()
+  })
+
   test("lists routines, actions and the go-to entries", async () => {
     renderPalette()
     expect(

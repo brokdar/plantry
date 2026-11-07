@@ -29,15 +29,26 @@ export function BatchBadge({
   className,
   ...content
 }: BatchBadgeProps) {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { highlight } = useBatchHighlight()
   const dashed = content.variant === "surplus" || content.variant === "toFreeze"
+  // "2/2" alone is cryptic and read as "2 slash 2": say what it is.
+  const spoken =
+    content.variant === "leftover" || content.variant === "frozen"
+      ? t(
+          content.variant === "frozen"
+            ? "plan.cell.speech_frozen"
+            : "plan.cell.speech_leftover",
+          { position: content.position, meals: content.meals }
+        )
+      : null
 
   return (
     <span
       data-batch-badge=""
       data-variant={content.variant}
       data-colour={colour}
+      title={spoken ?? undefined}
       onPointerEnter={() => highlight(sessionId, colour)}
       className={cn(
         "inline-flex items-center gap-1 rounded-tag border px-2 py-0.5 text-caption font-semibold whitespace-nowrap tabular-nums",
@@ -47,11 +58,18 @@ export function BatchBadge({
         className
       )}
     >
-      {content.variant === "frozen" && (
-        <Snowflake className="size-3" strokeWidth={1.5} aria-hidden="true" />
-      )}
-      <BadgeText content={content} text={batchBadgeText(content, i18n)} />
-      {suffix && ` · ${suffix}`}
+      {spoken && <span className="sr-only">{spoken}</span>}
+      <span
+        data-batch-badge-text=""
+        aria-hidden={spoken ? true : undefined}
+        className="inline-flex items-center gap-1"
+      >
+        {content.variant === "frozen" && (
+          <Snowflake className="size-3" strokeWidth={1.5} aria-hidden="true" />
+        )}
+        <BadgeText content={content} text={batchBadgeText(content, i18n)} />
+        {suffix && ` · ${suffix}`}
+      </span>
     </span>
   )
 }

@@ -34,7 +34,7 @@ function platesShown(container: HTMLElement) {
     .filter((cell) => cell.querySelector("[data-batch-badge]"))
     .map((cell) => [
       cell.getAttribute("data-cell-key"),
-      cell.querySelector("[data-batch-badge]")?.textContent,
+      cell.querySelector("[data-batch-badge-text]")?.textContent,
     ])
     .sort()
 }

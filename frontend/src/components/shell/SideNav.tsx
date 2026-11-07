@@ -39,7 +39,7 @@ export function SideNav({ collapsed, onToggle }: SideNavProps) {
   const [animate, setAnimate] = useState(false)
 
   return (
-    <aside
+    <div
       className={cn(
         "hide-scrollbar hidden h-screen shrink-0 flex-col overflow-y-auto md:flex",
         "sticky top-0 left-0 border-r border-line bg-panel-sunken",
@@ -140,6 +140,6 @@ export function SideNav({ collapsed, onToggle }: SideNavProps) {
           </button>
         )}
       </div>
-    </aside>
+    </div>
   )
 }

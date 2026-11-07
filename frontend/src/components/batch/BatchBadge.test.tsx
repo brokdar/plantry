@@ -72,13 +72,47 @@ const cases: Array<{
 describe("BatchBadge texts (F2-AC2)", () => {
   it.each(cases)("$props.variant → en $en", ({ props, en }) => {
     const { container } = render(<BatchBadge {...props} />)
-    expect(container.querySelector("[data-batch-badge]")?.textContent).toBe(en)
+    expect(
+      container.querySelector("[data-batch-badge-text]")?.textContent
+    ).toBe(en)
   })
 
   it.each(cases)("$props.variant → de $de", async ({ props, de }) => {
     await act(() => i18n.changeLanguage("de"))
     const { container } = render(<BatchBadge {...props} />)
-    expect(container.querySelector("[data-batch-badge]")?.textContent).toBe(de)
+    expect(
+      container.querySelector("[data-batch-badge-text]")?.textContent
+    ).toBe(de)
+  })
+})
+
+describe("BatchBadge spoken text", () => {
+  it("says what a leftover is instead of reading 2 slash 3", () => {
+    const { container } = render(
+      <BatchBadge
+        sessionId={7}
+        colour={1}
+        variant="leftover"
+        position={2}
+        meals={3}
+      />
+    )
+    const badge = container.querySelector("[data-batch-badge]")
+    expect(badge).toHaveAttribute("title", "leftover 2 of 3")
+    expect(badge?.querySelector(".sr-only")).toHaveTextContent(
+      "leftover 2 of 3"
+    )
+    expect(badge?.querySelector("[data-batch-badge-text]")).toHaveAttribute(
+      "aria-hidden",
+      "true"
+    )
+  })
+
+  it("leaves a cook badge as plain visible text", () => {
+    const { container } = render(
+      <BatchBadge sessionId={7} colour={1} variant="cook" portions={4} />
+    )
+    expect(container.querySelector(".sr-only")).toBeNull()
   })
 })
 

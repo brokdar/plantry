@@ -197,7 +197,7 @@ The scale is fixed rem with a ratio of about 1.2. Utilities: `text-h1`, `text-h2
 
 - **Display / h1** (Newsreader 600): page titles, recipe names on detail and cook mode. Base styles give `h1` this face, size and weight.
 - **Headline / h2**, **Title / h3** (Newsreader): section headings such as Ingredients, Steps and Notes. Base styles set face and size only; components add `font-semibold`.
-- **Body** (Source Sans 3 400): the default `body` size. Prose (recipe steps, notes) is capped at 68ch.
+- **Body** (Source Sans 3 400): the default `body` size, 15 px (16 px on phones; small is 13 px, 14 px on phones; the `body` and `label` tokens above are the 768 px-and-up values). Prose (recipe steps, notes) is capped at 68ch.
 - **Small / label** and **Caption** (Source Sans 3): metadata labels, nav labels, helper text.
 - **Numbers** (Source Sans 3 with `tabular-nums`): macros, quantities, counts, step numbers. Recipe detail shows meta values at h3 size in the sans, not the serif.
 - The Today headline uses the `headline` token (23px); there is no separate phone size. Newsreader italic is reserved for board row labels and notes (Phase 2).

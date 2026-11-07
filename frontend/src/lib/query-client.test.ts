@@ -22,4 +22,10 @@ describe("retryTransient", () => {
   it("is the default for queries", () => {
     expect(queryClient.getDefaultOptions().queries?.retry).toBe(retryTransient)
   })
+
+  it("lets a mutation fail offline instead of pausing unseen", () => {
+    expect(queryClient.getDefaultOptions().mutations?.networkMode).toBe(
+      "always"
+    )
+  })
 })

@@ -7,6 +7,7 @@
     "settings": "Settings",
     "collapse_sidebar": "Collapse sidebar",
     "expand_sidebar": "Expand sidebar",
+    "offline": "You're offline. Changes can't be saved until you reconnect.",
     "today": "Today",
     "plan": "Plan",
     "shop": "Shop",
@@ -926,6 +927,7 @@
     "invalid_body": "Invalid request data.",
     "invalid_query": "Invalid request parameters.",
     "server": "Something went wrong.",
+    "network": "Can't reach Plantry. Check your connection and try again.",
     "ingredient": {
       "duplicate_name": "An ingredient with this name already exists.",
       "in_use": "This ingredient is used in a component and cannot be deleted.",
@@ -1997,6 +1999,7 @@
   },
   "palette": {
     "title": "Command palette",
+    "description": "Search routines and pages, then press Enter.",
     "search_placeholder": "Search routines or pages…",
     "no_results": "Nothing matches.",
     "section_routines": "Routines",

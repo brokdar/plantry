@@ -39,7 +39,12 @@ export function WeekStrip({ board, windowStart, date }: WeekStripProps) {
                 search={{ start: windowStart, day: day.date }}
                 aria-current={current ? "date" : undefined}
                 title={t("today.week.open", { day: day.weekday })}
-                className="grid min-h-11 grid-cols-[2.75rem_minmax(0,1fr)] gap-3 rounded-cell px-2 py-2 transition-colors duration-150 ease-out hover:bg-panel-sunken"
+                className={cn(
+                  "grid min-h-11 grid-cols-[2.75rem_minmax(0,1fr)] gap-3 rounded-cell px-2 py-2 transition-colors duration-150 ease-out hover:bg-panel-sunken",
+                  // A ring as well as the accent text: the selected day must
+                  // not rest on colour alone.
+                  current && "bg-accent/10 ring-1 ring-accent ring-inset"
+                )}
                 data-testid={`week-strip-${day.date}`}
               >
                 <span

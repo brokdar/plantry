@@ -4,9 +4,11 @@ import { useTranslation } from "react-i18next"
 
 import { useIsPhone } from "@/components/plan/use-is-phone"
 import { Toaster } from "@/components/ui/sonner"
+import { focusPageStart } from "@/lib/focus"
 import { useProfile } from "@/lib/queries/profile"
 
 import { MobileBottomNav } from "./MobileBottomNav"
+import { OfflineBanner } from "./OfflineBanner"
 import { SideNav } from "./SideNav"
 
 type AppShellProps = {
@@ -26,6 +28,19 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     if (focusMain) mainRef.current?.focus()
   }, [focusMain])
+
+  // Moving to another section lands focus on the new page, not on the link
+  // that was used (WCAG 2.4.3). Within a section (the wizard over the board,
+  // search params) focus is left to the page.
+  const section = useRouterState({
+    select: (s) => s.location.pathname.split("/")[1] ?? "",
+  })
+  const lastSection = useRef(section)
+  useEffect(() => {
+    if (lastSection.current === section) return
+    lastSection.current = section
+    focusPageStart()
+  }, [section])
 
   // Toasts sit bottom-right, clear of page headings and header actions. On
   // phones they float above the tab bar, and on /plan also above the
@@ -72,6 +87,7 @@ export function AppShell({ children }: AppShellProps) {
       </a>
       <SideNav collapsed={collapsed} onToggle={handleToggle} />
       <div className="flex min-w-0 flex-1 flex-col pb-[var(--tab-bar-inset)] md:pb-0">
+        <OfflineBanner />
         <main
           id="main"
           ref={mainRef}

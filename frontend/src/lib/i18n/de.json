@@ -7,6 +7,7 @@
     "settings": "Einstellungen",
     "collapse_sidebar": "Seitenleiste einklappen",
     "expand_sidebar": "Seitenleiste ausklappen",
+    "offline": "Du bist offline. Änderungen können erst nach der Wiederverbindung gespeichert werden.",
     "today": "Heute",
     "plan": "Plan",
     "shop": "Einkauf",
@@ -953,6 +954,7 @@
     "invalid_body": "Ungültige Anfragedaten.",
     "invalid_query": "Ungültige Anfrageparameter.",
     "server": "Etwas ist schiefgelaufen.",
+    "network": "Plantry ist nicht erreichbar. Prüfe die Verbindung und versuche es erneut.",
     "ingredient": {
       "duplicate_name": "Eine Zutat mit diesem Namen existiert bereits.",
       "in_use": "Diese Zutat wird in einer Komponente verwendet und kann nicht gelöscht werden.",
@@ -1997,6 +1999,7 @@
   },
   "palette": {
     "title": "Befehlspalette",
+    "description": "Routinen und Seiten suchen, dann Enter drücken.",
     "search_placeholder": "Routinen oder Seiten suchen…",
     "no_results": "Nichts gefunden.",
     "section_routines": "Routinen",

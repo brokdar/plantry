@@ -138,7 +138,7 @@ test.describe("Today", () => {
       await expect(
         card.getByRole("heading", { name: `${ac1.name}, leftover` })
       ).toBeVisible()
-      await expect(card.locator("[data-batch-badge]")).toHaveText(
+      await expect(card.locator("[data-batch-badge-text]")).toHaveText(
         `2/3 · use by ${weekdayShort(ac1.useBy)}`
       )
       await expect(card).toContainText(
@@ -148,7 +148,7 @@ test.describe("Today", () => {
       )
       const dinner = page.getByTestId(`today-meal-${ac1.dinner}`)
       await expect(dinner).toContainText(ac1.name)
-      await expect(dinner.locator("[data-batch-badge]")).toHaveText("3/3")
+      await expect(dinner.locator("[data-batch-badge-text]")).toHaveText("3/3")
 
       // The previous-day button walks back to the cook day.
       await page.getByRole("link", { name: "Previous day" }).click()

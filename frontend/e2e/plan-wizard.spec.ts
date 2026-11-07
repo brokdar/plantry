@@ -57,6 +57,36 @@ async function json<T>(ctx: APIRequestContext, path: string): Promise<T> {
 }
 
 test.describe("plan wizard", () => {
+  test("opening the wizard from Today logs no React errors", async ({
+    page,
+  }) => {
+    const errors: string[] = []
+    page.on("console", (msg) => {
+      if (msg.type() === "error") errors.push(msg.text())
+    })
+    await stubRecipesReady(page)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto("/today")
+
+    await page
+      .getByTestId("sidenav")
+      .getByTestId("generate-plan-default")
+      .click()
+    await expect(page).toHaveURL("/plan/new")
+    await expect(
+      page.getByTestId("plan-wizard").getByRole("heading", {
+        name: "Who's home?",
+      })
+    ).toBeVisible()
+
+    // Cancelling returns to where it was opened.
+    await page.keyboard.press("Escape")
+    await expect(page.getByTestId("plan-wizard")).toHaveCount(0)
+    await expect(page).toHaveURL(/\/today$/)
+    // Regression: the board and the wizard shared the key "" without `start`.
+    expect(errors.filter((e) => /same key|unique "key"/.test(e))).toEqual([])
+  })
+
   test("F3-AC1/AC2: Today's banner → Who's home? → Skip → the draft board (AC-1 steps 1–4)", async ({
     page,
   }) => {
@@ -294,7 +324,24 @@ test.describe("plan wizard", () => {
     ).toBeVisible()
     await expect(page.getByTestId("assistant-composer-input")).toHaveCount(0)
 
-    // Escape closes it onto the board of the same window.
+    // Escape returns to where the wizard was opened.
+    await page.keyboard.press("Escape")
+    await expect(page.getByTestId("plan-wizard")).toHaveCount(0)
+    await expect(page).toHaveURL(/\/settings/)
+  })
+
+  test("a wizard opened by URL closes onto the board of its window", async ({
+    page,
+  }) => {
+    await stubRecipesReady(page)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto("/plan/new")
+    await expect(
+      page.getByTestId("plan-wizard").getByRole("heading", {
+        name: "Who's home?",
+      })
+    ).toBeVisible()
+
     await page.keyboard.press("Escape")
     await expect(page.getByTestId("plan-wizard")).toHaveCount(0)
     await expect(page).toHaveURL(/\/plan\?start=\d{4}-\d{2}-\d{2}$/)

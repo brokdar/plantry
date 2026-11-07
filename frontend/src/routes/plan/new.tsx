@@ -46,8 +46,8 @@ function PlanNewRoute() {
   // From 768 px the wizard is a dialog over the board of its window (D31).
   return (
     <>
-      {!phone && <PlanPage key={start ?? ""} start={start} />}
-      <PlanWizard key={start ?? ""} start={start} />
+      {!phone && <PlanPage key={`board:${start ?? ""}`} start={start} />}
+      <PlanWizard key={`wizard:${start ?? ""}`} start={start} />
     </>
   )
 }

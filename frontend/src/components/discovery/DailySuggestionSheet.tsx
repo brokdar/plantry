@@ -12,6 +12,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import type { RejectReason } from "@/lib/api/discovery"
+import { focusPageStart } from "@/lib/focus"
 import { discoveryAvailable } from "@/lib/discovery/available"
 import { useLocalStorageState } from "@/lib/hooks/useLocalStorageState"
 import {
@@ -82,6 +83,11 @@ export function DailySuggestionSheet({ date }: { date: string }) {
         )}
         data-testid="daily-suggestion-sheet"
         showCloseButton={false}
+        // The sheet opens by itself, so there is no trigger to return to.
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          focusPageStart()
+        }}
       >
         <div className="flex items-start justify-between gap-2 p-4 pb-2">
           <SheetTitle className="font-heading text-h3 text-ink">

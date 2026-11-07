@@ -13,6 +13,7 @@ import { AppShell } from "@/components/shell/AppShell"
 import { Button } from "@/components/ui/button"
 import { Toaster } from "@/components/ui/sonner"
 import { useCommandPaletteHotkey } from "@/lib/use-command-palette-hotkey"
+import { usePageTitle } from "@/lib/use-page-title"
 import { initUnitsVocabulary } from "@/lib/domain/units"
 import { useUnits } from "@/lib/queries/units"
 
@@ -30,6 +31,7 @@ function RootComponent() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [copyWeekOpen, setCopyWeekOpen] = useState(false)
   useCommandPaletteHotkey(() => setPaletteOpen((prev) => !prev))
+  usePageTitle()
 
   const { data: units } = useUnits()
   useEffect(() => {

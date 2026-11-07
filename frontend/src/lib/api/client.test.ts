@@ -35,6 +35,21 @@ describe("apiFetch", () => {
     })
   })
 
+  it("turns a failed fetch into an error.network ApiError", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch")))
+
+    const err = await apiFetch<never>("/foods/1").catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err).toMatchObject({ status: 0, messageKey: "error.network" })
+  })
+
+  it("lets an abort through untouched", async () => {
+    const abort = new DOMException("aborted", "AbortError")
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abort))
+
+    await expect(apiFetch<never>("/foods/1")).rejects.toBe(abort)
+  })
+
   it("leaves existingId unset when the body has none", async () => {
     vi.stubGlobal(
       "fetch",

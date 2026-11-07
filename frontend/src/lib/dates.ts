@@ -20,6 +20,18 @@ export function shiftYMD(ymd: string, days: number): string {
   return toYMD(new Date(y, m - 1, d + days))
 }
 
+/** True for a YYYY-MM-DD that names a real calendar day ("2026-02-30" is not). */
+export function isValidYMD(ymd: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false
+  const [y, m, d] = ymd.split("-").map(Number)
+  const date = new Date(y, m - 1, d)
+  return (
+    date.getFullYear() === y &&
+    date.getMonth() === m - 1 &&
+    date.getDate() === d
+  )
+}
+
 /** The start of the plan window holding `ymd`: the latest shopping day
  *  (0 = Monday … 6 = Sunday) on or before it, like the server's
  *  `window.Containing`. */
