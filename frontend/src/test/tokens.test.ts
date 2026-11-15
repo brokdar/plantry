@@ -1,31 +1,32 @@
 import css from "../index.css?raw"
 
-// UX_DESIGN_SPEC §3.1 — "Cookbook with batch badges". [light, dark]
+// The plan-board world (light, dark): green-biased neutrals, one green
+// accent, six vivid batch line colours. [light, dark]
 const TOKENS: Record<string, [string, string]> = {
-  ground: ["#FBFBFA", "#161821"],
-  panel: ["#FFFFFF", "#1D2030"],
-  "panel-sunken": ["#F3F4F6", "#12141C"],
-  "panel-raised": ["#FFFFFF", "#252A3F"],
-  ink: ["#1C2233", "#E6E8F0"],
-  "ink-muted": ["#5A6175", "#A3A8BB"],
-  line: ["#E3E5EA", "#2E3245"],
-  accent: ["#27407A", "#9DB2EA"],
-  "on-accent": ["#FBFBFA", "#161821"],
-  "batch-1": ["#7A3B2E", "#E29A88"],
-  "batch-1-tint": ["#F3E7E2", "#35231F"],
-  "batch-2": ["#8A6A12", "#D8B75A"],
-  "batch-2-tint": ["#F4EEDB", "#332B14"],
-  "batch-3": ["#2F6B5A", "#7CC4AD"],
-  "batch-3-tint": ["#E1EFE9", "#1B302A"],
-  "batch-4": ["#6A3D6E", "#C99BCD"],
-  "batch-4-tint": ["#EFE4F0", "#2E2131"],
-  "batch-5": ["#5D6B2A", "#B5C46E"],
-  "batch-5-tint": ["#ECEFDC", "#272C16"],
-  "batch-6": ["#3D5A80", "#93B0D6"],
-  "batch-6-tint": ["#E3EAF3", "#1C2533"],
-  success: ["#2E6B3F", "#79C48F"],
-  warning: ["#9A5B00", "#E3A54F"],
-  danger: ["#A23A2A", "#EE8B7B"],
+  ground: ["#F5F6F4", "#111513"],
+  panel: ["#FFFFFF", "#191E1B"],
+  "panel-sunken": ["#EEF0EC", "#0D100E"],
+  "panel-raised": ["#FFFFFF", "#212723"],
+  ink: ["#18201B", "#E6EBE7"],
+  "ink-muted": ["#5D6861", "#A0AAA3"],
+  line: ["#E1E4DE", "#2A312D"],
+  accent: ["#157A3C", "#4CC276"],
+  "on-accent": ["#FFFFFF", "#0D100E"],
+  "batch-1": ["#C2410C", "#F08A4B"],
+  "batch-1-tint": ["#FFF1E8", "#3A2418"],
+  "batch-2": ["#1D4ED8", "#7EA3F5"],
+  "batch-2-tint": ["#E9EFFE", "#1C2640"],
+  "batch-3": ["#6D28D9", "#A98BF5"],
+  "batch-3-tint": ["#F2ECFE", "#2A2140"],
+  "batch-4": ["#0F766E", "#3CC7B3"],
+  "batch-4-tint": ["#E3F4F1", "#143330"],
+  "batch-5": ["#BE185D", "#EF7FB0"],
+  "batch-5-tint": ["#FCE8F1", "#3A1D2B"],
+  "batch-6": ["#9D6006", "#E0B341"],
+  "batch-6-tint": ["#FBF1DC", "#362C12"],
+  success: ["#2E6B3F", "#6FCF8F"],
+  warning: ["#A15C00", "#E3A54F"],
+  danger: ["#B42318", "#F08B7B"],
 }
 
 // The shadcn theme names components/ui reads; index.css maps each onto a
@@ -102,12 +103,20 @@ describe("design tokens (index.css)", () => {
       ["ink-muted", "ground"],
       ["ink-muted", "panel"],
       ["on-accent", "accent"],
-      ...[1, 2, 3, 4, 5, 6].map((n) => ["ground", `batch-${n}`]),
+      // Solid batch pills carry on-accent text; lane labels and outlined
+      // pills carry the batch colour on ground, panel and its own tint.
+      ...[1, 2, 3, 4, 5, 6].flatMap((n) => [
+        ["on-accent", `batch-${n}`],
+        [`batch-${n}`, "ground"],
+        [`batch-${n}`, "panel"],
+        [`batch-${n}`, `batch-${n}-tint`],
+      ]),
+      ["warning", "panel"],
     ])("%s on %s meets 4.5:1", (fg, bg) => {
       expect(contrast(declared(fg), declared(bg))).toBeGreaterThanOrEqual(4.5)
     })
 
-    it.each(["success", "warning", "danger"])(
+    it.each(["accent", "success", "warning", "danger"])(
       "%s against ground meets 3:1",
       (state) => {
         expect(

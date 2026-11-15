@@ -1349,6 +1349,7 @@
       "collapsed": "{{slot}}: {{routine}} every day"
     },
     "toolbar": {
+      "assistant_setup": "Set up the assistant",
       "plates_one": "{{count}} plate",
       "plates_other": "{{count}} plates",
       "cook_days_one": "{{count}} cook day",
@@ -1500,6 +1501,11 @@
       "regenerate_week": "Regenerate week",
       "accept_and_shop": "Accept and shop",
       "discard": "Discard draft",
+      "draft_tag": "Draft",
+      "waiting_one": "{{count}} plate waiting for review",
+      "waiting_other": "{{count}} plates waiting for review",
+      "hint": "Confirmed plates go to Today and the shopping list.",
+      "discard_drafts": "Discard drafts",
       "why": "Why this?",
       "draft_note": "Draft. Confirmed plates stay when you regenerate.",
       "confirmed_note": "Confirmed. Its ingredients may already be bought."

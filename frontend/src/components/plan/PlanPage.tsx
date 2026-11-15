@@ -385,6 +385,7 @@ function PlanView({
           onClear={() => clearWindow.mutate({ from: win.start, to: win.end })}
           onShortcuts={() => setShortcutsOpen(true)}
           draft={toolbarDraft}
+          draftPlates={plan.draft?.plates ?? 0}
           running={running}
           accepting={accept.isPending}
           onAcceptAndShop={acceptAndShop}
@@ -417,7 +418,8 @@ function PlanView({
               assistantEnabled={assistantEnabled}
             />
           )}
-          <CookStrip batches={board.cookStrip} />
+          {/* Phones keep the strip; the grid draws the batch lines. */}
+          {phone && <CookStrip batches={board.cookStrip} />}
           <div ref={boardRef}>
             <Board
               board={board}

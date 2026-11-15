@@ -1,6 +1,8 @@
-import { useState, type KeyboardEvent } from "react"
+import { use, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 
+import { BatchLanes, LANE_REM } from "@/components/batch/BatchLanes"
+import { HighlightedContext } from "@/components/batch/batch-highlight"
 import { DayMeter } from "@/components/batch/DayMeter"
 import type { PlanTargets } from "@/lib/api/plan"
 import type { Board, BoardCell } from "@/lib/plan/board"
@@ -12,6 +14,11 @@ import {
 import { cn } from "@/lib/utils"
 
 import { PlateCell } from "./PlateCell"
+
+/** The meal column plus seven day columns; the batch lanes reuse it so the
+ *  lines land on the day columns. */
+const COLUMNS =
+  "grid-cols-[6rem_repeat(7,calc((100cqw-7rem)/4.5))] lg:grid-cols-[7rem_repeat(7,minmax(0,1fr))]"
 
 export interface BoardLayoutProps {
   board: Board
@@ -47,6 +54,7 @@ export function BoardGrid({
   const { t } = useTranslation()
   const rows = board.rows.filter((r) => !r.collapsed)
   const [focusKey, setFocusKey] = useState<string | null>(null)
+  const highlighted = use(HighlightedContext)
   const tabKey =
     focusKey && rows.some((r) => r.cells.some((c) => c.key === focusKey))
       ? focusKey
@@ -84,88 +92,117 @@ export function BoardGrid({
     // headers can stick inside it.
     <div className="@container max-h-[70dvh] snap-x snap-mandatory scroll-pl-24 overflow-auto overscroll-x-contain lg:max-h-none lg:overflow-visible">
       <div
-        role="grid"
-        aria-label={label}
-        aria-readonly={board.readOnly || undefined}
-        onKeyDown={onKeyDown}
-        className="grid grid-cols-[6rem_repeat(7,calc((100cqw-7rem)/4.5))] gap-1 p-1 lg:grid-cols-[7rem_repeat(7,minmax(0,1fr))]"
+        data-highlight-active={highlighted ? "" : undefined}
+        className="relative w-fit min-w-full"
       >
-        <div role="row" className="contents">
-          <div
-            role="columnheader"
-            className="sticky top-0 left-0 z-20 bg-ground"
-          >
-            <span className="sr-only">{t("plan.board.meal_column")}</span>
-          </div>
-          {board.days.map((day) => (
+        <div
+          role="grid"
+          aria-label={label}
+          aria-readonly={board.readOnly || undefined}
+          onKeyDown={onKeyDown}
+          className={cn("grid gap-1 p-1", COLUMNS)}
+        >
+          <div role="row" className="contents">
             <div
-              key={day.date}
               role="columnheader"
-              aria-label={`${day.weekday} ${day.dayNumber}`}
-              className="sticky top-0 z-10 flex snap-start flex-col gap-0.5 bg-ground px-1 pt-1"
+              className="sticky top-0 left-0 z-20 bg-ground"
             >
-              <span
-                className={cn(
-                  "flex items-baseline gap-1.5 text-small",
-                  day.isToday ? "font-semibold text-accent" : "text-ink-muted"
-                )}
-                aria-current={day.isToday ? "date" : undefined}
+              <span className="sr-only">{t("plan.board.meal_column")}</span>
+            </div>
+            {board.days.map((day) => (
+              <div
+                key={day.date}
+                role="columnheader"
+                aria-label={`${day.weekday} ${day.dayNumber}`}
+                className="sticky top-0 z-10 flex h-14 snap-start flex-col gap-0.5 bg-ground px-1 pt-1"
               >
-                <span>{day.weekdayShort}</span>
-                <span className="text-body text-ink tabular-nums">
-                  {day.dayNumber}
+                <span
+                  className={cn(
+                    "flex items-baseline gap-1.5 text-small",
+                    day.isToday
+                      ? "font-bold text-accent"
+                      : "font-medium text-ink-muted"
+                  )}
+                  aria-current={day.isToday ? "date" : undefined}
+                >
+                  <span>{day.weekdayShort}</span>
+                  <span
+                    className={cn(
+                      "text-body font-semibold tabular-nums",
+                      day.isToday ? "text-accent" : "text-ink"
+                    )}
+                  >
+                    {day.dayNumber}
+                  </span>
                 </span>
-              </span>
-              {day.nutrition && (
-                <DayMeter day={day.nutrition} targets={targets} />
-              )}
-            </div>
-          ))}
-        </div>
+                {day.nutrition && (
+                  <DayMeter
+                    day={day.nutrition}
+                    targets={targets}
+                    className="min-h-8"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
 
-        {board.rows.map((row) =>
-          row.collapsed ? (
-            <div key={row.slotId} role="row" className="contents">
-              <div
-                role="rowheader"
-                className="sticky left-0 z-10 flex items-center bg-ground pr-2 font-heading text-body text-ink-muted italic"
-              >
-                {row.name}
+          {board.cookStrip.length > 0 && (
+            <div
+              aria-hidden="true"
+              className="col-span-full"
+              style={{ height: `${board.cookStrip.length * LANE_REM}rem` }}
+            />
+          )}
+
+          {board.rows.map((row) =>
+            row.collapsed ? (
+              <div key={row.slotId} role="row" className="contents">
+                <div
+                  role="rowheader"
+                  className="sticky left-0 z-10 flex items-center bg-ground pr-2 text-body font-semibold text-ink-muted"
+                >
+                  {row.name}
+                </div>
+                <div
+                  role="gridcell"
+                  aria-colspan={board.days.length}
+                  className="col-span-7 flex min-h-11 items-center rounded-cell px-2 text-small text-ink-muted"
+                >
+                  {row.collapsed}
+                </div>
               </div>
-              <div
-                role="gridcell"
-                aria-colspan={board.days.length}
-                className="col-span-7 flex min-h-11 items-center rounded-cell px-2 text-small text-ink-muted"
-              >
-                {row.collapsed}
+            ) : (
+              <div key={row.slotId} role="row" className="contents">
+                <div
+                  role="rowheader"
+                  className="sticky left-0 z-10 flex items-start bg-ground pt-2 pr-2 text-body font-semibold text-ink-muted"
+                >
+                  {row.name}
+                </div>
+                {row.cells.map((cell, ci) => (
+                  <PlateCell
+                    key={cell.key}
+                    cell={cell}
+                    layout="grid"
+                    readOnly={board.readOnly}
+                    dnd
+                    onOpen={onOpenCell}
+                    onReplace={onReplace}
+                    onDifferentSide={onDifferentSide}
+                    pos={`${rows.indexOf(row)}-${ci}`}
+                    tabStop={cell.key === tabKey}
+                    onFocusCell={setFocusKey}
+                  />
+                ))}
               </div>
-            </div>
-          ) : (
-            <div key={row.slotId} role="row" className="contents">
-              <div
-                role="rowheader"
-                className="sticky left-0 z-10 flex items-start bg-ground pt-2 pr-2 font-heading text-body text-ink-muted italic"
-              >
-                {row.name}
-              </div>
-              {row.cells.map((cell, ci) => (
-                <PlateCell
-                  key={cell.key}
-                  cell={cell}
-                  layout="grid"
-                  readOnly={board.readOnly}
-                  dnd
-                  onOpen={onOpenCell}
-                  onReplace={onReplace}
-                  onDifferentSide={onDifferentSide}
-                  pos={`${rows.indexOf(row)}-${ci}`}
-                  tabStop={cell.key === tabKey}
-                  onFocusCell={setFocusKey}
-                />
-              ))}
-            </div>
-          )
-        )}
+            )
+          )}
+        </div>
+        <BatchLanes
+          batches={board.cookStrip}
+          days={board.days}
+          columns={COLUMNS}
+        />
       </div>
     </div>
   )

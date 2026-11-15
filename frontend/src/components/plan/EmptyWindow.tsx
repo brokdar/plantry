@@ -31,13 +31,13 @@ export function EmptyWindow({
     <section
       aria-labelledby="plan-empty-title"
       data-testid="plan-empty"
-      className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-4 md:flex-row md:items-center md:justify-between md:p-6"
+      className="flex flex-col gap-4 rounded-xl border border-line bg-panel p-4 shadow-card md:flex-row md:items-center md:justify-between md:p-6"
     >
       <div className="flex max-w-[52ch] flex-col gap-1">
         <h2 id="plan-empty-title" className="text-h3 font-semibold text-ink">
           {t("plan.empty.title")}
         </h2>
-        <p className="text-body text-ink-muted">
+        <p className="text-body text-pretty text-ink-muted">
           {t(
             assistantEnabled
               ? "plan.empty.body"

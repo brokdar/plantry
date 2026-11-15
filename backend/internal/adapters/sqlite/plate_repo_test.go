@@ -223,3 +223,44 @@ func TestPlatesRepo_UniqueIndexRace_MapsToCellOccupied(t *testing.T) {
 		}))
 	})
 }
+
+// TestPlatesRepo_ListByDateRange_ComponentImagePath checks that a plate's
+// components carry their food's image_path (nil when the food has none).
+func TestPlatesRepo_ListByDateRange_ComponentImagePath(t *testing.T) {
+	db := testhelper.NewTestDB(t)
+	ctx := context.Background()
+	slotID := seedSlot(t, db)
+	repo := NewPlateRepo(db)
+
+	withImage := seedFood(t, db, "Chili", "leaf", "'img/chili.jpg'")
+	without := seedFood(t, db, "Rice", "leaf", "NULL")
+
+	day := time.Date(2026, 4, 20, 0, 0, 0, 0, time.UTC)
+	amount, unit, src := 100.0, "g", "exact"
+	p := &plate.Plate{
+		State: plate.StateConfirmed, Date: day, SlotID: slotID, Eaters: 1,
+		Components: []plate.PlateComponent{
+			{FoodID: withImage, Amount: &amount, Unit: &unit, Grams: &amount, GramsSource: &src, SortOrder: 0},
+			{FoodID: without, Amount: &amount, Unit: &unit, Grams: &amount, GramsSource: &src, SortOrder: 1},
+		},
+	}
+	require.NoError(t, repo.Create(ctx, p))
+
+	got, err := repo.ListByDateRange(ctx, day, day)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Len(t, got[0].Components, 2)
+	require.NotNil(t, got[0].Components[0].FoodImagePath)
+	assert.Equal(t, "img/chili.jpg", *got[0].Components[0].FoodImagePath)
+	assert.Nil(t, got[0].Components[1].FoodImagePath)
+}
+
+func seedFood(t *testing.T, db *sql.DB, name, kind, image string) int64 {
+	t.Helper()
+	res, err := db.ExecContext(context.Background(),
+		`INSERT INTO foods (name, kind, source, image_path) VALUES (?, ?, 'manual', `+image+`)`, name, kind)
+	require.NoError(t, err)
+	id, err := res.LastInsertId()
+	require.NoError(t, err)
+	return id
+}

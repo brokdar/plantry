@@ -177,7 +177,7 @@ test.describe("Plan board", () => {
       await expect(entry).toBeVisible()
       await expect(entry).toHaveCount(1)
 
-      await entry.locator("[data-batch-badge]").hover()
+      await entry.hover()
       await expect(grid.locator("[data-highlighted]")).toHaveCount(3)
     } finally {
       await s.cleanup()
@@ -422,8 +422,10 @@ test.describe("Plan board", () => {
       expect((await restored).ok()).toBeTruthy()
       await expectAc1Badges(page, s)
       await expect(
-        page.getByRole("region", { name: "Cook days" })
-      ).toContainText(`× ${s.portions}`)
+        page
+          .getByRole("region", { name: "Cook days" })
+          .getByRole("button", { name: new RegExp(`× ${s.portions}$`) })
+      ).toBeVisible()
     } finally {
       await s.cleanup()
     }

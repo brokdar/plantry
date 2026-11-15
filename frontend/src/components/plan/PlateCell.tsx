@@ -3,7 +3,11 @@ import { Lock, Plus, RefreshCw, Shuffle, TriangleAlert } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { BatchBadge } from "@/components/batch/BatchBadge"
-import { useBatchCell } from "@/components/batch/batch-highlight"
+import {
+  useBatchCell,
+  useBatchHighlight,
+} from "@/components/batch/batch-highlight"
+import { imageURL } from "@/lib/image-url"
 import { cellInChange } from "@/lib/assistant/pulse"
 import type { BoardCell } from "@/lib/plan/board"
 import { BATCH_CLASSES, BATCH_HIGHLIGHT_CLASS } from "@/lib/plan/batch-colours"
@@ -31,24 +35,27 @@ interface PlateCellProps {
   onFocusCell?: (key: string) => void
 }
 
-/** Visual state of the cell's surface (UX §4, §5.5). A draft plate has a
- *  dashed border instead of the solid ring (a ring can't be dashed). */
+/** Visual state of the cell's surface: a hairline border and a whisper of
+ *  shadow. Draft plates are dashed, a cook cell takes its batch tint, a
+ *  violation turns the border warning-coloured, No plate is a transparent
+ *  dashed cell. */
 function surfaceClass(cell: BoardCell): string {
   const draft = cell.state === "draft"
-  if (cell.badge?.variant === "cook") {
-    // Tint means "cooked here"; the 1.5 px ink outline is an inset ring so
-    // the batch highlight (an outer ring) and the focus outline stay free.
+  if (cell.plate) {
     return cn(
-      BATCH_CLASSES[cell.badge.colour].tint,
-      draft
-        ? "border-[1.5px] border-dashed border-ink"
-        : "inset-ring-[1.5px] inset-ring-ink"
+      cell.badge?.variant === "cook"
+        ? BATCH_CLASSES[cell.badge.colour].tint
+        : "bg-panel",
+      cell.attention
+        ? "border-[1.5px] border-dashed border-warning"
+        : draft
+          ? "border border-dashed border-ink-muted/50"
+          : "border border-line shadow-card"
     )
   }
-  if (draft) return "bg-panel border border-dashed border-ink-muted"
-  if (cell.plate) return "bg-panel inset-ring inset-ring-line"
-  if (cell.mode === "none") return "bg-transparent"
-  return "bg-panel inset-ring inset-ring-line"
+  if (cell.mode === "none")
+    return "border border-dashed border-line bg-transparent"
+  return "border border-line bg-panel shadow-card"
 }
 
 /**
@@ -70,6 +77,11 @@ export function PlateCell({
   onFocusCell,
 }: PlateCellProps) {
   const batch = useBatchCell(cell.sessionIds, cell.cookOf)
+  const { highlight } = useBatchHighlight()
+  // Pointing at or focusing a card brings its batch forward.
+  const pointAtBatch = () => {
+    if (cell.badge) highlight(cell.badge.sessionId, cell.badge.colour)
+  }
   // The cell the assistant's last change touched pulses once (D17).
   const pulse = cellInChange(cell, useLastChange())
   const editable = dnd && !readOnly
@@ -111,8 +123,12 @@ export function PlateCell({
       data-highlighted={batch["data-highlighted"]}
       data-over={isOver && !isDragging ? "" : undefined}
       data-pulse={pulse ? "" : undefined}
+      onPointerEnter={pointAtBatch}
+      onFocus={pointAtBatch}
       className={cn(
-        "group/cell relative min-w-0 rounded-cell focus-within:z-20",
+        "group/cell @container/cell relative min-w-0 rounded-cell transition-opacity duration-200 ease-out focus-within:z-20",
+        // While a batch is highlighted the other cells step back.
+        "[[data-highlight-active]_&:not([data-highlighted])]:opacity-50",
         BATCH_HIGHLIGHT_CLASS
       )}
     >
@@ -136,16 +152,17 @@ export function PlateCell({
         onFocus={() => onFocusCell?.(cell.key)}
         onClick={() => onOpen(cell)}
         className={cn(
-          "flex w-full min-w-0 flex-col items-start gap-1 rounded-cell p-2 text-left transition-colors duration-150 ease-out",
-          grid ? "h-full min-h-24" : "min-h-14",
+          "flex w-full min-w-0 flex-col items-stretch gap-1.5 rounded-cell p-2 text-left transition-colors duration-150 ease-out @[7rem]/cell:p-2.5",
+          grid ? "h-full min-h-[5.25rem]" : "min-h-14",
           surfaceClass(cell),
           !cell.plate &&
             cell.mode !== "none" &&
             !readOnly &&
             "hover:bg-panel-sunken",
-          cell.mode === "none" && "hover:inset-ring hover:inset-ring-line",
+          cell.mode === "none" &&
+            "items-center justify-center hover:bg-panel-sunken",
           isDragging && "relative z-30 opacity-80",
-          isOver && !isDragging && "bg-accent/10 inset-ring-2 inset-ring-accent"
+          isOver && !isDragging && "border-accent bg-accent/10"
         )}
       >
         <CellContent cell={cell} readOnly={readOnly} />
@@ -153,7 +170,7 @@ export function PlateCell({
       {cell.attention && (
         <TriangleAlert
           data-testid="cell-warning"
-          className="pointer-events-none absolute top-1.5 right-1.5 size-3.5 text-warning"
+          className="pointer-events-none absolute top-2 right-2 size-3.5 text-warning"
           strokeWidth={2}
           aria-hidden="true"
         />
@@ -161,7 +178,10 @@ export function PlateCell({
       {cell.state === "confirmed" && (
         <Lock
           data-testid="cell-padlock"
-          className="pointer-events-none absolute right-1.5 bottom-1.5 size-3 text-ink-muted"
+          className={cn(
+            "pointer-events-none absolute top-2 size-3 text-ink-muted",
+            cell.attention ? "right-7" : "right-2"
+          )}
           strokeWidth={2}
           aria-hidden="true"
         />
@@ -196,7 +216,7 @@ function QuickActions({
   return (
     <div
       data-testid="cell-quick-actions"
-      className="absolute right-1 bottom-1 hidden gap-1 opacity-0 transition-opacity duration-150 ease-out group-focus-within/cell:opacity-100 group-hover/cell:opacity-100 pointer-fine:flex"
+      className="absolute right-1.5 bottom-1.5 hidden gap-1 opacity-0 transition-opacity duration-150 ease-out group-focus-within/cell:opacity-100 group-hover/cell:opacity-100 pointer-fine:flex"
     >
       {onDifferentSide && cell.sideComponentId !== null && (
         <button
@@ -236,22 +256,40 @@ function CellContent({
   const { t } = useTranslation()
 
   if (cell.plate) {
+    const name = cell.mainName ?? t("plan.cell.empty_plate")
     return (
       <>
-        {cell.badge && <BatchBadge {...cell.badge} />}
-        <span className="line-clamp-2 text-small font-semibold text-ink">
-          {cell.mainName ?? t("plan.cell.empty_plate")}
+        <span
+          className={cn(
+            "flex min-w-0 items-start gap-2",
+            cell.state === "confirmed" && "pr-4"
+          )}
+        >
+          <Thumb name={name} image={cell.mainImage} />
+          <span className="line-clamp-2 min-w-0 text-small leading-tight font-semibold text-ink">
+            {name}
+          </span>
         </span>
-        {cell.sideText && (
-          <span className="line-clamp-1 text-caption text-ink-muted">
-            {cell.sideText}
-          </span>
-        )}
-        {cell.subline && (
-          <span className="mt-auto text-caption text-ink-muted">
-            {t(`plan.cell.subline_${cell.subline}`)}
-          </span>
-        )}
+        <span className="mt-auto flex min-w-0 items-center gap-1.5">
+          {cell.badge && <BatchBadge {...cell.badge} inCell />}
+          {cell.sideText ? (
+            <span className="min-w-0 truncate text-caption text-ink-muted">
+              {cell.sideText}
+            </span>
+          ) : (
+            cell.subline && (
+              <span
+                className={cn(
+                  "min-w-0 truncate text-caption text-ink-muted",
+                  // The badge already says it; screen readers still hear it.
+                  cell.badge && "sr-only"
+                )}
+              >
+                {t(`plan.cell.subline_${cell.subline}`)}
+              </span>
+            )
+          )}
+        </span>
       </>
     )
   }
@@ -259,11 +297,11 @@ function CellContent({
   if (cell.mode === "none") {
     return (
       <>
-        <span className="text-small text-ink-muted italic">
+        <span className="text-small text-ink-muted">
           {t("plan.cell.no_plate")}
         </span>
         {cell.note && (
-          <span className="line-clamp-2 font-heading text-small text-ink-muted italic">
+          <span className="line-clamp-2 text-caption text-ink-muted">
             {cell.note}
           </span>
         )}
@@ -287,6 +325,44 @@ function CellContent({
     <span className="m-auto flex items-center gap-1 text-small text-ink-muted">
       <Plus className="size-4" strokeWidth={1.5} aria-hidden="true" />
       {t("plan.cell.add")}
+    </span>
+  )
+}
+
+const THUMB_TINTS = [
+  "bg-batch-1-tint",
+  "bg-batch-2-tint",
+  "bg-batch-3-tint",
+  "bg-batch-4-tint",
+  "bg-batch-5-tint",
+  "bg-batch-6-tint",
+]
+
+/** The main food's 30 px thumbnail; without an image, a tinted square with
+ *  the food's initial (the tint follows the name, so a food keeps its own). */
+function Thumb({ name, image }: { name: string; image: string | null }) {
+  const src = imageURL(image)
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        className="hidden size-[30px] shrink-0 rounded-lg border border-line object-cover @[7rem]/cell:block"
+      />
+    )
+  }
+  let hash = 0
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "hidden size-[30px] shrink-0 place-items-center rounded-lg text-small font-bold text-ink-muted @[7rem]/cell:grid",
+        THUMB_TINTS[hash % THUMB_TINTS.length]
+      )}
+    >
+      {name.trim().charAt(0).toUpperCase()}
     </span>
   )
 }

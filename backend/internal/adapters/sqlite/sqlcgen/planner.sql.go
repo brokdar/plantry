@@ -278,7 +278,7 @@ func (q *Queries) ListActiveTimeSlots(ctx context.Context) ([]TimeSlot, error) {
 }
 
 const listPlateComponentsByDateRange = `-- name: ListPlateComponentsByDateRange :many
-SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, f.name AS food_name, f.kind AS food_kind, f.role AS food_role
+SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path
 FROM plate_components pc
 JOIN plates p ON p.id = pc.plate_id
 JOIN foods f ON f.id = pc.food_id
@@ -296,6 +296,7 @@ type ListPlateComponentsByDateRangeRow struct {
 	FoodName       string
 	FoodKind       string
 	FoodRole       sql.NullString
+	FoodImagePath  sql.NullString
 }
 
 func (q *Queries) ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error) {
@@ -321,6 +322,7 @@ func (q *Queries) ListPlateComponentsByDateRange(ctx context.Context, arg ListPl
 			&i.FoodName,
 			&i.FoodKind,
 			&i.FoodRole,
+			&i.FoodImagePath,
 		); err != nil {
 			return nil, err
 		}
@@ -336,7 +338,7 @@ func (q *Queries) ListPlateComponentsByDateRange(ctx context.Context, arg ListPl
 }
 
 const listPlateComponentsByPlate = `-- name: ListPlateComponentsByPlate :many
-SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, f.name AS food_name, f.kind AS food_kind, f.role AS food_role
+SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path
 FROM plate_components pc
 JOIN foods f ON f.id = pc.food_id
 WHERE pc.plate_id = ?
@@ -348,6 +350,7 @@ type ListPlateComponentsByPlateRow struct {
 	FoodName       string
 	FoodKind       string
 	FoodRole       sql.NullString
+	FoodImagePath  sql.NullString
 }
 
 func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error) {
@@ -373,6 +376,7 @@ func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64)
 			&i.FoodName,
 			&i.FoodKind,
 			&i.FoodRole,
+			&i.FoodImagePath,
 		); err != nil {
 			return nil, err
 		}
@@ -388,7 +392,7 @@ func (q *Queries) ListPlateComponentsByPlate(ctx context.Context, plateID int64)
 }
 
 const listPlateComponentsByPlateIDs = `-- name: ListPlateComponentsByPlateIDs :many
-SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, f.name AS food_name, f.kind AS food_kind, f.role AS food_role
+SELECT pc.id, pc.plate_id, pc.food_id, pc.portions, pc.amount, pc.unit, pc.grams, pc.grams_source, pc.cook_session_id, pc.sort_order, f.name AS food_name, f.kind AS food_kind, f.role AS food_role, f.image_path AS food_image_path
 FROM plate_components pc
 JOIN foods f ON f.id = pc.food_id
 WHERE pc.plate_id IN (/*SLICE:ids*/?)
@@ -400,6 +404,7 @@ type ListPlateComponentsByPlateIDsRow struct {
 	FoodName       string
 	FoodKind       string
 	FoodRole       sql.NullString
+	FoodImagePath  sql.NullString
 }
 
 func (q *Queries) ListPlateComponentsByPlateIDs(ctx context.Context, ids []int64) ([]ListPlateComponentsByPlateIDsRow, error) {
@@ -435,6 +440,7 @@ func (q *Queries) ListPlateComponentsByPlateIDs(ctx context.Context, ids []int64
 			&i.FoodName,
 			&i.FoodKind,
 			&i.FoodRole,
+			&i.FoodImagePath,
 		); err != nil {
 			return nil, err
 		}

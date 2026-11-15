@@ -1,9 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/newsreader/opsz.css";
-@import "@fontsource-variable/newsreader/opsz-italic.css";
-@import "@fontsource-variable/source-sans-3";
+@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/figtree/wght-italic.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -24,10 +23,10 @@
 }
 
 @theme inline {
-  --font-sans: "Source Sans 3 Variable", system-ui, sans-serif;
-  --font-heading: "Newsreader Variable", Georgia, serif;
+  --font-sans: "Figtree Variable", system-ui, sans-serif;
+  --font-heading: "Figtree Variable", system-ui, sans-serif;
 
-  /* Cookbook — UX_DESIGN_SPEC §3.1. Use these names in new and rebuilt screens. */
+  /* Design tokens — UX_DESIGN_SPEC §3.1. Use these names in new and rebuilt screens. */
   --color-ground: var(--ground);
   --color-panel: var(--panel);
   --color-panel-sunken: var(--panel-sunken);
@@ -61,12 +60,13 @@
   --text-h1: 1.75rem;
 
   /* Radii by role — UX_DESIGN_SPEC §3.3 */
-  --radius-cell: 4px;
+  --radius-cell: 10px;
   --radius-sheet: 16px;
-  --radius-tag: 3px 10px 10px 3px;
+  --radius-tag: 9999px;
 
-  /* The one soft shadow — sheets and popovers only */
+  /* Sheets and popovers; cards use the whisper */
   --shadow-sheet: var(--shadow-soft);
+  --shadow-card: 0 1px 2px rgb(24 32 27 / 0.05);
 
   /* shadcn theme names (used by components/ui), mapped below */
   --color-ring: var(--ring);
@@ -97,39 +97,39 @@
 }
 
 /*
-  Cookbook palette — hex matches docs/UX_DESIGN_SPEC.md §3.1 verbatim.
+  Palette — hex matches docs/UX_DESIGN_SPEC.md §3.1 verbatim.
   Checked by src/test/tokens.test.ts (values and WCAG contrast).
 */
 :root {
-  --ground: #fbfbfa;
+  --ground: #f5f6f4;
   --panel: #ffffff;
-  --panel-sunken: #f3f4f6;
+  --panel-sunken: #eef0ec;
   --panel-raised: #ffffff;
-  --ink: #1c2233;
-  --ink-muted: #5a6175;
-  --line: #e3e5ea;
-  --accent: #27407a;
-  --on-accent: #fbfbfa;
+  --ink: #18201b;
+  --ink-muted: #5d6861;
+  --line: #e1e4de;
+  --accent: #157a3c;
+  --on-accent: #ffffff;
 
-  --batch-1: #7a3b2e;
-  --batch-1-tint: #f3e7e2;
-  --batch-2: #8a6a12;
-  --batch-2-tint: #f4eedb;
-  --batch-3: #2f6b5a;
-  --batch-3-tint: #e1efe9;
-  --batch-4: #6a3d6e;
-  --batch-4-tint: #efe4f0;
-  --batch-5: #5d6b2a;
-  --batch-5-tint: #ecefdc;
-  --batch-6: #3d5a80;
-  --batch-6-tint: #e3eaf3;
+  --batch-1: #c2410c;
+  --batch-1-tint: #fff1e8;
+  --batch-2: #1d4ed8;
+  --batch-2-tint: #e9effe;
+  --batch-3: #6d28d9;
+  --batch-3-tint: #f2ecfe;
+  --batch-4: #0f766e;
+  --batch-4-tint: #e3f4f1;
+  --batch-5: #be185d;
+  --batch-5-tint: #fce8f1;
+  --batch-6: #9d6006;
+  --batch-6-tint: #fbf1dc;
 
   --success: #2e6b3f;
-  --warning: #9a5b00;
-  --danger: #a23a2a;
+  --warning: #a15c00;
+  --danger: #b42318;
 
   --shadow-soft:
-    0 2px 6px -2px rgb(28 34 51 / 0.08), 0 12px 32px -8px rgb(28 34 51 / 0.16);
+    0 2px 6px -2px rgb(24 32 27 / 0.08), 0 12px 32px -8px rgb(24 32 27 / 0.16);
 
   --radius: 0.5rem;
 
@@ -140,42 +140,42 @@
 }
 
 .dark {
-  --ground: #161821;
-  --panel: #1d2030;
-  --panel-sunken: #12141c;
-  --panel-raised: #252a3f;
-  --ink: #e6e8f0;
-  --ink-muted: #a3a8bb;
-  --line: #2e3245;
-  --accent: #9db2ea;
-  --on-accent: #161821;
+  --ground: #111513;
+  --panel: #191e1b;
+  --panel-sunken: #0d100e;
+  --panel-raised: #212723;
+  --ink: #e6ebe7;
+  --ink-muted: #a0aaa3;
+  --line: #2a312d;
+  --accent: #4cc276;
+  --on-accent: #0d100e;
 
-  --batch-1: #e29a88;
-  --batch-1-tint: #35231f;
-  --batch-2: #d8b75a;
-  --batch-2-tint: #332b14;
-  --batch-3: #7cc4ad;
-  --batch-3-tint: #1b302a;
-  --batch-4: #c99bcd;
-  --batch-4-tint: #2e2131;
-  --batch-5: #b5c46e;
-  --batch-5-tint: #272c16;
-  --batch-6: #93b0d6;
-  --batch-6-tint: #1c2533;
+  --batch-1: #f08a4b;
+  --batch-1-tint: #3a2418;
+  --batch-2: #7ea3f5;
+  --batch-2-tint: #1c2640;
+  --batch-3: #a98bf5;
+  --batch-3-tint: #2a2140;
+  --batch-4: #3cc7b3;
+  --batch-4-tint: #143330;
+  --batch-5: #ef7fb0;
+  --batch-5-tint: #3a1d2b;
+  --batch-6: #e0b341;
+  --batch-6-tint: #362c12;
 
-  --success: #79c48f;
+  --success: #6fcf8f;
   --warning: #e3a54f;
-  --danger: #ee8b7b;
+  --danger: #f08b7b;
 
   --shadow-soft:
     0 2px 6px -2px rgb(0 0 0 / 0.3), 0 12px 32px -8px rgb(0 0 0 / 0.45);
 }
 
 /*
-  shadcn theme names resolve to the Cookbook tokens, so the ui primitives
-  follow both themes. App code uses the Cookbook names.
+  shadcn theme names resolve to the design tokens, so the ui primitives
+  follow both themes. App code uses the design token names.
 
-  | shadcn                              | Cookbook token |
+  | shadcn                              | Design token   |
   |-------------------------------------|----------------|
   | --background                        | --ground       |
   | --foreground                        | --ink          |
@@ -191,7 +191,7 @@
   | --ring                              | --accent       |
   | --destructive                       | --danger       |
 
-  Note: --accent is both the Cookbook accent and shadcn's hover/focus fill
+  Note: --accent is both the design accent and shadcn's hover/focus fill
   (same variable name), so menu and select highlights render solid accent
   with --accent-foreground (= --on-accent) text.
 
@@ -235,6 +235,13 @@
   }
   html {
     @apply font-sans;
+    caret-color: var(--accent);
+    scrollbar-color: color-mix(in srgb, var(--ink-muted) 45%, transparent)
+      transparent;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+    color: inherit;
   }
   h1,
   h2,
@@ -244,9 +251,18 @@
   h6 {
     font-family: var(--font-heading);
   }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
   h1 {
     font-size: var(--text-h1);
-    font-weight: 600;
+    letter-spacing: -0.02em;
   }
   h2 {
     font-size: var(--text-h2);

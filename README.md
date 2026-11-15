@@ -216,7 +216,7 @@ plantry/
 
 ## Design tokens
 
-The UI uses the "Cookbook" palette: a paper-white ground, ink-blue accent, and six earthy batch colours. Headings use Newsreader, everything else Source Sans 3.
+The UI uses a light neutral ground with a faint green bias, white rounded cards, one green accent for actions, and six vivid batch line colours. Figtree is the only typeface. See `DESIGN.md`.
 
 ```css
 --ground:  #FBFBFA;   /* page background */

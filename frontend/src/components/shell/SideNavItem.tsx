@@ -28,7 +28,7 @@ export function SideNavItem({
       data-active={active}
       className={cn(
         "flex text-ink-muted transition-colors duration-150 ease-out",
-        "hover:bg-panel hover:text-ink",
+        "hover:bg-panel-sunken hover:text-ink",
         "focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none",
         "data-[active=true]:bg-accent/10 data-[active=true]:font-semibold data-[active=true]:text-accent",
         variant === "rail"

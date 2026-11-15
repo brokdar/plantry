@@ -119,7 +119,7 @@ func (r *PlateRepo) Get(ctx context.Context, id int64) (*plate.Plate, error) {
 	p.Components = make([]plate.PlateComponent, len(rows))
 	for i := range rows {
 		mapPlateComponentToDomain(&rows[i].PlateComponent, &p.Components[i])
-		setComponentFood(&p.Components[i], rows[i].FoodName, rows[i].FoodKind, rows[i].FoodRole)
+		setComponentFood(&p.Components[i], rows[i].FoodName, rows[i].FoodKind, rows[i].FoodRole, rows[i].FoodImagePath)
 	}
 	fb, err := q.GetPlateFeedback(ctx, p.ID)
 	switch {
@@ -206,7 +206,7 @@ func (r *PlateRepo) ListByDateRange(ctx context.Context, from, to time.Time) ([]
 	comps := make([]plate.PlateComponent, len(compRows))
 	for i := range compRows {
 		mapPlateComponentToDomain(&compRows[i].PlateComponent, &comps[i])
-		setComponentFood(&comps[i], compRows[i].FoodName, compRows[i].FoodKind, compRows[i].FoodRole)
+		setComponentFood(&comps[i], compRows[i].FoodName, compRows[i].FoodKind, compRows[i].FoodRole, compRows[i].FoodImagePath)
 	}
 	fbRows, err := q.ListPlateFeedbackByDateRange(ctx, sqlcgen.ListPlateFeedbackByDateRangeParams{FromDate: fromS, ToDate: toS})
 	if err != nil {
@@ -233,7 +233,7 @@ func (r *PlateRepo) ListByIDs(ctx context.Context, ids []int64) ([]plate.Plate, 
 	comps := make([]plate.PlateComponent, len(compRows))
 	for i := range compRows {
 		mapPlateComponentToDomain(&compRows[i].PlateComponent, &comps[i])
-		setComponentFood(&comps[i], compRows[i].FoodName, compRows[i].FoodKind, compRows[i].FoodRole)
+		setComponentFood(&comps[i], compRows[i].FoodName, compRows[i].FoodKind, compRows[i].FoodRole, compRows[i].FoodImagePath)
 	}
 	fbRows, err := q.ListPlateFeedbackByPlateIDs(ctx, ids)
 	if err != nil {
@@ -397,7 +397,8 @@ func mapPlateComponentToDomain(row *sqlcgen.PlateComponent, pc *plate.PlateCompo
 	pc.CookSessionID = fromNullInt64(row.CookSessionID)
 }
 
-func setComponentFood(pc *plate.PlateComponent, name, kind string, role sql.NullString) {
+func setComponentFood(pc *plate.PlateComponent, name, kind string, role, image sql.NullString) {
+	pc.FoodImagePath = fromNullString(image)
 	pc.FoodName = name
 	pc.FoodKind = kind
 	pc.FoodRole = fromNullString(role)

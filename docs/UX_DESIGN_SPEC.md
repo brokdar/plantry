@@ -99,71 +99,67 @@ Daily idea:    Today ─▶ suggestion sheet ─▶ Add to my recipes │ Not fo
 
 ---
 
-## 3. Visual system: "Cookbook with batch badges"
+## 3. Visual system: green-neutral board with batch lines
 
-**The world:** a well-used home cookbook. Serif headings like a recipe title, a quiet paper-white ground, ink-blue for actions, and the earthy colours of cooked food (rust, ochre, herb) for batches. From the *Market* direction it takes the **batch badge** placed directly on each slot. These replace all current tokens in `src/index.css`.
+**The world (2026-11-15, replaces "Cookbook"):** the familiar modern meal-planner look done with Linear-grade precision. A light neutral ground with a faint green bias, white rounded cards with a hairline and a whisper of shadow, one fresh green accent for actions, selection and focus, and six vivid line colours used only for batches. One workhorse sans, Figtree, carries everything; weight carries hierarchy. Dark mode is a near-black green-grey with brighter line colours. Ruled out: cold navy on blue-grey, flat grey, cream paper with a serif, busy colour, tall vertical cards. The design record with rationale is `DESIGN.md`; the values below are the contract `src/index.css` and `src/test/tokens.test.ts` check.
 
 ### 3.1 Colour tokens
 
-Neutrals have a slight blue bias towards the ink accent, so they read as chosen rather than default grey.
-
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `--ground` | `#FBFBFA` | `#161821` | Page background |
-| `--panel` | `#FFFFFF` | `#1D2030` | Cells, sheets, cards with a role |
-| `--panel-sunken` | `#F3F4F6` | `#12141C` | Rail, toolbars, second neutral layer |
-| `--panel-raised` | `#FFFFFF` | `#252A3F` | Assistant panel surface |
-| `--ink` | `#1C2233` | `#E6E8F0` | Primary text |
-| `--ink-muted` | `#5A6175` | `#A3A8BB` | Secondary text, labels |
-| `--line` | `#E3E5EA` | `#2E3245` | Borders, dividers |
-| `--accent` | `#27407A` | `#9DB2EA` | Primary actions, focus ring, current selection, links |
-| `--on-accent` | `#FBFBFA` | `#161821` | Text on accent |
+| `--ground` | `#F5F6F4` | `#111513` | Page background |
+| `--panel` | `#FFFFFF` | `#191E1B` | Cells, sheets, cards, the rail |
+| `--panel-sunken` | `#EEF0EC` | `#0D100E` | Second neutral layer, tags, hover fills |
+| `--panel-raised` | `#FFFFFF` | `#212723` | Assistant panel surface |
+| `--ink` | `#18201B` | `#E6EBE7` | Primary text |
+| `--ink-muted` | `#5D6861` | `#A0AAA3` | Secondary text, labels |
+| `--line` | `#E1E4DE` | `#2A312D` | Borders, dividers, meter track |
+| `--accent` | `#157A3C` | `#4CC276` | Primary actions, focus ring, current selection, links |
+| `--on-accent` | `#FFFFFF` | `#0D100E` | Text on accent and on solid batch pills |
 
-**Batch palette.** Batches are assigned in order and cycle after six; a window rarely has more than four. Badge text uses `--ground` on the batch colour; tints are for the "cook here" cell and the Today card.
+**Batch palette.** Batches are assigned in order and cycle after six; a window rarely has more than four. The colour draws the batch line, the lane label, the pill and the cook-cell tint, and nothing else.
 
-| Batch | Light (badge / tint) | Dark (badge / tint) |
+| Batch | Light (line / tint) | Dark (line / tint) |
 |---|---|---|
-| 1 Rust | `#7A3B2E` / `#F3E7E2` | `#E29A88` / `#35231F` |
-| 2 Ochre | `#8A6A12` / `#F4EEDB` | `#D8B75A` / `#332B14` |
-| 3 Herb | `#2F6B5A` / `#E1EFE9` | `#7CC4AD` / `#1B302A` |
-| 4 Plum | `#6A3D6E` / `#EFE4F0` | `#C99BCD` / `#2E2131` |
-| 5 Olive | `#5D6B2A` / `#ECEFDC` | `#B5C46E` / `#272C16` |
-| 6 Slate | `#3D5A80` / `#E3EAF3` | `#93B0D6` / `#1C2533` |
+| 1 Orange | `#C2410C` / `#FFF1E8` | `#F08A4B` / `#3A2418` |
+| 2 Blue | `#1D4ED8` / `#E9EFFE` | `#7EA3F5` / `#1C2640` |
+| 3 Violet | `#6D28D9` / `#F2ECFE` | `#A98BF5` / `#2A2140` |
+| 4 Teal | `#0F766E` / `#E3F4F1` | `#3CC7B3` / `#143330` |
+| 5 Pink | `#BE185D` / `#FCE8F1` | `#EF7FB0` / `#3A1D2B` |
+| 6 Amber | `#9D6006` / `#FBF1DC` | `#E0B341` / `#362C12` |
 
 **State colours** are separate from batch colours and used only where they carry meaning:
 
 | State | Light | Dark |
 |---|---|---|
-| Success / on target | `#2E6B3F` | `#79C48F` |
-| Warning / below target, needs attention | `#9A5B00` | `#E3A54F` |
-| Danger / violation, destructive | `#A23A2A` | `#EE8B7B` |
+| Success / on target | `#2E6B3F` | `#6FCF8F` |
+| Warning / below target, needs attention | `#A15C00` | `#E3A54F` |
+| Danger / violation, destructive | `#B42318` | `#F08B7B` |
 | Info | uses `--accent` | |
 
-All text and badge pairs meet WCAG AA (≥4.5:1 for text, ≥3:1 for large text and UI marks). Colour is never the only signal: badges always carry text ("Cook × 4", "2/4"), and states carry an icon or word.
+All text and badge pairs meet WCAG AA (≥4.5:1 for text, ≥3:1 for large text and UI marks), including each batch colour on ground, panel and its own tint. Colour is never the only signal: badges always carry text ("Cook × 4", "2/4"), and states carry an icon or word. Text selection, the caret and scrollbars take the palette too.
 
 ### 3.2 Typography
 
 | Role | Face | Use |
 |---|---|---|
-| Display | **Newsreader** (serif, opsz 6–72), weights 500/600, italic 400 | Page titles, recipe names on detail and cook mode, the Today headline, row labels on the board (italic), notes. **Never** for buttons, inputs, data or labels. |
-| UI | **Source Sans 3**, weights 400/600 | Everything else: controls, plate names in cells, lists, data |
-| Numbers | Source Sans 3 with `font-variant-numeric: tabular-nums` | Macros, quantities, counts |
+| Everything | **Figtree** (variable, upright and italic) | Titles, labels, controls, plate names, data. Hierarchy comes from size and weight (400 / 600 / 700), not a second face. `font-heading` resolves to Figtree and stays only as a role name. |
+| Numbers | Figtree with `font-variant-numeric: tabular-nums` | Macros, quantities, counts, dates in the stepper |
 
-Both are self-hosted via `@fontsource-variable` (no Google Fonts call from a LAN app). Manrope and Inter are removed.
+Self-hosted via `@fontsource-variable/figtree` (no Google Fonts call from a LAN app). Newsreader and Source Sans 3 are removed.
 
-**Scale:** fixed rem, ratio about 1.2. Body 15 px (0.9375 rem) and small 13 px from 768 px, 16 px and 14 px on phones (the iOS input-zoom floor and Material's body size), caption 12 px, h3 19 px, h2 23 px, h1 28 px (Newsreader 600), and the Today headline at the h2 size (23 px) on phone. Line length for prose (recipe notes, instructions) is capped at 68ch. Labels use sentence case; there are no all-caps labels.
+**Scale:** fixed rem, ratio about 1.2. Body 15 px (0.9375 rem) and small 13 px from 768 px, 16 px and 14 px on phones (the iOS input-zoom floor and Material's body size), caption 12 px, h3 19 px, h2 23 px, h1 28 px (700), and the Today headline at the h2 size (23 px) on phone. Line length for prose (recipe notes, instructions) is capped at 68ch. Labels use sentence case; there are no all-caps labels.
 
 ### 3.3 Shape, spacing, elevation
 
 - Spacing scale: 4 · 8 · 12 · 16 · 24 · 32 · 48 px. Layouts use `gap`, not margins.
 - Radii by role:
-  - board cells and inputs: 4 px
-  - buttons: 8 px
+  - board cells, cards and inputs: 10 px
+  - buttons: 8 px; panels above the board (review, empty week): `rounded-xl` (about 11 px)
   - sheets and the phone tab bar: 16 px (top corners only)
-  - batch badges: `3px 10px 10px 3px`, a tag shape
-  - Not everything gets the same radius.
-- Elevation: none on cells. One soft shadow for sheets and popovers only. No shadow on cards in lists; the border carries separation.
-- Icons: Lucide (already in use), 1.5 px stroke, 16/20 px. No emoji as UI.
+  - batch badges: full pill
+- Elevation: cards and the panels above the board carry a 1 px whisper shadow (`--shadow-card`) under a hairline; sheets and popovers carry the one soft shadow. No coloured halos.
+- Icons: Lucide, 1.5 px stroke, 16/20 px. No emoji as UI.
 
 ### 3.4 Motion
 
@@ -173,19 +169,22 @@ Both are self-hosted via `@fontsource-variable` (no Google Fonts call from a LAN
 
 ---
 
-## 4. Signature: batch badges
+## 4. Signature: batch lines and badges
 
-The one memorable thing in Plantry: every slot shows where its food comes from.
+The one memorable thing in Plantry: every slot shows where its food comes from, and every batch reads as one coloured line across the week.
 
 | Element | Appearance |
 |---|---|
-| **Cook cell** (the session's own slot) | Batch tint background, 1.5 px `--ink` inset outline, badge **"Cook × 4"** |
-| **Leftover cell** | Plain `--panel`, badge **"2/4"** in the batch colour |
-| **Frozen portion cell** | Plain panel, badge **"2/4 · frozen"** with a snowflake icon |
-| **Cook strip** (above the board) | One badge per cook day, **"Sun · Chili × 4"**; tap to scroll to and highlight the batch |
-| **Linked highlight** | Hovering (desktop) or tapping (touch) any badge outlines every cell of that batch for 2 s. This is the main way to understand a batch at a glance. |
+| **Batch lane strip** (under the day headers, ≥768 px) | One lane per batch: the recipe name in the batch colour in the meal column, a 3 px line from the cook day to the last leftover day, a filled dot on the cook day and hollow dots on the leftover days. Each lane is a button in the "Cook days" list; activating it reveals the cook cell. |
+| **Cook cell** (the session's own slot) | Batch tint background, 1.5 px `--ink` inset outline, solid pill **"Cook × 4"** |
+| **Leftover cell** | Plain `--panel`, outlined pill **"2/4"** in the batch colour |
+| **Frozen portion cell** | Plain panel, outlined pill **"2/4 · frozen"** with a snowflake icon |
+| **Cook strip** (phone) | One pill per cook day, **"Sun · Chili × 4"**; tap to scroll to and highlight the batch |
+| **Linked highlight** | Hovering or focusing any card, pill or lane outlines every cell of that batch, brings its lane forward and dims the other lanes (2 s on touch). This is the main way to understand a batch at a glance. |
 | **Use-by** | Leftover cells on their last valid day add "use by today". Today shows "use by Wed" on the badge. |
-| **Surplus** | A badge with a dashed outline in the cook strip: **"2 spare"** or **"2 to freeze"** |
+| **Surplus** | A dashed pill: **"2 spare"** or **"2 to freeze"** |
+
+**Plan card:** about 84 px tall: a 30 px rounded photo (or a tinted initial) beside a two-line name, the pill on the bottom row. The photo hides when the cell is narrower than 7 rem. Drafts have a dashed border.
 
 Badges are the same component everywhere: board, Today, cook mode header, recipe detail ("last cooked as a batch of 4"), and the shopping list's "used in" expansion.
 
@@ -215,7 +214,7 @@ Every screen below lists its job, its layout per size, and the states it must ha
 **Phone layout (primary):**
 ```
 Monday, 2 November                       [gear]
-Nothing to cook today                    ← Newsreader headline: the day's verdict
+Nothing to cook today                    ← headline: the day's verdict
 ┌──────────────────────────────────────┐
 │ [3/4 · use by Wed]                   │  ← batch badge
 │ Dinner                               │
@@ -250,7 +249,7 @@ How was Sunday's Chili?   [Loved it] [Not again]
 
 **Job:** cook a batch from the phone with wet hands.
 
-- Full screen, large type (body 19 px, step text 22 px Newsreader). Requests a screen wake lock and tolerates refusal.
+- Full screen, large type (body 19 px, step text 22 px). Requests a screen wake lock and tolerates refusal.
 - **Header:** recipe name, then the badge **"Cooking × 4"**. The portion stepper scales live and explains its effect: "Covers Sun dinner, Mon lunch, Mon dinner, Tue lunch."
 - **Two tabs:**
   - **Ingredients:** scaled and tickable, with rounding hints ("1 can, using ⅔").
@@ -349,7 +348,7 @@ Three short steps. It opens as a full page on phone and as a centred panel over 
 **Job:** browse and maintain the personal cookbook; add new recipes easily.
 
 - **Library:**
-  - **Cards:** photo (4:3), recipe name (Newsreader), and one meta line: time, kcal per portion, diet icon, last eaten ("3 weeks ago" / "new" / "never").
+  - **Cards:** photo (4:3), recipe name (h3, medium), and one meta line: time, kcal per portion, diet icon, last eaten ("3 weeks ago" / "new" / "never").
   - **Layout:** 4 columns on desktop, 3 on tablet, 2 on phone.
   - **Filters** as a chip row: Role (Main, Side, …), Diet, Time (≤30 min), "Not eaten lately", Favorites, New. There is a search field, and Sort offers Name, Last eaten and Added.
   - **Missing photo:** a typographic placeholder (the recipe initial on the batch tint), never a stock image.
@@ -380,7 +379,7 @@ Three short steps. It opens as a full page on phone and as a centred panel over 
 
 - **Appearance:** a sheet over Today on the first open of the day, with a large photo (16:9) at the top.
 - **Content:**
-  - Name (Newsreader), cuisine, time, kcal and protein per portion, diet icon.
+  - Name (h1), cuisine, time, kcal and protein per portion, diet icon.
   - A one-line "why": "Uses 7 ingredients you already know. New cuisine for you: Persian."
   - The ingredient list with **new ingredients highlighted**: a small "new" label in `--accent` next to the name, with a legend "new = not in any of your recipes yet".
   - The source link.
@@ -522,7 +521,7 @@ Every setting shows its effect in one line ("Plantry plans at most 1 cooking ses
 ## 12. Phase 5 amendments (2026-11)
 
 - **§5.9 daily idea and failure.** Built as `DailySuggestionSheet` (right-hand sheet, bottom sheet on phones) over the real today only, at most once per day; silent on 204, while loading and when the run failed. Buttons read **Add to my recipes** and **Not for me** (three reason chips plus "No reason"), **Show another**.
-- **`SuggestionCard`.** Photo or a typographic placeholder (name in Newsreader on `panel-sunken`), diet icon and facts, computed macros or "Nutrition incomplete", the *why*, ingredients with the word "New" in accent semibold and a one-time legend, a source link, and a "Search-grounded" pill when the run searched the web.
+- **`SuggestionCard`.** Photo or a typographic placeholder (name on `panel-sunken`), diet icon and facts, computed macros or "Nutrition incomplete", the *why*, ingredients with the word "New" in accent semibold and a one-time legend, a source link, and a "Search-grounded" pill when the run searched the web.
 - **§5.8 `DiscoverSheet`.** Reached from the Recipes Add menu (`?add=discover`) and the third onboarding card; chips Daily idea, Explore a cuisine, Use what I know.
 - **§5.11 Settings → Assistant.** Cuisine chips for the daily idea; model list from the Anthropic rules table; Insights shows the price table date and a discovery block.
 - **Guided library.** Three cards (Import, Discover, Create); Discover only appears when an AI provider is set.

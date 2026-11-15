@@ -29,7 +29,7 @@ function isTyping(target: EventTarget | null) {
 }
 
 /**
- * One recipe step per screen (UX §5.3) in 22 px Newsreader, with durations
+ * One recipe step per screen (UX §5.3) in 22 px heading face, with durations
  * as timer buttons. Previous and Next are 56 px targets at the bottom; the
  * arrow keys and a horizontal swipe turn the page too. The last step
  * swaps Next for `finish`.

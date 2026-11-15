@@ -86,17 +86,17 @@ All forms use `react-hook-form` + `zod` via `@hookform/resolvers/zod`. Schema de
 
 ### Design system
 
-**Cookbook** — full reference: [`DESIGN.md`](../DESIGN.md); spec: `docs/UX_DESIGN_SPEC.md` §3. This section is the short summary. Tokens are hex CSS variables in `src/index.css` (`:root` + `.dark`), exposed to Tailwind via `@theme inline`. `src/test/tokens.test.ts` checks values and WCAG contrast.
+Full reference: [`DESIGN.md`](../DESIGN.md); spec: `docs/UX_DESIGN_SPEC.md` §3. This section is the short summary. Tokens are hex CSS variables in `src/index.css` (`:root` + `.dark`), exposed to Tailwind via `@theme inline`. `src/test/tokens.test.ts` checks values and WCAG contrast.
 
 Use these names in new and rebuilt code:
 
-- Colour: `bg-ground` (page), `bg-panel` (cells, sheets, cards), `bg-panel-sunken` (rail, toolbars), `text-ink`, `text-ink-muted`, `border-line`, `bg-accent` + `text-on-accent`, `bg-batch-1`…`bg-batch-6` and `bg-batch-N-tint`, `text-success` / `text-warning` / `text-danger`.
-- Type: `text-caption`, `text-small`, `text-body`, `text-h3`, `text-h2`, `text-h1`. Body/UI font is Source Sans 3 (`font-sans`, the default); `font-heading` is Newsreader, for display only (page titles, recipe names, headlines) — never labels, buttons, inputs or data. `h1`–`h6` get Newsreader from the base layer. Numbers use `tabular-nums`. Sentence case, no all-caps labels.
-- Shape: `rounded-cell` (4 px), `rounded-sheet` (16 px), `rounded-tag` (batch badge); buttons keep shadcn's `--radius` (8 px). `shadow-sheet` is the only shadow, for sheets and popovers.
+- Colour: `bg-ground` (page, green-neutral), `bg-panel` (cells, cards, sheets, the rail), `bg-panel-sunken` (second neutral layer, tags, hover fills), `text-ink`, `text-ink-muted`, `border-line`, `bg-accent` + `text-on-accent` (green: actions, selection, focus only), `bg-batch-1`…`bg-batch-6` and `bg-batch-N-tint` (batch lines, lane labels, pills and the cook-cell tint only), `text-success` / `text-warning` / `text-danger`.
+- Type: `text-caption`, `text-small`, `text-body`, `text-h3`, `text-h2`, `text-h1`. Figtree is the only face (`font-sans`, upright and italic); `font-heading` is a role alias that also resolves to Figtree. Hierarchy comes from size and weight. Numbers use `tabular-nums`. Sentence case, no all-caps labels.
+- Shape: `rounded-cell` (10 px: cells, cards, inputs), `rounded-xl` (panels above the board), `rounded-sheet` (16 px), `rounded-tag` (batch pill, full round); buttons keep shadcn's `--radius` (8 px). `shadow-card` is the 1 px whisper under cards and panels; `shadow-sheet` is for sheets and popovers.
 
-**shadcn names.** `components/ui` reads the shadcn theme variables (`--background`, `--primary`, `--muted`, `--border`, …); `index.css` maps each onto a Cookbook token (table in its comment). App code uses the Cookbook names. The Botanical Atelier aliases, macro and chart palettes and utilities are gone: `src/test/tokens.test.ts` allowlists every custom property `index.css` defines, and `scripts/check-legacy.sh` (in `bun run check`) fails on the Phase 2 legacy patterns in `src/` and `e2e/`. Nutrition reads as one line of text: `editorial/MacroLine` (kcal/P/F/C, `units.*` keys).
+**shadcn names.** `components/ui` reads the shadcn theme variables (`--background`, `--primary`, `--muted`, `--border`, …); `index.css` maps each onto a design token (table in its comment). App code uses the design token names. The Botanical Atelier aliases, macro and chart palettes and utilities are gone: `src/test/tokens.test.ts` allowlists every custom property `index.css` defines, and `scripts/check-legacy.sh` (in `bun run check`) fails on the Phase 2 legacy patterns in `src/` and `e2e/`. Nutrition reads as one line of text: `editorial/MacroLine` (kcal/P/F/C, `units.*` keys).
 
-**Gotcha:** shadcn's `--accent` is the same variable as the Cookbook accent (solid ink blue), so `bg-accent` (including shadcn menu/select highlights) needs `text-on-accent` / `text-accent-foreground` for text, never `text-ink`.
+**Gotcha:** shadcn's `--accent` is the same variable as the design accent (solid green), so `bg-accent` (including shadcn menu/select highlights) needs `text-on-accent` / `text-accent-foreground` for text, never `text-ink`.
 
 ### Dead code and legacy gates
 

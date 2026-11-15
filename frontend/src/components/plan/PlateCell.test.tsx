@@ -38,11 +38,11 @@ beforeEach(async () => {
 })
 
 describe("PlateCell", () => {
-  it("draws the cook cell on the batch tint with an inset ink outline", () => {
+  it("draws the cook cell on the batch tint with a hairline border", () => {
     const button = renderCell(cell("2026-11-01|3"))
     expect(button.className).toMatch(/bg-batch-1-tint/)
-    expect(button.className).toMatch(/inset-ring-\[1\.5px\]/)
-    expect(button.className).toMatch(/inset-ring-ink/)
+    expect(button.className).toMatch(/border-line/)
+    expect(button.className).not.toMatch(/border-dashed/)
     expect(screen.getByText("Cook × 6")).toBeInTheDocument()
     expect(screen.getByText("cook here")).toBeInTheDocument()
   })
@@ -67,7 +67,7 @@ describe("PlateCell", () => {
       ),
     }
     renderCell(cell("2026-11-03|1", plan))
-    expect(screen.getByText("No plate")).toHaveClass("italic")
+    expect(screen.getByText("No plate")).not.toHaveClass("italic")
     expect(screen.getByText("Hotel")).toBeInTheDocument()
     cleanup()
     renderCell(cell("2026-11-04|1", plan))
@@ -91,14 +91,12 @@ describe("PlateCell", () => {
   it("draws a draft with a dashed border and no padlock", () => {
     const button = renderCell(cell("2026-11-02|3", mockDraftPlan))
     expect(button.className).toMatch(/border-dashed/)
-    expect(button.className).not.toMatch(/inset-ring-line/)
     expect(screen.queryByTestId("cell-padlock")).not.toBeInTheDocument()
     cleanup()
-    // A draft cook cell keeps its tint with a dashed ink outline.
+    // A draft cook cell keeps its tint with a dashed border.
     const cook = renderCell(cell("2026-11-01|3", mockDraftPlan))
     expect(cook.className).toMatch(/bg-batch-1-tint/)
-    expect(cook.className).toMatch(/border-dashed border-ink/)
-    expect(cook.className).not.toMatch(/inset-ring-ink/)
+    expect(cook.className).toMatch(/border-dashed/)
   })
 
   it("draws a confirmed plate solid with a padlock", () => {

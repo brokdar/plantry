@@ -117,7 +117,14 @@ describe("BatchBadge spoken text", () => {
 })
 
 describe("BatchBadge appearance", () => {
-  it("fills solid variants with the batch colour and ground text", () => {
+  it("fills the cook pill with the batch colour and on-accent text", () => {
+    render(<BatchBadge sessionId={7} colour={3} variant="cook" portions={4} />)
+    const badge = screen.getByText("Cook × 4").closest("[data-batch-badge]")!
+    expect(badge).toHaveClass("bg-batch-3", "text-on-accent", "rounded-tag")
+    expect(badge).toHaveAttribute("data-colour", "3")
+  })
+
+  it("outlines leftovers in the batch colour", () => {
     render(
       <BatchBadge
         sessionId={7}
@@ -128,8 +135,8 @@ describe("BatchBadge appearance", () => {
       />
     )
     const badge = screen.getByText("2/3").closest("[data-batch-badge]")!
-    expect(badge).toHaveClass("bg-batch-3", "text-ground", "rounded-tag")
-    expect(badge).toHaveAttribute("data-colour", "3")
+    expect(badge).toHaveClass("border-batch-3", "text-batch-3")
+    expect(badge).not.toHaveClass("bg-batch-3", "border-dashed")
   })
 
   it("outlines surplus badges with a dashed border in the batch colour", () => {

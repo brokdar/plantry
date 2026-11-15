@@ -14,7 +14,10 @@ import { useBatchHighlight } from "./batch-highlight"
 /** The badges of one strip entry: the cook badge, then the dashed extras.
  *  `surplus` (portions − all consumption, never below 0) is split into the
  *  part planned for the freezer and the spare rest. */
-function stripBadges(session: Session, weekday: string): BatchBadgeContent[] {
+export function stripBadges(
+  session: Session,
+  weekday: string
+): BatchBadgeContent[] {
   const toFreeze = Math.min(
     session.surplus,
     Math.max(0, session.frozen_portions - session.frozen_consumed)
@@ -64,7 +67,7 @@ export function CookStrip({ batches }: { batches: readonly ColouredBatch[] }) {
                   .map((badge) => batchBadgeText(badge, i18n))
                   .join(", ")}
                 onClick={() => reveal(session.id, colour)}
-                className="flex min-h-11 items-center gap-1 rounded-lg px-1"
+                className="flex min-h-11 items-center gap-1 rounded-full border border-line bg-panel px-2 shadow-card"
               >
                 {badges.map((badge) => (
                   <BatchBadge
