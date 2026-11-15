@@ -125,9 +125,12 @@ describe("PlanPage", () => {
     const grid = await screen.findByRole("grid")
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/31.*6/)
     expect(screen.getByText("3 plates, 1 cook day")).toBeInTheDocument()
-    expect(screen.getByRole("region", { name: "Cook days" })).toHaveTextContent(
-      /Chili × 6/
-    )
+    expect(
+      within(screen.getByRole("region", { name: "Cook days" })).getByRole(
+        "button",
+        { name: /Chili × 6/ }
+      )
+    ).toBeInTheDocument()
     expect(within(grid).getByText("Cook × 6")).toBeInTheDocument()
     expect(within(grid).getByText("2/3")).toBeInTheDocument()
     expect(within(grid).getByText("3/3")).toBeInTheDocument()

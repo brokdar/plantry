@@ -1,7 +1,7 @@
 import type { PlanSlot } from "@/lib/api/plan"
 import type { Session } from "@/lib/api/sessions"
 
-/** One of the six batch palette entries (UX §3.1): 1 Rust … 6 Slate. */
+/** One of the six batch palette entries (plan-board world): 1 orange … 6 amber. */
 export type BatchColour = 1 | 2 | 3 | 4 | 5 | 6
 
 const PALETTE_SIZE = 6
@@ -44,33 +44,33 @@ export const BATCH_CLASSES: Record<
   { solid: string; outline: string; tint: string }
 > = {
   1: {
-    solid: "bg-batch-1 text-ground",
-    outline: "border-batch-1 text-batch-1",
+    solid: "bg-batch-1 text-on-accent",
+    outline: "border-batch-1 bg-panel text-batch-1",
     tint: "bg-batch-1-tint",
   },
   2: {
-    solid: "bg-batch-2 text-ground",
-    outline: "border-batch-2 text-batch-2",
+    solid: "bg-batch-2 text-on-accent",
+    outline: "border-batch-2 bg-panel text-batch-2",
     tint: "bg-batch-2-tint",
   },
   3: {
-    solid: "bg-batch-3 text-ground",
-    outline: "border-batch-3 text-batch-3",
+    solid: "bg-batch-3 text-on-accent",
+    outline: "border-batch-3 bg-panel text-batch-3",
     tint: "bg-batch-3-tint",
   },
   4: {
-    solid: "bg-batch-4 text-ground",
-    outline: "border-batch-4 text-batch-4",
+    solid: "bg-batch-4 text-on-accent",
+    outline: "border-batch-4 bg-panel text-batch-4",
     tint: "bg-batch-4-tint",
   },
   5: {
-    solid: "bg-batch-5 text-ground",
-    outline: "border-batch-5 text-batch-5",
+    solid: "bg-batch-5 text-on-accent",
+    outline: "border-batch-5 bg-panel text-batch-5",
     tint: "bg-batch-5-tint",
   },
   6: {
-    solid: "bg-batch-6 text-ground",
-    outline: "border-batch-6 text-batch-6",
+    solid: "bg-batch-6 text-on-accent",
+    outline: "border-batch-6 bg-panel text-batch-6",
     tint: "bg-batch-6-tint",
   },
 }

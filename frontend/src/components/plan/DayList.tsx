@@ -64,7 +64,7 @@ export function DayList({
                     key={cell.key}
                     className="grid grid-cols-[5.5rem_1fr] items-start gap-2"
                   >
-                    <span className="pt-2 font-heading text-small text-ink-muted italic">
+                    <span className="pt-2 text-small font-semibold text-ink-muted">
                       {row.name}
                     </span>
                     <PlateCell

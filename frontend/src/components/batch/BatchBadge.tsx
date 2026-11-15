@@ -18,9 +18,10 @@ export type BatchBadgeProps = BatchBadgeContent & {
 /**
  * The batch badge (UX §4, D28): a tag in the batch colour that always says
  * where the food comes from. Pointing at it (hover or tap) highlights every
- * cell of the batch through `BatchHighlightProvider`. Solid variants put
- * `ground` text on the batch colour; `surplus` and `toFreeze` are dashed
- * outlines, and `frozen` adds a snowflake.
+ * cell of the batch through `BatchHighlightProvider`. Cook is a solid
+ * pill with `on-accent` text; leftovers and frozen are outlined in the batch
+ * colour, `surplus` and `toFreeze` are dashed outlines, and `frozen` adds a
+ * snowflake.
  */
 export function BatchBadge({
   sessionId,
@@ -32,6 +33,8 @@ export function BatchBadge({
   const { t, i18n } = useTranslation()
   const { highlight } = useBatchHighlight()
   const dashed = content.variant === "surplus" || content.variant === "toFreeze"
+  // Cook is the one solid pill; leftovers and frozen portions are outlined.
+  const solid = content.variant === "cook"
   // "2/2" alone is cryptic and read as "2 slash 2": say what it is.
   const spoken =
     content.variant === "leftover" || content.variant === "frozen"
@@ -51,10 +54,13 @@ export function BatchBadge({
       title={spoken ?? undefined}
       onPointerEnter={() => highlight(sessionId, colour)}
       className={cn(
-        "inline-flex items-center gap-1 rounded-tag border px-2 py-0.5 text-caption font-semibold whitespace-nowrap tabular-nums",
-        dashed
-          ? cn("border-dashed", BATCH_CLASSES[colour].outline)
-          : cn("border-transparent", BATCH_CLASSES[colour].solid),
+        "inline-flex items-center gap-1 rounded-tag px-2 py-px text-caption font-semibold whitespace-nowrap tabular-nums",
+        solid
+          ? cn("border border-transparent", BATCH_CLASSES[colour].solid)
+          : cn(
+              dashed ? "border border-dashed" : "border-[1.5px]",
+              BATCH_CLASSES[colour].outline
+            ),
         className
       )}
     >

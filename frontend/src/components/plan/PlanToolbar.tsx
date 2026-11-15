@@ -2,7 +2,6 @@ import { Link } from "@tanstack/react-router"
 import {
   CalendarClock,
   CalendarRange,
-  Check,
   ChevronLeft,
   ChevronRight,
   Eraser,
@@ -12,7 +11,6 @@ import {
   RefreshCw,
   ShoppingBasket,
   Trash2,
-  TriangleAlert,
 } from "lucide-react"
 import { useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
@@ -57,6 +55,8 @@ interface PlanToolbarProps {
   onShortcuts: () => void
   /** The window's drafts; null when there are none (D33 review actions). */
   draft: DraftSummary | null
+  /** Draft plates in the window, for the review panel. */
+  draftPlates: number
   /** A generation runs for this window: review actions wait for it. */
   running: boolean
   accepting: boolean
@@ -70,7 +70,7 @@ interface PlanToolbarProps {
 }
 
 const NAV_LINK =
-  "inline-flex min-h-11 items-center justify-center rounded-lg text-small text-ink transition-colors duration-150 ease-out hover:bg-panel-sunken md:pointer-fine:min-h-9"
+  "inline-flex min-h-11 items-center justify-center text-small text-ink transition-colors duration-150 ease-out hover:bg-panel-sunken md:pointer-fine:min-h-9"
 
 /** Publishes the toolbar's bottom edge (viewport px) as `--plan-toolbar-bottom`
  *  so the floating assistant panel (768-1279 px) starts below it and leaves
@@ -123,6 +123,7 @@ export function PlanToolbar({
   onClear,
   onShortcuts,
   draft,
+  draftPlates,
   running,
   accepting,
   onAcceptAndShop,
@@ -141,32 +142,78 @@ export function PlanToolbar({
     <header ref={headerRef} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="text-h1 text-ink">{rangeLabel}</h1>
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-ink-muted tabular-nums">
-            <span data-testid="plan-summary">{summary}</span>
-            {warningCount > 0 && (
-              <button
-                type="button"
-                onClick={onNextWarning}
-                data-testid="plan-warnings"
-                className="inline-flex min-h-11 items-center gap-1 rounded-lg px-1 font-semibold text-warning hover:underline md:pointer-fine:min-h-6"
+          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+            <h1 className="text-h1 text-ink">{rangeLabel}</h1>
+            <nav
+              aria-label={t("plan.toolbar.weeks")}
+              className="flex items-center overflow-hidden rounded-lg border border-line bg-panel"
+            >
+              <Link
+                to="/plan"
+                search={{ start: window.prev_start, assistant: keep }}
+                aria-label={t("plan.toolbar.prev")}
+                className={cn(NAV_LINK, "w-11 md:pointer-fine:w-8")}
               >
-                <TriangleAlert
+                <ChevronLeft
                   className="size-4"
                   strokeWidth={1.5}
                   aria-hidden="true"
                 />
-                {t("plan.toolbar.warnings", { count: warningCount })}
-              </button>
-            )}
-            {/* Reviewing a draft, "0 plates need attention" is the answer
+              </Link>
+              <Link
+                to="/plan"
+                // The window holding today, as on Today, whatever the anchor.
+                search={{
+                  start: windowStartOf(window.today, window.shopping_day),
+                  assistant: keep,
+                }}
+                aria-current={window.is_current ? "page" : undefined}
+                className={cn(
+                  NAV_LINK,
+                  "rounded-none border-x border-line px-3",
+                  window.is_current && "bg-accent/10 font-semibold text-accent"
+                )}
+              >
+                {t("plan.toolbar.this_week")}
+              </Link>
+              <Link
+                to="/plan"
+                search={{ start: window.next_start, assistant: keep }}
+                aria-label={t("plan.toolbar.next")}
+                className={cn(NAV_LINK, "w-11 md:pointer-fine:w-8")}
+              >
+                <ChevronRight
+                  className="size-4"
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                />
+              </Link>
+            </nav>
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-ink-muted tabular-nums">
+              <span data-testid="plan-summary">{summary}</span>
+              {warningCount > 0 && (
+                <button
+                  type="button"
+                  onClick={onNextWarning}
+                  data-testid="plan-warnings"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-1 font-semibold text-warning hover:underline md:pointer-fine:min-h-6"
+                >
+                  <span
+                    className="size-2 rounded-full bg-warning"
+                    aria-hidden="true"
+                  />
+                  {t("plan.toolbar.warnings", { count: warningCount })}
+                </button>
+              )}
+              {/* Reviewing a draft, "0 plates need attention" is the answer
                 the review looks for (AC-1 step 4). */}
-            {warningCount === 0 && review && (
-              <span data-testid="plan-warnings">
-                {t("plan.toolbar.warnings", { count: 0 })}
-              </span>
-            )}
-          </p>
+              {warningCount === 0 && review && (
+                <span data-testid="plan-warnings">
+                  {t("plan.toolbar.warnings", { count: 0 })}
+                </span>
+              )}
+            </p>
+          </div>
           {readOnly && (
             <p className="text-small text-ink-muted">
               {t("plan.toolbar.read_only")}
@@ -237,17 +284,6 @@ export function PlanToolbar({
               <span className="max-sm:sr-only">{t("plan.toolbar.shop")}</span>
             </Link>
           </Button>
-          {/* Phones get Accept and shop in the sticky DraftBar. */}
-          {review && (
-            <Button
-              onClick={onAcceptAndShop}
-              disabled={running || accepting}
-              className="h-11 gap-2 px-3 max-md:hidden md:pointer-fine:h-9"
-            >
-              <Check strokeWidth={1.5} aria-hidden="true" />
-              {t("plan.review.accept_and_shop")}
-            </Button>
-          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -300,52 +336,37 @@ export function PlanToolbar({
         </div>
       </div>
 
-      <nav
-        aria-label={t("plan.toolbar.weeks")}
-        className="flex items-center gap-1"
-      >
-        <Link
-          to="/plan"
-          search={{ start: window.prev_start, assistant: keep }}
-          aria-label={t("plan.toolbar.prev")}
-          className={cn(NAV_LINK, "w-11 md:pointer-fine:w-9")}
+      {review && (
+        <div
+          data-testid="draft-panel"
+          className="flex items-center gap-3 rounded-xl border border-line bg-panel px-4 py-2.5 shadow-card max-md:hidden"
         >
-          <ChevronLeft
-            className="size-5"
-            strokeWidth={1.5}
-            aria-hidden="true"
-          />
-        </Link>
-        <Link
-          to="/plan"
-          // The window holding today, as on Today, whatever the anchor.
-          search={{
-            start: windowStartOf(window.today, window.shopping_day),
-            assistant: keep,
-          }}
-          aria-current={window.is_current ? "page" : undefined}
-          className={cn(
-            NAV_LINK,
-            "rounded-full border border-line px-3",
-            window.is_current &&
-              "border-accent bg-accent/10 font-semibold text-accent"
-          )}
-        >
-          {t("plan.toolbar.this_week")}
-        </Link>
-        <Link
-          to="/plan"
-          search={{ start: window.next_start, assistant: keep }}
-          aria-label={t("plan.toolbar.next")}
-          className={cn(NAV_LINK, "w-11 md:pointer-fine:w-9")}
-        >
-          <ChevronRight
-            className="size-5"
-            strokeWidth={1.5}
-            aria-hidden="true"
-          />
-        </Link>
-      </nav>
+          <span className="rounded-md bg-panel-sunken px-2 py-0.5 text-caption font-semibold text-ink-muted">
+            {t("plan.review.draft_tag")}
+          </span>
+          <span className="text-small font-semibold text-ink">
+            {t("plan.review.waiting", { count: draftPlates })}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-small text-ink-muted">
+            {t("plan.review.hint")}
+          </span>
+          <Button
+            variant="outline"
+            disabled={running}
+            onClick={onDiscard}
+            className="md:pointer-fine:h-9"
+          >
+            {t("plan.review.discard_drafts")}
+          </Button>
+          <Button
+            onClick={onAcceptAndShop}
+            disabled={running || accepting}
+            className="gap-2 md:pointer-fine:h-9"
+          >
+            {t("plan.review.accept_and_shop")}
+          </Button>
+        </div>
+      )}
       {progress}
     </header>
   )

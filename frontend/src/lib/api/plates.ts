@@ -9,6 +9,8 @@ export interface PlateComponent {
   food_name: string
   kind: FoodKind
   role?: FoodRole | null
+  /** The food's image (`imageURL`); null without one. */
+  image_path?: string | null
   /** Composed: portions per eater (REAL, usually 1). */
   portions?: number
   /** Composed: the cook session this component eats from (D8). */

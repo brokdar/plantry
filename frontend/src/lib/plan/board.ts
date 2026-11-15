@@ -53,6 +53,8 @@ export interface BoardCell {
   badge: CellBadge | null
   /** The main food's name; null without a plate. */
   mainName: string | null
+  /** The main food's image path (thumbnail); null without one. */
+  mainImage: string | null
   /** "with rice and salad" for the other components; null when none. */
   sideText: string | null
   subline: CellSubline | null
@@ -253,6 +255,7 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
       state: plate?.state ?? null,
       badge,
       mainName: main?.food_name ?? null,
+      mainImage: main?.image_path ?? null,
       sideText:
         sides.length > 0
           ? f.t("plan.cell.with", { names: listFormat.format(sides) })

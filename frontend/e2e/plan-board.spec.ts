@@ -177,7 +177,7 @@ test.describe("Plan board", () => {
       await expect(entry).toBeVisible()
       await expect(entry).toHaveCount(1)
 
-      await entry.locator("[data-batch-badge]").hover()
+      await entry.hover()
       await expect(grid.locator("[data-highlighted]")).toHaveCount(3)
     } finally {
       await s.cleanup()

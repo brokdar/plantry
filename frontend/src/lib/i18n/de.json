@@ -1500,6 +1500,11 @@
       "regenerate_week": "Woche neu planen",
       "accept_and_shop": "Übernehmen und einkaufen",
       "discard": "Entwurf verwerfen",
+      "draft_tag": "Entwurf",
+      "waiting_one": "{{count}} Mahlzeit wartet auf Prüfung",
+      "waiting_other": "{{count}} Mahlzeiten warten auf Prüfung",
+      "hint": "Bestätigte Mahlzeiten landen in Heute und auf der Einkaufsliste.",
+      "discard_drafts": "Entwürfe verwerfen",
       "why": "Warum das?",
       "draft_note": "Entwurf. Bestätigte Mahlzeiten bleiben beim Neuplanen erhalten.",
       "confirmed_note": "Bestätigt. Die Zutaten sind vielleicht schon gekauft."
