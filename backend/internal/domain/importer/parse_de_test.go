@@ -126,8 +126,10 @@ func TestParseLineDE(t *testing.T) {
 				t.Errorf("Confidence: got %q, want %q", got.Confidence, tc.confidence)
 			}
 			if units.IsCount(tc.unit) {
-				if got.PortionGrams == nil || *got.PortionGrams != units.CountGrams[tc.unit] {
-					t.Errorf("PortionGrams: got %v, want units.CountGrams[%q]", got.PortionGrams, tc.unit)
+				want := units.EstimateCountGrams(tc.unit, tc.ingrName)
+				if got.PortionGrams == nil || *got.PortionGrams != want {
+					t.Errorf("PortionGrams: got %v, want %v (units.EstimateCountGrams(%q, %q))",
+						got.PortionGrams, want, tc.unit, tc.ingrName)
 				}
 			} else if got.PortionGrams != nil {
 				t.Errorf("PortionGrams: got %v, want nil", *got.PortionGrams)

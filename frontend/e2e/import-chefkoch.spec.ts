@@ -39,18 +39,18 @@ function chefkochHTML(tag: string): string {
 }
 
 // Per-100 g values seeded for each ingredient, and the grams each line
-// resolves to (counts keep their unit and get a portion from units.CountGrams:
-// a unit-less count is 120 g per piece, Zehe = 5 g; EL = 15 ml at 1 g/ml
-// since the leaf has no ml portion):
+// resolves to (counts keep their unit and get a portion from
+// units.EstimateCountGrams: a piece of onion is 110 g, a clove of garlic 3 g;
+// EL = 15 ml at 1 g/ml since the leaf has no ml portion):
 //
-//   Reis       250 g          × 350 kcal = 875.0
-//   Zwiebel    2 × 120 = 240 g × 40 kcal =  96.0
-//   Knoblauch  2 × 5   =  10 g × 149 kcal =  14.9
-//   Olivenöl   1 × 15  =  15 g × 884 kcal = 132.6
-//   Tomaten    400 g          ×  18 kcal =  72.0
+//   Reis       250 g          × 350 kcal = 875.00
+//   Zwiebel    2 × 110 = 220 g × 40 kcal =  88.00
+//   Knoblauch  2 × 3   =   6 g × 149 kcal =   8.94
+//   Olivenöl   1 × 15  =  15 g × 884 kcal = 132.60
+//   Tomaten    400 g          ×  18 kcal =  72.00
 //   Salz und Pfeffer: no quantity, skipped
-//                                  total = 1190.5 kcal / 4 portions
-const EXPECTED_KCAL_PER_PORTION = 1190.5 / 4 // 297.625
+//                                  total = 1176.54 kcal / 4 portions
+const EXPECTED_KCAL_PER_PORTION = 1176.54 / 4 // 294.135
 
 const INGREDIENTS = [
   {
@@ -130,7 +130,7 @@ test.describe("Recipe import — chefkoch", () => {
         INGREDIENTS.length
       )
       await expect(page.getByTestId("import-nutrition")).toContainText(
-        "298 kcal per portion"
+        "294 kcal per portion"
       )
       await expect(page.getByTestId("import-nutrition")).toContainText(
         "Source: 520 kcal"

@@ -102,12 +102,12 @@ func TestImport_CountUnitsResolveThroughPortions(t *testing.T) {
 	assert.InDelta(t, 400, byChild[beans].Grams, 1e-9)
 	assert.Equal(t, "piece", byChild[onion].Unit)
 	assert.InDelta(t, 1, byChild[onion].Amount, 1e-9)
-	assert.InDelta(t, 120, byChild[onion].Grams, 1e-9, "1 piece × the units.CountGrams default")
+	assert.InDelta(t, 110, byChild[onion].Grams, 1e-9, "1 piece × the estimate for an onion")
 	assert.Equal(t, "clove", byChild[garlic].Unit)
 	assert.InDelta(t, 2, byChild[garlic].Amount, 1e-9)
 	assert.InDelta(t, 8, byChild[garlic].Grams, 1e-9, "2 cloves × the leaf's own 4 g portion")
 
-	assert.Equal(t, []food.Portion{{FoodID: onion, Unit: "piece", Grams: 120}}, env.portions(t, onion),
+	assert.Equal(t, []food.Portion{{FoodID: onion, Unit: "piece", Grams: 110}}, env.portions(t, onion),
 		"the onion lacked a piece portion, so the import creates it")
 	assert.Equal(t, []food.Portion{{FoodID: garlic, Unit: "clove", Grams: 4}}, env.portions(t, garlic),
 		"the garlic portion is kept as it was")

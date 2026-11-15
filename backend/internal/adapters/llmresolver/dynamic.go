@@ -51,6 +51,12 @@ func (d *Dynamic) Current(ctx context.Context) (llm.Client, string, error) {
 	if cfg.Provider == "" {
 		return nil, "", llm.ErrProviderMissing
 	}
+	// A hosted provider needs its key. Without one every call would fail with
+	// a 401 that callers report as a generic LLM failure; "no provider" is the
+	// truth. The fake provider runs from a script and needs no key.
+	if cfg.APIKey == "" && cfg.Provider != "fake" {
+		return nil, "", llm.ErrProviderMissing
+	}
 	key := cacheKey{
 		provider:   cfg.Provider,
 		apiKeyHash: hashKey(cfg.APIKey),
