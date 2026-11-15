@@ -42,9 +42,9 @@ export function SideNav({ collapsed, onToggle }: SideNavProps) {
     <div
       className={cn(
         "hide-scrollbar hidden h-screen shrink-0 flex-col overflow-y-auto md:flex",
-        "sticky top-0 left-0 border-r border-line bg-panel-sunken",
+        "sticky top-0 left-0 border-r border-line bg-panel",
         animate && "transition-[width] duration-200",
-        isRail ? "w-20 px-3 pt-8 pb-10" : "w-64 py-8 pr-0 pl-4"
+        isRail ? "w-20 px-3 pt-8 pb-10" : "w-52 py-8 pr-0 pl-3"
       )}
       data-testid="sidenav"
       data-collapsed={isRail}
@@ -102,7 +102,7 @@ export function SideNav({ collapsed, onToggle }: SideNavProps) {
             title={t("nav.settings")}
             aria-current={settingsActive ? "page" : undefined}
             data-active={settingsActive}
-            className="flex size-10 items-center justify-center rounded-lg text-ink-muted transition-colors duration-150 ease-out hover:bg-panel hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none data-[active=true]:bg-accent/10 data-[active=true]:text-accent"
+            className="flex size-10 items-center justify-center rounded-lg text-ink-muted transition-colors duration-150 ease-out hover:bg-panel-sunken hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none data-[active=true]:bg-accent/10 data-[active=true]:text-accent"
             data-testid="sidenav-settings"
           >
             <Settings className="size-5" strokeWidth={1.5} aria-hidden />
@@ -127,7 +127,7 @@ export function SideNav({ collapsed, onToggle }: SideNavProps) {
             aria-label={
               collapsed ? t("nav.expand_sidebar") : t("nav.collapse_sidebar")
             }
-            className="flex size-8 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-panel hover:text-ink"
+            className="flex size-8 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-panel-sunken hover:text-ink"
           >
             <ChevronLeft
               className={cn(
