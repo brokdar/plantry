@@ -13,12 +13,6 @@ const ON_TARGET_MAX = 1.15
  *  and an overshoot reads by length, not only by colour. */
 const TRACK_MAX = 1.25
 
-const FILL = {
-  success: "bg-success",
-  warning: "bg-warning",
-  neutral: "bg-ink-muted",
-} as const
-
 interface DayMeterProps {
   day: PlanDay
   targets: PlanTargets | null
@@ -27,7 +21,9 @@ interface DayMeterProps {
 
 /**
  * A thin bar of the day's per-eater kcal against the target: success colour
- * on target, warning colour outside, neutral without a target. The track
+ * on target, warning colour outside. Without a target there is nothing to
+ * measure against, so only the empty track shows (a full bar would read as
+ * "done"). The track
  * runs to 125 % of the target with a tick at the target. An incomplete day
  * adds a warning dot and says so in the value text. The whole meter opens
  * the `NutritionPopover`.
@@ -69,12 +65,15 @@ export function DayMeter({ day, targets, className }: DayMeterProps) {
         data-status={status}
         className="relative h-1 flex-1 rounded-full bg-line"
       >
-        <div
-          className={cn("h-full rounded-full", FILL[status])}
-          style={{
-            width: `${Math.min(ratio === null ? 1 : ratio / TRACK_MAX, 1) * 100}%`,
-          }}
-        />
+        {ratio !== null && (
+          <div
+            className={cn(
+              "h-full rounded-full",
+              status === "success" ? "bg-success" : "bg-warning"
+            )}
+            style={{ width: `${Math.min(ratio / TRACK_MAX, 1) * 100}%` }}
+          />
+        )}
         {target && (
           <span
             data-testid="day-meter-target"

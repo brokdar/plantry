@@ -347,7 +347,7 @@ export function PlanToolbar({
           <span className="text-small font-semibold text-ink">
             {t("plan.review.waiting", { count: draftPlates })}
           </span>
-          <span className="min-w-0 flex-1 truncate text-small text-ink-muted">
+          <span className="min-w-0 flex-1 text-small text-pretty text-ink-muted">
             {t("plan.review.hint")}
           </span>
           <Button
