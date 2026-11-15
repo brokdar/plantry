@@ -422,8 +422,10 @@ test.describe("Plan board", () => {
       expect((await restored).ok()).toBeTruthy()
       await expectAc1Badges(page, s)
       await expect(
-        page.getByRole("region", { name: "Cook days" })
-      ).toContainText(`× ${s.portions}`)
+        page
+          .getByRole("region", { name: "Cook days" })
+          .getByRole("button", { name: new RegExp(`× ${s.portions}$`) })
+      ).toBeVisible()
     } finally {
       await s.cleanup()
     }
