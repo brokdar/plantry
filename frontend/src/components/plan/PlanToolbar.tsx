@@ -212,25 +212,25 @@ export function PlanToolbar({
                   {t("plan.toolbar.warnings", { count: 0 })}
                 </span>
               )}
+              {/* A short link to Settings → Assistant in the summary line, so
+                  it costs no row of its own; the full reason is its title
+                  and the disabled Ask button's tooltip. */}
+              {!assistantEnabled && (
+                <Link
+                  to="/settings/$section"
+                  params={{ section: "assistant" }}
+                  data-testid="assistant-disabled-reason"
+                  title={t("assistant.disabled_reason")}
+                  className="underline decoration-ink-muted/40 underline-offset-2 hover:text-ink hover:decoration-current"
+                >
+                  {t("plan.toolbar.assistant_setup")}
+                </Link>
+              )}
             </p>
           </div>
           {readOnly && (
             <p className="text-small text-ink-muted">
               {t("plan.toolbar.read_only")}
-            </p>
-          )}
-          {/* The reason is a link to Settings → Assistant (a tooltip cannot
-              hold one); the tooltip repeats it as plain text. */}
-          {!assistantEnabled && (
-            <p className="max-w-prose text-small text-ink-muted">
-              <Link
-                to="/settings/$section"
-                params={{ section: "assistant" }}
-                data-testid="assistant-disabled-reason"
-                className="underline underline-offset-2 hover:text-ink"
-              >
-                {t("assistant.disabled_reason")}
-              </Link>
             </p>
           )}
           {draft?.notes && (
@@ -339,7 +339,7 @@ export function PlanToolbar({
       {review && (
         <div
           data-testid="draft-panel"
-          className="flex items-center gap-3 rounded-xl border border-line bg-panel px-4 py-2.5 shadow-card max-md:hidden"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line bg-panel px-4 py-2.5 shadow-card max-md:hidden"
         >
           <span className="rounded-md bg-panel-sunken px-2 py-0.5 text-caption font-semibold text-ink-muted">
             {t("plan.review.draft_tag")}
@@ -347,14 +347,16 @@ export function PlanToolbar({
           <span className="text-small font-semibold text-ink">
             {t("plan.review.waiting", { count: draftPlates })}
           </span>
-          <span className="min-w-0 flex-1 text-small text-pretty text-ink-muted">
+          {/* Below 1280 px the hint takes its own line under the actions,
+              so it never squeezes into a narrow column (German runs long). */}
+          <span className="order-last basis-full text-small text-pretty text-ink-muted xl:order-none xl:min-w-0 xl:flex-1 xl:basis-0">
             {t("plan.review.hint")}
           </span>
           <Button
             variant="outline"
             disabled={running}
             onClick={onDiscard}
-            className="md:pointer-fine:h-9"
+            className="ms-auto md:pointer-fine:h-9"
           >
             {t("plan.review.discard_drafts")}
           </Button>

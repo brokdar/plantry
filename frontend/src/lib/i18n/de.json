@@ -1349,6 +1349,7 @@
       "collapsed": "{{slot}}: jeden Tag {{routine}}"
     },
     "toolbar": {
+      "assistant_setup": "Assistenten einrichten",
       "plates_one": "{{count}} Mahlzeit",
       "plates_other": "{{count}} Mahlzeiten",
       "cook_days_one": "{{count}} Kochtag",

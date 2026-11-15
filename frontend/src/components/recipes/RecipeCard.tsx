@@ -16,7 +16,7 @@ type RecipeCardProps = {
 
 /**
  * A library card (UX §5.8): 4:3 photo or the typographic placeholder (the
- * initial on the Herb tint, as on recipe detail), the name in Newsreader and
+ * initial on the Herb tint, as on recipe detail), the name in the heading face and
  * one meta line led by the diet icon: time, kcal per portion and when it was
  * last eaten.
  */

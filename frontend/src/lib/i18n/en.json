@@ -1349,6 +1349,7 @@
       "collapsed": "{{slot}}: {{routine}} every day"
     },
     "toolbar": {
+      "assistant_setup": "Set up the assistant",
       "plates_one": "{{count}} plate",
       "plates_other": "{{count}} plates",
       "cook_days_one": "{{count}} cook day",

@@ -4,7 +4,7 @@ import { BatchBadge } from "@/components/batch/BatchBadge"
 import { DraftTag } from "@/components/batch/DraftTag"
 import type { TodayRow } from "@/lib/plan/today"
 
-/** One meal slot of the day (UX §5.2): the slot in Newsreader italic, then
+/** One meal slot of the day (UX §5.2): the slot in italic, then
  *  the plate with its batch badge, the routine, or No plate. */
 export function MealRow({ row }: { row: TodayRow }) {
   const { cell } = row

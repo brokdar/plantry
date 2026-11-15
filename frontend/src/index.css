@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/figtree";
+@import "@fontsource-variable/figtree/wght-italic.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -25,7 +26,7 @@
   --font-sans: "Figtree Variable", system-ui, sans-serif;
   --font-heading: "Figtree Variable", system-ui, sans-serif;
 
-  /* Cookbook — UX_DESIGN_SPEC §3.1. Use these names in new and rebuilt screens. */
+  /* Design tokens — UX_DESIGN_SPEC §3.1. Use these names in new and rebuilt screens. */
   --color-ground: var(--ground);
   --color-panel: var(--panel);
   --color-panel-sunken: var(--panel-sunken);
@@ -96,7 +97,7 @@
 }
 
 /*
-  Cookbook palette — hex matches docs/UX_DESIGN_SPEC.md §3.1 verbatim.
+  Palette — hex matches docs/UX_DESIGN_SPEC.md §3.1 verbatim.
   Checked by src/test/tokens.test.ts (values and WCAG contrast).
 */
 :root {
@@ -171,10 +172,10 @@
 }
 
 /*
-  shadcn theme names resolve to the Cookbook tokens, so the ui primitives
-  follow both themes. App code uses the Cookbook names.
+  shadcn theme names resolve to the design tokens, so the ui primitives
+  follow both themes. App code uses the design token names.
 
-  | shadcn                              | Cookbook token |
+  | shadcn                              | Design token   |
   |-------------------------------------|----------------|
   | --background                        | --ground       |
   | --foreground                        | --ink          |
@@ -190,7 +191,7 @@
   | --ring                              | --accent       |
   | --destructive                       | --danger       |
 
-  Note: --accent is both the Cookbook accent and shadcn's hover/focus fill
+  Note: --accent is both the design accent and shadcn's hover/focus fill
   (same variable name), so menu and select highlights render solid accent
   with --accent-foreground (= --on-accent) text.
 

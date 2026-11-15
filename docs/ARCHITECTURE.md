@@ -69,7 +69,7 @@ This document is the technical contract for the Plantry redesign. It defines the
 
 ### Colors
 
-The "Cookbook" palette (paper-white ground, ink-blue accent, six batch colours) with Newsreader headings and Source Sans 3 for UI. Tokens and values: `docs/UX_DESIGN_SPEC.md` §3. Implementation: `frontend/src/index.css`, where the shadcn theme variables are mapped onto the Cookbook tokens.
+A green-neutral palette (light ground, white cards, green accent, six batch line colours) with Figtree for everything. Tokens and values: `DESIGN.md`. Implementation: `frontend/src/index.css`, where the shadcn theme variables are mapped onto the design tokens.
 
 ### Deployment
 
@@ -647,7 +647,7 @@ Routes, component directories and the data layer are described in full in `front
 frontend/src/
 ├── main.tsx          # ErrorBoundary > ThemeProvider > QueryClientProvider > RouterProvider
 ├── router.ts         # createRouter from the generated routeTree.gen.ts
-├── index.css         # Cookbook design tokens (see DESIGN.md)
+├── index.css         # design tokens (see DESIGN.md)
 ├── routes/           # TanStack Router file-based routes (validate search params, mount a page)
 ├── components/       # by feature: shell, today, plan, batch, shop, cook, recipes, ingredients, import, discovery,
 │                     #   availability, setup, settings, assistant, command, images, editorial, ui (shadcn)

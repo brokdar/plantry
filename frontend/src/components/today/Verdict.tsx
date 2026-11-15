@@ -22,7 +22,7 @@ const ICON_LINK =
 /**
  * Today's header (UX §5.2): the date line with day navigation, the phone
  * Settings gear (D31; the rail carries it from 768 px up), then the
- * Newsreader headline with the day's verdict.
+ * Heading-face headline with the day's verdict.
  */
 export function Verdict({ date, today, dateLine, headline }: VerdictProps) {
   const { t } = useTranslation()

@@ -22,8 +22,7 @@ interface DayMeterProps {
 /**
  * A thin bar of the day's per-eater kcal against the target: success colour
  * on target, warning colour outside. Without a target there is nothing to
- * measure against, so only the empty track shows (a full bar would read as
- * "done"). The track
+ * measure against, so the day's kcal shows as text instead of a bar. The track
  * runs to 125 % of the target with a tick at the target. An incomplete day
  * adds a warning dot and says so in the value text. The whole meter opens
  * the `NutritionPopover`.
@@ -63,8 +62,16 @@ export function DayMeter({ day, targets, className }: DayMeterProps) {
         aria-valuenow={Math.round(kcal)}
         aria-valuetext={valueText}
         data-status={status}
-        className="relative h-1 flex-1 rounded-full bg-line"
+        className={cn(
+          "relative flex-1",
+          ratio === null
+            ? "text-caption text-ink-muted tabular-nums"
+            : "h-1 rounded-full bg-line"
+        )}
       >
+        {/* Without a target there is nothing to measure against: the day's
+            kcal as text instead of an empty bar. */}
+        {ratio === null && <span aria-hidden="true">{amountText}</span>}
         {ratio !== null && (
           <div
             className={cn(

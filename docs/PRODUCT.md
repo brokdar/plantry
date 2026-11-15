@@ -120,7 +120,7 @@ The second insight is **batch cooking**. People cook once and eat the leftovers.
 4. **The AI is a tool, not a dependency.** Everything is usable with AI off.
 5. **Macros over micros.**
 6. **Tests are the contract.** Domain rules have unit tests, features have e2e tests, and e2e never calls a real provider or the web.
-7. **Calm.** The Cookbook look: paper ground, ink-blue accent, Newsreader headings, sentence case, no exclamation marks. See `DESIGN.md`.
+7. **Calm.** The familiar meal-planner look done with care: green-neutral ground, one green accent, Figtree throughout, sentence case, no exclamation marks. See `DESIGN.md`.
 
 ## Success Criteria
 

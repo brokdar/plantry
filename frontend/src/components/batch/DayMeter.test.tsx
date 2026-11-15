@@ -77,12 +77,13 @@ describe("DayMeter (F2-AC4)", () => {
     expect(tick.style.left).toBe("80%")
   })
 
-  it("shows only the empty track without a target, and no tick", () => {
+  it("shows the kcal as text without a target, and no bar or tick", () => {
     render(<DayMeter day={day(1840)} targets={null} />)
     const meter = screen.getByRole("meter")
     expect(meter).toHaveAttribute("data-status", "neutral")
     expect(meter).toHaveAttribute("aria-valuetext", "1,840 kcal")
-    expect(meter.firstElementChild).toBeNull()
+    expect(meter).toHaveTextContent("1,840 kcal")
+    expect(meter).not.toHaveClass("bg-line")
     expect(screen.queryByTestId("day-meter-target")).toBeNull()
   })
 

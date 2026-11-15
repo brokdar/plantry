@@ -96,9 +96,11 @@ export function BatchLanes({ batches, days, columns }: BatchLanesProps) {
                 <span
                   aria-hidden="true"
                   title={session.food_name}
-                  className="col-start-1 min-w-0 truncate pr-1.5 text-left text-caption font-semibold text-(--lane) group-hover/lane:underline"
+                  className="sticky left-0 z-20 col-start-1 flex min-w-0 items-center self-stretch bg-ground pr-1.5 text-left text-caption font-semibold text-(--lane) group-hover/lane:underline"
                 >
-                  {session.food_name}
+                  {/* Sticky like the meal column, so the lines scroll under
+                      their label on the swiping tablet board. */}
+                  <span className="truncate">{session.food_name}</span>
                 </span>
                 {badges.length > 1 && (
                   <span className="sr-only">
