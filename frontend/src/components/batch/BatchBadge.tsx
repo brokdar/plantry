@@ -17,6 +17,8 @@ export type BatchBadgeProps = BatchBadgeContent & {
   /** Appended after a middle dot, e.g. Today's "use by Wed". */
   suffix?: string
   className?: string
+  /** In a board cell: below 7 rem a cook pill shows only "× 5". */
+  inCell?: boolean
 }
 
 /**
@@ -31,6 +33,7 @@ export function BatchBadge({
   sessionId,
   colour,
   suffix,
+  inCell = false,
   className,
   ...content
 }: BatchBadgeProps) {
@@ -39,7 +42,7 @@ export function BatchBadge({
   const dashed = content.variant === "surplus" || content.variant === "toFreeze"
   // Cook is the one solid pill; leftovers and frozen portions are outlined.
   const solid = content.variant === "cook"
-  const compact = content.variant === "cook" && !content.strip
+  const compact = inCell && content.variant === "cook" && !content.strip
   // "2/2" alone is cryptic and read as "2 slash 2": say what it is.
   const spoken =
     content.variant === "leftover" || content.variant === "frozen"
@@ -90,7 +93,7 @@ export function BatchBadge({
           {suffix && ` · ${suffix}`}
         </span>
       </span>
-      {content.variant === "cook" && !content.strip && (
+      {compact && content.variant === "cook" && (
         <span aria-hidden="true" className="hidden @max-[7rem]/cell:inline">
           × {formatAmount(content.portions, i18n)}
         </span>

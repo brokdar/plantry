@@ -1,0 +1,453 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-15T17:18:01+00:00",
+  "title": "Design System: Plantry",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Fresh Green",
+        "canonical": "#157a3c",
+        "tonalRamp": [
+          "#4cc276",
+          "#157a3c"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "canonical": "#f5f6f4",
+        "tonalRamp": [
+          "#111513",
+          "#f5f6f4"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#191e1b",
+          "#ffffff"
+        ]
+      },
+      "panel-sunken": {
+        "role": "neutral",
+        "displayName": "Sunken Panel",
+        "canonical": "#eef0ec",
+        "tonalRamp": [
+          "#0d100e",
+          "#eef0ec"
+        ]
+      },
+      "panel-raised": {
+        "role": "neutral",
+        "displayName": "Raised Panel",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#212723",
+          "#ffffff"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#18201b",
+        "tonalRamp": [
+          "#e6ebe7",
+          "#18201b"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#5d6861",
+        "tonalRamp": [
+          "#a0aaa3",
+          "#5d6861"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e1e4de",
+        "tonalRamp": [
+          "#2a312d",
+          "#e1e4de"
+        ]
+      },
+      "batch-1": {
+        "role": "batch",
+        "displayName": "Batch 1 Orange",
+        "canonical": "#c2410c",
+        "tonalRamp": [
+          "#3a2418",
+          "#f08a4b",
+          "#c2410c",
+          "#fff1e8"
+        ]
+      },
+      "batch-1-tint": {
+        "role": "batch",
+        "displayName": "Batch 1 Orange tint",
+        "canonical": "#fff1e8",
+        "tonalRamp": [
+          "#3a2418",
+          "#fff1e8"
+        ]
+      },
+      "batch-2": {
+        "role": "batch",
+        "displayName": "Batch 2 Blue",
+        "canonical": "#1d4ed8",
+        "tonalRamp": [
+          "#1c2640",
+          "#7ea3f5",
+          "#1d4ed8",
+          "#e9effe"
+        ]
+      },
+      "batch-2-tint": {
+        "role": "batch",
+        "displayName": "Batch 2 Blue tint",
+        "canonical": "#e9effe",
+        "tonalRamp": [
+          "#1c2640",
+          "#e9effe"
+        ]
+      },
+      "batch-3": {
+        "role": "batch",
+        "displayName": "Batch 3 Violet",
+        "canonical": "#6d28d9",
+        "tonalRamp": [
+          "#2a2140",
+          "#a98bf5",
+          "#6d28d9",
+          "#f2ecfe"
+        ]
+      },
+      "batch-3-tint": {
+        "role": "batch",
+        "displayName": "Batch 3 Violet tint",
+        "canonical": "#f2ecfe",
+        "tonalRamp": [
+          "#2a2140",
+          "#f2ecfe"
+        ]
+      },
+      "batch-4": {
+        "role": "batch",
+        "displayName": "Batch 4 Teal",
+        "canonical": "#0f766e",
+        "tonalRamp": [
+          "#143330",
+          "#3cc7b3",
+          "#0f766e",
+          "#e3f4f1"
+        ]
+      },
+      "batch-4-tint": {
+        "role": "batch",
+        "displayName": "Batch 4 Teal tint",
+        "canonical": "#e3f4f1",
+        "tonalRamp": [
+          "#143330",
+          "#e3f4f1"
+        ]
+      },
+      "batch-5": {
+        "role": "batch",
+        "displayName": "Batch 5 Pink",
+        "canonical": "#be185d",
+        "tonalRamp": [
+          "#3a1d2b",
+          "#ef7fb0",
+          "#be185d",
+          "#fce8f1"
+        ]
+      },
+      "batch-5-tint": {
+        "role": "batch",
+        "displayName": "Batch 5 Pink tint",
+        "canonical": "#fce8f1",
+        "tonalRamp": [
+          "#3a1d2b",
+          "#fce8f1"
+        ]
+      },
+      "batch-6": {
+        "role": "batch",
+        "displayName": "Batch 6 Amber",
+        "canonical": "#9d6006",
+        "tonalRamp": [
+          "#362c12",
+          "#e0b341",
+          "#9d6006",
+          "#fbf1dc"
+        ]
+      },
+      "batch-6-tint": {
+        "role": "batch",
+        "displayName": "Batch 6 Amber tint",
+        "canonical": "#fbf1dc",
+        "tonalRamp": [
+          "#362c12",
+          "#fbf1dc"
+        ]
+      },
+      "success": {
+        "role": "state",
+        "displayName": "Success",
+        "canonical": "#2e6b3f",
+        "tonalRamp": [
+          "#6fcf8f",
+          "#2e6b3f"
+        ]
+      },
+      "warning": {
+        "role": "state",
+        "displayName": "Warning",
+        "canonical": "#a15c00",
+        "tonalRamp": [
+          "#e3a54f",
+          "#a15c00"
+        ]
+      },
+      "danger": {
+        "role": "state",
+        "displayName": "Danger",
+        "canonical": "#b42318",
+        "tonalRamp": [
+          "#f08b7b",
+          "#b42318"
+        ]
+      },
+      "on-accent": {
+        "role": "neutral",
+        "displayName": "On accent",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0d100e",
+          "#ffffff"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "h1": {
+        "displayName": "h1",
+        "purpose": "Page titles, the week range."
+      },
+      "h2": {
+        "displayName": "h2",
+        "purpose": "Section headings, Today headline."
+      },
+      "h3": {
+        "displayName": "h3",
+        "purpose": "Card and panel titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default text, meal-row labels."
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Plate names, hints, summaries."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Lane labels, pill text, sublines."
+      },
+      "numeric": {
+        "displayName": "Numbers",
+        "purpose": "Tabular figures for macros, kcal, counts, dates."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "0 1px 2px rgb(24 32 27 / 0.05)",
+        "purpose": "Whisper under hairlined cards and panels."
+      },
+      {
+        "name": "sheet-light",
+        "value": "0 2px 6px -2px rgb(24 32 27 / 0.08), 0 12px 32px -8px rgb(24 32 27 / 0.16)",
+        "purpose": "Sheets and popovers (light)."
+      },
+      {
+        "name": "sheet-dark",
+        "value": "0 2px 6px -2px rgb(0 0 0 / 0.3), 0 12px 32px -8px rgb(0 0 0 / 0.45)",
+        "purpose": "Sheets and popovers (dark)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-change",
+        "value": "150-250ms ease-out",
+        "purpose": "Colour changes, highlight fade (200ms), lane thickening, sheet slides."
+      },
+      {
+        "name": "cell-pulse",
+        "value": "200ms ease-out 1",
+        "purpose": "Accent outline flash on a cell the assistant changed; off under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "cell-compact",
+        "value": "7rem (container)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Accent fill, one per screen region (Accept and shop).",
+      "html": "<button class=\"ds-btn\">Accept and shop</button>",
+      "css": ".ds-btn{font-family:'Figtree Variable',system-ui,sans-serif;font-size:.8125rem;font-weight:500;height:32px;padding:0 10px;border:0;border-radius:8px;background:var(--accent);color:var(--on-accent);cursor:pointer;transition:background-color 150ms ease-out}.ds-btn:hover{background:color-mix(in srgb,var(--accent) 90%,transparent)}.ds-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}"
+    },
+    {
+      "name": "Plan card (cook)",
+      "kind": "card",
+      "refersTo": "plate-card-cook",
+      "description": "Cook cell: batch tint, thumbnail or initial, two-line name, solid pill.",
+      "html": "<div class=\"ds-card ds-cook\"><div class=\"ds-card-top\"><span class=\"ds-thumb\">C</span><span class=\"ds-name\">Chili con carne</span></div><div class=\"ds-card-bottom\"><span class=\"ds-pill ds-pill-cook\">Cook × 4</span></div></div>",
+      "css": ".ds-card{font-family:'Figtree Variable',system-ui,sans-serif;display:flex;flex-direction:column;gap:6px;width:160px;min-height:84px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:0 1px 2px rgb(24 32 27/.05);text-align:left;color:var(--ink)}.ds-card.ds-cook{background:var(--batch-1-tint)}.ds-card.ds-draft{border:1px dashed color-mix(in srgb,var(--ink-muted) 50%,transparent);box-shadow:none}.ds-card-top{display:flex;gap:8px;align-items:flex-start}.ds-thumb{flex:none;width:30px;height:30px;border-radius:8px;background:var(--batch-3-tint);color:var(--ink-muted);display:grid;place-items:center;font-size:.8125rem;font-weight:700}.ds-name{font-size:.8125rem;font-weight:600;line-height:1.2}.ds-card-bottom{margin-top:auto;display:flex;gap:6px;align-items:center}.ds-cap{font-size:.75rem;color:var(--ink-muted)}.ds-pill{display:inline-flex;align-items:center;font-family:'Figtree Variable',system-ui,sans-serif;font-size:.75rem;font-weight:600;font-variant-numeric:tabular-nums;padding:1px 8px;border-radius:9999px;white-space:nowrap}.ds-pill-cook{background:var(--batch-1);color:var(--on-accent);border:1px solid transparent}.ds-pill-left{background:var(--panel);color:var(--batch-1);border:1.5px solid var(--batch-1)}.ds-pill-extra{background:var(--panel);color:var(--batch-1);border:1px dashed var(--batch-1)}"
+    },
+    {
+      "name": "Plan card (draft leftover)",
+      "kind": "card",
+      "refersTo": "plate-card",
+      "description": "Draft leftover: dashed border, outlined pill, side dish caption.",
+      "html": "<div class=\"ds-card ds-draft\"><div class=\"ds-card-top\"><span class=\"ds-thumb\">C</span><span class=\"ds-name\">Chili con carne</span></div><div class=\"ds-card-bottom\"><span class=\"ds-pill ds-pill-left\">2/4</span><span class=\"ds-cap\">Rice</span></div></div>",
+      "css": ".ds-card{font-family:'Figtree Variable',system-ui,sans-serif;display:flex;flex-direction:column;gap:6px;width:160px;min-height:84px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:0 1px 2px rgb(24 32 27/.05);text-align:left;color:var(--ink)}.ds-card.ds-cook{background:var(--batch-1-tint)}.ds-card.ds-draft{border:1px dashed color-mix(in srgb,var(--ink-muted) 50%,transparent);box-shadow:none}.ds-card-top{display:flex;gap:8px;align-items:flex-start}.ds-thumb{flex:none;width:30px;height:30px;border-radius:8px;background:var(--batch-3-tint);color:var(--ink-muted);display:grid;place-items:center;font-size:.8125rem;font-weight:700}.ds-name{font-size:.8125rem;font-weight:600;line-height:1.2}.ds-card-bottom{margin-top:auto;display:flex;gap:6px;align-items:center}.ds-cap{font-size:.75rem;color:var(--ink-muted)}.ds-pill{display:inline-flex;align-items:center;font-family:'Figtree Variable',system-ui,sans-serif;font-size:.75rem;font-weight:600;font-variant-numeric:tabular-nums;padding:1px 8px;border-radius:9999px;white-space:nowrap}.ds-pill-cook{background:var(--batch-1);color:var(--on-accent);border:1px solid transparent}.ds-pill-left{background:var(--panel);color:var(--batch-1);border:1.5px solid var(--batch-1)}.ds-pill-extra{background:var(--panel);color:var(--batch-1);border:1px dashed var(--batch-1)}"
+    },
+    {
+      "name": "Batch pills",
+      "kind": "chip",
+      "refersTo": "batch-pill-cook",
+      "description": "Cook solid, leftover outlined, surplus dashed.",
+      "html": "<span class=\"ds-pill ds-pill-cook\">Cook × 4</span> <span class=\"ds-pill ds-pill-left\">2/4</span> <span class=\"ds-pill ds-pill-extra\">2 spare</span>",
+      "css": ".ds-pill{display:inline-flex;align-items:center;font-family:'Figtree Variable',system-ui,sans-serif;font-size:.75rem;font-weight:600;font-variant-numeric:tabular-nums;padding:1px 8px;border-radius:9999px;white-space:nowrap}.ds-pill-cook{background:var(--batch-1);color:var(--on-accent);border:1px solid transparent}.ds-pill-left{background:var(--panel);color:var(--batch-1);border:1.5px solid var(--batch-1)}.ds-pill-extra{background:var(--panel);color:var(--batch-1);border:1px dashed var(--batch-1)}"
+    },
+    {
+      "name": "Batch lane",
+      "kind": "custom",
+      "refersTo": "batch-pill-cook",
+      "description": "Signature: 3 px line from cook day (filled dot) to last leftover (hollow dots), label in the batch colour.",
+      "html": "<div class=\"ds-lane\"><span class=\"ds-lane-label\">Lentil dal</span><span class=\"ds-lane-line\"><span class=\"ds-dot ds-dot-cook\"></span><span class=\"ds-dot ds-dot-left\"></span><span class=\"ds-dot ds-dot-left\"></span></span></div>",
+      "css": ".ds-lane{display:grid;grid-template-columns:96px repeat(4,56px);align-items:center;height:24px;font-family:'Figtree Variable',system-ui,sans-serif}.ds-lane-label{font-size:.75rem;font-weight:600;color:var(--batch-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-lane-line{position:relative;grid-column:2/span 3;display:grid;grid-template-columns:repeat(3,1fr);align-items:center}.ds-lane-line::before{content:'';position:absolute;left:16.6%;right:16.6%;top:50%;height:3px;margin-top:-1.5px;border-radius:9999px;background:var(--batch-2)}.ds-dot{position:relative;justify-self:center;border-radius:9999px}.ds-dot-cook{width:12px;height:12px;background:var(--batch-2)}.ds-dot-left{width:11px;height:11px;border:2.5px solid var(--batch-2);background:var(--panel)}"
+    },
+    {
+      "name": "Day meter",
+      "kind": "custom",
+      "description": "4 px bar on a line track to 125% of target, tick at the target.",
+      "html": "<div class=\"ds-meter\"><div class=\"ds-meter-fill\"></div><span class=\"ds-meter-tick\"></span></div>",
+      "css": ".ds-meter{position:relative;width:140px;height:4px;border-radius:9999px;background:var(--line)}.ds-meter-fill{height:100%;width:64%;border-radius:9999px;background:var(--success)}.ds-meter-tick{position:absolute;top:-2px;bottom:-2px;left:80%;width:1px;background:var(--ink)}"
+    },
+    {
+      "name": "Nav item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Muted at rest, accent wash when active.",
+      "html": "<div class=\"ds-nav\">Recipes</div><div class=\"ds-nav ds-active\">Plan</div>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;font-family:'Figtree Variable',system-ui,sans-serif;font-size:.9375rem;color:var(--ink-muted);transition:background-color 150ms ease-out}.ds-nav:hover{background:var(--panel-sunken);color:var(--ink)}.ds-nav.ds-active{background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent);font-weight:600}"
+    },
+    {
+      "name": "Review panel",
+      "kind": "card",
+      "refersTo": "review-panel",
+      "description": "Panel above the board with draft chip, count and actions.",
+      "html": "<div class=\"ds-panel\"><span class=\"ds-chip\">Draft</span><span class=\"ds-count\">12 plates waiting</span><button class=\"ds-btn\" style=\"margin-left:auto\">Accept and shop</button></div>",
+      "css": ".ds-panel{display:flex;align-items:center;gap:12px;padding:10px 16px;border:1px solid var(--line);border-radius:11.2px;background:var(--panel);box-shadow:0 1px 2px rgb(24 32 27/.05);font-family:'Figtree Variable',system-ui,sans-serif;color:var(--ink)}.ds-chip{padding:2px 8px;border-radius:6px;background:var(--panel-sunken);color:var(--ink-muted);font-size:.75rem;font-weight:600}.ds-count{font-size:.8125rem;font-weight:600}.ds-btn{font-family:'Figtree Variable',system-ui,sans-serif;font-size:.8125rem;font-weight:500;height:32px;padding:0 10px;border:0;border-radius:8px;background:var(--accent);color:var(--on-accent);cursor:pointer;transition:background-color 150ms ease-out}.ds-btn:hover{background:color-mix(in srgb,var(--accent) 90%,transparent)}.ds-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Timetable Board",
+    "overview": "The familiar modern meal planner, executed with precision: a light neutral ground with a faint green bias, white 10 px cards under a hairline and a whisper of shadow, one fresh green for actions, and six vivid colours that mean nothing except \"this food belongs to batch N\". Plantry is an **Operate** tool. It should feel familiar on first sight, scannable in a glance and calm. Its identity is the batch lane: each batch is drawn like a timetable line from the day it is cooked to the last day its leftovers are eaten.\n\nThe product stance (PRODUCT.md, 2026-11-15) prefers a familiar, craft-finished meal-planner look over a themed world. Ruled out: cold navy on blue-grey, flat grey, cream paper with a serif, busy colour, and tall vertical photo cards on the plan board.\n\nPrinciples carried from the product (UX spec §1.2):\n\n1. One obvious next action per screen.\n2. Batches are visible everywhere. A plate always says whether it is cooked here or a leftover, and from which batch.\n3. Summary first, detail on tap.\n4. The assistant acts in place; chat is a side panel.\n5. Nothing silently changes what you bought. Confirmed plates show a padlock.",
+    "keyCharacteristics": [
+      "Green-biased neutrals, so the ground reads as chosen, not default grey.",
+      "One accent, green, for actions, selection and focus only.",
+      "One typeface, Figtree; weight carries hierarchy.",
+      "White cards separated by a hairline and a 1 px whisper shadow; one deeper shadow for overlays.",
+      "Batch colours appear only on lanes, lane labels, pills and the cook-cell tint.",
+      "Browser surfaces are themed too: text selection, caret and scrollbars take the accent and ink."
+    ],
+    "rules": [
+      {
+        "name": "The Batches-Only Rule",
+        "body": "A batch colour means \"this food comes from batch N\". It draws the lane line, the lane label, the pill and the cook-cell tint, and nothing else: never state, category, decoration or a button.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Green Rule",
+        "body": "The accent is for actions, selection and focus. It is not a batch colour and not a success colour; success has its own token.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tint-Means-Cook Rule",
+        "body": "A batch tint background marks the cell where the batch is cooked. Leftover cells stay plain panel and show the batch colour only in the outlined pill.",
+        "section": "colors"
+      },
+      {
+        "name": "The Meaningful State Rule",
+        "body": "State colours appear only where they carry meaning, and always with an icon or a word.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Face Rule",
+        "body": "Hierarchy comes from weight and size, never from a second typeface or a letter-spaced label.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence-Case Rule",
+        "body": "Labels use sentence case. There are no all-caps labels and no letter-spaced eyebrows.",
+        "section": "typography"
+      },
+      {
+        "name": "The Whisper Rule",
+        "body": "Cards carry at most the 1 px whisper; only overlays carry the soft sheet shadow. No coloured halos, no hover lift, no hard offset shadows.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Linked Highlight Rule",
+        "body": "Pointing at or focusing any card, pill or lane outlines every cell of that batch in its colour (a 2 px ring offset 2 px over ground, fading in over 200 ms), keeps its lane at full strength, and dims the other lanes to 30 % and the other cells to 50 %. On touch it holds for 2 s. Reduced motion makes it instant.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "**Do** use the token names in every new or rebuilt component.",
+      "**Do** keep one accent: green for actions, focus, selection, today and links.",
+      "**Do** use batch colours only for lanes, lane labels, pills and the cook-cell tint, and always with text.",
+      "**Do** let weight and size carry hierarchy in Figtree; set numbers with `tabular-nums`.",
+      "**Do** separate cards with a hairline and at most the 1 px whisper shadow.",
+      "**Do** mark drafts with a dashed border and confirmed plates with a padlock.",
+      "**Do** give every interactive element a visible 2 px accent focus outline; targets are at least 44 x 44 px on touch and 24 px otherwise.",
+      "**Do** keep text and pill pairs at WCAG AA (4.5:1 text, 3:1 large text and UI marks); the token test enforces the core pairs.",
+      "**Do** pair every state colour with an icon or a word, and design for German string length."
+    ],
+    "donts": [
+      "**Don't** reintroduce a serif, a second typeface, all-caps or letter-spaced labels.",
+      "**Don't** use batch colours for state, category or decoration, or tell batches apart by colour alone.",
+      "**Don't** add gradients, glass or blur, shimmer, hover lifts or zooms, coloured halos or hard offset shadows.",
+      "**Don't** make tall vertical photo cards on the board; keep cards compact (about 84 px).",
+      "**Don't** put a shadow on overlays and a second shadow style on cards; use the two defined shadows only.",
+      "**Don't** use emoji in the UI or centred spinners.",
+      "**Don't** use the shadcn names in app code, or add a per-macro or chart palette."
+    ]
+  }
+}

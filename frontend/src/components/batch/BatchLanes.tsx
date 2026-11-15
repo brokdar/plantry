@@ -55,7 +55,7 @@ export function BatchLanes({ batches, days, columns }: BatchLanesProps) {
     >
       <ul
         data-highlight-active={highlighted ? "" : undefined}
-        className={cn("grid px-1", columns)}
+        className={cn("grid gap-x-1 px-1", columns)}
         style={{ gridAutoRows: `${LANE_REM}rem` }}
       >
         {batches.map(({ session, colour }) => {

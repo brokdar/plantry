@@ -155,7 +155,7 @@ Self-hosted via `@fontsource-variable/figtree` (no Google Fonts call from a LAN 
 - Spacing scale: 4 · 8 · 12 · 16 · 24 · 32 · 48 px. Layouts use `gap`, not margins.
 - Radii by role:
   - board cells, cards and inputs: 10 px
-  - buttons: 8 px; panels above the board (review, empty week): 12 px
+  - buttons: 8 px; panels above the board (review, empty week): `rounded-xl` (about 11 px)
   - sheets and the phone tab bar: 16 px (top corners only)
   - batch badges: full pill
 - Elevation: cards and the panels above the board carry a 1 px whisper shadow (`--shadow-card`) under a hairline; sheets and popovers carry the one soft shadow. No coloured halos.

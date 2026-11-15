@@ -271,7 +271,7 @@ function CellContent({
           </span>
         </span>
         <span className="mt-auto flex min-w-0 items-center gap-1.5">
-          {cell.badge && <BatchBadge {...cell.badge} />}
+          {cell.badge && <BatchBadge {...cell.badge} inCell />}
           {cell.sideText ? (
             <span className="min-w-0 truncate text-caption text-ink-muted">
               {cell.sideText}
