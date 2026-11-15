@@ -103,3 +103,58 @@ func TestNormalize_ImporterCountTokens(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalize_RealWorldVolumeWords(t *testing.T) {
+	cases := map[string]string{
+		"Tasse": "cup", "Tassen": "cup", "tasse": "cup",
+		"Schuss": "tbsp", "schuss": "tbsp",
+	}
+	for in, want := range cases {
+		if got := Normalize(in); got != want {
+			t.Errorf("Normalize(%q) = %q, want %q", in, got, want)
+		}
+		if _, ok := LookupDefault(want); !ok {
+			t.Errorf("LookupDefault(%q) missing", want)
+		}
+	}
+}
+
+// EstimateCountGrams is the one place a count unit becomes grams when the
+// user has not reviewed a weight: the parser's draft and Finalize both call it.
+func TestEstimateCountGrams(t *testing.T) {
+	cases := []struct {
+		unit, name string
+		want       float64
+	}{
+		{"piece", "Knoblauch", 3}, // recipes that count garlic "pieces" mean cloves
+		{"clove", "Knoblauchzehe", 3},
+		{"clove", "garlic", 3},
+		{"clove", "Ingwer", 5}, // no name entry: the unit default
+		{"piece", "Zwiebel", 110},
+		{"piece", "2 red onions chopped", 110},
+		{"piece", "Frühlingszwiebeln", 15}, // specific before the generic onion
+		{"piece", "Eier", 50},
+		{"piece", "Eier (Größe M)", 50},
+		{"piece", "Eisbergsalat", 120},  // "ei" is a whole word only
+		{"piece", "Süßkartoffeln", 130}, // specific before the generic potato
+		{"piece", "Kartoffeln (vorwiegend festkochend)", 170},
+		{"piece", "Cocktailtomaten", 17},
+		{"piece", "Tomaten", 120},
+		{"piece", "Karotten", 61},
+		{"piece", "Paprika", 119},
+		{"piece", "Peperoni", 45},
+		{"piece", "Zucchini", 196},
+		{"piece", "Brokkoli", 500},
+		{"leaf", "Lorbeerblatt", 0.6},
+		{"piece", "Lorbeerblatt", 0.6},
+		{"piece", "Fantasiefrucht", 120}, // nothing known: the unit default
+		{"piece", "", 120},
+		{"can", "Zwiebel", 400}, // name entries only refine piece, clove and leaf
+		{"bunch", "Zwiebel", 30},
+	}
+	for _, tc := range cases {
+		if got := EstimateCountGrams(tc.unit, tc.name); got != tc.want {
+			t.Errorf("EstimateCountGrams(%q, %q) = %v, want %v", tc.unit, tc.name, got, tc.want)
+		}
+	}
+}

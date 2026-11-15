@@ -33,6 +33,7 @@ type Resolver interface {
 // PortionStore reads and writes a leaf's unit → grams portions. Finalize
 // resolves count lines through it. Implemented by food.Service.
 type PortionStore interface {
+	Get(ctx context.Context, id int64) (*food.Food, error)
 	ListPortions(ctx context.Context, foodID int64) ([]food.Portion, error)
 	UpsertPortion(ctx context.Context, p *food.Portion) error
 }
@@ -160,7 +161,7 @@ type FinalizedChild struct {
 	Unit       string
 	// PortionGrams is the grams per count unit the user confirmed in the
 	// review ("1 piece ≈ 120 g"). nil keeps the leaf's portion, or seeds a
-	// missing one from units.CountGrams. Ignored for mass and volume.
+	// missing one from units.EstimateCountGrams. Ignored for mass and volume.
 	PortionGrams *float64
 }
 
@@ -204,7 +205,7 @@ type FinalizedFoodStep struct {
 // Finalize validates the reviewed draft and returns a payload that POSTs
 // directly to /api/foods. Its only writes are leaf portions: a count line
 // (D19) resolves its grams from the leaf's portion for that unit, which is
-// created from units.CountGrams (or the reviewed PortionGrams) when missing.
+// created from units.EstimateCountGrams (or the reviewed PortionGrams) when missing.
 func (s *Service) Finalize(ctx context.Context, in FinalizeInput) (*FinalizedFood, error) {
 	if in.Name == "" || in.Role == "" || in.ReferencePortions <= 0 {
 		return nil, fmt.Errorf("%w: name, role, reference_portions required", domain.ErrInvalidInput)
@@ -274,7 +275,7 @@ func (s *Service) Finalize(ctx context.Context, in FinalizeInput) (*FinalizedFoo
 
 // ensurePortion makes sure leaf foodID has a portion for the count unit. An
 // existing portion is kept unless the user reviewed a different weight;
-// a missing one is created from reviewed grams or units.CountGrams.
+// a missing one is created from reviewed grams or units.EstimateCountGrams.
 func (s *Service) ensurePortion(ctx context.Context, foodID int64, unit string, reviewed *float64) error {
 	if reviewed != nil && *reviewed <= 0 {
 		return fmt.Errorf("%w: portion grams must be > 0", domain.ErrImportInvalidResolution)
@@ -293,9 +294,17 @@ func (s *Service) ensurePortion(ctx context.Context, foodID int64, unit string, 
 		// Keep the stored unit spelling so the upsert replaces this row.
 		return s.portions.UpsertPortion(ctx, &food.Portion{FoodID: foodID, Unit: p.Unit, Grams: *reviewed})
 	}
-	grams := units.CountGrams[unit]
+	// Nothing reviewed and nothing stored: seed what the review step showed,
+	// the estimate for this ingredient (a clove of garlic is not 120 g).
+	var grams float64
 	if reviewed != nil {
 		grams = *reviewed
+	} else {
+		leaf, err := s.portions.Get(ctx, foodID)
+		if err != nil {
+			return fmt.Errorf("load food %d for its portion estimate: %w", foodID, err)
+		}
+		grams = units.EstimateCountGrams(unit, leaf.Name)
 	}
 	return s.portions.UpsertPortion(ctx, &food.Portion{FoodID: foodID, Unit: unit, Grams: grams})
 }
@@ -305,7 +314,7 @@ func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string) *Draft
 		Name:                 rec.Name,
 		Description:          rec.Description,
 		SourceURL:            sourceURL,
-		Instructions:         append([]string{}, rec.RecipeInstructions...),
+		Instructions:         dropClosingPleasantry(rec.RecipeInstructions),
 		Tags:                 append([]string{}, rec.Keywords...),
 		ExtractMethod:        method,
 		ReferencePortions:    float64(rec.RecipeYieldNumber),

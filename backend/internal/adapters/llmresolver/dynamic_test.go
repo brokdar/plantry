@@ -110,6 +110,7 @@ func TestCurrent_RebuildsOnProviderChange(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, svc.Set(ctx, settings.KeyAIProvider, "openai"))
+	require.NoError(t, svc.Set(ctx, settings.KeyAIAPIKey, "sk-test-0123456789"))
 	_, _, err = r.Current(ctx)
 	require.NoError(t, err)
 
@@ -143,4 +144,24 @@ func cipher(t *testing.T) crypto.Cipher {
 	c, err := crypto.New(testSecret)
 	require.NoError(t, err)
 	return c
+}
+
+// A hosted provider without an API key cannot answer. It must read as "no
+// provider", not build a client whose first call fails with a 401 that then
+// surfaces as a generic LLM failure.
+func TestCurrent_HostedProviderWithoutKeyIsMissing(t *testing.T) {
+	for _, provider := range []string{"anthropic", "openai"} {
+		t.Run(provider, func(t *testing.T) {
+			svc := settings.NewService(newMemRepo(), settings.NewEnvSnapshot(nil), cipher(t))
+			ctx := context.Background()
+			require.NoError(t, svc.Set(ctx, settings.KeyAIProvider, provider))
+			require.NoError(t, svc.Set(ctx, settings.KeyAIModel, "m1"))
+			r := llmresolver.New(svc, func(string, string, string) (llm.Client, error) {
+				t.Fatal("factory should not be called without an API key")
+				return nil, nil
+			})
+			_, _, err := r.Current(ctx)
+			assert.True(t, errors.Is(err, llm.ErrProviderMissing))
+		})
+	}
 }

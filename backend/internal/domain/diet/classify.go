@@ -145,7 +145,7 @@ var plant = []string{
 	"traube", "birne", "mango", "ananas", "melone", "radieschen", "kohlrabi",
 	"mais",
 	// German pulses, grains, nuts and pantry.
-	"bohnen", "erbsen", "linsen", "=reis", "basmatireis", "nudel", "pasta",
+	"bohnen", "erbsen", "linsen", "reis", "nudel", "pasta",
 	"spaghetti", "penne", "mehl", "zucker", "hafer-", "quinoa", "couscous",
 	"bulgur", "polenta", "grieß", "nuss", "nüsse", "mandel", "kerne", "sesam",
 	"kokos-", "tofu", "tempeh", "seitan", "soja-", "öl", "essig",
@@ -153,6 +153,10 @@ var plant = []string{
 	"tomatenmark", "passata", "oliven", "kapern", "brot", "brötchen",
 	"tortilla", "hefe", "sirup", "datteln", "rosinen", "saft", "wasser",
 	"wein", "leinsamen",
+	// Dried herbs and spices are neutral: plant foods, never a reason to
+	// raise a recipe's class or leave it unknown.
+	"lorbeer", "oregano", "majoran", "salbei", "bohnenkraut", "muskat",
+	"kardamom", "garam", "masala",
 	// English.
 	"vegetable", "fruit", "onion", "shallot", "scallion", "garlic", "potato",
 	"carrot", "=pepper", "=peppers", "tomato", "cucumber", "eggplant",
@@ -164,6 +168,8 @@ var plant = []string{
 	"=soy", "=oil", "vinegar", "=salt", "cumin", "turmeric", "cinnamon",
 	"mustard", "bread", "sourdough", "yeast", "syrup", "juice", "water",
 	"wine", "=corn",
+	"=bay", "oregano", "thyme", "rosemary", "marjoram", "=sage", "nutmeg",
+	"cardamom", "masala", "coriander", "chilli",
 }
 
 var fold = strings.NewReplacer(

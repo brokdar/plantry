@@ -164,7 +164,21 @@ func decodeRecipe(node map[string]any) *importer.RawRecipe {
 	r.RecipeInstructions = normalizeInstructions(node["recipeInstructions"])
 	r.SourceKcalPerServing = caloriesOf(node["nutrition"])
 
+	decodeEntities(r)
 	return r
+}
+
+// decodeEntities turns HTML entities left in the text fields into characters.
+// Some sites escape their JSON-LD twice, so a title arrives as "Gemüse &amp;
+// Hähnchen". JSON decoding already handled the JSON escapes.
+func decodeEntities(r *importer.RawRecipe) {
+	r.Name = html.UnescapeString(r.Name)
+	r.Description = html.UnescapeString(r.Description)
+	for _, list := range [][]string{r.RecipeIngredient, r.RecipeInstructions, r.Keywords} {
+		for i, v := range list {
+			list[i] = html.UnescapeString(v)
+		}
+	}
 }
 
 // yieldOf normalizes recipeYield, which sites publish as a string, a bare

@@ -120,6 +120,9 @@ var aliases = map[string]string{
 	"teel":        "tsp",
 	"teelöffel":   "tsp",
 	"cup":         "cup",
+	"tasse":       "cup",
+	"tassen":      "cup",
+	"schuss":      "tbsp", // a splash: about a spoonful
 	"cups":        "cup",
 	"floz":        "floz",
 	"fl oz":       "floz",

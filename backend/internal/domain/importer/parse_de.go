@@ -65,6 +65,17 @@ var pluralSuffixRE = regexp.MustCompile(`(\p{L})(?:\([nse]\)|/[ns])(\s|,|$)`)
 // gluedAmountUnitRE splits a number glued to a unit token: "100g", "1,5kg".
 var gluedAmountUnitRE = regexp.MustCompile(`^(\d+(?:[.,]\d+)?)(\p{L}+\.?)$`)
 
+// multiplierRE matches "N x rest": "1 x 175ml glass white wine", "2 x 400g can tomatoes".
+var multiplierRE = regexp.MustCompile(`^(\d+(?:[.,]\d+)?)\s*[x×]\s+(.+)$`)
+
+// containerWords name the packaging that follows a measured amount ("250g
+// pack chestnut mushrooms", "175ml glass white wine"). The amount is of the
+// contents, so the word is not part of the ingredient's name.
+var containerWords = map[string]struct{}{
+	"glass": {}, "pack": {}, "packet": {}, "tin": {}, "tins": {}, "can": {}, "cans": {},
+	"jar": {}, "bottle": {}, "carton": {}, "glas": {}, "packung": {}, "flasche": {},
+}
+
 // ParseLineDE parses a German-language ingredient line into a DraftIngredient.
 // The parser is best-effort: lines it cannot interpret still produce a
 // DraftIngredient with Confidence=ConfidenceUnparsed that the UI can show for
@@ -76,6 +87,16 @@ func ParseLineDE(raw string) DraftIngredient {
 	s = whitespaceRE.ReplaceAllString(s, " ")
 	if s == "" {
 		return out
+	}
+
+	if m := multiplierRE.FindStringSubmatch(s); m != nil {
+		if n, err := strconv.ParseFloat(strings.ReplaceAll(m[1], ",", "."), 64); err == nil {
+			if inner := ParseLineDE(m[2]); inner.Confidence != ConfidenceUnparsed && inner.Amount > 0 {
+				inner.Amount *= n
+				inner.RawText = raw
+				return inner
+			}
+		}
 	}
 
 	// Drop plural markers so they never end up in the unit, name, or note.
@@ -139,13 +160,22 @@ func ParseLineDE(raw string) DraftIngredient {
 
 	name := strings.TrimSpace(strings.Join(tokens, " "))
 
-	// Compound-word suffix match: "Knoblauchzehe(n)" is really a Zehe count.
-	// Only fires when no explicit unit was peeled.
-	if !hasUnit {
+	// Compound-word suffix match: "Knoblauchzehe(n)" is really a Zehe count,
+	// also behind a generic "Stk" ("2 Stk Knoblauchzehen"). A specific unit
+	// the line states ("1 Bund Knoblauchzehen") is left alone.
+	if !hasUnit || unit == "piece" {
 		if u, disp, matched := matchCompoundUnit(name); matched {
 			unit = u
 			unitToken = disp
 			hasUnit = true
+		}
+	}
+
+	// English "3 garlic cloves finely chopped": the count word is the second token.
+	if !hasUnit && len(tokens) >= 2 {
+		if w := strings.ToLower(tokens[1]); w == "clove" || w == "cloves" {
+			unit, unitToken, hasUnit = "clove", tokens[1], true
+			name = strings.TrimSpace(tokens[0] + " " + strings.Join(tokens[2:], " "))
 		}
 	}
 
@@ -161,9 +191,10 @@ func ParseLineDE(raw string) DraftIngredient {
 		// Finalize, estimated from units.CountGrams until then.
 		out.Amount = amount
 		out.Unit = unit
-		estimate := units.CountGrams[unit]
+		estimate := units.EstimateCountGrams(unit, name)
 		out.PortionGrams = &estimate
 	} else {
+		name = stripContainerWord(name)
 		def, _ := units.LookupDefault(unit)
 		out.Amount = amount * def.Grams
 		out.Unit = "g"
@@ -186,6 +217,19 @@ func ParseLineDE(raw string) DraftIngredient {
 	out.Name = name
 	out.Note = note
 	return out
+}
+
+// stripContainerWord drops a leading packaging word ("glass white wine" →
+// "white wine") when the name has more words after it.
+func stripContainerWord(name string) string {
+	first, rest, ok := strings.Cut(name, " ")
+	if !ok {
+		return name
+	}
+	if _, isContainer := containerWords[strings.ToLower(first)]; isContainer {
+		return strings.TrimSpace(rest)
+	}
+	return name
 }
 
 // ParseLineEN is a thin English fallback. v1 does not ship a full English

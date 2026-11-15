@@ -19,7 +19,7 @@ type DraftIngredient struct {
 	Note         string  `json:"note"`
 	Confidence   string  `json:"confidence"`
 	// PortionGrams is the estimated grams per count unit from
-	// units.CountGrams ("1 piece ≈ 120 g"); nil for mass, volume and
+	// units.EstimateCountGrams ("1 clove ≈ 3 g"); nil for mass, volume and
 	// unparsed lines. A leaf's own portion overrides it on Finalize.
 	PortionGrams *float64 `json:"portion_grams"`
 	// DietClass is the line's diet class from its name (diet.Classify), shown
