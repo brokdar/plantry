@@ -16,6 +16,7 @@ type plateComponentResponse struct {
 	FoodName      string   `json:"food_name"`
 	Kind          string   `json:"kind"`
 	Role          *string  `json:"role,omitempty"`
+	ImagePath     *string  `json:"image_path"`
 	Portions      *float64 `json:"portions,omitempty"`
 	CookSessionID *int64   `json:"cook_session_id,omitempty"`
 	Amount        *float64 `json:"amount,omitempty"`
@@ -61,6 +62,7 @@ func toPlateComponentResponse(pc *plate.PlateComponent) plateComponentResponse {
 		FoodName:      pc.FoodName,
 		Kind:          pc.FoodKind,
 		Role:          pc.FoodRole,
+		ImagePath:     pc.FoodImagePath,
 		Portions:      pc.Portions,
 		CookSessionID: pc.CookSessionID,
 		Amount:        pc.Amount,
