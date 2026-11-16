@@ -190,19 +190,20 @@ function ReplanBody({
                 : undefined,
             })
           } else {
-            toast.success(
+            const message =
               count > 0
                 ? t("plan.replan.done_removed", { count })
-                : t("plan.replan.done"),
-              unassigned > 0
-                ? {
-                    description: t("plan.replan.done_unassigned", {
-                      count: unassigned,
-                      amount: formatAmount(unassigned, i18n),
-                    }),
-                  }
-                : undefined
-            )
+                : t("plan.replan.done")
+            if (unassigned > 0) {
+              toast.success(message, {
+                description: t("plan.replan.done_unassigned", {
+                  count: unassigned,
+                  amount: formatAmount(unassigned, i18n),
+                }),
+              })
+            } else {
+              toast.success(message)
+            }
           }
           onClose()
         },

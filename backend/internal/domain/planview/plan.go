@@ -87,7 +87,7 @@ type Stats struct {
 	// CookDays is the number of distinct cook dates of sessions cooking in
 	// the window.
 	CookDays int
-	// Warnings is the number of session warnings.
+	// Warnings is the number of session warnings plus the board's issues.
 	Warnings int
 }
 
@@ -167,6 +167,7 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 		stats.Warnings += len(v.Warnings)
 	}
 	stats.CookDays = len(cookDays)
+	stats.Warnings += len(issues) // the board's issues count as warnings too
 
 	p := &Plan{
 		Window: w, Today: today, IsCurrent: w.Contains(today), ShoppingDay: e.shoppingDay,

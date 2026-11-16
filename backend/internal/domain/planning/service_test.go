@@ -359,22 +359,51 @@ func TestService_RegenerateScopes(t *testing.T) {
 		e := newSvcEnv(t)
 		e.ok(e.generate(e.req()))
 		before := e.window()
-		monLunch := before[key(mon, e.lunch)]
-		closure := closureKeys(e, before, monLunch.ID)
-		rows, _, err := e.plates.PlateClosure(e.ctx, monLunch.ID)
+		cook, _ := cookAndLeftoverPlates(t, e, before)
+		closure := closureKeys(e, before, cook.ID)
+		require.Greater(t, len(closure), 1)
+		rows, _, err := e.plates.PlateClosure(e.ctx, cook.ID)
 		require.NoError(t, err)
 
-		id := e.regenerate(planning.Scope{Kind: planning.ScopePlate, PlateID: monLunch.ID})
+		id := e.regenerate(planning.Scope{Kind: planning.ScopePlate, PlateID: cook.ID})
 
 		e.ok(id)
 		assert.Equal(t, airun.KindRegenerate, e.runs.start(id).Kind)
 		after := e.window()
 		assert.ElementsMatch(t, closure, regenerated(before, after))
-		assert.NotEqual(t, monLunch.Components[0].FoodID, after[key(mon, e.lunch)].Components[0].FoodID, "a different recipe")
 		sc := e.scope(id)
 		assert.Equal(t, "plate", sc["kind"])
 		assert.Equal(t, rows.PlateIDs, idsOf(sc["plate_ids"]), "closure expansion recorded")
 		assert.Equal(t, rows.SessionIDs, idsOf(sc["session_ids"]))
+	})
+
+	t.Run("plate on a leftover replaces only that plate", func(t *testing.T) {
+		e := newSvcEnv(t)
+		e.ok(e.generate(e.req()))
+		before := e.window()
+		_, left := cookAndLeftoverPlates(t, e, before)
+		sid := *left.Components[0].CookSessionID
+		batch, err := e.plates.Session(e.ctx, sid)
+		require.NoError(t, err)
+
+		id := e.regenerate(planning.Scope{Kind: planning.ScopePlate, PlateID: left.ID})
+
+		e.ok(id)
+		after := e.window()
+		k := key(left.DateString(), left.SlotID)
+		assert.Equal(t, []string{k}, regenerated(before, after), "only the leftover plate changes")
+		sc := e.scope(id)
+		assert.Equal(t, []int64{left.ID}, idsOf(sc["plate_ids"]))
+		assert.Empty(t, idsOf(sc["session_ids"]), "the batch stays")
+		now, err := e.plates.Session(e.ctx, sid)
+		require.NoError(t, err, "the batch survives")
+		reeats := slices.ContainsFunc(after[k].Components, func(c plate.PlateComponent) bool {
+			return c.CookSessionID != nil && *c.CookSessionID == sid
+		})
+		if !reeats {
+			assert.Len(t, now.Links, len(batch.Links)-1)
+			assert.Less(t, now.Portions, batch.Portions, "the batch shrinks (D11)")
+		}
 	})
 
 	t.Run("side changes only the side", func(t *testing.T) {
@@ -911,4 +940,34 @@ func TestService_ExploreQuota(t *testing.T) {
 	id = e.regenerate(planning.Scope{Kind: planning.ScopePlate, PlateID: d.ID})
 	e.ok(id)
 	assert.NotContains(t, e.scope(id), "explore_quota", "regenerate forces quota 0")
+}
+
+// cookAndLeftoverPlates finds a plate that is its batch's cook plate (the
+// batch has other plates) and a plate eating only a batch cooked elsewhere.
+func cookAndLeftoverPlates(t *testing.T, e *svcEnv, plates map[string]plate.Plate) (cook, left plate.Plate) {
+	t.Helper()
+	var haveCook, haveLeft bool
+	for _, k := range slices.Sorted(maps.Keys(plates)) {
+		p := plates[k]
+		cooksHere, shared, eats := false, true, false
+		for _, c := range p.Components {
+			if c.CookSessionID == nil {
+				continue
+			}
+			v, err := e.plates.Session(e.ctx, *c.CookSessionID)
+			require.NoError(t, err)
+			eats = true
+			cooksHere = cooksHere || v.CookCell().Equal(p.Cell())
+			shared = shared && len(v.Links) > 1
+		}
+		switch {
+		case !eats || !shared:
+		case cooksHere && !haveCook:
+			cook, haveCook = p, true
+		case !cooksHere && !haveLeft:
+			left, haveLeft = p, true
+		}
+	}
+	require.True(t, haveCook && haveLeft, "the generated week has a cook plate and a leftover plate")
+	return cook, left
 }

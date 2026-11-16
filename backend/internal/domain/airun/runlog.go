@@ -151,9 +151,13 @@ func resultErrorKey(result json.RawMessage) string {
 
 var dateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
+// filterKeys are tool arguments whose short text values are logged: the
+// lookup filters (list_foods search, kind, role, diet, sort).
+var filterKeys = map[string]bool{"search": true, "kind": true, "role": true, "diet": true, "sort": true}
+
 // argsSummary reduces a tool call's arguments to what is safe and short to
-// log: numbers, booleans, dates and ids (keys named id/ids/*_id/*_ids), never
-// free text.
+// log: numbers, booleans, dates, ids (keys named id/ids/*_id/*_ids) and the short
+// filter values of filterKeys, never other free text.
 func argsSummary(args json.RawMessage) string {
 	var m map[string]any
 	if json.Unmarshal(args, &m) != nil {
@@ -170,8 +174,12 @@ func argsSummary(args json.RawMessage) string {
 		case float64, bool:
 			parts = append(parts, fmt.Sprintf("%s=%v", k, v))
 		case string:
-			if dateRe.MatchString(v) {
+			switch {
+			case dateRe.MatchString(v):
 				parts = append(parts, k+"="+v)
+			case filterKeys[k] && v != "":
+				// A filter such as list_foods' search term is a food name, not prose.
+				parts = append(parts, fmt.Sprintf("%s=%q", k, cutChars(v, 60)))
 			}
 		case []any:
 			if k == "ids" || strings.HasSuffix(k, "_ids") {

@@ -66,11 +66,12 @@ type planner struct {
 	done     map[cellID]bool
 	supplies []*supply
 	// occasions holds each day's cook cells (H2), routine cells excluded.
-	occasions map[int]map[cellID]bool
-	meatDays  map[int]bool
-	seen      map[int64][]time.Time
-	used      map[int64]int
-	avoid     map[int64]bool
+	occasions  map[int]map[cellID]bool
+	meatDays   map[int]bool
+	seen       map[int64][]time.Time
+	used       map[int64]int
+	avoid      map[int64]bool
+	avoidBatch map[int64]bool
 	// routineFoods are the recipes the target's routine plates eat: they are
 	// breakfast routines, never planned into another cell.
 	routineFoods map[int64]bool
@@ -85,7 +86,7 @@ func newPlanner(in ChooseInput) *planner {
 		in: in, s: s, x: newIndex(s, in.Target), order: s.SlotOrder,
 		done: map[cellID]bool{}, occasions: map[int]map[cellID]bool{},
 		meatDays: map[int]bool{}, seen: map[int64][]time.Time{}, used: map[int64]int{},
-		avoid: idSet(in.Avoid), routineFoods: nil,
+		avoid: idSet(in.Avoid), avoidBatch: idSet(in.AvoidBatches), routineFoods: nil,
 	}
 	h.routineFoods = h.x.routineFoods()
 	for day, cells := range h.x.occasions {
@@ -217,10 +218,21 @@ func (h *planner) supplyFor(c plate.CellKey, eaters float64) *supply {
 	if !h.s.Settings.BatchCooking {
 		return nil
 	}
+	// A replaced plate leaves its batch unless nothing else can feed the cell.
+	if best := h.pickSupply(c, eaters, true); best != nil {
+		return best
+	}
+	return h.pickSupply(c, eaters, false)
+}
+
+func (h *planner) pickSupply(c plate.CellKey, eaters float64, skipAvoided bool) *supply {
 	var best *supply
 	for _, sup := range h.supplies {
 		k, ok := h.kindAt(sup, c)
 		if !ok || k == plate.KindFresh {
+			continue
+		}
+		if skipAvoided && sup.proposed < 0 && h.avoidBatch[sup.food] {
 			continue
 		}
 		room := sup.free
@@ -307,7 +319,7 @@ func (h *planner) cook(c plate.CellKey) error {
 	freezable := f.Freezable
 	side := int64(0)
 	if f.Role == food.RoleMain {
-		if id, ok := h.pickSide(c, 0); ok {
+		if id, ok := h.pickSide(c, 0, ""); ok {
 			side = id
 			sf := h.s.Foods[side]
 			keep = min(keep, h.s.Settings.KeepDays(sf.KeepDays))
@@ -460,9 +472,10 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	return best(cands)
 }
 
-// pickSide ranks the side recipes for a main cooked on c: not replaced, not
+// pickSide ranks the side recipes for a main cooked on c: of role when given
+// (a swap keeps veg veg and starch starch unless none exists), not replaced, not
 // the excluded food, used least in the proposal, then as pickMain.
-func (h *planner) pickSide(c plate.CellKey, exclude int64) (int64, bool) {
+func (h *planner) pickSide(c plate.CellKey, exclude int64, role food.Role) (int64, bool) {
 	var cands []candidate
 	for _, f := range h.s.Foods {
 		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || !h.fits(f) {
@@ -473,7 +486,7 @@ func (h *planner) pickSide(c plate.CellKey, exclude int64) (int64, bool) {
 			last = float64(f.LastEaten.Unix())
 		}
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
-			b2f(h.overMeat(f, c)), b2f(h.avoid[f.ID]), float64(h.used[f.ID]), b2f(!diet.Valid(f.DietClass)),
+			b2f(role != "" && f.Role != role), b2f(h.overMeat(f, c)), b2f(h.avoid[f.ID]), float64(h.used[f.ID]), b2f(!diet.Valid(f.DietClass)),
 			last, b2f(!f.Favorite), -f.LikeScore,
 		}})
 	}
@@ -570,7 +583,7 @@ func (h *planner) kcalShare(date time.Time) float64 {
 func (h *planner) side(sw SideSwap) (Proposal, error) {
 	c := plate.CellKey{Date: sw.CookDate, SlotID: sw.CookSlotID}
 	h.avoid[sw.FoodID] = true
-	id, ok := h.pickSide(c, sw.FoodID)
+	id, ok := h.pickSide(c, sw.FoodID, sw.Role)
 	if !ok {
 		return Proposal{}, fmt.Errorf("%w: no other side", domain.ErrNotEnoughRecipes)
 	}

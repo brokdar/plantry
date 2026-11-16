@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
@@ -292,6 +293,22 @@ func linksByComponent(sessions []plate.SessionView) map[int64]plate.Link {
 	return out
 }
 
+// rateName is what the rate question calls the plate: its main, else every
+// component's name joined as the board shows the plate ("rice + potatoes"),
+// never one side alone.
+func rateName(p *plate.Plate, primary *plate.PlateComponent) string {
+	if primary.FoodRole != nil && *primary.FoodRole == string(food.RoleMain) {
+		return primary.FoodName
+	}
+	names := make([]string, 0, len(p.Components))
+	for _, c := range p.Components {
+		if c.FoodName != "" {
+			names = append(names, c.FoodName)
+		}
+	}
+	return strings.Join(names, " + ")
+}
+
 // primaryComposed is the plate's first composed component with role main, else
 // its first composed component, else nil. Components are in sort order.
 func primaryComposed(p *plate.Plate) *plate.PlateComponent {
@@ -356,7 +373,7 @@ func rate(plates []plate.Plate, date time.Time, order plate.SlotOrder) *Rate {
 			continue
 		}
 		if best == nil || plate.Before(best.Cell(), p.Cell(), order) {
-			best, bestFood = p, pc.FoodName
+			best, bestFood = p, rateName(p, pc)
 		}
 	}
 	if best == nil {
