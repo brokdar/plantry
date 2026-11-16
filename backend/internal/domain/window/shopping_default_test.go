@@ -15,7 +15,7 @@ func TestShoppingDefault(t *testing.T) {
 	}{
 		{"mid-window starts today", "2026-11-04", "2026-11-04", "2026-11-06"},
 		{"on the shopping day", "2026-10-31", "2026-10-31", "2026-11-06"},
-		{"before the window starts at its start", "2026-10-29", "2026-10-31", "2026-11-06"},
+		{"a day of the previous window stays in it", "2026-10-29", "2026-10-29", "2026-10-30"},
 		{"last day shops the next window", "2026-11-06", "2026-11-07", "2026-11-13"},
 	}
 	for _, tt := range tests {
