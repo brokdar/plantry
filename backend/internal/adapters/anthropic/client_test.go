@@ -439,7 +439,7 @@ func TestStream_ThinkingBlocksReplayVerbatim(t *testing.T) {
 	require.Len(t, last, 3)
 	assert.JSONEq(t, `{"type":"thinking","thinking":"Let me plan.","signature":"EqQBCgIYAhIM"}`, string(last[0]))
 	assert.JSONEq(t, `{"type":"redacted_thinking","data":"EmwKAhgB"}`, string(last[1]))
-	assert.JSONEq(t, `{"type":"text","text":"Hello"}`, string(last[2]))
+	assert.JSONEq(t, `{"type":"text","text":"Hello","cache_control":{"type":"ephemeral","ttl":"5m"}}`, string(last[2]))
 }
 
 type reqBodyPeek struct {
@@ -489,4 +489,52 @@ func TestEffectiveParams_CacheBreakpoints(t *testing.T) {
 	e := c.EffectiveParams(llm.Request{Model: "m", System: "sys", Tools: []llm.Tool{{Name: "t"}}})
 	assert.Equal(t, []string{"system", "tools"}, e.CacheBreakpoints)
 	assert.Empty(t, c.EffectiveParams(llm.Request{Model: "m"}).CacheBreakpoints)
+}
+
+// The request puts a breakpoint on the last block of the last message, next to
+// system and tools (3 of the 4 allowed), so the resent history is a cache read.
+func TestStream_CachesConversationTail(t *testing.T) {
+	fixture := serveFixture(t, "testdata/stream_text.sse", "text/event-stream")
+	var body []byte
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ = io.ReadAll(r.Body)
+		fixture(w, r)
+	})
+	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+	req := llm.Request{
+		Model: "claude-sonnet-4-6", MaxTokens: 1024, System: "sys",
+		Tools: []llm.Tool{{Name: "t", Schema: json.RawMessage(`{"type":"object"}`)}},
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "hi"}}},
+			{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Type: llm.ContentTypeToolUse, ToolUseID: "tu_1", ToolUseName: "t", ToolUseInput: json.RawMessage(`{}`)}}},
+			{Role: llm.RoleUser, Content: []llm.ContentBlock{
+				{Type: llm.ContentTypeToolResult, ToolResultID: "tu_1", ToolResultContent: json.RawMessage(`"ok"`)},
+				{Type: llm.ContentTypeText, Text: "go on"},
+			}},
+		},
+	}
+	out := make(chan llm.Event, 64)
+	_, err := c.Stream(context.Background(), req, out)
+	require.NoError(t, err)
+	_ = drainEvents(out)
+
+	var got struct {
+		Messages []struct {
+			Content []map[string]any `json:"content"`
+		} `json:"messages"`
+	}
+	require.NoError(t, json.Unmarshal(body, &got))
+	marked := 0
+	for i, m := range got.Messages {
+		for j, b := range m.Content {
+			if _, ok := b["cache_control"]; ok {
+				marked++
+				assert.Equal(t, 2, i)
+				assert.Equal(t, len(m.Content)-1, j)
+			}
+		}
+	}
+	assert.Equal(t, 1, marked)
+	assert.Equal(t, 3, bytes.Count(body, []byte(`"cache_control"`)))
+	assert.Equal(t, []string{"system", "tools", "messages"}, c.EffectiveParams(req).CacheBreakpoints)
 }

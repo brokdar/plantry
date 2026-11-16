@@ -447,6 +447,9 @@ func (w wire) effective(req llm.Request) llm.Effective {
 	if len(req.Tools) > 0 {
 		e.CacheBreakpoints = append(e.CacheBreakpoints, "tools")
 	}
+	if tailCacheable(req.Messages) {
+		e.CacheBreakpoints = append(e.CacheBreakpoints, "messages")
+	}
 	switch {
 	case req.ToolChoice == nil:
 	case w.forcedTool:

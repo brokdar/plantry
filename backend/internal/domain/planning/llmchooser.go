@@ -565,10 +565,11 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 	merged := Merge(in.State, in.Target, prop)
 	ev := Evaluate(merged, in.Target)
 	RecordDryRun(ctx, n, func() Evaluation { return ev })
-	out, err := json.Marshal(struct {
-		Evaluation
-		Autofix []string `json:"autofix"`
-	}{ev, append([]string{}, fixes...)})
+	view := ev.Compact(ev.ProposedView())
+	if len(fixes) > 0 {
+		view["autofix"] = fixes
+	}
+	out, err := json.Marshal(view)
 	if err != nil {
 		return fail("error: encode evaluation")
 	}
@@ -580,7 +581,8 @@ func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n i
 // goes after the repair text so the model sees every rule, soft ones
 // included.
 func evaluationFeedback(merged State, t Target) string {
-	out, err := json.Marshal(Evaluate(merged, t))
+	ev := Evaluate(merged, t)
+	out, err := json.Marshal(ev.Compact(ev.ProposedView()))
 	if err != nil {
 		return ""
 	}

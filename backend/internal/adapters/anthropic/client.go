@@ -348,6 +348,8 @@ type contentBlock struct {
 	ToolUseID string          `json:"tool_use_id,omitempty"`
 	Content   json.RawMessage `json:"content,omitempty"`
 	IsError   bool            `json:"is_error,omitempty"`
+	// CacheControl marks the conversation tail breakpoint.
+	CacheControl *cacheCtrl `json:"cache_control,omitempty"`
 	// Caller is replayed on a tool_use made by code (or directly).
 	Caller *llm.Caller `json:"caller,omitempty"`
 
@@ -462,7 +464,33 @@ func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 			Content: encodeContent(m.Content),
 		}
 	}
+	if last := len(body.Messages) - 1; last >= 0 {
+		// Cache the conversation tail: the next request resends this history
+		// as a prefix, so it is a cache read instead of fresh input. Server
+		// blocks go out verbatim and cannot carry the marker.
+		content := body.Messages[last].Content
+		for i := len(content) - 1; i >= 0; i-- {
+			if content[i].raw == nil {
+				content[i].CacheControl = &cacheCtrl{Type: "ephemeral", TTL: "5m"}
+				break
+			}
+		}
+	}
 	return json.Marshal(body)
+}
+
+// tailCacheable reports whether encodeRequest can put a cache breakpoint on
+// the last message (it needs one block that is not a verbatim server block).
+func tailCacheable(msgs []llm.Message) bool {
+	if len(msgs) == 0 {
+		return false
+	}
+	for _, b := range msgs[len(msgs)-1].Content {
+		if b.Type != llm.ContentTypeServer {
+			return true
+		}
+	}
+	return false
 }
 
 func encodeContent(blocks []llm.ContentBlock) []contentBlock {

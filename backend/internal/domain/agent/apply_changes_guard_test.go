@@ -116,10 +116,56 @@ func TestApplyChanges_PlateFiguresAndCookDay(t *testing.T) {
 	plates := after["plates"].([]any)
 	require.NotEmpty(t, plates)
 	pl := plates[0].(map[string]any)
-	assert.Contains(t, pl, "kcal")
-	assert.Contains(t, pl, "protein_g")
+	// The fixture foods have no macros: zero figures are left out of the result.
+	assert.NotContains(t, pl, "kcal")
+	assert.NotContains(t, pl, "protein_g")
 	details := pl["component_details"].([]any)
 	require.NotEmpty(t, details)
-	assert.Contains(t, details[0], "plate_component_id")
-	assert.Contains(t, details[0], "kcal")
+	assert.Equal(t, true, details[0].(map[string]any)["provisional"], "a dry run's new component has no real id")
+	assert.NotContains(t, details[0], "kcal")
+}
+
+// A dry run rolls back, so the rows it creates have no real ids: they are
+// marked provisional and say to re-send the op list; rows that exist keep
+// their ids, and a real apply carries real ids and no note.
+func TestApplyChanges_DryRunMarksNewRowsProvisional(t *testing.T) {
+	e := newPlanToolEnv(t)
+	p, _ := e.freshMain()
+	slotID := e.emptyOtherSlot(p)
+	existing := p.Components[0].ID
+	input := func(dry bool) string {
+		return fmt.Sprintf(
+			`{"dry_run":%t,"ops":[{"op":"add","date":%q,"slot_id":%d,"food_id":%d,"portions":1},{"op":"set_quantity","plate_component_id":%d,"portions":1}]}`,
+			dry, p.DateString(), slotID, e.sides[0], existing)
+	}
+
+	res, err := e.exec("apply_changes", input(true))
+	require.NoError(t, err)
+	assert.Contains(t, res["dry_run_note"], "send the full op list again")
+	applied := res["applied"].([]any)
+	added, set := applied[0].(map[string]any), applied[1].(map[string]any)
+	assert.Equal(t, true, added["provisional"])
+	assert.NotContains(t, added, "plate_component_id")
+	assert.NotContains(t, added, "plate_id")
+	assert.NotContains(t, set, "provisional", "an existing component keeps its id")
+	assert.EqualValues(t, existing, set["plate_component_id"])
+	var provisionalPlates int
+	for _, pl := range res["after"].(map[string]any)["plates"].([]any) {
+		m := pl.(map[string]any)
+		if m["provisional"] == true {
+			provisionalPlates++
+			assert.NotContains(t, m, "plate_id")
+			for _, d := range m["component_details"].([]any) {
+				assert.Equal(t, true, d.(map[string]any)["provisional"])
+			}
+		}
+	}
+	assert.Equal(t, 1, provisionalPlates)
+
+	res, err = e.exec("apply_changes", input(false))
+	require.NoError(t, err)
+	assert.NotContains(t, res, "dry_run_note")
+	added = res["applied"].([]any)[0].(map[string]any)
+	assert.NotContains(t, added, "provisional")
+	assert.Contains(t, added, "plate_component_id")
 }
