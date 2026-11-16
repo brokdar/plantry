@@ -207,7 +207,8 @@ type Querier interface {
 	// (reset) or restored as drafts. open/NULL -> accepted or discarded; a run
 	// that sees both is partially_accepted; reset undoes an accept (accepted ->
 	// open, partially_accepted -> discarded); restored undoes a discard
-	// (discarded -> open, partially_accepted -> accepted).
+	// (discarded -> open, partially_accepted -> accepted). A single confirm
+	// (confirmed) of some of a run's drafts makes an open run partially_accepted.
 	SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error
 	SetSessionsState(ctx context.Context, arg SetSessionsStateParams) error
 	// D12: assigns the day to the oldest pending, never-shown suggestion after

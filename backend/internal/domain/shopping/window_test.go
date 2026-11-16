@@ -32,7 +32,8 @@ func TestService_Range(t *testing.T) {
 	}{
 		{"AC6 default mid-window starts today", sat, "", "", "2026-11-04", "2026-11-04", "2026-11-06", "2026-10-31"},
 		{"default on the shopping day", sat, "", "", "2026-10-31", "2026-10-31", "2026-11-06", "2026-10-31"},
-		{"default next shopping day anchor", next, "", "", "2026-11-04", "2026-11-07", "2026-11-13", "2026-11-07"},
+		{"default ignores the anchor setting", next, "", "", "2026-11-04", "2026-11-04", "2026-11-06", "2026-10-31"},
+		{"default on the last day shops the next window", next, "", "", "2026-11-06", "2026-11-07", "2026-11-13", "2026-11-07"},
 		{"explicit range keeps it, window contains from", sat, "2026-11-08", "2026-11-10", "2026-11-04", "2026-11-08", "2026-11-10", "2026-11-07"},
 	}
 	for _, tt := range tests {

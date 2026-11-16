@@ -55,8 +55,8 @@ func snapshotOrigin(ctx context.Context, st State, runID *int64, reason *string,
 }
 
 // Confirm confirms the batch closure of seed (D3) and returns the closure.
-// Each row it changes gets one confirm event; Confirm leaves run outcomes
-// alone (D25).
+// Each row it changes gets one confirm event; the runs of the rows become
+// partially_accepted unless already decided (D25).
 func (s *Service) Confirm(ctx context.Context, seed RowSet) (RowSet, error) {
 	return s.setClosureState(ctx, seed, StateConfirmed, ActionConfirm)
 }
@@ -90,6 +90,11 @@ func (s *Service) setClosureState(ctx context.Context, seed RowSet, to State, ac
 		j.changed = action
 		if _, err := s.setState(ctx, j, c, rows, to); err != nil {
 			return err
+		}
+		if to == StateConfirmed {
+			if err := s.recordOutcomes(ctx, OutcomeConfirmed, c, rows); err != nil {
+				return err
+			}
 		}
 		out = c
 		return s.commit(ctx, j)

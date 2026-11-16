@@ -80,9 +80,12 @@ SELECT chooser, notes FROM ai_runs WHERE id = ?;
 -- (reset) or restored as drafts. open/NULL -> accepted or discarded; a run
 -- that sees both is partially_accepted; reset undoes an accept (accepted ->
 -- open, partially_accepted -> discarded); restored undoes a discard
--- (discarded -> open, partially_accepted -> accepted).
+-- (discarded -> open, partially_accepted -> accepted). A single confirm
+-- (confirmed) of some of a run's drafts makes an open run partially_accepted.
 UPDATE ai_runs SET
     outcome = CASE
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'confirmed' AND (outcome IS NULL OR outcome = 'open') THEN 'partially_accepted'
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'confirmed' THEN outcome
         WHEN CAST(sqlc.arg(event) AS TEXT) = 'accepted' AND outcome IN ('discarded', 'partially_accepted') THEN 'partially_accepted'
         WHEN CAST(sqlc.arg(event) AS TEXT) = 'accepted' THEN 'accepted'
         WHEN CAST(sqlc.arg(event) AS TEXT) = 'discarded' AND outcome IN ('accepted', 'partially_accepted') THEN 'partially_accepted'

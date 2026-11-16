@@ -192,7 +192,7 @@ func TestConfirm_LeftoverConfirmsItsWholeBatch(t *testing.T) {
 	assert.Equal(t, plate.StateDraft, decodePlate(t, evs[0].Before).State)
 	assert.Equal(t, plate.StateConfirmed, decodePlate(t, evs[0].After).State)
 	assert.Equal(t, "confirmed", decodeSession(t, evs[3].After)["state"])
-	assert.Empty(t, e.outcome(7), "confirm leaves the outcome alone")
+	assert.Equal(t, "partially_accepted", e.outcome(7), "a confirmed batch makes its run partially accepted (F9)")
 
 	// Confirming again changes nothing and logs nothing.
 	n = len(e.events())
@@ -668,14 +668,14 @@ func TestOutcome_Machine(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "accepted", e.outcome(7))
 	})
-	t.Run("confirm and unlock leave it alone", func(t *testing.T) {
+	t.Run("confirm makes the run partially accepted, unlock keeps that", func(t *testing.T) {
 		e := setup(t)
 		p := e.plateAt(mon, e.dinner)
 		_, err := e.svc.Confirm(e.ctx, plate.RowSet{PlateIDs: []int64{p.ID}})
 		require.NoError(t, err)
 		_, err = e.svc.Unlock(e.ctx, plate.RowSet{PlateIDs: []int64{p.ID}})
 		require.NoError(t, err)
-		assert.Empty(t, e.outcome(7))
+		assert.Equal(t, "partially_accepted", e.outcome(7))
 	})
 }
 

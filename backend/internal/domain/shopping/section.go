@@ -43,6 +43,15 @@ var phrases = []struct {
 	phrase  string
 	section food.ShopSection
 }{
+	// Dried pulses are dry goods however the head noun reads; precooked rice
+	// comes in a pouch or jar, not in the dry-goods aisle.
+	{"dried butter beans", food.SectionDryGoods},
+	{"dried beans", food.SectionDryGoods},
+	{"dried chickpeas", food.SectionDryGoods},
+	{"getrocknete bohnen", food.SectionDryGoods},
+	{"getrocknete kichererbsen", food.SectionDryGoods},
+	{"cooked rice", food.SectionCansJars},
+	{"gekochter reis", food.SectionCansJars},
 	{"nussbutter", food.SectionDryGoods},
 	{"studentenfutter", food.SectionDryGoods},
 	{"kaffeebohnen", food.SectionDryGoods},

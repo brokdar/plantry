@@ -7,7 +7,7 @@ import (
 )
 
 func TestShoppingDefault(t *testing.T) {
-	w := Containing(d("2026-11-04"), saturday) // Sat 31 Oct → Fri 6 Nov
+	// Window Sat 31 Oct to Fri 6 Nov; the next one starts Sat 7 Nov.
 	tests := []struct {
 		name     string
 		today    string
@@ -16,11 +16,11 @@ func TestShoppingDefault(t *testing.T) {
 		{"mid-window starts today", "2026-11-04", "2026-11-04", "2026-11-06"},
 		{"on the shopping day", "2026-10-31", "2026-10-31", "2026-11-06"},
 		{"before the window starts at its start", "2026-10-29", "2026-10-31", "2026-11-06"},
-		{"last day", "2026-11-06", "2026-11-06", "2026-11-06"},
+		{"last day shops the next window", "2026-11-06", "2026-11-07", "2026-11-13"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			from, to := ShoppingDefault(d(tt.today), w)
+			_, from, to := ShoppingDefault(d(tt.today), saturday)
 			assert.Equal(t, d(tt.from), from)
 			assert.Equal(t, d(tt.to), to)
 		})

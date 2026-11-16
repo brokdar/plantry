@@ -11,7 +11,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import type { ShoppingRange } from "@/lib/api/shopping"
-import { shiftYMD } from "@/lib/dates"
+import { shiftYMD, todayISO } from "@/lib/dates"
 import { formatDate, type Formatter } from "@/lib/plan/format"
 import { cn } from "@/lib/utils"
 
@@ -41,10 +41,15 @@ function rangeText(range: ShoppingRange, f: Formatter): string {
   return f.t("shop.range", { from: date(range.from), to: date(range.to) })
 }
 
-/** "This window" and "Next window", anchored on the viewed window. */
-function rangePresets(window: ShoppingRange) {
+/**
+ * "This window" and "Next window", anchored on the viewed window. This one
+ * starts today when today lies inside the window (the server's default
+ * range: days already past are not bought for); the next one is whole.
+ */
+function rangePresets(window: ShoppingRange, today: string) {
+  const inWindow = today > window.from && today <= window.to
   return {
-    this_window: window,
+    this_window: inWindow ? { from: today, to: window.to } : window,
     next_window: {
       from: shiftYMD(window.from, WINDOW_DAYS),
       to: shiftYMD(window.to, WINDOW_DAYS),
@@ -60,7 +65,7 @@ function rangePresets(window: ShoppingRange) {
 export function RangePicker({ range, window, onChange }: RangePickerProps) {
   const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
-  const presets = rangePresets(window)
+  const presets = rangePresets(window, todayISO())
 
   function choose(next: ShoppingRange) {
     setOpen(false)
