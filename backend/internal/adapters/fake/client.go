@@ -243,7 +243,7 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 }
 
 // sequence picks the turns a request replays and the cursor key for them: the
-// for_tool turns when the request forces that tool, else the first match_user
+// for_tool turns when the request forces (or, with auto choice, offers) that tool, else the first match_user
 // sequence whose value the latest user text contains, else the default turns.
 func (c *Client) sequence(req llm.Request) (string, []Turn) {
 	pick := func(key string, ok func(Turn) bool) (string, []Turn) {
@@ -259,6 +259,16 @@ func (c *Client) sequence(req llm.Request) (string, []Turn) {
 		name := req.ToolChoice.Name
 		if k, turns := pick("tool:"+name, func(t Turn) bool { return t.ForTool == name }); len(turns) > 0 {
 			return k, turns
+		}
+	}
+	if req.ToolChoice == nil {
+		// Auto tool choice: a for_tool turn also serves a request that
+		// offers that tool (the planner offers evaluate_plan and submit_plan).
+		for _, tl := range req.Tools {
+			name := tl.Name
+			if k, turns := pick("tool:"+name, func(t Turn) bool { return t.ForTool == name }); len(turns) > 0 {
+				return k, turns
+			}
 		}
 	}
 	text := strings.ToLower(latestUserText(req))

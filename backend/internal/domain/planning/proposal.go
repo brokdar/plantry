@@ -43,10 +43,12 @@ type ProposedPlate struct {
 	Reason     string
 }
 
-// ProposedComponent is a composed food on a proposed plate, per eater.
+// ProposedComponent is a food on a proposed plate, per eater: a recipe with
+// Portions, or a no-cook leaf with Grams.
 type ProposedComponent struct {
 	FoodID     int64
 	Portions   float64
+	Grams      float64
 	SessionKey string
 	SessionID  int64
 }
@@ -109,8 +111,11 @@ func Merge(s State, t Target, p Proposal) State {
 	for i, pp := range p.Plates {
 		comps := make([]Component, len(pp.Components))
 		for j, pc := range pp.Components {
-			portions := pc.Portions
+			portions, grams := pc.Portions, pc.Grams
 			comps[j] = Component{FoodID: pc.FoodID, Portions: &portions, SessionKey: pc.SessionKey, SessionID: pc.SessionID, Proposed: true}
+			if grams > 0 {
+				comps[j].Portions, comps[j].Grams = nil, &grams
+			}
 		}
 		if at, ok := kept[pp.PlateID]; ok && pp.PlateID != 0 {
 			host := &out.Plates[at]
@@ -161,6 +166,10 @@ func ToSnapshot(p Proposal, s State) plate.PlanSnapshot {
 		for i, pc := range pp.Components {
 			portions := pc.Portions
 			c := plate.SnapshotComponent{FoodID: pc.FoodID, Portions: &portions, SortOrder: offset + i}
+			if pc.Grams > 0 {
+				grams, unit := pc.Grams, "g"
+				c.Portions, c.Amount, c.Unit = nil, &grams, &unit
+			}
 			switch {
 			case pc.SessionKey != "":
 				c.Session = &plate.SessionLink{Ref: pc.SessionKey}

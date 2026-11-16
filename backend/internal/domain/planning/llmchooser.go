@@ -21,6 +21,9 @@ const (
 	// maxRepairs is how many times a proposal with violations, or a reply
 	// without a readable submit_plan call, is sent back (spec §6.1).
 	maxRepairs = 2
+	// maxEvaluations is how many evaluate_plan dry runs a run answers; a
+	// further call is told to submit.
+	maxEvaluations = 8
 )
 
 // LLMChooser proposes a plan with one forced submit_plan call per attempt
@@ -69,9 +72,8 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 	req := llm.Request{
 		Model:       model,
 		System:      system,
-		Messages:    []llm.Message{textMessage("Plan the cells marked fill and call submit_plan with the complete plan.")},
-		Tools:       []llm.Tool{submitPlanTool()},
-		ToolChoice:  &llm.ToolChoice{Name: submitPlanName},
+		Messages:    []llm.Message{textMessage("Plan the cells marked fill. Draft the complete plan, check it with evaluate_plan (it saves nothing), fix what it reports, then call submit_plan.")},
+		Tools:       []llm.Tool{evaluatePlanTool(), submitPlanTool()},
 		Temperature: llmTemperature,
 		Reasoning:   true,
 		MaxTokens:   llmMaxTokens,
@@ -81,7 +83,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 	var allFixes, runNotes []string
 	// paid counts the repairs that use up the budget (maxRepairs); the one
 	// free attempt for a skeleton first reply is extra, once per run.
-	paid, freeUsed := 0, false
+	paid, freeUsed, evals := 0, false, 0
 	fillCells := len(fillCellLabels(in))
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 && in.Stage != nil {
@@ -96,6 +98,18 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 				partial = *last
 			}
 			return partial, fmt.Errorf("%w: %w", domain.ErrAIProviderFailed, err)
+		}
+		if calls := evaluateCalls(resp); len(calls) > 0 && !hasSubmit(resp) {
+			// A dry run: evaluate the draft, answer, and ask again. It is
+			// not an attempt and uses no repair.
+			results := make([]llm.ContentBlock, len(calls))
+			for i, b := range calls {
+				evals++
+				results[i] = evaluateResult(ctx, in, b, evals)
+			}
+			req.Messages = append(req.Messages, resp.Message, llm.Message{Role: llm.RoleUser, Content: results})
+			attempt--
+			continue
 		}
 		input, perr := submitted(resp)
 		var prop Proposal
@@ -133,7 +147,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			}
 			noted := withNotes(prop, allFixes, advice, "")
 			last = &noted
-			feedback = rep.feedback(findings{violations, advice, fixes, sig == lastSig})
+			feedback = rep.feedback(findings{violations, advice, fixes, sig == lastSig}) + evaluationFeedback(merged, in.Target)
 			lastSig = sig
 		} else {
 			logAttempt(ctx, in.Logger, attempt, nil, perr)
@@ -265,6 +279,7 @@ type submitPlan struct {
 		Components []struct {
 			FoodID     int64   `json:"food_id"`
 			Portions   float64 `json:"portions"`
+			Grams      float64 `json:"grams"`
 			SessionKey *string `json:"session_key"`
 			SessionID  *int64  `json:"session_id"`
 		} `json:"components"`
@@ -310,7 +325,7 @@ func parseProposal(input json.RawMessage, in ChooseInput) (Proposal, error) {
 		}
 		pp := ProposedPlate{PlateID: pl.PlateID, Date: d, SlotID: pl.SlotID, Eaters: eaters, Reason: strings.TrimSpace(pl.Reason)}
 		for _, c := range pl.Components {
-			pc := ProposedComponent{FoodID: c.FoodID, Portions: c.Portions}
+			pc := ProposedComponent{FoodID: c.FoodID, Portions: c.Portions, Grams: c.Grams}
 			if c.SessionKey != nil {
 				pc.SessionKey = *c.SessionKey
 			}
@@ -357,4 +372,68 @@ func violationsOf(issues []Issue) []Issue {
 		}
 	}
 	return out
+}
+
+func hasSubmit(resp *llm.Response) bool {
+	for _, b := range resp.Message.Content {
+		if b.Type == llm.ContentTypeToolUse && b.ToolUseName == submitPlanName {
+			return true
+		}
+	}
+	return false
+}
+
+// evaluateCalls are the reply's evaluate_plan tool calls.
+func evaluateCalls(resp *llm.Response) []llm.ContentBlock {
+	var out []llm.ContentBlock
+	for _, b := range resp.Message.Content {
+		if b.Type == llm.ContentTypeToolUse && b.ToolUseName == evaluatePlanName {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// evaluateResult answers one evaluate_plan call: the Evaluate result of the
+// merged proposal (after the same autofix a submit gets, listed under
+// autofix), or an error when the input is unreadable or the run used up its
+// dry runs. Every answered dry run is recorded as a plan.evaluation step.
+func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n int) llm.ContentBlock {
+	res := llm.ContentBlock{Type: llm.ContentTypeToolResult, ToolResultID: b.ToolUseID}
+	fail := func(msg string) llm.ContentBlock {
+		res.ToolResultIsError = true
+		res.ToolResultContent, _ = json.Marshal(msg)
+		return res
+	}
+	if n > maxEvaluations {
+		return fail(fmt.Sprintf("evaluate_plan is limited to %d calls per run; call submit_plan with your best plan.", maxEvaluations))
+	}
+	prop, err := parseProposal(b.ToolUseInput, in)
+	if err != nil {
+		return fail("error: " + err.Error() + "\nCall evaluate_plan again with the complete plan as valid JSON matching its schema.")
+	}
+	prop, fixes := autofix(in, prop)
+	merged := Merge(in.State, in.Target, prop)
+	ev := Evaluate(merged, in.Target)
+	RecordDryRun(ctx, n, func() Evaluation { return ev })
+	out, err := json.Marshal(struct {
+		Evaluation
+		Autofix []string `json:"autofix"`
+	}{ev, append([]string{}, fixes...)})
+	if err != nil {
+		return fail("error: encode evaluation")
+	}
+	res.ToolResultContent = out
+	return res
+}
+
+// evaluationFeedback is the evaluate_plan result of a submitted plan, which
+// goes after the repair text so the model sees every rule, soft ones
+// included.
+func evaluationFeedback(merged State, t Target) string {
+	out, err := json.Marshal(Evaluate(merged, t))
+	if err != nil {
+		return ""
+	}
+	return "\nEvaluation of this plan (the same result evaluate_plan returns): " + string(out)
 }

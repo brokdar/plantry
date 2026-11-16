@@ -376,11 +376,13 @@ func (x *index) component(p Plate, c Component) []Issue {
 	var out []Issue
 	// A routine cell's plate copies its preset (D8), leaves included.
 	if p.Proposed() && !x.routine(p.Cell()) {
-		if f.Kind != food.KindComposed {
+		if f.Kind == food.KindComposed {
+			if c.Portions == nil || !(*c.Portions > 0) {
+				out = append(out, issue("H7", CodeInvalidPortions, SeverityViolation).onPlate(p).with("food_id", c.FoodID))
+			}
+		} else if c.Grams == nil || !(*c.Grams > 0) {
+			// A leaf is allowed with grams (a no-cook item), never with portions.
 			out = append(out, issue("H7", CodeNotComposed, SeverityViolation).onPlate(p).with("food_id", c.FoodID))
-		}
-		if c.Portions == nil || !(*c.Portions > 0) {
-			out = append(out, issue("H7", CodeInvalidPortions, SeverityViolation).onPlate(p).with("food_id", c.FoodID))
 		}
 	}
 	r, linked := refOf(c)

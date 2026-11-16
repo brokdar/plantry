@@ -22,6 +22,9 @@ const (
 	PhaseAttempt       = "attempt"
 	PhaseAfter         = "after"
 	PhaseFinalProposal = "final_proposal"
+	// PhaseDryRun is a planner's evaluate_plan call or a chat
+	// apply_changes dry run (args carry `n`).
+	PhaseDryRun = "dry_run"
 )
 
 // Evaluation is a plan's quality at one moment, from the state alone: what
@@ -209,6 +212,11 @@ func RecordEvaluation(ctx context.Context, phase string, build func() Evaluation
 // RecordAttemptEvaluation stores the merged proposal of chooser attempt n.
 func RecordAttemptEvaluation(ctx context.Context, n int, build func() Evaluation) {
 	recordEvaluation(ctx, map[string]any{"phase": PhaseAttempt, "attempt": n}, build)
+}
+
+// RecordDryRun stores the evaluation of the n-th dry run of a run.
+func RecordDryRun(ctx context.Context, n int, build func() Evaluation) {
+	recordEvaluation(ctx, map[string]any{"phase": PhaseDryRun, "n": n}, build)
 }
 
 // RecordFinalProposal closes a failed generation run: the evaluation of its

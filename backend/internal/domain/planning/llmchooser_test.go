@@ -207,15 +207,15 @@ func TestLLMChooser_RequestAndPrompt(t *testing.T) {
 	reqs := e.client.Requests()
 	require.Len(t, reqs, 1)
 	req := reqs[0]
-	require.NotNil(t, req.ToolChoice)
-	assert.Equal(t, "submit_plan", req.ToolChoice.Name)
+	assert.Nil(t, req.ToolChoice, "evaluate_plan and submit_plan are both offered")
 	assert.InDelta(t, 0.4, req.Temperature, 1e-9)
 	assert.Equal(t, 16000, req.MaxTokens)
 	assert.Equal(t, "fake-model", req.Model)
-	require.Len(t, req.Tools, 1)
-	assert.Equal(t, "submit_plan", req.Tools[0].Name)
+	require.Len(t, req.Tools, 2)
+	assert.Equal(t, "evaluate_plan", req.Tools[0].Name)
+	assert.Equal(t, "submit_plan", req.Tools[1].Name)
 	var schema map[string]any
-	require.NoError(t, json.Unmarshal(req.Tools[0].Schema, &schema))
+	require.NoError(t, json.Unmarshal(req.Tools[1].Schema, &schema))
 	assert.Equal(t, "object", schema["type"])
 	for _, k := range []string{"anyOf", "oneOf", "allOf"} {
 		assert.NotContains(t, schema, k)
@@ -243,7 +243,7 @@ func TestLLMChooser_RequestAndPrompt(t *testing.T) {
 		row := candidateLine(t, sys, fid)
 		kcal := macros[fid].Macros.Kcal
 		require.Positive(t, kcal)
-		assert.Equal(t, fmt.Sprintf("%.0f", kcal), strings.Split(row, "|")[5], "candidate %d", fid)
+		assert.Equal(t, fmt.Sprintf("%.0f", kcal), strings.Split(row, "|")[6], "candidate %d", fid)
 	}
 	assert.Contains(t, sys, "- diet type: omnivore\n")
 	assert.Contains(t, sys, "No coriander, ever.")
@@ -490,7 +490,7 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	// The empty first plan is H1-only: its repair is extra, then two repairs.
 	assert.Equal(t, 3, p.RepairAttempts)
 	assert.Equal(t, []planning.Stage{planning.StageRepairing, planning.StageRepairing, planning.StageRepairing}, stages)
-	assert.Equal(t, "p6", c.PromptVersion())
+	assert.Equal(t, "p7", c.PromptVersion())
 
 	require.NoError(t, c.Ready(context.Background()))
 	assert.ErrorIs(t, planning.NewLLMChooser(llm.StaticResolver(nil, "")).Ready(context.Background()), domain.ErrAIProviderMissing)
