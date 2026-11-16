@@ -464,8 +464,9 @@ func (x *index) eligibleRecipes(weeks int) int {
 	since := VarietySince(x.s.Window.Start, weeks)
 	t := diet.Class(x.s.Profile.DietType)
 	n := 0
+	routine := x.routineFoods()
 	for _, f := range x.s.Foods {
-		if !f.Composed() || !varietyRole(f.Role) {
+		if !f.Composed() || !varietyRole(f.Role) || routine[f.ID] {
 			continue
 		}
 		// An unknown class is only a warning (H5), so it stays eligible.

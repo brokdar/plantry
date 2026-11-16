@@ -179,7 +179,7 @@ function ReplanBody({
         ...(assistant ? {} : { chooser: "heuristic" as const }),
       },
       {
-        onSuccess: ({ removed, run_id, regenerate_error }) => {
+        onSuccess: ({ removed, run_id, regenerate_error, unassigned }) => {
           const count = removed.plates.length
           if (regenerate && run_id === null) {
             // The removal committed but the run for the rest didn't start:
@@ -190,11 +190,20 @@ function ReplanBody({
                 : undefined,
             })
           } else {
-            toast.success(
+            const message =
               count > 0
                 ? t("plan.replan.done_removed", { count })
                 : t("plan.replan.done")
-            )
+            if (unassigned > 0) {
+              toast.success(message, {
+                description: t("plan.replan.done_unassigned", {
+                  count: unassigned,
+                  amount: formatAmount(unassigned, i18n),
+                }),
+              })
+            } else {
+              toast.success(message)
+            }
           }
           onClose()
         },
@@ -346,25 +355,35 @@ function ReplanBody({
                 })}
               </p>
             )}
-            {data?.spare.map((s) => (
-              <p key={s.session_id}>
-                {t(
-                  // Freezable: the choice below. Else a batch that can still
-                  // change cooks less; a cooked or earlier one keeps its
-                  // portions, unassigned.
-                  s.freezable
-                    ? "plan.replan.spare"
-                    : s.mutable
-                      ? "plan.replan.cook_less"
-                      : "plan.replan.unassigned",
-                  {
-                    count: s.portions,
-                    amount: formatAmount(s.portions, i18n),
+            {data?.spare.map((s) =>
+              s.freezable && spareMode === "freeze" && s.unassigned > 0 ? (
+                <p key={s.session_id}>
+                  {t("plan.replan.freeze_split", {
                     name: s.food_name,
-                  }
-                )}
-              </p>
-            ))}
+                    frozen: formatAmount(s.portions - s.unassigned, i18n),
+                    unassigned: formatAmount(s.unassigned, i18n),
+                  })}
+                </p>
+              ) : (
+                <p key={s.session_id}>
+                  {t(
+                    // Freezable: the choice below. Else a batch that can still
+                    // change cooks less; a cooked or earlier one keeps its
+                    // portions, unassigned.
+                    s.freezable && (s.mutable || spareMode === "freeze")
+                      ? "plan.replan.spare"
+                      : s.mutable
+                        ? "plan.replan.cook_less"
+                        : "plan.replan.unassigned",
+                    {
+                      count: s.portions,
+                      amount: formatAmount(s.portions, i18n),
+                      name: s.food_name,
+                    }
+                  )}
+                </p>
+              )
+            )}
             {dropped.map((d) => (
               <p key={`d${d.plate_id}`}>
                 {t("plan.replan.dropped", {

@@ -61,14 +61,19 @@ type AffectedPlate struct {
 
 // Spare is a batch that would cook more than is still eaten: Portions spare.
 // Mutable: the batch is not cooked and cooks on or after From, so the
-// re-plan may freeze or shrink it. Freezable: mutable, freezing is on and
-// the recipe marked freezable (unknown is not offered).
+// re-plan may shrink it. Freezable: freezing is on and the recipe marked
+// freezable (unknown is not offered); a cooked or earlier batch may gain
+// frozen portions too, but never loses portions. Unassigned: the portions a
+// freezing re-plan leaves cooked but eaten by no plate (not freezable and
+// not shrinkable); a keeping re-plan leaves every portion of an immutable
+// batch unassigned.
 type Spare struct {
-	SessionID int64
-	FoodName  string
-	Portions  float64
-	Freezable bool
-	Mutable   bool
+	SessionID  int64
+	FoodName   string
+	Portions   float64
+	Freezable  bool
+	Mutable    bool
+	Unassigned float64
 }
 
 // DroppedPlate is a plate outside the No-plate cells that loses a component
@@ -108,6 +113,7 @@ type ReplanPreview struct {
 // after the removal committed; empty otherwise.
 type ReplanResult struct {
 	Removed         plate.PlanSnapshot
+	Unassigned      float64
 	RunID           *int64
 	RegenerateError string
 }
@@ -214,6 +220,7 @@ func (s *Service) Replan(ctx context.Context, req ReplanRequest) (*ReplanResult,
 		if err != nil {
 			return err
 		}
+		res.Unassigned = sc.unassigned(req.Spare)
 		for _, c := range sc.write {
 			if _, _, err := s.d.Overrides.SetOverride(ctx, availability.OverrideInput{Date: c.Date, SlotID: c.SlotID, Mode: availability.ModeNone}); err != nil {
 				return err
@@ -259,25 +266,46 @@ func (s *Service) startable(ctx context.Context, chooser airun.Chooser) error {
 	return err
 }
 
-// keep is what RemovePlates sets each spare batch to: an uncooked one cooking
-// from From on freezes its spare (freeze, when freezable) or shrinks to what
-// is still eaten; a cooked or earlier one keeps its portions. A batch that
-// loses all its links is not here, so D11 removes it.
+// keep is what RemovePlates sets each spare batch to. In freeze mode a
+// freezable batch freezes its spare, up to its size. Otherwise an uncooked
+// batch cooking from From on shrinks to what is still eaten, and a cooked or
+// earlier one keeps its portions. A batch that loses all its links is not
+// here, so D11 removes it.
 func (sc *replanScan) keep(mode SpareMode) map[int64]plate.SessionPortions {
 	out := make(map[int64]plate.SessionPortions, len(sc.spare))
 	for id, b := range sc.spare {
 		p := plate.SessionPortions{Portions: b.sess.Portions, FrozenPortions: b.sess.FrozenPortions}
-		if b.mutable {
-			if mode == SpareFreeze && b.freezable {
-				p.FrozenPortions = min(p.Portions, p.FrozenPortions+b.sess.Portions-b.after)
-			} else {
-				p.Portions = b.after
-				p.FrozenPortions = min(p.FrozenPortions, b.after)
-			}
+		if mode == SpareFreeze && b.freezable {
+			p.FrozenPortions = min(p.Portions, p.FrozenPortions+b.sess.Portions-b.after)
+		} else if b.mutable {
+			p.Portions = b.after
+			p.FrozenPortions = min(p.FrozenPortions, b.after)
 		}
 		out[id] = p
 	}
 	return out
+}
+
+// unassigned totals the portions the re-plan leaves cooked but eaten by no
+// plate: the spare of a batch that cannot shrink or freeze, plus what a
+// freeze cannot take because it would exceed the batch size.
+func (sc *replanScan) unassigned(mode SpareMode) float64 {
+	var n float64
+	for _, b := range sc.spare {
+		n += unassignedOf(b, mode)
+	}
+	return n
+}
+
+func unassignedOf(b spareBatch, mode SpareMode) float64 {
+	spare := b.sess.Portions - b.after
+	if mode == SpareFreeze && b.freezable {
+		return max(0, b.sess.FrozenPortions+spare-b.sess.Portions)
+	}
+	if b.mutable {
+		return 0 // it shrinks to what is eaten
+	}
+	return spare
 }
 
 func (s *Service) scanReplan(ctx context.Context, q ReplanQuery) (*replanScan, error) {
@@ -431,14 +459,20 @@ func (s *Service) scanBatches(ctx context.Context, sc *replanScan, removed []pla
 			continue
 		}
 		f := foods[v.FoodID]
-		// Only a batch the re-plan may change can freeze its spare.
+		// A cooked or earlier batch may still gain frozen portions, while the
+		// freezer keep days from its cook date have not run out.
 		mut := mutable(v, from)
-		freezable := mut && set.FreezingEnabled && (f != nil && f.Freezable != nil && *f.Freezable)
+		freezable := set.FreezingEnabled && (f != nil && f.Freezable != nil && *f.Freezable) &&
+			!from.After(v.CookDate.AddDate(0, 0, set.FreezerKeepDays))
 		sc.spare[v.ID] = spareBatch{
 			sess: v.CookSession, after: after, freezable: freezable,
 			mutable: mut,
 		}
-		sc.preview.Spare = append(sc.preview.Spare, Spare{SessionID: v.ID, FoodName: v.FoodName, Portions: spare, Freezable: freezable, Mutable: mut})
+		sb := sc.spare[v.ID]
+		sc.preview.Spare = append(sc.preview.Spare, Spare{
+			SessionID: v.ID, FoodName: v.FoodName, Portions: spare, Freezable: freezable, Mutable: mut,
+			Unassigned: unassignedOf(sb, SpareFreeze),
+		})
 	}
 	return nil
 }

@@ -162,7 +162,7 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				// Loop finished — read the return value and maybe emit error.
 				err := <-chatErr
-				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, agent.ErrIterationsExceeded) {
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, agent.ErrIterationsExceeded) && !agent.ErrorEmitted(err) {
 					// Iterations exceeded already emits its own error event from Run.
 					// Other errors may not have — surface them here.
 					_ = writer.Send(string(llm.EventError), llm.StreamErrorPayload{

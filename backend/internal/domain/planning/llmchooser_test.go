@@ -468,7 +468,8 @@ func TestLLMChooser_AttemptsAreLoggedAndStored(t *testing.T) {
 		isErr, results = append(isErr, b), append(results, r)
 	}
 	require.Len(t, results, 3)
-	assert.Equal(t, []bool{true, true, false}, isErr)
+	// O2: only the unreadable reply is an error; a repaired violation is not.
+	assert.Equal(t, []bool{true, false, false}, isErr)
 	assert.Contains(t, results[0], `"unreadable":true`)
 	assert.Contains(t, results[0], "sessions must be an array")
 	assert.Contains(t, results[1], "H2.too_many_cook_occasions@"+sun)

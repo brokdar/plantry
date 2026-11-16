@@ -81,6 +81,9 @@ type OutcomeEvent string
 const (
 	OutcomeAccepted  OutcomeEvent = "accepted"
 	OutcomeDiscarded OutcomeEvent = "discarded"
+	// OutcomeConfirmed is one closure confirmed on its own: the run it
+	// belongs to is at least partially accepted.
+	OutcomeConfirmed OutcomeEvent = "confirmed"
 	// OutcomeReset is an undone accept.
 	OutcomeReset OutcomeEvent = "reset"
 	// OutcomeRestored is drafts brought back, such as an undone discard.

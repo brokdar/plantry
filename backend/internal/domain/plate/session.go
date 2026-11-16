@@ -73,6 +73,9 @@ type SessionView struct {
 	Links    []Link
 	Meals    int
 	Warnings []Warning
+	// Routine is set by the read models when the session cooks on a routine
+	// cell: a routine is no cooking occasion (spec §3.2, §6.4 H2).
+	Routine bool
 }
 
 // BuildView assembles a SessionView from a session and its raw links.

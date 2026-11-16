@@ -79,7 +79,14 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		}
 		res := <-done
 		if res.err != nil {
-			return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.ai.stream_interrupted", res.err)
+			key := "error.ai.stream_interrupted"
+			var perr llm.ProviderError
+			if errors.As(res.err, &perr) {
+				// The provider answered with an error (bad request, auth, ...):
+				// not an interrupted stream.
+				key = "error.ai.provider_error"
+			}
+			return emitAndPersistError(ctx, out, repo, req.ConversationID, key, res.err)
 		}
 		if res.resp == nil {
 			err := errors.New("llm client returned nil response without error")
@@ -228,6 +235,13 @@ type keyedError struct {
 
 func (e *keyedError) Error() string { return e.err.Error() }
 func (e *keyedError) Unwrap() error { return e.err }
+
+// ErrorEmitted reports whether the loop already sent err to the client as an
+// error event, so the caller must not send it again.
+func ErrorEmitted(err error) bool {
+	var keyed *keyedError
+	return errors.As(err, &keyed)
+}
 
 // emitAndPersistError reports a fatal loop error and returns err tagged with
 // key for the caller to return.

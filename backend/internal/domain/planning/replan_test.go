@@ -133,7 +133,7 @@ func TestReplan_Preview(t *testing.T) {
 	}, pv.ConfirmedAffected, "the draft Fri dinner is not listed")
 	assert.Equal(t, []planning.Spare{
 		{SessionID: e.chiliBatch, FoodName: "Main 05", Portions: 2, Freezable: true, Mutable: true},
-		{SessionID: e.monBatch, FoodName: "Main 06", Portions: 1, Freezable: false}, // cooked: nothing to freeze
+		{SessionID: e.monBatch, FoodName: "Main 06", Portions: 1, Freezable: true}, // cooked: may still gain frozen portions
 	}, pv.Spare, "Fri dinner's batch loses every link and goes")
 	assert.False(t, e.plateGone(e.thuLunch), "a preview writes nothing")
 }
@@ -491,4 +491,71 @@ func TestReplan_KeepsACookedBatchsCookCell(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, ck(thu, e.lunch).Equal(e.session(sid).CookCell()))
+}
+
+// F4 (UC-15.1, 15.5): a cooked batch's freed portions go to the freezer when
+// freezable and freezing is on (portions stay); otherwise they are reported
+// unassigned and the batch keeps its portions.
+func TestReplan_CookedBatchSpare(t *testing.T) {
+	cases := []struct {
+		name        string
+		freezing    bool
+		unfreezable bool
+		spare       planning.SpareMode
+		froz        float64
+		unassigned  float64
+	}{
+		{"freeze, freezable", true, false, planning.SpareFreeze, 1, 0},
+		{"freeze, freezing off", false, false, planning.SpareFreeze, 0, 1},
+		{"freeze, not freezable", true, true, planning.SpareFreeze, 0, 1},
+		{"keep", true, false, planning.SpareKeep, 0, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newReplanEnv(t, tc.freezing)
+			if tc.unfreezable {
+				e.exec(`UPDATE foods SET freezable = 0 WHERE kind = 'composed'`)
+			}
+			mon := e.session(e.monBatch)
+
+			res, err := e.replan(true, tc.spare, false)
+
+			require.NoError(t, err)
+			after := e.session(e.monBatch)
+			assert.Equal(t, mon.Portions, after.Portions, "a cooked batch never loses portions")
+			assert.InDelta(t, tc.froz, after.FrozenPortions, 1e-9)
+			assert.InDelta(t, tc.unassigned, res.Unassigned, 1e-9)
+		})
+	}
+}
+
+func TestReplan_PreviewUnassigned(t *testing.T) {
+	e := newReplanEnv(t, false)
+	pv, err := e.svc.PreviewReplan(e.ctx, e.query())
+	require.NoError(t, err)
+	found := false
+	for _, sp := range pv.Spare {
+		if sp.SessionID == e.monBatch {
+			found = true
+			assert.InDelta(t, 1, sp.Unassigned, 1e-9)
+		}
+	}
+	assert.True(t, found)
+}
+
+// A cooked batch is frozen only while the freezer keep days from its cook
+// date have not run out: Mon batch is past a 1-day limit by Wednesday, so
+// its spare portion stays unassigned.
+func TestReplan_FreezerKeepDaysLimitsFreezingACookedBatch(t *testing.T) {
+	e := newReplanEnv(t, true)
+	require.NoError(t, testsvc.Settings(e.db).Set(e.ctx, "plan.freezer_keep_days", "1"))
+
+	pv, err := e.svc.PreviewReplan(e.ctx, e.query())
+
+	require.NoError(t, err)
+	assert.Contains(t, pv.Spare, planning.Spare{SessionID: e.monBatch, FoodName: "Main 06", Portions: 1, Unassigned: 1})
+
+	_, err = e.replan(true, planning.SpareFreeze, false)
+	require.NoError(t, err)
+	assert.InDelta(t, 0, e.session(e.monBatch).FrozenPortions, 1e-9)
 }

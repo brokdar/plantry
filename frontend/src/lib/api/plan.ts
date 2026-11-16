@@ -212,6 +212,8 @@ export interface ReplanPreview {
     /** Not cooked and cooking from `from` on: the re-plan may freeze or
      *  shrink it; otherwise its spare stays unassigned. */
     mutable: boolean
+    /** Portions a freezing re-plan leaves cooked but eaten by no plate. */
+    unassigned: number
   }[]
   /** Plates outside the No-plate cells that lose a dropped batch (its cook
    *  plate goes and it cannot move); confirmed ones are also in
@@ -249,6 +251,8 @@ export interface ReplanInput {
 export interface ReplanResponse extends RemovedResponse {
   /** The generation started for the remaining cells, if `regenerate`. */
   run_id: number | null
+  /** Portions left cooked but eaten by no plate (not frozen, not removed). */
+  unassigned: number
   /** Message key of why the requested run did not start (the removal
    *  stands); absent when it started or none was asked for. */
   regenerate_error?: string

@@ -47,15 +47,21 @@ func Anchored(today time.Time, anchor string, shoppingDay int) Window {
 	return at(today.AddDate(0, 0, ahead))
 }
 
-// ShoppingDefault is the default shopping range of window w (spec §7.7):
-// max(w.Start, today) through w.End, so days already past are not bought
-// for.
-func ShoppingDefault(today time.Time, w Window) (from, to time.Time) {
+// ShoppingDefault is the default shopping range as of today (spec §7.7): the
+// window containing today, from max(window start, today) to the window end.
+// On the window's last day, the day before the shopping day, it is the next
+// window (shopping for the week ahead). plan.anchor plays no part here.
+func ShoppingDefault(today time.Time, shoppingDay int) (w Window, from, to time.Time) {
+	today = dateOnly(today)
+	w = Containing(today, shoppingDay)
+	if today.Equal(w.End) {
+		w = Containing(w.Next(), shoppingDay)
+	}
 	from = w.Start
-	if today = dateOnly(today); today.After(from) {
+	if today.After(from) {
 		from = today
 	}
-	return from, w.End
+	return w, from, w.End
 }
 
 // IsStart reports whether date is a shopping day, i.e. a valid window start.

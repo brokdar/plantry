@@ -140,5 +140,5 @@ func logAttempt(ctx context.Context, logger *slog.Logger, attempt int, violation
 	}
 	args, _ := json.Marshal(map[string]any{"attempt": attempt})
 	result, _ := json.Marshal(rec)
-	airun.FromContext(ctx).ToolStep(ctx, "plan.attempt", args, result, parseErr != nil || len(violations) > 0, 0)
+	airun.FromContext(ctx).ToolStep(ctx, "plan.attempt", args, result, parseErr != nil, 0)
 }

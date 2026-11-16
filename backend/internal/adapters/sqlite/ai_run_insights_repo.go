@@ -61,12 +61,13 @@ func (r *AIRunRepo) GetRun(ctx context.Context, id int64) (airun.RunDetailRow, e
 		return airun.RunDetailRow{}, err
 	}
 	return airun.RunDetailRow{
-		RunRow:      run,
-		ScopeJSON:   row.ScopeJson.String,
-		Instruction: row.Instruction.String,
-		Notes:       row.Notes.String,
-		ErrorKey:    row.ErrorKey.String,
-		PromptText:  row.PromptText.String,
+		RepairAttempts: int(row.RepairAttempts),
+		RunRow:         run,
+		ScopeJSON:      row.ScopeJson.String,
+		Instruction:    row.Instruction.String,
+		Notes:          row.Notes.String,
+		ErrorKey:       row.ErrorKey.String,
+		PromptText:     row.PromptText.String,
 	}, nil
 }
 

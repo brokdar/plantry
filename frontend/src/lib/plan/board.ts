@@ -147,7 +147,12 @@ function sortedComponents(plate: Plate): PlateComponent[] {
  * the API; this only joins and labels them.
  */
 export function buildBoard(plan: Plan, f: Formatter): Board {
-  const coloured = colourBatches(plan.sessions, plan.slots)
+  // A routine is no cooking occasion: its session gets no badge, lane or
+  // cook day (spec §3.2).
+  const coloured = colourBatches(
+    plan.sessions.filter((s) => !s.routine),
+    plan.slots
+  )
   const byId = new Map(coloured.map((b) => [b.session.id, b]))
   const slots = [...plan.slots].sort(
     (a, b) => a.sort_order - b.sort_order || a.id - b.id
@@ -326,6 +331,7 @@ function boardSummary(plan: Plan, f: Formatter): string {
         .filter(
           (s) =>
             s.state === "draft" &&
+            !s.routine &&
             s.cook_date >= plan.window.start &&
             s.cook_date <= plan.window.end
         )

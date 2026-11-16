@@ -37,6 +37,8 @@ func TestClassify_RealWorld(t *testing.T) {
 		{"Lemon juice", produce},
 		{"Zitronensaft", produce},
 		{"Limettensaft", produce},
+		{"Dried butter beans", food.SectionDryGoods},
+		{"Cooked rice", food.SectionCansJars},
 		// Unchanged neighbours.
 		{"Orangensaft", other},
 		{"Dried apricots", other},

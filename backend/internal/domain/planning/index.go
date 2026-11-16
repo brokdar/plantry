@@ -152,6 +152,25 @@ func (x *index) routine(c plate.CellKey) bool {
 	return ok && cell.Mode == availability.ModeRoutine
 }
 
+// routineFoods are the non-main foods (breakfast, standalone or role-less) the
+// target's plates on routine cells eat: a routine breakfast is never planned
+// into lunch or dinner. A real main stays plannable even if a routine eats it.
+func (x *index) routineFoods() map[int64]bool {
+	out := map[int64]bool{}
+	for _, p := range x.s.Plates {
+		if !x.routine(p.Cell()) || !x.inTarget(p.Cell()) {
+			continue
+		}
+		for _, c := range p.Components {
+			if f, ok := x.food(c.FoodID); ok && f.Role == food.RoleMain {
+				continue
+			}
+			out[c.FoodID] = true
+		}
+	}
+	return out
+}
+
 func (x *index) addOccasion(c plate.CellKey) {
 	cid := idOf(c)
 	if x.routine(c) {

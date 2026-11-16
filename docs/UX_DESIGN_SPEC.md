@@ -332,7 +332,7 @@ Three short steps. It opens as a full page on phone and as a centred panel over 
 **Job:** buy everything in one walk through the store.
 
 - **Header:**
-  - Range ("Sat 31 Oct to Fri 6 Nov", tappable; defaults per planning spec §7.7).
+  - Range ("Sat 31 Oct to Fri 6 Nov", tappable; defaults per planning spec §7.7: the window holding today from today on, the next window on its last day; the "This window" preset starts today).
   - A toggle "Include draft plates", shown only when drafts exist.
   - A count "18 items · 4 ticked".
 - **Sections:** grouped by store section in a fixed walk order: produce, bakery, dairy and eggs, meat and fish, dry goods, cans and jars, spices and oils, frozen, other. Each ingredient gets a section automatically (from its OFF/FDC category or name classification) and can be changed by long-press or the row menu.

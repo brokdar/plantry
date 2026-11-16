@@ -18,7 +18,7 @@ import (
 func TestFeedback_PreferenceTags(t *testing.T) {
 	a := newHistoryAPI(t)
 	plates := a.chiliBatch()
-	for _, tag := range []string{"main", "explore", "spicy", "side_veg"} {
+	for _, tag := range []string{"main", "explore", "spicy", "side_veg", "Side dish"} {
 		a.insert(fmt.Sprintf(`INSERT INTO food_tags (food_id, tag) VALUES (%d, '%s')`, a.chili, tag))
 	}
 	prefs := func() (likes, dislikes any) {

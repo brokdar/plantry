@@ -1,0 +1,211 @@
+[
+ {
+  "role": "user",
+  "content": [
+   {
+    "type": "text",
+    "text": "Swap Tuesday's side for something with potatoes"
+   }
+  ]
+ },
+ {
+  "role": "assistant",
+  "content": [
+   {
+    "type": "server",
+    "raw": {
+     "signature": "CAQSjwgKEAgTGAI4AUIIdGhpbmtpbmcSDClXFQ/ksFMgmZJxSBoMkZ9H4erdq+DK0heOIjDfwTNLohpE+pM1bzk0uQHghsg/vcmayh4ZOFanU5O+8Nr+izdrLXDrfM/pgUEfWyIqrAfEJFsj7Iib42O9TrhZk1TgOotDLpCe9gutWFhAWWy6zsJn/vMJgRRFrs1a99GGAPB0VzlOH5uP7biX+zd/x1OeFdd7DFe1g81dlilnTVQSMFKAnf9rVbcwbGZcZgAEHYTLi648RxGG2mSa6MMkR0mJVwEikAaFLNbwId2a6IJpKkFXTlglpVfie6cSV/Yis5NnejLQi8rcsCM6VZwk2J6dlhOWzhQGctkvLHkM7ph4rzJGUr3oGmZgkyVhWmQk3jKFEvc9s+682p9ZsVI/xXPUehVASLEC9kcFpEkyf4UcGcLxZ9qTwRyKEc2n0CzSO5Msz8TEKHkrfBV6P8gBFqY/vPiuTZk2Sxh+jZs7cb2GIkmhZh6OzfOCnDKnTqwZJRMwOqch+SYCjjMrnyTZk46JcPv8zBJzwwntw/kCL5Qgw1jmJuEdUrmmDl2yp6SIUsgVIu8IwOvzAQyr2Q0mw2YhFwAXx0HippH2Yq5RyDV/FqUHUeBpcqk7gkPQoe07MQmnEjgdXOCfgnocu3unyyU2WB3Yye9q+S8GrkE3CTdp5dYjHz45U1Ait6hOGGcKvhzMBb125aiNtOlDdpHzHmz8LnJLT4HTmoWlKVHxV4WA4QsMnxlLDI1zTGcHhyF5uHY8QOi8WkNHQV9AYV+f+1nZTmXtvYCBlQ8eYEBIpEC6yMl91dEGSepUSoZDKuOJNt9M9sUsmOaDM36EDTOW4qp5/xnuRW3lSy5WBitUCqWldxqo2bobtnTghMVlladCcEWubshYXYwz1/kKPFbFjk8rXveESjfc7RK7pdh57RWtMvr7KsL4WuZfDBlBwI1ZK20mi/OZQeWXI8FGg7DWiThb9/ukfafndE8UYtELvyd+lVSFHC4mbhnShIJSa5cOSyqr4tbaNBoG2IuD18vikyuOPm7q4FnMkezjbRwDjxlJITeY6tMLilSzS/NdEJcPADDR++OunyDqom1qDueMzjnHYUqjvVp4uew4SuXLuHqLiAry927ho8zdEe8gZUewZNMMufeH1pPlnLw09uFZuex04ycTLWe3JiUjC9ZrcthyHyXRftmJK51RxYzAfKN/6lbjDniaZP59fS2m/qaHLMXz5c14viVUkEr/UBvXfs+DGVfxtbMc/mp51ikwbstmDM4nuNaa1onENN8EGipgKsmvhrvHs62kld5h8tSI7JNeTXxHbqYyJSkgwlzpIMppPrVS/Ki9EPymn61hvcuou07a4UzK0mQtvW664PSgGAE=",
+     "thinking": "",
+     "type": "thinking"
+    }
+   },
+   {
+    "type": "tool_use",
+    "tool_use_id": "toolu_01RWE4dQqNJFM7xPG7pj8L6z",
+    "tool_use_name": "list_foods",
+    "tool_use_input": {
+     "search": "potato"
+    }
+   },
+   {
+    "type": "tool_use",
+    "tool_use_id": "toolu_01LWd1iLgGKTh5LANCSojZc5",
+    "tool_use_name": "get_plates_range",
+    "tool_use_input": {
+     "from": "2026-11-24",
+     "to": "2026-11-24"
+    }
+   }
+  ]
+ },
+ {
+  "role": "user",
+  "content": [
+   {
+    "type": "tool_result",
+    "tool_result_id": "toolu_01RWE4dQqNJFM7xPG7pj8L6z",
+    "tool_result_content": {
+     "items": [
+      {
+       "basis": "per_portion",
+       "diet_class": "vegan",
+       "favorite": false,
+       "freezable": null,
+       "id": 115,
+       "keep_days": 2,
+       "kind": "composed",
+       "last_eaten": null,
+       "name": "Hasselback potatoes",
+       "nutrition_complete": true,
+       "per_portion": {
+        "carbs": 67.3,
+        "fat": 15.4,
+        "kcal": 428.8,
+        "protein": 8
+       },
+       "reference_portions": 4,
+       "role": "side_starch",
+       "tags": [
+        "Celebration",
+        "Christmas dinner",
+        "Hasselback potatoes",
+        "Potato recipe",
+        "Potatoes",
+        "Roast potato recipe",
+        "Side dish",
+        "Sunday roast side dish",
+        "garlic potatoes",
+        "sliced potatoes"
+       ],
+       "times_cooked": 0
+      },
+      {
+       "basis": "per_100g",
+       "diet_class": "vegan",
+       "favorite": false,
+       "id": 38,
+       "kind": "leaf",
+       "name": "Potatoes",
+       "nutrition_complete": true,
+       "per_portion": {
+        "carbs": 17.5,
+        "fat": 0.1,
+        "kcal": 77,
+        "protein": 2.1
+       },
+       "reference_portions": 0,
+       "role": "",
+       "tags": null
+      }
+     ],
+     "total": 2
+    }
+   },
+   {
+    "type": "tool_result",
+    "tool_result_id": "toolu_01LWd1iLgGKTh5LANCSojZc5",
+    "tool_result_content": {
+     "availability": [
+      {
+       "date": "2026-11-24",
+       "mode": "routine",
+       "preset_name": "Oats",
+       "slot_id": 1
+      }
+     ],
+     "plates": [
+      {
+       "ai_run_id": 7,
+       "components": [
+        {
+         "cook_session_id": 48,
+         "food_id": 117,
+         "id": 30,
+         "plate_id": 67,
+         "portions": 1,
+         "sort_order": 0
+        }
+       ],
+       "date": "2026-11-24",
+       "eaters": 1,
+       "id": 67,
+       "note": null,
+       "reason": null,
+       "slot_id": 1,
+       "state": "draft"
+      },
+      {
+       "ai_run_id": 6,
+       "components": [
+        {
+         "cook_session_id": 47,
+         "food_id": 114,
+         "id": 31,
+         "plate_id": 68,
+         "portions": 1,
+         "sort_order": 0
+        }
+       ],
+       "date": "2026-11-24",
+       "eaters": 1,
+       "id": 68,
+       "note": null,
+       "reason": "Leftover bean soup.",
+       "slot_id": 2,
+       "state": "draft"
+      },
+      {
+       "ai_run_id": 7,
+       "components": [
+        {
+         "cook_session_id": 44,
+         "food_id": 107,
+         "id": 32,
+         "plate_id": 69,
+         "portions": 1,
+         "sort_order": 0
+        }
+       ],
+       "date": "2026-11-24",
+       "eaters": 1,
+       "id": 69,
+       "note": null,
+       "reason": "Leftover lentil curry for a light weekday dinner.",
+       "slot_id": 3,
+       "state": "draft"
+      }
+     ],
+     "sessions": [
+      {
+       "cook_date": "2026-11-21",
+       "cook_slot_id": 3,
+       "food_id": 107,
+       "frozen_portions": 0,
+       "id": 44,
+       "portions": 6,
+       "state": "draft"
+      },
+      {
+       "cook_date": "2026-11-23",
+       "cook_slot_id": 2,
+       "food_id": 114,
+       "frozen_portions": 0,
+       "id": 47,
+       "portions": 4,
+       "state": "draft"
+      },
+      {
+       "cook_date": "2026-11-24",
+       "cook_slot_id": 1,
+       "food_id": 117,
+       "frozen_portions": 0,
+       "id": 48,
+       "portions": 1,
+       "state": "draft"
+      }
+     ]
+    }
+   }
+  ]
+ }
+]

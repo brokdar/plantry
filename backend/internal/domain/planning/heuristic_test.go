@@ -437,3 +437,27 @@ func TestHeuristic_ConfirmedCookFillsTheDaysCap(t *testing.T) {
 }
 
 var _ = plate.CellKey{}
+
+// F6: a side swap keeps the side's role, even when another role ranks first.
+func TestHeuristic_SideSwapKeepsRole(t *testing.T) {
+	for _, role := range []food.Role{food.RoleSideVeg, food.RoleSideStarch} {
+		s := batchCooker()
+		// Two sides per role, the other role's ranking first.
+		s.Foods[301] = recipe(301, "Veg A", food.RoleSideVeg, "vegan", 100)
+		s.Foods[302] = recipe(302, "Veg B", food.RoleSideVeg, "vegan", 100)
+		s.Foods[303] = recipe(303, "Starch A", food.RoleSideStarch, "vegan", 100)
+		s.Foods[304] = recipe(304, "Starch B", food.RoleSideStarch, "vegan", 100)
+		old := int64(301)
+		if role == food.RoleSideStarch {
+			old = 303
+		}
+		s.Plates = append(s.Plates, persisted(70, sat, dinner, false, 104, 0))
+		in := planning.ChooseInput{State: s, Target: targetCells(cell(sat, dinner)), Side: &planning.SideSwap{
+			FoodID: old, Role: role, CookDate: day(sat), CookSlotID: dinner, Portions: 2,
+			Plates: []planning.SidePlate{{PlateID: 70, Date: day(sat), SlotID: dinner, Eaters: 1, PerEater: 1}},
+		}}
+		p := choose(t, in)
+		require.Len(t, p.Sessions, 1)
+		assert.Equal(t, role, s.Foods[p.Sessions[0].FoodID].Role)
+	}
+}

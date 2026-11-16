@@ -53,6 +53,7 @@ const preview: ReplanPreview = {
       portions: 2,
       freezable: true,
       mutable: true,
+      unassigned: 0,
     },
   ],
   dropped: [],
@@ -107,7 +108,11 @@ describe("ReplanSheet", () => {
     vi.clearAllMocks()
     vi.mocked(listSettings).mockResolvedValue(mockSettingsList([]))
     vi.mocked(getReplanPreview).mockResolvedValue(EMPTY)
-    vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: null })
+    vi.mocked(replan).mockResolvedValue({
+      ...mockRemovedBatch,
+      run_id: null,
+      unassigned: 0,
+    })
   })
 
   it("lists the days from `from` to the window's end", async () => {
@@ -176,7 +181,11 @@ describe("ReplanSheet", () => {
     await userEvent.click(
       within(s).getByLabelText("Re-plan the rest of the week")
     )
-    vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: 21 })
+    vi.mocked(replan).mockResolvedValue({
+      ...mockRemovedBatch,
+      run_id: 21,
+      unassigned: 0,
+    })
     await clickWhenEnabled(s, "Change them")
     await waitFor(() =>
       expect(replan).toHaveBeenCalledWith({
@@ -268,6 +277,7 @@ describe("ReplanSheet", () => {
           portions: 2,
           freezable: false,
           mutable: true,
+          unassigned: 0,
         },
       ],
       dropped: [],
@@ -281,6 +291,30 @@ describe("ReplanSheet", () => {
     expect(within(s).queryByText("Spare portions")).toBeNull()
   })
 
+  it("a freezable cooked batch that overflows says how much is frozen and how much unassigned", async () => {
+    vi.mocked(getReplanPreview).mockResolvedValue({
+      none_cells: [{ date: "2026-11-02", slot_id: 3 }],
+      confirmed_affected: [],
+      spare: [
+        {
+          session_id: 1,
+          food_name: "Chili",
+          portions: 5,
+          freezable: true,
+          mutable: false,
+          unassigned: 2,
+        },
+      ],
+      dropped: [],
+      moved: [],
+    })
+    renderSheet({ initialCells: [{ date: "2026-11-02", slot_id: 3 }] })
+    const s = await sheet()
+    expect(await within(s).findByTestId("replan-changes")).toHaveTextContent(
+      "Chili: 3 to freeze, 2 unassigned."
+    )
+  })
+
   it("a cooked batch reports its unassigned portions and offers no choice", async () => {
     vi.mocked(getReplanPreview).mockResolvedValue({
       none_cells: [{ date: "2026-11-02", slot_id: 3 }],
@@ -292,6 +326,7 @@ describe("ReplanSheet", () => {
           portions: 1,
           freezable: false,
           mutable: false,
+          unassigned: 0,
         },
       ],
       dropped: [],
@@ -391,6 +426,7 @@ describe("ReplanSheet", () => {
     vi.mocked(replan).mockResolvedValue({
       ...mockRemovedBatch,
       run_id: null,
+      unassigned: 0,
       regenerate_error: "error.ai.provider_error",
     })
     renderSheet()

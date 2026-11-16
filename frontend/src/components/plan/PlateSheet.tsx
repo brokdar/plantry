@@ -329,6 +329,22 @@ function ReviewActions({
       )
     : []
 
+  // Confirm and Unlock act on the whole batch closure (D34), and Replace on
+  // a batch's cook plate replaces the batch: say so before acting (F6).
+  const closureSize = closureCells(plan, plate.id).length + 1
+  const batch = plan.sessions.find(
+    (sess) =>
+      sess.cook_date === plate.date &&
+      sess.cook_slot_id === plate.slot_id &&
+      sess.links.length > 1 &&
+      sess.links.some((l) => l.plate_id === plate.id)
+  )
+  const replaceHint = batch
+    ? t("plan.review.replace_batch", { count: closureSize })
+    : plate.components.some((c) => c.cook_session_id != null)
+      ? t("plan.review.replace_plate")
+      : null
+
   const button = "h-11 justify-start md:pointer-fine:h-9"
   return (
     <section
@@ -366,6 +382,18 @@ function ReviewActions({
           {t("plan.review.unlock")}
         </Button>
       )}
+      {closureSize > 1 && (
+        <p className="text-small text-ink-muted" data-testid="closure-hint">
+          {t(
+            draft
+              ? "plan.review.confirm_closure"
+              : "plan.review.unlock_closure",
+            {
+              count: closureSize,
+            }
+          )}
+        </p>
+      )}
       {draft && (
         <Button
           type="button"
@@ -377,6 +405,11 @@ function ReviewActions({
           <RefreshCw strokeWidth={1.5} aria-hidden />
           {t("plan.review.replace")}
         </Button>
+      )}
+      {draft && replaceHint && (
+        <p className="text-small text-ink-muted" data-testid="replace-hint">
+          {replaceHint}
+        </p>
       )}
       {draft && cell.sideComponentId !== null && (
         <Button

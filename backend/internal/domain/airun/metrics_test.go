@@ -335,3 +335,17 @@ func TestRun_ToolStepLogsSummaryWithoutFreeText(t *testing.T) {
 	assert.False(t, steps[0].StartedAt.IsZero())
 }
 func ptr[T any](v T) *T { return &v }
+
+// O3: list_foods' search filter is logged; other free text still is not.
+func TestRun_ToolStepLogsListFoodsFilter(t *testing.T) {
+	store := newMemStore()
+	rec, logs := newRecorder(t, store)
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	run.ToolStep(ctx, "list_foods", json.RawMessage(`{"search":"potato","limit":5,"note":"secret prose"}`),
+		json.RawMessage(`{"items":[]}`), false, time.Millisecond)
+
+	call := findLog(logLines(t, logs.String()), "ai.tool.call")
+	require.NotNil(t, call)
+	assert.Equal(t, `limit=5 search="potato"`, call["args"])
+	assert.NotContains(t, logs.String(), "secret prose")
+}

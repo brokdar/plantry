@@ -80,9 +80,12 @@ SELECT chooser, notes FROM ai_runs WHERE id = ?;
 -- (reset) or restored as drafts. open/NULL -> accepted or discarded; a run
 -- that sees both is partially_accepted; reset undoes an accept (accepted ->
 -- open, partially_accepted -> discarded); restored undoes a discard
--- (discarded -> open, partially_accepted -> accepted).
+-- (discarded -> open, partially_accepted -> accepted). A single confirm
+-- (confirmed) of some of a run's drafts makes an open run partially_accepted.
 UPDATE ai_runs SET
     outcome = CASE
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'confirmed' AND (outcome IS NULL OR outcome = 'open') THEN 'partially_accepted'
+        WHEN CAST(sqlc.arg(event) AS TEXT) = 'confirmed' THEN outcome
         WHEN CAST(sqlc.arg(event) AS TEXT) = 'accepted' AND outcome IN ('discarded', 'partially_accepted') THEN 'partially_accepted'
         WHEN CAST(sqlc.arg(event) AS TEXT) = 'accepted' THEN 'accepted'
         WHEN CAST(sqlc.arg(event) AS TEXT) = 'discarded' AND outcome IN ('accepted', 'partially_accepted') THEN 'partially_accepted'
@@ -117,7 +120,7 @@ SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model,
        r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens, r.web_search_requests,
        r.reasoning_tokens, r.duration_ms,
        r.score_json, r.violations_json, r.outcome,
-       r.scope_json, r.instruction, r.notes, r.error_key, p.text AS prompt_text
+       r.scope_json, r.instruction, r.notes, r.error_key, r.repair_attempts, p.text AS prompt_text
 FROM ai_runs r
 LEFT JOIN ai_prompts p ON p.hash = r.prompt_hash
 WHERE r.id = ?;

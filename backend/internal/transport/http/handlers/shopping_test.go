@@ -264,7 +264,8 @@ func TestShoppingList_AC6_DefaultRange(t *testing.T) {
 	}{
 		// plan.shopping_day defaults to Monday.
 		{"window containing today starts today", "today", "2026-11-04", "2026-11-04", "2026-11-08", "2026-11-02", "2026-11-08"},
-		{"next shopping day anchor", "next_shopping_day", "2026-11-04", "2026-11-09", "2026-11-15", "2026-11-09", "2026-11-15"},
+		{"the anchor setting does not matter", "next_shopping_day", "2026-11-04", "2026-11-04", "2026-11-08", "2026-11-02", "2026-11-08"},
+		{"the day before the shopping day shops the next window", "next_shopping_day", "2026-11-08", "2026-11-09", "2026-11-15", "2026-11-09", "2026-11-15"},
 		{"on the shopping day", "today", "2026-11-02", "2026-11-02", "2026-11-08", "2026-11-02", "2026-11-08"},
 	}
 	for _, tt := range tests {

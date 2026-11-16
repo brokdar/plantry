@@ -3,6 +3,7 @@ package feedback
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
@@ -83,7 +84,14 @@ const tagExplore = "explore"
 // genericTag reports whether a tag says nothing about taste: a role name or
 // explore (spec §6.6). Such tags never reach the preferences.
 func genericTag(tag string) bool {
-	return tag == tagExplore || food.ValidRole(food.Role(tag))
+	t := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(strings.TrimSpace(tag)), " ", "_"), "-", "_")
+	return t == tagExplore || food.ValidRole(food.Role(t)) || genericDisplayTags[t]
+}
+
+// genericDisplayTags are the role names as people write them ("Side dish").
+var genericDisplayTags = map[string]bool{
+	"side": true, "side_dish": true, "main_dish": true, "main_course": true,
+	"sides": true, "side_dishes": true, "mains": true, "starter": true,
 }
 
 // collectTags returns the deduped union of the specific tags across every

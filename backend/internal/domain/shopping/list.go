@@ -110,8 +110,9 @@ type Range struct {
 }
 
 // Range resolves the range to shop for as of today. With r nil it is the
-// default, ShoppingDefault of the anchored window; otherwise r's dates in
-// the window containing r.From.
+// default, ShoppingDefault: the window holding today, the next one on its
+// last day (plan.anchor is not read). Otherwise it is r's dates in the window
+// containing r.From.
 func (s *Service) Range(ctx context.Context, r *Range, today time.Time) (Range, error) {
 	sd, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanShoppingDay)
 	if err != nil {
@@ -120,12 +121,7 @@ func (s *Service) Range(ctx context.Context, r *Range, today time.Time) (Range, 
 	if r != nil {
 		return Range{From: r.From, To: r.To, Window: window.Containing(r.From, sd)}, nil
 	}
-	anchor, err := s.d.Settings.Get(ctx, settings.KeyPlanAnchor)
-	if err != nil {
-		return Range{}, fmt.Errorf("read %s: %w", settings.KeyPlanAnchor, err)
-	}
-	w := window.Anchored(today, anchor.Raw, sd)
-	from, to := window.ShoppingDefault(today, w)
+	w, from, to := window.ShoppingDefault(today, sd)
 	return Range{From: from, To: to, Window: w}, nil
 }
 
@@ -279,7 +275,8 @@ func group(accs map[int64]*acc, order plate.SlotOrder) *List {
 	bySection := map[food.ShopSection][]Item{}
 	for _, a := range accs {
 		it := Item{FoodID: a.leaf.ID, Name: a.leaf.Name, TotalGrams: a.grams, UsedIn: a.uses}
-		if a.mixed {
+		sec := SectionOf(a.leaf)
+		if a.mixed || (a.unit == "ml" && !volumeFood(sec, a.leaf.Name)) {
 			it.Display = units.Display(a.grams, "g")
 		} else {
 			it.Display = units.Display(a.amount, a.unit)
@@ -288,7 +285,6 @@ func group(accs map[int64]*acc, order plate.SlotOrder) *List {
 			}
 		}
 		slices.SortStableFunc(it.UsedIn, func(a, b Use) int { return compareUses(a, b, order) })
-		sec := SectionOf(a.leaf)
 		bySection[sec] = append(bySection[sec], it)
 	}
 	out := &List{Sections: []Section{}}
@@ -307,6 +303,30 @@ func group(accs map[int64]*acc, order plate.SlotOrder) *List {
 		out.Count += len(items)
 	}
 	return out
+}
+
+// liquidWords mark a food in a dry or spice section that is a liquid.
+var liquidWords = []string{"öl", "oil", "essig", "vinegar", "sauce", "soße", "sirup", "syrup", "brühe", "broth", "stock", "wein", "wine"}
+
+// volumeFood reports whether a food is bought by volume. Spoons and cups of
+// a recipe are converted to ml assuming water density (the food has no
+// density of its own), which is only meaningful for liquids; flour, nuts,
+// honey, nut butter and spices show in grams. Dry goods and bakery are solid;
+// a spice-section food is solid unless its name says it is a liquid.
+func volumeFood(sec food.ShopSection, name string) bool {
+	n := strings.ToLower(name)
+	switch sec {
+	case food.SectionDryGoods, food.SectionBakery:
+		return false
+	case food.SectionSpicesOils:
+		for _, w := range liquidWords {
+			if strings.HasPrefix(n, w) || strings.HasSuffix(n, w) || strings.Contains(n, " "+w) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
 }
 
 func compareUses(a, b Use, order plate.SlotOrder) int {

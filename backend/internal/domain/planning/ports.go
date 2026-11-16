@@ -36,6 +36,10 @@ type ChooseInput struct {
 	// Avoid are the recipes of the rows the target replaces: a regenerate
 	// should not bring them back.
 	Avoid []int64
+	// AvoidBatches are recipes whose existing batches the target's plates
+	// must not eat (a replaced leftover plate leaves its batch); the
+	// heuristic honours it, the LLM sees the recipe in Avoid.
+	AvoidBatches []int64
 	// Side is set for the side scope: swap one side, keep everything else.
 	Side        *SideSwap
 	Instruction string
@@ -53,6 +57,7 @@ type ChooseInput struct {
 // size, and the plates eating it.
 type SideSwap struct {
 	FoodID         int64
+	Role           food.Role // the replaced side's role; the new one keeps it when it can
 	CookDate       time.Time
 	CookSlotID     int64
 	Portions       float64

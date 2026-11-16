@@ -87,7 +87,7 @@ type Stats struct {
 	// CookDays is the number of distinct cook dates of sessions cooking in
 	// the window.
 	CookDays int
-	// Warnings is the number of session warnings.
+	// Warnings is the number of session warnings plus the board's issues.
 	Warnings int
 }
 
@@ -135,6 +135,7 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 	if err != nil {
 		return nil, err
 	}
+	markRoutine(sessions, avail)
 	days, err := s.days(ctx, w.Days(), plates)
 	if err != nil {
 		return nil, err
@@ -160,12 +161,13 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 	stats := Stats{Plates: len(plates)}
 	cookDays := map[string]bool{}
 	for _, v := range sessions {
-		if w.Contains(v.CookDate) {
+		if w.Contains(v.CookDate) && !v.Routine {
 			cookDays[v.CookDate.Format(time.DateOnly)] = true
 		}
 		stats.Warnings += len(v.Warnings)
 	}
 	stats.CookDays = len(cookDays)
+	stats.Warnings += len(issues) // the board's issues count as warnings too
 
 	p := &Plan{
 		Window: w, Today: today, IsCurrent: w.Contains(today), ShoppingDay: e.shoppingDay,
@@ -178,6 +180,20 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 		}
 	}
 	return p, nil
+}
+
+// markRoutine sets Routine on every session whose cook cell is a routine cell
+// of cells.
+func markRoutine(sessions []plate.SessionView, cells []availability.Cell) {
+	routine := map[cellKey]bool{}
+	for _, c := range cells {
+		if c.Mode == availability.ModeRoutine {
+			routine[cellID(c.Date, c.SlotID)] = true
+		}
+	}
+	for i := range sessions {
+		sessions[i].Routine = routine[cellID(sessions[i].CookDate, sessions[i].CookSlotID)]
+	}
 }
 
 // env is what both read models need from settings and slots.

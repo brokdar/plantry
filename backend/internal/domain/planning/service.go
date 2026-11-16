@@ -24,7 +24,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h3"
+const HeuristicVersion = "h5"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -202,11 +202,14 @@ type job struct {
 	rows         plate.RowSet
 	side         *SideSwap
 	avoid        []int64
+	avoidBatches []int64
 	from, to     time.Time
 	eaters       map[string]float64
 	exploreQuota int
 	instruction  string
 	kept         int
+	// replacesBatch: a plate scope on a batch's cook plate replaces the batch.
+	replacesBatch bool
 }
 
 func (s *Service) start(ctx context.Context, kind airun.Kind, req Request, held bool) (int64, error) {
@@ -412,9 +415,25 @@ func (s *Service) resolve(ctx context.Context, w window.Window, today time.Time,
 			if err != nil {
 				return err
 			}
-			j.rows, closure, err = s.d.Plates.PlateClosure(ctx, p.ID)
-			if err != nil {
-				return err
+			leftover, lerr := s.eatsOnlyLeftovers(ctx, p)
+			if lerr != nil {
+				return lerr
+			}
+			if leftover {
+				// A leftover plate goes alone; the batch it ate from shrinks
+				// by D11 when the plate is removed (D6, F6).
+				j.rows, closure = plate.RowSet{PlateIDs: []int64{p.ID}}, []plate.Plate{*p}
+				for _, c := range p.Components {
+					if c.IsComposed() {
+						j.avoidBatches = append(j.avoidBatches, c.FoodID)
+					}
+				}
+			} else {
+				j.rows, closure, err = s.d.Plates.PlateClosure(ctx, p.ID)
+				if err != nil {
+					return err
+				}
+				j.replacesBatch = len(closure) > 1
 			}
 		case ScopeSide:
 			return s.resolveSide(ctx, w, today, sc.ComponentID, &j)
@@ -505,6 +524,26 @@ func (s *Service) scopePlate(ctx context.Context, w window.Window, today time.Ti
 	return p, nil
 }
 
+// eatsOnlyLeftovers reports whether p eats only batches cooked elsewhere:
+// it has composed components and none of their sessions cooks at p's cell.
+func (s *Service) eatsOnlyLeftovers(ctx context.Context, p *plate.Plate) (bool, error) {
+	any := false
+	for _, c := range p.Components {
+		if c.CookSessionID == nil {
+			continue
+		}
+		v, err := s.d.Plates.Session(ctx, *c.CookSessionID)
+		if err != nil {
+			return false, err
+		}
+		if v.CookCell().Equal(p.Cell()) {
+			return false, nil
+		}
+		any = true
+	}
+	return any, nil
+}
+
 // resolveSide targets a side component's session and every plate eating it;
 // the plates stay (D6 "different side").
 func (s *Service) resolveSide(ctx context.Context, w window.Window, today time.Time, componentID int64, j *job) error {
@@ -529,7 +568,7 @@ func (s *Service) resolveSide(ctx context.Context, w window.Window, today time.T
 	if err != nil {
 		return err
 	}
-	sw := &SideSwap{FoodID: v.FoodID, CookDate: v.CookDate, CookSlotID: v.CookSlotID, Portions: v.Portions, FrozenPortions: v.FrozenPortions}
+	sw := &SideSwap{FoodID: v.FoodID, Role: food.Role(*pc.FoodRole), CookDate: v.CookDate, CookSlotID: v.CookSlotID, Portions: v.Portions, FrozenPortions: v.FrozenPortions}
 	// The new side cooks on the old one's cell, so that cell is in the
 	// target (H6) even when no plate eats there.
 	cells := []plate.CellKey{v.CookCell()}
@@ -658,7 +697,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		stage(StageChoosing)
 		prop, err = j.chooser.Choose(ctx, ChooseInput{
 			State: base, Target: j.target, EatersByDate: j.eaters, ExploreQuota: j.exploreQuota,
-			Avoid: j.avoid, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
+			Avoid: j.avoid, AvoidBatches: j.avoidBatches, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
 			Stage: func(st Stage) { stage(st) }, Logger: s.d.Logger,
 		})
 		if err != nil {
@@ -671,7 +710,9 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	stage(StageChecking, issueAttrs(issues)...)
 
 	snap := ToSnapshot(prop, base)
-	stage(StageSaving, "plates", len(snap.Plates)+len(routine), "sessions", len(snap.Sessions))
+	// proposal_sessions are the chooser's; the run API's counts.sessions are the
+	// persisted ones, routine plates' sessions included.
+	stage(StageSaving, "plates", len(snap.Plates)+len(routine), "routine_plates", len(routine), "proposal_sessions", len(snap.Sessions))
 	snap.Plates = append(routine, snap.Plates...)
 	// Saving has its own budget: a proposal ready at the run's deadline is
 	// still written.
