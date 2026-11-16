@@ -210,7 +210,7 @@ func endTurn(usage fake.ScriptedUsage) fake.Turn {
 
 func TestChat_RecordsChatRun(t *testing.T) {
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{
-		toolUseTurn(fake.ScriptedUsage{InputTokens: 100, OutputTokens: 10, CacheReadTokens: 40, CacheWriteTokens: 4}, "list_foods", "no_such_tool"),
+		toolUseTurn(fake.ScriptedUsage{InputTokens: 100, OutputTokens: 10, CacheReadTokens: 40, CacheWriteTokens: 4}, "find_foods", "no_such_tool"),
 		endTurn(fake.ScriptedUsage{InputTokens: 200, OutputTokens: 20, CacheReadTokens: 60, CacheWriteTokens: 6}),
 	}})
 
@@ -241,7 +241,7 @@ func TestChat_RecordsChatRun(t *testing.T) {
 
 	assert.Equal(t, []stepRow{
 		{Seq: 1, Type: "llm_call", Name: chatModel, InputTokens: 100, OutputTokens: 10},
-		{Seq: 2, Type: "tool_call", Name: "list_foods"},
+		{Seq: 2, Type: "tool_call", Name: "find_foods"},
 		{Seq: 3, Type: "tool_call", Name: "no_such_tool", IsError: true},
 		{Seq: 4, Type: "llm_call", Name: chatModel, InputTokens: 200, OutputTokens: 20},
 	}, steps)
@@ -281,7 +281,7 @@ func TestChat_RecordsPlanEvaluationOnCancel(t *testing.T) {
 func TestChat_IterationsExceededStatus(t *testing.T) {
 	// The fake replays the last (tool_use) turn forever.
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{
-		toolUseTurn(fake.ScriptedUsage{InputTokens: 1, OutputTokens: 1}, "list_foods"),
+		toolUseTurn(fake.ScriptedUsage{InputTokens: 1, OutputTokens: 1}, "find_foods"),
 	}})
 
 	_, err := chat(context.Background(), svc, "loop forever", nil)

@@ -20,7 +20,7 @@ func TestTool_MutationsReturnWhatChanged(t *testing.T) {
 	p, sid := e.mainSession()
 	v := e.session(sid)
 
-	out := e.mustExec("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":%v}`, sid, v.Consumed+2))
+	out := e.mustOp("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":%v}`, sid, v.Consumed+2))
 	after, ok := out["after"].(map[string]any)
 	require.True(t, ok, "set_session_portions carries an after block: %v", out)
 	sessions := after["sessions"].([]any)
@@ -33,7 +33,7 @@ func TestTool_MutationsReturnWhatChanged(t *testing.T) {
 	assert.NotEmpty(t, s0["food"])
 	assert.Contains(t, after, "issues")
 
-	out = e.mustExec("set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
+	out = e.mustOp("set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
 	plates := out["after"].(map[string]any)["plates"].([]any)
 	require.Len(t, plates, 1)
 	pl := plates[0].(map[string]any)
@@ -42,7 +42,7 @@ func TestTool_MutationsReturnWhatChanged(t *testing.T) {
 	assert.NotEmpty(t, pl["components"])
 
 	comp := p.Components[0]
-	out = e.mustExec("swap_food", fmt.Sprintf(`{"plate_component_id":%d,"new_food_id":%d}`, comp.ID, comp.FoodID))
+	out = e.mustOp("swap_food", fmt.Sprintf(`{"plate_component_id":%d,"new_food_id":%d}`, comp.ID, comp.FoodID))
 	assert.Contains(t, out, "after")
 	assert.NotEmpty(t, out["name"])
 }
@@ -55,12 +55,12 @@ func TestTool_SetSessionPortionsRefusesDeficit(t *testing.T) {
 	v := e.session(sid)
 	require.Greater(t, v.Consumed, 1.0, "fixture: the batch feeds more than one portion")
 
-	_, err := e.exec("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":%v}`, sid, v.Consumed-1))
+	_, err := e.op("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":%v}`, sid, v.Consumed-1))
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
 	assert.Contains(t, err.Error(), fmt.Sprintf("eat %v", v.Consumed))
 	assert.InDelta(t, v.Portions, e.session(sid).Portions, 1e-9, "a refused call writes nothing")
 
-	e.mustExec("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":%v}`, sid, v.Consumed))
+	e.mustOp("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":%v}`, sid, v.Consumed))
 }
 
 // The chat prompt shows H3/H4 (a batch eaten 8 of 6) and each food's role and

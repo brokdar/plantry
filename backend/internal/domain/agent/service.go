@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v7"
+const PromptVersion = "v8"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -191,7 +192,19 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		SystemPrompt:   prompt,
 		History:        history,
 		Tools:          s.tools.Describe(),
+		Effort:         s.effort(ctx),
 	}, client, s.tools, s.repo, out)
+}
+
+// effort reads ai.reasoning_effort.chat; an unreadable setting means the
+// provider default.
+func (s *Service) effort(ctx context.Context) string {
+	v, err := s.settings.Get(ctx, settings.KeyAIReasoningEffortChat)
+	if err != nil {
+		slog.WarnContext(ctx, "agent.effort.setting", "error", err)
+		return ""
+	}
+	return v.Raw
 }
 
 // chatOutcome maps the result of a Chat turn to the run status and, for

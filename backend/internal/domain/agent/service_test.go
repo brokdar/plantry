@@ -25,6 +25,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
@@ -155,42 +156,50 @@ func cellToolSet(t *testing.T) (*agent.ToolSet, *sql.DB, int64, int64) {
 	plates := testsvc.Plates(db)
 	ts, err := agent.NewToolSet(agent.Services{
 		Foods: food.NewService(foodRepo), Plates: plates, Slots: slot.NewService(slotRepo), Availability: avail,
+		PlanView: testsvc.PlanView(db), State: testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db),
 	})
 	require.NoError(t, err)
 	return ts, db, dinner.ID, oats.ID
 }
 
-func TestTool_GetPlatesRange_IncludesAvailability(t *testing.T) {
+// cellCtx is the chat turn's ctx of the cell tests: today Sunday 2026-11-01,
+// window Monday 2026-11-02 to Sunday 2026-11-08.
+func cellCtx() context.Context {
+	return agent.WithWindow(agent.WithToday(context.Background(), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)),
+		window.Window{Start: time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC), End: time.Date(2026, 11, 8, 0, 0, 0, 0, time.UTC)})
+}
+
+func TestTool_GetPlan_IncludesAvailability(t *testing.T) {
 	ts, _, dinnerID, _ := cellToolSet(t)
-	ctx := agent.WithToday(context.Background(), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
-	_, _, _, err := ts.Execute(ctx, "create_plate", json.RawMessage(`{"date":"2026-11-04","slot_id":`+strconv.FormatInt(dinnerID, 10)+`}`))
+	ctx := cellCtx()
+	_, _, _, err := ts.Execute(ctx, "apply_changes", json.RawMessage(applyJSON(t, "create_plate", `{"date":"2026-11-04","slot_id":`+strconv.FormatInt(dinnerID, 10)+`}`)))
 	require.NoError(t, err)
 
-	out, _, _, err := ts.Execute(ctx, "get_plates_range", json.RawMessage(`{"from":"2026-11-02","to":"2026-11-04"}`))
+	out, _, _, err := ts.Execute(ctx, "get_plan", json.RawMessage(`{"from":"2026-11-02","to":"2026-11-04"}`))
 	require.NoError(t, err)
 	var got struct {
-		Plates       []map[string]any `json:"plates"`
-		Availability []map[string]any `json:"availability"`
+		Cells []map[string]any `json:"cells"`
 	}
 	require.NoError(t, json.Unmarshal(out, &got))
-	require.Len(t, got.Plates, 1)
-	assert.NotContains(t, got.Plates[0], "skipped")
-	assert.Equal(t, []map[string]any{
-		{"date": "2026-11-02", "slot_id": float64(dinnerID), "mode": "none"},
-		{"date": "2026-11-03", "slot_id": float64(dinnerID), "mode": "routine", "preset_name": "Oatmeal"},
-	}, got.Availability, "plan cells are not listed")
+	require.Len(t, got.Cells, 3)
+	assert.Equal(t, "none", got.Cells[0]["mode"])
+	assert.Equal(t, "routine", got.Cells[1]["mode"])
+	assert.Equal(t, "Oatmeal", got.Cells[1]["preset_name"])
+	assert.Equal(t, "plan", got.Cells[2]["mode"])
+	assert.NotNil(t, got.Cells[2]["plate"])
+	assert.NotContains(t, got.Cells[2]["plate"], "skipped")
 }
 
 func TestTool_CreatePlateIntoNoneCell_ReturnsKeyedToolError(t *testing.T) {
 	ts, db, dinnerID, _ := cellToolSet(t)
-	input := json.RawMessage(`{"date":"2026-11-02","slot_id":` + strconv.FormatInt(dinnerID, 10) + `}`)
+	input := json.RawMessage(applyJSON(t, "create_plate", `{"date":"2026-11-02","slot_id":`+strconv.FormatInt(dinnerID, 10)+`}`))
 
-	_, _, _, err := ts.Execute(agent.WithToday(context.Background(), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)), "create_plate", input)
+	_, _, _, err := ts.Execute(cellCtx(), "apply_changes", input)
 	require.ErrorIs(t, err, domain.ErrCellUnavailable)
 
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{
 		{StopReason: "tool_use", Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
-			{Type: "tool_use", ToolUseID: "tu_1", ToolName: "create_plate", ToolInput: input},
+			{Type: "tool_use", ToolUseID: "tu_1", ToolName: "apply_changes", ToolInput: input},
 		}}},
 		endTurn(fake.ScriptedUsage{}),
 	}})

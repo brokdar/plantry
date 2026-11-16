@@ -34,6 +34,9 @@ type RunRequest struct {
 	Tools       []llm.Tool
 	Temperature float64
 	MaxTokens   int
+	// Effort is the reasoning effort (ai.reasoning_effort.chat); empty: the
+	// provider default.
+	Effort string
 }
 
 // Run drives a tool-calling agent loop to completion on the given request and
@@ -58,6 +61,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			Temperature: req.Temperature,
 			MaxTokens:   req.MaxTokens,
 			Reasoning:   true,
+			Effort:      req.Effort,
 		}
 
 		providerCh := make(chan llm.Event, 16)

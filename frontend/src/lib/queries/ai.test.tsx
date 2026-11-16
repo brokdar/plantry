@@ -114,7 +114,7 @@ describe("useAssistantStream", () => {
   it("F1-AC2: a change event invalidates the plan views once and appends the change", async () => {
     const change = mockChange()
     const sse =
-      `event: tool_exec_end\ndata: {"id":"tu_1","name":"set_session_portions","status":"ok","duration_ms":5}\n\n` +
+      `event: tool_exec_end\ndata: {"id":"tu_1","name":"apply_changes","status":"ok","duration_ms":5}\n\n` +
       `event: change\ndata: ${JSON.stringify(change)}\n\n` +
       `event: unlock_request\ndata: {"rows":[{"date":"2026-04-15","slot_id":3,"names":["Chili"]}]}\n\n` +
       `event: done\ndata: {"stop_reason":"end_turn","iteration_count":1}\n\n`

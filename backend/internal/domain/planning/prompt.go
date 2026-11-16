@@ -18,14 +18,18 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p6"
+const PromptVersion = "p7"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
 const PromptTokenBudget = 40_000
 
-// submitPlanName is the one tool the LLM chooser forces (D12).
-const submitPlanName = "submit_plan"
+// submitPlanName and evaluatePlanName are the LLM chooser's tools: the model
+// drafts, checks with evaluate_plan (saves nothing) and ends with submit_plan.
+const (
+	submitPlanName   = "submit_plan"
+	evaluatePlanName = "evaluate_plan"
+)
 
 // submitPlanSchema is submit_plan's input (spec §6.3, D14). No top-level
 // anyOf/oneOf/allOf: Anthropic rejects them.
@@ -65,11 +69,12 @@ const submitPlanSchema = `{
               "type": "object",
               "properties": {
                 "food_id": {"type": "integer"},
-                "portions": {"type": "number", "description": "Portions PER EATER, usually 1, up to 1.5 only if the user asked for more (never the number of eaters: 3 eaters eating 1 portion each consume 3 portions of the session)."},
+                "portions": {"type": "number", "description": "Portions PER EATER of a recipe, usually 1, up to 1.5 only if the user asked for more (never the number of eaters: 3 eaters eating 1 portion each consume 3 portions of the session). Omit for a no-cook leaf."},
+                "grams": {"type": "number", "description": "Grams PER EATER of a leaf from the no-cook table (no session, no cooking occasion). Instead of portions."},
                 "session_key": {"type": "string", "description": "Key of a session you propose."},
                 "session_id": {"type": "integer", "description": "Id of a fixed session with free portions."}
               },
-              "required": ["food_id", "portions"]
+              "required": ["food_id"]
             }
           },
           "reason": {"type": "string", "description": "One short sentence for the user: why this plate."}
@@ -82,10 +87,22 @@ const submitPlanSchema = `{
   "required": ["sessions", "plates", "notes"]
 }`
 
+// evaluatePlanTool takes submit_plan's input and returns the evaluation of
+// that plan without saving anything.
+func evaluatePlanTool() llm.Tool {
+	return llm.Tool{
+		Name: evaluatePlanName,
+		Description: "Dry run: same input as submit_plan, saves nothing. Returns JSON {days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete,nutrition_missing}], meat_days, meat_days_max, " +
+			"plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,components:[{food_id,name,role,portions|grams,kcal,session_key}]}], issues:[{rule,code,severity violation|warning|soft,date,slot_id,params,options:[{action add|raise,food_id,name,date,slot_id,portions|grams,from,kcal_delta,protein_delta_g,day_kcal,day_protein_pct,cook_occasions}]}], totals:{violations,warnings,soft}, autofix:[string]} for the plan as it would stand. " +
+			"Hard rules (violation) must be fixed before submit_plan; soft rules (S2 day kcal outside 90-110% of its target, S3 protein share more than 5 points under the target) should be fixed when an option fits. Call it as often as needed.",
+		Schema: json.RawMessage(submitPlanSchema),
+	}
+}
+
 func submitPlanTool() llm.Tool {
 	return llm.Tool{
 		Name:        submitPlanName,
-		Description: "Submit the complete plan for the cells marked fill: every session you propose and every plate.",
+		Description: "Submit the complete plan for the cells marked fill: every session you propose and every plate. Evaluate it with evaluate_plan first. A plan with hard violations is sent back with the evaluation (same shape as evaluate_plan's result).",
 		Schema:      json.RawMessage(submitPlanSchema),
 	}
 }
@@ -127,7 +144,7 @@ func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 	for i, f := range cands {
 		rows[i] = candidateRow(f, s.Settings.DefaultKeepDays)
 	}
-	const header = "\nCandidate recipes (id|name|role|suits|diet|kcal|protein_g|fat_g|carbs_g|nutrition_complete|minutes|reference_portions|keep_days|freezable|last_eaten|eaten_8_weeks|favorite|like_score|explore), per portion:\n"
+	const header = "\nCandidate recipes (id|name|role|suits|diet|meat|kcal|protein_g|fat_g|carbs_g|nutrition_complete|minutes|reference_portions|keep_days|freezable|last_eaten|eaten_8_weeks|favorite|like_score|explore), per portion:\n"
 	room := PromptTokenBudget*4 - utf8.RuneCountInString(head.String()) - utf8.RuneCountInString(tail.String()) - len(header) - 80
 	keep := make([]bool, len(cands))
 	for _, i := range keepOrder(cands, in.Side != nil) {
@@ -155,6 +172,7 @@ func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 	if omitted > 0 {
 		fmt.Fprintf(&b, "(%d more recipes left out for length.)\n", omitted)
 	}
+	writeNoCook(&b, in)
 	b.WriteString(tail.String())
 	return b.String(), trimmed
 }
@@ -302,7 +320,7 @@ func writeIssues(b *strings.Builder, issues []Issue) {
 }
 
 func writeRules(b *strings.Builder, s State) {
-	b.WriteString(`You plan the meals of one week for a self-hosted meal planner. Fill every cell marked "fill" with exactly one plate, then call submit_plan once with the complete plan.
+	b.WriteString(`You plan the meals of one week for a self-hosted meal planner. Fill every cell marked "fill" with exactly one plate, check your draft with evaluate_plan (it saves nothing and reports every rule), fix it, then call submit_plan once with the complete plan.
 
 How a plan works:
 - A plate sits on one (date, slot_id) cell and serves eaters people (omit eaters for the household's portions). Its components are recipes with portions per eater, usually 1.
@@ -313,7 +331,10 @@ How a plan works:
 - Cooking occasions: every cook cell of a session counts, and so does every component without a session_key/session_id (it is cooked fresh on its own cell). Several sessions cooked on the same cell are one occasion, so cook a side on the same cell as its main, and let other plates eat from a session.
 - Every lunch and dinner plate needs a main (role main, suits lunch_dinner in the candidate table); a side alone is not a meal. Recipes that suit breakfast (standalone: oats, yoghurt) are for breakfast cells only, never a lunch or dinner. Pair mains with a side where it suits.
 - Submit the COMPLETE plan in your first call: a plate for every fill cell (the task lists them with their count) and every session they need. The checker allows only two repairs; do not use them to find missing cells. notes describe only what is in the plan.
-- Daily targets: the day's plates per eater should land near the daily kcal target and the macro shares. The candidate rows list kcal and macros per portion, so sum portions x kcal over the day's plates (weekday meals with 600 kcal against a 2200 target miss it). A day with a No-plate meal has a lower target (see Short days). Mix several different mains over the week rather than one recipe for most meals.
+- Soft rules (reported by evaluate_plan, never block saving, aim to satisfy them): S1 at most the meat-day limit of days with an omnivore recipe on a plate (the meat column; a cook day without an eating plate is not a meat day); S2 every day's plates per eater within 90-110% of the day's kcal target (a day with a No-plate meal has a lower target, see Short days); S3 every day's protein share of kcal at most 5 points under the profile's protein share. Each S2/S3 issue lists computed options (add a no-cook item, or raise an amount) with the kcal and protein they add; take one instead of computing by hand.
+- Evaluate before you submit: write the draft, call evaluate_plan with it, read days (kcal, protein, cook occasions, meat) and issues, change the plan, evaluate again. Do not simulate the checker in your head.
+- No-cook table: leaves (use grams per eater) and recipes with no cooking that close a kcal or protein gap without a cooking occasion; add one as a component of an existing plate (leaf: grams, no session).
+- Mix several different mains over the week rather than one recipe for most meals.
 - notes and reasons must describe the plan you submit, not an earlier idea.
 - Cook a session on the first cell that eats from it; that cell must be a fill cell.
 - Use only ids that appear in this prompt.
@@ -638,6 +659,37 @@ func keepOrder(cands []FoodFacts, sidesFirst bool) []int {
 	return idx
 }
 
+// writeNoCook lists the no-cook items (see NoCook) that fit the diet:
+// leaves per 100 g (give grams per eater, a typical portion is
+// TypicalLeafGrams), recipes per portion. A side swap needs none.
+func writeNoCook(b *strings.Builder, in ChooseInput) {
+	if in.Side != nil {
+		return
+	}
+	t := diet.Class(in.State.Profile.DietType)
+	var rows []string
+	for _, id := range in.State.NoCook {
+		f, ok := in.State.Foods[id]
+		if !ok || !f.NutritionComplete || (t != "" && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t)) {
+			continue
+		}
+		unit := fmt.Sprintf("per 100 g (typical %d g)", TypicalLeafGrams)
+		if f.Composed() {
+			unit = "per portion"
+		}
+		rows = append(rows, fmt.Sprintf("%d|%s|%s|%s|%s|%.0f|%.0f|%.0f|%.0f|%s", f.ID, cell(f.Name), f.Kind, f.DietClass,
+			yesNo(f.DietClass == diet.Omnivore), f.Macros.Kcal, f.Macros.Protein, f.Macros.Fat, f.Macros.Carbs, unit))
+	}
+	if len(rows) == 0 {
+		return
+	}
+	b.WriteString("\nNo-cook items (id|name|kind|diet|meat|kcal|protein_g|fat_g|carbs_g|basis; a leaf takes grams, a recipe portions; neither needs cooking):\n")
+	for _, r := range rows {
+		b.WriteString(r)
+		b.WriteByte('\n')
+	}
+}
+
 func candidateRow(f FoodFacts, defaultKeep int) string {
 	last := "-"
 	if f.LastEaten != nil {
@@ -651,8 +703,8 @@ func candidateRow(f FoodFacts, defaultKeep int) string {
 	if role == "" {
 		role = "-"
 	}
-	return fmt.Sprintf("%d|%s|%s|%s|%s|%.0f|%.0f|%.0f|%.0f|%s|%d|%s|%s|%s|%s|%d|%s|%s|%s",
-		f.ID, cell(f.Name), role, suits(f.Role), f.DietClass, f.Macros.Kcal, f.Macros.Protein, f.Macros.Fat, f.Macros.Carbs,
+	return fmt.Sprintf("%d|%s|%s|%s|%s|%s|%.0f|%.0f|%.0f|%.0f|%s|%d|%s|%s|%s|%s|%d|%s|%s|%s",
+		f.ID, cell(f.Name), role, suits(f.Role), f.DietClass, yesNo(f.DietClass == diet.Omnivore), f.Macros.Kcal, f.Macros.Protein, f.Macros.Fat, f.Macros.Carbs,
 		yesNo(f.NutritionComplete), f.Minutes, num(f.ReferencePortions), keep, yesNo(f.Freezable), last,
 		f.TimesEaten8Weeks, yesNo(f.Favorite), num(f.LikeScore), yesNo(f.Explore()))
 }

@@ -36,6 +36,7 @@ func (e *planToolEnv) toolSetWith(planner agent.Planner, changes agent.ChangeSto
 		Plates: e.plates, Profile: profile.NewService(sqlite.NewProfileRepo(e.db)),
 		Slots: slot.NewService(sqlite.NewSlotRepo(e.db)), Settings: testsvc.Settings(e.db),
 		PlanView: testsvc.PlanView(e.db), Planner: planner, Cells: e.avail, Changes: changes,
+		State: testsvc.PlanState(e.db), Tx: sqlite.NewTxRunner(e.db),
 	})
 	require.NoError(e.t, err)
 	return ts
@@ -104,7 +105,7 @@ func TestChange_SaveFailureIsSurfaced(t *testing.T) {
 	p, _ := e.mainSession()
 	ts := e.toolSetWith(e.planner, failCreate{sqlite.NewAIChangeRepo(e.db)})
 
-	out, _, ch, err := ts.Execute(ctx, "set_plate_eaters", json.RawMessage(fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID)))
+	out, _, ch, err := ts.Execute(ctx, "apply_changes", json.RawMessage(applyJSON(t, "set_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))))
 	require.NoError(t, err)
 	require.NotNil(t, ch)
 	assert.Zero(t, ch.ID)
@@ -112,8 +113,8 @@ func TestChange_SaveFailureIsSurfaced(t *testing.T) {
 	pl := ch.Payload()
 	assert.False(t, pl.Recorded)
 	assert.False(t, pl.Undoable)
-	assert.Equal(t, "set_plate_eaters", pl.Tool)
-	assert.Equal(t, "set_plate_eaters", pl.TextKey)
+	assert.Equal(t, "apply_changes", pl.Tool)
+	assert.Equal(t, "apply_changes", pl.TextKey)
 	var res map[string]any
 	require.NoError(t, json.Unmarshal(out, &res))
 	assert.Equal(t, "change_not_recorded", res["warning"])
@@ -121,7 +122,7 @@ func TestChange_SaveFailureIsSurfaced(t *testing.T) {
 	require.NoError(t, err)
 	assert.InDelta(t, 3.0, got.Eaters, 1e-9, "the write stands")
 
-	ok := e.change(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
+	ok := e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
 	assert.True(t, ok.Payload().Recorded)
 }
 
@@ -158,7 +159,7 @@ func TestChange_UndoAvailabilityStaleAfterManualEdit(t *testing.T) {
 			require.NoError(t, err)
 		}
 	}
-	ch := e.change(ctx, "set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, d.Format(time.DateOnly), slotID))
+	ch := e.changeOp(ctx, "set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, d.Format(time.DateOnly), slotID))
 	require.NotNil(t, ch.CellBefore)
 
 	note := "eating out after all"

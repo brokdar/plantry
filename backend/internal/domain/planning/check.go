@@ -17,6 +17,10 @@ type Severity string
 const (
 	SeverityViolation Severity = "violation"
 	SeverityWarning   Severity = "warning"
+	// SeveritySoft marks the soft rules S2/S3 (Evaluate): reported
+	// everywhere, they never block saving and are never repaired by the
+	// checker.
+	SeveritySoft Severity = "soft"
 )
 
 // Issue codes (D22). H3/H4 reuse the session warning codes of plate.
@@ -41,6 +45,10 @@ const (
 	CodePlateOnConfirmedCell  = "plate_on_confirmed_cell"
 	CodeVarietyRepeat         = "variety_repeat"
 	CodeVarietyRelaxed        = "variety_relaxed"
+	// Soft rules (Evaluate).
+	CodeKcalBelowBand = "kcal_below_band"
+	CodeKcalAboveBand = "kcal_above_band"
+	CodeProteinLow    = "protein_below_target"
 )
 
 // Issue is one finding of the checker (D22). Plates and sessions of a
@@ -55,6 +63,9 @@ type Issue struct {
 	PlateID   *int64         `json:"plate_id,omitempty"`
 	SessionID *int64         `json:"session_id,omitempty"`
 	Params    map[string]any `json:"params"`
+	// Options are the ways to close a soft rule's gap, computed by
+	// Evaluate (S2/S3 only).
+	Options []Option `json:"options,omitempty"`
 }
 
 // Check applies the hard rules H1–H8 (spec §6.4, D21) to the target of s and
@@ -365,11 +376,13 @@ func (x *index) component(p Plate, c Component) []Issue {
 	var out []Issue
 	// A routine cell's plate copies its preset (D8), leaves included.
 	if p.Proposed() && !x.routine(p.Cell()) {
-		if f.Kind != food.KindComposed {
+		if f.Kind == food.KindComposed {
+			if c.Portions == nil || !(*c.Portions > 0) {
+				out = append(out, issue("H7", CodeInvalidPortions, SeverityViolation).onPlate(p).with("food_id", c.FoodID))
+			}
+		} else if c.Grams == nil || !(*c.Grams > 0) {
+			// A leaf is allowed with grams (a no-cook item), never with portions.
 			out = append(out, issue("H7", CodeNotComposed, SeverityViolation).onPlate(p).with("food_id", c.FoodID))
-		}
-		if c.Portions == nil || !(*c.Portions > 0) {
-			out = append(out, issue("H7", CodeInvalidPortions, SeverityViolation).onPlate(p).with("food_id", c.FoodID))
 		}
 	}
 	r, linked := refOf(c)

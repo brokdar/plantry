@@ -1198,9 +1198,9 @@ export function mockChange(overrides: Partial<Change> = {}): Change {
   return {
     id: 5,
     run_id: 31,
-    tool: "set_session_portions",
-    text_key: "set_session_portions",
-    params: { name: "Chili", portions: 6 },
+    tool: "apply_changes",
+    text_key: "apply_changes",
+    params: { count: 1, summary: "Chili 6 portions (2026-11-03)" },
     dates: ["2026-11-03"],
     plate_ids: [12],
     session_ids: [4],
@@ -1231,8 +1231,8 @@ export function mockConversationWithChanges(): ConversationDetail {
       {
         ...mockChange({
           id: 6,
-          tool: "set_availability",
-          text_key: "set_availability_none",
+          tool: "apply_changes",
+          text_key: "apply_changes",
         }),
         undone_at: "2026-11-01T09:04:00Z",
       },

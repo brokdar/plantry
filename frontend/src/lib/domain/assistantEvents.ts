@@ -65,7 +65,10 @@ export interface Change {
   run_id: number
   tool: string
   text_key: string
-  params: Record<string, string | number | boolean | null>
+  params: Record<
+    string,
+    string | number | boolean | null | Record<string, unknown>[]
+  >
   dates: string[]
   plate_ids: number[]
   session_ids: number[]

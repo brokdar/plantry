@@ -8,9 +8,15 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 )
 
-// kcalLow is the share of a day's scaled target below which a day is named
-// in the run notes. It is information, never a rule and never a repair.
-const kcalLow = 0.7
+// The S2 band: a complete day's kcal outside [KcalBandLow, KcalBandHigh] of
+// its scaled target is a soft issue (Evaluate). Constants live here only.
+const (
+	KcalBandLow  = 0.9
+	KcalBandHigh = 1.1
+	// ProteinMarginPts is how far below the profile's protein share a day
+	// may fall before S3 reports it.
+	ProteinMarginPts = 5.0
+)
 
 // DayKcal is one day's account per person: the planned macros, the day's
 // target scaled to the meals that are planned (a day with a No-plate meal
@@ -127,13 +133,13 @@ func writeDayBudgets(b *strings.Builder, x *index) {
 	}
 }
 
-// kcalNote is the run-notes line of the days whose proposal lands below
-// kcalLow of its scaled target ("" when none does). The gaps are offered to
-// the user afterwards; the chooser is never asked to close them.
+// kcalNote is the run-notes line of the proposed days that land below the
+// S2 band ("" when none does). The gaps are offered to the user afterwards;
+// the chooser is never asked to close them.
 func kcalNote(s State, t Target) string {
 	var parts []string
 	for _, d := range DayKcals(s, t) {
-		if d.Complete && d.Proposed && d.Kcal < d.Scaled*kcalLow {
+		if d.Complete && d.Proposed && d.Kcal < d.Scaled*KcalBandLow {
 			parts = append(parts, fmt.Sprintf("%s −%.0f kcal", d.Date.Weekday().String()[:3], d.Gap))
 		}
 	}

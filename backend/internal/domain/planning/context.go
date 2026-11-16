@@ -155,10 +155,37 @@ func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to ti
 		s.Sessions[i] = StateSession(ss)
 		referenced[ss.FoodID] = true
 	}
+	// The no-cook candidates: raw-eaten leaves and no-cook recipes, so an
+	// evaluation can offer them to close a gap.
+	noCook := map[int64]bool{}
+	for id, f := range foods {
+		if NoCook(f) {
+			noCook[id] = true
+		}
+	}
+	leaves, err := b.d.Foods.List(ctx, food.ListQuery{Kind: food.KindLeaf, Limit: maxFoods, Today: today})
+	if err != nil {
+		return State{}, fmt.Errorf("list leaves: %w", err)
+	}
+	for i := range leaves.Items {
+		if f := &leaves.Items[i]; NoCook(f) {
+			foods[f.ID], noCook[f.ID] = f, true
+			ptrs = append(ptrs, f)
+		}
+	}
+	if err := b.d.Foods.DeriveDiet(ctx, ptrs[len(recipes.Items):]...); err != nil {
+		return State{}, fmt.Errorf("no-cook diet: %w", err)
+	}
 	s.Foods = map[int64]FoodFacts{}
 	if err := b.addFoods(ctx, &s, foods, referenced, timesEaten, prof); err != nil {
 		return State{}, err
 	}
+	for id := range noCook {
+		if f := s.Foods[id]; f.NutritionComplete && f.Macros.Kcal > 0 {
+			s.NoCook = append(s.NoCook, id)
+		}
+	}
+	slices.Sort(s.NoCook)
 	return s, nil
 }
 
@@ -261,6 +288,7 @@ func BaseFacts(f *food.Food) FoodFacts {
 	ff := FoodFacts{
 		ID: f.ID, Name: f.Name, Kind: f.Kind, KeepDays: f.KeepDays, Freezable: f.Freezable != nil && *f.Freezable,
 		Favorite: f.Favorite, LastEaten: f.History.LastEaten, ReferencePortions: 1, DietClass: f.DietClass,
+		NoCook: NoCook(f),
 	}
 	if f.Role != nil {
 		ff.Role = *f.Role

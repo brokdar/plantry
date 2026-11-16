@@ -137,7 +137,7 @@ func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 				assert.Equal(t, 0, r.RepairAttempts)
 			}
 			assert.Equal(t, "fake", r.Model)
-			assert.Equal(t, "p6", r.PromptVersion)
+			assert.Equal(t, planning.PromptVersion, r.PromptVersion)
 			// A run that fills cells asks the model; one with nothing to
 			// fill (away_thu_fri) may not.
 			if r.Plates > 0 {

@@ -68,6 +68,8 @@ func TestSettingsSpec_Phase1Defaults(t *testing.T) {
 		settings.KeyPlanExplorePerWeek:         "0",
 		settings.KeyDiscoveryDailyEnabled:      "true",
 		settings.KeyAIRunRetentionDays:         "180",
+		settings.KeyAIReasoningEffortChat:      "low",
+		settings.KeyAIReasoningEffortGenerate:  "medium",
 		settings.KeyPlanAnchor:                 "next_shopping_day",
 	}
 	for key, want := range defaults {

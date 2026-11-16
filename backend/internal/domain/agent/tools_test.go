@@ -16,50 +16,78 @@ func toolsByName() map[string]Tool {
 	return m
 }
 
-func TestTool_GetPlatesRange_Callable(t *testing.T) {
-	tools := toolsByName()
-
-	tool, ok := tools["get_plates_range"]
+func schemaOf(t *testing.T, name string) map[string]any {
+	t.Helper()
+	tool, ok := toolsByName()[name]
 	if !ok {
-		t.Fatal("get_plates_range tool is not registered")
+		t.Fatalf("%s tool is not registered", name)
 	}
-
 	var schema map[string]any
 	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
 		t.Fatalf("schema is not valid JSON: %v", err)
 	}
+	return schema
+}
 
-	props, ok := schema["properties"].(map[string]any)
-	if !ok {
-		t.Fatal("schema missing 'properties' object")
+// opItemProps returns the properties of one apply_changes op.
+func opItemProps(t *testing.T) map[string]any {
+	t.Helper()
+	props := schemaOf(t, "apply_changes")["properties"].(map[string]any)
+	ops := props["ops"].(map[string]any)
+	return ops["items"].(map[string]any)["properties"].(map[string]any)
+}
+
+func TestTool_ApplyChanges_Schema(t *testing.T) {
+	schema := schemaOf(t, "apply_changes")
+	props := schema["properties"].(map[string]any)
+	for _, k := range []string{"ops", "dry_run"} {
+		if _, ok := props[k]; !ok {
+			t.Errorf("apply_changes schema missing %q", k)
+		}
 	}
-	if _, hasFrom := props["from"]; !hasFrom {
-		t.Error("get_plates_range schema missing 'from' parameter")
+	if required, _ := schema["required"].([]any); len(required) != 1 || required[0] != "ops" {
+		t.Errorf("apply_changes requires ops; got %v", required)
 	}
-	if _, hasTo := props["to"]; !hasTo {
-		t.Error("get_plates_range schema missing 'to' parameter")
+	item := opItemProps(t)
+	enum := item["op"].(map[string]any)["enum"].([]any)
+	want := []string{"add", "swap", "set_quantity", "remove", "create_plate", "delete_plate", "set_portions", "set_eaters", "set_availability"}
+	if len(enum) != len(want) {
+		t.Fatalf("op enum = %v, want %v", enum, want)
+	}
+	for i, w := range want {
+		if enum[i] != w {
+			t.Errorf("op enum[%d] = %v, want %s", i, enum[i], w)
+		}
+	}
+	for _, k := range []string{"date", "slot_id", "session_id", "cook_at"} {
+		if _, ok := item[k]; !ok {
+			t.Errorf("op schema missing %q", k)
+		}
+	}
+	if _, ok := item["week_id"]; ok {
+		t.Error("op schema must not contain 'week_id'")
 	}
 }
 
-func TestTool_CreatePlate_AcceptsDate(t *testing.T) {
+func TestTool_FindFoods_Schema(t *testing.T) {
+	props := schemaOf(t, "find_foods")["properties"].(map[string]any)
+	for _, k := range []string{"roles", "kinds", "ids", "no_cook", "diet", "tags", "search", "max_kcal", "min_protein", "sort", "limit"} {
+		if _, ok := props[k]; !ok {
+			t.Errorf("find_foods schema missing %q", k)
+		}
+	}
+}
+
+func TestTool_RemovedToolsAreGone(t *testing.T) {
 	tools := toolsByName()
-
-	tool, ok := tools["create_plate"]
-	if !ok {
-		t.Fatal("create_plate tool is not registered")
-	}
-
-	var schema map[string]any
-	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
-	}
-
-	props, ok := schema["properties"].(map[string]any)
-	if !ok {
-		t.Fatal("schema missing 'properties' object")
-	}
-	if _, hasDate := props["date"]; !hasDate {
-		t.Error("create_plate schema missing 'date' parameter")
+	for _, name := range []string{
+		"list_foods", "get_food", "get_plates_range", "create_plate", "add_food_to_plate", "swap_food",
+		"update_plate_component", "remove_plate_component", "delete_plate", "set_session_portions",
+		"set_plate_eaters", "set_availability",
+	} {
+		if _, ok := tools[name]; ok {
+			t.Errorf("%s was replaced by apply_changes / find_foods / get_plan", name)
+		}
 	}
 }
 
@@ -67,51 +95,6 @@ func TestTool_GetWeek_NotExposed(t *testing.T) {
 	tools := toolsByName()
 	if _, ok := tools["get_week"]; ok {
 		t.Error("get_week must not be exposed in defaultTools")
-	}
-}
-
-func TestTool_CreatePlate_RequiresDate(t *testing.T) {
-	tools := toolsByName()
-	tool, ok := tools["create_plate"]
-	if !ok {
-		t.Fatal("create_plate tool is not registered")
-	}
-	var schema map[string]any
-	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
-	}
-	required, ok := schema["required"].([]any)
-	if !ok {
-		t.Fatal("schema missing 'required' array")
-	}
-	found := false
-	for _, r := range required {
-		if r == "date" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("create_plate schema required array must contain 'date'; got %v", required)
-	}
-}
-
-func TestTool_CreatePlate_NoWeekIdProp(t *testing.T) {
-	tools := toolsByName()
-	tool, ok := tools["create_plate"]
-	if !ok {
-		t.Fatal("create_plate tool is not registered")
-	}
-	var schema map[string]any
-	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
-	}
-	props, ok := schema["properties"].(map[string]any)
-	if !ok {
-		t.Fatal("schema missing 'properties' object")
-	}
-	if _, hasWeekID := props["week_id"]; hasWeekID {
-		t.Error("create_plate schema must not contain 'week_id' property")
 	}
 }
 

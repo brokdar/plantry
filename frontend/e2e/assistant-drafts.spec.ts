@@ -314,14 +314,18 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     const runMark = await maxRunId()
     await send(page, "Make the chili 6 portions and freeze 2")
 
-    const sentence = `${chili.name}: 6 portions, 2 frozen`
+    const [my, mm, md] = monday.split("-").map(Number)
+    const mondayName = new Intl.DateTimeFormat("en", {
+      weekday: "long",
+    }).format(new Date(my, mm - 1, md))
+    const sentence = `${chili.name}: 6 portions (${mondayName})`
     const line = panel.getByTestId("assistant-change")
     await expect(line).toHaveCount(1)
     await expect(line).toContainText(sentence)
     await expect(page.getByTestId("assistant-live")).toHaveText(sentence)
     await expect(panel.getByRole("button", { name: /^Undo/ })).toBeVisible()
     await expect(panel).not.toContainText(
-      /get_plan|set_session_portions|regenerate|submit_plan|tool_use/
+      /get_plan|apply_changes|regenerate|submit_plan|tool_use/
     )
     await expect(planCell(page, monday, dinner.id)).toHaveAttribute(
       "data-pulse",
@@ -346,11 +350,11 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     expect(detail1).toMatchObject({
       kind: "chat",
       status: "ok",
-      prompt_version: "v7",
+      prompt_version: "v8",
     })
     expect(detail1.instruction).toBe("Make the chili 6 portions and freeze 2")
     expect(detail1.steps.map((s) => s.name)).toEqual(
-      expect.arrayContaining(["get_plan", "set_session_portions"])
+      expect.arrayContaining(["get_plan", "apply_changes"])
     )
     expect(detail1.prompt_text).toContain(start)
     expect(detail1.prompt_text).toContain(chili.name)
@@ -529,14 +533,12 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
       panel3.getByTestId("assistant-message-assistant").last()
     ).toContainText("say yes")
     await expect(panel3.getByTestId("assistant-change")).toHaveCount(0)
-    await expect(panel3).not.toContainText(
-      /remove_plate_component|unlock\b.*\{/
-    )
+    await expect(panel3).not.toContainText(/apply_changes|unlock\b.*\{/)
     // The removal failed on the confirmed row; nothing changed.
     const [chat3] = await runsAfter(mark3, "chat")
     const failed = (
       await getJSON<RunDetail>(ctx, `/api/ai/runs/${chat3.id}`)
-    ).steps.find((x) => x.name === "remove_plate_component")!
+    ).steps.find((x) => x.name === "apply_changes")!
     expect(failed.is_error).toBe(true)
     expect(failed.result).toContain("confirmed")
     // The stored conversation keeps the failed result's message key.
@@ -579,7 +581,7 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     await expect(
       panel3
         .getByTestId("assistant-change")
-        .filter({ hasText: `${weekday(monday)}: ${rice.name} removed` })
+        .filter({ hasText: `remove ${rice.name} (${mondayName})` })
     ).toHaveCount(1)
     await expect(panel3.getByTestId("assistant-unlock-card")).toHaveCount(0)
     // The transcript followed the new lines to the bottom.

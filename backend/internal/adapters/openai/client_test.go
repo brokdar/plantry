@@ -297,3 +297,73 @@ func TestStream_RequestIDOnSuccess(t *testing.T) {
 	_ = drainEvents(out)
 	assert.Equal(t, "req_oa_1", resp.RequestID)
 }
+
+// reasoning_effort is sent only for reasoning models.
+func TestStream_ReasoningEffortOnlyForReasoningModels(t *testing.T) {
+	var bodies []map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var m map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&m))
+		bodies = append(bodies, m)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer ts.Close()
+	c := openai.New("k", openai.WithBaseURL(ts.URL), openai.WithHTTPClient(ts.Client()))
+	for _, model := range []string{"gpt-5.1", "gpt-4o"} {
+		out := make(chan llm.Event, 16)
+		go func() {
+			for range out {
+			}
+		}()
+		_, _ = c.Stream(context.Background(), llm.Request{Model: model, Effort: "low"}, out)
+	}
+	require.Len(t, bodies, 2)
+	assert.Equal(t, "low", bodies[0]["reasoning_effort"])
+	assert.NotContains(t, bodies[1], "reasoning_effort")
+	assert.Equal(t, "low", c.EffectiveParams(llm.Request{Model: "o3", Effort: "low"}).Effort)
+	assert.Empty(t, c.EffectiveParams(llm.Request{Model: "gpt-4o", Effort: "low"}).Effort)
+	for _, model := range []string{"gpt-5-chat-latest", "gpt-5-pro", "o1-mini", "o1-preview", "o3-pro"} {
+		assert.Empty(t, c.EffectiveParams(llm.Request{Model: model, Effort: "low"}).Effort, model)
+	}
+}
+
+// A 400 naming reasoning_effort is retried once without it, remembered for
+// the model, reported as an attempt and recorded as a fallback.
+func TestStream_RetriesWithoutRejectedEffort(t *testing.T) {
+	var bodies []map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var m map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&m))
+		bodies = append(bodies, m)
+		if _, has := m["reasoning_effort"]; has {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"message":"Unrecognized request argument supplied: reasoning_effort","type":"invalid_request_error"}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer ts.Close()
+	c := openai.New("k", openai.WithBaseURL(ts.URL), openai.WithHTTPClient(ts.Client()))
+	var attempts []llm.Attempt
+	ctx := llm.WithAttemptObserver(context.Background(), func(a llm.Attempt) { attempts = append(attempts, a) })
+	req := llm.Request{Model: "gpt-5.1", Effort: "low"}
+	for i := 0; i < 2; i++ {
+		out := make(chan llm.Event, 16)
+		go func() {
+			for range out {
+			}
+		}()
+		_, err := c.Stream(ctx, req, out)
+		require.NoError(t, err)
+	}
+	require.Len(t, bodies, 3, "one rejected try, its retry, then no effort at all")
+	assert.NotContains(t, bodies[1], "reasoning_effort")
+	assert.NotContains(t, bodies[2], "reasoning_effort")
+	require.Len(t, attempts, 1)
+	assert.Equal(t, "effort_rejected_400", attempts[0].Reason)
+	eff := c.EffectiveParams(req)
+	assert.Empty(t, eff.Effort)
+	assert.Contains(t, eff.Fallbacks, "effort_rejected_by_model")
+}

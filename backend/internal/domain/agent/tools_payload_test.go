@@ -144,6 +144,14 @@ func execJSON(t *testing.T, ts *ToolSet, name, input string) map[string]any {
 	return m
 }
 
+// findCurry reads recipe 3 through find_foods.
+func findCurry(t *testing.T, ts *ToolSet) map[string]any {
+	t.Helper()
+	items := execJSON(t, ts, "find_foods", `{"ids":[3]}`)["items"].([]any)
+	require.Len(t, items, 1)
+	return items[0].(map[string]any)
+}
+
 func assertCurryPayload(t *testing.T, m map[string]any) {
 	t.Helper()
 	assert.Equal(t, true, m["favorite"])
@@ -161,9 +169,9 @@ func assertCurryPayload(t *testing.T, m map[string]any) {
 	}, m["per_portion"])
 }
 
-func TestTool_GetFood_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
+func TestTool_FindFoods_ByID_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
 	ts, repo := newPayloadToolSet(t)
-	assertCurryPayload(t, execJSON(t, ts, "get_food", `{"food_id":3}`))
+	assertCurryPayload(t, findCurry(t, ts))
 	assert.Equal(t, payloadToday, repo.historyToday, "history is as of the user's today")
 }
 
@@ -172,8 +180,8 @@ func TestTool_GetFood_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
 func TestTool_Foods_KeepDaysIsEffective(t *testing.T) {
 	ts, repo := newPayloadToolSet(t)
 	repo.foods[3].KeepDays = nil
-	assert.Equal(t, float64(4), execJSON(t, ts, "get_food", `{"food_id":3}`)["keep_days"])
-	items := execJSON(t, ts, "list_foods", `{}`)["items"].([]any)
+	assert.Equal(t, float64(4), findCurry(t, ts)["keep_days"])
+	items := execJSON(t, ts, "find_foods", `{"ids":[1,2,3]}`)["items"].([]any)
 	for _, it := range items {
 		f := it.(map[string]any)
 		if f["name"] == "Curry" {
@@ -182,21 +190,21 @@ func TestTool_Foods_KeepDaysIsEffective(t *testing.T) {
 	}
 }
 
-func TestTool_GetFood_NeverEatenRecipeHasNullHistory(t *testing.T) {
+func TestTool_FindFoods_ByID_NeverEatenRecipeHasNullHistory(t *testing.T) {
 	ts, repo := newPayloadToolSet(t)
 	repo.history = nil
-	m := execJSON(t, ts, "get_food", `{"food_id":3}`)
+	m := findCurry(t, ts)
 	assert.Contains(t, m, "last_eaten")
 	assert.Nil(t, m["last_eaten"])
 	assert.Equal(t, float64(0), m["times_cooked"])
 }
 
-func TestTool_ListFoods_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
+func TestTool_FindFoods_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
 	ts, repo := newPayloadToolSet(t)
-	m := execJSON(t, ts, "list_foods", `{}`)
+	m := execJSON(t, ts, "find_foods", `{"ids":[1,2,3]}`)
 	items, ok := m["items"].([]any)
 	require.True(t, ok)
-	require.Len(t, items, 4)
+	require.Len(t, items, 3)
 	byName := map[string]map[string]any{}
 	for _, it := range items {
 		f := it.(map[string]any)
@@ -208,7 +216,7 @@ func TestTool_ListFoods_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
 	rice := byName["Rice"]
 	assert.Equal(t, false, rice["favorite"])
 	assert.Contains(t, rice, "diet_class")
-	assert.NotContains(t, rice, "last_eaten", "history is for recipes only")
+	assert.Nil(t, rice["last_eaten"], "history is for recipes only")
 	assert.NotContains(t, rice, "times_cooked")
 	assert.Equal(t, payloadToday, repo.historyToday)
 	assert.Equal(t, "per_100g", rice["basis"])
@@ -218,20 +226,18 @@ func TestTool_ListFoods_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
 		"kcal": 130.0, "protein": 2.7, "fat": 0.3, "carbs": 28.1,
 	}, rice["per_portion"])
 
-	// A failing nutrition lookup drops the macro fields for that item only.
-	broken := byName["Broken"]
-	assert.NotContains(t, broken, "per_portion")
-	assert.NotContains(t, broken, "nutrition_complete")
-	assert.NotContains(t, broken, "basis")
-	assert.Equal(t, false, broken["favorite"])
-}
-
-func TestPlateSummary_HasNoSkipped(t *testing.T) {
-	p := &plate.Plate{ID: 7, Date: time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC), SlotID: 1}
-	var m map[string]any
-	require.NoError(t, json.Unmarshal(mustJSON(plateSummary(p)), &m))
-	assert.NotContains(t, m, "skipped")
-	assert.Equal(t, "2026-10-26", m["date"])
+	// A failing nutrition lookup returns the item incomplete, and unknown ids
+	// are reported instead of failing the call.
+	raw, _, _, err := ts.Execute(withToday(context.Background(), payloadToday), "find_foods", json.RawMessage(`{"ids":[4,999]}`))
+	require.NoError(t, err)
+	var got struct {
+		Items      []map[string]any `json:"items"`
+		MissingIDs []int64          `json:"missing_ids"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &got))
+	require.Len(t, got.Items, 1)
+	assert.Equal(t, false, got.Items[0]["nutrition_complete"])
+	assert.Equal(t, []int64{999}, got.MissingIDs)
 }
 
 func TestErrorMessageKey_CellErrors(t *testing.T) {
@@ -268,7 +274,7 @@ func TestPlateTools_DescriptionsDropSkipped(t *testing.T) {
 		assert.NotContains(t, strings.ToLower(tool.Description), "skipped=", tool.Name)
 		assert.NotContains(t, strings.ToLower(tool.Description), "carries skipped", tool.Name)
 	}
-	assert.Contains(t, toolsByName()["get_plates_range"].Description, "availability")
+	assert.Contains(t, toolsByName()["apply_changes"].Description, "set_availability")
 }
 
 // The Anthropic Messages API rejects an input_schema with a top-level
@@ -283,10 +289,10 @@ func TestTools_SchemasHaveNoTopLevelCombinators(t *testing.T) {
 	}
 }
 
-func TestTool_ListFoods_CancelledContextAborts(t *testing.T) {
+func TestTool_FindFoods_CancelledContextAborts(t *testing.T) {
 	ts, _ := newPayloadToolSet(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, _, _, err := ts.Execute(ctx, "list_foods", json.RawMessage(`{}`))
+	_, _, _, err := ts.Execute(ctx, "find_foods", json.RawMessage(`{}`))
 	require.ErrorIs(t, err, context.Canceled)
 }

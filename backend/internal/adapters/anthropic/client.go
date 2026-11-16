@@ -164,6 +164,9 @@ func (c *Client) learnFromRejection(req llm.Request, w wire, e *APIError) string
 	case w.thinking && strings.Contains(msg, "thinking"):
 		c.reject(req.Model, func(r *rejection) { r.thinking = true })
 		return "thinking_rejected_400"
+	case w.effort != "" && (strings.Contains(msg, "effort") || strings.Contains(msg, "output_config")):
+		c.reject(req.Model, func(r *rejection) { r.effort = true })
+		return "effort_rejected_400"
 	case w.forcedTool && (strings.Contains(msg, "tool_choice") || strings.Contains(msg, "tool choice")):
 		c.reject(req.Model, func(r *rejection) { r.forcedTool = true })
 		return "tool_choice_rejected_400"
@@ -225,22 +228,28 @@ func (c *Client) buildRequest(ctx context.Context, method, path string, body io.
 // ---------------------------------------------------------------------------
 
 type reqBody struct {
-	Model       string           `json:"model"`
-	MaxTokens   int              `json:"max_tokens"`
-	Temperature *float64         `json:"temperature,omitempty"`
-	System      []systemBlock    `json:"system,omitempty"`
-	Messages    []messageBody    `json:"messages"`
-	Tools       []any            `json:"tools,omitempty"`
-	ToolChoice  *toolChoiceBody  `json:"tool_choice,omitempty"`
-	Thinking    *thinkingBody    `json:"thinking,omitempty"`
-	Stream      bool             `json:"stream,omitempty"`
-	Metadata    *requestMetadata `json:"metadata,omitempty"`
+	Model        string           `json:"model"`
+	MaxTokens    int              `json:"max_tokens"`
+	Temperature  *float64         `json:"temperature,omitempty"`
+	System       []systemBlock    `json:"system,omitempty"`
+	Messages     []messageBody    `json:"messages"`
+	Tools        []any            `json:"tools,omitempty"`
+	ToolChoice   *toolChoiceBody  `json:"tool_choice,omitempty"`
+	Thinking     *thinkingBody    `json:"thinking,omitempty"`
+	OutputConfig *outputConfig    `json:"output_config,omitempty"`
+	Stream       bool             `json:"stream,omitempty"`
+	Metadata     *requestMetadata `json:"metadata,omitempty"`
 }
 
 // toolChoiceBody is {"type":"tool","name":...} (forced) or {"type":"auto"}.
 type toolChoiceBody struct {
 	Type string `json:"type"`
 	Name string `json:"name,omitempty"`
+}
+
+// outputConfig is {"effort":"low"}.
+type outputConfig struct {
+	Effort string `json:"effort"`
 }
 
 // thinkingBody is {"type":"adaptive","display":"summarized"}.
@@ -324,6 +333,9 @@ func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 	}
 	if w.thinking {
 		body.Thinking = &thinkingBody{Type: "adaptive", Display: "summarized"}
+	}
+	if w.effort != "" {
+		body.OutputConfig = &outputConfig{Effort: w.effort}
 	}
 	system := req.System
 	if req.ToolChoice != nil {

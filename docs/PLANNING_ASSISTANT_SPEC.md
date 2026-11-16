@@ -440,13 +440,13 @@ The chat remains for adjustments ("no fish this week", "swap Tuesday's side for 
 - The system prompt now includes today's date, the window, and a compact plan summary, reusing §6.2.
 - **New tools:**
   - `regenerate` (scope + instruction → calls the generation service)
-  - `set_session_portions`, `set_plate_eaters`
+  - `apply_changes` (agent tools v2: one transaction of ops, with `dry_run`) replaces `create_plate`, `add_food_to_plate`, `swap_food`, `update_plate_component`, `remove_plate_component`, `delete_plate`, `set_session_portions`, `set_plate_eaters` and `set_availability`
   - `confirm` / `unlock` (unlock lists the affected confirmed rows and needs the user's yes in chat)
   - `set_availability`
   - `get_plan` (cells + sessions + plates in one call)
 - **Changed tools:**
-  - `list_foods` / `get_food` return macros per portion, diet class, keep days, last eaten, favorite.
-  - `get_plates_range` returns state, eaters, and session links.
+  - `find_foods` (agent tools v2) replaces `list_foods` / `get_food`: filters in, lists out, macros per portion, diet class, keep days, last eaten, favorite. A failed nutrition lookup returns the item with `nutrition_complete: false` (logged), never fails the call; macros are resolved only for the returned page unless a kcal/protein bound or sort needs them; `ids` combine with the other filters and unknown ids are listed in `missing_ids`.
+  - `get_plan(from?, to?)` replaces `get_plates_range` and returns the evaluation (days, per-plate and per-component kcal and protein per eater, issues incl. soft ones with options). Every tool describes its JSON return shape. `apply_changes` evaluates every plan window that holds a touched date (the chat window plus the 7-day windows of op dates), reports a cook_at op's cook day, and its change line carries structured `ops` params that the frontend turns into a localized sentence. A soft issue's options are ranked in-band first, then by protein share gain; an S3 option raises the day's protein share and an S2 option moves the day closer to the band without overshooting it; each option carries an `op` that is a valid `apply_changes` op. The planner loop is bounded (`maxModelCalls`, evaluate_plan calls included): at the bound the run ends with the last submitted proposal (partial, with a run note) or errors with `error.ai.invalid_plan`.
   - Agent tools take REAL portions (the `QuantityFromLegacyPortions` shim is removed).
 - **Removed tools:** `copy_week` (the generator replaces it); `record_preference` is restricted to keys other than likes/dislikes, enforced in code.
 - Mutations from chat on a draft window keep rows in the `draft` state, with the chat's `ai_run_id`.

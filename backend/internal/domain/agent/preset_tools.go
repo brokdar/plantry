@@ -51,7 +51,7 @@ func toolListPresets(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "list_presets",
-		Description: "List the user's saved presets, optionally filtered by name, slot_id, or tag. Returns id, name, plate count, slot_ids, tags, last_used_at, plus the top tags by frequency so you can prefer existing tags over coining duplicates.",
+		Description: "List the user's saved presets, optionally filtered by name, slot_id, or tag. Returns id, name, plate count, slot_ids, tags, last_used_at, plus the top tags by frequency so you can prefer existing tags over coining duplicates. Returns JSON {presets:[{id, name, plate_count, slot_ids, tags, last_used_at?}], total, known_tags:[{tag, count}]}.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -112,7 +112,7 @@ func toolGetPreset(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "get_preset",
-		Description: "Return a single preset with its plates and components fully expanded. Call this before apply_preset when you need to know which slots the preset covers or which foods it contains.",
+		Description: "Return a single preset with its plates and components fully expanded. Call this before apply_preset when you need to know which slots the preset covers or which foods it contains. Returns JSON {id, name, tags, plates:[{slot_id, components:[{food_id, sort_order, portions?, amount?, unit?, grams?, grams_source?, note?}]}]}.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -143,7 +143,7 @@ func toolCreatePresetFromPlates(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "create_preset_from_plates",
-		Description: "Create a new preset from one or more existing planner plates. Each plate becomes a PresetPlate bound to its slot, with components copied verbatim. Prefer tags already returned by list_presets' known_tags over coining near-duplicates.",
+		Description: "Create a new preset from one or more existing planner plates. Each plate becomes a PresetPlate bound to its slot, with components copied verbatim. Prefer tags already returned by list_presets' known_tags over coining near-duplicates. Returns the preset summary JSON {id, name, plate_count, slot_ids, tags}.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in preset.CreateFromPlatesInput
@@ -173,7 +173,7 @@ func toolUpdatePreset(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "update_preset",
-		Description: "Rename a preset and/or add/remove tags. Plate and component edits inside a preset are not exposed to the agent in v1 — use create_preset_from_plates to capture a new variant instead.",
+		Description: "Rename a preset and/or add/remove tags. Plate and component edits inside a preset are not exposed to the agent in v1 — use create_preset_from_plates to capture a new variant instead. Returns the preset summary JSON {id, name, plate_count, slot_ids, tags}.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -207,7 +207,7 @@ func toolDeletePreset(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "delete_preset",
-		Description: "Delete a preset by id. Already-applied plates on the planner are not affected.",
+		Description: "Delete a preset by id. Already-applied plates on the planner are not affected. Returns JSON {deleted:true}.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -238,7 +238,7 @@ func toolApplyPreset(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "apply_preset",
-		Description: "Apply a preset's plates onto target_date. Default on_conflict is 'skip' — leaves existing plates untouched. Use 'overwrite' only when the user explicitly asks to replace / rebuild / wipe. If the user's request targets a specific slot, set slot_ids_filter so multi-plate presets only land the relevant plate. The result enumerates created_plate_ids, replaced, skipped_occupied, skipped_unavailable (No-plate cells), and skipped_no_slot — surface any non-empty skip list to the user.",
+		Description: "Apply a preset's plates onto target_date. Default on_conflict is 'skip' — leaves existing plates untouched. Use 'overwrite' only when the user explicitly asks to replace / rebuild / wipe. If the user's request targets a specific slot, set slot_ids_filter so multi-plate presets only land the relevant plate. The result enumerates created_plate_ids, replaced, skipped_occupied, skipped_unavailable (No-plate cells), and skipped_no_slot — surface any non-empty skip list to the user. Each list is [{date, slot_id}] except replaced; the result also has the `after` block (plates, sessions, issues).",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {

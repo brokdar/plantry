@@ -195,7 +195,7 @@ func TestLLMChooser_KcalGapIsOneNotesLineAndNoRepair(t *testing.T) {
 
 func TestLLMChooser_KcalOnTargetHasNoNote(t *testing.T) {
 	in := run4Input()
-	k := 750.0
+	k := 620.0
 	in.State.Profile.KcalTarget = &k
 	p := validWeek(t, in)
 	prop, reqs := chooseWith(t, in, submit(t, "tu_1", p))
