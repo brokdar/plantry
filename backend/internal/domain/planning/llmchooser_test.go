@@ -209,7 +209,7 @@ func TestLLMChooser_RequestAndPrompt(t *testing.T) {
 	req := reqs[0]
 	assert.Nil(t, req.ToolChoice, "evaluate_plan and submit_plan are both offered")
 	assert.InDelta(t, 0.4, req.Temperature, 1e-9)
-	assert.Equal(t, 16000, req.MaxTokens)
+	assert.Equal(t, 32000, req.MaxTokens)
 	assert.Equal(t, "fake-model", req.Model)
 	require.Len(t, req.Tools, 2)
 	assert.Equal(t, "evaluate_plan", req.Tools[0].Name)
@@ -490,7 +490,7 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	// The empty first plan is H1-only: its repair is extra, then two repairs.
 	assert.Equal(t, 3, p.RepairAttempts)
 	assert.Equal(t, []planning.Stage{planning.StageRepairing, planning.StageRepairing, planning.StageRepairing}, stages)
-	assert.Equal(t, "p8", c.PromptVersion())
+	assert.Equal(t, "p9", c.PromptVersion())
 
 	require.NoError(t, c.Ready(context.Background()))
 	assert.ErrorIs(t, planning.NewLLMChooser(llm.StaticResolver(nil, "")).Ready(context.Background()), domain.ErrAIProviderMissing)
@@ -518,6 +518,38 @@ func TestLLMChooser_AnswersEveryToolCall(t *testing.T) {
 		assert.Equal(t, id, last.Content[i].ToolResultID)
 		assert.True(t, last.Content[i].ToolResultIsError)
 	}
+}
+
+// A reply cut off at max_tokens runs none of its calls: an empty evaluate_plan
+// input is answered with an error (not evaluated), the run continues without
+// using a repair, and the cut replies are bounded by the model-call cap.
+func TestLLMChooser_CutoffRunsNothing(t *testing.T) {
+	s := baseState()
+	cut := fake.Turn{StopReason: "max_tokens", Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
+		{Type: "tool_use", ToolUseID: "tu_cut", ToolName: "evaluate_plan", ToolInput: json.RawMessage(`{}`)},
+	}}}
+	empty := json.RawMessage(`{"sessions": [], "plates": [], "notes": ""}`)
+	submit := fake.Turn{StopReason: "tool_use", Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
+		{Type: "tool_use", ToolUseID: "tu_s", ToolName: "submit_plan", ToolInput: empty},
+	}}}
+	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{cut, submit}})
+	prop, err := planning.NewLLMChooser(llm.StaticResolver(client, "m")).Choose(context.Background(), planning.ChooseInput{State: s, Target: windowTarget(s)})
+	require.NoError(t, err)
+	assert.Contains(t, prop.Notes, "cut off at the output limit")
+
+	reqs := client.Requests()
+	require.GreaterOrEqual(t, len(reqs), 2)
+	last := reqs[1].Messages[len(reqs[1].Messages)-1]
+	require.Len(t, last.Content, 1)
+	assert.Equal(t, "tu_cut", last.Content[0].ToolResultID)
+	assert.True(t, last.Content[0].ToolResultIsError)
+	assert.Contains(t, string(last.Content[0].ToolResultContent), "nothing was run")
+
+	// Only cut-offs: the model-call cap ends the run.
+	client = fake.NewFromScript(&fake.Script{Turns: []fake.Turn{cut}})
+	_, err = planning.NewLLMChooser(llm.StaticResolver(client, "m")).Choose(context.Background(), planning.ChooseInput{State: s, Target: windowTarget(s)})
+	require.ErrorIs(t, err, domain.ErrAIInvalidPlan)
+	assert.Len(t, client.Requests(), 14)
 }
 
 // Names never break a pipe-separated row, and a side swap over the budget

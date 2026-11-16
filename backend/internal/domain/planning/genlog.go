@@ -152,3 +152,14 @@ func logRunStop(ctx context.Context, in ChooseInput, requests int, note string) 
 	}
 	logger.WarnContext(ctx, "plan.run.stopped", append(runAttrs(ctx, 0), "requests", requests, "reason", note)...)
 }
+
+// logRunCutoff logs a reply cut off at the output limit whose tool calls were
+// not run; modelSeq is the run step of the cut reply, toolSeqs those of its
+// answered calls.
+func logRunCutoff(ctx context.Context, in ChooseInput, modelSeq int, toolSeqs []int) {
+	logger := in.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.WarnContext(ctx, "plan.run.cutoff", append(runAttrs(ctx, 0), "model_seq", modelSeq, "tool_seqs", toolSeqs)...)
+}

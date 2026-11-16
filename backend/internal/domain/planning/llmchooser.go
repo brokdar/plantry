@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
 
 // LLM call shape (D12).
 const (
 	llmTemperature = 0.4
-	llmMaxTokens   = 16000
+	llmMaxTokens   = 32000
 	// maxRepairs is how many times a proposal with violations, or a reply
 	// without a readable submit_plan call, is sent back (spec §6.1).
 	maxRepairs = 2
@@ -176,6 +177,30 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			continuation = true
 			continue
 		}
+		if resp.StopReason == llm.StopReasonMaxTokens && hasToolUse(resp) {
+			// The reply was cut at the output limit: its tool input may be
+			// cut too (an empty evaluate_plan call evaluated an empty plan).
+			// Nothing is run; every call is answered with an error. It is a
+			// model turn but not an attempt and uses no repair.
+			var results []llm.ContentBlock
+			modelSeq := airun.FromContext(ctx).Seq()
+			var seqs []int
+			for _, b := range resp.Message.Content {
+				if b.Type != llm.ContentTypeToolUse {
+					continue
+				}
+				results = append(results, errorResult(b, cutoffMessage))
+				result, _ := json.Marshal(map[string]string{"error": cutoffMessage})
+				seqs = append(seqs, airun.FromContext(ctx).ToolStep(llm.WithCaller(ctx, b.Caller), b.ToolUseName, b.ToolUseInput, result, true, 0))
+			}
+			if note := "A reply was cut off at the output limit; its tool calls were not run."; !slices.Contains(runNotes, note) {
+				runNotes = append(runNotes, note)
+			}
+			logRunCutoff(ctx, in, modelSeq, seqs)
+			req.Messages = append(req.Messages, llm.ReplayMessage(resp.Message), llm.Message{Role: llm.RoleUser, Content: results})
+			attempt--
+			continue
+		}
 		if calls := pendingCalls(resp); len(calls) > 0 && !hasSubmit(resp) {
 			// A dry run: evaluate the draft, answer, and ask again. It is
 			// not an attempt and uses no repair.
@@ -296,6 +321,9 @@ func withNotes(p Proposal, fixes, advice []string, kcal string) Proposal {
 	}
 	return p
 }
+
+// cutoffMessage answers the tool calls of a reply cut off at the output limit.
+const cutoffMessage = "Your reply was cut off at the output limit, so nothing was run. Keep your reasoning short and let the tools compute: put your draft into evaluate_plan."
 
 // call streams one request and returns the assembled reply.
 func call(ctx context.Context, client llm.Client, req llm.Request) (*llm.Response, error) {

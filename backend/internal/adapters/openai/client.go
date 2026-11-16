@@ -344,10 +344,7 @@ func convertMessage(m llm.Message) []messageBody {
 			case llm.ContentTypeText:
 				text += b.Text
 			case llm.ContentTypeToolUse:
-				args := string(b.ToolUseInput)
-				if args == "" {
-					args = "{}"
-				}
+				args := string(llm.ObjectInput(b.ToolUseInput))
 				out.ToolCalls = append(out.ToolCalls, toolCallBody{
 					ID: b.ToolUseID, Type: "function",
 					Function: functionCallBody{Name: b.ToolUseName, Arguments: args},

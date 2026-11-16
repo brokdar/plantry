@@ -20,9 +20,13 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
+// chatMaxTokens is the output cap of a chat reply (thinking included); billing
+// is per generated token, the cap only prevents cut-offs.
+const chatMaxTokens = 16000
+
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v9"
+const PromptVersion = "v10"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -193,6 +197,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		History:        history,
 		Tools:          s.tools.Describe(),
 		Effort:         s.effort(ctx),
+		MaxTokens:      chatMaxTokens,
 	}
 	if s.programmatic(ctx) {
 		runReq.CodeExecution = true
