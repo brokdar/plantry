@@ -165,9 +165,22 @@ describe("SetupWizard", () => {
         icon: "Coffee",
         sort_order: 0,
         active: true,
+        kind: "light",
       },
-      { name_key: "slot.lunch", icon: "Sun", sort_order: 1, active: true },
-      { name_key: "slot.dinner", icon: "Moon", sort_order: 2, active: true },
+      {
+        name_key: "slot.lunch",
+        icon: "Sun",
+        sort_order: 1,
+        active: true,
+        kind: "meal",
+      },
+      {
+        name_key: "slot.dinner",
+        icon: "Moon",
+        sort_order: 2,
+        active: true,
+        kind: "meal",
+      },
     ])
     const grid = vi.mocked(setAvailabilityDefaults).mock.calls[0]![0]
     expect(grid).toHaveLength(21)
@@ -380,6 +393,7 @@ describe("SetupWizard", () => {
           icon: "Moon",
           sort_order: 0,
           active: true,
+          kind: "meal",
         },
       ],
     })
@@ -421,6 +435,7 @@ describe("SetupWizard", () => {
           icon: "Moon",
           sort_order: 0,
           active: true,
+          kind: "meal",
         },
       ],
     })
@@ -442,6 +457,7 @@ describe("SetupWizard", () => {
       icon: "Moon",
       sort_order: 0,
       active: true,
+      kind: "meal",
     })
   })
 
@@ -455,6 +471,7 @@ describe("SetupWizard", () => {
           icon: "Moon",
           sort_order: 2,
           active: true,
+          kind: "meal",
         },
         {
           id: 2,
@@ -462,6 +479,7 @@ describe("SetupWizard", () => {
           icon: "Sun",
           sort_order: 1,
           active: false,
+          kind: "meal",
         },
         {
           id: 1,
@@ -469,6 +487,7 @@ describe("SetupWizard", () => {
           icon: "Coffee",
           sort_order: 0,
           active: true,
+          kind: "light",
         },
       ],
     })
@@ -501,15 +520,28 @@ describe("SetupWizard", () => {
           icon: "Coffee",
           sort_order: 0,
           active: true,
+          kind: "light",
         },
       ],
       [
         2,
-        { name_key: "slot.lunch", icon: "Sun", sort_order: 1, active: false },
+        {
+          name_key: "slot.lunch",
+          icon: "Sun",
+          sort_order: 1,
+          active: false,
+          kind: "meal",
+        },
       ],
       [
         3,
-        { name_key: "slot.dinner", icon: "Moon", sort_order: 2, active: true },
+        {
+          name_key: "slot.dinner",
+          icon: "Moon",
+          sort_order: 2,
+          active: true,
+          kind: "meal",
+        },
       ],
     ])
   })
@@ -554,6 +586,7 @@ describe("SetupWizard", () => {
           icon: "Coffee",
           sort_order: 0,
           active: true,
+          kind: "light",
         },
         {
           id: 2,
@@ -561,6 +594,7 @@ describe("SetupWizard", () => {
           icon: "Moon",
           sort_order: 1,
           active: true,
+          kind: "meal",
         },
       ],
     })

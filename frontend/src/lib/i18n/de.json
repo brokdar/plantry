@@ -535,7 +535,11 @@
     "icon_search_placeholder": "Symbole suchen…",
     "icon_suggested": "Vorschläge",
     "icon_none_found": "Keine Symbole gefunden",
-    "row_detail": "{{key}}, Reihenfolge {{order}}"
+    "row_detail": "{{key}}, Reihenfolge {{order}}",
+    "kind_label": "Art",
+    "kind_light": "Kleine Mahlzeit",
+    "kind_meal": "Hauptmahlzeit",
+    "kind_row_label": "Art von {{name}}"
   },
   "ingredient": {
     "create": "Neue Zutat",
@@ -1302,6 +1306,7 @@
       "title": "Mahlzeiten & Woche",
       "why": "Plantry plant jede Mahlzeit, die auf „Planen“ steht. Was ihr woanders esst, setzt du auf „Kein Essen“.",
       "name_label": "Name der Mahlzeit {{n}}",
+      "kind_label": "Art von {{name}}",
       "move_up": "{{name}} nach oben",
       "move_down": "{{name}} nach unten",
       "plan_toggle": "{{name}} planen",

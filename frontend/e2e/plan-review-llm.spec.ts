@@ -151,16 +151,16 @@ test.describe("generated week on the LLM", () => {
         await ctx.get(`/api/plan/runs/${run_id}`)
       ).json()) as { status: string }
       expect(run.status).toBe("ok")
-      // One repair, plus the one extra attempt a kcal gap earns (the template
-      // plan is far under the profile target): count the LLM calls.
+      // One repair: no API exposes repair_attempts, so count the LLM calls.
+      // A kcal gap costs no call.
       const detail = (await (
         await ctx.get(`/api/ai/runs/${run_id}`)
       ).json()) as { steps: { type: string }[] }
-      expect(
-        detail.steps.filter((s) => s.type === "llm_call").length
-      ).toBeGreaterThanOrEqual(2)
+      expect(detail.steps.filter((s) => s.type === "llm_call")).toHaveLength(2)
 
-      // The notes line carries the run's notes (from the repaired turn).
+      // The notes line carries the run's notes (from the repaired turn),
+      // then the "Below target" line when the template plan is under the
+      // profile's kcal target.
       await expect(page.getByTestId("plan-notes")).toContainText(NOTES)
 
       // "Why this?" shows the plate's reason.

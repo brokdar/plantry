@@ -5,7 +5,7 @@ import { defaultsToGridValue } from "@/lib/availability-grid"
 import type { AvailabilityDefault } from "@/lib/api/availability"
 import type { DietType, Profile } from "@/lib/api/profile"
 import type { SettingItem } from "@/lib/api/settings"
-import type { TimeSlot } from "@/lib/api/slots"
+import type { SlotKind, TimeSlot } from "@/lib/api/slots"
 import {
   NUTRITION_PRESETS,
   type NutritionTargets,
@@ -37,6 +37,7 @@ export interface SlotDraft {
   label: string | null
   icon: string
   active: boolean
+  kind: SlotKind
 }
 
 export interface MealsDraft {
@@ -89,10 +90,14 @@ export const VARIETY_DEFAULTS: VarietyDraft = {
 }
 
 /** Plan D15: the slots an install with none starts with. */
-export const DEFAULT_SLOTS: readonly { name_key: string; icon: string }[] = [
-  { name_key: "slot.breakfast", icon: "Coffee" },
-  { name_key: "slot.lunch", icon: "Sun" },
-  { name_key: "slot.dinner", icon: "Moon" },
+export const DEFAULT_SLOTS: readonly {
+  name_key: string
+  icon: string
+  kind: SlotKind
+}[] = [
+  { name_key: "slot.breakfast", icon: "Coffee", kind: "light" },
+  { name_key: "slot.lunch", icon: "Sun", kind: "meal" },
+  { name_key: "slot.dinner", icon: "Moon", kind: "meal" },
 ]
 
 /** The settings keys steps 5–7 write. */
@@ -114,6 +119,7 @@ export function defaultSlotDrafts(): SlotDraft[] {
     label: null,
     icon: s.icon,
     active: true,
+    kind: s.kind,
   }))
 }
 
@@ -174,6 +180,7 @@ export function buildDraft({
               label: null,
               icon: s.icon,
               active: s.active,
+              kind: s.kind,
             }))
           : defaultSlotDrafts(),
       grid: defaultsToGridValue(defaults),

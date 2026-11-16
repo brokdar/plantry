@@ -535,7 +535,11 @@
     "icon_search_placeholder": "Search icons…",
     "icon_suggested": "Suggested",
     "icon_none_found": "No icons found",
-    "row_detail": "{{key}}, order {{order}}"
+    "row_detail": "{{key}}, order {{order}}",
+    "kind_label": "Kind",
+    "kind_light": "Light meal",
+    "kind_meal": "Full meal",
+    "kind_row_label": "Kind of {{name}}"
   },
   "ingredient": {
     "create": "New Ingredient",
@@ -1302,6 +1306,7 @@
       "title": "Meals & week",
       "why": "Plantry plans a plate for every meal marked Plan. Mark the meals you eat elsewhere as No plate.",
       "name_label": "Name of meal {{n}}",
+      "kind_label": "Kind of {{name}}",
       "move_up": "Move {{name}} up",
       "move_down": "Move {{name}} down",
       "plan_toggle": "Plan {{name}}",

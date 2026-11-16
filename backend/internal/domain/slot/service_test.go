@@ -124,3 +124,20 @@ func TestService_Update_Validation(t *testing.T) {
 	err := svc.Update(context.Background(), &slot.TimeSlot{ID: 1, NameKey: "", Icon: "Coffee"})
 	require.True(t, errors.Is(err, domain.ErrInvalidInput))
 }
+
+func TestService_Kind(t *testing.T) {
+	svc := slot.NewService(newFakeRepo())
+	ctx := context.Background()
+
+	s := &slot.TimeSlot{NameKey: "slot.lunch", Icon: "Sun", Active: true}
+	require.NoError(t, svc.Create(ctx, s))
+	require.Equal(t, slot.KindMeal, s.Kind, "default")
+
+	s.Kind = slot.KindLight
+	require.NoError(t, svc.Update(ctx, s))
+
+	s.Kind = "heavy"
+	require.True(t, errors.Is(svc.Update(ctx, s), domain.ErrInvalidInput))
+	bad := &slot.TimeSlot{NameKey: "slot.x", Icon: "Sun", Kind: "heavy"}
+	require.True(t, errors.Is(svc.Create(ctx, bad), domain.ErrInvalidInput))
+}

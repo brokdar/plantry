@@ -81,7 +81,7 @@ func TestPlanHTTP_AC1(t *testing.T) {
 	}, body["window"])
 	slots := body["slots"].([]any)
 	require.Len(t, slots, 3)
-	assert.Equal(t, map[string]any{"id": float64(a.breakfast), "name_key": "slot.breakfast", "icon": "coffee", "sort_order": float64(0)}, slots[0])
+	assert.Equal(t, map[string]any{"id": float64(a.breakfast), "name_key": "slot.breakfast", "icon": "coffee", "sort_order": float64(0), "kind": "meal"}, slots[0])
 
 	cells := body["cells"].([]any)
 	require.Len(t, cells, 21)

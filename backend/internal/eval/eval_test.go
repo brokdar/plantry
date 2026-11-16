@@ -134,9 +134,7 @@ func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 				assert.Equal(t, string(airun.StatusPartial), r.Status)
 			} else {
 				assert.Equal(t, string(airun.StatusOK), r.Status, r.ErrorKey)
-				// The fake model re-sends the heuristic plan: it may be sent back for a
-				// kcal gap or a standalone recipe on a lunch (no main), never for a rule.
-				assert.LessOrEqual(t, r.RepairAttempts, 2)
+				assert.Equal(t, 0, r.RepairAttempts)
 			}
 			assert.Equal(t, "fake", r.Model)
 			assert.Equal(t, "p6", r.PromptVersion)

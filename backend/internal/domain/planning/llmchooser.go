@@ -71,6 +71,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		Tools:       []llm.Tool{submitPlanTool()},
 		ToolChoice:  &llm.ToolChoice{Name: submitPlanName},
 		Temperature: llmTemperature,
+		Reasoning:   true,
 		MaxTokens:   llmMaxTokens,
 	}
 	var last *Proposal

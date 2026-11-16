@@ -57,6 +57,7 @@ export function useWizardSave() {
           icon: slot.icon,
           sort_order,
           active: slot.active,
+          kind: slot.kind,
         }
         return slot.id < 0
           ? createSlot.mutateAsync(input)
