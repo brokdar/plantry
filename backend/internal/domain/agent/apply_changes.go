@@ -58,7 +58,7 @@ const applyChangesSchema = `{
   "additionalProperties":false
 }`
 
-const applyChangesDescription = `Change the plan in one call: a list of ops that run in order in ONE transaction (any failing op rolls everything back and names it, numbered from 1). With dry_run true nothing is saved: you get the same result so you can check the rule effects first. Quantities are per eater: a recipe takes portions (usually 1), a leaf takes amount + unit (e.g. 100 + "g") and rejects portions.
+const applyChangesDescription = `Change the plan in one call: a list of ops that run in order in ONE transaction (any failing op rolls everything back and names it, numbered from 1). With dry_run true nothing is saved: you get the same result so you can check the rule effects first. Rows a dry run creates do not exist afterwards: their ids are left out everywhere (applied, after, issues and an option's op) and marked "provisional": true, an option whose op uses one is marked too, so never use them in a later call; to apply, send the full op list again with dry_run false (the result then has the real ids; a dry run says so in dry_run_note). Quantities are per eater: a recipe takes portions (usually 1), a leaf takes amount + unit (e.g. 100 + "g") and rejects portions.
 Ops (fields):
 - add: food_id, the plate by plate_id OR by date + slot_id (the plate is created when the cell is empty), a quantity (portions | amount+unit). Optional session_id: a recipe component eats from that existing cook session (leftover, no new cooking). Optional cook_at {date, slot_id}: a recipe is cooked on that other cell (a new session cooking there, e.g. with the lunch batch) and the plate eats it (portions = eaters x portions).
 - swap: plate_component_id, food_id (the new food), optional quantity (else the current one is kept).
@@ -70,7 +70,7 @@ Ops (fields):
 - set_eaters: plate_id, eaters (the batches it eats from are resized).
 - set_availability: date, slot_id, mode plan|none|routine|default, preset_id (routine), note (none). Only one per call.
 Only draft plates in the future are changeable; a confirmed one needs the user to unlock it.
-Returns JSON {dry_run, applied:[{op, plate_id?, plate_component_id?, session_id?, ...}], after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),component_details:[{plate_component_id,food_id,name,role,portions?|grams?,kcal,protein_g}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],total_open,new_more?,resolved_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). An S3 option raises the day's protein share; an S2 option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (H1-H8) are hard rules: fix them. Soft issues (S2 day kcal outside 90-110% of target, S3 protein share under target) carry options you can apply with another call. Your request is not done while an issue it caused is open, unless you tell the user why.`
+Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (dry runs only), applied:[{op, plate_id?, plate_component_id?, session_id?, ...}], after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],total_open,new_more?,resolved_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). An S3 option raises the day's protein share; an S2 option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (H1-H8) are hard rules: fix them. Soft issues (S2 day kcal outside 90-110% of target, S3 protein share under target) carry options you can apply with another call. Your request is not done while an issue it caused is open, unless you tell the user why.`
 
 // changeOp is one op of apply_changes.
 type changeOp struct {
@@ -197,9 +197,111 @@ func toolApplyChanges(svc Services) Tool {
 			} else {
 				noteChange(ctx, "apply_changes", map[string]any{"count": len(in.Ops), "ops": b.ops})
 			}
-			return mustJSON(map[string]any{"dry_run": in.DryRun, "applied": applied, "after": after}), ToolEffectNone, nil
+			result := map[string]any{"dry_run": in.DryRun, "applied": applied, "after": after}
+			if in.DryRun {
+				// The rollback is done: a row that is gone now was created by the dry run.
+				markProvisional(applied, after, rowGone(ctx, svc))
+				result["dry_run_note"] = dryRunNote
+			}
+			return mustJSON(result), ToolEffectNone, nil
 		},
 	}
+}
+
+// dryRunNote closes a dry run's result: its new rows never existed.
+const dryRunNote = "Nothing was saved. Ids marked provisional (plates, components, sessions; in issues and in an option's op too) do not exist after the dry run: do not use them in a later call. An option whose op uses one is marked provisional too. To apply, send the full op list again with dry_run false."
+
+// markProvisional replaces, anywhere in a rolled-back dry run's result (the
+// applied list, after's plates, sessions and issue deltas with their options'
+// ops), the id of every plate, component or session that no longer exists by
+// "provisional": true; an option whose op holds such an id is marked too.
+// Called after the rollback, so what is gone is what the dry run created.
+func markProvisional(applied []map[string]any, after map[string]any, gone func(kind string, id int64) bool) {
+	r := &rolledBack{gone: gone, cache: map[string]bool{}}
+	for _, m := range applied {
+		r.walk(m)
+	}
+	r.walk(after)
+}
+
+// rowGone looks a row up by its id key ("plate_id", "plate_component_id" or
+// "session_id"); a failing lookup counts as present.
+func rowGone(ctx context.Context, svc Services) func(kind string, id int64) bool {
+	return func(kind string, id int64) bool {
+		var err error
+		switch kind {
+		case "plate_id":
+			_, err = svc.Plates.Get(ctx, id)
+		case "plate_component_id":
+			_, err = svc.Plates.GetComponent(ctx, id)
+		default:
+			_, err = svc.Plates.CookSession(ctx, id)
+		}
+		return errors.Is(err, domain.ErrNotFound)
+	}
+}
+
+type rolledBack struct {
+	gone  func(kind string, id int64) bool
+	cache map[string]bool // "kind:id" -> the row does not exist
+}
+
+var idKinds = []string{"plate_id", "plate_component_id", "session_id"}
+
+// missing reports whether the row is gone, asking once per row.
+func (r *rolledBack) missing(kind string, id int64) bool {
+	key := fmt.Sprintf("%s:%d", kind, id)
+	g, ok := r.cache[key]
+	if !ok {
+		g = r.gone(kind, id)
+		r.cache[key] = g
+	}
+	return g
+}
+
+// walk marks every map and list below v; it reports whether v itself was marked.
+func (r *rolledBack) walk(v any) bool {
+	switch x := v.(type) {
+	case []any:
+		for _, e := range x {
+			r.walk(e)
+		}
+	case map[string]any:
+		marked := false
+		for k, e := range x {
+			switch e.(type) {
+			case map[string]any, []any:
+				if r.walk(e) && k == "op" {
+					marked = true
+				}
+			}
+		}
+		for _, kind := range idKinds {
+			if id, ok := idOf(x[kind]); ok && r.missing(kind, id) {
+				delete(x, kind)
+				x["provisional"] = true
+				marked = true
+			}
+		}
+		if _, isOption := x["action"]; isOption && marked {
+			x["provisional"] = true
+		}
+		return x["provisional"] == true
+	}
+	return false
+}
+
+func idOf(v any) (int64, bool) {
+	switch n := v.(type) {
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	case json.Number:
+		id, err := n.Int64()
+		return id, err == nil
+	}
+	return 0, false
 }
 
 func countOp(ops []changeOp, name string) int {
@@ -568,7 +670,7 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 			for _, pe := range now.Plates {
 				if pe.PlateID == p.ID {
 					kcal, prot := pe.Kcal, pe.ProteinG
-					plates[i].Kcal, plates[i].ProteinG, plates[i].Details = &kcal, &prot, pe.Components
+					plates[i].Kcal, plates[i].ProteinG, plates[i].Details = &kcal, &prot, planning.SlimComponents(pe.Components)
 				}
 			}
 		}
@@ -579,7 +681,7 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 			days = append(days, d)
 		}
 	}
-	out["days"] = days
+	out["days"] = planning.Compact(days)
 	out["meat_days"], out["meat_days_max"] = now.MeatDays, now.MeatDaysMax
 	out["issues_checked"] = true
 	delete(out, "issues_unchecked_reason")
@@ -596,7 +698,17 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 		out["issues_checked"] = false
 		out["issues_unchecked_reason"] = "dates outside the evaluated windows: " + strings.Join(outside, ", ")
 	}
-	out["issues"] = deltaOf(issueMap(before.Issues), issueMap(now.Issues))
+	delta := deltaOf(issueMap(before.Issues), issueMap(now.Issues))
+	for _, k := range []string{"new", "resolved"} {
+		delta[k] = planning.Compact(delta[k])
+	}
+	out["issues"] = delta
+	if plates, ok := out["plates"].([]effectPlate); ok {
+		out["plates"] = planning.Compact(plates)
+	}
+	if sessions, ok := out["sessions"].([]effectSession); ok {
+		out["sessions"] = planning.Compact(sessions)
+	}
 	return out, now, nil
 }
 

@@ -125,6 +125,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 
 			CodeExecution: req.CodeExecution,
 			Container:     container,
+			CacheTail:     true,
 		}
 
 		providerCh := make(chan llm.Event, 16)

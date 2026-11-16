@@ -35,7 +35,7 @@ const getPlanSchema = `{
   "additionalProperties":false
 }`
 
-const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,components:[{id,food_id,name,portions?|amount+unit?,session_id?}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation:{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete,nutrition_missing}], plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,components:[{plate_component_id,food_id,name,role,portions?|grams?,kcal,protein_g,nutrition_complete,session_id?}]}], meat_days, meat_days_max, issues:[issue], totals:{violations,warnings,soft}}}. kcal and protein are per eater, also per plate and per component (so a heavy plate needs no arithmetic). An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations (H1-H8) are hard rules, soft issues (S2 day kcal outside 90-110% of target, S3 protein share under target) carry computed options. an option's op is a ready apply_changes op. evaluation.issues is what the user sees; the top-level issues are the board's.`
+const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,components:[{id,food_id,name,portions?|amount+unit?,session_id?}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation (compact: only the requested range, kcal whole and other numbers one decimal, a field that is 0, false or empty left out so absent means 0 / false / none; complete and nutrition_complete show only when false):{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete?,nutrition_missing?}], plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,components:[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}] (food, role and session are in the cells), meat_days, meat_days_max, issues:[issue], totals:{violations,warnings,soft}}}. kcal and protein are per eater, also per plate and per component. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations (H1-H8) are hard rules, soft issues (S2 day kcal outside 90-110% of target, S3 protein share under target) carry computed options. an option's op is a ready apply_changes op. evaluation.issues is what the user sees; the top-level issues are the board's.`
 
 // toolGetPlan returns the chat window's plan: the same cells, sessions and
 // issues as GET /api/plan for that window, in a compact shape (D10), plus
@@ -79,10 +79,9 @@ func toolGetPlan(svc Services) Tool {
 				}
 			}
 			if ev != nil {
-				ev.AllIssues = nil
 				ev.Totals = planning.Evaluation{Issues: ev.Issues}.ViewedAs(ev.Issues).Totals
+				out.Evaluation = ev.Compact(planning.View{Slim: true})
 			}
-			out.Evaluation = ev
 			return mustJSON(out), ToolEffectNone, nil
 		},
 	}
@@ -118,7 +117,7 @@ type planOut struct {
 	Draft    *planDraftOut    `json:"draft"`
 	// Evaluation is the window evaluated as the user sees it (nil when the
 	// state could not be read).
-	Evaluation *planning.Evaluation `json:"evaluation,omitempty"`
+	Evaluation map[string]any `json:"evaluation,omitempty"`
 	// EvaluationError says why Evaluation is missing (never silently absent).
 	EvaluationError string `json:"evaluation_error,omitempty"`
 }

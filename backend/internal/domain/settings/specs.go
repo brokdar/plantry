@@ -141,7 +141,7 @@ var registry = []Spec{
 		Key:     KeyAIReasoningEffortGenerate,
 		Kind:    KindEnum,
 		Enum:    []string{"low", "medium", "high"},
-		Default: "medium",
+		Default: "low",
 	},
 	{
 		// Let the model script its read and dry-run tool calls (Anthropic

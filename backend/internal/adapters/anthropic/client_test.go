@@ -418,7 +418,7 @@ func TestStream_ServedModel(t *testing.T) {
 func TestStream_ThinkingBlocksReplayVerbatim(t *testing.T) {
 	c, bodies := captureServer(t, "testdata/stream_thinking.sse")
 	req := llm.Request{
-		Model:    "claude-opus-5-5",
+		Model: "claude-opus-5-5", CacheTail: true,
 		Messages: []llm.Message{{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "plan"}}}},
 	}
 	resp, _ := stream(t, c, req)
@@ -439,7 +439,7 @@ func TestStream_ThinkingBlocksReplayVerbatim(t *testing.T) {
 	require.Len(t, last, 3)
 	assert.JSONEq(t, `{"type":"thinking","thinking":"Let me plan.","signature":"EqQBCgIYAhIM"}`, string(last[0]))
 	assert.JSONEq(t, `{"type":"redacted_thinking","data":"EmwKAhgB"}`, string(last[1]))
-	assert.JSONEq(t, `{"type":"text","text":"Hello"}`, string(last[2]))
+	assert.JSONEq(t, `{"type":"text","text":"Hello","cache_control":{"type":"ephemeral","ttl":"5m"}}`, string(last[2]))
 }
 
 type reqBodyPeek struct {
@@ -489,4 +489,124 @@ func TestEffectiveParams_CacheBreakpoints(t *testing.T) {
 	e := c.EffectiveParams(llm.Request{Model: "m", System: "sys", Tools: []llm.Tool{{Name: "t"}}})
 	assert.Equal(t, []string{"system", "tools"}, e.CacheBreakpoints)
 	assert.Empty(t, c.EffectiveParams(llm.Request{Model: "m"}).CacheBreakpoints)
+}
+
+// The request puts a breakpoint on the last block of the last message, next to
+// system and tools (3 of the 4 allowed), so the resent history is a cache read.
+func TestStream_CachesConversationTail(t *testing.T) {
+	fixture := serveFixture(t, "testdata/stream_text.sse", "text/event-stream")
+	var body []byte
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ = io.ReadAll(r.Body)
+		fixture(w, r)
+	})
+	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+	req := llm.Request{
+		Model: "claude-sonnet-4-6", MaxTokens: 1024, System: "sys", CacheTail: true,
+		Tools: []llm.Tool{{Name: "t", Schema: json.RawMessage(`{"type":"object"}`)}},
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: "hi"}}},
+			{Role: llm.RoleAssistant, Content: []llm.ContentBlock{{Type: llm.ContentTypeToolUse, ToolUseID: "tu_1", ToolUseName: "t", ToolUseInput: json.RawMessage(`{}`)}}},
+			{Role: llm.RoleUser, Content: []llm.ContentBlock{
+				{Type: llm.ContentTypeToolResult, ToolResultID: "tu_1", ToolResultContent: json.RawMessage(`"ok"`)},
+				{Type: llm.ContentTypeText, Text: "go on"},
+			}},
+		},
+	}
+	out := make(chan llm.Event, 64)
+	_, err := c.Stream(context.Background(), req, out)
+	require.NoError(t, err)
+	_ = drainEvents(out)
+
+	var got struct {
+		Messages []struct {
+			Content []map[string]any `json:"content"`
+		} `json:"messages"`
+	}
+	require.NoError(t, json.Unmarshal(body, &got))
+	marked := 0
+	for i, m := range got.Messages {
+		for j, b := range m.Content {
+			if _, ok := b["cache_control"]; ok {
+				marked++
+				assert.Equal(t, 2, i)
+				assert.Equal(t, len(m.Content)-1, j)
+			}
+		}
+	}
+	assert.Equal(t, 1, marked)
+	assert.Equal(t, 3, bytes.Count(body, []byte(`"cache_control"`)))
+	assert.Equal(t, []string{"system", "tools", "messages"}, c.EffectiveParams(req).CacheBreakpoints)
+}
+
+// tailMarkers sends req and returns how many message blocks carry cache_control
+// and the breakpoints the request reports.
+func tailMarkers(t *testing.T, req llm.Request) (int, []string) {
+	t.Helper()
+	fixture := serveFixture(t, "testdata/stream_text.sse", "text/event-stream")
+	var body []byte
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		body, _ = io.ReadAll(r.Body)
+		fixture(w, r)
+	})
+	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+	out := make(chan llm.Event, 64)
+	_, err := c.Stream(context.Background(), req, out)
+	require.NoError(t, err)
+	_ = drainEvents(out)
+	var got struct {
+		Messages []struct {
+			Content []map[string]any `json:"content"`
+		} `json:"messages"`
+	}
+	require.NoError(t, json.Unmarshal(body, &got))
+	n := 0
+	for _, m := range got.Messages {
+		for _, b := range m.Content {
+			if _, ok := b["cache_control"]; ok {
+				n++
+			}
+		}
+	}
+	return n, c.EffectiveParams(req).CacheBreakpoints
+}
+
+// The tail breakpoint is opt-in (one-shot calls would only pay the write) and
+// needs a block that is not a verbatim server block; the reported breakpoints
+// follow the same rule.
+func TestStream_TailBreakpointOptInAndServerBlocks(t *testing.T) {
+	text := llm.ContentBlock{Type: llm.ContentTypeText, Text: "hi"}
+	server := llm.ContentBlock{Type: llm.ContentTypeServer, Raw: json.RawMessage(`{"type":"server_tool_use","id":"s1","name":"web_search","input":{}}`)}
+	thinking := llm.ContentBlock{Type: llm.ContentTypeServer, Raw: json.RawMessage(`{"type":"thinking","thinking":"t","signature":"s"}`)}
+	user := llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{text}}
+	req := func(tail bool, last llm.Message) llm.Request {
+		return llm.Request{Model: "claude-sonnet-4-6", MaxTokens: 1024, CacheTail: tail, Messages: []llm.Message{user, last}}
+	}
+	asst := func(blocks ...llm.ContentBlock) llm.Message {
+		return llm.Message{Role: llm.RoleAssistant, Content: blocks}
+	}
+
+	n, bp := tailMarkers(t, req(false, user))
+	assert.Equal(t, 0, n, "one-shot: no marker")
+	assert.Empty(t, bp)
+
+	n, bp = tailMarkers(t, req(true, user))
+	assert.Equal(t, 1, n)
+	assert.Equal(t, []string{"messages"}, bp)
+
+	n, bp = tailMarkers(t, req(true, asst(server)))
+	assert.Equal(t, 0, n, "a server-only tail cannot carry the marker")
+	assert.Empty(t, bp)
+
+	n, bp = tailMarkers(t, req(true, asst(thinking, text)))
+	assert.Equal(t, 1, n, "the text after the thinking block takes it")
+	assert.Equal(t, []string{"messages"}, bp)
+
+	n, bp = tailMarkers(t, req(true, asst(text, thinking)))
+	assert.Equal(t, 1, n, "the marker moves before a trailing server block")
+	assert.Equal(t, []string{"messages"}, bp)
+
+	n, bp = tailMarkers(t, llm.Request{Model: "claude-sonnet-4-6", MaxTokens: 1024, CacheTail: true})
+	assert.Equal(t, 0, n)
+	assert.Empty(t, bp, "no messages, no breakpoint")
 }

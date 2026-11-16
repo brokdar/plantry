@@ -135,6 +135,10 @@ type Request struct {
 	// ContainerID of an earlier response. A request that answers programmatic
 	// tool calls must carry it.
 	Container string
+	// CacheTail asks for a prompt-cache breakpoint on the last message, for
+	// multi-turn loops that resend the history as a prefix. Leave it false for
+	// one-shot calls: they would pay the cache write and never read it.
+	CacheTail bool
 }
 
 // Usage reports token accounting for a single provider call.
