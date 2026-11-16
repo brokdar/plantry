@@ -57,6 +57,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			Tools:       req.Tools,
 			Temperature: req.Temperature,
 			MaxTokens:   req.MaxTokens,
+			Reasoning:   true,
 		}
 
 		providerCh := make(chan llm.Event, 16)

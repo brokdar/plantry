@@ -44,6 +44,7 @@ type ModelInfo struct {
 			Supported bool `json:"supported"`
 			Types     *struct {
 				Disabled *support `json:"disabled"`
+				Adaptive *support `json:"adaptive"`
 			} `json:"types"`
 		} `json:"thinking"`
 		ServerTools *struct {
@@ -74,6 +75,19 @@ func (m ModelInfo) ForcedTool() bool {
 	return c.Thinking.Types != nil && c.Thinking.Types.Disabled != nil && c.Thinking.Types.Disabled.Supported
 }
 
+// Thinking reports whether the model can think and accepts adaptive thinking
+// (the types.adaptive entry, when the API lists one, must not say false). Its
+// summary is requested with display "summarized": Claude 5.x and Haiku 5.5
+// think by default with display "omitted", which leaves the trace empty.
+func (m ModelInfo) Thinking() bool {
+	c := m.Capabilities
+	if c == nil || c.Thinking == nil || !c.Thinking.Supported {
+		return false
+	}
+	t := c.Thinking.Types
+	return t == nil || t.Adaptive == nil || t.Adaptive.Supported
+}
+
 type capability struct {
 	info  ModelInfo
 	known bool // false: the call failed or the model is unknown to the API
@@ -97,6 +111,7 @@ func (c capability) hasWebSearch() bool {
 type rejection struct {
 	temperature bool
 	forcedTool  bool
+	thinking    bool
 }
 
 // flight is one capability lookup in progress; waiters block on done.
@@ -283,6 +298,7 @@ type wire struct {
 	forcedTool  bool
 	temperature bool
 	webSearch   bool
+	thinking    bool // adaptive thinking with a summarized display
 	maxTokens   int
 	fallbacks   []string
 }
@@ -319,6 +335,20 @@ func (c *Client) plan(req llm.Request) wire {
 			w.temperature = true
 		}
 	}
+	// Thinking is opt-in (req.Reasoning). A forced tool and thinking exclude
+	// each other (the API refuses it), and so does a temperature other than 1,
+	// so a reasoning request drops both and records why.
+	if req.Reasoning && cp.known && cp.info.Thinking() && !rej.thinking {
+		w.thinking = true
+		if w.forcedTool {
+			w.forcedTool = false
+			w.fallbacks = append(w.fallbacks, "thinking_over_forced_tool")
+		}
+		if w.temperature {
+			w.temperature = false
+			w.fallbacks = append(w.fallbacks, "temperature_dropped_for_thinking")
+		}
+	}
 	if req.WebSearch != nil {
 		if cp.webSearch != nil && !*cp.webSearch {
 			w.fallbacks = append(w.fallbacks, "web_search_rejected_by_org")
@@ -331,7 +361,7 @@ func (c *Client) plan(req llm.Request) wire {
 
 // effective reports w as llm.Effective for req.
 func (w wire) effective(req llm.Request) llm.Effective {
-	e := llm.Effective{MaxTokens: w.maxTokens, WebSearch: w.webSearch, Fallbacks: w.fallbacks}
+	e := llm.Effective{MaxTokens: w.maxTokens, WebSearch: w.webSearch, Thinking: w.thinking, Fallbacks: w.fallbacks}
 	if w.temperature {
 		t := req.Temperature
 		e.Temperature = &t

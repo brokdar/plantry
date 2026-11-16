@@ -38,6 +38,10 @@ type Config struct {
 	// Now times the measured step; nil is time.Now.
 	Now    func() time.Time
 	Logger *slog.Logger
+	// KeepDB is a directory the run databases (with the full run steps) are
+	// written to and left in, as <scenario>-<run>.db; empty uses a scratch
+	// directory that is removed.
+	KeepDB string
 }
 
 // Live is a real LLM provider's client.
@@ -101,7 +105,7 @@ func Run(ctx context.Context, cfg Config, scenarios []Scenario) ([]Record, error
 	if err != nil {
 		return nil, err
 	}
-	d, err := newDBs()
+	d, err := newDBs(cfg.KeepDB)
 	if err != nil {
 		return nil, err
 	}
@@ -120,11 +124,15 @@ func Run(ctx context.Context, cfg Config, scenarios []Scenario) ([]Record, error
 }
 
 func runOnce(ctx context.Context, cfg Config, d *dbs, lib Library, sc Scenario, n int) (Record, error) {
-	conn, err := d.open()
+	conn, err := d.open(fmt.Sprintf("%s-%d", sc.Name, n))
 	if err != nil {
 		return Record{}, err
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() {
+		// Fold the WAL into the file so a kept database is self-contained.
+		_, _ = conn.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+		_ = conn.Close()
+	}()
 	e := newEnv(conn, cfg)
 	if err := e.seed(ctx, sc, lib); err != nil {
 		return Record{}, fmt.Errorf("seed: %w", err)

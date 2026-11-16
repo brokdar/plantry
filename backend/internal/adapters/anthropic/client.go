@@ -158,6 +158,9 @@ func (c *Client) learnFromRejection(req llm.Request, w wire, e *APIError) string
 	case w.temperature && strings.Contains(msg, "temperature"):
 		c.reject(req.Model, func(r *rejection) { r.temperature = true })
 		return "temperature_rejected_400"
+	case w.thinking && strings.Contains(msg, "thinking"):
+		c.reject(req.Model, func(r *rejection) { r.thinking = true })
+		return "thinking_rejected_400"
 	case w.forcedTool && (strings.Contains(msg, "tool_choice") || strings.Contains(msg, "tool choice")):
 		c.reject(req.Model, func(r *rejection) { r.forcedTool = true })
 		return "tool_choice_rejected_400"
@@ -226,6 +229,7 @@ type reqBody struct {
 	Messages    []messageBody    `json:"messages"`
 	Tools       []any            `json:"tools,omitempty"`
 	ToolChoice  *toolChoiceBody  `json:"tool_choice,omitempty"`
+	Thinking    *thinkingBody    `json:"thinking,omitempty"`
 	Stream      bool             `json:"stream,omitempty"`
 	Metadata    *requestMetadata `json:"metadata,omitempty"`
 }
@@ -234,6 +238,12 @@ type reqBody struct {
 type toolChoiceBody struct {
 	Type string `json:"type"`
 	Name string `json:"name,omitempty"`
+}
+
+// thinkingBody is {"type":"adaptive","display":"summarized"}.
+type thinkingBody struct {
+	Type    string `json:"type"`
+	Display string `json:"display"`
 }
 
 type requestMetadata struct {
@@ -308,6 +318,9 @@ func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 	if w.temperature {
 		t := req.Temperature
 		body.Temperature = &t
+	}
+	if w.thinking {
+		body.Thinking = &thinkingBody{Type: "adaptive", Display: "summarized"}
 	}
 	system := req.System
 	if req.ToolChoice != nil {

@@ -362,6 +362,7 @@ type requestBody struct {
 type sentBody struct {
 	ToolChoice string   `json:"tool_choice"`
 	WebSearch  bool     `json:"web_search"`
+	Thinking   bool     `json:"thinking"`
 	Fallbacks  []string `json:"fallbacks,omitempty"`
 }
 
@@ -412,7 +413,7 @@ func encodeRequest(req llm.Request, eff *llm.Effective, offset int, systemHash, 
 	}
 	if eff != nil {
 		body.Temperature, body.MaxTokens = eff.Temperature, eff.MaxTokens
-		body.Sent = &sentBody{ToolChoice: eff.ToolChoice, WebSearch: eff.WebSearch, Fallbacks: eff.Fallbacks}
+		body.Sent = &sentBody{ToolChoice: eff.ToolChoice, WebSearch: eff.WebSearch, Thinking: eff.Thinking, Fallbacks: eff.Fallbacks}
 	}
 	return encodeCapped(&body, blocks, &body.Truncated)
 }

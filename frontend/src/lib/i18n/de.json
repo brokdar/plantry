@@ -436,6 +436,7 @@
         "cache": "Cache {{read}} gelesen / {{write}} geschrieben",
         "reasoning": "{{count}} Denk-Tokens",
         "thinking": "{{count}} Zeichen Denktext",
+        "thinking_summary": "Zusammenfassung der Überlegung",
         "served_model": "beantwortet von {{model}}"
       },
       "tool": {
