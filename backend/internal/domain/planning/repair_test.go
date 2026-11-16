@@ -269,7 +269,7 @@ func TestRepairFeedback_Table(t *testing.T) {
 				in.State.Profile.KcalTarget = &k
 				p.Plates[1]["components"] = []map[string]any{{"food_id": 124, "portions": 1}} // forces the repair
 			},
-			want: []string{"kcal per person against the target of 2200", "Fix: use the per-portion kcal"},
+			want: []string{"kcal per person against the target of 2200", "up to 1.5 portions per eater"},
 		},
 	}
 	for _, tt := range tests {
@@ -393,25 +393,25 @@ func TestLLMChooser_LeftoverAdvisoryIsWarned(t *testing.T) {
 	assert.NotContains(t, prop.Notes, "Fix:")
 }
 
-// The main is demanded by the slot's name, not its position: breakfast and
-// snack plates are exempt wherever they sit, any other slot (also a custom
-// one) needs a main, with 2 or 3 slot names alike.
-func TestMissingMain_ByRoleNotPosition(t *testing.T) {
+// The main is demanded by what the slot is (its place in the day, whether it
+// is a routine slot), never by its name: a renamed breakfast stays light, a
+// slot named breakfast in the middle of the day needs a main.
+func TestMissingMain_ByRoleNotName(t *testing.T) {
 	tests := []struct {
 		name     string
+		order    plate.SlotOrder
 		names    map[int64]string
 		wantFlag bool
 	}{
-		{"breakfast is the middle slot", map[int64]string{1: "slot.lunch", 2: "slot.breakfast", 3: "slot.dinner"}, false},
-		{"2 slots: breakfast and dinner", map[int64]string{1: "slot.dinner", 2: "slot.breakfast"}, false},
-		{"2 slots: lunch and dinner", map[int64]string{1: "slot.dinner", 2: "slot.lunch"}, true},
-		{"snack in the middle", map[int64]string{1: "slot.breakfast", 2: "slot.snack", 3: "slot.dinner"}, false},
-		{"custom slot name needs a main", map[int64]string{1: "slot.breakfast", 2: "slot.elevenses", 3: "slot.dinner"}, true},
-		{"first slot that is no breakfast", map[int64]string{1: "slot.lunch", 2: "slot.dinner", 3: "slot.snack"}, true},
+		{"first of 3 slots is light, whatever its name", plate.SlotOrder{2: 0, 1: 1, 3: 2}, map[int64]string{1: "slot.lunch", 2: "slot.elevenses", 3: "slot.dinner"}, false},
+		{"middle slot named breakfast needs a main", plate.SlotOrder{1: 0, 2: 1, 3: 2}, map[int64]string{1: "slot.lunch", 2: "slot.breakfast", 3: "slot.dinner"}, true},
+		{"2 slots: no light meal", plate.SlotOrder{2: 0, 3: 1}, map[int64]string{2: "slot.breakfast", 3: "slot.dinner"}, true},
+		{"last of 4 slots is light", plate.SlotOrder{1: 0, 3: 1, 4: 2, 2: 3}, map[int64]string{1: "slot.breakfast", 2: "slot.x", 3: "slot.lunch", 4: "slot.dinner"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in := run4Input()
+			in.State.SlotOrder = tt.order
 			in.State.SlotNames = tt.names
 			p := validWeek(t, in)
 			p.Plates[1]["components"] = []map[string]any{{"food_id": 124, "portions": 1}}

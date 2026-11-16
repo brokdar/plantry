@@ -8,19 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
-// Thresholds of the macro advisory: a complete day whose per-eater kcal is
-// outside [low, high] of the daily target sends the plan back.
 // maxFeedbackLines caps the problems one repair message lists.
 const maxFeedbackLines = 10
-
-const (
-	kcalLow  = 0.6
-	kcalHigh = 1.5
-)
 
 // repairer renders the repair feedback of one proposal: what the checker
 // found as rules in plain words with the numbers, the cells and keys
@@ -37,93 +30,66 @@ func newRepairer(in ChooseInput, prop Proposal) *repairer {
 }
 
 // advisories are the findings that are no hard rule: a lunch or dinner
-// without a main sends the plan back like a violation does. kcal days far off
-// the target are only added to a repair that happens anyway (info): a
-// library may not reach the target, and a repair cannot help then. A side
-// swap has no such findings.
-func (r *repairer) advisories() (needs, info []string) {
+// without a main sends the plan back like a violation does, and so does a
+// side swap that changes the side's role. The kcal findings are separate
+// (kcalFindings): they trigger at most one extra repair, never a rule.
+func (r *repairer) advisories() []string {
 	if r.in.Side != nil {
-		return nil, nil
+		return r.sideRoleChanged()
 	}
-	return r.missingMains(), r.kcalDays()
+	return r.missingMains()
 }
 
-// lightSlots are the slot names (keys without the "slot." prefix) of meals
-// that need no main: breakfast and snacks. Any other slot, including a
-// user-defined one, is a meal; a cell that is routine or not a fill cell is
-// skipped by its availability before this is asked.
-var lightSlots = []string{"breakfast", "fruehstueck", "frühstück", "snack", "snacks"}
+// sideRoleChanged reports a side swap whose new side has another role than
+// the replaced one (a veg side swapped for a second starch).
+func (r *repairer) sideRoleChanged() []string {
+	sw := r.in.Side
+	if sw.Role == "" {
+		return nil
+	}
+	var out []string
+	for _, ss := range r.s.Sessions {
+		if !ss.Proposed() {
+			continue
+		}
+		if f, ok := r.x.food(ss.FoodID); ok && f.Role != sw.Role {
+			out = append(out, fmt.Sprintf("%s has role %s, but the replaced side %s has role %s. Fix: keep the role; choose a candidate with role %s.",
+				foodName(r.s, ss.FoodID), roleName(f.Role), foodName(r.s, sw.FoodID), sw.Role, sw.Role))
+		}
+	}
+	return out
+}
 
-// mealSlot reports whether slot is a lunch, dinner or any other main meal,
-// by the slot's name, not its position.
-func (r *repairer) mealSlot(slot int64) bool {
-	return !slices.Contains(lightSlots, strings.ToLower(slotName(r.s, slot)))
+func roleName(r food.Role) string {
+	if r == "" {
+		return "none"
+	}
+	return string(r)
 }
 
 func (r *repairer) missingMains() []string {
+	if !hasFullMains(r.s) {
+		return nil
+	}
 	var out []string
 	for _, p := range r.s.Plates {
-		if !p.Proposed() || !r.x.inTarget(p.Cell()) || r.x.routine(p.Cell()) || !r.mealSlot(p.SlotID) {
+		if !p.Proposed() || !r.x.inTarget(p.Cell()) || r.x.routine(p.Cell()) {
 			continue
 		}
+		kind := r.x.mealOf(p.SlotID)
 		hasMain, unknown := false, false
 		var names []string
 		for _, c := range p.Components {
 			f, ok := r.x.food(c.FoodID)
 			unknown = unknown || !ok
 			names = append(names, foodName(r.s, c.FoodID))
-			if ok && varietyRole(f.Role) {
+			if ok && isMain(f.Role, kind) {
 				hasMain = true
 			}
 		}
 		if !hasMain && !unknown {
-			out = append(out, fmt.Sprintf("%s has no main (only %s). Fix: every lunch and dinner plate needs a recipe with role main or standalone; add one (or eat a main from a session) and keep the side next to it.",
+			out = append(out, fmt.Sprintf("%s has no main (only %s). Fix: every lunch and dinner plate needs a recipe with role main (a standalone recipe such as oats is a breakfast, not a main); add one (or eat a main from a session) and keep the side next to it.",
 				r.cellLabel(p.Cell()), strings.Join(names, " + ")))
-		}
-	}
-	return out
-}
-
-// kcalDays checks every day whose non-none cells all hold a plate.
-func (r *repairer) kcalDays() []string {
-	k := r.s.Profile.KcalTarget
-	if k == nil || *k <= 0 {
-		return nil
-	}
-	var out []string
-	for _, d := range r.x.days {
-		complete, planned := true, false
-		for _, c := range r.s.Cells {
-			if dayOf(c.Date) != dayOf(d) || c.Mode == availability.ModeNone || c.Mode == availability.ModeRoutine {
-				continue
-			}
-			if len(r.x.byCell[idOf(c.Key())]) == 0 {
-				complete = false
-			} else {
-				planned = true
-			}
-		}
-		if !complete || !planned {
-			continue
-		}
-		kcal := 0.0
-		for _, p := range r.s.Plates {
-			if dayOf(p.Date) != dayOf(d) {
-				continue
-			}
-			for _, c := range p.Components {
-				if f, ok := r.x.food(c.FoodID); ok {
-					kcal += f.Macros.Kcal * c.Multiplier()
-				}
-			}
-		}
-		switch {
-		case kcal < *k*kcalLow:
-			out = append(out, fmt.Sprintf("%s has %.0f kcal per person against the target of %.0f. Fix: use the per-portion kcal of the candidate rows to give lunch and dinner heavier mains or add a side, so the day lands near the target.",
-				weekdayDate(d), kcal, *k))
-		case kcal > *k*kcalHigh:
-			out = append(out, fmt.Sprintf("%s has %.0f kcal per person against the target of %.0f. Fix: swap a plate for a lighter recipe or drop a side so the day lands near the target.",
-				weekdayDate(d), kcal, *k))
 		}
 	}
 	return out

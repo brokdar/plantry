@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"time"
@@ -66,8 +67,11 @@ type planner struct {
 	done     map[cellID]bool
 	supplies []*supply
 	// occasions holds each day's cook cells (H2), routine cells excluded.
-	occasions  map[int]map[cellID]bool
-	meatDays   map[int]bool
+	occasions map[int]map[cellID]bool
+	meatDays  map[int]bool
+	// allowMeat lets a leftover add a meat day past the limit: the last
+	// resort for a cell nothing else can fill (H1 weighs more than H5).
+	allowMeat  bool
 	seen       map[int64][]time.Time
 	used       map[int64]int
 	avoid      map[int64]bool
@@ -157,6 +161,9 @@ func (h *planner) plan() (Proposal, error) {
 			}
 		}
 		if maxed && !h.occasions[dayOf(c.Date)][idOf(c)] {
+			if h.eatAnyway(c, eaters) {
+				continue
+			}
 			// The day's cap is used by other cells' cooks (confirmed ones
 			// included) and no batch can feed c: leave it empty; the checker
 			// reports it (H1). A cell that already is an occasion may cook.
@@ -168,6 +175,36 @@ func (h *planner) plan() (Proposal, error) {
 	}
 	h.prop.Notes = h.exploreNote()
 	return h.prop, nil
+}
+
+// eatAnyway fills c from a batch even if that adds a meat day past the
+// limit, when the day's cooking cap leaves nothing else.
+func (h *planner) eatAnyway(c plate.CellKey, eaters float64) bool {
+	h.allowMeat = true
+	defer func() { h.allowMeat = false }()
+	if sup := h.supplyFor(c, eaters); sup != nil {
+		h.eat(sup, c, eaters, false)
+		return true
+	}
+	if h.s.Settings.BatchCooking {
+		if sup := h.growable(c); sup != nil {
+			h.eat(sup, c, eaters, true)
+			return true
+		}
+	}
+	return false
+}
+
+// supplyOverMeat reports whether eating sup (and its side) on c adds a meat
+// day past meat_days_per_week_max (H5): leftovers count as meat days too.
+func (h *planner) supplyOverMeat(sup *supply, c plate.CellKey) bool {
+	if h.allowMeat {
+		return false
+	}
+	if h.overMeat(h.s.Foods[sup.food], c) {
+		return true
+	}
+	return sup.proposed >= 0 && sup.side >= 0 && h.overMeat(h.s.Foods[h.prop.Sessions[sup.side].FoodID], c)
 }
 
 // exploreNote names a shortfall of the explore quota: fewer explore recipes
@@ -235,6 +272,9 @@ func (h *planner) pickSupply(c plate.CellKey, eaters float64, skipAvoided bool) 
 		if skipAvoided && sup.proposed < 0 && h.avoidBatch[sup.food] {
 			continue
 		}
+		if h.supplyOverMeat(sup, c) {
+			continue
+		}
 		room := sup.free
 		if k == plate.KindFrozen {
 			room = sup.frozen
@@ -259,7 +299,7 @@ func (h *planner) growable(c plate.CellKey) *supply {
 		if sup.proposed < 0 {
 			continue
 		}
-		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover {
+		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) {
 			continue
 		}
 		if best == nil || plate.Before(best.cook.CookCell(), sup.cook.CookCell(), h.order) {
@@ -327,7 +367,8 @@ func (h *planner) cook(c plate.CellKey) error {
 		}
 	}
 	cook := plate.CookSession{FoodID: main, CookDate: c.Date, CookSlotID: c.SlotID}
-	cover := h.cover(c, cook, keep, freezable, f.ReferencePortions)
+	omni := f.DietClass == diet.Omnivore || (side != 0 && h.s.Foods[side].DietClass == diet.Omnivore)
+	cover := h.cover(c, cook, keep, freezable, f.ReferencePortions, omni)
 
 	reason := h.recipeReason(f)
 	ps := ProposedSession{Key: fmt.Sprintf("s%d", len(h.prop.Sessions)+1), FoodID: main, CookDate: c.Date, CookSlotID: c.SlotID, Reason: reason}
@@ -392,7 +433,10 @@ type covered struct {
 // the next open cells within keep days, or past them as frozen portions
 // when freezing is on and the recipe freezable, until the recipe's
 // reference portions are reached.
-func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freezable bool, ref float64) []covered {
+//
+// A batch with an omnivore recipe skips cells whose day would be a new meat
+// day past meat_days_per_week_max (H5).
+func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freezable bool, ref float64, omni bool) []covered {
 	out := []covered{{cell: c, eaters: h.eaters(c.Date)}}
 	if !h.s.Settings.BatchCooking {
 		return out
@@ -400,12 +444,23 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 	total := out[0].eaters
 	useBy := cook.CookDate.AddDate(0, 0, keep)
 	freezeBy := cook.CookDate.AddDate(0, 0, h.s.Settings.FreezerKeepDays)
+	meat := maps.Clone(h.meatDays)
+	if omni && h.s.Window.Contains(c.Date) {
+		meat[dayOf(c.Date)] = true
+	}
+	limit := h.s.Profile.MeatDaysPerWeekMax
 	for _, o := range h.open {
 		if total+epsilon >= ref {
 			break
 		}
 		if h.done[idOf(o)] || !plate.Before(c, o, h.order) {
 			continue
+		}
+		if omni && limit != nil && h.s.Window.Contains(o.Date) && !meat[dayOf(o.Date)] {
+			if len(meat)+1 > *limit {
+				continue
+			}
+			meat[dayOf(o.Date)] = true
 		}
 		frozen := o.Date.After(useBy)
 		if frozen && (!h.s.Settings.FreezingEnabled || !freezable || o.Date.After(freezeBy)) {
