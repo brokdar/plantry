@@ -468,7 +468,7 @@ func plateComponentMap(pc *plate.PlateComponent) map[string]any {
 		out["grams_source"] = *pc.GramsSource
 	}
 	if pc.CookSessionID != nil {
-		out["cook_session_id"] = *pc.CookSessionID
+		out["session_id"] = *pc.CookSessionID
 	}
 	return out
 }

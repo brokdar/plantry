@@ -123,11 +123,11 @@ func TestTool_AddFoodToPlate_TakesPerEaterQuantities(t *testing.T) {
 	assert.Equal(t, 150.0, leaf["amount"])
 	assert.Equal(t, "g", leaf["unit"])
 	assert.Equal(t, 150.0, leaf["grams"], "150 g, not portions × 100 g")
-	assert.NotContains(t, leaf, "cook_session_id")
+	assert.NotContains(t, leaf, "session_id")
 
 	composed := e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"portions":1.5}`, plateID, e.chili))
 	assert.Equal(t, 1.5, composed["portions"])
-	require.Contains(t, composed, "cook_session_id")
+	require.Contains(t, composed, "session_id")
 
 	p, err := e.plates.Get(e.ctx, plateID)
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestTool_SwapFood_TakesPerEaterQuantities(t *testing.T) {
 	got := e.mustOp(t, "swap_food", fmt.Sprintf(`{"plate_component_id":%v,"new_food_id":%d,"amount":120,"unit":"g"}`, composed["plate_component_id"], e.rice))
 	assert.Equal(t, float64(e.rice), got["food_id"])
 	assert.Equal(t, 120.0, got["grams"])
-	assert.NotContains(t, got, "cook_session_id")
+	assert.NotContains(t, got, "session_id")
 }
 
 func TestTool_CreatePlate_EatersAndPlateSummary(t *testing.T) {
