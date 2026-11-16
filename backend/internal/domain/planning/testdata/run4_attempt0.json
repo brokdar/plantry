@@ -1,0 +1,182 @@
+{
+ "sessions": [
+  {
+   "key": "s1",
+   "food_id": 107,
+   "cook_date": "2026-11-21",
+   "cook_slot_id": 3,
+   "portions": 4,
+   "reason": "Light vegan lentil curry, cooked once and eaten across several weekday dinners."
+  },
+  {
+   "key": "s2",
+   "food_id": 125,
+   "cook_date": "2026-11-22",
+   "cook_slot_id": 2,
+   "portions": 2,
+   "reason": "Light green salad to pair with leftovers."
+  },
+  {
+   "key": "s3",
+   "food_id": 106,
+   "cook_date": "2026-11-23",
+   "cook_slot_id": 3,
+   "portions": 4,
+   "reason": "Vegan chili cooked in batch and frozen for later in the week."
+  }
+ ],
+ "plates": [
+  {
+   "date": "2026-11-21",
+   "slot_id": 3,
+   "components": [
+    {
+     "food_id": 107,
+     "portions": 1,
+     "session_key": "s1"
+    }
+   ],
+   "reason": "Light lentil coconut curry from the first batch."
+  },
+  {
+   "date": "2026-11-22",
+   "slot_id": 2,
+   "components": [
+    {
+     "food_id": 107,
+     "portions": 1,
+     "session_key": "s1"
+    }
+   ],
+   "reason": "Leftover lentil curry for a light lunch."
+  },
+  {
+   "date": "2026-11-22",
+   "slot_id": 3,
+   "components": [
+    {
+     "food_id": 125,
+     "portions": 1,
+     "session_key": "s2"
+    },
+    {
+     "food_id": 124,
+     "portions": 1
+    }
+   ],
+   "reason": "Light dinner with green salad and rice."
+  },
+  {
+   "date": "2026-11-23",
+   "slot_id": 2,
+   "components": [
+    {
+     "food_id": 107,
+     "portions": 1,
+     "session_key": "s1"
+    }
+   ],
+   "reason": "Leftover lentil curry for lunch."
+  },
+  {
+   "date": "2026-11-23",
+   "slot_id": 3,
+   "components": [
+    {
+     "food_id": 106,
+     "portions": 1,
+     "session_key": "s3"
+    }
+   ],
+   "reason": "Chili sin carne, a hearty vegan dinner."
+  },
+  {
+   "date": "2026-11-24",
+   "slot_id": 2,
+   "components": [
+    {
+     "food_id": 107,
+     "portions": 1,
+     "session_key": "s1"
+    }
+   ],
+   "reason": "Leftover lentil curry for lunch."
+  },
+  {
+   "date": "2026-11-24",
+   "slot_id": 3,
+   "components": [
+    {
+     "food_id": 106,
+     "portions": 1,
+     "session_key": "s3"
+    }
+   ],
+   "reason": "Leftover chili for dinner."
+  },
+  {
+   "date": "2026-11-25",
+   "slot_id": 2,
+   "components": [
+    {
+     "food_id": 125,
+     "portions": 1,
+     "session_key": "s2"
+    }
+   ],
+   "reason": "Light salad for lunch."
+  },
+  {
+   "date": "2026-11-25",
+   "slot_id": 3,
+   "components": [
+    {
+     "food_id": 106,
+     "portions": 1,
+     "session_key": "s3"
+    }
+   ],
+   "reason": "Leftover chili for dinner."
+  },
+  {
+   "date": "2026-11-26",
+   "slot_id": 2,
+   "components": [
+    {
+     "food_id": 107,
+     "portions": 1,
+     "session_key": "s1"
+    }
+   ],
+   "reason": "Leftover lentil curry for lunch."
+  },
+  {
+   "date": "2026-11-27",
+   "slot_id": 2,
+   "components": [
+    {
+     "food_id": 125,
+     "portions": 3,
+     "session_key": "s2"
+    }
+   ],
+   "reason": "Light salad lunch for three."
+  },
+  {
+   "date": "2026-11-27",
+   "slot_id": 3,
+   "components": [
+    {
+     "food_id": 124,
+     "portions": 3
+    },
+    {
+     "food_id": 125,
+     "portions": 3
+    }
+   ],
+   "reason": "Light rice and salad dinner for three."
+  }
+ ],
+ "notes": "Batch-cooked a light vegan lentil curry and chili, with leftovers across the week to keep weekday meals light and avoid meat. Salad and rice sides fill the remaining dinners."
+}

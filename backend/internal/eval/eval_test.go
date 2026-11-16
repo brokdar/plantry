@@ -20,7 +20,7 @@ import (
 // The scenarios of spec §8.4 plus the confirmed-cook repros.
 var specScenarios = []string{
 	"away_thu_fri", "confirmed_cook_empty_cell", "confirmed_cook_no_surplus", "explore_quota", "family_daily", "many_none_cells", "replan_one_day",
-	"single_batch_cooker", "small_library_h8", "vegetarian_variety",
+	"single_batch_cooker", "small_library_h8", "vegetarian_variety", "walkthrough_batch_cooker",
 }
 
 func TestLoadScenarios(t *testing.T) {
@@ -137,7 +137,7 @@ func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 				assert.Equal(t, 0, r.RepairAttempts)
 			}
 			assert.Equal(t, "fake", r.Model)
-			assert.Equal(t, "p3", r.PromptVersion)
+			assert.Equal(t, "p4", r.PromptVersion)
 			// A run that fills cells asks the model; one with nothing to
 			// fill (away_thu_fri) may not.
 			if r.Plates > 0 {

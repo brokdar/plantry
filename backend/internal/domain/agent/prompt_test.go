@@ -32,7 +32,7 @@ func TestPrompt_CarriesSummaryBetweenProfileAndRules(t *testing.T) {
 // week-copy paragraph.
 func TestPrompt_ToolRules(t *testing.T) {
 	prompt := ComposePrompt(nil, "", time.Time{})
-	for _, want := range []string{"drafts", "unlock", "later message", "before today", "regenerate", "single short assistant message", "get_plan"} {
+	for _, want := range []string{"drafts", "unlock", "later message", "call unlock in that same turn", "before today", "regenerate", "single short assistant message", "get_plan"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt must mention %q", want)
 		}

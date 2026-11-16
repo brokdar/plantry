@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 
@@ -75,6 +73,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		MaxTokens:   llmMaxTokens,
 	}
 	var last *Proposal
+	var lastSig string
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 && in.Stage != nil {
 			in.Stage(StageRepairing)
@@ -91,12 +90,18 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		var feedback string
 		if perr == nil {
 			prop.RepairAttempts = attempt
+			sig := signature(prop)
+			var fixes []string
+			prop, fixes = autofix(in, prop)
 			violations := violationsOf(Check(Merge(in.State, in.Target, prop), in.Target))
-			logAttempt(ctx, in.Logger, attempt, violations, nil)
-			if len(violations) == 0 || attempt == maxRepairs {
+			rep := newRepairer(in, prop)
+			advice, info := rep.advisories()
+			logAttempt(ctx, in.Logger, attempt, violations, nil, fixes...)
+			if (len(violations) == 0 && len(advice) == 0) || attempt == maxRepairs {
 				return prop, nil
 			}
-			last, feedback = &prop, describeViolations(violations)
+			last, feedback = &prop, rep.feedback(violations, advice, info, fixes, sig == lastSig)
+			lastSig = sig
 		} else {
 			logAttempt(ctx, in.Logger, attempt, nil, perr)
 			if attempt == maxRepairs {
@@ -279,32 +284,4 @@ func violationsOf(issues []Issue) []Issue {
 		}
 	}
 	return out
-}
-
-// describeViolations is the repair feedback: one line per violation with
-// its rule, code, place and parameters.
-func describeViolations(vs []Issue) string {
-	var b strings.Builder
-	b.WriteString("violations:\n")
-	for _, v := range vs {
-		fmt.Fprintf(&b, "- %s %s", v.Rule, v.Code)
-		if v.Date != "" {
-			fmt.Fprintf(&b, " on %s", v.Date)
-		}
-		if v.SlotID != nil {
-			fmt.Fprintf(&b, " slot_id %d", *v.SlotID)
-		}
-		if v.PlateID != nil {
-			fmt.Fprintf(&b, " plate_id %d", *v.PlateID)
-		}
-		if v.SessionID != nil {
-			fmt.Fprintf(&b, " session_id %d", *v.SessionID)
-		}
-		for _, k := range slices.Sorted(maps.Keys(v.Params)) {
-			fmt.Fprintf(&b, " %s=%v", k, v.Params[k])
-		}
-		b.WriteByte('\n')
-	}
-	b.WriteString("Fix every violation and call submit_plan again with the complete plan (every session and plate, not only the changes).")
-	return b.String()
 }
