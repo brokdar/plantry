@@ -7,6 +7,7 @@ export const slotSchema = z.object({
   icon: z.string().min(1),
   sort_order: z.number().int(),
   active: z.boolean(),
+  kind: z.enum(["light", "meal"]),
 })
 
 export type SlotFormValues = z.infer<typeof slotSchema>

@@ -374,9 +374,24 @@ export const mockTimeSlots: TimeSlot[] = [
     icon: "Coffee",
     sort_order: 0,
     active: true,
+    kind: "light",
   },
-  { id: 2, name_key: "slot.lunch", icon: "Sun", sort_order: 1, active: true },
-  { id: 3, name_key: "slot.dinner", icon: "Moon", sort_order: 2, active: true },
+  {
+    id: 2,
+    name_key: "slot.lunch",
+    icon: "Sun",
+    sort_order: 1,
+    active: true,
+    kind: "meal",
+  },
+  {
+    id: 3,
+    name_key: "slot.dinner",
+    icon: "Moon",
+    sort_order: 2,
+    active: true,
+    kind: "meal",
+  },
 ]
 
 // ── Phase 2 contract fixtures (§3) ───────────────────────────────────

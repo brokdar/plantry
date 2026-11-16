@@ -73,3 +73,18 @@ func TestSlotRepo_CountPlatesUsing_Empty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 }
+
+func TestSlotRepo_KindRoundTrip(t *testing.T) {
+	repo := newSlotRepo(t)
+	ctx := context.Background()
+
+	s := &slot.TimeSlot{NameKey: "slot.lunch", Icon: "Sun", Active: true}
+	require.NoError(t, repo.Create(ctx, s))
+	assert.Equal(t, slot.KindMeal, s.Kind, "an unset kind is a full meal")
+
+	s.Kind = slot.KindLight
+	require.NoError(t, repo.Update(ctx, s))
+	got, err := repo.Get(ctx, s.ID)
+	require.NoError(t, err)
+	assert.Equal(t, slot.KindLight, got.Kind)
+}

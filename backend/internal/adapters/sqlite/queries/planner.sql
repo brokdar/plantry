@@ -1,6 +1,6 @@
 -- name: CreateTimeSlot :one
-INSERT INTO time_slots (name_key, icon, sort_order, active)
-VALUES (?, ?, ?, ?)
+INSERT INTO time_slots (name_key, icon, sort_order, active, kind)
+VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetTimeSlot :one
@@ -11,7 +11,8 @@ UPDATE time_slots SET
     name_key   = ?,
     icon       = ?,
     sort_order = ?,
-    active     = ?
+    active     = ?,
+    kind       = ?
 WHERE id = ?
 RETURNING *;
 

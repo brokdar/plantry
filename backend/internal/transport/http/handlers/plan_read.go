@@ -41,6 +41,7 @@ type planSlotResponse struct {
 	NameKey   string `json:"name_key"`
 	Icon      string `json:"icon"`
 	SortOrder int    `json:"sort_order"`
+	Kind      string `json:"kind"`
 }
 
 type planCellResponse struct {
@@ -146,7 +147,7 @@ func toPlanResponse(p *planview.Plan) planResponse {
 		resp.Draft = &planDraftResponse{Plates: d.Plates, Sessions: d.Sessions, RunID: d.RunID, Notes: d.Notes, Chooser: d.Chooser}
 	}
 	for i, s := range p.Slots {
-		resp.Slots[i] = planSlotResponse{ID: s.ID, NameKey: s.NameKey, Icon: s.Icon, SortOrder: s.SortOrder}
+		resp.Slots[i] = planSlotResponse{ID: s.ID, NameKey: s.NameKey, Icon: s.Icon, SortOrder: s.SortOrder, Kind: string(s.Kind)}
 	}
 	for i, c := range p.Cells {
 		resp.Cells[i] = planCellResponse{

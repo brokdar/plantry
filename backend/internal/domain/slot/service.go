@@ -24,6 +24,12 @@ func (s *Service) validate(t *TimeSlot) error {
 	if t.Icon == "" {
 		return fmt.Errorf("%w: icon required", domain.ErrInvalidInput)
 	}
+	if t.Kind == "" {
+		t.Kind = KindMeal
+	}
+	if !t.Kind.Valid() {
+		return fmt.Errorf("%w: kind must be light or meal", domain.ErrInvalidInput)
+	}
 	return nil
 }
 

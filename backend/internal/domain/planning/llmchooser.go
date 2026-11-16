@@ -71,11 +71,16 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		Tools:       []llm.Tool{submitPlanTool()},
 		ToolChoice:  &llm.ToolChoice{Name: submitPlanName},
 		Temperature: llmTemperature,
+		Reasoning:   true,
 		MaxTokens:   llmMaxTokens,
 	}
 	var last *Proposal
 	var lastSig string
-	var allFixes []string
+	var allFixes, runNotes []string
+	// paid counts the repairs that use up the budget (maxRepairs); the one
+	// free attempt for a skeleton first reply is extra, once per run.
+	paid, freeUsed := 0, false
+	fillCells := len(fillCellLabels(in))
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 && in.Stage != nil {
 			in.Stage(StageRepairing)
@@ -97,28 +102,39 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			prop, fixes = autofix(in, prop)
 			violations := violationsOf(Check(Merge(in.State, in.Target, prop), in.Target))
 			rep := newRepairer(in, prop)
-			advice, info := rep.advisories()
+			advice := rep.advisories()
 			logAttempt(ctx, in.Logger, attempt, violations, nil, fixes...)
 			for _, f := range fixes {
 				if !slices.Contains(allFixes, f) {
 					allFixes = append(allFixes, f)
 				}
 			}
-			noted := withNotes(prop, allFixes, advice)
-			if (len(violations) == 0 && len(advice) == 0) || attempt == maxRepairs {
-				return noted, nil
+			needRepair := len(violations) > 0 || len(advice) > 0
+			switch {
+			case !freeUsed && attempt == 0 && skeleton(violations, fillCells):
+				// An incomplete first plan is not a failed repair: the
+				// extra attempt is recorded in the run notes.
+				freeUsed = true
+				runNotes = append(runNotes, fmt.Sprintf("The plan lacked plates for %d cell(s) and was completed in an extra attempt.", missingCount(violations)))
+			case needRepair && paid < maxRepairs:
+				paid++
+			default:
+				return withNotes(prop, append(slices.Clone(allFixes), runNotes...), advice, kcalNote(rep.s, in.Target)), nil
 			}
-			last, feedback = &noted, rep.feedback(findings{violations, advice, info, fixes, sig == lastSig})
+			noted := withNotes(prop, allFixes, advice, "")
+			last = &noted
+			feedback = rep.feedback(findings{violations, advice, fixes, sig == lastSig})
 			lastSig = sig
 		} else {
 			logAttempt(ctx, in.Logger, attempt, nil, perr)
-			if attempt == maxRepairs {
+			if paid == maxRepairs {
 				if last != nil {
 					last.RepairAttempts = attempt
 					return *last, nil
 				}
 				return Proposal{}, fmt.Errorf("%w: %w", domain.ErrAIInvalidPlan, perr)
 			}
+			paid++
 			feedback = "error: " + perr.Error() + "\nCall submit_plan again with the complete plan as valid JSON matching its schema."
 		}
 		if len(resp.Message.Content) > 0 {
@@ -128,14 +144,38 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 	}
 }
 
+// skeleton reports whether the first reply is a plan still to complete:
+// every violation is a missing plate, or it misses plates for at least half
+// of the fill cells (the model used the checker as a to-do list; its other
+// violations are incidental). The caller grants the free attempt once and
+// only for call 1.
+func skeleton(vs []Issue, fillCells int) bool {
+	missing := missingCount(vs)
+	return missing > 0 && (missing == len(vs) || missing*2 >= fillCells)
+}
+
+func missingCount(vs []Issue) int {
+	n := 0
+	for _, v := range vs {
+		if v.Rule == "H1" && v.Code == CodeMissingPlate {
+			n++
+		}
+	}
+	return n
+}
+
 // withNotes appends to the proposal's notes (the run notes the board shows)
-// one line per autofix and one warning per advisory the repairs left open, so
-// a correction or an unresolved problem never passes silently.
-func withNotes(p Proposal, fixes, advice []string) Proposal {
+// one line per autofix and run event, one warning per advisory the repairs
+// left open and the calorie line (when set), so a correction or an
+// unresolved problem never passes silently.
+func withNotes(p Proposal, fixes, advice []string, kcal string) Proposal {
 	lines := slices.Clone(fixes)
 	for _, a := range advice {
 		short, _, _ := strings.Cut(a, " Fix:")
 		lines = append(lines, "Warning, not resolved: "+short)
+	}
+	if kcal != "" {
+		lines = append(lines, kcal)
 	}
 	if len(lines) > 0 {
 		p.Notes = strings.TrimSpace(strings.Join(append([]string{p.Notes}, lines...), "\n"))

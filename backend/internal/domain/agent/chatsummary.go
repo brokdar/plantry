@@ -2,11 +2,13 @@ package agent
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // chatIssues are the issues the chat prompt shows: what the board shows
@@ -73,12 +75,19 @@ func chatFacts(st planning.State) string {
 		}
 		fmt.Fprintf(&b, "food_id %d %s | %s | %.0f kcal, %.0f g protein %s\n", f.ID, f.Name, role, f.Macros.Kcal, f.Macros.Protein, per)
 	}
-	// TODO: switch to the planner's scaled day target (planning/kcal.go DayKcal
-	// on fix/planner-audit-gaps) once that merges; the raw target below
-	// diverges for days with a "No plate" meal.
+	// The day's target is scaled to its planned meals (a "No plate" meal asks
+	// less), as the planner computes it.
+	cells := make([]plate.CellKey, 0, len(st.Cells))
+	for _, c := range st.Cells {
+		cells = append(cells, c.Key())
+	}
+	scaled := map[string]float64{}
 	target := ""
+	for _, dk := range planning.DayKcals(st, planning.Target{Cells: cells}) {
+		scaled[dk.Date.Format(time.DateOnly)] = dk.Scaled
+	}
 	if k := st.Profile.KcalTarget; k != nil && *k > 0 {
-		target = fmt.Sprintf(" (target %.0f)", *k)
+		target = fmt.Sprintf(" (target %.0f; a day with a No-plate meal shows its scaled target)", *k)
 	}
 	b.WriteString("\nKcal per eater and day" + target + ":\n")
 	keys := make([]string, 0, len(days))
@@ -90,6 +99,9 @@ func chatFacts(st planning.State) string {
 		mark := ""
 		if incomplete[d] {
 			mark = " (some nutrition data missing)"
+		}
+		if sc, ok := scaled[d]; ok && st.Profile.KcalTarget != nil && math.Abs(sc-*st.Profile.KcalTarget) > 0.5 {
+			mark = fmt.Sprintf(" against %.0f%s", sc, mark)
 		}
 		fmt.Fprintf(&b, "%s: %.0f kcal%s\n", d, days[d], mark)
 	}

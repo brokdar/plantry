@@ -27,6 +27,7 @@ func (r *SlotRepo) Create(ctx context.Context, s *slot.TimeSlot) error {
 		Icon:      s.Icon,
 		SortOrder: int64(s.SortOrder),
 		Active:    boolToInt(s.Active),
+		Kind:      kindOrMeal(s.Kind),
 	})
 	if err != nil {
 		return err
@@ -55,6 +56,7 @@ func (r *SlotRepo) Update(ctx context.Context, s *slot.TimeSlot) error {
 		Icon:      s.Icon,
 		SortOrder: int64(s.SortOrder),
 		Active:    boolToInt(s.Active),
+		Kind:      kindOrMeal(s.Kind),
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -125,6 +127,7 @@ func mapTimeSlotToDomain(row *sqlcgen.TimeSlot, s *slot.TimeSlot) {
 	s.Icon = row.Icon
 	s.SortOrder = int(row.SortOrder)
 	s.Active = row.Active != 0
+	s.Kind = slot.Kind(row.Kind)
 }
 
 func boolToInt(b bool) int64 {
@@ -132,4 +135,12 @@ func boolToInt(b bool) int64 {
 		return 1
 	}
 	return 0
+}
+
+// kindOrMeal stores an unset kind as the default, a full meal.
+func kindOrMeal(k slot.Kind) string {
+	if k == "" {
+		return string(slot.KindMeal)
+	}
+	return string(k)
 }

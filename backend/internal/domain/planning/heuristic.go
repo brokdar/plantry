@@ -4,8 +4,10 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -66,8 +68,14 @@ type planner struct {
 	done     map[cellID]bool
 	supplies []*supply
 	// occasions holds each day's cook cells (H2), routine cells excluded.
-	occasions  map[int]map[cellID]bool
-	meatDays   map[int]bool
+	occasions map[int]map[cellID]bool
+	meatDays  map[int]bool
+	// allowMeat lets a leftover add a meat day past the limit: the last
+	// resort for a cell nothing else can fill (H1 weighs more than H5).
+	allowMeat bool
+	// notes are the run-note lines of rules the heuristic had to bend or
+	// could not meet (a meat day past the limit, a cell without a main).
+	notes      []string
 	seen       map[int64][]time.Time
 	used       map[int64]int
 	avoid      map[int64]bool
@@ -157,6 +165,9 @@ func (h *planner) plan() (Proposal, error) {
 			}
 		}
 		if maxed && !h.occasions[dayOf(c.Date)][idOf(c)] {
+			if h.eatAnyway(c, eaters) {
+				continue
+			}
 			// The day's cap is used by other cells' cooks (confirmed ones
 			// included) and no batch can feed c: leave it empty; the checker
 			// reports it (H1). A cell that already is an occasion may cook.
@@ -166,8 +177,46 @@ func (h *planner) plan() (Proposal, error) {
 			return Proposal{}, err
 		}
 	}
-	h.prop.Notes = h.exploreNote()
+	h.prop.Notes = strings.Join(append([]string{h.exploreNote()}, h.notes...), "\n")
+	h.prop.Notes = strings.TrimSpace(h.prop.Notes)
 	return h.prop, nil
+}
+
+// eatAnyway fills c from a batch even if that adds a meat day past the
+// limit, when the day's cooking cap leaves nothing else.
+func (h *planner) eatAnyway(c plate.CellKey, eaters float64) bool {
+	h.allowMeat = true
+	defer func() { h.allowMeat = false }()
+	place := func(sup *supply, grow bool) {
+		h.allowMeat = false
+		if h.supplyOverMeat(sup, c) {
+			h.notes = append(h.notes, fmt.Sprintf(h.text(textMeatOver), h.weekday(c.Date), *h.s.Profile.MeatDaysPerWeekMax))
+		}
+		h.eat(sup, c, eaters, grow)
+	}
+	if sup := h.supplyFor(c, eaters); sup != nil {
+		place(sup, false)
+		return true
+	}
+	if h.s.Settings.BatchCooking {
+		if sup := h.growable(c); sup != nil {
+			place(sup, true)
+			return true
+		}
+	}
+	return false
+}
+
+// supplyOverMeat reports whether eating sup (and its side) on c adds a meat
+// day past meat_days_per_week_max (H5): leftovers count as meat days too.
+func (h *planner) supplyOverMeat(sup *supply, c plate.CellKey) bool {
+	if h.allowMeat {
+		return false
+	}
+	if h.overMeat(h.s.Foods[sup.food], c) {
+		return true
+	}
+	return sup.proposed >= 0 && sup.side >= 0 && h.overMeat(h.s.Foods[h.prop.Sessions[sup.side].FoodID], c)
 }
 
 // exploreNote names a shortfall of the explore quota: fewer explore recipes
@@ -235,6 +284,9 @@ func (h *planner) pickSupply(c plate.CellKey, eaters float64, skipAvoided bool) 
 		if skipAvoided && sup.proposed < 0 && h.avoidBatch[sup.food] {
 			continue
 		}
+		if h.supplyOverMeat(sup, c) {
+			continue
+		}
 		room := sup.free
 		if k == plate.KindFrozen {
 			room = sup.frozen
@@ -259,7 +311,7 @@ func (h *planner) growable(c plate.CellKey) *supply {
 		if sup.proposed < 0 {
 			continue
 		}
-		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover {
+		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) {
 			continue
 		}
 		if best == nil || plate.Before(best.cook.CookCell(), sup.cook.CookCell(), h.order) {
@@ -311,6 +363,14 @@ func (h *planner) place(pp ProposedPlate) {
 // it covers.
 func (h *planner) cook(c plate.CellKey) error {
 	main, ok := h.pickMain(c)
+	if !ok && h.x.mealOf(c.SlotID) == mealFull && hasRecipes(h.s) {
+		// No main can be cooked here (a library of standalone recipes, or a
+		// diet that rules the mains out): a lunch or dinner without a main
+		// breaks the rule the checker enforces, so the cell stays empty and
+		// the checker reports it (H1).
+		h.notes = append(h.notes, fmt.Sprintf(h.text(textNoMain), h.weekday(c.Date), slotName(h.s, c.SlotID)))
+		return nil
+	}
 	if !ok {
 		return fmt.Errorf("%w: no recipe for %s", domain.ErrNotEnoughRecipes, c.Date.Format(time.DateOnly))
 	}
@@ -327,7 +387,8 @@ func (h *planner) cook(c plate.CellKey) error {
 		}
 	}
 	cook := plate.CookSession{FoodID: main, CookDate: c.Date, CookSlotID: c.SlotID}
-	cover := h.cover(c, cook, keep, freezable, f.ReferencePortions)
+	omni := f.DietClass == diet.Omnivore || (side != 0 && h.s.Foods[side].DietClass == diet.Omnivore)
+	cover := h.cover(c, cook, keep, freezable, f.ReferencePortions, omni)
 
 	reason := h.recipeReason(f)
 	ps := ProposedSession{Key: fmt.Sprintf("s%d", len(h.prop.Sessions)+1), FoodID: main, CookDate: c.Date, CookSlotID: c.SlotID, Reason: reason}
@@ -392,7 +453,10 @@ type covered struct {
 // the next open cells within keep days, or past them as frozen portions
 // when freezing is on and the recipe freezable, until the recipe's
 // reference portions are reached.
-func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freezable bool, ref float64) []covered {
+//
+// A batch with an omnivore recipe skips cells whose day would be a new meat
+// day past meat_days_per_week_max (H5).
+func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freezable bool, ref float64, omni bool) []covered {
 	out := []covered{{cell: c, eaters: h.eaters(c.Date)}}
 	if !h.s.Settings.BatchCooking {
 		return out
@@ -400,12 +464,23 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 	total := out[0].eaters
 	useBy := cook.CookDate.AddDate(0, 0, keep)
 	freezeBy := cook.CookDate.AddDate(0, 0, h.s.Settings.FreezerKeepDays)
+	meat := maps.Clone(h.meatDays)
+	if omni && h.s.Window.Contains(c.Date) {
+		meat[dayOf(c.Date)] = true
+	}
+	limit := h.s.Profile.MeatDaysPerWeekMax
 	for _, o := range h.open {
 		if total+epsilon >= ref {
 			break
 		}
 		if h.done[idOf(o)] || !plate.Before(c, o, h.order) {
 			continue
+		}
+		if omni && limit != nil && h.s.Window.Contains(o.Date) && !meat[dayOf(o.Date)] {
+			if len(meat)+1 > *limit {
+				continue
+			}
+			meat[dayOf(o.Date)] = true
 		}
 		frozen := o.Date.After(useBy)
 		if frozen && (!h.s.Settings.FreezingEnabled || !freezable || o.Date.After(freezeBy)) {
@@ -440,6 +515,10 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	var cands []candidate
 	for _, f := range h.s.Foods {
 		if !f.Composed() || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] {
+			continue
+		}
+		// A lunch or dinner takes a main; a standalone recipe is a breakfast.
+		if !isMain(f.Role, h.x.mealOf(c.SlotID)) {
 			continue
 		}
 		isNew := f.LastEaten == nil
@@ -610,6 +689,8 @@ const (
 	textLeftovers
 	textDifferentSide
 	textExploreShortfall
+	textMeatOver
+	textNoMain
 )
 
 var texts = map[string]map[textKey]string{
@@ -620,6 +701,8 @@ var texts = map[string]map[textKey]string{
 		textLeftovers:        "Leftovers from %s",
 		textDifferentSide:    "A different side",
 		textExploreShortfall: "Explore quota: %d of %d explore recipes available, filled with %d never-eaten",
+		textMeatOver:         "%s is a meat day past the limit of %d per week: no other recipe fit",
+		textNoMain:           "No main recipe available for %s %s: the cell stays empty",
 	},
 	"de": {
 		textNew:              "Neu: noch nie gegessen",
@@ -628,6 +711,8 @@ var texts = map[string]map[textKey]string{
 		textLeftovers:        "Reste von %s",
 		textDifferentSide:    "Eine andere Beilage",
 		textExploreShortfall: "Entdecker-Quote: %d von %d Entdecker-Rezepten verfügbar, aufgefüllt mit %d bisher nie gegessenen Rezepten",
+		textMeatOver:         "%s ist ein Fleischtag über dem Wochenlimit von %d: kein anderes Rezept passte",
+		textNoMain:           "Kein Hauptgericht verfügbar für %s %s: die Zelle bleibt leer",
 	},
 }
 
@@ -644,6 +729,18 @@ func (h *planner) lang() string {
 }
 
 func (h *planner) text(k textKey) string { return texts[h.lang()][k] }
+
+func (h *planner) weekday(d time.Time) string { return weekdays[h.lang()][d.Weekday()] }
+
+// hasRecipes reports whether the library holds any recipe.
+func hasRecipes(s State) bool {
+	for _, f := range s.Foods {
+		if f.Composed() {
+			return true
+		}
+	}
+	return false
+}
 
 func (h *planner) recipeReason(f FoodFacts) string {
 	switch {

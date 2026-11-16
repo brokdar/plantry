@@ -8,6 +8,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { weekdayColumns } from "@/lib/availability-grid"
 import { usePresets } from "@/lib/queries/presets"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import type { SlotKind } from "@/lib/api/slots"
 import { SLOT_ICONS, SLOT_ICON_FALLBACK } from "@/lib/slot-icons"
 
 import { SetupField } from "./SetupField"
@@ -103,6 +112,29 @@ export function MealsStep({
                 >
                   <ArrowDown strokeWidth={1.5} aria-hidden />
                 </Button>
+                <Select
+                  value={slot.kind}
+                  onValueChange={(kind) =>
+                    setSlot(i, { kind: kind as SlotKind })
+                  }
+                >
+                  <SelectTrigger
+                    aria-label={t("setup.meals.kind_label", { name })}
+                    className="w-28 shrink-0 pointer-coarse:h-11"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="light">
+                        {t("slot.kind_light")}
+                      </SelectItem>
+                      <SelectItem value="meal">
+                        {t("slot.kind_meal")}
+                      </SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
                 <Switch
                   checked={slot.active}
                   onChange={(active) => setSlot(i, { active })}

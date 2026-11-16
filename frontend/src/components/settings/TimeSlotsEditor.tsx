@@ -20,11 +20,20 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { ApiError } from "@/lib/api/client"
-import type { TimeSlot } from "@/lib/api/slots"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import type { SlotKind, TimeSlot } from "@/lib/api/slots"
 import {
   useCreateTimeSlot,
   useDeleteTimeSlot,
   useTimeSlots,
+  useUpdateTimeSlot,
 } from "@/lib/queries/slots"
 import { slotSchema, type SlotFormValues } from "@/lib/schemas/slot"
 import {
@@ -146,15 +155,47 @@ function IconPicker({
   )
 }
 
+function KindSelect({
+  value,
+  onChange,
+  label,
+}: {
+  value: SlotKind
+  onChange: (v: SlotKind) => void
+  label: string
+}) {
+  const { t } = useTranslation()
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as SlotKind)}>
+      <SelectTrigger aria-label={label} className="w-full pointer-coarse:h-11">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectItem value="light">{t("slot.kind_light")}</SelectItem>
+          <SelectItem value="meal">{t("slot.kind_meal")}</SelectItem>
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  )
+}
+
 export function TimeSlotsEditor() {
   const { t } = useTranslation()
   const slotsQuery = useTimeSlots(false)
   const createMut = useCreateTimeSlot()
   const deleteMut = useDeleteTimeSlot()
+  const updateMut = useUpdateTimeSlot()
 
   const form = useForm<SlotFormValues>({
     resolver: zodResolver(slotSchema) as Resolver<SlotFormValues>,
-    defaultValues: { name_key: "", icon: "", sort_order: 0, active: true },
+    defaultValues: {
+      name_key: "",
+      icon: "",
+      sort_order: 0,
+      active: true,
+      kind: "meal",
+    },
   })
 
   async function onSubmit(values: SlotFormValues) {
@@ -165,6 +206,7 @@ export function TimeSlotsEditor() {
         icon: "",
         sort_order: (slotsQuery.data?.items.length ?? 0) + 1,
         active: true,
+        kind: "meal",
       })
     } catch (err) {
       const key = err instanceof ApiError ? err.messageKey : "error.server"
@@ -191,7 +233,7 @@ export function TimeSlotsEditor() {
             onSubmit={form.handleSubmit(onSubmit)}
             // Two columns until the content column is wide enough for all
             // four controls; minmax(0, …) lets the icon picker shrink.
-            className="grid gap-4 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+            className="grid gap-4 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
           >
             {form.formState.errors.root && (
               <p role="alert" className="col-span-full text-small text-danger">
@@ -224,6 +266,21 @@ export function TimeSlotsEditor() {
                   <FormControl>
                     <IconPicker value={field.value} onChange={field.onChange} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="kind"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("slot.kind_label")}</FormLabel>
+                  <KindSelect
+                    value={field.value}
+                    onChange={field.onChange}
+                    label={t("slot.kind_label")}
+                  />
                   <FormMessage />
                 </FormItem>
               )}
@@ -279,6 +336,26 @@ export function TimeSlotsEditor() {
                       order: s.sort_order,
                     })}
                   </p>
+                </div>
+                <div className="w-44 shrink-0">
+                  <KindSelect
+                    value={s.kind}
+                    label={t("slot.kind_row_label", {
+                      name: slotLabel(t, s.name_key),
+                    })}
+                    onChange={(kind) =>
+                      updateMut.mutate({
+                        id: s.id,
+                        data: {
+                          name_key: s.name_key,
+                          icon: s.icon,
+                          sort_order: s.sort_order,
+                          active: s.active,
+                          kind,
+                        },
+                      })
+                    }
+                  />
                 </div>
                 <Button
                   variant="ghost"

@@ -1,11 +1,16 @@
 import { apiFetch } from "./client"
 
+/** What a slot's plates must hold: a full meal needs a main, a light meal
+ *  (breakfast, snack) takes anything. */
+export type SlotKind = "light" | "meal"
+
 export interface TimeSlot {
   id: number
   name_key: string
   icon: string
   sort_order: number
   active: boolean
+  kind: SlotKind
 }
 
 export interface TimeSlotInput {
@@ -13,6 +18,7 @@ export interface TimeSlotInput {
   icon: string
   sort_order: number
   active: boolean
+  kind: SlotKind
 }
 
 export interface TimeSlotListResponse {
