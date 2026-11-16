@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -80,6 +81,12 @@ func run(ctx context.Context, args []string, stdout io.Writer, getenv func(strin
 			return err
 		}
 	}
+	if dir := liveKeepDB(cfg.Live != nil, cfg.KeepDB, now()); dir != cfg.KeepDB {
+		cfg.KeepDB = dir
+		if _, err := fmt.Fprintf(stdout, "Live run: keeping the run databases in %s\n", dir); err != nil {
+			return err
+		}
+	}
 	recs, err := eval.Run(ctx, cfg, scs)
 	if err != nil {
 		return err
@@ -111,6 +118,17 @@ func run(ctx context.Context, args []string, stdout io.Writer, getenv func(strin
 		return fmt.Errorf("%d of %d %w", failed, len(recs), errFailed)
 	}
 	return nil
+}
+
+// liveKeepDB is the directory the run databases are kept in: a live run
+// costs money, so its databases are never discarded. Without -keep-db they go
+// to plantry-eval-dbs/<timestamp>/ (gitignored). Scripted runs keep only on
+// request.
+func liveKeepDB(live bool, keep string, now time.Time) string {
+	if !live || keep != "" {
+		return keep
+	}
+	return filepath.Join("plantry-eval-dbs", now.Format("20060102-150405"))
 }
 
 // live builds the real provider's client from the environment.

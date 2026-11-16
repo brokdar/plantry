@@ -149,7 +149,7 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	history = append(history, llm.Message{Role: llm.RoleUser, Content: userBlocks})
 
 	// Compose system prompt.
-	prompt, err := s.buildSystemPrompt(ctx, req, w)
+	prompt, st, err := s.buildSystemPrompt(ctx, req, w)
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,17 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 			Instruction:    &req.UserText,
 			ConversationID: &conv.ID,
 		})
+		// The plan before the turn is the state the prompt was built from;
+		// the plan after is read again when the turn ends, also on error or
+		// cancel (detached from ctx).
+		planning.RecordEvaluation(ctx, planning.PhaseBefore, -1, planning.Evaluate(st, planning.WindowTarget(st)))
 		defer func() {
+			dctx := context.WithoutCancel(ctx)
+			if after, berr := s.plan.Build(dctx, w, req.Today, w.Start, w.End); berr != nil {
+				planning.RecordEvaluationError(dctx, planning.PhaseAfter, berr)
+			} else {
+				planning.RecordEvaluation(dctx, planning.PhaseAfter, -1, planning.Evaluate(after, planning.WindowTarget(after)))
+			}
 			status, errKey := chatOutcome(ctx, err)
 			run.Finish(ctx, status, errKey)
 		}()
@@ -284,17 +294,19 @@ func (s *Service) CheckStart(ctx context.Context, start time.Time) error {
 	return err
 }
 
-func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w window.Window) (string, error) {
+// buildSystemPrompt renders the system prompt and returns the window's state
+// it was built from.
+func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w window.Window) (string, planning.State, error) {
 	p, err := s.profile.Get(ctx)
 	if err != nil {
-		return "", err
+		return "", planning.State{}, err
 	}
 	today := req.Today
 	st, err := s.plan.Build(ctx, w, today, w.Start, w.End)
 	if err != nil {
-		return "", err
+		return "", planning.State{}, err
 	}
-	return ComposePrompt(p, s.plan.Summary(st, chatIssues(st))+chatFacts(st), today), nil
+	return ComposePrompt(p, s.plan.Summary(st, chatIssues(st))+chatFacts(st), today), st, nil
 }
 
 type todayKey struct{}
@@ -336,5 +348,6 @@ func (s *Service) DebugSystemPrompt(ctx context.Context, req ChatRequest) (strin
 	if err != nil {
 		return "", err
 	}
-	return s.buildSystemPrompt(ctx, req, w)
+	prompt, _, err := s.buildSystemPrompt(ctx, req, w)
+	return prompt, err
 }

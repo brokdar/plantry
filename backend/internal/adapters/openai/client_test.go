@@ -279,3 +279,21 @@ data: [DONE]
 	assert.Equal(t, "gpt-served", resp.Model)
 	assert.Equal(t, 4096, c.EffectiveParams(llm.Request{}).MaxTokens)
 }
+
+// The x-request-id response header is on the response of a successful call.
+func TestStream_RequestIDOnSuccess(t *testing.T) {
+	body, err := os.ReadFile("testdata/stream_text.sse")
+	require.NoError(t, err)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("x-request-id", "req_oa_1")
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(ts.Close)
+	c := openai.New("k", openai.WithBaseURL(ts.URL), openai.WithHTTPClient(ts.Client()))
+	out := make(chan llm.Event, 64)
+	resp, err := c.Stream(context.Background(), llm.Request{Model: "gpt"}, out)
+	require.NoError(t, err)
+	_ = drainEvents(out)
+	assert.Equal(t, "req_oa_1", resp.RequestID)
+}

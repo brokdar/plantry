@@ -79,6 +79,7 @@ type AiRun struct {
 	WebSearchRequests int64
 	DurationMs        sql.NullInt64
 	ReasoningTokens   int64
+	AppVersion        sql.NullString
 }
 
 type AiRunStep struct {
@@ -104,6 +105,7 @@ type AiRunStep struct {
 	ReasoningTokens   int64
 	ThinkingChars     int64
 	ServedModel       sql.NullString
+	ProviderRequestID sql.NullString
 }
 
 type AiToolSchema struct {

@@ -26,6 +26,7 @@ func (run *Run) logLLMCall(ctx context.Context, provider string, req llm.Request
 		"provider", provider,
 		"model", req.Model,
 		"served_model", step.ServedModel,
+		"provider_request_id", step.ProviderRequestID,
 		"duration_ms", step.DurationMs,
 		"ttft_ms", ptrVal(step.TTFTMs),
 		"input_tokens", step.InputTokens,
@@ -62,7 +63,7 @@ func (run *Run) logLLMCall(ctx context.Context, provider string, req llm.Request
 			attrs = append(attrs,
 				"provider_status", info.Status, "provider_error_type", info.Type,
 				"provider_message", cutChars(info.Message, 300),
-				"provider_request_id", info.RequestID, "provider_rate_limit", info.RateLimit)
+				"provider_rate_limit", info.RateLimit)
 		}
 		level = run.rec.logger.WarnContext
 	}

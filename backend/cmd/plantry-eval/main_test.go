@@ -130,3 +130,14 @@ func TestLiveModeConfig(t *testing.T) {
 	assert.Equal(t, "anthropic", l.Provider)
 	assert.Equal(t, "claude-x", model)
 }
+
+// A live run always keeps its databases: without -keep-db they go to a
+// timestamped directory; scripted runs and an explicit -keep-db are left
+// alone.
+func TestLiveKeepDB(t *testing.T) {
+	now := time.Date(2026, 11, 6, 12, 30, 5, 0, time.UTC)
+	assert.Equal(t, filepath.Join("plantry-eval-dbs", "20261106-123005"), liveKeepDB(true, "", now))
+	assert.Equal(t, "mine", liveKeepDB(true, "mine", now))
+	assert.Empty(t, liveKeepDB(false, "", now))
+	assert.Equal(t, "mine", liveKeepDB(false, "mine", now))
+}

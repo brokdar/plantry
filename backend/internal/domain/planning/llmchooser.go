@@ -64,9 +64,11 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 	if err != nil {
 		return Proposal{}, err
 	}
+	system, trimmed := renderPrompt(in)
+	recordContext(ctx, in, "llm", trimmed)
 	req := llm.Request{
 		Model:       model,
-		System:      RenderPrompt(in),
+		System:      system,
 		Messages:    []llm.Message{textMessage("Plan the cells marked fill and call submit_plan with the complete plan.")},
 		Tools:       []llm.Tool{submitPlanTool()},
 		ToolChoice:  &llm.ToolChoice{Name: submitPlanName},
@@ -104,6 +106,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			rep := newRepairer(in, prop)
 			advice := rep.advisories()
 			logAttempt(ctx, in.Logger, attempt, violations, nil, fixes...)
+			RecordEvaluation(ctx, PhaseAttempt, attempt, Evaluate(Merge(in.State, in.Target, prop), in.Target))
 			for _, f := range fixes {
 				if !slices.Contains(allFixes, f) {
 					allFixes = append(allFixes, f)

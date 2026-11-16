@@ -160,8 +160,8 @@ func (q *Queries) CountPlanRunRows(ctx context.Context, id sql.NullInt64) (Count
 
 const createAIRun = `-- name: CreateAIRun :one
 INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction, conversation_id, request_id,
-    chooser, scope_json)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    chooser, scope_json, app_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id
 `
 
@@ -176,6 +176,7 @@ type CreateAIRunParams struct {
 	RequestID      sql.NullString
 	Chooser        sql.NullString
 	ScopeJson      sql.NullString
+	AppVersion     sql.NullString
 }
 
 func (q *Queries) CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64, error) {
@@ -190,6 +191,7 @@ func (q *Queries) CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64
 		arg.RequestID,
 		arg.Chooser,
 		arg.ScopeJson,
+		arg.AppVersion,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -199,8 +201,8 @@ func (q *Queries) CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64
 const createAIRunStep = `-- name: CreateAIRunStep :exec
 INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens,
     request_json, response_json, stop_reason, web_search_requests,
-    started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateAIRunStepParams struct {
@@ -225,6 +227,7 @@ type CreateAIRunStepParams struct {
 	ReasoningTokens   int64
 	ThinkingChars     int64
 	ServedModel       sql.NullString
+	ProviderRequestID sql.NullString
 }
 
 func (q *Queries) CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error {
@@ -250,6 +253,7 @@ func (q *Queries) CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams
 		arg.ReasoningTokens,
 		arg.ThinkingChars,
 		arg.ServedModel,
+		arg.ProviderRequestID,
 	)
 	return err
 }
@@ -344,7 +348,7 @@ SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model,
        r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens, r.web_search_requests,
        r.reasoning_tokens, r.duration_ms,
        r.score_json, r.violations_json, r.outcome,
-       r.scope_json, r.instruction, r.notes, r.error_key, r.repair_attempts, p.text AS prompt_text
+       r.scope_json, r.instruction, r.notes, r.error_key, r.repair_attempts, r.app_version, p.text AS prompt_text
 FROM ai_runs r
 LEFT JOIN ai_prompts p ON p.hash = r.prompt_hash
 WHERE r.id = ?
@@ -375,6 +379,7 @@ type GetAIRunDetailRow struct {
 	Notes             sql.NullString
 	ErrorKey          sql.NullString
 	RepairAttempts    int64
+	AppVersion        sql.NullString
 	PromptText        sql.NullString
 }
 
@@ -406,6 +411,7 @@ func (q *Queries) GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailR
 		&i.Notes,
 		&i.ErrorKey,
 		&i.RepairAttempts,
+		&i.AppVersion,
 		&i.PromptText,
 	)
 	return i, err
@@ -469,7 +475,7 @@ func (q *Queries) GetRunNote(ctx context.Context, id int64) (GetRunNoteRow, erro
 
 const listAIRunStepViews = `-- name: ListAIRunStepViews :many
 SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens, web_search_requests,
-       started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model,
+       started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id,
        CAST(COALESCE(substr(COALESCE(args_json, request_json), 1, 8192), '') AS TEXT) AS args,
        COALESCE(length(COALESCE(args_json, request_json)), 0) > 8192 AS args_cut,
        CAST(COALESCE(substr(COALESCE(result_json, response_json), 1, 8192), '') AS TEXT) AS result,
@@ -495,6 +501,7 @@ type ListAIRunStepViewsRow struct {
 	ReasoningTokens   int64
 	ThinkingChars     int64
 	ServedModel       sql.NullString
+	ProviderRequestID sql.NullString
 	Args              string
 	ArgsCut           bool
 	Result            string
@@ -529,6 +536,7 @@ func (q *Queries) ListAIRunStepViews(ctx context.Context, runID int64) ([]ListAI
 			&i.ReasoningTokens,
 			&i.ThinkingChars,
 			&i.ServedModel,
+			&i.ProviderRequestID,
 			&i.Args,
 			&i.ArgsCut,
 			&i.Result,

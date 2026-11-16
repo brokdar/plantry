@@ -366,6 +366,15 @@ func (w wire) effective(req llm.Request) llm.Effective {
 		t := req.Temperature
 		e.Temperature = &t
 	}
+	if w.thinking {
+		e.ThinkingType, e.ThinkingDisplay = "adaptive", "summarized"
+	}
+	if req.System != "" || req.ToolChoice != nil && !w.forcedTool {
+		e.CacheBreakpoints = append(e.CacheBreakpoints, "system")
+	}
+	if len(req.Tools) > 0 {
+		e.CacheBreakpoints = append(e.CacheBreakpoints, "tools")
+	}
 	switch {
 	case req.ToolChoice == nil:
 	case w.forcedTool:

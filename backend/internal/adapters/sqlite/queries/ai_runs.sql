@@ -1,7 +1,7 @@
 -- name: CreateAIRun :one
 INSERT INTO ai_runs (kind, started_at, prompt_version, window_start, window_end, instruction, conversation_id, request_id,
-    chooser, scope_json)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    chooser, scope_json, app_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id;
 
 -- name: FinishAIRun :execresult
@@ -31,8 +31,8 @@ WHERE id = ?;
 -- name: CreateAIRunStep :exec
 INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens,
     request_json, response_json, stop_reason, web_search_requests,
-    started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpsertAIPrompt :exec
 INSERT INTO ai_prompts (hash, text) VALUES (?, ?)
@@ -120,7 +120,7 @@ SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model,
        r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens, r.web_search_requests,
        r.reasoning_tokens, r.duration_ms,
        r.score_json, r.violations_json, r.outcome,
-       r.scope_json, r.instruction, r.notes, r.error_key, r.repair_attempts, p.text AS prompt_text
+       r.scope_json, r.instruction, r.notes, r.error_key, r.repair_attempts, r.app_version, p.text AS prompt_text
 FROM ai_runs r
 LEFT JOIN ai_prompts p ON p.hash = r.prompt_hash
 WHERE r.id = ?;
@@ -130,7 +130,7 @@ WHERE r.id = ?;
 -- (an llm_call shows its request_json and response_json there); the *_cut
 -- flags say a value was longer.
 SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens, web_search_requests,
-       started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model,
+       started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id,
        CAST(COALESCE(substr(COALESCE(args_json, request_json), 1, 8192), '') AS TEXT) AS args,
        COALESCE(length(COALESCE(args_json, request_json)), 0) > 8192 AS args_cut,
        CAST(COALESCE(substr(COALESCE(result_json, response_json), 1, 8192), '') AS TEXT) AS result,

@@ -17,6 +17,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
@@ -129,6 +130,44 @@ func onlyRun(t *testing.T, db *sql.DB) (runRow, []stepRow) {
 	return r, steps
 }
 
+// withoutEvaluations drops the plan.evaluation steps, so a test can assert
+// the model and tool steps alone.
+func withoutEvaluations(steps []stepRow) []stepRow {
+	var out []stepRow
+	for _, s := range steps {
+		if s.Name != planning.EvaluationStep {
+			out = append(out, s)
+		}
+	}
+	for i := range out {
+		out[i].Seq = i + 1
+	}
+	return out
+}
+
+// evaluationPhases are the phases of the only run's plan.evaluation steps in
+// seq order; each result must decode as a planning.Evaluation.
+func evaluationPhases(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+	rows, err := db.Query(`SELECT args_json, result_json FROM ai_run_steps WHERE name = ? ORDER BY seq`, planning.EvaluationStep)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	var phases []string
+	for rows.Next() {
+		var args, result string
+		require.NoError(t, rows.Scan(&args, &result))
+		var a struct {
+			Phase string `json:"phase"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(args), &a))
+		var ev planning.Evaluation
+		require.NoError(t, json.Unmarshal([]byte(result), &ev))
+		phases = append(phases, a.Phase)
+	}
+	require.NoError(t, rows.Err())
+	return phases
+}
+
 func toolUseTurn(usage fake.ScriptedUsage, names ...string) fake.Turn {
 	blocks := make([]fake.ScriptedBlock, len(names))
 	for i, n := range names {
@@ -158,7 +197,8 @@ func TestChat_RecordsChatRun(t *testing.T) {
 	assert.Equal(t, llm.Usage{InputTokens: 300, OutputTokens: 30, CacheReadTokens: 100, CacheWriteTokens: 10},
 		last.Payload.(llm.DonePayload).Usage)
 
-	run, steps := onlyRun(t, db)
+	run, all := onlyRun(t, db)
+	steps := withoutEvaluations(all)
 	assert.Equal(t, "chat", run.Kind)
 	assert.Equal(t, "fake", run.Provider)
 	assert.Equal(t, chatModel, run.Model)
@@ -183,6 +223,37 @@ func TestChat_RecordsChatRun(t *testing.T) {
 	}, steps)
 }
 
+// A chat run records the plan before the turn and after it, also when the
+// turn is cancelled.
+func TestChat_RecordsPlanEvaluationBeforeAndAfter(t *testing.T) {
+	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{endTurn(fake.ScriptedUsage{InputTokens: 1})}})
+	_, err := chat(context.Background(), svc, "hi", nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"before", "after"}, evaluationPhases(t, db))
+	_, steps := onlyRun(t, db)
+	assert.Equal(t, planning.EvaluationStep, steps[0].Name, "before is the first step")
+	assert.Equal(t, planning.EvaluationStep, steps[len(steps)-1].Name, "after is the last step")
+}
+
+func TestChat_RecordsPlanEvaluationOnCancel(t *testing.T) {
+	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{{
+		StopReason: "end_turn",
+		Events: []fake.ScriptedEvent{
+			{Type: string(llm.EventAssistantDelta), Payload: json.RawMessage(`{"text":"early"}`)},
+			{DelayMs: 10_000, Type: string(llm.EventAssistantDelta), Payload: json.RawMessage(`{"text":"late"}`)},
+		},
+	}}})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err := chat(ctx, svc, "hi", func(e llm.Event) {
+		if e.Type == llm.EventAssistantDelta {
+			cancel()
+		}
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, []string{"before", "after"}, evaluationPhases(t, db))
+}
+
 func TestChat_IterationsExceededStatus(t *testing.T) {
 	// The fake replays the last (tool_use) turn forever.
 	svc, db := newChatService(t, &fake.Script{Turns: []fake.Turn{
@@ -192,7 +263,8 @@ func TestChat_IterationsExceededStatus(t *testing.T) {
 	_, err := chat(context.Background(), svc, "loop forever", nil)
 	require.ErrorIs(t, err, agent.ErrIterationsExceeded)
 
-	run, steps := onlyRun(t, db)
+	run, all := onlyRun(t, db)
+	steps := withoutEvaluations(all)
 	assert.Equal(t, "iterations_exceeded", run.Status)
 	assert.Equal(t, agent.MaxIterations, run.Iterations)
 	assert.Equal(t, int64(agent.MaxIterations), run.InputTokens)
@@ -216,11 +288,14 @@ func TestChat_ErrorStatusAndKey(t *testing.T) {
 	_, err := chat(context.Background(), svc, "hi", nil)
 	require.Error(t, err)
 
-	run, steps := onlyRun(t, db)
+	run, all := onlyRun(t, db)
+	steps := withoutEvaluations(all)
 	assert.Equal(t, "error", run.Status)
 	assert.Equal(t, "error.ai.stream_interrupted", run.ErrorKey.String)
 	require.Len(t, steps, 1)
 	assert.True(t, steps[0].IsError)
+	// The turn failed, but the plan after it was still recorded.
+	assert.Equal(t, []string{"before", "after"}, evaluationPhases(t, db))
 }
 
 func TestChat_CancelledStatus(t *testing.T) {

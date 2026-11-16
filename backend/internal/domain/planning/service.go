@@ -732,6 +732,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		return fail("saving", changedDuringRun(err))
 	}
 
+	RecordEvaluation(ctx, PhaseAfter, -1, Evaluate(merged, j.target))
 	score := ComputeScore(merged, j.target, issues, j.exploreQuota)
 	violations := violationsOf(issues)
 	end := RunEnd{Status: airun.StatusOK, Notes: prop.Notes, RepairAttempts: prop.RepairAttempts}

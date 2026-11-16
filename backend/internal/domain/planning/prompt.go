@@ -100,6 +100,12 @@ func EstimateTokens(s string) int { return (utf8.RuneCountInString(s) + 3) / 4 }
 // PromptTokenBudget are left out (favorites and the least recently eaten
 // stay longest), and the prompt says how many.
 func RenderPrompt(in ChooseInput) string {
+	text, _ := renderPrompt(in)
+	return text
+}
+
+// renderPrompt is RenderPrompt plus the candidates the token budget left out.
+func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 	s := in.State
 	x := newIndex(s, in.Target)
 	var head, tail strings.Builder
@@ -136,9 +142,11 @@ func RenderPrompt(in ChooseInput) string {
 	b.WriteString(head.String())
 	b.WriteString(header)
 	omitted := 0
+	var trimmed []FoodFacts
 	for i, r := range rows {
 		if !keep[i] {
 			omitted++
+			trimmed = append(trimmed, cands[i])
 			continue
 		}
 		b.WriteString(r)
@@ -148,7 +156,7 @@ func RenderPrompt(in ChooseInput) string {
 		fmt.Fprintf(&b, "(%d more recipes left out for length.)\n", omitted)
 	}
 	b.WriteString(tail.String())
-	return b.String()
+	return b.String(), trimmed
 }
 
 // RenderPlanSummary renders the plan window of s for the chat's system prompt

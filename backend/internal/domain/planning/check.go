@@ -79,10 +79,7 @@ func Check(s State, t Target) []Issue {
 // is a draft, and only from today on: a hand-planned or accepted window may
 // leave cells empty, and past cells are history.
 func BoardIssues(s State) []Issue {
-	t := Target{Cells: make([]plate.CellKey, len(s.Cells))}
-	for i, c := range s.Cells {
-		t.Cells[i] = c.Key()
-	}
+	t := WindowTarget(s)
 	drafts := false
 	for _, p := range s.Plates {
 		drafts = drafts || !p.Confirmed
@@ -105,6 +102,16 @@ func BoardIssues(s State) []Issue {
 		out = append(out, is)
 	}
 	return out
+}
+
+// WindowTarget is the target spanning every cell of s: the plan as the board
+// sees it.
+func WindowTarget(s State) Target {
+	t := Target{Cells: make([]plate.CellKey, len(s.Cells))}
+	for i, c := range s.Cells {
+		t.Cells[i] = c.Key()
+	}
+	return t
 }
 
 func issue(rule, code string, sev Severity) Issue {
