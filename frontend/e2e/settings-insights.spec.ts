@@ -149,7 +149,7 @@ test("a chat turn shows up in Insights with its steps and an unknown cost", asyn
     ).toBeVisible()
     const tool = sheet
       .getByTestId("run-step")
-      .filter({ hasText: "Added a plate" })
+      .filter({ hasText: "Changed the plan" })
     await expect(tool).toBeVisible()
     await tool.getByText("Raw JSON").click()
     await expect(tool.getByText("Arguments")).toBeVisible()
