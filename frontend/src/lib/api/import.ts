@@ -14,6 +14,10 @@ export interface DraftIngredient {
   /** Estimated grams per count unit (backend `units.CountGrams`); null for
    *  mass, volume and unparsed lines. */
   portion_grams: number | null
+  /** A count line nobody can estimate: the review asks for a weight. */
+  needs_weight: boolean
+  /** Code of a hint about the line, e.g. "suspicious_unit". */
+  warning: string
   /** The line's diet class from its name, read-only on review (D30). */
   diet_class: EffectiveDietClass
 }
@@ -52,6 +56,8 @@ export function extractRecipe(req: ExtractRequest): Promise<{ draft: Draft }> {
 export interface ImportLookupResponse {
   results: LookupCandidate[]
   recommended_index: number
+  /** Why an empty result may not be a real "not found". */
+  unavailable_reason?: "not_configured" | "sources_unavailable"
 }
 
 export function lookupImportLine(

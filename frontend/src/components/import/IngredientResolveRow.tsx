@@ -133,7 +133,7 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
           <div className="text-sm font-medium">
             {ing.amount > 0
               ? `${ing.amount} ${
-                  ing.portion_grams !== null
+                  ing.portion_grams !== null || ing.needs_weight
                     ? t(`unit.${ing.unit}.name`, { count: ing.amount })
                     : ing.unit || ing.original_unit
                 } `
@@ -149,6 +149,14 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
             withLabel
             className="mt-1 text-caption text-ink-muted"
           />
+          {ing.warning && (
+            <Badge
+              variant="outline"
+              className="mt-1 h-auto border-amber-400 whitespace-normal text-amber-900"
+            >
+              {t(`import.step2.warning_${ing.warning}`)}
+            </Badge>
+          )}
           {optionalSkipped ? (
             <Badge
               variant="outline"
@@ -246,7 +254,9 @@ export function IngredientResolveRow({ ing, state, lang, onChange }: RowProps) {
           ) : (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
-                {t("import.step2.no_match")}
+                {lookup.data?.unavailable_reason
+                  ? t(`import.step2.lookup_${lookup.data.unavailable_reason}`)
+                  : t("import.step2.no_match")}
               </p>
               <Button
                 variant="outline"

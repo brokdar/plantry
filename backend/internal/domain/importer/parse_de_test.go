@@ -127,7 +127,11 @@ func TestParseLineDE(t *testing.T) {
 			}
 			if units.IsCount(tc.unit) {
 				want := units.EstimateCountGrams(tc.unit, tc.ingrName)
-				if got.PortionGrams == nil || *got.PortionGrams != want {
+				if want == 0 { // nothing known about the item: the review asks for a weight
+					if got.PortionGrams != nil || !got.NeedsWeight {
+						t.Errorf("PortionGrams: got %v, NeedsWeight %v, want nil and true", got.PortionGrams, got.NeedsWeight)
+					}
+				} else if got.PortionGrams == nil || *got.PortionGrams != want {
 					t.Errorf("PortionGrams: got %v, want %v (units.EstimateCountGrams(%q, %q))",
 						got.PortionGrams, want, tc.unit, tc.ingrName)
 				}

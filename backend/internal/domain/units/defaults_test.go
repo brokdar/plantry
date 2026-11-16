@@ -135,20 +135,25 @@ func TestEstimateCountGrams(t *testing.T) {
 		{"piece", "Frühlingszwiebeln", 15}, // specific before the generic onion
 		{"piece", "Eier", 50},
 		{"piece", "Eier (Größe M)", 50},
-		{"piece", "Eisbergsalat", 120},  // "ei" is a whole word only
+		{"piece", "Eisbergsalat", 0},    // "ei" is a whole word only; no estimate
 		{"piece", "Süßkartoffeln", 130}, // specific before the generic potato
 		{"piece", "Kartoffeln (vorwiegend festkochend)", 170},
 		{"piece", "Cocktailtomaten", 17},
 		{"piece", "Tomaten", 120},
 		{"piece", "Karotten", 61},
 		{"piece", "Paprika", 119},
-		{"piece", "Peperoni", 45},
+		{"piece", "Peperoni", 15},
+		{"piece", "Eigelb", 18},
+		{"piece", "Ciabatta-Brot", 30},
+		{"stalk", "Staudensellerie", 40},
+		{"sprig", "Zitronenthymian", 1},
+		{"pinch", "Tabasco", 0.5},
 		{"piece", "Zucchini", 196},
 		{"piece", "Brokkoli", 500},
 		{"leaf", "Lorbeerblatt", 0.6},
 		{"piece", "Lorbeerblatt", 0.6},
-		{"piece", "Fantasiefrucht", 120}, // nothing known: the unit default
-		{"piece", "", 120},
+		{"piece", "Fantasiefrucht", 0}, // nothing known: the review asks for a weight
+		{"piece", "", 0},
 		{"can", "Zwiebel", 400}, // name entries only refine piece, clove and leaf
 		{"bunch", "Zwiebel", 30},
 	}

@@ -101,7 +101,27 @@ var phrases = []struct {
 	{"ground ginger", food.SectionSpicesOils},
 	{"bay leaves", food.SectionSpicesOils},
 	{"pumpkin seeds", food.SectionDryGoods},
+	{"bay leaf", food.SectionSpicesOils},
+	{"lime juice", food.SectionProduce},
+	{"lemon juice", food.SectionProduce},
+	{"zitronensaft", food.SectionProduce},
+	{"limettensaft", food.SectionProduce},
 }
+
+// driedMarkers and herbs: a dried herb is a spice, not produce ("Basil
+// (dried)"), while dried fruit stays what its head noun says.
+var (
+	driedMarkers = []string{"=dried", "getrocknet", "gerebelt"}
+	herbs        = []string{
+		"basilikum", "=basil", "thymian", "=thyme", "oregano", "rosmarin", "=rosemary",
+		"petersilie", "=parsley", "=dill", "minze", "=mint", "salbei", "=sage",
+		"koriander", "=coriander", "schnittlauch", "=chives", "majoran", "=marjoram",
+		"kräuter", "=herbs",
+	}
+)
+
+// corianderSpiceMarkers turn coriander from fresh herb into spice.
+var corianderSpiceMarkers = []string{"=ground", "=seeds", "=seed", "=powder", "gemahlen", "samen", "pulver"}
 
 // sections is the head-noun table. Names are decided by their head noun,
 // which comes last in German compounds and English phrases: the match in
@@ -123,7 +143,7 @@ var sections = []rule{
 		"kümmel", "kurkuma", "lorbeer", "nelken", "kardamom", "anis", "curry",
 		"oregano", "muskat", "muskatnuss", "vanille", "vanilleschote", "senf",
 		"brühe", "brühwürfel", "fond", "sojasauce", "worcester", "ketchup",
-		"mayonnaise", "=mayo", "sauce", "soße", "sambal", "sriracha", "tabasco", "masala", "ghee",
+		"majoran", "=marjoram", "mayonnaise", "=mayo", "sauce", "soße", "sambal", "sriracha", "tabasco", "masala", "ghee",
 		"=oil", "vinegar", "=salt", "=pepper", "peppercorn", "cayenne", "powder",
 		"spice", "cinnamon", "cumin", "turmeric", "nutmeg", "vanilla", "mustard",
 		"broth", "=stock", "bouillon", "paprika edelsüß",
@@ -132,7 +152,7 @@ var sections = []rule{
 		"milch", "käse", "joghurt", "jogurt", "quark", "sahne", "rahm", "butter",
 		"=ei", "eier", "hühnerei", "eigelb", "eiweiß", "schmand", "mozzarella",
 		"parmesan", "feta", "ricotta", "mascarpone", "skyr", "halloumi", "gouda",
-		"emmentaler", "cheddar", "margarine", "kefir",
+		"emmentaler", "cheddar", "margarine", "kefir", "tofu",
 		"milk", "cheese", "yogurt", "yoghurt", "cream", "=egg", "=eggs", "yolk",
 	}},
 	{food.SectionMeatFish, []string{
@@ -178,7 +198,7 @@ var sections = []rule{
 		"bananas", "lemon", "lemons", "=lime", "=limes", "berry", "berries",
 		"spinach", "broccoli", "cabbage", "=kale", "cauliflower", "=leek", "=leeks",
 		"celery", "fennel", "asparagus", "radish", "mushroom", "mushrooms", "ginger",
-		"parsley", "=basil", "cilantro", "chives", "herbs", "=sage", "thyme",
+		"parsley", "=basil", "cilantro", "=coriander", "chives", "herbs", "=sage", "thyme",
 		"rosemary", "=mint", "fruit", "vegetable", "vegetables", "=pear", "=pears",
 		"pumpkin", "=peas", "=peppers", "jalapeño", "jalapeno", "avocados", "grapes",
 		"peaches", "melon", "courgette", "courgettes", "sprouts", "squash", "butternut",
@@ -203,6 +223,13 @@ func Classify(name string) food.ShopSection {
 			}
 		}
 	}
+	// Ground coriander and coriander seeds are spices, like a dried herb.
+	if anyWordMatches(words, corianderSpiceMarkers) && anyWordMatches(words, []string{"koriander", "=coriander"}) {
+		return food.SectionSpicesOils
+	}
+	if anyWordMatches(words, driedMarkers) && anyWordMatches(words, herbs) {
+		return food.SectionSpicesOils
+	}
 	joined := strings.Join(words, " ")
 	for _, p := range phrases {
 		if strings.Contains(joined, p.phrase) {
@@ -222,6 +249,17 @@ func Classify(name string) food.ShopSection {
 		}
 	}
 	return best
+}
+
+func anyWordMatches(words, keywords []string) bool {
+	for _, w := range words {
+		for _, kw := range keywords {
+			if matchEnd(w, kw) >= 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // matchEnd returns where keyword kw ends in word (a byte offset), or -1

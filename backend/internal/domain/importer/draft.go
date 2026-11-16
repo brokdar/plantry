@@ -22,6 +22,12 @@ type DraftIngredient struct {
 	// units.EstimateCountGrams ("1 clove ≈ 3 g"); nil for mass, volume and
 	// unparsed lines. A leaf's own portion overrides it on Finalize.
 	PortionGrams *float64 `json:"portion_grams"`
+	// NeedsWeight marks a count line nobody can estimate ("1 piece of
+	// Fantasiefrucht"): PortionGrams is nil and the review needs a weight
+	// before Save.
+	NeedsWeight bool `json:"needs_weight"`
+	// Warning is a code the review translates ("suspicious_unit"), or "".
+	Warning string `json:"warning"`
 	// DietClass is the line's diet class from its name (diet.Classify), shown
 	// read-only on review (D30).
 	DietClass diet.Class `json:"diet_class"`

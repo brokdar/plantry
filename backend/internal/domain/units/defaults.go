@@ -123,6 +123,9 @@ var aliases = map[string]string{
 	"tasse":       "cup",
 	"tassen":      "cup",
 	"schuss":      "tbsp", // a splash: about a spoonful
+	"spritzer":    "tsp",  // a squirt of juice: about a teaspoon
+	"dash":        "pinch",
+	"dashes":      "pinch",
 	"cups":        "cup",
 	"floz":        "floz",
 	"fl oz":       "floz",
@@ -162,6 +165,9 @@ var aliases = map[string]string{
 	"stick":    "stick",
 	"sticks":   "stick",
 	"stange":   "stick",
+	"stg":      "stalk",
+	"stiel":    "sprig",
+	"stiele":   "sprig",
 	"stangen":  "stick",
 	"can":      "can",
 	"cans":     "can",

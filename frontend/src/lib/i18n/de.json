@@ -52,7 +52,10 @@
       "portion_estimate": "1 {{unit}} ≈",
       "portion_grams_for": "Gramm pro {{unit}} {{name}}",
       "portion_estimated": "geschätzt",
-      "portion_saved": "für diese Zutat hinterlegt"
+      "portion_saved": "für diese Zutat hinterlegt",
+      "warning_suspicious_unit": "Einheit prüfen: mg sieht hier nach einem Tippfehler aus.",
+      "lookup_not_configured": "Kein Treffer in der Bibliothek. Für die Nährwertsuche fehlt ein FoodData-Central-Schlüssel in den Einstellungen.",
+      "lookup_sources_unavailable": "Kein Treffer in der Bibliothek. Die Nährwertquellen haben nicht geantwortet. Versuche es später noch einmal."
     },
     "step3": {
       "role_label": "Rolle",
@@ -77,7 +80,11 @@
       "via_jsonld": "Aus strukturierten Daten",
       "via_llm": "Mit KI extrahiert"
     },
-    "prefilled_subtitle": "Plantry hat die bekannten Zutaten schon zugeordnet. Prüf den Rest und speichere dann das Rezept."
+    "prefilled_subtitle": "Plantry hat die bekannten Zutaten schon zugeordnet. Prüf den Rest und speichere dann das Rezept.",
+    "warning": {
+      "redirected_other_recipe": "Die Seite hat auf eine andere Adresse weitergeleitet als dein Link. Prüfe, ob es das gewünschte Rezept ist.",
+      "times_from_steps": "Die Seite nennt keine Zeiten. Die Kochzeit ist die Summe der Zeiten aus den Schritten."
+    }
   },
   "plate": {
     "quantity": {
@@ -1033,13 +1040,18 @@
       "invalid_date": "Ein Chat-Datum ist kein gültiges Datum im Format JJJJ-MM-TT."
     },
     "import": {
-      "fetch_failed": "Die Rezeptseite konnte nicht geladen werden. Füge stattdessen den Quelltext ein.",
+      "fetch_failed": "{{host}} konnte nicht geladen werden (die Seite ließ sich nicht laden). Füge stattdessen den Rezepttext ein.",
       "body_too_large": "Die Seite ist zu groß zum Importieren.",
       "not_html": "Die URL liefert keine HTML-Seite.",
       "no_recipe": "Auf dieser Seite wurde kein Rezept gefunden.",
       "llm_failed": "Die KI konnte das Rezept nicht extrahieren.",
-      "invalid_url": "Ungültige URL.",
-      "invalid_resolution": "Ungültige Zutatenauswahl."
+      "invalid_url": "Das ist keine Webadresse. Gib einen Link ein, der mit http:// oder https:// beginnt.",
+      "invalid_resolution": "Ungültige Zutatenauswahl.",
+      "not_found": "{{host}} konnte nicht geladen werden (Seite nicht gefunden). Prüfe den Link oder füge den Rezepttext ein.",
+      "blocked": "{{host}} konnte nicht geladen werden (von der Seite blockiert). Füge stattdessen den Rezepttext ein.",
+      "timeout": "{{host}} hat nicht rechtzeitig geantwortet. Versuche es noch einmal oder füge den Rezepttext ein.",
+      "unreachable": "{{host}} ist nicht erreichbar. Prüfe die Adresse und deine Verbindung oder füge den Rezepttext ein.",
+      "no_recipe_no_ai": "Auf dieser Seite steht kein Rezept. Füge den Rezepttext ein oder richte den Assistenten ein."
     },
     "food": {
       "invalid_portions": "Die Portionen müssen größer als 0 und höchstens 100 sein.",

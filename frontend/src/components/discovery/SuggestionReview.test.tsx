@@ -50,6 +50,8 @@ const line = (name: string, amount: number) => ({
   note: "",
   confidence: "parsed" as const,
   portion_grams: null,
+  needs_weight: false,
+  warning: "",
   diet_class: "vegan" as const,
 })
 

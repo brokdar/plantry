@@ -54,6 +54,8 @@ export interface TraceEntry {
 export interface LookupResponse {
   results: LookupCandidate[]
   recommended_index: number
+  /** Why an empty result may not be a real "not found". */
+  unavailable_reason?: "not_configured" | "sources_unavailable"
   trace?: TraceEntry[]
 }
 

@@ -12,7 +12,7 @@ export function draftRows(d: Draft): RowState[] {
     foodName: null,
     amount: ing.amount,
     unit: ing.unit || "g",
-    countUnit: ing.portion_grams !== null ? ing.unit : null,
+    countUnit: ing.portion_grams !== null || ing.needs_weight ? ing.unit : null,
     portionGrams: ing.portion_grams,
     portionEdited: false,
   }))

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
 )
 
@@ -22,7 +23,6 @@ func TestFinalize_SeedsPortionFromIngredientName(t *testing.T) {
 		{"garlic clove", "Knoblauch", "clove", nil, 3},
 		{"onion piece", "Zwiebel", "piece", nil, 110},
 		{"egg piece", "Eier", "piece", nil, 50},
-		{"unknown falls back to the unit default", "Fantasiefrucht", "piece", nil, 120},
 		{"a reviewed weight wins", "Zwiebel", "piece", ptr(95), 95},
 	}
 	for _, tc := range cases {
@@ -45,3 +45,18 @@ func TestFinalize_SeedsPortionFromIngredientName(t *testing.T) {
 }
 
 func ptr(v float64) *float64 { return &v }
+
+// A count of something nobody can estimate is not seeded with a guess: the
+// review must supply the weight.
+func TestFinalize_UnknownCountNeedsWeight(t *testing.T) {
+	e := newFinalizeEnv(t)
+	id := e.leaf(t, "Fantasiefrucht")
+	_, err := e.importer.Finalize(context.Background(), importer.FinalizeInput{
+		Name: "R", Role: "main", ReferencePortions: 2,
+		Children: []importer.FinalizedChild{{
+			Resolution: importer.ResolutionExisting, FoodID: id, Amount: 2, Unit: "piece",
+		}},
+	})
+	require.ErrorIs(t, err, domain.ErrImportInvalidResolution)
+	assert.Empty(t, e.portions(t, id))
+}

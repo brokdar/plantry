@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -129,12 +131,12 @@ func (c *Client) Fetch(ctx context.Context, url string) (string, string, error) 
 		if errors.Is(err, ErrBlockedURL) {
 			return "", "", fmt.Errorf("%w: %w", importer.ErrURLBlocked, err)
 		}
-		return "", "", fmt.Errorf("%w: %w", domain.ErrImportFetchFailed, err)
+		return "", "", fmt.Errorf("%w: %w", classifyTransportError(err), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("%w: %w", domain.ErrImportFetchFailed, &UpstreamStatusError{Status: resp.StatusCode, URL: url})
+		return "", "", fmt.Errorf("%w: %w", classifyStatus(resp.StatusCode), &UpstreamStatusError{Status: resp.StatusCode, URL: url})
 	}
 
 	if err := assertHTMLContentType(resp.Header.Get("Content-Type")); err != nil {
@@ -157,6 +159,32 @@ func (c *Client) Fetch(ctx context.Context, url string) (string, string, error) 
 	}
 
 	return string(buf), finalURL, nil
+}
+
+// classifyStatus names the sentinel of a non-2xx response: a missing page, a
+// site that refuses us, or any other failure.
+func classifyStatus(status int) error {
+	switch status {
+	case http.StatusNotFound, http.StatusGone:
+		return domain.ErrImportNotFound
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests:
+		return domain.ErrImportBlocked
+	}
+	return domain.ErrImportFetchFailed
+}
+
+// classifyTransportError tells a timeout and an unresolvable or unreachable
+// host from other transport failures.
+func classifyTransportError(err error) error {
+	var dnsErr *net.DNSError
+	var netErr net.Error
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &netErr) && netErr.Timeout():
+		return domain.ErrImportTimeout
+	case errors.As(err, &dnsErr), errors.Is(err, syscall.ECONNREFUSED), errors.Is(err, syscall.EHOSTUNREACH), errors.Is(err, syscall.ENETUNREACH):
+		return domain.ErrImportUnreachable
+	}
+	return domain.ErrImportFetchFailed
 }
 
 func assertHTMLContentType(header string) error {

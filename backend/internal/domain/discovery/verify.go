@@ -243,7 +243,7 @@ func duplicate(u string, seen map[string]bool) bool {
 
 func discardReason(err error) string {
 	switch {
-	case errors.Is(err, context.DeadlineExceeded):
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, domain.ErrImportTimeout):
 		return ReasonTimeout
 	case errors.Is(err, domain.ErrImportNoRecipe):
 		return ReasonNoRecipe
@@ -251,7 +251,9 @@ func discardReason(err error) string {
 		return ReasonNotHTML
 	case errors.Is(err, importer.ErrURLBlocked):
 		return ReasonBlockedURL
-	case errors.Is(err, domain.ErrImportFetchFailed), errors.Is(err, domain.ErrImportBodyTooLarge):
+	case errors.Is(err, domain.ErrImportFetchFailed), errors.Is(err, domain.ErrImportNotFound),
+		errors.Is(err, domain.ErrImportBlocked), errors.Is(err, domain.ErrImportUnreachable),
+		errors.Is(err, domain.ErrImportInvalidURL), errors.Is(err, domain.ErrImportBodyTooLarge):
 		return ReasonFetch
 	default:
 		return ReasonError

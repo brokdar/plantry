@@ -50,6 +50,12 @@ var (
 
 	// Import errors.
 	ErrImportFetchFailed       = errors.New("import fetch failed")
+	ErrImportInvalidURL        = errors.New("import invalid url")
+	ErrImportNotFound          = errors.New("import page not found")
+	ErrImportBlocked           = errors.New("import page blocked")
+	ErrImportTimeout           = errors.New("import fetch timed out")
+	ErrImportUnreachable       = errors.New("import host unreachable")
+	ErrImportNoRecipeNoAI      = errors.New("import no recipe found and no ai provider")
 	ErrImportBodyTooLarge      = errors.New("import body too large")
 	ErrImportNotHTML           = errors.New("import not html")
 	ErrImportNoRecipe          = errors.New("import no recipe found")
@@ -175,6 +181,12 @@ var messageKeys = []struct {
 	{ErrImportNotHTML, "error.import.not_html"},
 	{ErrImportNoRecipe, "error.import.no_recipe"},
 	{ErrImportFetchFailed, "error.import.fetch_failed"},
+	{ErrImportInvalidURL, "error.import.invalid_url"},
+	{ErrImportNotFound, "error.import.not_found"},
+	{ErrImportBlocked, "error.import.blocked"},
+	{ErrImportTimeout, "error.import.timeout"},
+	{ErrImportUnreachable, "error.import.unreachable"},
+	{ErrImportNoRecipeNoAI, "error.import.no_recipe_no_ai"},
 	{ErrImportLLMFailed, "error.import.llm_failed"},
 	{ErrImportInvalidResolution, "error.import.invalid_resolution"},
 	{ErrInvalidDietType, "error.profile.invalid_diet_type"},

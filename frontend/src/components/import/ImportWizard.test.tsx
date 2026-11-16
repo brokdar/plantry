@@ -62,6 +62,8 @@ const draft: Draft = {
       confidence: "parsed",
       portion_grams: null,
       diet_class: "vegan",
+      needs_weight: false,
+      warning: "",
     },
     {
       raw_text: "Salz und Pfeffer",
@@ -73,6 +75,8 @@ const draft: Draft = {
       confidence: "unparsed",
       portion_grams: null,
       diet_class: "unknown",
+      needs_weight: false,
+      warning: "",
     },
   ],
   tags: [],
@@ -384,6 +388,54 @@ describe("ImportWizard", () => {
     })
   })
 
+  it("names the host and the next step when the page cannot be loaded", async () => {
+    vi.mocked(extractRecipe).mockRejectedValue(
+      new ApiError(502, "error.import.blocked", undefined, {
+        host: "chefkoch.de",
+      })
+    )
+    const user = userEvent.setup()
+    renderWithRouter(<ImportWizard />)
+    await user.type(
+      await screen.findByLabelText(/recipe url/i),
+      "https://chefkoch.de/x"
+    )
+    await user.click(screen.getByRole("button", { name: /extract recipe/i }))
+    expect(
+      await screen.findByText(
+        "Couldn't load chefkoch.de (blocked by the site). Paste the recipe text instead."
+      )
+    ).toBeInTheDocument()
+  })
+
+  it("blocks save on a count line nobody could estimate until a weight is entered", async () => {
+    mockLookup([localMehl])
+    vi.mocked(extractRecipe).mockResolvedValue({
+      draft: {
+        ...draft,
+        ingredients: [
+          {
+            raw_text: "1 Stk Mehl",
+            amount: 1,
+            unit: "piece",
+            original_unit: "Stück",
+            name: "Mehl",
+            note: "",
+            confidence: "approximate",
+            portion_grams: null,
+            needs_weight: true,
+            warning: "",
+            diet_class: "vegan",
+          },
+        ],
+      },
+    })
+    await openReview()
+
+    await screen.findByText(/enter a weight per unit/i)
+    expect(screen.getByRole("button", { name: /save recipe/i })).toBeDisabled()
+  })
+
   it("marks a skipped quantity-less line as optional, not as a parse error", async () => {
     mockLookup([localMehl])
     vi.mocked(extractRecipe).mockResolvedValue({
@@ -402,6 +454,8 @@ describe("ImportWizard", () => {
             confidence: "unparsed",
             portion_grams: null,
             diet_class: "unknown",
+            needs_weight: false,
+            warning: "",
           },
           // Unparsed but with an amount: still a parse error to review.
           {
@@ -414,6 +468,8 @@ describe("ImportWizard", () => {
             confidence: "unparsed",
             portion_grams: null,
             diet_class: "unknown",
+            needs_weight: false,
+            warning: "",
           },
         ],
       },
@@ -593,6 +649,8 @@ describe("ImportWizard", () => {
           confidence: "approximate",
           portion_grams: 120,
           diet_class: "vegan",
+          needs_weight: false,
+          warning: "",
         },
       ],
     }

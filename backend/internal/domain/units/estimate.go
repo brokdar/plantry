@@ -26,14 +26,19 @@ var pieceWeights = []struct {
 	{3, []string{"piece", "clove"}, []string{"knoblauch", "garlic"}}, // a counted garlic "piece" is a clove
 	{15, []string{"piece"}, []string{"frühlingszwiebel", "lauchzwiebel", "spring onion", "scallion"}},
 	{110, []string{"piece"}, []string{"zwiebel", "onion"}},
+	{18, []string{"piece"}, []string{"eigelb", "egg yolk", "=yolk", "=yolks"}},
+	{33, []string{"piece"}, []string{"eiweiß", "egg white", "=white", "=whites"}},
 	{50, []string{"piece"}, []string{"=ei", "=eier", "=egg", "=eggs"}},
+	{30, []string{"piece"}, []string{"ciabatta"}}, // recipes count it by the slice
+	{50, []string{"piece"}, []string{"brötchen", "semmel", "=bun", "=buns", "=roll", "=rolls"}},
+	{40, []string{"piece", "stalk", "stick"}, []string{"sellerie", "celery"}},
 	{130, []string{"piece"}, []string{"süßkartoffel", "sweet potato"}},
 	{170, []string{"piece"}, []string{"kartoffel", "potato"}},
 	{61, []string{"piece"}, []string{"karotte", "möhre", "carrot"}},
 	{17, []string{"piece"}, []string{"cocktailtomate", "kirschtomate", "cherry tomato"}},
 	{120, []string{"piece"}, []string{"tomate", "tomato"}},
 	{119, []string{"piece"}, []string{"paprika", "bell pepper"}},
-	{45, []string{"piece"}, []string{"peperoni", "chili", "chilli"}},
+	{15, []string{"piece"}, []string{"peperoni", "chili", "chilli"}},
 	{196, []string{"piece"}, []string{"zucchini", "courgette"}},
 	{500, []string{"piece"}, []string{"brokkoli", "broccoli"}}, // one head, like CountGrams["head"]
 	{0.6, []string{"piece", "leaf"}, []string{"lorbeer", "bay leaf", "bay leaves"}},
@@ -41,7 +46,9 @@ var pieceWeights = []struct {
 
 // EstimateCountGrams is the grams of one count unit of the named ingredient
 // when nobody has weighed it: the ingredient's own weight for a piece, clove
-// or leaf it describes, else the unit's CountGrams default (0 for an unknown unit). The
+// or leaf it describes, else the unit's CountGrams default (0 for an unknown
+// unit, and for a piece of an ingredient not listed: nobody can say what an
+// unknown thing weighs, so the review asks). The
 // importer's draft and Finalize both call it, so the number the review shows
 // is the one that is stored.
 func EstimateCountGrams(unit, name string) float64 {
@@ -62,6 +69,9 @@ func EstimateCountGrams(unit, name string) float64 {
 				return w.grams
 			}
 		}
+	}
+	if unit == "piece" {
+		return 0
 	}
 	return CountGrams[unit]
 }

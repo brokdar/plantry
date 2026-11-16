@@ -67,7 +67,10 @@ export function ImportWizard({
     String(initialDraft?.reference_portions || 1)
   )
   const [portionsError, setPortionsError] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<{
+    key: string
+    params?: Record<string, string>
+  } | null>(null)
   const referencePortions = Number(portionsInput)
   const portionsValid =
     Number.isFinite(referencePortions) && referencePortions >= 1
@@ -91,8 +94,9 @@ export function ImportWizard({
       setRows(draftRows(d))
       setStep(2)
     } catch (err) {
-      if (err instanceof ApiError) setSubmitError(err.messageKey)
-      else setSubmitError("error.server")
+      if (err instanceof ApiError)
+        setSubmitError({ key: err.messageKey, params: err.params })
+      else setSubmitError({ key: "error.server" })
     }
   }
 
@@ -229,7 +233,9 @@ export function ImportWizard({
             )}
 
             {submitError && (
-              <p className="text-sm text-destructive">{t(submitError)}</p>
+              <p className="text-sm text-destructive">
+                {t(submitError.key, submitError.params)}
+              </p>
             )}
 
             <Button
@@ -255,6 +261,14 @@ export function ImportWizard({
                 : t("import.status.via_jsonld")}
             </Badge>
           </div>
+          {draft.warnings.map((w) => (
+            <p
+              key={w}
+              className="rounded border border-amber-400 bg-amber-50 p-2 text-sm text-amber-900"
+            >
+              {t(`import.warning.${w}`)}
+            </p>
+          ))}
           {draft.extract_method === "llm" && (
             <p className="rounded border border-amber-400 bg-amber-50 p-2 text-sm text-amber-900">
               {t("import.step2.llm_warning")}

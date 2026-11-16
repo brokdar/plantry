@@ -78,6 +78,18 @@ var phrases = []struct {
 	{"almond butter", Vegan},
 	{"cocoa butter", Vegan},
 	{"cream of tartar", Vegan},
+	{"puff pastry", Vegetarian}, // often made with butter
+	{"gekörnte brühe", Vegan},
+	{"plant based milk", Vegan},
+	{"plant based drink", Vegan},
+	{"milk alternative", Vegan},
+	{"pflanzendrink", Vegan},
+	{"pflanzenmilch", Vegan},
+	{"haferdrink", Vegan},
+	{"mandeldrink", Vegan},
+	{"sojadrink", Vegan},
+	{"reisdrink", Vegan},
+	{"oat drink", Vegan},
 	{"zartbitterschokolade", Vegan},
 	{"dark chocolate", Vegan},
 	// Plants named after animals or dairy.
@@ -110,7 +122,7 @@ var animal = []rule{
 		"kasseler", "schmalz", "gelatin", "gyros", "döner",
 		"meat-", "chicken", "turkey", "beef", "pork", "bacon", "=ham", "lamb",
 		"=veal", "duck", "sausage", "pepperoni", "prosciutto", "=lard",
-		"venison", "=goose",
+		"venison", "=goose", "krakauer", "bockwurst", "leberkäse",
 	}},
 	{Pescetarian, []string{
 		"fisch-", "lachs", "thunfisch", "kabeljau", "forelle", "garnele",
@@ -125,7 +137,7 @@ var animal = []rule{
 		"milch", "sahne", "rahm", "sauerrahm", "schmand", "fraiche", "quark",
 		"joghurt", "jogurt", "käse", "parmesan", "mozzarella", "ricotta",
 		"mascarpone", "gouda", "emmentaler", "halloumi", "=skyr", "kefir",
-		"paneer", "butter", "=ei", "eier-", "eigelb", "eiweiß", "honig", "ghee",
+		"paneer", "butter", "emmental", "blätterteig", "=ei", "eier-", "eigelb", "eiweiß", "honig", "ghee",
 		"mayonnaise", "pesto", "croissant", "schokolade", "molke",
 		"milk", "cream", "cheese", "yogurt", "yoghurt", "=egg", "=eggs", "yolk",
 		"honey", "whey", "cheddar", "=feta", "=brie",
@@ -152,7 +164,8 @@ var plant = []string{
 	"salz", "pfeffer", "gewürz", "kümmel", "zimt", "kurkuma", "curry", "senf",
 	"tomatenmark", "passata", "oliven", "kapern", "brot", "brötchen",
 	"tortilla", "hefe", "sirup", "datteln", "rosinen", "saft", "wasser",
-	"wein", "leinsamen",
+	"wein", "leinsamen", "backpulver", "natron", "vanille", "stärke", "liebstöckel",
+	"ciabatta",
 	// Dried herbs and spices are neutral: plant foods, never a reason to
 	// raise a recipe's class or leave it unknown.
 	"lorbeer", "oregano", "majoran", "salbei", "bohnenkraut", "muskat",
@@ -167,7 +180,8 @@ var plant = []string{
 	"noodle", "flour", "sugar", "=oats", "almond", "peanut", "=nuts", "walnut",
 	"=soy", "=oil", "vinegar", "=salt", "cumin", "turmeric", "cinnamon",
 	"mustard", "bread", "sourdough", "yeast", "syrup", "juice", "water",
-	"wine", "=corn",
+	"wine", "=corn", "arugula", "ciabatta", "baking", "caraway", "starch", "chives",
+	"lasagne", "vanilla", "bouillon", "maizena",
 	"=bay", "oregano", "thyme", "rosemary", "marjoram", "=sage", "nutmeg",
 	"cardamom", "masala", "coriander", "chilli",
 }
