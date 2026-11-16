@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // affected names the rows a plan-writing tool touched, so its result can say
@@ -54,6 +53,8 @@ type effectIssue struct {
 	PlateID  *int64         `json:"plate_id,omitempty"`
 	Session  *int64         `json:"session_id,omitempty"`
 	Params   map[string]any `json:"params,omitempty"`
+	// Options are the computed fixes of a soft issue (planning.Option).
+	Options []planning.Option `json:"options,omitempty"`
 }
 
 // changeEffect reads the affected plates and sessions after a write, plus the
@@ -192,13 +193,21 @@ func issueDelta(ctx context.Context, svc Services, out map[string]any) {
 		out["issues_unchecked_reason"] = reason + "; call get_plan to check"
 		return
 	}
+	res := deltaOf(base.issues, now)
+	out["issues_checked"] = true
+	out["issues"] = res
+}
+
+// deltaOf is the issues now that base lacked (new) and base's that are gone
+// (resolved), each list capped at maxEffectIssues, with the open total.
+func deltaOf(base, now map[string]planning.Issue) map[string]any {
 	newIs, resolved := []effectIssue{}, []effectIssue{}
 	for k, is := range now {
-		if _, had := base.issues[k]; !had {
+		if _, had := base[k]; !had {
 			newIs = append(newIs, toEffectIssue(is))
 		}
 	}
-	for k, is := range base.issues {
+	for k, is := range base {
 		if _, still := now[k]; !still {
 			resolved = append(resolved, toEffectIssue(is))
 		}
@@ -214,14 +223,13 @@ func issueDelta(ctx context.Context, svc Services, out map[string]any) {
 		}
 		res[name] = list
 	}
-	out["issues_checked"] = true
-	out["issues"] = res
+	return res
 }
 
 func toEffectIssue(is planning.Issue) effectIssue {
 	return effectIssue{
 		Rule: is.Rule, Code: is.Code, Severity: string(is.Severity), Date: is.Date,
-		SlotID: is.SlotID, PlateID: is.PlateID, Session: is.SessionID, Params: is.Params,
+		SlotID: is.SlotID, PlateID: is.PlateID, Session: is.SessionID, Params: is.Params, Options: is.Options,
 	}
 }
 
@@ -235,13 +243,4 @@ func withEffect(ctx context.Context, svc Services, result any, a affected) json.
 	}
 	obj["after"] = mustJSON(changeEffect(ctx, svc, a))
 	return mustJSON(obj)
-}
-
-// plateIDsOf lists the ids of plates.
-func plateIDsOf(ps ...*plate.Plate) []int64 {
-	ids := make([]int64, len(ps))
-	for i, p := range ps {
-		ids[i] = p.ID
-	}
-	return ids
 }

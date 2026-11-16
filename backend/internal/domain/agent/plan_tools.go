@@ -24,14 +24,35 @@ type PlanReader interface {
 	Plan(ctx context.Context, start *time.Time, today time.Time) (*planview.Plan, error)
 }
 
+// getPlanSchema: from and to (YYYY-MM-DD) narrow the cells, sessions, days
+// and issues to a date range of the window.
+const getPlanSchema = `{
+  "type":"object",
+  "properties":{
+    "from":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "to":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+  },
+  "additionalProperties":false
+}`
+
+const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,components:[{id,food_id,name,portions?|amount+unit?,session_id?}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation:{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete,nutrition_missing}], meat_days, meat_days_max, issues:[issue], totals:{violations,warnings,soft}}}. kcal and protein are per eater. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations (H1-H8) are hard rules, soft issues (S2 day kcal outside 90-110% of target, S3 protein share under target) carry computed options. evaluation.issues is what the user sees; the top-level issues are the board's.`
+
 // toolGetPlan returns the chat window's plan: the same cells, sessions and
-// issues as GET /api/plan for that window, in a compact shape (D10).
+// issues as GET /api/plan for that window, in a compact shape (D10), plus
+// the evaluation.
 func toolGetPlan(svc Services) Tool {
 	return Tool{
 		Name:        "get_plan",
-		Description: "Read the current plan window: every cell (date, slot, availability mode, plate with its components), the cook sessions with consumption and warnings, the checker's issues and the draft summary. Call it to see the effect of your changes.",
-		Schema:      json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-		Handler: func(ctx context.Context, _ json.RawMessage) (json.RawMessage, ToolEffect, error) {
+		Description: getPlanDescription,
+		Schema:      json.RawMessage(getPlanSchema),
+		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
+			var in struct {
+				From string `json:"from"`
+				To   string `json:"to"`
+			}
+			if err := json.Unmarshal(input, &in); err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
 			w, ok := windowFrom(ctx)
 			if !ok {
 				return nil, ToolEffectNone, fmt.Errorf("%w: no plan window in this conversation turn", domain.ErrInvalidInput)
@@ -40,9 +61,51 @@ func toolGetPlan(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(planOutput(p)), ToolEffectNone, nil
+			out := planOutput(p)
+			var ev *planning.Evaluation
+			if svc.State != nil {
+				if e, err := evalWindow(ctx, svc, w); err == nil {
+					ev = &e
+				}
+			}
+			if in.From != "" || in.To != "" {
+				out.narrow(in.From, in.To)
+				if ev != nil {
+					ev.Days = slices.DeleteFunc(ev.Days, func(d planning.DayEval) bool { return !inRange(d.Date, in.From, in.To) })
+					ev.Plates = nil
+					ev.Issues = slices.DeleteFunc(ev.Issues, func(is planning.Issue) bool { return is.Date != "" && !inRange(is.Date, in.From, in.To) })
+				}
+			}
+			if ev != nil {
+				ev.Plates, ev.AllIssues = nil, nil
+				ev.Totals = planning.Evaluation{Issues: ev.Issues}.ViewedAs(ev.Issues).Totals
+			}
+			out.Evaluation = ev
+			return mustJSON(out), ToolEffectNone, nil
 		},
 	}
+}
+
+func inRange(date, from, to string) bool {
+	return (from == "" || date >= from) && (to == "" || date <= to)
+}
+
+// narrow keeps the cells, sessions and issues that touch from..to.
+func (o *planOut) narrow(from, to string) {
+	o.Cells = slices.DeleteFunc(o.Cells, func(c planCellOut) bool { return !inRange(c.Date, from, to) })
+	inCell := map[int64]bool{}
+	for _, c := range o.Cells {
+		if c.Plate != nil {
+			inCell[c.Plate.ID] = true
+		}
+	}
+	o.Sessions = slices.DeleteFunc(o.Sessions, func(s planSessionOut) bool {
+		if inRange(s.CookDate, from, to) {
+			return false
+		}
+		return !slices.ContainsFunc(s.Links, func(l planLinkOut) bool { return inCell[l.PlateID] })
+	})
+	o.Issues = slices.DeleteFunc(o.Issues, func(is planning.Issue) bool { return is.Date != "" && !inRange(is.Date, from, to) })
 }
 
 type planOut struct {
@@ -51,6 +114,9 @@ type planOut struct {
 	Sessions []planSessionOut `json:"sessions"`
 	Issues   []planning.Issue `json:"issues"`
 	Draft    *planDraftOut    `json:"draft"`
+	// Evaluation is the window evaluated as the user sees it (nil when the
+	// state could not be read).
+	Evaluation *planning.Evaluation `json:"evaluation,omitempty"`
 }
 
 type planWindowOut struct {
@@ -260,192 +326,9 @@ func rowsOutput(r plate.RowSet) rowsOut {
 	return out
 }
 
-func toolSetSessionPortions(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["session_id","portions"],
-      "properties":{
-        "session_id":{"type":"integer","minimum":1},
-        "portions":{"type":"number","exclusiveMinimum":0,"maximum":100,"description":"Total portions the batch cooks."},
-        "frozen_portions":{"type":"number","minimum":0,"maximum":100,"description":"Of those, portions to freeze. Omitted keeps the current value."}
-      },
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "set_session_portions",
-		Description: "Set how many portions a cook session (batch) makes and how many of them are frozen. Returns the session with its consumption and warnings.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				SessionID      int64    `json:"session_id"`
-				Portions       float64  `json:"portions"`
-				FrozenPortions *float64 `json:"frozen_portions"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			sess, err := svc.Plates.CookSession(ctx, in.SessionID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			if err := guardDate(ctx, sess.CookDate); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			frozen := sess.FrozenPortions
-			if in.FrozenPortions != nil {
-				frozen = *in.FrozenPortions
-			}
-			// Deficit guard (spec §3.4, H3): a batch must cover what its plates
-			// eat. A silent deficit is a hard-rule violation the model may not
-			// relay, so the call is refused with the numbers instead.
-			cur, err := svc.Plates.Session(ctx, in.SessionID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			if plate.Exceeds(cur.Consumed, in.Portions) || plate.Exceeds(cur.FrozenConsumed, frozen) {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %s would cook %s portions (%s frozen) but its plates eat %s (%s from the freezer); "+
-					"set at least %s portions (%s frozen), or reduce the plates' eaters or portions first",
-					domain.ErrInvalidInput, cur.FoodName, fnum(in.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
-			}
-			v, err := svc.Plates.SetSessionPortions(ctx, in.SessionID, plate.SessionPortions{
-				Portions: in.Portions, FrozenPortions: frozen, Note: sess.Note,
-			})
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			noteChange(ctx, "set_session_portions", map[string]any{
-				"name": v.FoodName, "portions": v.Portions, "frozen": v.FrozenPortions, "date": v.CookDate.Format(time.DateOnly),
-			})
-			return withEffect(ctx, svc, planSession(*v), affected{Sessions: []int64{v.ID}}), ToolEffectNone, nil
-		},
-	}
-}
-
-func toolSetPlateEaters(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["plate_id","eaters"],
-      "properties":{
-        "plate_id":{"type":"integer","minimum":1},
-        "eaters":{"type":"number","exclusiveMinimum":0,"maximum":100}
-      },
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "set_plate_eaters",
-		Description: "Set how many people eat a plate (e.g. guests). The batches the plate eats from are resized to match.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				PlateID int64   `json:"plate_id"`
-				Eaters  float64 `json:"eaters"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			if err := guardPlateDate(ctx, svc, in.PlateID); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			p, err := svc.Plates.Update(ctx, in.PlateID, plate.PlatePatch{Eaters: &in.Eaters})
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			noteChange(ctx, "set_plate_eaters", map[string]any{"name": plateNames(p), "date": p.DateString(), "eaters": p.Eaters})
-			return withEffect(ctx, svc, plateSummary(p), affected{Plates: plateIDsOf(p)}), ToolEffectNone, nil
-		},
-	}
-}
-
 // availabilityDefault is set_availability's mode that clears the cell's
 // override, so the weekday default applies again.
 const availabilityDefault = "default"
-
-func toolSetAvailability(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["date","slot_id","mode"],
-      "properties":{
-        "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
-        "slot_id":{"type":"integer","minimum":1},
-        "mode":{"type":"string","enum":["plan","none","routine","default"]},
-        "preset_id":{"type":"integer","minimum":1,"description":"The routine's preset; required for mode routine."},
-        "note":{"type":"string","maxLength":200,"description":"Why there is no plate (mode none only)."}
-      },
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "set_availability",
-		Description: "Set what a cell (date, slot) is for: plan (a planned plate), none (no plate, e.g. eating out; removes a draft plate there), routine (a fixed preset) or default (back to the weekday default).",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				Date     string  `json:"date"`
-				SlotID   int64   `json:"slot_id"`
-				CellMode string  `json:"mode"`
-				PresetID *int64  `json:"preset_id"`
-				Note     *string `json:"note"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			d, err := time.Parse(time.DateOnly, in.Date)
-			if err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: date: %v", domain.ErrInvalidInput, err)
-			}
-			if err := guardDate(ctx, d); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			before, err := svc.Cells.Override(ctx, d, in.SlotID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			slotKey, err := slotName(ctx, svc, in.SlotID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			out := map[string]any{"date": in.Date, "slot_id": in.SlotID, "mode": in.CellMode, "removed_plate": false}
-			if in.CellMode == availabilityDefault {
-				if err := svc.Cells.ClearOverride(ctx, d, in.SlotID); err != nil {
-					return nil, ToolEffectNone, err
-				}
-				if err := noteAvailability(ctx, svc, d, in.SlotID, before, in.CellMode, slotKey); err != nil {
-					return nil, ToolEffectNone, err
-				}
-				return withEffect(ctx, svc, out, affected{Dates: []string{in.Date}}), ToolEffectNone, nil
-			}
-			mode := availability.Mode(in.CellMode)
-			_, removed, err := svc.Cells.SetOverride(ctx, availability.OverrideInput{
-				Date: d, SlotID: in.SlotID, Mode: mode, PresetID: in.PresetID, Note: in.Note,
-				RemovePlate: mode == availability.ModeNone,
-			})
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			out["removed_plate"] = removed != nil
-			if err := noteAvailability(ctx, svc, d, in.SlotID, before, in.CellMode, slotKey); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			return withEffect(ctx, svc, out, affected{Dates: []string{in.Date}}), ToolEffectNone, nil
-		},
-	}
-}
-
-// noteAvailability notes a set_availability change: none, or plan for the
-// modes that let the cell hold a plate again (plan, routine, default). It
-// reads the override the write left, so undo can tell a newer manual edit.
-func noteAvailability(ctx context.Context, svc Services, d time.Time, slotID int64, before *availability.Override, mode, slotKey string) error {
-	after, err := svc.Cells.Override(ctx, d, slotID)
-	if err != nil {
-		return err
-	}
-	key := "set_availability_plan"
-	if mode == string(availability.ModeNone) {
-		key = "set_availability_none"
-	}
-	noteCell(ctx, d, slotID, before, after)
-	noteChange(ctx, key, map[string]any{"date": d.Format(time.DateOnly), "slot": slotKey, "mode": mode})
-	return nil
-}
 
 // regenerateDetachedWait bounds the wait for a run whose caller went away:
 // the generator's own run timeout (3 minutes) plus its save budget.

@@ -9,25 +9,28 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
-// chatIssues are the issues the chat prompt shows: what the board shows
-// (planning.BoardIssues: H1, H2, H5, H8) plus H3/H4. The board reports those
-// as session warnings, but the prompt has no session warnings, so a batch
-// eaten 8 of 6 would read "Issues: none."
-func chatIssues(st planning.State) []planning.Issue {
+// chatView is the plan's evaluation with the issues the chat prompt and the
+// user see: what the board shows (planning.BoardIssues: H1, H2, H5 including
+// the meat-day limit, H8), the session rules H3/H4 (the board reports them
+// as session warnings, but the prompt has none, so a batch eaten 8 of 6
+// would read "Issues: none.") and the soft rules S2/S3 of Evaluate with
+// their options. Check's full list stays in AllIssues.
+func chatView(st planning.State) planning.Evaluation {
+	ev := planning.Evaluate(st, planning.WindowTarget(st))
 	out := planning.BoardIssues(st)
-	for _, is := range planning.Check(st, planning.WindowTarget(st)) {
-		if is.Rule == "H3" || is.Rule == "H4" {
+	for _, is := range ev.Issues {
+		if is.Rule == "H3" || is.Rule == "H4" || is.Severity == planning.SeveritySoft {
 			out = append(out, is)
 		}
 	}
-	return out
+	return ev.ViewedAs(out)
 }
 
-// evaluateAsSeen is the plan's evaluation with the issues the chat prompt
-// and the user saw (chatIssues); Check's full list stays in AllIssues.
-func evaluateAsSeen(st planning.State) planning.Evaluation {
-	return planning.Evaluate(st, planning.WindowTarget(st)).ViewedAs(chatIssues(st))
-}
+// chatIssues are the issues of chatView.
+func chatIssues(st planning.State) []planning.Issue { return chatView(st).Issues }
+
+// evaluateAsSeen is chatView, the evaluation the run log stores.
+func evaluateAsSeen(st planning.State) planning.Evaluation { return chatView(st) }
 
 // chatFacts renders what the summary lacks: each food on a plate of the
 // window with its role and kcal and protein per portion (a leaf: per 100 g),

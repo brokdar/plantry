@@ -1,0 +1,260 @@
+package agent
+
+import (
+	"cmp"
+	"context"
+	"encoding/json"
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+)
+
+const findFoodsSchema = `{
+  "type":"object",
+  "properties":{
+    "ids":{"type":"array","items":{"type":"integer","minimum":1},"maxItems":100,"description":"Look these foods up by id (other filters then apply to them too)."},
+    "roles":{"type":"array","items":{"type":"string","enum":["main","side_starch","side_veg","side_protein","sauce","drink","dessert","standalone"]}},
+    "kinds":{"type":"array","items":{"type":"string","enum":["leaf","composed"]}},
+    "no_cook":{"type":"boolean","description":"true: only foods that need no cooking (leaves eaten raw such as fruit, vegetables, yoghurt; recipes whose cook minutes are 0)."},
+    "diet":{"type":"string","enum":["vegan","vegetarian","pescetarian","omnivore"],"description":"Keep foods whose diet class fits this diet (vegetarian keeps vegan and vegetarian); unknown classes are left out."},
+    "tags":{"type":"array","items":{"type":"string"},"description":"Foods with every one of these tags."},
+    "search":{"type":"string","description":"Words matched against names and tags, ignoring case and umlauts, with German/English synonyms (potato finds Kartoffelgratin)."},
+    "max_kcal":{"type":"number","minimum":0,"description":"At most this many kcal per portion (leaf: per typical portion)."},
+    "min_protein":{"type":"number","minimum":0,"description":"At least this many g protein per portion (leaf: per typical portion)."},
+    "sort":{"type":"string","enum":["name","last_eaten","kcal","protein"],"description":"last_eaten lists never-eaten recipes first, then the longest uneaten. kcal and protein sort descending unless sort_desc is false."},
+    "sort_desc":{"type":"boolean"},
+    "limit":{"type":"integer","minimum":1,"maximum":200,"description":"Default 50."}
+  },
+  "additionalProperties":false
+}`
+
+const findFoodsDescription = `Find foods in the library with filters, one call for any number of lookups (roles, kinds, ids, tags, no_cook, diet, search, kcal and protein bounds). A food is a LEAF (single item with direct nutrition: apple, rice, chicken) or COMPOSED (a recipe built from child foods). Returns JSON {items:[{id, name, kind, role, diet_class (vegan|vegetarian|pescetarian|omnivore|unknown), counts_as_cooking, no_cook, per_portion:{kcal,protein,fat,carbs}, basis, portion_g?, per_100g?:{kcal,protein,fat,carbs}, nutrition_complete, missing_nutrition?:[names], keep_days?, freezable?, last_eaten?, times_cooked?, tags, favorite}], total, truncated}. Composed: per_portion is per recipe portion, keep_days (days leftovers keep), last_eaten (YYYY-MM-DD or null) and times_cooked are set. Leaf: per_portion is for a typical portion of portion_g grams, per_100g the nutrition per 100 g, and a leaf is added to a plate by amount + unit. counts_as_cooking is true for a recipe (adding it to a plate makes or joins a cooking occasion, H2) and false for a leaf; no_cook is true for foods that need no cooking. total counts the matches before limit.`
+
+type foodsFilter struct {
+	IDs        []int64  `json:"ids"`
+	Roles      []string `json:"roles"`
+	Kinds      []string `json:"kinds"`
+	NoCook     *bool    `json:"no_cook"`
+	Diet       string   `json:"diet"`
+	Tags       []string `json:"tags"`
+	Search     string   `json:"search"`
+	MaxKcal    *float64 `json:"max_kcal"`
+	MinProtein *float64 `json:"min_protein"`
+	Sort       string   `json:"sort"`
+	SortDesc   *bool    `json:"sort_desc"`
+	Limit      int      `json:"limit"`
+}
+
+func toolFindFoods(svc Services) Tool {
+	return Tool{
+		Name:        "find_foods",
+		Description: findFoodsDescription,
+		Schema:      json.RawMessage(findFoodsSchema),
+		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
+			var in foodsFilter
+			if err := json.Unmarshal(input, &in); err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
+			today := todayFrom(ctx)
+			foods, err := candidateFoods(ctx, svc, in, today)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			if err := svc.Foods.Derive(ctx, today, foods...); err != nil {
+				return nil, ToolEffectNone, err
+			}
+			keep, err := defaultKeepDays(ctx, svc)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			foods = slices.DeleteFunc(foods, func(f *food.Food) bool { return !matchesFilter(f, in) })
+			ids := make([]int64, len(foods))
+			for i, f := range foods {
+				ids[i] = f.ID
+			}
+			macros, err := svc.NutritionResolver.PerPortionDetailedMany(ctx, ids)
+			if err != nil {
+				return nil, ToolEffectNone, fmt.Errorf("find_foods nutrition: %w", err)
+			}
+			items := make([]foodItem, 0, len(foods))
+			for _, f := range foods {
+				it := newFoodItem(f, macros[f.ID], keep)
+				if (in.MaxKcal != nil && it.PerPortion.Kcal > *in.MaxKcal) || (in.MinProtein != nil && it.PerPortion.Protein < *in.MinProtein) {
+					continue
+				}
+				items = append(items, it)
+			}
+			sortItems(items, in)
+			limit := in.Limit
+			if limit <= 0 {
+				limit = 50
+			}
+			total := len(items)
+			if len(items) > limit {
+				items = items[:limit]
+			}
+			return mustJSON(map[string]any{"items": items, "total": total, "truncated": total > len(items)}), ToolEffectNone, nil
+		},
+	}
+}
+
+// candidateFoods reads the foods the filter may keep: the ids, or the library
+// narrowed by what the repository filters (one kind, diet).
+func candidateFoods(ctx context.Context, svc Services, in foodsFilter, today time.Time) ([]*food.Food, error) {
+	if len(in.IDs) > 0 {
+		out := make([]*food.Food, 0, len(in.IDs))
+		for _, id := range in.IDs {
+			f, err := svc.Foods.Get(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, f)
+		}
+		return out, nil
+	}
+	q := food.ListQuery{Today: today, Diet: diet.Class(in.Diet), Limit: 10000}
+	if len(in.Kinds) == 1 {
+		q.Kind = food.Kind(in.Kinds[0])
+	}
+	res, err := svc.Foods.List(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	if s := strings.TrimSpace(in.Search); s != "" {
+		res = searchPage(res, s, 10000, 0)
+	}
+	out := make([]*food.Food, len(res.Items))
+	for i := range res.Items {
+		out[i] = &res.Items[i]
+	}
+	return out, nil
+}
+
+func matchesFilter(f *food.Food, in foodsFilter) bool {
+	if len(in.Kinds) > 0 && !slices.Contains(in.Kinds, string(f.Kind)) {
+		return false
+	}
+	if len(in.Roles) > 0 && (f.Role == nil || !slices.Contains(in.Roles, string(*f.Role))) {
+		return false
+	}
+	if in.NoCook != nil && planning.NoCook(f) != *in.NoCook {
+		return false
+	}
+	for _, t := range in.Tags {
+		if !slices.Contains(f.Tags, t) {
+			return false
+		}
+	}
+	return true
+}
+
+type macroOut struct {
+	Kcal    float64 `json:"kcal"`
+	Protein float64 `json:"protein"`
+	Fat     float64 `json:"fat"`
+	Carbs   float64 `json:"carbs"`
+}
+
+type foodItem struct {
+	ID               int64     `json:"id"`
+	Name             string    `json:"name"`
+	Kind             string    `json:"kind"`
+	Role             string    `json:"role"`
+	DietClass        string    `json:"diet_class"`
+	CountsAsCooking  bool      `json:"counts_as_cooking"`
+	NoCook           bool      `json:"no_cook"`
+	PerPortion       macroOut  `json:"per_portion"`
+	Basis            string    `json:"basis"`
+	PortionG         *float64  `json:"portion_g,omitempty"`
+	Per100g          *macroOut `json:"per_100g,omitempty"`
+	NutritionOK      bool      `json:"nutrition_complete"`
+	Missing          []string  `json:"missing_nutrition,omitempty"`
+	KeepDays         *int      `json:"keep_days,omitempty"`
+	Freezable        *bool     `json:"freezable,omitempty"`
+	LastEaten        *string   `json:"last_eaten"`
+	TimesCooked      *int      `json:"times_cooked,omitempty"`
+	Tags             []string  `json:"tags"`
+	Favorite         bool      `json:"favorite"`
+	lastEatenSortKey string
+}
+
+func newFoodItem(f *food.Food, d food.Detailed, defaultKeep int) foodItem {
+	it := foodItem{
+		ID: f.ID, Name: f.Name, Kind: string(f.Kind), DietClass: string(f.DietClass), CountsAsCooking: f.Kind == food.KindComposed,
+		NoCook: planning.NoCook(f), NutritionOK: d.Complete, Tags: f.Tags, Favorite: f.Favorite, Basis: "per_portion",
+	}
+	if it.Tags == nil {
+		it.Tags = []string{}
+	}
+	if f.Role != nil {
+		it.Role = string(*f.Role)
+	}
+	for _, m := range d.Missing {
+		it.Missing = append(it.Missing, m.Name)
+	}
+	m := macroOut{Kcal: round1(d.Macros.Kcal), Protein: round1(d.Macros.Protein), Fat: round1(d.Macros.Fat), Carbs: round1(d.Macros.Carbs)}
+	it.PerPortion = m
+	if f.Kind == food.KindLeaf {
+		g := float64(planning.TypicalLeafGrams)
+		it.Basis, it.PortionG, it.Per100g = "per_100g", &g, &m
+		k := g / 100
+		it.PerPortion = macroOut{Kcal: round1(m.Kcal * k), Protein: round1(m.Protein * k), Fat: round1(m.Fat * k), Carbs: round1(m.Carbs * k)}
+		return it
+	}
+	keep := plateKeep(f, defaultKeep)
+	it.KeepDays, it.Freezable = &keep, f.Freezable
+	times := f.History.TimesCooked
+	it.TimesCooked = &times
+	if f.History.LastEaten != nil {
+		s := f.History.LastEaten.Format(time.DateOnly)
+		it.LastEaten, it.lastEatenSortKey = &s, s
+	}
+	return it
+}
+
+func plateKeep(f *food.Food, defaultKeep int) int {
+	if f.KeepDays != nil {
+		return *f.KeepDays
+	}
+	return defaultKeep
+}
+
+func sortItems(items []foodItem, in foodsFilter) {
+	desc := func(def bool) bool {
+		if in.SortDesc != nil {
+			return *in.SortDesc
+		}
+		return def
+	}
+	var less func(a, b foodItem) int
+	switch in.Sort {
+	case "kcal":
+		less = func(a, b foodItem) int { return cmp.Compare(a.PerPortion.Kcal, b.PerPortion.Kcal) }
+		if desc(true) {
+			slices.SortStableFunc(items, func(a, b foodItem) int { return -less(a, b) })
+			return
+		}
+	case "protein":
+		less = func(a, b foodItem) int { return cmp.Compare(a.PerPortion.Protein, b.PerPortion.Protein) }
+		if desc(true) {
+			slices.SortStableFunc(items, func(a, b foodItem) int { return -less(a, b) })
+			return
+		}
+	case "last_eaten":
+		// Never eaten first, then the longest uneaten.
+		less = func(a, b foodItem) int { return cmp.Compare(a.lastEatenSortKey, b.lastEatenSortKey) }
+	default:
+		less = func(a, b foodItem) int { return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) }
+	}
+	if desc(false) {
+		slices.SortStableFunc(items, func(a, b foodItem) int { return -less(a, b) })
+		return
+	}
+	slices.SortStableFunc(items, less)
+}

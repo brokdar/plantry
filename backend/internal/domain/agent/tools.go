@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math"
-	"slices"
 	"strings"
 	"time"
 
@@ -16,14 +14,15 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/actor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
 // ToolEffect classifies what a tool's output means to the agent loop besides
@@ -84,6 +83,11 @@ type Services struct {
 	Cells CellWriter
 	// Changes may be nil: plan writes are then not recorded as changes.
 	Changes ChangeStore
+	// State reads the planning state of a window (planning.Builder.Build over
+	// the window) and Tx is the unit of work: apply_changes evaluates the
+	// plan with them and rolls a dry run back.
+	State func(ctx context.Context, w window.Window, today time.Time) (planning.State, error)
+	Tx    domain.Transactor
 }
 
 // NewToolSet builds the default tool set wired to the given services.
@@ -220,19 +224,10 @@ func schemaErrors(r *gojsonschema.Result) string {
 
 func defaultTools(svc Services) []Tool {
 	tools := []Tool{
-		toolListFoods(svc),
-		toolGetFood(svc),
+		toolFindFoods(svc),
 		toolListSlots(svc),
-		toolGetPlatesRange(svc),
 		toolGetProfile(svc),
-		toolCreatePlate(svc),
-		toolAddFoodToPlate(svc),
-		toolSwapFood(svc),
-		toolUpdatePlateComponent(svc),
-		toolRemovePlateComponent(svc),
-		toolDeletePlate(svc),
-		toolSetPlateEaters(svc),
-		toolSetSessionPortions(svc),
+		toolApplyChanges(svc),
 		toolConfirm(svc),
 		toolUnlock(svc),
 		toolRecordPreference(svc),
@@ -242,9 +237,6 @@ func defaultTools(svc Services) []Tool {
 	}
 	if svc.PlanView != nil {
 		tools = append(tools, toolGetPlan(svc))
-	}
-	if svc.Cells != nil {
-		tools = append(tools, toolSetAvailability(svc))
 	}
 	if svc.Planner != nil {
 		tools = append(tools, toolRegenerate(svc))
@@ -258,133 +250,6 @@ func defaultTools(svc Services) []Tool {
 }
 
 // --- read tools ---
-
-func toolListFoods(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "properties":{
-        "search":{"type":"string"},
-        "kind":{"type":"string","enum":["leaf","composed"]},
-        "role":{"type":"string","enum":["main","side_starch","side_veg","side_protein","sauce","drink","dessert","standalone"]},
-        "tag":{"type":"string"},
-        "diet":{"type":"string","enum":["vegan","vegetarian","pescetarian","omnivore"],"description":"Keep foods whose diet class fits this diet (a vegetarian diet keeps vegan and vegetarian foods); unknown classes are left out."},
-        "limit":{"type":"integer","minimum":1,"maximum":200},
-        "offset":{"type":"integer","minimum":0},
-        "sort_by":{"type":"string","enum":["name","created_at","last_eaten"]},
-        "sort_desc":{"type":"boolean"}
-      },
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "list_foods",
-		Description: "List foods in the library. A food is either a LEAF (single edible item with direct nutrition — apple, rice, chicken) or COMPOSED (built from child foods — curry, schnitzel). Filter by kind, role, diet, tag, or search. The search matches names and tags, ignores case and umlauts and knows common German/English food words (potato finds Kartoffelgratin, Haehnchen finds Hähnchen). Use this to find a food by name before referencing it by id. Each item carries favorite and diet_class (vegan, vegetarian, pescetarian, omnivore or unknown); composed foods also carry last_eaten (YYYY-MM-DD of the latest eaten plate up to today, or null), times_cooked (cook sessions up to today), keep_days (days leftovers keep, the plan default when the recipe sets none) and freezable (null = unknown). sort_by last_eaten lists never-eaten recipes first, then the longest uneaten. Each item also carries per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				Search   string `json:"search"`
-				Kind     string `json:"kind"`
-				Role     string `json:"role"`
-				Tag      string `json:"tag"`
-				Diet     string `json:"diet"`
-				Limit    int    `json:"limit"`
-				Offset   int    `json:"offset"`
-				SortBy   string `json:"sort_by"`
-				SortDesc bool   `json:"sort_desc"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			q := food.ListQuery{
-				Today:    todayFrom(ctx),
-				Kind:     food.Kind(in.Kind),
-				Role:     in.Role,
-				Tag:      in.Tag,
-				Diet:     diet.Class(in.Diet),
-				Limit:    in.Limit,
-				Offset:   in.Offset,
-				SortBy:   in.SortBy,
-				SortDesc: in.SortDesc,
-			}
-			if strings.TrimSpace(in.Search) != "" {
-				// The search runs here, not in SQL: it covers tags, folds case
-				// and umlauts and expands synonyms, so read every candidate
-				// and page after filtering.
-				q.Limit, q.Offset = 10000, 0
-			}
-			res, err := svc.Foods.List(ctx, q)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			if strings.TrimSpace(in.Search) != "" {
-				res = searchPage(res, in.Search, in.Limit, in.Offset)
-			}
-			foods := make([]*food.Food, len(res.Items))
-			for i := range res.Items {
-				foods[i] = &res.Items[i]
-			}
-			if err := svc.Foods.Derive(ctx, todayFrom(ctx), foods...); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			keep, err := defaultKeepDays(ctx, svc)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			items := make([]map[string]any, 0, len(res.Items))
-			for i := range res.Items {
-				f := &res.Items[i]
-				item := foodSummary(f, keep)
-				// A failed macro lookup for one food must not sink the whole
-				// page: that item simply goes without per_portion data.
-				if err := addPerPortion(ctx, svc, item, f); err != nil {
-					if ctxErr := ctx.Err(); ctxErr != nil {
-						return nil, ToolEffectNone, ctxErr
-					}
-					slog.WarnContext(ctx, "list_foods: per-portion lookup failed", "food_id", f.ID, "error", err)
-				}
-				items = append(items, item)
-			}
-			return mustJSON(map[string]any{"items": items, "total": res.Total}), ToolEffectNone, nil
-		},
-	}
-}
-
-func toolGetFood(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["food_id"],
-      "properties":{"food_id":{"type":"integer","minimum":1}},
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "get_food",
-		Description: "Fetch a food by id. Composed foods include children (child food + grams), instructions, and tags; leaf foods include direct nutrition and portion overrides. Also returns favorite and diet_class; composed foods also return last_eaten (YYYY-MM-DD or null), times_cooked, keep_days (the plan default when the recipe sets none) and freezable. Also returns per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				FoodID int64 `json:"food_id"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			f, err := svc.Foods.Get(ctx, in.FoodID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			if err := svc.Foods.Derive(ctx, todayFrom(ctx), f); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			keep, err := defaultKeepDays(ctx, svc)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			out := foodDetail(f, keep)
-			if err := addPerPortion(ctx, svc, out, f); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("get_food nutrition: %w", err)
-			}
-			return mustJSON(out), ToolEffectNone, nil
-		},
-	}
-}
 
 func toolListSlots(svc Services) Tool {
 	schema := json.RawMessage(`{
@@ -419,70 +284,6 @@ func toolListSlots(svc Services) Tool {
 	}
 }
 
-func toolGetPlatesRange(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["from","to"],
-      "properties":{
-        "from":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
-        "to":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
-      },
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "get_plates_range",
-		Description: "Get all plates for a date range (from and to inclusive, format YYYY-MM-DD). Use this instead of get_week to read plates by calendar date. Each plate carries state (draft or confirmed: you may change drafts only), ai_run_id and reason. The sessions array lists the cook sessions the plates eat from (id, food_id, cook_date, cook_slot_id, portions, frozen_portions, state). The availability array lists every cell in the range that is not plan: mode none (No plate: the user eats elsewhere, never create a plate there) or routine (covered by preset_name).",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				From string `json:"from"`
-				To   string `json:"to"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			from, err := time.Parse("2006-01-02", in.From)
-			if err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: from: %v", domain.ErrInvalidInput, err)
-			}
-			to, err := time.Parse("2006-01-02", in.To)
-			if err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: to: %v", domain.ErrInvalidInput, err)
-			}
-			plates, err := svc.Plates.Range(ctx, from, to)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			items := make([]map[string]any, 0, len(plates))
-			for i := range plates {
-				items = append(items, plateSummary(&plates[i]))
-			}
-			sessions, err := linkedSessionList(ctx, svc, plates)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			cells := []map[string]any{}
-			if svc.Availability != nil {
-				resolved, err := svc.Availability.Resolve(ctx, from, to)
-				if err != nil {
-					return nil, ToolEffectNone, err
-				}
-				for _, c := range resolved {
-					if c.Mode == availability.ModePlan {
-						continue
-					}
-					cell := map[string]any{"date": c.Date.Format("2006-01-02"), "slot_id": c.SlotID, "mode": string(c.Mode)}
-					if c.PresetName != nil {
-						cell["preset_name"] = *c.PresetName
-					}
-					cells = append(cells, cell)
-				}
-			}
-			return mustJSON(map[string]any{"plates": items, "sessions": sessions, "availability": cells}), ToolEffectNone, nil
-		},
-	}
-}
-
 func toolGetProfile(svc Services) Tool {
 	schema := json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)
 	return Tool{
@@ -501,16 +302,6 @@ func toolGetProfile(svc Services) Tool {
 
 // --- write tools ---
 
-// quantitySchema is the JSON schema of a per-eater component quantity:
-// portions for a composed food, amount + unit for a leaf food.
-const quantitySchema = `
-        "portions":{"type":"number","exclusiveMinimum":0},
-        "amount":{"type":"number","exclusiveMinimum":0},
-        "unit":{"type":"string","minLength":1}`
-
-// quantityHelp tells the model how to fill quantitySchema.
-const quantityHelp = "Quantities are per eater: a composed food (recipe) takes portions (REAL, usually 1); a leaf food (ingredient) takes amount + unit (e.g. 150 + \"g\", 1 + \"piece\") and rejects portions."
-
 // quantityInput is the per-eater quantity the plate tools accept.
 type quantityInput struct {
 	Portions *float64 `json:"portions"`
@@ -524,250 +315,6 @@ func (q quantityInput) empty() bool { return q.Portions == nil && q.Amount == ni
 // checks it against the food's kind.
 func (q quantityInput) component(foodID int64) plate.PlateComponent {
 	return plate.PlateComponent{FoodID: foodID, Portions: q.Portions, Amount: q.Amount, Unit: q.Unit}
-}
-
-func toolCreatePlate(svc Services) Tool {
-	schema := json.RawMessage(fmt.Sprintf(`{
-      "type":"object",
-      "required":["date","slot_id"],
-      "properties":{
-        "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
-        "slot_id":{"type":"integer","minimum":1},
-        "eaters":{"type":"number","exclusiveMinimum":0,"maximum":%g},
-        "note":{"type":"string"}
-      },
-      "additionalProperties":false
-    }`, plate.MaxEaters))
-	return Tool{
-		Name:        "create_plate",
-		Description: "Create an empty plate at a given date (YYYY-MM-DD) and slot. eaters is how many people it serves (defaults to the household's portions); component quantities are per eater. Returns the new plate's id. A cell holds at most one plate; creating into an occupied cell or a No-plate cell fails.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				Date   string   `json:"date"`
-				SlotID int64    `json:"slot_id"`
-				Eaters *float64 `json:"eaters"`
-				Note   *string  `json:"note"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			d, err := time.Parse("2006-01-02", in.Date)
-			if err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: date: %v", domain.ErrInvalidInput, err)
-			}
-			if err := guardDate(ctx, d); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			p, err := svc.Plates.Create(ctx, plate.PlateInput{Date: d, SlotID: in.SlotID, Eaters: in.Eaters, Note: in.Note})
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			slotKey, err := slotName(ctx, svc, in.SlotID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			noteChange(ctx, "create_plate", map[string]any{"date": in.Date, "slot": slotKey})
-			return withEffect(ctx, svc, plateSummary(p), affected{Plates: plateIDsOf(p)}), ToolEffectNone, nil
-		},
-	}
-}
-
-func toolAddFoodToPlate(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["plate_id","food_id"],
-      "properties":{
-        "plate_id":{"type":"integer","minimum":1},
-        "food_id":{"type":"integer","minimum":1},` + quantitySchema + `
-      },
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "add_food_to_plate",
-		Description: "Append a food (leaf or composed) to a plate. " + quantityHelp + " A composed food without portions gets 1 per eater and its own fresh cook session.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				PlateID int64 `json:"plate_id"`
-				FoodID  int64 `json:"food_id"`
-				quantityInput
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			if err := guardPlateDate(ctx, svc, in.PlateID); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			p, err := svc.Plates.AddComponent(ctx, in.PlateID, in.component(in.FoodID))
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			added := lastComponent(p)
-			noteChange(ctx, "add_food", map[string]any{"name": added.FoodName, "date": p.DateString()})
-			return withEffect(ctx, svc, plateComponentMap(added), affected{Plates: plateIDsOf(p)}), ToolEffectNone, nil
-		},
-	}
-}
-
-func toolSwapFood(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["plate_component_id","new_food_id"],
-      "properties":{
-        "plate_component_id":{"type":"integer","minimum":1},
-        "new_food_id":{"type":"integer","minimum":1},` + quantitySchema + `
-      },
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "swap_food",
-		Description: "Replace the food on an existing plate_component row, preserving sort order. Without a quantity the current one is kept, which must fit the new food's kind. " + quantityHelp,
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				PlateComponentID int64 `json:"plate_component_id"`
-				NewFoodID        int64 `json:"new_food_id"`
-				quantityInput
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			_, old, err := componentOnPlate(ctx, svc, in.PlateComponentID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			var quantity *plate.PlateComponent
-			if !in.empty() {
-				q := in.component(in.NewFoodID)
-				quantity = &q
-			}
-			p, err := svc.Plates.SwapComponent(ctx, in.PlateComponentID, in.NewFoodID, quantity)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			pc, err := componentByID(p, in.PlateComponentID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			noteChange(ctx, "swap_food", map[string]any{"from": old.FoodName, "name": pc.FoodName, "date": p.DateString()})
-			return withEffect(ctx, svc, plateComponentMap(pc), affected{Plates: plateIDsOf(p), Sessions: sessionIDOf(old)}), ToolEffectNone, nil
-		},
-	}
-}
-
-func toolUpdatePlateComponent(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["plate_component_id"],
-      "properties":{
-        "plate_component_id":{"type":"integer","minimum":1},` + quantitySchema + `
-      },
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "update_plate_component",
-		Description: "Change the quantity of an existing plate_component row without swapping the food; portions or amount + unit is required. " + quantityHelp,
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				PlateComponentID int64 `json:"plate_component_id"`
-				quantityInput
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			if in.empty() {
-				return nil, ToolEffectNone, fmt.Errorf("%w: portions or amount + unit required", domain.ErrInvalidInput)
-			}
-			if err := guardComponentDate(ctx, svc, in.PlateComponentID); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			p, err := svc.Plates.UpdateComponentQuantity(ctx, in.PlateComponentID, in.component(0))
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			pc, err := componentByID(p, in.PlateComponentID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			noteChange(ctx, "update_component", map[string]any{"name": pc.FoodName, "date": p.DateString()})
-			return withEffect(ctx, svc, plateComponentMap(pc), affected{Plates: plateIDsOf(p)}), ToolEffectNone, nil
-		},
-	}
-}
-
-func toolRemovePlateComponent(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["plate_component_id"],
-      "properties":{"plate_component_id":{"type":"integer","minimum":1}},
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "remove_plate_component",
-		Description: "Remove a food from a plate without deleting the plate itself.",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				PlateComponentID int64 `json:"plate_component_id"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			p, pc, err := componentOnPlate(ctx, svc, in.PlateComponentID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			if _, err := svc.Plates.RemoveComponent(ctx, in.PlateComponentID); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			noteChange(ctx, "remove_component", map[string]any{"name": pc.FoodName, "date": p.DateString()})
-			return withEffect(ctx, svc, map[string]any{"removed": true}, affected{Plates: plateIDsOf(p), Sessions: sessionIDOf(pc)}), ToolEffectNone, nil
-		},
-	}
-}
-
-func toolDeletePlate(svc Services) Tool {
-	schema := json.RawMessage(`{
-      "type":"object",
-      "required":["plate_id"],
-      "properties":{"plate_id":{"type":"integer","minimum":1}},
-      "additionalProperties":false
-    }`)
-	return Tool{
-		Name:        "delete_plate",
-		Description: "Delete a plate (cascades to its components).",
-		Schema:      schema,
-		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
-			var in struct {
-				PlateID int64 `json:"plate_id"`
-			}
-			if err := json.Unmarshal(input, &in); err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
-			}
-			p, err := svc.Plates.Get(ctx, in.PlateID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			if err := guardDate(ctx, p.Date); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			slotKey, err := slotName(ctx, svc, p.SlotID)
-			if err != nil {
-				return nil, ToolEffectNone, err
-			}
-			if _, err := svc.Plates.Delete(ctx, in.PlateID); err != nil {
-				return nil, ToolEffectNone, err
-			}
-			noteChange(ctx, "delete_plate", map[string]any{"name": plateNames(p), "date": p.DateString(), "slot": slotKey})
-			sessions := []int64{}
-			for i := range p.Components {
-				sessions = append(sessions, sessionIDOf(&p.Components[i])...)
-			}
-			return withEffect(ctx, svc, map[string]any{"deleted": true}, affected{Sessions: sessions, Dates: []string{p.DateString()}}), ToolEffectNone, nil
-		},
-	}
 }
 
 func toolRecordPreference(svc Services) Tool {
@@ -887,153 +434,13 @@ func guardComponentDate(ctx context.Context, svc Services, id int64) error {
 	return guardPlateDate(ctx, svc, pc.PlateID)
 }
 
-func foodSummary(f *food.Food, defaultKeep int) map[string]any {
-	role := ""
-	if f.Role != nil {
-		role = string(*f.Role)
-	}
-	ref := float64(0)
-	if f.ReferencePortions != nil {
-		ref = *f.ReferencePortions
-	}
-	out := map[string]any{
-		"id":                 f.ID,
-		"name":               f.Name,
-		"kind":               string(f.Kind),
-		"role":               role,
-		"reference_portions": ref,
-		"tags":               f.Tags,
-		"favorite":           f.Favorite,
-		"diet_class":         string(f.DietClass),
-	}
-	addHistory(out, f, defaultKeep)
-	return out
-}
-
-func foodDetail(f *food.Food, defaultKeep int) map[string]any {
-	children := make([]map[string]any, len(f.Children))
-	for i, ch := range f.Children {
-		children[i] = map[string]any{
-			"child_id":   ch.ChildID,
-			"child_name": ch.ChildName,
-			"child_kind": string(ch.ChildKind),
-			"amount":     ch.Amount,
-			"unit":       ch.Unit,
-			"grams":      ch.Grams,
-		}
-	}
-	instrs := make([]map[string]any, len(f.Instructions))
-	for i, inst := range f.Instructions {
-		instrs[i] = map[string]any{"step_number": inst.StepNumber, "text": inst.Text}
-	}
-	out := map[string]any{
-		"id":         f.ID,
-		"name":       f.Name,
-		"kind":       string(f.Kind),
-		"tags":       f.Tags,
-		"favorite":   f.Favorite,
-		"diet_class": string(f.DietClass),
-	}
-	addHistory(out, f, defaultKeep)
-	if f.Role != nil {
-		out["role"] = string(*f.Role)
-	}
-	if f.ReferencePortions != nil {
-		out["reference_portions"] = *f.ReferencePortions
-	}
-	if f.PrepMinutes != nil {
-		out["prep_minutes"] = *f.PrepMinutes
-	}
-	if f.CookMinutes != nil {
-		out["cook_minutes"] = *f.CookMinutes
-	}
-	if f.Notes != nil {
-		out["notes"] = *f.Notes
-	}
-	if len(children) > 0 {
-		out["children"] = children
-	}
-	if len(instrs) > 0 {
-		out["instructions"] = instrs
-	}
-	if f.Kind == food.KindLeaf {
-		out["kcal_100g"] = derefF(f.Kcal100g)
-		out["protein_100g"] = derefF(f.Protein100g)
-		out["fat_100g"] = derefF(f.Fat100g)
-		out["carbs_100g"] = derefF(f.Carbs100g)
-		out["fiber_100g"] = derefF(f.Fiber100g)
-		out["sodium_100g"] = derefF(f.Sodium100g)
-	}
-	return out
-}
-
-// addHistory writes a composed food's last_eaten (YYYY-MM-DD or nil),
-// times_cooked, effective keep_days (defaultKeep when the recipe sets none)
-// and freezable (nil when unset) into out.
-func addHistory(out map[string]any, f *food.Food, defaultKeep int) {
-	if f.Kind != food.KindComposed {
-		return
-	}
-	var lastEaten any
-	if f.History.LastEaten != nil {
-		lastEaten = f.History.LastEaten.Format(time.DateOnly)
-	}
-	out["last_eaten"] = lastEaten
-	out["times_cooked"] = f.History.TimesCooked
-	out["keep_days"] = plate.BatchSettings{DefaultKeepDays: defaultKeep}.KeepDays(f.KeepDays)
-	out["freezable"] = boolOrNil(f.Freezable)
-}
-
 // defaultKeepDays reads plan.default_keep_days.
 func defaultKeepDays(ctx context.Context, svc Services) (int, error) {
 	return plate.IntSetting(ctx, svc.Settings, settings.KeyPlanDefaultKeepDays)
 }
 
-func boolOrNil(p *bool) any {
-	if p == nil {
-		return nil
-	}
-	return *p
-}
-
-// addPerPortion writes per_portion, basis, nutrition_complete and (when
-// incomplete) missing_nutrition into out. On error out is left untouched.
-// Leaf macros are per 100 g; composed macros are per serving.
-func addPerPortion(ctx context.Context, svc Services, out map[string]any, f *food.Food) error {
-	d, err := svc.NutritionResolver.PerPortionDetailed(ctx, f.ID)
-	if err != nil {
-		return err
-	}
-	out["per_portion"] = map[string]any{
-		"kcal":    round1(d.Macros.Kcal),
-		"protein": round1(d.Macros.Protein),
-		"fat":     round1(d.Macros.Fat),
-		"carbs":   round1(d.Macros.Carbs),
-	}
-	out["basis"] = "per_portion"
-	if f.Kind == food.KindLeaf {
-		out["basis"] = "per_100g"
-	}
-	out["nutrition_complete"] = d.Complete
-	if !d.Complete {
-		names := make([]string, len(d.Missing))
-		for i, m := range d.Missing {
-			names[i] = m.Name
-		}
-		out["missing_nutrition"] = names
-	}
-	return nil
-}
-
 func round1(v float64) float64 {
 	return math.Round(v*10) / 10
-}
-
-func derefF(p *float64) float64 {
-	if p == nil {
-		return 0
-	}
-	return *p
 }
 
 func plateSummary(p *plate.Plate) map[string]any {
@@ -1046,33 +453,6 @@ func plateSummary(p *plate.Plate) map[string]any {
 		"note": p.Note, "state": string(p.State), "ai_run_id": p.AIRunID, "reason": p.Reason,
 		"components": comps,
 	}
-}
-
-// linkedSessionList renders the cook sessions the plates' components eat
-// from, ascending by id.
-func linkedSessionList(ctx context.Context, svc Services, plates []plate.Plate) ([]map[string]any, error) {
-	var ids []int64
-	for _, p := range plates {
-		for _, c := range p.Components {
-			if c.CookSessionID != nil {
-				ids = append(ids, *c.CookSessionID)
-			}
-		}
-	}
-	slices.Sort(ids)
-	sessions, err := svc.Plates.CookSessions(ctx, slices.Compact(ids))
-	if err != nil {
-		return nil, err
-	}
-	out := make([]map[string]any, 0, len(sessions))
-	for _, sess := range sessions {
-		out = append(out, map[string]any{
-			"id": sess.ID, "food_id": sess.FoodID, "cook_date": sess.CookDate.Format(time.DateOnly),
-			"cook_slot_id": sess.CookSlotID, "portions": sess.Portions, "frozen_portions": sess.FrozenPortions,
-			"state": string(sess.State),
-		})
-	}
-	return out, nil
 }
 
 // plateComponentMap renders a component. Quantities are per eater.
@@ -1197,7 +577,5 @@ func sessionIDOf(pc *plate.PlateComponent) []int64 {
 // effectTools are the tools whose result carries an `after` block; they get
 // the window's issues snapshotted before they run.
 var effectTools = map[string]bool{
-	"create_plate": true, "add_food_to_plate": true, "swap_food": true, "update_plate_component": true,
-	"remove_plate_component": true, "delete_plate": true, "set_plate_eaters": true, "set_session_portions": true,
-	"set_availability": true, "confirm": true, "unlock": true, "regenerate": true, "apply_preset": true,
+	"confirm": true, "unlock": true, "regenerate": true, "apply_preset": true,
 }

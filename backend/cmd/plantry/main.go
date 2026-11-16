@@ -47,6 +47,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/setup"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
 	plantrymw "github.com/jaltszeimer/plantry/backend/internal/transport/http/middleware"
@@ -294,6 +295,10 @@ func run() error {
 		Planner:           planningSvc,
 		Cells:             availabilitySvc,
 		Changes:           changeRepo,
+		State: func(ctx context.Context, w window.Window, today time.Time) (planning.State, error) {
+			return planBuilder.Build(ctx, w, today, w.Start, w.End)
+		},
+		Tx: txRunner,
 	})
 	if err != nil {
 		return fmt.Errorf("build tool set: %w", err)
