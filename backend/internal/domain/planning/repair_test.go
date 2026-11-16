@@ -149,8 +149,8 @@ func TestLLMChooser_Run4FeedbackAndRepair(t *testing.T) {
 
 	// The curry session grows by itself (freezable, freezing on): visible.
 	assert.Contains(t, fb, "Already corrected for you")
-	assert.Contains(t, fb, "session s1 (Speedy lentil coconut curry): portions 4 -> 5")
-	assert.Contains(t, fb, "frozen_portions 0 -> 1")
+	assert.Contains(t, fb, "Speedy lentil coconut curry: portions raised from 4 to 5")
+	assert.Contains(t, fb, "frozen portions from 0 to 1")
 	// H2 names the cells and what cooks there.
 	assert.Contains(t, fb, "H2: Sunday 2026-11-22 has 2 cooking occasions, at most 1 are allowed")
 	assert.Contains(t, fb, "Sunday 2026-11-22 lunch (slot_id 2): s2 (Green salad, food_id 125)")
@@ -221,6 +221,7 @@ func TestAutofix_GrowsFreezableSession(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 3.0, s1.Portions, "2 on Sunday plus Thursday's leftover")
+	assert.Contains(t, prop.Notes, "Speedy lentil coconut curry: portions raised from 2 to 3")
 	assert.Equal(t, 1.0, s1.FrozenPortions)
 }
 
@@ -285,4 +286,153 @@ func TestRepairFeedback_Table(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Run 4's mistake: 3 eaters with portions 3 each (eaters used as portions)
+// against a session of 3. It is no plausible arithmetic gap, so Go does not
+// grow the session to 18 (shopping would buy it); the model is told.
+func TestAutofix_EatersAsPortionsIsSentBack(t *testing.T) {
+	in := run4Input()
+	p := validWeek(t, in)
+	for _, pl := range p.Plates {
+		if pl["date"] == "2026-11-27" {
+			pl["components"] = []map[string]any{{"food_id": 119, "portions": 3, "session_key": "s6"}}
+		}
+	}
+	for _, s := range p.Sessions {
+		if s["key"] == "s6" {
+			s["portions"] = 3.0
+		}
+	}
+
+	prop, reqs := chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
+
+	require.Len(t, reqs, 3, "a violation that is not fixed by Go is repaired by the model")
+	fb := feedbackOf(t, reqs[1])
+	assert.NotContains(t, fb, "Already corrected")
+	assert.Contains(t, fb, "3 x 3 = 9")
+	assert.Contains(t, fb, "portions must be at least 18")
+	for _, s := range prop.Sessions {
+		if s.Key == "s6" {
+			assert.Equal(t, 3.0, s.Portions, "not grown")
+		}
+	}
+	assert.NotContains(t, prop.Notes, "raised")
+}
+
+// Every autofix is a line of the run notes; the gap must be plausible and the
+// links valid (freezing on, freezable, within the keep days).
+func TestAutofix_NotesAndLimits(t *testing.T) {
+	thursdayLeftover := func(in *planning.ChooseInput, p *jsonPlan) {
+		for _, pl := range p.Plates {
+			if pl["date"] == "2026-11-26" {
+				pl["components"] = []map[string]any{{"food_id": 107, "portions": 1, "session_key": "s1"}}
+			}
+		}
+		p.Sessions = append(p.Sessions[:5], p.Sessions[6:]...)
+	}
+	tests := []struct {
+		name      string
+		mutate    func(in *planning.ChooseInput, p *jsonPlan)
+		wantFixed bool
+	}{
+		{name: "freezable with freezing on", mutate: thursdayLeftover, wantFixed: true},
+		{name: "freezing off", mutate: func(in *planning.ChooseInput, p *jsonPlan) {
+			thursdayLeftover(in, p)
+			in.State.Settings.FreezingEnabled = false
+		}},
+		{name: "not freezable", mutate: func(in *planning.ChooseInput, p *jsonPlan) {
+			thursdayLeftover(in, p)
+			f := in.State.Foods[107]
+			f.Freezable = false
+			in.State.Foods[107] = f
+		}},
+		{name: "beyond the freezer keep days", mutate: func(in *planning.ChooseInput, p *jsonPlan) {
+			thursdayLeftover(in, p)
+			in.State.Settings.FreezerKeepDays = 2
+		}},
+		{name: "a plate before the cook cell", mutate: func(in *planning.ChooseInput, p *jsonPlan) {
+			// Monday's plate eats Tuesday's session (cooked after it).
+			for _, pl := range p.Plates {
+				if pl["date"] == "2026-11-23" {
+					pl["components"] = []map[string]any{{"food_id": 111, "portions": 1, "session_key": "s2"}}
+				}
+			}
+			p.Sessions = append(p.Sessions[:1], p.Sessions[2:]...)
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := run4Input()
+			p := validWeek(t, in)
+			tt.mutate(&in, p)
+			prop, reqs := chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
+			if tt.wantFixed {
+				require.Len(t, reqs, 1)
+				assert.Contains(t, prop.Notes, "Speedy lentil coconut curry: portions raised from 2 to 3, frozen portions from 0 to 1 to cover its plates.")
+				return
+			}
+			require.Greater(t, len(reqs), 1, "a violation Go does not fix goes back to the model")
+			assert.NotContains(t, prop.Notes, "raised")
+		})
+	}
+}
+
+// A missing main still there after the last repair is a warning in the run
+// notes, not a silent ok.
+func TestLLMChooser_LeftoverAdvisoryIsWarned(t *testing.T) {
+	in := run4Input()
+	p := validWeek(t, in)
+	p.Plates[1]["components"] = []map[string]any{{"food_id": 124, "portions": 1}}
+
+	prop, reqs := chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
+
+	require.Len(t, reqs, 3)
+	assert.Contains(t, prop.Notes, "One different main a day.")
+	assert.Contains(t, prop.Notes, "Warning, not resolved: Sunday 2026-11-22 lunch (slot_id 2) has no main (only Steamed rice).")
+	assert.NotContains(t, prop.Notes, "Fix:")
+}
+
+// The main is demanded by the slot's name, not its position: breakfast and
+// snack plates are exempt wherever they sit, any other slot (also a custom
+// one) needs a main, with 2 or 3 slot names alike.
+func TestMissingMain_ByRoleNotPosition(t *testing.T) {
+	tests := []struct {
+		name     string
+		names    map[int64]string
+		wantFlag bool
+	}{
+		{"breakfast is the middle slot", map[int64]string{1: "slot.lunch", 2: "slot.breakfast", 3: "slot.dinner"}, false},
+		{"2 slots: breakfast and dinner", map[int64]string{1: "slot.dinner", 2: "slot.breakfast"}, false},
+		{"2 slots: lunch and dinner", map[int64]string{1: "slot.dinner", 2: "slot.lunch"}, true},
+		{"snack in the middle", map[int64]string{1: "slot.breakfast", 2: "slot.snack", 3: "slot.dinner"}, false},
+		{"custom slot name needs a main", map[int64]string{1: "slot.breakfast", 2: "slot.elevenses", 3: "slot.dinner"}, true},
+		{"first slot that is no breakfast", map[int64]string{1: "slot.lunch", 2: "slot.dinner", 3: "slot.snack"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := run4Input()
+			in.State.SlotNames = tt.names
+			p := validWeek(t, in)
+			p.Plates[1]["components"] = []map[string]any{{"food_id": 124, "portions": 1}}
+			require.EqualValues(t, 2, p.Plates[1]["slot_id"])
+			prop, _ := chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
+			if tt.wantFlag {
+				assert.Contains(t, prop.Notes, "has no main (only Steamed rice)")
+			} else {
+				assert.NotContains(t, prop.Notes, "has no main (only Steamed rice)")
+			}
+		})
+	}
+}
+
+// A pathological week lists a capped number of problems.
+func TestRepairFeedback_Cap(t *testing.T) {
+	in := run4Input()
+	p := &jsonPlan{Notes: "nothing"}
+	_, reqs := chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
+	fb := feedbackOf(t, reqs[1])
+	assert.Contains(t, fb, "11. and 2 more")
+	assert.Contains(t, fb, "problem(s) of the same kind")
+	assert.NotContains(t, fb, "12. ")
 }

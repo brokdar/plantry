@@ -323,7 +323,7 @@ func TestLLMChooser_UnresolvedViolationsArePersisted(t *testing.T) {
 	}), "board issues %+v", board.Issues)
 	require.NotNil(t, board.Draft)
 	require.NotNil(t, board.Draft.Notes)
-	assert.Equal(t, "Two occasions on Sunday.", *board.Draft.Notes)
+	assert.True(t, strings.HasPrefix(r.Notes, "Two occasions on Sunday."), r.Notes)
 }
 
 // B7-AC4: an unknown food id is an H7 violation that is repaired.
@@ -417,7 +417,7 @@ func TestLLMChooser_UnreadableReplies(t *testing.T) {
 		r := e.run(id)
 		assert.Equal(t, "partial", r.Status)
 		assert.Equal(t, 2, r.RepairAttempts)
-		assert.Equal(t, "Two occasions on Sunday.", r.Notes)
+		assert.True(t, strings.HasPrefix(r.Notes, "Two occasions on Sunday.\nWarning, not resolved:"), r.Notes)
 	})
 }
 

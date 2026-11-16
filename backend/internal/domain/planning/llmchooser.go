@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -74,6 +75,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 	}
 	var last *Proposal
 	var lastSig string
+	var allFixes []string
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 && in.Stage != nil {
 			in.Stage(StageRepairing)
@@ -97,10 +99,16 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			rep := newRepairer(in, prop)
 			advice, info := rep.advisories()
 			logAttempt(ctx, in.Logger, attempt, violations, nil, fixes...)
-			if (len(violations) == 0 && len(advice) == 0) || attempt == maxRepairs {
-				return prop, nil
+			for _, f := range fixes {
+				if !slices.Contains(allFixes, f) {
+					allFixes = append(allFixes, f)
+				}
 			}
-			last, feedback = &prop, rep.feedback(violations, advice, info, fixes, sig == lastSig)
+			noted := withNotes(prop, allFixes, advice)
+			if (len(violations) == 0 && len(advice) == 0) || attempt == maxRepairs {
+				return noted, nil
+			}
+			last, feedback = &noted, rep.feedback(findings{violations, advice, info, fixes, sig == lastSig})
 			lastSig = sig
 		} else {
 			logAttempt(ctx, in.Logger, attempt, nil, perr)
@@ -118,6 +126,21 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		}
 		req.Messages = append(req.Messages, repairMessage(resp.Message, feedback))
 	}
+}
+
+// withNotes appends to the proposal's notes (the run notes the board shows)
+// one line per autofix and one warning per advisory the repairs left open, so
+// a correction or an unresolved problem never passes silently.
+func withNotes(p Proposal, fixes, advice []string) Proposal {
+	lines := slices.Clone(fixes)
+	for _, a := range advice {
+		short, _, _ := strings.Cut(a, " Fix:")
+		lines = append(lines, "Warning, not resolved: "+short)
+	}
+	if len(lines) > 0 {
+		p.Notes = strings.TrimSpace(strings.Join(append([]string{p.Notes}, lines...), "\n"))
+	}
+	return p
 }
 
 // call streams one request and returns the assembled reply.

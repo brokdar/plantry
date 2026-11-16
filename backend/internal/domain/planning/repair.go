@@ -2,6 +2,7 @@ package planning
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strings"
@@ -13,6 +14,9 @@ import (
 
 // Thresholds of the macro advisory: a complete day whose per-eater kcal is
 // outside [low, high] of the daily target sends the plan back.
+// maxFeedbackLines caps the problems one repair message lists.
+const maxFeedbackLines = 10
+
 const (
 	kcalLow  = 0.6
 	kcalHigh = 1.5
@@ -44,19 +48,16 @@ func (r *repairer) advisories() (needs, info []string) {
 	return r.missingMains(), r.kcalDays()
 }
 
-// mealSlot reports whether slot is a lunch or dinner: any slot but the
-// first of a day with three or more slots.
+// lightSlots are the slot names (keys without the "slot." prefix) of meals
+// that need no main: breakfast and snacks. Any other slot, including a
+// user-defined one, is a meal; a cell that is routine or not a fill cell is
+// skipped by its availability before this is asked.
+var lightSlots = []string{"breakfast", "fruehstueck", "frühstück", "snack", "snacks"}
+
+// mealSlot reports whether slot is a lunch, dinner or any other main meal,
+// by the slot's name, not its position.
 func (r *repairer) mealSlot(slot int64) bool {
-	if len(r.s.SlotOrder) < 3 {
-		return true
-	}
-	first := slot
-	for id, o := range r.s.SlotOrder {
-		if o < r.s.SlotOrder[first] || (o == r.s.SlotOrder[first] && id < first) {
-			first = id
-		}
-	}
-	return first != slot
+	return !slices.Contains(lightSlots, strings.ToLower(slotName(r.s, slot)))
 }
 
 func (r *repairer) missingMains() []string {
@@ -128,9 +129,20 @@ func (r *repairer) kcalDays() []string {
 	return out
 }
 
-// feedback is the repair message. repeated says the proposal equals the
-// previous attempt's; fixes are the corrections already applied in Go.
-func (r *repairer) feedback(vs []Issue, adv, info, fixes []string, repeated bool) string {
+// findings is what one attempt's proposal left to repair: violations, the
+// advisories, the corrections already applied in Go, and whether the
+// proposal equals the previous attempt's.
+type findings struct {
+	violations []Issue
+	advice     []string
+	info       []string
+	fixes      []string
+	repeated   bool
+}
+
+// feedback is the repair message.
+func (r *repairer) feedback(f findings) string {
+	vs, adv, info, fixes, repeated := f.violations, f.advice, f.info, f.fixes, f.repeated
 	var b strings.Builder
 	if repeated {
 		b.WriteString("Your last reply is identical to the one before it, so nothing was repaired. Change the cells named below; resubmitting the same plan fails again.\n")
@@ -153,6 +165,9 @@ func (r *repairer) feedback(vs []Issue, adv, info, fixes []string, repeated bool
 	}
 	lines = append(lines, adv...)
 	lines = append(lines, info...)
+	if len(lines) > maxFeedbackLines {
+		lines = append(lines[:maxFeedbackLines:maxFeedbackLines], fmt.Sprintf("and %d more problem(s) of the same kind; fix the ones above first.", len(lines)-maxFeedbackLines))
+	}
 	fmt.Fprintf(&b, "Your proposal has %d problem(s). Edit it, keeping everything that is not named, and call submit_plan again with the complete plan (every session and plate):\n", len(lines))
 	for i, l := range lines {
 		fmt.Fprintf(&b, "%d. %s\n", i+1, l)
@@ -236,7 +251,7 @@ func (r *repairer) describe(v Issue, seen map[string]bool) string {
 	}
 	// Anything else keeps the plain line.
 	line := fmt.Sprintf("%s %s at %s", v.Rule, v.Code, where)
-	for _, k := range slices.Sorted(mapKeys(v.Params)) {
+	for _, k := range slices.Sorted(maps.Keys(v.Params)) {
 		line += fmt.Sprintf(" %s=%v", k, v.Params[k])
 	}
 	return line + ". Fix: change the plan so this rule holds."
@@ -254,16 +269,6 @@ func orEmpty(v any) any {
 		return ""
 	}
 	return v
-}
-
-func mapKeys(m map[string]any) func(func(string) bool) {
-	return func(yield func(string) bool) {
-		for k := range m {
-			if !yield(k) {
-				return
-			}
-		}
-	}
 }
 
 // describeH2 lists the cells that cook on the day.
@@ -396,8 +401,16 @@ func (r *repairer) describeSession(v Issue, seen map[string]bool) string {
 // proposed session whose plates consume more than it cooks grows its
 // portions (and, for plates after the keep days, its frozen portions) to
 // match, when its links are otherwise valid (after the cook cell, frozen
-// ones only for a freezable recipe within the freezer's keep days). It
-// returns the corrected proposal and one line per change.
+// ones only for a freezable recipe within the freezer's keep days) and the
+// gap is plausible arithmetic: a plate eating more than maxAutofixPerEater
+// per eater, or a consumption over maxAutofixGrowth times the session, is a
+// model mistake (eaters used as portions) that is sent back, not hidden. It
+// returns the corrected proposal and one user-facing line per change.
+const (
+	maxAutofixPerEater = 2.0
+	maxAutofixGrowth   = 2.0
+)
+
 func autofix(in ChooseInput, prop Proposal) (Proposal, []string) {
 	s := Merge(in.State, in.Target, prop)
 	x := newIndex(s, in.Target)
@@ -421,18 +434,21 @@ func autofix(in ChooseInput, prop Proposal) (Proposal, []string) {
 		valid := len(links) > 0
 		for _, l := range links {
 			switch {
-			case plate.Before(l.Cell, ss.CookCell(), s.SlotOrder), !(l.PerEater > 0), !(l.Eaters > 0):
+			case plate.Before(l.Cell, ss.CookCell(), s.SlotOrder), !(l.PerEater > 0), !(l.Eaters > 0), l.PerEater > maxAutofixPerEater:
 				valid = false
 			case plate.Classify(l.Cell, ss.CookSession, keep) == plate.KindFrozen:
 				valid = valid && set.FreezingEnabled && f.Freezable && !l.Cell.Date.After(ss.CookDate.AddDate(0, 0, set.FreezerKeepDays))
 			}
 		}
-		if !valid {
+		if !valid || use.Total > maxAutofixGrowth*ps.Portions {
 			continue
 		}
 		portions, frozen := max(ps.Portions, round2(use.Total)), max(ps.FrozenPortions, round2(use.Frozen))
-		notes = append(notes, fmt.Sprintf("session %s (%s): portions %s -> %s, frozen_portions %s -> %s to cover its plates",
-			ps.Key, foodName(s, ps.FoodID), num(ps.Portions), num(portions), num(ps.FrozenPortions), num(frozen)))
+		line := fmt.Sprintf("%s: portions raised from %s to %s", foodName(s, ps.FoodID), num(ps.Portions), num(portions))
+		if frozen != ps.FrozenPortions {
+			line += fmt.Sprintf(", frozen portions from %s to %s", num(ps.FrozenPortions), num(frozen))
+		}
+		notes = append(notes, line+" to cover its plates.")
 		out.Sessions[i].Portions, out.Sessions[i].FrozenPortions = portions, frozen
 	}
 	return out, notes
