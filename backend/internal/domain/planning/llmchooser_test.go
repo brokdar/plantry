@@ -288,7 +288,7 @@ func TestLLMChooser_RepairsAnH2Violation(t *testing.T) {
 	assert.Equal(t, reqs[0].System, repair.System)
 	assert.Equal(t, reqs[0].ToolChoice, repair.ToolChoice)
 	feedback := toolResult(t, repair)
-	assert.Contains(t, feedback, "- H2 too_many_cook_occasions on "+sun+" count=2 max=1\n")
+	assert.Contains(t, feedback, "1. H2: Sunday "+sun+" has 2 cooking occasions, at most 1 are allowed")
 	assert.NotContains(t, feedback, "H8")
 
 	// The 16 proposed plates and 7 batches plus the 5 routine breakfasts.
@@ -323,7 +323,7 @@ func TestLLMChooser_UnresolvedViolationsArePersisted(t *testing.T) {
 	}), "board issues %+v", board.Issues)
 	require.NotNil(t, board.Draft)
 	require.NotNil(t, board.Draft.Notes)
-	assert.Equal(t, "Two occasions on Sunday.", *board.Draft.Notes)
+	assert.True(t, strings.HasPrefix(r.Notes, "Two occasions on Sunday."), r.Notes)
 }
 
 // B7-AC4: an unknown food id is an H7 violation that is repaired.
@@ -337,8 +337,8 @@ func TestLLMChooser_RepairsAnUnknownFood(t *testing.T) {
 	assert.Equal(t, 1, r.RepairAttempts)
 	reqs := e.client.Requests()
 	require.Len(t, reqs, 2)
-	assert.Contains(t, toolResult(t, reqs[1]), "H7 unknown_food on "+sat)
-	assert.Contains(t, toolResult(t, reqs[1]), "food_id=999999")
+	assert.Contains(t, toolResult(t, reqs[1]), "H7: Saturday "+sat)
+	assert.Contains(t, toolResult(t, reqs[1]), "names food_id 999999")
 }
 
 // B8-AC4: a reply without the submit_plan call (what an auto tool choice can
@@ -417,7 +417,7 @@ func TestLLMChooser_UnreadableReplies(t *testing.T) {
 		r := e.run(id)
 		assert.Equal(t, "partial", r.Status)
 		assert.Equal(t, 2, r.RepairAttempts)
-		assert.Equal(t, "Two occasions on Sunday.", r.Notes)
+		assert.True(t, strings.HasPrefix(r.Notes, "Two occasions on Sunday.\nWarning, not resolved:"), r.Notes)
 	})
 }
 
@@ -488,7 +488,7 @@ func TestLLMChooser_StageAndReady(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, p.RepairAttempts)
 	assert.Equal(t, []planning.Stage{planning.StageRepairing, planning.StageRepairing}, stages)
-	assert.Equal(t, "p3", c.PromptVersion())
+	assert.Equal(t, "p4", c.PromptVersion())
 
 	require.NoError(t, c.Ready(context.Background()))
 	assert.ErrorIs(t, planning.NewLLMChooser(llm.StaticResolver(nil, "")).Ready(context.Background()), domain.ErrAIProviderMissing)
@@ -648,8 +648,8 @@ func TestGenerateWeekFixture(t *testing.T) {
 	assert.Equal(t, 1, r.RepairAttempts)
 	assert.NotEmpty(t, r.Notes)
 	feedback := toolResult(t, e.client.Requests()[1])
-	assert.Contains(t, feedback, "H2 too_many_cook_occasions on "+sun)
-	assert.Equal(t, 1, strings.Count(feedback, "\n- "), feedback)
+	assert.Contains(t, feedback, "H2: Sunday "+sun+" has 2 cooking occasions")
+	assert.Contains(t, feedback, "has 1 problem(s)")
 	plates, sessions := e.rows(id)
 	assert.Equal(t, 21, plates)
 	assert.Equal(t, 7, sessions)

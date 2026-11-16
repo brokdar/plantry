@@ -346,7 +346,7 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     expect(detail1).toMatchObject({
       kind: "chat",
       status: "ok",
-      prompt_version: "v5",
+      prompt_version: "v6",
     })
     expect(detail1.instruction).toBe("Make the chili 6 portions and freeze 2")
     expect(detail1.steps.map((s) => s.name)).toEqual(

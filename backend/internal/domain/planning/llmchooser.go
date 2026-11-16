@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -75,6 +74,8 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		MaxTokens:   llmMaxTokens,
 	}
 	var last *Proposal
+	var lastSig string
+	var allFixes []string
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 && in.Stage != nil {
 			in.Stage(StageRepairing)
@@ -91,12 +92,24 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		var feedback string
 		if perr == nil {
 			prop.RepairAttempts = attempt
+			sig := signature(prop)
+			var fixes []string
+			prop, fixes = autofix(in, prop)
 			violations := violationsOf(Check(Merge(in.State, in.Target, prop), in.Target))
-			logAttempt(ctx, in.Logger, attempt, violations, nil)
-			if len(violations) == 0 || attempt == maxRepairs {
-				return prop, nil
+			rep := newRepairer(in, prop)
+			advice, info := rep.advisories()
+			logAttempt(ctx, in.Logger, attempt, violations, nil, fixes...)
+			for _, f := range fixes {
+				if !slices.Contains(allFixes, f) {
+					allFixes = append(allFixes, f)
+				}
 			}
-			last, feedback = &prop, describeViolations(violations)
+			noted := withNotes(prop, allFixes, advice)
+			if (len(violations) == 0 && len(advice) == 0) || attempt == maxRepairs {
+				return noted, nil
+			}
+			last, feedback = &noted, rep.feedback(findings{violations, advice, info, fixes, sig == lastSig})
+			lastSig = sig
 		} else {
 			logAttempt(ctx, in.Logger, attempt, nil, perr)
 			if attempt == maxRepairs {
@@ -113,6 +126,21 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		}
 		req.Messages = append(req.Messages, repairMessage(resp.Message, feedback))
 	}
+}
+
+// withNotes appends to the proposal's notes (the run notes the board shows)
+// one line per autofix and one warning per advisory the repairs left open, so
+// a correction or an unresolved problem never passes silently.
+func withNotes(p Proposal, fixes, advice []string) Proposal {
+	lines := slices.Clone(fixes)
+	for _, a := range advice {
+		short, _, _ := strings.Cut(a, " Fix:")
+		lines = append(lines, "Warning, not resolved: "+short)
+	}
+	if len(lines) > 0 {
+		p.Notes = strings.TrimSpace(strings.Join(append([]string{p.Notes}, lines...), "\n"))
+	}
+	return p
 }
 
 // call streams one request and returns the assembled reply.
@@ -279,32 +307,4 @@ func violationsOf(issues []Issue) []Issue {
 		}
 	}
 	return out
-}
-
-// describeViolations is the repair feedback: one line per violation with
-// its rule, code, place and parameters.
-func describeViolations(vs []Issue) string {
-	var b strings.Builder
-	b.WriteString("violations:\n")
-	for _, v := range vs {
-		fmt.Fprintf(&b, "- %s %s", v.Rule, v.Code)
-		if v.Date != "" {
-			fmt.Fprintf(&b, " on %s", v.Date)
-		}
-		if v.SlotID != nil {
-			fmt.Fprintf(&b, " slot_id %d", *v.SlotID)
-		}
-		if v.PlateID != nil {
-			fmt.Fprintf(&b, " plate_id %d", *v.PlateID)
-		}
-		if v.SessionID != nil {
-			fmt.Fprintf(&b, " session_id %d", *v.SessionID)
-		}
-		for _, k := range slices.Sorted(maps.Keys(v.Params)) {
-			fmt.Fprintf(&b, " %s=%v", k, v.Params[k])
-		}
-		b.WriteByte('\n')
-	}
-	b.WriteString("Fix every violation and call submit_plan again with the complete plan (every session and plate, not only the changes).")
-	return b.String()
 }
