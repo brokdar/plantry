@@ -183,6 +183,10 @@ func TestStream_RequestEncoding(t *testing.T) {
 		} `json:"tools"`
 	}
 	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet { // the capability lookup: unknown model
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		assert.Equal(t, "test-key", r.Header.Get("x-api-key"))
 		assert.Equal(t, "2023-06-01", r.Header.Get("anthropic-version"))
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
@@ -243,6 +247,10 @@ func TestStream_RequestEncoding(t *testing.T) {
 func TestStream_DefaultsMaxTokensWhenZero(t *testing.T) {
 	var body reqBodyPeek
 	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 		w.Header().Set("Content-Type", "text/event-stream")
 		b, _ := os.ReadFile("testdata/stream_text.sse")
@@ -266,7 +274,8 @@ func modelJSON(disabledOK bool, max int) string {
 // The request rules follow the model's capabilities from the Models API, not
 // a table: a model that cannot turn thinking off cannot take a forced
 // tool_choice, an unknown or unreachable model gets `auto`, and temperature
-// is never sent.
+// is sent whenever the caller sets one (a 400 retry covers models that
+// refuse it).
 func TestStream_ModelRequestRules(t *testing.T) {
 	tools := []llm.Tool{{Name: "submit_plan", Description: "submit", Schema: json.RawMessage(`{"type":"object"}`)}}
 	forced := llm.Request{
@@ -289,13 +298,13 @@ func TestStream_ModelRequestRules(t *testing.T) {
 	}{
 		{
 			"thinking can be disabled: forced", 200, modelJSON(true, 64000), forced,
-			[]string{forcedJSON},
-			[]string{autoJSON, temperature},
+			[]string{forcedJSON, temperature},
+			[]string{autoJSON},
 		},
 		{
 			"always thinking: auto plus the system line", 200, modelJSON(false, 64000), forced,
-			[]string{autoJSON, systemLine},
-			[]string{forcedJSON, temperature},
+			[]string{autoJSON, systemLine, temperature},
+			[]string{forcedJSON},
 		},
 		{
 			"no thinking support: forced", 200, `{"id":"m","capabilities":{"thinking":{"supported":false}}}`, forced,
@@ -451,5 +460,8 @@ func TestStream_TruncatedStreamIsError(t *testing.T) {
 	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
 	resp, err := c.Stream(context.Background(), llm.Request{Model: "m"}, make(chan llm.Event, 64))
 	require.ErrorIs(t, err, anthropic.ErrStreamIncomplete)
-	assert.Nil(t, resp)
+	require.NotNil(t, resp, "the partial reply and its billed usage come back with the error")
+	assert.True(t, resp.Partial)
+	assert.Equal(t, "Hello world", resp.Message.Content[0].Text)
+	assert.Equal(t, 42, resp.Usage.InputTokens)
 }

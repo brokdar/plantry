@@ -8,20 +8,59 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"slices"
 	"strings"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
 
-// parseStream reads the Anthropic SSE event sequence from body, relays
-// canonical llm.Events on out, and returns the assembled Response.
-// body is drained but not closed here — the caller owns it.
 // ErrStreamIncomplete: the stream ended without message_stop (the connection
-// dropped mid-reply); the partial reply is not returned.
+// dropped mid-reply); parseStream returns the partial reply with it.
 var ErrStreamIncomplete = errors.New("anthropic: stream ended before message_stop")
 
+// parseStream reads the SSE stream of one reply (see readStream). When the
+// stream breaks off it returns the partial reply next to the error: the text
+// and tool calls streamed so far and the usage billed so far, with Partial
+// set, so the run log keeps what was paid for.
 func parseStream(ctx context.Context, body io.Reader, out chan<- llm.Event) (*llm.Response, error) {
+	st := &streamState{blocks: map[int]*blockAccum{}}
+	resp, err := readStream(ctx, body, out, st)
+	if err != nil {
+		return st.partial(), err
+	}
+	return resp, nil
+}
+
+// partial is the reply streamed so far. A tool call whose arguments are cut
+// off keeps them as a JSON string so the result stays encodable.
+func (st *streamState) partial() *llm.Response {
+	content := make([]llm.ContentBlock, 0, len(st.order))
+	for _, idx := range st.order {
+		b, ok := st.blocks[idx]
+		if !ok {
+			continue
+		}
+		cb := b.finalize()
+		if cb.Type == llm.ContentTypeToolUse && !json.Valid(cb.ToolUseInput) {
+			cb.ToolUseInput, _ = json.Marshal(string(cb.ToolUseInput))
+		}
+		content = append(content, cb)
+	}
+	return &llm.Response{
+		Message:       llm.Message{Role: llm.RoleAssistant, Content: content},
+		StopReason:    st.stopReason,
+		Usage:         st.usage,
+		SearchResults: st.results,
+		Model:         st.model,
+		Partial:       true,
+	}
+}
+
+// readStream reads the Anthropic SSE event sequence from body, relays
+// canonical llm.Events on out, and returns the assembled Response.
+// body is drained but not closed here — the caller owns it.
+func readStream(ctx context.Context, body io.Reader, out chan<- llm.Event, st *streamState) (*llm.Response, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
@@ -29,8 +68,6 @@ func parseStream(ctx context.Context, body io.Reader, out chan<- llm.Event) (*ll
 		eventName string
 		dataBuf   bytes.Buffer
 	)
-
-	st := &streamState{blocks: map[int]*blockAccum{}}
 
 	flushEvent := func() error {
 		defer func() {
@@ -383,7 +420,10 @@ func handleSSEEvent(
 			} `json:"error"`
 		}
 		_ = json.Unmarshal(data, &payload)
-		return fmt.Errorf("anthropic: stream error %s: %s", payload.Error.Type, payload.Error.Message)
+		return &APIError{
+			Status: http.StatusOK, MidStream: true,
+			ErrorType: payload.Error.Type, Message: payload.Error.Message, RawBody: capBody(string(data)),
+		}
 
 	default:
 		return nil

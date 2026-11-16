@@ -6,6 +6,8 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
+	"time"
 )
 
 // Role identifies the author of a message in a conversation.
@@ -138,6 +140,9 @@ type Response struct {
 	SearchResults []SearchResult
 	// Model is the model the provider says it served, empty when unknown.
 	Model string
+	// Partial marks what a failed Stream returns next to its error: the
+	// content and billed usage of a reply that broke off mid-stream.
+	Partial bool
 }
 
 // Client is the port an LLM provider adapter must implement.
@@ -168,12 +173,22 @@ type Capabilities interface {
 	WebSearch(ctx context.Context, model string) (bool, error)
 }
 
-// Effective is the request parameters an adapter actually sends: its default
-// max_tokens and the model's cap applied, and a nil Temperature when it sends
-// none. Adapters implement it so the run log stores what went over the wire.
+// Effective is what an adapter actually sends for a request: its default
+// max_tokens and the model's cap applied, a nil Temperature when it sends
+// none, and the tool choice and web search that went over the wire. Adapters
+// implement it so the run log stores what was sent, not what was asked for.
+//
+// ToolChoice is "forced" (the named tool was forced), "auto" (the model
+// decides, the tool asked for in the system prompt) or "" (the request had
+// none). Fallbacks lists why the wire request differs from the asked one,
+// e.g. "capability_lookup_failed: 503 api_error", "model_always_thinks",
+// "temperature_rejected_by_model", "web_search_rejected_by_org".
 type Effective struct {
 	MaxTokens   int
 	Temperature *float64
+	ToolChoice  string
+	WebSearch   bool
+	Fallbacks   []string
 }
 
 // ParamsReporter is implemented by clients that can report the effective
@@ -183,11 +198,68 @@ type ParamsReporter interface {
 	EffectiveParams(req Request) Effective
 }
 
+// ProviderErrorInfo is what a provider error says, for the run log: never
+// the key or the prompt. RawBody is capped by the adapter.
+type ProviderErrorInfo struct {
+	Status    int    `json:"status"`
+	Type      string `json:"type,omitempty"`
+	Message   string `json:"message,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	RateLimit string `json:"rate_limit,omitempty"` // retry-after and ratelimit headers
+	RawBody   string `json:"raw_body,omitempty"`
+}
+
 // ProviderError is implemented by adapter errors that carry the provider's
-// HTTP status and error type, so the run log can record them (never the key
-// or the prompt).
+// HTTP status and error details, so the run log can record them.
 type ProviderError interface {
 	error
 	ProviderStatus() int
 	ProviderErrorType() string
+	ProviderInfo() ProviderErrorInfo
+}
+
+// Attempt is one failed wire request an adapter retried with different
+// parameters (a 400 naming temperature, tool_choice or web search). The
+// adapter reports each through the observer in ctx (WithAttemptObserver) so
+// the run log records every attempt as its own step.
+type Attempt struct {
+	Started  time.Time
+	Duration time.Duration
+	Err      error
+	// Sent is what this attempt put on the wire; Reason why the next one
+	// differs (e.g. "temperature_rejected_400").
+	Sent   Effective
+	Reason string
+}
+
+type ctxKey int
+
+const (
+	attemptKey ctxKey = iota
+	logAttrsKey
+)
+
+// WithAttemptObserver returns ctx carrying fn, which adapters call for each
+// retried attempt.
+func WithAttemptObserver(ctx context.Context, fn func(Attempt)) context.Context {
+	return context.WithValue(ctx, attemptKey, fn)
+}
+
+// ReportAttempt hands a to the observer in ctx, if any.
+func ReportAttempt(ctx context.Context, a Attempt) {
+	if fn, ok := ctx.Value(attemptKey).(func(Attempt)); ok {
+		fn(a)
+	}
+}
+
+// WithLogAttrs returns ctx carrying the attributes (run_id, request_id)
+// adapters add to their log lines.
+func WithLogAttrs(ctx context.Context, attrs []any) context.Context {
+	return context.WithValue(ctx, logAttrsKey, attrs)
+}
+
+// Log logs msg with the ctx's run attributes ahead of attrs.
+func Log(ctx context.Context, level slog.Level, msg string, attrs ...any) {
+	base, _ := ctx.Value(logAttrsKey).([]any)
+	slog.Log(ctx, level, msg, append(append([]any(nil), base...), attrs...)...)
 }

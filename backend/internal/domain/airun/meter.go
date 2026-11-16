@@ -8,6 +8,7 @@ import (
 	"errors"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -91,10 +92,36 @@ func (m *meteredClient) Stream(ctx context.Context, req llm.Request, out chan<- 
 			}
 		}
 	}()
+	// Wire requests the adapter retried with other parameters (a 400 naming
+	// temperature, tool_choice or web search) each become a failed step.
+	var attempts []llm.Attempt
+	var attemptsMu sync.Mutex
+	ctx = llm.WithAttemptObserver(ctx, func(a llm.Attempt) {
+		attemptsMu.Lock()
+		attempts = append(attempts, a)
+		attemptsMu.Unlock()
+	})
 	resp, err := m.inner.Stream(ctx, req, inner)
 	finished := m.rec.now()
 	close(stop)
 	<-done
+	attemptsMu.Lock()
+	for _, a := range attempts {
+		eff := a.Sent
+		run.llmCall(ctx, m.provider, req, nil, a.Err, callInfo{
+			started: a.Started, dur: a.Duration, eff: &eff, retryReason: a.Reason,
+		})
+	}
+	attemptsMu.Unlock()
+	if n := len(attempts); n > 0 { // the final attempt starts where the last failed one ended
+		last := attempts[n-1]
+		shifted := last.Started.Add(last.Duration)
+		if ttft != nil {
+			d := *ttft - shifted.Sub(started)
+			ttft = &d
+		}
+		started = shifted
+	}
 	call := callInfo{started: started, dur: finished.Sub(started), ttft: ttft}
 	if rep, ok := m.inner.(llm.ParamsReporter); ok {
 		eff := rep.EffectiveParams(req)
@@ -143,17 +170,20 @@ func (m *meteredClient) Complete(ctx context.Context, req llm.Request) (string, 
 	return sb.String(), nil
 }
 
-// llmCall folds one LLM call into the run totals and records it as a step
-// whose request_json and response_json let the call be replayed. The
-// provider, model and prompt hash of the first call are kept.
 // callInfo is what the metered client measured around one call.
 type callInfo struct {
-	started time.Time
-	dur     time.Duration
-	ttft    *time.Duration // nil: no token or tool call streamed
-	eff     *llm.Effective // nil: the client reports no effective parameters
+	started     time.Time
+	dur         time.Duration
+	ttft        *time.Duration // nil: no token or tool call streamed
+	eff         *llm.Effective // nil: the client reports no effective parameters
+	retryReason string         // a failed attempt the adapter retried: why it did
 }
 
+// llmCall folds one LLM call into the run totals and records it as a step
+// whose request_json and response_json let the call be replayed. The
+// provider, model and prompt hash of the first call are kept. A failed call
+// stores the provider's error (and the partial reply of a broken stream) in
+// response_json.
 func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, resp *llm.Response, callErr error, call callInfo) {
 	dur := call.dur
 	var usage llm.Usage
@@ -264,9 +294,14 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 		step.ServedModel = resp.Model
 		step.ThinkingChars = thinkingChars(resp.Message.Content)
 	}
-	if callErr == nil && resp != nil {
+	switch {
+	case callErr == nil && resp != nil:
 		step.StopReason = string(resp.StopReason)
-		if step.ResponseJSON, err = encodeResponse(resp); err != nil {
+		if step.ResponseJSON, err = encodeResponse(resp, nil, call); err != nil {
+			run.warn(ctx, "ai.run.response encode failed", err)
+		}
+	case callErr != nil:
+		if step.ResponseJSON, err = encodeResponse(resp, callErr, call); err != nil {
 			run.warn(ctx, "ai.run.response encode failed", err)
 		}
 	}
@@ -277,7 +312,7 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	// is assumed not to be mutated after the call. A step that was not
 	// stored resets the history, so the next call is recorded from offset 0
 	// instead of continuing a call replay cannot see.
-	run.logLLMCall(ctx, provider, req, step, callErr)
+	run.logLLMCall(ctx, provider, req, step, callErr, call, resp)
 	var lastMsgs []llm.Message
 	if run.addStep(ctx, step) {
 		lastMsgs = append([]llm.Message(nil), req.Messages...)
@@ -314,17 +349,43 @@ type requestBody struct {
 	// temperature: none was sent).
 	Temperature *float64 `json:"temperature"`
 	MaxTokens   int      `json:"max_tokens"`
-	SystemHash  *string  `json:"system_hash"`
-	ToolsHash   *string  `json:"tools_hash"`
-	Truncated   bool     `json:"truncated"`
+	// Sent is what went over the wire when the client says so: tool_choice
+	// and web_search above are what the caller asked for.
+	Sent       *sentBody `json:"sent,omitempty"`
+	SystemHash *string   `json:"system_hash"`
+	ToolsHash  *string   `json:"tools_hash"`
+	Truncated  bool      `json:"truncated"`
+}
+
+// sentBody is the tool choice ("forced", "auto" or ""), web search and the
+// reasons for every fallback of one wire request (see llm.Effective).
+type sentBody struct {
+	ToolChoice string   `json:"tool_choice"`
+	WebSearch  bool     `json:"web_search"`
+	Fallbacks  []string `json:"fallbacks,omitempty"`
 }
 
 // responseBody is the stored response_json: the reply's content blocks and
-// stop reason.
+// stop reason. A failed call also carries Error, and Partial when the reply
+// broke off mid-stream (the content is what streamed before the break).
 type responseBody struct {
 	Content    []llm.ContentBlock `json:"content"`
 	StopReason llm.StopReason     `json:"stop_reason"`
+	Partial    bool               `json:"partial,omitempty"`
+	Error      *errorBody         `json:"error,omitempty"`
 	Truncated  bool               `json:"truncated,omitempty"`
+}
+
+// errorBody is why a call failed: the provider's answer (status, type,
+// message, request id, rate limit headers, capped raw body), or just the
+// error text for a failure without one (network, decode). AfterFirstToken
+// says whether a token had streamed when it failed; RetryReason is set on an
+// attempt the adapter retried with other parameters.
+type errorBody struct {
+	llm.ProviderErrorInfo
+	Text            string `json:"text,omitempty"`
+	AfterFirstToken bool   `json:"after_first_token"`
+	RetryReason     string `json:"retry_reason,omitempty"`
 }
 
 func encodeRequest(req llm.Request, eff *llm.Effective, offset int, systemHash, toolsHash string) (string, error) {
@@ -351,17 +412,36 @@ func encodeRequest(req llm.Request, eff *llm.Effective, offset int, systemHash, 
 	}
 	if eff != nil {
 		body.Temperature, body.MaxTokens = eff.Temperature, eff.MaxTokens
+		body.Sent = &sentBody{ToolChoice: eff.ToolChoice, WebSearch: eff.WebSearch, Fallbacks: eff.Fallbacks}
 	}
 	return encodeCapped(&body, blocks, &body.Truncated)
 }
 
-func encodeResponse(resp *llm.Response) (string, error) {
-	content := append([]llm.ContentBlock{}, resp.Message.Content...)
+// encodeResponse is the stored response_json of a call: its reply, or for a
+// failed call (callErr set) the error plus whatever streamed before it.
+func encodeResponse(resp *llm.Response, callErr error, call callInfo) (string, error) {
+	content := []llm.ContentBlock{}
+	body := responseBody{}
+	if resp != nil {
+		content = append(content, resp.Message.Content...)
+		body.StopReason, body.Partial = resp.StopReason, resp.Partial
+	}
+	body.Content = content
+	if callErr != nil {
+		eb := &errorBody{AfterFirstToken: call.ttft != nil, RetryReason: call.retryReason}
+		var pe llm.ProviderError
+		if errors.As(callErr, &pe) {
+			eb.ProviderErrorInfo = pe.ProviderInfo()
+		}
+		if eb.Status == 0 { // a provider answer is structured above; the text of other errors is all there is
+			eb.Text = cutChars(callErr.Error(), 500)
+		}
+		body.Error = eb
+	}
 	blocks := make([]*llm.ContentBlock, len(content))
 	for i := range content {
 		blocks[i] = &content[i]
 	}
-	body := responseBody{Content: content, StopReason: resp.StopReason}
 	return encodeCapped(&body, blocks, &body.Truncated)
 }
 

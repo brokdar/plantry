@@ -2,6 +2,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net"
 	"net/http"
 	"sync"
@@ -98,7 +99,9 @@ func (r *RateLimiter) Allow(key string) bool {
 func (r *RateLimiter) Middleware(messageKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			if !r.Allow(clientIP(req)) {
+			if ip := clientIP(req); !r.Allow(ip) {
+				slog.WarnContext(req.Context(), "ratelimit.rejected", "message_key", messageKey,
+					"path", req.URL.Path, "client_ip", ip, "limit_per_min", r.capacity, "retry_after_s", 60)
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Retry-After", "60")
 				w.WriteHeader(http.StatusTooManyRequests)

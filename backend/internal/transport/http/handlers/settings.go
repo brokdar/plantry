@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"sort"
@@ -40,21 +41,10 @@ type SettingsHandler struct {
 	system     SystemInfo
 	rateLimit  *plantrymw.RateLimiter
 	httpClient *http.Client
-	// anthropicURL and openaiURL are the provider API roots; the setter
-	// below lets tests point them at an httptest server.
+	// anthropicURL and openaiURL are the provider API roots (empty
+	// anthropicURL: the adapter's default). Tests set them in export_test.go.
 	anthropicURL string
 	openaiURL    string
-}
-
-// SetProviderBaseURLs overrides the provider API roots (empty keeps the
-// default). For tests.
-func (h *SettingsHandler) SetProviderBaseURLs(anthropicURL, openaiURL string) {
-	if anthropicURL != "" {
-		h.anthropicURL = anthropicURL
-	}
-	if openaiURL != "" {
-		h.openaiURL = openaiURL
-	}
 }
 
 // NewSettingsHandler constructs the handler. rateLimit is optional — when
@@ -177,7 +167,7 @@ func (e *providerStatusError) Error() string { return fmt.Sprintf("provider stat
 // is a rejected key, 403 a valid key that is not permitted (billing, a
 // workspace), anything else (network, 5xx, 429) the provider being
 // unreachable. The key and the provider's body are never logged or echoed.
-func writeKeyCheckError(w http.ResponseWriter, err error) {
+func writeKeyCheckError(ctx context.Context, provider string, w http.ResponseWriter, err error) {
 	var status int
 	var se *providerStatusError
 	var ae *anthropic.APIError
@@ -187,6 +177,18 @@ func writeKeyCheckError(w http.ResponseWriter, err error) {
 	case errors.As(err, &ae):
 		status = ae.Status
 	}
+	// One line per failed key check: what the provider answered, so an
+	// "unreachable" report can be told apart (DNS, TLS, 5xx, 429). Never the
+	// key and never the provider's body.
+	attrs := []any{"provider", provider, "provider_status", status}
+	if ae != nil {
+		attrs = append(attrs, "provider_error_type", ae.ErrorType, "provider_request_id", ae.RequestID,
+			"provider_rate_limit", ae.RateLimit)
+	}
+	if status == 0 {
+		attrs = append(attrs, "error", err.Error()) // network or decode failure; no provider answer
+	}
+	slog.WarnContext(ctx, "settings.models.failed", attrs...)
 	switch status {
 	case http.StatusUnauthorized:
 		writeError(w, http.StatusUnauthorized, "error.settings.invalid_api_key")
@@ -221,7 +223,7 @@ func (h *SettingsHandler) Models(w http.ResponseWriter, r *http.Request) {
 		}
 		models, err := fetchOpenAIModels(r.Context(), h.httpClient, h.openaiURL, apiKey)
 		if err != nil {
-			writeKeyCheckError(w, err)
+			writeKeyCheckError(r.Context(), provider, w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, modelsResponse{Models: models, Validated: true})
@@ -236,7 +238,7 @@ func (h *SettingsHandler) Models(w http.ResponseWriter, r *http.Request) {
 		}
 		infos, err := anthropic.New(apiKey, opts...).ListModels(r.Context())
 		if err != nil {
-			writeKeyCheckError(w, err)
+			writeKeyCheckError(r.Context(), provider, w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, modelsResponse{Models: anthropicModelItems(infos), Validated: true})

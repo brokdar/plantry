@@ -1,8 +1,10 @@
 package handlers_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -142,4 +144,36 @@ func TestModels_OpenAIChatFilterNewestFirst(t *testing.T) {
 		ids = append(ids, m.ID)
 	}
 	assert.Equal(t, "gpt-5,o3-mini,gpt-4o", strings.Join(ids, ","))
+}
+
+// A failed key check is logged with the provider status and error type, never
+// the key or the provider body.
+func TestModels_FailedKeyCheckIsLogged(t *testing.T) {
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	ts := fakeProvider(t, 429, `{"type":"error","error":{"type":"rate_limit_error","message":"body-text-not-logged"}}`, nil)
+	w := getModels(modelsRouter(t, ts.URL, ts.URL), "provider=anthropic&api_key=sk-secret-key")
+	assert.Equal(t, 502, w.Code)
+
+	var line map[string]any
+	require.NoError(t, json.Unmarshal(bytes.Split(logs.Bytes(), []byte("\n"))[0], &line))
+	assert.Equal(t, "settings.models.failed", line["msg"])
+	assert.Equal(t, "WARN", line["level"])
+	assert.Equal(t, "anthropic", line["provider"])
+	assert.EqualValues(t, 429, line["provider_status"])
+	assert.Equal(t, "rate_limit_error", line["provider_error_type"])
+	assert.NotContains(t, logs.String(), "sk-secret-key")
+	assert.NotContains(t, logs.String(), "body-text-not-logged")
+
+	logs.Reset()
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closed.Close()
+	w = getModels(modelsRouter(t, closed.URL, closed.URL), "provider=openai&api_key=sk-secret-key")
+	assert.Equal(t, 502, w.Code)
+	assert.Contains(t, logs.String(), `"provider_status":0`)
+	assert.Contains(t, logs.String(), `"error":`)
+	assert.NotContains(t, logs.String(), "sk-secret-key")
 }

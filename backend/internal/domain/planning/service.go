@@ -659,7 +659,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		prop, err = j.chooser.Choose(ctx, ChooseInput{
 			State: base, Target: j.target, EatersByDate: j.eaters, ExploreQuota: j.exploreQuota,
 			Avoid: j.avoid, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
-			Stage: func(st Stage) { stage(st) },
+			Stage: func(st Stage) { stage(st) }, Logger: s.d.Logger,
 		})
 		if err != nil {
 			return fail("choosing", err)

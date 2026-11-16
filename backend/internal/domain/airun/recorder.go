@@ -221,7 +221,7 @@ func (r *Recorder) Start(ctx context.Context, s Start) (context.Context, *Run) {
 		run.id = id
 	}
 	r.logger.InfoContext(ctx, "ai.run.start", append(run.LogAttrs(), "kind", s.Kind)...)
-	return context.WithValue(ctx, ctxKey{}, run), run
+	return context.WithValue(llm.WithLogAttrs(ctx, run.LogAttrs()), ctxKey{}, run), run
 }
 
 // Finish writes the run totals and logs ai.run.end. Only the first call has

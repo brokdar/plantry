@@ -102,6 +102,7 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 			return nil, &ExtractError{Stage: StageFetch, Host: host, Err: err}
 		}
 		htmlBody = body
+		logStage(ctx, StageFetch, "host", host, "bytes", len(body), "redirected", final != "" && redirectedElsewhere(in.URL, final))
 		if final != "" {
 			sourceURL = final
 			if redirectedElsewhere(in.URL, final) {
@@ -112,11 +113,18 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 
 	rec, err := s.jsonld.ExtractRecipe(htmlBody)
 	if err == nil && len(rec.RecipeIngredient) > 0 {
-		return s.recipeToDraft(ctx, rec, sourceURL, "jsonld", warnings), nil
+		logStage(ctx, StageParse, "host", host, "outcome", "found", "ingredients", len(rec.RecipeIngredient))
+		return s.draftOf(ctx, rec, sourceURL, "jsonld", warnings, host), nil
 	}
-	if err != nil && !errors.Is(err, ErrNoRecipe) {
+	outcome := "no_recipe"
+	switch {
+	case err != nil && !errors.Is(err, ErrNoRecipe):
+		outcome = "error"
 		slog.DebugContext(ctx, "import: json-ld extraction error", "host", host, "error", err)
+	case err == nil:
+		outcome = "no_ingredients"
 	}
+	logStage(ctx, StageParse, "host", host, "outcome", outcome, "error", errText(err), "fallback_allowed", !in.NoLLMFallback)
 
 	if in.NoLLMFallback {
 		return nil, &ExtractError{Stage: StageParse, Host: host, Err: domain.ErrImportNoRecipe}
@@ -133,7 +141,31 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 	case rec == nil || len(rec.RecipeIngredient) == 0:
 		return nil, &ExtractError{Stage: StageFallback, Host: host, Err: domain.ErrImportNoRecipe}
 	}
-	return s.recipeToDraft(ctx, rec, sourceURL, "llm", warnings), nil
+	return s.draftOf(ctx, rec, sourceURL, "llm", warnings, host), nil
+}
+
+// draftOf is recipeToDraft plus the `resolve` stage line.
+func (s *Service) draftOf(ctx context.Context, rec *RawRecipe, sourceURL, method string, warnings []string, host string) *Draft {
+	d := s.recipeToDraft(ctx, rec, sourceURL, method, warnings)
+	logStage(ctx, StageResolve, "host", host, "method", method, "ingredients", len(d.Ingredients),
+		"instructions", len(d.Instructions), "warnings", len(d.Warnings))
+	return d
+}
+
+// logStage logs one import stage with its outcome (the run's ids when the
+// stage runs inside an import_fallback run).
+func logStage(ctx context.Context, stage string, attrs ...any) {
+	llm.Log(ctx, slog.LevelInfo, "import.stage", append([]any{"stage", stage}, attrs...)...)
+}
+
+func errText(err error) string {
+	if err == nil {
+		return ""
+	}
+	if s := err.Error(); len(s) > 200 {
+		return s[:200] + "…"
+	}
+	return err.Error()
 }
 
 // Import stages named in ExtractError and the import log.
@@ -141,6 +173,7 @@ const (
 	StageFetch    = "fetch"
 	StageParse    = "parse_jsonld"
 	StageFallback = "fallback"
+	StageResolve  = "resolve"
 )
 
 // ExtractError tags an Extract failure with the stage that failed and the

@@ -19,7 +19,7 @@ const debugBodyChars = 2000
 // logLLMCall logs one finished LLM call as ai.llm.call: no prompt text, no
 // key; sizes only. The bodies themselves go to the debug line ai.llm.body,
 // shortened.
-func (run *Run) logLLMCall(ctx context.Context, provider string, req llm.Request, step Step, callErr error) {
+func (run *Run) logLLMCall(ctx context.Context, provider string, req llm.Request, step Step, callErr error, call callInfo, resp *llm.Response) {
 	attrs := append(run.LogAttrs(),
 		"kind", run.kind,
 		"step_seq", step.Seq,
@@ -40,12 +40,28 @@ func (run *Run) logLLMCall(ctx context.Context, provider string, req llm.Request
 		"request_bytes", len(step.RequestJSON),
 		"response_bytes", len(step.ResponseJSON),
 	)
+	if e := call.eff; e != nil {
+		attrs = append(attrs,
+			"sent_tool_choice", e.ToolChoice,
+			"sent_web_search", e.WebSearch,
+			"sent_temperature", e.Temperature != nil,
+			"fallbacks", strings.Join(e.Fallbacks, "; "),
+		)
+	}
 	level := run.rec.logger.InfoContext
 	if callErr != nil {
-		attrs = append(attrs, "error", errorSummary(callErr))
+		attrs = append(attrs, "error", errorSummary(callErr),
+			"after_first_token", call.ttft != nil, "partial", resp != nil && resp.Partial)
+		if call.retryReason != "" {
+			attrs = append(attrs, "retry_reason", call.retryReason)
+		}
 		var pe llm.ProviderError
 		if errors.As(callErr, &pe) {
-			attrs = append(attrs, "provider_status", pe.ProviderStatus(), "provider_error_type", pe.ProviderErrorType())
+			info := pe.ProviderInfo()
+			attrs = append(attrs,
+				"provider_status", info.Status, "provider_error_type", info.Type,
+				"provider_message", cutChars(info.Message, 300),
+				"provider_request_id", info.RequestID, "provider_rate_limit", info.RateLimit)
 		}
 		level = run.rec.logger.WarnContext
 	}

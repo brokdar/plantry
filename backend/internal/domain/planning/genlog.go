@@ -2,6 +2,7 @@ package planning
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -60,9 +61,81 @@ func countList(m map[string]int) string {
 	return strings.Join(parts, ",")
 }
 
-// logAttempt logs the checker result of one chooser attempt (attempt 0 is
-// the first proposal, each later one a repair).
-func logAttempt(ctx context.Context, attempt int, violations []Issue) {
+// maxLoggedViolations caps the violations one attempt line and step list.
+const maxLoggedViolations = 20
+
+// attemptRecord is what one chooser attempt leaves in the run log: the
+// violations of a readable proposal, or the parse error of an unreadable
+// reply. It is the result of the run's `plan.attempt` step.
+type attemptRecord struct {
+	Attempt    int      `json:"attempt"`
+	Unreadable bool     `json:"unreadable,omitempty"`
+	ParseError string   `json:"parse_error,omitempty"`
+	Violations []string `json:"violations,omitempty"` // rule.code@date/slot plate session ids
+	Count      int      `json:"violation_count"`
+}
+
+// violationRef names one violation by rule, code and place:
+// "H2.too_many_cooks@2026-11-02/slot3", with plate and session ids and the
+// checker's parameters when it has them.
+func violationRef(v Issue) string {
+	s := v.Rule + "." + v.Code
+	if v.Date != "" {
+		s += "@" + v.Date
+		if v.SlotID != nil {
+			s += fmt.Sprintf("/slot%d", *v.SlotID)
+		}
+	}
+	if v.PlateID != nil {
+		s += fmt.Sprintf(" plate=%d", *v.PlateID)
+	}
+	if v.SessionID != nil {
+		s += fmt.Sprintf(" session=%d", *v.SessionID)
+	}
+	if len(v.Params) > 0 {
+		if b, err := json.Marshal(v.Params); err == nil {
+			s += " " + string(b)
+		}
+	}
+	return s
+}
+
+func newAttemptRecord(attempt int, violations []Issue, parseErr error) attemptRecord {
+	rec := attemptRecord{Attempt: attempt, Count: len(violations)}
+	if parseErr != nil {
+		rec.Unreadable = true
+		rec.ParseError = parseErr.Error()
+		if len(rec.ParseError) > 300 {
+			rec.ParseError = rec.ParseError[:300] + "…"
+		}
+	}
+	for i, v := range violations {
+		if i == maxLoggedViolations {
+			break
+		}
+		rec.Violations = append(rec.Violations, violationRef(v))
+	}
+	return rec
+}
+
+// logAttempt logs one chooser attempt (attempt 0 is the first proposal, each
+// later one a repair) on the service logger: the checker counts, the
+// violations by rule.code@date/slot, or the parse error of an unreadable
+// reply. It also stores the same as a `plan.attempt` step of the run, so a
+// repair can be explained from the run alone.
+func logAttempt(ctx context.Context, logger *slog.Logger, attempt int, violations []Issue, parseErr error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	rec := newAttemptRecord(attempt, violations, parseErr)
 	attrs := append(runAttrs(ctx, 0), "attempt", attempt)
-	slog.InfoContext(ctx, "plan.run.attempt", append(attrs, issueAttrs(violations)...)...)
+	if parseErr != nil {
+		logger.WarnContext(ctx, "plan.run.attempt", append(attrs, "unreadable", true, "parse_error", rec.ParseError)...)
+	} else {
+		attrs = append(attrs, issueAttrs(violations)...)
+		logger.InfoContext(ctx, "plan.run.attempt", append(attrs, "violation_list", strings.Join(rec.Violations, "; "))...)
+	}
+	args, _ := json.Marshal(map[string]any{"attempt": attempt})
+	result, _ := json.Marshal(rec)
+	airun.FromContext(ctx).ToolStep(ctx, "plan.attempt", args, result, parseErr != nil || len(violations) > 0, 0)
 }
