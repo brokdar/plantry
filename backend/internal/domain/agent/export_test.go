@@ -8,6 +8,12 @@ var WithToday = withToday
 // get_plan and regenerate read.
 var WithWindow = withWindow
 
+// IssueDelta and WithIssueBaseline expose the `after` block's issue diff.
+var (
+	IssueDelta        = issueDelta
+	WithIssueBaseline = withIssueBaseline
+)
+
 // ChatIssues and ChatFacts expose the chat prompt's issue list and fact
 // sections to the external tests.
 var (

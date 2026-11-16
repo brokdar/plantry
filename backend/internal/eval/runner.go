@@ -128,7 +128,11 @@ func runOnce(ctx context.Context, cfg Config, d *dbs, lib Library, sc Scenario, 
 	if err != nil {
 		return Record{}, err
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() {
+		// Fold the WAL into the file so a kept database is self-contained.
+		_, _ = conn.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+		_ = conn.Close()
+	}()
 	e := newEnv(conn, cfg)
 	if err := e.seed(ctx, sc, lib); err != nil {
 		return Record{}, fmt.Errorf("seed: %w", err)

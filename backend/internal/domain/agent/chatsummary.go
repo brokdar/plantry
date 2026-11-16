@@ -73,6 +73,9 @@ func chatFacts(st planning.State) string {
 		}
 		fmt.Fprintf(&b, "food_id %d %s | %s | %.0f kcal, %.0f g protein %s\n", f.ID, f.Name, role, f.Macros.Kcal, f.Macros.Protein, per)
 	}
+	// TODO: switch to the planner's scaled day target (planning/kcal.go DayKcal
+	// on fix/planner-audit-gaps) once that merges; the raw target below
+	// diverges for days with a "No plate" meal.
 	target := ""
 	if k := st.Profile.KcalTarget; k != nil && *k > 0 {
 		target = fmt.Sprintf(" (target %.0f)", *k)

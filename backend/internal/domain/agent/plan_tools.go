@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -301,10 +302,10 @@ func toolSetSessionPortions(svc Services) Tool {
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
-			if in.Portions < cur.Consumed || frozen < cur.FrozenConsumed {
+			if plate.Exceeds(cur.Consumed, in.Portions) || plate.Exceeds(cur.FrozenConsumed, frozen) {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %s would cook %s portions (%s frozen) but its plates eat %s (%s from the freezer); "+
-					"set at least that many, or reduce the plates' eaters or portions first",
-					domain.ErrInvalidInput, cur.FoodName, fnum(in.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
+					"set at least %s portions (%s frozen), or reduce the plates' eaters or portions first",
+					domain.ErrInvalidInput, cur.FoodName, fnum(in.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
 			}
 			v, err := svc.Plates.SetSessionPortions(ctx, in.SessionID, plate.SessionPortions{
 				Portions: in.Portions, FrozenPortions: frozen, Note: sess.Note,
@@ -812,3 +813,6 @@ func changedPlates(ctx context.Context, svc Services, from, to time.Time, runID 
 	}
 	return out, nil
 }
+
+// fnum formats a portion count for an error message.
+func fnum(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }

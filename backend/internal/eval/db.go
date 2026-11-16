@@ -95,6 +95,13 @@ func (d *dbs) open(label string) (*sql.DB, error) {
 		path = filepath.Join(d.dir, label+".db")
 	}
 	d.mu.Unlock()
+	// A -wal/-shm left by an earlier run of the same label would be replayed
+	// against the fresh file.
+	for _, sfx := range []string{"-wal", "-shm"} {
+		if err := os.Remove(path + sfx); err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
 	if err := os.WriteFile(path, tmpl, 0o600); err != nil {
 		return nil, err
 	}

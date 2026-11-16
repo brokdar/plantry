@@ -29,7 +29,7 @@ func TestTool_MutationsReturnWhatChanged(t *testing.T) {
 	assert.EqualValues(t, sid, s0["session_id"])
 	assert.InDelta(t, v.Consumed+2, s0["portions"], 1e-9)
 	assert.InDelta(t, v.Consumed, s0["consumed"], 1e-9)
-	assert.InDelta(t, 2, s0["spare"], 1e-9)
+	assert.InDelta(t, 2, s0["surplus"], 1e-9)
 	assert.NotEmpty(t, s0["food"])
 	assert.Contains(t, after, "issues")
 

@@ -335,9 +335,20 @@ func (c *Client) plan(req llm.Request) wire {
 			w.temperature = true
 		}
 	}
-	// A forced tool and thinking exclude each other (the API refuses it), and
-	// so does a temperature other than 1.
-	w.thinking = cp.known && cp.info.Thinking() && !rej.thinking && !w.forcedTool && !w.temperature
+	// Thinking is opt-in (req.Reasoning). A forced tool and thinking exclude
+	// each other (the API refuses it), and so does a temperature other than 1,
+	// so a reasoning request drops both and records why.
+	if req.Reasoning && cp.known && cp.info.Thinking() && !rej.thinking {
+		w.thinking = true
+		if w.forcedTool {
+			w.forcedTool = false
+			w.fallbacks = append(w.fallbacks, "thinking_over_forced_tool")
+		}
+		if w.temperature {
+			w.temperature = false
+			w.fallbacks = append(w.fallbacks, "temperature_dropped_for_thinking")
+		}
+	}
 	if req.WebSearch != nil {
 		if cp.webSearch != nil && !*cp.webSearch {
 			w.fallbacks = append(w.fallbacks, "web_search_rejected_by_org")
@@ -350,7 +361,7 @@ func (c *Client) plan(req llm.Request) wire {
 
 // effective reports w as llm.Effective for req.
 func (w wire) effective(req llm.Request) llm.Effective {
-	e := llm.Effective{MaxTokens: w.maxTokens, WebSearch: w.webSearch, Fallbacks: w.fallbacks}
+	e := llm.Effective{MaxTokens: w.maxTokens, WebSearch: w.webSearch, Thinking: w.thinking, Fallbacks: w.fallbacks}
 	if w.temperature {
 		t := req.Temperature
 		e.Temperature = &t

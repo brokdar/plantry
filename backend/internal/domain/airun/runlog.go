@@ -44,6 +44,7 @@ func (run *Run) logLLMCall(ctx context.Context, provider string, req llm.Request
 		attrs = append(attrs,
 			"sent_tool_choice", e.ToolChoice,
 			"sent_web_search", e.WebSearch,
+			"sent_thinking", e.Thinking,
 			"sent_temperature", e.Temperature != nil,
 			"fallbacks", strings.Join(e.Fallbacks, "; "),
 		)

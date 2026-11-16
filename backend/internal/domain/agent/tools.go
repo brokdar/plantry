@@ -249,6 +249,11 @@ func defaultTools(svc Services) []Tool {
 	if svc.Planner != nil {
 		tools = append(tools, toolRegenerate(svc))
 	}
+	for i := range tools {
+		if effectTools[tools[i].Name] {
+			tools[i].Handler = withIssueBaseline(svc, tools[i].Handler)
+		}
+	}
 	return tools
 }
 
@@ -1149,7 +1154,7 @@ func mustJSON(v any) json.RawMessage {
 // search (folded, synonyms expanded: diet.SearchAlternatives) and cuts the
 // page. The order of res is kept.
 func searchPage(res *food.ListResult, search string, limit, offset int) *food.ListResult {
-	var words [][]string
+	var words [][]diet.Alt
 	for _, w := range strings.Fields(search) {
 		words = append(words, diet.SearchAlternatives(w))
 	}
@@ -1158,14 +1163,7 @@ func searchPage(res *food.ListResult, search string, limit, offset int) *food.Li
 		hay := diet.Fold(f.Name + " " + strings.Join(f.Tags, " "))
 		ok := true
 		for _, alts := range words {
-			found := false
-			for _, a := range alts {
-				if strings.Contains(hay, a) {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !diet.MatchesWord(hay, alts) {
 				ok = false
 				break
 			}
@@ -1194,4 +1192,12 @@ func sessionIDOf(pc *plate.PlateComponent) []int64 {
 		return nil
 	}
 	return []int64{*pc.CookSessionID}
+}
+
+// effectTools are the tools whose result carries an `after` block; they get
+// the window's issues snapshotted before they run.
+var effectTools = map[string]bool{
+	"create_plate": true, "add_food_to_plate": true, "swap_food": true, "update_plate_component": true,
+	"remove_plate_component": true, "delete_plate": true, "set_plate_eaters": true, "set_session_portions": true,
+	"set_availability": true, "confirm": true, "unlock": true, "regenerate": true, "apply_preset": true,
 }

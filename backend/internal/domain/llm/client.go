@@ -93,6 +93,10 @@ type Request struct {
 	WebSearch   *WebSearch
 	Temperature float64
 	MaxTokens   int
+	// Reasoning asks for visible reasoning (adaptive thinking) where the model
+	// supports it. It makes the adapter ignore Temperature and downgrade a
+	// forced ToolChoice to auto; leave it false for short or cheap calls.
+	Reasoning bool
 }
 
 // Usage reports token accounting for a single provider call.
@@ -188,6 +192,7 @@ type Effective struct {
 	Temperature *float64
 	ToolChoice  string
 	WebSearch   bool
+	Thinking    bool // adaptive thinking went out
 	Fallbacks   []string
 }
 
