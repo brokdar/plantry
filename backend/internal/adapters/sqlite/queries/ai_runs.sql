@@ -36,6 +36,9 @@ INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_er
     caller, caller_tool_id)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
+-- name: UpdateAIRunStepResult :exec
+UPDATE ai_run_steps SET result_json = ?, is_error = ?, duration_ms = ? WHERE run_id = ? AND seq = ?;
+
 -- name: UpsertAIPrompt :exec
 INSERT INTO ai_prompts (hash, text) VALUES (?, ?)
 ON CONFLICT(hash) DO NOTHING;

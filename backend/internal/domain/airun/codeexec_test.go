@@ -104,3 +104,78 @@ func TestMeter_RecordsCodeExecutionStepsAndSentParams(t *testing.T) {
 	assert.Contains(t, out, `"container_id":"c1"`)
 	assert.Contains(t, out, "ai.code.execution")
 }
+
+func pausedCodeTurn() fake.Turn {
+	return fake.Turn{
+		StopReason: "tool_use", ContainerID: "c1",
+		Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
+			{Type: "server", Raw: json.RawMessage(`{"type":"server_tool_use","id":"srv1","name":"code_execution","input":{"code":"print(2)"}}`)},
+		}},
+	}
+}
+
+// The code step exists as soon as the code is issued; a run that ends before
+// the result keeps it, marked unfinished.
+func TestMeter_CodeStepWrittenWhenIssuedAndUnfinishedOnEarlyEnd(t *testing.T) {
+	store := newMemStore()
+	rec, _ := newRecorderWithClock(t, store, steppingClock(time.Second))
+	client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{pausedCodeTurn()}}), "fake")
+
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	_, err := drainStream(ctx, client, llm.Request{Model: "m", CodeExecution: true})
+	require.NoError(t, err)
+	_, _, steps, _ := store.snapshot()
+	var code *airun.Step
+	for i := range steps {
+		if steps[i].Type == airun.StepCodeExecution {
+			code = &steps[i]
+		}
+	}
+	require.NotNil(t, code, "written when issued")
+	assert.Equal(t, "print(2)", code.ArgsJSON)
+	assert.Contains(t, code.ResultJSON, `"status":"pending"`)
+
+	run.Finish(ctx, airun.StatusError, "error.ai.stream_interrupted")
+	_, _, steps, _ = store.snapshot()
+	for i := range steps {
+		if steps[i].Type == airun.StepCodeExecution {
+			code = &steps[i]
+		}
+	}
+	assert.Contains(t, code.ResultJSON, `"status":"unfinished"`)
+	assert.True(t, code.IsError)
+	assert.Equal(t, "print(2)", code.ArgsJSON)
+}
+
+// A pending-call timeout is raised inside the code and arrives in stderr with
+// return code 0; the step is still an error.
+func TestMeter_CodeStepTimeoutInStderrIsError(t *testing.T) {
+	done := fake.Turn{
+		StopReason: "end_turn", ContainerID: "c1",
+		Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
+			{Type: "server", Raw: json.RawMessage(`{"type":"code_execution_tool_result","tool_use_id":"srv1","content":{"type":"code_execution_result","stdout":"","stderr":"TimeoutError: tool timed out (no response after 270s)","return_code":0,"content":[]}}`)},
+			{Type: "text", Text: "ok"},
+		}},
+	}
+	store := newMemStore()
+	rec, _ := newRecorderWithClock(t, store, steppingClock(time.Second))
+	client := rec.Meter(fake.NewFromScript(&fake.Script{Turns: []fake.Turn{pausedCodeTurn(), done}}), "fake")
+
+	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
+	_, err := drainStream(ctx, client, llm.Request{Model: "m", CodeExecution: true})
+	require.NoError(t, err)
+	_, err = drainStream(ctx, client, llm.Request{Model: "m", CodeExecution: true})
+	require.NoError(t, err)
+	run.Finish(ctx, airun.StatusOK, "")
+
+	_, _, steps, _ := store.snapshot()
+	n := 0
+	for _, s := range steps {
+		if s.Type == airun.StepCodeExecution {
+			n++
+			assert.True(t, s.IsError)
+			assert.Contains(t, s.ResultJSON, `"status":"completed"`)
+		}
+	}
+	assert.Equal(t, 1, n, "issuing and completing is one step")
+}

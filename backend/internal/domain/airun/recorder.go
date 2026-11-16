@@ -282,6 +282,7 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 	}
 	run.mu.Unlock()
 
+	run.closeCode(ctx, finishedAt)
 	if run.id != 0 {
 		if err := run.rec.store.FinishRun(context.WithoutCancel(ctx), end); err != nil {
 			run.warn(ctx, "ai.run.finish failed", err)

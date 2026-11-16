@@ -107,10 +107,25 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 	// `auto` plus a system line.
 	_, _ = c.capability(ctx, req.Model)
 
+	dropContainer := false
 	for {
 		w := c.plan(req)
+		sent := req
+		if dropContainer && w.container != "" {
+			w.container = ""
+			w.fallbacks = append(w.fallbacks, "container_dropped_after_400")
+		}
+		if !w.codeExecution && llm.HasCodeBlocks(req.Messages) {
+			// The request carries no code execution tool (setting off,
+			// capability gone, rejected), so a history with code blocks is
+			// replayed without them: the docs do not say whether the tool
+			// definition is needed to replay them, and a history without
+			// them is always valid.
+			sent.Messages = llm.StripCodeBlocks(req.Messages)
+			w.fallbacks = append(w.fallbacks, "code_blocks_stripped")
+		}
 		started := c.now()
-		resp, err := c.post(ctx, req, w)
+		resp, err := c.post(ctx, sent, w)
 		if err != nil {
 			return nil, err
 		}
@@ -133,6 +148,9 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 		}
 		if reason == "" {
 			return nil, apiErr
+		}
+		if reason == "container_rejected_400" {
+			dropContainer = true
 		}
 		llm.Log(ctx, slog.LevelWarn, "anthropic.request.retry",
 			"model", req.Model, "reason", reason, "request_id", apiErr.RequestID,
@@ -159,13 +177,13 @@ func (c *Client) learnFromRejection(req llm.Request, w wire, e *APIError) string
 			return ""
 		}
 		return "web_search_rejected_by_org"
+	case w.container != "" && strings.Contains(msg, "container") && !pendingCodeCalls(req.Messages):
+		// An expired or unknown container: the code execution docs say to
+		// send again without it. Not with a programmatic call pending, whose
+		// continuation requires the container.
+		return "container_rejected_400"
 	case w.codeExecution && rejectsCodeExecution(e):
 		c.reject(req.Model, func(r *rejection) { r.codeExecution = true })
-		if replaysCodeBlocks(req.Messages) {
-			// The history holds code execution blocks; without the tool the
-			// API would reject it again, less clearly.
-			return ""
-		}
 		return "code_execution_rejected_400"
 	case w.temperature && strings.Contains(msg, "temperature"):
 		c.reject(req.Model, func(r *rejection) { r.temperature = true })
@@ -203,14 +221,15 @@ func replaysServerBlocks(msgs []llm.Message) bool {
 	return false
 }
 
-// replaysCodeBlocks reports whether msgs carry code execution blocks: a
-// server block or a tool call made from code.
-func replaysCodeBlocks(msgs []llm.Message) bool {
-	for _, m := range msgs {
-		for _, b := range m.Content {
-			if b.Type == llm.ContentTypeServer || b.Caller.FromCode() {
-				return true
-			}
+// pendingCodeCalls reports whether msgs end with the answers to tool calls
+// made from code: the continuation of a paused code execution.
+func pendingCodeCalls(msgs []llm.Message) bool {
+	if len(msgs) < 2 || msgs[len(msgs)-1].Role != llm.RoleUser {
+		return false
+	}
+	for _, b := range msgs[len(msgs)-2].Content {
+		if b.Type == llm.ContentTypeToolUse && b.Caller.FromCode() {
+			return true
 		}
 	}
 	return false
@@ -232,7 +251,7 @@ func codeCallable(tools []llm.Tool) []string {
 func rejectsCodeExecution(e *APIError) bool {
 	msg := strings.ToLower(e.Message)
 	return strings.Contains(msg, "code_execution") || strings.Contains(msg, "code execution") ||
-		strings.Contains(msg, "allowed_callers") || strings.Contains(msg, "programmatic")
+		strings.Contains(msg, "allowed_callers") || strings.Contains(msg, "programmatic tool")
 }
 
 // post sends req as a streaming Messages request.

@@ -196,8 +196,13 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	}
 	if s.programmatic(ctx) {
 		runReq.CodeExecution = true
-		if conv.ContainerID != "" && conv.ContainerExpiresAt.After(s.now()) {
+		switch {
+		case conv.ContainerID == "":
+		case conv.ContainerExpiresAt.After(s.now()):
 			runReq.Container = conv.ContainerID
+		default:
+			slog.InfoContext(ctx, "agent.container.expired", "conversation_id", conv.ID,
+				"container_id", conv.ContainerID, "expired_at", conv.ContainerExpiresAt)
 		}
 		runReq.SaveContainer = func(ctx context.Context, id string, expires time.Time) {
 			if err := s.repo.SetContainer(context.WithoutCancel(ctx), conv.ID, id, expires); err != nil {

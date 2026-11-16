@@ -162,3 +162,179 @@ func TestDescribe_OnlyReadAndDryRunToolsAllowCode(t *testing.T) {
 		assert.Empty(t, tl.AllowedCallers)
 	}
 }
+
+// failAfter wraps a client and fails every request after the first n.
+type failAfter struct {
+	llm.Client
+	n, calls int
+}
+
+func (f *failAfter) Stream(ctx context.Context, req llm.Request, out chan<- llm.Event) (*llm.Response, error) {
+	f.calls++
+	if f.calls > f.n {
+		close(out)
+		return nil, errors.New("connection reset")
+	}
+	return f.Client.Stream(ctx, req, out)
+}
+
+func runLoopRepo(t *testing.T, req RunRequest, client llm.Client, ts *ToolSet, repo *memRepo) error {
+	t.Helper()
+	out := make(chan llm.Event, 256)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); collectEvents(out) }()
+	err := Run(context.Background(), req, client, ts, repo, out)
+	close(out)
+	wg.Wait()
+	return err
+}
+
+func codeToolSet(t *testing.T, calls *int) *ToolSet {
+	t.Helper()
+	ts := minimalToolSet(t, "my_tool", json.RawMessage(`{"ok":true}`), ToolEffectNone, nil)
+	ts.byName["my_tool"].CodeCallable = true
+	inner := ts.byName["my_tool"].Handler
+	ts.byName["my_tool"].Handler = func(ctx context.Context, in json.RawMessage) (json.RawMessage, ToolEffect, error) {
+		*calls++
+		return inner(ctx, in)
+	}
+	return ts
+}
+
+// Sequential code-called tool calls are separate requests but not model
+// turns: they do not hit MaxIterations. At their own bound the script gets
+// errors, the model closes the turn with a message, and that message is stored.
+func TestRun_CodeContinuationsHaveTheirOwnBound(t *testing.T) {
+	t.Parallel()
+	exp := time.Now().Add(time.Hour)
+	var turns []fake.Turn
+	for range MaxCodeContinuations + 1 {
+		turns = append(turns, programmaticTurn("c1", exp, "my_tool"))
+	}
+	turns = append(turns, scriptEndTurn("Stopped early."))
+	client := fake.NewFromScript(&fake.Script{Turns: turns})
+	var calls int
+	ts := codeToolSet(t, &calls)
+	req := makeReq(1)
+	req.CodeExecution = true
+	req.Tools = ts.Describe()
+	repo := &memRepo{}
+
+	require.NoError(t, runLoopRepo(t, req, client, ts, repo))
+
+	assert.Greater(t, MaxCodeContinuations, MaxIterations)
+	assert.Equal(t, MaxCodeContinuations, calls, "the tools stop running at the bound")
+	reqs := client.Requests()
+	require.Len(t, reqs, MaxCodeContinuations+2)
+	last := reqs[len(reqs)-1].Messages
+	res := last[len(last)-1].Content[0]
+	assert.True(t, res.ToolResultIsError)
+	assert.Contains(t, string(res.ToolResultContent), "limit reached")
+	msgs, _ := repo.ListMessages(context.Background(), 1)
+	assert.Equal(t, RoleAssistant, msgs[len(msgs)-1].Role)
+	assert.Contains(t, string(msgs[len(msgs)-1].Content), "Stopped early.")
+}
+
+// A script that never stops, whatever the model does, ends at MaxRequests.
+func TestRun_RequestsAreBoundedAndTurnIsClosed(t *testing.T) {
+	t.Parallel()
+	exp := time.Now().Add(time.Hour)
+	var turns []fake.Turn
+	for range MaxRequests + 5 {
+		turns = append(turns, programmaticTurn("c1", exp, "my_tool"))
+	}
+	client := fake.NewFromScript(&fake.Script{Turns: turns})
+	var calls int
+	ts := codeToolSet(t, &calls)
+	req := makeReq(1)
+	req.CodeExecution = true
+	req.Tools = ts.Describe()
+	repo := &memRepo{}
+
+	err := runLoopRepo(t, req, client, ts, repo)
+
+	require.ErrorIs(t, err, ErrIterationsExceeded)
+	assert.Len(t, client.Requests(), MaxRequests)
+	msgs, _ := repo.ListMessages(context.Background(), 1)
+	for _, m := range msgs {
+		assert.NotContains(t, string(m.Content), "server_tool_use", "an unfinished code turn is not stored")
+	}
+}
+
+// A request that fails while a code turn is open must not leave the stored
+// conversation inside it: the next user message after unanswered programmatic
+// calls would be a 400 on every later turn.
+func TestRun_FailureInsideCodeTurnStoresNoOpenCode(t *testing.T) {
+	t.Parallel()
+	client := &failAfter{
+		Client: fake.NewFromScript(&fake.Script{Turns: []fake.Turn{programmaticTurn("c1", time.Now().Add(time.Hour), "my_tool")}}),
+		n:      1,
+	}
+	var calls int
+	ts := codeToolSet(t, &calls)
+	req := makeReq(1)
+	req.CodeExecution = true
+	req.Tools = ts.Describe()
+	repo := &memRepo{}
+
+	require.Error(t, runLoopRepo(t, req, client, ts, repo))
+
+	assert.Equal(t, 1, calls, "the code-called tool ran")
+	msgs, _ := repo.ListMessages(context.Background(), 1)
+	require.Len(t, msgs, 1, "only the error row is stored")
+	assert.Equal(t, RoleError, msgs[0].Role)
+}
+
+// A closed code turn is stored as it happened.
+func TestRun_ClosedCodeTurnIsStoredInOrder(t *testing.T) {
+	t.Parallel()
+	final := fake.Turn{
+		StopReason: "end_turn", ContainerID: "c1", ContainerExpiresAt: time.Now().Add(time.Hour),
+		Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
+			{Type: "server", Raw: json.RawMessage(`{"type":"code_execution_tool_result","tool_use_id":"srv1","content":{"type":"code_execution_result","stdout":"","stderr":"","return_code":0,"content":[]}}`)},
+			{Type: "text", Text: "Done."},
+		}},
+		Usage: fake.ScriptedUsage{InputTokens: 10, OutputTokens: 5},
+	}
+	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{programmaticTurn("c1", time.Now().Add(time.Hour), "my_tool"), final}})
+	var calls int
+	ts := codeToolSet(t, &calls)
+	req := makeReq(1)
+	req.CodeExecution = true
+	req.Tools = ts.Describe()
+	repo := &memRepo{}
+
+	require.NoError(t, runLoopRepo(t, req, client, ts, repo))
+
+	msgs, _ := repo.ListMessages(context.Background(), 1)
+	var roles []Role
+	for _, m := range msgs {
+		roles = append(roles, m.Role)
+	}
+	assert.Equal(t, []Role{RoleAssistant, RoleTool, RoleAssistant}, roles)
+}
+
+// The container's rolling expiry is stored with every reply, not only when
+// the id changes.
+func TestRun_ContainerExpiryRefreshedEveryReply(t *testing.T) {
+	t.Parallel()
+	e1, e2 := time.Now().Add(time.Hour), time.Now().Add(2*time.Hour)
+	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{
+		programmaticTurn("c1", e1, "my_tool"),
+		programmaticTurn("c1", e2, "my_tool"),
+		scriptEndTurn("Done."),
+	}})
+	var calls int
+	ts := codeToolSet(t, &calls)
+	var saved []time.Time
+	req := makeReq(1)
+	req.CodeExecution = true
+	req.Tools = ts.Describe()
+	req.SaveContainer = func(_ context.Context, _ string, exp time.Time) { saved = append(saved, exp) }
+
+	require.NoError(t, runLoopRepo(t, req, client, ts, &memRepo{}))
+
+	require.Len(t, saved, 2)
+	assert.True(t, saved[1].After(saved[0]))
+}

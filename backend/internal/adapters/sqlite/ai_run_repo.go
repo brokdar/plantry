@@ -277,6 +277,18 @@ func (r *AIRunRepo) UpsertToolSchema(ctx context.Context, hash, json string) err
 
 // PruneSteps deletes the steps of runs started before the cutoff in batches
 // and returns how many were deleted in total.
+// UpdateStepResult implements airun.Store.
+func (r *AIRunRepo) UpdateStepResult(ctx context.Context, runID int64, seq int, result string, isErr bool, durationMs int64) error {
+	var e int64
+	if isErr {
+		e = 1
+	}
+	return r.queriesFor(ctx).UpdateAIRunStepResult(ctx, sqlcgen.UpdateAIRunStepResultParams{
+		ResultJson: toNullStringEmpty(truncateUTF8(result, maxStepResultBytes)),
+		IsError:    e, DurationMs: durationMs, RunID: runID, Seq: int64(seq),
+	})
+}
+
 func (r *AIRunRepo) PruneSteps(ctx context.Context, before time.Time) (int64, error) {
 	var total int64
 	for {

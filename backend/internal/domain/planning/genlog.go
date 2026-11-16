@@ -142,3 +142,13 @@ func logAttempt(ctx context.Context, logger *slog.Logger, attempt int, violation
 	result, _ := json.Marshal(rec)
 	airun.FromContext(ctx).ToolStep(ctx, "plan.attempt", args, result, parseErr != nil, 0)
 }
+
+// logRunStop logs why the LLM chooser ended a run on one of its request
+// bounds (the same text goes to the run notes or the error).
+func logRunStop(ctx context.Context, in ChooseInput, requests int, note string) {
+	logger := in.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.WarnContext(ctx, "plan.run.stopped", append(runAttrs(ctx, 0), "requests", requests, "reason", note)...)
+}

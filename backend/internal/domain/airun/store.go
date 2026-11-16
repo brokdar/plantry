@@ -158,6 +158,8 @@ type Store interface {
 	CreateRun(ctx context.Context, start RunStart) (int64, error)
 	FinishRun(ctx context.Context, end RunEnd) error
 	AddStep(ctx context.Context, step Step) error
+	// UpdateStepResult completes a step written before its outcome was known.
+	UpdateStepResult(ctx context.Context, runID int64, seq int, result string, isErr bool, durationMs int64) error
 	UpsertPrompt(ctx context.Context, hash, text string) error
 	UpsertToolSchema(ctx context.Context, hash, json string) error
 	// PruneSteps deletes the steps of runs started before before and returns

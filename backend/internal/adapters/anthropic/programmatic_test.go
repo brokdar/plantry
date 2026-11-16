@@ -210,3 +210,100 @@ func TestStream_ProgrammaticNotSentWithForcedToolChoice(t *testing.T) {
 	assert.NotContains(t, bodies()[0], "code_execution_20260120")
 	assert.Contains(t, c.EffectiveParams(req).Fallbacks, "code_execution_with_tool_choice")
 }
+
+// historyWithCode is a finished programmatic exchange followed by a new user
+// message: what a later chat turn replays.
+func historyWithCode(t *testing.T, c *anthropic.Client) []llm.Message {
+	t.Helper()
+	first, _ := stream(t, c, ptcRequest())
+	user := func(text string) llm.Message {
+		return llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{Type: llm.ContentTypeText, Text: text}}}
+	}
+	result := llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{
+		Type: llm.ContentTypeToolResult, ToolResultID: "toolu_1", ToolResultContent: json.RawMessage(`"{}"`),
+	}}}
+	done := llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{
+		{Type: llm.ContentTypeServer, Raw: json.RawMessage(`{"type":"code_execution_tool_result","tool_use_id":"srvtoolu_1","content":{"type":"code_execution_result","stdout":"","stderr":"","return_code":0,"content":[]}}`)},
+		{Type: llm.ContentTypeText, Text: "Done."},
+	}}
+	return []llm.Message{user("hi"), first.Message, result, done, user("next")}
+}
+
+// Without the code tool in the request (setting off) a history with code
+// blocks is replayed without them: valid whatever the API needs for them.
+func TestStream_HistoryWithCodeBlocksIsStrippedWhenToolNotSent(t *testing.T) {
+	c, bodies := ptcServer(t, supportsCode, func(_ string, w http.ResponseWriter) { sse(w, pausedSSE) })
+	hist := historyWithCode(t, c)
+	req := ptcRequest()
+	req.CodeExecution = false
+	req.Container = ""
+	req.Messages = hist
+	stream(t, c, req)
+
+	b := bodies()[1]
+	assert.NotContains(t, b, "server_tool_use")
+	assert.NotContains(t, b, "code_execution_tool_result")
+	assert.NotContains(t, b, `"caller"`)
+	assert.NotContains(t, b, `"toolu_1"`, "the code-called call and its result go together")
+	assert.Contains(t, b, "Done.")
+	assert.Contains(t, b, "next")
+}
+
+// With the tool sent the same history is replayed verbatim.
+func TestStream_HistoryWithCodeBlocksKeptWhenToolSent(t *testing.T) {
+	c, bodies := ptcServer(t, supportsCode, func(_ string, w http.ResponseWriter) { sse(w, pausedSSE) })
+	hist := historyWithCode(t, c)
+	req := ptcRequest()
+	req.Messages = hist
+	stream(t, c, req)
+	assert.Contains(t, bodies()[1], "server_tool_use")
+	assert.Contains(t, bodies()[1], "code_execution_20260120")
+}
+
+// An expired container is a 400 naming it: send again without it.
+func TestStream_ExpiredContainerRetriedWithout(t *testing.T) {
+	c, bodies := ptcServer(t, supportsCode, func(body string, w http.ResponseWriter) {
+		if strings.Contains(body, `"container"`) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"type":"error","error":{"type":"invalid_request_error","message":"container_0 has expired"}}`)
+			return
+		}
+		sse(w, pausedSSE)
+	})
+	var attempts []llm.Attempt
+	ctx := llm.WithAttemptObserver(context.Background(), func(a llm.Attempt) { attempts = append(attempts, a) })
+	out := make(chan llm.Event, 64)
+	_, err := c.Stream(ctx, ptcRequest(), out)
+	require.NoError(t, err)
+
+	require.Len(t, bodies(), 2)
+	assert.NotContains(t, bodies()[1], `"container"`)
+	assert.Contains(t, bodies()[1], "code_execution_20260120", "code execution itself stays on")
+	require.Len(t, attempts, 1)
+	assert.Equal(t, "container_rejected_400", attempts[0].Reason)
+}
+
+// A continuation that answers programmatic calls needs its container: the
+// 400 is not retried without it.
+func TestStream_ContainerRejectedNotRetriedWhileCallsPending(t *testing.T) {
+	c, bodies := ptcServer(t, supportsCode, func(_ string, w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"type":"error","error":{"type":"invalid_request_error","message":"container container_0 not found"}}`)
+	})
+	first := llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{
+		{
+			Type: llm.ContentTypeToolUse, ToolUseID: "toolu_1", ToolUseName: "find_foods", ToolUseInput: json.RawMessage(`{}`),
+			Caller: &llm.Caller{Type: llm.CallerCodeExecution, ToolID: "srvtoolu_1"},
+		},
+	}}
+	req := ptcRequest()
+	req.Messages = append(req.Messages, first, llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{{
+		Type: llm.ContentTypeToolResult, ToolResultID: "toolu_1", ToolResultContent: json.RawMessage(`"{}"`),
+	}}})
+	out := make(chan llm.Event, 64)
+	_, err := c.Stream(context.Background(), req, out)
+	require.Error(t, err)
+	assert.Len(t, bodies(), 1)
+}

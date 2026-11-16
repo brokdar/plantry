@@ -104,3 +104,85 @@ func TestLLMChooser_ProgrammaticOffSendsNoCodeTool(t *testing.T) {
 		assert.Empty(t, tl.AllowedCallers, tl.Name)
 	}
 }
+
+// A script that awaits evaluate_plan one draft at a time is one request per
+// call; those continuations are not model turns, so 12 of them (past the
+// model-call cap) still reach the submit.
+func TestLLMChooser_SequentialCodeEvaluationsBeyondModelCap(t *testing.T) {
+	e := programmaticEnv(t, true)
+	plan := e.validPlan()
+	var turns []fake.Turn
+	for range 12 {
+		turns = append(turns, codeEvaluateTurn(t, plan, 1))
+	}
+	id := e.gen(append(turns, submit(t, "sub", plan))...)
+
+	assert.Equal(t, "ok", e.run(id).Status)
+	assert.Len(t, e.client.Requests(), 13)
+}
+
+// A script that never stops calling ends the run at the code-continuation
+// bound; with no submitted plan that is ErrAIInvalidPlan, never an unbounded
+// loop of paid requests.
+func TestLLMChooser_CodeContinuationsAreBounded(t *testing.T) {
+	e := programmaticEnv(t, true)
+	plan := e.validPlan()
+	var turns []fake.Turn
+	for range 40 {
+		turns = append(turns, codeEvaluateTurn(t, plan, 1))
+	}
+	id := e.gen(turns...)
+
+	assert.Equal(t, "error", e.run(id).Status)
+	assert.LessOrEqual(t, len(e.client.Requests()), 31)
+}
+
+// pause_turn without a tool call is resent as it is: no repair is used and
+// the plain-text repair message never follows the unanswered server block.
+func TestLLMChooser_PauseTurnResent(t *testing.T) {
+	e := programmaticEnv(t, true)
+	plan := e.validPlan()
+	pause := fake.Turn{
+		StopReason: "pause_turn", ContainerID: "c1", ContainerExpiresAt: time.Now().Add(time.Hour),
+		Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{{
+			Type: "server",
+			Raw:  json.RawMessage(`{"type":"server_tool_use","id":"srv1","name":"code_execution","input":{"code":"x=1"}}`),
+		}}},
+		Usage: fake.ScriptedUsage{InputTokens: 1000, OutputTokens: 200},
+	}
+	id := e.gen(pause, pause, pause, submit(t, "sub", plan))
+
+	assert.Equal(t, "ok", e.run(id).Status)
+	reqs := e.client.Requests()
+	require.Len(t, reqs, 4)
+	assert.Equal(t, "c1", reqs[3].Container)
+	for _, m := range reqs[3].Messages[1:] {
+		assert.Equal(t, llm.RoleAssistant, m.Role, "the paused turn is resent without a repair message")
+	}
+}
+
+// submit_plan from code is not the submission: it is answered with an error
+// and the run waits for a direct call.
+func TestLLMChooser_CodeCalledSubmitRefused(t *testing.T) {
+	e := programmaticEnv(t, true)
+	plan := e.validPlan()
+	raw, err := json.Marshal(plan)
+	require.NoError(t, err)
+	codeSubmit := fake.Turn{
+		StopReason: "tool_use", ContainerID: "c1", ContainerExpiresAt: time.Now().Add(time.Hour),
+		Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
+			{Type: "server", Raw: json.RawMessage(`{"type":"server_tool_use","id":"srv1","name":"code_execution","input":{"code":"await submit_plan(p)"}}`)},
+			{Type: "tool_use", ToolUseID: "tu1", ToolName: "submit_plan", ToolInput: raw, Caller: &llm.Caller{Type: llm.CallerCodeExecution, ToolID: "srv1"}},
+		}},
+		Usage: fake.ScriptedUsage{InputTokens: 1000, OutputTokens: 200},
+	}
+	id := e.gen(codeSubmit, submit(t, "sub", plan))
+
+	assert.Equal(t, "ok", e.run(id).Status)
+	reqs := e.client.Requests()
+	require.Len(t, reqs, 2, "the code-called submit did not end the run")
+	last := reqs[1].Messages[len(reqs[1].Messages)-1]
+	require.Len(t, last.Content, 1)
+	assert.Equal(t, "tu1", last.Content[0].ToolResultID)
+	assert.True(t, last.Content[0].ToolResultIsError)
+}

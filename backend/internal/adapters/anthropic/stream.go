@@ -267,6 +267,7 @@ func handleSSEEvent(
 		st.usage.CacheReadTokens = payload.Message.Usage.CacheReadInputTokens
 		st.usage.CacheWriteTokens = payload.Message.Usage.CacheCreationInputTokens
 		st.usage.WebSearchRequests = payload.Message.Usage.ServerToolUse.WebSearchRequests
+		st.usage.CodeExecutionRequests = payload.Message.Usage.ServerToolUse.CodeExecutionRequests
 		st.usage.ReasoningTokens = payload.Message.Usage.OutputTokensDetails.ThinkingTokens
 		return send(ctx, out, llm.Event{Type: llm.EventMessageStart, Payload: llm.MessageStartPayload{Model: st.model}})
 
@@ -435,6 +436,9 @@ func handleSSEEvent(
 		if n := payload.Usage.ServerToolUse.WebSearchRequests; n > 0 {
 			st.usage.WebSearchRequests = n
 		}
+		if n := payload.Usage.ServerToolUse.CodeExecutionRequests; n > 0 {
+			st.usage.CodeExecutionRequests = n
+		}
 		return nil
 
 	case "message_stop":
@@ -487,7 +491,8 @@ type outputDetails struct {
 
 // serverToolUse is the usage.server_tool_use object (cumulative counts).
 type serverToolUse struct {
-	WebSearchRequests int `json:"web_search_requests"`
+	WebSearchRequests     int `json:"web_search_requests"`
+	CodeExecutionRequests int `json:"code_execution_requests"`
 }
 
 // setServerInput writes the streamed input of a server_tool_use block into

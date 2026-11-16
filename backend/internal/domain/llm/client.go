@@ -145,6 +145,8 @@ type Usage struct {
 	CacheReadTokens   int
 	CacheWriteTokens  int
 	WebSearchRequests int
+	// CodeExecutionRequests counts the code execution requests billed.
+	CodeExecutionRequests int
 	// ReasoningTokens is what the provider reports as spent on reasoning
 	// (OpenAI reasoning_tokens, Anthropic output_tokens_details.thinking_tokens);
 	// both are part of OutputTokens.

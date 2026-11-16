@@ -718,6 +718,29 @@ func (q *Queries) SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) er
 	return err
 }
 
+const updateAIRunStepResult = `-- name: UpdateAIRunStepResult :exec
+UPDATE ai_run_steps SET result_json = ?, is_error = ?, duration_ms = ? WHERE run_id = ? AND seq = ?
+`
+
+type UpdateAIRunStepResultParams struct {
+	ResultJson sql.NullString
+	IsError    int64
+	DurationMs int64
+	RunID      int64
+	Seq        int64
+}
+
+func (q *Queries) UpdateAIRunStepResult(ctx context.Context, arg UpdateAIRunStepResultParams) error {
+	_, err := q.db.ExecContext(ctx, updateAIRunStepResult,
+		arg.ResultJson,
+		arg.IsError,
+		arg.DurationMs,
+		arg.RunID,
+		arg.Seq,
+	)
+	return err
+}
+
 const upsertAIPrompt = `-- name: UpsertAIPrompt :exec
 INSERT INTO ai_prompts (hash, text) VALUES (?, ?)
 ON CONFLICT(hash) DO NOTHING

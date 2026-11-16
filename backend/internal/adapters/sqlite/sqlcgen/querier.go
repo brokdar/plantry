@@ -220,6 +220,7 @@ type Querier interface {
 	TouchPlate(ctx context.Context, id int64) error
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error
 	TouchPresetUpdatedAt(ctx context.Context, id int64) error
+	UpdateAIRunStepResult(ctx context.Context, arg UpdateAIRunStepResultParams) error
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (AiConversation, error)
 	UpdateCookSession(ctx context.Context, arg UpdateCookSessionParams) (CookSession, error)
 	UpdateFood(ctx context.Context, arg UpdateFoodParams) (Food, error)

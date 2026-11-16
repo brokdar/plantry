@@ -32,6 +32,11 @@ const (
 	// replies included: every submit budget plus every dry run plus slack for
 	// the free attempt. Past it the run ends with what it has.
 	maxModelCalls = maxEvaluations + maxRepairs + 4
+	// maxRequests is the hard bound on provider requests per run, code
+	// continuations and pause_turn resends included, so nothing loops paid
+	// calls unbounded. Model turns (maxModelCalls) and code continuations
+	// (maxCodeEvaluations) have their own bounds below it.
+	maxRequests = maxModelCalls + maxCodeEvaluations
 )
 
 // LLMChooser proposes a plan with one forced submit_plan call per attempt
@@ -117,18 +122,36 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 	// free attempt for a skeleton first reply is extra, once per run.
 	paid, freeUsed, evals, modelCalls := 0, false, 0, 0
 	directEvals, codeEvals := 0, 0
+	// requests counts every provider request; conts the ones that only
+	// continue the previous reply (answers to code-called tools, a paused
+	// turn resent) and are not new model turns.
+	requests, conts, continuation := 0, 0, false
 	fillCells := len(fillCellLabels(in))
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 && in.Stage != nil {
 			in.Stage(StageRepairing)
 		}
-		if modelCalls++; modelCalls > maxModelCalls {
-			note := fmt.Sprintf("The model kept calling evaluate_plan or repairing; the run stopped after %d model calls.", maxModelCalls)
+		requests++
+		var stopNote string
+		switch {
+		case requests > maxRequests:
+			stopNote = fmt.Sprintf("The run stopped after %d provider requests.", maxRequests)
+		case continuation:
+			if conts++; conts > maxCodeEvaluations {
+				stopNote = fmt.Sprintf("The model's code kept calling tools; the run stopped after %d code continuations.", maxCodeEvaluations)
+			}
+		default:
+			if modelCalls++; modelCalls > maxModelCalls {
+				stopNote = fmt.Sprintf("The model kept calling evaluate_plan or repairing; the run stopped after %d model calls.", maxModelCalls)
+			}
+		}
+		if stopNote != "" {
+			logRunStop(ctx, in, requests-1, stopNote)
 			if last == nil {
-				return Proposal{}, fmt.Errorf("%w: no plan was submitted within %d model calls", domain.ErrAIInvalidPlan, maxModelCalls)
+				return Proposal{}, fmt.Errorf("%w: no plan was submitted: %s", domain.ErrAIInvalidPlan, stopNote)
 			}
 			last.RepairAttempts = attempt
-			return withNotes(*last, append(slices.Clone(allFixes), append(runNotes, note)...), nil, ""), nil
+			return withNotes(*last, append(slices.Clone(allFixes), append(runNotes, stopNote)...), nil, ""), nil
 		}
 		resp, err := call(ctx, client, req)
 		if err == nil && resp.ContainerID != "" {
@@ -143,11 +166,25 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			}
 			return partial, fmt.Errorf("%w: %w", domain.ErrAIProviderFailed, err)
 		}
-		if calls := evaluateCalls(resp); len(calls) > 0 && !hasSubmit(resp) {
+		continuation = false
+		if resp.StopReason == llm.StopReasonPauseTurn && !hasToolUse(resp) {
+			// The server paused a long turn (code execution): resend it as
+			// it is. Not an attempt, no repair used; it counts toward the
+			// request caps.
+			req.Messages = append(req.Messages, resp.Message)
+			attempt--
+			continuation = true
+			continue
+		}
+		if calls := pendingCalls(resp); len(calls) > 0 && !hasSubmit(resp) {
 			// A dry run: evaluate the draft, answer, and ask again. It is
 			// not an attempt and uses no repair.
 			results := make([]llm.ContentBlock, len(calls))
 			for i, b := range calls {
+				if b.ToolUseName == submitPlanName {
+					results[i] = errorResult(b, "submit_plan can't be called from code; call it directly once you have chosen the plan.")
+					continue
+				}
 				evals++
 				over := false
 				if b.Caller.FromCode() {
@@ -161,6 +198,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			}
 			req.Messages = append(req.Messages, resp.Message, llm.Message{Role: llm.RoleUser, Content: results})
 			attempt--
+			continuation = onlyCodeCalls(resp)
 			continue
 		}
 		input, perr := submitted(resp)
@@ -305,7 +343,7 @@ func repairMessage(reply llm.Message, feedback string) llm.Message {
 // submitted returns the input of the reply's submit_plan call.
 func submitted(resp *llm.Response) (json.RawMessage, error) {
 	for _, b := range resp.Message.Content {
-		if b.Type == llm.ContentTypeToolUse && b.ToolUseName == submitPlanName {
+		if b.Type == llm.ContentTypeToolUse && b.ToolUseName == submitPlanName && !b.Caller.FromCode() {
 			return b.ToolUseInput, nil
 		}
 	}
@@ -426,24 +464,55 @@ func violationsOf(issues []Issue) []Issue {
 	return out
 }
 
+// hasSubmit reports a direct submit_plan call: only that is the submission
+// (allowed_callers is guidance, not a boundary).
 func hasSubmit(resp *llm.Response) bool {
 	for _, b := range resp.Message.Content {
-		if b.Type == llm.ContentTypeToolUse && b.ToolUseName == submitPlanName {
+		if b.Type == llm.ContentTypeToolUse && b.ToolUseName == submitPlanName && !b.Caller.FromCode() {
 			return true
 		}
 	}
 	return false
 }
 
-// evaluateCalls are the reply's evaluate_plan tool calls.
-func evaluateCalls(resp *llm.Response) []llm.ContentBlock {
+// pendingCalls are the reply's calls the loop answers without it being an
+// attempt: evaluate_plan, and a submit_plan made from code (refused).
+func pendingCalls(resp *llm.Response) []llm.ContentBlock {
 	var out []llm.ContentBlock
 	for _, b := range resp.Message.Content {
-		if b.Type == llm.ContentTypeToolUse && b.ToolUseName == evaluatePlanName {
+		if b.Type != llm.ContentTypeToolUse {
+			continue
+		}
+		if b.ToolUseName == evaluatePlanName || (b.ToolUseName == submitPlanName && b.Caller.FromCode()) {
 			out = append(out, b)
 		}
 	}
 	return out
+}
+
+func hasToolUse(resp *llm.Response) bool {
+	return slices.ContainsFunc(resp.Message.Content, func(b llm.ContentBlock) bool { return b.Type == llm.ContentTypeToolUse })
+}
+
+// onlyCodeCalls reports a reply whose tool calls all come from code: the
+// next request only continues that script and is not a new model turn.
+func onlyCodeCalls(resp *llm.Response) bool {
+	n := 0
+	for _, b := range resp.Message.Content {
+		if b.Type != llm.ContentTypeToolUse {
+			continue
+		}
+		if !b.Caller.FromCode() {
+			return false
+		}
+		n++
+	}
+	return n > 0
+}
+
+func errorResult(b llm.ContentBlock, msg string) llm.ContentBlock {
+	content, _ := json.Marshal(msg)
+	return llm.ContentBlock{Type: llm.ContentTypeToolResult, ToolResultID: b.ToolUseID, ToolResultContent: content, ToolResultIsError: true}
 }
 
 // evaluateResult answers one evaluate_plan call: the Evaluate result of the
