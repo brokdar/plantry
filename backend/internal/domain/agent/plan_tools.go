@@ -294,6 +294,18 @@ func toolSetSessionPortions(svc Services) Tool {
 			if in.FrozenPortions != nil {
 				frozen = *in.FrozenPortions
 			}
+			// Deficit guard (spec §3.4, H3): a batch must cover what its plates
+			// eat. A silent deficit is a hard-rule violation the model may not
+			// relay, so the call is refused with the numbers instead.
+			cur, err := svc.Plates.Session(ctx, in.SessionID)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			if in.Portions < cur.Consumed || frozen < cur.FrozenConsumed {
+				return nil, ToolEffectNone, fmt.Errorf("%w: %s would cook %s portions (%s frozen) but its plates eat %s (%s from the freezer); "+
+					"set at least that many, or reduce the plates' eaters or portions first",
+					domain.ErrInvalidInput, cur.FoodName, fnum(in.Portions), fnum(frozen), fnum(cur.Consumed), fnum(cur.FrozenConsumed))
+			}
 			v, err := svc.Plates.SetSessionPortions(ctx, in.SessionID, plate.SessionPortions{
 				Portions: in.Portions, FrozenPortions: frozen, Note: sess.Note,
 			})
@@ -303,7 +315,7 @@ func toolSetSessionPortions(svc Services) Tool {
 			noteChange(ctx, "set_session_portions", map[string]any{
 				"name": v.FoodName, "portions": v.Portions, "frozen": v.FrozenPortions, "date": v.CookDate.Format(time.DateOnly),
 			})
-			return mustJSON(planSession(*v)), ToolEffectNone, nil
+			return withEffect(ctx, svc, planSession(*v), affected{Sessions: []int64{v.ID}}), ToolEffectNone, nil
 		},
 	}
 }
@@ -338,7 +350,7 @@ func toolSetPlateEaters(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			noteChange(ctx, "set_plate_eaters", map[string]any{"name": plateNames(p), "date": p.DateString(), "eaters": p.Eaters})
-			return mustJSON(plateSummary(p)), ToolEffectNone, nil
+			return withEffect(ctx, svc, plateSummary(p), affected{Plates: plateIDsOf(p)}), ToolEffectNone, nil
 		},
 	}
 }
@@ -398,7 +410,7 @@ func toolSetAvailability(svc Services) Tool {
 				if err := noteAvailability(ctx, svc, d, in.SlotID, before, in.CellMode, slotKey); err != nil {
 					return nil, ToolEffectNone, err
 				}
-				return mustJSON(out), ToolEffectNone, nil
+				return withEffect(ctx, svc, out, affected{Dates: []string{in.Date}}), ToolEffectNone, nil
 			}
 			mode := availability.Mode(in.CellMode)
 			_, removed, err := svc.Cells.SetOverride(ctx, availability.OverrideInput{
@@ -412,7 +424,7 @@ func toolSetAvailability(svc Services) Tool {
 			if err := noteAvailability(ctx, svc, d, in.SlotID, before, in.CellMode, slotKey); err != nil {
 				return nil, ToolEffectNone, err
 			}
-			return mustJSON(out), ToolEffectNone, nil
+			return withEffect(ctx, svc, out, affected{Dates: []string{in.Date}}), ToolEffectNone, nil
 		},
 	}
 }
@@ -470,7 +482,7 @@ func toolConfirm(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			noteChange(ctx, "confirm", map[string]any{"count": len(rows.PlateIDs)})
-			return mustJSON(rowsOutput(rows)), ToolEffectNone, nil
+			return withEffect(ctx, svc, rowsOutput(rows), affected{Plates: rows.PlateIDs, Sessions: rows.SessionIDs}), ToolEffectNone, nil
 		},
 	}
 }
@@ -535,7 +547,7 @@ func toolUnlock(svc Services) Tool {
 			}
 			turn.unlocks.drop(turn, closure)
 			noteChange(ctx, "unlock", map[string]any{"count": len(rows.PlateIDs)})
-			return mustJSON(rowsOutput(rows)), ToolEffectNone, nil
+			return withEffect(ctx, svc, rowsOutput(rows), affected{Plates: rows.PlateIDs, Sessions: rows.SessionIDs}), ToolEffectNone, nil
 		},
 	}
 }

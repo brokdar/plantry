@@ -82,6 +82,20 @@ func TestHeuristicRun(t *testing.T) {
 	assert.Equal(t, 2, bytes.Count(b, []byte("\n")))
 }
 
+// -keep-db leaves each run's database in the directory, named by scenario
+// and run; without it nothing is left behind.
+func TestKeepDB(t *testing.T) {
+	keep := filepath.Join(t.TempDir(), "dbs")
+	_, err := runCLI(t, "-runs", "2", "-scenarios", "single_batch_cooker", "-out", filepath.Join(t.TempDir(), "e.jsonl"), "-keep-db", keep)
+	require.NoError(t, err)
+	for _, name := range []string{"single_batch_cooker-1.db", "single_batch_cooker-2.db"} {
+		st, err := os.Stat(filepath.Join(keep, name))
+		require.NoError(t, err)
+		assert.Positive(t, st.Size())
+	}
+	assert.NoFileExists(t, filepath.Join(keep, "template.db"))
+}
+
 func TestRunFlags(t *testing.T) {
 	_, err := runCLI(t, "-runs", "0")
 	assert.ErrorContains(t, err, "-runs must be at least 1")

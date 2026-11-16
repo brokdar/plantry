@@ -232,6 +232,7 @@ func handleSSEEvent(
 					CacheCreationInputTokens int           `json:"cache_creation_input_tokens"`
 					CacheReadInputTokens     int           `json:"cache_read_input_tokens"`
 					ServerToolUse            serverToolUse `json:"server_tool_use"`
+					OutputTokensDetails      outputDetails `json:"output_tokens_details"`
 				} `json:"usage"`
 			} `json:"message"`
 		}
@@ -244,6 +245,7 @@ func handleSSEEvent(
 		st.usage.CacheReadTokens = payload.Message.Usage.CacheReadInputTokens
 		st.usage.CacheWriteTokens = payload.Message.Usage.CacheCreationInputTokens
 		st.usage.WebSearchRequests = payload.Message.Usage.ServerToolUse.WebSearchRequests
+		st.usage.ReasoningTokens = payload.Message.Usage.OutputTokensDetails.ThinkingTokens
 		return send(ctx, out, llm.Event{Type: llm.EventMessageStart, Payload: llm.MessageStartPayload{Model: st.model}})
 
 	case "content_block_start":
@@ -382,6 +384,7 @@ func handleSSEEvent(
 				CacheReadInputTokens     int           `json:"cache_read_input_tokens"`
 				CacheCreationInputTokens int           `json:"cache_creation_input_tokens"`
 				ServerToolUse            serverToolUse `json:"server_tool_use"`
+				OutputTokensDetails      outputDetails `json:"output_tokens_details"`
 			} `json:"usage"`
 		}
 		if err := json.Unmarshal(data, &payload); err != nil {
@@ -399,6 +402,9 @@ func handleSSEEvent(
 		}
 		if payload.Usage.CacheCreationInputTokens > 0 {
 			st.usage.CacheWriteTokens = payload.Usage.CacheCreationInputTokens
+		}
+		if n := payload.Usage.OutputTokensDetails.ThinkingTokens; n > 0 {
+			st.usage.ReasoningTokens = n
 		}
 		if n := payload.Usage.ServerToolUse.WebSearchRequests; n > 0 {
 			st.usage.WebSearchRequests = n
@@ -445,6 +451,12 @@ func mapStopReason(s string) llm.StopReason {
 	default:
 		return llm.StopReason(s)
 	}
+}
+
+// outputDetails is usage.output_tokens_details; thinking_tokens is part of
+// output_tokens.
+type outputDetails struct {
+	ThinkingTokens int `json:"thinking_tokens"`
 }
 
 // serverToolUse is the usage.server_tool_use object (cumulative counts).

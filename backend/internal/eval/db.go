@@ -21,6 +21,7 @@ const dsnPragmas = "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=b
 // migrations run once, into a template file every database copies.
 type dbs struct {
 	dir  string
+	keep bool // dir is the caller's: the run databases stay (-keep-db)
 	once sync.Once
 	tmpl []byte
 	err  error
@@ -28,7 +29,16 @@ type dbs struct {
 	n    int
 }
 
-func newDBs() (*dbs, error) {
+// newDBs makes the scratch directory; with keepDir set the databases go
+// there instead and survive close, named <scenario>-<run>.db, so a live
+// run's steps can be audited afterwards.
+func newDBs(keepDir string) (*dbs, error) {
+	if keepDir != "" {
+		if err := os.MkdirAll(keepDir, 0o750); err != nil {
+			return nil, err
+		}
+		return &dbs{dir: keepDir, keep: true}, nil
+	}
 	dir, err := os.MkdirTemp("", "plantry-eval-")
 	if err != nil {
 		return nil, err
@@ -36,8 +46,14 @@ func newDBs() (*dbs, error) {
 	return &dbs{dir: dir}, nil
 }
 
-// close removes every database handed out.
-func (d *dbs) close() error { return os.RemoveAll(d.dir) }
+// close removes every database handed out, except in keep mode, which only
+// drops the migrated template.
+func (d *dbs) close() error {
+	if d.keep {
+		return os.RemoveAll(filepath.Join(d.dir, "template.db"))
+	}
+	return os.RemoveAll(d.dir)
+}
 
 func (d *dbs) template() ([]byte, error) {
 	d.once.Do(func() {
@@ -66,8 +82,8 @@ func (d *dbs) template() ([]byte, error) {
 	return d.tmpl, d.err
 }
 
-// open returns a fresh migrated database.
-func (d *dbs) open() (*sql.DB, error) {
+// open returns a fresh migrated database; label names its file in keep mode.
+func (d *dbs) open(label string) (*sql.DB, error) {
 	tmpl, err := d.template()
 	if err != nil {
 		return nil, err
@@ -75,6 +91,9 @@ func (d *dbs) open() (*sql.DB, error) {
 	d.mu.Lock()
 	d.n++
 	path := filepath.Join(d.dir, fmt.Sprintf("run-%d.db", d.n))
+	if d.keep {
+		path = filepath.Join(d.dir, label+".db")
+	}
 	d.mu.Unlock()
 	if err := os.WriteFile(path, tmpl, 0o600); err != nil {
 		return nil, err

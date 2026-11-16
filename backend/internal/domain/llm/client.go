@@ -104,8 +104,8 @@ type Usage struct {
 	CacheWriteTokens  int
 	WebSearchRequests int
 	// ReasoningTokens is what the provider reports as spent on reasoning
-	// (OpenAI). Anthropic counts thinking inside OutputTokens and reports
-	// no separate figure.
+	// (OpenAI reasoning_tokens, Anthropic output_tokens_details.thinking_tokens);
+	// both are part of OutputTokens.
 	ReasoningTokens int
 }
 

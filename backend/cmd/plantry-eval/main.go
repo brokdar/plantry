@@ -49,6 +49,7 @@ func run(ctx context.Context, args []string, stdout io.Writer, getenv func(strin
 	model := fs.String("model", "", "LLM model (live: default PLANTRY_AI_MODEL; scripted: a label, default fake)")
 	version := fs.String("prompt-version", "", "prompt version label of the report (default: the chooser's)")
 	out := fs.String("out", "plantry-eval.jsonl", "JSONL report path")
+	keepDB := fs.String("keep-db", "", "directory to keep each run's database in (<scenario>-<run>.db, with the run steps); default: removed")
 	compare := fs.String("compare", "", "an earlier JSONL report to diff against")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -72,7 +73,7 @@ func run(ctx context.Context, args []string, stdout io.Writer, getenv func(strin
 	}
 	cfg := eval.Config{
 		Chooser: airun.Chooser(*chooser), Runs: *runs, Model: *model, PromptVersion: *version,
-		GitSHA: sha(), Now: now,
+		GitSHA: sha(), Now: now, KeepDB: *keepDB,
 	}
 	if cfg.Chooser == airun.ChooserLLM && getenv("PLANTRY_EVAL_LIVE") == "1" {
 		if cfg.Live, cfg.Model, err = live(getenv, *model); err != nil {

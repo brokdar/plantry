@@ -270,7 +270,7 @@ func toolApplyPreset(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			noteChange(ctx, "apply_preset", map[string]any{"name": p.Name, "date": in.TargetDate})
-			return mustJSON(applyResultSummary(result)), ToolEffectNone, nil
+			return withEffect(ctx, svc, applyResultSummary(result), affected{Plates: result.CreatedPlateIDs, Dates: []string{in.TargetDate}}), ToolEffectNone, nil
 		},
 	}
 }
