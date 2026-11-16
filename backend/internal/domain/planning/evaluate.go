@@ -3,11 +3,10 @@ package planning
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 )
 
 // EvaluationStep is the name of the run-log tool step that stores an
@@ -16,10 +15,13 @@ const EvaluationStep = "plan.evaluation"
 
 // Evaluation phases: chat runs record `before` and `after`; generation runs
 // `attempt` (each chooser attempt, the merged proposal) and `after`.
+// PhaseFinalProposal closes a generation run that failed: the last
+// proposal (or the unchanged plan) with the run's status.
 const (
-	PhaseBefore  = "before"
-	PhaseAttempt = "attempt"
-	PhaseAfter   = "after"
+	PhaseBefore        = "before"
+	PhaseAttempt       = "attempt"
+	PhaseAfter         = "after"
+	PhaseFinalProposal = "final_proposal"
 )
 
 // Evaluation is a plan's quality at one moment, from the state alone: what
@@ -33,8 +35,12 @@ type Evaluation struct {
 	MeatDays    int         `json:"meat_days"`
 	MeatDaysMax *int        `json:"meat_days_max"`
 	Plates      []PlateEval `json:"plates"`
-	Issues      []Issue     `json:"issues"`
-	Totals      EvalTotals  `json:"totals"`
+	// Issues are all of Check's findings, warnings included, unless the
+	// evaluation was ViewedAs a narrower list; AllIssues then keeps the
+	// raw Check result.
+	Issues    []Issue    `json:"issues"`
+	AllIssues []Issue    `json:"all_issues,omitempty"`
+	Totals    EvalTotals `json:"totals"`
 }
 
 // EvalTotals counts the issues by severity.
@@ -43,7 +49,7 @@ type EvalTotals struct {
 	Warnings   int `json:"warnings"`
 }
 
-// DayEval is one day with a target cell and at least one planned meal.
+// DayEval is one day of the window with at least one planned meal.
 // TargetKcal is the day's kcal target scaled to its planned meals (a short
 // day asks less); the percentages are the shares of the day's kcal.
 type DayEval struct {
@@ -57,8 +63,12 @@ type DayEval struct {
 	Meat          bool     `json:"meat"`
 	MeatFoods     []string `json:"meat_foods"`
 	CookOccasions int      `json:"cook_occasions"`
-	// Complete: every planned, non-routine meal of the day holds a plate.
+	// Complete: every planned, non-routine meal of the day holds a plate
+	// (not to be confused with NutritionMissing).
 	Complete bool `json:"complete"`
+	// NutritionMissing: a food of the day lacks nutrition data, so kcal
+	// and the shares understate the day (the board warns the same).
+	NutritionMissing bool `json:"nutrition_missing"`
 }
 
 // PlateEval is one plate of the window with its per-eater macros.
@@ -76,18 +86,22 @@ type PlateEval struct {
 // (leaf) per eater and the kcal that adds per eater. SessionID names a
 // persisted cook session, SessionKey a proposed one.
 type ComponentEval struct {
-	FoodID     int64    `json:"food_id"`
-	Name       string   `json:"name"`
-	Role       string   `json:"role"`
-	Portions   *float64 `json:"portions,omitempty"`
-	Grams      *float64 `json:"grams,omitempty"`
-	Kcal       float64  `json:"kcal"`
-	SessionID  int64    `json:"session_id,omitempty"`
-	SessionKey string   `json:"session_key,omitempty"`
+	FoodID   int64    `json:"food_id"`
+	Name     string   `json:"name"`
+	Role     string   `json:"role"`
+	Portions *float64 `json:"portions,omitempty"`
+	Grams    *float64 `json:"grams,omitempty"`
+	Kcal     float64  `json:"kcal"`
+	// NutritionComplete is false when the food lacks nutrition data.
+	NutritionComplete bool   `json:"nutrition_complete"`
+	SessionID         int64  `json:"session_id,omitempty"`
+	SessionKey        string `json:"session_key,omitempty"`
 }
 
-// Evaluate describes the plan in s for the days of t. It composes Check,
-// DayKcals, the H5 meat-day rule, the cook occasions of the index and the
+// Evaluate describes the plan in s for the window's days: every day with a
+// planned meal, whatever t covers (t only scopes Check). It is the single
+// source of the day accounts (index.dayAccounts, which DayKcals shares), the
+// H5 meat days (index.meatDays, which h5 shares), the cook occasions and the
 // foods' macros; pass the state after Merge to evaluate a proposal.
 func Evaluate(s State, t Target) Evaluation {
 	x := newIndex(s, t)
@@ -95,16 +109,12 @@ func Evaluate(s State, t Target) Evaluation {
 		Days: []DayEval{}, Plates: []PlateEval{}, MeatDaysMax: s.Profile.MeatDaysPerWeekMax,
 		Issues: Check(s, t),
 	}
-	for _, is := range ev.Issues {
-		if is.Severity == SeverityViolation {
-			ev.Totals.Violations++
-		} else {
-			ev.Totals.Warnings++
-		}
-	}
+	ev.Totals = totalsOf(ev.Issues)
 
-	meat := map[int][]string{} // day -> omnivore foods on its plates
 	for _, p := range s.Plates {
+		if !s.Window.Contains(p.Date) {
+			continue
+		}
 		pe := PlateEval{
 			Date: p.Date.Format(time.DateOnly), SlotID: p.SlotID, PlateID: p.ID, Eaters: p.Eaters,
 			Components: []ComponentEval{},
@@ -113,101 +123,101 @@ func Evaluate(s State, t Target) Evaluation {
 			f, ok := x.food(c.FoodID)
 			ce := ComponentEval{
 				FoodID: c.FoodID, Name: f.Name, Role: string(f.Role), Portions: c.Portions, Grams: c.Grams,
-				SessionID: c.SessionID, SessionKey: c.SessionKey,
+				NutritionComplete: ok && f.NutritionComplete, SessionID: c.SessionID, SessionKey: c.SessionKey,
 			}
 			if ok {
 				m := c.Multiplier()
 				ce.Kcal = f.Macros.Kcal * m
 				pe.Kcal += ce.Kcal
 				pe.ProteinG += f.Macros.Protein * m
-				if f.DietClass == diet.Omnivore && s.Window.Contains(p.Date) {
-					d := dayOf(p.Date)
-					if !containsStr(meat[d], f.Name) {
-						meat[d] = append(meat[d], f.Name)
-					}
-				}
 			}
 			pe.Components = append(pe.Components, ce)
 		}
-		if s.Window.Contains(p.Date) {
-			ev.Plates = append(ev.Plates, pe)
-		}
+		ev.Plates = append(ev.Plates, pe)
 	}
+
+	meat := x.meatDays()
 	ev.MeatDays = len(meat)
 
-	kcal := map[int]DayKcal{}
-	for _, d := range DayKcals(s, t) {
-		kcal[dayOf(d.Date)] = d
+	var days []time.Time // the window's days with a cell, ascending
+	seen := map[int]bool{}
+	for _, c := range s.Cells {
+		if d := dayOf(c.Date); s.Window.Contains(c.Date) && !seen[d] {
+			seen[d] = true
+			days = append(days, c.Date)
+		}
 	}
-	for _, d := range x.days {
-		de := DayEval{Date: d.Format(time.DateOnly), MeatFoods: []string{}, Complete: true}
-		dk, hasKcal := kcal[dayOf(d)]
-		planned := false
-		for _, c := range s.Cells {
-			if dayOf(c.Date) == dayOf(d) && c.Mode != availability.ModeNone {
-				planned = true
-			}
+	slices.SortFunc(days, time.Time.Compare)
+	hasTarget := s.Profile.KcalTarget != nil && *s.Profile.KcalTarget > 0
+	for _, dk := range x.dayAccounts(days) {
+		de := DayEval{
+			Date: dk.Date.Format(time.DateOnly), Kcal: dk.Kcal, ProteinG: dk.ProteinG,
+			MeatFoods: []string{}, Complete: dk.Complete, NutritionMissing: dk.NutritionMissing,
+			CookOccasions: len(x.occasions[dayOf(dk.Date)]),
 		}
-		if !planned {
-			continue // a day of No-plate meals has nothing to evaluate
-		}
-		if hasKcal {
+		if hasTarget {
 			sc := dk.Scaled
 			de.TargetKcal = &sc
-			de.Complete = dk.Complete
 		}
-		var protein, fat, carbs float64
-		for _, p := range s.Plates {
-			if dayOf(p.Date) != dayOf(d) {
-				continue
-			}
-			for _, c := range p.Components {
-				if f, ok := x.food(c.FoodID); ok {
-					m := c.Multiplier()
-					de.Kcal += f.Macros.Kcal * m
-					protein += f.Macros.Protein * m
-					fat += f.Macros.Fat * m
-					carbs += f.Macros.Carbs * m
-				}
-			}
+		if dk.Kcal > 0 {
+			de.ProteinPct, de.FatPct, de.CarbsPct = dk.ProteinG*4/dk.Kcal*100, dk.FatG*9/dk.Kcal*100, dk.CarbsG*4/dk.Kcal*100
 		}
-		de.ProteinG = protein
-		if de.Kcal > 0 {
-			de.ProteinPct, de.FatPct, de.CarbsPct = protein*4/de.Kcal*100, fat*9/de.Kcal*100, carbs*4/de.Kcal*100
+		for _, id := range meat[dayOf(dk.Date)] {
+			de.Meat = true
+			de.MeatFoods = append(de.MeatFoods, s.Foods[id].Name)
 		}
-		if foods := meat[dayOf(d)]; len(foods) > 0 {
-			de.Meat, de.MeatFoods = true, foods
-		}
-		de.CookOccasions = len(x.occasions[dayOf(d)])
 		ev.Days = append(ev.Days, de)
 	}
 	return ev
 }
 
-func containsStr(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
+func totalsOf(issues []Issue) EvalTotals {
+	var t EvalTotals
+	for _, is := range issues {
+		if is.Severity == SeverityViolation {
+			t.Violations++
+		} else {
+			t.Warnings++
 		}
 	}
-	return false
+	return t
 }
 
-// RecordEvaluation stores ev as a `plan.evaluation` step of the run in ctx
-// (no-op without one). attempt is the chooser attempt of an `attempt`
-// phase and omitted otherwise (pass -1). It uses a detached ctx so a
-// cancelled run still records its closing evaluation.
-func RecordEvaluation(ctx context.Context, phase string, attempt int, ev Evaluation) {
+// ViewedAs returns e with Issues (and Totals) narrowed to issues, the list
+// a user or the chat prompt saw; the raw Check result moves to AllIssues.
+func (e Evaluation) ViewedAs(issues []Issue) Evaluation {
+	e.AllIssues = e.Issues
+	e.Issues = issues
+	e.Totals = totalsOf(issues)
+	return e
+}
+
+// RecordEvaluation stores build() as a `plan.evaluation` step of phase for
+// the run in ctx; build is not called without a run. It uses a detached ctx
+// so a cancelled run still records its closing evaluation.
+func RecordEvaluation(ctx context.Context, phase string, build func() Evaluation) {
+	recordEvaluation(ctx, map[string]any{"phase": phase}, build)
+}
+
+// RecordAttemptEvaluation stores the merged proposal of chooser attempt n.
+func RecordAttemptEvaluation(ctx context.Context, n int, build func() Evaluation) {
+	recordEvaluation(ctx, map[string]any{"phase": PhaseAttempt, "attempt": n}, build)
+}
+
+// RecordFinalProposal closes a failed generation run: the evaluation of its
+// last proposal, with the run's status ("error", "timeout", "panic") and the
+// stage that failed.
+func RecordFinalProposal(ctx context.Context, status, stage string, build func() Evaluation) {
+	recordEvaluation(ctx, map[string]any{"phase": PhaseFinalProposal, "status": status, "stage": stage}, build)
+}
+
+func recordEvaluation(ctx context.Context, a map[string]any, build func() Evaluation) {
 	run := airun.FromContext(ctx)
 	if run == nil {
 		return
 	}
-	a := map[string]any{"phase": phase}
-	if attempt >= 0 {
-		a["attempt"] = attempt
-	}
 	args, _ := json.Marshal(a)
-	result, err := json.Marshal(ev)
+	result, err := json.Marshal(build())
 	isErr := false
 	if err != nil {
 		result, isErr = []byte(`{"error":"encode"}`), true

@@ -72,8 +72,8 @@ func (r *AIRunRepo) GetRun(ctx context.Context, id int64) (airun.RunDetailRow, e
 	}, nil
 }
 
-// ListSteps reads a run's steps in seq order, args and results cut to 8192
-// characters.
+// ListSteps reads a run's steps in seq order; an llm_call's request and response are cut to 8192
+// characters, a tool step's args and result come whole.
 func (r *AIRunRepo) ListSteps(ctx context.Context, runID int64) ([]airun.StepView, error) {
 	rows, err := r.queriesFor(ctx).ListAIRunStepViews(ctx, runID)
 	if err != nil {
@@ -86,9 +86,9 @@ func (r *AIRunRepo) ListSteps(ctx context.Context, runID int64) ([]airun.StepVie
 			Type:              airun.StepType(row.Type),
 			Name:              row.Name,
 			Args:              row.Args,
-			ArgsTruncated:     row.ArgsCut || hasTruncatedMarker(row.Args),
+			ArgsTruncated:     row.ArgsCut != 0 || hasTruncatedMarker(row.Args),
 			Result:            row.Result,
-			ResultTruncated:   row.ResultCut || hasTruncatedMarker(row.Result),
+			ResultTruncated:   row.ResultCut != 0 || hasTruncatedMarker(row.Result),
 			IsError:           row.IsError != 0,
 			DurationMs:        row.DurationMs,
 			InputTokens:       row.InputTokens,

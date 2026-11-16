@@ -133,3 +133,103 @@ func TestEvaluate_SkipsNoneDays(t *testing.T) {
 	assert.NotNil(t, ev.Issues)
 	assert.NotNil(t, ev.Plates)
 }
+
+// Without a kcal target the day still reports whether its meals hold plates.
+func TestEvaluate_NoKcalTarget(t *testing.T) {
+	s := baseState()
+	s.Profile.KcalTarget = nil
+	tgt := windowTarget(s)
+	prop := planning.Proposal{
+		Sessions: []planning.ProposedSession{session("s1", curry, sat, dinner, 1)},
+		Plates:   []planning.ProposedPlate{{Date: day(sat), SlotID: dinner, Eaters: 1, Components: []planning.ProposedComponent{onKey(curry, "s1")}}},
+	}
+	ev := planning.Evaluate(planning.Merge(s, tgt, prop), tgt)
+	d := evalDay(t, ev, sat)
+	assert.Nil(t, d.TargetKcal)
+	assert.False(t, d.Complete, "breakfast and lunch of Saturday are empty")
+	assert.InDelta(t, 500, d.Kcal, 0.01, "kcal is accounted without a target")
+	assert.Len(t, ev.Days, 7, "every day of the window with a planned meal")
+}
+
+func TestEvaluate_NutritionMissing(t *testing.T) {
+	s := baseState()
+	f := s.Foods[stew]
+	f.NutritionComplete = false
+	s.Foods[stew] = f
+	tgt := windowTarget(s)
+	prop := planning.Proposal{
+		Sessions: []planning.ProposedSession{session("s1", stew, sat, dinner, 1), session("s2", curry, sun, dinner, 1)},
+		Plates: []planning.ProposedPlate{
+			{Date: day(sat), SlotID: dinner, Eaters: 1, Components: []planning.ProposedComponent{onKey(stew, "s1")}},
+			{Date: day(sun), SlotID: dinner, Eaters: 1, Components: []planning.ProposedComponent{onKey(curry, "s2")}},
+		},
+	}
+	ev := planning.Evaluate(planning.Merge(s, tgt, prop), tgt)
+	assert.True(t, evalDay(t, ev, sat).NutritionMissing)
+	assert.False(t, evalDay(t, ev, sun).NutritionMissing)
+	for _, p := range ev.Plates {
+		for _, c := range p.Components {
+			assert.Equal(t, c.FoodID != stew, c.NutritionComplete)
+		}
+	}
+}
+
+// Evaluate is the single source: its days equal DayKcals, its issues equal
+// Check and its meat days equal the count the H5 rule reports.
+func TestEvaluate_ParityWithDayKcalsAndCheck(t *testing.T) {
+	s := baseState()
+	s.Profile.KcalTarget = f64(2000)
+	s.Profile.MeatDaysPerWeekMax = intp(1)
+	setMode(&s, cell(mon, dinner), availability.ModeNone)
+	tgt := windowTarget(s)
+	prop := planning.Proposal{
+		Sessions: []planning.ProposedSession{session("s1", chili, sat, dinner, 2), session("s2", chili, tue, dinner, 1), session("s3", curry, mon, lunch, 1)},
+		Plates: []planning.ProposedPlate{
+			{Date: day(sat), SlotID: dinner, Eaters: 1, Components: []planning.ProposedComponent{onKey(chili, "s1")}},
+			{Date: day(sun), SlotID: lunch, Eaters: 1, Components: []planning.ProposedComponent{onKey(chili, "s1")}},
+			{Date: day(wed), SlotID: lunch, Eaters: 1, Components: []planning.ProposedComponent{onKey(chili, "s2")}},
+			{Date: day(mon), SlotID: lunch, Eaters: 1, Components: []planning.ProposedComponent{onKey(curry, "s3")}},
+		},
+	}
+	merged := planning.Merge(s, tgt, prop)
+	ev := planning.Evaluate(merged, tgt)
+
+	dks := planning.DayKcals(merged, tgt)
+	require.Len(t, ev.Days, len(dks))
+	for i, dk := range dks {
+		d := ev.Days[i]
+		assert.Equal(t, dk.Date.Format("2006-01-02"), d.Date)
+		assert.InDelta(t, dk.Kcal, d.Kcal, 1e-9)
+		assert.InDelta(t, dk.ProteinG, d.ProteinG, 1e-9)
+		require.NotNil(t, d.TargetKcal)
+		assert.InDelta(t, dk.Scaled, *d.TargetKcal, 1e-9)
+		assert.Equal(t, dk.Complete, d.Complete)
+	}
+	assert.Equal(t, planning.Check(merged, tgt), ev.Issues)
+
+	var h5Days int
+	for _, is := range ev.Issues {
+		if is.Code == planning.CodeMeatDaysExceeded {
+			h5Days = is.Params["days"].(int)
+		}
+	}
+	assert.Equal(t, 3, h5Days)
+	assert.Equal(t, h5Days, ev.MeatDays)
+	var meatFlags int
+	for _, d := range ev.Days {
+		if d.Meat {
+			meatFlags++
+		}
+	}
+	assert.Equal(t, ev.MeatDays, meatFlags, "meat_days and the days flagged meat cover the same range")
+}
+
+func TestEvaluation_ViewedAs(t *testing.T) {
+	s := baseState()
+	ev := planning.Evaluate(s, windowTarget(s))
+	require.NotEmpty(t, ev.Issues, "an empty plan misses plates")
+	seen := ev.ViewedAs(nil)
+	assert.Empty(t, seen.Issues)
+	assert.Zero(t, seen.Totals)
+	assert.Equal(t, ev.Issues, seen.AllIssues, "the raw Check result is kept")
+}

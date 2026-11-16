@@ -168,13 +168,13 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 		// The plan before the turn is the state the prompt was built from;
 		// the plan after is read again when the turn ends, also on error or
 		// cancel (detached from ctx).
-		planning.RecordEvaluation(ctx, planning.PhaseBefore, -1, planning.Evaluate(st, planning.WindowTarget(st)))
+		planning.RecordEvaluation(ctx, planning.PhaseBefore, func() planning.Evaluation { return evaluateAsSeen(st) })
 		defer func() {
 			dctx := context.WithoutCancel(ctx)
 			if after, berr := s.plan.Build(dctx, w, req.Today, w.Start, w.End); berr != nil {
 				planning.RecordEvaluationError(dctx, planning.PhaseAfter, berr)
 			} else {
-				planning.RecordEvaluation(dctx, planning.PhaseAfter, -1, planning.Evaluate(after, planning.WindowTarget(after)))
+				planning.RecordEvaluation(dctx, planning.PhaseAfter, func() planning.Evaluation { return evaluateAsSeen(after) })
 			}
 			status, errKey := chatOutcome(ctx, err)
 			run.Finish(ctx, status, errKey)

@@ -33,10 +33,13 @@ type Heuristic struct{}
 func (Heuristic) Choose(ctx context.Context, in ChooseInput) (Proposal, error) {
 	recordContext(ctx, in, "heuristic", nil)
 	h := newPlanner(in)
+	var prop Proposal
+	var err error
 	if in.Side != nil {
-		return h.side(*in.Side)
+		prop, err = h.side(*in.Side)
+	} else {
+		prop, err = h.plan()
 	}
-	prop, err := h.plan()
 	h.recordChoices(ctx)
 	return prop, err
 }
@@ -691,6 +694,7 @@ func (h *planner) side(sw SideSwap) (Proposal, error) {
 	reason := h.text(textDifferentSide)
 	ps := ProposedSession{Key: "s1", FoodID: id, CookDate: sw.CookDate, CookSlotID: sw.CookSlotID, Portions: sw.Portions, FrozenPortions: sw.FrozenPortions, Reason: reason}
 	p := Proposal{Sessions: []ProposedSession{ps}}
+	h.choices = append(h.choices, heuristicChoice{Date: sw.CookDate.Format(time.DateOnly), SlotID: sw.CookSlotID, Foods: []int64{id}, Reason: "side_swap"})
 	for _, sp := range sw.Plates {
 		p.Plates = append(p.Plates, ProposedPlate{
 			PlateID: sp.PlateID, Date: sp.Date, SlotID: sp.SlotID, Eaters: sp.Eaters, Reason: reason,

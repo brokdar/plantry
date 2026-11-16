@@ -1,14 +1,15 @@
 package planning
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"slices"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 )
 
 // Run-log step names of the code's decisions.
@@ -32,11 +33,32 @@ type excludedFood struct {
 	Reason string `json:"reason"`
 }
 
+// shortDay is a day with a No-plate meal; TargetKcal is its scaled kcal
+// target, nil without a kcal target.
 type shortDay struct {
-	Date       string  `json:"date"`
-	Planned    int     `json:"planned"`
-	Meals      int     `json:"meals"`
-	TargetKcal float64 `json:"target_kcal"`
+	Date       string   `json:"date"`
+	Planned    int      `json:"planned"`
+	Meals      int      `json:"meals"`
+	TargetKcal *float64 `json:"target_kcal"`
+}
+
+// sideRecord is the side a side-swap run replaces.
+type sideRecord struct {
+	FoodID         int64       `json:"food_id"`
+	Role           string      `json:"role"`
+	CookDate       string      `json:"cook_date"`
+	CookSlotID     int64       `json:"cook_slot_id"`
+	Portions       float64     `json:"portions"`
+	FrozenPortions float64     `json:"frozen_portions"`
+	Plates         []sidePlate `json:"plates"`
+}
+
+type sidePlate struct {
+	PlateID  int64   `json:"plate_id"`
+	Date     string  `json:"date"`
+	SlotID   int64   `json:"slot_id"`
+	Eaters   float64 `json:"eaters"`
+	PerEater float64 `json:"per_eater"`
 }
 
 // contextRecord is the result of the run's `plan.context` step: what the
@@ -71,6 +93,13 @@ type contextRecord struct {
 	TargetCells  int        `json:"target_cells"`
 	OpenCells    int        `json:"open_cells"`
 	ShortDays    []shortDay `json:"short_days"`
+	// What the run's scope handed the chooser: the replaced recipes, the
+	// batches the target must not eat from, the per-day eaters override and
+	// the side a side swap replaces.
+	Avoid        []int64            `json:"avoid"`
+	AvoidBatches []int64            `json:"avoid_batches"`
+	EatersByDate map[string]float64 `json:"eaters_by_date"`
+	Side         *sideRecord        `json:"side"`
 	// Fixed rows: plates and sessions outside the target or confirmed (the
 	// chooser may not change them), and the totals they are counted from.
 	Plates struct {
@@ -88,29 +117,13 @@ type contextRecord struct {
 // candidateSplit returns the recipes candidates() offers and, for every
 // other composed recipe, why it is out.
 func candidateSplit(in ChooseInput) (included []FoodFacts, excluded []excludedFood) {
-	avoid := idSet(in.Avoid)
-	t := diet.Class(in.State.Profile.DietType)
-	var elig []FoodFacts
-	for _, f := range in.State.Foods {
-		if !f.Composed() {
-			continue
-		}
-		switch {
-		case avoid[f.ID]:
-			excluded = append(excluded, excludedFood{f.ID, f.Name, excludeReplaced})
-		case t != "" && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t):
-			excluded = append(excluded, excludedFood{f.ID, f.Name, excludeDiet})
-		default:
-			elig = append(elig, f)
-		}
-	}
+	elig, excluded := eligibleSplit(in)
 	included = candidates(in)
 	for _, f := range elig {
 		if !slices.ContainsFunc(included, func(c FoodFacts) bool { return c.ID == f.ID }) {
 			excluded = append(excluded, excludedFood{f.ID, f.Name, excludeSideRole})
 		}
 	}
-	slices.SortFunc(excluded, func(a, b excludedFood) int { return int(a.ID - b.ID) })
 	return included, excluded
 }
 
@@ -135,21 +148,26 @@ func recordContext(ctx context.Context, in ChooseInput, chooser string, trimmed 
 	rec.ExploreQuota = in.ExploreQuota
 	rec.TargetCells = len(in.Target.Cells)
 	rec.ShortDays = []shortDay{}
-	if p.KcalTarget != nil && *p.KcalTarget > 0 {
-		for _, d := range x.days {
-			meals, planned := 0, 0
-			for _, c := range s.Cells {
-				if dayOf(c.Date) == dayOf(d) {
-					meals++
-					if c.Mode != availability.ModeNone {
-						planned++
-					}
-				}
+	for _, dk := range x.dayAccounts(x.days) {
+		if dk.Planned < dk.Meals {
+			sd := shortDay{Date: dk.Date.Format(time.DateOnly), Planned: dk.Planned, Meals: dk.Meals}
+			if dk.Target > 0 {
+				scaled := dk.Scaled
+				sd.TargetKcal = &scaled
 			}
-			if planned > 0 && planned < meals {
-				rec.ShortDays = append(rec.ShortDays, shortDay{d.Format(time.DateOnly), planned, meals, *p.KcalTarget * float64(planned) / float64(meals)})
-			}
+			rec.ShortDays = append(rec.ShortDays, sd)
 		}
+	}
+	rec.Avoid, rec.AvoidBatches, rec.EatersByDate = nonNil(in.Avoid), nonNil(in.AvoidBatches), in.EatersByDate
+	if sw := in.Side; sw != nil {
+		sr := &sideRecord{
+			FoodID: sw.FoodID, Role: string(sw.Role), CookDate: sw.CookDate.Format(time.DateOnly), CookSlotID: sw.CookSlotID,
+			Portions: sw.Portions, FrozenPortions: sw.FrozenPortions, Plates: []sidePlate{},
+		}
+		for _, sp := range sw.Plates {
+			sr.Plates = append(sr.Plates, sidePlate{sp.PlateID, sp.Date.Format(time.DateOnly), sp.SlotID, sp.Eaters, sp.PerEater})
+		}
+		rec.Side = sr
 	}
 	for _, c := range s.Cells {
 		if c.Mode == availability.ModePlan && x.inTarget(c.Key()) && len(x.byCell[idOf(c.Key())]) == 0 {
@@ -180,6 +198,7 @@ func recordContext(ctx context.Context, in ChooseInput, chooser string, trimmed 
 			rec.CandidateIDs = append(rec.CandidateIDs, f.ID)
 		}
 	}
+	slices.SortFunc(excluded, func(a, b excludedFood) int { return cmp.Compare(a.ID, b.ID) })
 	if excluded == nil {
 		excluded = []excludedFood{}
 	}
@@ -187,6 +206,7 @@ func recordContext(ctx context.Context, in ChooseInput, chooser string, trimmed 
 	args, _ := json.Marshal(map[string]any{"chooser": chooser})
 	result, err := json.Marshal(rec)
 	if err != nil {
+		slog.WarnContext(ctx, "plan.context not recorded", "error", err)
 		return
 	}
 	run.ToolStep(context.WithoutCancel(ctx), ContextStep, args, result, false, 0)
@@ -195,7 +215,7 @@ func recordContext(ctx context.Context, in ChooseInput, chooser string, trimmed 
 // heuristicChoice is what the heuristic did for one cell: the recipes it
 // put there and a reason code (cook_new, leftover_fixed_batch,
 // leftover_proposed_batch, leftover_grown_batch, leftover_of_new_batch,
-// frozen_portion) or why it left the cell empty (left_empty_no_main,
+// frozen_portion, side_swap) or why it left the cell empty (left_empty_no_main,
 // left_empty_cook_cap).
 type heuristicChoice struct {
 	Date   string  `json:"date"`
@@ -224,6 +244,7 @@ func (h *planner) recordChoices(ctx context.Context) {
 	}
 	result, err := json.Marshal(choices)
 	if err != nil {
+		slog.WarnContext(ctx, "heuristic.choices not recorded", "error", err)
 		return
 	}
 	run.ToolStep(context.WithoutCancel(ctx), HeuristicChoicesStep, []byte(`{}`), result, false, 0)

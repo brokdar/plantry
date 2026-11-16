@@ -5,10 +5,8 @@ import (
 	"math"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
 // chatIssues are the issues the chat prompt shows: what the board shows
@@ -17,16 +15,18 @@ import (
 // eaten 8 of 6 would read "Issues: none."
 func chatIssues(st planning.State) []planning.Issue {
 	out := planning.BoardIssues(st)
-	t := planning.Target{}
-	for _, c := range st.Cells {
-		t.Cells = append(t.Cells, c.Key())
-	}
-	for _, is := range planning.Check(st, t) {
+	for _, is := range planning.Check(st, planning.WindowTarget(st)) {
 		if is.Rule == "H3" || is.Rule == "H4" {
 			out = append(out, is)
 		}
 	}
 	return out
+}
+
+// evaluateAsSeen is the plan's evaluation with the issues the chat prompt
+// and the user saw (chatIssues); Check's full list stays in AllIssues.
+func evaluateAsSeen(st planning.State) planning.Evaluation {
+	return planning.Evaluate(st, planning.WindowTarget(st)).ViewedAs(chatIssues(st))
 }
 
 // chatFacts renders what the summary lacks: each food on a plate of the
@@ -35,25 +35,18 @@ func chatIssues(st planning.State) []planning.Issue {
 func chatFacts(st planning.State) string {
 	var foods []int64
 	seen := map[int64]bool{}
-	days := map[string]float64{}
-	incomplete := map[string]bool{}
 	for _, p := range st.Plates {
 		if !st.Window.Contains(p.Date) || p.Proposed() {
 			continue
 		}
-		d := p.Date.Format(time.DateOnly)
 		for _, c := range p.Components {
-			f, ok := st.Foods[c.FoodID]
+			_, ok := st.Foods[c.FoodID]
 			if !ok {
 				continue
 			}
 			if !seen[c.FoodID] {
 				seen[c.FoodID] = true
 				foods = append(foods, c.FoodID)
-			}
-			days[d] += f.Macros.Kcal * c.Multiplier()
-			if !f.NutritionComplete {
-				incomplete[d] = true
 			}
 		}
 	}
@@ -75,35 +68,30 @@ func chatFacts(st planning.State) string {
 		}
 		fmt.Fprintf(&b, "food_id %d %s | %s | %.0f kcal, %.0f g protein %s\n", f.ID, f.Name, role, f.Macros.Kcal, f.Macros.Protein, per)
 	}
-	// The day's target is scaled to its planned meals (a "No plate" meal asks
-	// less), as the planner computes it.
-	cells := make([]plate.CellKey, 0, len(st.Cells))
-	for _, c := range st.Cells {
-		cells = append(cells, c.Key())
-	}
-	scaled := map[string]float64{}
+	// Day figures come from the evaluation; the day's target is scaled to its
+	// planned meals (a "No plate" meal asks less).
 	target := ""
-	for _, dk := range planning.DayKcals(st, planning.Target{Cells: cells}) {
-		scaled[dk.Date.Format(time.DateOnly)] = dk.Scaled
-	}
 	if k := st.Profile.KcalTarget; k != nil && *k > 0 {
 		target = fmt.Sprintf(" (target %.0f; a day with a No-plate meal shows its scaled target)", *k)
 	}
-	b.WriteString("\nKcal per eater and day" + target + ":\n")
-	keys := make([]string, 0, len(days))
-	for d := range days {
-		keys = append(keys, d)
+	withPlates := map[string]bool{}
+	ev := planning.Evaluate(st, planning.WindowTarget(st))
+	for _, p := range ev.Plates {
+		withPlates[p.Date] = true
 	}
-	slices.Sort(keys)
-	for _, d := range keys {
+	b.WriteString("\nKcal per eater and day" + target + ":\n")
+	for _, d := range ev.Days {
+		if !withPlates[d.Date] {
+			continue
+		}
 		mark := ""
-		if incomplete[d] {
+		if d.NutritionMissing {
 			mark = " (some nutrition data missing)"
 		}
-		if sc, ok := scaled[d]; ok && st.Profile.KcalTarget != nil && math.Abs(sc-*st.Profile.KcalTarget) > 0.5 {
-			mark = fmt.Sprintf(" against %.0f%s", sc, mark)
+		if d.TargetKcal != nil && st.Profile.KcalTarget != nil && math.Abs(*d.TargetKcal-*st.Profile.KcalTarget) > 0.5 {
+			mark = fmt.Sprintf(" against %.0f%s", *d.TargetKcal, mark)
 		}
-		fmt.Fprintf(&b, "%s: %.0f kcal%s\n", d, days[d], mark)
+		fmt.Fprintf(&b, "%s: %.0f kcal%s\n", d.Date, d.Kcal, mark)
 	}
 	return b.String()
 }

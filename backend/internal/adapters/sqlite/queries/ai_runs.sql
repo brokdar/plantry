@@ -126,15 +126,16 @@ LEFT JOIN ai_prompts p ON p.hash = r.prompt_hash
 WHERE r.id = ?;
 
 -- name: ListAIRunStepViews :many
--- A run's steps in seq order. args and result are cut to 8192 characters
--- (an llm_call shows its request_json and response_json there); the *_cut
--- flags say a value was longer.
+-- A run's steps in seq order. A tool step's args and result are returned
+-- whole (AddStep already caps them at 256 KiB); an llm_call's request_json
+-- and response_json are cut to 8192 characters, the *_cut flags say they
+-- were longer.
 SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens, web_search_requests,
        started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id,
-       CAST(COALESCE(substr(COALESCE(args_json, request_json), 1, 8192), '') AS TEXT) AS args,
-       COALESCE(length(COALESCE(args_json, request_json)), 0) > 8192 AS args_cut,
-       CAST(COALESCE(substr(COALESCE(result_json, response_json), 1, 8192), '') AS TEXT) AS result,
-       COALESCE(length(COALESCE(result_json, response_json)), 0) > 8192 AS result_cut
+       CAST(COALESCE(args_json, substr(request_json, 1, 8192), '') AS TEXT) AS args,
+       CAST(args_json IS NULL AND COALESCE(length(request_json), 0) > 8192 AS INTEGER) AS args_cut,
+       CAST(COALESCE(result_json, substr(response_json, 1, 8192), '') AS TEXT) AS result,
+       CAST(result_json IS NULL AND COALESCE(length(response_json), 0) > 8192 AS INTEGER) AS result_cut
 FROM ai_run_steps
 WHERE run_id = ?
 ORDER BY seq;

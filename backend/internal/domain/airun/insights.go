@@ -42,7 +42,7 @@ type RunDetailRow struct {
 	RepairAttempts int
 }
 
-// StepView is one step of a run's detail. Args and Result are cut to 8192
+// StepView is one step of a run's detail. For an llm_call Args and Result are cut to 8192
 // characters (Truncated says so); for an llm_call they hold the stored
 // request and response. Empty means none.
 type StepView struct {

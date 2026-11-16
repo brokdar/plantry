@@ -120,9 +120,10 @@ type Querier interface {
 	// Which of the given leaves at least one composed food uses.
 	LeafIDsUsedInRecipes(ctx context.Context, ids []int64) ([]int64, error)
 	ListAIChangesByConversation(ctx context.Context, conversationID sql.NullInt64) ([]AiChange, error)
-	// A run's steps in seq order. args and result are cut to 8192 characters
-	// (an llm_call shows its request_json and response_json there); the *_cut
-	// flags say a value was longer.
+	// A run's steps in seq order. A tool step's args and result are returned
+	// whole (AddStep already caps them at 256 KiB); an llm_call's request_json
+	// and response_json are cut to 8192 characters, the *_cut flags say they
+	// were longer.
 	ListAIRunStepViews(ctx context.Context, runID int64) ([]ListAIRunStepViewsRow, error)
 	// Runs newest first (by id), optionally filtered by kind, a started_at range
 	// [from_ts, to_ts) and a cursor (ids below before_id). lim -1 lists all.

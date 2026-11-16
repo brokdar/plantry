@@ -656,10 +656,26 @@ func (s *Service) execute(ctx context.Context, run Run, j job) {
 // cells and apply routines, build the context, choose, check, persist
 // atomically (D10) and score.
 func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
+	// Every run that got as far as the base plan ends with one closing
+	// plan.evaluation: `after` once saved, else the last proposal (or the
+	// unchanged plan) as `final_proposal` with the run's status, also when
+	// the run panics.
+	var base State
+	var haveBase, closed bool
+	var last Proposal // the chooser's last proposal, partial on its error
+	closeStatus, closeStage := "panic", ""
+	defer func() {
+		if haveBase && !closed {
+			RecordFinalProposal(ctx, closeStatus, closeStage, func() Evaluation {
+				return Evaluate(Merge(base, j.target, last), j.target)
+			})
+		}
+	}()
 	fail := func(stage string, err error) RunEnd {
 		key, _ := domain.MessageKey(err, "plan")
+		closeStatus, closeStage = "error", stage
 		if errors.Is(err, context.DeadlineExceeded) {
-			key = keyTimeout
+			key, closeStatus = keyTimeout, "timeout"
 		}
 		s.d.Logger.WarnContext(ctx, "plan.generate failed", "run_id", runID, "stage", stage, "error", err)
 		return RunEnd{Status: airun.StatusError, ErrorKey: key}
@@ -670,7 +686,6 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		s.logStage(ctx, runID, started, st, extra...)
 	}
 	s.logStage(ctx, runID, started, StageResolving)
-	var base State
 	var routine []plate.SnapshotPlate
 	err := s.d.Tx.InTx(ctx, func(ctx context.Context) error {
 		st, err := s.d.Builder.Build(ctx, j.w, j.today, j.from, j.to)
@@ -689,13 +704,13 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	if err != nil {
 		return fail("resolving", err)
 	}
+	haveBase = true
 
 	// Without an empty plan cell (a side swap aside) there is nothing to
 	// choose, so no chooser runs: an LLM call would plan nothing at a cost.
-	var prop Proposal
 	if j.side != nil || hasOpenCell(base, j.target) {
 		stage(StageChoosing)
-		prop, err = j.chooser.Choose(ctx, ChooseInput{
+		last, err = j.chooser.Choose(ctx, ChooseInput{
 			State: base, Target: j.target, EatersByDate: j.eaters, ExploreQuota: j.exploreQuota,
 			Avoid: j.avoid, AvoidBatches: j.avoidBatches, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
 			Stage: func(st Stage) { stage(st) }, Logger: s.d.Logger,
@@ -705,6 +720,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		}
 	}
 
+	prop := last
 	merged := Merge(base, j.target, prop)
 	issues := Check(merged, j.target)
 	stage(StageChecking, issueAttrs(issues)...)
@@ -732,7 +748,9 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		return fail("saving", changedDuringRun(err))
 	}
 
-	RecordEvaluation(ctx, PhaseAfter, -1, Evaluate(merged, j.target))
+	// The closing evaluation reads the saved plan back, as the board will.
+	closed = true
+	s.recordAfter(ctx, j)
 	score := ComputeScore(merged, j.target, issues, j.exploreQuota)
 	violations := violationsOf(issues)
 	end := RunEnd{Status: airun.StatusOK, Notes: prop.Notes, RepairAttempts: prop.RepairAttempts}
@@ -753,6 +771,19 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		"status", end.Status, "repair_attempts", end.RepairAttempts,
 		"violations", len(violations), "score", end.ScoreJSON)...)
 	return end
+}
+
+// recordAfter stores the `after` evaluation of the plan as saved: the window
+// built again from the database, not the merged proposal.
+func (s *Service) recordAfter(ctx context.Context, j job) {
+	dctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), saveTimeout)
+	defer cancel()
+	st, err := s.d.Builder.Build(dctx, j.w, j.today, j.from, j.to)
+	if err != nil {
+		RecordEvaluationError(ctx, PhaseAfter, err)
+		return
+	}
+	RecordEvaluation(ctx, PhaseAfter, func() Evaluation { return Evaluate(st, j.target) })
 }
 
 // changedDuringRun marks a save that failed because the plan changed while

@@ -236,8 +236,8 @@ func TestAIRuns_DetailStepsAndPrompt(t *testing.T) {
 	assert.Equal(t, int64(900), d.Steps[0].DurationMs)
 	assert.Nil(t, d.Steps[1].Result, "a failed call has no response")
 	require.NotNil(t, d.Steps[2].Result)
-	assert.True(t, d.Steps[2].ResultTruncated)
-	assert.LessOrEqual(t, len([]rune(*d.Steps[2].Result)), 8192)
+	assert.False(t, d.Steps[2].ResultTruncated, "a tool step's result comes whole")
+	assert.Equal(t, huge, *d.Steps[2].Result)
 	assert.Equal(t, `{"plates":[]}`, *d.Steps[2].Args)
 	assert.True(t, d.Steps[2].IsError)
 }

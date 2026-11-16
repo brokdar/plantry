@@ -85,7 +85,7 @@ type stepTokensResponse struct {
 }
 
 // runStepResponse carries args and result as text: stored payloads are cut
-// to 8192 characters, so they are not always valid JSON.
+// to 8192 characters (llm_call bodies) or 256 KiB, so they are not always valid JSON.
 type runStepResponse struct {
 	Seq               int                `json:"seq"`
 	Type              string             `json:"type"`
