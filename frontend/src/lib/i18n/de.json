@@ -118,8 +118,6 @@
       "api_key_placeholder": "sk-…",
       "api_key_placeholder_replace": "Gib einen neuen Schlüssel ein, um den gespeicherten zu ersetzen",
       "test_connection": "Verbindung testen",
-      "validated_saved_one": "Schlüssel gespeichert. {{count}} Modell verfügbar",
-      "validated_saved_other": "Schlüssel gespeichert. {{count}} Modelle verfügbar",
       "model_deprecated": "veraltet",
       "validated_works_one": "Schlüssel funktioniert, {{count}} Modell verfügbar",
       "validated_works_other": "Schlüssel funktioniert, {{count}} Modelle verfügbar",

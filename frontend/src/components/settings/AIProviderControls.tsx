@@ -54,15 +54,6 @@ export function AIProviderControls({
   return <ProviderSteps items={items} wizard={variant === "wizard"} />
 }
 
-/** The inline result of a successful key check (plan D17). The Anthropic key is
- *  only saved, not checked against the API (its model list comes from
- *  GET /settings/ai/models, a backend table), so that copy only says it's saved. */
-function validatedKey(provider: string): string {
-  return provider === "anthropic"
-    ? "settings_page.ai.validated_saved"
-    : "settings_page.ai.validated_works"
-}
-
 function ProviderSteps({
   items,
   wizard,
@@ -301,7 +292,7 @@ function ProviderSteps({
               className="inline-flex items-center gap-1 text-small text-success"
             >
               <Check className="size-4" strokeWidth={1.5} aria-hidden />
-              {t(validatedKey(provider), { count: models.length })}
+              {t("settings_page.ai.validated_works", { count: models.length })}
             </p>
           )}
         </SettingRow>

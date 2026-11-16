@@ -122,6 +122,19 @@ test.describe("AI settings", () => {
       await expect(keyInput).toBeEnabled()
       await keyInput.fill(`sk-ant-${tag}`)
 
+      // The key check calls the provider's models API: never the real one
+      // from a test, so the browser's call is answered here.
+      await page.route("**/api/settings/ai/models*", (route) =>
+        route.fulfill({
+          json: {
+            validated: true,
+            models: [
+              { id: "claude-haiku-4-5", display_name: "Claude Haiku 4.5" },
+              { id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6" },
+            ],
+          },
+        })
+      )
       const getModels = page.waitForResponse(
         (r) =>
           r.url().includes("/api/settings/ai/models") &&
@@ -131,9 +144,8 @@ test.describe("AI settings", () => {
       await page.getByTestId("ai-test-connection").click()
       await getModels
 
-      // Plan D17: Anthropic keys aren't really checked yet, so it says saved.
       await expect(
-        page.getByText(/^Key saved\. \d+ models? available$/)
+        page.getByText(/^Key works, \d+ models? available$/)
       ).toBeVisible()
 
       const putKey = page.waitForResponse(
