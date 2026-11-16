@@ -474,10 +474,7 @@ func encodeContent(blocks []llm.ContentBlock) []contentBlock {
 		case llm.ContentTypeText:
 			rest = append(rest, contentBlock{Type: "text", Text: b.Text})
 		case llm.ContentTypeToolUse:
-			input := b.ToolUseInput
-			if len(input) == 0 {
-				input = json.RawMessage("{}")
-			}
+			input := llm.ObjectInput(b.ToolUseInput)
 			rest = append(rest, contentBlock{
 				Type: "tool_use", ID: b.ToolUseID, Name: b.ToolUseName, Input: input, Caller: b.Caller,
 			})

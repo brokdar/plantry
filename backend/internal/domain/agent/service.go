@@ -20,12 +20,12 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
-// PromptVersion identifies the chat system prompt template. Bump it on every
-// change to the prompt.
 // chatMaxTokens is the output cap of a chat reply (thinking included); billing
 // is per generated token, the cap only prevents cut-offs.
 const chatMaxTokens = 16000
 
+// PromptVersion identifies the chat system prompt template. Bump it on every
+// change to the prompt.
 const PromptVersion = "v10"
 
 // SettingsReader is the subset of settings.Service that the agent needs.

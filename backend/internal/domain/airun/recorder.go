@@ -382,6 +382,16 @@ func (run *Run) addStep(ctx context.Context, step Step) bool {
 	return true
 }
 
+// Seq returns the seq of the run's latest step (0 for a nil run or none).
+func (run *Run) Seq() int {
+	if run == nil {
+		return 0
+	}
+	run.mu.Lock()
+	defer run.mu.Unlock()
+	return run.seq
+}
+
 // LogAttrs are the attributes every run log line carries: run_id,
 // request_id and, for chat runs, conversation_id. A nil run gives none.
 func (run *Run) LogAttrs() []any {

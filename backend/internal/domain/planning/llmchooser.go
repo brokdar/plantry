@@ -183,18 +183,21 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			// Nothing is run; every call is answered with an error. It is a
 			// model turn but not an attempt and uses no repair.
 			var results []llm.ContentBlock
-			seq := 0
+			modelSeq := airun.FromContext(ctx).Seq()
+			var seqs []int
 			for _, b := range resp.Message.Content {
 				if b.Type != llm.ContentTypeToolUse {
 					continue
 				}
 				results = append(results, errorResult(b, cutoffMessage))
-				result, _ := json.Marshal(cutoffMessage)
-				seq = airun.FromContext(ctx).ToolStep(llm.WithCaller(ctx, b.Caller), b.ToolUseName, b.ToolUseInput, result, true, 0)
+				result, _ := json.Marshal(map[string]string{"error": cutoffMessage})
+				seqs = append(seqs, airun.FromContext(ctx).ToolStep(llm.WithCaller(ctx, b.Caller), b.ToolUseName, b.ToolUseInput, result, true, 0))
 			}
-			runNotes = append(runNotes, "A reply was cut off at the output limit; its tool calls were not run.")
-			logRunCutoff(ctx, in, seq)
-			req.Messages = append(req.Messages, resp.Message, llm.Message{Role: llm.RoleUser, Content: results})
+			if note := "A reply was cut off at the output limit; its tool calls were not run."; !slices.Contains(runNotes, note) {
+				runNotes = append(runNotes, note)
+			}
+			logRunCutoff(ctx, in, modelSeq, seqs)
+			req.Messages = append(req.Messages, llm.ReplayMessage(resp.Message), llm.Message{Role: llm.RoleUser, Content: results})
 			attempt--
 			continue
 		}

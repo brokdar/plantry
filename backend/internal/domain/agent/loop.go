@@ -175,10 +175,12 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		usage.CacheWriteTokens += res.resp.Usage.CacheWriteTokens
 
 		// Persist the assistant message (text + any tool_use blocks).
-		if err := store(RoleAssistant, res.resp.Message); err != nil {
+		// A cut tool input is replayed as `{}`; the run steps keep the raw text.
+		replay := llm.ReplayMessage(res.resp.Message)
+		if err := store(RoleAssistant, replay); err != nil {
 			return fail("error.server", err)
 		}
-		history = append(history, res.resp.Message)
+		history = append(history, replay)
 
 		toolUses := extractToolUses(res.resp.Message)
 
@@ -205,13 +207,17 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		// nothing, answer every call with an error. It stays a model turn.
 		if res.resp.StopReason == llm.StopReasonMaxTokens {
 			resultBlocks := make([]llm.ContentBlock, 0, len(toolUses))
-			seq := 0
+			modelSeq := airun.FromContext(ctx).Seq()
+			var seqs []int
 			for _, call := range toolUses {
 				payload := mustMarshal(map[string]string{"error": cutoffMessage})
 				resultBlocks = append(resultBlocks, llm.ContentBlock{
 					Type: llm.ContentTypeToolResult, ToolResultID: call.ToolUseID, ToolResultContent: payload, ToolResultIsError: true,
 				})
-				seq = airun.FromContext(ctx).ToolStep(llm.WithCaller(ctx, call.Caller), call.ToolUseName, call.ToolUseInput, payload, true, 0)
+				seqs = append(seqs, airun.FromContext(ctx).ToolStep(llm.WithCaller(ctx, call.Caller), call.ToolUseName, call.ToolUseInput, payload, true, 0))
+				send(ctx, out, llm.Event{Type: llm.EventToolExecStart, Payload: llm.ToolExecStartPayload{
+					ID: call.ToolUseID, Name: call.ToolUseName,
+				}})
 				send(ctx, out, llm.Event{Type: llm.EventToolExecEnd, Payload: llm.ToolExecEndPayload{
 					ID: call.ToolUseID, Name: call.ToolUseName, Status: llm.ToolExecStatusError,
 				}})
@@ -219,8 +225,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 					ID: call.ToolUseID, Name: call.ToolUseName, Output: payload, IsError: true,
 				}})
 			}
-			slog.WarnContext(ctx, "agent.loop.cutoff", append(airun.FromContext(ctx).LogAttrs(), "conversation_id", req.ConversationID, "seq", seq)...)
-			continuation = false
+			slog.WarnContext(ctx, "agent.loop.cutoff", append(airun.FromContext(ctx).LogAttrs(), "conversation_id", req.ConversationID, "model_seq", modelSeq, "tool_seqs", seqs)...)
 			toolMsg := llm.Message{Role: llm.RoleUser, Content: resultBlocks}
 			if err := store(RoleTool, toolMsg); err != nil {
 				return fail("error.server", err)

@@ -549,7 +549,7 @@ func TestLLMChooser_CutoffRunsNothing(t *testing.T) {
 	client = fake.NewFromScript(&fake.Script{Turns: []fake.Turn{cut}})
 	_, err = planning.NewLLMChooser(llm.StaticResolver(client, "m")).Choose(context.Background(), planning.ChooseInput{State: s, Target: windowTarget(s)})
 	require.ErrorIs(t, err, domain.ErrAIInvalidPlan)
-	assert.LessOrEqual(t, len(client.Requests()), 14)
+	assert.Len(t, client.Requests(), 14)
 }
 
 // Names never break a pipe-separated row, and a side swap over the budget
