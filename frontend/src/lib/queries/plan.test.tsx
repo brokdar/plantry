@@ -554,7 +554,11 @@ describe("re-plan", () => {
   })
 
   it("useReplan with a started run attaches the board to it", async () => {
-    vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: 14 })
+    vi.mocked(replan).mockResolvedValue({
+      ...mockRemovedBatch,
+      run_id: 14,
+      unassigned: 0,
+    })
     expect(await invalidatedBy(() => useReplan(), input)).toEqual([
       availabilityKeys.ranges(),
       ...PLAN_VIEWS,
@@ -570,13 +574,21 @@ describe("re-plan", () => {
   })
 
   it("useReplan without a run stays on the board", async () => {
-    vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: null })
+    vi.mocked(replan).mockResolvedValue({
+      ...mockRemovedBatch,
+      run_id: null,
+      unassigned: 0,
+    })
     await invalidatedBy(() => useReplan(), { ...input, regenerate: false })
     expect(navigateMock).not.toHaveBeenCalled()
   })
 
   it("a failed refresh after the saved re-plan is no mutation error; the board still opens the run", async () => {
-    vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: 14 })
+    vi.mocked(replan).mockResolvedValue({
+      ...mockRemovedBatch,
+      run_id: 14,
+      unassigned: 0,
+    })
     const qc = new QueryClient({
       defaultOptions: {
         queries: { retry: false },

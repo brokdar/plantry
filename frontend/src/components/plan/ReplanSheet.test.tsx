@@ -53,6 +53,7 @@ const preview: ReplanPreview = {
       portions: 2,
       freezable: true,
       mutable: true,
+      unassigned: 0,
     },
   ],
   dropped: [],
@@ -276,6 +277,7 @@ describe("ReplanSheet", () => {
           portions: 2,
           freezable: false,
           mutable: true,
+          unassigned: 0,
         },
       ],
       dropped: [],
@@ -300,6 +302,7 @@ describe("ReplanSheet", () => {
           portions: 1,
           freezable: false,
           mutable: false,
+          unassigned: 0,
         },
       ],
       dropped: [],
@@ -399,6 +402,7 @@ describe("ReplanSheet", () => {
     vi.mocked(replan).mockResolvedValue({
       ...mockRemovedBatch,
       run_id: null,
+      unassigned: 0,
       regenerate_error: "error.ai.provider_error",
     })
     renderSheet()

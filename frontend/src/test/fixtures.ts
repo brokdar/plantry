@@ -991,6 +991,7 @@ export const mockReplanPreview: ReplanPreview = {
       portions: 2,
       freezable: true,
       mutable: true,
+      unassigned: 0,
     },
   ],
   dropped: [],
