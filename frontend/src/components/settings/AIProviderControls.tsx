@@ -28,7 +28,11 @@ const KEY_PROVIDER = "ai.provider"
 const KEY_API_KEY = "ai.api_key"
 const KEY_MODEL = "ai.model"
 
-type ModelOption = { id: string; display_name?: string }
+type ModelOption = {
+  id: string
+  display_name?: string
+  lifecycle?: "deprecated"
+}
 
 /**
  * The assistant's provider → key → model steps. Each choice saves at once
@@ -339,6 +343,8 @@ function ProviderSteps({
                 {models.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     {m.display_name || m.id}
+                    {m.lifecycle === "deprecated" &&
+                      ` (${t("settings_page.ai.model_deprecated")})`}
                   </SelectItem>
                 ))}
               </SelectGroup>

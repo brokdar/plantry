@@ -45,6 +45,8 @@ type runTokensResponse struct {
 	Output     int64 `json:"output"`
 	CacheRead  int64 `json:"cache_read"`
 	CacheWrite int64 `json:"cache_write"`
+	// Reasoning is the provider-reported reasoning tokens (inside Output).
+	Reasoning int64 `json:"reasoning"`
 }
 
 type runSummaryResponse struct {
@@ -64,6 +66,9 @@ type runSummaryResponse struct {
 	CorrectionRate    *float64          `json:"correction_rate"`
 	Edits             *int              `json:"edits"`
 	WebSearchRequests int64             `json:"web_search_requests"`
+	// DurationMs is the run's wall time; null for runs older than the
+	// column and for runs still running.
+	DurationMs *int64 `json:"duration_ms"`
 }
 
 type runsPageResponse struct {
@@ -72,8 +77,11 @@ type runsPageResponse struct {
 }
 
 type stepTokensResponse struct {
-	Input  int64 `json:"input"`
-	Output int64 `json:"output"`
+	Input      int64 `json:"input"`
+	Output     int64 `json:"output"`
+	CacheRead  int64 `json:"cache_read"`
+	CacheWrite int64 `json:"cache_write"`
+	Reasoning  int64 `json:"reasoning"`
 }
 
 // runStepResponse carries args and result as text: stored payloads are cut
@@ -90,6 +98,15 @@ type runStepResponse struct {
 	DurationMs        int64              `json:"duration_ms"`
 	Tokens            stepTokensResponse `json:"tokens"`
 	WebSearchRequests int64              `json:"web_search_requests"`
+	StartedAt         *string            `json:"started_at"`
+	// TTFTMs is the time to the first streamed token or tool call.
+	TTFTMs *int64 `json:"ttft_ms"`
+	// ThinkingChars is the length of the thinking text in the reply
+	// (Anthropic reports thinking inside output tokens).
+	ThinkingChars int64 `json:"thinking_chars"`
+	// ServedModel is the model the provider answered with (name is the
+	// requested one).
+	ServedModel *string `json:"served_model"`
 }
 
 type runDetailResponse struct {
@@ -225,17 +242,27 @@ func (h *AIRunsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	for i, s := range d.Steps {
 		resp.Steps[i] = runStepResponse{
-			Seq:               s.Seq,
-			Type:              string(s.Type),
-			Name:              s.Name,
-			Args:              nilIfEmpty(s.Args),
-			ArgsTruncated:     s.ArgsTruncated,
-			Result:            nilIfEmpty(s.Result),
-			ResultTruncated:   s.ResultTruncated,
-			IsError:           s.IsError,
-			DurationMs:        s.DurationMs,
-			Tokens:            stepTokensResponse{Input: s.InputTokens, Output: s.OutputTokens},
+			Seq:             s.Seq,
+			Type:            string(s.Type),
+			Name:            s.Name,
+			Args:            nilIfEmpty(s.Args),
+			ArgsTruncated:   s.ArgsTruncated,
+			Result:          nilIfEmpty(s.Result),
+			ResultTruncated: s.ResultTruncated,
+			IsError:         s.IsError,
+			DurationMs:      s.DurationMs,
+			Tokens: stepTokensResponse{
+				Input: s.InputTokens, Output: s.OutputTokens,
+				CacheRead: s.CacheReadTokens, CacheWrite: s.CacheWriteTokens, Reasoning: s.ReasoningTokens,
+			},
 			WebSearchRequests: s.WebSearchRequests,
+			TTFTMs:            s.TTFTMs,
+			ThinkingChars:     s.ThinkingChars,
+			ServedModel:       nilIfEmpty(s.ServedModel),
+		}
+		if s.StartedAt != nil {
+			t := s.StartedAt.Format("2006-01-02T15:04:05.000Z07:00")
+			resp.Steps[i].StartedAt = &t
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -343,6 +370,7 @@ func toRunSummaryResponse(s airun.RunSummary) runSummaryResponse {
 		Tokens: runTokensResponse{
 			Input: s.Tokens.Input, Output: s.Tokens.Output,
 			CacheRead: s.Tokens.CacheRead, CacheWrite: s.Tokens.CacheWrite,
+			Reasoning: s.Tokens.Reasoning,
 		},
 		CostEstimateUSD:   s.CostUSD,
 		Score:             rawJSONOrNull(s.ScoreJSON),
@@ -350,6 +378,7 @@ func toRunSummaryResponse(s airun.RunSummary) runSummaryResponse {
 		CorrectionRate:    s.CorrectionRate,
 		Edits:             s.Edits,
 		WebSearchRequests: s.Tokens.WebSearchRequests,
+		DurationMs:        s.DurationMs,
 	}
 	if s.FinishedAt != nil {
 		f := s.FinishedAt.Format(time.RFC3339)

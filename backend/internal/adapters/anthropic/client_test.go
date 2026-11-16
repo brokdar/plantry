@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -256,76 +257,89 @@ func TestStream_DefaultsMaxTokensWhenZero(t *testing.T) {
 	assert.Equal(t, anthropic.DefaultMaxTokens, body.MaxTokens)
 }
 
-// B8-AC1/AC2: the request rules follow the model table.
+// modelJSON is a GET /v1/models/{id} body whose thinking.types.disabled
+// support is canThink (false: always-thinking) and whose max_tokens is max.
+func modelJSON(disabledOK bool, max int) string {
+	return fmt.Sprintf(`{"id":"m","max_tokens":%d,"capabilities":{"thinking":{"supported":true,"types":{"disabled":{"supported":%t}}}}}`, max, disabledOK)
+}
+
+// The request rules follow the model's capabilities from the Models API, not
+// a table: a model that cannot turn thinking off cannot take a forced
+// tool_choice, an unknown or unreachable model gets `auto`, and temperature
+// is never sent.
 func TestStream_ModelRequestRules(t *testing.T) {
 	tools := []llm.Tool{{Name: "submit_plan", Description: "submit", Schema: json.RawMessage(`{"type":"object"}`)}}
-	forced := func(model string) llm.Request {
-		return llm.Request{
-			Model: model, System: "be brief", Tools: tools, Temperature: 0.4,
-			ToolChoice: &llm.ToolChoice{Name: "submit_plan"},
-		}
+	forced := llm.Request{
+		Model: "any-model", System: "be brief", Tools: tools, Temperature: 0.4,
+		ToolChoice: &llm.ToolChoice{Name: "submit_plan"},
 	}
 	const (
 		forcedJSON  = `"tool_choice":{"type":"tool","name":"submit_plan"}`
 		autoJSON    = `"tool_choice":{"type":"auto"}`
 		systemLine  = "be brief\\n\\nAnswer by calling `submit_plan`."
-		temperature = `"temperature":0.4`
+		temperature = `"temperature"`
 	)
 	tests := []struct {
 		name    string
+		status  int
+		model   string
 		req     llm.Request
 		present []string
 		absent  []string
 	}{
 		{
-			"opus 5.5 gets auto, the system line and no temperature", forced("claude-opus-5-5"),
-			[]string{autoJSON, systemLine},
-			[]string{forcedJSON, temperature},
-		},
-		{
-			"a dated opus 5.5 id follows the same entry", forced("claude-opus-5-5-20261001"),
-			[]string{autoJSON, systemLine},
-			[]string{forcedJSON, temperature},
-		},
-		{
-			"haiku 4.5 keeps both", forced("claude-haiku-4-5"),
-			[]string{forcedJSON, temperature},
-			[]string{autoJSON, "Answer by calling"},
-		},
-		{
-			"sonnet 4.6 keeps both", forced("claude-sonnet-4-6"),
-			[]string{forcedJSON, temperature},
-			[]string{autoJSON},
-		},
-		{
-			"sonnet 5 forces but drops temperature", forced("claude-sonnet-5"),
+			"thinking can be disabled: forced", 200, modelJSON(true, 64000), forced,
 			[]string{forcedJSON},
 			[]string{autoJSON, temperature},
 		},
 		{
-			"opus 4.7 forces but drops temperature", forced("claude-opus-4-7"),
-			[]string{forcedJSON},
-			[]string{temperature},
-		},
-		{
-			"an unknown opus 6 follows the newest rules", forced("claude-opus-6"),
+			"always thinking: auto plus the system line", 200, modelJSON(false, 64000), forced,
 			[]string{autoJSON, systemLine},
 			[]string{forcedJSON, temperature},
 		},
 		{
-			"no tool choice stays unset",
-			llm.Request{Model: "claude-haiku-4-5", Tools: tools},
-			nil,
-			[]string{`"tool_choice"`, `"temperature"`, "Answer by calling"},
+			"no thinking support: forced", 200, `{"id":"m","capabilities":{"thinking":{"supported":false}}}`, forced,
+			[]string{forcedJSON},
+			[]string{autoJSON},
 		},
-		{"auto without a system prompt still names the tool", llm.Request{
-			Model: "claude-opus-5-5", Tools: tools, ToolChoice: &llm.ToolChoice{Name: "submit_plan"},
-		}, []string{autoJSON, `"text":"Answer by calling `}, []string{forcedJSON}},
+		{
+			"no capabilities in the answer: auto", 200, `{"id":"m"}`, forced,
+			[]string{autoJSON, systemLine},
+			[]string{forcedJSON},
+		},
+		{
+			"unknown model (404): auto", 404, `{"type":"error","error":{"type":"not_found_error","message":"x"}}`, forced,
+			[]string{autoJSON, systemLine},
+			[]string{forcedJSON},
+		},
+		{
+			"models API down (500): auto", 500, `{}`, forced,
+			[]string{autoJSON, systemLine},
+			[]string{forcedJSON},
+		},
+		{
+			"no tool choice stays unset", 200, modelJSON(true, 64000),
+			llm.Request{Model: "m", Tools: tools},
+			[]string{`"max_tokens":4096`},
+			[]string{`"tool_choice"`, temperature, "Answer by calling"},
+		},
+		{
+			"max_tokens above the model's cap is clamped", 200, modelJSON(true, 8000),
+			func() llm.Request { r := forced; r.MaxTokens = 16000; return r }(),
+			[]string{`"max_tokens":8000`},
+			nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var raw []byte
 			ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet {
+					assert.Equal(t, "/v1/models/"+tt.req.Model, r.URL.Path)
+					w.WriteHeader(tt.status)
+					_, _ = io.WriteString(w, tt.model)
+					return
+				}
 				var err error
 				raw, err = io.ReadAll(r.Body)
 				require.NoError(t, err)
@@ -346,6 +360,49 @@ func TestStream_ModelRequestRules(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The Models API list is paginated and doubles as the API key check.
+func TestListModels(t *testing.T) {
+	page1 := `{"data":[{"id":"a","display_name":"A","lifecycle":"active","created_at":"2026-01-01T00:00:00Z"}],"has_more":true,"last_id":"a"}`
+	page2 := `{"data":[{"id":"b","display_name":"B","lifecycle":"deprecated"}],"has_more":false,"last_id":"b"}`
+	var queries []string
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "k", r.Header.Get("x-api-key"))
+		queries = append(queries, r.URL.RawQuery)
+		if r.URL.Query().Get("after_id") == "a" {
+			_, _ = io.WriteString(w, page2)
+			return
+		}
+		_, _ = io.WriteString(w, page1)
+	})
+	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+	got, err := c.ListModels(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, "b", got[1].ID)
+	assert.Equal(t, "deprecated", got[1].Lifecycle)
+	assert.Equal(t, []string{"limit=1000", "limit=1000&after_id=a"}, queries)
+}
+
+func TestListModels_RejectedKey(t *testing.T) {
+	ts := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}`)
+	})
+	c := anthropic.New("bad", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+	_, err := c.ListModels(context.Background())
+	var apiErr *anthropic.APIError
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusUnauthorized, apiErr.Status)
+	assert.Equal(t, "authentication_error", apiErr.ErrorType)
+}
+
+// The served model (message_start) is on the response.
+func TestStream_ServedModel(t *testing.T) {
+	c, _ := captureServer(t, "testdata/stream_text.sse")
+	resp, _ := stream(t, c, llm.Request{Model: "claude-sonnet-4-6"})
+	assert.NotEmpty(t, resp.Model)
 }
 
 // B8: thinking blocks (signature included) replay verbatim.

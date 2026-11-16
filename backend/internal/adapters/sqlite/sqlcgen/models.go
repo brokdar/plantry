@@ -77,6 +77,8 @@ type AiRun struct {
 	RequestID         sql.NullString
 	Notes             sql.NullString
 	WebSearchRequests int64
+	DurationMs        sql.NullInt64
+	ReasoningTokens   int64
 }
 
 type AiRunStep struct {
@@ -95,6 +97,13 @@ type AiRunStep struct {
 	ResponseJson      sql.NullString
 	StopReason        sql.NullString
 	WebSearchRequests int64
+	StartedAt         sql.NullString
+	TtftMs            sql.NullInt64
+	CacheReadTokens   int64
+	CacheWriteTokens  int64
+	ReasoningTokens   int64
+	ThinkingChars     int64
+	ServedModel       sql.NullString
 }
 
 type AiToolSchema struct {

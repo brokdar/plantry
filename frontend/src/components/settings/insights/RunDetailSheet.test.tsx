@@ -29,6 +29,47 @@ describe("RunDetailSheet", () => {
     expect(screen.getByText("cost unknown")).toBeInTheDocument()
   })
 
+  it("shows duration, cache and reasoning totals and per-call metrics", async () => {
+    const [llmStep, ...rest] = mockRunDetail.steps
+    vi.mocked(getRun).mockResolvedValue({
+      ...mockRunDetail,
+      duration_ms: 14230,
+      tokens: {
+        ...mockRunDetail.tokens,
+        cache_read: 900,
+        cache_write: 30,
+        reasoning: 20,
+      },
+      steps: [
+        {
+          ...llmStep,
+          ttft_ms: 420,
+          served_model: "claude-served-1",
+          thinking_chars: 144,
+          tokens: {
+            ...llmStep.tokens,
+            cache_read: 900,
+            cache_write: 30,
+            reasoning: 20,
+          },
+        },
+        ...rest,
+      ],
+    })
+    renderWithRouter(<RunDetailSheet runId={11} onClose={vi.fn()} />)
+
+    const metrics = await screen.findByTestId("step-metrics")
+    expect(metrics).toHaveTextContent("first token after 420 ms")
+    expect(metrics).toHaveTextContent("cache 900 read / 30 written")
+    expect(metrics).toHaveTextContent("20 reasoning tokens")
+    expect(metrics).toHaveTextContent("144 characters of thinking")
+    expect(metrics).toHaveTextContent("served by claude-served-1")
+    expect(screen.getByText("14,230 ms")).toBeInTheDocument()
+    expect(
+      screen.getByText(/900 read from cache, 30 written to cache/)
+    ).toBeInTheDocument()
+  })
+
   it("Z1: shows the run's edits, a dash when null", async () => {
     vi.mocked(getRun).mockResolvedValue({ ...mockRunDetail, edits: 3 })
     const { unmount } = renderWithRouter(

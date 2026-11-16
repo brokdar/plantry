@@ -101,6 +101,10 @@ type Usage struct {
 	CacheReadTokens   int
 	CacheWriteTokens  int
 	WebSearchRequests int
+	// ReasoningTokens is what the provider reports as spent on reasoning
+	// (OpenAI). Anthropic counts thinking inside OutputTokens and reports
+	// no separate figure.
+	ReasoningTokens int
 }
 
 // StopReason identifies why the assistant turn ended.
@@ -132,6 +136,8 @@ type Response struct {
 	StopReason    StopReason
 	Usage         Usage
 	SearchResults []SearchResult
+	// Model is the model the provider says it served, empty when unknown.
+	Model string
 }
 
 // Client is the port an LLM provider adapter must implement.
@@ -160,4 +166,28 @@ type Client interface {
 // non-nil only when the check itself failed.
 type Capabilities interface {
 	WebSearch(ctx context.Context, model string) (bool, error)
+}
+
+// Effective is the request parameters an adapter actually sends: its default
+// max_tokens and the model's cap applied, and a nil Temperature when it sends
+// none. Adapters implement it so the run log stores what went over the wire.
+type Effective struct {
+	MaxTokens   int
+	Temperature *float64
+}
+
+// ParamsReporter is implemented by clients that can report the effective
+// parameters of a request (call it after Stream: the model's capabilities
+// are known by then).
+type ParamsReporter interface {
+	EffectiveParams(req Request) Effective
+}
+
+// ProviderError is implemented by adapter errors that carry the provider's
+// HTTP status and error type, so the run log can record them (never the key
+// or the prompt).
+type ProviderError interface {
+	error
+	ProviderStatus() int
+	ProviderErrorType() string
 }

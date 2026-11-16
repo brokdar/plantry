@@ -96,6 +96,7 @@ func parseStream(ctx context.Context, body io.Reader, out chan<- llm.Event) (*ll
 		StopReason:    st.stopReason,
 		Usage:         st.usage,
 		SearchResults: st.results,
+		Model:         st.model,
 	}, nil
 }
 

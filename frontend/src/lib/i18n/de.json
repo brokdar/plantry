@@ -120,6 +120,7 @@
       "test_connection": "Verbindung testen",
       "validated_saved_one": "Schlüssel gespeichert. {{count}} Modell verfügbar",
       "validated_saved_other": "Schlüssel gespeichert. {{count}} Modelle verfügbar",
+      "model_deprecated": "veraltet",
       "validated_works_one": "Schlüssel funktioniert, {{count}} Modell verfügbar",
       "validated_works_other": "Schlüssel funktioniert, {{count}} Modelle verfügbar",
       "model_label": "Modell",
@@ -420,6 +421,10 @@
       "detail_error": "Dieser Lauf konnte nicht geladen werden.",
       "error_generic": "Der Lauf endete mit einem Fehler.",
       "tokens_detail": "{{input}} Eingabe, {{output}} Ausgabe",
+      "tokens_cache": "{{read}} aus dem Cache gelesen, {{write}} in den Cache geschrieben",
+      "tokens_reasoning": "{{count}} Denk-Tokens",
+      "duration": "Dauer",
+      "duration_value": "{{ms}} ms",
       "instruction": "Deine Anweisung",
       "notes": "Notizen des Assistenten",
       "steps_title": "Schritte",
@@ -428,7 +433,12 @@
         "llm_call": "Den Assistenten gefragt ({{model}}, {{tokens}} Tokens)",
         "tool_call": "Werkzeug {{name}} benutzt",
         "failed": "fehlgeschlagen",
-        "duration": "{{ms}} ms"
+        "duration": "{{ms}} ms",
+        "ttft": "erstes Token nach {{ms}} ms",
+        "cache": "Cache {{read}} gelesen / {{write}} geschrieben",
+        "reasoning": "{{count}} Denk-Tokens",
+        "thinking": "{{count}} Zeichen Denktext",
+        "served_model": "beantwortet von {{model}}"
       },
       "tool": {
         "list_foods": "Rezepte und Zutaten durchgesehen",
@@ -1063,7 +1073,9 @@
       "unknown_key": "Unbekannter Einstellungsschlüssel.",
       "readonly_key": "Diese Einstellung kann nur über eine Umgebungsvariable geändert werden.",
       "invalid_value": "Ungültiger Wert für diese Einstellung.",
-      "invalid_api_key": "Der API-Schlüssel wurde abgelehnt. Bitte überprüfe ihn.",
+      "invalid_api_key": "Schlüssel vom Anbieter abgelehnt: Prüfe, ob er vollständig kopiert wurde.",
+      "key_not_permitted": "Der Schlüssel ist gültig, darf die API aber nicht nutzen. Prüfe das Konto beim Anbieter (Abrechnung, Zugriff auf den Workspace).",
+      "provider_unreachable": "Der Anbieter war nicht erreichbar, der Schlüssel konnte nicht geprüft werden. Prüfe die Verbindung und versuche es erneut.",
       "secret_key_missing": "Kein Verschlüsselungsschlüssel geladen — verschlüsselte Werte können nicht gespeichert werden.",
       "unknown_provider": "Unbekannter KI-Anbieter."
     },

@@ -32,7 +32,7 @@ type Client struct {
 
 	now  func() time.Time
 	mu   sync.Mutex
-	caps map[string]capability // web search support per model
+	caps map[string]capability // model capabilities (24 h cache)
 }
 
 // Option configures the client.
@@ -93,6 +93,15 @@ func (c *Client) Complete(ctx context.Context, req llm.Request) (string, error) 
 func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Event) (*llm.Response, error) {
 	defer close(out)
 
+	// A forced tool_choice depends on the model's thinking capabilities
+	// (looked up once per model per 24 h); a failed or unknown lookup falls
+	// back to `auto` plus a system line. The max_tokens cap uses whatever
+	// the cache already holds.
+	if req.ToolChoice != nil {
+		if _, err := c.capability(ctx, req.Model); err != nil && ctx.Err() == nil {
+			slog.DebugContext(ctx, "anthropic.model.capabilities", "model", req.Model, "error", err)
+		}
+	}
 	resp, err := c.post(ctx, req)
 	if err != nil {
 		return nil, err
@@ -143,7 +152,8 @@ func replaysServerBlocks(msgs []llm.Message) bool {
 
 // post sends req as a streaming Messages request.
 func (c *Client) post(ctx context.Context, req llm.Request) (*http.Response, error) {
-	body, err := encodeRequest(req, true)
+	cp := c.cachedCapability(req.Model)
+	body, err := encodeRequest(req, true, c.maxTokens(req), cp.known && cp.info.ForcedTool())
 	if err != nil {
 		return nil, err
 	}
@@ -249,24 +259,20 @@ type webSearchTool struct {
 	MaxUses int    `json:"max_uses,omitempty"`
 }
 
-func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
-	maxTok := req.MaxTokens
-	if maxTok <= 0 {
-		maxTok = DefaultMaxTokens
-	}
+// encodeRequest builds the Messages body. Temperature is never sent: whether
+// a model accepts it is not in the Models API (newer models reject it), and
+// an unknown id must not fail the call. forcedTool says the model accepts a
+// forced tool_choice (see ModelInfo.ForcedTool); otherwise the tool is only
+// asked for in the system prompt.
+func encodeRequest(req llm.Request, stream bool, maxTok int, forcedTool bool) ([]byte, error) {
 	body := reqBody{
 		Model:     req.Model,
 		MaxTokens: maxTok,
 		Stream:    stream,
 	}
-	rules := rulesFor(req.Model)
-	if req.Temperature > 0 && rules.Sampling {
-		tmp := req.Temperature
-		body.Temperature = &tmp
-	}
 	system := req.System
 	if req.ToolChoice != nil {
-		if rules.ForcedTool {
+		if forcedTool {
 			body.ToolChoice = &toolChoiceBody{Type: "tool", Name: req.ToolChoice.Name}
 		} else {
 			body.ToolChoice = &toolChoiceBody{Type: "auto"}
@@ -391,3 +397,9 @@ func decodeAPIError(resp *http.Response) *APIError {
 	}
 	return e
 }
+
+// ProviderStatus implements llm.ProviderError.
+func (e *APIError) ProviderStatus() int { return e.Status }
+
+// ProviderErrorType implements llm.ProviderError.
+func (e *APIError) ProviderErrorType() string { return e.ErrorType }

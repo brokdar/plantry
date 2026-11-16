@@ -37,7 +37,8 @@ func (r *AIRunRepo) ListRuns(ctx context.Context, q airun.RunQuery) ([]airun.Run
 			InputTokens: row.InputTokens, OutputTokens: row.OutputTokens,
 			CacheReadTokens: row.CacheReadTokens, CacheWriteTokens: row.CacheWriteTokens,
 			WebSearchRequests: row.WebSearchRequests,
-			ScoreJson:         row.ScoreJson, ViolationsJson: row.ViolationsJson, Outcome: row.Outcome,
+			ReasoningTokens:   row.ReasoningTokens, DurationMs: row.DurationMs,
+			ScoreJson: row.ScoreJson, ViolationsJson: row.ViolationsJson, Outcome: row.Outcome,
 		})
 		if err != nil {
 			return nil, err
@@ -91,6 +92,18 @@ func (r *AIRunRepo) ListSteps(ctx context.Context, runID int64) ([]airun.StepVie
 			InputTokens:       row.InputTokens,
 			OutputTokens:      row.OutputTokens,
 			WebSearchRequests: row.WebSearchRequests,
+			TTFTMs:            fromNullInt64(row.TtftMs),
+			CacheReadTokens:   row.CacheReadTokens,
+			CacheWriteTokens:  row.CacheWriteTokens,
+			ReasoningTokens:   row.ReasoningTokens,
+			ThinkingChars:     row.ThinkingChars,
+			ServedModel:       row.ServedModel.String,
+		}
+		if row.StartedAt.Valid {
+			if t, err := time.Parse(stepTimeLayout, row.StartedAt.String); err == nil {
+				t = t.UTC()
+				out[i].StartedAt = &t
+			}
 		}
 	}
 	return out, nil
@@ -177,11 +190,13 @@ func runRow(row sqlcgen.GetAIRunDetailRow) (airun.RunRow, error) {
 			Input: row.InputTokens, Output: row.OutputTokens,
 			CacheRead: row.CacheReadTokens, CacheWrite: row.CacheWriteTokens,
 			WebSearchRequests: row.WebSearchRequests,
+			Reasoning:         row.ReasoningTokens,
 		},
 		ScoreJSON:      row.ScoreJson.String,
 		ViolationsJSON: row.ViolationsJson.String,
 		Outcome:        row.Outcome.String,
 	}
+	run.DurationMs = fromNullInt64(row.DurationMs)
 	if row.FinishedAt.Valid {
 		f, err := time.Parse(timeLayout, row.FinishedAt.String)
 		if err != nil {

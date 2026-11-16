@@ -52,8 +52,55 @@ func (m *meteredClient) Stream(ctx context.Context, req llm.Request, out chan<- 
 	}
 
 	started := m.rec.now()
-	resp, err := m.inner.Stream(ctx, req, out)
-	run.llmCall(ctx, m.provider, req, resp, err, m.rec.now().Sub(started))
+	inner := make(chan llm.Event, max(cap(out), 1))
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	var ttft *time.Duration
+	go func() {
+		defer close(done)
+		defer close(out)
+		forward := func(ev llm.Event) {
+			if ttft == nil && (ev.Type == llm.EventAssistantDelta || ev.Type == llm.EventToolCallStart) {
+				d := m.rec.now().Sub(started)
+				ttft = &d
+			}
+			select {
+			case out <- ev:
+			case <-ctx.Done():
+			}
+		}
+		for {
+			select {
+			case ev, ok := <-inner:
+				if !ok {
+					return
+				}
+				forward(ev)
+			case <-stop:
+				for { // the inner client returned: pass on what is buffered
+					select {
+					case ev, ok := <-inner:
+						if !ok {
+							return
+						}
+						forward(ev)
+					default:
+						return
+					}
+				}
+			}
+		}
+	}()
+	resp, err := m.inner.Stream(ctx, req, inner)
+	finished := m.rec.now()
+	close(stop)
+	<-done
+	call := callInfo{started: started, dur: finished.Sub(started), ttft: ttft}
+	if rep, ok := m.inner.(llm.ParamsReporter); ok {
+		eff := rep.EffectiveParams(req)
+		call.eff = &eff
+	}
+	run.llmCall(ctx, m.provider, req, resp, err, call)
 
 	if implicit {
 		status := StatusOK
@@ -99,7 +146,16 @@ func (m *meteredClient) Complete(ctx context.Context, req llm.Request) (string, 
 // llmCall folds one LLM call into the run totals and records it as a step
 // whose request_json and response_json let the call be replayed. The
 // provider, model and prompt hash of the first call are kept.
-func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, resp *llm.Response, callErr error, dur time.Duration) {
+// callInfo is what the metered client measured around one call.
+type callInfo struct {
+	started time.Time
+	dur     time.Duration
+	ttft    *time.Duration // nil: no token or tool call streamed
+	eff     *llm.Effective // nil: the client reports no effective parameters
+}
+
+func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, resp *llm.Response, callErr error, call callInfo) {
+	dur := call.dur
 	var usage llm.Usage
 	if resp != nil {
 		usage = resp.Usage
@@ -127,6 +183,7 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	run.cacheReadTokens += int64(usage.CacheReadTokens)
 	run.cacheWriteTokens += int64(usage.CacheWriteTokens)
 	run.webSearches += int64(usage.WebSearchRequests)
+	run.reasoningTokens += int64(usage.ReasoningTokens)
 	if run.provider == "" {
 		run.provider = provider
 		run.model = req.Model
@@ -190,10 +247,22 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 		InputTokens:       int64(usage.InputTokens),
 		OutputTokens:      int64(usage.OutputTokens),
 		WebSearchRequests: int64(usage.WebSearchRequests),
+		StartedAt:         call.started,
+		CacheReadTokens:   int64(usage.CacheReadTokens),
+		CacheWriteTokens:  int64(usage.CacheWriteTokens),
+		ReasoningTokens:   int64(usage.ReasoningTokens),
+	}
+	if call.ttft != nil {
+		ms := call.ttft.Milliseconds()
+		step.TTFTMs = &ms
 	}
 	var err error
-	if step.RequestJSON, err = encodeRequest(req, offset, systemHash, toolsHash); err != nil {
+	if step.RequestJSON, err = encodeRequest(req, call.eff, offset, systemHash, toolsHash); err != nil {
 		run.warn(ctx, "ai.run.request encode failed", err)
+	}
+	if resp != nil {
+		step.ServedModel = resp.Model
+		step.ThinkingChars = thinkingChars(resp.Message.Content)
 	}
 	if callErr == nil && resp != nil {
 		step.StopReason = string(resp.StopReason)
@@ -208,6 +277,7 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	// is assumed not to be mutated after the call. A step that was not
 	// stored resets the history, so the next call is recorded from offset 0
 	// instead of continuing a call replay cannot see.
+	run.logLLMCall(ctx, provider, req, step, callErr)
 	var lastMsgs []llm.Message
 	if run.addStep(ctx, step) {
 		lastMsgs = append([]llm.Message(nil), req.Messages...)
@@ -240,11 +310,13 @@ type requestBody struct {
 	Messages      []llm.Message   `json:"messages"`
 	ToolChoice    *llm.ToolChoice `json:"tool_choice,omitempty"`
 	WebSearch     *llm.WebSearch  `json:"web_search,omitempty"`
-	Temperature   float64         `json:"temperature"`
-	MaxTokens     int             `json:"max_tokens"`
-	SystemHash    *string         `json:"system_hash"`
-	ToolsHash     *string         `json:"tools_hash"`
-	Truncated     bool            `json:"truncated"`
+	// Temperature and MaxTokens are the effective values sent (nil
+	// temperature: none was sent).
+	Temperature *float64 `json:"temperature"`
+	MaxTokens   int      `json:"max_tokens"`
+	SystemHash  *string  `json:"system_hash"`
+	ToolsHash   *string  `json:"tools_hash"`
+	Truncated   bool     `json:"truncated"`
 }
 
 // responseBody is the stored response_json: the reply's content blocks and
@@ -255,7 +327,7 @@ type responseBody struct {
 	Truncated  bool               `json:"truncated,omitempty"`
 }
 
-func encodeRequest(req llm.Request, offset int, systemHash, toolsHash string) (string, error) {
+func encodeRequest(req llm.Request, eff *llm.Effective, offset int, systemHash, toolsHash string) (string, error) {
 	delta := make([]llm.Message, len(req.Messages)-offset)
 	var blocks []*llm.ContentBlock
 	for i, m := range req.Messages[offset:] {
@@ -269,10 +341,16 @@ func encodeRequest(req llm.Request, offset int, systemHash, toolsHash string) (s
 		Messages:      delta,
 		ToolChoice:    req.ToolChoice,
 		WebSearch:     req.WebSearch,
-		Temperature:   req.Temperature,
 		MaxTokens:     req.MaxTokens,
 		SystemHash:    nilIfEmpty(systemHash),
 		ToolsHash:     nilIfEmpty(toolsHash),
+	}
+	if req.Temperature > 0 {
+		t := req.Temperature
+		body.Temperature = &t
+	}
+	if eff != nil {
+		body.Temperature, body.MaxTokens = eff.Temperature, eff.MaxTokens
 	}
 	return encodeCapped(&body, blocks, &body.Truncated)
 }

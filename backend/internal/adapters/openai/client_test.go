@@ -252,3 +252,30 @@ func TestStream_RequestEncoding(t *testing.T) {
 	assert.Equal(t, "function", received.Tools[0].Type)
 	assert.Equal(t, "list_slots", received.Tools[0].Function.Name)
 }
+
+// Reasoning tokens (completion_tokens_details) and the served model are on the response.
+func TestStream_ReasoningTokensAndServedModel(t *testing.T) {
+	sse := `data: {"id":"c","model":"gpt-served","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}
+
+data: {"id":"c","model":"gpt-served","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"c","model":"gpt-served","choices":[],"usage":{"prompt_tokens":10,"completion_tokens":90,"completion_tokens_details":{"reasoning_tokens":64}}}
+
+data: [DONE]
+
+`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(sse))
+	}))
+	t.Cleanup(ts.Close)
+	c := openai.New("k", openai.WithBaseURL(ts.URL), openai.WithHTTPClient(ts.Client()))
+	out := make(chan llm.Event, 16)
+	resp, err := c.Stream(context.Background(), llm.Request{Model: "gpt-asked"}, out)
+	require.NoError(t, err)
+	_ = drainEvents(out)
+	assert.Equal(t, 64, resp.Usage.ReasoningTokens)
+	assert.Equal(t, 90, resp.Usage.OutputTokens)
+	assert.Equal(t, "gpt-served", resp.Model)
+	assert.Equal(t, 4096, c.EffectiveParams(llm.Request{}).MaxTokens)
+}

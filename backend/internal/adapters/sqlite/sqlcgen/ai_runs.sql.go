@@ -198,8 +198,9 @@ func (q *Queries) CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64
 
 const createAIRunStep = `-- name: CreateAIRunStep :exec
 INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens,
-    request_json, response_json, stop_reason, web_search_requests)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    request_json, response_json, stop_reason, web_search_requests,
+    started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateAIRunStepParams struct {
@@ -217,6 +218,13 @@ type CreateAIRunStepParams struct {
 	ResponseJson      sql.NullString
 	StopReason        sql.NullString
 	WebSearchRequests int64
+	StartedAt         sql.NullString
+	TtftMs            sql.NullInt64
+	CacheReadTokens   int64
+	CacheWriteTokens  int64
+	ReasoningTokens   int64
+	ThinkingChars     int64
+	ServedModel       sql.NullString
 }
 
 func (q *Queries) CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error {
@@ -235,6 +243,13 @@ func (q *Queries) CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams
 		arg.ResponseJson,
 		arg.StopReason,
 		arg.WebSearchRequests,
+		arg.StartedAt,
+		arg.TtftMs,
+		arg.CacheReadTokens,
+		arg.CacheWriteTokens,
+		arg.ReasoningTokens,
+		arg.ThinkingChars,
+		arg.ServedModel,
 	)
 	return err
 }
@@ -266,6 +281,8 @@ UPDATE ai_runs SET
     cache_read_tokens  = ?,
     cache_write_tokens = ?,
     web_search_requests = ?,
+    reasoning_tokens   = ?,
+    duration_ms        = ?,
     error_key          = ?,
     repair_attempts    = ?,
     violations_json    = ?,
@@ -286,6 +303,8 @@ type FinishAIRunParams struct {
 	CacheReadTokens   int64
 	CacheWriteTokens  int64
 	WebSearchRequests int64
+	ReasoningTokens   int64
+	DurationMs        sql.NullInt64
 	ErrorKey          sql.NullString
 	RepairAttempts    int64
 	ViolationsJson    sql.NullString
@@ -309,6 +328,8 @@ func (q *Queries) FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.R
 		arg.CacheReadTokens,
 		arg.CacheWriteTokens,
 		arg.WebSearchRequests,
+		arg.ReasoningTokens,
+		arg.DurationMs,
 		arg.ErrorKey,
 		arg.RepairAttempts,
 		arg.ViolationsJson,
@@ -321,6 +342,7 @@ func (q *Queries) FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.R
 const getAIRunDetail = `-- name: GetAIRunDetail :one
 SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model, r.prompt_version, r.chooser,
        r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens, r.web_search_requests,
+       r.reasoning_tokens, r.duration_ms,
        r.score_json, r.violations_json, r.outcome,
        r.scope_json, r.instruction, r.notes, r.error_key, p.text AS prompt_text
 FROM ai_runs r
@@ -343,6 +365,8 @@ type GetAIRunDetailRow struct {
 	CacheReadTokens   int64
 	CacheWriteTokens  int64
 	WebSearchRequests int64
+	ReasoningTokens   int64
+	DurationMs        sql.NullInt64
 	ScoreJson         sql.NullString
 	ViolationsJson    sql.NullString
 	Outcome           sql.NullString
@@ -371,6 +395,8 @@ func (q *Queries) GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailR
 		&i.CacheReadTokens,
 		&i.CacheWriteTokens,
 		&i.WebSearchRequests,
+		&i.ReasoningTokens,
+		&i.DurationMs,
 		&i.ScoreJson,
 		&i.ViolationsJson,
 		&i.Outcome,
@@ -441,6 +467,7 @@ func (q *Queries) GetRunNote(ctx context.Context, id int64) (GetRunNoteRow, erro
 
 const listAIRunStepViews = `-- name: ListAIRunStepViews :many
 SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens, web_search_requests,
+       started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model,
        CAST(COALESCE(substr(COALESCE(args_json, request_json), 1, 8192), '') AS TEXT) AS args,
        COALESCE(length(COALESCE(args_json, request_json)), 0) > 8192 AS args_cut,
        CAST(COALESCE(substr(COALESCE(result_json, response_json), 1, 8192), '') AS TEXT) AS result,
@@ -459,6 +486,13 @@ type ListAIRunStepViewsRow struct {
 	InputTokens       int64
 	OutputTokens      int64
 	WebSearchRequests int64
+	StartedAt         sql.NullString
+	TtftMs            sql.NullInt64
+	CacheReadTokens   int64
+	CacheWriteTokens  int64
+	ReasoningTokens   int64
+	ThinkingChars     int64
+	ServedModel       sql.NullString
 	Args              string
 	ArgsCut           bool
 	Result            string
@@ -486,6 +520,13 @@ func (q *Queries) ListAIRunStepViews(ctx context.Context, runID int64) ([]ListAI
 			&i.InputTokens,
 			&i.OutputTokens,
 			&i.WebSearchRequests,
+			&i.StartedAt,
+			&i.TtftMs,
+			&i.CacheReadTokens,
+			&i.CacheWriteTokens,
+			&i.ReasoningTokens,
+			&i.ThinkingChars,
+			&i.ServedModel,
 			&i.Args,
 			&i.ArgsCut,
 			&i.Result,
@@ -507,6 +548,7 @@ func (q *Queries) ListAIRunStepViews(ctx context.Context, runID int64) ([]ListAI
 const listAIRuns = `-- name: ListAIRuns :many
 SELECT id, kind, started_at, finished_at, status, provider, model, prompt_version, chooser,
        input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, web_search_requests,
+       reasoning_tokens, duration_ms,
        score_json, violations_json, outcome
 FROM ai_runs
 WHERE (CAST(?1 AS TEXT) IS NULL OR kind = ?1)
@@ -540,6 +582,8 @@ type ListAIRunsRow struct {
 	CacheReadTokens   int64
 	CacheWriteTokens  int64
 	WebSearchRequests int64
+	ReasoningTokens   int64
+	DurationMs        sql.NullInt64
 	ScoreJson         sql.NullString
 	ViolationsJson    sql.NullString
 	Outcome           sql.NullString
@@ -577,6 +621,8 @@ func (q *Queries) ListAIRuns(ctx context.Context, arg ListAIRunsParams) ([]ListA
 			&i.CacheReadTokens,
 			&i.CacheWriteTokens,
 			&i.WebSearchRequests,
+			&i.ReasoningTokens,
+			&i.DurationMs,
 			&i.ScoreJson,
 			&i.ViolationsJson,
 			&i.Outcome,

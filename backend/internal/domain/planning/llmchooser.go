@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"reflect"
 	"slices"
@@ -92,11 +93,13 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		if perr == nil {
 			prop.RepairAttempts = attempt
 			violations := violationsOf(Check(Merge(in.State, in.Target, prop), in.Target))
+			logAttempt(ctx, attempt, violations)
 			if len(violations) == 0 || attempt == maxRepairs {
 				return prop, nil
 			}
 			last, feedback = &prop, describeViolations(violations)
 		} else {
+			slog.WarnContext(ctx, "plan.run.attempt", append(runAttrs(ctx, 0), "attempt", attempt, "unreadable", true)...)
 			if attempt == maxRepairs {
 				if last != nil {
 					last.RepairAttempts = attempt

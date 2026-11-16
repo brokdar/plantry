@@ -29,6 +29,9 @@ type Tokens struct {
 	CacheWrite int64
 	// WebSearchRequests counts the billed server-side web searches.
 	WebSearchRequests int64
+	// Reasoning is the provider-reported reasoning tokens (already inside
+	// Output; informational, not priced separately).
+	Reasoning int64
 }
 
 // PriceSource says where a model's price came from.

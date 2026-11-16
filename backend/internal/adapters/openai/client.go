@@ -53,6 +53,19 @@ func New(apiKey string, opts ...Option) *Client {
 	return c
 }
 
+// EffectiveParams implements llm.ParamsReporter.
+func (c *Client) EffectiveParams(req llm.Request) llm.Effective {
+	eff := llm.Effective{MaxTokens: req.MaxTokens}
+	if eff.MaxTokens <= 0 {
+		eff.MaxTokens = DefaultMaxTokens
+	}
+	if req.Temperature > 0 {
+		t := req.Temperature
+		eff.Temperature = &t
+	}
+	return eff
+}
+
 // Complete implements llm.Client.Complete.
 func (c *Client) Complete(ctx context.Context, req llm.Request) (string, error) {
 	events := make(chan llm.Event, 16)
@@ -326,3 +339,9 @@ func decodeAPIError(resp *http.Response) error {
 	}
 	return e
 }
+
+// ProviderStatus implements llm.ProviderError.
+func (e *APIError) ProviderStatus() int { return e.Status }
+
+// ProviderErrorType implements llm.ProviderError.
+func (e *APIError) ProviderErrorType() string { return e.ErrorType }

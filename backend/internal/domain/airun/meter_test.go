@@ -577,9 +577,9 @@ func TestRecorder_DurationsFromClock(t *testing.T) {
 	if len(steps) != 1 || steps[0].DurationMs != 5 {
 		t.Errorf("steps = %+v; want one step with DurationMs 5", steps)
 	}
-	// Clock reads: start, call start, call end, finish => 15ms from start.
-	if !strings.Contains(logs.String(), `"duration_ms":15`) {
-		t.Errorf("end log missing duration_ms 15: %s", logs.String())
+	// Clock reads: start, call start, first token, call end, finish => 20ms from start.
+	if !strings.Contains(logs.String(), `"duration_ms":20`) {
+		t.Errorf("end log missing duration_ms 20: %s", logs.String())
 	}
 }
 
