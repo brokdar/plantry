@@ -25,6 +25,7 @@ type slotRequest struct {
 	Icon      string `json:"icon"`
 	SortOrder int    `json:"sort_order"`
 	Active    bool   `json:"active"`
+	Kind      string `json:"kind"`
 }
 
 type slotResponse struct {
@@ -33,12 +34,13 @@ type slotResponse struct {
 	Icon      string `json:"icon"`
 	SortOrder int    `json:"sort_order"`
 	Active    bool   `json:"active"`
+	Kind      string `json:"kind"`
 }
 
 func toSlotResponse(s *slot.TimeSlot) slotResponse {
 	return slotResponse{
 		ID: s.ID, NameKey: s.NameKey, Icon: s.Icon,
-		SortOrder: s.SortOrder, Active: s.Active,
+		SortOrder: s.SortOrder, Active: s.Active, Kind: string(s.Kind),
 	}
 }
 
@@ -71,7 +73,7 @@ func (h *SlotHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	s := &slot.TimeSlot{
 		NameKey: req.NameKey, Icon: req.Icon,
-		SortOrder: req.SortOrder, Active: req.Active,
+		SortOrder: req.SortOrder, Active: req.Active, Kind: slot.Kind(req.Kind),
 	}
 	if err := h.svc.Create(r.Context(), s); err != nil {
 		status, key := slotError(err)
@@ -95,7 +97,7 @@ func (h *SlotHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	s := &slot.TimeSlot{
 		ID: id, NameKey: req.NameKey, Icon: req.Icon,
-		SortOrder: req.SortOrder, Active: req.Active,
+		SortOrder: req.SortOrder, Active: req.Active, Kind: slot.Kind(req.Kind),
 	}
 	if err := h.svc.Update(r.Context(), s); err != nil {
 		status, key := slotError(err)

@@ -145,7 +145,11 @@ func (e *env) seed(ctx context.Context, sc Scenario, lib Library) error {
 		if icon == "" {
 			icon = "utensils"
 		}
-		s := &slot.TimeSlot{NameKey: "slot." + name, Icon: icon, SortOrder: i, Active: true}
+		kind := slot.KindMeal
+		if name == "breakfast" || name == "snack" {
+			kind = slot.KindLight
+		}
+		s := &slot.TimeSlot{NameKey: "slot." + name, Icon: icon, SortOrder: i, Active: true, Kind: kind}
 		if err := e.slots.Create(ctx, s); err != nil {
 			return fmt.Errorf("slot %s: %w", name, err)
 		}

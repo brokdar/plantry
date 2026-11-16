@@ -465,8 +465,14 @@ func (x *index) eligibleRecipes(weeks int) int {
 	t := diet.Class(x.s.Profile.DietType)
 	n := 0
 	routine := x.routineFoods()
+	// A standalone recipe is only a candidate where the window has a light
+	// slot to eat it in; lunches and dinners take mains.
+	light := false
+	for _, c := range x.s.Cells {
+		light = light || (c.Mode == availability.ModePlan && x.mealOf(c.SlotID) == mealLight)
+	}
 	for _, f := range x.s.Foods {
-		if !f.Composed() || !varietyRole(f.Role) || routine[f.ID] {
+		if !f.Composed() || !varietyRole(f.Role) || routine[f.ID] || (!light && !isMain(f.Role, mealFull)) {
 			continue
 		}
 		// An unknown class is only a warning (H5), so it stays eligible.

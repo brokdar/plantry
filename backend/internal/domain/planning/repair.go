@@ -31,8 +31,8 @@ func newRepairer(in ChooseInput, prop Proposal) *repairer {
 
 // advisories are the findings that are no hard rule: a lunch or dinner
 // without a main sends the plan back like a violation does, and so does a
-// side swap that changes the side's role. The kcal findings are separate
-// (kcalFindings): they trigger at most one extra repair, never a rule.
+// side swap that changes the side's role. Calories are never a repair
+// trigger (kcalNote).
 func (r *repairer) advisories() []string {
 	if r.in.Side != nil {
 		return r.sideRoleChanged()
@@ -44,8 +44,8 @@ func (r *repairer) advisories() []string {
 // the replaced one (a veg side swapped for a second starch).
 func (r *repairer) sideRoleChanged() []string {
 	sw := r.in.Side
-	if sw.Role == "" {
-		return nil
+	if !roleKept(r.in) {
+		return nil // no other side of that role exists: any side will do
 	}
 	var out []string
 	for _, ss := range r.s.Sessions {
@@ -101,14 +101,13 @@ func (r *repairer) missingMains() []string {
 type findings struct {
 	violations []Issue
 	advice     []string
-	info       []string
 	fixes      []string
 	repeated   bool
 }
 
 // feedback is the repair message.
 func (r *repairer) feedback(f findings) string {
-	vs, adv, info, fixes, repeated := f.violations, f.advice, f.info, f.fixes, f.repeated
+	vs, adv, fixes, repeated := f.violations, f.advice, f.fixes, f.repeated
 	var b strings.Builder
 	if repeated {
 		b.WriteString("Your last reply is identical to the one before it, so nothing was repaired. Change the cells named below; resubmitting the same plan fails again.\n")
@@ -130,7 +129,6 @@ func (r *repairer) feedback(f findings) string {
 		lines = append(lines, text)
 	}
 	lines = append(lines, adv...)
-	lines = append(lines, info...)
 	if len(lines) > maxFeedbackLines {
 		lines = append(lines[:maxFeedbackLines:maxFeedbackLines], fmt.Sprintf("and %d more problem(s) of the same kind; fix the ones above first.", len(lines)-maxFeedbackLines))
 	}

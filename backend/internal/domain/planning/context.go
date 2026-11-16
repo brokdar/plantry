@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -77,7 +78,9 @@ func (b *Builder) Build(ctx context.Context, w window.Window, today, from, to ti
 	}
 	s.SlotOrder = make(plate.SlotOrder, len(slots))
 	s.SlotNames = make(map[int64]string, len(slots))
+	s.SlotKind = make(map[int64]slot.Kind, len(slots))
 	for _, sl := range slots {
+		s.SlotKind[sl.ID] = sl.Kind
 		s.SlotOrder[sl.ID] = sl.SortOrder
 		s.SlotNames[sl.ID] = sl.NameKey
 	}

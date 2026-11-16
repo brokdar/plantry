@@ -339,6 +339,7 @@ type TimeSlot struct {
 	Icon      string
 	SortOrder int64
 	Active    int64
+	Kind      string
 }
 
 type UserProfile struct {

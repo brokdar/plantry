@@ -7,6 +7,7 @@ import (
 	"maps"
 	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -71,7 +72,10 @@ type planner struct {
 	meatDays  map[int]bool
 	// allowMeat lets a leftover add a meat day past the limit: the last
 	// resort for a cell nothing else can fill (H1 weighs more than H5).
-	allowMeat  bool
+	allowMeat bool
+	// notes are the run-note lines of rules the heuristic had to bend or
+	// could not meet (a meat day past the limit, a cell without a main).
+	notes      []string
 	seen       map[int64][]time.Time
 	used       map[int64]int
 	avoid      map[int64]bool
@@ -173,7 +177,8 @@ func (h *planner) plan() (Proposal, error) {
 			return Proposal{}, err
 		}
 	}
-	h.prop.Notes = h.exploreNote()
+	h.prop.Notes = strings.Join(append([]string{h.exploreNote()}, h.notes...), "\n")
+	h.prop.Notes = strings.TrimSpace(h.prop.Notes)
 	return h.prop, nil
 }
 
@@ -182,13 +187,20 @@ func (h *planner) plan() (Proposal, error) {
 func (h *planner) eatAnyway(c plate.CellKey, eaters float64) bool {
 	h.allowMeat = true
 	defer func() { h.allowMeat = false }()
+	place := func(sup *supply, grow bool) {
+		h.allowMeat = false
+		if h.supplyOverMeat(sup, c) {
+			h.notes = append(h.notes, fmt.Sprintf(h.text(textMeatOver), h.weekday(c.Date), *h.s.Profile.MeatDaysPerWeekMax))
+		}
+		h.eat(sup, c, eaters, grow)
+	}
 	if sup := h.supplyFor(c, eaters); sup != nil {
-		h.eat(sup, c, eaters, false)
+		place(sup, false)
 		return true
 	}
 	if h.s.Settings.BatchCooking {
 		if sup := h.growable(c); sup != nil {
-			h.eat(sup, c, eaters, true)
+			place(sup, true)
 			return true
 		}
 	}
@@ -351,6 +363,14 @@ func (h *planner) place(pp ProposedPlate) {
 // it covers.
 func (h *planner) cook(c plate.CellKey) error {
 	main, ok := h.pickMain(c)
+	if !ok && h.x.mealOf(c.SlotID) == mealFull && hasRecipes(h.s) {
+		// No main can be cooked here (a library of standalone recipes, or a
+		// diet that rules the mains out): a lunch or dinner without a main
+		// breaks the rule the checker enforces, so the cell stays empty and
+		// the checker reports it (H1).
+		h.notes = append(h.notes, fmt.Sprintf(h.text(textNoMain), h.weekday(c.Date), slotName(h.s, c.SlotID)))
+		return nil
+	}
 	if !ok {
 		return fmt.Errorf("%w: no recipe for %s", domain.ErrNotEnoughRecipes, c.Date.Format(time.DateOnly))
 	}
@@ -495,6 +515,10 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	var cands []candidate
 	for _, f := range h.s.Foods {
 		if !f.Composed() || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] {
+			continue
+		}
+		// A lunch or dinner takes a main; a standalone recipe is a breakfast.
+		if !isMain(f.Role, h.x.mealOf(c.SlotID)) {
 			continue
 		}
 		isNew := f.LastEaten == nil
@@ -665,6 +689,8 @@ const (
 	textLeftovers
 	textDifferentSide
 	textExploreShortfall
+	textMeatOver
+	textNoMain
 )
 
 var texts = map[string]map[textKey]string{
@@ -675,6 +701,8 @@ var texts = map[string]map[textKey]string{
 		textLeftovers:        "Leftovers from %s",
 		textDifferentSide:    "A different side",
 		textExploreShortfall: "Explore quota: %d of %d explore recipes available, filled with %d never-eaten",
+		textMeatOver:         "%s is a meat day past the limit of %d per week: no other recipe fit",
+		textNoMain:           "No main recipe available for %s %s: the cell stays empty",
 	},
 	"de": {
 		textNew:              "Neu: noch nie gegessen",
@@ -683,6 +711,8 @@ var texts = map[string]map[textKey]string{
 		textLeftovers:        "Reste von %s",
 		textDifferentSide:    "Eine andere Beilage",
 		textExploreShortfall: "Entdecker-Quote: %d von %d Entdecker-Rezepten verfügbar, aufgefüllt mit %d bisher nie gegessenen Rezepten",
+		textMeatOver:         "%s ist ein Fleischtag über dem Wochenlimit von %d: kein anderes Rezept passte",
+		textNoMain:           "Kein Hauptgericht verfügbar für %s %s: die Zelle bleibt leer",
 	},
 }
 
@@ -699,6 +729,18 @@ func (h *planner) lang() string {
 }
 
 func (h *planner) text(k textKey) string { return texts[h.lang()][k] }
+
+func (h *planner) weekday(d time.Time) string { return weekdays[h.lang()][d.Weekday()] }
+
+// hasRecipes reports whether the library holds any recipe.
+func hasRecipes(s State) bool {
+	for _, f := range s.Foods {
+		if f.Composed() {
+			return true
+		}
+	}
+	return false
+}
 
 func (h *planner) recipeReason(f FoodFacts) string {
 	switch {

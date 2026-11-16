@@ -18,7 +18,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p5"
+const PromptVersion = "p6"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -65,7 +65,7 @@ const submitPlanSchema = `{
               "type": "object",
               "properties": {
                 "food_id": {"type": "integer"},
-                "portions": {"type": "number", "description": "Portions PER EATER, usually 1, up to 1.5 to close a kcal gap (never the number of eaters: 3 eaters eating 1 portion each consume 3 portions of the session)."},
+                "portions": {"type": "number", "description": "Portions PER EATER, usually 1, up to 1.5 only if the user asked for more (never the number of eaters: 3 eaters eating 1 portion each consume 3 portions of the session)."},
                 "session_key": {"type": "string", "description": "Key of a session you propose."},
                 "session_id": {"type": "integer", "description": "Id of a fixed session with free portions."}
               },
@@ -305,7 +305,7 @@ How a plan works:
 - Cooking occasions: every cook cell of a session counts, and so does every component without a session_key/session_id (it is cooked fresh on its own cell). Several sessions cooked on the same cell are one occasion, so cook a side on the same cell as its main, and let other plates eat from a session.
 - Every lunch and dinner plate needs a main (role main, suits lunch_dinner in the candidate table); a side alone is not a meal. Recipes that suit breakfast (standalone: oats, yoghurt) are for breakfast cells only, never a lunch or dinner. Pair mains with a side where it suits.
 - Submit the COMPLETE plan in your first call: a plate for every fill cell (the task lists them with their count) and every session they need. The checker allows only two repairs; do not use them to find missing cells. notes describe only what is in the plan.
-- Daily targets: the day's plates per eater should land near the daily kcal target and the macro shares. The candidate rows list kcal and macros per portion, so sum portions x kcal over the day's plates (weekday meals with 600 kcal against a 2200 target miss it). A day with a No-plate meal has a lower target (see Short days). To close a kcal gap give a main up to 1.5 portions per eater (raise its session to match) or add a side; never above 1.5. Mix several different mains over the week rather than one recipe for most meals.
+- Daily targets: the day's plates per eater should land near the daily kcal target and the macro shares. The candidate rows list kcal and macros per portion, so sum portions x kcal over the day's plates (weekday meals with 600 kcal against a 2200 target miss it). A day with a No-plate meal has a lower target (see Short days). Mix several different mains over the week rather than one recipe for most meals.
 - notes and reasons must describe the plan you submit, not an earlier idea.
 - Cook a session on the first cell that eats from it; that cell must be a fill cell.
 - Use only ids that appear in this prompt.
@@ -530,6 +530,41 @@ func writeFixedCooks(b *strings.Builder, x *index) {
 // candidates are the recipes the chooser may cook: composed, fitting the
 // diet (unknown is only a warning), not among the replaced ones; by id.
 func candidates(in ChooseInput) []FoodFacts {
+	all := eligible(in)
+	sw := in.Side
+	if sw == nil || sw.Role == "" {
+		return all
+	}
+	// A side swap keeps the side's role: veg stays veg. Without another
+	// side of that role the table holds every side (see roleKept).
+	if same := slices.DeleteFunc(slices.Clone(all), func(f FoodFacts) bool { return f.Role != sw.Role }); len(same) > 0 {
+		return same
+	}
+	if sides := slices.DeleteFunc(slices.Clone(all), func(f FoodFacts) bool { return !sideRole(f.Role) }); len(sides) > 0 {
+		return sides
+	}
+	return all
+}
+
+// roleKept reports whether a side swap's candidates keep the replaced
+// side's role: false for no swap, a role-less side, or when no other
+// recipe has that role.
+func roleKept(in ChooseInput) bool {
+	sw := in.Side
+	if sw == nil || sw.Role == "" {
+		return false
+	}
+	for _, f := range eligible(in) {
+		if f.Role == sw.Role {
+			return true
+		}
+	}
+	return false
+}
+
+// eligible are the recipes fitting the diet that are not among the
+// replaced ones, by id.
+func eligible(in ChooseInput) []FoodFacts {
 	avoid := idSet(in.Avoid)
 	t := diet.Class(in.State.Profile.DietType)
 	var out []FoodFacts
@@ -538,10 +573,6 @@ func candidates(in ChooseInput) []FoodFacts {
 			continue
 		}
 		if t != "" && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t) {
-			continue
-		}
-		// A side swap keeps the side's role: veg stays veg.
-		if sw := in.Side; sw != nil && sw.Role != "" && f.Role != sw.Role {
 			continue
 		}
 		out = append(out, f)
@@ -679,7 +710,9 @@ func writeTask(b *strings.Builder, in ChooseInput) {
 			fmt.Fprintf(b, "  plate_id %d on %s slot_id %d, %s eaters, %s portions per eater%s\n",
 				p.PlateID, p.Date.Format(time.DateOnly), p.SlotID, num(p.Eaters), num(p.PerEater), plateKeeps(in.State, p.PlateID, sw.FoodID))
 		}
-		if sw.Role != "" {
+		if sw.Role != "" && !roleKept(in) {
+			fmt.Fprintf(b, "- No other recipe has the role %s of %s: choose any side from the candidate table; what a plate keeps is listed above, do not add a second side of a kind it already has.\n", sw.Role, foodName(in.State, sw.FoodID))
+		} else if sw.Role != "" {
 			fmt.Fprintf(b, "- Keep the role: %s has role %s, so the new side must have role %s (the candidate table holds only those); what a plate keeps is listed above, do not add a second side of a kind it already has.\n", foodName(in.State, sw.FoodID), sw.Role, sw.Role)
 		}
 	} else {
@@ -718,9 +751,10 @@ func plateKeeps(s State, id, replaced int64) string {
 	return "; the plate keeps " + strings.Join(parts, " + ")
 }
 
-// writeFillCells states the number of fill cells and lists them, so the
-// first submit_plan is complete.
-func writeFillCells(b *strings.Builder, in ChooseInput) {
+// fillCellLabels lists the cells the chooser must fill: empty plan cells in
+// the target. Target.Cells alone also holds No-plate, routine and occupied
+// cells, so it is no count of what is missing.
+func fillCellLabels(in ChooseInput) []string {
 	x := newIndex(in.State, in.Target)
 	var labels []string
 	for _, c := range in.State.Cells {
@@ -728,6 +762,13 @@ func writeFillCells(b *strings.Builder, in ChooseInput) {
 			labels = append(labels, fmt.Sprintf("%s %s (slot_id %d)", weekdayDate(c.Date), slotName(in.State, c.SlotID), c.SlotID))
 		}
 	}
+	return labels
+}
+
+// writeFillCells states the number of fill cells and lists them, so the
+// first submit_plan is complete.
+func writeFillCells(b *strings.Builder, in ChooseInput) {
+	labels := fillCellLabels(in)
 	if len(labels) == 0 {
 		return
 	}

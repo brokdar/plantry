@@ -113,9 +113,9 @@ func (q *Queries) CreatePlateComponent(ctx context.Context, arg CreatePlateCompo
 }
 
 const createTimeSlot = `-- name: CreateTimeSlot :one
-INSERT INTO time_slots (name_key, icon, sort_order, active)
-VALUES (?, ?, ?, ?)
-RETURNING id, name_key, icon, sort_order, active
+INSERT INTO time_slots (name_key, icon, sort_order, active, kind)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, name_key, icon, sort_order, active, kind
 `
 
 type CreateTimeSlotParams struct {
@@ -123,6 +123,7 @@ type CreateTimeSlotParams struct {
 	Icon      string
 	SortOrder int64
 	Active    int64
+	Kind      string
 }
 
 func (q *Queries) CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) (TimeSlot, error) {
@@ -131,6 +132,7 @@ func (q *Queries) CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) 
 		arg.Icon,
 		arg.SortOrder,
 		arg.Active,
+		arg.Kind,
 	)
 	var i TimeSlot
 	err := row.Scan(
@@ -139,6 +141,7 @@ func (q *Queries) CreateTimeSlot(ctx context.Context, arg CreateTimeSlotParams) 
 		&i.Icon,
 		&i.SortOrder,
 		&i.Active,
+		&i.Kind,
 	)
 	return i, err
 }
@@ -228,7 +231,7 @@ func (q *Queries) GetPlateIDByCell(ctx context.Context, arg GetPlateIDByCellPara
 }
 
 const getTimeSlot = `-- name: GetTimeSlot :one
-SELECT id, name_key, icon, sort_order, active FROM time_slots WHERE id = ?
+SELECT id, name_key, icon, sort_order, active, kind FROM time_slots WHERE id = ?
 `
 
 func (q *Queries) GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error) {
@@ -240,12 +243,13 @@ func (q *Queries) GetTimeSlot(ctx context.Context, id int64) (TimeSlot, error) {
 		&i.Icon,
 		&i.SortOrder,
 		&i.Active,
+		&i.Kind,
 	)
 	return i, err
 }
 
 const listActiveTimeSlots = `-- name: ListActiveTimeSlots :many
-SELECT id, name_key, icon, sort_order, active FROM time_slots WHERE active = 1 ORDER BY sort_order, id
+SELECT id, name_key, icon, sort_order, active, kind FROM time_slots WHERE active = 1 ORDER BY sort_order, id
 `
 
 func (q *Queries) ListActiveTimeSlots(ctx context.Context) ([]TimeSlot, error) {
@@ -263,6 +267,7 @@ func (q *Queries) ListActiveTimeSlots(ctx context.Context) ([]TimeSlot, error) {
 			&i.Icon,
 			&i.SortOrder,
 			&i.Active,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -547,7 +552,7 @@ func (q *Queries) ListPlatesByIDs(ctx context.Context, ids []int64) ([]Plate, er
 }
 
 const listTimeSlots = `-- name: ListTimeSlots :many
-SELECT id, name_key, icon, sort_order, active FROM time_slots ORDER BY sort_order, id
+SELECT id, name_key, icon, sort_order, active, kind FROM time_slots ORDER BY sort_order, id
 `
 
 func (q *Queries) ListTimeSlots(ctx context.Context) ([]TimeSlot, error) {
@@ -565,6 +570,7 @@ func (q *Queries) ListTimeSlots(ctx context.Context) ([]TimeSlot, error) {
 			&i.Icon,
 			&i.SortOrder,
 			&i.Active,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -742,9 +748,10 @@ UPDATE time_slots SET
     name_key   = ?,
     icon       = ?,
     sort_order = ?,
-    active     = ?
+    active     = ?,
+    kind       = ?
 WHERE id = ?
-RETURNING id, name_key, icon, sort_order, active
+RETURNING id, name_key, icon, sort_order, active, kind
 `
 
 type UpdateTimeSlotParams struct {
@@ -752,6 +759,7 @@ type UpdateTimeSlotParams struct {
 	Icon      string
 	SortOrder int64
 	Active    int64
+	Kind      string
 	ID        int64
 }
 
@@ -761,6 +769,7 @@ func (q *Queries) UpdateTimeSlot(ctx context.Context, arg UpdateTimeSlotParams) 
 		arg.Icon,
 		arg.SortOrder,
 		arg.Active,
+		arg.Kind,
 		arg.ID,
 	)
 	var i TimeSlot
@@ -770,6 +779,7 @@ func (q *Queries) UpdateTimeSlot(ctx context.Context, arg UpdateTimeSlotParams) 
 		&i.Icon,
 		&i.SortOrder,
 		&i.Active,
+		&i.Kind,
 	)
 	return i, err
 }

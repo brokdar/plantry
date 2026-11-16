@@ -77,7 +77,7 @@ func TestHeuristicHasNoHardViolations(t *testing.T) {
 			assert.Contains(t, names(r.Expectations), ExpectNoViolations)
 			require.NotNil(t, r.Score)
 			assert.Empty(t, r.Score.HardViolations)
-			assert.Equal(t, "h6", r.PromptVersion)
+			assert.Equal(t, "h7", r.PromptVersion)
 			assert.Equal(t, Tokens{}, r.Tokens, "the heuristic calls no model")
 			if r.Scenario == "single_batch_cooker" {
 				// Z5 §17.2: no hard violation covers one cook a day (H2), no
@@ -139,7 +139,7 @@ func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 				assert.LessOrEqual(t, r.RepairAttempts, 2)
 			}
 			assert.Equal(t, "fake", r.Model)
-			assert.Equal(t, "p5", r.PromptVersion)
+			assert.Equal(t, "p6", r.PromptVersion)
 			// A run that fills cells asks the model; one with nothing to
 			// fill (away_thu_fri) may not.
 			if r.Plates > 0 {

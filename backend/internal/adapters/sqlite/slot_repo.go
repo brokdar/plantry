@@ -27,6 +27,7 @@ func (r *SlotRepo) Create(ctx context.Context, s *slot.TimeSlot) error {
 		Icon:      s.Icon,
 		SortOrder: int64(s.SortOrder),
 		Active:    boolToInt(s.Active),
+		Kind:      string(s.Kind),
 	})
 	if err != nil {
 		return err
@@ -55,6 +56,7 @@ func (r *SlotRepo) Update(ctx context.Context, s *slot.TimeSlot) error {
 		Icon:      s.Icon,
 		SortOrder: int64(s.SortOrder),
 		Active:    boolToInt(s.Active),
+		Kind:      string(s.Kind),
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -125,6 +127,7 @@ func mapTimeSlotToDomain(row *sqlcgen.TimeSlot, s *slot.TimeSlot) {
 	s.Icon = row.Icon
 	s.SortOrder = int(row.SortOrder)
 	s.Active = row.Active != 0
+	s.Kind = slot.Kind(row.Kind)
 }
 
 func boolToInt(b bool) int64 {

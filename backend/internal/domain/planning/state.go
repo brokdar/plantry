@@ -13,6 +13,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -28,6 +29,9 @@ type State struct {
 	SlotOrder plate.SlotOrder
 	// SlotNames maps slot ids to their name key (the LLM prompt's labels).
 	SlotNames map[int64]string
+	// SlotKind maps slot ids to their kind (light or meal); a slot without
+	// an entry is a full meal.
+	SlotKind map[int64]slot.Kind
 	// Plates are the plates in and around the window: the window's own plus
 	// the ones eating from sessions the window's plates eat from. A plate
 	// with a negative ID is proposed (see Merge).

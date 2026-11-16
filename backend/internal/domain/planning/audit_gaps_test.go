@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +14,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 )
 
 // Replays the live p4 run 2's first reply (3 plates of 12 cells: the model
@@ -42,11 +44,37 @@ func TestLLMChooser_OnlyOneFreeSkeletonAttempt(t *testing.T) {
 	assert.Len(t, reqs, 4, "1 + 1 free + 2 repairs")
 }
 
+// A skeleton after a paid repair earns no free call: the free attempt is
+// for call 1 only.
+func TestLLMChooser_NoFreeSkeletonAttemptAfterARepair(t *testing.T) {
+	in := run4Input()
+	bad := validWeek(t, in)
+	bad.session("extra", 125, "2026-11-22", 3, 1) // H2
+	empty := &jsonPlan{Notes: "later"}
+	_, reqs := chooseWith(t, in, submit(t, "tu_1", bad), submit(t, "tu_2", empty), submit(t, "tu_3", empty), submit(t, "tu_4", empty))
+	assert.Len(t, reqs, 3, "1 + 2 repairs, no free skeleton attempt")
+}
+
+// The half-of-the-fill-cells check counts fill cells, not every cell of the
+// target (No-plate cells would make it too lenient).
+func TestLLMChooser_SkeletonCountsFillCellsNotTargetCells(t *testing.T) {
+	in := run4Input()
+	half := validWeek(t, in)
+	half.Plates = half.Plates[:len(half.Plates)-6] // 6 of 12 fill cells missing
+	good := validWeek(t, in)
+	in.Target.Cells = append(in.Target.Cells,
+		plate.CellKey{Date: day("2026-11-21"), SlotID: 2}, plate.CellKey{Date: day("2026-11-26"), SlotID: 3}) // No-plate cells
+	prop, reqs := chooseWith(t, in, submit(t, "tu_1", half), submit(t, "tu_2", good))
+	require.Len(t, reqs, 2)
+	assert.Contains(t, prop.Notes, "was completed in an extra attempt")
+	assert.Equal(t, 1, prop.RepairAttempts)
+}
+
 func TestPrompt_StatesTheFillCellsAndSuitability(t *testing.T) {
 	in := run4Input()
 	sys := planning.RenderPrompt(in)
 	assert.Contains(t, sys, fmt.Sprintf("Submit the complete plan in one call: %d fill cells", len(in.Target.Cells)))
-	assert.Contains(t, sys, "up to 1.5 portions per eater")
+	assert.NotContains(t, sys, "kcal gap")
 	// Candidate rows say where a recipe suits.
 	assert.Contains(t, candidateLine(t, sys, 107), "|main|lunch_dinner|")
 	assert.Contains(t, candidateLine(t, sys, 117), "|standalone|breakfast|")
@@ -138,40 +166,34 @@ func TestMissingMain_StandaloneIsBreakfastOnly(t *testing.T) {
 	prop, _ := chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
 	assert.Contains(t, prop.Notes, "has no main (only Overnight oats)")
 
-	// The same plate in the day's first slot (a light meal) is fine.
+	// The same plate in a light slot is fine.
 	in = run4Input()
-	in.State.SlotOrder = plate.SlotOrder{2: 0, 1: 1, 3: 2}
+	in.State.SlotKind[2] = slot.KindLight
 	p = validWeek(t, in)
 	p.Plates[1]["components"] = []map[string]any{{"food_id": 117, "portions": 1}}
 	prop, _ = chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
 	assert.NotContains(t, prop.Notes, "has no main (only Overnight oats)")
 }
 
-// Calories: a day far under its (scaled) target triggers one repair with the
-// gap and the changeable meals; what stays is named in the run notes.
-func TestLLMChooser_KcalGapTriggersOneRepairAndIsNoted(t *testing.T) {
+// Calories are information, never a repair: a day far under its (scaled)
+// target costs no call and shows as one run-notes line.
+func TestLLMChooser_KcalGapIsOneNotesLineAndNoRepair(t *testing.T) {
 	in := run4Input()
 	k := 2200.0
 	in.State.Profile.KcalTarget = &k
 	p := validWeek(t, in)
 
-	prop, reqs := chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
+	prop, reqs := chooseWith(t, in, submit(t, "tu_1", p))
 
-	require.Len(t, reqs, 2, "no violation: only the kcal repair, once")
-	fb := feedbackOf(t, reqs[1])
-	assert.Contains(t, fb, "kcal (no rule, but fix it): Sunday 2026-11-22 has ")
-	assert.Contains(t, fb, "against the target of 2200")
-	assert.Contains(t, fb, "Meals you can change: Sunday 2026-11-22 lunch (slot_id 2)")
-	assert.Contains(t, fb, "up to 1.5 portions per eater")
-	// Saturday has a No-plate lunch: its target is scaled, never 2200.
-	assert.Contains(t, fb, "Saturday 2026-11-21 has ")
-	assert.Contains(t, fb, "the target of 2200 scaled to 2 of 3 meals")
-	assert.Contains(t, prop.Notes, "Sun is ")
-	assert.Contains(t, prop.Notes, "kcal under target")
+	require.Len(t, reqs, 1, "no repair for a kcal gap")
+	assert.Equal(t, 1, strings.Count(prop.Notes, "Below target:"))
+	assert.Contains(t, prop.Notes, "Below target: Sat −")
+	assert.Contains(t, prop.Notes, "Sun −")
+	assert.Contains(t, prop.Notes, " kcal")
 	assert.NotContains(t, prop.Notes, "Warning, not resolved")
 }
 
-func TestLLMChooser_KcalOnTargetNeedsNoRepair(t *testing.T) {
+func TestLLMChooser_KcalOnTargetHasNoNote(t *testing.T) {
 	in := run4Input()
 	k := 750.0
 	in.State.Profile.KcalTarget = &k
@@ -179,6 +201,36 @@ func TestLLMChooser_KcalOnTargetNeedsNoRepair(t *testing.T) {
 	prop, reqs := chooseWith(t, in, submit(t, "tu_1", p))
 	require.Len(t, reqs, 1)
 	assert.NotContains(t, prop.Notes, "kcal")
+}
+
+// DayKcals is pure over the state: it covers days with nothing proposed
+// (a confirmed day), scales the target to the planned meals and counts a
+// routine plate.
+func TestDayKcals_PureOverState(t *testing.T) {
+	s := run4State()
+	k := 2200.0
+	s.Profile.KcalTarget = &k
+	one := 1.0
+	// Saturday: a confirmed dinner (the lunch is No plate, breakfast routine).
+	s.Plates = append(s.Plates, planning.Plate{
+		ID: 7, Date: day("2026-11-21"), SlotID: 3, Eaters: 1, Confirmed: true,
+		Components: []planning.Component{{FoodID: 106, Portions: &one}},
+	})
+	t.Run("a day with nothing proposed", func(t *testing.T) {
+		got := planning.DayKcals(s, planning.Target{Cells: []plate.CellKey{{Date: day("2026-11-21"), SlotID: 3}}})
+		require.Len(t, got, 1)
+		assert.InDelta(t, 729, got[0].Kcal, 0.01)
+		assert.InDelta(t, 2200*2.0/3, got[0].Scaled, 0.01, "the No-plate lunch scales the target")
+		assert.Equal(t, 2, got[0].Planned)
+		assert.Equal(t, 3, got[0].Meals)
+		assert.False(t, got[0].Proposed)
+		assert.True(t, got[0].Complete)
+	})
+	t.Run("no target gives nothing", func(t *testing.T) {
+		s2 := s
+		s2.Profile.KcalTarget = nil
+		assert.Empty(t, planning.DayKcals(s2, planning.Target{Cells: []plate.CellKey{{Date: day("2026-11-21"), SlotID: 3}}}))
+	})
 }
 
 // Meat days (H5): leftovers of an omnivore batch no longer push a week past
@@ -198,4 +250,51 @@ func TestHeuristic_MeatDaysCountLeftovers(t *testing.T) {
 	for _, is := range planning.Check(planning.Merge(in.State, in.Target, prop), in.Target) {
 		assert.NotEqual(t, "H5", is.Rule, "%+v", is)
 	}
+}
+
+// A side swap with no other side of the replaced role gets every side as a
+// candidate (never an empty table), says so, and is not sent back for the
+// role change.
+func TestSideSwap_NoSameRoleCandidateFallsBackToAnySide(t *testing.T) {
+	in := sideSwapInput()
+	delete(in.State.Foods, 116) // the only other side_veg
+	in.Avoid = []int64{125}     // the replaced side
+	sys := planning.RenderPrompt(in)
+	assert.Contains(t, sys, "No other recipe has the role side_veg")
+	assert.NotContains(t, sys, "Keep the role")
+	candidateLine(t, sys, 115)
+	assert.NotContains(t, sys, "\n107|", "a main is still no candidate for a side")
+
+	p := &jsonPlan{Notes: "Swapped the side."}
+	p.session("s1", 115, "2026-11-22", 3, 1)
+	p.Plates = append(p.Plates, map[string]any{
+		"plate_id": 29, "date": "2026-11-22", "slot_id": 3, "reason": "swap",
+		"components": []map[string]any{{"food_id": 115, "portions": 1, "session_key": "s1"}},
+	})
+	_, reqs := chooseWith(t, in, submit(t, "tu_1", p))
+	assert.Len(t, reqs, 1, "no role advisory without a same-role candidate")
+}
+
+// A library without mains never gets a standalone recipe on a lunch or
+// dinner: the cell stays empty, the note says so and the checker reports it.
+func TestHeuristic_NoMainLeavesFullMealCellEmpty(t *testing.T) {
+	s := run4State()
+	for id, f := range s.Foods {
+		if f.Role == food.RoleMain {
+			f.Role = food.RoleStandalone
+			s.Foods[id] = f
+		}
+	}
+	in := planning.ChooseInput{State: s, Target: fillCells(s), Locale: "en"}
+	prop, err := planning.Heuristic{}.Choose(t.Context(), in)
+	require.NoError(t, err)
+	assert.Empty(t, prop.Plates)
+	assert.Contains(t, prop.Notes, "No main recipe available for")
+	missing := 0
+	for _, is := range planning.Check(planning.Merge(in.State, in.Target, prop), in.Target) {
+		if is.Code == planning.CodeMissingPlate {
+			missing++
+		}
+	}
+	assert.Equal(t, len(in.Target.Cells), missing)
 }

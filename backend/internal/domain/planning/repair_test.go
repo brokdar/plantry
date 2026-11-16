@@ -19,6 +19,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -66,6 +67,7 @@ func run4State() planning.State {
 		Window: w, Today: day("2026-11-20"),
 		SlotOrder: plate.SlotOrder{1: 0, 2: 1, 3: 2},
 		SlotNames: map[int64]string{1: "slot.breakfast", 2: "slot.lunch", 3: "slot.dinner"},
+		SlotKind:  map[int64]slot.Kind{1: slot.KindLight, 2: slot.KindMeal, 3: slot.KindMeal},
 		Foods:     foods,
 		Settings: planning.Settings{
 			BatchSettings:          plate.BatchSettings{DefaultKeepDays: 3, FreezingEnabled: true, FreezerKeepDays: 90},
@@ -262,15 +264,6 @@ func TestRepairFeedback_Table(t *testing.T) {
 			},
 			want: []string{"has no main (only Steamed rice)"},
 		},
-		{
-			name: "day far under the kcal target (info on a repair that happens anyway)",
-			mutate: func(in *planning.ChooseInput, p *jsonPlan) {
-				k := 2200.0
-				in.State.Profile.KcalTarget = &k
-				p.Plates[1]["components"] = []map[string]any{{"food_id": 124, "portions": 1}} // forces the repair
-			},
-			want: []string{"kcal per person against the target of 2200", "up to 1.5 portions per eater"},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -393,26 +386,65 @@ func TestLLMChooser_LeftoverAdvisoryIsWarned(t *testing.T) {
 	assert.NotContains(t, prop.Notes, "Fix:")
 }
 
-// The main is demanded by what the slot is (its place in the day, whether it
-// is a routine slot), never by its name: a renamed breakfast stays light, a
-// slot named breakfast in the middle of the day needs a main.
-func TestMissingMain_ByRoleNotName(t *testing.T) {
+// The main is demanded by the slot's kind setting, never by its name, its
+// place in the day or a routine cell.
+func TestMissingMain_BySlotKind(t *testing.T) {
 	tests := []struct {
 		name     string
 		order    plate.SlotOrder
 		names    map[int64]string
+		kinds    map[int64]slot.Kind
 		wantFlag bool
 	}{
-		{"first of 3 slots is light, whatever its name", plate.SlotOrder{2: 0, 1: 1, 3: 2}, map[int64]string{1: "slot.lunch", 2: "slot.elevenses", 3: "slot.dinner"}, false},
-		{"middle slot named breakfast needs a main", plate.SlotOrder{1: 0, 2: 1, 3: 2}, map[int64]string{1: "slot.lunch", 2: "slot.breakfast", 3: "slot.dinner"}, true},
-		{"2 slots: no light meal", plate.SlotOrder{2: 0, 3: 1}, map[int64]string{2: "slot.breakfast", 3: "slot.dinner"}, true},
-		{"last of 4 slots is light", plate.SlotOrder{1: 0, 3: 1, 4: 2, 2: 3}, map[int64]string{1: "slot.breakfast", 2: "slot.x", 3: "slot.lunch", 4: "slot.dinner"}, false},
+		{
+			"[lunch, dinner, snack]: the first slot is a lunch and needs a main",
+			plate.SlotOrder{2: 0, 3: 1, 1: 2},
+			map[int64]string{2: "slot.lunch", 3: "slot.dinner", 1: "slot.snack"},
+			map[int64]slot.Kind{2: slot.KindMeal, 3: slot.KindMeal, 1: slot.KindLight},
+			true,
+		},
+		{
+			"[breakfast, lunch, snack, dinner]: the last slot is a dinner and needs a main",
+			plate.SlotOrder{1: 0, 2: 1, 4: 2, 3: 3},
+			map[int64]string{1: "slot.breakfast", 2: "slot.lunch", 4: "slot.snack", 3: "slot.dinner"},
+			map[int64]slot.Kind{1: slot.KindLight, 2: slot.KindMeal, 4: slot.KindLight, 3: slot.KindMeal},
+			true,
+		},
+		{
+			"a renamed breakfast slot stays light",
+			plate.SlotOrder{2: 0, 1: 1, 3: 2},
+			map[int64]string{1: "slot.lunch", 2: "slot.elevenses", 3: "slot.dinner"},
+			map[int64]slot.Kind{2: slot.KindLight, 1: slot.KindMeal, 3: slot.KindMeal},
+			false,
+		},
+		{
+			"a slot named breakfast set to meal needs a main",
+			plate.SlotOrder{1: 0, 2: 1, 3: 2},
+			map[int64]string{1: "slot.lunch", 2: "slot.breakfast", 3: "slot.dinner"},
+			map[int64]slot.Kind{2: slot.KindMeal},
+			true,
+		},
+		{
+			"2 slots with a light one",
+			plate.SlotOrder{2: 0, 3: 1},
+			map[int64]string{2: "slot.snack", 3: "slot.dinner"},
+			map[int64]slot.Kind{2: slot.KindLight, 3: slot.KindMeal},
+			false,
+		},
+		{
+			"2 slots, both meals",
+			plate.SlotOrder{2: 0, 3: 1},
+			map[int64]string{2: "slot.lunch", 3: "slot.dinner"},
+			map[int64]slot.Kind{2: slot.KindMeal, 3: slot.KindMeal},
+			true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in := run4Input()
 			in.State.SlotOrder = tt.order
 			in.State.SlotNames = tt.names
+			in.State.SlotKind = tt.kinds
 			p := validWeek(t, in)
 			p.Plates[1]["components"] = []map[string]any{{"food_id": 124, "portions": 1}}
 			require.EqualValues(t, 2, p.Plates[1]["slot_id"])
@@ -424,6 +456,20 @@ func TestMissingMain_ByRoleNotName(t *testing.T) {
 			}
 		})
 	}
+}
+
+// One routine lunch does not make the other lunches light.
+func TestMissingMain_RoutineCellDoesNotLightenTheSlot(t *testing.T) {
+	in := run4Input()
+	for i := range in.State.Cells {
+		if in.State.Cells[i].SlotID == 2 && in.State.Cells[i].Date.Equal(day("2026-11-25")) {
+			in.State.Cells[i].Mode = availability.ModeRoutine
+		}
+	}
+	p := validWeek(t, in)
+	p.Plates[1]["components"] = []map[string]any{{"food_id": 124, "portions": 1}}
+	prop, _ := chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
+	assert.Contains(t, prop.Notes, "has no main (only Steamed rice)")
 }
 
 // A pathological week lists a capped number of problems.

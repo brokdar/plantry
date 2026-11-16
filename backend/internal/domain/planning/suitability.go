@@ -4,7 +4,7 @@ import (
 	"slices"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
-	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 )
 
 // mealKind is what a cell asks of its plate: a full meal needs a main, a
@@ -44,27 +44,12 @@ func suits(r food.Role) string {
 	return "extra"
 }
 
-// mealOf is the kind of slot's cells. The day's first slot is a light meal
-// when the day has at least three slots, and so is the last one with at
-// least four; a slot with a routine cell in the window is a habit meal
-// (breakfast oats) too. Names play no part: a renamed breakfast stays light.
-func (x *index) mealOf(slot int64) mealKind {
-	order, ok := x.s.SlotOrder[slot]
-	if ok && len(x.s.SlotOrder) >= 3 {
-		rank := 0
-		for id, o := range x.s.SlotOrder {
-			if id != slot && o < order {
-				rank++
-			}
-		}
-		if rank == 0 || (len(x.s.SlotOrder) >= 4 && rank == len(x.s.SlotOrder)-1) {
-			return mealLight
-		}
-	}
-	for _, c := range x.s.Cells {
-		if c.SlotID == slot && x.routine(plate.CellKey{Date: c.Date, SlotID: slot}) {
-			return mealLight
-		}
+// mealOf is the kind of slot's cells, read from the slot's kind setting
+// (State.SlotKind). A slot without an entry is a full meal. Names, position
+// and routine cells play no part.
+func (x *index) mealOf(id int64) mealKind {
+	if x.s.SlotKind[id] == slot.KindLight {
+		return mealLight
 	}
 	return mealFull
 }
