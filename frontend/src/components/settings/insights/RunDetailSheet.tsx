@@ -301,9 +301,37 @@ function stepMetrics(step: RunStep, t: Formatter["t"], f: Formatter): string {
   return parts.join(" · ")
 }
 
+/** The reasoning summary of a model call: the text of the thinking blocks in
+ *  its response JSON. A cut-off response (not valid JSON) falls back to the
+ *  complete `"thinking"` strings in it. */
+function thinkingSummary(step: RunStep): string {
+  if (step.type !== "llm_call" || step.thinking_chars <= 0 || !step.result)
+    return ""
+  try {
+    const content = (JSON.parse(step.result) as { content?: unknown }).content
+    if (Array.isArray(content))
+      return content
+        .filter((b) => b?.type === "thinking" && typeof b.thinking === "string")
+        .map((b) => b.thinking as string)
+        .join("\n\n")
+  } catch {
+    const parts: string[] = []
+    for (const m of step.result.matchAll(/"thinking":("(?:[^"\\]|\\.)*")/g)) {
+      try {
+        parts.push(JSON.parse(m[1]) as string)
+      } catch {
+        // an incomplete string at the cut
+      }
+    }
+    return parts.join("\n\n")
+  }
+  return ""
+}
+
 function Step({ step }: { step: RunStep }) {
   const { t, i18n } = useTranslation()
   const linkedRun = regenerateRunId(step)
+  const thinking = thinkingSummary(step)
   return (
     <li className="flex flex-col gap-1 py-2.5" data-testid="run-step">
       <div className="flex items-baseline justify-between gap-3">
@@ -324,6 +352,14 @@ function Step({ step }: { step: RunStep }) {
         >
           {stepMetrics(step, t, i18n)}
         </p>
+      )}
+      {thinking && (
+        <details className="text-small" data-testid="step-thinking">
+          <summary className="cursor-pointer text-ink-muted">
+            {t("settings_page.insights.step.thinking_summary")}
+          </summary>
+          <Raw text={thinking} />
+        </details>
       )}
       {linkedRun !== null && (
         <Link

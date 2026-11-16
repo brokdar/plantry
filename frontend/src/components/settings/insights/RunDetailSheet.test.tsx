@@ -70,6 +70,20 @@ describe("RunDetailSheet", () => {
     ).toBeInTheDocument()
   })
 
+  it("shows the reasoning summary of a call, also from a cut-off response", async () => {
+    const [llmStep, ...rest] = mockRunDetail.steps
+    const cut =
+      '{"content":[{"type":"thinking","thinking":"Weighed the options.","signature":"S"},{"type":"text","text":"Hel'
+    vi.mocked(getRun).mockResolvedValue({
+      ...mockRunDetail,
+      steps: [{ ...llmStep, thinking_chars: 19, result: cut }, ...rest],
+    })
+    renderWithRouter(<RunDetailSheet runId={11} onClose={vi.fn()} />)
+    expect(await screen.findByTestId("step-thinking")).toHaveTextContent(
+      "Weighed the options."
+    )
+  })
+
   it("Z1: shows the run's edits, a dash when null", async () => {
     vi.mocked(getRun).mockResolvedValue({ ...mockRunDetail, edits: 3 })
     const { unmount } = renderWithRouter(

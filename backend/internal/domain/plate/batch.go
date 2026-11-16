@@ -201,3 +201,7 @@ const portionEpsilon = 1e-6
 func almostEqual(a, b float64) bool { return math.Abs(a-b) < portionEpsilon }
 
 func exceeds(a, b float64) bool { return a-b >= portionEpsilon }
+
+// Exceeds reports whether a is more than b by the checker's tolerance, so
+// callers judge portions as H3 does.
+func Exceeds(a, b float64) bool { return exceeds(a, b) }

@@ -17,6 +17,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/actor"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -248,6 +249,11 @@ func defaultTools(svc Services) []Tool {
 	if svc.Planner != nil {
 		tools = append(tools, toolRegenerate(svc))
 	}
+	for i := range tools {
+		if effectTools[tools[i].Name] {
+			tools[i].Handler = withIssueBaseline(svc, tools[i].Handler)
+		}
+	}
 	return tools
 }
 
@@ -261,6 +267,7 @@ func toolListFoods(svc Services) Tool {
         "kind":{"type":"string","enum":["leaf","composed"]},
         "role":{"type":"string","enum":["main","side_starch","side_veg","side_protein","sauce","drink","dessert","standalone"]},
         "tag":{"type":"string"},
+        "diet":{"type":"string","enum":["vegan","vegetarian","pescetarian","omnivore"],"description":"Keep foods whose diet class fits this diet (a vegetarian diet keeps vegan and vegetarian foods); unknown classes are left out."},
         "limit":{"type":"integer","minimum":1,"maximum":200},
         "offset":{"type":"integer","minimum":0},
         "sort_by":{"type":"string","enum":["name","created_at","last_eaten"]},
@@ -270,7 +277,7 @@ func toolListFoods(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "list_foods",
-		Description: "List foods in the library. A food is either a LEAF (single edible item with direct nutrition — apple, rice, chicken) or COMPOSED (built from child foods — curry, schnitzel). Filter by kind, role, tag, or search substring. Use this to find a food by name before referencing it by id. Each item carries favorite and diet_class (vegan, vegetarian, pescetarian, omnivore or unknown); composed foods also carry last_eaten (YYYY-MM-DD of the latest eaten plate up to today, or null), times_cooked (cook sessions up to today), keep_days (days leftovers keep, the plan default when the recipe sets none) and freezable (null = unknown). sort_by last_eaten lists never-eaten recipes first, then the longest uneaten. Each item also carries per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
+		Description: "List foods in the library. A food is either a LEAF (single edible item with direct nutrition — apple, rice, chicken) or COMPOSED (built from child foods — curry, schnitzel). Filter by kind, role, diet, tag, or search. The search matches names and tags, ignores case and umlauts and knows common German/English food words (potato finds Kartoffelgratin, Haehnchen finds Hähnchen). Use this to find a food by name before referencing it by id. Each item carries favorite and diet_class (vegan, vegetarian, pescetarian, omnivore or unknown); composed foods also carry last_eaten (YYYY-MM-DD of the latest eaten plate up to today, or null), times_cooked (cook sessions up to today), keep_days (days leftovers keep, the plan default when the recipe sets none) and freezable (null = unknown). sort_by last_eaten lists never-eaten recipes first, then the longest uneaten. Each item also carries per_portion macros {kcal, protein, fat, carbs} with basis ('per_portion' for composed foods, 'per_100g' for leaves), nutrition_complete, and missing_nutrition (names of leaves without nutrition data) when incomplete.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -278,6 +285,7 @@ func toolListFoods(svc Services) Tool {
 				Kind     string `json:"kind"`
 				Role     string `json:"role"`
 				Tag      string `json:"tag"`
+				Diet     string `json:"diet"`
 				Limit    int    `json:"limit"`
 				Offset   int    `json:"offset"`
 				SortBy   string `json:"sort_by"`
@@ -286,19 +294,29 @@ func toolListFoods(svc Services) Tool {
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
-			res, err := svc.Foods.List(ctx, food.ListQuery{
+			q := food.ListQuery{
 				Today:    todayFrom(ctx),
 				Kind:     food.Kind(in.Kind),
-				Search:   in.Search,
 				Role:     in.Role,
 				Tag:      in.Tag,
+				Diet:     diet.Class(in.Diet),
 				Limit:    in.Limit,
 				Offset:   in.Offset,
 				SortBy:   in.SortBy,
 				SortDesc: in.SortDesc,
-			})
+			}
+			if strings.TrimSpace(in.Search) != "" {
+				// The search runs here, not in SQL: it covers tags, folds case
+				// and umlauts and expands synonyms, so read every candidate
+				// and page after filtering.
+				q.Limit, q.Offset = 10000, 0
+			}
+			res, err := svc.Foods.List(ctx, q)
 			if err != nil {
 				return nil, ToolEffectNone, err
+			}
+			if strings.TrimSpace(in.Search) != "" {
+				res = searchPage(res, in.Search, in.Limit, in.Offset)
 			}
 			foods := make([]*food.Food, len(res.Items))
 			for i := range res.Items {
@@ -550,7 +568,7 @@ func toolCreatePlate(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			noteChange(ctx, "create_plate", map[string]any{"date": in.Date, "slot": slotKey})
-			return mustJSON(plateSummary(p)), ToolEffectNone, nil
+			return withEffect(ctx, svc, plateSummary(p), affected{Plates: plateIDsOf(p)}), ToolEffectNone, nil
 		},
 	}
 }
@@ -587,7 +605,7 @@ func toolAddFoodToPlate(svc Services) Tool {
 			}
 			added := lastComponent(p)
 			noteChange(ctx, "add_food", map[string]any{"name": added.FoodName, "date": p.DateString()})
-			return mustJSON(plateComponentMap(added)), ToolEffectNone, nil
+			return withEffect(ctx, svc, plateComponentMap(added), affected{Plates: plateIDsOf(p)}), ToolEffectNone, nil
 		},
 	}
 }
@@ -633,7 +651,7 @@ func toolSwapFood(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			noteChange(ctx, "swap_food", map[string]any{"from": old.FoodName, "name": pc.FoodName, "date": p.DateString()})
-			return mustJSON(plateComponentMap(pc)), ToolEffectNone, nil
+			return withEffect(ctx, svc, plateComponentMap(pc), affected{Plates: plateIDsOf(p), Sessions: sessionIDOf(old)}), ToolEffectNone, nil
 		},
 	}
 }
@@ -674,7 +692,7 @@ func toolUpdatePlateComponent(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			noteChange(ctx, "update_component", map[string]any{"name": pc.FoodName, "date": p.DateString()})
-			return mustJSON(plateComponentMap(pc)), ToolEffectNone, nil
+			return withEffect(ctx, svc, plateComponentMap(pc), affected{Plates: plateIDsOf(p)}), ToolEffectNone, nil
 		},
 	}
 }
@@ -705,7 +723,7 @@ func toolRemovePlateComponent(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			noteChange(ctx, "remove_component", map[string]any{"name": pc.FoodName, "date": p.DateString()})
-			return mustJSON(map[string]any{"removed": true}), ToolEffectNone, nil
+			return withEffect(ctx, svc, map[string]any{"removed": true}, affected{Plates: plateIDsOf(p), Sessions: sessionIDOf(pc)}), ToolEffectNone, nil
 		},
 	}
 }
@@ -743,7 +761,11 @@ func toolDeletePlate(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			noteChange(ctx, "delete_plate", map[string]any{"name": plateNames(p), "date": p.DateString(), "slot": slotKey})
-			return mustJSON(map[string]any{"deleted": true}), ToolEffectNone, nil
+			sessions := []int64{}
+			for i := range p.Components {
+				sessions = append(sessions, sessionIDOf(&p.Components[i])...)
+			}
+			return withEffect(ctx, svc, map[string]any{"deleted": true}, affected{Sessions: sessions, Dates: []string{p.DateString()}}), ToolEffectNone, nil
 		},
 	}
 }
@@ -1057,7 +1079,10 @@ func linkedSessionList(ctx context.Context, svc Services, plates []plate.Plate) 
 func plateComponentMap(pc *plate.PlateComponent) map[string]any {
 	out := map[string]any{
 		"id": pc.ID, "plate_id": pc.PlateID, "food_id": pc.FoodID,
-		"sort_order": pc.SortOrder,
+		"sort_order": pc.SortOrder, "name": pc.FoodName,
+	}
+	if pc.FoodRole != nil && *pc.FoodRole != "" {
+		out["role"] = *pc.FoodRole
 	}
 	if pc.Portions != nil {
 		out["portions"] = *pc.Portions
@@ -1123,4 +1148,56 @@ func mustJSON(v any) json.RawMessage {
 		panic(fmt.Sprintf("agent tools: json.Marshal: %v", err))
 	}
 	return b
+}
+
+// searchPage keeps the foods of res whose name or tags match every word of
+// search (folded, synonyms expanded: diet.SearchAlternatives) and cuts the
+// page. The order of res is kept.
+func searchPage(res *food.ListResult, search string, limit, offset int) *food.ListResult {
+	var words [][]diet.Alt
+	for _, w := range strings.Fields(search) {
+		words = append(words, diet.SearchAlternatives(w))
+	}
+	var hits []food.Food
+	for _, f := range res.Items {
+		hay := diet.Fold(f.Name + " " + strings.Join(f.Tags, " "))
+		ok := true
+		for _, alts := range words {
+			if !diet.MatchesWord(hay, alts) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			hits = append(hits, f)
+		}
+	}
+	total := len(hits)
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset > len(hits) {
+		offset = len(hits)
+	}
+	hits = hits[offset:]
+	if len(hits) > limit {
+		hits = hits[:limit]
+	}
+	return &food.ListResult{Items: hits, Total: total}
+}
+
+// sessionIDOf lists the cook session a component eats from (none for a leaf).
+func sessionIDOf(pc *plate.PlateComponent) []int64 {
+	if pc == nil || pc.CookSessionID == nil {
+		return nil
+	}
+	return []int64{*pc.CookSessionID}
+}
+
+// effectTools are the tools whose result carries an `after` block; they get
+// the window's issues snapshotted before they run.
+var effectTools = map[string]bool{
+	"create_plate": true, "add_food_to_plate": true, "swap_food": true, "update_plate_component": true,
+	"remove_plate_component": true, "delete_plate": true, "set_plate_eaters": true, "set_session_portions": true,
+	"set_availability": true, "confirm": true, "unlock": true, "regenerate": true, "apply_preset": true,
 }

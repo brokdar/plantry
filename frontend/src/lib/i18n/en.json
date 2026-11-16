@@ -436,6 +436,7 @@
         "cache": "cache {{read}} read / {{write}} written",
         "reasoning": "{{count}} reasoning tokens",
         "thinking": "{{count}} characters of thinking",
+        "thinking_summary": "Reasoning summary",
         "served_model": "served by {{model}}"
       },
       "tool": {

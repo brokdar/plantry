@@ -21,7 +21,7 @@ import (
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v6"
+const PromptVersion = "v7"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -294,7 +294,7 @@ func (s *Service) buildSystemPrompt(ctx context.Context, req ChatRequest, w wind
 	if err != nil {
 		return "", err
 	}
-	return ComposePrompt(p, s.plan.Summary(st, planning.BoardIssues(st)), today), nil
+	return ComposePrompt(p, s.plan.Summary(st, chatIssues(st))+chatFacts(st), today), nil
 }
 
 type todayKey struct{}
