@@ -1013,7 +1013,7 @@
       "invalid_date": "A chat date is not a valid YYYY-MM-DD date."
     },
     "import": {
-      "fetch_failed": "Couldn't load {{host}} (the site answered with an error). Paste the recipe text instead.",
+      "fetch_failed": "Couldn't load {{host}} (the site could not be loaded). Paste the recipe text instead.",
       "body_too_large": "The page is too large to import.",
       "not_html": "The URL did not return an HTML page.",
       "no_recipe": "No recipe was found on this page.",

@@ -100,6 +100,8 @@ func TestParseLine_SeedFindings(t *testing.T) {
 		// F3: the weight the line states beats the table; mg for a liquid warns.
 		{raw: "1 große Zwiebel (ca. 200 g)", amount: 1, unit: "piece", portion: 200, name: "Zwiebel"},
 		{raw: "3 Karotten (ca. 120 g)", amount: 3, unit: "piece", portion: 40, name: "Karotten"},
+		{raw: "3 Karotten (je ca. 120 g)", amount: 3, unit: "piece", portion: 120, name: "Karotten"},
+		{raw: "3 Karotten (ca. je 120 g)", amount: 3, unit: "piece", portion: 120, name: "Karotten"},
 		{raw: "2 Zwiebeln (je 100 g)", amount: 2, unit: "piece", portion: 100, name: "Zwiebeln"},
 		{raw: "300 mg Gemüsesuppe", amount: 0.3, unit: "g", name: "Gemüsesuppe", warning: WarningSuspiciousUnit},
 		// F5: prep text and size words are not part of the name.

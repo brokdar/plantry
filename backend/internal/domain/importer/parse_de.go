@@ -86,7 +86,7 @@ var (
 
 // explicitWeightRE reads a weight a count line states in its parenthetical:
 // "(ca. 200 g)", "(je 100 g)". "je"/"each" make it per piece.
-var explicitWeightRE = regexp.MustCompile(`(?i)^(?:ca\.?|etwa|about|approx\.?|circa)?\s*(je|each|pro)?\s*(\d+(?:[.,]\d+)?)\s*(g|gramm|kg)$`)
+var explicitWeightRE = regexp.MustCompile(`(?i)^(je|each|pro)?\s*(?:ca\.?|etwa|about|approx\.?|circa)?\s*(je|each|pro)?\s*(\d+(?:[.,]\d+)?)\s*(g|gramm|kg)$`)
 
 // ParseLineDE parses a German-language ingredient line into a DraftIngredient.
 // The parser is best-effort: lines it cannot interpret still produce a
@@ -270,14 +270,14 @@ func explicitWeight(paren string, amount float64) (float64, bool) {
 	if m == nil || amount <= 0 {
 		return 0, false
 	}
-	v, err := strconv.ParseFloat(strings.ReplaceAll(m[2], ",", "."), 64)
+	v, err := strconv.ParseFloat(strings.ReplaceAll(m[3], ",", "."), 64)
 	if err != nil || v <= 0 {
 		return 0, false
 	}
-	if strings.EqualFold(m[3], "kg") {
+	if strings.EqualFold(m[4], "kg") {
 		v *= 1000
 	}
-	if m[1] == "" {
+	if m[1] == "" && m[2] == "" {
 		v /= amount
 	}
 	return v, true

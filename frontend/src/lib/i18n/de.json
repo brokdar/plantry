@@ -1040,7 +1040,7 @@
       "invalid_date": "Ein Chat-Datum ist kein gültiges Datum im Format JJJJ-MM-TT."
     },
     "import": {
-      "fetch_failed": "{{host}} konnte nicht geladen werden (die Seite meldet einen Fehler). Füge stattdessen den Rezepttext ein.",
+      "fetch_failed": "{{host}} konnte nicht geladen werden (die Seite ließ sich nicht laden). Füge stattdessen den Rezepttext ein.",
       "body_too_large": "Die Seite ist zu groß zum Importieren.",
       "not_html": "Die URL liefert keine HTML-Seite.",
       "no_recipe": "Auf dieser Seite wurde kein Rezept gefunden.",

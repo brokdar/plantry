@@ -25,6 +25,10 @@ func TestResolveLine_StripsPrepText(t *testing.T) {
 		"garlic roughly chopped":                   "garlic",
 		"medium-sized floury potatoes":             "floury potatoes",
 		"Zwiebel":                                  "Zwiebel",
+		"Frozen chopped spinach":                   "Frozen chopped spinach",
+		"Canned chopped tomatoes":                  "Canned chopped tomatoes",
+		"Fresh grated parmesan":                    "Fresh grated parmesan",
+		"Dried sliced mushrooms":                   "Dried sliced mushrooms",
 		"chopped tomatoes":                         "chopped tomatoes", // "chopped" first: it is the food
 		"light coconut or natural yogurt to serve": "light coconut or natural yogurt",
 	}

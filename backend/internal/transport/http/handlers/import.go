@@ -93,7 +93,7 @@ func (h *ImportHandler) Extract(w http.ResponseWriter, r *http.Request) {
 	reqID := middleware.GetReqID(r.Context())
 	if err != nil {
 		status, key := toHTTP(err)
-		attrs := []any{"request_id", reqID, "outcome", "error", "message_key", key, "reason", err.Error()}
+		attrs := []any{"request_id", reqID, "outcome", "error", "message_key", key}
 		var xe *importer.ExtractError
 		if errors.As(err, &xe) {
 			attrs = append(attrs, "stage", xe.Stage, "host", xe.Host)

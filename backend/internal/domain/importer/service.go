@@ -112,7 +112,7 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 
 	rec, err := s.jsonld.ExtractRecipe(htmlBody)
 	if err == nil && len(rec.RecipeIngredient) > 0 {
-		return s.recipeToDraft(rec, sourceURL, "jsonld", warnings), nil
+		return s.recipeToDraft(ctx, rec, sourceURL, "jsonld", warnings), nil
 	}
 	if err != nil && !errors.Is(err, ErrNoRecipe) {
 		slog.DebugContext(ctx, "import: json-ld extraction error", "host", host, "error", err)
@@ -133,7 +133,7 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 	case rec == nil || len(rec.RecipeIngredient) == 0:
 		return nil, &ExtractError{Stage: StageFallback, Host: host, Err: domain.ErrImportNoRecipe}
 	}
-	return s.recipeToDraft(rec, sourceURL, "llm", warnings), nil
+	return s.recipeToDraft(ctx, rec, sourceURL, "llm", warnings), nil
 }
 
 // Import stages named in ExtractError and the import log.
@@ -141,7 +141,6 @@ const (
 	StageFetch    = "fetch"
 	StageParse    = "parse_jsonld"
 	StageFallback = "fallback"
-	StageResolve  = "resolve"
 )
 
 // ExtractError tags an Extract failure with the stage that failed and the
@@ -350,7 +349,7 @@ func (s *Service) ensurePortion(ctx context.Context, foodID int64, unit string, 
 	return s.portions.UpsertPortion(ctx, &food.Portion{FoodID: foodID, Unit: unit, Grams: grams})
 }
 
-func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string, warnings []string) *Draft {
+func (s *Service) recipeToDraft(ctx context.Context, rec *RawRecipe, sourceURL, method string, warnings []string) *Draft {
 	steps := make([]string, 0, len(rec.RecipeInstructions))
 	for _, step := range rec.RecipeInstructions {
 		if step = stripHTML(step); step != "" {
@@ -404,7 +403,7 @@ func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string, warnin
 		}
 		parsed.DietClass = diet.Classify(parsed.Name)
 		if parsed.Confidence == ConfidenceUnparsed || parsed.NeedsWeight || parsed.Warning != "" {
-			slog.Debug("import: line needs review", "raw", line, "confidence", parsed.Confidence,
+			slog.DebugContext(ctx, "import: line needs review", "raw", line, "confidence", parsed.Confidence,
 				"needs_weight", parsed.NeedsWeight, "warning", parsed.Warning)
 		}
 		d.Ingredients = append(d.Ingredients, parsed)

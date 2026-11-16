@@ -24,7 +24,13 @@ func TestClassify_RealWorld(t *testing.T) {
 		{"Bay leaf", spices},
 		{"Coriander (fresh)", produce},
 		{"Basil", produce},
+		{"Ground coriander", spices},
+		{"Coriander seeds", spices},
+		{"Koriandersamen", spices},
+		{"Koriander, gemahlen", spices},
 		{"Thyme", produce},
+		// Tofu stays dairy_eggs on purpose: German supermarkets stock it in the
+		// chilled aisle next to dairy, which is where a shopper looks for it.
 		{"Tofu (firm)", dairy},
 		{"Räuchertofu", dairy},
 		{"Lime juice", produce},

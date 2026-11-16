@@ -120,6 +120,9 @@ var (
 	}
 )
 
+// corianderSpiceMarkers turn coriander from fresh herb into spice.
+var corianderSpiceMarkers = []string{"=ground", "=seeds", "=seed", "=powder", "gemahlen", "samen", "pulver"}
+
 // sections is the head-noun table. Names are decided by their head noun,
 // which comes last in German compounds and English phrases: the match in
 // the last matching word that ends rightmost wins ("Fleischtomaten" is a
@@ -219,6 +222,10 @@ func Classify(name string) food.ShopSection {
 				}
 			}
 		}
+	}
+	// Ground coriander and coriander seeds are spices, like a dried herb.
+	if anyWordMatches(words, corianderSpiceMarkers) && anyWordMatches(words, []string{"koriander", "=coriander"}) {
+		return food.SectionSpicesOils
 	}
 	if anyWordMatches(words, driedMarkers) && anyWordMatches(words, herbs) {
 		return food.SectionSpicesOils

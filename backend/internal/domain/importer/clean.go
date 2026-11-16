@@ -33,7 +33,7 @@ func stripHTML(s string) string {
 	}
 	s = htmlBreakRE.ReplaceAllString(s, " ")
 	s = htmlTagRE.ReplaceAllString(s, "")
-	return strings.TrimSpace(whitespaceRE.ReplaceAllString(html.UnescapeString(s), " "))
+	return strings.TrimSpace(whitespaceRE.ReplaceAllString(strings.ReplaceAll(html.UnescapeString(s), "\u00a0", " "), " "))
 }
 
 var (
@@ -113,11 +113,38 @@ func CleanName(name string) (clean, prep string) {
 		words = words[1:]
 	}
 	for i := 1; i < len(words); i++ {
-		if _, ok := prepWords[strings.ToLower(strings.Trim(words[i], ",;"))]; ok {
+		if prepStartsAt(words, i) {
 			return strings.Join(words[:i], " "), strings.Join(words[i:], " ")
 		}
 	}
 	return strings.Join(words, " "), ""
+}
+
+// connectorWords introduce free note text ("oil for frying").
+var connectorWords = setOf("to", "for", "plus", "zum")
+
+// prepStartsAt reports whether words[i:] is preparation text rather than
+// part of the name: the word is a prep word that follows a comma or
+// is a connector, or everything from it on is prep words (up to a connector,
+// after which any text is note). "Frozen chopped spinach" stays whole.
+func prepStartsAt(words []string, i int) bool {
+	low := strings.ToLower(strings.Trim(words[i], ",;"))
+	if _, ok := prepWords[low]; !ok {
+		return false
+	}
+	if _, ok := connectorWords[low]; ok || strings.HasSuffix(words[i-1], ",") {
+		return true
+	}
+	for _, w := range words[i:] {
+		w = strings.ToLower(strings.Trim(w, ",;"))
+		if _, ok := connectorWords[w]; ok {
+			return true
+		}
+		if _, ok := prepWords[w]; !ok && w != "and" && w != "und" {
+			return false
+		}
+	}
+	return true
 }
 
 // redirectedElsewhere reports whether fetching requested ended on a page
@@ -156,22 +183,38 @@ func slugWords(path string) map[string]struct{} {
 
 var stepDurationRE = regexp.MustCompile(`(?i)(\d+)(?:\s*[-–]\s*(\d+))?\s*(min(?:ute[n]?|s)?\.?|std\.?|stunden?|h|hours?|hrs?)\b`)
 
+var altDurationRE = regexp.MustCompile(`(?i)(?:\b(?:or|oder|alternativ|bis zu)|/)\s*(?:ca\.?\s*)?$`)
+
+// maxStepMinutes is the longest total a recipe is believed to take; more is
+// a typo or a stray number.
+const maxStepMinutes = 24 * 60
+
 // minutesFromSteps sums the durations the steps mention ("20 Min", "6-7
-// Stunden": the upper bound). It returns 0 when no step names one.
+// Stunden": the upper bound). Per step only the longest counts, so a short
+// duration inside a long one ("30 Min backen, nach 15 Min wenden") is not
+// added, and alternatives ("oder 90 Min") are skipped. It returns 0 when no
+// step names one or the total exceeds 24 hours.
 func minutesFromSteps(steps []string) int {
 	total := 0
 	for _, step := range steps {
-		for _, m := range stepDurationRE.FindAllStringSubmatch(step, -1) {
-			n, _ := strconv.Atoi(m[1])
-			if m[2] != "" {
-				n, _ = strconv.Atoi(m[2])
+		longest := 0
+		for _, loc := range stepDurationRE.FindAllStringSubmatchIndex(step, -1) {
+			if altDurationRE.MatchString(step[:loc[0]]) {
+				continue
 			}
-			if strings.HasPrefix(strings.ToLower(m[3]), "min") {
-				total += n
-			} else {
-				total += n * 60
+			n, _ := strconv.Atoi(step[loc[2]:loc[3]])
+			if loc[4] >= 0 {
+				n, _ = strconv.Atoi(step[loc[4]:loc[5]])
 			}
+			if !strings.HasPrefix(strings.ToLower(step[loc[6]:loc[7]]), "min") {
+				n *= 60
+			}
+			longest = max(longest, n)
 		}
+		total += longest
+	}
+	if total > maxStepMinutes {
+		return 0
 	}
 	return total
 }
