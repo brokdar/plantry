@@ -54,7 +54,7 @@ func TestCompactEvaluationPayload(t *testing.T) {
 	}
 	full := len(raw)
 	planner := size(ev.Compact(planning.View{Detail: func(planning.PlateEval) bool { return true }}))
-	getPlan := size(ev.Compact(planning.View{}))
+	getPlan := size(ev.Compact(planning.View{Slim: true}))
 	first := ev.Plates[0]
 	one := size(ev.Compact(planning.View{
 		Dates:  map[string]bool{first.Date: true},

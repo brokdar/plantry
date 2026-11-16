@@ -24,6 +24,23 @@ type View struct {
 	Dates map[string]bool
 	// Detail reports whether a plate keeps its component list; nil: none.
 	Detail func(PlateEval) bool
+	// Slim keeps, on the plates Detail does not select, a slim component
+	// list (SlimComponents) instead of none.
+	Slim bool
+}
+
+// SlimComponents keeps what judging a plate needs: the component id, name,
+// quantity, kcal and protein (and nutrition_complete, shown only when false).
+// The cells and the proposal already carry food, role and session.
+func SlimComponents(cs []ComponentEval) []ComponentEval {
+	out := make([]ComponentEval, len(cs))
+	for i, c := range cs {
+		out[i] = ComponentEval{
+			ID: c.ID, Name: c.Name, Portions: c.Portions, Grams: c.Grams,
+			Kcal: c.Kcal, ProteinG: c.ProteinG, NutritionComplete: c.NutritionComplete,
+		}
+	}
+	return out
 }
 
 // ProposedView scopes e to what a proposal touched: the days that hold a
@@ -63,7 +80,11 @@ func (e Evaluation) Compact(v View) map[string]any {
 	}
 	plates := make([]PlateEval, len(e.Plates))
 	for i, p := range e.Plates {
-		if v.Detail == nil || !v.Detail(p) {
+		switch {
+		case v.Detail != nil && v.Detail(p):
+		case v.Slim:
+			p.Components = SlimComponents(p.Components)
+		default:
 			p.Components = nil
 		}
 		plates[i] = p

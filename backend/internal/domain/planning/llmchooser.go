@@ -108,6 +108,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		Temperature: llmTemperature,
 		Reasoning:   true,
 		MaxTokens:   llmMaxTokens,
+		CacheTail:   true,
 	}
 	if c.effort != nil {
 		req.Effort = c.effort(ctx)
