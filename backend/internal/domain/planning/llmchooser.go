@@ -24,6 +24,10 @@ const (
 	// maxEvaluations is how many evaluate_plan dry runs a run answers; a
 	// further call is told to submit.
 	maxEvaluations = 8
+	// maxModelCalls is the hard bound on provider calls per run, evaluate_plan
+	// replies included: every submit budget plus every dry run plus slack for
+	// the free attempt. Past it the run ends with what it has.
+	maxModelCalls = maxEvaluations + maxRepairs + 4
 )
 
 // LLMChooser proposes a plan with one forced submit_plan call per attempt
@@ -94,11 +98,19 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 	var allFixes, runNotes []string
 	// paid counts the repairs that use up the budget (maxRepairs); the one
 	// free attempt for a skeleton first reply is extra, once per run.
-	paid, freeUsed, evals := 0, false, 0
+	paid, freeUsed, evals, modelCalls := 0, false, 0, 0
 	fillCells := len(fillCellLabels(in))
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 && in.Stage != nil {
 			in.Stage(StageRepairing)
+		}
+		if modelCalls++; modelCalls > maxModelCalls {
+			note := fmt.Sprintf("The model kept calling evaluate_plan or repairing; the run stopped after %d model calls.", maxModelCalls)
+			if last == nil {
+				return Proposal{}, fmt.Errorf("%w: no plan was submitted within %d model calls", domain.ErrAIInvalidPlan, maxModelCalls)
+			}
+			last.RepairAttempts = attempt
+			return withNotes(*last, append(slices.Clone(allFixes), append(runNotes, note)...), nil, ""), nil
 		}
 		resp, err := call(ctx, client, req)
 		if err != nil {

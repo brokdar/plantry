@@ -1,13 +1,17 @@
 package planning_test
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/fake"
+	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 )
 
 // evaluate_plan is a dry run: it is answered with the evaluation, is not an
@@ -42,4 +46,21 @@ func TestLLMChooser_EvaluatePlanLoop(t *testing.T) {
 		soft = soft || (is.Rule == "S2" && is.Severity == "soft")
 	}
 	assert.True(t, soft, "the day kcal gap is reported as a soft issue: %s", last.Content[0].ToolResultContent)
+}
+
+// A model that only ever calls evaluate_plan is cut off: the provider is
+// called a bounded number of times and the run errors without a proposal.
+func TestLLMChooser_EvaluateLoopIsBounded(t *testing.T) {
+	in := run4Input()
+	eval := submit(t, "tu_e", validWeek(t, in))
+	eval.Message.Content[0].ToolName = "evaluate_plan"
+	turns := make([]fake.Turn, 40)
+	for i := range turns {
+		turns[i] = eval
+	}
+	client := fake.NewFromScript(&fake.Script{Turns: turns})
+	c := planning.NewLLMChooser(llm.StaticResolver(client, "fake-model"))
+	_, err := c.Choose(context.Background(), in)
+	require.ErrorIs(t, err, domain.ErrAIInvalidPlan)
+	assert.Len(t, client.Requests(), 14, "maxModelCalls")
 }

@@ -1,6 +1,7 @@
 package planning_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -121,4 +122,63 @@ func TestEvaluate_S2AboveBandHasNoOptions(t *testing.T) {
 	require.Len(t, s2, 1)
 	assert.Equal(t, planning.CodeKcalAboveBand, s2[0].Code)
 	assert.Empty(t, s2[0].Options)
+}
+
+func satDay(ev planning.Evaluation) planning.DayEval {
+	for _, d := range ev.Days {
+		if d.Date == sat {
+			return d
+		}
+	}
+	return planning.DayEval{}
+}
+
+// An S3 option must raise the day's protein share: raising low-protein rice
+// (80 -> 100 g) would lower it and is never offered.
+func TestEvaluate_S3OptionsRaiseTheProteinShare(t *testing.T) {
+	s := softState(1850)
+	s.Profile.ProteinPct = f64(30)
+	s.Profile.MeatDaysPerWeekMax = intp(7)
+	before := planning.Evaluate(s, windowTarget(s))
+	s3 := softOf(before, "S3")
+	require.Len(t, s3, 1)
+	dayPct := satDay(before).ProteinPct
+	for _, o := range s3[0].Options {
+		assert.Greater(t, o.DayProteinPct, dayPct-0.05, "option %+v", o)
+		assert.False(t, o.Action == "raise" && o.FoodID == riceLeaf, "rice lowers the share: %+v", o)
+	}
+}
+
+// An S2 option moves the day toward its target without leaving the band,
+// and options that bring the day into the band come first. Each option's op
+// is a valid apply_changes op.
+func TestEvaluate_S2OptionsCloseTheGapAndCarryOps(t *testing.T) {
+	s := softState(2200)
+	s.Profile.MeatDaysPerWeekMax = intp(7)
+	ev := planning.Evaluate(s, windowTarget(s))
+	s2 := softOf(ev, "S2")
+	require.Len(t, s2, 1)
+	opts := s2[0].Options
+	require.NotEmpty(t, opts)
+	dayKcal := satDay(ev).Kcal
+	seenOut := false
+	for _, o := range opts {
+		assert.Less(t, math.Abs(2200-o.DayKcal), math.Abs(2200-dayKcal), "closer to the target: %+v", o)
+		assert.LessOrEqual(t, o.DayKcal, 2200*planning.KcalBandHigh)
+		inBand := o.DayKcal >= 2200*planning.KcalBandLow
+		assert.False(t, seenOut && inBand, "in-band options come first")
+		seenOut = seenOut || !inBand
+		switch o.Op.Op {
+		case "set_quantity":
+			require.NotNil(t, o.Op.PlateComponentID)
+			assert.Equal(t, "g", o.Op.Unit)
+			require.NotNil(t, o.Op.Amount)
+		case "add":
+			assert.NotZero(t, o.Op.FoodID)
+			assert.True(t, o.Op.PlateID != nil || (o.Op.Date != "" && o.Op.SlotID != 0))
+			assert.True(t, o.Op.Portions != nil || (o.Op.Amount != nil && o.Op.Unit == "g"))
+		default:
+			t.Fatalf("op %q is not an apply_changes op", o.Op.Op)
+		}
+	}
 }

@@ -226,18 +226,18 @@ func TestTool_FindFoods_PayloadIncludesFavoriteHistoryAndMacros(t *testing.T) {
 		"kcal": 130.0, "protein": 2.7, "fat": 0.3, "carbs": 28.1,
 	}, rice["per_portion"])
 
-	// A failing nutrition lookup is a tool error, never silently partial data.
-	_, _, _, err := ts.Execute(withToday(context.Background(), payloadToday), "find_foods", json.RawMessage(`{"ids":[4]}`))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nutrition")
-}
-
-func TestPlateSummary_HasNoSkipped(t *testing.T) {
-	p := &plate.Plate{ID: 7, Date: time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC), SlotID: 1}
-	var m map[string]any
-	require.NoError(t, json.Unmarshal(mustJSON(plateSummary(p)), &m))
-	assert.NotContains(t, m, "skipped")
-	assert.Equal(t, "2026-10-26", m["date"])
+	// A failing nutrition lookup returns the item incomplete, and unknown ids
+	// are reported instead of failing the call.
+	raw, _, _, err := ts.Execute(withToday(context.Background(), payloadToday), "find_foods", json.RawMessage(`{"ids":[4,999]}`))
+	require.NoError(t, err)
+	var got struct {
+		Items      []map[string]any `json:"items"`
+		MissingIDs []int64          `json:"missing_ids"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &got))
+	require.Len(t, got.Items, 1)
+	assert.Equal(t, false, got.Items[0]["nutrition_complete"])
+	assert.Equal(t, []int64{999}, got.MissingIDs)
 }
 
 func TestErrorMessageKey_CellErrors(t *testing.T) {

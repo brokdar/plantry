@@ -35,7 +35,7 @@ const getPlanSchema = `{
   "additionalProperties":false
 }`
 
-const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,components:[{id,food_id,name,portions?|amount+unit?,session_id?}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation:{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete,nutrition_missing}], meat_days, meat_days_max, issues:[issue], totals:{violations,warnings,soft}}}. kcal and protein are per eater. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations (H1-H8) are hard rules, soft issues (S2 day kcal outside 90-110% of target, S3 protein share under target) carry computed options. evaluation.issues is what the user sees; the top-level issues are the board's.`
+const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,components:[{id,food_id,name,portions?|amount+unit?,session_id?}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation:{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete,nutrition_missing}], plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,components:[{plate_component_id,food_id,name,role,portions?|grams?,kcal,protein_g,nutrition_complete,session_id?}]}], meat_days, meat_days_max, issues:[issue], totals:{violations,warnings,soft}}}. kcal and protein are per eater, also per plate and per component (so a heavy plate needs no arithmetic). An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations (H1-H8) are hard rules, soft issues (S2 day kcal outside 90-110% of target, S3 protein share under target) carry computed options. an option's op is a ready apply_changes op. evaluation.issues is what the user sees; the top-level issues are the board's.`
 
 // toolGetPlan returns the chat window's plan: the same cells, sessions and
 // issues as GET /api/plan for that window, in a compact shape (D10), plus
@@ -66,18 +66,20 @@ func toolGetPlan(svc Services) Tool {
 			if svc.State != nil {
 				if e, err := evalWindow(ctx, svc, w); err == nil {
 					ev = &e
+				} else {
+					out.EvaluationError = err.Error()
 				}
 			}
 			if in.From != "" || in.To != "" {
 				out.narrow(in.From, in.To)
 				if ev != nil {
 					ev.Days = slices.DeleteFunc(ev.Days, func(d planning.DayEval) bool { return !inRange(d.Date, in.From, in.To) })
-					ev.Plates = nil
+					ev.Plates = slices.DeleteFunc(ev.Plates, func(p planning.PlateEval) bool { return !inRange(p.Date, in.From, in.To) })
 					ev.Issues = slices.DeleteFunc(ev.Issues, func(is planning.Issue) bool { return is.Date != "" && !inRange(is.Date, in.From, in.To) })
 				}
 			}
 			if ev != nil {
-				ev.Plates, ev.AllIssues = nil, nil
+				ev.AllIssues = nil
 				ev.Totals = planning.Evaluation{Issues: ev.Issues}.ViewedAs(ev.Issues).Totals
 			}
 			out.Evaluation = ev
@@ -117,6 +119,8 @@ type planOut struct {
 	// Evaluation is the window evaluated as the user sees it (nil when the
 	// state could not be read).
 	Evaluation *planning.Evaluation `json:"evaluation,omitempty"`
+	// EvaluationError says why Evaluation is missing (never silently absent).
+	EvaluationError string `json:"evaluation_error,omitempty"`
 }
 
 type planWindowOut struct {
@@ -343,7 +347,7 @@ func toolConfirm(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "confirm",
-		Description: "Confirm a draft plate or cook session together with its batch closure (every plate and batch linked to it). Give exactly one of plate_id or session_id. Only when the user asks for it.",
+		Description: "Confirm a draft plate or cook session together with its batch closure (every plate and batch linked to it). Give exactly one of plate_id or session_id. Only when the user asks for it. Returns JSON {plate_ids:[int], session_ids:[int]} (every row confirmed) plus the `after` block of apply_changes without days (plates, sessions, issues {new, resolved, total_open}).",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in rowSeed
@@ -391,7 +395,7 @@ func toolUnlock(svc Services) Tool {
 	return Tool{
 		Name: "unlock",
 		Description: "Return a confirmed plate or cook session, with its batch closure, to draft so you can change it. Two steps: first call without user_confirmed; it changes nothing, " +
-			"shows the user the rows and you ask for a yes. Only after the user's yes in a later message call it again with user_confirmed: true. Give exactly one of plate_id or session_id.",
+			"shows the user the rows and you ask for a yes. Only after the user's yes in a later message call it again with user_confirmed: true. Give exactly one of plate_id or session_id. First call returns JSON {status:\"needs_user_confirmation\", rows:[{date, slot_id, names:[string]}], plate_ids, session_ids}; the confirmed call returns {plate_ids, session_ids} plus the `after` block (plates, sessions, issues).",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -472,7 +476,7 @@ func toolRegenerate(svc Services) Tool {
 	return Tool{
 		Name: "regenerate",
 		Description: "Let the planner choose again for part of the draft plan and wait for it: use it for 'different/another X' requests. Confirmed rows are kept. " +
-			"Returns the run's status, counts, issues and the changed plates.",
+			"Returns JSON {run_id, status (ok|partial|error|...), error_key?, counts:{plates, sessions, cook_days, kept_confirmed}, issues:[issue], notes?, changed:[{date, slot_id, plate}]} where plate has the shape of a get_plan cell plate.",
 		Schema: schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {

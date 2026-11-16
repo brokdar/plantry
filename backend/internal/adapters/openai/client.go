@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
@@ -25,6 +27,11 @@ type Client struct {
 	apiKey     string
 	baseURL    string
 	httpClient *http.Client
+
+	mu sync.Mutex
+	// noEffort holds the models that answered a 400 naming reasoning_effort;
+	// they are sent no effort again for the life of the process.
+	noEffort map[string]bool
 }
 
 // Option configures the client.
@@ -63,8 +70,39 @@ func (c *Client) EffectiveParams(req llm.Request) llm.Effective {
 		t := req.Temperature
 		eff.Temperature = &t
 	}
-	eff.Effort = effort(req)
+	eff.Effort = c.effortFor(req)
+	if req.Effort != "" && reasoningModel(req.Model) && eff.Effort == "" {
+		eff.Fallbacks = append(eff.Fallbacks, effortRejectedFallback)
+	}
 	return eff
+}
+
+const effortRejectedFallback = "effort_rejected_by_model"
+
+// effortFor is the reasoning_effort to send for req: none for a model that
+// is not a known reasoning model or that refused it before.
+func (c *Client) effortFor(req llm.Request) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.noEffort[req.Model] {
+		return ""
+	}
+	return effort(req)
+}
+
+// learnEffortRejection reads a 400 naming reasoning_effort, remembers it for
+// the model and says whether the call is worth retrying without it.
+func (c *Client) learnEffortRejection(req llm.Request, e *APIError) bool {
+	if !strings.Contains(strings.ToLower(e.Message), "reasoning_effort") {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.noEffort == nil {
+		c.noEffort = map[string]bool{}
+	}
+	c.noEffort[req.Model] = true
+	return true
 }
 
 // Complete implements llm.Client.Complete.
@@ -97,13 +135,39 @@ func (c *Client) Complete(ctx context.Context, req llm.Request) (string, error) 
 func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Event) (*llm.Response, error) {
 	defer close(out)
 
-	body, err := encodeRequest(req, true)
+	for {
+		resp, apiErr, err := c.post(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		if apiErr != nil {
+			if apiErr.Status == http.StatusBadRequest && c.effortFor(req) != "" && c.learnEffortRejection(req, apiErr) {
+				llm.ReportAttempt(ctx, llm.Attempt{
+					Started: time.Now(), Err: apiErr, Sent: llm.Effective{Effort: req.Effort}, Reason: "effort_rejected_400",
+				})
+				continue
+			}
+			return nil, apiErr
+		}
+		defer func() { _ = resp.Body.Close() }()
+		final, err := parseStream(ctx, resp.Body, out)
+		if final != nil {
+			final.RequestID = resp.Header.Get("x-request-id")
+		}
+		return final, err
+	}
+}
+
+// post sends one chat-completions request; a non-200 answer comes back as
+// the decoded *APIError with the body already closed.
+func (c *Client) post(ctx context.Context, req llm.Request) (*http.Response, *APIError, error) {
+	body, err := encodeRequest(req, true, c.effortFor(req))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("openai: build request: %w", err)
+		return nil, nil, fmt.Errorf("openai: build request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
@@ -111,19 +175,17 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("openai: request: %w", err)
+		return nil, nil, fmt.Errorf("openai: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
 	if resp.StatusCode != http.StatusOK {
-		return nil, decodeAPIError(resp)
+		defer func() { _ = resp.Body.Close() }()
+		apiErr, _ := decodeAPIError(resp).(*APIError)
+		if apiErr == nil {
+			return nil, nil, fmt.Errorf("openai: status %d", resp.StatusCode)
+		}
+		return nil, apiErr, nil
 	}
-
-	final, err := parseStream(ctx, resp.Body, out)
-	if final != nil {
-		final.RequestID = resp.Header.Get("x-request-id")
-	}
-	return final, err
+	return resp, nil, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -149,12 +211,25 @@ type reqBody struct {
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
 
-// reasoningModel reports whether model is a reasoning model (o-series,
-// gpt-5.x), the only ones that accept reasoning_effort. OpenAI has no
-// capabilities endpoint, so this is a name check.
+// reasoningPrefixes are the known reasoning models that accept
+// reasoning_effort. OpenAI has no capabilities endpoint, so this is an
+// explicit name allowlist; reasoningDenied lists variants of those families
+// that reject it (chat aliases, pro models that only run at high, the early
+// o1 models without it). A model outside the list gets no effort; one that
+// is listed but refuses it is retried without (learnEffortRejection).
+var (
+	reasoningPrefixes = []string{"o1", "o3", "o4-mini", "gpt-5"}
+	reasoningDenied   = []string{"o1-mini", "o1-preview", "-chat", "-pro", "-search"}
+)
+
 func reasoningModel(model string) bool {
 	m := strings.ToLower(model)
-	for _, p := range []string{"o1", "o3", "o4", "gpt-5"} {
+	for _, d := range reasoningDenied {
+		if strings.HasPrefix(m, d) || strings.Contains(m, d) {
+			return false
+		}
+	}
+	for _, p := range reasoningPrefixes {
 		if strings.HasPrefix(m, p) {
 			return true
 		}
@@ -212,7 +287,7 @@ type functionDecl struct {
 	Parameters  json.RawMessage `json:"parameters"`
 }
 
-func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
+func encodeRequest(req llm.Request, stream bool, effort string) ([]byte, error) {
 	maxTok := req.MaxTokens
 	if maxTok <= 0 {
 		maxTok = DefaultMaxTokens
@@ -229,7 +304,7 @@ func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
 		tmp := req.Temperature
 		body.Temperature = &tmp
 	}
-	body.ReasoningEffort = effort(req)
+	body.ReasoningEffort = effort
 	// Top-level system message comes first.
 	if req.System != "" {
 		sys := req.System

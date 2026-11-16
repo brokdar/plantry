@@ -49,12 +49,58 @@ function text(v: unknown): string {
 /**
  * The change line's sentence (D16): `assistant.change.<text_key>` with the
  * change's params. Dates become weekdays, a slot key its display name.
- * `apply_changes` (one change per call: `count` ops, `summary` their short
- * descriptions) plurals on the count. The per-tool keys below it are what
+ * `apply_changes` (one change per call: `count` ops, `ops` their structured
+ * params, composed here; older lines stored a ready `summary`) plurals on the
+ * count. The per-tool keys below it are what
  * older conversations stored. `set_session_portions` and `set_plate_eaters`
  * plural on the number; the portions line adds the frozen part only when
  * some are frozen.
  */
+/** At most this many ops are spelled out in an apply_changes line. */
+const MAX_OPS_IN_LINE = 3
+
+/** One apply_changes op (structured params, written by the backend) as a
+ *  short phrase in the user's language. */
+function opPhrase(
+  t: TFunction,
+  language: string,
+  op: Record<string, unknown>
+): string {
+  const kind = text(op.op)
+  const key =
+    kind === "set_availability"
+      ? `assistant.change.op_set_availability_${text(op.mode)}`
+      : `assistant.change.op_${kind}`
+  return t(key, {
+    food: text(op.food),
+    to: text(op.to),
+    day: weekday(op.date, language),
+    slot:
+      typeof op.slot_key === "string"
+        ? slotInSentence(slotLabel(t, op.slot_key), language)
+        : "",
+    portions: text(op.portions),
+    eaters: text(op.eaters),
+    defaultValue: t("assistant.change.fallback"),
+  })
+}
+
+function opsSummary(
+  t: TFunction,
+  language: string,
+  ops: Record<string, unknown>[]
+): string {
+  const shown = ops
+    .slice(0, MAX_OPS_IN_LINE)
+    .map((op) => opPhrase(t, language, op))
+  if (ops.length > MAX_OPS_IN_LINE) {
+    shown.push(
+      t("assistant.change.op_more", { count: ops.length - MAX_OPS_IN_LINE })
+    )
+  }
+  return shown.join("; ")
+}
+
 export function changeSentence(
   t: TFunction,
   i18n: Pick<I18n, "language">,
@@ -64,7 +110,10 @@ export function changeSentence(
   let key = change.text_key
   const values: Record<string, string | number> = {
     name: text(p.name),
-    summary: text(p.summary),
+    // Newer lines carry structured `ops`; older ones a ready `summary`.
+    summary: Array.isArray(p.ops)
+      ? opsSummary(t, i18n.language, p.ops as Record<string, unknown>[])
+      : text(p.summary),
     from: text(p.from),
     day: weekday(p.date, i18n.language),
     slot:

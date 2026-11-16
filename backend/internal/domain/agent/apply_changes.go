@@ -57,7 +57,7 @@ const applyChangesSchema = `{
   "additionalProperties":false
 }`
 
-const applyChangesDescription = `Change the plan in one call: a list of ops that run in order in ONE transaction (any failing op rolls everything back and names the op). With dry_run true nothing is saved: you get the same result so you can check the rule effects first. Quantities are per eater: a recipe takes portions (usually 1), a leaf takes amount + unit (e.g. 100 + "g") and rejects portions.
+const applyChangesDescription = `Change the plan in one call: a list of ops that run in order in ONE transaction (any failing op rolls everything back and names it, numbered from 1). With dry_run true nothing is saved: you get the same result so you can check the rule effects first. Quantities are per eater: a recipe takes portions (usually 1), a leaf takes amount + unit (e.g. 100 + "g") and rejects portions.
 Ops (fields):
 - add: food_id, the plate by plate_id OR by date + slot_id (the plate is created when the cell is empty), a quantity (portions | amount+unit). Optional session_id: a recipe component eats from that existing cook session (leftover, no new cooking). Optional cook_at {date, slot_id}: a recipe is cooked on that other cell (a new session cooking there, e.g. with the lunch batch) and the plate eats it (portions = eaters x portions).
 - swap: plate_component_id, food_id (the new food), optional quantity (else the current one is kept).
@@ -69,7 +69,7 @@ Ops (fields):
 - set_eaters: plate_id, eaters (the batches it eats from are resized).
 - set_availability: date, slot_id, mode plan|none|routine|default, preset_id (routine), note (none). Only one per call.
 Only draft plates in the future are changeable; a confirmed one needs the user to unlock it.
-Returns JSON {dry_run, applied:[{op, plate_id?, plate_component_id?, session_id?, ...}], after:{plates:[{plate_id,date,slot_id,state,eaters,components}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete}] (the days the ops touched), meat_days, meat_days_max, issues_checked, issues:{new:[issue],resolved:[issue],total_open,new_more?,resolved_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day}]}. Violations (H1-H8) are hard rules: fix them. Soft issues (S2 day kcal outside 90-110% of target, S3 protein share under target) carry options you can apply with another call. Your request is not done while an issue it caused is open, unless you tell the user why.`
+Returns JSON {dry_run, applied:[{op, plate_id?, plate_component_id?, session_id?, ...}], after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),component_details:[{plate_component_id,food_id,name,role,portions?|grams?,kcal,protein_g}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],total_open,new_more?,resolved_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). An S3 option raises the day's protein share; an S2 option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (H1-H8) are hard rules: fix them. Soft issues (S2 day kcal outside 90-110% of target, S3 protein share under target) carry options you can apply with another call. Your request is not done while an issue it caused is open, unless you tell the user why.`
 
 // changeOp is one op of apply_changes.
 type changeOp struct {
@@ -100,8 +100,26 @@ func (o changeOp) quantity() quantityInput {
 
 // batch collects what a call's ops touched.
 type batch struct {
-	aff   affected
-	names []string
+	aff affected
+	// ops is one entry per op for the change line's params (the frontend
+	// writes the sentence): op, food, to, date, slot_id, slot_key, mode,
+	// portions, amount, unit, eaters.
+	ops []map[string]any
+}
+
+// note records op's line entry; quantity fields are added when the op sets them.
+func (b *batch) note(op changeOp, kv map[string]any) {
+	kv["op"] = op.Op
+	if op.Portions != nil {
+		kv["portions"] = *op.Portions
+	}
+	if op.Amount != nil {
+		kv["amount"] = *op.Amount
+		if op.Unit != nil {
+			kv["unit"] = *op.Unit
+		}
+	}
+	b.ops = append(b.ops, kv)
 }
 
 func (b *batch) plate(p *plate.Plate) {
@@ -134,7 +152,8 @@ func toolApplyChanges(svc Services) Tool {
 			if !ok {
 				return nil, ToolEffectNone, fmt.Errorf("%w: no plan window in this conversation turn", domain.ErrInvalidInput)
 			}
-			before, err := evalWindow(ctx, svc, w)
+			ws := windowsFor(w, opDates(in.Ops))
+			before, err := evalWindows(ctx, svc, ws)
 			if err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("read the plan before the change: %w", err)
 			}
@@ -148,12 +167,12 @@ func toolApplyChanges(svc Services) Tool {
 				for i, op := range in.Ops {
 					res, err := applyOp(ctx, svc, op, &b)
 					if err != nil {
-						return fmt.Errorf("op %d (%s): %w", i, op.Op, err)
+						return fmt.Errorf("op %d of %d (%s): %w", i+1, len(in.Ops), op.Op, err)
 					}
 					applied = append(applied, res)
 				}
 				var err error
-				after, afterEv, err = batchAfter(ctx, svc, w, b, before)
+				after, afterEv, err = batchAfter(ctx, svc, ws, b, before)
 				return err
 			}
 			err = svc.Tx.InTx(ctx, func(ctx context.Context) error {
@@ -172,7 +191,7 @@ func toolApplyChanges(svc Services) Tool {
 				// Rolled back: the dry run is a step of the run log too.
 				planning.RecordEvaluation(ctx, planning.PhaseDryRun, func() planning.Evaluation { return afterEv })
 			} else {
-				noteChange(ctx, "apply_changes", map[string]any{"count": len(in.Ops), "summary": strings.Join(b.names, "; ")})
+				noteChange(ctx, "apply_changes", map[string]any{"count": len(in.Ops), "ops": b.ops})
 			}
 			return mustJSON(map[string]any{"dry_run": in.DryRun, "applied": applied, "after": after}), ToolEffectNone, nil
 		},
@@ -217,7 +236,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		}
 		b.plate(p)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(old)...)
-		b.names = append(b.names, fmt.Sprintf("%s -> %s (%s)", old.FoodName, pc.FoodName, p.DateString()))
+		b.note(op, map[string]any{"food": old.FoodName, "to": pc.FoodName, "date": p.DateString()})
 		return opResult(op, p, pc), nil
 	case "set_quantity":
 		q := op.quantity()
@@ -236,7 +255,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 			return nil, err
 		}
 		b.plate(p)
-		b.names = append(b.names, fmt.Sprintf("%s quantity (%s)", pc.FoodName, p.DateString()))
+		b.note(op, map[string]any{"food": pc.FoodName, "date": p.DateString()})
 		return opResult(op, p, pc), nil
 	case "remove":
 		p, pc, err := componentOnPlate(ctx, svc, op.PlateComponentID)
@@ -248,7 +267,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		}
 		b.plate(p)
 		b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(pc)...)
-		b.names = append(b.names, fmt.Sprintf("remove %s (%s)", pc.FoodName, p.DateString()))
+		b.note(op, map[string]any{"food": pc.FoodName, "date": p.DateString()})
 		return map[string]any{"op": op.Op, "plate_component_id": op.PlateComponentID, "removed": true}, nil
 	case "create_plate":
 		d, err := parseOpDate(op.Date)
@@ -263,7 +282,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 			return nil, err
 		}
 		b.plate(p)
-		b.names = append(b.names, "new plate "+p.DateString())
+		b.note(op, map[string]any{"date": p.DateString(), "slot_id": p.SlotID})
 		return map[string]any{"op": op.Op, "plate_id": p.ID, "date": p.DateString(), "slot_id": p.SlotID, "eaters": p.Eaters}, nil
 	case "delete_plate":
 		p, err := svc.Plates.Get(ctx, op.PlateID)
@@ -280,7 +299,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		for i := range p.Components {
 			b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(&p.Components[i])...)
 		}
-		b.names = append(b.names, fmt.Sprintf("delete %s (%s)", plateNames(p), p.DateString()))
+		b.note(op, map[string]any{"food": plateNames(p), "date": p.DateString()})
 		return map[string]any{"op": op.Op, "plate_id": op.PlateID, "deleted": true}, nil
 	case "set_portions":
 		return opSetPortions(ctx, svc, op, b)
@@ -296,7 +315,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 			return nil, err
 		}
 		b.plate(p)
-		b.names = append(b.names, fmt.Sprintf("%s eaters %g (%s)", plateNames(p), p.Eaters, p.DateString()))
+		b.note(op, map[string]any{"food": plateNames(p), "date": p.DateString(), "eaters": p.Eaters})
 		return map[string]any{"op": op.Op, "plate_id": p.ID, "eaters": p.Eaters}, nil
 	case "set_availability":
 		return opSetAvailability(ctx, svc, op, b)
@@ -385,8 +404,11 @@ func opAdd(ctx context.Context, svc Services, op changeOp, b *batch) (map[string
 	}
 	added := lastComponent(got)
 	b.plate(got)
+	if op.CookAt != nil && op.SessionID == 0 {
+		b.aff.Dates = append(b.aff.Dates, op.CookAt.Date)
+	}
 	b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(added)...)
-	b.names = append(b.names, fmt.Sprintf("add %s (%s)", added.FoodName, got.DateString()))
+	b.note(op, map[string]any{"food": added.FoodName, "date": got.DateString()})
 	return opResult(op, got, added), nil
 }
 
@@ -460,7 +482,7 @@ func opSetPortions(ctx context.Context, svc Services, op changeOp, b *batch) (ma
 	}
 	b.aff.Sessions = append(b.aff.Sessions, v.ID)
 	b.aff.Dates = append(b.aff.Dates, v.CookDate.Format(time.DateOnly))
-	b.names = append(b.names, fmt.Sprintf("%s %g portions (%s)", v.FoodName, v.Portions, v.CookDate.Format(time.DateOnly)))
+	b.note(op, map[string]any{"food": v.FoodName, "date": v.CookDate.Format(time.DateOnly), "portions": v.Portions})
 	return map[string]any{"op": op.Op, "session_id": v.ID, "portions": v.Portions, "frozen_portions": v.FrozenPortions}, nil
 }
 
@@ -503,7 +525,7 @@ func opSetAvailability(ctx context.Context, svc Services, op changeOp, b *batch)
 		out["removed_plate"] = removed != nil
 	}
 	b.aff.Dates = append(b.aff.Dates, op.Date)
-	b.names = append(b.names, fmt.Sprintf("%s %s (%s)", slotKey, op.CellMode, op.Date))
+	b.note(op, map[string]any{"slot_key": slotKey, "slot_id": op.SlotID, "mode": op.CellMode, "date": op.Date})
 	after, err := svc.Cells.Override(ctx, d, op.SlotID)
 	if err != nil {
 		return nil, err
@@ -524,8 +546,8 @@ func evalWindow(ctx context.Context, svc Services, w window.Window) (planning.Ev
 // batchAfter is the combined `after` of a call: the touched plates and
 // sessions, the evaluation's days for the touched dates and the issues the
 // ops made new or resolved against before.
-func batchAfter(ctx context.Context, svc Services, w window.Window, b batch, before planning.Evaluation) (map[string]any, planning.Evaluation, error) {
-	now, err := evalWindow(ctx, svc, w)
+func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, before planning.Evaluation) (map[string]any, planning.Evaluation, error) {
+	now, err := evalWindows(ctx, svc, ws)
 	if err != nil {
 		return nil, planning.Evaluation{}, fmt.Errorf("read the plan after the change: %w", err)
 	}
@@ -537,8 +559,14 @@ func batchAfter(ctx context.Context, svc Services, w window.Window, b batch, bef
 		dates[d] = true
 	}
 	if plates, ok := out["plates"].([]effectPlate); ok {
-		for _, p := range plates {
+		for i, p := range plates {
 			dates[p.Date] = true
+			for _, pe := range now.Plates {
+				if pe.PlateID == p.ID {
+					kcal, prot := pe.Kcal, pe.ProteinG
+					plates[i].Kcal, plates[i].ProteinG, plates[i].Details = &kcal, &prot, pe.Components
+				}
+			}
 		}
 	}
 	days := []planning.DayEval{}
@@ -551,8 +579,87 @@ func batchAfter(ctx context.Context, svc Services, w window.Window, b batch, bef
 	out["meat_days"], out["meat_days_max"] = now.MeatDays, now.MeatDaysMax
 	out["issues_checked"] = true
 	delete(out, "issues_unchecked_reason")
+	// A touched date outside every evaluated window (a plate_id or session_id
+	// op that reaches past the chat window) has no figures: say so.
+	var outside []string
+	for d := range dates {
+		if !inWindows(ws, d) {
+			outside = append(outside, d)
+		}
+	}
+	if len(outside) > 0 {
+		slices.Sort(outside)
+		out["issues_checked"] = false
+		out["issues_unchecked_reason"] = "dates outside the evaluated windows: " + strings.Join(outside, ", ")
+	}
 	out["issues"] = deltaOf(issueMap(before.Issues), issueMap(now.Issues))
 	return out, now, nil
+}
+
+// opDates lists the dates the ops name (date, cook_at.date).
+func opDates(ops []changeOp) []string {
+	var out []string
+	for _, o := range ops {
+		if o.Date != "" {
+			out = append(out, o.Date)
+		}
+		if o.CookAt != nil && o.CookAt.Date != "" {
+			out = append(out, o.CookAt.Date)
+		}
+	}
+	return out
+}
+
+// windowsFor is w plus the 7-day windows (same shopping day) that contain
+// the given dates, each once.
+func windowsFor(w window.Window, dates []string) []window.Window {
+	ws := []window.Window{w}
+	for _, s := range dates {
+		d, err := time.Parse(time.DateOnly, s)
+		if err != nil || w.Contains(d) {
+			continue
+		}
+		days := int(d.Sub(w.Start).Hours() / 24)
+		k := days / 7
+		if days < 0 && days%7 != 0 {
+			k--
+		}
+		start := w.Start.AddDate(0, 0, 7*k)
+		if !slices.ContainsFunc(ws, func(x window.Window) bool { return x.Start.Equal(start) }) {
+			ws = append(ws, window.Window{Start: start, End: start.AddDate(0, 0, 6)})
+		}
+	}
+	return ws
+}
+
+func inWindows(ws []window.Window, date string) bool {
+	d, err := time.Parse(time.DateOnly, date)
+	return err == nil && slices.ContainsFunc(ws, func(w window.Window) bool { return w.Contains(d) })
+}
+
+// evalWindows evaluates the chat window and every extra window: days and
+// issues are the union, the meat figures are the chat window's.
+func evalWindows(ctx context.Context, svc Services, ws []window.Window) (planning.Evaluation, error) {
+	ev, err := evalWindow(ctx, svc, ws[0])
+	if err != nil {
+		return ev, err
+	}
+	seen := issueMap(ev.Issues)
+	for _, w := range ws[1:] {
+		more, err := evalWindow(ctx, svc, w)
+		if err != nil {
+			return ev, err
+		}
+		ev.Days = append(ev.Days, more.Days...)
+		ev.Plates = append(ev.Plates, more.Plates...)
+		for _, is := range more.Issues {
+			if _, dup := seen[issueKey(is)]; !dup {
+				ev.Issues = append(ev.Issues, is)
+				seen[issueKey(is)] = is
+			}
+		}
+	}
+	return ev, nil
 }
 
 func issueMap(issues []planning.Issue) map[string]planning.Issue {

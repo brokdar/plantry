@@ -28,6 +28,10 @@ type effectPlate struct {
 	State      string   `json:"state"`
 	Eaters     float64  `json:"eaters"`
 	Components []string `json:"components"`
+	// Per eater, from the evaluation (apply_changes `after` only).
+	Kcal     *float64                 `json:"kcal,omitempty"`
+	ProteinG *float64                 `json:"protein_g,omitempty"`
+	Details  []planning.ComponentEval `json:"component_details,omitempty"`
 }
 
 type effectSession struct {

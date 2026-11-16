@@ -314,7 +314,11 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     const runMark = await maxRunId()
     await send(page, "Make the chili 6 portions and freeze 2")
 
-    const sentence = `${chili.name} 6 portions (${monday})`
+    const [my, mm, md] = monday.split("-").map(Number)
+    const mondayName = new Intl.DateTimeFormat("en", {
+      weekday: "long",
+    }).format(new Date(my, mm - 1, md))
+    const sentence = `${chili.name}: 6 portions (${mondayName})`
     const line = panel.getByTestId("assistant-change")
     await expect(line).toHaveCount(1)
     await expect(line).toContainText(sentence)

@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -18,7 +20,7 @@ import (
 const findFoodsSchema = `{
   "type":"object",
   "properties":{
-    "ids":{"type":"array","items":{"type":"integer","minimum":1},"maxItems":100,"description":"Look these foods up by id (other filters then apply to them too)."},
+    "ids":{"type":"array","items":{"type":"integer","minimum":1},"maxItems":100,"description":"Look these foods up by id (the other filters apply to them too; unknown ids are listed in missing_ids)."},
     "roles":{"type":"array","items":{"type":"string","enum":["main","side_starch","side_veg","side_protein","sauce","drink","dessert","standalone"]}},
     "kinds":{"type":"array","items":{"type":"string","enum":["leaf","composed"]}},
     "no_cook":{"type":"boolean","description":"true: only foods that need no cooking (leaves eaten raw such as fruit, vegetables, yoghurt; recipes whose cook minutes are 0)."},
@@ -34,7 +36,7 @@ const findFoodsSchema = `{
   "additionalProperties":false
 }`
 
-const findFoodsDescription = `Find foods in the library with filters, one call for any number of lookups (roles, kinds, ids, tags, no_cook, diet, search, kcal and protein bounds). A food is a LEAF (single item with direct nutrition: apple, rice, chicken) or COMPOSED (a recipe built from child foods). Returns JSON {items:[{id, name, kind, role, diet_class (vegan|vegetarian|pescetarian|omnivore|unknown), counts_as_cooking, no_cook, per_portion:{kcal,protein,fat,carbs}, basis, portion_g?, per_100g?:{kcal,protein,fat,carbs}, nutrition_complete, missing_nutrition?:[names], keep_days?, freezable?, last_eaten?, times_cooked?, tags, favorite}], total, truncated}. Composed: per_portion is per recipe portion, keep_days (days leftovers keep), last_eaten (YYYY-MM-DD or null) and times_cooked are set. Leaf: per_portion is for a typical portion of portion_g grams, per_100g the nutrition per 100 g, and a leaf is added to a plate by amount + unit. counts_as_cooking is true for a recipe (adding it to a plate makes or joins a cooking occasion, H2) and false for a leaf; no_cook is true for foods that need no cooking. total counts the matches before limit.`
+const findFoodsDescription = `Find foods in the library with filters, one call for any number of lookups (roles, kinds, ids, tags, no_cook, diet, search, kcal and protein bounds). A food is a LEAF (single item with direct nutrition: apple, rice, chicken) or COMPOSED (a recipe built from child foods). Returns JSON {items:[{id, name, kind, role, diet_class (vegan|vegetarian|pescetarian|omnivore|unknown), counts_as_cooking, no_cook, per_portion:{kcal,protein,fat,carbs}, basis, portion_g?, per_100g?:{kcal,protein,fat,carbs}, nutrition_complete, missing_nutrition?:[names], keep_days?, freezable?, last_eaten?, times_cooked?, tags, favorite}], total, truncated, missing_ids?:[ids not found]}. A food whose nutrition cannot be resolved is still returned with nutrition_complete false and zero values. Composed: per_portion is per recipe portion, keep_days (days leftovers keep), last_eaten (YYYY-MM-DD or null) and times_cooked are set. Leaf: per_portion is for a typical portion of portion_g grams, per_100g the nutrition per 100 g, and a leaf is added to a plate by amount + unit. counts_as_cooking is true for a recipe (adding it to a plate makes or joins a cooking occasion, H2) and false for a leaf; no_cook is true for foods that need no cooking. total counts the matches before limit.`
 
 type foodsFilter struct {
 	IDs        []int64  `json:"ids"`
@@ -62,7 +64,7 @@ func toolFindFoods(svc Services) Tool {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
 			today := todayFrom(ctx)
-			foods, err := candidateFoods(ctx, svc, in, today)
+			foods, missing, err := candidateFoods(ctx, svc, in, today)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
@@ -74,18 +76,21 @@ func toolFindFoods(svc Services) Tool {
 				return nil, ToolEffectNone, err
 			}
 			foods = slices.DeleteFunc(foods, func(f *food.Food) bool { return !matchesFilter(f, in) })
-			ids := make([]int64, len(foods))
-			for i, f := range foods {
-				ids[i] = f.ID
-			}
-			macros, err := svc.NutritionResolver.PerPortionDetailedMany(ctx, ids)
-			if err != nil {
-				return nil, ToolEffectNone, fmt.Errorf("find_foods nutrition: %w", err)
+			// Macros decide the filter or the order only for kcal/protein bounds
+			// and sorts; otherwise they are resolved for the returned page alone.
+			early := in.MaxKcal != nil || in.MinProtein != nil || in.Sort == "kcal" || in.Sort == "protein"
+			var macros map[int64]food.Detailed
+			if early {
+				if macros, err = resolveMacros(ctx, svc, foods); err != nil {
+					return nil, ToolEffectNone, err
+				}
 			}
 			items := make([]foodItem, 0, len(foods))
+			byID := make(map[int64]*food.Food, len(foods))
 			for _, f := range foods {
+				byID[f.ID] = f
 				it := newFoodItem(f, macros[f.ID], keep)
-				if (in.MaxKcal != nil && it.PerPortion.Kcal > *in.MaxKcal) || (in.MinProtein != nil && it.PerPortion.Protein < *in.MinProtein) {
+				if early && ((in.MaxKcal != nil && it.PerPortion.Kcal > *in.MaxKcal) || (in.MinProtein != nil && it.PerPortion.Protein < *in.MinProtein)) {
 					continue
 				}
 				items = append(items, it)
@@ -99,24 +104,89 @@ func toolFindFoods(svc Services) Tool {
 			if len(items) > limit {
 				items = items[:limit]
 			}
-			return mustJSON(map[string]any{"items": items, "total": total, "truncated": total > len(items)}), ToolEffectNone, nil
+			if !early {
+				page := make([]*food.Food, len(items))
+				for i, it := range items {
+					page[i] = byID[it.ID]
+				}
+				if macros, err = resolveMacros(ctx, svc, page); err != nil {
+					return nil, ToolEffectNone, err
+				}
+				for i, f := range page {
+					items[i] = newFoodItem(f, macros[f.ID], keep)
+				}
+			}
+			out := map[string]any{"items": items, "total": total, "truncated": total > len(items)}
+			if len(missing) > 0 {
+				out["missing_ids"] = missing
+			}
+			return mustJSON(out), ToolEffectNone, nil
 		},
 	}
 }
 
+// resolveMacros resolves per-portion nutrition for foods. A food whose
+// nutrition cannot be resolved (cyclic or too deep recipe) comes back as an
+// incomplete zero entry so one bad recipe never sinks the call; only a
+// cancelled context fails.
+func resolveMacros(ctx context.Context, svc Services, foods []*food.Food) (map[int64]food.Detailed, error) {
+	ids := make([]int64, len(foods))
+	for i, f := range foods {
+		ids[i] = f.ID
+	}
+	macros, err := svc.NutritionResolver.PerPortionDetailedMany(ctx, ids)
+	if err == nil {
+		return macros, nil
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	macros = make(map[int64]food.Detailed, len(ids))
+	for _, id := range ids {
+		d, err := svc.NutritionResolver.PerPortionDetailed(ctx, id)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			slog.WarnContext(ctx, "find_foods nutrition failed", "food_id", id, "error", err)
+			d = food.Detailed{}
+		}
+		macros[id] = d
+	}
+	return macros, nil
+}
+
 // candidateFoods reads the foods the filter may keep: the ids, or the library
 // narrowed by what the repository filters (one kind, diet).
-func candidateFoods(ctx context.Context, svc Services, in foodsFilter, today time.Time) ([]*food.Food, error) {
+func candidateFoods(ctx context.Context, svc Services, in foodsFilter, today time.Time) (foods []*food.Food, missing []int64, err error) {
 	if len(in.IDs) > 0 {
 		out := make([]*food.Food, 0, len(in.IDs))
 		for _, id := range in.IDs {
 			f, err := svc.Foods.Get(ctx, id)
+			if errors.Is(err, domain.ErrNotFound) {
+				missing = append(missing, id)
+				continue
+			}
 			if err != nil {
-				return nil, err
+				return nil, nil, err
+			}
+			if in.Diet != "" && !diet.Compatible(f.DietClass, diet.Class(in.Diet)) {
+				continue
 			}
 			out = append(out, f)
 		}
-		return out, nil
+		if s := strings.TrimSpace(in.Search); s != "" {
+			res := &food.ListResult{Items: make([]food.Food, len(out))}
+			for i, f := range out {
+				res.Items[i] = *f
+			}
+			res = searchPage(res, s, 10000, 0)
+			out = out[:0]
+			for i := range res.Items {
+				out = append(out, &res.Items[i])
+			}
+		}
+		return out, missing, nil
 	}
 	q := food.ListQuery{Today: today, Diet: diet.Class(in.Diet), Limit: 10000}
 	if len(in.Kinds) == 1 {
@@ -124,7 +194,7 @@ func candidateFoods(ctx context.Context, svc Services, in foodsFilter, today tim
 	}
 	res, err := svc.Foods.List(ctx, q)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if s := strings.TrimSpace(in.Search); s != "" {
 		res = searchPage(res, s, 10000, 0)
@@ -133,7 +203,7 @@ func candidateFoods(ctx context.Context, svc Services, in foodsFilter, today tim
 	for i := range res.Items {
 		out[i] = &res.Items[i]
 	}
-	return out, nil
+	return out, nil, nil
 }
 
 func matchesFilter(f *food.Food, in foodsFilter) bool {

@@ -91,12 +91,15 @@ type PlateEval struct {
 // (leaf) per eater and the kcal that adds per eater. SessionID names a
 // persisted cook session, SessionKey a proposed one.
 type ComponentEval struct {
+	// ID is the persisted plate component (apply_changes plate_component_id); 0 when proposed.
+	ID       int64    `json:"plate_component_id,omitempty"`
 	FoodID   int64    `json:"food_id"`
 	Name     string   `json:"name"`
 	Role     string   `json:"role"`
 	Portions *float64 `json:"portions,omitempty"`
 	Grams    *float64 `json:"grams,omitempty"`
 	Kcal     float64  `json:"kcal"`
+	ProteinG float64  `json:"protein_g"`
 	// NutritionComplete is false when the food lacks nutrition data.
 	NutritionComplete bool   `json:"nutrition_complete"`
 	SessionID         int64  `json:"session_id,omitempty"`
@@ -127,12 +130,12 @@ func Evaluate(s State, t Target) Evaluation {
 		for _, c := range p.Components {
 			f, ok := x.food(c.FoodID)
 			ce := ComponentEval{
-				FoodID: c.FoodID, Name: f.Name, Role: string(f.Role), Portions: c.Portions, Grams: c.Grams,
+				ID: c.ID, FoodID: c.FoodID, Name: f.Name, Role: string(f.Role), Portions: c.Portions, Grams: c.Grams,
 				NutritionComplete: ok && f.NutritionComplete, SessionID: c.SessionID, SessionKey: c.SessionKey,
 			}
 			if ok {
 				m := c.Multiplier()
-				ce.Kcal = f.Macros.Kcal * m
+				ce.Kcal, ce.ProteinG = f.Macros.Kcal*m, f.Macros.Protein*m
 				pe.Kcal += ce.Kcal
 				pe.ProteinG += f.Macros.Protein * m
 			}

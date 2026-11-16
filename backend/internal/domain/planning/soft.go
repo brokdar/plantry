@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"slices"
@@ -35,6 +36,26 @@ type Option struct {
 	// a meat day.
 	CookOccasions int  `json:"cook_occasions"`
 	NewMeatDay    bool `json:"new_meat_day"`
+	// Op is the apply_changes op that applies the option as it is.
+	Op OptionOp `json:"op"`
+
+	inBand   bool
+	shareGap float64
+}
+
+// OptionOp is an option written as a valid apply_changes op: add (an
+// existing plate by plate_id, else the cell by date + slot_id; a leaf takes
+// amount + unit, a recipe portions) or set_quantity (plate_component_id).
+type OptionOp struct {
+	Op               string   `json:"op"`
+	PlateID          *int64   `json:"plate_id,omitempty"`
+	PlateComponentID *int64   `json:"plate_component_id,omitempty"`
+	FoodID           int64    `json:"food_id,omitempty"`
+	Date             string   `json:"date,omitempty"`
+	SlotID           int64    `json:"slot_id,omitempty"`
+	Portions         *float64 `json:"portions,omitempty"`
+	Amount           *float64 `json:"amount,omitempty"`
+	Unit             string   `json:"unit,omitempty"`
 }
 
 const (
@@ -81,7 +102,7 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 					with("gap_kcal", math.Round(target-d.Kcal)).
 					with("band_low_kcal", math.Round(target*KcalBandLow)).with("band_high_kcal", math.Round(target*KcalBandHigh))
 				if code == CodeKcalBelowBand {
-					is.Options = x.options(ev, t, d, day)
+					is.Options = x.options(ev, t, d, day, false)
 				}
 				out = append(out, is)
 			}
@@ -90,19 +111,22 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 			is := issue("S3", CodeProteinLow, SeveritySoft).onDate(day).
 				with("protein_pct", math.Round(d.ProteinPct*10)/10).with("target_pct", *proteinTarget).
 				with("min_pct", *proteinTarget-ProteinMarginPts)
-			is.Options = x.options(ev, t, d, day)
+			is.Options = x.options(ev, t, d, day, true)
 			out = append(out, is)
 		}
 	}
 	return out
 }
 
-// options ranks the verified ways to close day d's gap: by protein added,
-// then by how well the kcal fit the gap, at most maxOptions. An option is
-// verified by re-checking the plan with it applied: it must add no hard
-// issue (so H2 and H3 never get worse), keep the day within the kcal band
-// and, for a protein gap, not lower the protein share.
-func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time) []Option {
+// options returns the verified ways to close day d's gap, at most
+// maxOptions. An option is verified by re-checking the plan with it
+// applied: it must add no hard issue (so H2 and H3 never get worse), keep
+// the day within the kcal band, and move the day the right way: an S3
+// option (protein) must raise the day's protein share, an S2 option must
+// bring the day's kcal closer to its target. Options that bring the day into
+// the band come first, then the larger protein share gain, then the better
+// fit.
+func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time, protein bool) []Option {
 	target := 0.0
 	if d.TargetKcal != nil {
 		target = *d.TargetKcal
@@ -117,24 +141,33 @@ func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time) []Opt
 	base := hardKeys(ev.Issues)
 	cands := x.candidates(day, want)
 	slices.SortStableFunc(cands, func(a, b optCand) int {
-		if a.protein != b.protein {
-			if a.protein > b.protein {
+		return cmp.Or(cmp.Compare(b.protein, a.protein), cmp.Compare(math.Abs(want-a.kcal), math.Abs(want-b.kcal)))
+	})
+	var ok []Option
+	for i, c := range cands {
+		if i >= maxVerified {
+			break
+		}
+		if o, good := x.verify(c, t, base, d, target, protein); good {
+			ok = append(ok, o)
+		}
+	}
+	slices.SortStableFunc(ok, func(a, b Option) int {
+		if a.inBand != b.inBand {
+			if a.inBand {
 				return -1
 			}
 			return 1
 		}
-		return int(math.Abs(want-a.kcal) - math.Abs(want-b.kcal))
+		return cmp.Or(cmp.Compare(b.shareGap, a.shareGap), cmp.Compare(math.Abs(target-a.DayKcal), math.Abs(target-b.DayKcal)))
 	})
-	out := []Option{}
-	for i, c := range cands {
-		if i >= maxVerified || len(out) >= maxOptions {
-			break
-		}
-		if o, ok := x.verify(c, t, base, d, target); ok {
-			out = append(out, o)
-		}
+	if len(ok) > maxOptions {
+		ok = ok[:maxOptions]
 	}
-	return out
+	if ok == nil {
+		ok = []Option{}
+	}
+	return ok
 }
 
 // optCand is an unverified option: the plate edit and its figures.
@@ -142,9 +175,31 @@ type optCand struct {
 	opt     Option
 	plate   int // index in s.Plates
 	comp    int // component index for a raise, -1 for an add
+	compID  int64
 	add     Component
 	kcal    float64
 	protein float64
+}
+
+// op writes c as an apply_changes op.
+func (c optCand) op(plateID *int64, date string, slot int64) OptionOp {
+	o := c.opt
+	if c.comp >= 0 {
+		id := c.compID
+		op := OptionOp{Op: "set_quantity", PlateComponentID: &id, Portions: o.Portions}
+		if o.Grams != nil {
+			op.Amount, op.Unit = o.Grams, "g"
+		}
+		return op
+	}
+	op := OptionOp{Op: "add", FoodID: o.FoodID, PlateID: plateID, Portions: o.Portions}
+	if plateID == nil {
+		op.Date, op.SlotID = date, slot
+	}
+	if o.Grams != nil {
+		op.Amount, op.Unit = o.Grams, "g"
+	}
+	return op
 }
 
 func (x *index) editablePlates(day time.Time) []int {
@@ -208,7 +263,7 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 			if !ok || !f.NutritionComplete {
 				continue
 			}
-			c := optCand{plate: pi, comp: ci}
+			c := optCand{plate: pi, comp: ci, compID: comp.ID}
 			switch {
 			case comp.Portions != nil && *comp.Portions > 0:
 				n := math.Round(*comp.Portions*raiseFactor/roundPortions) * roundPortions
@@ -238,7 +293,7 @@ func (x *index) candidates(day time.Time, want float64) []optCand {
 
 // verify applies c to a copy of the plan and keeps it when the re-check
 // holds; the returned option carries the day's figures after it.
-func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, target float64) (Option, bool) {
+func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, target float64, protein bool) (Option, bool) {
 	s := x.s
 	s.Plates = slices.Clone(s.Plates)
 	p := s.Plates[c.plate]
@@ -268,15 +323,20 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 	if after.Kcal > 0 {
 		pct = after.ProteinG * proteinKcalPerG / after.Kcal * 100
 	}
-	if pct < d.ProteinPct && c.protein <= 0 {
+	if protein && pct <= d.ProteinPct {
+		return Option{}, false
+	}
+	if !protein && target > 0 && math.Abs(target-after.Kcal) >= math.Abs(target-d.Kcal) {
 		return Option{}, false
 	}
 	o := c.opt
+	o.inBand, o.shareGap = target <= 0 || after.Kcal >= target*KcalBandLow, pct-d.ProteinPct
 	o.Date, o.SlotID = p.Date.Format(time.DateOnly), p.SlotID
 	if !p.Proposed() {
 		id := p.ID
 		o.PlateID = &id
 	}
+	o.Op = c.op(o.PlateID, o.Date, o.SlotID)
 	o.KcalDelta, o.ProteinDeltaG = math.Round(c.kcal), math.Round(c.protein*10)/10
 	o.DayKcal, o.DayProteinPct = math.Round(after.Kcal), math.Round(pct*10)/10
 	o.CookOccasions = len(y.occasions[dayOf(p.Date)])

@@ -121,7 +121,7 @@ func TestApplyChanges_FailingOpRollsBackTheBatch(t *testing.T) {
 		{"op":"set_eaters","plate_id":%d,"eaters":3},
 		{"op":"set_eaters","plate_id":999999,"eaters":2}]}`, p.ID))
 	require.ErrorIs(t, err, domain.ErrNotFound)
-	assert.Contains(t, err.Error(), "op 1 (set_eaters)")
+	assert.Contains(t, err.Error(), "op 2 of 2 (set_eaters)")
 	assert.Equal(t, before, e.dbCounts())
 	got, err := e.plates.Get(context.Background(), p.ID)
 	require.NoError(t, err)

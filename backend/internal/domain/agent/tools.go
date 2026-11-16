@@ -259,7 +259,7 @@ func toolListSlots(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "list_slots",
-		Description: "List the user-defined meal time slots (breakfast, lunch, dinner, etc.). Required before creating plates — the slot_id must come from this list.",
+		Description: "List the user-defined meal time slots (breakfast, lunch, dinner, etc.). Required before creating plates — the slot_id must come from this list. Returns JSON {items:[{id, name_key, icon, sort_order, active}]}.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -288,7 +288,7 @@ func toolGetProfile(svc Services) Tool {
 	schema := json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`)
 	return Tool{
 		Name:        "get_profile",
-		Description: "Read the user's profile: kcal/macro targets, dietary restrictions, free-form preferences, and any custom system prompt.",
+		Description: "Read the user's profile: kcal/macro targets, dietary restrictions, free-form preferences, and any custom system prompt. Returns JSON {kcal_target, protein_pct, fat_pct, carbs_pct (numbers or null), dietary_restrictions:[string], preferences:{key:value}, system_prompt, locale, household_portions}.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, _ json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			p, err := svc.Profile.Get(ctx)
@@ -329,7 +329,7 @@ func toolRecordPreference(svc Services) Tool {
     }`)
 	return Tool{
 		Name:        "record_preference",
-		Description: "Persist a single preference key/value into the user's profile (e.g. 'likes_spicy'=true, 'prefers_quick_meals'=true). Overwrites existing key.",
+		Description: "Persist a single preference key/value into the user's profile (e.g. 'likes_spicy'=true, 'prefers_quick_meals'=true). Overwrites existing key. Returns JSON {recorded:true, key}.",
 		Schema:      schema,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
@@ -441,18 +441,6 @@ func defaultKeepDays(ctx context.Context, svc Services) (int, error) {
 
 func round1(v float64) float64 {
 	return math.Round(v*10) / 10
-}
-
-func plateSummary(p *plate.Plate) map[string]any {
-	comps := make([]map[string]any, len(p.Components))
-	for i := range p.Components {
-		comps[i] = plateComponentMap(&p.Components[i])
-	}
-	return map[string]any{
-		"id": p.ID, "date": p.DateString(), "slot_id": p.SlotID, "eaters": p.Eaters,
-		"note": p.Note, "state": string(p.State), "ai_run_id": p.AIRunID, "reason": p.Reason,
-		"components": comps,
-	}
 }
 
 // plateComponentMap renders a component. Quantities are per eater.

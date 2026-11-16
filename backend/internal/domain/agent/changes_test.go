@@ -46,6 +46,14 @@ func (e *planToolEnv) change(ctx context.Context, name, input string) *agent.Cha
 	return ch
 }
 
+// opsOf returns the structured ops of an apply_changes change line.
+func opsOf(ch *agent.Change) []map[string]any {
+	raw, _ := json.Marshal(ch.Params["ops"])
+	var ops []map[string]any
+	_ = json.Unmarshal(raw, &ops)
+	return ops
+}
+
 // changeOp runs one apply_changes op (old single-write tool name, old input)
 // in ctx and returns the change it recorded.
 func (e *planToolEnv) changeOp(ctx context.Context, tool, input string) *agent.Change {
@@ -84,7 +92,9 @@ func TestChange_SetSessionPortions(t *testing.T) {
 	ch := e.changeOp(ctx, "set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":6,"frozen_portions":2}`, sid))
 	assert.Equal(t, "apply_changes", ch.TextKey)
 	assert.EqualValues(t, 1, ch.Params["count"])
-	assert.Contains(t, ch.Params["summary"], "Chili 6 portions")
+	assert.Equal(t, "set_portions", opsOf(ch)[0]["op"])
+	assert.Equal(t, "Chili", opsOf(ch)[0]["food"])
+	assert.EqualValues(t, 6, opsOf(ch)[0]["portions"])
 	assert.Equal(t, []int64{sid}, ch.SessionIDs)
 	assert.True(t, ch.Undoable())
 	var rows int
@@ -152,7 +162,7 @@ func TestChange_UndoStaleAndTwice(t *testing.T) {
 
 	ch := e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
 	assert.Equal(t, "apply_changes", ch.TextKey)
-	assert.Contains(t, ch.Params["summary"], "eaters 3")
+	assert.EqualValues(t, 3, opsOf(ch)[0]["eaters"])
 	four := 4.0
 	_, err := e.plates.Update(context.Background(), p.ID, plate.PlatePatch{Eaters: &four})
 	require.NoError(t, err)
@@ -191,8 +201,8 @@ func TestChange_UndoDeletePlate(t *testing.T) {
 
 	ch := e.changeOp(ctx, "delete_plate", fmt.Sprintf(`{"plate_id":%d}`, p.ID))
 	assert.Equal(t, "apply_changes", ch.TextKey)
-	assert.Contains(t, ch.Params["summary"], p.DateString())
-	assert.Contains(t, ch.Params["summary"], "delete")
+	assert.Equal(t, p.DateString(), opsOf(ch)[0]["date"])
+	assert.Equal(t, "delete_plate", opsOf(ch)[0]["op"])
 
 	_, err := e.changes.Undo(context.Background(), ch.ID)
 	require.NoError(t, err)
@@ -249,7 +259,7 @@ func TestChange_UndoSetAvailabilityWithoutOverride(t *testing.T) {
 
 	ch := e.changeOp(ctx, "set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, d.Format("2006-01-02"), slotID))
 	assert.Equal(t, "apply_changes", ch.TextKey)
-	assert.Contains(t, ch.Params["summary"], "slot.breakfast")
+	assert.Equal(t, "slot.breakfast", opsOf(ch)[0]["slot_key"])
 	assert.Nil(t, ch.FirstEventID, "no plate was touched")
 	assert.True(t, ch.Undoable())
 
@@ -281,7 +291,7 @@ func TestChange_ConversationList(t *testing.T) {
 	assert.Equal(t, second.ID, list[1].ID)
 	assert.NotNil(t, list[1].UndoneAt)
 	assert.Equal(t, "apply_changes", list[1].TextKey)
-	assert.Contains(t, list[1].Params["summary"], "9 portions")
+	assert.EqualValues(t, 9, opsOf(&list[1])[0]["portions"])
 }
 
 // A tool call outside a chat run, or a read, records no change.

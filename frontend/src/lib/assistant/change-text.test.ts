@@ -42,6 +42,39 @@ describe("change text", () => {
     expect(line(0)).toBe("Chili: 6 portions")
   })
 
+  it("composes an apply_changes line from structured ops, capped at three", () => {
+    const t = i18next.t.bind(i18next)
+    const ops = [
+      { op: "add", food: "Gurke", date: "2026-11-03" },
+      {
+        op: "set_availability",
+        slot_key: "slot.dinner",
+        mode: "none",
+        date: "2026-11-04",
+      },
+      { op: "set_portions", food: "Chili", portions: 6, date: "2026-11-05" },
+      { op: "remove", food: "Reis", date: "2026-11-06" },
+    ]
+    const line = changeSentence(
+      t,
+      i18next,
+      mockChange({ text_key: "apply_changes", params: { count: 4, ops } })
+    )
+    expect(line).toBe(
+      "4 changes: add Gurke (Tuesday); dinner: no plate (Wednesday); Chili: 6 portions (Thursday); +1 more"
+    )
+    expect(
+      changeSentence(
+        t,
+        i18next,
+        mockChange({
+          text_key: "apply_changes",
+          params: { count: 1, summary: "Chili 6 portions (2026-11-03)" },
+        })
+      )
+    ).toBe("Chili 6 portions (2026-11-03)")
+  })
+
   it("renders dates as weekdays and slots by name", () => {
     const t = i18next.t.bind(i18next)
     expect(
