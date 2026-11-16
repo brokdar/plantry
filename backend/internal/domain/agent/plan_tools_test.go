@@ -3,7 +3,6 @@ package agent_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/agent"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
@@ -38,27 +38,24 @@ func TestToolGetPlan_MatchesPlanReadModel(t *testing.T) {
 	rice := insert(`INSERT INTO foods (name, kind, source) VALUES ('Rice', 'leaf', 'manual')`)
 	chili := insert(`INSERT INTO foods (name, kind, role, reference_portions) VALUES ('Chili', 'composed', 'main', 4)`)
 	planView := testsvc.PlanView(db)
+	plates := testsvc.Plates(db)
 	ts, err := agent.NewToolSet(agent.Services{
 		Foods:    food.NewService(sqlite.NewFoodRepo(db)),
-		Plates:   testsvc.Plates(db),
+		Plates:   plates,
 		Profile:  profile.NewService(sqlite.NewProfileRepo(db)),
 		Slots:    slot.NewService(sqlite.NewSlotRepo(db)),
 		PlanView: planView,
 	})
 	require.NoError(t, err)
 
-	exec := func(name, input string) json.RawMessage {
-		t.Helper()
-		out, _, _, err := ts.Execute(ctx, name, json.RawMessage(input))
-		require.NoError(t, err)
-		return out
-	}
-	var created struct {
-		ID int64 `json:"id"`
-	}
-	require.NoError(t, json.Unmarshal(exec("create_plate", fmt.Sprintf(`{"date":"2026-11-03","slot_id":%d}`, dinner)), &created))
-	exec("add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":150,"unit":"g"}`, created.ID, rice))
-	exec("add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"portions":1}`, created.ID, chili))
+	_, err = plates.Create(ctx, plate.PlateInput{
+		Date: time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC), SlotID: dinner,
+		Components: []plate.PlateComponent{
+			{FoodID: rice, Amount: ptrF(150), Unit: ptrS("g")},
+			{FoodID: chili, Portions: ptrF(1)},
+		},
+	})
+	require.NoError(t, err)
 
 	start := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
 	today := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)

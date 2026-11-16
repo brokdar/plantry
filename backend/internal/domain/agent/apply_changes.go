@@ -89,7 +89,7 @@ type changeOp struct {
 	} `json:"cook_at"`
 	FrozenPortions *float64 `json:"frozen_portions"`
 	Eaters         *float64 `json:"eaters"`
-	Mode           string   `json:"mode"`
+	CellMode       string   `json:"mode"`
 	PresetID       *int64   `json:"preset_id"`
 	Note           *string  `json:"note"`
 }
@@ -264,7 +264,7 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		}
 		b.plate(p)
 		b.names = append(b.names, "new plate "+p.DateString())
-		return map[string]any{"op": op.Op, "plate_id": p.ID, "date": p.DateString(), "slot_id": p.SlotID}, nil
+		return map[string]any{"op": op.Op, "plate_id": p.ID, "date": p.DateString(), "slot_id": p.SlotID, "eaters": p.Eaters}, nil
 	case "delete_plate":
 		p, err := svc.Plates.Get(ctx, op.PlateID)
 		if err != nil {
@@ -316,6 +316,7 @@ func opResult(op changeOp, p *plate.Plate, pc *plate.PlateComponent) map[string]
 	out := plateComponentMap(pc)
 	out["op"] = op.Op
 	out["plate_id"] = p.ID
+	out["plate_component_id"] = pc.ID
 	return out
 }
 
@@ -474,7 +475,7 @@ func opSetAvailability(ctx context.Context, svc Services, op changeOp, b *batch)
 	if err := guardDate(ctx, d); err != nil {
 		return nil, err
 	}
-	if op.Mode == "" || op.SlotID == 0 {
+	if op.CellMode == "" || op.SlotID == 0 {
 		return nil, fmt.Errorf("%w: set_availability needs date, slot_id and mode", domain.ErrInvalidInput)
 	}
 	before, err := svc.Cells.Override(ctx, d, op.SlotID)
@@ -485,13 +486,13 @@ func opSetAvailability(ctx context.Context, svc Services, op changeOp, b *batch)
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"op": op.Op, "date": op.Date, "slot_id": op.SlotID, "mode": op.Mode, "removed_plate": false}
-	if op.Mode == availabilityDefault {
+	out := map[string]any{"op": op.Op, "date": op.Date, "slot_id": op.SlotID, "mode": op.CellMode, "removed_plate": false}
+	if op.CellMode == availabilityDefault {
 		if err := svc.Cells.ClearOverride(ctx, d, op.SlotID); err != nil {
 			return nil, err
 		}
 	} else {
-		mode := availability.Mode(op.Mode)
+		mode := availability.Mode(op.CellMode)
 		_, removed, err := svc.Cells.SetOverride(ctx, availability.OverrideInput{
 			Date: d, SlotID: op.SlotID, Mode: mode, PresetID: op.PresetID, Note: op.Note,
 			RemovePlate: mode == availability.ModeNone,
@@ -502,7 +503,7 @@ func opSetAvailability(ctx context.Context, svc Services, op changeOp, b *batch)
 		out["removed_plate"] = removed != nil
 	}
 	b.aff.Dates = append(b.aff.Dates, op.Date)
-	b.names = append(b.names, fmt.Sprintf("%s %s (%s)", slotKey, op.Mode, op.Date))
+	b.names = append(b.names, fmt.Sprintf("%s %s (%s)", slotKey, op.CellMode, op.Date))
 	after, err := svc.Cells.Override(ctx, d, op.SlotID)
 	if err != nil {
 		return nil, err

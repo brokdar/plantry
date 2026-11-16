@@ -4,6 +4,7 @@
 package testsvc
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
 // Plan returns the plate and availability services over db, wired to each
@@ -108,5 +110,14 @@ func PlanningDeps(db *sql.DB) planning.Deps {
 		Plates: plates, PlateRows: sqlite.NewPlateRepo(db), Sessions: sqlite.NewCookSessionRepo(db), Cells: avail, Overrides: avail, FoodRows: foods, Settings: set,
 		Tx: sqlite.NewTxRunner(db), Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{airun.ChooserHeuristic: planning.Heuristic{}},
+	}
+}
+
+// PlanState reads the planning state of a window like the agent's
+// Services.State in main.go.
+func PlanState(db *sql.DB) func(ctx context.Context, w window.Window, today time.Time) (planning.State, error) {
+	b := PlanningDeps(db).Builder
+	return func(ctx context.Context, w window.Window, today time.Time) (planning.State, error) {
+		return b.Build(ctx, w, today, w.Start, w.End)
 	}
 }

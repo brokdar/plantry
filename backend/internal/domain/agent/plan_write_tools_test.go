@@ -101,6 +101,7 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 		Slots: slot.NewService(sqlite.NewSlotRepo(db)), Settings: set,
 		PlanView: testsvc.PlanView(db), Planner: e.planner, Cells: e.avail,
 		Changes: sqlite.NewAIChangeRepo(db),
+		State:   testsvc.PlanState(db), Tx: sqlite.NewTxRunner(db),
 	})
 	require.NoError(t, err)
 	e.changes = testsvc.Changes(db, e.plates, e.avail)
@@ -138,6 +139,24 @@ func (e *planToolEnv) exec(name, input string) (map[string]any, error) {
 	var m map[string]any
 	require.NoError(e.t, json.Unmarshal(out, &m))
 	return m, nil
+}
+
+// op runs one apply_changes op (old single-write tool name, old input) and
+// returns the op's applied entry.
+func (e *planToolEnv) op(tool, input string) (map[string]any, error) {
+	e.t.Helper()
+	m, err := e.exec("apply_changes", applyJSON(e.t, oldToolOps[tool], input))
+	if err != nil {
+		return nil, err
+	}
+	return firstApplied(e.t, m), nil
+}
+
+func (e *planToolEnv) mustOp(tool, input string) map[string]any {
+	e.t.Helper()
+	m, err := e.op(tool, input)
+	require.NoError(e.t, err)
+	return m
 }
 
 func (e *planToolEnv) mustExec(name, input string) map[string]any {
@@ -197,28 +216,29 @@ func TestTool_SetSessionPortions(t *testing.T) {
 	e := newPlanToolEnv(t)
 	_, id := e.mainSession()
 
-	out := e.mustExec("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":6,"frozen_portions":2}`, id))
+	out := e.mustOp("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":6,"frozen_portions":2}`, id))
 	assert.Equal(t, 6.0, out["portions"])
 	assert.Equal(t, 2.0, out["frozen_portions"])
-	assert.Equal(t, "draft", out["state"])
-	assert.Contains(t, out, "consumed")
-	assert.Contains(t, out, "warnings")
+	s0 := out["after"].(map[string]any)["sessions"].([]any)[0].(map[string]any)
+	assert.Equal(t, "draft", s0["state"])
+	assert.Contains(t, s0, "consumed")
+	assert.Contains(t, s0, "warnings")
 	v := e.session(id)
 	assert.InDelta(t, 6.0, v.Portions, 1e-9)
 	assert.InDelta(t, 2.0, v.FrozenPortions, 1e-9)
 	assert.Equal(t, plate.StateDraft, v.State)
 
-	e.mustExec("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":7}`, id))
+	e.mustOp("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":7}`, id))
 	assert.InDelta(t, 2.0, e.session(id).FrozenPortions, 1e-9, "omitted frozen_portions keeps the frozen portions")
 
 	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.freezing_enabled", "false"))
-	_, err := e.exec("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":6,"frozen_portions":3}`, id))
+	_, err := e.op("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":6,"frozen_portions":3}`, id))
 	require.ErrorIs(t, err, domain.ErrSessionFreezingDisabled)
 	key, _ := domain.MessageKey(err, "plate")
 	assert.Equal(t, "error.session.freezing_disabled", key)
 	assert.InDelta(t, 7.0, e.session(id).Portions, 1e-9, "a rejected call writes nothing")
 
-	_, err = e.exec("set_session_portions", `{"session_id":999999,"portions":6}`)
+	_, err = e.op("set_session_portions", `{"session_id":999999,"portions":6}`)
 	assert.ErrorIs(t, err, domain.ErrNotFound)
 }
 
@@ -351,7 +371,7 @@ func TestTool_SetAvailability(t *testing.T) {
 	_, err := e.plates.Confirm(ctx, plate.RowSet{PlateIDs: []int64{confirmed.ID}})
 	require.NoError(t, err)
 
-	out := e.mustExec("set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none","note":"eating out"}`, draft.DateString(), draft.SlotID))
+	out := e.mustOp("set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none","note":"eating out"}`, draft.DateString(), draft.SlotID))
 	assert.Equal(t, true, out["removed_plate"])
 	_, err = e.plates.Get(ctx, draft.ID)
 	assert.ErrorIs(t, err, domain.ErrNotFound, "none removes the draft plate")
@@ -364,7 +384,7 @@ func TestTool_SetAvailability(t *testing.T) {
 		return *p, err
 	}()
 	require.NoError(t, err)
-	_, err = e.exec("set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, confirmed.DateString(), confirmed.SlotID))
+	_, err = e.op("set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, confirmed.DateString(), confirmed.SlotID))
 	require.ErrorIs(t, err, domain.ErrRowConfirmed)
 	_, err = e.plates.Get(ctx, confirmed.ID)
 	assert.NoError(t, err, "the confirmed plate stays")
@@ -372,12 +392,12 @@ func TestTool_SetAvailability(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, availability.ModePlan, mode, "nothing was written")
 
-	e.mustExec("set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"default"}`, draft.DateString(), draft.SlotID))
+	e.mustOp("set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"default"}`, draft.DateString(), draft.SlotID))
 	mode, err = e.avail.ModeAt(ctx, draft.Date, draft.SlotID)
 	require.NoError(t, err)
 	assert.Equal(t, availability.ModePlan, mode, "default clears the override")
 
-	_, err = e.exec("set_availability", fmt.Sprintf(`{"date":"2026-11-05","slot_id":%d,"mode":"none"}`, draft.SlotID))
+	_, err = e.op("set_availability", fmt.Sprintf(`{"date":"2026-11-05","slot_id":%d,"mode":"none"}`, draft.SlotID))
 	assert.ErrorIs(t, err, domain.ErrAIPastDate)
 }
 
@@ -389,8 +409,8 @@ func TestTool_ConfirmAndSetPlateEaters(t *testing.T) {
 
 	// D11: a session that covers its links exactly keeps covering them.
 	v := e.session(sid)
-	e.mustExec("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":%v}`, sid, v.Consumed))
-	out := e.mustExec("set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
+	e.mustOp("set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":%v}`, sid, v.Consumed))
+	out := e.mustOp("set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
 	assert.Equal(t, 3.0, out["eaters"])
 	got, err := e.plates.Get(ctx, p.ID)
 	require.NoError(t, err)
@@ -417,7 +437,7 @@ func TestTool_ConfirmAndSetPlateEaters(t *testing.T) {
 	assert.ErrorIs(t, err, domain.ErrInvalidInput, "one id is required")
 	_, err = e.exec("confirm", fmt.Sprintf(`{"plate_id":%d,"session_id":%d}`, p.ID, sid))
 	assert.ErrorIs(t, err, domain.ErrInvalidInput, "only one id")
-	_, err = e.exec("set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
+	_, err = e.op("set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
 	assert.ErrorIs(t, err, domain.ErrRowConfirmed, "a confirmed plate is guarded")
 }
 

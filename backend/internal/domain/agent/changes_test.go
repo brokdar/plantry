@@ -46,6 +46,13 @@ func (e *planToolEnv) change(ctx context.Context, name, input string) *agent.Cha
 	return ch
 }
 
+// changeOp runs one apply_changes op (old single-write tool name, old input)
+// in ctx and returns the change it recorded.
+func (e *planToolEnv) changeOp(ctx context.Context, tool, input string) *agent.Change {
+	e.t.Helper()
+	return e.change(ctx, "apply_changes", applyJSON(e.t, oldToolOps[tool], input))
+}
+
 func (e *planToolEnv) eventCount() int {
 	e.t.Helper()
 	evs, err := sqlite.NewPlateEventRepo(e.db).List(context.Background())
@@ -74,15 +81,14 @@ func TestChange_SetSessionPortions(t *testing.T) {
 	sid := e.sessionNamed("Chili")
 	before := e.session(sid)
 
-	ch := e.change(ctx, "set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":6,"frozen_portions":2}`, sid))
-	assert.Equal(t, "set_session_portions", ch.TextKey)
-	assert.Equal(t, "Chili", ch.Params["name"])
-	assert.Equal(t, 6.0, ch.Params["portions"])
-	assert.Equal(t, 2.0, ch.Params["frozen"])
+	ch := e.changeOp(ctx, "set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":6,"frozen_portions":2}`, sid))
+	assert.Equal(t, "apply_changes", ch.TextKey)
+	assert.EqualValues(t, 1, ch.Params["count"])
+	assert.Contains(t, ch.Params["summary"], "Chili 6 portions")
 	assert.Equal(t, []int64{sid}, ch.SessionIDs)
 	assert.True(t, ch.Undoable())
 	var rows int
-	require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM ai_changes WHERE text_key = 'set_session_portions'`).Scan(&rows))
+	require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM ai_changes WHERE text_key = 'apply_changes'`).Scan(&rows))
 	assert.Equal(t, 1, rows, "one ai_changes row")
 
 	n := e.eventCount()
@@ -144,9 +150,9 @@ func TestChange_UndoStaleAndTwice(t *testing.T) {
 	ctx, _ := e.chat()
 	p, _ := e.mainSession()
 
-	ch := e.change(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
-	assert.Equal(t, "set_plate_eaters", ch.TextKey)
-	assert.Equal(t, 3.0, ch.Params["eaters"])
+	ch := e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
+	assert.Equal(t, "apply_changes", ch.TextKey)
+	assert.Contains(t, ch.Params["summary"], "eaters 3")
 	four := 4.0
 	_, err := e.plates.Update(context.Background(), p.ID, plate.PlatePatch{Eaters: &four})
 	require.NoError(t, err)
@@ -161,7 +167,7 @@ func TestChange_UndoStaleAndTwice(t *testing.T) {
 	require.NoError(t, err)
 	assert.InDelta(t, 4.0, got.Eaters, 1e-9)
 
-	ch2 := e.change(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
+	ch2 := e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":2}`, p.ID))
 	_, err = e.changes.Undo(context.Background(), ch2.ID)
 	require.NoError(t, err)
 	got, err = e.plates.Get(context.Background(), p.ID)
@@ -183,10 +189,10 @@ func TestChange_UndoDeletePlate(t *testing.T) {
 	p, _ := e.mainSession()
 	require.NotNil(t, p.AIRunID)
 
-	ch := e.change(ctx, "delete_plate", fmt.Sprintf(`{"plate_id":%d}`, p.ID))
-	assert.Equal(t, "delete_plate", ch.TextKey)
-	assert.Equal(t, p.DateString(), ch.Params["date"])
-	assert.NotEmpty(t, ch.Params["name"])
+	ch := e.changeOp(ctx, "delete_plate", fmt.Sprintf(`{"plate_id":%d}`, p.ID))
+	assert.Equal(t, "apply_changes", ch.TextKey)
+	assert.Contains(t, ch.Params["summary"], p.DateString())
+	assert.Contains(t, ch.Params["summary"], "delete")
 
 	_, err := e.changes.Undo(context.Background(), ch.ID)
 	require.NoError(t, err)
@@ -210,8 +216,8 @@ func TestChange_UndoSetAvailabilityNone(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, beforeOverride)
 
-	ch := e.change(ctx, "set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, p.DateString(), p.SlotID))
-	assert.Equal(t, "set_availability_none", ch.TextKey)
+	ch := e.changeOp(ctx, "set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, p.DateString(), p.SlotID))
+	assert.Equal(t, "apply_changes", ch.TextKey)
 	require.NotNil(t, ch.CellBefore)
 	assert.Contains(t, ch.PlateIDs, p.ID, "the removed draft plate is part of the change")
 
@@ -241,9 +247,9 @@ func TestChange_UndoSetAvailabilityWithoutOverride(t *testing.T) {
 		}
 	}
 
-	ch := e.change(ctx, "set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, d.Format("2006-01-02"), slotID))
-	assert.Equal(t, "set_availability_none", ch.TextKey)
-	assert.Equal(t, "slot.breakfast", ch.Params["slot"])
+	ch := e.changeOp(ctx, "set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, d.Format("2006-01-02"), slotID))
+	assert.Equal(t, "apply_changes", ch.TextKey)
+	assert.Contains(t, ch.Params["summary"], "slot.breakfast")
 	assert.Nil(t, ch.FirstEventID, "no plate was touched")
 	assert.True(t, ch.Undoable())
 
@@ -260,12 +266,12 @@ func TestChange_ConversationList(t *testing.T) {
 	e := newPlanToolEnv(t)
 	ctx, conv := e.chat()
 	p, sid := e.mainSession()
-	first := e.change(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
-	second := e.change(ctx, "set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":9}`, sid))
+	first := e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
+	second := e.changeOp(ctx, "set_session_portions", fmt.Sprintf(`{"session_id":%d,"portions":9}`, sid))
 	_, err := e.changes.Undo(context.Background(), second.ID)
 	require.NoError(t, err)
 	other, _ := e.chat()
-	e.change(other, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":5}`, p.ID))
+	e.changeOp(other, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":5}`, p.ID))
 
 	list, err := e.changes.List(context.Background(), conv)
 	require.NoError(t, err)
@@ -274,15 +280,15 @@ func TestChange_ConversationList(t *testing.T) {
 	assert.Nil(t, list[0].UndoneAt)
 	assert.Equal(t, second.ID, list[1].ID)
 	assert.NotNil(t, list[1].UndoneAt)
-	assert.Equal(t, "set_session_portions", list[1].TextKey)
-	assert.Equal(t, 9.0, list[1].Params["portions"])
+	assert.Equal(t, "apply_changes", list[1].TextKey)
+	assert.Contains(t, list[1].Params["summary"], "9 portions")
 }
 
 // A tool call outside a chat run, or a read, records no change.
 func TestChange_OnlyPlanWritesOfARun(t *testing.T) {
 	e := newPlanToolEnv(t)
 	p, _ := e.mainSession()
-	_, _, ch, err := e.ts.Execute(e.ctx, "set_plate_eaters", json.RawMessage(fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID)))
+	_, _, ch, err := e.ts.Execute(e.ctx, "apply_changes", json.RawMessage(applyJSON(t, "set_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))))
 	require.NoError(t, err)
 	assert.Nil(t, ch, "no run: no change")
 
@@ -290,7 +296,7 @@ func TestChange_OnlyPlanWritesOfARun(t *testing.T) {
 	_, _, ch, err = e.ts.Execute(ctx, "get_plan", json.RawMessage(`{}`))
 	require.NoError(t, err)
 	assert.Nil(t, ch, "a read is no change")
-	_, _, ch, err = e.ts.Execute(ctx, "set_plate_eaters", json.RawMessage(`{"plate_id":999999,"eaters":3}`))
+	_, _, ch, err = e.ts.Execute(ctx, "apply_changes", json.RawMessage(applyJSON(t, "set_eaters", `{"plate_id":999999,"eaters":3}`)))
 	require.Error(t, err)
 	assert.Nil(t, ch, "a failed call is no change")
 }
@@ -322,7 +328,7 @@ func TestChange_ChatStreamsChangeEvent(t *testing.T) {
 	client := fake.NewFromScript(&fake.Script{Turns: []fake.Turn{
 		{StopReason: "tool_use", Message: fake.ScriptedMessage{Content: []fake.ScriptedBlock{
 			{Type: "tool_use", ToolUseID: "tu_0", ToolName: "get_plan", ToolInput: json.RawMessage(`{}`)},
-			{Type: "tool_use", ToolUseID: "tu_1", ToolName: "set_plate_eaters", ToolInput: json.RawMessage(fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))},
+			{Type: "tool_use", ToolUseID: "tu_1", ToolName: "apply_changes", ToolInput: json.RawMessage(applyJSON(t, "set_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID)))},
 		}}},
 		endTurn(fake.ScriptedUsage{}),
 	}})
@@ -347,8 +353,8 @@ func TestChange_ChatStreamsChangeEvent(t *testing.T) {
 	c := changes[0]
 	assert.NotZero(t, c.ID)
 	assert.NotZero(t, c.RunID)
-	assert.Equal(t, "set_plate_eaters", c.Tool)
-	assert.Equal(t, "set_plate_eaters", c.TextKey)
+	assert.Equal(t, "apply_changes", c.Tool)
+	assert.Equal(t, "apply_changes", c.TextKey)
 	assert.Contains(t, c.Dates, p.DateString())
 	assert.Contains(t, c.PlateIDs, p.ID)
 	assert.True(t, c.Undoable)
@@ -387,7 +393,7 @@ func TestChange_UndoBlockedWhenConfirmed(t *testing.T) {
 	e := newPlanToolEnv(t)
 	ctx, conv := e.chat()
 	p, _ := e.mainSession()
-	ch := e.change(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
+	ch := e.changeOp(ctx, "set_plate_eaters", fmt.Sprintf(`{"plate_id":%d,"eaters":3}`, p.ID))
 
 	list, err := e.changes.List(context.Background(), conv)
 	require.NoError(t, err)

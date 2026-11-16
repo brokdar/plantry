@@ -24,6 +24,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
@@ -42,7 +43,7 @@ type plateToolEnv struct {
 
 func newPlateToolEnv(t *testing.T) *plateToolEnv {
 	t.Helper()
-	ctx := agent.WithToday(context.Background(), toolToday)
+	ctx := agent.WithWindow(agent.WithToday(context.Background(), toolToday), window.Window{Start: toolToday.AddDate(0, 0, 1), End: toolToday.AddDate(0, 0, 7)})
 	db := testhelper.NewTestDB(t)
 	insert := func(q string) int64 {
 		res, err := db.ExecContext(ctx, q)
@@ -59,13 +60,34 @@ func newPlateToolEnv(t *testing.T) *plateToolEnv {
 	require.NoError(t, err)
 	e.plates = testsvc.Plates(db)
 	e.ts, err = agent.NewToolSet(agent.Services{
-		Foods:   food.NewService(sqlite.NewFoodRepo(db)),
-		Plates:  e.plates,
-		Profile: profile.NewService(sqlite.NewProfileRepo(db)),
-		Slots:   slot.NewService(sqlite.NewSlotRepo(db)),
+		Foods:    food.NewService(sqlite.NewFoodRepo(db)),
+		Plates:   e.plates,
+		Profile:  profile.NewService(sqlite.NewProfileRepo(db)),
+		Slots:    slot.NewService(sqlite.NewSlotRepo(db)),
+		PlanView: testsvc.PlanView(db),
+		State:    testsvc.PlanState(db),
+		Tx:       sqlite.NewTxRunner(db),
 	})
 	require.NoError(t, err)
 	return e
+}
+
+// op runs one apply_changes op (old single-write tool name, old input) and
+// returns the op's applied entry.
+func (e *plateToolEnv) op(t *testing.T, tool, input string) (map[string]any, error) {
+	t.Helper()
+	m, err := e.exec(t, "apply_changes", applyJSON(t, oldToolOps[tool], input))
+	if err != nil {
+		return nil, err
+	}
+	return firstApplied(t, m), nil
+}
+
+func (e *plateToolEnv) mustOp(t *testing.T, tool, input string) map[string]any {
+	t.Helper()
+	m, err := e.op(t, tool, input)
+	require.NoError(t, err)
+	return m
 }
 
 func (e *plateToolEnv) exec(t *testing.T, name, input string) (map[string]any, error) {
@@ -88,8 +110,8 @@ func (e *plateToolEnv) mustExec(t *testing.T, name, input string) map[string]any
 
 func (e *plateToolEnv) newPlate(t *testing.T) int64 {
 	t.Helper()
-	p := e.mustExec(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d}`, e.slotID))
-	return int64(p["id"].(float64))
+	p := e.mustOp(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d}`, e.slotID))
+	return int64(p["plate_id"].(float64))
 }
 
 // B2-AC5
@@ -97,13 +119,13 @@ func TestTool_AddFoodToPlate_TakesPerEaterQuantities(t *testing.T) {
 	e := newPlateToolEnv(t)
 	plateID := e.newPlate(t)
 
-	leaf := e.mustExec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":150,"unit":"g"}`, plateID, e.rice))
+	leaf := e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":150,"unit":"g"}`, plateID, e.rice))
 	assert.Equal(t, 150.0, leaf["amount"])
 	assert.Equal(t, "g", leaf["unit"])
 	assert.Equal(t, 150.0, leaf["grams"], "150 g, not portions × 100 g")
 	assert.NotContains(t, leaf, "cook_session_id")
 
-	composed := e.mustExec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"portions":1.5}`, plateID, e.chili))
+	composed := e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"portions":1.5}`, plateID, e.chili))
 	assert.Equal(t, 1.5, composed["portions"])
 	require.Contains(t, composed, "cook_session_id")
 
@@ -123,7 +145,7 @@ func TestTool_AddFoodToPlate_TakesPerEaterQuantities(t *testing.T) {
 		"composed with amount": fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":150,"unit":"g"}`, plateID, e.chili),
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := e.exec(t, "add_food_to_plate", input)
+			_, err := e.op(t, "add_food_to_plate", input)
 			assert.ErrorIs(t, err, domain.ErrInvalidInput)
 		})
 	}
@@ -135,30 +157,30 @@ func TestTool_AddFoodToPlate_TakesPerEaterQuantities(t *testing.T) {
 func TestTool_UpdatePlateComponent_TakesPerEaterQuantities(t *testing.T) {
 	e := newPlateToolEnv(t)
 	plateID := e.newPlate(t)
-	leaf := e.mustExec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":100,"unit":"g"}`, plateID, e.rice))
-	composed := e.mustExec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d}`, plateID, e.chili))
+	leaf := e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":100,"unit":"g"}`, plateID, e.rice))
+	composed := e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d}`, plateID, e.chili))
 	assert.Equal(t, 1.0, composed["portions"], "portions default to 1 per eater")
 
-	got := e.mustExec(t, "update_plate_component", fmt.Sprintf(`{"plate_component_id":%v,"amount":80,"unit":"g"}`, leaf["id"]))
+	got := e.mustOp(t, "update_plate_component", fmt.Sprintf(`{"plate_component_id":%v,"amount":80,"unit":"g"}`, leaf["plate_component_id"]))
 	assert.Equal(t, 80.0, got["grams"])
-	got = e.mustExec(t, "update_plate_component", fmt.Sprintf(`{"plate_component_id":%v,"portions":0.5}`, composed["id"]))
+	got = e.mustOp(t, "update_plate_component", fmt.Sprintf(`{"plate_component_id":%v,"portions":0.5}`, composed["plate_component_id"]))
 	assert.Equal(t, 0.5, got["portions"])
 
-	_, err := e.exec(t, "update_plate_component", fmt.Sprintf(`{"plate_component_id":%v}`, composed["id"]))
+	_, err := e.op(t, "update_plate_component", fmt.Sprintf(`{"plate_component_id":%v}`, composed["plate_component_id"]))
 	assert.ErrorIs(t, err, domain.ErrInvalidInput, "a quantity is required")
-	_, err = e.exec(t, "update_plate_component", fmt.Sprintf(`{"plate_component_id":%v,"portions":2}`, leaf["id"]))
+	_, err = e.op(t, "update_plate_component", fmt.Sprintf(`{"plate_component_id":%v,"portions":2}`, leaf["plate_component_id"]))
 	assert.ErrorIs(t, err, domain.ErrInvalidInput, "a leaf takes amount + unit")
 }
 
 func TestTool_SwapFood_TakesPerEaterQuantities(t *testing.T) {
 	e := newPlateToolEnv(t)
 	plateID := e.newPlate(t)
-	composed := e.mustExec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d}`, plateID, e.chili))
+	composed := e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d}`, plateID, e.chili))
 
-	_, err := e.exec(t, "swap_food", fmt.Sprintf(`{"plate_component_id":%v,"new_food_id":%d}`, composed["id"], e.rice))
+	_, err := e.op(t, "swap_food", fmt.Sprintf(`{"plate_component_id":%v,"new_food_id":%d}`, composed["plate_component_id"], e.rice))
 	assert.ErrorIs(t, err, domain.ErrInvalidInput, "portions do not fit a leaf")
 
-	got := e.mustExec(t, "swap_food", fmt.Sprintf(`{"plate_component_id":%v,"new_food_id":%d,"amount":120,"unit":"g"}`, composed["id"], e.rice))
+	got := e.mustOp(t, "swap_food", fmt.Sprintf(`{"plate_component_id":%v,"new_food_id":%d,"amount":120,"unit":"g"}`, composed["plate_component_id"], e.rice))
 	assert.Equal(t, float64(e.rice), got["food_id"])
 	assert.Equal(t, 120.0, got["grams"])
 	assert.NotContains(t, got, "cook_session_id")
@@ -166,25 +188,36 @@ func TestTool_SwapFood_TakesPerEaterQuantities(t *testing.T) {
 
 func TestTool_CreatePlate_EatersAndPlateSummary(t *testing.T) {
 	e := newPlateToolEnv(t)
-	p := e.mustExec(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d,"eaters":3}`, e.slotID))
+	p := e.mustOp(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d,"eaters":3}`, e.slotID))
 	assert.Equal(t, 3.0, p["eaters"])
-	e.mustExec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%v,"food_id":%d}`, p["id"], e.chili))
-	defaulted := e.mustExec(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-03","slot_id":%d}`, e.slotID))
+	e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%v,"food_id":%d}`, p["plate_id"], e.chili))
+	defaulted := e.mustOp(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-03","slot_id":%d}`, e.slotID))
 	assert.Equal(t, 2.0, defaulted["eaters"], "eaters default to the household")
 
-	_, err := e.exec(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-04","slot_id":%d,"eaters":0}`, e.slotID))
+	_, err := e.op(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-04","slot_id":%d,"eaters":0}`, e.slotID))
 	assert.ErrorIs(t, err, domain.ErrInvalidInput)
-	_, err = e.exec(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-04","slot_id":%d,"eaters":21}`, e.slotID))
+	_, err = e.op(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-04","slot_id":%d,"eaters":21}`, e.slotID))
 	assert.ErrorIs(t, err, domain.ErrInvalidInput)
 
-	got := e.mustExec(t, "get_plates_range", `{"from":"2026-11-02","to":"2026-11-03"}`)
-	plates := got["plates"].([]any)
+	got := e.mustExec(t, "get_plan", `{"from":"2026-11-02","to":"2026-11-03"}`)
+	plates := platesOf(got)
 	require.Len(t, plates, 2)
-	first := plates[0].(map[string]any)
+	first := plates[0]
 	assert.Equal(t, 3.0, first["eaters"])
 	comp := first["components"].([]any)[0].(map[string]any)
-	assert.Contains(t, comp, "cook_session_id")
+	assert.Contains(t, comp, "session_id")
 	assert.Equal(t, 1.0, comp["portions"])
+}
+
+// platesOf returns the plates of a get_plan result's cells.
+func platesOf(plan map[string]any) []map[string]any {
+	var out []map[string]any
+	for _, c := range plan["cells"].([]any) {
+		if p, ok := c.(map[string]any)["plate"].(map[string]any); ok {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func TestTool_GetProfile_HasHouseholdPortions(t *testing.T) {
@@ -196,7 +229,7 @@ func TestTool_GetProfile_HasHouseholdPortions(t *testing.T) {
 func TestPrompt_SaysPortionsPerEater(t *testing.T) {
 	prompt := agent.ComposePrompt(nil, "", time.Time{})
 	assert.Contains(t, prompt, "portions per eater")
-	assert.Equal(t, "v7", agent.PromptVersion)
+	assert.Equal(t, "v8", agent.PromptVersion)
 }
 
 // B2-AC6: the chat modes and week ids are gone from the agent package.
@@ -242,10 +275,10 @@ var toolToday = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 // B2-AC3 (D7): the agent never writes a day before today.
 func TestTool_PastDateGuard(t *testing.T) {
 	e := newPlateToolEnv(t)
-	_, err := e.exec(t, "create_plate", fmt.Sprintf(`{"date":"2026-10-31","slot_id":%d}`, e.slotID))
+	_, err := e.op(t, "create_plate", fmt.Sprintf(`{"date":"2026-10-31","slot_id":%d}`, e.slotID))
 	require.ErrorIs(t, err, domain.ErrAIPastDate)
 	assert.Equal(t, "error.ai.past_date", errorKey(err))
-	e.mustExec(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-01","slot_id":%d}`, e.slotID))
+	e.mustOp(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-01","slot_id":%d}`, e.slotID))
 
 	// A past plate the user made: every plate write refuses it.
 	past, err := e.plates.Create(e.ctx, plate.PlateInput{
@@ -262,7 +295,7 @@ func TestTool_PastDateGuard(t *testing.T) {
 		"delete_plate":           fmt.Sprintf(`{"plate_id":%d}`, past.ID),
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := e.exec(t, name, input)
+			_, err := e.op(t, name, input)
 			require.ErrorIs(t, err, domain.ErrAIPastDate)
 		})
 	}
@@ -277,10 +310,10 @@ func TestTool_ConfirmedPlateIsRefused(t *testing.T) {
 	e := newPlateToolEnv(t)
 	p, err := e.plates.Create(e.ctx, plate.PlateInput{Date: toolToday, SlotID: e.slotID})
 	require.NoError(t, err)
-	_, err = e.exec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":100,"unit":"g"}`, p.ID, e.rice))
+	_, err = e.op(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":100,"unit":"g"}`, p.ID, e.rice))
 	require.ErrorIs(t, err, domain.ErrRowConfirmed)
 	assert.Equal(t, "error.plan.row_confirmed", errorKey(err))
-	_, err = e.exec(t, "delete_plate", fmt.Sprintf(`{"plate_id":%d}`, p.ID))
+	_, err = e.op(t, "delete_plate", fmt.Sprintf(`{"plate_id":%d}`, p.ID))
 	require.ErrorIs(t, err, domain.ErrRowConfirmed)
 }
 
@@ -303,24 +336,22 @@ func TestTool_RecordPreference_ReservedKeys(t *testing.T) {
 	assert.NotContains(t, prefs, "likes.extra")
 }
 
-// B2-AC6 (D10): plates carry state, run and reason; their sessions are listed.
-func TestTool_GetPlatesRange_StateAndSessions(t *testing.T) {
+// B2-AC6 (D10): plates carry state and reason; their sessions are listed.
+func TestTool_GetPlan_StateAndSessions(t *testing.T) {
 	e := newPlateToolEnv(t)
 	draft := e.newPlate(t)
-	e.mustExec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d}`, draft, e.chili))
+	e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d}`, draft, e.chili))
 	_, err := e.plates.Create(e.ctx, plate.PlateInput{Date: toolToday.AddDate(0, 0, 2), SlotID: e.slotID})
 	require.NoError(t, err)
 
-	got := e.mustExec(t, "get_plates_range", `{"from":"2026-11-02","to":"2026-11-03"}`)
-	plates := got["plates"].([]any)
+	got := e.mustExec(t, "get_plan", `{"from":"2026-11-02","to":"2026-11-03"}`)
+	plates := platesOf(got)
 	require.Len(t, plates, 2)
-	first, second := plates[0].(map[string]any), plates[1].(map[string]any)
+	first, second := plates[0], plates[1]
 	assert.Equal(t, "draft", first["state"])
-	assert.Contains(t, first, "ai_run_id")
-	assert.Contains(t, first, "reason")
 	assert.Equal(t, "confirmed", second["state"])
 
-	sid := first["components"].([]any)[0].(map[string]any)["cook_session_id"]
+	sid := first["components"].([]any)[0].(map[string]any)["session_id"]
 	sessions := got["sessions"].([]any)
 	require.Len(t, sessions, 1)
 	s := sessions[0].(map[string]any)
@@ -331,9 +362,12 @@ func TestTool_GetPlatesRange_StateAndSessions(t *testing.T) {
 	assert.Equal(t, 2.0, s["portions"])
 	assert.Equal(t, 0.0, s["frozen_portions"])
 	assert.Equal(t, "draft", s["state"])
+	assert.Contains(t, got, "evaluation", "get_plan carries the evaluation")
 }
 
 func ptrF(v float64) *float64 { return &v }
+
+func ptrS(v string) *string { return &v }
 
 func errorKey(err error) string {
 	key, _ := domain.MessageKey(err, "plate")

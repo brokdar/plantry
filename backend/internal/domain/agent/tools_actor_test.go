@@ -19,13 +19,13 @@ import (
 // ctx, overriding the user actor the HTTP middleware set.
 func TestToolSet_ExecuteActsAsAgentOfRun(t *testing.T) {
 	e := newPlateToolEnv(t)
-	plateID := int64(e.mustExec(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d}`, e.slotID))["id"].(float64))
+	plateID := int64(e.mustOp(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d}`, e.slotID))["plate_id"].(float64))
 
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(e.db), slog.New(slog.DiscardHandler), time.Now)
 	ctx, run := rec.Start(actor.With(e.ctx, actor.User, 0), airun.Start{Kind: airun.KindChat, PromptVersion: "v1"})
 	require.NotZero(t, run.ID())
 	e.ctx = ctx
-	e.mustExec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":150,"unit":"g"}`, plateID, e.rice))
+	e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"amount":150,"unit":"g"}`, plateID, e.rice))
 	run.Finish(ctx, airun.StatusOK, "")
 	rec.Wait()
 
@@ -50,8 +50,8 @@ func TestToolSet_CreatesDraftsOfTheChatRun(t *testing.T) {
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(e.db), slog.New(slog.DiscardHandler), time.Now)
 	ctx, run := rec.Start(actor.With(e.ctx, actor.User, 0), airun.Start{Kind: airun.KindChat, PromptVersion: "v1"})
 	e.ctx = ctx
-	plateID := int64(e.mustExec(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d}`, e.slotID))["id"].(float64))
-	e.mustExec(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"portions":1}`, plateID, e.chili))
+	plateID := int64(e.mustOp(t, "create_plate", fmt.Sprintf(`{"date":"2026-11-02","slot_id":%d}`, e.slotID))["plate_id"].(float64))
+	e.mustOp(t, "add_food_to_plate", fmt.Sprintf(`{"plate_id":%d,"food_id":%d,"portions":1}`, plateID, e.chili))
 	run.Finish(ctx, airun.StatusOK, "")
 	rec.Wait()
 
