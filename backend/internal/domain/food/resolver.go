@@ -3,6 +3,7 @@ package food
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -193,6 +194,10 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 	if c, ok := r.fdc.(configurable); ok && !c.Configured(ctx) {
 		useFDC = false
 	}
+	status := lookupStatusFrom(ctx)
+	if !useFDC {
+		status.markFDCNotConfigured()
+	}
 
 	var external []Candidate
 	var fdcErr error
@@ -207,6 +212,7 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 		fdcResults, fdcErr = r.fdc.SearchByName(ctx, searchTerm, limit)
 		dur := time.Since(start).Milliseconds()
 		if fdcErr != nil {
+			status.markSourceFailed()
 			// An FDC failure is traced but does not discard local and OFF
 			// results; it only fails the lookup when nothing else was found.
 			trace.Add(TraceEntry{
@@ -240,6 +246,8 @@ func (r *Resolver) lookupQuery(ctx context.Context, query, lang string, limit in
 		offResults, err := r.off.SearchByName(ctx, originalQuery, limit)
 		dur := time.Since(start).Milliseconds()
 		if err != nil {
+			status.markSourceFailed()
+			slog.WarnContext(ctx, "lookup: open food facts search failed", "error", err)
 			trace.Add(TraceEntry{
 				Step: "off.search", Level: TraceLevelError,
 				Summary: "OFF search failed", DurationMs: dur,

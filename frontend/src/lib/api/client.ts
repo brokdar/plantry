@@ -5,13 +5,21 @@ export class ApiError extends Error {
   messageKey: string
   /** Set on a duplicate-name 409: the id of the food that already exists. */
   existingId?: number
+  /** Interpolation values of the message, e.g. `{ host }` of an import error. */
+  params?: Record<string, string>
 
-  constructor(status: number, messageKey: string, existingId?: number) {
+  constructor(
+    status: number,
+    messageKey: string,
+    existingId?: number,
+    params?: Record<string, string>
+  ) {
     super(messageKey)
     this.name = "ApiError"
     this.status = status
     this.messageKey = messageKey
     this.existingId = existingId
+    this.params = params
   }
 }
 
@@ -38,7 +46,12 @@ export async function apiFetch<T>(
       message_key: "error.server",
       status: res.status,
     }))
-    throw new ApiError(body.status, body.message_key, body.existing_id)
+    throw new ApiError(
+      body.status,
+      body.message_key,
+      body.existing_id,
+      body.params
+    )
   }
   if (res.status === 204) return undefined as T
   return res.json()

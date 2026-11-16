@@ -76,6 +76,18 @@ var containerWords = map[string]struct{}{
 	"jar": {}, "bottle": {}, "carton": {}, "glas": {}, "packung": {}, "flasche": {},
 }
 
+// dualUnitMetricFirstRE and dualUnitMetricSecondRE match a line that gives its
+// amount in two systems ("300g/12oz flour", "12oz/300g flour"); the metric
+// value is the one kept.
+var (
+	dualUnitMetricFirstRE  = regexp.MustCompile(`(?i)^(\d+(?:[.,]\d+)?\s*(?:kg|g|ml|l|cl|dl))\s*/\s*\d+(?:[.,]\d+)?\s*(?:fl\.?\s*oz|oz|lbs?|pints?|cups?|tbsp|tsp)\.?\s+`)
+	dualUnitMetricSecondRE = regexp.MustCompile(`(?i)^\d+(?:[.,]\d+)?\s*(?:fl\.?\s*oz|oz|lbs?|pints?|cups?)\.?\s*/\s*(\d+(?:[.,]\d+)?\s*(?:kg|g|ml|l|cl|dl))\s+`)
+)
+
+// explicitWeightRE reads a weight a count line states in its parenthetical:
+// "(ca. 200 g)", "(je 100 g)". "je"/"each" make it per piece.
+var explicitWeightRE = regexp.MustCompile(`(?i)^(?:ca\.?|etwa|about|approx\.?|circa)?\s*(je|each|pro)?\s*(\d+(?:[.,]\d+)?)\s*(g|gramm|kg)$`)
+
 // ParseLineDE parses a German-language ingredient line into a DraftIngredient.
 // The parser is best-effort: lines it cannot interpret still produce a
 // DraftIngredient with Confidence=ConfidenceUnparsed that the UI can show for
@@ -98,6 +110,9 @@ func ParseLineDE(raw string) DraftIngredient {
 			}
 		}
 	}
+
+	s = dualUnitMetricFirstRE.ReplaceAllString(s, "$1 ")
+	s = dualUnitMetricSecondRE.ReplaceAllString(s, "$1 ")
 
 	// Drop plural markers so they never end up in the unit, name, or note.
 	s = pluralSuffixRE.ReplaceAllString(s, "${1}${2}")
@@ -145,17 +160,29 @@ func ParseLineDE(raw string) DraftIngredient {
 	amount, amountApprox, consumed, ok := parseAmount(tokens)
 	if !ok {
 		// No amount — whole remainder is the name; note is whatever we already collected.
-		out.Name = strings.TrimSpace(main)
-		out.Note = note
+		out.Name, out.Note = splitPrep(strings.TrimSpace(main), note)
 		return out
 	}
 
 	tokens = tokens[consumed:]
 
+	// "1 small bunch of coriander": a size word between amount and unit.
+	if len(tokens) > 1 {
+		if _, size := sizeWords[strings.ToLower(tokens[0])]; size {
+			if _, _, isUnit := matchUnit(tokens[1:]); isUnit {
+				tokens = tokens[1:]
+			}
+		}
+	}
+
 	// Peel the unit token, if any.
 	unit, unitToken, hasUnit := matchUnit(tokens)
 	if hasUnit {
 		tokens = tokens[1:]
+		// "1 piece of ginger", "2 Stiele von Thymian".
+		if len(tokens) > 1 && (strings.EqualFold(tokens[0], "of") || strings.EqualFold(tokens[0], "von")) {
+			tokens = tokens[1:]
+		}
 	}
 
 	name := strings.TrimSpace(strings.Join(tokens, " "))
@@ -191,8 +218,13 @@ func ParseLineDE(raw string) DraftIngredient {
 		// Finalize, estimated from units.CountGrams until then.
 		out.Amount = amount
 		out.Unit = unit
-		estimate := units.EstimateCountGrams(unit, name)
-		out.PortionGrams = &estimate
+		if w, ok := explicitWeight(parenNote, amount); ok {
+			out.PortionGrams = &w
+		} else if estimate := units.EstimateCountGrams(unit, name); estimate > 0 {
+			out.PortionGrams = &estimate
+		} else {
+			out.NeedsWeight = true
+		}
 	} else {
 		name = stripContainerWord(name)
 		def, _ := units.LookupDefault(unit)
@@ -201,6 +233,10 @@ func ParseLineDE(raw string) DraftIngredient {
 		if def.Kind == units.KindVolume {
 			// Volume defaults assume water density, so grams equal ml.
 			out.Unit = "ml"
+		}
+		if unit == "mg" && amount >= 100 {
+			// Pages typo ml as mg ("300 mg Gemüsesuppe"): 0.3 g of broth.
+			out.Warning = WarningSuspiciousUnit
 		}
 		if !amountApprox && (def.Kind == units.KindMass || metricVolume[unit]) {
 			out.Confidence = ConfidenceParsed
@@ -214,9 +250,37 @@ func ParseLineDE(raw string) DraftIngredient {
 		name, note = note, ""
 	}
 
-	out.Name = name
-	out.Note = note
+	out.Name, out.Note = splitPrep(name, note)
 	return out
+}
+
+// splitPrep moves the preparation text of a name ("onion roughly chopped")
+// into the note.
+func splitPrep(name, note string) (string, string) {
+	clean, prep := CleanName(name)
+	if clean == "" {
+		return name, note
+	}
+	return clean, joinNote(note, prep)
+}
+
+// explicitWeight is the grams per count unit a line's parenthetical states.
+func explicitWeight(paren string, amount float64) (float64, bool) {
+	m := explicitWeightRE.FindStringSubmatch(strings.TrimSpace(paren))
+	if m == nil || amount <= 0 {
+		return 0, false
+	}
+	v, err := strconv.ParseFloat(strings.ReplaceAll(m[2], ",", "."), 64)
+	if err != nil || v <= 0 {
+		return 0, false
+	}
+	if strings.EqualFold(m[3], "kg") {
+		v *= 1000
+	}
+	if m[1] == "" {
+		v /= amount
+	}
+	return v, true
 }
 
 // stripContainerWord drops a leading packaging word ("glass white wine" →

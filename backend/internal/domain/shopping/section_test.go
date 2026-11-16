@@ -297,10 +297,10 @@ func TestClassify(t *testing.T) {
 		{"Frozen peas", frozen},
 		{"Frozen berries", frozen},
 		{"Water", other},
-		{"Tofu", other},
+		{"Tofu", dairy}, // chilled aisle (F9)
 
 		// Found by a broad probe after the review.
-		{"Zitronensaft", other},
+		{"Zitronensaft", produce}, // fruit juice sits with the fruit (F9)
 		{"Orange juice", other},
 		{"Rotwein", other},
 		{"Schwein", meat},

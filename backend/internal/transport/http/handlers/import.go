@@ -3,7 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
+	"net/url"
+
+	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/importer"
@@ -38,6 +43,8 @@ type extractResponse struct {
 type importLookupResponse struct {
 	Results          []food.Candidate `json:"results"`
 	RecommendedIndex int              `json:"recommended_index"`
+	// UnavailableReason: see lookupResponse.
+	UnavailableReason string `json:"unavailable_reason,omitempty"`
 }
 
 type resolveChildRequest struct {
@@ -83,12 +90,34 @@ func (h *ImportHandler) Extract(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	draft, err := h.svc.Extract(r.Context(), importer.ExtractInput{URL: req.URL, HTML: req.HTML})
+	reqID := middleware.GetReqID(r.Context())
 	if err != nil {
 		status, key := toHTTP(err)
+		attrs := []any{"request_id", reqID, "outcome", "error", "message_key", key, "reason", err.Error()}
+		var xe *importer.ExtractError
+		if errors.As(err, &xe) {
+			attrs = append(attrs, "stage", xe.Stage, "host", xe.Host)
+			if xe.Host != "" {
+				writeErrorParams(w, status, key, map[string]string{"host": xe.Host})
+				slog.WarnContext(r.Context(), "import extract failed", attrs...)
+				return
+			}
+		}
+		slog.WarnContext(r.Context(), "import extract failed", attrs...)
 		writeError(w, status, key)
 		return
 	}
+	slog.InfoContext(r.Context(), "import extract", "request_id", reqID, "outcome", "ok",
+		"host", hostOf(req.URL), "method", draft.ExtractMethod, "ingredients", len(draft.Ingredients),
+		"warnings", draft.Warnings)
 	writeJSON(w, http.StatusOK, extractResponse{Draft: draft})
+}
+
+func hostOf(raw string) string {
+	if u, err := url.Parse(raw); err == nil {
+		return u.Hostname()
+	}
+	return ""
 }
 
 // LookupLine handles GET /api/import/lookup.
@@ -102,7 +131,8 @@ func (h *ImportHandler) LookupLine(w http.ResponseWriter, r *http.Request) {
 	if lang == "" {
 		lang = "de"
 	}
-	results, err := h.svc.ResolveLine(r.Context(), q, lang)
+	ctx, status := food.WithLookupStatus(r.Context())
+	results, err := h.svc.ResolveLine(ctx, q, lang)
 	if err != nil {
 		status, key := toHTTP(err)
 		writeError(w, status, key)
@@ -110,7 +140,7 @@ func (h *ImportHandler) LookupLine(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(results) == 0 {
 		writeJSON(w, http.StatusOK, importLookupResponse{
-			Results: []food.Candidate{}, RecommendedIndex: -1,
+			Results: []food.Candidate{}, RecommendedIndex: -1, UnavailableReason: status.Reason(),
 		})
 		return
 	}

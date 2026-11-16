@@ -30,6 +30,9 @@ type lookupResponse struct {
 	Results          []food.Candidate  `json:"results"`
 	RecommendedIndex int               `json:"recommended_index"`
 	Trace            []food.TraceEntry `json:"trace,omitempty"`
+	// UnavailableReason explains an empty result: "not_configured" (no
+	// nutrition source key) or "sources_unavailable" (a source failed).
+	UnavailableReason string `json:"unavailable_reason,omitempty"`
 }
 
 // Lookup handles GET /api/foods/lookup.
@@ -54,6 +57,7 @@ func (h *LookupHandler) Lookup(w http.ResponseWriter, r *http.Request) {
 		ctx = food.WithTrace(ctx, trace)
 	}
 
+	ctx, status := food.WithLookupStatus(ctx)
 	results, recommended, err := h.resolver.Lookup(ctx, barcode, query, lang, 5)
 	if err != nil {
 		status, key := toHTTP(err)
@@ -64,6 +68,9 @@ func (h *LookupHandler) Lookup(w http.ResponseWriter, r *http.Request) {
 	resp := lookupResponse{Results: results, RecommendedIndex: recommended}
 	if results == nil {
 		resp.Results = []food.Candidate{}
+	}
+	if len(results) == 0 {
+		resp.UnavailableReason = status.Reason()
 	}
 	if trace != nil {
 		resp.Trace = trace.Entries()

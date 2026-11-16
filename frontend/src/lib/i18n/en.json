@@ -52,7 +52,10 @@
       "portion_estimate": "1 {{unit}} ≈",
       "portion_grams_for": "Grams per {{unit}} of {{name}}",
       "portion_estimated": "estimate",
-      "portion_saved": "saved for this ingredient"
+      "portion_saved": "saved for this ingredient",
+      "warning_suspicious_unit": "Check the unit: mg looks like a typo here.",
+      "lookup_not_configured": "No match in library. Nutrition search needs a FoodData Central key in Settings.",
+      "lookup_sources_unavailable": "No match in library. The nutrition sources didn't answer; try again later."
     },
     "step3": {
       "role_label": "Role",
@@ -77,7 +80,11 @@
       "via_jsonld": "From structured data",
       "via_llm": "Extracted with AI"
     },
-    "prefilled_subtitle": "Plantry matched the ingredients it knows. Check the rest, then save the recipe."
+    "prefilled_subtitle": "Plantry matched the ingredients it knows. Check the rest, then save the recipe.",
+    "warning": {
+      "redirected_other_recipe": "The site sent us to a different page than the link. Check that this is the recipe you wanted.",
+      "times_from_steps": "The page lists no times. The cooking time is the sum of the times in the steps."
+    }
   },
   "plate": {
     "quantity": {
@@ -1006,13 +1013,18 @@
       "invalid_date": "A chat date is not a valid YYYY-MM-DD date."
     },
     "import": {
-      "fetch_failed": "Could not load the recipe page. Try pasting the page source instead.",
+      "fetch_failed": "Couldn't load {{host}} (the site answered with an error). Paste the recipe text instead.",
       "body_too_large": "The page is too large to import.",
       "not_html": "The URL did not return an HTML page.",
       "no_recipe": "No recipe was found on this page.",
       "llm_failed": "AI could not extract the recipe.",
-      "invalid_url": "Invalid URL.",
-      "invalid_resolution": "Invalid ingredient resolution."
+      "invalid_url": "That isn't a web address. Enter a link starting with http:// or https://.",
+      "invalid_resolution": "Invalid ingredient resolution.",
+      "not_found": "Couldn't load {{host}} (page not found). Check the link or paste the recipe text instead.",
+      "blocked": "Couldn't load {{host}} (blocked by the site). Paste the recipe text instead.",
+      "timeout": "Couldn't load {{host}} (no answer in time). Try again or paste the recipe text instead.",
+      "unreachable": "Couldn't reach {{host}}. Check the address and your connection, or paste the recipe text instead.",
+      "no_recipe_no_ai": "No recipe found on this page. Paste the recipe text or set up the assistant."
     },
     "food": {
       "invalid_portions": "Portions must be more than 0 and at most 100.",

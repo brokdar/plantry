@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/url"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
@@ -87,45 +89,81 @@ func (s *Service) Extract(ctx context.Context, in ExtractInput) (*Draft, error) 
 
 	htmlBody := in.HTML
 	sourceURL := in.URL
+	host := ""
+	var warnings []string
 	if htmlBody == "" {
+		u, err := url.Parse(in.URL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+			return nil, &ExtractError{Stage: StageFetch, Err: domain.ErrImportInvalidURL}
+		}
+		host = u.Hostname()
 		body, final, err := s.fetcher.Fetch(ctx, in.URL)
 		if err != nil {
-			return nil, err
+			return nil, &ExtractError{Stage: StageFetch, Host: host, Err: err}
 		}
 		htmlBody = body
 		if final != "" {
 			sourceURL = final
+			if redirectedElsewhere(in.URL, final) {
+				warnings = append(warnings, WarningRedirectedOtherRecipe)
+			}
 		}
 	}
 
 	rec, err := s.jsonld.ExtractRecipe(htmlBody)
 	if err == nil && len(rec.RecipeIngredient) > 0 {
-		return s.recipeToDraft(rec, sourceURL, "jsonld"), nil
+		return s.recipeToDraft(rec, sourceURL, "jsonld", warnings), nil
+	}
+	if err != nil && !errors.Is(err, ErrNoRecipe) {
+		slog.DebugContext(ctx, "import: json-ld extraction error", "host", host, "error", err)
 	}
 
 	if in.NoLLMFallback {
-		return nil, domain.ErrImportNoRecipe
-	}
-	if s.llmResolver == nil {
-		if errors.Is(err, ErrNoRecipe) {
-			return nil, domain.ErrImportNoRecipe
-		}
-		return nil, domain.ErrAIProviderMissing
+		return nil, &ExtractError{Stage: StageParse, Host: host, Err: domain.ErrImportNoRecipe}
 	}
 
 	rec, llmErr := s.llmExtract(ctx, htmlBody)
-	if llmErr != nil {
-		return nil, llmErr
+	switch {
+	case errors.Is(llmErr, domain.ErrAIProviderMissing):
+		// No JSON-LD recipe and no assistant to read the page: tell the user
+		// about the page, not about server configuration.
+		return nil, &ExtractError{Stage: StageParse, Host: host, Err: domain.ErrImportNoRecipeNoAI}
+	case llmErr != nil:
+		return nil, &ExtractError{Stage: StageFallback, Host: host, Err: llmErr}
+	case rec == nil || len(rec.RecipeIngredient) == 0:
+		return nil, &ExtractError{Stage: StageFallback, Host: host, Err: domain.ErrImportNoRecipe}
 	}
-	if rec == nil || len(rec.RecipeIngredient) == 0 {
-		return nil, domain.ErrImportNoRecipe
-	}
-	return s.recipeToDraft(rec, sourceURL, "llm"), nil
+	return s.recipeToDraft(rec, sourceURL, "llm", warnings), nil
 }
+
+// Import stages named in ExtractError and the import log.
+const (
+	StageFetch    = "fetch"
+	StageParse    = "parse_jsonld"
+	StageFallback = "fallback"
+	StageResolve  = "resolve"
+)
+
+// ExtractError tags an Extract failure with the stage that failed and the
+// host of the page, so the handler can name the host to the user and log the
+// stage. It unwraps to the domain sentinel.
+type ExtractError struct {
+	Stage string
+	Host  string
+	Err   error
+}
+
+func (e *ExtractError) Error() string {
+	return fmt.Sprintf("import %s (%s): %v", e.Stage, e.Host, e.Err)
+}
+func (e *ExtractError) Unwrap() error { return e.Err }
 
 // ResolveLine wraps the food resolver used from the per-row lookup endpoint
 // in the review step. The recommended-index return value is not exposed.
 func (s *Service) ResolveLine(ctx context.Context, query, lang string) ([]food.Candidate, error) {
+	if clean, _ := CleanName(query); clean != "" {
+		query = clean
+	}
 	results, _, err := s.resolver.Lookup(ctx, "", query, lang, 5)
 	return results, err
 }
@@ -305,20 +343,29 @@ func (s *Service) ensurePortion(ctx context.Context, foodID int64, unit string, 
 			return fmt.Errorf("load food %d for its portion estimate: %w", foodID, err)
 		}
 		grams = units.EstimateCountGrams(unit, leaf.Name)
+		if grams <= 0 {
+			return fmt.Errorf("%w: %s needs a weight per %s", domain.ErrImportInvalidResolution, leaf.Name, unit)
+		}
 	}
 	return s.portions.UpsertPortion(ctx, &food.Portion{FoodID: foodID, Unit: unit, Grams: grams})
 }
 
-func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string) *Draft {
+func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string, warnings []string) *Draft {
+	steps := make([]string, 0, len(rec.RecipeInstructions))
+	for _, step := range rec.RecipeInstructions {
+		if step = stripHTML(step); step != "" {
+			steps = append(steps, step)
+		}
+	}
 	d := &Draft{
-		Name:                 rec.Name,
-		Description:          rec.Description,
+		Name:                 cleanRecipeName(rec.Name),
+		Description:          stripHTML(rec.Description),
 		SourceURL:            sourceURL,
-		Instructions:         dropClosingPleasantry(rec.RecipeInstructions),
-		Tags:                 append([]string{}, rec.Keywords...),
+		Instructions:         dropClosingPleasantry(steps),
+		Tags:                 cleanTags(rec.Keywords, rec.AuthorName),
 		ExtractMethod:        method,
 		ReferencePortions:    float64(rec.RecipeYieldNumber),
-		Warnings:             []string{},
+		Warnings:             append([]string{}, warnings...),
 		SourceKcalPerServing: rec.SourceKcalPerServing,
 	}
 	if d.ReferencePortions == 0 {
@@ -339,6 +386,12 @@ func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string) *Draft
 		v := rec.TotalMinutes
 		d.TotalMinutes = &v
 	}
+	if d.PrepMinutes == nil && d.CookMinutes == nil && d.TotalMinutes == nil {
+		if v := minutesFromSteps(d.Instructions); v > 0 {
+			d.CookMinutes = &v
+			d.Warnings = append(d.Warnings, WarningTimesFromSteps)
+		}
+	}
 
 	d.Language = DetectLanguage(rec.RecipeIngredient)
 	d.Ingredients = make([]DraftIngredient, 0, len(rec.RecipeIngredient))
@@ -350,6 +403,10 @@ func (s *Service) recipeToDraft(rec *RawRecipe, sourceURL, method string) *Draft
 			parsed = ParseLineDE(line)
 		}
 		parsed.DietClass = diet.Classify(parsed.Name)
+		if parsed.Confidence == ConfidenceUnparsed || parsed.NeedsWeight || parsed.Warning != "" {
+			slog.Debug("import: line needs review", "raw", line, "confidence", parsed.Confidence,
+				"needs_weight", parsed.NeedsWeight, "warning", parsed.Warning)
+		}
 		d.Ingredients = append(d.Ingredients, parsed)
 	}
 	return d
