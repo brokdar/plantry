@@ -52,6 +52,16 @@ describe("buildBoard", () => {
     await i18n.changeLanguage("en")
   })
 
+  it("gives a routine session no badge (a routine is no cooking occasion)", () => {
+    const plan: Plan = {
+      ...mockPlan,
+      sessions: mockPlan.sessions.map((x) => ({ ...x, routine: true })),
+    }
+    const board = buildBoard(plan, i18n)
+    expect(cellAt(board, "2026-11-01", 3).badge).toBeNull()
+    expect(cellAt(board, "2026-11-02", 2).badge).toBeNull()
+  })
+
   it("F3-AC1: gives the AC-1 batch its cook and leftover badges in one colour", () => {
     const board = buildBoard(mockPlan, i18n)
 

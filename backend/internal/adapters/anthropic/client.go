@@ -376,10 +376,7 @@ func encodeContent(blocks []llm.ContentBlock) []contentBlock {
 		case llm.ContentTypeServer:
 			rest = append(rest, contentBlock{raw: b.Raw})
 		case llm.ContentTypeToolResult:
-			content := b.ToolResultContent
-			if len(content) == 0 {
-				content = json.RawMessage(`""`)
-			}
+			content := toolResultString(b.ToolResultContent)
 			results = append(results, contentBlock{
 				Type:      "tool_result",
 				ToolUseID: b.ToolResultID,
@@ -390,6 +387,20 @@ func encodeContent(blocks []llm.ContentBlock) []contentBlock {
 	}
 	out = append(out, results...)
 	out = append(out, rest...)
+	return out
+}
+
+// toolResultString encodes a tool result for the wire. Anthropic accepts only
+// a string or a list of content blocks as tool_result content, so a JSON
+// object or array is sent as its JSON text; a JSON string is sent as is.
+func toolResultString(raw json.RawMessage) json.RawMessage {
+	var s string
+	if len(raw) != 0 {
+		if err := json.Unmarshal(raw, &s); err != nil {
+			s = string(raw)
+		}
+	}
+	out, _ := json.Marshal(s)
 	return out
 }
 

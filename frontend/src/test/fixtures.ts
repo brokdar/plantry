@@ -443,6 +443,7 @@ export const mockSession: Session = {
   freezable: true,
   cook_date: "2026-11-01",
   cook_slot_id: 3,
+  routine: false,
   portions: 6,
   frozen_portions: 0,
   cooked_at: null,

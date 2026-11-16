@@ -36,6 +36,8 @@ export interface Session {
   freezable: boolean | null
   cook_date: string
   cook_slot_id: number
+  /** Cooks on a routine cell: not a cooking occasion. */
+  routine: boolean
   portions: number
   frozen_portions: number
   cooked_at: string | null

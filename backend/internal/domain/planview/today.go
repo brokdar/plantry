@@ -193,8 +193,9 @@ func (s *Service) today(ctx context.Context, date time.Time) (*Today, error) {
 	}
 	out.PlanBanner.Due = !date.Before(next.Start.AddDate(0, 0, -1)) && inNext == 0
 
+	markRoutine(sessions, avail)
 	for _, v := range sessions {
-		if v.CookDate.Equal(date) {
+		if v.CookDate.Equal(date) && !v.Routine {
 			out.Cook = append(out.Cook, Cook{Session: v, Minutes: minutes(foods[v.FoodID])})
 		}
 	}

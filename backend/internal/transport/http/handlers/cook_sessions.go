@@ -70,6 +70,8 @@ type sessionResponse struct {
 	Links          []sessionLinkResponse    `json:"links"`
 	Meals          int                      `json:"meals"`
 	Warnings       []sessionWarningResponse `json:"warnings"`
+	// Routine marks a session cooking on a routine cell: not a cooking occasion.
+	Routine bool `json:"routine"`
 }
 
 func toSessionResponse(v *plate.SessionView) sessionResponse {
@@ -82,6 +84,7 @@ func toSessionResponse(v *plate.SessionView) sessionResponse {
 		Consumed: v.Consumed, FrozenConsumed: v.FrozenConsumed, Surplus: v.Surplus,
 		Links: make([]sessionLinkResponse, len(v.Links)), Meals: v.Meals,
 		Warnings: make([]sessionWarningResponse, len(v.Warnings)),
+		Routine:  v.Routine,
 	}
 	if v.CookedAt != nil {
 		s := v.CookedAt.UTC().Format(time.RFC3339)

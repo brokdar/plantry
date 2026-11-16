@@ -71,6 +71,9 @@ type planner struct {
 	seen      map[int64][]time.Time
 	used      map[int64]int
 	avoid     map[int64]bool
+	// routineFoods are the recipes the target's routine plates eat: they are
+	// breakfast routines, never planned into another cell.
+	routineFoods map[int64]bool
 	// explorePlaced and fillPlaced count the explore recipes and the
 	// never-eaten fillers the proposal cooks toward the quota (D17).
 	explorePlaced, fillPlaced int
@@ -82,8 +85,9 @@ func newPlanner(in ChooseInput) *planner {
 		in: in, s: s, x: newIndex(s, in.Target), order: s.SlotOrder,
 		done: map[cellID]bool{}, occasions: map[int]map[cellID]bool{},
 		meatDays: map[int]bool{}, seen: map[int64][]time.Time{}, used: map[int64]int{},
-		avoid: idSet(in.Avoid),
+		avoid: idSet(in.Avoid), routineFoods: nil,
 	}
+	h.routineFoods = h.x.routineFoods()
 	for day, cells := range h.x.occasions {
 		h.occasions[day] = map[cellID]bool{}
 		for c := range cells {
@@ -415,13 +419,15 @@ type candidate struct {
 // recipes last otherwise; known diet class, least recently eaten, favorite,
 // liked, closest to the meal's kcal share, food id. Diet-incompatible recipes never
 // qualify; one that adds a meat day past the limit only when nothing else
-// does.
+// does. A recipe a routine plate eats is never picked, and mains come before
+// standalone and role-less recipes among equals (a breakfast recipe is not a
+// lunch).
 func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	span := 7 * h.s.Settings.VarietyWeeks
 	share := h.kcalShare(c.Date)
 	var cands []candidate
 	for _, f := range h.s.Foods {
-		if !f.Composed() || !varietyRole(f.Role) || !h.fits(f) {
+		if !f.Composed() || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] {
 			continue
 		}
 		isNew := f.LastEaten == nil
@@ -447,7 +453,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 			fit = math.Abs(f.Macros.Kcal - share)
 		}
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
-			b2f(h.overMeat(f, c)), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]),
+			b2f(h.overMeat(f, c)), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
 			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, fit,
 		}})
 	}

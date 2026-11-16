@@ -152,6 +152,21 @@ func (x *index) routine(c plate.CellKey) bool {
 	return ok && cell.Mode == availability.ModeRoutine
 }
 
+// routineFoods are the foods the target's plates on routine cells eat: a
+// routine (a breakfast) is never planned into another cell.
+func (x *index) routineFoods() map[int64]bool {
+	out := map[int64]bool{}
+	for _, p := range x.s.Plates {
+		if !x.routine(p.Cell()) || !x.inTarget(p.Cell()) {
+			continue
+		}
+		for _, c := range p.Components {
+			out[c.FoodID] = true
+		}
+	}
+	return out
+}
+
 func (x *index) addOccasion(c plate.CellKey) {
 	cid := idOf(c)
 	if x.routine(c) {
