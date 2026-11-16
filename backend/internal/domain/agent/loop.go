@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
@@ -27,6 +28,9 @@ const MaxIterations = 20
 // count them. Past it the pending calls are answered with an error telling
 // the script to stop, so the model closes its turn with a final message.
 const MaxCodeContinuations = 40
+
+// cutoffMessage answers the tool calls of a reply cut off at the output limit.
+const cutoffMessage = "Your reply was cut off at the output limit, so nothing was run. Keep your reasoning short and let the tools compute: use apply_changes with dry_run true."
 
 // MaxRequests is the hard bound on provider requests per Run, wrap-up
 // requests included.
@@ -195,6 +199,34 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				IterationCount: iter + 1,
 			}})
 			return nil
+		}
+
+		// A reply cut off at the output limit may hold cut tool input: run
+		// nothing, answer every call with an error. It stays a model turn.
+		if res.resp.StopReason == llm.StopReasonMaxTokens {
+			resultBlocks := make([]llm.ContentBlock, 0, len(toolUses))
+			seq := 0
+			for _, call := range toolUses {
+				payload := mustMarshal(map[string]string{"error": cutoffMessage})
+				resultBlocks = append(resultBlocks, llm.ContentBlock{
+					Type: llm.ContentTypeToolResult, ToolResultID: call.ToolUseID, ToolResultContent: payload, ToolResultIsError: true,
+				})
+				seq = airun.FromContext(ctx).ToolStep(llm.WithCaller(ctx, call.Caller), call.ToolUseName, call.ToolUseInput, payload, true, 0)
+				send(ctx, out, llm.Event{Type: llm.EventToolExecEnd, Payload: llm.ToolExecEndPayload{
+					ID: call.ToolUseID, Name: call.ToolUseName, Status: llm.ToolExecStatusError,
+				}})
+				send(ctx, out, llm.Event{Type: llm.EventToolResult, Payload: llm.ToolResultPayload{
+					ID: call.ToolUseID, Name: call.ToolUseName, Output: payload, IsError: true,
+				}})
+			}
+			slog.WarnContext(ctx, "agent.loop.cutoff", append(airun.FromContext(ctx).LogAttrs(), "conversation_id", req.ConversationID, "seq", seq)...)
+			continuation = false
+			toolMsg := llm.Message{Role: llm.RoleUser, Content: resultBlocks}
+			if err := store(RoleTool, toolMsg); err != nil {
+				return fail("error.server", err)
+			}
+			history = append(history, toolMsg)
+			continue
 		}
 
 		// Past the code continuation bound the script gets errors only, so it

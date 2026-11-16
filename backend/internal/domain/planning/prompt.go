@@ -18,7 +18,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p8"
+const PromptVersion = "p9"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -333,7 +333,7 @@ How a plan works:
 - Submit the COMPLETE plan in your first call: a plate for every fill cell (the task lists them with their count) and every session they need. The checker allows only two repairs; do not use them to find missing cells. notes describe only what is in the plan.
 - Soft rules (reported by evaluate_plan, never block saving, aim to satisfy them): S1 at most the meat-day limit of days with an omnivore recipe on a plate (the meat column; a cook day without an eating plate is not a meat day); S2 every day's plates per eater within 90-110% of the day's kcal target (a day with a No-plate meal has a lower target, see Short days); S3 every day's protein share of kcal at most 5 points under the profile's protein share. Each S2/S3 issue lists computed options (add a no-cook item, or raise an amount) with the kcal and protein they add; take one instead of computing by hand.
 - When a code execution tool is offered: for fan-out or comparing variants, write code that calls evaluate_plan on several drafts and prints only what you need (the cheapest plan that clears the hard rules); call submit_plan yourself, directly, with the plan you chose.
-- Evaluate before you submit: write the draft, call evaluate_plan with it, read days (kcal, protein, cook occasions, meat) and issues, change the plan, evaluate again. Do not simulate the checker in your head.
+- Evaluate before you submit: write the draft, call evaluate_plan with it, read days (kcal, protein, cook occasions, meat) and issues, change the plan, evaluate again. Do not simulate the checker in your head. Do not add up kcal, protein, meat days or keep windows in your reasoning: write a draft and call evaluate_plan, which computes them, then fix what it reports.
 - No-cook table: leaves (use grams per eater) and recipes with no cooking that close a kcal or protein gap without a cooking occasion; add one as a component of an existing plate (leaf: grams, no session).
 - Mix several different mains over the week rather than one recipe for most meals.
 - notes and reasons must describe the plan you submit, not an earlier idea.
