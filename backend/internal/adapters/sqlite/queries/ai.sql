@@ -12,6 +12,9 @@ SET title = ?, updated_at = datetime('now')
 WHERE id = ?
 RETURNING *;
 
+-- name: SetConversationContainer :execresult
+UPDATE ai_conversations SET container_id = ?, container_expires_at = ? WHERE id = ?;
+
 -- name: TouchConversation :execresult
 UPDATE ai_conversations SET updated_at = datetime('now') WHERE id = ?;
 

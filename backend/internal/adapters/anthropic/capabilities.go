@@ -56,6 +56,10 @@ type ModelInfo struct {
 		ServerTools *struct {
 			WebSearch *support `json:"web_search"`
 		} `json:"server_tools"`
+		// CodeExecution is the top-level capability: whether code the model
+		// runs in the code execution tool can call the request's other tools
+		// (programmatic tool calling).
+		CodeExecution *support `json:"code_execution"`
 	} `json:"capabilities"`
 }
 
@@ -84,6 +88,14 @@ func (m ModelInfo) EffortSupported(level string) bool {
 func (m ModelInfo) WebSearch() bool {
 	c := m.Capabilities
 	return c != nil && c.ServerTools != nil && c.ServerTools.WebSearch != nil && c.ServerTools.WebSearch.Supported
+}
+
+// ProgrammaticTools reports capabilities.code_execution.supported: the model
+// lets code it runs call the request's tools. Without capability data the
+// answer is false.
+func (m ModelInfo) ProgrammaticTools() bool {
+	c := m.Capabilities
+	return c != nil && c.CodeExecution != nil && c.CodeExecution.Supported
 }
 
 // ForcedTool reports whether the model accepts a forced tool_choice. The API
@@ -140,6 +152,8 @@ type rejection struct {
 	forcedTool  bool
 	thinking    bool
 	effort      bool
+	// codeExecution: the API refused the code execution tool or allowed_callers.
+	codeExecution bool
 }
 
 // flight is one capability lookup in progress; waiters block on done.
@@ -330,6 +344,11 @@ type wire struct {
 	effort      string
 	maxTokens   int
 	fallbacks   []string
+	// codeExecution: the code execution tool goes out, with container (empty:
+	// a new one) and allowed_callers on codeTools.
+	codeExecution bool
+	container     string
+	codeTools     []string
 }
 
 // plan decides the wire parameters of req.
@@ -381,6 +400,25 @@ func (c *Client) plan(req llm.Request) wire {
 	if req.Effort != "" && cp.known && cp.info.EffortSupported(req.Effort) && !rej.effort {
 		w.effort = req.Effort
 	}
+	if req.CodeExecution {
+		codeTools := codeCallable(req.Tools)
+		switch {
+		case req.ToolChoice != nil:
+			w.fallbacks = append(w.fallbacks, "code_execution_with_tool_choice")
+		case len(codeTools) == 0:
+			w.fallbacks = append(w.fallbacks, "no_code_callable_tools")
+		case rej.codeExecution:
+			w.fallbacks = append(w.fallbacks, "code_execution_rejected_by_model")
+		case !cp.known && cp.failure != "":
+			w.fallbacks = append(w.fallbacks, "capability_lookup_failed: "+cp.failure)
+		case !cp.known:
+			w.fallbacks = append(w.fallbacks, "capability_unknown")
+		case !cp.info.ProgrammaticTools():
+			w.fallbacks = append(w.fallbacks, "code_execution_unsupported_by_model")
+		default:
+			w.codeExecution, w.container, w.codeTools = true, req.Container, codeTools
+		}
+	}
 	if req.WebSearch != nil {
 		if cp.webSearch != nil && !*cp.webSearch {
 			w.fallbacks = append(w.fallbacks, "web_search_rejected_by_org")
@@ -402,6 +440,7 @@ func (w wire) effective(req llm.Request) llm.Effective {
 		e.ThinkingType, e.ThinkingDisplay = "adaptive", "summarized"
 	}
 	e.Effort = w.effort
+	e.CodeExecution, e.CodeTools, e.Container = w.codeExecution, w.codeTools, w.container
 	if req.System != "" || req.ToolChoice != nil && !w.forcedTool {
 		e.CacheBreakpoints = append(e.CacheBreakpoints, "system")
 	}

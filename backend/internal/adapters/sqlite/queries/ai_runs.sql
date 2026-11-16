@@ -25,14 +25,16 @@ UPDATE ai_runs SET
     repair_attempts    = ?,
     violations_json    = ?,
     score_json         = ?,
-    notes              = ?
+    notes              = ?,
+    container_id       = ?
 WHERE id = ?;
 
 -- name: CreateAIRunStep :exec
 INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens,
     request_json, response_json, stop_reason, web_search_requests,
-    started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id,
+    caller, caller_tool_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpsertAIPrompt :exec
 INSERT INTO ai_prompts (hash, text) VALUES (?, ?)
@@ -120,7 +122,7 @@ SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model,
        r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens, r.web_search_requests,
        r.reasoning_tokens, r.duration_ms,
        r.score_json, r.violations_json, r.outcome,
-       r.scope_json, r.instruction, r.notes, r.error_key, r.repair_attempts, r.app_version, p.text AS prompt_text
+       r.scope_json, r.instruction, r.notes, r.error_key, r.repair_attempts, r.app_version, r.container_id, p.text AS prompt_text
 FROM ai_runs r
 LEFT JOIN ai_prompts p ON p.hash = r.prompt_hash
 WHERE r.id = ?;
@@ -131,7 +133,7 @@ WHERE r.id = ?;
 -- and response_json are cut to 8192 characters, the *_cut flags say they
 -- were longer.
 SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens, web_search_requests,
-       started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id,
+       started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id, caller, caller_tool_id,
        CAST(COALESCE(args_json, substr(request_json, 1, 8192), '') AS TEXT) AS args,
        CAST(args_json IS NULL AND COALESCE(length(request_json), 0) > 8192 AS INTEGER) AS args_cut,
        CAST(COALESCE(result_json, substr(response_json, 1, 8192), '') AS TEXT) AS result,

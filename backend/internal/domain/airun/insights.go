@@ -37,6 +37,8 @@ type RunDetailRow struct {
 	Notes       string
 	ErrorKey    string
 	AppVersion  string
+	// ContainerID is the code execution container the run used (the last one).
+	ContainerID string
 	PromptText  string
 	// RepairAttempts is the number of repair rounds of a generation run.
 	RepairAttempts int
@@ -66,6 +68,10 @@ type StepView struct {
 	ThinkingChars     int64
 	ServedModel       string
 	ProviderRequestID string
+	// Caller says who called a tool_call step (direct or code_execution) and
+	// CallerToolID the code's server tool use id; empty for other steps.
+	Caller       string
+	CallerToolID string
 }
 
 // Correction counts a run's generated plates and those the user changed
@@ -136,6 +142,7 @@ type RunDetail struct {
 	Notes       string
 	ErrorKey    string
 	AppVersion  string
+	ContainerID string
 	PromptText  string
 	// RepairAttempts is the number of repair rounds of a generation run.
 	RepairAttempts int
@@ -264,6 +271,7 @@ func (s *Insights) Run(ctx context.Context, id int64) (RunDetail, error) {
 		Notes:          row.Notes,
 		ErrorKey:       row.ErrorKey,
 		AppVersion:     row.AppVersion,
+		ContainerID:    row.ContainerID,
 		PromptText:     row.PromptText,
 		RepairAttempts: row.RepairAttempts,
 		Steps:          steps,

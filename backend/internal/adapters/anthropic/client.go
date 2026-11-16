@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -158,6 +159,14 @@ func (c *Client) learnFromRejection(req llm.Request, w wire, e *APIError) string
 			return ""
 		}
 		return "web_search_rejected_by_org"
+	case w.codeExecution && rejectsCodeExecution(e):
+		c.reject(req.Model, func(r *rejection) { r.codeExecution = true })
+		if replaysCodeBlocks(req.Messages) {
+			// The history holds code execution blocks; without the tool the
+			// API would reject it again, less clearly.
+			return ""
+		}
+		return "code_execution_rejected_400"
 	case w.temperature && strings.Contains(msg, "temperature"):
 		c.reject(req.Model, func(r *rejection) { r.temperature = true })
 		return "temperature_rejected_400"
@@ -192,6 +201,38 @@ func replaysServerBlocks(msgs []llm.Message) bool {
 		}
 	}
 	return false
+}
+
+// replaysCodeBlocks reports whether msgs carry code execution blocks: a
+// server block or a tool call made from code.
+func replaysCodeBlocks(msgs []llm.Message) bool {
+	for _, m := range msgs {
+		for _, b := range m.Content {
+			if b.Type == llm.ContentTypeServer || b.Caller.FromCode() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// codeCallable lists the tools that allow a code execution caller.
+func codeCallable(tools []llm.Tool) []string {
+	var names []string
+	for _, t := range tools {
+		if slices.Contains(t.AllowedCallers, llm.CallerCodeExecution) {
+			names = append(names, t.Name)
+		}
+	}
+	return names
+}
+
+// rejectsCodeExecution reports whether a 400 refused the code execution tool
+// or the allowed_callers field.
+func rejectsCodeExecution(e *APIError) bool {
+	msg := strings.ToLower(e.Message)
+	return strings.Contains(msg, "code_execution") || strings.Contains(msg, "code execution") ||
+		strings.Contains(msg, "allowed_callers") || strings.Contains(msg, "programmatic")
 }
 
 // post sends req as a streaming Messages request.
@@ -238,6 +279,7 @@ type reqBody struct {
 	Thinking     *thinkingBody    `json:"thinking,omitempty"`
 	OutputConfig *outputConfig    `json:"output_config,omitempty"`
 	Stream       bool             `json:"stream,omitempty"`
+	Container    string           `json:"container,omitempty"`
 	Metadata     *requestMetadata `json:"metadata,omitempty"`
 }
 
@@ -287,6 +329,8 @@ type contentBlock struct {
 	ToolUseID string          `json:"tool_use_id,omitempty"`
 	Content   json.RawMessage `json:"content,omitempty"`
 	IsError   bool            `json:"is_error,omitempty"`
+	// Caller is replayed on a tool_use made by code (or directly).
+	Caller *llm.Caller `json:"caller,omitempty"`
 
 	raw json.RawMessage // a server block, sent verbatim
 }
@@ -305,6 +349,16 @@ type toolBody struct {
 	Description  string          `json:"description"`
 	InputSchema  json.RawMessage `json:"input_schema"`
 	CacheControl *cacheCtrl      `json:"cache_control,omitempty"`
+	// AllowedCallers is sent only when the request carries the code
+	// execution tool.
+	AllowedCallers []string `json:"allowed_callers,omitempty"`
+}
+
+// codeExecutionTool is the code execution server tool programmatic tool
+// calling needs.
+type codeExecutionTool struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
 }
 
 // webSearchTool is the server-side web search tool (D1: the basic version,
@@ -357,10 +411,17 @@ func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 			CacheControl: &cacheCtrl{Type: "ephemeral", TTL: "5m"},
 		}}
 	}
+	if w.codeExecution {
+		body.Container = w.container
+		body.Tools = append(body.Tools, codeExecutionTool{Type: llm.CallerCodeExecution, Name: "code_execution"})
+	}
 	if len(req.Tools) > 0 {
 		for i, t := range req.Tools {
 			tool := toolBody{
 				Name: t.Name, Description: t.Description, InputSchema: t.Schema,
+			}
+			if w.codeExecution {
+				tool.AllowedCallers = t.AllowedCallers
 			}
 			if i == len(req.Tools)-1 {
 				// Cache the tail of the tool list so the full tool block counts
@@ -399,7 +460,7 @@ func encodeContent(blocks []llm.ContentBlock) []contentBlock {
 				input = json.RawMessage("{}")
 			}
 			rest = append(rest, contentBlock{
-				Type: "tool_use", ID: b.ToolUseID, Name: b.ToolUseName, Input: input,
+				Type: "tool_use", ID: b.ToolUseID, Name: b.ToolUseName, Input: input, Caller: b.Caller,
 			})
 		case llm.ContentTypeServer:
 			rest = append(rest, contentBlock{raw: b.Raw})

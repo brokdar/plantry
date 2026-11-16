@@ -49,7 +49,7 @@ func (q *Queries) CountConversations(ctx context.Context) (int64, error) {
 const createConversation = `-- name: CreateConversation :one
 INSERT INTO ai_conversations (title)
 VALUES (?)
-RETURNING id, title, created_at, updated_at
+RETURNING id, title, created_at, updated_at, container_id, container_expires_at
 `
 
 func (q *Queries) CreateConversation(ctx context.Context, title sql.NullString) (AiConversation, error) {
@@ -60,6 +60,8 @@ func (q *Queries) CreateConversation(ctx context.Context, title sql.NullString) 
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContainerID,
+		&i.ContainerExpiresAt,
 	)
 	return i, err
 }
@@ -73,7 +75,7 @@ func (q *Queries) DeleteConversation(ctx context.Context, id int64) (sql.Result,
 }
 
 const getConversation = `-- name: GetConversation :one
-SELECT id, title, created_at, updated_at FROM ai_conversations WHERE id = ?
+SELECT id, title, created_at, updated_at, container_id, container_expires_at FROM ai_conversations WHERE id = ?
 `
 
 func (q *Queries) GetConversation(ctx context.Context, id int64) (AiConversation, error) {
@@ -84,12 +86,14 @@ func (q *Queries) GetConversation(ctx context.Context, id int64) (AiConversation
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContainerID,
+		&i.ContainerExpiresAt,
 	)
 	return i, err
 }
 
 const listConversations = `-- name: ListConversations :many
-SELECT id, title, created_at, updated_at FROM ai_conversations
+SELECT id, title, created_at, updated_at, container_id, container_expires_at FROM ai_conversations
 ORDER BY updated_at DESC, id DESC
 LIMIT ? OFFSET ?
 `
@@ -113,6 +117,8 @@ func (q *Queries) ListConversations(ctx context.Context, arg ListConversationsPa
 			&i.Title,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ContainerID,
+			&i.ContainerExpiresAt,
 		); err != nil {
 			return nil, err
 		}
@@ -162,6 +168,20 @@ func (q *Queries) ListMessages(ctx context.Context, conversationID int64) ([]AiM
 	return items, nil
 }
 
+const setConversationContainer = `-- name: SetConversationContainer :execresult
+UPDATE ai_conversations SET container_id = ?, container_expires_at = ? WHERE id = ?
+`
+
+type SetConversationContainerParams struct {
+	ContainerID        sql.NullString
+	ContainerExpiresAt sql.NullString
+	ID                 int64
+}
+
+func (q *Queries) SetConversationContainer(ctx context.Context, arg SetConversationContainerParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, setConversationContainer, arg.ContainerID, arg.ContainerExpiresAt, arg.ID)
+}
+
 const touchConversation = `-- name: TouchConversation :execresult
 UPDATE ai_conversations SET updated_at = datetime('now') WHERE id = ?
 `
@@ -174,7 +194,7 @@ const updateConversationTitle = `-- name: UpdateConversationTitle :one
 UPDATE ai_conversations
 SET title = ?, updated_at = datetime('now')
 WHERE id = ?
-RETURNING id, title, created_at, updated_at
+RETURNING id, title, created_at, updated_at, container_id, container_expires_at
 `
 
 type UpdateConversationTitleParams struct {
@@ -190,6 +210,8 @@ func (q *Queries) UpdateConversationTitle(ctx context.Context, arg UpdateConvers
 		&i.Title,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ContainerID,
+		&i.ContainerExpiresAt,
 	)
 	return i, err
 }

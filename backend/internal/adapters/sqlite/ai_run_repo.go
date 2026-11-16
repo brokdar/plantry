@@ -205,6 +205,7 @@ func (r *AIRunRepo) FinishRun(ctx context.Context, end airun.RunEnd) error {
 		ViolationsJson:    toNullStringEmpty(end.ViolationsJSON),
 		ScoreJson:         toNullStringEmpty(end.ScoreJSON),
 		Notes:             toNullStringEmpty(end.Notes),
+		ContainerID:       toNullStringEmpty(end.ContainerID),
 		ID:                end.ID,
 	})
 	if err != nil {
@@ -248,6 +249,8 @@ func (r *AIRunRepo) AddStep(ctx context.Context, step airun.Step) error {
 		ThinkingChars:     step.ThinkingChars,
 		ServedModel:       toNullStringEmpty(step.ServedModel),
 		ProviderRequestID: toNullStringEmpty(step.ProviderRequestID),
+		Caller:            toNullStringEmpty(step.Caller),
+		CallerToolID:      toNullStringEmpty(step.CallerToolID),
 	})
 	if err != nil {
 		if isForeignKeyViolation(err) {

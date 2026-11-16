@@ -38,6 +38,7 @@ func (run *Run) logLLMCall(ctx context.Context, provider string, req llm.Request
 		"stop_reason", step.StopReason,
 		"tool_choice", toolChoiceName(req.ToolChoice),
 		"max_tokens", requestMaxTokens(step.RequestJSON, req.MaxTokens),
+		"container_id", containerOf(resp, call.eff),
 		"request_bytes", len(step.RequestJSON),
 		"response_bytes", len(step.ResponseJSON),
 	)
@@ -46,6 +47,8 @@ func (run *Run) logLLMCall(ctx context.Context, provider string, req llm.Request
 			"sent_tool_choice", e.ToolChoice,
 			"sent_web_search", e.WebSearch,
 			"sent_thinking", e.Thinking,
+			"sent_code_execution", e.CodeExecution,
+			"sent_code_tools", strings.Join(e.CodeTools, ","),
 			"sent_temperature", e.Temperature != nil,
 			"fallbacks", strings.Join(e.Fallbacks, "; "),
 		)

@@ -37,6 +37,12 @@ type RunRequest struct {
 	// Effort is the reasoning effort (ai.reasoning_effort.chat); empty: the
 	// provider default.
 	Effort string
+	// CodeExecution offers the code execution tool (programmatic tool
+	// calling). Container is the container to reuse (empty: a new one) and
+	// SaveContainer, when set, is told every new container the provider names.
+	CodeExecution bool
+	Container     string
+	SaveContainer func(ctx context.Context, id string, expires time.Time)
 }
 
 // Run drives a tool-calling agent loop to completion on the given request and
@@ -51,6 +57,7 @@ type RunRequest struct {
 func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet, repo Repository, out chan<- llm.Event) error {
 	history := append([]llm.Message{}, req.History...)
 	var usage llm.Usage
+	container := req.Container
 
 	for iter := 0; iter < MaxIterations; iter++ {
 		providerReq := llm.Request{
@@ -62,6 +69,9 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			MaxTokens:   req.MaxTokens,
 			Reasoning:   true,
 			Effort:      req.Effort,
+
+			CodeExecution: req.CodeExecution,
+			Container:     container,
 		}
 
 		providerCh := make(chan llm.Event, 16)
@@ -97,6 +107,12 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			err := errors.New("llm client returned nil response without error")
 			return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", err)
 		}
+		if id := res.resp.ContainerID; id != "" && id != container {
+			container = id
+			if req.SaveContainer != nil && !res.resp.ContainerExpiresAt.IsZero() {
+				req.SaveContainer(ctx, id, res.resp.ContainerExpiresAt)
+			}
+		}
 		usage.InputTokens += res.resp.Usage.InputTokens
 		usage.OutputTokens += res.resp.Usage.OutputTokens
 		usage.CacheReadTokens += res.resp.Usage.CacheReadTokens
@@ -109,6 +125,12 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		history = append(history, res.resp.Message)
 
 		toolUses := extractToolUses(res.resp.Message)
+
+		// A long server-side turn (code execution) paused: resend the
+		// conversation, now ending in the assistant blocks, to continue it.
+		if res.resp.StopReason == llm.StopReasonPauseTurn && len(toolUses) == 0 {
+			continue
+		}
 
 		// No tool calls → the turn is the final response.
 		if res.resp.StopReason == llm.StopReasonEndTurn || len(toolUses) == 0 {
@@ -127,7 +149,11 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				ID: call.ToolUseID, Name: call.ToolUseName,
 			}})
 			start := time.Now()
-			output, effect, change, err := tools.Execute(ctx, call.ToolUseName, call.ToolUseInput)
+			caller := call.Caller
+			if caller == nil {
+				caller = &llm.Caller{Type: llm.CallerDirect}
+			}
+			output, effect, change, err := tools.Execute(llm.WithCaller(ctx, caller), call.ToolUseName, call.ToolUseInput)
 			dur := time.Since(start).Milliseconds()
 
 			if err != nil {

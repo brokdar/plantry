@@ -144,6 +144,13 @@ var registry = []Spec{
 		Default: "medium",
 	},
 	{
+		// Let the model script its read and dry-run tool calls (Anthropic
+		// programmatic tool calling). Providers without it ignore it.
+		Key:     KeyAIProgrammaticTools,
+		Kind:    KindBool,
+		Default: "true",
+	},
+	{
 		Key:      KeyAIRunRetentionDays,
 		Kind:     KindInt,
 		Default:  "180",

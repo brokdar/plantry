@@ -48,6 +48,10 @@ type StepType string
 const (
 	StepLLMCall  StepType = "llm_call"
 	StepToolCall StepType = "tool_call"
+	// StepCodeExecution is code the model ran in the provider's code
+	// execution container (programmatic tool calling): args_json is the code,
+	// result_json its stdout, stderr and return code.
+	StepCodeExecution StepType = "code_execution"
 )
 
 // Chooser is what picked a generation run's plates. Chat and lookup runs
@@ -101,6 +105,8 @@ type RunEnd struct {
 	ViolationsJSON string
 	ScoreJSON      string
 	Notes          string
+	// ContainerID is the run's last code execution container; empty is NULL.
+	ContainerID string
 }
 
 // Step is one LLM call or tool call within a run. Empty string fields are
@@ -139,6 +145,10 @@ type Step struct {
 	ServedModel string
 	// ProviderRequestID is the provider's id of the call's HTTP request.
 	ProviderRequestID string
+	// Caller is "direct" or "code_execution" on a tool_call step and
+	// CallerToolID the id of the code's server tool use block; empty is NULL.
+	Caller       string
+	CallerToolID string
 }
 
 // Store persists runs, steps and system prompts. Implementations are safe for

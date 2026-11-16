@@ -53,9 +53,31 @@ type ContentBlock struct {
 	ToolResultContent json.RawMessage `json:"tool_result_content,omitempty"`
 	ToolResultIsError bool            `json:"tool_result_is_error,omitempty"`
 
+	// Caller says who made a ToolUse call: the model directly or code it ran
+	// in the provider's code execution container (programmatic tool calling).
+	// Nil for blocks that are not tool calls or whose provider reports none.
+	Caller *Caller `json:"caller,omitempty"`
+
 	// Server block payload: the provider's block JSON, kept verbatim.
 	Raw json.RawMessage `json:"raw,omitempty"`
 }
+
+// Caller types: Anthropic's wire values of tool_use.caller.type and of a
+// tool's allowed_callers.
+const (
+	CallerDirect        = "direct"
+	CallerCodeExecution = "code_execution_20260120"
+)
+
+// Caller is who called a tool. For a code execution caller ToolID is the id
+// of the server tool use block that holds the code.
+type Caller struct {
+	Type   string `json:"type"`
+	ToolID string `json:"tool_id,omitempty"`
+}
+
+// FromCode reports whether the call came from code the model ran.
+func (c *Caller) FromCode() bool { return c != nil && c.Type == CallerCodeExecution }
 
 // Message is a single turn in a conversation.
 type Message struct {
@@ -68,6 +90,10 @@ type Tool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Schema      json.RawMessage `json:"schema"`
+	// AllowedCallers lists who may call the tool (CallerDirect,
+	// CallerCodeExecution); empty: only the model directly. A provider
+	// without programmatic tool calling ignores it.
+	AllowedCallers []string `json:"allowed_callers,omitempty"`
 }
 
 // ToolChoice forces the model to call the named tool.
@@ -101,6 +127,14 @@ type Request struct {
 	// provider default). An adapter sends it only for a model that supports
 	// it (Anthropic output_config.effort, OpenAI reasoning_effort).
 	Effort string
+	// CodeExecution offers the provider's code execution tool so the model
+	// can call the tools whose AllowedCallers name CallerCodeExecution from
+	// code. Adapters that cannot (or models that do not support it) ignore it.
+	CodeExecution bool
+	// Container is the id of the code execution container to keep using: the
+	// ContainerID of an earlier response. A request that answers programmatic
+	// tool calls must carry it.
+	Container string
 }
 
 // Usage reports token accounting for a single provider call.
@@ -154,6 +188,10 @@ type Response struct {
 	// RequestID is the provider's id of the HTTP request (Anthropic
 	// request-id, OpenAI x-request-id), empty when unknown.
 	RequestID string
+	// ContainerID is the code execution container of the turn (empty: none)
+	// and ContainerExpiresAt when the provider says it expires (zero: unknown).
+	ContainerID        string
+	ContainerExpiresAt time.Time
 }
 
 // Client is the port an LLM provider adapter must implement.
@@ -209,6 +247,12 @@ type Effective struct {
 	Effort           string
 	Betas            []string
 	CacheBreakpoints []string
+	// CodeExecution says the code execution tool went out; CodeTools are the
+	// tools sent with a code execution caller and Container the container id
+	// sent (empty: a new one).
+	CodeExecution bool
+	CodeTools     []string
+	Container     string
 }
 
 // ParamsReporter is implemented by clients that can report the effective
@@ -257,7 +301,20 @@ type ctxKey int
 const (
 	attemptKey ctxKey = iota
 	logAttrsKey
+	callerKey
 )
+
+// WithCaller returns ctx carrying who called the tool being executed, so the
+// tool and the run log can tell a call from code from a direct one.
+func WithCaller(ctx context.Context, c *Caller) context.Context {
+	return context.WithValue(ctx, callerKey, c)
+}
+
+// CallerFrom returns the caller set by WithCaller; nil means a direct call.
+func CallerFrom(ctx context.Context) *Caller {
+	c, _ := ctx.Value(callerKey).(*Caller)
+	return c
+}
 
 // WithAttemptObserver returns ctx carrying fn, which adapters call for each
 // retried attempt.

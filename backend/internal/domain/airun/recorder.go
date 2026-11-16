@@ -190,6 +190,11 @@ type Run struct {
 	// next call can store only what it appends.
 	lastMsgs []llm.Message
 	finished bool
+	// containerID is the code execution container of the latest reply that
+	// named one; codePending holds the code of server tool uses whose result
+	// has not arrived yet (it comes with a later reply), by tool use id.
+	containerID string
+	codePending map[string]pendingCode
 }
 
 // ID returns the run's row id: 0 for a nil run or one whose row could not be
@@ -273,6 +278,7 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 		ViolationsJSON:    res.ViolationsJSON,
 		ScoreJSON:         res.ScoreJSON,
 		Notes:             res.Notes,
+		ContainerID:       run.containerID,
 	}
 	run.mu.Unlock()
 
@@ -310,18 +316,27 @@ func (run *Run) ToolStep(ctx context.Context, name string, args, result json.Raw
 	seq := run.seq
 	run.mu.Unlock()
 
+	caller, callerToolID := callerLabel(llm.CallerFrom(ctx))
 	run.addStep(ctx, Step{
-		Seq:        seq,
-		Type:       StepToolCall,
-		Name:       name,
-		ArgsJSON:   string(args),
-		ResultJSON: string(result),
-		IsError:    isErr,
-		DurationMs: dur.Milliseconds(),
-		StartedAt:  run.rec.now().Add(-dur),
+		Seq:          seq,
+		Type:         StepToolCall,
+		Name:         name,
+		ArgsJSON:     string(args),
+		ResultJSON:   string(result),
+		IsError:      isErr,
+		DurationMs:   dur.Milliseconds(),
+		StartedAt:    run.rec.now().Add(-dur),
+		Caller:       caller,
+		CallerToolID: callerToolID,
 	})
+	run.mu.Lock()
+	container := run.containerID
+	run.mu.Unlock()
 	run.rec.logger.InfoContext(ctx, "ai.tool.call", append(run.LogAttrs(),
 		"kind", run.kind,
+		"caller", caller,
+		"caller_tool_id", callerToolID,
+		"container_id", container,
 		"step_seq", seq,
 		"tool", name,
 		"duration_ms", dur.Milliseconds(),
@@ -330,6 +345,26 @@ func (run *Run) ToolStep(ctx context.Context, name string, args, result json.Raw
 		"args", argsSummary(args),
 	)...)
 	return seq
+}
+
+// Caller labels stored on tool_call steps.
+const (
+	CallerDirect = "direct"
+	CallerCode   = "code_execution"
+)
+
+// callerLabel maps a tool call's caller to the step's caller label and the
+// code's server tool use id; a call without a caller (a step the code wrote
+// itself) has neither.
+func callerLabel(c *llm.Caller) (label, toolID string) {
+	switch {
+	case c == nil:
+		return "", ""
+	case c.FromCode():
+		return CallerCode, c.ToolID
+	default:
+		return CallerDirect, ""
+	}
 }
 
 // addStep writes step for this run, ignoring ctx cancellation. It reports

@@ -24,6 +24,10 @@ const (
 	// maxEvaluations is how many evaluate_plan dry runs a run answers; a
 	// further call is told to submit.
 	maxEvaluations = 8
+	// maxCodeEvaluations is the same bound for evaluate_plan calls made from
+	// code (programmatic tool calling), which exist to try several drafts in
+	// one model turn.
+	maxCodeEvaluations = 30
 	// maxModelCalls is the hard bound on provider calls per run, evaluate_plan
 	// replies included: every submit budget plus every dry run plus slack for
 	// the free attempt. Past it the run ends with what it has.
@@ -37,6 +41,15 @@ const (
 type LLMChooser struct {
 	resolver llm.Resolver
 	effort   func(context.Context) string
+	// programmatic reports whether the model may call evaluate_plan from code.
+	programmatic func(context.Context) bool
+}
+
+// WithProgrammatic sets where the chooser reads ai.programmatic_tools; without
+// it evaluate_plan is only called directly.
+func (c *LLMChooser) WithProgrammatic(read func(context.Context) bool) *LLMChooser {
+	c.programmatic = read
+	return c
 }
 
 // NewLLMChooser returns the LLM chooser over the configured provider.
@@ -93,12 +106,17 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 	if c.effort != nil {
 		req.Effort = c.effort(ctx)
 	}
+	if c.programmatic != nil && c.programmatic(ctx) {
+		req.CodeExecution = true
+		req.Tools[0].AllowedCallers = []string{llm.CallerDirect, llm.CallerCodeExecution}
+	}
 	var last *Proposal
 	var lastSig string
 	var allFixes, runNotes []string
 	// paid counts the repairs that use up the budget (maxRepairs); the one
 	// free attempt for a skeleton first reply is extra, once per run.
 	paid, freeUsed, evals, modelCalls := 0, false, 0, 0
+	directEvals, codeEvals := 0, 0
 	fillCells := len(fillCellLabels(in))
 	for attempt := 0; ; attempt++ {
 		if attempt > 0 && in.Stage != nil {
@@ -113,6 +131,9 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			return withNotes(*last, append(slices.Clone(allFixes), append(runNotes, note)...), nil, ""), nil
 		}
 		resp, err := call(ctx, client, req)
+		if err == nil && resp.ContainerID != "" {
+			req.Container = resp.ContainerID
+		}
 		if err != nil {
 			// The last proposal that came before the failure goes with the
 			// error, so the run log can evaluate it.
@@ -128,7 +149,15 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			results := make([]llm.ContentBlock, len(calls))
 			for i, b := range calls {
 				evals++
-				results[i] = evaluateResult(ctx, in, b, evals)
+				over := false
+				if b.Caller.FromCode() {
+					codeEvals++
+					over = codeEvals > maxCodeEvaluations
+				} else {
+					directEvals++
+					over = directEvals > maxEvaluations
+				}
+				results[i] = evaluateResult(llm.WithCaller(ctx, b.Caller), in, b, evals, over)
 			}
 			req.Messages = append(req.Messages, resp.Message, llm.Message{Role: llm.RoleUser, Content: results})
 			attempt--
@@ -421,15 +450,15 @@ func evaluateCalls(resp *llm.Response) []llm.ContentBlock {
 // merged proposal (after the same autofix a submit gets, listed under
 // autofix), or an error when the input is unreadable or the run used up its
 // dry runs. Every answered dry run is recorded as a plan.evaluation step.
-func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n int) llm.ContentBlock {
+func evaluateResult(ctx context.Context, in ChooseInput, b llm.ContentBlock, n int, over bool) llm.ContentBlock {
 	res := llm.ContentBlock{Type: llm.ContentTypeToolResult, ToolResultID: b.ToolUseID}
 	fail := func(msg string) llm.ContentBlock {
 		res.ToolResultIsError = true
 		res.ToolResultContent, _ = json.Marshal(msg)
 		return res
 	}
-	if n > maxEvaluations {
-		return fail(fmt.Sprintf("evaluate_plan is limited to %d calls per run; call submit_plan with your best plan.", maxEvaluations))
+	if over {
+		return fail("evaluate_plan call limit reached for this run; call submit_plan with your best plan.")
 	}
 	prop, err := parseProposal(b.ToolUseInput, in)
 	if err != nil {

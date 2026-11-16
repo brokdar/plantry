@@ -12,6 +12,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
@@ -141,6 +142,9 @@ func toolApplyChanges(svc Services) Tool {
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
+			}
+			if llm.CallerFrom(ctx).FromCode() && !in.DryRun {
+				return nil, ToolEffectNone, fmt.Errorf("%w: apply_changes called from code must set dry_run: true; call it directly (not from code) to save the change", ErrCodeCallRefused)
 			}
 			if svc.Tx == nil || svc.State == nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: apply_changes is not available (no unit of work or plan reader)", domain.ErrInvalidInput)

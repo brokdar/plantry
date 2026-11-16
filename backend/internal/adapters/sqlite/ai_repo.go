@@ -73,6 +73,16 @@ func (r *AIRepo) UpdateConversationTitle(ctx context.Context, id int64, title *s
 	return c, nil
 }
 
+// SetContainer implements agent.Repository.
+func (r *AIRepo) SetContainer(ctx context.Context, id int64, containerID string, expires time.Time) error {
+	_, err := r.queriesFor(ctx).SetConversationContainer(ctx, sqlcgen.SetConversationContainerParams{
+		ContainerID:        toNullStringEmpty(containerID),
+		ContainerExpiresAt: toNullStringEmpty(formatTime(expires)),
+		ID:                 id,
+	})
+	return err
+}
+
 func (r *AIRepo) TouchConversation(ctx context.Context, id int64) error {
 	res, err := r.queriesFor(ctx).TouchConversation(ctx, id)
 	if err != nil {
@@ -166,6 +176,10 @@ func mapConversationToDomain(row *sqlcgen.AiConversation, c *agent.Conversation)
 	if row.Title.Valid {
 		v := row.Title.String
 		c.Title = &v
+	}
+	c.ContainerID = row.ContainerID.String
+	if row.ContainerExpiresAt.Valid {
+		c.ContainerExpiresAt, _ = time.Parse(timeLayout, row.ContainerExpiresAt.String) //nolint:errcheck // written by SetContainer
 	}
 	c.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt) //nolint:errcheck // layout is controlled by our migration
 	c.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt) //nolint:errcheck

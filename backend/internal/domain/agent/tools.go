@@ -48,7 +48,18 @@ type Tool struct {
 	Description string
 	Schema      json.RawMessage
 	Handler     ToolHandler
+	// CodeCallable: the model may also call the tool from code it runs
+	// (programmatic tool calling). Only read and dry-run tools are.
+	CodeCallable bool
 }
+
+// codeCallableTools are the tools code may call: the reads and apply_changes,
+// which from code must be a dry run.
+var codeCallableTools = map[string]bool{"find_foods": true, "get_plan": true, applyChangesName: true}
+
+// ErrCodeCallRefused is returned when code the model ran calls a tool it may
+// not call (allowed_callers is guidance, not a security boundary).
+var ErrCodeCallRefused = errors.New("tool cannot be called from code")
 
 // ErrToolNotFound is returned when the model emits a tool call for a name the
 // registry doesn't know.
@@ -124,6 +135,20 @@ func (s *ToolSet) Describe() []llm.Tool {
 	out := make([]llm.Tool, len(s.tools))
 	for i, t := range s.tools {
 		out[i] = llm.Tool{Name: t.Name, Description: t.Description, Schema: t.Schema}
+		if t.CodeCallable {
+			out[i].AllowedCallers = []string{llm.CallerDirect, llm.CallerCodeExecution}
+		}
+	}
+	return out
+}
+
+// withoutCallers returns tools without their allowed callers (programmatic
+// tool calling is off).
+func withoutCallers(tools []llm.Tool) []llm.Tool {
+	out := make([]llm.Tool, len(tools))
+	for i, t := range tools {
+		t.AllowedCallers = nil
+		out[i] = t
 	}
 	return out
 }
@@ -197,6 +222,9 @@ func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessag
 	if !ok {
 		return nil, ToolEffectNone, fmt.Errorf("%w: %s", ErrToolNotFound, name)
 	}
+	if llm.CallerFrom(ctx).FromCode() && !t.CodeCallable {
+		return nil, ToolEffectNone, fmt.Errorf("%w: %s (it changes the plan or the conversation: call it directly)", ErrCodeCallRefused, name)
+	}
 	if len(input) == 0 {
 		input = json.RawMessage("{}")
 	}
@@ -242,6 +270,7 @@ func defaultTools(svc Services) []Tool {
 		tools = append(tools, toolRegenerate(svc))
 	}
 	for i := range tools {
+		tools[i].CodeCallable = codeCallableTools[tools[i].Name]
 		if effectTools[tools[i].Name] {
 			tools[i].Handler = withIssueBaseline(svc, tools[i].Handler)
 		}

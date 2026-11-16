@@ -22,7 +22,7 @@ import (
 
 // PromptVersion identifies the chat system prompt template. Bump it on every
 // change to the prompt.
-const PromptVersion = "v8"
+const PromptVersion = "v9"
 
 // SettingsReader is the subset of settings.Service that the agent needs.
 type SettingsReader interface {
@@ -186,14 +186,38 @@ func (s *Service) Chat(ctx context.Context, req ChatRequest, out chan<- llm.Even
 	// ctx.
 	ctx = withWindow(withToday(ctx, req.Today), w)
 	ctx = withTurn(ctx, chatTurn{conversationID: conv.ID, seq: s.turns.Add(1), unlocks: s.unlocks})
-	return Run(ctx, RunRequest{
+	runReq := RunRequest{
 		ConversationID: conv.ID,
 		Model:          model,
 		SystemPrompt:   prompt,
 		History:        history,
 		Tools:          s.tools.Describe(),
 		Effort:         s.effort(ctx),
-	}, client, s.tools, s.repo, out)
+	}
+	if s.programmatic(ctx) {
+		runReq.CodeExecution = true
+		if conv.ContainerID != "" && conv.ContainerExpiresAt.After(s.now()) {
+			runReq.Container = conv.ContainerID
+		}
+		runReq.SaveContainer = func(ctx context.Context, id string, expires time.Time) {
+			if err := s.repo.SetContainer(context.WithoutCancel(ctx), conv.ID, id, expires); err != nil {
+				slog.WarnContext(ctx, "agent.container.save", "conversation_id", conv.ID, "container_id", id, "error", err)
+			}
+		}
+	} else {
+		runReq.Tools = withoutCallers(runReq.Tools)
+	}
+	return Run(ctx, runReq, client, s.tools, s.repo, out)
+}
+
+// programmatic reads ai.programmatic_tools; an unreadable setting means off.
+func (s *Service) programmatic(ctx context.Context) bool {
+	v, err := s.settings.Get(ctx, settings.KeyAIProgrammaticTools)
+	if err != nil {
+		slog.WarnContext(ctx, "agent.programmatic.setting", "error", err)
+		return false
+	}
+	return v.Raw == "true"
 }
 
 // effort reads ai.reasoning_effort.chat; an unreadable setting means the

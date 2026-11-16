@@ -194,6 +194,7 @@ type Querier interface {
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
 	ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
+	SetConversationContainer(ctx context.Context, arg SetConversationContainerParams) (sql.Result, error)
 	// D11: any suggestion accepted -> accepted; all rejected -> discarded; else
 	// open. A run without suggestions keeps NULL.
 	SetDiscoveryRunOutcome(ctx context.Context, id int64) error

@@ -218,6 +218,9 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 		run.provider = provider
 		run.model = req.Model
 	}
+	if resp != nil && resp.ContainerID != "" {
+		run.containerID = resp.ContainerID
+	}
 	// The call continues the last recorded one when it resends its messages
 	// unchanged; otherwise the full history is stored from offset 0.
 	offset := 0
@@ -318,6 +321,9 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	if run.addStep(ctx, step) {
 		lastMsgs = append([]llm.Message(nil), req.Messages...)
 	}
+	if resp != nil {
+		run.recordCode(ctx, resp, call)
+	}
 	run.mu.Lock()
 	run.lastMsgs = lastMsgs
 	run.mu.Unlock()
@@ -384,6 +390,11 @@ type sentBody struct {
 	Effort           string   `json:"effort,omitempty"`
 	Betas            []string `json:"betas,omitempty"`
 	CacheBreakpoints []string `json:"cache_breakpoints,omitempty"`
+	// CodeExecution says the code execution tool went out, CodeTools which
+	// tools allowed a code caller and Container the container id sent.
+	CodeExecution bool     `json:"code_execution"`
+	CodeTools     []string `json:"code_tools,omitempty"`
+	Container     string   `json:"container,omitempty"`
 }
 
 // responseBody is the stored response_json: the reply's content blocks and
@@ -393,8 +404,10 @@ type responseBody struct {
 	Content    []llm.ContentBlock `json:"content"`
 	StopReason llm.StopReason     `json:"stop_reason"`
 	Partial    bool               `json:"partial,omitempty"`
-	Error      *errorBody         `json:"error,omitempty"`
-	Truncated  bool               `json:"truncated,omitempty"`
+	// ContainerID is the code execution container the reply names.
+	ContainerID string     `json:"container_id,omitempty"`
+	Error       *errorBody `json:"error,omitempty"`
+	Truncated   bool       `json:"truncated,omitempty"`
 }
 
 // errorBody is why a call failed: the provider's answer (status, type,
@@ -436,6 +449,7 @@ func encodeRequest(req llm.Request, eff *llm.Effective, offset int, systemHash, 
 		body.Sent = &sentBody{
 			ToolChoice: eff.ToolChoice, WebSearch: eff.WebSearch, Thinking: eff.Thinking, Fallbacks: eff.Fallbacks,
 			ThinkingType: eff.ThinkingType, ThinkingDisplay: eff.ThinkingDisplay, Effort: eff.Effort, Betas: eff.Betas, CacheBreakpoints: eff.CacheBreakpoints,
+			CodeExecution: eff.CodeExecution, CodeTools: eff.CodeTools, Container: eff.Container,
 		}
 	}
 	return encodeCapped(&body, blocks, &body.Truncated)
@@ -448,7 +462,7 @@ func encodeResponse(resp *llm.Response, callErr error, call callInfo) (string, e
 	body := responseBody{}
 	if resp != nil {
 		content = append(content, resp.Message.Content...)
-		body.StopReason, body.Partial = resp.StopReason, resp.Partial
+		body.StopReason, body.Partial, body.ContainerID = resp.StopReason, resp.Partial, resp.ContainerID
 	}
 	body.Content = content
 	if callErr != nil {

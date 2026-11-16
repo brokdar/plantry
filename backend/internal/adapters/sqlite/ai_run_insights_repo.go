@@ -68,6 +68,7 @@ func (r *AIRunRepo) GetRun(ctx context.Context, id int64) (airun.RunDetailRow, e
 		Notes:          row.Notes.String,
 		ErrorKey:       row.ErrorKey.String,
 		AppVersion:     row.AppVersion.String,
+		ContainerID:    row.ContainerID.String,
 		PromptText:     row.PromptText.String,
 	}, nil
 }
@@ -101,6 +102,8 @@ func (r *AIRunRepo) ListSteps(ctx context.Context, runID int64) ([]airun.StepVie
 			ThinkingChars:     row.ThinkingChars,
 			ServedModel:       row.ServedModel.String,
 			ProviderRequestID: row.ProviderRequestID.String,
+			Caller:            row.Caller.String,
+			CallerToolID:      row.CallerToolID.String,
 		}
 		if row.StartedAt.Valid {
 			if t, err := time.Parse(stepTimeLayout, row.StartedAt.String); err == nil {
