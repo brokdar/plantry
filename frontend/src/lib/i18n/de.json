@@ -440,6 +440,10 @@
         "served_model": "beantwortet von {{model}}"
       },
       "tool": {
+        "find_foods": "Rezepte und Zutaten durchgesucht",
+        "apply_changes": "Den Plan geändert",
+        "evaluate_plan": "Einen Planentwurf geprüft",
+        "get_plan": "Deinen Plan gelesen",
         "list_foods": "Rezepte und Zutaten durchgesehen",
         "get_food": "Ein Rezept gelesen",
         "list_slots": "Deine Mahlzeiten geprüft",
@@ -1148,6 +1152,8 @@
     "change": {
       "blocked_confirmed": "Übernommen, Rückgängig ist nicht mehr möglich",
       "fallback": "Dein Plan hat sich geändert",
+      "apply_changes_one": "{{summary}}",
+      "apply_changes_other": "{{count}} Änderungen: {{summary}}",
       "apply_preset": "{{day}}: Routine {{name}} angewendet",
       "set_session_portions_one": "{{name}}: {{count}} Portion",
       "set_session_portions_other": "{{name}}: {{count}} Portionen",

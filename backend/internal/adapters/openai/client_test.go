@@ -297,3 +297,30 @@ func TestStream_RequestIDOnSuccess(t *testing.T) {
 	_ = drainEvents(out)
 	assert.Equal(t, "req_oa_1", resp.RequestID)
 }
+
+// reasoning_effort is sent only for reasoning models.
+func TestStream_ReasoningEffortOnlyForReasoningModels(t *testing.T) {
+	var bodies []map[string]any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var m map[string]any
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&m))
+		bodies = append(bodies, m)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer ts.Close()
+	c := openai.New("k", openai.WithBaseURL(ts.URL), openai.WithHTTPClient(ts.Client()))
+	for _, model := range []string{"gpt-5.1", "gpt-4o"} {
+		out := make(chan llm.Event, 16)
+		go func() {
+			for range out {
+			}
+		}()
+		_, _ = c.Stream(context.Background(), llm.Request{Model: model, Effort: "low"}, out)
+	}
+	require.Len(t, bodies, 2)
+	assert.Equal(t, "low", bodies[0]["reasoning_effort"])
+	assert.NotContains(t, bodies[1], "reasoning_effort")
+	assert.Equal(t, "low", c.EffectiveParams(llm.Request{Model: "o3", Effort: "low"}).Effort)
+	assert.Empty(t, c.EffectiveParams(llm.Request{Model: "gpt-4o", Effort: "low"}).Effort)
+}

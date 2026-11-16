@@ -81,7 +81,7 @@
           "type": "tool_call_start",
           "payload": {
             "id": "tu_c2",
-            "name": "set_session_portions"
+            "name": "apply_changes"
           }
         },
         {
@@ -89,7 +89,7 @@
           "type": "tool_call_delta",
           "payload": {
             "id": "tu_c2",
-            "args_json": "{\"session_id\": \"{{chili_session}}\", \"portions\": 6, \"frozen_portions\": 2}"
+            "args_json": "{\"ops\": [{\"op\": \"set_portions\", \"session_id\": \"{{chili_session}}\", \"portions\": 6, \"frozen_portions\": 2}]}"
           }
         }
       ],
@@ -103,11 +103,16 @@
           {
             "type": "tool_use",
             "tool_use_id": "tu_c2",
-            "tool_name": "set_session_portions",
+            "tool_name": "apply_changes",
             "tool_input": {
-              "session_id": "{{chili_session}}",
-              "portions": 6,
-              "frozen_portions": 2
+              "ops": [
+                {
+                  "op": "set_portions",
+                  "session_id": "{{chili_session}}",
+                  "portions": 6,
+                  "frozen_portions": 2
+                }
+              ]
             }
           }
         ]
@@ -171,7 +176,7 @@
           "type": "tool_call_start",
           "payload": {
             "id": "tu_r1",
-            "name": "remove_plate_component"
+            "name": "apply_changes"
           }
         },
         {
@@ -179,7 +184,7 @@
           "type": "tool_call_delta",
           "payload": {
             "id": "tu_r1",
-            "args_json": "{\"plate_component_id\": \"{{mon_side_component}}\"}"
+            "args_json": "{\"ops\": [{\"op\": \"remove\", \"plate_component_id\": \"{{mon_side_component}}\"}]}"
           }
         }
       ],
@@ -193,9 +198,14 @@
           {
             "type": "tool_use",
             "tool_use_id": "tu_r1",
-            "tool_name": "remove_plate_component",
+            "tool_name": "apply_changes",
             "tool_input": {
-              "plate_component_id": "{{mon_side_component}}"
+              "ops": [
+                {
+                  "op": "remove",
+                  "plate_component_id": "{{mon_side_component}}"
+                }
+              ]
             }
           }
         ]
@@ -372,7 +382,7 @@
           "type": "tool_call_start",
           "payload": {
             "id": "tu_y2",
-            "name": "remove_plate_component"
+            "name": "apply_changes"
           }
         },
         {
@@ -380,7 +390,7 @@
           "type": "tool_call_delta",
           "payload": {
             "id": "tu_y2",
-            "args_json": "{\"plate_component_id\": \"{{mon_side_component}}\"}"
+            "args_json": "{\"ops\": [{\"op\": \"remove\", \"plate_component_id\": \"{{mon_side_component}}\"}]}"
           }
         }
       ],
@@ -394,9 +404,14 @@
           {
             "type": "tool_use",
             "tool_use_id": "tu_y2",
-            "tool_name": "remove_plate_component",
+            "tool_name": "apply_changes",
             "tool_input": {
-              "plate_component_id": "{{mon_side_component}}"
+              "ops": [
+                {
+                  "op": "remove",
+                  "plate_component_id": "{{mon_side_component}}"
+                }
+              ]
             }
           }
         ]

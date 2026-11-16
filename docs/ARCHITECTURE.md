@@ -586,14 +586,15 @@ error.profile.invalid_macros
 ### 7.1 Tool schema (domain-defined)
 
 ```
-read:    list_foods, get_food, list_slots, get_profile, get_plates_range(from, to),
-         get_plan                          -- cells, sessions, plates, issues in one call
+read:    find_foods(roles, kinds, ids, no_cook, diet, tags, search, max_kcal, min_protein, sort, limit),
+         list_slots, get_profile,
+         get_plan(from?, to?)              -- cells, sessions, plates, issues and the evaluation in one call
          list_presets, get_preset
-plates:  create_plate, delete_plate, add_food_to_plate, swap_food,
-         update_plate_component, remove_plate_component
+write:   apply_changes(ops[], dry_run)     -- add, swap, set_quantity, remove, create_plate, delete_plate,
+                                              set_portions, set_eaters, set_availability in one transaction
 presets: create_preset_from_plates, update_preset, delete_preset, apply_preset
-plan:    set_session_portions, set_plate_eaters, set_availability,
-         confirm, unlock, regenerate
+plan:    confirm, unlock, regenerate
+planner: evaluate_plan, submit_plan        -- the plan generator's own tools (planning package)
 profile: record_preference(key, value)     -- never likes/dislikes (enforced in code)
 ```
 

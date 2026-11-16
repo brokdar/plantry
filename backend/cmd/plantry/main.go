@@ -248,7 +248,14 @@ func run() error {
 		Progress: planning.NewProgress(),
 		Choosers: map[airun.Chooser]planning.Chooser{
 			airun.ChooserHeuristic: planning.Heuristic{},
-			airun.ChooserLLM:       planning.NewLLMChooser(llmResolver),
+			airun.ChooserLLM: planning.NewLLMChooser(llmResolver).WithEffort(func(ctx context.Context) string {
+				v, err := settingsSvc.Get(ctx, settingsdom.KeyAIReasoningEffortGenerate)
+				if err != nil {
+					slog.WarnContext(ctx, "plan.effort.setting", "error", err)
+					return ""
+				}
+				return v.Raw
+			}),
 		},
 		Logger: logger,
 	})

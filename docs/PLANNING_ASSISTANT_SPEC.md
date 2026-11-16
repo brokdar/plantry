@@ -440,13 +440,13 @@ The chat remains for adjustments ("no fish this week", "swap Tuesday's side for 
 - The system prompt now includes today's date, the window, and a compact plan summary, reusing §6.2.
 - **New tools:**
   - `regenerate` (scope + instruction → calls the generation service)
-  - `set_session_portions`, `set_plate_eaters`
+  - `apply_changes` (agent tools v2: one transaction of ops, with `dry_run`) replaces `create_plate`, `add_food_to_plate`, `swap_food`, `update_plate_component`, `remove_plate_component`, `delete_plate`, `set_session_portions`, `set_plate_eaters` and `set_availability`
   - `confirm` / `unlock` (unlock lists the affected confirmed rows and needs the user's yes in chat)
   - `set_availability`
   - `get_plan` (cells + sessions + plates in one call)
 - **Changed tools:**
-  - `list_foods` / `get_food` return macros per portion, diet class, keep days, last eaten, favorite.
-  - `get_plates_range` returns state, eaters, and session links.
+  - `find_foods` (agent tools v2) replaces `list_foods` / `get_food`: filters in, lists out, macros per portion, diet class, keep days, last eaten, favorite.
+  - `get_plan(from?, to?)` replaces `get_plates_range` and returns the evaluation (days, issues incl. soft ones with options).
   - Agent tools take REAL portions (the `QuantityFromLegacyPortions` shim is removed).
 - **Removed tools:** `copy_week` (the generator replaces it); `record_preference` is restricted to keys other than likes/dislikes, enforced in code.
 - Mutations from chat on a draft window keep rows in the `draft` state, with the chat's `ai_run_id`.

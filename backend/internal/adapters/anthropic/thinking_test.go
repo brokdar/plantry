@@ -94,3 +94,26 @@ func TestStream_ReasoningOnUnsupportedModel(t *testing.T) {
 	assert.Equal(t, "tool", bodies[0]["tool_choice"].(map[string]any)["type"])
 	assert.InDelta(t, 0.4, bodies[0]["temperature"], 1e-9)
 }
+
+// effort goes out as output_config.effort only for a model whose
+// capabilities list it, and is reported in the effective parameters.
+func TestStream_EffortFollowsCapabilities(t *testing.T) {
+	supported := `{"id":"m","capabilities":{"effort":{"supported":true,"low":{"supported":true},"medium":{"supported":true},"high":{"supported":false}}}}`
+	var bodies []map[string]any
+	c := thinkingServer(t, supported, &bodies)
+	req := llm.Request{Model: "e1", Effort: "low"}
+	stream(t, c, req)
+	stream(t, c, llm.Request{Model: "e1", Effort: "high"})
+	stream(t, c, llm.Request{Model: "e1"})
+	require.Len(t, bodies, 3)
+	assert.Equal(t, map[string]any{"effort": "low"}, bodies[0]["output_config"])
+	assert.NotContains(t, bodies[1], "output_config", "the model lists high as unsupported")
+	assert.NotContains(t, bodies[2], "output_config", "no effort asked")
+	assert.Equal(t, "low", c.EffectiveParams(req).Effort)
+
+	var other []map[string]any
+	c2 := thinkingServer(t, `{"id":"m","capabilities":{"thinking":{"supported":true}}}`, &other)
+	stream(t, c2, llm.Request{Model: "e2", Effort: "low"})
+	assert.NotContains(t, other[0], "output_config", "no effort capability")
+	assert.Empty(t, c2.EffectiveParams(llm.Request{Model: "e2", Effort: "low"}).Effort)
+}

@@ -32,10 +32,18 @@ const (
 // call as a step of the run.
 type LLMChooser struct {
 	resolver llm.Resolver
+	effort   func(context.Context) string
 }
 
 // NewLLMChooser returns the LLM chooser over the configured provider.
 func NewLLMChooser(r llm.Resolver) *LLMChooser { return &LLMChooser{resolver: r} }
+
+// WithEffort sets where the chooser reads the reasoning effort of its calls
+// (ai.reasoning_effort.generate); without it the provider default applies.
+func (c *LLMChooser) WithEffort(read func(context.Context) string) *LLMChooser {
+	c.effort = read
+	return c
+}
 
 // PromptVersion is the run log's prompt_version of LLM runs.
 func (*LLMChooser) PromptVersion() string { return PromptVersion }
@@ -77,6 +85,9 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		Temperature: llmTemperature,
 		Reasoning:   true,
 		MaxTokens:   llmMaxTokens,
+	}
+	if c.effort != nil {
+		req.Effort = c.effort(ctx)
 	}
 	var last *Proposal
 	var lastSig string

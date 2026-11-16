@@ -27,13 +27,13 @@ describe("buildTranscript", () => {
           {
             type: "tool_use",
             tool_use_id: "b",
-            tool_use_name: "set_session_portions",
+            tool_use_name: "apply_changes",
           },
         ]),
         msg(3, "tool", [{ type: "tool_result", tool_result_id: "b" }]),
         msg(4, "assistant", [{ type: "text", text: "Done." }]),
       ],
-      [change(5, "set_session_portions")]
+      [change(5, "apply_changes")]
     )
     expect(turns.map((t) => [t.message.id, t.text, t.changes.length])).toEqual([
       [1, "chili 6", 0],
@@ -50,7 +50,7 @@ describe("buildTranscript", () => {
           {
             type: "tool_use",
             tool_use_id: "b",
-            tool_use_name: "remove_plate_component",
+            tool_use_name: "apply_changes",
           },
         ]),
         msg(3, "user", [
@@ -61,12 +61,10 @@ describe("buildTranscript", () => {
           },
         ]),
       ],
-      [change(9, "remove_plate_component")]
+      [change(9, "apply_changes")]
     )
     expect(turns.map((t) => [t.message.id, t.changes.length])).toEqual([[2, 0]])
-    expect(turns[0].failures).toEqual([
-      { id: "b", tool: "remove_plate_component" },
-    ])
+    expect(turns[0].failures).toEqual([{ id: "b", tool: "apply_changes" }])
     expect(rest.map((c) => c.id)).toEqual([9])
   })
 
@@ -197,12 +195,12 @@ describe("buildTranscript", () => {
     it("gives a change to the call whose result names it, whatever the tool", () => {
       const { turns, rest } = buildTranscript(
         [
-          msg(2, "assistant", [call("a", "set_availability")]),
+          msg(2, "assistant", [call("a", "apply_changes")]),
           msg(3, "tool", [result("a", { change_id: 9 })]),
-          msg(4, "assistant", [call("b", "set_availability")]),
+          msg(4, "assistant", [call("b", "apply_changes")]),
           msg(5, "tool", [result("b", { change_id: 8 })]),
         ],
-        [change(8, "set_availability"), change(9, "set_availability")]
+        [change(8, "apply_changes"), change(9, "apply_changes")]
       )
       expect(
         turns.map((t) => [t.message.id, t.changes.map((c) => c.id)])
@@ -252,12 +250,12 @@ describe("buildTranscript", () => {
     it("keeps calls apart when a tool call id is reused in a later turn", () => {
       const { turns, rest } = buildTranscript(
         [
-          msg(2, "assistant", [call("tu_1", "set_session_portions")]),
+          msg(2, "assistant", [call("tu_1", "apply_changes")]),
           msg(3, "tool", [result("tu_1", { change_id: 5 })]),
-          msg(4, "assistant", [call("tu_1", "set_session_portions")]),
+          msg(4, "assistant", [call("tu_1", "apply_changes")]),
           msg(5, "tool", [result("tu_1", { change_id: 6 })]),
         ],
-        [change(5, "set_session_portions"), change(6, "set_session_portions")]
+        [change(5, "apply_changes"), change(6, "apply_changes")]
       )
       expect(
         turns.map((t) => [t.message.id, t.changes.map((c) => c.id)])

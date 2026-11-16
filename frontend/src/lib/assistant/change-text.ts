@@ -6,6 +6,7 @@ import { slotLabel } from "@/lib/slot-label"
 /** Every `text_key` the backend notes (agent `noteChange`), each with a line
  *  under `assistant.change.<key>` in en and de. */
 export const CHANGE_TEXT_KEYS = [
+  "apply_changes",
   "apply_preset",
   "set_session_portions",
   "set_plate_eaters",
@@ -48,8 +49,11 @@ function text(v: unknown): string {
 /**
  * The change line's sentence (D16): `assistant.change.<text_key>` with the
  * change's params. Dates become weekdays, a slot key its display name.
- * `set_session_portions` and `set_plate_eaters` plural on the number; the
- * portions line adds the frozen part only when some are frozen.
+ * `apply_changes` (one change per call: `count` ops, `summary` their short
+ * descriptions) plurals on the count. The per-tool keys below it are what
+ * older conversations stored. `set_session_portions` and `set_plate_eaters`
+ * plural on the number; the portions line adds the frozen part only when
+ * some are frozen.
  */
 export function changeSentence(
   t: TFunction,
@@ -60,6 +64,7 @@ export function changeSentence(
   let key = change.text_key
   const values: Record<string, string | number> = {
     name: text(p.name),
+    summary: text(p.summary),
     from: text(p.from),
     day: weekday(p.date, i18n.language),
     slot:
@@ -87,11 +92,9 @@ export function changeSentence(
 /** Tools that only read: the status line says "Reading your plan…". */
 const READ_TOOLS = new Set([
   "get_plan",
-  "get_plates_range",
   "get_profile",
-  "get_food",
   "get_preset",
-  "list_foods",
+  "find_foods",
   "list_presets",
   "list_slots",
 ])

@@ -440,6 +440,10 @@
         "served_model": "served by {{model}}"
       },
       "tool": {
+        "find_foods": "Searched your recipes and ingredients",
+        "apply_changes": "Changed the plan",
+        "evaluate_plan": "Checked a plan draft",
+        "get_plan": "Read your plan",
         "list_foods": "Looked through your recipes and ingredients",
         "get_food": "Read a recipe",
         "list_slots": "Checked your meal slots",
@@ -1148,6 +1152,8 @@
     "change": {
       "blocked_confirmed": "Accepted, undo is no longer possible",
       "fallback": "Your plan changed",
+      "apply_changes_one": "{{summary}}",
+      "apply_changes_other": "{{count}} changes: {{summary}}",
       "apply_preset": "{{day}}: routine {{name}} applied",
       "set_session_portions_one": "{{name}}: {{count}} portion",
       "set_session_portions_other": "{{name}}: {{count}} portions",

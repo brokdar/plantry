@@ -130,6 +130,20 @@ var registry = []Spec{
 		},
 	},
 	{
+		// Reasoning effort of the chat agent and of plan generation, sent
+		// to models that support it.
+		Key:     KeyAIReasoningEffortChat,
+		Kind:    KindEnum,
+		Enum:    []string{"low", "medium", "high"},
+		Default: "low",
+	},
+	{
+		Key:     KeyAIReasoningEffortGenerate,
+		Kind:    KindEnum,
+		Enum:    []string{"low", "medium", "high"},
+		Default: "medium",
+	},
+	{
 		Key:      KeyAIRunRetentionDays,
 		Kind:     KindInt,
 		Default:  "180",

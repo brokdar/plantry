@@ -62,11 +62,11 @@ async function chatOnce(
   return runId
 }
 
-/** A chat script that adds one draft plate (create_plate), then ends. */
+/** A chat script that adds one draft plate (apply_changes create_plate), then ends. */
 function createPlateScript(date: string, slotId: number): string {
   const text = "Done, it is planned."
   const usage = { input_tokens: 1000, output_tokens: 30 }
-  const input = { date, slot_id: slotId }
+  const input = { ops: [{ op: "create_plate", date, slot_id: slotId }] }
   return JSON.stringify({
     turns: [
       {
@@ -74,7 +74,7 @@ function createPlateScript(date: string, slotId: number): string {
           { type: "message_start", payload: { model: "fake-e2e" } },
           {
             type: "tool_call_start",
-            payload: { id: "tu_1", name: "create_plate" },
+            payload: { id: "tu_1", name: "apply_changes" },
           },
           {
             type: "tool_call_delta",
@@ -87,7 +87,7 @@ function createPlateScript(date: string, slotId: number): string {
             {
               type: "tool_use",
               tool_use_id: "tu_1",
-              tool_name: "create_plate",
+              tool_name: "apply_changes",
               tool_input: input,
             },
           ],

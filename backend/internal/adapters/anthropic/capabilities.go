@@ -47,10 +47,37 @@ type ModelInfo struct {
 				Adaptive *support `json:"adaptive"`
 			} `json:"types"`
 		} `json:"thinking"`
+		Effort *struct {
+			Supported bool     `json:"supported"`
+			Low       *support `json:"low"`
+			Medium    *support `json:"medium"`
+			High      *support `json:"high"`
+		} `json:"effort"`
 		ServerTools *struct {
 			WebSearch *support `json:"web_search"`
 		} `json:"server_tools"`
 	} `json:"capabilities"`
+}
+
+// EffortSupported reports whether capabilities.effort lists level (low,
+// medium or high) as supported. Without capability data the answer is false.
+func (m ModelInfo) EffortSupported(level string) bool {
+	c := m.Capabilities
+	if c == nil || c.Effort == nil || !c.Effort.Supported {
+		return false
+	}
+	var l *support
+	switch level {
+	case "low":
+		l = c.Effort.Low
+	case "medium":
+		l = c.Effort.Medium
+	case "high":
+		l = c.Effort.High
+	default:
+		return false
+	}
+	return l == nil || l.Supported
 }
 
 // WebSearch reports capabilities.server_tools.web_search.supported.
@@ -112,6 +139,7 @@ type rejection struct {
 	temperature bool
 	forcedTool  bool
 	thinking    bool
+	effort      bool
 }
 
 // flight is one capability lookup in progress; waiters block on done.
@@ -299,6 +327,7 @@ type wire struct {
 	temperature bool
 	webSearch   bool
 	thinking    bool // adaptive thinking with a summarized display
+	effort      string
 	maxTokens   int
 	fallbacks   []string
 }
@@ -349,6 +378,9 @@ func (c *Client) plan(req llm.Request) wire {
 			w.fallbacks = append(w.fallbacks, "temperature_dropped_for_thinking")
 		}
 	}
+	if req.Effort != "" && cp.known && cp.info.EffortSupported(req.Effort) && !rej.effort {
+		w.effort = req.Effort
+	}
 	if req.WebSearch != nil {
 		if cp.webSearch != nil && !*cp.webSearch {
 			w.fallbacks = append(w.fallbacks, "web_search_rejected_by_org")
@@ -369,6 +401,7 @@ func (w wire) effective(req llm.Request) llm.Effective {
 	if w.thinking {
 		e.ThinkingType, e.ThinkingDisplay = "adaptive", "summarized"
 	}
+	e.Effort = w.effort
 	if req.System != "" || req.ToolChoice != nil && !w.forcedTool {
 		e.CacheBreakpoints = append(e.CacheBreakpoints, "system")
 	}

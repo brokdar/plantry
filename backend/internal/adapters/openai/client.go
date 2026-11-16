@@ -63,6 +63,7 @@ func (c *Client) EffectiveParams(req llm.Request) llm.Effective {
 		t := req.Temperature
 		eff.Temperature = &t
 	}
+	eff.Effort = effort(req)
 	return eff
 }
 
@@ -144,6 +145,29 @@ type reqBody struct {
 	// model, including the older gpt-4o family, so we send only the new key.
 	MaxCompletionTokens int      `json:"max_completion_tokens,omitempty"`
 	Temperature         *float64 `json:"temperature,omitempty"`
+	// ReasoningEffort is sent only for reasoning models (see reasoningModel).
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+}
+
+// reasoningModel reports whether model is a reasoning model (o-series,
+// gpt-5.x), the only ones that accept reasoning_effort. OpenAI has no
+// capabilities endpoint, so this is a name check.
+func reasoningModel(model string) bool {
+	m := strings.ToLower(model)
+	for _, p := range []string{"o1", "o3", "o4", "gpt-5"} {
+		if strings.HasPrefix(m, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// effort is the reasoning_effort to send for req ("" for none).
+func effort(req llm.Request) string {
+	if req.Effort == "" || !reasoningModel(req.Model) {
+		return ""
+	}
+	return req.Effort
 }
 
 type toolChoiceBody struct {
@@ -205,6 +229,7 @@ func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
 		tmp := req.Temperature
 		body.Temperature = &tmp
 	}
+	body.ReasoningEffort = effort(req)
 	// Top-level system message comes first.
 	if req.System != "" {
 		sys := req.System

@@ -33,7 +33,10 @@ describe("change text", () => {
       changeSentence(
         t,
         i18next,
-        mockChange({ params: { name: "Chili", portions: 6, frozen } })
+        mockChange({
+          text_key: "set_session_portions",
+          params: { name: "Chili", portions: 6, frozen },
+        })
       )
     expect(line(2)).toBe("Chili: 6 portions, 2 frozen")
     expect(line(0)).toBe("Chili: 6 portions")
@@ -78,6 +81,6 @@ describe("change text", () => {
   it("status keys never carry a tool name", () => {
     expect(statusKey("get_plan")).toBe("assistant.status.reading")
     expect(statusKey("regenerate")).toBe("assistant.status.regenerating")
-    expect(statusKey("set_session_portions")).toBe("assistant.status.updating")
+    expect(statusKey("apply_changes")).toBe("assistant.status.updating")
   })
 })

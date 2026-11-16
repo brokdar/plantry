@@ -97,6 +97,10 @@ type Request struct {
 	// supports it. It makes the adapter ignore Temperature and downgrade a
 	// forced ToolChoice to auto; leave it false for short or cheap calls.
 	Reasoning bool
+	// Effort is the reasoning effort ("low", "medium" or "high"; empty: the
+	// provider default). An adapter sends it only for a model that supports
+	// it (Anthropic output_config.effort, OpenAI reasoning_effort).
+	Effort string
 }
 
 // Usage reports token accounting for a single provider call.

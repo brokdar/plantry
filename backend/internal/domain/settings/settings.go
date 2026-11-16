@@ -117,6 +117,8 @@ const (
 	KeyDiscoveryCuisines          = "discovery.cuisines"
 	KeyAIRunRetentionDays         = "ai.run_retention_days"
 	KeyAIPriceOverrides           = "ai.price_overrides"
+	KeyAIReasoningEffortChat      = "ai.reasoning_effort.chat"
+	KeyAIReasoningEffortGenerate  = "ai.reasoning_effort.generate"
 )
 
 // maxCuisines and maxCuisineLen bound discovery.cuisines (D19).

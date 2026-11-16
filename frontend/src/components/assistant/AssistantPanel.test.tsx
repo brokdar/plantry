@@ -354,7 +354,7 @@ describe("AssistantPanel changes (F3-AC4)", () => {
         id: 2,
         role: "assistant" as const,
         text: "Done.",
-        toolUse: { id: "tu_1", name: "set_session_portions" },
+        toolUse: { id: "tu_1", name: "apply_changes" },
       },
     ],
   }
@@ -405,7 +405,7 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     })
     renderPanel()
     const line = screen.getByTestId("assistant-change")
-    expect(line).toHaveTextContent("Chili: 6 portions")
+    expect(line).toHaveTextContent("Chili 6 portions (2026-11-03)")
     expect(line).toHaveTextContent("Changed since")
     expect(
       screen.queryByTestId("assistant-change-undo")
@@ -422,7 +422,7 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     })
     renderPanel()
     const line = screen.getByTestId("assistant-change")
-    expect(line).toHaveTextContent("Chili: 6 portions")
+    expect(line).toHaveTextContent("Chili 6 portions (2026-11-03)")
     expect(screen.getByTestId("assistant-change-unrecorded")).toHaveTextContent(
       "Couldn't be saved, undo not possible"
     )
@@ -502,7 +502,7 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     const call = (id: string) => ({
       type: "tool_use",
       tool_use_id: id,
-      tool_use_name: "set_session_portions",
+      tool_use_name: "apply_changes",
     })
     stubQueries({
       raw: [
@@ -538,7 +538,10 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     stubQueries({})
     act(() => {
       assistantStream.addChange(
-        mockChange({ params: { name: "Chili", portions: 6, frozen: 2 } })
+        mockChange({
+          text_key: "set_session_portions",
+          params: { name: "Chili", portions: 6, frozen: 2 },
+        })
       )
     })
     renderPanel()
@@ -554,11 +557,11 @@ describe("AssistantPanel changes (F3-AC4)", () => {
     stubQueries({ ...oneChange, changes: [live()] })
     act(() => {
       assistantStream.setConversation(1)
-      assistantStream.setStatus("set_session_portions")
+      assistantStream.setStatus("apply_changes")
     })
     renderPanel({})
-    expect(screen.queryByText(/set_session_portions/)).not.toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/set_session_portions/)
+    expect(screen.queryByText(/apply_changes/)).not.toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/apply_changes/)
   })
 
   test("an unlock request shows the card and Yes, unlock sends that text", async () => {
