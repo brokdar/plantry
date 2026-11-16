@@ -31,7 +31,10 @@ test.describe("Time slots settings", () => {
 
       await page.getByLabel(/translation key/i).fill(nameKey)
       // Icon field is a custom Popover combobox — open it, search, then click.
-      await page.getByRole("combobox").click()
+      await page
+        .getByRole("combobox")
+        .filter({ hasText: "Pick an icon" })
+        .click()
       await page.getByPlaceholder("Search icons…").fill("Coffee")
       // Multiple lucide icons match "coffee" (Coffee, CoffeeIcon, LucideCoffee);
       // anchor to an exact title match to pick the primary icon.
