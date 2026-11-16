@@ -111,13 +111,15 @@ type runStepResponse struct {
 
 type runDetailResponse struct {
 	runSummaryResponse
-	Scope       json.RawMessage   `json:"scope"`
-	Instruction *string           `json:"instruction"`
-	Notes       *string           `json:"notes"`
-	Violations  json.RawMessage   `json:"violations"`
-	ErrorKey    *string           `json:"error_key"`
-	Steps       []runStepResponse `json:"steps"`
-	PromptText  *string           `json:"prompt_text"`
+	Scope       json.RawMessage `json:"scope"`
+	Instruction *string         `json:"instruction"`
+	Notes       *string         `json:"notes"`
+	Violations  json.RawMessage `json:"violations"`
+	// RepairAttempts counts the repair rounds of a generation run.
+	RepairAttempts int               `json:"repair_attempts"`
+	ErrorKey       *string           `json:"error_key"`
+	Steps          []runStepResponse `json:"steps"`
+	PromptText     *string           `json:"prompt_text"`
 }
 
 type insightsWeekResponse struct {
@@ -236,6 +238,7 @@ func (h *AIRunsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		Instruction:        nilIfEmpty(d.Instruction),
 		Notes:              nilIfEmpty(d.Notes),
 		Violations:         rawJSONOrNull(d.ViolationsJSON),
+		RepairAttempts:     d.RepairAttempts,
 		ErrorKey:           nilIfEmpty(d.ErrorKey),
 		Steps:              make([]runStepResponse, len(d.Steps)),
 		PromptText:         nilIfEmpty(d.PromptText),

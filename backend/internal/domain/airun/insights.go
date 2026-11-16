@@ -37,6 +37,8 @@ type RunDetailRow struct {
 	Notes       string
 	ErrorKey    string
 	PromptText  string
+	// RepairAttempts is the number of repair rounds of a generation run.
+	RepairAttempts int
 }
 
 // StepView is one step of a run's detail. Args and Result are cut to 8192
@@ -132,7 +134,9 @@ type RunDetail struct {
 	Notes       string
 	ErrorKey    string
 	PromptText  string
-	Steps       []StepView
+	// RepairAttempts is the number of repair rounds of a generation run.
+	RepairAttempts int
+	Steps          []StepView
 }
 
 // RunsPage is one page of runs; NextCursor is nil on the last page.
@@ -251,13 +255,14 @@ func (s *Insights) Run(ctx context.Context, id int64) (RunDetail, error) {
 		return RunDetail{}, fmt.Errorf("list steps of run %d: %w", id, err)
 	}
 	return RunDetail{
-		RunSummary:  sums[0],
-		ScopeJSON:   row.ScopeJSON,
-		Instruction: row.Instruction,
-		Notes:       row.Notes,
-		ErrorKey:    row.ErrorKey,
-		PromptText:  row.PromptText,
-		Steps:       steps,
+		RunSummary:     sums[0],
+		ScopeJSON:      row.ScopeJSON,
+		Instruction:    row.Instruction,
+		Notes:          row.Notes,
+		ErrorKey:       row.ErrorKey,
+		PromptText:     row.PromptText,
+		RepairAttempts: row.RepairAttempts,
+		Steps:          steps,
 	}, nil
 }
 

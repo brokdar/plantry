@@ -344,7 +344,7 @@ SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model,
        r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens, r.web_search_requests,
        r.reasoning_tokens, r.duration_ms,
        r.score_json, r.violations_json, r.outcome,
-       r.scope_json, r.instruction, r.notes, r.error_key, p.text AS prompt_text
+       r.scope_json, r.instruction, r.notes, r.error_key, r.repair_attempts, p.text AS prompt_text
 FROM ai_runs r
 LEFT JOIN ai_prompts p ON p.hash = r.prompt_hash
 WHERE r.id = ?
@@ -374,6 +374,7 @@ type GetAIRunDetailRow struct {
 	Instruction       sql.NullString
 	Notes             sql.NullString
 	ErrorKey          sql.NullString
+	RepairAttempts    int64
 	PromptText        sql.NullString
 }
 
@@ -404,6 +405,7 @@ func (q *Queries) GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailR
 		&i.Instruction,
 		&i.Notes,
 		&i.ErrorKey,
+		&i.RepairAttempts,
 		&i.PromptText,
 	)
 	return i, err
