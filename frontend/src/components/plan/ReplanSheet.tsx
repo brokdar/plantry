@@ -355,25 +355,35 @@ function ReplanBody({
                 })}
               </p>
             )}
-            {data?.spare.map((s) => (
-              <p key={s.session_id}>
-                {t(
-                  // Freezable: the choice below. Else a batch that can still
-                  // change cooks less; a cooked or earlier one keeps its
-                  // portions, unassigned.
-                  s.freezable && (s.mutable || spareMode === "freeze")
-                    ? "plan.replan.spare"
-                    : s.mutable
-                      ? "plan.replan.cook_less"
-                      : "plan.replan.unassigned",
-                  {
-                    count: s.portions,
-                    amount: formatAmount(s.portions, i18n),
+            {data?.spare.map((s) =>
+              s.freezable && spareMode === "freeze" && s.unassigned > 0 ? (
+                <p key={s.session_id}>
+                  {t("plan.replan.freeze_split", {
                     name: s.food_name,
-                  }
-                )}
-              </p>
-            ))}
+                    frozen: formatAmount(s.portions - s.unassigned, i18n),
+                    unassigned: formatAmount(s.unassigned, i18n),
+                  })}
+                </p>
+              ) : (
+                <p key={s.session_id}>
+                  {t(
+                    // Freezable: the choice below. Else a batch that can still
+                    // change cooks less; a cooked or earlier one keeps its
+                    // portions, unassigned.
+                    s.freezable && (s.mutable || spareMode === "freeze")
+                      ? "plan.replan.spare"
+                      : s.mutable
+                        ? "plan.replan.cook_less"
+                        : "plan.replan.unassigned",
+                    {
+                      count: s.portions,
+                      amount: formatAmount(s.portions, i18n),
+                      name: s.food_name,
+                    }
+                  )}
+                </p>
+              )
+            )}
             {dropped.map((d) => (
               <p key={`d${d.plate_id}`}>
                 {t("plan.replan.dropped", {

@@ -1571,6 +1571,7 @@
       "spare_other": "Von {{name}} bleiben {{amount}} Portionen übrig.",
       "cook_less_one": "{{name}}: {{amount}} Portion weniger kochen.",
       "cook_less_other": "{{name}}: {{amount}} Portionen weniger kochen.",
+      "freeze_split": "{{name}}: {{frozen}} zum Einfrieren, {{unassigned}} ohne Mahlzeit.",
       "unassigned_one": "{{amount}} Portion {{name}} ohne Mahlzeit.",
       "unassigned_other": "{{amount}} Portionen {{name}} ohne Mahlzeit.",
       "dropped": "{{name}} ({{cell}}) verliert den Vorrat.",

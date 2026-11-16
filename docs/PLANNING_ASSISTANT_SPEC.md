@@ -72,7 +72,7 @@ The unit of planning is a **window** of 7 days, running from the shopping day (`
 
 - `plan.anchor` keeps deciding where the planner opens. Its default changes from `today` to `next_shopping_day`.
 - The frontend fallback for `plan.shopping_day` (`"1"`) must match the backend default.
-- There is no per-slot "shopping time" setting. The shopping list instead defaults to max(window start, today) through the window end (§7.7), so slots already past on the shopping day are not bought for. The range stays editable, and households that shop several times a week use a custom range.
+- There is no per-slot "shopping time" setting. The shopping list instead defaults to the window containing today, from max(window start, today) to the window end; on the window's last day (the day before the shopping day) it defaults to the next window (§7.7), so slots already past on the shopping day are not bought for. The range stays editable, and households that shop several times a week use a custom range.
 
 ### 3.2 Cell and availability
 
@@ -323,7 +323,7 @@ notes:    string   -- short summary shown to the user
 | H5 | Every food's diet class ≤ `diet_type`. `meat_days_per_week_max` is respected. |
 | H6 | Confirmed rows and out-of-scope rows are untouched. |
 | H7 | All IDs exist, sessions only reference composed foods, and every plate has at least one component. |
-| H8 | **Variety:** no session of a recipe eaten within `plan.variety_weeks`. This is relaxable: if the library cannot satisfy H8, the checker allows the least-recently-eaten recipes and reports the relaxation as a warning instead of a violation. |
+| H8 | **Variety** (the heuristic, `h5`, also never plans a non-main recipe that a routine plate in the target eats into lunch or dinner, and ranks mains before role-less ones; a real main stays plannable even if a routine eats it): no session of a recipe eaten within `plan.variety_weeks`. This is relaxable: if the library cannot satisfy H8, the checker allows the least-recently-eaten recipes and reports the relaxation as a warning instead of a violation. |
 
 Violations that remain after repair don't abort the generation. They are persisted, shown on the affected plates ("needs attention"), and counted in the run's score.
 
@@ -463,7 +463,7 @@ The chat remains for adjustments ("no fish this week", "swap Tuesday's side for 
 ### 7.7 Shopping list
 
 - The source is confirmed sessions (scaled by `portions / reference_portions`), leaf components (× eaters), and routine plates in the window. A toggle includes drafts.
-- The range defaults to max(window start, today) through the window end. The presets "this window" and "next window" are anchored on the **viewed window**, and a custom date range is available.
+- The range defaults to the window containing today, from max(window start, today) to the window end. On the window's last day (the day before the shopping day) it defaults to the next window. `plan.anchor` is not read: it only decides where the planner opens. The presets "this window" and "next window" are anchored on the **viewed window**; "This window" starts today when today lies inside it, and a custom date range is available.
 - Count units are rounded up as in §7.5. The list groups by ingredient and shows which recipes use it on expand.
 - "Purchased" check state stays local (localStorage), as today.
 
@@ -763,7 +763,7 @@ Each phase ships independently and leaves the app usable.
    - OpenAI search (Responses API) is deferred. Discovery is hidden only without any AI provider. See §9.4.
 2. **Window boundaries:**
    - The window runs from the shopping day through the day before the next one, covering all slots.
-   - The shopping list defaults to max(window start, today) → window end. No per-slot shopping-time setting.
+   - The shopping list defaults to the window containing today, max(window start, today) → window end, and to the next window on the window's last day. No per-slot shopping-time setting.
    - `plan.anchor` defaults to `next_shopping_day`. See §3.1.
 3. **Cost:**
    - Store tokens only and compute cost on read.

@@ -266,10 +266,11 @@ func (s *Service) startable(ctx context.Context, chooser airun.Chooser) error {
 	return err
 }
 
-// keep is what RemovePlates sets each spare batch to: freezes its spare
-// (freeze, when freezable); else an uncooked one cooking from From on
-// shrinks to what is still eaten and a cooked or earlier one keeps its portions. A batch that
-// loses all its links is not here, so D11 removes it.
+// keep is what RemovePlates sets each spare batch to. In freeze mode a
+// freezable batch freezes its spare, up to its size. Otherwise an uncooked
+// batch cooking from From on shrinks to what is still eaten, and a cooked or
+// earlier one keeps its portions. A batch that loses all its links is not
+// here, so D11 removes it.
 func (sc *replanScan) keep(mode SpareMode) map[int64]plate.SessionPortions {
 	out := make(map[int64]plate.SessionPortions, len(sc.spare))
 	for id, b := range sc.spare {
@@ -286,7 +287,8 @@ func (sc *replanScan) keep(mode SpareMode) map[int64]plate.SessionPortions {
 }
 
 // unassigned totals the portions the re-plan leaves cooked but eaten by no
-// plate: those of an immutable batch that are not frozen.
+// plate: the spare of a batch that cannot shrink or freeze, plus what a
+// freeze cannot take because it would exceed the batch size.
 func (sc *replanScan) unassigned(mode SpareMode) float64 {
 	var n float64
 	for _, b := range sc.spare {
@@ -296,12 +298,12 @@ func (sc *replanScan) unassigned(mode SpareMode) float64 {
 }
 
 func unassignedOf(b spareBatch, mode SpareMode) float64 {
-	if b.mutable {
-		return 0
-	}
 	spare := b.sess.Portions - b.after
 	if mode == SpareFreeze && b.freezable {
 		return max(0, b.sess.FrozenPortions+spare-b.sess.Portions)
+	}
+	if b.mutable {
+		return 0 // it shrinks to what is eaten
 	}
 	return spare
 }
@@ -457,9 +459,11 @@ func (s *Service) scanBatches(ctx context.Context, sc *replanScan, removed []pla
 			continue
 		}
 		f := foods[v.FoodID]
-		// A cooked or earlier batch may still gain frozen portions.
+		// A cooked or earlier batch may still gain frozen portions, while the
+		// freezer keep days from its cook date have not run out.
 		mut := mutable(v, from)
-		freezable := set.FreezingEnabled && (f != nil && f.Freezable != nil && *f.Freezable)
+		freezable := set.FreezingEnabled && (f != nil && f.Freezable != nil && *f.Freezable) &&
+			!from.After(v.CookDate.AddDate(0, 0, set.FreezerKeepDays))
 		sc.spare[v.ID] = spareBatch{
 			sess: v.CookSession, after: after, freezable: freezable,
 			mutable: mut,

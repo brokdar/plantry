@@ -110,8 +110,9 @@ type Range struct {
 }
 
 // Range resolves the range to shop for as of today. With r nil it is the
-// default, ShoppingDefault (the window holding today, the next one on its last day; plan.anchor is not read); otherwise r's dates in
-// the window containing r.From.
+// default, ShoppingDefault: the window holding today, the next one on its
+// last day (plan.anchor is not read). Otherwise it is r's dates in the window
+// containing r.From.
 func (s *Service) Range(ctx context.Context, r *Range, today time.Time) (Range, error) {
 	sd, err := plate.IntSetting(ctx, s.d.Settings, settings.KeyPlanShoppingDay)
 	if err != nil {

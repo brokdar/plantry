@@ -291,6 +291,30 @@ describe("ReplanSheet", () => {
     expect(within(s).queryByText("Spare portions")).toBeNull()
   })
 
+  it("a freezable cooked batch that overflows says how much is frozen and how much unassigned", async () => {
+    vi.mocked(getReplanPreview).mockResolvedValue({
+      none_cells: [{ date: "2026-11-02", slot_id: 3 }],
+      confirmed_affected: [],
+      spare: [
+        {
+          session_id: 1,
+          food_name: "Chili",
+          portions: 5,
+          freezable: true,
+          mutable: false,
+          unassigned: 2,
+        },
+      ],
+      dropped: [],
+      moved: [],
+    })
+    renderSheet({ initialCells: [{ date: "2026-11-02", slot_id: 3 }] })
+    const s = await sheet()
+    expect(await within(s).findByTestId("replan-changes")).toHaveTextContent(
+      "Chili: 3 to freeze, 2 unassigned."
+    )
+  })
+
   it("a cooked batch reports its unassigned portions and offers no choice", async () => {
     vi.mocked(getReplanPreview).mockResolvedValue({
       none_cells: [{ date: "2026-11-02", slot_id: 3 }],

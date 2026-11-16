@@ -28,3 +28,26 @@ func TestHeuristic_RoutineRecipeIsNotALunchOrDinner(t *testing.T) {
 		assert.NotEqual(t, int64(301), ps.FoodID, "a main is picked while mains remain")
 	}
 }
+
+// A recipe with role main stays plannable even when a routine plate eats it:
+// with it as the only main, it is the one that gets cooked.
+func TestHeuristic_RoutineMainStaysPlannable(t *testing.T) {
+	s := batchCooker()
+	o := s.Foods[oats]
+	o.Role = food.RoleMain
+	o.LastEaten = nil
+	s.Foods[oats] = o
+	for id, f := range s.Foods {
+		if f.Role == food.RoleMain && id != oats {
+			delete(s.Foods, id)
+		}
+	}
+
+	p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+
+	cooked := false
+	for _, ps := range p.Sessions {
+		cooked = cooked || ps.FoodID == oats
+	}
+	assert.True(t, cooked, "a real main is plannable although a routine eats it")
+}

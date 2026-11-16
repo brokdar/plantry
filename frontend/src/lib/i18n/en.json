@@ -1571,6 +1571,7 @@
       "spare_other": "{{name}} has {{amount}} spare portions.",
       "cook_less_one": "{{name}}: cook {{amount}} portion less.",
       "cook_less_other": "{{name}}: cook {{amount}} portions less.",
+      "freeze_split": "{{name}}: {{frozen}} to freeze, {{unassigned}} unassigned.",
       "unassigned_one": "{{amount}} portion of {{name}} unassigned.",
       "unassigned_other": "{{amount}} portions of {{name}} unassigned.",
       "dropped": "{{name}} on {{cell}} loses its batch.",

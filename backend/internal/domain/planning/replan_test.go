@@ -542,3 +542,20 @@ func TestReplan_PreviewUnassigned(t *testing.T) {
 	}
 	assert.True(t, found)
 }
+
+// A cooked batch is frozen only while the freezer keep days from its cook
+// date have not run out: Mon batch is past a 1-day limit by Wednesday, so
+// its spare portion stays unassigned.
+func TestReplan_FreezerKeepDaysLimitsFreezingACookedBatch(t *testing.T) {
+	e := newReplanEnv(t, true)
+	require.NoError(t, testsvc.Settings(e.db).Set(e.ctx, "plan.freezer_keep_days", "1"))
+
+	pv, err := e.svc.PreviewReplan(e.ctx, e.query())
+
+	require.NoError(t, err)
+	assert.Contains(t, pv.Spare, planning.Spare{SessionID: e.monBatch, FoodName: "Main 06", Portions: 1, Unassigned: 1})
+
+	_, err = e.replan(true, planning.SpareFreeze, false)
+	require.NoError(t, err)
+	assert.InDelta(t, 0, e.session(e.monBatch).FrozenPortions, 1e-9)
+}
