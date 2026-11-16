@@ -141,6 +141,11 @@ func TestAIRunRepo_GetRunWithStepsAndPrompt(t *testing.T) {
 		RequestJSON: `{"messages":[]}`, ResponseJSON: `{"content":[]}`, InputTokens: 10, OutputTokens: 5,
 	}))
 
+	require.NoError(t, repo.AddStep(ctx, airun.Step{
+		RunID: id, Seq: 3, Type: airun.StepLLMCall, Name: "claude-sonnet-5-5",
+		RequestJSON: `{"messages":[]}`, ResponseJSON: big,
+	}))
+
 	run, err := repo.GetRun(ctx, id)
 	require.NoError(t, err)
 	assert.Equal(t, "You plan meals.", run.PromptText)
@@ -151,7 +156,7 @@ func TestAIRunRepo_GetRunWithStepsAndPrompt(t *testing.T) {
 
 	steps, err := repo.ListSteps(ctx, id)
 	require.NoError(t, err)
-	require.Len(t, steps, 2)
+	require.Len(t, steps, 3)
 	assert.Equal(t, airun.StepView{
 		Seq: 1, Type: airun.StepLLMCall, Name: "claude-sonnet-5-5",
 		Args: `{"messages":[]}`, Result: `{"content":[]}`, InputTokens: 10, OutputTokens: 5,
@@ -159,9 +164,11 @@ func TestAIRunRepo_GetRunWithStepsAndPrompt(t *testing.T) {
 	assert.Equal(t, 2, steps[1].Seq)
 	assert.Equal(t, `{"a":1}`, steps[1].Args)
 	assert.False(t, steps[1].ArgsTruncated)
-	assert.True(t, steps[1].ResultTruncated)
-	assert.LessOrEqual(t, len([]rune(steps[1].Result)), 8192)
+	assert.False(t, steps[1].ResultTruncated, "a tool step's result comes whole")
+	assert.Equal(t, big, steps[1].Result)
 	assert.True(t, steps[1].IsError)
+	assert.True(t, steps[2].ResultTruncated, "an llm_call's response is cut")
+	assert.LessOrEqual(t, len([]rune(steps[2].Result)), 8192)
 
 	_, err = repo.GetRun(ctx, id+100)
 	assert.ErrorIs(t, err, domain.ErrNotFound)

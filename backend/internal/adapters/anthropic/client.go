@@ -119,6 +119,9 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 			if err != nil {
 				err = fmt.Errorf("anthropic: reading stream: %w", err)
 			}
+			if final != nil {
+				final.RequestID = resp.Header.Get("request-id")
+			}
 			return final, err
 		}
 		apiErr := decodeAPIError(resp)

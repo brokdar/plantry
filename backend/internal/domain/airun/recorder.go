@@ -49,11 +49,20 @@ type Recorder struct {
 	lastPrune     time.Time
 	pruning       sync.WaitGroup // background prunes
 	closed        bool           // set by Wait: no new prunes start
+
+	appVersion string // stored on every run
 }
 
 // NewRecorder builds a Recorder. now is injected so tests can pin time.
 func NewRecorder(store Store, logger *slog.Logger, now func() time.Time) *Recorder {
-	return &Recorder{store: store, logger: logger, now: now}
+	return &Recorder{store: store, logger: logger, now: now, appVersion: BuildVersion()}
+}
+
+// WithAppVersion sets the app version stored on every run (default
+// BuildVersion). Call it before the Recorder is used.
+func (r *Recorder) WithAppVersion(v string) *Recorder {
+	r.appVersion = v
+	return r
 }
 
 // WithRetention enables pruning: Prune, and Finish at most once per hour,
@@ -214,6 +223,7 @@ func (r *Recorder) Start(ctx context.Context, s Start) (context.Context, *Run) {
 		RequestID:      run.requestID,
 		Chooser:        s.Chooser,
 		ScopeJSON:      s.ScopeJSON,
+		AppVersion:     r.appVersion,
 	})
 	if err != nil {
 		r.logger.WarnContext(ctx, "ai.run.create failed", "request_id", run.requestID, "kind", s.Kind, "error", err)

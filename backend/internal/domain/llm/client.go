@@ -147,6 +147,9 @@ type Response struct {
 	// Partial marks what a failed Stream returns next to its error: the
 	// content and billed usage of a reply that broke off mid-stream.
 	Partial bool
+	// RequestID is the provider's id of the HTTP request (Anthropic
+	// request-id, OpenAI x-request-id), empty when unknown.
+	RequestID string
 }
 
 // Client is the port an LLM provider adapter must implement.
@@ -194,6 +197,14 @@ type Effective struct {
 	WebSearch   bool
 	Thinking    bool // adaptive thinking went out
 	Fallbacks   []string
+	// The remaining fields describe the wire request beyond the above, for
+	// the run log: thinking type and display, effort (empty when none is
+	// sent), beta headers and where cache breakpoints sit ("system", "tools").
+	ThinkingType     string
+	ThinkingDisplay  string
+	Effort           string
+	Betas            []string
+	CacheBreakpoints []string
 }
 
 // ParamsReporter is implemented by clients that can report the effective

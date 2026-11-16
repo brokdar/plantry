@@ -206,7 +206,7 @@ func TestAIRunRepo_UpsertPromptIsIdempotent(t *testing.T) {
 }
 
 func TestAIRunRepo_ResultJSONTruncation(t *testing.T) {
-	const limit = 8192
+	const limit = 256 << 10
 	const marker = "…[truncated]"
 
 	tests := []struct {
@@ -243,7 +243,7 @@ func TestAIRunRepo_ResultJSONTruncation(t *testing.T) {
 }
 
 func TestAIRunRepo_ArgsJSONTruncation(t *testing.T) {
-	const limit = 8192
+	const limit = 256 << 10
 	ctx := context.Background()
 	db := testhelper.NewTestDB(t)
 	repo := sqlite.NewAIRunRepo(db)
@@ -496,4 +496,35 @@ func TestAIRunRepo_PruneStepsDeletesInBatches(t *testing.T) {
 	require.NoError(t, db.QueryRow(`SELECT count(*) FROM ai_run_steps WHERE run_id = ?`, recent).Scan(&kept))
 	assert.Zero(t, left)
 	assert.Equal(t, 1, kept)
+}
+
+// 00043: the run's app version and a step's provider request id are stored
+// and read back by the run detail queries.
+func TestAIRunRepo_AppVersionAndProviderRequestID(t *testing.T) {
+	ctx := context.Background()
+	db := testhelper.NewTestDB(t)
+	repo := sqlite.NewAIRunRepo(db)
+
+	id, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: time.Now(), AppVersion: "v1.0.0+abc"})
+	require.NoError(t, err)
+	require.NoError(t, repo.AddStep(ctx, airun.Step{
+		RunID: id, Seq: 1, Type: airun.StepLLMCall, Name: "m", ProviderRequestID: "req_011X",
+	}))
+	require.NoError(t, repo.AddStep(ctx, airun.Step{RunID: id, Seq: 2, Type: airun.StepToolCall, Name: "t"}))
+
+	run, err := repo.GetRun(ctx, id)
+	require.NoError(t, err)
+	assert.Equal(t, "v1.0.0+abc", run.AppVersion)
+	steps, err := repo.ListSteps(ctx, id)
+	require.NoError(t, err)
+	require.Len(t, steps, 2)
+	assert.Equal(t, "req_011X", steps[0].ProviderRequestID)
+	assert.Empty(t, steps[1].ProviderRequestID)
+
+	// A run without a version reads back empty (NULL).
+	id2, err := repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: time.Now()})
+	require.NoError(t, err)
+	run2, err := repo.GetRun(ctx, id2)
+	require.NoError(t, err)
+	assert.Empty(t, run2.AppVersion)
 }

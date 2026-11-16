@@ -36,12 +36,13 @@ type RunDetailRow struct {
 	Instruction string
 	Notes       string
 	ErrorKey    string
+	AppVersion  string
 	PromptText  string
 	// RepairAttempts is the number of repair rounds of a generation run.
 	RepairAttempts int
 }
 
-// StepView is one step of a run's detail. Args and Result are cut to 8192
+// StepView is one step of a run's detail. For an llm_call Args and Result are cut to 8192
 // characters (Truncated says so); for an llm_call they hold the stored
 // request and response. Empty means none.
 type StepView struct {
@@ -64,6 +65,7 @@ type StepView struct {
 	ReasoningTokens   int64
 	ThinkingChars     int64
 	ServedModel       string
+	ProviderRequestID string
 }
 
 // Correction counts a run's generated plates and those the user changed
@@ -133,6 +135,7 @@ type RunDetail struct {
 	Instruction string
 	Notes       string
 	ErrorKey    string
+	AppVersion  string
 	PromptText  string
 	// RepairAttempts is the number of repair rounds of a generation run.
 	RepairAttempts int
@@ -260,6 +263,7 @@ func (s *Insights) Run(ctx context.Context, id int64) (RunDetail, error) {
 		Instruction:    row.Instruction,
 		Notes:          row.Notes,
 		ErrorKey:       row.ErrorKey,
+		AppVersion:     row.AppVersion,
 		PromptText:     row.PromptText,
 		RepairAttempts: row.RepairAttempts,
 		Steps:          steps,

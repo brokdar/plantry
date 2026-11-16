@@ -100,6 +100,12 @@ func EstimateTokens(s string) int { return (utf8.RuneCountInString(s) + 3) / 4 }
 // PromptTokenBudget are left out (favorites and the least recently eaten
 // stay longest), and the prompt says how many.
 func RenderPrompt(in ChooseInput) string {
+	text, _ := renderPrompt(in)
+	return text
+}
+
+// renderPrompt is RenderPrompt plus the candidates the token budget left out.
+func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 	s := in.State
 	x := newIndex(s, in.Target)
 	var head, tail strings.Builder
@@ -136,9 +142,11 @@ func RenderPrompt(in ChooseInput) string {
 	b.WriteString(head.String())
 	b.WriteString(header)
 	omitted := 0
+	var trimmed []FoodFacts
 	for i, r := range rows {
 		if !keep[i] {
 			omitted++
+			trimmed = append(trimmed, cands[i])
 			continue
 		}
 		b.WriteString(r)
@@ -148,7 +156,7 @@ func RenderPrompt(in ChooseInput) string {
 		fmt.Fprintf(&b, "(%d more recipes left out for length.)\n", omitted)
 	}
 	b.WriteString(tail.String())
-	return b.String()
+	return b.String(), trimmed
 }
 
 // RenderPlanSummary renders the plan window of s for the chat's system prompt
@@ -565,20 +573,28 @@ func roleKept(in ChooseInput) bool {
 // eligible are the recipes fitting the diet that are not among the
 // replaced ones, by id.
 func eligible(in ChooseInput) []FoodFacts {
+	kept, _ := eligibleSplit(in)
+	return kept
+}
+
+// eligibleSplit is eligible plus the composed recipes it dropped, with the
+// reason: the one filter the chooser's candidates and the run log share.
+func eligibleSplit(in ChooseInput) (kept []FoodFacts, dropped []excludedFood) {
 	avoid := idSet(in.Avoid)
 	t := diet.Class(in.State.Profile.DietType)
-	var out []FoodFacts
 	for _, f := range in.State.Foods {
-		if !f.Composed() || avoid[f.ID] {
-			continue
+		switch {
+		case !f.Composed():
+		case avoid[f.ID]:
+			dropped = append(dropped, excludedFood{f.ID, f.Name, excludeReplaced})
+		case t != "" && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t):
+			dropped = append(dropped, excludedFood{f.ID, f.Name, excludeDiet})
+		default:
+			kept = append(kept, f)
 		}
-		if t != "" && diet.Valid(f.DietClass) && !diet.Compatible(f.DietClass, t) {
-			continue
-		}
-		out = append(out, f)
 	}
-	slices.SortFunc(out, func(a, b FoodFacts) int { return cmp.Compare(a.ID, b.ID) })
-	return out
+	slices.SortFunc(kept, func(a, b FoodFacts) int { return cmp.Compare(a.ID, b.ID) })
+	return kept, dropped
 }
 
 // keepOrder ranks candidates for the token budget: sides first for a side

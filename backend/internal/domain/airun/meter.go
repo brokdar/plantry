@@ -290,6 +290,7 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	if step.RequestJSON, err = encodeRequest(req, call.eff, offset, systemHash, toolsHash); err != nil {
 		run.warn(ctx, "ai.run.request encode failed", err)
 	}
+	step.ProviderRequestID = providerRequestID(resp, callErr)
 	if resp != nil {
 		step.ServedModel = resp.Model
 		step.ThinkingChars = thinkingChars(resp.Message.Content)
@@ -320,6 +321,19 @@ func (run *Run) llmCall(ctx context.Context, provider string, req llm.Request, r
 	run.mu.Lock()
 	run.lastMsgs = lastMsgs
 	run.mu.Unlock()
+}
+
+// providerRequestID is the provider's id of the call: the response's, else
+// the one a provider error carries.
+func providerRequestID(resp *llm.Response, callErr error) string {
+	if resp != nil && resp.RequestID != "" {
+		return resp.RequestID
+	}
+	var pe llm.ProviderError
+	if errors.As(callErr, &pe) {
+		return pe.ProviderInfo().RequestID
+	}
+	return ""
 }
 
 func sha256Hex(b []byte) string {
@@ -364,6 +378,12 @@ type sentBody struct {
 	WebSearch  bool     `json:"web_search"`
 	Thinking   bool     `json:"thinking"`
 	Fallbacks  []string `json:"fallbacks,omitempty"`
+	// Every other provider parameter except system, tools and messages.
+	ThinkingType     string   `json:"thinking_type,omitempty"`
+	ThinkingDisplay  string   `json:"thinking_display,omitempty"`
+	Effort           string   `json:"effort,omitempty"`
+	Betas            []string `json:"betas,omitempty"`
+	CacheBreakpoints []string `json:"cache_breakpoints,omitempty"`
 }
 
 // responseBody is the stored response_json: the reply's content blocks and
@@ -413,7 +433,10 @@ func encodeRequest(req llm.Request, eff *llm.Effective, offset int, systemHash, 
 	}
 	if eff != nil {
 		body.Temperature, body.MaxTokens = eff.Temperature, eff.MaxTokens
-		body.Sent = &sentBody{ToolChoice: eff.ToolChoice, WebSearch: eff.WebSearch, Thinking: eff.Thinking, Fallbacks: eff.Fallbacks}
+		body.Sent = &sentBody{
+			ToolChoice: eff.ToolChoice, WebSearch: eff.WebSearch, Thinking: eff.Thinking, Fallbacks: eff.Fallbacks,
+			ThinkingType: eff.ThinkingType, ThinkingDisplay: eff.ThinkingDisplay, Effort: eff.Effort, Betas: eff.Betas, CacheBreakpoints: eff.CacheBreakpoints,
+		}
 	}
 	return encodeCapped(&body, blocks, &body.Truncated)
 }

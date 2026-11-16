@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"slices"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
@@ -79,10 +80,7 @@ func Check(s State, t Target) []Issue {
 // is a draft, and only from today on: a hand-planned or accepted window may
 // leave cells empty, and past cells are history.
 func BoardIssues(s State) []Issue {
-	t := Target{Cells: make([]plate.CellKey, len(s.Cells))}
-	for i, c := range s.Cells {
-		t.Cells[i] = c.Key()
-	}
+	t := WindowTarget(s)
 	drafts := false
 	for _, p := range s.Plates {
 		drafts = drafts || !p.Confirmed
@@ -105,6 +103,16 @@ func BoardIssues(s State) []Issue {
 		out = append(out, is)
 	}
 	return out
+}
+
+// WindowTarget is the target spanning every cell of s: the plan as the board
+// sees it.
+func WindowTarget(s State) Target {
+	t := Target{Cells: make([]plate.CellKey, len(s.Cells))}
+	for i, c := range s.Cells {
+		t.Cells[i] = c.Key()
+	}
+	return t
 }
 
 func issue(rule, code string, sev Severity) Issue {
@@ -215,23 +223,40 @@ func (x *index) h3h4() []Issue {
 	return out
 }
 
+// meatDays lists, per day of the window, the omnivore foods on its plates
+// (by id, first seen first): the days that count against
+// meat_days_per_week_max. h5 and Evaluate share it.
+func (x *index) meatDays() map[int][]int64 {
+	out := map[int][]int64{}
+	for _, p := range x.s.Plates {
+		if !x.s.Window.Contains(p.Date) {
+			continue
+		}
+		for _, c := range p.Components {
+			if f, ok := x.food(c.FoodID); ok && f.DietClass == diet.Omnivore {
+				d := dayOf(p.Date)
+				if !slices.Contains(out[d], c.FoodID) {
+					out[d] = append(out[d], c.FoodID)
+				}
+			}
+		}
+	}
+	return out
+}
+
 // h5: every food on a target plate fits the diet type (unknown is a
 // warning) and the window's days with an omnivore food stay within
 // meat_days_per_week_max.
 func (x *index) h5() []Issue {
 	var out []Issue
-	meatDays := map[int]bool{}
+	meatDays := x.meatDays()
 	for _, p := range x.s.Plates {
-		inWindow := x.s.Window.Contains(p.Date)
 		inTarget := x.inTarget(p.Cell())
 		seen := map[int64]bool{}
 		for _, c := range p.Components {
 			f, ok := x.food(c.FoodID)
 			if !ok {
 				continue
-			}
-			if inWindow && f.DietClass == diet.Omnivore {
-				meatDays[dayOf(p.Date)] = true
 			}
 			if !inTarget || seen[c.FoodID] {
 				continue

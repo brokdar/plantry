@@ -64,9 +64,11 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 	if err != nil {
 		return Proposal{}, err
 	}
+	system, trimmed := renderPrompt(in)
+	recordContext(ctx, in, "llm", trimmed)
 	req := llm.Request{
 		Model:       model,
-		System:      RenderPrompt(in),
+		System:      system,
 		Messages:    []llm.Message{textMessage("Plan the cells marked fill and call submit_plan with the complete plan.")},
 		Tools:       []llm.Tool{submitPlanTool()},
 		ToolChoice:  &llm.ToolChoice{Name: submitPlanName},
@@ -87,7 +89,13 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		}
 		resp, err := call(ctx, client, req)
 		if err != nil {
-			return Proposal{}, fmt.Errorf("%w: %w", domain.ErrAIProviderFailed, err)
+			// The last proposal that came before the failure goes with the
+			// error, so the run log can evaluate it.
+			var partial Proposal
+			if last != nil {
+				partial = *last
+			}
+			return partial, fmt.Errorf("%w: %w", domain.ErrAIProviderFailed, err)
 		}
 		input, perr := submitted(resp)
 		var prop Proposal
@@ -100,10 +108,12 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			sig := signature(prop)
 			var fixes []string
 			prop, fixes = autofix(in, prop)
-			violations := violationsOf(Check(Merge(in.State, in.Target, prop), in.Target))
+			merged := Merge(in.State, in.Target, prop)
+			violations := violationsOf(Check(merged, in.Target))
 			rep := newRepairer(in, prop)
 			advice := rep.advisories()
 			logAttempt(ctx, in.Logger, attempt, violations, nil, fixes...)
+			RecordAttemptEvaluation(ctx, attempt, func() Evaluation { return Evaluate(merged, in.Target) })
 			for _, f := range fixes {
 				if !slices.Contains(allFixes, f) {
 					allFixes = append(allFixes, f)

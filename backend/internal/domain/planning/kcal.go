@@ -12,21 +12,28 @@ import (
 // in the run notes. It is information, never a rule and never a repair.
 const kcalLow = 0.7
 
-// DayKcal is one day's calorie account per person: the planned kcal, the
-// day's target scaled to the meals that are planned (a day with a No-plate
-// meal asks less) and the gap.
+// DayKcal is one day's account per person: the planned macros, the day's
+// target scaled to the meals that are planned (a day with a No-plate meal
+// asks less) and the gap. Target, Scaled and Gap are zero without a kcal
+// target.
 type DayKcal struct {
-	Date    time.Time
-	Kcal    float64
-	Target  float64
-	Scaled  float64
-	Gap     float64 // Scaled - Kcal; positive: under target
-	Planned int
-	Meals   int
+	Date     time.Time
+	Kcal     float64
+	ProteinG float64
+	FatG     float64
+	CarbsG   float64
+	Target   float64
+	Scaled   float64
+	Gap      float64 // Scaled - Kcal; positive: under target
+	Planned  int
+	Meals    int
 	// Complete: every planned (non-routine) meal of the day holds a plate.
 	Complete bool
 	// Proposed: the day holds a plate of the proposal.
 	Proposed bool
+	// NutritionMissing: a food on the day's plates lacks nutrition data, so
+	// the macros understate the day.
+	NutritionMissing bool
 }
 
 // DayKcals computes the account of every day with a cell in t that has at
@@ -38,9 +45,20 @@ func DayKcals(s State, t Target) []DayKcal {
 		return nil
 	}
 	x := newIndex(s, t)
+	return x.dayAccounts(x.days)
+}
+
+// dayAccounts is the account of each of days that has a planned meal: the
+// one place that sums a day's plates, with or without a kcal target.
+func (x *index) dayAccounts(days []time.Time) []DayKcal {
+	s := x.s
+	var k float64
+	if t := s.Profile.KcalTarget; t != nil && *t > 0 {
+		k = *t
+	}
 	var out []DayKcal
-	for _, d := range x.days {
-		dk := DayKcal{Date: d, Target: *k, Complete: true}
+	for _, d := range days {
+		dk := DayKcal{Date: d, Target: k, Complete: true}
 		for _, c := range s.Cells {
 			if dayOf(c.Date) != dayOf(d) {
 				continue
@@ -57,14 +75,19 @@ func DayKcals(s State, t Target) []DayKcal {
 		if dk.Planned == 0 {
 			continue
 		}
-		dk.Scaled = *k * float64(dk.Planned) / float64(dk.Meals)
+		dk.Scaled = k * float64(dk.Planned) / float64(dk.Meals)
 		for _, p := range s.Plates {
 			if dayOf(p.Date) != dayOf(d) {
 				continue
 			}
 			for _, c := range p.Components {
 				if f, ok := x.food(c.FoodID); ok {
-					dk.Kcal += f.Macros.Kcal * c.Multiplier()
+					m := c.Multiplier()
+					dk.Kcal += f.Macros.Kcal * m
+					dk.ProteinG += f.Macros.Protein * m
+					dk.FatG += f.Macros.Fat * m
+					dk.CarbsG += f.Macros.Carbs * m
+					dk.NutritionMissing = dk.NutritionMissing || !f.NutritionComplete
 				}
 			}
 			dk.Proposed = dk.Proposed || (p.Proposed() && x.inTarget(p.Cell()))

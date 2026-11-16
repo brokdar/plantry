@@ -465,3 +465,28 @@ func TestStream_TruncatedStreamIsError(t *testing.T) {
 	assert.Equal(t, "Hello world", resp.Message.Content[0].Text)
 	assert.Equal(t, 42, resp.Usage.InputTokens)
 }
+
+// The request-id response header is on the response of a successful call.
+func TestStream_RequestIDOnSuccess(t *testing.T) {
+	body, err := os.ReadFile("testdata/stream_text.sse")
+	require.NoError(t, err)
+	ts := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("request-id", "req_011OK")
+		_, _ = w.Write(body)
+	})
+	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
+	out := make(chan llm.Event, 64)
+	resp, err := c.Stream(context.Background(), llm.Request{Model: "claude-sonnet-4-6"}, out)
+	require.NoError(t, err)
+	_ = drainEvents(out)
+	assert.Equal(t, "req_011OK", resp.RequestID)
+}
+
+// The effective parameters name the cache breakpoints the request carries.
+func TestEffectiveParams_CacheBreakpoints(t *testing.T) {
+	c := anthropic.New("k")
+	e := c.EffectiveParams(llm.Request{Model: "m", System: "sys", Tools: []llm.Tool{{Name: "t"}}})
+	assert.Equal(t, []string{"system", "tools"}, e.CacheBreakpoints)
+	assert.Empty(t, c.EffectiveParams(llm.Request{Model: "m"}).CacheBreakpoints)
+}

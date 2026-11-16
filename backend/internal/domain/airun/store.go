@@ -72,6 +72,8 @@ type RunStart struct {
 	RequestID      string
 	Chooser        Chooser
 	ScopeJSON      string
+	// AppVersion is the build that made the run; empty is NULL.
+	AppVersion string
 }
 
 // RunEnd holds the totals written when a run finishes. An empty ErrorKey is
@@ -135,6 +137,8 @@ type Step struct {
 	ThinkingChars   int64
 	// ServedModel is the model the provider answered with.
 	ServedModel string
+	// ProviderRequestID is the provider's id of the call's HTTP request.
+	ProviderRequestID string
 }
 
 // Store persists runs, steps and system prompts. Implementations are safe for

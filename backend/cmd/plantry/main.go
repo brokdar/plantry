@@ -199,6 +199,7 @@ func run() error {
 	// Steps of runs older than ai.run_retention_days are pruned now and after
 	// a finished run, at most once per hour.
 	runRecorder := airun.NewRecorder(aiRunRepo, logger, time.Now).
+		WithAppVersion(appVersion()).
 		WithRetention(func(ctx context.Context) (int, error) {
 			v, err := settingsSvc.Get(ctx, settingsdom.KeyAIRunRetentionDays)
 			if err != nil {
@@ -478,4 +479,16 @@ func migrate(conn *sql.DB) error {
 		return err
 	}
 	return goose.Up(conn, "migrations")
+}
+
+// appVersion is what runs record as app_version: the ldflags version and
+// commit when set, else the VCS stamp of the build.
+func appVersion() string {
+	if version != "dev" || commit != "" {
+		if commit == "" {
+			return version
+		}
+		return version + "+" + commit
+	}
+	return airun.BuildVersion()
 }

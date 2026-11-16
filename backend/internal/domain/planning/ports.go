@@ -18,6 +18,7 @@ import (
 // Chooser proposes the plates and sessions of a target (spec §6.1 step 3):
 // the LLM or the heuristic.
 type Chooser interface {
+	// On error the Proposal holds the last proposal made before it, if any.
 	Choose(ctx context.Context, in ChooseInput) (Proposal, error)
 }
 

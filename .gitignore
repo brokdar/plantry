@@ -49,3 +49,6 @@ secret.key
 
 # Offline eval reports (cmd/plantry-eval -out default)
 plantry-eval.jsonl
+
+# Live eval run databases (cmd/plantry-eval, PLANTRY_EVAL_LIVE=1)
+plantry-eval-dbs/

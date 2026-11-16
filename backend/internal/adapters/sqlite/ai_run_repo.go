@@ -17,8 +17,9 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
 
-// maxStepResultBytes caps the stored size of a step's args_json and result_json.
-const maxStepResultBytes = 8192
+// maxStepResultBytes caps the stored size of a step's args_json and result_json
+// (256 KiB, the same cap as an llm_call's bodies).
+const maxStepResultBytes = 256 << 10
 
 const truncatedMarker = "…[truncated]"
 
@@ -176,6 +177,7 @@ func (r *AIRunRepo) CreateRun(ctx context.Context, start airun.RunStart) (int64,
 		RequestID:      toNullStringEmpty(start.RequestID),
 		Chooser:        toNullStringEmpty(string(start.Chooser)),
 		ScopeJson:      toNullStringEmpty(start.ScopeJSON),
+		AppVersion:     toNullStringEmpty(start.AppVersion),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("create ai run: %w", err)
@@ -245,6 +247,7 @@ func (r *AIRunRepo) AddStep(ctx context.Context, step airun.Step) error {
 		ReasoningTokens:   step.ReasoningTokens,
 		ThinkingChars:     step.ThinkingChars,
 		ServedModel:       toNullStringEmpty(step.ServedModel),
+		ProviderRequestID: toNullStringEmpty(step.ProviderRequestID),
 	})
 	if err != nil {
 		if isForeignKeyViolation(err) {

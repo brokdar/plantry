@@ -85,7 +85,7 @@ type stepTokensResponse struct {
 }
 
 // runStepResponse carries args and result as text: stored payloads are cut
-// to 8192 characters, so they are not always valid JSON.
+// to 8192 characters (llm_call bodies) or 256 KiB, so they are not always valid JSON.
 type runStepResponse struct {
 	Seq               int                `json:"seq"`
 	Type              string             `json:"type"`
@@ -107,6 +107,8 @@ type runStepResponse struct {
 	// ServedModel is the model the provider answered with (name is the
 	// requested one).
 	ServedModel *string `json:"served_model"`
+	// ProviderRequestID is the provider's id of the call's HTTP request.
+	ProviderRequestID *string `json:"provider_request_id"`
 }
 
 type runDetailResponse struct {
@@ -118,6 +120,7 @@ type runDetailResponse struct {
 	// RepairAttempts counts the repair rounds of a generation run.
 	RepairAttempts int               `json:"repair_attempts"`
 	ErrorKey       *string           `json:"error_key"`
+	AppVersion     *string           `json:"app_version"`
 	Steps          []runStepResponse `json:"steps"`
 	PromptText     *string           `json:"prompt_text"`
 }
@@ -240,6 +243,7 @@ func (h *AIRunsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		Violations:         rawJSONOrNull(d.ViolationsJSON),
 		RepairAttempts:     d.RepairAttempts,
 		ErrorKey:           nilIfEmpty(d.ErrorKey),
+		AppVersion:         nilIfEmpty(d.AppVersion),
 		Steps:              make([]runStepResponse, len(d.Steps)),
 		PromptText:         nilIfEmpty(d.PromptText),
 	}
@@ -262,6 +266,7 @@ func (h *AIRunsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			TTFTMs:            s.TTFTMs,
 			ThinkingChars:     s.ThinkingChars,
 			ServedModel:       nilIfEmpty(s.ServedModel),
+			ProviderRequestID: nilIfEmpty(s.ProviderRequestID),
 		}
 		if s.StartedAt != nil {
 			t := s.StartedAt.Format("2006-01-02T15:04:05.000Z07:00")

@@ -118,7 +118,11 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 		return nil, decodeAPIError(resp)
 	}
 
-	return parseStream(ctx, resp.Body, out)
+	final, err := parseStream(ctx, resp.Body, out)
+	if final != nil {
+		final.RequestID = resp.Header.Get("x-request-id")
+	}
+	return final, err
 }
 
 // ---------------------------------------------------------------------------

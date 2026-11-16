@@ -30,12 +30,18 @@ type Heuristic struct{}
 
 // Choose implements Chooser. It fails with ErrNotEnoughRecipes when no
 // recipe fits a cell.
-func (Heuristic) Choose(_ context.Context, in ChooseInput) (Proposal, error) {
+func (Heuristic) Choose(ctx context.Context, in ChooseInput) (Proposal, error) {
+	recordContext(ctx, in, "heuristic", nil)
 	h := newPlanner(in)
+	var prop Proposal
+	var err error
 	if in.Side != nil {
-		return h.side(*in.Side)
+		prop, err = h.side(*in.Side)
+	} else {
+		prop, err = h.plan()
 	}
-	return h.plan()
+	h.recordChoices(ctx)
+	return prop, err
 }
 
 // epsilon absorbs float noise in portion sums.
@@ -86,6 +92,9 @@ type planner struct {
 	// explorePlaced and fillPlaced count the explore recipes and the
 	// never-eaten fillers the proposal cooks toward the quota (D17).
 	explorePlaced, fillPlaced int
+	// choices log what was chosen per cell and why (the run's
+	// heuristic.choices step).
+	choices []heuristicChoice
 }
 
 func newPlanner(in ChooseInput) *planner {
@@ -171,6 +180,7 @@ func (h *planner) plan() (Proposal, error) {
 			// The day's cap is used by other cells' cooks (confirmed ones
 			// included) and no batch can feed c: leave it empty; the checker
 			// reports it (H1). A cell that already is an occasion may cook.
+			h.choices = append(h.choices, heuristicChoice{Date: c.Date.Format(time.DateOnly), SlotID: c.SlotID, Reason: "left_empty_cook_cap"})
 			continue
 		}
 		if err := h.cook(c); err != nil {
@@ -337,6 +347,15 @@ func (h *planner) eat(sup *supply, c plate.CellKey, eaters float64, grow bool) {
 		sup.free -= eaters
 	}
 	pp := ProposedPlate{Date: c.Date, SlotID: c.SlotID, Eaters: eaters, Reason: h.leftoverReason(sup.cook.CookDate)}
+	code := "leftover_fixed_batch"
+	switch {
+	case grow:
+		code = "leftover_grown_batch"
+	case k == plate.KindFrozen:
+		code = "frozen_portion"
+	case sup.proposed >= 0:
+		code = "leftover_proposed_batch"
+	}
 	if sup.proposed >= 0 {
 		pp.Components = append(pp.Components, ProposedComponent{FoodID: sup.food, Portions: 1, SessionKey: h.prop.Sessions[sup.proposed].Key})
 		if sup.side >= 0 {
@@ -346,10 +365,11 @@ func (h *planner) eat(sup *supply, c plate.CellKey, eaters float64, grow bool) {
 	} else {
 		pp.Components = append(pp.Components, ProposedComponent{FoodID: sup.food, Portions: 1, SessionID: sup.id})
 	}
-	h.place(pp)
+	h.place(pp, code)
 }
 
-func (h *planner) place(pp ProposedPlate) {
+func (h *planner) place(pp ProposedPlate, code string) {
+	h.logChoice(pp, code)
 	h.done[idOf(plate.CellKey{Date: pp.Date, SlotID: pp.SlotID})] = true
 	for _, pc := range pp.Components {
 		if h.s.Foods[pc.FoodID].DietClass == diet.Omnivore && h.s.Window.Contains(pp.Date) {
@@ -369,6 +389,7 @@ func (h *planner) cook(c plate.CellKey) error {
 		// breaks the rule the checker enforces, so the cell stays empty and
 		// the checker reports it (H1).
 		h.notes = append(h.notes, fmt.Sprintf(h.text(textNoMain), h.weekday(c.Date), slotName(h.s, c.SlotID)))
+		h.choices = append(h.choices, heuristicChoice{Date: c.Date.Format(time.DateOnly), SlotID: c.SlotID, Reason: "left_empty_no_main"})
 		return nil
 	}
 	if !ok {
@@ -427,7 +448,11 @@ func (h *planner) cook(c plate.CellKey) error {
 		if sup.side >= 0 {
 			pp.Components = append(pp.Components, ProposedComponent{FoodID: side, Portions: 1, SessionKey: h.prop.Sessions[sup.side].Key})
 		}
-		h.place(pp)
+		code := "cook_new"
+		if !cc.cell.Equal(c) {
+			code = "leftover_of_new_batch"
+		}
+		h.place(pp, code)
 	}
 	return nil
 }
@@ -669,6 +694,7 @@ func (h *planner) side(sw SideSwap) (Proposal, error) {
 	reason := h.text(textDifferentSide)
 	ps := ProposedSession{Key: "s1", FoodID: id, CookDate: sw.CookDate, CookSlotID: sw.CookSlotID, Portions: sw.Portions, FrozenPortions: sw.FrozenPortions, Reason: reason}
 	p := Proposal{Sessions: []ProposedSession{ps}}
+	h.choices = append(h.choices, heuristicChoice{Date: sw.CookDate.Format(time.DateOnly), SlotID: sw.CookSlotID, Foods: []int64{id}, Reason: "side_swap"})
 	for _, sp := range sw.Plates {
 		p.Plates = append(p.Plates, ProposedPlate{
 			PlateID: sp.PlateID, Date: sp.Date, SlotID: sp.SlotID, Eaters: sp.Eaters, Reason: reason,
