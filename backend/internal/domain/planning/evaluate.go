@@ -47,6 +47,8 @@ type Evaluation struct {
 type EvalTotals struct {
 	Violations int `json:"violations"`
 	Warnings   int `json:"warnings"`
+	// Soft counts the S2/S3 issues.
+	Soft int `json:"soft"`
 }
 
 // DayEval is one day of the window with at least one planned meal.
@@ -168,15 +170,20 @@ func Evaluate(s State, t Target) Evaluation {
 		}
 		ev.Days = append(ev.Days, de)
 	}
+	ev.Issues = append(ev.Issues, x.softIssues(ev, t)...)
+	ev.Totals = totalsOf(ev.Issues)
 	return ev
 }
 
 func totalsOf(issues []Issue) EvalTotals {
 	var t EvalTotals
 	for _, is := range issues {
-		if is.Severity == SeverityViolation {
+		switch is.Severity {
+		case SeverityViolation:
 			t.Violations++
-		} else {
+		case SeveritySoft:
+			t.Soft++
+		default:
 			t.Warnings++
 		}
 	}

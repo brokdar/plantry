@@ -41,7 +41,11 @@ type State struct {
 	Sessions []Session
 	// Foods holds the facts of every food the state references and every
 	// candidate recipe, by id.
-	Foods    map[int64]FoodFacts
+	Foods map[int64]FoodFacts
+	// NoCook lists the ids (in Foods) of the no-cook foods the evaluation
+	// may offer to close a day's gap (Evaluate options); empty where the
+	// builder does not load them.
+	NoCook   []int64
 	Settings Settings
 	Profile  Profile
 	// History holds the confirmed plates of the 4 weeks before the window.
@@ -140,6 +144,9 @@ type FoodFacts struct {
 	LikeScore float64
 	// ExploreTag is set for a recipe tagged explore by discovery.
 	ExploreTag bool
+	// NoCook: the food needs no cooking (see NoCook): a leaf eaten raw, or
+	// a recipe whose cook minutes are explicitly 0 and that is not a main.
+	NoCook bool
 }
 
 // Explore reports whether the food is an explore candidate: tagged explore
