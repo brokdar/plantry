@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/llm"
 )
@@ -47,14 +48,7 @@ func (st *streamState) partial() *llm.Response {
 		}
 		content = append(content, cb)
 	}
-	return &llm.Response{
-		Message:       llm.Message{Role: llm.RoleAssistant, Content: content},
-		StopReason:    st.stopReason,
-		Usage:         st.usage,
-		SearchResults: st.results,
-		Model:         st.model,
-		Partial:       true,
-	}
+	return st.response(content, true)
 }
 
 // readStream reads the Anthropic SSE event sequence from body, relays
@@ -128,13 +122,7 @@ func readStream(ctx context.Context, body io.Reader, out chan<- llm.Event, st *s
 		}
 		content = append(content, b.finalize())
 	}
-	return &llm.Response{
-		Message:       llm.Message{Role: llm.RoleAssistant, Content: content},
-		StopReason:    st.stopReason,
-		Usage:         st.usage,
-		SearchResults: st.results,
-		Model:         st.model,
-	}, nil
+	return st.response(content, false), nil
 }
 
 // streamState accumulates one streamed assistant turn.
@@ -146,6 +134,37 @@ type streamState struct {
 	usage      llm.Usage
 	model      string
 	results    []llm.SearchResult
+	container  containerInfo
+}
+
+// containerInfo is the code execution container of a reply.
+type containerInfo struct {
+	ID        string `json:"id"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+// setContainer keeps the container a message_start or message_delta names.
+func (st *streamState) setContainer(c *containerInfo) {
+	if c != nil && c.ID != "" {
+		st.container = *c
+	}
+}
+
+// response assembles the llm.Response of the reply streamed so far.
+func (st *streamState) response(content []llm.ContentBlock, partial bool) *llm.Response {
+	resp := &llm.Response{
+		Message:       llm.Message{Role: llm.RoleAssistant, Content: content},
+		StopReason:    st.stopReason,
+		Usage:         st.usage,
+		SearchResults: st.results,
+		Model:         st.model,
+		Partial:       partial,
+		ContainerID:   st.container.ID,
+	}
+	if t, err := time.Parse(time.RFC3339, st.container.ExpiresAt); err == nil {
+		resp.ContainerExpiresAt = t
+	}
+	return resp
 }
 
 // addResults appends the pages of a web_search_tool_result block, skipping
@@ -187,6 +206,7 @@ type blockAccum struct {
 	name      string
 	args      strings.Builder
 	input     json.RawMessage
+	caller    *llm.Caller
 	raw       json.RawMessage // server and thinking blocks: the block JSON, compacted
 	thinking  strings.Builder // thinking text from thinking_delta
 	signature strings.Builder // thinking signature from signature_delta
@@ -207,7 +227,7 @@ func (b *blockAccum) finalize() llm.ContentBlock {
 			raw = json.RawMessage(s)
 		}
 		return llm.ContentBlock{
-			Type: llm.ContentTypeToolUse, ToolUseID: b.id, ToolUseName: b.name, ToolUseInput: raw,
+			Type: llm.ContentTypeToolUse, ToolUseID: b.id, ToolUseName: b.name, ToolUseInput: raw, Caller: b.caller,
 		}
 	default:
 		return llm.ContentBlock{Type: llm.ContentTypeText, Text: b.text.String(), Citations: b.citations}
@@ -225,8 +245,9 @@ func handleSSEEvent(
 	case "message_start":
 		var payload struct {
 			Message struct {
-				Model string `json:"model"`
-				Usage struct {
+				Model     string         `json:"model"`
+				Container *containerInfo `json:"container"`
+				Usage     struct {
 					InputTokens              int           `json:"input_tokens"`
 					OutputTokens             int           `json:"output_tokens"`
 					CacheCreationInputTokens int           `json:"cache_creation_input_tokens"`
@@ -240,11 +261,13 @@ func handleSSEEvent(
 			return fmt.Errorf("anthropic: message_start decode: %w", err)
 		}
 		st.model = payload.Message.Model
+		st.setContainer(payload.Message.Container)
 		st.usage.InputTokens = payload.Message.Usage.InputTokens
 		st.usage.OutputTokens = payload.Message.Usage.OutputTokens
 		st.usage.CacheReadTokens = payload.Message.Usage.CacheReadInputTokens
 		st.usage.CacheWriteTokens = payload.Message.Usage.CacheCreationInputTokens
 		st.usage.WebSearchRequests = payload.Message.Usage.ServerToolUse.WebSearchRequests
+		st.usage.CodeExecutionRequests = payload.Message.Usage.ServerToolUse.CodeExecutionRequests
 		st.usage.ReasoningTokens = payload.Message.Usage.OutputTokensDetails.ThinkingTokens
 		return send(ctx, out, llm.Event{Type: llm.EventMessageStart, Payload: llm.MessageStartPayload{Model: st.model}})
 
@@ -258,6 +281,7 @@ func handleSSEEvent(
 				Name    string          `json:"name"`
 				Input   json.RawMessage `json:"input"`
 				Content json.RawMessage `json:"content"`
+				Caller  *llm.Caller     `json:"caller"`
 			} `json:"content_block"`
 		}
 		if err := json.Unmarshal(data, &payload); err != nil {
@@ -283,6 +307,7 @@ func handleSSEEvent(
 		case "tool_use":
 			blk.id = payload.ContentBlock.ID
 			blk.name = payload.ContentBlock.Name
+			blk.caller = payload.ContentBlock.Caller
 			if len(payload.ContentBlock.Input) > 0 && string(payload.ContentBlock.Input) != "null" {
 				blk.input = payload.ContentBlock.Input
 			}
@@ -376,7 +401,8 @@ func handleSSEEvent(
 	case "message_delta":
 		var payload struct {
 			Delta struct {
-				StopReason string `json:"stop_reason"`
+				StopReason string         `json:"stop_reason"`
+				Container  *containerInfo `json:"container"`
 			} `json:"delta"`
 			Usage struct {
 				OutputTokens             int           `json:"output_tokens"`
@@ -391,6 +417,7 @@ func handleSSEEvent(
 			return fmt.Errorf("anthropic: message_delta decode: %w", err)
 		}
 		st.stopReason = mapStopReason(payload.Delta.StopReason)
+		st.setContainer(payload.Delta.Container)
 		if payload.Usage.OutputTokens > 0 {
 			st.usage.OutputTokens = payload.Usage.OutputTokens
 		}
@@ -408,6 +435,9 @@ func handleSSEEvent(
 		}
 		if n := payload.Usage.ServerToolUse.WebSearchRequests; n > 0 {
 			st.usage.WebSearchRequests = n
+		}
+		if n := payload.Usage.ServerToolUse.CodeExecutionRequests; n > 0 {
+			st.usage.CodeExecutionRequests = n
 		}
 		return nil
 
@@ -461,7 +491,8 @@ type outputDetails struct {
 
 // serverToolUse is the usage.server_tool_use object (cumulative counts).
 type serverToolUse struct {
-	WebSearchRequests int `json:"web_search_requests"`
+	WebSearchRequests     int `json:"web_search_requests"`
+	CodeExecutionRequests int `json:"code_execution_requests"`
 }
 
 // setServerInput writes the streamed input of a server_tool_use block into

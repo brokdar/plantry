@@ -1,6 +1,9 @@
 package agent
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Repository is the persistence port for conversations + messages.
 type Repository interface {
@@ -8,6 +11,8 @@ type Repository interface {
 	GetConversation(ctx context.Context, id int64) (*Conversation, error)
 	UpdateConversationTitle(ctx context.Context, id int64, title *string) (*Conversation, error)
 	TouchConversation(ctx context.Context, id int64) error
+	// SetContainer stores the code execution container the conversation keeps.
+	SetContainer(ctx context.Context, id int64, containerID string, expires time.Time) error
 	DeleteConversation(ctx context.Context, id int64) error
 	ListConversations(ctx context.Context, q ListQuery) (*ListResult, error)
 	AppendMessage(ctx context.Context, m *Message) error

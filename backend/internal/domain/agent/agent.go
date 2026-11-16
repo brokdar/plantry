@@ -33,11 +33,15 @@ func ValidRole(r Role) bool { return validRoles[r] }
 
 // Conversation aggregates an AI chat session.
 type Conversation struct {
-	ID        int64
-	Title     *string
-	Messages  []Message
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID       int64
+	Title    *string
+	Messages []Message
+	// ContainerID is the code execution container later turns reuse until
+	// ContainerExpiresAt; empty when none.
+	ContainerID        string
+	ContainerExpiresAt time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 // Message is one persisted turn. Content is a JSON-encoded array of

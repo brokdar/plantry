@@ -194,6 +194,7 @@ type Querier interface {
 	PruneAIRunSteps(ctx context.Context, before string) (sql.Result, error)
 	ReinsertPlate(ctx context.Context, arg ReinsertPlateParams) error
 	RestorePlateFeedback(ctx context.Context, arg RestorePlateFeedbackParams) error
+	SetConversationContainer(ctx context.Context, arg SetConversationContainerParams) (sql.Result, error)
 	// D11: any suggestion accepted -> accepted; all rejected -> discarded; else
 	// open. A run without suggestions keeps NULL.
 	SetDiscoveryRunOutcome(ctx context.Context, id int64) error
@@ -219,6 +220,7 @@ type Querier interface {
 	TouchPlate(ctx context.Context, id int64) error
 	TouchPresetLastUsedAt(ctx context.Context, id int64) error
 	TouchPresetUpdatedAt(ctx context.Context, id int64) error
+	UpdateAIRunStepResult(ctx context.Context, arg UpdateAIRunStepResultParams) error
 	UpdateConversationTitle(ctx context.Context, arg UpdateConversationTitleParams) (AiConversation, error)
 	UpdateCookSession(ctx context.Context, arg UpdateCookSessionParams) (CookSession, error)
 	UpdateFood(ctx context.Context, arg UpdateFoodParams) (Food, error)

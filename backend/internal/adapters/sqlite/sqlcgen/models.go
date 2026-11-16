@@ -27,10 +27,12 @@ type AiChange struct {
 }
 
 type AiConversation struct {
-	ID        int64
-	Title     sql.NullString
-	CreatedAt string
-	UpdatedAt string
+	ID                 int64
+	Title              sql.NullString
+	CreatedAt          string
+	UpdatedAt          string
+	ContainerID        sql.NullString
+	ContainerExpiresAt sql.NullString
 }
 
 type AiMessage struct {
@@ -80,6 +82,7 @@ type AiRun struct {
 	DurationMs        sql.NullInt64
 	ReasoningTokens   int64
 	AppVersion        sql.NullString
+	ContainerID       sql.NullString
 }
 
 type AiRunStep struct {
@@ -106,6 +109,8 @@ type AiRunStep struct {
 	ThinkingChars     int64
 	ServedModel       sql.NullString
 	ProviderRequestID sql.NullString
+	Caller            sql.NullString
+	CallerToolID      sql.NullString
 }
 
 type AiToolSchema struct {

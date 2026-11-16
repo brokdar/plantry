@@ -39,9 +39,21 @@ func newChatService(t *testing.T, script *fake.Script) (*agent.Service, *sql.DB)
 // read being the first and the closing `after` read the second.
 func newChatServiceWith(t *testing.T, script *fake.Script, wrap func(call int, st planning.State, err error) (planning.State, error)) (*agent.Service, *sql.DB) {
 	t.Helper()
+	return buildChatService(t, fake.NewFromScript(script), wrap)
+}
+
+// newChatServiceWithClient is newChatService over a client the test keeps, to
+// read its recorded requests.
+func newChatServiceWithClient(t *testing.T, fc *fake.Client) (*agent.Service, *sql.DB) {
+	t.Helper()
+	return buildChatService(t, fc, nil)
+}
+
+func buildChatService(t *testing.T, fc *fake.Client, wrap func(call int, st planning.State, err error) (planning.State, error)) (*agent.Service, *sql.DB) {
+	t.Helper()
 	db := testhelper.NewTestDB(t)
 	rec := airun.NewRecorder(sqlite.NewAIRunRepo(db), slog.New(slog.DiscardHandler), time.Now)
-	client := rec.Meter(fake.NewFromScript(script), "fake")
+	client := rec.Meter(fc, "fake")
 
 	foodRepo := sqlite.NewFoodRepo(db)
 	tools, err := agent.NewToolSet(agent.Services{

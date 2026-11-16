@@ -109,6 +109,10 @@ type runStepResponse struct {
 	ServedModel *string `json:"served_model"`
 	// ProviderRequestID is the provider's id of the call's HTTP request.
 	ProviderRequestID *string `json:"provider_request_id"`
+	// Caller is direct or code_execution on a tool_call step, CallerToolID
+	// the code's server tool use id; null for other steps.
+	Caller       *string `json:"caller"`
+	CallerToolID *string `json:"caller_tool_id"`
 }
 
 type runDetailResponse struct {
@@ -118,11 +122,13 @@ type runDetailResponse struct {
 	Notes       *string         `json:"notes"`
 	Violations  json.RawMessage `json:"violations"`
 	// RepairAttempts counts the repair rounds of a generation run.
-	RepairAttempts int               `json:"repair_attempts"`
-	ErrorKey       *string           `json:"error_key"`
-	AppVersion     *string           `json:"app_version"`
-	Steps          []runStepResponse `json:"steps"`
-	PromptText     *string           `json:"prompt_text"`
+	RepairAttempts int     `json:"repair_attempts"`
+	ErrorKey       *string `json:"error_key"`
+	AppVersion     *string `json:"app_version"`
+	// ContainerID is the code execution container the run used.
+	ContainerID *string           `json:"container_id"`
+	Steps       []runStepResponse `json:"steps"`
+	PromptText  *string           `json:"prompt_text"`
 }
 
 type insightsWeekResponse struct {
@@ -244,6 +250,7 @@ func (h *AIRunsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		RepairAttempts:     d.RepairAttempts,
 		ErrorKey:           nilIfEmpty(d.ErrorKey),
 		AppVersion:         nilIfEmpty(d.AppVersion),
+		ContainerID:        nilIfEmpty(d.ContainerID),
 		Steps:              make([]runStepResponse, len(d.Steps)),
 		PromptText:         nilIfEmpty(d.PromptText),
 	}
@@ -267,6 +274,8 @@ func (h *AIRunsHandler) Get(w http.ResponseWriter, r *http.Request) {
 			ThinkingChars:     s.ThinkingChars,
 			ServedModel:       nilIfEmpty(s.ServedModel),
 			ProviderRequestID: nilIfEmpty(s.ProviderRequestID),
+			Caller:            nilIfEmpty(s.Caller),
+			CallerToolID:      nilIfEmpty(s.CallerToolID),
 		}
 		if s.StartedAt != nil {
 			t := s.StartedAt.Format("2006-01-02T15:04:05.000Z07:00")

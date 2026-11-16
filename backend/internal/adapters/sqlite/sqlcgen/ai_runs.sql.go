@@ -201,8 +201,9 @@ func (q *Queries) CreateAIRun(ctx context.Context, arg CreateAIRunParams) (int64
 const createAIRunStep = `-- name: CreateAIRunStep :exec
 INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens,
     request_json, response_json, stop_reason, web_search_requests,
-    started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id,
+    caller, caller_tool_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateAIRunStepParams struct {
@@ -228,6 +229,8 @@ type CreateAIRunStepParams struct {
 	ThinkingChars     int64
 	ServedModel       sql.NullString
 	ProviderRequestID sql.NullString
+	Caller            sql.NullString
+	CallerToolID      sql.NullString
 }
 
 func (q *Queries) CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams) error {
@@ -254,6 +257,8 @@ func (q *Queries) CreateAIRunStep(ctx context.Context, arg CreateAIRunStepParams
 		arg.ThinkingChars,
 		arg.ServedModel,
 		arg.ProviderRequestID,
+		arg.Caller,
+		arg.CallerToolID,
 	)
 	return err
 }
@@ -291,7 +296,8 @@ UPDATE ai_runs SET
     repair_attempts    = ?,
     violations_json    = ?,
     score_json         = ?,
-    notes              = ?
+    notes              = ?,
+    container_id       = ?
 WHERE id = ?
 `
 
@@ -314,6 +320,7 @@ type FinishAIRunParams struct {
 	ViolationsJson    sql.NullString
 	ScoreJson         sql.NullString
 	Notes             sql.NullString
+	ContainerID       sql.NullString
 	ID                int64
 }
 
@@ -339,6 +346,7 @@ func (q *Queries) FinishAIRun(ctx context.Context, arg FinishAIRunParams) (sql.R
 		arg.ViolationsJson,
 		arg.ScoreJson,
 		arg.Notes,
+		arg.ContainerID,
 		arg.ID,
 	)
 }
@@ -348,7 +356,7 @@ SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model,
        r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens, r.web_search_requests,
        r.reasoning_tokens, r.duration_ms,
        r.score_json, r.violations_json, r.outcome,
-       r.scope_json, r.instruction, r.notes, r.error_key, r.repair_attempts, r.app_version, p.text AS prompt_text
+       r.scope_json, r.instruction, r.notes, r.error_key, r.repair_attempts, r.app_version, r.container_id, p.text AS prompt_text
 FROM ai_runs r
 LEFT JOIN ai_prompts p ON p.hash = r.prompt_hash
 WHERE r.id = ?
@@ -380,6 +388,7 @@ type GetAIRunDetailRow struct {
 	ErrorKey          sql.NullString
 	RepairAttempts    int64
 	AppVersion        sql.NullString
+	ContainerID       sql.NullString
 	PromptText        sql.NullString
 }
 
@@ -412,6 +421,7 @@ func (q *Queries) GetAIRunDetail(ctx context.Context, id int64) (GetAIRunDetailR
 		&i.ErrorKey,
 		&i.RepairAttempts,
 		&i.AppVersion,
+		&i.ContainerID,
 		&i.PromptText,
 	)
 	return i, err
@@ -475,7 +485,7 @@ func (q *Queries) GetRunNote(ctx context.Context, id int64) (GetRunNoteRow, erro
 
 const listAIRunStepViews = `-- name: ListAIRunStepViews :many
 SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens, web_search_requests,
-       started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id,
+       started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model, provider_request_id, caller, caller_tool_id,
        CAST(COALESCE(args_json, substr(request_json, 1, 8192), '') AS TEXT) AS args,
        CAST(args_json IS NULL AND COALESCE(length(request_json), 0) > 8192 AS INTEGER) AS args_cut,
        CAST(COALESCE(result_json, substr(response_json, 1, 8192), '') AS TEXT) AS result,
@@ -502,6 +512,8 @@ type ListAIRunStepViewsRow struct {
 	ThinkingChars     int64
 	ServedModel       sql.NullString
 	ProviderRequestID sql.NullString
+	Caller            sql.NullString
+	CallerToolID      sql.NullString
 	Args              string
 	ArgsCut           int64
 	Result            string
@@ -538,6 +550,8 @@ func (q *Queries) ListAIRunStepViews(ctx context.Context, runID int64) ([]ListAI
 			&i.ThinkingChars,
 			&i.ServedModel,
 			&i.ProviderRequestID,
+			&i.Caller,
+			&i.CallerToolID,
 			&i.Args,
 			&i.ArgsCut,
 			&i.Result,
@@ -701,6 +715,29 @@ type SetRunOutcomeParams struct {
 // (confirmed) of some of a run's drafts makes an open run partially_accepted.
 func (q *Queries) SetRunOutcome(ctx context.Context, arg SetRunOutcomeParams) error {
 	_, err := q.db.ExecContext(ctx, setRunOutcome, arg.Event, arg.ID)
+	return err
+}
+
+const updateAIRunStepResult = `-- name: UpdateAIRunStepResult :exec
+UPDATE ai_run_steps SET result_json = ?, is_error = ?, duration_ms = ? WHERE run_id = ? AND seq = ?
+`
+
+type UpdateAIRunStepResultParams struct {
+	ResultJson sql.NullString
+	IsError    int64
+	DurationMs int64
+	RunID      int64
+	Seq        int64
+}
+
+func (q *Queries) UpdateAIRunStepResult(ctx context.Context, arg UpdateAIRunStepResultParams) error {
+	_, err := q.db.ExecContext(ctx, updateAIRunStepResult,
+		arg.ResultJson,
+		arg.IsError,
+		arg.DurationMs,
+		arg.RunID,
+		arg.Seq,
+	)
 	return err
 }
 

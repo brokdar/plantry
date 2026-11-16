@@ -367,3 +367,41 @@ func TestStream_RetriesWithoutRejectedEffort(t *testing.T) {
 	assert.Empty(t, eff.Effort)
 	assert.Contains(t, eff.Fallbacks, "effort_rejected_by_model")
 }
+
+// Programmatic tool calling is Anthropic's: the opt-in, allowed callers and
+// container change nothing on an OpenAI request.
+func TestStream_IgnoresCodeExecutionOptIn(t *testing.T) {
+	body, err := os.ReadFile("testdata/stream_text.sse")
+	require.NoError(t, err)
+	var bodies []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(b))
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(ts.Close)
+	c := openai.New("k", openai.WithBaseURL(ts.URL), openai.WithHTTPClient(ts.Client()))
+
+	send := func(req llm.Request) {
+		out := make(chan llm.Event, 64)
+		_, err := c.Stream(context.Background(), req, out)
+		require.NoError(t, err)
+		drainEvents(out)
+	}
+	tool := llm.Tool{Name: "find_foods", Description: "d", Schema: json.RawMessage(`{"type":"object"}`)}
+	plain := llm.Request{Model: "gpt-5.4-mini", Tools: []llm.Tool{tool}}
+	opted := plain
+	opted.CodeExecution, opted.Container = true, "container_1"
+	opted.Tools = []llm.Tool{{
+		Name: tool.Name, Description: tool.Description, Schema: tool.Schema,
+		AllowedCallers: []string{llm.CallerDirect, llm.CallerCodeExecution},
+	}}
+	send(plain)
+	send(opted)
+
+	require.Len(t, bodies, 2)
+	assert.JSONEq(t, bodies[0], bodies[1])
+	assert.NotContains(t, bodies[1], "code_execution")
+	assert.NotContains(t, bodies[1], "allowed_callers")
+}

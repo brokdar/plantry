@@ -51,6 +51,10 @@ type Turn struct {
 	// stop_reason of "pause_turn" simulates a paused long server-tool turn.
 	SearchResults     []llm.SearchResult `json:"search_results,omitempty"`
 	WebSearchRequests int                `json:"web_search_requests,omitempty"`
+	// ContainerID and ContainerExpiresAt simulate the code execution
+	// container of a programmatic tool calling turn.
+	ContainerID        string    `json:"container_id,omitempty"`
+	ContainerExpiresAt time.Time `json:"container_expires_at,omitempty"`
 }
 
 // ScriptedEvent is one canonical Event to emit, with optional pre-delay.
@@ -75,6 +79,8 @@ type ScriptedBlock struct {
 	ToolInput json.RawMessage `json:"tool_input,omitempty"`
 	// Raw is a "server" block's provider JSON (D2), replayed verbatim.
 	Raw json.RawMessage `json:"raw,omitempty"`
+	// Caller marks a tool_use made from code (programmatic tool calling).
+	Caller *llm.Caller `json:"caller,omitempty"`
 }
 
 // ScriptedUsage matches llm.Usage.
@@ -238,7 +244,9 @@ func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Eve
 			CacheReadTokens: turn.Usage.CacheReadTokens, CacheWriteTokens: turn.Usage.CacheWriteTokens,
 			WebSearchRequests: turn.WebSearchRequests,
 		},
-		SearchResults: turn.SearchResults,
+		SearchResults:      turn.SearchResults,
+		ContainerID:        turn.ContainerID,
+		ContainerExpiresAt: turn.ContainerExpiresAt,
 	}, nil
 }
 
@@ -365,7 +373,7 @@ func assembleMessage(m ScriptedMessage) llm.Message {
 			}
 			content[i] = llm.ContentBlock{
 				Type: llm.ContentTypeToolUse, ToolUseID: b.ToolUseID,
-				ToolUseName: b.ToolName, ToolUseInput: input,
+				ToolUseName: b.ToolName, ToolUseInput: input, Caller: b.Caller,
 			}
 		case "server":
 			content[i] = llm.ContentBlock{Type: llm.ContentTypeServer, Raw: b.Raw}

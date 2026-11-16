@@ -68,6 +68,17 @@ func (s *memStore) UpsertToolSchema(ctx context.Context, hash, json string) erro
 	return nil
 }
 
+func (s *memStore) UpdateStepResult(ctx context.Context, runID int64, seq int, result string, isErr bool, durationMs int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.steps {
+		if s.steps[i].RunID == runID && s.steps[i].Seq == seq {
+			s.steps[i].ResultJSON, s.steps[i].IsError, s.steps[i].DurationMs = result, isErr, durationMs
+		}
+	}
+	return nil
+}
+
 func (s *memStore) PruneSteps(ctx context.Context, before time.Time) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

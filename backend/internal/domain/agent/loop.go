@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
@@ -16,9 +17,20 @@ import (
 // iteration budget without the model returning an end_turn.
 var ErrIterationsExceeded = errors.New("agent iteration budget exceeded")
 
-// MaxIterations caps the tool-calling loop. The cap protects against
-// runaway tool-tool cycles and unbounded token cost.
+// MaxIterations caps the model turns of the tool-calling loop. The cap
+// protects against runaway tool-tool cycles and unbounded token cost.
 const MaxIterations = 20
+
+// MaxCodeContinuations caps the requests that only continue a script the
+// model runs in the code execution container (answers to code-called tools,
+// a paused turn resent); they are not model turns, so MaxIterations does not
+// count them. Past it the pending calls are answered with an error telling
+// the script to stop, so the model closes its turn with a final message.
+const MaxCodeContinuations = 40
+
+// MaxRequests is the hard bound on provider requests per Run, wrap-up
+// requests included.
+const MaxRequests = MaxIterations + MaxCodeContinuations + 4
 
 // RunRequest is the input to Run.
 type RunRequest struct {
@@ -37,6 +49,12 @@ type RunRequest struct {
 	// Effort is the reasoning effort (ai.reasoning_effort.chat); empty: the
 	// provider default.
 	Effort string
+	// CodeExecution offers the code execution tool (programmatic tool
+	// calling). Container is the container to reuse (empty: a new one) and
+	// SaveContainer, when set, is told every new container the provider names.
+	CodeExecution bool
+	Container     string
+	SaveContainer func(ctx context.Context, id string, expires time.Time)
 }
 
 // Run drives a tool-calling agent loop to completion on the given request and
@@ -51,8 +69,46 @@ type RunRequest struct {
 func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet, repo Repository, out chan<- llm.Event) error {
 	history := append([]llm.Message{}, req.History...)
 	var usage llm.Usage
+	container := req.Container
+	var lastExpires time.Time
 
-	for iter := 0; iter < MaxIterations; iter++ {
+	// pend holds the messages of an open code execution turn: they are
+	// stored only once the turn is closed, so the stored conversation never
+	// ends inside a turn the API cannot continue from (a text message after
+	// unanswered programmatic calls is a 400 on every later request).
+	var pend []pendingMessage
+	var turn []llm.Message
+	store := func(role Role, m llm.Message) error {
+		pend = append(pend, pendingMessage{role, m})
+		turn = append(turn, m)
+		if llm.CodeTurnOpen(turn) {
+			return nil
+		}
+		return flushPending(ctx, repo, req.ConversationID, &pend, &turn, false)
+	}
+	// closeTurn stores what remains of an unfinished code turn without its
+	// code blocks, so the next request replays a complete exchange.
+	closeTurn := func() {
+		if len(pend) > 0 {
+			_ = flushPending(context.WithoutCancel(ctx), repo, req.ConversationID, &pend, &turn, true)
+		}
+	}
+	fail := func(key string, err error) error {
+		closeTurn()
+		return emitAndPersistError(ctx, out, repo, req.ConversationID, key, err)
+	}
+
+	requests, turns, conts, continuation, wrapUp := 0, 0, 0, false, false
+	for {
+		if requests++; requests > MaxRequests {
+			break
+		}
+		if continuation {
+			conts++
+		} else if turns++; turns > MaxIterations {
+			break
+		}
+		iter := requests - 1
 		providerReq := llm.Request{
 			Model:       req.Model,
 			System:      req.SystemPrompt,
@@ -62,6 +118,9 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			MaxTokens:   req.MaxTokens,
 			Reasoning:   true,
 			Effort:      req.Effort,
+
+			CodeExecution: req.CodeExecution,
+			Container:     container,
 		}
 
 		providerCh := make(chan llm.Event, 16)
@@ -79,6 +138,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		for evt := range providerCh {
 			if !send(ctx, out, evt) {
 				<-done // wait for goroutine exit
+				closeTurn()
 				return ctx.Err()
 			}
 		}
@@ -91,11 +151,19 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 				// not an interrupted stream.
 				key = "error.ai.provider_error"
 			}
-			return emitAndPersistError(ctx, out, repo, req.ConversationID, key, res.err)
+			return fail(key, res.err)
 		}
 		if res.resp == nil {
 			err := errors.New("llm client returned nil response without error")
-			return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", err)
+			return fail("error.server", err)
+		}
+		if id, exp := res.resp.ContainerID, res.resp.ContainerExpiresAt; id != "" {
+			// The expiry rolls forward with every reply: store it each time,
+			// so the next turn's reuse check sees the current one.
+			if (id != container || !exp.Equal(lastExpires)) && req.SaveContainer != nil && !exp.IsZero() {
+				req.SaveContainer(ctx, id, exp)
+			}
+			container, lastExpires = id, exp
 		}
 		usage.InputTokens += res.resp.Usage.InputTokens
 		usage.OutputTokens += res.resp.Usage.OutputTokens
@@ -103,15 +171,24 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		usage.CacheWriteTokens += res.resp.Usage.CacheWriteTokens
 
 		// Persist the assistant message (text + any tool_use blocks).
-		if err := persistMessage(ctx, repo, req.ConversationID, RoleAssistant, res.resp.Message.Content); err != nil {
-			return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", err)
+		if err := store(RoleAssistant, res.resp.Message); err != nil {
+			return fail("error.server", err)
 		}
 		history = append(history, res.resp.Message)
 
 		toolUses := extractToolUses(res.resp.Message)
 
+		// A long server-side turn (code execution) paused: resend the
+		// conversation, now ending in the assistant blocks, to continue it.
+		continuation = false
+		if res.resp.StopReason == llm.StopReasonPauseTurn && len(toolUses) == 0 {
+			continuation = true
+			continue
+		}
+
 		// No tool calls → the turn is the final response.
 		if res.resp.StopReason == llm.StopReasonEndTurn || len(toolUses) == 0 {
+			closeTurn()
 			send(ctx, out, llm.Event{Type: llm.EventDone, Payload: llm.DonePayload{
 				StopReason:     res.resp.StopReason,
 				Usage:          usage,
@@ -120,14 +197,33 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			return nil
 		}
 
+		// Past the code continuation bound the script gets errors only, so it
+		// ends and the model closes the turn with a message.
+		if !wrapUp && onlyCodeCalls(toolUses) && conts >= MaxCodeContinuations {
+			wrapUp = true
+			slog.WarnContext(ctx, "agent.loop.code_limit", "conversation_id", req.ConversationID, "continuations", conts)
+		}
+		continuation = onlyCodeCalls(toolUses)
+
 		// Execute each tool call.
 		resultBlocks := make([]llm.ContentBlock, 0, len(toolUses))
 		for _, call := range toolUses {
+			if wrapUp && call.Caller.FromCode() {
+				resultBlocks = append(resultBlocks, llm.ContentBlock{
+					Type: llm.ContentTypeToolResult, ToolResultID: call.ToolUseID, ToolResultIsError: true,
+					ToolResultContent: mustMarshal(map[string]string{"error": "tool call limit reached for this turn; stop calling tools and answer with what you have"}),
+				})
+				continue
+			}
 			send(ctx, out, llm.Event{Type: llm.EventToolExecStart, Payload: llm.ToolExecStartPayload{
 				ID: call.ToolUseID, Name: call.ToolUseName,
 			}})
 			start := time.Now()
-			output, effect, change, err := tools.Execute(ctx, call.ToolUseName, call.ToolUseInput)
+			caller := call.Caller
+			if caller == nil {
+				caller = &llm.Caller{Type: llm.CallerDirect}
+			}
+			output, effect, change, err := tools.Execute(llm.WithCaller(ctx, caller), call.ToolUseName, call.ToolUseInput)
 			dur := time.Since(start).Milliseconds()
 
 			if err != nil {
@@ -180,7 +276,7 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 			case ToolEffectUnlockRequest:
 				var unlock llm.UnlockRequestPayload
 				if err := json.Unmarshal(output, &unlock); err != nil {
-					return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", fmt.Errorf("unlock request: %w", err))
+					return fail("error.server", fmt.Errorf("unlock request: %w", err))
 				}
 				send(ctx, out, llm.Event{Type: llm.EventUnlockRequest, Payload: unlock})
 			case ToolEffectNone:
@@ -188,14 +284,15 @@ func Run(ctx context.Context, req RunRequest, client llm.Client, tools *ToolSet,
 		}
 
 		// Persist and append the tool message carrying all result blocks.
-		if err := persistMessage(ctx, repo, req.ConversationID, RoleTool, resultBlocks); err != nil {
-			return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.server", err)
+		toolMsg := llm.Message{Role: llm.RoleUser, Content: resultBlocks}
+		if err := store(RoleTool, toolMsg); err != nil {
+			return fail("error.server", err)
 		}
-		history = append(history, llm.Message{Role: llm.RoleUser, Content: resultBlocks})
+		history = append(history, toolMsg)
 	}
 
-	err := fmt.Errorf("%w: %d iterations reached", ErrIterationsExceeded, MaxIterations)
-	return emitAndPersistError(ctx, out, repo, req.ConversationID, "error.ai.iterations_exceeded", err)
+	err := fmt.Errorf("%w: %d model turns, %d requests", ErrIterationsExceeded, turns, requests)
+	return fail("error.ai.iterations_exceeded", err)
 }
 
 // send writes evt to out unless ctx is done. Returns false if the context was
@@ -207,6 +304,51 @@ func send(ctx context.Context, out chan<- llm.Event, evt llm.Event) bool {
 	case out <- evt:
 		return true
 	}
+}
+
+// onlyCodeCalls reports whether every call comes from code the model ran.
+func onlyCodeCalls(calls []llm.ContentBlock) bool {
+	for _, c := range calls {
+		if !c.Caller.FromCode() {
+			return false
+		}
+	}
+	return len(calls) > 0
+}
+
+type pendingMessage struct {
+	role Role
+	msg  llm.Message
+}
+
+// flushPending stores the buffered messages of a code turn and empties the
+// buffer. With strip the turn is unfinished: its code blocks, the code-called
+// tool calls and their results are left out (later messages are appended, so
+// no stored message is rewritten).
+func flushPending(ctx context.Context, repo Repository, convID int64, pend *[]pendingMessage, turn *[]llm.Message, strip bool) error {
+	msgs := *pend
+	*pend, *turn = nil, nil
+	if strip {
+		plain := make([]llm.Message, len(msgs))
+		for i, m := range msgs {
+			plain[i] = m.msg
+		}
+		kept := llm.StripCodeBlocks(plain)
+		msgs = msgs[:0:0]
+		for _, m := range kept {
+			role := RoleAssistant
+			if m.Role == llm.RoleUser {
+				role = RoleTool
+			}
+			msgs = append(msgs, pendingMessage{role, m})
+		}
+	}
+	for _, m := range msgs {
+		if err := persistMessage(ctx, repo, convID, m.role, m.msg.Content); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func extractToolUses(m llm.Message) []llm.ContentBlock {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +43,10 @@ func (r *memRepo) GetConversation(_ context.Context, id int64) (*Conversation, e
 func (r *memRepo) UpdateConversationTitle(_ context.Context, id int64, title *string) (*Conversation, error) {
 	return &Conversation{ID: id, Title: title}, nil
 }
-func (r *memRepo) TouchConversation(_ context.Context, _ int64) error  { return nil }
+func (r *memRepo) TouchConversation(_ context.Context, _ int64) error { return nil }
+func (r *memRepo) SetContainer(_ context.Context, _ int64, _ string, _ time.Time) error {
+	return nil
+}
 func (r *memRepo) DeleteConversation(_ context.Context, _ int64) error { return nil }
 func (r *memRepo) ListConversations(_ context.Context, _ ListQuery) (*ListResult, error) {
 	return &ListResult{}, nil
