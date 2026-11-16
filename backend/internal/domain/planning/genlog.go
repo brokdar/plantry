@@ -73,6 +73,9 @@ type attemptRecord struct {
 	ParseError string   `json:"parse_error,omitempty"`
 	Violations []string `json:"violations,omitempty"` // rule.code@date/slot plate session ids
 	Count      int      `json:"violation_count"`
+	// Autofix lists the corrections Go applied to the proposal before it
+	// was checked (session portions grown to cover their plates).
+	Autofix []string `json:"autofix,omitempty"`
 }
 
 // violationRef names one violation by rule, code and place:
@@ -100,8 +103,8 @@ func violationRef(v Issue) string {
 	return s
 }
 
-func newAttemptRecord(attempt int, violations []Issue, parseErr error) attemptRecord {
-	rec := attemptRecord{Attempt: attempt, Count: len(violations)}
+func newAttemptRecord(attempt int, violations []Issue, parseErr error, fixes []string) attemptRecord {
+	rec := attemptRecord{Attempt: attempt, Count: len(violations), Autofix: fixes}
 	if parseErr != nil {
 		rec.Unreadable = true
 		rec.ParseError = parseErr.Error()
@@ -123,11 +126,11 @@ func newAttemptRecord(attempt int, violations []Issue, parseErr error) attemptRe
 // violations by rule.code@date/slot, or the parse error of an unreadable
 // reply. It also stores the same as a `plan.attempt` step of the run, so a
 // repair can be explained from the run alone.
-func logAttempt(ctx context.Context, logger *slog.Logger, attempt int, violations []Issue, parseErr error) {
+func logAttempt(ctx context.Context, logger *slog.Logger, attempt int, violations []Issue, parseErr error, fixes ...string) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	rec := newAttemptRecord(attempt, violations, parseErr)
+	rec := newAttemptRecord(attempt, violations, parseErr, fixes)
 	attrs := append(runAttrs(ctx, 0), "attempt", attempt)
 	if parseErr != nil {
 		logger.WarnContext(ctx, "plan.run.attempt", append(attrs, "unreadable", true, "parse_error", rec.ParseError)...)

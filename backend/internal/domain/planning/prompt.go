@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -16,7 +17,7 @@ import (
 
 // PromptVersion is the run log's prompt_version of LLM runs: bump it on
 // every change to the prompt or the submit_plan schema.
-const PromptVersion = "p3"
+const PromptVersion = "p4"
 
 // PromptTokenBudget caps the estimated input tokens of the system prompt
 // (D18): candidates beyond it are left out.
@@ -40,8 +41,8 @@ const submitPlanSchema = `{
           "food_id": {"type": "integer", "description": "A candidate recipe id."},
           "cook_date": {"type": "string", "description": "YYYY-MM-DD of a fill cell."},
           "cook_slot_id": {"type": "integer"},
-          "portions": {"type": "number", "description": "Portions cooked: covers every plate eating from it."},
-          "frozen_portions": {"type": "number", "description": "Of portions, how many go into the freezer (0 unless freezing is on)."},
+          "portions": {"type": "number", "description": "Total portions cooked. Must be at least the sum over every plate eating from the session (the plate on the cook cell included) of eaters x component portions; e.g. 3 plates of 1 eater x 1 portion need 3."},
+          "frozen_portions": {"type": "number", "description": "Of portions, how many are eaten after the recipe's keep days (plates later than cook_date + keep_days). Each such plate needs eaters x portions here. Only when freezing is on and the recipe is freezable; otherwise 0 and no plate may eat it that late."},
           "reason": {"type": "string", "description": "One short sentence for the user: why this recipe."}
         },
         "required": ["key", "food_id", "cook_date", "cook_slot_id", "portions", "reason"]
@@ -49,21 +50,21 @@ const submitPlanSchema = `{
     },
     "plates": {
       "type": "array",
-      "description": "One plate for every fill cell.",
+      "description": "One plate for every fill cell. Every lunch and dinner plate has a main (role main) or a standalone recipe; sides only accompany a main.",
       "items": {
         "type": "object",
         "properties": {
           "plate_id": {"type": "integer", "description": "Only for a side swap: the existing plate that gets the new side."},
           "date": {"type": "string", "description": "YYYY-MM-DD"},
           "slot_id": {"type": "integer"},
-          "eaters": {"type": "number", "description": "People eating; omit for the household's portions."},
+          "eaters": {"type": "number", "description": "People eating this plate; omit for the household's portions."},
           "components": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
                 "food_id": {"type": "integer"},
-                "portions": {"type": "number", "description": "Portions per eater, usually 1."},
+                "portions": {"type": "number", "description": "Portions PER EATER, usually 1 (never the number of eaters: 3 eaters eating 1 portion each consume 3 portions of the session)."},
                 "session_key": {"type": "string", "description": "Key of a session you propose."},
                 "session_id": {"type": "integer", "description": "Id of a fixed session with free portions."}
               },
@@ -75,7 +76,7 @@ const submitPlanSchema = `{
         "required": ["date", "slot_id", "components", "reason"]
       }
     },
-    "notes": {"type": "string", "description": "A one or two sentence summary of the plan for the user."}
+    "notes": {"type": "string", "description": "One or two sentences describing exactly the plan you submit (its recipes and days), nothing it does not contain."}
   },
   "required": ["sessions", "plates", "notes"]
 }`
@@ -107,6 +108,7 @@ func RenderPrompt(in ChooseInput) string {
 	writeProfile(&head, s.Profile)
 	writeCells(&head, x)
 	writeSessions(&head, x)
+	writeKeepTable(&head, in)
 	writeHistory(&tail, s)
 	writeCorrections(&tail, s)
 	writeTask(&tail, in)
@@ -114,7 +116,7 @@ func RenderPrompt(in ChooseInput) string {
 	cands := candidates(in)
 	rows := make([]string, len(cands))
 	for i, f := range cands {
-		rows[i] = candidateRow(f)
+		rows[i] = candidateRow(f, s.Settings.DefaultKeepDays)
 	}
 	const header = "\nCandidate recipes (id|name|role|diet|kcal|protein_g|fat_g|carbs_g|nutrition_complete|minutes|reference_portions|keep_days|freezable|last_eaten|eaten_8_weeks|favorite|like_score|explore), per portion:\n"
 	room := PromptTokenBudget*4 - utf8.RuneCountInString(head.String()) - utf8.RuneCountInString(tail.String()) - len(header) - 80
@@ -294,7 +296,13 @@ func writeRules(b *strings.Builder, s State) {
 How a plan works:
 - A plate sits on one (date, slot_id) cell and serves eaters people (omit eaters for the household's portions). Its components are recipes with portions per eater, usually 1.
 - A recipe is cooked in a cook session (key, food_id, cook_date, cook_slot_id, portions). A component eats from a session by session_key (a session you propose) or session_id (a fixed session listed below); with neither it is cooked fresh for its own plate.
-- A session's portions cover every plate eating from it: the sum of eaters times portions per eater. Leftovers are plates eating from a session at a later cell than its cook cell: a later slot of the same day or a later day, at most keep_days after the cook date. A day's earlier slot never eats from that day's later cooking.
+- Portions are per eater. A plate with 3 eaters and a component of 1 portion consumes 3 portions of its session; never write the number of eaters as portions. A session's portions must cover every plate eating from it: the sum of eaters x portions per eater, the plate on the cook cell included.
+- Leftovers are plates eating from a session at a later cell than its cook cell: a later slot of the same day or a later day, at most keep_days after the cook date (see the keep table below for the last allowed date). A day's earlier slot never eats from that day's later cooking. A recipe can feed plates only up to that date: a 3-day curry cooked Saturday cannot feed Wednesday. For later plates cook it again (a new session) or choose another recipe.
+- Frozen: a plate after the keep days is a frozen link. It is allowed only when freezing is on and the recipe is freezable (freezable column yes), and the session's frozen_portions must cover every such plate (eaters x portions). Without freezing, or for a non-freezable recipe, no plate may eat it after its last allowed date. frozen_portions never exceeds portions.
+- Cooking occasions: every cook cell of a session counts, and so does every component without a session_key/session_id (it is cooked fresh on its own cell). Several sessions cooked on the same cell are one occasion, so cook a side on the same cell as its main, and let other plates eat from a session.
+- Every lunch and dinner plate needs a main (role main) or a standalone recipe; a side alone is not a meal. Pair mains with a side where it suits.
+- Daily targets: the day's plates per eater should land near the daily kcal target and the macro shares. The candidate rows list kcal and macros per portion, so sum portions x kcal over the day's plates (weekday meals with 600 kcal against a 2200 target miss it). Mix several different mains over the week rather than one recipe for most meals.
+- notes and reasons must describe the plan you submit, not an earlier idea.
 - Cook a session on the first cell that eats from it; that cell must be a fill cell.
 - Use only ids that appear in this prompt.
 
@@ -543,12 +551,12 @@ func keepOrder(cands []FoodFacts, sidesFirst bool) []int {
 	return idx
 }
 
-func candidateRow(f FoodFacts) string {
+func candidateRow(f FoodFacts, defaultKeep int) string {
 	last := "-"
 	if f.LastEaten != nil {
 		last = f.LastEaten.Format(time.DateOnly)
 	}
-	keep := "default"
+	keep := fmt.Sprint(defaultKeep)
 	if f.KeepDays != nil {
 		keep = fmt.Sprint(*f.KeepDays)
 	}
@@ -672,3 +680,29 @@ func yesNo(v bool) string {
 
 // num formats a quantity without trailing zeros.
 func num(v float64) string { return fmt.Sprintf("%g", v) }
+
+// writeKeepTable precomputes the last day a batch cooked on each date of
+// the week can still be eaten, for every keep_days value among the
+// candidates, so the model does not count days itself.
+func writeKeepTable(b *strings.Builder, in ChooseInput) {
+	s := in.State
+	keeps := map[int]bool{}
+	for _, f := range candidates(in) {
+		k := s.Settings.DefaultKeepDays
+		if f.KeepDays != nil {
+			k = *f.KeepDays
+		}
+		keeps[k] = true
+	}
+	if len(keeps) == 0 {
+		return
+	}
+	b.WriteString("\nKeep table (a batch cooked on a date feeds plates up to this date; later plates need frozen_portions or a new session):\n")
+	for _, k := range slices.Sorted(maps.Keys(keeps)) {
+		parts := make([]string, 0, 7)
+		for _, d := range s.Window.Days() {
+			parts = append(parts, fmt.Sprintf("%s->%s", d.Format("01-02"), d.AddDate(0, 0, k).Format("01-02")))
+		}
+		fmt.Fprintf(b, "- keep_days %d: %s\n", k, strings.Join(parts, ", "))
+	}
+}

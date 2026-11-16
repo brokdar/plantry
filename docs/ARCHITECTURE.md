@@ -626,7 +626,7 @@ SSE event types (`llm/events.go`): `conversation_ready`, `message_start`, the mo
 
 ### 7.3 System prompt composition
 
-Built on every turn (prompt `v5`):
+Built on every turn (prompt `v6`):
 
 1. Plantry role description (static).
 2. User profile JSON (targets, restrictions, preferences, custom system_prompt).
