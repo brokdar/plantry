@@ -211,6 +211,8 @@ type replanSpare struct {
 	Portions  float64 `json:"portions"`
 	Freezable bool    `json:"freezable"`
 	Mutable   bool    `json:"mutable"`
+	// Unassigned is what a freezing re-plan leaves cooked but eaten by no plate.
+	Unassigned float64 `json:"unassigned"`
 }
 
 // replanDropped is a plate outside the No-plate cells that loses the
@@ -256,6 +258,7 @@ type replanRequest struct {
 type replanResponse struct {
 	Removed         plate.PlanSnapshot `json:"removed"`
 	RunID           *int64             `json:"run_id"`
+	Unassigned      float64            `json:"unassigned"`
 	RegenerateError string             `json:"regenerate_error,omitempty"`
 }
 
@@ -305,7 +308,7 @@ func (h *PlanGenerateHandler) ReplanPreview(w http.ResponseWriter, r *http.Reque
 		out.NoneCells = append(out.NoneCells, replanCell{Date: dateString(c.Date), SlotID: c.SlotID})
 	}
 	for _, sp := range pv.Spare {
-		out.Spare = append(out.Spare, replanSpare{SessionID: sp.SessionID, FoodName: sp.FoodName, Portions: sp.Portions, Freezable: sp.Freezable, Mutable: sp.Mutable})
+		out.Spare = append(out.Spare, replanSpare{SessionID: sp.SessionID, FoodName: sp.FoodName, Portions: sp.Portions, Freezable: sp.Freezable, Mutable: sp.Mutable, Unassigned: sp.Unassigned})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -336,7 +339,7 @@ func (h *PlanGenerateHandler) Replan(w http.ResponseWriter, r *http.Request) {
 		writePlanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, replanResponse{Removed: res.Removed, RunID: res.RunID, RegenerateError: res.RegenerateError})
+	writeJSON(w, http.StatusOK, replanResponse{Removed: res.Removed, RunID: res.RunID, Unassigned: res.Unassigned, RegenerateError: res.RegenerateError})
 }
 
 func (h *PlanGenerateHandler) replanQuery(w http.ResponseWriter, r *http.Request, from, to string, cells []replanCell) (planning.ReplanQuery, bool) {

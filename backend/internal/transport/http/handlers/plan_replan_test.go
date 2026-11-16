@@ -45,6 +45,7 @@ func TestPlanReplanHTTP(t *testing.T) {
 	assert.Len(t, removed["plates"], 1)
 	require.IsType(t, float64(0), body["run_id"])
 	assert.NotContains(t, body, "regenerate_error", "the run started")
+	assert.InDelta(t, 0, body["unassigned"], 1e-9)
 	a.drain()
 	_, run := a.do(http.MethodGet, fmt.Sprintf("/api/plan/runs/%.0f", body["run_id"]), "")
 	assert.Equal(t, "regenerate", run["kind"])
@@ -85,6 +86,7 @@ func TestPlanReplanHTTP_PreviewSpare(t *testing.T) {
 	assert.Positive(t, s["portions"])
 	assert.Equal(t, false, s["freezable"], "freezing is off")
 	assert.Equal(t, true, s["mutable"])
+	assert.InDelta(t, 0, s["unassigned"], 1e-9, "a mutable batch shrinks, nothing is left over")
 }
 
 // A batch whose cook plate goes moves to its next plate when that day has a
@@ -144,4 +146,30 @@ func TestPlanReplanHTTP_Errors(t *testing.T) {
 			assert.Equal(t, tt.key, body["message_key"])
 		})
 	}
+}
+
+// F4: a cooked batch's freed portion is reported unassigned in the preview
+// and in the response (freezing is off, so it cannot be frozen).
+func TestPlanReplanHTTP_CookedBatchUnassigned(t *testing.T) {
+	a := newGenAPI(t)
+	var lunch, food int64
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM time_slots WHERE name_key = 'slot.lunch'`).Scan(&lunch))
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM foods WHERE name = 'Main 1'`).Scan(&food))
+	code, body := a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2026-11-11","slot_id":%d,"components":[{"food_id":%d,"portions":1}]}`, lunch, food))
+	require.Equal(t, http.StatusCreated, code, body)
+	sid := body["components"].([]any)[0].(map[string]any)["cook_session_id"]
+	code, body = a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2026-11-12","slot_id":%d,"components":[{"food_id":%d,"cook_session_id":%v}]}`, lunch, food, sid))
+	require.Equal(t, http.StatusCreated, code, body)
+	_, err := a.db.Exec(`UPDATE cook_sessions SET cooked_at = datetime('now') WHERE id = ?`, sid)
+	require.NoError(t, err)
+
+	code, pv := a.do(http.MethodGet, fmt.Sprintf("/api/plan/replan/preview?from=2026-11-12&to=2026-11-13&none=2026-11-12:%d&today=2026-11-12", lunch), "")
+	require.Equal(t, http.StatusOK, code, pv)
+	s := pv["spare"].([]any)[0].(map[string]any)
+	assert.Equal(t, false, s["mutable"])
+	assert.InDelta(t, 1, s["unassigned"], 1e-9)
+
+	code, body = a.do(http.MethodPost, "/api/plan/replan?today=2026-11-12", fmt.Sprintf(`{"from":"2026-11-12","to":"2026-11-13","none_cells":[{"date":"2026-11-12","slot_id":%d}],"unlock_confirmed":true,"spare":"freeze"}`, lunch))
+	require.Equal(t, http.StatusOK, code, body)
+	assert.InDelta(t, 1, body["unassigned"], 1e-9)
 }

@@ -1581,6 +1581,8 @@
       "change": "Ändern",
       "apply": "Neu planen",
       "done": "Neu geplant.",
+      "done_unassigned_one": "{{amount}} Portion bleibt ohne Mahlzeit.",
+      "done_unassigned_other": "{{amount}} Portionen bleiben ohne Mahlzeit.",
       "done_removed_one": "Neu geplant. {{count}} Mahlzeit entfernt.",
       "done_removed_other": "Neu geplant. {{count}} Mahlzeiten entfernt."
     },

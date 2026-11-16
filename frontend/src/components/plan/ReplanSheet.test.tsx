@@ -107,7 +107,11 @@ describe("ReplanSheet", () => {
     vi.clearAllMocks()
     vi.mocked(listSettings).mockResolvedValue(mockSettingsList([]))
     vi.mocked(getReplanPreview).mockResolvedValue(EMPTY)
-    vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: null })
+    vi.mocked(replan).mockResolvedValue({
+      ...mockRemovedBatch,
+      run_id: null,
+      unassigned: 0,
+    })
   })
 
   it("lists the days from `from` to the window's end", async () => {
@@ -176,7 +180,11 @@ describe("ReplanSheet", () => {
     await userEvent.click(
       within(s).getByLabelText("Re-plan the rest of the week")
     )
-    vi.mocked(replan).mockResolvedValue({ ...mockRemovedBatch, run_id: 21 })
+    vi.mocked(replan).mockResolvedValue({
+      ...mockRemovedBatch,
+      run_id: 21,
+      unassigned: 0,
+    })
     await clickWhenEnabled(s, "Change them")
     await waitFor(() =>
       expect(replan).toHaveBeenCalledWith({

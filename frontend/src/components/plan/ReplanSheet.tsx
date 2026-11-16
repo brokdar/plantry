@@ -179,7 +179,7 @@ function ReplanBody({
         ...(assistant ? {} : { chooser: "heuristic" as const }),
       },
       {
-        onSuccess: ({ removed, run_id, regenerate_error }) => {
+        onSuccess: ({ removed, run_id, regenerate_error, unassigned }) => {
           const count = removed.plates.length
           if (regenerate && run_id === null) {
             // The removal committed but the run for the rest didn't start:
@@ -193,7 +193,15 @@ function ReplanBody({
             toast.success(
               count > 0
                 ? t("plan.replan.done_removed", { count })
-                : t("plan.replan.done")
+                : t("plan.replan.done"),
+              unassigned > 0
+                ? {
+                    description: t("plan.replan.done_unassigned", {
+                      count: unassigned,
+                      amount: formatAmount(unassigned, i18n),
+                    }),
+                  }
+                : undefined
             )
           }
           onClose()
@@ -352,7 +360,7 @@ function ReplanBody({
                   // Freezable: the choice below. Else a batch that can still
                   // change cooks less; a cooked or earlier one keeps its
                   // portions, unassigned.
-                  s.freezable
+                  s.freezable && (s.mutable || spareMode === "freeze")
                     ? "plan.replan.spare"
                     : s.mutable
                       ? "plan.replan.cook_less"

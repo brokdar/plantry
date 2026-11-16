@@ -1581,6 +1581,8 @@
       "change": "Change them",
       "apply": "Re-plan",
       "done": "Re-planned.",
+      "done_unassigned_one": "{{amount}} portion left unassigned.",
+      "done_unassigned_other": "{{amount}} portions left unassigned.",
       "done_removed_one": "Re-planned. {{count}} plate removed.",
       "done_removed_other": "Re-planned. {{count}} plates removed."
     },
