@@ -70,6 +70,7 @@ describe("RunsTable", () => {
             output: 200,
             cache_read: 3000,
             cache_write: 50,
+            reasoning: 0,
           },
         },
       ],

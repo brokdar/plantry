@@ -32,6 +32,10 @@ func captureServer(t *testing.T, fixture string) (*anthropic.Client, func() [][]
 	var mu sync.Mutex
 	var bodies [][]byte
 	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet { // the capability lookup: unknown model
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		b, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 		mu.Lock()
@@ -419,17 +423,17 @@ func TestStream_WebSearchRejectedFallsBack(t *testing.T) {
 	ok, err := c.WebSearch(context.Background(), "claude-opus-5-5")
 	require.NoError(t, err)
 	assert.False(t, ok)
-	assert.Equal(t, int32(0), modelCalls.Load())
+	assert.Equal(t, int32(1), modelCalls.Load(), "one lookup when the first stream began")
 
 	now = now.Add(23 * time.Hour)
 	ok, _ = c.WebSearch(context.Background(), "claude-opus-5-5")
 	assert.False(t, ok)
-	assert.Equal(t, int32(0), modelCalls.Load())
+	assert.Equal(t, int32(1), modelCalls.Load(), "one lookup when the first stream began")
 
 	now = now.Add(2 * time.Hour)
 	ok, _ = c.WebSearch(context.Background(), "claude-opus-5-5")
 	assert.True(t, ok)
-	assert.Equal(t, int32(1), modelCalls.Load())
+	assert.Equal(t, int32(2), modelCalls.Load())
 }
 
 // A 400 that is not about web search is returned as is, not retried, and
@@ -514,8 +518,10 @@ func TestStream_WebSearchRejectedOnContinuationNotRetried(t *testing.T) {
 	disabled, err := os.ReadFile("testdata/error_web_search_disabled.json")
 	require.NoError(t, err)
 	var calls atomic.Int32
-	ts := newTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		calls.Add(1)
+	ts := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			calls.Add(1)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write(disabled)
@@ -558,6 +564,7 @@ func TestStream_WebSearchRejectedLogsWarn(t *testing.T) {
 	c := anthropic.New("k", anthropic.WithBaseURL(ts.URL), anthropic.WithHTTPClient(ts.Client()))
 	_, _ = stream(t, c, llm.Request{Model: "claude-opus-5-5", WebSearch: &llm.WebSearch{MaxUses: 5}})
 	assert.Contains(t, logs.String(), "level=WARN")
-	assert.Contains(t, logs.String(), "anthropic.web_search.rejected")
+	assert.Contains(t, logs.String(), "anthropic.request.retry")
+	assert.Contains(t, logs.String(), "reason=web_search_rejected_by_org")
 	assert.Contains(t, logs.String(), "model=claude-opus-5-5")
 }

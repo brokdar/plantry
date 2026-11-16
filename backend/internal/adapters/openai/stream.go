@@ -115,6 +115,7 @@ func parseStream(ctx context.Context, body io.Reader, out chan<- llm.Event) (*ll
 		Message:    llm.Message{Role: llm.RoleAssistant, Content: content},
 		StopReason: mapFinishReason(finishReason),
 		Usage:      usage,
+		Model:      model,
 	}, nil
 }
 
@@ -152,6 +153,9 @@ type chunkPayload struct {
 		PromptTokensDetails struct {
 			CachedTokens int `json:"cached_tokens"`
 		} `json:"prompt_tokens_details"`
+		CompletionTokensDetails struct {
+			ReasoningTokens int `json:"reasoning_tokens"`
+		} `json:"completion_tokens_details"`
 	} `json:"usage"`
 }
 
@@ -183,6 +187,7 @@ func handleChunk(
 			usage.InputTokens = chunk.Usage.PromptTokens
 			usage.OutputTokens = chunk.Usage.CompletionTokens
 			usage.CacheReadTokens = chunk.Usage.PromptTokensDetails.CachedTokens
+			usage.ReasoningTokens = chunk.Usage.CompletionTokensDetails.ReasoningTokens
 		}
 		return nil
 	}
@@ -239,6 +244,7 @@ func handleChunk(
 		usage.InputTokens = chunk.Usage.PromptTokens
 		usage.OutputTokens = chunk.Usage.CompletionTokens
 		usage.CacheReadTokens = chunk.Usage.PromptTokensDetails.CachedTokens
+		usage.ReasoningTokens = chunk.Usage.CompletionTokensDetails.ReasoningTokens
 	}
 	return nil
 }

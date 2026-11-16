@@ -1,7 +1,9 @@
 package middleware_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -118,4 +120,27 @@ func TestRateLimiter_RefillsOverTime(t *testing.T) {
 	// Wait for ~1.2s to get one token back.
 	time.Sleep(1100 * time.Millisecond)
 	assert.True(t, rl.Allow("k"))
+}
+
+// The limiter says when it rejects: path, client and limit, at warn.
+func TestRateLimiter_RejectionIsLogged(t *testing.T) {
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	rl := middleware.NewRateLimiter(1)
+	h := rl.Middleware("error.ai.rate_limited")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	for range 2 {
+		req := httptest.NewRequest(http.MethodPost, "/api/ai/chat", nil)
+		req.RemoteAddr = "10.0.0.5:4000"
+		h.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	var line map[string]any
+	require.NoError(t, json.Unmarshal(bytes.TrimSpace(logs.Bytes()), &line))
+	assert.Equal(t, "ratelimit.rejected", line["msg"])
+	assert.Equal(t, "WARN", line["level"])
+	assert.Equal(t, "/api/ai/chat", line["path"])
+	assert.Equal(t, "10.0.0.5", line["client_ip"])
+	assert.EqualValues(t, 1, line["limit_per_min"])
 }

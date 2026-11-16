@@ -30,9 +30,12 @@ type Client struct {
 	baseURL    string
 	httpClient *http.Client
 
-	now  func() time.Time
-	mu   sync.Mutex
-	caps map[string]capability // web search support per model
+	now           func() time.Time
+	lookupTimeout time.Duration
+	mu            sync.Mutex
+	caps          map[string]capability // model capabilities (24 h cache)
+	flights       map[string]*flight    // capability lookups in progress
+	rejects       map[string]rejection  // parameters a model's API refused
 }
 
 // Option configures the client.
@@ -53,9 +56,13 @@ func New(apiKey string, opts ...Option) *Client {
 	c := &Client{
 		apiKey:     apiKey,
 		baseURL:    defaultBaseURL,
-		httpClient: http.DefaultClient,
+		httpClient: llm.NewHTTPClient(),
 		now:        time.Now,
-		caps:       map[string]capability{},
+
+		lookupTimeout: lookupTimeout,
+		caps:          map[string]capability{},
+		flights:       map[string]*flight{},
+		rejects:       map[string]rejection{},
 	}
 	for _, o := range opts {
 		o(c)
@@ -93,39 +100,76 @@ func (c *Client) Complete(ctx context.Context, req llm.Request) (string, error) 
 func (c *Client) Stream(ctx context.Context, req llm.Request, out chan<- llm.Event) (*llm.Response, error) {
 	defer close(out)
 
-	resp, err := c.post(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode == http.StatusBadRequest && req.WebSearch != nil {
-		// Web search can be turned off for the organisation (D3): run the
-		// same turn without it and stop offering it for a while. Other 400s
-		// are the caller's to see.
+	// The model's capabilities (looked up once per model per 24 h, failures
+	// 5 min; a failed lookup is logged by the lookup itself) decide the forced
+	// tool_choice and the max_tokens cap. A lookup that fails falls back to
+	// `auto` plus a system line.
+	_, _ = c.capability(ctx, req.Model)
+
+	for {
+		w := c.plan(req)
+		started := c.now()
+		resp, err := c.post(ctx, req, w)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode == http.StatusOK {
+			defer func() { _ = resp.Body.Close() }()
+			final, err := parseStream(ctx, resp.Body, out)
+			if err != nil {
+				err = fmt.Errorf("anthropic: reading stream: %w", err)
+			}
+			return final, err
+		}
 		apiErr := decodeAPIError(resp)
 		_ = resp.Body.Close()
-		if !rejectsWebSearch(apiErr) {
+		reason := ""
+		if resp.StatusCode == http.StatusBadRequest {
+			reason = c.learnFromRejection(req, w, apiErr)
+		}
+		if reason == "" {
 			return nil, apiErr
 		}
+		llm.Log(ctx, slog.LevelWarn, "anthropic.request.retry",
+			"model", req.Model, "reason", reason, "request_id", apiErr.RequestID,
+			"message", cutMessage(apiErr.Message), "sent_tool_choice", w.effective(req).ToolChoice,
+			"sent_temperature", w.temperature, "sent_web_search", w.webSearch)
+		llm.ReportAttempt(ctx, llm.Attempt{
+			Started: started, Duration: c.now().Sub(started), Err: apiErr, Sent: w.effective(req), Reason: reason,
+		})
+	}
+}
+
+// learnFromRejection reads a 400 for a parameter the model's API refuses
+// (web search, temperature, a forced tool_choice), remembers it per model so
+// the next plan leaves it out, and returns the reason to retry once without
+// it; "" means the 400 is the caller's to see.
+func (c *Client) learnFromRejection(req llm.Request, w wire, e *APIError) string {
+	msg := strings.ToLower(e.Message)
+	switch {
+	case w.webSearch && rejectsWebSearch(e):
 		c.setWebSearch(req.Model, false)
-		slog.WarnContext(ctx, "anthropic.web_search.rejected",
-			"model", req.Model, "request_id", apiErr.RequestID, "message", apiErr.Message)
 		if replaysServerBlocks(req.Messages) {
 			// A continuation's history holds search blocks; without the
 			// tool the API would reject it again, less clearly.
-			return nil, apiErr
+			return ""
 		}
-		req.WebSearch = nil
-		if resp, err = c.post(ctx, req); err != nil {
-			return nil, err
-		}
+		return "web_search_rejected_by_org"
+	case w.temperature && strings.Contains(msg, "temperature"):
+		c.reject(req.Model, func(r *rejection) { r.temperature = true })
+		return "temperature_rejected_400"
+	case w.forcedTool && (strings.Contains(msg, "tool_choice") || strings.Contains(msg, "tool choice")):
+		c.reject(req.Model, func(r *rejection) { r.forcedTool = true })
+		return "tool_choice_rejected_400"
 	}
-	defer func() { _ = resp.Body.Close() }()
+	return ""
+}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, decodeAPIError(resp)
+func cutMessage(s string) string {
+	if len(s) <= 300 {
+		return s
 	}
-
-	return parseStream(ctx, resp.Body, out)
+	return s[:300] + "…"
 }
 
 // replaysServerBlocks reports whether msgs carry server tool blocks (a
@@ -142,8 +186,8 @@ func replaysServerBlocks(msgs []llm.Message) bool {
 }
 
 // post sends req as a streaming Messages request.
-func (c *Client) post(ctx context.Context, req llm.Request) (*http.Response, error) {
-	body, err := encodeRequest(req, true)
+func (c *Client) post(ctx context.Context, req llm.Request, w wire) (*http.Response, error) {
+	body, err := encodeRequest(req, true, w)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +199,7 @@ func (c *Client) post(ctx context.Context, req llm.Request) (*http.Response, err
 	httpReq.Header.Set("Accept", "text/event-stream")
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("anthropic: request: %w", err)
+		return nil, fmt.Errorf("anthropic: request (before response headers): %w", err)
 	}
 	return resp, nil
 }
@@ -249,24 +293,25 @@ type webSearchTool struct {
 	MaxUses int    `json:"max_uses,omitempty"`
 }
 
-func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
-	maxTok := req.MaxTokens
-	if maxTok <= 0 {
-		maxTok = DefaultMaxTokens
-	}
+// encodeRequest builds the Messages body from what plan decided to send.
+// Temperature goes out when the caller set one and the model has not refused
+// it; the Models API does not say whether a model accepts it, so a 400 naming
+// it is retried without (see learnFromRejection). A forced tool_choice goes
+// out when the capabilities allow it; otherwise the tool is only asked for in
+// the system prompt. Web search goes out only when w says so.
+func encodeRequest(req llm.Request, stream bool, w wire) ([]byte, error) {
 	body := reqBody{
 		Model:     req.Model,
-		MaxTokens: maxTok,
+		MaxTokens: w.maxTokens,
 		Stream:    stream,
 	}
-	rules := rulesFor(req.Model)
-	if req.Temperature > 0 && rules.Sampling {
-		tmp := req.Temperature
-		body.Temperature = &tmp
+	if w.temperature {
+		t := req.Temperature
+		body.Temperature = &t
 	}
 	system := req.System
 	if req.ToolChoice != nil {
-		if rules.ForcedTool {
+		if w.forcedTool {
 			body.ToolChoice = &toolChoiceBody{Type: "tool", Name: req.ToolChoice.Name}
 		} else {
 			body.ToolChoice = &toolChoiceBody{Type: "auto"}
@@ -297,7 +342,7 @@ func encodeRequest(req llm.Request, stream bool) ([]byte, error) {
 			body.Tools = append(body.Tools, tool)
 		}
 	}
-	if req.WebSearch != nil {
+	if w.webSearch {
 		body.Tools = append(body.Tools, webSearchTool{
 			Type: "web_search_20250305", Name: "web_search", MaxUses: req.WebSearch.MaxUses,
 		})
@@ -365,13 +410,23 @@ type APIError struct {
 	Status    int
 	ErrorType string
 	Message   string
-	RawBody   string
+	RawBody   string // capped
 	RequestID string
+	RateLimit string // retry-after and ratelimit headers
+	// MidStream marks an `error` event inside a stream that started fine
+	// (Status is 200 then).
+	MidStream bool
 }
 
 func (e *APIError) Error() string {
+	if e.MidStream {
+		return fmt.Sprintf("anthropic: stream error %s: %s", e.ErrorType, e.Message)
+	}
 	return fmt.Sprintf("anthropic: %d %s: %s", e.Status, e.ErrorType, e.Message)
 }
+
+// capBody is llm.CapBody.
+func capBody(s string) string { return llm.CapBody(s) }
 
 // rejectsWebSearch reports whether a 400 refused the web search tool itself.
 func rejectsWebSearch(e *APIError) bool {
@@ -381,7 +436,10 @@ func rejectsWebSearch(e *APIError) bool {
 
 func decodeAPIError(resp *http.Response) *APIError {
 	raw, _ := io.ReadAll(resp.Body)
-	e := &APIError{Status: resp.StatusCode, RawBody: string(raw), RequestID: resp.Header.Get("request-id")}
+	e := &APIError{
+		Status: resp.StatusCode, RawBody: capBody(string(raw)), RequestID: resp.Header.Get("request-id"),
+		RateLimit: llm.RateLimitHeaders(resp.Header),
+	}
 	var body apiErrorBody
 	if err := json.Unmarshal(raw, &body); err == nil {
 		e.ErrorType = body.Error.Type
@@ -390,4 +448,18 @@ func decodeAPIError(resp *http.Response) *APIError {
 		e.Message = string(raw)
 	}
 	return e
+}
+
+// ProviderStatus implements llm.ProviderError.
+func (e *APIError) ProviderStatus() int { return e.Status }
+
+// ProviderErrorType implements llm.ProviderError.
+func (e *APIError) ProviderErrorType() string { return e.ErrorType }
+
+// ProviderInfo implements llm.ProviderError.
+func (e *APIError) ProviderInfo() llm.ProviderErrorInfo {
+	return llm.ProviderErrorInfo{
+		Status: e.Status, Type: e.ErrorType, Message: e.Message,
+		RequestID: e.RequestID, RateLimit: e.RateLimit, RawBody: e.RawBody,
+	}
 }

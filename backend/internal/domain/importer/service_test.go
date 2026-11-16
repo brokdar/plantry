@@ -1,9 +1,12 @@
 package importer_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -193,4 +196,47 @@ func TestService_Extract_NoLLMFallback(t *testing.T) {
 	d, err := plain.Extract(context.Background(), importer.ExtractInput{HTML: "<html></html>", Options: importer.Options{NoLLMFallback: true}})
 	require.NoError(t, err)
 	assert.Equal(t, "jsonld", d.ExtractMethod)
+}
+
+// The fallback logs each stage with its outcome: the retry keeps the parse
+// error that caused it, and the lines carry the run id.
+func TestService_Extract_LLMFallbackStageLogs(t *testing.T) {
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	validJSON := `{"name":"Soup","servings":2,"instructions":["Cook"],"ingredient_lines":["1 l Water"],"language":"en"}`
+	svc, _ := newRecordedImport(t,
+		textTurn("not json", "max_tokens", 100, 10),
+		textTurn(validJSON, "end_turn", 200, 20),
+	)
+	_, err := svc.Extract(context.Background(), importer.ExtractInput{HTML: "<html>soup</html>"})
+	require.NoError(t, err)
+
+	var stages []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(logs.String()), "\n") {
+		var m map[string]any
+		require.NoError(t, json.Unmarshal([]byte(line), &m), line)
+		if m["msg"] == "import.stage" {
+			stages = append(stages, m)
+		}
+	}
+	find := func(stage string, attempt float64) map[string]any {
+		for _, m := range stages {
+			if m["stage"] == stage && (attempt == 0 || m["attempt"] == attempt) {
+				return m
+			}
+		}
+		t.Fatalf("no %s stage line (attempt %v) in %s", stage, attempt, logs.String())
+		return nil
+	}
+	assert.Equal(t, "no_ingredients", find("parse_jsonld", 0)["outcome"])
+	first := find("fallback", 1)
+	assert.Equal(t, "unreadable", first["outcome"])
+	assert.NotEmpty(t, first["parse_error"])
+	assert.NotEmpty(t, first["retry_reason"])
+	assert.NotZero(t, first["run_id"])
+	assert.Equal(t, "ok", find("fallback", 2)["outcome"])
+	assert.EqualValues(t, 1, find("resolve", 0)["ingredients"])
 }

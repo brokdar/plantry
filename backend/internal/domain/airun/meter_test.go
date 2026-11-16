@@ -577,9 +577,9 @@ func TestRecorder_DurationsFromClock(t *testing.T) {
 	if len(steps) != 1 || steps[0].DurationMs != 5 {
 		t.Errorf("steps = %+v; want one step with DurationMs 5", steps)
 	}
-	// Clock reads: start, call start, call end, finish => 15ms from start.
-	if !strings.Contains(logs.String(), `"duration_ms":15`) {
-		t.Errorf("end log missing duration_ms 15: %s", logs.String())
+	// Clock reads: start, call start, first token, call end, finish => 20ms from start.
+	if !strings.Contains(logs.String(), `"duration_ms":20`) {
+		t.Errorf("end log missing duration_ms 20: %s", logs.String())
 	}
 }
 
@@ -985,7 +985,7 @@ func TestMeter_RecordsResponseAndStopReason(t *testing.T) {
 	}
 }
 
-func TestMeter_ErrorCallHasNullResponse(t *testing.T) {
+func TestMeter_ErrorCallStoresErrorText(t *testing.T) {
 	store := newMemStore()
 	rec, _ := newRecorder(t, store)
 	ctx, run := rec.Start(context.Background(), airun.Start{Kind: airun.KindChat})
@@ -997,8 +997,8 @@ func TestMeter_ErrorCallHasNullResponse(t *testing.T) {
 	run.Finish(ctx, airun.StatusError, "")
 
 	s := stepsBySeq(store)[0]
-	if !s.IsError || s.ResponseJSON != "" || s.StopReason != "" {
-		t.Errorf("step = %+v; want is_error with null response and stop reason", s)
+	if !s.IsError || !strings.Contains(s.ResponseJSON, `"text":"boom"`) || s.StopReason != "" {
+		t.Errorf("step = %+v; want is_error with the error text in response_json and no stop reason", s)
 	}
 	if b := decodeRequest(t, s); len(b.Messages) != 1 {
 		t.Errorf("request messages = %d; want the request recorded", len(b.Messages))

@@ -91,11 +91,14 @@ type RunEnd struct {
 	CacheWriteTokens int64
 	// WebSearchRequests sums the searches of the run's llm_calls.
 	WebSearchRequests int64
-	ErrorKey          string
-	RepairAttempts    int
-	ViolationsJSON    string
-	ScoreJSON         string
-	Notes             string
+	ReasoningTokens   int64
+	// DurationMs is the run's wall time at ms precision.
+	DurationMs     int64
+	ErrorKey       string
+	RepairAttempts int
+	ViolationsJSON string
+	ScoreJSON      string
+	Notes          string
 }
 
 // Step is one LLM call or tool call within a run. Empty string fields are
@@ -118,6 +121,20 @@ type Step struct {
 	StopReason   string
 	// WebSearchRequests is the searches this llm_call was billed for.
 	WebSearchRequests int64
+	// StartedAt is when the step began (stored at ms precision); zero is NULL.
+	StartedAt time.Time
+	// TTFTMs is the time to the first streamed token or tool call of an
+	// llm_call, nil when none arrived.
+	TTFTMs           *int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	// ReasoningTokens is the provider-reported reasoning tokens (OpenAI);
+	// ThinkingChars the length of the thinking text in the reply (Anthropic,
+	// which reports no separate count).
+	ReasoningTokens int64
+	ThinkingChars   int64
+	// ServedModel is the model the provider answered with.
+	ServedModel string
 }
 
 // Store persists runs, steps and system prompts. Implementations are safe for

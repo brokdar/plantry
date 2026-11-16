@@ -509,3 +509,58 @@ func TestAIRuns_InsightsDiscovery(t *testing.T) {
 	}
 	assert.True(t, found, "B7-AC3: discovery d1 group")
 }
+
+// The run detail carries duration, reasoning/cache totals and per-step timing.
+func TestAIRuns_MetricFields(t *testing.T) {
+	a := newRunsAPI(t)
+	ctx := context.Background()
+	started := time.Date(2026, 10, 30, 8, 0, 0, 0, time.UTC)
+	id, err := a.repo.CreateRun(ctx, airun.RunStart{Kind: airun.KindChat, StartedAt: started})
+	require.NoError(t, err)
+	ttft := int64(310)
+	require.NoError(t, a.repo.AddStep(ctx, airun.Step{
+		RunID: id, Seq: 1, Type: airun.StepLLMCall, Name: "claude-asked", DurationMs: 900,
+		StartedAt: started.Add(1234 * time.Millisecond), TTFTMs: &ttft,
+		InputTokens: 10, OutputTokens: 5, CacheReadTokens: 800, CacheWriteTokens: 40, ReasoningTokens: 3,
+		ThinkingChars: 99, ServedModel: "claude-served",
+	}))
+	require.NoError(t, a.repo.FinishRun(ctx, airun.RunEnd{
+		ID: id, Status: airun.StatusOK, FinishedAt: started.Add(2 * time.Second),
+		Provider: "anthropic", Model: "claude-asked", InputTokens: 10, OutputTokens: 5,
+		CacheReadTokens: 800, CacheWriteTokens: 40, ReasoningTokens: 3, DurationMs: 1987,
+	}))
+
+	var d struct {
+		DurationMs *int64 `json:"duration_ms"`
+		Tokens     struct {
+			CacheRead  int64 `json:"cache_read"`
+			CacheWrite int64 `json:"cache_write"`
+			Reasoning  int64 `json:"reasoning"`
+		} `json:"tokens"`
+		Steps []struct {
+			StartedAt     string `json:"started_at"`
+			TTFTMs        *int64 `json:"ttft_ms"`
+			ThinkingChars int64  `json:"thinking_chars"`
+			ServedModel   string `json:"served_model"`
+			Tokens        struct {
+				CacheRead  int64 `json:"cache_read"`
+				CacheWrite int64 `json:"cache_write"`
+				Reasoning  int64 `json:"reasoning"`
+			} `json:"tokens"`
+		} `json:"steps"`
+	}
+	a.get(fmt.Sprintf("/api/ai/runs/%d", id), &d)
+	require.NotNil(t, d.DurationMs)
+	assert.EqualValues(t, 1987, *d.DurationMs)
+	assert.EqualValues(t, 3, d.Tokens.Reasoning)
+	assert.EqualValues(t, 800, d.Tokens.CacheRead)
+	require.Len(t, d.Steps, 1)
+	st := d.Steps[0]
+	assert.Equal(t, "2026-10-30T08:00:01.234Z", st.StartedAt)
+	require.NotNil(t, st.TTFTMs)
+	assert.EqualValues(t, 310, *st.TTFTMs)
+	assert.EqualValues(t, 99, st.ThinkingChars)
+	assert.Equal(t, "claude-served", st.ServedModel)
+	assert.EqualValues(t, 40, st.Tokens.CacheWrite)
+	assert.EqualValues(t, 3, st.Tokens.Reasoning)
+}

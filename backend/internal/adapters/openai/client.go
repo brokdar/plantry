@@ -45,12 +45,25 @@ func New(apiKey string, opts ...Option) *Client {
 	c := &Client{
 		apiKey:     apiKey,
 		baseURL:    defaultBaseURL,
-		httpClient: http.DefaultClient,
+		httpClient: llm.NewHTTPClient(),
 	}
 	for _, o := range opts {
 		o(c)
 	}
 	return c
+}
+
+// EffectiveParams implements llm.ParamsReporter.
+func (c *Client) EffectiveParams(req llm.Request) llm.Effective {
+	eff := llm.Effective{MaxTokens: req.MaxTokens}
+	if eff.MaxTokens <= 0 {
+		eff.MaxTokens = DefaultMaxTokens
+	}
+	if req.Temperature > 0 {
+		t := req.Temperature
+		eff.Temperature = &t
+	}
+	return eff
 }
 
 // Complete implements llm.Client.Complete.
@@ -307,6 +320,8 @@ type APIError struct {
 	Code      string
 	Message   string
 	RawBody   string
+	RequestID string
+	RateLimit string
 }
 
 func (e *APIError) Error() string {
@@ -315,7 +330,7 @@ func (e *APIError) Error() string {
 
 func decodeAPIError(resp *http.Response) error {
 	raw, _ := io.ReadAll(resp.Body)
-	e := &APIError{Status: resp.StatusCode, RawBody: string(raw)}
+	e := &APIError{Status: resp.StatusCode, RawBody: llm.CapBody(string(raw)), RequestID: resp.Header.Get("x-request-id"), RateLimit: llm.RateLimitHeaders(resp.Header)}
 	var body apiErrorBody
 	if err := json.Unmarshal(raw, &body); err == nil {
 		e.ErrorType = body.Error.Type
@@ -325,4 +340,18 @@ func decodeAPIError(resp *http.Response) error {
 		e.Message = string(raw)
 	}
 	return e
+}
+
+// ProviderStatus implements llm.ProviderError.
+func (e *APIError) ProviderStatus() int { return e.Status }
+
+// ProviderErrorType implements llm.ProviderError.
+func (e *APIError) ProviderErrorType() string { return e.ErrorType }
+
+// ProviderInfo implements llm.ProviderError.
+func (e *APIError) ProviderInfo() llm.ProviderErrorInfo {
+	return llm.ProviderErrorInfo{
+		Status: e.Status, Type: e.ErrorType, Message: e.Message,
+		RequestID: e.RequestID, RateLimit: e.RateLimit, RawBody: e.RawBody,
+	}
 }

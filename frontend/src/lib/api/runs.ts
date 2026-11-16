@@ -32,6 +32,8 @@ export interface RunTokens {
   output: number
   cache_read: number
   cache_write: number
+  /** Provider-reported reasoning tokens (inside output). */
+  reasoning: number
 }
 
 export interface RunSummary {
@@ -54,6 +56,8 @@ export interface RunSummary {
   correction_rate: number | null
   /** Plan changes made by the agent in this run; null for non-chat runs. */
   edits: number | null
+  /** Wall time in ms; null for runs older than the column or still running. */
+  duration_ms: number | null
 }
 
 export interface RunStep {
@@ -67,8 +71,21 @@ export interface RunStep {
   result_truncated: boolean
   is_error: boolean
   duration_ms: number
-  tokens: { input: number; output: number }
+  tokens: {
+    input: number
+    output: number
+    cache_read: number
+    cache_write: number
+    reasoning: number
+  }
   web_search_requests: number
+  started_at: string | null
+  /** Time to the first streamed token or tool call. */
+  ttft_ms: number | null
+  /** Thinking text length (Anthropic counts thinking inside output tokens). */
+  thinking_chars: number
+  /** Model the provider answered with (`name` is the requested one). */
+  served_model: string | null
 }
 
 export interface RunDetail extends RunSummary {

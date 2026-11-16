@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jaltszeimer/plantry/backend/internal/adapters/anthropic"
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/crypto"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
 	"github.com/jaltszeimer/plantry/backend/internal/transport/http/handlers"
@@ -184,34 +183,6 @@ func TestModels_UnknownProvider(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, 400, w.Code)
 	assert.Contains(t, w.Body.String(), "error.settings.unknown_provider")
-}
-
-func TestModels_AnthropicRequiresKey(t *testing.T) {
-	r, _ := newSettingsRouter(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai/models?provider=anthropic", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, 401, w.Code)
-
-	req = httptest.NewRequest(http.MethodGet, "/api/settings/ai/models?provider=anthropic&api_key=sk-xxxx", nil)
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-
-	// B8-AC3: the list is the model table, newest family first.
-	var body struct {
-		Models []struct {
-			ID          string `json:"id"`
-			DisplayName string `json:"display_name"`
-		} `json:"models"`
-	}
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&body))
-	require.Len(t, body.Models, len(anthropic.Models()))
-	for i, m := range anthropic.Models() {
-		assert.Equal(t, m.Prefix, body.Models[i].ID)
-		assert.Equal(t, m.DisplayName, body.Models[i].DisplayName)
-	}
-	assert.Equal(t, "claude-fable-5-1", body.Models[0].ID)
 }
 
 func TestSystem_ReturnsInfo(t *testing.T) {

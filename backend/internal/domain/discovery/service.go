@@ -205,6 +205,11 @@ func (s *Service) execute(ctx context.Context, run *airun.Run, client llm.Client
 
 func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, model string, req Request) (airun.Status, airun.Result, error) {
 	var res airun.Result
+	started := s.d.Now()
+	stage := func(name string, extra ...any) {
+		attrs := append(airun.FromContext(ctx).LogAttrs(), "stage", name, "elapsed_ms", s.d.Now().Sub(started).Milliseconds())
+		s.d.Logger.InfoContext(ctx, "discovery.run.stage", append(attrs, extra...)...)
+	}
 	if n, err := s.d.Store.DeleteStale(ctx, s.d.Now().Add(-staleAfter)); err != nil {
 		// Cleanup is housekeeping; it must not fail the run.
 		s.d.Logger.WarnContext(ctx, "discovery.stale_cleanup failed", "run_id", runID, "error", err)
@@ -222,10 +227,12 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 	if err != nil {
 		return "", res, err
 	}
+	stage("research", "candidates", len(found.Candidates), "searches", found.Searches, "repaired", found.Repaired)
 	verified, discarded, err := s.d.Verifier.Verify(ctx, found.Candidates)
 	if err != nil {
 		return "", res, err
 	}
+	stage("verify", "verified", len(verified), "discarded", len(discarded))
 	verified = verified[:min(len(verified), maxStored)]
 	// A candidate that cannot be annotated (e.g. a transient DB error) is
 	// discarded; the others keep the paid run.
@@ -245,6 +252,7 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 		kept, anns = append(kept, v), append(anns, a)
 	}
 	verified = kept
+	stage("annotate", "kept", len(kept))
 	res.Notes = notes(len(verified), len(found.Candidates), discarded)
 	if len(verified) == 0 {
 		s.d.Logger.WarnContext(ctx, "discovery.run no_results", "run_id", runID,
@@ -271,6 +279,7 @@ func (s *Service) pipeline(ctx context.Context, runID int64, client llm.Client, 
 		}
 		shownOn = nil
 	}
+	stage("save", "saved", len(verified))
 	return airun.StatusOK, res, nil
 }
 

@@ -28,7 +28,11 @@ const KEY_PROVIDER = "ai.provider"
 const KEY_API_KEY = "ai.api_key"
 const KEY_MODEL = "ai.model"
 
-type ModelOption = { id: string; display_name?: string }
+type ModelOption = {
+  id: string
+  display_name?: string
+  lifecycle?: "deprecated"
+}
 
 /**
  * The assistant's provider → key → model steps. Each choice saves at once
@@ -48,15 +52,6 @@ export function AIProviderControls({
   const { data: items } = useSettingItems()
   if (!items) return null
   return <ProviderSteps items={items} wizard={variant === "wizard"} />
-}
-
-/** The inline result of a successful key check (plan D17). The Anthropic key is
- *  only saved, not checked against the API (its model list comes from
- *  GET /settings/ai/models, a backend table), so that copy only says it's saved. */
-function validatedKey(provider: string): string {
-  return provider === "anthropic"
-    ? "settings_page.ai.validated_saved"
-    : "settings_page.ai.validated_works"
 }
 
 function ProviderSteps({
@@ -297,7 +292,7 @@ function ProviderSteps({
               className="inline-flex items-center gap-1 text-small text-success"
             >
               <Check className="size-4" strokeWidth={1.5} aria-hidden />
-              {t(validatedKey(provider), { count: models.length })}
+              {t("settings_page.ai.validated_works", { count: models.length })}
             </p>
           )}
         </SettingRow>
@@ -339,6 +334,8 @@ function ProviderSteps({
                 {models.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     {m.display_name || m.id}
+                    {m.lifecycle === "deprecated" &&
+                      ` (${t("settings_page.ai.model_deprecated")})`}
                   </SelectItem>
                 ))}
               </SelectGroup>

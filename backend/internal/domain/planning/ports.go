@@ -2,6 +2,7 @@ package planning
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
@@ -43,6 +44,9 @@ type ChooseInput struct {
 	// Stage reports a chooser's progress (the LLM's repair turns); nil
 	// ignores it.
 	Stage func(Stage)
+	// Logger is the service logger for the chooser's attempt lines; nil uses
+	// the default.
+	Logger *slog.Logger
 }
 
 // SideSwap is the side a side scope replaces: its session's occasion and

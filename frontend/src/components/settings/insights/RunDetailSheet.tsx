@@ -102,7 +102,26 @@ function Detail({ run }: { run: RunDetail }) {
       t("settings_page.insights.tokens_detail", {
         input: formatNumber(run.tokens.input, i18n),
         output: formatNumber(run.tokens.output, i18n),
-      }),
+      }) +
+        (run.tokens.cache_read + run.tokens.cache_write > 0
+          ? ` · ${t("settings_page.insights.tokens_cache", {
+              read: formatNumber(run.tokens.cache_read, i18n),
+              write: formatNumber(run.tokens.cache_write, i18n),
+            })}`
+          : "") +
+        (run.tokens.reasoning > 0
+          ? ` · ${t("settings_page.insights.tokens_reasoning", {
+              count: run.tokens.reasoning,
+            })}`
+          : ""),
+    ],
+    [
+      t("settings_page.insights.duration"),
+      run.duration_ms === null
+        ? "–"
+        : t("settings_page.insights.duration_value", {
+            ms: formatNumber(run.duration_ms, i18n),
+          }),
     ],
     [
       t("settings_page.insights.col.cost"),
@@ -247,6 +266,41 @@ function regenerateRunId(step: RunStep): number | null {
   }
 }
 
+/** The extra numbers of a model call, only those that are present. */
+function stepMetrics(step: RunStep, t: Formatter["t"], f: Formatter): string {
+  const parts: string[] = []
+  if (step.ttft_ms !== null)
+    parts.push(
+      t("settings_page.insights.step.ttft", {
+        ms: formatNumber(step.ttft_ms, f),
+      })
+    )
+  if (step.tokens.cache_read + step.tokens.cache_write > 0)
+    parts.push(
+      t("settings_page.insights.step.cache", {
+        read: formatNumber(step.tokens.cache_read, f),
+        write: formatNumber(step.tokens.cache_write, f),
+      })
+    )
+  if (step.tokens.reasoning > 0)
+    parts.push(
+      t("settings_page.insights.step.reasoning", {
+        count: step.tokens.reasoning,
+      })
+    )
+  if (step.thinking_chars > 0)
+    parts.push(
+      t("settings_page.insights.step.thinking", { count: step.thinking_chars })
+    )
+  if (step.served_model && step.served_model !== step.name)
+    parts.push(
+      t("settings_page.insights.step.served_model", {
+        model: step.served_model,
+      })
+    )
+  return parts.join(" · ")
+}
+
 function Step({ step }: { step: RunStep }) {
   const { t, i18n } = useTranslation()
   const linkedRun = regenerateRunId(step)
@@ -263,6 +317,14 @@ function Step({ step }: { step: RunStep }) {
           })}
         </span>
       </div>
+      {step.type === "llm_call" && (
+        <p
+          className="text-caption text-ink-muted tabular-nums"
+          data-testid="step-metrics"
+        >
+          {stepMetrics(step, t, i18n)}
+        </p>
+      )}
       {linkedRun !== null && (
         <Link
           to="/settings/assistant/insights"

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"log/slog"
 	"net/http"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -39,6 +41,10 @@ type SettingsHandler struct {
 	system     SystemInfo
 	rateLimit  *plantrymw.RateLimiter
 	httpClient *http.Client
+	// anthropicURL and openaiURL are the provider API roots (empty
+	// anthropicURL: the adapter's default). Tests set them in export_test.go.
+	anthropicURL string
+	openaiURL    string
 }
 
 // NewSettingsHandler constructs the handler. rateLimit is optional — when
@@ -52,6 +58,7 @@ func NewSettingsHandler(svc *settings.Service, system SystemInfo, rateLimit *pla
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		openaiURL: "https://api.openai.com",
 	}
 }
 
@@ -141,6 +148,9 @@ func (h *SettingsHandler) System(w http.ResponseWriter, r *http.Request) {
 type modelItem struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name,omitempty"`
+	// Lifecycle is "deprecated" for a model that is still callable but
+	// headed for retirement; empty otherwise.
+	Lifecycle string `json:"lifecycle,omitempty"`
 }
 
 type modelsResponse struct {
@@ -148,9 +158,52 @@ type modelsResponse struct {
 	Validated bool        `json:"validated"`
 }
 
+// providerStatusError is a provider answer other than 200.
+type providerStatusError struct{ status int }
+
+func (e *providerStatusError) Error() string { return fmt.Sprintf("provider status %d", e.status) }
+
+// writeKeyCheckError maps a failed models call to the key-test message: 401
+// is a rejected key, 403 a valid key that is not permitted (billing, a
+// workspace), anything else (network, 5xx, 429) the provider being
+// unreachable. The key and the provider's body are never logged or echoed.
+func writeKeyCheckError(ctx context.Context, provider string, w http.ResponseWriter, err error) {
+	var status int
+	var se *providerStatusError
+	var ae *anthropic.APIError
+	switch {
+	case errors.As(err, &se):
+		status = se.status
+	case errors.As(err, &ae):
+		status = ae.Status
+	}
+	// One line per failed key check: what the provider answered, so an
+	// "unreachable" report can be told apart (DNS, TLS, 5xx, 429). Never the
+	// key and never the provider's body.
+	attrs := []any{"provider", provider, "provider_status", status}
+	if ae != nil {
+		attrs = append(attrs, "provider_error_type", ae.ErrorType, "provider_request_id", ae.RequestID,
+			"provider_rate_limit", ae.RateLimit)
+	}
+	if status == 0 {
+		attrs = append(attrs, "error", err.Error()) // network or decode failure; no provider answer
+	}
+	slog.WarnContext(ctx, "settings.models.failed", attrs...)
+	switch status {
+	case http.StatusUnauthorized:
+		writeError(w, http.StatusUnauthorized, "error.settings.invalid_api_key")
+	case http.StatusForbidden:
+		writeError(w, http.StatusForbidden, "error.settings.key_not_permitted")
+	default:
+		writeError(w, http.StatusBadGateway, "error.settings.provider_unreachable")
+	}
+}
+
 // Models handles GET /api/settings/ai/models?provider=X.
 // Optional query param api_key overrides the stored/env key for this request
-// only — letting the UI validate a new key before saving it.
+// only — letting the UI validate a new key before saving it. For both real
+// providers the models call is the key check: it needs a valid key and costs
+// no tokens, so `validated` is true only when the provider accepted the key.
 func (h *SettingsHandler) Models(w http.ResponseWriter, r *http.Request) {
 	provider := strings.ToLower(r.URL.Query().Get("provider"))
 	apiKey := r.URL.Query().Get("api_key")
@@ -164,9 +217,13 @@ func (h *SettingsHandler) Models(w http.ResponseWriter, r *http.Request) {
 
 	switch provider {
 	case "openai":
-		models, err := fetchOpenAIModels(r.Context(), h.httpClient, apiKey)
-		if err != nil {
+		if apiKey == "" {
 			writeError(w, http.StatusUnauthorized, "error.settings.invalid_api_key")
+			return
+		}
+		models, err := fetchOpenAIModels(r.Context(), h.httpClient, h.openaiURL, apiKey)
+		if err != nil {
+			writeKeyCheckError(r.Context(), provider, w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, modelsResponse{Models: models, Validated: true})
@@ -175,11 +232,16 @@ func (h *SettingsHandler) Models(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnauthorized, "error.settings.invalid_api_key")
 			return
 		}
-		out := make([]modelItem, 0, len(anthropic.Models()))
-		for _, m := range anthropic.Models() {
-			out = append(out, modelItem{ID: m.Prefix, DisplayName: m.DisplayName})
+		opts := []anthropic.Option{anthropic.WithHTTPClient(h.httpClient)}
+		if h.anthropicURL != "" {
+			opts = append(opts, anthropic.WithBaseURL(h.anthropicURL))
 		}
-		writeJSON(w, http.StatusOK, modelsResponse{Models: out, Validated: true})
+		infos, err := anthropic.New(apiKey, opts...).ListModels(r.Context())
+		if err != nil {
+			writeKeyCheckError(r.Context(), provider, w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, modelsResponse{Models: anthropicModelItems(infos), Validated: true})
 	case "fake":
 		writeJSON(w, http.StatusOK, modelsResponse{
 			Models: []modelItem{
@@ -191,6 +253,32 @@ func (h *SettingsHandler) Models(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusBadRequest, "error.settings.unknown_provider")
 	}
+}
+
+// anthropicModelItems lists the usable models: retired ones are dropped,
+// active ones come before deprecated ones, newest first within each.
+func anthropicModelItems(infos []anthropic.ModelInfo) []modelItem {
+	kept := make([]anthropic.ModelInfo, 0, len(infos))
+	for _, m := range infos {
+		if m.Lifecycle != "retired" {
+			kept = append(kept, m)
+		}
+	}
+	sort.SliceStable(kept, func(i, j int) bool {
+		di, dj := kept[i].Lifecycle == "deprecated", kept[j].Lifecycle == "deprecated"
+		if di != dj {
+			return !di
+		}
+		return kept[i].CreatedAt > kept[j].CreatedAt
+	})
+	out := make([]modelItem, len(kept))
+	for i, m := range kept {
+		out[i] = modelItem{ID: m.ID, DisplayName: m.DisplayName}
+		if m.Lifecycle == "deprecated" {
+			out[i].Lifecycle = "deprecated"
+		}
+	}
+	return out
 }
 
 // AISummary handles GET /api/settings/ai — BC endpoint for the existing
@@ -224,12 +312,10 @@ func writeSettingsError(w http.ResponseWriter, err error) {
 }
 
 // fetchOpenAIModels calls GET /v1/models and filters the result to
-// chat-capable models. The caller maps any error to 401.
-func fetchOpenAIModels(ctx context.Context, client *http.Client, apiKey string) ([]modelItem, error) {
-	if apiKey == "" {
-		return nil, errors.New("missing api key")
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.openai.com/v1/models", nil)
+// chat-capable models, newest first. A non-200 answer is a
+// *providerStatusError.
+func fetchOpenAIModels(ctx context.Context, client *http.Client, baseURL, apiKey string) ([]modelItem, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1/models", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -240,35 +326,49 @@ func fetchOpenAIModels(ctx context.Context, client *http.Client, apiKey string) 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, fmt.Errorf("openai models: status %d: %s", resp.StatusCode, string(body))
+		return nil, &providerStatusError{status: resp.StatusCode}
 	}
 	var payload struct {
 		Data []struct {
-			ID string `json:"id"`
+			ID      string `json:"id"`
+			Created int64  `json:"created"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		return nil, err
 	}
+	sort.SliceStable(payload.Data, func(i, j int) bool { return payload.Data[i].Created > payload.Data[j].Created })
 	out := make([]modelItem, 0, len(payload.Data))
 	for _, m := range payload.Data {
-		if isOpenAIChatFamily(m.ID) {
+		if isOpenAIChatModel(m.ID) {
 			out = append(out, modelItem{ID: m.ID, DisplayName: m.ID})
 		}
 	}
 	return out, nil
 }
 
-// isOpenAIChatFamily filters /v1/models output to chat-capable families. The
-// endpoint lists every model (including embeddings, audio, moderation) — we
-// want only the ones that accept messages + tools.
-func isOpenAIChatFamily(id string) bool {
+// openAINonChat are id fragments of models in the chat families that are not
+// chat completions models (audio, realtime, image, search, transcription,
+// embeddings, moderation, legacy instruct).
+var openAINonChat = []string{
+	"audio", "realtime", "transcribe", "tts", "whisper", "image", "search",
+	"embedding", "moderation", "instruct", "codex", "dall-e", "diarize",
+}
+
+var openAIReasoningPrefix = regexp.MustCompile(`^o[0-9]`)
+
+// isOpenAIChatModel filters /v1/models output (it lists every model) to the
+// ones that accept messages + tools: the gpt-, chatgpt- and o<digit>
+// families minus audio, realtime, image and similar variants.
+func isOpenAIChatModel(id string) bool {
 	low := strings.ToLower(id)
-	for _, prefix := range []string{"gpt-", "chatgpt-", "o1-", "o3-", "o4-"} {
-		if strings.HasPrefix(low, prefix) {
-			return true
+	if !strings.HasPrefix(low, "gpt-") && !strings.HasPrefix(low, "chatgpt-") && !openAIReasoningPrefix.MatchString(low) {
+		return false
+	}
+	for _, frag := range openAINonChat {
+		if strings.Contains(low, frag) {
+			return false
 		}
 	}
-	return false
+	return true
 }

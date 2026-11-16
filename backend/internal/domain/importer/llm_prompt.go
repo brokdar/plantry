@@ -47,7 +47,10 @@ func (s *Service) llmExtract(ctx context.Context, htmlBody string) (_ *RawRecipe
 	}
 
 	stripped := stripHTMLForLLM(htmlBody)
+	strippedBytes := len(stripped)
 	stripped = truncateMiddle(stripped, htmlBodyLimit)
+	logStage(ctx, StageFallback, "step", "prepared", "model", model, "html_bytes", len(htmlBody),
+		"stripped_bytes", strippedBytes, "sent_bytes", len(stripped), "truncated", len(stripped) < strippedBytes)
 
 	userMsg := llm.Message{Role: llm.RoleUser, Content: []llm.ContentBlock{
 		{Type: llm.ContentTypeText, Text: buildUserPrompt(stripped)},
@@ -63,17 +66,22 @@ func (s *Service) llmExtract(ctx context.Context, htmlBody string) (_ *RawRecipe
 
 	text, err := client.Complete(ctx, req)
 	if err != nil {
+		logStage(ctx, StageFallback, "attempt", 1, "outcome", "call_failed", "error", errText(err))
 		return nil, fmt.Errorf("%w: %v", domain.ErrImportLLMFailed, err)
 	}
 
 	rec, parseErr := parseLLMResponse(text)
 	if parseErr == nil {
+		logStage(ctx, StageFallback, "attempt", 1, "outcome", "ok", "reply_chars", len(text))
 		return rec, nil
 	}
 	// Definitive "no recipe" responses should not trigger a retry.
 	if errors.Is(parseErr, domain.ErrImportNoRecipe) {
+		logStage(ctx, StageFallback, "attempt", 1, "outcome", "not_a_recipe", "reply_chars", len(text))
 		return nil, domain.ErrImportNoRecipe
 	}
+	logStage(ctx, StageFallback, "attempt", 1, "outcome", "unreadable", "reply_chars", len(text),
+		"parse_error", errText(parseErr), "retry_reason", "reply was not valid recipe JSON")
 
 	// One retry with correction.
 	req.Messages = append(req.Messages,
@@ -82,15 +90,21 @@ func (s *Service) llmExtract(ctx context.Context, htmlBody string) (_ *RawRecipe
 	)
 	text2, err := client.Complete(ctx, req)
 	if err != nil {
+		logStage(ctx, StageFallback, "attempt", 2, "outcome", "call_failed", "error", errText(err))
 		return nil, fmt.Errorf("%w: %v", domain.ErrImportLLMFailed, err)
 	}
+	firstErr := parseErr
 	rec, parseErr = parseLLMResponse(text2)
 	if parseErr != nil {
 		if errors.Is(parseErr, domain.ErrImportNoRecipe) {
+			logStage(ctx, StageFallback, "attempt", 2, "outcome", "not_a_recipe", "reply_chars", len(text2))
 			return nil, domain.ErrImportNoRecipe
 		}
-		return nil, fmt.Errorf("%w: %v", domain.ErrImportLLMFailed, parseErr)
+		logStage(ctx, StageFallback, "attempt", 2, "outcome", "unreadable", "reply_chars", len(text2),
+			"parse_error", errText(parseErr), "first_parse_error", errText(firstErr))
+		return nil, fmt.Errorf("%w: %v (first attempt: %v)", domain.ErrImportLLMFailed, parseErr, firstErr)
 	}
+	logStage(ctx, StageFallback, "attempt", 2, "outcome", "ok", "reply_chars", len(text2))
 	return rec, nil
 }
 

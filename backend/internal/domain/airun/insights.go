@@ -11,16 +11,19 @@ import (
 // RunRow is one ai_runs row as the insights read it. Empty strings stand for
 // NULL columns.
 type RunRow struct {
-	ID             int64
-	Kind           Kind
-	StartedAt      time.Time
-	FinishedAt     *time.Time
-	Status         Status
-	Provider       string
-	Model          string
-	PromptVersion  string
-	Chooser        Chooser
-	Tokens         Tokens
+	ID            int64
+	Kind          Kind
+	StartedAt     time.Time
+	FinishedAt    *time.Time
+	Status        Status
+	Provider      string
+	Model         string
+	PromptVersion string
+	Chooser       Chooser
+	Tokens        Tokens
+	// DurationMs is the run's wall time; nil for runs made before it was
+	// recorded and for runs still running.
+	DurationMs     *int64
 	ScoreJSON      string
 	ViolationsJSON string
 	Outcome        string
@@ -52,6 +55,13 @@ type StepView struct {
 	InputTokens       int64
 	OutputTokens      int64
 	WebSearchRequests int64
+	StartedAt         *time.Time
+	TTFTMs            *int64
+	CacheReadTokens   int64
+	CacheWriteTokens  int64
+	ReasoningTokens   int64
+	ThinkingChars     int64
+	ServedModel       string
 }
 
 // Correction counts a run's generated plates and those the user changed
@@ -423,6 +433,7 @@ func versionGroups(runs []RunSummary, counts map[int64]SuggestionCount) []Versio
 		a.g.Runs++
 		a.g.Tokens.Input += r.Tokens.Input
 		a.g.Tokens.Output += r.Tokens.Output
+		a.g.Tokens.Reasoning += r.Tokens.Reasoning
 		a.g.Tokens.CacheRead += r.Tokens.CacheRead
 		a.g.Tokens.CacheWrite += r.Tokens.CacheWrite
 		a.g.Tokens.WebSearchRequests += r.Tokens.WebSearchRequests

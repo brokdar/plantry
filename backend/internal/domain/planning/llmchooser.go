@@ -92,11 +92,13 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 		if perr == nil {
 			prop.RepairAttempts = attempt
 			violations := violationsOf(Check(Merge(in.State, in.Target, prop), in.Target))
+			logAttempt(ctx, in.Logger, attempt, violations, nil)
 			if len(violations) == 0 || attempt == maxRepairs {
 				return prop, nil
 			}
 			last, feedback = &prop, describeViolations(violations)
 		} else {
+			logAttempt(ctx, in.Logger, attempt, nil, perr)
 			if attempt == maxRepairs {
 				if last != nil {
 					last.RepairAttempts = attempt

@@ -11,3 +11,6 @@ func CapabilityTTLLeft(c *Client, model string) time.Duration {
 	defer c.mu.Unlock()
 	return c.caps[model].until.Sub(c.now())
 }
+
+// SetLookupTimeout replaces the bound on one capability lookup.
+func SetLookupTimeout(c *Client, d time.Duration) { c.lookupTimeout = d }

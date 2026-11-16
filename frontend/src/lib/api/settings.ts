@@ -30,6 +30,8 @@ export interface SystemInfo {
 export interface AIModel {
   id: string
   display_name?: string
+  /** "deprecated": still callable, headed for retirement. */
+  lifecycle?: "deprecated"
 }
 
 export interface AIModelList {

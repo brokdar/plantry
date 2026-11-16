@@ -196,6 +196,8 @@ func (r *AIRunRepo) FinishRun(ctx context.Context, end airun.RunEnd) error {
 		CacheReadTokens:   end.CacheReadTokens,
 		CacheWriteTokens:  end.CacheWriteTokens,
 		WebSearchRequests: end.WebSearchRequests,
+		ReasoningTokens:   end.ReasoningTokens,
+		DurationMs:        sql.NullInt64{Int64: end.DurationMs, Valid: true},
 		ErrorKey:          toNullStringEmpty(end.ErrorKey),
 		RepairAttempts:    int64(end.RepairAttempts),
 		ViolationsJson:    toNullStringEmpty(end.ViolationsJSON),
@@ -236,6 +238,13 @@ func (r *AIRunRepo) AddStep(ctx context.Context, step airun.Step) error {
 		ResponseJson:      toNullStringEmpty(step.ResponseJSON),
 		StopReason:        toNullStringEmpty(step.StopReason),
 		WebSearchRequests: step.WebSearchRequests,
+		StartedAt:         startedAtNull(step.StartedAt),
+		TtftMs:            toNullInt64(step.TTFTMs),
+		CacheReadTokens:   step.CacheReadTokens,
+		CacheWriteTokens:  step.CacheWriteTokens,
+		ReasoningTokens:   step.ReasoningTokens,
+		ThinkingChars:     step.ThinkingChars,
+		ServedModel:       toNullStringEmpty(step.ServedModel),
 	})
 	if err != nil {
 		if isForeignKeyViolation(err) {
@@ -278,6 +287,16 @@ func (r *AIRunRepo) PruneSteps(ctx context.Context, before time.Time) (int64, er
 		}
 		total += n
 	}
+}
+
+// stepTimeLayout is a step's started_at: UTC with millisecond precision.
+const stepTimeLayout = "2006-01-02 15:04:05.000"
+
+func startedAtNull(t time.Time) sql.NullString {
+	if t.IsZero() {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: t.UTC().Format(stepTimeLayout), Valid: true}
 }
 
 func formatTime(t time.Time) string {

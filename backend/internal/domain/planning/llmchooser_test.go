@@ -1,6 +1,7 @@
 package planning_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -418,6 +419,60 @@ func TestLLMChooser_UnreadableReplies(t *testing.T) {
 		assert.Equal(t, 2, r.RepairAttempts)
 		assert.Equal(t, "Two occasions on Sunday.", r.Notes)
 	})
+}
+
+// Every attempt is logged on the service logger (not the global one) with
+// its violations or its parse error, and stored as a plan.attempt step, so a
+// repair can be explained from the log and the run alone.
+func TestLLMChooser_AttemptsAreLoggedAndStored(t *testing.T) {
+	e := newLLMEnv(t)
+	var buf, global bytes.Buffer
+	e.deps.Logger = slog.New(slog.NewJSONHandler(&buf, nil))
+	e.svc = planning.NewService(e.deps)
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&global, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	bad := submitRaw("tu_bad", json.RawMessage(`{"sessions": "soon", "plates": [], "notes": ""}`))
+	id := e.gen(bad, submit(t, "tu_1", e.h2Plan()), submit(t, "tu_2", e.validPlan()))
+	require.Equal(t, "ok", e.run(id).Status)
+
+	assert.NotContains(t, global.String(), "plan.run.attempt")
+	var attempts []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var m map[string]any
+		require.NoError(t, json.Unmarshal([]byte(line), &m), line)
+		if m["msg"] == "plan.run.attempt" {
+			attempts = append(attempts, m)
+		}
+	}
+	require.Len(t, attempts, 3)
+	for i, m := range attempts {
+		assert.EqualValues(t, id, m["run_id"])
+		assert.EqualValues(t, i, m["attempt"])
+	}
+	assert.Equal(t, true, attempts[0]["unreadable"])
+	assert.Contains(t, attempts[0]["parse_error"], "sessions must be an array")
+	assert.Contains(t, attempts[1]["violation_list"], "H2.too_many_cook_occasions@"+sun)
+	assert.EqualValues(t, 0, attempts[2]["violations"])
+
+	rows, err := e.db.Query(`SELECT is_error, result_json FROM ai_run_steps WHERE run_id = ? AND type = 'tool_call' AND name = 'plan.attempt' ORDER BY seq`, id)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	var results []string
+	var isErr []bool
+	for rows.Next() {
+		var b bool
+		var r string
+		require.NoError(t, rows.Scan(&b, &r))
+		isErr, results = append(isErr, b), append(results, r)
+	}
+	require.Len(t, results, 3)
+	assert.Equal(t, []bool{true, true, false}, isErr)
+	assert.Contains(t, results[0], `"unreadable":true`)
+	assert.Contains(t, results[0], "sessions must be an array")
+	assert.Contains(t, results[1], "H2.too_many_cook_occasions@"+sun)
+	assert.Contains(t, results[1], `"violation_count":`)
 }
 
 // Repair turns report the repairing stage (D35), and Ready tells a missing

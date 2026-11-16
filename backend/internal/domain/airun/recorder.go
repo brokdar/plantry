@@ -157,6 +157,7 @@ type Run struct {
 	id        int64 // 0 when CreateRun failed: nothing more is written
 	kind      Kind
 	requestID string
+	convID    *int64
 	startedAt time.Time
 
 	mu               sync.Mutex
@@ -167,6 +168,7 @@ type Run struct {
 	cacheReadTokens  int64
 	cacheWriteTokens int64
 	webSearches      int64
+	reasoningTokens  int64
 	provider         string
 	model            string
 	promptHash       string
@@ -198,6 +200,7 @@ func (r *Recorder) Start(ctx context.Context, s Start) (context.Context, *Run) {
 		rec:       r,
 		kind:      s.Kind,
 		requestID: middleware.GetReqID(ctx),
+		convID:    s.ConversationID,
 		startedAt: r.now(),
 	}
 	id, err := r.store.CreateRun(context.WithoutCancel(ctx), RunStart{
@@ -217,8 +220,8 @@ func (r *Recorder) Start(ctx context.Context, s Start) (context.Context, *Run) {
 	} else {
 		run.id = id
 	}
-	r.logger.InfoContext(ctx, "ai.run.start", "run_id", run.id, "request_id", run.requestID, "kind", s.Kind)
-	return context.WithValue(ctx, ctxKey{}, run), run
+	r.logger.InfoContext(ctx, "ai.run.start", append(run.LogAttrs(), "kind", s.Kind)...)
+	return context.WithValue(llm.WithLogAttrs(ctx, run.LogAttrs()), ctxKey{}, run), run
 }
 
 // Finish writes the run totals and logs ai.run.end. Only the first call has
@@ -239,10 +242,11 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 		return
 	}
 	run.finished = true
+	finishedAt := run.rec.now()
 	end := RunEnd{
 		ID:                run.id,
 		Status:            status,
-		FinishedAt:        run.rec.now(),
+		FinishedAt:        finishedAt,
 		Provider:          run.provider,
 		Model:             run.model,
 		PromptHash:        run.promptHash,
@@ -252,6 +256,8 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 		CacheReadTokens:   run.cacheReadTokens,
 		CacheWriteTokens:  run.cacheWriteTokens,
 		WebSearchRequests: run.webSearches,
+		ReasoningTokens:   run.reasoningTokens,
+		DurationMs:        finishedAt.Sub(run.startedAt).Milliseconds(),
 		ErrorKey:          errKey,
 		RepairAttempts:    res.RepairAttempts,
 		ViolationsJSON:    res.ViolationsJSON,
@@ -265,9 +271,7 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 			run.warn(ctx, "ai.run.finish failed", err)
 		}
 	}
-	run.rec.logger.InfoContext(ctx, "ai.run.end",
-		"run_id", run.id,
-		"request_id", run.requestID,
+	run.rec.logger.InfoContext(ctx, "ai.run.end", append(run.LogAttrs(),
 		"kind", run.kind,
 		"provider", end.Provider,
 		"model", end.Model,
@@ -277,9 +281,11 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 		"cache_read_tokens", end.CacheReadTokens,
 		"cache_write_tokens", end.CacheWriteTokens,
 		"web_search_requests", end.WebSearchRequests,
+		"reasoning_tokens", end.ReasoningTokens,
 		"status", status,
-		"duration_ms", end.FinishedAt.Sub(run.startedAt).Milliseconds(),
-	)
+		"error_key", errKey,
+		"duration_ms", end.DurationMs,
+	)...)
 	run.rec.pruneThrottled(ctx)
 }
 
@@ -302,7 +308,17 @@ func (run *Run) ToolStep(ctx context.Context, name string, args, result json.Raw
 		ResultJSON: string(result),
 		IsError:    isErr,
 		DurationMs: dur.Milliseconds(),
+		StartedAt:  run.rec.now().Add(-dur),
 	})
+	run.rec.logger.InfoContext(ctx, "ai.tool.call", append(run.LogAttrs(),
+		"kind", run.kind,
+		"step_seq", seq,
+		"tool", name,
+		"duration_ms", dur.Milliseconds(),
+		"is_error", isErr,
+		"error_key", resultErrorKey(result),
+		"args", argsSummary(args),
+	)...)
 	return seq
 }
 
@@ -320,6 +336,19 @@ func (run *Run) addStep(ctx context.Context, step Step) bool {
 	return true
 }
 
+// LogAttrs are the attributes every run log line carries: run_id,
+// request_id and, for chat runs, conversation_id. A nil run gives none.
+func (run *Run) LogAttrs() []any {
+	if run == nil {
+		return nil
+	}
+	attrs := []any{"run_id", run.id, "request_id", run.requestID}
+	if run.convID != nil {
+		attrs = append(attrs, "conversation_id", *run.convID)
+	}
+	return attrs
+}
+
 func (run *Run) warn(ctx context.Context, msg string, err error) {
-	run.rec.logger.WarnContext(ctx, msg, "run_id", run.id, "request_id", run.requestID, "kind", run.kind, "error", err)
+	run.rec.logger.WarnContext(ctx, msg, append(run.LogAttrs(), "kind", run.kind, "error", err)...)
 }

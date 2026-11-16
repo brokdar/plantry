@@ -19,6 +19,8 @@ UPDATE ai_runs SET
     cache_read_tokens  = ?,
     cache_write_tokens = ?,
     web_search_requests = ?,
+    reasoning_tokens   = ?,
+    duration_ms        = ?,
     error_key          = ?,
     repair_attempts    = ?,
     violations_json    = ?,
@@ -28,8 +30,9 @@ WHERE id = ?;
 
 -- name: CreateAIRunStep :exec
 INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens,
-    request_json, response_json, stop_reason, web_search_requests)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    request_json, response_json, stop_reason, web_search_requests,
+    started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpsertAIPrompt :exec
 INSERT INTO ai_prompts (hash, text) VALUES (?, ?)
@@ -99,6 +102,7 @@ WHERE id = sqlc.arg(id);
 -- [from_ts, to_ts) and a cursor (ids below before_id). lim -1 lists all.
 SELECT id, kind, started_at, finished_at, status, provider, model, prompt_version, chooser,
        input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, web_search_requests,
+       reasoning_tokens, duration_ms,
        score_json, violations_json, outcome
 FROM ai_runs
 WHERE (CAST(sqlc.narg(kind) AS TEXT) IS NULL OR kind = sqlc.narg(kind))
@@ -111,6 +115,7 @@ LIMIT sqlc.arg(lim);
 -- name: GetAIRunDetail :one
 SELECT r.id, r.kind, r.started_at, r.finished_at, r.status, r.provider, r.model, r.prompt_version, r.chooser,
        r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_write_tokens, r.web_search_requests,
+       r.reasoning_tokens, r.duration_ms,
        r.score_json, r.violations_json, r.outcome,
        r.scope_json, r.instruction, r.notes, r.error_key, p.text AS prompt_text
 FROM ai_runs r
@@ -122,6 +127,7 @@ WHERE r.id = ?;
 -- (an llm_call shows its request_json and response_json there); the *_cut
 -- flags say a value was longer.
 SELECT seq, type, name, is_error, duration_ms, input_tokens, output_tokens, web_search_requests,
+       started_at, ttft_ms, cache_read_tokens, cache_write_tokens, reasoning_tokens, thinking_chars, served_model,
        CAST(COALESCE(substr(COALESCE(args_json, request_json), 1, 8192), '') AS TEXT) AS args,
        COALESCE(length(COALESCE(args_json, request_json)), 0) > 8192 AS args_cut,
        CAST(COALESCE(substr(COALESCE(result_json, response_json), 1, 8192), '') AS TEXT) AS result,

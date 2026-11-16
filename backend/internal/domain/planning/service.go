@@ -625,6 +625,12 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		s.d.Logger.WarnContext(ctx, "plan.generate failed", "run_id", runID, "stage", stage, "error", err)
 		return RunEnd{Status: airun.StatusError, ErrorKey: key}
 	}
+	started := time.Now()
+	stage := func(st Stage, extra ...any) {
+		s.d.Progress.setStage(runID, st)
+		s.logStage(ctx, runID, started, st, extra...)
+	}
+	s.logStage(ctx, runID, started, StageResolving)
 	var base State
 	var routine []plate.SnapshotPlate
 	err := s.d.Tx.InTx(ctx, func(ctx context.Context) error {
@@ -649,23 +655,23 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 	// choose, so no chooser runs: an LLM call would plan nothing at a cost.
 	var prop Proposal
 	if j.side != nil || hasOpenCell(base, j.target) {
-		s.d.Progress.setStage(runID, StageChoosing)
+		stage(StageChoosing)
 		prop, err = j.chooser.Choose(ctx, ChooseInput{
 			State: base, Target: j.target, EatersByDate: j.eaters, ExploreQuota: j.exploreQuota,
 			Avoid: j.avoid, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
-			Stage: func(st Stage) { s.d.Progress.setStage(runID, st) },
+			Stage: func(st Stage) { stage(st) }, Logger: s.d.Logger,
 		})
 		if err != nil {
 			return fail("choosing", err)
 		}
 	}
 
-	s.d.Progress.setStage(runID, StageChecking)
 	merged := Merge(base, j.target, prop)
 	issues := Check(merged, j.target)
+	stage(StageChecking, issueAttrs(issues)...)
 
-	s.d.Progress.setStage(runID, StageSaving)
 	snap := ToSnapshot(prop, base)
+	stage(StageSaving, "plates", len(snap.Plates)+len(routine), "sessions", len(snap.Sessions))
 	snap.Plates = append(routine, snap.Plates...)
 	// Saving has its own budget: a proposal ready at the run's deadline is
 	// still written.
@@ -700,6 +706,10 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		return fail("scoring", err)
 	}
 	end.ViolationsJSON, end.ScoreJSON = string(vj), string(sj)
+	s.d.Logger.InfoContext(ctx, "plan.run.stage", append(runAttrs(ctx, runID),
+		"stage", "done", "elapsed_ms", time.Since(started).Milliseconds(),
+		"status", end.Status, "repair_attempts", end.RepairAttempts,
+		"violations", len(violations), "score", end.ScoreJSON)...)
 	return end
 }
 

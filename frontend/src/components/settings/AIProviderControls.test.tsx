@@ -14,6 +14,7 @@ vi.mock("@/lib/api/settings", () => ({
   getSystemInfo: vi.fn(),
 }))
 
+import { ApiError } from "@/lib/api/client"
 import { listAIModels, listSettings } from "@/lib/api/settings"
 
 import { AIProviderControls } from "./AIProviderControls"
@@ -40,7 +41,7 @@ describe("AIProviderControls key check (plan D17)", () => {
   it.each([
     ["openai", 3, "Key works, 3 models available"],
     ["fake", 1, "Key works, 1 model available"],
-    ["anthropic", 4, "Key saved. 4 models available"],
+    ["anthropic", 4, "Key works, 4 models available"],
   ])("%s shows “%s”", async (provider, count, text) => {
     vi.mocked(listAIModels).mockResolvedValue({
       models: models(count),
@@ -50,6 +51,21 @@ describe("AIProviderControls key check (plan D17)", () => {
     renderWithProvider(provider)
 
     await user.type(await screen.findByTestId("ai-api-key-input"), "sk-test")
+    await user.click(screen.getByTestId("ai-test-connection"))
+
+    expect(await screen.findByText(text)).toBeInTheDocument()
+  })
+
+  it.each([
+    [401, "error.settings.invalid_api_key", /Key rejected by the provider/],
+    [403, "error.settings.key_not_permitted", /valid but not permitted/],
+    [502, "error.settings.provider_unreachable", /Couldn't reach the provider/],
+  ])("a %i answer shows its own message", async (status, key, text) => {
+    vi.mocked(listAIModels).mockRejectedValue(new ApiError(status, key))
+    const user = userEvent.setup()
+    renderWithProvider("anthropic")
+
+    await user.type(await screen.findByTestId("ai-api-key-input"), "sk-bad")
     await user.click(screen.getByTestId("ai-test-connection"))
 
     expect(await screen.findByText(text)).toBeInTheDocument()
