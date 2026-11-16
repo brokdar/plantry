@@ -581,7 +581,7 @@ test("AC-1 to AC-4.1: portions and freezing, a different side, the unlock card, 
     await expect(
       panel3
         .getByTestId("assistant-change")
-        .filter({ hasText: `remove ${rice.name} (${monday})` })
+        .filter({ hasText: `remove ${rice.name} (${mondayName})` })
     ).toHaveCount(1)
     await expect(panel3.getByTestId("assistant-unlock-card")).toHaveCount(0)
     // The transcript followed the new lines to the bottom.
