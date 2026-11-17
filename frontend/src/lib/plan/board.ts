@@ -89,6 +89,8 @@ export interface BoardDay {
   nutrition: PlanDay | null
   /** "Light day" / "Light: Dinner" for a day with a light request. */
   light: string | null
+  /** The light request asks for a hearty meal or day. */
+  hearty: boolean
   /** The day's cells in slot order. */
   cells: BoardCell[]
 }
@@ -296,6 +298,7 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
       light: day
         ? lightLabel(day, (short) => slotLabel(f.t, `slot.${short}`), f)
         : null,
+      hearty: day?.light_level === "hearty",
       cells: grid[i],
     }
   })

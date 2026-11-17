@@ -117,8 +117,11 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 		dk.Away = meals > 0 && away == meals
 		dk.Scaled = k * dk.Share()
 		dk.Adjusted = dk.Scaled
-		if s.lightDay(d) {
+		switch {
+		case s.lightDay(d):
 			dk.Adjusted *= LightDayShare
+		case s.heartyDay(d):
+			dk.Adjusted *= HeartyDayShare
 		}
 		if dk.Adjusted < dk.Scaled {
 			// A light day is never asked to go below the floor, so the week

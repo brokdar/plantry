@@ -162,6 +162,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Get("/runs/{id}", h.PlanGenerate.Run)
 					r.Get("/replan/preview", h.PlanGenerate.ReplanPreview)
 					r.Post("/replan", h.PlanGenerate.Replan)
+					r.Post("/alternatives", h.PlanGenerate.Alternatives)
 				}
 			})
 		}

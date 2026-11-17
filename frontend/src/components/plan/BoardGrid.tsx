@@ -136,7 +136,9 @@ export function BoardGrid({
                   >
                     {day.dayNumber}
                   </span>
-                  {day.light && <LightMark label={day.light} />}
+                  {day.light && (
+                    <LightMark label={day.light} hearty={day.hearty} />
+                  )}
                 </span>
                 {day.nutrition && (
                   <DayMeter

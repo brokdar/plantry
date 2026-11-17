@@ -57,6 +57,8 @@ const (
 	CodeWeekCarbsRange    = "week_carbs_out_of_range"
 	CodeWeekFatRange      = "week_fat_out_of_range"
 	CodeMealNotLight      = "meal_not_light"
+	CodeMealNotHearty     = "meal_not_hearty"
+	CodeDishRepeats       = "dish_repeats_exceeded"
 	CodeWeekMeatAboveDGE  = "week_meat_above_dge"
 	CodeWeekFishBelowDGE  = "week_fish_below_dge"
 	CodeWeekLegumesBelow  = "week_legumes_below_dge"
@@ -148,7 +150,7 @@ func FilterBoardIssues(s State, issues []Issue) []Issue {
 }
 
 // BoardSoftIssues keeps the soft issues the board shows as hints of issues,
-// Evaluate's Issues over WindowTarget(s): S2 to S7, a dated one only from
+// Evaluate's Issues over WindowTarget(s): S2 to S8, a dated one only from
 // today on (past days are history), without their options (the board does
 // not offer them). They never block saving.
 func BoardSoftIssues(s State, issues []Issue) []Issue {
@@ -159,7 +161,7 @@ func BoardSoftIssues(s State, issues []Issue) []Issue {
 			continue
 		}
 		switch is.Rule {
-		case "S2", "S3", "S4", "S5", "S6", "S7":
+		case "S2", "S3", "S4", "S5", "S6", "S6b", "S7", "S8":
 			is.Options = nil
 			out = append(out, is)
 		}

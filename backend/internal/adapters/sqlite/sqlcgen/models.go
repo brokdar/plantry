@@ -243,6 +243,7 @@ type PlanLight struct {
 	Date  string
 	Scope string
 	Slot  string
+	Level string
 }
 
 type Plate struct {

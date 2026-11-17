@@ -1,5 +1,5 @@
 -- name: ListPlanLight :many
-SELECT date, scope, slot FROM plan_light
+SELECT date, scope, slot, level FROM plan_light
 WHERE date >= ? AND date <= ?
 ORDER BY date, scope, slot;
 
@@ -10,4 +10,4 @@ DELETE FROM plan_light WHERE date = ?;
 DELETE FROM plan_light WHERE date < ?;
 
 -- name: CreatePlanLight :exec
-INSERT OR IGNORE INTO plan_light (date, scope, slot) VALUES (?, ?, ?);
+INSERT OR IGNORE INTO plan_light (date, scope, slot, level) VALUES (?, ?, ?, ?);

@@ -41,6 +41,11 @@ type ChooseInput struct {
 	// must not eat (a replaced leftover plate leaves its batch); the
 	// heuristic honours it, the LLM sees the recipe in Avoid.
 	AvoidBatches []int64
+	// Exclude are foods the target's cells must not hold at all, fresh or
+	// leftover: a replaced plate's composed foods (scope plate), so the
+	// replacement is a different dish. The LLM already drops them with
+	// Avoid; the heuristic never picks or eats them.
+	Exclude []int64
 	// Side is set for the side scope: swap one side, keep everything else.
 	Side        *SideSwap
 	Instruction string

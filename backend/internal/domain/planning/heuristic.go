@@ -77,7 +77,8 @@ type planner struct {
 	occasions map[int]map[cellID]bool
 	meatDays  map[int]bool
 	// allowMeat lets a leftover add a meat day past the limit: the last
-	// resort for a cell nothing else can fill (H1 weighs more than H5).
+	// resort for a cell nothing else can fill (H1 weighs more than H5); it
+	// also lets a batch pass its S8 dish cap then.
 	allowMeat bool
 	// notes are the run-note lines of rules the heuristic had to bend or
 	// could not meet (a meat day past the limit, a cell without a main).
@@ -86,6 +87,8 @@ type planner struct {
 	used       map[int64]int
 	avoid      map[int64]bool
 	avoidBatch map[int64]bool
+	// exclude are foods the target may not hold at all (ChooseInput.Exclude).
+	exclude map[int64]bool
 	// routineFoods are the recipes the target's routine plates eat: they are
 	// breakfast routines, never planned into another cell.
 	routineFoods map[int64]bool
@@ -114,7 +117,7 @@ func newPlanner(in ChooseInput) *planner {
 		in: in, s: s, x: newIndex(s, in.Target), order: s.SlotOrder,
 		done: map[cellID]bool{}, occasions: map[int]map[cellID]bool{},
 		meatDays: map[int]bool{}, seen: map[int64][]time.Time{}, used: map[int64]int{},
-		avoid: idSet(in.Avoid), avoidBatch: idSet(in.AvoidBatches), routineFoods: nil,
+		avoid: idSet(in.Avoid), avoidBatch: idSet(in.AvoidBatches), exclude: idSet(in.Exclude), routineFoods: nil,
 	}
 	h.routineFoods = h.x.routineFoods()
 	for day, cells := range h.x.occasions {
@@ -379,7 +382,9 @@ func (h *planner) pickSupply(c plate.CellKey, eaters float64, skipAvoided bool) 
 		if skipAvoided && sup.proposed < 0 && h.avoidBatch[sup.food] {
 			continue
 		}
-		if h.supplyOverMeat(sup, c) {
+		// An excluded food (a replaced plate) feeds the cell only as the last
+		// resort of eatAnyway: an empty cell (H1) weighs more.
+		if h.supplyOverMeat(sup, c) || (h.exclude[sup.food] && !h.allowMeat) {
 			continue
 		}
 		room := sup.free
@@ -406,7 +411,7 @@ func (h *planner) growable(c plate.CellKey) *supply {
 		if sup.proposed < 0 {
 			continue
 		}
-		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) {
+		if k, ok := h.kindAt(sup, c); !ok || k != plate.KindLeftover || h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) || h.exclude[sup.food] {
 			continue
 		}
 		if best == nil || plate.Before(best.cook.CookCell(), sup.cook.CookCell(), h.order) {
@@ -414,6 +419,14 @@ func (h *planner) growable(c plate.CellKey) *supply {
 		}
 	}
 	return best
+}
+
+// supplyAtDishCap reports whether growing sup for a lunch or dinner on c
+// would make its dish the main of more meals than S8 allows (never while
+// eatAnyway fills a cell nothing else can: S8 is soft). Portions a batch
+// already has are eaten regardless.
+func (h *planner) supplyAtDishCap(sup *supply, c plate.CellKey) bool {
+	return !h.allowMeat && h.x.mealOf(c.SlotID) == mealFull && h.dishFull(sup.food)
 }
 
 // eat places a plate on c eating from sup (and its side); grow cooks the
@@ -581,11 +594,21 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 		meat[dayOf(c.Date)] = true
 	}
 	limit := h.s.Profile.MeatDaysPerWeekMax
+	// S8: the batch stops growing once its dish is the main of as many
+	// lunches and dinners as the setting allows.
+	dishes := h.dishMeals(cook.FoodID)
+	if h.x.mealOf(c.SlotID) == mealFull {
+		dishes++
+	}
 	for _, o := range h.open {
 		if total+epsilon >= ref {
 			break
 		}
 		if h.done[idOf(o)] || !plate.Before(c, o, h.order) || h.isForced(o) {
+			continue
+		}
+		full := h.x.mealOf(o.SlotID) == mealFull
+		if full && dishes >= h.s.Settings.MaxDishMeals() {
 			continue
 		}
 		if omni && limit != nil && h.s.Window.Contains(o.Date) && !meat[dayOf(o.Date)] {
@@ -601,6 +624,9 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 		n := h.eaters(o.Date)
 		out = append(out, covered{cell: o, eaters: n, frozen: frozen})
 		total += n
+		if full {
+			dishes++
+		}
 	}
 	return out
 }
@@ -655,8 +681,11 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		}
 		// A light cell asks for a recipe within its (reduced) share first.
 		heavy := light && share > 0 && f.Macros.Kcal > share
+		// S8: a dish already at its weekly cap comes only when nothing
+		// else qualifies.
+		atCap := h.x.mealOf(c.SlotID) == mealFull && h.dishFull(f.ID)
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
-			b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
+			b2f(atCap), b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
 			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
@@ -723,7 +752,7 @@ func (d dgeState) meat(f FoodFacts) float64 {
 
 // mainCandidate reports whether f may be cooked as the main of c.
 func (h *planner) mainCandidate(f FoodFacts, c plate.CellKey) bool {
-	if !f.Composed() || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] {
+	if !f.Composed() || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] || h.exclude[f.ID] {
 		return false
 	}
 	// A lunch or dinner takes a main; a standalone recipe is a breakfast.
@@ -852,8 +881,12 @@ func (h *planner) kcalShare(c plate.CellKey) float64 {
 	switch {
 	case h.s.lightMeal(c.Date, c.SlotID):
 		return LightMealShare * *t / float64(meals)
+	case h.s.heartyMeal(c.Date, c.SlotID):
+		return HeartyMealShare * *t / float64(meals)
 	case h.s.lightDay(c.Date):
 		return *t / float64(n) * LightDayShare
+	case h.s.heartyDay(c.Date):
+		return *t / float64(n) * HeartyDayShare
 	}
 	return *t / float64(n)
 }

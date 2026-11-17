@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 )
@@ -22,6 +24,7 @@ type planGenerateService interface {
 	PreviewReplan(ctx context.Context, q planning.ReplanQuery) (*planning.ReplanPreview, error)
 	Replan(ctx context.Context, req planning.ReplanRequest) (*planning.ReplanResult, error)
 	WizardQuota(ctx context.Context, on bool) (int, error)
+	Alternatives(ctx context.Context, start, today time.Time, req planning.AltRequest) ([]planning.Alternative, error)
 }
 
 // PlanGenerateHandler starts generations and reports their runs (spec §3.2,
@@ -107,6 +110,76 @@ func (h *PlanGenerateHandler) Regenerate(w http.ResponseWriter, r *http.Request)
 		req.Scope.Date = d
 	}
 	h.started(w, r, h.svc.Regenerate, req)
+}
+
+type altConstraintsRequest struct {
+	MaxMinutes  int         `json:"max_minutes"`
+	Diet        string      `json:"diet"`
+	Roles       []food.Role `json:"roles"`
+	Search      string      `json:"search"`
+	Tags        []string    `json:"tags"`
+	MinProteinG float64     `json:"min_protein_g"`
+	MaxKcal     float64     `json:"max_kcal"`
+	NoCook      bool        `json:"no_cook"`
+}
+
+type alternativesRequest struct {
+	PlateID          int64                  `json:"plate_id"`
+	What             string                 `json:"what"`
+	PlateComponentID int64                  `json:"plate_component_id"`
+	Constraints      *altConstraintsRequest `json:"constraints"`
+	Limit            int                    `json:"limit"`
+}
+
+type alternativesResponse struct {
+	Alternatives []planning.Alternative `json:"alternatives"`
+}
+
+// Alternatives handles POST /api/plan/alternatives?start&today: the
+// verified ways to change one plate (planning.Alternatives). Writes nothing.
+func (h *PlanGenerateHandler) Alternatives(w http.ResponseWriter, r *http.Request) {
+	var body alternativesRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PlateID <= 0 || body.Limit < 0 || body.Limit > 10 {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	start, err := time.Parse(time.DateOnly, r.URL.Query().Get("start"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.plan.invalid_start")
+		return
+	}
+	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
+	if !ok {
+		return
+	}
+	if c := body.Constraints; c != nil {
+		if c.Diet != "" && !diet.Valid(diet.Class(c.Diet)) {
+			writeError(w, http.StatusBadRequest, "error.invalid_body")
+			return
+		}
+		for _, role := range c.Roles {
+			if !food.ValidRole(role) {
+				writeError(w, http.StatusBadRequest, "error.invalid_body")
+				return
+			}
+		}
+	}
+	req := planning.AltRequest{PlateID: body.PlateID, What: body.What, ComponentID: body.PlateComponentID, Limit: body.Limit}
+	if c := body.Constraints; c != nil {
+		req.Constraints = planning.AltConstraints{
+			MaxMinutes: c.MaxMinutes, Diet: c.Diet, Roles: c.Roles, Search: c.Search, Tags: c.Tags,
+			MinProteinG: c.MinProteinG, MaxKcal: c.MaxKcal, NoCook: c.NoCook,
+		}
+	}
+	out, err := h.svc.Alternatives(r.Context(), start, today, req)
+	if err != nil {
+		writePlanError(w, err)
+		return
+	}
+	if out == nil {
+		out = []planning.Alternative{}
+	}
+	writeJSON(w, http.StatusOK, alternativesResponse{Alternatives: out})
 }
 
 func (h *PlanGenerateHandler) request(w http.ResponseWriter, r *http.Request, start, chooser, instruction string) (planning.Request, bool) {

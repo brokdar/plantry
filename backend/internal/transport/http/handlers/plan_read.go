@@ -73,6 +73,8 @@ type planDayResponse struct {
 	TargetKcal *float64 `json:"target_kcal"`
 	Light      string   `json:"light,omitempty"`
 	LightSlot  string   `json:"light_slot,omitempty"`
+	// LightLevel is "hearty" for a hearty day or meal, omitted for light.
+	LightLevel string `json:"light_level,omitempty"`
 }
 
 type planTargetsResponse struct {
@@ -176,7 +178,7 @@ func toPlanResponse(p *planview.Plan) planResponse {
 			Date:     dateString(d.Date),
 			Macros:   dayMacrosResponse{Kcal: d.Macros.Kcal, Protein: d.Macros.Protein, Fat: d.Macros.Fat, Carbs: d.Macros.Carbs},
 			Complete: d.Complete, Missing: d.Missing,
-			TargetKcal: d.TargetKcal, Light: d.Light, LightSlot: d.LightSlot,
+			TargetKcal: d.TargetKcal, Light: d.Light, LightSlot: d.LightSlot, LightLevel: d.LightLevel,
 		}
 	}
 	if t := p.Targets; t != nil {

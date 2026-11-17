@@ -1790,6 +1790,10 @@
       "day": "Leichter Tag",
       "meal": "Leicht: {{slot}}"
     },
+    "hearty": {
+      "day": "Deftiger Tag",
+      "meal": "Deftig: {{slot}}"
+    },
     "soft": {
       "week_meat_above_dge": "Fleisch: {{meat}} g diese Woche, über der DGE-Grenze von {{max}} g.",
       "week_fish_below_dge": "Diese Woche keine Fischmahlzeit; die DGE empfiehlt ein bis zwei pro Woche.",
