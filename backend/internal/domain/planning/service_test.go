@@ -58,6 +58,9 @@ func newSvcEnv(t testing.TB) *svcEnv {
 	for k, v := range map[string]string{
 		"plan.shopping_day": "5", "plan.batch_cooking": "true", "plan.default_keep_days": "3",
 		"plan.max_cook_occasions_per_day": "1", "plan.variety_weeks": "3", "plan.freezing_enabled": "false",
+		// The batch mechanics these tests pin feed 4 meals from a batch; S8
+		// has its own tests.
+		"plan.max_dish_meals_per_week": "14",
 	} {
 		require.NoError(t, set.Set(e.ctx, k, v))
 	}

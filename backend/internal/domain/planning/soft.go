@@ -304,6 +304,9 @@ func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time, prote
 	}
 	base := hardKeys(ev.Issues)
 	cands := x.candidates(day, want)
+	for i := range cands {
+		capLeafAdd(&cands[i], x.s.Foods[cands[i].add.FoodID], target)
+	}
 	slices.SortStableFunc(cands, func(a, b optCand) int {
 		return cmp.Or(cmp.Compare(b.protein, a.protein), cmp.Compare(math.Abs(want-a.kcal), math.Abs(want-b.kcal)))
 	})
@@ -364,6 +367,23 @@ func (c optCand) op(plateID *int64, date string, slot int64) OptionOp {
 		op.Amount, op.Unit = o.Grams, "g"
 	}
 	return op
+}
+
+// capLeafAdd caps a leaf add at the heuristic's per-add cap (dayAdds):
+// maxAddFillerGrams and fillerDayShare of the day's target. An add that
+// cannot close the gap alone is still offered at the cap; its day figures
+// show the partial effect.
+func capLeafAdd(c *optCand, f FoodFacts, target float64) {
+	if c.comp >= 0 || c.add.Grams == nil || f.Macros.Kcal <= 0 {
+		return
+	}
+	g := min(*c.add.Grams, maxAddFillerGrams)
+	if target > 0 {
+		g = min(g, math.Floor(target*fillerDayShare/f.Macros.Kcal*100/roundGrams)*roundGrams)
+	}
+	g = max(g, roundGrams)
+	*c.add.Grams = g
+	c.kcal, c.protein = f.Macros.Kcal*g/100, f.Macros.Protein*g/100
 }
 
 func (x *index) editablePlates(day time.Time) []int {

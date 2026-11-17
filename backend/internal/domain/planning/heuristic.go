@@ -77,7 +77,8 @@ type planner struct {
 	occasions map[int]map[cellID]bool
 	meatDays  map[int]bool
 	// allowMeat lets a leftover add a meat day past the limit: the last
-	// resort for a cell nothing else can fill (H1 weighs more than H5).
+	// resort for a cell nothing else can fill (H1 weighs more than H5); it
+	// also lets a batch pass its S8 dish cap then.
 	allowMeat bool
 	// notes are the run-note lines of rules the heuristic had to bend or
 	// could not meet (a meat day past the limit, a cell without a main).
@@ -379,7 +380,7 @@ func (h *planner) pickSupply(c plate.CellKey, eaters float64, skipAvoided bool) 
 		if skipAvoided && sup.proposed < 0 && h.avoidBatch[sup.food] {
 			continue
 		}
-		if h.supplyOverMeat(sup, c) || h.supplyAtDishCap(sup, c) {
+		if h.supplyOverMeat(sup, c) {
 			continue
 		}
 		room := sup.free
@@ -416,10 +417,12 @@ func (h *planner) growable(c plate.CellKey) *supply {
 	return best
 }
 
-// supplyAtDishCap reports whether a lunch or dinner on c eating from sup
-// would make its dish the main of more meals than S8 allows.
+// supplyAtDishCap reports whether growing sup for a lunch or dinner on c
+// would make its dish the main of more meals than S8 allows (never while
+// eatAnyway fills a cell nothing else can: S8 is soft). Portions a batch
+// already has are eaten regardless.
 func (h *planner) supplyAtDishCap(sup *supply, c plate.CellKey) bool {
-	return h.x.mealOf(c.SlotID) == mealFull && h.dishFull(sup.food)
+	return !h.allowMeat && h.x.mealOf(c.SlotID) == mealFull && h.dishFull(sup.food)
 }
 
 // eat places a plate on c eating from sup (and its side); grow cooks the
