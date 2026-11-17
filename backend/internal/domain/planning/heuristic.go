@@ -39,6 +39,23 @@ func (Heuristic) Choose(ctx context.Context, in ChooseInput) (Proposal, error) {
 		prop, err = h.side(*in.Side)
 	} else {
 		prop, err = h.plan()
+		// A cell left empty by the cooking cap may be fillable by a cook the
+		// greedy walk did not make: rerun with those cooks forced.
+		forced := map[cellID]bool{}
+		for err == nil && len(h.stranded) > 0 {
+			before := len(forced)
+			for _, c := range h.stranded {
+				if f, ok := h.feederFor(c, forced); ok {
+					forced[idOf(f)] = true
+				}
+			}
+			if len(forced) == before {
+				break
+			}
+			h = newPlanner(in)
+			h.forced = forced
+			prop, err = h.plan()
+		}
 	}
 	h.recordChoices(ctx)
 	return prop, err
@@ -95,6 +112,12 @@ type planner struct {
 	// choices log what was chosen per cell and why (the run's
 	// heuristic.choices step).
 	choices []heuristicChoice
+	// stranded are the cells left empty because their day's cooking cap was
+	// used and no batch could feed them; forced are cells that must cook
+	// (and are never covered by another cook) so a stranded cell can eat
+	// their leftovers.
+	stranded []plate.CellKey
+	forced   map[cellID]bool
 }
 
 func newPlanner(in ChooseInput) *planner {
@@ -157,6 +180,12 @@ func (h *planner) plan() (Proposal, error) {
 			continue
 		}
 		eaters := h.eaters(c.Date)
+		if h.forced[idOf(c)] {
+			if err := h.cook(c); err != nil {
+				return Proposal{}, err
+			}
+			continue
+		}
 		if sup := h.supplyFor(c, eaters); sup != nil {
 			h.eat(sup, c, eaters, false)
 			continue
@@ -181,6 +210,7 @@ func (h *planner) plan() (Proposal, error) {
 			// included) and no batch can feed c: leave it empty; the checker
 			// reports it (H1). A cell that already is an occasion may cook.
 			h.choices = append(h.choices, heuristicChoice{Date: c.Date.Format(time.DateOnly), SlotID: c.SlotID, Reason: "left_empty_cook_cap"})
+			h.stranded = append(h.stranded, c)
 			continue
 		}
 		if err := h.cook(c); err != nil {
@@ -190,6 +220,27 @@ func (h *planner) plan() (Proposal, error) {
 	h.prop.Notes = strings.Join(append([]string{h.exploreNote()}, h.notes...), "\n")
 	h.prop.Notes = strings.TrimSpace(h.prop.Notes)
 	return h.prop, nil
+}
+
+// feederFor is the latest open cell before the stranded cell c that may cook
+// (its day has a free cooking occasion and is not cooking yet) and whose
+// leftovers reach c within the default keep days.
+func (h *planner) feederFor(c plate.CellKey, forced map[cellID]bool) (plate.CellKey, bool) {
+	limit := h.s.Settings.MaxCookOccasionsPerDay
+	keep := h.s.Settings.KeepDays(nil)
+	for _, o := range slices.Backward(h.open) {
+		if !plate.Before(o, c, h.order) || forced[idOf(o)] || h.x.routine(o) {
+			continue
+		}
+		occ := h.occasions[dayOf(o.Date)]
+		if occ[idOf(o)] || (limit > 0 && len(occ) >= limit) {
+			continue
+		}
+		if plate.Classify(c, plate.CookSession{CookDate: o.Date, CookSlotID: o.SlotID}, keep) == plate.KindLeftover {
+			return o, true
+		}
+	}
+	return plate.CellKey{}, false
 }
 
 // eatAnyway fills c from a batch even if that adds a meat day past the
@@ -498,7 +549,7 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 		if total+epsilon >= ref {
 			break
 		}
-		if h.done[idOf(o)] || !plate.Before(c, o, h.order) {
+		if h.done[idOf(o)] || !plate.Before(c, o, h.order) || h.forced[idOf(o)] {
 			continue
 		}
 		if omni && limit != nil && h.s.Window.Contains(o.Date) && !meat[dayOf(o.Date)] {
