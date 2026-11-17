@@ -1,4 +1,5 @@
 import { apiFetch } from "./client"
+import type { AlsoChanged, Undo } from "./meal"
 import type { PlateFeedback } from "./feedback"
 import type { FoodKind, FoodRole } from "./foods"
 
@@ -24,6 +25,8 @@ export interface PlateComponent {
   /** Leaf: confidence label for the grams resolution. */
   grams_source?: string
   sort_order: number
+  /** The component's place on the plate (00048): one main per plate. */
+  position?: "main" | "side" | "extra"
 }
 
 /** Draft rows are proposals, confirmed rows are fixed (D1). The state is
@@ -124,6 +127,16 @@ export interface RemovedResponse {
   removed: PlanSnapshot
 }
 
+/** A hand edit of a plate (PUT, component endpoints): the plate, what else
+ *  it changed and its revert token. */
+export type PlateEdit = Plate & { also_changed: AlsoChanged[]; undo: Undo }
+
+/** DELETE /api/plates/{id}: the snapshot plus the revert token. */
+export type PlateRemoval = RemovedResponse & {
+  also_changed: AlsoChanged[]
+  undo: Undo
+}
+
 /** The rows a state change touched: the whole batch closure (D3). */
 export interface StateChange {
   plate_ids: number[]
@@ -156,14 +169,14 @@ export function updatePlate(
   })
 }
 
-export function deletePlate(id: number): Promise<RemovedResponse> {
+export function deletePlate(id: number): Promise<PlateRemoval> {
   return apiFetch(`/plates/${id}`, { method: "DELETE" })
 }
 
 export function addPlateComponent(
   plateId: number,
   input: ComponentInput
-): Promise<Plate> {
+): Promise<PlateEdit> {
   return apiFetch(`/plates/${plateId}/components`, {
     method: "POST",
     body: JSON.stringify(input),
@@ -174,7 +187,7 @@ export function updatePlateComponent(
   plateId: number,
   pcId: number,
   input: UpdatePlateComponentInput
-): Promise<Plate> {
+): Promise<PlateEdit> {
   return apiFetch(`/plates/${plateId}/components/${pcId}`, {
     method: "PUT",
     body: JSON.stringify(input),
@@ -184,7 +197,7 @@ export function updatePlateComponent(
 export function deletePlateComponent(
   plateId: number,
   pcId: number
-): Promise<Plate> {
+): Promise<PlateEdit> {
   return apiFetch(`/plates/${plateId}/components/${pcId}`, { method: "DELETE" })
 }
 

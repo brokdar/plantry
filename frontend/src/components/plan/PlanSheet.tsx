@@ -40,6 +40,7 @@ interface PlanSheetProps {
   onClosed: () => void
   /** Mark as No plate on a plate (a confirmed one opens the re-plan). */
   onMarkNoPlate: (cell: BoardCell) => void
+  onRegenerateDay: (date: string) => void
 }
 
 function findCell(board: Board, key: string): BoardCell | undefined {
@@ -64,6 +65,7 @@ export function PlanSheet({
   onChange,
   onClosed,
   onMarkNoPlate,
+  onRegenerateDay,
 }: PlanSheetProps) {
   const { t, i18n } = useTranslation()
   const phone = useIsPhone()
@@ -150,6 +152,7 @@ export function PlanSheet({
               onPick={(p) => onChange({ key: state.key, picker: p })}
               onOpenCell={(key) => onChange({ key })}
               onMarkNoPlate={onMarkNoPlate}
+              onRegenerateDay={onRegenerateDay}
               onClose={close}
             />
           ) : (

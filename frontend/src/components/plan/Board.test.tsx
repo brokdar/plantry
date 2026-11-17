@@ -14,7 +14,9 @@ import { DayList } from "./DayList"
 /** `Board` renders the grid where there is no phone media query (jsdom),
  *  with the real sensors and drop rules. */
 function renderGrid(p: BoardLayoutProps) {
-  return render(<Board {...p} />, { wrapper: createHookWrapper() })
+  return render(<Board {...p} plan={mockPlan} slotName={() => "Dinner"} />, {
+    wrapper: createHookWrapper(),
+  })
 }
 
 function props(overrides: Partial<BoardLayoutProps> = {}): BoardLayoutProps {

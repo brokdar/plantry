@@ -14,6 +14,7 @@ import {
   mockPlateComponent,
   mockRemovedBatch,
   mockSession,
+  edited,
 } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
@@ -109,6 +110,7 @@ async function renderSheet(
       plan={plan}
       readOnly={readOnly}
       running={false}
+      onRegenerateDay={vi.fn()}
       freezing={false}
       slotName={(id) => ["", "Breakfast", "Lunch", "Dinner"][id]}
       onPick={onPick}
@@ -153,9 +155,9 @@ beforeEach(async () => {
     ],
   })
   vi.mocked(updatePlate).mockResolvedValue(mockAc1Plates[0])
-  vi.mocked(updatePlateComponent).mockResolvedValue(mockAc1Plates[0])
-  vi.mocked(deletePlateComponent).mockResolvedValue(mockAc1Plates[0])
-  vi.mocked(deletePlate).mockResolvedValue(mockRemovedBatch)
+  vi.mocked(updatePlateComponent).mockResolvedValue(edited(mockAc1Plates[0]))
+  vi.mocked(deletePlateComponent).mockResolvedValue(edited(mockAc1Plates[0]))
+  vi.mocked(deletePlate).mockResolvedValue(edited(mockRemovedBatch))
   vi.mocked(updateSession).mockResolvedValue(mockSession)
   vi.mocked(putFeedback).mockResolvedValue({
     plate_id: 1,

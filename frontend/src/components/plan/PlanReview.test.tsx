@@ -29,6 +29,11 @@ vi.mock("@/lib/api/plates", () => ({
   confirmPlate: vi.fn(),
   unlockPlate: vi.fn(),
 }))
+vi.mock("@/lib/api/meal", () => ({
+  getRegeneratePreview: vi.fn(),
+  revertPlan: vi.fn(),
+  getAlternatives: vi.fn(),
+}))
 vi.mock("@/lib/api/generation", () => ({
   generatePlan: vi.fn(),
   regeneratePlan: vi.fn(),
@@ -64,6 +69,7 @@ const toastMock = vi.hoisted(() =>
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
 import { getPlanRun, regeneratePlan } from "@/lib/api/generation"
+import { getRegeneratePreview } from "@/lib/api/meal"
 import {
   acceptPlan,
   discardPlan,
@@ -423,14 +429,17 @@ describe("plate sheet review actions", () => {
     expect(issues).toHaveTextContent("Breaks a planning rule (H7).")
   })
 
-  it("Replace, Different side and Regenerate day regenerate their scope", async () => {
+  it("Regenerate day previews the day, then regenerates it", async () => {
     const user = userEvent.setup()
     vi.mocked(getPlan).mockResolvedValue(sidedPlan)
+    vi.mocked(getRegeneratePreview).mockResolvedValue({
+      replaced: [3],
+      also_changed: [],
+      confirmed_affected: [],
+    })
     renderWithRouter(<PlanPage />)
 
     const scopes = [
-      ["Replace", { kind: "plate", plate_id: 3 }],
-      ["Different side", { kind: "side", component_id: 50 }],
       ["Regenerate day", { kind: "day", date: "2026-11-02" }],
     ] as const
     for (const [action, scope] of scopes) {
@@ -456,13 +465,13 @@ describe("plate sheet review actions", () => {
     })
   })
 
-  it("a confirmed plate offers no Replace or Different side", async () => {
+  it("a confirmed plate offers no Something else", async () => {
     const user = userEvent.setup()
     renderWithRouter(<PlanPage />)
     await user.click(await cellButton(/^Tuesday dinner, Tofu bowl/))
     const sheet = await screen.findByRole("dialog", { name: "Tofu bowl" })
     expect(
-      within(sheet).queryByRole("button", { name: "Replace" })
+      within(sheet).queryByRole("button", { name: "Something else" })
     ).not.toBeInTheDocument()
     expect(
       within(sheet).getByRole("button", { name: "Regenerate day" })
@@ -648,7 +657,7 @@ describe("generation progress (D35)", () => {
 
     await user.click(await cellButton(MONDAY_DINNER))
     const sheet = await screen.findByRole("dialog", { name: "Chili" })
-    for (const name of ["Replace", "Different side", "Regenerate day"]) {
+    for (const name of ["Something else", "Regenerate day"]) {
       expect(within(sheet).getByRole("button", { name })).toBeDisabled()
     }
   })

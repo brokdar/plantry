@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
+import { edited } from "@/test/fixtures"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ApiError } from "@/lib/api/client"
@@ -43,7 +44,7 @@ function result(overrides: Partial<ApplyResult> = {}): ApplyResult {
 // overwrite removed, clear the created No plate overrides.
 describe("useUndoApply", () => {
   it("deletes, then restores, then clears overrides", async () => {
-    vi.mocked(deletePlate).mockResolvedValue({ removed: empty })
+    vi.mocked(deletePlate).mockResolvedValue(edited({ removed: empty }))
     vi.mocked(restorePlan).mockResolvedValue({ plate_ids: [9] })
     vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
     const removed = {
@@ -96,7 +97,7 @@ describe("useUndoApply", () => {
   })
 
   it("skips the restore when nothing was replaced", async () => {
-    vi.mocked(deletePlate).mockResolvedValue({ removed: empty })
+    vi.mocked(deletePlate).mockResolvedValue(edited({ removed: empty }))
     await invalidatedBy(
       () => useUndoApply(),
       result({ created_plate_ids: [5] })
@@ -121,7 +122,7 @@ describe("useUndoApply", () => {
   it("treats a plate that is already gone as deleted", async () => {
     vi.mocked(deletePlate)
       .mockRejectedValueOnce(new ApiError(404, "error.not_found"))
-      .mockResolvedValueOnce({ removed: empty })
+      .mockResolvedValueOnce(edited({ removed: empty }))
     vi.mocked(restorePlan).mockResolvedValue({ plate_ids: [9] })
     vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
     await invalidatedBy(
@@ -141,7 +142,7 @@ describe("useUndoApply", () => {
   it("still restores and clears after a failed delete, then reports a partial undo", async () => {
     vi.mocked(deletePlate)
       .mockRejectedValueOnce(new ApiError(500, "error.server"))
-      .mockResolvedValueOnce({ removed: empty })
+      .mockResolvedValueOnce(edited({ removed: empty }))
     vi.mocked(restorePlan).mockResolvedValue({ plate_ids: [9] })
     vi.mocked(clearAvailabilityOverride)
       .mockRejectedValueOnce(new Error("network"))
@@ -192,7 +193,7 @@ describe("useApplyResultToasts", () => {
   }
 
   it("names the created plates and offers a 6 s Undo that deletes them once", async () => {
-    vi.mocked(deletePlate).mockResolvedValue({ removed: empty })
+    vi.mocked(deletePlate).mockResolvedValue(edited({ removed: empty }))
     show(result({ created_plate_ids: [5, 6] }))
     expect(toastMock).toHaveBeenCalledTimes(1)
     const [message, opts] = toastMock.mock.calls[0]!
@@ -207,7 +208,7 @@ describe("useApplyResultToasts", () => {
   })
 
   it("Undo after overwrite restores the replaced plates", async () => {
-    vi.mocked(deletePlate).mockResolvedValue({ removed: empty })
+    vi.mocked(deletePlate).mockResolvedValue(edited({ removed: empty }))
     vi.mocked(restorePlan).mockResolvedValue({ plate_ids: [9] })
     const removed = { plates: [replacedPlate], sessions: [] }
     show(result({ created_plate_ids: [5, 6], removed }))

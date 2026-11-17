@@ -1159,7 +1159,8 @@
     "yes": "Yes",
     "no": "No",
     "opens_new_tab": "(opens in a new tab)",
-    "retry": "Try again"
+    "retry": "Try again",
+    "confirm": "Confirm"
   },
   "assistant": {
     "title": "Assistant",
@@ -1409,7 +1410,6 @@
       "plate_removed": "Plate removed",
       "batch_removed": "Batch removed",
       "plan_cleared": "Plan cleared",
-      "marked_no_plate": "Marked as No plate",
       "restored": "Restored",
       "conflict": "Can't undo: that meal was changed in the meantime.",
       "draft_discarded": "Draft discarded"
@@ -1595,9 +1595,6 @@
       "confirm_closure_other": "Confirms {{count}} plates of this batch.",
       "unlock_closure_one": "Unlocks this plate.",
       "unlock_closure_other": "Unlocks {{count}} plates of this batch.",
-      "replace_batch_one": "Replaces this plate.",
-      "replace_batch_other": "Cook plate of its batch: replaces the batch and its {{count}} plates.",
-      "replace_plate": "Replaces only this plate; its batch cooks less.",
       "different_side": "Different side",
       "regenerate_day": "Regenerate day",
       "regenerate_week": "Regenerate week",
@@ -1803,6 +1800,62 @@
       "protein_below_target": "{{day}}: {{protein}} g protein, target {{target}} g.",
       "protein_below_share": "{{day}}: protein is {{pct}} % of energy, target {{target_pct}} %.",
       "meal_not_light": "{{day}}: the light meal holds {{kcal}} kcal; aim for at most {{max}}."
+    },
+    "meal": {
+      "undo": {
+        "moved": "Meal moved",
+        "swapped": "Meals swapped",
+        "replaced": "Meal changed",
+        "copied": "Meal copied",
+        "cook_moved": "Cooking moved",
+        "away": "Marked as No plate",
+        "day_away": "Away all day",
+        "regenerated": "Day regenerated",
+        "component_added": "Food added",
+        "component_changed": "Amount changed",
+        "component_removed": "Food removed"
+      },
+      "also": {
+        "title": "This changes other meals",
+        "body": "Confirm to make these changes too.",
+        "cook_moved": "{{name}} will now be cooked {{cell}}",
+        "cooks_fresh": "{{cell}} will cook {{name}} fresh",
+        "batch_resized": "The {{name}} batch changes size"
+      },
+      "no_cells": "No free meal this week.",
+      "taken": "{{cell}} already has {{name}}.",
+      "swap": "Swap",
+      "replace": "Replace {{name}}",
+      "move_occupant": "Move {{name}} to…",
+      "day_menu": "Actions for {{day}}",
+      "away_day": "Away all day",
+      "plan_day": "Plan this day",
+      "move_to": "Move to…",
+      "copy_to": "Copy to…",
+      "cook_other_day": "Cook on another day",
+      "cook_other_day_body": "Pick when to cook {{name}}. Every meal of the batch has to come after it and stay within its keeping time."
+    },
+    "alt": {
+      "filters": "Filters",
+      "chip": {
+        "quicker": "Quicker",
+        "vegetarian": "Vegetarian",
+        "protein": "More protein",
+        "lighter": "Lighter"
+      },
+      "error": "Couldn't load the alternatives.",
+      "none": "Nothing fits. Try fewer filters.",
+      "eats_batch": "Eats a batch",
+      "new_cooking": "Adds a cooking",
+      "minutes_one": "{{count}} min",
+      "minutes_other": "{{count}} min",
+      "day_pct": "Day {{pct}} %",
+      "day_kcal": "Day {{kcal}} kcal",
+      "change_main": "Change main",
+      "change_side": "Change side",
+      "change_side_of": "Change {{name}}",
+      "add": "Add side, snack or dessert",
+      "something_else": "Something else"
     }
   },
   "batch": {

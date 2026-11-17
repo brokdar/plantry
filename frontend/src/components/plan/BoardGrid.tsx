@@ -14,6 +14,7 @@ import {
 } from "@/lib/plan/keynav"
 import { cn } from "@/lib/utils"
 
+import { DayMenu, type DayAction } from "./MealActions"
 import { LightMark } from "./LightMark"
 import { PlateCell } from "./PlateCell"
 
@@ -34,6 +35,9 @@ export interface BoardLayoutProps {
   onReplace?: (cell: BoardCell) => void
   /** Different side on a draft plate: keyboard S and the quick action. */
   onDifferentSide?: (cell: BoardCell) => void
+  /** The day header's menu (Away all day, Plan this day, Regenerate day);
+   *  absent on a read-only board. */
+  onDayAction?: (date: string, action: DayAction) => void
 }
 
 /**
@@ -52,6 +56,7 @@ export function BoardGrid({
   onMarkNoPlate,
   onReplace,
   onDifferentSide,
+  onDayAction,
 }: BoardLayoutProps) {
   const { t } = useTranslation()
   const rows = board.rows.filter((r) => !r.collapsed)
@@ -138,6 +143,14 @@ export function BoardGrid({
                   </span>
                   {day.light && (
                     <LightMark label={day.light} hearty={day.hearty} />
+                  )}
+                  {onDayAction && (
+                    <span className="ml-auto">
+                      <DayMenu
+                        label={`${day.weekday} ${day.dayNumber}`}
+                        onAction={(a) => onDayAction(day.date, a)}
+                      />
+                    </span>
                   )}
                 </span>
                 {day.nutrition && (

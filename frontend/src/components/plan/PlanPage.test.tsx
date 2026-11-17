@@ -6,8 +6,10 @@ import type { Plan } from "@/lib/api/plan"
 import i18n from "@/lib/i18n"
 import {
   mockPlan,
+  edited,
   mockRemovedBatch,
   mockSessionWithWarnings,
+  mockUndo,
 } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
@@ -15,6 +17,11 @@ vi.mock("@/lib/api/plan", () => ({
   getPlan: vi.fn(),
   clearPlan: vi.fn(),
   restorePlan: vi.fn(),
+}))
+vi.mock("@/lib/api/meal", () => ({
+  setAway: vi.fn(),
+  revertPlan: vi.fn(),
+  getRegeneratePreview: vi.fn(),
 }))
 vi.mock("@/lib/api/availability", () => ({
   setAvailabilityOverride: vi.fn(),
@@ -70,10 +77,7 @@ const toastMock = vi.hoisted(() =>
 )
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
-import {
-  clearAvailabilityOverride,
-  setAvailabilityOverride,
-} from "@/lib/api/availability"
+import { revertPlan, setAway } from "@/lib/api/meal"
 import { clearPlan, getPlan, restorePlan } from "@/lib/api/plan"
 import { listSettings } from "@/lib/api/settings"
 
@@ -202,7 +206,7 @@ describe("PlanPage", () => {
     expect(mockRemovedBatch.removed.sessions).toHaveLength(1)
   })
 
-  it("N marks a focused draft cell No plate, and Undo brings the plate back", async () => {
+  it("N marks a focused draft cell away after the preview, and Undo reverts it", async () => {
     const user = userEvent.setup()
     // A confirmed plate goes through the re-plan sheet instead (F4).
     vi.mocked(getPlan).mockResolvedValue({
@@ -211,11 +215,10 @@ describe("PlanPage", () => {
         c.plate ? { ...c, plate: { ...c.plate, state: "draft" } } : c
       ),
     })
-    vi.mocked(setAvailabilityOverride).mockResolvedValue({
-      cell: { ...mockPlan.cells[0], mode: "none" },
-      removed: mockRemovedBatch.removed,
-    })
-    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
+    vi.mocked(setAway).mockResolvedValue(
+      edited({ removed: mockRemovedBatch.removed })
+    )
+    vi.mocked(revertPlan).mockResolvedValue({ plate_ids: [], session_ids: [] })
     renderWithRouter(<PlanPage />)
     ;(
       await screen.findByRole("button", {
@@ -223,20 +226,14 @@ describe("PlanPage", () => {
       })
     ).focus()
     await user.keyboard("n")
-    await waitFor(() =>
-      expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-11-02", 2, {
-        mode: "none",
-        note: null,
-        remove_plate: true,
-      })
-    )
+    const cells = [{ date: "2026-11-02", slot_id: 2 }]
+    // The dry run first; nothing else changes, so it commits at once.
+    await waitFor(() => expect(setAway).toHaveBeenCalledWith({ cells }, true))
+    await waitFor(() => expect(setAway).toHaveBeenCalledWith({ cells }))
     await waitFor(() => expect(toastMock).toHaveBeenCalled())
     expect(lastToast().message).toBe("Marked as No plate")
     lastToast().opts.action.onClick()
-    await waitFor(() =>
-      expect(restorePlan).toHaveBeenCalledWith(mockRemovedBatch.removed)
-    )
-    expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-11-02", 2)
+    await waitFor(() => expect(revertPlan).toHaveBeenCalledWith(mockUndo))
   })
 
   it("teaches an empty window; Plan this week opens the wizard, or plan by hand focuses the first open cell", async () => {

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Plan, PlanCell } from "@/lib/api/plan"
 import type { ApplyResult, Preset } from "@/lib/api/presets"
 import i18n from "@/lib/i18n"
-import { mockPlan, mockPlate, mockSession } from "@/test/fixtures"
+import { mockPlan, mockPlate, mockSession, edited } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
 vi.mock("@/lib/api/plates", () => ({ createPlate: vi.fn() }))
@@ -19,12 +19,14 @@ vi.mock("@/lib/api/availability", () => ({
   getAvailabilityRange: vi.fn(),
 }))
 vi.mock("@/lib/api/plan", () => ({ restorePlan: vi.fn() }))
+vi.mock("@/lib/api/meal", () => ({ setAway: vi.fn(), revertPlan: vi.fn() }))
 const toastMock = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() })
 )
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
 import { setAvailabilityOverride } from "@/lib/api/availability"
+import { setAway } from "@/lib/api/meal"
 import { createPlate } from "@/lib/api/plates"
 import { applyPreset, getPresets } from "@/lib/api/presets"
 
@@ -150,15 +152,14 @@ describe("CellSheet on an empty cell", () => {
   })
 
   it("marks the meal No plate", async () => {
+    vi.mocked(setAway).mockResolvedValue(edited({ removed: null }))
     const { onClose } = await renderCell(cell("2026-11-03", 1))
     await userEvent.click(
       await screen.findByRole("button", { name: "Mark as No plate" })
     )
     await waitFor(() =>
-      expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-11-03", 1, {
-        mode: "none",
-        note: null,
-        remove_plate: false,
+      expect(setAway).toHaveBeenCalledWith({
+        cells: [{ date: "2026-11-03", slot_id: 1 }],
       })
     )
     expect(onClose).toHaveBeenCalled()
