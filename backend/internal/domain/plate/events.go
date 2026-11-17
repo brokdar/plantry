@@ -251,7 +251,7 @@ func plateJSON(p *Plate) (json.RawMessage, error) {
 		sp.Feedback = &SnapshotFeedback{Status: p.Feedback.Status, Note: p.Feedback.Note, RatedAt: p.Feedback.RatedAt}
 	}
 	for i, c := range p.Components {
-		sc := SnapshotComponent{FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, Grams: c.Grams, SortOrder: c.SortOrder}
+		sc := SnapshotComponent{FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, Grams: c.Grams, SortOrder: c.SortOrder, Position: c.Position}
 		if c.CookSessionID != nil {
 			sc.Session = &SessionLink{ID: *c.CookSessionID}
 		}

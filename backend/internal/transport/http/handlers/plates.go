@@ -61,11 +61,14 @@ type componentInput struct {
 	Amount        *float64 `json:"amount,omitempty"`
 	Unit          *string  `json:"unit,omitempty"`
 	CookSessionID *int64   `json:"cook_session_id,omitempty"`
+	// Position is main, side or extra; empty means derived.
+	Position string `json:"position,omitempty"`
 }
 
 func (c componentInput) toComponent() plate.PlateComponent {
 	return plate.PlateComponent{
 		FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, CookSessionID: c.CookSessionID,
+		Position: plate.Position(c.Position),
 	}
 }
 

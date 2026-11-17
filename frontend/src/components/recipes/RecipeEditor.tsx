@@ -67,6 +67,7 @@ import {
   useDeleteFood,
   useFoodNutrition,
   useSetDietClass,
+  useSetNoCook,
   useVariants,
 } from "@/lib/queries/foods"
 import { fromIngredients, type IngredientInput } from "@/lib/domain/nutrition"
@@ -75,6 +76,7 @@ import type { ComposedFood } from "@/lib/api/foods"
 import { ApiError } from "@/lib/api/client"
 
 import { DietClassSelect } from "./DietClassSelect"
+import { NoCookSelect } from "./NoCookSelect"
 import { IngredientRow } from "./IngredientRow"
 import { NutritionCompletenessWarning } from "./NutritionCompletenessWarning"
 
@@ -107,6 +109,7 @@ export function RecipeEditor({
           keep_days: component.keep_days ?? null,
           freezable: component.freezable ?? null,
           diet_class: dietOverride(component),
+          no_cook: noCookOverride(component),
           notes: component.notes,
           source_url: component.source_url ?? "",
           description: component.description ?? null,
@@ -135,6 +138,7 @@ export function RecipeEditor({
           keep_days: null,
           freezable: null,
           diet_class: null,
+          no_cook: null,
           notes: null,
           source_url: "",
           description: null,
@@ -161,6 +165,7 @@ export function RecipeEditor({
   const deleteMutation = useDeleteFood()
   const uploadMutation = useUploadImage()
   const dietMutation = useSetDietClass()
+  const noCookMutation = useSetNoCook()
   const { data: variantsData } = useVariants(component?.id ?? 0)
   const { data: savedNutrition } = useFoodNutrition(component?.id ?? 0)
 
@@ -244,6 +249,12 @@ export function RecipeEditor({
             dietClass: values.diet_class,
           })
         }
+        if (values.no_cook !== noCookOverride(component)) {
+          await noCookMutation.mutateAsync({
+            id: component.id,
+            value: values.no_cook,
+          })
+        }
       } else {
         const created = await createMutation.mutateAsync(input)
         if (values.diet_class) {
@@ -251,6 +262,11 @@ export function RecipeEditor({
           // mutation and must not stop the save (a retry would duplicate it).
           await dietMutation
             .mutateAsync({ id: created.id, dietClass: values.diet_class })
+            .catch(() => undefined)
+        }
+        if (values.no_cook !== null) {
+          await noCookMutation
+            .mutateAsync({ id: created.id, value: values.no_cook })
             .catch(() => undefined)
         }
         if (stagedImage) {
@@ -495,6 +511,28 @@ export function RecipeEditor({
                       testId="recipe-diet-class"
                     />
                     <FormDescription>{t("diet.editor_hint")}</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="no_cook"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("no_cook.label")}</FormLabel>
+                    <NoCookSelect
+                      value={field.value}
+                      effective={
+                        component?.no_cook_source === "user"
+                          ? undefined
+                          : component?.no_cook
+                      }
+                      onChange={field.onChange}
+                      className="w-full md:pointer-fine:min-h-9"
+                      testId="recipe-no-cook"
+                    />
+                    <FormDescription>{t("no_cook.hint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1021,6 +1059,11 @@ function computePerPortionMacros(
     fiber: total.fiber / portions,
     sodium: total.sodium / portions,
   }
+}
+
+/** The recipe's own "needs no cooking" flag, or null when automatic. */
+function noCookOverride(food: ComposedFood): boolean | null {
+  return food.no_cook_source === "user" ? food.no_cook : null
 }
 
 /** The recipe's own diet class, or null when it follows the ingredients. */

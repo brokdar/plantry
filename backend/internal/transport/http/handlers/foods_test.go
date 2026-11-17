@@ -48,6 +48,7 @@ func setupFoodRouterWithStore(t *testing.T, store *imagestore.Store) http.Handle
 			r.Post("/favorite", h.SetFavorite)
 			r.Put("/shop-section", h.SetShopSection)
 			r.Put("/diet-class", h.SetDietClass)
+			r.Put("/no-cook", h.SetNoCook)
 			r.Get("/portions", h.ListPortions)
 			r.Post("/portions", h.UpsertPortion)
 			r.Delete("/portions/{unit}", h.DeletePortion)

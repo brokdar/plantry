@@ -395,6 +395,7 @@ func mapPlateComponentToDomain(row *sqlcgen.PlateComponent, pc *plate.PlateCompo
 	pc.Grams = fromNullFloat(row.Grams)
 	pc.GramsSource = fromNullString(row.GramsSource)
 	pc.CookSessionID = fromNullInt64(row.CookSessionID)
+	pc.Position = plate.Position(row.Position)
 }
 
 func setComponentFood(pc *plate.PlateComponent, name, kind string, role, image sql.NullString) {
@@ -409,6 +410,10 @@ func setComponentFood(pc *plate.PlateComponent, name, kind string, role, image s
 // sql.Null* wrappers. Used by Create, CreateComponent and UpdateComponent so
 // the null-handling is in one place.
 func plateComponentParams(pc *plate.PlateComponent) sqlcgen.CreatePlateComponentParams {
+	position := pc.Position
+	if position == "" {
+		position = plate.PositionSide
+	}
 	return sqlcgen.CreatePlateComponentParams{
 		PlateID:       pc.PlateID,
 		FoodID:        pc.FoodID,
@@ -419,5 +424,6 @@ func plateComponentParams(pc *plate.PlateComponent) sqlcgen.CreatePlateComponent
 		GramsSource:   toNullString(pc.GramsSource),
 		CookSessionID: toNullInt64(pc.CookSessionID),
 		SortOrder:     int64(pc.SortOrder),
+		Position:      string(position),
 	}
 }

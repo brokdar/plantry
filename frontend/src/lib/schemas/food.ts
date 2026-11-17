@@ -22,6 +22,17 @@ export const DIET_CLASSES = [
   "omnivore",
 ] as const satisfies readonly DietClass[]
 
+/** The roles a leaf may carry as an override (main and standalone are
+ *  recipe-only). */
+export const LEAF_ROLES = [
+  "side_starch",
+  "side_veg",
+  "side_protein",
+  "sauce",
+  "drink",
+  "dessert",
+] as const
+
 // Optional nutrient: coerces "" → null so empty inputs serialize correctly.
 const optionalNutrient = z.preprocess(
   (v) => (v === "" || v === undefined ? null : v),
@@ -31,6 +42,11 @@ const optionalNutrient = z.preprocess(
 const leafBase = z.object({
   kind: z.literal("leaf"),
   name: z.string().min(1),
+  // The role override; null follows the store section.
+  role: z.enum(LEAF_ROLES).nullable().default(null),
+  // The "needs no cooking" override (null = automatic). Saved through
+  // PUT /api/foods/{id}/no-cook, not the food payload.
+  no_cook: z.boolean().nullable().default(null),
   source: z.string().optional().default("manual"),
   barcode: z.string().nullable().optional(),
   off_id: z.string().nullable().optional(),
@@ -104,6 +120,9 @@ export const composedFoodSchema = z.object({
     z.coerce.number().int().min(1).max(7).nullable()
   ),
   freezable: z.boolean().nullable().default(null),
+  // The "needs no cooking" override (null = automatic); saved through
+  // PUT /api/foods/{id}/no-cook, not the food payload.
+  no_cook: z.boolean().nullable().default(null),
   // The diet class override (D28); null follows the ingredients. Saved
   // through PUT /api/foods/{id}/diet-class, not the food payload.
   diet_class: z.enum(DIET_CLASSES).nullable().default(null),

@@ -152,6 +152,8 @@ describe("IngredientTable", () => {
           ...mockChickenBreast,
           diet_class: "vegan",
           diet_class_source: "user",
+          no_cook: false,
+          no_cook_source: "derived",
         },
       ],
       total: 1,

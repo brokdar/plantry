@@ -8,6 +8,45 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 )
 
+// Role sources of EffectiveRole.
+const (
+	RoleSourceUser    = "user"
+	RoleSourceDerived = "derived"
+)
+
+// EffectiveRole is the role planning and the agent read for f and where it
+// comes from. A composed food has its stored role (source user). A leaf has
+// its stored role as an override (user), else one derived from its store
+// section (SectionOf): produce is side_veg, bakery side_starch, meat and
+// fish side_protein, anything else none (nil, empty source). It lives here,
+// not in package food, because the section classifier does.
+func EffectiveRole(f *food.Food) (*food.Role, string) {
+	if f.Role != nil {
+		return f.Role, RoleSourceUser
+	}
+	if f.Kind != food.KindLeaf {
+		return nil, ""
+	}
+	var r food.Role
+	switch SectionOf(f) {
+	case food.SectionProduce:
+		r = food.RoleSideVeg
+	case food.SectionBakery:
+		r = food.RoleSideStarch
+	case food.SectionMeatFish:
+		r = food.RoleSideProtein
+	default:
+		return nil, ""
+	}
+	return &r, RoleSourceDerived
+}
+
+// RoleOf is EffectiveRole without the source, for plate.Deps.EffectiveRole.
+func RoleOf(f *food.Food) *food.Role {
+	r, _ := EffectiveRole(f)
+	return r
+}
+
 // SectionOf returns a leaf's effective store section (D18): its override,
 // or the section classified from its name.
 func SectionOf(f *food.Food) food.ShopSection {

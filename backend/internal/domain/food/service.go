@@ -348,8 +348,8 @@ func (s *Service) validate(f *Food) error {
 		if f.ReferencePortions != nil {
 			return fmt.Errorf("%w: leaf foods cannot have reference_portions", domain.ErrInvalidInput)
 		}
-		if f.Role != nil {
-			return fmt.Errorf("%w: leaf foods cannot have a role", domain.ErrInvalidInput)
+		if f.Role != nil && !validLeafRoles[*f.Role] {
+			return fmt.Errorf("%w: leaf foods cannot have role %q", domain.ErrInvalidInput, *f.Role)
 		}
 		if f.VariantGroupID != nil {
 			return fmt.Errorf("%w: leaf foods cannot have a variant group", domain.ErrInvalidInput)

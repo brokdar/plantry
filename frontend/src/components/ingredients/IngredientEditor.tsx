@@ -19,9 +19,17 @@ import {
   FormItem,
   FormLabel,
   FormControl,
+  FormDescription,
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Tooltip,
   TooltipContent,
@@ -37,6 +45,7 @@ import {
   VITAMIN_FIELDS,
 } from "./ExtendedNutrientFieldSet"
 import { IngredientMetaToolbar } from "./IngredientMetaToolbar"
+import { NoCookSelect } from "@/components/recipes/NoCookSelect"
 import { LookupPanel } from "./LookupPanel"
 import { MacroFieldSet } from "./MacroFieldSet"
 import { PortionsEditor, type StagedPortion } from "./PortionsEditor"
@@ -46,9 +55,14 @@ import {
   type ExtendedNutrientKey,
 } from "@/lib/api/foods"
 
-import { leafFoodSchema, type LeafFoodFormValues } from "@/lib/schemas/food"
+import {
+  LEAF_ROLES,
+  leafFoodSchema,
+  type LeafFoodFormValues,
+} from "@/lib/schemas/food"
 import {
   useCreateFood,
+  useSetNoCook,
   useUpdateFood,
   useUpsertPortion,
 } from "@/lib/queries/foods"
@@ -62,6 +76,9 @@ interface IngredientEditorProps {
   onDeleted?: () => void
   onCancel?: () => void
 }
+
+/** The role select's "no override" item (a Select item needs a value). */
+const NO_ROLE = "none"
 
 const MACRO_WATCH_FIELDS = [
   "kcal_100g",
@@ -86,6 +103,8 @@ function toFormValues(input?: LeafFood | LookupCandidate): LeafFoodFormValues {
     return {
       kind: "leaf",
       name: "",
+      role: null,
+      no_cook: null,
       source: "manual",
       barcode: null,
       off_id: null,
@@ -116,6 +135,8 @@ function toFormValues(input?: LeafFood | LookupCandidate): LeafFoodFormValues {
   return {
     kind: "leaf",
     name: input.name,
+    role: isIngredient ? leafRoleOverride(input) : null,
+    no_cook: isIngredient ? noCookOverride(input) : null,
     source: input.source ?? "manual",
     barcode,
     off_id,
@@ -130,6 +151,18 @@ function toFormValues(input?: LeafFood | LookupCandidate): LeafFoodFormValues {
   }
 }
 
+/** The ingredient's own role, or null when it follows the store section. */
+function leafRoleOverride(f: LeafFood): LeafFoodFormValues["role"] {
+  return f.role_source === "user" && f.role
+    ? (f.role as LeafFoodFormValues["role"])
+    : null
+}
+
+/** The ingredient's own "needs no cooking" flag, or null when automatic. */
+function noCookOverride(f: LeafFood): boolean | null {
+  return f.no_cook_source === "user" ? f.no_cook : null
+}
+
 export function IngredientEditor({
   ingredient,
   onSuccess,
@@ -139,6 +172,9 @@ export function IngredientEditor({
   const { t } = useTranslation()
   const router = useRouter()
   const isEdit = !!ingredient
+  // The role the store section gives while no override is set.
+  const derivedRole =
+    ingredient?.role_source === "derived" ? ingredient.role : null
 
   const form = useForm<LeafFoodFormValues>({
     resolver: zodResolver(leafFoodSchema) as Resolver<LeafFoodFormValues>,
@@ -150,6 +186,7 @@ export function IngredientEditor({
   const uploadMutation = useUploadImage()
   const fetchImageMutation = useFetchImageFromUrl()
   const upsertPortionMutation = useUpsertPortion()
+  const noCookMutation = useSetNoCook()
 
   const [stagedImage, setStagedImage] = useState<Blob | null>(null)
   const [stagedPortions, setStagedPortions] = useState<StagedPortion[]>([])
@@ -176,12 +213,24 @@ export function IngredientEditor({
     if (!isEdit) nameInputRef.current?.focus()
   }, [isEdit])
 
-  async function onSubmit(v: LeafFoodFormValues) {
+  async function onSubmit(values: LeafFoodFormValues) {
+    // no_cook has its own endpoint; the food payload carries the role only.
+    const { no_cook: noCook, ...v } = values
     try {
       if (isEdit && ingredient) {
         await updateMutation.mutateAsync({ id: ingredient.id, data: v })
+        if (noCook !== noCookOverride(ingredient)) {
+          await noCookMutation.mutateAsync({ id: ingredient.id, value: noCook })
+        }
       } else {
         const created = await createMutation.mutateAsync(v)
+        if (noCook !== null) {
+          // The ingredient exists now: a failed override is toasted by the
+          // mutation and must not stop the save (a retry would duplicate it).
+          await noCookMutation
+            .mutateAsync({ id: created.id, value: noCook })
+            .catch(() => undefined)
+        }
         if (stagedImage) {
           try {
             await uploadMutation.mutateAsync({
@@ -317,6 +366,71 @@ export function IngredientEditor({
                           }}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SectionCard>
+
+              <SectionCard title={t("ingredient.section_planning")}>
+                <FormField
+                  control={form.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("ingredient.role")}</FormLabel>
+                      <Select
+                        value={field.value ?? NO_ROLE}
+                        onValueChange={(v) =>
+                          field.onChange(v === NO_ROLE ? null : v)
+                        }
+                        disabled={isPending}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="ingredient-role">
+                            <SelectValue
+                              placeholder={t("ingredient.role_auto")}
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value={NO_ROLE}>
+                            {derivedRole
+                              ? `${t("ingredient.role_auto")} (${t(`component.role_${derivedRole}`)})`
+                              : t("ingredient.role_auto")}
+                          </SelectItem>
+                          {LEAF_ROLES.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {t(`component.role_${role}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {t("ingredient.role_hint")}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="no_cook"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("no_cook.label")}</FormLabel>
+                      <NoCookSelect
+                        value={field.value}
+                        effective={
+                          ingredient?.no_cook_source === "user"
+                            ? undefined
+                            : ingredient?.no_cook
+                        }
+                        onChange={field.onChange}
+                        disabled={isPending}
+                        testId="ingredient-no-cook"
+                      />
+                      <FormDescription>{t("no_cook.hint")}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

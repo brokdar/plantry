@@ -202,6 +202,7 @@ type Food struct {
 	Description       sql.NullString
 	ShopSection       sql.NullString
 	DietClass         sql.NullString
+	NoCook            sql.NullInt64
 	KeepDays          sql.NullInt64
 	Freezable         sql.NullInt64
 }
@@ -268,6 +269,7 @@ type PlateComponent struct {
 	GramsSource   sql.NullString
 	CookSessionID sql.NullInt64
 	SortOrder     int64
+	Position      string
 }
 
 type PlateEvent struct {

@@ -14,6 +14,7 @@ import {
   listVariants,
   refetchFood,
   setDietClass,
+  setNoCook,
   setFoodFavorite,
   setShopSection,
   syncPortions,
@@ -192,6 +193,22 @@ export function useSetDietClass() {
       id: number
       dietClass: DietClass | null
     }) => setDietClass(id, dietClass),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: foodKeys.all }),
+        queryClient.invalidateQueries({ queryKey: planKeys.all }),
+      ]),
+    onError: (err) => toastError(err, t),
+  })
+}
+
+/** Overrides a food's "needs no cooking" flag; `null` drops the override.
+ *  The planner reads it, so foods and the plan refetch. */
+export function useSetNoCook() {
+  const { t } = useTranslation()
+  return useMutation({
+    mutationFn: ({ id, value }: { id: number; value: boolean | null }) =>
+      setNoCook(id, value),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: foodKeys.all }),

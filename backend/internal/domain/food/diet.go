@@ -106,6 +106,12 @@ func (s *Service) SetDietClass(ctx context.Context, id int64, class *diet.Class)
 	return s.repo.SetDietClass(ctx, id, class)
 }
 
+// SetNoCook sets a food's "needs no cooking" override; nil clears it so
+// planning.NoCook derives it again.
+func (s *Service) SetNoCook(ctx context.Context, id int64, value *bool) (*Food, error) {
+	return s.repo.SetNoCook(ctx, id, value)
+}
+
 // listByDiet is List with the diet filter: the class is derived, not stored,
 // so every other filter runs in the repository, the diet filter here, and
 // the page is cut afterwards.

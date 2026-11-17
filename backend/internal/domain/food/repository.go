@@ -47,6 +47,9 @@ type Repository interface {
 	// SetDietClass writes a food's diet class override (nil clears it) and
 	// returns the food.
 	SetDietClass(ctx context.Context, id int64, class *diet.Class) (*Food, error)
+	// SetNoCook writes a food's "needs no cooking" override (nil clears it)
+	// and returns the food.
+	SetNoCook(ctx context.Context, id int64, value *bool) (*Food, error)
 }
 
 // ChildExistsChecker lets plate / template services verify a food_id refers

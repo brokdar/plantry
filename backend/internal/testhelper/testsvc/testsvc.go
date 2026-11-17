@@ -20,6 +20,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
 
@@ -35,16 +36,17 @@ func PlanWithEvents(db *sql.DB, events plate.EventLog) (*plate.Service, *availab
 	tx := sqlite.NewTxRunner(db)
 	avail := availability.NewService(sqlite.NewAvailabilityRepo(db), tx, sqlite.NewPresetRepo(db))
 	plates := plate.NewService(plate.Deps{
-		Plates:   sqlite.NewPlateRepo(db),
-		Sessions: sqlite.NewCookSessionRepo(db),
-		Slots:    sqlite.NewSlotRepo(db),
-		Foods:    sqlite.NewFoodRepo(db),
-		Cells:    avail,
-		Profile:  profile.NewService(sqlite.NewProfileRepo(db)),
-		Settings: Settings(db),
-		Events:   events,
-		Outcomes: sqlite.NewAIRunRepo(db),
-		Tx:       tx,
+		Plates:        sqlite.NewPlateRepo(db),
+		Sessions:      sqlite.NewCookSessionRepo(db),
+		Slots:         sqlite.NewSlotRepo(db),
+		Foods:         sqlite.NewFoodRepo(db),
+		Cells:         avail,
+		EffectiveRole: shopping.RoleOf,
+		Profile:       profile.NewService(sqlite.NewProfileRepo(db)),
+		Settings:      Settings(db),
+		Events:        events,
+		Outcomes:      sqlite.NewAIRunRepo(db),
+		Tx:            tx,
 	})
 	avail.WithPlates(plates)
 	return plates, avail
