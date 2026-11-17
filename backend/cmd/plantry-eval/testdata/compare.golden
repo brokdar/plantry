@@ -13,7 +13,7 @@ nutrition_maintain          1     1   0           1         1.511            14 
 nutrition_maintain_1800     1     1   0           1         4.678            14        0        0      4055       -         0
 nutrition_maintain_2500     1     1   0           1         4.992            14        0        0      4055       -         0
 protein_gap_week            1     1   0           1         0.1              8         6        0      3670       -         0
-replan_one_day              1     1   0           1         7.129            2         0        0      4118       -         0
+replan_one_day              1     1   0           1         9.727            1         0        0      4170       -         0
 single_batch_cooker         1     1   0           1         26.619           5         0        0      4019       -         0
 small_library_h8            1     1   0           1         -                7         14       0      2836       -         0
 unreachable_floor           1     1   7           1         82.092           14        0        0      12165      -         0
@@ -295,20 +295,20 @@ replan_one_day
   ok_runs             1         1        0
   hard_violations     0         0        0
   repair_attempts     0         0        0
-  plates              7         7        0
+  plates              3         3        0
   coverage            1         1        0
-  macro_daily_pct     7.129     7.129    0
-  macro_weekly_pct    0.984     0.984    0
-  cook_occasions      5         5        0
-  days_with_prepared  5         5        0
-  variety_distinct    2         2        0
+  macro_daily_pct     9.727     9.727    0
+  macro_weekly_pct    9.727     9.727    0
+  cook_occasions      1         1        0
+  days_with_prepared  1         1        0
+  variety_distinct    1         1        0
   variety_repeats     0         0        0
   explore_placed      0         0        0
   preference_fit      0         0        0
   waste_portions      0         0        0
   unknown_data_share  0         0        0
-  input_tokens        4118      4118     0
-  output_tokens       483       483      0
+  input_tokens        4170      4170     0
+  output_tokens       183       183      0
   latency_ms          0         0        0
 
 single_batch_cooker
