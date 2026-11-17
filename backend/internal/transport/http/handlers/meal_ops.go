@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -66,6 +67,21 @@ func writeMealError(w http.ResponseWriter, err error) {
 	writePlateError(w, err)
 }
 
+// dryRunner runs a mutation in a unit of work that is rolled back.
+type dryRunner interface {
+	DryRun(ctx context.Context, fn func(ctx context.Context) error) error
+}
+
+// orDryRun runs op, inside a rolled-back unit of work when the request has
+// ?dry_run=1: the response is what the call would do (its undo token names
+// events that were never kept, so it must not be used).
+func orDryRun(r *http.Request, d dryRunner, op func(ctx context.Context) error) error {
+	if r.URL.Query().Get("dry_run") != "1" {
+		return op(r.Context())
+	}
+	return d.DryRun(r.Context(), op)
+}
+
 type moveRequest struct {
 	Date     string          `json:"date"`
 	SlotID   int64           `json:"slot_id"`
@@ -98,7 +114,8 @@ func parseOccupant(raw json.RawMessage) (plate.Occupant, bool) {
 	return plate.Occupant{Kind: plate.OccupantTo, To: to}, true
 }
 
-// Move handles POST /api/plates/{id}/move with {date, slot_id, occupant?}.
+// Move handles POST /api/plates/{id}/move with {date, slot_id, occupant?};
+// ?dry_run=1 previews it.
 func (h *PlateHandler) Move(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseIDParam(w, r, "id")
 	if !ok {
@@ -115,7 +132,11 @@ func (h *PlateHandler) Move(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	res, err := h.svc.MoveMeal(r.Context(), id, to, occ)
+	var res plate.MealResult
+	err := orDryRun(r, h.svc, func(ctx context.Context) (err error) {
+		res, err = h.svc.MoveMeal(ctx, id, to, occ)
+		return err
+	})
 	if err != nil {
 		writeMealError(w, err)
 		return
@@ -136,7 +157,7 @@ type replaceRequest struct {
 
 // Replace handles POST /api/plates/{id}/replace with {position? |
 // plate_component_id?, food_id, session_id?, cook_at?, portions? |
-// amount?+unit?}.
+// amount?+unit?}; ?dry_run=1 previews it.
 func (h *PlateHandler) Replace(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseIDParam(w, r, "id")
 	if !ok {
@@ -165,7 +186,11 @@ func (h *PlateHandler) Replace(w http.ResponseWriter, r *http.Request) {
 		qty = &plate.PlateComponent{Portions: req.Portions, Amount: req.Amount, Unit: req.Unit}
 	}
 	sel := plate.Selector{Position: plate.Position(req.Position), ComponentID: req.PlateComponentID}
-	res, err := h.svc.ReplaceComponent(r.Context(), id, sel, req.FoodID, src, qty)
+	var res plate.MealResult
+	err := orDryRun(r, h.svc, func(ctx context.Context) (err error) {
+		res, err = h.svc.ReplaceComponent(ctx, id, sel, req.FoodID, src, qty)
+		return err
+	})
 	if err != nil {
 		writeMealError(w, err)
 		return

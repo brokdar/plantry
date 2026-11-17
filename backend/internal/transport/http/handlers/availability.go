@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -218,7 +219,8 @@ func (h *AvailabilityHandler) PutOverride(w http.ResponseWriter, r *http.Request
 
 // PostAway handles POST /api/availability/away?today=: the cells (or, with
 // date alone, every active slot of that date that is not routine) become
-// No plate and their plates are removed in one unit of work.
+// No plate and their plates are removed in one unit of work; ?dry_run=1
+// previews it.
 func (h *AvailabilityHandler) PostAway(w http.ResponseWriter, r *http.Request) {
 	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
 	if !ok {
@@ -250,7 +252,11 @@ func (h *AvailabilityHandler) PostAway(w http.ResponseWriter, r *http.Request) {
 		}
 		in.Date = &d
 	}
-	res, err := h.svc.SetAway(r.Context(), in)
+	var res availability.AwayResult
+	err := orDryRun(r, h.svc, func(ctx context.Context) (err error) {
+		res, err = h.svc.SetAway(ctx, in)
+		return err
+	})
 	if err != nil {
 		availabilityError(w, err)
 		return

@@ -107,6 +107,10 @@ func (s *stubPlateService) Unlock(_ context.Context, seed plate.RowSet) (plate.R
 	return seed, nil
 }
 
+func (s *stubPlateService) DryRun(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
+}
+
 // ── router helper ─────────────────────────────────────────────────────────────
 
 func newPlateRouter(stub *stubPlateService) http.Handler {

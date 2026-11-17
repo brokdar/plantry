@@ -590,3 +590,9 @@ type cellKey struct {
 	date   string
 	slotID int64
 }
+
+// DryRun runs fn (a mutation of this service) in a unit of work that is
+// rolled back: the away preview (?dry_run=1).
+func (s *Service) DryRun(ctx context.Context, fn func(ctx context.Context) error) error {
+	return domain.DryRun(ctx, s.tx, fn)
+}

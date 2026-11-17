@@ -29,6 +29,7 @@ type platesService interface {
 	RemoveComponent(ctx context.Context, componentID int64) (*plate.Plate, error)
 	Confirm(ctx context.Context, seed plate.RowSet) (plate.RowSet, error)
 	Unlock(ctx context.Context, seed plate.RowSet) (plate.RowSet, error)
+	DryRun(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 // PlateHandler exposes plate + plate_component mutation endpoints.
