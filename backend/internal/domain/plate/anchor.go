@@ -86,7 +86,7 @@ func reanchor(in anchorInput) (Link, bool) {
 	}
 	ahead := !cookHasMeal && in.Before.cookedAhead(in.Order)
 	move := (!cookHasMeal && !ahead) || (ahead && in.CookNone) ||
-		(in.Restore && Before(first.Cell, cook, in.Order))
+		(in.Restore && len(in.Before.cells) > 0 && Before(first.Cell, cook, in.Order))
 	if !move {
 		return Link{}, false
 	}
