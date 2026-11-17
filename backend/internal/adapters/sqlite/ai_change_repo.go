@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite/sqlcgen"
@@ -64,8 +65,8 @@ func (r *AIChangeRepo) CreateChange(ctx context.Context, c *agent.Change) error 
 			return err
 		}
 	}
-	if c.CellBefore != nil {
-		s, err := marshalString(c.CellBefore)
+	if len(c.Cells) > 0 {
+		s, err := marshalString(c.Cells)
 		if err != nil {
 			return err
 		}
@@ -144,10 +145,11 @@ func mapAIChange(row sqlcgen.AiChange) (*agent.Change, error) {
 		}
 	}
 	if row.AvailabilityBeforeJson.Valid {
-		c.CellBefore = &agent.CellBefore{}
-		if err := json.Unmarshal([]byte(row.AvailabilityBeforeJson.String), c.CellBefore); err != nil {
+		cells, err := decodeCells(row.AvailabilityBeforeJson.String)
+		if err != nil {
 			return nil, fmt.Errorf("ai change %d availability: %w", row.ID, err)
 		}
+		c.Cells = cells
 	}
 	var err error
 	if c.CreatedAt, err = time.Parse(timeLayout, row.CreatedAt); err != nil {
@@ -177,4 +179,19 @@ func nullInt64s(ids []int64) []sql.NullInt64 {
 		out[i] = sql.NullInt64{Int64: id, Valid: true}
 	}
 	return out
+}
+
+// decodeCells reads availability_before_json: a list of cells, or the single
+// cell object of rows written before a change could hold several cells.
+func decodeCells(raw string) ([]agent.CellBefore, error) {
+	if strings.HasPrefix(strings.TrimSpace(raw), "{") {
+		var one agent.CellBefore
+		if err := json.Unmarshal([]byte(raw), &one); err != nil {
+			return nil, err
+		}
+		return []agent.CellBefore{one}, nil
+	}
+	var cells []agent.CellBefore
+	err := json.Unmarshal([]byte(raw), &cells)
+	return cells, err
 }

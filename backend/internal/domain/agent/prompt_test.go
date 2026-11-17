@@ -42,6 +42,49 @@ func TestPrompt_ToolRules(t *testing.T) {
 	}
 }
 
+// v16: meal edits, moves as swaps, absence as one away op, replacements via
+// find_alternatives with minutes, tool limits and one undo per request.
+func TestPrompt_MealEditRules(t *testing.T) {
+	prompt := ComposePrompt(nil, "", time.Time{})
+	for _, want := range []string{
+		"change only what the user asked", "offer the fix", "only to clear a hard violation (H1-H9)",
+		`occupant "swap"`, "also_changed entry in plain words",
+		"one away op", "A day away is not judged for calories",
+		"call find_alternatives", "cite total_minutes",
+		"only do what your tools do", "logging food eaten out", "say so plainly",
+		"one change the user can undo", "all ops of a request in one call",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt must mention %q", want)
+		}
+	}
+	if strings.Contains(prompt, `"something different" or "another X" requests prefer regenerate`) {
+		t.Error("replacements go through find_alternatives, not regenerate")
+	}
+}
+
+// The "not done while an issue is open" rule covers hard issues only; a soft
+// issue is reported with the fix offered, never applied unasked (no
+// contradiction with "offer the fix" and the protein instruction).
+func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
+	prompt := ComposePrompt(nil, "", time.Time{})
+	for _, want := range []string{
+		"A request is not done while a hard issue (violation H1-H9) it caused is open",
+		"Fix a new hard issue with another apply_changes call",
+		"A soft issue (S2-S8) is not fixed on your own: report it and offer the fix",
+		"Close protein gaps by offering",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt must contain %q", want)
+		}
+	}
+	for _, gone := range []string{"Close protein gaps actively", "Fix a new issue with another apply_changes call"} {
+		if strings.Contains(prompt, gone) {
+			t.Errorf("prompt must not contain %q", gone)
+		}
+	}
+}
+
 // S5 (carb and fat ranges) ranks last: after preferences, never at the cost
 // of kcal or protein.
 func TestPrompt_S5RanksLowest(t *testing.T) {

@@ -1,0 +1,129 @@
+{
+  "_comment": [
+    "Chat script for assistant-move.spec.ts (meal editing slice 4). A template: fill the placeholders, write the result to a unique path and PUT it as ai.fake_script.",
+    "\"{{a}}\", \"{{b}}\" (food ids), \"{{dinner}}\" (slot id) and \"{{plate_a}}\" are replaced with their quotes, so they become numbers; {{mon}} and {{tue}} are replaced inside the date strings.",
+    "Sequences by the user text: \"plan\" adds the two dinners (agent drafts), \"swap\" moves the Monday dinner onto Tuesday with occupant swap."
+  ],
+  "turns": [
+    {
+      "match_user": "plan",
+      "events": [
+        {
+          "delay_ms": 10,
+          "type": "message_start",
+          "payload": { "model": "fake-e2e" }
+        },
+        {
+          "delay_ms": 10,
+          "type": "tool_call_start",
+          "payload": { "id": "tu_m1", "name": "apply_changes" }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_m1",
+            "tool_name": "apply_changes",
+            "tool_input": {
+              "ops": [
+                {
+                  "op": "add",
+                  "food_id": "{{a}}",
+                  "date": "{{mon}}",
+                  "slot_id": "{{dinner}}",
+                  "portions": 1
+                },
+                {
+                  "op": "add",
+                  "food_id": "{{b}}",
+                  "date": "{{tue}}",
+                  "slot_id": "{{dinner}}",
+                  "portions": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "usage": { "input_tokens": 900, "output_tokens": 60 }
+    },
+    {
+      "match_user": "plan",
+      "events": [
+        {
+          "delay_ms": 10,
+          "type": "message_start",
+          "payload": { "model": "fake-e2e" }
+        },
+        {
+          "delay_ms": 10,
+          "type": "assistant_delta",
+          "payload": { "text": "Both dinners are planned." }
+        }
+      ],
+      "stop_reason": "end_turn",
+      "message": {
+        "content": [{ "type": "text", "text": "Both dinners are planned." }]
+      },
+      "usage": { "input_tokens": 1000, "output_tokens": 20 }
+    },
+    {
+      "match_user": "swap",
+      "events": [
+        {
+          "delay_ms": 10,
+          "type": "message_start",
+          "payload": { "model": "fake-e2e" }
+        },
+        {
+          "delay_ms": 10,
+          "type": "tool_call_start",
+          "payload": { "id": "tu_m2", "name": "apply_changes" }
+        }
+      ],
+      "stop_reason": "tool_use",
+      "message": {
+        "content": [
+          {
+            "type": "tool_use",
+            "tool_use_id": "tu_m2",
+            "tool_name": "apply_changes",
+            "tool_input": {
+              "ops": [
+                {
+                  "op": "move",
+                  "plate_id": "{{plate_a}}",
+                  "to": { "date": "{{tue}}", "slot_id": "{{dinner}}" },
+                  "occupant": "swap"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "usage": { "input_tokens": 900, "output_tokens": 60 }
+    },
+    {
+      "match_user": "swap",
+      "events": [
+        {
+          "delay_ms": 10,
+          "type": "message_start",
+          "payload": { "model": "fake-e2e" }
+        },
+        {
+          "delay_ms": 10,
+          "type": "assistant_delta",
+          "payload": { "text": "Swapped the two dinners." }
+        }
+      ],
+      "stop_reason": "end_turn",
+      "message": {
+        "content": [{ "type": "text", "text": "Swapped the two dinners." }]
+      },
+      "usage": { "input_tokens": 1000, "output_tokens": 20 }
+    }
+  ]
+}

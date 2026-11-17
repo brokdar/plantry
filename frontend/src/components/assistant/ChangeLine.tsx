@@ -1,8 +1,9 @@
 import { Check, Undo2 } from "lucide-react"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
-import { changeSentence } from "@/lib/assistant/change-text"
+import { changeSentence, hiddenOpCount } from "@/lib/assistant/change-text"
 import type { Change } from "@/lib/domain/assistantEvents"
 import type { ChangeLineState } from "@/lib/stores/assistant-stream"
 
@@ -16,7 +17,9 @@ interface ChangeLineProps {
 }
 
 /** One applied agent write as a sentence with its Undo (D16). The button
- *  stays until the change is undone or later edits make a revert unsafe. */
+ *  stays until the change is undone or later edits make a revert unsafe.
+ *  A change of more than three ops shows the first three and a "+N more"
+ *  toggle that expands the full list. */
 export function ChangeLine({
   change,
   state,
@@ -24,7 +27,13 @@ export function ChangeLine({
   hideUndoneLabel,
 }: ChangeLineProps) {
   const { t, i18n } = useTranslation()
-  const sentence = changeSentence(t, i18n, change)
+  const [expanded, setExpanded] = useState(false)
+  const hidden = hiddenOpCount(change)
+  const sentence = changeSentence(t, i18n, change, { allOps: true })
+  const shown =
+    hidden > 0
+      ? changeSentence(t, i18n, change, { allOps: expanded, omitMore: true })
+      : sentence
   const blocked =
     state === "confirmed" ||
     (state === null && change.undo_blocked === "confirmed")
@@ -36,11 +45,26 @@ export function ChangeLine({
     >
       <span className="flex min-w-0 items-center gap-2">
         <Check className="size-4 shrink-0 text-success" aria-hidden="true" />
-        <span
-          data-testid="assistant-change-text"
-          className={state === "undone" ? "text-ink-muted line-through" : ""}
-        >
-          {sentence}
+        <span>
+          <span
+            data-testid="assistant-change-text"
+            className={state === "undone" ? "text-ink-muted line-through" : ""}
+          >
+            {shown}
+          </span>
+          {hidden > 0 && (
+            <button
+              type="button"
+              data-testid="assistant-change-more"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((v) => !v)}
+              className="ml-1.5 rounded-sm text-caption text-ink-muted underline underline-offset-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              {expanded
+                ? t("assistant.change.show_less")
+                : t("assistant.change.op_more", { count: hidden })}
+            </button>
+          )}
         </span>
       </span>
       {state === "undone" && !hideUndoneLabel && (

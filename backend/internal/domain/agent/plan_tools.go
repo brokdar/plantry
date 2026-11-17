@@ -36,7 +36,7 @@ var getPlanSchema = `{
   "additionalProperties":false
 }`
 
-const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,components:[{id,food_id,name,portions?|amount+unit?,session_id?}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation (compact: only the requested range, kcal whole and other numbers one decimal, a field that is 0, false or empty left out so absent means 0 / false / none; complete and nutrition_complete show only when false):{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete?,nutrition_missing?}], plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,components:[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}] (food, role and session are in the cells), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (weekly kcal ledger over the whole window, complete days only; with light requests target_kcal is the target after them and normal_target_kcal the normal one, and a light day shows light (meal|day) and normal_target_kcal), issues:[issue], totals:{violations,warnings,soft}}}. Pass light to evaluate the plan under the user's light requests. kcal and protein are per eater, also per plate and per component. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations (H1-H9) are hard rules, soft issues (S2 day kcal outside the day band of target, S3 protein under 90% of the day target (g/kg) or the share under target, or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range or a DGE food rule missed (week_meat_above_dge over 300 g, week_fish_below_dge, week_legumes_below_dge), S6 a light meal that is not lighter; only S2 and S3 carry computed options. an option's op is a ready apply_changes op. evaluation.issues is what the user sees; the top-level issues are the board's.`
+const getPlanDescription = `Read the plan window (optionally only from..to, both inclusive, inside the window): every cell, the cook sessions, the checker's issues and the evaluation. Returns JSON {window:{start,end,today,shopping_day}, cells:[{date,slot_id,mode,preset_name?,note?,plate:{id,state draft|confirmed,eaters,reason?,components:[{id,food_id,name,portions?|amount+unit?,session_id?,position main|side|extra,batch? cook|leftover|frozen (cook: this meal is the batch's cooking meal)}]}|null}], sessions:[{id,food_id,name,cook_date,cook_slot_id,portions,frozen_portions,state,cooked,consumed,frozen_consumed,use_by,links:[{plate_id,component_id,portions,kind}],warnings:[{code,plate_id?}]}], issues:[issue], draft:{plates,sessions,run_id,notes}|null, evaluation (compact: only the requested range, kcal whole and other numbers one decimal, a field that is 0, false or empty left out so absent means 0 / false / none; complete and nutrition_complete show only when false):{days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete?,nutrition_missing?}], plates:[{date,slot_id,plate_id,eaters,kcal,protein_g,components:[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}] (food, role and session are in the cells), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (weekly kcal ledger over the whole window, complete days only; with light requests target_kcal is the target after them and normal_target_kcal the normal one, and a light day shows light (meal|day) and normal_target_kcal), issues:[issue], totals:{violations,warnings,soft}}}. Pass light to evaluate the plan under the user's light requests. kcal and protein are per eater, also per plate and per component. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[...]}: violations (H1-H9) are hard rules, soft issues (S2 day kcal outside the day band of target, S3 protein under 90% of the day target (g/kg) or the share under target, or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range or a DGE food rule missed (week_meat_above_dge over 300 g, week_fish_below_dge, week_legumes_below_dge), S6 a light meal that is not lighter; only S2 and S3 carry computed options. an option's op is a ready apply_changes op. evaluation.issues is what the user sees; the top-level issues are the board's.`
 
 // toolGetPlan returns the chat window's plan: the same cells, sessions and
 // issues as GET /api/plan for that window, in a compact shape (D10), plus
@@ -164,6 +164,10 @@ type planComponentOut struct {
 	Amount    *float64 `json:"amount,omitempty"`
 	Unit      *string  `json:"unit,omitempty"`
 	SessionID *int64   `json:"session_id,omitempty"`
+	Position  string   `json:"position,omitempty"`
+	// Batch is a recipe's role in its batch: cook (this meal is the batch's
+	// cooking meal), leftover or frozen.
+	Batch string `json:"batch,omitempty"`
 }
 
 type planSessionOut struct {
@@ -215,13 +219,19 @@ func planOutput(p *planview.Plan) planOut {
 	if out.Issues == nil {
 		out.Issues = []planning.Issue{}
 	}
+	batch := map[int64]string{} // component id -> batch role
+	for _, v := range p.Sessions {
+		for _, l := range v.Links {
+			batch[l.ComponentID] = batchRole(l.Kind)
+		}
+	}
 	for i, c := range p.Cells {
 		out.Cells[i] = planCellOut{
 			Date: c.Date.Format(time.DateOnly), SlotID: c.SlotID, CellMode: string(c.Mode),
 			PresetName: c.PresetName, Note: c.Note,
 		}
 		if c.Plate != nil {
-			out.Cells[i].Plate = planPlate(c.Plate)
+			out.Cells[i].Plate = planPlate(c.Plate, batch)
 		}
 	}
 	for i, v := range p.Sessions {
@@ -251,7 +261,16 @@ func planSession(v plate.SessionView) planSessionOut {
 	return s
 }
 
-func planPlate(p *plate.Plate) *planPlateOut {
+// batchRole names a link kind for the model: the fresh link is the batch's
+// cooking meal.
+func batchRole(k plate.LinkKind) string {
+	if k == plate.KindFresh {
+		return "cook"
+	}
+	return string(k)
+}
+
+func planPlate(p *plate.Plate, batch map[int64]string) *planPlateOut {
 	out := &planPlateOut{
 		ID: p.ID, State: string(p.State), Eaters: p.Eaters, Reason: p.Reason,
 		Components: make([]planComponentOut, len(p.Components)),
@@ -260,6 +279,7 @@ func planPlate(p *plate.Plate) *planPlateOut {
 		out.Components[i] = planComponentOut{
 			ID: c.ID, FoodID: c.FoodID, Name: c.FoodName,
 			Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, SessionID: c.CookSessionID,
+			Position: string(c.Position), Batch: batch[c.ID],
 		}
 	}
 	return out
@@ -275,7 +295,9 @@ type Planner interface {
 // CellWriter writes the availability overrides of cells
 // (availability.Service).
 type CellWriter interface {
-	SetOverride(ctx context.Context, in availability.OverrideInput) (availability.Cell, *plate.PlanSnapshot, error)
+	SetOverrideMeals(ctx context.Context, in availability.OverrideInput) (availability.Cell, *plate.MealResult, error)
+	// SetAway marks cells "none" and removes their plates (the away op).
+	SetAway(ctx context.Context, in availability.AwayInput) (availability.AwayResult, error)
 	ClearOverride(ctx context.Context, date time.Time, slotID int64) error
 	// Override returns the cell's stored override, nil when none.
 	Override(ctx context.Context, date time.Time, slotID int64) (*availability.Override, error)
@@ -713,7 +735,7 @@ func changedPlates(ctx context.Context, svc Services, from, to time.Time, runID 
 			changed = changed || (c.CookSessionID != nil && byRun[*c.CookSessionID])
 		}
 		if changed {
-			out = append(out, changedPlateOut{Date: p.DateString(), SlotID: p.SlotID, Plate: planPlate(p)})
+			out = append(out, changedPlateOut{Date: p.DateString(), SlotID: p.SlotID, Plate: planPlate(p, nil)})
 		}
 	}
 	return out, nil

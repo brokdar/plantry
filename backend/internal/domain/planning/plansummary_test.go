@@ -50,7 +50,7 @@ func TestRenderPlanSummary(t *testing.T) {
 		"- Saturday 2026-11-07\n",
 		"- Friday 2026-11-13\n",
 		"plate_id 11, confirmed, 2 eaters: Chili (component_id 21, food_id ",
-		", session_id 4)",
+		", session_id 4 cook)",
 		"plate_id 12, draft, 1 eater: Oats (component_id 22",
 		"60 g/eater",
 		"| none | no plate, leave empty",

@@ -41,10 +41,11 @@ type Change struct {
 	// event.
 	FirstEventID *int64
 	LastEventID  *int64
-	// CellBefore is the cell set_availability changed, as it was before.
-	CellBefore *CellBefore
-	CreatedAt  time.Time
-	UndoneAt   *time.Time
+	// Cells are the cells the call's availability ops changed, each as it
+	// was before the call and as the call left it.
+	Cells     []CellBefore
+	CreatedAt time.Time
+	UndoneAt  *time.Time
 	// Unrecorded marks a change that was made but could not be saved: it has
 	// no ID, is not undoable and is never stored.
 	Unrecorded bool
@@ -55,7 +56,7 @@ type Change struct {
 
 // Undoable reports whether the change wrote anything undo can put back.
 func (c Change) Undoable() bool {
-	return !c.Unrecorded && (c.FirstEventID != nil || c.CellBefore != nil)
+	return !c.Unrecorded && (c.FirstEventID != nil || len(c.Cells) > 0)
 }
 
 // Payload is the change as the chat stream and the conversation carry it.
@@ -67,7 +68,7 @@ func (c Change) Payload() llm.ChangePayload {
 	}
 }
 
-// CellBefore is a cell's availability override before set_availability;
+// CellBefore is a cell's availability override before an availability op;
 // Override nil means the cell had none. After is the override the call left
 // (nil: none), which undo compares with the current one to see a newer
 // manual edit.
@@ -104,14 +105,17 @@ type ChangeStore interface {
 }
 
 // changeNote is what a plan-writing tool tells Execute about its call: the
-// line's text key and params, a regenerate run it waited for and the cell
-// set_availability changed.
+// line's text key and params, a regenerate run it waited for and the cells
+// its availability ops changed.
 type changeNote struct {
 	set     bool
 	textKey string
 	params  map[string]any
 	runIDs  []int64
-	cell    *CellBefore
+	cells   []CellBefore
+	// dates are the cells' dates the call touched besides its events' (a
+	// move's source and target).
+	dates []string
 }
 
 type changeNoteKey struct{}
@@ -136,19 +140,31 @@ func noteChange(ctx context.Context, textKey string, params map[string]any) {
 	n.set, n.textKey, n.params = true, textKey, params
 }
 
+// noteDates adds dates the change line's cells cover.
+func noteDates(ctx context.Context, dates []string) {
+	n := noteFrom(ctx)
+	n.dates = append(n.dates, dates...)
+}
+
 // noteRun adds a run whose events belong to the call (regenerate's run).
 func noteRun(ctx context.Context, runID int64) {
 	n := noteFrom(ctx)
 	n.runIDs = append(n.runIDs, runID)
 }
 
-// noteCell records the cell's override before set_availability writes it and
-// the one it left.
+// noteCell records a cell's override before an availability op writes it and
+// the one it left. A cell noted again keeps its first before and takes the
+// new after, so undo restores the state before the whole call.
 func noteCell(ctx context.Context, date time.Time, slotID int64, before, after *availability.Override) {
-	noteFrom(ctx).cell = &CellBefore{
-		Date: date.Format(time.DateOnly), SlotID: slotID,
-		Override: cellOverride(before), After: cellOverride(after),
+	n := noteFrom(ctx)
+	d := date.Format(time.DateOnly)
+	for i := range n.cells {
+		if n.cells[i].Date == d && n.cells[i].SlotID == slotID {
+			n.cells[i].After = cellOverride(after)
+			return
+		}
 	}
+	n.cells = append(n.cells, CellBefore{Date: d, SlotID: slotID, Override: cellOverride(before), After: cellOverride(after)})
 }
 
 func cellOverride(o *availability.Override) *CellOverride {
@@ -212,14 +228,19 @@ func (s *ToolSet) recordChange(ctx context.Context, runID int64, seq int, tool s
 	}
 	c := &Change{
 		RunID: runID, StepSeq: seq, Tool: tool, TextKey: n.textKey, Params: n.params,
-		RunIDs: runIDs, CellBefore: n.cell,
+		RunIDs: runIDs, Cells: n.cells,
 		Dates: []string{}, PlateIDs: []int64{}, SessionIDs: []int64{},
 	}
 	if c.Params == nil {
 		c.Params = map[string]any{}
 	}
-	if n.cell != nil {
-		c.Dates = append(c.Dates, n.cell.Date)
+	for _, cb := range n.cells {
+		c.Dates = append(c.Dates, cb.Date)
+	}
+	for _, d := range n.dates {
+		if d != "" {
+			c.Dates = append(c.Dates, d)
+		}
 	}
 	plates, sessions := plate.EventRows(events)
 	c.PlateIDs, c.SessionIDs = plates, sessions
@@ -340,12 +361,13 @@ func (c *Changes) confirmed(ctx context.Context, ch *Change) (bool, error) {
 
 // Undo reverts one change as the actor in ctx (the user), in one unit of
 // work: its plates and sessions go back to their state before it
-// (plate.Service.Revert) and a set_availability cell gets its override back.
+// (plate.Service.Revert) and every cell of its availability ops gets its
+// override back.
 // It fails with domain.ErrAIChangeUndone when the change was undone and
 // domain.ErrAIChangeConfirmed when one of its plates or sessions is
 // confirmed now and domain.ErrAIChangeStale, writing nothing, when one of its
-// rows has an event the change did not make or its cell's override is no
-// longer the one it wrote. A change that wrote nothing (not Undoable) is
+// rows has an event the change did not make or any of its cells' override
+// is no longer the one it wrote. A change that wrote nothing (not Undoable) is
 // domain.ErrAIChangeNotUndoable and stays as it is. It returns the rows it
 // wrote.
 func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
@@ -368,8 +390,8 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 		if blocked {
 			return fmt.Errorf("%w: change %d", domain.ErrAIChangeConfirmed, id)
 		}
-		if cb := ch.CellBefore; cb != nil {
-			if err := c.checkCell(ctx, id, *cb); err != nil {
+		for _, cb := range ch.Cells {
+			if err := c.checkCell(ctx, id, cb); err != nil {
 				return err
 			}
 		}
@@ -389,8 +411,8 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 				return err
 			}
 		}
-		if cb := ch.CellBefore; cb != nil {
-			if err := c.restoreCell(ctx, *cb); err != nil {
+		for _, cb := range ch.Cells {
+			if err := c.restoreCell(ctx, cb); err != nil {
 				return err
 			}
 		}
@@ -427,7 +449,7 @@ func (c *Changes) checkCell(ctx context.Context, id int64, cb CellBefore) error 
 		return err
 	}
 	if !sameOverride(cellOverride(cur), cb.After) {
-		return fmt.Errorf("%w: change %d: the cell was edited since", domain.ErrAIChangeStale, id)
+		return fmt.Errorf("%w: change %d: the cell %s slot %d was edited since", domain.ErrAIChangeStale, id, cb.Date, cb.SlotID)
 	}
 	return nil
 }

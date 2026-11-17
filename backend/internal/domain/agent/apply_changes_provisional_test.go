@@ -10,6 +10,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// The ops build copies (copy) and cells (away) as []map[string]any, and a move's
+// also_changed arrives as planning.Compact's []any: the walk marks all of them.
+func TestMarkProvisional_TypedListsAndAlsoChanged(t *testing.T) {
+	gone := map[string]bool{"plate_id:90": true, "session_id:92": true}
+	missing := func(kind string, id int64) bool { return gone[kind+":"+strconv.FormatInt(id, 10)] }
+
+	var alsoChanged []any
+	dec := json.NewDecoder(bytes.NewReader([]byte(`[
+	  {"what":"cooks_fresh","session_id":92,"plate_id":5},
+	  {"what":"became_cooking_meal","session_id":7,"plate_id":90},
+	  {"what":"cook_moved","session_id":7,"plate_id":5}]`)))
+	dec.UseNumber()
+	require.NoError(t, dec.Decode(&alsoChanged))
+	applied := []map[string]any{{
+		"op":           "copy",
+		"copies":       []map[string]any{{"plate_id": int64(90), "date": "2026-11-08"}, {"plate_id": int64(5), "date": "2026-11-09"}},
+		"cells":        []map[string]any{{"date": "2026-11-08", "slot_id": int64(1)}},
+		"also_changed": alsoChanged,
+	}}
+
+	markProvisional(applied, nil, missing)
+
+	copies := applied[0]["copies"].([]map[string]any)
+	assert.Equal(t, map[string]any{"provisional": true, "date": "2026-11-08"}, copies[0])
+	assert.Equal(t, map[string]any{"plate_id": int64(5), "date": "2026-11-09"}, copies[1])
+	assert.Equal(t, map[string]any{"date": "2026-11-08", "slot_id": int64(1)}, applied[0]["cells"].([]map[string]any)[0])
+	ac := applied[0]["also_changed"].([]any)
+	assert.Equal(t, map[string]any{"what": "cooks_fresh", "provisional": true, "plate_id": json.Number("5")}, ac[0])
+	assert.Equal(t, map[string]any{"what": "became_cooking_meal", "provisional": true, "session_id": json.Number("7")}, ac[1])
+	assert.Equal(t, map[string]any{"what": "cook_moved", "session_id": json.Number("7"), "plate_id": json.Number("5")}, ac[2])
+}
+
 // Ids of rows that no longer exist are stripped wherever they appear: in the
 // applied list, the plates and sessions, the issue deltas and an option's op.
 // An option whose op used one is marked provisional too; rows that exist keep

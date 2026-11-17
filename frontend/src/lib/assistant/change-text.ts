@@ -61,24 +61,48 @@ const MAX_OPS_IN_LINE = 3
 
 /** One apply_changes op (structured params, written by the backend) as a
  *  short phrase in the user's language. */
+function slotText(t: TFunction, key: unknown, language: string): string {
+  return typeof key === "string"
+    ? slotInSentence(slotLabel(t, key), language)
+    : ""
+}
+
+/** The i18n key of one op: availability by mode, a move by what happened
+ *  to the meal on the target cell, a copy by leftover or fresh. */
+function opKey(op: Record<string, unknown>): string {
+  const kind = text(op.op)
+  if (kind === "set_availability") return `op_set_availability_${text(op.mode)}`
+  if (kind === "move" && op.occupant) return `op_move_${text(op.occupant)}`
+  if (kind === "copy") return `op_copy_${text(op.as)}`
+  return `op_${kind}`
+}
+
 function opPhrase(
   t: TFunction,
   language: string,
   op: Record<string, unknown>
 ): string {
-  const kind = text(op.op)
-  const key =
-    kind === "set_availability"
-      ? `assistant.change.op_set_availability_${text(op.mode)}`
-      : `assistant.change.op_${kind}`
-  return t(key, {
+  const cells = Array.isArray(op.cells)
+    ? (op.cells as Record<string, unknown>[])
+        .map((c) =>
+          `${weekday(c.date, language)} ${slotText(t, c.slot_key, language)}`.trim()
+        )
+        .join(", ")
+    : ""
+  const days = Array.isArray(op.dates)
+    ? (op.dates as unknown[]).map((d) => weekday(d, language)).join(", ")
+    : ""
+  return t(`assistant.change.${opKey(op)}`, {
     food: text(op.food),
     to: text(op.to),
+    other: text(op.other),
     day: weekday(op.date, language),
-    slot:
-      typeof op.slot_key === "string"
-        ? slotInSentence(slotLabel(t, op.slot_key), language)
-        : "",
+    slot: slotText(t, op.slot_key, language),
+    toDay: weekday(op.to_date, language),
+    toSlot: slotText(t, op.to_slot_key, language),
+    fromDay: weekday(op.from_date, language),
+    cells,
+    days,
     portions: text(op.portions),
     eaters: text(op.eaters),
     defaultValue: t("assistant.change.fallback"),
@@ -88,23 +112,42 @@ function opPhrase(
 function opsSummary(
   t: TFunction,
   language: string,
-  ops: Record<string, unknown>[]
+  ops: Record<string, unknown>[],
+  opts: ChangeSentenceOptions
 ): string {
-  const shown = ops
-    .slice(0, MAX_OPS_IN_LINE)
-    .map((op) => opPhrase(t, language, op))
-  if (ops.length > MAX_OPS_IN_LINE) {
-    shown.push(
-      t("assistant.change.op_more", { count: ops.length - MAX_OPS_IN_LINE })
-    )
+  const max = opts.allOps ? ops.length : MAX_OPS_IN_LINE
+  const shown = ops.slice(0, max).map((op) => opPhrase(t, language, op))
+  if (ops.length > max && !opts.omitMore) {
+    shown.push(t("assistant.change.op_more", { count: ops.length - max }))
   }
   return shown.join("; ")
+}
+
+/** The ops of an apply_changes change, empty for any other line. */
+export function changeOps(
+  change: Pick<Change, "params">
+): Record<string, unknown>[] {
+  const ops = change.params.ops
+  return Array.isArray(ops) ? (ops as Record<string, unknown>[]) : []
+}
+
+/** How many ops an apply_changes line hides until it is expanded. */
+export function hiddenOpCount(change: Pick<Change, "params">): number {
+  return Math.max(0, changeOps(change).length - MAX_OPS_IN_LINE)
+}
+
+export interface ChangeSentenceOptions {
+  /** Spell out every op instead of the first three. */
+  allOps?: boolean
+  /** Leave out the "+N more" tail (the change line shows a toggle). */
+  omitMore?: boolean
 }
 
 export function changeSentence(
   t: TFunction,
   i18n: Pick<I18n, "language">,
-  change: Pick<Change, "text_key" | "params">
+  change: Pick<Change, "text_key" | "params">,
+  opts: ChangeSentenceOptions = {}
 ): string {
   const p = change.params
   let key = change.text_key
@@ -112,7 +155,7 @@ export function changeSentence(
     name: text(p.name),
     // Newer lines carry structured `ops`; older ones a ready `summary`.
     summary: Array.isArray(p.ops)
-      ? opsSummary(t, i18n.language, p.ops as Record<string, unknown>[])
+      ? opsSummary(t, i18n.language, p.ops as Record<string, unknown>[], opts)
       : text(p.summary),
     from: text(p.from),
     day: weekday(p.date, i18n.language),
@@ -146,6 +189,7 @@ const READ_TOOLS = new Set([
   "find_foods",
   "list_presets",
   "list_slots",
+  "find_alternatives",
 ])
 
 /** The status line's key for the tool running (never the tool's own name). */
