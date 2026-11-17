@@ -86,7 +86,7 @@ func (x *index) week(ev Evaluation) *WeekEval {
 	fiberMissing := false
 	counted := map[string]bool{}
 	for _, d := range ev.Days {
-		if !d.Complete || !withPlate[d.Date] || d.NutritionMissing || d.Kcal <= 0 || d.TargetKcal == nil || *d.TargetKcal <= 0 {
+		if !d.Complete || d.Away || !withPlate[d.Date] || d.NutritionMissing || d.Kcal <= 0 || d.TargetKcal == nil || *d.TargetKcal <= 0 {
 			continue
 		}
 		w.Days++
@@ -203,7 +203,7 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 		withPlate[p.Date] = true
 	}
 	for _, d := range ev.Days {
-		if !d.Complete || !withPlate[d.Date] || d.NutritionMissing || d.Kcal <= 0 {
+		if !d.Complete || d.Away || !withPlate[d.Date] || d.NutritionMissing || d.Kcal <= 0 {
 			continue
 		}
 		day, _ := time.Parse(time.DateOnly, d.Date)

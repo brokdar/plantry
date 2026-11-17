@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -33,7 +34,8 @@ type availabilityEnv struct {
 func setupAvailabilityRouter(t *testing.T) *availabilityEnv {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
-	plates, svc := testsvc.Plan(db)
+	// The plates lie in late October 2026: R1 moves no cook before today.
+	plates, svc := testsvc.PlanAt(db, nil, func() time.Time { return time.Date(2026, 10, 1, 12, 0, 0, 0, time.Local) })
 	h := handlers.NewAvailabilityHandler(svc)
 	pw := handlers.NewPlanWriteHandler(plates)
 	r := chi.NewRouter()
@@ -41,6 +43,7 @@ func setupAvailabilityRouter(t *testing.T) *availabilityEnv {
 		r.Get("/", h.List)
 		r.Get("/defaults", h.GetDefaults)
 		r.Put("/defaults", h.PutDefaults)
+		r.Post("/away", h.PostAway)
 		r.Put("/{date}/{slotId}", h.PutOverride)
 		r.Delete("/{date}/{slotId}", h.DeleteOverride)
 	})
@@ -258,11 +261,15 @@ func TestAvailabilityHandler_RemovePlate_RestoreBringsItBack(t *testing.T) {
 	resp := e.do(t, http.MethodPut, path, `{"mode":"none","remove_plate":true}`)
 	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
 	var body struct {
-		Removed plate.PlanSnapshot `json:"removed"`
+		Removed     plate.PlanSnapshot  `json:"removed"`
+		AlsoChanged []plate.AlsoChanged `json:"also_changed"`
 	}
 	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
 	require.Len(t, body.Removed.Plates, 1)
 	assert.Equal(t, &plate.SessionLink{ID: sid}, body.Removed.Plates[0].Components[0].Session, "the batch survives on its leftover")
+	require.Len(t, body.AlsoChanged, 1, "the batch now cooks on its leftover")
+	assert.Equal(t, "2026-10-27", body.AlsoChanged[0].Date)
+	assert.Equal(t, "cook_moved", body.AlsoChanged[0].What)
 
 	resp = e.do(t, http.MethodDelete, path, "")
 	require.Equal(t, http.StatusNoContent, resp.Code)
@@ -299,4 +306,60 @@ func TestAvailabilityHandler_DeleteOverride(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
 	resp = e.do(t, http.MethodDelete, fmt.Sprintf("/api/availability/not-a-date/%d", e.slotA), "")
 	assert.Equal(t, http.StatusBadRequest, resp.Code)
+}
+
+func TestAvailabilityHandler_PostAway(t *testing.T) {
+	e := setupAvailabilityRouter(t)
+	chili := e.insert(t, `INSERT INTO foods (name, kind, role, reference_portions) VALUES ('Chili', 'composed', 'main', 4)`)
+	day := mustDate(t, "2026-10-26")
+	cook, err := e.plates.Create(context.Background(), plate.PlateInput{
+		Date: day, SlotID: e.slotB, Eaters: ptrFloat64(2), Components: []plate.PlateComponent{{FoodID: chili, Portions: ptrFloat64(1)}},
+	})
+	require.NoError(t, err)
+	sid := *cook.Components[0].CookSessionID
+	_, err = e.plates.AddLeftovers(context.Background(), sid, []plate.CellKey{{Date: day.AddDate(0, 0, 1), SlotID: e.slotB}})
+	require.NoError(t, err)
+
+	resp := e.do(t, http.MethodPost, "/api/availability/away?today=2026-10-26", `{"date":"2026-10-26","note":"trip"}`)
+
+	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	body := decodeMap(t, resp)
+	cells := body["cells"].([]any)
+	require.Len(t, cells, 2, "both active slots of the date")
+	assert.Equal(t, "none", cells[1].(map[string]any)["mode"])
+	assert.Equal(t, "trip", cells[1].(map[string]any)["note"])
+	before := body["before"].([]any)
+	require.Len(t, before, 2)
+	assert.Nil(t, before[0].(map[string]any)["override"])
+	assert.Len(t, body["removed"].(map[string]any)["plates"], 1)
+	also := body["also_changed"].([]any)
+	require.Len(t, also, 1)
+	assert.Equal(t, "2026-10-27", also[0].(map[string]any)["date"])
+	assert.Equal(t, float64(sid), also[0].(map[string]any)["session_id"])
+}
+
+func TestAvailabilityHandler_PostAway_Errors(t *testing.T) {
+	e := setupAvailabilityRouter(t)
+	cases := []struct {
+		name, path, body, key string
+		status                int
+	}{
+		{"malformed JSON", "/api/availability/away?today=2026-10-26", `{`, "error.invalid_body", http.StatusBadRequest},
+		{"neither cells nor date", "/api/availability/away?today=2026-10-26", `{"note":"x"}`, "error.invalid_body", http.StatusBadRequest},
+		{"invalid date", "/api/availability/away?today=2026-10-26", `{"date":"26.10.2026"}`, "error.invalid_body", http.StatusBadRequest},
+		{"invalid cell date", "/api/availability/away?today=2026-10-26", fmt.Sprintf(`{"cells":[{"date":"x","slot_id":%d}]}`, e.slotB), "error.invalid_body", http.StatusBadRequest},
+		{"invalid today", "/api/availability/away?today=x", `{"date":"2026-10-26"}`, "error.invalid_body", http.StatusBadRequest},
+		{"past date", "/api/availability/away?today=2026-10-27", `{"date":"2026-10-26"}`, "error.plan.past_cell", http.StatusBadRequest},
+		{"inactive slot", "/api/availability/away?today=2026-10-26", fmt.Sprintf(`{"cells":[{"date":"2026-10-26","slot_id":%d}]}`, e.inactive), "error.availability.slot_inactive", http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := e.do(t, http.MethodPost, tc.path, tc.body)
+			require.Equal(t, tc.status, resp.Code, resp.Body.String())
+			assert.Equal(t, tc.key, decodeMap(t, resp)["message_key"])
+		})
+	}
+	var n int
+	require.NoError(t, e.db.QueryRow(`SELECT COUNT(*) FROM availability_overrides`).Scan(&n))
+	assert.Zero(t, n, "nothing written")
 }

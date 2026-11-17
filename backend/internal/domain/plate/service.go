@@ -395,29 +395,121 @@ func (s *Service) Update(ctx context.Context, id int64, patch PlatePatch) (*Plat
 	return out, nil
 }
 
-// Delete removes a plate and returns what restores it. Sessions left without
-// links are deleted; the others follow D11.
+// Delete removes a plate and returns what restores it: RemoveMeals of one
+// plate.
 func (s *Service) Delete(ctx context.Context, id int64) (PlanSnapshot, error) {
-	var snap PlanSnapshot
-	err := s.tx.InTx(ctx, func(ctx context.Context) error {
-		p, err := s.plates.Get(ctx, id)
-		if err != nil {
-			return err
-		}
-		if err := s.guardPlates(ctx, *p); err != nil {
-			return err
-		}
-		j := newJournal()
-		snap, err = s.remove(ctx, []Plate{*p}, allComponents, false, &refAlloc{}, nil, nil, j)
-		if err != nil {
-			return err
-		}
-		return s.commit(ctx, j)
-	})
+	res, err := s.RemoveMeals(ctx, []int64{id})
 	if err != nil {
 		return PlanSnapshot{}, err
 	}
-	return snap, nil
+	return res.Removed, nil
+}
+
+// MealResult is what a meal removal did: Removed restores the plates
+// (Apply with Restore), AlsoChanged lists the batches whose cook moved.
+type MealResult struct {
+	Removed     PlanSnapshot  `json:"removed"`
+	AlsoChanged []AlsoChanged `json:"also_changed"`
+}
+
+// RemoveMeals removes the plates of ids in one unit of work. Sessions left
+// without links are deleted; the others follow D11, and an uncooked batch
+// that lost the meal on its cook cell cooks at its earliest remaining meal
+// (R1, reported in AlsoChanged). A missing plate is ErrNotFound and nothing
+// is removed.
+func (s *Service) RemoveMeals(ctx context.Context, ids []int64) (MealResult, error) {
+	ids = uniqueIDs(ids)
+	var res MealResult
+	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		plates, err := s.plates.ListByIDs(ctx, ids)
+		if err != nil {
+			return err
+		}
+		if len(plates) != len(ids) {
+			return fmt.Errorf("%w: a plate is gone", domain.ErrNotFound)
+		}
+		res, err = s.removeMeals(ctx, plates, nil)
+		return err
+	})
+	if err != nil {
+		return MealResult{}, err
+	}
+	return res, nil
+}
+
+// RemoveMealsAt is RemoveMeals of the plates on cells, for cells about to
+// be (or just) marked "none" in the same unit of work: a cooked-ahead batch
+// cooking on one of the cells also moves to its earliest meal (R1).
+func (s *Service) RemoveMealsAt(ctx context.Context, cells []CellKey) (MealResult, error) {
+	res := MealResult{Removed: emptySnapshot(), AlsoChanged: []AlsoChanged{}}
+	if len(cells) == 0 {
+		return res, nil
+	}
+	from, to := cells[0].Date, cells[0].Date
+	for _, c := range cells {
+		if c.Date.Before(from) {
+			from = c.Date
+		}
+		if c.Date.After(to) {
+			to = c.Date
+		}
+	}
+	in := func(c CellKey) bool { return slices.ContainsFunc(cells, c.Equal) }
+	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		plates, err := s.plates.ListByDateRange(ctx, dateOnly(from), dateOnly(to))
+		if err != nil {
+			return err
+		}
+		plates = slices.DeleteFunc(plates, func(p Plate) bool { return !in(p.Cell()) })
+		sessions, links, err := s.sessions.ListInRange(ctx, dateOnly(from), dateOnly(to))
+		if err != nil {
+			return err
+		}
+		var cooking []int64
+		for _, sess := range sessions {
+			// A batch without meals (one a re-plan kept) is left alone:
+			// settle would delete it.
+			if in(sess.CookCell()) && len(links[sess.ID]) > 0 {
+				cooking = append(cooking, sess.ID)
+			}
+		}
+		res, err = s.removeMeals(ctx, plates, cooking)
+		return err
+	})
+	if err != nil {
+		return MealResult{}, err
+	}
+	return res, nil
+}
+
+// removeMeals is the body of RemoveMeals inside its unit of work; the
+// sessions of also are tracked too, so settle re-anchors them.
+func (s *Service) removeMeals(ctx context.Context, plates []Plate, also []int64) (MealResult, error) {
+	if err := s.guardPlates(ctx, plates...); err != nil {
+		return MealResult{}, err
+	}
+	j := newJournal()
+	t := newTracker(j)
+	for _, id := range also {
+		if err := s.track(ctx, t, id); err != nil {
+			return MealResult{}, err
+		}
+	}
+	snap, err := s.remove(ctx, plates, allComponents, false, &refAlloc{}, t, nil, j)
+	if err != nil {
+		return MealResult{}, err
+	}
+	if err := s.settle(ctx, t); err != nil {
+		return MealResult{}, err
+	}
+	if err := s.commit(ctx, j); err != nil {
+		return MealResult{}, err
+	}
+	moves := t.moves
+	if moves == nil {
+		moves = []AlsoChanged{}
+	}
+	return MealResult{Removed: snap, AlsoChanged: moves}, nil
 }
 
 // ClearRange removes every plate in [from, to] (only slotID's plates when
@@ -522,6 +614,10 @@ func (s *Service) RemovePlates(ctx context.Context, r Removal) (PlanSnapshot, er
 		pick := func(c PlateComponent) bool { return whole[c.PlateID] || dropped[c.ID] }
 		j := newJournal()
 		t := newTracker(j)
+		t.noMove = make(map[int64]bool, len(r.Move))
+		for id := range r.Move {
+			t.noMove[id] = true
+		}
 		if snap, err = s.remove(ctx, plates, pick, true, &refAlloc{}, t, pinned, j); err != nil {
 			return err
 		}
@@ -1162,7 +1258,9 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 			j.created = ActionRestore
 		}
 		t := newTracker(j)
+		t.restore = opts.Restore
 		pinned := map[int64]bool{}
+		t.pullBack = pinned
 		for _, st := range steps {
 			for _, c := range st.sp.Components {
 				if c.Session == nil || c.Session.ID == 0 || pinned[c.Session.ID] {
@@ -1520,7 +1618,11 @@ func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateCom
 		if err != nil {
 			return PlanSnapshot{}, err
 		}
-		t.record(sid, totalPortions(links))
+		sess, err := s.sessions.GetSession(ctx, sid)
+		if err != nil {
+			return PlanSnapshot{}, err
+		}
+		t.record(sid, links, sess.CookCell())
 		survives := pinned[sid]
 		for _, l := range links {
 			if !removed[l.ComponentID] {
@@ -1530,10 +1632,6 @@ func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateCom
 		}
 		if survives {
 			continue
-		}
-		sess, err := s.sessions.GetSession(ctx, sid)
-		if err != nil {
-			return PlanSnapshot{}, err
 		}
 		ref := refs.next()
 		refOf[sid] = ref
@@ -1620,24 +1718,45 @@ func emptySnapshot() PlanSnapshot {
 // settle can apply D11 after it. j is the mutation's journal: the session
 // writes of settle, attach and Apply record into it. unify lists the plates
 // whose batch closure settle makes take the plate's state (D3).
+//
+// prior keeps each tracked session's cook cell and link cells before the
+// mutation, for the R1 re-anchor (anchor.go). Sessions in noMove are never
+// re-anchored (RemovePlates' explicit moves win); restore makes a meal
+// before the cook pull the cook back to it (Apply with Restore), and so does
+// pullBack for its sessions (the ones an Apply snapshot links by id, such as
+// an overwrite's undo). moves
+// collects every re-anchor settle made.
 type tracker struct {
-	before map[int64]float64
-	ids    []int64
-	unify  []int64
-	j      *journal
+	before   map[int64]float64
+	prior    map[int64]batchBefore
+	ids      []int64
+	unify    []int64
+	noMove   map[int64]bool
+	restore  bool
+	pullBack map[int64]bool
+	moves    []AlsoChanged
+	j        *journal
 }
 
-func newTracker(j *journal) *tracker { return &tracker{before: map[int64]float64{}, j: j} }
+func newTracker(j *journal) *tracker {
+	return &tracker{before: map[int64]float64{}, prior: map[int64]batchBefore{}, j: j}
+}
 
-func (t *tracker) record(id int64, total float64) {
+func (t *tracker) record(id int64, links []Link, cook CellKey) {
 	if _, ok := t.before[id]; ok {
 		return
 	}
-	t.before[id] = total
+	t.before[id] = totalPortions(links)
+	b := batchBefore{cook: cook, cells: make([]CellKey, len(links))}
+	for i, l := range links {
+		b.cells[i] = l.Cell
+	}
+	t.prior[id] = b
 	t.ids = append(t.ids, id)
 }
 
-// track records session id's current consumption unless already tracked.
+// track records session id's current consumption and cells unless already
+// tracked.
 func (s *Service) track(ctx context.Context, t *tracker, id int64) error {
 	if _, ok := t.before[id]; ok {
 		return nil
@@ -1646,13 +1765,19 @@ func (s *Service) track(ctx context.Context, t *tracker, id int64) error {
 	if err != nil {
 		return err
 	}
-	t.record(id, totalPortions(links))
+	sess, err := s.sessions.GetSession(ctx, id)
+	if err != nil {
+		return err
+	}
+	t.record(id, links, sess.CookCell())
 	return nil
 }
 
 // settle applies D11 to every tracked session: one without links is deleted;
-// the others get Sync'd portions. Then it unifies the closures of t.unify.
+// the others get Sync'd portions and then the R1 re-anchor (reanchorSession).
+// Then it unifies the closures of t.unify.
 func (s *Service) settle(ctx context.Context, t *tracker) error {
+	var e *env
 	for _, id := range t.ids {
 		links, err := s.sessions.ListLinks(ctx, id)
 		if err != nil {
@@ -1673,15 +1798,60 @@ func (s *Service) settle(ctx context.Context, t *tracker) error {
 			continue
 		}
 		portions, frozen := Sync(Usage{Total: t.before[id]}, Usage{Total: totalPortions(links)}, sess.Portions, sess.FrozenPortions)
-		if portions == sess.Portions && frozen == sess.FrozenPortions {
+		changed := portions != sess.Portions || frozen != sess.FrozenPortions
+		sess.Portions, sess.FrozenPortions = portions, frozen
+		if !t.noMove[id] && sess.CookedAt == nil {
+			if e == nil {
+				loaded, err := s.loadEnv(ctx)
+				if err != nil {
+					return err
+				}
+				e = &loaded
+			}
+			moved, err := s.reanchorSession(ctx, t, sess, links, *e)
+			if err != nil {
+				return err
+			}
+			changed = changed || moved
+		}
+		if !changed {
 			continue
 		}
-		sess.Portions, sess.FrozenPortions = portions, frozen
 		if err := s.sessions.UpdateSession(ctx, sess); err != nil {
 			return err
 		}
 	}
 	return s.unify(ctx, t)
+}
+
+// reanchorSession moves sess's cook cell in place when R1 asks for it
+// (reanchor) and records the move in t.moves.
+func (s *Service) reanchorSession(ctx context.Context, t *tracker, sess *CookSession, links []Link, e env) (bool, error) {
+	f, err := s.foods.Get(ctx, sess.FoodID)
+	if err != nil {
+		return false, err
+	}
+	in := anchorInput{
+		Session: *sess, Before: t.prior[sess.ID], Links: links, Restore: t.restore || t.pullBack[sess.ID], Today: dateOnly(s.now()),
+		KeepDays: e.set.KeepDays(f.KeepDays), Set: e.set, Order: e.order,
+	}
+	if in.Before.cookedAhead(e.order) {
+		mode, err := s.cellMode(ctx, sess.CookCell())
+		if err != nil {
+			return false, err
+		}
+		in.CookNone = mode == CellNone
+	}
+	first, ok := reanchor(in)
+	if !ok {
+		return false, nil
+	}
+	t.moves = append(t.moves, AlsoChanged{
+		SessionID: sess.ID, PlateID: first.PlateID, Date: first.Cell.Date.Format(dateLayout), SlotID: first.Cell.SlotID,
+		What: AlsoCookMoved, FromDate: sess.CookDate.Format(dateLayout), FromSlotID: sess.CookSlotID,
+	})
+	sess.CookDate, sess.CookSlotID = first.Cell.Date, first.Cell.SlotID
+	return true, nil
 }
 
 func totalPortions(links []Link) float64 {

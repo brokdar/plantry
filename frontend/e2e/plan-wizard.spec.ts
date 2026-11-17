@@ -115,7 +115,10 @@ test.describe("plan wizard", () => {
     const original = (
       await json<{ items: Default[] }>(ctx, "/api/availability/defaults")
     ).items
-    const library = await seedRecipeLibrary(tag)
+    // Hearty recipes (600 g at 490 kcal/100 g for 4: 735 kcal a portion): a
+    // 3-meal day of the default ones (180 kcal a portion) stays under the H9
+    // floor.
+    const library = await seedRecipeLibrary(tag, 10, undefined, 490)
     const oatsFood = await seedLeafFood({
       name: `Oats ${tag}`,
       kcal_100g: 370,
@@ -399,7 +402,8 @@ test("F3-AC3: an assistant failure offers Plan without the assistant", async ({
   request,
 }) => {
   test.slow()
-  const library = await seedRecipeLibrary(uid())
+  // Hearty recipes, so the heuristic plan is ok (H9 floor; see above).
+  const library = await seedRecipeLibrary(uid(), 10, undefined, 490)
   const plan = await request.get(`${API}/api/plan`)
   const { window } = (await plan.json()) as { window: { start: string } }
   const start = addDays(window.start, 7 * 65)

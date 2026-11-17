@@ -30,6 +30,10 @@ import (
 // Slots: lunch (sort 1), dinner (sort 2), breakfast (sort 0, created last so
 // its id is the highest). Household portions 2. Default keep days 3.
 
+// testNow is the plate service's clock in these tests: the day before sun,
+// so the R1 re-anchor may move cooks to every test date.
+var testNow = time.Date(2026, 10, 31, 12, 0, 0, 0, time.Local)
+
 const (
 	sun = "2026-11-01"
 	mon = "2026-11-02"
@@ -58,12 +62,18 @@ func newEnv(t *testing.T) *env {
 // wrap (nil: the sqlite repo as is).
 func newEnvWithEvents(t *testing.T, wrap func(plate.EventLog) plate.EventLog) *env {
 	t.Helper()
+	return newEnvAt(t, wrap, testNow)
+}
+
+// newEnvAt is newEnvWithEvents with the plate service's clock at now.
+func newEnvAt(t *testing.T, wrap func(plate.EventLog) plate.EventLog, now time.Time) *env {
+	t.Helper()
 	db := testhelper.NewTestDB(t)
 	var events plate.EventLog = sqlite.NewPlateEventRepo(db)
 	if wrap != nil {
 		events = wrap(events)
 	}
-	svc, avail := testsvc.PlanWithEvents(db, events)
+	svc, avail := testsvc.PlanAt(db, events, func() time.Time { return now })
 	e := &env{t: t, ctx: context.Background(), db: db, svc: svc, avail: avail, settings: testsvc.Settings(db)}
 	e.lunch = e.insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.lunch', 'sun', 1, 1)`)
 	e.dinner = e.insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.dinner', 'moon', 2, 1)`)

@@ -185,12 +185,15 @@ export function lightLabel(
   slotName: (short: string) => string,
   f: Formatter
 ): string | null {
-  const key = day.light_level === "hearty" ? "plan.hearty" : "plan.light"
-  if (day.light === "day") return f.t(`${key}.day`)
+  const hearty = day.light_level === "hearty"
+  if (day.light === "day") {
+    return hearty ? f.t("plan.hearty.day") : f.t("plan.light.day")
+  }
   if (day.light === "meal") {
-    return f.t(`${key}.meal`, {
-      slot: slotName(day.light_slot ?? ""),
-    })
+    const slot = slotName(day.light_slot ?? "")
+    return hearty
+      ? f.t("plan.hearty.meal", { slot })
+      : f.t("plan.light.meal", { slot })
   }
   return null
 }

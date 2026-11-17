@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 )
 
 // The S2 band (a complete day's kcal outside the policy's day band of its
@@ -48,6 +49,11 @@ type DayKcal struct {
 	// Unplated counts routine cells without a plate: they hold no kcal to
 	// count, so like a No-plate cell they ask nothing of the day.
 	Unplated int
+	// Away: every cell of a meal-kind slot (lunch, dinner) that is not
+	// routine is No plate, so the user eats elsewhere. H9, S2, the day S3
+	// and the weekly averages do not judge the day (light and routine cells
+	// do not count).
+	Away bool
 }
 
 // Active is the number of meals the day's targets are judged on: the
@@ -81,11 +87,18 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 	var out []DayKcal
 	for _, d := range days {
 		dk := DayKcal{Date: d, Target: k, Complete: true}
+		meals, away := 0, 0
 		for _, c := range s.Cells {
 			if dayOf(c.Date) != dayOf(d) {
 				continue
 			}
 			dk.Meals++
+			if c.Mode != availability.ModeRoutine && s.SlotKind[c.SlotID] != slot.KindLight {
+				meals++
+				if c.Mode == availability.ModeNone {
+					away++
+				}
+			}
 			if c.Mode == availability.ModeNone {
 				continue
 			}
@@ -101,6 +114,7 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 		if dk.Active() == 0 {
 			continue
 		}
+		dk.Away = meals > 0 && away == meals
 		dk.Scaled = k * dk.Share()
 		dk.Adjusted = dk.Scaled
 		switch {
@@ -166,7 +180,7 @@ func kcalNote(s State, t Target) string {
 	var parts []string
 	pol := PolicyOf(s.Profile)
 	for _, d := range DayKcals(s, t) {
-		if d.Complete && d.Proposed && !d.NutritionMissing && !s.lightDay(d.Date) && d.Kcal < d.Adjusted*pol.DayLow {
+		if d.Complete && !d.Away && d.Proposed && !d.NutritionMissing && !s.lightDay(d.Date) && d.Kcal < d.Adjusted*pol.DayLow {
 			parts = append(parts, fmt.Sprintf("%s −%.0f kcal", d.Date.Weekday().String()[:3], d.Gap))
 		}
 	}
