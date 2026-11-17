@@ -128,7 +128,15 @@ export function useAssistantStream() {
     },
     // Also after an error or abort: the turn may have been stored, and a
     // conversation left stale would bring back an answered unlock preview.
-    onSettled: () => qc.invalidateQueries({ queryKey: aiKeys.all }),
+    // A new conversation's first read starts at `conversation_ready`, while the
+    // turn is still running. Invalidating alone would join that read when it is
+    // still in flight (a query without data is not refetched) and keep its
+    // pre-reply answer, so the final reply would never show. Cancel first, so
+    // the refetch starts after the stream and reads the whole turn.
+    onSettled: async () => {
+      await qc.cancelQueries({ queryKey: aiKeys.all })
+      await qc.invalidateQueries({ queryKey: aiKeys.all })
+    },
   })
 
   return {
