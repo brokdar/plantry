@@ -53,7 +53,9 @@ func (s *scriptedLLM) Choose(ctx context.Context, in planning.ChooseInput) (plan
 	if err != nil {
 		return planning.Proposal{}, err
 	}
-	input, err := json.Marshal(submitInput(p))
+	sp := submitInput(p)
+	sp.Light = in.State.Light
+	input, err := json.Marshal(sp)
 	if err != nil {
 		return planning.Proposal{}, err
 	}
@@ -88,9 +90,10 @@ func (s *scriptedLLM) takeRequests() []llm.Request {
 
 // submitPlan mirrors the submit_plan tool's input schema.
 type submitPlan struct {
-	Sessions []submitSession `json:"sessions"`
-	Plates   []submitPlate   `json:"plates"`
-	Notes    string          `json:"notes"`
+	Sessions []submitSession        `json:"sessions"`
+	Plates   []submitPlate          `json:"plates"`
+	Light    []planning.LightIntent `json:"light,omitempty"`
+	Notes    string                 `json:"notes"`
 }
 
 type submitSession struct {

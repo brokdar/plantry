@@ -60,6 +60,11 @@ func (h *planner) topUpFloors() {
 			continue
 		}
 		floor := y.pol.Floor(dk.Target, dk.FloorShare())
+		if y.lightOf(dk.Date) == LightScopeMeal {
+			// A light meal leaves the day's target as it was: the other
+			// meals carry the rest, up to the band's low end.
+			floor = max(floor, dk.Adjusted*y.pol.DayLow)
+		}
 		if dk.Kcal >= floor {
 			continue
 		}
@@ -135,10 +140,10 @@ func (h *planner) addNoCook(date time.Time, protein bool, used map[int64]bool) b
 			return false
 		}
 		// Room up to the day band top; the sizes aim at the kcal gap.
-		band = dk.Scaled
-		need = dk.Scaled - dk.Kcal
+		band = dk.Adjusted
+		need = dk.Adjusted - dk.Kcal
 		if need <= 0 {
-			need = dk.Scaled*y.pol.DayHigh - dk.Kcal
+			need = dk.Adjusted*y.pol.DayHigh - dk.Kcal
 		}
 	}
 	if need <= 0 {
@@ -160,7 +165,7 @@ func (h *planner) addNoCook(date time.Time, protein bool, used map[int64]bool) b
 			// Staying at or under the day's target first, then the most
 			// protein, then the best fit.
 			over := func(c optCand) int {
-				if dk.Kcal+c.kcal > dk.Scaled+1e-9 {
+				if dk.Kcal+c.kcal > dk.Adjusted+1e-9 {
 					return 1
 				}
 				return 0
@@ -239,7 +244,7 @@ func (h *planner) topUpDay(date time.Time, need float64) {
 	// its keep days (not a frozen link), and the session's index.
 	growable := func(p ProposedPlate, c ProposedComponent) (int, bool) {
 		i, ok := sessions[c.SessionKey]
-		if c.SessionKey == "" || !ok || c.Portions <= 0 {
+		if c.SessionKey == "" || !ok || c.Portions <= 0 || h.s.lightMeal(p.Date, p.SlotID) {
 			return 0, false
 		}
 		ss := h.prop.Sessions[i]

@@ -23,11 +23,12 @@ const applyChangesName = "apply_changes"
 // errDryRun ends a dry run's transaction so everything it wrote rolls back.
 var errDryRun = errors.New("dry run")
 
-const applyChangesSchema = `{
+var applyChangesSchema = `{
   "type":"object",
   "required":["ops"],
   "properties":{
     "dry_run":{"type":"boolean","description":"true: run every op, report the result and roll everything back (nothing is saved). Use it first for multi-step changes."},
+    ` + lightSchema + `,
     "ops":{
       "type":"array","minItems":1,"maxItems":40,
       "items":{
@@ -70,7 +71,7 @@ Ops (fields):
 - set_eaters: plate_id, eaters (the batches it eats from are resized).
 - set_availability: date, slot_id, mode plan|none|routine|default, preset_id (routine), note (none). Only one per call.
 Only draft plates in the future are changeable; a confirmed one needs the user to unlock it.
-Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (dry runs only), applied:[{op, plate_id?, plate_component_id?, session_id?, ...}], after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only)} (the weekly kcal ledger of the whole window: complete days only, per eater), issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],total_open,new_more?,resolved_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). An S3 option raises the day's protein; an S2 option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (H1-H9; H9 is a day below its kcal safety floor) are hard rules: fix them. Soft issues (S2 day kcal outside the day band of target, S3 protein under 90% of the day target (g/kg) or the share under target, or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range; only S2 and S3 carry options you can apply with another call. Your request is not done while an issue it caused is open, unless you tell the user why.`
+Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (dry runs only), applied:[{op, plate_id?, plate_component_id?, session_id?, ...}], after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only)} (the weekly kcal ledger of the whole window: complete days only, per eater), issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],total_open,new_more?,resolved_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). An S3 option raises the day's protein; an S2 option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (H1-H9; H9 is a day below its kcal safety floor) are hard rules: fix them. Soft issues (S2 day kcal outside the day band of target, S3 protein under 90% of the day target (g/kg) or the share under target, or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range, S6 a light meal that is not lighter; only S2 and S3 carry options you can apply with another call. Pass light (the user's light requests, meal unless they explicitly ask to eat less for the day) to judge the result under them; stored light requests apply without passing them again. A call that is not a dry run and succeeds saves the light you pass (a date replaces that date's request, scope none clears it); a dry run saves nothing: days then show light and normal_target_kcal, week.target_kcal is the target after them and week.normal_target_kcal the normal one. Your request is not done while an issue it caused is open, unless you tell the user why.`
 
 // changeOp is one op of apply_changes.
 type changeOp struct {
@@ -137,12 +138,18 @@ func toolApplyChanges(svc Services) Tool {
 		Schema:      json.RawMessage(applyChangesSchema),
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
-				Ops    []changeOp `json:"ops"`
-				DryRun bool       `json:"dry_run"`
+				Ops    []changeOp             `json:"ops"`
+				DryRun bool                   `json:"dry_run"`
+				Light  []planning.LightIntent `json:"light"`
 			}
 			if err := json.Unmarshal(input, &in); err != nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: %v", domain.ErrInvalidInput, err)
 			}
+			light, err := parseLight(in.Light)
+			if err != nil {
+				return nil, ToolEffectNone, err
+			}
+			ctx = withLight(ctx, light)
 			if llm.CallerFrom(ctx).FromCode() && !in.DryRun {
 				return nil, ToolEffectNone, fmt.Errorf("%w: apply_changes called from code must set dry_run: true; call it directly (not from code) to save the change", ErrCodeCallRefused)
 			}
@@ -155,6 +162,9 @@ func toolApplyChanges(svc Services) Tool {
 			w, ok := windowFrom(ctx)
 			if !ok {
 				return nil, ToolEffectNone, fmt.Errorf("%w: no plan window in this conversation turn", domain.ErrInvalidInput)
+			}
+			if err := checkLight(ctx, svc, w, light); err != nil {
+				return nil, ToolEffectNone, err
 			}
 			ws := windowsFor(w, opDates(in.Ops))
 			before, err := evalWindows(ctx, svc, ws)
@@ -186,7 +196,7 @@ func toolApplyChanges(svc Services) Tool {
 				if in.DryRun {
 					return errDryRun
 				}
-				return nil
+				return saveLight(ctx, svc, light)
 			})
 			if err != nil && !errors.Is(err, errDryRun) {
 				return nil, ToolEffectNone, err
@@ -646,6 +656,7 @@ func evalWindow(ctx context.Context, svc Services, w window.Window) (planning.Ev
 	if err != nil {
 		return planning.Evaluation{}, err
 	}
+	st.Light = planning.MergeLight(st.Light, lightFrom(ctx))
 	return chatView(st), nil
 }
 

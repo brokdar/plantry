@@ -3,6 +3,7 @@ package eval
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,9 +20,14 @@ import (
 
 // The scenarios of spec §8.4 plus the confirmed-cook repros.
 var specScenarios = []string{
-	"away_thu_fri", "confirmed_cook_empty_cell", "confirmed_cook_no_surplus", "explore_quota", "family_daily", "many_none_cells", "replan_one_day",
-	"single_batch_cooker", "small_library_h8", "vegetarian_variety", "walkthrough_batch_cooker",
+	"away_thu_fri", "confirmed_cook_empty_cell", "confirmed_cook_no_surplus", "explore_quota", "family_daily", "light_day", "light_meal_weekday_dinners",
+	"many_none_cells", "nutrition_lose", "nutrition_maintain", "protein_gap_week", "replan_one_day",
+	"single_batch_cooker", "small_library_h8", "unreachable_floor", "vegetarian_variety", "walkthrough_batch_cooker",
 }
+
+// policyScenarios assert on the saved plan's Evaluation (bands, floors, the
+// weekly ledger, light intents); unreachable_floor ends partial on purpose.
+var policyScenarios = []string{"light_day", "light_meal_weekday_dinners", "nutrition_lose", "nutrition_maintain", "protein_gap_week", "unreachable_floor"}
 
 func TestLoadScenarios(t *testing.T) {
 	all, err := LoadScenarios()
@@ -71,13 +77,28 @@ func TestHeuristicHasNoHardViolations(t *testing.T) {
 				assert.Contains(t, names(r.Expectations), ExpectNoNewCook)
 				return
 			}
+			if r.Scenario == "unreachable_floor" {
+				// No library recipe reaches the floor: it stays a hard H9
+				// (never lowered) and the notes say so.
+				assert.Equal(t, string(airun.StatusPartial), r.Status)
+				require.NotEmpty(t, r.Violations)
+				for _, v := range r.Violations {
+					assert.Equal(t, planning.CodeKcalBelowFloor, v.Code)
+				}
+				assert.Empty(t, r.Failed())
+				assert.Contains(t, names(r.Expectations), ExpectEvaluation)
+				return
+			}
+			if slices.Contains(policyScenarios, r.Scenario) {
+				assert.Contains(t, names(r.Expectations), ExpectEvaluation)
+			}
 			assert.Equal(t, string(airun.StatusOK), r.Status, r.ErrorKey)
 			assert.Empty(t, r.Violations)
 			assert.Empty(t, r.Failed())
 			assert.Contains(t, names(r.Expectations), ExpectNoViolations)
 			require.NotNil(t, r.Score)
 			assert.Empty(t, r.Score.HardViolations)
-			assert.Equal(t, "h10", r.PromptVersion)
+			assert.Equal(t, "h11", r.PromptVersion)
 			assert.Equal(t, Tokens{}, r.Tokens, "the heuristic calls no model")
 			if r.Scenario == "single_batch_cooker" {
 				// Z5 §17.2: no hard violation covers one cook a day (H2), no
@@ -128,9 +149,10 @@ func TestScriptedLLMPromptHasScenarioDates(t *testing.T) {
 	for _, r := range recs {
 		t.Run(r.Scenario, func(t *testing.T) {
 			assert.Empty(t, r.Failed())
-			if r.Scenario == "confirmed_cook_no_surplus" {
-				// The fake model cannot fill the cell: it ends partial
-				// after its repairs, with only the allowed missing_plate.
+			if r.Scenario == "confirmed_cook_no_surplus" || r.Scenario == "unreachable_floor" {
+				// The fake model cannot fill the cell or lift the days over
+				// the floor: it ends partial after its repairs, with only the
+				// allowed violation.
 				assert.Equal(t, string(airun.StatusPartial), r.Status)
 			} else {
 				assert.Equal(t, string(airun.StatusOK), r.Status, r.ErrorKey)

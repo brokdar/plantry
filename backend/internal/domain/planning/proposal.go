@@ -18,6 +18,9 @@ type Proposal struct {
 	Notes string
 	// RepairAttempts is how many repair turns the chooser took (LLM, D12).
 	RepairAttempts int
+	// Light are the light requests the chooser was given, as it states them
+	// (Merge adds them to the state's).
+	Light []LightIntent
 }
 
 // ProposedSession is a session the proposal cooks.
@@ -73,6 +76,7 @@ func Merge(s State, t Target, p Proposal) State {
 	targetSession := idSet(t.SessionIDs)
 
 	out := s
+	out.Light = UnionLight(s.Light, p.Light)
 	dropSession := map[int64]bool{}
 	out.Sessions = make([]Session, 0, len(s.Sessions)+len(p.Sessions))
 	for _, ss := range s.Sessions {

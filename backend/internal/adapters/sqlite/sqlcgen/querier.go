@@ -41,6 +41,7 @@ type Querier interface {
 	CreateFoodComponent(ctx context.Context, arg CreateFoodComponentParams) error
 	CreateFoodInstruction(ctx context.Context, arg CreateFoodInstructionParams) error
 	CreateFoodTag(ctx context.Context, arg CreateFoodTagParams) error
+	CreatePlanLight(ctx context.Context, arg CreatePlanLightParams) error
 	CreatePlate(ctx context.Context, arg CreatePlateParams) (Plate, error)
 	CreatePlateComponent(ctx context.Context, arg CreatePlateComponentParams) (PlateComponent, error)
 	CreatePlateEvent(ctx context.Context, arg CreatePlateEventParams) error
@@ -67,6 +68,8 @@ type Querier interface {
 	// D12: pending suggestions created before the cutoff go; their ids let the
 	// caller delete the images.
 	DeletePendingSuggestionsBefore(ctx context.Context, before string) ([]int64, error)
+	DeletePlanLightBefore(ctx context.Context, date string) error
+	DeletePlanLightDate(ctx context.Context, date string) error
 	DeletePlate(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateComponent(ctx context.Context, id int64) (sql.Result, error)
 	DeletePlateFeedback(ctx context.Context, plateID int64) (sql.Result, error)
@@ -154,6 +157,7 @@ type Querier interface {
 	// cell, eaters and state: the ingredient sources of a shopping list.
 	ListLeafPlateComponentsInRange(ctx context.Context, arg ListLeafPlateComponentsInRangeParams) ([]ListLeafPlateComponentsInRangeRow, error)
 	ListMessages(ctx context.Context, conversationID int64) ([]AiMessage, error)
+	ListPlanLight(ctx context.Context, arg ListPlanLightParams) ([]PlanLight, error)
 	ListPlateComponentsByDateRange(ctx context.Context, arg ListPlateComponentsByDateRangeParams) ([]ListPlateComponentsByDateRangeRow, error)
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
 	ListPlateComponentsByPlateIDs(ctx context.Context, ids []int64) ([]ListPlateComponentsByPlateIDsRow, error)

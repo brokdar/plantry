@@ -149,6 +149,8 @@ func (p Policy) Describe() string {
 		p.Goal, pct(p.WeekLow), pct(p.WeekHigh), pct(p.DayLow), pct(p.DayHigh), floor)
 	out += fmt.Sprintf(" Priority when rules conflict: 1 hard rules, 2 weekly kcal, 3 day kcal band, 4 protein, 5 food-group rules, 6 preferences and effort, 7 carb and fat ranges (soft issues S5: last, never at the cost of kcal or protein). Carbs and fat are judged on the weekly average only: carbs %.0f-%.0f%% and fat %.0f-%.0f%% of energy.",
 		p.CarbsLow, p.CarbsHigh, p.FatLow, p.FatHigh)
+	out += fmt.Sprintf(" Light requests are structured, never prose: a list of {date, scope meal|day, slot lunch|dinner for a meal}. \"Something light\" means scope meal: that lunch or dinner holds at most %d%% of its normal share of the day's target, the day keeps its target and the other meals carry the rest (soft issue S6 when it is not lighter). Only an explicit request to eat less for the day or the week is scope day: that day's target becomes %d%% and its band is centred there. Never go below the floors (H9); when a floor stopped a lighter day, say so in the reply.",
+		pct(LightMealShare), pct(LightDayShare))
 	if p.ProteinGPerKg > 0 {
 		out += fmt.Sprintf(" Protein target: %.1f g per kg x %.0f kg = %.0f g per person per full day (scaled to the planned meals on a short day). A day under %d%% of it is soft issue S3, a weekly average under %d%% too: close protein gaps actively (find_foods with min_protein, or take an issue's options: skyr/quark, yoghurt, tofu, eggs, cheese, legumes, honouring the diet type and the kcal band) and write a note only when no option exists.",
 			p.ProteinGPerKg, p.WeightKg, p.ProteinTargetG(1), pct(ProteinDayMin), pct(ProteinWeekMin))

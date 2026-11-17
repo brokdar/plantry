@@ -170,7 +170,11 @@ func runOnce(ctx context.Context, cfg Config, d *dbs, lib Library, sc Scenario, 
 			rec.Expectations = append(rec.Expectations, Expectation{Name: ExpectNoViolations, Detail: err.Error()})
 			return rec, nil
 		}
-		if err := e.measure(ctx, runID, &rec, sc.Expect.AllowMissingPlate); err != nil {
+		allowed := slices.Clone(sc.Expect.AllowViolations)
+		if sc.Expect.AllowMissingPlate {
+			allowed = append(allowed, planning.CodeMissingPlate)
+		}
+		if err := e.measure(ctx, runID, &rec, allowed); err != nil {
 			return Record{}, err
 		}
 		// A run with nothing to choose sends no request, and has no prompt
@@ -197,7 +201,7 @@ func stepToday(sc Scenario, st Step) time.Time {
 // step runs one scenario step and returns the run it started (0 for none).
 func (e *env) step(ctx context.Context, sc Scenario, st Step, chooser airun.Chooser) (int64, error) {
 	today := stepToday(sc, st)
-	req := planning.Request{Start: e.window.Start, Today: today, Chooser: chooser, Instruction: st.Instruction}
+	req := planning.Request{Start: e.window.Start, Today: today, Chooser: chooser, Instruction: st.Instruction, Light: st.Light}
 	switch st.Action {
 	case ActionGenerate:
 		return e.svc.Generate(ctx, req)
@@ -242,7 +246,7 @@ func (e *env) step(ctx context.Context, sc Scenario, st Step, chooser airun.Choo
 
 // measure fills a record from the measured run: how it ended, its score,
 // violations, plates, tokens and cost.
-func (e *env) measure(ctx context.Context, runID int64, rec *Record, allowMissingPlate bool) error {
+func (e *env) measure(ctx context.Context, runID int64, rec *Record, allowed []string) error {
 	end, ok := e.runs.ends[runID]
 	if !ok {
 		return fmt.Errorf("run %d did not finish", runID)
@@ -275,8 +279,12 @@ func (e *env) measure(ctx context.Context, runID int64, rec *Record, allowMissin
 		rec.CostUSD = airun.Cost(row.Model, row.Provider, row.Tokens, nil)
 	}
 	ok = end.Status == airun.StatusOK && len(rec.Violations) == 0
-	if allowMissingPlate && !ok && end.Status == airun.StatusPartial {
-		ok = !slices.ContainsFunc(rec.Violations, func(is planning.Issue) bool { return is.Code != planning.CodeMissingPlate })
+	if len(allowed) > 0 && !ok && end.Status == airun.StatusPartial {
+		ok = !slices.ContainsFunc(rec.Violations, func(is planning.Issue) bool { return !slices.Contains(allowed, is.Code) })
+	}
+	e.notes = end.Notes
+	if e.after, err = e.afterEvaluation(ctx, runID); err != nil {
+		return err
 	}
 	detail := ""
 	if !ok {
@@ -476,6 +484,9 @@ func (e *env) expect(sc Scenario, st Step, before, after rows, rec Record) []Exp
 	}
 	if x.BatchMeals > 0 {
 		out = append(out, e.batchMeals(x.BatchMeals, before, after))
+	}
+	if x.Evaluation != nil {
+		out = append(out, e.evaluationExpect(*x.Evaluation))
 	}
 	if x.MinPlates > 0 {
 		ex := Expectation{Name: ExpectMinPlates, OK: rec.Plates >= x.MinPlates}

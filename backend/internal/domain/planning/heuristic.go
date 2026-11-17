@@ -203,6 +203,9 @@ func (h *planner) plan() (Proposal, error) {
 		}
 	}
 	h.topUpFloors()
+	if note := lightNote(h.s.Light, h.in.Locale); note != "" {
+		h.notes = append(h.notes, note)
+	}
 	if note := floorNote(Merge(h.s, h.in.Target, h.prop), h.in.Target); note != "" {
 		h.notes = append(h.notes, note)
 	}
@@ -474,7 +477,9 @@ func (h *planner) cook(c plate.CellKey) error {
 	freezable := f.Freezable
 	side := int64(0)
 	if f.Role == food.RoleMain {
-		if id, ok := h.pickSide(c, 0, ""); ok {
+		// A light meal takes a side only while the plate stays within its
+		// share.
+		if id, ok := h.pickSide(c, 0, ""); ok && !(h.s.lightMeal(c.Date, c.SlotID) && f.Macros.Kcal+h.s.Foods[id].Macros.Kcal > h.kcalShare(c)) {
 			side = id
 			sf := h.s.Foods[side]
 			keep = min(keep, h.s.Settings.KeepDays(sf.KeepDays))
@@ -610,7 +615,8 @@ type candidate struct {
 // lunch).
 func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	span := 7 * h.s.Settings.VarietyWeeks
-	share := h.kcalShare(c.Date)
+	share := h.kcalShare(c)
+	light := h.s.lightMeal(c.Date, c.SlotID) || h.s.lightDay(c.Date)
 	var cands []candidate
 	for _, f := range h.s.Foods {
 		if !h.mainCandidate(f, c) || !h.reachesForced(f, c) {
@@ -638,8 +644,10 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		if share > 0 {
 			fit = math.Abs(f.Macros.Kcal - share)
 		}
+		// A light cell asks for a recipe within its (reduced) share first.
+		heavy := light && share > 0 && f.Macros.Kcal > share
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
-			b2f(h.overMeat(f, c)), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
+			b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
 			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, fit,
 		}})
 	}
@@ -753,21 +761,32 @@ func (h *planner) overMeat(f FoodFacts, c plate.CellKey) bool {
 	return len(h.meatDays)+1 > *limit
 }
 
-// kcalShare is one meal's share of the daily kcal target on date: the
-// target over the date's cells that need a plate; 0 without a target.
-func (h *planner) kcalShare(date time.Time) float64 {
+// kcalShare is one meal's share of the daily kcal target on the cell's day:
+// the target over the day's cells that need a plate; 0 without a target. A
+// light day asks LightDayShare of it, a light meal LightMealShare of the
+// meal's normal share (the evaluator's cap, mealCap).
+func (h *planner) kcalShare(c plate.CellKey) float64 {
 	t := h.s.Profile.KcalTarget
 	if t == nil || *t <= 0 {
 		return 0
 	}
-	n := 0
-	for _, c := range h.s.Cells {
-		if dayOf(c.Date) == dayOf(date) && c.Mode != availability.ModeNone {
-			n++
+	n, meals := 0, 0
+	for _, o := range h.s.Cells {
+		if dayOf(o.Date) == dayOf(c.Date) {
+			meals++
+			if o.Mode != availability.ModeNone {
+				n++
+			}
 		}
 	}
 	if n == 0 {
 		return 0
+	}
+	switch {
+	case h.s.lightMeal(c.Date, c.SlotID):
+		return LightMealShare * *t / float64(meals)
+	case h.s.lightDay(c.Date):
+		return *t / float64(n) * LightDayShare
 	}
 	return *t / float64(n)
 }

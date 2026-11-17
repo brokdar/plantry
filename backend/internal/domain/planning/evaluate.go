@@ -47,6 +47,8 @@ type Evaluation struct {
 	// Week is the weekly kcal ledger; nil without a kcal target or a
 	// complete day.
 	Week *WeekEval `json:"week,omitempty"`
+	// Light are the light requests the evaluation was made under.
+	Light []LightIntent `json:"light,omitempty"`
 }
 
 // WeekEval is the weekly kcal ledger per eater over the window's complete
@@ -54,9 +56,13 @@ type Evaluation struct {
 // average of their scaled targets. The week matters most: the policy's week
 // band is narrower than its day band.
 type WeekEval struct {
-	Days       int     `json:"days"`
-	AvgKcal    float64 `json:"avg_kcal"`
-	TargetKcal float64 `json:"target_kcal"`
+	Days    int     `json:"days"`
+	AvgKcal float64 `json:"avg_kcal"`
+	// TargetKcal is the average of the days' targets after the light
+	// requests; NormalTargetKcal the average of the normal ones (only when
+	// they differ).
+	TargetKcal       float64 `json:"target_kcal"`
+	NormalTargetKcal float64 `json:"normal_target_kcal,omitempty"`
 	// Pct is AvgKcal as a share of TargetKcal, in percent.
 	Pct float64 `json:"pct"`
 	// AvgProteinG is the average protein per day; TargetProteinG the average
@@ -90,19 +96,23 @@ type EvalTotals struct {
 // TargetKcal is the day's kcal target scaled to its planned meals (a short
 // day asks less); the percentages are the shares of the day's kcal.
 type DayEval struct {
-	Date           string   `json:"date"`
-	Kcal           float64  `json:"kcal"`
-	TargetKcal     *float64 `json:"target_kcal"`
-	ProteinG       float64  `json:"protein_g"`
-	ProteinTargetG float64  `json:"protein_target_g,omitempty"`
-	ProteinPct     float64  `json:"protein_pct"`
-	FatPct         float64  `json:"fat_pct"`
-	CarbsPct       float64  `json:"carbs_pct"`
-	FiberG         float64  `json:"-"`
-	FiberMissing   bool     `json:"-"`
-	Meat           bool     `json:"meat"`
-	MeatFoods      []string `json:"meat_foods"`
-	CookOccasions  int      `json:"cook_occasions"`
+	Date       string   `json:"date"`
+	Kcal       float64  `json:"kcal"`
+	TargetKcal *float64 `json:"target_kcal"`
+	// NormalTargetKcal is the target without the light request; only on a
+	// light day. Light is "day" or "meal" when the day was asked for light.
+	NormalTargetKcal float64  `json:"normal_target_kcal,omitempty"`
+	Light            string   `json:"light,omitempty"`
+	ProteinG         float64  `json:"protein_g"`
+	ProteinTargetG   float64  `json:"protein_target_g,omitempty"`
+	ProteinPct       float64  `json:"protein_pct"`
+	FatPct           float64  `json:"fat_pct"`
+	CarbsPct         float64  `json:"carbs_pct"`
+	FiberG           float64  `json:"-"`
+	FiberMissing     bool     `json:"-"`
+	Meat             bool     `json:"meat"`
+	MeatFoods        []string `json:"meat_foods"`
+	CookOccasions    int      `json:"cook_occasions"`
 	// Complete: every planned, non-routine meal of the day holds a plate
 	// (not to be confused with NutritionMissing).
 	Complete bool `json:"complete"`
@@ -150,7 +160,7 @@ func Evaluate(s State, t Target) Evaluation {
 	x := newIndex(s, t)
 	ev := Evaluation{
 		Days: []DayEval{}, Plates: []PlateEval{}, MeatDaysMax: s.Profile.MeatDaysPerWeekMax,
-		Issues: Check(s, t),
+		Issues: Check(s, t), Light: s.Light,
 	}
 	ev.Totals = totalsOf(ev.Issues)
 
@@ -199,9 +209,13 @@ func Evaluate(s State, t Target) Evaluation {
 			CookOccasions: len(x.occasions[dayOf(dk.Date)]),
 		}
 		if hasTarget {
-			sc := dk.Scaled
+			sc := dk.Adjusted
 			de.TargetKcal = &sc
+			if dk.Adjusted != dk.Scaled {
+				de.NormalTargetKcal = dk.Scaled
+			}
 		}
+		de.Light = x.lightOf(dk.Date)
 		if t := x.pol.ProteinTargetG(float64(dk.Planned) / float64(dk.Meals)); t > 0 {
 			de.ProteinTargetG = t
 		}
