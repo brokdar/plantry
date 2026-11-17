@@ -275,4 +275,34 @@ func TestPlanHTTP_WeekLedger(t *testing.T) {
 			assert.NotEqual(t, "soft", it.(map[string]any)["severity"], "soft hints stay out of issues")
 		}
 	})
+
+	// B1: a routine cell without a plate leaves the day's target like a
+	// No-plate cell, so a normal week with a routine breakfast is in band.
+	t.Run("a routine cell without a plate leaves the day target", func(t *testing.T) {
+		a := newReadAPI(t)
+		_, err := a.db.Exec(`UPDATE user_profile SET kcal_target = 1500 WHERE id = 1`)
+		require.NoError(t, err)
+		preset := a.insert(`INSERT INTO presets (name) VALUES ('Oatmeal')`)
+		for wd := 0; wd < 7; wd++ {
+			a.insert(fmt.Sprintf(`INSERT INTO availability_defaults (weekday, slot_id, mode, preset_id) VALUES (%d, %d, 'routine', %d)`, wd, a.breakfast, preset))
+		}
+		for _, d := range []string{"2026-11-01", "2026-11-02", "2026-11-03"} {
+			for _, slot := range []int64{a.lunch, a.dinner} {
+				code, body := a.do(http.MethodPost, "/api/plates",
+					fmt.Sprintf(`{"date":"%s","slot_id":%d,"components":[{"food_id":%d,"portions":5}]}`, d, slot, a.chili))
+				require.Equal(t, http.StatusCreated, code, body)
+			}
+		}
+		code, body := a.do(http.MethodGet, "/api/plan?start=2026-10-31&today=2026-10-30", "")
+		require.Equal(t, http.StatusOK, code, body)
+
+		week := body["week"].(map[string]any)
+		assert.InDelta(t, 1000, week["target_kcal"], 1e-6)
+		assert.InDelta(t, 100, week["pct"], 1e-6)
+		for _, it := range body["soft"].([]any) {
+			rule := it.(map[string]any)["rule"]
+			assert.NotEqual(t, "S2", rule, "no below-band hint: %v", body["soft"])
+			assert.NotEqual(t, "S4", rule, "no week hint: %v", body["soft"])
+		}
+	})
 }

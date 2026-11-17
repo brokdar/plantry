@@ -91,13 +91,13 @@ export function buildLedger(
     label: f.t("plan.ledger.protein"),
     value: perKg
       ? f.t("plan.ledger.pct", { pct: n(week.protein_pct ?? 0) })
-      : f.t("plan.ledger.grams", { g: n(week.avg_protein_g) }),
+      : f.t("plan.ledger.protein_avg", { g: n(week.avg_protein_g) }),
     detail: perKg
       ? f.t("plan.ledger.protein_detail", {
           avg: n(week.avg_protein_g),
           target: n(week.target_protein_g ?? 0),
         })
-      : f.t("plan.ledger.per_day"),
+      : "",
     status: proteinStatus,
     statusText: statusText(proteinStatus, f),
   })

@@ -244,7 +244,7 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 	out = append(out, x.lightIssues(ev)...)
 	// S4: the weekly average outside the policy's week band. No date and no
 	// options: the model decides which days to move.
-	if w := ev.Week; w != nil && w.Days >= minWeekDays {
+	if w := ev.Week; w != nil && w.Days >= MinWeekDays {
 		if code := x.pol.WeekCode(w.Pct / 100); code != "" {
 			out = append(out, issue("S4", code, SeveritySoft).
 				with("days", w.Days).with("avg_kcal", math.Round(w.AvgKcal)).with("target_kcal", math.Round(w.TargetKcal)).

@@ -1,5 +1,6 @@
-import { render, screen, within } from "@testing-library/react"
-import { beforeEach, describe, expect, it } from "vitest"
+import { cleanup, render, screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { SoftIssue, WeekLedger as Week } from "@/lib/api/plan"
 import i18n from "@/lib/i18n"
@@ -90,10 +91,14 @@ describe("WeekLedger", () => {
     expect(status("fat")).toBe("low")
   })
 
-  it("without a weight shows the protein grams and no verdict", () => {
+  it("without a weight shows the protein as an average and no verdict", async () => {
     ledger({ ...week, target_protein_g: undefined, protein_pct: undefined })
     expect(status("protein")).toBe("info")
-    expect(screen.getByText("80 g")).toBeVisible()
+    expect(screen.getByText("Avg. 80 g a day")).toBeVisible()
+    cleanup()
+    await i18n.changeLanguage("de")
+    ledger({ ...week, target_protein_g: undefined, protein_pct: undefined })
+    expect(screen.getByText("Ø 80 g am Tag")).toBeVisible()
   })
 
   it("leaves fibre out when the server has none, and counts light days", () => {
@@ -181,5 +186,47 @@ describe("light marks", () => {
     expect(dayMeterTargets(t, meal)).toBe(t)
     expect(dayMeterTargets(t, day)?.kcal).toBe(1870)
     expect(dayMeterTargets(null, day)).toBeNull()
+  })
+})
+
+describe("WeekLedger on a phone", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes("max-width: 767px"),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    )
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("is one calm line while everything is in range, open on tap", async () => {
+    ledger()
+    const toggle = screen.getByRole("button", { name: "Week on track" })
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByTestId("ledger-kcal")).not.toBeInTheDocument()
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByTestId("ledger-kcal")).toBeVisible()
+  })
+
+  it("names only what is off, with arrows", () => {
+    ledger({ ...week, pct: 27, fat_pct: 50 }, [
+      soft("S4", "week_kcal_below_band"),
+      soft("S5", "week_fat_out_of_range", {
+        params: { range_low_pct: 20, range_high_pct: 35 },
+      }),
+    ])
+    const toggle = screen.getByTestId("ledger-toggle")
+    expect(toggle).toHaveTextContent("Energy 27 %")
+    expect(toggle).toHaveTextContent("Fat")
+    expect(toggle).toHaveTextContent("below")
+    expect(toggle).toHaveTextContent("above")
+    expect(toggle).not.toHaveTextContent("Protein")
+    expect(toggle).not.toHaveTextContent("Week on track")
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
   })
 })

@@ -284,22 +284,21 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
 
   const grid = dates.map((date) => slots.map((s) => buildCell(date, s.id)))
 
-  const days: BoardDay[] = dates.map((date, i) => ({
-    date,
-    weekdayShort: formatDate(date, f, { weekday: "short" }),
-    dayNumber: formatDate(date, f, { day: "numeric" }),
-    weekday: formatDate(date, f, { weekday: "long" }),
-    isToday: date === plan.window.today,
-    nutrition: nutrition.get(date) ?? null,
-    light: nutrition.has(date)
-      ? lightLabel(
-          nutrition.get(date)!,
-          (short) => slotLabel(f.t, `slot.${short}`),
-          f
-        )
-      : null,
-    cells: grid[i],
-  }))
+  const days: BoardDay[] = dates.map((date, i) => {
+    const day = nutrition.get(date) ?? null
+    return {
+      date,
+      weekdayShort: formatDate(date, f, { weekday: "short" }),
+      dayNumber: formatDate(date, f, { day: "numeric" }),
+      weekday: formatDate(date, f, { weekday: "long" }),
+      isToday: date === plan.window.today,
+      nutrition: day,
+      light: day
+        ? lightLabel(day, (short) => slotLabel(f.t, `slot.${short}`), f)
+        : null,
+      cells: grid[i],
+    }
+  })
 
   const rows: BoardRow[] = slots.map((slot, si) => {
     const rowCells = grid.map((dayCells) => dayCells[si])

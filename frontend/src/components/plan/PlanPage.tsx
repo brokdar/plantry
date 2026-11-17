@@ -27,7 +27,6 @@ import { useSettingItems } from "@/lib/queries/settings"
 import { cn } from "@/lib/utils"
 
 import { Board } from "./Board"
-import { WeekLedger } from "./WeekLedger"
 import { BoardSkeleton } from "./BoardSkeleton"
 import { DiscardDialog } from "./DiscardDialog"
 import { DraftBar } from "./DraftBar"
@@ -38,6 +37,7 @@ import { PlanToolbar } from "./PlanToolbar"
 import { ReplanSheet } from "./ReplanSheet"
 import { ShortcutsDialog } from "./ShortcutsDialog"
 import { useIsPhone, useIsWide } from "./use-is-phone"
+import { WeekLedger } from "./WeekLedger"
 
 interface PlanPageProps {
   /** The window start from the URL; undefined opens the anchored window. */
