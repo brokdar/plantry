@@ -187,6 +187,7 @@ func (h *planner) plan() (Proposal, error) {
 			return Proposal{}, err
 		}
 	}
+	h.topUpFloors()
 	h.prop.Notes = strings.Join(append([]string{h.exploreNote()}, h.notes...), "\n")
 	h.prop.Notes = strings.TrimSpace(h.prop.Notes)
 	return h.prop, nil

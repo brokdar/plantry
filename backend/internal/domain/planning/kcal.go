@@ -8,11 +8,10 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 )
 
-// The S2 band: a complete day's kcal outside [KcalBandLow, KcalBandHigh] of
-// its scaled target is a soft issue (Evaluate). Constants live here only.
+// The S2 band (a complete day's kcal outside the policy's day band of its
+// scaled target is a soft issue, Evaluate) and the floors come from the
+// nutrition policy (policy.go).
 const (
-	KcalBandLow  = 0.9
-	KcalBandHigh = 1.1
 	// ProteinMarginPts is how far below the profile's protein share a day
 	// may fall before S3 reports it.
 	ProteinMarginPts = 5.0
@@ -138,8 +137,9 @@ func writeDayBudgets(b *strings.Builder, x *index) {
 // the chooser is never asked to close them.
 func kcalNote(s State, t Target) string {
 	var parts []string
+	pol := PolicyOf(s.Profile)
 	for _, d := range DayKcals(s, t) {
-		if d.Complete && d.Proposed && d.Kcal < d.Scaled*KcalBandLow {
+		if d.Complete && d.Proposed && d.Kcal < d.Scaled*pol.DayLow {
 			parts = append(parts, fmt.Sprintf("%s −%.0f kcal", d.Date.Weekday().String()[:3], d.Gap))
 		}
 	}

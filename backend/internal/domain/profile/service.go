@@ -3,6 +3,8 @@ package profile
 import (
 	"context"
 	"fmt"
+	"slices"
+	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 )
@@ -24,31 +26,39 @@ func (s *Service) Get(ctx context.Context) (*Profile, error) {
 
 // Update validates and persists the profile.
 func (s *Service) Update(ctx context.Context, p *Profile) (*Profile, error) {
+	if p.Goal == "" {
+		p.Goal = GoalMaintain
+	}
 	if err := validate(p); err != nil {
 		return nil, err
 	}
 	return s.repo.Update(ctx, p)
 }
 
-// ReplaceInput is a full replace of the profile, except that a nil DietType or
-// HouseholdPortions keeps the stored value. Profile.DietType and
-// Profile.HouseholdPortions are ignored.
+// ReplaceInput is a full replace of the profile, except that a nil DietType,
+// HouseholdPortions or Goal keeps the stored value. Profile.DietType,
+// Profile.HouseholdPortions and Profile.Goal are ignored.
 type ReplaceInput struct {
 	Profile           Profile
 	DietType          *DietType
 	HouseholdPortions *float64
+	Goal              *Goal
 }
 
 // Replace merges in with the stored profile, then validates and persists it.
 func (s *Service) Replace(ctx context.Context, in ReplaceInput) (*Profile, error) {
 	p := in.Profile
-	if in.DietType == nil || in.HouseholdPortions == nil {
+	if in.DietType == nil || in.HouseholdPortions == nil || in.Goal == nil {
 		stored, err := s.repo.Get(ctx)
 		if err != nil {
 			return nil, err
 		}
 		p.DietType = stored.DietType
 		p.HouseholdPortions = stored.HouseholdPortions
+		p.Goal = stored.Goal
+	}
+	if in.Goal != nil {
+		p.Goal = *in.Goal
 	}
 	if in.DietType != nil {
 		p.DietType = *in.DietType
@@ -83,8 +93,20 @@ func validate(p *Profile) error {
 		return fmt.Errorf("%w: must be > 0 and <= %g", domain.ErrInvalidHouseholdPortions, MaxHouseholdPortions)
 	}
 
+	if !p.Goal.Valid() {
+		return fmt.Errorf("%w: %q", domain.ErrInvalidGoal, p.Goal)
+	}
+	if err := validateBody(p); err != nil {
+		return err
+	}
+
 	if p.KcalTarget != nil && *p.KcalTarget <= 0 {
 		return fmt.Errorf("%w: kcal_target must be positive", domain.ErrInvalidMacros)
+	}
+	// A target below the safety floor could never be planned: the floor is a
+	// hard rule.
+	if p.KcalTarget != nil && p.Sex != nil && *p.KcalTarget < MinDailyKcal(p.Sex) {
+		return fmt.Errorf("%w: kcal_target below %.0f", domain.ErrKcalBelowFloor, MinDailyKcal(p.Sex))
 	}
 
 	var sum float64
@@ -110,5 +132,32 @@ func validate(p *Profile) error {
 		return fmt.Errorf("%w: macro percentages sum to %.1f (max 100)", domain.ErrInvalidMacros, sum)
 	}
 
+	return nil
+}
+
+// Bounds of the optional body data: generous, they only catch typos.
+const (
+	MinBirthYear = 1900
+	maxWeightKg  = 500
+	maxHeightCm  = 280
+)
+
+func validateBody(p *Profile) error {
+	bad := func(msg string) error { return fmt.Errorf("%w: %s", domain.ErrInvalidBodyData, msg) }
+	if p.WeightKg != nil && (*p.WeightKg <= 0 || *p.WeightKg > maxWeightKg) {
+		return bad("weight_kg out of range")
+	}
+	if p.HeightCm != nil && (*p.HeightCm <= 0 || *p.HeightCm > maxHeightCm) {
+		return bad("height_cm out of range")
+	}
+	if p.BirthYear != nil && (*p.BirthYear < MinBirthYear || *p.BirthYear > time.Now().Year()) {
+		return bad("birth_year out of range")
+	}
+	if p.Sex != nil && !p.Sex.Valid() {
+		return bad("sex must be female or male")
+	}
+	if p.ActivityLevel != nil && !slices.Contains(ActivityLevels, *p.ActivityLevel) {
+		return bad("activity_level must be 1.4, 1.6 or 1.8")
+	}
 	return nil
 }

@@ -194,6 +194,9 @@ func (r *repairer) describe(v Issue, seen map[string]bool) string {
 	case "H8." + CodeVarietyRepeat:
 		return fmt.Sprintf("H8: %s cooks %s again, last eaten or cooked %v (within %d weeks). Fix: choose a different main or standalone recipe there, with last_eaten empty or older.",
 			where, foodName(r.s, intParam(v, "food_id")), v.Params["last_eaten"], r.s.Settings.VarietyWeeks)
+	case "H9." + CodeKcalBelowFloor:
+		return fmt.Sprintf("H9: %s holds %d kcal per person, below the safety floor of %d kcal for that day (its target is %d). This is a hard rule, never planned below. Fix: raise the portions of that day's plates or add a side or snack until the day reaches at least %d kcal.",
+			v.Date, intParam(v, "kcal"), intParam(v, "floor_kcal"), intParam(v, "target_kcal"), intParam(v, "floor_kcal"))
 	case "H7." + CodeUnknownFood:
 		return fmt.Sprintf("H7: %s names food_id %d, which is not a candidate recipe. Fix: use only ids from the candidate table.", where, intParam(v, "food_id"))
 	case "H7." + CodeNotComposed:

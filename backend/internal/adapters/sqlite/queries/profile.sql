@@ -14,6 +14,12 @@ SET kcal_target           = ?,
     diet_type             = ?,
     meat_days_per_week_max = ?,
     household_portions    = ?,
+    goal                  = ?,
+    weight_kg             = ?,
+    height_cm             = ?,
+    birth_year            = ?,
+    sex                   = ?,
+    activity_level        = ?,
     updated_at            = datetime('now')
 WHERE id = 1
 RETURNING *;

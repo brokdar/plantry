@@ -121,6 +121,68 @@ func TestProfileHandler_Update_PlanningPrefs(t *testing.T) {
 	assert.Equal(t, float64(2000), body["kcal_target"])
 }
 
+func TestProfileHandler_NutritionPolicyFields(t *testing.T) {
+	r := setupProfileRouter(t)
+
+	// Defaults: maintain, no body data.
+	_, body := putProfile(t, r, `{}`)
+	assert.Equal(t, "maintain", body["goal"])
+	assert.Nil(t, body["weight_kg"])
+	assert.Nil(t, body["sex"])
+
+	code, body := putProfile(t, r, `{"goal":"lose","weight_kg":82.5,"height_cm":180,"birth_year":1985,"sex":"male","activity_level":1.6,"kcal_target":1900}`)
+	require.Equal(t, http.StatusOK, code, body)
+	assert.Equal(t, "lose", body["goal"])
+	assert.Equal(t, 82.5, body["weight_kg"])
+	assert.Equal(t, float64(180), body["height_cm"])
+	assert.Equal(t, float64(1985), body["birth_year"])
+	assert.Equal(t, "male", body["sex"])
+	assert.Equal(t, 1.6, body["activity_level"])
+
+	// An absent goal keeps the stored one; body fields are a full replace.
+	code, body = putProfile(t, r, `{"kcal_target":1900}`)
+	require.Equal(t, http.StatusOK, code, body)
+	assert.Equal(t, "lose", body["goal"])
+	assert.Nil(t, body["weight_kg"])
+	assert.Nil(t, body["sex"])
+	assert.Nil(t, body["activity_level"])
+}
+
+func TestProfileHandler_Update_InvalidNutritionPolicyFields(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		wantKey string
+	}{
+		{"goal", `{"goal":"bulk"}`, "error.profile.invalid_goal"},
+		{"weight zero", `{"weight_kg":0}`, "error.profile.invalid_body_data"},
+		{"weight huge", `{"weight_kg":900}`, "error.profile.invalid_body_data"},
+		{"height negative", `{"height_cm":-1}`, "error.profile.invalid_body_data"},
+		{"birth year old", `{"birth_year":1800}`, "error.profile.invalid_body_data"},
+		{"birth year future", `{"birth_year":2999}`, "error.profile.invalid_body_data"},
+		{"sex", `{"sex":"x"}`, "error.profile.invalid_body_data"},
+		{"activity", `{"activity_level":1.5}`, "error.profile.invalid_body_data"},
+		{"kcal below the female floor", `{"sex":"female","kcal_target":1100}`, "error.profile.kcal_below_floor"},
+		{"kcal below the male floor", `{"sex":"male","kcal_target":1400}`, "error.profile.kcal_below_floor"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := setupProfileRouter(t)
+			code, body := putProfile(t, r, tc.payload)
+			require.Equal(t, http.StatusBadRequest, code)
+			assert.Equal(t, tc.wantKey, body["message_key"])
+		})
+	}
+
+	t.Run("floor targets pass, and no floor without sex", func(t *testing.T) {
+		r := setupProfileRouter(t)
+		code, body := putProfile(t, r, `{"sex":"female","kcal_target":1200}`)
+		require.Equal(t, http.StatusOK, code, body)
+		code, body = putProfile(t, r, `{"kcal_target":900}`)
+		require.Equal(t, http.StatusOK, code, body)
+	})
+}
+
 func TestProfileHandler_Update_InvalidPlanningPrefs(t *testing.T) {
 	cases := []struct {
 		name    string

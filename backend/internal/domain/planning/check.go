@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"math"
 	"slices"
 	"time"
 
@@ -45,10 +46,13 @@ const (
 	CodePlateOnConfirmedCell  = "plate_on_confirmed_cell"
 	CodeVarietyRepeat         = "variety_repeat"
 	CodeVarietyRelaxed        = "variety_relaxed"
+	CodeKcalBelowFloor        = "kcal_below_floor"
 	// Soft rules (Evaluate).
-	CodeKcalBelowBand = "kcal_below_band"
-	CodeKcalAboveBand = "kcal_above_band"
-	CodeProteinLow    = "protein_below_target"
+	CodeKcalBelowBand     = "kcal_below_band"
+	CodeKcalAboveBand     = "kcal_above_band"
+	CodeProteinLow        = "protein_below_target"
+	CodeWeekKcalBelowBand = "week_kcal_below_band"
+	CodeWeekKcalAboveBand = "week_kcal_above_band"
 )
 
 // Issue is one finding of the checker (D22). Plates and sessions of a
@@ -81,6 +85,7 @@ func Check(s State, t Target) []Issue {
 	out = append(out, x.h6()...)
 	out = append(out, x.h7()...)
 	out = append(out, x.h8()...)
+	out = append(out, x.h9()...)
 	return out
 }
 
@@ -107,7 +112,7 @@ func BoardIssues(s State) []Issue {
 			if is.Code == CodeMissingPlate && (!drafts || is.Date < today) {
 				continue
 			}
-		case "H2", "H5", "H8":
+		case "H2", "H5", "H8", "H9":
 		default:
 			continue
 		}
@@ -464,6 +469,36 @@ func (x *index) h8() []Issue {
 		out = append(out, is.with("food_id", ev.foodID).with("last_eaten", prev.Format(time.DateOnly)))
 	}
 	return out
+}
+
+// h9: the safety floor. A complete day with plates in the target whose kcal
+// per eater fall below the policy's floor (75 % of its scaled target, and the
+// absolute floor for a known sex, scaled the same way) is a violation. Days
+// without a kcal target, with missing nutrition data or without a plate of
+// the target are not judged.
+func (x *index) h9() []Issue {
+	var out []Issue
+	for _, dk := range x.dayAccounts(x.days) {
+		if dk.Target <= 0 || !dk.Complete || dk.NutritionMissing || dk.Kcal <= 0 || !x.plateInTarget(dk.Date) {
+			continue
+		}
+		floor := x.pol.Floor(dk.Target, float64(dk.Planned)/float64(dk.Meals))
+		if dk.Kcal < floor {
+			out = append(out, issue("H9", CodeKcalBelowFloor, SeverityViolation).onDate(dk.Date).
+				with("kcal", math.Round(dk.Kcal)).with("floor_kcal", math.Round(floor)).with("target_kcal", math.Round(dk.Scaled)))
+		}
+	}
+	return out
+}
+
+// plateInTarget reports whether a plate of the target sits on date.
+func (x *index) plateInTarget(date time.Time) bool {
+	for _, p := range x.s.Plates {
+		if dayOf(p.Date) == dayOf(date) && x.inTarget(p.Cell()) {
+			return true
+		}
+	}
+	return false
 }
 
 // earlierCook finds another cook of cook i's food at an earlier cell, on or

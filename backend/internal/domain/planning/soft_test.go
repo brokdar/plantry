@@ -164,8 +164,8 @@ func TestEvaluate_S2OptionsCloseTheGapAndCarryOps(t *testing.T) {
 	seenOut := false
 	for _, o := range opts {
 		assert.Less(t, math.Abs(2200-o.DayKcal), math.Abs(2200-dayKcal), "closer to the target: %+v", o)
-		assert.LessOrEqual(t, o.DayKcal, 2200*planning.KcalBandHigh)
-		inBand := o.DayKcal >= 2200*planning.KcalBandLow
+		assert.LessOrEqual(t, o.DayKcal, 2200*1.1)
+		inBand := o.DayKcal >= 2200*0.9
 		assert.False(t, seenOut && inBand, "in-band options come first")
 		seenOut = seenOut || !inBand
 		switch o.Op.Op {
