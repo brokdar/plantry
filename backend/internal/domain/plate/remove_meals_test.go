@@ -262,3 +262,23 @@ func TestPutOverride_RemovePlateReanchors(t *testing.T) {
 	require.Len(t, res.AlsoChanged, 1)
 	assert.True(t, cell(mon, e.lunch).Equal(e.session(sid).CookCell()))
 }
+
+// Clearing the cook slot's plates (what the e2e slot cleanup does) moves the
+// batch off that slot, so the slot can be deleted: cook_sessions.cook_slot_id
+// is ON DELETE RESTRICT. Before R1 the session kept cooking there and pinned
+// the slot, which then stayed active and gave later plans extra meals.
+func TestClearRange_CookSlotIsFreedForDeletion(t *testing.T) {
+	e := newEnv(t)
+	cook := e.insert(`INSERT INTO time_slots (name_key, icon, sort_order, active) VALUES ('slot.cook', 'moon', 1000000, 1)`)
+	sunCook := e.create(sun, cook, nil, composed(e.chili, 1))
+	sid := sessionOf(sunCook, 0)
+	_, err := e.svc.AddLeftovers(e.ctx, sid, []plate.CellKey{cell(mon, e.lunch), cell(mon, e.dinner)})
+	require.NoError(t, err)
+
+	_, err = e.svc.ClearRange(e.ctx, day(sun), day(sun), cook)
+
+	require.NoError(t, err)
+	assert.True(t, cell(mon, e.lunch).Equal(e.session(sid).CookCell()), "the batch cooks at its first meal left")
+	_, err = e.db.Exec(`DELETE FROM time_slots WHERE id = ?`, cook)
+	assert.NoError(t, err, "no session pins the cook slot")
+}

@@ -115,7 +115,9 @@ test("F4-AC1: re-plan from today: Keep them changes nothing; Change them removes
     slotId = slot.id
     // The generator needs the 10-recipe target (D22) even on a fresh DB.
     // Unknown freezable is not offered as freezable, so mark them freezable.
-    library = await seedRecipeLibrary(tag, 10, true)
+    // Hearty (about 740 kcal a portion), so the refilled days reach the H9
+    // floor.
+    library = await seedRecipeLibrary(tag, 10, true, 490)
     const [chili, curry] = library.mains
 
     const clear = await ctx.delete(`/api/plan?from=${start}&to=${end}`)
