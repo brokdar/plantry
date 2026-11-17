@@ -34,13 +34,17 @@ interface PlanView {
   }[]
 }
 
-async function send(page: Page, text: string) {
+// Sends a message and waits for the scripted closing reply, a positive sign
+// that the turn is over (an absent abort button is also true before the
+// stream starts and after it failed).
+async function send(page: Page, text: string, reply: string) {
   const input = page.getByTestId("assistant-composer-input")
   await input.fill(text)
   await page.getByTestId("assistant-composer-submit").click()
-  await expect(page.getByTestId("assistant-composer-abort")).toHaveCount(0, {
-    timeout: 30_000,
-  })
+  await expect(
+    page.getByTestId("assistant-panel").getByText(reply).first()
+  ).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByTestId("assistant-composer-abort")).toHaveCount(0)
 }
 
 test("a move onto a taken dinner swaps both meals in one change, and Undo restores them", async ({
@@ -114,11 +118,16 @@ test("a move onto a taken dinner swaps both meals in one change, and Undo restor
     }
     await useScript(0)
     await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto(`/plan?start=${start}&assistant=1`)
+    // Open the panel from the toolbar, not with `?assistant=1`: a page that
+    // loads with the panel open restores the latest conversation of the shared
+    // DB (another spec's, or an earlier run's), whose change lines would count
+    // as ours and whose switch can land mid-turn.
+    await page.goto(`/plan?start=${start}`)
+    await page.getByRole("button", { name: "Ask assistant" }).click()
     const panel = page.getByTestId("assistant-panel")
     await expect(panel).toBeVisible()
 
-    await send(page, "plan two dinners")
+    await send(page, "plan two dinners", "Both dinners are planned.")
     await expect(panel.getByTestId("assistant-change")).toHaveCount(1)
     expect(await foodAt(mon)).toBe(a.id)
     expect(await foodAt(tue)).toBe(b.id)
@@ -127,7 +136,7 @@ test("a move onto a taken dinner swaps both meals in one change, and Undo restor
     )!.plate!.id
 
     await useScript(plateA)
-    await send(page, "swap them")
+    await send(page, "swap them", "Swapped the two dinners.")
     const line = panel
       .getByTestId("assistant-change")
       .filter({ hasText: "swapped" })

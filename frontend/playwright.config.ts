@@ -47,6 +47,7 @@ const GLOBAL_SETTINGS_SPECS = [
   "plan-review-llm.spec.ts",
   "plan-wizard.spec.ts",
   "profile.spec.ts",
+  "settings-insights-generate.spec.ts",
   "settings-preferences.spec.ts",
   "today-freezer.spec.ts",
   "today-rate.spec.ts",
