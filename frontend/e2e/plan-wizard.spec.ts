@@ -115,8 +115,9 @@ test.describe("plan wizard", () => {
     const original = (
       await json<{ items: Default[] }>(ctx, "/api/availability/defaults")
     ).items
-    // Hearty recipes (about 740 kcal a portion): a day of breakfast, lunch
-    // and dinner from light ones stays under the H9 floor.
+    // Hearty recipes (600 g at 490 kcal/100 g for 4: 735 kcal a portion): a
+    // 3-meal day of the default ones (180 kcal a portion) stays under the H9
+    // floor.
     const library = await seedRecipeLibrary(tag, 10, undefined, 490)
     const oatsFood = await seedLeafFood({
       name: `Oats ${tag}`,

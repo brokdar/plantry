@@ -1258,8 +1258,9 @@ func (s *Service) Apply(ctx context.Context, snap PlanSnapshot, opts ApplyOption
 			j.created = ActionRestore
 		}
 		t := newTracker(j)
-		t.restore = true
+		t.restore = opts.Restore
 		pinned := map[int64]bool{}
+		t.pullBack = pinned
 		for _, st := range steps {
 			for _, c := range st.sp.Components {
 				if c.Session == nil || c.Session.ID == 0 || pinned[c.Session.ID] {
@@ -1721,17 +1722,20 @@ func emptySnapshot() PlanSnapshot {
 // prior keeps each tracked session's cook cell and link cells before the
 // mutation, for the R1 re-anchor (anchor.go). Sessions in noMove are never
 // re-anchored (RemovePlates' explicit moves win); restore makes a meal
-// before the cook pull the cook back to it (Apply with Restore). moves
+// before the cook pull the cook back to it (Apply with Restore), and so does
+// pullBack for its sessions (the ones an Apply snapshot links by id, such as
+// an overwrite's undo). moves
 // collects every re-anchor settle made.
 type tracker struct {
-	before  map[int64]float64
-	prior   map[int64]batchBefore
-	ids     []int64
-	unify   []int64
-	noMove  map[int64]bool
-	restore bool
-	moves   []AlsoChanged
-	j       *journal
+	before   map[int64]float64
+	prior    map[int64]batchBefore
+	ids      []int64
+	unify    []int64
+	noMove   map[int64]bool
+	restore  bool
+	pullBack map[int64]bool
+	moves    []AlsoChanged
+	j        *journal
 }
 
 func newTracker(j *journal) *tracker {
@@ -1828,7 +1832,7 @@ func (s *Service) reanchorSession(ctx context.Context, t *tracker, sess *CookSes
 		return false, err
 	}
 	in := anchorInput{
-		Session: *sess, Before: t.prior[sess.ID], Links: links, Restore: t.restore,
+		Session: *sess, Before: t.prior[sess.ID], Links: links, Restore: t.restore || t.pullBack[sess.ID], Today: dateOnly(s.now()),
 		KeepDays: e.set.KeepDays(f.KeepDays), Set: e.set, Order: e.order,
 	}
 	if in.Before.cookedAhead(e.order) {

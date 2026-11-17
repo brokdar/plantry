@@ -3,6 +3,7 @@ package plate_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -281,4 +282,75 @@ func TestClearRange_CookSlotIsFreedForDeletion(t *testing.T) {
 	assert.True(t, cell(mon, e.lunch).Equal(e.session(sid).CookCell()), "the batch cooks at its first meal left")
 	_, err = e.db.Exec(`DELETE FROM time_slots WHERE id = ?`, cook)
 	assert.NoError(t, err, "no session pins the cook slot")
+}
+
+// A batch whose remaining meals all eat from the freezer keeps its cook: a
+// frozen meal is not where the fresh batch is cooked.
+func TestDelete_FrozenMealsKeepTheCook(t *testing.T) {
+	e := newEnv(t)
+	e.set("plan.freezing_enabled", "true")
+	e.exec(`UPDATE foods SET freezable = 1, keep_days = 1 WHERE id = ?`, e.chili)
+	sunPlate := e.create(sun, e.dinner, nil, composed(e.chili, 1))
+	sid := sessionOf(sunPlate, 0)
+	_, err := e.svc.SetSessionPortions(e.ctx, sid, plate.SessionPortions{Portions: 4, FrozenPortions: 2})
+	require.NoError(t, err)
+	_, err = e.svc.AddLeftovers(e.ctx, sid, []plate.CellKey{cell(wed, e.lunch)})
+	require.NoError(t, err)
+	require.Equal(t, []string{
+		"2026-11-01/dinner chili cook=2026-11-01/dinner portions=4",
+		"2026-11-04/lunch chili cook=2026-11-01/dinner portions=4",
+	}, e.describePlan(), "Wed lunch is past the 1 keep day: it eats frozen portions")
+
+	res, err := e.svc.RemoveMeals(e.ctx, []int64{sunPlate.ID})
+
+	require.NoError(t, err)
+	assert.Empty(t, res.AlsoChanged)
+	assert.True(t, cell(sun, e.dinner).Equal(e.session(sid).CookCell()))
+}
+
+// The cook never moves to a cell before today: it goes to the earliest meal
+// from today on (Tue lunch), past Mon lunch.
+func TestDelete_NeverMovesTheCookIntoThePast(t *testing.T) {
+	e := newEnvAt(t, nil, day(tue).Add(12*time.Hour))
+	sunPlate := e.create(sun, e.dinner, nil, composed(e.chili, 1))
+	sid := sessionOf(sunPlate, 0)
+	_, err := e.svc.AddLeftovers(e.ctx, sid, []plate.CellKey{cell(mon, e.lunch), cell(tue, e.lunch)})
+	require.NoError(t, err)
+
+	res, err := e.svc.RemoveMeals(e.ctx, []int64{sunPlate.ID})
+
+	require.NoError(t, err)
+	require.Len(t, res.AlsoChanged, 1)
+	assert.True(t, cell(tue, e.lunch).Equal(e.session(sid).CookCell()), "Mon lunch is past")
+
+	// With every meal left in the past, the batch stays where it is.
+	e2 := newEnvAt(t, nil, day(wed).Add(12*time.Hour))
+	sunPlate = e2.create(sun, e2.dinner, nil, composed(e2.chili, 1))
+	sid = sessionOf(sunPlate, 0)
+	_, err = e2.svc.AddLeftovers(e2.ctx, sid, []plate.CellKey{cell(mon, e2.lunch)})
+	require.NoError(t, err)
+
+	res, err = e2.svc.RemoveMeals(e2.ctx, []int64{sunPlate.ID})
+
+	require.NoError(t, err)
+	assert.Empty(t, res.AlsoChanged)
+	assert.True(t, cell(sun, e2.dinner).Equal(e2.session(sid).CookCell()))
+}
+
+// A past cell later in the list fails the whole call: the override written
+// for the earlier cell rolls back and no plate goes.
+func TestSetAway_LaterPastCellWritesNothing(t *testing.T) {
+	e := newEnv(t)
+	_, sid := e.lasagne()
+	e.create(sun, e.dinner, nil, grams(e.rice, 100))
+	before := e.describePlan()
+
+	_, err := e.avail.SetAway(e.ctx, availability.AwayInput{
+		Cells: []plate.CellKey{cell(wed, e.lunch), cell(sun, e.dinner)}, Today: day(mon),
+	})
+
+	require.ErrorIs(t, err, domain.ErrPastCell)
+	assert.Equal(t, 0, e.count("availability_overrides"))
+	assert.Equal(t, before, e.describePlan())
+	assert.True(t, cell(wed, e.lunch).Equal(e.session(sid).CookCell()))
 }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
@@ -33,7 +34,8 @@ type availabilityEnv struct {
 func setupAvailabilityRouter(t *testing.T) *availabilityEnv {
 	t.Helper()
 	db := testhelper.NewTestDB(t)
-	plates, svc := testsvc.Plan(db)
+	// The plates lie in late October 2026: R1 moves no cook before today.
+	plates, svc := testsvc.PlanAt(db, nil, func() time.Time { return time.Date(2026, 10, 1, 12, 0, 0, 0, time.Local) })
 	h := handlers.NewAvailabilityHandler(svc)
 	pw := handlers.NewPlanWriteHandler(plates)
 	r := chi.NewRouter()

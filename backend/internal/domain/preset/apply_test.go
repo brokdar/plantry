@@ -575,3 +575,55 @@ func TestCopyWeek_Validation(t *testing.T) {
 	_, err = e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: copySource, TargetStart: copyTarget, OnConflict: "merge"})
 	assert.ErrorIs(t, err, domain.ErrInvalidInput)
 }
+
+// ── R1: Apply leaves unrelated batches alone ────────────────────────────
+
+// laterCookBatch builds a future batch whose cook lies after one of its
+// meals (Chili eaten Mon dinner, Tue lunch and Tue dinner, cooking Tue
+// lunch, as a re-plan move can leave it) and returns it with Tue.
+func (e *applyTestEnv) laterCookBatch(t *testing.T) (sid int64, tue time.Time) {
+	t.Helper()
+	mon := time.Date(2030, 3, 4, 0, 0, 0, 0, time.UTC)
+	tue = mon.AddDate(0, 0, 1)
+	cook := e.create(t, mon, e.slotID, composedComp(e.chiliID))
+	sid = *cook.Components[0].CookSessionID
+	_, err := e.plateSvc.AddLeftovers(e.ctx, sid, []plate.CellKey{{Date: tue, SlotID: e.lunchID}, {Date: tue, SlotID: e.slotID}})
+	require.NoError(t, err)
+	_, err = e.db.ExecContext(e.ctx, `UPDATE cook_sessions SET cook_date = ?, cook_slot_id = ? WHERE id = ?`, tue.Format(time.DateOnly), e.lunchID, sid)
+	require.NoError(t, err)
+	return sid, tue
+}
+
+func (e *applyTestEnv) cookCell(t *testing.T, sid int64) plate.CellKey {
+	t.Helper()
+	v, err := e.plateSvc.Session(e.ctx, sid)
+	require.NoError(t, err)
+	return v.CookCell()
+}
+
+// Overwriting one of the batch's meals tracks the batch, but only a restore
+// (or a snapshot linking it by id) may pull its cook back to an earlier meal.
+func TestApply_OverwriteKeepsTheCookOfAnUnrelatedBatch(t *testing.T) {
+	e := newApplyTestEnv(t)
+	p := e.seedPreset(t, "X")
+	sid, tue := e.laterCookBatch(t)
+
+	res, err := e.presetSvc.Apply(e.ctx, p.ID, preset.ApplyRequest{TargetDate: tue, OnConflict: preset.ConflictOverwrite})
+
+	require.NoError(t, err)
+	require.Len(t, res.Removed.Plates, 1)
+	assert.True(t, plate.CellKey{Date: tue, SlotID: e.lunchID}.Equal(e.cookCell(t, sid)), "the cook stays on Tue lunch")
+}
+
+func TestCopyWeek_OverwriteKeepsTheCookOfAnUnrelatedBatch(t *testing.T) {
+	e := newApplyTestEnv(t)
+	sid, tue := e.laterCookBatch(t)
+	source := tue.AddDate(0, 0, -14)
+	e.leafPlate(t, source)
+
+	res, err := e.presetSvc.CopyWeek(e.ctx, preset.CopyWeekRequest{SourceStart: source, TargetStart: tue, OnConflict: preset.ConflictOverwrite})
+
+	require.NoError(t, err)
+	require.Len(t, res.Removed.Plates, 1)
+	assert.True(t, plate.CellKey{Date: tue, SlotID: e.lunchID}.Equal(e.cookCell(t, sid)), "the cook stays on Tue lunch")
+}

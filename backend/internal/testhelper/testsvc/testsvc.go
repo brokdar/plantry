@@ -33,6 +33,16 @@ func Plan(db *sql.DB) (*plate.Service, *availability.Service) {
 // PlanWithEvents is Plan with the plate service writing its audit trail to
 // events.
 func PlanWithEvents(db *sql.DB, events plate.EventLog) (*plate.Service, *availability.Service) {
+	return PlanAt(db, events, nil)
+}
+
+// PlanAt is PlanWithEvents with the plate service's clock (nil: time.Now),
+// for tests whose plates lie before the real today (the R1 re-anchor never
+// moves a cook into the past).
+func PlanAt(db *sql.DB, events plate.EventLog, now func() time.Time) (*plate.Service, *availability.Service) {
+	if events == nil {
+		events = sqlite.NewPlateEventRepo(db)
+	}
 	tx := sqlite.NewTxRunner(db)
 	avail := availability.NewService(sqlite.NewAvailabilityRepo(db), tx, sqlite.NewPresetRepo(db))
 	plates := plate.NewService(plate.Deps{
@@ -47,6 +57,7 @@ func PlanWithEvents(db *sql.DB, events plate.EventLog) (*plate.Service, *availab
 		Events:        events,
 		Outcomes:      sqlite.NewAIRunRepo(db),
 		Tx:            tx,
+		Now:           now,
 	})
 	avail.WithPlates(plates)
 	return plates, avail

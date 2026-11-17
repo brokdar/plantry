@@ -1,5 +1,10 @@
 package plate
 
+import (
+	"slices"
+	"time"
+)
+
 // Batch invariants (meal editing, R1 and R2). The decision is pure; settle
 // applies it to every session a mutation tracks.
 //
@@ -52,9 +57,12 @@ type anchorInput struct {
 	Links   []Link
 	// CookNone: the session's cook cell resolves to "none".
 	CookNone bool
-	// Restore: the mutation brings removed meals back (Apply with Restore),
-	// so a meal before the cook pulls the cook back to it.
-	Restore  bool
+	// Restore: the mutation brings removed meals back (Apply with Restore,
+	// or an Apply snapshot that links this session by id), so a meal before
+	// the cook pulls the cook back to it.
+	Restore bool
+	// Today: the cook never moves to a cell before it.
+	Today    time.Time
 	KeepDays int
 	Set      BatchSettings
 	Order    SlotOrder
@@ -63,16 +71,24 @@ type anchorInput struct {
 // reanchor returns the cell an uncooked batch must cook at after a mutation
 // and true, or false when it stays. A batch whose cook cell no longer holds
 // one of its meals moves to its earliest meal unless it was cooked ahead; a
-// cooked-ahead batch moves only when its cook cell became "none". A cooked
+// cooked-ahead batch moves only when its cook cell became "none". The target
+// is the earliest meal that is neither frozen (it eats from the freezer, not
+// from the fresh cook) nor before Today; with none, the batch stays. A cooked
 // batch never moves, nor does a move that would add a past_keep_days warning.
-// The returned link is the earliest meal (the one now cooking).
+// The returned link is the meal now cooking.
 func reanchor(in anchorInput) (Link, bool) {
 	s := in.Session
 	if s.CookedAt != nil || len(in.Links) == 0 {
 		return Link{}, false
 	}
 	ordered := OrderLinks(s, in.Links, in.KeepDays, in.Order)
-	first := ordered[0]
+	i := slices.IndexFunc(ordered, func(l Link) bool {
+		return l.Kind != KindFrozen && !dateOnly(l.Cell.Date).Before(dateOnly(in.Today))
+	})
+	if i < 0 {
+		return Link{}, false
+	}
+	first := ordered[i]
 	cook := s.CookCell()
 	if first.Cell.Equal(cook) {
 		return Link{}, false

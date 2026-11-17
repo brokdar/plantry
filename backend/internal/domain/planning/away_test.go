@@ -8,6 +8,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 )
 
 // A day away (every lunch and dinner No plate) is not judged by H9, S2 or
@@ -65,4 +66,24 @@ func TestEvaluate_HalfAwayDayIsStillJudged(t *testing.T) {
 	assert.Contains(t, codeDates(issues, "H9", planning.CodeKcalBelowFloor), mon)
 	assert.Contains(t, codeDates(ev.Issues, "S2", planning.CodeKcalBelowBand), mon)
 	assert.Equal(t, 7, ev.Week.Days)
+}
+
+// Lunch No plate and a routine dinner that holds a plate is a day away too
+// (breakfast is a light slot): routine cells do not count, so every judged meal is away. Decision: kept
+// (the routine is the user's own, not the planner's to judge).
+func TestEvaluate_NoneLunchAndRoutineDinnerIsAway(t *testing.T) {
+	s := baseState()
+	s.Profile.KcalTarget = f64(3000)
+	s.SlotKind = map[int64]slot.Kind{breakfast: slot.KindLight}
+	setMode(&s, cell(mon, lunch), availability.ModeNone)
+	setMode(&s, cell(mon, dinner), availability.ModeRoutine)
+
+	ev, issues := weekOf(s)
+
+	d := dayEval(t, ev, mon)
+	assert.True(t, d.Away)
+	assert.Positive(t, d.Kcal, "the routine dinner's plate still counts on the day")
+	assert.NotContains(t, codeDates(issues, "H9", planning.CodeKcalBelowFloor), mon)
+	assert.NotContains(t, codeDates(ev.Issues, "S2", planning.CodeKcalBelowBand), mon)
+	assert.Equal(t, 6, ev.Week.Days)
 }
