@@ -1337,6 +1337,10 @@ func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, ses
 		if err != nil {
 			return err
 		}
+		// A snapshot's explicit main yields to the main the plate has now.
+		if pc.Position == PositionMain && slices.ContainsFunc(existing, func(c PlateComponent) bool { return c.Position == PositionMain }) {
+			pc.Position = PositionSide
+		}
 		if err := s.resolvePosition(pc, f, existing); err != nil {
 			return err
 		}

@@ -85,3 +85,30 @@ func TestPosition_SwapKeepsPositionAndSnapshotRoundTrips(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []plate.Position{plate.PositionMain, plate.PositionExtra}, positions(e.plateAt(mon, e.lunch)))
 }
+
+func TestPosition_UndoRemovedMainOntoPlateWithNewMainDemotesToSide(t *testing.T) {
+	e := newEnv(t)
+	p := e.create(mon, e.lunch, nil, composed(e.chili, 1), grams(e.rice, 100))
+	require.Equal(t, []plate.Position{plate.PositionMain, plate.PositionExtra}, positions(p))
+
+	// Removing the main's session keeps the plate; a new recipe takes over
+	// as the derived main.
+	snap, err := e.svc.DeleteSession(e.ctx, sessionOf(p, 0))
+	require.NoError(t, err)
+	p, err = e.svc.AddComponent(e.ctx, p.ID, composed(e.curry, 1))
+	require.NoError(t, err)
+	require.Contains(t, positions(p), plate.PositionMain)
+
+	// Undo: the snapshot's explicit main yields instead of failing.
+	_, err = e.svc.Apply(e.ctx, snap, plate.ApplyOptions{OnConflict: plate.ConflictFail, Restore: true})
+	require.NoError(t, err)
+	got := e.plateAt(mon, e.lunch)
+	require.Len(t, got.Components, 3)
+	mains := 0
+	for _, c := range got.Components {
+		if c.Position == plate.PositionMain {
+			mains++
+		}
+	}
+	assert.Equal(t, 1, mains)
+}

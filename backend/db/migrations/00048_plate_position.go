@@ -23,6 +23,9 @@ func init() {
 // else extra. It is a Go migration because the leaf's effective role needs
 // the name classifier; sqlc reads the end state from
 // schema_patches/00048_plate_position.sql.
+//
+// The backfill intentionally uses the classifier as of this migration; later
+// classifier changes affect only databases that had not yet applied 00048.
 func upPlatePosition(ctx context.Context, tx *sql.Tx) error {
 	if _, err := tx.ExecContext(ctx, `ALTER TABLE plate_components ADD COLUMN position TEXT NOT NULL DEFAULT 'side' CHECK (position IN ('main','side','extra'))`); err != nil {
 		return fmt.Errorf("add position: %w", err)

@@ -42,6 +42,9 @@ func TestMigration00048_BackfillsPositions(t *testing.T) {
 	mustExec(t, conn, `INSERT INTO foods (id, name, kind, source, shop_section) VALUES (7, 'Gurke', 'leaf', 'manual', 'produce')`)
 	mustExec(t, conn, `INSERT INTO foods (id, name, kind, source, shop_section) VALUES (8, 'Joghurt', 'leaf', 'manual', 'dairy_eggs')`)
 
+	mustExec(t, conn, `INSERT INTO foods (id, name, kind, source) VALUES (9, 'Zzqx Unbekannt', 'leaf', 'manual')`)
+	mustExec(t, conn, `INSERT INTO foods (id, name, kind, source, role) VALUES (10, 'Zzqy Override', 'leaf', 'manual', 'side_veg')`)
+
 	plateN := 0
 	comp := func(plateID, foodID int64, sortOrder int) {
 		var kind string
@@ -71,6 +74,7 @@ func TestMigration00048_BackfillsPositions(t *testing.T) {
 	breakfast := plate(5)
 	leaves := plate(1, 7, 8)
 	dessert := plate(1, 6)
+	unclassified := plate(1, 9, 10)
 
 	require.NoError(t, goose.UpTo(conn, "migrations", 48))
 
@@ -93,6 +97,7 @@ func TestMigration00048_BackfillsPositions(t *testing.T) {
 	assert.Equal(t, []string{"main"}, positionsOf(breakfast))
 	assert.Equal(t, []string{"main", "side", "extra"}, positionsOf(leaves), "produce is a side, dairy an extra")
 	assert.Equal(t, []string{"main", "extra"}, positionsOf(dessert))
+	assert.Equal(t, []string{"main", "extra", "side"}, positionsOf(unclassified), "an unclassifiable leaf is an extra, a stored side_veg override a side")
 
 	var plates int
 	require.NoError(t, conn.QueryRow(`SELECT COUNT(*) FROM (SELECT plate_id FROM plate_components WHERE position = 'main' GROUP BY plate_id HAVING COUNT(*) > 1)`).Scan(&plates))
