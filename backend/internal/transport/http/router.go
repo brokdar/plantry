@@ -114,6 +114,9 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Post("/components", h.Plates.AddComponent)
 					r.Put("/components/{pcId}", h.Plates.UpdateComponent)
 					r.Delete("/components/{pcId}", h.Plates.DeleteComponent)
+					r.Post("/move", h.Plates.Move)
+					r.Post("/replace", h.Plates.Replace)
+					r.Post("/copy", h.Plates.Copy)
 					r.Post("/confirm", h.Plates.Confirm)
 					r.Post("/unlock", h.Plates.Unlock)
 					if h.Feedback != nil {
@@ -132,6 +135,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				r.Post("/cooked", h.CookSessions.Cooked)
 				r.Get("/leftover-cells", h.CookSessions.LeftoverCells)
 				r.Post("/leftovers", h.CookSessions.Leftovers)
+				r.Post("/move-cook", h.CookSessions.MoveCook)
 				r.Post("/confirm", h.CookSessions.Confirm)
 				r.Post("/unlock", h.CookSessions.Unlock)
 			})
@@ -145,6 +149,9 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 				if h.PlanWrite != nil {
 					r.Delete("/", h.PlanWrite.Clear)
 					r.Post("/restore", h.PlanWrite.Restore)
+					if h.Availability != nil {
+						r.Post("/revert", h.Availability.Revert)
+					}
 					r.Post("/accept", h.PlanWrite.Accept)
 					r.Post("/unaccept", h.PlanWrite.Unaccept)
 					r.Post("/discard", h.PlanWrite.Discard)

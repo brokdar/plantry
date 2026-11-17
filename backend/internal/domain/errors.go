@@ -134,6 +134,9 @@ var (
 	ErrReplanPast        = errors.New("a re-plan cannot start in the past")
 	// ErrPastCell: a meal operation (SetAway) names a cell before today.
 	ErrPastCell = errors.New("the cell lies in the past")
+	// ErrPlanChangeStale: a hand edit's undo token names rows (or a cell)
+	// written again after it, so reverting it would lose that write.
+	ErrPlanChangeStale = errors.New("the change was edited afterwards")
 
 	// Store sections (Phase 2 D18).
 	ErrInvalidShopSection  = errors.New("unknown store section")
@@ -231,6 +234,7 @@ var messageKeys = []struct {
 	{ErrConfirmedAffected, "error.plan.confirmed_affected"},
 	{ErrReplanPast, "error.plan.replan_past"},
 	{ErrPastCell, "error.plan.past_cell"},
+	{ErrPlanChangeStale, "error.plan.change_stale"},
 }
 
 // MessageKey returns the i18n message key of the first sentinel err wraps,

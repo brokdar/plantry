@@ -14,12 +14,22 @@ import (
 // (past_keep_days of Warnings). A re-anchor never adds a past_keep_days
 // warning.
 
-// What values of AlsoChanged.
-const AlsoCookMoved = "cook_moved"
+// What values of AlsoChanged. AlsoCookMoved: the batch's cook moved to
+// (Date, SlotID), the cell of the meal PlateID (0: none), from (FromDate,
+// FromSlotID). The meal operations (meal.go) add AlsoBecameCooking (the
+// cook moved to the meal PlateID the caller did not name), AlsoCooksFresh
+// (the named meal PlateID left batch SessionID and cooks fresh at its own
+// cell (Date, SlotID); Why says which rule broke) and AlsoBatchResized
+// (D11 resized SessionID, cooking at (Date, SlotID)).
+const (
+	AlsoCookMoved     = "cook_moved"
+	AlsoBecameCooking = "became_cooking_meal"
+	AlsoCooksFresh    = "cooks_fresh"
+	AlsoBatchResized  = "batch_resized"
+)
 
-// AlsoChanged is a change a mutation made to a row the caller did not name:
-// a batch whose cook moved to the meal PlateID on (Date, SlotID), from
-// (FromDate, FromSlotID).
+// AlsoChanged is a change a mutation made beyond what the caller named (see
+// the What values).
 type AlsoChanged struct {
 	SessionID  int64  `json:"session_id"`
 	PlateID    int64  `json:"plate_id"`
@@ -28,6 +38,7 @@ type AlsoChanged struct {
 	What       string `json:"what"`
 	FromDate   string `json:"from_date"`
 	FromSlotID int64  `json:"from_slot_id"`
+	Why        string `json:"why,omitempty"`
 }
 
 // batchBefore is a session as it was before a mutation: its cook cell and

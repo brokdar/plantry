@@ -47,11 +47,32 @@ func (s *stubPlateService) Get(ctx context.Context, id int64) (*plate.Plate, err
 	return &plate.Plate{ID: id, SlotID: 1, Date: d}, nil
 }
 
-func (s *stubPlateService) Update(ctx context.Context, id int64, patch plate.PlatePatch) (*plate.Plate, error) {
+func (s *stubPlateService) UpdateMeal(ctx context.Context, id int64, patch plate.PlatePatch) (plate.MealResult, error) {
+	get := s.Get
 	if s.updateFn != nil {
-		return s.updateFn(ctx, id, patch)
+		get = func(ctx context.Context, id int64) (*plate.Plate, error) { return s.updateFn(ctx, id, patch) }
 	}
-	return s.Get(ctx, id)
+	p, err := get(ctx, id)
+	if err != nil {
+		return plate.MealResult{}, err
+	}
+	return plate.MealResult{Plates: []plate.Plate{*p}}, nil
+}
+
+func (s *stubPlateService) MoveMeal(context.Context, int64, plate.CellKey, plate.Occupant) (plate.MealResult, error) {
+	return plate.MealResult{}, nil
+}
+
+func (s *stubPlateService) ReplaceComponent(context.Context, int64, plate.Selector, int64, plate.Source, *plate.PlateComponent) (plate.MealResult, error) {
+	return plate.MealResult{}, nil
+}
+
+func (s *stubPlateService) CopyMeal(context.Context, int64, []plate.CellKey, plate.CopyAs) (plate.MealResult, error) {
+	return plate.MealResult{}, nil
+}
+
+func (s *stubPlateService) Recorded(ctx context.Context, fn func(ctx context.Context) error) (plate.Undo, error) {
+	return plate.Undo{}, fn(ctx)
 }
 
 func (s *stubPlateService) Delete(_ context.Context, _ int64) (plate.PlanSnapshot, error) {

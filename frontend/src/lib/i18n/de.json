@@ -1058,6 +1058,7 @@
       "confirmed_affected": "Einige dieser Essen sind bestätigt und schon eingekauft.",
       "replan_past": "Neu planen geht frühestens ab heute.",
       "past_cell": "Tage vor heute lassen sich hier nicht ändern.",
+      "change_stale": "Das wurde danach noch geändert und lässt sich nicht mehr rückgängig machen.",
       "row_confirmed": "Dieses Essen ist bestätigt. Entsperre es, bevor der Assistent es ändert.",
       "nothing_to_accept": "In dieser Woche gibt es keine Entwürfe.",
       "state_mismatch": "Einige dieser Essen haben sich inzwischen geändert, deshalb lässt sich das nicht rückgängig machen.",

@@ -252,6 +252,9 @@ type AwayResult struct {
 	Before      []CellOverride
 	Removed     plate.PlanSnapshot
 	AlsoChanged []plate.AlsoChanged
+	// Undo reverts the whole call (Revert): the plate events and every
+	// cell's override.
+	Undo plate.Undo
 }
 
 // SetAway marks cells "none" and removes their plates in one unit of work
@@ -272,6 +275,7 @@ func (s *Service) SetAway(ctx context.Context, in AwayInput) (AwayResult, error)
 			return err
 		}
 		res = AwayResult{Cells: make([]Cell, 0, len(cells)), Before: make([]CellOverride, 0, len(cells))}
+		undoCells := make([]plate.CellUndo, 0, len(cells))
 		for _, c := range cells {
 			if c.Date.Before(today) {
 				return fmt.Errorf("%w: %s", domain.ErrPastCell, c.Date.Format(dateLayout))
@@ -292,18 +296,99 @@ func (s *Service) SetAway(ctx context.Context, in AwayInput) (AwayResult, error)
 				return err
 			}
 			res.Cells = append(res.Cells, Cell{Date: c.Date, SlotID: c.SlotID, Mode: ModeNone, Source: SourceOverride, Note: n})
+			undoCells = append(undoCells, plate.CellUndo{
+				Date: c.Date.Format(dateLayout), SlotID: c.SlotID, Before: undoOverride(prev),
+				After: &plate.CellOverride{Mode: string(ModeNone), Note: n},
+			})
 		}
 		removed, err := s.removeMeals(ctx, cells)
 		if err != nil {
 			return err
 		}
-		res.Removed, res.AlsoChanged = removed.Removed, removed.AlsoChanged
+		res.Removed, res.AlsoChanged, res.Undo = removed.Removed, removed.AlsoChanged, removed.Undo
+		res.Undo.Cells = undoCells
 		return nil
 	})
 	if err != nil {
 		return AwayResult{}, err
 	}
 	return res, nil
+}
+
+// Revert takes back a hand edit's undo token in one unit of work: the plate
+// events through plate.Service.RevertRange and each cell's override back to
+// Before. A cell whose override is no longer After, or a row written after
+// the events, is domain.ErrPlanChangeStale and nothing is written; a token
+// without events or cells is domain.ErrInvalidInput.
+func (s *Service) Revert(ctx context.Context, u plate.Undo) (plate.RowSet, error) {
+	if u.FirstEventID == 0 && len(u.Cells) == 0 {
+		return plate.RowSet{}, fmt.Errorf("%w: nothing to revert", domain.ErrInvalidInput)
+	}
+	if s.plates == nil {
+		return plate.RowSet{}, errPlatesNotWired
+	}
+	rows := plate.RowSet{PlateIDs: []int64{}, SessionIDs: []int64{}}
+	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		dates := make([]time.Time, len(u.Cells))
+		for i, c := range u.Cells {
+			d, err := time.Parse(dateLayout, c.Date)
+			if err != nil {
+				return fmt.Errorf("%w: cell date %q", domain.ErrInvalidInput, c.Date)
+			}
+			dates[i] = d
+			cur, err := s.repo.GetOverride(ctx, d, c.SlotID)
+			if err != nil {
+				return err
+			}
+			if !sameOverride(undoOverride(cur), c.After) {
+				return fmt.Errorf("%w: cell %s slot %d was edited since", domain.ErrPlanChangeStale, c.Date, c.SlotID)
+			}
+		}
+		if u.FirstEventID != 0 {
+			var err error
+			if rows, err = s.plates.RevertRange(ctx, u.FirstEventID, u.LastEventID); err != nil {
+				return err
+			}
+		}
+		for i, c := range u.Cells {
+			if err := s.RestoreOverride(ctx, dates[i], c.SlotID, fromUndo(c.Before)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return plate.RowSet{}, err
+	}
+	return rows, nil
+}
+
+func undoOverride(o *Override) *plate.CellOverride {
+	if o == nil {
+		return nil
+	}
+	return &plate.CellOverride{Mode: string(o.Mode), PresetID: o.PresetID, Note: o.Note}
+}
+
+func fromUndo(o *plate.CellOverride) *Override {
+	if o == nil {
+		return nil
+	}
+	return &Override{Mode: Mode(o.Mode), PresetID: o.PresetID, Note: o.Note}
+}
+
+func sameOverride(a, b *plate.CellOverride) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Mode == b.Mode && equalPtr(a.PresetID, b.PresetID) && equalPtr(a.Note, b.Note)
+}
+
+func equalPtr[T comparable](a, b *T) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 // awayCells resolves AwayInput to distinct cells: the given ones, or every

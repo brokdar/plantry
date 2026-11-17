@@ -135,6 +135,53 @@ func (q *Queries) ListPlateEvents(ctx context.Context) ([]PlateEvent, error) {
 	return items, nil
 }
 
+const listPlateEventsInRange = `-- name: ListPlateEventsInRange :many
+SELECT id, plate_id, cook_session_id, date, slot_id, action, actor, ai_run_id, before_json, after_json, at
+FROM plate_events
+WHERE id >= ?1 AND id <= ?2
+ORDER BY id
+`
+
+type ListPlateEventsInRangeParams struct {
+	FirstID int64
+	LastID  int64
+}
+
+func (q *Queries) ListPlateEventsInRange(ctx context.Context, arg ListPlateEventsInRangeParams) ([]PlateEvent, error) {
+	rows, err := q.db.QueryContext(ctx, listPlateEventsInRange, arg.FirstID, arg.LastID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PlateEvent{}
+	for rows.Next() {
+		var i PlateEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.PlateID,
+			&i.CookSessionID,
+			&i.Date,
+			&i.SlotID,
+			&i.Action,
+			&i.Actor,
+			&i.AiRunID,
+			&i.BeforeJson,
+			&i.AfterJson,
+			&i.At,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPlateEventsOfRuns = `-- name: ListPlateEventsOfRuns :many
 SELECT id, plate_id, cook_session_id, date, slot_id, action, actor, ai_run_id, before_json, after_json, at
 FROM plate_events
