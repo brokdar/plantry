@@ -226,4 +226,20 @@ describe("HouseholdSection", () => {
       )
     )
   })
+
+  it("saves the protein factor override and ignores values outside 0.8 to 2.2", async () => {
+    renderWithRouter(<HouseholdSection />)
+    const factor = await screen.findByLabelText(/^Protein per kg/)
+    await userEvent.type(factor, "0.5")
+    await userEvent.tab()
+    expect(updateProfile).not.toHaveBeenCalled()
+    await userEvent.clear(factor)
+    await userEvent.type(factor, "1.8")
+    await userEvent.tab()
+    await waitFor(() =>
+      expect(updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ protein_g_per_kg: 1.8 })
+      )
+    )
+  })
 })

@@ -305,6 +305,7 @@ export const mockProfile: Profile = {
   household_portions: 1,
   goal: "maintain",
   weight_kg: null,
+  protein_g_per_kg: null,
   height_cm: null,
   birth_year: null,
   sex: null,

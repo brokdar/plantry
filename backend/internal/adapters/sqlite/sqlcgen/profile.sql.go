@@ -11,7 +11,7 @@ import (
 )
 
 const getProfile = `-- name: GetProfile :one
-SELECT id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions, goal, weight_kg, height_cm, birth_year, sex, activity_level FROM user_profile WHERE id = 1
+SELECT id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions, goal, weight_kg, height_cm, birth_year, sex, activity_level, protein_g_per_kg FROM user_profile WHERE id = 1
 `
 
 func (q *Queries) GetProfile(ctx context.Context) (UserProfile, error) {
@@ -37,6 +37,7 @@ func (q *Queries) GetProfile(ctx context.Context) (UserProfile, error) {
 		&i.BirthYear,
 		&i.Sex,
 		&i.ActivityLevel,
+		&i.ProteinGPerKg,
 	)
 	return i, err
 }
@@ -56,13 +57,14 @@ SET kcal_target           = ?,
     household_portions    = ?,
     goal                  = ?,
     weight_kg             = ?,
+    protein_g_per_kg      = ?,
     height_cm             = ?,
     birth_year            = ?,
     sex                   = ?,
     activity_level        = ?,
     updated_at            = datetime('now')
 WHERE id = 1
-RETURNING id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions, goal, weight_kg, height_cm, birth_year, sex, activity_level
+RETURNING id, kcal_target, protein_pct, fat_pct, carbs_pct, dietary_restrictions, preferences, system_prompt, locale, updated_at, diet_type, meat_days_per_week_max, household_portions, goal, weight_kg, height_cm, birth_year, sex, activity_level, protein_g_per_kg
 `
 
 type UpsertProfileParams struct {
@@ -79,6 +81,7 @@ type UpsertProfileParams struct {
 	HouseholdPortions   float64
 	Goal                string
 	WeightKg            sql.NullFloat64
+	ProteinGPerKg       sql.NullFloat64
 	HeightCm            sql.NullFloat64
 	BirthYear           sql.NullInt64
 	Sex                 sql.NullString
@@ -100,6 +103,7 @@ func (q *Queries) UpsertProfile(ctx context.Context, arg UpsertProfileParams) (U
 		arg.HouseholdPortions,
 		arg.Goal,
 		arg.WeightKg,
+		arg.ProteinGPerKg,
 		arg.HeightCm,
 		arg.BirthYear,
 		arg.Sex,
@@ -126,6 +130,7 @@ func (q *Queries) UpsertProfile(ctx context.Context, arg UpsertProfileParams) (U
 		&i.BirthYear,
 		&i.Sex,
 		&i.ActivityLevel,
+		&i.ProteinGPerKg,
 	)
 	return i, err
 }

@@ -33,6 +33,8 @@ export interface Profile {
   goal: Goal
   /** Optional body data; they feed the kcal estimate and the safety floor. */
   weight_kg: number | null
+  /** Optional protein factor in g per kg body weight (0.8–2.2). */
+  protein_g_per_kg: number | null
   height_cm: number | null
   birth_year: number | null
   sex: Sex | null
@@ -54,6 +56,7 @@ export interface ProfileInput {
   household_portions?: number
   goal?: Goal
   weight_kg?: number | null
+  protein_g_per_kg?: number | null
   height_cm?: number | null
   birth_year?: number | null
   sex?: Sex | null
@@ -77,6 +80,7 @@ export function profileToInput(profile: Profile): ProfileInput {
     household_portions: profile.household_portions,
     goal: profile.goal,
     weight_kg: profile.weight_kg,
+    protein_g_per_kg: profile.protein_g_per_kg,
     height_cm: profile.height_cm,
     birth_year: profile.birth_year,
     sex: profile.sex,

@@ -27,6 +27,7 @@ type DayKcal struct {
 	ProteinG float64
 	FatG     float64
 	CarbsG   float64
+	FiberG   float64
 	Target   float64
 	Scaled   float64
 	Gap      float64 // Scaled - Kcal; positive: under target
@@ -105,6 +106,7 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 					dk.ProteinG += f.Macros.Protein * m
 					dk.FatG += f.Macros.Fat * m
 					dk.CarbsG += f.Macros.Carbs * m
+					dk.FiberG += f.Macros.Fiber * m
 					dk.NutritionMissing = dk.NutritionMissing || !f.NutritionComplete
 				}
 			}

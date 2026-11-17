@@ -252,6 +252,8 @@
         "weight": "Gewicht",
         "height": "Größe",
         "birth_year": "Geburtsjahr",
+        "protein_per_kg": "Protein pro kg (optional)",
+        "protein_per_kg_hint": "Standard je nach Ziel: 1,0 g/kg zum Halten, 1,6 g/kg zum Abnehmen oder Zunehmen. Höher (bis 2,2), wenn du trainierst. Braucht dein Gewicht; erlaubt ist mindestens 0,8 g/kg (DGE).",
         "sex_label": "Geschlecht",
         "sex": {
           "female": "Weiblich",

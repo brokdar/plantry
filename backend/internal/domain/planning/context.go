@@ -302,7 +302,7 @@ func StateProfile(p *profile.Profile) Profile {
 		KcalTarget: p.KcalTarget, ProteinPct: p.ProteinPct, FatPct: p.FatPct, CarbsPct: p.CarbsPct,
 		DietType: p.DietType, MeatDaysPerWeekMax: p.MeatDaysPerWeekMax, HouseholdPortions: p.HouseholdPortions,
 		Locale: p.Locale, Restrictions: p.DietaryRestrictions,
-		Goal: p.Goal, Sex: p.Sex,
+		Goal: p.Goal, Sex: p.Sex, WeightKg: p.WeightKg, BirthYear: p.BirthYear, ProteinGPerKg: p.ProteinGPerKg,
 	}
 	if p.SystemPrompt != nil {
 		out.Notes = *p.SystemPrompt

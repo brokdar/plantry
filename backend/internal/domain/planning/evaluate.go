@@ -59,6 +59,18 @@ type WeekEval struct {
 	TargetKcal float64 `json:"target_kcal"`
 	// Pct is AvgKcal as a share of TargetKcal, in percent.
 	Pct float64 `json:"pct"`
+	// AvgProteinG is the average protein per day; TargetProteinG the average
+	// scaled g/kg target and ProteinPct their share in percent (both 0
+	// without a weight).
+	AvgProteinG    float64 `json:"avg_protein_g"`
+	TargetProteinG float64 `json:"target_protein_g,omitempty"`
+	ProteinPct     float64 `json:"protein_pct,omitempty"`
+	// CarbsPct and FatPct are the weekly shares of energy, in percent.
+	CarbsPct float64 `json:"carbs_pct"`
+	FatPct   float64 `json:"fat_pct"`
+	// FiberG is the average fibre per day against the DGE target of 30 g, for
+	// display only. 0 (absent) when no food of the week has fibre data.
+	FiberG float64 `json:"fiber_g,omitempty"`
 }
 
 // minWeekDays is how many complete days the weekly average needs before it
@@ -77,16 +89,18 @@ type EvalTotals struct {
 // TargetKcal is the day's kcal target scaled to its planned meals (a short
 // day asks less); the percentages are the shares of the day's kcal.
 type DayEval struct {
-	Date          string   `json:"date"`
-	Kcal          float64  `json:"kcal"`
-	TargetKcal    *float64 `json:"target_kcal"`
-	ProteinG      float64  `json:"protein_g"`
-	ProteinPct    float64  `json:"protein_pct"`
-	FatPct        float64  `json:"fat_pct"`
-	CarbsPct      float64  `json:"carbs_pct"`
-	Meat          bool     `json:"meat"`
-	MeatFoods     []string `json:"meat_foods"`
-	CookOccasions int      `json:"cook_occasions"`
+	Date           string   `json:"date"`
+	Kcal           float64  `json:"kcal"`
+	TargetKcal     *float64 `json:"target_kcal"`
+	ProteinG       float64  `json:"protein_g"`
+	ProteinTargetG float64  `json:"protein_target_g,omitempty"`
+	ProteinPct     float64  `json:"protein_pct"`
+	FatPct         float64  `json:"fat_pct"`
+	CarbsPct       float64  `json:"carbs_pct"`
+	FiberG         float64  `json:"-"`
+	Meat           bool     `json:"meat"`
+	MeatFoods      []string `json:"meat_foods"`
+	CookOccasions  int      `json:"cook_occasions"`
 	// Complete: every planned, non-routine meal of the day holds a plate
 	// (not to be confused with NutritionMissing).
 	Complete bool `json:"complete"`
@@ -186,6 +200,10 @@ func Evaluate(s State, t Target) Evaluation {
 			sc := dk.Scaled
 			de.TargetKcal = &sc
 		}
+		if t := x.pol.ProteinTargetG(float64(dk.Planned) / float64(dk.Meals)); t > 0 {
+			de.ProteinTargetG = t
+		}
+		de.FiberG = dk.FiberG
 		if dk.Kcal > 0 {
 			de.ProteinPct, de.FatPct, de.CarbsPct = dk.ProteinG*4/dk.Kcal*100, dk.FatG*9/dk.Kcal*100, dk.CarbsG*4/dk.Kcal*100
 		}

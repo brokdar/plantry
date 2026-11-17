@@ -53,6 +53,9 @@ const (
 	CodeProteinLow        = "protein_below_target"
 	CodeWeekKcalBelowBand = "week_kcal_below_band"
 	CodeWeekKcalAboveBand = "week_kcal_above_band"
+	CodeWeekProteinLow    = "week_protein_below_target"
+	CodeWeekCarbsRange    = "week_carbs_out_of_range"
+	CodeWeekFatRange      = "week_fat_out_of_range"
 )
 
 // Issue is one finding of the checker (D22). Plates and sessions of a
