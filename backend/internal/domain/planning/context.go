@@ -293,7 +293,7 @@ func BaseFacts(f *food.Food) FoodFacts {
 	ff := FoodFacts{
 		ID: f.ID, Name: f.Name, Kind: f.Kind, KeepDays: f.KeepDays, Freezable: f.Freezable != nil && *f.Freezable,
 		Favorite: f.Favorite, LastEaten: f.History.LastEaten, ReferencePortions: 1, DietClass: f.DietClass,
-		NoCook: NoCook(f),
+		NoCook: NoCook(f), Sweet: IsSweet(f),
 	}
 	if f.Role != nil {
 		ff.Role = *f.Role

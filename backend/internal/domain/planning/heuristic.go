@@ -92,6 +92,11 @@ type planner struct {
 	// explorePlaced and fillPlaced count the explore recipes and the
 	// never-eaten fillers the proposal cooks toward the quota (D17).
 	explorePlaced, fillPlaced int
+	// topUpBase is the portions of a component (plate, component index) before
+	// the kcal passes grew it: the 1.5x cap holds over all of them.
+	topUpBase map[[2]int]float64
+	// adds counts each day's no-cook adds over every pass (dayAdds).
+	adds map[int]*dayAdds
 	// choices log what was chosen per cell and why (the run's
 	// heuristic.choices step).
 	choices []heuristicChoice
@@ -204,6 +209,9 @@ func (h *planner) plan() (Proposal, error) {
 	}
 	h.topUpFloors()
 	if note := lightNote(h.s.Light, h.in.Locale); note != "" {
+		h.notes = append(h.notes, note)
+	}
+	if note := kcalNote(Merge(h.s, h.in.Target, h.prop), h.in.Target); note != "" {
 		h.notes = append(h.notes, note)
 	}
 	if note := floorNote(Merge(h.s, h.in.Target, h.prop), h.in.Target); note != "" {

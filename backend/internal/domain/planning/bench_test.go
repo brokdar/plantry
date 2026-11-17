@@ -15,6 +15,7 @@ import (
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 )
@@ -33,6 +34,18 @@ func benchState() (planning.State, planning.Target, planning.Proposal) {
 			f.LastEaten = &eaten
 		}
 		s.Foods[id] = f
+	}
+	// 40 no-cook foods, a weight and batch cooking, so the heuristic's
+	// filler and protein passes run.
+	s.Profile.WeightKg = f64(80)
+	s.Settings.BatchCooking = true
+	for i := range 40 {
+		id := int64(2000 + i)
+		s.Foods[id] = planning.FoodFacts{
+			ID: id, Name: "Snack", Kind: food.KindLeaf, DietClass: diet.Vegan, NoCook: true, NutritionComplete: true,
+			Macros: nutrition.Macros{Kcal: 50 + float64(i%8)*40, Protein: float64(i%6) * 3},
+		}
+		s.NoCook = append(s.NoCook, id)
 	}
 	for d := range 28 {
 		date := day(sat).AddDate(0, 0, -d-1)
@@ -189,5 +202,19 @@ func BenchmarkPlanView(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+// BenchmarkHeuristic plans a whole window with the heuristic over the
+// 300-recipe state at a 3000 kcal target (its days fall short, so the floor,
+// kcal band and protein passes all add no-cook foods).
+func BenchmarkHeuristic(b *testing.B) {
+	s, tgt, _ := benchState()
+	s.Profile.KcalTarget = f64(3000)
+	b.ResetTimer()
+	for range b.N {
+		if _, err := (planning.Heuristic{}).Choose(context.Background(), planning.ChooseInput{State: s, Target: tgt}); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

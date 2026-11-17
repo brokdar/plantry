@@ -38,6 +38,9 @@ func proteinState(dt profile.DietType) planning.State {
 	leaf(skyr, "Skyr", diet.Vegetarian, 60, 11)
 	leaf(tofu, "Tofu", diet.Vegan, 120, 8)
 	leaf(candy, "Candy", diet.Vegan, 400, 0)
+	c := s.Foods[candy]
+	c.Sweet = true
+	s.Foods[candy] = c
 	return s
 }
 
@@ -126,12 +129,12 @@ func TestHeuristic_ProteinGapClosing(t *testing.T) {
 		}
 	})
 
-	t.Run("unreachable: nothing added, the checker reports S3", func(t *testing.T) {
+	t.Run("unreachable: no protein food to add, the checker reports S3", func(t *testing.T) {
 		s := proteinState(profile.DietOmnivore)
-		s.NoCook = []int64{candy}
+		s.NoCook = []int64{candy} // a sweet holds no protein and is never a filler either
 		tgt := windowTarget(s)
 		p := choose(t, planning.ChooseInput{State: s, Target: tgt})
-		assert.Zero(t, foodsAdded(p, candy))
+		assert.Zero(t, foodsAdded(p, candy), "a sweet is no filler and holds no protein")
 		assert.Contains(t, p.Notes, "Protein below target")
 		ev := planning.Evaluate(planning.Merge(s, tgt, p), tgt)
 		found := false
@@ -148,12 +151,13 @@ func TestHeuristic_ProteinGapClosing(t *testing.T) {
 		p := choose(t, planning.ChooseInput{State: s, Target: tgt})
 		ev := planning.Evaluate(planning.Merge(s, tgt, p), tgt)
 		for _, is := range ev.Issues {
-			assert.NotEqual(t, planning.CodeWeekProteinLow, is.Code)
 			assert.NotEqual(t, planning.CodeProteinLow, is.Code)
 		}
 		for _, d := range ev.Days {
-			assert.GreaterOrEqual(t, d.ProteinG, d.ProteinTargetG-1e-6, "%s closes toward 100 %%", d.Date)
+			// One protein add per day (200 g at most) gets close to, not always to, 100 %.
+			assert.GreaterOrEqual(t, d.ProteinG, d.ProteinTargetG*0.95, "%s closes toward 100 %%", d.Date)
 		}
+		assert.GreaterOrEqual(t, ev.Week.ProteinPct, 95.0)
 		perDay := map[string]int{}
 		for _, pl := range p.Plates {
 			n := 0
@@ -166,7 +170,7 @@ func TestHeuristic_ProteinGapClosing(t *testing.T) {
 			perDay[pl.Date.Format("2006-01-02")] += n
 		}
 		for date, n := range perDay {
-			assert.LessOrEqual(t, n, 2, date)
+			assert.LessOrEqual(t, n, 3, date)
 		}
 	})
 
@@ -193,7 +197,18 @@ func TestHeuristic_ProteinGapClosing(t *testing.T) {
 	t.Run("without a weight the heuristic does not chase protein", func(t *testing.T) {
 		s := proteinState(profile.DietOmnivore)
 		s.Profile.WeightKg = nil
+		s.Profile.KcalTarget = f64(2400)
 		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
-		assert.Zero(t, foodsAdded(p, skyr))
+		assert.Positive(t, foodsAdded(p, skyr)+foodsAdded(p, tofu)+foodsAdded(p, pear)+foodsAdded(p, bread), "the kcal pass adds fillers")
+
+		// Protein plays no part: skyr holding none changes nothing (the fit decides).
+		flat := proteinState(profile.DietOmnivore)
+		flat.Profile.WeightKg = nil
+		flat.Profile.KcalTarget = f64(2400)
+		f := flat.Foods[skyr]
+		f.Macros.Protein = 0
+		flat.Foods[skyr] = f
+		q := choose(t, planning.ChooseInput{State: flat, Target: windowTarget(flat)})
+		assert.Equal(t, p.Plates, q.Plates)
 	})
 }

@@ -147,7 +147,9 @@ func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 		rows[i] = candidateRow(f, s.Settings.DefaultKeepDays)
 	}
 	const header = "\nCandidate recipes (id|name|role|suits|diet|meat|kcal|protein_g|fat_g|carbs_g|nutrition_complete|minutes|reference_portions|keep_days|freezable|last_eaten|eaten_8_weeks|favorite|like_score|explore), per portion:\n"
-	room := PromptTokenBudget*4 - utf8.RuneCountInString(head.String()) - utf8.RuneCountInString(tail.String()) - len(header) - 80
+	var noCook strings.Builder
+	writeNoCook(&noCook, in)
+	room := PromptTokenBudget*4 - utf8.RuneCountInString(head.String()) - utf8.RuneCountInString(tail.String()) - utf8.RuneCountInString(noCook.String()) - len(header) - 80
 	keep := make([]bool, len(cands))
 	for _, i := range keepOrder(cands, in.Side != nil) {
 		n := utf8.RuneCountInString(rows[i]) + 1
@@ -174,7 +176,7 @@ func renderPrompt(in ChooseInput) (string, []FoodFacts) {
 	if omitted > 0 {
 		fmt.Fprintf(&b, "(%d more recipes left out for length.)\n", omitted)
 	}
-	writeNoCook(&b, in)
+	b.WriteString(noCook.String())
 	b.WriteString(tail.String())
 	return b.String(), trimmed
 }

@@ -152,6 +152,8 @@ type FoodFacts struct {
 	// NoCook: the food needs no cooking (see NoCook): a leaf eaten raw, or
 	// a recipe whose cook minutes are explicitly 0 and that is not a main.
 	NoCook bool
+	// Sweet: a leaf that is mostly sugar (see IsSweet); never a kcal filler.
+	Sweet bool
 }
 
 // Explore reports whether the food is an explore candidate: tagged explore
