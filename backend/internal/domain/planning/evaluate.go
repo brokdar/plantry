@@ -44,7 +44,26 @@ type Evaluation struct {
 	Issues    []Issue    `json:"issues"`
 	AllIssues []Issue    `json:"all_issues,omitempty"`
 	Totals    EvalTotals `json:"totals"`
+	// Week is the weekly kcal ledger; nil without a kcal target or a
+	// complete day.
+	Week *WeekEval `json:"week,omitempty"`
 }
+
+// WeekEval is the weekly kcal ledger per eater over the window's complete
+// days with nutrition data (the days S2 judges): their average against the
+// average of their scaled targets. The week matters most: the policy's week
+// band is narrower than its day band.
+type WeekEval struct {
+	Days       int     `json:"days"`
+	AvgKcal    float64 `json:"avg_kcal"`
+	TargetKcal float64 `json:"target_kcal"`
+	// Pct is AvgKcal as a share of TargetKcal, in percent.
+	Pct float64 `json:"pct"`
+}
+
+// minWeekDays is how many complete days the weekly average needs before it
+// is judged: the average of one or two days is no week.
+const minWeekDays = 3
 
 // EvalTotals counts the issues by severity.
 type EvalTotals struct {
@@ -176,6 +195,7 @@ func Evaluate(s State, t Target) Evaluation {
 		}
 		ev.Days = append(ev.Days, de)
 	}
+	ev.Week = x.week(ev)
 	ev.Issues = append(ev.Issues, x.softIssues(ev, t)...)
 	ev.Totals = totalsOf(ev.Issues)
 	return ev

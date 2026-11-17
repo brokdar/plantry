@@ -363,6 +363,12 @@ type UserProfile struct {
 	DietType            string
 	MeatDaysPerWeekMax  sql.NullInt64
 	HouseholdPortions   float64
+	Goal                string
+	WeightKg            sql.NullFloat64
+	HeightCm            sql.NullFloat64
+	BirthYear           sql.NullInt64
+	Sex                 sql.NullString
+	ActivityLevel       sql.NullFloat64
 }
 
 type VariantGroup struct {

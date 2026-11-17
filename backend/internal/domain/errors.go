@@ -66,6 +66,9 @@ var (
 	ErrInvalidDietType          = errors.New("invalid diet type")
 	ErrInvalidMeatDays          = errors.New("invalid meat days per week")
 	ErrInvalidHouseholdPortions = errors.New("invalid household portions")
+	ErrInvalidGoal              = errors.New("invalid goal")
+	ErrInvalidBodyData          = errors.New("invalid body data")
+	ErrKcalBelowFloor           = errors.New("kcal target below the safety floor")
 
 	// Availability errors.
 	ErrCellHasPlate     = errors.New("cell has a plate")
@@ -192,6 +195,9 @@ var messageKeys = []struct {
 	{ErrInvalidDietType, "error.profile.invalid_diet_type"},
 	{ErrInvalidMeatDays, "error.profile.invalid_meat_days"},
 	{ErrInvalidHouseholdPortions, "error.profile.invalid_household_portions"},
+	{ErrInvalidGoal, "error.profile.invalid_goal"},
+	{ErrInvalidBodyData, "error.profile.invalid_body_data"},
+	{ErrKcalBelowFloor, "error.profile.kcal_below_floor"},
 	{ErrCellHasPlate, "error.availability.cell_has_plate"},
 	{ErrPresetRequired, "error.availability.preset_required"},
 	{ErrPresetNotAllowed, "error.availability.preset_not_allowed"},

@@ -18,7 +18,8 @@ import (
 // attempt and uses no repair; the plan that follows is submitted as usual.
 func TestLLMChooser_EvaluatePlanLoop(t *testing.T) {
 	in := run4Input()
-	k := 2200.0
+	k := 1480.0
+	doubleKcal(&in.State)
 	in.State.Profile.KcalTarget = &k
 	p := validWeek(t, in)
 	eval := submit(t, "tu_e", p)

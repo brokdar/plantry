@@ -165,4 +165,65 @@ describe("HouseholdSection", () => {
       await screen.findByRole("button", { name: "Remove peanuts" })
     ).toBeInTheDocument()
   })
+
+  it("saves the goal with the full profile", async () => {
+    renderWithRouter(<HouseholdSection />)
+    await userEvent.click(
+      await screen.findByRole("radio", { name: "Lose weight" })
+    )
+    await waitFor(() =>
+      expect(updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ goal: "lose", kcal_target: null })
+      )
+    )
+  })
+
+  it("asks for body data before suggesting a target", async () => {
+    renderWithRouter(<HouseholdSection />)
+    expect(
+      await screen.findByText(/Enter weight, height, birth year/)
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: /Use as my kcal target/ })
+    ).toBeNull()
+  })
+
+  it("suggests an estimated target and applies it", async () => {
+    vi.mocked(getProfile).mockResolvedValue({
+      ...mockProfile,
+      goal: "lose",
+      weight_kg: 80,
+      height_cm: 180,
+      birth_year: new Date().getFullYear() - 40,
+      sex: "male",
+      activity_level: 1.6,
+    })
+    renderWithRouter(<HouseholdSection />)
+    expect(await screen.findByText(/Estimated need: about/)).toHaveTextContent(
+      /2,270 kcal/
+    )
+    expect(
+      screen.getByText(/An estimate \(Mifflin-St Jeor/)
+    ).toBeInTheDocument()
+    await userEvent.click(
+      screen.getByRole("button", { name: /Use as my kcal target/ })
+    )
+    await waitFor(() =>
+      expect(updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ kcal_target: 2270, goal: "lose" })
+      )
+    )
+  })
+
+  it("saves a body field on blur and clears it when emptied", async () => {
+    renderWithRouter(<HouseholdSection />)
+    const weight = await screen.findByLabelText(/^Weight/)
+    await userEvent.type(weight, "72.5")
+    await userEvent.tab()
+    await waitFor(() =>
+      expect(updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ weight_kg: 72.5 })
+      )
+    )
+  })
 })

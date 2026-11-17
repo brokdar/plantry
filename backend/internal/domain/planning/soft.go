@@ -71,6 +71,32 @@ const (
 	proteinKcalPerG = 4
 )
 
+// week is the weekly ledger of ev: the average kcal of the days S2 judges
+// (complete, with a plate and nutrition data) against the average of their
+// scaled targets. Nil without a kcal target or such a day.
+func (x *index) week(ev Evaluation) *WeekEval {
+	withPlate := map[string]bool{}
+	for _, p := range ev.Plates {
+		withPlate[p.Date] = true
+	}
+	var w WeekEval
+	for _, d := range ev.Days {
+		if !d.Complete || !withPlate[d.Date] || d.NutritionMissing || d.Kcal <= 0 || d.TargetKcal == nil || *d.TargetKcal <= 0 {
+			continue
+		}
+		w.Days++
+		w.AvgKcal += d.Kcal
+		w.TargetKcal += *d.TargetKcal
+	}
+	if w.Days == 0 {
+		return nil
+	}
+	w.Pct = w.AvgKcal / w.TargetKcal * 100
+	w.AvgKcal /= float64(w.Days)
+	w.TargetKcal /= float64(w.Days)
+	return &w
+}
+
 // softIssues reports the soft rules S2 (day kcal outside the band of its
 // scaled target) and S3 (protein share below the profile's minus the
 // margin) for every complete day of ev with a plate. Each carries its
@@ -91,16 +117,16 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 			target := *d.TargetKcal
 			code := ""
 			switch {
-			case d.Kcal < target*KcalBandLow:
+			case d.Kcal < target*x.pol.DayLow:
 				code = CodeKcalBelowBand
-			case d.Kcal > target*KcalBandHigh:
+			case d.Kcal > target*x.pol.DayHigh:
 				code = CodeKcalAboveBand
 			}
 			if code != "" {
 				is := issue("S2", code, SeveritySoft).onDate(day).
 					with("kcal", math.Round(d.Kcal)).with("target_kcal", math.Round(target)).
 					with("gap_kcal", math.Round(target-d.Kcal)).
-					with("band_low_kcal", math.Round(target*KcalBandLow)).with("band_high_kcal", math.Round(target*KcalBandHigh))
+					with("band_low_kcal", math.Round(target*x.pol.DayLow)).with("band_high_kcal", math.Round(target*x.pol.DayHigh))
 				if code == CodeKcalBelowBand {
 					is.Options = x.options(ev, t, d, day, false)
 				}
@@ -113,6 +139,16 @@ func (x *index) softIssues(ev Evaluation, t Target) []Issue {
 				with("min_pct", *proteinTarget-ProteinMarginPts)
 			is.Options = x.options(ev, t, d, day, true)
 			out = append(out, is)
+		}
+	}
+	// S4: the weekly average outside the policy's week band. No date and no
+	// options: the model decides which days to move.
+	if w := ev.Week; w != nil && w.Days >= minWeekDays {
+		if code := x.pol.WeekCode(w.Pct / 100); code != "" {
+			out = append(out, issue("S4", code, SeveritySoft).
+				with("days", w.Days).with("avg_kcal", math.Round(w.AvgKcal)).with("target_kcal", math.Round(w.TargetKcal)).
+				with("pct", math.Round(w.Pct*10)/10).
+				with("band_low_pct", math.Round(x.pol.WeekLow*100)).with("band_high_pct", math.Round(x.pol.WeekHigh*100)))
 		}
 	}
 	return out
@@ -133,7 +169,7 @@ func (x *index) options(ev Evaluation, t Target, d DayEval, day time.Time, prote
 	}
 	want := target - d.Kcal
 	if want <= 0 {
-		want = target*KcalBandHigh - d.Kcal
+		want = target*x.pol.DayHigh - d.Kcal
 	}
 	if want <= 0 {
 		return []Option{}
@@ -316,7 +352,7 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 	for _, dk := range y.dayAccounts([]time.Time{p.Date}) {
 		after = &dk
 	}
-	if after == nil || (target > 0 && after.Kcal > target*KcalBandHigh) {
+	if after == nil || (target > 0 && after.Kcal > target*x.pol.DayHigh) {
 		return Option{}, false
 	}
 	pct := 0.0
@@ -330,7 +366,7 @@ func (x *index) verify(c optCand, t Target, base map[string]bool, d DayEval, tar
 		return Option{}, false
 	}
 	o := c.opt
-	o.inBand, o.shareGap = target <= 0 || after.Kcal >= target*KcalBandLow, pct-d.ProteinPct
+	o.inBand, o.shareGap = target <= 0 || after.Kcal >= target*x.pol.DayLow, pct-d.ProteinPct
 	o.Date, o.SlotID = p.Date.Format(time.DateOnly), p.SlotID
 	if !p.Proposed() {
 		id := p.ID

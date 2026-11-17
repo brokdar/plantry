@@ -116,6 +116,16 @@ test.describe("generated week on the LLM", () => {
     }
     const ctx = await apiRequest.newContext({ baseURL: API })
     const overrides: string[] = []
+    // The scripted plan is tiny: with a kcal target (an earlier spec's
+    // profile) its days fall under the H9 floor, a hard rule. This spec is
+    // about progress and notes, so it runs without a target.
+    const { updated_at: _u, ...profile } = (await (
+      await ctx.get("/api/profile")
+    ).json()) as Record<string, unknown>
+    void _u
+    const put = (body: Record<string, unknown>) =>
+      ctx.put("/api/profile", { data: body })
+    expect((await put({ ...profile, kcal_target: null })).ok()).toBeTruthy()
     try {
       await clearWindow(start, days[6])
       const plan = await getPlan(start)
@@ -172,6 +182,7 @@ test.describe("generated week on the LLM", () => {
     } finally {
       // Back to the env's script (plan-dinner.json).
       await ctx.delete("/api/settings/ai.fake_script")
+      await put(profile)
       for (const o of overrides) await ctx.delete(`/api/availability/${o}`)
       await ctx.dispose()
       await rm(scriptPath, { force: true })

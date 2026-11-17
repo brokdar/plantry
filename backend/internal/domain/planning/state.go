@@ -174,6 +174,9 @@ type Profile struct {
 	DietType           profile.DietType
 	MeatDaysPerWeekMax *int
 	HouseholdPortions  float64
+	// Goal and Sex feed the nutrition policy (PolicyOf).
+	Goal profile.Goal
+	Sex  *profile.Sex
 	// Locale is the language of the chooser's reasons and notes.
 	Locale string
 	// Restrictions and Notes (the user's notes to the assistant) are free

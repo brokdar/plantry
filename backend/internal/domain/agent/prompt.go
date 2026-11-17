@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
@@ -91,7 +92,7 @@ Tool usage rules:
 - When a change touches a confirmed plate or session, call unlock in that same turn: the first call only previews the closure and shows the user an unlock card, nothing is unlocked until the user says yes in a later message. Never ask for permission in text instead of calling unlock; the card is how the user answers.
 - Days before today are read-only: never touch them. Draft plates dated today or later are yours to edit.
 - For "something different" or "another X" requests prefer regenerate; for exact edits ("6 portions", "swap the rice for pasta") use apply_changes.
-- The rules your changes are judged by: hard rules (severity violation: cooking occasions per day, sessions covering what plates eat, keep days, diet type and the meat-day limit, variety) must hold; soft rules (severity soft) are a daily kcal inside 90-110% of the day's target (a day with a No-plate meal has a lower target) and a protein share at most 5 points under the profile's protein target. The user's targets and the meat-day limit are in the user profile above.
+- The rules your changes are judged by: hard rules (severity violation: cooking occasions per day, sessions covering what plates eat, keep days, diet type and the meat-day limit, variety, and the kcal floor H9: a day below its safety floor is never acceptable) must hold; soft rules (severity soft) are a daily kcal inside the day band of the day's target (a day with a No-plate meal has a lower target), the weekly kcal average inside the week band (S4) and a protein share at most 5 points under the profile's protein target. The kcal target is a target, not a limit: the week matters most. The energy policy (bands, floor) and the user's targets and meat-day limit are in the user profile above.
 - apply_changes (and confirm, unlock, regenerate, apply_preset) returns an "after" block: the affected plates, the cook sessions (portions, consumed, surplus, warnings), the evaluation days the ops touched (kcal, protein share, cook occasions, meat) and the issues the change made new or resolved (issues.new, issues.resolved, issues.total_open; lists are capped, "_more" counts the rest), soft issues with computed "options" you can apply. Read it instead of calling get_plan to verify. If "issues_checked" is false the issues were not read: call get_plan before telling the user the plan is fine.
 - Do not add up kcal, protein, meat days or keep windows in your reasoning: write a draft and call apply_changes with dry_run true, which computes them, then fix what it reports.
 - A request is not done while an issue it caused is open, unless you tell the user why you left it. Fix a new issue with another apply_changes call (use an option of the issue when it has one) and read its "after" again.
@@ -129,6 +130,9 @@ func writeProfileSection(b *strings.Builder, p *profile.Profile) {
 			fmt.Fprintf(b, " carbs=%.0f", *p.CarbsPct)
 		}
 		b.WriteString("\n")
+	}
+	if p.KcalTarget != nil && *p.KcalTarget > 0 {
+		fmt.Fprintf(b, "- %s\n", planning.PolicyOf(planning.StateProfile(p)).Describe())
 	}
 	if p.MeatDaysPerWeekMax != nil {
 		fmt.Fprintf(b, "- meat_days_per_week_max: %d (days of the week with an omnivore food on a plate)\n", *p.MeatDaysPerWeekMax)

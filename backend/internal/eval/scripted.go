@@ -114,7 +114,8 @@ type submitPlate struct {
 
 type submitComponent struct {
 	FoodID     int64   `json:"food_id"`
-	Portions   float64 `json:"portions"`
+	Portions   float64 `json:"portions,omitempty"`
+	Grams      float64 `json:"grams,omitempty"`
 	SessionKey string  `json:"session_key,omitempty"`
 	SessionID  int64   `json:"session_id,omitempty"`
 }
@@ -131,7 +132,7 @@ func submitInput(p planning.Proposal) submitPlan {
 	for _, pl := range p.Plates {
 		sp := submitPlate{PlateID: pl.PlateID, Date: pl.Date.Format(time.DateOnly), SlotID: pl.SlotID, Eaters: pl.Eaters, Reason: pl.Reason}
 		for _, c := range pl.Components {
-			sp.Components = append(sp.Components, submitComponent{FoodID: c.FoodID, Portions: c.Portions, SessionKey: c.SessionKey, SessionID: c.SessionID})
+			sp.Components = append(sp.Components, submitComponent{FoodID: c.FoodID, Portions: c.Portions, Grams: c.Grams, SessionKey: c.SessionKey, SessionID: c.SessionID})
 		}
 		out.Plates = append(out.Plates, sp)
 	}

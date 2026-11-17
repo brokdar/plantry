@@ -9,6 +9,13 @@ export const DIET_TYPES: readonly DietType[] = [
   "omnivore",
 ]
 
+export type Goal = "maintain" | "lose" | "gain"
+export const GOALS: readonly Goal[] = ["maintain", "lose", "gain"]
+export type Sex = "female" | "male"
+/** PAL: mostly sitting, standing, physically active. */
+export type ActivityLevel = 1.4 | 1.6 | 1.8
+export const ACTIVITY_LEVELS: readonly ActivityLevel[] = [1.4, 1.6, 1.8]
+
 export interface Profile {
   kcal_target: number | null
   protein_pct: number | null
@@ -23,6 +30,13 @@ export interface Profile {
   meat_days_per_week_max: number | null
   /** Portions per planned plate (> 0, ≤ 20). */
   household_portions: number
+  goal: Goal
+  /** Optional body data; they feed the kcal estimate and the safety floor. */
+  weight_kg: number | null
+  height_cm: number | null
+  birth_year: number | null
+  sex: Sex | null
+  activity_level: ActivityLevel | null
   updated_at: string
 }
 
@@ -38,6 +52,12 @@ export interface ProfileInput {
   diet_type?: DietType
   meat_days_per_week_max?: number | null
   household_portions?: number
+  goal?: Goal
+  weight_kg?: number | null
+  height_cm?: number | null
+  birth_year?: number | null
+  sex?: Sex | null
+  activity_level?: ActivityLevel | null
 }
 
 /** The full PUT body for a stored profile. `PUT /api/profile` is a full
@@ -55,6 +75,12 @@ export function profileToInput(profile: Profile): ProfileInput {
     diet_type: profile.diet_type,
     meat_days_per_week_max: profile.meat_days_per_week_max,
     household_portions: profile.household_portions,
+    goal: profile.goal,
+    weight_kg: profile.weight_kg,
+    height_cm: profile.height_cm,
+    birth_year: profile.birth_year,
+    sex: profile.sex,
+    activity_level: profile.activity_level,
   }
 }
 

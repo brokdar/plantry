@@ -175,27 +175,64 @@ func TestMissingMain_StandaloneIsBreakfastOnly(t *testing.T) {
 	assert.NotContains(t, prop.Notes, "has no main (only Overnight oats)")
 }
 
-// Calories are information, never a repair: a day far under its (scaled)
-// target costs no call and shows as one run-notes line.
+// Calories between the floor and the band are information, never a repair: a
+// day under its (scaled) target costs no call and shows as one run-notes line.
 func TestLLMChooser_KcalGapIsOneNotesLineAndNoRepair(t *testing.T) {
 	in := run4Input()
-	k := 2200.0
+	k := 1480.0
+	doubleKcal(&in.State)
 	in.State.Profile.KcalTarget = &k
 	p := validWeek(t, in)
 
 	prop, reqs := chooseWith(t, in, submit(t, "tu_1", p))
 
-	require.Len(t, reqs, 1, "no repair for a kcal gap")
-	assert.Equal(t, 1, strings.Count(prop.Notes, "Below target:"))
-	assert.Contains(t, prop.Notes, "Below target: Sat −")
-	assert.Contains(t, prop.Notes, "Sun −")
+	require.Len(t, reqs, 1, "no repair for a kcal gap above the floor")
+	assert.Equal(t, 1, strings.Count(prop.Notes, "Below target:"), prop.Notes)
 	assert.Contains(t, prop.Notes, " kcal")
 	assert.NotContains(t, prop.Notes, "Warning, not resolved")
 }
 
+// A day under the safety floor is a hard violation: it is repaired.
+func TestLLMChooser_KcalFloorIsRepaired(t *testing.T) {
+	in := run4Input()
+	k := 2200.0
+	in.State.Profile.KcalTarget = &k
+	p := validWeek(t, in)
+
+	_, reqs := chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
+
+	require.Greater(t, len(reqs), 1)
+	fb := feedbackOf(t, reqs[1])
+	assert.Contains(t, fb, "H9")
+	assert.Contains(t, fb, "safety floor")
+}
+
+// A floor the model never reaches ends the run within its bounded calls; the
+// final draft still carries the H9 violation and tells the user.
+func TestLLMChooser_UnmetFloorShipsWithH9AndANote(t *testing.T) {
+	in := run4Input()
+	k := 2200.0
+	in.State.Profile.KcalTarget = &k
+	p := validWeek(t, in)
+
+	prop, reqs := chooseWith(t, in, submit(t, "tu_1", p), submit(t, "tu_2", p), submit(t, "tu_3", p))
+
+	assert.Len(t, reqs, 3, "one call and two repairs, then it stops")
+	merged := planning.Merge(in.State, in.Target, prop)
+	var h9 int
+	for _, is := range planning.Check(merged, in.Target) {
+		if is.Rule == "H9" {
+			h9++
+		}
+	}
+	assert.Positive(t, h9, "the final draft carries the violation")
+	assert.Contains(t, prop.Notes, "daily minimum")
+}
+
 func TestLLMChooser_KcalOnTargetHasNoNote(t *testing.T) {
 	in := run4Input()
-	k := 620.0
+	k := 1240.0
+	doubleKcal(&in.State)
 	in.State.Profile.KcalTarget = &k
 	p := validWeek(t, in)
 	prop, reqs := chooseWith(t, in, submit(t, "tu_1", p))

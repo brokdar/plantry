@@ -30,6 +30,13 @@ type profileRequest struct {
 	DietType           *profile.DietType `json:"diet_type"`
 	MeatDaysPerWeekMax *int              `json:"meat_days_per_week_max"`
 	HouseholdPortions  *float64          `json:"household_portions"`
+	// Goal keeps the stored value when absent; the body fields are a full replace.
+	Goal          *profile.Goal `json:"goal"`
+	WeightKg      *float64      `json:"weight_kg"`
+	HeightCm      *float64      `json:"height_cm"`
+	BirthYear     *int          `json:"birth_year"`
+	Sex           *profile.Sex  `json:"sex"`
+	ActivityLevel *float64      `json:"activity_level"`
 }
 
 type profileResponse struct {
@@ -44,6 +51,12 @@ type profileResponse struct {
 	DietType            string         `json:"diet_type"`
 	MeatDaysPerWeekMax  *int           `json:"meat_days_per_week_max"`
 	HouseholdPortions   float64        `json:"household_portions"`
+	Goal                string         `json:"goal"`
+	WeightKg            *float64       `json:"weight_kg"`
+	HeightCm            *float64       `json:"height_cm"`
+	BirthYear           *int           `json:"birth_year"`
+	Sex                 *profile.Sex   `json:"sex"`
+	ActivityLevel       *float64       `json:"activity_level"`
 	UpdatedAt           string         `json:"updated_at"`
 }
 
@@ -72,6 +85,12 @@ func toProfileResponse(p *profile.Profile) profileResponse {
 		DietType:            string(p.DietType),
 		MeatDaysPerWeekMax:  p.MeatDaysPerWeekMax,
 		HouseholdPortions:   p.HouseholdPortions,
+		Goal:                string(p.Goal),
+		WeightKg:            p.WeightKg,
+		HeightCm:            p.HeightCm,
+		BirthYear:           p.BirthYear,
+		Sex:                 p.Sex,
+		ActivityLevel:       p.ActivityLevel,
 		UpdatedAt:           updatedAt,
 	}
 }
@@ -118,9 +137,15 @@ func (h *ProfileHandler) Update(w http.ResponseWriter, r *http.Request) {
 			SystemPrompt:        req.SystemPrompt,
 			Locale:              locale,
 			MeatDaysPerWeekMax:  req.MeatDaysPerWeekMax,
+			WeightKg:            req.WeightKg,
+			HeightCm:            req.HeightCm,
+			BirthYear:           req.BirthYear,
+			Sex:                 req.Sex,
+			ActivityLevel:       req.ActivityLevel,
 		},
 		DietType:          req.DietType,
 		HouseholdPortions: req.HouseholdPortions,
+		Goal:              req.Goal,
 	}
 
 	updated, err := h.svc.Replace(r.Context(), in)

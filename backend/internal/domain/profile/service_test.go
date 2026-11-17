@@ -250,3 +250,25 @@ func TestProfileDietType_Valid(t *testing.T) {
 		require.Falsef(t, d.Valid(), "%q should be invalid", d)
 	}
 }
+
+// With the sex unknown the conservative floor (1200) applies: a target below
+// it is rejected, while reading a stored one still works.
+func TestService_KcalFloorWithoutSex(t *testing.T) {
+	repo := newFakeRepo()
+	repo.stored.KcalTarget = ptr(900.0) // saved before the floor existed
+	svc := profile.NewService(repo)
+
+	p, err := svc.Get(context.Background())
+	require.NoError(t, err)
+	require.InDelta(t, 900, *p.KcalTarget, 0.01)
+
+	in := *p
+	_, err = svc.Update(context.Background(), &in)
+	require.ErrorIs(t, err, domain.ErrKcalBelowFloor)
+
+	in.KcalTarget = ptr(1200.0)
+	_, err = svc.Update(context.Background(), &in)
+	require.NoError(t, err)
+
+	require.InDelta(t, 1200, profile.MinDailyKcal(nil), 0.01)
+}

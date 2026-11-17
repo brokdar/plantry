@@ -60,6 +60,7 @@ type cookEvent struct {
 type index struct {
 	s       State
 	t       Target
+	pol     Policy
 	cells   map[cellID]Cell
 	target  map[cellID]bool
 	days    []time.Time // dates with a target cell, ascending
@@ -85,6 +86,7 @@ func newIndex(s State, t Target) *index {
 	x := &index{
 		s:         s,
 		t:         t,
+		pol:       PolicyOf(s.Profile),
 		cells:     make(map[cellID]Cell, len(s.Cells)),
 		target:    make(map[cellID]bool, len(t.Cells)),
 		byCell:    make(map[cellID][]int, len(s.Plates)),

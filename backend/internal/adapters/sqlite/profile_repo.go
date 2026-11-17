@@ -42,6 +42,10 @@ func (r *ProfileRepo) Update(ctx context.Context, p *profile.Profile) (*profile.
 		return nil, err
 	}
 
+	goal := p.Goal
+	if goal == "" {
+		goal = profile.GoalMaintain
+	}
 	row, err := r.queriesFor(ctx).UpsertProfile(ctx, sqlcgen.UpsertProfileParams{
 		KcalTarget:          toNullFloat64(p.KcalTarget),
 		ProteinPct:          toNullFloat64(p.ProteinPct),
@@ -54,6 +58,12 @@ func (r *ProfileRepo) Update(ctx context.Context, p *profile.Profile) (*profile.
 		DietType:            string(p.DietType),
 		MeatDaysPerWeekMax:  toNullInt64FromIntPtr(p.MeatDaysPerWeekMax),
 		HouseholdPortions:   p.HouseholdPortions,
+		Goal:                string(goal),
+		WeightKg:            toNullFloat64(p.WeightKg),
+		HeightCm:            toNullFloat64(p.HeightCm),
+		BirthYear:           toNullInt64FromIntPtr(p.BirthYear),
+		Sex:                 sexToNull(p.Sex),
+		ActivityLevel:       toNullFloat64(p.ActivityLevel),
 	})
 	if err != nil {
 		return nil, err
@@ -69,6 +79,15 @@ func mapProfileToDomain(row sqlcgen.UserProfile) *profile.Profile {
 		DietType:            profile.DietType(row.DietType),
 		MeatDaysPerWeekMax:  fromNullInt64ToIntPtr(row.MeatDaysPerWeekMax),
 		HouseholdPortions:   row.HouseholdPortions,
+		Goal:                profile.Goal(row.Goal),
+		WeightKg:            fromNullFloat64(row.WeightKg),
+		HeightCm:            fromNullFloat64(row.HeightCm),
+		BirthYear:           fromNullInt64ToIntPtr(row.BirthYear),
+		ActivityLevel:       fromNullFloat64(row.ActivityLevel),
+	}
+	if row.Sex.Valid {
+		v := profile.Sex(row.Sex.String)
+		p.Sex = &v
 	}
 
 	if row.KcalTarget.Valid {
@@ -104,4 +123,18 @@ func toNullFloat64(v *float64) sql.NullFloat64 {
 		return sql.NullFloat64{}
 	}
 	return sql.NullFloat64{Float64: *v, Valid: true}
+}
+
+func fromNullFloat64(v sql.NullFloat64) *float64 {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Float64
+}
+
+func sexToNull(v *profile.Sex) sql.NullString {
+	if v == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: string(*v), Valid: true}
 }

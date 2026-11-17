@@ -1,6 +1,7 @@
 package planning
 
 import (
+	"math"
 	"slices"
 	"time"
 
@@ -45,10 +46,13 @@ const (
 	CodePlateOnConfirmedCell  = "plate_on_confirmed_cell"
 	CodeVarietyRepeat         = "variety_repeat"
 	CodeVarietyRelaxed        = "variety_relaxed"
+	CodeKcalBelowFloor        = "kcal_below_floor"
 	// Soft rules (Evaluate).
-	CodeKcalBelowBand = "kcal_below_band"
-	CodeKcalAboveBand = "kcal_above_band"
-	CodeProteinLow    = "protein_below_target"
+	CodeKcalBelowBand     = "kcal_below_band"
+	CodeKcalAboveBand     = "kcal_above_band"
+	CodeProteinLow        = "protein_below_target"
+	CodeWeekKcalBelowBand = "week_kcal_below_band"
+	CodeWeekKcalAboveBand = "week_kcal_above_band"
 )
 
 // Issue is one finding of the checker (D22). Plates and sessions of a
@@ -68,7 +72,7 @@ type Issue struct {
 	Options []Option `json:"options,omitempty"`
 }
 
-// Check applies the hard rules H1–H8 (spec §6.4, D21) to the target of s and
+// Check applies the hard rules H1–H9 (spec §6.4, D21) to the target of s and
 // returns the issues in rule order. Pass the state after Merge to check a
 // proposal, or the persisted state to check a window as it is.
 func Check(s State, t Target) []Issue {
@@ -81,20 +85,26 @@ func Check(s State, t Target) []Issue {
 	out = append(out, x.h6()...)
 	out = append(out, x.h7()...)
 	out = append(out, x.h8()...)
+	out = append(out, x.h9()...)
 	return out
 }
 
 // BoardIssues checks the window of s as persisted with Check over all its
 // cells and keeps the rules the board shows (D21): H1, H2, H5 and H8. H3/H4
 // already appear as session warnings; H6/H7 cannot occur in persisted data.
-// An empty plan cell (missing_plate) needs attention only while the window
-// is a draft, and only from today on: a hand-planned or accepted window may
+// H9 shows only from today on, and as a warning on days without a draft
+// plate. An empty plan cell (missing_plate) needs attention only while the
+// window is a draft, and only from today on: a hand-planned or accepted window may
 // leave cells empty, and past cells are history.
 func BoardIssues(s State) []Issue {
 	t := WindowTarget(s)
 	drafts := false
+	draftDays := map[string]bool{}
 	for _, p := range s.Plates {
 		drafts = drafts || !p.Confirmed
+		if !p.Confirmed {
+			draftDays[p.Date.Format(time.DateOnly)] = true
+		}
 	}
 	for _, ss := range s.Sessions {
 		drafts = drafts || !ss.Confirmed
@@ -106,6 +116,15 @@ func BoardIssues(s State) []Issue {
 		case "H1":
 			if is.Code == CodeMissingPlate && (!drafts || is.Date < today) {
 				continue
+			}
+		case "H9":
+			// Past days are history; a day without a draft plate cannot be
+			// changed by the planner, so it is a warning at most.
+			if is.Date < today {
+				continue
+			}
+			if !draftDays[is.Date] {
+				is.Severity = SeverityWarning
 			}
 		case "H2", "H5", "H8":
 		default:
@@ -464,6 +483,36 @@ func (x *index) h8() []Issue {
 		out = append(out, is.with("food_id", ev.foodID).with("last_eaten", prev.Format(time.DateOnly)))
 	}
 	return out
+}
+
+// h9: the safety floor. A complete day with plates in the target whose kcal
+// per eater fall below the policy's floor (75 % of its scaled target, and the
+// absolute floor for a known sex, scaled the same way) is a violation. Days
+// without a kcal target, with missing nutrition data or without a plate of
+// the target are not judged.
+func (x *index) h9() []Issue {
+	var out []Issue
+	for _, dk := range x.dayAccounts(x.days) {
+		if dk.Target <= 0 || !dk.Complete || dk.NutritionMissing || dk.Kcal <= 0 || !x.plateInTarget(dk.Date) {
+			continue
+		}
+		floor := x.pol.Floor(dk.Target, dk.FloorShare())
+		if dk.Kcal < floor {
+			out = append(out, issue("H9", CodeKcalBelowFloor, SeverityViolation).onDate(dk.Date).
+				with("kcal", math.Round(dk.Kcal)).with("floor_kcal", math.Round(floor)).with("target_kcal", math.Round(dk.Scaled)))
+		}
+	}
+	return out
+}
+
+// plateInTarget reports whether a plate of the target sits on date.
+func (x *index) plateInTarget(date time.Time) bool {
+	for _, p := range x.s.Plates {
+		if dayOf(p.Date) == dayOf(date) && x.inTarget(p.Cell()) {
+			return true
+		}
+	}
+	return false
 }
 
 // earlierCook finds another cook of cook i's food at an earlier cell, on or

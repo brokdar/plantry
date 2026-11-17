@@ -303,6 +303,12 @@ export const mockProfile: Profile = {
   diet_type: "omnivore",
   meat_days_per_week_max: null,
   household_portions: 1,
+  goal: "maintain",
+  weight_kg: null,
+  height_cm: null,
+  birth_year: null,
+  sex: null,
+  activity_level: null,
   updated_at: "2026-01-01T00:00:00Z",
 }
 

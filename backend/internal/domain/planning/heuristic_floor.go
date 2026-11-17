@@ -1,0 +1,161 @@
+package planning
+
+import (
+	"cmp"
+	"math"
+	"slices"
+	"time"
+
+	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+)
+
+// maxTopUp caps how far the floor pass raises a component's portions: 1.5
+// portions of a recipe is still a plate.
+const maxTopUp = 1.5
+
+// topUpFloors raises the portions of the proposal's plates on every complete
+// day that holds fewer kcal than the policy's floor (H9), up to the floor
+// itself (a light day above it stays light). The heuristic picks recipes by
+// closeness to a meal's kcal share and never counts a day's total, so a day
+// of small recipes (or a routine breakfast plus one dinner) would fall under
+// the floor. Only mains and carb sides that eat a proposed session within
+// its keep days grow (their session grows by the same amount, so H3 holds);
+// other sides, frozen links and fixed sessions stay. A day still under the
+// floor gets a verified no-cook food (S2's candidates). A day that cannot
+// reach the floor that way stays as it is; the checker reports it (H9).
+func (h *planner) topUpFloors() {
+	k := h.s.Profile.KcalTarget
+	if k == nil || *k <= 0 || len(h.prop.Plates) == 0 {
+		return
+	}
+	merged := Merge(h.s, h.in.Target, h.prop)
+	y := newIndex(merged, h.in.Target)
+	for _, dk := range y.dayAccounts(y.days) {
+		if !dk.Complete || dk.NutritionMissing || dk.Kcal <= 0 {
+			continue
+		}
+		floor := y.pol.Floor(dk.Target, dk.FloorShare())
+		if dk.Kcal >= floor {
+			continue
+		}
+		h.topUpDay(dk.Date, floor-dk.Kcal)
+	}
+	for _, dk := range y.dayAccounts(y.days) {
+		for range maxFloorAdds {
+			if !h.addNoCook(dk.Date) {
+				break
+			}
+		}
+	}
+}
+
+// maxFloorAdds bounds the no-cook foods added to one day.
+const maxFloorAdds = 3
+
+// addNoCook adds the best verified no-cook food to a still too light day
+// (the candidates and the re-check of S2's options) and reports whether it
+// did. Raising a component is left to topUpDay: it would have to move the
+// component's session too.
+func (h *planner) addNoCook(date time.Time) bool {
+	merged := Merge(h.s, h.in.Target, h.prop)
+	y := newIndex(merged, h.in.Target)
+	var dk *DayKcal
+	for _, a := range y.dayAccounts([]time.Time{date}) {
+		dk = &a
+	}
+	if dk == nil || !dk.Complete || dk.NutritionMissing || dk.Kcal <= 0 {
+		return false
+	}
+	need := y.pol.Floor(dk.Target, dk.FloorShare()) - dk.Kcal
+	if need <= 0 {
+		return false
+	}
+	ev := Evaluate(merged, h.in.Target)
+	var d DayEval
+	for _, e := range ev.Days {
+		if e.Date == date.Format(time.DateOnly) {
+			d = e
+		}
+	}
+	base := hardKeys(ev.Issues)
+	cands := slices.DeleteFunc(y.candidates(date, need), func(c optCand) bool { return c.comp >= 0 })
+	slices.SortStableFunc(cands, func(a, b optCand) int {
+		return cmp.Compare(math.Abs(need-a.kcal), math.Abs(need-b.kcal))
+	})
+	for _, c := range cands {
+		if _, ok := y.verify(c, h.in.Target, base, d, dk.Target, false); !ok {
+			continue
+		}
+		at := merged.Plates[c.plate]
+		for i := range h.prop.Plates {
+			p := &h.prop.Plates[i]
+			if dayOf(p.Date) == dayOf(at.Date) && p.SlotID == at.SlotID {
+				pc := ProposedComponent{FoodID: c.opt.FoodID}
+				if c.opt.Portions != nil {
+					pc.Portions = *c.opt.Portions
+				}
+				if c.opt.Grams != nil {
+					pc.Grams = *c.opt.Grams
+				}
+				p.Components = append(p.Components, pc)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// topUpDay adds need kcal per eater to the day's growable components.
+func (h *planner) topUpDay(date time.Time, need float64) {
+	sessions := map[string]int{}
+	for i, ss := range h.prop.Sessions {
+		sessions[ss.Key] = i
+	}
+	// growable reports whether a component eats a proposed session within
+	// its keep days (not a frozen link), and the session's index.
+	growable := func(p ProposedPlate, c ProposedComponent) (int, bool) {
+		i, ok := sessions[c.SessionKey]
+		if c.SessionKey == "" || !ok || c.Portions <= 0 {
+			return 0, false
+		}
+		ss := h.prop.Sessions[i]
+		f, known := h.s.Foods[c.FoodID]
+		if !known {
+			return 0, false
+		}
+		last := ss.CookDate.AddDate(0, 0, h.x.keepDays(c.FoodID))
+		return i, !p.Date.After(last) && f.Macros.Kcal > 0 && (f.Role == food.RoleMain || f.Role == food.RoleSideStarch)
+	}
+	var raisable float64
+	for _, p := range h.prop.Plates {
+		if dayOf(p.Date) != dayOf(date) {
+			continue
+		}
+		for _, c := range p.Components {
+			if _, ok := growable(p, c); ok {
+				raisable += h.s.Foods[c.FoodID].Macros.Kcal * c.Portions
+			}
+		}
+	}
+	if raisable <= 0 {
+		return
+	}
+	factor := math.Min(1+need/raisable, maxTopUp)
+	for pi := range h.prop.Plates {
+		p := &h.prop.Plates[pi]
+		if dayOf(p.Date) != dayOf(date) {
+			continue
+		}
+		eaters := p.eaters(h.s)
+		for ci := range p.Components {
+			c := &p.Components[ci]
+			si, ok := growable(*p, *c)
+			if !ok {
+				continue
+			}
+			raised := math.Ceil(c.Portions*factor*4-epsilon) / 4
+			h.prop.Sessions[si].Portions += eaters * (raised - c.Portions)
+			c.Portions = raised
+		}
+	}
+}
