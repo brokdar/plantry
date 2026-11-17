@@ -17,7 +17,11 @@ import (
 type platesService interface {
 	Get(ctx context.Context, id int64) (*plate.Plate, error)
 	Create(ctx context.Context, in plate.PlateInput) (*plate.Plate, error)
-	Update(ctx context.Context, id int64, patch plate.PlatePatch) (*plate.Plate, error)
+	UpdateMeal(ctx context.Context, id int64, patch plate.PlatePatch) (plate.MealResult, error)
+	MoveMeal(ctx context.Context, plateID int64, to plate.CellKey, occ plate.Occupant) (plate.MealResult, error)
+	ReplaceComponent(ctx context.Context, plateID int64, sel plate.Selector, foodID int64, src plate.Source, qty *plate.PlateComponent) (plate.MealResult, error)
+	CopyMeal(ctx context.Context, plateID int64, to []plate.CellKey, as plate.CopyAs) (plate.MealResult, error)
+	Recorded(ctx context.Context, fn func(ctx context.Context) error) (plate.Undo, error)
 	Delete(ctx context.Context, id int64) (plate.PlanSnapshot, error)
 	AddComponent(ctx context.Context, plateID int64, pc plate.PlateComponent) (*plate.Plate, error)
 	SwapComponent(ctx context.Context, componentID, newFoodID int64, quantity *plate.PlateComponent) (*plate.Plate, error)
@@ -183,12 +187,52 @@ func (h *PlateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		patch.Date = &d
 	}
-	p, err := h.svc.Update(r.Context(), id, patch)
+	res, err := h.svc.UpdateMeal(r.Context(), id, patch)
+	if err != nil {
+		writeMealError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, plateChangeResponse{
+		plateResponse: toPlateResponse(&res.Plates[0]), AlsoChanged: alsoChanged(res.AlsoChanged), Undo: undoOf(res.Undo),
+	})
+}
+
+// plateChangeResponse is a plate with what else changed and the revert
+// token of the change (POST /api/plan/revert).
+type plateChangeResponse struct {
+	plateResponse
+	AlsoChanged []plate.AlsoChanged `json:"also_changed"`
+	Undo        plate.Undo          `json:"undo"`
+}
+
+func alsoChanged(a []plate.AlsoChanged) []plate.AlsoChanged {
+	if a == nil {
+		return []plate.AlsoChanged{}
+	}
+	return a
+}
+
+func undoOf(u plate.Undo) plate.Undo {
+	if u.Cells == nil {
+		u.Cells = []plate.CellUndo{}
+	}
+	return u
+}
+
+// writeComponentChange runs a component edit under plate.Service.Recorded
+// and writes the plate with its undo token.
+func (h *PlateHandler) writeComponentChange(w http.ResponseWriter, r *http.Request, status int, edit func(ctx context.Context) (*plate.Plate, error)) {
+	var p *plate.Plate
+	undo, err := h.svc.Recorded(r.Context(), func(ctx context.Context) error {
+		var err error
+		p, err = edit(ctx)
+		return err
+	})
 	if err != nil {
 		writePlateError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toPlateResponse(p))
+	writeJSON(w, status, plateChangeResponse{plateResponse: toPlateResponse(p), AlsoChanged: []plate.AlsoChanged{}, Undo: undoOf(undo)})
 }
 
 // Delete handles DELETE /api/plates/{id} and returns what restores it.
@@ -216,12 +260,9 @@ func (h *PlateHandler) AddComponent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	p, err := h.svc.AddComponent(r.Context(), plateID, req.toComponent())
-	if err != nil {
-		writePlateError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, toPlateResponse(p))
+	h.writeComponentChange(w, r, http.StatusCreated, func(ctx context.Context) (*plate.Plate, error) {
+		return h.svc.AddComponent(ctx, plateID, req.toComponent())
+	})
 }
 
 // updateComponentRequest supports two modes:
@@ -254,10 +295,6 @@ func (h *PlateHandler) UpdateComponent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
-	var (
-		p   *plate.Plate
-		err error
-	)
 	switch {
 	case req.FoodID != nil:
 		var override *plate.PlateComponent
@@ -265,18 +302,16 @@ func (h *PlateHandler) UpdateComponent(w http.ResponseWriter, r *http.Request) {
 			q := req.toQuantity()
 			override = &q
 		}
-		p, err = h.svc.SwapComponent(r.Context(), pcID, *req.FoodID, override)
+		h.writeComponentChange(w, r, http.StatusOK, func(ctx context.Context) (*plate.Plate, error) {
+			return h.svc.SwapComponent(ctx, pcID, *req.FoodID, override)
+		})
 	case req.hasQuantity():
-		p, err = h.svc.UpdateComponentQuantity(r.Context(), pcID, req.toQuantity())
+		h.writeComponentChange(w, r, http.StatusOK, func(ctx context.Context) (*plate.Plate, error) {
+			return h.svc.UpdateComponentQuantity(ctx, pcID, req.toQuantity())
+		})
 	default:
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
-		return
 	}
-	if err != nil {
-		writePlateError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, toPlateResponse(p))
 }
 
 // DeleteComponent handles DELETE /api/plates/{id}/components/{pcId} and
@@ -286,12 +321,9 @@ func (h *PlateHandler) DeleteComponent(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, err := h.svc.RemoveComponent(r.Context(), pcID)
-	if err != nil {
-		writePlateError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, toPlateResponse(p))
+	h.writeComponentChange(w, r, http.StatusOK, func(ctx context.Context) (*plate.Plate, error) {
+		return h.svc.RemoveComponent(ctx, pcID)
+	})
 }
 
 // parseIDParam parses the int64 URL parameter name, writing 400

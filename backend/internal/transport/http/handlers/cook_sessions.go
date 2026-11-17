@@ -21,6 +21,7 @@ type cookSessionsService interface {
 	DeleteSession(ctx context.Context, id int64) (plate.PlanSnapshot, error)
 	Confirm(ctx context.Context, seed plate.RowSet) (plate.RowSet, error)
 	Unlock(ctx context.Context, seed plate.RowSet) (plate.RowSet, error)
+	MoveCook(ctx context.Context, sessionID int64, to plate.CellKey) (plate.MealResult, error)
 }
 
 // CookSessionHandler exposes /api/cook-sessions.

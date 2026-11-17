@@ -92,6 +92,7 @@ type awayResponse struct {
 	Before      []awayBeforeJSON       `json:"before"`
 	Removed     plate.PlanSnapshot     `json:"removed"`
 	AlsoChanged []plate.AlsoChanged    `json:"also_changed"`
+	Undo        plate.Undo             `json:"undo"`
 }
 
 func availabilityError(w http.ResponseWriter, err error) {
@@ -256,7 +257,7 @@ func (h *AvailabilityHandler) PostAway(w http.ResponseWriter, r *http.Request) {
 	}
 	out := awayResponse{
 		Cells: make([]availabilityCellJSON, len(res.Cells)), Before: make([]awayBeforeJSON, len(res.Before)),
-		Removed: res.Removed, AlsoChanged: res.AlsoChanged,
+		Removed: res.Removed, AlsoChanged: res.AlsoChanged, Undo: undoOf(res.Undo),
 	}
 	for i, c := range res.Cells {
 		out.Cells[i] = toAvailabilityCellJSON(c)
