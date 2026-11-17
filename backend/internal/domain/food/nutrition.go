@@ -39,6 +39,9 @@ type Detailed struct {
 	Macros   nutrition.Macros
 	Complete bool
 	Missing  []MissingLeaf
+	// FiberMissing is true when any leaf in the tree has no fibre value
+	// (it contributes 0), so Macros.Fiber may understate.
+	FiberMissing bool
 }
 
 // MissingLeaf identifies a leaf food that lacks core macros.
@@ -83,11 +86,11 @@ func (r *NutritionResolver) PerPortionDetailedMany(ctx context.Context, ids []in
 	w := &walk{nodes: nodes, memo: map[int64]subtree{}}
 	for _, id := range ids {
 		f := nodes[id]
-		total, missing, err := w.total(f, 0)
+		total, missing, fiberMissing, err := w.total(f, 0)
 		if err != nil {
 			return nil, err
 		}
-		d := Detailed{Macros: total, Missing: sortedMissing(missing)}
+		d := Detailed{Macros: total, Missing: sortedMissing(missing), FiberMissing: fiberMissing}
 		d.Complete = len(d.Missing) == 0
 		if f.Kind == KindComposed {
 			portions := float64(1)
@@ -235,32 +238,36 @@ type walk struct {
 type subtree struct {
 	per100g nutrition.Macros
 	missing map[int64]string
+	// fiberMissing: a leaf below has no fibre value.
+	fiberMissing bool
 }
 
 // total returns absolute macros for a whole food (all ingredients summed)
 // and its incomplete leaves. For a leaf that means "macros for 100 g"; for a
 // composed food "macros for the total recipe at reference_portions servings".
-func (w *walk) total(f *Food, depth int) (nutrition.Macros, map[int64]string, error) {
+func (w *walk) total(f *Food, depth int) (nutrition.Macros, map[int64]string, bool, error) {
 	if depth > maxResolveDepth {
-		return nutrition.Macros{}, nil, fmt.Errorf("%w: food tree deeper than %d", domain.ErrInvalidInput, maxResolveDepth)
+		return nutrition.Macros{}, nil, false, fmt.Errorf("%w: food tree deeper than %d", domain.ErrInvalidInput, maxResolveDepth)
 	}
 	missing := map[int64]string{}
 	if f.Kind == KindLeaf {
 		if f.Kcal100g == nil || f.Protein100g == nil || f.Fat100g == nil || f.Carbs100g == nil {
 			missing[f.ID] = f.Name
 		}
-		return leafPer100g(f), missing, nil
+		return leafPer100g(f), missing, f.Fiber100g == nil, nil
 	}
 	var total nutrition.Macros
+	fiberMissing := false
 	for _, ch := range f.Children {
 		sub, err := w.per100g(ch.ChildID, depth+1)
 		if err != nil {
-			return nutrition.Macros{}, nil, err
+			return nutrition.Macros{}, nil, false, err
 		}
 		total = add(total, scale(sub.per100g, ch.Grams/100))
 		maps.Copy(missing, sub.missing)
+		fiberMissing = fiberMissing || sub.fiberMissing
 	}
-	return total, missing, nil
+	return total, missing, fiberMissing, nil
 }
 
 // per100g returns the per-100g macros for any food (leaf or composed).
@@ -277,11 +284,11 @@ func (w *walk) per100g(id int64, depth int) (subtree, error) {
 	if !ok {
 		return subtree{}, fmt.Errorf("%w: food %d not found during nutrition resolve", domain.ErrNotFound, id)
 	}
-	total, missing, err := w.total(f, depth)
+	total, missing, fiberMissing, err := w.total(f, depth)
 	if err != nil {
 		return subtree{}, err
 	}
-	s := subtree{per100g: total, missing: missing}
+	s := subtree{per100g: total, missing: missing, fiberMissing: fiberMissing}
 	if f.Kind == KindComposed {
 		totalGrams := float64(0)
 		for _, ch := range f.Children {

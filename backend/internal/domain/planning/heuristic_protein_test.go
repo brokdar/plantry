@@ -141,6 +141,55 @@ func TestHeuristic_ProteinGapClosing(t *testing.T) {
 		require.True(t, found)
 	})
 
+	t.Run("week with room: every day reaches its target, no weekly protein issue, one add per plate", func(t *testing.T) {
+		s := proteinState(profile.DietOmnivore)
+		s.Profile.KcalTarget = f64(2400)
+		tgt := windowTarget(s)
+		p := choose(t, planning.ChooseInput{State: s, Target: tgt})
+		ev := planning.Evaluate(planning.Merge(s, tgt, p), tgt)
+		for _, is := range ev.Issues {
+			assert.NotEqual(t, planning.CodeWeekProteinLow, is.Code)
+			assert.NotEqual(t, planning.CodeProteinLow, is.Code)
+		}
+		for _, d := range ev.Days {
+			assert.GreaterOrEqual(t, d.ProteinG, d.ProteinTargetG-1e-6, "%s closes toward 100 %%", d.Date)
+		}
+		perDay := map[string]int{}
+		for _, pl := range p.Plates {
+			n := 0
+			for _, c := range pl.Components {
+				if c.FoodID == skyr || c.FoodID == tofu {
+					n++
+				}
+			}
+			assert.LessOrEqual(t, n, 1, "at most one protein add per plate")
+			perDay[pl.Date.Format("2006-01-02")] += n
+		}
+		for date, n := range perDay {
+			assert.LessOrEqual(t, n, 2, date)
+		}
+	})
+
+	t.Run("seven at-target days: the adds keep the week inside its band", func(t *testing.T) {
+		s := proteinState(profile.DietOmnivore)
+		s.Profile.KcalTarget = f64(2000) // the week starts at 98 %; day adds alone could take it past 105 %
+		tgt := windowTarget(s)
+		p := choose(t, planning.ChooseInput{State: s, Target: tgt})
+		ev := planning.Evaluate(planning.Merge(s, tgt, p), tgt)
+		assert.LessOrEqual(t, ev.Week.Pct, 105+1e-6)
+		for _, is := range ev.Issues {
+			assert.NotEqual(t, planning.CodeWeekKcalAboveBand, is.Code)
+		}
+		assert.Positive(t, foodsAdded(p, skyr)+foodsAdded(p, tofu), "there was room for some adds")
+	})
+
+	t.Run("a week already above its band takes no protein adds", func(t *testing.T) {
+		s := proteinState(profile.DietOmnivore)
+		s.Profile.KcalTarget = f64(1800) // the week starts at 109 %
+		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
+		assert.Zero(t, foodsAdded(p, skyr)+foodsAdded(p, tofu))
+	})
+
 	t.Run("without a weight the heuristic does not chase protein", func(t *testing.T) {
 		s := proteinState(profile.DietOmnivore)
 		s.Profile.WeightKg = nil

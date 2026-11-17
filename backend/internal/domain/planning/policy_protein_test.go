@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
@@ -28,6 +30,9 @@ func TestPolicyOf_ProteinPerKg(t *testing.T) {
 		{"gain 1.6", f64(80), profile.GoalGain, nil, nil, 1.6, 128},
 		{"65+ maintain 1.0 (DGE)", f64(70), profile.GoalMaintain, intp(now - 65), nil, 1.0, 70},
 		{"65+ keeps the higher lose default", f64(70), profile.GoalLose, intp(now - 70), nil, 1.6, 112},
+		{"65+ raises an override below 1.0 to 1.0", f64(70), profile.GoalMaintain, intp(now - 66), f64(0.9), 1.0, 70},
+		{"under 65 keeps the low override", f64(70), profile.GoalMaintain, intp(now - 64), f64(0.9), 0.9, 63},
+		{"65+ keeps an override above 1.0", f64(70), profile.GoalMaintain, intp(now - 66), f64(1.4), 1.4, 98},
 		{"override wins", f64(70), profile.GoalMaintain, nil, f64(1.8), 1.8, 126},
 		{"override at the upper bound", f64(70), profile.GoalLose, nil, f64(2.2), 2.2, 154},
 		{"never below the DGE floor", f64(70), profile.GoalMaintain, nil, f64(0.5), 0.8, 56},
@@ -44,6 +49,12 @@ func TestPolicyOf_ProteinPerKg(t *testing.T) {
 		p := planning.PolicyOf(planning.Profile{WeightKg: f64(90)})
 		assert.InDelta(t, 60, p.ProteinTargetG(2.0/3.0), 1e-9)
 	})
+}
+
+func TestPolicy_DescribeRanksS5Lowest(t *testing.T) {
+	d := planning.PolicyOf(planning.Profile{}).Describe()
+	assert.Contains(t, d, "6 preferences and effort, 7 carb and fat ranges")
+	assert.Contains(t, d, "never at the cost of kcal or protein")
 }
 
 func TestPolicyOf_MacroRanges(t *testing.T) {
@@ -135,6 +146,32 @@ func TestEvaluate_ProteinPerKgAndMacroRanges(t *testing.T) {
 		assert.Equal(t, 7, n)
 	})
 
+	t.Run("without a weight S5 still applies to carbs and fat, protein stays on the share", func(t *testing.T) {
+		s := baseState()
+		s.Profile.KcalTarget = f64(1500)
+		s.Profile.FatPct = f64(40) // range 35-45 %: the days hold 20 %
+		s.Profile.ProteinPct = f64(40)
+		ev, _ := weekOf(s)
+		s5 := map[string]map[string]any{}
+		protein := 0
+		for _, is := range ev.Issues {
+			if is.Rule == "S5" {
+				s5[is.Code] = is.Params
+			}
+			if is.Code == planning.CodeProteinLow {
+				protein++
+				assert.Contains(t, is.Params, "target_pct")
+			}
+			assert.NotEqual(t, planning.CodeWeekProteinLow, is.Code)
+		}
+		require.Contains(t, s5, planning.CodeWeekFatRange)
+		assert.InDelta(t, 20, s5[planning.CodeWeekFatRange]["pct"], 0.01)
+		assert.InDelta(t, 35, s5[planning.CodeWeekFatRange]["range_low_pct"], 1e-9)
+		assert.InDelta(t, 45, s5[planning.CodeWeekFatRange]["range_high_pct"], 1e-9)
+		assert.NotContains(t, s5, planning.CodeWeekCarbsRange, "carbs 50 % sit inside the default 45-65 %")
+		assert.Equal(t, 7, protein, "the share logic is unchanged")
+	})
+
 	t.Run("a short day scales its protein target", func(t *testing.T) {
 		s := baseState()
 		s.Profile.KcalTarget = f64(1500)
@@ -171,5 +208,38 @@ func TestEvaluate_ProteinPerKgAndMacroRanges(t *testing.T) {
 		for _, is := range ev.Issues {
 			assert.NotContains(t, is.Code, "fiber")
 		}
+	})
+
+	t.Run("a food without fibre data hides the weekly fibre average", func(t *testing.T) {
+		s := baseState()
+		s.Profile.KcalTarget = f64(1500)
+		for _, id := range []int64{curry, chili} {
+			f := s.Foods[id]
+			f.Macros.Fiber = 10
+			s.Foods[id] = f
+		}
+		build := func(missing bool) planning.Evaluation {
+			f := s.Foods[chili]
+			f.FiberMissing = missing
+			s.Foods[chili] = f
+			tgt := windowTarget(s)
+			var prop planning.Proposal
+			for i, c := range s.Cells {
+				if c.Mode != availability.ModePlan {
+					continue
+				}
+				id := curry
+				if i == 0 {
+					id = chili
+				}
+				prop.Plates = append(prop.Plates, pplate(c.Date.Format("2006-01-02"), c.SlotID, fresh(id)))
+			}
+			return planning.Evaluate(planning.Merge(s, tgt, prop), tgt)
+		}
+		assert.Positive(t, build(false).Week.FiberG, "all foods have fibre: shown")
+		ev := build(true)
+		assert.Zero(t, ev.Week.FiberG, "one food lacks fibre: no partial average")
+		m := ev.Compact(planning.View{Dates: map[string]bool{sat: true}})
+		assert.NotContains(t, m["week"], "fiber_g")
 	})
 }

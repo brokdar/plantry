@@ -80,6 +80,7 @@ func (x *index) week(ev Evaluation) *WeekEval {
 		withPlate[p.Date] = true
 	}
 	var w WeekEval
+	fiberMissing := false
 	for _, d := range ev.Days {
 		if !d.Complete || !withPlate[d.Date] || d.NutritionMissing || d.Kcal <= 0 || d.TargetKcal == nil || *d.TargetKcal <= 0 {
 			continue
@@ -92,6 +93,7 @@ func (x *index) week(ev Evaluation) *WeekEval {
 		w.CarbsPct += d.CarbsPct * d.Kcal
 		w.FatPct += d.FatPct * d.Kcal
 		w.FiberG += d.FiberG
+		fiberMissing = fiberMissing || d.FiberMissing
 	}
 	if w.Days == 0 {
 		return nil
@@ -109,6 +111,10 @@ func (x *index) week(ev Evaluation) *WeekEval {
 	w.AvgProteinG /= n
 	w.TargetProteinG /= n
 	w.FiberG /= n
+	if fiberMissing {
+		// A partial average would mislead: show none.
+		w.FiberG = 0
+	}
 	return &w
 }
 

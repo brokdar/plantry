@@ -42,6 +42,17 @@ func TestPrompt_ToolRules(t *testing.T) {
 	}
 }
 
+// S5 (carb and fat ranges) ranks last: after preferences, never at the cost
+// of kcal or protein.
+func TestPrompt_S5RanksLowest(t *testing.T) {
+	prompt := ComposePrompt(nil, "", time.Time{})
+	for _, want := range []string{"preferences and effort, carb and fat ranges (last", "never at the cost of kcal or protein"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt must contain %q", want)
+		}
+	}
+}
+
 // planLines builds a summary with n cell lines per day over 31 days.
 func planLines(n int, note string) string {
 	var b strings.Builder

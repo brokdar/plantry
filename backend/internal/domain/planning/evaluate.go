@@ -69,7 +69,8 @@ type WeekEval struct {
 	CarbsPct float64 `json:"carbs_pct"`
 	FatPct   float64 `json:"fat_pct"`
 	// FiberG is the average fibre per day against the DGE target of 30 g, for
-	// display only. 0 (absent) when no food of the week has fibre data.
+	// display only. 0 (absent) when no food of the week has fibre data or any
+	// food lacks it (a partial average would mislead).
 	FiberG float64 `json:"fiber_g,omitempty"`
 }
 
@@ -98,6 +99,7 @@ type DayEval struct {
 	FatPct         float64  `json:"fat_pct"`
 	CarbsPct       float64  `json:"carbs_pct"`
 	FiberG         float64  `json:"-"`
+	FiberMissing   bool     `json:"-"`
 	Meat           bool     `json:"meat"`
 	MeatFoods      []string `json:"meat_foods"`
 	CookOccasions  int      `json:"cook_occasions"`
@@ -203,7 +205,7 @@ func Evaluate(s State, t Target) Evaluation {
 		if t := x.pol.ProteinTargetG(float64(dk.Planned) / float64(dk.Meals)); t > 0 {
 			de.ProteinTargetG = t
 		}
-		de.FiberG = dk.FiberG
+		de.FiberG, de.FiberMissing = dk.FiberG, dk.FiberMissing
 		if dk.Kcal > 0 {
 			de.ProteinPct, de.FatPct, de.CarbsPct = dk.ProteinG*4/dk.Kcal*100, dk.FatG*9/dk.Kcal*100, dk.CarbsG*4/dk.Kcal*100
 		}

@@ -131,6 +131,8 @@ type FoodFacts struct {
 	DietClass         diet.Class
 	Macros            nutrition.Macros
 	NutritionComplete bool
+	// FiberMissing: a leaf of the food has no fibre value (counted as 0).
+	FiberMissing      bool
 	Minutes           int
 	ReferencePortions float64
 	KeepDays          *int

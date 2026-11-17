@@ -235,7 +235,7 @@ const ExploreTag = "explore"
 // facts maps a food to what the planner reads about it.
 func facts(f *food.Food, d food.Detailed, timesEaten int, likes, dislikes map[string]bool) FoodFacts {
 	ff := BaseFacts(f)
-	ff.Macros, ff.NutritionComplete, ff.TimesEaten8Weeks = d.Macros, d.Complete, timesEaten
+	ff.Macros, ff.NutritionComplete, ff.FiberMissing, ff.TimesEaten8Weeks = d.Macros, d.Complete, d.FiberMissing, timesEaten
 	if f.ReferencePortions != nil && *f.ReferencePortions > 0 {
 		ff.ReferencePortions = *f.ReferencePortions
 	}

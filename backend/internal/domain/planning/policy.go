@@ -76,6 +76,8 @@ const (
 	// FiberTargetG is the DGE fibre target per day.
 	FiberTargetG = 30.0
 	seniorAge    = 65
+	// seniorProteinPerKg is the protein floor in g per kg from seniorAge.
+	seniorProteinPerKg = 1.0
 )
 
 // PolicyOf derives the policy of p; an empty goal is maintain.
@@ -105,19 +107,17 @@ func PolicyOf(p Profile) Policy {
 }
 
 // proteinPerKg is the profile's protein factor: its own override, else the
-// goal's default (maintain 1.0, lose and gain 1.6), at least 1.0 from 65;
-// never below the DGE floor.
+// goal's default (maintain 1.0, lose and gain 1.6); from age 65 at least 1.0
+// (the DGE advice), also over a lower override; never below the DGE floor.
 func proteinPerKg(p Profile) float64 {
 	f := 1.0
 	if p.ProteinGPerKg != nil {
 		f = *p.ProteinGPerKg
-	} else {
-		if p.Goal == profile.GoalLose || p.Goal == profile.GoalGain {
-			f = 1.6
-		}
-		if p.BirthYear != nil && time.Now().Year()-*p.BirthYear >= seniorAge {
-			f = max(f, 1.0)
-		}
+	} else if p.Goal == profile.GoalLose || p.Goal == profile.GoalGain {
+		f = 1.6
+	}
+	if p.BirthYear != nil && time.Now().Year()-*p.BirthYear >= seniorAge {
+		f = max(f, seniorProteinPerKg)
 	}
 	return max(f, profile.MinProteinGPerKg)
 }
@@ -147,7 +147,7 @@ func (p Policy) Describe() string {
 	}
 	out := fmt.Sprintf("Energy policy (goal: %s). The kcal target is a target, not a limit. The week matters most: the average of the complete days should land at %d-%d%% of the target (soft issue S4); a single day may deviate within %d-%d%% of its target (soft issue S2). The floor is hard: never plan a day below %s (H9).",
 		p.Goal, pct(p.WeekLow), pct(p.WeekHigh), pct(p.DayLow), pct(p.DayHigh), floor)
-	out += fmt.Sprintf(" Priority when rules conflict: 1 hard rules, 2 weekly kcal, 3 day kcal band, 4 protein, 5 food-group rules, 6 carb and fat ranges, 7 preferences and effort. Carbs and fat are judged on the weekly average only: carbs %.0f-%.0f%% and fat %.0f-%.0f%% of energy (soft issues S5).",
+	out += fmt.Sprintf(" Priority when rules conflict: 1 hard rules, 2 weekly kcal, 3 day kcal band, 4 protein, 5 food-group rules, 6 preferences and effort, 7 carb and fat ranges (soft issues S5: last, never at the cost of kcal or protein). Carbs and fat are judged on the weekly average only: carbs %.0f-%.0f%% and fat %.0f-%.0f%% of energy.",
 		p.CarbsLow, p.CarbsHigh, p.FatLow, p.FatHigh)
 	if p.ProteinGPerKg > 0 {
 		out += fmt.Sprintf(" Protein target: %.1f g per kg x %.0f kg = %.0f g per person per full day (scaled to the planned meals on a short day). A day under %d%% of it is soft issue S3, a weekly average under %d%% too: close protein gaps actively (find_foods with min_protein, or take an issue's options: skyr/quark, yoghurt, tofu, eggs, cheese, legumes, honouring the diet type and the kcal band) and write a note only when no option exists.",
