@@ -38,7 +38,7 @@ func (Heuristic) Choose(ctx context.Context, in ChooseInput) (Proposal, error) {
 	if in.Side != nil {
 		prop, err = h.side(*in.Side)
 	} else {
-		prop, err = h.plan()
+		h, prop, err = planWithForcedCooks(in, h)
 	}
 	h.recordChoices(ctx)
 	return prop, err
@@ -95,6 +95,12 @@ type planner struct {
 	// choices log what was chosen per cell and why (the run's
 	// heuristic.choices step).
 	choices []heuristicChoice
+	// stranded are the cells left empty because their day's cooking cap was
+	// used and no batch could feed them; forced are cells that must cook
+	// (and are never covered by another cook) so the stranded cell they map to
+	// can eat their leftovers; the recipes cooked there must keep that long.
+	stranded []plate.CellKey
+	forced   map[cellID]plate.CellKey
 }
 
 func newPlanner(in ChooseInput) *planner {
@@ -157,6 +163,16 @@ func (h *planner) plan() (Proposal, error) {
 			continue
 		}
 		eaters := h.eaters(c.Date)
+		limit := h.s.Settings.MaxCookOccasionsPerDay
+		maxed := limit > 0 && len(h.occasions[dayOf(c.Date)]) >= limit
+		// A forced cell cooks unless earlier cooks of the rerun used its
+		// day's cap meanwhile.
+		if _, ok := h.forced[idOf(c)]; ok && (!maxed || h.occasions[dayOf(c.Date)][idOf(c)]) {
+			if err := h.cook(c); err != nil {
+				return Proposal{}, err
+			}
+			continue
+		}
 		if sup := h.supplyFor(c, eaters); sup != nil {
 			h.eat(sup, c, eaters, false)
 			continue
@@ -165,8 +181,6 @@ func (h *planner) plan() (Proposal, error) {
 		// earlier cell eats from the latest proposed session that may still
 		// feed it, which cooks more; so does any cell of a day that may not
 		// cook again. Only a cell nothing can feed cooks early.
-		limit := h.s.Settings.MaxCookOccasionsPerDay
-		maxed := limit > 0 && len(h.occasions[dayOf(c.Date)]) >= limit
 		if h.s.Settings.BatchCooking && (maxed || !h.lastOpenOfDay(c)) {
 			if sup := h.growable(c); sup != nil {
 				h.eat(sup, c, eaters, true)
@@ -181,6 +195,7 @@ func (h *planner) plan() (Proposal, error) {
 			// included) and no batch can feed c: leave it empty; the checker
 			// reports it (H1). A cell that already is an occasion may cook.
 			h.choices = append(h.choices, heuristicChoice{Date: c.Date.Format(time.DateOnly), SlotID: c.SlotID, Reason: "left_empty_cook_cap"})
+			h.stranded = append(h.stranded, c)
 			continue
 		}
 		if err := h.cook(c); err != nil {
@@ -190,6 +205,58 @@ func (h *planner) plan() (Proposal, error) {
 	h.prop.Notes = strings.Join(append([]string{h.exploreNote()}, h.notes...), "\n")
 	h.prop.Notes = strings.TrimSpace(h.prop.Notes)
 	return h.prop, nil
+}
+
+// planWithForcedCooks plans, and while a cell is left empty by the cooking
+// cap that a cook the greedy walk did not make could fill, reruns with those
+// cooks forced. It returns the planner of the last run.
+func planWithForcedCooks(in ChooseInput, h *planner) (*planner, Proposal, error) {
+	prop, err := h.plan()
+	forced := map[cellID]plate.CellKey{}
+	for err == nil && len(h.stranded) > 0 {
+		before := len(forced)
+		for _, c := range h.stranded {
+			if f, ok := h.feederFor(c, forced); ok {
+				forced[idOf(f)] = c
+			}
+		}
+		if len(forced) == before {
+			break
+		}
+		h = newPlanner(in)
+		h.forced = forced
+		prop, err = h.plan()
+	}
+	return h, prop, err
+}
+
+// feederFor is the latest open cell before the stranded cell c that may cook
+// (a lunch or dinner of a day with a free cooking occasion, not cooking yet)
+// for which a main exists whose leftovers reach c within its keep days.
+func (h *planner) feederFor(c plate.CellKey, forced map[cellID]plate.CellKey) (plate.CellKey, bool) {
+	limit := h.s.Settings.MaxCookOccasionsPerDay
+	for _, o := range slices.Backward(h.open) {
+		_, isForced := forced[idOf(o)]
+		if !plate.Before(o, c, h.order) || isForced || h.x.routine(o) || h.x.mealOf(o.SlotID) != mealFull {
+			continue
+		}
+		occ := h.occasions[dayOf(o.Date)]
+		if occ[idOf(o)] || (limit > 0 && len(occ) >= limit) {
+			continue
+		}
+		for _, f := range h.s.Foods {
+			if h.mainCandidate(f, o) && reaches(f, o, c, h.s.Settings) {
+				return o, true
+			}
+		}
+	}
+	return plate.CellKey{}, false
+}
+
+// reaches reports whether a batch of f cooked on from still feeds c as a
+// leftover within f's keep days.
+func reaches(f FoodFacts, from, c plate.CellKey, set Settings) bool {
+	return plate.Classify(c, plate.CookSession{CookDate: from.Date, CookSlotID: from.SlotID}, set.KeepDays(f.KeepDays)) == plate.KindLeftover
 }
 
 // eatAnyway fills c from a batch even if that adds a meat day past the
@@ -498,7 +565,7 @@ func (h *planner) cover(c plate.CellKey, cook plate.CookSession, keep int, freez
 		if total+epsilon >= ref {
 			break
 		}
-		if h.done[idOf(o)] || !plate.Before(c, o, h.order) {
+		if h.done[idOf(o)] || !plate.Before(c, o, h.order) || h.isForced(o) {
 			continue
 		}
 		if omni && limit != nil && h.s.Window.Contains(o.Date) && !meat[dayOf(o.Date)] {
@@ -539,11 +606,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	share := h.kcalShare(c.Date)
 	var cands []candidate
 	for _, f := range h.s.Foods {
-		if !f.Composed() || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] {
-			continue
-		}
-		// A lunch or dinner takes a main; a standalone recipe is a breakfast.
-		if !isMain(f.Role, h.x.mealOf(c.SlotID)) {
+		if !h.mainCandidate(f, c) || !h.reachesForced(f, c) {
 			continue
 		}
 		isNew := f.LastEaten == nil
@@ -576,13 +639,34 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	return best(cands)
 }
 
+// mainCandidate reports whether f may be cooked as the main of c.
+func (h *planner) mainCandidate(f FoodFacts, c plate.CellKey) bool {
+	if !f.Composed() || !varietyRole(f.Role) || !h.fits(f) || h.routineFoods[f.ID] {
+		return false
+	}
+	// A lunch or dinner takes a main; a standalone recipe is a breakfast.
+	return isMain(f.Role, h.x.mealOf(c.SlotID))
+}
+
+func (h *planner) isForced(c plate.CellKey) bool {
+	_, ok := h.forced[idOf(c)]
+	return ok
+}
+
+// reachesForced is false for a recipe too short-lived to feed the stranded
+// cell a forced cook on c is for; true when c is not forced.
+func (h *planner) reachesForced(f FoodFacts, c plate.CellKey) bool {
+	target, ok := h.forced[idOf(c)]
+	return !ok || reaches(f, c, target, h.s.Settings)
+}
+
 // pickSide ranks the side recipes for a main cooked on c: of role when given
 // (a swap keeps veg veg and starch starch unless none exists), not replaced, not
 // the excluded food, used least in the proposal, then as pickMain.
 func (h *planner) pickSide(c plate.CellKey, exclude int64, role food.Role) (int64, bool) {
 	var cands []candidate
 	for _, f := range h.s.Foods {
-		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || !h.fits(f) {
+		if !f.Composed() || !sideRole(f.Role) || f.ID == exclude || !h.fits(f) || !h.reachesForced(f, c) {
 			continue
 		}
 		last := 0.0
