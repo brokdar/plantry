@@ -35,7 +35,7 @@ var applyChangesSchema = `{
         "type":"object",
         "required":["op"],
         "properties":{
-          "op":{"type":"string","enum":["add","swap","set_quantity","remove","create_plate","delete_plate","set_portions","set_eaters","set_availability"]},
+          "op":{"type":"string","enum":["add","swap","set_quantity","remove","create_plate","delete_plate","set_portions","set_eaters","set_availability","move","replace","away","move_cook","copy"]},
           "plate_id":{"type":"integer","minimum":1},
           "plate_component_id":{"type":"integer","minimum":1},
           "food_id":{"type":"integer","minimum":1},
@@ -50,7 +50,12 @@ var applyChangesSchema = `{
           "eaters":{"type":"number","exclusiveMinimum":0,"maximum":100},
           "mode":{"type":"string","enum":["plan","none","routine","default"]},
           "preset_id":{"type":"integer","minimum":1},
-          "note":{"type":"string","maxLength":200}
+          "note":{"type":"string","maxLength":200},
+          "position":{"type":"string","enum":["main","side","extra"]},
+          "to":{"type":["object","array"],"description":"move: one cell {date, slot_id}; copy: a list of cells [{date, slot_id}]"},
+          "occupant":{"type":["string","object"],"description":"move onto a taken cell: \"swap\", \"drop\" or {date, slot_id}"},
+          "cells":{"type":"array","minItems":1,"maxItems":21,"items":{"type":"object","required":["date","slot_id"],"properties":{"date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"slot_id":{"type":"integer","minimum":1}},"additionalProperties":false}},
+          "as":{"type":"string","enum":["leftover","fresh"]}
         },
         "additionalProperties":false
       }
@@ -61,17 +66,22 @@ var applyChangesSchema = `{
 
 const applyChangesDescription = `Change the plan in one call: a list of ops that run in order in ONE transaction (any failing op rolls everything back and names it, numbered from 1). With dry_run true nothing is saved: you get the same result so you can check the rule effects first. Rows a dry run creates do not exist afterwards: their ids are left out everywhere (applied, after, issues and an option's op) and marked "provisional": true, an option whose op uses one is marked too, so never use them in a later call; to apply, send the full op list again with dry_run false (the result then has the real ids; a dry run says so in dry_run_note). Quantities are per eater: a recipe takes portions (usually 1), a leaf takes amount + unit (e.g. 100 + "g") and rejects portions.
 Ops (fields):
-- add: food_id, the plate by plate_id OR by date + slot_id (the plate is created when the cell is empty), a quantity (portions | amount+unit). Optional session_id: a recipe component eats from that existing cook session (leftover, no new cooking). Optional cook_at {date, slot_id}: a recipe is cooked on that other cell (a new session cooking there, e.g. with the lunch batch) and the plate eats it (portions = eaters x portions).
-- swap: plate_component_id, food_id (the new food), optional quantity (else the current one is kept).
-- set_quantity: plate_component_id + quantity.
+- add: food_id, the plate by plate_id OR by date + slot_id (the plate is created when the cell is empty), portions | amount+unit. Optional position main|side|extra (else derived). Optional session_id: a recipe component eats from that existing cook session (leftover, no new cooking). Optional cook_at {date, slot_id}: a recipe is cooked on that other cell (a new session cooking there, e.g. with the lunch batch) and the plate eats it (portions = eaters x portions).
+- swap: plate_component_id, food_id (the new food), optional portions | amount+unit (else the current one is kept).
+- set_quantity: plate_component_id + portions | amount+unit.
 - remove: plate_component_id.
 - create_plate: date, slot_id, optional eaters, note.
 - delete_plate: plate_id.
 - set_portions: session_id, portions (total the batch cooks), optional frozen_portions. Refused below what the plates eat.
 - set_eaters: plate_id, eaters (the batches it eats from are resized).
-- set_availability: date, slot_id, mode plan|none|routine|default, preset_id (routine), note (none). Only one per call.
+- set_availability: date, slot_id, mode plan|none|routine|default, preset_id (routine), note (none). none removes the cell's plate and moves a cook off it.
+- move: plate_id, to {date, slot_id}. A taken target needs occupant: "swap" (the other plate takes this plate's cell), "drop" (the other plate is removed) or {date, slot_id} (it moves on to that empty cell); without one the op fails naming the plate there. Batches follow (the cook moves with its meal or to the earliest meal still eating it).
+- replace: plate_id, position main|side OR plate_component_id, food_id (the new food); optional session_id (eat from that batch), cook_at {date, slot_id} (cook it there), portions | amount+unit (else the current quantity is kept). Keeps the position.
+- away: cells [{date, slot_id}] OR date (every planned meal of that day), optional note. Marks the cells "no plate", removes their plates and moves cooks off them. A day away is not judged for calories.
+- move_cook: session_id, cook_at {date, slot_id}: the batch cooks there instead (on or before every meal eating it, within keep days).
+- copy: plate_id, to [{date, slot_id}], as leftover (eat from the same batches) | fresh (cook again on each cell).
 Only draft plates in the future are changeable; a confirmed one needs the user to unlock it.
-Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (dry runs only), applied:[{op, plate_id?, plate_component_id?, session_id?, ...}], after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (the weekly kcal ledger of the whole window: complete days only, per eater), issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],total_open,new_more?,resolved_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). An S3 option raises the day's protein; an S2 option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (H1-H9; H9 is a day below its kcal safety floor) are hard rules: fix them. Soft issues (S2 day kcal outside the day band of target, S3 protein under 90% of the day target (g/kg) or the share under target, or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range or a DGE food rule missed (week_meat_above_dge over 300 g, week_fish_below_dge, week_legumes_below_dge), S6 a light meal that is not lighter; only S2 and S3 carry options you can apply with another call. Pass light (the user's light requests, meal unless they explicitly ask to eat less for the day) to judge the result under them; stored light requests apply without passing them again. A call that is not a dry run and succeeds saves the light you pass (a date replaces that date's request, scope none clears it); a dry run saves nothing: days then show light and normal_target_kcal, week.target_kcal is the target after them and week.normal_target_kcal the normal one. Your request is not done while an issue it caused is open, unless you tell the user why.`
+Returns compact JSON (numbers rounded: kcal whole, other figures one decimal; a field that is 0, false or empty is left out, so absent means 0 / false / none; complete shows only when false) {dry_run, dry_run_note? (dry runs only), applied:[{op, plate_id?, plate_component_id?, session_id?, ..., also_changed?:[{what cook_moved|became_cooking_meal|cooks_fresh|batch_resized, session_id, plate_id, date, slot_id, from_date, from_slot_id, why?}]}] (move: date, slot_id, from_date, from_slot_id, occupant?, occupant_plate_id?; away: cells, removed_plates; move_cook: cook_date, cook_slot_id; copy: copies [{plate_id, date, slot_id}]; also_changed lists what else the op changed, tell the user in plain words), after:{plates:[{plate_id,date,slot_id,state,eaters,components:[names],kcal,protein_g (per eater),component_details (only these touched plates):[{plate_component_id,name,portions?|grams?,kcal,protein_g,nutrition_complete? (only false)}]}], sessions:[{session_id,food,cook_date,portions,frozen_portions,consumed,frozen_consumed,surplus,state,cooked,warnings}], days:[{date,kcal,target_kcal,protein_g,protein_pct,fat_pct,carbs_pct,meat,meat_foods,cook_occasions,complete}] (the days the ops touched, a cook_at op's cook day included, also in other plan windows), meat_days, meat_days_max, week:{days,avg_kcal,target_kcal,pct,avg_protein_g,target_protein_g?,protein_pct?,carbs_pct,fat_pct,fiber_g? (average per day, DGE target 30 g, display only),meat_g? (per week, extrapolated to 7 days),fish_meals?,legume_meals?,produce_g_per_day? (DGE food groups per eater, display only)} (the weekly kcal ledger of the whole window: complete days only, per eater), issues_checked (false with issues_unchecked_reason when a touched date lies outside the evaluated plan windows), issues:{new:[issue],resolved:[issue],total_open,new_more?,resolved_more?}, change_id? (not on dry runs)}}. An issue is {rule, code, severity violation|warning|soft, date, slot_id?, plate_id?, session_id?, params, options?:[{action add|raise, food_id, name, date, slot_id, plate_id, portions|grams, from?, kcal_delta, protein_delta_g, day_kcal, day_protein_pct, cook_occasions, new_meat_day, op}]} where op is an apply_changes op you can pass as it is (add with plate_id or date+slot_id and portions or amount+unit, or set_quantity with plate_component_id). An S3 option raises the day's protein; an S2 option moves the day closer to its target without leaving the band; options that bring the day into the band come first. Violations (H1-H9; H9 is a day below its kcal safety floor) are hard rules: fix them. Soft issues (S2 day kcal outside the day band of target, S3 protein under 90% of the day target (g/kg) or the share under target, or the weekly average under target, S4 weekly average outside the week band, S5 weekly carb or fat share outside its range or a DGE food rule missed (week_meat_above_dge over 300 g, week_fish_below_dge, week_legumes_below_dge), S6 a light meal that is not lighter; only S2 and S3 carry options you can apply with another call. Pass light (the user's light requests, meal unless they explicitly ask to eat less for the day) to judge the result under them; stored light requests apply without passing them again. A call that is not a dry run and succeeds saves the light you pass (a date replaces that date's request, scope none clears it); a dry run saves nothing: days then show light and normal_target_kcal, week.target_kcal is the target after them and week.normal_target_kcal the normal one. Your request is not done while an issue it caused is open, unless you tell the user why.`
 
 // changeOp is one op of apply_changes.
 type changeOp struct {
@@ -94,6 +104,12 @@ type changeOp struct {
 	CellMode       string   `json:"mode"`
 	PresetID       *int64   `json:"preset_id"`
 	Note           *string  `json:"note"`
+	Position       string   `json:"position"`
+	// To is one cell (move) or a list of cells (copy).
+	To       json.RawMessage `json:"to"`
+	Occupant json.RawMessage `json:"occupant"`
+	Cells    []cellRef       `json:"cells"`
+	As       string          `json:"as"`
 }
 
 func (o changeOp) quantity() quantityInput {
@@ -136,6 +152,7 @@ func toolApplyChanges(svc Services) Tool {
 		Name:        applyChangesName,
 		Description: applyChangesDescription,
 		Schema:      json.RawMessage(applyChangesSchema),
+		Hint:        applyChangesHint,
 		Handler: func(ctx context.Context, input json.RawMessage) (json.RawMessage, ToolEffect, error) {
 			var in struct {
 				Ops    []changeOp             `json:"ops"`
@@ -156,8 +173,8 @@ func toolApplyChanges(svc Services) Tool {
 			if svc.Tx == nil || svc.State == nil {
 				return nil, ToolEffectNone, fmt.Errorf("%w: apply_changes is not available (no unit of work or plan reader)", domain.ErrInvalidInput)
 			}
-			if n := countOp(in.Ops, "set_availability"); n > 1 {
-				return nil, ToolEffectNone, fmt.Errorf("%w: at most one set_availability op per call (undo restores one cell)", domain.ErrInvalidInput)
+			if hint := applyChangesHint(input); hint != "" {
+				return nil, ToolEffectNone, fmt.Errorf("%w: %s", domain.ErrInvalidInput, hint)
 			}
 			w, ok := windowFrom(ctx)
 			if !ok {
@@ -206,6 +223,7 @@ func toolApplyChanges(svc Services) Tool {
 				planning.RecordEvaluation(ctx, planning.PhaseDryRun, func() planning.Evaluation { return afterEv })
 			} else {
 				noteChange(ctx, "apply_changes", map[string]any{"count": len(in.Ops), "ops": b.ops})
+				noteDates(ctx, b.aff.Dates)
 			}
 			result := map[string]any{"dry_run": in.DryRun, "applied": applied, "after": after}
 			if in.DryRun {
@@ -312,16 +330,6 @@ func idOf(v any) (int64, bool) {
 		return id, err == nil
 	}
 	return 0, false
-}
-
-func countOp(ops []changeOp, name string) int {
-	n := 0
-	for _, o := range ops {
-		if o.Op == name {
-			n++
-		}
-	}
-	return n
 }
 
 // applyOp runs one op through plate.Service (and the availability writer).
@@ -435,6 +443,16 @@ func applyOp(ctx context.Context, svc Services, op changeOp, b *batch) (map[stri
 		return map[string]any{"op": op.Op, "plate_id": p.ID, "eaters": p.Eaters}, nil
 	case "set_availability":
 		return opSetAvailability(ctx, svc, op, b)
+	case "move":
+		return opMove(ctx, svc, op, b)
+	case "replace":
+		return opReplace(ctx, svc, op, b)
+	case "away":
+		return opAway(ctx, svc, op, b)
+	case "move_cook":
+		return opMoveCook(ctx, svc, op, b)
+	case "copy":
+		return opCopy(ctx, svc, op, b)
 	}
 	return nil, fmt.Errorf("%w: unknown op %q", domain.ErrInvalidInput, op.Op)
 }
@@ -504,6 +522,7 @@ func opAdd(ctx context.Context, svc Services, op changeOp, b *batch) (map[string
 		return nil, fmt.Errorf("%w: add needs plate_id or date + slot_id", domain.ErrInvalidInput)
 	}
 	comp := op.quantity().component(op.FoodID)
+	comp.Position = plate.Position(op.Position)
 	if op.SessionID != 0 {
 		sid := op.SessionID
 		comp.CookSessionID = &sid
@@ -631,14 +650,17 @@ func opSetAvailability(ctx context.Context, svc Services, op changeOp, b *batch)
 		}
 	} else {
 		mode := availability.Mode(op.CellMode)
-		_, removed, err := svc.Cells.SetOverride(ctx, availability.OverrideInput{
+		_, res, err := svc.Cells.SetOverrideMeals(ctx, availability.OverrideInput{
 			Date: d, SlotID: op.SlotID, Mode: mode, PresetID: op.PresetID, Note: op.Note,
 			RemovePlate: mode == availability.ModeNone,
 		})
 		if err != nil {
 			return nil, err
 		}
-		out["removed_plate"] = removed != nil
+		out["removed_plate"] = res != nil && len(res.Removed.Plates) > 0
+		if res != nil {
+			mealResult(out, *res, b)
+		}
 	}
 	b.aff.Dates = append(b.aff.Dates, op.Date)
 	b.note(op, map[string]any{"slot_key": slotKey, "slot_id": op.SlotID, "mode": op.CellMode, "date": op.Date})
@@ -726,7 +748,7 @@ func batchAfter(ctx context.Context, svc Services, ws []window.Window, b batch, 
 	return out, now, nil
 }
 
-// opDates lists the dates the ops name (date, cook_at.date).
+// opDates lists the dates the ops name (date, cook_at.date, to, cells).
 func opDates(ops []changeOp) []string {
 	var out []string
 	for _, o := range ops {
@@ -735,6 +757,13 @@ func opDates(ops []changeOp) []string {
 		}
 		if o.CookAt != nil && o.CookAt.Date != "" {
 			out = append(out, o.CookAt.Date)
+		}
+		if c, err := o.toCell(); err == nil {
+			out = append(out, c.Date)
+		}
+		cs, _ := o.toCells()
+		for _, c := range append(cs, o.Cells...) {
+			out = append(out, c.Date)
 		}
 	}
 	return out

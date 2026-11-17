@@ -160,7 +160,7 @@ func TestChange_UndoAvailabilityStaleAfterManualEdit(t *testing.T) {
 		}
 	}
 	ch := e.changeOp(ctx, "set_availability", fmt.Sprintf(`{"date":%q,"slot_id":%d,"mode":"none"}`, d.Format(time.DateOnly), slotID))
-	require.NotNil(t, ch.CellBefore)
+	require.Len(t, ch.Cells, 1)
 
 	note := "eating out after all"
 	_, _, err := e.avail.SetOverride(context.Background(), availability.OverrideInput{Date: d, SlotID: slotID, Mode: availability.ModePlan, Note: &note})

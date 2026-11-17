@@ -51,11 +51,13 @@ type Tool struct {
 	// CodeCallable: the model may also call the tool from code it runs
 	// (programmatic tool calling). Only read and dry-run tools are.
 	CodeCallable bool
+	// Hint explains a schema refusal in the tool's own terms (optional).
+	Hint func(input json.RawMessage) string
 }
 
 // codeCallableTools are the tools code may call: the reads and apply_changes,
 // which from code must be a dry run.
-var codeCallableTools = map[string]bool{"find_foods": true, "get_plan": true, applyChangesName: true}
+var codeCallableTools = map[string]bool{"find_foods": true, "get_plan": true, applyChangesName: true, findAlternativesName: true}
 
 // ErrCodeCallRefused is returned when code the model ran calls a tool it may
 // not call (allowed_callers is guidance, not a security boundary).
@@ -236,7 +238,13 @@ func (s *ToolSet) execute(ctx context.Context, name string, input json.RawMessag
 		return nil, ToolEffectNone, fmt.Errorf("%w: schema validation: %v", domain.ErrInvalidInput, err)
 	}
 	if !result.Valid() {
-		return nil, ToolEffectNone, fmt.Errorf("%w: %s", domain.ErrInvalidInput, schemaErrors(result))
+		msg := schemaErrors(result)
+		if t.Hint != nil {
+			if h := t.Hint(input); h != "" {
+				msg = h + " (" + msg + ")"
+			}
+		}
+		return nil, ToolEffectNone, fmt.Errorf("%w: %s", domain.ErrInvalidInput, msg)
 	}
 	return t.Handler(ctx, input)
 }
@@ -259,6 +267,7 @@ func defaultTools(svc Services) []Tool {
 		toolListSlots(svc),
 		toolGetProfile(svc),
 		toolApplyChanges(svc),
+		toolFindAlternatives(svc),
 		toolConfirm(svc),
 		toolUnlock(svc),
 		toolRecordPreference(svc),

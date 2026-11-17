@@ -33,8 +33,9 @@ func chatIssues(st planning.State) []planning.Issue { return chatView(st).Issues
 func evaluateAsSeen(st planning.State) planning.Evaluation { return chatView(st) }
 
 // chatFacts renders what the summary lacks: each food on a plate of the
-// window with its role and kcal and protein per portion (a leaf: per 100 g),
-// and every day's kcal per eater against the target.
+// window with its role, a recipe's total minutes (prep + cook, when known)
+// and kcal and protein per portion (a leaf: per 100 g), and every day's kcal
+// per eater against the target.
 func chatFacts(st planning.State) string {
 	var foods []int64
 	seen := map[int64]bool{}
@@ -58,7 +59,7 @@ func chatFacts(st planning.State) string {
 	}
 	slices.Sort(foods)
 	var b strings.Builder
-	b.WriteString("\nFoods on the plan (role, kcal and protein per portion; leaf foods per 100 g):\n")
+	b.WriteString("\nFoods on the plan (role, a recipe's total minutes, kcal and protein per portion; leaf foods per 100 g; other foods' minutes: find_foods or find_alternatives):\n")
 	for _, id := range foods {
 		f := st.Foods[id]
 		role := string(f.Role)
@@ -69,7 +70,11 @@ func chatFacts(st planning.State) string {
 		if !f.Composed() {
 			per = "per 100 g"
 		}
-		fmt.Fprintf(&b, "food_id %d %s | %s | %.0f kcal, %.0f g protein %s\n", f.ID, f.Name, role, f.Macros.Kcal, f.Macros.Protein, per)
+		minutes := ""
+		if f.Composed() && f.Minutes > 0 {
+			minutes = fmt.Sprintf(" | %d min", f.Minutes)
+		}
+		fmt.Fprintf(&b, "food_id %d %s | %s%s | %.0f kcal, %.0f g protein %s\n", f.ID, f.Name, role, minutes, f.Macros.Kcal, f.Macros.Protein, per)
 	}
 	// Day figures come from the evaluation; the day's target is scaled to its
 	// planned meals (a "No plate" meal asks less).

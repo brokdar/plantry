@@ -92,7 +92,8 @@ func newPlanToolEnv(t *testing.T) *planToolEnv {
 	e.deps.RunLog, e.deps.Runs = planning.RecorderLog{Recorder: e.rec}, sqlite.NewAIRunRepo(db)
 	e.deps.Go = func(f func()) { f() }
 	e.planner = planning.NewService(e.deps)
-	e.plates, e.avail = testsvc.Plan(db)
+	// The plate clock is the chat's today: meal operations refuse cells before it.
+	e.plates, e.avail = testsvc.PlanAt(db, nil, func() time.Time { return planToday })
 	foods := sqlite.NewFoodRepo(db)
 	var err error
 	e.ts, err = agent.NewToolSet(agent.Services{
