@@ -83,7 +83,7 @@ func (s *stubPlateService) RemoveMeals(context.Context, []int64) (plate.MealResu
 	}, nil
 }
 
-func (s *stubPlateService) AddComponent(_ context.Context, id int64, _ plate.PlateComponent) (*plate.Plate, error) {
+func (s *stubPlateService) AddComponentAt(_ context.Context, id int64, _ plate.PlateComponent, _ *plate.CellKey) (*plate.Plate, error) {
 	return &plate.Plate{ID: id}, nil
 }
 

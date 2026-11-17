@@ -1,6 +1,6 @@
 import type { i18n as I18n, TFunction } from "i18next"
 
-import type { AlsoChanged, MealCell } from "@/lib/api/meal"
+import type { AlsoChanged, EmptyReason, MealCell } from "@/lib/api/meal"
 import type { Plan } from "@/lib/api/plan"
 import type { Session } from "@/lib/api/sessions"
 
@@ -102,6 +102,42 @@ export function lighterKcal(plan: Plan, date: string): number | undefined {
   if (!target) return undefined
   const meals = plan.cells.filter((c) => c.date === date && c.plate).length
   return Math.round(target / Math.max(1, meals))
+}
+
+const DROP_RULES = ["H2", "H3", "H4", "H5", "H8", "H9"]
+
+/**
+ * Why an alternatives list is empty, in plain words: the dishes that fit the
+ * position and filters, and what each rule dropped, the most common first
+ * ("would add a cooking over your limit (5), eaten recently (2)"). `dropped`
+ * keys are `rule.code`; a rule without copy shows its name. With no
+ * candidate the filters are the reason.
+ */
+export function emptyReasonText(
+  reason: EmptyReason | undefined,
+  t: TFunction
+): string {
+  if (!reason || reason.candidates === 0) return t("plan.alt.none")
+  const byRule = new Map<string, number>()
+  for (const [key, n] of Object.entries(reason.dropped ?? {})) {
+    const rule = key.split(".")[0]
+    byRule.set(rule, (byRule.get(rule) ?? 0) + n)
+  }
+  const reasons = [...byRule]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([rule, count]) =>
+      t("plan.alt.dropped.entry", {
+        why: DROP_RULES.includes(rule)
+          ? t(`plan.alt.dropped.${rule}`)
+          : t("plan.alt.dropped.other", { rule }),
+        count,
+      })
+    )
+  if (reasons.length === 0) return t("plan.alt.none")
+  return t("plan.alt.none_but", {
+    candidates: reason.candidates,
+    reasons: reasons.join(", "),
+  })
 }
 
 /** "Thu dinner" for a cell. */

@@ -1,5 +1,5 @@
 import { apiFetch } from "./client"
-import type { AlsoChanged, Undo } from "./meal"
+import type { AlsoChanged, MealCell, Undo } from "./meal"
 import type { PlateFeedback } from "./feedback"
 import type { FoodKind, FoodRole } from "./foods"
 
@@ -54,7 +54,13 @@ export interface Plate {
 /** ComponentInput of §3.1: composed → portions per eater (default 1),
  *  optionally eating from an existing session; leaf → amount + unit. */
 export type ComponentInput =
-  | { food_id: number; portions?: number; cook_session_id?: number }
+  | {
+      food_id: number
+      portions?: number
+      cook_session_id?: number
+      /** Cooks the food as a new batch on this cell (on or before the plate). */
+      cook_at?: MealCell
+    }
   | { food_id: number; amount: number; unit: string }
 
 export interface CreatePlateInput {

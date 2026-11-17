@@ -193,3 +193,28 @@ func TestGet_HTTP_RoundTrips_BothShapes(t *testing.T) {
 	assert.InDelta(t, 150.0, c1["amount"].(float64), 0.01)
 	assert.Equal(t, "g", c1["unit"])
 }
+
+func TestAddComponent_HTTP_CookAt(t *testing.T) {
+	r, foodRepo, plateSvc, slotRepo := newComponentRouterWithDB(t)
+	slotID, leafID, composedID, _ := seedComponentTestData(t, foodRepo, plateSvc, slotRepo)
+	d, _ := time.Parse("2006-01-02", "2030-01-10")
+	p := &plate.Plate{Date: d, SlotID: slotID}
+	seedPlate(t, plateSvc, p)
+	cookAt := fmt.Sprintf(`{"date":"2030-01-09","slot_id":%d}`, slotID)
+
+	w := postComponent(t, r, p.ID, fmt.Sprintf(`{"food_id":%d,"portions":1,"cook_at":%s}`, composedID, cookAt))
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	sid := int64(lastComponentJSON(t, w)["cook_session_id"].(float64))
+	sess, err := plateSvc.Session(context.Background(), sid)
+	require.NoError(t, err)
+	assert.Equal(t, "2030-01-09", sess.CookDate.Format("2006-01-02"), "the dish cooks on the named cell, not the plate's")
+	assert.Equal(t, slotID, sess.CookSlotID)
+
+	for name, body := range map[string]string{
+		"a leaf cannot cook there": fmt.Sprintf(`{"food_id":%d,"amount":100,"unit":"g","cook_at":%s}`, leafID, cookAt),
+		"bad cell":                 fmt.Sprintf(`{"food_id":%d,"portions":1,"cook_at":{"date":"nope","slot_id":1}}`, composedID),
+	} {
+		w := postComponent(t, r, p.ID, body)
+		assert.Equal(t, http.StatusBadRequest, w.Code, "%s: %s", name, w.Body.String())
+	}
+}

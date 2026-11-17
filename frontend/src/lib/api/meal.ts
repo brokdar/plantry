@@ -189,18 +189,33 @@ export type AlternativeOp =
       plate_id?: number
       food_id: number
       session_id?: number
+      cook_at?: MealCell
       portions?: number
       amount?: number
       unit?: string
       position?: string
+    }
+  | {
+      /** A cook_at alternative: the food cooks on `cook_at` and takes the
+       *  component's place, one `POST /api/plates/{id}/replace`. */
+      op: "replace"
+      plate_id?: number
+      plate_component_id: number
+      food_id: number
+      cook_at: MealCell
+      portions?: number
+      amount?: number
+      unit?: string
     }
   | { op: "remove"; plate_component_id: number }
 
 export interface Alternative {
   food_id: number
   name: string
-  source: "fresh" | "session" | "leaf"
+  source: "fresh" | "session" | "cook_at" | "leaf"
   session_id?: number
+  /** The cell a cook_at alternative cooks on (it shares that cook). */
+  cook_at?: MealCell
   total_minutes?: number
   kcal: number
   protein_g: number
@@ -212,11 +227,23 @@ export interface Alternative {
   ops: AlternativeOp[]
 }
 
+/** Why a list is empty: how many candidates fit the position and the
+ *  filters, and how many each rule dropped (`"H2.cook_cap"`: rule.code). */
+export interface EmptyReason {
+  candidates: number
+  dropped?: Record<string, number>
+}
+
+export interface AlternativesResult {
+  alternatives: Alternative[]
+  empty_reason?: EmptyReason
+}
+
 /** POST /api/plan/alternatives?start&today: ranked, writes nothing. */
 export function getAlternatives(
   start: string,
   input: AlternativesInput
-): Promise<{ alternatives: Alternative[] }> {
+): Promise<AlternativesResult> {
   const qs = new URLSearchParams({ start, today: todayISO() })
   return apiFetch(`/plan/alternatives?${qs}`, {
     method: "POST",

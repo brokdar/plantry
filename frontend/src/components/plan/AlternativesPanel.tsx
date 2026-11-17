@@ -8,7 +8,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { AlternativeConstraints, AlternativeWhat } from "@/lib/api/meal"
 import { KNOWN_ISSUE_CODES, type Plan } from "@/lib/api/plan"
 import { formatNumber } from "@/lib/plan/format"
-import { lighterKcal } from "@/lib/plan/meal-actions"
+import {
+  cellLabel,
+  emptyReasonText,
+  lighterKcal,
+} from "@/lib/plan/meal-actions"
+import { slotLabel } from "@/lib/slot-label"
 import {
   useAlternatives,
   useApplyAlternative,
@@ -69,6 +74,8 @@ export function AlternativesPanel({
   onDone: () => void
 }) {
   const { t, i18n } = useTranslation()
+  const slotName = (id: number) =>
+    slotLabel(t, plan.slots.find((s) => s.id === id)?.name_key ?? "")
   const [chips, setChips] = useState<Set<Chip>>(new Set())
   const lighter = lighterKcal(plan, date)
   const input = {
@@ -141,11 +148,13 @@ export function AlternativesPanel({
         </div>
       ) : list.isError ? (
         <p className="text-small text-danger">{t("plan.alt.error")}</p>
-      ) : list.data.length === 0 ? (
-        <p className="text-small text-ink-muted">{t("plan.alt.none")}</p>
+      ) : list.data.alternatives.length === 0 ? (
+        <p className="text-small text-ink-muted" data-testid="alt-empty">
+          {emptyReasonText(list.data.empty_reason, t)}
+        </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {list.data.map((alt) => (
+          {list.data.alternatives.map((alt) => (
             <li key={`${alt.food_id}-${alt.source}-${alt.session_id ?? 0}`}>
               <button
                 type="button"
@@ -167,13 +176,20 @@ export function AlternativesPanel({
                     <Badge variant="secondary">
                       {t("plan.alt.eats_batch")}
                     </Badge>
+                  ) : alt.source === "cook_at" && alt.cook_at ? (
+                    <Badge variant="secondary">
+                      {t("plan.alt.cook_at", {
+                        cell: cellLabel(alt.cook_at, t, i18n, slotName),
+                      })}
+                    </Badge>
                   ) : alt.source === "fresh" ? (
                     <Badge variant="outline">{t("plan.alt.new_cooking")}</Badge>
                   ) : null}
                 </span>
                 <span className="text-small text-ink-muted tabular-nums">
                   {[
-                    alt.source === "fresh" && alt.total_minutes
+                    (alt.source === "fresh" || alt.source === "cook_at") &&
+                    alt.total_minutes
                       ? t("plan.alt.minutes", { count: alt.total_minutes })
                       : null,
                     `${formatNumber(alt.kcal, i18n)} ${t("units.kcal")}`,

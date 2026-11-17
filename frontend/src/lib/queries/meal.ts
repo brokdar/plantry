@@ -126,7 +126,6 @@ export function useAlternatives(
     queryKey: mealKeys.alternatives(start, input),
     queryFn: () => getAlternatives(start, input!),
     enabled: input !== null,
-    select: (res) => res.alternatives,
   })
 }
 
@@ -199,9 +198,22 @@ export function alternativeCalls(plateId: number, alt: Alternative): Step[] {
   const steps: Step[] = []
   const ops = [...alt.ops]
   const swap = ops.find((o) => o.op === "swap")
+  const replace = ops.find((o) => o.op === "replace")
   const add = ops.find((o) => o.op === "add")
   let replacedId: number | undefined
-  if (swap) {
+  if (replace) {
+    // A cook_at alternative: exactly one replace that also names the cell
+    // the new dish cooks on.
+    replacedId = replace.plate_component_id
+    steps.push(() =>
+      replaceComponent(plateId, {
+        plate_component_id: replace.plate_component_id,
+        food_id: replace.food_id,
+        cook_at: replace.cook_at,
+        ...qty(replace),
+      })
+    )
+  } else if (swap) {
     replacedId = swap.plate_component_id
     steps.push(() =>
       replaceComponent(plateId, {
@@ -235,6 +247,7 @@ export function alternativeCalls(plateId: number, alt: Alternative): Step[] {
                 food_id: add.food_id,
                 portions: add.portions,
                 cook_session_id: add.session_id,
+                cook_at: add.cook_at,
               }
         )
       )

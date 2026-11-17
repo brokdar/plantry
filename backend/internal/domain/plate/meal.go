@@ -582,29 +582,9 @@ func (s *Service) replace(ctx context.Context, t *tracker, p *Plate, pc *PlateCo
 		id := src.SessionID
 		pc.CookSessionID = &id
 	case src.CookAt != nil:
-		c := CellKey{Date: dateOnly(src.CookAt.Date), SlotID: src.CookAt.SlotID}
-		if err := s.validateSlot(ctx, c.SlotID); err != nil {
+		if err := s.cookAt(ctx, t, p, pc, f, *src.CookAt, fresh); err != nil {
 			return err
 		}
-		if err := notPast(dateOnly(s.now()), c); err != nil {
-			return err
-		}
-		mode, err := s.cellMode(ctx, c)
-		if err != nil {
-			return err
-		}
-		if mode == CellNone {
-			return fmt.Errorf("%w: %s slot %d", domain.ErrCellUnavailable, c.Date.Format(dateLayout), c.SlotID)
-		}
-		sess := &CookSession{
-			FoodID: f.ID, CookDate: c.Date, CookSlotID: c.SlotID, Portions: *pc.Portions * p.Eaters,
-			State: fresh.state, AIRunID: fresh.runID,
-		}
-		if err := s.sessions.CreateSession(ctx, sess); err != nil {
-			return err
-		}
-		t.j.createSession(sess.ID)
-		pc.CookSessionID = &sess.ID
 	}
 	linked, err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, true, fresh)
 	if err != nil {
@@ -614,6 +594,35 @@ func (s *Service) replace(ctx context.Context, t *tracker, p *Plate, pc *PlateCo
 		return err
 	}
 	return s.plates.UpdateComponent(ctx, pc)
+}
+
+// cookAt gives pc a new batch cooked at cell at (not past, not "none"): the
+// plate's meal eats from a cook cell other than its own.
+func (s *Service) cookAt(ctx context.Context, t *tracker, p *Plate, pc *PlateComponent, f *food.Food, at CellKey, fresh origin) error {
+	c := CellKey{Date: dateOnly(at.Date), SlotID: at.SlotID}
+	if err := s.validateSlot(ctx, c.SlotID); err != nil {
+		return err
+	}
+	if err := notPast(dateOnly(s.now()), c); err != nil {
+		return err
+	}
+	mode, err := s.cellMode(ctx, c)
+	if err != nil {
+		return err
+	}
+	if mode == CellNone {
+		return fmt.Errorf("%w: %s slot %d", domain.ErrCellUnavailable, c.Date.Format(dateLayout), c.SlotID)
+	}
+	sess := &CookSession{
+		FoodID: f.ID, CookDate: c.Date, CookSlotID: c.SlotID, Portions: *pc.Portions * p.Eaters,
+		State: fresh.state, AIRunID: fresh.runID,
+	}
+	if err := s.sessions.CreateSession(ctx, sess); err != nil {
+		return err
+	}
+	t.j.createSession(sess.ID)
+	pc.CookSessionID = &sess.ID
+	return nil
 }
 
 // ── Move cook ───────────────────────────────────────────────────────────

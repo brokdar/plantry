@@ -165,12 +165,75 @@ describe("AlternativesPanel", () => {
       expect(row).toBeDisabled()
   })
 
+  it("badges a cook_at row with the cell it cooks on and applies it as one replace", async () => {
+    vi.mocked(getAlternatives).mockResolvedValue({
+      alternatives: [
+        {
+          food_id: 13,
+          name: "Soup",
+          source: "cook_at",
+          cook_at: { date: "2026-11-03", slot_id: 3 },
+          total_minutes: 35,
+          kcal: 450,
+          protein_g: 20,
+          day_kcal: 1900,
+          cook_occasions_day: 0,
+          ops: [
+            {
+              op: "replace",
+              plate_id: 3,
+              plate_component_id: 3,
+              food_id: 13,
+              cook_at: { date: "2026-11-03", slot_id: 3 },
+              portions: 1,
+            },
+          ],
+        },
+      ],
+    })
+    vi.mocked(replaceComponent).mockResolvedValue(
+      edited({ plates: [mockPlate()], session_ids: [] })
+    )
+    const onDone = renderPanel()
+    const row = await screen.findByTestId("alt-row")
+    expect(within(row).getByText("Cooked with Tue dinner")).toBeInTheDocument()
+    expect(row).toHaveTextContent("35 min")
+    await userEvent.click(row)
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(replaceComponent).toHaveBeenCalledTimes(1)
+    expect(replaceComponent).toHaveBeenCalledWith(3, {
+      plate_component_id: 3,
+      food_id: 13,
+      cook_at: { date: "2026-11-03", slot_id: 3 },
+      portions: 1,
+    })
+  })
+
   it("says so when nothing fits", async () => {
     vi.mocked(getAlternatives).mockResolvedValue({ alternatives: [] })
     renderPanel()
     expect(
       await screen.findByText("Nothing fits. Try fewer filters.")
     ).toBeInTheDocument()
+  })
+
+  it("says why in plain words when the list is empty with a reason", async () => {
+    vi.mocked(getAlternatives).mockResolvedValue({
+      alternatives: [],
+      empty_reason: {
+        candidates: 9,
+        dropped: {
+          "H2.too_many_cook_occasions": 5,
+          "H8.variety_repeat": 2,
+          "H9.kcal_below_floor": 1,
+          "H1.missing_plate": 1,
+        },
+      },
+    })
+    renderPanel()
+    expect(await screen.findByTestId("alt-empty")).toHaveTextContent(
+      "Nothing fits. Of 9 matching dishes: would add a cooking over your limit (5), eaten recently (2), H1 (1), day would fall under its minimum (1)."
+    )
   })
 
   it("shows the load error", async () => {

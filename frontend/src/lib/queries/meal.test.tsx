@@ -178,7 +178,7 @@ describe("useAlternatives", () => {
     )
     await waitFor(() => expect(r.current.isSuccess).toBe(true))
     expect(getAlternatives).toHaveBeenCalledWith("2026-10-31", input)
-    expect(r.current.data?.map((a) => a.name)).toEqual(["Dal"])
+    expect(r.current.data?.alternatives.map((a) => a.name)).toEqual(["Dal"])
   })
 
   it("waits without an input", () => {
@@ -261,6 +261,76 @@ describe("alternativeCalls", () => {
       cook_session_id: 3,
     })
     expect(replaceComponent).not.toHaveBeenCalled()
+  })
+
+  it("a cook_at row is exactly one replace that sends cook_at, no session_id", async () => {
+    const cookAt = { date: "2026-11-03", slot_id: 3 }
+    const calls = alternativeCalls(
+      5,
+      alt(
+        [
+          {
+            op: "replace",
+            plate_id: 5,
+            plate_component_id: 11,
+            food_id: 9,
+            cook_at: cookAt,
+            portions: 2,
+          },
+        ],
+        { source: "cook_at", cook_at: cookAt }
+      )
+    )
+    expect(calls).toHaveLength(1)
+    await calls[0]()
+    expect(replaceComponent).toHaveBeenCalledTimes(1)
+    const input = vi.mocked(replaceComponent).mock.calls[0][1]
+    expect(input).toEqual({
+      plate_component_id: 11,
+      food_id: 9,
+      cook_at: cookAt,
+      portions: 2,
+    })
+    expect(input).not.toHaveProperty("session_id")
+    expect(addPlateComponent).not.toHaveBeenCalled()
+    expect(deletePlateComponent).not.toHaveBeenCalled()
+  })
+
+  it("a cook_at add sends cook_at on the component add", async () => {
+    const cookAt = { date: "2026-11-03", slot_id: 3 }
+    await run(
+      5,
+      alt(
+        [{ op: "add", plate_id: 5, food_id: 9, cook_at: cookAt, portions: 1 }],
+        {
+          source: "cook_at",
+          cook_at: cookAt,
+        }
+      )
+    )
+    expect(addPlateComponent).toHaveBeenCalledTimes(1)
+    expect(addPlateComponent).toHaveBeenCalledWith(5, {
+      food_id: 9,
+      portions: 1,
+      cook_at: cookAt,
+    })
+    expect(replaceComponent).not.toHaveBeenCalled()
+  })
+
+  it("a session row sends session_id, not cook_at", async () => {
+    await run(
+      5,
+      alt(
+        [
+          { op: "add", food_id: 9, session_id: 3, portions: 1 },
+          { op: "remove", plate_component_id: 11 },
+        ],
+        { source: "session", session_id: 3 }
+      )
+    )
+    const input = vi.mocked(replaceComponent).mock.calls[0][1]
+    expect(input).toMatchObject({ session_id: 3 })
+    expect(input).not.toHaveProperty("cook_at")
   })
 
   it("every other remove deletes its component, after the replace", async () => {

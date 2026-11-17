@@ -1855,6 +1855,18 @@
       },
       "error": "Die Alternativen konnten nicht geladen werden.",
       "none": "Nichts passt. Versuch es mit weniger Filtern.",
+      "none_but": "Nichts passt. Von {{candidates}} passenden Gerichten: {{reasons}}.",
+      "dropped": {
+        "H2": "würde einmal zu oft kochen",
+        "H3": "würde eine Menge überziehen",
+        "H4": "läge jenseits der Haltbarkeit",
+        "H5": "Fleischtage-Grenze",
+        "H8": "kürzlich gegessen",
+        "H9": "Tag läge unter dem Minimum",
+        "other": "{{rule}}",
+        "entry": "{{why}} ({{count}})"
+      },
+      "cook_at": "Gekocht mit {{cell}}",
       "eats_batch": "Isst eine Menge",
       "new_cooking": "Einmal mehr kochen",
       "minutes_one": "{{count}} Min.",

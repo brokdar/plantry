@@ -51,6 +51,65 @@ async function slotPlates(start: string, slot: number): Promise<PlanPlate[]> {
   return cells.flatMap((c) => (c.slot_id === slot && c.plate ? [c.plate] : []))
 }
 
+interface Meal {
+  id: number
+  date: string
+  slotId: number
+  /** The meal's cooking cell differs from its own: it eats a batch. */
+  leftover: boolean
+  main: { food_id: number; food_name: string }
+}
+
+/** The draft plates of the window with their main and whether they eat a
+ *  batch cooked on another cell. */
+async function mealsOf(start: string): Promise<Meal[]> {
+  const ctx = await apiRequest.newContext({ baseURL: API })
+  const res = await ctx.get(`/api/plan?start=${start}`)
+  expect(res.ok()).toBeTruthy()
+  const plan = (await res.json()) as {
+    cells: {
+      date: string
+      slot_id: number
+      plate:
+        | (PlanPlate & {
+            components: {
+              food_id: number
+              food_name: string
+              position?: string
+              cook_session_id?: number
+            }[]
+          })
+        | null
+    }[]
+    sessions: { id: number; cook_date: string; cook_slot_id: number }[]
+  }
+  await ctx.dispose()
+  return plan.cells.flatMap((c) => {
+    const p = c.plate
+    const main = p?.components.find((x) => x.position === "main")
+    if (!p || p.state !== "draft" || !main) return []
+    const s = plan.sessions.find((x) => x.id === main.cook_session_id)
+    return [
+      {
+        id: p.id,
+        date: c.date,
+        slotId: c.slot_id,
+        leftover:
+          !!s &&
+          (s.cook_date.slice(0, 10) !== c.date || s.cook_slot_id !== c.slot_id),
+        main: { food_id: main.food_id, food_name: main.food_name },
+      },
+    ]
+  })
+}
+
+/** A generated leftover meal; a week of one batch a day has some. */
+async function generatedLeftover(start: string): Promise<Meal> {
+  const meal = (await mealsOf(start)).find((m) => m.leftover)
+  expect(meal, "a generated leftover meal").toBeTruthy()
+  return meal!
+}
+
 async function clearWindow(from: string, to: string) {
   const ctx = await apiRequest.newContext({ baseURL: API })
   const res = await ctx.delete(`/api/plan?from=${from}&to=${to}`)
@@ -160,7 +219,37 @@ test.describe("generated week on the heuristic", () => {
       }
 
       // Replace and Different side are the alternatives lists now (no
-      // planner run): meal-alternatives.spec.ts covers them.
+      // planner run). On a generated leftover meal (it eats a batch cooked
+      // on another cell: what used to end in "Nothing fits" on a day at its
+      // cooking limit), "Something else" lists at least one other dish;
+      // applying it changes the dish and Undo restores it.
+      const leftover = await generatedLeftover(start)
+      const mainOf = async () =>
+        (await mealsOf(start)).find((m) => m.id === leftover.id)!.main
+      const cell = planCell(page, leftover.date, leftover.slotId)
+      await expect(cell).toContainText(leftover.main.food_name)
+      const alts = await openCellSheet(page, leftover.date, leftover.slotId)
+      await alts.getByRole("button", { name: "Something else" }).click()
+      const rows = page.getByTestId("alt-row")
+      await expect(rows.first()).toBeVisible()
+      for (const text of await rows.allInnerTexts())
+        expect(text).not.toContain(leftover.main.food_name)
+      const changed = page.waitForResponse(
+        (r) =>
+          /\/api\/plates\/\d+\/(replace|components)/.test(r.url()) &&
+          r.request().method() === "POST"
+      )
+      await rows.first().click()
+      expect((await changed).ok()).toBeTruthy()
+      await expect(page.getByTestId("plan-sheet")).toHaveCount(0)
+      await expect(cell).not.toContainText(leftover.main.food_name)
+      expect((await mainOf()).food_id).not.toBe(leftover.main.food_id)
+      const reverted = waitForPost(page, "/api/plan/revert")
+      await page.getByRole("button", { name: "Undo", exact: true }).click()
+      expect((await reverted).ok()).toBeTruthy()
+      await expect(cell).toContainText(leftover.main.food_name)
+      expect((await mainOf()).food_id).toBe(leftover.main.food_id)
+
       let plates = await slotPlates(start, slot.id)
       // Regenerate day: every draft plate of that day is replaced.
       const day = plates[plates.length - 1].date

@@ -675,6 +675,14 @@ func (s *Service) Range(ctx context.Context, from, to time.Time) ([]Plate, error
 // food's kind; a composed component gets a fresh session unless it names one
 // to link to.
 func (s *Service) AddComponent(ctx context.Context, plateID int64, pc PlateComponent) (*Plate, error) {
+	return s.AddComponentAt(ctx, plateID, pc, nil)
+}
+
+// AddComponentAt is AddComponent whose composed food cooks as a new batch at
+// cookAt (on or before the plate's cell) instead of at the plate's own cell,
+// the add that a cook_at alternative applies. A leaf cannot cook anywhere
+// (domain.ErrInvalidInput).
+func (s *Service) AddComponentAt(ctx context.Context, plateID int64, pc PlateComponent, cookAt *CellKey) (*Plate, error) {
 	var out *Plate
 	err := s.tx.InTx(ctx, func(ctx context.Context) error {
 		p, err := s.plates.Get(ctx, plateID)
@@ -696,7 +704,19 @@ func (s *Service) AddComponent(ctx context.Context, plateID int64, pc PlateCompo
 		if err := s.resolvePosition(&pc, f, p.Components); err != nil {
 			return err
 		}
-		linked, err := s.attach(ctx, t, &pc, f, p.Cell(), p.Eaters, e, true, freshOrigin(ctx, p.State))
+		fresh := freshOrigin(ctx, p.State)
+		if cookAt != nil {
+			if pc.CookSessionID != nil {
+				return fmt.Errorf("%w: cook_session_id and cook_at exclude each other", domain.ErrInvalidInput)
+			}
+			if f.Kind != food.KindComposed {
+				return fmt.Errorf("%w: only a composed food cooks at another cell", domain.ErrInvalidInput)
+			}
+			if err := s.cookAt(ctx, t, p, &pc, f, *cookAt, fresh); err != nil {
+				return err
+			}
+		}
+		linked, err := s.attach(ctx, t, &pc, f, p.Cell(), p.Eaters, e, true, fresh)
 		if err != nil {
 			return err
 		}

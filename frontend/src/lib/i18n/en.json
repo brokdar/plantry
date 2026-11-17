@@ -1855,6 +1855,18 @@
       },
       "error": "Couldn't load the alternatives.",
       "none": "Nothing fits. Try fewer filters.",
+      "none_but": "Nothing fits. Of {{candidates}} matching dishes: {{reasons}}.",
+      "dropped": {
+        "H2": "would add a cooking over your limit",
+        "H3": "would overdraw a batch",
+        "H4": "would be past its keeping time",
+        "H5": "meat-day limit",
+        "H8": "eaten recently",
+        "H9": "day would fall under its minimum",
+        "other": "{{rule}}",
+        "entry": "{{why}} ({{count}})"
+      },
+      "cook_at": "Cooked with {{cell}}",
       "eats_batch": "Eats a batch",
       "new_cooking": "Adds a cooking",
       "minutes_one": "{{count}} min",
