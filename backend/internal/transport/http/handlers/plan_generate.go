@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain/airun"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
@@ -138,7 +139,7 @@ type alternativesResponse struct {
 // verified ways to change one plate (planning.Alternatives). Writes nothing.
 func (h *PlanGenerateHandler) Alternatives(w http.ResponseWriter, r *http.Request) {
 	var body alternativesRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PlateID <= 0 || body.Limit < 0 {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PlateID <= 0 || body.Limit < 0 || body.Limit > 10 {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
@@ -150,6 +151,18 @@ func (h *PlanGenerateHandler) Alternatives(w http.ResponseWriter, r *http.Reques
 	today, ok := parseToday(w, r.URL.Query().Get("today"), h.now)
 	if !ok {
 		return
+	}
+	if c := body.Constraints; c != nil {
+		if c.Diet != "" && !diet.Valid(diet.Class(c.Diet)) {
+			writeError(w, http.StatusBadRequest, "error.invalid_body")
+			return
+		}
+		for _, role := range c.Roles {
+			if !food.ValidRole(role) {
+				writeError(w, http.StatusBadRequest, "error.invalid_body")
+				return
+			}
+		}
 	}
 	req := planning.AltRequest{PlateID: body.PlateID, What: body.What, ComponentID: body.PlateComponentID, Limit: body.Limit}
 	if c := body.Constraints; c != nil {

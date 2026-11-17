@@ -23,9 +23,9 @@ import (
 func batchCooker() planning.State {
 	s := baseState()
 	s.Settings.BatchCooking = true
-	// These tests pin the batch mechanics (a batch feeds 4 meals); S8 has
+	// These tests pin the batch mechanics (a batch feeds 4-5 meals, so the cap is 5); S8 has
 	// its own tests.
-	s.Settings.MaxDishMealsPerWeek = 14
+	s.Settings.MaxDishMealsPerWeek = 5
 	// The routine Oats were eaten yesterday, like every weekday.
 	o := s.Foods[oats]
 	yesterday := day(fri).AddDate(0, 0, -7)

@@ -139,6 +139,24 @@ func TestAlternatives(t *testing.T) {
 			},
 		},
 		{
+			name: "a full batch is not offered, one with a free portion is",
+			mutate: func(s *planning.State) {
+				s.Sessions = append(s.Sessions, persistedSession(6, curry, sat, lunch, 1, false))
+				p := persisted(14, sun, dinner, false, curry, 6)
+				p.Components[0].Position = plate.PositionMain
+				s.Plates = append(s.Plates, p)
+			},
+			req: planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain},
+			assert: func(t *testing.T, out []planning.Alternative) {
+				for _, a := range out {
+					if a.SessionID != nil {
+						assert.NotEqual(t, int64(6), *a.SessionID, "session 6 is eaten up")
+					}
+				}
+				assert.GreaterOrEqual(t, indexOf(out, curry, planning.SourceSession), 0, "session 2 has a spare portion")
+			},
+		},
+		{
 			name: "max_minutes filters fresh cooks by minutes",
 			req:  planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain, Constraints: planning.AltConstraints{MaxMinutes: 30}},
 			assert: func(t *testing.T, out []planning.Alternative) {
@@ -250,6 +268,8 @@ func TestAlternatives_LimitAndErrors(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, out, 1)
 
+	g := 100.0
+	s.Plates[2].Components = append(s.Plates[2].Components, planning.Component{ID: 123, FoodID: salad, Grams: &g})
 	cases := []struct {
 		name string
 		req  planning.AltRequest
@@ -258,6 +278,7 @@ func TestAlternatives_LimitAndErrors(t *testing.T) {
 		{"unknown plate", planning.AltRequest{PlateID: 999, What: planning.AltMain}, domain.ErrNotFound},
 		{"bad what", planning.AltRequest{PlateID: altSunLunch, What: "dessert"}, domain.ErrInvalidInput},
 		{"two sides need a component", planning.AltRequest{PlateID: altSatLunch, What: planning.AltSide}, domain.ErrInvalidInput},
+		{"a leaf is no main", planning.AltRequest{PlateID: altSatLunch, What: planning.AltMain, ComponentID: 123}, domain.ErrInvalidInput},
 		{"unknown component", planning.AltRequest{PlateID: altSatLunch, What: planning.AltSide, ComponentID: 7}, domain.ErrNotFound},
 	}
 	for _, c := range cases {

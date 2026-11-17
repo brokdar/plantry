@@ -134,8 +134,8 @@ func Alternatives(s State, t Target, req AltRequest) ([]Alternative, error) {
 
 	base := Evaluate(s, t)
 	hard, soft := hardKeys(base.Issues), softKeys(base.Issues)
-	baseCooks := newIndex(s, t).occasions[dayOf(p.Date)]
 	x := newIndex(s, t)
+	baseCooks := x.occasions[dayOf(p.Date)]
 	var out []Alternative
 	for _, c := range s.altCandidates(x, p, old, req) {
 		a, ok := s.tryAlt(t, pi, old, drop, c, hard, soft, len(baseCooks))
@@ -221,6 +221,9 @@ func (s State) altTarget(p Plate, req AltRequest) (int, []int, error) {
 		}
 		if i < 0 {
 			return -1, nil, fmt.Errorf("%w: plate %d has no main", domain.ErrInvalidInput, p.ID)
+		}
+		if f, ok := s.Foods[p.Components[i].FoodID]; ok && !f.Composed() {
+			return -1, nil, fmt.Errorf("%w: plate_component %d is a leaf, not a main; use what=side or add", domain.ErrInvalidInput, p.Components[i].ID)
 		}
 		var drop []int
 		if req.What == AltMeal {
@@ -328,6 +331,10 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 			ss := &s.Sessions[i]
 			if ss.ID <= 0 || ss.FoodID != id || !s.cookedBy(ss.CookSession, p) ||
 				ss.CookDate.AddDate(0, 0, x.keepDays(id)).Before(p.Date) {
+				continue
+			}
+			// A full batch cannot feed the cell.
+			if ss.Portions-x.usage(*ss).Total < comp.Multiplier()*p.Eaters {
 				continue
 			}
 			sc := comp

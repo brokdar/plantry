@@ -28,6 +28,10 @@ func TestPlanAlternativesHTTP(t *testing.T) {
 	require.Equal(t, http.StatusCreated, code, body)
 	confirmed := int64(body["id"].(float64))
 
+	code, body = a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2026-11-20","slot_id":%d,"components":[{"food_id":%d,"portions":1}]}`, lunch, food))
+	require.Equal(t, http.StatusCreated, code, body)
+	outside := int64(body["id"].(float64))
+
 	url := "/api/plan/alternatives?start=2026-11-07&today=2026-11-11"
 	var before int
 	require.NoError(t, a.db.QueryRow(`SELECT COUNT(*) FROM plate_components`).Scan(&before))
@@ -63,6 +67,11 @@ func TestPlanAlternativesHTTP(t *testing.T) {
 		{"start not a shopping day", "/api/plan/alternatives?start=2026-11-08&today=2026-11-11", fmt.Sprintf(`{"plate_id":%d,"what":"main"}`, pid), http.StatusBadRequest, "error.plan.invalid_start"},
 		{"unknown plate", url, `{"plate_id":99999,"what":"main"}`, http.StatusNotFound, ""},
 		{"confirmed plate", url, fmt.Sprintf(`{"plate_id":%d,"what":"main"}`, confirmed), http.StatusBadRequest, "error.invalid_body"},
+		{"negative limit", url, fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":-1}`, pid), http.StatusBadRequest, "error.invalid_body"},
+		{"limit over 10", url, fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":11}`, pid), http.StatusBadRequest, "error.invalid_body"},
+		{"plate outside the window", url, fmt.Sprintf(`{"plate_id":%d,"what":"main"}`, outside), http.StatusNotFound, ""},
+		{"unknown diet", url, fmt.Sprintf(`{"plate_id":%d,"what":"main","constraints":{"diet":"carnivore"}}`, pid), http.StatusBadRequest, "error.invalid_body"},
+		{"unknown role", url, fmt.Sprintf(`{"plate_id":%d,"what":"main","constraints":{"roles":["dessertt"]}}`, pid), http.StatusBadRequest, "error.invalid_body"},
 		{"bad what", url, fmt.Sprintf(`{"plate_id":%d,"what":"dessert"}`, pid), http.StatusBadRequest, "error.invalid_body"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
