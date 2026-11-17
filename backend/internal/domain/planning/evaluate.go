@@ -89,9 +89,9 @@ type WeekEval struct {
 	ProduceGPerDay float64 `json:"produce_g_per_day,omitempty"`
 }
 
-// minWeekDays is how many complete days the weekly average needs before it
+// MinWeekDays is how many complete days the weekly average needs before it
 // is judged: the average of one or two days is no week.
-const minWeekDays = 3
+const MinWeekDays = 3
 
 // EvalTotals counts the issues by severity.
 type EvalTotals struct {
@@ -225,7 +225,7 @@ func Evaluate(s State, t Target) Evaluation {
 			}
 		}
 		de.Light = x.lightOf(dk.Date)
-		if t := x.pol.ProteinTargetG(float64(dk.Planned) / float64(dk.Meals)); t > 0 {
+		if t := x.pol.ProteinTargetG(dk.Share()); t > 0 {
 			de.ProteinTargetG = t
 		}
 		de.FiberG, de.FiberMissing = dk.FiberG, dk.FiberMissing

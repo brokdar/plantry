@@ -5,6 +5,7 @@ import { BatchLanes, LANE_REM } from "@/components/batch/BatchLanes"
 import { HighlightedContext } from "@/components/batch/batch-highlight"
 import { DayMeter } from "@/components/batch/DayMeter"
 import type { PlanTargets } from "@/lib/api/plan"
+import { dayMeterTargets } from "@/lib/plan/ledger"
 import type { Board, BoardCell } from "@/lib/plan/board"
 import {
   cellShortcut,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/plan/keynav"
 import { cn } from "@/lib/utils"
 
+import { LightMark } from "./LightMark"
 import { PlateCell } from "./PlateCell"
 
 /** The meal column plus seven day columns; the batch lanes reuse it so the
@@ -134,11 +136,12 @@ export function BoardGrid({
                   >
                     {day.dayNumber}
                   </span>
+                  {day.light && <LightMark label={day.light} />}
                 </span>
                 {day.nutrition && (
                   <DayMeter
                     day={day.nutrition}
-                    targets={targets}
+                    targets={dayMeterTargets(targets, day.nutrition)}
                     className="min-h-8"
                   />
                 )}

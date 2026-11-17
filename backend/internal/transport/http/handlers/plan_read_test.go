@@ -198,3 +198,111 @@ func TestTodayHTTP_BadDates(t *testing.T) {
 	code, _ := a.do(http.MethodGet, "/api/today", "")
 	assert.Equal(t, http.StatusOK, code, "date and today default to the server date")
 }
+
+// planWeek plans three complete days (Nov 1-3, three slots, one Chili
+// portion each: 300 kcal a day) under a 2000 kcal target.
+func (a *readAPI) planWeek() {
+	a.t.Helper()
+	_, err := a.db.Exec(`UPDATE user_profile SET kcal_target = 2000, protein_pct = 30, fat_pct = 30, carbs_pct = 40 WHERE id = 1`)
+	require.NoError(a.t, err)
+	for _, d := range []string{"2026-11-01", "2026-11-02", "2026-11-03"} {
+		for _, slot := range []int64{a.breakfast, a.lunch, a.dinner} {
+			code, body := a.do(http.MethodPost, "/api/plates",
+				fmt.Sprintf(`{"date":"%s","slot_id":%d,"components":[{"food_id":%d,"portions":1}]}`, d, slot, a.chili))
+			require.Equal(a.t, http.StatusCreated, code, body)
+		}
+	}
+}
+
+func TestPlanHTTP_WeekLedger(t *testing.T) {
+	t.Run("without a kcal target or complete days there is none", func(t *testing.T) {
+		a := newReadAPI(t)
+		a.ac1()
+		code, body := a.do(http.MethodGet, "/api/plan?start=2026-10-31&today=2026-10-30", "")
+		require.Equal(t, http.StatusOK, code, body)
+		assert.Contains(t, body, "week")
+		assert.Nil(t, body["week"])
+		assert.Equal(t, []any{}, body["soft"])
+		for _, d := range body["days"].([]any) {
+			assert.Nil(t, d.(map[string]any)["target_kcal"])
+			assert.NotContains(t, d, "light")
+		}
+	})
+
+	t.Run("fewer than three complete days is no week", func(t *testing.T) {
+		a := newReadAPI(t)
+		a.planWeek()
+		_, err := a.db.Exec(`DELETE FROM plates WHERE date = '2026-11-03'`)
+		require.NoError(t, err)
+		_, body := a.do(http.MethodGet, "/api/plan?start=2026-10-31&today=2026-10-30", "")
+		assert.Nil(t, body["week"])
+	})
+
+	t.Run("a week with light marks and soft hints", func(t *testing.T) {
+		a := newReadAPI(t)
+		a.planWeek()
+		a.insert(`INSERT INTO plan_light (date, scope, slot) VALUES ('2026-11-02', 'day', '')`)
+		a.insert(`INSERT INTO plan_light (date, scope, slot) VALUES ('2026-11-03', 'meal', 'dinner')`)
+		code, body := a.do(http.MethodGet, "/api/plan?start=2026-10-31&today=2026-10-30", "")
+		require.Equal(t, http.StatusOK, code, body)
+
+		week := body["week"].(map[string]any)
+		assert.EqualValues(t, 3, week["days"])
+		assert.InDelta(t, 300, week["avg_kcal"], 1e-6)
+		assert.InDelta(t, (2000+1700+2000)/3.0, week["target_kcal"], 1e-6, "the light day lowers the week target")
+		assert.InDelta(t, 300/week["target_kcal"].(float64)*100, week["pct"], 1e-6)
+
+		days := body["days"].([]any)
+		day := func(i int) map[string]any { return days[i].(map[string]any) }
+		assert.Equal(t, "2026-11-02", day(2)["date"])
+		assert.Equal(t, "day", day(2)["light"])
+		assert.InDelta(t, 1700, day(2)["target_kcal"], 1e-6)
+		assert.NotContains(t, day(2), "light_slot")
+		assert.Equal(t, "meal", day(3)["light"])
+		assert.Equal(t, "dinner", day(3)["light_slot"])
+		assert.InDelta(t, 2000, day(3)["target_kcal"], 1e-6)
+		assert.NotContains(t, day(1), "light")
+
+		rules := map[string]bool{}
+		for _, it := range body["soft"].([]any) {
+			is := it.(map[string]any)
+			assert.Equal(t, "soft", is["severity"])
+			rules[is["rule"].(string)] = true
+		}
+		assert.True(t, rules["S2"], "days far under their band: %v", body["soft"])
+		assert.True(t, rules["S4"], "the week is under its band: %v", body["soft"])
+		for _, it := range body["issues"].([]any) {
+			assert.NotEqual(t, "soft", it.(map[string]any)["severity"], "soft hints stay out of issues")
+		}
+	})
+
+	// B1: a routine cell without a plate leaves the day's target like a
+	// No-plate cell, so a normal week with a routine breakfast is in band.
+	t.Run("a routine cell without a plate leaves the day target", func(t *testing.T) {
+		a := newReadAPI(t)
+		_, err := a.db.Exec(`UPDATE user_profile SET kcal_target = 1500 WHERE id = 1`)
+		require.NoError(t, err)
+		preset := a.insert(`INSERT INTO presets (name) VALUES ('Oatmeal')`)
+		for wd := 0; wd < 7; wd++ {
+			a.insert(fmt.Sprintf(`INSERT INTO availability_defaults (weekday, slot_id, mode, preset_id) VALUES (%d, %d, 'routine', %d)`, wd, a.breakfast, preset))
+		}
+		for _, d := range []string{"2026-11-01", "2026-11-02", "2026-11-03"} {
+			for _, slot := range []int64{a.lunch, a.dinner} {
+				code, body := a.do(http.MethodPost, "/api/plates",
+					fmt.Sprintf(`{"date":"%s","slot_id":%d,"components":[{"food_id":%d,"portions":5}]}`, d, slot, a.chili))
+				require.Equal(t, http.StatusCreated, code, body)
+			}
+		}
+		code, body := a.do(http.MethodGet, "/api/plan?start=2026-10-31&today=2026-10-30", "")
+		require.Equal(t, http.StatusOK, code, body)
+
+		week := body["week"].(map[string]any)
+		assert.InDelta(t, 1000, week["target_kcal"], 1e-6)
+		assert.InDelta(t, 100, week["pct"], 1e-6)
+		for _, it := range body["soft"].([]any) {
+			rule := it.(map[string]any)["rule"]
+			assert.NotEqual(t, "S2", rule, "no below-band hint: %v", body["soft"])
+			assert.NotEqual(t, "S4", rule, "no week hint: %v", body["soft"])
+		}
+	})
+}

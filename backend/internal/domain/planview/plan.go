@@ -42,6 +42,11 @@ type Plan struct {
 	// Issues are the checker's H1, H2, H5 and H8 findings over the window
 	// (D21); H3/H4 show as session warnings instead.
 	Issues []planning.Issue
+	// Soft are the soft hints the board shows (S2 to S7, planning.BoardSoftIssues).
+	Soft []planning.Issue
+	// Week is the weekly ledger, nil without a kcal target or under
+	// planning.MinWeekDays complete days.
+	Week *planning.WeekEval
 	// Draft is nil when the window holds no draft rows.
 	Draft *Draft
 	// RunningRunID is the generation running for the window, nil when none.
@@ -71,6 +76,12 @@ type Day struct {
 	Macros   nutrition.Macros
 	Complete bool
 	Missing  []string
+	// TargetKcal is the day's kcal target per eater after a light request,
+	// nil without a target or a planned meal; Light is "day" or "meal" for a
+	// day asked for light, LightSlot the lunch or dinner of a light meal.
+	TargetKcal *float64
+	Light      string
+	LightSlot  string
 }
 
 // Targets are the profile's daily targets in kcal and grams.
@@ -136,7 +147,7 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 		return nil, err
 	}
 	markRoutine(sessions, avail)
-	days, err := s.days(ctx, w.Days(), plates)
+	days, resolved, err := s.days(ctx, w.Days(), plates)
 	if err != nil {
 		return nil, err
 	}
@@ -144,10 +155,12 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 	if err != nil {
 		return nil, fmt.Errorf("get profile: %w", err)
 	}
-	issues, err := s.issues(ctx, checkInput{w: w, today: today, env: e, cells: avail, plates: plates, sessions: sessions, foods: foods, profile: prof})
+	led, err := s.evaluate(ctx, checkInput{w: w, today: today, env: e, cells: avail, plates: plates, sessions: sessions, foods: foods, profile: prof, resolved: resolved})
 	if err != nil {
 		return nil, err
 	}
+	issues := led.issues
+	markLight(days, led)
 	draft, err := s.draft(ctx, plates, sessions)
 	if err != nil {
 		return nil, err
@@ -172,7 +185,7 @@ func (s *Service) plan(ctx context.Context, start *time.Time, today time.Time) (
 	p := &Plan{
 		Window: w, Today: today, IsCurrent: w.Contains(today), ShoppingDay: e.shoppingDay,
 		Slots: e.active, Cells: cells, Sessions: sessions, Days: days, Targets: targets(prof), Stats: stats,
-		Issues: issues, Draft: draft,
+		Issues: issues, Soft: led.soft, Week: led.week, Draft: draft,
 	}
 	if s.d.Progress != nil {
 		if id, ok := s.d.Progress.Running(w.Start); ok {
@@ -267,7 +280,7 @@ func (s *Service) sessionViews(ctx context.Context, from, to time.Time, e env) (
 // days sums per-eater macros for each date: per-portion macros × portions for
 // composed components, per-100 g macros × grams / 100 for leaves. The foods
 // resolve in one batch.
-func (s *Service) days(ctx context.Context, dates []time.Time, plates []plate.Plate) ([]Day, error) {
+func (s *Service) days(ctx context.Context, dates []time.Time, plates []plate.Plate) ([]Day, map[int64]food.Detailed, error) {
 	var ids []int64
 	for _, p := range plates {
 		for _, pc := range p.Components {
@@ -280,7 +293,7 @@ func (s *Service) days(ctx context.Context, dates []time.Time, plates []plate.Pl
 	if len(ids) > 0 {
 		var err error
 		if resolved, err = s.d.Nutrition.PerPortionDetailedMany(ctx, ids); err != nil {
-			return nil, fmt.Errorf("resolve plate foods: %w", err)
+			return nil, nil, fmt.Errorf("resolve plate foods: %w", err)
 		}
 	}
 	byDate := map[string]*Day{}
@@ -318,7 +331,29 @@ func (s *Service) days(ctx context.Context, dates []time.Time, plates []plate.Pl
 		})
 		out[i].Complete = len(names) == 0
 	}
-	return out, nil
+	return out, resolved, nil
+}
+
+// markLight sets each day's adjusted target and light mark from the
+// evaluation, and the slot (lunch, dinner) of a light meal from the stored
+// intents.
+func markLight(days []Day, led ledger) {
+	for i := range days {
+		date := days[i].Date.Format(time.DateOnly)
+		de, ok := led.days[date]
+		if !ok {
+			continue
+		}
+		days[i].TargetKcal, days[i].Light = de.TargetKcal, de.Light
+		if de.Light != planning.LightScopeMeal {
+			continue
+		}
+		for _, l := range led.light {
+			if l.Date == date && l.Scope == planning.LightScopeMeal {
+				days[i].LightSlot = l.Slot
+			}
+		}
+	}
 }
 
 func addScaled(a, m nutrition.Macros, k float64) nutrition.Macros {

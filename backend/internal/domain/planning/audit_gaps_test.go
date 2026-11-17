@@ -83,7 +83,7 @@ func TestPrompt_StatesTheFillCellsAndSuitability(t *testing.T) {
 	k := 2200.0
 	in.State.Profile.KcalTarget = &k
 	sys = planning.RenderPrompt(in)
-	assert.Contains(t, sys, "Saturday 2026-11-21: 2 of 3 meals planned, target 1467 kcal")
+	assert.Contains(t, sys, "Saturday 2026-11-21: 1 of 3 meals planned, target 733 kcal")
 }
 
 // Runs 6 and 7: a fixed session whose portions are all eaten was hidden, so
@@ -179,7 +179,7 @@ func TestMissingMain_StandaloneIsBreakfastOnly(t *testing.T) {
 // day under its (scaled) target costs no call and shows as one run-notes line.
 func TestLLMChooser_KcalGapIsOneNotesLineAndNoRepair(t *testing.T) {
 	in := run4Input()
-	k := 1480.0
+	k := 2220.0 // the routine breakfasts hold no plate: two of three meals count
 	doubleKcal(&in.State)
 	in.State.Profile.KcalTarget = &k
 	p := validWeek(t, in)
@@ -257,7 +257,7 @@ func TestDayKcals_PureOverState(t *testing.T) {
 		got := planning.DayKcals(s, planning.Target{Cells: []plate.CellKey{{Date: day("2026-11-21"), SlotID: 3}}})
 		require.Len(t, got, 1)
 		assert.InDelta(t, 729, got[0].Kcal, 0.01)
-		assert.InDelta(t, 2200*2.0/3, got[0].Scaled, 0.01, "the No-plate lunch scales the target")
+		assert.InDelta(t, 2200.0/3, got[0].Scaled, 0.01, "the No-plate lunch and the unplated routine breakfast leave the target")
 		assert.Equal(t, 2, got[0].Planned)
 		assert.Equal(t, 3, got[0].Meals)
 		assert.False(t, got[0].Proposed)

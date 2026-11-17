@@ -237,11 +237,19 @@ func (b *Builder) addFoods(ctx context.Context, s *State, foods map[int64]*food.
 // ExploreTag is the tag discovery puts on a recipe the user has not tried.
 const ExploreTag = "explore"
 
+// WithNutrition sets the facts' macros, completeness, fibre flag and DGE
+// groups from the food's resolved nutrition (the board and the builder share
+// it).
+func WithNutrition(ff FoodFacts, d food.Detailed) FoodFacts {
+	ff.Macros, ff.NutritionComplete, ff.FiberMissing = d.Macros, d.Complete, d.FiberMissing
+	ff.Groups = GroupsOf(d.Leaves)
+	return ff
+}
+
 // facts maps a food to what the planner reads about it.
 func facts(f *food.Food, d food.Detailed, timesEaten int, likes, dislikes map[string]bool) FoodFacts {
-	ff := BaseFacts(f)
-	ff.Macros, ff.NutritionComplete, ff.FiberMissing, ff.TimesEaten8Weeks = d.Macros, d.Complete, d.FiberMissing, timesEaten
-	ff.Groups = GroupsOf(d.Leaves)
+	ff := WithNutrition(BaseFacts(f), d)
+	ff.TimesEaten8Weeks = timesEaten
 	if f.ReferencePortions != nil && *f.ReferencePortions > 0 {
 		ff.ReferencePortions = *f.ReferencePortions
 	}

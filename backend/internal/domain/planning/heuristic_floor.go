@@ -72,7 +72,7 @@ func (h *planner) topUpFloors() {
 	h.adds = map[int]*dayAdds{}
 	y, days := h.dayAccounts()
 	for _, dk := range days {
-		if floor := y.pol.Floor(dk.Target, dk.FloorShare()); dk.Kcal < floor {
+		if floor := y.pol.Floor(dk.Target, dk.Share()); dk.Kcal < floor {
 			h.liftDay(dk, floor, true)
 		}
 	}

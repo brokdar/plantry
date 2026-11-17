@@ -67,6 +67,12 @@ type planDayResponse struct {
 	Macros   dayMacrosResponse `json:"macros"`
 	Complete bool              `json:"complete"`
 	Missing  []string          `json:"missing"`
+	// TargetKcal is the day's target after a light request (null without a
+	// kcal target); Light is day or meal, LightSlot the lunch or dinner of a
+	// light meal.
+	TargetKcal *float64 `json:"target_kcal"`
+	Light      string   `json:"light,omitempty"`
+	LightSlot  string   `json:"light_slot,omitempty"`
 }
 
 type planTargetsResponse struct {
@@ -91,16 +97,21 @@ type planDraftResponse struct {
 }
 
 type planResponse struct {
-	Window       planWindowResponse   `json:"window"`
-	Slots        []planSlotResponse   `json:"slots"`
-	Cells        []planCellResponse   `json:"cells"`
-	Sessions     []sessionResponse    `json:"sessions"`
-	Days         []planDayResponse    `json:"days"`
-	Targets      *planTargetsResponse `json:"targets"`
-	Stats        planStatsResponse    `json:"stats"`
-	Issues       []planning.Issue     `json:"issues"`
-	Draft        *planDraftResponse   `json:"draft"`
-	RunningRunID *int64               `json:"running_run_id"`
+	Window   planWindowResponse   `json:"window"`
+	Slots    []planSlotResponse   `json:"slots"`
+	Cells    []planCellResponse   `json:"cells"`
+	Sessions []sessionResponse    `json:"sessions"`
+	Days     []planDayResponse    `json:"days"`
+	Targets  *planTargetsResponse `json:"targets"`
+	Stats    planStatsResponse    `json:"stats"`
+	Issues   []planning.Issue     `json:"issues"`
+	// Soft are the soft hints (S2 to S7), kept apart from the hard issues.
+	Soft []planning.Issue `json:"soft"`
+	// Week is the weekly nutrition ledger, null without a kcal target or
+	// under 3 complete days.
+	Week         *planning.WeekEval `json:"week"`
+	Draft        *planDraftResponse `json:"draft"`
+	RunningRunID *int64             `json:"running_run_id"`
 }
 
 // Get handles GET /api/plan?start&today. Without start it opens the anchored
@@ -141,6 +152,8 @@ func toPlanResponse(p *planview.Plan) planResponse {
 		Days:         make([]planDayResponse, len(p.Days)),
 		Stats:        planStatsResponse{Plates: p.Stats.Plates, CookDays: p.Stats.CookDays, Warnings: p.Stats.Warnings},
 		Issues:       p.Issues,
+		Soft:         p.Soft,
+		Week:         p.Week,
 		RunningRunID: p.RunningRunID,
 	}
 	if d := p.Draft; d != nil {
@@ -163,6 +176,7 @@ func toPlanResponse(p *planview.Plan) planResponse {
 			Date:     dateString(d.Date),
 			Macros:   dayMacrosResponse{Kcal: d.Macros.Kcal, Protein: d.Macros.Protein, Fat: d.Macros.Fat, Carbs: d.Macros.Carbs},
 			Complete: d.Complete, Missing: d.Missing,
+			TargetKcal: d.TargetKcal, Light: d.Light, LightSlot: d.LightSlot,
 		}
 	}
 	if t := p.Targets; t != nil {

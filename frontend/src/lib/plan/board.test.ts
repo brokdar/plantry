@@ -314,6 +314,27 @@ describe("buildBoard: drafts and issues (F2)", () => {
     expect(board.warningCells).toEqual(["2026-11-01|3", "2026-11-05|3"])
   })
 
+  it("an H9 warning on a confirmed day shows on its cell but is not counted", () => {
+    const plan: Plan = {
+      ...mockDraftPlan,
+      issues: [
+        {
+          rule: "H9",
+          code: "kcal_below_floor",
+          severity: "warning",
+          date: "2026-11-03",
+          slot_id: 3,
+          params: { kcal: 900, floor_kcal: 1500 },
+        },
+      ],
+    }
+    const board = buildBoard(plan, i18n)
+    const cell = cellAt(board, "2026-11-03", 3)
+    expect(cell.warnings.map((w) => w.code)).toContain("kcal_below_floor")
+    expect(cell.attention).toBe(false)
+    expect(board.warningCells).not.toContain("2026-11-03|3")
+  })
+
   it("F2-AC1: merges session warnings and issues on one cell", () => {
     const plan: Plan = {
       ...mockDraftPlan,

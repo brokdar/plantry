@@ -10,6 +10,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
@@ -108,6 +109,8 @@ type Deps struct {
 	Recipes      Recipes
 	Runs         RunNotes
 	Diets        Diets
+	// Light holds the user's light requests (see planning.LightIntent).
+	Light planning.LightStore
 	// Progress is nil while no generation runner is wired: running_run_id
 	// is then always null.
 	Progress Progress

@@ -18,6 +18,7 @@ import {
   type BatchBadgeContent,
   type Formatter,
 } from "@/lib/plan/format"
+import { lightLabel } from "@/lib/plan/ledger"
 import { slotLabel } from "@/lib/slot-label"
 
 /** The badge a cell shows for the batch its main food comes from. */
@@ -86,6 +87,8 @@ export interface BoardDay {
   weekday: string
   isToday: boolean
   nutrition: PlanDay | null
+  /** "Light day" / "Light: Dinner" for a day with a light request. */
+  light: string | null
   /** The day's cells in slot order. */
   cells: BoardCell[]
 }
@@ -281,15 +284,21 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
 
   const grid = dates.map((date) => slots.map((s) => buildCell(date, s.id)))
 
-  const days: BoardDay[] = dates.map((date, i) => ({
-    date,
-    weekdayShort: formatDate(date, f, { weekday: "short" }),
-    dayNumber: formatDate(date, f, { day: "numeric" }),
-    weekday: formatDate(date, f, { weekday: "long" }),
-    isToday: date === plan.window.today,
-    nutrition: nutrition.get(date) ?? null,
-    cells: grid[i],
-  }))
+  const days: BoardDay[] = dates.map((date, i) => {
+    const day = nutrition.get(date) ?? null
+    return {
+      date,
+      weekdayShort: formatDate(date, f, { weekday: "short" }),
+      dayNumber: formatDate(date, f, { day: "numeric" }),
+      weekday: formatDate(date, f, { weekday: "long" }),
+      isToday: date === plan.window.today,
+      nutrition: day,
+      light: day
+        ? lightLabel(day, (short) => slotLabel(f.t, `slot.${short}`), f)
+        : null,
+      cells: grid[i],
+    }
+  })
 
   const rows: BoardRow[] = slots.map((slot, si) => {
     const rowCells = grid.map((dayCells) => dayCells[si])

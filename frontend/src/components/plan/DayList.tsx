@@ -1,7 +1,9 @@
 import { DayMeter } from "@/components/batch/DayMeter"
+import { dayMeterTargets } from "@/lib/plan/ledger"
 import { cn } from "@/lib/utils"
 
 import type { BoardLayoutProps } from "./BoardGrid"
+import { LightMark } from "./LightMark"
 import { PlateCell } from "./PlateCell"
 
 /**
@@ -47,10 +49,11 @@ export function DayList({
                 {day.weekday}{" "}
                 <span className="tabular-nums">{day.dayNumber}</span>
               </h2>
+              {day.light && <LightMark label={day.light} showLabel />}
               {day.nutrition && (
                 <DayMeter
                   day={day.nutrition}
-                  targets={targets}
+                  targets={dayMeterTargets(targets, day.nutrition)}
                   className="flex-1"
                 />
               )}

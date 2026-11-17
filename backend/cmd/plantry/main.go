@@ -289,6 +289,7 @@ func run() error {
 		Recipes:      foodRepo,
 		Runs:         aiRunRepo,
 		Diets:        foodSvc,
+		Light:        planLight,
 		Progress:     planningSvc,
 		Tx:           txRunner,
 	})

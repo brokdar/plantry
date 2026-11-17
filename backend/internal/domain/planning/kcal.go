@@ -46,15 +46,17 @@ type DayKcal struct {
 	// the macros understate the day.
 	NutritionMissing bool
 	// Unplated counts routine cells without a plate: they hold no kcal to
-	// count, so the floor does not ask for their share.
+	// count, so like a No-plate cell they ask nothing of the day.
 	Unplated int
 }
 
-// FloorShare is the part of the day's meals the floor is judged on: the
+// Active is the number of meals the day's targets are judged on: the
 // planned meals less the routine cells that hold no plate.
-func (d DayKcal) FloorShare() float64 {
-	return float64(d.Planned-d.Unplated) / float64(d.Meals)
-}
+func (d DayKcal) Active() int { return d.Planned - d.Unplated }
+
+// Share is Active as a part of all the day's meals: the share of the day's
+// kcal and protein target, the floor and a light meal's cap.
+func (d DayKcal) Share() float64 { return float64(d.Active()) / float64(d.Meals) }
 
 // DayKcals computes the account of every day with a cell in t that has at
 // least one planned (non-No-plate) meal, proposed or not. Nil without a kcal
@@ -96,10 +98,10 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 				}
 			}
 		}
-		if dk.Planned == 0 {
+		if dk.Active() == 0 {
 			continue
 		}
-		dk.Scaled = k * float64(dk.Planned) / float64(dk.Meals)
+		dk.Scaled = k * dk.Share()
 		dk.Adjusted = dk.Scaled
 		if s.lightDay(d) {
 			dk.Adjusted *= LightDayShare
@@ -107,7 +109,7 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 		if dk.Adjusted < dk.Scaled {
 			// A light day is never asked to go below the floor, so the week
 			// is not measured against a target the hard floor forbids.
-			dk.Adjusted = min(dk.Scaled, max(dk.Adjusted, x.pol.Floor(k, dk.FloorShare())))
+			dk.Adjusted = min(dk.Scaled, max(dk.Adjusted, x.pol.Floor(k, dk.Share())))
 		}
 		for _, p := range s.Plates {
 			if dayOf(p.Date) != dayOf(d) {
@@ -133,32 +135,24 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 	return out
 }
 
-// writeDayBudgets tells the prompt which days have fewer planned meals than
-// slots (a No-plate meal): their kcal target is scaled to the planned meals.
+// writeDayBudgets tells the prompt which days have fewer meals to plan than
+// slots (a No-plate meal, a routine meal without a plate): their kcal target
+// is scaled to the meals that count.
 func writeDayBudgets(b *strings.Builder, x *index) {
 	k := x.s.Profile.KcalTarget
 	if k == nil || *k <= 0 {
 		return
 	}
 	first := true
-	for _, d := range x.days {
-		meals, planned := 0, 0
-		for _, c := range x.s.Cells {
-			if dayOf(c.Date) == dayOf(d) {
-				meals++
-				if c.Mode != availability.ModeNone {
-					planned++
-				}
-			}
-		}
-		if planned == 0 || planned == meals {
+	for _, dk := range x.dayAccounts(x.days) {
+		if dk.Active() == dk.Meals {
 			continue
 		}
 		if first {
-			b.WriteString("\nShort days (a No-plate meal): the kcal target of these days is scaled to the planned meals, per person:\n")
+			b.WriteString("\nShort days (a No-plate meal or a routine meal without a plate): the kcal target of these days is scaled to the meals you plan, per person:\n")
 			first = false
 		}
-		fmt.Fprintf(b, "- %s: %d of %d meals planned, target %.0f kcal\n", weekdayDate(d), planned, meals, *k*float64(planned)/float64(meals))
+		fmt.Fprintf(b, "- %s: %d of %d meals planned, target %.0f kcal\n", weekdayDate(dk.Date), dk.Active(), dk.Meals, dk.Scaled)
 	}
 }
 

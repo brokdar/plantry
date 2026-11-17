@@ -607,11 +607,14 @@ export const mockPlan: Plan = {
       },
       complete: true,
       missing: [],
+      target_kcal: 2200,
     }
   }),
   targets: { kcal: 2200, protein_g: 140, fat_g: 70, carbs_g: 250 },
   stats: { plates: 3, cook_days: 1, warnings: 0 },
   issues: [],
+  soft: [],
+  week: null,
   draft: null,
   running_run_id: null,
 }

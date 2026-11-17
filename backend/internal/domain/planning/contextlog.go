@@ -153,8 +153,8 @@ func recordContext(ctx context.Context, in ChooseInput, chooser string, trimmed 
 	rec.TargetCells = len(in.Target.Cells)
 	rec.ShortDays = []shortDay{}
 	for _, dk := range x.dayAccounts(x.days) {
-		if dk.Planned < dk.Meals {
-			sd := shortDay{Date: dk.Date.Format(time.DateOnly), Planned: dk.Planned, Meals: dk.Meals}
+		if dk.Active() < dk.Meals {
+			sd := shortDay{Date: dk.Date.Format(time.DateOnly), Planned: dk.Active(), Meals: dk.Meals}
 			if dk.Target > 0 {
 				scaled := dk.Scaled
 				sd.TargetKcal = &scaled

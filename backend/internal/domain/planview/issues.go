@@ -26,16 +26,44 @@ type checkInput struct {
 	// foods holds the sessions' foods by id.
 	foods   map[int64]*food.Food
 	profile *profile.Profile
+	// resolved is the nutrition of the plates' foods, as days() resolved it.
+	resolved map[int64]food.Detailed
 }
 
-// issues checks the window as persisted and keeps the rules the board shows
-// (planning.BoardIssues).
-func (s *Service) issues(ctx context.Context, in checkInput) ([]planning.Issue, error) {
+// ledger is what one planning.Evaluate of the persisted window gives the
+// board: the hard issues it shows (planning.BoardIssues), the soft hints, the
+// weekly ledger (nil under planning.MinWeekDays complete days) and the days'
+// evaluations (light mark, adjusted target).
+type ledger struct {
+	issues []planning.Issue
+	soft   []planning.Issue
+	week   *planning.WeekEval
+	days   map[string]planning.DayEval
+	// light are the stored light requests of the window.
+	light []planning.LightIntent
+}
+
+// evaluate checks the window as persisted with one planning.Evaluate over
+// all its cells.
+func (s *Service) evaluate(ctx context.Context, in checkInput) (ledger, error) {
 	st, err := s.checkState(ctx, in)
 	if err != nil {
-		return nil, err
+		return ledger{}, err
 	}
-	return planning.BoardIssues(st), nil
+	ev := planning.Evaluate(st, planning.WindowTarget(st))
+	l := ledger{
+		issues: planning.FilterBoardIssues(st, ev.Issues),
+		soft:   planning.BoardSoftIssues(st, ev.Issues),
+		days:   make(map[string]planning.DayEval, len(ev.Days)),
+		light:  st.Light,
+	}
+	if ev.Week != nil && ev.Week.Days >= planning.MinWeekDays {
+		l.week = ev.Week
+	}
+	for _, d := range ev.Days {
+		l.days[d.Date] = d
+	}
+	return l, nil
 }
 
 // checkState builds the planning state of the window from the loaded rows
@@ -55,6 +83,13 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 		Sessions: make([]planning.Session, len(in.sessions)),
 		Settings: set,
 		Profile:  planning.StateProfile(in.profile),
+	}
+	st.SlotNames = make(map[int64]string, len(in.env.active))
+	for _, sl := range in.env.active {
+		st.SlotNames[sl.ID] = sl.NameKey
+	}
+	if st.Light, err = s.d.Light.List(ctx, in.w.Start, in.w.End); err != nil {
+		return planning.State{}, fmt.Errorf("read light requests: %w", err)
 	}
 	for i, c := range in.cells {
 		st.Cells[i] = planning.StateCell(c)
@@ -118,6 +153,9 @@ func (s *Service) checkState(ctx context.Context, in checkInput) (planning.State
 	st.Foods = make(map[int64]planning.FoodFacts, len(ids))
 	for _, id := range ids {
 		ff := planning.BaseFacts(foods[id])
+		if d, ok := in.resolved[id]; ok {
+			ff = planning.WithNutrition(ff, d)
+		}
 		ff.LastEaten = hist[id].LastEaten
 		st.Foods[id] = ff
 	}

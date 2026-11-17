@@ -37,6 +37,7 @@ import { PlanToolbar } from "./PlanToolbar"
 import { ReplanSheet } from "./ReplanSheet"
 import { ShortcutsDialog } from "./ShortcutsDialog"
 import { useIsPhone, useIsWide } from "./use-is-phone"
+import { WeekLedger } from "./WeekLedger"
 
 interface PlanPageProps {
   /** The window start from the URL; undefined opens the anchored window. */
@@ -407,6 +408,7 @@ function PlanView({
             )
           }
         />
+        {plan.week && <WeekLedger week={plan.week} soft={plan.soft} />}
         <BatchHighlightProvider>
           {board.empty && !board.readOnly && !running && (
             <EmptyWindow

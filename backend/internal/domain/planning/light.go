@@ -195,10 +195,10 @@ func (s State) slotIs(id int64, name string) bool {
 // mealCap is the most kcal per eater a light meal may hold: LightMealShare
 // of the day's normal target split evenly over its planned meals.
 func (dk DayKcal) mealCap() float64 {
-	if dk.Planned == 0 {
+	if dk.Active() == 0 {
 		return 0
 	}
-	return LightMealShare * dk.Scaled / float64(dk.Planned)
+	return LightMealShare * dk.Scaled / float64(dk.Active())
 }
 
 // lightIssues reports S6 `meal_not_light` for every light meal whose plate
@@ -225,7 +225,7 @@ func (x *index) lightIssues(ev Evaluation) []Issue {
 				out = append(out, issue("S6", CodeMealNotLight, SeveritySoft).
 					atCell(plate.CellKey{Date: day, SlotID: p.SlotID}).
 					with("kcal", math.Round(p.Kcal)).with("max_kcal", math.Round(limit)).
-					with("normal_share_kcal", math.Round(dk.Scaled/float64(dk.Planned))))
+					with("normal_share_kcal", math.Round(dk.Scaled/float64(dk.Active()))))
 			}
 		}
 	}

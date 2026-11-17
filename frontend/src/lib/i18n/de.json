@@ -1753,6 +1753,45 @@
       "removed_other": "{{count}} Mahlzeiten entfernt",
       "removed_no_undo_one": "{{count}} Mahlzeit entfernt. Sie gehört zu einem Vorkochen, deshalb lässt sich das nicht rückgängig machen.",
       "removed_no_undo_other": "{{count}} Mahlzeiten entfernt. Sie gehören zu einem Vorkochen, deshalb lässt sich das nicht rückgängig machen."
+    },
+    "ledger": {
+      "name": "Wochenbilanz",
+      "kcal": "Energie",
+      "protein": "Eiweiß",
+      "carbs": "Kohlenhydrate",
+      "fat": "Fett",
+      "fiber": "Ballaststoffe",
+      "pct": "{{pct}} %",
+      "grams": "{{g}} g",
+      "per_day": "pro Tag",
+      "protein_avg": "Ø {{g}} g am Tag",
+      "on_track": "Woche im Plan",
+      "dge_short": "Ernährungsregeln",
+      "of_energy": "der Energie",
+      "kcal_detail": "{{avg}} von {{target}} kcal pro Tag",
+      "kcal_detail_light": "{{avg}} von {{target}} kcal pro Tag, leichte Tage eingerechnet",
+      "protein_detail": "{{avg}} von {{target}} g pro Tag",
+      "day_hints_one": "{{count}} Hinweis zu einzelnen Tagen",
+      "day_hints_other": "{{count}} Hinweise zu einzelnen Tagen",
+      "status": {
+        "ok": "im Bereich",
+        "low": "darunter",
+        "high": "darüber"
+      }
+    },
+    "light": {
+      "day": "Leichter Tag",
+      "meal": "Leicht: {{slot}}"
+    },
+    "soft": {
+      "week_meat_above_dge": "Fleisch: {{meat}} g diese Woche, über der DGE-Grenze von {{max}} g.",
+      "week_fish_below_dge": "Diese Woche keine Fischmahlzeit; die DGE empfiehlt ein bis zwei pro Woche.",
+      "week_legumes_below_dge": "Diese Woche keine Hülsenfrüchte; die DGE empfiehlt mindestens eine Mahlzeit.",
+      "kcal_below_band": "{{day}}: {{kcal}} kcal, unter dem Bereich von {{low}}–{{high}} kcal.",
+      "kcal_above_band": "{{day}}: {{kcal}} kcal, über dem Bereich von {{low}}–{{high}} kcal.",
+      "protein_below_target": "{{day}}: {{protein}} g Eiweiß, Ziel {{target}} g.",
+      "protein_below_share": "{{day}}: Eiweiß macht {{pct}} % der Energie aus, Ziel {{target_pct}} %.",
+      "meal_not_light": "{{day}}: Die leichte Mahlzeit hat {{kcal}} kcal; höchstens {{max}} wären richtig."
     }
   },
   "batch": {
