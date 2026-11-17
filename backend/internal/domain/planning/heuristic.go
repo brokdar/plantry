@@ -626,6 +626,7 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 	share := h.kcalShare(c)
 	light := h.s.lightMeal(c.Date, c.SlotID) || h.s.lightDay(c.Date)
 	var cands []candidate
+	dge := h.dgeState()
 	for _, f := range h.s.Foods {
 		if !h.mainCandidate(f, c) || !h.reachesForced(f, c) {
 			continue
@@ -656,10 +657,60 @@ func (h *planner) pickMain(c plate.CellKey) (int64, bool) {
 		heavy := light && share > 0 && f.Macros.Kcal > share
 		cands = append(cands, candidate{id: f.ID, keys: []float64{
 			b2f(h.overMeat(f, c)), b2f(heavy), float64(h.used[f.ID]), b2f(h.recent(f.ID, c.Date, span)), b2f(h.avoid[f.ID]), b2f(f.Role != food.RoleMain),
-			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, fit,
+			newKey, exploreOrder, b2f(!diet.Valid(f.DietClass)), last, b2f(!f.Favorite), -f.LikeScore, math.Round(fit / dgeFitBucket), dge.fish(f), dge.legume(f), dge.meat(f), fit,
 		}})
 	}
 	return best(cands)
+}
+
+// dgeFitBucket is the kcal width within which the kcal fit counts as equal,
+// so the DGE keys decide only between recipes that fit the meal about as
+// well: they never trade kcal fit for a food group.
+const dgeFitBucket = 60
+
+// dgeState is the DGE weekly food-group standing of the plan so far, for
+// the tie-break of pickMain (see groups.go; soft, below kcal and protein).
+type dgeState struct {
+	needFish, needLegume bool
+	meatG                float64
+}
+
+// dgeState counts what the fixed plates and the recipes cooked so far hold:
+// a fish or legume main is wanted while none is planned, and meat is
+// estimated as one portion per eater for each of a recipe's reference
+// portions (a batch feeds that many cells).
+func (h *planner) dgeState() dgeState {
+	t := diet.Class(h.s.Profile.DietType)
+	d := dgeState{needFish: t == "" || diet.Compatible(diet.Pescetarian, t), needLegume: true}
+	note := func(g FoodGroups, times float64) {
+		d.needFish = d.needFish && g.FishG == 0
+		d.needLegume = d.needLegume && g.LegumeG == 0
+		d.meatG += g.MeatG * times
+	}
+	for _, p := range h.s.Plates {
+		if !h.s.Window.Contains(p.Date) {
+			continue
+		}
+		for _, c := range p.Components {
+			note(h.s.Foods[c.FoodID].Groups, c.Multiplier())
+		}
+	}
+	for id, n := range h.used {
+		f := h.s.Foods[id]
+		note(f.Groups, float64(n)*f.ReferencePortions)
+	}
+	return d
+}
+
+// fish is 0 for a fish main while the week has none (1 otherwise).
+func (d dgeState) fish(f FoodFacts) float64 { return b2f(!(d.needFish && f.Groups.FishG > 0)) }
+
+// legume is 0 for a legume main while the week has none.
+func (d dgeState) legume(f FoodFacts) float64 { return b2f(!(d.needLegume && f.Groups.LegumeG > 0)) }
+
+// meat is 1 for a recipe that takes the estimated week past the DGE limit.
+func (d dgeState) meat(f FoodFacts) float64 {
+	return b2f(f.Groups.MeatG > 0 && d.meatG+f.Groups.MeatG*f.ReferencePortions > DGEMeatMaxG)
 }
 
 // mainCandidate reports whether f may be cooked as the main of c.

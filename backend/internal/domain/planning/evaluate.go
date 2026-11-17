@@ -78,6 +78,15 @@ type WeekEval struct {
 	// display only. 0 (absent) when no food of the week has fibre data or any
 	// food lacks it (a partial average would mislead).
 	FiberG float64 `json:"fiber_g,omitempty"`
+	// DGE food groups per eater (see groups.go). MeatG is per week: the sum
+	// over the counted days times 7/Days when the window has fewer. FishMeals
+	// and LegumeMeals count the plates of the counted days with fish or
+	// legumes (not extrapolated). ProduceGPerDay is the average fruit and
+	// vegetable grams per counted day, display only.
+	MeatG          float64 `json:"meat_g,omitempty"`
+	FishMeals      int     `json:"fish_meals,omitempty"`
+	LegumeMeals    int     `json:"legume_meals,omitempty"`
+	ProduceGPerDay float64 `json:"produce_g_per_day,omitempty"`
 }
 
 // minWeekDays is how many complete days the weekly average needs before it

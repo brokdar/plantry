@@ -24,6 +24,9 @@ type EvalExpect struct {
 	WeekPct []float64 `json:"week_pct"`
 	// WeekProteinPctMin is the least Week.ProteinPct.
 	WeekProteinPctMin float64 `json:"week_protein_pct_min"`
+	// FishOrLegumeMealsMin is the least Week.FishMeals + Week.LegumeMeals
+	// (the DGE weekly food rules, a soft preference).
+	FishOrLegumeMealsMin int `json:"fish_or_legume_meals_min"`
 	// MinDayShare is the least share of its NORMAL target every complete day
 	// holds (0.75: the floor held).
 	MinDayShare float64 `json:"min_day_share"`
@@ -80,6 +83,9 @@ func (e *env) evaluationExpect(x EvalExpect) Expectation {
 		if x.LightAdjusted && w.NormalTargetKcal <= w.TargetKcal {
 			return fail("week target %.0f is not below the normal %.0f", w.TargetKcal, w.NormalTargetKcal)
 		}
+	}
+	if x.FishOrLegumeMealsMin > 0 && (w == nil || w.FishMeals+w.LegumeMeals < x.FishOrLegumeMealsMin) {
+		return fail("fish and legume meals below %d", x.FishOrLegumeMealsMin)
 	}
 	if x.MinDayShare > 0 {
 		for _, d := range ev.Days {

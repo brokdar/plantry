@@ -42,6 +42,17 @@ type Detailed struct {
 	// FiberMissing is true when any leaf in the tree has no fibre value
 	// (it contributes 0), so Macros.Fiber may understate.
 	FiberMissing bool
+	// Leaves are the leaves of the tree with their grams per portion
+	// (composed) or the leaf itself at 100 g, for the DGE food groups.
+	Leaves []LeafGrams
+}
+
+// LeafGrams is one leaf's weight in a food's portion; Section is the
+// leaf's shop section override (nil: classified from the name).
+type LeafGrams struct {
+	Name    string
+	Section *ShopSection
+	Grams   float64
 }
 
 // MissingLeaf identifies a leaf food that lacks core macros.
@@ -98,6 +109,9 @@ func (r *NutritionResolver) PerPortionDetailedMany(ctx context.Context, ids []in
 				portions = *f.ReferencePortions
 			}
 			d.Macros = scale(total, 1/portions)
+			d.Leaves = w.leaves(f, 1/portions, 0)
+		} else {
+			d.Leaves = []LeafGrams{{Name: f.Name, Section: f.ShopSection, Grams: 100}}
 		}
 		out[id] = d
 	}
@@ -268,6 +282,41 @@ func (w *walk) total(f *Food, depth int) (nutrition.Macros, map[int64]string, bo
 		fiberMissing = fiberMissing || sub.fiberMissing
 	}
 	return total, missing, fiberMissing, nil
+}
+
+// leaves flattens a composed food into its leaves with their grams, times
+// k (1/portions gives grams per portion). A nested recipe contributes its
+// leaves in proportion to the grams used of it.
+func (w *walk) leaves(f *Food, k float64, depth int) []LeafGrams {
+	if depth > maxResolveDepth {
+		return nil
+	}
+	totalGrams := 0.0
+	for _, ch := range f.Children {
+		totalGrams += ch.Grams
+	}
+	if totalGrams <= 0 {
+		return nil
+	}
+	var out []LeafGrams
+	for _, ch := range f.Children {
+		c, ok := w.nodes[ch.ChildID]
+		if !ok || ch.Grams <= 0 {
+			continue
+		}
+		if c.Kind == KindLeaf {
+			out = append(out, LeafGrams{Name: c.Name, Section: c.ShopSection, Grams: ch.Grams * k})
+			continue
+		}
+		cTotal := 0.0
+		for _, cc := range c.Children {
+			cTotal += cc.Grams
+		}
+		if cTotal > 0 {
+			out = append(out, w.leaves(c, ch.Grams*k/cTotal, depth+1)...)
+		}
+	}
+	return out
 }
 
 // per100g returns the per-100g macros for any food (leaf or composed).
