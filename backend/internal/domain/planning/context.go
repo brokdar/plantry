@@ -304,7 +304,9 @@ func BaseFacts(f *food.Food) FoodFacts {
 		Favorite: f.Favorite, LastEaten: f.History.LastEaten, ReferencePortions: 1, DietClass: f.DietClass,
 		NoCook: NoCook(f), Sweet: IsSweet(f),
 	}
-	if f.Role != nil {
+	// Only composed foods carry a planner role; a leaf's stored role is a
+	// user override for plate position and must not enter candidate lists.
+	if f.Role != nil && f.Kind == food.KindComposed {
 		ff.Role = *f.Role
 	}
 	return ff

@@ -402,6 +402,8 @@ describe("RecipeDetail", () => {
           ...recipe,
           diet_class: "unknown",
           diet_class_source: "derived",
+          no_cook: false,
+          no_cook_source: "derived",
         }}
       />
     )

@@ -185,6 +185,8 @@ func run() error {
 		Events:   sqlite.NewPlateEventRepo(conn),
 		Outcomes: aiRunRepo,
 		Tx:       txRunner,
+
+		EffectiveRole: shopping.RoleOf,
 	})
 	availabilitySvc.WithPlates(plateSvc)
 

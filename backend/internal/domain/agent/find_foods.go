@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 )
 
 const findFoodsSchema = `{
@@ -29,14 +31,15 @@ const findFoodsSchema = `{
     "search":{"type":"string","description":"Words matched against names and tags, ignoring case and umlauts, with German/English synonyms (potato finds Kartoffelgratin)."},
     "max_kcal":{"type":"number","minimum":0,"description":"At most this many kcal per portion (leaf: per typical portion)."},
     "min_protein":{"type":"number","minimum":0,"description":"At least this many g protein per portion (leaf: per typical portion)."},
-    "sort":{"type":"string","enum":["name","last_eaten","kcal","protein"],"description":"last_eaten lists never-eaten recipes first, then the longest uneaten. kcal and protein sort descending unless sort_desc is false."},
+    "max_minutes":{"type":"integer","minimum":1,"description":"Only recipes whose total minutes (prep + cook) are at most this. Recipes with unknown minutes and all leaves are excluded."},
+    "sort":{"type":"string","enum":["name","last_eaten","kcal","protein","minutes"],"description":"last_eaten lists never-eaten recipes first, then the longest uneaten. kcal and protein sort descending unless sort_desc is false. minutes sorts ascending by total minutes (unknown last) unless sort_desc is true."},
     "sort_desc":{"type":"boolean"},
     "limit":{"type":"integer","minimum":1,"maximum":200,"description":"Default 50."}
   },
   "additionalProperties":false
 }`
 
-const findFoodsDescription = `Find foods in the library with filters, one call for any number of lookups (roles, kinds, ids, tags, no_cook, diet, search, kcal and protein bounds). A food is a LEAF (single item with direct nutrition: apple, rice, chicken) or COMPOSED (a recipe built from child foods). Returns JSON {items:[{id, name, kind, role, diet_class (vegan|vegetarian|pescetarian|omnivore|unknown), counts_as_cooking, no_cook, per_portion:{kcal,protein,fat,carbs}, basis, portion_g?, per_100g?:{kcal,protein,fat,carbs}, nutrition_complete, missing_nutrition?:[names], keep_days?, freezable?, last_eaten?, times_cooked?, tags, favorite}], total, truncated, missing_ids?:[ids not found]}. A food whose nutrition cannot be resolved is still returned with nutrition_complete false and zero values. Composed: per_portion is per recipe portion, keep_days (days leftovers keep), last_eaten (YYYY-MM-DD or null) and times_cooked are set. Leaf: per_portion is for a typical portion of portion_g grams, per_100g the nutrition per 100 g, and a leaf is added to a plate by amount + unit. counts_as_cooking is true for a recipe (adding it to a plate makes or joins a cooking occasion, H2) and false for a leaf; no_cook is true for foods that need no cooking. total counts the matches before limit.`
+const findFoodsDescription = `Find foods in the library with filters, one call for any number of lookups (roles, kinds, ids, tags, no_cook, diet, search, kcal and protein bounds, max_minutes). A food is a LEAF (single item with direct nutrition: apple, rice, chicken) or COMPOSED (a recipe built from child foods). Returns JSON {items:[{id, name, kind, role (a leaf's role is its effective role: the user's override, else derived from its store section: produce is side_veg, bakery side_starch, meat and fish side_protein, otherwise empty), diet_class (vegan|vegetarian|pescetarian|omnivore|unknown), counts_as_cooking, no_cook, prep_minutes?, cook_minutes?, total_minutes?, per_portion:{kcal,protein,fat,carbs}, basis, portion_g?, per_100g?:{kcal,protein,fat,carbs}, nutrition_complete, missing_nutrition?:[names], keep_days?, freezable?, last_eaten?, times_cooked?, tags, favorite}], total, truncated, missing_ids?:[ids not found]}. A food whose nutrition cannot be resolved is still returned with nutrition_complete false and zero values. Composed: per_portion is per recipe portion, keep_days (days leftovers keep), last_eaten (YYYY-MM-DD or null) and times_cooked are set. Leaf: per_portion is for a typical portion of portion_g grams, per_100g the nutrition per 100 g, and a leaf is added to a plate by amount + unit. counts_as_cooking is true for a recipe (adding it to a plate makes or joins a cooking occasion, H2) and false for a leaf; no_cook is true for foods that need no cooking (the user's setting, else derived). Recipes carry prep_minutes, cook_minutes and total_minutes; a zero or unknown value is left out, and max_minutes and sort minutes ignore recipes without a total. roles[] matches a leaf by its effective role. total counts the matches before limit.`
 
 type foodsFilter struct {
 	IDs        []int64  `json:"ids"`
@@ -48,6 +51,7 @@ type foodsFilter struct {
 	Search     string   `json:"search"`
 	MaxKcal    *float64 `json:"max_kcal"`
 	MinProtein *float64 `json:"min_protein"`
+	MaxMinutes *int     `json:"max_minutes"`
 	Sort       string   `json:"sort"`
 	SortDesc   *bool    `json:"sort_desc"`
 	Limit      int      `json:"limit"`
@@ -210,8 +214,17 @@ func matchesFilter(f *food.Food, in foodsFilter) bool {
 	if len(in.Kinds) > 0 && !slices.Contains(in.Kinds, string(f.Kind)) {
 		return false
 	}
-	if len(in.Roles) > 0 && (f.Role == nil || !slices.Contains(in.Roles, string(*f.Role))) {
-		return false
+	if len(in.Roles) > 0 {
+		role, _ := shopping.EffectiveRole(f)
+		if role == nil || !slices.Contains(in.Roles, string(*role)) {
+			return false
+		}
+	}
+	if in.MaxMinutes != nil {
+		total := totalMinutes(f)
+		if total == 0 || total > *in.MaxMinutes {
+			return false
+		}
 	}
 	if in.NoCook != nil && planning.NoCook(f) != *in.NoCook {
 		return false
@@ -222,6 +235,22 @@ func matchesFilter(f *food.Food, in foodsFilter) bool {
 		}
 	}
 	return true
+}
+
+// totalMinutes is a recipe's prep + cook minutes; 0 means unknown (a leaf,
+// or a recipe with neither set).
+func totalMinutes(f *food.Food) int {
+	if f.Kind != food.KindComposed {
+		return 0
+	}
+	total := 0
+	if f.PrepMinutes != nil {
+		total += *f.PrepMinutes
+	}
+	if f.CookMinutes != nil {
+		total += *f.CookMinutes
+	}
+	return total
 }
 
 type macroOut struct {
@@ -239,6 +268,9 @@ type foodItem struct {
 	DietClass        string    `json:"diet_class"`
 	CountsAsCooking  bool      `json:"counts_as_cooking"`
 	NoCook           bool      `json:"no_cook"`
+	PrepMinutes      int       `json:"prep_minutes,omitempty"`
+	CookMinutes      int       `json:"cook_minutes,omitempty"`
+	TotalMinutes     int       `json:"total_minutes,omitempty"`
 	PerPortion       macroOut  `json:"per_portion"`
 	Basis            string    `json:"basis"`
 	PortionG         *float64  `json:"portion_g,omitempty"`
@@ -262,8 +294,17 @@ func newFoodItem(f *food.Food, d food.Detailed, defaultKeep int) foodItem {
 	if it.Tags == nil {
 		it.Tags = []string{}
 	}
-	if f.Role != nil {
-		it.Role = string(*f.Role)
+	if role, _ := shopping.EffectiveRole(f); role != nil {
+		it.Role = string(*role)
+	}
+	if f.Kind == food.KindComposed {
+		if f.PrepMinutes != nil {
+			it.PrepMinutes = *f.PrepMinutes
+		}
+		if f.CookMinutes != nil {
+			it.CookMinutes = *f.CookMinutes
+		}
+		it.TotalMinutes = it.PrepMinutes + it.CookMinutes
 	}
 	for _, m := range d.Missing {
 		it.Missing = append(it.Missing, m.Name)
@@ -315,6 +356,18 @@ func sortItems(items []foodItem, in foodsFilter) {
 		if desc(true) {
 			slices.SortStableFunc(items, func(a, b foodItem) int { return -less(a, b) })
 			return
+		}
+	case "minutes":
+		// Unknown totals (0) sort after every known one.
+		less = func(a, b foodItem) int {
+			ka, kb := a.TotalMinutes, b.TotalMinutes
+			if ka == 0 {
+				ka = math.MaxInt
+			}
+			if kb == 0 {
+				kb = math.MaxInt
+			}
+			return cmp.Compare(ka, kb)
 		}
 	case "last_eaten":
 		// Never eaten first, then the longest uneaten.

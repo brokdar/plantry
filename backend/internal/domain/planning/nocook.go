@@ -11,12 +11,28 @@ import (
 // stores no typical portion for a leaf.
 const TypicalLeafGrams = 100
 
-// NoCook reports whether f needs no cooking. The library has no flag for
-// it, so a leaf counts when its store section (the user's override or the
+// NoCook reports whether f needs no cooking: the user's override
+// (food.Food.NoCookOverride) first, else a derivation. A leaf counts when its store section (the user's override or the
 // classified name) is produce, dairy or bakery and its name is not a
 // food that is cooked first (potato, egg, pulses); a recipe counts when its
 // cook minutes are set to 0 and it is not a main.
 func NoCook(f *food.Food) bool {
+	if f.NoCookOverride != nil {
+		return *f.NoCookOverride
+	}
+	return derivedNoCook(f)
+}
+
+// NoCookSource reports where NoCook's answer for f comes from: "user" or
+// "derived".
+func NoCookSource(f *food.Food) string {
+	if f.NoCookOverride != nil {
+		return "user"
+	}
+	return "derived"
+}
+
+func derivedNoCook(f *food.Food) bool {
 	if f.Kind == food.KindComposed {
 		return f.CookMinutes != nil && *f.CookMinutes == 0 && (f.Role == nil || *f.Role != food.RoleMain)
 	}

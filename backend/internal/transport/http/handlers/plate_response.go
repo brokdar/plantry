@@ -24,6 +24,7 @@ type plateComponentResponse struct {
 	Grams         *float64 `json:"grams,omitempty"`
 	GramsSource   *string  `json:"grams_source,omitempty"`
 	SortOrder     int      `json:"sort_order"`
+	Position      string   `json:"position"`
 }
 
 type plateFeedbackResponse struct {
@@ -70,6 +71,7 @@ func toPlateComponentResponse(pc *plate.PlateComponent) plateComponentResponse {
 		Grams:         pc.Grams,
 		GramsSource:   pc.GramsSource,
 		SortOrder:     pc.SortOrder,
+		Position:      string(pc.Position),
 	}
 }
 

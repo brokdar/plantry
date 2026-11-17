@@ -47,6 +47,7 @@ var quantityKeys = []struct {
 	{ErrInvalidQuantityForComposed, "error.plate.invalid_quantity_for_composed"},
 	{ErrInvalidQuantityForLeaf, "error.plate.invalid_quantity_for_leaf"},
 	{ErrUnitRequiresPortion, "error.plate.unit_requires_portion"},
+	{ErrSecondMain, "error.plate.second_main"},
 }
 
 // MessageKey returns the i18n message key of the quantity sentinel err wraps.
@@ -126,6 +127,9 @@ type Deps struct {
 	Outcomes RunOutcomes
 	Tx       domain.Transactor
 	Now      func() time.Time
+	// EffectiveRole gives a food's effective role (shopping.EffectiveRole;
+	// nil: the stored role) for deriving a leaf's position.
+	EffectiveRole func(*food.Food) *food.Role
 }
 
 // Service is the single write path for plates, components and cook sessions
@@ -142,6 +146,7 @@ type Service struct {
 	outcomes RunOutcomes
 	tx       domain.Transactor
 	now      func() time.Time
+	roles    func(*food.Food) *food.Role
 }
 
 // NewService creates a plate service.
@@ -153,7 +158,7 @@ func NewService(d Deps) *Service {
 	return &Service{
 		plates: d.Plates, sessions: d.Sessions, slots: d.Slots, foods: d.Foods,
 		cells: d.Cells, profile: d.Profile, settings: d.Settings, events: d.Events, outcomes: d.Outcomes,
-		tx: d.Tx, now: now,
+		tx: d.Tx, now: now, roles: d.EffectiveRole,
 	}
 }
 
@@ -239,6 +244,9 @@ func (s *Service) createPlate(ctx context.Context, in PlateInput, e env, t *trac
 			return 0, fmt.Errorf("component[%d]: %w", i, err)
 		}
 		foods[i] = f
+		if err := s.resolvePosition(pc, f, p.Components[:i]); err != nil {
+			return 0, fmt.Errorf("component[%d]: %w", i, err)
+		}
 		if pc.CookSessionID == nil {
 			continue
 		}
@@ -590,6 +598,9 @@ func (s *Service) AddComponent(ctx context.Context, plateID int64, pc PlateCompo
 		t := newTracker(newJournal())
 		f, err := s.normaliseComponent(ctx, &pc)
 		if err != nil {
+			return err
+		}
+		if err := s.resolvePosition(&pc, f, p.Components); err != nil {
 			return err
 		}
 		linked, err := s.attach(ctx, t, &pc, f, p.Cell(), p.Eaters, e, true, freshOrigin(ctx, p.State))
@@ -1319,12 +1330,21 @@ func (s *Service) mergeInto(ctx context.Context, p *Plate, sp SnapshotPlate, ses
 		return err
 	}
 	st := p.State
+	existing := slices.Clone(p.Components)
 	for i := range comps {
 		pc := &comps[i]
 		f, err := s.normaliseComponent(ctx, pc)
 		if err != nil {
 			return err
 		}
+		// A snapshot's explicit main yields to the main the plate has now.
+		if pc.Position == PositionMain && slices.ContainsFunc(existing, func(c PlateComponent) bool { return c.Position == PositionMain }) {
+			pc.Position = PositionSide
+		}
+		if err := s.resolvePosition(pc, f, existing); err != nil {
+			return err
+		}
+		existing = append(existing, *pc)
 		linked, err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, false, freshOrigin(ctx, st))
 		if err != nil {
 			return err
@@ -1348,7 +1368,7 @@ func (s *Service) snapshotComponents(ctx context.Context, j *journal, in []Snaps
 	for i, c := range in {
 		pc := PlateComponent{
 			FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, Grams: c.Grams,
-			SortOrder: c.SortOrder,
+			SortOrder: c.SortOrder, Position: c.Position,
 		}
 		if c.Session != nil {
 			switch {
@@ -1531,7 +1551,7 @@ func (s *Service) remove(ctx context.Context, plates []Plate, pick func(PlateCom
 			if !removed[c.ID] {
 				continue
 			}
-			sc := SnapshotComponent{FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, Grams: c.Grams, SortOrder: c.SortOrder}
+			sc := SnapshotComponent{FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, Grams: c.Grams, SortOrder: c.SortOrder, Position: c.Position}
 			if c.CookSessionID != nil {
 				if ref, ok := refOf[*c.CookSessionID]; ok {
 					sc.Session = &SessionLink{Ref: ref}

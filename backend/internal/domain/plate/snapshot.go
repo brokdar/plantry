@@ -51,6 +51,9 @@ type SnapshotComponent struct {
 	Grams     *float64     `json:"grams,omitempty"`
 	SortOrder int          `json:"sort_order"`
 	Session   *SessionLink `json:"session,omitempty"`
+	// Position is empty in a snapshot that predates it or is built by a
+	// planner: Apply derives it.
+	Position Position `json:"position,omitempty"`
 }
 
 // SessionLink names the session a composed component eats from: Ref, a

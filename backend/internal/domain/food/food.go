@@ -54,6 +54,17 @@ var validRoles = map[Role]bool{
 	RoleStandalone:  true,
 }
 
+// validLeafRoles are the roles a leaf may carry as an override: main and
+// standalone name whole meals and stay recipe-only.
+var validLeafRoles = map[Role]bool{
+	RoleSideStarch:  true,
+	RoleSideVeg:     true,
+	RoleSideProtein: true,
+	RoleSauce:       true,
+	RoleDrink:       true,
+	RoleDessert:     true,
+}
+
 // ValidRole reports whether r is a known food role.
 func ValidRole(r Role) bool { return validRoles[r] }
 
@@ -113,6 +124,10 @@ type Food struct {
 	// DietOverride is the user's diet class (D28), for both kinds; nil means
 	// the class is derived.
 	DietOverride *diet.Class
+
+	// NoCookOverride is the user's "needs no cooking" flag, for both kinds;
+	// nil means planning.NoCook derives it.
+	NoCookOverride *bool
 
 	// Shared.
 	SourceURL   *string // where the food was imported from

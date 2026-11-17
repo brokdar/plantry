@@ -171,7 +171,7 @@ func decodePlate(raw json.RawMessage) (Plate, error) {
 		p.Feedback = &Feedback{Status: sp.Feedback.Status, Note: sp.Feedback.Note, RatedAt: sp.Feedback.RatedAt}
 	}
 	for i, c := range sp.Components {
-		pc := PlateComponent{FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, Grams: c.Grams, SortOrder: c.SortOrder}
+		pc := PlateComponent{FoodID: c.FoodID, Portions: c.Portions, Amount: c.Amount, Unit: c.Unit, Grams: c.Grams, SortOrder: c.SortOrder, Position: c.Position}
 		if c.Session != nil {
 			id := c.Session.ID
 			pc.CookSessionID = &id
