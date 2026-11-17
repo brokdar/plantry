@@ -37,3 +37,17 @@ func TestPlanLightRepo_ReplaceListPrune(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []planning.LightIntent{{Date: "2026-11-11", Scope: "day"}}, got)
 }
+
+func TestPlanLightRepo_Level(t *testing.T) {
+	ctx := context.Background()
+	repo := sqlite.NewPlanLightRepo(testhelper.NewTestDB(t))
+	d := func(s string) time.Time { x, _ := time.Parse(time.DateOnly, s); return x }
+	in := []planning.LightIntent{
+		{Date: "2026-11-11", Scope: "meal", Slot: "dinner", Level: planning.LevelHearty},
+		{Date: "2026-11-11", Scope: "meal", Slot: "lunch"},
+	}
+	require.NoError(t, repo.Replace(ctx, d("2026-11-10"), []string{"2026-11-11"}, in))
+	got, err := repo.List(ctx, d("2026-11-11"), d("2026-11-11"))
+	require.NoError(t, err)
+	assert.ElementsMatch(t, in, got, "hearty round-trips, light reads back as the empty default")
+}

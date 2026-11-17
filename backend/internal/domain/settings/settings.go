@@ -113,6 +113,7 @@ const (
 	KeyPlanFreezerKeepDays        = "plan.freezer_keep_days"
 	KeyPlanVarietyWeeks           = "plan.variety_weeks"
 	KeyPlanExplorePerWeek         = "plan.explore_per_week"
+	KeyPlanMaxDishMealsPerWeek    = "plan.max_dish_meals_per_week"
 	KeyDiscoveryDailyEnabled      = "discovery.daily_enabled"
 	KeyDiscoveryCuisines          = "discovery.cuisines"
 	KeyAIRunRetentionDays         = "ai.run_retention_days"

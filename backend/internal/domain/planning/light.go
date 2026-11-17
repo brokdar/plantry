@@ -34,30 +34,67 @@ const (
 	// LightDayShare: a light day's target is this share of the normal one
 	// and its band is centred there. The floors (H9) are not lowered.
 	LightDayShare = 0.85
+	// HeartyMealShare: a hearty meal holds at least this share of the
+	// meal's normal share; the day's target is unchanged.
+	HeartyMealShare = 1.25
+	// HeartyDayShare: a hearty day's target is this share of the normal one
+	// and its band is centred there.
+	HeartyDayShare = 1.15
+	// LevelLight and LevelHearty are an intent's level. Light is the
+	// default and is kept empty in LightIntent, so stored and new intents
+	// compare equal.
+	LevelLight  = "light"
+	LevelHearty = "hearty"
 )
 
-// LightIntent is one light request: a meal (Slot lunch or dinner) or the
-// whole day of Date (YYYY-MM-DD).
+// LightIntent is one light (or hearty) request: a meal (Slot lunch or
+// dinner) or the whole day of Date (YYYY-MM-DD). Level is empty for light
+// (the default) or LevelHearty.
 type LightIntent struct {
 	Date  string `json:"date"`
 	Scope string `json:"scope"`
 	Slot  string `json:"slot,omitempty"`
+	Level string `json:"level,omitempty"`
+}
+
+// Hearty reports whether the intent asks for more instead of less.
+func (l LightIntent) Hearty() bool { return l.Level == LevelHearty }
+
+// LevelOrLight is the intent's level with the default spelled out.
+func (l LightIntent) LevelOrLight() string {
+	if l.Hearty() {
+		return LevelHearty
+	}
+	return LevelLight
 }
 
 // lightSlots are the slots a meal intent may name.
 var lightSlots = []string{"lunch", "dinner"}
 
 // ValidateLight checks the intents and returns them without duplicates; a
-// day intent drops its slot.
+// day intent drops its slot, a none intent its level, and level light is
+// kept empty.
 func ValidateLight(in []LightIntent) ([]LightIntent, error) {
 	var out []LightIntent
 	for i, l := range in {
 		if _, err := time.Parse(time.DateOnly, l.Date); err != nil {
 			return nil, fmt.Errorf("light[%d].date %q is not a YYYY-MM-DD date", i, l.Date)
 		}
+		switch l.Level {
+		case "", LevelLight:
+			l.Level = ""
+		case LevelHearty:
+		default:
+			return nil, fmt.Errorf("light[%d].level %q must be light or hearty", i, l.Level)
+		}
 		switch l.Scope {
-		case LightScopeDay, LightScopeNone:
+		case LightScopeDay:
 			l.Slot = ""
+		case LightScopeNone:
+			l.Level = ""
+			if l.Slot != "" && !slices.Contains(lightSlots, l.Slot) {
+				return nil, fmt.Errorf("light[%d]: scope none takes slot lunch, dinner or none", i)
+			}
 		case LightScopeMeal:
 			if !slices.Contains(lightSlots, l.Slot) {
 				return nil, fmt.Errorf("light[%d]: scope meal needs slot lunch or dinner", i)
@@ -72,13 +109,15 @@ func ValidateLight(in []LightIntent) ([]LightIntent, error) {
 	return out, nil
 }
 
-// MergeLight is stored with every date that in names replaced by in's
-// intents of that date (none intents only clear): the state's light after a
-// call that was given in.
+// MergeLight is the state's light after a call that was given in: a meal
+// intent replaces the stored meal intent of its date and slot, a day intent
+// the stored day intent of its date; none with a slot clears that slot's
+// meal intent, none without one clears the whole date. Everything else
+// stored stays.
 func MergeLight(stored, in []LightIntent) []LightIntent {
 	var out []LightIntent
 	for _, l := range stored {
-		if !slices.ContainsFunc(in, func(i LightIntent) bool { return i.Date == l.Date }) {
+		if !slices.ContainsFunc(in, func(i LightIntent) bool { return replaces(i, l) }) {
 			out = append(out, l)
 		}
 	}
@@ -88,6 +127,20 @@ func MergeLight(stored, in []LightIntent) []LightIntent {
 		}
 	}
 	return out
+}
+
+// replaces reports whether the new intent n replaces the stored intent s.
+func replaces(n, s LightIntent) bool {
+	if n.Date != s.Date {
+		return false
+	}
+	switch n.Scope {
+	case LightScopeNone:
+		return n.Slot == "" || (s.Scope == LightScopeMeal && s.Slot == n.Slot)
+	case LightScopeMeal:
+		return s.Scope == LightScopeMeal && s.Slot == n.Slot
+	}
+	return s.Scope == LightScopeDay
 }
 
 // LightDates are the distinct dates of in, in order.
@@ -145,17 +198,18 @@ func LightSchema(withClear bool) string {
 	scopes, clear := `"meal","day"`, ""
 	if withClear {
 		scopes = `"meal","day","none"`
-		clear = " scope none: remove that date's light request (stored requests of other dates stay)."
+		clear = " scope none: remove a stored request: with slot only that meal's, without slot the whole date's."
 	}
 	return fmt.Sprintf(`"light":{
       "type":"array","maxItems":14,
-      "description":"The user's light requests, structured, one entry per date; omit when there is none. Requests are stored: a date you list replaces that date's stored request, other dates keep theirs and every evaluation already stands under them, so list only what the user asked for now. scope meal: that lunch or dinner is lighter (at most 75%% of its even share of the day's target) and the day keeps its target. scope day: ONLY when the user explicitly asks to eat less that day; the day's target becomes 85%%; at most %d per plan window (a lasting cut is the profile's goal lose). Dates must lie in the plan window.%s",
+      "description":"The user's light (or hearty) requests, structured; omit when there is none. Requests are stored: a meal entry replaces the stored request of that date and slot, a day entry that date's day request; everything else stored stays and every evaluation already stands under it, so list only what the user asked for now. scope meal: that lunch or dinner is lighter (at most 75%% of its even share of the day's target; level hearty: at least 125%%) and the day keeps its target. scope day: ONLY when the user explicitly asks to eat less (hearty: more) that day; the day's target becomes 85%% (hearty: 115%%); at most %d light or hearty days per plan window (a lasting change is the profile's goal). Dates must lie in the plan window.%s",
       "items":{
         "type":"object","required":["date","scope"],
         "properties":{
           "date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
           "scope":{"type":"string","enum":[%s]},
-          "slot":{"type":"string","enum":["lunch","dinner"],"description":"Required for scope meal."}
+          "slot":{"type":"string","enum":["lunch","dinner"],"description":"Required for scope meal."},
+          "level":{"type":"string","enum":["light","hearty"],"description":"Default light."}
         },
         "additionalProperties":false
       }
@@ -178,11 +232,25 @@ func (s State) lightDay(date time.Time) bool {
 	return slices.Contains(s.Light, LightIntent{Date: date.Format(time.DateOnly), Scope: LightScopeDay})
 }
 
+// heartyDay reports whether the day of date is a hearty day.
+func (s State) heartyDay(date time.Time) bool {
+	return slices.Contains(s.Light, LightIntent{Date: date.Format(time.DateOnly), Scope: LightScopeDay, Level: LevelHearty})
+}
+
 // lightMeal reports whether the meal in slot on date is a light meal.
 func (s State) lightMeal(date time.Time, slot int64) bool {
+	return s.mealLevel(date, slot, "")
+}
+
+// heartyMeal reports whether the meal in slot on date is a hearty meal.
+func (s State) heartyMeal(date time.Time, slot int64) bool {
+	return s.mealLevel(date, slot, LevelHearty)
+}
+
+func (s State) mealLevel(date time.Time, slot int64, level string) bool {
 	d := date.Format(time.DateOnly)
 	return slices.ContainsFunc(s.Light, func(l LightIntent) bool {
-		return l.Scope == LightScopeMeal && l.Date == d && s.slotIs(slot, l.Slot)
+		return l.Scope == LightScopeMeal && l.Date == d && l.Level == level && s.slotIs(slot, l.Slot)
 	})
 }
 
@@ -198,11 +266,20 @@ func (dk DayKcal) mealCap() float64 {
 	if dk.Active() == 0 {
 		return 0
 	}
-	return LightMealShare * dk.Scaled / float64(dk.Active())
+	return LightMealShare * dk.normalShare()
+}
+
+// normalShare is one meal's even share of the day's normal target.
+func (dk DayKcal) normalShare() float64 {
+	if dk.Active() == 0 {
+		return 0
+	}
+	return dk.Scaled / float64(dk.Active())
 }
 
 // lightIssues reports S6 `meal_not_light` for every light meal whose plate
-// holds more kcal than its cap (soft: it never blocks saving).
+// holds more kcal than its cap and S6b `meal_not_hearty` for every hearty
+// meal whose plate holds less than its minimum (soft: never blocks saving).
 func (x *index) lightIssues(ev Evaluation) []Issue {
 	var out []Issue
 	for _, l := range x.s.Light {
@@ -221,11 +298,19 @@ func (x *index) lightIssues(ev Evaluation) []Issue {
 			if p.Date != l.Date || p.Kcal <= 0 || !x.s.slotIs(p.SlotID, l.Slot) || x.unfixable(p) {
 				continue
 			}
+			cell := plate.CellKey{Date: day, SlotID: p.SlotID}
+			if l.Hearty() {
+				if least := HeartyMealShare * dk.normalShare(); p.Kcal < least-1e-9 {
+					out = append(out, issue("S6b", CodeMealNotHearty, SeveritySoft).atCell(cell).
+						with("kcal", math.Round(p.Kcal)).with("min_kcal", math.Round(least)).
+						with("normal_share_kcal", math.Round(dk.normalShare())))
+				}
+				continue
+			}
 			if limit := dk.mealCap(); p.Kcal > limit+1e-9 {
-				out = append(out, issue("S6", CodeMealNotLight, SeveritySoft).
-					atCell(plate.CellKey{Date: day, SlotID: p.SlotID}).
+				out = append(out, issue("S6", CodeMealNotLight, SeveritySoft).atCell(cell).
 					with("kcal", math.Round(p.Kcal)).with("max_kcal", math.Round(limit)).
-					with("normal_share_kcal", math.Round(dk.Scaled/float64(dk.Active()))))
+					with("normal_share_kcal", math.Round(dk.normalShare())))
 			}
 		}
 	}
@@ -261,13 +346,13 @@ func lightNote(light []LightIntent, locale string) string {
 	if len(light) == 0 {
 		return ""
 	}
-	w := lightWords["en"]
+	w, hearty := lightWords["en"], "Hearty"
 	if locale == "de" {
-		w = lightWords["de"]
+		w, hearty = lightWords["de"], "Deftig"
 	}
 	sorted := slices.Clone(light)
 	slices.SortStableFunc(sorted, func(a, b LightIntent) int { return strings.Compare(a.Date, b.Date) })
-	parts := make([]string, 0, len(sorted))
+	var parts, heartyParts []string
 	for _, l := range sorted {
 		d, err := time.Parse(time.DateOnly, l.Date)
 		if err != nil {
@@ -277,19 +362,36 @@ func lightNote(light []LightIntent, locale string) string {
 		if l.Scope == LightScopeMeal {
 			what = w.slots[l.Slot]
 		}
+		if l.Hearty() {
+			heartyParts = append(heartyParts, w.weekdays[d.Weekday()]+" "+what)
+			continue
+		}
 		parts = append(parts, w.weekdays[d.Weekday()]+" "+what)
 	}
-	return w.prefix + ": " + strings.Join(parts, ", ")
+	var out []string
+	if len(parts) > 0 {
+		out = append(out, w.prefix+": "+strings.Join(parts, ", "))
+	}
+	if len(heartyParts) > 0 {
+		out = append(out, hearty+": "+strings.Join(heartyParts, ", "))
+	}
+	return strings.Join(out, "; ")
 }
 
-// lightOf is "day" for a light day, "meal" when one of its meals is light,
-// else "".
-func (x *index) lightOf(date time.Time) string {
+// lightOf is "day" for a light or hearty day, "meal" when one of its meals
+// is light or hearty, else ""; level is LevelHearty for a hearty one (a day
+// intent wins over a meal intent).
+func (x *index) lightOf(date time.Time) (scope, level string) {
 	switch {
 	case x.s.lightDay(date):
-		return LightScopeDay
-	case slices.ContainsFunc(x.s.Cells, func(c Cell) bool { return dayOf(c.Date) == dayOf(date) && x.s.lightMeal(c.Date, c.SlotID) }):
-		return LightScopeMeal
+		return LightScopeDay, ""
+	case x.s.heartyDay(date):
+		return LightScopeDay, LevelHearty
 	}
-	return ""
+	for _, level := range []string{"", LevelHearty} {
+		if slices.ContainsFunc(x.s.Cells, func(c Cell) bool { return dayOf(c.Date) == dayOf(date) && x.s.mealLevel(c.Date, c.SlotID, level) }) {
+			return LightScopeMeal, level
+		}
+	}
+	return "", ""
 }

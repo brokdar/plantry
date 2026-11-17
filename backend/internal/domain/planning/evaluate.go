@@ -109,9 +109,11 @@ type DayEval struct {
 	Kcal       float64  `json:"kcal"`
 	TargetKcal *float64 `json:"target_kcal"`
 	// NormalTargetKcal is the target without the light request; only on a
-	// light day. Light is "day" or "meal" when the day was asked for light.
+	// light day. Light is "day" or "meal" when the day was asked for light
+	// (or hearty: LightLevel is then "hearty").
 	NormalTargetKcal float64  `json:"normal_target_kcal,omitempty"`
 	Light            string   `json:"light,omitempty"`
+	LightLevel       string   `json:"light_level,omitempty"`
 	ProteinG         float64  `json:"protein_g"`
 	ProteinTargetG   float64  `json:"protein_target_g,omitempty"`
 	ProteinPct       float64  `json:"protein_pct"`
@@ -227,7 +229,7 @@ func Evaluate(s State, t Target) Evaluation {
 				de.NormalTargetKcal = dk.Scaled
 			}
 		}
-		de.Light = x.lightOf(dk.Date)
+		de.Light, de.LightLevel = x.lightOf(dk.Date)
 		if t := x.pol.ProteinTargetG(dk.Share()); t > 0 {
 			de.ProteinTargetG = t
 		}

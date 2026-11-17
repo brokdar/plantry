@@ -98,6 +98,9 @@ type Component struct {
 	Grams      *float64
 	SessionID  int64
 	SessionKey string
+	// Position is the stored place on the plate (main, side, extra);
+	// empty on a proposed component.
+	Position plate.Position
 	// Proposed marks a component Merge added from a proposal.
 	Proposed bool
 }
@@ -156,6 +159,11 @@ type FoodFacts struct {
 	Groups FoodGroups
 	// Sweet: a leaf that is mostly sugar (see IsSweet); never a kcal filler.
 	Sweet bool
+	// Tags are the food's tags (Alternatives' search and tag filter).
+	Tags []string
+	// LeafRole is a leaf's effective role (shopping.EffectiveRole); Role
+	// stays recipe-only. Alternatives reads it for side and add candidates.
+	LeafRole food.Role
 }
 
 // Explore reports whether the food is an explore candidate: tagged explore
@@ -172,6 +180,9 @@ type Settings struct {
 	VarietyWeeks           int
 	// BatchCooking false keeps every session to its own cell.
 	BatchCooking bool
+	// MaxDishMealsPerWeek is plan.max_dish_meals_per_week (S8); 0 reads
+	// as DefaultMaxDishMeals.
+	MaxDishMealsPerWeek int
 }
 
 // Profile is the part of the user profile the rules read.

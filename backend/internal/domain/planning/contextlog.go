@@ -98,6 +98,7 @@ type contextRecord struct {
 	// the side a side swap replaces.
 	Avoid        []int64            `json:"avoid"`
 	AvoidBatches []int64            `json:"avoid_batches"`
+	Exclude      []int64            `json:"exclude"`
 	EatersByDate map[string]float64 `json:"eaters_by_date"`
 	Side         *sideRecord        `json:"side"`
 	// Light are the light requests the run started with (the chooser may add
@@ -162,7 +163,7 @@ func recordContext(ctx context.Context, in ChooseInput, chooser string, trimmed 
 			rec.ShortDays = append(rec.ShortDays, sd)
 		}
 	}
-	rec.Avoid, rec.AvoidBatches, rec.EatersByDate = nonNil(in.Avoid), nonNil(in.AvoidBatches), in.EatersByDate
+	rec.Avoid, rec.AvoidBatches, rec.Exclude, rec.EatersByDate = nonNil(in.Avoid), nonNil(in.AvoidBatches), nonNil(in.Exclude), in.EatersByDate
 	if sw := in.Side; sw != nil {
 		sr := &sideRecord{
 			FoodID: sw.FoodID, Role: string(sw.Role), CookDate: sw.CookDate.Format(time.DateOnly), CookSlotID: sw.CookSlotID,

@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
@@ -302,7 +303,12 @@ func BaseFacts(f *food.Food) FoodFacts {
 	ff := FoodFacts{
 		ID: f.ID, Name: f.Name, Kind: f.Kind, KeepDays: f.KeepDays, Freezable: f.Freezable != nil && *f.Freezable,
 		Favorite: f.Favorite, LastEaten: f.History.LastEaten, ReferencePortions: 1, DietClass: f.DietClass,
-		NoCook: NoCook(f), Sweet: IsSweet(f),
+		NoCook: NoCook(f), Sweet: IsSweet(f), Tags: f.Tags,
+	}
+	if f.Kind == food.KindLeaf {
+		if r, _ := shopping.EffectiveRole(f); r != nil {
+			ff.LeafRole = *r
+		}
 	}
 	// Only composed foods carry a planner role; a leaf's stored role is a
 	// user override for plate position and must not enter candidate lists.
@@ -343,7 +349,7 @@ func StatePlate(p plate.Plate) Plate {
 		Components: make([]Component, len(p.Components)),
 	}
 	for i, c := range p.Components {
-		out.Components[i] = Component{ID: c.ID, FoodID: c.FoodID, Portions: c.Portions, Grams: c.Grams}
+		out.Components[i] = Component{ID: c.ID, FoodID: c.FoodID, Portions: c.Portions, Grams: c.Grams, Position: c.Position}
 		if c.CookSessionID != nil {
 			out.Components[i].SessionID = *c.CookSessionID
 		}
@@ -387,7 +393,11 @@ func ReadSettings(ctx context.Context, r SettingsReader) (Settings, error) {
 	if err != nil {
 		return Settings{}, fmt.Errorf("parse %s: %w", settings.KeyPlanBatchCooking, err)
 	}
-	return Settings{BatchSettings: batch, MaxCookOccasionsPerDay: maxCook, VarietyWeeks: variety, BatchCooking: batchCooking}, nil
+	maxDish, err := plate.IntSetting(ctx, r, settings.KeyPlanMaxDishMealsPerWeek)
+	if err != nil {
+		return Settings{}, err
+	}
+	return Settings{BatchSettings: batch, MaxCookOccasionsPerDay: maxCook, VarietyWeeks: variety, BatchCooking: batchCooking, MaxDishMealsPerWeek: maxDish}, nil
 }
 
 // routineBase is the id of the first routine plate in a state (D8): they

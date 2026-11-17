@@ -94,6 +94,33 @@ func TestEvaluate_S2BelowBandOffersRaiseAndNoCookSide(t *testing.T) {
 	assert.True(t, add, "options: %+v", s2[0].Options)
 }
 
+// C8: a leaf add is capped like the heuristic's adds (200 g and 20 % of the
+// day's target), even when the gap is far bigger; it is still offered.
+func TestEvaluate_S2LeafAddIsCapped(t *testing.T) {
+	const parmesan int64 = 22
+	s := softState(3000) // a gap of about 1100 kcal
+	s.Foods[parmesan] = planning.FoodFacts{
+		ID: parmesan, Name: "Parmesan", Kind: food.KindLeaf, DietClass: "vegetarian", NoCook: true,
+		Macros: nutrition.Macros{Kcal: 400, Protein: 35}, NutritionComplete: true,
+	}
+	s.NoCook = []int64{parmesan}
+	ev := planning.Evaluate(s, windowTarget(s))
+	s2 := softOf(ev, "S2")
+	require.Len(t, s2, 1)
+	var found bool
+	for _, o := range s2[0].Options {
+		if o.Action == "add" && o.FoodID == parmesan {
+			found = true
+			require.NotNil(t, o.Grams)
+			assert.LessOrEqual(t, *o.Grams, 200.0)
+			assert.InDelta(t, 150, *o.Grams, 0.01, "20 %% of 3000 kcal is 600 kcal = 150 g")
+			assert.InDelta(t, 600, o.KcalDelta, 0.5)
+			assert.Less(t, o.DayKcal, 3000*0.9, "the capped add closes the gap only partly")
+		}
+	}
+	assert.True(t, found, "options: %+v", s2[0].Options)
+}
+
 func TestEvaluate_LightDayInBandIsUntouched(t *testing.T) {
 	s := softState(1850) // 1800 / 1850 = 97 %
 	ev := planning.Evaluate(s, windowTarget(s))

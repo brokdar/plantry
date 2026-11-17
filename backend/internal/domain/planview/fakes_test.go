@@ -352,6 +352,7 @@ func newFixture() *fixture {
 			settings.KeyPlanMaxCookOccasionsPerDay: "1",
 			settings.KeyPlanVarietyWeeks:           "3",
 			settings.KeyPlanBatchCooking:           "true",
+			settings.KeyPlanMaxDishMealsPerWeek:    "3",
 		},
 		profile: &fakeProfile{p: profile.Profile{HouseholdPortions: 2}},
 		tx:      &fakeTx{},

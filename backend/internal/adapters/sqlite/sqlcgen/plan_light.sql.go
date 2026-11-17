@@ -10,17 +10,23 @@ import (
 )
 
 const createPlanLight = `-- name: CreatePlanLight :exec
-INSERT OR IGNORE INTO plan_light (date, scope, slot) VALUES (?, ?, ?)
+INSERT OR IGNORE INTO plan_light (date, scope, slot, level) VALUES (?, ?, ?, ?)
 `
 
 type CreatePlanLightParams struct {
 	Date  string
 	Scope string
 	Slot  string
+	Level string
 }
 
 func (q *Queries) CreatePlanLight(ctx context.Context, arg CreatePlanLightParams) error {
-	_, err := q.db.ExecContext(ctx, createPlanLight, arg.Date, arg.Scope, arg.Slot)
+	_, err := q.db.ExecContext(ctx, createPlanLight,
+		arg.Date,
+		arg.Scope,
+		arg.Slot,
+		arg.Level,
+	)
 	return err
 }
 
@@ -43,7 +49,7 @@ func (q *Queries) DeletePlanLightDate(ctx context.Context, date string) error {
 }
 
 const listPlanLight = `-- name: ListPlanLight :many
-SELECT date, scope, slot FROM plan_light
+SELECT date, scope, slot, level FROM plan_light
 WHERE date >= ? AND date <= ?
 ORDER BY date, scope, slot
 `
@@ -62,7 +68,12 @@ func (q *Queries) ListPlanLight(ctx context.Context, arg ListPlanLightParams) ([
 	items := []PlanLight{}
 	for rows.Next() {
 		var i PlanLight
-		if err := rows.Scan(&i.Date, &i.Scope, &i.Slot); err != nil {
+		if err := rows.Scan(
+			&i.Date,
+			&i.Scope,
+			&i.Slot,
+			&i.Level,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

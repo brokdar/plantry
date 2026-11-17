@@ -1789,6 +1789,10 @@
       "day": "Light day",
       "meal": "Light: {{slot}}"
     },
+    "hearty": {
+      "day": "Hearty day",
+      "meal": "Hearty: {{slot}}"
+    },
     "soft": {
       "week_meat_above_dge": "Meat: {{meat}} g this week, over the {{max}} g DGE limit.",
       "week_fish_below_dge": "No fish meal this week; the DGE suggests one or two a week.",

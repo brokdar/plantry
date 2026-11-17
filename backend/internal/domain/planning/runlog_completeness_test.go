@@ -249,6 +249,7 @@ func TestRunLog_DayRegenerateEvaluatesTheWindow(t *testing.T) {
 	var rec struct {
 		Avoid        []int64            `json:"avoid"`
 		AvoidBatches []int64            `json:"avoid_batches"`
+		Exclude      []int64            `json:"exclude"`
 		EatersByDate map[string]float64 `json:"eaters_by_date"`
 		Side         any                `json:"side"`
 	}

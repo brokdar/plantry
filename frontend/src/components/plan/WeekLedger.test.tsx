@@ -179,6 +179,25 @@ describe("light marks", () => {
     expect(screen.getByText("Light: Dinner")).toBeVisible()
   })
 
+  it("labels a hearty request in en and de", async () => {
+    const hearty = light.map((d) =>
+      d.light ? { ...d, light_level: "hearty" as const } : d
+    )
+    const board = buildBoard({ ...mockPlan, days: hearty }, i18n)
+    expect(board.days.filter((d) => d.light).map((d) => d.light)).toEqual([
+      "Hearty day",
+      "Hearty: Dinner",
+    ])
+    expect(board.days.filter((d) => d.light).every((d) => d.hearty)).toBe(true)
+    await i18n.changeLanguage("de")
+    const de = buildBoard({ ...mockPlan, days: hearty }, i18n)
+    expect(de.days.filter((d) => d.light).map((d) => d.light)).toEqual([
+      "Deftiger Tag",
+      "Deftig: Abendessen",
+    ])
+    await i18n.changeLanguage("en")
+  })
+
   it("measures a light day against its adjusted target only", () => {
     const [plain, day, meal] = [light[0], light[2], light[3]]
     const t = mockPlan.targets

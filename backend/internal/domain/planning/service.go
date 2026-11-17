@@ -24,7 +24,7 @@ import (
 
 // HeuristicVersion is the run log's prompt_version of heuristic runs: bump
 // it when the heuristic changes what it picks.
-const HeuristicVersion = "h13"
+const HeuristicVersion = "h14"
 
 // runTimeout bounds one generation (D9). Saving has its own budget, so a
 // proposal ready late in the run is still written.
@@ -208,6 +208,7 @@ type job struct {
 	side         *SideSwap
 	avoid        []int64
 	avoidBatches []int64
+	exclude      []int64
 	from, to     time.Time
 	eaters       map[string]float64
 	exploreQuota int
@@ -429,6 +430,13 @@ func (s *Service) resolve(ctx context.Context, w window.Window, today time.Time,
 			leftover, lerr := s.eatsOnlyLeftovers(ctx, p)
 			if lerr != nil {
 				return lerr
+			}
+			// "Replace plate" means a different dish: the plate's own
+			// foods may not come back on its cell, fresh or leftover.
+			for _, c := range p.Components {
+				if c.IsComposed() {
+					j.exclude = append(j.exclude, c.FoodID)
+				}
 			}
 			if leftover {
 				// A leftover plate goes alone; the batch it ate from shrinks
@@ -728,7 +736,7 @@ func (s *Service) generate(ctx context.Context, runID int64, j job) RunEnd {
 		stage(StageChoosing)
 		last, err = j.chooser.Choose(ctx, ChooseInput{
 			State: base, Target: j.target, EatersByDate: j.eaters, ExploreQuota: j.exploreQuota,
-			Avoid: j.avoid, AvoidBatches: j.avoidBatches, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
+			Avoid: j.avoid, AvoidBatches: j.avoidBatches, Exclude: j.exclude, Side: j.side, Instruction: j.instruction, Locale: base.Profile.Locale,
 			Stage: func(st Stage) { stage(st) }, Logger: s.d.Logger,
 		})
 		if err != nil {

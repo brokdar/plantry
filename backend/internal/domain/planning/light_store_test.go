@@ -16,8 +16,8 @@ func TestMergeLight(t *testing.T) {
 	got := planning.MergeLight(stored, []planning.LightIntent{
 		{Date: mon, Scope: "meal", Slot: "lunch"}, {Date: tue, Scope: "none"},
 	})
-	assert.Equal(t, []planning.LightIntent{{Date: mon, Scope: "meal", Slot: "lunch"}}, got,
-		"a date in the input replaces its stored intents, none only clears")
+	assert.Equal(t, []planning.LightIntent{{Date: mon, Scope: "day"}, {Date: mon, Scope: "meal", Slot: "lunch"}}, got,
+		"a meal intent leaves the day intent, none without a slot clears its date")
 	assert.Equal(t, stored, planning.MergeLight(stored, nil))
 	assert.Equal(t, []string{mon, tue}, planning.LightDates([]planning.LightIntent{{Date: mon, Scope: "day"}, {Date: tue, Scope: "none"}, {Date: mon, Scope: "meal", Slot: "lunch"}}))
 }
