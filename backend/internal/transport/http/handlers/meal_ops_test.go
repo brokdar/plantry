@@ -125,6 +125,20 @@ func TestMealHTTP_ReplaceCopyAndMoveCook(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, code, "same food: %v", body)
 }
 
+func TestMealHTTP_CopyIsAllOrNothing(t *testing.T) {
+	a := newMealAPI(t)
+	id, _ := a.plateOn("2030-01-08", a.dinner, a.chili)
+
+	code, body := a.do(http.MethodPost, fmt.Sprintf("/api/plates/%d/copy", id),
+		fmt.Sprintf(`{"cells":[{"date":"2030-01-09","slot_id":%d},{"date":"2020-01-09","slot_id":%d}],"as":"fresh"}`, a.lunch, a.lunch))
+
+	require.Equal(t, http.StatusBadRequest, code, body)
+	assert.Equal(t, "error.plan.past_cell", body["message_key"])
+	var n int
+	require.NoError(t, a.db.QueryRow(`SELECT COUNT(*) FROM plates`).Scan(&n))
+	assert.Equal(t, 1, n, "the valid cell was not written either")
+}
+
 func TestMealHTTP_ComponentEditReturnsUndo(t *testing.T) {
 	a := newMealAPI(t)
 	id, _ := a.plateOn("2030-01-08", a.dinner, a.chili)
@@ -163,6 +177,7 @@ func TestMealHTTP_BadRequests(t *testing.T) {
 		{"move-cook bad cell", http.MethodPost, fmt.Sprintf("/api/cook-sessions/%d/move-cook", sid), `{"date":"2030-01-08"}`, 400},
 		{"revert malformed", http.MethodPost, "/api/plan/revert", `{`, 400},
 		{"revert empty token", http.MethodPost, "/api/plan/revert", `{"first_event_id":0,"last_event_id":0}`, 400},
+		{"revert first id missing", http.MethodPost, "/api/plan/revert", `{"first_event_id":0,"last_event_id":5}`, 400},
 		{"revert inverted range", http.MethodPost, "/api/plan/revert", `{"first_event_id":5,"last_event_id":2}`, 400},
 	}
 	for _, tc := range cases {

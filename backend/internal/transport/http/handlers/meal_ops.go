@@ -236,7 +236,7 @@ func (h *CookSessionHandler) MoveCook(w http.ResponseWriter, r *http.Request) {
 // session_ids}. A stale token is 409 error.plan.change_stale.
 func (h *AvailabilityHandler) Revert(w http.ResponseWriter, r *http.Request) {
 	var u plate.Undo
-	if err := json.NewDecoder(r.Body).Decode(&u); err != nil || u.FirstEventID < 0 || u.LastEventID < u.FirstEventID {
+	if err := json.NewDecoder(r.Body).Decode(&u); err != nil || u.FirstEventID < 0 || u.LastEventID < u.FirstEventID || (u.FirstEventID == 0 && u.LastEventID != 0) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}

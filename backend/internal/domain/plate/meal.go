@@ -124,6 +124,13 @@ func (s *Service) moveMeal(ctx context.Context, cur, next Plate, occ Occupant) (
 		qNext := *q
 		switch occ.Kind {
 		case OccupantSwap:
+			srcMode, err := s.cellMode(ctx, cur.Cell())
+			if err != nil {
+				return MealResult{}, err
+			}
+			if srcMode == CellNone {
+				return MealResult{}, fmt.Errorf("%w: %s slot %d", domain.ErrCellUnavailable, cur.DateString(), cur.SlotID)
+			}
 			qNext.Date, qNext.SlotID = cur.Date, cur.SlotID
 			moves[0].after.Eaters, qNext.Eaters = q.Eaters, cur.Eaters
 		case OccupantTo:
@@ -261,7 +268,9 @@ func (s *Service) localRule(ctx context.Context, t *tracker, sid int64, named ma
 		cook := sess.CookCell()
 		cookMoved := false
 		for _, l := range mine {
-			if named[l.PlateID].before.Cell().Equal(t.prior[sid].cook) {
+			// A removal may have re-anchored the cook since the tracker saw it.
+			b := named[l.PlateID].before.Cell()
+			if b.Equal(t.prior[sid].cook) || b.Equal(cook) {
 				cookMoved = true
 			}
 		}
@@ -269,7 +278,7 @@ func (s *Service) localRule(ctx context.Context, t *tracker, sid int64, named ma
 		if first, ok := earliestMeal(links, today, e.order); ok {
 			switch {
 			case cookMoved:
-				target = first
+				target = cookTarget(*sess, links, named, keep, e, today)
 			case Before(first, cook, e.order):
 				cand := *sess
 				cand.CookDate, cand.CookSlotID = first.Date, first.SlotID
@@ -363,6 +372,41 @@ func earliestMeal(links []Link, today time.Time, order SlotOrder) (CellKey, bool
 		return CellKey{}, false
 	}
 	return *first, true
+}
+
+// cookTarget is where the cook of sess goes when its cooking meal moved: the
+// earliest meal not before today, provided the batch can feed every meal from
+// there. When the earliest meal is named only and the batch cannot feed all,
+// that meal leaves the batch (it cooks fresh) and the next earliest is tried;
+// an earliest meal the caller did not name always gets the cook. With no meal
+// left the cook stays.
+func cookTarget(sess CookSession, links []Link, named map[int64]relocation, keep int, e env, today time.Time) CellKey {
+	rest := make([]Link, 0, len(links))
+	for _, l := range links {
+		if !dateOnly(l.Cell.Date).Before(today) {
+			rest = append(rest, l)
+		}
+	}
+	for {
+		first, ok := earliestMeal(rest, today, e.order)
+		if !ok {
+			return sess.CookCell()
+		}
+		cand := sess
+		cand.CookDate, cand.CookSlotID = first.Date, first.SlotID
+		namedOnly := true
+		for _, l := range rest {
+			if l.Cell.Equal(first) {
+				if _, ok := named[l.PlateID]; !ok {
+					namedOnly = false
+				}
+			}
+		}
+		if !namedOnly || feedsAll(cand, rest, keep, e) {
+			return first
+		}
+		rest = slices.DeleteFunc(rest, func(l Link) bool { return l.Cell.Equal(first) })
+	}
 }
 
 // feedsAll reports whether s can feed every link (CheckLink: on or after the

@@ -121,6 +121,52 @@ func TestMoveMeal_LeftoverBeforeItsCookCooksFreshWhenKeepWouldBreak(t *testing.T
 	assert.Equal(t, sid, res.AlsoChanged[1].SessionID)
 }
 
+func TestMoveMeal_CookingMealEarlierTakesTheBatchWhenKeepHolds(t *testing.T) {
+	e := newEnv(t)
+	sid := e.lateBatch()
+	tueDinner := e.plateAt(tue, e.dinner)
+
+	res, err := e.move(tueDinner, mon, e.lunch, plate.Occupant{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"2026-11-02/lunch chili x2 cook=2026-11-02/lunch portions=6",
+		"2026-11-04/lunch chili x2 cook=2026-11-02/lunch portions=6",
+		"2026-11-04/dinner chili x2 cook=2026-11-02/lunch portions=6",
+	}, e.week(), "the batch follows its cooking meal")
+	assert.Equal(t, []plate.AlsoChanged{{
+		SessionID: sid, PlateID: tueDinner.ID, Date: mon, SlotID: e.lunch, What: plate.AlsoCookMoved, FromDate: tue, FromSlotID: e.dinner,
+	}}, res.AlsoChanged)
+	assert.Empty(t, e.session(sid).Warnings)
+}
+
+func TestMoveMeal_CookingMealEarlierCooksFreshWhenKeepWouldBreak(t *testing.T) {
+	e := newEnv(t)
+	e.set("plan.default_keep_days", "1")
+	sid := e.lateBatch()
+	tueDinner := e.plateAt(tue, e.dinner)
+	wedLunch := e.plateAt(wed, e.lunch)
+
+	res, err := e.move(tueDinner, mon, e.lunch, plate.Occupant{})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"2026-11-02/lunch chili x2 cook=2026-11-02/lunch portions=2",
+		"2026-11-04/lunch chili x2 cook=2026-11-04/lunch portions=4",
+		"2026-11-04/dinner chili x2 cook=2026-11-04/lunch portions=4",
+	}, e.week(), "Wed would be past Mon's keep: the named meal cooks fresh, the batch re-anchors to Wed lunch")
+	assert.Equal(t, []string{plate.AlsoBecameCooking, plate.AlsoCooksFresh, plate.AlsoBatchResized}, whats(res.AlsoChanged))
+	assert.Equal(t, wedLunch.ID, res.AlsoChanged[0].PlateID)
+	assert.Equal(t, tueDinner.ID, res.AlsoChanged[1].PlateID)
+	assert.Equal(t, "before_cook", res.AlsoChanged[1].Why)
+	assert.Empty(t, e.session(sid).Warnings)
+	for _, p := range res.Plates {
+		for _, c := range p.Components {
+			assert.Empty(t, e.session(*c.CookSessionID).Warnings)
+		}
+	}
+}
+
 func TestMoveMeal_LeftoverPastKeepCooksFreshAndTheBatchShrinks(t *testing.T) {
 	e := newEnv(t)
 	_, sid := e.batch()
@@ -284,6 +330,36 @@ func TestMoveMeal_DroppedOccupantsBatchReanchors(t *testing.T) {
 	assert.Equal(t, plate.AlsoChanged{
 		SessionID: sid, PlateID: monLunch.ID, Date: mon, SlotID: e.lunch, What: plate.AlsoCookMoved, FromDate: sun, FromSlotID: e.dinner,
 	}, res.AlsoChanged[0])
+}
+
+func TestMoveMeal_DroppedCookingMealAndTheNextMealMovesInTakesTheBatch(t *testing.T) {
+	e := newEnv(t)
+	_, sid := e.batch()
+	monLunch := e.plateAt(mon, e.lunch)
+
+	res, err := e.move(monLunch, sun, e.dinner, plate.Occupant{Kind: plate.OccupantDrop})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"2026-11-01/dinner chili x2 cook=2026-11-01/dinner portions=4",
+		"2026-11-02/dinner chili x2 cook=2026-11-01/dinner portions=4",
+	}, e.week(), "the moved meal is the batch's cooking meal again")
+	assert.NotContains(t, whats(res.AlsoChanged), plate.AlsoCooksFresh)
+	assert.Empty(t, e.session(sid).Warnings)
+}
+
+func TestMoveMeal_SwapFromANoneSourceIsRefused(t *testing.T) {
+	e := newEnv(t)
+	e.batch()
+	// a plate can sit on a none cell when the override came after it
+	_, err := e.db.Exec(`INSERT INTO availability_overrides (date, slot_id, mode) VALUES (?, ?, 'none')`, sun, e.dinner)
+	require.NoError(t, err)
+	before := e.week()
+
+	_, err = e.move(e.plateAt(sun, e.dinner), mon, e.lunch, plate.Occupant{Kind: plate.OccupantSwap})
+
+	require.ErrorIs(t, err, domain.ErrCellUnavailable)
+	assert.Equal(t, before, e.week())
 }
 
 func TestMoveMeal_TakenCellWithoutOccupantIs409WithTheOccupant(t *testing.T) {
