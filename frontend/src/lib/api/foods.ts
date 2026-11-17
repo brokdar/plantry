@@ -82,6 +82,9 @@ interface FoodBase {
   favorite: boolean
   diet_class: EffectiveDietClass
   diet_class_source: DietClassSource
+  /** Effective "needs no cooking" flag; `user` = override, else derived. */
+  no_cook: boolean
+  no_cook_source: "user" | "derived"
   created_at: string
   updated_at: string
 }
@@ -118,6 +121,10 @@ export interface LeafFood extends FoodBase {
   /** Effective store section: the user override, else the classifier (D18). */
   shop_section: ShopSection
   shop_section_source: "auto" | "user"
+  /** Effective role: the user's override, else derived from the store
+   *  section; absent when none. */
+  role?: FoodRole | null
+  role_source?: "user" | "derived" | null
   /** Number of recipes using this ingredient. */
   used_in_count: number
 }
@@ -435,6 +442,14 @@ export function setDietClass(
   return apiFetch(`/foods/${id}/diet-class`, {
     method: "PUT",
     body: JSON.stringify({ class: dietClass }),
+  })
+}
+
+/** PUT /api/foods/{id}/no-cook — `null` drops the override. */
+export function setNoCook(id: number, value: boolean | null): Promise<Food> {
+  return apiFetch(`/foods/${id}/no-cook`, {
+    method: "PUT",
+    body: JSON.stringify({ value }),
   })
 }
 

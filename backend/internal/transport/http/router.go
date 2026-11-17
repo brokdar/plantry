@@ -77,6 +77,7 @@ func NewRouter(logger *slog.Logger, staticHandler http.Handler, h Handlers) http
 					r.Post("/favorite", h.Foods.SetFavorite)
 					r.Put("/shop-section", h.Foods.SetShopSection)
 					r.Put("/diet-class", h.Foods.SetDietClass)
+					r.Put("/no-cook", h.Foods.SetNoCook)
 					r.Post("/variant", h.Foods.CreateVariant)
 					r.Get("/variants", h.Foods.ListVariants)
 					r.Get("/portions", h.Foods.ListPortions)

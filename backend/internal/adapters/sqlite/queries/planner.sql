@@ -54,9 +54,9 @@ DELETE FROM plates WHERE id = ?;
 
 -- name: CreatePlateComponent :one
 INSERT INTO plate_components (
-    plate_id, food_id, portions, amount, unit, grams, grams_source, cook_session_id, sort_order
+    plate_id, food_id, portions, amount, unit, grams, grams_source, cook_session_id, sort_order, position
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetPlateComponent :one

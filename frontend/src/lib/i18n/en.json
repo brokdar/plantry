@@ -606,6 +606,7 @@
     "source_manual": "Manual",
     "source_off": "Open Food Facts",
     "source_fdc": "USDA",
+    "section_planning": "Planning",
     "section_basic": "Basic Information",
     "section_macros": "Nutrition per 100 g",
     "section_image_hint": "Add a photo so this ingredient is easy to spot in the catalog.",
@@ -624,7 +625,10 @@
       "description": "Add a new pantry item inline — you can refine nutrition and add a photo later on the ingredient page.",
       "macros_hint": "Optional — leave at 0 if unknown.",
       "save": "Create and use"
-    }
+    },
+    "role": "Role",
+    "role_auto": "None",
+    "role_hint": "Used when this ingredient is planned as a side. Leave it on none to follow the store section."
   },
   "component": {
     "edit_eyebrow": "Editor",
@@ -1005,7 +1009,8 @@
     "plate": {
       "slot_unknown": "That time slot doesn't exist.",
       "cell_unavailable": "This meal is marked No plate. Plan it first.",
-      "cell_occupied": "This meal already has a plate."
+      "cell_occupied": "This meal already has a plate.",
+      "second_main": "This plate already has a main dish."
     },
     "session": {
       "before_cook": "Leftovers can only come after the batch is cooked.",
@@ -2224,5 +2229,13 @@
     "replaces": "Replaces the draft {{name}}",
     "replaces_unnamed": "Replaces a draft",
     "cell_replaces": "{{day}}, {{meal}}. {{replaces}}"
+  },
+  "no_cook": {
+    "label": "Needs no cooking",
+    "auto": "Automatic",
+    "yes": "Yes",
+    "no": "No",
+    "hint": "The planner offers foods that need no cooking to fill a day. Automatic guesses from the name and store section.",
+    "auto_hint": "auto"
   }
 }

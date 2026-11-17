@@ -55,7 +55,7 @@ var foodCols = []string{
 	"notes", "image_path", "favorite",
 	"created_at", "updated_at",
 	"source_url", "description", "keep_days", "freezable", "shop_section",
-	"diet_class",
+	"diet_class", "no_cook",
 }
 
 // FoodRepo implements food.Repository backed by SQLite.
@@ -635,6 +635,35 @@ func (r *FoodRepo) SetShopSection(ctx context.Context, id int64, section *food.S
 	return &f, nil
 }
 
+// SetNoCook writes a food's "needs no cooking" override; nil clears it.
+func (r *FoodRepo) SetNoCook(ctx context.Context, id int64, value *bool) (*food.Food, error) {
+	var ni sql.NullInt64
+	if value != nil {
+		ni.Valid = true
+		if *value {
+			ni.Int64 = 1
+		}
+	}
+	row, err := r.queriesFor(ctx).SetFoodNoCook(ctx, sqlcgen.SetFoodNoCookParams{ID: id, NoCook: ni})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: id %d", domain.ErrNotFound, id)
+		}
+		return nil, err
+	}
+	var f food.Food
+	mapFoodToDomain(&row, &f)
+	if err := r.loadComposed(ctx, r.queriesFor(ctx), &f); err != nil {
+		return nil, err
+	}
+	if f.Kind == food.KindLeaf {
+		if f.Portions, err = r.ListPortions(ctx, f.ID); err != nil {
+			return nil, err
+		}
+	}
+	return &f, nil
+}
+
 // SetDietClass writes a food's diet class override; nil clears it.
 func (r *FoodRepo) SetDietClass(ctx context.Context, id int64, class *diet.Class) (*food.Food, error) {
 	var ns sql.NullString
@@ -944,6 +973,11 @@ func mapFoodToDomain(row *sqlcgen.Food, f *food.Food) {
 		v := diet.Class(row.DietClass.String)
 		f.DietOverride = &v
 	}
+	f.NoCookOverride = nil
+	if row.NoCook.Valid {
+		v := row.NoCook.Int64 == 1
+		f.NoCookOverride = &v
+	}
 	f.CreatedAt, _ = time.Parse(timeLayout, row.CreatedAt)
 	f.UpdatedAt, _ = time.Parse(timeLayout, row.UpdatedAt)
 }
@@ -996,7 +1030,7 @@ func scanFoodRow(rows *sql.Rows) (*sqlcgen.Food, error) {
 		&row.Notes, &row.ImagePath, &row.Favorite,
 		&row.CreatedAt, &row.UpdatedAt,
 		&row.SourceUrl, &row.Description, &row.KeepDays, &row.Freezable, &row.ShopSection,
-		&row.DietClass,
+		&row.DietClass, &row.NoCook,
 	); err != nil {
 		return nil, err
 	}

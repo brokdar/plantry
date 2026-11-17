@@ -14,6 +14,7 @@ vi.mock("@/lib/api/foods", () => ({
   listVariants: vi.fn().mockResolvedValue({ items: [] }),
   createVariant: vi.fn(),
   setDietClass: vi.fn(),
+  setNoCook: vi.fn(),
   getFoodNutrition: vi.fn().mockResolvedValue({
     kcal: 0,
     protein: 0,
@@ -30,6 +31,7 @@ import {
   createFood,
   getFoodNutrition,
   setDietClass,
+  setNoCook,
   updateFood,
 } from "@/lib/api/foods"
 
@@ -187,6 +189,8 @@ describe("RecipeEditor", () => {
           ...mockChickenCurry,
           diet_class: "vegan",
           diet_class_source: "user",
+          no_cook: false,
+          no_cook_source: "derived",
         }}
       />
     )
@@ -240,6 +244,8 @@ describe("RecipeEditor", () => {
           ...mockChickenCurry,
           diet_class: "vegan",
           diet_class_source: "user",
+          no_cook: false,
+          no_cook_source: "derived",
         }}
       />
     )
@@ -248,6 +254,50 @@ describe("RecipeEditor", () => {
     await user.click(diet)
     await user.click(await screen.findByRole("option", { name: "Automatic" }))
     expect(diet).toHaveTextContent(/^Automatic$/)
+  })
+
+  it("changing the no-cook tri-state saves through its own endpoint", async () => {
+    vi.mocked(updateFood).mockClear()
+    vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)
+    vi.mocked(setNoCook).mockClear()
+    vi.mocked(setNoCook).mockResolvedValue(mockChickenCurry)
+    const user = userEvent.setup()
+    renderWithRouter(<RecipeEditor component={mockChickenCurry} />)
+
+    const noCook = await screen.findByRole("combobox", {
+      name: "Needs no cooking",
+    })
+    expect(noCook).toHaveTextContent(/^Automatic/)
+    await user.click(noCook)
+    await user.click(await screen.findByRole("option", { name: "Yes" }))
+    await user.click(screen.getByRole("button", { name: /save/i }))
+
+    await vi.waitFor(() =>
+      expect(setNoCook).toHaveBeenCalledWith(mockChickenCurry.id, true)
+    )
+    expect(vi.mocked(updateFood).mock.calls[0][1]).not.toHaveProperty("no_cook")
+  })
+
+  it("an unchanged no-cook flag makes no no-cook call", async () => {
+    vi.mocked(updateFood).mockClear()
+    vi.mocked(updateFood).mockResolvedValue(mockChickenCurry)
+    vi.mocked(setNoCook).mockClear()
+    const user = userEvent.setup()
+    renderWithRouter(
+      <RecipeEditor
+        component={{
+          ...mockChickenCurry,
+          no_cook: true,
+          no_cook_source: "user",
+        }}
+      />
+    )
+    expect(
+      await screen.findByRole("combobox", { name: "Needs no cooking" })
+    ).toHaveTextContent(/^Yes$/)
+    await user.click(screen.getByRole("button", { name: /save/i }))
+    await vi.waitFor(() => expect(updateFood).toHaveBeenCalled())
+    expect(setNoCook).not.toHaveBeenCalled()
   })
 
   it("an empty keep days field saves null (use the default)", async () => {

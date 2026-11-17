@@ -106,6 +106,10 @@ func (r *fakeRepo) SetDietClass(_ context.Context, id int64, class *diet.Class) 
 	return &food.Food{ID: id, Kind: food.KindLeaf, DietOverride: class}, nil
 }
 
+func (r *fakeRepo) SetNoCook(_ context.Context, id int64, value *bool) (*food.Food, error) {
+	return &food.Food{ID: id, Kind: food.KindLeaf, NoCookOverride: value}, nil
+}
+
 func ptrF64(v float64) *float64      { return &v }
 func ptrRole(r food.Role) *food.Role { return &r }
 

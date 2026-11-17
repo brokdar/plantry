@@ -16,6 +16,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/units"
 )
@@ -190,6 +191,11 @@ type foodResponse struct {
 	DietClass       string `json:"diet_class"`
 	DietClassSource string `json:"diet_class_source"`
 
+	// NoCook is the effective "needs no cooking" flag and NoCookSource where
+	// it comes from: user (override) or derived (planning.NoCook).
+	NoCook       bool   `json:"no_cook"`
+	NoCookSource string `json:"no_cook_source"`
+
 	// Derived (§3.3), one of them per kind: leafDerived is set by
 	// toFoodResponse, composedDerived by FoodHandler.respond. Call
 	// food.Service.Derive first.
@@ -216,6 +222,9 @@ type leafDerived struct {
 	UsedInCount       int    `json:"used_in_count"`
 	ShopSection       string `json:"shop_section"`
 	ShopSectionSource string `json:"shop_section_source"`
+	// RoleSource says where the leaf's role (effective, in role) comes from:
+	// user (override), derived (store section) or null (no role).
+	RoleSource *string `json:"role_source"`
 }
 
 // Store section sources.
@@ -297,6 +306,10 @@ func requestToFood(req *foodRequest) *food.Food {
 		f.VitaminB12100g = req.VitaminB12100g
 		f.VitaminB6100g = req.VitaminB6100g
 		f.Folate100g = req.Folate100g
+		if req.Role != "" {
+			r := food.Role(req.Role)
+			f.Role = &r
+		}
 		return f
 	}
 
@@ -351,6 +364,8 @@ func toFoodResponse(f *food.Food) foodResponse {
 
 		DietClass:       string(f.DietClass),
 		DietClassSource: string(f.DietClassSource),
+		NoCook:          planning.NoCook(f),
+		NoCookSource:    planning.NoCookSource(f),
 	}
 
 	if f.Kind == food.KindLeaf {
@@ -390,6 +405,11 @@ func toFoodResponse(f *food.Food) foodResponse {
 		}
 		if f.ShopSection != nil {
 			resp.ShopSectionSource = shopSectionUser
+		}
+		if role, src := shopping.EffectiveRole(f); role != nil {
+			r := string(*role)
+			resp.Role = &r
+			resp.RoleSource = &src
 		}
 		if len(f.Portions) > 0 {
 			resp.Portions = make([]foodPortionResponse, len(f.Portions))
@@ -882,6 +902,36 @@ func (h *FoodHandler) SetDietClass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f, err := h.svc.SetDietClass(r.Context(), id, req.Class)
+	if err != nil {
+		status, key := foodHTTPError(err)
+		writeError(w, status, key)
+		return
+	}
+	h.writeFood(w, r, http.StatusOK, today, f)
+}
+
+type foodNoCookRequest struct {
+	Value *bool `json:"value"`
+}
+
+// SetNoCook handles PUT /api/foods/{id}/no-cook {value: true|false|null}: a
+// food's "needs no cooking" override; null reverts to the derived answer.
+func (h *FoodHandler) SetNoCook(w http.ResponseWriter, r *http.Request) {
+	today, ok := parseToday(w, r.URL.Query().Get("today"), time.Now)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_id")
+		return
+	}
+	var req foodNoCookRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "error.invalid_body")
+		return
+	}
+	f, err := h.svc.SetNoCook(r.Context(), id, req.Value)
 	if err != nil {
 		status, key := foodHTTPError(err)
 		writeError(w, status, key)

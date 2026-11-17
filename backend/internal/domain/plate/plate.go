@@ -76,6 +76,9 @@ type PlateComponent struct {
 	GramsSource   *string  // leaf only — surfaced for UI confidence badge
 	CookSessionID *int64   // composed only
 	SortOrder     int
+	// Position is the component's place on the plate (main, side, extra);
+	// empty on input means the service derives it.
+	Position Position
 
 	// Read-only food facts filled when a plate is loaded (never written).
 	FoodName string

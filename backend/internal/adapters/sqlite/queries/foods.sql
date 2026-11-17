@@ -226,6 +226,13 @@ UPDATE foods SET
 WHERE id = ?
 RETURNING *;
 
+-- name: SetFoodNoCook :one
+UPDATE foods SET
+    no_cook    = ?,
+    updated_at = datetime('now')
+WHERE id = ?
+RETURNING *;
+
 -- name: SetFoodShopSection :one
 UPDATE foods SET
     shop_section = ?,

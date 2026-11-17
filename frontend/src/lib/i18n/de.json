@@ -606,6 +606,7 @@
     "source_manual": "Manuell",
     "source_off": "Open Food Facts",
     "source_fdc": "USDA",
+    "section_planning": "Planung",
     "section_basic": "Basisangaben",
     "section_macros": "Nährwerte pro 100 g",
     "section_image_hint": "Füge ein Foto hinzu, damit die Zutat im Katalog auf einen Blick erkennbar ist.",
@@ -624,7 +625,10 @@
       "description": "Lege hier inline eine neue Zutat an — Nährwerte und Foto kannst du später auf der Zutaten-Seite verfeinern.",
       "macros_hint": "Optional — bei Unbekanntem auf 0 lassen.",
       "save": "Anlegen und übernehmen"
-    }
+    },
+    "role": "Rolle",
+    "role_auto": "Keine",
+    "role_hint": "Gilt, wenn diese Zutat als Beilage geplant wird. Bei „Keine“ folgt sie der Einkaufsabteilung."
   },
   "component": {
     "edit_eyebrow": "Editor",
@@ -1032,7 +1036,8 @@
     "plate": {
       "slot_unknown": "Diese Mahlzeitzeit existiert nicht.",
       "cell_unavailable": "Für diese Mahlzeit ist „Kein Essen“ eingetragen. Plane sie zuerst.",
-      "cell_occupied": "Für diese Mahlzeit ist schon etwas geplant."
+      "cell_occupied": "Für diese Mahlzeit ist schon etwas geplant.",
+      "second_main": "Dieser Teller hat schon ein Hauptgericht."
     },
     "session": {
       "before_cook": "Reste gibt es erst, nachdem vorgekocht wurde.",
@@ -2224,5 +2229,13 @@
     "replaces": "Ersetzt den Entwurf {{name}}",
     "replaces_unnamed": "Ersetzt einen Entwurf",
     "cell_replaces": "{{day}}, {{meal}}. {{replaces}}"
+  },
+  "no_cook": {
+    "label": "Braucht kein Kochen",
+    "auto": "Automatisch",
+    "yes": "Ja",
+    "no": "Nein",
+    "hint": "Der Planer füllt Tage mit Lebensmitteln, die nicht gekocht werden müssen. Automatisch rät er aus Name und Einkaufsabteilung.",
+    "auto_hint": "auto"
   }
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
@@ -65,7 +66,7 @@ func newEnv(conn *sql.DB, cfg Config) *env {
 	runRepo := sqlite.NewAIRunRepo(conn)
 	plateSvc := plate.NewService(plate.Deps{
 		Plates: plateRepo, Sessions: sessionRepo, Slots: slotRepo, Foods: foodRepo, Cells: avail,
-		Profile: profileSvc, Settings: settingsSvc, Events: sqlite.NewPlateEventRepo(conn), Outcomes: runRepo, Tx: tx,
+		Profile: profileSvc, Settings: settingsSvc, Events: sqlite.NewPlateEventRepo(conn), Outcomes: runRepo, Tx: tx, EffectiveRole: shopping.RoleOf,
 	})
 	avail.WithPlates(plateSvc)
 	foodSvc := food.NewService(foodRepo)

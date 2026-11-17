@@ -122,6 +122,8 @@ const createdLeaf: LeafFood = {
   favorite: false,
   diet_class: "vegan",
   diet_class_source: "auto",
+  no_cook: false,
+  no_cook_source: "derived",
   shop_section: "produce",
   shop_section_source: "auto",
   used_in_count: 0,
