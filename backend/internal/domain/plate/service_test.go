@@ -497,26 +497,21 @@ func TestLink_FreezingAllowsPastUseByUpToFreezerDays(t *testing.T) {
 
 // ── Moves ───────────────────────────────────────────────────────────────
 
-// B1-AC6
-func TestUpdate_MoveCarriesCookCellAndLeavesWarnings(t *testing.T) {
+// B1-AC6, revised by meal editing slice 2b: moving the cooking meal later
+// hands the cook to the batch's earliest remaining meal, so no leftover
+// comes before the cook.
+func TestUpdate_MovingTheCookingMealLaterHandsTheCookOn(t *testing.T) {
 	e := newEnv(t)
 	sunPlate, sid := e.batch()
 
 	got, err := e.svc.Update(e.ctx, sunPlate.ID, plate.PlatePatch{Date: ptrTime(day(tue))})
-	require.NoError(t, err, "moves never fail on batch rules")
+	require.NoError(t, err)
 	assert.Equal(t, day(tue), got.Date)
 
 	v := e.session(sid)
-	assert.Equal(t, day(tue), v.CookDate)
-	assert.Equal(t, e.dinner, v.CookSlotID)
-	monLunch, monDinner := e.plateAt(mon, e.lunch), e.plateAt(mon, e.dinner)
-	var before []int64
-	for _, w := range v.Warnings {
-		if w.Code == plate.WarnLeftoverBeforeCook {
-			before = append(before, *w.PlateID)
-		}
-	}
-	assert.ElementsMatch(t, []int64{monLunch.ID, monDinner.ID}, before)
+	assert.Equal(t, day(mon), v.CookDate)
+	assert.Equal(t, e.lunch, v.CookSlotID)
+	assert.Empty(t, v.Warnings)
 }
 
 // Moving a leftover plate does not touch the session's cook cell.

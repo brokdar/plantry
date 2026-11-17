@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -92,8 +93,6 @@ type ChangeStore interface {
 	// RunEvents returns the plate events of runIDs with afterID < id <=
 	// throughID, ascending.
 	RunEvents(ctx context.Context, afterID, throughID int64, runIDs []int64) ([]plate.Event, error)
-	// LaterEvents counts the events after afterID of the plates or sessions.
-	LaterEvents(ctx context.Context, afterID int64, plateIDs, sessionIDs []int64) (int64, error)
 	// CreateChange inserts c and sets its ID and CreatedAt.
 	CreateChange(ctx context.Context, c *Change) error
 	// GetChange returns the change or an error wrapping domain.ErrNotFound.
@@ -222,7 +221,7 @@ func (s *ToolSet) recordChange(ctx context.Context, runID int64, seq int, tool s
 	if n.cell != nil {
 		c.Dates = append(c.Dates, n.cell.Date)
 	}
-	plates, sessions := eventRows(events)
+	plates, sessions := plate.EventRows(events)
 	c.PlateIDs, c.SessionIDs = plates, sessions
 	for _, e := range events {
 		c.Dates = append(c.Dates, e.Date.Format(time.DateOnly))
@@ -238,24 +237,6 @@ func (s *ToolSet) recordChange(ctx context.Context, runID int64, seq int, tool s
 		return unrecordedChange(runID, seq, tool, n)
 	}
 	return c
-}
-
-// eventRows returns the plates and the sessions events are about, each
-// ascending without duplicates. A plate event of a session edit names the
-// plate only.
-func eventRows(events []plate.Event) (plateIDs, sessionIDs []int64) {
-	plateIDs, sessionIDs = []int64{}, []int64{}
-	for _, e := range events {
-		switch {
-		case e.PlateID != nil:
-			plateIDs = append(plateIDs, *e.PlateID)
-		case e.CookSessionID != nil:
-			sessionIDs = append(sessionIDs, *e.CookSessionID)
-		}
-	}
-	slices.Sort(plateIDs)
-	slices.Sort(sessionIDs)
-	return slices.Compact(plateIDs), slices.Compact(sessionIDs)
 }
 
 // CellRestorer puts a cell's availability override back
@@ -397,18 +378,14 @@ func (c *Changes) Undo(ctx context.Context, id int64) (plate.RowSet, error) {
 			if err != nil {
 				return err
 			}
-			plateIDs, sessionIDs := eventRows(events)
 			// Every event on these rows since the change began must be one of
 			// the change's own: a user edit between its first and last event
 			// has no run id and would otherwise be overwritten.
-			all, err := c.store.LaterEvents(ctx, *ch.FirstEventID-1, plateIDs, sessionIDs)
-			if err != nil {
-				return err
-			}
-			if all != int64(len(events)) {
+			rows, err = c.plates.RevertChecked(ctx, events)
+			if errors.Is(err, domain.ErrPlanChangeStale) {
 				return fmt.Errorf("%w: change %d", domain.ErrAIChangeStale, id)
 			}
-			if rows, err = c.plates.Revert(ctx, events); err != nil {
+			if err != nil {
 				return err
 			}
 		}

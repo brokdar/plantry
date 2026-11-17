@@ -38,6 +38,7 @@ type Repository interface {
 type CellPlates interface {
 	Range(ctx context.Context, from, to time.Time) ([]plate.Plate, error)
 	RemoveMealsAt(ctx context.Context, cells []plate.CellKey) (plate.MealResult, error)
+	RevertRange(ctx context.Context, first, last int64) (plate.RowSet, error)
 }
 
 // PresetLookup resolves a preset's name. ok is false when it doesn't exist.

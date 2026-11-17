@@ -162,6 +162,7 @@ type Querier interface {
 	ListPlateComponentsByPlate(ctx context.Context, plateID int64) ([]ListPlateComponentsByPlateRow, error)
 	ListPlateComponentsByPlateIDs(ctx context.Context, ids []int64) ([]ListPlateComponentsByPlateIDsRow, error)
 	ListPlateEvents(ctx context.Context) ([]PlateEvent, error)
+	ListPlateEventsInRange(ctx context.Context, arg ListPlateEventsInRangeParams) ([]PlateEvent, error)
 	ListPlateEventsOfRuns(ctx context.Context, arg ListPlateEventsOfRunsParams) ([]PlateEvent, error)
 	ListPlateFeedbackByDateRange(ctx context.Context, arg ListPlateFeedbackByDateRangeParams) ([]PlateFeedback, error)
 	ListPlateFeedbackByPlateIDs(ctx context.Context, ids []int64) ([]PlateFeedback, error)

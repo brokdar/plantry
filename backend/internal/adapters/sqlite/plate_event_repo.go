@@ -54,6 +54,27 @@ func (r *PlateEventRepo) List(ctx context.Context) ([]plate.Event, error) {
 	return mapPlateEvents(rows)
 }
 
+// LastID returns the highest event id, 0 when there is none.
+func (r *PlateEventRepo) LastID(ctx context.Context) (int64, error) {
+	return r.queriesFor(ctx).LastPlateEventID(ctx)
+}
+
+// Range returns the events with first <= id <= last, ascending.
+func (r *PlateEventRepo) Range(ctx context.Context, first, last int64) ([]plate.Event, error) {
+	rows, err := r.queriesFor(ctx).ListPlateEventsInRange(ctx, sqlcgen.ListPlateEventsInRangeParams{FirstID: first, LastID: last})
+	if err != nil {
+		return nil, fmt.Errorf("list plate events in range: %w", err)
+	}
+	return mapPlateEvents(rows)
+}
+
+// CountAfter counts the events after afterID of the plates or sessions.
+func (r *PlateEventRepo) CountAfter(ctx context.Context, afterID int64, plateIDs, sessionIDs []int64) (int64, error) {
+	return r.queriesFor(ctx).CountPlateEventsAfter(ctx, sqlcgen.CountPlateEventsAfterParams{
+		AfterID: afterID, PlateIds: nullInt64s(plateIDs), SessionIds: nullInt64s(sessionIDs),
+	})
+}
+
 func mapPlateEvents(rows []sqlcgen.PlateEvent) ([]plate.Event, error) {
 	out := make([]plate.Event, len(rows))
 	for i, row := range rows {

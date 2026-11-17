@@ -310,13 +310,21 @@ type PlatePatch struct {
 	SetNote bool
 }
 
-// Update changes date, slot, eaters and note. A move must land in an empty
-// cell that is not "none"; it never fails on batch rules and moves the cook
-// cell of every session whose fresh component is on the plate (D13).
-// Changing eaters runs D11 on every session linked to the plate.
+// Update is UpdateMeal returning the plate.
 func (s *Service) Update(ctx context.Context, id int64, patch PlatePatch) (*Plate, error) {
-	var out *Plate
-	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+	res, err := s.UpdateMeal(ctx, id, patch)
+	if err != nil {
+		return nil, err
+	}
+	return &res.Plates[0], nil
+}
+
+// UpdateMeal changes date, slot, eaters and note. A new cell is MoveMeal's
+// move without an occupant (the local rule, past cells refused). Changing
+// eaters runs D11 on every session linked to the plate.
+func (s *Service) UpdateMeal(ctx context.Context, id int64, patch PlatePatch) (MealResult, error) {
+	var res MealResult
+	undo, err := s.Recorded(ctx, func(ctx context.Context) error {
 		cur, err := s.plates.Get(ctx, id)
 		if err != nil {
 			return err
@@ -346,17 +354,14 @@ func (s *Service) Update(ctx context.Context, id int64, patch PlatePatch) (*Plat
 		if patch.SetNote {
 			next.Note = patch.Note
 		}
-		moved := !next.Cell().Equal(cur.Cell())
-		if moved {
-			if err := s.checkCell(ctx, next.Cell(), id); err != nil {
-				return err
-			}
+		if !next.Cell().Equal(cur.Cell()) {
+			res, err = s.moveMeal(ctx, *cur, next, Occupant{})
+			return err
 		}
 		j := newJournal()
 		j.touch(*cur)
 		t := newTracker(j)
-		sessionIDs := linkedSessions(cur.Components)
-		for _, sid := range sessionIDs {
+		for _, sid := range linkedSessions(cur.Components) {
 			if err := s.track(ctx, t, sid); err != nil {
 				return err
 			}
@@ -364,35 +369,20 @@ func (s *Service) Update(ctx context.Context, id int64, patch PlatePatch) (*Plat
 		if err := s.plates.Update(ctx, &next); err != nil {
 			return err
 		}
-		if moved {
-			for _, sid := range sessionIDs {
-				sess, err := s.sessions.GetSession(ctx, sid)
-				if err != nil {
-					return err
-				}
-				if !sess.CookCell().Equal(cur.Cell()) {
-					continue
-				}
-				j.touchSession(*sess)
-				sess.CookDate, sess.CookSlotID = next.Date, next.SlotID
-				if err := s.sessions.UpdateSession(ctx, sess); err != nil {
-					return err
-				}
-			}
-		}
 		if err := s.settle(ctx, t); err != nil {
 			return err
 		}
 		if err := s.commit(ctx, j); err != nil {
 			return err
 		}
-		out, err = s.plates.Get(ctx, id)
+		res, err = s.mealResult(ctx, t, []int64{id})
 		return err
 	})
 	if err != nil {
-		return nil, err
+		return MealResult{}, err
 	}
-	return out, nil
+	res.Undo = undo
+	return res, nil
 }
 
 // Delete removes a plate and returns what restores it: RemoveMeals of one
@@ -405,11 +395,16 @@ func (s *Service) Delete(ctx context.Context, id int64) (PlanSnapshot, error) {
 	return res.Removed, nil
 }
 
-// MealResult is what a meal removal did: Removed restores the plates
-// (Apply with Restore), AlsoChanged lists the batches whose cook moved.
+// MealResult is what a meal operation did: Removed restores the plates a
+// removal took (Apply with Restore), Plates are the named plates as they are
+// after it, Sessions the named sessions (MoveCook), AlsoChanged every effect
+// on a meal or batch the caller did not name, and Undo the revert token.
 type MealResult struct {
 	Removed     PlanSnapshot  `json:"removed"`
+	Plates      []Plate       `json:"-"`
+	Sessions    []CookSession `json:"-"`
 	AlsoChanged []AlsoChanged `json:"also_changed"`
+	Undo        Undo          `json:"undo"`
 }
 
 // RemoveMeals removes the plates of ids in one unit of work. Sessions left
@@ -420,7 +415,7 @@ type MealResult struct {
 func (s *Service) RemoveMeals(ctx context.Context, ids []int64) (MealResult, error) {
 	ids = uniqueIDs(ids)
 	var res MealResult
-	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+	undo, err := s.Recorded(ctx, func(ctx context.Context) error {
 		plates, err := s.plates.ListByIDs(ctx, ids)
 		if err != nil {
 			return err
@@ -434,6 +429,7 @@ func (s *Service) RemoveMeals(ctx context.Context, ids []int64) (MealResult, err
 	if err != nil {
 		return MealResult{}, err
 	}
+	res.Undo = undo
 	return res, nil
 }
 
@@ -441,7 +437,7 @@ func (s *Service) RemoveMeals(ctx context.Context, ids []int64) (MealResult, err
 // be (or just) marked "none" in the same unit of work: a cooked-ahead batch
 // cooking on one of the cells also moves to its earliest meal (R1).
 func (s *Service) RemoveMealsAt(ctx context.Context, cells []CellKey) (MealResult, error) {
-	res := MealResult{Removed: emptySnapshot(), AlsoChanged: []AlsoChanged{}}
+	res := MealResult{Removed: emptySnapshot(), AlsoChanged: []AlsoChanged{}, Undo: Undo{Cells: []CellUndo{}}}
 	if len(cells) == 0 {
 		return res, nil
 	}
@@ -455,7 +451,7 @@ func (s *Service) RemoveMealsAt(ctx context.Context, cells []CellKey) (MealResul
 		}
 	}
 	in := func(c CellKey) bool { return slices.ContainsFunc(cells, c.Equal) }
-	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+	undo, err := s.Recorded(ctx, func(ctx context.Context) error {
 		plates, err := s.plates.ListByDateRange(ctx, dateOnly(from), dateOnly(to))
 		if err != nil {
 			return err
@@ -479,6 +475,7 @@ func (s *Service) RemoveMealsAt(ctx context.Context, cells []CellKey) (MealResul
 	if err != nil {
 		return MealResult{}, err
 	}
+	res.Undo = undo
 	return res, nil
 }
 
@@ -786,25 +783,7 @@ func (s *Service) SwapComponent(ctx context.Context, componentID, newFoodID int6
 			return err
 		}
 		t := newTracker(newJournal())
-		if pc.CookSessionID != nil {
-			if err := s.track(ctx, t, *pc.CookSessionID); err != nil {
-				return err
-			}
-		}
-		pc.FoodID = newFoodID
-		pc.CookSessionID = nil
-		if quantity != nil {
-			pc.Portions, pc.Amount, pc.Unit, pc.Grams = quantity.Portions, quantity.Amount, quantity.Unit, quantity.Grams
-		}
-		pc.GramsSource = nil
-		f, err := s.normaliseComponent(ctx, pc)
-		if err != nil {
-			return err
-		}
-		if _, err := s.attach(ctx, t, pc, f, p.Cell(), p.Eaters, e, true, freshOrigin(ctx, p.State)); err != nil {
-			return err
-		}
-		if err := s.plates.UpdateComponent(ctx, pc); err != nil {
+		if err := s.replace(ctx, t, p, pc, newFoodID, quantity, Source{}, e); err != nil {
 			return err
 		}
 		out, err = s.finishComponentChange(ctx, t, p)

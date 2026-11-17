@@ -149,6 +149,10 @@ type fakePlates struct {
 	plates []plate.Plate
 }
 
+func (p *fakePlates) RevertRange(context.Context, int64, int64) (plate.RowSet, error) {
+	return plate.RowSet{}, nil
+}
+
 func (p *fakePlates) Range(_ context.Context, from, to time.Time) ([]plate.Plate, error) {
 	var out []plate.Plate
 	for _, pl := range p.plates {

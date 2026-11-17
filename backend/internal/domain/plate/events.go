@@ -52,6 +52,12 @@ type Event struct {
 // of work carried by ctx (D21).
 type EventLog interface {
 	Append(ctx context.Context, e Event) error
+	// LastID is the highest event id, 0 when there is none.
+	LastID(ctx context.Context) (int64, error)
+	// Range returns the events with first <= id <= last, ascending.
+	Range(ctx context.Context, first, last int64) ([]Event, error)
+	// CountAfter counts the events after afterID of the plates or sessions.
+	CountAfter(ctx context.Context, afterID int64, plateIDs, sessionIDs []int64) (int64, error)
 }
 
 // eventSession is a session event's snapshot: the snapshot session shape with

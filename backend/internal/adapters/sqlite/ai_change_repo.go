@@ -43,13 +43,6 @@ func (r *AIChangeRepo) RunEvents(ctx context.Context, afterID, throughID int64, 
 	return mapPlateEvents(rows)
 }
 
-// LaterEvents counts the events after afterID of the plates or sessions.
-func (r *AIChangeRepo) LaterEvents(ctx context.Context, afterID int64, plateIDs, sessionIDs []int64) (int64, error) {
-	return r.queriesFor(ctx).CountPlateEventsAfter(ctx, sqlcgen.CountPlateEventsAfterParams{
-		AfterID: afterID, PlateIds: nullInt64s(plateIDs), SessionIds: nullInt64s(sessionIDs),
-	})
-}
-
 // CreateChange inserts c and sets its ID and CreatedAt.
 func (r *AIChangeRepo) CreateChange(ctx context.Context, c *agent.Change) error {
 	p := sqlcgen.CreateAIChangeParams{

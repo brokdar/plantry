@@ -31,3 +31,9 @@ ORDER BY id;
 SELECT COUNT(*) FROM plate_events
 WHERE id > sqlc.arg(after_id)
   AND (plate_id IN (sqlc.slice(plate_ids)) OR cook_session_id IN (sqlc.slice(session_ids)));
+
+-- name: ListPlateEventsInRange :many
+SELECT id, plate_id, cook_session_id, date, slot_id, action, actor, ai_run_id, before_json, after_json, at
+FROM plate_events
+WHERE id >= sqlc.arg(first_id) AND id <= sqlc.arg(last_id)
+ORDER BY id;
