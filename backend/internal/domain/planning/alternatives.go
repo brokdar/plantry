@@ -402,7 +402,7 @@ func (s State) altCandidates(x *index, p Plate, old int, req AltRequest) []altCa
 			need, spare := comp.Multiplier()*p.Eaters, ss.Portions-x.usage(*ss).Total
 			var grow float64
 			switch {
-			case math.Abs(spare) < 1e-9:
+			case math.Abs(spare) < plate.PortionEpsilon:
 				grow = need
 			case spare < need:
 				continue
@@ -439,7 +439,7 @@ func (s State) cookAtCell(x *index, p Plate, foodID int64) (plate.CellKey, bool)
 		switch {
 		case x.occasions[d][idOf(k)]:
 			best = c // cells are in (date, slot order) order: the last is the latest
-		case d < own.day && len(x.occasions[d]) < s.Settings.MaxCookOccasionsPerDay:
+		case d < own.day && len(x.occasions[d]) < s.Settings.MaxCookOccasionsPerDay && !x.onlyConfirmed(k):
 			free = c
 		}
 	}
@@ -450,6 +450,18 @@ func (s State) cookAtCell(x *index, p Plate, foodID int64) (plate.CellKey, bool)
 		return free.Key(), true
 	}
 	return plate.CellKey{}, false
+}
+
+// onlyConfirmed reports whether the cell holds plates and all are confirmed:
+// a draft cook there would sit among rows the user locked in.
+func (x *index) onlyConfirmed(k plate.CellKey) bool {
+	idx := x.byCell[idOf(k)]
+	for _, i := range idx {
+		if !x.s.Plates[i].Confirmed {
+			return false
+		}
+	}
+	return len(idx) > 0
 }
 
 // cookedBy reports whether ss cooks on or before p's cell.

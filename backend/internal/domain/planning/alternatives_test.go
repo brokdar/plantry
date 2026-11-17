@@ -1,12 +1,14 @@
 package planning_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/jaltszeimer/plantry/backend/internal/domain"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
@@ -368,4 +370,104 @@ func TestAlternatives_EmptyReason(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, res.Alternatives)
 	assert.Equal(t, &planning.EmptyReason{}, res.EmptyReason, "no candidate fits the constraints")
+}
+
+// cookAtCells are the cells of the cook_at alternatives in out.
+func cookAtCells(out []planning.Alternative) []planning.OptionCell {
+	var cells []planning.OptionCell
+	for _, a := range out {
+		if a.Source == planning.SourceCookAt {
+			cells = append(cells, *a.CookAt)
+		}
+	}
+	return cells
+}
+
+// cookAtState: a draft plate eating a leaf on target (no cooking anywhere),
+// other plates as given; only the cells in planCells (and target) stay plan
+// cells.
+func cookAtState(target plate.CellKey, others []planning.Plate, planCells ...plate.CellKey) planning.State {
+	s := altState()
+	s.Sessions, s.Plates = nil, others
+	s.Plates = append(s.Plates, planning.Plate{
+		ID: 90, Date: target.Date, SlotID: target.SlotID, Eaters: 1,
+		Components: []planning.Component{{ID: 900, FoodID: egg, Grams: f64(100), Position: plate.PositionMain}},
+	})
+	for i := range s.Cells {
+		k := s.Cells[i].Key()
+		if !k.Equal(target) && !slices.ContainsFunc(planCells, k.Equal) {
+			s.Cells[i].Mode = availability.ModeNone
+		}
+	}
+	return s
+}
+
+func eggPlate(id int64, date string, slot int64, confirmed bool) planning.Plate {
+	return planning.Plate{
+		ID: id, Date: day(date), SlotID: slot, Eaters: 1, Confirmed: confirmed,
+		Components: []planning.Component{{ID: id * 10, FoodID: egg, Grams: f64(100), Position: plate.PositionMain}},
+	}
+}
+
+func TestAlternatives_CookAtCell(t *testing.T) {
+	req := func(id int64) planning.AltRequest { return planning.AltRequest{PlateID: id, What: planning.AltAdd} }
+	satDinner, satLunch := cell(sat, dinner), cell(sat, lunch)
+	at := func(date string, slot int64) planning.OptionCell {
+		return planning.OptionCell{Date: date, SlotID: slot}
+	}
+
+	t.Run("a free occasion never lands on a cell holding only confirmed plates", func(t *testing.T) {
+		s := cookAtState(cell(sun, lunch), []planning.Plate{eggPlate(91, sat, dinner, true)}, satLunch, satDinner)
+		cells := cookAtCells(alts(t, s, req(90)))
+		require.NotEmpty(t, cells)
+		for _, c := range cells {
+			assert.Equal(t, at(sat, lunch), c)
+		}
+	})
+
+	t.Run("a cell with a draft plate is a fine free occasion", func(t *testing.T) {
+		s := cookAtState(cell(sun, lunch), []planning.Plate{eggPlate(91, sat, dinner, false)}, satLunch, satDinner)
+		cells := cookAtCells(alts(t, s, req(90)))
+		require.NotEmpty(t, cells)
+		for _, c := range cells {
+			assert.Equal(t, at(sat, dinner), c)
+		}
+	})
+
+	t.Run("cook_at never lands after the plate on the same day", func(t *testing.T) {
+		// Sunday dinner cooks (soup), the plate eats Sunday lunch.
+		s := cookAtState(cell(sun, lunch), nil, cell(sun, dinner), satLunch)
+		s.Sessions = []planning.Session{persistedSession(5, soup, sun, dinner, 1, false)}
+		p := persisted(13, sun, dinner, false, soup, 5)
+		p.Components[0].Position = plate.PositionMain
+		s.Plates = append(s.Plates, p)
+		cells := cookAtCells(alts(t, s, req(90)))
+		require.NotEmpty(t, cells)
+		for _, c := range cells {
+			assert.Equal(t, at(sat, lunch), c, "not the later Sunday dinner")
+		}
+	})
+
+	t.Run("cook_at stays within the recipe's keep days", func(t *testing.T) {
+		// Keep days 3: Saturday's food is past by Wednesday.
+		s := cookAtState(cell(wed, lunch), nil, satLunch, satDinner)
+		assert.Empty(t, cookAtCells(alts(t, s, req(90))))
+		s = cookAtState(cell(wed, lunch), nil, satLunch, cell(sun, lunch))
+		cells := cookAtCells(alts(t, s, req(90)))
+		require.NotEmpty(t, cells)
+		for _, c := range cells {
+			assert.Equal(t, at(sun, lunch), c)
+		}
+	})
+
+	t.Run("routine and none cells are never chosen", func(t *testing.T) {
+		s := cookAtState(cell(sun, lunch), nil, satLunch, satDinner, cell(sat, breakfast))
+		setMode(&s, satDinner, availability.ModeRoutine)
+		setMode(&s, satLunch, availability.ModeNone)
+		cells := cookAtCells(alts(t, s, req(90)))
+		require.NotEmpty(t, cells)
+		for _, c := range cells {
+			assert.Equal(t, at(sat, breakfast), c)
+		}
+	})
 }

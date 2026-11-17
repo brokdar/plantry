@@ -540,6 +540,47 @@ func TestFindAlternatives_CookAtAppliesWithoutH2(t *testing.T) {
 	}
 }
 
+// A batch that exactly covers its meals is offered as a session source and
+// grows with the plate as the evaluation assumed: after the apply its
+// portions equal the old ones plus the plate's, covering its meals, and no
+// H3 appears.
+func TestFindAlternatives_GrowingSessionAppliesAsEvaluated(t *testing.T) {
+	e := newPlanToolEnv(t)
+	v, _ := e.laterMealSession()
+	require.InDelta(t, v.Consumed, v.Portions, plate.PortionEpsilon, "the batch exactly covers its meals")
+	_, target := e.twoDinners()
+	target = *e.plateAtCell(target.DateString(), target.SlotID)
+	need := 0.0
+	for _, c := range target.Components {
+		if c.Position == plate.PositionMain {
+			need = *c.Portions * target.Eaters
+		}
+	}
+	require.Positive(t, need)
+
+	res := e.mustExec("find_alternatives", fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":10}`, target.ID))
+	var pick map[string]any
+	for _, a := range res["alternatives"].([]any) {
+		if m := a.(map[string]any); m["session_id"] == float64(v.ID) {
+			pick = m
+		}
+	}
+	require.NotNil(t, pick, "the exactly covering batch is offered: %v", res)
+	assert.Equal(t, "session", pick["source"])
+	ops, err := json.Marshal(pick["ops"])
+	require.NoError(t, err)
+	out := e.mustExec("apply_changes", `{"ops":`+string(ops)+`}`)
+
+	after := e.session(v.ID)
+	assert.InDelta(t, v.Portions+need, after.Portions, plate.PortionEpsilon, "grown by the plate's portions")
+	assert.InDelta(t, after.Consumed, after.Portions, plate.PortionEpsilon, "still exactly covers its meals")
+	issues := out["after"].(map[string]any)["issues"].(map[string]any)
+	news, _ := issues["new"].([]any)
+	for _, is := range news {
+		assert.NotEqual(t, "H3", is.(map[string]any)["rule"], "%v", is)
+	}
+}
+
 func sqliteChange(e *planToolEnv, id int64) (*agent.Change, error) {
 	return sqlite.NewAIChangeRepo(e.db).GetChange(context.Background(), id)
 }
