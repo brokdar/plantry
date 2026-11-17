@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"reflect"
 	"slices"
 	"strconv"
@@ -87,6 +88,11 @@ const (
 	ExpectFrozenSpare     = "frozen_spare"
 	ExpectBatchMeals      = "batch_meals"
 	ExpectMaxDishMeals    = "max_dish_meals"
+	// ExpectUnchangedOutside: no plate dated outside the regenerated day
+	// changed; ExpectDayBatchKept: a later meal of a batch cooked on that
+	// day still eats it.
+	ExpectUnchangedOutside = "unchanged_outside"
+	ExpectDayBatchKept     = "day_batch_kept"
 )
 
 // Run runs every scenario cfg.Runs times, each on a fresh database, and
@@ -204,6 +210,7 @@ func stepToday(sc Scenario, st Step) time.Time {
 // step runs one scenario step and returns the run it started (0 for none).
 func (e *env) step(ctx context.Context, sc Scenario, st Step, chooser airun.Chooser) (int64, error) {
 	today := stepToday(sc, st)
+	e.today = today
 	req := planning.Request{Start: e.window.Start, Today: today, Chooser: chooser, Instruction: st.Instruction, Light: st.Light}
 	switch st.Action {
 	case ActionGenerate:
@@ -414,6 +421,11 @@ func (e *env) expect(sc Scenario, st Step, before, after rows, rec Record) []Exp
 			func(p plateRow) bool { return p.Date < d },
 			func(s sessionRow) bool { return s.CookDate < d }))
 	}
+	if x.UnchangedOutside != nil {
+		d := x.UnchangedOutside.Format(time.DateOnly)
+		out = append(out, compare(ExpectUnchangedOutside, before, after, func(p plateRow) bool { return p.Date != d }, nil),
+			dayBatchKept(d, before, after))
+	}
 	if len(x.NoPlate) > 0 {
 		ex := Expectation{Name: ExpectNoPlate, OK: true}
 		for _, c := range x.NoPlate {
@@ -528,6 +540,40 @@ func (e *env) maxDishMeals(sc Scenario, after rows) Expectation {
 		if n > limit {
 			ex.OK, ex.Detail = false, fmt.Sprintf("food %d is the main of %d meals, want ≤ %d", id, n, limit)
 		}
+	}
+	return ex
+}
+
+// dayBatchKept checks that every plate after day d that ate a batch cooking
+// on d before the step eats the same batch after it. It applies only when
+// such a batch existed before the step (the chooser made it); otherwise it
+// passes with Detail "not applicable" so the report shows it did not run.
+func dayBatchKept(d string, before, after rows) Expectation {
+	ex := Expectation{Name: ExpectDayBatchKept, OK: true}
+	found := false
+	for _, id := range slices.Sorted(maps.Keys(before.plates)) {
+		p := before.plates[id]
+		if p.Date <= d {
+			continue
+		}
+		for _, c := range p.Components {
+			if c.SessionID == nil || before.sessions[*c.SessionID].CookDate != d {
+				continue
+			}
+			found = true
+			q, ok := after.plates[id]
+			if !ok || !slices.ContainsFunc(q.Components, func(qc componentRow) bool {
+				return qc.FoodID == c.FoodID && qc.SessionID != nil && *qc.SessionID == *c.SessionID
+			}) {
+				ex.OK, ex.Detail = false, fmt.Sprintf("plate %d (%s) lost the batch cooked on %s", id, p.Date, d)
+				return ex
+			}
+		}
+	}
+	if !found {
+		// Not a failure: what the chooser planned before the step decides
+		// whether the day cooked for a later meal. The report says so.
+		ex.Detail = fmt.Sprintf("not applicable: no later meal ate a batch cooked on %s before the step", d)
 	}
 	return ex
 }

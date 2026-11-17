@@ -75,8 +75,12 @@ func (s *stubPlateService) Recorded(ctx context.Context, fn func(ctx context.Con
 	return plate.Undo{}, fn(ctx)
 }
 
-func (s *stubPlateService) Delete(_ context.Context, _ int64) (plate.PlanSnapshot, error) {
-	return plate.PlanSnapshot{Plates: []plate.SnapshotPlate{}, Sessions: []plate.SnapshotSession{}}, nil
+func (s *stubPlateService) RemoveMeals(context.Context, []int64) (plate.MealResult, error) {
+	return plate.MealResult{
+		Removed:     plate.PlanSnapshot{Plates: []plate.SnapshotPlate{}, Sessions: []plate.SnapshotSession{}},
+		AlsoChanged: []plate.AlsoChanged{},
+		Undo:        plate.Undo{FirstEventID: 7, LastEventID: 8, Cells: []plate.CellUndo{}},
+	}, nil
 }
 
 func (s *stubPlateService) AddComponent(_ context.Context, id int64, _ plate.PlateComponent) (*plate.Plate, error) {
@@ -140,6 +144,25 @@ func TestPlatesHandler_Create_201(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 	assert.Equal(t, float64(42), resp["id"])
 	assert.Equal(t, "2025-03-10", resp["date"])
+}
+
+func TestPlatesHandler_DeleteReturnsUndo(t *testing.T) {
+	r := newPlateRouter(&stubPlateService{})
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/plates/7", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp struct {
+		Removed     map[string]any `json:"removed"`
+		AlsoChanged []any          `json:"also_changed"`
+		Undo        plate.Undo     `json:"undo"`
+	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.NotNil(t, resp.Removed)
+	assert.NotNil(t, resp.AlsoChanged)
+	assert.Equal(t, plate.Undo{FirstEventID: 7, LastEventID: 8, Cells: []plate.CellUndo{}}, resp.Undo)
 }
 
 func TestPlatesHandler_PlateJSONHasNoSkipped(t *testing.T) {

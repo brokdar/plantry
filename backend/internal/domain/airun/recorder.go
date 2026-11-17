@@ -31,6 +31,8 @@ type Result struct {
 	ViolationsJSON string
 	ScoreJSON      string
 	Notes          string
+	// ScopeJSON, when set, replaces the run's scope_json.
+	ScopeJSON string
 }
 
 // pruneInterval is the minimum time between two prunes triggered by Finish.
@@ -278,6 +280,7 @@ func (run *Run) FinishWith(ctx context.Context, status Status, errKey string, re
 		ViolationsJSON:    res.ViolationsJSON,
 		ScoreJSON:         res.ScoreJSON,
 		Notes:             res.Notes,
+		ScopeJSON:         res.ScopeJSON,
 		ContainerID:       run.containerID,
 	}
 	run.mu.Unlock()

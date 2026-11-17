@@ -139,7 +139,7 @@ type SessionRows interface {
 
 // PlateService is the plate write path (plate.Service): the scope reads
 // the rows a scope names, and the generator persists through RemoveDrafts
-// and Apply (D10).
+// (RemoveMeals for a day) and Apply in one Recorded unit of work (D10).
 type PlateService interface {
 	Get(ctx context.Context, id int64) (*plate.Plate, error)
 	GetComponent(ctx context.Context, componentID int64) (*plate.PlateComponent, error)
@@ -147,6 +147,8 @@ type PlateService interface {
 	DraftClosure(ctx context.Context, from, to time.Time) (plate.RowSet, []plate.Plate, error)
 	PlateClosure(ctx context.Context, plateID int64) (plate.RowSet, []plate.Plate, error)
 	RemoveDrafts(ctx context.Context, rows plate.RowSet) (plate.PlanSnapshot, error)
+	RemoveMeals(ctx context.Context, ids []int64) (plate.MealResult, error)
+	Recorded(ctx context.Context, fn func(ctx context.Context) error) (plate.Undo, error)
 	RemovePlates(ctx context.Context, r plate.Removal) (plate.PlanSnapshot, error)
 	Apply(ctx context.Context, snap plate.PlanSnapshot, opts plate.ApplyOptions) (*plate.ApplyResult, error)
 }
@@ -196,6 +198,8 @@ type RunEnd struct {
 	ViolationsJSON string
 	ScoreJSON      string
 	Notes          string
+	// ScopeJSON, when set, replaces the scope_json the run started with.
+	ScopeJSON string
 }
 
 // RunLog writes the ai_runs rows of generations (every run is one, D9).

@@ -927,6 +927,7 @@ const (
 	textExploreShortfall
 	textMeatOver
 	textNoMain
+	textCookMoved
 )
 
 var texts = map[string]map[textKey]string{
@@ -939,6 +940,7 @@ var texts = map[string]map[textKey]string{
 		textExploreShortfall: "Explore quota: %d of %d explore recipes available, filled with %d never-eaten",
 		textMeatOver:         "%s is a meat day past the limit of %d per week: no other recipe fit",
 		textNoMain:           "No main recipe available for %s %s: the cell stays empty",
+		textCookMoved:        "%s now cooked %s %s",
 	},
 	"de": {
 		textNew:              "Neu: noch nie gegessen",
@@ -949,6 +951,7 @@ var texts = map[string]map[textKey]string{
 		textExploreShortfall: "Entdecker-Quote: %d von %d Entdecker-Rezepten verfügbar, aufgefüllt mit %d bisher nie gegessenen Rezepten",
 		textMeatOver:         "%s ist ein Fleischtag über dem Wochenlimit von %d: kein anderes Rezept passte",
 		textNoMain:           "Kein Hauptgericht verfügbar für %s %s: die Zelle bleibt leer",
+		textCookMoved:        "%s wird jetzt %s %s gekocht",
 	},
 }
 

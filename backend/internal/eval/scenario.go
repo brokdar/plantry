@@ -219,6 +219,9 @@ type Expect struct {
 	// UnchangedBefore: the plates dated before it and the sessions cooking
 	// before it are unchanged by the measured step.
 	UnchangedBefore *Date `json:"unchanged_before"`
+	// UnchangedOutside: no plate dated on another day changes, and a later
+	// meal of a batch cooked on this day keeps eating it (a day regenerate).
+	UnchangedOutside *Date `json:"unchanged_outside"`
 	// Leftovers cells hold a plate eating a batch that already existed
 	// before the measured step.
 	Leftovers []CellSpec `json:"leftovers"`

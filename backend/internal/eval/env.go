@@ -51,6 +51,9 @@ type env struct {
 	foodIDs   map[string]int64
 	presetIDs map[string]int64
 	window    window.Window
+	// today is the running step's date, the plate service's clock (the R1
+	// re-anchor never moves a cook before it); zero reads the real clock.
+	today time.Time
 }
 
 func newEnv(conn *sql.DB, cfg Config) *env {
@@ -64,9 +67,19 @@ func newEnv(conn *sql.DB, cfg Config) *env {
 	plateRepo := sqlite.NewPlateRepo(conn)
 	sessionRepo := sqlite.NewCookSessionRepo(conn)
 	runRepo := sqlite.NewAIRunRepo(conn)
+	var e *env
 	plateSvc := plate.NewService(plate.Deps{
 		Plates: plateRepo, Sessions: sessionRepo, Slots: slotRepo, Foods: foodRepo, Cells: avail,
 		Profile: profileSvc, Settings: settingsSvc, Events: sqlite.NewPlateEventRepo(conn), Outcomes: runRepo, Tx: tx, EffectiveRole: shopping.RoleOf,
+		// e is assigned below, before any step runs; the closure reads
+		// e.today only when the plate service asks for the time, after the
+		// steps set it.
+		Now: func() time.Time {
+			if !e.today.IsZero() {
+				return e.today
+			}
+			return time.Now()
+		},
 	})
 	avail.WithPlates(plateSvc)
 	foodSvc := food.NewService(foodRepo)
@@ -75,7 +88,7 @@ func newEnv(conn *sql.DB, cfg Config) *env {
 		logger = slog.New(slog.DiscardHandler)
 	}
 	recorder := airun.NewRecorder(runRepo, logger, time.Now)
-	e := &env{
+	e = &env{
 		db: conn, settings: settingsSvc, slots: slot.NewService(slotRepo), foods: foodSvc,
 		presets: preset.NewService(presetRepo, foodRepo, plateSvc, tx, foodRepo, foodRepo),
 		profile: profileSvc, avail: avail, plates: plateSvc, plateRow: plateRepo, sessions: sessionRepo,

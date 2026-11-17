@@ -22,6 +22,7 @@ type planGenerateService interface {
 	Regenerate(ctx context.Context, req planning.Request) (int64, error)
 	Run(ctx context.Context, id int64) (*planning.RunView, error)
 	PreviewReplan(ctx context.Context, q planning.ReplanQuery) (*planning.ReplanPreview, error)
+	PreviewDay(ctx context.Context, start, today, date time.Time) (*planning.DayPreview, error)
 	Replan(ctx context.Context, req planning.ReplanRequest) (*planning.ReplanResult, error)
 	WizardQuota(ctx context.Context, on bool) (int, error)
 	Alternatives(ctx context.Context, start, today time.Time, req planning.AltRequest) ([]planning.Alternative, error)
@@ -228,6 +229,9 @@ type planRunResponse struct {
 	Issues   []planning.Issue `json:"issues"`
 	Score    *planning.Score  `json:"score"`
 	Window   planRunWindow    `json:"window"`
+	// Undo is the revert token of a finished day or plate regenerate's
+	// save (POST /api/plan/revert); omitted otherwise.
+	Undo *plate.Undo `json:"undo,omitempty"`
 }
 
 // Run handles GET /api/plan/runs/{id}.
@@ -249,7 +253,44 @@ func (h *PlanGenerateHandler) Run(w http.ResponseWriter, r *http.Request) {
 		},
 		Issues: v.Issues, Score: v.Score,
 		Window: planRunWindow{Start: dateString(v.Window.Start), End: dateString(v.Window.End)},
+		Undo:   v.Undo,
 	})
+}
+
+type dayPreviewResponse struct {
+	Replaced          []int64             `json:"replaced"`
+	AlsoChanged       []plate.AlsoChanged `json:"also_changed"`
+	ConfirmedAffected []int64             `json:"confirmed_affected"`
+}
+
+// RegeneratePreview handles GET /api/plan/regenerate/preview?scope=day&date&start[&today]:
+// what a day regenerate replaces and moves outside the day. Writes nothing.
+func (h *PlanGenerateHandler) RegeneratePreview(w http.ResponseWriter, r *http.Request) {
+	qs := r.URL.Query()
+	if qs.Get("scope") != string(planning.ScopeDay) {
+		writeError(w, http.StatusBadRequest, "error.plan.invalid_scope")
+		return
+	}
+	date, err := time.Parse(time.DateOnly, qs.Get("date"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.plan.invalid_scope")
+		return
+	}
+	start, err := time.Parse(time.DateOnly, qs.Get("start"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "error.plan.invalid_start")
+		return
+	}
+	today, ok := parseToday(w, qs.Get("today"), h.now)
+	if !ok {
+		return
+	}
+	pv, err := h.svc.PreviewDay(r.Context(), start, today, date)
+	if err != nil {
+		writePlanError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, dayPreviewResponse{Replaced: pv.Replaced, AlsoChanged: pv.AlsoChanged, ConfirmedAffected: pv.ConfirmedAffected})
 }
 
 func nonEmpty(s string) *string {

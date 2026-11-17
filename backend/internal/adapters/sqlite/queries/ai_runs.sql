@@ -26,8 +26,9 @@ UPDATE ai_runs SET
     violations_json    = ?,
     score_json         = ?,
     notes              = ?,
-    container_id       = ?
-WHERE id = ?;
+    container_id       = ?,
+    scope_json         = COALESCE(sqlc.narg(scope_json), scope_json)
+WHERE id = sqlc.arg(id);
 
 -- name: CreateAIRunStep :exec
 INSERT INTO ai_run_steps (run_id, seq, type, name, args_json, result_json, is_error, duration_ms, input_tokens, output_tokens,

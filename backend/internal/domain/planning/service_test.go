@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -442,26 +443,17 @@ func TestService_RegenerateScopes(t *testing.T) {
 		}
 	})
 
-	t.Run("day changes that day and its closures", func(t *testing.T) {
-		e := newSvcEnv(t)
+	t.Run("day changes only that day", func(t *testing.T) {
+		e := newDayEnv(t)
 		e.ok(e.generate(e.req()))
 		before := e.window()
-		allowed := map[string]bool{}
-		for _, slot := range []int64{e.breakfast, e.lunch, e.dinner} {
-			if p, ok := before[key(tue, slot)]; ok {
-				allowed[key(tue, slot)] = true
-				for _, k := range closureKeys(e, before, p.ID) {
-					allowed[k] = true
-				}
-			}
-		}
 
-		e.ok(e.regenerate(planning.Scope{Kind: planning.ScopeDay, Date: day(tue)}))
+		finished(t, e, e.regenerate(planning.Scope{Kind: planning.ScopeDay, Date: day(tue)}))
 
 		changed := regenerated(before, e.window())
 		assert.NotEmpty(t, changed)
 		for _, k := range changed {
-			assert.True(t, allowed[k], "%s is outside Tuesday's closure", k)
+			assert.True(t, strings.HasPrefix(k, tue+"/"), "%s is outside Tuesday", k)
 		}
 	})
 
@@ -883,6 +875,9 @@ func (f *fakeRuns) PlanRun(_ context.Context, id int64) (planning.RunRecord, err
 	if end, done := f.ends[id]; done {
 		rec.Status, rec.ErrorKey, rec.Notes = end.Status, end.ErrorKey, end.Notes
 		rec.ViolationsJSON, rec.ScoreJSON = end.ViolationsJSON, end.ScoreJSON
+		if end.ScopeJSON != "" {
+			rec.ScopeJSON = end.ScopeJSON
+		}
 	}
 	return rec, nil
 }

@@ -37,6 +37,6 @@ func (r recorderRun) ID() int64 { return r.run.ID() }
 
 func (r recorderRun) Finish(ctx context.Context, end RunEnd) {
 	r.run.FinishWith(ctx, end.Status, end.ErrorKey, airun.Result{
-		RepairAttempts: end.RepairAttempts, ViolationsJSON: end.ViolationsJSON, ScoreJSON: end.ScoreJSON, Notes: end.Notes,
+		RepairAttempts: end.RepairAttempts, ViolationsJSON: end.ViolationsJSON, ScoreJSON: end.ScoreJSON, Notes: end.Notes, ScopeJSON: end.ScopeJSON,
 	})
 }

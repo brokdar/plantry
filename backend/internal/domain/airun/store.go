@@ -105,6 +105,7 @@ type RunEnd struct {
 	ViolationsJSON string
 	ScoreJSON      string
 	Notes          string
+	ScopeJSON      string
 	// ContainerID is the run's last code execution container; empty is NULL.
 	ContainerID string
 }
