@@ -8,6 +8,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/availability"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 )
 
 func floorCodes(issues []planning.Issue) []string {
@@ -64,6 +65,35 @@ func TestHeuristic_UnreachableFloorStaysAnH9WithANote(t *testing.T) {
 
 	assert.NotEmpty(t, floorCodes(planning.Check(m, tgt)))
 	assert.Contains(t, p.Notes, "daily minimum")
+	assert.Contains(t, p.Notes, "Below target", "the band is out of reach too: said, not silent")
+}
+
+// A normal target is not only lifted over the floor: no day stays under its
+// band and the week lands in its band, within the 1.5x cap.
+func TestHeuristic_KcalBandDaysAndWeek(t *testing.T) {
+	for _, kcal := range []float64{2000, 2400, 2800} {
+		s := proteinState(profile.DietOmnivore) // batchCooker plus no-cook foods
+		s.Profile.WeightKg = nil
+		s.Profile.KcalTarget = f64(kcal)
+		tgt := windowTarget(s)
+		p := choose(t, planning.ChooseInput{State: s, Target: tgt})
+		m := planning.Merge(s, tgt, p)
+		ev := planning.Evaluate(m, tgt)
+
+		assert.Empty(t, violations(planning.Check(m, tgt)), "%.0f kcal", kcal)
+		for _, d := range ev.Days {
+			// Days the recipes already overfill stay as they are.
+			assert.GreaterOrEqual(t, d.Kcal, kcal*0.9-1e-6, "%.0f kcal: %s not under the day band", kcal, d.Date)
+		}
+		if assert.NotNil(t, ev.Week) {
+			assert.InDelta(t, 100, ev.Week.Pct, 5, "%.0f kcal: week inside its band", kcal)
+		}
+		for _, pl := range p.Plates {
+			for _, c := range pl.Components {
+				assert.LessOrEqual(t, c.Portions, 1.5+1e-9, "capped at 1.5x over every pass")
+			}
+		}
+	}
 }
 
 // A routine cell with no plate has no kcal to count: it does not scale the

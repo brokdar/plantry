@@ -7,7 +7,7 @@
     "plan.shopping_day": "5", "plan.batch_cooking": "false", "plan.default_keep_days": "2",
     "plan.max_cook_occasions_per_day": "2", "plan.variety_weeks": "2", "plan.freezing_enabled": "false"
   },
-  "profile": {"diet_type": "omnivore", "household_portions": 1, "kcal_target": 1750, "goal": "maintain", "weight_kg": 70},
+  "profile": {"diet_type": "omnivore", "household_portions": 1, "kcal_target": 2000, "goal": "maintain", "weight_kg": 70},
   "slots": ["breakfast", "lunch", "dinner"],
   "presets": [{"name": "Yoghurt", "slot": "breakfast", "recipe": "Joghurt mit Beeren"}],
   "availability": {"defaults": [

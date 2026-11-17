@@ -191,3 +191,17 @@ func BenchmarkPlanView(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkHeuristic plans a whole window with the heuristic over the
+// 300-recipe state at a normal kcal target (the floor, kcal band and protein
+// passes all run).
+func BenchmarkHeuristic(b *testing.B) {
+	s, tgt, _ := benchState()
+	s.Profile.KcalTarget = f64(2400)
+	b.ResetTimer()
+	for range b.N {
+		if _, err := (planning.Heuristic{}).Choose(context.Background(), planning.ChooseInput{State: s, Target: tgt}); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

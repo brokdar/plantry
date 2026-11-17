@@ -126,12 +126,11 @@ func TestHeuristic_ProteinGapClosing(t *testing.T) {
 		}
 	})
 
-	t.Run("unreachable: nothing added, the checker reports S3", func(t *testing.T) {
+	t.Run("unreachable: no protein food to add, the checker reports S3", func(t *testing.T) {
 		s := proteinState(profile.DietOmnivore)
-		s.NoCook = []int64{candy}
+		s.NoCook = []int64{candy} // the kcal pass may still use it; it holds no protein
 		tgt := windowTarget(s)
 		p := choose(t, planning.ChooseInput{State: s, Target: tgt})
-		assert.Zero(t, foodsAdded(p, candy))
 		assert.Contains(t, p.Notes, "Protein below target")
 		ev := planning.Evaluate(planning.Merge(s, tgt, p), tgt)
 		found := false
@@ -193,6 +192,7 @@ func TestHeuristic_ProteinGapClosing(t *testing.T) {
 	t.Run("without a weight the heuristic does not chase protein", func(t *testing.T) {
 		s := proteinState(profile.DietOmnivore)
 		s.Profile.WeightKg = nil
+		s.Profile.KcalTarget = f64(1800) // days above the band: the kcal pass adds nothing either
 		p := choose(t, planning.ChooseInput{State: s, Target: windowTarget(s)})
 		assert.Zero(t, foodsAdded(p, skyr))
 	})
