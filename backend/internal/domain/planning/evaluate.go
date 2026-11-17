@@ -128,6 +128,9 @@ type DayEval struct {
 	// NutritionMissing: a food of the day lacks nutrition data, so kcal
 	// and the shares understate the day (the board warns the same).
 	NutritionMissing bool `json:"nutrition_missing"`
+	// Away: the day's lunch and dinner are No plate (DayKcal.Away); H9, S2,
+	// the day S3 and the week do not judge it.
+	Away bool `json:"away,omitempty"`
 }
 
 // PlateEval is one plate of the window with its per-eater macros.
@@ -214,7 +217,7 @@ func Evaluate(s State, t Target) Evaluation {
 	for _, dk := range x.dayAccounts(days) {
 		de := DayEval{
 			Date: dk.Date.Format(time.DateOnly), Kcal: dk.Kcal, ProteinG: dk.ProteinG,
-			MeatFoods: []string{}, Complete: dk.Complete, NutritionMissing: dk.NutritionMissing,
+			MeatFoods: []string{}, Complete: dk.Complete, NutritionMissing: dk.NutritionMissing, Away: dk.Away,
 			CookOccasions: len(x.occasions[dayOf(dk.Date)]),
 		}
 		if hasTarget {

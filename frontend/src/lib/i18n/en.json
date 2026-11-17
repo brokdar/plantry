@@ -1025,6 +1025,7 @@
       "not_enough_recipes": "Add at least 10 recipes before the plan is made for you.",
       "confirmed_affected": "Some of these plates are confirmed and were already shopped for.",
       "replan_past": "Re-planning starts today at the earliest.",
+      "past_cell": "Days before today can't be changed here.",
       "row_confirmed": "This plate is confirmed. Unlock it before the assistant changes it.",
       "nothing_to_accept": "This week has no draft plates.",
       "state_mismatch": "Some of these plates changed in the meantime, so this can't be undone.",

@@ -132,6 +132,8 @@ var (
 	// need unlock_confirmed, and a re-plan starts today at the earliest.
 	ErrConfirmedAffected = errors.New("the re-plan removes confirmed plates")
 	ErrReplanPast        = errors.New("a re-plan cannot start in the past")
+	// ErrPastCell: a meal operation (SetAway) names a cell before today.
+	ErrPastCell = errors.New("the cell lies in the past")
 
 	// Store sections (Phase 2 D18).
 	ErrInvalidShopSection  = errors.New("unknown store section")
@@ -228,6 +230,7 @@ var messageKeys = []struct {
 	{ErrDiscoveryCuisineRequired, "error.discovery.cuisine_required"},
 	{ErrConfirmedAffected, "error.plan.confirmed_affected"},
 	{ErrReplanPast, "error.plan.replan_past"},
+	{ErrPastCell, "error.plan.past_cell"},
 }
 
 // MessageKey returns the i18n message key of the first sentinel err wraps,
