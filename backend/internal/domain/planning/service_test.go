@@ -403,7 +403,13 @@ func TestService_RegenerateScopes(t *testing.T) {
 		reeats := slices.ContainsFunc(after[k].Components, func(c plate.PlateComponent) bool {
 			return c.CookSessionID != nil && *c.CookSessionID == sid
 		})
+		// On a day whose cooking cap is used the batch is the last resort
+		// (an empty cell weighs more); otherwise it is a different dish,
+		// never the same food cooked fresh.
 		if !reeats {
+			for _, c := range after[k].Components {
+				assert.NotEqual(t, left.Components[0].FoodID, c.FoodID, "a replaced plate gets a different dish")
+			}
 			assert.Len(t, now.Links, len(batch.Links)-1)
 			assert.Less(t, now.Portions, batch.Portions, "the batch shrinks (D11)")
 		}
