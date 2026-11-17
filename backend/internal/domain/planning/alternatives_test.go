@@ -75,7 +75,7 @@ func alts(t *testing.T, s planning.State, req planning.AltRequest) []planning.Al
 	req.Limit = 10
 	out, err := planning.Alternatives(s, windowTarget(s), req)
 	require.NoError(t, err)
-	return out
+	return out.Alternatives
 }
 
 func altIDs(out []planning.Alternative) []int64 {
@@ -93,6 +93,14 @@ func indexOf(out []planning.Alternative, foodID int64, source string) int {
 		}
 	}
 	return -1
+}
+
+// cookedAt is the index of foodID cooked fresh or cook_at (one per recipe).
+func cookedAt(out []planning.Alternative, foodID int64) int {
+	if i := indexOf(out, foodID, planning.SourceFresh); i >= 0 {
+		return i
+	}
+	return indexOf(out, foodID, planning.SourceCookAt)
 }
 
 func TestAlternatives(t *testing.T) {
@@ -130,18 +138,44 @@ func TestAlternatives(t *testing.T) {
 				assert.EqualValues(t, altSunLunch, *first.Ops[0].PlateID)
 				assert.Equal(t, "remove", first.Ops[1].Op)
 				assert.EqualValues(t, 110, *first.Ops[1].PlateComponentID)
-				if i := indexOf(out, soup, planning.SourceFresh); assert.Positive(t, i) {
-					fresh := out[i]
-					assert.Equal(t, "swap", fresh.Ops[0].Op)
-					assert.EqualValues(t, soup, fresh.Ops[0].FoodID)
-					assert.Equal(t, 1, fresh.CookOccasionsDay)
+				assert.Equal(t, -1, indexOf(out, soup, planning.SourceFresh), "cook_at beats a fresh cook that adds an occasion")
+			},
+		},
+		{
+			name: "a leftover meal's recipe cooks at the latest cell that already cooks: no new occasion",
+			req:  planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain},
+			assert: func(t *testing.T, out []planning.Alternative) {
+				i := indexOf(out, soup, planning.SourceCookAt)
+				require.Positive(t, i)
+				a := out[i]
+				require.NotNil(t, a.CookAt)
+				assert.Equal(t, planning.OptionCell{Date: sat, SlotID: dinner}, *a.CookAt)
+				assert.Equal(t, 20, a.TotalMinutes)
+				assert.Zero(t, a.CookOccasionsDay, "Sunday still cooks nothing")
+				require.Len(t, a.Ops, 1)
+				op := a.Ops[0]
+				assert.Equal(t, "replace", op.Op)
+				assert.EqualValues(t, altSunLunch, *op.PlateID)
+				assert.EqualValues(t, 110, *op.PlateComponentID)
+				assert.EqualValues(t, soup, op.FoodID)
+				assert.Equal(t, a.CookAt, op.CookAt)
+				assert.InDelta(t, 1, *op.Portions, 1e-9)
+			},
+		},
+		{
+			name: "a plate whose cell already cooks gets no cook_at",
+			req:  planning.AltRequest{PlateID: altSatLunch, What: planning.AltMain},
+			assert: func(t *testing.T, out []planning.Alternative) {
+				require.NotEmpty(t, out)
+				for _, a := range out {
+					assert.NotEqual(t, planning.SourceCookAt, a.Source, a.Name)
 				}
 			},
 		},
 		{
-			name: "a full batch is not offered, one with a free portion is",
+			name: "a batch short of its meals is not offered, one with a free portion is",
 			mutate: func(s *planning.State) {
-				s.Sessions = append(s.Sessions, persistedSession(6, curry, sat, lunch, 1, false))
+				s.Sessions = append(s.Sessions, persistedSession(6, curry, sat, lunch, 0.5, false))
 				p := persisted(14, sun, dinner, false, curry, 6)
 				p.Components[0].Position = plate.PositionMain
 				s.Plates = append(s.Plates, p)
@@ -150,19 +184,35 @@ func TestAlternatives(t *testing.T) {
 			assert: func(t *testing.T, out []planning.Alternative) {
 				for _, a := range out {
 					if a.SessionID != nil {
-						assert.NotEqual(t, int64(6), *a.SessionID, "session 6 is eaten up")
+						assert.NotEqual(t, int64(6), *a.SessionID, "session 6 is short")
 					}
 				}
 				assert.GreaterOrEqual(t, indexOf(out, curry, planning.SourceSession), 0, "session 2 has a spare portion")
 			},
 		},
 		{
+			name: "a batch that exactly covers its meals grows with the plate (D11)",
+			mutate: func(s *planning.State) {
+				s.Sessions = append(s.Sessions, persistedSession(6, lasagne, sat, dinner, 1, false))
+				p := persisted(14, sat, dinner, false, lasagne, 6)
+				p.Components[0].Position = plate.PositionSide
+				s.Plates[0].Components = append(s.Plates[0].Components, p.Components[0])
+			},
+			req: planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain},
+			assert: func(t *testing.T, out []planning.Alternative) {
+				i := indexOf(out, lasagne, planning.SourceSession)
+				require.GreaterOrEqual(t, i, 0, "%+v", out)
+				assert.EqualValues(t, 6, *out[i].SessionID)
+				assert.Empty(t, out[i].NewIssues, "no H3 deficit: the batch grows")
+			},
+		},
+		{
 			name: "max_minutes filters fresh cooks by minutes",
 			req:  planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain, Constraints: planning.AltConstraints{MaxMinutes: 30}},
 			assert: func(t *testing.T, out []planning.Alternative) {
-				assert.GreaterOrEqual(t, indexOf(out, soup, planning.SourceFresh), 0)
-				assert.Equal(t, -1, indexOf(out, curry, planning.SourceFresh))
-				assert.Equal(t, -1, indexOf(out, lasagne, planning.SourceFresh), "no minutes known is not within 30")
+				assert.GreaterOrEqual(t, cookedAt(out, soup), 0)
+				assert.Equal(t, -1, cookedAt(out, curry))
+				assert.Equal(t, -1, cookedAt(out, lasagne), "no minutes known is not within 30")
 			},
 		},
 		{
@@ -176,7 +226,7 @@ func TestAlternatives(t *testing.T) {
 			},
 		},
 		{
-			name: "a candidate that would add an H2 cook is dropped",
+			name: "a fresh cook that would add an H2 occasion is dropped; cook_at on an earlier day is not",
 			mutate: func(s *planning.State) {
 				s.Settings.MaxCookOccasionsPerDay = 1
 				s.Sessions = append(s.Sessions, persistedSession(5, soup, sun, dinner, 1, false))
@@ -188,8 +238,10 @@ func TestAlternatives(t *testing.T) {
 			assert: func(t *testing.T, out []planning.Alternative) {
 				require.NotEmpty(t, out)
 				for _, a := range out {
-					assert.Equal(t, planning.SourceSession, a.Source, "%s would cook a second time on Sunday", a.Name)
+					assert.NotEqual(t, planning.SourceFresh, a.Source, "%s would cook a second time on Sunday", a.Name)
+					assert.Equal(t, 1, a.CookOccasionsDay, a.Name)
 				}
+				assert.GreaterOrEqual(t, indexOf(out, lasagne, planning.SourceCookAt), 0)
 			},
 		},
 		{
@@ -213,7 +265,7 @@ func TestAlternatives(t *testing.T) {
 			},
 			req: planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain, Constraints: planning.AltConstraints{Diet: "vegetarian"}},
 			assert: func(t *testing.T, out []planning.Alternative) {
-				soupAt, lasagneAt := indexOf(out, soup, planning.SourceFresh), indexOf(out, lasagne, planning.SourceFresh)
+				soupAt, lasagneAt := cookedAt(out, soup), cookedAt(out, lasagne)
 				require.GreaterOrEqual(t, soupAt, 0)
 				require.GreaterOrEqual(t, lasagneAt, 0)
 				assert.Less(t, soupAt, lasagneAt)
@@ -266,7 +318,8 @@ func TestAlternatives_LimitAndErrors(t *testing.T) {
 	s := altState()
 	out, err := planning.Alternatives(s, windowTarget(s), planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain, Limit: 1})
 	require.NoError(t, err)
-	assert.Len(t, out, 1)
+	assert.Len(t, out.Alternatives, 1)
+	assert.Nil(t, out.EmptyReason)
 
 	g := 100.0
 	s.Plates[2].Components = append(s.Plates[2].Components, planning.Component{ID: 123, FoodID: salad, Grams: &g})
@@ -290,4 +343,29 @@ func TestAlternatives_LimitAndErrors(t *testing.T) {
 	s.Plates[0].Confirmed = true
 	_, err = planning.Alternatives(s, windowTarget(s), planning.AltRequest{PlateID: altSatDinner, What: planning.AltMain})
 	assert.ErrorIs(t, err, domain.ErrInvalidInput, "a confirmed plate needs an unlock first")
+}
+
+// When nothing is left the result says why: how many candidates fit and the
+// hard rule that dropped each.
+func TestAlternatives_EmptyReason(t *testing.T) {
+	s := altState()
+	// Sunday cooks soup at dinner and allows one occasion; Saturday is past,
+	// so the lasagne can only cook fresh at Sunday lunch: H2.
+	s.Today = day(sun)
+	s.Settings.MaxCookOccasionsPerDay = 1
+	s.Sessions = append(s.Sessions, persistedSession(5, soup, sun, dinner, 1, false))
+	p := persisted(13, sun, dinner, false, soup, 5)
+	p.Components[0].Position = plate.PositionMain
+	s.Plates = append(s.Plates, p)
+
+	res, err := planning.Alternatives(s, windowTarget(s), planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain, Constraints: planning.AltConstraints{Search: "lasagne"}})
+	require.NoError(t, err)
+	assert.Empty(t, res.Alternatives)
+	require.NotNil(t, res.EmptyReason)
+	assert.Equal(t, planning.EmptyReason{Candidates: 1, Dropped: map[string]int{"H2.too_many_cook_occasions": 1}}, *res.EmptyReason)
+
+	res, err = planning.Alternatives(s, windowTarget(s), planning.AltRequest{PlateID: altSunLunch, What: planning.AltMain, Constraints: planning.AltConstraints{Search: "nothing like this"}})
+	require.NoError(t, err)
+	assert.Empty(t, res.Alternatives)
+	assert.Equal(t, &planning.EmptyReason{}, res.EmptyReason, "no candidate fits the constraints")
 }

@@ -502,6 +502,44 @@ func TestFindAlternatives(t *testing.T) {
 	e.mustExec("apply_changes", `{"dry_run":true,"ops":`+string(ops)+`}`)
 }
 
+// With one cooking occasion a day, a plate whose cell does not cook gets
+// cook_at alternatives (cooked with an existing cooking cell); their replace
+// op applies through apply_changes and adds no H2.
+func TestFindAlternatives_CookAtAppliesWithoutH2(t *testing.T) {
+	e := newPlanToolEnv(t)
+	require.NoError(t, testsvc.Settings(e.db).Set(context.Background(), "plan.max_cook_occasions_per_day", "1"))
+	lunch := e.slotID("lunch")
+	var pick map[string]any
+	for d := 0; d < 7 && pick == nil; d++ {
+		p := e.plateAtCell(planStart.AddDate(0, 0, d).Format(time.DateOnly), lunch)
+		if p == nil {
+			continue
+		}
+		res := e.mustExec("find_alternatives", fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":10}`, p.ID))
+		for _, a := range res["alternatives"].([]any) {
+			if m := a.(map[string]any); m["source"] == "cook_at" {
+				pick = m
+				break
+			}
+		}
+	}
+	require.NotNil(t, pick, "a lunch plate with a cook_at alternative")
+	require.NotNil(t, pick["cook_at"])
+	ops := pick["ops"].([]any)
+	require.Len(t, ops, 1)
+	op := ops[0].(map[string]any)
+	assert.Equal(t, "replace", op["op"])
+	assert.Equal(t, pick["cook_at"], op["cook_at"])
+	raw, err := json.Marshal(ops)
+	require.NoError(t, err)
+	res := e.mustExec("apply_changes", `{"dry_run":false,"ops":`+string(raw)+`}`)
+	issues := res["after"].(map[string]any)["issues"].(map[string]any)
+	news, _ := issues["new"].([]any)
+	for _, is := range news {
+		assert.NotEqual(t, "H2", is.(map[string]any)["rule"], "%v", is)
+	}
+}
+
 func sqliteChange(e *planToolEnv, id int64) (*agent.Change, error) {
 	return sqlite.NewAIChangeRepo(e.db).GetChange(context.Background(), id)
 }

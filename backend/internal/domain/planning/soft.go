@@ -59,6 +59,15 @@ type OptionOp struct {
 	Unit             string   `json:"unit,omitempty"`
 	// SessionID makes an add eat from that existing batch (Alternatives).
 	SessionID *int64 `json:"session_id,omitempty"`
+	// CookAt makes a replace or add cook the recipe on that cell
+	// (Alternatives).
+	CookAt *OptionCell `json:"cook_at,omitempty"`
+}
+
+// OptionCell is a (date, slot) cell of an op.
+type OptionCell struct {
+	Date   string `json:"date"`
+	SlotID int64  `json:"slot_id"`
 }
 
 const (

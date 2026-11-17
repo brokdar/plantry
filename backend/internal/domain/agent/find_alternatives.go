@@ -38,8 +38,8 @@ const findAlternativesSchema = `{
   "additionalProperties":false
 }`
 
-const findAlternativesDescription = `Find verified replacements for one draft plate of the plan window in one call. what: meal (a new main, every other component removed), main, side (plate_component_id, or the plate's only side) or add (a side, dessert, drink or no-cook food to add). constraints (all optional): max_minutes (fresh cooking time, prep + cook), diet (vegan|vegetarian|pescetarian|omnivore), roles, search (name and tags, as find_foods), tags, min_protein_g and max_kcal (the new component, per eater), no_cook. Foods already on the plate are excluded. Each candidate is applied to a copy of the plan and evaluated like an apply_changes dry run, under the stored light/hearty requests; a candidate that adds a hard issue is dropped. Ranked by fewest new soft issues, no new cooking occasion, eating an existing batch before cooking fresh, dish repeats, kcal fit, longest since eaten. limit default 5, max 10. Saves nothing.
-Returns compact JSON (a field that is 0, false or empty is left out) {alternatives:[{food_id, name, source fresh|session|leaf, session_id?, total_minutes? (fresh cooking minutes; cite it for "quicker"), kcal, protein_g (the plate after the change, per eater), day_kcal, day_pct, week_pct, cook_occasions_day, new_issues?:[issue], ops:[apply_changes ops]}]}. To take one, pass its ops as they are to apply_changes (with your other ops in the same call). An empty list means nothing fits: say so, or loosen a constraint.`
+const findAlternativesDescription = `Find verified replacements for one draft plate of the plan window in one call. what: meal (a new main, every other component removed), main, side (plate_component_id, or the plate's only side) or add (a side, dessert, drink or no-cook food to add). constraints (all optional): max_minutes (fresh cooking time, prep + cook), diet (vegan|vegetarian|pescetarian|omnivore), roles, search (name and tags, as find_foods), tags, min_protein_g and max_kcal (the new component, per eater), no_cook. Foods already on the plate are excluded. Each candidate is applied to a copy of the plan and evaluated like an apply_changes dry run, under the stored light/hearty requests; a candidate that adds a hard issue is dropped. A recipe is offered eaten from an existing batch (session; a batch that exactly covers its meals grows), cooked together with a cell that already cooks (cook_at: the same day or an earlier day within keep days, so the plate's day gets no new cooking occasion), or cooked fresh at the plate. Ranked by fewest new soft issues, no new cooking occasion, session before cook_at before fresh, dish repeats, kcal fit, longest since eaten. limit default 5, max 10. Saves nothing.
+Returns compact JSON (a field that is 0, false or empty is left out) {alternatives:[{food_id, name, source fresh|session|cook_at|leaf, session_id?, cook_at? {date, slot_id} (where a cook_at source cooks), total_minutes? (fresh or cook_at cooking minutes; cite it for "quicker"), kcal, protein_g (the plate after the change, per eater), day_kcal, day_pct, week_pct, cook_occasions_day, new_issues?:[issue], ops:[apply_changes ops]}], empty_reason?: {candidates, dropped?: {"rule.code": count}}}. To take one, pass its ops as they are to apply_changes (with your other ops in the same call). An empty list comes with empty_reason: candidates 0 means no food fits the position and constraints (loosen one); otherwise dropped counts the hard rule that blocked each candidate (e.g. H2 too_many_cook_occasions, H8 variety_repeat, H9 kcal_below_floor): tell the user why in plain words.`
 
 func toolFindAlternatives(svc Services) Tool {
 	return Tool{
@@ -92,14 +92,19 @@ func toolFindAlternatives(svc Services) Tool {
 				return nil, ToolEffectNone, fmt.Errorf("read the plan: %w", err)
 			}
 			st.Light = planning.MergeLight(st.Light, lightFrom(ctx))
-			alts, err := planning.Alternatives(st, planning.WindowTarget(st), req)
+			res, err := planning.Alternatives(st, planning.WindowTarget(st), req)
 			if err != nil {
 				return nil, ToolEffectNone, err
 			}
+			alts := res.Alternatives
 			if alts == nil {
 				alts = []planning.Alternative{}
 			}
-			return mustJSON(map[string]any{"alternatives": planning.Compact(alts)}), ToolEffectNone, nil
+			out := map[string]any{"alternatives": planning.Compact(alts)}
+			if res.EmptyReason != nil {
+				out["empty_reason"] = res.EmptyReason
+			}
+			return mustJSON(out), ToolEffectNone, nil
 		},
 	}
 }

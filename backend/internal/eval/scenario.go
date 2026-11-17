@@ -251,6 +251,9 @@ type Expect struct {
 	// this many plates (the batch cooker's one-cook-feeds-several-meals
 	// promise: the dinner it is cooked for plus the leftovers).
 	BatchMeals int `json:"batch_meals"`
+	// Alternatives: after the measured step every draft lunch or dinner
+	// main from today on gets at least one alternative (ExpectAlternatives).
+	Alternatives bool `json:"alternatives"`
 }
 
 // LoadLibrary reads the built-in library.
