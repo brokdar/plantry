@@ -63,6 +63,28 @@ func TestPrompt_MealEditRules(t *testing.T) {
 	}
 }
 
+// The "not done while an issue is open" rule covers hard issues only; a soft
+// issue is reported with the fix offered, never applied unasked (no
+// contradiction with "offer the fix" and the protein instruction).
+func TestPrompt_SoftIssuesAreOffered(t *testing.T) {
+	prompt := ComposePrompt(nil, "", time.Time{})
+	for _, want := range []string{
+		"A request is not done while a hard issue (violation H1-H9) it caused is open",
+		"Fix a new hard issue with another apply_changes call",
+		"A soft issue (S2-S8) is not fixed on your own: report it and offer the fix",
+		"Close protein gaps by offering",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt must contain %q", want)
+		}
+	}
+	for _, gone := range []string{"Close protein gaps actively", "Fix a new issue with another apply_changes call"} {
+		if strings.Contains(prompt, gone) {
+			t.Errorf("prompt must not contain %q", gone)
+		}
+	}
+}
+
 // S5 (carb and fat ranges) ranks last: after preferences, never at the cost
 // of kcal or protein.
 func TestPrompt_S5RanksLowest(t *testing.T) {

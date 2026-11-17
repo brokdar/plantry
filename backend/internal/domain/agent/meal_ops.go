@@ -147,6 +147,7 @@ func opMove(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 		return nil, err
 	}
 	line := map[string]any{"food": plateNames(src), "date": src.DateString(), "slot_key": fromKey, "to_date": to.Date, "to_slot_key": toKey}
+	line["pulse"] = pulseCells(pulseCell(src.DateString(), src.SlotID), pulseCell(to.Date, to.SlotID))
 	out := map[string]any{"op": op.Op, "plate_id": op.PlateID, "date": to.Date, "slot_id": to.SlotID, "from_date": src.DateString(), "from_slot_id": src.SlotID}
 	if occupant != nil && occ.Kind != plate.OccupantNone {
 		line["occupant"], line["other"] = string(occ.Kind), plateNames(occupant)
@@ -155,6 +156,7 @@ func opMove(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 			d := occ.To.Date.Format(time.DateOnly)
 			out["occupant_to"] = map[string]any{"date": d, "slot_id": occ.To.SlotID}
 			b.aff.Dates = append(b.aff.Dates, d)
+			line["pulse"] = append(line["pulse"].([]map[string]any), pulseCell(d, occ.To.SlotID))
 		}
 		for i := range occupant.Components {
 			b.aff.Sessions = append(b.aff.Sessions, sessionIDOf(&occupant.Components[i])...)
@@ -260,6 +262,13 @@ func opAway(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 		return nil, fmt.Errorf("%w: away is not available", domain.ErrInvalidInput)
 	}
 	in := availability.AwayInput{Note: op.Note, Today: todayFrom(ctx)}
+	if len(op.Cells) == 0 && op.Date != "" && op.SlotID != 0 {
+		// date + slot_id without cells is that one cell.
+		op.Cells = []cellRef{{Date: op.Date, SlotID: op.SlotID}}
+		op.Date = ""
+	} else if op.SlotID != 0 {
+		return nil, fmt.Errorf("%w: away takes slot_id only together with date (that one cell)", domain.ErrInvalidInput)
+	}
 	switch {
 	case len(op.Cells) > 0 && op.Date == "":
 		for _, c := range op.Cells {
@@ -279,7 +288,7 @@ func opAway(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 		}
 		in.Date = &d
 	default:
-		return nil, fmt.Errorf("%w: away needs cells [{date, slot_id}] or date (the whole day), not both", domain.ErrInvalidInput)
+		return nil, fmt.Errorf("%w: away needs cells [{date, slot_id}], or date (the whole day), or date + slot_id (one cell); not a mix", domain.ErrInvalidInput)
 	}
 	res, err := svc.Cells.SetAway(ctx, in)
 	if err != nil {
@@ -287,6 +296,7 @@ func opAway(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 	}
 	cells := make([]map[string]any, 0, len(res.Before))
 	line := make([]map[string]any, 0, len(res.Before))
+	pulse := make([]map[string]any, 0, len(res.Before))
 	for _, c := range res.Before {
 		after, err := svc.Cells.Override(ctx, c.Date, c.SlotID)
 		if err != nil {
@@ -301,9 +311,10 @@ func opAway(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 		b.aff.Dates = append(b.aff.Dates, d)
 		cells = append(cells, map[string]any{"date": d, "slot_id": c.SlotID})
 		line = append(line, map[string]any{"date": d, "slot_key": key})
+		pulse = append(pulse, pulseCell(d, c.SlotID))
 	}
 	sort.SliceStable(line, func(i, j int) bool { return line[i]["date"].(string) < line[j]["date"].(string) })
-	b.note(op, map[string]any{"cells": line, "date": firstDate(line)})
+	b.note(op, map[string]any{"cells": line, "date": firstDate(line), "pulse": pulse})
 	out := map[string]any{"op": op.Op, "cells": cells, "removed_plates": len(res.Removed.Plates)}
 	return mealResult(out, plate.MealResult{AlsoChanged: res.AlsoChanged}, b), nil
 }
@@ -341,7 +352,10 @@ func opMoveCook(ctx context.Context, svc Services, op changeOp, b *batch) (map[s
 	if v, err := svc.Plates.Session(ctx, op.SessionID); err == nil {
 		name = v.FoodName
 	}
-	b.note(op, map[string]any{"food": name, "date": op.CookAt.Date, "from_date": from})
+	b.note(op, map[string]any{
+		"food": name, "date": op.CookAt.Date, "from_date": from,
+		"pulse": pulseCells(pulseCell(from, sess.CookSlotID), pulseCell(op.CookAt.Date, op.CookAt.SlotID)),
+	})
 	out := map[string]any{"op": op.Op, "session_id": op.SessionID, "cook_date": op.CookAt.Date, "cook_slot_id": op.CookAt.SlotID, "from_date": from, "from_slot_id": sess.CookSlotID}
 	return mealResult(out, res, b), nil
 }
@@ -357,6 +371,9 @@ func opCopy(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 	if err != nil {
 		return nil, err
 	}
+	// The source is not date-guarded on purpose: copying FROM a past meal
+	// ("repeat last week's dinner") is allowed. Only the targets are guarded
+	// (c.key below).
 	src, err := svc.Plates.Get(ctx, op.PlateID)
 	if err != nil {
 		return nil, err
@@ -385,7 +402,11 @@ func opCopy(ctx context.Context, svc Services, op changeOp, b *batch) (map[strin
 		}
 		copies = append(copies, map[string]any{"plate_id": p.ID, "date": p.DateString(), "slot_id": p.SlotID})
 	}
-	b.note(op, map[string]any{"food": plateNames(src), "date": src.DateString(), "dates": dates, "as": op.As})
+	pulse := make([]map[string]any, len(refs))
+	for i, c := range refs {
+		pulse[i] = pulseCell(c.Date, c.SlotID)
+	}
+	b.note(op, map[string]any{"food": plateNames(src), "date": src.DateString(), "dates": dates, "as": op.As, "pulse": pulse})
 	out := map[string]any{"op": op.Op, "plate_id": op.PlateID, "as": op.As, "copies": copies}
 	return mealResult(out, res, b), nil
 }
@@ -404,7 +425,7 @@ var opFields = map[string]string{
 	"set_availability": "date, slot_id, mode, optional preset_id, note",
 	"move":             "plate_id, to {date, slot_id}, optional occupant (\"swap\" | \"drop\" | {date, slot_id})",
 	"replace":          "plate_id, position (main|side) or plate_component_id, food_id, optional session_id, cook_at {date, slot_id}, portions or amount + unit",
-	"away":             "cells [{date, slot_id}] or date, optional note",
+	"away":             "cells [{date, slot_id}] or date (the whole day) or date + slot_id (that one cell), optional note",
 	"move_cook":        "session_id, cook_at {date, slot_id}",
 	"copy":             "plate_id, to [{date, slot_id}], as (leftover|fresh)",
 }
@@ -422,38 +443,81 @@ var opKeys = map[string][]string{
 	"set_availability": {"date", "slot_id", "mode", "preset_id", "note"},
 	"move":             {"plate_id", "to", "occupant"},
 	"replace":          {"plate_id", "position", "plate_component_id", "food_id", "session_id", "cook_at", "portions", "amount", "unit"},
-	"away":             {"cells", "date", "note"},
+	"away":             {"cells", "date", "slot_id", "note"},
 	"move_cook":        {"session_id", "cook_at"},
 	"copy":             {"plate_id", "to", "as"},
 }
 
-// applyChangesHint explains a schema refusal per op: each field an op does
-// not take, with the fields it does take, so the model can retry once.
-func applyChangesHint(input json.RawMessage) string {
+// harmlessFields are the fields a model plausibly repeats on an op that does
+// not take them (the plate it names, the cell, a note): they are ignored and
+// reported in the op's applied entry as ignored_fields. Any other field an op
+// does not take is refused.
+var harmlessFields = []string{"plate_id", "plate_component_id", "food_id", "date", "slot_id", "note", "eaters"}
+
+// foreignFields splits the fields of an op that its op name does not take
+// into the ignorable (harmless) and the refused ones, both sorted.
+func foreignFields(name string, o map[string]json.RawMessage) (ignored, refused []string) {
+	keys := opKeys[name]
+	for k := range o {
+		if k == "op" || slices.Contains(keys, k) {
+			continue
+		}
+		if slices.Contains(harmlessFields, k) {
+			ignored = append(ignored, k)
+		} else {
+			refused = append(refused, k)
+		}
+	}
+	slices.Sort(ignored)
+	slices.Sort(refused)
+	return ignored, refused
+}
+
+func parseOps(input json.RawMessage) []map[string]json.RawMessage {
 	var in struct {
 		Ops []map[string]json.RawMessage `json:"ops"`
 	}
 	if json.Unmarshal(input, &in) != nil {
-		return ""
+		return nil
 	}
-	var hints []string
-	for i, o := range in.Ops {
-		var name string
-		_ = json.Unmarshal(o["op"], &name)
-		keys, ok := opKeys[name]
-		if !ok {
+	return in.Ops
+}
+
+func opName(o map[string]json.RawMessage) string {
+	var name string
+	_ = json.Unmarshal(o["op"], &name)
+	return name
+}
+
+// ignoredFields lists, per op index, the harmless fields the op does not take.
+func ignoredFields(input json.RawMessage) map[int][]string {
+	out := map[int][]string{}
+	for i, o := range parseOps(input) {
+		name := opName(o)
+		if _, ok := opKeys[name]; !ok {
 			continue
 		}
-		var bad []string
-		for k := range o {
-			if k != "op" && !slices.Contains(keys, k) {
-				bad = append(bad, k)
-			}
+		if ign, _ := foreignFields(name, o); len(ign) > 0 {
+			out[i] = ign
 		}
+	}
+	return out
+}
+
+// applyChangesHint explains a schema refusal per op: each field an op does
+// not take (except the harmless ones, which are ignored), with the fields it
+// does take, so the model can retry once.
+func applyChangesHint(input json.RawMessage) string {
+	var hints []string
+	for i, o := range parseOps(input) {
+		name := opName(o)
+		if _, ok := opKeys[name]; !ok {
+			continue
+		}
+		_, bad := foreignFields(name, o)
 		if len(bad) == 0 {
 			continue
 		}
-		slices.Sort(bad)
 		hints = append(hints, fmt.Sprintf("op %d (%s): unknown field %s; %s takes %s", i+1, name, quoteAll(bad), name, opFields[name]))
 	}
 	return strings.Join(hints, "; ")
