@@ -1159,7 +1159,8 @@
     "yes": "Ja",
     "no": "Nein",
     "opens_new_tab": "(öffnet in neuem Tab)",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "confirm": "Bestätigen"
   },
   "assistant": {
     "title": "Assistent",
@@ -1419,7 +1420,6 @@
       "plate_removed": "Essen entfernt",
       "batch_removed": "Vorkochen entfernt",
       "plan_cleared": "Plan geleert",
-      "marked_no_plate": "Als „Kein Essen“ markiert",
       "restored": "Wiederhergestellt",
       "conflict": "Rückgängig nicht möglich: Die Mahlzeit wurde inzwischen geändert.",
       "draft_discarded": "Entwurf verworfen"
@@ -1493,8 +1493,8 @@
       "assistant": "Assistent öffnen oder schließen",
       "this_panel": "Diese Übersicht zeigen",
       "drag": "Ziehen",
-      "replace": "Mahlzeit ersetzen",
-      "different_side": "Andere Beilage wählen",
+      "replace": "Etwas anderes für die Mahlzeit",
+      "different_side": "Beilage ändern",
       "accept": "Übernehmen und einkaufen"
     },
     "dnd": {
@@ -1600,15 +1600,10 @@
     "review": {
       "confirm": "Bestätigen",
       "unlock": "Entsperren",
-      "replace": "Ersetzen",
       "confirm_closure_one": "Bestätigt diese Mahlzeit.",
       "confirm_closure_other": "Bestätigt {{count}} Mahlzeiten dieses Ansatzes.",
       "unlock_closure_one": "Entsperrt diese Mahlzeit.",
       "unlock_closure_other": "Entsperrt {{count}} Mahlzeiten dieses Ansatzes.",
-      "replace_batch_one": "Ersetzt diese Mahlzeit.",
-      "replace_batch_other": "Hier wird gekocht: ersetzt den ganzen Ansatz mit seinen {{count}} Mahlzeiten.",
-      "replace_plate": "Ersetzt nur diese Mahlzeit; der Ansatz wird kleiner.",
-      "different_side": "Andere Beilage",
       "regenerate_day": "Tag neu planen",
       "regenerate_week": "Woche neu planen",
       "accept_and_shop": "Übernehmen und einkaufen",
@@ -1813,6 +1808,76 @@
       "protein_below_target": "{{day}}: {{protein}} g Eiweiß, Ziel {{target}} g.",
       "protein_below_share": "{{day}}: Eiweiß macht {{pct}} % der Energie aus, Ziel {{target_pct}} %.",
       "meal_not_light": "{{day}}: Die leichte Mahlzeit hat {{kcal}} kcal; höchstens {{max}} wären richtig."
+    },
+    "meal": {
+      "undo": {
+        "moved": "Mahlzeit verschoben",
+        "swapped": "Mahlzeiten getauscht",
+        "replaced": "Mahlzeit geändert",
+        "partial": "Nur ein Teil der Änderung wurde angewendet",
+        "copied": "Mahlzeit kopiert",
+        "cook_moved": "Kochen verschoben",
+        "away": "Als „Kein Teller“ markiert",
+        "day_away": "Den ganzen Tag weg",
+        "regenerated": "Tag neu geplant",
+        "component_added": "Lebensmittel hinzugefügt",
+        "component_changed": "Menge geändert",
+        "component_removed": "Lebensmittel entfernt"
+      },
+      "also": {
+        "title": "Das ändert andere Mahlzeiten",
+        "body": "Bestätige, um diese Änderungen mitzumachen.",
+        "cook_moved": "{{name}} wird jetzt {{cell}} gekocht",
+        "cooks_fresh": "{{cell}} kocht {{name}} frisch",
+        "batch_resized": "Die Menge von {{name}} ändert sich"
+      },
+      "no_cells": "Diese Woche ist keine Mahlzeit frei.",
+      "taken": "{{cell}} hat schon {{name}}.",
+      "swap": "Tauschen",
+      "replace": "{{name}} ersetzen",
+      "move_occupant": "{{name}} verschieben nach…",
+      "day_menu": "Aktionen für {{day}}",
+      "away_day": "Den ganzen Tag weg",
+      "day_partial": "{{done}} von {{total}} Mahlzeiten wieder auf Plan gesetzt",
+      "plan_day": "Diesen Tag planen",
+      "move_to": "Verschieben nach…",
+      "copy_to": "Kopieren nach…",
+      "cook_other_day": "An einem anderen Tag kochen",
+      "cook_other_day_body": "Wähle, wann {{name}} gekocht wird. Jede Mahlzeit der Menge muss danach kommen und innerhalb der Haltbarkeit bleiben."
+    },
+    "alt": {
+      "filters": "Filter",
+      "chip": {
+        "quicker": "Schneller",
+        "vegetarian": "Vegetarisch",
+        "protein": "Mehr Eiweiß",
+        "lighter": "Leichter"
+      },
+      "error": "Die Alternativen konnten nicht geladen werden.",
+      "none": "Nichts passt. Versuch es mit weniger Filtern.",
+      "none_but": "Nichts passt. Von {{candidates}} passenden Gerichten: {{reasons}}.",
+      "dropped": {
+        "H2": "würde einmal zu oft kochen",
+        "H3": "würde eine Menge überziehen",
+        "H4": "läge jenseits der Haltbarkeit",
+        "H5": "Fleischtage-Grenze",
+        "H8": "kürzlich gegessen",
+        "H9": "Tag läge unter dem Minimum",
+        "other": "{{rule}}",
+        "entry": "{{why}} ({{count}})"
+      },
+      "cook_at": "Gekocht mit {{cell}}",
+      "eats_batch": "Isst eine Menge",
+      "new_cooking": "Einmal mehr kochen",
+      "minutes_one": "{{count}} Min.",
+      "minutes_other": "{{count}} Min.",
+      "day_pct": "Tag {{pct}} %",
+      "day_kcal": "Tag {{kcal}} kcal",
+      "change_main": "Hauptgericht ändern",
+      "change_side": "Beilage ändern",
+      "change_side_of": "{{name}} ändern",
+      "add": "Beilage, Snack oder Dessert hinzufügen",
+      "something_else": "Etwas anderes"
     }
   },
   "batch": {

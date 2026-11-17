@@ -83,7 +83,7 @@ func (s *stubPlateService) RemoveMeals(context.Context, []int64) (plate.MealResu
 	}, nil
 }
 
-func (s *stubPlateService) AddComponent(_ context.Context, id int64, _ plate.PlateComponent) (*plate.Plate, error) {
+func (s *stubPlateService) AddComponentAt(_ context.Context, id int64, _ plate.PlateComponent, _ *plate.CellKey) (*plate.Plate, error) {
 	return &plate.Plate{ID: id}, nil
 }
 
@@ -105,6 +105,10 @@ func (s *stubPlateService) Confirm(_ context.Context, seed plate.RowSet) (plate.
 
 func (s *stubPlateService) Unlock(_ context.Context, seed plate.RowSet) (plate.RowSet, error) {
 	return seed, nil
+}
+
+func (s *stubPlateService) DryRun(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
 }
 
 // ── router helper ─────────────────────────────────────────────────────────────

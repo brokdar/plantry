@@ -23,12 +23,13 @@ type platesService interface {
 	CopyMeal(ctx context.Context, plateID int64, to []plate.CellKey, as plate.CopyAs) (plate.MealResult, error)
 	Recorded(ctx context.Context, fn func(ctx context.Context) error) (plate.Undo, error)
 	RemoveMeals(ctx context.Context, ids []int64) (plate.MealResult, error)
-	AddComponent(ctx context.Context, plateID int64, pc plate.PlateComponent) (*plate.Plate, error)
+	AddComponentAt(ctx context.Context, plateID int64, pc plate.PlateComponent, cookAt *plate.CellKey) (*plate.Plate, error)
 	SwapComponent(ctx context.Context, componentID, newFoodID int64, quantity *plate.PlateComponent) (*plate.Plate, error)
 	UpdateComponentQuantity(ctx context.Context, componentID int64, q plate.PlateComponent) (*plate.Plate, error)
 	RemoveComponent(ctx context.Context, componentID int64) (*plate.Plate, error)
 	Confirm(ctx context.Context, seed plate.RowSet) (plate.RowSet, error)
 	Unlock(ctx context.Context, seed plate.RowSet) (plate.RowSet, error)
+	DryRun(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 // PlateHandler exposes plate + plate_component mutation endpoints.
@@ -67,6 +68,9 @@ type componentInput struct {
 	CookSessionID *int64   `json:"cook_session_id,omitempty"`
 	// Position is main, side or extra; empty means derived.
 	Position string `json:"position,omitempty"`
+	// CookAt (component add only) cooks a composed food as a new batch on
+	// another cell on or before the plate's.
+	CookAt *mealCell `json:"cook_at,omitempty"`
 }
 
 func (c componentInput) toComponent() plate.PlateComponent {
@@ -260,8 +264,17 @@ func (h *PlateHandler) AddComponent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "error.invalid_body")
 		return
 	}
+	var cookAt *plate.CellKey
+	if req.CookAt != nil {
+		c, ok := req.CookAt.key()
+		if !ok {
+			writeError(w, http.StatusBadRequest, "error.invalid_body")
+			return
+		}
+		cookAt = &c
+	}
 	h.writeComponentChange(w, r, http.StatusCreated, func(ctx context.Context) (*plate.Plate, error) {
-		return h.svc.AddComponent(ctx, plateID, req.toComponent())
+		return h.svc.AddComponentAt(ctx, plateID, req.toComponent(), cookAt)
 	})
 }
 

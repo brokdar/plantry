@@ -32,7 +32,11 @@ const AI_SERIAL_SPECS = [
 
 // Specs that write the profile or plan settings through the UI. Those are
 // global: the anchor moves every window other specs open, so they run last,
-// alone, after the other projects.
+// alone, after the other projects. `meal-away.spec.ts` is not here: Away all
+// day writes a cell for every slot, other specs' slots included, but it works
+// in its own `futureWindow()` band, and a revert skips a cell whose slot a
+// parallel spec has deleted since (availability.Service.Revert), so it runs
+// with the parallel chromium specs.
 const GLOBAL_SETTINGS_SPECS = [
   "assistant-drafts.spec.ts",
   "discovery-explore-plan.spec.ts",

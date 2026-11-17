@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react"
+import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -6,8 +6,10 @@ import type { Plan } from "@/lib/api/plan"
 import i18n from "@/lib/i18n"
 import {
   mockPlan,
+  edited,
   mockRemovedBatch,
   mockSessionWithWarnings,
+  mockUndo,
 } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
@@ -15,6 +17,12 @@ vi.mock("@/lib/api/plan", () => ({
   getPlan: vi.fn(),
   clearPlan: vi.fn(),
   restorePlan: vi.fn(),
+}))
+vi.mock("@/lib/api/meal", () => ({
+  getAlternatives: vi.fn(),
+  setAway: vi.fn(),
+  revertPlan: vi.fn(),
+  getRegeneratePreview: vi.fn(),
 }))
 vi.mock("@/lib/api/availability", () => ({
   setAvailabilityOverride: vi.fn(),
@@ -70,10 +78,8 @@ const toastMock = vi.hoisted(() =>
 )
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
-import {
-  clearAvailabilityOverride,
-  setAvailabilityOverride,
-} from "@/lib/api/availability"
+import { setAvailabilityOverride } from "@/lib/api/availability"
+import { getAlternatives, revertPlan, setAway } from "@/lib/api/meal"
 import { clearPlan, getPlan, restorePlan } from "@/lib/api/plan"
 import { listSettings } from "@/lib/api/settings"
 
@@ -202,7 +208,7 @@ describe("PlanPage", () => {
     expect(mockRemovedBatch.removed.sessions).toHaveLength(1)
   })
 
-  it("N marks a focused draft cell No plate, and Undo brings the plate back", async () => {
+  it("N marks a focused draft cell away after the preview, and Undo reverts it", async () => {
     const user = userEvent.setup()
     // A confirmed plate goes through the re-plan sheet instead (F4).
     vi.mocked(getPlan).mockResolvedValue({
@@ -211,11 +217,10 @@ describe("PlanPage", () => {
         c.plate ? { ...c, plate: { ...c.plate, state: "draft" } } : c
       ),
     })
-    vi.mocked(setAvailabilityOverride).mockResolvedValue({
-      cell: { ...mockPlan.cells[0], mode: "none" },
-      removed: mockRemovedBatch.removed,
-    })
-    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
+    vi.mocked(setAway).mockResolvedValue(
+      edited({ removed: mockRemovedBatch.removed })
+    )
+    vi.mocked(revertPlan).mockResolvedValue({ plate_ids: [], session_ids: [] })
     renderWithRouter(<PlanPage />)
     ;(
       await screen.findByRole("button", {
@@ -223,20 +228,102 @@ describe("PlanPage", () => {
       })
     ).focus()
     await user.keyboard("n")
-    await waitFor(() =>
-      expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-11-02", 2, {
-        mode: "none",
-        note: null,
-        remove_plate: true,
-      })
-    )
+    const cells = [{ date: "2026-11-02", slot_id: 2 }]
+    // The dry run first; nothing else changes, so it commits at once.
+    await waitFor(() => expect(setAway).toHaveBeenCalledWith({ cells }, true))
+    await waitFor(() => expect(setAway).toHaveBeenCalledWith({ cells }))
     await waitFor(() => expect(toastMock).toHaveBeenCalled())
     expect(lastToast().message).toBe("Marked as No plate")
     lastToast().opts.action.onClick()
+    await waitFor(() => expect(revertPlan).toHaveBeenCalledWith(mockUndo))
+  })
+
+  it("R on a cell switches an already open plate sheet to the list, again after Back", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      cells: mockPlan.cells.map((c) =>
+        c.plate ? { ...c, plate: { ...c.plate, state: "draft" } } : c
+      ),
+    })
+    vi.mocked(getAlternatives).mockResolvedValue({ alternatives: [] })
+    renderWithRouter(<PlanPage />)
+    const cell = await screen.findByRole("button", {
+      name: "Monday lunch, Chili, leftover 2 of 3, draft",
+    })
+    await user.click(cell)
+    const sheet = await screen.findByTestId("plan-sheet")
+    expect(within(sheet).queryByTestId("alternatives")).not.toBeInTheDocument()
+
+    // The open sheet traps focus, so the key goes straight to the cell.
+    fireEvent.keyDown(cell, { key: "r" })
+    expect(await within(sheet).findByTestId("alternatives")).toBeInTheDocument()
+
+    await user.click(within(sheet).getByRole("button", { name: "Back" }))
     await waitFor(() =>
-      expect(restorePlan).toHaveBeenCalledWith(mockRemovedBatch.removed)
+      expect(
+        within(sheet).queryByTestId("alternatives")
+      ).not.toBeInTheDocument()
     )
-    expect(clearAvailabilityOverride).toHaveBeenCalledWith("2026-11-02", 2)
+    fireEvent.keyDown(cell, { key: "r" })
+    expect(await within(sheet).findByTestId("alternatives")).toBeInTheDocument()
+  })
+
+  it("the day menu's Away all day previews, marks the day away and offers Undo", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      cells: mockPlan.cells.map((c) =>
+        c.plate ? { ...c, plate: { ...c.plate, state: "draft" } } : c
+      ),
+    })
+    vi.mocked(setAway).mockResolvedValue(
+      edited({ removed: mockRemovedBatch.removed })
+    )
+    vi.mocked(revertPlan).mockResolvedValue({ plate_ids: [], session_ids: [] })
+    renderWithRouter(<PlanPage />)
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Monday 2" })
+    )
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Away all day" })
+    )
+    const input = { date: "2026-11-02" }
+    await waitFor(() => expect(setAway).toHaveBeenCalledWith(input, true))
+    await waitFor(() => expect(setAway).toHaveBeenCalledWith(input))
+    await waitFor(() => expect(toastMock).toHaveBeenCalled())
+    expect(lastToast().message).toBe("Away all day")
+    lastToast().opts.action.onClick()
+    await waitFor(() => expect(revertPlan).toHaveBeenCalledWith(mockUndo))
+  })
+
+  it("the day menu's Plan this day clears the day's No plate cells", async () => {
+    const user = userEvent.setup()
+    vi.mocked(getPlan).mockResolvedValue({
+      ...mockPlan,
+      cells: mockPlan.cells.map((c) =>
+        c.date === "2026-11-02"
+          ? { ...c, mode: "none", source: "default", plate: null }
+          : c
+      ),
+    })
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({
+      ...mockPlan.cells[0],
+      mode: "plan",
+    } as never)
+    renderWithRouter(<PlanPage />)
+    await user.click(
+      await screen.findByRole("button", { name: "Actions for Monday 2" })
+    )
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Plan this day" })
+    )
+    await waitFor(() =>
+      expect(setAvailabilityOverride).toHaveBeenCalledTimes(3)
+    )
+    expect(setAvailabilityOverride).toHaveBeenCalledWith("2026-11-02", 1, {
+      mode: "plan",
+    })
   })
 
   it("teaches an empty window; Plan this week opens the wizard, or plan by hand focuses the first open cell", async () => {

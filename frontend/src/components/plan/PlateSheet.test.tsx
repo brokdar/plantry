@@ -14,6 +14,7 @@ import {
   mockPlateComponent,
   mockRemovedBatch,
   mockSession,
+  edited,
 } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
@@ -50,12 +51,20 @@ vi.mock("@/lib/api/availability", () => ({
   getAvailabilityRange: vi.fn(),
 }))
 vi.mock("@/lib/api/plan", () => ({ restorePlan: vi.fn() }))
+vi.mock("@/lib/api/meal", () => ({
+  movePlate: vi.fn(),
+  copyPlate: vi.fn(),
+  getAlternatives: vi.fn(),
+  replaceComponent: vi.fn(),
+  revertPlan: vi.fn(),
+}))
 const toastMock = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() })
 )
 vi.mock("@/lib/toast", () => ({ toast: toastMock, toastError: vi.fn() }))
 
 import { setAvailabilityOverride } from "@/lib/api/availability"
+import { copyPlate, getAlternatives, movePlate } from "@/lib/api/meal"
 import { deleteFeedback, putFeedback } from "@/lib/api/feedback"
 import { getFood, listFoodMacros } from "@/lib/api/foods"
 import {
@@ -109,6 +118,7 @@ async function renderSheet(
       plan={plan}
       readOnly={readOnly}
       running={false}
+      onRegenerateDay={vi.fn()}
       freezing={false}
       slotName={(id) => ["", "Breakfast", "Lunch", "Dinner"][id]}
       onPick={onPick}
@@ -153,9 +163,9 @@ beforeEach(async () => {
     ],
   })
   vi.mocked(updatePlate).mockResolvedValue(mockAc1Plates[0])
-  vi.mocked(updatePlateComponent).mockResolvedValue(mockAc1Plates[0])
-  vi.mocked(deletePlateComponent).mockResolvedValue(mockAc1Plates[0])
-  vi.mocked(deletePlate).mockResolvedValue(mockRemovedBatch)
+  vi.mocked(updatePlateComponent).mockResolvedValue(edited(mockAc1Plates[0]))
+  vi.mocked(deletePlateComponent).mockResolvedValue(edited(mockAc1Plates[0]))
+  vi.mocked(deletePlate).mockResolvedValue(edited(mockRemovedBatch))
   vi.mocked(updateSession).mockResolvedValue(mockSession)
   vi.mocked(putFeedback).mockResolvedValue({
     plate_id: 1,
@@ -446,5 +456,116 @@ describe("PlateSheet", () => {
     await userEvent.tab()
     unmount()
     await waitFor(() => expect(updatePlate).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe("PlateSheet: meal actions", () => {
+  const MONDAY_LUNCH = "2026-11-02|2"
+  const ok = () => edited({ plates: [mockAc1Plates[0]], session_ids: [] })
+
+  beforeEach(() => {
+    today.iso = "2026-10-31"
+    vi.mocked(movePlate).mockResolvedValue(ok())
+    vi.mocked(copyPlate).mockResolvedValue(ok())
+    vi.mocked(getAlternatives).mockResolvedValue({ alternatives: [] })
+  })
+
+  it("Move to… lists the week's cells; a free cell moves with a dry run first", async () => {
+    const { onClose } = await renderSheet(mockPlan, MONDAY_LUNCH)
+    await userEvent.click(screen.getByRole("button", { name: "Move to…" }))
+    const dialog = await screen.findByTestId("cell-choice")
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /^Sat lunch/ })
+    )
+    await waitFor(() => expect(movePlate).toHaveBeenCalledTimes(2))
+    expect(movePlate).toHaveBeenNthCalledWith(
+      1,
+      2,
+      { date: "2026-10-31", slot_id: 2, occupant: undefined },
+      true
+    )
+    expect(movePlate).toHaveBeenNthCalledWith(2, 2, {
+      date: "2026-10-31",
+      slot_id: 2,
+      occupant: undefined,
+    })
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  it("Move to… a taken cell asks Swap or Replace", async () => {
+    await renderSheet(mockPlan, MONDAY_LUNCH)
+    await userEvent.click(screen.getByRole("button", { name: "Move to…" }))
+    const dialog = await screen.findByTestId("cell-choice")
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /^Sun dinner/ })
+    )
+    await userEvent.click(within(dialog).getByRole("button", { name: "Swap" }))
+    await waitFor(() =>
+      expect(movePlate).toHaveBeenLastCalledWith(2, {
+        date: "2026-11-01",
+        slot_id: 3,
+        occupant: "swap",
+      })
+    )
+  })
+
+  it("Copy to… copies the plate to a free cell, as a fresh meal", async () => {
+    await renderSheet(mockPlan, MONDAY_LUNCH)
+    await userEvent.click(screen.getByRole("button", { name: "Copy to…" }))
+    const dialog = await screen.findByTestId("cell-choice")
+    // Copy targets free cells only.
+    expect(
+      within(dialog).queryByRole("button", { name: /^Sun dinner/ })
+    ).not.toBeInTheDocument()
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /^Sat lunch/ })
+    )
+    await waitFor(() =>
+      expect(copyPlate).toHaveBeenCalledWith(
+        2,
+        [{ date: "2026-10-31", slot_id: 2 }],
+        "fresh"
+      )
+    )
+  })
+
+  it("Something else opens the meal's alternatives, not a planner run", async () => {
+    const draft = { ...mockAc1Plates[1], state: "draft" as const }
+    await renderSheet(planWith(draft), MONDAY_LUNCH)
+    await userEvent.click(
+      screen.getByRole("button", { name: "Something else" })
+    )
+    expect(await screen.findByTestId("alternatives")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(getAlternatives).toHaveBeenCalledWith(
+        mockPlan.window.start,
+        expect.objectContaining({ plate_id: draft.id, what: "meal" })
+      )
+    )
+  })
+
+  it("opens straight on the alternatives list when asked (R and S)", async () => {
+    const draft = { ...mockAc1Plates[1], state: "draft" as const }
+    const plan = planWith(draft)
+    const onClose = vi.fn()
+    renderWithRouter(
+      <PlateSheet
+        cell={cellOf(plan, MONDAY_LUNCH)}
+        plan={plan}
+        readOnly={false}
+        running={false}
+        onRegenerateDay={vi.fn()}
+        freezing={false}
+        slotName={(id) => ["", "Breakfast", "Lunch", "Dinner"][id]}
+        onPick={vi.fn()}
+        onOpenCell={vi.fn()}
+        onMarkNoPlate={vi.fn()}
+        initialAlt="meal"
+        onClose={onClose}
+      />
+    )
+    expect(
+      await screen.findByRole("heading", { name: "Something else" })
+    ).toBeInTheDocument()
   })
 })

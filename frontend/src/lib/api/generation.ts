@@ -1,4 +1,5 @@
 import { apiFetch } from "./client"
+import type { Undo } from "./meal"
 import type { Issue } from "./plan"
 
 /** Who picks the recipes (D11): the model, or the deterministic heuristic. */
@@ -81,6 +82,8 @@ export interface PlanRun {
   issues: Issue[]
   score: Score | null
   window: { start: string; end: string }
+  /** A finished day or plate regenerate's revert token. */
+  undo?: Undo
 }
 
 /** POST /api/plan/generate → 202 {run_id}; 409

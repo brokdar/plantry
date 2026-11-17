@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/jaltszeimer/plantry/backend/internal/adapters/sqlite"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper"
 	"github.com/jaltszeimer/plantry/backend/internal/testhelper/testsvc"
 	transport "github.com/jaltszeimer/plantry/backend/internal/transport/http"
@@ -186,4 +188,67 @@ func TestMealHTTP_BadRequests(t *testing.T) {
 			assert.Equal(t, tc.want, code, body)
 		})
 	}
+}
+
+func TestMealHTTP_DryRunPreviewsWithoutWriting(t *testing.T) {
+	a := newMealAPI(t)
+	id, sid := a.plateOn("2030-01-07", a.dinner, a.chili)
+	code, body := a.do(http.MethodPost, fmt.Sprintf("/api/cook-sessions/%d/leftovers", sid), fmt.Sprintf(`{"cells":[{"date":"2030-01-08","slot_id":%d}]}`, a.dinner))
+	require.Less(t, code, 300, body)
+	occ, _ := a.plateOn("2030-01-09", a.dinner, a.curry)
+	lastEvent, sessions := a.eventMark()
+
+	// The cooking meal moved past its leftover moves the cook: the preview
+	// lists that and writes nothing.
+	code, body = a.do(http.MethodPost, fmt.Sprintf("/api/plates/%d/move?dry_run=1", id), fmt.Sprintf(`{"date":"2030-01-09","slot_id":%d,"occupant":"drop"}`, a.dinner))
+	require.Equal(t, http.StatusOK, code, body)
+	assert.NotEmpty(t, body["also_changed"])
+	code, body = a.do(http.MethodGet, fmt.Sprintf("/api/plates/%d", id), "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "2030-01-07", body["date"])
+	code, _ = a.do(http.MethodGet, fmt.Sprintf("/api/plates/%d", occ), "")
+	assert.Equal(t, http.StatusOK, code, "the dropped occupant is still there")
+
+	code, body = a.do(http.MethodPost, fmt.Sprintf("/api/plates/%d/replace?dry_run=1", id), fmt.Sprintf(`{"position":"main","food_id":%d}`, a.curry))
+	require.Equal(t, http.StatusOK, code, body)
+	code, body = a.do(http.MethodGet, fmt.Sprintf("/api/plates/%d", id), "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "Chili", body["components"].([]any)[0].(map[string]any)["food_name"])
+
+	code, body = a.do(http.MethodPost, fmt.Sprintf("/api/plates/%d/move?dry_run=1", id), fmt.Sprintf(`{"date":"2030-01-09","slot_id":%d}`, a.dinner))
+	assert.Equal(t, http.StatusConflict, code, "a dry run still reports the refusal: %v", body)
+	assert.EqualValues(t, occ, body["occupant_plate_id"])
+
+	code, body = a.do(http.MethodPost, "/api/availability/away?dry_run=1&today=2030-01-01", `{"date":"2030-01-07"}`)
+	require.Equal(t, http.StatusOK, code, body)
+	assert.NotNil(t, body["removed"])
+	code, _ = a.do(http.MethodGet, fmt.Sprintf("/api/plates/%d", id), "")
+	assert.Equal(t, http.StatusOK, code, "an away dry run keeps the plate")
+	code, body = a.do(http.MethodGet, "/api/availability?from=2030-01-07&to=2030-01-07", "")
+	require.Equal(t, http.StatusOK, code)
+	for _, c := range body["items"].([]any) {
+		assert.Equal(t, "plan", c.(map[string]any)["mode"], "an away dry run writes no override")
+	}
+	nowEvent, nowSessions := a.eventMark()
+	assert.Equal(t, lastEvent, nowEvent, "no dry run logs an event")
+	assert.Equal(t, sessions, nowSessions, "no dry run leaves a session behind")
+
+	// Only move, replace and away preview; the plate update ignores the
+	// parameter and writes.
+	code, body = a.do(http.MethodPut, fmt.Sprintf("/api/plates/%d?dry_run=1", id), `{"date":"2030-01-10"}`)
+	require.Equal(t, http.StatusOK, code, body)
+	code, body = a.do(http.MethodGet, fmt.Sprintf("/api/plates/%d", id), "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "2030-01-10", body["date"], "dry_run does not apply to PUT /plates/{id}")
+	putEvent, _ := a.eventMark()
+	assert.Greater(t, putEvent, lastEvent)
+}
+
+// eventMark is the highest plate event id and the cook session count.
+func (a *planAPI) eventMark() (lastEvent int64, sessions int) {
+	a.t.Helper()
+	last, err := sqlite.NewPlateEventRepo(a.db).LastID(context.Background())
+	require.NoError(a.t, err)
+	require.NoError(a.t, a.db.QueryRow(`SELECT COUNT(*) FROM cook_sessions`).Scan(&sessions))
+	return last, sessions
 }

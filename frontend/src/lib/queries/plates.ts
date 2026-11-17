@@ -16,7 +16,7 @@ import {
 import { restorePlan } from "@/lib/api/plan"
 import { toastError } from "@/lib/toast"
 
-import { invalidatePlanViews, useUndoableRemoval } from "./plan"
+import { invalidatePlanViews, useRevertUndo } from "./plan"
 
 // ── Plate mutations for the new screens (§3.1) ───────────────────────
 // Each invalidates exactly the plan views (planKeys, todayKeys, shoppingKeys).
@@ -73,16 +73,16 @@ export function useUpdatePlate() {
   })
 }
 
-/** Deletes the plate and offers Undo through the returned snapshot. */
+/** Deletes the plate and offers Undo through the revert token. */
 export function useDeletePlate() {
   const qc = useQueryClient()
   const { t } = useTranslation()
-  const offerUndo = useUndoableRemoval()
+  const offerRevert = useRevertUndo()
   return useMutation({
     mutationFn: (id: number) => deletePlate(id),
     onSuccess: (res) => {
-      void invalidatePlanViews(qc)
-      offerUndo(res, "plate_removed")
+      offerRevert(res.undo, t("plan.undo.plate_removed"))
+      return invalidatePlanViews(qc)
     },
     onError: (err) => toastError(err, t),
   })
@@ -91,6 +91,7 @@ export function useDeletePlate() {
 export function useAddComponent() {
   const qc = useQueryClient()
   const { t } = useTranslation()
+  const offerRevert = useRevertUndo()
   return useMutation({
     mutationFn: ({
       plateId,
@@ -99,7 +100,10 @@ export function useAddComponent() {
       plateId: number
       input: ComponentInput
     }) => addPlateComponent(plateId, input),
-    onSuccess: () => invalidatePlanViews(qc),
+    onSuccess: (res) => {
+      offerRevert(res.undo, t("plan.meal.undo.component_added"))
+      return invalidatePlanViews(qc)
+    },
     onError: (err) => toastError(err, t),
   })
 }
@@ -108,6 +112,7 @@ export function useAddComponent() {
 export function useUpdateComponent() {
   const qc = useQueryClient()
   const { t } = useTranslation()
+  const offerRevert = useRevertUndo()
   return useMutation({
     mutationFn: ({
       plateId,
@@ -118,7 +123,10 @@ export function useUpdateComponent() {
       componentId: number
       input: UpdatePlateComponentInput
     }) => updatePlateComponent(plateId, componentId, input),
-    onSuccess: () => invalidatePlanViews(qc),
+    onSuccess: (res) => {
+      offerRevert(res.undo, t("plan.meal.undo.component_changed"))
+      return invalidatePlanViews(qc)
+    },
     onError: (err) => toastError(err, t),
   })
 }
@@ -126,6 +134,7 @@ export function useUpdateComponent() {
 export function useRemoveComponent() {
   const qc = useQueryClient()
   const { t } = useTranslation()
+  const offerRevert = useRevertUndo()
   return useMutation({
     mutationFn: ({
       plateId,
@@ -134,7 +143,10 @@ export function useRemoveComponent() {
       plateId: number
       componentId: number
     }) => deletePlateComponent(plateId, componentId),
-    onSuccess: () => invalidatePlanViews(qc),
+    onSuccess: (res) => {
+      offerRevert(res.undo, t("plan.meal.undo.component_removed"))
+      return invalidatePlanViews(qc)
+    },
     onError: (err) => toastError(err, t),
   })
 }

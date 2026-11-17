@@ -5,8 +5,9 @@ import {
   Lock,
   LockOpen,
   Plus,
-  RefreshCw,
-  Shuffle,
+  Copy,
+  MoveRight,
+  Repeat,
   TriangleAlert,
   X,
 } from "lucide-react"
@@ -22,9 +23,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { PlateFeedbackStatus } from "@/lib/api/feedback"
-import type { RegenerateScope } from "@/lib/api/generation"
+import { movePlate } from "@/lib/api/meal"
 import { KNOWN_ISSUE_CODES, type Plan } from "@/lib/api/plan"
 import type { Plate, PlateComponent } from "@/lib/api/plates"
+import type { AlsoChanged } from "@/lib/api/meal"
 import type { Session, SessionWarning } from "@/lib/api/sessions"
 import { todayISO } from "@/lib/dates"
 import { colourBatches } from "@/lib/plan/batch-colours"
@@ -33,7 +35,12 @@ import { formatAmount, formatDate, formatNumber } from "@/lib/plan/format"
 import { plateMacros } from "@/lib/plan/plate-macros"
 import { useClearFeedback, useRecordFeedback } from "@/lib/queries/feedback"
 import { useFood, useFoodMacros } from "@/lib/queries/foods"
-import { useRegenerate } from "@/lib/queries/generation"
+import { targetCells } from "@/lib/plan/meal-actions"
+import {
+  useCopyPlate,
+  useMovePlate,
+  type DescribeAlsoChanged,
+} from "@/lib/queries/meal"
 import { useConfirm, useUnlock } from "@/lib/queries/plan"
 import {
   useDeletePlate,
@@ -46,7 +53,9 @@ import { useUpdateSession } from "@/lib/queries/sessions"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
+import { AlternativesPanel, type AlternativesTarget } from "./AlternativesPanel"
 import { BatchSection } from "./BatchSection"
+import { CellChoiceDialog, useAlsoChangedConfirm } from "./MealActions"
 import type { PickerTarget } from "./FoodPicker"
 import { QuantityStepper } from "./QuantityStepper"
 import { UnlockDialog } from "./UnlockDialog"
@@ -67,6 +76,11 @@ interface PlateSheetProps {
   onOpenCell: (key: string) => void
   /** Mark as No plate (a confirmed plate goes through the re-plan). */
   onMarkNoPlate: (cell: BoardCell) => void
+  /** Regenerate day, with its preview (PlanPage). */
+  onRegenerateDay: (date: string) => void
+  /** Open straight on an alternatives list (keyboard R and S, the cell's
+   *  quick actions): the meal's, or its side's. */
+  initialAlt?: "meal" | "side"
   onClose: () => void
 }
 
@@ -91,6 +105,8 @@ export function PlateSheet({
   onPick,
   onOpenCell,
   onMarkNoPlate,
+  onRegenerateDay,
+  initialAlt,
   onClose,
 }: PlateSheetProps) {
   const { t } = useTranslation()
@@ -107,6 +123,37 @@ export function PlateSheet({
   const [eaters, setEaters] = useState<number | null>(null)
   // Feedback is asked only once the plate's day has come.
   const [today] = useState(todayISO)
+  const [alt, setAlt] = useState<AlternativesTarget | null>(() => {
+    if (initialAlt === "meal")
+      return { what: "meal", title: t("plan.alt.something_else") }
+    const side = components.find((c) => c.id === cell.sideComponentId)
+    return initialAlt === "side" && side
+      ? {
+          what: "side",
+          componentId: side.id,
+          title: t("plan.alt.change_side_of", { name: side.food_name }),
+        }
+      : null
+  })
+  const { confirm, describe, dialog } = useAlsoChangedConfirm(plan, slotName)
+  // The alternatives work on drafts only (confirmed: Unlock first).
+  const canAlt = !readOnly && plate.state === "draft"
+
+  if (alt) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pb-6">
+        <AlternativesPanel
+          plan={plan}
+          plateId={plate.id}
+          date={plate.date}
+          target={alt}
+          describe={describe}
+          onBack={() => setAlt(null)}
+          onDone={onClose}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pb-6">
@@ -148,6 +195,32 @@ export function PlateSheet({
                   readOnly={readOnly}
                   onPick={onPick}
                 />
+                {canAlt && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-11 self-start text-small md:pointer-fine:h-8"
+                    data-testid="change-component"
+                    onClick={() =>
+                      setAlt(
+                        c.position === "main"
+                          ? { what: "main", title: t("plan.alt.change_main") }
+                          : {
+                              what: "side",
+                              componentId: c.id,
+                              title: t("plan.alt.change_side_of", {
+                                name: c.food_name,
+                              }),
+                            }
+                      )
+                    }
+                  >
+                    <Repeat strokeWidth={1.5} aria-hidden />
+                    {c.position === "main"
+                      ? t("plan.alt.change_main")
+                      : t("plan.alt.change_side")}
+                  </Button>
+                )}
                 {session && (
                   <BatchSection
                     session={session}
@@ -156,6 +229,7 @@ export function PlateSheet({
                     slotName={slotName}
                     freezing={freezing}
                     readOnly={readOnly}
+                    plan={plan}
                     onOpenCell={onOpenCell}
                     onClose={onClose}
                   />
@@ -173,6 +247,17 @@ export function PlateSheet({
           >
             <Plus strokeWidth={1.5} aria-hidden />
             {t("plan.sheet.add_food")}
+          </Button>
+        )}
+        {canAlt && (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 self-start md:pointer-fine:h-9"
+            onClick={() => setAlt({ what: "add", title: t("plan.alt.add") })}
+          >
+            <Plus strokeWidth={1.5} aria-hidden />
+            {t("plan.alt.add")}
           </Button>
         )}
       </section>
@@ -211,6 +296,13 @@ export function PlateSheet({
           plan={plan}
           running={running}
           slotName={slotName}
+          onSomethingElse={() =>
+            setAlt({ what: "meal", title: t("plan.alt.something_else") })
+          }
+          onRegenerateDay={() => {
+            onClose()
+            onRegenerateDay(plate.date)
+          }}
           onClose={onClose}
         />
       )}
@@ -219,10 +311,15 @@ export function PlateSheet({
         <PlateActions
           plate={plate}
           cell={cell}
+          plan={plan}
+          slotName={slotName}
+          confirm={confirm}
+          describe={describe}
           onMarkNoPlate={onMarkNoPlate}
           onClose={onClose}
         />
       )}
+      {dialog}
     </div>
   )
 }
@@ -297,28 +394,25 @@ function ReviewActions({
   plan,
   running,
   slotName,
+  onSomethingElse,
+  onRegenerateDay,
   onClose,
 }: {
   cell: BoardCell & { plate: Plate }
   plan: Plan
   running: boolean
   slotName: (slotId: number) => string
+  onSomethingElse: () => void
+  onRegenerateDay: () => void
   onClose: () => void
 }) {
   const { t, i18n } = useTranslation()
   const confirm = useConfirm()
   const unlock = useUnlock()
-  const regenerate = useRegenerate()
   const [unlocking, setUnlocking] = useState(false)
   const plate = cell.plate
   const draft = plate.state === "draft"
   const target = { kind: "plate", id: plate.id } as const
-  const start = plan.window.start
-
-  function regen(scope: RegenerateScope) {
-    onClose()
-    regenerate.mutate({ scope, start })
-  }
 
   const alsoUnlocks = unlocking
     ? closureCells(plan, plate.id).map((c) =>
@@ -329,21 +423,8 @@ function ReviewActions({
       )
     : []
 
-  // Confirm and Unlock act on the whole batch closure (D34), and Replace on
-  // a batch's cook plate replaces the batch: say so before acting (F6).
+  // Confirm and Unlock act on the whole batch closure (D34).
   const closureSize = closureCells(plan, plate.id).length + 1
-  const batch = plan.sessions.find(
-    (sess) =>
-      sess.cook_date === plate.date &&
-      sess.cook_slot_id === plate.slot_id &&
-      sess.links.length > 1 &&
-      sess.links.some((l) => l.plate_id === plate.id)
-  )
-  const replaceHint = batch
-    ? t("plan.review.replace_batch", { count: closureSize })
-    : plate.components.some((c) => c.cook_session_id != null)
-      ? t("plan.review.replace_plate")
-      : null
 
   const button = "h-11 justify-start md:pointer-fine:h-9"
   return (
@@ -400,29 +481,10 @@ function ReviewActions({
           variant="outline"
           className={button}
           disabled={running}
-          onClick={() => regen({ kind: "plate", plate_id: plate.id })}
+          onClick={onSomethingElse}
         >
-          <RefreshCw strokeWidth={1.5} aria-hidden />
-          {t("plan.review.replace")}
-        </Button>
-      )}
-      {draft && replaceHint && (
-        <p className="text-small text-ink-muted" data-testid="replace-hint">
-          {replaceHint}
-        </p>
-      )}
-      {draft && cell.sideComponentId !== null && (
-        <Button
-          type="button"
-          variant="outline"
-          className={button}
-          disabled={running}
-          onClick={() =>
-            regen({ kind: "side", component_id: cell.sideComponentId! })
-          }
-        >
-          <Shuffle strokeWidth={1.5} aria-hidden />
-          {t("plan.review.different_side")}
+          <Repeat strokeWidth={1.5} aria-hidden />
+          {t("plan.alt.something_else")}
         </Button>
       )}
       <Button
@@ -430,7 +492,7 @@ function ReviewActions({
         variant="outline"
         className={button}
         disabled={running}
-        onClick={() => regen({ kind: "day", date: plate.date })}
+        onClick={onRegenerateDay}
       >
         <CalendarSync strokeWidth={1.5} aria-hidden />
         {t("plan.review.regenerate_day")}
@@ -804,16 +866,28 @@ function FeedbackButtons({ plate }: { plate: Plate }) {
 function PlateActions({
   plate,
   cell,
+  plan,
+  slotName,
+  confirm,
+  describe,
   onMarkNoPlate,
   onClose,
 }: {
   plate: Plate
   cell: BoardCell
+  plan: Plan
+  slotName: (slotId: number) => string
+  confirm: (preview: () => Promise<AlsoChanged[]>, commit: () => void) => void
+  describe: DescribeAlsoChanged
   onMarkNoPlate: (cell: BoardCell) => void
   onClose: () => void
 }) {
   const { t } = useTranslation()
   const deletePlate = useDeletePlate()
+  const move = useMovePlate(describe)
+  const copy = useCopyPlate()
+  const [choosing, setChoosing] = useState<"move" | "copy" | null>(null)
+  const [today] = useState(todayISO)
   const createPreset = useCreatePreset()
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState(cell.mainName ?? "")
@@ -877,6 +951,52 @@ function PlateActions({
           {t("plan.sheet.save_routine")}
         </Button>
       )}
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 justify-start md:pointer-fine:h-9"
+        onClick={() => setChoosing("move")}
+      >
+        <MoveRight strokeWidth={1.5} aria-hidden />
+        {t("plan.meal.move_to")}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 justify-start md:pointer-fine:h-9"
+        onClick={() => setChoosing("copy")}
+      >
+        <Copy strokeWidth={1.5} aria-hidden />
+        {t("plan.meal.copy_to")}
+      </Button>
+      <CellChoiceDialog
+        open={choosing !== null}
+        title={t(
+          choosing === "copy" ? "plan.meal.copy_to" : "plan.meal.move_to"
+        )}
+        cells={targetCells(plan, today, {
+          except: cell.key,
+          taken: choosing === "move",
+        })}
+        slotName={slotName}
+        onOpenChange={(o) => !o && setChoosing(null)}
+        onChoose={(c, occupant) => {
+          const target = { date: c.date, slot_id: c.slot_id }
+          if (choosing === "copy") {
+            copy.mutate({ id: plate.id, cells: [target], as: "fresh" })
+            onClose()
+            return
+          }
+          const input = { ...target, occupant }
+          confirm(
+            () => movePlate(plate.id, input, true).then((r) => r.also_changed),
+            () => {
+              move.mutate({ id: plate.id, input })
+              onClose()
+            }
+          )
+        }}
+      />
       <Button
         type="button"
         variant="outline"

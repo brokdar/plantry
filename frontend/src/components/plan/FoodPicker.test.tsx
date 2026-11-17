@@ -9,6 +9,7 @@ import {
   mockChickenCurry,
   mockChili,
   mockPlate,
+  edited,
 } from "@/test/fixtures"
 import { renderWithRouter } from "@/test/render"
 
@@ -43,8 +44,8 @@ beforeEach(async () => {
   })
   vi.mocked(getFood).mockResolvedValue(mockBrownRice)
   vi.mocked(createPlate).mockResolvedValue(mockPlate())
-  vi.mocked(addPlateComponent).mockResolvedValue(mockPlate())
-  vi.mocked(updatePlateComponent).mockResolvedValue(mockPlate())
+  vi.mocked(addPlateComponent).mockResolvedValue(edited(mockPlate()))
+  vi.mocked(updatePlateComponent).mockResolvedValue(edited(mockPlate()))
 })
 
 function renderPicker(target: PickerTarget) {
@@ -117,7 +118,7 @@ describe("FoodPicker", () => {
 
   it("a retry after a failed add does not add the saved food again", async () => {
     vi.mocked(addPlateComponent)
-      .mockResolvedValueOnce(mockPlate())
+      .mockResolvedValueOnce(edited(mockPlate()))
       .mockRejectedValueOnce(new Error("offline"))
     const { onDone } = renderPicker({ kind: "add", plateId: 5 })
     await userEvent.click(await row("Chili"))

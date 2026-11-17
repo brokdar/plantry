@@ -12,7 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { CalendarArrowUp } from "lucide-react"
+
+import type { Plan } from "@/lib/api/plan"
 import type { Cell, Session } from "@/lib/api/sessions"
+import { todayISO } from "@/lib/dates"
+import { cookCells } from "@/lib/plan/meal-actions"
+import { useMoveCook } from "@/lib/queries/meal"
 import type { BatchColour } from "@/lib/plan/batch-colours"
 import {
   batchBadgeText,
@@ -27,6 +33,7 @@ import {
   useUpdateSession,
 } from "@/lib/queries/sessions"
 
+import { CellList } from "./MealActions"
 import { QuantityStepper } from "./QuantityStepper"
 
 const MIN_MEALS = 2
@@ -44,6 +51,8 @@ interface BatchSectionProps {
   /** `plan.freezing_enabled`: shows the freeze stepper. */
   freezing: boolean
   readOnly: boolean
+  /** The board's plan: offers "Cook on another day" (move-cook). */
+  plan?: Plan
   /** Opens another cell's sheet (the batch's cook cell). */
   onOpenCell: (key: string) => void
   /** Closes the sheet once the batch is removed. */
@@ -266,6 +275,7 @@ function BatchControls({
   session,
   slotName,
   freezing,
+  plan,
   onClose,
 }: BatchSectionProps) {
   const { t, i18n } = useTranslation()
@@ -410,6 +420,71 @@ function BatchControls({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {plan && session.cooked_at === null && (
+        <MoveCook
+          plan={plan}
+          session={session}
+          slotName={slotName}
+          onClose={onClose}
+        />
+      )}
     </SectionFrame>
+  )
+}
+
+/** "Cook on another day": the cells the batch may cook on; the backend
+ *  checks again and its refusal is shown as a toast. */
+function MoveCook({
+  plan,
+  session,
+  slotName,
+  onClose,
+}: {
+  plan: Plan
+  session: Session
+  slotName: (slotId: number) => string
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [today] = useState(todayISO)
+  const move = useMoveCook()
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 self-start md:pointer-fine:h-9"
+        onClick={() => setOpen(true)}
+      >
+        <CalendarArrowUp strokeWidth={1.5} aria-hidden />
+        {t("plan.meal.cook_other_day")}
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent data-testid="move-cook">
+          <DialogHeader>
+            <DialogTitle>{t("plan.meal.cook_other_day")}</DialogTitle>
+            <DialogDescription>
+              {t("plan.meal.cook_other_day_body", { name: session.food_name })}
+            </DialogDescription>
+          </DialogHeader>
+          <CellList
+            cells={cookCells(plan, session, today)}
+            slotName={slotName}
+            onChoose={(c) =>
+              move.mutate(
+                { id: session.id, cell: { date: c.date, slot_id: c.slot_id } },
+                {
+                  onSuccess: () => {
+                    setOpen(false)
+                    onClose()
+                  },
+                }
+              )
+            }
+          />
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { ApiError } from "@/lib/api/client"
+import { revertPlan } from "@/lib/api/meal"
 import {
   mockPlan,
   mockRemovedBatch,
@@ -20,6 +21,9 @@ vi.mock("@/lib/api/plan", () => ({
   discardPlan: vi.fn(),
   getReplanPreview: vi.fn(),
   replan: vi.fn(),
+}))
+vi.mock("@/lib/api/meal", () => ({
+  revertPlan: vi.fn(),
 }))
 vi.mock("@/lib/api/plates", () => ({
   confirmPlate: vi.fn(),
@@ -79,9 +83,12 @@ import {
   useClearWindow,
   useConfirm,
   useDiscard,
-  useMarkNoPlate,
+  emptyUndo,
+  mergeUndo,
   usePlan,
+  usePlanDay,
   usePlanMeal,
+  useRevertUndo,
   useReplan,
   useReplanPreview,
   useRestorePlan,
@@ -265,82 +272,141 @@ describe("useUndoableRemoval", () => {
   })
 })
 
-describe("useMarkNoPlate", () => {
-  const cell = mockPlan.cells.find((c) => c.plate)!
+describe("useRevertUndo", () => {
+  const undo = { first_event_id: 4, last_event_id: 9, cells: [] }
 
-  async function mark() {
-    vi.mocked(setAvailabilityOverride).mockResolvedValue({
-      cell: { ...cell, mode: "none" },
-      removed: mockRemovedBatch.removed,
-    })
-    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
-    const { result } = renderHook(() => useMarkNoPlate(), {
+  function offer(token = undo) {
+    const { result } = renderHook(() => useRevertUndo(), {
       wrapper: createHookWrapper(),
     })
-    await act(async () => {
-      await result.current.mutateAsync(cell)
-    })
-    return lastToast()
+    act(() => result.current(token, "Moved", "Lasagne will now be cooked"))
+    return toastMock.mock.calls.at(-1)
   }
 
-  it("marks the cell, removing its plate, and Undo restores it once", async () => {
-    const { message, opts } = await mark()
-    expect(setAvailabilityOverride).toHaveBeenCalledWith(
-      cell.date,
-      cell.slot_id,
-      { mode: "none", note: null, remove_plate: true }
+  it("shows the undo toast with the also-changed line; Undo reverts once", async () => {
+    vi.mocked(revertPlan).mockResolvedValue({ plate_ids: [1], session_ids: [] })
+    offer()
+    const { message, opts } = lastToast()
+    expect(message).toBe("Moved")
+    expect((opts as unknown as { description: string }).description).toBe(
+      "Lasagne will now be cooked"
     )
-    expect(message).toBe("Marked as No plate")
-    expect(opts.duration).toBe(6000)
     act(() => {
       opts.action.onClick()
       opts.action.onClick()
     })
-    await waitFor(() => expect(restorePlan).toHaveBeenCalledTimes(1))
-    expect(clearAvailabilityOverride).toHaveBeenCalledTimes(1)
-  })
-
-  it("puts No plate back when the plate can't be restored", async () => {
-    vi.mocked(restorePlan).mockRejectedValue(
-      new ApiError(409, "error.plan.cell_occupied")
-    )
-    const { opts } = await mark()
-    act(() => opts.action.onClick())
-    await waitFor(() =>
-      expect(toastMock.error).toHaveBeenCalledWith(
-        "Can't undo: that meal was changed in the meantime."
-      )
-    )
-    expect(clearAvailabilityOverride).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(setAvailabilityOverride).mock.calls.at(-1)).toEqual([
-      cell.date,
-      cell.slot_id,
-      { mode: "none", note: null },
-    ])
-    expect(toastMock.success).not.toHaveBeenCalled()
-  })
-
-  it("confirms a successful Undo", async () => {
-    const { opts } = await mark()
-    act(() => opts.action.onClick())
+    await waitFor(() => expect(revertPlan).toHaveBeenCalledTimes(1))
+    expect(revertPlan).toHaveBeenCalledWith(undo)
     await waitFor(() =>
       expect(toastMock.success).toHaveBeenCalledWith("Restored")
     )
   })
 
-  it.each(["onAutoClose", "onDismiss"] as const)(
-    "does nothing once the toast closed (%s)",
-    async (close) => {
-      const { opts } = await mark()
-      act(() => {
-        opts[close]()
-        opts.action.onClick()
-      })
-      await Promise.resolve()
-      expect(clearAvailabilityOverride).not.toHaveBeenCalled()
-      expect(restorePlan).not.toHaveBeenCalled()
-    }
-  )
+  it("a stale token shows its message", async () => {
+    vi.mocked(revertPlan).mockRejectedValue(
+      new ApiError(409, "error.plan.change_stale")
+    )
+    offer()
+    act(() => lastToast().opts.action.onClick())
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalled())
+    expect((toastErrorMock.mock.calls[0][0] as ApiError).messageKey).toBe(
+      "error.plan.change_stale"
+    )
+  })
+
+  it("offers nothing for an empty token", () => {
+    expect(offer({ first_event_id: 0, last_event_id: 0, cells: [] })).toBe(
+      undefined
+    )
+  })
+})
+
+describe("mergeUndo / emptyUndo", () => {
+  it("spans the first to the last event and keeps every cell", () => {
+    const cell = { date: "2026-11-02", slot_id: 1, before: null, after: null }
+    expect(
+      mergeUndo([
+        { first_event_id: 3, last_event_id: 4, cells: [] },
+        { first_event_id: 0, last_event_id: 0, cells: [cell] },
+        { first_event_id: 7, last_event_id: 9, cells: [] },
+      ])
+    ).toEqual({ first_event_id: 3, last_event_id: 9, cells: [cell] })
+    expect(emptyUndo({ first_event_id: 0, last_event_id: 0, cells: [] })).toBe(
+      true
+    )
+    expect(emptyUndo(undefined)).toBe(true)
+  })
+})
+
+describe("usePlanDay", () => {
+  it("puts every No plate cell of the day back to Plan", async () => {
+    vi.mocked(clearAvailabilityOverride).mockResolvedValue(undefined)
+    vi.mocked(getAvailabilityRange).mockResolvedValue({ items: [] })
+    vi.mocked(setAvailabilityOverride).mockResolvedValue({
+      cell: {} as never,
+      removed: null,
+    })
+    const cells = [
+      {
+        ...mockPlan.cells[0],
+        mode: "none" as const,
+        source: "default" as const,
+      },
+      { ...mockPlan.cells[1], mode: "plan" as const },
+    ]
+    const { result } = renderHook(() => usePlanDay(), {
+      wrapper: createHookWrapper(),
+    })
+    await act(async () => {
+      await result.current.mutateAsync(cells)
+    })
+    expect(setAvailabilityOverride).toHaveBeenCalledTimes(1)
+    expect(setAvailabilityOverride).toHaveBeenCalledWith(
+      cells[0].date,
+      cells[0].slot_id,
+      { mode: "plan" }
+    )
+  })
+})
+
+describe("usePlanDay partial failure", () => {
+  const noneCells = [0, 1, 2].map((i) => ({
+    ...mockPlan.cells[0],
+    slot_id: 100 + i,
+    mode: "none" as const,
+    source: "default" as const,
+  }))
+
+  it("reports how many cells were set when a later one fails", async () => {
+    vi.mocked(setAvailabilityOverride)
+      .mockResolvedValueOnce({ cell: {} as never, removed: null })
+      .mockRejectedValueOnce(new ApiError(500, "error.internal"))
+    const { result } = renderHook(() => usePlanDay(), {
+      wrapper: createHookWrapper(),
+    })
+    await act(async () => {
+      await result.current.mutateAsync(noneCells)
+    })
+    expect(setAvailabilityOverride).toHaveBeenCalledTimes(2)
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "1 of 3 meals set back to plan"
+    )
+  })
+
+  it("a failure on the first cell is just the error", async () => {
+    vi.mocked(setAvailabilityOverride).mockRejectedValueOnce(
+      new ApiError(500, "error.internal")
+    )
+    const { result } = renderHook(() => usePlanDay(), {
+      wrapper: createHookWrapper(),
+    })
+    await act(async () => {
+      await result.current.mutateAsync(noneCells).catch(() => {})
+    })
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastMock.error).not.toHaveBeenCalled()
+  })
 })
 
 describe("No plate cell actions", () => {

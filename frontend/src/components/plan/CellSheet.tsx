@@ -13,11 +13,8 @@ import {
   useApplyResultToasts,
   usePresets,
 } from "@/lib/queries/presets"
-import {
-  useMarkNoPlate,
-  usePlanMeal,
-  useSetNoPlateNote,
-} from "@/lib/queries/plan"
+import { useSetAway } from "@/lib/queries/meal"
+import { usePlanMeal, useSetNoPlateNote } from "@/lib/queries/plan"
 import { useCreatePlate } from "@/lib/queries/plates"
 
 import type { PickerTarget } from "./FoodPicker"
@@ -56,7 +53,7 @@ export function CellSheet({ cell, plan, onPick, onClose }: CellSheetProps) {
 
 function EmptyActions({ cell, plan, onPick, onClose }: CellSheetProps) {
   const { t } = useTranslation()
-  const markNoPlate = useMarkNoPlate()
+  const away = useSetAway()
   return (
     <>
       {cell.mode === "routine" && (
@@ -82,7 +79,7 @@ function EmptyActions({ cell, plan, onPick, onClose }: CellSheetProps) {
         variant="outline"
         className={actionClass}
         onClick={() => {
-          markNoPlate.mutate(cell)
+          away.mutate({ cells: [{ date: cell.date, slot_id: cell.slot_id }] })
           onClose()
         }}
       >

@@ -10,6 +10,7 @@ import {
   mockPlate,
   mockPlateComponent,
   mockProfile,
+  edited,
 } from "@/test/fixtures"
 
 vi.mock("@/lib/api/plan", () => ({ getPlan: vi.fn(), restorePlan: vi.fn() }))
@@ -178,7 +179,7 @@ describe("AddToPlanSheet", () => {
       vi.mocked(getPlan).mockImplementation(async (start) =>
         start === "2026-11-07" ? { ...next, cells: [] } : drafted
       )
-      vi.mocked(deletePlate).mockResolvedValue({ removed })
+      vi.mocked(deletePlate).mockResolvedValue(edited({ removed }))
     })
 
     it("offers a draft cell, labelled as replacing the draft", async () => {

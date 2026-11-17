@@ -3,6 +3,7 @@ import { dayMeterTargets } from "@/lib/plan/ledger"
 import { cn } from "@/lib/utils"
 
 import type { BoardLayoutProps } from "./BoardGrid"
+import { DayMenu } from "./MealActions"
 import { LightMark } from "./LightMark"
 import { PlateCell } from "./PlateCell"
 
@@ -16,6 +17,7 @@ export function DayList({
   targets,
   label,
   onOpenCell,
+  onDayAction,
 }: BoardLayoutProps) {
   const collapsed = board.rows.filter((r) => r.collapsed)
   const slotRows = board.rows.filter((r) => !r.collapsed)
@@ -51,6 +53,12 @@ export function DayList({
               </h2>
               {day.light && (
                 <LightMark label={day.light} hearty={day.hearty} showLabel />
+              )}
+              {onDayAction && (
+                <DayMenu
+                  label={`${day.weekday} ${day.dayNumber}`}
+                  onAction={(a) => onDayAction(day.date, a)}
+                />
               )}
               {day.nutrition && (
                 <DayMeter

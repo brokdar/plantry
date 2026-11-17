@@ -318,7 +318,8 @@ func (s *Service) SetAway(ctx context.Context, in AwayInput) (AwayResult, error)
 // Revert takes back a hand edit's undo token in one unit of work: the plate
 // events through plate.Service.RevertRange and each cell's override back to
 // Before. A cell whose override is no longer After, or a row written after
-// the events, is domain.ErrPlanChangeStale and nothing is written; a token
+// the events, is domain.ErrPlanChangeStale and nothing is written; a cell
+// whose slot no longer exists is skipped (nothing to restore); a token
 // without events or cells is domain.ErrInvalidInput.
 func (s *Service) Revert(ctx context.Context, u plate.Undo) (plate.RowSet, error) {
 	if u.FirstEventID == 0 && len(u.Cells) == 0 {
@@ -330,12 +331,22 @@ func (s *Service) Revert(ctx context.Context, u plate.Undo) (plate.RowSet, error
 	rows := plate.RowSet{PlateIDs: []int64{}, SessionIDs: []int64{}}
 	err := s.tx.InTx(ctx, func(ctx context.Context) error {
 		dates := make([]time.Time, len(u.Cells))
+		// A cell whose slot was deleted since has nothing left to restore.
+		gone := make([]bool, len(u.Cells))
 		for i, c := range u.Cells {
 			d, err := time.Parse(dateLayout, c.Date)
 			if err != nil {
 				return fmt.Errorf("%w: cell date %q", domain.ErrInvalidInput, c.Date)
 			}
 			dates[i] = d
+			exists, _, err := s.repo.SlotState(ctx, c.SlotID)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				gone[i] = true
+				continue
+			}
 			cur, err := s.repo.GetOverride(ctx, d, c.SlotID)
 			if err != nil {
 				return err
@@ -351,6 +362,9 @@ func (s *Service) Revert(ctx context.Context, u plate.Undo) (plate.RowSet, error
 			}
 		}
 		for i, c := range u.Cells {
+			if gone[i] {
+				continue
+			}
 			if err := s.RestoreOverride(ctx, dates[i], c.SlotID, fromUndo(c.Before)); err != nil {
 				return err
 			}
@@ -589,4 +603,10 @@ type defaultKey struct {
 type cellKey struct {
 	date   string
 	slotID int64
+}
+
+// DryRun runs fn (a mutation of this service) in a unit of work that is
+// rolled back: the away preview (?dry_run=1).
+func (s *Service) DryRun(ctx context.Context, fn func(ctx context.Context) error) error {
+	return domain.DryRun(ctx, s.tx, fn)
 }

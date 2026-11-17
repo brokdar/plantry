@@ -27,6 +27,11 @@ import { useIsPhone } from "./use-is-phone"
 export interface SheetState {
   key: string
   picker?: PickerTarget
+  /** Open the plate sheet on an alternatives list (R, S, quick actions). */
+  alt?: "meal" | "side"
+  /** Bumped on every R/S so an already open sheet re-opens on the list
+   *  (the plate sheet keeps its list in local state, keyed by this). */
+  altSeq?: number
 }
 
 interface PlanSheetProps {
@@ -40,6 +45,7 @@ interface PlanSheetProps {
   onClosed: () => void
   /** Mark as No plate on a plate (a confirmed one opens the re-plan). */
   onMarkNoPlate: (cell: BoardCell) => void
+  onRegenerateDay: (date: string) => void
 }
 
 function findCell(board: Board, key: string): BoardCell | undefined {
@@ -64,6 +70,7 @@ export function PlanSheet({
   onChange,
   onClosed,
   onMarkNoPlate,
+  onRegenerateDay,
 }: PlanSheetProps) {
   const { t, i18n } = useTranslation()
   const phone = useIsPhone()
@@ -140,7 +147,7 @@ export function PlanSheet({
             />
           ) : cell.plate ? (
             <PlateSheet
-              key={cell.plate.id}
+              key={`${cell.plate.id}:${state.alt ?? ""}:${state.altSeq ?? 0}`}
               cell={cell as BoardCell & { plate: Plate }}
               plan={plan}
               readOnly={board.readOnly}
@@ -150,6 +157,8 @@ export function PlanSheet({
               onPick={(p) => onChange({ key: state.key, picker: p })}
               onOpenCell={(key) => onChange({ key })}
               onMarkNoPlate={onMarkNoPlate}
+              onRegenerateDay={onRegenerateDay}
+              initialAlt={state.alt}
               onClose={close}
             />
           ) : (

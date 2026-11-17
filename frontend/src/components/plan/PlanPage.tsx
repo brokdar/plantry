@@ -15,13 +15,17 @@ import {
   isCheatsheetShortcut,
 } from "@/lib/plan/keynav"
 import { replanFrom } from "@/lib/plan/replan"
+import { getRegeneratePreview, setAway, type MealCell } from "@/lib/api/meal"
+import { useSetAway } from "@/lib/queries/meal"
+import { slotLabel } from "@/lib/slot-label"
 import { useGenerate, useRegenerate, useRun } from "@/lib/queries/generation"
 import {
   useAccept,
   useClearWindow,
   useDiscard,
-  useMarkNoPlate,
   usePlan,
+  usePlanDay,
+  useRevertUndo,
 } from "@/lib/queries/plan"
 import { useSettingItems } from "@/lib/queries/settings"
 import { cn } from "@/lib/utils"
@@ -32,6 +36,7 @@ import { DiscardDialog } from "./DiscardDialog"
 import { DraftBar } from "./DraftBar"
 import { EmptyWindow } from "./EmptyWindow"
 import { GenerationProgress } from "./GenerationProgress"
+import { useAlsoChangedConfirm, type DayAction } from "./MealActions"
 import { PlanSheet, type SheetState } from "./PlanSheet"
 import { PlanToolbar } from "./PlanToolbar"
 import { ReplanSheet } from "./ReplanSheet"
@@ -168,7 +173,16 @@ function PlanView({
   const assistantShown = assistant && !(phone && sheet !== null)
   const assistantKeep = assistantShown ? (1 as const) : undefined
   const clearWindow = useClearWindow()
-  const markNoPlate = useMarkNoPlate()
+  const slotNames = new Map(
+    plan.slots.map((s) => [s.id, slotLabel(t, s.name_key)])
+  )
+  const slotName = (id: number) => slotNames.get(id) ?? ""
+  const { confirm, describe, dialog } = useAlsoChangedConfirm(plan, slotName)
+  const away = useSetAway(describe)
+  const planDay = usePlanDay()
+  const offerRevert = useRevertUndo()
+  // The regenerate-day run whose Undo is offered once it finishes.
+  const undoRun = useRef<number | null>(null)
   const accept = useAccept()
   const discard = useDiscard()
   const generate = useGenerate()
@@ -195,6 +209,13 @@ function PlanView({
   // server says is running for this window (a reload re-attaches, D35).
   const runId = run ?? plan.running_run_id ?? undefined
   const runQuery = useRun(runId)
+  const finished = runQuery.data
+  useEffect(() => {
+    if (!finished || finished.id !== undoRun.current) return
+    if (finished.status !== "ok" && finished.status !== "partial") return
+    undoRun.current = null
+    offerRevert(finished.undo, t("plan.meal.undo.regenerated"))
+  }, [finished, offerRevert, t])
   const running =
     runId !== undefined &&
     !runQuery.isError &&
@@ -246,22 +267,20 @@ function PlanView({
     return () => window.removeEventListener("keydown", listener)
   }, [])
 
-  /** Replace a draft plate (keyboard R, quick action): its batch closure. */
+  const altSeq = useRef(0)
+  const nextAltSeq = () => ++altSeq.current
+
+  /** Something else (keyboard R, quick action): the plate sheet on the
+   *  meal's alternatives list. */
   function replace(cell: BoardCell) {
     if (!cell.plate) return
-    regenerate.mutate({
-      scope: { kind: "plate", plate_id: cell.plate.id },
-      start: win.start,
-    })
+    changeSheet({ key: cell.key, alt: "meal", altSeq: nextAltSeq() })
   }
 
-  /** Different side (keyboard S, quick action): only the side. */
+  /** Change side (keyboard S, quick action): the side's alternatives. */
   function differentSide(cell: BoardCell) {
     if (cell.sideComponentId === null) return
-    regenerate.mutate({
-      scope: { kind: "side", component_id: cell.sideComponentId },
-      start: win.start,
-    })
+    changeSheet({ key: cell.key, alt: "side", altSeq: nextAltSeq() })
   }
 
   /** Drops `?run=` once the run is over, so a reload doesn't announce it
@@ -362,10 +381,61 @@ function PlanView({
       openReplan([{ date: cell.date, slot_id: cell.slotId }], cell.key)
       return
     }
-    const raw = plan.cells.find(
-      (c) => c.date === cell.date && c.slot_id === cell.slotId
+    awayCells({ cells: [{ date: cell.date, slot_id: cell.slotId }] })
+  }
+
+  /** Away (a cell or a day) with the also-changed preview first. */
+  function awayCells(input: { cells: MealCell[] } | { date: string }) {
+    confirm(
+      () => setAway(input, true).then((r) => r.also_changed),
+      () => away.mutate(input)
     )
-    if (raw) markNoPlate.mutate(raw)
+  }
+
+  /** Regenerate day: the preview first; when other days change, ask. The
+   *  run's Undo is offered once it finishes. */
+  function regenerateDay(date: string) {
+    confirm(
+      () => getRegeneratePreview(win.start, date).then((r) => r.also_changed),
+      () =>
+        regenerate.mutate(
+          { scope: { kind: "day", date }, start: win.start },
+          {
+            onSuccess: ({ run_id }) => {
+              undoRun.current = run_id
+            },
+          }
+        )
+    )
+  }
+
+  /** The day header's menu. A confirmed plate from the re-plan start on
+   *  routes Away all day to the re-plan sheet, as No plate does. */
+  function dayAction(date: string, action: DayAction) {
+    if (action === "regenerate") {
+      regenerateDay(date)
+      return
+    }
+    if (action === "plan") {
+      planDay.mutate(plan.cells.filter((c) => c.date === date))
+      return
+    }
+    const confirmed = plan.cells.filter(
+      (c) =>
+        c.date === date &&
+        c.plate?.state === "confirmed" &&
+        from !== null &&
+        c.date >= from
+    )
+    if (confirmed.length > 0) {
+      openReplan(
+        plan.cells
+          .filter((c) => c.date === date && c.mode === "plan")
+          .map((c) => ({ date: c.date, slot_id: c.slot_id }))
+      )
+      return
+    }
+    awayCells({ date })
   }
 
   return (
@@ -424,6 +494,9 @@ function PlanView({
           {phone && <CookStrip batches={board.cookStrip} />}
           <div ref={boardRef}>
             <Board
+              plan={plan}
+              slotName={slotName}
+              onDayAction={board.readOnly || running ? undefined : dayAction}
               board={board}
               targets={plan.targets}
               label={t("plan.board.label", { range: rangeLabel })}
@@ -469,7 +542,9 @@ function PlanView({
           onChange={changeSheet}
           onClosed={returnFocus}
           onMarkNoPlate={markCell}
+          onRegenerateDay={regenerateDay}
         />
+        {dialog}
         {from !== null && (
           <ReplanSheet
             open={replan.open}

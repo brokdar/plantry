@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { invalidatedBy } from "@/test/render"
-import { mockPlate as makePlate, mockRemovedBatch } from "@/test/fixtures"
+import {
+  mockPlate as makePlate,
+  mockRemovedBatch,
+  edited,
+} from "@/test/fixtures"
 
 vi.mock("@/lib/api/plates", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/plates")>()),
@@ -68,7 +72,7 @@ describe("plate mutations (§3.1) invalidate the plan views", () => {
   })
 
   it("useDeletePlate also offers Undo", async () => {
-    vi.mocked(deletePlate).mockResolvedValueOnce(mockRemovedBatch)
+    vi.mocked(deletePlate).mockResolvedValueOnce(edited(mockRemovedBatch))
     expect(await invalidatedBy(() => useDeletePlate(), 1)).toEqual(PLAN_VIEWS)
     expect(deletePlate).toHaveBeenCalledWith(1)
     expect(toastMock).toHaveBeenCalledWith(
@@ -78,7 +82,7 @@ describe("plate mutations (§3.1) invalidate the plan views", () => {
   })
 
   it("useAddComponent", async () => {
-    vi.mocked(addPlateComponent).mockResolvedValueOnce(makePlate())
+    vi.mocked(addPlateComponent).mockResolvedValueOnce(edited(makePlate()))
     const input = { food_id: 42, portions: 1, cook_session_id: 7 }
     expect(
       await invalidatedBy(() => useAddComponent(), { plateId: 2, input })
@@ -87,7 +91,7 @@ describe("plate mutations (§3.1) invalidate the plan views", () => {
   })
 
   it("useUpdateComponent", async () => {
-    vi.mocked(updatePlateComponent).mockResolvedValueOnce(makePlate())
+    vi.mocked(updatePlateComponent).mockResolvedValueOnce(edited(makePlate()))
     expect(
       await invalidatedBy(() => useUpdateComponent(), {
         plateId: 2,
@@ -99,7 +103,7 @@ describe("plate mutations (§3.1) invalidate the plan views", () => {
   })
 
   it("useRemoveComponent", async () => {
-    vi.mocked(deletePlateComponent).mockResolvedValueOnce(makePlate())
+    vi.mocked(deletePlateComponent).mockResolvedValueOnce(edited(makePlate()))
     expect(
       await invalidatedBy(() => useRemoveComponent(), {
         plateId: 2,

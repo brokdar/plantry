@@ -137,3 +137,9 @@ func EventRows(events []Event) (plateIDs, sessionIDs []int64) {
 	slices.Sort(sessionIDs)
 	return slices.Compact(plateIDs), slices.Compact(sessionIDs)
 }
+
+// DryRun runs fn (a mutation of this service) in a unit of work that is
+// rolled back: the meal operations' ?dry_run=1 preview.
+func (s *Service) DryRun(ctx context.Context, fn func(ctx context.Context) error) error {
+	return domain.DryRun(ctx, s.tx, fn)
+}

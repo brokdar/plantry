@@ -414,11 +414,11 @@ test.describe("Plan batches", () => {
     await expect(planCell(page, s.days[2], s.lunch)).toContainText("No plate")
     await expect(planCell(page, s.days[1], s.cook)).toContainText("Cook × 4")
 
-    const restored = page.waitForResponse(
-      (r) => r.url().endsWith("/api/plan/restore") && r.ok()
+    const reverted = page.waitForResponse(
+      (r) => r.url().endsWith("/api/plan/revert") && r.ok()
     )
     await page.getByRole("button", { name: "Undo", exact: true }).click()
-    await restored
+    await reverted
     await expectBatch(page, s, "Cook × 6", ["2/3", "3/3"])
   })
 })

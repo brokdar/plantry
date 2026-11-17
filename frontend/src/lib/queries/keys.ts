@@ -32,6 +32,12 @@ export const slotKeys = {
 
 // Read models (D23). Every plan mutation invalidates planKeys.all,
 // todayKeys.all and shoppingKeys.all.
+/** Under planKeys.all, so every plan change refetches the alternatives. */
+export const mealKeys = {
+  alternatives: (start: string, input: unknown) =>
+    ["plan", "alternatives", start, input] as const,
+}
+
 export const planKeys = {
   all: ["plan"] as const,
   /** `start` undefined = the anchored window. */

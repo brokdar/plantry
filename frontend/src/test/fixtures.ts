@@ -1,3 +1,4 @@
+import type { AlsoChanged, Undo } from "@/lib/api/meal"
 import type { Change, ConversationDetail } from "@/lib/domain/assistantEvents"
 import type { AvailabilityDefault } from "@/lib/api/availability"
 import type { ComposedFood, LeafFood, ScaledRecipe } from "@/lib/api/foods"
@@ -1345,4 +1346,16 @@ export function mockDiscoveryRun(
     error_key: status === "error" ? "error.ai.provider_missing" : null,
     ...overrides,
   }
+}
+
+// ── Hand edits (meal editing slice 5) ────────────────────────────────
+
+export const mockUndo: Undo = { first_event_id: 1, last_event_id: 2, cells: [] }
+
+/** A hand edit's body: `x` plus no also_changed and a revert token. */
+export function edited<T>(
+  x: T,
+  undo: Undo = mockUndo
+): T & { also_changed: AlsoChanged[]; undo: Undo } {
+  return { ...x, also_changed: [], undo }
 }

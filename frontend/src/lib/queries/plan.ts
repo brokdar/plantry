@@ -15,6 +15,7 @@ import {
   setAvailabilityOverride,
 } from "@/lib/api/availability"
 import { ApiError } from "@/lib/api/client"
+import { revertPlan, type Undo } from "@/lib/api/meal"
 import {
   acceptPlan,
   clearPlan,
@@ -111,12 +112,17 @@ const REMOVAL_MESSAGE_KEYS: Record<RemovalVerb, string> = {
  */
 export function useUndoToast() {
   const { t } = useTranslation()
-  return function offer(message: string, undo: () => void) {
+  return function offer(
+    message: string,
+    undo: () => void,
+    description?: string
+  ) {
     let closed = false
     const close = () => {
       closed = true
     }
     toast(message, {
+      description,
       duration: UNDO_MS,
       action: {
         label: t("common.undo"),
@@ -172,6 +178,54 @@ export function useUndoableRemoval() {
   }
 }
 
+/** A revert token that undoes nothing (no events, no cells). */
+export function emptyUndo(undo: Undo | undefined | null): boolean {
+  return !undo || (undo.first_event_id === 0 && undo.cells.length === 0)
+}
+
+/** One token for several edits made in a row: the event range from the
+ *  first to the last, and every cell. */
+export function mergeUndo(tokens: Undo[]): Undo {
+  const real = tokens.filter((u) => u.first_event_id > 0)
+  return {
+    first_event_id: real[0]?.first_event_id ?? 0,
+    last_event_id: real.at(-1)?.last_event_id ?? 0,
+    cells: tokens.flatMap((u) => u.cells),
+  }
+}
+
+/**
+ * The revert-token form of the shared undo toast (hand edits since meal
+ * editing 2b): `offerRevert(undo, message, description?)` shows the undo
+ * toast and Undo calls `POST /api/plan/revert`. A stale token (409
+ * `error.plan.change_stale`) shows its message. An empty token offers
+ * nothing.
+ */
+export function useRevertUndo() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  const offer = useUndoToast()
+  const revert = useMutation({
+    mutationFn: (undo: Undo) => revertPlan(undo),
+    onSuccess: () => {
+      toast.success(t("plan.undo.restored"))
+      return invalidatePlanViews(qc)
+    },
+    onError: (err) => {
+      void invalidatePlanViews(qc)
+      toastUndoError(err, t)
+    },
+  })
+  return function offerRevert(
+    undo: Undo | undefined,
+    message: string,
+    description?: string
+  ) {
+    if (!undo || emptyUndo(undo)) return
+    offer(message, () => revert.mutate(undo), description)
+  }
+}
+
 /** Clear window: removes every plate in [from, to] and offers Undo. */
 export function useClearWindow() {
   const qc = useQueryClient()
@@ -189,85 +243,6 @@ export function useClearWindow() {
 }
 
 /**
- * "Mark as No plate" on a board cell (keyboard N): sets a `none` override,
- * removing the cell's plate, and offers Undo for UNDO_MS. Undo puts the
- * cell's previous override back (or clears it) and restores the plate with
- * its batch from the returned snapshot. The override goes first because a
- * No plate cell refuses the plate; if the restore then fails, the cell is
- * marked No plate again so Undo never half-applies.
- */
-export function useMarkNoPlate() {
-  const qc = useQueryClient()
-  const { t } = useTranslation()
-
-  function refresh() {
-    void invalidatePlanViews(qc)
-    void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
-  }
-
-  async function undo(cell: PlanCell, removed: PlanSnapshot | null) {
-    let reverted = false
-    try {
-      if (cell.source === "override") {
-        await setAvailabilityOverride(cell.date, cell.slot_id, {
-          mode: cell.mode,
-          preset_id: cell.preset_id,
-          note: cell.note,
-        })
-      } else {
-        await clearAvailabilityOverride(cell.date, cell.slot_id)
-      }
-      reverted = true
-      if (removed) await restorePlan(removed)
-      toast.success(t("plan.undo.restored"))
-    } catch (err) {
-      if (reverted) {
-        await setAvailabilityOverride(cell.date, cell.slot_id, {
-          mode: "none",
-          note: cell.note,
-          // The toast below reports the failed Undo and the refresh shows
-          // the cell as it really is.
-        }).catch(() => {})
-      }
-      toastUndoError(err, t)
-    } finally {
-      refresh()
-    }
-  }
-
-  return useMutation({
-    mutationFn: (cell: PlanCell) =>
-      setAvailabilityOverride(cell.date, cell.slot_id, {
-        mode: "none",
-        note: cell.note,
-        remove_plate: cell.plate !== null,
-      }),
-    onSuccess: (res, cell) => {
-      refresh()
-      // Undo works once, and not after the toast has closed.
-      let closed = false
-      const close = () => {
-        closed = true
-      }
-      toast(t("plan.undo.marked_no_plate"), {
-        duration: UNDO_MS,
-        action: {
-          label: t("common.undo"),
-          onClick: () => {
-            if (closed) return
-            closed = true
-            void undo(cell, res.removed)
-          },
-        },
-        onDismiss: close,
-        onAutoClose: close,
-      })
-    },
-    onError: (err) => toastError(err, t),
-  })
-}
-
-/**
  * "Plan this meal" on a No plate cell. A date override is dropped so the
  * cell falls back to its weekday default; only when that default is `none`
  * too does it get an explicit `plan` override, so dates are not pinned
@@ -277,22 +252,63 @@ export function usePlanMeal() {
   const qc = useQueryClient()
   const { t } = useTranslation()
   return useMutation({
-    mutationFn: async (cell: PlanCell) => {
-      if (cell.source === "override") {
-        await clearAvailabilityOverride(cell.date, cell.slot_id)
-        const { items } = await getAvailabilityRange(cell.date, cell.date)
-        const resolved = items.find((c) => c.slot_id === cell.slot_id)
-        // A cell the range doesn't resolve gets the explicit override.
-        if (resolved && resolved.mode !== "none") return
-      }
-      await setAvailabilityOverride(cell.date, cell.slot_id, { mode: "plan" })
-    },
+    mutationFn: planCell,
     onSuccess: () => {
       void invalidatePlanViews(qc)
       void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
     },
     onError: (err) => toastError(err, t),
   })
+}
+
+/** "Plan this day" in the day header: every No plate cell of the day goes
+ *  back to Plan, as "Plan this meal" does per cell. */
+export function usePlanDay() {
+  const qc = useQueryClient()
+  const { t } = useTranslation()
+  return useMutation({
+    // The calls are sequential and not rolled back: when one fails, the cells
+    // before it stay set to Plan and the result says how many.
+    mutationFn: async (cells: PlanCell[]) => {
+      const todo = cells.filter((c) => c.mode === "none")
+      let done = 0
+      try {
+        for (const c of todo) {
+          await planCell(c)
+          done++
+        }
+      } catch (err) {
+        if (done === 0) throw err
+        return { done, total: todo.length, failure: err }
+      }
+      return { done, total: todo.length, failure: undefined }
+    },
+    onSuccess: (res) => {
+      if (res.failure !== undefined) {
+        toastError(res.failure, t)
+        toast.error(
+          t("plan.meal.day_partial", { done: res.done, total: res.total })
+        )
+      }
+      void qc.invalidateQueries({ queryKey: availabilityKeys.ranges() })
+      return invalidatePlanViews(qc)
+    },
+    onError: (err) => {
+      void invalidatePlanViews(qc)
+      toastError(err, t)
+    },
+  })
+}
+
+async function planCell(cell: PlanCell) {
+  if (cell.source === "override") {
+    await clearAvailabilityOverride(cell.date, cell.slot_id)
+    const { items } = await getAvailabilityRange(cell.date, cell.date)
+    const resolved = items.find((c) => c.slot_id === cell.slot_id)
+    // A cell the range doesn't resolve gets the explicit override.
+    if (resolved && resolved.mode !== "none") return
+  }
+  await setAvailabilityOverride(cell.date, cell.slot_id, { mode: "plan" })
 }
 
 /** The reason on a No plate cell ("Eating out"); empty clears it. */
