@@ -93,6 +93,10 @@ type WeekEval struct {
 // is judged: the average of one or two days is no week.
 const minWeekDays = 3
 
+// MinWeekDays is the number of complete days a weekly ledger needs to be
+// shown and judged.
+const MinWeekDays = minWeekDays
+
 // EvalTotals counts the issues by severity.
 type EvalTotals struct {
 	Violations int `json:"violations"`

@@ -99,7 +99,7 @@ test("a fresh install goes from the wizard defaults to an accepted week without 
     for (const name of INGREDIENTS) {
       const leaf = await seedLeafFood({
         name: `${name} ${tag}`,
-        kcal_100g: 120,
+        kcal_100g: 250,
         protein_100g: 6,
         fat_100g: 2,
         carbs_100g: 18,

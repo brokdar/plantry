@@ -18,6 +18,7 @@ import {
   type BatchBadgeContent,
   type Formatter,
 } from "@/lib/plan/format"
+import { lightLabel } from "@/lib/plan/ledger"
 import { slotLabel } from "@/lib/slot-label"
 
 /** The badge a cell shows for the batch its main food comes from. */
@@ -86,6 +87,8 @@ export interface BoardDay {
   weekday: string
   isToday: boolean
   nutrition: PlanDay | null
+  /** "Light day" / "Light: Dinner" for a day with a light request. */
+  light: string | null
   /** The day's cells in slot order. */
   cells: BoardCell[]
 }
@@ -288,6 +291,13 @@ export function buildBoard(plan: Plan, f: Formatter): Board {
     weekday: formatDate(date, f, { weekday: "long" }),
     isToday: date === plan.window.today,
     nutrition: nutrition.get(date) ?? null,
+    light: nutrition.has(date)
+      ? lightLabel(
+          nutrition.get(date)!,
+          (short) => slotLabel(f.t, `slot.${short}`),
+          f
+        )
+      : null,
     cells: grid[i],
   }))
 

@@ -16,6 +16,7 @@ function day(kcal: number, patch: Partial<PlanDay> = {}): PlanDay {
     macros: { kcal, protein: 90, fat: 60, carbs: 200 },
     complete: true,
     missing: [],
+    target_kcal: 2200,
     ...patch,
   }
 }

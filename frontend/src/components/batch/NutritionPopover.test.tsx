@@ -13,6 +13,7 @@ const monday: PlanDay = {
   macros: { kcal: 1840.4, protein: 96.2, fat: 58, carbs: 210 },
   complete: true,
   missing: [],
+  target_kcal: 2200,
 }
 
 async function open(day: PlanDay, targets = mockPlan.targets) {

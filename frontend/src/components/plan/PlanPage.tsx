@@ -27,6 +27,7 @@ import { useSettingItems } from "@/lib/queries/settings"
 import { cn } from "@/lib/utils"
 
 import { Board } from "./Board"
+import { WeekLedger } from "./WeekLedger"
 import { BoardSkeleton } from "./BoardSkeleton"
 import { DiscardDialog } from "./DiscardDialog"
 import { DraftBar } from "./DraftBar"
@@ -407,6 +408,7 @@ function PlanView({
             )
           }
         />
+        {plan.week && <WeekLedger week={plan.week} soft={plan.soft} />}
         <BatchHighlightProvider>
           {board.empty && !board.readOnly && !running && (
             <EmptyWindow

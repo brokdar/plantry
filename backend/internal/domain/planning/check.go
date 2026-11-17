@@ -104,7 +104,12 @@ func Check(s State, t Target) []Issue {
 // window is a draft, and only from today on: a hand-planned or accepted window may
 // leave cells empty, and past cells are history.
 func BoardIssues(s State) []Issue {
-	t := WindowTarget(s)
+	return FilterBoardIssues(s, Check(s, WindowTarget(s)))
+}
+
+// FilterBoardIssues keeps the issues BoardIssues shows of issues, the Check
+// result of s over WindowTarget(s) (Evaluate's Issues start with it).
+func FilterBoardIssues(s State, issues []Issue) []Issue {
 	drafts := false
 	draftDays := map[string]bool{}
 	for _, p := range s.Plates {
@@ -118,7 +123,7 @@ func BoardIssues(s State) []Issue {
 	}
 	today := s.Today.Format(time.DateOnly)
 	out := []Issue{}
-	for _, is := range Check(s, t) {
+	for _, is := range issues {
 		switch is.Rule {
 		case "H1":
 			if is.Code == CodeMissingPlate && (!drafts || is.Date < today) {
@@ -138,6 +143,26 @@ func BoardIssues(s State) []Issue {
 			continue
 		}
 		out = append(out, is)
+	}
+	return out
+}
+
+// BoardSoftIssues keeps the soft issues the board shows as hints of issues,
+// Evaluate's Issues over WindowTarget(s): S2 to S7, a dated one only from
+// today on (past days are history), without their options (the board does
+// not offer them). They never block saving.
+func BoardSoftIssues(s State, issues []Issue) []Issue {
+	today := s.Today.Format(time.DateOnly)
+	out := []Issue{}
+	for _, is := range issues {
+		if is.Severity != SeveritySoft || (is.Date != "" && is.Date < today) {
+			continue
+		}
+		switch is.Rule {
+		case "S2", "S3", "S4", "S5", "S6", "S7":
+			is.Options = nil
+			out = append(out, is)
+		}
 	}
 	return out
 }

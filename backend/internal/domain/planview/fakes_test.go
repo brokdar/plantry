@@ -10,6 +10,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/diet"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/food"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/nutrition"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/planning"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/plate"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
@@ -28,6 +29,7 @@ type store struct {
 	overrides map[cellKey]availability.Mode
 	recipes   int64
 	runs      map[int64]RunNote
+	light     []planning.LightIntent
 
 	recipeListCalls  int
 	nutritionBatches int
@@ -78,6 +80,18 @@ func (s *store) ListByDateRange(ctx context.Context, from, to time.Time) ([]plat
 		}
 	}
 	return out, nil
+}
+
+// lightStore is the planning.LightStore over the store's light requests.
+type lightStore struct{ s *store }
+
+func (l lightStore) List(ctx context.Context, from, to time.Time) ([]planning.LightIntent, error) {
+	l.s.read(ctx)
+	return l.s.light, nil
+}
+
+func (l lightStore) Replace(context.Context, time.Time, []string, []planning.LightIntent) error {
+	return nil
 }
 
 func (s *store) ListInRange(ctx context.Context, from, to time.Time) ([]plate.CookSession, map[int64][]plate.Link, error) {
@@ -355,7 +369,7 @@ func (f *fixture) service() *Service {
 	return NewService(Deps{
 		Plates: f.store, Sessions: f.store, Foods: f.store, Nutrition: f.store,
 		Availability: f.store, Slots: f.store, Settings: f.settings, Profile: f.profile, Recipes: f.store, Tx: f.tx,
-		Runs: f.store, Diets: f.diets, Progress: f.progress,
+		Runs: f.store, Diets: f.diets, Progress: f.progress, Light: lightStore{f.store},
 	})
 }
 

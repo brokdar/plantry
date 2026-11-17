@@ -53,7 +53,17 @@ export interface PlanDay {
   macros: DayMacros
   complete: boolean
   missing: string[]
+  /** The day's kcal target per eater after a light request; null without a
+   *  kcal target. */
+  target_kcal: number | null
+  /** A light request on the day: the whole day or one meal. */
+  light?: LightScope
+  /** The lunch or dinner of a light meal (the slot's name without
+   *  "slot."). */
+  light_slot?: string
 }
+
+export type LightScope = "meal" | "day"
 
 export interface PlanTargets {
   kcal: number
@@ -115,6 +125,42 @@ export interface Issue {
   params: Record<string, string | number>
 }
 
+/** The soft rules the board shows as hints (S2 to S7). */
+export type SoftRule = "S2" | "S3" | "S4" | "S5" | "S6" | "S7"
+
+/** A soft finding: never blocks saving. Message key `plan.soft.<code>` with
+ *  `params`. */
+export interface SoftIssue {
+  rule: SoftRule
+  code: string
+  severity: "soft"
+  date?: string
+  slot_id?: number
+  params: Record<string, string | number>
+}
+
+/** The weekly nutrition ledger per eater over the complete days of the
+ *  window; the shares are percentages. */
+export interface WeekLedger {
+  days: number
+  avg_kcal: number
+  /** The average of the days' targets after light requests. */
+  target_kcal: number
+  normal_target_kcal?: number
+  pct: number
+  avg_protein_g: number
+  target_protein_g?: number
+  protein_pct?: number
+  carbs_pct: number
+  fat_pct: number
+  /** Average per day; absent when any food lacks fibre data. */
+  fiber_g?: number
+  meat_g?: number
+  fish_meals?: number
+  legume_meals?: number
+  produce_g_per_day?: number
+}
+
 /** The window's drafts (D26); `run_id`/`notes` from the newest run with
  *  drafts in the window. */
 export interface PlanDraft {
@@ -136,6 +182,11 @@ export interface Plan {
   stats: PlanStats
   /** H1, H2, H5 and H8 findings on the window (D21). */
   issues: Issue[]
+  /** Soft hints (S2 to S7), apart from the hard issues. */
+  soft: SoftIssue[]
+  /** The weekly ledger; null without a kcal target or under 3 complete
+   *  days. */
+  week: WeekLedger | null
   /** null when the window holds no drafts. */
   draft: PlanDraft | null
   /** The generation running for this window, if any (D9). */

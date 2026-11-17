@@ -97,3 +97,39 @@ func TestStateParity_BoardAndBuilder(t *testing.T) {
 		})
 	}
 }
+
+// The board's weekly ledger, its days' light marks and its soft hints are the
+// ones Evaluate gives over the builder's state: one evaluation, same rows.
+func TestStateParity_BoardLedger(t *testing.T) {
+	e := newSvcEnv(t)
+	e.exec(`UPDATE user_profile SET kcal_target = 2200, weight_kg = 75 WHERE id = 1`)
+	e.generate(e.req()) // partial: the fixture foods are small, H9 stays a violation
+	e.exec(`INSERT INTO plan_light (date, scope, slot) VALUES (?, 'day', '')`, mon)
+	e.exec(`INSERT INTO plan_light (date, scope, slot) VALUES (?, 'meal', 'dinner')`, wed)
+
+	start, today := day(sat), day(svcToday)
+	board, err := testsvc.PlanView(e.db).Plan(e.ctx, &start, today)
+	require.NoError(t, err)
+
+	var ev planning.Evaluation
+	var soft []planning.Issue
+	require.NoError(t, e.deps.Tx.InTx(e.ctx, func(ctx context.Context) error {
+		st, err := e.deps.Builder.Build(ctx, board.Window, today, board.Window.Start, board.Window.End)
+		if err != nil {
+			return err
+		}
+		ev = planning.Evaluate(st, planning.WindowTarget(st))
+		soft = planning.BoardSoftIssues(st, ev.Issues)
+		return nil
+	}))
+
+	require.NotNil(t, board.Week, "a generated week has complete days under a target")
+	assert.Equal(t, ev.Week, board.Week)
+	assert.ElementsMatch(t, soft, board.Soft)
+	marks := map[string]string{}
+	for _, d := range board.Days {
+		marks[d.Date.Format("2006-01-02")] = d.Light
+	}
+	assert.Equal(t, "day", marks[mon])
+	assert.Equal(t, "meal", marks[wed])
+}
