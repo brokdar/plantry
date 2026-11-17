@@ -1,0 +1,76 @@
+package handlers_test
+
+import (
+	"fmt"
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// POST /api/plan/alternatives lists verified replacements for a plate and
+// writes nothing.
+func TestPlanAlternativesHTTP(t *testing.T) {
+	a := newGenAPI(t)
+	var lunch, food int64
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM time_slots WHERE name_key = 'slot.lunch'`).Scan(&lunch))
+	require.NoError(t, a.db.QueryRow(`SELECT id FROM foods WHERE name = 'Main 1'`).Scan(&food))
+	code, body := a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2026-11-12","slot_id":%d,"components":[{"food_id":%d,"portions":1}]}`, lunch, food))
+	require.Equal(t, http.StatusCreated, code, body)
+	pid := int64(body["id"].(float64))
+	_, err := a.db.Exec(`UPDATE plates SET state = 'draft' WHERE id = ?`, pid)
+	require.NoError(t, err, "a hand-made plate is confirmed; alternatives are for drafts")
+	_, err = a.db.Exec(`UPDATE cook_sessions SET state = 'draft'`)
+	require.NoError(t, err)
+
+	code, body = a.do(http.MethodPost, "/api/plates", fmt.Sprintf(`{"date":"2026-11-13","slot_id":%d,"components":[{"food_id":%d,"portions":1}]}`, lunch, food))
+	require.Equal(t, http.StatusCreated, code, body)
+	confirmed := int64(body["id"].(float64))
+
+	url := "/api/plan/alternatives?start=2026-11-07&today=2026-11-11"
+	var before int
+	require.NoError(t, a.db.QueryRow(`SELECT COUNT(*) FROM plate_components`).Scan(&before))
+	code, body = a.do(http.MethodPost, url, fmt.Sprintf(`{"plate_id":%d,"what":"main","limit":3}`, pid))
+	require.Equal(t, http.StatusOK, code, body)
+	list := body["alternatives"].([]any)
+	require.Len(t, list, 3)
+	for _, e := range list {
+		alt := e.(map[string]any)
+		assert.NotEqual(t, float64(food), alt["food_id"], "the replaced main is never offered")
+		assert.Equal(t, "fresh", alt["source"])
+		ops := alt["ops"].([]any)
+		require.NotEmpty(t, ops)
+		assert.Equal(t, "swap", ops[0].(map[string]any)["op"])
+		assert.Contains(t, alt, "new_issues")
+	}
+	var after int
+	require.NoError(t, a.db.QueryRow(`SELECT COUNT(*) FROM plate_components`).Scan(&after))
+	assert.Equal(t, before, after, "nothing written")
+
+	code, body = a.do(http.MethodPost, url, fmt.Sprintf(`{"plate_id":%d,"what":"main","constraints":{"search":"zzz-nothing"}}`, pid))
+	require.Equal(t, http.StatusOK, code, body)
+	assert.Equal(t, []any{}, body["alternatives"])
+
+	for _, c := range []struct {
+		name, url, body string
+		status          int
+		key             string
+	}{
+		{"malformed body", url, `{`, http.StatusBadRequest, "error.invalid_body"},
+		{"missing plate", url, `{"what":"main"}`, http.StatusBadRequest, "error.invalid_body"},
+		{"bad start", "/api/plan/alternatives?start=nope", fmt.Sprintf(`{"plate_id":%d,"what":"main"}`, pid), http.StatusBadRequest, "error.plan.invalid_start"},
+		{"start not a shopping day", "/api/plan/alternatives?start=2026-11-08&today=2026-11-11", fmt.Sprintf(`{"plate_id":%d,"what":"main"}`, pid), http.StatusBadRequest, "error.plan.invalid_start"},
+		{"unknown plate", url, `{"plate_id":99999,"what":"main"}`, http.StatusNotFound, ""},
+		{"confirmed plate", url, fmt.Sprintf(`{"plate_id":%d,"what":"main"}`, confirmed), http.StatusBadRequest, "error.invalid_body"},
+		{"bad what", url, fmt.Sprintf(`{"plate_id":%d,"what":"dessert"}`, pid), http.StatusBadRequest, "error.invalid_body"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			code, body := a.do(http.MethodPost, c.url, c.body)
+			assert.Equal(t, c.status, code, body)
+			if c.key != "" {
+				assert.Equal(t, c.key, body["message_key"])
+			}
+		})
+	}
+}

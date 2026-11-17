@@ -15,6 +15,7 @@ import (
 	"github.com/jaltszeimer/plantry/backend/internal/domain/preset"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/profile"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/settings"
+	"github.com/jaltszeimer/plantry/backend/internal/domain/shopping"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/slot"
 	"github.com/jaltszeimer/plantry/backend/internal/domain/window"
 )
@@ -302,7 +303,12 @@ func BaseFacts(f *food.Food) FoodFacts {
 	ff := FoodFacts{
 		ID: f.ID, Name: f.Name, Kind: f.Kind, KeepDays: f.KeepDays, Freezable: f.Freezable != nil && *f.Freezable,
 		Favorite: f.Favorite, LastEaten: f.History.LastEaten, ReferencePortions: 1, DietClass: f.DietClass,
-		NoCook: NoCook(f), Sweet: IsSweet(f),
+		NoCook: NoCook(f), Sweet: IsSweet(f), Tags: f.Tags,
+	}
+	if f.Kind == food.KindLeaf {
+		if r, _ := shopping.EffectiveRole(f); r != nil {
+			ff.LeafRole = *r
+		}
 	}
 	// Only composed foods carry a planner role; a leaf's stored role is a
 	// user override for plate position and must not enter candidate lists.

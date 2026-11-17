@@ -45,7 +45,8 @@ type Option struct {
 
 // OptionOp is an option written as a valid apply_changes op: add (an
 // existing plate by plate_id, else the cell by date + slot_id; a leaf takes
-// amount + unit, a recipe portions) or set_quantity (plate_component_id).
+// amount + unit, a recipe portions), set_quantity (plate_component_id), and
+// for Alternatives swap and remove.
 type OptionOp struct {
 	Op               string   `json:"op"`
 	PlateID          *int64   `json:"plate_id,omitempty"`
@@ -56,6 +57,8 @@ type OptionOp struct {
 	Portions         *float64 `json:"portions,omitempty"`
 	Amount           *float64 `json:"amount,omitempty"`
 	Unit             string   `json:"unit,omitempty"`
+	// SessionID makes an add eat from that existing batch (Alternatives).
+	SessionID *int64 `json:"session_id,omitempty"`
 }
 
 const (
