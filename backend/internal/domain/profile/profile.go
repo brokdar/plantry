@@ -78,18 +78,15 @@ const (
 func (s Sex) Valid() bool { return s == SexFemale || s == SexMale }
 
 // MinDailyKcal is the lowest daily kcal an unsupervised plan may hold per
-// person: 1200 for women, 1500 for men, 0 when the sex is unknown. Source:
+// person: 1200 for women, 1500 for men, 1200 (the lower figure) when the sex is unknown. Source:
 // Academy of Nutrition and Dietetics and NICE CG189 summaries (secondary
 // sources, not checked against the primary pages); below these figures only
 // under medical supervision.
 func MinDailyKcal(s *Sex) float64 {
-	if s == nil {
-		return 0
+	if s != nil && *s == SexMale {
+		return 1500
 	}
-	if *s == SexFemale {
-		return 1200
-	}
-	return 1500
+	return 1200
 }
 
 // ActivityLevels are the allowed PAL values (DGE: mostly sitting, standing,

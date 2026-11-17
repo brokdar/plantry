@@ -75,6 +75,6 @@ describe("minDailyKcal", () => {
   it("matches the backend floors", () => {
     expect(minDailyKcal("female")).toBe(1200)
     expect(minDailyKcal("male")).toBe(1500)
-    expect(minDailyKcal(null)).toBe(0)
+    expect(minDailyKcal(null)).toBe(1200)
   })
 })

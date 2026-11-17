@@ -19,9 +19,7 @@ export interface KcalEstimate {
 
 /** Lowest unsupervised daily kcal (mirrors the backend's MinDailyKcal). */
 export function minDailyKcal(sex: Sex | null): number {
-  if (sex === "female") return 1200
-  if (sex === "male") return 1500
-  return 0
+  return sex === "male" ? 1500 : 1200
 }
 
 /** The estimate needs weight, height, birth year and an activity level. */

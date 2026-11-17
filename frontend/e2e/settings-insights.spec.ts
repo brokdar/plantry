@@ -169,7 +169,9 @@ test("heuristic generate and regenerate runs are rows with version, score and ou
   request,
 }) => {
   const tag = uid()
-  const lib = await seedRecipeLibrary(tag, 10)
+  // Hearty recipes (about 740 kcal a portion): the shared profile may carry a
+  // kcal target whose H9 floor a day of light recipes cannot reach.
+  const lib = await seedRecipeLibrary(tag, 10, undefined, 490)
   const { start, days } = await futureWindow()
   const runs = async (kind: string) =>
     (

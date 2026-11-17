@@ -72,7 +72,7 @@ type Issue struct {
 	Options []Option `json:"options,omitempty"`
 }
 
-// Check applies the hard rules H1–H8 (spec §6.4, D21) to the target of s and
+// Check applies the hard rules H1–H9 (spec §6.4, D21) to the target of s and
 // returns the issues in rule order. Pass the state after Merge to check a
 // proposal, or the persisted state to check a window as it is.
 func Check(s State, t Target) []Issue {
@@ -92,14 +92,19 @@ func Check(s State, t Target) []Issue {
 // BoardIssues checks the window of s as persisted with Check over all its
 // cells and keeps the rules the board shows (D21): H1, H2, H5 and H8. H3/H4
 // already appear as session warnings; H6/H7 cannot occur in persisted data.
-// An empty plan cell (missing_plate) needs attention only while the window
-// is a draft, and only from today on: a hand-planned or accepted window may
+// H9 shows only from today on, and as a warning on days without a draft
+// plate. An empty plan cell (missing_plate) needs attention only while the
+// window is a draft, and only from today on: a hand-planned or accepted window may
 // leave cells empty, and past cells are history.
 func BoardIssues(s State) []Issue {
 	t := WindowTarget(s)
 	drafts := false
+	draftDays := map[string]bool{}
 	for _, p := range s.Plates {
 		drafts = drafts || !p.Confirmed
+		if !p.Confirmed {
+			draftDays[p.Date.Format(time.DateOnly)] = true
+		}
 	}
 	for _, ss := range s.Sessions {
 		drafts = drafts || !ss.Confirmed
@@ -112,7 +117,16 @@ func BoardIssues(s State) []Issue {
 			if is.Code == CodeMissingPlate && (!drafts || is.Date < today) {
 				continue
 			}
-		case "H2", "H5", "H8", "H9":
+		case "H9":
+			// Past days are history; a day without a draft plate cannot be
+			// changed by the planner, so it is a warning at most.
+			if is.Date < today {
+				continue
+			}
+			if !draftDays[is.Date] {
+				is.Severity = SeverityWarning
+			}
+		case "H2", "H5", "H8":
 		default:
 			continue
 		}
@@ -482,7 +496,7 @@ func (x *index) h9() []Issue {
 		if dk.Target <= 0 || !dk.Complete || dk.NutritionMissing || dk.Kcal <= 0 || !x.plateInTarget(dk.Date) {
 			continue
 		}
-		floor := x.pol.Floor(dk.Target, float64(dk.Planned)/float64(dk.Meals))
+		floor := x.pol.Floor(dk.Target, dk.FloorShare())
 		if dk.Kcal < floor {
 			out = append(out, issue("H9", CodeKcalBelowFloor, SeverityViolation).onDate(dk.Date).
 				with("kcal", math.Round(dk.Kcal)).with("floor_kcal", math.Round(floor)).with("target_kcal", math.Round(dk.Scaled)))

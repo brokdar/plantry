@@ -106,6 +106,15 @@ func run4Input() planning.ChooseInput {
 	return planning.ChooseInput{State: s, Target: fillCells(s), EatersByDate: map[string]float64{"2026-11-27": 3}, Locale: "en"}
 }
 
+// doubleKcal doubles every food's kcal: the run-4 fixture's days hold about
+// 620 kcal, under the 1200 kcal floor that applies without a known sex.
+func doubleKcal(s *planning.State) {
+	for id, f := range s.Foods {
+		f.Macros.Kcal *= 2
+		s.Foods[id] = f
+	}
+}
+
 // validWeek is a plan without violations for run4Input: a distinct main a
 // day cooked on the day's first fill cell and eaten there and at the
 // day's other plan cell.

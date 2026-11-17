@@ -138,11 +138,12 @@ export async function cleanupFood(id: number) {
 export async function seedRecipeLibrary(
   tag: string,
   count = 10,
-  freezable?: boolean
+  freezable?: boolean,
+  kcal100g = 120
 ) {
   const leaf = await seedLeafFood({
     name: `Beans ${tag}`,
-    kcal_100g: 120,
+    kcal_100g: kcal100g,
     protein_100g: 8,
     fat_100g: 2,
     carbs_100g: 18,

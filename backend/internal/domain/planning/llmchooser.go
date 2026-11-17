@@ -259,7 +259,7 @@ func (c *LLMChooser) Choose(ctx context.Context, in ChooseInput) (Proposal, erro
 			case needRepair && paid < maxRepairs:
 				paid++
 			default:
-				return withNotes(prop, append(slices.Clone(allFixes), runNotes...), advice, kcalNote(rep.s, in.Target)), nil
+				return withNotes(prop, append(slices.Clone(allFixes), runNotes...), advice, joinNotes(kcalNote(rep.s, in.Target), floorNote(rep.s, in.Target))), nil
 			}
 			noted := withNotes(prop, allFixes, advice, "")
 			last = &noted
@@ -321,6 +321,10 @@ func withNotes(p Proposal, fixes, advice []string, kcal string) Proposal {
 		p.Notes = strings.TrimSpace(strings.Join(append([]string{p.Notes}, lines...), "\n"))
 	}
 	return p
+}
+
+func joinNotes(notes ...string) string {
+	return strings.Join(slices.DeleteFunc(notes, func(n string) bool { return n == "" }), "\n")
 }
 
 // cutoffMessage answers the tool calls of a reply cut off at the output limit.

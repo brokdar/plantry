@@ -105,7 +105,7 @@ func validate(p *Profile) error {
 	}
 	// A target below the safety floor could never be planned: the floor is a
 	// hard rule.
-	if p.KcalTarget != nil && p.Sex != nil && *p.KcalTarget < MinDailyKcal(p.Sex) {
+	if p.KcalTarget != nil && *p.KcalTarget < MinDailyKcal(p.Sex) {
 		return fmt.Errorf("%w: kcal_target below %.0f", domain.ErrKcalBelowFloor, MinDailyKcal(p.Sex))
 	}
 

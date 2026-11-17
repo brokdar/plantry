@@ -174,12 +174,14 @@ func TestProfileHandler_Update_InvalidNutritionPolicyFields(t *testing.T) {
 		})
 	}
 
-	t.Run("floor targets pass, and no floor without sex", func(t *testing.T) {
+	t.Run("floor targets pass, and the lower floor applies without sex", func(t *testing.T) {
 		r := setupProfileRouter(t)
 		code, body := putProfile(t, r, `{"sex":"female","kcal_target":1200}`)
 		require.Equal(t, http.StatusOK, code, body)
-		code, body = putProfile(t, r, `{"kcal_target":900}`)
+		code, body = putProfile(t, r, `{"kcal_target":1200}`)
 		require.Equal(t, http.StatusOK, code, body)
+		code, body = putProfile(t, r, `{"kcal_target":900}`)
+		require.Equal(t, http.StatusBadRequest, code, body)
 	})
 }
 

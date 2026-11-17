@@ -39,6 +39,15 @@ type DayKcal struct {
 	// NutritionMissing: a food on the day's plates lacks nutrition data, so
 	// the macros understate the day.
 	NutritionMissing bool
+	// Unplated counts routine cells without a plate: they hold no kcal to
+	// count, so the floor does not ask for their share.
+	Unplated int
+}
+
+// FloorShare is the part of the day's meals the floor is judged on: the
+// planned meals less the routine cells that hold no plate.
+func (d DayKcal) FloorShare() float64 {
+	return float64(d.Planned-d.Unplated) / float64(d.Meals)
 }
 
 // DayKcals computes the account of every day with a cell in t that has at
@@ -73,8 +82,12 @@ func (x *index) dayAccounts(days []time.Time) []DayKcal {
 				continue
 			}
 			dk.Planned++
-			if c.Mode != availability.ModeRoutine && len(x.byCell[idOf(c.Key())]) == 0 {
-				dk.Complete = false
+			if len(x.byCell[idOf(c.Key())]) == 0 {
+				if c.Mode == availability.ModeRoutine {
+					dk.Unplated++
+				} else {
+					dk.Complete = false
+				}
 			}
 		}
 		if dk.Planned == 0 {
@@ -147,4 +160,20 @@ func kcalNote(s State, t Target) string {
 		return ""
 	}
 	return "Below target: " + strings.Join(parts, ", ")
+}
+
+// floorNote is the run-notes line of the days left below the safety floor
+// (H9) after the repairs ("" when none is).
+func floorNote(s State, t Target) string {
+	var parts []string
+	for _, is := range newIndex(s, t).h9() {
+		day, _ := time.Parse(time.DateOnly, is.Date)
+		kcal, _ := is.Params["kcal"].(float64)
+		floor, _ := is.Params["floor_kcal"].(float64)
+		parts = append(parts, fmt.Sprintf("%s %.0f of %.0f kcal", day.Weekday().String()[:3], kcal, floor))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Below the daily minimum (the plan could not reach it, please add food to these days): " + strings.Join(parts, ", ")
 }
